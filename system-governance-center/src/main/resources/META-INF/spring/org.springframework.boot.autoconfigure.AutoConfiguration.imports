@@ -1,0 +1,2 @@
+com.bank.branch.platform.governance.config.GovCacheConfig
+com.bank.branch.platform.governance.config.MinioConfig
