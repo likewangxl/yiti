@@ -13,6 +13,7 @@
 
     <modules>
         <module>common</module>
+        <module>auth-permission-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -63,6 +64,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>common-db</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- auth-permission-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>auth-permission-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
