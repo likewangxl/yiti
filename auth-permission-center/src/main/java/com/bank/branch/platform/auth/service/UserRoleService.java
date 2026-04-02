@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.api.dto.RoleUserRespDTO;
 import com.bank.branch.platform.auth.api.event.PermissionCacheInvalidatedEvent;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtUser;
@@ -9,6 +10,7 @@ import com.bank.branch.platform.auth.enums.AuthErrorCode;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -113,6 +115,22 @@ public class UserRoleService {
         cacheService.evictUserRolesCache(userId);
         publishCacheInvalidatedEvent(userId, reason);
         log.info("[UserRoleService.unbindRole] 角色解绑完成 userId={}, roleId={}", userId, roleId);
+    }
+
+    /**
+     * 分页查询指定角色下已绑定的用户列表（含机构信息和绑定时间）。
+     *
+     * @param roleId   角色ID
+     * @param keyword  工号/姓名关键字（可为 null）
+     * @param pageNo   页码（从1开始）
+     * @param pageSize 每页条数
+     * @return 分页结果
+     */
+    public PageResult<RoleUserRespDTO> listRoleUsers(String roleId, String keyword, int pageNo, int pageSize) {
+        int offset = (pageNo - 1) * pageSize;
+        List<RoleUserRespDTO> items = userRoleMapper.selectRoleUserDetailsByRoleId(roleId, keyword, offset, pageSize);
+        long total = userRoleMapper.countUsersByRoleId(roleId, keyword);
+        return PageResult.of(pageNo, pageSize, total, items);
     }
 
     /**

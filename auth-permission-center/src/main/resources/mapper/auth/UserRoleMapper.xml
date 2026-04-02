@@ -86,4 +86,30 @@
         </if>
     </select>
 
+    <!--
+        查询角色下用户详情（含机构信息和绑定时间）。
+        LEFT JOIN EXT_USER_ORG 和 EXT_ORG_INFO 获取主机构，JOIN PT_USER_ROLE 获取绑定时间。
+    -->
+    <select id="selectRoleUserDetailsByRoleId"
+            resultType="com.bank.branch.platform.auth.api.dto.RoleUserRespDTO">
+        SELECT
+            u.USER_ID       AS empId,
+            u.USERNAME      AS username,
+            u.USERCHNNAME   AS displayName,
+            uo.ORG_CODE     AS orgCode,
+            o.ORG_NAME      AS orgName,
+            ur.CREATE_TIME  AS bindTime
+        FROM PT_USER u
+        INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID AND ur.ROLE_ID = #{roleId}
+        LEFT JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        LEFT JOIN EXT_ORG_INFO o  ON uo.ORG_CODE = o.ORG_CODE
+        WHERE 1=1
+        <if test="keyword != null and keyword != ''">
+            AND (u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY ur.CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
 </mapper>

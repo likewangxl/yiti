@@ -1,11 +1,13 @@
 package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.api.dto.RoleUserRespDTO;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtUserRole;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -83,6 +85,20 @@ class UserRoleServiceTest {
         userRoleService.unbindRole("E001", "R_RM", "解绑原因");
         verify(userRoleMapper).deleteByUserIdAndRoleId("E001", "R_RM");
         verify(cacheService).evictUserRolesCache("E001");
+    }
+
+    @Test
+    void listRoleUsers_shouldReturnPageResult() {
+        RoleUserRespDTO dto = new RoleUserRespDTO();
+        dto.setEmpId("E001");
+        when(userRoleMapper.selectRoleUserDetailsByRoleId("R_RM", null, 0, 20)).thenReturn(List.of(dto));
+        when(userRoleMapper.countUsersByRoleId("R_RM", null)).thenReturn(1L);
+
+        PageResult<RoleUserRespDTO> result = userRoleService.listRoleUsers("R_RM", null, 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(1);
+        assertThat(result.getRecords()).hasSize(1);
+        assertThat(result.getRecords().get(0).getEmpId()).isEqualTo("E001");
     }
 
     @Test

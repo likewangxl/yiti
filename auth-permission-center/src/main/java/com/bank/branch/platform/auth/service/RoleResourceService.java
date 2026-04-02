@@ -1,0 +1,118 @@
+package com.bank.branch.platform.auth.service;
+
+import com.bank.branch.platform.auth.api.event.PermissionCacheInvalidatedEvent;
+import com.bank.branch.platform.auth.entity.PtRoleResource;
+import com.bank.branch.platform.auth.enums.AuthErrorCode;
+import com.bank.branch.platform.auth.mapper.ResourceMapper;
+import com.bank.branch.platform.auth.mapper.RoleMapper;
+import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
+import com.bank.branch.platform.common.web.exception.BizException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * 角色资源绑定管理服务
+ * 负责角色与资源之间的增量绑定（bindResources）和全量替换（replaceResources）操作。
+ * 所有写操作完成后须清除角色资源缓存并发布权限缓存失效事件。
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class RoleResourceService {
+
+    private final RoleResourceMapper roleResourceMapper;
+    private final RoleMapper roleMapper;
+    private final ResourceMapper resourceMapper;
+    private final PermissionCacheService cacheService;
+    private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * 增量绑定资源到指定角色（幂等：已绑定的资源跳过）
+     *
+     * @param roleId      角色ID
+     * @param resourceIds 要绑定的资源ID列表
+     * @param reason      操作原因（审计用）
+     */
+    @Transactional
+    public void bindResources(String roleId, List<String> resourceIds, String reason) {
+        if (roleMapper.selectByRoleId(roleId) == null) {
+            throw new BizException(AuthErrorCode.ROLE_NOT_FOUND.getCode(),
+                AuthErrorCode.ROLE_NOT_FOUND.getMessage());
+        }
+        int inserted = 0;
+        for (String resourceId : resourceIds) {
+            // 幂等：已绑定的记录跳过
+            if (roleResourceMapper.existsByRoleIdAndResourceId(roleId, resourceId)) {
+                log.debug("[RoleResourceService.bindResources] 已绑定，跳过 roleId={}, resourceId={}", roleId, resourceId);
+                continue;
+            }
+            PtRoleResource rr = new PtRoleResource();
+            rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
+            rr.setRoleId(roleId);
+            rr.setResourceId(resourceId);
+            roleResourceMapper.insert(rr);
+            inserted++;
+        }
+        cacheService.evictRoleResourceCache(roleId);
+        publishCacheInvalidatedEvent(roleId, reason);
+        log.info("[RoleResourceService.bindResources] 绑定完成 roleId={}, inserted={}", roleId, inserted);
+    }
+
+    /**
+     * 全量替换角色的资源绑定（先删后插，事务保证原子性）
+     *
+     * @param roleId      角色ID
+     * @param resourceIds 替换后的资源ID列表（空列表表示清空所有绑定）
+     * @param reason      操作原因（审计用）
+     */
+    @Transactional
+    public void replaceResources(String roleId, List<String> resourceIds, String reason) {
+        if (roleMapper.selectByRoleId(roleId) == null) {
+            throw new BizException(AuthErrorCode.ROLE_NOT_FOUND.getCode(),
+                AuthErrorCode.ROLE_NOT_FOUND.getMessage());
+        }
+        // 先删：清空现有绑定
+        roleResourceMapper.deleteByRoleId(roleId);
+        // 后插：写入新绑定
+        for (String resourceId : resourceIds) {
+            PtRoleResource rr = new PtRoleResource();
+            rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
+            rr.setRoleId(roleId);
+            rr.setResourceId(resourceId);
+            roleResourceMapper.insert(rr);
+        }
+        cacheService.evictRoleResourceCache(roleId);
+        publishCacheInvalidatedEvent(roleId, reason);
+        log.info("[RoleResourceService.replaceResources] 全量替换完成 roleId={}, count={}", roleId, resourceIds.size());
+    }
+
+    /**
+     * 查询角色已授权的资源ID集合（读取缓存，缓存未命中则回查数据库）
+     *
+     * @param roleId 角色ID
+     * @return 资源ID集合
+     */
+    public Set<String> getResourceIdsByRoleId(String roleId) {
+        return cacheService.getResourceIdsByRoleId(roleId);
+    }
+
+    // ── 私有方法 ──────────────────────────────────────────────────
+
+    private void publishCacheInvalidatedEvent(String roleId, String reason) {
+        PermissionCacheInvalidatedEvent event = new PermissionCacheInvalidatedEvent();
+        event.setChangeType("ROLE_RESOURCE");
+        event.setAffectedRoleIds(Set.of(roleId));
+        event.setOperator("SYSTEM");
+        event.setReason(reason);
+        event.setEventId("evt_" + System.currentTimeMillis());
+        event.setOccurredAt(System.currentTimeMillis());
+        eventPublisher.publishEvent(event);
+    }
+}

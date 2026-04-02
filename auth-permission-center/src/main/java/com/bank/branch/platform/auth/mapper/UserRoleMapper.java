@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.mapper;
 
+import com.bank.branch.platform.auth.api.dto.RoleUserRespDTO;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.entity.PtUserRole;
@@ -82,4 +83,18 @@ public interface UserRoleMapper {
      */
     long countUsersByRoleId(@Param("roleId") String roleId,
                             @Param("keyword") String keyword);
+
+    /**
+     * 分页查询角色下用户详情（含机构信息和绑定时间），用于 B.5 接口。
+     *
+     * @param roleId   角色ID
+     * @param keyword  关键字（工号/姓名）
+     * @param offset   偏移量
+     * @param limit    每页条数
+     * @return 包含机构信息和绑定时间的用户列表
+     */
+    List<RoleUserRespDTO> selectRoleUserDetailsByRoleId(@Param("roleId") String roleId,
+                                                        @Param("keyword") String keyword,
+                                                        @Param("offset") int offset,
+                                                        @Param("limit") int limit);
 }

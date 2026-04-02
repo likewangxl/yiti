@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.mapper.OrgMapper;
@@ -141,5 +142,31 @@ class OrgServiceTest {
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getOrgName()).isEqualTo("测试分行");
+    }
+
+    @Test
+    void getOrgTree_shouldBuildHierarchyFromAllOrgs() {
+        // 模拟三层结构：root → branch → sub1/sub2
+        ExtOrgInfo root = makeOrg("ROOT", "总行", null);
+        branch.setPId("ROOT"); // 将分行设为总行的子节点
+        when(orgMapper.selectAll()).thenReturn(List.of(root, branch, sub1, sub2));
+
+        List<OrgTreeNodeDTO> tree = orgService.getOrgTree();
+
+        // 顶层只有总行
+        assertThat(tree).hasSize(1);
+        assertThat(tree.get(0).getOrgCode()).isEqualTo("ROOT");
+        // 总行有一个子节点（分行）
+        assertThat(tree.get(0).getChildren()).hasSize(1);
+        // 分行有两个子节点
+        assertThat(tree.get(0).getChildren().get(0).getChildren()).hasSize(2);
+    }
+
+    private ExtOrgInfo makeOrg(String orgCode, String orgName, String parentOrgCode) {
+        ExtOrgInfo org = new ExtOrgInfo();
+        org.setOrgCode(orgCode);
+        org.setOrgName(orgName);
+        org.setPId(parentOrgCode);
+        return org;
     }
 }

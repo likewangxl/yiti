@@ -1,0 +1,62 @@
+package com.bank.branch.platform.auth.controller;
+
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
+import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
+import com.bank.branch.platform.auth.service.OrgService;
+import com.bank.branch.platform.common.security.context.CurrentUserContext;
+import com.bank.branch.platform.common.web.ResponseWrapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+/**
+ * 组织机构控制器
+ * 提供机构树查询和当前用户机构子树查询接口
+ */
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/orgs")
+@Tag(name = "组织机构", description = "机构树查询接口")
+public class OrgController {
+
+    private final OrgService orgService;
+    private final CurrentUserProvider currentUserProvider;
+
+    /**
+     * 获取完整组织机构树
+     * 从数据库一次性加载所有机构，在内存中构建层级树形结构
+     *
+     * @return 根节点列表（含完整子树）
+     */
+    @GetMapping("/tree")
+    @Operation(summary = "获取完整组织机构树", description = "返回完整的机构树形结构，含所有层级")
+    public ResponseWrapper<List<OrgTreeNodeDTO>> getOrgTree() {
+        log.debug("[OrgController.getOrgTree] 获取完整机构树");
+        List<OrgTreeNodeDTO> tree = orgService.getOrgTree();
+        return ResponseWrapper.success(tree);
+    }
+
+    /**
+     * 获取当前用户所在机构的子树
+     * 基于当前登录用户的主机构编码，查询其机构子树（含自身）
+     *
+     * @return 当前用户机构子树中所有机构的列表
+     */
+    @GetMapping("/subtree")
+    @Operation(summary = "获取当前用户机构子树", description = "返回当前用户主机构及其下属所有机构列表")
+    public ResponseWrapper<List<OrgDTO>> getOrgSubtree() {
+        CurrentUserContext ctx = currentUserProvider.get();
+        String orgCode = ctx.mainOrgCode();
+        log.debug("[OrgController.getOrgSubtree] 获取机构子树 orgCode={}", orgCode);
+        List<OrgDTO> nodes = orgService.getOrgSubtree(orgCode);
+        return ResponseWrapper.success(nodes);
+    }
+}

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -140,5 +142,43 @@ public class OrgService {
         dto.setParentOrgCode(org.getPId());
         dto.setOrganState(org.getOrganState());
         return dto;
+    }
+
+    /**
+     * 获取完整的组织机构树（从数据库一次性加载所有机构，在内存中构建层级）
+     *
+     * @return 顶层机构节点列表（每个节点包含完整子树）
+     */
+    public List<OrgTreeNodeDTO> getOrgTree() {
+        List<ExtOrgInfo> all = orgMapper.selectAll();
+        // 按 orgCode 分组，方便快速查找
+        Map<String, OrgTreeNodeDTO> nodeMap = all.stream()
+            .collect(Collectors.toMap(ExtOrgInfo::getOrgCode, this::toTreeNode));
+        List<OrgTreeNodeDTO> roots = new ArrayList<>();
+        for (ExtOrgInfo org : all) {
+            OrgTreeNodeDTO node = nodeMap.get(org.getOrgCode());
+            if (org.getPId() == null || !nodeMap.containsKey(org.getPId())) {
+                // 没有父节点或父节点不在当前数据集中 → 顶层节点
+                roots.add(node);
+            } else {
+                OrgTreeNodeDTO parent = nodeMap.get(org.getPId());
+                if (parent.getChildren() == null) {
+                    parent.setChildren(new ArrayList<>());
+                }
+                parent.getChildren().add(node);
+            }
+        }
+        return roots;
+    }
+
+    /** 将 ExtOrgInfo 实体转换为 OrgTreeNodeDTO（不含 children） */
+    private OrgTreeNodeDTO toTreeNode(ExtOrgInfo org) {
+        OrgTreeNodeDTO node = new OrgTreeNodeDTO();
+        node.setOrgCode(org.getOrgCode());
+        node.setOrgName(org.getOrgName());
+        node.setOrgLevel(org.getOrgLevel());
+        node.setParentOrgCode(org.getPId());
+        node.setOrganState(org.getOrganState());
+        return node;
     }
 }
