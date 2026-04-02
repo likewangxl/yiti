@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.RoleResourceMapper">
+
+    <!-- 查询指定角色的已授权资源ID列表，用于权限缓存和授权页面回显 -->
+    <select id="selectResourceIdsByRoleId" parameterType="string" resultType="string">
+        SELECT RESOURCE_ID
+        FROM PT_ROLE_RESOURCE
+        WHERE ROLE_ID = #{roleId}
+    </select>
+
+    <!-- 新增角色资源授权记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtRoleResource">
+        INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
+        VALUES (#{id}, #{roleId}, #{resourceId}, #{sysCode}, #{createTime})
+    </insert>
+
+    <!--
+        删除指定角色的全部资源授权。
+        重新授权时先调用此方法清空旧记录，再批量 insert 新授权，
+        确保授权操作的原子性（配合 @Transactional 使用）。
+    -->
+    <delete id="deleteByRoleId" parameterType="string">
+        DELETE FROM PT_ROLE_RESOURCE
+        WHERE ROLE_ID = #{roleId}
+    </delete>
+
+    <!--
+        删除指定资源的全部角色授权。
+        当资源下线（STATUS 改为 1）或物理删除时，需先清理此表中的关联记录，
+        避免脏数据影响权限缓存。
+    -->
+    <delete id="deleteByResourceId" parameterType="string">
+        DELETE FROM PT_ROLE_RESOURCE
+        WHERE RESOURCE_ID = #{resourceId}
+    </delete>
+
+    <!--
+        判断角色与资源的授权关系是否存在。
+        使用 COUNT(*) > 0 的写法，MyBatis 能将数值型结果自动映射到 boolean。
+        返回 1（true）表示已存在，0（false）表示不存在。
+    -->
+    <select id="existsByRoleIdAndResourceId" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM PT_ROLE_RESOURCE
+        WHERE ROLE_ID    = #{roleId}
+          AND RESOURCE_ID = #{resourceId}
+    </select>
+
+</mapper>

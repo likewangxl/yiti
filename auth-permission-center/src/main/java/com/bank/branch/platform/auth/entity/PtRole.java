@@ -1,0 +1,45 @@
+package com.bank.branch.platform.auth.entity;
+
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+/**
+ * 角色实体，对应 PT_ROLE 表。
+ * <p>
+ * 字段命名遵循驼峰，MyBatis 全局 underscore-to-camel 配置负责与数据库大写下划线列名的映射。
+ * </p>
+ */
+@Data
+public class PtRole {
+
+    /** 角色ID，对应 ROLE_ID */
+    private String roleId;
+
+    /** 角色编码，对应 ROLE_CODE */
+    private String roleCode;
+
+    /** 角色中文名，对应 ROLE_CHNAME */
+    private String roleChName;
+
+    /** 记录状态：0-可用，1-不可用，对应 RECORD_STATUS */
+    private Integer recordStatus;
+
+    /** 系统编号，对应 SYS_CODE */
+    private String sysCode;
+
+    /** 创建时间，对应 CREATE_TIME */
+    private LocalDateTime createTime;
+
+    /** 创建人，对应 CREATE_USER */
+    private String createUser;
+
+    /** 更新时间，对应 UPDATE_TIME */
+    private LocalDateTime updateTime;
+
+    /** 更新人，对应 UPDATE_USER */
+    private String updateUser;
+
+    /** 备注，对应 REMARK */
+    private String remark;
+}

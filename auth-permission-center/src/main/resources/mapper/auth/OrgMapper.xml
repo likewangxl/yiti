@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.OrgMapper">
+
+    <!--
+        EXT_ORG_INFO 全列查询片段。
+        注意：P_ID 列名不含下划线，全局 underscore-to-camel 无法处理，
+        需要通过 resultMap 或别名显式映射。此处使用列别名方式解决：
+        将 P_ID 显式别名为 p_id（小写下划线），使 MyBatis 能正确映射到 Java 字段 pId。
+        同理，ORGAN_STATE → organ_state 已能被全局配置处理；
+        ADM_DIVISION_CODE / ADM_DIVISION_NAME 同理。
+        为避免歧义，全部使用别名保持一致性。
+    -->
+    <sql id="BASE_COLUMNS">
+        ID         AS id,
+        ORG_CODE   AS org_code,
+        ORG_NAME   AS org_name,
+        ORG_LEVEL  AS org_level,
+        P_ID       AS p_id,
+        ORGAN_STATE       AS organ_state,
+        ADM_DIVISION_CODE AS adm_division_code,
+        ADM_DIVISION_NAME AS adm_division_name,
+        CREATE_TIME AS create_time,
+        CREATE_USER AS create_user
+    </sql>
+
+    <!-- 根据机构编码查询（命中唯一索引 uk_ext_org_info_org_code） -->
+    <select id="selectByOrgCode" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        WHERE ORG_CODE = #{orgCode}
+    </select>
+
+    <!--
+        查询全量机构数据，用于系统启动时构建完整机构树缓存。
+        不过滤 ORGAN_STATE，以便业务层自行决定是否展示已删除机构。
+        按 ORG_LEVEL 和 ORG_CODE 排序，保证父节点先于子节点出现，方便树形构建。
+    -->
+    <select id="selectAll"
+            resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        ORDER BY ORG_LEVEL ASC, ORG_CODE ASC
+    </select>
+
+    <!--
+        查询指定父机构的直接子机构列表（利用索引 idx_p_id）。
+        用于机构树的按需懒加载，避免一次性加载全量节点。
+        只返回 ORGAN_STATE = 0（启用）的机构。
+    -->
+    <select id="selectChildren" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        WHERE P_ID = #{parentOrgCode}
+          AND ORGAN_STATE = 0
+        ORDER BY ORG_CODE ASC
+    </select>
+
+    <!--
+        关键字搜索机构，模糊匹配机构编码和机构名称。
+        LIMIT 限制返回数量，防止全表扫描返回过多数据。
+        只搜索 ORGAN_STATE = 0（启用）的机构。
+    -->
+    <select id="searchByKeyword"
+            resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        WHERE ORGAN_STATE = 0
+          AND (ORG_CODE LIKE CONCAT('%', #{keyword}, '%')
+               OR ORG_NAME LIKE CONCAT('%', #{keyword}, '%'))
+        ORDER BY ORG_LEVEL ASC, ORG_CODE ASC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

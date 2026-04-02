@@ -15,6 +15,13 @@
     <description>认证授权中心：用户认证、RBAC权限、BizType数据范围、组织范围</description>
 
     <dependencies>
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Common 模块 -->
         <dependency>
             <groupId>com.bank.branch.platform</groupId>

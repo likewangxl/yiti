@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.UserOrgMapper">
+
+    <!--
+        根据用户ID查询用户机构关联记录（V1 单主机构）。
+        EXT_USER_ORG 的字段全部为下划线命名，全局 underscore-to-camel 可自动处理。
+    -->
+    <select id="selectByUserId" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.ExtUserOrg">
+        SELECT USER_ID, ORG_CODE, CREATE_TIME
+        FROM EXT_USER_ORG
+        WHERE USER_ID = #{userId}
+        LIMIT 1
+    </select>
+
+    <!--
+        根据用户ID查询用户所属机构的完整信息，通过 JOIN EXT_ORG_INFO 获取机构详情。
+        P_ID 不含下划线，使用别名 p_id 确保 underscore-to-camel 能正确映射到 pId 字段。
+        只返回 ORGAN_STATE = 0（启用）的机构，避免将已注销机构加入权限计算。
+    -->
+    <select id="selectOrgsByUserId" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            o.ID         AS id,
+            o.ORG_CODE   AS org_code,
+            o.ORG_NAME   AS org_name,
+            o.ORG_LEVEL  AS org_level,
+            o.P_ID       AS p_id,
+            o.ORGAN_STATE       AS organ_state,
+            o.ADM_DIVISION_CODE AS adm_division_code,
+            o.ADM_DIVISION_NAME AS adm_division_name,
+            o.CREATE_TIME AS create_time,
+            o.CREATE_USER AS create_user
+        FROM EXT_ORG_INFO o
+        INNER JOIN EXT_USER_ORG uo ON o.ORG_CODE = uo.ORG_CODE
+        WHERE uo.USER_ID   = #{userId}
+          AND o.ORGAN_STATE = 0
+    </select>
+
+</mapper>

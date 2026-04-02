@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.UserRoleMapper">
+
+    <!--
+        查询用户已分配的完整角色信息，JOIN PT_ROLE 获取角色详情。
+        只返回 RECORD_STATUS = 0（可用）的角色，避免将已禁用角色加入权限缓存。
+    -->
+    <select id="selectRolesByUserId" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtRole">
+        SELECT
+            r.ROLE_ID, r.ROLE_CODE, r.ROLE_CHNAME, r.RECORD_STATUS, r.SYS_CODE,
+            r.CREATE_TIME, r.CREATE_USER, r.UPDATE_TIME, r.UPDATE_USER, r.REMARK
+        FROM PT_ROLE r
+        INNER JOIN PT_USER_ROLE ur ON r.ROLE_ID = ur.ROLE_ID
+        WHERE ur.USER_ID = #{userId}
+          AND r.RECORD_STATUS = 0
+    </select>
+
+    <!--
+        仅查询角色ID列表，相比 selectRolesByUserId 减少数据传输量，
+        适用于只需要 ID 集合的权限缓存构建场景。
+    -->
+    <select id="selectRoleIdsByUserId" parameterType="string" resultType="string">
+        SELECT ur.ROLE_ID
+        FROM PT_USER_ROLE ur
+        INNER JOIN PT_ROLE r ON ur.ROLE_ID = r.ROLE_ID
+        WHERE ur.USER_ID = #{userId}
+          AND r.RECORD_STATUS = 0
+    </select>
+
+    <!-- 新增用户角色关联记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtUserRole">
+        INSERT INTO PT_USER_ROLE (
+            USER_ID, ROLE_ID, DEFAULT_ASSIGN, INHERIT_ASSIGN, GROUP_ASSING, CREATE_TIME
+        ) VALUES (
+            #{userId}, #{roleId}, #{defaultAssign}, #{inheritAssign}, #{groupAssing}, #{createTime}
+        )
+    </insert>
+
+    <!-- 删除指定用户与角色的关联关系 -->
+    <delete id="deleteByUserIdAndRoleId">
+        DELETE FROM PT_USER_ROLE
+        WHERE USER_ID = #{userId}
+          AND ROLE_ID = #{roleId}
+    </delete>
+
+    <!-- 统计指定角色关联的用户数量，用于角色删除前的前置校验 -->
+    <select id="countByRoleId" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM PT_USER_ROLE
+        WHERE ROLE_ID = #{roleId}
+    </select>
+
+    <!--
+        分页查询角色下关联的用户，支持关键字模糊搜索。
+        JOIN PT_USER 获取用户详情，JOIN 后过滤，保证分页数量准确。
+    -->
+    <select id="selectUsersByRoleId"
+            resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            u.USER_ID, u.USERNAME, u.USERCHNNAME, u.EMAIL,
+            u.ISEXPIRED, u.ISLOCKED, u.PASS_WRONG_COUNT, u.ISENABLED,
+            u.CREATE_TIME, u.CREATE_AUTHOR, u.UPDATE_TIME, u.UPDATE_AUTHOR,
+            u.REMARK, u.PWD_UPDATE_TIME
+        FROM PT_USER u
+        INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID
+        WHERE ur.ROLE_ID = #{roleId}
+        <if test="keyword != null and keyword != ''">
+            AND (u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY u.CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计角色下满足关键字条件的用户总数 -->
+    <select id="countUsersByRoleId" resultType="long">
+        SELECT COUNT(*)
+        FROM PT_USER u
+        INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID
+        WHERE ur.ROLE_ID = #{roleId}
+        <if test="keyword != null and keyword != ''">
+            AND (u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+</mapper>

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.UserMapper">
+
+    <!--
+        PT_USER 全列查询片段，供多个 select 语句复用。
+        注意：CREATE_AUTHOR / UPDATE_AUTHOR 是本表特有的字段名，
+              全局 underscore-to-camel 会将其映射为 createAuthor / updateAuthor。
+    -->
+    <sql id="BASE_COLUMNS">
+        USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL,
+        ISEXPIRED, ISLOCKED, PASS_WRONG_COUNT, ISENABLED,
+        CREATE_TIME, CREATE_AUTHOR, UPDATE_TIME, UPDATE_AUTHOR,
+        REMARK, PWD_UPDATE_TIME
+    </sql>
+
+    <!-- 根据用户ID查询用户 -->
+    <select id="selectByUserId" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_USER
+        WHERE USER_ID = #{userId}
+    </select>
+
+    <!-- 根据用户名（登录名）查询用户，用于登录认证 -->
+    <select id="selectByUsername" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_USER
+        WHERE USERNAME = #{username}
+    </select>
+
+    <!--
+        仅更新密码错误计数，单独写 SQL 而非走 updateById 的原因：
+        避免并发场景下因整体更新而覆盖其他字段的并发修改。
+    -->
+    <update id="updatePassWrongCount">
+        UPDATE PT_USER
+        SET PASS_WRONG_COUNT = #{count}
+        WHERE USER_ID = #{userId}
+    </update>
+
+    <!-- 仅更新锁定状态，同上，单字段精准更新 -->
+    <update id="updateLockedStatus">
+        UPDATE PT_USER
+        SET ISLOCKED = #{locked}
+        WHERE USER_ID = #{userId}
+    </update>
+
+    <!--
+        按主键动态更新用户信息。
+        使用 <set> 标签自动处理末尾逗号，仅更新传入的非 null 字段，
+        保证幂等且安全（不会将未传入字段置空）。
+        userId 作为 WHERE 条件，本身不在 SET 中更新。
+    -->
+    <update id="updateById" parameterType="com.bank.branch.platform.auth.entity.PtUser">
+        UPDATE PT_USER
+        <set>
+            <if test="username != null">USERNAME = #{username},</if>
+            <if test="userchnname != null">USERCHNNAME = #{userchnname},</if>
+            <if test="pwd != null">PWD = #{pwd},</if>
+            <if test="email != null">EMAIL = #{email},</if>
+            <if test="isExpired != null">ISEXPIRED = #{isExpired},</if>
+            <if test="isLocked != null">ISLOCKED = #{isLocked},</if>
+            <if test="passWrongCount != null">PASS_WRONG_COUNT = #{passWrongCount},</if>
+            <if test="isEnabled != null">ISENABLED = #{isEnabled},</if>
+            <if test="updateTime != null">UPDATE_TIME = #{updateTime},</if>
+            <if test="updateAuthor != null">UPDATE_AUTHOR = #{updateAuthor},</if>
+            <if test="remark != null">REMARK = #{remark},</if>
+            <if test="pwdUpdateTime != null">PWD_UPDATE_TIME = #{pwdUpdateTime},</if>
+        </set>
+        WHERE USER_ID = #{userId}
+    </update>
+
+</mapper>

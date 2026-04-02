@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.RoleBizScopeMapper">
+
+    <!-- PT_ROLE_BIZ_SCOPE 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS,
+        CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK
+    </sql>
+
+    <!-- 分页/计数查询的公共 WHERE 条件片段 -->
+    <sql id="PAGE_WHERE">
+        <where>
+            <if test="roleId != null and roleId != ''">
+                AND ROLE_ID = #{roleId}
+            </if>
+            <if test="bizType != null and bizType != ''">
+                AND BIZ_TYPE = #{bizType}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 查询指定角色的全部业务范围配置 -->
+    <select id="selectByRoleId" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE_BIZ_SCOPE
+        WHERE ROLE_ID = #{roleId}
+    </select>
+
+    <!--
+        根据角色ID + 业务类型精确查询，命中唯一索引 uk_pt_role_biz_scope_role_biz。
+        是数据权限鉴权的核心查询，调用频率高，建议在 Service 层加 Redis 缓存。
+    -->
+    <select id="selectByRoleIdAndBizType"
+            resultType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE_BIZ_SCOPE
+        WHERE ROLE_ID  = #{roleId}
+          AND BIZ_TYPE = #{bizType}
+        LIMIT 1
+    </select>
+
+    <!-- 根据主键ID查询 -->
+    <select id="selectById" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE_BIZ_SCOPE
+        WHERE ID = #{id}
+    </select>
+
+    <!-- 分页查询，按创建时间倒序 -->
+    <select id="selectByPage"
+            resultType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE_BIZ_SCOPE
+        <include refid="PAGE_WHERE"/>
+        ORDER BY CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计分页总数 -->
+    <select id="countByPage" resultType="long">
+        SELECT COUNT(*)
+        FROM PT_ROLE_BIZ_SCOPE
+        <include refid="PAGE_WHERE"/>
+    </select>
+
+    <!--
+        查询全量业务范围配置，用于系统启动时全量加载到 Redis。
+        只加载 RECORD_STATUS = 0（可用）的记录，避免加载已禁用的配置。
+    -->
+    <select id="selectAll"
+            resultType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE_BIZ_SCOPE
+        WHERE RECORD_STATUS = 0
+    </select>
+
+    <!-- 新增业务范围配置 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
+        INSERT INTO PT_ROLE_BIZ_SCOPE (
+            ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS,
+            CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK
+        ) VALUES (
+            #{id}, #{roleId}, #{bizType}, #{dataScope}, #{recordStatus},
+            #{createTime}, #{createUser}, #{updateTime}, #{updateUser}, #{remark}
+        )
+    </insert>
+
+    <!-- 按主键动态更新业务范围配置，仅更新非 null 字段 -->
+    <update id="updateById"
+            parameterType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
+        UPDATE PT_ROLE_BIZ_SCOPE
+        <set>
+            <if test="roleId != null">ROLE_ID = #{roleId},</if>
+            <if test="bizType != null">BIZ_TYPE = #{bizType},</if>
+            <if test="dataScope != null">DATA_SCOPE = #{dataScope},</if>
+            <if test="recordStatus != null">RECORD_STATUS = #{recordStatus},</if>
+            <if test="updateTime != null">UPDATE_TIME = #{updateTime},</if>
+            <if test="updateUser != null">UPDATE_USER = #{updateUser},</if>
+            <if test="remark != null">REMARK = #{remark},</if>
+        </set>
+        WHERE ID = #{id}
+    </update>
+
+    <!-- 按主键删除业务范围配置 -->
+    <delete id="deleteById" parameterType="string">
+        DELETE FROM PT_ROLE_BIZ_SCOPE
+        WHERE ID = #{id}
+    </delete>
+
+    <!-- 删除指定角色的全部业务范围配置，用于角色删除前的级联清理 -->
+    <delete id="deleteByRoleId" parameterType="string">
+        DELETE FROM PT_ROLE_BIZ_SCOPE
+        WHERE ROLE_ID = #{roleId}
+    </delete>
+
+</mapper>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.RoleMapper">
+
+    <!-- PT_ROLE 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS, SYS_CODE,
+        CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK
+    </sql>
+
+    <!-- 分页/计数查询的公共 WHERE 条件片段，避免 SQL 重复 -->
+    <sql id="PAGE_WHERE">
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (ROLE_CODE LIKE CONCAT('%', #{keyword}, '%')
+                     OR ROLE_CHNAME LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="recordStatus != null">
+                AND RECORD_STATUS = #{recordStatus}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 根据角色ID查询 -->
+    <select id="selectByRoleId" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtRole">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE
+        WHERE ROLE_ID = #{roleId}
+    </select>
+
+    <!-- 根据角色编码查询，用于新增时的唯一性校验 -->
+    <select id="selectByRoleCode" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtRole">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE
+        WHERE ROLE_CODE = #{roleCode}
+    </select>
+
+    <!-- 分页查询，按创建时间倒序 -->
+    <select id="selectByPage" resultType="com.bank.branch.platform.auth.entity.PtRole">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE
+        <include refid="PAGE_WHERE"/>
+        ORDER BY CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计分页总数 -->
+    <select id="countByPage" resultType="long">
+        SELECT COUNT(*)
+        FROM PT_ROLE
+        <include refid="PAGE_WHERE"/>
+    </select>
+
+    <!-- 新增角色 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtRole">
+        INSERT INTO PT_ROLE (
+            ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS, SYS_CODE,
+            CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK
+        ) VALUES (
+            #{roleId}, #{roleCode}, #{roleChName}, #{recordStatus}, #{sysCode},
+            #{createTime}, #{createUser}, #{updateTime}, #{updateUser}, #{remark}
+        )
+    </insert>
+
+    <!-- 按主键动态更新角色信息 -->
+    <update id="updateById" parameterType="com.bank.branch.platform.auth.entity.PtRole">
+        UPDATE PT_ROLE
+        <set>
+            <if test="roleCode != null">ROLE_CODE = #{roleCode},</if>
+            <if test="roleChName != null">ROLE_CHNAME = #{roleChName},</if>
+            <if test="recordStatus != null">RECORD_STATUS = #{recordStatus},</if>
+            <if test="sysCode != null">SYS_CODE = #{sysCode},</if>
+            <if test="updateTime != null">UPDATE_TIME = #{updateTime},</if>
+            <if test="updateUser != null">UPDATE_USER = #{updateUser},</if>
+            <if test="remark != null">REMARK = #{remark},</if>
+        </set>
+        WHERE ROLE_ID = #{roleId}
+    </update>
+
+    <!--
+        查询指定用户已分配的角色，通过 PT_USER_ROLE 关联。
+        使用 INNER JOIN 确保只返回同时存在于两张表中的有效角色。
+    -->
+    <select id="selectByUserId" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtRole">
+        SELECT
+            r.ROLE_ID, r.ROLE_CODE, r.ROLE_CHNAME, r.RECORD_STATUS, r.SYS_CODE,
+            r.CREATE_TIME, r.CREATE_USER, r.UPDATE_TIME, r.UPDATE_USER, r.REMARK
+        FROM PT_ROLE r
+        INNER JOIN PT_USER_ROLE ur ON r.ROLE_ID = ur.ROLE_ID
+        WHERE ur.USER_ID = #{userId}
+    </select>
+
+</mapper>
