@@ -1,0 +1,263 @@
+package com.bank.branch.platform.governance.service;
+
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.dto.JobConfDTO;
+import com.bank.branch.platform.governance.api.dto.JobRunLogDTO;
+import com.bank.branch.platform.governance.entity.SysJobConf;
+import com.bank.branch.platform.governance.entity.SysJobRunLog;
+import com.bank.branch.platform.governance.mapper.JobConfMapper;
+import com.bank.branch.platform.governance.mapper.JobRunLogMapper;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * 任务调度服务单元测试
+ */
+@ExtendWith(MockitoExtension.class)
+class JobServiceTest {
+
+    @Mock
+    JobConfMapper jobConfMapper;
+    @Mock
+    JobRunLogMapper jobRunLogMapper;
+    @InjectMocks
+    JobService jobService;
+
+    // ── getJobConf ──────────────────────────────────────────────
+
+    /**
+     * 测试获取任务配置 - 任务存在时返回 DTO
+     */
+    @Test
+    void getJobConf_found_returnsDTO() {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectByJobKey("PERF_DAILY_CALC")).thenReturn(conf);
+
+        JobConfDTO dto = jobService.getJobConf("PERF_DAILY_CALC");
+
+        assertThat(dto).isNotNull();
+        assertThat(dto.getId()).isEqualTo("JOB_001");
+        assertThat(dto.getJobKey()).isEqualTo("PERF_DAILY_CALC");
+        assertThat(dto.getJobName()).isEqualTo("绩效日计算");
+    }
+
+    /**
+     * 测试获取任务配置 - 任务不存在时抛出 GOV-40004
+     */
+    @Test
+    void getJobConf_notFound_throwsGov40004() {
+        when(jobConfMapper.selectByJobKey("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.getJobConf("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    // ── startJobRun ─────────────────────────────────────────────
+
+    /**
+     * 测试任务启动 - 成功时创建 RUNNING 状态日志并返回日志ID
+     */
+    @Test
+    void startJobRun_success_createsRunningLog() {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        when(jobRunLogMapper.existsRunningByJobId("JOB_001")).thenReturn(false);
+        when(jobRunLogMapper.insert(any(SysJobRunLog.class))).thenReturn(1);
+
+        String runLogId = jobService.startJobRun("JOB_001", "SCHEDULED", "SYSTEM");
+
+        assertThat(runLogId).isNotBlank();
+        // 验证插入了一条 RUNNING 状态的日志
+        verify(jobRunLogMapper).insert(argThat(log ->
+                "RUNNING".equals(log.getStatus())
+                        && "SCHEDULED".equals(log.getTriggerType())
+                        && "SYSTEM".equals(log.getCreatedBy())
+                        && log.getStartTime() != null
+        ));
+        // 验证更新了任务的最后执行时间
+        verify(jobConfMapper).updateById(argThat(c -> c.getLastRunTime() != null));
+    }
+
+    /**
+     * 测试任务启动 - 任务不存在时抛出 GOV-40004
+     */
+    @Test
+    void startJobRun_jobNotFound_throwsGov40004() {
+        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.startJobRun("NOT_EXIST", "SCHEDULED", "SYSTEM"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    /**
+     * 测试任务启动 - 已有 RUNNING 日志时抛出 GOV-40903（并发防控）
+     */
+    @Test
+    void startJobRun_alreadyRunning_throwsGov40903() {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        when(jobRunLogMapper.existsRunningByJobId("JOB_001")).thenReturn(true);
+
+        assertThatThrownBy(() -> jobService.startJobRun("JOB_001", "SCHEDULED", "SYSTEM"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40903"));
+    }
+
+    // ── completeJobRun ──────────────────────────────────────────
+
+    /**
+     * 测试完成任务执行 - 更新状态为 SUCCESS 且设置 endTime
+     */
+    @Test
+    void completeJobRun_updatesStatus() {
+        SysJobRunLog log = makeRunLog("LOG_001", "JOB_001", "RUNNING");
+        when(jobRunLogMapper.selectById("LOG_001")).thenReturn(log);
+        when(jobRunLogMapper.updateById(any())).thenReturn(1);
+
+        jobService.completeJobRun("LOG_001");
+
+        verify(jobRunLogMapper).updateById(argThat(l ->
+                "SUCCESS".equals(l.getStatus()) && l.getEndTime() != null
+        ));
+    }
+
+    /**
+     * 测试完成任务执行 - 日志不存在时抛出 GOV-40007
+     */
+    @Test
+    void completeJobRun_notFound_throwsGov40007() {
+        when(jobRunLogMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.completeJobRun("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40007"));
+    }
+
+    // ── failJobRun ──────────────────────────────────────────────
+
+    /**
+     * 测试任务执行失败 - 记录 FAILED 状态和错误信息
+     */
+    @Test
+    void failJobRun_recordsError() {
+        SysJobRunLog log = makeRunLog("LOG_001", "JOB_001", "RUNNING");
+        when(jobRunLogMapper.selectById("LOG_001")).thenReturn(log);
+        when(jobRunLogMapper.updateById(any())).thenReturn(1);
+
+        jobService.failJobRun("LOG_001", "NullPointerException at line 42");
+
+        verify(jobRunLogMapper).updateById(argThat(l ->
+                "FAILED".equals(l.getStatus())
+                        && l.getEndTime() != null
+                        && "NullPointerException at line 42".equals(l.getErrorMsg())
+        ));
+    }
+
+    // ── pauseJob / resumeJob ────────────────────────────────────
+
+    /**
+     * 测试暂停任务 - 更新状态为 PAUSED
+     */
+    @Test
+    void pauseJob_updatesStatus() {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        conf.setStatus("ACTIVE");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        when(jobConfMapper.updateById(any())).thenReturn(1);
+
+        jobService.pauseJob("JOB_001");
+
+        verify(jobConfMapper).updateById(argThat(c -> "PAUSED".equals(c.getStatus())));
+    }
+
+    /**
+     * 测试恢复任务 - 更新状态为 ACTIVE
+     */
+    @Test
+    void resumeJob_updatesStatus() {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        conf.setStatus("PAUSED");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        when(jobConfMapper.updateById(any())).thenReturn(1);
+
+        jobService.resumeJob("JOB_001");
+
+        verify(jobConfMapper).updateById(argThat(c -> "ACTIVE".equals(c.getStatus())));
+    }
+
+    // ── listJobs ────────────────────────────────────────────────
+
+    /**
+     * 测试分页查询任务列表
+     */
+    @Test
+    void listJobs_returnsPageResult() {
+        List<SysJobConf> records = List.of(makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算"));
+        when(jobConfMapper.countByPage("绩效")).thenReturn(1L);
+        when(jobConfMapper.selectByPage(eq("绩效"), eq(0), eq(20))).thenReturn(records);
+
+        PageResult<JobConfDTO> page = jobService.listJobs("绩效", 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1L);
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).getJobKey()).isEqualTo("PERF_DAILY_CALC");
+    }
+
+    // ── listRunLogs ─────────────────────────────────────────────
+
+    /**
+     * 测试分页查询任务执行日志
+     */
+    @Test
+    void listRunLogs_returnsPageResult() {
+        List<SysJobRunLog> logs = List.of(makeRunLog("LOG_001", "JOB_001", "SUCCESS"));
+        when(jobRunLogMapper.countByJobId("JOB_001")).thenReturn(1L);
+        when(jobRunLogMapper.selectByJobId(eq("JOB_001"), eq(0), eq(20))).thenReturn(logs);
+
+        PageResult<JobRunLogDTO> page = jobService.listRunLogs("JOB_001", 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1L);
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).getJobId()).isEqualTo("JOB_001");
+    }
+
+    // ── Helper Methods ──────────────────────────────────────────
+
+    private SysJobConf makeJobConf(String id, String jobKey, String jobName) {
+        SysJobConf conf = new SysJobConf();
+        conf.setId(id);
+        conf.setJobKey(jobKey);
+        conf.setJobName(jobName);
+        conf.setCronExpr("0 2 * * *");
+        conf.setStatus("ACTIVE");
+        conf.setAllowManualTrigger(1);
+        conf.setCreatedTime(LocalDateTime.now());
+        conf.setUpdatedTime(LocalDateTime.now());
+        return conf;
+    }
+
+    private SysJobRunLog makeRunLog(String id, String jobId, String status) {
+        SysJobRunLog log = new SysJobRunLog();
+        log.setId(id);
+        log.setJobId(jobId);
+        log.setTriggerType("SCHEDULED");
+        log.setStatus(status);
+        log.setStartTime(LocalDateTime.now());
+        log.setCreatedBy("SYSTEM");
+        log.setCreatedTime(LocalDateTime.now());
+        return log;
+    }
+}

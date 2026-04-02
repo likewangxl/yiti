@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.governance.mapper.JobConfMapper">
+
+    <!-- sys_job_conf 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, job_key, job_name, cron_expr, status,
+        allow_manual_trigger, last_run_time, next_run_time, remark,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!-- 根据任务KEY查询 -->
+    <select id="selectByJobKey" parameterType="string"
+            resultType="com.bank.branch.platform.governance.entity.SysJobConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_job_conf
+        WHERE job_key = #{jobKey}
+    </select>
+
+    <!-- 根据主键查询 -->
+    <select id="selectById" parameterType="string"
+            resultType="com.bank.branch.platform.governance.entity.SysJobConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_job_conf
+        WHERE id = #{id}
+    </select>
+
+    <!-- 分页查询任务配置列表 -->
+    <select id="selectByPage" resultType="com.bank.branch.platform.governance.entity.SysJobConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_job_conf
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (job_key LIKE CONCAT('%', #{keyword}, '%')
+                  OR job_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY created_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计分页查询总记录数 -->
+    <select id="countByPage" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_job_conf
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (job_key LIKE CONCAT('%', #{keyword}, '%')
+                  OR job_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
+
+    <!-- 新增任务配置记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
+        INSERT INTO sys_job_conf (
+            id, job_key, job_name, cron_expr, status,
+            allow_manual_trigger, last_run_time, next_run_time, remark,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES (
+            #{id}, #{jobKey}, #{jobName}, #{cronExpr}, #{status},
+            #{allowManualTrigger}, #{lastRunTime}, #{nextRunTime}, #{remark},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按主键动态更新任务配置 -->
+    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
+        UPDATE sys_job_conf
+        <set>
+            <if test="jobName != null">job_name = #{jobName},</if>
+            <if test="cronExpr != null">cron_expr = #{cronExpr},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="allowManualTrigger != null">allow_manual_trigger = #{allowManualTrigger},</if>
+            <if test="lastRunTime != null">last_run_time = #{lastRunTime},</if>
+            <if test="nextRunTime != null">next_run_time = #{nextRunTime},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+</mapper>

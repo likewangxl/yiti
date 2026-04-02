@@ -1,0 +1,273 @@
+package com.bank.branch.platform.governance.service;
+
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.dto.JobConfDTO;
+import com.bank.branch.platform.governance.api.dto.JobRunLogDTO;
+import com.bank.branch.platform.governance.entity.SysJobConf;
+import com.bank.branch.platform.governance.entity.SysJobRunLog;
+import com.bank.branch.platform.governance.enums.GovErrorCode;
+import com.bank.branch.platform.governance.enums.JobRunStatus;
+import com.bank.branch.platform.governance.enums.JobStatus;
+import com.bank.branch.platform.governance.mapper.JobConfMapper;
+import com.bank.branch.platform.governance.mapper.JobRunLogMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+/**
+ * 任务调度服务
+ * <p>
+ * 负责任务配置的查询和状态管理，以及任务执行日志的生命周期管理。
+ * 核心业务规则：startJobRun 中通过 existsRunningByJobId 实现并发防控，
+ * 同一任务同时只允许一条 RUNNING 状态的执行日志。
+ * </p>
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class JobService {
+
+    private final JobConfMapper jobConfMapper;
+    private final JobRunLogMapper jobRunLogMapper;
+
+    private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+    /**
+     * 获取任务配置
+     *
+     * @param jobKey 任务唯一标识
+     * @return 任务配置 DTO
+     * @throws BizException GOV-40004 任务不存在
+     */
+    public JobConfDTO getJobConf(String jobKey) {
+        log.info("[JobService.getJobConf] jobKey={}", jobKey);
+        SysJobConf conf = jobConfMapper.selectByJobKey(jobKey);
+        if (conf == null) {
+            throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+        return toJobConfDTO(conf);
+    }
+
+    /**
+     * 记录任务执行开始，创建一条 RUNNING 状态的执行日志
+     * <p>
+     * 业务规则：同一任务同时只允许一条 RUNNING 日志（并发防控）。
+     * 若已存在 RUNNING 日志则抛出 GOV-40903。
+     * </p>
+     *
+     * @param jobId         任务ID
+     * @param triggerType   触发类型（SCHEDULED/MANUAL）
+     * @param operatorEmpId 触发人工号（SCHEDULED 时传 "SYSTEM"）
+     * @return 执行日志ID
+     * @throws BizException GOV-40004 任务不存在
+     * @throws BizException GOV-40903 任务正在执行中（并发防控）
+     */
+    @Transactional
+    public String startJobRun(String jobId, String triggerType, String operatorEmpId) {
+        log.info("[JobService.startJobRun] jobId={}, triggerType={}, operator={}", jobId, triggerType, operatorEmpId);
+
+        // 1. 校验任务配置存在
+        SysJobConf conf = jobConfMapper.selectById(jobId);
+        if (conf == null) {
+            throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+
+        // 2. 并发防控：检查是否有 RUNNING 中的日志
+        if (jobRunLogMapper.existsRunningByJobId(jobId)) {
+            throw new BizException(GovErrorCode.TASK_ALREADY_RUNNING.getCode(),
+                    GovErrorCode.TASK_ALREADY_RUNNING.getMessage());
+        }
+
+        // 3. 创建执行日志
+        String logId = "JRL_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        SysJobRunLog runLog = new SysJobRunLog();
+        runLog.setId(logId);
+        runLog.setJobId(jobId);
+        runLog.setTriggerType(triggerType);
+        runLog.setStatus(JobRunStatus.RUNNING.getCode());
+        runLog.setStartTime(LocalDateTime.now());
+        runLog.setCreatedBy(operatorEmpId);
+        runLog.setCreatedTime(LocalDateTime.now());
+        jobRunLogMapper.insert(runLog);
+
+        // 4. 更新任务最后执行时间
+        conf.setLastRunTime(LocalDateTime.now());
+        conf.setUpdatedTime(LocalDateTime.now());
+        jobConfMapper.updateById(conf);
+
+        log.info("[JobService.startJobRun] 执行日志已创建 logId={}", logId);
+        return logId;
+    }
+
+    /**
+     * 记录任务执行结束（成功）
+     *
+     * @param runLogId 执行日志ID
+     * @throws BizException GOV-40007 执行日志不存在
+     */
+    @Transactional
+    public void completeJobRun(String runLogId) {
+        log.info("[JobService.completeJobRun] runLogId={}", runLogId);
+        SysJobRunLog runLog = jobRunLogMapper.selectById(runLogId);
+        if (runLog == null) {
+            throw new BizException(GovErrorCode.TASK_LOG_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_LOG_NOT_FOUND.getMessage());
+        }
+        runLog.setStatus(JobRunStatus.SUCCESS.getCode());
+        runLog.setEndTime(LocalDateTime.now());
+        jobRunLogMapper.updateById(runLog);
+        log.info("[JobService.completeJobRun] 任务执行成功 runLogId={}", runLogId);
+    }
+
+    /**
+     * 记录任务执行结束（失败）
+     *
+     * @param runLogId 执行日志ID
+     * @param errorMsg 错误信息
+     * @throws BizException GOV-40007 执行日志不存在
+     */
+    @Transactional
+    public void failJobRun(String runLogId, String errorMsg) {
+        log.info("[JobService.failJobRun] runLogId={}, errorMsg={}", runLogId, errorMsg);
+        SysJobRunLog runLog = jobRunLogMapper.selectById(runLogId);
+        if (runLog == null) {
+            throw new BizException(GovErrorCode.TASK_LOG_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_LOG_NOT_FOUND.getMessage());
+        }
+        runLog.setStatus(JobRunStatus.FAILED.getCode());
+        runLog.setEndTime(LocalDateTime.now());
+        runLog.setErrorMsg(errorMsg);
+        jobRunLogMapper.updateById(runLog);
+        log.info("[JobService.failJobRun] 任务执行失败 runLogId={}", runLogId);
+    }
+
+    /**
+     * 分页查询任务配置列表
+     *
+     * @param keyword  关键词（模糊匹配 job_key / job_name）
+     * @param pageNo   当前页码（从 1 开始）
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    public PageResult<JobConfDTO> listJobs(String keyword, int pageNo, int pageSize) {
+        log.debug("[JobService.listJobs] keyword={}, pageNo={}, pageSize={}", keyword, pageNo, pageSize);
+        int offset = (pageNo - 1) * pageSize;
+        long total = jobConfMapper.countByPage(keyword);
+        List<SysJobConf> records = jobConfMapper.selectByPage(keyword, offset, pageSize);
+        List<JobConfDTO> dtos = records.stream()
+                .map(this::toJobConfDTO)
+                .collect(Collectors.toList());
+        return PageResult.of(pageNo, pageSize, total, dtos);
+    }
+
+    /**
+     * 分页查询任务执行日志
+     *
+     * @param jobId    任务ID
+     * @param pageNo   当前页码（从 1 开始）
+     * @param pageSize 每页大小
+     * @return 分页结果
+     */
+    public PageResult<JobRunLogDTO> listRunLogs(String jobId, int pageNo, int pageSize) {
+        log.debug("[JobService.listRunLogs] jobId={}, pageNo={}, pageSize={}", jobId, pageNo, pageSize);
+        int offset = (pageNo - 1) * pageSize;
+        long total = jobRunLogMapper.countByJobId(jobId);
+        List<SysJobRunLog> records = jobRunLogMapper.selectByJobId(jobId, offset, pageSize);
+        List<JobRunLogDTO> dtos = records.stream()
+                .map(this::toRunLogDTO)
+                .collect(Collectors.toList());
+        return PageResult.of(pageNo, pageSize, total, dtos);
+    }
+
+    /**
+     * 暂停任务
+     *
+     * @param jobId 任务ID
+     * @throws BizException GOV-40004 任务不存在
+     */
+    @Transactional
+    public void pauseJob(String jobId) {
+        log.info("[JobService.pauseJob] jobId={}", jobId);
+        SysJobConf conf = jobConfMapper.selectById(jobId);
+        if (conf == null) {
+            throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+        conf.setStatus(JobStatus.PAUSED.getCode());
+        conf.setUpdatedTime(LocalDateTime.now());
+        jobConfMapper.updateById(conf);
+        log.info("[JobService.pauseJob] 任务已暂停 jobId={}", jobId);
+    }
+
+    /**
+     * 恢复任务
+     *
+     * @param jobId 任务ID
+     * @throws BizException GOV-40004 任务不存在
+     */
+    @Transactional
+    public void resumeJob(String jobId) {
+        log.info("[JobService.resumeJob] jobId={}", jobId);
+        SysJobConf conf = jobConfMapper.selectById(jobId);
+        if (conf == null) {
+            throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+        conf.setStatus(JobStatus.ACTIVE.getCode());
+        conf.setUpdatedTime(LocalDateTime.now());
+        jobConfMapper.updateById(conf);
+        log.info("[JobService.resumeJob] 任务已恢复 jobId={}", jobId);
+    }
+
+    // ── 私有方法：实体 → DTO 转换 ──────────────────────────────────
+
+    /**
+     * 将 SysJobConf 实体转换为 JobConfDTO
+     *
+     * @param entity 任务配置实体
+     * @return JobConfDTO
+     */
+    private JobConfDTO toJobConfDTO(SysJobConf entity) {
+        JobConfDTO dto = new JobConfDTO();
+        dto.setId(entity.getId());
+        dto.setJobKey(entity.getJobKey());
+        dto.setJobName(entity.getJobName());
+        dto.setCronExpr(entity.getCronExpr());
+        dto.setStatus(entity.getStatus());
+        dto.setAllowManualTrigger(entity.getAllowManualTrigger() != null && entity.getAllowManualTrigger() == 1);
+        dto.setLastRunTime(entity.getLastRunTime() != null ? entity.getLastRunTime().format(ISO_FORMATTER) : null);
+        dto.setNextRunTime(entity.getNextRunTime() != null ? entity.getNextRunTime().format(ISO_FORMATTER) : null);
+        dto.setRemark(entity.getRemark());
+        return dto;
+    }
+
+    /**
+     * 将 SysJobRunLog 实体转换为 JobRunLogDTO
+     *
+     * @param entity 执行日志实体
+     * @return JobRunLogDTO
+     */
+    private JobRunLogDTO toRunLogDTO(SysJobRunLog entity) {
+        JobRunLogDTO dto = new JobRunLogDTO();
+        dto.setId(entity.getId());
+        dto.setJobId(entity.getJobId());
+        dto.setTriggerType(entity.getTriggerType());
+        dto.setReason(entity.getReason());
+        dto.setStartTime(entity.getStartTime() != null ? entity.getStartTime().format(ISO_FORMATTER) : null);
+        dto.setEndTime(entity.getEndTime() != null ? entity.getEndTime().format(ISO_FORMATTER) : null);
+        dto.setStatus(entity.getStatus());
+        dto.setErrorMsg(entity.getErrorMsg());
+        dto.setCreatedBy(entity.getCreatedBy());
+        return dto;
+    }
+}
