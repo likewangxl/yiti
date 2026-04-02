@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.bank.branch.platform</groupId>
+        <artifactId>branch-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>common</artifactId>
+    <packaging>pom</packaging>
+    <name>Common</name>
+    <description>公共基础设施层</description>
+
+    <modules>
+        <module>common-web</module>
+        <module>common-trace</module>
+        <module>common-security</module>
+        <module>common-aop</module>
+        <module>common-db</module>
+    </modules>
+</project>

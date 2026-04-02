@@ -1,0 +1,22 @@
+# 开发环境专属配置
+spring:
+  datasource:
+    druid:
+      stat-view-servlet:
+        enabled: true
+        url-pattern: /druid/*
+        login-username: admin
+        login-password: admin123
+      web-stat-filter:
+        enabled: true
+      filter:
+        stat:
+          log-slow-sql: true
+          slow-sql-millis: 5000
+
+# CORS 由 CorsConfig (@Profile("dev")) 自动生效
+
+logging:
+  level:
+    com.bank.branch.platform: DEBUG
+    org.mybatis: DEBUG
