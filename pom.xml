@@ -14,6 +14,7 @@
     <modules>
         <module>common</module>
         <module>auth-permission-center</module>
+        <module>system-governance-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -71,6 +72,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>auth-permission-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- system-governance-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>system-governance-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
