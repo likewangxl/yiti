@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.governance.mapper.NotificationMapper">
+
+    <!-- user_notification 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, emp_id, title, content, notify_type, biz_type, biz_id,
+        link_url, is_read, read_time, created_time
+    </sql>
+
+    <!-- 动态 WHERE 条件片段（按用户和已读状态筛选） -->
+    <sql id="QUERY_WHERE">
+        <where>
+            <if test="empId != null and empId != ''">
+                AND emp_id = #{empId}
+            </if>
+            <if test="isRead != null">
+                AND is_read = #{isRead}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 插入通知 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.UserNotification">
+        INSERT INTO user_notification (
+            id, emp_id, title, content, notify_type, biz_type, biz_id,
+            link_url, is_read, created_time
+        ) VALUES (
+            #{id}, #{empId}, #{title}, #{content}, #{notifyType}, #{bizType}, #{bizId},
+            #{linkUrl}, #{isRead}, #{createdTime}
+        )
+    </insert>
+
+    <!-- 根据主键查询 -->
+    <select id="selectById" parameterType="string"
+            resultType="com.bank.branch.platform.governance.entity.UserNotification">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM user_notification
+        WHERE id = #{id}
+    </select>
+
+    <!-- 分页查询指定用户的通知列表 -->
+    <select id="selectByEmpId" resultType="com.bank.branch.platform.governance.entity.UserNotification">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM user_notification
+        <include refid="QUERY_WHERE"/>
+        ORDER BY created_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计指定用户的通知总数 -->
+    <select id="countByEmpId" resultType="long">
+        SELECT COUNT(*)
+        FROM user_notification
+        <include refid="QUERY_WHERE"/>
+    </select>
+
+    <!-- 查询指定用户的未读通知数量 -->
+    <select id="countUnread" parameterType="string" resultType="int">
+        SELECT COUNT(*)
+        FROM user_notification
+        WHERE emp_id = #{empId} AND is_read = 0
+    </select>
+
+    <!-- 更新通知的已读状态 -->
+    <update id="updateReadStatus">
+        UPDATE user_notification
+        SET is_read = #{isRead}, read_time = #{readTime}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 将指定用户的所有未读通知标记为已读 -->
+    <update id="markAllAsRead">
+        UPDATE user_notification
+        SET is_read = 1, read_time = #{readTime}
+        WHERE emp_id = #{empId} AND is_read = 0
+    </update>
+
+</mapper>

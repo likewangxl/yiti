@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.governance.mapper.BizFileRelMapper">
+
+    <!-- biz_file_rel 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, biz_type, biz_id, file_object_id, file_role,
+        created_by, created_time
+    </sql>
+
+    <!-- 新增业务-附件关联记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.BizFileRel">
+        INSERT INTO biz_file_rel (id, biz_type, biz_id, file_object_id, file_role,
+                                   created_by, created_time)
+        VALUES (#{id}, #{bizType}, #{bizId}, #{fileObjectId}, #{fileRole},
+                #{createdBy}, #{createdTime})
+    </insert>
+
+    <!-- 根据业务类型和业务ID查询关联文件列表，按创建时间升序 -->
+    <select id="selectByBizTypeAndBizId"
+            resultType="com.bank.branch.platform.governance.entity.BizFileRel">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM biz_file_rel
+        WHERE biz_type = #{bizType}
+          AND biz_id = #{bizId}
+        ORDER BY created_time ASC
+    </select>
+
+    <!-- 判断指定关联是否已存在 -->
+    <select id="existsByBizTypeAndBizIdAndFileObjectId" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM biz_file_rel
+        WHERE biz_type = #{bizType}
+          AND biz_id = #{bizId}
+          AND file_object_id = #{fileObjectId}
+    </select>
+
+    <!-- 根据文件对象ID删除所有关联记录 -->
+    <delete id="deleteByFileObjectId" parameterType="string">
+        DELETE FROM biz_file_rel WHERE file_object_id = #{fileObjectId}
+    </delete>
+
+</mapper>
