@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.governance.mapper.AuditLogMapper">
+
+    <!-- audit_log 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, trace_id, emp_id, emp_name, biz_type, biz_action,
+        resource_url, request_method, request_params, response_status,
+        error_msg, ip_address, user_agent, execution_time, reason, created_time
+    </sql>
+
+    <!-- 动态 WHERE 条件片段 -->
+    <sql id="QUERY_WHERE">
+        <where>
+            <if test="empId != null and empId != ''">
+                AND emp_id = #{empId}
+            </if>
+            <if test="bizType != null and bizType != ''">
+                AND biz_type = #{bizType}
+            </if>
+            <if test="bizAction != null and bizAction != ''">
+                AND biz_action = #{bizAction}
+            </if>
+            <if test="startDate != null">
+                AND created_time &gt;= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND created_time &lt; DATE_ADD(#{endDate}, INTERVAL 1 DAY)
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
+                  OR resource_url LIKE CONCAT('%', #{keyword}, '%')
+                  OR reason LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </sql>
+
+    <!-- 插入审计日志 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.AuditLog">
+        INSERT INTO audit_log (
+            id, trace_id, emp_id, emp_name, biz_type, biz_action,
+            resource_url, request_method, request_params, response_status,
+            error_msg, ip_address, user_agent, execution_time, reason, created_time
+        ) VALUES (
+            #{id}, #{traceId}, #{empId}, #{empName}, #{bizType}, #{bizAction},
+            #{resourceUrl}, #{requestMethod}, #{requestParams}, #{responseStatus},
+            #{errorMsg}, #{ipAddress}, #{userAgent}, #{executionTime}, #{reason}, #{createdTime}
+        )
+    </insert>
+
+    <!-- 根据主键查询 -->
+    <select id="selectById" parameterType="string"
+            resultType="com.bank.branch.platform.governance.entity.AuditLog">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM audit_log
+        WHERE id = #{id}
+    </select>
+
+    <!-- 分页查询审计日志 -->
+    <select id="selectByPage" resultType="com.bank.branch.platform.governance.entity.AuditLog">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM audit_log
+        <include refid="QUERY_WHERE"/>
+        ORDER BY created_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计分页查询总记录数 -->
+    <select id="countByPage" resultType="long">
+        SELECT COUNT(*)
+        FROM audit_log
+        <include refid="QUERY_WHERE"/>
+    </select>
+
+</mapper>
