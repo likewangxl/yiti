@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.governance.mapper.CalendarMapper">
+
+    <!-- sys_calendar_day 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        day, is_workday, remark,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!-- 根据日期查询单条日历记录 -->
+    <select id="selectByDay" parameterType="java.time.LocalDate"
+            resultType="com.bank.branch.platform.governance.entity.SysCalendarDay">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_calendar_day
+        WHERE day = #{day}
+    </select>
+
+    <!-- 查询指定日期范围内的日历记录 -->
+    <select id="selectByDateRange"
+            resultType="com.bank.branch.platform.governance.entity.SysCalendarDay">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_calendar_day
+        WHERE day &gt;= #{from}
+          AND day &lt;= #{to}
+        ORDER BY day ASC
+    </select>
+
+    <!-- 查询指定年份的所有日历记录 -->
+    <select id="selectByYear"
+            resultType="com.bank.branch.platform.governance.entity.SysCalendarDay">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_calendar_day
+        WHERE YEAR(day) = #{year}
+        ORDER BY day ASC
+    </select>
+
+    <!-- 统计指定日期范围内的工作日天数 -->
+    <select id="countWorkingDays" resultType="int">
+        SELECT COUNT(*)
+        FROM sys_calendar_day
+        WHERE day &gt;= #{from}
+          AND day &lt;= #{to}
+          AND is_workday = 1
+    </select>
+
+    <!-- 新增日历记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysCalendarDay">
+        INSERT INTO sys_calendar_day (
+            day, is_workday, remark,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES (
+            #{day}, #{isWorkday}, #{remark},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按 day 主键更新日历记录 -->
+    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysCalendarDay">
+        UPDATE sys_calendar_day
+        <set>
+            <if test="isWorkday != null">is_workday = #{isWorkday},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
+        </set>
+        WHERE day = #{day}
+    </update>
+
+    <!-- 判断指定日期是否已存在 -->
+    <select id="existsByDay" parameterType="java.time.LocalDate" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM sys_calendar_day
+        WHERE day = #{day}
+    </select>
+
+</mapper>
