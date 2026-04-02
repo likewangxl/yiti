@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.governance.mapper.DictMapper">
+
+    <!-- sys_dict 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, dict_type, dict_code, dict_label, dict_value,
+        sort_order, status, remark,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!-- 根据字典类型查询所有启用状态的字典项，按排序号升序 -->
+    <select id="selectByDictType" parameterType="string"
+            resultType="com.bank.branch.platform.governance.entity.SysDict">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_dict
+        WHERE dict_type = #{dictType}
+          AND status = 'ACTIVE'
+        ORDER BY sort_order ASC
+    </select>
+
+    <!-- 根据字典类型和编码查询单条启用记录 -->
+    <select id="selectByDictTypeAndDictCode"
+            resultType="com.bank.branch.platform.governance.entity.SysDict">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_dict
+        WHERE dict_type = #{dictType}
+          AND dict_code = #{dictCode}
+          AND status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
+    <!-- 根据主键查询（不限状态） -->
+    <select id="selectById" parameterType="string"
+            resultType="com.bank.branch.platform.governance.entity.SysDict">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_dict
+        WHERE id = #{id}
+    </select>
+
+    <!-- 新增字典记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysDict">
+        INSERT INTO sys_dict (
+            id, dict_type, dict_code, dict_label, dict_value,
+            sort_order, status, remark,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES (
+            #{id}, #{dictType}, #{dictCode}, #{dictLabel}, #{dictValue},
+            #{sortOrder}, #{status}, #{remark},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按主键动态更新字典信息 -->
+    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysDict">
+        UPDATE sys_dict
+        <set>
+            <if test="dictLabel != null">dict_label = #{dictLabel},</if>
+            <if test="dictValue != null">dict_value = #{dictValue},</if>
+            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 判断字典类型+编码是否已存在 -->
+    <select id="existsByDictTypeAndDictCode" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM sys_dict
+        WHERE dict_type = #{dictType}
+          AND dict_code = #{dictCode}
+    </select>
+
+    <!-- 分页查询字典列表 -->
+    <select id="selectByPage" resultType="com.bank.branch.platform.governance.entity.SysDict">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_dict
+        <where>
+            <if test="dictType != null and dictType != ''">
+                AND dict_type = #{dictType}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (dict_type LIKE CONCAT('%', #{keyword}, '%')
+                  OR dict_label LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY dict_type ASC, sort_order ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计分页查询总记录数 -->
+    <select id="countByPage" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_dict
+        <where>
+            <if test="dictType != null and dictType != ''">
+                AND dict_type = #{dictType}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (dict_type LIKE CONCAT('%', #{keyword}, '%')
+                  OR dict_label LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
+
+</mapper>
