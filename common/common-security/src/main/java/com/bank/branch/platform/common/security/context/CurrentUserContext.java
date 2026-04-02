@@ -9,6 +9,7 @@ import java.util.Set;
  * @param empId              员工ID
  * @param mainOrgCode        主机构编码
  * @param roleIds            角色ID集合
+ * @param roleCodes          角色编码集合（ROLE_CODE）
  * @param candidateGroupKeys 候选组标识集合（用于工作流）
  * @param systemAdmin        是否系统管理员
  */
@@ -16,6 +17,7 @@ public record CurrentUserContext(
     String empId,
     String mainOrgCode,
     Set<String> roleIds,
+    Set<String> roleCodes,
     Set<String> candidateGroupKeys,
     boolean systemAdmin
 ) {
