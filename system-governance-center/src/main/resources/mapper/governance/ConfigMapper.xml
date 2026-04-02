@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.governance.mapper.ConfigMapper">
+
+    <!-- sys_config_kv 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, config_key, config_value, value_type,
+        status, remark,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!-- 根据配置键查询（不限状态） -->
+    <select id="selectByConfigKey" parameterType="string"
+            resultType="com.bank.branch.platform.governance.entity.SysConfigKv">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_config_kv
+        WHERE config_key = #{configKey}
+        LIMIT 1
+    </select>
+
+    <!-- 分页查询配置列表 -->
+    <select id="selectAll" resultType="com.bank.branch.platform.governance.entity.SysConfigKv">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_config_kv
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY config_key ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计配置总记录数 -->
+    <select id="countAll" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_config_kv
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <!-- 按主键动态更新配置信息 -->
+    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysConfigKv">
+        UPDATE sys_config_kv
+        <set>
+            <if test="configValue != null">config_value = #{configValue},</if>
+            <if test="valueType != null">value_type = #{valueType},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 新增配置记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysConfigKv">
+        INSERT INTO sys_config_kv (
+            id, config_key, config_value, value_type,
+            status, remark,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES (
+            #{id}, #{configKey}, #{configValue}, #{valueType},
+            #{status}, #{remark},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+</mapper>
