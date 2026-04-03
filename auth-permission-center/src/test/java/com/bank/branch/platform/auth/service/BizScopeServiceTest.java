@@ -7,6 +7,7 @@ import com.bank.branch.platform.auth.mapper.RoleBizScopeMapper;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.common.web.exception.PermissionDeniedException;
 import org.junit.jupiter.api.Test;
@@ -153,5 +154,67 @@ class BizScopeServiceTest {
         s.setDataScope(dataScope);
         s.setRecordStatus(0);
         return s;
+    }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    @Test
+    void checkWritePermission_defaultScopeReturnsFalse() {
+        // ORG scope 在简化实现中返回 false
+        PtRoleBizScope scope = makeScope("S1", "R_RM", "CUSTOMER", "ORG");
+        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(scope));
+
+        assertThat(bizScopeService.checkWritePermission("E001", BizType.CUSTOMER, "ORG001", "E001")).isFalse();
+    }
+
+    @Test
+    void checkWritePermission_noBizTypeConfigReturnsFalse() {
+        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of());
+
+        assertThat(bizScopeService.checkWritePermission("E001", BizType.LOAN, "ORG001", "E001")).isFalse();
+    }
+
+    @Test
+    void saveBizScope_existingScope_shouldUpdate() {
+        PtRole role = new PtRole();
+        role.setRoleId("R_RM");
+        role.setRoleCode("CUST_MANAGER");
+        role.setRoleChName("客户经理");
+        when(roleMapper.selectByRoleId("R_RM")).thenReturn(role);
+
+        PtRoleBizScope existing = makeScope("S1", "R_RM", "LEAD", "SELF_CREATED");
+        when(roleBizScopeMapper.selectByRoleIdAndBizType("R_RM", "LEAD")).thenReturn(existing);
+
+        BizScopeRespDTO dto = bizScopeService.saveBizScope("R_RM", "LEAD", "ALL", "升级权限");
+
+        assertThat(dto.getDataScope()).isEqualTo("ALL");
+        verify(roleBizScopeMapper).updateById(argThat(s -> "ALL".equals(s.getDataScope())));
+        verify(roleBizScopeMapper, never()).insert(any());
+    }
+
+    @Test
+    void resolveScope_disabledScopesShouldBeIgnored() {
+        PtRoleBizScope active = makeScope("S1", "R_RM", "LEAD", "SELF_CREATED");
+        PtRoleBizScope disabled = makeScope("S2", "R_RM", "LEAD", "ALL");
+        disabled.setRecordStatus(1); // 已禁用
+        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(active, disabled));
+
+        DataScopeType result = bizScopeService.resolveScope("E001", BizType.LEAD);
+
+        assertThat(result).isEqualTo(DataScopeType.SELF_CREATED);
+    }
+
+    @Test
+    void listByPage_shouldDelegateToMapper() {
+        when(roleBizScopeMapper.selectByPage(null, null, 0, 20)).thenReturn(List.of());
+        when(roleBizScopeMapper.countByPage(null, null)).thenReturn(0L);
+
+        PageResult<BizScopeRespDTO> result = bizScopeService.listByPage(null, null, 1, 20);
+
+        assertThat(result.getRecords()).isEmpty();
+        assertThat(result.getTotal()).isZero();
     }
 }

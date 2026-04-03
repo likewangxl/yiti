@@ -6,7 +6,9 @@ import com.bank.branch.platform.auth.api.dto.RoleUpdateReqDTO;
 import com.bank.branch.platform.auth.api.dto.RoleUserRespDTO;
 import com.bank.branch.platform.auth.service.RoleService;
 import com.bank.branch.platform.auth.service.UserRoleService;
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +45,9 @@ class RoleControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new RoleController(roleService, userRoleService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new RoleController(roleService, userRoleService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -129,5 +133,38 @@ class RoleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(1));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void createRole_duplicateCode_shouldReturnBizError() throws Exception {
+        when(roleService.createRole(anyString(), anyString(), any()))
+            .thenThrow(new BizException("AUTH-40901", "角色编码已存在"));
+
+        RoleCreateReqDTO req = new RoleCreateReqDTO();
+        req.setRoleCode("DUP_ROLE");
+        req.setRoleChName("重复角色");
+
+        mockMvc.perform(post("/api/admin/roles/")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("AUTH-40901"));
+    }
+
+    @Test
+    void updateRole_notFound_shouldReturnBizError() throws Exception {
+        when(roleService.updateRole(anyString(), anyString(), any()))
+            .thenThrow(new BizException("AUTH-40401", "角色不存在"));
+
+        RoleUpdateReqDTO req = new RoleUpdateReqDTO();
+        req.setRoleChName("新名称");
+
+        mockMvc.perform(put("/api/admin/roles/NONE")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("AUTH-40401"));
     }
 }

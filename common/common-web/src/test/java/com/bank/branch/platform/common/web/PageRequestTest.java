@@ -44,4 +44,19 @@ class PageRequestTest {
             () -> req.validateSortBy(Set.of("createdTime", "name")));
         assertEquals("PAGE_001", ex.getCode());
     }
+
+    @Test
+    void validateSortBy_nullSortBy_shouldNotThrow() {
+        PageRequest req = new PageRequest();
+        req.setSortBy(null);
+        assertDoesNotThrow(() -> req.validateSortBy(Set.of("createdTime", "name")));
+    }
+
+    @Test
+    void getOffset_largePageNo_shouldCalculateCorrectly() {
+        PageRequest req = new PageRequest();
+        req.setPageNo(100);
+        req.setPageSize(50);
+        assertEquals(4950, req.getOffset());
+    }
 }

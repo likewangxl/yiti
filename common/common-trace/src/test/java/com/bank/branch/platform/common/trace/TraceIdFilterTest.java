@@ -48,4 +48,40 @@ class TraceIdFilterTest {
 
         assertEquals("external12345678", capturedTraceId[0]);
     }
+
+    @Test
+    void shouldIgnoreBlankTraceIdHeader() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Trace-Id", "   ");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        final String[] capturedTraceId = {null};
+
+        FilterChain chain = mock(FilterChain.class);
+        doAnswer(invocation -> {
+            capturedTraceId[0] = MDC.get("traceId");
+            return null;
+        }).when(chain).doFilter(request, response);
+
+        filter.doFilter(request, response, chain);
+
+        assertNotNull(capturedTraceId[0]);
+        assertEquals(16, capturedTraceId[0].length(), "blank header should trigger new traceId");
+    }
+
+    @Test
+    void shouldCleanMdcEvenIfChainThrows() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        FilterChain chain = mock(FilterChain.class);
+        doThrow(new RuntimeException("chain error")).when(chain).doFilter(request, response);
+
+        try {
+            filter.doFilter(request, response, chain);
+        } catch (RuntimeException ignored) {
+            // expected
+        }
+
+        assertNull(MDC.get("traceId"), "traceId should be cleaned even after exception");
+    }
 }

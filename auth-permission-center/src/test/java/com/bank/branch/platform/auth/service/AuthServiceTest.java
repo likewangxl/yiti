@@ -130,4 +130,74 @@ class AuthServiceTest {
         u.setPassWrongCount(0);
         return u;
     }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    @Test
+    void login_shouldThrowWhenAccountDisabled() {
+        PtUser user = makeEnabledUser("E001", "admin", "hashed");
+        user.setIsEnabled(1); // 1=未启用
+        when(userMapper.selectByUsername("admin")).thenReturn(user);
+
+        assertThatThrownBy(() -> authService.login("admin", "pw", session))
+            .isInstanceOf(AuthException.class)
+            .satisfies(e -> assertThat(((AuthException) e).getCode()).isEqualTo("AUTH-40104"));
+    }
+
+    @Test
+    void login_shouldThrowWhenAccountExpired() {
+        PtUser user = makeEnabledUser("E001", "admin", "hashed");
+        user.setIsExpired(1);
+        when(userMapper.selectByUsername("admin")).thenReturn(user);
+
+        assertThatThrownBy(() -> authService.login("admin", "pw", session))
+            .isInstanceOf(AuthException.class)
+            .satisfies(e -> assertThat(((AuthException) e).getCode()).isEqualTo("AUTH-40103"));
+    }
+
+    @Test
+    void login_shouldHandleNullUserOrg() {
+        PtUser user = makeEnabledUser("E001", "admin", "hashed");
+        when(userMapper.selectByUsername("admin")).thenReturn(user);
+        when(passwordEncoder.matches("pass", "hashed")).thenReturn(true);
+        when(userOrgMapper.selectByUserId("E001")).thenReturn(null);
+        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(List.of());
+
+        LoginRespDTO resp = authService.login("admin", "pass", session);
+
+        assertThat(resp.getMainOrgCode()).isNull();
+        assertThat(resp.getRoles()).isEmpty();
+    }
+
+    @Test
+    void login_shouldLockAccountAtExactThreshold() {
+        PtUser user = makeEnabledUser("E001", "admin", "hashed");
+        user.setPassWrongCount(4); // next wrong = 5 = MAX_WRONG_COUNT
+        when(userMapper.selectByUsername("admin")).thenReturn(user);
+        when(passwordEncoder.matches("wrong", "hashed")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login("admin", "wrong", session))
+            .isInstanceOf(AuthException.class)
+            .satisfies(e -> assertThat(((AuthException) e).getCode()).isEqualTo("AUTH-40106"));
+        verify(userMapper).updateLockedStatus("E001", 1);
+    }
+
+    @Test
+    void getCurrentUser_shouldThrowWhenSessionInvalid() {
+        when(session.getAttribute("currentUser")).thenReturn(null);
+
+        assertThatThrownBy(() -> authService.getCurrentUser(session))
+            .isInstanceOf(AuthException.class)
+            .satisfies(e -> assertThat(((AuthException) e).getCode()).isEqualTo("AUTH-40105"));
+    }
+
+    @Test
+    void getCurrentUser_shouldReturnContextWhenValid() {
+        CurrentUserContext ctx = new CurrentUserContext("E001", "ORG001",
+            Set.of("R1"), Set.of("ADMIN"), Set.of(), false);
+        when(session.getAttribute("currentUser")).thenReturn(ctx);
+
+        CurrentUserContext result = authService.getCurrentUser(session);
+        assertThat(result.empId()).isEqualTo("E001");
+    }
 }

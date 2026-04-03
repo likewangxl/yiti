@@ -6,7 +6,9 @@ import com.bank.branch.platform.common.web.exception.PermissionDeniedException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GlobalExceptionHandlerTest {
@@ -50,5 +52,40 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ResponseWrapper<?>> resp = handler.handleException(ex);
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, resp.getStatusCode());
         assertEquals("SYS_500", resp.getBody().getCode());
+    }
+
+    @Test
+    void handlePermissionDenied_customCode_shouldPreserveCode() {
+        PermissionDeniedException ex = new PermissionDeniedException("AUTH-40303", "写范围校验失败");
+        ResponseEntity<ResponseWrapper<?>> resp = handler.handlePermissionDeniedException(ex);
+        assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
+        assertEquals("AUTH-40303", resp.getBody().getCode());
+    }
+
+    @Test
+    void handleMissingParam_shouldReturn400() {
+        MissingServletRequestParameterException ex =
+            new MissingServletRequestParameterException("empId", "String");
+        ResponseEntity<ResponseWrapper<?>> resp = handler.handleMissingParam(ex);
+        assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+        assertEquals("VALID_002", resp.getBody().getCode());
+        assertTrue(resp.getBody().getMessage().contains("empId"));
+    }
+
+    @Test
+    void handleMediaTypeNotSupported_shouldReturn415() {
+        HttpMediaTypeNotSupportedException ex =
+            new HttpMediaTypeNotSupportedException("不支持的媒体类型");
+        ResponseEntity<ResponseWrapper<?>> resp = handler.handleMediaTypeNotSupported(ex);
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, resp.getStatusCode());
+        assertEquals("SYS_415", resp.getBody().getCode());
+    }
+
+    @Test
+    void handleAuthException_customCode_shouldPreserveCode() {
+        AuthException ex = new AuthException("AUTH-40102", "账户已被锁定");
+        ResponseEntity<ResponseWrapper<?>> resp = handler.handleAuthException(ex);
+        assertEquals(HttpStatus.UNAUTHORIZED, resp.getStatusCode());
+        assertEquals("AUTH-40102", resp.getBody().getCode());
     }
 }

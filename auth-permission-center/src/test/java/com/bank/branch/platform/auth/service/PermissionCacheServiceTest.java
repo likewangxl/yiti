@@ -108,4 +108,44 @@ class PermissionCacheServiceTest {
         assertThat(resources).hasSize(1);
         verify(resourceMapper, never()).selectAll(any(), any());
     }
+
+    // ── L1 补全测试: cache miss 链路 ──────────────────────────────
+
+    @Test
+    void getResourceIdsByRoleId_shouldLoadFromDbOnCacheMiss() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("auth:role-resource:R_RM")).thenReturn(null);
+        when(roleResourceMapper.selectResourceIdsByRoleId("R_RM")).thenReturn(List.of("RES_001", "RES_002"));
+
+        Set<String> ids = cacheService.getResourceIdsByRoleId("R_RM");
+
+        assertThat(ids).containsExactlyInAnyOrder("RES_001", "RES_002");
+        verify(valueOperations).set(eq("auth:role-resource:R_RM"), any(), any(Duration.class));
+    }
+
+    @Test
+    void getAllResources_shouldLoadFromDbOnCacheMiss() {
+        PtResource r = new PtResource();
+        r.setResourceId("RES_001");
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("auth:resource:all")).thenReturn(null);
+        when(resourceMapper.selectAll(0, null)).thenReturn(List.of(r));
+
+        List<PtResource> resources = cacheService.getAllResources();
+
+        assertThat(resources).hasSize(1);
+        assertThat(resources.get(0).getResourceId()).isEqualTo("RES_001");
+        verify(valueOperations).set(eq("auth:resource:all"), any(), any(Duration.class));
+    }
+
+    @Test
+    void getRoleIdsByEmpId_shouldReturnEmptySetOnDbEmpty() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("auth:user-roles:E999")).thenReturn(null);
+        when(userRoleMapper.selectRoleIdsByUserId("E999")).thenReturn(List.of());
+
+        Set<String> roleIds = cacheService.getRoleIdsByEmpId("E999");
+
+        assertThat(roleIds).isEmpty();
+    }
 }

@@ -102,4 +102,32 @@ class ResourceServiceTest {
         r.setMenuEndflag("1");
         return r;
     }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    @Test
+    void getById_shouldReturnDtoWhenFound() {
+        PtResource r = makeResource("RES_001", "/api/test", "GET");
+        when(resourceMapper.selectByResourceId("RES_001")).thenReturn(r);
+
+        ResourceTreeNodeDTO dto = resourceService.getById("RES_001");
+
+        assertThat(dto.getResourceId()).isEqualTo("RES_001");
+        assertThat(dto.getResourceUrl()).isEqualTo("/api/test");
+    }
+
+    @Test
+    void deleteResource_shouldThrowWhenNotFound() {
+        when(resourceMapper.selectByResourceId("NONE")).thenReturn(null);
+        assertThatThrownBy(() -> resourceService.deleteResource("NONE", "原因"))
+            .isInstanceOf(BizException.class)
+            .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40402"));
+    }
+
+    @Test
+    void getResourceTree_shouldReturnEmptyForNoResources() {
+        when(resourceMapper.selectAll(any(), any())).thenReturn(List.of());
+        List<ResourceTreeNodeDTO> tree = resourceService.getResourceTree(null, null);
+        assertThat(tree).isEmpty();
+    }
 }

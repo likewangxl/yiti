@@ -4,6 +4,8 @@ import com.bank.branch.platform.auth.api.dto.LoginReqDTO;
 import com.bank.branch.platform.auth.api.dto.LoginRespDTO;
 import com.bank.branch.platform.auth.service.AuthService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
+import com.bank.branch.platform.common.web.exception.AuthException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +42,9 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -89,5 +93,33 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.empId").value("emp001"))
                 .andExpect(jsonPath("$.data.mainOrgCode").value("ORG001"))
                 .andExpect(jsonPath("$.data.isSystemAdmin").value(true));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void login_serviceThrowsAuthException_shouldReturn401() throws Exception {
+        when(authService.login(anyString(), anyString(), any(HttpSession.class)))
+            .thenThrow(new AuthException("AUTH-40101", "用户名或密码错误"));
+
+        LoginReqDTO req = new LoginReqDTO();
+        req.setUsername("bad");
+        req.setPassword("badpassword");
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH-40101"));
+    }
+
+    @Test
+    void getCurrentUser_sessionInvalid_shouldReturn401() throws Exception {
+        when(authService.getCurrentUser(any(HttpSession.class)))
+            .thenThrow(new AuthException("AUTH-40105", "未登录或会话已过期"));
+
+        mockMvc.perform(get("/api/auth/current-user"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH-40105"));
     }
 }

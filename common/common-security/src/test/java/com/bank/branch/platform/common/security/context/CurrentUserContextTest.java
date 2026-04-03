@@ -1,6 +1,7 @@
 package com.bank.branch.platform.common.security.context;
 
 import org.junit.jupiter.api.Test;
+import java.util.Collections;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -22,5 +23,24 @@ class CurrentUserContextTest {
     @Test void hasAnyRoleShouldHandleNullInputs() {
         var ctx = new CurrentUserContext("E001", "ORG001", Set.of("R1"), Set.of(), Set.of(), false);
         assertFalse(ctx.hasAnyRole(null));
+    }
+
+    @Test void hasAnyRole_bothNull_shouldReturnFalse() {
+        var ctx = new CurrentUserContext("E001", "ORG001", null, Set.of(), Set.of(), false);
+        assertFalse(ctx.hasAnyRole(Set.of("R1")));
+    }
+
+    @Test void hasAnyRole_emptyRoleIds_shouldReturnFalse() {
+        var ctx = new CurrentUserContext("E001", "ORG001", Collections.emptySet(), Set.of(), Set.of(), false);
+        assertFalse(ctx.hasAnyRole(Set.of("R1")));
+    }
+
+    @Test void recordAccessors_shouldReturnCorrectValues() {
+        var ctx = new CurrentUserContext("E001", "ORG001", Set.of("R1"), Set.of("ADMIN"), Set.of("GRP1"), true);
+        assertEquals("E001", ctx.empId());
+        assertEquals("ORG001", ctx.mainOrgCode());
+        assertTrue(ctx.systemAdmin());
+        assertTrue(ctx.roleCodes().contains("ADMIN"));
+        assertTrue(ctx.candidateGroupKeys().contains("GRP1"));
     }
 }
