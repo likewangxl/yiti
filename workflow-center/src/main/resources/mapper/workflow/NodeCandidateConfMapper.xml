@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.workflow.mapper.NodeCandidateConfMapper">
+
+    <!-- wf_node_candidate_conf 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, process_definition_key, node_key,
+        candidate_type, candidate_value,
+        created_time, updated_time
+    </sql>
+
+    <!-- 根据流程定义KEY和节点KEY查询所有候选人配置 -->
+    <select id="selectByProcessDefKeyAndNodeKey"
+            resultType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM wf_node_candidate_conf
+        WHERE process_definition_key = #{processDefinitionKey}
+          AND node_key = #{nodeKey}
+    </select>
+
+    <!-- 根据流程定义KEY查询所有节点的候选人配置 -->
+    <select id="selectByProcessDefKey" parameterType="string"
+            resultType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM wf_node_candidate_conf
+        WHERE process_definition_key = #{processDefinitionKey}
+    </select>
+
+    <!-- 新增候选人配置记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
+        INSERT INTO wf_node_candidate_conf (
+            id, process_definition_key, node_key,
+            candidate_type, candidate_value,
+            created_time, updated_time
+        ) VALUES (
+            #{id}, #{processDefinitionKey}, #{nodeKey},
+            #{candidateType}, #{candidateValue},
+            #{createdTime}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按主键动态更新候选人配置 -->
+    <update id="updateById" parameterType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
+        UPDATE wf_node_candidate_conf
+        <set>
+            <if test="processDefinitionKey != null">process_definition_key = #{processDefinitionKey},</if>
+            <if test="nodeKey != null">node_key = #{nodeKey},</if>
+            <if test="candidateType != null">candidate_type = #{candidateType},</if>
+            <if test="candidateValue != null">candidate_value = #{candidateValue},</if>
+            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 按主键删除候选人配置 -->
+    <delete id="deleteById" parameterType="string">
+        DELETE FROM wf_node_candidate_conf
+        WHERE id = #{id}
+    </delete>
+
+</mapper>

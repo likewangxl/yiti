@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.workflow.mapper.TimeoutRuleMapper">
+
+    <!-- wf_timeout_rule 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, process_definition_key, node_key,
+        timeout_hours, warning_hours,
+        created_time, updated_time
+    </sql>
+
+    <!-- 根据流程定义KEY和节点KEY查询超时规则 -->
+    <select id="selectByProcessDefKeyAndNodeKey"
+            resultType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM wf_timeout_rule
+        WHERE process_definition_key = #{processDefinitionKey}
+          AND node_key = #{nodeKey}
+        LIMIT 1
+    </select>
+
+    <!-- 新增超时规则记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
+        INSERT INTO wf_timeout_rule (
+            id, process_definition_key, node_key,
+            timeout_hours, warning_hours,
+            created_time, updated_time
+        ) VALUES (
+            #{id}, #{processDefinitionKey}, #{nodeKey},
+            #{timeoutHours}, #{warningHours},
+            #{createdTime}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按主键动态更新超时规则 -->
+    <update id="updateById" parameterType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
+        UPDATE wf_timeout_rule
+        <set>
+            <if test="processDefinitionKey != null">process_definition_key = #{processDefinitionKey},</if>
+            <if test="nodeKey != null">node_key = #{nodeKey},</if>
+            <if test="timeoutHours != null">timeout_hours = #{timeoutHours},</if>
+            <if test="warningHours != null">warning_hours = #{warningHours},</if>
+            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+</mapper>
