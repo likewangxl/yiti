@@ -47,7 +47,38 @@ mvn clean package
 ```
 
 
-### 模块依赖规则
+## 当前已实现的模块
+
+| 模块 | 包名 | 状态 | 说明 |
+|------|------|------|------|
+| `common` | com.bank.branch.platform.common.* | 已完成 | 公共基础设施层 (5 个子模块) |
+| `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
+| `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
+| `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
+| `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
+
+**尚未实现的模块** (代码骨架和 DDL 已存在):
+- `portal-content-center` (门户与内容中心)
+- `customer-marketing-center` (客户营销中心)
+- `business-application-center` (业务申请中心)
+- `performance-engine-center` (绩效计算中心)
+- `report-analytics-center` (报表分析中心)
+
+### 当前模块依赖图
+
+```
+common (common-web → common-trace → common-security → common-aop → common-db)
+  ↑
+auth-permission-center (无其他业务模块依赖)
+  ↑
+system-governance-center (依赖 auth)  ← 被 workflow 依赖
+  ↑
+workflow-center (依赖 auth + governance)
+
+bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
+```
+
+### 模块间依赖规则
 
 **严格遵守以下规则**:
 
@@ -63,16 +94,16 @@ mvn clean package
 强制：使用多module进行开发结构如下
 ```text
 com.bank.branch.platform
-├─ common                        存放公用组件
-├─ auth-permission-center        认证授权中心
-├─ system-governance-center      系统治理中心
-├─ portal-content-center         门户与内容中心
-├─ customer-marketing-center     客户营销中心
-├─ workflow-center               工作流中心
-├─ business-application-center   业务申请中心
-├─ performance-engine-center     绩效计算中心
-└─ report-analytics-center       报表分析中心
-└─ bootstrap                     启动模块
+├─ common                        存放公用组件 ✅ 已完成 (5 个子模块)
+├─ auth-permission-center        认证授权中心 ✅ 已完成
+├─ system-governance-center      系统治理中心 ✅ 已完成
+├─ workflow-center               工作流中心 ✅ 已完成
+├─ bootstrap                     启动入口 ✅ 已完成
+├─ portal-content-center         门户与内容中心 ⏳ 骨架
+├─ customer-marketing-center     客户营销中心 ⏳ 骨架
+├─ business-application-center   业务申请中心 ⏳ 骨架
+├─ performance-engine-center     绩效计算中心 ⏳ 骨架
+└─ report-analytics-center       报表分析中心 ⏳ 骨架
 ```
 
 ```
@@ -167,10 +198,20 @@ com.bank.branch.platform.<module>/
 9. ✅ 所有接口记录入参/出参、traceId 和耗时
 
 ## 重要文件路径
+
+### 项目规划与设计
 - **设计文档**: `project_ana_技术方案与架构拆分.md`
 - **功能文档**: `project_ana.md`
-- **模块详细说明**: 各模块目录下的 `CLAUDE.md`
-- **docs/modules** 是各个模块的拆分后的文档，开发各个模块时必须读取该文档
+- **docs 目录**: 各模块详细设计文档 + DDL + 共享开发规范 (见 `docs/CLAUDE.md`)
+
+### 模块级 CLAUDE.md (开发时必须参考)
+- **公共基础设施**: [common/CLAUDE.md](common/CLAUDE.md)
+- **认证授权**: [auth-permission-center/CLAUDE.md](auth-permission-center/CLAUDE.md)
+- **系统治理**: [system-governance-center/CLAUDE.md](system-governance-center/CLAUDE.md)
+- **工作流**: [workflow-center/CLAUDE.md](workflow-center/CLAUDE.md)
+
+### 共享开发规范
+- **[docs/common-dev-guide.md](docs/common-dev-guide.md)** — 统一响应模型、错误码规范、分页标准、鉴权链路、数据范围 SQL 模板、审计规范、事件发布、数据传输、日志规范 (所有模块必须遵守)
 
 ### TDD (测试驱动开发) 绝对红线
 - **红-绿-重构 (Red-Green-Refactor) 闭环**：一切特性的开发或者 Bug 修复，必须先写测试（让他失败，Red），再写最简代码让他通过（Green），最后重构优化（Refactor）。
