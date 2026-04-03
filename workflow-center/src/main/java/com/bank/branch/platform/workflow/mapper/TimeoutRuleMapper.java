@@ -4,6 +4,8 @@ import com.bank.branch.platform.workflow.entity.WfTimeoutRule;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 流程超时规则 Mapper 接口，操作 wf_timeout_rule 表。
  * <p>
@@ -24,6 +26,14 @@ public interface TimeoutRuleMapper {
     WfTimeoutRule selectByProcessDefKeyAndNodeKey(
             @Param("processDefinitionKey") String processDefinitionKey,
             @Param("nodeKey") String nodeKey);
+
+    /**
+     * 根据流程定义KEY查询所有节点的超时规则。
+     *
+     * @param processDefinitionKey 流程定义KEY
+     * @return 超时规则列表
+     */
+    List<WfTimeoutRule> selectByProcessDefKey(String processDefinitionKey);
 
     /**
      * 新增超时规则记录。
