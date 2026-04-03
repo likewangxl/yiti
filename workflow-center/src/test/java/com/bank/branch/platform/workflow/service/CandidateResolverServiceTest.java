@@ -114,4 +114,26 @@ class CandidateResolverServiceTest {
 
         assertThat(result).containsExactly("ROLE:CUST_MANAGER", "ORG:ORG001", "ORG:ORG002");
     }
+
+    /**
+     * 测试 malicious/malformed JSON 时 parseCandidateValue 应返回空列表，不向上传播异常
+     */
+    @Test
+    void resolve_malformedJson_gracefullySkipsInvalidConfig() {
+        WfNodeCandidateConf validConf = new WfNodeCandidateConf();
+        validConf.setCandidateType("USER");
+        validConf.setCandidateValue("[\"E001\"]");
+
+        WfNodeCandidateConf malformedConf = new WfNodeCandidateConf();
+        malformedConf.setCandidateType("ROLE");
+        malformedConf.setCandidateValue("{ NOT VALID JSON }");
+
+        when(nodeCandidateConfMapper.selectByProcessDefKeyAndNodeKey("loan", "approve"))
+                .thenReturn(List.of(validConf, malformedConf));
+
+        List<String> result = candidateResolverService.resolveCandidates("loan", "approve");
+
+        // 正常的 USER 配置应解析成功，malformed 被跳过
+        assertThat(result).containsExactly("USER:E001");
+    }
 }

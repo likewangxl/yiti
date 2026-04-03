@@ -291,4 +291,57 @@ class ProcessStartServiceTest {
                 .extracting("code")
                 .isEqualTo("WF-40402");
     }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 测试 startProcess：首个节点为自动任务时 firstTask 为 null，不应报错
+     */
+    @Test
+    void startProcess_firstTaskNull_returnsNullTaskId() {
+        // given —— 首个节点是自动任务，无用户任务
+        StartProcessCmd cmd = buildCmd();
+        ProcessDefinition pd = mock(ProcessDefinition.class);
+        mockProcessDefinitionQuery(pd);
+        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+
+        ProcessInstance pi = mock(ProcessInstance.class);
+        when(pi.getId()).thenReturn("PID_AUTO");
+        when(runtimeService.startProcessInstanceByKey(
+                cmd.getProcessDefinitionKey(), cmd.getBusinessKey(), cmd.getVariables()))
+                .thenReturn(pi);
+
+        mockTaskQuery(null);
+
+        // when
+        WorkflowLaunchResp resp = processStartService.startProcess(cmd);
+
+        // then —— firstTaskId 应为 null
+        assertThat(resp.getProcessInstanceId()).isEqualTo("PID_AUTO");
+        assertThat(resp.getFirstTaskId()).isNull();
+    }
+
+    /**
+     * 测试 startProcess：variables 为 null 时仍能正常启动
+     */
+    @Test
+    void startProcess_nullVariables_succeeds() {
+        StartProcessCmd cmd = buildCmd();
+        cmd.setVariables(null);
+
+        ProcessDefinition pd = mock(ProcessDefinition.class);
+        mockProcessDefinitionQuery(pd);
+        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+
+        ProcessInstance pi = mock(ProcessInstance.class);
+        when(pi.getId()).thenReturn("PID_NOVAR");
+        when(runtimeService.startProcessInstanceByKey(
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), isNull()))
+                .thenReturn(pi);
+        mockTaskQuery(null);
+
+        WorkflowLaunchResp resp = processStartService.startProcess(cmd);
+
+        assertThat(resp.getProcessInstanceId()).isEqualTo("PID_NOVAR");
+    }
 }

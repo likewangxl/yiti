@@ -1,6 +1,8 @@
 package com.bank.branch.platform.workflow.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
@@ -22,8 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -47,7 +48,9 @@ class TaskControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new TaskController(todoQueryService, taskOperationService)).build();
+                new TaskController(todoQueryService, taskOperationService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -167,5 +170,97 @@ class TaskControllerTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void claimTask_taskNotFound_returnsBizError() throws Exception {
+        doThrow(new BizException("WF-40403", "任务不存在"))
+            .when(taskOperationService).claimTask(anyString(), anyString());
+
+        mockMvc.perform(post("/api/workflow/tasks/NONEXIST/claim")
+                        .param("empId", "EMP001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("WF-40403"));
+    }
+
+    @Test
+    void claimTask_alreadyClaimed_returnsBizError() throws Exception {
+        doThrow(new BizException("WF-40904", "任务已被签收"))
+            .when(taskOperationService).claimTask(anyString(), anyString());
+
+        mockMvc.perform(post("/api/workflow/tasks/T_001/claim")
+                        .param("empId", "EMP001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("WF-40904"));
+    }
+
+    @Test
+    void approveTask_notAssignee_returnsBizError() throws Exception {
+        doThrow(new BizException("WF-40903", "非任务办理人"))
+            .when(taskOperationService).approveTask(anyString(), anyString(), any(), any());
+
+        ApproveReqDTO req = new ApproveReqDTO();
+        req.setComment("同意");
+
+        mockMvc.perform(post("/api/workflow/tasks/T_001/approve")
+                        .param("empId", "EMP001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("WF-40903"));
+    }
+
+    @Test
+    void rejectTask_notAssignee_returnsBizError() throws Exception {
+        doThrow(new BizException("WF-40903", "非任务办理人"))
+            .when(taskOperationService).rejectTask(anyString(), anyString(), anyString());
+
+        RejectReqDTO req = new RejectReqDTO();
+        req.setComment("不符合要求");
+
+        mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
+                        .param("empId", "EMP001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("WF-40903"));
+    }
+
+    @Test
+    void rejectTask_missingComment_returns400() throws Exception {
+        // comment 为空，触发 @NotBlank 校验
+        RejectReqDTO req = new RejectReqDTO();
+
+        mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
+                        .param("empId", "EMP001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void transferTask_missingToEmpId_returns400() throws Exception {
+        // toEmpId 为空，触发 @NotBlank 校验
+        TransferReqDTO req = new TransferReqDTO();
+        req.setReason("出差交接");
+
+        mockMvc.perform(post("/api/workflow/tasks/T_001/transfer")
+                        .param("empId", "EMP001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTaskDetail_taskNotFound_returnsBizError() throws Exception {
+        when(todoQueryService.getTaskDetail(anyString(), anyString()))
+                .thenThrow(new BizException("WF-40403", "任务不存在"));
+
+        mockMvc.perform(get("/api/workflow/tasks/NONEXIST")
+                        .param("empId", "EMP001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("WF-40403"));
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
@@ -146,6 +147,163 @@ class DictServiceTest {
         assertThat(page.getRecords()).hasSize(1);
         assertThat(page.getPageNo()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(20);
+    }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 测试 getDictLabel：编码不存在时返回 null
+     */
+    @Test
+    void getDictLabel_unknownCode_returnsNull() {
+        List<SysDict> cached = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
+        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+
+        String label = dictService.getDictLabel("INDUSTRY", "NON_EXIST");
+
+        assertThat(label).isNull();
+    }
+
+    /**
+     * 测试 isValidDictValue：编码存在时返回 true
+     */
+    @Test
+    void isValidDictValue_existingCode_returnsTrue() {
+        List<SysDict> cached = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
+        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+
+        boolean valid = dictService.isValidDictValue("INDUSTRY", "IT");
+
+        assertThat(valid).isTrue();
+    }
+
+    /**
+     * 测试 isValidDictValue：编码不存在时返回 false
+     */
+    @Test
+    void isValidDictValue_nonExistingCode_returnsFalse() {
+        List<SysDict> cached = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
+        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+
+        boolean valid = dictService.isValidDictValue("INDUSTRY", "UNKNOWN");
+
+        assertThat(valid).isFalse();
+    }
+
+    /**
+     * 测试 batchGetDictItems：批量获取多类型字典数据
+     */
+    @Test
+    void batchGetDictItems_mergesMultipleTypes() {
+        List<SysDict> industryItems = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
+        List<SysDict> statusItems = List.of(makeDict("D_002", "STATUS", "ACT", "激活", "ACTIVE"));
+        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(industryItems);
+        when(valueOperations.get("gov:dict:STATUS")).thenReturn(statusItems);
+
+        var result = dictService.batchGetDictItems(Set.of("INDUSTRY", "STATUS"));
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get("INDUSTRY")).hasSize(1);
+        assertThat(result.get("STATUS")).hasSize(1);
+    }
+
+    /**
+     * 测试 updateDict：正常更新成功
+     */
+    @Test
+    void updateDict_success_updatesAndEvictsCache() {
+        SysDict existing = makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT");
+        when(dictMapper.selectById("D_001")).thenReturn(existing);
+        when(dictMapper.updateById(any())).thenReturn(1);
+
+        dictService.updateDict("D_001", "新标签", "新值", 5, "更新备注");
+
+        verify(dictMapper).updateById(argThat(dict ->
+                "新标签".equals(dict.getDictLabel())
+                        && "新值".equals(dict.getDictValue())
+                        && dict.getSortOrder() == 5
+        ));
+        verify(redisTemplate).delete("gov:dict:INDUSTRY");
+    }
+
+    /**
+     * 测试 updateDict：字典不存在时抛出 GOV-40001
+     */
+    @Test
+    void updateDict_notFound_throwsGov40001() {
+        when(dictMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> dictService.updateDict("NOT_EXIST", "标签", null, null, null))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40001"));
+    }
+
+    /**
+     * 测试 toggleStatus：ACTIVE → DISABLED
+     */
+    @Test
+    void toggleStatus_activeToDisabled() {
+        SysDict existing = makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT");
+        existing.setStatus("ACTIVE");
+        when(dictMapper.selectById("D_001")).thenReturn(existing);
+        when(dictMapper.updateById(any())).thenReturn(1);
+
+        SysDict result = dictService.toggleStatus("D_001");
+
+        verify(dictMapper).updateById(argThat(dict -> "DISABLED".equals(dict.getStatus())));
+        verify(redisTemplate).delete("gov:dict:INDUSTRY");
+    }
+
+    /**
+     * 测试 toggleStatus：DISABLED → ACTIVE
+     */
+    @Test
+    void toggleStatus_disabledToActive() {
+        SysDict existing = makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT");
+        existing.setStatus("DISABLED");
+        when(dictMapper.selectById("D_001")).thenReturn(existing);
+        when(dictMapper.updateById(any())).thenReturn(1);
+
+        SysDict result = dictService.toggleStatus("D_001");
+
+        verify(dictMapper).updateById(argThat(dict -> "ACTIVE".equals(dict.getStatus())));
+    }
+
+    /**
+     * 测试 toggleStatus：字典不存在时抛出 GOV-40001
+     */
+    @Test
+    void toggleStatus_notFound_throwsGov40001() {
+        when(dictMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> dictService.toggleStatus("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40001"));
+    }
+
+    /**
+     * 测试 deleteDict：字典不存在时抛出 GOV-40001
+     */
+    @Test
+    void deleteDict_notFound_throwsGov40001() {
+        when(dictMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> dictService.deleteDict("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40001"));
+    }
+
+    /**
+     * 测试 getDictItems：DB 返回空列表时应写入空缓存
+     */
+    @Test
+    void getDictItems_emptyDb_returnsEmptyList() {
+        when(valueOperations.get("gov:dict:EMPTY_TYPE")).thenReturn(null);
+        when(dictMapper.selectByDictType("EMPTY_TYPE")).thenReturn(List.of());
+
+        List<SysDict> result = dictService.getDictItems("EMPTY_TYPE");
+
+        assertThat(result).isEmpty();
     }
 
     private SysDict makeDict(String id, String dictType, String dictCode, String dictLabel, String dictValue) {

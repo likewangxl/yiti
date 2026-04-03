@@ -318,4 +318,168 @@ class TodoQueryServiceTest {
         assertThat(result.getRecords()).hasSize(1);
         assertThat(result.getRecords().get(0).getBizType()).isEqualTo("LOAN");
     }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 测试 queryTodoList：convertTaskToDTO 返回 null 时（biz map 不存在）应静默跳过
+     */
+    @Test
+    void queryTodoList_bizMapNull_skipsTask() {
+        // given —— 任务的 biz map 不存在
+        Task mockTask = buildMockTask("TASK_020", "孤立的审批", "PID_020",
+                "E10001", "userTask1", "loan_approve:1:123");
+        mockTaskQueryChain(1L, List.of(mockTask));
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_020")).thenReturn(null);
+
+        // when
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
+
+        // then —— 该任务被跳过，返回空列表
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).isEmpty();
+    }
+
+    /**
+     * 测试 queryDoneList：按 bizType 过滤
+     */
+    @Test
+    void queryDoneList_filterByBizType() {
+        // given —— 两个已办任务，分属不同业务类型
+        HistoricTaskInstance hti1 = mock(HistoricTaskInstance.class);
+        lenient().when(hti1.getId()).thenReturn("TASK_021");
+        lenient().when(hti1.getName()).thenReturn("贷款审批");
+        lenient().when(hti1.getProcessInstanceId()).thenReturn("PID_021");
+        lenient().when(hti1.getCreateTime()).thenReturn(new Date());
+        lenient().when(hti1.getAssignee()).thenReturn("E10001");
+        lenient().when(hti1.getTaskDefinitionKey()).thenReturn("userTask1");
+        lenient().when(hti1.getProcessDefinitionId()).thenReturn("loan_approve:1:123");
+
+        HistoricTaskInstance hti2 = mock(HistoricTaskInstance.class);
+        lenient().when(hti2.getId()).thenReturn("TASK_022");
+        lenient().when(hti2.getName()).thenReturn("线索审批");
+        lenient().when(hti2.getProcessInstanceId()).thenReturn("PID_022");
+        lenient().when(hti2.getCreateTime()).thenReturn(new Date());
+        lenient().when(hti2.getAssignee()).thenReturn("E10001");
+        lenient().when(hti2.getTaskDefinitionKey()).thenReturn("userTask1");
+        lenient().when(hti2.getProcessDefinitionId()).thenReturn("lead_approve:1:456");
+
+        mockHistoricTaskQueryChain(2L, List.of(hti1, hti2));
+
+        BizProcessMap map1 = buildBizProcessMap("PID_021", "LOAN", "LA021");
+        BizProcessMap map2 = buildBizProcessMap("PID_022", "LEAD", "LD022");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_021")).thenReturn(map1);
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_022")).thenReturn(map2);
+        when(slaCalculationService.calculateSlaStatus(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+
+        // when —— 仅查询 LOAN 类型
+        PageResult<TaskRespDTO> result = todoQueryService.queryDoneList("E10001", "LOAN", null, 1, 20);
+
+        // then —— 仅返回 LOAN
+        assertThat(result.getRecords()).hasSize(1);
+        assertThat(result.getRecords().get(0).getBizType()).isEqualTo("LOAN");
+    }
+
+    /**
+     * 测试 convertCommentsToLogs：空 comments 列表返回空列表
+     */
+    @Test
+    void getTaskDetail_noComments_returnsEmptyLogs() {
+        Task mockTask = buildMockTask("TASK_030", "无评论任务", "PID_030",
+                "E10001", "userTask1", "loan_approve:1:123");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId("TASK_030")).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(mockTask);
+
+        BizProcessMap map = buildBizProcessMap("PID_030", "LOAN", "LA030");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_030")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+        when(nodeFormConfMapper.selectByProcessDefKeyAndNodeKey(anyString(), anyString())).thenReturn(null);
+        when(taskService.getProcessInstanceComments("PID_030")).thenReturn(Collections.emptyList());
+
+        TaskDetailRespDTO detail = todoQueryService.getTaskDetail("TASK_030", "E10001");
+
+        assertThat(detail.getApprovalLogs()).isEmpty();
+    }
+
+    /**
+     * 测试 extractProcessDefinitionKey：null 输入返回 null
+     */
+    @Test
+    void convertTaskToDTO_nullProcessDefinitionId_returnsNullKey() {
+        // given —— processDefinitionId 为 null
+        Task mockTask = buildMockTask("TASK_040", "测试", "PID_040",
+                "E10001", "userTask1", null);
+        mockTaskQueryChain(1L, List.of(mockTask));
+
+        BizProcessMap map = buildBizProcessMap("PID_040", "LOAN", "LA040");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_040")).thenReturn(map);
+        // processDefinitionKey 为 null 时，SLA 计算应能处理
+        when(slaCalculationService.calculateSlaStatus(isNull(), eq("userTask1"), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
+
+        assertThat(result.getRecords()).hasSize(1);
+        assertThat(result.getRecords().get(0).getTaskId()).isEqualTo("TASK_040");
+    }
+
+    /**
+     * 测试 convertToLocalDateTime：null date 返回 null
+     */
+    @Test
+    void convertToLocalDateTime_nullDate_returnsNull() {
+        Task mockTask = buildMockTask("TASK_050", "测试", "PID_050",
+                "E10001", "userTask1", "loan_approve:1:123");
+        lenient().when(mockTask.getCreateTime()).thenReturn(null);
+        mockTaskQueryChain(1L, List.of(mockTask));
+
+        BizProcessMap map = buildBizProcessMap("PID_050", "LOAN", "LA050");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_050")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(eq("loan_approve"), eq("userTask1"), isNull()))
+                .thenReturn(SlaStatus.GREEN);
+
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
+
+        assertThat(result.getRecords()).hasSize(1);
+        assertThat(result.getRecords().get(0).getTaskCreateTime()).isNull();
+    }
+
+    /**
+     * 测试 convertHistoricTaskToDTO：biz map 为 null 时静默跳过
+     */
+    @Test
+    void queryDoneList_bizMapNull_skipsTask() {
+        HistoricTaskInstance hti = mock(HistoricTaskInstance.class);
+        lenient().when(hti.getId()).thenReturn("TASK_060");
+        lenient().when(hti.getName()).thenReturn("孤立已办");
+        lenient().when(hti.getProcessInstanceId()).thenReturn("PID_060");
+        lenient().when(hti.getCreateTime()).thenReturn(new Date());
+        lenient().when(hti.getAssignee()).thenReturn("E10001");
+        lenient().when(hti.getTaskDefinitionKey()).thenReturn("userTask1");
+        lenient().when(hti.getProcessDefinitionId()).thenReturn("loan_approve:1:123");
+
+        mockHistoricTaskQueryChain(1L, List.of(hti));
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_060")).thenReturn(null);
+
+        PageResult<TaskRespDTO> result = todoQueryService.queryDoneList("E10001", null, null, 1, 20);
+
+        assertThat(result.getRecords()).isEmpty();
+    }
+
+    /**
+     * 测试 queryTodoList：空任务列表返回空结果
+     */
+    @Test
+    void queryTodoList_emptyList_returnsEmptyResult() {
+        mockTaskQueryChain(0L, List.of());
+
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(0L);
+        assertThat(result.getRecords()).isEmpty();
+    }
 }

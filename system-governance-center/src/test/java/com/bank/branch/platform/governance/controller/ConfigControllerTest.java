@@ -1,6 +1,8 @@
 package com.bank.branch.platform.governance.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.ConfigDTO;
 import com.bank.branch.platform.governance.api.dto.ConfigUpdateReqDTO;
 import com.bank.branch.platform.governance.service.ConfigService;
@@ -17,8 +19,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,7 +38,9 @@ class ConfigControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new ConfigController(configService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ConfigController(configService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -71,5 +74,33 @@ class ConfigControllerTest {
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void updateConfig_keyNotFound_returnsBizError() throws Exception {
+        doThrow(new BizException("GOV-40002", "配置项不存在"))
+            .when(configService).updateConfig(anyString(), anyString());
+
+        ConfigUpdateReqDTO req = new ConfigUpdateReqDTO();
+        req.setConfigValue("newValue");
+
+        mockMvc.perform(put("/api/admin/sys/configs/not.exist.key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-40002"));
+    }
+
+    @Test
+    void updateConfig_missingConfigValue_returns400() throws Exception {
+        // configValue 为空，触发 @NotBlank 校验
+        ConfigUpdateReqDTO req = new ConfigUpdateReqDTO();
+
+        mockMvc.perform(put("/api/admin/sys/configs/sys.title")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
     }
 }

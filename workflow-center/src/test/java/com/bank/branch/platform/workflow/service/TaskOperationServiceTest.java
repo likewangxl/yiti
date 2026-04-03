@@ -229,4 +229,79 @@ class TaskOperationServiceTest {
                 .extracting("code")
                 .isEqualTo("WF-40903");
     }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 审批时任务不存在，应抛出 WF-40403 异常
+     */
+    @Test
+    void approveTask_taskNotFound_throwsWf40403() {
+        mockTaskQuery(null);
+
+        assertThatThrownBy(() -> taskOperationService.approveTask(
+                "TASK_999", "E001", Map.of(), "同意"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40403");
+    }
+
+    /**
+     * 驳回时任务不存在，应抛出 WF-40403 异常
+     */
+    @Test
+    void rejectTask_taskNotFound_throwsWf40403() {
+        mockTaskQuery(null);
+
+        assertThatThrownBy(() -> taskOperationService.rejectTask(
+                "TASK_999", "E001", "不符合"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40403");
+    }
+
+    /**
+     * 驳回时非任务办理人，应抛出 WF-40903 异常
+     */
+    @Test
+    void rejectTask_notAssignee_throwsWf40903() {
+        Task mockTask = buildMockTask("TASK_001", "PID_001", "OTHER");
+        mockTaskQuery(mockTask);
+
+        assertThatThrownBy(() -> taskOperationService.rejectTask(
+                "TASK_001", "E001", "不符合"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40903");
+    }
+
+    /**
+     * 转交时任务不存在，应抛出 WF-40403 异常
+     */
+    @Test
+    void transferTask_taskNotFound_throwsWf40403() {
+        mockTaskQuery(null);
+
+        assertThatThrownBy(() -> taskOperationService.transferTask(
+                "TASK_999", "E001", "E002", "出差"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40403");
+    }
+
+    /**
+     * 签收时 BizProcessMap 不存在，不应抛异常（仅跳过更新）
+     */
+    @Test
+    void claimTask_noBizProcessMap_doesNotThrow() {
+        Task mockTask = buildMockTask("TASK_001", "PID_001", null);
+        mockTaskQuery(mockTask);
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_001")).thenReturn(null);
+
+        // 不应抛异常
+        taskOperationService.claimTask("TASK_001", "E001");
+
+        verify(taskService).claim("TASK_001", "E001");
+        verify(bizProcessMapMapper, never()).updateById(any());
+    }
 }

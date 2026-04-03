@@ -1,6 +1,8 @@
 package com.bank.branch.platform.governance.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.AuditLogDTO;
 import com.bank.branch.platform.governance.service.SqlProbeService;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +36,9 @@ class SqlProbeControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new SqlProbeController(sqlProbeService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new SqlProbeController(sqlProbeService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -72,5 +76,33 @@ class SqlProbeControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(1));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void executeSql_nonSelect_returnsBizError() throws Exception {
+        when(sqlProbeService.executeSql(anyString(), anyString(), anyString()))
+                .thenThrow(new BizException("GOV-42201", "非SELECT SQL语句"));
+
+        mockMvc.perform(post("/api/admin/sql-probe/execute")
+                .param("sql", "DELETE FROM sys_dict")
+                .param("operatorEmpId", "emp001")
+                .param("reason", "测试"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-42201"));
+    }
+
+    @Test
+    void executeSql_concurrencyExceeded_returnsBizError() throws Exception {
+        when(sqlProbeService.executeSql(anyString(), anyString(), anyString()))
+                .thenThrow(new BizException("GOV-42202", "SQL并发数超限"));
+
+        mockMvc.perform(post("/api/admin/sql-probe/execute")
+                .param("sql", "SELECT 1")
+                .param("operatorEmpId", "emp001")
+                .param("reason", "测试"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-42202"));
     }
 }

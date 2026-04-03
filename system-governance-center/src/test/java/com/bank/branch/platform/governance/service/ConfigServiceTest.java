@@ -141,6 +141,65 @@ class ConfigServiceTest {
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40002"));
     }
 
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 测试 listConfigs：正常返回分页结果
+     */
+    @Test
+    void listConfigs_returnsPageResult() {
+        List<SysConfigKv> records = List.of(makeConfig("C_001", "app.name", "BP", "STRING"));
+        when(configMapper.countAll(null)).thenReturn(1L);
+        when(configMapper.selectAll(isNull(), eq(0), eq(20))).thenReturn(records);
+
+        PageResult<ConfigDTO> page = configService.listConfigs(null, 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1L);
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).getConfigKey()).isEqualTo("app.name");
+    }
+
+    /**
+     * 测试 listConfigs：带状态过滤
+     */
+    @Test
+    void listConfigs_withStatusFilter_delegatesToMapper() {
+        when(configMapper.countAll("ACTIVE")).thenReturn(0L);
+        when(configMapper.selectAll(eq("ACTIVE"), eq(0), eq(10))).thenReturn(List.of());
+
+        PageResult<ConfigDTO> page = configService.listConfigs("ACTIVE", 1, 10);
+
+        assertThat(page.getTotal()).isEqualTo(0L);
+        assertThat(page.getRecords()).isEmpty();
+        verify(configMapper).countAll("ACTIVE");
+    }
+
+    /**
+     * 测试 getConfigValue(key, Class)：key 不存在时抛出 GOV-40002
+     */
+    @Test
+    void getConfigValue_typedMethod_keyNotFound_throwsGov40002() {
+        when(valueOperations.get("gov:config:missing")).thenReturn(null);
+        when(configMapper.selectByConfigKey("missing")).thenReturn(null);
+
+        assertThatThrownBy(() -> configService.getConfigValue("missing", Long.class))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40002"));
+    }
+
+    /**
+     * 测试 getConfigValue：DB 中不存在且无默认值时返回 null
+     */
+    @Test
+    void getConfigValue_dbMissAndNoDefault_returnsNull() {
+        when(valueOperations.get("gov:config:missing")).thenReturn(null);
+        when(configMapper.selectByConfigKey("missing")).thenReturn(null);
+
+        String result = configService.getConfigValue("missing");
+
+        assertThat(result).isNull();
+    }
+
     // ── 辅助方法 ──────────────────────────────────────────────────
 
     private SysConfigKv makeConfig(String id, String configKey, String configValue, String valueType) {

@@ -1,5 +1,7 @@
 package com.bank.branch.platform.workflow.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.service.ProcessStartService;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +32,9 @@ class ProcessControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new ProcessController(processStartService)).build();
+                new ProcessController(processStartService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -63,5 +67,27 @@ class ProcessControllerTest {
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.bizType").value("LEAD"))
                 .andExpect(jsonPath("$.data.bizId").value("1001"));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void getProcessByBusinessKey_notFound_returnsBizError() throws Exception {
+        when(processStartService.getProcessByBusinessKey(anyString()))
+                .thenThrow(new BizException("WF-40402", "流程实例不存在"));
+
+        mockMvc.perform(get("/api/workflow/processes/NONEXISTENT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("WF-40402"));
+    }
+
+    @Test
+    void getProcessByBizTypeAndBizId_notFound_returnsBizError() throws Exception {
+        when(processStartService.getProcessByBizTypeAndBizId(anyString(), anyString()))
+                .thenThrow(new BizException("WF-40402", "流程实例不存在"));
+
+        mockMvc.perform(get("/api/workflow/processes/biz/LOAN/NONEXIST"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("WF-40402"));
     }
 }

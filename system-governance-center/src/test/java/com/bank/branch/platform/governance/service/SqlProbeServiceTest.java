@@ -187,4 +187,114 @@ class SqlProbeServiceTest {
 
         verify(statement).setQueryTimeout(30);
     }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 测试：UPDATE 语句应抛出 GOV-42201 异常
+     */
+    @Test
+    void executeSql_updateStatement_throwsGov42201() {
+        BizException ex = catchThrowableOfType(
+                () -> sqlProbeService.executeSql("UPDATE users SET name='test'", "E001", "测试"),
+                BizException.class
+        );
+
+        assertThat(ex).isNotNull();
+        assertThat(ex.getCode()).isEqualTo(GovErrorCode.NOT_SELECT_SQL.getCode());
+    }
+
+    /**
+     * 测试：DROP 语句应抛出 GOV-42201 异常
+     */
+    @Test
+    void executeSql_dropStatement_throwsGov42201() {
+        BizException ex = catchThrowableOfType(
+                () -> sqlProbeService.executeSql("DROP TABLE users", "E001", "测试"),
+                BizException.class
+        );
+
+        assertThat(ex).isNotNull();
+        assertThat(ex.getCode()).isEqualTo(GovErrorCode.NOT_SELECT_SQL.getCode());
+    }
+
+    /**
+     * 测试：ALTER 语句应抛出 GOV-42201 异常
+     */
+    @Test
+    void executeSql_alterStatement_throwsGov42201() {
+        BizException ex = catchThrowableOfType(
+                () -> sqlProbeService.executeSql("ALTER TABLE users ADD COLUMN age INT", "E001", "测试"),
+                BizException.class
+        );
+
+        assertThat(ex).isNotNull();
+        assertThat(ex.getCode()).isEqualTo(GovErrorCode.NOT_SELECT_SQL.getCode());
+    }
+
+    /**
+     * 测试：TRUNCATE 语句应抛出 GOV-42201 异常
+     */
+    @Test
+    void executeSql_truncateStatement_throwsGov42201() {
+        BizException ex = catchThrowableOfType(
+                () -> sqlProbeService.executeSql("TRUNCATE TABLE users", "E001", "测试"),
+                BizException.class
+        );
+
+        assertThat(ex).isNotNull();
+        assertThat(ex.getCode()).isEqualTo(GovErrorCode.NOT_SELECT_SQL.getCode());
+    }
+
+    /**
+     * 测试：小写 select 也应被识别（大小写不敏感）
+     */
+    @Test
+    void executeSql_lowercaseSelect_succeeds() throws Exception {
+        sqlProbeService.executeSql("select * from sys_dict LIMIT 10", "E001", "测试");
+
+        verify(statement).executeQuery(anyString());
+    }
+
+    /**
+     * 测试：小写 limit 也应被正确识别，不重复追加
+     */
+    @Test
+    void executeSql_lowercaseLimit_doesNotAppend() throws Exception {
+        sqlProbeService.executeSql("SELECT * FROM sys_dict limit 10", "E001", "测试");
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(statement).executeQuery(sqlCaptor.capture());
+
+        assertThat(sqlCaptor.getValue()).doesNotContain("LIMIT 1000");
+    }
+
+    /**
+     * 测试：SQL 执行异常时应抛出 GOV-50003 并释放信号量
+     */
+    @Test
+    void executeSql_sqlException_throwsGov50003() throws Exception {
+        when(statement.executeQuery(anyString())).thenThrow(new java.sql.SQLException("timeout"));
+
+        BizException ex = catchThrowableOfType(
+                () -> sqlProbeService.executeSql("SELECT 1", "E001", "测试"),
+                BizException.class
+        );
+
+        assertThat(ex).isNotNull();
+        assertThat(ex.getCode()).isEqualTo(GovErrorCode.SQL_EXECUTION_TIMEOUT.getCode());
+    }
+
+    /**
+     * 测试：空结果集（0行）正常返回空列表
+     */
+    @Test
+    void executeSql_emptyResultSet_returnsEmptyList() throws Exception {
+        // resultSet.next() 默认已返回 false (在 setUp 中设置)
+
+        List<Map<String, Object>> result = sqlProbeService.executeSql(
+                "SELECT * FROM empty_table LIMIT 10", "E001", "测试");
+
+        assertThat(result).isEmpty();
+    }
 }

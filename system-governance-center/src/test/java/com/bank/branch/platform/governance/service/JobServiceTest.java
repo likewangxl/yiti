@@ -234,6 +234,58 @@ class JobServiceTest {
         assertThat(page.getRecords().get(0).getJobId()).isEqualTo("JOB_001");
     }
 
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 测试暂停任务：任务不存在时抛出 GOV-40004
+     */
+    @Test
+    void pauseJob_notFound_throwsGov40004() {
+        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.pauseJob("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    /**
+     * 测试恢复任务：任务不存在时抛出 GOV-40004
+     */
+    @Test
+    void resumeJob_notFound_throwsGov40004() {
+        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.resumeJob("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    /**
+     * 测试 failJobRun：日志不存在时抛出 GOV-40007
+     */
+    @Test
+    void failJobRun_notFound_throwsGov40007() {
+        when(jobRunLogMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.failJobRun("NOT_EXIST", "error"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40007"));
+    }
+
+    /**
+     * 测试 listJobs：keyword 为 null 时正常返回
+     */
+    @Test
+    void listJobs_nullKeyword_returnsAll() {
+        when(jobConfMapper.countByPage(null)).thenReturn(0L);
+        when(jobConfMapper.selectByPage(isNull(), eq(0), eq(20))).thenReturn(List.of());
+
+        PageResult<JobConfDTO> page = jobService.listJobs(null, 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(0L);
+        assertThat(page.getRecords()).isEmpty();
+    }
+
     // ── Helper Methods ──────────────────────────────────────────
 
     private SysJobConf makeJobConf(String id, String jobKey, String jobName) {

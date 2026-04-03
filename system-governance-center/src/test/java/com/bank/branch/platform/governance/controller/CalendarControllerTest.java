@@ -1,5 +1,7 @@
 package com.bank.branch.platform.governance.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.CalendarDayDTO;
 import com.bank.branch.platform.governance.service.CalendarService;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,8 +16,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -33,7 +34,9 @@ class CalendarControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new CalendarController(calendarService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new CalendarController(calendarService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -73,5 +76,17 @@ class CalendarControllerTest {
                 .param("year", "2026"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void toggleWorkday_pastDate_returnsBizError() throws Exception {
+        doThrow(new BizException("GOV-40301", "过去日期不可修改"))
+            .when(calendarService).toggleWorkday(any(LocalDate.class));
+
+        mockMvc.perform(put("/api/admin/sys/calendar/2020-01-01/toggle"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-40301"));
     }
 }

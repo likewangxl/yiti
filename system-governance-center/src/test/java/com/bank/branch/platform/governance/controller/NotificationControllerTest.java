@@ -1,6 +1,8 @@
 package com.bank.branch.platform.governance.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.NotificationDTO;
 import com.bank.branch.platform.governance.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,8 +16,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -33,7 +34,9 @@ class NotificationControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new NotificationController(notificationService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new NotificationController(notificationService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -91,5 +94,17 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data").value(3));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void markAsRead_notFound_returnsBizError() throws Exception {
+        doThrow(new BizException("GOV-40006", "通知不存在"))
+            .when(notificationService).markAsRead(anyString());
+
+        mockMvc.perform(put("/api/notifications/NOT_EXIST/read"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-40006"));
     }
 }

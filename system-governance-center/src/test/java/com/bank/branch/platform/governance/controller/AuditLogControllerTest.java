@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.dto.AuditLogDTO;
 import com.bank.branch.platform.governance.api.dto.AuditLogQueryReqDTO;
@@ -33,7 +34,9 @@ class AuditLogControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AuditLogController(auditLogService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new AuditLogController(auditLogService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test

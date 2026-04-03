@@ -109,4 +109,65 @@ class SlaCalculationServiceTest {
 
         assertThat(result).isEqualTo(SlaStatus.RED);
     }
+
+    // ── L1 补全测试：边界值 ──────────────────────────────────────
+
+    /**
+     * 已耗工时恰好等于预警阈值时，应返回黄灯（>=）。
+     * 规则：warning=16h, timeout=24h；2个工作日=16h → 16 >= 16 → YELLOW
+     */
+    @Test
+    void calculate_exactlyAtWarning_returnsYellow() {
+        WfTimeoutRule rule = new WfTimeoutRule();
+        rule.setWarningHours(16);
+        rule.setTimeoutHours(24);
+        when(timeoutRuleMapper.selectByProcessDefKeyAndNodeKey("loan_approve", "userTask1"))
+                .thenReturn(rule);
+        when(calendarApi.countWorkingDays(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(2); // 2*8=16 == warningHours
+
+        SlaStatus result = slaCalculationService.calculateSlaStatus(
+                "loan_approve", "userTask1", LocalDateTime.of(2026, 3, 29, 9, 0));
+
+        assertThat(result).isEqualTo(SlaStatus.YELLOW);
+    }
+
+    /**
+     * 已耗工时恰好等于超时阈值时，应返回红灯（>=）。
+     * 规则：warning=8h, timeout=16h；2个工作日=16h → 16 >= 16 → RED
+     */
+    @Test
+    void calculate_exactlyAtTimeout_returnsRed() {
+        WfTimeoutRule rule = new WfTimeoutRule();
+        rule.setWarningHours(8);
+        rule.setTimeoutHours(16);
+        when(timeoutRuleMapper.selectByProcessDefKeyAndNodeKey("loan_approve", "userTask1"))
+                .thenReturn(rule);
+        when(calendarApi.countWorkingDays(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(2); // 2*8=16 == timeoutHours
+
+        SlaStatus result = slaCalculationService.calculateSlaStatus(
+                "loan_approve", "userTask1", LocalDateTime.of(2026, 3, 29, 9, 0));
+
+        assertThat(result).isEqualTo(SlaStatus.RED);
+    }
+
+    /**
+     * 零工作日时，应返回绿灯（0h < 任何阈值）。
+     */
+    @Test
+    void calculate_zeroWorkingDays_returnsGreen() {
+        WfTimeoutRule rule = new WfTimeoutRule();
+        rule.setWarningHours(8);
+        rule.setTimeoutHours(16);
+        when(timeoutRuleMapper.selectByProcessDefKeyAndNodeKey("loan_approve", "userTask1"))
+                .thenReturn(rule);
+        when(calendarApi.countWorkingDays(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(0);
+
+        SlaStatus result = slaCalculationService.calculateSlaStatus(
+                "loan_approve", "userTask1", LocalDateTime.now());
+
+        assertThat(result).isEqualTo(SlaStatus.GREEN);
+    }
 }

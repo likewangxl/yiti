@@ -161,6 +161,79 @@ class NotificationServiceTest {
         assertThat(dto.getNotifyType()).isEqualTo("SYSTEM");
     }
 
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 测试 markAllAsRead：委托给 mapper 并返回影响行数
+     */
+    @Test
+    void markAllAsRead_delegatesToMapper() {
+        when(notificationMapper.markAllAsRead(eq("E001"), any(LocalDateTime.class))).thenReturn(3);
+
+        int count = notificationService.markAllAsRead("E001");
+
+        assertThat(count).isEqualTo(3);
+        verify(notificationMapper).markAllAsRead(eq("E001"), any(LocalDateTime.class));
+    }
+
+    /**
+     * 测试 queryNotifications：isRead=true 时传递 1 给 mapper
+     */
+    @Test
+    void queryNotifications_withIsReadTrue_passesIntegerOne() {
+        when(notificationMapper.countByEmpId("E001", 1)).thenReturn(1L);
+        UserNotification n = makeNotification("N001", "E001", "已读通知");
+        n.setIsRead(1);
+        when(notificationMapper.selectByEmpId("E001", 1, 0, 10)).thenReturn(List.of(n));
+
+        PageResult<NotificationDTO> result = notificationService.queryNotifications("E001", true, 1, 10);
+
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).hasSize(1);
+        verify(notificationMapper).selectByEmpId("E001", 1, 0, 10);
+    }
+
+    /**
+     * 测试 queryNotifications：isRead=false 时传递 0 给 mapper
+     */
+    @Test
+    void queryNotifications_withIsReadFalse_passesIntegerZero() {
+        when(notificationMapper.countByEmpId("E001", 0)).thenReturn(2L);
+        when(notificationMapper.selectByEmpId("E001", 0, 0, 10))
+                .thenReturn(List.of(makeNotification("N001", "E001", "未读1"), makeNotification("N002", "E001", "未读2")));
+
+        PageResult<NotificationDTO> result = notificationService.queryNotifications("E001", false, 1, 10);
+
+        assertThat(result.getTotal()).isEqualTo(2L);
+        verify(notificationMapper).countByEmpId("E001", 0);
+    }
+
+    /**
+     * 测试 queryNotifications：空结果集返回空 PageResult
+     */
+    @Test
+    void queryNotifications_emptyResult_returnsEmptyPage() {
+        when(notificationMapper.countByEmpId("E999", null)).thenReturn(0L);
+        when(notificationMapper.selectByEmpId("E999", null, 0, 20)).thenReturn(List.of());
+
+        PageResult<NotificationDTO> result = notificationService.queryNotifications("E999", null, 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(0L);
+        assertThat(result.getRecords()).isEmpty();
+    }
+
+    /**
+     * 测试 countUnread：empId 无未读通知时返回 0
+     */
+    @Test
+    void countUnread_noUnread_returnsZero() {
+        when(notificationMapper.countUnread("E999")).thenReturn(0);
+
+        int count = notificationService.countUnread("E999");
+
+        assertThat(count).isEqualTo(0);
+    }
+
     // ── 辅助方法 ──────────────────────────────────────────────────
 
     private UserNotification makeNotification(String id, String empId, String title) {

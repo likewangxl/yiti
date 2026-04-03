@@ -183,4 +183,120 @@ class FileServiceTest {
         assertThat(result.get(0).getFileName()).isEqualTo("doc.pdf");
         assertThat(result.get(0).getFileRole()).isEqualTo("ATTACHMENT");
     }
+
+    // ── L1 补全测试 ──────────────────────────────────────────────
+
+    /**
+     * 删除文件：文件不存在时抛出 GOV-40005
+     */
+    @Test
+    void deleteFile_notFound_throwsGov40005() {
+        when(fileObjectMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> fileService.deleteFile("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("GOV-40005");
+    }
+
+    /**
+     * 删除文件：成功删除 DB 记录和关联
+     */
+    @Test
+    void deleteFile_success_deletesRecordAndRelations() {
+        FileObject fo = new FileObject();
+        fo.setId("F_001");
+        fo.setStoragePath("2026/04/test.pdf");
+        fo.setBucketName("branch-platform");
+        when(fileObjectMapper.selectById("F_001")).thenReturn(fo);
+        when(fileObjectMapper.deleteById("F_001")).thenReturn(1);
+        when(bizFileRelMapper.deleteByFileObjectId("F_001")).thenReturn(2);
+
+        fileService.deleteFile("F_001");
+
+        verify(fileObjectMapper).deleteById("F_001");
+        verify(bizFileRelMapper).deleteByFileObjectId("F_001");
+    }
+
+    /**
+     * 获取下载 URL：成功场景
+     */
+    @Test
+    void getDownloadUrl_success_returnsPresignedUrl() throws Exception {
+        FileObject fo = new FileObject();
+        fo.setId("F_001");
+        fo.setStoragePath("2026/04/test.pdf");
+        fo.setBucketName("branch-platform");
+        when(fileObjectMapper.selectById("F_001")).thenReturn(fo);
+        when(minioClient.getPresignedObjectUrl(any())).thenReturn("https://minio/presigned-url");
+
+        String url = fileService.getDownloadUrl("F_001");
+
+        assertThat(url).isEqualTo("https://minio/presigned-url");
+    }
+
+    /**
+     * 绑定文件：文件不存在时抛出 GOV-40005
+     */
+    @Test
+    void bindFile_fileNotFound_throwsGov40005() {
+        when(fileObjectMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> fileService.bindFile("LEAD", "L001", "NOT_EXIST", "ATTACHMENT"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("GOV-40005");
+    }
+
+    /**
+     * 绑定文件：新建关联成功
+     */
+    @Test
+    void bindFile_newRelation_insertsRecord() {
+        FileObject fo = new FileObject();
+        fo.setId("F_001");
+        fo.setUploadedBy("EMP001");
+        when(fileObjectMapper.selectById("F_001")).thenReturn(fo);
+        when(bizFileRelMapper.existsByBizTypeAndBizIdAndFileObjectId("LEAD", "L001", "F_001"))
+                .thenReturn(false);
+        when(bizFileRelMapper.insert(any(BizFileRel.class))).thenReturn(1);
+
+        fileService.bindFile("LEAD", "L001", "F_001", "ATTACHMENT");
+
+        verify(bizFileRelMapper).insert(argThat(rel ->
+                "LEAD".equals(rel.getBizType())
+                        && "L001".equals(rel.getBizId())
+                        && "F_001".equals(rel.getFileObjectId())
+                        && "ATTACHMENT".equals(rel.getFileRole())
+        ));
+    }
+
+    /**
+     * 查询业务关联文件：无关联时返回空列表
+     */
+    @Test
+    void listBizFiles_noRelations_returnsEmptyList() {
+        when(bizFileRelMapper.selectByBizTypeAndBizId("CUSTOMER", "C999"))
+                .thenReturn(Collections.emptyList());
+
+        List<FileObjectDTO> result = fileService.listBizFiles("CUSTOMER", "C999");
+
+        assertThat(result).isEmpty();
+    }
+
+    /**
+     * 上传文件：合法格式（大写扩展名 .PDF）应被接受
+     */
+    @Test
+    void upload_validFormatPdf_succeeds() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "report.PDF", "application/pdf", "data".getBytes());
+        when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
+        when(minioClient.putObject(any())).thenReturn(
+                new ObjectWriteResponse(null, "branch-platform", null, "test-path", null, null));
+
+        FileObjectDTO result = fileService.upload(file, "EMP001");
+
+        assertThat(result).isNotNull();
+    }
 }

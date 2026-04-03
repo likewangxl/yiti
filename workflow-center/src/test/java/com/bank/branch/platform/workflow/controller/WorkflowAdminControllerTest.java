@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.controller;
 
+import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.workflow.entity.WfNodeCandidateConf;
 import com.bank.branch.platform.workflow.entity.WfTimeoutRule;
 import com.bank.branch.platform.workflow.service.WorkflowAdminService;
@@ -17,10 +18,8 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -39,7 +38,9 @@ class WorkflowAdminControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new WorkflowAdminController(workflowAdminService)).build();
+                new WorkflowAdminController(workflowAdminService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
     }
 
     @Test
@@ -118,5 +119,16 @@ class WorkflowAdminControllerTest {
                         .content(objectMapper.writeValueAsString(rule)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    // ── L2 错误路径测试 ──────────────────────────────────────────
+
+    @Test
+    void saveCandidateConfig_malformedJson_returns500() throws Exception {
+        // GlobalExceptionHandler 未处理 HttpMessageNotReadableException，兜底返回 500
+        mockMvc.perform(post("/api/admin/workflow/candidate-configs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ invalid json}"))
+                .andExpect(status().isInternalServerError());
     }
 }
