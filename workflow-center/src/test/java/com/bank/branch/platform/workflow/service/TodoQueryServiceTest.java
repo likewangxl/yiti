@@ -1,0 +1,321 @@
+package com.bank.branch.platform.workflow.service;
+
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
+import com.bank.branch.platform.workflow.entity.BizProcessMap;
+import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
+import com.bank.branch.platform.workflow.enums.SlaStatus;
+import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
+import com.bank.branch.platform.workflow.mapper.NodeFormConfMapper;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.TaskService;
+import org.flowable.engine.task.Comment;
+import org.flowable.task.api.Task;
+import org.flowable.task.api.TaskQuery;
+import org.flowable.task.api.history.HistoricTaskInstance;
+import org.flowable.task.api.history.HistoricTaskInstanceQuery;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * TodoQueryService 单元测试。
+ * <p>
+ * 验证待办/已办查询服务的核心逻辑：
+ * 1. 待办列表查询返回正确的任务数据及SLA状态
+ * 2. 未签收任务的 claimable 标志为 true
+ * 3. 已办列表使用 HistoryService 查询已完成任务
+ * 4. 任务详情加载完整上下文（业务映射+表单配置+SLA+审批日志）
+ * 5. 任务不存在时抛出 WF-40403 异常
+ * </p>
+ */
+@ExtendWith(MockitoExtension.class)
+class TodoQueryServiceTest {
+
+    @Mock
+    private TaskService taskService;
+
+    @Mock
+    private HistoryService historyService;
+
+    @Mock
+    private BizProcessMapMapper bizProcessMapMapper;
+
+    @Mock
+    private SlaCalculationService slaCalculationService;
+
+    @Mock
+    private NodeFormConfMapper nodeFormConfMapper;
+
+    @InjectMocks
+    private TodoQueryService todoQueryService;
+
+    // ========== 辅助方法 ==========
+
+    /**
+     * 模拟 Flowable TaskQuery 的流式链式调用
+     */
+    private TaskQuery mockTaskQueryChain(long count, List<Task> tasks) {
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskCandidateOrAssigned(anyString())).thenReturn(tq);
+        when(tq.orderByTaskCreateTime()).thenReturn(tq);
+        when(tq.desc()).thenReturn(tq);
+        when(tq.count()).thenReturn(count);
+        when(tq.listPage(anyInt(), anyInt())).thenReturn(tasks);
+        return tq;
+    }
+
+    /**
+     * 模拟 Flowable HistoricTaskInstanceQuery 的流式链式调用
+     */
+    private HistoricTaskInstanceQuery mockHistoricTaskQueryChain(long count, List<HistoricTaskInstance> tasks) {
+        HistoricTaskInstanceQuery htq = mock(HistoricTaskInstanceQuery.class);
+        when(historyService.createHistoricTaskInstanceQuery()).thenReturn(htq);
+        when(htq.taskAssignee(anyString())).thenReturn(htq);
+        when(htq.finished()).thenReturn(htq);
+        when(htq.orderByHistoricTaskInstanceEndTime()).thenReturn(htq);
+        when(htq.desc()).thenReturn(htq);
+        when(htq.count()).thenReturn(count);
+        when(htq.listPage(anyInt(), anyInt())).thenReturn(tasks);
+        return htq;
+    }
+
+    /**
+     * 构建模拟的 Flowable Task
+     */
+    private Task buildMockTask(String taskId, String taskName, String processInstanceId,
+                               String assignee, String taskDefinitionKey, String processDefinitionId) {
+        Task mockTask = mock(Task.class);
+        lenient().when(mockTask.getId()).thenReturn(taskId);
+        lenient().when(mockTask.getName()).thenReturn(taskName);
+        lenient().when(mockTask.getProcessInstanceId()).thenReturn(processInstanceId);
+        lenient().when(mockTask.getCreateTime()).thenReturn(new Date());
+        lenient().when(mockTask.getAssignee()).thenReturn(assignee);
+        lenient().when(mockTask.getTaskDefinitionKey()).thenReturn(taskDefinitionKey);
+        lenient().when(mockTask.getProcessDefinitionId()).thenReturn(processDefinitionId);
+        return mockTask;
+    }
+
+    /**
+     * 构建模拟的 BizProcessMap
+     */
+    private BizProcessMap buildBizProcessMap(String processInstanceId, String bizType, String bizId) {
+        BizProcessMap map = new BizProcessMap();
+        map.setProcessInstanceId(processInstanceId);
+        map.setBizType(bizType);
+        map.setBizId(bizId);
+        map.setBusinessKey(bizType + ":" + bizId);
+        map.setStartUser("E10001");
+        map.setProcessDefinitionKey("loan_approve");
+        return map;
+    }
+
+    // ========== 测试方法 ==========
+
+    /**
+     * 查询待办列表：正常返回任务列表，SLA状态已计算
+     */
+    @Test
+    void queryTodoList_returnsTasks() {
+        // given
+        Task mockTask = buildMockTask("TASK_001", "经理审批", "PID_001",
+                "E10001", "userTask1", "loan_approve:1:123");
+        mockTaskQueryChain(1L, List.of(mockTask));
+
+        BizProcessMap map = buildBizProcessMap("PID_001", "LOAN", "LA001");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_001")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(eq("loan_approve"), eq("userTask1"), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+
+        // when
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
+
+        // then
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).hasSize(1);
+
+        TaskRespDTO dto = result.getRecords().get(0);
+        assertThat(dto.getTaskId()).isEqualTo("TASK_001");
+        assertThat(dto.getProcessInstanceId()).isEqualTo("PID_001");
+        assertThat(dto.getBizType()).isEqualTo("LOAN");
+        assertThat(dto.getBusinessKey()).isEqualTo("LOAN:LA001");
+        assertThat(dto.getSlaStatus()).isEqualTo("GREEN");
+        assertThat(dto.getTaskName()).isEqualTo("经理审批");
+
+        verify(slaCalculationService).calculateSlaStatus(eq("loan_approve"), eq("userTask1"), any(LocalDateTime.class));
+    }
+
+    /**
+     * 查询待办列表：未签收任务的 claimable 标志为 true
+     */
+    @Test
+    void queryTodoList_setsClaimableFlag() {
+        // given —— assignee 为 null 表示未签收
+        Task unclaimedTask = buildMockTask("TASK_002", "主管审核", "PID_002",
+                null, "userTask2", "loan_approve:1:123");
+        mockTaskQueryChain(1L, List.of(unclaimedTask));
+
+        BizProcessMap map = buildBizProcessMap("PID_002", "LOAN", "LA002");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_002")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.YELLOW);
+
+        // when
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10002", null, null, 1, 20);
+
+        // then
+        assertThat(result.getRecords()).hasSize(1);
+        TaskRespDTO dto = result.getRecords().get(0);
+        assertThat(dto.getClaimable()).isTrue();
+        assertThat(dto.getAssignee()).isNull();
+    }
+
+    /**
+     * 查询已办列表：使用 HistoryService 查询已完成任务
+     */
+    @Test
+    void queryDoneList_returnsFinishedTasks() {
+        // given
+        HistoricTaskInstance hti = mock(HistoricTaskInstance.class);
+        lenient().when(hti.getId()).thenReturn("TASK_003");
+        lenient().when(hti.getName()).thenReturn("总经理审批");
+        lenient().when(hti.getProcessInstanceId()).thenReturn("PID_003");
+        lenient().when(hti.getCreateTime()).thenReturn(new Date());
+        lenient().when(hti.getAssignee()).thenReturn("E10003");
+        lenient().when(hti.getTaskDefinitionKey()).thenReturn("userTask3");
+        lenient().when(hti.getProcessDefinitionId()).thenReturn("loan_approve:1:456");
+
+        mockHistoricTaskQueryChain(1L, List.of(hti));
+
+        BizProcessMap map = buildBizProcessMap("PID_003", "LOAN", "LA003");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_003")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+
+        // when
+        PageResult<TaskRespDTO> result = todoQueryService.queryDoneList("E10003", null, null, 1, 20);
+
+        // then
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).hasSize(1);
+
+        TaskRespDTO dto = result.getRecords().get(0);
+        assertThat(dto.getTaskId()).isEqualTo("TASK_003");
+        assertThat(dto.getBizType()).isEqualTo("LOAN");
+        assertThat(dto.getAssignee()).isEqualTo("E10003");
+
+        verify(historyService).createHistoricTaskInstanceQuery();
+    }
+
+    /**
+     * 获取任务详情：加载完整上下文（业务映射 + 表单配置 + SLA + 审批日志）
+     */
+    @Test
+    void getTaskDetail_loadsFullContext() {
+        // given —— 模拟 TaskService.createTaskQuery 用于按 taskId 查询
+        Task mockTask = buildMockTask("TASK_004", "风控审核", "PID_004",
+                "E10004", "userTask4", "loan_approve:1:789");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId("TASK_004")).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(mockTask);
+
+        BizProcessMap map = buildBizProcessMap("PID_004", "LOAN", "LA004");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_004")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(eq("loan_approve"), eq("userTask4"), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.RED);
+
+        WfNodeFormConf formConf = new WfNodeFormConf();
+        formConf.setFormFields("[\"amount\",\"customerName\"]");
+        formConf.setEditableFields("[\"amount\"]");
+        formConf.setRequiredFields("[\"amount\"]");
+        when(nodeFormConfMapper.selectByProcessDefKeyAndNodeKey("loan_approve", "userTask4"))
+                .thenReturn(formConf);
+
+        // 模拟审批日志
+        Comment comment = mock(Comment.class);
+        lenient().when(comment.getUserId()).thenReturn("E10001");
+        lenient().when(comment.getFullMessage()).thenReturn("同意");
+        lenient().when(comment.getTime()).thenReturn(new Date());
+        when(taskService.getProcessInstanceComments("PID_004")).thenReturn(List.of(comment));
+
+        // when
+        TaskDetailRespDTO detail = todoQueryService.getTaskDetail("TASK_004", "E10004");
+
+        // then
+        assertThat(detail).isNotNull();
+        assertThat(detail.getTaskInfo()).isNotNull();
+        assertThat(detail.getTaskInfo().getTaskId()).isEqualTo("TASK_004");
+        assertThat(detail.getTaskInfo().getSlaStatus()).isEqualTo("RED");
+        assertThat(detail.getFormFields()).isEqualTo("[\"amount\",\"customerName\"]");
+        assertThat(detail.getEditableFields()).isEqualTo("[\"amount\"]");
+        assertThat(detail.getRequiredFields()).isEqualTo("[\"amount\"]");
+        assertThat(detail.getApprovalLogs()).hasSize(1);
+        assertThat(detail.getApprovalLogs().get(0).getUserId()).isEqualTo("E10001");
+        assertThat(detail.getApprovalLogs().get(0).getComment()).isEqualTo("同意");
+
+        verify(nodeFormConfMapper).selectByProcessDefKeyAndNodeKey("loan_approve", "userTask4");
+        verify(taskService).getProcessInstanceComments("PID_004");
+    }
+
+    /**
+     * 获取任务详情：任务不存在时抛出 WF-40403 异常
+     */
+    @Test
+    void getTaskDetail_taskNotFound_throwsWf40403() {
+        // given
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId("NONEXISTENT")).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(null);
+
+        // when & then
+        assertThatThrownBy(() -> todoQueryService.getTaskDetail("NONEXISTENT", "E10001"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40403");
+    }
+
+    /**
+     * 查询待办列表：按 bizType 过滤，只返回匹配的业务类型
+     */
+    @Test
+    void queryTodoList_filterByBizType() {
+        // given —— 两个任务，分属不同业务类型
+        Task loanTask = buildMockTask("TASK_010", "贷款审批", "PID_010",
+                "E10001", "userTask1", "loan_approve:1:123");
+        Task leadTask = buildMockTask("TASK_011", "线索审批", "PID_011",
+                "E10001", "userTask1", "lead_approve:1:456");
+        mockTaskQueryChain(2L, List.of(loanTask, leadTask));
+
+        BizProcessMap loanMap = buildBizProcessMap("PID_010", "LOAN", "LA010");
+        BizProcessMap leadMap = buildBizProcessMap("PID_011", "LEAD", "LD011");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_010")).thenReturn(loanMap);
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_011")).thenReturn(leadMap);
+        when(slaCalculationService.calculateSlaStatus(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+
+        // when —— 仅查询 LOAN 类型
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", "LOAN", null, 1, 20);
+
+        // then —— 仅返回 LOAN 类型的任务
+        assertThat(result.getRecords()).hasSize(1);
+        assertThat(result.getRecords().get(0).getBizType()).isEqualTo("LOAN");
+    }
+}
