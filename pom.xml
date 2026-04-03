@@ -15,6 +15,7 @@
         <module>common</module>
         <module>auth-permission-center</module>
         <module>system-governance-center</module>
+        <module>workflow-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -79,6 +80,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>system-governance-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- workflow-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>workflow-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
