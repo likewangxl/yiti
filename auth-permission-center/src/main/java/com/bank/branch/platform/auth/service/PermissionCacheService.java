@@ -6,6 +6,7 @@ import com.bank.branch.platform.auth.mapper.RoleBizScopeMapper;
 import com.bank.branch.platform.auth.mapper.ResourceMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 权限缓存管理服务
@@ -89,12 +91,43 @@ public class PermissionCacheService {
         String key = KEY_RESOURCE_ALL;
         Object cached = redisTemplate.opsForValue().get(key);
         if (cached instanceof List) {
-            return (List<PtResource>) cached;
+            List<Object> list = (List<Object>) cached;
+            // 检查元素是否是 PtResource，避免 JSON 反序列化后变成 LinkedHashMap
+            if (!list.isEmpty() && list.get(0) instanceof PtResource) {
+                return (List<PtResource>) cached;
+            }
+            // 处理 Redis 取出的 LinkedHashMap 转为 PtResource
+            List<PtResource> result = list.stream()
+                .map(obj -> convertTo(obj, PtResource.class))
+                .collect(java.util.stream.Collectors.toList());
+            return result;
         }
         // 只加载已启用的资源，所有系统
         List<PtResource> resources = resourceMapper.selectAll(0, null);
         redisTemplate.opsForValue().set(key, resources, TTL);
         return resources;
+    }
+
+    /**
+     * 从 Redis 取出的 LinkedHashMap 转换为实体对象
+     */
+    @SuppressWarnings("unchecked")
+    private <T> T convertTo(Object obj, Class<T> clazz) {
+        if (obj == null) return null;
+        if (clazz.isInstance(obj)) {
+            return (T) obj;
+        }
+        if (obj instanceof java.util.Map) {
+            // 使用 Jackson ObjectMapper 进行转换
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                return mapper.convertValue(obj, clazz);
+            } catch (Exception e) {
+                log.warn("转换失败: {} -> {}", obj.getClass(), clazz, e);
+                return null;
+            }
+        }
+        return null;
     }
 
     /**

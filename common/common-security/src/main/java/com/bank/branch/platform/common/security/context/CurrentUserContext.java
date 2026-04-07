@@ -1,10 +1,14 @@
 package com.bank.branch.platform.common.security.context;
 
+import java.io.Serializable;
 import java.util.Set;
 
 /**
  * 当前登录用户上下文
  * 封装当前请求的用户身份信息，包括员工ID、主机构、角色集合等
+ *
+ * 注意: 实现 Serializable 接口以支持 Spring Session Redis 存储。
+ * 当 Spring Session store-type=redis 时，存入 session 的对象必须可序列化。
  *
  * @param empId              员工ID
  * @param mainOrgCode        主机构编码
@@ -20,7 +24,9 @@ public record CurrentUserContext(
     Set<String> roleCodes,
     Set<String> candidateGroupKeys,
     boolean systemAdmin
-) {
+) implements Serializable {
+
+    private static final long serialVersionUID = 1L;
     /**
      * 判断当前用户是否拥有指定角色
      *
