@@ -11,7 +11,7 @@ spring:
     allow-bean-definition-overriding: true
   datasource:
     driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MYSQL;INIT=RUNSCRIPT FROM 'classpath:schema.sql'\\;RUNSCRIPT FROM 'classpath:data.sql'
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MYSQL;NON_KEYWORDS=DAY,READ
     username: sa
     password:
     type: com.zaxxer.hikari.HikariDataSource
@@ -41,7 +41,15 @@ spring:
       - org.flowable.spring.boot.actuate.info.FlowableInfoAutoConfiguration
   sql:
     init:
-      mode: never
+      # embedded 模式：仅当检测到嵌入式数据库时执行脚本，
+      # 且仅执行显式指定的 schema-locations/data-locations，
+      # 不会额外自动检测 classpath 上的 schema.sql/data.sql
+      mode: embedded
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+      encoding: UTF-8
+      # 忽略单条语句执行失败（如 IF NOT EXISTS 的重复表创建）
+      continue-on-error: true
 
 # 额外关闭 Flowable 的自动初始化（Flowable 在 classpath 上时默认会尝试初始化）
 flowable:

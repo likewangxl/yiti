@@ -137,7 +137,7 @@ class CrossModuleApiTest {
     @Test
     @DisplayName("DictApi - 校验字典值有效性 (有效)")
     void dictApi_isValidDictValue_returnsTrueForValidValue() {
-        assertThat(dictApi.isValidDictValue("STATUS", "ACTIVE")).isTrue();
+        assertThat(dictApi.isValidDictValue("STATUS", "ACT")).isTrue();
     }
 
     @Test

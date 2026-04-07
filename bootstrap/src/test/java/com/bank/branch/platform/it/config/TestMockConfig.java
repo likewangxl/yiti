@@ -1,16 +1,23 @@
 package com.bank.branch.platform.it.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.minio.MinioClient;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.mockito.Mockito;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
  * 集成测试 mock 配置，通过 Mockito 提供业务模块依赖的外部服务 Bean。
@@ -20,8 +27,17 @@ import org.springframework.data.redis.connection.RedisConnection;
  *
  * Redis mock 连接工厂返回空结果，模拟 "缓存始终未命中"，
  * 让业务逻辑降级到数据库查询，确保所有功能通过 DB 验证而非缓存。
+ *
+ * 注意: MyBatis @MapperScan 必须显式指定包路径，
+ * 因为 MyBatisAutoConfiguration.AutoConfiguredMapperScannerRegistrar 在 JAR 依赖场景下
+ * 无法自动发现 mapper 接口（JAR 内类扫描受限）。
  */
 @TestConfiguration
+@MapperScan(basePackages = {
+        "com.bank.branch.platform.auth.mapper",
+        "com.bank.branch.platform.governance.mapper",
+        "com.bank.branch.platform.workflow.mapper"
+})
 public class TestMockConfig {
 
     /**
@@ -40,6 +56,29 @@ public class TestMockConfig {
         // 模拟 isQueueing 等基础方法不会抛异常
         Mockito.when(connection.isQueueing()).thenReturn(false);
         return factory;
+    }
+
+    /**
+     * 配置好的 RedisTemplate，使用注册了 JavaTimeModule 的 ObjectMapper。
+     * 解决 DictService 等业务服务缓存 SysDict 等含 LocalDateTime 字段实体时的序列化问题。
+     */
+    @Bean
+    @Primary
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        // LocalDateTime 序列化为 ISO-8601 字符串，而非时间戳数组
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(jsonSerializer);
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(jsonSerializer);
+        template.afterPropertiesSet();
+        return template;
     }
 
     /**

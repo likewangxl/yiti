@@ -6,9 +6,9 @@
 -- ====== AUTH DATA ======
 
 INSERT INTO PT_USER (USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL, ISENABLED) VALUES
-    ('admin', 'admin', '系统管理员', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@test.com', 0),
-    ('user001', 'user001', '张三', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'zhangsan@test.com', 0),
-    ('user002', 'user002', '李四', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'lisi@test.com', 0);
+    ('admin', 'admin', '系统管理员', '$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy', 'admin@test.com', 0),
+    ('user001', 'user001', '张三', '$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy', 'zhangsan@test.com', 0),
+    ('user002', 'user002', '李四', '$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy', 'lisi@test.com', 0);
 
 INSERT INTO PT_ROLE (ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS) VALUES
     ('R001', 'ADMIN', '系统管理员', 0),
@@ -23,7 +23,10 @@ INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, 
     ('4', '/api/role/list', 'GET', '查询角色', 1, 0),
     ('5', '/api/role/create', 'POST', '创建角色', 1, 0),
     ('6', '/api/dict/list', 'GET', '查询字典', 1, 0),
-    ('7', '/api/config/list', 'GET', '查询配置', 1, 0);
+    ('7', '/api/config/list', 'GET', '查询配置', 1, 0),
+    ('8', '/api/sys/dicts/**', 'GET', '字典查询', 1, 0),
+    ('9', '/api/orgs/tree', 'GET', '组织架构', 1, 0),
+    ('10', '/api/orgs/**', 'GET', '组织查询', 1, 0);
 
 INSERT INTO PT_USER_ROLE (USER_ID, ROLE_ID, DEFAULT_ASSIGN) VALUES
     ('admin', 'R001', 1),
@@ -38,7 +41,8 @@ INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID) VALUES
     ('RR013', 'R003', '1'), ('RR014', 'R003', '2'), ('RR015', 'R003', '3'),
     ('RR016', 'R003', '4'), ('RR017', 'R003', '6'),
     ('RR018', 'R004', '1'), ('RR019', 'R004', '2'), ('RR020', 'R004', '3'),
-    ('RR021', 'R004', '6'), ('RR022', 'R004', '7');
+    ('RR021', 'R004', '6'), ('RR022', 'R004', '7'),
+    ('RR023', 'R001', '8'), ('RR024', 'R001', '9'), ('RR025', 'R001', '10');
 
 INSERT INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE) VALUES
     ('RBS001', 'R001', 'LEAD', 'ALL'),
@@ -74,7 +78,7 @@ INSERT INTO sys_config_kv (id, config_key, config_value, value_type, status) VAL
     ('C003', 'max.login.retry', '5', 'NUMBER', 'ACTIVE'),
     ('C004', 'notification.settings', '{"email":true,"sms":false}', 'JSON', 'ACTIVE');
 
-INSERT INTO sys_calendar_day (day, is_workday, remark) VALUES
+INSERT INTO sys_calendar_day (`day`, is_workday, remark) VALUES
     ('2026-04-01', 1, NULL),
     ('2026-04-02', 1, NULL),
     ('2026-04-03', 1, NULL),
