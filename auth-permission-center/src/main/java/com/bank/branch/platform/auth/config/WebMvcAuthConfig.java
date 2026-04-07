@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -21,6 +22,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * 过滤器最先执行（Order=1），拦截器在 DispatcherServlet 内执行。
  */
 @Configuration
+@Profile("!test")
 @RequiredArgsConstructor
 public class WebMvcAuthConfig implements WebMvcConfigurer {
 

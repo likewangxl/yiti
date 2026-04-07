@@ -35,14 +35,12 @@ public class OrgService {
      * 根据机构编码查询机构信息
      *
      * @param orgCode 机构编码
-     * @return 机构DTO
-     * @throws BizException AUTH-40404 机构不存在
+     * @return 机构DTO，不存在时返回 null
      */
     public OrgDTO getOrg(String orgCode) {
         ExtOrgInfo org = orgMapper.selectByOrgCode(orgCode);
         if (org == null) {
-            throw new BizException(AuthErrorCode.ORG_NOT_FOUND.getCode(),
-                AuthErrorCode.ORG_NOT_FOUND.getMessage());
+            return null;
         }
         return toDto(org);
     }

@@ -25,10 +25,9 @@ public class OrgFacade implements OrgApi {
 
     /**
      * 根据机构编码查询机构信息
-     * 机构不存在时抛出 BizException(AUTH-40404)
      *
      * @param orgCode 机构编码
-     * @return 机构 DTO
+     * @return 机构DTO，不存在时返回 null
      */
     @Override
     public OrgDTO getOrg(String orgCode) {

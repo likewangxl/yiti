@@ -67,12 +67,12 @@ class OrgServiceTest {
     }
 
     @Test
-    void getOrg_shouldThrowBizExceptionWhenNotFound() {
+    void getOrg_shouldReturnNullWhenNotFound() {
         when(orgMapper.selectByOrgCode("NONE")).thenReturn(null);
 
-        assertThatThrownBy(() -> orgService.getOrg("NONE"))
-            .isInstanceOf(BizException.class)
-            .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40404"));
+        OrgDTO dto = orgService.getOrg("NONE");
+
+        assertThat(dto).isNull();
     }
 
     @Test
