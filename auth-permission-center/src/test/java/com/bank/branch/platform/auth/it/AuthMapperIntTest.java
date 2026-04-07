@@ -3,12 +3,9 @@ package com.bank.branch.platform.auth.it;
 import com.bank.branch.platform.auth.entity.*;
 import com.bank.branch.platform.auth.mapper.*;
 import org.mybatis.spring.boot.test.autoconfigure.MybatisTest;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.jdbc.Sql;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,11 +17,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * L3 集成测试 - Auth 模块
  * 使用 @MybatisTest 仅加载 MyBatis 组件（跳过 Web、Redis、Security 等）
+ * 注意: @MybatisTest 会自动运行 src/test/resources/schema.sql 和 data.sql
  */
 @MybatisTest
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 @ContextConfiguration(classes = AuthTestConfig.class)
-@Sql(scripts = {"/schema.sql", "/data.sql"}, executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 class AuthMapperIntTest {
 
     @Autowired
@@ -92,7 +89,7 @@ class AuthMapperIntTest {
     @Test
     @DisplayName("角色查询: 根据角色编码查询")
     void selectByRoleCode() {
-        PtRole role = roleMapper.selectByRoleCode("CUST_MANAGER");
+        PtRole role = roleMapper.selectByRoleCode("CUST_MGR");
         assertThat(role).isNotNull();
         assertThat(role.getRoleId()).isEqualTo("R002");
     }
@@ -189,11 +186,5 @@ class AuthMapperIntTest {
  * 测试专用配置 - 提供 Mapper 扫描入口，满足 @MybatisTest 的配置要求。
  */
 @org.mybatis.spring.annotation.MapperScan("com.bank.branch.platform.auth.mapper")
-@org.springframework.boot.autoconfigure.EnableAutoConfiguration(exclude = {
-        org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.session.SessionAutoConfiguration.class,
-})
-@ComponentScan(basePackages = {})
 class AuthTestConfig {
 }

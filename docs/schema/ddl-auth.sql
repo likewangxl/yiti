@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `PT_USER` (
 -- -------------------------------------------
 CREATE TABLE IF NOT EXISTS `PT_ROLE` (
   `ROLE_ID` varchar(50) NOT NULL COMMENT '角色ID',
-  `ROLE_CODE` varchar(10) NOT NULL COMMENT '角色编码',
+  `ROLE_CODE` varchar(50) NOT NULL COMMENT '角色编码',
   `ROLE_CHNAME` varchar(100) NOT NULL COMMENT '角色中文名',
   `RECORD_STATUS` int DEFAULT '0' COMMENT '是否可用 0 可用 1 不可用',
   `SYS_CODE` varchar(10) DEFAULT 'PLATFORM' COMMENT '系统编号',
