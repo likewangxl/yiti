@@ -5,6 +5,9 @@ import com.bank.branch.platform.auth.api.dto.LoginReqDTO;
 import com.bank.branch.platform.auth.api.dto.LoginRespDTO;
 import com.bank.branch.platform.auth.service.AuthService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
+import com.bank.branch.platform.common.security.annotation.BizAuth;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -68,6 +71,7 @@ public class AuthController {
      */
     @GetMapping("/current-user")
     @Operation(summary = "获取当前用户信息", description = "返回当前登录用户的权限和身份信息")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
     public ResponseWrapper<CurrentUserRespDTO> getCurrentUser(HttpSession session) {
         log.debug("[AuthController.getCurrentUser] 获取当前用户请求");
         CurrentUserContext ctx = authService.getCurrentUser(session);

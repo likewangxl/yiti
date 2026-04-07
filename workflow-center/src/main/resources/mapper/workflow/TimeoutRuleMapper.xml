@@ -29,6 +29,16 @@
         WHERE process_definition_key = #{processDefinitionKey}
     </select>
 
+    <!-- 根据主键ID查询超时规则 -->
+    <select id="selectById"
+            resultType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM wf_timeout_rule
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
     <!-- 新增超时规则记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
         INSERT INTO wf_timeout_rule (

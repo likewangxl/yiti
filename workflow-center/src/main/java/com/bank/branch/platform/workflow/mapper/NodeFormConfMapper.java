@@ -4,6 +4,8 @@ import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 流程节点表单配置 Mapper 接口，操作 wf_node_form_conf 表。
  * <p>
@@ -15,6 +17,14 @@ import org.apache.ibatis.annotations.Param;
 public interface NodeFormConfMapper {
 
     /**
+     * 根据流程定义KEY查询所有节点表单配置。
+     *
+     * @param processDefinitionKey 流程定义KEY
+     * @return 表单配置实体列表
+     */
+    List<WfNodeFormConf> selectByProcessDefKey(@Param("processDefinitionKey") String processDefinitionKey);
+
+    /**
      * 根据流程定义KEY和节点KEY查询表单配置。
      *
      * @param processDefinitionKey 流程定义KEY
@@ -24,6 +34,14 @@ public interface NodeFormConfMapper {
     WfNodeFormConf selectByProcessDefKeyAndNodeKey(
             @Param("processDefinitionKey") String processDefinitionKey,
             @Param("nodeKey") String nodeKey);
+
+    /**
+     * 根据主键ID查询表单配置。
+     *
+     * @param id 表单配置ID
+     * @return 表单配置实体，不存在时返回 null
+     */
+    WfNodeFormConf selectById(@Param("id") String id);
 
     /**
      * 新增表单配置记录。

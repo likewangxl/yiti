@@ -9,6 +9,16 @@
         created_time, updated_time
     </sql>
 
+    <!-- 根据流程定义KEY查询所有节点表单配置 -->
+    <select id="selectByProcessDefKey"
+            resultType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM wf_node_form_conf
+        WHERE process_definition_key = #{processDefinitionKey}
+        ORDER BY created_time
+    </select>
+
     <!-- 根据流程定义KEY和节点KEY查询表单配置 -->
     <select id="selectByProcessDefKeyAndNodeKey"
             resultType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
@@ -17,6 +27,16 @@
         FROM wf_node_form_conf
         WHERE process_definition_key = #{processDefinitionKey}
           AND node_key = #{nodeKey}
+        LIMIT 1
+    </select>
+
+    <!-- 根据主键ID查询表单配置 -->
+    <select id="selectById"
+            resultType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM wf_node_form_conf
+        WHERE id = #{id}
         LIMIT 1
     </select>
 

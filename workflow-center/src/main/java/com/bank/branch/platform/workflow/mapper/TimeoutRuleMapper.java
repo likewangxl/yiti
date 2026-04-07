@@ -36,6 +36,14 @@ public interface TimeoutRuleMapper {
     List<WfTimeoutRule> selectByProcessDefKey(String processDefinitionKey);
 
     /**
+     * 根据主键ID查询超时规则。
+     *
+     * @param id 超时规则ID
+     * @return 超时规则实体，不存在时返回 null
+     */
+    WfTimeoutRule selectById(@Param("id") String id);
+
+    /**
      * 新增超时规则记录。
      *
      * @param rule 超时规则实体

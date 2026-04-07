@@ -110,4 +110,35 @@
         </where>
     </select>
 
+    <!-- 按字典类型分组聚合，返回类型汇总信息 -->
+    <!-- 用于 A.1 字典类型列表查询（GET /api/sys/dicts） -->
+    <select id="selectGroupByType" resultType="com.bank.branch.platform.governance.mapper.DictTypeVO">
+        SELECT
+            dict_type AS dictType,
+            FIRST_VALUE(remark) OVER (PARTITION BY dict_type ORDER BY sort_order ASC) AS remark,
+            COUNT(*) AS totalCount,
+            SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS activeCount
+        FROM sys_dict
+        <where>
+            <if test="dictType != null and dictType != ''">
+                AND dict_type = #{dictType}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND dict_type LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                <choose>
+                    <when test="status == 'ACTIVE'">
+                        AND EXISTS (SELECT 1 FROM sys_dict t2 WHERE t2.dict_type = sys_dict.dict_type AND t2.status = 'ACTIVE')
+                    </when>
+                    <otherwise>
+                        AND NOT EXISTS (SELECT 1 FROM sys_dict t2 WHERE t2.dict_type = sys_dict.dict_type AND t2.status = 'ACTIVE')
+                    </otherwise>
+                </choose>
+            </if>
+        </where>
+        GROUP BY dict_type
+        ORDER BY dict_type ASC
+    </select>
+
 </mapper>

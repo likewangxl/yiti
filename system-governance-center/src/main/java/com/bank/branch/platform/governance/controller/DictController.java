@@ -6,6 +6,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.governance.api.dto.DictCreateReqDTO;
+import com.bank.branch.platform.governance.api.dto.DictTypeRespDTO;
 import com.bank.branch.platform.governance.api.dto.DictUpdateReqDTO;
 import com.bank.branch.platform.governance.entity.SysDict;
 import com.bank.branch.platform.governance.service.DictService;
@@ -36,6 +37,29 @@ import java.util.List;
 public class DictController {
 
     private final DictService dictService;
+
+    /**
+     * 查询字典类型列表（公共接口，无需权限）。
+     * <p>
+     * 用于 A.1 字典类型列表查询（GET /api/sys/dicts）。
+     * 按字典类型分组聚合，返回每种类型的汇总信息。
+     * </p>
+     *
+     * @param dictType 字典类型精确匹配，可为 null
+     * @param keyword  关键词模糊搜索字典类型，可为 null
+     * @param status   状态筛选（ACTIVE/DISABLED），可为 null
+     * @return 字典类型汇总列表
+     */
+    @GetMapping("/api/sys/dicts")
+    @Operation(summary = "查询字典类型列表")
+    public ResponseWrapper<List<DictTypeRespDTO>> listDictTypes(
+            @RequestParam(value = "dictType", required = false) String dictType,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "status", required = false) String status) {
+        log.debug("[DictController.listDictTypes] dictType={}, keyword={}, status={}", dictType, keyword, status);
+        List<DictTypeRespDTO> result = dictService.listDictTypes(dictType, keyword, status);
+        return ResponseWrapper.success(result);
+    }
 
     /**
      * 查询指定字典类型下的所有启用字典项（公共接口，无需权限）
@@ -101,6 +125,24 @@ public class DictController {
         log.info("[DictController.deleteDict] id={}", id);
         dictService.deleteDict(id);
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 启用/禁用字典项状态（A.6）
+     *
+     * @param id     字典ID（路径参数）
+     * @param status 目标状态（ACTIVE/DISABLED）
+     * @return 更新后的字典实体
+     */
+    @PutMapping("/api/admin/sys/dicts/{id}/status")
+    @Operation(summary = "启用/禁用字典项")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    public ResponseWrapper<SysDict> updateDictStatus(
+            @PathVariable(value = "id") String id,
+            @RequestParam(value = "status") String status) {
+        log.info("[DictController.updateDictStatus] id={}, status={}", id, status);
+        SysDict dict = dictService.updateStatus(id, status);
+        return ResponseWrapper.success(dict);
     }
 
     /**

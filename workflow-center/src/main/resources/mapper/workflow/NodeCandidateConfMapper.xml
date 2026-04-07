@@ -28,6 +28,16 @@
         WHERE process_definition_key = #{processDefinitionKey}
     </select>
 
+    <!-- 根据主键ID查询候选人配置 -->
+    <select id="selectById"
+            resultType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM wf_node_candidate_conf
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
     <!-- 新增候选人配置记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
         INSERT INTO wf_node_candidate_conf (

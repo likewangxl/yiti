@@ -457,7 +457,18 @@ VALUES
 ('RES_WF_IS_PART',     '/api/workflow/participants/is-participant',   'GET',  '参与者判定',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_WF_CFG_CAND',    '/api/workflow/config/node-candidates',        'POST', '流程节点候选配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_WF_CFG_FORM',    '/api/workflow/config/node-form',              'POST', '流程节点表单配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_CFG_SLA',     '/api/workflow/config/timeout-rule',           'POST', '流程超时规则配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
+('RES_WF_CFG_SLA',     '/api/workflow/config/timeout-rule',           'POST', '流程超时规则配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_PROC_INST',   '/api/workflow/process/instance/*',          'GET',  '流程实例详情',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_PROC_DIAGRAM','/api/workflow/process/*/diagram',            'GET',  '流程进度图',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_SLA_L',   '/api/admin/workflow/timeout-rules',         'GET',  '超时规则列表(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_SLA_I',   '/api/admin/workflow/timeout-rules/item/*',   'GET',  '超时规则详情(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_SLA_U',   '/api/admin/workflow/timeout-rules/item/*',   'PUT',  '超时规则编辑(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_CAND_L',  '/api/admin/workflow/candidate-configs',     'GET',  '节点候选配置列表(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_CAND_I',  '/api/admin/workflow/candidate-configs/item/*','GET', '节点候选配置详情(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_CAND_U',  '/api/admin/workflow/candidate-configs/item/*','PUT', '节点候选配置编辑(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_FORM_L',   '/api/admin/workflow/node-form-configs',     'GET',  '节点表单配置列表(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_FORM_I',  '/api/admin/workflow/node-form-configs/item/*','GET', '节点表单配置详情(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_ADM_FORM_U',  '/api/admin/workflow/node-form-configs/item/*','PUT', '节点表单配置编辑(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
 
 -- ---------------------------------------------------------
 -- 3.6 performance-engine-center 资源
@@ -539,8 +550,10 @@ VALUES
 ('RES_SYS_FILE_UPLOAD',   '/api/sys/files/upload',            'POST', '文件上传(治理)',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_SYS_FILE_DOWNLOAD', '/api/sys/files/*/download',        'GET',  '文件下载(治理)',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_SYS_FILE_BY_BIZ',   '/api/sys/files/by-biz',            'GET',  '文件按业务查询',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_AUDIT_LIST',    '/api/sys/audits',                   'GET',  '审计查询',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_AUDIT_EXPORT',  '/api/sys/audits/export',            'POST', '审计导出',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
+('RES_SYS_AUDIT_LIST',    '/api/admin/audit-logs',                 'GET',  '审计查询',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_SYS_AUDIT_DETAIL', '/api/admin/audit-logs/*',               'GET',  '审计详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_SYS_AUDIT_EXPORT', '/api/admin/audit-logs/export',          'POST', '审计导出',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_SYS_DICT_STATUS',  '/api/admin/sys/dicts/*/status',         'PUT',  '字典状态更新',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
 
 
 -- =========================================================
@@ -863,7 +876,22 @@ VALUES
 ('RR_BT_WF_CS',    'R_BACK_TECH', 'RES_WF_CFG_SLA',          'PLATFORM', NOW()),
 ('RR_BT_FILE_U',   'R_BACK_TECH', 'RES_SYS_FILE_UPLOAD',     'PLATFORM', NOW()),
 ('RR_BT_FILE_D',   'R_BACK_TECH', 'RES_SYS_FILE_DOWNLOAD',   'PLATFORM', NOW()),
-('RR_BT_FILE_B',   'R_BACK_TECH', 'RES_SYS_FILE_BY_BIZ',     'PLATFORM', NOW());
+('RR_BT_FILE_B',   'R_BACK_TECH', 'RES_SYS_FILE_BY_BIZ',     'PLATFORM', NOW()),
+-- 审计+字典+流程实例新增资源
+('RR_BT_AUD_I',   'R_BACK_TECH', 'RES_SYS_AUDIT_DETAIL',   'PLATFORM', NOW()),
+('RR_BT_DICT_S',  'R_BACK_TECH', 'RES_SYS_DICT_STATUS',     'PLATFORM', NOW()),
+('RR_BT_WF_PI',   'R_BACK_TECH', 'RES_WF_PROC_INST',       'PLATFORM', NOW()),
+('RR_BT_WF_PD',   'R_BACK_TECH', 'RES_WF_PROC_DIAGRAM',    'PLATFORM', NOW()),
+('RR_BT_WF_ADM_SL','R_BACK_TECH', 'RES_WF_ADM_SLA_L',       'PLATFORM', NOW()),
+('RR_BT_WF_ADM_SI','R_BACK_TECH', 'RES_WF_ADM_SLA_I',      'PLATFORM', NOW()),
+('RR_BT_WF_ADM_SU','R_BACK_TECH', 'RES_WF_ADM_SLA_U',      'PLATFORM', NOW()),
+('RR_BT_WF_ADM_CL','R_BACK_TECH', 'RES_WF_ADM_CAND_L',     'PLATFORM', NOW()),
+('RR_BT_WF_ADM_CI','R_BACK_TECH', 'RES_WF_ADM_CAND_I',     'PLATFORM', NOW()),
+('RR_BT_WF_ADM_CU','R_BACK_TECH', 'RES_WF_ADM_CAND_U',     'PLATFORM', NOW()),
+('RR_BT_WF_ADM_FL','R_BACK_TECH', 'RES_WF_ADM_FORM_L',     'PLATFORM', NOW()),
+('RR_BT_WF_ADM_FI','R_BACK_TECH', 'RES_WF_ADM_FORM_I',     'PLATFORM', NOW()),
+('RR_BT_WF_ADM_FU','R_BACK_TECH', 'RES_WF_ADM_FORM_U',     'PLATFORM', NOW());
+
 
 -- ---------------------------------------------------------
 -- 4.8 中场支持部门秘书（R_SUPPORT_SEC）: 承接列表+派单
@@ -1178,6 +1206,46 @@ VALUES
 ('2026-10-05', 0, '国庆节假期', 'seed'),
 ('2026-10-06', 0, '国庆节假期', 'seed'),
 ('2026-10-07', 0, '国庆节假期', 'seed');
+
+-- ============================================================================
+-- 7. PT_ROLE 旧数据清理（解决 R001/R002/R003/R_ADMIN 等重复）
+-- ============================================================================
+-- 7.1 修复审计日志资源 URL（旧路径 /api/sys/audits -> 新路径 /api/admin/audit-logs）
+UPDATE PT_RESOURCE SET RESOURCE_URL = '/api/admin/audit-logs', UPDATE_TIME = NOW(), UPDATE_USER = 'seed'
+WHERE RESOURCE_ID IN ('RES_SYS_AUDIT_LIST', 'RES_SYS_AUDIT_DETAIL')
+  AND RESOURCE_URL = '/api/sys/audits';
+UPDATE PT_RESOURCE SET RESOURCE_URL = '/api/admin/audit-logs/export', UPDATE_TIME = NOW(), UPDATE_USER = 'seed'
+WHERE RESOURCE_ID = 'RES_SYS_AUDIT_EXPORT'
+  AND RESOURCE_URL = '/api/sys/audits/export';
+
+-- 7.2 V1 规范角色 ID 集合（保留）
+-- R_SYS_ADMIN, R_BRANCH_PRESIDENT, R_BRANCH_MGR, R_CORP_DEPT, R_RETAIL_DEPT,
+-- R_BACK_FINANCE, R_BACK_TECH, R_SUPPORT_SEC, R_SUPPORT_STAFF,
+-- R_CREDIT_REVIEWER, R_CREDIT_APPROVER, R_TAG_ADMIN
+-- 以上之外的 ROLE_ID 均视为旧数据，予以清理
+DELETE FROM PT_ROLE WHERE ROLE_ID NOT IN (
+    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+);
+-- 清理关联的角色-资源数据（旧角色）
+DELETE FROM PT_ROLE_RESOURCE WHERE ROLE_ID NOT IN (
+    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+);
+-- 清理关联的用户-角色数据（旧角色）
+DELETE FROM PT_USER_ROLE WHERE ROLE_ID NOT IN (
+    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+);
+-- 清理关联的角色-BizScope数据（旧角色）
+DELETE FROM PT_ROLE_BIZ_SCOPE WHERE ROLE_ID NOT IN (
+    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+);
 
 -- ============================================================================
 -- END OF seed-v1.sql

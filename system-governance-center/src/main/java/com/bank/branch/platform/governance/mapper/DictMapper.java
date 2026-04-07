@@ -91,4 +91,17 @@ public interface DictMapper {
      */
     long countByPage(@Param("dictType") String dictType,
                      @Param("keyword") String keyword);
+
+    /**
+     * 按字典类型分组聚合，返回类型汇总信息。
+     * 用于 A.1 字典类型列表查询（GET /api/sys/dicts）。
+     *
+     * @param dictType 字典类型精确匹配，为 null 时不过滤
+     * @param keyword  关键词模糊匹配字典类型，为 null 时不过滤
+     * @param status   状态筛选（ACTIVE/DISABLED/null 不过滤）
+     * @return 按字典类型聚合的汇总列表
+     */
+    List<DictTypeVO> selectGroupByType(@Param("dictType") String dictType,
+                                       @Param("keyword") String keyword,
+                                       @Param("status") String status);
 }

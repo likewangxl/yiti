@@ -1,5 +1,24 @@
 package com.bank.branch.platform.governance.service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import jakarta.servlet.http.HttpServletResponse;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.governance.api.dto.AuditLogDTO;
@@ -12,12 +31,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * 审计日志服务
@@ -149,4 +162,113 @@ public class AuditLogService {
         }
         return LocalDate.parse(dateStr);
     }
+
+    /**
+     * 根据ID查询单条审计日志详情（D.2）。
+     *
+     * @param id 审计日志ID
+     * @return 审计日志详情DTO
+     */
+    public AuditLogDTO getById(String id) {
+        log.debug("[AuditLogService.getById] id={}", id);
+        AuditLog entity = auditLogMapper.selectById(id);
+        if (entity == null) {
+            log.warn("[AuditLogService.getById] 审计日志不存在 id={}", id);
+            return null;
+        }
+        return toDTO(entity);
+    }
+
+    /**
+     * 导出审计日志为Excel文件（D.3）。
+     * <p>
+     * 导出的列包括：日志ID、操作时间、操作人工号、操作人姓名、
+     * 业务类型、业务动作、资源URL、请求方法、响应状态、
+     * 执行时长(ms)、IP地址、原因、错误信息。
+     * </p>
+     *
+     * @param query    查询条件（与列表查询条件一致）
+     * @param response HTTP响应对象，用于写入Excel文件
+     */
+    public void exportLogs(AuditLogQueryReqDTO query, HttpServletResponse response) {
+        log.info("[AuditLogService.exportLogs] empId={}, bizType={}", query.getEmpId(), query.getBizType());
+
+        LocalDate startDate = parseDate(query.getStartTime());
+        LocalDate endDate = parseDate(query.getEndTime());
+
+        // 查询所有匹配记录（不分页，上限10000条）
+        int maxExportRows = 10000;
+        List<AuditLog> records = auditLogMapper.selectByPage(
+                query.getEmpId(), query.getBizType(), query.getBizAction(),
+                startDate, endDate, query.getKeyword(),
+                0, maxExportRows
+        );
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("审计日志");
+
+            // 创建表头样式
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            headerStyle.setFillForegroundColor((short) 0xC6EFCE);
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+            // 创建表头行
+            String[] headers = {"日志ID", "操作时间", "操作人工号", "操作人姓名", "业务类型",
+                    "业务动作", "资源URL", "请求方法", "响应状态", "执行时长(ms)",
+                    "IP地址", "原因", "错误信息"};
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // 填充数据行
+            int rowNum = 1;
+            for (AuditLog record : records) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(record.getId());
+                row.createCell(1).setCellValue(record.getCreatedTime() != null
+                        ? record.getCreatedTime().format(DT_FMT) : "");
+                row.createCell(2).setCellValue(record.getEmpId() != null ? record.getEmpId() : "");
+                row.createCell(3).setCellValue(record.getEmpName() != null ? record.getEmpName() : "");
+                row.createCell(4).setCellValue(record.getBizType() != null ? record.getBizType() : "");
+                row.createCell(5).setCellValue(record.getBizAction() != null ? record.getBizAction() : "");
+                row.createCell(6).setCellValue(record.getResourceUrl() != null ? record.getResourceUrl() : "");
+                row.createCell(7).setCellValue(record.getRequestMethod() != null ? record.getRequestMethod() : "");
+                row.createCell(8).setCellValue(record.getResponseStatus() != null
+                        ? record.getResponseStatus().toString() : "");
+                row.createCell(9).setCellValue(record.getExecutionTime() != null ? record.getExecutionTime().doubleValue() : 0.0);
+                row.createCell(10).setCellValue(record.getIpAddress() != null ? record.getIpAddress() : "");
+                row.createCell(11).setCellValue(record.getReason() != null ? record.getReason() : "");
+                row.createCell(12).setCellValue(record.getErrorMsg() != null ? record.getErrorMsg() : "");
+            }
+
+            // 自动调整列宽
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            // 设置响应头并写入
+            String filename = "audit_log_" + LocalDateTime.now().format(
+                    DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".xlsx";
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader("Content-Disposition",
+                    "attachment; filename=" + java.net.URLEncoder.encode(filename, java.nio.charset.StandardCharsets.UTF_8));
+            response.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+            workbook.write(response.getOutputStream());
+            response.getOutputStream().flush();
+
+            log.info("[AuditLogService.exportLogs] 导出完成，共{}条记录", records.size());
+        } catch (Exception e) {
+            log.error("[AuditLogService.exportLogs] 导出失败", e);
+            throw new RuntimeException("导出审计日志失败: " + e.getMessage(), e);
+        }
+    }
+
 }

@@ -12,6 +12,7 @@ import lombok.Getter;
 public enum WfErrorCode {
 
     // 404 资源不存在
+    RESOURCE_NOT_FOUND("WF-40400", "资源不存在"),
     PROCESS_DEF_NOT_FOUND("WF-40401", "流程定义不存在"),
     PROCESS_INSTANCE_NOT_FOUND("WF-40402", "流程实例不存在"),
     TASK_NOT_FOUND("WF-40403", "任务不存在"),

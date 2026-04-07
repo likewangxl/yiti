@@ -2,9 +2,11 @@ package com.bank.branch.platform.governance.service;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.dto.DictTypeRespDTO;
 import com.bank.branch.platform.governance.entity.SysDict;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
 import com.bank.branch.platform.governance.mapper.DictMapper;
+import com.bank.branch.platform.governance.mapper.DictTypeVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 字典管理服务
@@ -230,6 +233,33 @@ public class DictService {
     }
 
     /**
+     * 设置字典项状态（启用/禁用）。
+     *
+     * @param id     字典ID
+     * @param status 目标状态（ACTIVE/DISABLED）
+     * @return 更新后的字典实体
+     * @throws BizException GOV-40001 当字典不存在时
+     */
+    @Transactional
+    public SysDict updateStatus(String id, String status) {
+        log.info("[DictService.updateStatus] id={}, status={}", id, status);
+        SysDict existing = dictMapper.selectById(id);
+        if (existing == null) {
+            throw new BizException(GovErrorCode.DICT_TYPE_NOT_FOUND.getCode(),
+                    GovErrorCode.DICT_TYPE_NOT_FOUND.getMessage());
+        }
+        if (!"ACTIVE".equals(status) && !"DISABLED".equals(status)) {
+            throw new BizException("GOV-40002", "状态值无效，仅支持 ACTIVE 或 DISABLED");
+        }
+        existing.setStatus(status);
+        existing.setUpdatedTime(LocalDateTime.now());
+        dictMapper.updateById(existing);
+        redisTemplate.delete(CACHE_PREFIX + existing.getDictType());
+        log.info("[DictService.updateStatus] 状态已更新 id={}, newStatus={}", id, status);
+        return existing;
+    }
+
+    /**
      * 分页查询字典列表。
      *
      * @param dictType 字典类型，为 null 时不过滤
@@ -245,5 +275,31 @@ public class DictService {
         long total = dictMapper.countByPage(dictType, keyword);
         List<SysDict> records = dictMapper.selectByPage(dictType, keyword, offset, pageSize);
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 查询字典类型列表（按类型聚合）。
+     * <p>
+     * 用于 A.1 字典类型列表查询（GET /api/sys/dicts）。
+     * 按字典类型分组聚合，返回每种类型的汇总信息。
+     * </p>
+     *
+     * @param dictType 字典类型精确匹配，为 null 时不过滤
+     * @param keyword  关键词模糊搜索字典类型，为 null 时不过滤
+     * @param status   状态筛选（ACTIVE/DISABLED/null 不过滤）
+     * @return 字典类型汇总列表
+     */
+    public List<DictTypeRespDTO> listDictTypes(String dictType, String keyword, String status) {
+        log.debug("[DictService.listDictTypes] dictType={}, keyword={}, status={}", dictType, keyword, status);
+        List<DictTypeVO> vos = dictMapper.selectGroupByType(dictType, keyword, status);
+        return vos.stream().map(vo -> {
+            DictTypeRespDTO dto = new DictTypeRespDTO();
+            dto.setDictType(vo.getDictType());
+            dto.setDictTypeLabel(vo.getRemark() != null && !vo.getRemark().isEmpty()
+                    ? vo.getRemark() : vo.getDictType());
+            dto.setItemCount(vo.getActiveCount() != null ? vo.getActiveCount().intValue() : 0);
+            dto.setStatus(vo.getActiveCount() != null && vo.getActiveCount() > 0 ? "ACTIVE" : "DISABLED");
+            return dto;
+        }).collect(Collectors.toList());
     }
 }

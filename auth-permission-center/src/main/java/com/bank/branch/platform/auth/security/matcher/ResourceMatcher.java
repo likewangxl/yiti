@@ -31,9 +31,12 @@ public class ResourceMatcher {
      */
     public Optional<PtResource> match(String url, String method) {
         List<PtResource> resources = cacheService.getAllResources();
+        if (resources == null) {
+            return Optional.empty();
+        }
         return resources.stream()
-            // 只匹配已启用的资源（status=0）
-            .filter(r -> r.getStatus() != null && r.getStatus() == 0)
+            // 防御性过滤：跳过 null 元素和 status 为 null 的资源
+            .filter(r -> r != null && r.getStatus() != null && r.getStatus() == 0)
             // method 为 * 时匹配所有请求方法，否则不区分大小写匹配
             .filter(r -> "*".equals(r.getResourceMethod())
                 || r.getResourceMethod().equalsIgnoreCase(method))

@@ -36,6 +36,14 @@ public interface NodeCandidateConfMapper {
     List<WfNodeCandidateConf> selectByProcessDefKey(String processDefinitionKey);
 
     /**
+     * 根据主键ID查询候选人配置。
+     *
+     * @param id 候选人配置ID
+     * @return 候选人配置实体，不存在时返回 null
+     */
+    WfNodeCandidateConf selectById(@Param("id") String id);
+
+    /**
      * 新增候选人配置记录。
      *
      * @param conf 候选人配置实体
