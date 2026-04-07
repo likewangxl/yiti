@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docs/modules/auth-permission-center/02-后端架构.md:*)",
+      "Bash(docs/modules/business-application-center/03-接口设计与报文.md:*)",
+      "Bash(wc -l docs/modules/business-application-center/*.md)",
+      "Bash(docs/modules/business-application-center/06-并发与事务策略.md:*)",
+      "Bash(docs/modules/business-application-center/02-后端架构.md:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true
+  },
+  "bypassPermissions": true
+}

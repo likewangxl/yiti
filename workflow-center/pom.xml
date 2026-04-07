@@ -56,11 +56,18 @@
             <artifactId>system-governance-center</artifactId>
         </dependency>
 
-        <!-- Flowable 工作流引擎 -->
+        <!-- Flowable -->
         <dependency>
             <groupId>org.flowable</groupId>
             <artifactId>flowable-spring-boot-starter</artifactId>
             <version>${flowable.version}</version>
+            <!-- 排除默认的 HikariCP -->
+            <exclusions>
+                <exclusion>
+                    <groupId>com.zaxxer</groupId>
+                    <artifactId>HikariCP</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Spring Boot Web -->

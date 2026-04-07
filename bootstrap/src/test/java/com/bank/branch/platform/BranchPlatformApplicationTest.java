@@ -1,27 +1,22 @@
 package com.bank.branch.platform;
 
+import com.bank.branch.platform.it.config.TestMockConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 
 /**
- * 集成测试：验证 ApplicationContext 可正常加载
- * 使用 H2 内存数据库，禁用 Redis 和 Session，隔离外部依赖
+ * 集成测试：验证 ApplicationContext 可正常加载。
+ * 使用 H2 内存数据库，通过 application-test.yml 初始化 schema，
+ * 同时排除 Flowable 和 Redis 等外部依赖的自动配置。
+ *
+ * 与 SmokeTest 共享同一个 ApplicationContext（相同 @SpringBootTest 配置），
+ * 避免重复加载 Spring 上下文。
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1",
-    "spring.datasource.driver-class-name=org.h2.Driver",
-    "spring.datasource.username=sa",
-    "spring.datasource.password=",
-    "spring.session.store-type=none",
-    "spring.autoconfigure.exclude=" +
-        "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration," +
-        "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration," +
-        "org.springframework.boot.autoconfigure.session.SessionAutoConfiguration"
-})
+@Import(TestMockConfig.class)
 class BranchPlatformApplicationTest {
 
     @Test

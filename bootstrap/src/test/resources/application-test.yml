@@ -1,0 +1,72 @@
+# ============================================================
+# 测试环境配置 - 使用 H2 内存数据库 + Redis 禁用 + Flowable 禁用
+# ============================================================
+
+server:
+  port: 0
+
+# 允许 Bean 定义覆盖，避免业务模块 AutoConfig 与 TestMockConfig (@Primary mock) 冲突
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MYSQL;INIT=RUNSCRIPT FROM 'classpath:schema.sql'\\;RUNSCRIPT FROM 'classpath:data.sql'
+    username: sa
+    password:
+    type: com.zaxxer.hikari.HikariDataSource
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
+      - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
+      # 全部 Flowable 自动配置 — 测试环境无 Flowable 内部表，且不需要流程引擎
+      - org.flowable.spring.boot.ProcessEngineAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration
+      - org.flowable.spring.boot.RestApiAutoConfiguration
+      - org.flowable.spring.boot.FlowableJpaAutoConfiguration
+      - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
+      - org.flowable.spring.boot.EndpointAutoConfiguration
+      - org.flowable.spring.boot.actuate.info.FlowableInfoAutoConfiguration
+  sql:
+    init:
+      mode: never
+
+# 额外关闭 Flowable 的自动初始化（Flowable 在 classpath 上时默认会尝试初始化）
+flowable:
+  enabled: false
+  async-executor-activate: false
+  job-executor-activate: false
+  app-engine:
+    enabled: false
+    async-executor-activate: false
+  dmn-engine:
+    enabled: false
+    async-executor-activate: false
+  cmmn:
+    enabled: false
+    async-executor-activate: false
+  idm:
+    enabled: false
+
+mybatis:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.bank.branch.platform: DEBUG
+    org.mybatis: DEBUG
+    root: INFO
