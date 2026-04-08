@@ -98,6 +98,21 @@ public class CalendarService {
     }
 
     /**
+     * 获取指定年月的日历数据（无缓存，按需查询）
+     *
+     * @param year  年份
+     * @param month 月份（1-12）
+     * @return 日历天DTO列表
+     */
+    public List<CalendarDayDTO> getDaysByMonth(int year, int month) {
+        log.debug("[CalendarService.getDaysByMonth] year={}, month={}", year, month);
+        LocalDate start = LocalDate.of(year, month, 1);
+        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+        List<SysCalendarDay> days = calendarMapper.selectByDateRange(start, end);
+        return days.stream().map(this::toDTO).collect(Collectors.toList());
+    }
+
+    /**
      * 从指定日期开始，推算 N 个工作日后的日期。
      * <p>
      * 从起始日期的下一天开始计数，跳过非工作日，直到累计够指定的工作日天数。
