@@ -32,8 +32,43 @@
         WHERE USERNAME = #{username}
     </select>
 
-    <!--
-        仅更新密码错误计数，单独写 SQL 而非走 updateById 的原因：
+    <!-- 根据机构编码查询该机构下的所有用户（G.2） -->
+    <select id="selectByOrgCode" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_USER u
+        INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        WHERE uo.ORG_CODE = #{orgCode}
+    </select>
+
+    <!-- 分页查询机构下的用户（G.2） -->
+    <select id="selectOrgUsersByPage" resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_USER u
+        INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        WHERE uo.ORG_CODE = #{orgCode}
+        <if test="keyword != null and keyword != ''">
+            AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY u.USER_ID
+    </select>
+
+    <!-- 统计机构下的用户总数（G.2） -->
+    <select id="countOrgUsers" resultType="long">
+        SELECT COUNT(*)
+        FROM PT_USER u
+        INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        WHERE uo.ORG_CODE = #{orgCode}
+        <if test="keyword != null and keyword != ''">
+            AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- 仅更新密码错误计数，单独写 SQL 而非走 updateById 的原因：
         避免并发场景下因整体更新而覆盖其他字段的并发修改。
     -->
     <update id="updatePassWrongCount">

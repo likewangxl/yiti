@@ -4,6 +4,8 @@ import com.bank.branch.platform.auth.entity.PtUser;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 用户 Mapper 接口，操作 PT_USER 表。
  * <p>
@@ -20,6 +22,37 @@ public interface UserMapper {
      * @return 用户实体，不存在时返回 null
      */
     PtUser selectByUserId(String userId);
+
+    /**
+     * 根据机构编码查询该机构下的所有用户（G.2）
+     *
+     * @param orgCode 机构编码
+     * @return 用户列表
+     */
+    List<PtUser> selectByOrgCode(String orgCode);
+
+    /**
+     * 分页查询机构下的用户（G.2）
+     *
+     * @param orgCode 机构编码
+     * @param keyword 关键字（工号/姓名），可选
+     * @param offset 偏移量
+     * @param limit 每页条数
+     * @return 用户列表
+     */
+    List<PtUser> selectOrgUsersByPage(@Param("orgCode") String orgCode,
+                                      @Param("keyword") String keyword,
+                                      @Param("offset") int offset,
+                                      @Param("limit") int limit);
+
+    /**
+     * 统计机构下的用户总数（G.2）
+     *
+     * @param orgCode 机构编码
+     * @param keyword 关键字
+     * @return 用户总数
+     */
+    long countOrgUsers(@Param("orgCode") String orgCode, @Param("keyword") String keyword);
 
     /**
      * 根据用户名（登录名）查询用户信息，用于登录认证。
