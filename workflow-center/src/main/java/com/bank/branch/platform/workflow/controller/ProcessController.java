@@ -1,9 +1,7 @@
 package com.bank.branch.platform.workflow.controller;
 
 import com.bank.branch.platform.common.web.ResponseWrapper;
-import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.service.ProcessQueryService;
-import com.bank.branch.platform.workflow.service.ProcessStartService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +28,6 @@ import java.util.List;
 @Tag(name = "流程查询", description = "流程实例/进度图/历史/映射查询")
 public class ProcessController {
 
-    private final ProcessStartService processStartService;
     private final ProcessQueryService processQueryService;
 
     // ==================== C.1 / C.2 / C.3 流程实例查询 ====================
@@ -79,37 +76,5 @@ public class ProcessController {
         return ResponseWrapper.success(history);
     }
 
-    // ==================== C.4 流程映射查询（已有）====================
-
-    /**
-     * 根据业务键查询流程映射记录
-     *
-     * @param businessKey 业务键
-     * @return 流程映射 DTO
-     */
-    @GetMapping("/{businessKey}")
-    @Operation(summary = "根据业务键查询流程")
-    public ResponseWrapper<BizProcessMapDTO> getProcessByBusinessKey(
-            @PathVariable(value = "businessKey") String businessKey) {
-        log.debug("[ProcessController.getProcessByBusinessKey] businessKey={}", businessKey);
-        BizProcessMapDTO dto = processStartService.getProcessByBusinessKey(businessKey);
-        return ResponseWrapper.success(dto);
-    }
-
-    /**
-     * 根据业务类型和业务ID查询流程映射记录
-     *
-     * @param bizType 业务类型
-     * @param bizId   业务ID
-     * @return 流程映射 DTO
-     */
-    @GetMapping("/biz/{bizType}/{bizId}")
-    @Operation(summary = "根据业务类型和业务ID查询流程")
-    public ResponseWrapper<BizProcessMapDTO> getProcessByBizTypeAndBizId(
-            @PathVariable(value = "bizType") String bizType,
-            @PathVariable(value = "bizId") String bizId) {
-        log.debug("[ProcessController.getProcessByBizTypeAndBizId] bizType={}, bizId={}", bizType, bizId);
-        BizProcessMapDTO dto = processStartService.getProcessByBizTypeAndBizId(bizType, bizId);
-        return ResponseWrapper.success(dto);
-    }
+    // C.4 流程映射查询已移至 ProcessMapController
 }

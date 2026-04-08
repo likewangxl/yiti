@@ -4,12 +4,17 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.workflow.api.dto.NodeCandidateUpdateReqDTO;
+import com.bank.branch.platform.workflow.api.dto.NodeFormUpdateReqDTO;
+import com.bank.branch.platform.workflow.api.dto.ProcessDefinitionRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TimeoutRuleUpdateReqDTO;
 import com.bank.branch.platform.workflow.entity.WfNodeCandidateConf;
 import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
 import com.bank.branch.platform.workflow.entity.WfTimeoutRule;
 import com.bank.branch.platform.workflow.service.WorkflowAdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,26 +48,24 @@ public class WorkflowAdminController {
     // ==================== 超时规则 (D.1 / D.2) ====================
 
     /**
-     * 查询指定流程定义下的超时规则列表（D.1）
+     * 查询超时规则列表（D.1）
+     * 设计文档: GET /api/admin/workflow/timeout-rules?processDefinitionKey=xxx
      *
-     * @param processDefinitionKey 流程定义KEY
+     * @param processDefinitionKey 流程定义KEY (可选)
      * @return 超时规则列表
      */
-    @GetMapping("/timeout-rules/{processDefinitionKey}")
+    @GetMapping("/timeout-rules")
     @Operation(summary = "查询超时规则列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<List<WfTimeoutRule>> listTimeoutRules(
-            @PathVariable(value = "processDefinitionKey") String processDefinitionKey) {
+            @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
         log.debug("[WorkflowAdminController.listTimeoutRules] processDefinitionKey={}", processDefinitionKey);
         List<WfTimeoutRule> list = workflowAdminService.listTimeoutRules(processDefinitionKey);
         return ResponseWrapper.success(list);
     }
 
     /**
-     * 查询单条超时规则详情（D.2 GET）
-     *
-     * @param id 超时规则ID
-     * @return 超时规则详情
+     * 查询单条超时规则详情
      */
     @GetMapping("/timeout-rules/item/{id}")
     @Operation(summary = "查询超时规则详情")
@@ -75,10 +78,10 @@ public class WorkflowAdminController {
 
     /**
      * 更新超时规则（D.2 PUT）
+     * 设计文档: PUT /api/admin/workflow/timeout-rules/{id} with JSON body
      *
-     * @param id       超时规则ID
-     * @param warningHours 黄灯阈值（工作小时数）
-     * @param timeoutHours 红灯阈值（工作小时数）
+     * @param id   超时规则ID
+     * @param req  更新请求 (warningHours, timeoutHours)
      * @return 成功响应
      */
     @PutMapping("/timeout-rules/{id}")
@@ -86,11 +89,10 @@ public class WorkflowAdminController {
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<Void> updateTimeoutRule(
             @PathVariable(value = "id") String id,
-            @RequestParam(value = "warningHours", required = false) Integer warningHours,
-            @RequestParam(value = "timeoutHours", required = false) Integer timeoutHours) {
+            @Valid @RequestBody TimeoutRuleUpdateReqDTO req) {
         log.info("[WorkflowAdminController.updateTimeoutRule] id={}, warningHours={}, timeoutHours={}",
-                id, warningHours, timeoutHours);
-        workflowAdminService.updateTimeoutRule(id, warningHours, timeoutHours);
+                id, req.getWarningHours(), req.getTimeoutHours());
+        workflowAdminService.updateTimeoutRule(id, req.getWarningHours(), req.getTimeoutHours());
         return ResponseWrapper.success();
     }
 
@@ -113,28 +115,26 @@ public class WorkflowAdminController {
     // ==================== 候选人配置 (D.3 / D.4) ====================
 
     /**
-     * 查询指定流程定义下的候选人配置列表（D.3）
+     * 查询节点候选人配置列表（D.3）
+     * 设计文档: GET /api/admin/workflow/node-candidates?processDefinitionKey=xxx
      *
-     * @param processDefinitionKey 流程定义KEY
+     * @param processDefinitionKey 流程定义KEY (可选)
      * @return 候选人配置列表
      */
-    @GetMapping("/candidate-configs/{processDefinitionKey}")
-    @Operation(summary = "查询候选人配置列表")
+    @GetMapping("/node-candidates")
+    @Operation(summary = "查询节点候选人配置列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<List<WfNodeCandidateConf>> listCandidateConfigs(
-            @PathVariable(value = "processDefinitionKey") String processDefinitionKey) {
-        log.debug("[WorkflowAdminController.listCandidateConfigs] processDefinitionKey={}", processDefinitionKey);
+    public ResponseWrapper<List<WfNodeCandidateConf>> listNodeCandidates(
+            @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
+        log.debug("[WorkflowAdminController.listNodeCandidates] processDefinitionKey={}", processDefinitionKey);
         List<WfNodeCandidateConf> list = workflowAdminService.listCandidateConfigs(processDefinitionKey);
         return ResponseWrapper.success(list);
     }
 
     /**
-     * 查询单条候选人配置详情（D.4 GET）
-     *
-     * @param id 候选人配置ID
-     * @return 候选人配置详情
+     * 查询单条候选人配置详情
      */
-    @GetMapping("/candidate-configs/item/{id}")
+    @GetMapping("/node-candidates/item/{id}")
     @Operation(summary = "查询候选人配置详情")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<WfNodeCandidateConf> getCandidateConfigById(@PathVariable(value = "id") String id) {
@@ -145,21 +145,20 @@ public class WorkflowAdminController {
 
     /**
      * 更新候选人配置（D.4 PUT）
+     * 设计文档: PUT /api/admin/workflow/node-candidates/{id} with JSON body
      *
-     * @param id             候选人配置ID
-     * @param candidateType  候选类型
-     * @param candidateValue 候选值
+     * @param id   候选人配置ID
+     * @param req  更新请求 (candidateType, candidateValue)
      * @return 成功响应
      */
-    @PutMapping("/candidate-configs/{id}")
+    @PutMapping("/node-candidates/{id}")
     @Operation(summary = "更新候选人配置")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<Void> updateCandidateConfig(
+    public ResponseWrapper<Void> updateNodeCandidate(
             @PathVariable(value = "id") String id,
-            @RequestParam(value = "candidateType", required = false) String candidateType,
-            @RequestParam(value = "candidateValue", required = false) String candidateValue) {
-        log.info("[WorkflowAdminController.updateCandidateConfig] id={}, candidateType={}", id, candidateType);
-        workflowAdminService.updateCandidateConfig(id, candidateType, candidateValue);
+            @Valid @RequestBody NodeCandidateUpdateReqDTO req) {
+        log.info("[WorkflowAdminController.updateNodeCandidate] id={}, candidateType={}", id, req.getCandidateType());
+        workflowAdminService.updateCandidateConfig(id, req.getCandidateType(), String.join(",", req.getCandidateValue()));
         return ResponseWrapper.success();
     }
 
@@ -169,11 +168,11 @@ public class WorkflowAdminController {
      * @param conf 候选人配置实体
      * @return 成功响应
      */
-    @PostMapping("/candidate-configs")
+    @PostMapping("/node-candidates")
     @Operation(summary = "新增候选人配置")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<Void> saveCandidateConfig(@RequestBody WfNodeCandidateConf conf) {
-        log.info("[WorkflowAdminController.saveCandidateConfig] processDefKey={}, nodeKey={}",
+    public ResponseWrapper<Void> saveNodeCandidate(@RequestBody WfNodeCandidateConf conf) {
+        log.info("[WorkflowAdminController.saveNodeCandidate] processDefKey={}, nodeKey={}",
                 conf.getProcessDefinitionKey(), conf.getNodeKey());
         workflowAdminService.saveCandidateConfig(conf);
         return ResponseWrapper.success();
@@ -182,28 +181,26 @@ public class WorkflowAdminController {
     // ==================== 节点表单配置 (D.5 / D.6) ====================
 
     /**
-     * 查询指定流程定义下的节点表单配置列表（D.5）
+     * 查询节点表单配置列表（D.5）
+     * 设计文档: GET /api/admin/workflow/node-forms?processDefinitionKey=xxx
      *
-     * @param processDefinitionKey 流程定义KEY
+     * @param processDefinitionKey 流程定义KEY (可选)
      * @return 节点表单配置列表
      */
-    @GetMapping("/node-form-confs/{processDefinitionKey}")
+    @GetMapping("/node-forms")
     @Operation(summary = "查询节点表单配置列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<List<WfNodeFormConf>> listNodeFormConfs(
-            @PathVariable(value = "processDefinitionKey") String processDefinitionKey) {
-        log.debug("[WorkflowAdminController.listNodeFormConfs] processDefinitionKey={}", processDefinitionKey);
+    public ResponseWrapper<List<WfNodeFormConf>> listNodeForms(
+            @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
+        log.debug("[WorkflowAdminController.listNodeForms] processDefinitionKey={}", processDefinitionKey);
         List<WfNodeFormConf> list = workflowAdminService.listNodeFormConfs(processDefinitionKey);
         return ResponseWrapper.success(list);
     }
 
     /**
-     * 查询单条节点表单配置详情（D.6 GET）
-     *
-     * @param id 节点表单配置ID
-     * @return 节点表单配置详情
+     * 查询单条节点表单配置详情
      */
-    @GetMapping("/node-form-confs/item/{id}")
+    @GetMapping("/node-forms/item/{id}")
     @Operation(summary = "查询节点表单配置详情")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<WfNodeFormConf> getNodeFormConfById(@PathVariable(value = "id") String id) {
@@ -218,11 +215,11 @@ public class WorkflowAdminController {
      * @param conf 节点表单配置实体
      * @return 成功响应
      */
-    @PostMapping("/node-form-confs")
+    @PostMapping("/node-forms")
     @Operation(summary = "保存节点表单配置")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<Void> saveNodeFormConf(@RequestBody WfNodeFormConf conf) {
-        log.info("[WorkflowAdminController.saveNodeFormConf] processDefKey={}, nodeKey={}",
+    public ResponseWrapper<Void> saveNodeForm(@RequestBody WfNodeFormConf conf) {
+        log.info("[WorkflowAdminController.saveNodeForm] processDefKey={}, nodeKey={}",
                 conf.getProcessDefinitionKey(), conf.getNodeKey());
         workflowAdminService.saveNodeFormConf(conf);
         return ResponseWrapper.success();
@@ -230,23 +227,42 @@ public class WorkflowAdminController {
 
     /**
      * 更新节点表单配置（D.6 PUT）
+     * 设计文档: PUT /api/admin/workflow/node-forms/{id} with JSON body
      *
-     * @param id             节点表单配置ID
-     * @param formFields     表单字段配置
-     * @param editableFields 可编辑字段
-     * @param requiredFields 必填字段
+     * @param id   节点表单配置ID
+     * @param req  更新请求 (formFields, editableFields, requiredFields)
      * @return 成功响应
      */
-    @PutMapping("/node-form-confs/{id}")
+    @PutMapping("/node-forms/{id}")
     @Operation(summary = "更新节点表单配置")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<Void> updateNodeFormConf(
+    public ResponseWrapper<Void> updateNodeForm(
             @PathVariable(value = "id") String id,
-            @RequestParam(value = "formFields", required = false) String formFields,
-            @RequestParam(value = "editableFields", required = false) String editableFields,
-            @RequestParam(value = "requiredFields", required = false) String requiredFields) {
-        log.info("[WorkflowAdminController.updateNodeFormConf] id={}", id);
-        workflowAdminService.updateNodeFormConf(id, formFields, editableFields, requiredFields);
+            @Valid @RequestBody NodeFormUpdateReqDTO req) {
+        log.info("[WorkflowAdminController.updateNodeForm] id={}", id);
+        workflowAdminService.updateNodeFormConf(id,
+                req.getFormFields() != null ? req.getFormFields().toString() : null,
+                req.getEditableFields() != null ? req.getEditableFields().toString() : null,
+                req.getRequiredFields() != null ? req.getRequiredFields().toString() : null);
         return ResponseWrapper.success();
+    }
+
+    // ==================== 流程定义 (D.7) ====================
+
+    /**
+     * 获取流程定义列表（D.7）
+     * 设计文档: GET /api/admin/workflow/process-definitions
+     *
+     * @param active 是否仅查询已激活的流程定义，默认 true
+     * @return 流程定义列表
+     */
+    @GetMapping("/process-definitions")
+    @Operation(summary = "获取流程定义列表")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    public ResponseWrapper<List<ProcessDefinitionRespDTO>> listProcessDefinitions(
+            @RequestParam(value = "active", defaultValue = "true") boolean active) {
+        log.debug("[WorkflowAdminController.listProcessDefinitions] active={}", active);
+        List<ProcessDefinitionRespDTO> list = workflowAdminService.listProcessDefinitions(active);
+        return ResponseWrapper.success(list);
     }
 }

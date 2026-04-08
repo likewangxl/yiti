@@ -8,6 +8,7 @@ import lombok.Data;
  * 任务转交请求 DTO
  * <p>
  * 转交接收人工号和转交原因均为必填项。
+ * 对齐设计文档 B.4: targetEmpId, reason
  * </p>
  */
 @Data
@@ -15,7 +16,7 @@ public class TransferReqDTO {
 
     /** 转交接收人工号 */
     @NotBlank(message = "转交接收人不能为空")
-    private String toEmpId;
+    private String targetEmpId;
 
     /** 转交原因（必填） */
     @NotBlank(message = "转交原因不能为空")

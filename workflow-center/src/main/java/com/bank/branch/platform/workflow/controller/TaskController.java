@@ -41,32 +41,33 @@ public class TaskController {
 
     /**
      * 查询待办列表（分页）
+     * 设计文档 A.1: GET /api/workflow/tasks
      *
-     * @param empId    当前用户工号（后续替换为 CurrentUserApi）
      * @param bizType  业务类型过滤（可选）
      * @param keyword  关键字搜索（可选）
      * @param pageNo   页码，默认 1
      * @param pageSize 每页条数，默认 20
      * @return 分页待办列表
      */
-    @GetMapping("/todo")
+    @GetMapping
     @Operation(summary = "查询待办列表")
     public ResponseWrapper<TaskRespDTO> queryTodoList(
-            @RequestParam(value = "empId") String empId,
             @RequestParam(value = "bizType", required = false) String bizType,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        log.debug("[TaskController.queryTodoList] empId={}, bizType={}, keyword={}, pageNo={}, pageSize={}",
-                empId, bizType, keyword, pageNo, pageSize);
+        log.debug("[TaskController.queryTodoList] bizType={}, keyword={}, pageNo={}, pageSize={}",
+                bizType, keyword, pageNo, pageSize);
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
         PageResult<TaskRespDTO> result = todoQueryService.queryTodoList(empId, bizType, keyword, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 
     /**
      * 查询已办列表（分页）
+     * 设计文档 A.2: GET /api/workflow/tasks/done
      *
-     * @param empId    当前用户工号（后续替换为 CurrentUserApi）
      * @param bizType  业务类型过滤（可选）
      * @param keyword  关键字搜索（可选）
      * @param pageNo   页码，默认 1
@@ -76,29 +77,31 @@ public class TaskController {
     @GetMapping("/done")
     @Operation(summary = "查询已办列表")
     public ResponseWrapper<TaskRespDTO> queryDoneList(
-            @RequestParam(value = "empId") String empId,
             @RequestParam(value = "bizType", required = false) String bizType,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        log.debug("[TaskController.queryDoneList] empId={}, bizType={}, keyword={}, pageNo={}, pageSize={}",
-                empId, bizType, keyword, pageNo, pageSize);
+        log.debug("[TaskController.queryDoneList] bizType={}, keyword={}, pageNo={}, pageSize={}",
+                bizType, keyword, pageNo, pageSize);
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
         PageResult<TaskRespDTO> result = todoQueryService.queryDoneList(empId, bizType, keyword, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 
     /**
      * 获取任务详情
+     * 设计文档 A.3: GET /api/workflow/tasks/{taskId}
      *
      * @param taskId 任务ID
-     * @param empId  当前用户工号
      * @return 任务详情
      */
     @GetMapping("/{taskId}")
     @Operation(summary = "获取任务详情")
     public ResponseWrapper<TaskDetailRespDTO> getTaskDetail(
-            @PathVariable(value = "taskId") String taskId,
-            @RequestParam(value = "empId") String empId) {
+            @PathVariable(value = "taskId") String taskId) {
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
         log.debug("[TaskController.getTaskDetail] taskId={}, empId={}", taskId, empId);
         TaskDetailRespDTO detail = todoQueryService.getTaskDetail(taskId, empId);
         return ResponseWrapper.success(detail);
@@ -106,16 +109,17 @@ public class TaskController {
 
     /**
      * 签收任务
+     * 设计文档 B.1: POST /api/workflow/tasks/{taskId}/claim
      *
      * @param taskId 任务ID
-     * @param empId  签收人工号
      * @return 成功响应
      */
     @PostMapping("/{taskId}/claim")
     @Operation(summary = "签收任务")
     public ResponseWrapper<Void> claimTask(
-            @PathVariable(value = "taskId") String taskId,
-            @RequestParam(value = "empId") String empId) {
+            @PathVariable(value = "taskId") String taskId) {
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
         log.info("[TaskController.claimTask] taskId={}, empId={}", taskId, empId);
         taskOperationService.claimTask(taskId, empId);
         return ResponseWrapper.success();
@@ -123,58 +127,61 @@ public class TaskController {
 
     /**
      * 审批通过任务
+     * 设计文档 B.2: POST /api/workflow/tasks/{taskId}/approve
      *
      * @param taskId 任务ID
-     * @param empId  办理人工号
-     * @param req    审批请求
+     * @param req    审批请求 (opinion, formData)
      * @return 成功响应
      */
     @PostMapping("/{taskId}/approve")
     @Operation(summary = "审批通过")
     public ResponseWrapper<Void> approveTask(
             @PathVariable(value = "taskId") String taskId,
-            @RequestParam(value = "empId") String empId,
             @Valid @RequestBody ApproveReqDTO req) {
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
         log.info("[TaskController.approveTask] taskId={}, empId={}", taskId, empId);
-        taskOperationService.approveTask(taskId, empId, req.getVariables(), req.getComment());
+        taskOperationService.approveTask(taskId, empId, req.getFormData(), req.getOpinion());
         return ResponseWrapper.success();
     }
 
     /**
      * 驳回任务
+     * 设计文档 B.3: POST /api/workflow/tasks/{taskId}/reject
      *
      * @param taskId 任务ID
-     * @param empId  办理人工号
-     * @param req    驳回请求
+     * @param req    驳回请求 (opinion)
      * @return 成功响应
      */
     @PostMapping("/{taskId}/reject")
     @Operation(summary = "驳回任务")
     public ResponseWrapper<Void> rejectTask(
             @PathVariable(value = "taskId") String taskId,
-            @RequestParam(value = "empId") String empId,
             @Valid @RequestBody RejectReqDTO req) {
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
         log.info("[TaskController.rejectTask] taskId={}, empId={}", taskId, empId);
-        taskOperationService.rejectTask(taskId, empId, req.getComment());
+        taskOperationService.rejectTask(taskId, empId, req.getOpinion());
         return ResponseWrapper.success();
     }
 
     /**
      * 转交任务
+     * 设计文档 B.4: POST /api/workflow/tasks/{taskId}/transfer
      *
      * @param taskId 任务ID
-     * @param empId  转出人工号
-     * @param req    转交请求
+     * @param req    转交请求 (targetEmpId, reason)
      * @return 成功响应
      */
     @PostMapping("/{taskId}/transfer")
     @Operation(summary = "转交任务")
     public ResponseWrapper<Void> transferTask(
             @PathVariable(value = "taskId") String taskId,
-            @RequestParam(value = "empId") String empId,
             @Valid @RequestBody TransferReqDTO req) {
-        log.info("[TaskController.transferTask] taskId={}, empId={}, toEmpId={}", taskId, empId, req.getToEmpId());
-        taskOperationService.transferTask(taskId, empId, req.getToEmpId(), req.getReason());
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        log.info("[TaskController.transferTask] taskId={}, empId={}, targetEmpId={}", taskId, empId, req.getTargetEmpId());
+        taskOperationService.transferTask(taskId, empId, req.getTargetEmpId(), req.getReason());
         return ResponseWrapper.success();
     }
 }

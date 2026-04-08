@@ -1,6 +1,7 @@
 package com.bank.branch.platform.workflow.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.ProcessDefinitionRespDTO;
 import com.bank.branch.platform.workflow.entity.WfNodeCandidateConf;
 import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
 import com.bank.branch.platform.workflow.entity.WfTimeoutRule;
@@ -10,11 +11,18 @@ import com.bank.branch.platform.workflow.mapper.NodeFormConfMapper;
 import com.bank.branch.platform.workflow.mapper.TimeoutRuleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.ProcessEngine;
+import org.flowable.engine.RepositoryService;
+import org.flowable.engine.repository.ProcessDefinition;
+import org.flowable.engine.repository.ProcessDefinitionQuery;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 工作流管理端服务
@@ -31,6 +39,7 @@ public class WorkflowAdminService {
     private final NodeCandidateConfMapper nodeCandidateConfMapper;
     private final TimeoutRuleMapper timeoutRuleMapper;
     private final NodeFormConfMapper nodeFormConfMapper;
+    private final ProcessEngine processEngine;
 
     // ==================== 超时规则 (D.1 / D.2) ====================
 
@@ -234,5 +243,55 @@ public class WorkflowAdminService {
         conf.setRequiredFields(requiredFields);
         conf.setUpdatedTime(LocalDateTime.now());
         nodeFormConfMapper.updateById(conf);
+    }
+
+    // ==================== 流程定义 (D.7) ====================
+
+    private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+
+    /**
+     * 获取流程定义列表（D.7）
+     * 从 Flowable RepositoryService 读取已部署的流程定义列表。
+     *
+     * @param active 是否仅查询已激活的流程定义
+     * @return 流程定义信息列表
+     */
+    public List<ProcessDefinitionRespDTO> listProcessDefinitions(boolean active) {
+        log.debug("[WorkflowAdminService.listProcessDefinitions] active={}", active);
+        RepositoryService repositoryService = processEngine.getRepositoryService();
+        ProcessDefinitionQuery query = repositoryService.createProcessDefinitionQuery();
+        if (active) {
+            query.active();
+        }
+        List<ProcessDefinition> definitions = query.orderByProcessDefinitionKey().asc().list();
+        return definitions.stream().map(def -> {
+            ProcessDefinitionRespDTO dto = new ProcessDefinitionRespDTO();
+            dto.setProcessDefinitionId(def.getId());
+            dto.setProcessDefinitionKey(def.getKey());
+            dto.setProcessDefinitionName(def.getName());
+            dto.setVersion(def.getVersion());
+            dto.setDeploymentId(def.getDeploymentId());
+            dto.setSuspended(def.isSuspended());
+            dto.setDescription(def.getDescription());
+            // 从 DeploymentQuery 获取部署时间
+            if (def.getDeploymentId() != null) {
+                try {
+                    var deploymentList = repositoryService.createDeploymentQuery()
+                            .deploymentId(def.getDeploymentId()).list();
+                    if (deploymentList != null && !deploymentList.isEmpty()) {
+                        var deployment = deploymentList.get(0);
+                        if (deployment.getDeploymentTime() != null) {
+                            dto.setDeploymentTime(
+                                    deployment.getDeploymentTime().toInstant()
+                                            .atZone(ZoneId.systemDefault())
+                                            .format(ISO_FORMATTER));
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("[WorkflowAdminService] 获取部署时间失败, deploymentId={}", def.getDeploymentId(), e);
+                }
+            }
+            return dto;
+        }).collect(Collectors.toList());
     }
 }
