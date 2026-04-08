@@ -93,4 +93,24 @@ public class NotificationController {
         int count = notificationService.markAllAsRead(empId);
         return ResponseWrapper.success(count);
     }
+
+    /**
+     * 查看通知详情，同时自动标记为已读（E.5）
+     *
+     * @param id   通知ID（路径参数）
+     * @param empId 当前用户ID（实际应从 CurrentUserContext 获取）
+     * @return 通知详情
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "查看通知详情")
+    public ResponseWrapper<NotificationDTO> getNotificationDetail(
+            @PathVariable(value = "id") String id,
+            @RequestParam(value = "empId") String empId) {
+        log.info("[NotificationController.getNotificationDetail] id={}, empId={}", id, empId);
+        // 查询通知详情
+        NotificationDTO notification = notificationService.getById(id);
+        // 自动标记为已读
+        notificationService.markAsRead(id);
+        return ResponseWrapper.success(notification);
+    }
 }

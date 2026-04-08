@@ -96,6 +96,25 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.data").value(3));
     }
 
+    @Test
+    void getNotificationDetail_shouldReturn200AndMarkAsRead() throws Exception {
+        // given
+        NotificationDTO dto = new NotificationDTO();
+        dto.setId("N_001");
+        dto.setTitle("测试通知");
+        when(notificationService.getById(anyString())).thenReturn(dto);
+        doNothing().when(notificationService).markAsRead(anyString());
+
+        // when & then
+        mockMvc.perform(get("/api/notifications/N_001")
+                .param("empId", "emp001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.title").value("测试通知"));
+        // 验证自动标记已读被调用
+        verify(notificationService).markAsRead("N_001");
+    }
+
     // ── L2 错误路径测试 ──────────────────────────────────────────
 
     @Test
