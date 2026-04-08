@@ -2,16 +2,23 @@ package com.bank.branch.platform.auth.controller;
 
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
+import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
 import com.bank.branch.platform.auth.service.OrgService;
+import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -58,5 +65,27 @@ public class OrgController {
         log.debug("[OrgController.getOrgSubtree] 获取机构子树 orgCode={}", orgCode);
         List<OrgDTO> nodes = orgService.getOrgSubtree(orgCode);
         return ResponseWrapper.success(nodes);
+    }
+
+    /**
+     * 根据机构编码查询该机构下的所有用户（G.2）
+     *
+     * @param orgCode 机构编码
+     * @param keyword 关键字（工号/姓名），可选
+     * @param pageNo 页码，默认 1
+     * @param pageSize 每页条数，默认 20
+     * @return 机构下的用户列表（分页）
+     */
+    @GetMapping("/{orgCode}/users")
+    @Operation(summary = "查询机构下的用户列表", description = "根据机构编码查询该机构绑定的所有用户（分页）")
+    @BizAuth(bizType = BizType.ORG, action = BizAction.READ)
+    public ResponseWrapper<OrgUserDTO> getOrgUsers(
+            @PathVariable String orgCode,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
+        log.debug("[OrgController.getOrgUsers] orgCode={}, keyword={}, pageNo={}, pageSize={}", orgCode, keyword, pageNo, pageSize);
+        PageResult<OrgUserDTO> result = orgService.getOrgUsers(orgCode, keyword, pageNo, pageSize);
+        return ResponseWrapper.page(result);
     }
 }
