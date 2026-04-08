@@ -105,19 +105,12 @@
 
 > **说明**：`BizType.ORG` 已存在于枚举中（描述为"组织机构"），用于机构下用户查询比 `SYS_CONFIG` 更语义准确。
 
-**修改 2 — 响应体类型描述（第 612 行）**:
-
-**当前文档**:
+**响应体现状**:
 ```
-**响应体 PageResult\<OrgUserRespDTO\>：**
+ResponseWrapper<OrgUserDTO>（items 在 page.records 中）
 ```
 
-**修改为**:
-```
-**响应体 PageResult\<OrgUserDTO\>：**
-```
-
-> **说明**：代码 `OrgService.getOrgUsers()` 返回类型为 `PageResult<OrgUserDTO>`，文档写作 `OrgUserRespDTO` 不准确。`OrgUserDTO` 包含 `userId`/`userChnName`（与 `empId`/`displayName` 同值）以保持向后兼容，其新增字段与文档一致。
+> **说明**：`OrgService.getOrgUsers()` 返回 `PageResult<OrgUserDTO>`，`ResponseWrapper.page(result)` 将其放入 `page` 字段，items 在 `page.records` 中。接口设计文档已更新为完整的 JSON 示例结构。`OrgUserRespDTO.java` 已删除（从未被代码使用）。
 
 ---
 
