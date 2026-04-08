@@ -1,6 +1,10 @@
 package com.bank.branch.platform.workflow.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
+import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
+import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
@@ -28,6 +32,7 @@ public class TaskOperationService {
     private final TaskService taskService;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final CurrentUserApi currentUserApi;
 
     /**
      * 签收任务
@@ -36,10 +41,10 @@ public class TaskOperationService {
      * </p>
      *
      * @param taskId 任务ID
-     * @param empId  签收人工号
      * @throws BizException WF-40403 任务不存在；WF-40904 任务已被签收
      */
-    public void claimTask(String taskId, String empId) {
+    public void claimTask(String taskId) {
+        String empId = currentUserApi.getCurrentEmpId();
         // 查询任务，不存在则抛异常
         Task task = queryTaskOrThrow(taskId);
 
@@ -65,22 +70,21 @@ public class TaskOperationService {
      * 当前办理人审批通过任务，添加审批意见并完成任务流转。
      * </p>
      *
-     * @param taskId    任务ID
-     * @param empId     办理人工号
-     * @param variables 流程变量
-     * @param comment   审批意见
+     * @param taskId 任务ID
+     * @param req    审批请求DTO
      * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
      */
-    public void approveTask(String taskId, String empId, Map<String, Object> variables, String comment) {
+    public void approveTask(String taskId, ApproveReqDTO req) {
+        String empId = currentUserApi.getCurrentEmpId();
         // 查询任务并校验办理人
         Task task = queryTaskOrThrow(taskId);
         verifyAssignee(task, empId);
 
         // 添加审批意见
-        taskService.addComment(taskId, task.getProcessInstanceId(), "APPROVE", comment);
+        taskService.addComment(taskId, task.getProcessInstanceId(), "APPROVE", req.getOpinion());
 
         // 完成任务，推动流程流转
-        taskService.complete(taskId, variables);
+        taskService.complete(taskId, req.getFormData());
 
         // 发布事件
         eventPublisher.publishEvent(new TaskApprovedEvent(taskId, task.getProcessInstanceId(), empId));
@@ -94,12 +98,12 @@ public class TaskOperationService {
      * 当前办理人驳回任务，设置 approved=false 流程变量并完成任务。
      * </p>
      *
-     * @param taskId  任务ID
-     * @param empId   办理人工号
-     * @param comment 驳回原因
+     * @param taskId 任务ID
+     * @param req    驳回请求DTO（opinion 审批意见）
      * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
      */
-    public void rejectTask(String taskId, String empId, String comment) {
+    public void rejectTask(String taskId, RejectReqDTO req) {
+        String empId = currentUserApi.getCurrentEmpId();
         // 查询任务并校验办理人
         Task task = queryTaskOrThrow(taskId);
         verifyAssignee(task, empId);
@@ -108,7 +112,7 @@ public class TaskOperationService {
         Map<String, Object> vars = Map.of("approved", false);
 
         // 添加驳回意见
-        taskService.addComment(taskId, task.getProcessInstanceId(), "REJECT", comment);
+        taskService.addComment(taskId, task.getProcessInstanceId(), "REJECT", req.getOpinion());
 
         // 完成任务（带驳回变量）
         taskService.complete(taskId, vars);
@@ -116,7 +120,7 @@ public class TaskOperationService {
         // 发布事件
         eventPublisher.publishEvent(new TaskRejectedEvent(taskId, task.getProcessInstanceId(), empId));
 
-        log.info("任务驳回: taskId={}, empId={}, comment={}", taskId, empId, comment);
+        log.info("任务驳回: taskId={}, empId={}, opinion={}", taskId, empId, req.getOpinion());
     }
 
     /**
@@ -125,13 +129,13 @@ public class TaskOperationService {
      * 当前办理人将任务转交给其他人员，变更任务办理人并同步更新映射表。
      * </p>
      *
-     * @param taskId    任务ID
-     * @param fromEmpId 转出人工号
-     * @param toEmpId   接收人工号
-     * @param reason    转交原因
+     * @param taskId 任务ID
+     * @param req    转交请求DTO（targetEmpId 接收人，reason 转交原因）
      * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
      */
-    public void transferTask(String taskId, String fromEmpId, String toEmpId, String reason) {
+    public void transferTask(String taskId, TransferReqDTO req) {
+        String fromEmpId = currentUserApi.getCurrentEmpId();
+        String toEmpId = req.getTargetEmpId();
         // 查询任务并校验办理人
         Task task = queryTaskOrThrow(taskId);
         verifyAssignee(task, fromEmpId);
@@ -140,7 +144,7 @@ public class TaskOperationService {
         taskService.setAssignee(taskId, toEmpId);
 
         // 添加转交备注
-        taskService.addComment(taskId, task.getProcessInstanceId(), "TRANSFER", reason);
+        taskService.addComment(taskId, task.getProcessInstanceId(), "TRANSFER", req.getReason());
 
         // 更新 biz_process_map 当前办理人
         updateCurrentAssignee(task.getProcessInstanceId(), toEmpId);
@@ -148,7 +152,7 @@ public class TaskOperationService {
         // 发布事件
         eventPublisher.publishEvent(new TaskTransferredEvent(taskId, task.getProcessInstanceId(), fromEmpId, toEmpId));
 
-        log.info("任务转交: taskId={}, from={}, to={}, reason={}", taskId, fromEmpId, toEmpId, reason);
+        log.info("任务转交: taskId={}, from={}, to={}, reason={}", taskId, fromEmpId, toEmpId, req.getReason());
     }
 
     // ==================== 私有方法 ====================

@@ -1,6 +1,10 @@
 package com.bank.branch.platform.workflow.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
+import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
+import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import org.flowable.engine.TaskService;
@@ -43,6 +47,9 @@ class TaskOperationServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private CurrentUserApi currentUserApi;
+
     @InjectMocks
     private TaskOperationService taskOperationService;
 
@@ -75,6 +82,7 @@ class TaskOperationServiceTest {
     @Test
     void claimTask_success() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", null);
         mockTaskQuery(mockTask);
 
@@ -84,7 +92,7 @@ class TaskOperationServiceTest {
         when(bizProcessMapMapper.selectByProcessInstanceId("PID_001")).thenReturn(map);
 
         // when
-        taskOperationService.claimTask("TASK_001", "E001");
+        taskOperationService.claimTask("TASK_001");
 
         // then
         verify(taskService).claim("TASK_001", "E001");
@@ -99,10 +107,11 @@ class TaskOperationServiceTest {
     @Test
     void claimTask_taskNotFound_throwsWf40403() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         mockTaskQuery(null);
 
         // when & then
-        assertThatThrownBy(() -> taskOperationService.claimTask("TASK_999", "E001"))
+        assertThatThrownBy(() -> taskOperationService.claimTask("TASK_999"))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40403");
@@ -114,11 +123,12 @@ class TaskOperationServiceTest {
     @Test
     void claimTask_alreadyClaimed_throwsWf40904() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "E002");
         mockTaskQuery(mockTask);
 
         // when & then
-        assertThatThrownBy(() -> taskOperationService.claimTask("TASK_001", "E001"))
+        assertThatThrownBy(() -> taskOperationService.claimTask("TASK_001"))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40904");
@@ -132,12 +142,14 @@ class TaskOperationServiceTest {
     @Test
     void approveTask_notAssignee_throwsWf40903() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "OTHER");
         mockTaskQuery(mockTask);
 
+        ApproveReqDTO req = new ApproveReqDTO("同意", Map.of());
+
         // when & then
-        assertThatThrownBy(() -> taskOperationService.approveTask(
-                "TASK_001", "E001", Map.of(), "同意"))
+        assertThatThrownBy(() -> taskOperationService.approveTask("TASK_001", req))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40903");
@@ -149,13 +161,15 @@ class TaskOperationServiceTest {
     @Test
     void approveTask_success_completesTask() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "E001");
         mockTaskQuery(mockTask);
 
         Map<String, Object> variables = Map.of("needCreditMeeting", "YES");
+        ApproveReqDTO req = new ApproveReqDTO("同意", variables);
 
         // when
-        taskOperationService.approveTask("TASK_001", "E001", variables, "同意");
+        taskOperationService.approveTask("TASK_001", req);
 
         // then
         verify(taskService).addComment("TASK_001", "PID_001", "APPROVE", "同意");
@@ -171,11 +185,14 @@ class TaskOperationServiceTest {
     @Test
     void rejectTask_success_completesWithReject() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "E001");
         mockTaskQuery(mockTask);
 
+        RejectReqDTO req = new RejectReqDTO("资质不符合要求");
+
         // when
-        taskOperationService.rejectTask("TASK_001", "E001", "资质不符合要求");
+        taskOperationService.rejectTask("TASK_001", req);
 
         // then
         verify(taskService).addComment("TASK_001", "PID_001", "REJECT", "资质不符合要求");
@@ -193,6 +210,7 @@ class TaskOperationServiceTest {
     @Test
     void transferTask_success_changesAssignee() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "E001");
         mockTaskQuery(mockTask);
 
@@ -201,8 +219,10 @@ class TaskOperationServiceTest {
         map.setProcessInstanceId("PID_001");
         when(bizProcessMapMapper.selectByProcessInstanceId("PID_001")).thenReturn(map);
 
+        TransferReqDTO req = new TransferReqDTO("E002", "本人出差");
+
         // when
-        taskOperationService.transferTask("TASK_001", "E001", "E002", "本人出差");
+        taskOperationService.transferTask("TASK_001", req);
 
         // then
         verify(taskService).setAssignee("TASK_001", "E002");
@@ -219,12 +239,14 @@ class TaskOperationServiceTest {
     @Test
     void transferTask_notAssignee_throwsWf40903() {
         // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "OTHER");
         mockTaskQuery(mockTask);
 
+        TransferReqDTO req = new TransferReqDTO("E002", "本人出差");
+
         // when & then
-        assertThatThrownBy(() -> taskOperationService.transferTask(
-                "TASK_001", "E001", "E002", "本人出差"))
+        assertThatThrownBy(() -> taskOperationService.transferTask("TASK_001", req))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40903");
@@ -237,10 +259,12 @@ class TaskOperationServiceTest {
      */
     @Test
     void approveTask_taskNotFound_throwsWf40403() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         mockTaskQuery(null);
 
-        assertThatThrownBy(() -> taskOperationService.approveTask(
-                "TASK_999", "E001", Map.of(), "同意"))
+        ApproveReqDTO req = new ApproveReqDTO("同意", Map.of());
+
+        assertThatThrownBy(() -> taskOperationService.approveTask("TASK_999", req))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40403");
@@ -251,10 +275,12 @@ class TaskOperationServiceTest {
      */
     @Test
     void rejectTask_taskNotFound_throwsWf40403() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         mockTaskQuery(null);
 
-        assertThatThrownBy(() -> taskOperationService.rejectTask(
-                "TASK_999", "E001", "不符合"))
+        RejectReqDTO req = new RejectReqDTO("不符合");
+
+        assertThatThrownBy(() -> taskOperationService.rejectTask("TASK_999", req))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40403");
@@ -265,11 +291,13 @@ class TaskOperationServiceTest {
      */
     @Test
     void rejectTask_notAssignee_throwsWf40903() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "OTHER");
         mockTaskQuery(mockTask);
 
-        assertThatThrownBy(() -> taskOperationService.rejectTask(
-                "TASK_001", "E001", "不符合"))
+        RejectReqDTO req = new RejectReqDTO("不符合");
+
+        assertThatThrownBy(() -> taskOperationService.rejectTask("TASK_001", req))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40903");
@@ -280,10 +308,12 @@ class TaskOperationServiceTest {
      */
     @Test
     void transferTask_taskNotFound_throwsWf40403() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         mockTaskQuery(null);
 
-        assertThatThrownBy(() -> taskOperationService.transferTask(
-                "TASK_999", "E001", "E002", "出差"))
+        TransferReqDTO req = new TransferReqDTO("E002", "出差");
+
+        assertThatThrownBy(() -> taskOperationService.transferTask("TASK_999", req))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40403");
@@ -294,12 +324,13 @@ class TaskOperationServiceTest {
      */
     @Test
     void claimTask_noBizProcessMap_doesNotThrow() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", null);
         mockTaskQuery(mockTask);
         when(bizProcessMapMapper.selectByProcessInstanceId("PID_001")).thenReturn(null);
 
         // 不应抛异常
-        taskOperationService.claimTask("TASK_001", "E001");
+        taskOperationService.claimTask("TASK_001");
 
         verify(taskService).claim("TASK_001", "E001");
         verify(bizProcessMapMapper, never()).updateById(any());
