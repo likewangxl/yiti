@@ -2,11 +2,15 @@ package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
+import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
+import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
 import com.bank.branch.platform.auth.mapper.OrgMapper;
+import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserOrgMapper;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +34,7 @@ public class OrgService {
 
     private final OrgMapper orgMapper;
     private final UserOrgMapper userOrgMapper;
+    private final UserMapper userMapper;
 
     /**
      * 根据机构编码查询机构信息
@@ -100,6 +105,61 @@ public class OrgService {
     public List<OrgDTO> searchOrgs(String keyword, int limit) {
         return orgMapper.searchByKeyword(keyword, limit)
             .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    /**
+     * 根据机构编码查询该机构下的所有用户（G.2）
+     *
+     * @param orgCode 机构编码
+     * @return 机构下的用户列表
+     */
+    public List<OrgUserDTO> getOrgUsers(String orgCode) {
+        log.debug("[OrgService.getOrgUsers] orgCode={}", orgCode);
+        List<PtUser> users = userMapper.selectByOrgCode(orgCode);
+        return users.stream()
+            .map(u -> {
+                OrgUserDTO dto = new OrgUserDTO();
+                dto.setUserId(u.getUserId());
+                dto.setUsername(u.getUsername());
+                dto.setUserChnName(u.getUserchnname());
+                return dto;
+            })
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * 分页查询机构下的用户（G.2）
+     *
+     * @param orgCode 机构编码
+     * @param keyword 关键字（工号/姓名）
+     * @param pageNo 页码
+     * @param pageSize 每页条数
+     * @return 分页结果
+     */
+    public PageResult<OrgUserDTO> getOrgUsers(String orgCode, String keyword, int pageNo, int pageSize) {
+        log.debug("[OrgService.getOrgUsers] orgCode={}, keyword={}, pageNo={}, pageSize={}", orgCode, keyword, pageNo, pageSize);
+        int offset = (pageNo - 1) * pageSize;
+
+        // 查询列表
+        List<PtUser> users = userMapper.selectOrgUsersByPage(orgCode, keyword, offset, pageSize);
+
+        // 查询总数
+        long total = userMapper.countOrgUsers(orgCode, keyword);
+
+        // 转换并填充角色信息
+        List<OrgUserDTO> records = users.stream().map(u -> {
+            OrgUserDTO dto = new OrgUserDTO();
+            dto.setUserId(u.getUserId());
+            dto.setEmpId(u.getUserId());
+            dto.setUsername(u.getUsername());
+            dto.setUserChnName(u.getUserchnname());
+            dto.setDisplayName(u.getUserchnname());
+            dto.setEmail(u.getEmail());
+            // TODO: 后续 Task A.3 完成后再填充 roles 字段
+            return dto;
+        }).collect(Collectors.toList());
+
+        return PageResult.of(pageNo, pageSize, total, records);
     }
 
     /**
