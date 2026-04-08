@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/admin/audit-logs")
+@RequestMapping("/api/admin/sys/audit-logs")
 @Tag(name = "审计日志", description = "操作审计日志查询")
 public class AuditLogController {
 

@@ -50,7 +50,7 @@ class AuditLogControllerTest {
                 .thenReturn(pageResult);
 
         // when & then
-        mockMvc.perform(get("/api/admin/audit-logs")
+        mockMvc.perform(get("/api/admin/sys/audit-logs")
                 .param("pageNo", "1")
                 .param("pageSize", "20"))
                 .andExpect(status().isOk())
@@ -66,7 +66,7 @@ class AuditLogControllerTest {
                 .thenReturn(pageResult);
 
         // when & then
-        mockMvc.perform(get("/api/admin/audit-logs")
+        mockMvc.perform(get("/api/admin/sys/audit-logs")
                 .param("empId", "emp001")
                 .param("bizType", "SYS_CONFIG")
                 .param("startTime", "2026-01-01")
