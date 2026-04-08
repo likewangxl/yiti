@@ -4,7 +4,6 @@ import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.governance.service.FileService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,8 +19,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * FileController 单元测试
@@ -33,7 +31,6 @@ class FileControllerTest {
     private FileService fileService;
 
     private MockMvc mockMvc;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -43,15 +40,15 @@ class FileControllerTest {
     }
 
     @Test
-    void getDownloadUrl_shouldReturn200() throws Exception {
+    void downloadFile_should302Redirect() throws Exception {
         // given
-        when(fileService.getDownloadUrl(anyString())).thenReturn("https://minio.local/bucket/path/file.pdf");
+        when(fileService.getDownloadUrl(anyString()))
+                .thenReturn("https://minio.local/bucket/path/file.pdf");
 
-        // when & then
-        mockMvc.perform(get("/api/files/F_001/download-url"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.data").value("https://minio.local/bucket/path/file.pdf"));
+        // when & then：302重定向到预签名URL
+        mockMvc.perform(get("/api/files/F_001/download"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("https://minio.local/bucket/path/file.pdf"));
     }
 
     @Test
@@ -62,8 +59,10 @@ class FileControllerTest {
         dto.setFileName("test.pdf");
         when(fileService.listBizFiles(anyString(), anyString())).thenReturn(List.of(dto));
 
-        // when & then
-        mockMvc.perform(get("/api/files/biz/LOAN/BIZ_001"))
+        // when & then（Query参数方式）
+        mockMvc.perform(get("/api/files")
+                .param("bizType", "LOAN")
+                .param("bizId", "BIZ_001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data").isArray());
@@ -88,16 +87,27 @@ class FileControllerTest {
                 .andExpect(jsonPath("$.code").value("0"));
     }
 
+    @Test
+    void deleteFile_shouldReturn200() throws Exception {
+        // given
+        doNothing().when(fileService).deleteFile(anyString());
+
+        // when & then
+        mockMvc.perform(delete("/api/files/F_001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+    }
+
     // ── L2 错误路径测试 ──────────────────────────────────────────
 
     @Test
-    void getDownloadUrl_fileNotFound_returnsBizError() throws Exception {
+    void downloadFile_fileNotFound_returnsBizError() throws Exception {
         when(fileService.getDownloadUrl(anyString()))
-                .thenThrow(new BizException("GOV-40005", "文件不存在"));
+                .thenThrow(new BizException("GOV-40404", "文件不存在"));
 
-        mockMvc.perform(get("/api/files/NOT_EXIST/download-url"))
+        mockMvc.perform(get("/api/files/NOT_EXIST/download"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("GOV-40005"));
+                .andExpect(jsonPath("$.code").value("GOV-40404"));
     }
 
     @Test
