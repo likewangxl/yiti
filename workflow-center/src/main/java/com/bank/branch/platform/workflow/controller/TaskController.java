@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.controller;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
@@ -38,6 +39,7 @@ public class TaskController {
 
     private final TodoQueryService todoQueryService;
     private final TaskOperationService taskOperationService;
+    private final CurrentUserApi currentUserApi;
 
     /**
      * 查询待办列表（分页）
@@ -58,8 +60,7 @@ public class TaskController {
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
         log.debug("[TaskController.queryTodoList] bizType={}, keyword={}, pageNo={}, pageSize={}",
                 bizType, keyword, pageNo, pageSize);
-        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
-        String empId = "CURRENT_USER";
+        String empId = currentUserApi.getCurrentEmpId();
         PageResult<TaskRespDTO> result = todoQueryService.queryTodoList(empId, bizType, keyword, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
@@ -83,8 +84,7 @@ public class TaskController {
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
         log.debug("[TaskController.queryDoneList] bizType={}, keyword={}, pageNo={}, pageSize={}",
                 bizType, keyword, pageNo, pageSize);
-        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
-        String empId = "CURRENT_USER";
+        String empId = currentUserApi.getCurrentEmpId();
         PageResult<TaskRespDTO> result = todoQueryService.queryDoneList(empId, bizType, keyword, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
@@ -100,8 +100,7 @@ public class TaskController {
     @Operation(summary = "获取任务详情")
     public ResponseWrapper<TaskDetailRespDTO> getTaskDetail(
             @PathVariable(value = "taskId") String taskId) {
-        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
-        String empId = "CURRENT_USER";
+        String empId = currentUserApi.getCurrentEmpId();
         log.debug("[TaskController.getTaskDetail] taskId={}, empId={}", taskId, empId);
         TaskDetailRespDTO detail = todoQueryService.getTaskDetail(taskId, empId);
         return ResponseWrapper.success(detail);
@@ -118,10 +117,8 @@ public class TaskController {
     @Operation(summary = "签收任务")
     public ResponseWrapper<Void> claimTask(
             @PathVariable(value = "taskId") String taskId) {
-        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
-        String empId = "CURRENT_USER";
-        log.info("[TaskController.claimTask] taskId={}, empId={}", taskId, empId);
-        taskOperationService.claimTask(taskId, empId);
+        log.info("[TaskController.claimTask] taskId={}", taskId);
+        taskOperationService.claimTask(taskId);
         return ResponseWrapper.success();
     }
 
@@ -138,10 +135,8 @@ public class TaskController {
     public ResponseWrapper<Void> approveTask(
             @PathVariable(value = "taskId") String taskId,
             @Valid @RequestBody ApproveReqDTO req) {
-        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
-        String empId = "CURRENT_USER";
-        log.info("[TaskController.approveTask] taskId={}, empId={}", taskId, empId);
-        taskOperationService.approveTask(taskId, empId, req.getFormData(), req.getOpinion());
+        log.info("[TaskController.approveTask] taskId={}, opinion={}", taskId, req.getOpinion());
+        taskOperationService.approveTask(taskId, req);
         return ResponseWrapper.success();
     }
 
@@ -158,10 +153,8 @@ public class TaskController {
     public ResponseWrapper<Void> rejectTask(
             @PathVariable(value = "taskId") String taskId,
             @Valid @RequestBody RejectReqDTO req) {
-        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
-        String empId = "CURRENT_USER";
-        log.info("[TaskController.rejectTask] taskId={}, empId={}", taskId, empId);
-        taskOperationService.rejectTask(taskId, empId, req.getOpinion());
+        log.info("[TaskController.rejectTask] taskId={}, opinion={}", taskId, req.getOpinion());
+        taskOperationService.rejectTask(taskId, req);
         return ResponseWrapper.success();
     }
 
@@ -178,10 +171,8 @@ public class TaskController {
     public ResponseWrapper<Void> transferTask(
             @PathVariable(value = "taskId") String taskId,
             @Valid @RequestBody TransferReqDTO req) {
-        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
-        String empId = "CURRENT_USER";
-        log.info("[TaskController.transferTask] taskId={}, empId={}, targetEmpId={}", taskId, empId, req.getTargetEmpId());
-        taskOperationService.transferTask(taskId, empId, req.getTargetEmpId(), req.getReason());
+        log.info("[TaskController.transferTask] taskId={}, targetEmpId={}", taskId, req.getTargetEmpId());
+        taskOperationService.transferTask(taskId, req);
         return ResponseWrapper.success();
     }
 }
