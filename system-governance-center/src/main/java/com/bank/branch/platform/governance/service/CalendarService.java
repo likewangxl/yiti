@@ -2,19 +2,28 @@ package com.bank.branch.platform.governance.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.CalendarDayDTO;
+import com.bank.branch.platform.governance.api.dto.CalendarImportRespDTO;
 import com.bank.branch.platform.governance.entity.SysCalendarDay;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
 import com.bank.branch.platform.governance.mapper.CalendarMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -194,6 +203,47 @@ public class CalendarService {
     }
 
     /**
+     * 设置指定日期的工作日/休息日状态。
+     * <p>
+     * 将指定日期设置为工作日或休息日（而非翻转）。
+     * 过去日期不允许修改，抛出 GOV-40301。
+     * 若日期不存在则自动创建。
+     * </p>
+     *
+     * @param date     日期
+     * @param isWorkday 是否工作日（true=工作日，false=休息日）
+     * @param remark   备注
+     * @throws BizException GOV-40301 过去日期不可修改
+     */
+    @Transactional
+    public void setWorkday(LocalDate date, boolean isWorkday, String remark) {
+        log.info("[CalendarService.setWorkday] date={}, isWorkday={}, remark={}", date, isWorkday, remark);
+        // 过去日期不允许修改
+        if (date.isBefore(LocalDate.now())) {
+            throw new BizException(GovErrorCode.PAST_DATE_NOT_MODIFIABLE.getCode(),
+                    GovErrorCode.PAST_DATE_NOT_MODIFIABLE.getMessage());
+        }
+        SysCalendarDay existing = calendarMapper.selectByDay(date);
+        if (existing == null) {
+            existing = new SysCalendarDay();
+            existing.setDay(date);
+            existing.setIsWorkday(isWorkday ? 1 : 0);
+            existing.setRemark(remark);
+            existing.setCreatedTime(LocalDateTime.now());
+            existing.setUpdatedTime(LocalDateTime.now());
+            calendarMapper.insert(existing);
+        } else {
+            existing.setIsWorkday(isWorkday ? 1 : 0);
+            existing.setRemark(remark);
+            existing.setUpdatedTime(LocalDateTime.now());
+            calendarMapper.updateById(existing);
+        }
+        // 清除该年份缓存
+        redisTemplate.delete(CACHE_PREFIX + date.getYear());
+        log.info("[CalendarService.setWorkday] 已设置 date={}, isWorkday={}", date, isWorkday);
+    }
+
+    /**
      * 初始化指定年份的日历数据。
      * <p>
      * 幂等操作：对每一天，若不存在则插入（周一至周五默认工作日=1，周六日=0）。
@@ -274,6 +324,69 @@ public class CalendarService {
             redisTemplate.delete(CACHE_PREFIX + year);
         }
         log.info("[CalendarService.batchImport] 导入完成，受影响年份={}", affectedYears);
+    }
+
+    /**
+     * 批量导入节假日（Excel格式）
+     * <p>
+     * Excel格式：日期(yyyy-MM-dd), 是否工作日(1/0), 备注
+     * 只处理未来日期，过去日期自动跳过
+     * </p>
+     *
+     * @param file Excel文件
+     * @return 导入结果
+     */
+    public CalendarImportRespDTO importFromExcel(MultipartFile file) {
+        log.info("[CalendarService.importFromExcel] fileName={}", file.getOriginalFilename());
+        List<CalendarDayDTO> toImport = new ArrayList<>();
+        int skipped = 0;
+        LocalDate today = LocalDate.now();
+
+        try (InputStream is = file.getInputStream();
+             Workbook workbook = new XSSFWorkbook(is)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                Cell dateCell = row.getCell(0);
+                Cell workdayCell = row.getCell(1);
+                Cell remarkCell = row.getCell(2);
+
+                if (dateCell == null || workdayCell == null) continue;
+
+                // 解析日期
+                LocalDate date;
+                if (dateCell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+                    date = dateCell.getLocalDateTimeCellValue().toLocalDate();
+                } else {
+                    date = LocalDate.parse(dateCell.getStringCellValue());
+                }
+
+                if (date.isBefore(today)) {
+                    skipped++;
+                    continue;
+                }
+
+                CalendarDayDTO dto = new CalendarDayDTO();
+                dto.setDay(date);
+                dto.setIsWorkday((int) workdayCell.getNumericCellValue());
+                dto.setRemark(remarkCell != null ? remarkCell.getStringCellValue() : null);
+                toImport.add(dto);
+            }
+        } catch (Exception e) {
+            log.error("[CalendarService.importFromExcel] Excel解析失败", e);
+            throw new BizException(GovErrorCode.FILE_FORMAT_INVALID.getCode(),
+                    "Excel解析失败: " + e.getMessage());
+        }
+
+        batchImport(toImport);
+
+        CalendarImportRespDTO resp = new CalendarImportRespDTO();
+        resp.setTotalRows(toImport.size() + skipped);
+        resp.setSuccessRows(toImport.size());
+        resp.setSkippedRows(skipped);
+        return resp;
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────

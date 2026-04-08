@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -56,12 +57,14 @@ class CalendarControllerTest {
     }
 
     @Test
-    void toggleWorkday_shouldReturn200() throws Exception {
+    void setWorkday_shouldReturn200() throws Exception {
         // given
-        doNothing().when(calendarService).toggleWorkday(any(LocalDate.class));
+        doNothing().when(calendarService).setWorkday(any(LocalDate.class), anyBoolean(), any());
 
         // when & then
-        mockMvc.perform(put("/api/admin/sys/calendar/2026-05-01/toggle"))
+        mockMvc.perform(put("/api/admin/sys/calendar/2026-05-01")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"isWorkday\": true, \"remark\": \"调休\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
     }
@@ -81,11 +84,13 @@ class CalendarControllerTest {
     // ── L2 错误路径测试 ──────────────────────────────────────────
 
     @Test
-    void toggleWorkday_pastDate_returnsBizError() throws Exception {
+    void setWorkday_pastDate_returnsBizError() throws Exception {
         doThrow(new BizException("GOV-40301", "过去日期不可修改"))
-            .when(calendarService).toggleWorkday(any(LocalDate.class));
+            .when(calendarService).setWorkday(any(LocalDate.class), anyBoolean(), any());
 
-        mockMvc.perform(put("/api/admin/sys/calendar/2020-01-01/toggle"))
+        mockMvc.perform(put("/api/admin/sys/calendar/2020-01-01")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"isWorkday\": true, \"remark\": \"test\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("GOV-40301"));
     }
