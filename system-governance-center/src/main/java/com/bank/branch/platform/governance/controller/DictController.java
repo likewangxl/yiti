@@ -6,6 +6,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.governance.api.dto.DictCreateReqDTO;
+import com.bank.branch.platform.governance.api.dto.DictStatusReqDTO;
 import com.bank.branch.platform.governance.api.dto.DictTypeRespDTO;
 import com.bank.branch.platform.governance.api.dto.DictUpdateReqDTO;
 import com.bank.branch.platform.governance.entity.SysDict;
@@ -131,7 +132,7 @@ public class DictController {
      * 启用/禁用字典项状态（A.6）
      *
      * @param id     字典ID（路径参数）
-     * @param status 目标状态（ACTIVE/DISABLED）
+     * @param req    目标状态请求DTO（ACTIVE/DISABLED）
      * @return 更新后的字典实体
      */
     @PutMapping("/api/admin/sys/dicts/{id}/status")
@@ -139,9 +140,9 @@ public class DictController {
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<SysDict> updateDictStatus(
             @PathVariable(value = "id") String id,
-            @RequestParam(value = "status") String status) {
-        log.info("[DictController.updateDictStatus] id={}, status={}", id, status);
-        SysDict dict = dictService.updateStatus(id, status);
+            @Valid @RequestBody DictStatusReqDTO req) {
+        log.info("[DictController.updateDictStatus] id={}, status={}", id, req.getStatus());
+        SysDict dict = dictService.updateStatus(id, req.getStatus());
         return ResponseWrapper.success(dict);
     }
 

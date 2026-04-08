@@ -7,6 +7,7 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.governance.api.dto.CalendarDayDTO;
 import com.bank.branch.platform.governance.api.dto.CalendarDayUpdateReqDTO;
 import com.bank.branch.platform.governance.api.dto.CalendarImportRespDTO;
+import com.bank.branch.platform.governance.api.dto.CalendarInitReqDTO;
 import com.bank.branch.platform.governance.service.CalendarService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -83,10 +84,9 @@ public class CalendarController {
     @PostMapping("/init")
     @Operation(summary = "初始化年份日历数据")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<Void> initYear(
-            @RequestParam(value = "year") int year) {
-        log.info("[CalendarController.initYear] year={}", year);
-        calendarService.initYear(year);
+    public ResponseWrapper<Void> initYear(@Valid @RequestBody CalendarInitReqDTO req) {
+        log.info("[CalendarController.initYear] year={}", req.getYear());
+        calendarService.initYear(req.getYear());
         return ResponseWrapper.success();
     }
 
