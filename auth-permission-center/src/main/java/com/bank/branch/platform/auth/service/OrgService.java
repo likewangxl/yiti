@@ -229,6 +229,42 @@ public class OrgService {
         return roots;
     }
 
+    /**
+     * 获取机构子树（树形结构）
+     * 加载全量机构后在内存中构建指定根节点的子树
+     *
+     * @param orgCode 根机构编码
+     * @return 根节点列表（通常只有1个元素：当前用户主机构为根的子树）
+     */
+    public List<OrgTreeNodeDTO> getOrgSubtreeAsTree(String orgCode) {
+        ExtOrgInfo root = orgMapper.selectByOrgCode(orgCode);
+        if (root == null) return List.of();
+        // 获取子树编码集合
+        Set<String> subtreeCodes = getOrgSubtreeCodes(orgCode);
+        // 加载全量机构后在内存中过滤并构建树
+        List<ExtOrgInfo> all = orgMapper.selectAll();
+        Map<String, OrgTreeNodeDTO> nodeMap = all.stream()
+            .filter(o -> subtreeCodes.contains(o.getOrgCode()))
+            .collect(Collectors.toMap(ExtOrgInfo::getOrgCode, this::toTreeNode));
+        // 根节点应只有当前 orgCode 对应的节点
+        List<OrgTreeNodeDTO> roots = new ArrayList<>();
+        for (ExtOrgInfo org : all) {
+            if (!subtreeCodes.contains(org.getOrgCode())) continue;
+            OrgTreeNodeDTO node = nodeMap.get(org.getOrgCode());
+            if (org.getPId() == null || !subtreeCodes.contains(org.getPId())) {
+                // 没有父节点或父节点不在子树中 → 子树根节点
+                roots.add(node);
+            } else {
+                OrgTreeNodeDTO parent = nodeMap.get(org.getPId());
+                if (parent.getChildren() == null) {
+                    parent.setChildren(new ArrayList<>());
+                }
+                parent.getChildren().add(node);
+            }
+        }
+        return roots;
+    }
+
     /** 将 ExtOrgInfo 实体转换为 OrgTreeNodeDTO（不含 children） */
     private OrgTreeNodeDTO toTreeNode(ExtOrgInfo org) {
         OrgTreeNodeDTO node = new OrgTreeNodeDTO();

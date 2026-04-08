@@ -1,6 +1,5 @@
 package com.bank.branch.platform.auth.controller;
 
-import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
 import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
@@ -58,12 +57,12 @@ public class OrgController {
      * @return 当前用户机构子树中所有机构的列表
      */
     @GetMapping("/subtree")
-    @Operation(summary = "获取当前用户机构子树", description = "返回当前用户主机构及其下属所有机构列表")
-    public ResponseWrapper<List<OrgDTO>> getOrgSubtree() {
+    @Operation(summary = "获取当前用户机构子树", description = "返回当前用户主机构及其下属所有机构列表（树形结构）")
+    public ResponseWrapper<List<OrgTreeNodeDTO>> getOrgSubtree() {
         CurrentUserContext ctx = currentUserProvider.get();
         String orgCode = ctx.mainOrgCode();
         log.debug("[OrgController.getOrgSubtree] 获取机构子树 orgCode={}", orgCode);
-        List<OrgDTO> nodes = orgService.getOrgSubtree(orgCode);
+        List<OrgTreeNodeDTO> nodes = orgService.getOrgSubtreeAsTree(orgCode);
         return ResponseWrapper.success(nodes);
     }
 
