@@ -1,7 +1,9 @@
 package com.bank.branch.platform.auth.service;
 
+import com.bank.branch.platform.auth.api.dto.BizScopeMatrixRespDTO;
 import com.bank.branch.platform.auth.api.dto.BizScopeRespDTO;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.api.event.PermissionCacheInvalidatedEvent;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtRoleBizScope;
@@ -240,6 +242,60 @@ public class BizScopeService {
         roleBizScopeMapper.deleteById(id);
         cacheService.evictBizScopeCache(scope.getRoleId());
         publishCacheInvalidatedEvent("BIZ_SCOPE", Set.of(scope.getRoleId()), null, reason);
+    }
+
+    // ── 公开查询方法 ────────────────────────────────────────────────
+
+    /**
+     * 获取角色×业务类型数据范围矩阵（F.2）
+     * <p>
+     * 一次性返回所有角色、所有业务类型的配置视图，
+     * 便于管理后台以矩阵表格形式展示和编辑数据范围策略。
+     * </p>
+     *
+     * @return 矩阵DTO，含所有角色列表、所有 BizType、roleId→(bizType→dataScope) 的映射
+     */
+    public BizScopeMatrixRespDTO getBizScopeMatrix() {
+        log.debug("[BizScopeService.getBizScopeMatrix] 构建角色×业务类型数据范围矩阵");
+
+        // 1. 查询所有角色，转换为 RoleSimpleDTO
+        List<PtRole> allRoles = roleMapper.selectAll();
+        List<RoleSimpleDTO> roleDtos = allRoles.stream()
+                .map(r -> {
+                    RoleSimpleDTO dto = new RoleSimpleDTO();
+                    dto.setRoleId(r.getRoleId());
+                    dto.setRoleCode(r.getRoleCode());
+                    dto.setRoleChName(r.getRoleChName());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        // 2. 查询所有 BizScope 记录，提取去重后的 BizType 列表
+        List<PtRoleBizScope> allScopes = roleBizScopeMapper.selectAll();
+        List<String> bizTypes = allScopes.stream()
+                .map(PtRoleBizScope::getBizType)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        // 3. 构建矩阵：roleId → (bizType → dataScope)
+        Map<String, Map<String, String>> matrix = new HashMap<>();
+        for (PtRoleBizScope scope : allScopes) {
+            if (scope.getRoleId() == null || scope.getBizType() == null) {
+                continue;
+            }
+            matrix.computeIfAbsent(scope.getRoleId(), k -> new HashMap<>())
+                    .put(scope.getBizType(), scope.getDataScope());
+        }
+
+        BizScopeMatrixRespDTO result = new BizScopeMatrixRespDTO();
+        result.setRoles(roleDtos);
+        result.setBizTypes(bizTypes);
+        result.setMatrix(matrix);
+        log.debug("[BizScopeService.getBizScopeMatrix] 矩阵构建完成，roles={}, bizTypes={}",
+                roleDtos.size(), bizTypes.size());
+        return result;
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────

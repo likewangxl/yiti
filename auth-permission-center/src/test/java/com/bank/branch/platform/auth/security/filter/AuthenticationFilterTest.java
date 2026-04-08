@@ -106,7 +106,7 @@ class AuthenticationFilterTest {
     }
 
     private CurrentUserContext makeCtx(String empId) {
-        return new CurrentUserContext(empId, "ORG001", Set.of("R_RM"), Set.of("CUST_MANAGER"),
-            Set.of("ROLE:CUST_MANAGER"), false);
+        return new CurrentUserContext(empId, empId, "测试用户", "ORG001", "总行", 1,
+            Set.of("R_RM"), Set.of("CUST_MANAGER"), Set.of("ROLE:CUST_MANAGER"), false);
     }
 }

@@ -6,7 +6,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BizTypeTest {
-    @Test void shouldHave17Values() { assertEquals(17, BizType.values().length); }
+    @Test void shouldHave18Values() { assertEquals(18, BizType.values().length); }
     @Test void navShouldHaveCorrectCode() { assertEquals("NAV", BizType.NAV.getCode()); }
     @Test void sysConfigShouldHaveCorrectCode() { assertEquals("SYS_CONFIG", BizType.SYS_CONFIG.getCode()); }
 

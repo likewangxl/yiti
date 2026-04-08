@@ -193,8 +193,8 @@ class AuthServiceTest {
 
     @Test
     void getCurrentUser_shouldReturnContextWhenValid() {
-        CurrentUserContext ctx = new CurrentUserContext("E001", "ORG001",
-            Set.of("R1"), Set.of("ADMIN"), Set.of(), false);
+        CurrentUserContext ctx = new CurrentUserContext("E001", "E001", "测试用户", "ORG001",
+            "总行", 1, Set.of("R1"), Set.of("ADMIN"), Set.of(), false);
         when(session.getAttribute("currentUser")).thenReturn(ctx);
 
         CurrentUserContext result = authService.getCurrentUser(session);

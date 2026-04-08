@@ -1,8 +1,11 @@
 package com.bank.branch.platform.auth.controller;
 
+import com.bank.branch.platform.auth.api.dto.CheckPermissionReqDTO;
+import com.bank.branch.platform.auth.api.dto.CheckPermissionRespDTO;
 import com.bank.branch.platform.auth.api.dto.CurrentUserRespDTO;
 import com.bank.branch.platform.auth.api.dto.LoginReqDTO;
 import com.bank.branch.platform.auth.api.dto.LoginRespDTO;
+import com.bank.branch.platform.auth.api.dto.PermissionSetRespDTO;
 import com.bank.branch.platform.auth.service.AuthService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
@@ -23,13 +26,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 认证控制器
- * 负责用户登录、登出和当前用户信息查询接口
+ * 负责用户登录、登出、当前用户信息查询、权限查询与校验接口
  */
 @Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")
-@Tag(name = "认证接口", description = "登录、登出和当前用户信息")
+@Tag(name = "认证接口", description = "登录、登出、当前用户信息查询、权限查询与校验")
 public class AuthController {
 
     private final AuthService authService;
@@ -77,12 +80,51 @@ public class AuthController {
         CurrentUserContext ctx = authService.getCurrentUser(session);
         CurrentUserRespDTO dto = new CurrentUserRespDTO();
         dto.setEmpId(ctx.empId());
+        dto.setUsername(ctx.username());
+        dto.setDisplayName(ctx.displayName());
         dto.setMainOrgCode(ctx.mainOrgCode());
+        dto.setMainOrgName(ctx.mainOrgName());
+        dto.setOrgLevel(ctx.orgLevel());
         dto.setIsSystemAdmin(ctx.systemAdmin());
         // roles/permissions/bizScopes 由前端按需调用专属接口获取
         dto.setRoles(null);
         dto.setPermissions(null);
         dto.setBizScopes(null);
+        return ResponseWrapper.success(dto);
+    }
+
+    /**
+     * 获取当前用户完整权限集合（H.1）
+     *
+     * @param session HttpSession，从中读取用户上下文
+     * @return 当前用户的资源URL集合、BizScope映射、角色列表
+     */
+    @GetMapping("/permissions")
+    @Operation(summary = "获取当前用户完整权限集合",
+            description = "返回当前用户所有有权限的资源URL列表和BizScope映射，供前端/网关做完整权限判断")
+    public ResponseWrapper<PermissionSetRespDTO> getPermissions(HttpSession session) {
+        log.debug("[AuthController.getPermissions] 获取当前用户权限集合请求");
+        CurrentUserContext ctx = authService.getCurrentUser(session);
+        PermissionSetRespDTO dto = authService.getUserPermissions(ctx.empId());
+        return ResponseWrapper.success(dto);
+    }
+
+    /**
+     * 校验当前用户是否有指定资源/BizType的权限（H.2）
+     *
+     * @param req 权限检查请求（resourceUrl、resourceMethod必填，bizType/action可选）
+     * @param session HttpSession，从中读取用户上下文
+     * @return 权限检查结果（含RBAC和数据范围检查详情）
+     */
+    @PostMapping("/check-permission")
+    @Operation(summary = "校验权限",
+            description = "校验当前用户是否有指定资源/BizType的权限，返回详细检查结论")
+    public ResponseWrapper<CheckPermissionRespDTO> checkPermission(
+            @Valid @RequestBody CheckPermissionReqDTO req, HttpSession session) {
+        log.debug("[AuthController.checkPermission] 权限校验请求 url={}, method={}",
+                req.getResourceUrl(), req.getResourceMethod());
+        authService.getCurrentUser(session); // 确保已登录
+        CheckPermissionRespDTO dto = authService.checkPermission(req);
         return ResponseWrapper.success(dto);
     }
 }

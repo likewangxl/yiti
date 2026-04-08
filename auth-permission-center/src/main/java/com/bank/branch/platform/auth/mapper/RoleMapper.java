@@ -78,4 +78,11 @@ public interface RoleMapper {
      * @return 角色列表
      */
     List<PtRole> selectByUserId(String userId);
+
+    /**
+     * 查询全部可用角色，用于 BizScope 矩阵构建。
+     *
+     * @return 全部 RECORD_STATUS = 0 的角色列表
+     */
+    List<PtRole> selectAll();
 }

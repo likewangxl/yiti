@@ -38,4 +38,50 @@
           AND o.ORGAN_STATE = 0
     </select>
 
+    <!--
+        根据机构编码分页查询用户列表，JOIN PT_USER 获取完整用户信息。
+        用于 OrgController GET /api/orgs/{orgCode}/users 接口。
+    -->
+    <select id="selectUsersByOrgCode"
+            resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            u.USER_ID      AS user_id,
+            u.USERNAME     AS username,
+            u.USERCHNNAME  AS userchnname,
+            u.EMAIL        AS email,
+            u.ISEXPIRED    AS is_expired,
+            u.ISLOCKED     AS is_locked,
+            u.PASS_WRONG_COUNT AS pass_wrong_count,
+            u.ISENABLED    AS is_enabled,
+            u.CREATE_TIME  AS create_time,
+            u.CREATE_AUTHOR AS create_author,
+            u.UPDATE_TIME  AS update_time,
+            u.UPDATE_AUTHOR AS update_author,
+            u.REMARK       AS remark,
+            u.PWD_UPDATE_TIME AS pwd_update_time
+        FROM PT_USER u
+        INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        WHERE uo.ORG_CODE = #{orgCode}
+          <if test="keyword != null and keyword != ''">
+            AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+        ORDER BY u.USER_ID ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计指定机构下的用户数量 -->
+    <select id="countUsersByOrgCode" resultType="long">
+        SELECT COUNT(*)
+        FROM PT_USER u
+        INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        WHERE uo.ORG_CODE = #{orgCode}
+          <if test="keyword != null and keyword != ''">
+            AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+    </select>
+
 </mapper>

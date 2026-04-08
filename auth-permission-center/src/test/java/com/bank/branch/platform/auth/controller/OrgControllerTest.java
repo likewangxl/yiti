@@ -1,6 +1,5 @@
 package com.bank.branch.platform.auth.controller;
 
-import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
 import com.bank.branch.platform.auth.service.OrgService;
@@ -60,22 +59,30 @@ class OrgControllerTest {
     void getOrgSubtree_shouldReturn200WithSubtreeNodes() throws Exception {
         // given
         CurrentUserContext ctx = new CurrentUserContext(
-                "emp001", "ORG001", Set.of(), Set.of(), Set.of(), false);
+                "emp001", "emp001", "测试用户", "ORG001", "总行", 1,
+                Set.of(), Set.of(), Set.of(), false);
         when(currentUserProvider.get()).thenReturn(ctx);
 
-        OrgDTO orgDto = new OrgDTO();
-        orgDto.setOrgCode("ORG001");
-        orgDto.setOrgName("总行");
-        OrgDTO childDto = new OrgDTO();
+        // 构造树形结构：ORG001 为根节点，ORG002 为子节点
+        OrgTreeNodeDTO childDto = new OrgTreeNodeDTO();
         childDto.setOrgCode("ORG002");
         childDto.setOrgName("分行");
-        when(orgService.getOrgSubtree(anyString())).thenReturn(List.of(orgDto, childDto));
+        childDto.setOrgLevel(2);
+        childDto.setParentOrgCode("ORG001");
+
+        OrgTreeNodeDTO rootDto = new OrgTreeNodeDTO();
+        rootDto.setOrgCode("ORG001");
+        rootDto.setOrgName("总行");
+        rootDto.setOrgLevel(1);
+        rootDto.setChildren(List.of(childDto));
+
+        when(orgService.getOrgSubtreeAsTree(anyString())).thenReturn(List.of(rootDto));
 
         // when & then
         mockMvc.perform(get("/api/orgs/subtree"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data[0].orgCode").value("ORG001"))
-                .andExpect(jsonPath("$.data[1].orgCode").value("ORG002"));
+                .andExpect(jsonPath("$.data[0].children[0].orgCode").value("ORG002"));
     }
 }

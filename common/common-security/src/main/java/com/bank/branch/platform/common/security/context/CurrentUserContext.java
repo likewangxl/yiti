@@ -11,7 +11,11 @@ import java.util.Set;
  * 当 Spring Session store-type=redis 时，存入 session 的对象必须可序列化。
  *
  * @param empId              员工ID
+ * @param username           用户名
+ * @param displayName        中文姓名
  * @param mainOrgCode        主机构编码
+ * @param mainOrgName        主机构名称
+ * @param orgLevel           机构等级（1总行/2分行/3支行）
  * @param roleIds            角色ID集合
  * @param roleCodes          角色编码集合（ROLE_CODE）
  * @param candidateGroupKeys 候选组标识集合（用于工作流）
@@ -19,11 +23,15 @@ import java.util.Set;
  */
 public record CurrentUserContext(
     String empId,
+    String username,
+    String displayName,
     String mainOrgCode,
+    String mainOrgName,
+    Integer orgLevel,
     Set<String> roleIds,
     Set<String> roleCodes,
     Set<String> candidateGroupKeys,
-    boolean systemAdmin
+    Boolean systemAdmin
 ) implements Serializable {
 
     private static final long serialVersionUID = 1L;

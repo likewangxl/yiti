@@ -20,16 +20,15 @@ INSERT INTO PT_USER (USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL, ISENABLED, ISEX
     ('user002', 'user002', '李四', '$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy', 'lisi@test.com', 0, 0, 0, 0)
 ON DUPLICATE KEY UPDATE USERNAME=VALUES(USERNAME), PWD=VALUES(PWD);
 
--- 角色表
-INSERT INTO PT_ROLE (ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS, SYS_CODE) VALUES
-    ('R001', 'ADMIN', '系统管理员', 0, 'PLATFORM'),
-    ('R002', 'CUST_MGR', '客户经理', 0, 'PLATFORM'),
-    ('R003', 'BRANCH_HD', '分行行长', 0, 'PLATFORM'),
-    ('R004', 'AUDITOR', '审计员', 0, 'PLATFORM')
-ON DUPLICATE KEY UPDATE ROLE_CHNAME=VALUES(ROLE_CHNAME);
+-- 角色表（V1规范角色已在seed-v1.sql中定义，此处仅记录旧测试数据中曾用过的角色ID用于参考）
+-- INSERT IGNORE INTO PT_ROLE (ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS, SYS_CODE) VALUES
+--     ('R001', 'ADMIN', '系统管理员(旧)', 0, 'PLATFORM'),  -- 已迁移到 R_ADMIN
+--     ('R002', 'CUST_MGR', '客户经理(旧)', 0, 'PLATFORM'), -- 已迁移到 R_RM
+--     ('R003', 'BRANCH_HD', '分行行长(旧)', 0, 'PLATFORM'), -- 已迁移到 R_PRESIDENT
+--     ('R004', 'AUDITOR', '审计员(旧)', 0, 'PLATFORM');   -- 已迁移到 R_BACK_TECH
 
--- 资源表
-INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_RANK_NO, ISMENU, STATUS, SYS_CODE) VALUES
+-- 资源表（INSERT IGNORE：V1规范资源已在seed-v1.sql中，此处仅确保基础测试资源存在）
+INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_RANK_NO, ISMENU, STATUS, SYS_CODE) VALUES
     ('1', '/api/auth/login', 'POST', '登录', 0, 1, 0, 'PLATFORM'),
     ('2', '/api/auth/logout', 'POST', '登出', 0, 1, 0, 'PLATFORM'),
     ('3', '/api/auth/currentUser', 'GET', '当前用户', 0, 1, 0, 'PLATFORM'),
@@ -42,34 +41,39 @@ INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, 
     ('10', '/api/orgs/**', 'GET', '组织查询', 0, 1, 0, 'PLATFORM')
 ON DUPLICATE KEY UPDATE MENU_NAME=VALUES(MENU_NAME);
 
--- 用户角色关联
+-- 用户角色关联（V1规范角色ID：R_ADMIN=系统管理员，R_RM=客户经理，R_PRESIDENT=分行行长）
 INSERT INTO PT_USER_ROLE (USER_ID, ROLE_ID, DEFAULT_ASSIGN) VALUES
-    ('admin', 'R001', 1),
-    ('user001', 'R002', 1),
-    ('user002', 'R003', 1)
+    ('admin', 'R_ADMIN', 1),
+    ('user001', 'R_RM', 1),
+    ('user002', 'R_PRESIDENT', 1)
 ON DUPLICATE KEY UPDATE DEFAULT_ASSIGN=VALUES(DEFAULT_ASSIGN);
 
--- 角色资源关联
-INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID) VALUES
-    ('RR001', 'R001', '1'), ('RR002', 'R001', '2'), ('RR003', 'R001', '3'),
-    ('RR004', 'R001', '4'), ('RR005', 'R001', '5'), ('RR006', 'R001', '6'),
-    ('RR007', 'R001', '7'), ('RR023', 'R001', '8'), ('RR024', 'R001', '9'), ('RR025', 'R001', '10'),
-    ('RR008', 'R002', '1'), ('RR009', 'R002', '2'), ('RR010', 'R002', '3'),
-    ('RR011', 'R002', '4'), ('RR012', 'R002', '6'),
-    ('RR013', 'R003', '1'), ('RR014', 'R003', '2'), ('RR015', 'R003', '3'),
-    ('RR016', 'R003', '4'), ('RR017', 'R003', '6'),
-    ('RR018', 'R004', '1'), ('RR019', 'R004', '2'), ('RR020', 'R004', '3'),
-    ('RR021', 'R004', '6'), ('RR022', 'R004', '7')
+-- 角色资源关联（V1规范资源ID已在seed-v1.sql中定义，此处仅补充测试所需的核心资源绑定）
+-- 使用 INSERT IGNORE 避免与seed-v1.sql重复绑定冲突
+INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME) VALUES
+    ('RR_T01', 'R_ADMIN',     '1',               'PLATFORM', NOW()),
+    ('RR_T02', 'R_ADMIN',     '2',               'PLATFORM', NOW()),
+    ('RR_T03', 'R_ADMIN',     'RES_AUTH_CURRENT','PLATFORM', NOW()),
+    ('RR_T04', 'R_RM',        '1',               'PLATFORM', NOW()),
+    ('RR_T05', 'R_RM',        '2',               'PLATFORM', NOW()),
+    ('RR_T06', 'R_RM',        'RES_AUTH_CURRENT','PLATFORM', NOW()),
+    ('RR_T07', 'R_PRESIDENT', '1',               'PLATFORM', NOW()),
+    ('RR_T08', 'R_PRESIDENT', '2',               'PLATFORM', NOW()),
+    ('RR_T09', 'R_PRESIDENT', 'RES_AUTH_CURRENT','PLATFORM', NOW())
 ON DUPLICATE KEY UPDATE ROLE_ID=VALUES(ROLE_ID);
 
--- 角色业务范围
-INSERT INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS) VALUES
-    ('RBS001', 'R001', 'LEAD', 'ALL', 0),
-    ('RBS002', 'R001', 'CUSTOMER', 'ALL', 0),
-    ('RBS003', 'R002', 'LEAD', 'SELF_CREATED', 0),
-    ('RBS004', 'R002', 'CUSTOMER', 'SELF_CREATED', 0),
-    ('RBS005', 'R003', 'LEAD', 'ORG', 0),
-    ('RBS006', 'R003', 'CUSTOMER', 'ORG', 0)
+-- 角色业务范围（V1规范角色ID：R_ADMIN=ALL，R_RM=SELF_CREATED，SELF=ORG_SUBTREE，R_PRESIDENT=ORG_SUBTREE）
+INSERT INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK) VALUES
+    ('RBS_T01', 'R_ADMIN',     'LEAD',        'ALL', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T02', 'R_ADMIN',     'CUSTOMER',    'ALL', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T03', 'R_ADMIN',     'LOAN',        'ALL', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T04', 'R_ADMIN',     'SUPPORT',     'ALL', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T05', 'R_RM',        'LEAD',        'SELF_CREATED', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T06', 'R_RM',        'CUSTOMER',    'SELF_CREATED', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T07', 'R_RM',        'SUPPORT',     'SELF_CREATED', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T08', 'R_PRESIDENT', 'LEAD',        'ORG_SUBTREE', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T09', 'R_PRESIDENT', 'CUSTOMER',    'ORG_SUBTREE', 0, NOW(), 'seed', '测试数据'),
+    ('RBS_T10', 'R_PRESIDENT', 'REPORT',      'ORG_SUBTREE', 0, NOW(), 'seed', '测试数据')
 ON DUPLICATE KEY UPDATE DATA_SCOPE=VALUES(DATA_SCOPE);
 
 -- 机构数据

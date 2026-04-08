@@ -83,7 +83,8 @@ class AuthControllerTest {
     void getCurrentUser_shouldReturn200WithUserInfo() throws Exception {
         // given
         CurrentUserContext ctx = new CurrentUserContext(
-                "emp001", "ORG001", Set.of("R_001"), Set.of("SYS_ADMIN"), Set.of("ROLE:SYS_ADMIN"), true);
+                "emp001", "testUser", "测试用户", "ORG001", "总行", 1,
+                Set.of("R_001"), Set.of("SYS_ADMIN"), Set.of("ROLE:SYS_ADMIN"), true);
         when(authService.getCurrentUser(any(HttpSession.class))).thenReturn(ctx);
 
         // when & then
@@ -91,7 +92,11 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.empId").value("emp001"))
+                .andExpect(jsonPath("$.data.username").value("testUser"))
+                .andExpect(jsonPath("$.data.displayName").value("测试用户"))
                 .andExpect(jsonPath("$.data.mainOrgCode").value("ORG001"))
+                .andExpect(jsonPath("$.data.mainOrgName").value("总行"))
+                .andExpect(jsonPath("$.data.orgLevel").value(1))
                 .andExpect(jsonPath("$.data.isSystemAdmin").value(true));
     }
 

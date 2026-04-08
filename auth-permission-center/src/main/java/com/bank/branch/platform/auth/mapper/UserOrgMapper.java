@@ -2,7 +2,9 @@ package com.bank.branch.platform.auth.mapper;
 
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
+import com.bank.branch.platform.auth.entity.PtUser;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -33,4 +35,28 @@ public interface UserOrgMapper {
      * @return 机构信息列表
      */
     List<ExtOrgInfo> selectOrgsByUserId(String userId);
+
+    /**
+     * 根据机构编码分页查询用户列表，JOIN PT_USER 获取用户信息。
+     *
+     * @param orgCode  机构编码
+     * @param keyword  关键字（工号/姓名模糊），为 null 时不过滤
+     * @param offset   分页偏移量
+     * @param limit    每页记录数
+     * @return 用户列表
+     */
+    List<PtUser> selectUsersByOrgCode(@Param("orgCode") String orgCode,
+                                      @Param("keyword") String keyword,
+                                      @Param("offset") int offset,
+                                      @Param("limit") int limit);
+
+    /**
+     * 统计指定机构下的用户数量。
+     *
+     * @param orgCode  机构编码
+     * @param keyword  关键字（工号/姓名模糊），为 null 时不过滤
+     * @return 用户总数
+     */
+    long countUsersByOrgCode(@Param("orgCode") String orgCode,
+                             @Param("keyword") String keyword);
 }

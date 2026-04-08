@@ -96,4 +96,13 @@
         WHERE ur.USER_ID = #{userId}
     </select>
 
+    <!-- 查询全部可用角色（RECORD_STATUS=0），用于 BizScope 矩阵构建 -->
+    <select id="selectAll" resultType="com.bank.branch.platform.auth.entity.PtRole">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE
+        WHERE RECORD_STATUS = 0
+        ORDER BY ROLE_CODE ASC
+    </select>
+
 </mapper>
