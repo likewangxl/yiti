@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.controller;
 
+import com.bank.branch.platform.auth.api.dto.BizScopeMatrixRespDTO;
 import com.bank.branch.platform.auth.api.dto.BizScopeRespDTO;
 import com.bank.branch.platform.auth.api.dto.BizScopeSaveReqDTO;
 import com.bank.branch.platform.auth.service.BizScopeService;
@@ -44,7 +45,7 @@ public class BizScopeController {
      * @param pageSize 每页条数，默认 20
      * @return 分页结果
      */
-    @GetMapping("/")
+    @GetMapping("")
     @Operation(summary = "分页查询业务数据范围列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
     public ResponseWrapper<BizScopeRespDTO> listBizScopes(
@@ -58,12 +59,27 @@ public class BizScopeController {
     }
 
     /**
+     * 获取角色×业务类型数据范围矩阵（F.2）
+     *
+     * @return 矩阵视图，含所有角色列表、所有业务类型、roleId→(bizType→dataScope)映射
+     */
+    @GetMapping("/matrix")
+    @Operation(summary = "获取角色×业务类型数据范围矩阵",
+               description = "以矩阵表格形式展示所有角色在各业务类型下的数据范围配置")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<BizScopeMatrixRespDTO> getBizScopeMatrix() {
+        log.debug("[BizScopeController.getBizScopeMatrix] 获取角色×业务类型矩阵");
+        BizScopeMatrixRespDTO matrix = bizScopeService.getBizScopeMatrix();
+        return ResponseWrapper.success(matrix);
+    }
+
+    /**
      * 保存业务数据范围配置（UPSERT：已存在则更新，不存在则新增）
      *
      * @param req 保存请求DTO（含角色ID、BizType、DataScope 和操作原因）
      * @return 保存后的 BizScopeRespDTO
      */
-    @PostMapping("/")
+    @PostMapping("")
     @Operation(summary = "保存业务数据范围配置", description = "存在则更新，不存在则新增（UPSERT 语义）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<BizScopeRespDTO> saveBizScope(@Valid @RequestBody BizScopeSaveReqDTO req) {

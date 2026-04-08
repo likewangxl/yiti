@@ -42,7 +42,7 @@ public class UserRoleController {
      * @param userId 用户ID（路径参数）
      * @return 角色简要信息列表
      */
-    @GetMapping("/")
+    @GetMapping("")
     @Operation(summary = "查询用户已绑定角色列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
     public ResponseWrapper<List<RoleSimpleDTO>> getUserRoles(@PathVariable("userId") String userId) {
@@ -58,7 +58,7 @@ public class UserRoleController {
      * @param req    绑定请求DTO（含角色ID列表和操作原因）
      * @return 成功响应
      */
-    @PostMapping("/")
+    @PostMapping("")
     @Operation(summary = "批量绑定角色到用户")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)
     public ResponseWrapper<Void> bindRoles(
