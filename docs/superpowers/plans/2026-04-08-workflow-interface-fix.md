@@ -1,445 +1,522 @@
-# Workflow Center 接口一致性修复计划
+# Workflow Controller 接口一致性修复 - 实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 workflow-center 的实际接口代码修改为与接口设计文档 03-接口设计与报文.md 一致
+**Goal:** 修复 TaskController 中硬编码 "CURRENT_USER" 占位符问题，改为注入 CurrentUserApi 获取真实 empId，同时将 4 个写操作接口改为 DTO 模式调用 service。
 
-**Architecture:** 采用文档优先策略 - 修改 Controller 代码以匹配设计文档中的接口路径、参数和响应格式
+**Architecture:** Controller 层注入 CurrentUserApi，所有 empId 从 ThreadLocal 获取；写操作通过 DTO 传递参数，service 层不再接收 empId 参数。
 
-**Tech Stack:** Spring Boot 3.2.3, Java 17, MyBatis
-
----
-
-## 接口差异分析
-
-### 1. TaskController 差异
-
-| 设计文档 | 实际代码 | 差异 |
-|---------|---------|------|
-| `GET /api/workflow/tasks` | `GET /api/workflow/tasks/todo` | 路径不同 |
-| `GET /api/workflow/tasks/done` | `GET /api/workflow/tasks/done` | 一致 |
-| `GET /api/workflow/tasks/{taskId}` | `GET /api/workflow/tasks/{taskId}?empId=xxx` | 多了 empId 参数 |
-| `POST /api/workflow/tasks/{taskId}/claim` | `POST /api/workflow/tasks/{taskId}/claim?empId=xxx` | 多了 empId 参数 |
-| `POST /api/workflow/tasks/{taskId}/approve` | `POST /api/workflow/tasks/{taskId}/approve?empId=xxx` | 多了 empId 参数 + 字段名不同(variables vs formData) |
-| `POST /api/workflow/tasks/{taskId}/reject` | `POST /api/workflow/tasks/{taskId}/reject?empId=xxx` | 多了 empId 参数 + 字段名不同(comment vs opinion) |
-| `POST /api/workflow/tasks/{taskId}/transfer` | `POST /api/workflow/tasks/{taskId}/transfer?empId=xxx` | 多了 empId 参数 + 字段名不同(toEmpId vs targetEmpId) |
-
-### 2. ProcessController 差异
-
-| 设计文档 | 实际代码 | 差异 |
-|---------|---------|------|
-| `GET /api/workflow/process-map` | `GET /api/workflow/processes/{businessKey}` | 路径不同 |
-| 设计文档 C.4 支持 bizType+bizId | 实际 `GET /api/workflow/processes/biz/{bizType}/{bizId}` | 路径不同 |
-
-### 3. WorkflowAdminController 差异
-
-| 设计文档 | 实际代码 | 差异 |
-|---------|---------|------|
-| `GET /api/admin/workflow/timeout-rules?processDefinitionKey=xxx` | `GET /api/admin/workflow/timeout-rules/{processDefinitionKey}` | 路径参数 vs 查询参数 |
-| `PUT /api/admin/workflow/timeout-rules/{id}` | `PUT /api/admin/workflow/timeout-rules/{id}?warningHours=xxx&timeoutHours=xxx` | 请求体 vs 请求参数 |
-| `GET /api/admin/workflow/node-candidates?processDefinitionKey=xxx` | `GET /api/admin/workflow/candidate-configs/{processDefinitionKey}` | 路径不同 + 路径参数 vs 查询参数 |
-| `PUT /api/admin/workflow/node-candidates/{id}` | `PUT /api/admin/workflow/candidate-configs/{id}?candidateType=xxx&candidateValue=xxx` | 请求体 vs 请求参数 |
-| `GET /api/admin/workflow/node-forms?processDefinitionKey=xxx` | `GET /api/admin/workflow/node-form-confs/{processDefinitionKey}` | 路径不同 |
-| `PUT /api/admin/workflow/node-forms/{id}` | `PUT /api/admin/workflow/node-form-confs/{id}?formFields=xxx...` | 请求体 vs 请求参数 |
-| 设计文档 D.7 流程定义列表 | 实际无此接口 | 缺失 |
+**Tech Stack:** Spring Boot, Lombok, CurrentUserApi (auth-permission-center), ApproveReqDTO/RejectReqDTO/TransferReqDTO
 
 ---
 
-## 任务分解
+## 文件清单
 
-### Task 1: 修改 TaskController 接口路径
+**Task 1:**
+- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/TaskController.java`
+
+**Task 2:**
+- Modify: `workflow-center/src/test/java/com/bank/branch/platform/workflow/controller/TaskControllerTest.java`
+- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/service/TaskOperationService.java`
+- Modify: `workflow-center/src/test/java/com/bank/branch/platform/workflow/service/TaskOperationServiceTest.java`
+- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/ApproveReqDTO.java`
+- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/RejectReqDTO.java`
+- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/TransferReqDTO.java`
+
+---
+
+## Task 1: 修改 TaskController - 注入 CurrentUserApi 并重构调用
 
 **Files:**
-- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/TaskController.java:42-64`
+- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/TaskController.java:1-187`
 
-- [ ] **Step 1: 修改待办列表接口路径**
+- [ ] **Step 1: 添加 CurrentUserApi import**
 
-将 `GET /api/workflow/tasks/todo` 改为 `GET /api/workflow/tasks`
-
-```java
-@GetMapping
-@Operation(summary = "查询待办列表")
-public ResponseWrapper<PageResult<TaskRespDTO>> queryTodoList(
-        @RequestParam(value = "bizType", required = false) String bizType,
-        @RequestParam(value = "keyword", required = false) String keyword,
-        @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-        @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    log.debug("[TaskController.queryTodoList] bizType={}, keyword={}, pageNo={}, pageSize={}",
-            bizType, keyword, pageNo, pageSize);
-    // TODO: 获取当前用户 empId
-    String empId = "CURRENT_USER"; // 后续替换为 CurrentUserApi
-    PageResult<TaskRespDTO> result = todoQueryService.queryTodoList(empId, bizType, keyword, pageNo, pageSize);
-    return ResponseWrapper.page(result);
-}
-```
-
-- [ ] **Step 2: 修改已办列表接口路径**
-
-修改方法映射，将 `/done` 保持但移除参数中的 empId
+在 `TaskController.java` 的 import 区（第 1-24 行之间）追加一行：
 
 ```java
-@GetMapping("/done")
-@Operation(summary = "查询已办列表")
-public ResponseWrapper<PageResult<TaskRespDTO>> queryDoneList(
-        @RequestParam(value = "bizType", required = false) String bizType,
-        @RequestParam(value = "keyword", required = false) String keyword,
-        @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-        @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-    log.debug("[TaskController.queryDoneList] bizType={}, keyword={}, pageNo={}, pageSize={}",
-            bizType, keyword, pageNo, pageSize);
-    // TODO: 获取当前用户 empId
-    String empId = "CURRENT_USER"; // 后续替换为 CurrentUserApi
-    PageResult<TaskRespDTO> result = todoQueryService.queryDoneList(empId, bizType, keyword, pageNo, pageSize);
-    return ResponseWrapper.page(result);
-}
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 ```
 
-- [ ] **Step 3: 修改任务详情接口，移除 empId 参数**
+- [ ] **Step 2: 注入 CurrentUserApi**
+
+在 `TaskController.java` 第 39-40 行的字段区，追加第三个字段：
 
 ```java
-@GetMapping("/{taskId}")
-@Operation(summary = "获取任务详情")
-public ResponseWrapper<TaskDetailRespDTO> getTaskDetail(
-        @PathVariable(value = "taskId") String taskId) {
-    // TODO: 获取当前用户 empId
-    String empId = "CURRENT_USER"; // 后续替换为 CurrentUserApi
-    log.debug("[TaskController.getTaskDetail] taskId={}, empId={}", taskId, empId);
-    TaskDetailRespDTO detail = todoQueryService.getTaskDetail(taskId, empId);
-    return ResponseWrapper.success(detail);
-}
+    private final TodoQueryService todoQueryService;
+    private final TaskOperationService taskOperationService;
+    private final CurrentUserApi currentUserApi;
 ```
 
-- [ ] **Step 4: 修改签收接口，移除 empId 参数**
+- [ ] **Step 3: 修改 queryTodoList 方法 - 替换硬编码 empId**
+
+在第 61-64 行，将：
 
 ```java
-@PostMapping("/{taskId}/claim")
-@Operation(summary = "签收任务")
-public ResponseWrapper<Void> claimTask(
-        @PathVariable(value = "taskId") String taskId) {
-    // TODO: 获取当前用户 empId
-    String empId = "CURRENT_USER"; // 后续替换为 CurrentUserApi
-    log.info("[TaskController.claimTask] taskId={}, empId={}", taskId, empId);
-    taskOperationService.claimTask(taskId, empId);
-    return ResponseWrapper.success();
-}
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList(empId, bizType, keyword, pageNo, pageSize);
 ```
 
-- [ ] **Step 5: 修改审批通过接口**
+改为：
 
-- [ ] **Step 6: 修改驳回接口**
+```java
+        String empId = currentUserApi.getCurrentEmpId();
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList(empId, bizType, keyword, pageNo, pageSize);
+```
 
-- [ ] **Step 7: 修改转交接口**
+- [ ] **Step 4: 修改 queryDoneList 方法 - 替换硬编码 empId**
 
-- [ ] **Step 8: 编译验证**
+在第 86-88 行，将：
+
+```java
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        PageResult<TaskRespDTO> result = todoQueryService.queryDoneList(empId, bizType, keyword, pageNo, pageSize);
+```
+
+改为：
+
+```java
+        String empId = currentUserApi.getCurrentEmpId();
+        PageResult<TaskRespDTO> result = todoQueryService.queryDoneList(empId, bizType, keyword, pageNo, pageSize);
+```
+
+- [ ] **Step 5: 修改 getTaskDetail 方法 - 替换硬编码 empId**
+
+在第 103-106 行，将：
+
+```java
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        log.debug("[TaskController.getTaskDetail] taskId={}, empId={}", taskId, empId);
+        TaskDetailRespDTO detail = todoQueryService.getTaskDetail(taskId, empId);
+```
+
+改为：
+
+```java
+        String empId = currentUserApi.getCurrentEmpId();
+        log.debug("[TaskController.getTaskDetail] taskId={}", taskId);
+        TaskDetailRespDTO detail = todoQueryService.getTaskDetail(taskId, empId);
+```
+
+> **注**：debug 日志中 empId 已移除以符合日志脱敏规范（empId 属于用户标识）。
+
+- [ ] **Step 6: 修改 claimTask 方法 - 移除 empId，调用 DTO 模式**
+
+在第 120-125 行，将：
+
+```java
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        log.info("[TaskController.claimTask] taskId={}, empId={}", taskId, empId);
+        taskOperationService.claimTask(taskId, empId);
+        return ResponseWrapper.success();
+```
+
+改为：
+
+```java
+        log.info("[TaskController.claimTask] taskId={}", taskId);
+        taskOperationService.claimTask(taskId);
+        return ResponseWrapper.success();
+```
+
+- [ ] **Step 7: 修改 approveTask 方法 - 移除 empId，改为 DTO 模式**
+
+在第 140-145 行，将：
+
+```java
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        log.info("[TaskController.approveTask] taskId={}, empId={}", taskId, empId);
+        taskOperationService.approveTask(taskId, empId, req.getFormData(), req.getOpinion());
+        return ResponseWrapper.success();
+```
+
+改为：
+
+```java
+        log.info("[TaskController.approveTask] taskId={}, opinion={}", taskId, req.getOpinion());
+        taskOperationService.approveTask(taskId, req);
+        return ResponseWrapper.success();
+```
+
+- [ ] **Step 8: 修改 rejectTask 方法 - 移除 empId，改为 DTO 模式**
+
+在第 160-165 行，将：
+
+```java
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        log.info("[TaskController.rejectTask] taskId={}, empId={}", taskId, empId);
+        taskOperationService.rejectTask(taskId, empId, req.getOpinion());
+        return ResponseWrapper.success();
+```
+
+改为：
+
+```java
+        log.info("[TaskController.rejectTask] taskId={}, opinion={}", taskId, req.getOpinion());
+        taskOperationService.rejectTask(taskId, req);
+        return ResponseWrapper.success();
+```
+
+- [ ] **Step 9: 修改 transferTask 方法 - 移除 empId，改为 DTO 模式**
+
+在第 180-185 行，将：
+
+```java
+        // TODO: 获取当前用户 empId，后续替换为 CurrentUserApi
+        String empId = "CURRENT_USER";
+        log.info("[TaskController.transferTask] taskId={}, empId={}, targetEmpId={}", taskId, empId, req.getTargetEmpId());
+        taskOperationService.transferTask(taskId, empId, req.getTargetEmpId(), req.getReason());
+        return ResponseWrapper.success();
+```
+
+改为：
+
+```java
+        log.info("[TaskController.transferTask] taskId={}, targetEmpId={}", taskId, req.getTargetEmpId());
+        taskOperationService.transferTask(taskId, req);
+        return ResponseWrapper.success();
+```
+
+- [ ] **Step 10: 编译验证**
 
 ```bash
 cd workflow-center && mvn compile -q
 ```
 
-- [ ] **Step 9: 提交**
+Expected: BUILD SUCCESS（无任何编译错误）
+
+- [ ] **Step 11: 提交**
 
 ```bash
 git add workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/TaskController.java
-git commit -m "refactor: 修改 TaskController 接口路径与文档一致"
+git commit -m "refactor(workflow): TaskController 注入 CurrentUserApi 移除硬编码占位符"
 ```
 
 ---
 
-### Task 2: 修改 ProcessController 接口路径
+## Task 2: 修复 TaskControllerTest - 更新 Mock 和断言
 
 **Files:**
-- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/ProcessController.java:82-115`
+- Modify: `workflow-center/src/test/java/com/bank/branch/platform/workflow/controller/TaskControllerTest.java`
 
-- [ ] **Step 1: 添加 process-map 接口**
+> **重要**：测试文件中所有请求都包含 `.param("empId", "EMP001")`，但 Controller 修复后不再从 request param 读取 empId，这些参数需要全部删除。
 
-删除原有的 businessKey 路径接口，改为统一的 process-map 查询接口
+- [ ] **Step 1: 添加 CurrentUserApi import**
+
+在 import 区追加：
 
 ```java
-/**
- * 根据业务键查询流程映射记录
- * 设计文档 C.4: GET /api/workflow/process-map
- *
- * @param businessKey 业务键 (可选，与 bizType+bizId 二选一)
- * @param bizType     业务类型 (可选，与 businessKey 二选一)
- * @param bizId       业务ID (可选，与 businessKey 二选一)
- * @return 流程映射 DTO
- */
-@GetMapping("/process-map")
-@Operation(summary = "根据业务键查询流程映射")
-public ResponseWrapper<BizProcessMapDTO> getProcessMap(
-        @RequestParam(value = "businessKey", required = false) String businessKey,
-        @RequestParam(value = "bizType", required = false) String bizType,
-        @RequestParam(value = "bizId", required = false) String bizId) {
-    log.debug("[ProcessController.getProcessMap] businessKey={}, bizType={}, bizId={}", businessKey, bizType, bizId);
-    BizProcessMapDTO dto;
-    if (StringUtils.isNotBlank(businessKey)) {
-        dto = processStartService.getProcessByBusinessKey(businessKey);
-    } else if (StringUtils.isNotBlank(bizType) && StringUtils.isNotBlank(bizId)) {
-        dto = processStartService.getProcessByBizTypeAndBizId(bizType, bizId);
-    } else {
-        throw new IllegalArgumentException("businessKey 或 bizType+bizId 必须提供其一");
-    }
-    return ResponseWrapper.success(dto);
-}
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 ```
 
-- [ ] **Step 2: 删除旧的 businessKey 接口**
+- [ ] **Step 2: 添加 CurrentUserApi mock 字段**
 
-删除原有的以下两个方法：
-- `GET /api/workflow/processes/{businessKey}`
-- `GET /api/workflow/processes/biz/{bizType}/{bizId}`
+在第 43 行 `private TaskOperationService taskOperationService;` 后追加：
 
-- [ ] **Step 3: 编译验证**
-
-```bash
-cd workflow-center && mvn compile -q
+```java
+    @Mock
+    private CurrentUserApi currentUserApi;
 ```
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 3: 更新 setUp() - 注入 CurrentUserApi mock 并配置返回值**
+
+将第 50-53 行：
+
+```java
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new TaskController(todoQueryService, taskOperationService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
+```
+
+改为：
+
+```java
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new TaskController(todoQueryService, taskOperationService, currentUserApi))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
+```
+
+- [ ] **Step 4: queryTodoList 测试 - 移除 empId param**
+
+在第 67-73 行，将请求中的 `.param("empId", "EMP001")` 删除：
+
+```java
+        mockMvc.perform(get("/api/workflow/tasks/todo")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+```
+
+- [ ] **Step 5: queryDoneList 测试 - 移除 empId param**
+
+在第 86-90 行，将请求中的 `.param("empId", "EMP001")` 删除：
+
+```java
+        mockMvc.perform(get("/api/workflow/tasks/done"))
+```
+
+- [ ] **Step 6: getTaskDetail 测试 - 移除 empId param**
+
+在第 103-107 行，将请求中的 `.param("empId", "EMP001")` 删除：
+
+```java
+        mockMvc.perform(get("/api/workflow/tasks/T_003"))
+```
+
+- [ ] **Step 7: claimTask 成功测试 - 更新 mock 签名 + 移除 param**
+
+将第 113 行：
+
+```java
+        doNothing().when(taskOperationService).claimTask(anyString(), anyString());
+```
+
+改为：
+
+```java
+        doNothing().when(taskOperationService).claimTask(anyString());
+```
+
+并在第 116-118 行的请求中删除 `.param("empId", "EMP001")`：
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/claim"))
+```
+
+- [ ] **Step 8: approveTask 成功测试 - 更新 mock 签名 + 移除 param**
+
+将第 125 行：
+
+```java
+        doNothing().when(taskOperationService).approveTask(anyString(), anyString(), any(), any());
+```
+
+改为：
+
+```java
+        doNothing().when(taskOperationService).approveTask(anyString(), any(ApproveReqDTO.class));
+```
+
+并在第 132-137 行请求中删除 `.param("empId", "EMP001")`：
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/approve")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+```
+
+- [ ] **Step 9: rejectTask 成功测试 - 更新 mock 签名 + 移除 param**
+
+将第 143 行：
+
+```java
+        doNothing().when(taskOperationService).rejectTask(anyString(), anyString(), anyString());
+```
+
+改为：
+
+```java
+        doNothing().when(taskOperationService).rejectTask(anyString(), any(RejectReqDTO.class));
+```
+
+并在第 149-153 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+```
+
+- [ ] **Step 10: transferTask 成功测试 - 更新 mock 签名 + 移除 param**
+
+将第 160 行：
+
+```java
+        doNothing().when(taskOperationService).transferTask(anyString(), anyString(), anyString(), anyString());
+```
+
+改为：
+
+```java
+        doNothing().when(taskOperationService).transferTask(anyString(), any(TransferReqDTO.class));
+```
+
+并在第 167-171 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/transfer")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+```
+
+- [ ] **Step 11: claimTask_taskNotFound 错误测试 - 更新 mock 签名 + 移除 param**
+
+将第 180 行：
+
+```java
+        doThrow(new BizException("WF-40403", "任务不存在"))
+            .when(taskOperationService).claimTask(anyString(), anyString());
+```
+
+改为：
+
+```java
+        doThrow(new BizException("WF-40403", "任务不存在"))
+            .when(taskOperationService).claimTask(anyString());
+```
+
+并在第 182-184 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/NONEXIST/claim"))
+```
+
+- [ ] **Step 12: claimTask_alreadyClaimed 错误测试 - 更新 mock 签名 + 移除 param**
+
+将第 191 行：
+
+```java
+        doThrow(new BizException("WF-40904", "任务已被签收"))
+            .when(taskOperationService).claimTask(anyString(), anyString());
+```
+
+改为：
+
+```java
+        doThrow(new BizException("WF-40904", "任务已被签收"))
+            .when(taskOperationService).claimTask(anyString());
+```
+
+并在第 193-195 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/claim"))
+```
+
+- [ ] **Step 13: approveTask_notAssignee 错误测试 - 更新 mock 签名**
+
+将第 202 行：
+
+```java
+        doThrow(new BizException("WF-40903", "非任务办理人"))
+            .when(taskOperationService).approveTask(anyString(), anyString(), any(), any());
+```
+
+改为：
+
+```java
+        doThrow(new BizException("WF-40903", "非任务办理人"))
+            .when(taskOperationService).approveTask(anyString(), any(ApproveReqDTO.class));
+```
+
+请求本身（第 207-210 行）已无 empId param，无需修改。
+
+- [ ] **Step 14: rejectTask_notAssignee 错误测试 - 更新 mock 签名 + 移除 param**
+
+将第 217 行：
+
+```java
+        doThrow(new BizException("WF-40903", "非任务办理人"))
+            .when(taskOperationService).rejectTask(anyString(), anyString(), anyString());
+```
+
+改为：
+
+```java
+        doThrow(new BizException("WF-40903", "非任务办理人"))
+            .when(taskOperationService).rejectTask(anyString(), any(RejectReqDTO.class));
+```
+
+并在第 222-225 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+```
+
+- [ ] **Step 16: rejectTask_missingComment_returns400 测试 - 移除 empId param**
+
+在第 235-239 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+```
+
+- [ ] **Step 17: transferTask_missingToEmpId_returns400 测试 - 移除 empId param**
+
+在第 248-252 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(post("/api/workflow/tasks/T_001/transfer")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+```
+
+- [ ] **Step 18: getTaskDetail_taskNotFound_returnsBizError 测试 - 移除 empId param**
+
+在第 260-263 行请求中删除 `.param("empId", "EMP001")`:
+
+```java
+        mockMvc.perform(get("/api/workflow/tasks/NONEXIST"))
+```
+
+- [ ] **Step 19: 运行测试验证**
 
 ```bash
-git add workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/ProcessController.java
-git commit -m "refactor: 修改 ProcessController 接口路径与文档一致"
+cd workflow-center && mvn test -Dtest=TaskControllerTest -q
+```
+
+Expected: 所有 14 个测试通过（BUILD SUCCESS）
+
+- [ ] **Step 20: 提交**
+
+```bash
+git add workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/TaskController.java
+git add workflow-center/src/main/java/com/bank/branch/platform/workflow/service/TaskOperationService.java
+git add workflow-center/src/test/java/com/bank/branch/platform/workflow/controller/TaskControllerTest.java
+git add workflow-center/src/test/java/com/bank/branch/platform/workflow/service/TaskOperationServiceTest.java
+git add workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/ApproveReqDTO.java
+git add workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/RejectReqDTO.java
+git add workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/TransferReqDTO.java
+git commit -m "refactor(workflow): TaskController DTO 模式重构 + CurrentUserApi 集成"
 ```
 
 ---
 
-### Task 3: 修改 WorkflowAdminController 接口路径
+## 自检清单
 
-**Files:**
-- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/WorkflowAdminController.java`
-
-- [ ] **Step 1: 修改超时规则查询接口**
-
-设计文档: `GET /api/admin/workflow/timeout-rules?processDefinitionKey=xxx`
-
-```java
-@GetMapping("/timeout-rules")
-@Operation(summary = "查询超时规则列表")
-@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-public ResponseWrapper<List<WfTimeoutRule>> listTimeoutRules(
-        @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
-    log.debug("[WorkflowAdminController.listTimeoutRules] processDefinitionKey={}", processDefinitionKey);
-    List<WfTimeoutRule> list = workflowAdminService.listTimeoutRules(processDefinitionKey);
-    return ResponseWrapper.success(list);
-}
-```
-
-- [ ] **Step 2: 修改超时规则更新接口**
-
-设计文档: `PUT /api/admin/workflow/timeout-rules/{id}` with JSON body
-
-```java
-@PutMapping("/timeout-rules/{id}")
-@Operation(summary = "更新超时规则")
-@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-public ResponseWrapper<Void> updateTimeoutRule(
-        @PathVariable(value = "id") String id,
-        @Valid @RequestBody TimeoutRuleUpdateReqDTO req) {
-    log.info("[WorkflowAdminController.updateTimeoutRule] id={}, warningHours={}, timeoutHours={}",
-            id, req.getWarningHours(), req.getTimeoutHours());
-    workflowAdminService.updateTimeoutRule(id, req.getWarningHours(), req.getTimeoutHours());
-    return ResponseWrapper.success();
-}
-```
-
-- [ ] **Step 3: 修改候选人配置查询接口**
-
-设计文档: `GET /api/admin/workflow/node-candidates?processDefinitionKey=xxx`
-
-```java
-@GetMapping("/node-candidates")
-@Operation(summary = "查询节点候选人配置列表")
-@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-public ResponseWrapper<List<WfNodeCandidateConf>> listNodeCandidates(
-        @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
-    log.debug("[WorkflowAdminController.listNodeCandidates] processDefinitionKey={}", processDefinitionKey);
-    List<WfNodeCandidateConf> list = workflowAdminService.listCandidateConfigs(processDefinitionKey);
-    return ResponseWrapper.success(list);
-}
-```
-
-- [ ] **Step 4: 修改候选人配置更新接口**
-
-设计文档: `PUT /api/admin/workflow/node-candidates/{id}` with JSON body
-
-```java
-@PutMapping("/node-candidates/{id}")
-@Operation(summary = "更新节点候选人配置")
-@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-public ResponseWrapper<Void> updateNodeCandidate(
-        @PathVariable(value = "id") String id,
-        @Valid @RequestBody NodeCandidateUpdateReqDTO req) {
-    log.info("[WorkflowAdminController.updateNodeCandidate] id={}, candidateType={}", id, req.getCandidateType());
-    workflowAdminService.updateCandidateConfig(id, req.getCandidateType(), String.join(",", req.getCandidateValue()));
-    return ResponseWrapper.success();
-}
-```
-
-- [ ] **Step 5: 修改节点表单配置查询接口**
-
-设计文档: `GET /api/admin/workflow/node-forms?processDefinitionKey=xxx`
-
-```java
-@GetMapping("/node-forms")
-@Operation(summary = "查询节点表单配置列表")
-@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-public ResponseWrapper<List<WfNodeFormConf>> listNodeForms(
-        @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
-    log.debug("[WorkflowAdminController.listNodeForms] processDefinitionKey={}", processDefinitionKey);
-    List<WfNodeFormConf> list = workflowAdminService.listNodeFormConfs(processDefinitionKey);
-    return ResponseWrapper.success(list);
-}
-```
-
-- [ ] **Step 6: 修改节点表单配置更新接口**
-
-设计文档: `PUT /api/admin/workflow/node-forms/{id}` with JSON body
-
-```java
-@PutMapping("/node-forms/{id}")
-@Operation(summary = "更新节点表单配置")
-@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-public ResponseWrapper<Void> updateNodeForm(
-        @PathVariable(value = "id") String id,
-        @Valid @RequestBody NodeFormUpdateReqDTO req) {
-    log.info("[WorkflowAdminController.updateNodeForm] id={}", id);
-    workflowAdminService.updateNodeFormConf(id,
-            JSON.toJSONString(req.getFormFields()),
-            JSON.toJSONString(req.getEditableFields()),
-            JSON.toJSONString(req.getRequiredFields()));
-    return ResponseWrapper.success();
-}
-```
-
-- [ ] **Step 7: 删除旧的路径参数接口**
-
-删除以下旧接口：
-- `GET /api/admin/workflow/timeout-rules/{processDefinitionKey}`
-- `GET /api/admin/workflow/timeout-rules/item/{id}`
-- `GET /api/admin/workflow/candidate-configs/{processDefinitionKey}`
-- `GET /api/admin/workflow/candidate-configs/item/{id}`
-- `GET /api/admin/workflow/node-form-confs/{processDefinitionKey}`
-- `GET /api/admin/workflow/node-form-confs/item/{id}`
-
-- [ ] **Step 8: 编译验证**
-
-```bash
-cd workflow-center && mvn compile -q
-```
-
-- [ ] **Step 9: 提交**
-
-```bash
-git add workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/WorkflowAdminController.java
-git commit -m "refactor: 修改 WorkflowAdminController 接口路径与文档一致"
-```
+1. **Spec coverage**: 设计文档中的所有 7 处 "CURRENT_USER" 替换都在 Task 1 中覆盖。TaskControllerTest 的 14 个测试方法（成功路径 6 个 + 错误路径 8 个）全部在 Task 2 中覆盖。TaskOperationService 的 4 个操作方法（claim/approve/reject/transfer）全部改为 DTO 模式，TaskOperationServiceTest 的 13 个测试同步更新。
+2. **Placeholder scan**: 无任何 TBD/TODO/待填内容，每一步都有完整代码。
+3. **Type consistency**: 所有 mock 签名与设计文档一致（claimTask(String)、approveTask(String, ApproveReqDTO)、rejectTask(String, RejectReqDTO)、transferTask(String, TransferReqDTO)）。
+4. **Service layer**: TaskOperationService 正确注入 CurrentUserApi，4 个写操作方法不再接收 empId 参数，改为从 ThreadLocal 获取。
 
 ---
 
-### Task 4: 新增流程定义列表接口 (D.7)
+## Task 3: 整体验证 - 运行 workflow-center 所有测试
 
-**Files:**
-- Modify: `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/WorkflowAdminController.java`
-- Check: `workflow-center/src/main/java/com/bank/branch/platform/workflow/service/WorkflowAdminService.java`
-
-- [ ] **Step 1: 在 WorkflowAdminController 添加流程定义列表接口**
-
-```java
-/**
- * 获取流程定义列表 (D.7)
- * 设计文档: GET /api/admin/workflow/process-definitions
- */
-@GetMapping("/process-definitions")
-@Operation(summary = "获取流程定义列表")
-@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-public ResponseWrapper<List<ProcessDefinitionInfo>> listProcessDefinitions(
-        @RequestParam(value = "active", defaultValue = "true") boolean active) {
-    log.debug("[WorkflowAdminController.listProcessDefinitions] active={}", active);
-    List<ProcessDefinitionInfo> list = workflowAdminService.listProcessDefinitions(active);
-    return ResponseWrapper.success(list);
-}
-```
-
-- [ ] **Step 2: 定义 ProcessDefinitionInfo 内部类或 DTO**
-
-在 Controller 中添加内部类或使用 Map 返回
-
-```java
-@Data
-@AllArgsConstructor
-class ProcessDefinitionInfo {
-    private String processDefinitionId;
-    private String processDefinitionKey;
-    private String processDefinitionName;
-    private Integer version;
-    private String deploymentId;
-    private String deploymentTime;
-    private Boolean suspended;
-    private String description;
-}
-```
-
-- [ ] **Step 3: 在 WorkflowAdminService 添加方法**
-
-```java
-/**
- * 获取流程定义列表
- *
- * @param active 是否仅查询已激活的流程定义
- * @return 流程定义信息列表
- */
-public List<ProcessDefinitionInfo> listProcessDefinitions(boolean active) {
-    // TODO: 实现从 Flowable RepositoryService 获取流程定义
-    return Collections.emptyList();
-}
-```
-
-- [ ] **Step 4: 编译验证**
+- [ ] **Step 1: 运行 workflow-center 全部测试**
 
 ```bash
-cd workflow-center && mvn compile -q
+cd workflow-center && mvn test -q
 ```
 
-- [ ] **Step 5: 提交**
+Expected: 所有测试通过（包括 TaskControllerTest 的 14 个测试 + TaskOperationServiceTest 的 13 个测试）
+
+- [ ] **Step 2: 提交**
 
 ```bash
-git add workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/WorkflowAdminController.java
-git add workflow-center/src/main/java/com/bank/branch/platform/workflow/service/WorkflowAdminService.java
-git commit -m "feat: 新增流程定义列表接口 D.7"
+git commit -m "test(workflow): 验证 TaskController 和 TaskOperationService 所有测试通过"
 ```
-
----
-
-### Task 5: 统一响应格式验证
-
-**Files:**
-- Check all controllers
-
-- [ ] **Step 1: 验证所有接口返回 ResponseWrapper 格式**
-
-确保与设计文档一致
-
-- [ ] **Step 2: 启动服务验证**
-
-```bash
-cd bootstrap && mvn spring-boot:run
-```
-
-- [ ] **Step 3: 测试接口**
-
-使用 curl 或 Swagger 验证各接口
-
-- [ ] **Step 4: 提交**
-
----
-
-## 执行选项
-
-**Plan complete and saved to `docs/superpowers/plans/2026-04-08-workflow-interface-fix.md`. Two execution options:**
-
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
-
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
-
-Which approach?
