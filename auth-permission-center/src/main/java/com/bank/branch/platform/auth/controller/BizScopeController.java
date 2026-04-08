@@ -81,7 +81,7 @@ public class BizScopeController {
      */
     @PostMapping("")
     @Operation(summary = "保存业务数据范围配置", description = "存在则更新，不存在则新增（UPSERT 语义）")
-    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)
     public ResponseWrapper<BizScopeRespDTO> saveBizScope(@Valid @RequestBody BizScopeSaveReqDTO req) {
         log.info("[BizScopeController.saveBizScope] roleId={}, bizType={}, dataScope={}",
                 req.getRoleId(), req.getBizType(), req.getDataScope());
