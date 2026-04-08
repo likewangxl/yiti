@@ -2,7 +2,9 @@ package com.bank.branch.platform.workflow.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * 任务转交请求 DTO
@@ -12,6 +14,8 @@ import lombok.Data;
  * </p>
  */
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class TransferReqDTO {
 
     /** 转交接收人工号 */

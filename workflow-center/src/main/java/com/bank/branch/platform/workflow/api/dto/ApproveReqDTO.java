@@ -1,7 +1,9 @@
 package com.bank.branch.platform.workflow.api.dto;
 
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.Map;
 
@@ -13,6 +15,8 @@ import java.util.Map;
  * </p>
  */
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class ApproveReqDTO {
 
     /** 审批意见 */

@@ -101,7 +101,7 @@ public class TaskController {
     public ResponseWrapper<TaskDetailRespDTO> getTaskDetail(
             @PathVariable(value = "taskId") String taskId) {
         String empId = currentUserApi.getCurrentEmpId();
-        log.debug("[TaskController.getTaskDetail] taskId={}, empId={}", taskId, empId);
+        log.debug("[TaskController.getTaskDetail] taskId={}", taskId);
         TaskDetailRespDTO detail = todoQueryService.getTaskDetail(taskId, empId);
         return ResponseWrapper.success(detail);
     }

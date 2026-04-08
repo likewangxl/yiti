@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.controller;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
@@ -42,13 +43,17 @@ class TaskControllerTest {
     @Mock
     private TaskOperationService taskOperationService;
 
+    @Mock
+    private CurrentUserApi currentUserApi;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
+        lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new TaskController(todoQueryService, taskOperationService))
+                new TaskController(todoQueryService, taskOperationService, currentUserApi))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
     }
@@ -64,8 +69,7 @@ class TaskControllerTest {
                 .thenReturn(pageResult);
 
         // when & then
-        mockMvc.perform(get("/api/workflow/tasks/todo")
-                        .param("empId", "EMP001")
+        mockMvc.perform(get("/api/workflow/tasks")
                         .param("pageNo", "1")
                         .param("pageSize", "20"))
                 .andExpect(status().isOk())
@@ -83,8 +87,7 @@ class TaskControllerTest {
                 .thenReturn(pageResult);
 
         // when & then
-        mockMvc.perform(get("/api/workflow/tasks/done")
-                        .param("empId", "EMP001"))
+        mockMvc.perform(get("/api/workflow/tasks/done"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(1));
@@ -100,8 +103,7 @@ class TaskControllerTest {
         when(todoQueryService.getTaskDetail(anyString(), anyString())).thenReturn(detail);
 
         // when & then
-        mockMvc.perform(get("/api/workflow/tasks/T_003")
-                        .param("empId", "EMP001"))
+        mockMvc.perform(get("/api/workflow/tasks/T_003"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.taskInfo.taskId").value("T_003"));
@@ -110,11 +112,10 @@ class TaskControllerTest {
     @Test
     void claimTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(taskOperationService).claimTask(anyString(), anyString());
+        doNothing().when(taskOperationService).claimTask(anyString());
 
         // when & then
-        mockMvc.perform(post("/api/workflow/tasks/T_001/claim")
-                        .param("empId", "EMP001"))
+        mockMvc.perform(post("/api/workflow/tasks/T_001/claim"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
     }
@@ -122,15 +123,14 @@ class TaskControllerTest {
     @Test
     void approveTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(taskOperationService).approveTask(anyString(), anyString(), any(), any());
+        doNothing().when(taskOperationService).approveTask(anyString(), any(ApproveReqDTO.class));
 
         ApproveReqDTO req = new ApproveReqDTO();
-        req.setComment("同意");
-        req.setVariables(Map.of("approved", true));
+        req.setOpinion("同意");
+        req.setFormData(Map.of("approved", true));
 
         // when & then
         mockMvc.perform(post("/api/workflow/tasks/T_001/approve")
-                        .param("empId", "EMP001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -140,14 +140,13 @@ class TaskControllerTest {
     @Test
     void rejectTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(taskOperationService).rejectTask(anyString(), anyString(), anyString());
+        doNothing().when(taskOperationService).rejectTask(anyString(), any(RejectReqDTO.class));
 
         RejectReqDTO req = new RejectReqDTO();
-        req.setComment("不符合要求");
+        req.setOpinion("不符合要求");
 
         // when & then
         mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
-                        .param("empId", "EMP001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -157,15 +156,14 @@ class TaskControllerTest {
     @Test
     void transferTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(taskOperationService).transferTask(anyString(), anyString(), anyString(), anyString());
+        doNothing().when(taskOperationService).transferTask(anyString(), any(TransferReqDTO.class));
 
         TransferReqDTO req = new TransferReqDTO();
-        req.setToEmpId("EMP002");
+        req.setTargetEmpId("EMP002");
         req.setReason("出差交接");
 
         // when & then
         mockMvc.perform(post("/api/workflow/tasks/T_001/transfer")
-                        .param("empId", "EMP001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -177,10 +175,9 @@ class TaskControllerTest {
     @Test
     void claimTask_taskNotFound_returnsBizError() throws Exception {
         doThrow(new BizException("WF-40403", "任务不存在"))
-            .when(taskOperationService).claimTask(anyString(), anyString());
+            .when(taskOperationService).claimTask(anyString());
 
-        mockMvc.perform(post("/api/workflow/tasks/NONEXIST/claim")
-                        .param("empId", "EMP001"))
+        mockMvc.perform(post("/api/workflow/tasks/NONEXIST/claim"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("WF-40403"));
     }
@@ -188,10 +185,9 @@ class TaskControllerTest {
     @Test
     void claimTask_alreadyClaimed_returnsBizError() throws Exception {
         doThrow(new BizException("WF-40904", "任务已被签收"))
-            .when(taskOperationService).claimTask(anyString(), anyString());
+            .when(taskOperationService).claimTask(anyString());
 
-        mockMvc.perform(post("/api/workflow/tasks/T_001/claim")
-                        .param("empId", "EMP001"))
+        mockMvc.perform(post("/api/workflow/tasks/T_001/claim"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("WF-40904"));
     }
@@ -199,13 +195,12 @@ class TaskControllerTest {
     @Test
     void approveTask_notAssignee_returnsBizError() throws Exception {
         doThrow(new BizException("WF-40903", "非任务办理人"))
-            .when(taskOperationService).approveTask(anyString(), anyString(), any(), any());
+            .when(taskOperationService).approveTask(anyString(), any(ApproveReqDTO.class));
 
         ApproveReqDTO req = new ApproveReqDTO();
-        req.setComment("同意");
+        req.setOpinion("同意");
 
         mockMvc.perform(post("/api/workflow/tasks/T_001/approve")
-                        .param("empId", "EMP001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -215,13 +210,12 @@ class TaskControllerTest {
     @Test
     void rejectTask_notAssignee_returnsBizError() throws Exception {
         doThrow(new BizException("WF-40903", "非任务办理人"))
-            .when(taskOperationService).rejectTask(anyString(), anyString(), anyString());
+            .when(taskOperationService).rejectTask(anyString(), any(RejectReqDTO.class));
 
         RejectReqDTO req = new RejectReqDTO();
-        req.setComment("不符合要求");
+        req.setOpinion("不符合要求");
 
         mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
-                        .param("empId", "EMP001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -234,7 +228,6 @@ class TaskControllerTest {
         RejectReqDTO req = new RejectReqDTO();
 
         mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
-                        .param("empId", "EMP001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -247,7 +240,6 @@ class TaskControllerTest {
         req.setReason("出差交接");
 
         mockMvc.perform(post("/api/workflow/tasks/T_001/transfer")
-                        .param("empId", "EMP001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -258,8 +250,7 @@ class TaskControllerTest {
         when(todoQueryService.getTaskDetail(anyString(), anyString()))
                 .thenThrow(new BizException("WF-40403", "任务不存在"));
 
-        mockMvc.perform(get("/api/workflow/tasks/NONEXIST")
-                        .param("empId", "EMP001"))
+        mockMvc.perform(get("/api/workflow/tasks/NONEXIST"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("WF-40403"));
     }
