@@ -1,24 +1,26 @@
 package com.bank.branch.platform.governance.controller;
 
 import com.bank.branch.platform.common.security.annotation.BizAuth;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.governance.api.dto.AuditLogDTO;
+import com.bank.branch.platform.governance.api.dto.SqlProbeReqDTO;
+import com.bank.branch.platform.governance.api.dto.SqlProbeRespDTO;
 import com.bank.branch.platform.governance.service.SqlProbeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * SQL探针控制器
@@ -36,21 +38,18 @@ public class SqlProbeController {
     /**
      * 执行SQL查询（仅SELECT）
      *
-     * @param sql           待执行的SQL语句
-     * @param operatorEmpId 操作人工号
-     * @param reason        执行原因
-     * @return 查询结果列表
+     * @param req 请求体，包含 SQL 语句和备注
+     * @return SQL探查结果
      */
     @PostMapping("/execute")
     @Operation(summary = "执行SQL查询")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.EXECUTE_SQL)
-    public ResponseWrapper<List<Map<String, Object>>> executeSql(
-            @RequestParam(value = "sql") String sql,
-            @RequestParam(value = "operatorEmpId") String operatorEmpId,
-            @RequestParam(value = "reason") String reason) {
-        log.info("[SqlProbeController.executeSql] operatorEmpId={}, reason={}", operatorEmpId, reason);
-        List<Map<String, Object>> results = sqlProbeService.executeSql(sql, operatorEmpId, reason);
-        return ResponseWrapper.success(results);
+    public ResponseWrapper<SqlProbeRespDTO> executeSql(@Valid @RequestBody SqlProbeReqDTO req) {
+        String operatorEmpId = DataScopeContext.current().getEmpId();
+        log.info("[SqlProbeController.executeSql] operatorEmpId={}, sqlLength={}",
+                operatorEmpId, req.getSql().length());
+        SqlProbeRespDTO result = sqlProbeService.executeSql(req, operatorEmpId);
+        return ResponseWrapper.success(result);
     }
 
     /**

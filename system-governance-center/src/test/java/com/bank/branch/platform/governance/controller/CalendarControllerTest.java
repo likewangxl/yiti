@@ -76,7 +76,8 @@ class CalendarControllerTest {
 
         // when & then
         mockMvc.perform(post("/api/admin/sys/calendar/init")
-                .param("year", "2026"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"year\": 2026}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
     }

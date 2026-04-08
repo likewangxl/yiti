@@ -5,6 +5,8 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.governance.api.dto.AuditLogDTO;
 import com.bank.branch.platform.governance.api.dto.AuditLogQueryReqDTO;
+import com.bank.branch.platform.governance.api.dto.SqlProbeReqDTO;
+import com.bank.branch.platform.governance.api.dto.SqlProbeRespDTO;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +44,33 @@ public class SqlProbeService {
 
     /** 查询超时秒数 */
     private static final int QUERY_TIMEOUT_SECONDS = 30;
+
+    /**
+     * 执行SQL查询（使用请求DTO）
+     * <p>
+     * 基于 executeSql(String, String, String) 方法，返回 SqlProbeRespDTO 结构。
+     * </p>
+     *
+     * @param req            请求DTO，包含 SQL 语句和备注
+     * @param operatorEmpId  操作人工号
+     * @return SQL探查响应DTO
+     */
+    public SqlProbeRespDTO executeSql(SqlProbeReqDTO req, String operatorEmpId) {
+        long start = System.currentTimeMillis();
+        List<Map<String, Object>> results = executeSql(req.getSql(), operatorEmpId, req.getRemark());
+        long executionTime = System.currentTimeMillis() - start;
+
+        SqlProbeRespDTO resp = new SqlProbeRespDTO();
+        if (!results.isEmpty()) {
+            resp.setColumns(new ArrayList<>(results.get(0).keySet()));
+        } else {
+            resp.setColumns(new ArrayList<>());
+        }
+        resp.setRows(results);
+        resp.setRowCount(results.size());
+        resp.setExecutionTime((int) executionTime);
+        return resp;
+    }
 
     /**
      * 执行SQL查询（仅SELECT）

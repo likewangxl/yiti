@@ -4,6 +4,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
 import com.bank.branch.platform.governance.api.dto.JobRunLogDTO;
+import com.bank.branch.platform.governance.api.dto.JobTriggerRespDTO;
 import com.bank.branch.platform.governance.entity.SysJobConf;
 import com.bank.branch.platform.governance.entity.SysJobRunLog;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
@@ -227,6 +228,45 @@ public class JobService {
         conf.setUpdatedTime(LocalDateTime.now());
         jobConfMapper.updateById(conf);
         log.info("[JobService.resumeJob] 任务已恢复 jobId={}", jobId);
+    }
+
+    /**
+     * 手动触发任务（返回响应DTO）
+     * <p>
+     * 基于 startJobRun 方法，增加返回 JobTriggerRespDTO，包含日志ID、任务KEY和触发时间。
+     * </p>
+     *
+     * @param jobId   任务ID
+     * @param reason  触发原因
+     * @return 触发响应DTO
+     * @throws BizException GOV-40004 任务不存在
+     * @throws BizException GOV-40901 任务正在执行中
+     */
+    public JobTriggerRespDTO triggerJob(String jobId, String reason) {
+        log.info("[JobService.triggerJob] jobId={}, reason={}", jobId, reason);
+
+        // 获取任务配置
+        SysJobConf conf = jobConfMapper.selectById(jobId);
+        if (conf == null) {
+            throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
+                    GovErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+
+        // 检查是否允许手动触发
+        if (conf.getAllowManualTrigger() == null || conf.getAllowManualTrigger() != 1) {
+            throw new BizException(GovErrorCode.TASK_ALREADY_RUNNING.getCode(),
+                    "该任务不允许手动触发");
+        }
+
+        // 启动执行
+        String runLogId = startJobRun(jobId, "MANUAL", "SYSTEM");
+
+        // 返回响应
+        JobTriggerRespDTO resp = new JobTriggerRespDTO();
+        resp.setRunLogId(runLogId);
+        resp.setJobKey(conf.getJobKey());
+        resp.setTriggerTime(LocalDateTime.now().format(ISO_FORMATTER));
+        return resp;
     }
 
     // ── 私有方法：实体 → DTO 转换 ──────────────────────────────────

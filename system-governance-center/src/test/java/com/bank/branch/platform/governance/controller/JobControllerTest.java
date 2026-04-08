@@ -5,12 +5,15 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
 import com.bank.branch.platform.governance.api.dto.JobRunLogDTO;
+import com.bank.branch.platform.governance.api.dto.JobTriggerReqDTO;
+import com.bank.branch.platform.governance.api.dto.JobTriggerRespDTO;
 import com.bank.branch.platform.governance.service.JobService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -79,12 +82,15 @@ class JobControllerTest {
     @Test
     void triggerJob_shouldReturn200() throws Exception {
         // given
-        when(jobService.startJobRun(anyString(), anyString(), anyString())).thenReturn("JRL_NEW");
+        JobTriggerRespDTO resp = new JobTriggerRespDTO();
+        resp.setRunLogId("JRL_NEW");
+        resp.setJobKey("DAILY_REPORT");
+        when(jobService.triggerJob(anyString(), anyString())).thenReturn(resp);
 
         // when & then
         mockMvc.perform(post("/api/admin/sys/jobs/J_001/trigger")
-                .param("operatorEmpId", "emp001")
-                .param("reason", "手动测试"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\": \"手动测试\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
     }
@@ -115,24 +121,24 @@ class JobControllerTest {
 
     @Test
     void triggerJob_notFound_returnsBizError() throws Exception {
-        when(jobService.startJobRun(anyString(), anyString(), anyString()))
+        when(jobService.triggerJob(anyString(), anyString()))
                 .thenThrow(new BizException("GOV-40004", "任务不存在"));
 
         mockMvc.perform(post("/api/admin/sys/jobs/NOT_EXIST/trigger")
-                .param("operatorEmpId", "emp001")
-                .param("reason", "测试"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\": \"测试\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("GOV-40004"));
     }
 
     @Test
     void triggerJob_alreadyRunning_returnsBizError() throws Exception {
-        when(jobService.startJobRun(anyString(), anyString(), anyString()))
+        when(jobService.triggerJob(anyString(), anyString()))
                 .thenThrow(new BizException("GOV-40903", "任务正在执行中"));
 
         mockMvc.perform(post("/api/admin/sys/jobs/J_001/trigger")
-                .param("operatorEmpId", "emp001")
-                .param("reason", "测试"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\": \"测试\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("GOV-40903"));
     }

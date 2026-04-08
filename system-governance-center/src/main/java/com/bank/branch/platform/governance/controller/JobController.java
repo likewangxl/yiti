@@ -7,15 +7,19 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
 import com.bank.branch.platform.governance.api.dto.JobRunLogDTO;
+import com.bank.branch.platform.governance.api.dto.JobTriggerReqDTO;
+import com.bank.branch.platform.governance.api.dto.JobTriggerRespDTO;
 import com.bank.branch.platform.governance.service.JobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -74,23 +78,21 @@ public class JobController {
     }
 
     /**
-     * 手动触发任务执行
+     * 手动触发任务执行（C.3）
      *
-     * @param jobId         任务ID（路径参数）
-     * @param operatorEmpId 操作人工号
-     * @param reason        触发原因
-     * @return 执行日志ID
+     * @param jobId   任务ID（路径参数）
+     * @param reqDTO  触发请求（包含原因）
+     * @return 执行结果
      */
     @PostMapping("/{jobId}/trigger")
     @Operation(summary = "手动触发任务")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.JOB_TRIGGER)
-    public ResponseWrapper<String> triggerJob(
+    public ResponseWrapper<JobTriggerRespDTO> triggerJob(
             @PathVariable(value = "jobId") String jobId,
-            @RequestParam(value = "operatorEmpId") String operatorEmpId,
-            @RequestParam(value = "reason") String reason) {
-        log.info("[JobController.triggerJob] jobId={}, operatorEmpId={}, reason={}", jobId, operatorEmpId, reason);
-        String runLogId = jobService.startJobRun(jobId, "MANUAL", operatorEmpId);
-        return ResponseWrapper.success(runLogId);
+            @Valid @RequestBody JobTriggerReqDTO reqDTO) {
+        log.info("[JobController.triggerJob] jobId={}, reason={}", jobId, reqDTO.getReason());
+        JobTriggerRespDTO resp = jobService.triggerJob(jobId, reqDTO.getReason());
+        return ResponseWrapper.success(resp);
     }
 
     /**
