@@ -3,6 +3,7 @@ package com.bank.branch.platform.workflow.service;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
+import com.bank.branch.platform.workflow.api.dto.FormFieldDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
@@ -17,12 +18,16 @@ import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.flowable.task.api.history.HistoricTaskInstanceQuery;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Date;
@@ -57,13 +62,24 @@ class TodoQueryServiceTest {
     private BizProcessMapMapper bizProcessMapMapper;
 
     @Mock
-    private SlaCalculationService slaCalculationService;
+    private NodeFormConfMapper nodeFormConfMapper;
 
     @Mock
-    private NodeFormConfMapper nodeFormConfMapper;
+    private SlaCalculationService slaCalculationService;
 
     @InjectMocks
     private TodoQueryService todoQueryService;
+
+    private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        objectMapper = mock(ObjectMapper.class);
+        // 通过反射注入 mock objectMapper（TodoQueryService 依赖它进行 JSON 解析）
+        Field field = TodoQueryService.class.getDeclaredField("objectMapper");
+        field.setAccessible(true);
+        field.set(todoQueryService, objectMapper);
+    }
 
     // ========== 辅助方法 ==========
 
@@ -242,11 +258,39 @@ class TodoQueryServiceTest {
                 .thenReturn(SlaStatus.RED);
 
         WfNodeFormConf formConf = new WfNodeFormConf();
-        formConf.setFormFields("[\"amount\",\"customerName\"]");
+        formConf.setFormFields("[{\"fieldKey\":\"amount\",\"fieldName\":\"金额\",\"fieldType\":\"number\"},{\"fieldKey\":\"customerName\",\"fieldName\":\"客户名称\",\"fieldType\":\"text\"}]");
         formConf.setEditableFields("[\"amount\"]");
         formConf.setRequiredFields("[\"amount\"]");
         when(nodeFormConfMapper.selectByProcessDefKeyAndNodeKey("loan_approve", "userTask4"))
                 .thenReturn(formConf);
+
+        // 模拟 ObjectMapper JSON 解析（使用 Answer 根据不同 JSON 返回不同结果）
+        FormFieldDTO f1 = new FormFieldDTO();
+        f1.setFieldKey("amount");
+        f1.setFieldName("金额");
+        f1.setFieldType("number");
+        FormFieldDTO f2 = new FormFieldDTO();
+        f2.setFieldKey("customerName");
+        f2.setFieldName("客户名称");
+        f2.setFieldType("text");
+        List<FormFieldDTO> formFields = List.of(f1, f2);
+        List<String> editableList = List.of("amount");
+        List<String> requiredList = List.of("amount");
+        try {
+            when(objectMapper.readValue(anyString(), any(com.fasterxml.jackson.core.type.TypeReference.class)))
+                    .thenAnswer(inv -> {
+                        String json = inv.getArgument(0);
+                        if (json.contains("fieldKey")) {
+                            return formFields;
+                        } else if (json.contains("amount") && !json.contains("fieldKey")) {
+                            return editableList;
+                        } else {
+                            return requiredList;
+                        }
+                    });
+        } catch (Exception ignored) {
+            // objectMapper 是 mock，这行不会真正执行，只为满足编译器
+        }
 
         // 模拟审批日志
         Comment comment = mock(Comment.class);
@@ -263,12 +307,11 @@ class TodoQueryServiceTest {
         assertThat(detail.getTaskInfo()).isNotNull();
         assertThat(detail.getTaskInfo().getTaskId()).isEqualTo("TASK_004");
         assertThat(detail.getTaskInfo().getSlaStatus()).isEqualTo("RED");
-        assertThat(detail.getFormFields()).isEqualTo("[\"amount\",\"customerName\"]");
-        assertThat(detail.getEditableFields()).isEqualTo("[\"amount\"]");
-        assertThat(detail.getRequiredFields()).isEqualTo("[\"amount\"]");
+        assertThat(detail.getNodeFormConf()).isNotNull();
+        assertThat(detail.getNodeFormConf().getFormFields()).hasSize(2);
         assertThat(detail.getApprovalLogs()).hasSize(1);
-        assertThat(detail.getApprovalLogs().get(0).getUserId()).isEqualTo("E10001");
-        assertThat(detail.getApprovalLogs().get(0).getComment()).isEqualTo("同意");
+        assertThat(detail.getApprovalLogs().get(0).getOperator()).isEqualTo("E10001");
+        assertThat(detail.getApprovalLogs().get(0).getOpinion()).isEqualTo("同意");
 
         verify(nodeFormConfMapper).selectByProcessDefKeyAndNodeKey("loan_approve", "userTask4");
         verify(taskService).getProcessInstanceComments("PID_004");

@@ -22,7 +22,7 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.TaskInfo;
 import org.flowable.task.api.history.HistoricTaskInstance;
-import org.flowable.task.api.TaskService;
+import org.flowable.engine.TaskService;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -322,12 +322,12 @@ public class ProcessQueryService {
                         .taskId(activity.getActivityId())
                         .singleResult();
                 if (hti != null) {
-                    Map<String, Object> vars = historyService.getHistoricTaskInstanceVariables(hti.getId());
-                    if (vars.containsKey("approved")) {
+                    Map<String, Object> vars = hti.getTaskLocalVariables();
+                    if (vars != null && vars.containsKey("approved")) {
                         Boolean approved = (Boolean) vars.get("approved");
                         dto.setAction(approved != null && approved ? "APPROVE" : "REJECT");
                     }
-                    if (vars.containsKey("opinion")) {
+                    if (vars != null && vars.containsKey("opinion")) {
                         dto.setOpinion((String) vars.get("opinion"));
                     }
                 }
