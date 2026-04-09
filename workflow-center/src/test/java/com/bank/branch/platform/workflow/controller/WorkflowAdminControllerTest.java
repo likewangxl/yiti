@@ -55,7 +55,7 @@ class WorkflowAdminControllerTest {
         when(workflowAdminService.listCandidateConfigs(anyString())).thenReturn(List.of(conf));
 
         // when & then
-        mockMvc.perform(get("/api/admin/workflow/candidate-configs")
+        mockMvc.perform(get("/api/admin/workflow/node-candidates")
                         .param("processDefinitionKey", "lead_approval"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
@@ -75,7 +75,7 @@ class WorkflowAdminControllerTest {
         conf.setCandidateValue("[\"BRANCH_HEAD\"]");
 
         // when & then
-        mockMvc.perform(post("/api/admin/workflow/candidate-configs")
+        mockMvc.perform(post("/api/admin/workflow/node-candidates")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(conf)))
                 .andExpect(status().isOk())
