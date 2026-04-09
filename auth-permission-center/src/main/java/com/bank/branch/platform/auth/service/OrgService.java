@@ -120,34 +120,7 @@ public class OrgService {
     public List<OrgUserDTO> getOrgUsers(String orgCode) {
         log.debug("[OrgService.getOrgUsers] orgCode={}", orgCode);
         List<PtUser> users = userMapper.selectByOrgCode(orgCode);
-
-        final Map<String, List<RoleSimpleDTO>> rolesMap;
-        if (!users.isEmpty()) {
-            List<String> userIds = users.stream().map(PtUser::getUserId).collect(Collectors.toList());
-            List<UserRoleItemDTO> rolesList = userRoleMapper.selectRolesByUserIds(userIds);
-            rolesMap = rolesList.stream().collect(Collectors.groupingBy(
-                    UserRoleItemDTO::getUserId,
-                    Collectors.mapping(r -> {
-                        RoleSimpleDTO rd = new RoleSimpleDTO();
-                        rd.setRoleId(r.getRoleId());
-                        rd.setRoleCode(r.getRoleCode());
-                        rd.setRoleChName(r.getRoleChName());
-                        return rd;
-                    }, Collectors.toList())
-            ));
-        } else {
-            rolesMap = Map.of();
-        }
-
-        return users.stream().map(u -> {
-            OrgUserDTO dto = new OrgUserDTO();
-            dto.setEmpId(u.getUserId());
-            dto.setUsername(u.getUsername());
-            dto.setDisplayName(u.getUserchnname());
-            dto.setEmail(u.getEmail());
-            dto.setRoles(rolesMap.getOrDefault(u.getUserId(), List.of()));
-            return dto;
-        }).collect(Collectors.toList());
+        return buildOrgUserDtoList(users);
     }
 
     /**
@@ -166,35 +139,7 @@ public class OrgService {
         List<PtUser> users = userMapper.selectOrgUsersByPage(orgCode, keyword, offset, pageSize);
         long total = userMapper.countOrgUsers(orgCode, keyword);
 
-        // 批量查询用户角色
-        final Map<String, List<RoleSimpleDTO>> rolesMap;
-        if (!users.isEmpty()) {
-            List<String> userIds = users.stream().map(PtUser::getUserId).collect(Collectors.toList());
-            List<UserRoleItemDTO> rolesList = userRoleMapper.selectRolesByUserIds(userIds);
-            rolesMap = rolesList.stream().collect(Collectors.groupingBy(
-                    UserRoleItemDTO::getUserId,
-                    Collectors.mapping(r -> {
-                        RoleSimpleDTO rd = new RoleSimpleDTO();
-                        rd.setRoleId(r.getRoleId());
-                        rd.setRoleCode(r.getRoleCode());
-                        rd.setRoleChName(r.getRoleChName());
-                        return rd;
-                    }, Collectors.toList())
-            ));
-        } else {
-            rolesMap = Map.of();
-        }
-
-        List<OrgUserDTO> records = users.stream().map(u -> {
-            OrgUserDTO dto = new OrgUserDTO();
-            dto.setEmpId(u.getUserId());
-            dto.setUsername(u.getUsername());
-            dto.setDisplayName(u.getUserchnname());
-            dto.setEmail(u.getEmail());
-            dto.setRoles(rolesMap.getOrDefault(u.getUserId(), List.of()));
-            return dto;
-        }).collect(Collectors.toList());
-
+        List<OrgUserDTO> records = buildOrgUserDtoList(users);
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
@@ -236,6 +181,49 @@ public class OrgService {
         dto.setParentOrgCode(org.getPId());
         dto.setOrganState(org.getOrganState());
         return dto;
+    }
+
+    /**
+     * 将 PtUser 列表转换为 OrgUserDTO 列表，并批量补充角色信息。
+     *
+     * @param users 用户实体列表
+     * @return OrgUserDTO 列表（含 roles）
+     */
+    private List<OrgUserDTO> buildOrgUserDtoList(List<PtUser> users) {
+        Map<String, List<RoleSimpleDTO>> rolesMap = loadRolesMap(users);
+        return users.stream().map(u -> {
+            OrgUserDTO dto = new OrgUserDTO();
+            dto.setEmpId(u.getUserId());
+            dto.setUsername(u.getUsername());
+            dto.setDisplayName(u.getUserchnname());
+            dto.setEmail(u.getEmail());
+            dto.setRoles(rolesMap.getOrDefault(u.getUserId(), List.of()));
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 批量查询用户角色并按 userId 分组。
+     *
+     * @param users 用户实体列表
+     * @return userId → 角色列表的映射
+     */
+    private Map<String, List<RoleSimpleDTO>> loadRolesMap(List<PtUser> users) {
+        if (users.isEmpty()) {
+            return Map.of();
+        }
+        List<String> userIds = users.stream().map(PtUser::getUserId).collect(Collectors.toList());
+        List<UserRoleItemDTO> rolesList = userRoleMapper.selectRolesByUserIds(userIds);
+        return rolesList.stream().collect(Collectors.groupingBy(
+                UserRoleItemDTO::getUserId,
+                Collectors.mapping(r -> {
+                    RoleSimpleDTO rd = new RoleSimpleDTO();
+                    rd.setRoleId(r.getRoleId());
+                    rd.setRoleCode(r.getRoleCode());
+                    rd.setRoleChName(r.getRoleChName());
+                    return rd;
+                }, Collectors.toList())
+        ));
     }
 
     /**
