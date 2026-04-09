@@ -1,6 +1,7 @@
 package com.bank.branch.platform.workflow.controller;
 
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.service.ProcessQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -74,6 +75,21 @@ public class ProcessController {
         log.debug("[ProcessController.getProcessHistory] processInstanceId={}", processInstanceId);
         List<ProcessQueryService.ProcessHistoryDTO> history = processQueryService.getProcessHistory(processInstanceId);
         return ResponseWrapper.success(history);
+    }
+
+    /**
+     * 获取流程进度图结构化数据（C.2 JSON）
+     *
+     * @param processInstanceId 流程实例ID
+     * @return 流程进度图结构化数据
+     */
+    @GetMapping("/{processInstanceId}/nodes")
+    @Operation(summary = "获取流程进度图结构化数据")
+    public ResponseWrapper<ProcessDiagramDTO> getProcessNodes(
+            @PathVariable(value = "processInstanceId") String processInstanceId) {
+        log.debug("[ProcessController.getProcessNodes] processInstanceId={}", processInstanceId);
+        ProcessDiagramDTO dto = processQueryService.getProcessNodes(processInstanceId);
+        return ResponseWrapper.success(dto);
     }
 
     // C.4 流程映射查询已移至 ProcessMapController

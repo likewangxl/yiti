@@ -1,7 +1,15 @@
 package com.bank.branch.platform.workflow.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
+import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
@@ -15,9 +23,12 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -35,12 +46,23 @@ public class ProcessQueryService {
     private final RepositoryService repositoryService;
     private final RuntimeService runtimeService;
     private final HistoryService historyService;
+    private final UserApi userApi;
+    private final OrgApi orgApi;
+    private final BizProcessMapMapper bizProcessMapMapper;
+    private final ObjectMapper objectMapper;
+
+    // ========== 流程实例详情 ==========
 
     /**
      * 查询流程实例详情（C.1）
+     * <p>
+     * 先查运行时表，再查历史表，最后关联业务映射补充业务字段。
+     * 业务字段包括：bizType、bizId、title、发起人姓名、发起人机构、
+     * 当前节点处理人信息、候选组列表和流程状态。
+     * </p>
      *
      * @param processInstanceId 流程实例ID
-     * @return 流程实例信息（运行时 + 历史合并）
+     * @return 流程实例信息（运行时 + 历史 + 业务合并）
      */
     public ProcessInstanceInfo getProcessInstanceInfo(String processInstanceId) {
         log.debug("[ProcessQueryService.getProcessInstanceInfo] processInstanceId={}", processInstanceId);
@@ -50,23 +72,59 @@ public class ProcessQueryService {
                 .processInstanceId(processInstanceId)
                 .singleResult();
 
+        ProcessInstanceInfo info;
         if (runtimeInstance != null) {
-            return ProcessInstanceInfo.fromRuntime(runtimeInstance, repositoryService, runtimeService);
+            info = ProcessInstanceInfo.fromRuntime(runtimeInstance, repositoryService, runtimeService);
+        } else {
+            // 再查历史表
+            HistoricProcessInstance historicInstance = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+
+            if (historicInstance == null) {
+                throw new BizException(
+                        WfErrorCode.PROCESS_INSTANCE_NOT_FOUND.getCode(),
+                        WfErrorCode.PROCESS_INSTANCE_NOT_FOUND.getMessage());
+            }
+            info = ProcessInstanceInfo.fromHistoric(historicInstance);
         }
 
-        // 再查历史表
-        HistoricProcessInstance historicInstance = historyService.createHistoricProcessInstanceQuery()
-                .processInstanceId(processInstanceId)
-                .singleResult();
+        // 补充业务字段 - 关联查询 BizProcessMap
+        var map = bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
+        if (map != null) {
+            info.setBizType(map.getBizType());
+            info.setBizId(map.getBizId());
+            info.setTitle(map.getTitle());
+            info.setCandidateGroups(parseJsonToList(map.getCandidateGroups()));
 
-        if (historicInstance == null) {
-            throw new BizException(
-                    WfErrorCode.PROCESS_INSTANCE_NOT_FOUND.getCode(),
-                    WfErrorCode.PROCESS_INSTANCE_NOT_FOUND.getMessage());
+            // 补充发起人姓名
+            if (map.getStartUser() != null) {
+                info.setStartUserName(userApi.getUserName(map.getStartUser()));
+                OrgDTO org = orgApi.getUserMainOrg(map.getStartUser());
+                if (org != null) {
+                    info.setStartOrgName(org.getOrgName());
+                }
+            }
         }
 
-        return ProcessInstanceInfo.fromHistoric(historicInstance);
+        // 补充当前节点信息（仅运行时实例）
+        if (runtimeInstance != null) {
+            List<String> activeActivityIds = runtimeService.getActiveActivityIds(processInstanceId);
+            if (!activeActivityIds.isEmpty()) {
+                info.setCurrentNodeId(activeActivityIds.get(0));
+                // 节点名称需从 BPMN 模型获取，当前仅设置 nodeId
+            }
+            info.setProcessStatus("RUNNING");
+        } else if (info.getEndTime() != null) {
+            info.setProcessStatus("COMPLETED");
+        } else {
+            info.setProcessStatus("CANCELLED");
+        }
+
+        return info;
     }
+
+    // ========== 流程进度图 ==========
 
     /**
      * 生成流程进度图 PNG 字节数组（C.2）
@@ -115,10 +173,97 @@ public class ProcessQueryService {
     }
 
     /**
+     * 获取流程进度图结构化数据（C.2 JSON）
+     *
+     * @param processInstanceId 流程实例ID
+     * @return 流程进度图结构化数据
+     */
+    public ProcessDiagramDTO getProcessNodes(String processInstanceId) {
+        log.debug("[ProcessQueryService.getProcessNodes] processInstanceId={}", processInstanceId);
+
+        ProcessDiagramDTO dto = new ProcessDiagramDTO();
+        dto.setProcessInstanceId(processInstanceId);
+
+        // 获取流程定义KEY
+        ProcessInstance runtimeInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+
+        String processDefinitionKey = null;
+        if (runtimeInstance != null) {
+            processDefinitionKey = extractKey(runtimeInstance.getProcessDefinitionId());
+        } else {
+            HistoricProcessInstance hpi = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (hpi != null) {
+                processDefinitionKey = hpi.getProcessDefinitionKey();
+            } else {
+                throw new BizException(
+                        WfErrorCode.PROCESS_INSTANCE_NOT_FOUND.getCode(),
+                        WfErrorCode.PROCESS_INSTANCE_NOT_FOUND.getMessage());
+            }
+        }
+        dto.setProcessDefinitionKey(processDefinitionKey);
+
+        // 获取历史活动节点
+        List<HistoricActivityInstance> activities = historyService.createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .orderByHistoricActivityInstanceStartTime()
+                .asc()
+                .list();
+
+        // 获取当前活动节点
+        Set<String> activeActivityIds = new HashSet<>();
+        if (runtimeInstance != null) {
+            activeActivityIds = new HashSet<>(runtimeService.getActiveActivityIds(processInstanceId));
+        }
+
+        List<ProcessDiagramNodeDTO> nodes = new ArrayList<>();
+        for (HistoricActivityInstance activity : activities) {
+            if (!"userTask".equals(activity.getActivityType())
+                    && !"startEvent".equals(activity.getActivityType())
+                    && !"endEvent".equals(activity.getActivityType())
+                    && !"exclusiveGateway".equals(activity.getActivityType())) {
+                continue;
+            }
+
+            ProcessDiagramNodeDTO node = new ProcessDiagramNodeDTO();
+            node.setNodeKey(activity.getActivityId());
+            node.setNodeName(activity.getActivityName());
+            node.setNodeType(activity.getActivityType());
+            node.setAssignee(activity.getAssignee());
+
+            if (activity.getEndTime() != null) {
+                node.setStatus("COMPLETED");
+                node.setStartTime(convertToLocalDateTime(activity.getStartTime()));
+                node.setEndTime(convertToLocalDateTime(activity.getEndTime()));
+            } else if (activeActivityIds.contains(activity.getActivityId())) {
+                node.setStatus("ACTIVE");
+                node.setStartTime(convertToLocalDateTime(activity.getStartTime()));
+            } else {
+                node.setStatus("PENDING");
+            }
+
+            // 补充处理人姓名
+            if (activity.getAssignee() != null) {
+                node.setAssigneeName(userApi.getUserName(activity.getAssignee()));
+            }
+
+            nodes.add(node);
+        }
+
+        dto.setNodes(nodes);
+        return dto;
+    }
+
+    // ========== 审批日志 ==========
+
+    /**
      * 查询流程历史节点列表（C.3）
      *
      * @param processInstanceId 流程实例ID
-     * @return 历史活动节点列表（不含服务任务等自动节点）
+     * @return 审批日志列表（不含服务任务等自动节点）
      */
     public List<ProcessHistoryDTO> getProcessHistory(String processInstanceId) {
         log.debug("[ProcessQueryService.getProcessHistory] processInstanceId={}", processInstanceId);
@@ -164,26 +309,78 @@ public class ProcessQueryService {
         return dto;
     }
 
+    // ========== 工具方法 ==========
+
+    private String extractKey(String processDefinitionId) {
+        if (processDefinitionId == null) return null;
+        return processDefinitionId.split(":")[0];
+    }
+
+    private LocalDateTime convertToLocalDateTime(java.util.Date date) {
+        if (date == null) return null;
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+    }
+
+    private List<String> parseJsonToList(String json) {
+        if (json == null || json.isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            log.warn("JSON 解析失败: {}", json, e);
+            return new ArrayList<>();
+        }
+    }
+
+    // ========== 内部 DTO ==========
+
     /**
      * 流程实例信息 DTO
+     * <p>
+     * 包含流程定义基础信息和业务扩展字段。
+     * 基础字段由 Flowable 运行时/历史数据填充，
+     * 业务字段（bizType、bizId、title 等）由 BizProcessMap 关联查询补充。
+     * </p>
      */
-    public record ProcessInstanceInfo(
-            String processInstanceId,
-            String processDefinitionKey,
-            String processDefinitionName,
-            Integer processDefinitionVersion,
-            String businessKey,
-            String startUserId,
-            String currentActivityId,
-            Boolean isEnded,
-            java.time.LocalDateTime startTime,
-            java.time.LocalDateTime endTime,
-            Long durationMs
-    ) {
-        private static String extractKey(String processDefinitionId) {
-            if (processDefinitionId == null) return null;
-            return processDefinitionId.split(":")[0];
-        }
+    @lombok.Data
+    public static class ProcessInstanceInfo {
+        // --- 基础字段 ---
+        private String processInstanceId;
+        private String processDefinitionKey;
+        private String processDefinitionName;
+        private Integer processDefinitionVersion;
+        private String businessKey;
+        private String startUserId;
+        private String currentActivityId;
+        private Boolean isEnded;
+        private LocalDateTime startTime;
+        private LocalDateTime endTime;
+        private Long durationMs;
+
+        // --- 业务字段 ---
+        /** 业务类型 */
+        private String bizType;
+        /** 业务ID */
+        private String bizId;
+        /** 流程标题 */
+        private String title;
+        /** 发起人姓名 */
+        private String startUserName;
+        /** 发起人机构名称 */
+        private String startOrgName;
+        /** 流程状态：RUNNING / COMPLETED / CANCELLED */
+        private String processStatus;
+        /** 当前节点ID */
+        private String currentNodeId;
+        /** 当前节点名称 */
+        private String currentNodeName;
+        /** 当前处理人工号 */
+        private String currentAssignee;
+        /** 当前处理人姓名 */
+        private String currentAssigneeName;
+        /** 候选组列表 */
+        private List<String> candidateGroups;
 
         public static ProcessInstanceInfo fromRuntime(ProcessInstance pi, RepositoryService repoService, RuntimeService runtimeService) {
             String pdId = pi.getProcessDefinitionId();
@@ -196,41 +393,44 @@ public class ProcessQueryService {
 
             List<String> activeActivityIds = new ArrayList<>(runtimeService.getActiveActivityIds(pi.getId()));
 
-            return new ProcessInstanceInfo(
-                    pi.getId(),
-                    extractKey(pdId),
-                    pd != null ? pd.getName() : null,
-                    pd != null ? pd.getVersion() : null,
-                    pi.getBusinessKey(),
-                    pi.getStartUserId(),
-                    activeActivityIds.isEmpty() ? null : activeActivityIds.get(0),
-                    false,
-                    pi.getStartTime() != null
-                            ? pi.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-                            : null,
-                    null,
-                    null
-            );
+            ProcessInstanceInfo info = new ProcessInstanceInfo();
+            info.setProcessInstanceId(pi.getId());
+            info.setProcessDefinitionKey(extractKey(pdId));
+            info.setProcessDefinitionName(pd != null ? pd.getName() : null);
+            info.setProcessDefinitionVersion(pd != null ? pd.getVersion() : null);
+            info.setBusinessKey(pi.getBusinessKey());
+            info.setStartUserId(pi.getStartUserId());
+            info.setCurrentActivityId(activeActivityIds.isEmpty() ? null : activeActivityIds.get(0));
+            info.setIsEnded(false);
+            info.setStartTime(pi.getStartTime() != null
+                    ? pi.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+                    : null);
+            return info;
         }
 
         public static ProcessInstanceInfo fromHistoric(HistoricProcessInstance hpi) {
-            return new ProcessInstanceInfo(
-                    hpi.getId(),
-                    hpi.getProcessDefinitionKey(),
-                    null, // HistoricProcessInstance 不直接提供名称
-                    null, // HistoricProcessInstance 不直接提供版本
-                    hpi.getBusinessKey(),
-                    hpi.getStartUserId(),
-                    null, // 历史实例无法确定当前节点
-                    hpi.getEndTime() != null,
-                    hpi.getStartTime() != null
-                            ? hpi.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-                            : null,
-                    hpi.getEndTime() != null
-                            ? hpi.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-                            : null,
-                    hpi.getDurationInMillis()
-            );
+            ProcessInstanceInfo info = new ProcessInstanceInfo();
+            info.setProcessInstanceId(hpi.getId());
+            info.setProcessDefinitionKey(hpi.getProcessDefinitionKey());
+            info.setProcessDefinitionName(null); // HistoricProcessInstance 不直接提供名称
+            info.setProcessDefinitionVersion(null); // HistoricProcessInstance 不直接提供版本
+            info.setBusinessKey(hpi.getBusinessKey());
+            info.setStartUserId(hpi.getStartUserId());
+            info.setCurrentActivityId(null); // 历史实例无法确定当前节点
+            info.setIsEnded(hpi.getEndTime() != null);
+            info.setStartTime(hpi.getStartTime() != null
+                    ? hpi.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+                    : null);
+            info.setEndTime(hpi.getEndTime() != null
+                    ? hpi.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+                    : null);
+            info.setDurationMs(hpi.getDurationInMillis());
+            return info;
+        }
+
+        private static String extractKey(String processDefinitionId) {
+            if (processDefinitionId == null) return null;
+            return processDefinitionId.split(":")[0];
         }
     }
 
@@ -248,9 +448,9 @@ public class ProcessQueryService {
         /** 办理人 */
         private String assignee;
         /** 开始时间 */
-        private java.time.LocalDateTime startTime;
+        private LocalDateTime startTime;
         /** 结束时间 */
-        private java.time.LocalDateTime endTime;
+        private LocalDateTime endTime;
         /** 耗时（毫秒） */
         private Long durationMs;
     }
