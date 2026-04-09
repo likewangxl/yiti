@@ -76,21 +76,24 @@ public class FileService {
     /**
      * 上传文件到 MinIO
      * <p>
-     * 执行流程：格式校验 → 大小校验 → 计算 MD5 → 去重检查 → 上传 MinIO → 插入记录。
+     * 执行流程：格式校验 → 大小校验 → 计算 MD5 → 去重检查 → 上传 MinIO → 插入记录 → 绑定业务关联（若传入 bizType/bizId）。
      * 若 MD5 相同的文件已存在，直接返回已有记录，跳过重复上传。
+     * 若传入了 bizType 和 bizId，在上传成功后自动建立业务关联。
      * </p>
      *
      * @param file       上传的文件
      * @param uploadedBy 上传人工号
+     * @param bizType    业务类型（可选）
+     * @param bizId      业务ID（可选）
      * @return 文件对象 DTO
      * @throws BizException GOV-42203 文件格式不合法
      * @throws BizException GOV-42204 文件大小超限
      * @throws BizException GOV-50001 MinIO 存储异常
      */
     @Transactional
-    public FileObjectDTO upload(MultipartFile file, String uploadedBy) {
-        log.info("[FileService.upload] fileName={}, size={}, uploadedBy={}",
-                file.getOriginalFilename(), file.getSize(), uploadedBy);
+    public FileObjectDTO upload(MultipartFile file, String uploadedBy, String bizType, String bizId) {
+        log.info("[FileService.upload] fileName={}, size={}, uploadedBy={}, bizType={}, bizId={}",
+                file.getOriginalFilename(), file.getSize(), uploadedBy, bizType, bizId);
 
         // 1. 校验文件格式
         String originalFilename = file.getOriginalFilename();
@@ -155,8 +158,15 @@ public class FileService {
         fileObject.setUploadedTime(now);
         fileObjectMapper.insert(fileObject);
 
+        FileObjectDTO dto = toDTO(fileObject);
+
+        // 如果传入了 bizType 和 bizId，建立业务关联
+        if (bizType != null && bizId != null && !bizType.isEmpty() && !bizId.isEmpty()) {
+            bindFile(bizType, bizId, fileObject.getId(), null);
+        }
+
         log.info("[FileService.upload] 文件上传成功 id={}, path={}", id, storagePath);
-        return toDTO(fileObject);
+        return dto;
     }
 
     /**

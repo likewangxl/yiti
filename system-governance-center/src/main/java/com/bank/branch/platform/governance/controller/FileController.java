@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.controller;
 
+import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.governance.service.FileService;
@@ -37,18 +38,22 @@ public class FileController {
      * 上传文件（G.1）
      *
      * @param file       上传的文件
-     * @param uploadedBy 上传人工号（实际应从 CurrentUserContext 获取）
+     * @param uploadedBy 上传人工号（可选，未传时从 DataScopeContext 获取）
+     * @param bizType    业务类型（可选）
+     * @param bizId      业务ID（可选）
      * @return 文件对象DTO
      */
     @PostMapping("/upload")
     @Operation(summary = "上传文件")
     public ResponseWrapper<FileObjectDTO> upload(
             @RequestParam(value = "file") MultipartFile file,
-            @RequestParam(value = "uploadedBy", required = false) String uploadedBy) {
-        log.info("[FileController.upload] fileName={}, uploadedBy={}", file.getOriginalFilename(), uploadedBy);
-        // 简化：如果未传 uploadedBy，使用默认值
-        String uploader = uploadedBy != null ? uploadedBy : "ANONYMOUS";
-        FileObjectDTO dto = fileService.upload(file, uploader);
+            @RequestParam(value = "uploadedBy", required = false) String uploadedBy,
+            @RequestParam(value = "bizType", required = false) String bizType,
+            @RequestParam(value = "bizId", required = false) String bizId) {
+        log.info("[FileController.upload] fileName={}, uploadedBy={}, bizType={}, bizId={}",
+                file.getOriginalFilename(), uploadedBy, bizType, bizId);
+        String uploader = uploadedBy != null ? uploadedBy : DataScopeContext.current().getEmpId();
+        FileObjectDTO dto = fileService.upload(file, uploader, bizType, bizId);
         return ResponseWrapper.success(dto);
     }
 

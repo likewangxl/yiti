@@ -54,7 +54,7 @@ class FileServiceTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "malware.exe", "application/octet-stream", new byte[100]);
 
-        assertThatThrownBy(() -> fileService.upload(file, "EMP001"))
+        assertThatThrownBy(() -> fileService.upload(file, "EMP001", null, null))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("GOV-42203");
@@ -72,7 +72,7 @@ class FileServiceTest {
         MockMultipartFile spyFile = spy(file);
         when(spyFile.getSize()).thenReturn(51L * 1024 * 1024);
 
-        assertThatThrownBy(() -> fileService.upload(spyFile, "EMP001"))
+        assertThatThrownBy(() -> fileService.upload(spyFile, "EMP001", null, null))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("GOV-42204");
@@ -96,7 +96,7 @@ class FileServiceTest {
 
         when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(existing);
 
-        FileObjectDTO result = fileService.upload(file, "EMP001");
+        FileObjectDTO result = fileService.upload(file, "EMP001", null, null);
 
         assertThat(result.getId()).isEqualTo("F_EXISTING");
         // MinIO 不应被调用
@@ -118,7 +118,7 @@ class FileServiceTest {
         when(minioClient.putObject(any())).thenReturn(
                 new ObjectWriteResponse(null, "branch-platform", null, "test-path", null, null));
 
-        FileObjectDTO result = fileService.upload(file, "EMP002");
+        FileObjectDTO result = fileService.upload(file, "EMP002", null, null);
 
         assertThat(result).isNotNull();
         assertThat(result.getFileName()).isEqualTo("report.xlsx");
@@ -295,7 +295,7 @@ class FileServiceTest {
         when(minioClient.putObject(any())).thenReturn(
                 new ObjectWriteResponse(null, "branch-platform", null, "test-path", null, null));
 
-        FileObjectDTO result = fileService.upload(file, "EMP001");
+        FileObjectDTO result = fileService.upload(file, "EMP001", null, null);
 
         assertThat(result).isNotNull();
     }

@@ -74,7 +74,7 @@ class FileControllerTest {
         FileObjectDTO dto = new FileObjectDTO();
         dto.setId("F_NEW");
         dto.setFileName("test.pdf");
-        when(fileService.upload(any(), anyString())).thenReturn(dto);
+        when(fileService.upload(any(), anyString(), any(), any())).thenReturn(dto);
 
         MockMultipartFile mockFile = new MockMultipartFile(
                 "file", "test.pdf", MediaType.APPLICATION_PDF_VALUE, "pdf content".getBytes());
@@ -112,7 +112,7 @@ class FileControllerTest {
 
     @Test
     void upload_invalidFormat_returnsBizError() throws Exception {
-        when(fileService.upload(any(), anyString()))
+        when(fileService.upload(any(), anyString(), any(), any()))
                 .thenThrow(new BizException("GOV-42203", "文件格式不合法"));
 
         MockMultipartFile mockFile = new MockMultipartFile(
