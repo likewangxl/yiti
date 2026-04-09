@@ -63,10 +63,11 @@ class ConfigControllerTest {
     @Test
     void updateConfig_shouldReturn200() throws Exception {
         // given
-        doNothing().when(configService).updateConfig(anyString(), anyString());
+        doNothing().when(configService).updateConfig(anyString(), anyString(), anyString());
 
         ConfigUpdateReqDTO req = new ConfigUpdateReqDTO();
         req.setConfigValue("新标题");
+        req.setReason("修改标题");
 
         // when & then
         mockMvc.perform(put("/api/admin/sys/configs/sys.title")
@@ -81,10 +82,11 @@ class ConfigControllerTest {
     @Test
     void updateConfig_keyNotFound_returnsBizError() throws Exception {
         doThrow(new BizException("GOV-40002", "配置项不存在"))
-            .when(configService).updateConfig(anyString(), anyString());
+            .when(configService).updateConfig(anyString(), anyString(), anyString());
 
         ConfigUpdateReqDTO req = new ConfigUpdateReqDTO();
         req.setConfigValue("newValue");
+        req.setReason("测试原因");
 
         mockMvc.perform(put("/api/admin/sys/configs/not.exist.key")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -97,6 +99,19 @@ class ConfigControllerTest {
     void updateConfig_missingConfigValue_returns400() throws Exception {
         // configValue 为空，触发 @NotBlank 校验
         ConfigUpdateReqDTO req = new ConfigUpdateReqDTO();
+        req.setReason("测试原因");
+
+        mockMvc.perform(put("/api/admin/sys/configs/sys.title")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateConfig_missingReason_returns400() throws Exception {
+        // reason 为空，触发 @NotBlank 校验
+        ConfigUpdateReqDTO req = new ConfigUpdateReqDTO();
+        req.setConfigValue("新标题");
 
         mockMvc.perform(put("/api/admin/sys/configs/sys.title")
                 .contentType(MediaType.APPLICATION_JSON)

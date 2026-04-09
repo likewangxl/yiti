@@ -159,11 +159,12 @@ public class ConfigService {
      *
      * @param key   配置键
      * @param value 新的配置值
+     * @param reason 修改原因（用于审计日志）
      * @throws BizException GOV-40002 配置项不存在
      */
     @Transactional
-    public void updateConfig(String key, String value) {
-        log.info("[ConfigService.updateConfig] configKey={}", key);
+    public void updateConfig(String key, String value, String reason) {
+        log.info("[ConfigService.updateConfig] configKey={}, reason={}", key, reason);
         SysConfigKv existing = configMapper.selectByConfigKey(key);
         if (existing == null) {
             throw new BizException(GovErrorCode.CONFIG_NOT_FOUND.getCode(),

@@ -67,8 +67,8 @@ public class ConfigController {
     public ResponseWrapper<Void> updateConfig(
             @PathVariable(value = "configKey") String configKey,
             @Valid @RequestBody ConfigUpdateReqDTO req) {
-        log.info("[ConfigController.updateConfig] configKey={}", configKey);
-        configService.updateConfig(configKey, req.getConfigValue());
+        log.info("[ConfigController.updateConfig] configKey={}, reason={}", configKey, req.getReason());
+        configService.updateConfig(configKey, req.getConfigValue(), req.getReason());
         return ResponseWrapper.success();
     }
 }

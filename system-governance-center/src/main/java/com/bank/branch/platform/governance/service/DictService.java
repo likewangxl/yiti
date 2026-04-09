@@ -2,6 +2,7 @@ package com.bank.branch.platform.governance.service;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.dto.DictItemRespDTO;
 import com.bank.branch.platform.governance.api.dto.DictTypeRespDTO;
 import com.bank.branch.platform.governance.entity.SysDict;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
@@ -301,5 +302,37 @@ public class DictService {
             dto.setStatus(vo.getActiveCount() != null && vo.getActiveCount() > 0 ? "ACTIVE" : "DISABLED");
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    // ── 私有方法：实体 → DTO 转换 ──────────────────────────────────
+
+    /**
+     * 将 SysDict 实体转换为 DictItemRespDTO
+     *
+     * @param entity 字典实体
+     * @return DictItemRespDTO
+     */
+    public DictItemRespDTO toDictItemRespDTO(SysDict entity) {
+        if (entity == null) return null;
+        DictItemRespDTO dto = new DictItemRespDTO();
+        dto.setId(entity.getId());
+        dto.setDictType(entity.getDictType());
+        dto.setDictCode(entity.getDictCode());
+        dto.setDictLabel(entity.getDictLabel());
+        dto.setDictValue(entity.getDictValue());
+        dto.setSortOrder(entity.getSortOrder());
+        dto.setStatus(entity.getStatus());
+        return dto;
+    }
+
+    /**
+     * 将 SysDict 列表转换为 DictItemRespDTO 列表
+     *
+     * @param entities 字典实体列表
+     * @return DictItemRespDTO 列表
+     */
+    public List<DictItemRespDTO> toDictItemRespDTOList(List<SysDict> entities) {
+        if (entities == null) return List.of();
+        return entities.stream().map(this::toDictItemRespDTO).collect(Collectors.toList());
     }
 }
