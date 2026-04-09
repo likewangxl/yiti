@@ -3,6 +3,7 @@ package com.bank.branch.platform.workflow.api.dto;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 业务流程映射 DTO
@@ -16,14 +17,14 @@ public class BizProcessMapDTO {
     /** 映射ID */
     private String id;
 
+    /** 业务键 */
+    private String businessKey;
+
     /** 业务类型 */
     private String bizType;
 
     /** 业务ID */
     private String bizId;
-
-    /** 业务键 */
-    private String businessKey;
 
     /** 流程定义KEY */
     private String processDefinitionKey;
@@ -45,6 +46,9 @@ public class BizProcessMapDTO {
 
     /** 当前处理人工号 */
     private String currentAssignee;
+
+    /** 候选组列表 */
+    private List<String> candidateGroups;
 
     /** 发起时间 */
     private LocalDateTime startTime;
