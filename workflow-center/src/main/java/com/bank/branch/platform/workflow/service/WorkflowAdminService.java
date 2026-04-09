@@ -1,7 +1,10 @@
 package com.bank.branch.platform.workflow.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.NodeCandidateRespDTO;
+import com.bank.branch.platform.workflow.api.dto.NodeFormRespDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDefinitionRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TimeoutRuleRespDTO;
 import com.bank.branch.platform.workflow.entity.WfNodeCandidateConf;
 import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
 import com.bank.branch.platform.workflow.entity.WfTimeoutRule;
@@ -9,6 +12,8 @@ import com.bank.branch.platform.workflow.enums.WfErrorCode;
 import com.bank.branch.platform.workflow.mapper.NodeCandidateConfMapper;
 import com.bank.branch.platform.workflow.mapper.NodeFormConfMapper;
 import com.bank.branch.platform.workflow.mapper.TimeoutRuleMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.ProcessEngine;
@@ -40,6 +45,8 @@ public class WorkflowAdminService {
     private final TimeoutRuleMapper timeoutRuleMapper;
     private final NodeFormConfMapper nodeFormConfMapper;
     private final ProcessEngine processEngine;
+    private final RepositoryService repositoryService;
+    private final ObjectMapper objectMapper;
 
     // ==================== 超时规则 (D.1 / D.2) ====================
 
@@ -52,6 +59,47 @@ public class WorkflowAdminService {
     public List<WfTimeoutRule> listTimeoutRules(String processDefinitionKey) {
         log.debug("[WorkflowAdminService.listTimeoutRules] processDefinitionKey={}", processDefinitionKey);
         return timeoutRuleMapper.selectByProcessDefKey(processDefinitionKey);
+    }
+
+    /**
+     * 查询指定流程定义下的所有超时规则（RespDTO）
+     *
+     * @param processDefinitionKey 流程定义KEY
+     * @return 超时规则RespDTO列表
+     */
+    public List<TimeoutRuleRespDTO> listTimeoutRulesResp(String processDefinitionKey) {
+        log.debug("[WorkflowAdminService.listTimeoutRulesResp] processDefinitionKey={}", processDefinitionKey);
+        List<WfTimeoutRule> rules = timeoutRuleMapper.selectByProcessDefKey(processDefinitionKey);
+        return rules.stream().map(this::toTimeoutRuleResp).collect(Collectors.toList());
+    }
+
+    private TimeoutRuleRespDTO toTimeoutRuleResp(WfTimeoutRule rule) {
+        TimeoutRuleRespDTO resp = new TimeoutRuleRespDTO();
+        resp.setId(rule.getId());
+        resp.setProcessDefinitionKey(rule.getProcessDefinitionKey());
+        resp.setNodeKey(rule.getNodeKey());
+        resp.setWarningHours(rule.getWarningHours());
+        resp.setTimeoutHours(rule.getTimeoutHours());
+        resp.setCreatedTime(rule.getCreatedTime());
+        resp.setUpdatedTime(rule.getUpdatedTime());
+
+        // 补充流程定义名称
+        if (rule.getProcessDefinitionKey() != null) {
+            try {
+                ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                        .processDefinitionKey(rule.getProcessDefinitionKey())
+                        .latestVersion()
+                        .singleResult();
+                if (pd != null) {
+                    resp.setProcessDefinitionName(pd.getName());
+                }
+            } catch (Exception e) {
+                log.warn("获取流程定义失败: key={}", rule.getProcessDefinitionKey(), e);
+            }
+        }
+        // 节点名称需从 BPMN 模型获取，当前为空
+
+        return resp;
     }
 
     /**
@@ -112,14 +160,56 @@ public class WorkflowAdminService {
     // ==================== 节点候选人配置 (D.3 / D.4) ====================
 
     /**
-     * 查询指定流程定义下的所有候选人配置（D.3）
+     * 查询指定流程定义下的所有候选人配置（RespDTO）
      *
      * @param processDefinitionKey 流程定义KEY
-     * @return 候选人配置列表
+     * @return 候选人配置RespDTO列表
      */
-    public List<WfNodeCandidateConf> listCandidateConfigs(String processDefinitionKey) {
-        log.debug("[WorkflowAdminService.listCandidateConfigs] processDefinitionKey={}", processDefinitionKey);
-        return nodeCandidateConfMapper.selectByProcessDefKey(processDefinitionKey);
+    public List<NodeCandidateRespDTO> listCandidateConfigsResp(String processDefinitionKey) {
+        log.debug("[WorkflowAdminService.listCandidateConfigsResp] processDefinitionKey={}", processDefinitionKey);
+        List<WfNodeCandidateConf> confs = nodeCandidateConfMapper.selectByProcessDefKey(processDefinitionKey);
+        return confs.stream().map(this::toNodeCandidateResp).collect(Collectors.toList());
+    }
+
+    private NodeCandidateRespDTO toNodeCandidateResp(WfNodeCandidateConf conf) {
+        NodeCandidateRespDTO resp = new NodeCandidateRespDTO();
+        resp.setId(conf.getId());
+        resp.setProcessDefinitionKey(conf.getProcessDefinitionKey());
+        resp.setNodeKey(conf.getNodeKey());
+        resp.setCandidateType(conf.getCandidateType());
+        resp.setCreatedTime(conf.getCreatedTime());
+        resp.setUpdatedTime(conf.getUpdatedTime());
+
+        // 补充流程定义名称
+        if (conf.getProcessDefinitionKey() != null) {
+            try {
+                ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                        .processDefinitionKey(conf.getProcessDefinitionKey())
+                        .latestVersion()
+                        .singleResult();
+                if (pd != null) {
+                    resp.setProcessDefinitionName(pd.getName());
+                }
+            } catch (Exception e) {
+                log.warn("获取流程定义失败: key={}", conf.getProcessDefinitionKey(), e);
+            }
+        }
+        // 节点名称需从 BPMN 模型获取，当前为空
+
+        // 解析 candidateValue JSON
+        if (conf.getCandidateValue() != null && !conf.getCandidateValue().isEmpty()) {
+            try {
+                resp.setCandidateValue(objectMapper.readValue(conf.getCandidateValue(),
+                        new TypeReference<List<String>>() {}));
+            } catch (Exception e) {
+                log.warn("解析候选人值失败: {}", conf.getCandidateValue(), e);
+                resp.setCandidateValue(List.of(conf.getCandidateValue()));
+            }
+        } else {
+            resp.setCandidateValue(List.of());
+        }
+
+        return resp;
     }
 
     /**
@@ -179,14 +269,62 @@ public class WorkflowAdminService {
     // ==================== 节点表单配置 (D.5 / D.6) ====================
 
     /**
-     * 查询指定流程定义下的所有节点表单配置（D.5）
+     * 查询指定流程定义下的所有节点表单配置（RespDTO）
      *
      * @param processDefinitionKey 流程定义KEY
-     * @return 节点表单配置列表
+     * @return 节点表单配置RespDTO列表
      */
-    public List<WfNodeFormConf> listNodeFormConfs(String processDefinitionKey) {
-        log.debug("[WorkflowAdminService.listNodeFormConfs] processDefinitionKey={}", processDefinitionKey);
-        return nodeFormConfMapper.selectByProcessDefKey(processDefinitionKey);
+    public List<NodeFormRespDTO> listNodeFormConfsResp(String processDefinitionKey) {
+        log.debug("[WorkflowAdminService.listNodeFormConfsResp] processDefinitionKey={}", processDefinitionKey);
+        List<WfNodeFormConf> confs = nodeFormConfMapper.selectByProcessDefKey(processDefinitionKey);
+        return confs.stream().map(this::toNodeFormResp).collect(Collectors.toList());
+    }
+
+    private NodeFormRespDTO toNodeFormResp(WfNodeFormConf conf) {
+        NodeFormRespDTO resp = new NodeFormRespDTO();
+        resp.setId(conf.getId());
+        resp.setProcessDefinitionKey(conf.getProcessDefinitionKey());
+        resp.setNodeKey(conf.getNodeKey());
+        resp.setCreatedTime(conf.getCreatedTime());
+        resp.setUpdatedTime(conf.getUpdatedTime());
+
+        // 补充流程定义名称
+        if (conf.getProcessDefinitionKey() != null) {
+            try {
+                ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                        .processDefinitionKey(conf.getProcessDefinitionKey())
+                        .latestVersion()
+                        .singleResult();
+                if (pd != null) {
+                    resp.setProcessDefinitionName(pd.getName());
+                }
+            } catch (Exception e) {
+                log.warn("获取流程定义失败: key={}", conf.getProcessDefinitionKey(), e);
+            }
+        }
+        // 节点名称需从 BPMN 模型获取，当前为空
+
+        // 解析 JSON 字段
+        resp.setFormFields(parseJson(conf.getFormFields(),
+                new com.fasterxml.jackson.core.type.TypeReference<java.util.List<com.bank.branch.platform.workflow.api.dto.FormFieldDTO>>() {}));
+        resp.setEditableFields(parseJson(conf.getEditableFields(),
+                new TypeReference<List<String>>() {}));
+        resp.setRequiredFields(parseJson(conf.getRequiredFields(),
+                new TypeReference<List<String>>() {}));
+
+        return resp;
+    }
+
+    private <T> List<T> parseJson(String json, TypeReference<List<T>> typeRef) {
+        if (json == null || json.isEmpty()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, typeRef);
+        } catch (Exception e) {
+            log.warn("JSON 解析失败: {}", json, e);
+            return List.of();
+        }
     }
 
     /**
@@ -258,7 +396,7 @@ public class WorkflowAdminService {
      */
     public List<ProcessDefinitionRespDTO> listProcessDefinitions(boolean active) {
         log.debug("[WorkflowAdminService.listProcessDefinitions] active={}", active);
-        RepositoryService repositoryService = processEngine.getRepositoryService();
+        RepositoryService repositoryService = this.repositoryService;
         ProcessDefinitionQuery query = repositoryService.createProcessDefinitionQuery();
         if (active) {
             query.active();

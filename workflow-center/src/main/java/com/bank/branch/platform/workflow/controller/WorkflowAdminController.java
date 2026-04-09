@@ -4,9 +4,12 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.workflow.api.dto.NodeCandidateRespDTO;
 import com.bank.branch.platform.workflow.api.dto.NodeCandidateUpdateReqDTO;
+import com.bank.branch.platform.workflow.api.dto.NodeFormRespDTO;
 import com.bank.branch.platform.workflow.api.dto.NodeFormUpdateReqDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDefinitionRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TimeoutRuleRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TimeoutRuleUpdateReqDTO;
 import com.bank.branch.platform.workflow.entity.WfNodeCandidateConf;
 import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
@@ -57,10 +60,10 @@ public class WorkflowAdminController {
     @GetMapping("/timeout-rules")
     @Operation(summary = "查询超时规则列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<List<WfTimeoutRule>> listTimeoutRules(
+    public ResponseWrapper<List<TimeoutRuleRespDTO>> listTimeoutRules(
             @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
         log.debug("[WorkflowAdminController.listTimeoutRules] processDefinitionKey={}", processDefinitionKey);
-        List<WfTimeoutRule> list = workflowAdminService.listTimeoutRules(processDefinitionKey);
+        List<TimeoutRuleRespDTO> list = workflowAdminService.listTimeoutRulesResp(processDefinitionKey);
         return ResponseWrapper.success(list);
     }
 
@@ -124,10 +127,10 @@ public class WorkflowAdminController {
     @GetMapping("/node-candidates")
     @Operation(summary = "查询节点候选人配置列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<List<WfNodeCandidateConf>> listNodeCandidates(
+    public ResponseWrapper<List<NodeCandidateRespDTO>> listNodeCandidates(
             @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
         log.debug("[WorkflowAdminController.listNodeCandidates] processDefinitionKey={}", processDefinitionKey);
-        List<WfNodeCandidateConf> list = workflowAdminService.listCandidateConfigs(processDefinitionKey);
+        List<NodeCandidateRespDTO> list = workflowAdminService.listCandidateConfigsResp(processDefinitionKey);
         return ResponseWrapper.success(list);
     }
 
@@ -190,10 +193,10 @@ public class WorkflowAdminController {
     @GetMapping("/node-forms")
     @Operation(summary = "查询节点表单配置列表")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<List<WfNodeFormConf>> listNodeForms(
+    public ResponseWrapper<List<NodeFormRespDTO>> listNodeForms(
             @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
         log.debug("[WorkflowAdminController.listNodeForms] processDefinitionKey={}", processDefinitionKey);
-        List<WfNodeFormConf> list = workflowAdminService.listNodeFormConfs(processDefinitionKey);
+        List<NodeFormRespDTO> list = workflowAdminService.listNodeFormConfsResp(processDefinitionKey);
         return ResponseWrapper.success(list);
     }
 
