@@ -1,9 +1,9 @@
 package com.bank.branch.platform.governance.controller;
 
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
-import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.DictCreateReqDTO;
+import com.bank.branch.platform.governance.api.dto.DictItemRespDTO;
 import com.bank.branch.platform.governance.api.dto.DictUpdateReqDTO;
 import com.bank.branch.platform.governance.entity.SysDict;
 import com.bank.branch.platform.governance.service.DictService;
@@ -35,11 +35,17 @@ class DictControllerTest {
     private DictService dictService;
 
     private MockMvc mockMvc;
+    private MockMvc adminMockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
+        // 公共查询接口测试
         mockMvc = MockMvcBuilders.standaloneSetup(new DictController(dictService))
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .build();
+        // 管理接口测试
+        adminMockMvc = MockMvcBuilders.standaloneSetup(new AdminDictController(dictService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
     }
@@ -52,6 +58,8 @@ class DictControllerTest {
         dict.setDictType("INDUSTRY");
         dict.setDictCode("IT");
         dict.setDictLabel("信息技术");
+        dict.setDictValue("IT");
+        dict.setStatus("ACTIVE");
         when(dictService.getDictItems(anyString())).thenReturn(List.of(dict));
 
         // when & then
@@ -68,6 +76,9 @@ class DictControllerTest {
         dict.setId("D_NEW");
         dict.setDictType("INDUSTRY");
         dict.setDictCode("FIN");
+        dict.setDictLabel("金融");
+        dict.setDictValue("FIN");
+        dict.setStatus("ACTIVE");
         when(dictService.createDict(anyString(), anyString(), anyString(), anyString(), any(), any()))
                 .thenReturn(dict);
 
@@ -79,7 +90,7 @@ class DictControllerTest {
         req.setSortOrder(1);
 
         // when & then
-        mockMvc.perform(post("/api/admin/sys/dicts")
+        adminMockMvc.perform(post("/api/admin/sys/dicts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -87,20 +98,26 @@ class DictControllerTest {
     }
 
     @Test
-    void listByPage_shouldReturn200WithPageResult() throws Exception {
+    void updateDict_shouldReturn200() throws Exception {
         // given
         SysDict dict = new SysDict();
         dict.setId("D_001");
-        PageResult<SysDict> pageResult = PageResult.of(1, 20, 1L, List.of(dict));
-        when(dictService.listByPage(any(), any(), anyInt(), anyInt())).thenReturn(pageResult);
+        dict.setDictType("INDUSTRY");
+        dict.setDictCode("IT");
+        dict.setDictLabel("信息技术更新");
+        dict.setDictValue("IT");
+        dict.setStatus("ACTIVE");
+        when(dictService.updateDict(anyString(), any(), any(), any(), any())).thenReturn(dict);
+
+        DictUpdateReqDTO req = new DictUpdateReqDTO();
+        req.setDictLabel("信息技术更新");
 
         // when & then
-        mockMvc.perform(get("/api/admin/sys/dicts")
-                .param("pageNo", "1")
-                .param("pageSize", "20"))
+        adminMockMvc.perform(put("/api/admin/sys/dicts/D_001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.page.total").value(1));
+                .andExpect(jsonPath("$.code").value("0"));
     }
 
     @Test
@@ -109,7 +126,7 @@ class DictControllerTest {
         doNothing().when(dictService).deleteDict(anyString());
 
         // when & then
-        mockMvc.perform(delete("/api/admin/sys/dicts/D_001"))
+        adminMockMvc.perform(delete("/api/admin/sys/dicts/D_001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
     }
@@ -127,7 +144,7 @@ class DictControllerTest {
         req.setDictLabel("信息技术");
         req.setDictValue("IT");
 
-        mockMvc.perform(post("/api/admin/sys/dicts")
+        adminMockMvc.perform(post("/api/admin/sys/dicts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -142,7 +159,7 @@ class DictControllerTest {
         req.setDictLabel("信息技术");
         req.setDictValue("IT");
 
-        mockMvc.perform(post("/api/admin/sys/dicts")
+        adminMockMvc.perform(post("/api/admin/sys/dicts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -157,7 +174,7 @@ class DictControllerTest {
         req.setDictLabel("信息技术");
         req.setDictValue("IT");
 
-        mockMvc.perform(post("/api/admin/sys/dicts")
+        adminMockMvc.perform(post("/api/admin/sys/dicts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -171,7 +188,7 @@ class DictControllerTest {
         DictUpdateReqDTO req = new DictUpdateReqDTO();
         req.setDictLabel("新标签");
 
-        mockMvc.perform(put("/api/admin/sys/dicts/NOT_EXIST")
+        adminMockMvc.perform(put("/api/admin/sys/dicts/NOT_EXIST")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
@@ -183,7 +200,7 @@ class DictControllerTest {
         doThrow(new BizException("GOV-40001", "字典类型不存在"))
             .when(dictService).deleteDict(anyString());
 
-        mockMvc.perform(delete("/api/admin/sys/dicts/NOT_EXIST"))
+        adminMockMvc.perform(delete("/api/admin/sys/dicts/NOT_EXIST"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("GOV-40001"));
     }

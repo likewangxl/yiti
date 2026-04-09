@@ -123,7 +123,7 @@ class ConfigServiceTest {
         when(configMapper.selectByConfigKey("app.name")).thenReturn(config);
         when(configMapper.updateById(any())).thenReturn(1);
 
-        configService.updateConfig("app.name", "NewValue");
+        configService.updateConfig("app.name", "NewValue", "test reason");
 
         verify(configMapper).updateById(argThat(c -> "NewValue".equals(c.getConfigValue())));
         verify(redisTemplate).delete("gov:config:app.name");
@@ -136,7 +136,7 @@ class ConfigServiceTest {
     void updateConfig_keyNotFound_throwsGov40002() {
         when(configMapper.selectByConfigKey("nonexistent.key")).thenReturn(null);
 
-        assertThatThrownBy(() -> configService.updateConfig("nonexistent.key", "value"))
+        assertThatThrownBy(() -> configService.updateConfig("nonexistent.key", "value", "test reason"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40002"));
     }
