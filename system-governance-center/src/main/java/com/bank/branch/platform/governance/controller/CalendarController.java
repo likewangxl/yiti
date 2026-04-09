@@ -42,18 +42,25 @@ public class CalendarController {
     private final CalendarService calendarService;
 
     /**
-     * 获取指定年份的全部日历数据
+     * 获取指定年份或指定月份的日历数据
      *
-     * @param year 年份
+     * @param year  年份（必填）
+     * @param month 月份（可选，1-12）
      * @return 日历天列表
      */
     @GetMapping
     @Operation(summary = "获取指定年份日历数据")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
     public ResponseWrapper<List<CalendarDayDTO>> getWorkingDays(
-            @RequestParam(value = "year") int year) {
-        log.debug("[CalendarController.getWorkingDays] year={}", year);
-        List<CalendarDayDTO> days = calendarService.getWorkingDays(year);
+            @RequestParam(value = "year") int year,
+            @RequestParam(value = "month", required = false) Integer month) {
+        log.debug("[CalendarController.getWorkingDays] year={}, month={}", year, month);
+        List<CalendarDayDTO> days;
+        if (month != null) {
+            days = calendarService.getDaysByMonth(year, month);
+        } else {
+            days = calendarService.getWorkingDays(year);
+        }
         return ResponseWrapper.success(days);
     }
 
