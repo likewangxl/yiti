@@ -53,23 +53,23 @@ public class SqlProbeController {
     }
 
     /**
-     * 查询SQL探针执行历史
+     * 查询当前用户的SQL探针执行历史
      *
-     * @param operatorEmpId 操作人工号
-     * @param pageNo        页码，默认 1
-     * @param pageSize      每页条数，默认 20
+     * @param pageNo   页码，默认 1
+     * @param pageSize 每页条数，默认 20
      * @return 分页结果
      */
     @GetMapping("/history")
     @Operation(summary = "查询执行历史")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
     public ResponseWrapper<AuditLogDTO> listHistory(
-            @RequestParam(value = "operatorEmpId") String operatorEmpId,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        log.debug("[SqlProbeController.listHistory] operatorEmpId={}, pageNo={}, pageSize={}",
-                operatorEmpId, pageNo, pageSize);
-        PageResult<AuditLogDTO> result = sqlProbeService.listHistory(operatorEmpId, pageNo, pageSize);
+        // 从上下文获取当前用户ID，查询自己的历史
+        String empId = DataScopeContext.current().getEmpId();
+        log.debug("[SqlProbeController.listHistory] empId={}, pageNo={}, pageSize={}",
+                empId, pageNo, pageSize);
+        PageResult<AuditLogDTO> result = sqlProbeService.listHistory(empId, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 }
