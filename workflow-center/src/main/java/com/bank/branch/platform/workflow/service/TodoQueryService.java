@@ -3,6 +3,8 @@ package com.bank.branch.platform.workflow.service;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
+import com.bank.branch.platform.workflow.api.dto.NodeFormConfDTO;
+import com.bank.branch.platform.workflow.api.dto.ProcessNodeDTO;
 import com.bank.branch.platform.workflow.api.dto.RuntimeAccessDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
@@ -193,24 +195,44 @@ public class TodoQueryService {
 
         // 2. 构建基础任务信息
         TaskRespDTO taskInfo = convertTaskToDTO(task);
-
-        // 3. 加载表单配置
         String processDefinitionKey = extractProcessDefinitionKey(task.getProcessDefinitionId());
-        WfNodeFormConf formConf = nodeFormConfMapper.selectByProcessDefKeyAndNodeKey(
-                processDefinitionKey, task.getTaskDefinitionKey());
 
-        // 4. 加载审批日志
-        List<Comment> comments = taskService.getProcessInstanceComments(task.getProcessInstanceId());
-        List<ApprovalLogDTO> approvalLogs = convertCommentsToLogs(comments);
-
-        // 5. 组装详情响应
+        // 3. 构建详情对象
         TaskDetailRespDTO detail = new TaskDetailRespDTO();
         detail.setTaskInfo(taskInfo);
+
+        // 4. 构建运行时权限（Task 2.6 增强）
+        RuntimeAccessDTO runtimeAccess = new RuntimeAccessDTO();
+        boolean isAssignee = empId.equals(task.getAssignee());
+        runtimeAccess.setIsAssignee(isAssignee);
+        runtimeAccess.setCanClaim(!isAssignee && task.getAssignee() == null); // TODO: 需检查候选人
+        runtimeAccess.setCanApprove(isAssignee);
+        runtimeAccess.setCanReject(isAssignee);
+        runtimeAccess.setCanTransfer(isAssignee);
+        runtimeAccess.setIsCandidate(false); // TODO: 需检查候选人
+        detail.setRuntimeAccess(runtimeAccess);
+
+        // 5. 加载表单配置
+        WfNodeFormConf formConf = nodeFormConfMapper.selectByProcessDefKeyAndNodeKey(
+                processDefinitionKey, task.getTaskDefinitionKey());
         if (formConf != null) {
-            detail.setFormFields(formConf.getFormFields());
-            detail.setEditableFields(formConf.getEditableFields());
-            detail.setRequiredFields(formConf.getRequiredFields());
+            NodeFormConfDTO nodeFormConf = new NodeFormConfDTO();
+            nodeFormConf.setProcessDefinitionKey(processDefinitionKey);
+            nodeFormConf.setNodeKey(task.getTaskDefinitionKey());
+            nodeFormConf.setFormFields(parseJsonToList(formConf.getFormFields(),
+                new com.fasterxml.jackson.core.type.TypeReference<List<com.bank.branch.platform.workflow.api.dto.FormFieldDTO>>() {}));
+            nodeFormConf.setEditableFields(parseJsonToList(formConf.getEditableFields(), STRING_LIST_TYPE));
+            nodeFormConf.setRequiredFields(parseJsonToList(formConf.getRequiredFields(), STRING_LIST_TYPE));
+            detail.setNodeFormConf(nodeFormConf);
         }
+
+        // 6. 构建流程进度（Task 2.6 增强）
+        // TODO: 通过 HistoryService 查询历史活动节点
+        detail.setProcessProgress(new ArrayList<>());
+
+        // 7. 加载审批日志
+        List<Comment> comments = taskService.getProcessInstanceComments(task.getProcessInstanceId());
+        List<ApprovalLogDTO> approvalLogs = convertCommentsToLogs(comments);
         detail.setApprovalLogs(approvalLogs);
 
         return detail;
