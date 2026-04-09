@@ -112,4 +112,20 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 批量查询用户角色，用于 OrgService.getOrgUsers() 补充 roles -->
+    <select id="selectRolesByUserIds" resultType="com.bank.branch.platform.auth.api.dto.UserRoleItemDTO">
+        SELECT
+            ur.USER_ID    AS userId,
+            r.ROLE_ID     AS roleId,
+            r.ROLE_CODE   AS roleCode,
+            r.ROLE_CHNAME AS roleChName
+        FROM PT_ROLE r
+        INNER JOIN PT_USER_ROLE ur ON r.ROLE_ID = ur.ROLE_ID
+        WHERE ur.USER_ID IN
+        <foreach collection="userIds" item="uid" open="(" separator="," close=")">
+            #{uid}
+        </foreach>
+        AND r.RECORD_STATUS = 0
+    </select>
+
 </mapper>

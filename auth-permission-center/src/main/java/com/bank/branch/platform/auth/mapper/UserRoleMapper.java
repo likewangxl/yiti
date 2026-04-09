@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.mapper;
 
 import com.bank.branch.platform.auth.api.dto.RoleUserRespDTO;
+import com.bank.branch.platform.auth.api.dto.UserRoleItemDTO;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.entity.PtUserRole;
@@ -97,4 +98,12 @@ public interface UserRoleMapper {
                                                         @Param("keyword") String keyword,
                                                         @Param("offset") int offset,
                                                         @Param("limit") int limit);
+
+    /**
+     * 批量查询多个用户的角色列表，用于 OrgService.getOrgUsers() 补充 roles 字段。
+     *
+     * @param userIds 用户ID列表
+     * @return 用户角色关联列表（含 userId，调用方按 userId 分组）
+     */
+    List<UserRoleItemDTO> selectRolesByUserIds(@Param("userIds") List<String> userIds);
 }

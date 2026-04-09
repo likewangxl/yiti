@@ -1,8 +1,12 @@
 package com.bank.branch.platform.auth.controller;
 
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
+import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
 import com.bank.branch.platform.auth.service.OrgService;
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +19,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 import java.util.Set;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -84,5 +90,35 @@ class OrgControllerTest {
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data[0].orgCode").value("ORG001"))
                 .andExpect(jsonPath("$.data[0].children[0].orgCode").value("ORG002"));
+    }
+
+    @Test
+    void getOrgUsers_shouldReturn200WithUsersAndRoles() throws Exception {
+        // given
+        RoleSimpleDTO role = new RoleSimpleDTO();
+        role.setRoleId("R_001");
+        role.setRoleCode("CUST_MGR");
+        role.setRoleChName("客户经理");
+
+        OrgUserDTO user = new OrgUserDTO();
+        user.setEmpId("emp001");
+        user.setUsername("testuser");
+        user.setDisplayName("测试用户");
+        user.setEmail("test@example.com");
+        user.setRoles(List.of(role));
+
+        PageResult<OrgUserDTO> page = PageResult.of(1, 20, 1, List.of(user));
+        when(orgService.getOrgUsers(eq("ORG001"), any(), eq(1), eq(20))).thenReturn(page);
+
+        // when & then
+        mockMvc.perform(get("/api/orgs/ORG001/users")
+                .param("pageNo", "1")
+                .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.page.records[0].empId").value("emp001"))
+                .andExpect(jsonPath("$.page.records[0].displayName").value("测试用户"))
+                .andExpect(jsonPath("$.page.records[0].email").value("test@example.com"))
+                .andExpect(jsonPath("$.page.records[0].roles[0].roleCode").value("CUST_MGR"));
     }
 }

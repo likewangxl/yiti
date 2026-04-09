@@ -3,6 +3,8 @@ package com.bank.branch.platform.auth.service;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
 import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.api.dto.UserRoleItemDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.entity.PtUser;
@@ -10,6 +12,7 @@ import com.bank.branch.platform.auth.enums.AuthErrorCode;
 import com.bank.branch.platform.auth.mapper.OrgMapper;
 import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserOrgMapper;
+import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +38,7 @@ public class OrgService {
     private final OrgMapper orgMapper;
     private final UserOrgMapper userOrgMapper;
     private final UserMapper userMapper;
+    private final UserRoleMapper userRoleMapper;
 
     /**
      * 根据机构编码查询机构信息
@@ -116,15 +120,34 @@ public class OrgService {
     public List<OrgUserDTO> getOrgUsers(String orgCode) {
         log.debug("[OrgService.getOrgUsers] orgCode={}", orgCode);
         List<PtUser> users = userMapper.selectByOrgCode(orgCode);
-        return users.stream()
-            .map(u -> {
-                OrgUserDTO dto = new OrgUserDTO();
-                dto.setUserId(u.getUserId());
-                dto.setUsername(u.getUsername());
-                dto.setUserChnName(u.getUserchnname());
-                return dto;
-            })
-            .collect(Collectors.toList());
+
+        final Map<String, List<RoleSimpleDTO>> rolesMap;
+        if (!users.isEmpty()) {
+            List<String> userIds = users.stream().map(PtUser::getUserId).collect(Collectors.toList());
+            List<UserRoleItemDTO> rolesList = userRoleMapper.selectRolesByUserIds(userIds);
+            rolesMap = rolesList.stream().collect(Collectors.groupingBy(
+                    UserRoleItemDTO::getUserId,
+                    Collectors.mapping(r -> {
+                        RoleSimpleDTO rd = new RoleSimpleDTO();
+                        rd.setRoleId(r.getRoleId());
+                        rd.setRoleCode(r.getRoleCode());
+                        rd.setRoleChName(r.getRoleChName());
+                        return rd;
+                    }, Collectors.toList())
+            ));
+        } else {
+            rolesMap = Map.of();
+        }
+
+        return users.stream().map(u -> {
+            OrgUserDTO dto = new OrgUserDTO();
+            dto.setEmpId(u.getUserId());
+            dto.setUsername(u.getUsername());
+            dto.setDisplayName(u.getUserchnname());
+            dto.setEmail(u.getEmail());
+            dto.setRoles(rolesMap.getOrDefault(u.getUserId(), List.of()));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     /**
@@ -140,22 +163,35 @@ public class OrgService {
         log.debug("[OrgService.getOrgUsers] orgCode={}, keyword={}, pageNo={}, pageSize={}", orgCode, keyword, pageNo, pageSize);
         int offset = (pageNo - 1) * pageSize;
 
-        // 查询列表
         List<PtUser> users = userMapper.selectOrgUsersByPage(orgCode, keyword, offset, pageSize);
-
-        // 查询总数
         long total = userMapper.countOrgUsers(orgCode, keyword);
 
-        // 转换并填充角色信息
+        // 批量查询用户角色
+        final Map<String, List<RoleSimpleDTO>> rolesMap;
+        if (!users.isEmpty()) {
+            List<String> userIds = users.stream().map(PtUser::getUserId).collect(Collectors.toList());
+            List<UserRoleItemDTO> rolesList = userRoleMapper.selectRolesByUserIds(userIds);
+            rolesMap = rolesList.stream().collect(Collectors.groupingBy(
+                    UserRoleItemDTO::getUserId,
+                    Collectors.mapping(r -> {
+                        RoleSimpleDTO rd = new RoleSimpleDTO();
+                        rd.setRoleId(r.getRoleId());
+                        rd.setRoleCode(r.getRoleCode());
+                        rd.setRoleChName(r.getRoleChName());
+                        return rd;
+                    }, Collectors.toList())
+            ));
+        } else {
+            rolesMap = Map.of();
+        }
+
         List<OrgUserDTO> records = users.stream().map(u -> {
             OrgUserDTO dto = new OrgUserDTO();
-            dto.setUserId(u.getUserId());
             dto.setEmpId(u.getUserId());
             dto.setUsername(u.getUsername());
-            dto.setUserChnName(u.getUserchnname());
             dto.setDisplayName(u.getUserchnname());
             dto.setEmail(u.getEmail());
-            // TODO: 后续 Task A.3 完成后再填充 roles 字段
+            dto.setRoles(rolesMap.getOrDefault(u.getUserId(), List.of()));
             return dto;
         }).collect(Collectors.toList());
 
