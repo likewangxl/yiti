@@ -1,6 +1,8 @@
 package com.bank.branch.platform.workflow.controller;
 
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
+import com.bank.branch.platform.workflow.api.dto.NodeCandidateRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TimeoutRuleRespDTO;
 import com.bank.branch.platform.workflow.entity.WfNodeCandidateConf;
 import com.bank.branch.platform.workflow.entity.WfTimeoutRule;
 import com.bank.branch.platform.workflow.service.WorkflowAdminService;
@@ -46,13 +48,13 @@ class WorkflowAdminControllerTest {
     @Test
     void listCandidateConfigs_shouldReturn200() throws Exception {
         // given
-        WfNodeCandidateConf conf = new WfNodeCandidateConf();
+        NodeCandidateRespDTO conf = new NodeCandidateRespDTO();
         conf.setId("CC_001");
         conf.setProcessDefinitionKey("lead_approval");
         conf.setNodeKey("dept_review");
         conf.setCandidateType("ROLE");
-        conf.setCandidateValue("[\"BRANCH_HEAD\"]");
-        when(workflowAdminService.listCandidateConfigs(anyString())).thenReturn(List.of(conf));
+        conf.setCandidateValue(List.of("BRANCH_HEAD"));
+        when(workflowAdminService.listCandidateConfigsResp(anyString())).thenReturn(List.of(conf));
 
         // when & then
         mockMvc.perform(get("/api/admin/workflow/node-candidates")
@@ -85,13 +87,13 @@ class WorkflowAdminControllerTest {
     @Test
     void listTimeoutRules_shouldReturn200() throws Exception {
         // given
-        WfTimeoutRule rule = new WfTimeoutRule();
+        TimeoutRuleRespDTO rule = new TimeoutRuleRespDTO();
         rule.setId("TR_001");
         rule.setProcessDefinitionKey("lead_approval");
         rule.setNodeKey("dept_review");
         rule.setTimeoutHours(48);
         rule.setWarningHours(24);
-        when(workflowAdminService.listTimeoutRules(anyString())).thenReturn(List.of(rule));
+        when(workflowAdminService.listTimeoutRulesResp(anyString())).thenReturn(List.of(rule));
 
         // when & then
         mockMvc.perform(get("/api/admin/workflow/timeout-rules")

@@ -2,6 +2,7 @@ package com.bank.branch.platform.workflow.controller;
 
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.service.ProcessQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,20 +44,17 @@ class ProcessControllerTest {
 
     @Test
     void getProcessInstanceInfo_shouldReturn200() throws Exception {
-        // given - 创建 ProcessInstanceInfo record
-        ProcessQueryService.ProcessInstanceInfo info = new ProcessQueryService.ProcessInstanceInfo(
-                "PID_001",
-                "loanApproval",
-                "贷款审批流程",
-                1,
-                "LOAN:1001",
-                "E001",
-                "task_1",
-                false,
-                LocalDateTime.of(2026, 4, 1, 10, 0, 0),
-                null,
-                null
-        );
+        // given - 创建 ProcessInstanceInfo
+        ProcessQueryService.ProcessInstanceInfo info = new ProcessQueryService.ProcessInstanceInfo();
+        info.setProcessInstanceId("PID_001");
+        info.setProcessDefinitionKey("loanApproval");
+        info.setProcessDefinitionName("贷款审批流程");
+        info.setProcessDefinitionVersion(1);
+        info.setBusinessKey("LOAN:1001");
+        info.setStartUserId("E001");
+        info.setCurrentActivityId("task_1");
+        info.setIsEnded(false);
+        info.setStartTime(LocalDateTime.of(2026, 4, 1, 10, 0, 0));
         when(processQueryService.getProcessInstanceInfo(anyString())).thenReturn(info);
 
         // when & then
@@ -107,24 +105,22 @@ class ProcessControllerTest {
 
     @Test
     void getProcessHistory_shouldReturn200() throws Exception {
-        // given - 创建 ProcessHistoryDTO 列表
-        ProcessQueryService.ProcessHistoryDTO dto1 = new ProcessQueryService.ProcessHistoryDTO();
-        dto1.setActivityId("task_1");
-        dto1.setActivityName("提交申请");
-        dto1.setActivityType("userTask");
-        dto1.setAssignee("E001");
-        dto1.setStartTime(LocalDateTime.of(2026, 4, 1, 10, 0, 0));
-        dto1.setEndTime(LocalDateTime.of(2026, 4, 1, 10, 30, 0));
-        dto1.setDurationMs(1800000L);
+        // given - 创建 ApprovalLogDTO 列表
+        ApprovalLogDTO dto1 = new ApprovalLogDTO();
+        dto1.setNodeKey("task_1");
+        dto1.setNodeName("提交申请");
+        dto1.setOperator("E001");
+        dto1.setOperatorName("张三");
+        dto1.setAction("SUBMIT");
+        dto1.setOperateTime(LocalDateTime.of(2026, 4, 1, 10, 0, 0));
 
-        ProcessQueryService.ProcessHistoryDTO dto2 = new ProcessQueryService.ProcessHistoryDTO();
-        dto2.setActivityId("task_2");
-        dto2.setActivityName("审批");
-        dto2.setActivityType("userTask");
-        dto2.setAssignee("E002");
-        dto2.setStartTime(LocalDateTime.of(2026, 4, 1, 10, 30, 0));
-        dto2.setEndTime(LocalDateTime.of(2026, 4, 1, 11, 0, 0));
-        dto2.setDurationMs(1800000L);
+        ApprovalLogDTO dto2 = new ApprovalLogDTO();
+        dto2.setNodeKey("task_2");
+        dto2.setNodeName("审批");
+        dto2.setOperator("E002");
+        dto2.setOperatorName("李四");
+        dto2.setAction("APPROVE");
+        dto2.setOperateTime(LocalDateTime.of(2026, 4, 1, 10, 30, 0));
 
         when(processQueryService.getProcessHistory(anyString())).thenReturn(List.of(dto1, dto2));
 
@@ -133,10 +129,11 @@ class ProcessControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.length()").value(2))
-                .andExpect(jsonPath("$.data[0].activityId").value("task_1"))
-                .andExpect(jsonPath("$.data[0].activityName").value("提交申请"))
-                .andExpect(jsonPath("$.data[1].activityId").value("task_2"))
-                .andExpect(jsonPath("$.data[1].activityName").value("审批"));
+                .andExpect(jsonPath("$.data[0].nodeKey").value("task_1"))
+                .andExpect(jsonPath("$.data[0].nodeName").value("提交申请"))
+                .andExpect(jsonPath("$.data[0].operator").value("E001"))
+                .andExpect(jsonPath("$.data[1].nodeKey").value("task_2"))
+                .andExpect(jsonPath("$.data[1].nodeName").value("审批"));
     }
 
     @Test
