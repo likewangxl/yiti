@@ -6,7 +6,11 @@ import com.bank.branch.platform.auth.api.dto.CurrentUserRespDTO;
 import com.bank.branch.platform.auth.api.dto.LoginReqDTO;
 import com.bank.branch.platform.auth.api.dto.LoginRespDTO;
 import com.bank.branch.platform.auth.api.dto.PermissionSetRespDTO;
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.entity.PtRole;
+import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.auth.service.AuthService;
+import com.bank.branch.platform.auth.service.BizScopeService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
@@ -20,6 +24,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,6 +45,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserRoleMapper userRoleMapper;
+    private final BizScopeService bizScopeService;
 
     /**
      * 用户登录
@@ -86,10 +97,29 @@ public class AuthController {
         dto.setMainOrgName(ctx.mainOrgName());
         dto.setOrgLevel(ctx.orgLevel());
         dto.setIsSystemAdmin(ctx.systemAdmin());
-        // roles/permissions/bizScopes 由前端按需调用专属接口获取
-        dto.setRoles(null);
-        dto.setPermissions(null);
-        dto.setBizScopes(null);
+        // 填充 roles: 从 UserRoleMapper 查询并映射为 RoleSimpleDTO
+        List<PtRole> roles = userRoleMapper.selectRolesByUserId(ctx.empId());
+        dto.setRoles(roles.stream().map(r -> {
+            RoleSimpleDTO rd = new RoleSimpleDTO();
+            rd.setRoleId(r.getRoleId());
+            rd.setRoleCode(r.getRoleCode());
+            rd.setRoleChName(r.getRoleChName());
+            return rd;
+        }).collect(Collectors.toList()));
+
+        // 填充 permissions 和 bizScopes: 复用 AuthService.getUserPermissions()
+        PermissionSetRespDTO permSet = authService.getUserPermissions(ctx.empId());
+        dto.setPermissions(
+            permSet.getResourceUrls() != null
+                ? new ArrayList<>(permSet.getResourceUrls())
+                : new ArrayList<>()
+        );
+        if (permSet.getBizScopes() != null) {
+            dto.setBizScopes(new LinkedHashMap<>());
+            permSet.getBizScopes().forEach(dto.getBizScopes()::put);
+        } else {
+            dto.setBizScopes(new LinkedHashMap<>());
+        }
         return ResponseWrapper.success(dto);
     }
 

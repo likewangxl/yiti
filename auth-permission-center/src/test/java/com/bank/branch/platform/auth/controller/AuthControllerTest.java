@@ -2,7 +2,12 @@ package com.bank.branch.platform.auth.controller;
 
 import com.bank.branch.platform.auth.api.dto.LoginReqDTO;
 import com.bank.branch.platform.auth.api.dto.LoginRespDTO;
+import com.bank.branch.platform.auth.api.dto.PermissionSetRespDTO;
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.entity.PtRole;
+import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.auth.service.AuthService;
+import com.bank.branch.platform.auth.service.BizScopeService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.exception.AuthException;
@@ -17,8 +22,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import static org.hamcrest.Matchers.hasItems;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
@@ -37,12 +45,19 @@ class AuthControllerTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private UserRoleMapper userRoleMapper;
+
+    @Mock
+    private BizScopeService bizScopeService;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService))
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new AuthController(authService, userRoleMapper, bizScopeService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
     }
@@ -86,6 +101,14 @@ class AuthControllerTest {
                 "emp001", "testUser", "测试用户", "ORG001", "总行", 1,
                 Set.of("R_001"), Set.of("SYS_ADMIN"), Set.of("ROLE:SYS_ADMIN"), true);
         when(authService.getCurrentUser(any(HttpSession.class))).thenReturn(ctx);
+        when(userRoleMapper.selectRolesByUserId("emp001")).thenReturn(List.of());
+        PermissionSetRespDTO permSet = new PermissionSetRespDTO();
+        permSet.setResourceUrls(Set.of());
+        permSet.setBizScopes(Map.of());
+        permSet.setRoleIds(Set.of());
+        permSet.setRoleCodes(Set.of());
+        permSet.setIsSystemAdmin(true);
+        when(authService.getUserPermissions("emp001")).thenReturn(permSet);
 
         // when & then
         mockMvc.perform(get("/api/auth/current-user"))
@@ -98,6 +121,38 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.data.mainOrgName").value("总行"))
                 .andExpect(jsonPath("$.data.orgLevel").value(1))
                 .andExpect(jsonPath("$.data.isSystemAdmin").value(true));
+    }
+
+    @Test
+    void getCurrentUser_shouldReturnRolesPermissionsAndBizScopes() throws Exception {
+        // given
+        CurrentUserContext ctx = new CurrentUserContext(
+                "emp001", "testUser", "测试用户", "ORG001", "总行", 1,
+                Set.of("R_001"), Set.of("CUST_MGR"), Set.of("ROLE:CUST_MGR"), false);
+        when(authService.getCurrentUser(any(HttpSession.class))).thenReturn(ctx);
+
+        PtRole role = new PtRole();
+        role.setRoleId("R_001");
+        role.setRoleCode("CUST_MGR");
+        role.setRoleChName("客户经理");
+        when(userRoleMapper.selectRolesByUserId("emp001")).thenReturn(List.of(role));
+
+        PermissionSetRespDTO permSet = new PermissionSetRespDTO();
+        permSet.setResourceUrls(Set.of("/api/leads", "/api/customers"));
+        permSet.setBizScopes(Map.of("LEAD", "SELF_CREATED"));
+        permSet.setRoleIds(Set.of("R_001"));
+        permSet.setRoleCodes(Set.of("CUST_MGR"));
+        permSet.setIsSystemAdmin(false);
+        when(authService.getUserPermissions("emp001")).thenReturn(permSet);
+
+        // when & then
+        mockMvc.perform(get("/api/auth/current-user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.empId").value("emp001"))
+                .andExpect(jsonPath("$.data.roles[0].roleCode").value("CUST_MGR"))
+                .andExpect(jsonPath("$.data.permissions", org.hamcrest.Matchers.hasItems("/api/leads", "/api/customers")))
+                .andExpect(jsonPath("$.data.bizScopes.LEAD").value("SELF_CREATED"));
     }
 
     // ── L2 错误路径测试 ──────────────────────────────────────────
