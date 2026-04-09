@@ -3,6 +3,7 @@ package com.bank.branch.platform.workflow.service;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
+import com.bank.branch.platform.workflow.api.dto.RuntimeAccessDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
@@ -11,11 +12,15 @@ import com.bank.branch.platform.workflow.enums.SlaStatus;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import com.bank.branch.platform.workflow.mapper.NodeFormConfMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.task.Comment;
+import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
@@ -27,6 +32,8 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -41,11 +48,34 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TodoQueryService {
 
+    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {};
+
     private final TaskService taskService;
     private final HistoryService historyService;
+    private final RuntimeService runtimeService;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final SlaCalculationService slaCalculationService;
     private final NodeFormConfMapper nodeFormConfMapper;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * 解析 JSON 字符串为 List。
+     *
+     * @param json JSON 字符串
+     * @param typeRef 类型引用
+     * @return 解析后的列表，解析失败时返回空列表
+     */
+    private <T> List<T> parseJsonToList(String json, TypeReference<List<T>> typeRef) {
+        if (json == null || json.isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, typeRef);
+        } catch (Exception e) {
+            log.warn("JSON 解析失败: {}", json, e);
+            return new ArrayList<>();
+        }
+    }
 
     /**
      * 查询待办列表（分页）。
@@ -216,13 +246,15 @@ public class TodoQueryService {
         dto.setBusinessKey(map.getBusinessKey());
         dto.setBizType(map.getBizType());
         dto.setBizId(map.getBizId());
-        dto.setTitle(map.getBusinessKey());
+        dto.setTitle(map.getTitle());
         dto.setStartUser(map.getStartUser());
+        dto.setStartTime(map.getStartTime());
         dto.setTaskName(task.getName());
         dto.setTaskCreateTime(taskCreateTime);
         dto.setAssignee(task.getAssignee());
-        dto.setCandidateGroups(map.getCandidateGroups());
+        dto.setCandidateGroups(parseJsonToList(map.getCandidateGroups(), STRING_LIST_TYPE));
         dto.setSlaStatus(slaStatus.getCode());
+        // SLA 时间通过 SLA 计算服务获取
         dto.setClaimable(task.getAssignee() == null);
 
         return dto;
@@ -256,14 +288,20 @@ public class TodoQueryService {
         dto.setBusinessKey(map.getBusinessKey());
         dto.setBizType(map.getBizType());
         dto.setBizId(map.getBizId());
-        dto.setTitle(map.getBusinessKey());
+        dto.setTitle(map.getTitle());
         dto.setStartUser(map.getStartUser());
+        dto.setStartTime(map.getStartTime());
         dto.setTaskName(hti.getName());
         dto.setTaskCreateTime(taskCreateTime);
         dto.setAssignee(hti.getAssignee());
-        dto.setCandidateGroups(map.getCandidateGroups());
+        dto.setCandidateGroups(parseJsonToList(map.getCandidateGroups(), STRING_LIST_TYPE));
         dto.setSlaStatus(slaStatus.getCode());
         dto.setClaimable(false); // 已办任务不可签收
+
+        // 已办任务：设置完成信息
+        if (hti.getEndTime() != null) {
+            dto.setCompleteTime(convertToLocalDateTime(hti.getEndTime()));
+        }
 
         return dto;
     }
@@ -281,9 +319,10 @@ public class TodoQueryService {
         List<ApprovalLogDTO> logs = new ArrayList<>();
         for (Comment comment : comments) {
             ApprovalLogDTO logDTO = new ApprovalLogDTO();
-            logDTO.setUserId(comment.getUserId());
-            logDTO.setComment(comment.getFullMessage());
-            logDTO.setTime(convertToLocalDateTime(comment.getTime()));
+            logDTO.setOperator(comment.getUserId());
+            logDTO.setOpinion(comment.getFullMessage());
+            logDTO.setOperateTime(convertToLocalDateTime(comment.getTime()));
+            // nodeKey/nodeName/action/operatorName/operatorOrgName 在 Task 2.6 中通过 HistoryService 补充
             logs.add(logDTO);
         }
         return logs;

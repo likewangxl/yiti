@@ -14,15 +14,27 @@ import java.time.LocalDateTime;
 @Data
 public class ApprovalLogDTO {
 
-    /** 操作人工号 */
-    private String userId;
+    /** 节点ID */
+    private String nodeKey;
 
-    /** 操作类型（如 APPROVE / REJECT / TRANSFER） */
+    /** 节点名称 */
+    private String nodeName;
+
+    /** 操作人工号 */
+    private String operator;
+
+    /** 操作人姓名 */
+    private String operatorName;
+
+    /** 操作人机构名称 */
+    private String operatorOrgName;
+
+    /** 操作类型：SUBMIT / APPROVE / REJECT / CLAIM / TRANSFER */
     private String action;
 
     /** 审批意见 */
-    private String comment;
+    private String opinion;
 
     /** 操作时间 */
-    private LocalDateTime time;
+    private LocalDateTime operateTime;
 }
