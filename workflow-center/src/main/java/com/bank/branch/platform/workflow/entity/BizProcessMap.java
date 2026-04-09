@@ -45,6 +45,9 @@ public class BizProcessMap {
     /** 流程状态：RUNNING/COMPLETED/CANCELLED，对应 process_status */
     private String processStatus;
 
+    /** 流程标题，对应 title */
+    private String title;
+
     /** 发起时间，对应 start_time */
     private LocalDateTime startTime;
 

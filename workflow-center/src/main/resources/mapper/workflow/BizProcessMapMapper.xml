@@ -7,7 +7,7 @@
         id, business_key, biz_type, biz_id,
         process_definition_key, process_instance_id,
         start_user, current_assignee, candidate_groups,
-        process_status, start_time, end_time,
+        process_status, title, start_time, end_time,
         created_time, updated_time
     </sql>
 
@@ -59,13 +59,13 @@
             id, business_key, biz_type, biz_id,
             process_definition_key, process_instance_id,
             start_user, current_assignee, candidate_groups,
-            process_status, start_time, end_time,
+            process_status, title, start_time, end_time,
             created_time, updated_time
         ) VALUES (
             #{id}, #{businessKey}, #{bizType}, #{bizId},
             #{processDefinitionKey}, #{processInstanceId},
             #{startUser}, #{currentAssignee}, #{candidateGroups},
-            #{processStatus}, #{startTime}, #{endTime},
+            #{processStatus}, #{title}, #{startTime}, #{endTime},
             #{createdTime}, #{updatedTime}
         )
     </insert>
@@ -83,6 +83,7 @@
             <if test="currentAssignee != null">current_assignee = #{currentAssignee},</if>
             <if test="candidateGroups != null">candidate_groups = #{candidateGroups},</if>
             <if test="processStatus != null">process_status = #{processStatus},</if>
+            <if test="title != null">title = #{title},</if>
             <if test="startTime != null">start_time = #{startTime},</if>
             <if test="endTime != null">end_time = #{endTime},</if>
             <if test="updatedTime != null">updated_time = #{updatedTime},</if>

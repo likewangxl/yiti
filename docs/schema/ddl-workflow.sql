@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `biz_process_map` (
   `current_assignee` varchar(32) DEFAULT NULL COMMENT '当前处理人工号',
   `candidate_groups` text COMMENT '候选组列表（JSON数组）',
   `process_status` varchar(50) DEFAULT 'RUNNING' COMMENT '流程状态：RUNNING-运行中, COMPLETED-已完成, CANCELLED-已取消',
+  `title` varchar(200) DEFAULT NULL COMMENT '流程标题',
   `start_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '发起时间',
   `end_time` datetime DEFAULT NULL COMMENT '结束时间',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
