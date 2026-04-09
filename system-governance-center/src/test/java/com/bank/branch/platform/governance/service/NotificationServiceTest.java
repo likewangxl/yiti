@@ -108,6 +108,86 @@ class NotificationServiceTest {
     }
 
     /**
+     * 测试 markAsReadForUser：本用户通知标记已读成功
+     */
+    @Test
+    void markAsReadForUser_correctUser_callsMarkAsRead() {
+        UserNotification existing = makeNotification("N001", "E001", "测试通知");
+        when(notificationMapper.selectById("N001")).thenReturn(existing);
+        when(notificationMapper.updateReadStatus(eq("N001"), eq(1), any(LocalDateTime.class))).thenReturn(1);
+
+        notificationService.markAsReadForUser("N001", "E001");
+
+        verify(notificationMapper).updateReadStatus(eq("N001"), eq(1), any(LocalDateTime.class));
+    }
+
+    /**
+     * 测试 markAsReadForUser：非本用户通知抛出 GOV-40006（不暴露通知是否存在）
+     */
+    @Test
+    void markAsReadForUser_wrongUser_throwsGov40006() {
+        UserNotification existing = makeNotification("N001", "E001", "测试通知");
+        when(notificationMapper.selectById("N001")).thenReturn(existing);
+
+        assertThatThrownBy(() -> notificationService.markAsReadForUser("N001", "E002"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "GOV-40006");
+    }
+
+    /**
+     * 测试 markAsReadForUser：通知不存在时抛出 GOV-40006
+     */
+    @Test
+    void markAsReadForUser_notFound_throwsGov40006() {
+        when(notificationMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> notificationService.markAsReadForUser("NOT_EXIST", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "GOV-40006");
+    }
+
+    /**
+     * 测试 getByIdForUser：本用户通知查询成功
+     */
+    @Test
+    void getByIdForUser_correctUser_returnsDto() {
+        UserNotification existing = makeNotification("N001", "E001", "测试通知");
+        existing.setNotifyType("SYSTEM");
+        when(notificationMapper.selectById("N001")).thenReturn(existing);
+
+        NotificationDTO dto = notificationService.getByIdForUser("N001", "E001");
+
+        assertThat(dto.getId()).isEqualTo("N001");
+        assertThat(dto.getEmpId()).isEqualTo("E001");
+        assertThat(dto.getTitle()).isEqualTo("测试通知");
+    }
+
+    /**
+     * 测试 getByIdForUser：非本用户通知抛出 GOV-40006（不暴露通知是否存在）
+     */
+    @Test
+    void getByIdForUser_wrongUser_throwsGov40006() {
+        UserNotification existing = makeNotification("N001", "E001", "测试通知");
+        when(notificationMapper.selectById("N001")).thenReturn(existing);
+
+        assertThatThrownBy(() -> notificationService.getByIdForUser("N001", "E002"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "GOV-40006");
+    }
+
+    /**
+     * 测试 getByIdForUser：通知不存在时抛出 GOV-40006
+     */
+    @Test
+    void getByIdForUser_notFound_throwsGov40006() {
+        when(notificationMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> notificationService.getByIdForUser("NOT_EXIST", "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "GOV-40006");
+    }
+
+    /**
      * 测试 queryNotifications：验证分页查询参数传递和结果组装
      */
     @Test

@@ -150,6 +150,28 @@ public class NotificationService {
     }
 
     /**
+     * 将单条通知标记为已读（带权限校验）。
+     * 仅允许操作属于当前用户自己的通知。
+     *
+     * @param id    通知ID
+     * @param empId 当前用户工号
+     * @throws BizException GOV-40006 通知不存在（非本用户通知也返回不存在）
+     */
+    public void markAsReadForUser(String id, String empId) {
+        log.info("[NotificationService.markAsReadForUser] id={}, empId={}", id, empId);
+
+        UserNotification notification = notificationMapper.selectById(id);
+        // 不暴露通知是否存在：非本用户通知也返回NOT_FOUND
+        if (notification == null || !empId.equals(notification.getEmpId())) {
+            throw new BizException(GovErrorCode.NOTICE_NOT_FOUND.getCode(),
+                    GovErrorCode.NOTICE_NOT_FOUND.getMessage());
+        }
+
+        // 调用基础方法标记已读（包含幂等处理）
+        markAsRead(id);
+    }
+
+    /**
      * 将指定用户的所有未读通知标记为已读。
      *
      * @param empId 接收人工号
@@ -178,6 +200,27 @@ public class NotificationService {
                     GovErrorCode.NOTICE_NOT_FOUND.getMessage());
         }
         return toDTO(existing);
+    }
+
+    /**
+     * 根据ID查询通知详情（带权限校验）。
+     * 仅允许查询属于当前用户自己的通知。
+     *
+     * @param id    通知ID
+     * @param empId 当前用户工号
+     * @return 通知 DTO
+     * @throws BizException GOV-40006 通知不存在（非本用户通知也返回不存在）
+     */
+    public NotificationDTO getByIdForUser(String id, String empId) {
+        log.debug("[NotificationService.getByIdForUser] id={}, empId={}", id, empId);
+
+        UserNotification notification = notificationMapper.selectById(id);
+        // 不暴露通知是否存在：非本用户通知也返回NOT_FOUND
+        if (notification == null || !empId.equals(notification.getEmpId())) {
+            throw new BizException(GovErrorCode.NOTICE_NOT_FOUND.getCode(),
+                    GovErrorCode.NOTICE_NOT_FOUND.getMessage());
+        }
+        return toDTO(notification);
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────
