@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
@@ -19,6 +20,9 @@ import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.task.api.TaskInfo;
+import org.flowable.task.api.history.HistoricTaskInstance;
+import org.flowable.task.api.TaskService;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -28,6 +32,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,6 +51,7 @@ public class ProcessQueryService {
     private final RepositoryService repositoryService;
     private final RuntimeService runtimeService;
     private final HistoryService historyService;
+    private final TaskService taskService;
     private final UserApi userApi;
     private final OrgApi orgApi;
     private final BizProcessMapMapper bizProcessMapMapper;
@@ -265,7 +271,7 @@ public class ProcessQueryService {
      * @param processInstanceId 流程实例ID
      * @return 审批日志列表（不含服务任务等自动节点）
      */
-    public List<ProcessHistoryDTO> getProcessHistory(String processInstanceId) {
+    public List<ApprovalLogDTO> getProcessHistory(String processInstanceId) {
         log.debug("[ProcessQueryService.getProcessHistory] processInstanceId={}", processInstanceId);
 
         // 校验流程实例是否存在
@@ -287,25 +293,54 @@ public class ProcessQueryService {
         // 仅返回用户任务类型的历史节点
         return activities.stream()
                 .filter(a -> a.getActivityType() != null && a.getActivityType().startsWith("userTask"))
-                .map(this::toHistoryDTO)
+                .map(this::toApprovalLogDTO)
                 .collect(Collectors.toList());
     }
 
-    private ProcessHistoryDTO toHistoryDTO(HistoricActivityInstance activity) {
-        ProcessHistoryDTO dto = new ProcessHistoryDTO();
-        dto.setActivityId(activity.getActivityId());
-        dto.setActivityName(activity.getActivityName());
-        dto.setActivityType(activity.getActivityType());
-        dto.setAssignee(activity.getAssignee());
+    private ApprovalLogDTO toApprovalLogDTO(HistoricActivityInstance activity) {
+        ApprovalLogDTO dto = new ApprovalLogDTO();
+        dto.setNodeKey(activity.getActivityId());
+        dto.setNodeName(activity.getActivityName());
+
+        // 获取操作人信息
+        if (activity.getAssignee() != null) {
+            dto.setOperator(activity.getAssignee());
+            // 获取操作人姓名
+            String userName = userApi.getUserName(activity.getAssignee());
+            dto.setOperatorName(userName);
+            // 获取操作人机构名称
+            OrgDTO org = orgApi.getUserMainOrg(activity.getAssignee());
+            if (org != null) {
+                dto.setOperatorOrgName(org.getOrgName());
+            }
+        }
+
+        // 获取审批意见（从历史任务变量）
+        if (activity.getAssignee() != null) {
+            try {
+                HistoricTaskInstance hti = historyService.createHistoricTaskInstanceQuery()
+                        .taskId(activity.getActivityId())
+                        .singleResult();
+                if (hti != null) {
+                    Map<String, Object> vars = historyService.getHistoricTaskInstanceVariables(hti.getId());
+                    if (vars.containsKey("approved")) {
+                        Boolean approved = (Boolean) vars.get("approved");
+                        dto.setAction(approved != null && approved ? "APPROVE" : "REJECT");
+                    }
+                    if (vars.containsKey("opinion")) {
+                        dto.setOpinion((String) vars.get("opinion"));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("获取审批意见失败: activityId={}", activity.getActivityId(), e);
+            }
+        }
+
+        // 设置操作时间
         if (activity.getStartTime() != null) {
-            dto.setStartTime(activity.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
+            dto.setOperateTime(activity.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
         }
-        if (activity.getEndTime() != null) {
-            dto.setEndTime(activity.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
-        }
-        if (activity.getDurationInMillis() != null) {
-            dto.setDurationMs(activity.getDurationInMillis());
-        }
+
         return dto;
     }
 
@@ -434,24 +469,4 @@ public class ProcessQueryService {
         }
     }
 
-    /**
-     * 流程历史节点 DTO
-     */
-    @lombok.Data
-    public static class ProcessHistoryDTO {
-        /** 活动节点ID（BPMN node ID） */
-        private String activityId;
-        /** 活动节点名称 */
-        private String activityName;
-        /** 活动类型 */
-        private String activityType;
-        /** 办理人 */
-        private String assignee;
-        /** 开始时间 */
-        private LocalDateTime startTime;
-        /** 结束时间 */
-        private LocalDateTime endTime;
-        /** 耗时（毫秒） */
-        private Long durationMs;
-    }
 }

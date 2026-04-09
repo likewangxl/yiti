@@ -1,6 +1,7 @@
 package com.bank.branch.platform.workflow.controller;
 
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.service.ProcessQueryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -66,14 +67,14 @@ public class ProcessController {
      * 查询流程历史节点列表（C.3）
      *
      * @param processInstanceId 流程实例ID
-     * @return 历史活动节点列表
+     * @return 审批日志列表
      */
     @GetMapping("/{processInstanceId}/history")
     @Operation(summary = "查询流程历史节点")
-    public ResponseWrapper<List<ProcessQueryService.ProcessHistoryDTO>> getProcessHistory(
+    public ResponseWrapper<List<ApprovalLogDTO>> getProcessHistory(
             @PathVariable(value = "processInstanceId") String processInstanceId) {
         log.debug("[ProcessController.getProcessHistory] processInstanceId={}", processInstanceId);
-        List<ProcessQueryService.ProcessHistoryDTO> history = processQueryService.getProcessHistory(processInstanceId);
+        List<ApprovalLogDTO> history = processQueryService.getProcessHistory(processInstanceId);
         return ResponseWrapper.success(history);
     }
 
