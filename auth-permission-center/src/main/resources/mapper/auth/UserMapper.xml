@@ -14,6 +14,14 @@
         REMARK, PWD_UPDATE_TIME
     </sql>
 
+    <!-- JOIN 场景下的限定列，避免与 EXT_USER_ORG 的同名列（如 USER_ID）冲突 -->
+    <sql id="BASE_COLUMNS_QUALIFIED">
+        u.USER_ID, u.USERNAME, u.USERCHNNAME, u.PWD, u.EMAIL,
+        u.ISEXPIRED, u.ISLOCKED, u.PASS_WRONG_COUNT, u.ISENABLED,
+        u.CREATE_TIME, u.CREATE_AUTHOR, u.UPDATE_TIME, u.UPDATE_AUTHOR,
+        u.REMARK, u.PWD_UPDATE_TIME
+    </sql>
+
     <!-- 根据用户ID查询用户 -->
     <select id="selectByUserId" parameterType="string"
             resultType="com.bank.branch.platform.auth.entity.PtUser">
@@ -36,7 +44,7 @@
     <select id="selectByOrgCode" parameterType="string"
             resultType="com.bank.branch.platform.auth.entity.PtUser">
         SELECT
-            <include refid="BASE_COLUMNS"/>
+            <include refid="BASE_COLUMNS_QUALIFIED"/>
         FROM PT_USER u
         INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
         WHERE uo.ORG_CODE = #{orgCode}
@@ -45,7 +53,7 @@
     <!-- 分页查询机构下的用户（G.2） -->
     <select id="selectOrgUsersByPage" resultType="com.bank.branch.platform.auth.entity.PtUser">
         SELECT
-            <include refid="BASE_COLUMNS"/>
+            <include refid="BASE_COLUMNS_QUALIFIED"/>
         FROM PT_USER u
         INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
         WHERE uo.ORG_CODE = #{orgCode}

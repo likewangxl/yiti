@@ -6,12 +6,14 @@ import com.bank.branch.platform.common.web.exception.PermissionDeniedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import java.util.stream.Collectors;
 
 /**
@@ -87,6 +89,38 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ResponseWrapper<?>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
             .body(ResponseWrapper.error("SYS_415", "不支持的媒体类型"));
+    }
+
+    /**
+     * 处理非法参数异常 - 返回 400
+     * 包括控制器内手动抛出的 IllegalArgumentException（如参数校验）
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ResponseWrapper<?>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("非法参数: {}", ex.getMessage());
+        return ResponseEntity.badRequest()
+            .body(ResponseWrapper.error("VALID_003", ex.getMessage()));
+    }
+
+    /**
+     * 处理路径变量/查询参数类型不匹配异常 - 返回 400
+     * 例如 PathVariable @DateTimeFormat 解析失败等
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ResponseWrapper<?>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String msg = "参数类型错误: " + ex.getName() + "=" + ex.getValue();
+        log.warn("参数类型不匹配: {}", msg);
+        return ResponseEntity.badRequest().body(ResponseWrapper.error("VALID_004", msg));
+    }
+
+    /**
+     * 处理请求体 JSON 解析异常 - 返回 400
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ResponseWrapper<?>> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        log.warn("请求体解析失败: {}", ex.getMostSpecificCause().getMessage());
+        return ResponseEntity.badRequest()
+            .body(ResponseWrapper.error("VALID_005", "请求体格式错误: " + ex.getMostSpecificCause().getMessage()));
     }
 
     /**

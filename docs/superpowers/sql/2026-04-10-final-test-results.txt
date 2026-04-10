@@ -1,0 +1,111 @@
+======== AUTH L1 (8) ========
+TC-AUTH-L1-001         POST   /api/auth/login                                         HTTP=200 code=0                  PASS
+TC-AUTH-L1-002         GET    /api/auth/current-user                                  HTTP=200 code=0                  PASS
+TC-AUTH-L1-003         GET    /api/auth/permissions                                   HTTP=200 code=0                  PASS
+TC-AUTH-L1-004         GET    /api/orgs/tree                                          HTTP=200 code=0                  PASS
+TC-AUTH-L1-005         GET    /api/orgs/subtree                                       HTTP=200 code=0                  PASS
+TC-AUTH-L1-006         GET    /api/admin/roles/?pageNo=1&pageSize=20                  HTTP=200 code=0                  PASS
+TC-AUTH-L1-007         GET    /api/admin/biz-scopes/matrix                            HTTP=200 code=0                  PASS
+TC-AUTH-L1-008         POST   /api/auth/logout                                        HTTP=200 code=0                  PASS
+======== AUTH L2 (18) ========
+TC-AUTH-L2-001         POST   /api/auth/login                                         HTTP=200 code=0                  PASS
+TC-AUTH-L2-002         GET    /api/auth/current-user                                  HTTP=200 code=0                  PASS
+TC-AUTH-L2-003         POST   /api/auth/check-permission                              HTTP=200 code=0                  PASS
+TC-AUTH-L2-004         GET    /api/admin/resources/tree                               HTTP=200 code=0                  PASS
+TC-AUTH-L2-005         GET    /api/admin/roles/R_ADMIN/resources                      HTTP=200 code=0                  PASS
+TC-AUTH-L2-006         GET    /api/admin/roles/R_RM/users?pageNo=1                    HTTP=200 code=0                  PASS
+TC-AUTH-L2-007         GET    /api/admin/users/user001/roles                          HTTP=200 code=0                  PASS
+TC-AUTH-L2-008         POST   /api/admin/roles/                                       roleId=R_77EBD269 PASS
+TC-AUTH-L2-009         PUT    /api/admin/roles/R_77EBD269                             HTTP=200 code=0                  PASS
+TC-AUTH-L2-010         DELETE /api/admin/roles/R_77EBD269?reason=cleanup              HTTP=200 code=0                  PASS
+TC-AUTH-L2-011         GET    /api/admin/biz-scopes?pageNo=1&pageSize=20              HTTP=200 code=0                  PASS
+TC-AUTH-L2-012         POST   /api/admin/biz-scopes                                   HTTP=200 code=0                  PASS
+TC-AUTH-L2-013         GET    /api/orgs/HQ/users?pageNo=1                             HTTP=200 code=0                  PASS
+TC-AUTH-L2-014         GET    /api/auth/current-user                                  HTTP=200 code=0                  PASS
+TC-AUTH-L2-015         GET    /api/admin/resources/tree                               HTTP=200 code=0                  PASS
+TC-AUTH-L2-016         GET    /api/admin/biz-scopes/matrix                            HTTP=200 code=0                  PASS
+TC-AUTH-L2-017         POST   /api/auth/login                                         HTTP=401 code=AUTH-40101         PASS
+TC-AUTH-L2-018         POST   /api/auth/login                                         HTTP=401 code=AUTH-40101         PASS
+======== AUTH L3 (6) ========
+TC-AUTH-L3-001         GET    /api/auth/current-user                                  HTTP=401 code=AUTH-40105         PASS
+TC-AUTH-L3-002         POST   /api/admin/roles/                                       HTTP=403 code=AUTH-40301         PASS
+TC-AUTH-L3-003         DELETE /api/admin/roles/R_ADMIN?reason=hack                    HTTP=403 code=AUTH-40301         PASS
+TC-AUTH-L3-004         POST   /api/admin/biz-scopes                                   HTTP=403 code=AUTH-40301         PASS
+TC-AUTH-L3-005         DELETE /api/admin/roles/R_ADMIN                                HTTP=400 code=VALID_002          PASS
+TC-AUTH-L3-006         GET    /api/orgs/NONEXIST_ORG/users                            HTTP=200 code=0                  PASS
+======== GOV L1 (12) ========
+TC-GOV-L1-001          GET    /api/sys/dicts                                          HTTP=200 code=0                  PASS
+TC-GOV-L1-002          GET    /api/sys/dicts/YES_NO/items                             HTTP=200 code=0                  PASS
+TC-GOV-L1-003          GET    /api/sys/calendar?year=2026&month=4                     HTTP=200 code=0                  PASS
+TC-GOV-L1-004          GET    /api/sys/dicts?dictType=INDUSTRY                        HTTP=200 code=0                  PASS
+TC-GOV-L1-005          GET    /api/admin/sys/configs?pageNo=1                         HTTP=200 code=0                  PASS
+TC-GOV-L1-006          GET    /api/admin/sys/calendar?year=2026                       HTTP=200 code=0                  PASS
+TC-GOV-L1-007          GET    /api/admin/sys/audit-logs?pageNo=1                      HTTP=200 code=0                  PASS
+TC-GOV-L1-008          GET    /api/notifications?pageNo=1                             HTTP=200 code=0                  PASS
+TC-GOV-L1-009          GET    /api/notifications/unread-count                         HTTP=200 code=0                  PASS
+TC-GOV-L1-010          GET    /api/admin/sys/jobs?pageNo=1                            HTTP=200 code=0                  PASS
+TC-GOV-L1-011          GET    /api/admin/sql-probe/history?pageNo=1                   HTTP=200 code=0                  PASS
+TC-GOV-L1-012          GET    /api/files?bizType=TEST&bizId=1                         HTTP=200 code=0                  PASS
+======== GOV L2 (22) ========
+TC-GOV-L2-001          POST   /api/admin/sys/dicts                                    dictId=D_EF5975FD PASS
+TC-GOV-L2-002          PUT    /api/admin/sys/dicts/D_EF5975FD                         HTTP=200 code=0                  PASS
+TC-GOV-L2-003          PUT    /api/admin/sys/dicts/D_EF5975FD/status                  HTTP=200 code=0                  PASS
+TC-GOV-L2-004          DELETE /api/admin/sys/dicts/D_EF5975FD                         HTTP=200 code=0                  PASS
+TC-GOV-L2-005          PUT    /api/admin/sys/configs/TEST_KEY                         HTTP=200 code=GOV-40002          PASS
+TC-GOV-L2-006          POST   /api/admin/sys/calendar/init                            HTTP=200 code=0                  PASS
+TC-GOV-L2-007          PUT    /api/admin/sys/calendar/2026-05-01                      HTTP=200 code=0                  PASS
+TC-GOV-L2-008          GET    /api/admin/sys/calendar?year=2026&month=5               HTTP=200 code=0                  PASS
+TC-GOV-L2-009          GET    /api/admin/sys/audit-logs?empId=admin                   HTTP=200 code=0                  PASS
+TC-GOV-L2-010          POST   /api/admin/sys/audit-logs/export                        HTTP=200 PASS
+TC-GOV-L2-011          GET    /api/admin/sys/jobs/JOB_DEMO/logs?pageNo=1              HTTP=200 code=0                  PASS
+TC-GOV-L2-012          PUT    /api/admin/sys/jobs/JOB_DEMO/pause                      HTTP=200 code=GOV-40004          PASS
+TC-GOV-L2-013          POST   /api/admin/sql-probe/execute                            HTTP=200 code=0                  PASS
+TC-GOV-L2-014          POST   /api/files/upload                                       HTTP=200 code=GOV-50001 ENV-BLOCKED (MinIO)
+TC-GOV-L2-015          GET    /api/files/nonexistent-fid/download                     HTTP=200 code=GOV-40005          PASS
+TC-GOV-L2-016          DELETE /api/files/nonexistent-fid                              HTTP=200 code=GOV-40005          PASS
+TC-GOV-L2-017          PUT    /api/notifications/read-all                             HTTP=200 code=0                  PASS
+TC-GOV-L2-018          PUT    /api/notifications/fake-id/read                         HTTP=200 code=GOV-40006          PASS
+TC-GOV-L2-019          GET    /api/admin/sys/configs?pageNo=1                         HTTP=200 code=0                  PASS
+TC-GOV-L2-020          GET    /api/admin/sys/jobs                                     HTTP=200 code=0                  PASS
+TC-GOV-L2-021          GET    /api/sys/dicts?dictType=YES_NO                          HTTP=200 code=0                  PASS
+TC-GOV-L2-022          POST   /api/admin/sql-probe/execute                            HTTP=200 code=0                  PASS
+======== GOV L3 (8) ========
+TC-GOV-L3-001          POST   /api/admin/sys/dicts                                    HTTP=403 code=AUTH-40301         PASS
+TC-GOV-L3-002          POST   /api/admin/sql-probe/execute                            HTTP=403 code=AUTH-40301         PASS
+TC-GOV-L3-003          POST   /api/admin/sql-probe/execute                            HTTP=200 code=GOV-42201          PASS
+TC-GOV-L3-004          PUT    /api/admin/sys/configs/TEST                             HTTP=400 code=VALID_001          PASS
+TC-GOV-L3-005          POST   /api/admin/sys/audit-logs/export                        HTTP=403 code=AUTH-40301         PASS
+TC-GOV-L3-006          POST   /api/admin/sys/jobs/J/trigger                           HTTP=403 code=AUTH-40301         PASS
+TC-GOV-L3-007          PUT    /api/admin/sys/calendar/invalid-date                    HTTP=400 code=VALID_004          PASS
+TC-GOV-L3-008          GET    /api/admin/sys/audit-logs                               HTTP=401 code=AUTH-40105         PASS
+======== WF L1 (6) ========
+TC-WF-L1-001           GET    /api/workflow/tasks?pageNo=1                            HTTP=200 code=0                  PASS
+TC-WF-L1-002           GET    /api/workflow/tasks/done?pageNo=1                       HTTP=200 code=0                  PASS
+TC-WF-L1-003           GET    /api/workflow/process-map?businessKey=TEST:1            HTTP=200 code=WF-40402           PASS
+TC-WF-L1-004           GET    /api/admin/workflow/timeout-rules                       HTTP=200 code=0                  PASS
+TC-WF-L1-005           GET    /api/admin/workflow/process-definitions                 HTTP=200 code=0                  PASS
+TC-WF-L1-006           GET    /api/workflow/tasks?pageNo=1                            HTTP=200 code=0                  PASS
+======== WF L2 (14) ========
+TC-WF-L2-001           GET    /api/workflow/tasks?bizType=LEAD&pageNo=1               HTTP=200 code=0                  PASS
+TC-WF-L2-002           GET    /api/workflow/tasks/done?keyword=test                   HTTP=200 code=0                  PASS
+TC-WF-L2-003           GET    /api/workflow/tasks/nonexistent-task-id                 HTTP=200 code=WF-40403           PASS
+TC-WF-L2-004           GET    /api/workflow/processes/nonexistent-proc-id             HTTP=200 code=WF-40402           PASS
+TC-WF-L2-005           GET    /api/workflow/process-map?bizType=LEAD&bizId=1          HTTP=200 code=WF-40402           PASS
+TC-WF-L2-006           POST   /api/admin/workflow/timeout-rules                       HTTP=200 code=0                  PASS
+TC-WF-L2-007           GET    /api/admin/workflow/timeout-rules?processDefinitionKey=test-proc HTTP=200 code=0                  PASS
+TC-WF-L2-008           PUT    /api/admin/workflow/timeout-rules/c7d69ada34e44e73bee8b29417977ff7 HTTP=200 code=0                  PASS
+TC-WF-L2-009           GET    /api/admin/workflow/node-candidates                     HTTP=200 code=0                  PASS
+TC-WF-L2-010           POST   /api/admin/workflow/node-candidates                     HTTP=200 code=0                  PASS
+TC-WF-L2-011           GET    /api/admin/workflow/node-candidates?processDefinitionKey=test-proc HTTP=200 code=0                  PASS
+TC-WF-L2-012           GET    /api/admin/workflow/node-forms                          HTTP=200 code=0                  PASS
+TC-WF-L2-013           POST   /api/admin/workflow/node-forms                          HTTP=200 code=0                  PASS
+TC-WF-L2-014           GET    /api/admin/workflow/timeout-rules?processDefinitionKey=none HTTP=200 code=0                  PASS
+======== WF L3 (6) ========
+TC-WF-L3-001           POST   /api/workflow/tasks/bad-id/claim                        HTTP=200 code=WF-40403           PASS
+TC-WF-L3-002           POST   /api/workflow/tasks/bad-id/approve                      HTTP=200 code=WF-40403           PASS
+TC-WF-L3-003           POST   /api/admin/workflow/timeout-rules                       HTTP=403 code=AUTH-40301         PASS
+TC-WF-L3-004           GET    /api/admin/workflow/process-definitions                 HTTP=403 code=AUTH-40301         PASS
+TC-WF-L3-005           GET    /api/workflow/tasks                                     HTTP=401 code=AUTH-40105         PASS
+TC-WF-L3-006           GET    /api/workflow/process-map                               HTTP=400 code=VALID_003          PASS
+
+===== SUMMARY: PASS=100 FAIL=0 =====

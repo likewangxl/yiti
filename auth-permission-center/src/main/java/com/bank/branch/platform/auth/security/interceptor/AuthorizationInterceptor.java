@@ -70,12 +70,17 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
             }
         }
 
-        // Step 3: 解析 @BizAuth 元数据
+        // Step 3: 解析 @BizAuth 元数据（缺失时放行，使用仅包含 empId 的最小上下文）
         Optional<BizMeta> bizMetaOpt = bizMetaResolver.resolve(handler);
         if (bizMetaOpt.isEmpty()) {
-            writeForbidden(response, AuthErrorCode.BIZ_TYPE_NOT_CONFIGURED.getCode(),
-                AuthErrorCode.BIZ_TYPE_NOT_CONFIGURED.getMessage());
-            return false;
+            com.bank.branch.platform.common.security.context.DataScopeContext minCtx =
+                new com.bank.branch.platform.common.security.context.DataScopeContext();
+            minCtx.setEmpId(empId);
+            minCtx.setOrgCode(userCtx.mainOrgCode());
+            minCtx.setCandidateGroupKeys(userCtx.candidateGroupKeys());
+            com.bank.branch.platform.common.security.context.DataScopeContext.set(minCtx);
+            log.debug("[AuthInterceptor] 接口未声明@BizAuth，放行 empId={}, resourceId={}", empId, resourceId);
+            return true;
         }
         BizMeta bizMeta = bizMetaOpt.get();
 

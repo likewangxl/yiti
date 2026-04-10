@@ -115,7 +115,7 @@
     <select id="selectGroupByType" resultType="com.bank.branch.platform.governance.mapper.DictTypeVO">
         SELECT
             dict_type AS dictType,
-            FIRST_VALUE(remark) OVER (PARTITION BY dict_type ORDER BY sort_order ASC) AS remark,
+            MIN(remark) AS remark,
             COUNT(*) AS totalCount,
             SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS activeCount
         FROM sys_dict

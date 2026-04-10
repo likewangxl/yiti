@@ -32,7 +32,7 @@ public class FileFacade implements FileApi {
      */
     @Override
     public FileObjectDTO upload(MultipartFile file, String uploadedBy) {
-        return fileService.upload(file, uploadedBy);
+        return fileService.upload(file, uploadedBy, null, null);
     }
 
     /**

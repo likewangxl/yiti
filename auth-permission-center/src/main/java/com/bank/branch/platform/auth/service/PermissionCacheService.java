@@ -7,6 +7,7 @@ import com.bank.branch.platform.auth.mapper.ResourceMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -118,9 +119,10 @@ public class PermissionCacheService {
             return (T) obj;
         }
         if (obj instanceof java.util.Map) {
-            // 使用 Jackson ObjectMapper 进行转换
+            // 使用 Jackson ObjectMapper 进行转换（注册 JavaTimeModule 支持 LocalDateTime 等 JSR310 类型）
             try {
                 ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
                 return mapper.convertValue(obj, clazz);
             } catch (Exception e) {
                 log.warn("转换失败: {} -> {}", obj.getClass(), clazz, e);
@@ -141,7 +143,14 @@ public class PermissionCacheService {
         String key = KEY_BIZ_SCOPE + roleId;
         Object cached = redisTemplate.opsForValue().get(key);
         if (cached instanceof List) {
-            return (List<PtRoleBizScope>) cached;
+            List<Object> list = (List<Object>) cached;
+            if (!list.isEmpty() && list.get(0) instanceof PtRoleBizScope) {
+                return (List<PtRoleBizScope>) cached;
+            }
+            // 处理 Redis 取出的 LinkedHashMap 转为 PtRoleBizScope
+            return list.stream()
+                .map(obj -> convertTo(obj, PtRoleBizScope.class))
+                .collect(java.util.stream.Collectors.toList());
         }
         List<PtRoleBizScope> scopes = roleBizScopeMapper.selectByRoleId(roleId);
         redisTemplate.opsForValue().set(key, scopes, TTL);

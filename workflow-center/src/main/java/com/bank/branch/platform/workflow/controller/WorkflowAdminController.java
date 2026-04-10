@@ -167,16 +167,38 @@ public class WorkflowAdminController {
 
     /**
      * 新增候选人配置（D.4 POST）
+     * <p>
+     * 接收带有 candidateValue List 字段的请求体，转换为实体（实体字段为逗号分隔 String）。
+     * 支持的字段: processDefinitionKey, nodeKey, candidateType, candidateValue(List)
+     * </p>
      *
-     * @param conf 候选人配置实体
+     * @param req 候选人配置创建请求（candidateValue 为 List<String>）
      * @return 成功响应
      */
     @PostMapping("/node-candidates")
     @Operation(summary = "新增候选人配置")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
-    public ResponseWrapper<Void> saveNodeCandidate(@RequestBody WfNodeCandidateConf conf) {
+    public ResponseWrapper<Void> saveNodeCandidate(@RequestBody java.util.Map<String, Object> req) {
+        String processDefinitionKey = (String) req.get("processDefinitionKey");
+        String nodeKey = (String) req.get("nodeKey");
+        String candidateType = (String) req.get("candidateType");
+        Object cvRaw = req.get("candidateValue");
+        String candidateValue;
+        if (cvRaw instanceof java.util.List) {
+            candidateValue = String.join(",",
+                ((java.util.List<?>) cvRaw).stream().map(Object::toString).toList());
+        } else if (cvRaw != null) {
+            candidateValue = cvRaw.toString();
+        } else {
+            candidateValue = null;
+        }
         log.info("[WorkflowAdminController.saveNodeCandidate] processDefKey={}, nodeKey={}",
-                conf.getProcessDefinitionKey(), conf.getNodeKey());
+                processDefinitionKey, nodeKey);
+        WfNodeCandidateConf conf = new WfNodeCandidateConf();
+        conf.setProcessDefinitionKey(processDefinitionKey);
+        conf.setNodeKey(nodeKey);
+        conf.setCandidateType(candidateType);
+        conf.setCandidateValue(candidateValue);
         workflowAdminService.saveCandidateConfig(conf);
         return ResponseWrapper.success();
     }
