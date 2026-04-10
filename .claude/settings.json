@@ -1,4 +1,5 @@
 {
+  "permissionMode": "auto",
   "permissions": {
     "allow": [
       "Bash(docs/modules/auth-permission-center/02-后端架构.md:*)",

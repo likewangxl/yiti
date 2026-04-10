@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "bootstrap",
+      "runtimeExecutable": "mvn",
+      "runtimeArgs": ["-pl", "bootstrap", "-am", "spring-boot:run"],
+      "port": 8080
+    }
+  ]
+}

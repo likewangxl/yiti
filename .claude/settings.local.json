@@ -19,7 +19,8 @@
       "Bash(docs/modules/auth-permission-center/01-功能规格.md:*)",
       "Bash(docs/modules/auth-permission-center/03-接口设计与报文.md:*)",
       "Bash(wc -l docs/modules/auth-permission-center/*.md)",
-      "Bash(ls -d \"c:/Users/Dong/Desktop/oneplt/\"*/)"
+      "Bash(ls -d \"c:/Users/Dong/Desktop/oneplt/\"*/)",
+      "Bash(find C:\\\\Users\\\\admin\\\\Desktop\\\\yiti\\\\auth-permission-center\\\\target\\\\surefire-reports:*)"
     ]
   },
   "bypassPermissions": true

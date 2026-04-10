@@ -2,11 +2,17 @@
 
 本文件为 `docs/modules/` 目录提供上下文说明。这里存放了各模块的详细设计文档。
 
+**文档状态（2026-04-10）**：全部 9 个模块文档已就绪，共计 74 份文档，约 35,000 行。
+
 ## 目录结构
 
 ```
 docs/modules/
-├── auth-permission-center/
+├── common/                                # 公共基础设施 (3 份)
+│   ├── 01-功能规格.md
+│   ├── 02-后端架构.md
+│   └── 03-关键组件设计.md
+├── auth-permission-center/                # 认证授权中心 (8 份)
 │   ├── 01-功能规格.md
 │   ├── 02-后端架构.md
 │   ├── 03-接口设计与报文.md
@@ -15,49 +21,62 @@ docs/modules/
 │   ├── 06-并发与事务策略.md
 │   ├── 07-审计要求.md
 │   └── 08-初始化数据清单.md
-├── common/
-│   ├── 01-功能规格.md
-│   ├── 02-后端架构.md
-│   └── 03-关键组件设计.md
-├── system-governance-center/
-│   ├── 01-功能规格.md
-│   ├── 02-后端架构.md
-│   ├── 03-接口设计与报文.md
-│   ├── 04-对外API契约.md
-│   ├── 05-表结构DDL.md
-│   ├── 06-并发与事务策略.md
-│   ├── 07-审计要求.md
-│   ├── 08-初始化数据清单.md
-│   └── 09-依赖契约摘要.md
-└── workflow-center/
-    ├── 01-功能规格.md
-    ├── 02-后端架构.md
-    ├── 03-接口设计与报文.md
-    ├── 04-对外API契约.md
-    ├── 05-表结构DDL.md
-    ├── 06-并发与事务策略.md
-    ├── 07-审计要求.md
-    ├── 08-初始化数据清单.md
-    └── 09-依赖契约摘要.md
+├── system-governance-center/              # 系统治理中心 (9 份)
+│   ├── 01-功能规格.md ~ 09-依赖契约摘要.md
+├── workflow-center/                       # 工作流中心 (9 份)
+│   ├── 01-功能规格.md ~ 09-依赖契约摘要.md
+├── portal-content-center/                 # 门户与内容中心 (9 份)
+│   ├── 01-功能规格.md ~ 09-依赖契约摘要.md
+├── customer-marketing-center/             # 客户营销中心 (9 份)
+│   ├── 01-功能规格.md ~ 09-依赖契约摘要.md
+├── business-application-center/           # 业务申请中心 (9 份)
+│   ├── 01-功能规格.md ~ 09-依赖契约摘要.md
+├── performance-engine-center/             # 绩效计算中心 (9 份)
+│   ├── 01-功能规格.md ~ 09-依赖契约摘要.md
+└── report-analytics-center/               # 报表分析中心 (9 份)
+    └── 01-功能规格.md ~ 09-依赖契约摘要.md
 ```
 
 ## 各模块文档索引
 
 ### common (3 份文档)
 公共基础设施层，包含统一响应模型、错误码规范、鉴权链路等核心组件的详细设计。
-详见 [common/CLAUDE.md](../../common/CLAUDE.md)
+提供 5 个子模块：common-web / common-trace / common-aop / common-db / common-security。
+所有业务模块必须依赖 common。
 
 ### auth-permission-center (8 份文档)
-认证授权中心，涵盖用户认证、RBAC 权限控制、BizType 数据范围、组织架构等全部设计文档。
-详见 [auth-permission-center/CLAUDE.md](../../auth-permission-center/CLAUDE.md)
+**支撑域** — 认证授权中心，涵盖用户认证、RBAC 权限控制、BizType 数据范围、组织架构等全部设计文档。
+可被所有模块依赖，不依赖任何业务模块。
 
 ### system-governance-center (9 份文档)
-系统治理中心，提供字典管理、系统配置、工作日历、审计日志、通知、文件管理、定时任务等治理功能。
-详见 [system-governance-center/CLAUDE.md](../../system-governance-center/CLAUDE.md)
+**支撑域** — 系统治理中心，提供字典管理、系统配置、工作日历、审计日志、通知、文件管理、定时任务等治理功能。
+依赖：auth。被：workflow / portal / performance / report 等依赖。
 
 ### workflow-center (9 份文档)
-工作流中心，嵌入 Flowable 7.0.1，提供流程启动、任务审批、SLA 超时管理、候选人解析等工作流能力。
-详见 [workflow-center/CLAUDE.md](../../workflow-center/CLAUDE.md)
+**支撑域** — 工作流中心，嵌入 Flowable 7.0.1，提供流程启动、任务审批、SLA 超时管理、候选人解析等工作流能力。
+系统唯一的 Flowable 集成边界。依赖：auth / governance。
+
+### portal-content-center (9 份文档)
+**通用域** — 门户与内容中心，负责工作台聚合、网址导航、通讯录、产品资料库、文档下载。
+只做只读聚合，不持有业务状态。依赖：auth / governance / workflow / performance。
+
+### customer-marketing-center (9 份文档)
+**核心域** — 客户营销中心，覆盖客户营销全生命周期：标签→线索→审批→客户入池→认领→首次触达。
+依赖：auth / workflow / portal。被：business-application / performance / report 依赖。
+
+### business-application-center (9 份文档)
+**核心域** — 业务申请中心，提供资产投放申请和中场支持申请两大业务流程。
+场景 A/B 路由、多产品拆单、SUPPORT/SUPPORT_DEPT 双视图。
+依赖：auth / workflow / customer / portal。
+
+### performance-engine-center (9 份文档)
+**核心域** — 绩效计算中心，负责指标库、KPI 规则、目标管理、考核计算、分配关系调整、sys_control 版本控制。
+依赖：auth / governance / workflow / customer。
+
+### report-analytics-center (9 份文档)
+**支撑域（纯只读）** — 报表分析中心，提供动态指标查询、固定管理报表、SQL 探查。
+**只读原则**：不反向写业务数据，不被任何模块依赖。
+依赖：auth / governance / customer / performance。
 
 ## 文档编号说明
 
@@ -73,11 +92,57 @@ docs/modules/
 | 08 | 初始化数据清单 | 种子数据 |
 | 09 | 依赖契约摘要 | **了解模块间依赖关系** |
 
-## 缺失文档的模块
+> **说明**：`common` 模块只有 01-03 共 3 份文档（基础设施层无需完整的 9 份）；
+> `auth-permission-center` 只有 01-08 共 8 份文档（作为最底层支撑域，无向下依赖，不需要 09）。
 
-以下模块仅有代码实现，尚未创建文档目录：
-- customer-marketing-center
-- portal-content-center
-- business-application-center
-- performance-engine-center
-- report-analytics-center
+## 模块依赖层级图
+
+```
+                      ┌────────────┐
+                      │  common    │  ← 所有模块必须依赖
+                      └─────┬──────┘
+                            │
+                            ↓
+                ┌───────────────────────┐
+                │ auth-permission-center│  ← 支撑域（被所有模块依赖）
+                └───────────┬───────────┘
+                            │
+         ┌──────────────────┼──────────────────┐
+         ↓                  ↓                  ↓
+┌─────────────────┐  ┌────────────┐  ┌──────────────────┐
+│system-governance│  │  workflow  │  │ portal-content   │
+│  (支撑域)        │  │  (支撑域)  │  │   (通用域)       │
+└────────┬────────┘  └─────┬──────┘  └────────┬─────────┘
+         │                 │                  │
+         └─────────┬───────┴──────┬───────────┘
+                   │              │
+                   ↓              ↓
+         ┌──────────────┐  ┌──────────────────┐
+         │  customer    │  │   performance    │
+         │   (核心域)    │  │    (核心域)      │
+         └──────┬───────┘  └────────┬─────────┘
+                │                   │
+                └────────┬──────────┘
+                         ↓
+                ┌──────────────────┐
+                │business-application│
+                │    (核心域)       │
+                └────────┬─────────┘
+                         │
+                         ↓
+                ┌─────────────────┐
+                │report-analytics │  ← 纯只读，不被任何模块依赖
+                │   (支撑域)       │
+                └─────────────────┘
+```
+
+## 使用指引
+
+1. **了解模块职责**：先读 `01-功能规格.md`
+2. **开发具体接口**：参考 `03-接口设计与报文.md`（字段级可执行精度）
+3. **跨模块调用**：**必须**阅读目标模块的 `04-对外API契约.md`
+4. **本模块依赖速查**：读 `09-依赖契约摘要.md`，一份文档看清所有依赖
+5. **新建数据库表**：参考 `05-表结构DDL.md` + 项目根 `docs/schema/ddl-*.sql`
+6. **并发/事务设计**：参考 `06-并发与事务策略.md`
+7. **审计埋点**：参考 `07-审计要求.md` + `common-dev-guide.md` §6
+8. **初始化数据**：参考 `08-初始化数据清单.md` + `docs/schema/seed-v1.sql`
