@@ -16,6 +16,7 @@
         <module>auth-permission-center</module>
         <module>system-governance-center</module>
         <module>workflow-center</module>
+        <module>portal-content-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -29,6 +30,8 @@
         <knife4j.version>4.4.0</knife4j.version>
         <flowable.version>7.0.1</flowable.version>
         <minio.version>8.5.7</minio.version>
+        <easyexcel.version>3.3.4</easyexcel.version>
+        <testcontainers.version>1.19.7</testcontainers.version>
     </properties>
 
     <dependencyManagement>
@@ -38,6 +41,15 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Testcontainers BOM -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -90,6 +102,13 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- portal-content-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>portal-content-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- 第三方 -->
             <dependency>
                 <groupId>org.mybatis.spring.boot</groupId>
@@ -111,6 +130,11 @@
                 <groupId>com.github.xiaoymin</groupId>
                 <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
                 <version>${knife4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>easyexcel</artifactId>
+                <version>${easyexcel.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

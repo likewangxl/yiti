@@ -73,6 +73,10 @@
             <groupId>com.bank.branch.platform</groupId>
             <artifactId>workflow-center</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>portal-content-center</artifactId>
+        </dependency>
 
         <!-- 测试 -->
         <dependency>
