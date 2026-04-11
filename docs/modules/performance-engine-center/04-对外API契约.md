@@ -385,46 +385,245 @@ public interface DataTaskApi {
 
 **接口路径:** `com.bank.branch.platform.performance.api.AllocApi`
 
-**调用方:** `customer-marketing-center` 用于客户视图展示, `report-analytics-center` 用于分配分析
+**调用方:**
+- `customer-marketing-center` — 客户详情页展示当前分配关系
+- `report-analytics-center` — 跨维度分配分析、员工 KPI 归集
+- `business-application-center` — 资产投放审批时校验申请人与客户的分配关系
+
+**调用约束:**
+- 所有方法为**只读同步**调用，P95 < 50 ms
+- 单次 `custIds` / `empIds` 批量上限 **500**
+- `bizKind = null` 表示跨业务种类汇总，`""` 表示无效参数（抛 `PERF-40002`）
+- 查询当前有效分配时，自动从 `sys_control` 取最新已发布版本
+- 历史分配查询不走缓存，直接查库 + 按版本过滤
 
 ```java
 package com.bank.branch.platform.performance.api;
 
 import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
+import com.bank.branch.platform.performance.api.dto.AllocSummaryDTO;
+import com.bank.branch.platform.performance.api.dto.AllocVersionDTO;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 客户业绩分配关系查询 API.
+ *
+ * <p>职责边界:
+ * <ul>
+ *   <li>只读查询当前或历史分配关系，不提供任何写操作</li>
+ *   <li>所有写操作（新增/调整分配）通过内部 AllocAdjustService 经工作流审批</li>
+ *   <li>数据源为 cust_alloc_relation 表 + sys_control 版本控制</li>
+ * </ul>
+ *
+ * <p>数据范围: 调用方自行处理 DATA_SCOPE，本 Api 不做数据范围过滤（由上层 @BizAuth 保证）。
  */
 public interface AllocApi {
+
+    /* ==================== 基础查询 ==================== */
 
     /**
      * 查询客户当前有效的分配关系.
      *
-     * @param custId   客户 ID
-     * @param bizKind  业务种类, null 表示全部
-     * @return 分配关系列表
+     * @param custId   客户 ID，不可为 null
+     * @param bizKind  业务种类，null 表示全部
+     * @return 分配关系列表，可能为空列表，不会返回 null
+     * @throws IllegalArgumentException custId 为空
      */
     List<CustAllocRelationDTO> getCurrentAllocations(String custId, String bizKind);
 
     /**
-     * 查询客户在指定日期的分配关系 (历史).
+     * 查询客户在指定日期的分配关系 (历史快照).
      *
-     * @param custId     客户 ID
-     * @param asOfDate   查询截止日期
+     * @param custId    客户 ID
+     * @param asOfDate  查询截止日期（含当天）
+     * @return 分配关系列表（基于 asOfDate 时点的最新已发布版本）
      */
     List<CustAllocRelationDTO> getAllocationHistory(String custId, LocalDate asOfDate);
 
     /**
      * 查询某员工名下当前负责的客户列表 (当前有效分配).
      *
-     * @param empId  员工 ID
-     * @param bizKind 业务种类, null 表示全部
+     * @param empId    员工工号
+     * @param bizKind  业务种类，null 表示全部
+     * @return 该员工当前负责的所有分配关系
      */
     List<CustAllocRelationDTO> listCustomersByEmp(String empId, String bizKind);
+
+    /* ==================== 批量查询（供 report / customer 调用）==================== */
+
+    /**
+     * 批量查询多个客户的当前分配关系.
+     *
+     * <p>用于客户列表页展示"当前分配人"字段，避免 N+1 查询。
+     *
+     * @param custIds  客户 ID 集合，不可为空，上限 500
+     * @param bizKind  业务种类，null 表示全部
+     * @return Key=custId, Value=该客户的分配关系列表；缺失客户不在 Map 中
+     * @throws IllegalArgumentException custIds 为空或超限
+     */
+    Map<String, List<CustAllocRelationDTO>> batchGetCurrentAllocations(Set<String> custIds, String bizKind);
+
+    /**
+     * 批量查询多个员工名下的客户数汇总.
+     *
+     * <p>用于员工工作台展示"我名下客户 N 户"。
+     *
+     * @param empIds  员工工号集合，上限 500
+     * @return Key=empId, Value=客户数（去重后）
+     */
+    Map<String, Long> countCustomersByEmps(Set<String> empIds);
+
+    /**
+     * 批量查询多个员工的分配关系汇总 (供 report 聚合报表).
+     *
+     * @param empIds   员工工号集合，上限 500
+     * @param bizKind  业务种类
+     * @param asOfDate 截止日期，null 表示当前最新
+     * @return 按员工汇总的分配概况
+     */
+    List<AllocSummaryDTO> batchSummaryByEmps(Set<String> empIds, String bizKind, LocalDate asOfDate);
+
+    /* ==================== 快速判定 ==================== */
+
+    /**
+     * 判断某员工对某客户是否存在当前有效的分配关系.
+     *
+     * <p>用于 business-application-center 校验"申请人是否有权为该客户发起资产投放申请"。
+     *
+     * @param empId   员工工号
+     * @param custId  客户 ID
+     * @param bizKind 业务种类，null 表示任一业务种类匹配即视为有效
+     * @return true=存在有效分配，false=无分配
+     */
+    boolean hasAllocation(String empId, String custId, String bizKind);
+
+    /**
+     * 统计某员工当前负责的客户总数.
+     *
+     * @param empId    员工工号
+     * @param bizKind  业务种类，null 表示全部
+     * @return 客户数（去重）
+     */
+    long countCustomersOfEmp(String empId, String bizKind);
+
+    /* ==================== 版本查询 ==================== */
+
+    /**
+     * 查询当前最新的分配关系版本号.
+     *
+     * <p>返回 sys_control.current_version (scope_dim='CUST', bizKind 过滤)。
+     * 用于前端做版本感知刷新 / report 判定报表数据是否已更新。
+     *
+     * @param bizKind 业务种类
+     * @return 当前版本号（格式 v1/v2/...），若无任何版本返回 null
+     */
+    AllocVersionDTO getLatestAllocVersion(String bizKind);
+
+    /**
+     * 查询某时间点生效的分配关系版本号.
+     *
+     * @param bizKind   业务种类
+     * @param asOfDate  查询时点
+     * @return 该时点的版本号信息
+     */
+    AllocVersionDTO getAllocVersionAt(String bizKind, LocalDate asOfDate);
 }
 ```
+
+### 7.1 AllocApi 补充 DTO
+
+以下 DTO 供 §7 AllocApi 使用，统一放在 `com.bank.branch.platform.performance.api.dto` 包：
+
+#### `AllocSummaryDTO`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `empId` | String | 员工工号 |
+| `empName` | String | 员工姓名（冗余展示） |
+| `orgCode` | String | 员工所在机构 |
+| `bizKind` | String | 业务种类 |
+| `custCount` | Long | 负责客户总数（去重） |
+| `totalAllocAmount` | BigDecimal | 分配金额汇总（DECIMAL(20,4)） |
+| `avgAllocRatio` | BigDecimal | 平均分配比例（DECIMAL(10,4)） |
+| `asOfDate` | LocalDate | 数据基准日 |
+| `sysControlVersion` | String | 数据版本号 |
+
+#### `AllocVersionDTO`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `bizKind` | String | 业务种类 |
+| `scopeDim` | String | 固定 `CUST` |
+| `currentVersion` | String | 当前版本号，格式 `v{N}` |
+| `latestDataDate` | LocalDate | 版本生效日 |
+| `publishedAt` | LocalDateTime | 版本发布时间 |
+| `publishedBy` | String | 发布人工号 |
+
+### 7.2 AllocApi 调用示例
+
+```java
+// customer-marketing-center 客户详情页调用
+@Service
+public class CustomerDetailService {
+    @Autowired AllocApi allocApi;
+
+    public CustomerDetailVO getDetail(String custId) {
+        CustomerDetailVO vo = buildBase(custId);
+        List<CustAllocRelationDTO> allocs = allocApi.getCurrentAllocations(custId, null);
+        vo.setCurrentManagers(allocs.stream()
+            .map(a -> new ManagerVO(a.getEmpId(), a.getEmpName(), a.getAllocRatio()))
+            .collect(Collectors.toList()));
+        return vo;
+    }
+}
+
+// report-analytics-center 批量聚合
+@Service
+public class OrgPerfReportService {
+    @Autowired AllocApi allocApi;
+
+    public List<EmpPerfVO> getOrgPerfReport(String orgCode, LocalDate date) {
+        List<String> empIds = empQueryApi.listEmpsByOrg(orgCode);
+        List<AllocSummaryDTO> summaries = allocApi.batchSummaryByEmps(
+            Set.copyOf(empIds), null, date);
+        return summaries.stream().map(this::toVO).collect(Collectors.toList());
+    }
+}
+
+// business-application-center 申请前校验
+@Service
+public class LoanSubmitService {
+    @Autowired AllocApi allocApi;
+
+    public void checkAllocBeforeSubmit(String empId, String custId) {
+        if (!allocApi.hasAllocation(empId, custId, "CORPORATE_LOAN")) {
+            throw new BizException("BIZ-40301", "您未分配该客户的资产投放权限");
+        }
+    }
+}
+```
+
+### 7.3 AllocApi 缓存与性能
+
+| 方法 | 频率 | 缓存策略 | P95 |
+|---|---|---|---|
+| `getCurrentAllocations` | 高（客户详情页） | Redis 10 min，key=`alloc:cur:{custId}:{bizKind}`；`allocation-adjustment.approved.v1` 事件触发失效 | < 20 ms |
+| `getAllocationHistory` | 低 | 不缓存 | < 100 ms |
+| `listCustomersByEmp` | 中 | Redis 15 min，key=`alloc:emp:{empId}:{bizKind}` | < 30 ms |
+| `batchGetCurrentAllocations` | 中（列表页） | 逐条走单客户缓存 + 未命中走批量查询 | < 100 ms |
+| `countCustomersByEmps` | 中（工作台） | Redis 30 min，key=`alloc:empcount:{empIds hash}:{bizKind}` | < 50 ms |
+| `batchSummaryByEmps` | 低（报表） | 不缓存，直查库 + `asOfDate` 参数化 | < 300 ms |
+| `hasAllocation` | 高（申请前校验） | 继承 `getCurrentAllocations` 的缓存 | < 10 ms |
+| `countCustomersOfEmp` | 中 | Redis 15 min | < 20 ms |
+| `getLatestAllocVersion` | 高 | Redis 5 min（与 sys_control 同步） | < 5 ms |
+| `getAllocVersionAt` | 低 | 不缓存 | < 50 ms |
+
+**缓存失效触发**：
+- 监听 `performance.allocation-adjustment.approved.v1` 事件 → 失效相关 `alloc:*` 缓存
+- 监听 `performance.sys-control.updated.v1` 事件 → 失效 `alloc:latestver:*` 缓存
 
 ---
 

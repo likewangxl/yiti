@@ -146,3 +146,79 @@ docs/modules/
 6. **并发/事务设计**：参考 `06-并发与事务策略.md`
 7. **审计埋点**：参考 `07-审计要求.md` + `common-dev-guide.md` §6
 8. **初始化数据**：参考 `08-初始化数据清单.md` + `docs/schema/seed-v1.sql`
+
+## 2026-04-10 文档维度补齐记录
+
+本次基于 `拆分要求.txt` 的 10 项维度对 5 个待开发模块做了系统性补充，消除了 P0/P1/P2 级别的关键缺口：
+
+### 03-接口设计与报文 新增章节
+
+| 模块 | 新增内容 | 章节 |
+|------|---------|------|
+| portal-content-center | 导出接口统一规范 + 产品导出列清单 + 错误码汇总 | 附录 H + 附录 I |
+| customer-marketing-center | 导出接口统一规范（3 个导出接口的列清单 + 脱敏规则）+ 错误码汇总 | 附录 K + 附录 L |
+| business-application-center | 导出接口统一规范（2 个导出接口的 14 列清单）+ 错误码汇总 | 附录 H + 附录 I |
+| performance-engine-center | 导出接口统一规范 + **补齐 4 个原缺失的导出接口定义**（含最高风险的 cust-alloc 导出）+ 错误码汇总 | 附录 J + 附录 K |
+| report-analytics-center | 导出接口统一规范（强制异步，500000 行上限）+ 错误码汇总 + 10 个错误响应 JSON 示例 + 快速导航章节 | 附录 I + 附录 J + 开头导航 |
+
+### 04-对外API契约 补充
+
+| 模块 | 新增内容 | 章节 |
+|------|---------|------|
+| business-application-center | 订阅的上游事件 `WorkflowProcessCompletedEvent` 完整 DTO + businessKey 解析 + 状态迁移规则 + 幂等要求 + 可观测性 | §8.0（新增） |
+| performance-engine-center | AllocApi 补齐（从 3 个方法扩展到 10 个），含 `AllocSummaryDTO` / `AllocVersionDTO` 新增 DTO、调用示例、缓存策略 | §7 全面重写 |
+
+### 05-表结构DDL 补充
+
+| 模块 | 新增内容 | 章节 |
+|------|---------|------|
+| business-application-center | 字段来源与赋值时机溯源表（2 张主表 × 每个字段的来源/时机/可变性/赋值方） + 赋值时机 vs 状态对照表 | §4a（新增） |
+
+### 01-功能规格 补充
+
+| 模块 | 新增内容 | 章节 |
+|------|---------|------|
+| customer-marketing-center | 触达任务完整状态机图 + 状态转移矩阵 + SLA 规则 + 并发控制 + 定时任务清单 | §7.3bis（新增） |
+
+### 08-初始化数据清单 补充
+
+所有 5 个待开发模块新增"共享基线脚本指引"章节，明确：
+- 共享 DDL 指向
+- 共享种子数据 `seed-v1.sql` 的本模块段落
+- 共享流程配置 `workflow-seed-v1.sql` 的本模块段落
+- 首次建库 / 升级现有库的标准流程
+- 权威路径表（开发者 / DBA / 权限管理员 / 流程工程师 / 运维）
+- 关键校验 SQL
+
+performance 模块额外新增 **定时任务汇总表**：5 个 job 的 cron/依赖/时长/失败处理矩阵 + 参数化配置 + JobApi 集成示例（§4.0）。
+
+### 09-依赖契约摘要 补充
+
+所有 5 个待开发模块新增 "DATA_SCOPE SQL 过滤片段具化示例" 章节，包括：
+- 本模块表与 DATA_SCOPE 字段映射表
+- MyBatis XML 过滤片段的完整示例（包括跨表 JOIN 场景）
+- DATA_SCOPE 规则对应表（角色 × BizType 矩阵）
+- 单元测试用例
+
+### docs/schema DDL 脚本对齐
+
+| 脚本 | 状态 | 变更 |
+|---|---|---|
+| `docs/schema/ddl-bizapp.sql` | 从 73 行 2 表 → 对齐 05 文档的完整 DDL | 补齐字段注释、索引（idx_created_time、idx_process_inst 等）、字符集统一 |
+| `docs/schema/ddl-report.sql` | 从 24 行 1 表 → 对齐 05 文档的 3 张表 | 补齐 sql_probe_history、rpt_snapshot_task 表定义 |
+
+### 新增全局文档
+
+| 文件 | 说明 |
+|---|---|
+| `docs/export-spec-coverage.md` | 导出接口统一规范的覆盖状态跟踪文档，记录 5 个待开发模块的完成情况 + auth/governance/workflow 3 个已完成模块中未对齐范围的技术债清单 |
+
+### 未处理项（已达成共识的跳过项）
+
+- **P0-1 BPMN XML 目录**：`docs/workflow/` 目录和 6 份 BPMN 文件（lead_approve_v1.bpmn 等）暂未创建。用户明确表示暂时忽略。
+
+### 后续建议
+
+1. 为 5 个模块的 03 文档补充剩余接口的字段级校验注解（已有基础，个别接口需完善）
+2. 为 customer-marketing-center 补齐 08 文档中 `lead_delete_approve_v1` 的节点候选配置（workflow-seed-v1.sql 已有，08 文档需引用）
+3. 等待 BPMN 文件补充后，重新跑一次"模块文档完备性"评审

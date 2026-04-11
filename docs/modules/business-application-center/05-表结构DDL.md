@@ -228,6 +228,87 @@ SELECT id, product_id, status FROM support_request
 
 ---
 
+## 4a. 字段来源与赋值时机表（2026-04-10 新增）
+
+本章节明确每个字段的**数据来源**和**赋值时机**，消除"字段何时该有值、何时可变"的歧义。开发时按此表实现字段的写入和更新逻辑。
+
+### 4a.1 loan_apply 字段溯源
+
+| 字段 | 来源 | 赋值时机 | 可变性 | 是否可为空 | 赋值方 |
+|---|---|---|---|---|---|
+| `id` | 应用层生成（UUID） | 创建草稿（POST /api/loans） | 不可变 | 不可空 | `LoanService.createDraft` |
+| `apply_no` | 应用层生成（`LA+yyyyMMdd+6位序号`） | 提交审批（POST /api/loans/{id}/submit）时生成 | 不可变 | 草稿期可空，提交后必填 | `LoanService.submit` |
+| `cust_id` | 前端选择器（来自 `CustomerQueryApi.searchCustomers`） | 创建草稿 | 草稿期可改，提交后不可变 | 不可空 | 前端传参 → `LoanService.createDraft/updateDraft` |
+| `source_touch_task_id` | 前端从"触达完成弹窗"跳转时自动带入 | 创建草稿 | 不可变 | 可空（非触达发起则为 null） | `LoanService.createDraft`（从请求参数） |
+| `project_type` | 前端下拉（字典 PROJECT_TYPE） | 创建草稿 / 更新草稿 | 草稿期可改，提交后不可变 | 提交时必填 | 前端传参 → Service 校验字典 |
+| `biz_type` | 同上（字典 BIZ_TYPE） | 同上 | 同上 | 提交时必填 | 同上 |
+| `guarantee_type` | 同上（字典 GUARANTEE_TYPE） | 同上 | 同上 | 提交时必填 | 同上 |
+| `credit_amount` | 用户输入 | 创建草稿 / 更新草稿 | 草稿期可改，提交后不可变 | 提交时必填，`> 0` | 前端传参，Service 校验 `> 0` |
+| `credit_exposure_amount` | 用户输入 | 同上 | 同上 | 提交时必填，`>= 0 && <= credit_amount` | 同上 |
+| `status` | Service 层状态机 | 状态转移时 | 按状态机规则可变 | 不可空（默认 `DRAFT`） | `LoanService.*` 各方法 / `WorkflowCompletedListener` |
+| `business_key` | 应用层固定格式 `LOAN:{id}` | 提交审批时生成 | 不可变 | 草稿期可空，提交后必填 | `LoanService.submit`（格式：`"LOAN:" + id`） |
+| `process_instance_id` | `WorkflowApi.startProcess` 返回 | 提交审批的**同一事务**中回填 | 不可变 | 草稿期可空，提交后必填 | `LoanService.submit` 的事务内 |
+| `owner_org_id` | `CurrentUserApi.getCurrentUser().getOrgCode()` | 创建草稿 | **不可变**（即使用户换机构） | 不可空 | `LoanService.createDraft` 从上下文取 |
+| `created_by` | `CurrentUserApi.getCurrentUser().getEmpId()` | 创建草稿 | 不可变 | 不可空 | 同上 |
+| `created_time` | 数据库 `DEFAULT CURRENT_TIMESTAMP` | INSERT 时 | 不可变 | 不可空 | 数据库 |
+| `updated_by` | `CurrentUserApi.getCurrentUser().getEmpId()` | 每次 UPDATE | 可变 | 首次 INSERT 时可空 | `LoanService.*` 各方法 |
+| `updated_time` | 数据库 `ON UPDATE CURRENT_TIMESTAMP` | 每次 UPDATE | 可变 | 不可空 | 数据库 |
+| `deleted` | 应用层逻辑删除 | 删除草稿时 | `0 → 1`（不可逆） | 不可空，默认 0 | `LoanService.deleteDraft`（仅 DRAFT 可删） |
+
+**关键提示**：
+- `cust_id` / `project_type` / `biz_type` / `guarantee_type` / `credit_amount` 等**业务字段**在 `DRAFT` 状态可改；一旦 `status = IN_APPROVAL`（即提交审批），所有业务字段**冻结**，任何修改均返回 `BIZ-40902` 终态保护
+- `owner_org_id` **不随用户换机构变化**：假设用户 A 以 ORG_SZ_001 发起申请，后被调至 ORG_SH_002，该申请仍归属 ORG_SZ_001
+
+### 4a.2 support_request 字段溯源
+
+| 字段 | 来源 | 赋值时机 | 可变性 | 是否可为空 | 赋值方 |
+|---|---|---|---|---|---|
+| `id` | 应用层生成（UUID） | 创建草稿 | 不可变 | 不可空 | `SupportService.createDraft` |
+| `request_no` | 应用层生成（`SR+yyyyMMdd+6位序号`） | 提交审批时 | 不可变 | 草稿可空 | `SupportService.submit` |
+| `submit_group_id` | 应用层生成（UUID） | 多产品拆单提交时，同批所有记录共享 | 不可变 | 单产品为 null | `SupportProductSplitService.splitAndSave` |
+| `cust_id` | 前端选择器 | 创建草稿 | 草稿期可改，提交后不可变 | 不可空 | 前端传参 |
+| `source_touch_task_id` | 前端从"触达完成弹窗"带入 | 创建草稿 | 不可变 | 可空 | 前端传参 |
+| `product_id` | 前端产品选择器（来自 `ProductApi.listSupportAvailable`） | **创建草稿时确定**（因拆单后不可变更） | 不可变（拆单后） | 可空（场景 B 无具体产品时） | `SupportService.createDraft` / `splitAndSave` |
+| `support_dept_id` | 根据 `product_id` 自动推导，或用户选择 | 创建草稿 | 草稿期可改，提交后不可变 | 场景 A 自动设置，场景 B 必填 | `SupportScenarioRouter.resolveDept` |
+| `other_demand` | 用户输入 | 创建草稿 / 更新草稿 | 草稿期可改，提交后不可变 | 场景 B 必填（若 product_id 为空） | 前端传参 |
+| `dispatch_emp_id` | `CurrentUserApi`（派单人） | **派单时**（POST /api/support-dept/requests/{id}/dispatch） | 仅派单时赋值，不可再改 | 场景 A 永远为空 | `SupportDeptService.dispatch` |
+| `dispatch_time` | `System.now()` | 派单时 | 同上 | 同上 | 同上 |
+| `assigned_emp_id` | 场景 A：从 `ProductApi.getProduct().getResponsibleEmpIds()` 取第一个；场景 B：秘书派单时选择 | 场景 A：提交审批时自动赋值；场景 B：派单时赋值 | 仅初次赋值时可改（通过 TRANSFER 接口） | 不可空 | `SupportService.submit` / `SupportDeptService.dispatch` / `SupportDeptService.transfer` |
+| `status` | Service 状态机 | 状态转移时 | 按状态机规则可变 | 不可空，默认 `DRAFT` | `SupportService.*` / `SupportDeptService.*` / `WorkflowCompletedListener` |
+| `business_key` | 应用层 `SUPPORT:{id}` | 提交审批时 | 不可变 | 草稿可空 | `SupportService.submit` |
+| `process_instance_id` | `WorkflowApi.startProcess` 返回 | 提交审批的同一事务 | 不可变 | 草稿可空 | 同上 |
+| `owner_org_id` | `CurrentUserApi.getOrgCode()` | 创建草稿 | 不可变 | 不可空 | `SupportService.createDraft` |
+| `created_by` | `CurrentUserApi.getEmpId()` | 创建草稿 | 不可变 | 不可空 | 同上 |
+| `created_time` | 数据库 | INSERT 时 | 不可变 | 不可空 | 数据库 |
+| `updated_by` | `CurrentUserApi.getEmpId()` | 每次 UPDATE | 可变 | 首次可空 | Service |
+| `updated_time` | 数据库 | 每次 UPDATE | 可变 | 不可空 | 数据库 |
+| `deleted` | 应用层 | 删除草稿时 | `0 → 1` | 不可空，默认 0 | `SupportService.deleteDraft` |
+
+**关键提示**：
+- `product_id` 一旦拆单保存就**不可再改**（即使是草稿状态也不能改）。如需改，必须**删除整组草稿重建**
+- `support_dept_id` 的推导逻辑：
+  - 场景 A（`product_id != null`）：`support_dept_id = ProductApi.getProduct(product_id).getProductDeptOrgCode()`
+  - 场景 B（`product_id == null`）：用户前端选择承接部门
+- `assigned_emp_id` 的 TRANSFER 是**受限变更**：只有 `SUPPORT_DEPT` 秘书可在 `IN_PROGRESS` 状态下转交给本部门其他人员
+
+### 4a.3 赋值时机 vs 状态对照表
+
+| 操作 | 触发接口 | 写入字段 | 目标状态 |
+|---|---|---|---|
+| 创建草稿（LOAN） | POST /api/loans | id/cust_id/project_type/biz_type/guarantee_type/credit_amount/credit_exposure_amount/owner_org_id/created_by/created_time/status=DRAFT | `DRAFT` |
+| 创建草稿（SUPPORT） | POST /api/support-requests | id/cust_id/product_id 或 other_demand/support_dept_id/owner_org_id/created_by/created_time/status=DRAFT/submit_group_id | `DRAFT` |
+| 更新草稿 | PUT /api/loans/{id} 或 /api/support-requests/{id} | 业务字段 + updated_by/updated_time | `DRAFT` |
+| 提交审批 | POST /api/loans/{id}/submit 或 /api/support-requests/{id}/submit | apply_no/request_no + business_key + process_instance_id + status=IN_APPROVAL | `IN_APPROVAL` |
+| 秘书派单（仅场景 B） | POST /api/support-dept/requests/{id}/dispatch | dispatch_emp_id + dispatch_time + assigned_emp_id + status=IN_PROGRESS | `IN_PROGRESS` |
+| 秘书转交 | POST /api/support-dept/requests/{id}/transfer | assigned_emp_id（更新为新人） + updated_by/updated_time | `IN_PROGRESS`（不变） |
+| 支持人员完成 | POST /api/support-dept/requests/{id}/complete | status=COMPLETED + updated_by/updated_time | `COMPLETED` |
+| 流程通过回写（LOAN） | `WorkflowCompletedListener`（异步） | status=COMPLETED + updated_by=SYSTEM + updated_time | `COMPLETED` |
+| 流程驳回回写 | 同上 | status=REJECTED + updated_by=SYSTEM + updated_time | `REJECTED` |
+| 撤回 | POST /api/loans/{id}/cancel 或 /api/support-requests/{id}/cancel | status=CANCELLED + updated_by/updated_time | `CANCELLED` |
+| 逻辑删除 | DELETE /api/loans/{id} 或 /api/support-requests/{id} | deleted=1 + updated_by/updated_time | 状态不变 |
+
+---
+
 ## 5. 关键字段取值枚举
 
 ### 5.1 loan_apply.status

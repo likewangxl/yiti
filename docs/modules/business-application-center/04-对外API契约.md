@@ -556,11 +556,182 @@ public class SupportQueryConditionDTO {
 
 ## 8. 领域事件
 
-本模块对外发布的所有领域事件，事件主题命名遵循 `bizapp.<category>.<action>.<version>` 规范。所有事件都满足：
+本章节先描述**本模块订阅的上游事件**（§8.0），再描述**本模块对外发布的事件**（§8.1+）。
 
-- 事件载荷为 JSON
-- 包含 `eventId`（全局唯一）、`eventTime`（事件发生时间）、`traceId`（全链路追踪）
-- 至少一次送达（At-Least-Once），消费方需自行幂等
+### 8.0 订阅的上游事件（来自 workflow-center）
+
+本模块是流程发起方也是流程状态的**最终持有者**，通过订阅 workflow-center 发布的流程事件完成状态回写，再对下游发布 `bizapp.*.approved/rejected/completed` 事件。**完整链路**：
+
+```
+发起申请 → LoanService.submit / SupportService.submit
+         ↓（发 bizapp.loan.submitted.v1 / bizapp.support.submitted.v1）
+workflow-center 执行审批 / 办理
+         ↓
+流程最终节点完成 → workflow-center 发布 workflow.process.completed.v1
+         ↓（本模块订阅）
+WorkflowCompletedListener.onCompleted
+  1. 根据 businessKey 解析 bizType + bizId
+  2. SELECT ... FOR UPDATE 锁定主表行
+  3. 按 outcome 迁移 status: COMPLETED / REJECTED
+  4. 写 updated_time、updated_by
+  5. 发布 bizapp.loan.approved.v1 / .rejected.v1 / .support.completed.v1
+```
+
+#### 8.0.1 订阅 `workflow.process.completed.v1`
+
+**上游事件来源**：`workflow-center` 流程实例到达最终节点时发布（参考 `docs/modules/workflow-center/04-对外API契约.md §8`）
+
+**本模块处理方式**：`@TransactionalEventListener(AFTER_COMMIT)` 监听，在**独立事务**中更新业务主表
+
+**事件载荷 DTO：`WorkflowProcessCompletedEvent`**
+
+| 字段 | 类型 | 是否必填 | 说明 |
+|---|---|---|---|
+| `eventId` | String | 是 | 全局事件 ID |
+| `eventType` | String | 是 | 固定 `workflow.process.completed.v1` |
+| `eventTime` | LocalDateTime | 是 | 流程完成时刻 |
+| `traceId` | String | 是 | 全链路追踪 ID |
+| `payload.processInstanceId` | String | 是 | Flowable 流程实例 ID |
+| `payload.processDefinitionKey` | String | 是 | 流程定义 Key（`loan_approve_v1` / `support_simple_v1` / `support_complex_v1`） |
+| `payload.businessKey` | String | 是 | 业务键，格式 `LOAN:{id}` 或 `SUPPORT:{id}` |
+| `payload.outcome` | String | 是 | 流程结果：`APPROVED` / `REJECTED` / `CANCELLED` |
+| `payload.finalTaskKey` | String | 是 | 最后一个节点的 task definition key |
+| `payload.finalApproverEmpId` | String | 否 | 最后审批人工号（CANCELLED 时可能为空） |
+| `payload.finalApproverOrgId` | String | 否 | 最后审批人机构 |
+| `payload.finalApprovalTime` | LocalDateTime | 是 | 最终节点完成时间 |
+| `payload.reason` | String | 否 | 审批意见 / 驳回原因 / 撤回原因 |
+| `payload.variables` | Map\<String, Object\> | 否 | 流程变量快照（含节点表单数据，如 `isNeedCreditMeeting`） |
+
+**载荷示例（审批通过）**：
+
+```json
+{
+  "eventId": "wf_evt_20260410_001",
+  "eventType": "workflow.process.completed.v1",
+  "eventTime": "2026-04-10T15:00:00.000+08:00",
+  "traceId": "trace-abc-xyz",
+  "payload": {
+    "processInstanceId": "piid_abc123",
+    "processDefinitionKey": "loan_approve_v1",
+    "businessKey": "LOAN:LA202604100001",
+    "outcome": "APPROVED",
+    "finalTaskKey": "credit_approval",
+    "finalApproverEmpId": "E99001",
+    "finalApproverOrgId": "ORG_HEAD",
+    "finalApprovalTime": "2026-04-10T15:00:00.000+08:00",
+    "reason": "同意授信",
+    "variables": {
+      "isNeedCreditMeeting": true,
+      "creditMeetingNo": "CM20260410-01",
+      "approvedAmount": 5000000.00
+    }
+  }
+}
+```
+
+**载荷示例（审批驳回）**：
+
+```json
+{
+  "eventId": "wf_evt_20260410_002",
+  "eventType": "workflow.process.completed.v1",
+  "eventTime": "2026-04-10T16:30:00.000+08:00",
+  "traceId": "trace-def-xyz",
+  "payload": {
+    "processInstanceId": "piid_def456",
+    "processDefinitionKey": "loan_approve_v1",
+    "businessKey": "LOAN:LA202604100002",
+    "outcome": "REJECTED",
+    "finalTaskKey": "corp_review",
+    "finalApproverEmpId": "E88001",
+    "finalApproverOrgId": "ORG_CORP",
+    "finalApprovalTime": "2026-04-10T16:30:00.000+08:00",
+    "reason": "客户信用评级不足",
+    "variables": {}
+  }
+}
+```
+
+#### 8.0.2 消费处理契约
+
+**businessKey 解析**：
+
+```java
+public record ParsedBusinessKey(String bizType, String bizId) {
+    public static ParsedBusinessKey parse(String businessKey) {
+        int colonIdx = businessKey.indexOf(':');
+        if (colonIdx <= 0) throw new BizException("BIZ-40001", "非法 businessKey: " + businessKey);
+        return new ParsedBusinessKey(
+            businessKey.substring(0, colonIdx),  // LOAN / SUPPORT
+            businessKey.substring(colonIdx + 1)  // LA202604100001 / SR202604100001
+        );
+    }
+}
+```
+
+**状态迁移规则**：
+
+| 当前 status | outcome | 目标 status | 发布事件 |
+|---|---|---|---|
+| `IN_APPROVAL` | `APPROVED` | `COMPLETED`（LOAN）/ `IN_PROGRESS`（SUPPORT 场景B，触发承接）/ `COMPLETED`（其他） | `bizapp.loan.approved.v1` / `bizapp.support.dispatched.v1` / `bizapp.support.completed.v1` |
+| `IN_APPROVAL` | `REJECTED` | `REJECTED` | `bizapp.loan.rejected.v1` / `bizapp.support.rejected.v1` |
+| `IN_APPROVAL` | `CANCELLED` | `CANCELLED` | 不发事件（用户主动撤回已有 cancel 事件） |
+| 其他状态 | 任意 | 保持不变（幂等处理） | 不发事件 |
+
+**幂等要求**：
+
+1. `WorkflowCompletedListener` 按 `eventId` 去重，使用 `sys_event_consumed` 表（governance 提供）
+2. 状态迁移使用 **条件 UPDATE**：`UPDATE loan_apply SET status='COMPLETED' WHERE business_key=? AND status='IN_APPROVAL'`
+3. 如果 `rowsAffected = 0`，记录 WARN 日志但不抛异常（说明已被其他实例处理）
+4. 发布下游事件前再次确认 `rowsAffected > 0`，避免重复发布
+
+**异常处理**：
+
+- 流程变量读取失败：记录 ERROR 日志，状态仍迁移，但 `variables` 字段在 `bizapp.*.approved.v1` 中置为空对象
+- 业务主表不存在（被物理删除）：记录 ERROR 日志 + 告警，不抛异常（避免无限重试）
+- 条件 UPDATE 乐观锁失败：属幂等场景，直接 return
+
+**超时与重试**：
+
+- 监听器本身同步执行（AFTER_COMMIT），不阻塞 workflow 事务
+- 如果本模块事务失败，由消息投递层保证重试（governance 的事件总线负责）
+- 最大重试 3 次，超过后写入死信队列 `dead_letter_event`
+
+#### 8.0.3 订阅 `workflow.task.claimed.v1`（仅 SUPPORT 场景 B）
+
+**上游事件来源**：`workflow-center` 任务被认领（`TaskService.claim`）时发布
+
+**本模块处理方式**：仅更新 `support_request.assigned_emp_id`（当前承接人），不迁移 status
+
+**事件载荷 DTO：`WorkflowTaskClaimedEvent`**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `eventId` | String | 全局事件 ID |
+| `eventType` | String | 固定 `workflow.task.claimed.v1` |
+| `payload.processInstanceId` | String | 流程实例 ID |
+| `payload.businessKey` | String | 业务键 |
+| `payload.taskId` | String | Flowable Task ID |
+| `payload.taskDefinitionKey` | String | 节点 key（仅 `support_staff_handle` 触发本模块更新） |
+| `payload.assigneeEmpId` | String | 被认领的员工工号 |
+| `payload.claimTime` | LocalDateTime | 认领时间 |
+
+**处理条件**：只有 `processDefinitionKey = support_complex_v1` 且 `taskDefinitionKey = support_staff_handle` 时本模块才处理，其他节点忽略。
+
+#### 8.0.4 事件消费的可观测性
+
+本模块为 workflow 事件消费埋点：
+
+| 指标 | 类型 | 说明 |
+|---|---|---|
+| `bizapp.event.consumed.count` | Counter | 成功消费事件计数（按 eventType 打标） |
+| `bizapp.event.skipped.count` | Counter | 幂等跳过事件计数 |
+| `bizapp.event.failed.count` | Counter | 消费失败事件计数（告警） |
+| `bizapp.event.consume.duration` | Histogram | 消费耗时（p50/p95/p99） |
+
+告警规则：`bizapp.event.failed.count` 1 分钟内 > 5 次告警。
+
+---
 
 ### 8.1 `bizapp.loan.submitted.v1`
 
