@@ -1900,11 +1900,10 @@ void listProductsShouldReturn400WhenPageSizeExceedsLimit() throws Exception {
 ```
 
 - [ ] **Step 2:** Run, expect FAIL
-- [ ] **Step 3 (GREEN):** Add to `ProductController.java`. **注意 (r2 fix)**：`bizScopeApi.buildScopeContext(...)` 返回的是 `auth.api.dto.DataScopeContext` record，必须用 `DataScopeAdapter.fromAuthRecord(...)` 转为 `common-security.context.DataScopeContext` POJO 才能传给 Service。
+- [ ] **Step 3 (GREEN):** Add to `ProductController.java`. **注意 (r3 fix)**：`bizScopeApi.buildScopeContext(...)` 返回的是 `auth.api.dto.DataScopeContext` record，必须用 `DataScopeAdapter.fromAuthRecord(...)` 转为 `common-security.context.DataScopeContext` POJO 才能传给 Service。Java 不支持 `import as` 别名语法，对 `auth.api.dto.DataScopeContext` 用 `var` 类型推断（无需 import）。
 
 ```java
-import com.bank.branch.platform.auth.api.dto.DataScopeContext as AuthDataScopeContext;
-// (or use fully qualified name)
+// 只 import common-security 的 DataScopeContext；auth.api.dto 那个用 var 推断
 import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
 
@@ -1914,8 +1913,9 @@ public ResponseWrapper<PageResult<ProductDTO>> listProducts(
         @Valid ProductListReqDTO req
 ) {
     String empId = currentUserApi.getCurrentEmpId();
-    // BizScopeApi 返回 record；转换为 common-security 的 POJO
+    // bizScopeApi.buildScopeContext 返回 auth.api.dto.DataScopeContext (record)，用 var 推断避免 import 冲突
     var authScope = bizScopeApi.buildScopeContext(empId, BizType.PRODUCT, BizAction.LIST);
+    // 转换为 common-security POJO，传给 Service / Mapper
     DataScopeContext scope = DataScopeAdapter.fromAuthRecord(authScope);
     PageResult<ProductDTO> result = productService.listProducts(req, scope);
     return ResponseWrapper.page(result);
@@ -2662,9 +2662,11 @@ void exportShouldWriteExcelStreamWhenWithinThreshold() throws Exception {
 }
 ```
 
-- [ ] **Step 3 (GREEN):** Implement `ProductExportService.exportToStream`:
+- [ ] **Step 3 (GREEN):** Implement `ProductExportService.exportToStream`. **注意**：方法签名中 `DataScopeContext` 必须 import `common.security.context.DataScopeContext` (POJO)，与 Service 内部使用的 ProductInfoMapper 的 q.dataScope 类型一致：
 
 ```java
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+
 @Service
 @RequiredArgsConstructor
 public class ProductExportService {
@@ -2719,14 +2721,16 @@ public class ProductExportService {
 ```
 
 - [ ] **Step 4:** Run, expect PASS
-- [ ] **Step 5:** Add `ProductController.export` endpoint:
+- [ ] **Step 5:** Add `ProductController.export` endpoint. **注意 (r3 fix)**：和 Task 4.3 的 listProducts 一样，必须用 `DataScopeAdapter.fromAuthRecord(...)` 转换 record → POJO，否则 `productExportService.exportToStream` 调用类型不匹配编译失败：
 
 ```java
 @GetMapping("/export")
 @BizAuth(bizType = BizType.PRODUCT, action = BizAction.EXPORT)
 public void export(@Valid ProductListReqDTO req, HttpServletResponse response) throws IOException {
     String empId = currentUserApi.getCurrentEmpId();
-    DataScopeContext scope = bizScopeApi.buildScopeContext(empId, BizType.PRODUCT, BizAction.EXPORT);
+    // 与 listProducts 一致：record → POJO 转换
+    var authScope = bizScopeApi.buildScopeContext(empId, BizType.PRODUCT, BizAction.EXPORT);
+    DataScopeContext scope = DataScopeAdapter.fromAuthRecord(authScope);
     String filename = "portal_product_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".xlsx";
     response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     response.setHeader("Content-Disposition", "attachment; filename=" + filename);
