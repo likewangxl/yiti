@@ -45,12 +45,28 @@
 | `AuditApi` | `com.bank.branch.platform.governance.api` | `log(cmd)` |
 | `WorkflowApi` | `com.bank.branch.platform.workflow.api` | `startProcess(cmd)` (NOT used in this slice — workflow is mocked) |
 
-**Verified facts (source-checked at spec r3 time)**:
+**Verified facts (source-checked at spec r3 + plan r2 time)**:
 - `WorkflowQueryApi` does NOT exist in workflow-center → use `portal.adapter.WorkflowQueryApi` placeholder
 - `MetricApi` does NOT exist (performance-engine-center not created) → use `portal.adapter.MetricApi` placeholder
 - `FileApi` has NO `getFileInfo / attachBizRelation / detachBizRelation` → use `getDownloadUrl` for existence check + `bindFile` (idempotent) for attach
 - `sys_event_outbox` table does NOT exist → V1 uses `@TransactionalEventListener(AFTER_COMMIT)` only
 - `DataScopeType` enum has `ORG` (NOT `ORG_SELF`) — verified at `common-security/.../DataScopeType.java:16`
+
+**CRITICAL: Two `DataScopeContext` classes exist (plan r2 fix)**:
+
+| 类 | 位置 | 用途 |
+|---|---|---|
+| `com.bank.branch.platform.common.security.context.DataScopeContext` | common-security | **ThreadLocal 持有者** + `@Data` POJO，字段名 `scope`（**不是** `scopeType`）。提供静态方法 `set(ctx) / current() / clear()`。AuthorizationInterceptor 实际放入 ThreadLocal 的就是这个类。 |
+| `com.bank.branch.platform.auth.api.dto.DataScopeContext` | auth-permission-center | `BizScopeApi.buildScopeContext()` 的返回类型，是 record，字段 `scopeType` |
+
+**本 plan 的统一选择**：
+- **ThreadLocal 持有 + Mapper XML 引用**：使用 `common-security` 的 `DataScopeContext` POJO（字段 `scope`），通过静态方法 `DataScopeContext.set/current/clear`
+- **`BizScopeApi.buildScopeContext()` 的返回值**：必须在 Service 层做一次转换，把 record 转成 POJO 后传给 Mapper
+- **Mapper XML OGNL**：使用 `q.dataScope.scope.name() == 'ALL'`（注意是 `.scope`，不是 `.scopeType`）
+
+**`CurrentUserProvider` 而不是 `CurrentUserContextHolder`**：实际类是 `com.bank.branch.platform.auth.security.context.CurrentUserProvider`，是 `@Component` 实例（不是 static class），方法是 **实例方法** `set / get / clear`。测试扩展应通过 `@MockBean CurrentUserApi` 替换 Spring bean，**不要直接操作 ThreadLocal**（详见 Task 0.6 r2 修订）。
+
+**`PageRequest` 没有 `(int, int)` 构造函数**：`com.bank.branch.platform.common.web.PageRequest` 是 `@Data` POJO，只有默认构造 + setters。需用 `PageRequest p = new PageRequest(); p.setPageNo(1); p.setPageSize(5);`
 
 ---
 
@@ -374,7 +390,7 @@ class MapperContainerSmokeTest extends AbstractMapperIntegrationTest {
   - If fails: check that Docker daemon is running, that `withReuse(true)` is set, and inspect Testcontainers logs
 - [ ] **Step 5:** Commit: `feat(portal): Task 0.5 - Testcontainers Mapper 集成测试基类 + smoke test`
 
-### Task 0.6: @WithMockEmpContext + MockEmpContextExtension
+### Task 0.6: @WithMockEmpContext + MockEmpContextExtension (r2 重写)
 
 **Files:**
 - Create: `portal-content-center/src/test/java/com/bank/branch/platform/portal/support/WithMockEmpContext.java`
@@ -382,9 +398,16 @@ class MapperContainerSmokeTest extends AbstractMapperIntegrationTest {
 - Create: `portal-content-center/src/test/java/com/bank/branch/platform/portal/support/AbstractControllerIntegrationTest.java`
 - Create: `portal-content-center/src/test/java/com/bank/branch/platform/portal/support/WithMockEmpContextSelfTest.java`
 
-**Context:** Custom JUnit 5 annotation that sets up `CurrentUserContext` (ThreadLocal) and `DataScopeContext` (ThreadLocal) before each test, and clears them after. Used by Controller integration tests to simulate authentication.
+**Context (r2 重写)**：reviewer 指出 r1 引用了不存在的 `CurrentUserContextHolder` 类。实际项目里：
+- `CurrentUserProvider` 是 `@Component` 实例类（不是静态），方法是实例方法 `set/get/clear`
+- `DataScopeContext` 在 `common-security` 包，是 `@Data` POJO + 静态 `set/current/clear`，字段叫 `scope`（不是 `scopeType`）
 
-- [ ] **Step 1:** Read `common/common-security/src/main/java/com/bank/branch/platform/common/security/context/CurrentUserContext.java` and `auth-permission-center/.../security/context/CurrentUserProvider.java` to understand how the ThreadLocal is set
+**r2 决策**：避免直接操作 ThreadLocal（因为 `CurrentUserProvider` 是实例 bean，注入到 JUnit Extension 很别扭），改用 **`@MockBean CurrentUserApi`** 替换 Spring bean。`CurrentUserApi` 已经被业务代码注入，mock 后所有 `currentUserApi.getCurrentEmpId()` 等调用直接返回测试值，绕过 ThreadLocal。
+
+`DataScopeContext` 由于是静态方法，仍可直接 `DataScopeContext.set(ctx)` 操作。
+
+- [ ] **Step 1:** Read `common-security/src/main/java/com/bank/branch/platform/common/security/context/DataScopeContext.java` 和 `auth-permission-center/src/main/java/com/bank/branch/platform/auth/api/CurrentUserApi.java` 确认实际方法签名
+
 - [ ] **Step 2:** Create `WithMockEmpContext.java`:
 
 ```java
@@ -398,8 +421,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 测试用：注入 mock 的 CurrentUserContext 和 DataScopeContext
+ * 测试用：注入 mock 的当前用户上下文 + 数据范围
  * 默认 dataScope 为 ORG_SUBTREE，避免测试漏掉真实过滤分支
+ *
+ * 使用方式：标注在 @SpringBootTest 测试类的方法上，配合 AbstractControllerIntegrationTest 基类。
+ * 基类已 @MockBean(CurrentUserApi.class)，本扩展通过 ExtensionContext 拿到 mock 实例
+ * 后用 Mockito.when(...) stub 各方法。
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
@@ -419,12 +446,16 @@ public @interface WithMockEmpContext {
 ```java
 package com.bank.branch.platform.portal.support;
 
-import com.bank.branch.platform.common.security.context.CurrentUserContext;
-import com.bank.branch.platform.common.security.context.CurrentUserContextHolder;
-// NOTE: replace with actual ThreadLocal holder class — verify by reading common-security source
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.mockito.Mockito;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -432,7 +463,14 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * JUnit 5 扩展：根据 @WithMockEmpContext 注解参数设置 ThreadLocal 上下文
+ * JUnit 5 扩展：
+ *  1. 从 Spring ApplicationContext 拿到 @MockBean(CurrentUserApi.class) 实例，
+ *     用 Mockito 配置返回值
+ *  2. 用静态方法 DataScopeContext.set(...) 设置 ThreadLocal
+ *  3. afterEach 清理 DataScopeContext.clear()
+ *
+ * 不直接操作 CurrentUserProvider 的 ThreadLocal —— 因为它是 Spring @Component 实例，
+ * 而且业务代码用的是 CurrentUserApi（mock 接口比 mock 实例上下文更稳定）
  */
 public class MockEmpContextExtension implements BeforeEachCallback, AfterEachCallback {
 
@@ -442,101 +480,112 @@ public class MockEmpContextExtension implements BeforeEachCallback, AfterEachCal
         WithMockEmpContext anno = m.getAnnotation(WithMockEmpContext.class);
         if (anno == null) return;
 
-        Set<String> roleCodes = new HashSet<>(Arrays.asList(anno.roleCodes()));
-        Set<String> roleIds = new HashSet<>(Arrays.asList(anno.roleCodes())); // simplified
-        Set<String> candidateGroups = new HashSet<>();
+        // 1. 拿到 Spring 容器中 mock 的 CurrentUserApi（由 AbstractControllerIntegrationTest 通过 @MockBean 注册）
+        CurrentUserApi currentUserApi = SpringExtension.getApplicationContext(context)
+            .getBean(CurrentUserApi.class);
+        Set<String> roleCodeSet = new HashSet<>(Arrays.asList(anno.roleCodes()));
+        Mockito.when(currentUserApi.getCurrentEmpId()).thenReturn(anno.empId());
+        Mockito.when(currentUserApi.getCurrentOrgCode()).thenReturn(anno.orgCode());
+        Mockito.when(currentUserApi.getCurrentRoleCodes()).thenReturn(roleCodeSet);
+        Mockito.when(currentUserApi.isSystemAdmin()).thenReturn(anno.systemAdmin());
 
-        CurrentUserContext userCtx = new CurrentUserContext(
-            anno.empId(),
-            anno.orgCode(),
-            roleIds,
-            roleCodes,
-            candidateGroups,
-            anno.systemAdmin()
-        );
-        CurrentUserContextHolder.set(userCtx);
-
-        // DataScope context: see Step 4 below — needs DataScopeContextHolder reference
+        // 2. 设置 DataScopeContext (static method on common-security DataScopeContext)
+        DataScopeContext scopeCtx = new DataScopeContext();
+        scopeCtx.setBizType(BizType.PRODUCT);  // 默认 PRODUCT，业务测试可根据需要改造
+        scopeCtx.setAction(BizAction.LIST);
+        scopeCtx.setScope(DataScopeType.valueOf(anno.dataScope()));
+        scopeCtx.setEmpId(anno.empId());
+        scopeCtx.setOrgCode(anno.orgCode());
+        scopeCtx.setOrgSubtreeCodes(new HashSet<>(Arrays.asList(anno.orgSubtree())));
+        DataScopeContext.set(scopeCtx);
     }
 
     @Override
     public void afterEach(ExtensionContext context) {
-        CurrentUserContextHolder.clear();
-        // Clear DataScopeContext too
+        // 1. 清理 DataScopeContext ThreadLocal
+        DataScopeContext.clear();
+        // 2. CurrentUserApi mock 由 @MockBean 自动 reset，不需手动清理
     }
 }
 ```
 
-- [ ] **Step 4:** Read `common-security` source to find the actual `CurrentUserContextHolder` class (or `CurrentUserProvider`) and `DataScopeContextHolder`. Adjust the imports and method calls in `MockEmpContextExtension` to match the real API. The pattern likely is:
-  ```java
-  CurrentUserProvider.set(userCtx);  // or similar
-  ```
-- [ ] **Step 5:** Add DataScope setup in `beforeEach`:
-  ```java
-  if (!anno.dataScope().equals("ALL")) {
-      DataScopeContext scopeCtx = new DataScopeContext(
-          DataScopeType.valueOf(anno.dataScope()),
-          anno.empId(),
-          anno.orgCode(),
-          new HashSet<>(Arrays.asList(anno.orgSubtree())),
-          BizType.PRODUCT,  // default; tests can override with system property
-          BizAction.LIST
-      );
-      DataScopeContextHolder.set(scopeCtx);
-  }
-  ```
-- [ ] **Step 6:** Create `AbstractControllerIntegrationTest.java`:
+- [ ] **Step 4:** Create `AbstractControllerIntegrationTest.java`（**关键：含 @MockBean CurrentUserApi**）:
 
 ```java
 package com.bank.branch.platform.portal.support;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.NotifyApi;
 import org.junit.jupiter.api.Tag;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Controller 集成测试基类
  * - SpringBootTest with MockMvc
- * - 使用 @MockBean 替换所有 Mapper 和跨模块 Api（不连真实数据库）
- * - @WithMockEmpContext 注入测试用户上下文
+ * - @MockBean 替换所有跨模块 Api（auth + governance），让测试不依赖真实模块启动
+ * - @WithMockEmpContext 通过 SpringExtension 拿到 mock 的 CurrentUserApi 配置返回值
+ *
+ * Mapper 不在这里 mock —— Controller 测试中的 ProductService 等业务 Service 由
+ * 子类自己 @MockBean 替换，避免拖入数据库依赖。
  */
 @Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public abstract class AbstractControllerIntegrationTest {
+
+    @MockBean protected CurrentUserApi currentUserApi;
+    @MockBean protected BizScopeApi bizScopeApi;
+    @MockBean protected OrgApi orgApi;
+    @MockBean protected DictApi dictApi;
+    @MockBean protected FileApi fileApi;
+    @MockBean protected NotifyApi notifyApi;
+    @MockBean protected AuditApi auditApi;
 }
 ```
 
-- [ ] **Step 7:** Create `WithMockEmpContextSelfTest.java` to verify the extension works:
+- [ ] **Step 5:** Create `WithMockEmpContextSelfTest.java` 验证扩展工作:
 
 ```java
 package com.bank.branch.platform.portal.support;
 
-import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class WithMockEmpContextSelfTest extends AbstractControllerIntegrationTest {
 
-    @Autowired
-    CurrentUserApi currentUserApi;
-
     @Test
-    @WithMockEmpContext(empId = "E99999", orgCode = "ORG_TEST", dataScope = "ORG", orgSubtree = {"ORG_TEST"})
+    @WithMockEmpContext(empId = "E99999", orgCode = "ORG_TEST",
+                        dataScope = "ORG", orgSubtree = {"ORG_TEST"})
     void shouldInjectMockContext() {
+        // 1. CurrentUserApi mock 已配置
         assertThat(currentUserApi.getCurrentEmpId()).isEqualTo("E99999");
         assertThat(currentUserApi.getCurrentOrgCode()).isEqualTo("ORG_TEST");
+
+        // 2. DataScopeContext ThreadLocal 已设置（注意字段是 scope 不是 scopeType）
+        DataScopeContext ctx = DataScopeContext.current();
+        assertThat(ctx).isNotNull();
+        assertThat(ctx.getScope()).isEqualTo(DataScopeType.ORG);
+        assertThat(ctx.getOrgCode()).isEqualTo("ORG_TEST");
     }
 }
 ```
 
-- [ ] **Step 8:** Run the self-test: `mvn test -pl portal-content-center -Dtest=WithMockEmpContextSelfTest`. Expected: PASS
-- [ ] **Step 9:** **TROUBLESHOOTING NOTE:** If `CurrentUserContextHolder` doesn't exist (the actual class might be named differently), grep `auth-permission-center/src/main/java` for `ThreadLocal<CurrentUserContext>` and use whatever class wraps it. Alternative approach: use `MockBean(CurrentUserApi.class)` and stub its methods directly with Mockito instead of touching ThreadLocal.
-- [ ] **Step 10:** Commit: `feat(portal): Task 0.6 - @WithMockEmpContext 自定义 JUnit 5 扩展`
+- [ ] **Step 6:** Run self-test: `mvn test -pl portal-content-center -Dtest=WithMockEmpContextSelfTest`
+  - Expected: PASS
+  - If fails because Spring context can't start: check `application-test.yml` and that all required beans (DataSource etc.) are mocked or replaced
+- [ ] **Step 7:** Commit: `feat(portal): Task 0.6 - @WithMockEmpContext 扩展（r2 修复 - 用 @MockBean CurrentUserApi）`
 
 ### Task 0.7: JsonStringListTypeHandler + Unit Tests
 
@@ -737,6 +786,102 @@ WHERE RESOURCE_ID IN ('RES_PORTAL_TODOS','RES_PORTAL_NOTIFY','RES_PORTAL_NOTIFY_
 
 - [ ] **Step 3:** Verify the SQL syntactically by running it against a local MySQL: `mysql -uroot -p123456 onepl < docs/superpowers/sql/2026-04-11-portal-resources-align.sql` (or skip if no DB access; the integration test will validate it)
 - [ ] **Step 4:** Commit: `chore(portal): Task 0.8 - PT_RESOURCE 对齐 SQL（新增 3 条 + 废弃 4 条）`
+
+### Task 0.9: DataScopeAdapter (record → POJO 转换桥) — r2 新增
+
+**Files:**
+- Create: `portal-content-center/src/main/java/com/bank/branch/platform/portal/adapter/DataScopeAdapter.java`
+- Create: `portal-content-center/src/test/java/com/bank/branch/platform/portal/adapter/DataScopeAdapterTest.java`
+
+**Context (r2 修复)**: 项目中存在两个 `DataScopeContext` 类（详见 plan header 的"verified facts"）：
+- `auth.api.dto.DataScopeContext` — record，是 `BizScopeApi.buildScopeContext()` 的返回类型
+- `common.security.context.DataScopeContext` — POJO，是 ThreadLocal 持有者 + Mapper XML 引用的对象
+
+Controller 必须把 record 转成 POJO 才能传给 Service / Mapper。本任务创建一次性的转换工具，所有业务 Phase 复用。
+
+- [ ] **Step 1 (RED):** Create `DataScopeAdapterTest.java`:
+
+```java
+package com.bank.branch.platform.portal.adapter;
+
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
+import org.junit.jupiter.api.Test;
+
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class DataScopeAdapterTest {
+
+    @Test
+    void shouldReturnNullWhenInputIsNull() {
+        assertThat(DataScopeAdapter.fromAuthRecord(null)).isNull();
+    }
+
+    @Test
+    void shouldMapAllFieldsFromAuthRecordToCommonPojo() {
+        var record = new com.bank.branch.platform.auth.api.dto.DataScopeContext(
+            DataScopeType.ORG_SUBTREE,
+            "E10001",
+            "ORG_SZ_001",
+            Set.of("ORG_SZ_001", "ORG_SZ_002"),
+            BizType.PRODUCT,
+            BizAction.LIST
+        );
+
+        var pojo = DataScopeAdapter.fromAuthRecord(record);
+
+        assertThat(pojo).isNotNull();
+        assertThat(pojo.getScope()).isEqualTo(DataScopeType.ORG_SUBTREE);  // 注意字段名 scope
+        assertThat(pojo.getEmpId()).isEqualTo("E10001");
+        assertThat(pojo.getOrgCode()).isEqualTo("ORG_SZ_001");
+        assertThat(pojo.getOrgSubtreeCodes()).containsExactlyInAnyOrder("ORG_SZ_001", "ORG_SZ_002");
+        assertThat(pojo.getBizType()).isEqualTo(BizType.PRODUCT);
+        assertThat(pojo.getAction()).isEqualTo(BizAction.LIST);
+    }
+}
+```
+
+- [ ] **Step 2:** Run, expect FAIL
+- [ ] **Step 3 (GREEN):** Create `DataScopeAdapter.java`:
+
+```java
+package com.bank.branch.platform.portal.adapter;
+
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+
+/**
+ * record (auth.api.dto.DataScopeContext) → POJO (common.security.context.DataScopeContext) 转换桥
+ *
+ * 项目中存在两个 DataScopeContext 类：
+ * - auth.api.dto.DataScopeContext: BizScopeApi.buildScopeContext() 的返回类型，是 record
+ * - common.security.context.DataScopeContext: ThreadLocal 持有 + Mapper XML 引用的对象，是 @Data POJO
+ *
+ * 业务 Service / Mapper 期望使用 POJO，因此 Controller 在拿到 BizScopeApi 的返回值后必须用本工具转换。
+ */
+public final class DataScopeAdapter {
+
+    private DataScopeAdapter() {}
+
+    public static DataScopeContext fromAuthRecord(
+            com.bank.branch.platform.auth.api.dto.DataScopeContext authRecord) {
+        if (authRecord == null) return null;
+        DataScopeContext pojo = new DataScopeContext();
+        pojo.setBizType(authRecord.bizType());
+        pojo.setAction(authRecord.action());
+        pojo.setScope(authRecord.scopeType());           // record .scopeType() → POJO .scope (字段名差异)
+        pojo.setEmpId(authRecord.empId());
+        pojo.setOrgCode(authRecord.orgCode());
+        pojo.setOrgSubtreeCodes(authRecord.orgSubtreeCodes());
+        return pojo;
+    }
+}
+```
+
+- [ ] **Step 4:** Run, expect PASS
+- [ ] **Step 5:** Commit: `feat(portal): Task 0.9 - DataScopeAdapter (record → POJO 转换桥)`
 
 ---
 
@@ -1494,7 +1639,8 @@ public class ProductController {
 ```java
 package com.bank.branch.platform.portal.service.dto;
 
-import com.bank.branch.platform.auth.api.dto.DataScopeContext;
+// 注意：必须 import common-security 包的 DataScopeContext，不是 auth.api.dto 包
+import com.bank.branch.platform.common.security.context.DataScopeContext;
 import lombok.Builder;
 import lombok.Data;
 
@@ -1506,11 +1652,13 @@ public class ProductListQuery {
     private String status;             // ACTIVE / DISABLED / ALL，默认 ACTIVE
     private String productDeptOrgCode; // 03 §D.1 列表的可选过滤
     private Boolean supportForSupportRequest;
-    private Integer offset;            // pageNo - 1) * pageSize
+    private Integer offset;            // (pageNo - 1) * pageSize
     private Integer limit;             // pageSize
-    private DataScopeContext dataScope;
+    private DataScopeContext dataScope; // common-security 的 POJO，字段名 scope（不是 scopeType）
 }
 ```
+
+**重要 (r2 fix)**：本字段使用 `common-security.context.DataScopeContext`（POJO），**不是** `auth.api.dto.DataScopeContext`（record）。Service 层会做一次转换（见 Task 4.2 Step 4 转换代码）。这样 MyBatis XML 才能用 `q.dataScope.scope.name() == 'XXX'` 的 OGNL 表达式访问字段。
 
 - [ ] **Step 2:** Add to `ProductInfoMapper.java`:
 
@@ -1522,20 +1670,22 @@ long countProducts(@Param("q") ProductListQuery query);
 
 - [ ] **Step 3:** Add to `ProductInfoMapper.xml`:
 
+**注意 (r2 fix)**：OGNL 字段名是 `.scope`（不是 `.scopeType`）。`common-security.context.DataScopeContext` POJO 的字段名为 `scope`，类型 `DataScopeType`。
+
 ```xml
 <!-- 通用 DATA_SCOPE 过滤片段。reuse 到 portal 其他 mapper 时可复制 -->
 <sql id="dataScopeFilter">
     <choose>
         <when test="q.dataScope == null"> AND 1 = 0 </when>
-        <when test="q.dataScope.scopeType.name() == 'ALL'"/>
-        <when test="q.dataScope.scopeType.name() == 'ORG_SUBTREE'">
+        <when test="q.dataScope.scope.name() == 'ALL'"/>
+        <when test="q.dataScope.scope.name() == 'ORG_SUBTREE'">
             AND product_dept_org_code IN
             <foreach collection="q.dataScope.orgSubtreeCodes" item="o" open="(" close=")" separator=",">#{o}</foreach>
         </when>
-        <when test="q.dataScope.scopeType.name() == 'ORG'">
+        <when test="q.dataScope.scope.name() == 'ORG'">
             AND product_dept_org_code = #{q.dataScope.orgCode}
         </when>
-        <when test="q.dataScope.scopeType.name() == 'SELF_CREATED'">
+        <when test="q.dataScope.scope.name() == 'SELF_CREATED'">
             AND created_by = #{q.dataScope.empId}
         </when>
         <otherwise> AND 1 = 0 </otherwise>
@@ -1575,11 +1725,26 @@ long countProducts(@Param("q") ProductListQuery query);
 </select>
 ```
 
-- [ ] **Step 4 (RED):** Add 4 integration tests to `ProductInfoMapperIntegrationTest.java`:
-  1. `listProductsWithDataScopeAllShouldReturnAll()` — insert 3 products in 3 different orgs, query with `scopeType=ALL`, verify all 3 returned
-  2. `listProductsWithDataScopeOrgSubtreeShouldFilter()` — insert 3 products in `ORG_SZ_001 / ORG_SZ_002 / ORG_BJ_001`, query with `scopeType=ORG_SUBTREE` and `orgSubtreeCodes=[ORG_SZ_001, ORG_SZ_002]`, verify 2 returned
-  3. `listProductsWithDataScopeOrgShouldReturnOnlyOwnOrg()` — `scopeType=ORG, orgCode=ORG_SZ_001`, verify only that org's product returned
-  4. `listProductsWithUnknownScopeShouldReturnEmpty()` — pass a `null` DataScope or invalid scopeType, verify 0 results (Fail Close)
+- [ ] **Step 4 (RED):** Add 4 integration tests to `ProductInfoMapperIntegrationTest.java`. **注意构造 DataScopeContext 时必须用 setter（POJO，无 6-arg constructor）**:
+
+```java
+private DataScopeContext newScope(DataScopeType scope, String empId, String orgCode, Set<String> subtree) {
+    DataScopeContext ctx = new DataScopeContext();
+    ctx.setBizType(BizType.PRODUCT);
+    ctx.setAction(BizAction.LIST);
+    ctx.setScope(scope);
+    ctx.setEmpId(empId);
+    ctx.setOrgCode(orgCode);
+    ctx.setOrgSubtreeCodes(subtree);
+    return ctx;
+}
+```
+
+测试场景：
+1. `listProductsWithDataScopeAllShouldReturnAll()` — insert 3 products in 3 different orgs, query with `scope=ALL`, verify all 3 returned
+2. `listProductsWithDataScopeOrgSubtreeShouldFilter()` — insert 3 products in `ORG_SZ_001 / ORG_SZ_002 / ORG_BJ_001`, query with `scope=ORG_SUBTREE` and `orgSubtreeCodes=[ORG_SZ_001, ORG_SZ_002]`, verify 2 returned
+3. `listProductsWithDataScopeOrgShouldReturnOnlyOwnOrg()` — `scope=ORG, orgCode=ORG_SZ_001`, verify only that org's product returned
+4. `listProductsWithUnknownScopeShouldReturnEmpty()` — pass a `null` DataScope, verify 0 results (Fail Close)
 - [ ] **Step 5:** Run, iterate XML, expect PASS
 - [ ] **Step 6:** Don't commit yet — combine with Task 4.2 and Task 4.3.
 
@@ -1600,15 +1765,29 @@ long countProducts(@Param("q") ProductListQuery query);
 For now, the conversion of `productCategoryDesc / productDeptOrgName / fileName / responsibleEmps / updatedByName` might be simplified — leave TODO comments and implement minimal projection (just the entity → DTO field copy).
 
 - [ ] **Step 1:** Create `ProductListReqDTO.java` (Controller-facing request DTO with `@Min` validation)
-- [ ] **Step 2 (RED):** Add to `ProductServiceTest.java`:
+- [ ] **Step 2 (RED):** Add to `ProductServiceTest.java`. **注意 (r2 fix)**：使用 common-security 包的 DataScopeContext POJO 配 setter，而不是 auth.api.dto 包的 record 构造函数。
 
 ```java
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
+
+private DataScopeContext newScope(DataScopeType scope, String empId, String orgCode, Set<String> subtree) {
+    DataScopeContext ctx = new DataScopeContext();
+    ctx.setBizType(BizType.PRODUCT);
+    ctx.setAction(BizAction.LIST);
+    ctx.setScope(scope);
+    ctx.setEmpId(empId);
+    ctx.setOrgCode(orgCode);
+    ctx.setOrgSubtreeCodes(subtree);
+    return ctx;
+}
+
 @Test
 void listProductsShouldReturnPageResultWithMappedDTO() {
-    DataScopeContext scope = new DataScopeContext(
-        DataScopeType.ORG_SUBTREE, "E10001", "ORG_SZ_001",
-        Set.of("ORG_SZ_001", "ORG_SZ_002"),
-        BizType.PRODUCT, BizAction.LIST);
+    DataScopeContext scope = newScope(DataScopeType.ORG_SUBTREE, "E10001", "ORG_SZ_001",
+        Set.of("ORG_SZ_001", "ORG_SZ_002"));
 
     ProductInfo entity = newEntity("P001", "DEPOSIT_001", "ORG_SZ_001");
     when(productInfoMapper.countProducts(any())).thenReturn(1L);
@@ -1626,23 +1805,67 @@ void listProductsShouldReturnPageResultWithMappedDTO() {
 @Test
 void listProductsShouldReturnEmptyPageWhenCountIsZero() {
     when(productInfoMapper.countProducts(any())).thenReturn(0L);
-    DataScopeContext scope = new DataScopeContext(
-        DataScopeType.ALL, "E10001", "ORG_SZ_001", Set.of(),
-        BizType.PRODUCT, BizAction.LIST);
+    DataScopeContext scope = newScope(DataScopeType.ALL, "E10001", "ORG_SZ_001", Set.of());
 
     PageResult<ProductDTO> result = productService.listProducts(
         ProductListReqDTO.builder().pageNo(1).pageSize(20).build(), scope);
 
     assertThat(result.getTotal()).isZero();
     assertThat(result.getRecords()).isEmpty();
-    // Should not call listProducts when count == 0 (optimization)
     verify(productInfoMapper, never()).listProducts(any());
 }
 ```
 
 - [ ] **Step 3:** Run, expect FAIL
-- [ ] **Step 4 (GREEN):** Implement `ProductService.listProducts` (with the count==0 optimization). Use `ProductConverter.toListItem(entity)` (which initially is a minimal field-copy converter — full enrichment with DictApi/OrgApi happens in Task 5 for D.2 detail; for D.1 list V1 leaves productCategoryDesc/productDeptOrgName empty with TODO comment)
+- [ ] **Step 4 (GREEN):** Implement `ProductService.listProducts` (with the count==0 optimization). Service signature:
+
+```java
+public PageResult<ProductDTO> listProducts(ProductListReqDTO req, DataScopeContext scope) {
+    ProductListQuery q = ProductListQuery.builder()
+        .keyword(req.getKeyword())
+        .category(req.getCategory())
+        .status(req.getStatus() != null ? req.getStatus() : "ACTIVE")
+        .productDeptOrgCode(req.getProductDeptOrgCode())
+        .supportForSupportRequest(req.getSupportForSupportRequest())
+        .offset(req.getOffset())
+        .limit(req.getPageSize())
+        .dataScope(scope)  // pass through to mapper
+        .build();
+    long total = productInfoMapper.countProducts(q);
+    if (total == 0) {
+        return PageResult.of(req.getPageNo(), req.getPageSize(), 0L, Collections.emptyList());
+    }
+    List<ProductInfo> entities = productInfoMapper.listProducts(q);
+    return PageResult.of(req.getPageNo(), req.getPageSize(), total,
+        entities.stream().map(ProductConverter::toListItem).collect(Collectors.toList()));
+}
+```
+
 - [ ] **Step 5:** Run, expect PASS
+
+**重要 (r2 fix - record→POJO 转换桥)**：Controller 层从 `BizScopeApi.buildScopeContext()` 获得的是 `auth.api.dto.DataScopeContext` record，但 Service/Mapper 期望的是 `common-security.context.DataScopeContext` POJO。需要在 Controller 层做一次转换：
+
+```java
+// 工具方法：放在 portal.adapter 或 portal.support 包下
+// File: portal-content-center/src/main/java/com/bank/branch/platform/portal/adapter/DataScopeAdapter.java
+public final class DataScopeAdapter {
+    private DataScopeAdapter() {}
+    public static com.bank.branch.platform.common.security.context.DataScopeContext fromAuthRecord(
+            com.bank.branch.platform.auth.api.dto.DataScopeContext authRecord) {
+        if (authRecord == null) return null;
+        var ctx = new com.bank.branch.platform.common.security.context.DataScopeContext();
+        ctx.setBizType(authRecord.bizType());
+        ctx.setAction(authRecord.action());
+        ctx.setScope(authRecord.scopeType());           // record .scopeType() → POJO .scope
+        ctx.setEmpId(authRecord.empId());
+        ctx.setOrgCode(authRecord.orgCode());
+        ctx.setOrgSubtreeCodes(authRecord.orgSubtreeCodes());
+        return ctx;
+    }
+}
+```
+
+Phase 0.6 / Task 4.3 / Task 5.2 都会用到这个适配器。建议在 Phase 0 末尾（Task 0.9）创建它，本任务直接 import。
 
 ### Task 4.3: ProductController GET /api/products + Controller Test + Commit
 
@@ -1677,16 +1900,23 @@ void listProductsShouldReturn400WhenPageSizeExceedsLimit() throws Exception {
 ```
 
 - [ ] **Step 2:** Run, expect FAIL
-- [ ] **Step 3 (GREEN):** Add to `ProductController.java`:
+- [ ] **Step 3 (GREEN):** Add to `ProductController.java`. **注意 (r2 fix)**：`bizScopeApi.buildScopeContext(...)` 返回的是 `auth.api.dto.DataScopeContext` record，必须用 `DataScopeAdapter.fromAuthRecord(...)` 转为 `common-security.context.DataScopeContext` POJO 才能传给 Service。
 
 ```java
+import com.bank.branch.platform.auth.api.dto.DataScopeContext as AuthDataScopeContext;
+// (or use fully qualified name)
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
+
 @GetMapping
 @BizAuth(bizType = BizType.PRODUCT, action = BizAction.LIST)
 public ResponseWrapper<PageResult<ProductDTO>> listProducts(
         @Valid ProductListReqDTO req
 ) {
     String empId = currentUserApi.getCurrentEmpId();
-    DataScopeContext scope = bizScopeApi.buildScopeContext(empId, BizType.PRODUCT, BizAction.LIST);
+    // BizScopeApi 返回 record；转换为 common-security 的 POJO
+    var authScope = bizScopeApi.buildScopeContext(empId, BizType.PRODUCT, BizAction.LIST);
+    DataScopeContext scope = DataScopeAdapter.fromAuthRecord(authScope);
     PageResult<ProductDTO> result = productService.listProducts(req, scope);
     return ResponseWrapper.page(result);
 }
@@ -2665,9 +2895,12 @@ public class WorkspaceService {
 
         CompletableFuture<List<NotificationItemDTO>> fRecentNotif = supplyAsync(
             () -> {
-                PageResult<NotificationDTO> page = notifyApi.queryNotifications(
-                    empId, false, new PageRequest(1, 5));
-                return page.getRecords().stream().map(this::toNotifItemDTO).collect(Collectors.toList());
+                // PageRequest 没有 (int, int) 构造函数 — 必须用 setter (r2 fix)
+                PageRequest page = new PageRequest();
+                page.setPageNo(1);
+                page.setPageSize(5);
+                PageResult<NotificationDTO> result = notifyApi.queryNotifications(empId, false, page);
+                return result.getRecords().stream().map(this::toNotifItemDTO).collect(Collectors.toList());
             }, "recent_notifications", errors, 500);
 
         CompletableFuture<List<PortalMetricCard>> fMetrics = supplyAsync(
