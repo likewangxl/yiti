@@ -54,7 +54,7 @@ src/main/java/com/bank/branch/platform/portal/
 - 模块设计文档: `docs/modules/portal-content-center/` (9 份)
 - 切片实现计划: `docs/superpowers/plans/` (portal V1 slice 计划 r3)
 - 共享开发规范: `docs/common-dev-guide.md`
-- 错误码前缀: `PORTAL-xxxyy`, 模块前缀注册见 `docs/common-dev-guide.md` §2
+- 错误码前缀: `PORTAL-{HTTP_STATUS}{SEQ}` (例如 PORTAL-40003, PORTAL-40905), 模块前缀注册见 `docs/common-dev-guide.md` §2
 
 ## Phase 0 说明
 
