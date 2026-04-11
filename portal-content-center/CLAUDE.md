@@ -35,7 +35,7 @@ src/main/java/com/bank/branch/platform/portal/
 ├── service/          # 业务逻辑
 ├── mapper/           # MyBatis Mapper
 ├── entity/           # 数据库实体
-├── enums/            # 错误码枚举 (PortalErrorCode, PORTAL-xxxyy)
+├── enums/            # 错误码枚举 (PortalErrorCode, PORTAL-{HTTP_STATUS}{SEQ})
 ├── config/           # Spring 配置 (PortalCacheConfig 等)
 └── exception/        # 模块异常
 ```
