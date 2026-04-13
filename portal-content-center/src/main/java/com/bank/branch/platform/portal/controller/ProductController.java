@@ -14,7 +14,9 @@ import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
 import com.bank.branch.platform.portal.convert.ProductConverter;
 import com.bank.branch.platform.portal.entity.ProductInfo;
+import com.bank.branch.platform.portal.service.ProductExportService;
 import com.bank.branch.platform.portal.service.ProductService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,6 +28,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,6 +44,7 @@ import java.util.stream.Collectors;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductExportService productExportService;
     private final BizScopeApi bizScopeApi;
     private final CurrentUserApi currentUserApi;
 
@@ -57,6 +63,23 @@ public class ProductController {
     public ResponseWrapper<List<ProductSimpleDTO>> getSupportAvailable() {
         List<ProductInfo> entities = productService.listSupportAvailable();
         return ResponseWrapper.success(entities.stream().map(ProductConverter::toSimple).collect(Collectors.toList()));
+    }
+
+    /**
+     * D.7 产品导出（V1 同步导出 ≤5000 行）
+     */
+    @GetMapping("/export")
+    @BizAuth(bizType = BizType.PRODUCT, action = BizAction.EXPORT)
+    public void exportProducts(
+            @jakarta.annotation.Nullable String keyword,
+            @jakarta.annotation.Nullable String category,
+            @jakarta.annotation.Nullable String status,
+            HttpServletResponse response) throws IOException {
+        String empId = currentUserApi.getCurrentEmpId();
+        String filename = "product_export_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".xlsx";
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=" + filename);
+        productExportService.exportToStream(keyword, category, status, response.getOutputStream(), empId);
     }
 
     /** D.2 产品详情 */
@@ -92,4 +115,5 @@ public class ProductController {
         productService.deleteProduct(id);
         return ResponseWrapper.success(null);
     }
+
 }

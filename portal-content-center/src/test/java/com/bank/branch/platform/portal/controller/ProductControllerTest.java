@@ -4,6 +4,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
 import com.bank.branch.platform.portal.entity.ProductInfo;
+import com.bank.branch.platform.portal.service.ProductExportService;
 import com.bank.branch.platform.portal.service.ProductService;
 import com.bank.branch.platform.portal.support.AbstractControllerIntegrationTest;
 import com.bank.branch.platform.portal.support.WithMockEmpContext;
@@ -17,6 +18,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import com.bank.branch.platform.common.web.exception.BizException;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -28,7 +31,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * ProductController 集成测试 -- Service 返回实体，Controller 负责 DTO 转换
@@ -37,6 +42,7 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @MockBean ProductService productService;
+    @MockBean ProductExportService productExportService;
 
     @Test @WithMockEmpContext(empId = "E10001", roleCodes = {"R_RM"})
     void getSupportAvailableShouldReturn200WithProductList() throws Exception {
@@ -139,5 +145,28 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
         mockMvc.perform(delete("/api/products/P001"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    // ========== D.2 getProduct 异常测试 ==========
+
+    @Test @WithMockEmpContext(empId = "E10001")
+    void getProductShouldReturnErrorCodeWhenNotFound() throws Exception {
+        when(productService.getProduct("P_NONE"))
+                .thenThrow(new BizException("PORTAL-40003", "产品不存在"));
+        // GlobalExceptionHandler 对 BizException 返回 HTTP 200 + 业务错误码
+        mockMvc.perform(get("/api/products/P_NONE"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("PORTAL-40003"));
+    }
+
+    // ========== D.7 exportProducts 测试 ==========
+
+    @Test @WithMockEmpContext(empId = "E10001", dataScope = "ORG_SUBTREE", orgSubtree = {"ORG_SZ_001"})
+    void exportProductsShouldReturn200() throws Exception {
+        // ProductExportService 已被 @MockBean，doNothing 是默认行为
+        mockMvc.perform(get("/api/products/export"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Type",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
     }
 }

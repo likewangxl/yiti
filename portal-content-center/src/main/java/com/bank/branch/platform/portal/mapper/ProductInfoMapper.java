@@ -114,6 +114,15 @@ public interface ProductInfoMapper {
                    @Param("status") String status);
 
     /**
+     * 按产品部门机构编码查询产品列表（ProductApi.listProductsByDept 用）。
+     * 仅返回未删除的产品记录。
+     *
+     * @param productDeptOrgCode 产品部门机构编码
+     * @return 该部门维护的全部产品列表
+     */
+    List<ProductInfo> listByProductDeptOrgCode(@Param("productDeptOrgCode") String productDeptOrgCode);
+
+    /**
      * D.1 分页查询产品列表（含 DATA_SCOPE 过滤）。
      *
      * @param query 查询参数（含数据权限范围）

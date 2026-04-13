@@ -86,6 +86,14 @@
             <artifactId>easyexcel</artifactId>
         </dependency>
 
+        <!-- 显式升级 commons-compress 到 1.25.0 以匹配 POI 5.2.5 需要的 putArchiveEntry 新签名 -->
+        <!-- 原 MinIO 传递依赖的 1.24.0 与 POI 5.2.5 存在 NoSuchMethodError -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.25.0</version>
+        </dependency>
+
         <!-- 测试 -->
         <dependency>
             <groupId>com.mysql</groupId>

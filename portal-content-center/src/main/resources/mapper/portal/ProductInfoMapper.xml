@@ -167,6 +167,16 @@
         </if>
     </select>
 
+    <!-- 按产品部门机构编码查询（ProductApi.listProductsByDept 用） -->
+    <select id="listByProductDeptOrgCode" resultMap="ProductInfoMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM product_info
+        WHERE product_dept_org_code = #{productDeptOrgCode}
+          AND deleted = 0
+        ORDER BY product_name
+    </select>
+
     <!-- ========== D.1 DATA_SCOPE 分页查询 ========== -->
 
     <!-- 通用 DATA_SCOPE 过滤片段 -->
