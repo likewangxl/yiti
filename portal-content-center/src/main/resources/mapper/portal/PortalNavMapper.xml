@@ -86,4 +86,13 @@
         </foreach>
     </update>
 
+    <!-- 按名称和分类统计启用状态的导航数量 -->
+    <select id="countByNameAndCategory" resultType="int">
+        SELECT COUNT(1)
+        FROM portal_nav
+        WHERE nav_name = #{navName}
+          AND nav_category = #{category}
+          AND status = 'ACTIVE'
+    </select>
+
 </mapper>

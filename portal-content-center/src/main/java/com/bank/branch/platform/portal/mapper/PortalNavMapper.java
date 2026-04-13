@@ -70,4 +70,13 @@ public interface PortalNavMapper {
      * @return 受影响行数
      */
     int updateSortOrderBatch(@Param("items") List<PortalNav> items);
+
+    /**
+     * 按名称和分类统计启用状态的导航数量（用于同分类下名称唯一性校验）。
+     *
+     * @param navName  导航名称
+     * @param category 导航分类
+     * @return 匹配数量
+     */
+    int countByNameAndCategory(@Param("navName") String navName, @Param("category") String category);
 }
