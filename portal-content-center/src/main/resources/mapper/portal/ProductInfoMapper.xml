@@ -131,4 +131,96 @@
         </foreach>
     </select>
 
+    <!-- 分页查询产品列表（keyword 搜索 product_code 和 product_name） -->
+    <select id="selectPage" resultMap="ProductInfoMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM product_info
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (product_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR product_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="category != null and category != ''">
+            AND product_category = #{category}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计分页查询的总记录数 -->
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM product_info
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (product_code LIKE CONCAT('%', #{keyword}, '%')
+                 OR product_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="category != null and category != ''">
+            AND product_category = #{category}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <!-- ========== D.1 DATA_SCOPE 分页查询 ========== -->
+
+    <!-- 通用 DATA_SCOPE 过滤片段 -->
+    <sql id="dataScopeFilter">
+        <choose>
+            <when test="q.dataScope == null"> AND 1 = 0 </when>
+            <when test="q.dataScope.scope.name() == 'ALL'"/>
+            <when test="q.dataScope.scope.name() == 'ORG_SUBTREE'">
+                AND product_dept_org_code IN
+                <foreach collection="q.dataScope.orgSubtreeCodes" item="o" open="(" close=")" separator=",">#{o}</foreach>
+            </when>
+            <when test="q.dataScope.scope.name() == 'ORG'">
+                AND product_dept_org_code = #{q.dataScope.orgCode}
+            </when>
+            <when test="q.dataScope.scope.name() == 'SELF_CREATED'">
+                AND created_by = #{q.dataScope.empId}
+            </when>
+            <otherwise> AND 1 = 0 </otherwise>
+        </choose>
+    </sql>
+
+    <!-- D.1 listProducts 共享 WHERE 条件 -->
+    <sql id="listProductsWhere">
+        <where>
+            AND deleted = 0
+            <if test="q.status == null or q.status == 'ACTIVE'"> AND status = 'ACTIVE' </if>
+            <if test="q.status != null and q.status == 'DISABLED'"> AND status = 'DISABLED' </if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (product_name LIKE CONCAT('%', #{q.keyword}, '%')
+                  OR product_code LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+            <if test="q.category != null and q.category != ''"> AND product_category = #{q.category} </if>
+            <if test="q.productDeptOrgCode != null and q.productDeptOrgCode != ''">
+                AND product_dept_org_code = #{q.productDeptOrgCode}
+            </if>
+            <if test="q.supportForSupportRequest != null">
+                AND support_for_support_request = #{q.supportForSupportRequest}
+            </if>
+            <include refid="dataScopeFilter"/>
+        </where>
+    </sql>
+
+    <!-- D.1 分页查询产品列表（含 DATA_SCOPE 过滤） -->
+    <select id="listProducts" resultMap="ProductInfoMap">
+        SELECT <include refid="BASE_COLUMNS"/> FROM product_info
+        <include refid="listProductsWhere"/>
+        ORDER BY updated_time DESC
+        LIMIT #{q.offset}, #{q.limit}
+    </select>
+
+    <!-- D.1 统计产品总数 -->
+    <select id="countProducts" resultType="long">
+        SELECT COUNT(*) FROM product_info
+        <include refid="listProductsWhere"/>
+    </select>
+
 </mapper>

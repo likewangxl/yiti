@@ -55,4 +55,36 @@
           AND emp_id = #{empId}
     </delete>
 
+    <!-- 按员工工号查询快捷入口（仅该员工的），按 sort_order 升序 -->
+    <select id="listByEmpId" resultType="com.bank.branch.platform.portal.entity.PortalShortcut">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM portal_shortcut
+        WHERE emp_id = #{empId}
+        ORDER BY sort_order ASC
+    </select>
+
+    <!-- 批量插入快捷入口（insertBatch，与 batchInsert 功能相同） -->
+    <insert id="insertBatch">
+        INSERT INTO portal_shortcut (
+            id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type,
+            target_type, emp_id, sort_order, status,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.id}, #{item.shortcutName}, #{item.shortcutUrl}, #{item.shortcutIcon}, #{item.shortcutType},
+                #{item.targetType}, #{item.empId}, #{item.sortOrder}, #{item.status},
+                #{item.createdBy}, #{item.createdTime}, #{item.updatedBy}, #{item.updatedTime}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 统计指定员工的自定义快捷入口数量 -->
+    <select id="countCustomByEmpId" resultType="int">
+        SELECT COUNT(*) FROM portal_shortcut
+        WHERE emp_id = #{empId}
+          AND shortcut_type = 'CUSTOM'
+    </select>
+
 </mapper>

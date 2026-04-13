@@ -1,6 +1,7 @@
 package com.bank.branch.platform.portal.mapper;
 
 import com.bank.branch.platform.portal.entity.ProductInfo;
+import com.bank.branch.platform.portal.service.dto.ProductListQuery;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -79,4 +80,52 @@ public interface ProductInfoMapper {
      * @return 匹配的产品列表
      */
     List<ProductInfo> listByIds(@Param("ids") List<String> ids);
+
+    /**
+     * 分页查询产品列表。
+     * <p>
+     * keyword 模糊搜索 product_code 和 product_name，category 和 status 精确匹配，
+     * 始终过滤逻辑删除记录（deleted=0）。
+     * </p>
+     *
+     * @param keyword  关键词（搜索 product_code 和 product_name），可为 null
+     * @param category 产品类别，可为 null
+     * @param status   状态过滤，可为 null
+     * @param offset   偏移量
+     * @param limit    每页条数
+     * @return 产品列表
+     */
+    List<ProductInfo> selectPage(@Param("keyword") String keyword,
+                                 @Param("category") String category,
+                                 @Param("status") String status,
+                                 @Param("offset") int offset,
+                                 @Param("limit") int limit);
+
+    /**
+     * 统计分页查询的总记录数。
+     *
+     * @param keyword  关键词（搜索 product_code 和 product_name），可为 null
+     * @param category 产品类别，可为 null
+     * @param status   状态过滤，可为 null
+     * @return 总记录数
+     */
+    long countPage(@Param("keyword") String keyword,
+                   @Param("category") String category,
+                   @Param("status") String status);
+
+    /**
+     * D.1 分页查询产品列表（含 DATA_SCOPE 过滤）。
+     *
+     * @param query 查询参数（含数据权限范围）
+     * @return 当前页产品列表
+     */
+    List<ProductInfo> listProducts(@Param("q") ProductListQuery query);
+
+    /**
+     * D.1 统计产品总数（与 listProducts 共享 WHERE 条件）。
+     *
+     * @param query 查询参数（含数据权限范围）
+     * @return 总记录数
+     */
+    long countProducts(@Param("q") ProductListQuery query);
 }

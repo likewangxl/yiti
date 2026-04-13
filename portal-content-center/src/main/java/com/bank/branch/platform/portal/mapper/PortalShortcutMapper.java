@@ -52,4 +52,28 @@ public interface PortalShortcutMapper {
      * @return 受影响行数
      */
     int deleteCustomByEmpId(@Param("empId") String empId);
+
+    /**
+     * 按员工工号查询快捷入口（仅该员工的，不含系统级），按 sort_order 升序排列。
+     *
+     * @param empId 员工工号
+     * @return 该员工的快捷入口列表
+     */
+    List<PortalShortcut> listByEmpId(@Param("empId") String empId);
+
+    /**
+     * 批量插入快捷入口（与 batchInsert 功能相同，命名符合规范）。
+     *
+     * @param list 快捷入口实体列表
+     * @return 受影响行数
+     */
+    int insertBatch(@Param("list") List<PortalShortcut> list);
+
+    /**
+     * 统计指定员工的自定义快捷入口数量。
+     *
+     * @param empId 员工工号
+     * @return 自定义快捷入口数量
+     */
+    int countCustomByEmpId(@Param("empId") String empId);
 }

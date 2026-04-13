@@ -134,6 +134,120 @@ class AddrbookEmployeeMapperIntegrationTest extends AbstractMapperIntegrationTes
     }
 
     /**
+     * 验证 selectPage 多条件过滤功能。
+     */
+    @Test
+    void selectPage_withFilters() {
+        // Arrange
+        AddrbookEmployee e1 = newEmployee("TEST_P001", List.of("P001"));
+        e1.setMobile("13900001111");
+        e1.setOrgCode("ORG_SZ_001");
+        mapper.insert(e1);
+
+        AddrbookEmployee e2 = newEmployee("TEST_P002", List.of("P002"));
+        e2.setMobile("13900002222");
+        e2.setOrgCode("ORG_SZ_002");
+        mapper.insert(e2);
+
+        AddrbookEmployee e3 = newEmployee("TEST_P003", List.of("P003"));
+        e3.setMobile("13900003333");
+        e3.setOrgCode("ORG_SZ_001");
+        e3.setStatus("RESIGNED");
+        mapper.insert(e3);
+
+        // Act - 按机构代码过滤
+        List<AddrbookEmployee> result = mapper.selectPage(null, "ORG_SZ_001", null, 0, 10);
+
+        // Assert
+        assertThat(result).hasSize(2);
+        assertThat(result).allMatch(e -> "ORG_SZ_001".equals(e.getOrgCode()));
+
+        // 按机构 + 状态过滤
+        List<AddrbookEmployee> activeOnly = mapper.selectPage(null, "ORG_SZ_001", "ACTIVE", 0, 10);
+        assertThat(activeOnly).hasSize(1);
+
+        // countPage 与 selectPage 一致
+        long count = mapper.countPage(null, "ORG_SZ_001", "ACTIVE");
+        assertThat(count).isEqualTo(1);
+    }
+
+    /**
+     * 验证 searchByKeyword 按关键词搜索（仅 ACTIVE）。
+     */
+    @Test
+    void searchByKeyword() {
+        // Arrange
+        AddrbookEmployee e1 = newEmployee("TEST_S001", List.of());
+        e1.setEmpName("张三");
+        e1.setMobile("13800001111");
+        mapper.insert(e1);
+
+        AddrbookEmployee e2 = newEmployee("TEST_S002", List.of());
+        e2.setEmpName("李四");
+        e2.setMobile("13800002222");
+        mapper.insert(e2);
+
+        AddrbookEmployee e3 = newEmployee("TEST_S003", List.of());
+        e3.setEmpName("张伟");
+        e3.setMobile("13800003333");
+        e3.setStatus("RESIGNED");
+        mapper.insert(e3);
+
+        // Act - 搜索 "张"
+        List<AddrbookEmployee> result = mapper.searchByKeyword("张", 10);
+
+        // Assert - 只返回 ACTIVE 的张三，不返回 RESIGNED 的张伟
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getEmpName()).isEqualTo("张三");
+    }
+
+    /**
+     * 验证 updateFields 动态更新可编辑字段。
+     */
+    @Test
+    void updateFields() {
+        // Arrange
+        AddrbookEmployee emp = newEmployee("TEST_U001", List.of("P001"));
+        mapper.insert(emp);
+
+        // Act - 只更新 empName 和 position
+        AddrbookEmployee patch = new AddrbookEmployee();
+        patch.setEmpId("TEST_U001");
+        patch.setEmpName("更新后姓名");
+        patch.setPosition("高级客户经理");
+        int rows = mapper.updateFields(patch);
+
+        // Assert
+        assertThat(rows).isEqualTo(1);
+        AddrbookEmployee found = mapper.selectByEmpId("TEST_U001");
+        assertThat(found.getEmpName()).isEqualTo("更新后姓名");
+        assertThat(found.getPosition()).isEqualTo("高级客户经理");
+        // orgCode 应保持不变
+        assertThat(found.getOrgCode()).isEqualTo("ORG_SZ_001");
+    }
+
+    /**
+     * 验证 selectByOrgCode 按机构代码查询。
+     */
+    @Test
+    void selectByOrgCode() {
+        // Arrange
+        mapper.insert(newEmployee("TEST_O001", List.of()));
+        mapper.insert(newEmployee("TEST_O002", List.of()));
+
+        AddrbookEmployee e3 = newEmployee("TEST_O003", List.of());
+        e3.setOrgCode("ORG_BJ_001");
+        mapper.insert(e3);
+
+        // Act
+        List<AddrbookEmployee> result = mapper.selectByOrgCode("ORG_SZ_001");
+
+        // Assert
+        assertThat(result).hasSize(2);
+        assertThat(result).allMatch(e -> "ORG_SZ_001".equals(e.getOrgCode()));
+    }
+
+    /**
      * 构造测试用员工实体的辅助方法。
      *
      * @param empId      员工工号

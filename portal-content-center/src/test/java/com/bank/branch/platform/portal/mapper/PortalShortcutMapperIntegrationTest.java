@@ -111,6 +111,93 @@ class PortalShortcutMapperIntegrationTest extends AbstractMapperIntegrationTest 
     }
 
     /**
+     * 验证 listByEmpId 只返回指定员工的快捷入口，按 sort_order 排序。
+     */
+    @Test
+    void insertAndListByEmpId() {
+        // Arrange
+        PortalShortcut s1 = newShortcut("TEST_快捷A", "CUSTOM", "TEST_EMP01");
+        s1.setSortOrder(2);
+        PortalShortcut s2 = newShortcut("TEST_快捷B", "CUSTOM", "TEST_EMP01");
+        s2.setSortOrder(1);
+        PortalShortcut s3 = newShortcut("TEST_快捷C", "CUSTOM", "TEST_EMP02");
+        mapper.insert(s1);
+        mapper.insert(s2);
+        mapper.insert(s3);
+
+        // Act
+        List<PortalShortcut> result = mapper.listByEmpId("TEST_EMP01");
+
+        // Assert - 只返回 TEST_EMP01 的快捷入口
+        assertThat(result).hasSize(2);
+        assertThat(result).allMatch(s -> "TEST_EMP01".equals(s.getEmpId()));
+        // 验证排序（sort_order 升序）
+        assertThat(result.get(0).getSortOrder()).isLessThanOrEqualTo(result.get(1).getSortOrder());
+    }
+
+    /**
+     * 验证 deleteCustomByEmpId 只删除 CUSTOM 类型，保留 SYSTEM 类型。
+     */
+    @Test
+    void deleteCustomByEmpId_keepsSystem() {
+        // Arrange
+        PortalShortcut custom1 = newShortcut("TEST_自定义1", "CUSTOM", "TEST_EMP01");
+        PortalShortcut custom2 = newShortcut("TEST_自定义2", "CUSTOM", "TEST_EMP01");
+        PortalShortcut system1 = newShortcut("TEST_系统1", "SYSTEM", "TEST_EMP01");
+        mapper.insert(custom1);
+        mapper.insert(custom2);
+        mapper.insert(system1);
+
+        // Act
+        int deleted = mapper.deleteCustomByEmpId("TEST_EMP01");
+
+        // Assert - 只删除了 2 条 CUSTOM
+        assertThat(deleted).isEqualTo(2);
+
+        // SYSTEM 类型应保留
+        List<PortalShortcut> remaining = mapper.listByEmpId("TEST_EMP01");
+        assertThat(remaining).hasSize(1);
+        assertThat(remaining.get(0).getShortcutType()).isEqualTo("SYSTEM");
+    }
+
+    /**
+     * 验证 insertBatch 批量插入。
+     */
+    @Test
+    void insertBatchShouldPersistAllRows() {
+        // Arrange
+        PortalShortcut s1 = newShortcut("TEST_批量A", "CUSTOM", "TEST_EMP01");
+        PortalShortcut s2 = newShortcut("TEST_批量B", "CUSTOM", "TEST_EMP01");
+        PortalShortcut s3 = newShortcut("TEST_批量C", "CUSTOM", "TEST_EMP01");
+
+        // Act
+        int rows = mapper.insertBatch(Arrays.asList(s1, s2, s3));
+
+        // Assert
+        assertThat(rows).isEqualTo(3);
+        List<PortalShortcut> result = mapper.listByEmpId("TEST_EMP01");
+        assertThat(result).hasSize(3);
+    }
+
+    /**
+     * 验证统计指定员工的自定义快捷入口数量。
+     */
+    @Test
+    void countCustomByEmpId() {
+        // Arrange
+        mapper.insert(newShortcut("TEST_自定义A", "CUSTOM", "TEST_EMP01"));
+        mapper.insert(newShortcut("TEST_自定义B", "CUSTOM", "TEST_EMP01"));
+        mapper.insert(newShortcut("TEST_系统A", "SYSTEM", "TEST_EMP01"));
+        mapper.insert(newShortcut("TEST_其他员工", "CUSTOM", "TEST_EMP02"));
+
+        // Act
+        int count = mapper.countCustomByEmpId("TEST_EMP01");
+
+        // Assert - 只统计 TEST_EMP01 的 CUSTOM 类型
+        assertThat(count).isEqualTo(2);
+    }
+
+    /**
      * 创建测试快捷入口辅助方法。
      *
      * @param name  快捷入口名称

@@ -71,4 +71,62 @@ public interface AddrbookEmployeeMapper {
      * @return 满足条件的员工数量
      */
     int countActiveByEmpIds(@Param("empIds") List<String> empIds);
+
+    /**
+     * 分页查询员工列表。
+     * <p>
+     * keyword 模糊搜索 emp_name 和 mobile，orgCode 精确匹配，status 精确匹配，
+     * 始终过滤逻辑删除记录（deleted=0）。
+     * </p>
+     *
+     * @param keyword 关键词（搜索 emp_name 和 mobile），可为 null
+     * @param orgCode 机构代码，可为 null
+     * @param status  状态过滤，可为 null
+     * @param offset  偏移量
+     * @param limit   每页条数
+     * @return 员工列表
+     */
+    List<AddrbookEmployee> selectPage(@Param("keyword") String keyword,
+                                      @Param("orgCode") String orgCode,
+                                      @Param("status") String status,
+                                      @Param("offset") int offset,
+                                      @Param("limit") int limit);
+
+    /**
+     * 统计分页查询的总记录数。
+     *
+     * @param keyword 关键词（搜索 emp_name 和 mobile），可为 null
+     * @param orgCode 机构代码，可为 null
+     * @param status  状态过滤，可为 null
+     * @return 总记录数
+     */
+    long countPage(@Param("keyword") String keyword,
+                   @Param("orgCode") String orgCode,
+                   @Param("status") String status);
+
+    /**
+     * 按关键词搜索员工（模糊匹配 emp_name 和 mobile），限制返回数量。
+     *
+     * @param keyword 搜索关键词
+     * @param limit   最大返回数量
+     * @return 匹配的员工列表
+     */
+    List<AddrbookEmployee> searchByKeyword(@Param("keyword") String keyword,
+                                           @Param("limit") int limit);
+
+    /**
+     * 动态更新可编辑字段（非 null 字段才更新）。
+     *
+     * @param entity 包含 empId 及待更新字段的员工实体
+     * @return 受影响行数
+     */
+    int updateFields(AddrbookEmployee entity);
+
+    /**
+     * 按机构代码查询员工列表。
+     *
+     * @param orgCode 机构代码
+     * @return 该机构下未删除的员工列表
+     */
+    List<AddrbookEmployee> selectByOrgCode(@Param("orgCode") String orgCode);
 }

@@ -92,4 +92,83 @@
           AND deleted = 0
     </select>
 
+    <!-- 分页查询员工列表（keyword 搜索 emp_name 和 mobile） -->
+    <select id="selectPage" resultMap="AddrbookEmployeeMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM addrbook_employee
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR mobile LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="orgCode != null and orgCode != ''">
+            AND org_code = #{orgCode}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        ORDER BY emp_id ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计分页查询的总记录数 -->
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM addrbook_employee
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR mobile LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="orgCode != null and orgCode != ''">
+            AND org_code = #{orgCode}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <!-- 按关键词搜索员工（模糊匹配 emp_name 和 mobile） -->
+    <select id="searchByKeyword" resultMap="AddrbookEmployeeMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM addrbook_employee
+        WHERE deleted = 0
+          AND status = 'ACTIVE'
+          AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
+               OR mobile LIKE CONCAT('%', #{keyword}, '%'))
+        ORDER BY emp_name ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 动态更新可编辑字段 -->
+    <update id="updateFields" parameterType="com.bank.branch.platform.portal.entity.AddrbookEmployee">
+        UPDATE addrbook_employee
+        <set>
+            <if test="empName != null">emp_name = #{empName},</if>
+            <if test="mobile != null">mobile = #{mobile},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="orgCode != null">org_code = #{orgCode},</if>
+            <if test="orgName != null">org_name = #{orgName},</if>
+            <if test="position != null">position = #{position},</if>
+            <if test="selfDesc != null">self_desc = #{selfDesc},</if>
+            <if test="responsibleProductIds != null">responsible_product_ids = #{responsibleProductIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="maintainerEmpId != null">maintainer_emp_id = #{maintainerEmpId},</if>
+            updated_time = NOW(),
+        </set>
+        WHERE emp_id = #{empId}
+          AND deleted = 0
+    </update>
+
+    <!-- 按机构代码查询员工列表 -->
+    <select id="selectByOrgCode" resultMap="AddrbookEmployeeMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM addrbook_employee
+        WHERE org_code = #{orgCode}
+          AND deleted = 0
+        ORDER BY emp_id ASC
+    </select>
+
 </mapper>

@@ -1,6 +1,11 @@
 package com.bank.branch.platform.portal.mapper;
 
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.portal.entity.ProductInfo;
+import com.bank.branch.platform.portal.service.dto.ProductListQuery;
 import com.bank.branch.platform.portal.support.AbstractMapperIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +14,7 @@ import org.springframework.test.context.jdbc.Sql;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -227,6 +233,209 @@ class ProductInfoMapperIntegrationTest extends AbstractMapperIntegrationTest {
         // Assert
         assertThat(found).isNotNull();
         assertThat(found.getResponsibleEmpIds()).isEmpty();
+    }
+
+    /**
+     * 验证 selectPage 按关键词搜索 product_code 和 product_name。
+     */
+    @Test
+    void selectPage_withKeywordFilter() {
+        // Arrange
+        mapper.insert(newProduct("TEST_PAGE_A"));
+        mapper.insert(newProduct("TEST_PAGE_B"));
+        mapper.insert(newProduct("TEST_OTHER"));
+
+        // Act - 搜索含 "PAGE" 的产品
+        List<ProductInfo> result = mapper.selectPage("PAGE", null, null, 0, 10);
+
+        // Assert
+        assertThat(result).hasSize(2);
+        assertThat(result).allMatch(p ->
+                p.getProductCode().contains("PAGE") || p.getProductName().contains("PAGE"));
+    }
+
+    /**
+     * 验证 countPage 统计总数与 selectPage 过滤条件一致。
+     */
+    @Test
+    void countPage() {
+        // Arrange
+        ProductInfo p1 = newProduct("TEST_COUNT_A");
+        p1.setProductCategory("CAT_LOAN");
+        p1.setStatus("ACTIVE");
+        mapper.insert(p1);
+
+        ProductInfo p2 = newProduct("TEST_COUNT_B");
+        p2.setProductCategory("CAT_LOAN");
+        p2.setStatus("DISABLED");
+        mapper.insert(p2);
+
+        ProductInfo p3 = newProduct("TEST_COUNT_C");
+        p3.setProductCategory("CAT_DEPOSIT");
+        p3.setStatus("ACTIVE");
+        mapper.insert(p3);
+
+        // Act - 按分类 CAT_LOAN + 状态 ACTIVE 统计
+        long count = mapper.countPage(null, "CAT_LOAN", "ACTIVE");
+
+        // Assert
+        assertThat(count).isEqualTo(1);
+
+        // 无过滤条件时应返回全部（至少包含本测试插入的 3 条）
+        long allCount = mapper.countPage(null, null, null);
+        assertThat(allCount).isGreaterThanOrEqualTo(3);
+    }
+
+    // ========== D.1 DATA_SCOPE 分页查询测试 ==========
+
+    /**
+     * DATA_SCOPE=ALL 时应返回所有机构的产品。
+     */
+    @Test
+    void listProductsWithDataScopeAllShouldReturnAll() {
+        // Arrange: 3 products in different orgs
+        ProductInfo p1 = newProduct("SCOPE_ALL_1");
+        p1.setProductDeptOrgCode("ORG_SZ_001");
+        mapper.insert(p1);
+
+        ProductInfo p2 = newProduct("SCOPE_ALL_2");
+        p2.setProductDeptOrgCode("ORG_SZ_002");
+        mapper.insert(p2);
+
+        ProductInfo p3 = newProduct("SCOPE_ALL_3");
+        p3.setProductDeptOrgCode("ORG_BJ_001");
+        mapper.insert(p3);
+
+        DataScopeContext scope = newScope(DataScopeType.ALL, "E10001", "ORG_SZ_001", null);
+        ProductListQuery query = defaultQuery(scope);
+
+        // Act
+        List<ProductInfo> result = mapper.listProducts(query);
+        long count = mapper.countProducts(query);
+
+        // Assert
+        List<String> codes = result.stream().map(ProductInfo::getProductCode).toList();
+        assertThat(codes).contains("SCOPE_ALL_1", "SCOPE_ALL_2", "SCOPE_ALL_3");
+        assertThat(count).isGreaterThanOrEqualTo(3);
+    }
+
+    /**
+     * DATA_SCOPE=ORG_SUBTREE 时只返回 subtree 内的产品。
+     */
+    @Test
+    void listProductsWithDataScopeOrgSubtreeShouldFilter() {
+        // Arrange: 3 products, 2 in SZ subtree, 1 in BJ
+        ProductInfo p1 = newProduct("SCOPE_SUB_1");
+        p1.setProductDeptOrgCode("ORG_SZ_001");
+        mapper.insert(p1);
+
+        ProductInfo p2 = newProduct("SCOPE_SUB_2");
+        p2.setProductDeptOrgCode("ORG_SZ_002");
+        mapper.insert(p2);
+
+        ProductInfo p3 = newProduct("SCOPE_SUB_3");
+        p3.setProductDeptOrgCode("ORG_BJ_001");
+        mapper.insert(p3);
+
+        DataScopeContext scope = newScope(DataScopeType.ORG_SUBTREE, "E10001", "ORG_SZ_001",
+                Set.of("ORG_SZ_001", "ORG_SZ_002"));
+        ProductListQuery query = defaultQuery(scope);
+
+        // Act
+        List<ProductInfo> result = mapper.listProducts(query);
+        long count = mapper.countProducts(query);
+
+        // Assert
+        List<String> codes = result.stream().map(ProductInfo::getProductCode).toList();
+        assertThat(codes).contains("SCOPE_SUB_1", "SCOPE_SUB_2");
+        assertThat(codes).doesNotContain("SCOPE_SUB_3");
+        assertThat(count).isEqualTo(2);
+    }
+
+    /**
+     * DATA_SCOPE=ORG 时只返回当前机构的产品。
+     */
+    @Test
+    void listProductsWithDataScopeOrgShouldReturnOnlyOwnOrg() {
+        // Arrange
+        ProductInfo p1 = newProduct("SCOPE_ORG_1");
+        p1.setProductDeptOrgCode("ORG_SZ_001");
+        mapper.insert(p1);
+
+        ProductInfo p2 = newProduct("SCOPE_ORG_2");
+        p2.setProductDeptOrgCode("ORG_SZ_002");
+        mapper.insert(p2);
+
+        ProductInfo p3 = newProduct("SCOPE_ORG_3");
+        p3.setProductDeptOrgCode("ORG_BJ_001");
+        mapper.insert(p3);
+
+        DataScopeContext scope = newScope(DataScopeType.ORG, "E10001", "ORG_SZ_001", null);
+        ProductListQuery query = defaultQuery(scope);
+
+        // Act
+        List<ProductInfo> result = mapper.listProducts(query);
+        long count = mapper.countProducts(query);
+
+        // Assert
+        List<String> codes = result.stream().map(ProductInfo::getProductCode).toList();
+        assertThat(codes).contains("SCOPE_ORG_1");
+        assertThat(codes).doesNotContain("SCOPE_ORG_2", "SCOPE_ORG_3");
+        assertThat(count).isEqualTo(1);
+    }
+
+    /**
+     * dataScope=null 时 Fail Close，应返回 0 条结果。
+     */
+    @Test
+    void listProductsWithNullScopeShouldReturnEmpty() {
+        // Arrange
+        ProductInfo p = newProduct("SCOPE_NULL_1");
+        mapper.insert(p);
+
+        ProductListQuery query = ProductListQuery.builder()
+                .status("ACTIVE").offset(0).limit(100).dataScope(null).build();
+
+        // Act
+        List<ProductInfo> result = mapper.listProducts(query);
+        long count = mapper.countProducts(query);
+
+        // Assert: Fail Close - null scope -> AND 1=0 -> empty
+        assertThat(result).isEmpty();
+        assertThat(count).isEqualTo(0);
+    }
+
+    // ========== Helper methods ==========
+
+    /**
+     * 构建 DataScopeContext 辅助方法。
+     *
+     * @param scope   数据范围类型
+     * @param empId   员工 ID
+     * @param orgCode 机构编码
+     * @param subtree 机构子树编码集合
+     * @return DataScopeContext POJO
+     */
+    private DataScopeContext newScope(DataScopeType scope, String empId, String orgCode, Set<String> subtree) {
+        DataScopeContext ctx = new DataScopeContext();
+        ctx.setBizType(BizType.PRODUCT);
+        ctx.setAction(BizAction.LIST);
+        ctx.setScope(scope);
+        ctx.setEmpId(empId);
+        ctx.setOrgCode(orgCode);
+        ctx.setOrgSubtreeCodes(subtree);
+        return ctx;
+    }
+
+    /**
+     * 构建默认查询参数辅助方法。
+     *
+     * @param scope 数据权限范围
+     * @return ProductListQuery
+     */
+    private ProductListQuery defaultQuery(DataScopeContext scope) {
+        return ProductListQuery.builder()
+                .status("ACTIVE").offset(0).limit(100).dataScope(scope).build();
     }
 
     /**

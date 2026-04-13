@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.portal.mapper.DocInfoMapper">
+
+    <!-- doc_info 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, doc_title, doc_category, file_object_id, status,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!-- 插入新文档 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.DocInfo">
+        INSERT INTO doc_info (
+            id, doc_title, doc_category, file_object_id, status,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES (
+            #{id}, #{docTitle}, #{docCategory}, #{fileObjectId}, #{status},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按 id 查询 -->
+    <select id="selectById" resultType="com.bank.branch.platform.portal.entity.DocInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM doc_info
+        WHERE id = #{id}
+    </select>
+
+    <!-- 按部分字段更新，动态 SET -->
+    <update id="updateById" parameterType="com.bank.branch.platform.portal.entity.DocInfo">
+        UPDATE doc_info
+        <set>
+            <if test="docTitle != null">doc_title = #{docTitle},</if>
+            <if test="docCategory != null">doc_category = #{docCategory},</if>
+            <if test="fileObjectId != null">file_object_id = #{fileObjectId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            updated_time = NOW(),
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 逻辑停用（将 status 设为 DISABLED） -->
+    <update id="softDeleteById">
+        UPDATE doc_info
+        SET status = 'DISABLED',
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND status = 'ACTIVE'
+    </update>
+
+    <!-- 分页查询文档列表 -->
+    <select id="selectPage" resultType="com.bank.branch.platform.portal.entity.DocInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM doc_info
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND doc_title LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="category != null and category != ''">
+                AND doc_category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计分页查询的总记录数 -->
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM doc_info
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND doc_title LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="category != null and category != ''">
+                AND doc_category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <!-- 按分类查询启用的文档列表 -->
+    <select id="listActiveByCategory" resultType="com.bank.branch.platform.portal.entity.DocInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM doc_info
+        WHERE status = 'ACTIVE'
+          AND doc_category = #{category}
+        ORDER BY created_time DESC
+    </select>
+
+</mapper>
