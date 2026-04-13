@@ -110,7 +110,7 @@ public class ProductController {
      * D.6 删除产品（高危操作）
      */
     @DeleteMapping("/{id:[A-Za-z0-9_-]{1,64}}")
-    @BizAuth(bizType = BizType.PRODUCT, action = BizAction.WRITE)
+    @BizAuth(bizType = BizType.PRODUCT, action = BizAction.DELETE)
     public ResponseWrapper<Void> deleteProduct(@PathVariable String id) {
         productService.deleteProduct(id);
         return ResponseWrapper.success(null);

@@ -1,6 +1,6 @@
 package com.bank.branch.platform.portal.listener;
 
-import com.bank.branch.platform.portal.api.event.ProductResponsibleUpdatedEvent;
+import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 产品负责人双向同步监听器
@@ -35,10 +37,15 @@ public class ProductResponsibleSyncListener {
             log.debug("Skip event from source={}", event.getSource());
             return;
         }
-        for (String empId : event.getRemoved()) {
+        // 从 beforeEmpIds/afterEmpIds 计算增量 diff
+        Set<String> beforeSet = new HashSet<>(event.getBeforeEmpIds() != null ? event.getBeforeEmpIds() : List.of());
+        Set<String> afterSet = new HashSet<>(event.getAfterEmpIds() != null ? event.getAfterEmpIds() : List.of());
+        Set<String> removed = new HashSet<>(beforeSet); removed.removeAll(afterSet);
+        Set<String> added = new HashSet<>(afterSet); added.removeAll(beforeSet);
+        for (String empId : removed) {
             updateWithRetry(empId, event.getProductId(), event.getOperatorEmpId(), false);
         }
-        for (String empId : event.getAdded()) {
+        for (String empId : added) {
             updateWithRetry(empId, event.getProductId(), event.getOperatorEmpId(), true);
         }
     }

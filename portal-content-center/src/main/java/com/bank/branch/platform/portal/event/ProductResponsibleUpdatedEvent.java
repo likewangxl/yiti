@@ -32,6 +32,9 @@ public class ProductResponsibleUpdatedEvent {
     /** 变更后负责人工号列表 */
     List<String> afterEmpIds;
 
+    /** 事件来源：PRODUCT_SIDE / ADDRBOOK_SIDE — 防止反向触发 */
+    String source;
+
     /** 操作人工号 */
     String operatorEmpId;
 

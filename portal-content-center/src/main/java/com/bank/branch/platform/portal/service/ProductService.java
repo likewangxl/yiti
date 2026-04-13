@@ -9,6 +9,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
+import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
@@ -24,7 +25,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,7 +32,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 @Service
@@ -45,9 +44,6 @@ public class ProductService {
     private final BizScopeApi bizScopeApi;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ApplicationEventPublisher eventPublisher;
-
-    private static final String SUPPORT_CACHE_KEY = "portal:product:support-available";
-    private static final Duration SUPPORT_CACHE_TTL = Duration.ofMinutes(5);
 
     /** D.1 分页查询产品列表（含数据权限过滤） */
     public PageResult<ProductInfo> listProducts(ProductQueryReqDTO req) {
@@ -78,13 +74,15 @@ public class ProductService {
     /** D.3 查询所有支持中场支持的产品（Cache-Aside 模式） */
     @SuppressWarnings("unchecked")
     public List<ProductInfo> listSupportAvailable() {
-        Object cached = redisTemplate.opsForValue().get(SUPPORT_CACHE_KEY);
+        Object cached = redisTemplate.opsForValue().get(PortalCacheConfig.PRODUCT_SUPPORT_KEY);
         if (cached != null) { log.debug("[ProductService.listSupportAvailable] cache hit"); return (List<ProductInfo>) cached; }
         log.debug("[ProductService.listSupportAvailable] cache miss");
         List<ProductInfo> items = productInfoMapper.listSupportAvailable();
-        long baseMillis = SUPPORT_CACHE_TTL.toMillis();
-        long jitter = (long) (baseMillis * 0.1 * (ThreadLocalRandom.current().nextDouble() * 2 - 1));
-        redisTemplate.opsForValue().set(SUPPORT_CACHE_KEY, items, Duration.ofMillis(baseMillis + jitter));
+        redisTemplate.opsForValue().set(
+                PortalCacheConfig.PRODUCT_SUPPORT_KEY,
+                items,
+                PortalCacheConfig.jitteredTtl(PortalCacheConfig.DEFAULT_TTL)
+        );
         return items;
     }
 
@@ -123,7 +121,7 @@ public class ProductService {
         if (!newEmpIds.isEmpty()) { syncResponsibleToAddrbook(productId, Collections.emptyList(), newEmpIds, currentEmpId); }
         clearSupportCache();
         if (!newEmpIds.isEmpty()) {
-            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(productId, req.getProductCode(), Collections.emptyList(), newEmpIds, currentEmpId, LocalDateTime.now()));
+            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(productId, req.getProductCode(), Collections.emptyList(), newEmpIds, "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
         }
         return entity;
     }
@@ -158,7 +156,7 @@ public class ProductService {
         if (empIdsChanged) { syncResponsibleToAddrbook(id, oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), currentEmpId); }
         clearSupportCache();
         if (empIdsChanged) {
-            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), currentEmpId, LocalDateTime.now()));
+            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
         }
         return existing;
     }
@@ -181,7 +179,7 @@ public class ProductService {
         List<String> oldEmpIds = existing.getResponsibleEmpIds() != null ? existing.getResponsibleEmpIds() : Collections.emptyList();
         if (!oldEmpIds.isEmpty()) { syncResponsibleToAddrbook(id, oldEmpIds, Collections.emptyList(), currentEmpId); }
         clearSupportCache();
-        eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, Collections.emptyList(), currentEmpId, LocalDateTime.now()));
+        eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, Collections.emptyList(), "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
     }
 
     private void syncResponsibleToAddrbook(String productId, List<String> oldEmpIds, List<String> newEmpIds, String operatorEmpId) {
@@ -200,7 +198,8 @@ public class ProductService {
         }
     }
 
+    /** 清除产品支持缓存（吞没异常，缓存删除失败不影响主流程） */
     private void clearSupportCache() {
-        try { redisTemplate.delete(SUPPORT_CACHE_KEY); } catch (Exception e) { log.warn("clearSupportCache failed", e); }
+        try { redisTemplate.delete(PortalCacheConfig.PRODUCT_SUPPORT_KEY); } catch (Exception e) { log.warn("clearSupportCache failed", e); }
     }
 }

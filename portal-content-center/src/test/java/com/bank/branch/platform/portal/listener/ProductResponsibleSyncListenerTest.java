@@ -1,6 +1,6 @@
 package com.bank.branch.platform.portal.listener;
 
-import com.bank.branch.platform.portal.api.event.ProductResponsibleUpdatedEvent;
+import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import org.junit.jupiter.api.Test;
@@ -40,11 +40,12 @@ class ProductResponsibleSyncListenerTest {
     @Test
     void shouldSkipNonProductSideEvent() {
         ProductResponsibleUpdatedEvent event = new ProductResponsibleUpdatedEvent(
-                "P001",
+                "P001", "PROD_CODE",
                 Collections.emptyList(),
                 List.of("E001"),
                 "ADDRBOOK_SIDE",
-                "OP001"
+                "OP001",
+                LocalDateTime.now()
         );
 
         listener.onProductResponsibleUpdated(event);
@@ -71,12 +72,14 @@ class ProductResponsibleSyncListenerTest {
                 eq(emp.getUpdatedTime()), eq("OP001")))
                 .thenReturn(1);
 
+        // beforeEmpIds=[], afterEmpIds=[E001] → added=[E001]
         ProductResponsibleUpdatedEvent event = new ProductResponsibleUpdatedEvent(
-                productId,
+                productId, "PROD_CODE",
                 Collections.emptyList(),
                 List.of("E001"),
                 "PRODUCT_SIDE",
-                "OP001"
+                "OP001",
+                LocalDateTime.now()
         );
 
         listener.onProductResponsibleUpdated(event);
@@ -103,12 +106,14 @@ class ProductResponsibleSyncListenerTest {
                 eq(emp.getUpdatedTime()), eq("OP001")))
                 .thenReturn(1);
 
+        // beforeEmpIds=[E001], afterEmpIds=[] → removed=[E001]
         ProductResponsibleUpdatedEvent event = new ProductResponsibleUpdatedEvent(
-                productId,
+                productId, "PROD_CODE",
                 List.of("E001"),
                 Collections.emptyList(),
                 "PRODUCT_SIDE",
-                "OP001"
+                "OP001",
+                LocalDateTime.now()
         );
 
         listener.onProductResponsibleUpdated(event);
@@ -136,12 +141,14 @@ class ProductResponsibleSyncListenerTest {
                 .thenReturn(0)
                 .thenReturn(1);
 
+        // beforeEmpIds=[], afterEmpIds=[E001] → added=[E001]
         ProductResponsibleUpdatedEvent event = new ProductResponsibleUpdatedEvent(
-                productId,
+                productId, "PROD_CODE",
                 Collections.emptyList(),
                 List.of("E001"),
                 "PRODUCT_SIDE",
-                "OP001"
+                "OP001",
+                LocalDateTime.now()
         );
 
         listener.onProductResponsibleUpdated(event);

@@ -3,6 +3,7 @@ package com.bank.branch.platform.portal.service;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.portal.api.dto.NavDTO;
+import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.nav.NavCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.nav.NavGroupItem;
 import com.bank.branch.platform.portal.controller.dto.nav.NavGroupRespDTO;
@@ -17,6 +18,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,7 +30,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +47,7 @@ class NavServiceTest {
 
     @Mock PortalNavMapper portalNavMapper;
     @Mock CurrentUserApi currentUserApi;
+    @Mock RedisTemplate<String, Object> redisTemplate;
     @InjectMocks NavService navService;
 
     // ========== listGrouped ==========
@@ -231,10 +237,16 @@ class NavServiceTest {
         assertThat(items.get(1).getSortOrder()).isEqualTo(1);
     }
 
-    // ========== listActiveNavs ==========
+    // ========== listActiveNavs (Cache-Aside) ==========
 
     @Test
-    void listActiveNavs_returnsAll() {
+    @SuppressWarnings("unchecked")
+    void listActiveNavs_cacheMiss_queriesDbAndCaches() {
+        // 模拟 Redis 缓存未命中
+        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get(PortalCacheConfig.NAV_ACTIVE_KEY)).thenReturn(null);
+
         PortalNav nav1 = buildNav("id1", "核心系统", "https://core.bank.com", "业务系统", 1);
         PortalNav nav2 = buildNav("id2", "百度", "https://baidu.com", "常用工具", 1);
         when(portalNavMapper.listActive()).thenReturn(Arrays.asList(nav1, nav2));
@@ -242,7 +254,85 @@ class NavServiceTest {
         List<PortalNav> result = navService.listActiveNavs();
 
         assertThat(result).hasSize(2);
-        verify(portalNavMapper).listActive();
+        // 缓存未命中时应查询数据库
+        verify(portalNavMapper, times(1)).listActive();
+        // 并将结果写入缓存（TTL 带抖动）
+        verify(valueOps).set(eq(PortalCacheConfig.NAV_ACTIVE_KEY), eq(Arrays.asList(nav1, nav2)), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listActiveNavs_cacheHit_skipsDb() {
+        // 模拟 Redis 缓存命中
+        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+
+        PortalNav nav1 = buildNav("id1", "核心系统", "https://core.bank.com", "业务系统", 1);
+        List<PortalNav> cachedData = Collections.singletonList(nav1);
+        when(valueOps.get(PortalCacheConfig.NAV_ACTIVE_KEY)).thenReturn(cachedData);
+
+        List<PortalNav> result = navService.listActiveNavs();
+
+        assertThat(result).hasSize(1);
+        // 缓存命中时不应查询数据库
+        verify(portalNavMapper, never()).listActive();
+    }
+
+    @Test
+    void createNav_clearsNavCache() {
+        NavCreateReqDTO req = new NavCreateReqDTO();
+        req.setNavName("新导航");
+        req.setNavUrl("https://new.bank.com");
+        req.setNavIcon("icon-new");
+        req.setNavCategory("业务系统");
+        req.setSortOrder(1);
+
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(portalNavMapper.countByNameAndCategory("新导航", "业务系统")).thenReturn(0);
+
+        navService.createNav(req);
+
+        // 写操作完成后应清除导航缓存
+        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+    }
+
+    @Test
+    void updateNav_clearsNavCache() {
+        PortalNav existing = buildNav("nav-001", "旧名称", "https://old.com", "业务系统", 1);
+        when(portalNavMapper.selectById("nav-001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+
+        NavUpdateReqDTO req = new NavUpdateReqDTO();
+        req.setNavName("更新名称");
+
+        navService.updateNav("nav-001", req);
+
+        // 更新操作完成后应清除导航缓存
+        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+    }
+
+    @Test
+    void deleteNav_clearsNavCache() {
+        PortalNav existing = buildNav("nav-001", "核心系统", "https://core.bank.com", "业务系统", 1);
+        when(portalNavMapper.selectById("nav-001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+
+        navService.deleteNav("nav-001");
+
+        // 删除操作完成后应清除导航缓存
+        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+    }
+
+    @Test
+    void batchSort_clearsNavCache() {
+        NavSortItemReqDTO item1 = new NavSortItemReqDTO();
+        item1.setId("nav-001"); item1.setSortOrder(2);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+
+        navService.batchSort(Collections.singletonList(item1));
+
+        // 排序操作完成后应清除导航缓存
+        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
     }
 
     // ========== 辅助方法 ==========

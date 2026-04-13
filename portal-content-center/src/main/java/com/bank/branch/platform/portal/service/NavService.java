@@ -3,6 +3,7 @@ package com.bank.branch.platform.portal.service;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.portal.api.dto.NavDTO;
+import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.nav.NavCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.nav.NavGroupItem;
 import com.bank.branch.platform.portal.controller.dto.nav.NavGroupRespDTO;
@@ -14,6 +15,7 @@ import com.bank.branch.platform.portal.enums.PortalErrorCode;
 import com.bank.branch.platform.portal.mapper.PortalNavMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,7 @@ public class NavService {
 
     private final PortalNavMapper portalNavMapper;
     private final CurrentUserApi currentUserApi;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     /**
      * 按分类分组查询导航列表。
@@ -115,6 +118,7 @@ public class NavService {
         entity.setUpdatedTime(LocalDateTime.now());
 
         portalNavMapper.insert(entity);
+        clearNavCache();
         log.info("[NavService.createNav] 新增导航成功, id={}, name={}", navId, req.getNavName());
         return entity;
     }
@@ -149,6 +153,7 @@ public class NavService {
         patch.setUpdatedBy(currentEmpId);
 
         portalNavMapper.updateById(patch);
+        clearNavCache();
         log.info("[NavService.updateNav] 更新导航成功, id={}", id);
     }
 
@@ -169,6 +174,7 @@ public class NavService {
 
         String currentEmpId = currentUserApi.getCurrentEmpId();
         portalNavMapper.softDeleteById(id, currentEmpId);
+        clearNavCache();
         log.info("[NavService.deleteNav] 逻辑删除导航成功, id={}", id);
     }
 
@@ -190,15 +196,43 @@ public class NavService {
         }).collect(Collectors.toList());
 
         portalNavMapper.updateSortOrderBatch(entities);
+        clearNavCache();
         log.info("[NavService.batchSort] 批量排序完成, count={}", items.size());
     }
 
     /**
-     * 查询所有启用状态的导航列表。
+     * 查询所有启用状态的导航列表（Cache-Aside 模式）。
+     *
+     * <p>优先从 Redis 缓存读取，缓存未命中时查询数据库并回填缓存。
+     * TTL 使用 PortalCacheConfig.jitteredTtl() 添加 +-10% 抖动，防止缓存雪崩。</p>
      *
      * @return 启用导航列表（按 sort_order 升序）
      */
+    @SuppressWarnings("unchecked")
     public List<PortalNav> listActiveNavs() {
-        return portalNavMapper.listActive();
+        Object cached = redisTemplate.opsForValue().get(PortalCacheConfig.NAV_ACTIVE_KEY);
+        if (cached != null) {
+            log.debug("[NavService.listActiveNavs] cache hit");
+            return (List<PortalNav>) cached;
+        }
+        log.debug("[NavService.listActiveNavs] cache miss, querying DB");
+        List<PortalNav> items = portalNavMapper.listActive();
+        redisTemplate.opsForValue().set(
+                PortalCacheConfig.NAV_ACTIVE_KEY,
+                items,
+                PortalCacheConfig.jitteredTtl(PortalCacheConfig.DEFAULT_TTL)
+        );
+        return items;
+    }
+
+    /**
+     * 清除导航列表缓存（吞没异常，缓存删除失败不影响主流程）
+     */
+    private void clearNavCache() {
+        try {
+            redisTemplate.delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+        } catch (Exception e) {
+            log.warn("[NavService] clearNavCache failed", e);
+        }
     }
 }

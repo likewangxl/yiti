@@ -409,6 +409,59 @@ class ProductServiceTest {
         verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
     }
 
+    // ========== Cache-Aside 补充测试 ==========
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listSupportAvailable_cacheMiss_queriesDbAndCaches() {
+        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("portal:product:support-available")).thenReturn(null);
+        List<ProductInfo> dbResult = Arrays.asList(
+                buildProduct("p1", "PRD001", Collections.emptyList()),
+                buildProduct("p2", "PRD002", Collections.emptyList()));
+        when(productInfoMapper.listSupportAvailable()).thenReturn(dbResult);
+
+        List<ProductInfo> result = productService.listSupportAvailable();
+
+        assertThat(result).hasSize(2);
+        verify(productInfoMapper, times(1)).listSupportAvailable();
+        verify(valueOps).set(eq("portal:product:support-available"), eq(dbResult), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listSupportAvailable_cacheHit_skipsDb() {
+        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        List<ProductInfo> cachedResult = Collections.singletonList(
+                buildProduct("p1", "PRD001", Collections.emptyList()));
+        when(valueOps.get("portal:product:support-available")).thenReturn(cachedResult);
+
+        List<ProductInfo> result = productService.listSupportAvailable();
+
+        assertThat(result).hasSize(1);
+        // 缓存命中时不应查询数据库
+        verify(productInfoMapper, never()).listSupportAvailable();
+    }
+
+    @Test
+    void createProduct_clearsCache() {
+        ProductCreateReqDTO req = new ProductCreateReqDTO();
+        req.setProductCode("PRD_CACHE_TEST");
+        req.setProductName("缓存测试产品");
+        req.setProductCategory("LOAN");
+        req.setSupportForSupportRequest(false);
+        req.setProductDeptOrgCode("ORG001");
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(productInfoMapper.selectByProductCode("PRD_CACHE_TEST")).thenReturn(null);
+
+        productService.createProduct(req);
+
+        // 写操作完成后应清除产品支持缓存
+        verify(redisTemplate).delete("portal:product:support-available");
+    }
+
     private ProductInfo buildProduct(String id, String productCode, List<String> responsibleEmpIds) {
         ProductInfo p = new ProductInfo(); p.setId(id); p.setProductCode(productCode); p.setProductName("产品-" + productCode);
         p.setProductCategory("LOAN"); p.setStatus("ACTIVE"); p.setResponsibleEmpIds(responsibleEmpIds);
