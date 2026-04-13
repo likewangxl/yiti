@@ -1,5 +1,12 @@
 package com.bank.branch.platform.portal.controller;
 
+import com.bank.branch.platform.auth.api.dto.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.portal.api.dto.ProductDTO;
+import com.bank.branch.platform.portal.api.dto.ProductListReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
 import com.bank.branch.platform.portal.service.ProductService;
 import com.bank.branch.platform.portal.support.AbstractControllerIntegrationTest;
@@ -11,7 +18,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -63,5 +74,70 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    // ========== D.1 listProducts 测试 ==========
+
+    /**
+     * D.1 分页查询产品列表 - 正常返回分页数据（$.page 路径）
+     */
+    @Test
+    @WithMockEmpContext(empId = "E10001", dataScope = "ORG_SUBTREE", orgSubtree = {"ORG_SZ_001", "ORG_SZ_002"})
+    void listProductsShouldReturn200WithPagedResult() throws Exception {
+        // Arrange: mock BizScopeApi.buildScopeContext
+        DataScopeContext authRecord = new DataScopeContext(
+                DataScopeType.ORG_SUBTREE, "E10001", "ORG_SZ_001",
+                Set.of("ORG_SZ_001", "ORG_SZ_002"),
+                BizType.PRODUCT, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(eq("E10001"), eq(BizType.PRODUCT), eq(BizAction.LIST)))
+                .thenReturn(authRecord);
+
+        ProductDTO dto = new ProductDTO();
+        dto.setId("P001");
+        dto.setProductCode("DEPOSIT_001");
+        dto.setProductName("活期存款");
+        PageResult<ProductDTO> page = PageResult.of(1, 20, 1L, List.of(dto));
+        when(productService.listProducts(any(ProductListReqDTO.class),
+                any(com.bank.branch.platform.common.security.context.DataScopeContext.class)))
+                .thenReturn(page);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/products")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.page.records[0].productCode").value("DEPOSIT_001"));
+    }
+
+    /**
+     * D.1 分页查询产品列表 - 空结果时返回空分页
+     */
+    @Test
+    @WithMockEmpContext(empId = "E10001", dataScope = "ORG", orgSubtree = {"ORG_SZ_001"})
+    void listProductsShouldReturn200WithEmptyPageWhenNoResults() throws Exception {
+        // Arrange
+        DataScopeContext authRecord = new DataScopeContext(
+                DataScopeType.ORG, "E10001", "ORG_SZ_001",
+                Set.of("ORG_SZ_001"),
+                BizType.PRODUCT, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(eq("E10001"), eq(BizType.PRODUCT), eq(BizAction.LIST)))
+                .thenReturn(authRecord);
+
+        PageResult<ProductDTO> emptyPage = PageResult.of(1, 20, 0L, Collections.emptyList());
+        when(productService.listProducts(any(ProductListReqDTO.class),
+                any(com.bank.branch.platform.common.security.context.DataScopeContext.class)))
+                .thenReturn(emptyPage);
+
+        // Act & Assert
+        mockMvc.perform(get("/api/products")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.page.total").value(0))
+                .andExpect(jsonPath("$.page.records").isArray())
+                .andExpect(jsonPath("$.page.records").isEmpty());
     }
 }
