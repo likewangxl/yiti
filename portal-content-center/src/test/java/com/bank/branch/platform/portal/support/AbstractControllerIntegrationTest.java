@@ -27,7 +27,7 @@ import org.springframework.test.context.ActiveProfiles;
  * 此基类内嵌 {@link TestApp} 作为最小化 Spring Boot 入口，仅扫描 portal 包即可。</p>
  */
 @Tag("integration")
-@SpringBootTest
+@SpringBootTest(classes = AbstractControllerIntegrationTest.TestApp.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public abstract class AbstractControllerIntegrationTest {
@@ -35,6 +35,8 @@ public abstract class AbstractControllerIntegrationTest {
     /**
      * 最小化 Spring Boot 测试入口
      * 仅扫描 portal 包，避免拉起 auth/governance/workflow 的真实 Bean
+     *
+     * <p>通过 @SpringBootTest(classes=...) 显式引用，确保子类在任意包路径下都能正确发现此配置。</p>
      */
     @SpringBootApplication(scanBasePackages = "com.bank.branch.platform.portal")
     static class TestApp {
