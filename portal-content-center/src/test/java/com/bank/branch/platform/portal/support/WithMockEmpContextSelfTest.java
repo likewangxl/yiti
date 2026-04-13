@@ -2,11 +2,15 @@ package com.bank.branch.platform.portal.support;
 
 import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.portal.service.ProductService;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class WithMockEmpContextSelfTest extends AbstractControllerIntegrationTest {
+
+    @MockBean ProductService productService;
 
     @Test
     @WithMockEmpContext(empId = "E99999", orgCode = "ORG_TEST",

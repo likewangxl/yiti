@@ -35,7 +35,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
- * ProductService 单元测试 —— 纯 JUnit 5 + Mockito，无需 Spring 上下文
+ * ProductService 单元测试 -- 纯 JUnit 5 + Mockito，无需 Spring 上下文
  *
  * <p>TDD RED-GREEN 闭环：先写测试（Red），再实现 Service（Green）。
  * 涵盖 CRUD、双向同步、缓存、事件发布等核心场景。</p>
@@ -43,366 +43,384 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
 
-    @Mock
-    ProductInfoMapper productInfoMapper;
+    @Mock ProductInfoMapper productInfoMapper;
+    @Mock AddrbookEmployeeMapper addrbookEmployeeMapper;
+    @Mock CurrentUserApi currentUserApi;
+    @Mock BizScopeApi bizScopeApi;
+    @Mock RedisTemplate<String, Object> redisTemplate;
+    @Mock ApplicationEventPublisher eventPublisher;
+    @InjectMocks ProductService productService;
 
-    @Mock
-    AddrbookEmployeeMapper addrbookEmployeeMapper;
-
-    @Mock
-    CurrentUserApi currentUserApi;
-
-    @Mock
-    BizScopeApi bizScopeApi;
-
-    @Mock
-    RedisTemplate<String, Object> redisTemplate;
-
-    @Mock
-    ApplicationEventPublisher eventPublisher;
-
-    @InjectMocks
-    ProductService productService;
-
-    // ===== 1. createProduct_success =====
-
-    /**
-     * 正常创建产品：校验 insert 被调用、事件被发布、返回实体包含正确字段
-     */
     @Test
     void createProduct_success() {
-        // given
         ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("PRD001");
-        req.setProductName("测试产品");
-        req.setProductCategory("LOAN");
-        req.setDescription("测试描述");
-        req.setSupportForSupportRequest(true);
-        req.setProductDeptOrgCode("ORG001");
-        req.setFileObjectId("file-001");
+        req.setProductCode("PRD001"); req.setProductName("测试产品"); req.setProductCategory("LOAN");
+        req.setDescription("测试描述"); req.setSupportForSupportRequest(true);
+        req.setProductDeptOrgCode("ORG001"); req.setFileObjectId("file-001");
         req.setResponsibleEmpIds(Arrays.asList("E001", "E002"));
-
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         when(productInfoMapper.selectByProductCode("PRD001")).thenReturn(null);
         when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E001", "E002"))).thenReturn(2);
-
-        // 为 addrbook 同步准备 mock（按字典序 E001, E002 处理）
-        AddrbookEmployee emp1 = buildEmployee("E001", new ArrayList<>());
-        AddrbookEmployee emp2 = buildEmployee("E002", new ArrayList<>());
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(emp1);
-        when(addrbookEmployeeMapper.selectByEmpId("E002")).thenReturn(emp2);
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(
-                anyString(), any(), any(), anyString())).thenReturn(1);
-
-        // when
+        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>()));
+        when(addrbookEmployeeMapper.selectByEmpId("E002")).thenReturn(buildEmployee("E002", new ArrayList<>()));
+        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
         ProductInfo result = productService.createProduct(req);
-
-        // then
         assertThat(result).isNotNull();
         assertThat(result.getProductCode()).isEqualTo("PRD001");
-        assertThat(result.getProductName()).isEqualTo("测试产品");
         assertThat(result.getCreatedBy()).isEqualTo("OPERATOR01");
         assertThat(result.getId()).isNotBlank();
         assertThat(result.getStatus()).isEqualTo("ACTIVE");
-
         verify(productInfoMapper).insert(any(ProductInfo.class));
         verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
     }
 
-    // ===== 2. createProduct_duplicateCode =====
-
-    /**
-     * 产品代码已存在时应抛出 PRODUCT_CODE_DUPLICATE 异常
-     */
     @Test
     void createProduct_duplicateCode() {
-        // given
         ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("EXISTING_CODE");
-        req.setProductName("重复产品");
-        req.setProductCategory("LOAN");
-        req.setSupportForSupportRequest(false);
-        req.setProductDeptOrgCode("ORG001");
-
+        req.setProductCode("EXISTING_CODE"); req.setProductName("重复产品"); req.setProductCategory("LOAN");
+        req.setSupportForSupportRequest(false); req.setProductDeptOrgCode("ORG001");
         when(productInfoMapper.selectByProductCode("EXISTING_CODE")).thenReturn(new ProductInfo());
-
-        // when & then
-        assertThatThrownBy(() -> productService.createProduct(req))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> {
-                    BizException bizEx = (BizException) ex;
-                    assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode());
-                });
-
+        assertThatThrownBy(() -> productService.createProduct(req)).isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode()));
         verify(productInfoMapper, never()).insert(any());
     }
 
-    // ===== 3. createProduct_resignedEmployee =====
-
-    /**
-     * 传入的负责人中有离职员工时应抛出 EMPLOYEE_RESIGNED 异常
-     */
     @Test
     void createProduct_resignedEmployee() {
-        // given
         ProductCreateReqDTO req = new ProductCreateReqDTO();
-        req.setProductCode("PRD002");
-        req.setProductName("产品2");
-        req.setProductCategory("DEPOSIT");
-        req.setSupportForSupportRequest(true);
-        req.setProductDeptOrgCode("ORG002");
+        req.setProductCode("PRD002"); req.setProductName("产品2"); req.setProductCategory("DEPOSIT");
+        req.setSupportForSupportRequest(true); req.setProductDeptOrgCode("ORG002");
         req.setResponsibleEmpIds(Arrays.asList("E001", "E002", "E003"));
-
         when(productInfoMapper.selectByProductCode("PRD002")).thenReturn(null);
-        // 只有2人在职，但传入了3个empId
         when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E001", "E002", "E003"))).thenReturn(2);
-
-        // when & then
-        assertThatThrownBy(() -> productService.createProduct(req))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> {
-                    BizException bizEx = (BizException) ex;
-                    assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.EMPLOYEE_RESIGNED.getCode());
-                });
-
+        assertThatThrownBy(() -> productService.createProduct(req)).isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.EMPLOYEE_RESIGNED.getCode()));
         verify(productInfoMapper, never()).insert(any());
     }
 
-    // ===== 4. updateProduct_success =====
-
-    /**
-     * 正常更新产品名称和描述（不变更负责人），验证 updateById 被调用
-     */
     @Test
     void updateProduct_success() {
-        // given
         String productId = "prod-001";
         ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductName("更新后名称");
-        req.setDescription("更新后描述");
-
-        ProductInfo existing = buildProduct(productId, "PRD001", Arrays.asList("E001"));
-        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(existing);
+        req.setProductName("更新后名称"); req.setDescription("更新后描述");
+        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(buildProduct(productId, "PRD001", Arrays.asList("E001")));
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-
-        // when
         ProductInfo result = productService.updateProduct(productId, req);
-
-        // then
         assertThat(result).isNotNull();
         verify(productInfoMapper).updateById(any(ProductInfo.class));
     }
 
-    // ===== 5. updateProduct_notFound =====
-
-    /**
-     * 更新不存在的产品时应抛出 PRODUCT_NOT_FOUND 异常
-     */
     @Test
     void updateProduct_notFound() {
-        // given
-        String productId = "nonexistent";
-        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
-        req.setProductName("不存在的产品");
-
-        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(null);
-
-        // when & then
-        assertThatThrownBy(() -> productService.updateProduct(productId, req))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> {
-                    BizException bizEx = (BizException) ex;
-                    assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode());
-                });
-
+        when(productInfoMapper.selectByIdForUpdate("nonexistent")).thenReturn(null);
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO(); req.setProductName("x");
+        assertThatThrownBy(() -> productService.updateProduct("nonexistent", req)).isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
         verify(productInfoMapper, never()).updateById(any());
     }
 
-    // ===== 6. updateProduct_responsibleSync =====
-
-    /**
-     * 更新产品负责人时验证 addrbook 双向同步：
-     * 原 [E001, E002] -> 新 [E002, E003]，应移除 E001、添加 E003
-     */
     @Test
     void updateProduct_responsibleSync() {
-        // given
         String productId = "prod-002";
         ProductUpdateReqDTO req = new ProductUpdateReqDTO();
         req.setResponsibleEmpIds(Arrays.asList("E002", "E003"));
-
-        ProductInfo existing = buildProduct(productId, "PRD002", Arrays.asList("E001", "E002"));
-        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(existing);
+        when(productInfoMapper.selectByIdForUpdate(productId)).thenReturn(buildProduct(productId, "PRD002", Arrays.asList("E001", "E002")));
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E002", "E003"))).thenReturn(2);
-
-        // removed: E001（原有，新列表无）, added: E003（原无，新列表有）
-        AddrbookEmployee emp1 = buildEmployee("E001", new ArrayList<>(Collections.singletonList(productId)));
-        AddrbookEmployee emp3 = buildEmployee("E003", new ArrayList<>());
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(emp1);
-        when(addrbookEmployeeMapper.selectByEmpId("E003")).thenReturn(emp3);
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(
-                anyString(), any(), any(), anyString())).thenReturn(1);
-
-        // when
-        ProductInfo result = productService.updateProduct(productId, req);
-
-        // then: 验证 addrbook 同步调用
+        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList(productId))));
+        when(addrbookEmployeeMapper.selectByEmpId("E003")).thenReturn(buildEmployee("E003", new ArrayList<>()));
+        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
+        productService.updateProduct(productId, req);
         verify(addrbookEmployeeMapper).selectByEmpId("E001");
         verify(addrbookEmployeeMapper).selectByEmpId("E003");
-        verify(addrbookEmployeeMapper, times(2)).updateResponsibleProductsWithOptimisticLock(
-                anyString(), any(), any(), anyString());
-
-        // 验证发布事件
+        verify(addrbookEmployeeMapper, times(2)).updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString());
         verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
     }
 
-    // ===== 7. deleteProduct_success_cleansReferences =====
-
-    /**
-     * 删除产品时验证软删除 + 清理所有员工引用 + 发布事件（before 有值，after 为空）
-     */
     @Test
     void deleteProduct_success_cleansReferences() {
-        // given
         String productId = "prod-003";
-        ProductInfo existing = buildProduct(productId, "PRD003", Arrays.asList("E001", "E002"));
-        when(productInfoMapper.selectById(productId)).thenReturn(existing);
+        when(productInfoMapper.selectById(productId)).thenReturn(buildProduct(productId, "PRD003", Arrays.asList("E001", "E002")));
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
-
-        AddrbookEmployee emp1 = buildEmployee("E001", new ArrayList<>(Collections.singletonList(productId)));
-        AddrbookEmployee emp2 = buildEmployee("E002", new ArrayList<>(Collections.singletonList(productId)));
-        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(emp1);
-        when(addrbookEmployeeMapper.selectByEmpId("E002")).thenReturn(emp2);
-        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(
-                anyString(), any(), any(), anyString())).thenReturn(1);
-
-        // when
+        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList(productId))));
+        when(addrbookEmployeeMapper.selectByEmpId("E002")).thenReturn(buildEmployee("E002", new ArrayList<>(Collections.singletonList(productId))));
+        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
         productService.deleteProduct(productId);
-
-        // then
         verify(productInfoMapper).softDeleteById(productId, "OPERATOR01");
-        // 验证清理 E001 和 E002 的引用
-        verify(addrbookEmployeeMapper, times(2)).updateResponsibleProductsWithOptimisticLock(
-                anyString(), any(), any(), anyString());
-        // 验证发布事件（before=[E001,E002], after=[]）
-        ArgumentCaptor<ProductResponsibleUpdatedEvent> eventCaptor =
-                ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-        ProductResponsibleUpdatedEvent event = eventCaptor.getValue();
-        assertThat(event.getAfterEmpIds()).isEmpty();
-        assertThat(event.getBeforeEmpIds()).containsExactlyInAnyOrder("E001", "E002");
+        verify(addrbookEmployeeMapper, times(2)).updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString());
+        ArgumentCaptor<ProductResponsibleUpdatedEvent> cap = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
+        verify(eventPublisher).publishEvent(cap.capture());
+        assertThat(cap.getValue().getAfterEmpIds()).isEmpty();
+        assertThat(cap.getValue().getBeforeEmpIds()).containsExactlyInAnyOrder("E001", "E002");
     }
 
-    // ===== 8. deleteProduct_notFound =====
-
-    /**
-     * 删除不存在的产品时应抛出 PRODUCT_NOT_FOUND 异常
-     */
     @Test
     void deleteProduct_notFound() {
-        // given
         when(productInfoMapper.selectById("nonexistent")).thenReturn(null);
-
-        // when & then
-        assertThatThrownBy(() -> productService.deleteProduct("nonexistent"))
-                .isInstanceOf(BizException.class)
-                .satisfies(ex -> {
-                    BizException bizEx = (BizException) ex;
-                    assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode());
-                });
-
+        assertThatThrownBy(() -> productService.deleteProduct("nonexistent")).isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
         verify(productInfoMapper, never()).softDeleteById(anyString(), anyString());
     }
 
-    // ===== 9. listSupportAvailable_cached =====
-
-    /**
-     * 缓存命中时不应查询数据库，缓存未命中时查询数据库并回填缓存
-     */
-    @Test
-    @SuppressWarnings("unchecked")
+    @Test @SuppressWarnings("unchecked")
     void listSupportAvailable_cached() {
-        // given
         ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-
-        List<ProductInfo> dbResult = Arrays.asList(
-                buildProduct("p1", "PRD001", Collections.emptyList()),
-                buildProduct("p2", "PRD002", Collections.emptyList())
-        );
-
-        // 第一次调用：缓存为 null，查询数据库
+        List<ProductInfo> dbResult = Arrays.asList(buildProduct("p1", "PRD001", Collections.emptyList()), buildProduct("p2", "PRD002", Collections.emptyList()));
         when(valueOps.get("portal:product:support-available")).thenReturn(null, (Object) dbResult);
         when(productInfoMapper.listSupportAvailable()).thenReturn(dbResult);
-
-        // when: 第一次调用
-        List<ProductInfo> result1 = productService.listSupportAvailable();
-
-        // then: 应查询数据库并回填缓存
-        assertThat(result1).hasSize(2);
+        List<ProductInfo> r1 = productService.listSupportAvailable();
+        assertThat(r1).hasSize(2);
         verify(productInfoMapper, times(1)).listSupportAvailable();
         verify(valueOps).set(eq("portal:product:support-available"), eq(dbResult), any());
-
-        // when: 第二次调用（缓存命中）
-        List<ProductInfo> result2 = productService.listSupportAvailable();
-
-        // then: 不应再查询数据库（仍然只调用了1次）
-        assertThat(result2).hasSize(2);
+        List<ProductInfo> r2 = productService.listSupportAvailable();
+        assertThat(r2).hasSize(2);
         verify(productInfoMapper, times(1)).listSupportAvailable();
     }
 
-    // ===== 10. getProduct_notFound =====
-
-    /**
-     * 按 ID 查询不存在的产品时应抛出 PRODUCT_NOT_FOUND 异常
-     */
     @Test
     void getProduct_notFound() {
-        // given
         when(productInfoMapper.selectById("nonexistent")).thenReturn(null);
+        assertThatThrownBy(() -> productService.getProduct("nonexistent")).isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
+    }
 
-        // when & then
-        assertThatThrownBy(() -> productService.getProduct("nonexistent"))
+    // ========== D.4 createProduct 补充测试 ==========
+
+    @Test
+    void createProductShouldInsertAndPublishEvent() {
+        ProductCreateReqDTO req = new ProductCreateReqDTO();
+        req.setProductCode("DEPOSIT_001");
+        req.setProductName("活期存款");
+        req.setProductCategory("CAT_DEPOSIT");
+        req.setSupportForSupportRequest(true);
+        req.setProductDeptOrgCode("ORG_SZ_001");
+        req.setResponsibleEmpIds(List.of("E10001", "E10002"));
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(productInfoMapper.selectByProductCode("DEPOSIT_001")).thenReturn(null);
+        when(addrbookEmployeeMapper.countActiveByEmpIds(List.of("E10001", "E10002"))).thenReturn(2);
+        when(addrbookEmployeeMapper.selectByEmpId("E10001")).thenReturn(buildEmployee("E10001", new ArrayList<>()));
+        when(addrbookEmployeeMapper.selectByEmpId("E10002")).thenReturn(buildEmployee("E10002", new ArrayList<>()));
+        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
+
+        ProductInfo result = productService.createProduct(req);
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isNotBlank();
+        verify(productInfoMapper).insert(any());
+        ArgumentCaptor<ProductResponsibleUpdatedEvent> captor = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().getAfterEmpIds()).containsExactly("E10001", "E10002");
+        assertThat(captor.getValue().getBeforeEmpIds()).isEmpty();
+    }
+
+    @Test
+    void createProductShouldThrowWhenDuplicateCodePreCheck() {
+        ProductCreateReqDTO req = new ProductCreateReqDTO();
+        req.setProductCode("EXISTING_CODE");
+        req.setProductName("活期存款");
+        req.setProductCategory("CAT_DEPOSIT");
+        req.setSupportForSupportRequest(true);
+        req.setProductDeptOrgCode("ORG_SZ_001");
+        when(productInfoMapper.selectByProductCode("EXISTING_CODE")).thenReturn(new ProductInfo());
+
+        assertThatThrownBy(() -> productService.createProduct(req))
                 .isInstanceOf(BizException.class)
-                .satisfies(ex -> {
-                    BizException bizEx = (BizException) ex;
-                    assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode());
-                });
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40901"));
     }
 
-    // ===== 辅助方法 =====
+    @Test
+    void createProductShouldNotPublishEventWhenNoResponsibleEmpIds() {
+        ProductCreateReqDTO req = new ProductCreateReqDTO();
+        req.setProductCode("DEPOSIT_003");
+        req.setProductName("定期存款");
+        req.setProductCategory("CAT_DEPOSIT");
+        req.setSupportForSupportRequest(false);
+        req.setProductDeptOrgCode("ORG_SZ_001");
+        // 不设置 responsibleEmpIds
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(productInfoMapper.selectByProductCode("DEPOSIT_003")).thenReturn(null);
 
-    /**
-     * 构建测试用 ProductInfo 实体
-     */
+        ProductInfo result = productService.createProduct(req);
+        assertThat(result).isNotNull();
+        verify(productInfoMapper).insert(any());
+        verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
+    }
+
+    @Test
+    void createProductShouldThrowWhenEmployeeResigned() {
+        ProductCreateReqDTO req = new ProductCreateReqDTO();
+        req.setProductCode("DEPOSIT_004");
+        req.setProductName("基金产品");
+        req.setProductCategory("CAT_FUND");
+        req.setSupportForSupportRequest(true);
+        req.setProductDeptOrgCode("ORG_SZ_001");
+        req.setResponsibleEmpIds(List.of("E001", "E002", "E003"));
+        when(productInfoMapper.selectByProductCode("DEPOSIT_004")).thenReturn(null);
+        when(addrbookEmployeeMapper.countActiveByEmpIds(List.of("E001", "E002", "E003"))).thenReturn(2);
+
+        assertThatThrownBy(() -> productService.createProduct(req))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40902"));
+        verify(productInfoMapper, never()).insert(any());
+    }
+
+    @Test
+    void createProductShouldSetStatusActiveByDefault() {
+        ProductCreateReqDTO req = new ProductCreateReqDTO();
+        req.setProductCode("DEPOSIT_005");
+        req.setProductName("理财产品");
+        req.setProductCategory("CAT_WEALTH");
+        req.setSupportForSupportRequest(false);
+        req.setProductDeptOrgCode("ORG_BJ_001");
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(productInfoMapper.selectByProductCode("DEPOSIT_005")).thenReturn(null);
+
+        ProductInfo result = productService.createProduct(req);
+        assertThat(result.getStatus()).isEqualTo("ACTIVE");
+        assertThat(result.getDeleted()).isEqualTo(0);
+        assertThat(result.getCreatedBy()).isEqualTo("E10001");
+    }
+
+    // ========== D.5 updateProduct 补充测试 ==========
+
+    @Test
+    void updateProductShouldThrowWhenNotFound() {
+        when(productInfoMapper.selectByIdForUpdate("P999")).thenReturn(null);
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setProductName("新名称");
+        assertThatThrownBy(() -> productService.updateProduct("P999", req))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40003"));
+    }
+
+    @Test
+    void updateProductShouldUseForUpdateLock() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setProductName("新名称");
+
+        productService.updateProduct("P001", req);
+        verify(productInfoMapper).selectByIdForUpdate("P001");
+        verify(productInfoMapper).updateById(any());
+    }
+
+    @Test
+    void updateProductShouldComputeDiffAndPublishEvent() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Arrays.asList("E001", "E002"));
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E002", "E003"))).thenReturn(2);
+        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList("P001"))));
+        when(addrbookEmployeeMapper.selectByEmpId("E003")).thenReturn(buildEmployee("E003", new ArrayList<>()));
+        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setResponsibleEmpIds(Arrays.asList("E002", "E003"));
+
+        productService.updateProduct("P001", req);
+
+        ArgumentCaptor<ProductResponsibleUpdatedEvent> captor = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        ProductResponsibleUpdatedEvent event = captor.getValue();
+        assertThat(event.getBeforeEmpIds()).containsExactlyInAnyOrder("E001", "E002");
+        assertThat(event.getAfterEmpIds()).containsExactlyInAnyOrder("E002", "E003");
+    }
+
+    @Test
+    void updateProductShouldNotPublishEventWhenEmpIdsUnchanged() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Arrays.asList("E001"));
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setProductName("新名称");
+        // 不设置 responsibleEmpIds，不触发变更事件
+
+        productService.updateProduct("P001", req);
+        verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
+    }
+
+    @Test
+    void updateProductShouldOnlyUpdateNonNullFields() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setProductName("更新名称");
+        // 其他字段为 null，不应被更新
+
+        ProductInfo result = productService.updateProduct("P001", req);
+        assertThat(result.getProductName()).isEqualTo("更新名称");
+        verify(productInfoMapper).updateById(any(ProductInfo.class));
+    }
+
+    // ========== D.6 deleteProduct 补充测试 ==========
+
+    @Test
+    void deleteProductShouldThrowWhenNotFound() {
+        when(productInfoMapper.selectById("P999")).thenReturn(null);
+        assertThatThrownBy(() -> productService.deleteProduct("P999"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40003"));
+    }
+
+    @Test
+    void deleteProductShouldThrow40905WhenStillReferenced() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of("E001"));
+        when(productInfoMapper.selectById("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(addrbookEmployeeMapper.countEmployeesReferringProduct("P001")).thenReturn(2);
+
+        assertThatThrownBy(() -> productService.deleteProduct("P001"))
+                .isInstanceOf(BizException.class)
+                .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40905"));
+        verify(productInfoMapper, never()).softDeleteById(anyString(), anyString());
+    }
+
+    @Test
+    void deleteProductShouldSoftDeleteAndPublishEvent() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Arrays.asList("E001"));
+        when(productInfoMapper.selectById("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(addrbookEmployeeMapper.countEmployeesReferringProduct("P001")).thenReturn(0);
+        when(addrbookEmployeeMapper.selectByEmpId("E001")).thenReturn(buildEmployee("E001", new ArrayList<>(Collections.singletonList("P001"))));
+        when(addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(anyString(), any(), any(), anyString())).thenReturn(1);
+
+        productService.deleteProduct("P001");
+
+        verify(productInfoMapper).softDeleteById("P001", "OPERATOR01");
+        ArgumentCaptor<ProductResponsibleUpdatedEvent> captor = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().getAfterEmpIds()).isEmpty();
+        assertThat(captor.getValue().getBeforeEmpIds()).containsExactly("E001");
+    }
+
+    @Test
+    void deleteProductShouldSucceedWhenNoResponsibleEmps() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", Collections.emptyList());
+        when(productInfoMapper.selectById("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(addrbookEmployeeMapper.countEmployeesReferringProduct("P001")).thenReturn(0);
+
+        productService.deleteProduct("P001");
+
+        verify(productInfoMapper).softDeleteById("P001", "OPERATOR01");
+        // 无负责人时仍发布事件（beforeEmpIds 为空，afterEmpIds 为空）
+        verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
+    }
+
     private ProductInfo buildProduct(String id, String productCode, List<String> responsibleEmpIds) {
-        ProductInfo product = new ProductInfo();
-        product.setId(id);
-        product.setProductCode(productCode);
-        product.setProductName("产品-" + productCode);
-        product.setProductCategory("LOAN");
-        product.setStatus("ACTIVE");
-        product.setResponsibleEmpIds(responsibleEmpIds);
-        product.setProductDeptOrgCode("ORG001");
-        product.setCreatedBy("CREATOR01");
-        product.setCreatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
-        product.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
-        product.setDeleted(0);
-        return product;
+        ProductInfo p = new ProductInfo(); p.setId(id); p.setProductCode(productCode); p.setProductName("产品-" + productCode);
+        p.setProductCategory("LOAN"); p.setStatus("ACTIVE"); p.setResponsibleEmpIds(responsibleEmpIds);
+        p.setProductDeptOrgCode("ORG001"); p.setCreatedBy("CREATOR01");
+        p.setCreatedTime(LocalDateTime.of(2026, 4, 1, 10, 0)); p.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0)); p.setDeleted(0);
+        return p;
     }
 
-    /**
-     * 构建测试用 AddrbookEmployee 实体
-     */
     private AddrbookEmployee buildEmployee(String empId, List<String> responsibleProductIds) {
-        AddrbookEmployee emp = new AddrbookEmployee();
-        emp.setEmpId(empId);
-        emp.setEmpName("员工-" + empId);
-        emp.setStatus("ACTIVE");
-        emp.setResponsibleProductIds(responsibleProductIds != null ? responsibleProductIds : new ArrayList<>());
-        emp.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
-        emp.setDeleted(0);
-        return emp;
+        AddrbookEmployee e = new AddrbookEmployee(); e.setEmpId(empId); e.setEmpName("员工-" + empId);
+        e.setStatus("ACTIVE"); e.setResponsibleProductIds(responsibleProductIds != null ? responsibleProductIds : new ArrayList<>());
+        e.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0)); e.setDeleted(0);
+        return e;
     }
 }

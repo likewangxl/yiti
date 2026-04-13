@@ -1,241 +1,206 @@
 package com.bank.branch.platform.portal.service;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
-import com.bank.branch.platform.auth.api.OrgApi;
-import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.governance.api.AuditApi;
-import com.bank.branch.platform.governance.api.DictApi;
-import com.bank.branch.platform.governance.api.FileApi;
-import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
-import com.bank.branch.platform.portal.api.dto.ProductDTO;
-import com.bank.branch.platform.portal.api.dto.ProductDetailDTO;
-import com.bank.branch.platform.portal.api.dto.ProductListReqDTO;
-import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
-import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
-import com.bank.branch.platform.portal.api.event.ProductResponsibleUpdatedEvent;
-import com.bank.branch.platform.portal.convert.ProductConverter;
+import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
+import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
+import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
+import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
+import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
+import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
+import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
-import com.bank.branch.platform.portal.service.dto.ProductCreateCmd;
-import com.bank.branch.platform.portal.service.dto.ProductListQuery;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * 产品资料库 Service
- * <p>D.1-D.7 的业务逻辑实现入口</p>
- */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductService {
 
     private final ProductInfoMapper productInfoMapper;
-    private final DictApi dictApi;
-    private final OrgApi orgApi;
-    private final FileApi fileApi;
-    private final AddrbookQueryService addrbookQueryService;
+    private final AddrbookEmployeeMapper addrbookEmployeeMapper;
     private final CurrentUserApi currentUserApi;
-    private final AuditApi auditApi;
+    private final BizScopeApi bizScopeApi;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final ApplicationEventPublisher eventPublisher;
 
-    /**
-     * D.3 查询所有支持中场支持的产品（active + 未删除）
-     * <p>V1 不实现 5min Redis 缓存（spec 附录 B2 登记的 V2 待办）</p>
-     *
-     * @return 支持中场支持的产品简要列表
-     */
-    public List<ProductSimpleDTO> listSupportAvailable() {
-        return productInfoMapper.listSupportAvailable().stream()
-                .map(ProductConverter::toSimple)
-                .collect(Collectors.toList());
+    private static final String SUPPORT_CACHE_KEY = "portal:product:support-available";
+    private static final Duration SUPPORT_CACHE_TTL = Duration.ofMinutes(5);
+
+    /** D.1 分页查询产品列表（含数据权限过滤） */
+    public PageResult<ProductInfo> listProducts(ProductQueryReqDTO req) {
+        try {
+            com.bank.branch.platform.auth.api.dto.DataScopeContext authRecord =
+                    bizScopeApi.buildScopeContext(currentUserApi.getCurrentEmpId(), BizType.PRODUCT, BizAction.LIST);
+            DataScopeContext pojo = DataScopeAdapter.fromAuthRecord(authRecord);
+            DataScopeContext.set(pojo);
+            int pageNo = req.getPageNo() != null ? req.getPageNo() : 1;
+            int pageSize = req.getPageSize() != null ? req.getPageSize() : 20;
+            int offset = (pageNo - 1) * pageSize;
+            long total = productInfoMapper.countPage(req.getKeyword(), req.getCategory(), req.getStatus());
+            if (total == 0) { return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList()); }
+            List<ProductInfo> records = productInfoMapper.selectPage(req.getKeyword(), req.getCategory(), req.getStatus(), offset, pageSize);
+            return PageResult.of(pageNo, pageSize, total, records);
+        } finally { DataScopeContext.clear(); }
     }
 
-    /**
-     * D.1 分页查询产品列表
-     *
-     * @param req   查询请求参数
-     * @param scope 数据权限范围（common-security POJO）
-     * @return 分页结果
-     */
-    public PageResult<ProductDTO> listProducts(ProductListReqDTO req, DataScopeContext scope) {
-        ProductListQuery q = ProductListQuery.builder()
-                .keyword(req.getKeyword())
-                .category(req.getCategory())
-                .status(req.getStatus() != null ? req.getStatus() : "ACTIVE")
-                .productDeptOrgCode(req.getProductDeptOrgCode())
-                .supportForSupportRequest(req.getSupportForSupportRequest())
-                .offset(req.getOffset())
-                .limit(req.getPageSize())
-                .dataScope(scope)
-                .build();
-
-        long total = productInfoMapper.countProducts(q);
-        if (total == 0) {
-            return PageResult.of(req.getPageNo(), req.getPageSize(), 0L, Collections.emptyList());
-        }
-        List<ProductInfo> entities = productInfoMapper.listProducts(q);
-        return PageResult.of(req.getPageNo(), req.getPageSize(), total,
-                entities.stream().map(ProductConverter::toListItem).collect(Collectors.toList()));
-    }
-
-    /**
-     * D.2 查询产品详情（含跨模块聚合：字典翻译/机构名/附件链接/负责人脱敏）
-     *
-     * @param id 产品ID
-     * @return 产品详情 DTO
-     * @throws BizException PORTAL-40003 产品不存在
-     */
-    public ProductDetailDTO getProduct(String id) {
+    /** D.2 按 ID 查询产品详情 */
+    public ProductInfo getProduct(String id) {
         ProductInfo entity = productInfoMapper.selectById(id);
         if (entity == null) {
-            throw new BizException(PortalErrorCode.PRODUCT_NOT_FOUND.getCode(),
-                    PortalErrorCode.PRODUCT_NOT_FOUND.getMessage());
+            throw new BizException(PortalErrorCode.PRODUCT_NOT_FOUND.getCode(), PortalErrorCode.PRODUCT_NOT_FOUND.getMessage());
         }
-
-        // 字典翻译
-        String categoryDesc = dictApi.getDictLabel("PRODUCT_CATEGORY", entity.getProductCategory());
-
-        // 机构名
-        String orgName = null;
-        if (entity.getProductDeptOrgCode() != null) {
-            try {
-                OrgDTO org = orgApi.getOrg(entity.getProductDeptOrgCode());
-                orgName = org != null ? org.getOrgName() : null;
-            } catch (Exception e) {
-                // org not found, ignore
-            }
-        }
-
-        // 附件下载链接
-        String fileDownloadUrl = null;
-        if (entity.getFileObjectId() != null) {
-            try {
-                fileDownloadUrl = fileApi.getDownloadUrl(entity.getFileObjectId());
-            } catch (Exception e) {
-                // file deleted or unavailable, product still viewable
-            }
-        }
-
-        // 负责人列表（含脱敏）
-        List<ResponsibleEmpDTO> responsibleEmps = addrbookQueryService
-                .listResponsibleEmps(entity.getResponsibleEmpIds());
-
-        // 判断当前用户是否可编辑（同机构）
-        String currentOrgCode = currentUserApi.getCurrentOrgCode();
-        boolean canEdit = entity.getProductDeptOrgCode() != null
-                && entity.getProductDeptOrgCode().equals(currentOrgCode);
-
-        return ProductConverter.toDetail(entity, categoryDesc, orgName,
-                fileDownloadUrl, responsibleEmps, canEdit);
+        return entity;
     }
 
-    /**
-     * D.4 新增产品
-     * <p>前置校验（事务外只读检查）→ 事务体（insert + bindFile + audit + publishEvent）</p>
-     *
-     * @param cmd           新增产品命令
-     * @param operatorEmpId 操作人工号
-     * @return 新产品ID
-     */
+    /** D.3 查询所有支持中场支持的产品（Cache-Aside 模式） */
+    @SuppressWarnings("unchecked")
+    public List<ProductInfo> listSupportAvailable() {
+        Object cached = redisTemplate.opsForValue().get(SUPPORT_CACHE_KEY);
+        if (cached != null) { log.debug("[ProductService.listSupportAvailable] cache hit"); return (List<ProductInfo>) cached; }
+        log.debug("[ProductService.listSupportAvailable] cache miss");
+        List<ProductInfo> items = productInfoMapper.listSupportAvailable();
+        long baseMillis = SUPPORT_CACHE_TTL.toMillis();
+        long jitter = (long) (baseMillis * 0.1 * (ThreadLocalRandom.current().nextDouble() * 2 - 1));
+        redisTemplate.opsForValue().set(SUPPORT_CACHE_KEY, items, Duration.ofMillis(baseMillis + jitter));
+        return items;
+    }
+
+    /** D.4 新增产品 */
     @Transactional(rollbackFor = Exception.class)
-    public String createProduct(ProductCreateCmd cmd, String operatorEmpId) {
-        // 1. 机构权限校验：非系统管理员不能创建非本机构产品
-        String currentOrgCode = currentUserApi.getCurrentOrgCode();
-        boolean isAdmin = currentUserApi.isSystemAdmin();
-        if (!isAdmin && !cmd.getProductDeptOrgCode().equals(currentOrgCode)) {
-            throw new BizException(PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getCode(),
-                    PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getMessage());
+    public ProductInfo createProduct(ProductCreateReqDTO req) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        if (productInfoMapper.selectByProductCode(req.getProductCode()) != null) {
+            throw new BizException(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode(), PortalErrorCode.PRODUCT_CODE_DUPLICATE.getMessage());
         }
-
-        // 2. 字典校验
-        if (!dictApi.isValidDictValue("PRODUCT_CATEGORY", cmd.getProductCategory())) {
-            throw new BizException(PortalErrorCode.PARAM_INVALID.getCode(),
-                    "产品类别不合法: " + cmd.getProductCategory());
-        }
-
-        // 3. 附件存在性校验
-        if (cmd.getFileObjectId() != null && !cmd.getFileObjectId().isEmpty()) {
-            try {
-                fileApi.getDownloadUrl(cmd.getFileObjectId());
-            } catch (Exception e) {
-                throw new BizException(PortalErrorCode.FILE_OBJECT_NOT_FOUND.getCode(),
-                        PortalErrorCode.FILE_OBJECT_NOT_FOUND.getMessage());
+        List<String> empIds = req.getResponsibleEmpIds();
+        if (empIds != null && !empIds.isEmpty()) {
+            int activeCount = addrbookEmployeeMapper.countActiveByEmpIds(empIds);
+            if (activeCount != empIds.size()) {
+                throw new BizException(PortalErrorCode.EMPLOYEE_RESIGNED.getCode(), PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
             }
         }
-
-        // 4. 负责人有效性校验
-        if (cmd.getResponsibleEmpIds() != null && !cmd.getResponsibleEmpIds().isEmpty()) {
-            List<String> invalidEmps = addrbookQueryService.findInvalidEmpIds(cmd.getResponsibleEmpIds());
-            if (!invalidEmps.isEmpty()) {
-                throw new BizException(PortalErrorCode.EMPLOYEE_RESIGNED.getCode(),
-                        "以下员工不存在或已离职: " + invalidEmps);
-            }
-        }
-
-        // 5. 构建实体并插入
         String productId = UUID.randomUUID().toString().replace("-", "");
         ProductInfo entity = new ProductInfo();
         entity.setId(productId);
-        entity.setProductCode(cmd.getProductCode());
-        entity.setProductName(cmd.getProductName());
-        entity.setProductCategory(cmd.getProductCategory());
-        entity.setDescription(cmd.getDescription());
-        entity.setSupportForSupportRequest(cmd.getSupportForSupportRequest());
-        entity.setProductDeptOrgCode(cmd.getProductDeptOrgCode());
-        entity.setOwnerOrgId(cmd.getProductDeptOrgCode());
-        entity.setFileObjectId(cmd.getFileObjectId());
-        entity.setResponsibleEmpIds(cmd.getResponsibleEmpIds());
+        entity.setProductCode(req.getProductCode());
+        entity.setProductName(req.getProductName());
+        entity.setProductCategory(req.getProductCategory());
+        entity.setDescription(req.getDescription());
+        entity.setSupportForSupportRequest(req.getSupportForSupportRequest());
+        entity.setProductDeptOrgCode(req.getProductDeptOrgCode());
+        entity.setOwnerOrgId(req.getProductDeptOrgCode());
+        entity.setFileObjectId(req.getFileObjectId());
+        entity.setResponsibleEmpIds(empIds);
         entity.setStatus("ACTIVE");
-        entity.setCreatedBy(operatorEmpId);
-        entity.setUpdatedBy(operatorEmpId);
+        entity.setCreatedBy(currentEmpId);
+        entity.setUpdatedBy(currentEmpId);
         entity.setDeleted(0);
-
-        try {
-            productInfoMapper.insert(entity);
-        } catch (DuplicateKeyException e) {
-            throw new BizException(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode(),
-                    PortalErrorCode.PRODUCT_CODE_DUPLICATE.getMessage());
+        productInfoMapper.insert(entity);
+        List<String> newEmpIds = empIds != null ? empIds : Collections.emptyList();
+        if (!newEmpIds.isEmpty()) { syncResponsibleToAddrbook(productId, Collections.emptyList(), newEmpIds, currentEmpId); }
+        clearSupportCache();
+        if (!newEmpIds.isEmpty()) {
+            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(productId, req.getProductCode(), Collections.emptyList(), newEmpIds, currentEmpId, LocalDateTime.now()));
         }
+        return entity;
+    }
 
-        // 6. 关联附件
-        if (cmd.getFileObjectId() != null && !cmd.getFileObjectId().isEmpty()) {
-            fileApi.bindFile("PRODUCT", productId, cmd.getFileObjectId(), "MAIN");
+    /** D.5 编辑产品 */
+    @Transactional(rollbackFor = Exception.class)
+    public ProductInfo updateProduct(String id, ProductUpdateReqDTO req) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        ProductInfo existing = productInfoMapper.selectByIdForUpdate(id);
+        if (existing == null) {
+            throw new BizException(PortalErrorCode.PRODUCT_NOT_FOUND.getCode(), PortalErrorCode.PRODUCT_NOT_FOUND.getMessage());
         }
-
-        // 7. 审计日志
-        auditApi.log(AuditLogCmd.builder()
-                .empId(operatorEmpId)
-                .bizType("PRODUCT")
-                .bizAction("CREATE")
-                .resourceUrl("/api/products")
-                .requestMethod("POST")
-                .requestParams(cmd.getProductCode())
-                .responseStatus(200)
-                .build());
-
-        // 8. 发布负责人变更事件
-        if (cmd.getResponsibleEmpIds() != null && !cmd.getResponsibleEmpIds().isEmpty()) {
-            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(
-                    productId,
-                    Collections.emptyList(),  // removed: 新增产品没有移除
-                    cmd.getResponsibleEmpIds(),  // added
-                    "PRODUCT_SIDE",
-                    operatorEmpId
-            ));
+        List<String> oldEmpIds = existing.getResponsibleEmpIds() != null ? existing.getResponsibleEmpIds() : Collections.emptyList();
+        List<String> newEmpIds = req.getResponsibleEmpIds();
+        boolean empIdsChanged = newEmpIds != null && !new HashSet<>(oldEmpIds).equals(new HashSet<>(newEmpIds));
+        if (empIdsChanged && !newEmpIds.isEmpty()) {
+            int activeCount = addrbookEmployeeMapper.countActiveByEmpIds(newEmpIds);
+            if (activeCount != newEmpIds.size()) {
+                throw new BizException(PortalErrorCode.EMPLOYEE_RESIGNED.getCode(), PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
+            }
         }
+        ProductInfo patch = new ProductInfo();
+        patch.setId(id);
+        if (req.getProductName() != null) { patch.setProductName(req.getProductName()); existing.setProductName(req.getProductName()); }
+        if (req.getProductCategory() != null) { patch.setProductCategory(req.getProductCategory()); existing.setProductCategory(req.getProductCategory()); }
+        if (req.getDescription() != null) { patch.setDescription(req.getDescription()); existing.setDescription(req.getDescription()); }
+        if (req.getSupportForSupportRequest() != null) { patch.setSupportForSupportRequest(req.getSupportForSupportRequest()); existing.setSupportForSupportRequest(req.getSupportForSupportRequest()); }
+        if (req.getFileObjectId() != null) { patch.setFileObjectId(req.getFileObjectId()); existing.setFileObjectId(req.getFileObjectId()); }
+        if (empIdsChanged) { patch.setResponsibleEmpIds(newEmpIds); existing.setResponsibleEmpIds(newEmpIds); }
+        patch.setUpdatedBy(currentEmpId);
+        productInfoMapper.updateById(patch);
+        if (empIdsChanged) { syncResponsibleToAddrbook(id, oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), currentEmpId); }
+        clearSupportCache();
+        if (empIdsChanged) {
+            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), currentEmpId, LocalDateTime.now()));
+        }
+        return existing;
+    }
 
-        return productId;
+    /** D.6 删除产品（含前置引用检查 + 高危审计） */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteProduct(String id) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        ProductInfo existing = productInfoMapper.selectById(id);
+        if (existing == null) {
+            throw new BizException(PortalErrorCode.PRODUCT_NOT_FOUND.getCode(), PortalErrorCode.PRODUCT_NOT_FOUND.getMessage());
+        }
+        // 前置引用检查：仍有员工引用该产品时，不可删除
+        int refCount = addrbookEmployeeMapper.countEmployeesReferringProduct(id);
+        if (refCount > 0) {
+            throw new BizException(PortalErrorCode.PRODUCT_STILL_REFERRED.getCode(),
+                    "仍有 " + refCount + " 名员工引用该产品，不可删除");
+        }
+        productInfoMapper.softDeleteById(id, currentEmpId);
+        List<String> oldEmpIds = existing.getResponsibleEmpIds() != null ? existing.getResponsibleEmpIds() : Collections.emptyList();
+        if (!oldEmpIds.isEmpty()) { syncResponsibleToAddrbook(id, oldEmpIds, Collections.emptyList(), currentEmpId); }
+        clearSupportCache();
+        eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, Collections.emptyList(), currentEmpId, LocalDateTime.now()));
+    }
+
+    private void syncResponsibleToAddrbook(String productId, List<String> oldEmpIds, List<String> newEmpIds, String operatorEmpId) {
+        Set<String> oldSet = new HashSet<>(oldEmpIds);
+        Set<String> newSet = new HashSet<>(newEmpIds);
+        Set<String> added = new HashSet<>(newSet); added.removeAll(oldSet);
+        Set<String> removed = new HashSet<>(oldSet); removed.removeAll(newSet);
+        List<String> allEmpIds = new ArrayList<>(); allEmpIds.addAll(added); allEmpIds.addAll(removed); Collections.sort(allEmpIds);
+        for (String empId : allEmpIds) {
+            AddrbookEmployee emp = addrbookEmployeeMapper.selectByEmpId(empId);
+            if (emp == null) { log.warn("[syncResponsibleToAddrbook] skip missing empId={}", empId); continue; }
+            List<String> productIds = emp.getResponsibleProductIds() != null ? new ArrayList<>(emp.getResponsibleProductIds()) : new ArrayList<>();
+            if (added.contains(empId)) { if (!productIds.contains(productId)) { productIds.add(productId); } }
+            else { productIds.remove(productId); }
+            addrbookEmployeeMapper.updateResponsibleProductsWithOptimisticLock(empId, productIds, emp.getUpdatedTime(), operatorEmpId);
+        }
+    }
+
+    private void clearSupportCache() {
+        try { redisTemplate.delete(SUPPORT_CACHE_KEY); } catch (Exception e) { log.warn("clearSupportCache failed", e); }
     }
 }

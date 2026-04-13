@@ -7,11 +7,14 @@ import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
+import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import org.junit.jupiter.api.Tag;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -38,7 +41,13 @@ public abstract class AbstractControllerIntegrationTest {
      *
      * <p>通过 @SpringBootTest(classes=...) 显式引用，确保子类在任意包路径下都能正确发现此配置。</p>
      */
-    @SpringBootApplication(scanBasePackages = "com.bank.branch.platform.portal")
+    @SpringBootApplication(
+            scanBasePackages = "com.bank.branch.platform.portal",
+            exclude = {
+                    org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration.class,
+                    org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration.class
+            }
+    )
     static class TestApp {
     }
 
@@ -49,4 +58,6 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected FileApi fileApi;
     @MockBean protected NotifyApi notifyApi;
     @MockBean protected AuditApi auditApi;
+    @MockBean(name = "redisTemplate")
+    protected RedisTemplate<String, Object> redisTemplate;
 }

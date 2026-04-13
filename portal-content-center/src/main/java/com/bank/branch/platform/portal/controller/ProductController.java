@@ -3,35 +3,35 @@ package com.bank.branch.platform.portal.controller;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
-import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
-import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
-import com.bank.branch.platform.portal.api.dto.ProductDetailDTO;
-import com.bank.branch.platform.portal.api.dto.ProductListReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
+import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
+import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
+import com.bank.branch.platform.portal.convert.ProductConverter;
+import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.service.ProductService;
-import com.bank.branch.platform.portal.service.dto.ProductCreateCmd;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 产品资料库 REST Controller (D.1-D.7)
- *
- * <p>路由顺序约束：/support-available 必须在 /{id} 之前声明，
- * 否则 Spring MVC 会把 "support-available" 匹配为 {id} 路径变量。</p>
+ * <p>Service 层返回实体，Controller 层负责 Entity -> DTO 转换。</p>
  */
 @RestController
 @RequestMapping("/api/products")
@@ -42,67 +42,54 @@ public class ProductController {
     private final BizScopeApi bizScopeApi;
     private final CurrentUserApi currentUserApi;
 
-    /**
-     * D.1 分页查询产品列表
-     *
-     * @param req 查询请求参数（含分页 + 筛选条件）
-     * @return 分页结果（走 ResponseWrapper.page，JSON 路径 $.page）
-     */
+    /** D.1 分页查询产品列表 */
     @GetMapping
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.LIST)
-    public ResponseWrapper<ProductDTO> listProducts(@Valid ProductListReqDTO req) {
-        String empId = currentUserApi.getCurrentEmpId();
-        var authScope = bizScopeApi.buildScopeContext(empId, BizType.PRODUCT, BizAction.LIST);
-        DataScopeContext scope = DataScopeAdapter.fromAuthRecord(authScope);
-        PageResult<ProductDTO> result = productService.listProducts(req, scope);
-        return ResponseWrapper.page(result);
+    public ResponseWrapper<ProductDTO> listProducts(@Valid ProductQueryReqDTO req) {
+        PageResult<ProductInfo> entityPage = productService.listProducts(req);
+        List<ProductDTO> dtos = entityPage.getRecords().stream().map(ProductConverter::toDTO).collect(Collectors.toList());
+        return ResponseWrapper.page(PageResult.of(entityPage.getPageNo(), entityPage.getPageSize(), entityPage.getTotal(), dtos));
     }
 
-    /**
-     * D.3 查询支持中场支持的产品
-     *
-     * @return 支持产品简要列表
-     */
+    /** D.3 查询支持中场支持的产品 */
     @GetMapping("/support-available")
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.READ)
     public ResponseWrapper<List<ProductSimpleDTO>> getSupportAvailable() {
-        return ResponseWrapper.success(productService.listSupportAvailable());
+        List<ProductInfo> entities = productService.listSupportAvailable();
+        return ResponseWrapper.success(entities.stream().map(ProductConverter::toSimple).collect(Collectors.toList()));
     }
 
-    /**
-     * D.2 产品详情（含跨模块聚合：字典翻译/机构名/附件下载链接/负责人脱敏）
-     *
-     * @param id 产品ID
-     * @return 产品详情 DTO
-     */
+    /** D.2 产品详情 */
     @GetMapping("/{id:[A-Za-z0-9_-]{1,64}}")
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.READ)
-    public ResponseWrapper<ProductDetailDTO> getProduct(@PathVariable String id) {
-        return ResponseWrapper.success(productService.getProduct(id));
+    public ResponseWrapper<ProductDTO> getProduct(@PathVariable String id) {
+        return ResponseWrapper.success(ProductConverter.toDTO(productService.getProduct(id)));
     }
 
-    /**
-     * D.4 新增产品
-     *
-     * @param req 新增产品请求
-     * @return 新产品ID
-     */
+    /** D.4 新增产品 */
     @PostMapping
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.WRITE)
     public ResponseWrapper<String> createProduct(@Valid @RequestBody ProductCreateReqDTO req) {
-        String empId = currentUserApi.getCurrentEmpId();
-        ProductCreateCmd cmd = ProductCreateCmd.builder()
-                .productCode(req.getProductCode())
-                .productName(req.getProductName())
-                .productCategory(req.getProductCategory())
-                .description(req.getDescription())
-                .supportForSupportRequest(req.getSupportForSupportRequest())
-                .productDeptOrgCode(req.getProductDeptOrgCode())
-                .fileObjectId(req.getFileObjectId())
-                .responsibleEmpIds(req.getResponsibleEmpIds())
-                .build();
-        return ResponseWrapper.success(productService.createProduct(cmd, empId));
+        return ResponseWrapper.success(productService.createProduct(req).getId());
     }
 
-    // D.5-D.7 will be added in later tasks
+    /**
+     * D.5 编辑产品
+     */
+    @PutMapping("/{id:[A-Za-z0-9_-]{1,64}}")
+    @BizAuth(bizType = BizType.PRODUCT, action = BizAction.WRITE)
+    public ResponseWrapper<Void> updateProduct(@PathVariable String id, @Valid @RequestBody ProductUpdateReqDTO req) {
+        productService.updateProduct(id, req);
+        return ResponseWrapper.success(null);
+    }
+
+    /**
+     * D.6 删除产品（高危操作）
+     */
+    @DeleteMapping("/{id:[A-Za-z0-9_-]{1,64}}")
+    @BizAuth(bizType = BizType.PRODUCT, action = BizAction.WRITE)
+    public ResponseWrapper<Void> deleteProduct(@PathVariable String id) {
+        productService.deleteProduct(id);
+        return ResponseWrapper.success(null);
+    }
 }
