@@ -71,4 +71,14 @@
           AND shortcut_type = 'CUSTOM'
     </select>
 
+    <!-- 查询所有系统级快捷入口（ACTIVE），按 sort_order 升序 -->
+    <select id="listSystemOnly" resultType="com.bank.branch.platform.portal.entity.PortalShortcut">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM portal_shortcut
+        WHERE shortcut_type = 'SYSTEM'
+          AND status = 'ACTIVE'
+        ORDER BY sort_order ASC
+    </select>
+
 </mapper>

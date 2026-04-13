@@ -68,4 +68,11 @@ public interface PortalShortcutMapper {
      * @return 自定义快捷入口数量
      */
     int countCustomByEmpId(@Param("empId") String empId);
+
+    /**
+     * 查询所有系统级快捷入口（shortcut_type='SYSTEM' 且 status='ACTIVE'），按 sort_order 升序。
+     *
+     * @return 系统级快捷入口列表
+     */
+    List<PortalShortcut> listSystemOnly();
 }
