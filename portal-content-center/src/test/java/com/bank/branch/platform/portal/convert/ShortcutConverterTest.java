@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ShortcutConverterTest {
 
     @Test
-    @DisplayName("toDTO: null 输入 → 返回 null")
+    @DisplayName("toDTO: null 输入 -> 返回 null")
     void toDTOShouldReturnNullOnNullInput() {
         assertNull(ShortcutConverter.toDTO(null));
     }

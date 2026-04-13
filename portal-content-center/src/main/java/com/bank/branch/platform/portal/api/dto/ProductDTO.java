@@ -1,55 +1,62 @@
 package com.bank.branch.platform.portal.api.dto;
 
-import lombok.Data;
+import lombok.Builder;
+import lombok.Value;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 产品列表项 DTO（D.1 分页查询响应）
+ * 产品信息传输对象（不可变）
  *
- * <p>包含产品基本信息、分类描述、状态、负责人列表等，
- * 用于产品管理页面的分页列表展示。</p>
+ * <p>跨模块 API 返回类型，由 ProductApi 对外提供。
+ * 同时也用于本模块 Controller 层列表/详情的统一返回。</p>
+ *
+ * @see com.bank.branch.platform.portal.convert.ProductConverter
  */
-@Data
+@Value
+@Builder
 public class ProductDTO {
 
     /** 产品ID */
-    private String id;
+    String id;
 
     /** 产品代码 */
-    private String productCode;
+    String productCode;
 
     /** 产品名称 */
-    private String productName;
+    String productName;
 
-    /** 产品类别 */
-    private String productCategory;
+    /** 产品类别代码 */
+    String productCategory;
 
-    /** 产品类别描述（字典翻译后） */
-    private String productCategoryDesc;
+    /** 产品类别显示名（字典翻译后，Service 层填充） */
+    String productCategoryDesc;
 
-    /** 产品部门ORG_CODE */
-    private String productDeptOrgCode;
+    /** 产品描述 */
+    String description;
 
-    /** 产品部门名称（组织翻译后） */
-    private String productDeptOrgName;
+    /** 是否支持中场支持 */
+    Boolean supportForSupportRequest;
 
-    /** 是否支持中场支持请求 */
-    private Boolean supportForSupportRequest;
+    /** 产品部门机构编码（维护组织） */
+    String productDeptOrgCode;
 
-    /** 产品状态：ACTIVE-启用，DISABLED-禁用 */
-    private String status;
+    /** 产品部门机构名称（Service 层填充） */
+    String productDeptOrgName;
 
-    /** 主附件文件名 */
-    private String fileName;
+    /** 附件对象ID */
+    String fileObjectId;
 
-    /** 负责人列表 */
-    private List<ResponsibleEmpDTO> responsibleEmps;
+    /** 产品负责人工号列表 */
+    List<String> responsibleEmpIds;
 
-    /** 最后更新人姓名 */
-    private String updatedByName;
+    /** 状态 ACTIVE/DISABLED */
+    String status;
+
+    /** 创建时间 */
+    LocalDateTime createdTime;
 
     /** 最后更新时间 */
-    private LocalDateTime updatedTime;
+    LocalDateTime updatedTime;
 }

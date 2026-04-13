@@ -10,7 +10,9 @@ import java.util.List;
 
 /**
  * ProductInfo Entity -> DTO 转换器
- * <p>纯静态方法，无业务逻辑。toListItem / toDetail 在 Phase 4/5 按需补充。</p>
+ *
+ * <p>纯静态方法，无业务逻辑。productCategoryDesc / productDeptOrgName 留 null，
+ * 由 Service 层通过 DictApi / OrgApi 填充。</p>
  */
 public final class ProductConverter {
 
@@ -34,30 +36,41 @@ public final class ProductConverter {
     }
 
     /**
-     * Entity -> ProductDTO（D.1 列表项）
-     * <p>V1 简化版：categoryDesc/orgName/fileName/responsibleEmps/updatedByName 暂留空，Phase 5+ 补齐</p>
+     * Entity -> ProductDTO（跨模块 API 返回 / D.1 列表项）
+     *
+     * <p>productCategoryDesc / productDeptOrgName 留 null，由 Service 层补充。</p>
      *
      * @param entity 产品实体
-     * @return 列表 DTO，entity 为 null 时返回 null
+     * @return ProductDTO，entity 为 null 时返回 null
+     */
+    public static ProductDTO toDTO(ProductInfo entity) {
+        if (entity == null) return null;
+        return ProductDTO.builder()
+                .id(entity.getId())
+                .productCode(entity.getProductCode())
+                .productName(entity.getProductName())
+                .productCategory(entity.getProductCategory())
+                .productCategoryDesc(null) // 需要 DictApi 翻译，Service 层填充
+                .description(entity.getDescription())
+                .supportForSupportRequest(entity.getSupportForSupportRequest())
+                .productDeptOrgCode(entity.getProductDeptOrgCode())
+                .productDeptOrgName(null) // 需要 OrgApi 翻译，Service 层填充
+                .fileObjectId(entity.getFileObjectId())
+                .responsibleEmpIds(entity.getResponsibleEmpIds())
+                .status(entity.getStatus())
+                .createdTime(entity.getCreatedTime())
+                .updatedTime(entity.getUpdatedTime())
+                .build();
+    }
+
+    /**
+     * Entity -> ProductDTO（D.1 列表项，别名方法兼容旧调用）
+     *
+     * @param entity 产品实体
+     * @return ProductDTO，entity 为 null 时返回 null
      */
     public static ProductDTO toListItem(ProductInfo entity) {
-        if (entity == null) return null;
-        ProductDTO dto = new ProductDTO();
-        dto.setId(entity.getId());
-        dto.setProductCode(entity.getProductCode());
-        dto.setProductName(entity.getProductName());
-        dto.setProductCategory(entity.getProductCategory());
-        dto.setProductDeptOrgCode(entity.getProductDeptOrgCode());
-        dto.setSupportForSupportRequest(entity.getSupportForSupportRequest());
-        dto.setStatus(entity.getStatus());
-        dto.setUpdatedTime(entity.getUpdatedTime());
-        // V1 simplified: these fields require cross-module calls, filled in later phases
-        // dto.setProductCategoryDesc(...);  // needs DictApi
-        // dto.setProductDeptOrgName(...);   // needs OrgApi
-        // dto.setFileName(...);             // needs FileApi
-        // dto.setResponsibleEmps(...);      // needs AddrbookQueryService
-        // dto.setUpdatedByName(...);        // needs auth lookup
-        return dto;
+        return toDTO(entity);
     }
 
     /**

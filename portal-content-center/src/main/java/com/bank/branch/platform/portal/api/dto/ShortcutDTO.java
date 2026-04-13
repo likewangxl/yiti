@@ -1,33 +1,35 @@
 package com.bank.branch.platform.portal.api.dto;
 
-import lombok.Data;
+import lombok.Builder;
+import lombok.Value;
 
 /**
- * 工作台快捷入口 DTO（A.1/A.2 用）
+ * 工作台快捷入口 DTO（不可变）
  *
  * <p>用于工作台快捷入口列表展示和个性化配置场景。</p>
  */
-@Data
+@Value
+@Builder
 public class ShortcutDTO {
 
     /** 快捷入口ID */
-    private String id;
+    String id;
 
     /** 快捷入口名称 */
-    private String shortcutName;
+    String shortcutName;
 
     /** 跳转URL */
-    private String shortcutUrl;
+    String shortcutUrl;
 
     /** 图标 */
-    private String shortcutIcon;
+    String shortcutIcon;
 
     /** 类型：SYSTEM-系统, CUSTOM-自定义 */
-    private String shortcutType;
+    String shortcutType;
 
     /** 目标类型：INTERNAL-内部, EXTERNAL-外部 */
-    private String targetType;
+    String targetType;
 
     /** 排序号 */
-    private Integer sortOrder;
+    Integer sortOrder;
 }

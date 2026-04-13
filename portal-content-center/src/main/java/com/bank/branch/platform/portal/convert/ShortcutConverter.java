@@ -19,14 +19,14 @@ public final class ShortcutConverter {
      */
     public static ShortcutDTO toDTO(PortalShortcut entity) {
         if (entity == null) return null;
-        ShortcutDTO dto = new ShortcutDTO();
-        dto.setId(entity.getId());
-        dto.setShortcutName(entity.getShortcutName());
-        dto.setShortcutUrl(entity.getShortcutUrl());
-        dto.setShortcutIcon(entity.getShortcutIcon());
-        dto.setShortcutType(entity.getShortcutType());
-        dto.setTargetType(entity.getTargetType());
-        dto.setSortOrder(entity.getSortOrder());
-        return dto;
+        return ShortcutDTO.builder()
+                .id(entity.getId())
+                .shortcutName(entity.getShortcutName())
+                .shortcutUrl(entity.getShortcutUrl())
+                .shortcutIcon(entity.getShortcutIcon())
+                .shortcutType(entity.getShortcutType())
+                .targetType(entity.getTargetType())
+                .sortOrder(entity.getSortOrder())
+                .build();
     }
 }

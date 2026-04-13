@@ -95,10 +95,11 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
         when(bizScopeApi.buildScopeContext(eq("E10001"), eq(BizType.PRODUCT), eq(BizAction.LIST)))
                 .thenReturn(authRecord);
 
-        ProductDTO dto = new ProductDTO();
-        dto.setId("P001");
-        dto.setProductCode("DEPOSIT_001");
-        dto.setProductName("活期存款");
+        ProductDTO dto = ProductDTO.builder()
+                .id("P001")
+                .productCode("DEPOSIT_001")
+                .productName("活期存款")
+                .build();
         PageResult<ProductDTO> page = PageResult.of(1, 20, 1L, List.of(dto));
         when(productService.listProducts(any(ProductListReqDTO.class),
                 any(com.bank.branch.platform.common.security.context.DataScopeContext.class)))
