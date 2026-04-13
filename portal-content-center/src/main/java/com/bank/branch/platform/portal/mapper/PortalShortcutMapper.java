@@ -26,14 +26,6 @@ public interface PortalShortcutMapper {
     int insert(PortalShortcut entity);
 
     /**
-     * 批量插入快捷入口（A.3 批量保存用）。
-     *
-     * @param list 快捷入口实体列表
-     * @return 受影响行数
-     */
-    int batchInsert(@Param("list") List<PortalShortcut> list);
-
-    /**
      * 查询员工可见的快捷入口（系统级 + 该员工自定义）。
      * <p>
      * 返回 status='ACTIVE' 的系统级快捷入口和指定员工的自定义快捷入口，

@@ -11,7 +11,7 @@ spring:
         - classpath:sql/test-ddl-governance-clean.sql
         - classpath:sql/test-ddl-portal-clean.sql
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/onepl?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://127.0.0.1:3306/onepl?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&allowMultiQueries=true
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver

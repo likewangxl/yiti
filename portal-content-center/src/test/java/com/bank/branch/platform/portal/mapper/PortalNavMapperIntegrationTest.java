@@ -154,6 +154,54 @@ class PortalNavMapperIntegrationTest extends AbstractMapperIntegrationTest {
     }
 
     /**
+     * 验证 updateSortOrderBatch 能批量更新多条记录的排序号和更新人。
+     */
+    @Test
+    void updateSortOrderBatch_shouldUpdateMultiple() {
+        // Arrange: 插入 3 条导航，初始 sort_order 分别为 1, 2, 3
+        PortalNav nav1 = newNav("TEST_排序A", "HQ_SYSTEM", 1);
+        PortalNav nav2 = newNav("TEST_排序B", "HQ_SYSTEM", 2);
+        PortalNav nav3 = newNav("TEST_排序C", "HQ_SYSTEM", 3);
+        mapper.insert(nav1);
+        mapper.insert(nav2);
+        mapper.insert(nav3);
+
+        // Act: 批量调整排序（反转顺序），并设置更新人
+        nav1.setSortOrder(30);
+        nav1.setUpdatedBy("batch_updater");
+        nav2.setSortOrder(20);
+        nav2.setUpdatedBy("batch_updater");
+        nav3.setSortOrder(10);
+        nav3.setUpdatedBy("batch_updater");
+        // MyBatis foreach 多语句模式下返回最后一条语句的影响行数
+        int rows = mapper.updateSortOrderBatch(Arrays.asList(nav1, nav2, nav3));
+
+        // Assert: 执行成功（rows >= 1 即为最后一条 UPDATE 的影响行数）
+        assertThat(rows).isGreaterThanOrEqualTo(1);
+
+        // 验证数据库中排序号已生效
+        PortalNav found1 = mapper.selectById(nav1.getId());
+        PortalNav found2 = mapper.selectById(nav2.getId());
+        PortalNav found3 = mapper.selectById(nav3.getId());
+        assertThat(found1.getSortOrder()).isEqualTo(30);
+        assertThat(found2.getSortOrder()).isEqualTo(20);
+        assertThat(found3.getSortOrder()).isEqualTo(10);
+
+        // 验证 updated_by 已写入
+        assertThat(found1.getUpdatedBy()).isEqualTo("batch_updater");
+        assertThat(found2.getUpdatedBy()).isEqualTo("batch_updater");
+        assertThat(found3.getUpdatedBy()).isEqualTo("batch_updater");
+
+        // 验证按 sort_order 升序后顺序为 nav3 < nav2 < nav1
+        List<PortalNav> active = mapper.listByCategory("HQ_SYSTEM");
+        List<String> orderedNames = active.stream()
+                .filter(n -> n.getNavName().startsWith("TEST_排序"))
+                .map(PortalNav::getNavName)
+                .toList();
+        assertThat(orderedNames).containsExactly("TEST_排序C", "TEST_排序B", "TEST_排序A");
+    }
+
+    /**
      * 创建测试导航辅助方法。
      *
      * @param name     导航名称

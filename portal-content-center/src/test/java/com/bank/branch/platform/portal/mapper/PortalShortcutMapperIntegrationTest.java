@@ -88,7 +88,7 @@ class PortalShortcutMapperIntegrationTest extends AbstractMapperIntegrationTest 
     }
 
     /**
-     * 验证 batchInsert 能够一次性持久化所有行。
+     * 验证 insertBatch 能够一次性持久化所有行。
      */
     @Test
     void batchInsertShouldPersistAllRows() {
@@ -98,7 +98,7 @@ class PortalShortcutMapperIntegrationTest extends AbstractMapperIntegrationTest 
         PortalShortcut s3 = newShortcut("TEST_BATCH_03", "CUSTOM", "E10001");
 
         // Act
-        int rows = mapper.batchInsert(Arrays.asList(s1, s2, s3));
+        int rows = mapper.insertBatch(Arrays.asList(s1, s2, s3));
 
         // Assert
         assertThat(rows).isEqualTo(3);

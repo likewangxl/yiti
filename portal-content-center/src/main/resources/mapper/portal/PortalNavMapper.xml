@@ -80,6 +80,7 @@
         <foreach collection="items" item="item" separator=";">
             UPDATE portal_nav
             SET sort_order = #{item.sortOrder},
+                updated_by = #{item.updatedBy},
                 updated_time = NOW()
             WHERE id = #{item.id}
         </foreach>

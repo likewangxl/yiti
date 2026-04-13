@@ -16,6 +16,7 @@
                 typeHandler="com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler"/>
         <result column="status" property="status"/>
         <result column="maintainer_emp_id" property="maintainerEmpId"/>
+        <result column="created_by" property="createdBy"/>
         <result column="created_time" property="createdTime"/>
         <result column="updated_time" property="updatedTime"/>
         <result column="deleted" property="deleted"/>
@@ -25,7 +26,7 @@
     <sql id="BASE_COLUMNS">
         emp_id, emp_name, mobile, email, org_code, org_name,
         position, self_desc, responsible_product_ids, status,
-        maintainer_emp_id, created_time, updated_time, deleted
+        maintainer_emp_id, created_by, created_time, updated_time, deleted
     </sql>
 
     <!-- 插入新员工 -->
@@ -33,13 +34,13 @@
         INSERT INTO addrbook_employee (
             emp_id, emp_name, mobile, email, org_code, org_name,
             position, self_desc, responsible_product_ids, status,
-            maintainer_emp_id, created_time, updated_time, deleted
+            maintainer_emp_id, created_by, created_time, updated_time, deleted
         ) VALUES (
             #{empId}, #{empName}, #{mobile}, #{email}, #{orgCode}, #{orgName},
             #{position}, #{selfDesc},
             #{responsibleProductIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},
             #{status},
-            #{maintainerEmpId}, IFNULL(#{createdTime}, NOW()), IFNULL(#{updatedTime}, NOW()), #{deleted}
+            #{maintainerEmpId}, #{createdBy}, IFNULL(#{createdTime}, NOW()), IFNULL(#{updatedTime}, NOW()), #{deleted}
         )
     </insert>
 
