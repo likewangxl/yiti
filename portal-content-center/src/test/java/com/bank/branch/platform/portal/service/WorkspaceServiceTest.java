@@ -111,14 +111,15 @@ class WorkspaceServiceTest {
                 .thenReturn(notifPage);
 
         // metricCards
-        PortalMetricCard card = new PortalMetricCard();
-        card.setMetricCode("DEPOSIT");
-        card.setMetricName("存款余额");
-        card.setCurrentValue("1000000.00");
-        card.setTargetValue("2000000.00");
-        card.setCompletionRate(new BigDecimal("50.00"));
-        card.setTrend("UP");
-        card.setUnit("元");
+        PortalMetricCard card = PortalMetricCard.builder()
+                .metricCode("DEPOSIT")
+                .metricName("存款余额")
+                .currentValue("1000000.00")
+                .targetValue("2000000.00")
+                .completionRate(new BigDecimal("50.00"))
+                .trend("UP")
+                .unit("元")
+                .build();
         when(metricAdapter.fetch("E10001")).thenReturn(List.of(card));
 
         // 执行

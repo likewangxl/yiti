@@ -6,7 +6,6 @@ import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeQueryReqD
 import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeUpdateReqDTO;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.entity.ProductInfo;
-import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import com.bank.branch.platform.portal.service.AddressBookService;
 import com.bank.branch.platform.portal.support.AbstractControllerIntegrationTest;
 import com.bank.branch.platform.portal.support.WithMockEmpContext;
@@ -40,7 +39,6 @@ class AddressBookControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @MockBean AddressBookService addressBookService;
-    @MockBean ProductInfoMapper productInfoMapper;
 
     // ===== C.1 GET /api/employees =====
 
@@ -71,7 +69,7 @@ class AddressBookControllerTest extends AbstractControllerIntegrationTest {
         p1.setId("P001"); p1.setProductCode("DEPOSIT_001"); p1.setProductName("活期存款"); p1.setProductCategory("CAT_DEPOSIT");
         ProductInfo p2 = new ProductInfo();
         p2.setId("P002"); p2.setProductCode("LOAN_001"); p2.setProductName("消费贷"); p2.setProductCategory("CAT_LOAN");
-        when(productInfoMapper.listByIds(Arrays.asList("P001", "P002"))).thenReturn(Arrays.asList(p1, p2));
+        when(addressBookService.listProductsByIds(Arrays.asList("P001", "P002"))).thenReturn(Arrays.asList(p1, p2));
 
         AddrbookEmployee maintainer = buildEmployee("E999", "维护人");
         when(addressBookService.getEmployee("E999")).thenReturn(maintainer);

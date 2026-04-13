@@ -12,6 +12,7 @@ import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
+import com.bank.branch.platform.portal.service.dto.ProductListQuery;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
@@ -45,21 +46,27 @@ public class ProductService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ApplicationEventPublisher eventPublisher;
 
-    /** D.1 分页查询产品列表（含数据权限过滤） */
+    /** D.1 分页查询产品列表（含 DATA_SCOPE 数据权限过滤） */
     public PageResult<ProductInfo> listProducts(ProductQueryReqDTO req) {
-        try {
-            com.bank.branch.platform.auth.api.dto.DataScopeContext authRecord =
-                    bizScopeApi.buildScopeContext(currentUserApi.getCurrentEmpId(), BizType.PRODUCT, BizAction.LIST);
-            DataScopeContext pojo = DataScopeAdapter.fromAuthRecord(authRecord);
-            DataScopeContext.set(pojo);
-            int pageNo = req.getPageNo() != null ? req.getPageNo() : 1;
-            int pageSize = req.getPageSize() != null ? req.getPageSize() : 20;
-            int offset = (pageNo - 1) * pageSize;
-            long total = productInfoMapper.countPage(req.getKeyword(), req.getCategory(), req.getStatus());
-            if (total == 0) { return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList()); }
-            List<ProductInfo> records = productInfoMapper.selectPage(req.getKeyword(), req.getCategory(), req.getStatus(), offset, pageSize);
-            return PageResult.of(pageNo, pageSize, total, records);
-        } finally { DataScopeContext.clear(); }
+        com.bank.branch.platform.auth.api.dto.DataScopeContext authRecord =
+                bizScopeApi.buildScopeContext(currentUserApi.getCurrentEmpId(), BizType.PRODUCT, BizAction.LIST);
+        DataScopeContext pojo = DataScopeAdapter.fromAuthRecord(authRecord);
+        int pageNo = req.getPageNo() != null ? req.getPageNo() : 1;
+        int pageSize = req.getPageSize() != null ? req.getPageSize() : 20;
+        int offset = (pageNo - 1) * pageSize;
+        // 使用带 DATA_SCOPE 的 listProducts / countProducts 方法
+        ProductListQuery query = ProductListQuery.builder()
+                .keyword(req.getKeyword())
+                .category(req.getCategory())
+                .status(req.getStatus())
+                .offset(offset)
+                .limit(pageSize)
+                .dataScope(pojo)
+                .build();
+        long total = productInfoMapper.countProducts(query);
+        if (total == 0) { return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList()); }
+        List<ProductInfo> records = productInfoMapper.listProducts(query);
+        return PageResult.of(pageNo, pageSize, total, records);
     }
 
     /** D.2 按 ID 查询产品详情 */
@@ -90,6 +97,15 @@ public class ProductService {
     @Transactional(rollbackFor = Exception.class)
     public ProductInfo createProduct(ProductCreateReqDTO req) {
         String currentEmpId = currentUserApi.getCurrentEmpId();
+        // 机构权限校验：当前用户 orgCode 须与产品部门 orgCode 匹配（系统管理员豁免）
+        if (!currentUserApi.isSystemAdmin()) {
+            String currentOrgCode = currentUserApi.getCurrentOrgCode();
+            if (currentOrgCode == null || !currentOrgCode.equals(req.getProductDeptOrgCode())) {
+                throw new BizException(
+                        PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getCode(),
+                        PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getMessage());
+            }
+        }
         if (productInfoMapper.selectByProductCode(req.getProductCode()) != null) {
             throw new BizException(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode(), PortalErrorCode.PRODUCT_CODE_DUPLICATE.getMessage());
         }
@@ -165,9 +181,19 @@ public class ProductService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteProduct(String id) {
         String currentEmpId = currentUserApi.getCurrentEmpId();
-        ProductInfo existing = productInfoMapper.selectById(id);
+        // 使用 FOR UPDATE 行锁防竞态（与 updateProduct 一致）
+        ProductInfo existing = productInfoMapper.selectByIdForUpdate(id);
         if (existing == null) {
             throw new BizException(PortalErrorCode.PRODUCT_NOT_FOUND.getCode(), PortalErrorCode.PRODUCT_NOT_FOUND.getMessage());
+        }
+        // 机构权限校验：当前用户 orgCode 须与产品部门 orgCode 匹配（系统管理员豁免）
+        if (!currentUserApi.isSystemAdmin()) {
+            String currentOrgCode = currentUserApi.getCurrentOrgCode();
+            if (currentOrgCode == null || !currentOrgCode.equals(existing.getProductDeptOrgCode())) {
+                throw new BizException(
+                        PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getCode(),
+                        PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getMessage());
+            }
         }
         // 前置引用检查：仍有员工引用该产品时，不可删除
         int refCount = addrbookEmployeeMapper.countEmployeesReferringProduct(id);

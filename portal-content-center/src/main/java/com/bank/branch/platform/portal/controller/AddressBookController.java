@@ -14,7 +14,6 @@ import com.bank.branch.platform.portal.controller.dto.addrbook.ProductBriefDTO;
 import com.bank.branch.platform.portal.convert.EmployeeConverter;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.entity.ProductInfo;
-import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import com.bank.branch.platform.portal.service.AddressBookService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +41,6 @@ import java.util.stream.Collectors;
 public class AddressBookController {
 
     private final AddressBookService addressBookService;
-    private final ProductInfoMapper productInfoMapper;
     private final CurrentUserApi currentUserApi;
 
     /**
@@ -153,7 +151,7 @@ public class AddressBookController {
         // 负责产品详细列表
         List<String> productIds = entity.getResponsibleProductIds();
         if (productIds != null && !productIds.isEmpty()) {
-            List<ProductInfo> products = productInfoMapper.listByIds(productIds);
+            List<ProductInfo> products = addressBookService.listProductsByIds(productIds);
             List<ProductBriefDTO> productBriefs = products.stream()
                     .map(this::toProductBrief)
                     .collect(Collectors.toList());

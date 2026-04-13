@@ -95,4 +95,31 @@
           AND status = 'ACTIVE'
     </select>
 
+    <!-- 按名称和分类统计启用状态的导航数量（排除指定 id，用于 updateNav 唯一性校验） -->
+    <select id="countByNameAndCategoryExcludeId" resultType="int">
+        SELECT COUNT(1)
+        FROM portal_nav
+        WHERE nav_name = #{navName}
+          AND nav_category = #{category}
+          AND status = 'ACTIVE'
+          AND id != #{excludeId}
+    </select>
+
+    <!-- 查询所有导航（不过滤状态），按 sort_order 升序 -->
+    <select id="listAll" resultType="com.bank.branch.platform.portal.entity.PortalNav">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM portal_nav
+        ORDER BY sort_order ASC
+    </select>
+
+    <!-- 按状态查询导航，按 sort_order 升序 -->
+    <select id="listByStatus" resultType="com.bank.branch.platform.portal.entity.PortalNav">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM portal_nav
+        WHERE status = #{status}
+        ORDER BY sort_order ASC
+    </select>
+
 </mapper>

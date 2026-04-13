@@ -45,8 +45,8 @@ public class NavService {
     /**
      * 按分类分组查询导航列表。
      *
-     * @param category 分类过滤条件（null 时查询全部）
-     * @param status   状态过滤（null 或空时默认 ACTIVE）
+     * @param category 分类过滤条件（null 时查询全部分类）
+     * @param status   状态过滤（null 或空时默认 ACTIVE；"ALL" 查全部状态；其他值精确匹配）
      * @return 分组后的导航列表
      */
     public NavGroupRespDTO listGrouped(String category, String status) {
@@ -54,8 +54,14 @@ public class NavService {
         if (category != null && !category.isBlank()) {
             // 按分类查询（仅查 ACTIVE）
             navs = portalNavMapper.listByCategory(category);
+        } else if ("ALL".equalsIgnoreCase(status)) {
+            // 查询全部状态的导航
+            navs = portalNavMapper.listAll();
+        } else if (status != null && !status.isBlank()) {
+            // 按指定状态查询
+            navs = portalNavMapper.listByStatus(status);
         } else {
-            // 查询全部启用导航
+            // 默认查询启用导航
             navs = portalNavMapper.listActive();
         }
 
@@ -125,11 +131,11 @@ public class NavService {
 
     /**
      * 更新导航。
-     * 查询导航是否存在，不存在则抛异常；存在则动态更新非 null 字段。
+     * 查询导航是否存在，不存在则抛异常；名称或分类变更时校验同分类下名称唯一性；存在则动态更新非 null 字段。
      *
      * @param id  导航ID
      * @param req 更新请求
-     * @throws BizException 导航不存在（PORTAL-40001）
+     * @throws BizException 导航不存在（PORTAL-40001）或名称重复（PORTAL-40903）
      */
     public void updateNav(String id, NavUpdateReqDTO req) {
         PortalNav existing = portalNavMapper.selectById(id);
@@ -138,6 +144,21 @@ public class NavService {
                     PortalErrorCode.NAV_NOT_FOUND.getCode(),
                     PortalErrorCode.NAV_NOT_FOUND.getMessage()
             );
+        }
+
+        // 同分类下名称唯一性校验（名称或分类变更时触发）
+        String newName = req.getNavName() != null ? req.getNavName() : existing.getNavName();
+        String newCategory = req.getNavCategory() != null ? req.getNavCategory() : existing.getNavCategory();
+        boolean nameOrCategoryChanged = !newName.equals(existing.getNavName())
+                || !newCategory.equals(existing.getNavCategory());
+        if (nameOrCategoryChanged) {
+            int count = portalNavMapper.countByNameAndCategoryExcludeId(newName, newCategory, id);
+            if (count > 0) {
+                throw new BizException(
+                        PortalErrorCode.NAV_NAME_DUPLICATE.getCode(),
+                        PortalErrorCode.NAV_NAME_DUPLICATE.getMessage()
+                );
+            }
         }
 
         String currentEmpId = currentUserApi.getCurrentEmpId();

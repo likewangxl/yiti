@@ -79,4 +79,31 @@ public interface PortalNavMapper {
      * @return 匹配数量
      */
     int countByNameAndCategory(@Param("navName") String navName, @Param("category") String category);
+
+    /**
+     * 按名称和分类统计启用状态的导航数量（排除指定 id，用于 updateNav 唯一性校验）。
+     *
+     * @param navName  导航名称
+     * @param category 导航分类
+     * @param excludeId 排除的导航ID
+     * @return 匹配数量
+     */
+    int countByNameAndCategoryExcludeId(@Param("navName") String navName,
+                                        @Param("category") String category,
+                                        @Param("excludeId") String excludeId);
+
+    /**
+     * 查询所有导航（不过滤状态），按 sort_order 升序排列。
+     *
+     * @return 所有导航列表
+     */
+    List<PortalNav> listAll();
+
+    /**
+     * 按状态查询导航，按 sort_order 升序排列。
+     *
+     * @param status 导航状态（ACTIVE / DISABLED）
+     * @return 匹配状态的导航列表
+     */
+    List<PortalNav> listByStatus(@Param("status") String status);
 }

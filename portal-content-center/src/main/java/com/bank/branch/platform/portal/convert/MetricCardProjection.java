@@ -24,15 +24,15 @@ public final class MetricCardProjection {
      */
     public static PortalMetricCard toPortal(MetricCardDTO src) {
         if (src == null) return null;
-        PortalMetricCard out = new PortalMetricCard();
-        out.setMetricCode(src.getMetricCode());
-        out.setMetricName(src.getMetricName());
-        out.setUnit(src.getUnit());
-        out.setTrend(src.getTrend());
-        out.setCurrentValue(formatNumber(src.getCurrentValue()));
-        out.setTargetValue(formatNumber(src.getTargetValue()));
-        out.setCompletionRate(src.getAchievementRate()); // 字段重命名
-        return out;
+        return PortalMetricCard.builder()
+                .metricCode(src.getMetricCode())
+                .metricName(src.getMetricName())
+                .unit(src.getUnit())
+                .trend(src.getTrend())
+                .currentValue(formatNumber(src.getCurrentValue()))
+                .targetValue(formatNumber(src.getTargetValue()))
+                .completionRate(src.getAchievementRate()) // 字段重命名
+                .build();
     }
 
     /**

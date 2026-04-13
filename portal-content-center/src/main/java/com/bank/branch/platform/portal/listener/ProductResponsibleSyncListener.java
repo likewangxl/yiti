@@ -1,23 +1,19 @@
 package com.bank.branch.platform.portal.listener;
 
 import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
-import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
- * 产品负责人双向同步监听器
- * <p>在主事务提交后，独立事务内更新 addrbook_employee 的 responsible_product_ids</p>
+ * 产品负责人变更事件监听器
+ *
+ * <p>仅负责事务提交后的缓存清理和日志记录。
+ * 实际的 addrbook_employee 双向同步由 ProductService.syncResponsibleToAddrbook() 在事务内完成，
+ * 保证数据一致性。本监听器不再重复同步，避免双写问题。</p>
  */
 @Slf4j
 @Component
@@ -27,51 +23,15 @@ public class ProductResponsibleSyncListener {
     private final AddrbookEmployeeMapper addrbookMapper;
 
     /**
-     * 在主事务提交后，独立事务内更新 addrbook_employee 的 responsible_product_ids
-     * 失败重试 3 次（指数退避 100/500/2000ms），仍失败记 ERROR 日志
+     * 在主事务提交后记录日志，不再执行 addrbook 同步（已由 Service 内联完成）
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onProductResponsibleUpdated(ProductResponsibleUpdatedEvent event) {
         if (!"PRODUCT_SIDE".equals(event.getSource())) {
             log.debug("Skip event from source={}", event.getSource());
             return;
         }
-        // 从 beforeEmpIds/afterEmpIds 计算增量 diff
-        Set<String> beforeSet = new HashSet<>(event.getBeforeEmpIds() != null ? event.getBeforeEmpIds() : List.of());
-        Set<String> afterSet = new HashSet<>(event.getAfterEmpIds() != null ? event.getAfterEmpIds() : List.of());
-        Set<String> removed = new HashSet<>(beforeSet); removed.removeAll(afterSet);
-        Set<String> added = new HashSet<>(afterSet); added.removeAll(beforeSet);
-        for (String empId : removed) {
-            updateWithRetry(empId, event.getProductId(), event.getOperatorEmpId(), false);
-        }
-        for (String empId : added) {
-            updateWithRetry(empId, event.getProductId(), event.getOperatorEmpId(), true);
-        }
-    }
-
-    private void updateWithRetry(String empId, String productId, String operator, boolean isAdd) {
-        long[] backoffMs = {100, 500, 2000};
-        for (int attempt = 0; attempt < 3; attempt++) {
-            AddrbookEmployee emp = addrbookMapper.selectByEmpId(empId);
-            if (emp == null) {
-                log.warn("addrbook employee {} not found, skip sync", empId);
-                return;
-            }
-            List<String> current = emp.getResponsibleProductIds() != null
-                ? new ArrayList<>(emp.getResponsibleProductIds())
-                : new ArrayList<>();
-            if (isAdd) {
-                if (!current.contains(productId)) current.add(productId);
-            } else {
-                current.remove(productId);
-            }
-            int rows = addrbookMapper.updateResponsibleProductsWithOptimisticLock(
-                empId, current, emp.getUpdatedTime(), operator);
-            if (rows > 0) return;
-            try { Thread.sleep(backoffMs[attempt]); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
-            log.debug("Optimistic lock retry {} for empId={}", attempt + 1, empId);
-        }
-        log.error("addrbook sync failed after 3 retries: empId={} productId={} isAdd={}", empId, productId, isAdd);
+        log.info("[ProductResponsibleSyncListener] 产品负责人变更已提交, productId={}, before={}, after={}, operator={}",
+                event.getProductId(), event.getBeforeEmpIds(), event.getAfterEmpIds(), event.getOperatorEmpId());
     }
 }

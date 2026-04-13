@@ -227,6 +227,21 @@ public class AddressBookService {
     }
 
     /**
+     * 按 ID 列表查询产品信息（供 Controller 聚合详情使用）
+     *
+     * <p>遵循 Controller→Service→Mapper 分层规则，Controller 不直接注入 Mapper。</p>
+     *
+     * @param productIds 产品ID列表
+     * @return 匹配的产品列表
+     */
+    public List<ProductInfo> listProductsByIds(List<String> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return productInfoMapper.listByIds(productIds);
+    }
+
+    /**
      * 双向同步产品负责人：将员工从旧产品中移除、加入新产品
      *
      * @param empId         员工工号
