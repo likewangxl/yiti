@@ -66,7 +66,7 @@ public final class EmployeeConverter {
      * @param mobile 原始手机号
      * @return 脱敏后的手机号，null 或长度不足时原样返回
      */
-    static String maskMobile(String mobile) {
+    public static String maskMobile(String mobile) {
         if (mobile == null || mobile.length() < 7) {
             return mobile;
         }
