@@ -6,23 +6,31 @@ import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
 import com.bank.branch.platform.portal.api.dto.ProductDetailDTO;
 import com.bank.branch.platform.portal.api.dto.ProductListReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
 import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
+import com.bank.branch.platform.portal.api.event.ProductResponsibleUpdatedEvent;
 import com.bank.branch.platform.portal.convert.ProductConverter;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
+import com.bank.branch.platform.portal.service.dto.ProductCreateCmd;
 import com.bank.branch.platform.portal.service.dto.ProductListQuery;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -39,6 +47,8 @@ public class ProductService {
     private final FileApi fileApi;
     private final AddrbookQueryService addrbookQueryService;
     private final CurrentUserApi currentUserApi;
+    private final AuditApi auditApi;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * D.3 查询所有支持中场支持的产品（active + 未删除）
@@ -129,5 +139,103 @@ public class ProductService {
 
         return ProductConverter.toDetail(entity, categoryDesc, orgName,
                 fileDownloadUrl, responsibleEmps, canEdit);
+    }
+
+    /**
+     * D.4 新增产品
+     * <p>前置校验（事务外只读检查）→ 事务体（insert + bindFile + audit + publishEvent）</p>
+     *
+     * @param cmd           新增产品命令
+     * @param operatorEmpId 操作人工号
+     * @return 新产品ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public String createProduct(ProductCreateCmd cmd, String operatorEmpId) {
+        // 1. 机构权限校验：非系统管理员不能创建非本机构产品
+        String currentOrgCode = currentUserApi.getCurrentOrgCode();
+        boolean isAdmin = currentUserApi.isSystemAdmin();
+        if (!isAdmin && !cmd.getProductDeptOrgCode().equals(currentOrgCode)) {
+            throw new BizException(PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getCode(),
+                    PortalErrorCode.NO_RIGHT_TO_PRODUCT_DEPT.getMessage());
+        }
+
+        // 2. 字典校验
+        if (!dictApi.isValidDictValue("PRODUCT_CATEGORY", cmd.getProductCategory())) {
+            throw new BizException(PortalErrorCode.PARAM_INVALID.getCode(),
+                    "产品类别不合法: " + cmd.getProductCategory());
+        }
+
+        // 3. 附件存在性校验
+        if (cmd.getFileObjectId() != null && !cmd.getFileObjectId().isEmpty()) {
+            try {
+                fileApi.getDownloadUrl(cmd.getFileObjectId());
+            } catch (Exception e) {
+                throw new BizException(PortalErrorCode.FILE_OBJECT_NOT_FOUND.getCode(),
+                        PortalErrorCode.FILE_OBJECT_NOT_FOUND.getMessage());
+            }
+        }
+
+        // 4. 负责人有效性校验
+        if (cmd.getResponsibleEmpIds() != null && !cmd.getResponsibleEmpIds().isEmpty()) {
+            List<String> invalidEmps = addrbookQueryService.findInvalidEmpIds(cmd.getResponsibleEmpIds());
+            if (!invalidEmps.isEmpty()) {
+                throw new BizException(PortalErrorCode.EMPLOYEE_RESIGNED.getCode(),
+                        "以下员工不存在或已离职: " + invalidEmps);
+            }
+        }
+
+        // 5. 构建实体并插入
+        String productId = UUID.randomUUID().toString().replace("-", "");
+        ProductInfo entity = new ProductInfo();
+        entity.setId(productId);
+        entity.setProductCode(cmd.getProductCode());
+        entity.setProductName(cmd.getProductName());
+        entity.setProductCategory(cmd.getProductCategory());
+        entity.setDescription(cmd.getDescription());
+        entity.setSupportForSupportRequest(cmd.getSupportForSupportRequest());
+        entity.setProductDeptOrgCode(cmd.getProductDeptOrgCode());
+        entity.setOwnerOrgId(cmd.getProductDeptOrgCode());
+        entity.setFileObjectId(cmd.getFileObjectId());
+        entity.setResponsibleEmpIds(cmd.getResponsibleEmpIds());
+        entity.setStatus("ACTIVE");
+        entity.setCreatedBy(operatorEmpId);
+        entity.setUpdatedBy(operatorEmpId);
+        entity.setDeleted(0);
+
+        try {
+            productInfoMapper.insert(entity);
+        } catch (DuplicateKeyException e) {
+            throw new BizException(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode(),
+                    PortalErrorCode.PRODUCT_CODE_DUPLICATE.getMessage());
+        }
+
+        // 6. 关联附件
+        if (cmd.getFileObjectId() != null && !cmd.getFileObjectId().isEmpty()) {
+            fileApi.bindFile("PRODUCT", productId, cmd.getFileObjectId(), "MAIN");
+        }
+
+        // 7. 审计日志
+        auditApi.log(AuditLogCmd.builder()
+                .empId(operatorEmpId)
+                .bizType("PRODUCT")
+                .bizAction("CREATE")
+                .resourceUrl("/api/products")
+                .requestMethod("POST")
+                .requestParams(cmd.getProductCode())
+                .responseStatus(200)
+                .build());
+
+        // 8. 发布负责人变更事件
+        if (cmd.getResponsibleEmpIds() != null && !cmd.getResponsibleEmpIds().isEmpty()) {
+            eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(
+                    productId,
+                    Collections.emptyList(),  // removed: 新增产品没有移除
+                    cmd.getResponsibleEmpIds(),  // added
+                    "PRODUCT_SIDE",
+                    operatorEmpId
+            ));
+        }
+
+        return productId;
     }
 }

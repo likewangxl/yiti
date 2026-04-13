@@ -28,7 +28,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import com.bank.branch.platform.portal.service.dto.ProductCreateCmd;
+import org.springframework.http.MediaType;
 
 /**
  * ProductController 集成测试
@@ -175,5 +179,41 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray());
         verify(productService, never()).getProduct("support-available");
+    }
+
+    // ========== D.4 createProduct 测试 ==========
+
+    /**
+     * D.4 新增产品 - 正常返回 200 + 新产品ID
+     */
+    @Test
+    @WithMockEmpContext(empId = "E10001", orgCode = "ORG_SZ_001")
+    void createProductShouldReturn200WithProductId() throws Exception {
+        when(productService.createProduct(any(), eq("E10001"))).thenReturn("NEW_P_001");
+
+        String body = """
+            {"productCode":"DEPOSIT_001","productName":"活期存款","productCategory":"CAT_DEPOSIT","supportForSupportRequest":true,"productDeptOrgCode":"ORG_SZ_001"}
+            """;
+        mockMvc.perform(post("/api/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("0"))
+            .andExpect(jsonPath("$.data").value("NEW_P_001"));
+    }
+
+    /**
+     * D.4 新增产品 - productCode 缺失时返回 400
+     */
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void createProductShouldReturn400WhenProductCodeMissing() throws Exception {
+        String body = """
+            {"productName":"活期存款","supportForSupportRequest":true,"productDeptOrgCode":"ORG_SZ_001"}
+            """;
+        mockMvc.perform(post("/api/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isBadRequest());
     }
 }

@@ -9,15 +9,19 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
+import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
 import com.bank.branch.platform.portal.api.dto.ProductDetailDTO;
 import com.bank.branch.platform.portal.api.dto.ProductListReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
 import com.bank.branch.platform.portal.service.ProductService;
+import com.bank.branch.platform.portal.service.dto.ProductCreateCmd;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -77,5 +81,28 @@ public class ProductController {
         return ResponseWrapper.success(productService.getProduct(id));
     }
 
-    // D.4-D.7 will be added in later tasks
+    /**
+     * D.4 新增产品
+     *
+     * @param req 新增产品请求
+     * @return 新产品ID
+     */
+    @PostMapping
+    @BizAuth(bizType = BizType.PRODUCT, action = BizAction.WRITE)
+    public ResponseWrapper<String> createProduct(@Valid @RequestBody ProductCreateReqDTO req) {
+        String empId = currentUserApi.getCurrentEmpId();
+        ProductCreateCmd cmd = ProductCreateCmd.builder()
+                .productCode(req.getProductCode())
+                .productName(req.getProductName())
+                .productCategory(req.getProductCategory())
+                .description(req.getDescription())
+                .supportForSupportRequest(req.getSupportForSupportRequest())
+                .productDeptOrgCode(req.getProductDeptOrgCode())
+                .fileObjectId(req.getFileObjectId())
+                .responsibleEmpIds(req.getResponsibleEmpIds())
+                .build();
+        return ResponseWrapper.success(productService.createProduct(cmd, empId));
+    }
+
+    // D.5-D.7 will be added in later tasks
 }
