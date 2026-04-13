@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.portal.mapper.ProductInfoMapper">
+
+    <!-- product_info 结果映射（responsible_emp_ids 需要 TypeHandler） -->
+    <resultMap id="ProductInfoMap" type="com.bank.branch.platform.portal.entity.ProductInfo">
+        <id column="id" property="id"/>
+        <result column="product_code" property="productCode"/>
+        <result column="product_name" property="productName"/>
+        <result column="product_category" property="productCategory"/>
+        <result column="description" property="description"/>
+        <result column="support_for_support_request" property="supportForSupportRequest"/>
+        <result column="owner_org_id" property="ownerOrgId"/>
+        <result column="product_dept_org_code" property="productDeptOrgCode"/>
+        <result column="file_object_id" property="fileObjectId"/>
+        <result column="responsible_emp_ids" property="responsibleEmpIds"
+                typeHandler="com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler"/>
+        <result column="status" property="status"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="created_time" property="createdTime"/>
+        <result column="updated_time" property="updatedTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <!-- product_info 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, product_code, product_name, product_category, description,
+        support_for_support_request, owner_org_id, product_dept_org_code,
+        file_object_id, responsible_emp_ids, status,
+        created_by, updated_by, created_time, updated_time, deleted
+    </sql>
+
+    <!-- 插入新产品 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.ProductInfo">
+        INSERT INTO product_info (
+            id, product_code, product_name, product_category, description,
+            support_for_support_request, owner_org_id, product_dept_org_code,
+            file_object_id, responsible_emp_ids, status,
+            created_by, updated_by, created_time, updated_time, deleted
+        ) VALUES (
+            #{id}, #{productCode}, #{productName}, #{productCategory}, #{description},
+            #{supportForSupportRequest}, #{ownerOrgId}, #{productDeptOrgCode},
+            #{fileObjectId},
+            #{responsibleEmpIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},
+            #{status},
+            #{createdBy}, #{updatedBy}, #{createdTime}, #{updatedTime}, #{deleted}
+        )
+    </insert>
+
+    <!-- 按 id 查询（含逻辑删除过滤） -->
+    <select id="selectById" resultMap="ProductInfoMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM product_info
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
+    <!-- 按 id 查询并加 FOR UPDATE 行锁（D.5 编辑用） -->
+    <select id="selectByIdForUpdate" resultMap="ProductInfoMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM product_info
+        WHERE id = #{id}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <!-- 按 productCode 查询（用于 D.4 唯一性预检） -->
+    <select id="selectByProductCode" resultMap="ProductInfoMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM product_info
+        WHERE product_code = #{productCode}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 按部分字段更新（D.5），动态 SET -->
+    <update id="updateById" parameterType="com.bank.branch.platform.portal.entity.ProductInfo">
+        UPDATE product_info
+        <set>
+            <if test="productCode != null">product_code = #{productCode},</if>
+            <if test="productName != null">product_name = #{productName},</if>
+            <if test="productCategory != null">product_category = #{productCategory},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="supportForSupportRequest != null">support_for_support_request = #{supportForSupportRequest},</if>
+            <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
+            <if test="productDeptOrgCode != null">product_dept_org_code = #{productDeptOrgCode},</if>
+            <if test="fileObjectId != null">file_object_id = #{fileObjectId},</if>
+            <if test="responsibleEmpIds != null">responsible_emp_ids = #{responsibleEmpIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            updated_time = NOW(),
+        </set>
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- 逻辑删除（D.6） -->
+    <update id="softDeleteById">
+        UPDATE product_info
+        SET deleted = 1,
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- D.3 查询所有支持中场支持的产品（active + 未删除） -->
+    <select id="listSupportAvailable" resultMap="ProductInfoMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM product_info
+        WHERE support_for_support_request = 1
+          AND status = 'ACTIVE'
+          AND deleted = 0
+        ORDER BY product_name
+    </select>
+
+    <!-- 批量按 id 列表查询（D.2 详情聚合时用） -->
+    <select id="listByIds" resultMap="ProductInfoMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM product_info
+        WHERE deleted = 0
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+</mapper>

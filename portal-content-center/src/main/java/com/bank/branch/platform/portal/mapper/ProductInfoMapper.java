@@ -1,0 +1,82 @@
+package com.bank.branch.platform.portal.mapper;
+
+import com.bank.branch.platform.portal.entity.ProductInfo;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+/**
+ * 产品信息 Mapper 接口，操作 product_info 表。
+ * <p>
+ * 所有查询默认过滤逻辑删除记录（deleted = 0）。
+ * responsible_emp_ids 字段通过 JsonStringListTypeHandler 自动转换 List&lt;String&gt; ↔ JSON 字符串。
+ * </p>
+ */
+@Mapper
+public interface ProductInfoMapper {
+
+    /**
+     * 插入新产品。
+     *
+     * @param entity 产品实体
+     * @return 受影响行数
+     */
+    int insert(ProductInfo entity);
+
+    /**
+     * 按 id 查询（含逻辑删除过滤）。
+     *
+     * @param id 产品ID
+     * @return 产品实体，不存在或已删除时返回 null
+     */
+    ProductInfo selectById(@Param("id") String id);
+
+    /**
+     * 按 id 查询并加 FOR UPDATE 行锁（D.5 编辑用）。
+     *
+     * @param id 产品ID
+     * @return 产品实体，不存在或已删除时返回 null
+     */
+    ProductInfo selectByIdForUpdate(@Param("id") String id);
+
+    /**
+     * 按 productCode 查询（用于 D.4 唯一性预检）。
+     *
+     * @param productCode 产品代码
+     * @return 产品实体，不存在或已删除时返回 null
+     */
+    ProductInfo selectByProductCode(@Param("productCode") String productCode);
+
+    /**
+     * 按部分字段更新（D.5），使用动态 SET 仅更新非 null 字段。
+     *
+     * @param entity 包含 id 及待更新字段的产品实体
+     * @return 受影响行数
+     */
+    int updateById(ProductInfo entity);
+
+    /**
+     * 逻辑删除（D.6），将 deleted 标记为 1。
+     *
+     * @param id        产品ID
+     * @param updatedBy 操作人
+     * @return 受影响行数
+     */
+    int softDeleteById(@Param("id") String id, @Param("updatedBy") String updatedBy);
+
+    /**
+     * D.3 查询所有支持中场支持的产品（active + 未删除）。
+     *
+     * @return 支持中场支持的产品列表，按产品名称升序排列
+     */
+    List<ProductInfo> listSupportAvailable();
+
+    /**
+     * 批量按 id 列表查询（D.2 详情聚合时用）。
+     *
+     * @param ids 产品ID列表
+     * @return 匹配的产品列表
+     */
+    List<ProductInfo> listByIds(@Param("ids") List<String> ids);
+}
