@@ -18,11 +18,16 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -109,5 +114,30 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
         String body = "{\"productName\":\"活期存款\",\"supportForSupportRequest\":true,\"productDeptOrgCode\":\"ORG_SZ_001\"}";
         mockMvc.perform(post("/api/products").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ========== D.5 updateProduct 测试 ==========
+
+    @Test @WithMockEmpContext(empId = "E10001", orgCode = "ORG_SZ_001")
+    void updateProductShouldReturn200() throws Exception {
+        ProductInfo updated = new ProductInfo();
+        updated.setId("P001"); updated.setProductCode("DEPOSIT_001"); updated.setProductName("更新后名称");
+        when(productService.updateProduct(eq("P001"), any(com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO.class))).thenReturn(updated);
+        String body = "{\"productName\":\"更新后名称\",\"description\":\"更新描述\"}";
+        mockMvc.perform(put("/api/products/P001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    // ========== D.6 deleteProduct 测试 ==========
+
+    @Test @WithMockEmpContext(empId = "E10001")
+    void deleteProductShouldReturn200() throws Exception {
+        doNothing().when(productService).deleteProduct(eq("P001"));
+        mockMvc.perform(delete("/api/products/P001"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("0"));
     }
 }
