@@ -139,10 +139,24 @@ com.bank.branch.platform.customer/
 │   ├── TouchTaskType.java
 │   └── CustMasterStatus.java
 ├── convert/                 # MapStruct 转换器
+│   ├── TagConvert.java
+│   ├── LeadConvert.java
+│   ├── CustomerConvert.java
+│   ├── ClaimConvert.java
+│   └── TouchTaskConvert.java
 ├── dto/                     # Controller 层 DTO
 │   ├── req/                 # 请求 DTO
 │   └── resp/                # 响应 DTO
+├── util/                    # 工具类
+│   ├── ExcelImportUtil.java
+│   ├── LeadBusinessKeyUtil.java
+│   ├── CustNameNormalizer.java
+│   └── PhotoUrlJsonUtil.java
 └── config/                  # 模块配置
+    ├── CustomerModuleConfig.java
+    ├── CustomerCacheConfig.java
+    ├── CustomerEventPublisher.java
+    └── ExcelTemplateConfig.java
 ```
 
 ### 2.3 依赖关系
@@ -190,6 +204,16 @@ customer-marketing-center 依赖：
 | `cust_master` | `status` | `ACTIVE` / `INACTIVE` | `ACTIVE` |
 | `touch_task` | `task_status` | `PENDING` / `SUCCESS` / `CANCELLED` | `PENDING` |
 | `touch_task` | `sla_status` | `GREEN` / `YELLOW` / `RED` | `GREEN` |
+| `lead_import_batch` | `status` | `CREATED` / `PENDING_APPROVAL` / `APPROVED` / `REJECTED` | `CREATED` |
+
+> **文档对齐说明**: DDL (`05-表结构DDL.md`) 为枚举值的权威来源。以下源文档中存在已知不一致，实现时必须以 DDL 为准：
+> - `02-后端架构.md` 中 `LeadStatus` 使用四态 `DRAFT/PENDING_APPROVAL/APPROVED/REJECTED`，DDL 为五态（含 `SUBMITTED` + `IN_APPROVAL`）
+> - `02-后端架构.md` 和 `04-对外API契约.md` 中 `CustMasterStatus` 使用 `VALID/DELETED`，DDL 为 `ACTIVE/INACTIVE`
+> - `02-后端架构.md` 中 `TouchTaskStatus` 使用四态（含 `IN_PROGRESS`），DDL 为三态（无 `IN_PROGRESS`）
+> - `03-接口设计与报文.md` 中标签状态使用 `ENABLED/DISABLED`，DDL 为 `ACTIVE/DISABLED`
+> - `03-接口设计与报文.md` 使用 `ApiResponse<T>` 命名和 epoch 时间戳，实现必须使用 `ResponseWrapper<T>` 和 ISO 8601（遵循 `common-dev-guide.md`）
+>
+> 这些源文档的对齐修正将作为独立任务在实现过程中或之后处理。
 
 ### 3.3 关键设计要点
 
@@ -379,9 +403,9 @@ DRAFT → SUBMITTED → IN_APPROVAL → APPROVED / REJECTED
 | TOUCH_TASK | SELF_ASSIGNED | 被指派人 |
 | TOUCH_REPORT | ALL / ORG_SUBTREE | 管理员 / 负责人 |
 
-### 5.2 审计
+### 5.2 审计（高危操作）
 
-高危操作清单，`@AuditLog(level=HIGH)`，5 年留存：
+以下为 HIGH 级别审计操作，`@AuditLog(level=HIGH)`，5 年留存。完整审计操作清单（含 SENSITIVE 级别）见 `07-审计要求.md`。
 
 | # | 操作 | 接口 | 要求 |
 |---|------|------|------|
@@ -411,15 +435,12 @@ DRAFT → SUBMITTED → IN_APPROVAL → APPROVED / REJECTED
 
 错误码格式: `CUST-{HTTP状态码后两位}{序号}`（遵循 `common-dev-guide.md` 规范）
 
-| 场景 | 错误码 | 说明 |
-|------|--------|------|
-| 客户记录不存在 | `CUST-40401` | 404 系列 |
-| 客户已被其他客户经理认领 | `CUST-40901` | 409 系列（冲突） |
-| 线索状态不允许提交 | `CUST-40001` | 400 系列（参数/状态错误） |
-| 标签名已存在 | `CUST-40902` | 409 系列（冲突） |
-| 标签编码已存在 | `CUST-40903` | 409 系列（冲突） |
+完整错误码枚举定义在 `CustomerErrorCode.java`，权威来源为 `02-后端架构.md` 第 304-398 行。实现时直接参照该枚举，不在本 Spec 中重复定义以避免二次不一致。
 
-完整错误码枚举见 `CustomerErrorCode.java`，详细定义见 `02-后端架构.md` 第 304-398 行。
+示例（仅供说明，以 02-arch 为准）：
+- `CUST-40004` — 客户记录不存在
+- `CUST-40902` — 客户已被认领（唯一键冲突）
+- `CUST-40906` — 线索非草稿状态，不允许提交
 
 ### 5.5 领域事件
 
