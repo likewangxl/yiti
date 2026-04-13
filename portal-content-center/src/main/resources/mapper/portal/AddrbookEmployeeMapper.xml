@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper">
+
+    <!-- addrbook_employee 结果映射（responsible_product_ids 需要 TypeHandler） -->
+    <resultMap id="AddrbookEmployeeMap" type="com.bank.branch.platform.portal.entity.AddrbookEmployee">
+        <id column="emp_id" property="empId"/>
+        <result column="emp_name" property="empName"/>
+        <result column="mobile" property="mobile"/>
+        <result column="email" property="email"/>
+        <result column="org_code" property="orgCode"/>
+        <result column="org_name" property="orgName"/>
+        <result column="position" property="position"/>
+        <result column="self_desc" property="selfDesc"/>
+        <result column="responsible_product_ids" property="responsibleProductIds"
+                typeHandler="com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler"/>
+        <result column="status" property="status"/>
+        <result column="maintainer_emp_id" property="maintainerEmpId"/>
+        <result column="created_time" property="createdTime"/>
+        <result column="updated_time" property="updatedTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <!-- addrbook_employee 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        emp_id, emp_name, mobile, email, org_code, org_name,
+        position, self_desc, responsible_product_ids, status,
+        maintainer_emp_id, created_time, updated_time, deleted
+    </sql>
+
+    <!-- 插入新员工 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.AddrbookEmployee">
+        INSERT INTO addrbook_employee (
+            emp_id, emp_name, mobile, email, org_code, org_name,
+            position, self_desc, responsible_product_ids, status,
+            maintainer_emp_id, created_time, updated_time, deleted
+        ) VALUES (
+            #{empId}, #{empName}, #{mobile}, #{email}, #{orgCode}, #{orgName},
+            #{position}, #{selfDesc},
+            #{responsibleProductIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},
+            #{status},
+            #{maintainerEmpId}, IFNULL(#{createdTime}, NOW()), IFNULL(#{updatedTime}, NOW()), #{deleted}
+        )
+    </insert>
+
+    <!-- 按员工工号查询（含逻辑删除过滤） -->
+    <select id="selectByEmpId" resultMap="AddrbookEmployeeMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM addrbook_employee
+        WHERE emp_id = #{empId}
+          AND deleted = 0
+    </select>
+
+    <!-- D.2 详情用：批量按 empId 查员工 -->
+    <select id="listByEmpIds" resultMap="AddrbookEmployeeMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM addrbook_employee
+        WHERE emp_id IN
+        <foreach collection="empIds" item="empId" open="(" separator="," close=")">
+            #{empId}
+        </foreach>
+          AND deleted = 0
+    </select>
+
+    <!-- D.6 前置引用检查：统计仍把 productId 列为负责产品的员工数 -->
+    <select id="countEmployeesReferringProduct" resultType="int">
+        SELECT COUNT(*) FROM addrbook_employee
+        WHERE deleted = 0
+          AND responsible_product_ids LIKE CONCAT('%"', #{productId}, '"%')
+    </select>
+
+    <!-- D.4/D.5/D.6 双向同步：更新单个员工的 responsible_product_ids（乐观锁） -->
+    <update id="updateResponsibleProductsWithOptimisticLock">
+        UPDATE addrbook_employee
+        SET responsible_product_ids = #{responsibleProductIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},
+            updated_time = NOW()
+        WHERE emp_id = #{empId}
+          AND deleted = 0
+          AND updated_time = #{expectedUpdatedTime}
+    </update>
+
+    <!-- D.4/D.5 校验 empId 是否存在且 ACTIVE -->
+    <select id="countActiveByEmpIds" resultType="int">
+        SELECT COUNT(*) FROM addrbook_employee
+        WHERE emp_id IN
+        <foreach collection="empIds" item="empId" open="(" separator="," close=")">
+            #{empId}
+        </foreach>
+          AND status = 'ACTIVE'
+          AND deleted = 0
+    </select>
+
+</mapper>
