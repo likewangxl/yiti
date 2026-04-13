@@ -1,0 +1,25 @@
+spring:
+  autoconfigure:
+    exclude:
+      - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
+  sql:
+    init:
+      mode: always
+      continue-on-error: false
+      schema-locations:
+        - classpath:sql/test-ddl-auth-clean.sql
+        - classpath:sql/test-ddl-governance-clean.sql
+        - classpath:sql/test-ddl-portal-clean.sql
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/onepl?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath*:mapper/**/*.xml
+logging:
+  level:
+    com.bank.branch.platform.portal: DEBUG
+    org.mybatis: DEBUG
