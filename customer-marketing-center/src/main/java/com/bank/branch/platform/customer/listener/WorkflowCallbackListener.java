@@ -1,0 +1,152 @@
+package com.bank.branch.platform.customer.listener;
+
+import com.bank.branch.platform.customer.entity.CustLead;
+import com.bank.branch.platform.customer.enums.LeadOp;
+import com.bank.branch.platform.customer.enums.LeadStatus;
+import com.bank.branch.platform.customer.event.LeadApprovedEvent;
+import com.bank.branch.platform.customer.event.LeadDeletedEvent;
+import com.bank.branch.platform.customer.mapper.CustLeadMapper;
+import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+
+/**
+ * 工作流回调监听器。
+ * <p>
+ * 监听工作流中心发布的 {@link ProcessCompletedListener.ProcessCompletedEvent} 事件，
+ * 根据 businessKey 前缀（LEAD:）识别线索相关流程，更新线索状态为 APPROVED 或 REJECTED。
+ * <br>
+ * 注意：{@link ProcessCompletedListener.ProcessCompletedEvent} 不携带审批结果（通过/拒绝），
+ * 当前简化实现将所有完成的流程视为 APPROVED。生产中应从流程变量中读取 approved 标识。
+ * <br>
+ * 审批结果：
+ * - APPROVED + leadOp=CREATE/UPDATE → 发布 {@link LeadApprovedEvent}
+ * - APPROVED + leadOp=DELETE → 发布 {@link LeadDeletedEvent}
+ * </p>
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class WorkflowCallbackListener {
+
+    private final CustLeadMapper leadMapper;
+    private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * 监听工作流流程完成事件，处理线索状态流转。
+     * <p>
+     * businessKey 格式为 {@code LEAD:{leadId}}，非线索相关流程直接忽略。
+     * 简化实现：流程完成即视为 APPROVED；生产中需从流程变量 approved=true/false 判断。
+     * </p>
+     *
+     * @param event 流程完成事件（来自 workflow-center ProcessCompletedListener）
+     */
+    @EventListener
+    public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
+        String businessKey = event.businessKey();
+        log.info("[WorkflowCallbackListener.onProcessCompleted] processInstanceId={}, businessKey={}",
+                event.processInstanceId(), businessKey);
+
+        // 只处理线索相关流程
+        if (businessKey == null || !businessKey.startsWith("LEAD:")) {
+            return;
+        }
+
+        String leadId = businessKey.substring("LEAD:".length());
+
+        // 查询线索，如果不存在则跳过（幂等保护）
+        CustLead lead = leadMapper.selectById(leadId);
+        if (lead == null) {
+            log.warn("[WorkflowCallbackListener] 线索 {} 不存在，跳过状态更新", leadId);
+            return;
+        }
+
+        // 简化实现：流程完成视为 APPROVED
+        // 生产中应通过 WorkflowApi.getProcessByBusinessKey() 获取流程变量 approved
+        handleApproved(lead, event.processInstanceId());
+    }
+
+    /**
+     * 处理审批通过逻辑：更新线索状态为 APPROVED，根据操作类型发布对应事件。
+     *
+     * @param lead              线索实体
+     * @param processInstanceId 流程实例ID
+     */
+    private void handleApproved(CustLead lead, String processInstanceId) {
+        String leadId = lead.getId();
+
+        // 更新状态为 APPROVED
+        leadMapper.updateStatusById(leadId, LeadStatus.APPROVED.getCode(), "SYSTEM");
+        log.info("[WorkflowCallbackListener] 线索 {} 审批通过，状态更新为 APPROVED", leadId);
+
+        // 根据操作类型发布不同事件
+        if (LeadOp.DELETE.getCode().equals(lead.getLeadOp())) {
+            // 删除类型：发布 LeadDeletedEvent
+            LeadDeletedEvent deletedEvent = new LeadDeletedEvent(
+                    leadId,
+                    lead.getLeadNo(),
+                    lead.getSourceCustId(),
+                    "SYSTEM"
+            );
+            eventPublisher.publishEvent(deletedEvent);
+            log.info("[WorkflowCallbackListener] 发布 LeadDeletedEvent, leadId={}", leadId);
+        } else {
+            // CREATE/UPDATE 类型：发布 LeadApprovedEvent
+            LeadApprovedEvent approvedEvent = new LeadApprovedEvent(
+                    leadId,
+                    lead.getLeadNo(),
+                    lead.getLeadOp(),
+                    lead.getSourceCustId(),
+                    lead.getOwnerOrgId(),
+                    "SYSTEM"
+            );
+            eventPublisher.publishEvent(approvedEvent);
+            log.info("[WorkflowCallbackListener] 发布 LeadApprovedEvent, leadId={}, leadOp={}", leadId, lead.getLeadOp());
+        }
+    }
+
+    /**
+     * 外部回调入口（供工作流模块在无 Spring 事件时直接调用）。
+     * <p>
+     * 当工作流回调通过 REST 方式触发时，由 Controller 层调用此方法。
+     * approved=true 表示通过，false 表示拒绝。
+     * </p>
+     *
+     * @param leadId            线索ID
+     * @param approved          审批结果
+     * @param operatorEmpId     审批人
+     */
+    public void handleWorkflowCallback(String leadId, boolean approved, String operatorEmpId) {
+        log.info("[WorkflowCallbackListener.handleWorkflowCallback] leadId={}, approved={}, operator={}",
+                leadId, approved, operatorEmpId);
+
+        CustLead lead = leadMapper.selectById(leadId);
+        if (lead == null) {
+            log.warn("[WorkflowCallbackListener] 线索 {} 不存在，跳过回调处理", leadId);
+            return;
+        }
+
+        if (approved) {
+            // 审批通过
+            leadMapper.updateStatusById(leadId, LeadStatus.APPROVED.getCode(), operatorEmpId);
+
+            if (LeadOp.DELETE.getCode().equals(lead.getLeadOp())) {
+                eventPublisher.publishEvent(new LeadDeletedEvent(
+                        leadId, lead.getLeadNo(), lead.getSourceCustId(), operatorEmpId));
+            } else {
+                eventPublisher.publishEvent(new LeadApprovedEvent(
+                        leadId, lead.getLeadNo(), lead.getLeadOp(),
+                        lead.getSourceCustId(), lead.getOwnerOrgId(), operatorEmpId));
+            }
+        } else {
+            // 审批拒绝
+            leadMapper.updateStatusById(leadId, LeadStatus.REJECTED.getCode(), operatorEmpId);
+            log.info("[WorkflowCallbackListener] 线索 {} 审批拒绝，状态更新为 REJECTED", leadId);
+        }
+    }
+}

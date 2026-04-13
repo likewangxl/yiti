@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.CustMasterMapper">
+
+    <!-- cust_master 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, cust_no, cust_name, unified_credit_code, contact_person, contact_mobile,
+        industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
+        is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
+        owner_org_id, lead_id, status, deleted, created_time, updated_time
+    </sql>
+
+    <!-- 按 id 查询客户主档（含逻辑删除过滤） -->
+    <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustMaster">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_master
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
+    <!-- 按客户编号查询 -->
+    <select id="selectByCustNo" resultType="com.bank.branch.platform.customer.entity.CustMaster">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_master
+        WHERE cust_no = #{custNo}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 分页查询客户主档列表 -->
+    <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.CustMaster">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_master
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计分页查询总记录数 -->
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM cust_master
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <!-- 插入新客户主档 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustMaster">
+        INSERT INTO cust_master (
+            id, cust_no, cust_name, unified_credit_code, contact_person, contact_mobile,
+            industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
+            is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
+            owner_org_id, lead_id, status, deleted, created_time, updated_time
+        ) VALUES (
+            #{id}, #{custNo}, #{custName}, #{unifiedCreditCode}, #{contactPerson}, #{contactMobile},
+            #{industry}, #{groupType}, #{customerType}, #{isKeystone}, #{enterpriseType}, #{groupName},
+            #{isAccountOpened}, #{customerDesc}, #{creditAmount}, #{creditExposureAmount},
+            #{ownerOrgId}, #{leadId}, #{status}, #{deleted}, #{createdTime}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按 id 更新客户主档（动态 SET，仅更新非 null 字段） -->
+    <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustMaster">
+        UPDATE cust_master
+        <set>
+            <if test="custNo != null">cust_no = #{custNo},</if>
+            <if test="custName != null">cust_name = #{custName},</if>
+            <if test="unifiedCreditCode != null">unified_credit_code = #{unifiedCreditCode},</if>
+            <if test="contactPerson != null">contact_person = #{contactPerson},</if>
+            <if test="contactMobile != null">contact_mobile = #{contactMobile},</if>
+            <if test="industry != null">industry = #{industry},</if>
+            <if test="groupType != null">group_type = #{groupType},</if>
+            <if test="customerType != null">customer_type = #{customerType},</if>
+            <if test="isKeystone != null">is_keystone = #{isKeystone},</if>
+            <if test="enterpriseType != null">enterprise_type = #{enterpriseType},</if>
+            <if test="groupName != null">group_name = #{groupName},</if>
+            <if test="isAccountOpened != null">is_account_opened = #{isAccountOpened},</if>
+            <if test="customerDesc != null">customer_desc = #{customerDesc},</if>
+            <if test="creditAmount != null">credit_amount = #{creditAmount},</if>
+            <if test="creditExposureAmount != null">credit_exposure_amount = #{creditExposureAmount},</if>
+            <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
+            <if test="leadId != null">lead_id = #{leadId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="deleted != null">deleted = #{deleted},</if>
+            updated_time = NOW(),
+        </set>
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+</mapper>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.TouchLogMapper">
+
+    <!-- touch_log 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, touch_task_id, log_time, client_uuid, log_content,
+        photo_urls, owner_org_id, created_by, created_time
+    </sql>
+
+    <!-- 按触达任务ID查询该任务的所有日志（按 log_time 降序） -->
+    <select id="selectByTaskId" resultType="com.bank.branch.platform.customer.entity.TouchLog">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_log
+        WHERE touch_task_id = #{touchTaskId}
+        ORDER BY log_time DESC
+    </select>
+
+    <!-- 按触达任务ID和客户端幂等键查询（幂等性检查） -->
+    <select id="selectByTaskIdAndClientUuid" resultType="com.bank.branch.platform.customer.entity.TouchLog">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_log
+        WHERE touch_task_id = #{touchTaskId}
+          AND client_uuid = #{clientUuid}
+        LIMIT 1
+    </select>
+
+    <!-- 插入新触达日志 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchLog">
+        INSERT INTO touch_log (
+            id, touch_task_id, log_time, client_uuid, log_content,
+            photo_urls, owner_org_id, created_by, created_time
+        ) VALUES (
+            #{id}, #{touchTaskId}, #{logTime}, #{clientUuid}, #{logContent},
+            #{photoUrls}, #{ownerOrgId}, #{createdBy}, #{createdTime}
+        )
+    </insert>
+
+</mapper>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.TouchTaskMapper">
+
+    <!-- touch_task 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
+        plan_finish_time, warning_time, sla_status, business_key,
+        success_time, cancel_time, created_time, updated_time
+    </sql>
+
+    <!-- 按 id 查询触达任务 -->
+    <select id="selectById" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE id = #{id}
+    </select>
+
+    <!-- 按任务编号查询 -->
+    <select id="selectByTaskNo" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE task_no = #{taskNo}
+        LIMIT 1
+    </select>
+
+    <!-- 分页查询触达任务列表 -->
+    <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND task_no LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+            <if test="assigneeEmpId != null and assigneeEmpId != ''">
+                AND assignee_emp_id = #{assigneeEmpId}
+            </if>
+        </where>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计分页查询总记录数 -->
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM touch_task
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND task_no LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+            <if test="assigneeEmpId != null and assigneeEmpId != ''">
+                AND assignee_emp_id = #{assigneeEmpId}
+            </if>
+        </where>
+    </select>
+
+    <!-- 查询待刷新 SLA 状态的 PENDING 任务（定时任务使用） -->
+    <select id="selectPendingForSlaRefresh" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE task_status = 'PENDING'
+          AND plan_finish_time IS NOT NULL
+        ORDER BY plan_finish_time
+    </select>
+
+    <!-- 插入新触达任务 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
+        INSERT INTO touch_task (
+            id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
+            plan_finish_time, warning_time, sla_status, business_key,
+            success_time, cancel_time, created_time, updated_time
+        ) VALUES (
+            #{id}, #{taskNo}, #{custId}, #{orgId}, #{assigneeEmpId}, #{taskType}, #{taskStatus},
+            #{planFinishTime}, #{warningTime}, #{slaStatus}, #{businessKey},
+            #{successTime}, #{cancelTime}, #{createdTime}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 按 id 更新触达任务（动态 SET，仅更新非 null 字段） -->
+    <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
+        UPDATE touch_task
+        <set>
+            <if test="taskNo != null">task_no = #{taskNo},</if>
+            <if test="custId != null">cust_id = #{custId},</if>
+            <if test="orgId != null">org_id = #{orgId},</if>
+            <if test="assigneeEmpId != null">assignee_emp_id = #{assigneeEmpId},</if>
+            <if test="taskType != null">task_type = #{taskType},</if>
+            <if test="taskStatus != null">task_status = #{taskStatus},</if>
+            <if test="planFinishTime != null">plan_finish_time = #{planFinishTime},</if>
+            <if test="warningTime != null">warning_time = #{warningTime},</if>
+            <if test="slaStatus != null">sla_status = #{slaStatus},</if>
+            <if test="businessKey != null">business_key = #{businessKey},</if>
+            <if test="successTime != null">success_time = #{successTime},</if>
+            <if test="cancelTime != null">cancel_time = #{cancelTime},</if>
+            updated_time = NOW(),
+        </set>
+        WHERE id = #{id}
+    </update>
+
+</mapper>

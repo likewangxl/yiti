@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.CustTagRelMapper">
+
+    <!-- cust_tag_rel 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, cust_id, tag_id, created_by, created_time
+    </sql>
+
+    <!-- 查询某客户的所有标签关联 -->
+    <select id="selectByCustId" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_tag_rel
+        WHERE cust_id = #{custId}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 查询某标签关联的所有客户 -->
+    <select id="selectByTagId" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_tag_rel
+        WHERE tag_id = #{tagId}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 物理删除指定客户与指定标签的关联记录 -->
+    <delete id="deleteByCustIdAndTagId">
+        DELETE FROM cust_tag_rel
+        WHERE cust_id = #{custId}
+          AND tag_id = #{tagId}
+    </delete>
+
+    <!-- 物理删除某标签的所有客户关联 -->
+    <delete id="deleteByTagId">
+        DELETE FROM cust_tag_rel
+        WHERE tag_id = #{tagId}
+    </delete>
+
+    <!-- 插入单条关联记录 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustTagRel">
+        INSERT INTO cust_tag_rel (
+            id, cust_id, tag_id, created_by, created_time
+        ) VALUES (
+            #{id}, #{custId}, #{tagId}, #{createdBy}, #{createdTime}
+        )
+    </insert>
+
+    <!-- 批量插入关联记录 -->
+    <insert id="insertBatch">
+        INSERT INTO cust_tag_rel (
+            id, cust_id, tag_id, created_by, created_time
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.custId}, #{item.tagId}, #{item.createdBy}, #{item.createdTime})
+        </foreach>
+    </insert>
+
+</mapper>

@@ -1,0 +1,111 @@
+package com.bank.branch.platform.customer.mapper;
+
+import com.bank.branch.platform.customer.entity.CustClaim;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+/**
+ * 客户认领关系 Mapper 接口，操作 cust_claim 表。
+ * <p>
+ * 该表无逻辑删除字段，有效认领通过 claim_status='CLAIMED' 过滤。
+ * 客户池查询：cust_master 中尚未被本机构认领的客户。
+ * </p>
+ */
+@Mapper
+public interface CustClaimMapper {
+
+    /**
+     * 按 id 查询认领记录。
+     *
+     * @param id 认领记录ID
+     * @return 认领实体，不存在时返回 null
+     */
+    CustClaim selectById(@Param("id") String id);
+
+    /**
+     * 按客户ID和机构代码查询认领记录（防重复认领用）。
+     *
+     * @param custId 客户ID
+     * @param orgId  机构代码
+     * @return 认领实体，不存在时返回 null
+     */
+    CustClaim selectByCustIdAndOrgId(@Param("custId") String custId, @Param("orgId") String orgId);
+
+    /**
+     * 查询某客户的所有认领记录（含取消的历史记录）。
+     *
+     * @param custId 客户ID
+     * @return 该客户的认领记录列表
+     */
+    List<CustClaim> selectByCustId(@Param("custId") String custId);
+
+    /**
+     * 查询某员工认领的所有有效客户记录（claim_status='CLAIMED'）。
+     *
+     * @param claimedBy 认领人（员工工号）
+     * @return 该员工的有效认领记录列表
+     */
+    List<CustClaim> selectByClaimedBy(@Param("claimedBy") String claimedBy);
+
+    /**
+     * 分页查询客户池（尚未被任何机构有效认领的客户）。
+     * <p>
+     * LEFT JOIN cust_claim 过滤掉已认领客户，keyword 模糊搜索 cust_name。
+     * </p>
+     *
+     * @param keyword 关键词（搜索 cust_name），可为 null
+     * @param offset  偏移量
+     * @param limit   每页条数
+     * @return 未被认领的客户主档列表
+     */
+    List<com.bank.branch.platform.customer.entity.CustMaster> selectPoolPage(
+            @Param("keyword") String keyword,
+            @Param("offset") int offset,
+            @Param("limit") int limit);
+
+    /**
+     * 统计客户池分页的总记录数（与 selectPoolPage 共享 WHERE 条件）。
+     *
+     * @param keyword 关键词，可为 null
+     * @return 未被认领的客户总数
+     */
+    long countPoolPage(@Param("keyword") String keyword);
+
+    /**
+     * 分页查询某员工的认领客户列表（我的客户）。
+     *
+     * @param empId  员工工号
+     * @param offset 偏移量
+     * @param limit  每页条数
+     * @return 该员工有效认领的客户认领记录列表
+     */
+    List<CustClaim> selectMyClaimsPage(@Param("empId") String empId,
+                                       @Param("offset") int offset,
+                                       @Param("limit") int limit);
+
+    /**
+     * 统计某员工的认领客户总数（与 selectMyClaimsPage 共享 WHERE 条件）。
+     *
+     * @param empId 员工工号
+     * @return 该员工有效认领的客户总数
+     */
+    long countMyClaimsPage(@Param("empId") String empId);
+
+    /**
+     * 插入新认领记录。
+     *
+     * @param entity 认领实体
+     * @return 受影响行数
+     */
+    int insert(CustClaim entity);
+
+    /**
+     * 按 id 更新认领记录（动态 SET，仅更新非 null 字段）。
+     *
+     * @param entity 包含 id 及待更新字段的认领实体
+     * @return 受影响行数
+     */
+    int updateById(CustClaim entity);
+}
