@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.portal.mapper.PortalShortcutMapper">
+
+    <!-- portal_shortcut 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type,
+        target_type, emp_id, sort_order, status,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!-- 插入单条快捷入口 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.PortalShortcut">
+        INSERT INTO portal_shortcut (
+            id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type,
+            target_type, emp_id, sort_order, status,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES (
+            #{id}, #{shortcutName}, #{shortcutUrl}, #{shortcutIcon}, #{shortcutType},
+            #{targetType}, #{empId}, #{sortOrder}, #{status},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <!-- 批量插入快捷入口（A.3 批量保存用） -->
+    <insert id="batchInsert">
+        INSERT INTO portal_shortcut (
+            id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type,
+            target_type, emp_id, sort_order, status,
+            created_by, created_time, updated_by, updated_time
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.id}, #{item.shortcutName}, #{item.shortcutUrl}, #{item.shortcutIcon}, #{item.shortcutType},
+                #{item.targetType}, #{item.empId}, #{item.sortOrder}, #{item.status},
+                #{item.createdBy}, #{item.createdTime}, #{item.updatedBy}, #{item.updatedTime}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 查询员工可见的快捷入口（系统级 + 该员工自定义），仅返回 ACTIVE 状态 -->
+    <select id="listByEmpIdOrSystem" resultType="com.bank.branch.platform.portal.entity.PortalShortcut">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM portal_shortcut
+        WHERE (shortcut_type = 'SYSTEM' OR (shortcut_type = 'CUSTOM' AND emp_id = #{empId}))
+          AND status = 'ACTIVE'
+        ORDER BY shortcut_type DESC, sort_order ASC
+    </select>
+
+    <!-- 删除指定员工的所有自定义快捷入口（物理删除） -->
+    <delete id="deleteCustomByEmpId">
+        DELETE FROM portal_shortcut
+        WHERE shortcut_type = 'CUSTOM'
+          AND emp_id = #{empId}
+    </delete>
+
+</mapper>
