@@ -10,12 +10,14 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
+import com.bank.branch.platform.portal.api.dto.ProductDetailDTO;
 import com.bank.branch.platform.portal.api.dto.ProductListReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
 import com.bank.branch.platform.portal.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -63,6 +65,17 @@ public class ProductController {
         return ResponseWrapper.success(productService.listSupportAvailable());
     }
 
-    // D.2 detail / D.4-D.7 will be added in later tasks
-    // IMPORTANT: when adding @GetMapping("/{id}"), declare it AFTER /support-available
+    /**
+     * D.2 产品详情（含跨模块聚合：字典翻译/机构名/附件下载链接/负责人脱敏）
+     *
+     * @param id 产品ID
+     * @return 产品详情 DTO
+     */
+    @GetMapping("/{id:[A-Za-z0-9_-]{1,64}}")
+    @BizAuth(bizType = BizType.PRODUCT, action = BizAction.READ)
+    public ResponseWrapper<ProductDetailDTO> getProduct(@PathVariable String id) {
+        return ResponseWrapper.success(productService.getProduct(id));
+    }
+
+    // D.4-D.7 will be added in later tasks
 }

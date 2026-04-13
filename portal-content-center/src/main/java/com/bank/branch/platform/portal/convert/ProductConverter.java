@@ -1,8 +1,12 @@
 package com.bank.branch.platform.portal.convert;
 
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
+import com.bank.branch.platform.portal.api.dto.ProductDetailDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
+import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
 import com.bank.branch.platform.portal.entity.ProductInfo;
+
+import java.util.List;
 
 /**
  * ProductInfo Entity -> DTO 转换器
@@ -56,5 +60,40 @@ public final class ProductConverter {
         return dto;
     }
 
-    // toDetail will be added in Phase 5
+    /**
+     * Entity -> ProductDetailDTO（D.2 详情聚合响应）
+     *
+     * @param entity          产品实体
+     * @param categoryDesc    字典翻译后的产品类别描述
+     * @param orgName         机构翻译后的产品部门名称
+     * @param fileDownloadUrl 附件下载链接
+     * @param responsibleEmps 负责人列表（含脱敏）
+     * @param canEdit         当前用户是否可编辑
+     * @return 产品详情 DTO，entity 为 null 时返回 null
+     */
+    public static ProductDetailDTO toDetail(
+            ProductInfo entity,
+            String categoryDesc,
+            String orgName,
+            String fileDownloadUrl,
+            List<ResponsibleEmpDTO> responsibleEmps,
+            boolean canEdit) {
+        if (entity == null) return null;
+        ProductDetailDTO dto = new ProductDetailDTO();
+        dto.setId(entity.getId());
+        dto.setProductCode(entity.getProductCode());
+        dto.setProductName(entity.getProductName());
+        dto.setProductCategory(entity.getProductCategory());
+        dto.setProductCategoryDesc(categoryDesc);
+        dto.setProductDeptOrgCode(entity.getProductDeptOrgCode());
+        dto.setProductDeptOrgName(orgName);
+        dto.setSupportForSupportRequest(entity.getSupportForSupportRequest());
+        dto.setStatus(entity.getStatus());
+        dto.setUpdatedTime(entity.getUpdatedTime());
+        dto.setDescription(entity.getDescription());
+        dto.setFileDownloadUrl(fileDownloadUrl);
+        dto.setResponsibleEmps(responsibleEmps);
+        dto.setCanEdit(canEdit);
+        return dto;
+    }
 }

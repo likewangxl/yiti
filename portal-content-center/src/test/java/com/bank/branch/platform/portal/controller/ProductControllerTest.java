@@ -6,6 +6,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
+import com.bank.branch.platform.portal.api.dto.ProductDetailDTO;
 import com.bank.branch.platform.portal.api.dto.ProductListReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
 import com.bank.branch.platform.portal.service.ProductService;
@@ -23,6 +24,8 @@ import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -139,5 +142,37 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.page.total").value(0))
                 .andExpect(jsonPath("$.page.records").isArray())
                 .andExpect(jsonPath("$.page.records").isEmpty());
+    }
+
+    // ========== D.2 getProduct 测试 ==========
+
+    /**
+     * D.2 产品详情 - 正常返回 200 + 详情 DTO
+     */
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void getProductShouldReturn200WithDetailDTO() throws Exception {
+        ProductDetailDTO dto = new ProductDetailDTO();
+        dto.setId("P001");
+        dto.setProductCode("DEPOSIT_001");
+        when(productService.getProduct("P001")).thenReturn(dto);
+
+        mockMvc.perform(get("/api/products/P001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value("P001"))
+                .andExpect(jsonPath("$.data.productCode").value("DEPOSIT_001"));
+    }
+
+    /**
+     * /support-available 路由不应被 /{id} 路径变量匹配
+     */
+    @Test
+    @WithMockEmpContext
+    void supportAvailableEndpointShouldNotBeMatchedAsIdPathVariable() throws Exception {
+        when(productService.listSupportAvailable()).thenReturn(Collections.emptyList());
+        mockMvc.perform(get("/api/products/support-available"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray());
+        verify(productService, never()).getProduct("support-available");
     }
 }
