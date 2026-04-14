@@ -28,6 +28,14 @@ public interface WorkflowApi {
     WorkflowLaunchResp startProcess(StartProcessCmd cmd);
 
     /**
+     * 取消流程实例。
+     *
+     * @param processInstanceId 流程实例 ID
+     * @param reason 取消原因
+     */
+    void cancelProcess(String processInstanceId, String reason);
+
+    /**
      * 根据业务键查询流程映射记录
      *
      * @param businessKey 业务键

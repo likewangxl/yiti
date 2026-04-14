@@ -24,6 +24,7 @@ public enum WfErrorCode {
     TASK_NOT_OWNED("WF-40902", "任务非当前用户"),
     NOT_TASK_ASSIGNEE("WF-40903", "非任务办理人"),
     TASK_ALREADY_CLAIMED("WF-40904", "任务已被签收"),
+    PROCESS_NOT_RUNNING("WF-40905", "流程实例不存在或已结束"),
 
     // 500 内部错误
     ENGINE_ERROR("WF-50001", "流程引擎异常");

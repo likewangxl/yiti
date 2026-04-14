@@ -1,0 +1,58 @@
+server:
+  port: 0
+
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/onepl?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+    username: root
+    password: 123456
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 14
+  session:
+    store-type: redis
+    timeout: 7200s
+    redis:
+      namespace: branch-platform:flowable-real-env
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:flowable-real-env-data.sql
+      encoding: UTF-8
+      continue-on-error: false
+
+flowable:
+  history-level: audit
+  process-definition-location-prefix: classpath*:/bpmn/
+  process-definition-location-suffixes:
+    - '**.bpmn20.xml'
+  idm:
+    enabled: false
+  database-schema-update: true
+  app:
+    enabled: false
+  eventregistry:
+    enabled: false
+  dmn:
+    enabled: false
+  cmmn:
+    enabled: false
+  form:
+    enabled: false
+
+mybatis:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.bank.branch.platform: INFO
+    org.flowable: INFO
+    root: INFO

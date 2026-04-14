@@ -16,7 +16,8 @@
         <module>auth-permission-center</module>
         <module>system-governance-center</module>
         <module>workflow-center</module>
-        <module>portal-content-center</modul        <module>customer-marketing-center</module>
+        <module>portal-content-center</module>
+        <module>customer-marketing-center</module>
         <module>bootstrap</module>
     </modules>
 
