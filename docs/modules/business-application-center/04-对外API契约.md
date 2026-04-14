@@ -583,6 +583,8 @@ WorkflowCompletedListener.onCompleted
 
 **本模块处理方式**：`@TransactionalEventListener(AFTER_COMMIT)` 监听，在**独立事务**中更新业务主表
 
+> 实现差异（2026-04-14）：`workflow-center` 当前实际发布的是 `ProcessCompletedListener.ProcessCompletedEvent(processInstanceId, businessKey)`，只有最小载荷。下表是 `business-application-center` 期望的扩展事件模型；在 workflow-center 未补齐扩展 DTO 前，消费方需要依赖 `businessKey`、流程映射查询或业务侧本地状态推断补足信息。
+
 **事件载荷 DTO：`WorkflowProcessCompletedEvent`**
 
 | 字段 | 类型 | 是否必填 | 说明 |
