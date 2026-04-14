@@ -16,7 +16,7 @@
         <module>auth-permission-center</module>
         <module>system-governance-center</module>
         <module>workflow-center</module>
-        <module>portal-content-center</module>
+        <module>portal-content-center</modul        <module>customer-marketing-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -106,6 +106,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>portal-content-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- customer-marketing-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>customer-marketing-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

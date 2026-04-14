@@ -1,0 +1,37 @@
+﻿# Context Snapshot
+
+- Task statement: 评估并验证 `workflow-center` 中 Flowable 7 是否能在当前项目里真实运转，尤其是流程提交/审批链路与本地 `PT_*` 权限表的适配。
+- Desired outcome: 形成可执行、可验证的测试目标与边界，后续可据此进入规划或实施阶段。
+- Stated solution: 需要对 Flowable 是否能正常运转进行测试，覆盖 `workflow-center` 对外能力，并适配本地权限体系。
+- Probable intent hypothesis: 用户希望先确认现有 Flowable 集成不是“只接了依赖但无法跑起来”，并希望后续测试方案能直接证明引擎、流程、权限三者协同可用。
+- Known facts/evidence:
+  - `workflow-center` 已引入 `flowable-spring-boot-starter`，`bootstrap/src/main/resources/application.yml` 开启了 `flowable.history-level=audit`、`idm.enabled=false`、`database-schema-update=true`。
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/service/ProcessStartService.java` 启动流程前会通过 `RepositoryService` 校验流程定义存在，再用 `RuntimeService.startProcessInstanceByKey(...)` 启动实例。
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/TaskController.java` 暴露待办、已办、详情、签收、审批、驳回、转交接口；管理端接口在 `WorkflowAdminController.java` 上使用 `@BizAuth(BizType.SYS_CONFIG, BizAction.CONFIG)`。
+  - `auth-permission-center/src/main/java/com/bank/branch/platform/auth/security/interceptor/AuthorizationInterceptor.java` 显示请求先匹配 `PT_RESOURCE`，再做 RBAC，最后再根据 `@BizAuth` 组装数据范围。
+  - `docs/superpowers/sql/2026-04-10-pt-align-and-test-seed.sql` 已定义 workflow 相关 `PT_RESOURCE`、`PT_ROLE_RESOURCE`、`PT_ROLE_BIZ_SCOPE` 数据。
+  - 当前 `workflow-center/src` 下未发现 `.bpmn20.xml`/`.bpmn` 流程定义文件；仅有 MyBatis XML。说明“真实启动流程”至少还依赖外部已部署定义或补齐 BPMN/部署逻辑。
+  - 当前 `workflow-center` 已有大量单元测试，但主要是 mock Flowable 服务，不是实际引擎/数据库/权限联调测试。
+- Constraints:
+  - 必须遵守项目模块边界：只有 `workflow-center` 直接调用 Flowable API。
+  - 权限必须适配本地 `PT_RESOURCE` / `PT_ROLE_RESOURCE` / `PT_ROLE_BIZ_SCOPE` 体系。
+  - 需要后续按 TDD 路线推进实施。
+- Unknowns/open questions:
+  - 本次目标是要“真实端到端联调验证”，还是只做“最小可运行集成测试”。
+  - 允许为了测试补齐/引入最小 BPMN 流程定义与部署逻辑，还是必须严格基于现有代码/数据。
+  - 优先验证哪些能力：启动流程、任务流转、候选人解析、管理端配置接口、权限拦截、数据范围。
+  - 希望以何种证据判定通过：JUnit 集成测试、启动后接口脚本、手工联调脚本、数据库断言，还是组合方式。
+- Decision-boundary unknowns:
+  - OMX 是否可以自行决定补最小 BPMN 测试资源。
+  - OMX 是否可以自行调整 PT_* 测试种子数据。
+  - OMX 是否可以仅选一个业务流程（如 `loan_approve_v1`）作为代表性链路。
+- Likely codebase touchpoints:
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/service/ProcessStartService.java`
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/service/TaskOperationService.java`
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/service/TodoQueryService.java`
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/listener/TaskAssignmentListener.java`
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/TaskController.java`
+  - `workflow-center/src/main/java/com/bank/branch/platform/workflow/controller/WorkflowAdminController.java`
+  - `auth-permission-center/src/main/java/com/bank/branch/platform/auth/security/interceptor/AuthorizationInterceptor.java`
+  - `docs/superpowers/sql/2026-04-10-pt-align-and-test-seed.sql`
+  - `docs/schema/workflow-seed-v1.sql`

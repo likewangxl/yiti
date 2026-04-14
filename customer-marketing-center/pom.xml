@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.bank.branch.platform</groupId>
+        <artifactId>branch-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>customer-marketing-center</artifactId>
+    <name>Customer Marketing Center</name>
+    <description>客户营销中心：标签管理、线索管理、客户主档、客户认领、触达管理</description>
+
+    <dependencies>
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Common 模块 -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-aop</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-db</artifactId>
+        </dependency>
+
+        <!-- auth-permission-center（强依赖：CurrentUserApi, BizScopeApi, OrgApi） -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>auth-permission-center</artifactId>
+        </dependency>
+
+        <!-- workflow-center（强依赖：WorkflowApi 流程启动与审批） -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>workflow-center</artifactId>
+        </dependency>
+
+        <!-- system-governance-center（弱依赖：DictApi, FileApi, NotifyApi, AuditApi） -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>system-governance-center</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Redis + Session -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- MyBatis -->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- EasyExcel（线索/客户导出） -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>easyexcel</artifactId>
+        </dependency>
+
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
