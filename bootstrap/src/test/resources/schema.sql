@@ -242,6 +242,7 @@ CREATE TABLE IF NOT EXISTS biz_process_map (
     start_user VARCHAR(32) NOT NULL,
     current_assignee VARCHAR(32) DEFAULT NULL,
     candidate_groups TEXT,
+    title VARCHAR(200) DEFAULT NULL,
     process_status VARCHAR(50) DEFAULT 'RUNNING',
     start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     end_time DATETIME DEFAULT NULL,

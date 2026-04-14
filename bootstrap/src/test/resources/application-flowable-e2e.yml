@@ -1,0 +1,55 @@
+server:
+  port: 0
+
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:flowable-e2e;DB_CLOSE_DELAY=-1;MODE=LEGACY;NON_KEYWORDS=DAY,READ
+    username: sa
+    password:
+    type: com.zaxxer.hikari.HikariDataSource
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
+      - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
+  sql:
+    init:
+      mode: embedded
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql,classpath:flowable-e2e-data.sql
+      encoding: UTF-8
+      continue-on-error: true
+
+flowable:
+  history-level: audit
+  database-schema-update: true
+  process-definition-location-prefix: classpath*:/bpmn/
+  process-definition-location-suffixes:
+    - '**.bpmn20.xml'
+  idm:
+    enabled: false
+  app:
+    enabled: false
+  eventregistry:
+    enabled: false
+  dmn:
+    enabled: false
+  cmmn:
+    enabled: false
+  form:
+    enabled: false
+
+mybatis:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.bank.branch.platform: DEBUG
+    org.flowable: INFO
+    root: INFO

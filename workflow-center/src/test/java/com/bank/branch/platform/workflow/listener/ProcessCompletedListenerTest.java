@@ -57,6 +57,26 @@ class ProcessCompletedListenerTest {
     }
 
     @Test
+    void notify_rejectedProcess_updatesMapToCancelled() {
+        DelegateExecution execution = mock(DelegateExecution.class);
+        when(execution.getProcessInstanceId()).thenReturn("PID_003");
+        when(execution.getVariable("approved")).thenReturn(Boolean.FALSE);
+
+        BizProcessMap map = new BizProcessMap();
+        map.setId("MAP_003");
+        map.setProcessInstanceId("PID_003");
+        map.setProcessStatus(ProcessStatus.RUNNING.getCode());
+
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_003")).thenReturn(map);
+
+        processCompletedListener.notify(execution);
+
+        ArgumentCaptor<BizProcessMap> captor = ArgumentCaptor.forClass(BizProcessMap.class);
+        verify(bizProcessMapMapper).updateById(captor.capture());
+        assertEquals(ProcessStatus.CANCELLED.getCode(), captor.getValue().getProcessStatus());
+    }
+
+    @Test
     void notify_noMapping_logsWarningAndSkips() {
         // Arrange
         DelegateExecution execution = mock(DelegateExecution.class);

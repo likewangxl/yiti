@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.bank.com/branch/platform/workflow">
+
+    <process id="loan_approve_v1" name="资产投放审批" isExecutable="true">
+        <extensionElements>
+            <flowable:executionListener event="end" delegateExpression="${processCompletedListener}"/>
+        </extensionElements>
+
+        <startEvent id="start" name="开始"/>
+
+        <userTask id="branch_approve" name="经营机构负责人审核">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+        <exclusiveGateway id="branch_decision" name="经营机构负责人决策"/>
+
+        <userTask id="corp_review" name="公司部审核">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+        <exclusiveGateway id="corp_decision" name="公司部决策"/>
+
+        <userTask id="credit_check" name="授信审查">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+        <exclusiveGateway id="credit_check_decision" name="授信审查决策"/>
+
+        <userTask id="credit_approval" name="授信批复">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+        <exclusiveGateway id="credit_approval_decision" name="授信批复决策"/>
+
+        <endEvent id="approved_end" name="通过结束"/>
+        <endEvent id="rejected_end" name="驳回结束"/>
+
+        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_approve"/>
+        <sequenceFlow id="flow_branch_gateway" sourceRef="branch_approve" targetRef="branch_decision"/>
+        <sequenceFlow id="flow_branch_pass" sourceRef="branch_decision" targetRef="corp_review">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${approved}]]></conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow_branch_reject" sourceRef="branch_decision" targetRef="rejected_end">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${!approved}]]></conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="flow_corp_gateway" sourceRef="corp_review" targetRef="corp_decision"/>
+        <sequenceFlow id="flow_corp_pass" sourceRef="corp_decision" targetRef="credit_check">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${approved}]]></conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow_corp_reject" sourceRef="corp_decision" targetRef="rejected_end">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${!approved}]]></conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="flow_credit_check_gateway" sourceRef="credit_check" targetRef="credit_check_decision"/>
+        <sequenceFlow id="flow_credit_check_pass" sourceRef="credit_check_decision" targetRef="credit_approval">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${approved}]]></conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow_credit_check_reject" sourceRef="credit_check_decision" targetRef="rejected_end">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${!approved}]]></conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="flow_credit_approval_gateway" sourceRef="credit_approval" targetRef="credit_approval_decision"/>
+        <sequenceFlow id="flow_credit_approval_pass" sourceRef="credit_approval_decision" targetRef="approved_end">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${approved}]]></conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow_credit_approval_reject" sourceRef="credit_approval_decision" targetRef="rejected_end">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${!approved}]]></conditionExpression>
+        </sequenceFlow>
+    </process>
+</definitions>

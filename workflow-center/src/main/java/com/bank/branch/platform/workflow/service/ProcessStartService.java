@@ -93,6 +93,7 @@ public class ProcessStartService {
         map.setProcessInstanceId(pi.getId());
         map.setProcessStatus(ProcessStatus.RUNNING.getCode());
         map.setStartUser(cmd.getStartUser());
+        map.setTitle(cmd.getTitle());
         map.setStartTime(LocalDateTime.now());
         bizProcessMapMapper.insert(map);
 
