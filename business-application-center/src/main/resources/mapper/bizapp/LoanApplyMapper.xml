@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.bizapp.mapper.LoanApplyMapper">
+
+    <!-- loan_apply 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, apply_no, cust_id, source_touch_task_id, project_type, biz_type, guarantee_type,
+        credit_amount, credit_exposure_amount, status, business_key, process_instance_id,
+        owner_org_id, created_by, created_time, updated_by, updated_time, deleted
+    </sql>
+
+    <!-- 按 id 查询（含逻辑删除过滤） -->
+    <select id="selectById" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM loan_apply
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
+    <!-- 按 id 查询并加 FOR UPDATE 行锁（并发保护） -->
+    <select id="selectForUpdate" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM loan_apply
+        WHERE id = #{id}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <!-- 按 business_key 查询 -->
+    <select id="selectByBusinessKey" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM loan_apply
+        WHERE business_key = #{businessKey}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 分页查询申请列表 -->
+    <select id="selectPage" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM loan_apply
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND apply_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计分页查询总记录数 -->
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM loan_apply
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND apply_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+    </select>
+
+    <!-- 插入新申请 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        INSERT INTO loan_apply (
+            id, apply_no, cust_id, source_touch_task_id, project_type, biz_type, guarantee_type,
+            credit_amount, credit_exposure_amount, status, business_key, process_instance_id,
+            owner_org_id, created_by, created_time, updated_by, updated_time, deleted
+        ) VALUES (
+            #{id}, #{applyNo}, #{custId}, #{sourceTouchTaskId}, #{projectType}, #{bizType}, #{guaranteeType},
+            #{creditAmount}, #{creditExposureAmount}, #{status}, #{businessKey}, #{processInstanceId},
+            #{ownerOrgId}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}, #{deleted}
+        )
+    </insert>
+
+    <!-- 按 id 更新申请（动态 SET，仅更新非 null 字段） -->
+    <update id="updateById" parameterType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        UPDATE loan_apply
+        <set>
+            <if test="applyNo != null">apply_no = #{applyNo},</if>
+            <if test="custId != null">cust_id = #{custId},</if>
+            <if test="sourceTouchTaskId != null">source_touch_task_id = #{sourceTouchTaskId},</if>
+            <if test="projectType != null">project_type = #{projectType},</if>
+            <if test="bizType != null">biz_type = #{bizType},</if>
+            <if test="guaranteeType != null">guarantee_type = #{guaranteeType},</if>
+            <if test="creditAmount != null">credit_amount = #{creditAmount},</if>
+            <if test="creditExposureAmount != null">credit_exposure_amount = #{creditExposureAmount},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="businessKey != null">business_key = #{businessKey},</if>
+            <if test="processInstanceId != null">process_instance_id = #{processInstanceId},</if>
+            <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            updated_time = NOW(),
+        </set>
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- 更新申请状态（状态流转专用） -->
+    <update id="updateStatusById">
+        UPDATE loan_apply
+        SET status = #{status},
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- 按客户ID查询历史申请（最新在前） -->
+    <select id="selectByCustId" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM loan_apply
+        WHERE cust_id = #{custId}
+          AND deleted = 0
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 批量按ID查询 -->
+    <select id="selectByIds" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM loan_apply
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          AND deleted = 0
+    </select>
+
+    <!-- 按机构+时间范围统计已完成数量（用于绩效统计） -->
+    <select id="countCompletedByOrg" resultType="long">
+        SELECT COUNT(*) FROM loan_apply
+        WHERE status = 'COMPLETED'
+          AND owner_org_id = #{orgId}
+          AND deleted = 0
+          AND updated_time BETWEEN #{start} AND #{end}
+    </select>
+
+    <!-- 按创建人+时间范围汇总授信金额（用于绩效统计） -->
+    <select id="sumCreditAmountByEmp" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(credit_amount), 0) FROM loan_apply
+        WHERE created_by = #{empId}
+          AND deleted = 0
+          AND created_time BETWEEN #{start} AND #{end}
+    </select>
+
+</mapper>

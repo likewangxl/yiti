@@ -18,6 +18,7 @@
         <module>workflow-center</module>
         <module>portal-content-center</module>
         <module>customer-marketing-center</module>
+        <module>business-application-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -114,6 +115,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>customer-marketing-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- business-application-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>business-application-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
