@@ -598,11 +598,11 @@ public interface KpiApi {
     Optional<KpiResultDTO> getCurrentKpiResult(String empId, String cycleType);
     List<KpiResultDTO> getKpiHistory(String empId, String cycleType, LocalDate from, LocalDate to);
     Optional<KpiSchemeDTO> getKpiScheme(String schemeCode);
-    Optional<KpiSchemeDTO> getKpiSchemeById(Long schemeId);
+    Optional<KpiSchemeDTO> getKpiSchemeById(String schemeId);  // v1.2: String 对齐 DDL
 }
 ```
 
-- [ ] **Step 4: 编写 TargetApi.java**
+- [ ] **Step 4: 编写 TargetApi.java**（**v1.2：planId 统一 String**）
 
 ```java
 package com.bank.branch.platform.performance.api;
@@ -613,12 +613,12 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-/** 目标查询对外 API. V1.0 全部实现. 注意 planId 类型为 Long (spec v1.1 对齐). */
+/** 目标查询对外 API. V1.0 全部实现. planId 为 String (v1.2 对齐生产 DDL varchar(32)). */
 public interface TargetApi {
     Optional<TargetPlanDTO> getTargetPlan(String planCode);
-    Optional<TargetPlanDTO> getTargetPlanById(Long planId);
-    Optional<BigDecimal> getTargetValue(Long planId, String subjectType, String subjectId, String cycleKey, String metricCode);
-    List<TargetValueDTO> listTargetValues(Long planId, String subjectType, String subjectId, String cycleKey);
+    Optional<TargetPlanDTO> getTargetPlanById(String planId);
+    Optional<BigDecimal> getTargetValue(String planId, String subjectType, String subjectId, String cycleKey, String metricCode);
+    List<TargetValueDTO> listTargetValues(String planId, String subjectType, String subjectId, String cycleKey);
 }
 ```
 
@@ -732,19 +732,19 @@ public class MetricDefDTO {
 
 **CustMetricSnapshotDTO**: custId, dataDate, version, metricValues(Map)
 
-**KpiResultDTO**: id(Long), empId, empName, cycleType, cycleDate, asOfDate, dataVersion, schemeCode, schemeName, kpiTotalScore(BigDecimal), detailJson, createTime(LocalDateTime)
+**KpiResultDTO**: id(Long), empId, empName, cycleType, cycleDate, asOfDate, dataVersion, schemeCode, schemeName, kpiTotalScore(BigDecimal), detailJson, createTime(LocalDateTime) — **kpi_result 是宽表，id 保持 Long**
 
-**KpiSchemeDTO**: id(Long), schemeCode, schemeName, cycleType, openDetail(Boolean), status, version, items(List<KpiItemDTO>)
+**KpiSchemeDTO**: id(String), schemeCode, schemeName, cycleType, openDetail(Boolean), status, version, items(List<KpiItemDTO>) — v1.2: id String
 
-**KpiItemDTO**: id(Long), metricCode, metricName, weight, multiplier, minScore, maxScore, sortNo
+**KpiItemDTO**: id(String), metricCode, metricName, weight, multiplier, minScore, maxScore, sortNo — v1.2: id String
 
-**TargetPlanDTO**: id(Long), planCode, planName, kpiSchemeId, targetDim, targetCycle, effectiveDate, expireDate, status
+**TargetPlanDTO**: id(String), planCode, planName, kpiSchemeId(String), targetDim, targetCycle, effectiveDate, expireDate, status — v1.2: id/kpiSchemeId 统一 String
 
-**TargetValueDTO**: id(Long), planId(Long), subjectType, subjectId, cycleKey, metricCode, targetValue(BigDecimal), baseValue(BigDecimal)
+**TargetValueDTO**: id(String), planId(String), subjectType, subjectId, cycleKey, metricCode, targetValue(BigDecimal), baseValue(BigDecimal) — v1.2: planId String 对齐 DDL
 
-**PerfRunTaskDTO**: id(Long), taskNo, taskType, dataDate, status, totalCount, successCount, errorCount, startedBy, createdTime, durationMs, errorMsg
+**PerfRunTaskDTO**: id(String), taskNo, taskType, dataDate, status, totalCount, successCount, errorCount, startedBy, createdTime, durationMs, errorMsg — v1.2: id String
 
-**CustAllocRelationDTO**: id(Long), custId, custName, allocDim, bizKind, accountNo, empId, empName, allocRatio, allocAmount, effectiveDate, expireDate
+**CustAllocRelationDTO**: id(String), custId, custName, allocDim, bizKind, accountNo, empId, empName, allocRatio, allocAmount, effectiveDate, expireDate — v1.2: id String
 
 **AllocSummaryDTO**: empId, empName, orgCode, bizKind, custCount(Long), totalAllocAmount(BigDecimal), avgAllocRatio(BigDecimal), asOfDate, sysControlVersion
 
@@ -769,341 +769,305 @@ git commit -m "feat(perf): define 7 public Apis + 15 DTOs per spec §5.2 (aligne
 
 ---
 
-### Task 0.9: 编写 V1_0_0__performance_ddl.sql
+### Task 0.9: 编写 V1_0_0__performance_ddl.sql（v1.2：基线副本，不做调整）
 
 **Files:**
 - Create: `performance-engine-center/src/main/resources/sql/V1_0_0__performance_ddl.sql`
 
-基于 `docs/schema/ddl-performance.sql`，应用 spec §3.1 的 4 项调整。
+**v1.2 决策**：基于环境探针确认 onepl 库中 13 张表已存在且来自权威 DDL，本脚本不做任何结构变更，仅作为新环境部署基线副本。
 
-- [ ] **Step 1: 读取权威 DDL 作为基础**
+- [ ] **Step 1: 复制权威 DDL 作为基线**
 
 ```bash
 cp docs/schema/ddl-performance.sql performance-engine-center/src/main/resources/sql/V1_0_0__performance_ddl.sql
 ```
 
-- [ ] **Step 2: 应用 spec §3.1 的 4 项调整**
+- [ ] **Step 2: 文件头添加注释说明**
 
-**调整 1 & 2**：`perf_target_plan.id` 和 `perf_target_value.plan_id` 改为 `bigint`。
-
-找到 `perf_target_plan` 的 `CREATE TABLE`，将：
-```sql
-  `id` varchar(32) NOT NULL,
-```
-改为：
-```sql
-  `id` bigint NOT NULL AUTO_INCREMENT,
-```
-
-找到 `perf_target_value` 的 `plan_id`：
-```sql
-  `plan_id` varchar(32) NOT NULL,
-```
-改为：
-```sql
-  `plan_id` bigint NOT NULL,
-```
-
-**调整 3**：为 `perf_metric_def` 添加 `deleted` 列与 UK。在 `CREATE TABLE perf_metric_def` 中：
-- 在 `status` 字段后添加：
-```sql
-  `deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除标记',
-```
-- 修改索引：删除 `KEY idx_val_slot`，替换为 `UNIQUE KEY uk_base_dim_slot_active (base_dim, val_slot, deleted)`
-- 修改：`UNIQUE KEY uk_metric_code (metric_code)` 改为 `UNIQUE KEY uk_metric_code (metric_code, deleted)`
-
-**调整 4**：为其他配置表补齐 `deleted` 列并纳入 UK。
-- `perf_kpi_scheme`: 添加 `deleted`，UK 改为 `uk_scheme_code (scheme_code, deleted)`
-- `perf_kpi_item`: 添加 `deleted`，UK 改为 `uk_scheme_metric (scheme_id, metric_code, deleted)`
-- `perf_target_plan`: 添加 `deleted`，UK 改为 `uk_plan_code (plan_code, deleted)`
-- `perf_target_value`: 添加 `deleted`，UK 改为 `uk_plan_subject_cycle_metric (plan_id, subject_type, subject_id, cycle_key, metric_code, deleted)`
-- `cust_alloc_relation`: 添加 `deleted`（虽未入 UK 但需要与项目审计字段规范一致）
-- `perf_run_task`: 添加 `deleted`
-
-**其他审计字段补齐**：所有业务表确保有完整的 `created_by / created_time / updated_by / updated_time / deleted`。
-
-- [ ] **Step 3: 在文件头加注释**
+在 `V1_0_0__performance_ddl.sql` 顶部插入：
 
 ```sql
 -- =====================================================================
--- performance-engine-center V1.0 DDL Script
+-- performance-engine-center V1.0 DDL Script (baseline copy, v1.2)
 -- Version: V1_0_0
 -- Date: 2026-04-15
--- Changes from docs/schema/ddl-performance.sql:
---   1. perf_target_plan.id: varchar(32) -> bigint AUTO_INCREMENT (align with 04 contract Long planId)
---   2. perf_target_value.plan_id: varchar(32) -> bigint
---   3. perf_metric_def: add `deleted` column; UK uk_base_dim_slot_active(base_dim, val_slot, deleted);
---      UK uk_metric_code(metric_code, deleted)
---   4. Other config tables: add `deleted` column, UK includes deleted
+-- Source: docs/schema/ddl-performance.sql (unchanged - verified against onepl)
+--
+-- v1.2 note:
+--   This script is a baseline copy of the authoritative schema.
+--   For existing onepl database (where 13 tables are already deployed),
+--   this script is effectively a no-op (relies on CREATE TABLE IF NOT EXISTS).
+--   For fresh environments, it creates the 13 core tables.
+--
+--   No structural changes applied:
+--   - perf_target_plan.id stays varchar(32) (aligned with TargetApi String planId)
+--   - No `deleted` column added (logical delete by status='DISABLED')
+--   - UKs remain as in authoritative DDL
+--   - Slot uniqueness enforced by Redis lock + Service check (not DB UK)
 -- =====================================================================
 ```
 
-- [ ] **Step 4: 在本地 MySQL 验证执行**
+若权威 DDL 不包含 `IF NOT EXISTS`，可**选择性**添加该子句以提高幂等性（不强制）。
+
+- [ ] **Step 3: 验证 onepl 当前表结构可用**
 
 ```bash
-# 先备份（如果 onepl 中已有 performance 相关表）
-mysqldump -u root -p123456 onepl \
-  sys_control perf_metric_def perf_metric_ref perf_kpi_scheme perf_kpi_item \
-  perf_target_plan perf_target_value perf_run_task cust_alloc_relation \
-  emp_index_result org_index_result cust_index_result kpi_result \
-  2>/dev/null > /tmp/perf-pre-backup.sql || echo "(tables not exist, skip backup)"
-
-# 执行 DDL
-mysql -u root -p123456 onepl < performance-engine-center/src/main/resources/sql/V1_0_0__performance_ddl.sql
+mysql -u root -p123456 onepl -e "
+SELECT COUNT(*) AS cnt FROM information_schema.tables
+WHERE table_schema='onepl' AND (
+  table_name IN ('sys_control','perf_metric_def','perf_metric_ref','perf_kpi_scheme','perf_kpi_item',
+                 'perf_target_plan','perf_target_value','perf_run_task','cust_alloc_relation',
+                 'emp_index_result','org_index_result','cust_index_result','kpi_result'));"
 ```
 
-Expected: 无报错，新建 13 张表。
+Expected: `cnt = 13`（本次探针已确认）。
 
-- [ ] **Step 5: 验证表结构**
-
-```bash
-mysql -u root -p123456 onepl -e "SHOW TABLES LIKE 'perf_%'; SHOW TABLES LIKE 'sys_control'; SHOW TABLES LIKE '%_index_result'; SHOW TABLES LIKE 'kpi_result'; SHOW TABLES LIKE 'cust_alloc_relation';"
-```
-
-Expected: 13 张表出现。
-
-```bash
-mysql -u root -p123456 onepl -e "SHOW CREATE TABLE perf_target_plan\G" | grep -E "id|deleted|UNIQUE"
-```
-
-Expected: `id` 为 `bigint`、`deleted` 存在、UK 含 `deleted`。
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add performance-engine-center/src/main/resources/sql/V1_0_0__performance_ddl.sql
-git commit -m "feat(perf): add V1_0_0 DDL script (13 tables, 4 adjustments per spec §3.1)"
+git commit -m "feat(perf): add V1_0_0 DDL baseline (copy of authoritative ddl-performance.sql, v1.2 no-op for onepl)"
 ```
 
 ---
 
-### Task 0.10: 编写 V1_0_1__performance_resources.sql
+### Task 0.10: 编写 V1_0_1__performance_resources.sql（v1.2：按实际 PT_RESOURCE 列）
 
 **Files:**
 - Create: `performance-engine-center/src/main/resources/sql/V1_0_1__performance_resources.sql`
 
-对应 spec §6.2（35 个端点）+ §6.3（P_PERF_* 前缀规则）。
+**实际 PT_RESOURCE 列结构**（环境探针已确认）：
+- `RESOURCE_ID varchar(20)` / `RESOURCE_URL varchar(256)` / `RESOURCE_METHOD varchar(10)` / `MENU_NAME varchar(256)`
+- `MENU_ICON_URL / MENU_RANK_NO / ISMENU / MENU_ENDFLAG / PARENT_RESOURCE_ID`
+- `STATUS int`（0=启用）/ `SYS_CODE varchar(10)`（用 `PERF` 表示模块）
+- `CREATE_TIME/CREATE_USER/UPDATE_TIME/UPDATE_USER/REMARK`
+- **无 BIZ_TYPE/ACTION 字段**（BizType 存 `pt_role_biz_scope`，Action 是 @BizAuth 注解参数不入库）
 
-- [ ] **Step 1: 参考现有 PT_RESOURCE 的列结构**
-
-```bash
-mysql -u root -p123456 onepl -e "DESC PT_RESOURCE;"
-```
-
-- [ ] **Step 2: 编写 SQL**
+- [ ] **Step 1: 编写 PT_RESOURCE INSERT（35 条）**
 
 ```sql
 -- =====================================================================
--- performance-engine-center V1.0 Resources Registration
+-- performance-engine-center V1.0 Resources Registration (v1.2)
 -- Version: V1_0_1
 -- 35 REST endpoints, prefix P_PERF_*, ID length <= 20
+-- Schema: see PT_RESOURCE actual columns (no BIZ_TYPE/ACTION/MODULE — use SYS_CODE)
 -- =====================================================================
 
-INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_NAME, URL_PATH, HTTP_METHOD, BIZ_TYPE, ACTION, MODULE, STATUS, CREATED_BY, CREATED_TIME)
+INSERT INTO pt_resource (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
 VALUES
 -- MetricDef (10)
-('P_PERF_METRIC_LIST', '指标列表',            '/api/perf/metrics',                     'GET',    'PERF_METRIC_CONFIG', 'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_GET',  '指标详情',            '/api/perf/metrics/*',                   'GET',    'PERF_METRIC_CONFIG', 'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_ADD',  '新增指标',            '/api/perf/metrics',                     'POST',   'PERF_METRIC_CONFIG', 'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_UPD',  '编辑指标',            '/api/perf/metrics/*',                   'PUT',    'PERF_METRIC_CONFIG', 'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_DEL',  '删除指标',            '/api/perf/metrics/*',                   'DELETE', 'PERF_METRIC_CONFIG', 'DELETE',        'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_STAT', '指标状态流转',        '/api/perf/metrics/*/status',            'PUT',    'PERF_METRIC_CONFIG', 'STATUS_CHANGE', 'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_REFS', '查指标上游依赖',      '/api/perf/metrics/*/refs',              'GET',    'PERF_METRIC_CONFIG', 'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_RBY',  '查谁引用了我',        '/api/perf/metrics/*/ref-by',            'GET',    'PERF_METRIC_CONFIG', 'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_SLOT', '槽位占用查询',        '/api/perf/metrics/val-slots',           'GET',    'PERF_METRIC_CONFIG', 'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_METRIC_SREL', '强制释放槽位',        '/api/perf/metrics/*/slot/release',      'POST',   'PERF_METRIC_CONFIG', 'MANAGE',        'perf', 1, 'system', NOW()),
-
+('P_PERF_METRIC_LIST', '/api/perf/metrics',                      'GET',    '指标列表',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_GET',  '/api/perf/metrics/*',                    'GET',    '指标详情',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_ADD',  '/api/perf/metrics',                      'POST',   '新增指标',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_UPD',  '/api/perf/metrics/*',                    'PUT',    '编辑指标',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_DEL',  '/api/perf/metrics/*',                    'DELETE', '删除指标',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_STAT', '/api/perf/metrics/*/status',             'PUT',    '指标状态流转',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_REFS', '/api/perf/metrics/*/refs',               'GET',    '查指标上游依赖', NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_RBY',  '/api/perf/metrics/*/ref-by',             'GET',    '查谁引用了我',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_SLOT', '/api/perf/metrics/val-slots',            'GET',    '槽位占用查询',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_METRIC_SREL', '/api/perf/metrics/*/slot/release',       'POST',   '强制释放槽位',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
 -- KpiScheme (9)
-('P_PERF_KPI_LIST',    'KPI方案列表',         '/api/perf/kpi-schemes',                 'GET',    'PERF_KPI_CONFIG',    'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_KPI_GET',     'KPI方案详情',         '/api/perf/kpi-schemes/*',               'GET',    'PERF_KPI_CONFIG',    'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_KPI_ADD',     '新增KPI方案',         '/api/perf/kpi-schemes',                 'POST',   'PERF_KPI_CONFIG',    'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_KPI_UPD',     '编辑KPI方案',         '/api/perf/kpi-schemes/*',               'PUT',    'PERF_KPI_CONFIG',    'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_KPI_DEL',     '删除KPI方案',         '/api/perf/kpi-schemes/*',               'DELETE', 'PERF_KPI_CONFIG',    'DELETE',        'perf', 1, 'system', NOW()),
-('P_PERF_KPI_PUB',     '发布KPI方案',         '/api/perf/kpi-schemes/*/publish',       'POST',   'PERF_KPI_CONFIG',    'PUBLISH',       'perf', 1, 'system', NOW()),
-('P_PERF_KPI_IADD',    '添加指标项',          '/api/perf/kpi-schemes/*/items',         'POST',   'PERF_KPI_CONFIG',    'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_KPI_IUPD',    '编辑指标项',          '/api/perf/kpi-schemes/*/items/*',       'PUT',    'PERF_KPI_CONFIG',    'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_KPI_IDEL',    '删除指标项',          '/api/perf/kpi-schemes/*/items/*',       'DELETE', 'PERF_KPI_CONFIG',    'WRITE',         'perf', 1, 'system', NOW()),
-
+('P_PERF_KPI_LIST',    '/api/perf/kpi-schemes',                  'GET',    'KPI方案列表',    NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_GET',     '/api/perf/kpi-schemes/*',                'GET',    'KPI方案详情',    NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_ADD',     '/api/perf/kpi-schemes',                  'POST',   '新增KPI方案',    NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_UPD',     '/api/perf/kpi-schemes/*',                'PUT',    '编辑KPI方案',    NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_DEL',     '/api/perf/kpi-schemes/*',                'DELETE', '删除KPI方案',    NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_PUB',     '/api/perf/kpi-schemes/*/publish',        'POST',   '发布KPI方案',    NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_IADD',    '/api/perf/kpi-schemes/*/items',          'POST',   '添加指标项',     NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_IUPD',    '/api/perf/kpi-schemes/*/items/*',        'PUT',    '编辑指标项',     NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_KPI_IDEL',    '/api/perf/kpi-schemes/*/items/*',        'DELETE', '删除指标项',     NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
 -- TargetPlan (4)
-('P_PERF_TGT_P_LIST',  '目标方案列表',        '/api/perf/target-plans',                'GET',    'PERF_TARGET_CONFIG', 'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_TGT_P_GET',   '目标方案详情',        '/api/perf/target-plans/*',              'GET',    'PERF_TARGET_CONFIG', 'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_TGT_P_ADD',   '新增目标方案',        '/api/perf/target-plans',                'POST',   'PERF_TARGET_CONFIG', 'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_TGT_P_UPD',   '编辑目标方案',        '/api/perf/target-plans/*',              'PUT',    'PERF_TARGET_CONFIG', 'WRITE',         'perf', 1, 'system', NOW()),
-
+('P_PERF_TGT_P_LIST',  '/api/perf/target-plans',                 'GET',    '目标方案列表',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_TGT_P_GET',   '/api/perf/target-plans/*',               'GET',    '目标方案详情',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_TGT_P_ADD',   '/api/perf/target-plans',                 'POST',   '新增目标方案',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_TGT_P_UPD',   '/api/perf/target-plans/*',               'PUT',    '编辑目标方案',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
 -- TargetValue (3)
-('P_PERF_TGT_V_LIST',  '目标值查询',          '/api/perf/target-values',               'GET',    'PERF_TARGET_VALUE',  'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_TGT_V_ADD',   '目标值upsert',        '/api/perf/target-values',               'POST',   'PERF_TARGET_VALUE',  'WRITE',         'perf', 1, 'system', NOW()),
-('P_PERF_TGT_V_BAT',   '目标值批量',          '/api/perf/target-values/batch',         'POST',   'PERF_TARGET_VALUE',  'WRITE',         'perf', 1, 'system', NOW()),
-
+('P_PERF_TGT_V_LIST',  '/api/perf/target-values',                'GET',    '目标值查询',     NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_TGT_V_ADD',   '/api/perf/target-values',                'POST',   '目标值upsert',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_TGT_V_BAT',   '/api/perf/target-values/batch',          'POST',   '目标值批量',     NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
 -- Alloc (3)
-('P_PERF_ALLOC_CUR',   '当前分配关系',        '/api/perf/alloc-relations',             'GET',    'PERF_ALLOC_QUERY',   'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_ALLOC_HIS',   '历史分配关系',        '/api/perf/alloc-relations/history',     'GET',    'PERF_ALLOC_QUERY',   'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_ALLOC_SUM',   '分配关系汇总',        '/api/perf/alloc-relations/summary',     'GET',    'PERF_ALLOC_QUERY',   'READ',          'perf', 1, 'system', NOW()),
-
+('P_PERF_ALLOC_CUR',   '/api/perf/alloc-relations',              'GET',    '当前分配关系',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_ALLOC_HIS',   '/api/perf/alloc-relations/history',      'GET',    '历史分配关系',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_ALLOC_SUM',   '/api/perf/alloc-relations/summary',      'GET',    '分配关系汇总',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
 -- RunTask (2)
-('P_PERF_RT_LIST',     '任务日志列表',        '/api/perf/run-tasks',                   'GET',    'PERF_RUN_TASK_QUERY','READ',          'perf', 1, 'system', NOW()),
-('P_PERF_RT_GET',      '任务日志详情',        '/api/perf/run-tasks/*',                 'GET',    'PERF_RUN_TASK_QUERY','READ',          'perf', 1, 'system', NOW()),
-
+('P_PERF_RT_LIST',     '/api/perf/run-tasks',                    'GET',    '任务日志列表',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_RT_GET',      '/api/perf/run-tasks/*',                  'GET',    '任务日志详情',   NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
 -- SysControl (4)
-('P_PERF_SC_GET',      '版本查询',            '/api/perf/sys-control',                 'GET',    'PERF_SYS_CONTROL',   'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_SC_HIS',      '版本历史',            '/api/perf/sys-control/history',         'GET',    'PERF_SYS_CONTROL',   'READ',          'perf', 1, 'system', NOW()),
-('P_PERF_SC_INIT',     '版本初始化',          '/api/perf/sys-control/init',            'POST',   'PERF_SYS_CONTROL',   'MANAGE',        'perf', 1, 'system', NOW()),
-('P_PERF_SC_SW',       '版本切换',            '/api/perf/sys-control/switch-version',  'POST',   'PERF_SYS_CONTROL',   'MANAGE',        'perf', 1, 'system', NOW())
+('P_PERF_SC_GET',      '/api/perf/sys-control',                  'GET',    '版本查询',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_SC_HIS',      '/api/perf/sys-control/history',          'GET',    '版本历史',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_SC_INIT',     '/api/perf/sys-control/init',             'POST',   '版本初始化',     NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
+('P_PERF_SC_SW',       '/api/perf/sys-control/switch-version',   'POST',   '版本切换',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0')
 ON DUPLICATE KEY UPDATE
-  RESOURCE_NAME = VALUES(RESOURCE_NAME),
-  URL_PATH = VALUES(URL_PATH),
-  HTTP_METHOD = VALUES(HTTP_METHOD),
-  BIZ_TYPE = VALUES(BIZ_TYPE),
-  ACTION = VALUES(ACTION),
-  UPDATED_TIME = NOW();
+  RESOURCE_URL    = VALUES(RESOURCE_URL),
+  RESOURCE_METHOD = VALUES(RESOURCE_METHOD),
+  MENU_NAME       = VALUES(MENU_NAME),
+  STATUS          = VALUES(STATUS),
+  UPDATE_TIME     = NOW(),
+  UPDATE_USER     = 'seed',
+  REMARK          = VALUES(REMARK);
 
--- 授权给 R_ADMIN 和 R_BACK_TECH
-INSERT INTO PT_ROLE_RESOURCE (ROLE_ID, RESOURCE_ID, CREATED_BY, CREATED_TIME)
-SELECT r.ROLE_ID, res.RESOURCE_ID, 'system', NOW()
+-- 授权 R_ADMIN 和 R_BACK_TECH 对 PERF 模块 35 条资源的访问
+-- pt_role_resource 列: ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME
+INSERT INTO pt_role_resource (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
+SELECT CONCAT(r.ROLE_ID, '_', res.RESOURCE_ID) AS ID, r.ROLE_ID, res.RESOURCE_ID, 'PERF', NOW()
 FROM (SELECT 'R_ADMIN' AS ROLE_ID UNION ALL SELECT 'R_BACK_TECH') r
-CROSS JOIN PT_RESOURCE res
-WHERE res.MODULE = 'perf'
-ON DUPLICATE KEY UPDATE UPDATED_TIME = NOW();
+CROSS JOIN pt_resource res
+WHERE res.SYS_CODE = 'PERF' AND res.RESOURCE_ID LIKE 'P_PERF_%'
+ON DUPLICATE KEY UPDATE CREATE_TIME = CREATE_TIME;
+
+-- BizType 数据范围配置 (pt_role_biz_scope): 7 个 BizType × 2 个管理角色 = 14 条
+-- R_ADMIN / R_BACK_TECH 全部 ALL 范围
+INSERT INTO pt_role_biz_scope (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
+VALUES
+(UUID(), 'R_ADMIN',      'PERF_METRIC_CONFIG',   'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_ADMIN',      'PERF_KPI_CONFIG',      'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_ADMIN',      'PERF_TARGET_CONFIG',   'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_ADMIN',      'PERF_TARGET_VALUE',    'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_ADMIN',      'PERF_ALLOC_QUERY',     'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_ADMIN',      'PERF_RUN_TASK_QUERY',  'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_ADMIN',      'PERF_SYS_CONTROL',     'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_BACK_TECH',  'PERF_METRIC_CONFIG',   'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_BACK_TECH',  'PERF_KPI_CONFIG',      'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_BACK_TECH',  'PERF_TARGET_CONFIG',   'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_BACK_TECH',  'PERF_TARGET_VALUE',    'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_BACK_TECH',  'PERF_ALLOC_QUERY',     'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_BACK_TECH',  'PERF_RUN_TASK_QUERY',  'ALL', 0, NOW(), 'seed', 'perf v1.0'),
+(UUID(), 'R_BACK_TECH',  'PERF_SYS_CONTROL',     'ALL', 0, NOW(), 'seed', 'perf v1.0');
 ```
 
-**注意**：列名（`RESOURCE_ID`, `ROLE_ID` 等）需按实际 `PT_RESOURCE` 表结构调整（Step 1 已查看）。若实际列与上述不一致，调整 SQL。
-
-- [ ] **Step 3: 本地执行**
+- [ ] **Step 2: 本地执行并幂等验证**
 
 ```bash
 mysql -u root -p123456 onepl < performance-engine-center/src/main/resources/sql/V1_0_1__performance_resources.sql
-```
-
-Expected: 35 条 INSERT + N 条 role-resource 关联。
-
-- [ ] **Step 4: 验证**
-
-```bash
-mysql -u root -p123456 onepl -e "SELECT COUNT(*) FROM PT_RESOURCE WHERE MODULE='perf';"
+mysql -u root -p123456 onepl -e "SELECT COUNT(*) FROM pt_resource WHERE SYS_CODE='PERF';"
 ```
 
 Expected: 35。
 
-- [ ] **Step 5: Commit**
+```bash
+mysql -u root -p123456 onepl -e "SELECT COUNT(*) FROM pt_role_biz_scope WHERE BIZ_TYPE LIKE 'PERF_%';"
+```
+
+Expected: 14（7 BizType × 2 管理角色）。
+
+- [ ] **Step 3: Commit**
 
 ```bash
 git add performance-engine-center/src/main/resources/sql/V1_0_1__performance_resources.sql
-git commit -m "feat(perf): add V1_0_1 PT_RESOURCE registration (35 P_PERF_* entries)"
+git commit -m "feat(perf): add V1_0_1 resources registration (35 P_PERF_* + 14 biz_scope; align with actual pt_resource schema)"
 ```
 
 ---
 
-### Task 0.11: 编写 V1_0_2__performance_dicts.sql
+### Task 0.11: 编写 V1_0_2__performance_dicts.sql（v1.2：sys_dict + sys_dict_item 实际列）
 
 **Files:**
 - Create: `performance-engine-center/src/main/resources/sql/V1_0_2__performance_dicts.sql`
 
-对应 spec §附录（10 类字典）。
+**实际字典表**（环境探针已确认）：
+- `sys_dict`: id / dict_type / dict_code / dict_label / dict_value / sort_order / status / remark / 审计字段
+- `sys_dict_item`: id / dict_type / item_code / item_label / item_value / sort_order / status / remark / 审计字段
 
-- [ ] **Step 1: 查看字典表结构**
+**使用约定**（与 governance 保持一致）：
+- `sys_dict` 存 **字典类型元数据**（dict_type 作为类型 ID，dict_code 对应字典类型中文名）
+- `sys_dict_item` 存 **字典项**（每个 type 下的具体值）
 
-```bash
-mysql -u root -p123456 onepl -e "SHOW TABLES LIKE 'gov%dict%';"
-```
-
-常见命名：`gov_dict_type` + `gov_dict_item` 或合并表。以实际为准。
-
-- [ ] **Step 2: 编写字典类型 + 字典项**
+- [ ] **Step 1: 编写 SQL**
 
 ```sql
 -- =====================================================================
--- performance-engine-center V1.0 Dictionary Seed
+-- performance-engine-center V1.0 Dictionary Seed (v1.2)
 -- Version: V1_0_2
--- 10 dict types per spec §3.1 (init data)
+-- 10 dict types (PERF_*) + items
+-- Tables: sys_dict (types) + sys_dict_item (items)
 -- =====================================================================
 
--- 字典类型（如果表结构包含 type 表）
-INSERT INTO gov_dict_type (dict_type, dict_name, description, status, created_by, created_time) VALUES
-('PERF_BASE_DIM',              '指标维度',      'EMP/ORG/CUST',            1, 'system', NOW()),
-('PERF_METRIC_LEVEL',          '指标级次',      '1/2/3',                   1, 'system', NOW()),
-('PERF_METRIC_CALC_LOGIC',     '计算逻辑类型',  'SQL/PROC/EXPR/SUMMARY',   1, 'system', NOW()),
-('PERF_CALC_FREQ',             '计算频率',      'DAY/MONTH/QUARTER/YEAR',  1, 'system', NOW()),
-('PERF_CYCLE_TYPE',            '考核周期类型',  'MONTHLY/QUARTERLY/YEARLY',1, 'system', NOW()),
-('PERF_TASK_TYPE',             '任务类型',      'METRIC_RUN/KPI_RUN/...',  1, 'system', NOW()),
-('PERF_TASK_STATUS',           '任务状态',      'PENDING/RUNNING/...',     1, 'system', NOW()),
-('PERF_METRIC_STATUS',         '指标状态',      'DRAFT/PUBLISHED/DISABLED',1, 'system', NOW()),
-('PERF_APPLY_STATUS',          '申请状态',      '(V1.2使用)',              1, 'system', NOW()),
-('PERF_ALLOC_DIM',             '分配维度',      'RULE/ACCOUNT',            1, 'system', NOW())
-ON DUPLICATE KEY UPDATE dict_name=VALUES(dict_name), updated_time=NOW();
+('PERF_DICT_001', 'PERF_BASE_DIM',          'PERF_BASE_DIM',          '指标维度',       'EMP/ORG/CUST',             1,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_002', 'PERF_METRIC_LEVEL',      'PERF_METRIC_LEVEL',      '指标级次',       '1/2/3',                    2,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_003', 'PERF_METRIC_CALC_LOGIC', 'PERF_METRIC_CALC_LOGIC', '计算逻辑类型',   'SQL/PROC/EXPR/SUMMARY',    3,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_004', 'PERF_CALC_FREQ',         'PERF_CALC_FREQ',         '计算频率',       'DAY/MONTH/QUARTER/YEAR',   4,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_005', 'PERF_CYCLE_TYPE',        'PERF_CYCLE_TYPE',        '考核周期类型',   'MONTHLY/QUARTERLY/YEARLY', 5,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_006', 'PERF_TASK_TYPE',         'PERF_TASK_TYPE',         '任务类型',       'METRIC_RUN/KPI_RUN/...',   6,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_007', 'PERF_TASK_STATUS',       'PERF_TASK_STATUS',       '任务状态',       'PENDING/RUNNING/...',      7,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_008', 'PERF_METRIC_STATUS',     'PERF_METRIC_STATUS',     '指标状态',       'DRAFT/PUBLISHED/DISABLED', 8,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_009', 'PERF_APPLY_STATUS',      'PERF_APPLY_STATUS',      '申请状态',       '(V1.2使用)',               9,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
+('PERF_DICT_010', 'PERF_ALLOC_DIM',         'PERF_ALLOC_DIM',         '分配维度',       'RULE/ACCOUNT',             10, 'ACTIVE', 'perf v1.0', 'seed', NOW())
+ON DUPLICATE KEY UPDATE dict_label=VALUES(dict_label), updated_time=NOW();
 
--- 字典项
-INSERT INTO gov_dict_item (dict_type, item_code, item_name, sort_no, status, created_by, created_time) VALUES
+-- 字典项（sys_dict_item）
+INSERT INTO sys_dict_item (id, dict_type, item_code, item_label, item_value, sort_order, status, remark, created_by, created_time) VALUES
 -- PERF_BASE_DIM
-('PERF_BASE_DIM', 'EMP', '员工', 1, 1, 'system', NOW()),
-('PERF_BASE_DIM', 'ORG', '机构', 2, 1, 'system', NOW()),
-('PERF_BASE_DIM', 'CUST','客户', 3, 1, 'system', NOW()),
+(UUID(), 'PERF_BASE_DIM',          'EMP',          '员工',        'EMP',          1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_BASE_DIM',          'ORG',          '机构',        'ORG',          2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_BASE_DIM',          'CUST',         '客户',        'CUST',         3,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_METRIC_LEVEL
-('PERF_METRIC_LEVEL', '1', '一级', 1, 1, 'system', NOW()),
-('PERF_METRIC_LEVEL', '2', '二级', 2, 1, 'system', NOW()),
-('PERF_METRIC_LEVEL', '3', '三级', 3, 1, 'system', NOW()),
+(UUID(), 'PERF_METRIC_LEVEL',      '1',            '一级',        '1',            1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_METRIC_LEVEL',      '2',            '二级',        '2',            2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_METRIC_LEVEL',      '3',            '三级',        '3',            3,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_METRIC_CALC_LOGIC
-('PERF_METRIC_CALC_LOGIC', 'SQL',     'SQL查询',   1, 1, 'system', NOW()),
-('PERF_METRIC_CALC_LOGIC', 'PROC',    '存储过程',  2, 1, 'system', NOW()),
-('PERF_METRIC_CALC_LOGIC', 'EXPR',    '表达式',    3, 1, 'system', NOW()),
-('PERF_METRIC_CALC_LOGIC', 'SUMMARY', '汇总规则',  4, 1, 'system', NOW()),
+(UUID(), 'PERF_METRIC_CALC_LOGIC', 'SQL',          'SQL查询',     'SQL',          1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_METRIC_CALC_LOGIC', 'PROC',         '存储过程',    'PROC',         2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_METRIC_CALC_LOGIC', 'EXPR',         '表达式',      'EXPR',         3,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_METRIC_CALC_LOGIC', 'SUMMARY',      '汇总规则',    'SUMMARY',      4,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_CALC_FREQ
-('PERF_CALC_FREQ', 'DAY',     '日',     1, 1, 'system', NOW()),
-('PERF_CALC_FREQ', 'MONTH',   '月',     2, 1, 'system', NOW()),
-('PERF_CALC_FREQ', 'QUARTER', '季',     3, 1, 'system', NOW()),
-('PERF_CALC_FREQ', 'YEAR',    '年',     4, 1, 'system', NOW()),
+(UUID(), 'PERF_CALC_FREQ',         'DAY',          '日',          'DAY',          1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_CALC_FREQ',         'MONTH',        '月',          'MONTH',        2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_CALC_FREQ',         'QUARTER',      '季',          'QUARTER',      3,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_CALC_FREQ',         'YEAR',         '年',          'YEAR',         4,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_CYCLE_TYPE
-('PERF_CYCLE_TYPE', 'MONTHLY',   '月度', 1, 1, 'system', NOW()),
-('PERF_CYCLE_TYPE', 'QUARTERLY', '季度', 2, 1, 'system', NOW()),
-('PERF_CYCLE_TYPE', 'YEARLY',    '年度', 3, 1, 'system', NOW()),
+(UUID(), 'PERF_CYCLE_TYPE',        'MONTHLY',      '月度',        'MONTHLY',      1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_CYCLE_TYPE',        'QUARTERLY',    '季度',        'QUARTERLY',    2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_CYCLE_TYPE',        'YEARLY',       '年度',        'YEARLY',       3,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_METRIC_STATUS
-('PERF_METRIC_STATUS', 'DRAFT',     '草稿', 1, 1, 'system', NOW()),
-('PERF_METRIC_STATUS', 'PUBLISHED', '已发布', 2, 1, 'system', NOW()),
-('PERF_METRIC_STATUS', 'DISABLED',  '已停用', 3, 1, 'system', NOW()),
+(UUID(), 'PERF_METRIC_STATUS',     'DRAFT',        '草稿',        'DRAFT',        1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_METRIC_STATUS',     'PUBLISHED',    '已发布',      'PUBLISHED',    2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_METRIC_STATUS',     'DISABLED',     '已停用',      'DISABLED',     3,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_TASK_TYPE
-('PERF_TASK_TYPE', 'METRIC_TRIAL', '指标试运行', 1, 1, 'system', NOW()),
-('PERF_TASK_TYPE', 'METRIC_RUN',   '指标计算',   2, 1, 'system', NOW()),
-('PERF_TASK_TYPE', 'KPI_RUN',      'KPI计算',    3, 1, 'system', NOW()),
-('PERF_TASK_TYPE', 'RECALC',       '历史回算',   4, 1, 'system', NOW()),
-('PERF_TASK_TYPE', 'DATA_IMPORT',  '数据导入',   5, 1, 'system', NOW()),
+(UUID(), 'PERF_TASK_TYPE',         'METRIC_TRIAL', '指标试运行',  'METRIC_TRIAL', 1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_TYPE',         'METRIC_RUN',   '指标计算',    'METRIC_RUN',   2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_TYPE',         'KPI_RUN',      'KPI计算',     'KPI_RUN',      3,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_TYPE',         'RECALC',       '历史回算',    'RECALC',       4,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_TYPE',         'DATA_IMPORT',  '数据导入',    'DATA_IMPORT',  5,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_TASK_STATUS
-('PERF_TASK_STATUS', 'PENDING',  '待执行', 1, 1, 'system', NOW()),
-('PERF_TASK_STATUS', 'RUNNING',  '执行中', 2, 1, 'system', NOW()),
-('PERF_TASK_STATUS', 'SUCCESS',  '成功',   3, 1, 'system', NOW()),
-('PERF_TASK_STATUS', 'FAILED',   '失败',   4, 1, 'system', NOW()),
-('PERF_TASK_STATUS', 'CANCELLED','已取消', 5, 1, 'system', NOW()),
+(UUID(), 'PERF_TASK_STATUS',       'PENDING',      '待执行',      'PENDING',      1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_STATUS',       'RUNNING',      '执行中',      'RUNNING',      2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_STATUS',       'SUCCESS',      '成功',        'SUCCESS',      3,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_STATUS',       'FAILED',       '失败',        'FAILED',       4,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_TASK_STATUS',       'CANCELLED',    '已取消',      'CANCELLED',    5,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_APPLY_STATUS (V1.2 用, 先预置)
-('PERF_APPLY_STATUS', 'DRAFT',       '草稿',     1, 1, 'system', NOW()),
-('PERF_APPLY_STATUS', 'IN_APPROVAL', '审批中',   2, 1, 'system', NOW()),
-('PERF_APPLY_STATUS', 'APPROVED',    '审批通过', 3, 1, 'system', NOW()),
-('PERF_APPLY_STATUS', 'REJECTED',    '已驳回',   4, 1, 'system', NOW()),
-('PERF_APPLY_STATUS', 'CANCELLED',   '已撤回',   5, 1, 'system', NOW()),
+(UUID(), 'PERF_APPLY_STATUS',      'DRAFT',        '草稿',        'DRAFT',        1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_APPLY_STATUS',      'IN_APPROVAL',  '审批中',      'IN_APPROVAL',  2,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_APPLY_STATUS',      'APPROVED',     '审批通过',    'APPROVED',     3,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_APPLY_STATUS',      'REJECTED',     '已驳回',      'REJECTED',     4,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_APPLY_STATUS',      'CANCELLED',    '已撤回',      'CANCELLED',    5,  'ACTIVE', NULL, 'seed', NOW()),
 -- PERF_ALLOC_DIM
-('PERF_ALLOC_DIM', 'RULE',    '规则维度', 1, 1, 'system', NOW()),
-('PERF_ALLOC_DIM', 'ACCOUNT', '账号维度', 2, 1, 'system', NOW())
-ON DUPLICATE KEY UPDATE item_name=VALUES(item_name), updated_time=NOW();
+(UUID(), 'PERF_ALLOC_DIM',         'RULE',         '规则维度',    'RULE',         1,  'ACTIVE', NULL, 'seed', NOW()),
+(UUID(), 'PERF_ALLOC_DIM',         'ACCOUNT',      '账号维度',    'ACCOUNT',      2,  'ACTIVE', NULL, 'seed', NOW())
+ON DUPLICATE KEY UPDATE item_label=VALUES(item_label), updated_time=NOW();
 ```
 
-**注意**：实际表名与列名以 governance 模块实际为准，必要时调整。
+**注意**：`sys_dict_item` 的 UK 推测为 `(dict_type, item_code)`；若实际不是 UK 则 `ON DUPLICATE KEY UPDATE` 可能不生效，后续可改为先 DELETE 再 INSERT 模式。
 
-- [ ] **Step 3: 本地执行**
+- [ ] **Step 2: 本地执行**
 
 ```bash
 mysql -u root -p123456 onepl < performance-engine-center/src/main/resources/sql/V1_0_2__performance_dicts.sql
 ```
 
-- [ ] **Step 4: 验证**
+- [ ] **Step 3: 验证**
 
 ```bash
-mysql -u root -p123456 onepl -e "SELECT COUNT(*) FROM gov_dict_type WHERE dict_type LIKE 'PERF_%';"
+mysql -u root -p123456 onepl -e "SELECT COUNT(*) FROM sys_dict WHERE dict_type LIKE 'PERF_%';"
+mysql -u root -p123456 onepl -e "SELECT COUNT(*) FROM sys_dict_item WHERE dict_type LIKE 'PERF_%';"
 ```
 
-Expected: 10。
+Expected: `sys_dict` 10 条，`sys_dict_item` 39 条（3+3+4+4+3+3+5+5+5+2+2=39）。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add performance-engine-center/src/main/resources/sql/V1_0_2__performance_dicts.sql
-git commit -m "feat(perf): add V1_0_2 dictionary seed (10 PERF_* dict types + items)"
+git commit -m "feat(perf): add V1_0_2 dictionary seed (10 types + 39 items in sys_dict/sys_dict_item)"
 ```
 
 ---
@@ -1618,15 +1582,16 @@ git tag -a perf-v1.0-phase0 -m "performance-engine-center V1.0 phase 0 skeleton 
   - 红：`checkLevelConstraint_L3RefL2_shouldPass`
   - 绿：实现层级校验
 
-- [ ] **T5: MetricSlotService.allocSlot（悲观锁 + 重试）**
+- [ ] **T5: MetricSlotService.allocSlot（v1.2: Redis 锁 + Service 业务校验）**
+  - **v1.2 调整**：现有 DDL `perf_metric_def.val_slot` 仅是 KEY（非 UNIQUE），DB UK 兜底不可行，改用 Redis 分布式锁保障唯一性
   - 红：`allocSlot_l1_noUsed_shouldReturn1`
   - 红：`allocSlot_l2_whenSlot_101_105_used_shouldReturn106`
   - 红：`allocSlot_preferredSlot_whenAvailable_shouldReturnPreferred`
   - 红：`allocSlot_preferredSlot_whenOccupied_shouldThrow40901`
-  - 绿：事务内 `SELECT ... FOR UPDATE`；找最小可用；插入；DuplicateKeyException 捕获重试一次
+  - 绿：**Facade 层**（非 Service）申请 Redis 锁 `perf:slot-alloc:{baseDim}` (TTL 30s, Lua 脚本释放) → 调 **Service `@Transactional`** 方法：查当前占用 slot 集合 → 按 level 范围找最小可用 → INSERT → 返回；finally 释放锁
 
 - [ ] **T6: MetricSlotConcurrentIT**
-  - `allocSlot_concurrentTwoThreads_onlyOneWins`：2 线程同时 allocSlot(EMP, L1, null)，断言分配结果不同
+  - `allocSlot_concurrentTwoThreads_shouldGetDifferentSlots`：2 线程同时 allocSlot(EMP, L1, null)，断言最终 2 个槽位不重复（Redis 锁生效）
   - 使用 `PerformanceConcurrentTestBase`
 
 - [ ] **T7: MetricRefService.setRefs（双写一致性）**
@@ -1730,19 +1695,19 @@ private void dfs(String node, Map<String, Set<String>> graph, Set<String> visiti
 
 ### 3.5 P1-D: Target 子代理
 
-**负责表**：`perf_target_plan`（id bigint）, `perf_target_value`（plan_id bigint）  
+**负责表**：`perf_target_plan`（**id varchar(32) — v1.2**）, `perf_target_value`（**plan_id varchar(32) — v1.2**）  
 **数据前缀**：`TEST_TGT_*`
 
 **Files:**
-- `entity/PerfTargetPlan.java`（id Long）, `entity/PerfTargetValue.java`（planId Long）
-- 2 Mapper + XML（注意 Mapper 方法参数用 Long）
+- `entity/PerfTargetPlan.java`（**id String**）, `entity/PerfTargetValue.java`（**planId String**）
+- 2 Mapper + XML（Mapper 方法参数用 String）
 - `service/TargetPlanService.java`, `service/TargetValueService.java`
 - `facade/TargetApiImpl.java`, `facade/TargetAssembler.java`
 - `controller/TargetPlanController.java`（4 端点）, `controller/TargetValueController.java`（3 端点）
 
 **TDD 里程碑**：
 
-- [ ] **T1-T2: Entity + Mapper（注意 Long）**
+- [ ] **T1-T2: Entity + Mapper（v1.2: id/planId String 类型）**
 - [ ] **T3: TargetPlanService.create/update**
   - 校验 kpiSchemeId 存在（通过 KpiSchemeService 查询）
   - 校验 `effective_date <= expire_date`
@@ -1752,7 +1717,7 @@ private void dfs(String node, Map<String, Set<String>> graph, Set<String> visiti
   - 红：`upsertBatch_whenSizeGT500_shouldThrow40910`
   - 红：`upsertBatch_whenSize500_shouldSucceed`
 - [ ] **T6: TargetApiImpl（全部实现，planId 用 Long）**
-- [ ] **T7: 2 Controller + IT（含 planId bigint 路径参数）**
+- [ ] **T7: 2 Controller + IT（v1.2: planId 路径参数用 String）**
 - [ ] **T8: 子代理验收**
 
 ---

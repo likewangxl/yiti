@@ -6,7 +6,7 @@
 | 目标模块 | `performance-engine-center`（绩效计算中心） |
 | 交付版本 | V1.0（配置与版本骨架） |
 | 编写日期 | 2026-04-15 |
-| 修订版本 | v1.1（2026-04-15，根据首轮 review 修订 10 项） |
+| 修订版本 | v1.2（2026-04-15，根据环境探针结果回退 v1.1 的 DDL 调整 4 项 + planId 类型回 String） |
 | 作者 | Claude Code + leid（通过 brainstorming 确认） |
 | 交付策略 | 纵切分期（B 方案） + 骨架先行 + 子域并行 + 集成收敛（C 方案） |
 | 后续版本 | V1.1（计算与导入）、V1.2（业务流程与回算） |
@@ -50,7 +50,7 @@
 | 配置表数据范围 | 方案 A：`SCOPE_ALL` + `@BizAuth` 资源级控制 | 配置为平台级全局数据 |
 | 交付节奏 | 方案 C：骨架 + 6 子域并行 + 集成收敛 | 消灭共享文件冲突，最大化并行 |
 | **对外 Api 契约策略** | **权威对齐 + UOE 占位** | **V1.0 定型 7 个 Api 签名，V1.1 仅替换 UOE 为真实实现；避免未来破坏性改动** |
-| **planId 数据类型** | **统一 `Long`**（与 04 契约对齐）；DDL `perf_target_plan.id` 改为 `bigint` | 04 契约权威；消除三边类型冲突 |
+| **planId 数据类型** | **统一 `String`（与生产 DDL 对齐）** | **v1.2 修订**：环境探针发现 onepl 库中 `perf_target_plan.id = varchar(32)` 且表已有业务依赖；04 契约的 `Long planId` 在本期标注为**技术债**（后续由架构师同步修正 04 契约），V1.0 TargetApi 方法签名一律用 `String planId` |
 
 ---
 
@@ -89,7 +89,7 @@ Entity (贫血模型)
 ### 1.4 并发/事务基线
 
 - **版本切换**：`SysControlFacade.switchVersion` 层申请 Redis 分布式锁 `perf:sys_control:switch:{scope_dim}`（TTL 30s），锁内调用 `SysControlService.doSwitchVersion(@Transactional)`，锁在 finally 释放；DB UK 双保险
-- **槽位分配**：DB UK `uk_base_dim_slot_active` + `SELECT FOR UPDATE` 跟踪行 + 失败捕获重试一次
+- **槽位分配（v1.2 修订）**：**Redis 分布式锁** `perf:slot-alloc:{baseDim}`（TTL 30s）+ Service 层 `SELECT MAX(val_slot) + 1` + 业务校验确认未占用（无 DB UK 兜底，因现有 DDL 仅是 KEY 索引）
 - **配置 CRUD**：`@Transactional(rollbackFor=Exception.class)`，REQUIRED 传播
 
 ---
@@ -201,16 +201,19 @@ enums/
 
 ## 3. 数据层设计
 
-### 3.1 DDL 来源与策略
+### 3.1 DDL 来源与策略（v1.2 修订：接受现有表结构）
 
-- **权威来源**：`docs/schema/ddl-performance.sql`（已与 `docs/modules/performance-engine-center/05-表结构DDL.md` 对齐）
-- **V1.0 必须应用的 DDL 调整**（合入 `V1_0_0__performance_ddl.sql`）：
-  1. `perf_target_plan.id` 类型由 `varchar(32)` 改为 `bigint AUTO_INCREMENT`（对齐 04 契约 `Long planId`；统一 TargetApi/TargetValue 的主键类型）
-  2. `perf_target_value.plan_id` 相应由 `varchar(32)` 改为 `bigint`
-  3. 补齐 `perf_metric_def` 的活动槽位唯一约束：`UNIQUE KEY uk_base_dim_slot_active (base_dim, val_slot, deleted)` —— 其中 `deleted` 字段参与，保证逻辑删除后槽位可被新指标复用（若业务规则是"不复用"，可改为 `uk_base_dim_slot (base_dim, val_slot)` 仅对 `deleted=0` 行生效；V1.0 采用前者，实现时在 Service 层按"DISABLED 不释放"语义控制）
-  4. 补齐其他表 UK 包含 `deleted` 字段：`perf_metric_def.uk_metric_code`、`perf_kpi_scheme.uk_scheme_code`、`perf_target_plan.uk_plan_code` 均加 `deleted` 列进 UK
-- **交付文件**：`src/main/resources/sql/V1_0_0__performance_ddl.sql`
-- **执行方式**：V1.0 手工执行一次；V1.1 考虑引入 Flyway
+- **权威来源**：`docs/schema/ddl-performance.sql`（onepl 库中已部署）
+- **v1.2 决策**：**不对现有 DDL 做任何结构性修改**（环境探针确认 13 张表已在 onepl 生产就绪）。spec v1.1 提出的 4 项 DDL 调整**全部回退**：
+  | 原 v1.1 调整项 | v1.2 决策 | 业务语义兜底 |
+  |---|---|---|
+  | `perf_target_plan.id` 改为 `bigint` | **保持 `varchar(32)`** | TargetApi 方法签名用 `String planId` |
+  | `perf_target_value.plan_id` 改为 `bigint` | **保持 `varchar(32)`** | 同上 |
+  | `perf_metric_def` 补 `deleted` 列 + UK 含 deleted | **保持现状**（无 deleted 列） | 逻辑删除通过 `status=DISABLED` 表达；槽位释放语义仍由 Service 层 `MetricSlotService.releaseSlot` 控制 |
+  | 其他配置表 UK 含 `deleted` | **保持现状** | 同上；重复 metric_code/scheme_code/plan_code 通过 Service 层业务校验拦截 |
+- **V1_0_0 脚本职责**：**不再做 DDL 变更**，改为"幂等验证脚本"，`CREATE TABLE IF NOT EXISTS` 方式保证新环境部署时表结构存在（实际 onepl 已有表，脚本几乎空跑）
+- **交付文件**：`src/main/resources/sql/V1_0_0__performance_ddl.sql`（源自 `docs/schema/ddl-performance.sql`，一字不改作为基线副本）
+- **技术债记录**：`04-对外API契约.md` 的 `Long planId` 与 DDL 的 `varchar(32)` 冲突**不在本期解决**，由架构师后续统一；V1.0 内部与下游消费方均使用 `String planId`
 
 ### 3.2 V1.0 表分类
 
@@ -231,7 +234,7 @@ enums/
 - 金额/比例：`BigDecimal`
 - JSON 字段：`String`（由 Service 层负责序列化/反序列化）；统一使用 bootstrap 已注入的全局 `ObjectMapper` Bean（通过构造器注入），避免本模块自建
 - 枚举字段：DB 存 `varchar`，Entity 用 `String`，Service 与 DTO 层转换
-- **主键类型**：配置表（`perf_metric_def` 等）用 `String(id varchar(32))`；`perf_target_plan` / `perf_target_value` / `perf_run_task` / `cust_alloc_relation` / `kpi_result` 用 `Long(id bigint)`（对齐 04 契约）
+- **主键类型**（v1.2 修正）：配置表与业务表统一用 `String(id varchar(32))`（与生产 DDL 一致）；**仅宽表**（`emp/org/cust_index_result` / `kpi_result`）用 `Long(id bigint AUTO_INCREMENT)`
 
 ### 3.4 Mapper 规范
 
@@ -255,19 +258,23 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 - 分页由 common-db 的 `PageInterceptor` 统一处理，Mapper 不手写 `LIMIT`
 - 数据范围 SQL 片段通过 `<if test="scope == 'XXX'">` 动态拼接
 
-### 3.5 关键索引与约束（V1.0 实际交付口径，与 DDL 脚本 1:1）
+### 3.5 关键索引与约束（v1.2：与生产 DDL 严格对齐）
 
 | 表 | 关键约束 | 目的 |
 |---|---|---|
 | `sys_control` | `UK(scope_dim, latest_data_date)` + `IDX(scope_dim, is_valid)` | 版本切换原子性 |
-| `perf_metric_def` | `UK(metric_code, deleted)` + `UK(base_dim, val_slot, deleted)` | 编码与槽位唯一，逻辑删后允许复用；"不复用"语义由 Service 层 §4.2 控制 |
+| `perf_metric_def` | `UK(metric_code)` + `IDX(base_dim, metric_level)` + `IDX(status)` + `IDX(val_slot)` | 编码唯一；**槽位唯一由 Service 层业务校验 + Redis 悲观锁保证**（非 DB UK） |
 | `perf_metric_ref` | `UK(metric_code, ref_metric_code)` + `IDX(ref_metric_code)` | 防重 + 反向查询 |
-| `perf_kpi_scheme` | `UK(scheme_code, deleted)` | 编码唯一 |
-| `perf_kpi_item` | `UK(scheme_id, metric_code, deleted)` | 项内指标不重复 |
-| `perf_target_plan` | `UK(plan_code, deleted)`；`id bigint AUTO_INCREMENT` | 编码唯一；planId 为 Long |
-| `perf_target_value` | `UK(plan_id, subject_type, subject_id, cycle_key, metric_code, deleted)`；`plan_id bigint` | 目标值唯一 |
+| `perf_kpi_scheme` | `UK(scheme_code)` + `IDX(status)` | 编码唯一 |
+| `perf_kpi_item` | `UK(scheme_id, metric_code)` + `IDX(scheme_id)` | 项内指标不重复 |
+| `perf_target_plan` | `UK(plan_code)` + `IDX(status)`；`id varchar(32)` | 编码唯一；**planId 为 String** |
+| `perf_target_value` | `UK(plan_id, subject_type, subject_id, cycle_key, metric_code)`；`plan_id varchar(32)` | 目标值唯一 |
 | `cust_alloc_relation` | `IDX(cust_id)` + `IDX(emp_id)` + `IDX(effective_date)` | 三向查询 |
-| `perf_run_task` | `UK(task_no)` + `IDX(task_type, data_date)` + `IDX(started_by, created_time)` | 任务标识 |
+| `perf_run_task` | `IDX(task_type)` + `IDX(status)` + `IDX(started_by)` + `IDX(created_time)` | 任务查询 |
+
+**影响说明**：
+- 无 `deleted` 字段 → Entity 中也**不声明** `deleted` 字段；逻辑删除语义通过 `status=DISABLED` 实现
+- 槽位唯一性保障改为：**Redis 分布式锁** `perf:slot-alloc:{baseDim}`（TTL 30s）+ Service 层检查 + 重试机制（见 §4.2）
 
 ### 3.6 不在 V1.0 做的
 
@@ -320,7 +327,7 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 - L1 指标：slot 1~100（每维度独立）
 - L2 指标：slot 101~150
 - L3 指标：slot 151~200
-- 算法：`SELECT FOR UPDATE` 锁住跟踪行 → 找最小可用 → INSERT → UK 兜底
+- 算法（v1.2 修订）：Facade 层 Redis 锁 `perf:slot-alloc:{baseDim}`（TTL 30s，Lua 释放）→ Service 层 `@Transactional` 内 `SELECT val_slot FROM perf_metric_def WHERE base_dim=? AND val_slot IS NOT NULL` 取当前占用集 → 找最小可用槽位 → INSERT；锁在 finally 释放
 - 手工指定 slot：校验可用性；被占用则抛 `PERF-40901`
 
 **槽位释放语义**（修正 review #9）：
@@ -448,14 +455,16 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 | `Optional<KpiSchemeDTO> getKpiScheme(String schemeCode)` | **V1.0 实现**（方案配置查询） |
 | `Optional<KpiSchemeDTO> getKpiSchemeById(Long schemeId)` | **V1.0 实现** |
 
-#### 5.2.4 TargetApi（4 方法，planId 统一 `Long`）
+#### 5.2.4 TargetApi（4 方法，**planId 统一 `String`** — v1.2 与生产 DDL 对齐）
 
 | 方法 | V1.0 状态 |
 |---|---|
 | `Optional<TargetPlanDTO> getTargetPlan(String planCode)` | **V1.0 实现** |
-| `Optional<TargetPlanDTO> getTargetPlanById(Long planId)` | **V1.0 实现** |
-| `Optional<BigDecimal> getTargetValue(Long planId, String subjectType, String subjectId, String cycleKey, String metricCode)` | **V1.0 实现** |
-| `List<TargetValueDTO> listTargetValues(Long planId, String subjectType, String subjectId, String cycleKey)` | **V1.0 实现** |
+| `Optional<TargetPlanDTO> getTargetPlanById(String planId)` | **V1.0 实现** |
+| `Optional<BigDecimal> getTargetValue(String planId, String subjectType, String subjectId, String cycleKey, String metricCode)` | **V1.0 实现** |
+| `List<TargetValueDTO> listTargetValues(String planId, String subjectType, String subjectId, String cycleKey)` | **V1.0 实现** |
+
+**注意**：04 契约文档使用 `Long planId`，但 v1.2 修订基于生产 DDL 事实（`varchar(32)`）改回 `String`，列为技术债由后续架构统一处理。
 
 #### 5.2.5 PerfCalcApi（3 方法）
 
@@ -1036,7 +1045,7 @@ CLAUDE.md TDD 红线：
 | **V1.0 契约偏离权威 04 文档致 V1.1 被迫改动** | 高 → **已消除** | v1.1 修订：7 个 Api 全部对齐 04 契约签名 + UOE 占位策略 |
 | **并发测试与 @Transactional 冲突** | 高 → **已消除** | v1.1 修订：并发测试独立基类 + 数据前缀 + `@Sql(AFTER_TEST_METHOD)` 清理 |
 | **Redis 锁时序错误导致锁未包住事务** | 高 → **已消除** | v1.1 修订：明确 Facade 层申请锁，事务 Service 被锁包围 |
-| **planId 类型三边不一致** | 中 → **已消除** | v1.1 修订：DDL/Entity/Api 统一 Long |
+| **planId 类型三边不一致** | 中 → **技术债** | v1.2 修订：对齐生产 DDL 用 `String`，04 契约的 `Long` 标为技术债；TargetApi 方法签名统一 String |
 
 ---
 
@@ -1096,3 +1105,4 @@ CLAUDE.md TDD 红线：
 |---|---|---|---|
 | 2026-04-15 | v1.0 | 初稿，经 5 轮澄清 + 9 节分节确认后定稿 | Claude Code + leid |
 | 2026-04-15 | v1.1 | 根据首轮 spec review 意见修订 10 项：Api 权威对齐+UOE 占位、planId 统一 Long、DDL UK 补齐、Redis 锁时序修正、并发测试例外策略、端点数统一 35、PT_RESOURCE 前缀 `P_PERF_*`、阶段 2 集成 SQL 执行、槽位释放语义明确、BizType/resourceType 映射表 | Claude Code + leid |
+| 2026-04-15 | v1.2 | **环境探针后回退 v1.1 的 4 项 DDL 调整**：① `perf_target_plan.id` 保持 `varchar(32)`（TargetApi 改回 `String planId`），② 配置表不加 `deleted` 列，③ 配置表 UK 不含 `deleted`，④ 槽位唯一由 Redis 锁 + Service 业务校验保证（无 DB UK）；PT_RESOURCE 实际列名确认（`RESOURCE_URL/RESOURCE_METHOD/MENU_NAME/SYS_CODE`，无 `BIZ_TYPE/ACTION` 字段，BizType 存于 `pt_role_biz_scope` 表）；字典表实际为 `sys_dict + sys_dict_item` | Claude Code + leid |
