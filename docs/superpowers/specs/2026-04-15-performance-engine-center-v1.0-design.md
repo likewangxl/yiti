@@ -6,6 +6,7 @@
 | 目标模块 | `performance-engine-center`（绩效计算中心） |
 | 交付版本 | V1.0（配置与版本骨架） |
 | 编写日期 | 2026-04-15 |
+| 修订版本 | v1.1（2026-04-15，根据首轮 review 修订 10 项） |
 | 作者 | Claude Code + leid（通过 brainstorming 确认） |
 | 交付策略 | 纵切分期（B 方案） + 骨架先行 + 子域并行 + 集成收敛（C 方案） |
 | 后续版本 | V1.1（计算与导入）、V1.2（业务流程与回算） |
@@ -30,17 +31,16 @@
 - 只读查询接口（运行任务日志、分配关系）
 - 指标层级校验、环路检测、槽位分配
 - sys_control 版本管理基础（查询 + 手工切换 + 初始化）
-- 4 个对外 Api：MetricApi、MetricQueryApi、TargetApi、AllocApi
+- **对外 Api 全部 7 个接口（MetricApi/MetricQueryApi/KpiApi/TargetApi/PerfCalcApi/DataTaskApi/AllocApi）签名与 DTO 类在 V1.0 定型**；配置类方法 V1.0 实现，计算类方法 V1.0 抛 `UnsupportedOperationException("V1.1 delivered")` 占位（详见 §5）
 
 **不纳入**：
 - 任何指标执行能力（SQL 执行器、Groovy 沙箱、级联刷新）
 - 任何 KPI 计算、历史回算、导入能力
 - 任何流程发起、事件订阅、事件发布
 - 任何定时任务
-- KpiApi、PerfCalcApi、DataTaskApi（留待 V1.1）
 - 所有导出接口（留待 V1.2）
 
-### 0.3 关键决策摘要（brainstorming 阶段确认）
+### 0.3 关键决策摘要
 
 | 决策项 | 方案 | 理由 |
 |---|---|---|
@@ -49,6 +49,8 @@
 | 指标引用关系存储 | 方案 C：双写（独立表为主 + JSON 冗余） | 独立表支持 DFS，JSON 供详情，同事务保证一致性 |
 | 配置表数据范围 | 方案 A：`SCOPE_ALL` + `@BizAuth` 资源级控制 | 配置为平台级全局数据 |
 | 交付节奏 | 方案 C：骨架 + 6 子域并行 + 集成收敛 | 消灭共享文件冲突，最大化并行 |
+| **对外 Api 契约策略** | **权威对齐 + UOE 占位** | **V1.0 定型 7 个 Api 签名，V1.1 仅替换 UOE 为真实实现；避免未来破坏性改动** |
+| **planId 数据类型** | **统一 `Long`**（与 04 契约对齐）；DDL `perf_target_plan.id` 改为 `bigint` | 04 契约权威；消除三边类型冲突 |
 
 ---
 
@@ -66,7 +68,7 @@
 Controller (REST)
     ↓ 仅调用 facade，绝不直接调 service
 Facade (对外 Api 实现 + 用例编排)
-    ↓ 组合多个 service
+    ↓ 组合多个 service；Redis 分布式锁在此层申请与释放（事务外）
 Service (单一职责，事务边界)
     ↓ 通过 mapper 访问 DB
 Mapper (MyBatis，模块私有)
@@ -78,16 +80,16 @@ Entity (贫血模型)
 
 | 方向 | 内容 |
 |---|---|
-| **入站** | 32 个 REST 端点，路径前缀 `/api/perf/*` |
-| **出站（对其他模块）** | 4 个 Api：`MetricApi`、`MetricQueryApi`、`TargetApi`、`AllocApi`（V1.0 仅声明与实现，无现有消费者） |
+| **入站** | **35 个 REST 端点**，路径前缀 `/api/perf/*` |
+| **出站（对其他模块）** | **7 个对外 Api**：`MetricApi`、`MetricQueryApi`、`KpiApi`、`TargetApi`、`PerfCalcApi`、`DataTaskApi`、`AllocApi` — V1.0 全部定型签名；实现状态见 §5 |
 | **依赖（上游）** | auth（CurrentUserApi/BizScopeApi/OrgApi/EmpQueryApi）、governance（DictApi/AuditApi/ConfigApi） |
 | **V1.0 不依赖** | workflow、customer-marketing |
 | **V1.0 不包含** | 任何定时任务、任何事件发布/订阅、任何外部系统交互 |
 
 ### 1.4 并发/事务基线
 
-- **版本切换**：Redis 分布式锁 `perf:sys_control:switch:{scope_dim}`（TTL 30s）+ DB UK 双保险
-- **槽位分配**：DB UK `uk_base_dim_slot` + 悲观锁 `SELECT FOR UPDATE` 或乐观重试
+- **版本切换**：`SysControlFacade.switchVersion` 层申请 Redis 分布式锁 `perf:sys_control:switch:{scope_dim}`（TTL 30s），锁内调用 `SysControlService.doSwitchVersion(@Transactional)`，锁在 finally 释放；DB UK 双保险
+- **槽位分配**：DB UK `uk_base_dim_slot_active` + `SELECT FOR UPDATE` 跟踪行 + 失败捕获重试一次
 - **配置 CRUD**：`@Transactional(rollbackFor=Exception.class)`，REQUIRED 传播
 
 ---
@@ -103,10 +105,10 @@ performance-engine-center/
 └── src/
     ├── main/
     │   ├── java/com/bank/branch/platform/performance/
-    │   │   ├── api/                   # 对外契约
+    │   │   ├── api/                   # 7 个对外契约 + DTO
     │   │   ├── config/                # Spring 配置
     │   │   ├── controller/            # REST 控制器
-    │   │   ├── facade/                # 对外 Api 实现
+    │   │   ├── facade/                # 对外 Api 实现 + 锁包装
     │   │   ├── service/               # 业务逻辑
     │   │   ├── mapper/                # MyBatis Mapper 接口
     │   │   ├── entity/                # 贫血模型
@@ -131,20 +133,30 @@ performance-engine-center/
 
 ```
 api/
-├── MetricApi.java
-├── MetricQueryApi.java
-├── TargetApi.java
-├── AllocApi.java
+├── MetricApi.java                # 7 方法
+├── MetricQueryApi.java           # 3 方法
+├── KpiApi.java                   # 5 方法
+├── TargetApi.java                # 4 方法
+├── PerfCalcApi.java              # 3 方法
+├── DataTaskApi.java              # 1 方法
+├── AllocApi.java                 # 11 方法
 └── dto/
     ├── MetricDefDTO.java
-    ├── MetricRefDTO.java
-    ├── KpiSchemeDTO.java              # 预置，KpiApi V1.1 暴露
+    ├── MetricCardDTO.java
+    ├── EmpMetricSnapshotDTO.java
+    ├── OrgMetricSnapshotDTO.java
+    ├── CustMetricSnapshotDTO.java
+    ├── KpiResultDTO.java
+    ├── KpiSchemeDTO.java
     ├── KpiItemDTO.java
     ├── TargetPlanDTO.java
     ├── TargetValueDTO.java
+    ├── PerfRunTaskDTO.java
     ├── CustAllocRelationDTO.java
     ├── AllocSummaryDTO.java
-    └── AllocVersionDTO.java
+    ├── AllocVersionDTO.java
+    └── cmd/
+        └── DataTaskStatusCmd.java
 ```
 
 ### 2.3 `service/` 包
@@ -164,12 +176,12 @@ service/
 └── PerfRunTaskService.java
 ```
 
-### 2.4 `enums/` 包（错误码与业务枚举）
+### 2.4 `enums/` 包
 
 ```
 enums/
 ├── PerfErrorCode.java                # 所有 PERF-* 错误码
-├── PerfBizType.java                  # PERF_CONFIG / PERF_QUERY / ...
+├── PerfBizType.java                  # PERF_METRIC_CONFIG / ...
 ├── BaseDimEnum.java                  # EMP / ORG / CUST
 ├── MetricLevelEnum.java              # 1 / 2 / 3
 ├── CalcLogicTypeEnum.java            # SQL / PROC / EXPR / SUMMARY
@@ -192,9 +204,11 @@ enums/
 ### 3.1 DDL 来源与策略
 
 - **权威来源**：`docs/schema/ddl-performance.sql`（已与 `docs/modules/performance-engine-center/05-表结构DDL.md` 对齐）
-- **微调内容**：
-  - 与项目审计字段规范对齐（`created_by/created_time/updated_by/updated_time/deleted`）
-  - 补全缺失的唯一键与索引
+- **V1.0 必须应用的 DDL 调整**（合入 `V1_0_0__performance_ddl.sql`）：
+  1. `perf_target_plan.id` 类型由 `varchar(32)` 改为 `bigint AUTO_INCREMENT`（对齐 04 契约 `Long planId`；统一 TargetApi/TargetValue 的主键类型）
+  2. `perf_target_value.plan_id` 相应由 `varchar(32)` 改为 `bigint`
+  3. 补齐 `perf_metric_def` 的活动槽位唯一约束：`UNIQUE KEY uk_base_dim_slot_active (base_dim, val_slot, deleted)` —— 其中 `deleted` 字段参与，保证逻辑删除后槽位可被新指标复用（若业务规则是"不复用"，可改为 `uk_base_dim_slot (base_dim, val_slot)` 仅对 `deleted=0` 行生效；V1.0 采用前者，实现时在 Service 层按"DISABLED 不释放"语义控制）
+  4. 补齐其他表 UK 包含 `deleted` 字段：`perf_metric_def.uk_metric_code`、`perf_kpi_scheme.uk_scheme_code`、`perf_target_plan.uk_plan_code` 均加 `deleted` 列进 UK
 - **交付文件**：`src/main/resources/sql/V1_0_0__performance_ddl.sql`
 - **执行方式**：V1.0 手工执行一次；V1.1 考虑引入 Flyway
 
@@ -215,8 +229,9 @@ enums/
 - 驼峰↔下划线由 MyBatis `map-underscore-to-camel-case: true` 自动转换
 - 日期类型：`LocalDate` / `LocalDateTime` / `Instant`（不用 `java.util.Date`）
 - 金额/比例：`BigDecimal`
-- JSON 字段：`String`（由 Service 层负责序列化/反序列化，避免 TypeHandler 复杂度）
+- JSON 字段：`String`（由 Service 层负责序列化/反序列化）；统一使用 bootstrap 已注入的全局 `ObjectMapper` Bean（通过构造器注入），避免本模块自建
 - 枚举字段：DB 存 `varchar`，Entity 用 `String`，Service 与 DTO 层转换
+- **主键类型**：配置表（`perf_metric_def` 等）用 `String(id varchar(32))`；`perf_target_plan` / `perf_target_value` / `perf_run_task` / `cust_alloc_relation` / `kpi_result` 用 `Long(id bigint)`（对齐 04 契约）
 
 ### 3.4 Mapper 规范
 
@@ -226,9 +241,9 @@ int insert(Entity e);
 int insertBatch(@Param("list") List<Entity> list);
 int updateById(Entity e);
 int updateByIdSelective(Entity e);
-int deleteById(@Param("id") String id, @Param("updatedBy") String op);
-Entity selectById(@Param("id") String id);
-List<Entity> selectByIds(@Param("ids") List<String> ids);
+int deleteById(@Param("id") Serializable id, @Param("updatedBy") String op);
+Entity selectById(@Param("id") Serializable id);
+List<Entity> selectByIds(@Param("ids") List<? extends Serializable> ids);
 List<Entity> selectByCondition(@Param("cond") XxxQueryCond cond);
 long countByCondition(@Param("cond") XxxQueryCond cond);
 ```
@@ -240,17 +255,17 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 - 分页由 common-db 的 `PageInterceptor` 统一处理，Mapper 不手写 `LIMIT`
 - 数据范围 SQL 片段通过 `<if test="scope == 'XXX'">` 动态拼接
 
-### 3.5 关键索引与约束
+### 3.5 关键索引与约束（V1.0 实际交付口径，与 DDL 脚本 1:1）
 
 | 表 | 关键约束 | 目的 |
 |---|---|---|
 | `sys_control` | `UK(scope_dim, latest_data_date)` + `IDX(scope_dim, is_valid)` | 版本切换原子性 |
-| `perf_metric_def` | `UK(metric_code)` + `UK(base_dim, val_slot, deleted)` | 编码与槽位唯一 |
+| `perf_metric_def` | `UK(metric_code, deleted)` + `UK(base_dim, val_slot, deleted)` | 编码与槽位唯一，逻辑删后允许复用；"不复用"语义由 Service 层 §4.2 控制 |
 | `perf_metric_ref` | `UK(metric_code, ref_metric_code)` + `IDX(ref_metric_code)` | 防重 + 反向查询 |
 | `perf_kpi_scheme` | `UK(scheme_code, deleted)` | 编码唯一 |
-| `perf_kpi_item` | `UK(scheme_id, metric_code)` | 项内指标不重复 |
-| `perf_target_plan` | `UK(plan_code, deleted)` | 编码唯一 |
-| `perf_target_value` | `UK(plan_id, subject_type, subject_id, cycle_key, metric_code)` | 目标值唯一 |
+| `perf_kpi_item` | `UK(scheme_id, metric_code, deleted)` | 项内指标不重复 |
+| `perf_target_plan` | `UK(plan_code, deleted)`；`id bigint AUTO_INCREMENT` | 编码唯一；planId 为 Long |
+| `perf_target_value` | `UK(plan_id, subject_type, subject_id, cycle_key, metric_code, deleted)`；`plan_id bigint` | 目标值唯一 |
 | `cust_alloc_relation` | `IDX(cust_id)` + `IDX(emp_id)` + `IDX(effective_date)` | 三向查询 |
 | `perf_run_task` | `UK(task_no)` + `IDX(task_type, data_date)` + `IDX(started_by, created_time)` | 任务标识 |
 
@@ -264,24 +279,41 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 
 ## 4. 领域服务设计
 
-### 4.1 sys_control 子域
+### 4.1 sys_control 子域（含 Redis 锁正确时序）
 
 | Service | 关键方法 |
 |---|---|
-| `SysControlService` | `getCurrentVersion(scopeDim)` / `listVersionHistory(scopeDim, limit)` / `switchVersion(SwitchVersionCmd)` / `initIfAbsent(scopeDim, dataDate)` |
+| `SysControlService` | `getCurrentVersion(scopeDim)` / `listVersionHistory(scopeDim, limit)` / `doSwitchVersion(SwitchVersionCmd)` (**@Transactional**) / `initIfAbsent(scopeDim, dataDate)` |
 
 **关键设计**：
-- `switchVersion` 原子性：Redis 分布式锁 → 事务内 `UPDATE old.is_valid=0` + `INSERT new.is_valid=1` → UK 兜底
-- V1.0 仅支持 `MANUAL` + `INIT` 两种触发源
-- Redis 锁在事务外获取/释放
+
+1. **版本切换的锁时序**（修正 review #4）
+   - Redis 锁**不能**在 `@Transactional` 方法内申请（AOP 先开事务再入方法）
+   - 正确分层：
+     ```
+     SysControlFacade.switchVersion(cmd):
+       String lockKey = "perf:sys_control:switch:" + cmd.scopeDim
+       String token = UUID.randomUUID().toString()
+       boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, Duration.ofSeconds(30))
+       if (!locked) throw new PerfException(PERF-40904)
+       try {
+         sysControlService.doSwitchVersion(cmd)    // 内部 @Transactional
+       } finally {
+         // Lua 脚本原子比对 token 再删除，防误删其他节点的锁
+         redisTemplate.execute(unlockScript, keys, args)
+       }
+     ```
+   - `SysControlService.doSwitchVersion` 事务内：`UPDATE old.is_valid=0` + `INSERT new.is_valid=1`；UK 兜底
+2. V1.0 仅支持 `MANUAL` + `INIT` 两种触发源
+3. `initIfAbsent`：幂等，已存在直接跳过
 
 ### 4.2 指标库子域（核心复杂子域）
 
 | Service | 关键方法 |
 |---|---|
-| `MetricDefService` | `create` / `update` / `publish` / `disable(reason)` / `getByCode` / `page` |
+| `MetricDefService` | `create` / `update` / `publish` / `disable(reason)` / `getByCode` / `page` / `delete(reason)` |
 | `MetricRefService` | `setRefs(metricCode, refMetricCodes)` / `listRefsOf` / `listWhoRef` |
-| `MetricSlotService` | `allocSlot(baseDim, metricLevel, preferredSlot)` / `releaseSlot(baseDim, slot, operator)` / `listOccupied(baseDim)` |
+| `MetricSlotService` | `allocSlot(baseDim, metricLevel, preferredSlot)` / `releaseSlot(baseDim, slot, operator, reason)` / `listOccupied(baseDim)` |
 | `MetricCycleDetectService` | `checkNoCycle(metricCode, refCodes)` / `checkLevelConstraint(metricLevel, refCodes)` |
 
 **槽位分配策略**：
@@ -291,7 +323,13 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 - 算法：`SELECT FOR UPDATE` 锁住跟踪行 → 找最小可用 → INSERT → UK 兜底
 - 手工指定 slot：校验可用性；被占用则抛 `PERF-40901`
 
-**引用关系双写一致性**：
+**槽位释放语义**（修正 review #9）：
+- 默认："PUBLISHED → DISABLED" 转换时**不自动释放**槽位（避免新老指标数据混淆）
+- `POST /metrics/{code}/slot/release`：**仅管理员**对 `DISABLED` 状态指标**强制释放**槽位，`reason` 必填，审计记录
+- `MetricSlotService.releaseSlot` 在 Service 层校验：指标必须为 DISABLED 状态，否则抛 `PERF-40905`
+- 释放后该槽位在 UK 下可被新指标复用（因 UK 含 `deleted`）
+
+**引用关系双写一致性**（决策 ② 方案 C）：
 - `MetricDefService.create/update` 内调用 `MetricRefService.setRefs` → 同事务
   - `UPDATE perf_metric_def.ref_metric_codes = ?(JSON)`
   - `DELETE FROM perf_metric_ref WHERE metric_code=?` + `INSERT INTO perf_metric_ref ...`
@@ -305,7 +343,7 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 
 **生命周期流转**：
 - `DRAFT → PUBLISHED`：校验通过后方可发布
-- `PUBLISHED → DISABLED`：槽位**不释放**（V1.0 规则），需 `@AuditLog(reason required)`
+- `PUBLISHED → DISABLED`：槽位保留，需 `@AuditLog(reason required)`
 - `DISABLED → 删除`：仅当无下游引用时允许（实为逻辑删）
 
 ### 4.3 KPI 方案子域
@@ -324,12 +362,12 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 
 | Service | 关键方法 |
 |---|---|
-| `TargetPlanService` | `create` / `update` / `getByCode` / `page` |
-| `TargetValueService` | `upsert(UpsertTargetValueCmd)` / `upsertBatch(List)` / `get` / `queryByPlan` |
+| `TargetPlanService` | `create` / `update` / `getByCode` / `getById(Long planId)` / `page` |
+| `TargetValueService` | `upsert(UpsertTargetValueCmd)` / `upsertBatch(List)` / `get(Long planId, ...)` / `queryByPlan` |
 
 **关键设计**：
 - V1.0 不支持 Excel 导入
-- `upsert` 基于 UK `uk_plan_subject_cycle_metric` 使用 `INSERT ... ON DUPLICATE KEY UPDATE`
+- `upsert` 基于 UK `uk_plan_subject_cycle_metric_deleted` 使用 `INSERT ... ON DUPLICATE KEY UPDATE`
 - `upsertBatch` 上限 500 条，超过抛 `PERF-40910`
 - 生效/失效日期校验：`effective_date <= expire_date`
 
@@ -344,16 +382,16 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 - 查询支持过滤：taskType / status / dataDate 范围 / startedBy / createdTime 范围
 - 数据范围：管理员全见，普通用户仅见自己启动的任务
 
-### 4.6 分配关系子域（只读）
+### 4.6 分配关系子域（只读，支撑 AllocApi）
 
 | Service | 关键方法 |
 |---|---|
-| `AllocRelationService` | 10 个查询方法（对应 AllocApi） |
+| `AllocRelationService` | 11 个查询方法（对应 AllocApi 全部方法） |
 
 **关键设计**：
 - V1.0 不提供任何写入（写入在 V1.2）
 - 时间线查询核心：`WHERE effective_date <= ? AND (end_date IS NULL OR end_date >= ?)`
-- `getLatestAllocVersion` / `getAllocVersion`：从 `sys_control` 的 CUST 维度派生
+- `getLatestAllocVersion` / `getAllocVersionAt`：从 `sys_control` 的 CUST 维度派生
 - 数据范围简化：管理员全见 + 普通用户仅见 `emp_id = 当前 empId` 的行
 
 ### 4.7 Service 层通用约定
@@ -367,7 +405,7 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 
 ---
 
-## 5. 对外 API 层设计（Facade）
+## 5. 对外 API 层设计（7 个 Api 权威对齐）
 
 ### 5.1 Facade 层职责
 
@@ -375,60 +413,104 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 2. Entity → DTO 转换（通过 `*Assembler`）
 3. 多 Service 编排
 4. 应用缓存
-5. **不承担事务**（事务在 Service 层）
+5. **Redis 分布式锁申请/释放**（涉及事务切换场景）
+6. **不承担业务事务**（事务在 Service 层）
 
-### 5.2 四个对外 Api 契约
+### 5.2 V1.0 对外 Api 契约（按 `04-对外API契约.md` 权威签名）
 
-#### MetricApi（2 个方法）
+#### 5.2.1 MetricApi（7 方法）
+
+| 方法 | V1.0 状态 | 说明 |
+|---|---|---|
+| `List<MetricCardDTO> getUserMetricCards(String empId)` | **UOE 占位** | 需要结果数据，V1.1 实现 |
+| `Optional<MetricDefDTO> getMetricDef(String metricCode)` | **V1.0 实现** | 配置查询，缓存 5 min |
+| `List<MetricDefDTO> getMetricDefs(List<String> metricCodes)` | **V1.0 实现** | 批量配置查询，上限 100 |
+| `List<MetricDefDTO> listMetrics(String baseDim, Integer metricLevel)` | **V1.0 实现** | 维度+级别查询，缓存 5 min |
+| `Map<String, BigDecimal> getEmpMetricValues(String empId, LocalDate dataDate, List<String> metricCodes)` | **UOE 占位** | 需要宽表数据，V1.1 实现 |
+| `Map<String, BigDecimal> getOrgMetricValues(String orgCode, LocalDate dataDate, List<String> metricCodes)` | **UOE 占位** | V1.1 |
+| `Map<String, BigDecimal> getCustMetricValues(String custId, LocalDate dataDate, List<String> metricCodes)` | **UOE 占位** | V1.1 |
+
+#### 5.2.2 MetricQueryApi（3 方法，report 专用）
+
+| 方法 | V1.0 状态 |
+|---|---|
+| `List<EmpMetricSnapshotDTO> batchQueryEmpSnapshots(List<String> empIds, LocalDate from, LocalDate to, List<String> metricCodes)` | **UOE 占位**（需宽表数据） |
+| `List<OrgMetricSnapshotDTO> batchQueryOrgSnapshots(...)` | **UOE 占位** |
+| `List<CustMetricSnapshotDTO> batchQueryCustSnapshots(...)` | **UOE 占位** |
+
+#### 5.2.3 KpiApi（5 方法）
+
+| 方法 | V1.0 状态 |
+|---|---|
+| `BigDecimal getCurrentKpiTotal(String empId, String cycleType)` | **UOE 占位**（需 KPI 结果） |
+| `Optional<KpiResultDTO> getCurrentKpiResult(String empId, String cycleType)` | **UOE 占位** |
+| `List<KpiResultDTO> getKpiHistory(String empId, String cycleType, LocalDate from, LocalDate to)` | **UOE 占位** |
+| `Optional<KpiSchemeDTO> getKpiScheme(String schemeCode)` | **V1.0 实现**（方案配置查询） |
+| `Optional<KpiSchemeDTO> getKpiSchemeById(Long schemeId)` | **V1.0 实现** |
+
+#### 5.2.4 TargetApi（4 方法，planId 统一 `Long`）
+
+| 方法 | V1.0 状态 |
+|---|---|
+| `Optional<TargetPlanDTO> getTargetPlan(String planCode)` | **V1.0 实现** |
+| `Optional<TargetPlanDTO> getTargetPlanById(Long planId)` | **V1.0 实现** |
+| `Optional<BigDecimal> getTargetValue(Long planId, String subjectType, String subjectId, String cycleKey, String metricCode)` | **V1.0 实现** |
+| `List<TargetValueDTO> listTargetValues(Long planId, String subjectType, String subjectId, String cycleKey)` | **V1.0 实现** |
+
+#### 5.2.5 PerfCalcApi（3 方法）
+
+| 方法 | V1.0 状态 |
+|---|---|
+| `String triggerKpiCalc(LocalDate dataDate)` | **UOE 占位**（无计算能力） |
+| `String triggerRecalc(String cycleType, LocalDate from, LocalDate to, String reason, String operator)` | **UOE 占位** |
+| `Optional<PerfRunTaskDTO> getRunTask(String taskId)` | **V1.0 实现**（任务查询复用 PerfRunTaskService） |
+
+#### 5.2.6 DataTaskApi（1 方法）
+
+| 方法 | V1.0 状态 |
+|---|---|
+| `void reportDataTaskStatus(DataTaskStatusCmd cmd)` | **UOE 占位**（V1.1 接入外部数据上报） |
+
+#### 5.2.7 AllocApi（11 方法，全部 V1.0 实现）
+
+| 方法 | V1.0 状态 |
+|---|---|
+| `List<CustAllocRelationDTO> getCurrentAllocations(String custId, String bizKind)` | **V1.0 实现**，缓存 10 min |
+| `List<CustAllocRelationDTO> getAllocationHistory(String custId, LocalDate asOfDate)` | **V1.0 实现**，不缓存 |
+| `List<CustAllocRelationDTO> listCustomersByEmp(String empId, String bizKind)` | **V1.0 实现**，缓存 15 min |
+| `Map<String, List<CustAllocRelationDTO>> batchGetCurrentAllocations(Set<String> custIds, String bizKind)` | **V1.0 实现**，单客户缓存命中 + 批量查询 |
+| `Map<String, Long> countCustomersByEmps(Set<String> empIds)` | **V1.0 实现**，缓存 30 min |
+| `List<AllocSummaryDTO> batchSummaryByEmps(Set<String> empIds, String bizKind, LocalDate asOfDate)` | **V1.0 实现**，不缓存 |
+| `boolean hasAllocation(String empId, String custId, String bizKind)` | **V1.0 实现**，继承 getCurrentAllocations 缓存 |
+| `long countCustomersOfEmp(String empId, String bizKind)` | **V1.0 实现**，缓存 15 min |
+| `AllocVersionDTO getLatestAllocVersion(String bizKind)` | **V1.0 实现**，缓存 5 min |
+| `AllocVersionDTO getAllocVersionAt(String bizKind, LocalDate asOfDate)` | **V1.0 实现**，不缓存 |
+
+### 5.3 UOE 占位实现规范
 
 ```java
-Optional<MetricDefDTO> getMetricDef(String metricCode);
-boolean isMetricExists(String metricCode);
+@Override
+public Map<String, BigDecimal> getEmpMetricValues(
+        String empId, LocalDate dataDate, List<String> metricCodes) {
+    throw new UnsupportedOperationException(
+        "MetricApi.getEmpMetricValues will be delivered in performance-engine-center V1.1");
+}
 ```
 
-#### MetricQueryApi（3 个方法）
+**约定**：
+- 所有 UOE 占位方法**仍需通过契约单测**（Mockito + 验证抛出 `UnsupportedOperationException`）
+- 上层调用方（portal/report/customer）在 V1.0 若误调将得到明确信号，不是"返回 empty 静默失败"
+- V1.1 交付时逐个替换实现，对外接口契约不变
 
-```java
-List<MetricDefDTO> getMetrics(List<String> metricCodes);
-List<MetricDefDTO> getMetricsByBaseDim(String baseDim);
-List<MetricDefDTO> getRefMetrics(String metricCode);
-```
-
-#### TargetApi（4 个方法）
-
-```java
-Optional<TargetPlanDTO> getTargetPlan(String planCode);
-Optional<TargetPlanDTO> getTargetPlanById(String planId);
-Optional<BigDecimal> getTargetValue(
-    String planId, String subjectType, String subjectId, String cycleKey, String metricCode);
-Map<String, BigDecimal> getTargetValues(
-    String planId, String subjectType, String subjectId, String cycleKey);
-```
-
-#### AllocApi（10 个方法）
-
-```java
-List<CustAllocRelationDTO> getCurrentAllocations(String custId, String bizKind);
-List<CustAllocRelationDTO> getAllocationsAt(String custId, LocalDate asOfDate, String bizKind);
-AllocSummaryDTO getAllocSummary(String custId, LocalDate asOfDate);
-List<CustAllocRelationDTO> getAllocsByEmp(String empId, LocalDate asOfDate);
-List<CustAllocRelationDTO> getAllocsByOrg(String orgCode, LocalDate asOfDate);
-Long countCustsOfEmp(String empId, LocalDate asOfDate);
-Long countCustsOfOrg(String orgCode, LocalDate asOfDate);
-Map<String, BigDecimal> getAllocRatioMap(String custId, LocalDate asOfDate);
-AllocVersionDTO getLatestAllocVersion();
-Optional<AllocVersionDTO> getAllocVersion(String versionId);
-```
-
-### 5.3 DTO 设计约束
+### 5.4 DTO 设计约束
 
 - 命名以 `DTO` 结尾，放在 `api/dto/` 包
 - V1.0 采用 `class + Lombok @Data/@Builder` 方案（与已完成模块一致）
 - 枚举字段用 `String`
 - `LocalDate`/`LocalDateTime`/`BigDecimal` 透传
-- 暴露 `val_slot`、`ref_metric_codes` 等内部实现字段（报表和工作台需要）
+- 暴露 `valSlot`、`refMetricCodes` 等内部实现字段（报表和工作台需要）
 
-### 5.4 Facade 实现规范
+### 5.5 Facade 实现规范
 
 ```java
 @Service
@@ -444,19 +526,20 @@ public class MetricApiImpl implements MetricApi {
         PerfMetricDef entity = metricDefService.getByCodeOrNull(metricCode);
         return Optional.ofNullable(entity).map(assembler::toDTO);
     }
+
+    @Override
+    public List<MetricCardDTO> getUserMetricCards(String empId) {
+        throw new UnsupportedOperationException(
+            "MetricApi.getUserMetricCards will be delivered in V1.1");
+    }
 }
 ```
 
-**约定**：
-- 容忍 null 入参（返回 `Optional.empty()` 或空集合）
-- 异常统一向上抛 `PerfException`
-- 每个 Facade 配对 `XxxAssembler` 静态方法类
+### 5.6 版本兼容
 
-### 5.5 版本兼容
-
-- V1.0 暴露的 Api 一旦发布即为稳定契约
-- 删除/重命名需走 deprecation 流程；新增方法允许
-- V1.1 新增 `KpiApi`、`PerfCalcApi`、`DataTaskApi` 以及 `MetricApi.getUserMetricCards`
+- V1.0 暴露的 Api 一旦发布即为稳定契约（7 个 Api 全部签名定型）
+- V1.1 仅**替换 UOE 为真实实现**，不改签名
+- 删除/重命名需走正式 deprecation 流程；新增方法允许
 
 ---
 
@@ -470,7 +553,7 @@ public class MetricApiImpl implements MetricApi {
 4. 调用 Facade → 封装 `ResponseWrapper<T>` 返回
 5. **不写任何业务逻辑**
 
-### 6.2 V1.0 所有 REST 端点清单（共 32 个）
+### 6.2 V1.0 所有 REST 端点清单（**共 35 个**）
 
 #### MetricDefController（10 个端点）
 
@@ -485,7 +568,7 @@ public class MetricApiImpl implements MetricApi {
 | GET | `/api/perf/metrics/{metricCode}/refs` | PERF_METRIC_CONFIG / READ | ✗ |
 | GET | `/api/perf/metrics/{metricCode}/ref-by` | PERF_METRIC_CONFIG / READ | ✗ |
 | GET | `/api/perf/metrics/val-slots` | PERF_METRIC_CONFIG / READ | ✗ |
-| POST | `/api/perf/metrics/{metricCode}/slot/release` | PERF_METRIC_CONFIG / MANAGE | ✓ (reason 必填) |
+| POST | `/api/perf/metrics/{metricCode}/slot/release` | PERF_METRIC_CONFIG / MANAGE | ✓ (reason 必填；仅 DISABLED 状态允许) |
 
 #### KpiSchemeController（9 个端点）
 
@@ -542,23 +625,44 @@ public class MetricApiImpl implements MetricApi {
 | POST | `/api/perf/sys-control/init` | PERF_SYS_CONTROL / MANAGE | ✓ (reason 必填) |
 | POST | `/api/perf/sys-control/switch-version` | PERF_SYS_CONTROL / MANAGE | ✓ (reason 必填) |
 
-**小计**：10 + 9 + 4 + 3 + 3 + 2 + 4 = **35 个端点**（第 6 章节 6.2 中示例列出 9 个 KpiScheme 端点含 items 3 个；实际端点数见本表）
+**合计：10 + 9 + 4 + 3 + 3 + 2 + 4 = 35 个端点**
 
-实际 V1.0 REST 端点总数：**35 个**。
+### 6.3 BizType 枚举 + PT_RESOURCE 前缀规则（修正 review #7、#10）
 
-### 6.3 BizType 枚举
+#### BizType 定义（与审计 `resourceType` 的映射关系）
 
 ```java
 public enum PerfBizType {
-    PERF_METRIC_CONFIG,   // 指标库配置
-    PERF_KPI_CONFIG,      // KPI 方案配置
-    PERF_TARGET_CONFIG,   // 目标方案配置
-    PERF_TARGET_VALUE,    // 目标值管理
-    PERF_ALLOC_QUERY,     // 分配关系查询
-    PERF_RUN_TASK_QUERY,  // 任务日志查询
-    PERF_SYS_CONTROL      // 版本控制管理
+    PERF_METRIC_CONFIG,   // → 审计 resourceType: PERF_METRIC_DEF / PERF_METRIC_REF
+    PERF_KPI_CONFIG,      // → PERF_KPI_SCHEME / PERF_KPI_ITEM
+    PERF_TARGET_CONFIG,   // → PERF_TARGET_PLAN
+    PERF_TARGET_VALUE,    // → PERF_TARGET_VALUE
+    PERF_ALLOC_QUERY,     // → (V1.0 只读，无写审计)
+    PERF_RUN_TASK_QUERY,  // → (V1.0 只读)
+    PERF_SYS_CONTROL      // → PERF_SYS_CONTROL
 }
 ```
+
+**映射原则**：
+- `PerfBizType` 是"资源域"粒度，供 @BizAuth 鉴权使用
+- `resourceType`（审计）是"表/实体"粒度，供 @AuditLog 切入使用
+- 一个 BizType 可对应多个 resourceType（一对多）
+
+#### PT_RESOURCE ID 命名规则
+
+- **前缀**：`P_PERF_*`（遵循项目 `A_/G_/W_` 规则，`P` 表示 performance 模块）
+- **长度**：每条 ≤ 20 字符
+- **示例**：
+  - `P_PERF_METRIC_LIST` / `P_PERF_METRIC_GET` / `P_PERF_METRIC_ADD` / `P_PERF_METRIC_UPD` / `P_PERF_METRIC_DEL` / `P_PERF_METRIC_STAT`
+  - `P_PERF_METRIC_REFS` / `P_PERF_METRIC_RBY` / `P_PERF_METRIC_SLOT` / `P_PERF_METRIC_SREL`
+  - `P_PERF_KPI_LIST` / `P_PERF_KPI_GET` / `P_PERF_KPI_ADD` / `P_PERF_KPI_UPD` / `P_PERF_KPI_DEL` / `P_PERF_KPI_PUB`
+  - `P_PERF_KPI_ITEM_ADD` / `P_PERF_KPI_ITEM_UPD` / `P_PERF_KPI_ITEM_DEL`
+  - `P_PERF_TGT_P_LIST` / `P_PERF_TGT_P_GET` / `P_PERF_TGT_P_ADD` / `P_PERF_TGT_P_UPD`
+  - `P_PERF_TGT_V_LIST` / `P_PERF_TGT_V_ADD` / `P_PERF_TGT_V_BAT`
+  - `P_PERF_ALLOC_CUR` / `P_PERF_ALLOC_HIS` / `P_PERF_ALLOC_SUM`
+  - `P_PERF_RT_LIST` / `P_PERF_RT_GET`
+  - `P_PERF_SC_GET` / `P_PERF_SC_HIS` / `P_PERF_SC_INIT` / `P_PERF_SC_SW`
+- **登记文件**：`V1_0_1__performance_resources.sql` 共 35 行 INSERT
 
 ### 6.4 请求/响应模型规范
 
@@ -594,8 +698,8 @@ public enum PerfBizType {
 | `PERF-40901` | 槽位已被占用 |
 | `PERF-40902` | 指标引用形成环路 |
 | `PERF-40903` | 指标编码已存在 |
-| `PERF-40904` | 版本切换并发冲突 |
-| `PERF-40905` | 指标非 DRAFT 状态不可编辑 SQL |
+| `PERF-40904` | 版本切换并发冲突（Redis 锁获取失败） |
+| `PERF-40905` | 状态不允许操作（如非 DISABLED 不可释放槽位） |
 | `PERF-40906` | 方案未发布不可绑定目标 |
 | `PERF-40910` | 目标值批量上限 500 |
 | `PERF-40911` | 引用层级违规 |
@@ -608,14 +712,16 @@ public enum PerfBizType {
 
 | Key 模式 | TTL | 数据 | evict 触发 |
 |---|---|---|---|
-| `perf:metric_def:{metricCode}` | 5 min | 单个指标 | create/update/disable/delete |
-| `perf:metric_def:list:{baseDim}` | 5 min | 维度指标列表 | 该维度任一变更 |
-| `perf:kpi_scheme:{schemeId}` | 5 min | KPI 方案详情 | create/update/publish/delete/item 变更 |
+| `perf:metric_def:{metricCode}` | 5 min | 单个指标 | create/update/disable/delete/status_change |
+| `perf:metric_def:list:{baseDim}` | 5 min | 维度指标列表 | 该维度任一指标 create/update/disable/delete/status_change |
+| `perf:kpi_scheme:{schemeId}` | 5 min | KPI 方案详情（含 items） | create/update/publish/delete/item 变更 |
 | `perf:kpi_scheme:list` | 5 min | 启用方案列表 | 方案状态变更 |
 | `perf:target_plan:{planId}` | 5 min | 目标方案 | create/update |
 | `perf:sys_control:{scopeDim}` | 60 s | 当前有效版本 | switchVersion 成功后 |
-| `perf:alloc:cur:{custId}:{bizKind}` | 15 min | 客户当前分配关系 | V1.0 不 evict |
-| `perf:alloc:ver:latest` | 5 min | 最新分配版本号 | V1.0 不 evict |
+| `perf:alloc:cur:{custId}:{bizKind}` | 10 min | 客户当前分配关系 | V1.0 不 evict（V1.2 分配调整审批后 evict） |
+| `perf:alloc:emp:{empId}:{bizKind}` | 15 min | 员工名下客户 | V1.0 不 evict |
+| `perf:alloc:empcount:{empIds hash}:{bizKind}` | 30 min | 员工客户数批量 | V1.0 不 evict |
+| `perf:alloc:latestver:{bizKind}` | 5 min | 最新分配版本号 | V1.0 不 evict |
 
 **事务后失效**：所有 evict 通过 `TransactionSynchronizationManager.registerSynchronization` 的 `afterCommit` 回调触发。
 
@@ -623,7 +729,9 @@ public enum PerfBizType {
 
 **路径**：`@AuditLog` → AOP → 发布 `AuditLogEvent` → `AuditApi.log()` 落库
 
-| 资源类型 | 触发场景 | reason 要求 |
+**BizType ↔ resourceType 映射**：见 §6.3
+
+| resourceType | 触发场景 | reason 要求 |
 |---|---|---|
 | `PERF_METRIC_DEF` | CREATE/UPDATE/DELETE/STATUS_CHANGE/SLOT_RELEASE | UPDATE 涉及 SQL 改动时必填；DELETE/STATUS_CHANGE/SLOT_RELEASE 必填 |
 | `PERF_METRIC_REF` | 随 DEF UPDATE 合并记录 | — |
@@ -642,15 +750,16 @@ public enum PerfBizType {
 | `perf_run_task` | 按 `started_by` 过滤：管理员全见 + 普通用户仅见自己 |
 | `cust_alloc_relation` | V1.0 简化：管理员全见 + 普通用户仅见 `emp_id = 当前 empId` |
 
-### 7.5 事务边界
+### 7.5 事务边界与 Redis 锁正确时序
 
-| 场景 | 事务声明 |
+| 场景 | 锁 / 事务策略 |
 |---|---|
 | Service 写方法 | `@Transactional(rollbackFor = Exception.class)` REQUIRED |
 | Service 查询方法 | `@Transactional(readOnly = true)` 或不加 |
-| Facade 层 | 不加或 `@Transactional(readOnly = true)` |
+| Facade 层 | 不加事务或 `@Transactional(readOnly = true)` |
+| Facade 层**申请 Redis 锁** | 在 `@Transactional` 外层；获取成功后调用 Service 事务方法；finally 释放 |
 | `create/update` 调 `setRefs` | 同事务（REQUIRED） |
-| `switchVersion` | 同事务完成双操作；Redis 锁在事务外 |
+| `switchVersion` | Facade 锁外层 → Service 事务内完成 UPDATE+INSERT；Facade finally 释放锁 |
 | `upsertBatch` | 单事务；500 条上限 |
 
 ### 7.6 幂等性
@@ -677,33 +786,45 @@ public enum PerfBizType {
 
 ### 8.1 测试金字塔
 
-- Service UT：~100 个（最多）
+- Service UT：~100 个
 - Mapper IT：~60 个
 - Controller IT：~30 个
-- Facade UT：~12 个
+- Facade UT：~14 个（含 UOE 占位契约测试）
 
-### 8.2 测试分层约定
+### 8.2 测试分层与事务策略（修正 review #5）
 
-| 层 | 框架 | 配置 | 数据库 | 事务 |
+| 层 | 框架 | 配置 | 数据库 | 事务策略 |
 |---|---|---|---|---|
 | Service UT | JUnit 5 + Mockito + AssertJ | 纯单元 | 全 mock | 无 |
-| Mapper IT | `@SpringBootTest` + `@MybatisTest` | 真 MyBatis | 真 `onepl` | `@Transactional + @Rollback(true)` |
+| **Mapper IT（单线程）** | `@SpringBootTest` + `@MybatisTest` | 真 MyBatis | 真 `onepl` | `@Transactional + @Rollback(true)`（默认） |
+| **Mapper IT（并发测试）** | 同上 + `@Sql(executionPhase = AFTER_TEST_METHOD, scripts = "cleanup.sql")` | 真 MyBatis | 真 `onepl` | **不使用 `@Transactional`**；用数据前缀 + `AFTER_TEST_METHOD` 的 `@Sql` 清理 |
 | Facade UT | JUnit 5 + Mockito | 纯单元 | 全 mock | 无 |
 | Controller IT | `@SpringBootTest(MOCK)` + MockMvc | 完整上下文 | 真 `onepl` | `@Transactional + @Rollback(true)` |
+
+**并发测试例外规则**：
+- Spring 事务与多线程不兼容（线程本地绑定）
+- 涉及并发的测试类（如 `SysControlMapperConcurrentIT`、`MetricSlotConcurrentIT`）**必须**：
+  - 不标注 `@Transactional`
+  - 使用独立数据前缀（如 `CONCURRENT_SC_`）
+  - 在 `@AfterEach` 或 `@Sql(executionPhase = AFTER_TEST_METHOD, ...)` 显式 DELETE 清理
+- 单线程 Mapper IT 继续使用 `@Transactional + @Rollback`，两者测试类文件分离
 
 ### 8.3 测试基础设施
 
 **基类**：
-- `PerformanceMapperTestBase`
+- `PerformanceMapperTestBase`（单线程 IT 用，含 `@Transactional`）
+- `PerformanceConcurrentTestBase`（并发 IT 用，不含事务，含 `@AfterEach` 前缀清理）
 - `PerformanceControllerTestBase`
 - `PerformanceServiceTestBase`
 
 **工具**：
 - `TestDataBuilder`（Fluent Builder）
 - `MockCurrentUserHelper`
-- `TestDbCleaner`
+- `TestDbCleaner`（按前缀批量清理）
 
-**测试配置**：`src/test/resources/application-test.yml`（连接本地 `onepl`）
+**@Cacheable 测试处理**：
+- Facade UT 默认禁用 Spring Cache（通过 `@Import(NoOpCacheConfiguration.class)` 覆盖）
+- 避免 UT 变成集成测试
 
 ### 8.4 TDD 闭环示例
 
@@ -716,48 +837,56 @@ public enum PerfBizType {
 CLAUDE.md TDD 红线：
 - 严禁"先写实现再补测试"
 - 测试必须先于实现提交
-- 红→绿→重构三步单独提交，便于 code-reviewer 审查
+- 红→绿→重构三步单独提交
 
 ### 8.5 关键场景测试清单
 
-**sys_control**：
-- `switchVersion_concurrentTwoThreads_onlyOneWins`
-- `switchVersion_whenUkViolation_shouldThrow40904`
-- `initIfAbsent_whenExists_shouldNotInsertDup`
+**sys_control**（含并发）：
+- `SysControlMapperIT.switchVersion_whenUkViolation_shouldThrow`（单线程，@Transactional）
+- `SysControlConcurrentIT.switchVersion_concurrentTwoThreads_onlyOneWins`（**不含 @Transactional**）
+- `SysControlFacadeUT.switchVersion_whenLockAcquireFailed_shouldThrow40904`（UT，mock Redis）
+- `SysControlServiceUT.initIfAbsent_whenExists_shouldNotInsertDup`
 
 **指标库**：
-- `allocSlot_basicAllocation` × 4 个边界
-- `checkNoCycle_simpleSelfRef_shouldThrow40902`
-- `checkNoCycle_indirectRef_A_B_A_shouldThrow40902`
-- `checkLevelConstraint_L2RefL3_shouldThrow40911`
-- `create_whenMetricCodeDup_shouldThrow40903`
-- `update_withRefsChange_shouldUpdateBothJsonAndRefTable`
+- `MetricSlotServiceUT.allocSlot_basicAllocation` × 4 边界
+- `MetricSlotConcurrentIT.allocSlot_concurrentTwoThreads_onlyOneWins`（**不含 @Transactional**）
+- `MetricCycleDetectServiceUT.checkNoCycle_simpleSelfRef_shouldThrow40902`
+- `MetricCycleDetectServiceUT.checkNoCycle_indirectRef_A_B_A_shouldThrow40902`
+- `MetricCycleDetectServiceUT.checkLevelConstraint_L2RefL3_shouldThrow40911`
+- `MetricDefMapperIT.create_whenMetricCodeDup_shouldThrow40903`
+- `MetricDefServiceIT.update_withRefsChange_shouldUpdateBothJsonAndRefTable`
 
 **KPI 方案**：
-- `publish_whenItemReferMissingMetric_shouldThrow`
-- `publish_whenItemReferDraftMetric_shouldThrow`
-- `addItem_whenDuplicate_shouldThrow`
+- `KpiSchemeServiceUT.publish_whenItemReferMissingMetric_shouldThrow`
+- `KpiSchemeServiceUT.publish_whenItemReferDraftMetric_shouldThrow`
+- `KpiItemServiceUT.addItem_whenDuplicate_shouldThrow`
 
 **目标方案**：
-- `upsertBatch_whenSizeExceeds500_shouldThrow40910`
-- `upsertBatch_whenAllSuccess_shouldReturnCount`
-- `upsert_existingRow_shouldUpdate`
+- `TargetValueServiceUT.upsertBatch_whenSizeExceeds500_shouldThrow40910`
+- `TargetValueServiceUT.upsertBatch_whenAllSuccess_shouldReturnCount`
+- `TargetValueMapperIT.upsert_existingRow_shouldUpdate`
 
 **分配关系**：
-- `getCurrentAllocations_excludesExpired`
-- `getAllocSummary_sumRatio_equals100`
-- `listAllocsByEmp_appliesScopeFilter`
+- `AllocRelationMapperIT.getCurrentAllocations_excludesExpired`
+- `AllocRelationServiceUT.getAllocSummary_sumRatio_equals100`
+- `AllocRelationServiceUT.listCustomersByEmp_appliesScopeFilter`
 
-**Controller**（每个控制器抽样）：
+**UOE 占位契约测试**（Facade UT）：
+- `MetricApiImplTest.getUserMetricCards_shouldThrowUnsupportedOperationException`
+- `KpiApiImplTest.getCurrentKpiTotal_shouldThrowUOE`
+- `PerfCalcApiImplTest.triggerKpiCalc_shouldThrowUOE`
+- ... 每个 UOE 方法都有一个契约测试
+
+**Controller 层抽样**：
 - 401（未登录）/ 403（权限不足）/ 200（成功）/ 409（业务冲突）
 
 ### 8.6 测试数据隔离
 
-- `@Transactional + @Rollback(true)` 全局回滚
-- `@BeforeEach` 构造测试专用数据
-- 测试数据前缀分配避免并行 IT 冲突：
-  - sys_control 子代理：`TEST_SC_*`
-  - 指标库子代理：`TEST_METRIC_*`
+- 单线程 IT：`@Transactional + @Rollback(true)` 全局回滚
+- 并发 IT：独立数据前缀 + `@AfterEach` / `@Sql(AFTER_TEST_METHOD)` 清理
+- 子代理间并行的前缀分配：
+  - sys_control 子代理：`TEST_SC_*` / 并发前缀 `CONCUR_SC_*`
+  - 指标库子代理：`TEST_METRIC_*` / `CONCUR_METRIC_*`
   - KPI 子代理：`TEST_KPI_*`
   - 目标子代理：`TEST_TGT_*`
   - 任务子代理：`TEST_RT_*`
@@ -782,27 +911,31 @@ CLAUDE.md TDD 红线：
 2. 编写 `pom.xml`（common 5 子模块 + auth + governance，不含 workflow/customer-marketing）
 3. 创建空包 + package-info
 4. 创建 `PerformanceAutoConfiguration`、`PerformanceMyBatisConfig`、`PerformanceRedisConfig`
-5. 定义全部枚举与 `PerfErrorCode`
+5. 定义全部枚举与 `PerfErrorCode`（含全部 `PERF-*` 错误码）
 6. 编写 `PerfException`
-7. 编写三个 SQL 脚本（DDL + Resources + Dicts）
-8. 编写 `CLAUDE.md`
-9. 编写测试基础设施（基类、工具、配置）
+7. **定义 7 个对外 Api 接口文件（含完整方法签名）+ 全部 DTO 类文件**（子代理在阶段 1 各自实现 Facade，但接口文件必须在阶段 0 统一定义好）
+8. 编写三个 SQL 脚本：
+   - `V1_0_0__performance_ddl.sql`（13 张表 DDL，含 §3.1 的 4 项调整）
+   - `V1_0_1__performance_resources.sql`（35 条 PT_RESOURCE，遵循 `P_PERF_*` 规则）
+   - `V1_0_2__performance_dicts.sql`（10 类字典 + 对应字典项）
+9. 编写 `CLAUDE.md`
+10. 编写测试基础设施（基类、工具、配置）
 
 **验收**：
 - `mvn clean install -pl performance-engine-center` 通过
-- 本地 MySQL `onepl` 13 张表存在
-- 枚举可 import
+- 本地 MySQL `onepl` 13 张表存在（含 §3.1 调整）
+- 枚举、Api 接口、DTO 可被其他子代理 import
 
 ### 9.3 阶段 1：子域全栈并行（P1-1 ~ P1-6）
 
 | 子代理 | 主要交付物 |
 |---|---|
-| **P1-SysControl** | SysControl Entity/Mapper/XML/Service/Controller + 测试（含并发测试） |
-| **P1-Metric** | Metric + MetricRef Entity/Mapper/XML、4 个 Service、2 个 Facade、MetricDefController(10)、2 个对外 Api + 4 DTO + 全测试 |
-| **P1-Kpi** | KpiScheme + KpiItem Entity/Mapper/XML、2 个 Service、KpiSchemeController(9)、2 个 DTO + 全测试 |
-| **P1-Target** | TargetPlan + TargetValue Entity/Mapper/XML、2 个 Service、TargetApi Facade、2 个 Controller(4+3)、TargetApi + 2 DTO + 全测试 |
-| **P1-RunTask** | PerfRunTask Entity/Mapper/XML、Service（仅查询）、Controller(2) + 测试 |
-| **P1-Alloc** | CustAllocRelation Entity/Mapper/XML、AllocRelationService(10 方法)、AllocApi Facade、Controller(3)、AllocApi + 3 DTO + 全测试 |
+| **P1-SysControl** | SysControl Entity/Mapper/XML/Service/Facade/Controller + 测试（含并发 IT） |
+| **P1-Metric** | Metric + MetricRef Entity/Mapper/XML、4 Service、`MetricApiImpl`+`MetricQueryApiImpl`（UOE 占位方法实现）、MetricDefController(10) + 全测试 |
+| **P1-Kpi** | KpiScheme + KpiItem Entity/Mapper/XML、2 Service、`KpiApiImpl`（`getKpiScheme`/`getKpiSchemeById` 实现 + 3 个 UOE 占位）、KpiSchemeController(9) + 全测试 |
+| **P1-Target** | TargetPlan + TargetValue Entity/Mapper/XML、2 Service、`TargetApiImpl`（全部实现）、2 Controller(4+3) + 全测试 |
+| **P1-RunTask** | PerfRunTask Entity/Mapper/XML、Service（仅查询）、`PerfCalcApiImpl`（`getRunTask` 实现 + 2 个 UOE 占位）、Controller(2) + 测试 |
+| **P1-Alloc** | CustAllocRelation Entity/Mapper/XML、AllocRelationService(11 方法)、`AllocApiImpl`（全部实现）+`DataTaskApiImpl`（1 个 UOE 占位）、Controller(3) + 全测试 |
 
 **共同约定**：
 - 严格 TDD：先红 → 绿 → 重构
@@ -810,27 +943,34 @@ CLAUDE.md TDD 红线：
 - `mvn clean test -pl performance-engine-center` 必须全绿
 - 禁止修改 pom.xml、bootstrap、其他子代理的文件
 - 新增 `PerfErrorCode` 在末尾追加
+- UOE 占位方法**必须**有契约测试验证抛出 UnsupportedOperationException
 
 ### 9.4 阶段 2：集成收敛（P2）
 
 **职责**：
 1. 修改 `bootstrap/pom.xml` 添加 `performance-engine-center` 依赖
 2. 确认 `@ComponentScan`/`@MapperScan` 覆盖 performance 包
-3. 修改根 `pom.xml` 注册 `<module>`
+3. 修改根 `pom.xml` 注册 `<module>performance-engine-center</module>`
 4. 统一审查 `PerfErrorCode`（去重、冲突）
 5. 验证 `mvn clean package` 通过
-6. 启动 bootstrap，验证 Knife4j UI
-7. 执行冒烟测试：
+6. **执行 3 个 SQL 脚本**（onepl 库）：
+   - `V1_0_0__performance_ddl.sql`（仅首次，已执行可跳过）
+   - `V1_0_1__performance_resources.sql`（INSERT ON DUPLICATE KEY UPDATE 模式，可重复执行）
+   - `V1_0_2__performance_dicts.sql`（同上）
+7. 启动 bootstrap，验证 Knife4j UI 显示全部 35 个端点
+8. 执行冒烟测试（curl 或 Knife4j）：
    - `GET /api/perf/sys-control?scopeDim=EMP`
    - `GET /api/perf/metrics?pageNo=1&pageSize=10`
    - `GET /api/perf/kpi-schemes?pageNo=1&pageSize=10`
    - `GET /api/perf/target-plans?pageNo=1&pageSize=10`
-   - `POST /api/perf/sys-control/init`
-8. 运行全量 `mvn clean test`
+   - `POST /api/perf/sys-control/init`（成功后验证 sys_control 表有三条 is_valid=1 记录）
+9. 运行全量 `mvn clean test`
 
 **验收**：
 - `mvn clean package` 通过
 - bootstrap 可启动，Knife4j 展示全部 35 个端点
+- PT_RESOURCE 表新增 35 条 `P_PERF_*` 资源
+- 字典表新增 10 类字典 + 对应项
 - 冒烟测试全绿
 - 全量 mvn test 通过
 
@@ -840,12 +980,12 @@ CLAUDE.md TDD 红线：
 
 1. TDD 节奏（git 历史体现红→绿→重构）
 2. CLAUDE.md 规范（`@BizAuth`、`@AuditLog`、跨模块调用、中文注释、UTF-8）
-3. 设计文档对照
+3. 设计文档对照（35 端点、7 个 Api、UOE 占位完整性）
 4. 错误码完整性
 5. 缓存一致性（事务后 evict）
 6. SQL 安全（`#{}` vs `${}`）
 7. 空值处理（Optional）
-8. 测试质量
+8. 测试质量（并发测试事务策略是否正确，UOE 契约测试是否齐全）
 
 **产出**：
 - `docs/superpowers/sessions/<date>-perf-v1.0-code-review.md`
@@ -856,28 +996,29 @@ CLAUDE.md TDD 红线：
 
 | 分类 | 数量 |
 |---|---|
-| Java 源文件 | ~120 |
+| Java 源文件 | ~135（含 7 个 Api 接口 + 15 个 DTO） |
 | MyBatis XML | 9 |
 | SQL 脚本 | 3 |
-| 测试文件 | ~60 |
+| 测试文件 | ~65（含并发 IT 与 UOE 契约测试） |
 | 配置文件 | 3 |
 | 文档 | 1（CLAUDE.md） |
-| REST 端点 | 35 |
-| 对外 Api | 4（共 19 方法） |
+| REST 端点 | **35** |
+| 对外 Api | **7**（共 34 方法：V1.0 实现 19 方法 + V1.1 UOE 占位 15 方法） |
 | 数据表 | 13 |
-| PT_RESOURCE 登记 | 35 |
+| PT_RESOURCE 登记 | 35 条 `P_PERF_*` |
 | 字典 | 10 类 |
 
 ### 9.7 完成标准（Definition of Done）
 
 1. ✅ `mvn clean package` 通过
 2. ✅ `mvn clean test` 全部通过，覆盖率达标（Service 行覆盖 ≥ 80%，分支 ≥ 70%）
-3. ✅ bootstrap 可启动，Knife4j 正常展示
+3. ✅ bootstrap 可启动，Knife4j 正常展示全部 35 端点
 4. ✅ 冒烟测试 5 个关键端点返回 200
 5. ✅ Code-reviewer 子代理无 Must Fix
 6. ✅ git 历史体现 TDD 节奏
-7. ✅ PT_RESOURCE、字典、sys_control 初始数据就位
+7. ✅ PT_RESOURCE（35 条 `P_PERF_*`）、字典（10 类）、sys_control 初始数据就位
 8. ✅ 模块级 CLAUDE.md 已撰写
+9. ✅ 所有 UOE 占位方法有契约测试
 
 ---
 
@@ -886,24 +1027,28 @@ CLAUDE.md TDD 红线：
 | 风险 | 级别 | 缓解 |
 |---|---|---|
 | 阶段 1 六个子代理同时改 `PerfErrorCode` | 中 | 约定末尾追加，阶段 2 统一去重 |
-| Mapper IT 并行跑导致数据冲突 | 中 | 数据前缀隔离（8.6）+ `@Transactional + @Rollback` |
-| Redis 未就绪导致缓存相关测试失败 | 低 | `application-test.yml` 允许 Redis 降级（`spring.data.redis.enabled` 条件）|
+| Mapper IT 并行跑导致数据冲突 | 中 | 数据前缀隔离（§8.6）+ `@Transactional + @Rollback`；并发测试单独处理 |
+| Redis 未就绪导致缓存相关测试失败 | 低 | `application-test.yml` 允许 Redis 降级 |
 | DDL 与 Entity 字段不一致 | 中 | Mapper IT 强制命中每个字段，MyBatis 映射失败即报错 |
 | bootstrap 启动失败（依赖冲突） | 中 | 阶段 2 必须执行启动冒烟测试 |
 | TDD 节奏被子代理忽略 | 高 | code-reviewer 审查 git 历史，Must Fix |
-| 槽位分配并发场景漏测 | 中 | Mapper IT 必须包含并发测试用例 |
+| 槽位分配并发场景漏测 | 中 | 专门的 `MetricSlotConcurrentIT`（不含 @Transactional） |
+| **V1.0 契约偏离权威 04 文档致 V1.1 被迫改动** | 高 → **已消除** | v1.1 修订：7 个 Api 全部对齐 04 契约签名 + UOE 占位策略 |
+| **并发测试与 @Transactional 冲突** | 高 → **已消除** | v1.1 修订：并发测试独立基类 + 数据前缀 + `@Sql(AFTER_TEST_METHOD)` 清理 |
+| **Redis 锁时序错误导致锁未包住事务** | 高 → **已消除** | v1.1 修订：明确 Facade 层申请锁，事务 Service 被锁包围 |
+| **planId 类型三边不一致** | 中 → **已消除** | v1.1 修订：DDL/Entity/Api 统一 Long |
 
 ---
 
 ## 11. 后续计划（V1.1 / V1.2 预告）
 
-**V1.1 计算与导入**（下一轮 brainstorm 再详细设计）：
+**V1.1 计算与导入**：
 - 指标执行（SQL 执行器 + Groovy 沙箱 + 级联刷新）
 - KPI 计算引擎
 - 数据导入（统一入口，三种类型）
 - 外部数据上报接收（`/api/data-task/status`）
 - 定时任务（日终指标/KPI 计算）
-- KpiApi、PerfCalcApi、DataTaskApi 暴露
+- **替换所有 UOE 占位**为真实实现（MetricApi 4 个计算方法、KpiApi 3 个结果方法、MetricQueryApi 3 个快照方法、PerfCalcApi 2 个触发方法、DataTaskApi 1 个上报方法）
 
 **V1.2 业务流程与回算**：
 - 分配关系调整审批（对公/零售分流）
@@ -911,17 +1056,31 @@ CLAUDE.md TDD 红线：
 - 历史回算引擎
 - 所有导出接口（4 个高危）
 - 事件发布（TargetAdjustApprovedEvent、AllocAdjustApprovedEvent、KpiCalcCompletedEvent）
+- 分配关系缓存的 evict 触发
 
 ---
 
 ## 12. 附录
 
-### 12.1 相关文档
+### 12.1 V1.0 vs V1.1 Api 方法矩阵
+
+| Api | V1.0 实现 | V1.0 UOE 占位 | 总计 |
+|---|---|---|---|
+| MetricApi | `getMetricDef`, `getMetricDefs`, `listMetrics`（3） | `getUserMetricCards`, `getEmpMetricValues`, `getOrgMetricValues`, `getCustMetricValues`（4） | 7 |
+| MetricQueryApi | — | `batchQueryEmpSnapshots`, `batchQueryOrgSnapshots`, `batchQueryCustSnapshots`（3） | 3 |
+| KpiApi | `getKpiScheme`, `getKpiSchemeById`（2） | `getCurrentKpiTotal`, `getCurrentKpiResult`, `getKpiHistory`（3） | 5 |
+| TargetApi | `getTargetPlan`, `getTargetPlanById`, `getTargetValue`, `listTargetValues`（4） | — | 4 |
+| PerfCalcApi | `getRunTask`（1） | `triggerKpiCalc`, `triggerRecalc`（2） | 3 |
+| DataTaskApi | — | `reportDataTaskStatus`（1） | 1 |
+| AllocApi | 全部 11 方法 | — | 11 |
+| **合计** | **21 方法** | **13 方法** | **34 方法** |
+
+### 12.2 相关文档
 
 - 功能规格：`docs/modules/performance-engine-center/01-功能规格.md`
 - 后端架构：`docs/modules/performance-engine-center/02-后端架构.md`
 - 接口设计：`docs/modules/performance-engine-center/03-接口设计与报文.md`
-- 对外 API 契约：`docs/modules/performance-engine-center/04-对外API契约.md`
+- **对外 API 契约（权威）**：`docs/modules/performance-engine-center/04-对外API契约.md`
 - 表结构 DDL：`docs/modules/performance-engine-center/05-表结构DDL.md`
 - 并发与事务：`docs/modules/performance-engine-center/06-并发与事务策略.md`
 - 审计要求：`docs/modules/performance-engine-center/07-审计要求.md`
@@ -931,8 +1090,9 @@ CLAUDE.md TDD 红线：
 - 共通开发规范：`docs/common-dev-guide.md`
 - 项目根规范：`CLAUDE.md`
 
-### 12.2 变更历史
+### 12.3 变更历史
 
 | 日期 | 版本 | 变更 | 作者 |
 |---|---|---|---|
 | 2026-04-15 | v1.0 | 初稿，经 5 轮澄清 + 9 节分节确认后定稿 | Claude Code + leid |
+| 2026-04-15 | v1.1 | 根据首轮 spec review 意见修订 10 项：Api 权威对齐+UOE 占位、planId 统一 Long、DDL UK 补齐、Redis 锁时序修正、并发测试例外策略、端点数统一 35、PT_RESOURCE 前缀 `P_PERF_*`、阶段 2 集成 SQL 执行、槽位释放语义明确、BizType/resourceType 映射表 | Claude Code + leid |
