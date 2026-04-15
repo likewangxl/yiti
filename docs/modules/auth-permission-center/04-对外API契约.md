@@ -255,7 +255,7 @@ public interface BizScopeApi {
      *    - ORG_SUBTREE: entityOwnerOrgId IN 用户机构子树
      *    - ALL: 直接通过
      *    - SELF_ASSIGNED: assigneeEmpId == empId (需额外参数)
-     *    - WORKFLOW_PARTICIPANT: 需结合WorkflowParticipantService
+     *    - WORKFLOW_PARTICIPANT: 需结合 workflow-center 的参与者判定能力（当前对外 Java 契约待补齐）
      *
      * @param empId             用户工号
      * @param bizType           业务类型

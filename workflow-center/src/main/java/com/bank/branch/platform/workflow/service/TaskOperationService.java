@@ -15,6 +15,7 @@ import org.flowable.task.api.Task;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -84,7 +85,12 @@ public class TaskOperationService {
         taskService.addComment(taskId, task.getProcessInstanceId(), "APPROVE", req.getOpinion());
 
         // 完成任务，推动流程流转
-        taskService.complete(taskId, req.getFormData());
+        Map<String, Object> vars = new HashMap<>();
+        if (req.getFormData() != null) {
+            vars.putAll(req.getFormData());
+        }
+        vars.put("approved", true);
+        taskService.complete(taskId, vars);
 
         // 发布事件
         eventPublisher.publishEvent(new TaskApprovedEvent(taskId, task.getProcessInstanceId(), empId));

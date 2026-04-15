@@ -48,8 +48,13 @@ public class ProcessCompletedListener implements ExecutionListener {
             return;
         }
 
-        // 更新流程状态为已完成
-        map.setProcessStatus(ProcessStatus.COMPLETED.getCode());
+        Object approved = execution.getVariable("approved");
+        ProcessStatus terminalStatus = Boolean.FALSE.equals(approved)
+                ? ProcessStatus.CANCELLED
+                : ProcessStatus.COMPLETED;
+
+        // 更新流程状态为已完成/已取消
+        map.setProcessStatus(terminalStatus.getCode());
         map.setEndTime(LocalDateTime.now());
         map.setUpdatedTime(LocalDateTime.now());
         bizProcessMapMapper.updateById(map);

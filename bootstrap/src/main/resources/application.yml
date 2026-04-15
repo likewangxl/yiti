@@ -23,6 +23,9 @@ spring:
     timeout: 7200s
 flowable:
   history-level: audit
+  process-definition-location-prefix: classpath*:/bpmn/
+  process-definition-location-suffixes:
+    - "**.bpmn20.xml"
   idm:
     enabled: false
   database-schema-update: true

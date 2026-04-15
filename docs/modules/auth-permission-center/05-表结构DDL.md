@@ -244,7 +244,7 @@
 | ORG | `'ORG'` | 本机构 | `owner_org_id = #{orgCode}` | 认领范围、部门秘书派单范围 |
 | ORG_SUBTREE | `'ORG_SUBTREE'` | 本机构及下属 | `owner_org_id IN (#{orgSubtreeCodes})` | 机构负责人视角 |
 | ALL | `'ALL'` | 全行 | `1=1`（不过滤） | 系统管理员、公司部/零售部 |
-| WORKFLOW_PARTICIPANT | `'WORKFLOW_PARTICIPANT'` | 流程参与者 | 需结合 WorkflowParticipantService | 授信审查/批复、公司部审批 |
+| WORKFLOW_PARTICIPANT | `'WORKFLOW_PARTICIPANT'` | 流程参与者 | 需结合 workflow-center 的参与者判定能力（当前对外 Java 契约待补齐） | 授信审查/批复、公司部审批 |
 
 ---
 

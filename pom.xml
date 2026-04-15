@@ -111,20 +111,6 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- customer-marketing-center -->
-            <dependency>
-                <groupId>com.bank.branch.platform</groupId>
-                <artifactId>customer-marketing-center</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-
-            <!-- business-application-center -->
-            <dependency>
-                <groupId>com.bank.branch.platform</groupId>
-                <artifactId>business-application-center</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-
             <!-- 第三方 -->
             <dependency>
                 <groupId>org.mybatis.spring.boot</groupId>

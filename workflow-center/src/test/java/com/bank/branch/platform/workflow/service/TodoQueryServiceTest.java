@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
@@ -32,6 +33,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,6 +68,9 @@ class TodoQueryServiceTest {
 
     @Mock
     private SlaCalculationService slaCalculationService;
+
+    @Mock
+    private CurrentUserApi currentUserApi;
 
     @InjectMocks
     private TodoQueryService todoQueryService;
@@ -112,6 +117,25 @@ class TodoQueryServiceTest {
         return htq;
     }
 
+    private void mockAssignedAndCandidateTaskQueries(String empId, Set<String> candidateGroupKeys,
+                                                     List<Task> assignedTasks, List<Task> candidateTasks) {
+        TaskQuery assignedQuery = mock(TaskQuery.class);
+        TaskQuery candidateQuery = mock(TaskQuery.class);
+
+        when(taskService.createTaskQuery()).thenReturn(assignedQuery, candidateQuery);
+
+        when(assignedQuery.taskAssignee(empId)).thenReturn(assignedQuery);
+        when(assignedQuery.orderByTaskCreateTime()).thenReturn(assignedQuery);
+        when(assignedQuery.desc()).thenReturn(assignedQuery);
+        when(assignedQuery.list()).thenReturn(assignedTasks);
+
+        when(candidateQuery.taskCandidateGroupIn(candidateGroupKeys)).thenReturn(candidateQuery);
+        when(candidateQuery.taskUnassigned()).thenReturn(candidateQuery);
+        when(candidateQuery.orderByTaskCreateTime()).thenReturn(candidateQuery);
+        when(candidateQuery.desc()).thenReturn(candidateQuery);
+        when(candidateQuery.list()).thenReturn(candidateTasks);
+    }
+
     /**
      * 构建模拟的 Flowable Task
      */
@@ -150,6 +174,7 @@ class TodoQueryServiceTest {
     @Test
     void queryTodoList_returnsTasks() {
         // given
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
         Task mockTask = buildMockTask("TASK_001", "经理审批", "PID_001",
                 "E10001", "userTask1", "loan_approve:1:123");
         mockTaskQueryChain(1L, List.of(mockTask));
@@ -183,6 +208,7 @@ class TodoQueryServiceTest {
     @Test
     void queryTodoList_setsClaimableFlag() {
         // given —— assignee 为 null 表示未签收
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
         Task unclaimedTask = buildMockTask("TASK_002", "主管审核", "PID_002",
                 null, "userTask2", "loan_approve:1:123");
         mockTaskQueryChain(1L, List.of(unclaimedTask));
@@ -341,6 +367,7 @@ class TodoQueryServiceTest {
     @Test
     void queryTodoList_filterByBizType() {
         // given —— 两个任务，分属不同业务类型
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
         Task loanTask = buildMockTask("TASK_010", "贷款审批", "PID_010",
                 "E10001", "userTask1", "loan_approve:1:123");
         Task leadTask = buildMockTask("TASK_011", "线索审批", "PID_011",
@@ -370,6 +397,7 @@ class TodoQueryServiceTest {
     @Test
     void queryTodoList_bizMapNull_skipsTask() {
         // given —— 任务的 biz map 不存在
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
         Task mockTask = buildMockTask("TASK_020", "孤立的审批", "PID_020",
                 "E10001", "userTask1", "loan_approve:1:123");
         mockTaskQueryChain(1L, List.of(mockTask));
@@ -454,6 +482,7 @@ class TodoQueryServiceTest {
     @Test
     void convertTaskToDTO_nullProcessDefinitionId_returnsNullKey() {
         // given —— processDefinitionId 为 null
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
         Task mockTask = buildMockTask("TASK_040", "测试", "PID_040",
                 "E10001", "userTask1", null);
         mockTaskQueryChain(1L, List.of(mockTask));
@@ -475,6 +504,7 @@ class TodoQueryServiceTest {
      */
     @Test
     void convertToLocalDateTime_nullDate_returnsNull() {
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
         Task mockTask = buildMockTask("TASK_050", "测试", "PID_050",
                 "E10001", "userTask1", "loan_approve:1:123");
         lenient().when(mockTask.getCreateTime()).thenReturn(null);
@@ -518,11 +548,46 @@ class TodoQueryServiceTest {
      */
     @Test
     void queryTodoList_emptyList_returnsEmptyResult() {
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
         mockTaskQueryChain(0L, List.of());
 
         PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
 
         assertThat(result.getTotal()).isEqualTo(0L);
         assertThat(result.getRecords()).isEmpty();
+    }
+
+    @Test
+    void queryTodoList_includesCandidateGroupTasksWithoutWideningClaimedScope() {
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Set.of("ROLE:R_BRANCH_MGR"));
+
+        Task assignedTask = buildMockTask("TASK_070", "已签收机构审批", "PID_070",
+                "E10001", "branch_approve", "loan_approve_v1:1:123");
+        lenient().when(assignedTask.getCreateTime()).thenReturn(new Date(2_000L));
+        Task candidateTask = buildMockTask("TASK_071", "未签收机构审批", "PID_071",
+                null, "branch_approve", "loan_approve_v1:1:123");
+        lenient().when(candidateTask.getCreateTime()).thenReturn(new Date(3_000L));
+
+        mockAssignedAndCandidateTaskQueries(
+                "E10001",
+                Set.of("ROLE:R_BRANCH_MGR"),
+                List.of(assignedTask),
+                List.of(candidateTask)
+        );
+
+        BizProcessMap assignedMap = buildBizProcessMap("PID_070", "LOAN", "LA070");
+        BizProcessMap candidateMap = buildBizProcessMap("PID_071", "LOAN", "LA071");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_070")).thenReturn(assignedMap);
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_071")).thenReturn(candidateMap);
+        when(slaCalculationService.calculateSlaStatus(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(2L);
+        assertThat(result.getRecords()).extracting(TaskRespDTO::getTaskId)
+                .containsExactly("TASK_071", "TASK_070");
+        assertThat(result.getRecords().get(0).getClaimable()).isTrue();
+        assertThat(result.getRecords().get(1).getClaimable()).isFalse();
     }
 }

@@ -453,6 +453,8 @@ VALUES
 ('RES_WF_APPROVE',     '/api/workflow/tasks/*/approve',               'POST', '工作流任务同意',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_WF_REJECT',      '/api/workflow/tasks/*/reject',                'POST', '工作流任务驳回',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_WF_TRANSFER',    '/api/workflow/tasks/*/transfer',              'POST', '工作流任务转交',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_SUBMIT',      '/api/workflow/processes/submit',              'POST', '工作流流程提交',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
+('RES_WF_CANCEL',      '/api/workflow/processes/*/cancel',            'POST', '工作流流程撤回',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_WF_HISTORY',     '/api/workflow/process/history',               'GET',  '流程历史',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_WF_IS_PART',     '/api/workflow/participants/is-participant',   'GET',  '参与者判定',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
 ('RES_WF_CFG_CAND',    '/api/workflow/config/node-candidates',        'POST', '流程节点候选配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
@@ -645,6 +647,8 @@ VALUES
 ('RR_RM_WF_APV',    'R_RM', 'RES_WF_APPROVE',         'PLATFORM', NOW()),
 ('RR_RM_WF_REJ',    'R_RM', 'RES_WF_REJECT',          'PLATFORM', NOW()),
 ('RR_RM_WF_TRF',    'R_RM', 'RES_WF_TRANSFER',        'PLATFORM', NOW()),
+('RR_RM_WF_SUBMIT', 'R_RM', 'RES_WF_SUBMIT',          'PLATFORM', NOW()),
+('RR_RM_WF_CANCEL', 'R_RM', 'RES_WF_CANCEL',          'PLATFORM', NOW()),
 ('RR_RM_WF_HIS',    'R_RM', 'RES_WF_HISTORY',         'PLATFORM', NOW()),
 ('RR_RM_WF_PART',   'R_RM', 'RES_WF_IS_PART',         'PLATFORM', NOW()),
 -- 报表：个人只读

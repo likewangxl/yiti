@@ -4,6 +4,8 @@ import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
+import com.bank.branch.platform.workflow.api.dto.CancelProcessReqDTO;
+import com.bank.branch.platform.workflow.service.ProcessCommandService;
 import com.bank.branch.platform.workflow.service.ProcessStartService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 public class WorkflowFacade implements WorkflowApi {
 
     private final ProcessStartService processStartService;
+    private final ProcessCommandService processCommandService;
 
     /**
      * {@inheritDoc}
@@ -27,6 +30,16 @@ public class WorkflowFacade implements WorkflowApi {
     @Override
     public WorkflowLaunchResp startProcess(StartProcessCmd cmd) {
         return processStartService.startProcess(cmd);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void cancelProcess(String processInstanceId, String reason) {
+        CancelProcessReqDTO req = new CancelProcessReqDTO();
+        req.setReason(reason);
+        processCommandService.cancelProcess(processInstanceId, req);
     }
 
     /**

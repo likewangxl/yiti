@@ -173,7 +173,10 @@ class TaskOperationServiceTest {
 
         // then
         verify(taskService).addComment("TASK_001", "PID_001", "APPROVE", "同意");
-        verify(taskService).complete("TASK_001", variables);
+        verify(taskService).complete(eq("TASK_001"), argThat((Map<String, Object> vars) ->
+                "YES".equals(vars.get("needCreditMeeting"))
+                        && Boolean.TRUE.equals(vars.get("approved"))
+        ));
         verify(eventPublisher).publishEvent(any(TaskOperationService.TaskApprovedEvent.class));
     }
 

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
@@ -32,7 +33,9 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +62,7 @@ public class TodoQueryService {
     private final SlaCalculationService slaCalculationService;
     private final NodeFormConfMapper nodeFormConfMapper;
     private final ObjectMapper objectMapper;
+    private final CurrentUserApi currentUserApi;
 
     /**
      * 解析 JSON 字符串为 List。
@@ -95,15 +99,24 @@ public class TodoQueryService {
      */
     public PageResult<TaskRespDTO> queryTodoList(String empId, String bizType, String keyword,
                                                   int pageNo, int pageSize) {
-        // 1. 构建 Flowable TaskQuery
-        TaskQuery query = taskService.createTaskQuery()
-                .taskCandidateOrAssigned(empId)
-                .orderByTaskCreateTime()
-                .desc();
+        Set<String> candidateGroupKeys = currentUserApi.getCurrentCandidateGroupKeys();
+        List<Task> tasks;
+        long total;
 
-        // 2. 分页查询
-        long total = query.count();
-        List<Task> tasks = query.listPage((pageNo - 1) * pageSize, pageSize);
+        if (candidateGroupKeys == null || candidateGroupKeys.isEmpty()) {
+            TaskQuery query = taskService.createTaskQuery()
+                    .taskCandidateOrAssigned(empId)
+                    .orderByTaskCreateTime()
+                    .desc();
+            total = query.count();
+            tasks = query.listPage((pageNo - 1) * pageSize, pageSize);
+        } else {
+            List<Task> visibleTasks = mergeVisibleTasks(empId, candidateGroupKeys);
+            total = visibleTasks.size();
+            int fromIndex = Math.min((pageNo - 1) * pageSize, visibleTasks.size());
+            int toIndex = Math.min(fromIndex + pageSize, visibleTasks.size());
+            tasks = visibleTasks.subList(fromIndex, toIndex);
+        }
 
         // 3. 转换为 DTO 并关联业务信息
         List<TaskRespDTO> dtos = new ArrayList<>();
@@ -122,6 +135,35 @@ public class TodoQueryService {
         }
 
         return PageResult.of(pageNo, pageSize, total, dtos);
+    }
+
+    private List<Task> mergeVisibleTasks(String empId, Set<String> candidateGroupKeys) {
+        List<Task> assignedTasks = taskService.createTaskQuery()
+                .taskAssignee(empId)
+                .orderByTaskCreateTime()
+                .desc()
+                .list();
+        List<Task> candidateTasks = taskService.createTaskQuery()
+                .taskCandidateGroupIn(candidateGroupKeys)
+                .taskUnassigned()
+                .orderByTaskCreateTime()
+                .desc()
+                .list();
+
+        Map<String, Task> visibleTasks = new LinkedHashMap<>();
+        for (Task task : assignedTasks) {
+            visibleTasks.put(task.getId(), task);
+        }
+        for (Task task : candidateTasks) {
+            visibleTasks.putIfAbsent(task.getId(), task);
+        }
+
+        List<Task> mergedTasks = new ArrayList<>(visibleTasks.values());
+        mergedTasks.sort(Comparator.comparing(
+                Task::getCreateTime,
+                Comparator.nullsLast(Date::compareTo))
+                .reversed());
+        return mergedTasks;
     }
 
     /**
