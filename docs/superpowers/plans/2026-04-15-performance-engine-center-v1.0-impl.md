@@ -114,6 +114,87 @@ performance-engine-center/
 
 ---
 
+### Task 0.0: 环境探针（**先执行，再启动后续任务**）
+
+**目的**：在编写任何 SQL 脚本前，验证外部依赖的真实表结构（PT_RESOURCE、gov_dict、既有 perf_* 表），将 plan 中的模板 SQL 替换为已验证的列名。
+
+**Files:** 不创建文件，产出探针报告到 `/tmp/perf-env-probe.md`
+
+- [ ] **Step 1: 检查 onepl 中是否已存在 perf_* 表**
+
+```bash
+mysql -u root -p123456 onepl -e "
+SELECT table_name FROM information_schema.tables
+WHERE table_schema='onepl'
+  AND (table_name LIKE 'perf_%' OR table_name IN ('sys_control','cust_alloc_relation','emp_index_result','org_index_result','cust_index_result','kpi_result'))
+ORDER BY table_name;" > /tmp/perf-env-probe-existing.txt
+cat /tmp/perf-env-probe-existing.txt
+```
+
+**决策分支**：
+- 若**全部不存在**：Task 0.9 可直接 CREATE TABLE，无需 DROP 预处理
+- 若**部分已存在**：在 Task 0.9 之前加 `DROP TABLE IF EXISTS ...;`（备份后）
+
+- [ ] **Step 2: 验证 PT_RESOURCE 实际列结构**
+
+```bash
+mysql -u root -p123456 onepl -e "DESC PT_RESOURCE;" > /tmp/perf-env-probe-ptresource.txt
+cat /tmp/perf-env-probe-ptresource.txt
+```
+
+**检查点**：
+- 列名是大写 `RESOURCE_ID/URL_PATH/HTTP_METHOD/BIZ_TYPE/ACTION/MODULE/STATUS` 还是小写或混合？
+- 是否有 `BIZ_TYPE` 字段？（spec §6.3 使用此字段）
+- `RESOURCE_ID` 长度限制（应为 20）
+
+```bash
+# 采样现有资源记录（如 auth / governance 的）查看风格
+mysql -u root -p123456 onepl -e "SELECT * FROM PT_RESOURCE WHERE MODULE IN ('auth','governance','workflow') LIMIT 3\G" > /tmp/perf-env-probe-ptresource-sample.txt
+cat /tmp/perf-env-probe-ptresource-sample.txt
+```
+
+- [ ] **Step 3: 验证 PT_ROLE_RESOURCE 列结构**
+
+```bash
+mysql -u root -p123456 onepl -e "DESC PT_ROLE_RESOURCE;" > /tmp/perf-env-probe-ptroleresource.txt
+cat /tmp/perf-env-probe-ptroleresource.txt
+```
+
+- [ ] **Step 4: 验证字典表实际结构**
+
+```bash
+mysql -u root -p123456 onepl -e "SHOW TABLES LIKE '%dict%';" > /tmp/perf-env-probe-dict-tables.txt
+cat /tmp/perf-env-probe-dict-tables.txt
+```
+
+**决策分支**：
+- **双表** `gov_dict_type` + `gov_dict_item`：沿用 Task 0.11 模板
+- **单表** `gov_dict`（type+code 合并）：重写 Task 0.11 SQL 为单表模式
+- **其他命名**：以实际为准调整
+
+```bash
+# 对实际存在的字典表做 DESC，采样数据
+mysql -u root -p123456 onepl -e "DESC gov_dict_type; DESC gov_dict_item;" 2>/dev/null || \
+mysql -u root -p123456 onepl -e "DESC gov_dict;" 2>/dev/null
+```
+
+- [ ] **Step 5: 验证 PT_RESOURCE 现有 MODULE 枚举值**
+
+```bash
+mysql -u root -p123456 onepl -e "SELECT DISTINCT MODULE FROM PT_RESOURCE;" > /tmp/perf-env-probe-modules.txt
+cat /tmp/perf-env-probe-modules.txt
+```
+
+Expected: 看到 `auth/governance/workflow` 等；确认 `perf` 可以作为新枚举值使用（若 MODULE 字段带长度限制或校验，需适配）。
+
+- [ ] **Step 6: 汇总探针结果并更新 Task 0.9/0.10/0.11 模板**
+
+根据探针结果，若发现 plan 中模板 SQL 列名/表名与实际不符，**主代理在 Task 0.9/0.10/0.11 执行前现场修正模板**，并在本 plan 对应 Task 下增加注释记录"实际使用的列名/表名"。
+
+探针完成，可以继续 Task 0.1。
+
+---
+
 ### Task 0.1: 创建模块目录骨架
 
 **Files:**
@@ -571,7 +652,7 @@ public interface DataTaskApi {
 }
 ```
 
-- [ ] **Step 7: 编写 AllocApi.java**（11 方法，V1.0 全部实现）
+- [ ] **Step 7: 编写 AllocApi.java**（**10 方法**，V1.0 全部实现；与 04 契约精确一致）
 
 ```java
 package com.bank.branch.platform.performance.api;
@@ -599,17 +680,15 @@ public interface AllocApi {
 }
 ```
 
-- [ ] **Step 8: 编译验证**
+- [ ] **Step 8: 跳过编译，先完成 DTO 定义（Task 0.8），再统一编译**
 
-DTO 还未创建，编译会失败。跳过编译，先完成 Task 0.8。
+**重要**：本 Task 先只创建 Api 接口文件，不执行编译（会因 DTO 缺失失败）。必须先完成 Task 0.8 的全部 DTO，再在 Task 0.8 Step 3 做统一编译验证。
 
-- [ ] **Step 9: Commit（配合 Task 0.8 一起提交）**
-
-合并到 Task 0.8 末尾。
+本 Task 不独立 commit，与 Task 0.8 合并为单次提交。
 
 ---
 
-### Task 0.8: 定义 15 个 DTO 类
+### Task 0.8: 定义 15 个 DTO 类（完成后与 Task 0.7 统一编译+提交）
 
 **Files:**
 - Create: `performance-engine-center/src/main/java/com/bank/branch/platform/performance/api/dto/*.java` (14 个 DTO + 1 个 cmd)
@@ -980,12 +1059,24 @@ INSERT INTO gov_dict_item (dict_type, item_code, item_name, sort_no, status, cre
 ('PERF_METRIC_STATUS', 'DRAFT',     '草稿', 1, 1, 'system', NOW()),
 ('PERF_METRIC_STATUS', 'PUBLISHED', '已发布', 2, 1, 'system', NOW()),
 ('PERF_METRIC_STATUS', 'DISABLED',  '已停用', 3, 1, 'system', NOW()),
+-- PERF_TASK_TYPE
+('PERF_TASK_TYPE', 'METRIC_TRIAL', '指标试运行', 1, 1, 'system', NOW()),
+('PERF_TASK_TYPE', 'METRIC_RUN',   '指标计算',   2, 1, 'system', NOW()),
+('PERF_TASK_TYPE', 'KPI_RUN',      'KPI计算',    3, 1, 'system', NOW()),
+('PERF_TASK_TYPE', 'RECALC',       '历史回算',   4, 1, 'system', NOW()),
+('PERF_TASK_TYPE', 'DATA_IMPORT',  '数据导入',   5, 1, 'system', NOW()),
 -- PERF_TASK_STATUS
 ('PERF_TASK_STATUS', 'PENDING',  '待执行', 1, 1, 'system', NOW()),
 ('PERF_TASK_STATUS', 'RUNNING',  '执行中', 2, 1, 'system', NOW()),
 ('PERF_TASK_STATUS', 'SUCCESS',  '成功',   3, 1, 'system', NOW()),
 ('PERF_TASK_STATUS', 'FAILED',   '失败',   4, 1, 'system', NOW()),
 ('PERF_TASK_STATUS', 'CANCELLED','已取消', 5, 1, 'system', NOW()),
+-- PERF_APPLY_STATUS (V1.2 用, 先预置)
+('PERF_APPLY_STATUS', 'DRAFT',       '草稿',     1, 1, 'system', NOW()),
+('PERF_APPLY_STATUS', 'IN_APPROVAL', '审批中',   2, 1, 'system', NOW()),
+('PERF_APPLY_STATUS', 'APPROVED',    '审批通过', 3, 1, 'system', NOW()),
+('PERF_APPLY_STATUS', 'REJECTED',    '已驳回',   4, 1, 'system', NOW()),
+('PERF_APPLY_STATUS', 'CANCELLED',   '已撤回',   5, 1, 'system', NOW()),
 -- PERF_ALLOC_DIM
 ('PERF_ALLOC_DIM', 'RULE',    '规则维度', 1, 1, 'system', NOW()),
 ('PERF_ALLOC_DIM', 'ACCOUNT', '账号维度', 2, 1, 'system', NOW())
@@ -1172,15 +1263,24 @@ import org.mockito.junit.jupiter.MockitoExtension;
 public abstract class PerformanceServiceTestBase {}
 ```
 
-- [ ] **Step 6: TestDataBuilder.java**
+- [ ] **Step 6: TestDataBuilder.java（分子代理私有，避免共享冲突）**
+
+**重要**：为避免 6 个并行子代理同时修改 `TestDataBuilder.java` 引发 git 冲突，采用**每子代理独立 Builder 类**的模式：
+- P1-A 创建 `SysControlTestDataBuilder.java`
+- P1-B 创建 `MetricTestDataBuilder.java`
+- P1-C 创建 `KpiTestDataBuilder.java`
+- P1-D 创建 `TargetTestDataBuilder.java`
+- P1-E 创建 `RunTaskTestDataBuilder.java`
+- P1-F 创建 `AllocTestDataBuilder.java`
+
+骨架阶段仅创建**空接口父类**（供未来统一接入）：
 
 ```java
 package com.bank.branch.platform.performance.support;
 
-/** Fluent Builder for test entities. 各子代理按需扩展自己的 builder 方法. */
-public class TestDataBuilder {
-    // Builders will be added by each sub-agent as needed, e.g.:
-    // public static PerfMetricDef.PerfMetricDefBuilder metricDef() { ... }
+/** 测试数据 Builder 标记接口（空接口，供各子代理扩展）.
+ *  各子代理在 test/support/ 下创建自己的 XxxTestDataBuilder 实现类, 避免共享冲突. */
+public interface TestDataBuilder {
 }
 ```
 
@@ -1405,7 +1505,8 @@ git tag -a perf-v1.0-phase0 -m "performance-engine-center V1.0 phase 0 skeleton 
 
 - [ ] **T1: SysControl Entity**
   - 红：`SysControlTest.shouldMapAllFields` (字段 getter/setter)
-  - 绿：编写 Entity（8 字段：id/scopeDim/latestDataDate/currentVersion/isValid/createdTime/updatedTime/[无 createdBy/updatedBy/deleted 因 DDL 不含]）
+  - 绿：编写 Entity（7 字段：id/scopeDim/latestDataDate/currentVersion/isValid/createdTime/updatedTime）
+  - **注意**：sys_control 是**版本控制基础设施表**，不遵循业务表的审计字段规范，故无 createdBy/updatedBy/deleted/version 列（Task 0.9 DDL 保持与 docs/schema/ddl-performance.sql 一致，不为此表补齐审计字段）
   - commit: `test/feat: SysControl entity`
 
 - [ ] **T2: SysControlMapper 基础 CRUD**
@@ -1538,7 +1639,9 @@ git tag -a perf-v1.0-phase0 -m "performance-engine-center V1.0 phase 0 skeleton 
 - [ ] **T8: MetricDefService.create / update / publish / disable / delete**
   - 红：`create_whenCodeDup_shouldThrow40903`
   - 红：`create_whenLevelInvalid_shouldThrow40911`
-  - 红：`create_whenCycle_shouldThrow40902`
+  - 红：`create_whenCycleInRefs_shouldThrow40902`
+    - **测试场景**：create 新指标 M_NEW（level=2），`refMetricCodes = ["M_EXISTING"]`；M_EXISTING 已存在且引用了 M_NEW（预置测试数据）→ 形成环路
+    - 环路检测在 `MetricCycleDetectService.checkNoCycle(metricCode, refCodes)` 中，需先把 "待创建 metricCode→refs" 加入临时图再 DFS；metricCode 尚未持久化不影响纯函数检测
   - 红：`publish_fromDraft_shouldSucceed`
   - 红：`publish_fromDisabled_shouldThrow40905`
   - 红：`disable_fromPublished_shouldSucceed_slotNotReleased`
@@ -1691,7 +1794,7 @@ private void dfs(String node, Map<String, Set<String>> graph, Set<String> visiti
 **Files:**
 - `entity/CustAllocRelation.java`
 - Mapper + XML（仅查询，11 个业务方法）
-- `service/AllocRelationService.java`（11 方法）
+- `service/AllocRelationService.java`（10 方法）
 - `facade/AllocApiImpl.java` + `DataTaskApiImpl.java` + `AllocAssembler.java`
 - `controller/AllocRelationController.java`（3 端点）
 
@@ -1860,10 +1963,11 @@ Expected: 看到 `BOOT-INF/lib/performance-engine-center-*.jar`。
 
 ### Task 2.6: 启动 bootstrap 验证
 
-- [ ] **Step 1: 启动应用（后台）**
+- [ ] **Step 1: 启动应用（后台，记录 PID）**
 
 ```bash
 cd bootstrap && mvn spring-boot:run -q > /tmp/bootstrap.log 2>&1 &
+echo $! > /tmp/bootstrap.pid
 sleep 15
 ```
 
@@ -1939,10 +2043,17 @@ mysql -u root -p123456 onepl -e "SELECT scope_dim, latest_data_date, current_ver
 
 Expected: 3 行，scope_dim 覆盖 EMP/ORG/CUST。
 
-- [ ] **Step 4: 停止应用**
+- [ ] **Step 4: 停止应用（Windows 兼容）**
 
 ```bash
-pkill -f "spring-boot:run" || true
+# Windows Git Bash 环境：
+taskkill //F //FI "WINDOWTITLE eq *spring-boot*" 2>/dev/null || \
+  taskkill //F //IM java.exe 2>/dev/null || true
+
+# 或者记录 PID 后直接 kill（推荐：Task 2.6 Step 1 启动时用 $! 记录 PID）
+# 参考：
+# mvn spring-boot:run -q > /tmp/bootstrap.log 2>&1 & echo $! > /tmp/bootstrap.pid
+# 然后这里：kill $(cat /tmp/bootstrap.pid) 2>/dev/null || true
 ```
 
 ---

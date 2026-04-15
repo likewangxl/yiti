@@ -139,7 +139,7 @@ api/
 ├── TargetApi.java                # 4 方法
 ├── PerfCalcApi.java              # 3 方法
 ├── DataTaskApi.java              # 1 方法
-├── AllocApi.java                 # 11 方法
+├── AllocApi.java                 # 10 方法
 └── dto/
     ├── MetricDefDTO.java
     ├── MetricCardDTO.java
@@ -386,7 +386,7 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 
 | Service | 关键方法 |
 |---|---|
-| `AllocRelationService` | 11 个查询方法（对应 AllocApi 全部方法） |
+| `AllocRelationService` | 10 个查询方法（对应 AllocApi 全部方法） |
 
 **关键设计**：
 - V1.0 不提供任何写入（写入在 V1.2）
@@ -471,7 +471,7 @@ long countByCondition(@Param("cond") XxxQueryCond cond);
 |---|---|
 | `void reportDataTaskStatus(DataTaskStatusCmd cmd)` | **UOE 占位**（V1.1 接入外部数据上报） |
 
-#### 5.2.7 AllocApi（11 方法，全部 V1.0 实现）
+#### 5.2.7 AllocApi（10 方法，全部 V1.0 实现）
 
 | 方法 | V1.0 状态 |
 |---|---|
@@ -935,7 +935,7 @@ CLAUDE.md TDD 红线：
 | **P1-Kpi** | KpiScheme + KpiItem Entity/Mapper/XML、2 Service、`KpiApiImpl`（`getKpiScheme`/`getKpiSchemeById` 实现 + 3 个 UOE 占位）、KpiSchemeController(9) + 全测试 |
 | **P1-Target** | TargetPlan + TargetValue Entity/Mapper/XML、2 Service、`TargetApiImpl`（全部实现）、2 Controller(4+3) + 全测试 |
 | **P1-RunTask** | PerfRunTask Entity/Mapper/XML、Service（仅查询）、`PerfCalcApiImpl`（`getRunTask` 实现 + 2 个 UOE 占位）、Controller(2) + 测试 |
-| **P1-Alloc** | CustAllocRelation Entity/Mapper/XML、AllocRelationService(11 方法)、`AllocApiImpl`（全部实现）+`DataTaskApiImpl`（1 个 UOE 占位）、Controller(3) + 全测试 |
+| **P1-Alloc** | CustAllocRelation Entity/Mapper/XML、AllocRelationService(10 方法)、`AllocApiImpl`（全部实现）+`DataTaskApiImpl`（1 个 UOE 占位）、Controller(3) + 全测试 |
 
 **共同约定**：
 - 严格 TDD：先红 → 绿 → 重构
@@ -1003,7 +1003,7 @@ CLAUDE.md TDD 红线：
 | 配置文件 | 3 |
 | 文档 | 1（CLAUDE.md） |
 | REST 端点 | **35** |
-| 对外 Api | **7**（共 34 方法：V1.0 实现 19 方法 + V1.1 UOE 占位 15 方法） |
+| 对外 Api | **7**（共 33 方法：V1.0 实现 20 方法 + V1.1 UOE 占位 13 方法） |
 | 数据表 | 13 |
 | PT_RESOURCE 登记 | 35 条 `P_PERF_*` |
 | 字典 | 10 类 |
@@ -1072,8 +1072,8 @@ CLAUDE.md TDD 红线：
 | TargetApi | `getTargetPlan`, `getTargetPlanById`, `getTargetValue`, `listTargetValues`（4） | — | 4 |
 | PerfCalcApi | `getRunTask`（1） | `triggerKpiCalc`, `triggerRecalc`（2） | 3 |
 | DataTaskApi | — | `reportDataTaskStatus`（1） | 1 |
-| AllocApi | 全部 11 方法 | — | 11 |
-| **合计** | **21 方法** | **13 方法** | **34 方法** |
+| AllocApi | 全部 10 方法 | — | 10 |
+| **合计** | **20 方法** | **13 方法** | **33 方法** |
 
 ### 12.2 相关文档
 
