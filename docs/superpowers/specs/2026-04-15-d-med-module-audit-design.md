@@ -91,24 +91,24 @@ Git 历史显示：
 
 ---
 
-## 4. 审计 Checklist 定义（4 大类，约 25 条）
+## 4. 审计 Checklist 定义（4 大类，**恰好 25 条**）
 
-完整 checklist 在阶段 1 生成并保存为独立文件。本 spec 只定义大类结构与条目示例。
+完整 checklist 在阶段 1 生成并保存为独立文件。本 spec 已枚举全部 25 条 ID（V1-01 ~ V4-05），阶段 1 只需补齐每条的"检查方法"与"期望输出格式"字段，不得新增或删除 ID。
 
-### 4.1 V1 - 规范合规（约 8 条）
+### 4.1 V1 - 规范合规（8 条）
 
 对照 `docs/common-dev-guide.md` + 根 `CLAUDE.md` 的 9 条开发 Checklist：
 
 - V1-01 跨模块调用是否只走 `*Api`（不直连 mapper / entity / serviceImpl）
 - V1-02 所有对外接口是否声明 `@BizAuth`
-- V1-03 `PT_RESOURCE` 登记（本次通过 `docs/superpowers/sql/*bizapp-pt-resource*.sql` 间接验证）
+- V1-03 `PT_RESOURCE` 登记（**假设性验证**：通过 `docs/superpowers/sql/*.sql` 间接核对；本项不作为硬检查，报告中以"假设成立/不成立"而非 ✅/❌ 记录，防止读者过度解读）
 - V1-04 写操作是否在 Service 层做二次权限校验
 - V1-05 高危操作是否独立 URL + 独立授权 + 独立审计
 - V1-06 读接口 / 导出接口是否统一应用 DATA_SCOPE
 - V1-07 流程类业务是否维护 `business_key` 与 `biz_process_map`
 - V1-08 错误码前缀是否符合模块约定（PORTAL / CUST / BIZ）
 
-### 4.2 V2 - 代码质量（约 7 条）
+### 4.2 V2 - 代码质量（7 条）
 
 - V2-01 重复代码（跨类 / 跨方法）
 - V2-02 过大文件（单文件 > 500 行警示）
@@ -118,15 +118,19 @@ Git 历史显示：
 - V2-06 Service 类 + public 方法注释齐全性
 - V2-07 是否使用 Object 作为通用参数（CLAUDE.md 明令禁止）
 
-### 4.3 V3 - 测试完备性（约 5 条）
+### 4.3 V3 - 测试完备性（5 条）
 
-- V3-01 是否存在"事后补测试"痕迹（测试逻辑简陋 / 只验证 happy path / 无边界条件）
+- V3-01 是否存在"事后补测试"痕迹。**识别启发式（命中任一即判红）**：
+  - 测试方法命名仅 `testXxx` / `testXxxSuccess` / `testCreate` 等 happy path 模式，无 `when<边界条件>_then<预期>` 结构
+  - 单个测试方法同时覆盖多个逻辑分支（一个 `@Test` 内多次变更状态并多次断言）
+  - Service 层断言只 verify "非 null" 或 verify 调用次数，而不 verify 关键业务字段的具体值
+  - 核心业务分支（状态转换、场景路由、错误码触发）零对应测试用例
 - V3-02 单元测试 vs 集成测试边界（单元测试是否误用 SpringBootTest）
 - V3-03 核心业务分支覆盖（状态机转换、场景路由、错误码触发路径）
 - V3-04 过度 mock 识别（是否 mock 掉了本应 verify 的逻辑）
 - V3-05 `@Transactional` 回滚路径测试覆盖
 
-### 4.4 V4 - 文档一致性（约 5 条）
+### 4.4 V4 - 文档一致性（5 条）
 
 - V4-01 模块级 CLAUDE.md 自述的端点数 vs 实际 Controller 端点数
 - V4-02 模块级 CLAUDE.md 自述的 Service / Facade 类清单 vs 实际文件
@@ -198,11 +202,14 @@ Git 历史显示：
 mvn -pl portal-content-center,customer-marketing-center,business-application-center -am test
 ```
 
-**中断条件**：若任一模块测试失败，立即停止并向用户上报，转入 D-深讨论（因为测试失败意味着代码 vs 功能规范有实质偏离）。
+**中断条件分级**：
+
+- **编译失败**（pom 修复后仍报 compile error / dependency resolve error / classpath 冲突）→ 视为阶段 0.1 未完成的延续；主会话自行诊断根因并向用户上报，**不扩大修复范围**（不碰业务代码）；若根因非 pom 且无法用"补 dependencyManagement"级别的最小改动解决，上报后转 D-超深讨论
+- **测试失败**（编译通过但 `@Test` 报红）→ 立即停止，向用户上报，转入 D-深讨论（因为测试失败意味着代码 vs 功能规范有实质偏离）
 
 ### 阶段 1：生成审计 Checklist
 
-主会话基于 common-dev-guide.md 9 章 + 根 CLAUDE.md 开发 Checklist 段落 + 4 大类定义，生成：
+主会话基于 common-dev-guide.md 9 章 + 根 CLAUDE.md 开发 Checklist 段落 + §4 大类定义，生成**恰好 25 条** checklist 条目（**V1:8 / V2:7 / V3:5 / V4:5**，与 §4 一致，子代理禁止自行增减 ID），保存为：
 
 `docs/superpowers/audits/2026-04-15-module-audit-checklist.md`
 
@@ -324,6 +331,17 @@ mvn -pl portal-content-center,customer-marketing-center,business-application-cen
 | **Critical** | 违反 CLAUDE.md 明文禁止条款 / 可能导致运行时错误 / 存在安全隐患 / 权限绕过 |
 | **Important** | 违反最佳实践 / 影响可维护性 / 测试覆盖重大缺口 / 文档与代码不一致 |
 | **Minor** | 代码风格 / 注释缺失 / 轻微重复 / 命名不一致 |
+
+### 7.1 主会话收验规则
+
+子代理报告落盘后，主会话在进入阶段 3 汇总前做结构校验：
+
+- 是否存在"执行摘要"矩阵表
+- 是否存在"Checklist 通过情况"全量 25 行表
+- 缺陷详单 ID 是否以 `D-` 开头且顺序编号（D-001, D-002...）
+- 每条缺陷是否齐全：位置 / 规范依据 / 问题描述 / 建议修复 / 证据 5 字段均非空
+
+校验不通过则**主会话一次性回写子代理**（通过 SendMessage）要求补齐，最多 1 次；仍不合规则按现有报告汇总并在总报告中标注"该模块报告格式部分缺失"。此规则保证汇总机械可执行。
 
 ---
 
