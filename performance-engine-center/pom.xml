@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.bank.branch.platform</groupId>
+        <artifactId>branch-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>performance-engine-center</artifactId>
+    <name>Performance Engine Center</name>
+    <description>绩效计算中心：指标库、KPI 方案、目标管理、分配关系查询、数据版本控制 (V1.0 配置与版本骨架)</description>
+
+    <dependencies>
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Common 模块 -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-aop</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-db</artifactId>
+        </dependency>
+
+        <!-- auth-permission-center -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>auth-permission-center</artifactId>
+        </dependency>
+
+        <!-- system-governance-center -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>system-governance-center</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Redis (V1.0 用于配置缓存 + 槽位分布式锁) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- MyBatis -->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- API 文档 -->
+        <dependency>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

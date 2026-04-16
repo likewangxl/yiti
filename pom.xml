@@ -19,6 +19,7 @@
         <module>portal-content-center</module>
         <module>customer-marketing-center</module>
         <module>business-application-center</module>
+        <module>performance-engine-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -125,6 +126,13 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- performance-engine-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>performance-engine-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- 第三方 -->
             <dependency>
                 <groupId>org.mybatis.spring.boot</groupId>
@@ -173,6 +181,14 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.5</version>
+                    <configuration>
+                        <!--
+                            启用 JDK 17+ 的 Dynamic Agent Loading，满足 Mockito 5.x 的 inline mock maker
+                            对 self-attach 的要求。缺此项会在 JDK 17.0.18 + Windows 等环境出现
+                            "Could not self-attach to current VM using external process" 错误。
+                        -->
+                        <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.springframework.boot</groupId>
