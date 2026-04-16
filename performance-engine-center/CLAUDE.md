@@ -1,0 +1,157 @@
+# performance-engine-center/ CLAUDE.md
+
+本文件为 `performance-engine-center` 模块提供上下文说明。
+
+## 模块概述
+
+**performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制等能力。
+
+**当前版本**: V1.0（配置与版本骨架）—— 仅含配置态 CRUD + 只读查询 + 版本管理基础设施，**不含任何计算、流程、事件、定时任务**。
+
+**基础包名**: `com.bank.branch.platform.performance`
+**Maven 坐标**: `com.bank.branch.platform:performance-engine-center`
+
+**Spec**: `docs/superpowers/specs/2026-04-15-performance-engine-center-v1.0-design.md`（v1.2）
+**Plan**: `docs/superpowers/plans/2026-04-15-performance-engine-center-v1.0-impl.md`
+
+## 分期策略
+
+| 版本 | 范围 | 状态 |
+|---|---|---|
+| **V1.0** | 配置态 CRUD + 版本管理骨架 + 只读查询 + 7 个 Api（契约定型）| **本期交付** |
+| V1.1 | 指标执行（SQL+Groovy+级联）、KPI 计算、数据导入、外部上报 | 规划中 |
+| V1.2 | 分配/目标调整审批、历史回算、导出接口、事件发布 | 规划中 |
+
+## 依赖关系
+
+- **依赖**: `common-web`, `common-trace`, `common-security`, `common-aop`, `common-db`, `auth-permission-center`, `system-governance-center`
+- **V1.0 不依赖**: `workflow-center`（V1.2 才依赖）、`customer-marketing-center`
+- **被依赖（未来）**: `portal-content-center`、`report-analytics-center`、`customer-marketing-center`、`business-application-center`
+
+## 包结构
+
+```
+src/main/java/com/bank/branch/platform/performance/
+├── api/                    # 7 个对外 Api 接口 + 14 DTO + 1 Cmd
+│   ├── MetricApi.java          (7 方法, 3 V1.0 实现 + 4 V1.1 UOE)
+│   ├── MetricQueryApi.java     (3 方法, 全部 V1.1 UOE)
+│   ├── KpiApi.java             (5 方法, 2 V1.0 实现 + 3 V1.1 UOE)
+│   ├── TargetApi.java          (4 方法, 全部 V1.0 实现)
+│   ├── PerfCalcApi.java        (3 方法, 1 V1.0 实现 + 2 V1.1 UOE)
+│   ├── DataTaskApi.java        (1 方法, V1.1 UOE)
+│   ├── AllocApi.java           (10 方法, 全部 V1.0 实现)
+│   └── dto/ (14 DTO + cmd/1 Cmd)
+├── config/                 # Spring 配置 (AutoConfig / MyBatis / Redis)
+├── controller/             # REST 控制器 (V1.0: 8 个 Controller, 35 端点)
+├── facade/                 # 对外 Api 实现 + 分布式锁 (Facade 申请/释放)
+├── service/                # 业务逻辑 (V1.0: 11 个 Service)
+├── mapper/                 # MyBatis Mapper 接口 (V1.0: 9 个 Mapper, 模块私有)
+├── entity/                 # 贫血模型 (V1.0: 9 个 Entity)
+├── enums/                  # 枚举 + 错误码
+│   ├── PerfErrorCode.java      (25 个 PERF-* 错误码)
+│   ├── BaseDimEnum.java
+│   ├── MetricLevelEnum.java
+│   ├── CalcLogicTypeEnum.java
+│   ├── CycleTypeEnum.java
+│   ├── MetricStatusEnum.java
+│   └── RunTaskStatusEnum.java
+├── exception/
+│   └── PerfException.java      (extends common-web BizException)
+└── listener/               # V1.2 事件监听器, 本期空包
+
+src/main/resources/
+├── mapper/                 # MyBatis XML
+└── sql/
+    ├── V1_0_0__performance_ddl.sql        # 基线 DDL 副本 (v1.2 no-op)
+    ├── V1_0_1__performance_resources.sql  # PT_RESOURCE 35 + pt_role_biz_scope 2
+    └── V1_0_2__performance_dicts.sql      # sys_dict 10 + sys_dict_item 39
+```
+
+## V1.0 数据表 (13 张)
+
+**配置表** (6 张)：`sys_control` / `perf_metric_def` / `perf_metric_ref` / `perf_kpi_scheme` / `perf_kpi_item` / `perf_target_plan`
+
+**业务数据表** (2 张)：`perf_target_value` / `cust_alloc_relation`
+
+**日志表** (1 张)：`perf_run_task`
+
+**宽表仅建表** (4 张, V1.1 使用)：`emp_index_result` / `org_index_result` / `cust_index_result` / `kpi_result`
+
+**v1.2 决策**：全部采用 `docs/schema/ddl-performance.sql` 原始结构, 不做 DDL 修改。
+
+## 关键设计原则
+
+### 1. 严格 TDD 红线 (CLAUDE.md 根项目规则)
+
+- 先写测试 → 运行失败 (红) → 写最简实现 → 运行通过 (绿) → 重构
+- 每步独立 commit, 禁止批量提交
+- code-reviewer 审查 git 历史, 不符合 TDD 节奏视为 Must Fix
+
+### 2. 7 个对外 Api 契约 V1.0 定型, V1.1 UOE 占位
+
+V1.0 的 7 个对外 Api 签名全部按 `docs/modules/performance-engine-center/04-对外API契约.md` 定型。
+V1.0 无法实现的 13 个方法抛 `UnsupportedOperationException("V1.1 delivered")` 占位, 下游模块不会因 "缺 Api" 要改签名, V1.1 仅替换实现。
+
+### 3. planId 类型 String（v1.2 修订）
+
+**技术债声明**：04 契约文档原用 `Long planId`, 与生产 DDL `varchar(32)` 冲突。V1.0 对齐生产 DDL, 全局使用 `String planId`, 04 契约的修正由架构师后续统一处理。
+
+### 4. 配置表缓存策略
+
+Redis 缓存 `perf:metric_def:{code}`, `perf:kpi_scheme:{id}`, `perf:target_plan:{id}`, `perf:sys_control:{scopeDim}` 等。所有 evict 通过 `TransactionSynchronizationManager.registerSynchronization` 的 `afterCommit` 回调触发，避免事务前脏数据污染缓存。
+
+### 5. Redis 锁在 Facade 层申请 (v1.2)
+
+Spring `@Transactional` 方法内无法在 "事务外" 申请锁。正确分层：
+- `SysControlFacade.switchVersion` → 申请 Redis 锁 → 调 Service `@Transactional` 方法 → finally 释放锁
+- `MetricApiImpl.allocSlot`（槽位分配）同理
+
+### 6. 并发测试例外策略
+
+`@Transactional + @Rollback` 与多线程不兼容（线程本地事务绑定）。
+- 单线程 Mapper IT：继承 `PerformanceMapperTestBase`（含 @Transactional）
+- 并发 Mapper IT：继承 `PerformanceConcurrentTestBase`（**不含** @Transactional），用 `TestDbCleaner` + 前缀隔离
+
+### 7. BizType 使用 common-security 现有枚举
+
+V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（细粒度）的组合模型，不扩展 common-security 的 BizType 枚举。
+
+## 测试数据前缀约定
+
+子代理并行开发时，每个子代理使用独立前缀避免冲突：
+- P1-A SysControl: `TEST_SC_*` / `CONCUR_SC_*`
+- P1-B Metric:    `TEST_METRIC_*` / `CONCUR_METRIC_*`
+- P1-C Kpi:       `TEST_KPI_*`
+- P1-D Target:    `TEST_TGT_*`
+- P1-E RunTask:   `TEST_RT_*`
+- P1-F Alloc:     `TEST_AR_*`
+
+## 环境依赖
+
+- MySQL 8.0 本地实例：`jdbc:mysql://localhost:3306/onepl`（root/123456）
+- Redis 6.X 本地实例：`localhost:6379`
+- 13 张 perf_* 表已在 onepl 库部署（来自 `docs/schema/ddl-performance.sql`）
+- `pt_resource` 已注册 35 条 `P_PERF_*` 资源（V1_0_1 脚本）
+- `sys_dict_item` 已注册 39 条 `PERF_*` 字典项（V1_0_2 脚本）
+
+## 开发 Checklist（新增功能时）
+
+1. ✅ 写失败的单元测试
+2. ✅ 写最简实现让测试通过
+3. ✅ 重构（保持测试通过）
+4. ✅ 每步独立 commit
+5. ✅ 所有 Controller 方法必标 `@BizAuth(bizType = BizType.PERF_CONFIG, action = ...)`
+6. ✅ 写操作必标 `@AuditLog(action, resourceType)`，高危操作 `reasonRequired=true`
+7. ✅ Service 层 public 写方法 `@Transactional(rollbackFor = Exception.class)`
+8. ✅ Mapper XML 使用 `#{}` 不用 `${}`（除数据范围片段外）
+9. ✅ 跨模块调用走对方 `*Api` 接口
+10. ✅ 中文注释 + UTF-8 编码
+
+## 相关文档
+
+- Spec: `docs/superpowers/specs/2026-04-15-performance-engine-center-v1.0-design.md`
+- Plan: `docs/superpowers/plans/2026-04-15-performance-engine-center-v1.0-impl.md`
+- 权威功能规格: `docs/modules/performance-engine-center/` (9 份)
+- 对外 API 契约: `docs/modules/performance-engine-center/04-对外API契约.md`
+- DDL 权威源: `docs/schema/ddl-performance.sql`
+- 共通开发规范: `docs/common-dev-guide.md`
