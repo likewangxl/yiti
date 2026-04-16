@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeUpdateReqDTO;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
@@ -49,6 +50,7 @@ class AddressBookServiceTest {
     @Mock AddrbookEmployeeMapper addrbookEmployeeMapper;
     @Mock ProductInfoMapper productInfoMapper;
     @Mock CurrentUserApi currentUserApi;
+    @Mock AuditApi auditApi;
     @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks AddressBookService addressBookService;
 
@@ -136,6 +138,25 @@ class AddressBookServiceTest {
 
         verify(addrbookEmployeeMapper).updateFields(any(AddrbookEmployee.class));
         verify(eventPublisher).publishEvent(any(AddrbookUpdatedEvent.class));
+        verify(auditApi, never()).log(any());
+    }
+
+    @Test
+    void updateEmployee_otherInSameOrg_shouldAudit() {
+        String targetEmpId = "E002";
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
+        AddrbookEmployee target = buildEmployee("E002", "李四");
+        target.setOrgCode("ORG_SZ_001");
+        when(addrbookEmployeeMapper.selectByEmpId(targetEmpId)).thenReturn(target);
+
+        EmployeeUpdateReqDTO req = new EmployeeUpdateReqDTO();
+        req.setMobile("13900002222");
+
+        addressBookService.updateEmployee(targetEmpId, req);
+
+        verify(addrbookEmployeeMapper).updateFields(any(AddrbookEmployee.class));
+        verify(auditApi).log(any());
     }
 
     @Test
@@ -299,7 +320,6 @@ class AddressBookServiceTest {
         e.setStatus("ACTIVE");
         e.setResponsibleProductIds(new ArrayList<>());
         e.setMaintainerEmpId("E999");
-        e.setCreatedBy("SYSTEM");
         e.setCreatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
         e.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
         e.setDeleted(0);

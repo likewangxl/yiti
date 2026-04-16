@@ -1,7 +1,10 @@
 package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.portal.api.dto.NavDTO;
 import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.nav.NavCreateReqDTO;
@@ -40,6 +43,7 @@ public class NavService {
 
     private final PortalNavMapper portalNavMapper;
     private final CurrentUserApi currentUserApi;
+    private final AuditApi auditApi;
     private final RedisTemplate<String, Object> redisTemplate;
 
     /**
@@ -125,6 +129,7 @@ public class NavService {
 
         portalNavMapper.insert(entity);
         clearNavCache();
+        auditCreate(entity, currentEmpId);
         log.info("[NavService.createNav] 新增导航成功, id={}, name={}", navId, req.getNavName());
         return entity;
     }
@@ -175,6 +180,7 @@ public class NavService {
 
         portalNavMapper.updateById(patch);
         clearNavCache();
+        auditUpdate(id, newName, newCategory, currentEmpId);
         log.info("[NavService.updateNav] 更新导航成功, id={}", id);
     }
 
@@ -196,6 +202,7 @@ public class NavService {
         String currentEmpId = currentUserApi.getCurrentEmpId();
         portalNavMapper.softDeleteById(id, currentEmpId);
         clearNavCache();
+        auditDelete(existing, currentEmpId);
         log.info("[NavService.deleteNav] 逻辑删除导航成功, id={}", id);
     }
 
@@ -254,6 +261,53 @@ public class NavService {
             redisTemplate.delete(PortalCacheConfig.NAV_ACTIVE_KEY);
         } catch (Exception e) {
             log.warn("[NavService] clearNavCache failed", e);
+        }
+    }
+
+    private void auditCreate(PortalNav entity, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("NAV")
+                .bizAction("CREATE")
+                .resourceUrl("/api/admin/nav")
+                .requestMethod("POST")
+                .requestParams("id=" + entity.getId() + "&navName=" + entity.getNavName() + "&navCategory=" + entity.getNavCategory())
+                .responseStatus(200)
+                .build());
+    }
+
+    private void auditUpdate(String navId, String navName, String navCategory, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("NAV")
+                .bizAction("EDIT")
+                .resourceUrl("/api/admin/nav/" + navId)
+                .requestMethod("PUT")
+                .requestParams("id=" + navId + "&navName=" + navName + "&navCategory=" + navCategory)
+                .responseStatus(200)
+                .build());
+    }
+
+    private void auditDelete(PortalNav entity, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("NAV")
+                .bizAction("DELETE")
+                .resourceUrl("/api/admin/nav/" + entity.getId())
+                .requestMethod("DELETE")
+                .requestParams("id=" + entity.getId() + "&navName=" + entity.getNavName() + "&navUrl=" + entity.getNavUrl())
+                .responseStatus(200)
+                .build());
+    }
+
+    private void safeAuditLog(AuditLogCmd cmd) {
+        try {
+            auditApi.log(cmd);
+        } catch (Exception ex) {
+            log.warn("[NavService] audit log failed, action={}", cmd.getBizAction(), ex);
         }
     }
 }

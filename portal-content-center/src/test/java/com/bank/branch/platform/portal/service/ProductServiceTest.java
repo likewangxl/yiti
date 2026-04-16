@@ -3,6 +3,7 @@ package com.bank.branch.platform.portal.service;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
@@ -47,6 +48,7 @@ class ProductServiceTest {
     @Mock AddrbookEmployeeMapper addrbookEmployeeMapper;
     @Mock CurrentUserApi currentUserApi;
     @Mock BizScopeApi bizScopeApi;
+    @Mock AuditApi auditApi;
     @Mock RedisTemplate<String, Object> redisTemplate;
     @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks ProductService productService;
@@ -73,6 +75,7 @@ class ProductServiceTest {
         assertThat(result.getStatus()).isEqualTo("ACTIVE");
         verify(productInfoMapper).insert(any(ProductInfo.class));
         verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
+        verify(auditApi).log(any());
     }
 
     @Test
@@ -111,6 +114,7 @@ class ProductServiceTest {
         ProductInfo result = productService.updateProduct(productId, req);
         assertThat(result).isNotNull();
         verify(productInfoMapper).updateById(any(ProductInfo.class));
+        verify(auditApi).log(any());
     }
 
     @Test
@@ -156,6 +160,7 @@ class ProductServiceTest {
         verify(eventPublisher).publishEvent(cap.capture());
         assertThat(cap.getValue().getAfterEmpIds()).isEmpty();
         assertThat(cap.getValue().getBeforeEmpIds()).containsExactlyInAnyOrder("E001", "E002");
+        verify(auditApi).log(any());
     }
 
     @Test

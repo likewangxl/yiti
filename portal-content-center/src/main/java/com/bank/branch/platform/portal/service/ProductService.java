@@ -5,8 +5,11 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.portal.adapter.DataScopeAdapter;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.config.PortalCacheConfig;
@@ -43,6 +46,7 @@ public class ProductService {
     private final AddrbookEmployeeMapper addrbookEmployeeMapper;
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
+    private final AuditApi auditApi;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -139,6 +143,7 @@ public class ProductService {
         if (!newEmpIds.isEmpty()) {
             eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(productId, req.getProductCode(), Collections.emptyList(), newEmpIds, "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
         }
+        auditCreate(entity, currentEmpId);
         return entity;
     }
 
@@ -174,6 +179,7 @@ public class ProductService {
         if (empIdsChanged) {
             eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
         }
+        auditUpdate(existing, req, currentEmpId);
         return existing;
     }
 
@@ -206,6 +212,7 @@ public class ProductService {
         if (!oldEmpIds.isEmpty()) { syncResponsibleToAddrbook(id, oldEmpIds, Collections.emptyList(), currentEmpId); }
         clearSupportCache();
         eventPublisher.publishEvent(new ProductResponsibleUpdatedEvent(id, existing.getProductCode(), oldEmpIds, Collections.emptyList(), "PRODUCT_SIDE", currentEmpId, LocalDateTime.now()));
+        auditDelete(existing, currentEmpId);
     }
 
     private void syncResponsibleToAddrbook(String productId, List<String> oldEmpIds, List<String> newEmpIds, String operatorEmpId) {
@@ -227,5 +234,55 @@ public class ProductService {
     /** 清除产品支持缓存（吞没异常，缓存删除失败不影响主流程） */
     private void clearSupportCache() {
         try { redisTemplate.delete(PortalCacheConfig.PRODUCT_SUPPORT_KEY); } catch (Exception e) { log.warn("clearSupportCache failed", e); }
+    }
+
+    private void auditCreate(ProductInfo entity, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("PRODUCT")
+                .bizAction("CREATE")
+                .resourceUrl("/api/products")
+                .requestMethod("POST")
+                .requestParams("id=" + entity.getId() + "&productCode=" + entity.getProductCode() + "&productName=" + entity.getProductName())
+                .responseStatus(200)
+                .build());
+    }
+
+    private void auditUpdate(ProductInfo existing, ProductUpdateReqDTO req, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("PRODUCT")
+                .bizAction("EDIT")
+                .resourceUrl("/api/products/" + existing.getId())
+                .requestMethod("PUT")
+                .requestParams("id=" + existing.getId() + "&productCode=" + existing.getProductCode()
+                        + "&productName=" + (req.getProductName() != null ? req.getProductName() : existing.getProductName()))
+                .responseStatus(200)
+                .build());
+    }
+
+    private void auditDelete(ProductInfo existing, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("PRODUCT")
+                .bizAction("DELETE")
+                .resourceUrl("/api/products/" + existing.getId())
+                .requestMethod("DELETE")
+                .requestParams("id=" + existing.getId() + "&productCode=" + existing.getProductCode()
+                        + "&fileObjectId=" + existing.getFileObjectId()
+                        + "&responsibleEmpIds=" + existing.getResponsibleEmpIds())
+                .responseStatus(200)
+                .build());
+    }
+
+    private void safeAuditLog(AuditLogCmd cmd) {
+        try {
+            auditApi.log(cmd);
+        } catch (Exception ex) {
+            log.warn("[ProductService] audit log failed, action={}", cmd.getBizAction(), ex);
+        }
     }
 }

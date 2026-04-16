@@ -3,6 +3,7 @@ package com.bank.branch.platform.portal.service;
 import com.alibaba.excel.EasyExcel;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
@@ -74,13 +75,14 @@ public class ProductExportService {
                 .doWrite(rows);
 
         // 5. 审计日志（导出为高危操作）
-        auditApi.log(AuditLogCmd.builder()
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
                 .empId(operatorEmpId)
                 .bizType("PRODUCT")
                 .bizAction("EXPORT")
                 .resourceUrl("/api/products/export")
                 .requestMethod("GET")
-                .requestParams("keyword=" + keyword + "&category=" + category + "&status=" + effectiveStatus)
+                .requestParams("keyword=" + keyword + "&category=" + category + "&status=" + effectiveStatus + "&rowCount=" + rows.size())
                 .responseStatus(200)
                 .build());
 
@@ -134,5 +136,13 @@ public class ProductExportService {
         row.setUpdatedTime(entity.getUpdatedTime() != null ? entity.getUpdatedTime().format(DT_FMT) : "");
 
         return row;
+    }
+
+    private void safeAuditLog(AuditLogCmd cmd) {
+        try {
+            auditApi.log(cmd);
+        } catch (Exception ex) {
+            log.warn("[ProductExportService] audit log failed, action={}", cmd.getBizAction(), ex);
+        }
     }
 }

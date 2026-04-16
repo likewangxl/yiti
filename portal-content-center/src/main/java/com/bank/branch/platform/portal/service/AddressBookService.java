@@ -1,8 +1,11 @@
 package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.addrbook.EmployeeUpdateReqDTO;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
@@ -40,6 +43,7 @@ public class AddressBookService {
     private final AddrbookEmployeeMapper addrbookEmployeeMapper;
     private final ProductInfoMapper productInfoMapper;
     private final CurrentUserApi currentUserApi;
+    private final AuditApi auditApi;
     private final ApplicationEventPublisher eventPublisher;
 
     /** 单员工负责产品数量上限 */
@@ -201,6 +205,10 @@ public class AddressBookService {
         eventPublisher.publishEvent(new AddrbookUpdatedEvent(
                 targetEmpId, changedFields, operatorEmpId, LocalDateTime.now()));
 
+        if (!operatorEmpId.equals(targetEmpId)) {
+            auditEditOther(targetEmpId, changedFields, operatorEmpId);
+        }
+
         log.info("[AddressBookService.updateEmployee] empId={}, changedFields={}, operator={}",
                 targetEmpId, changedFields, operatorEmpId);
     }
@@ -299,6 +307,27 @@ public class AddressBookService {
                     productId, product.getProductCode(),
                     beforeEmpIds, empIds,
                     "ADDRBOOK_SIDE", operatorEmpId, LocalDateTime.now()));
+        }
+    }
+
+    private void auditEditOther(String targetEmpId, List<String> changedFields, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("EMPLOYEE")
+                .bizAction("EDIT_OTHER")
+                .resourceUrl("/api/employees/" + targetEmpId)
+                .requestMethod("PUT")
+                .requestParams("targetEmpId=" + targetEmpId + "&changedFields=" + changedFields)
+                .responseStatus(200)
+                .build());
+    }
+
+    private void safeAuditLog(AuditLogCmd cmd) {
+        try {
+            auditApi.log(cmd);
+        } catch (Exception ex) {
+            log.warn("[AddressBookService] audit log failed, action={}", cmd.getBizAction(), ex);
         }
     }
 }

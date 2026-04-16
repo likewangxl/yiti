@@ -33,9 +33,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class NavControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
-    @MockBean NavService navService;
-    @MockBean ProductService productService;
-    @MockBean ProductExportService productExportService;
 
     @Test
     @WithMockEmpContext(empId = "E10001", roleCodes = {"R_RM"})

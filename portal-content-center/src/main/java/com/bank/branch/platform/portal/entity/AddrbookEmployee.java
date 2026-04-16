@@ -50,9 +50,6 @@ public class AddrbookEmployee {
     /** 维护人工号，对应 maintainer_emp_id */
     private String maintainerEmpId;
 
-    /** 创建人工号，对应 created_by */
-    private String createdBy;
-
     /** 创建时间，对应 created_time */
     private LocalDateTime createdTime;
 

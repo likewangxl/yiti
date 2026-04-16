@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class WithMockEmpContextSelfTest extends AbstractControllerIntegrationTest {
 
-    @MockBean ProductService productService;
 
     @Test
     @WithMockEmpContext(empId = "E99999", orgCode = "ORG_TEST",

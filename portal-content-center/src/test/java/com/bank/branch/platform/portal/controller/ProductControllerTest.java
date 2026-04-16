@@ -41,8 +41,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProductControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
-    @MockBean ProductService productService;
-    @MockBean ProductExportService productExportService;
 
     @Test @WithMockEmpContext(empId = "E10001", roleCodes = {"R_RM"})
     void getSupportAvailableShouldReturn200WithProductList() throws Exception {

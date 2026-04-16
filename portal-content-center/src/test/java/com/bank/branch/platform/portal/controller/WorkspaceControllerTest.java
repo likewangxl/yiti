@@ -33,11 +33,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class WorkspaceControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
-    @MockBean WorkspaceService workspaceService;
-    @MockBean ShortcutService shortcutService;
-    @MockBean NavService navService;
-    @MockBean ProductService productService;
-    @MockBean ProductExportService productExportService;
 
     // ────────── 1. 正常数据场景 ──────────
 

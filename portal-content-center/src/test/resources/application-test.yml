@@ -10,6 +10,7 @@ spring:
         - classpath:sql/test-ddl-auth-clean.sql
         - classpath:sql/test-ddl-governance-clean.sql
         - classpath:sql/test-ddl-portal-clean.sql
+        - classpath:sql/test-ddl-flowable-idm-clean.sql
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/onepl?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&allowMultiQueries=true
     username: root
