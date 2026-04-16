@@ -16,7 +16,7 @@
 
 ## 维护要求
 
-- 近期 Flowable 联调后，当前真正公开的跨模块 Java 契约只有 `WorkflowApi`；若文档提到 `WorkflowQueryApi`、`WorkflowConfigApi`、`WorkflowParticipantService`，必须注明其是否仍处于规划态。
+- 当前真正公开的跨模块 Java 契约包括 `WorkflowApi` 与 `WorkflowQueryApi`；若文档提到 `WorkflowConfigApi`、`WorkflowParticipantService`，必须注明其仍处于规划态。
 - 修改控制器、DTO、事件、权限资源或种子数据时，至少同步 `03`、`04`、`08`、`09` 四份文档。
 - 若流程终态、事件载荷或 REST 路径变更，要同步检查依赖模块文档。
 

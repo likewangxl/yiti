@@ -1,7 +1,7 @@
 # 工作流中心 -- 对外 API 契约
 
-> 版本：V1.1
-> 最后更新：2026-04-14
+> 版本：V1.2
+> 最后更新：2026-04-16
 > 本文档以 `workflow-center` 当前代码实现为准，用于说明真实可用的 Java 契约、REST 契约、内部事件与实现边界。
 
 ## 1. 当前实现边界
@@ -10,11 +10,11 @@
 
 | 能力 | 当前暴露形态 | 入口 | 说明 |
 |---|---|---|---|
-| 跨模块同步调用 | Java `*Api` | `WorkflowApi` / `WorkflowFacade` | 当前唯一已落地的跨模块 Java 契约 |
+| 跨模块同步调用 | Java `*Api` | `WorkflowApi` / `WorkflowQueryApi` / `WorkflowFacade` / `WorkflowQueryFacade` | 当前已落地的跨模块 Java 契约 |
 | 任务查询与办理 | REST | `TaskController` | 面向前端、联调和真实环境测试 |
 | 流程提交/撤回 | REST | `ProcessCommandController` | 与 `WorkflowApi` 共享底层 service |
-| 流程详情/进度图/历史 | REST | `ProcessController` | 当前无独立 Java QueryApi |
-| 流程映射查询 | REST + `WorkflowApi` | `ProcessMapController` / `WorkflowApi` | Java 侧只暴露两种映射查询方法 |
+| 流程详情/进度图/历史 | REST + Java `*Api` | `ProcessController` / `WorkflowQueryApi` | Java 侧已开放只读查询能力 |
+| 流程映射查询 | REST + Java `*Api` | `ProcessMapController` / `WorkflowApi` / `WorkflowQueryApi` | Java 侧同时暴露命令侧与查询侧映射方法 |
 | 管理端配置 | REST | `WorkflowAdminController` | 超时规则、候选人、节点表单、流程定义列表 |
 | 模块内事件 | Spring 内部事件 | service / listener record 事件 | 供同 JVM 内其他模块监听 |
 
@@ -22,7 +22,6 @@
 
 以下名称在旧设计稿、历史计划或其他模块文档中出现过，但 `workflow-center` 当前代码库中**没有对应对外接口/Facade**：
 
-- `WorkflowQueryApi`
 - `WorkflowConfigApi`
 - `WorkflowParticipantService`
 
@@ -34,7 +33,7 @@
 
 ---
 
-## 2. Java 对外契约：WorkflowApi
+## 2. Java 对外契约：WorkflowApi / WorkflowQueryApi
 
 ### 2.1 接口定义
 
@@ -142,9 +141,61 @@ public interface WorkflowApi {
 
 ### 2.8 调用约束
 
-- 其他模块**只能**依赖 `WorkflowApi`，不得直接注入 `ProcessStartService`、`ProcessCommandService`、`mapper`、`entity`。
+- 其他模块**只能**依赖正式 `WorkflowApi` / `WorkflowQueryApi`，不得直接注入内部 `service`、`mapper`、`entity`。
 - `startProcess()` 与调用方业务事务共享数据库事务边界。
-- Java 查询能力当前仅限流程映射；待办、流程图、历史节点等查询不属于当前 Java 对外契约。
+- 其他模块读取待办、任务详情、流程历史、流程节点图时，应优先依赖 `WorkflowQueryApi`，不得直接注入 `TodoQueryService` / `ProcessQueryService`。
+
+### 2.9 WorkflowQueryApi
+
+```java
+package com.bank.branch.platform.workflow.api;
+
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
+import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
+import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
+
+import java.util.List;
+
+public interface WorkflowQueryApi {
+
+    PageResult<TaskRespDTO> queryTodoList(String empId, String bizType, String keyword, int pageNo, int pageSize);
+
+    PageResult<TaskRespDTO> queryDoneList(String empId, String bizType, String keyword, int pageNo, int pageSize);
+
+    int countPendingTasks(String empId);
+
+    List<TaskRespDTO> listRecentPendingTasks(String empId, int limit);
+
+    TaskDetailRespDTO getTaskDetail(String taskId, String empId);
+
+    List<ApprovalLogDTO> getProcessHistory(String processInstanceId);
+
+    ProcessDiagramDTO getProcessNodes(String processInstanceId);
+
+    BizProcessMapDTO getProcessByBusinessKey(String businessKey);
+
+    BizProcessMapDTO getProcessByBizTypeAndBizId(String bizType, String bizId);
+}
+```
+
+当前实现路径：`WorkflowQueryFacade -> TodoQueryService / ProcessQueryService / ProcessStartService`
+
+### 2.10 WorkflowQueryApi 能力说明
+
+| 方法 | 底层实现 | 说明 |
+|---|---|---|
+| `queryTodoList(...)` | `TodoQueryService.queryTodoList(...)` | 查询待办分页列表 |
+| `queryDoneList(...)` | `TodoQueryService.queryDoneList(...)` | 查询已办分页列表 |
+| `countPendingTasks(empId)` | `queryTodoList(empId, null, null, 1, 1)` | 复用待办分页的 `total` 统计 |
+| `listRecentPendingTasks(empId, limit)` | `queryTodoList(empId, null, null, 1, limit)` | 返回最近待办记录；`limit<=0` 时返回空列表 |
+| `getTaskDetail(taskId, empId)` | `TodoQueryService.getTaskDetail(...)` | 获取任务详情与运行时办理信息 |
+| `getProcessHistory(processInstanceId)` | `ProcessQueryService.getProcessHistory(...)` | 获取审批历史日志 |
+| `getProcessNodes(processInstanceId)` | `ProcessQueryService.getProcessNodes(...)` | 获取流程节点图数据 |
+| `getProcessByBusinessKey(...)` | `ProcessStartService.getProcessByBusinessKey(...)` | 查询流程映射 |
+| `getProcessByBizTypeAndBizId(...)` | `ProcessStartService.getProcessByBizTypeAndBizId(...)` | 查询流程映射 |
 
 ---
 
@@ -383,7 +434,7 @@ public interface WorkflowApi {
 
 ## 6. 兼容性与落地说明
 
-- 旧文档中的 `WorkflowQueryApi`、`WorkflowConfigApi`、`WorkflowParticipantService` 仍可作为**规划态目标名**保留，但不能写成当前已落地 Java Bean。
-- 若其他模块需要“待办列表 / 节点表单 / 流程图 / 历史节点 / 参与者判定”等能力，当前要么走 `workflow-center` 标准 REST，要么先补齐新的 Java `*Api`。
+- 旧文档中的 `WorkflowConfigApi`、`WorkflowParticipantService` 仍可作为**规划态目标名**保留，但不能写成当前已落地 Java Bean。
+- 其他模块若需要“待办列表 / 节点表单 / 流程图 / 历史节点 / 流程映射”等只读能力，应优先走 `WorkflowQueryApi`；参与者判定等尚未公开的能力仍需补齐新的 Java `*Api` 或通过标准 REST 解决。
 - `TaskController`、`ProcessController`、`WorkflowAdminController` 属于当前真实联调入口；但按项目分层规则，业务模块之间仍应优先通过正式 `*Api` 契约协作。
 - 任何新增对外能力，都应先补 `api/` 接口与 DTO，再同步本文件和依赖模块文档。

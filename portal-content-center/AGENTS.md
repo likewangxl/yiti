@@ -20,7 +20,7 @@
   - `common-web`, `common-trace`, `common-security`, `common-aop`, `common-db`
   - `auth-permission-center` (CurrentUserApi, BizScopeApi, OrgApi)
   - `system-governance-center` (DictApi, ConfigApi, FileApi, NotifyApi, AuditApi)
-  - `workflow-center` (WorkflowApi — 工作台待办查询)
+  - `workflow-center` (WorkflowApi + WorkflowQueryApi — 工作台待办/流程映射只读能力)
 - **不依赖**: `customer-marketing-center`, `business-application-center`, `performance-engine-center`, `report-analytics-center` (portal 只聚合，不依赖核心域)
 - **被依赖**: `customer-marketing-center`, `business-application-center` 等业务模块 (通过 `*Api` 接口复用产品库、文档库等能力)
 
@@ -61,5 +61,5 @@ src/main/java/com/bank/branch/platform/portal/
 - 已实现 REST 端点见 `src/main/java/com/bank/branch/platform/portal/controller/`
 - 已实现对外 `*Api` 见 `src/main/java/com/bank/branch/platform/portal/api/`
 - 已实现数据库实体/Mapper 见 `src/main/java/com/bank/branch/platform/portal/entity/` 与 `src/main/resources/mapper/portal/`
-- 当前对 workflow 待读查询仍使用本地 `WorkflowQueryAdapter` 降级
+- 当前对 workflow 待读查询通过正式 `WorkflowQueryApi` + 本地 `WorkflowQueryAdapter` 做降级封装
 - 当前产品导出为 **V1 同步导出**（`<=5000` 行），超过阈值直接拒绝，不做异步导出

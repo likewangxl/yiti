@@ -53,6 +53,21 @@ class CrossModuleApiTest {
     @Autowired(required = false)
     private com.bank.branch.platform.workflow.api.WorkflowApi workflowApi;
 
+    @Autowired(required = false)
+    private com.bank.branch.platform.customer.api.TagApi tagApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.customer.api.LeadApi leadApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.customer.api.CustomerQueryApi customerQueryApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.customer.api.ClaimApi claimApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.customer.api.TouchTaskQueryApi touchTaskQueryApi;
+
     // ========== 测试 1: 所有 API Bean 可被注入 ==========
 
     @Test
@@ -76,6 +91,16 @@ class CrossModuleApiTest {
     @DisplayName("跨模块 API - Workflow 模块 API 可被注入")
     void workflowApi_injectable() {
         assertThat(workflowApi).as("WorkflowApi should be injectable").isNotNull();
+    }
+
+    @Test
+    @DisplayName("跨模块 API - Customer 模块 API 可被注入")
+    void customerApis_allInjectable() {
+        assertThat(tagApi).as("TagApi should be injectable").isNotNull();
+        assertThat(leadApi).as("LeadApi should be injectable").isNotNull();
+        assertThat(customerQueryApi).as("CustomerQueryApi should be injectable").isNotNull();
+        assertThat(claimApi).as("ClaimApi should be injectable").isNotNull();
+        assertThat(touchTaskQueryApi).as("TouchTaskQueryApi should be injectable").isNotNull();
     }
 
     // ========== 测试 2: OrgApi 功能验证 ==========
