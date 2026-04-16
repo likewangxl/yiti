@@ -99,8 +99,8 @@ class SysControlMapperIT extends PerformanceMapperTestBase {
         sysControlMapper.insert(r2);
         sysControlMapper.insert(r3);
 
-        // When
-        List<SysControl> list = sysControlMapper.listByScope("CUST", 10);
+        // When: 限制 3 条, 确保 2099 年测试数据优先 (生产环境可能已有更早的 1970-01-01 SC_INIT_* 基线)
+        List<SysControl> list = sysControlMapper.listByScope("CUST", 3);
 
         // Then: 倒序 V3 > V2 > V1
         assertThat(list).hasSize(3);
