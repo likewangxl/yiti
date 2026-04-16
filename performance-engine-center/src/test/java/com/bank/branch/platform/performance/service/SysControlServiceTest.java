@@ -191,4 +191,22 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
         // Then
         assertThat(list).hasSize(1).containsExactly(r1);
     }
+
+    @Test
+    @DisplayName("initIfAbsent 当有历史记录但无生效版本时返回最近一条 (历史 is_valid=0)")
+    void initIfAbsent_whenHasHistoryButNoneValid_shouldReturnLatest() {
+        // Given: 存在一条历史记录 (is_valid=0), 但无当前生效版本
+        SysControl historical = SysControlTestDataBuilder.buildTest(
+                "G06", "EMP", LocalDate.of(2099, 6, 1), "V_HISTORY", 0);
+        when(sysControlMapper.countByCondition("EMP", null)).thenReturn(1L);
+        when(sysControlMapper.selectByScopeAndValid("EMP")).thenReturn(null);
+        when(sysControlMapper.listByScope("EMP", 1)).thenReturn(java.util.List.of(historical));
+
+        // When
+        SysControl got = sysControlService.initIfAbsent("EMP", LocalDate.of(2099, 7, 1), "V_NEW");
+
+        // Then: 不 insert 新记录, 返回历史最近一条
+        assertThat(got).isSameAs(historical);
+        verify(sysControlMapper, never()).insert(any());
+    }
 }
