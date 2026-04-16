@@ -13,3 +13,12 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+# Local agent/runtime state
+.omc/
+
+.claude/*
+!.claude/launch.json
+!.claude/settings.json
+
+.omx/
