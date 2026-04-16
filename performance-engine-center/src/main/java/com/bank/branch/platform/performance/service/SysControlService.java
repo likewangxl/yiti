@@ -110,19 +110,28 @@ public class SysControlService {
     }
 
     /**
-     * 幂等初始化: 若该 scope_dim 已有任何记录则返回当前生效版本, 否则 insert 一条.
+     * 幂等初始化: 若该 scope_dim 已有记录则返回既有 (优先生效版本, 否则返回最近一条),
+     * 无任何记录时才 insert 一条新基线.
      *
      * @param scopeDim 维度
      * @param dataDate 数据日期
      * @param version  版本号
-     * @return 实体 (新建或既有)
+     * @return 实体 (新建或既有, 永不为 null)
      */
     @Transactional(rollbackFor = Exception.class)
     public SysControl initIfAbsent(String scopeDim, LocalDate dataDate, String version) {
         long count = sysControlMapper.countByCondition(scopeDim, null);
         if (count > 0) {
-            // 已存在任何版本 → 返回当前生效版本 (若无有效版本则抛 40406, 业务上表示需要显式 switchVersion)
-            return sysControlMapper.selectByScopeAndValid(scopeDim);
+            // 优先返回当前生效版本; 若无生效版本 (历史记录均已失效) 则返回最近一条
+            SysControl curr = sysControlMapper.selectByScopeAndValid(scopeDim);
+            if (curr != null) {
+                return curr;
+            }
+            List<SysControl> latest = sysControlMapper.listByScope(scopeDim, 1);
+            // count>0 理论上一定有至少一条, 但防御式编程再核查一次
+            if (!latest.isEmpty()) {
+                return latest.get(0);
+            }
         }
         SysControl sc = new SysControl();
         sc.setId(generateId());
