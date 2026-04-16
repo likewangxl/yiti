@@ -89,9 +89,7 @@ CREATE TABLE `addrbook_employee` (
     `responsible_product_ids`  TEXT         DEFAULT NULL   COMMENT '负责产品 ID 列表，JSON 数组格式：["PROD_001","PROD_002"]',
     `status`                   VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE 在职 / RESIGNED 离职',
     `maintainer_emp_id`        VARCHAR(32)  DEFAULT NULL   COMMENT '维护人 emp_id（60 天提醒发送对象）',
-    `created_by`               VARCHAR(32)  DEFAULT NULL   COMMENT '创建人 emp_id（同步时为 SYSTEM）',
     `created_time`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updated_by`               VARCHAR(32)  DEFAULT NULL   COMMENT '最后更新人 emp_id',
     `updated_time`             DATETIME     DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
     `deleted`                  TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '逻辑删除：0 未删除 / 1 已删除',
     PRIMARY KEY (`emp_id`),
@@ -246,19 +244,18 @@ CREATE TABLE `doc_info` (
 
 ## 5. 审计字段规范
 
-所有表必须包含以下 4 个审计字段（addrbook_employee 因同步场景允许 created_by 为空）：
+除 `addrbook_employee` 外，其余业务表均包含以下 4 个审计字段：
 
 | 字段 | 类型 | 默认值 | 是否必填 | 说明 |
 |---|---|---|---|---|
-| `created_by` | VARCHAR(32) | 无 | 是 | 创建人 emp_id；系统同步数据填 `SYSTEM` |
+| `created_by` | VARCHAR(32) | 无 | 是 | 创建人 emp_id；系统写入固定填当前操作人 |
 | `created_time` | DATETIME | `CURRENT_TIMESTAMP` | 是 | 创建时间，由数据库默认值保证 |
 | `updated_by` | VARCHAR(32) | `NULL` | 否 | 最后更新人 emp_id；由 Service 层在 update 时显式设置 |
 | `updated_time` | DATETIME | `NULL ON UPDATE CURRENT_TIMESTAMP` | 否 | 最后更新时间，由 MySQL `ON UPDATE` 自动维护 |
 
-**统一由 MyBatis 拦截器 `AuditFieldInterceptor` 处理**：
-- 新增时自动填充 `created_by = CurrentUserContext.getEmpId()`
-- 更新时自动填充 `updated_by = CurrentUserContext.getEmpId()`
-- 禁止业务代码手动设置（除同步场景需显式传 `SYSTEM`）
+**portal 当前实现约定：**
+- `portal_nav` / `portal_shortcut` / `product_info` / `doc_info` 由 Service 层显式设置 `created_by` / `updated_by`
+- `addrbook_employee` 与当前 MySQL 基线一致，仅保留 `created_time` / `updated_time`，不持有 `created_by` / `updated_by`
 
 **逻辑删除字段：**
 - `addrbook_employee.deleted`、`product_info.deleted` 使用 `TINYINT` 类型（0/1）
@@ -370,10 +367,9 @@ WHERE deleted = 0
 2. 事务内执行：
    - 计算 `removed = 旧列表 - 新列表`，`added = 新列表 - 旧列表`
    - `UPDATE product_info SET responsible_emp_ids = 新列表 WHERE id = ?`
-   - 发布事件 `portal.product.responsible-updated.v1`，payload：`{productId, removed, added}`
-3. 事件消费（`ProductResponsibleSyncListener`，同事务或独立事务，见 06 文档）：
    - 对 `removed` 中每个 emp_id：从其 `responsible_product_ids` 中移除该 productId
    - 对 `added` 中每个 emp_id：追加该 productId 到其 `responsible_product_ids`
+   - 注册 `afterCommit` 记录事件 `portal.product.responsible-updated.v1`，payload：`{productId, removed, added}`
 
 **触发时机 2：员工本人在通讯录页调整"我负责的产品"**
 
@@ -381,13 +377,12 @@ WHERE deleted = 0
 2. 事务内执行：
    - 计算 `removed` / `added`
    - `UPDATE addrbook_employee SET responsible_product_ids = 新列表 WHERE emp_id = ?`
-   - 发布事件 `portal.employee.responsible-products-updated.v1`
-3. 事件消费：对 `removed`/`added` 中每个 productId 同步更新 `product_info.responsible_emp_ids`
+   - 对 `removed`/`added` 中每个 productId 同步更新 `product_info.responsible_emp_ids`
+   - 注册 `afterCommit` 记录事件 `portal.employee.responsible-products-updated.v1`
 
 **幂等与冲突处理：**
-- 消费端使用乐观锁：读取目标记录 → 修改 → `UPDATE ... WHERE updated_time = ?`，失败则重试 ≤3 次
-- 双向同步避免无限循环：`portal.product.responsible-updated.v1` 的消费者只更新 `addrbook_employee`，不再发 `portal.employee.responsible-products-updated.v1`；反之亦然
-- 消费失败记录到 `sys_event_failure_log`，由运维告警后手动补偿
+- 同步更新阶段使用乐观锁 / 行锁保护，冲突时快速失败并由前端重试
+- `afterCommit` 监听器仅做记录，不再反向写业务表，因此不存在二次补偿链路
 
 **一致性校验任务**：`PRODUCT_RESPONSIBLE_CONSISTENCY_CHECK`，每日凌晨 3 点扫描不一致项并告警（不自动修复），详见 06 文档。
 
