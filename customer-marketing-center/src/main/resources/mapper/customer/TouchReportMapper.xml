@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.customer.mapper.TouchReportMapper">
+
+    <!-- 触达报告聚合查询公共 WHERE 条件片段 -->
+    <sql id="REPORT_WHERE">
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (t.task_no LIKE CONCAT('%', #{keyword}, '%')
+                    OR m.cust_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="status != null and status != ''">
+                AND t.task_status = #{status}
+            </if>
+            <if test="orgId != null and orgId != ''">
+                AND t.org_id = #{orgId}
+            </if>
+        </where>
+    </sql>
+
+    <!--
+        分页查询触达报告：
+        touch_task LEFT JOIN cust_master 获取客户名称，
+        子查询统计每个任务关联的触达日志数量。
+    -->
+    <select id="selectReportPage" resultType="com.bank.branch.platform.customer.dto.resp.TouchReportVO">
+        SELECT
+            t.task_no          AS taskNo,
+            t.task_type        AS taskType,
+            t.task_status      AS taskStatus,
+            t.sla_status       AS slaStatus,
+            m.cust_name        AS custName,
+            t.assignee_emp_id  AS assigneeEmpId,
+            t.org_id           AS orgId,
+            t.plan_finish_time AS planFinishTime,
+            t.success_time     AS successTime,
+            (SELECT COUNT(*) FROM touch_log tl WHERE tl.touch_task_id = t.id) AS logCount
+        FROM touch_task t
+        LEFT JOIN cust_master m ON t.cust_id = m.id AND m.deleted = 0
+        <include refid="REPORT_WHERE"/>
+        ORDER BY t.created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 统计触达报告分页总记录数（与 selectReportPage 共享 WHERE 条件） -->
+    <select id="countReportPage" resultType="long">
+        SELECT COUNT(*)
+        FROM touch_task t
+        LEFT JOIN cust_master m ON t.cust_id = m.id AND m.deleted = 0
+        <include refid="REPORT_WHERE"/>
+    </select>
+
+    <!--
+        按 task_status 分组统计触达任务数量。
+        orgId 为 null 时统计全量，不为 null 时限制在该机构范围内。
+    -->
+    <select id="selectStatistics" resultType="com.bank.branch.platform.customer.dto.resp.TouchStatisticVO">
+        SELECT
+            task_status AS status,
+            COUNT(*)    AS count
+        FROM touch_task
+        <where>
+            <if test="orgId != null and orgId != ''">
+                AND org_id = #{orgId}
+            </if>
+        </where>
+        GROUP BY task_status
+        ORDER BY task_status
+    </select>
+
+</mapper>

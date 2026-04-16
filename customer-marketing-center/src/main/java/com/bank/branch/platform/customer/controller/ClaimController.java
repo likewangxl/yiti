@@ -1,0 +1,106 @@
+package com.bank.branch.platform.customer.controller;
+
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
+import com.bank.branch.platform.common.security.annotation.BizAuth;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.customer.dto.req.CancelClaimReqDTO;
+import com.bank.branch.platform.customer.dto.req.ClaimReqDTO;
+import com.bank.branch.platform.customer.entity.CustClaim;
+import com.bank.branch.platform.customer.service.ClaimService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 客户认领 REST 控制器。
+ * <p>
+ * 提供客户认领的创建（争抢式）、取消（高危操作）以及个人认领列表查询接口。
+ * 取消认领为高危操作，配置了独立 URL、独立权限，并启用 @AuditLog 审计。
+ * </p>
+ */
+@Slf4j
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/claims")
+@Validated
+@Tag(name = "客户认领管理")
+public class ClaimController {
+
+    private final ClaimService claimService;
+    private final CurrentUserApi currentUserApi;
+
+    /**
+     * 认领客户（争抢式）。
+     * <p>
+     * 若同一机构已认领该客户，返回 CUSTOMER_ALREADY_CLAIMED 业务异常。
+     * </p>
+     *
+     * @param req 认领请求 DTO（包含 custId）
+     * @return 认领记录 ID
+     */
+    @PostMapping
+    @BizAuth(bizType = BizType.CLAIM, action = BizAction.WRITE)
+    @Operation(summary = "认领客户")
+    public ResponseWrapper<String> claim(@Valid @RequestBody ClaimReqDTO req) {
+        log.info("[ClaimController.claim] custId={}", req.getCustId());
+        String empId = currentUserApi.getCurrentEmpId();
+        String orgId = currentUserApi.getCurrentOrgCode();
+        CustClaim result = claimService.claim(req.getCustId(), orgId, empId);
+        return ResponseWrapper.success(result.getId());
+    }
+
+    /**
+     * 取消认领（高危操作）。
+     * <p>
+     * 操作需携带取消原因，由 @AuditLog 切面记录审计日志。
+     * </p>
+     *
+     * @param id  认领记录 ID
+     * @param req 取消请求 DTO（包含 reason）
+     * @return 操作结果
+     */
+    @PostMapping("/{id}/cancel")
+    @BizAuth(bizType = BizType.CLAIM, action = BizAction.WRITE)
+    @AuditLog(action = "CANCEL_CLAIM", resourceType = "CLAIM", reasonRequired = true)
+    @Operation(summary = "取消认领")
+    public ResponseWrapper<Void> cancelClaim(@PathVariable String id,
+                                             @Valid @RequestBody CancelClaimReqDTO req) {
+        log.info("[ClaimController.cancelClaim] claimId={}", id);
+        String empId = currentUserApi.getCurrentEmpId();
+        claimService.cancelClaim(id, req.getReason(), empId);
+        return ResponseWrapper.success();
+    }
+
+    /**
+     * 查询我的认领列表。
+     *
+     * @param pageNo   页码，默认 1
+     * @param pageSize 每页大小，默认 20
+     * @return 分页的个人认领记录列表
+     */
+    @GetMapping("/mine")
+    @BizAuth(bizType = BizType.CLAIM, action = BizAction.LIST)
+    @Operation(summary = "查询我的认领列表")
+    public ResponseWrapper<CustClaim> listMyClaims(
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        log.info("[ClaimController.listMyClaims] pageNo={}, pageSize={}", pageNo, pageSize);
+        String empId = currentUserApi.getCurrentEmpId();
+        PageResult<CustClaim> result = claimService.listMyClaims(empId, pageNo, pageSize);
+        return ResponseWrapper.page(result);
+    }
+}

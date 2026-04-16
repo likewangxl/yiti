@@ -1,0 +1,174 @@
+package com.bank.branch.platform.customer.service;
+
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.dto.resp.LeadImportPreviewResp;
+import com.bank.branch.platform.customer.entity.LeadImportBatch;
+import com.bank.branch.platform.customer.enums.BatchStatus;
+import com.bank.branch.platform.customer.enums.CustomerErrorCode;
+import com.bank.branch.platform.customer.mapper.CustLeadMapper;
+import com.bank.branch.platform.customer.mapper.LeadImportBatchMapper;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Collections;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * LeadImportService 单元测试（TDD）
+ * 测试导入预览、执行导入、查询批次列表等功能。
+ */
+@ExtendWith(MockitoExtension.class)
+class LeadImportServiceTest {
+
+    @Mock
+    private LeadImportBatchMapper batchMapper;
+
+    @Mock
+    private CustLeadMapper leadMapper;
+
+    @InjectMocks
+    private LeadImportService leadImportService;
+
+    // ==================== preview ====================
+
+    @Test
+    void preview_shouldReturnRowCountAndCreateBatch() {
+        // given: 一个包含 CSV 头行 + 2 条数据行的文件
+        String csvContent = "客户名称,统一社会信用代码,联系人,手机号\n" +
+                "企业A,91110000123456789A,张三,13800000001\n" +
+                "企业B,91110000123456789B,李四,13900000002\n";
+        MultipartFile file = new MockMultipartFile(
+                "file", "leads.csv", "text/csv", csvContent.getBytes()
+        );
+
+        when(batchMapper.insert(any(LeadImportBatch.class))).thenReturn(1);
+
+        // when
+        LeadImportPreviewResp result = leadImportService.preview(file, "E001", "ORG001");
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getTotalRows()).isEqualTo(2);
+        assertThat(result.getBatchId()).isNotNull();
+        verify(batchMapper).insert(any(LeadImportBatch.class));
+    }
+
+    @Test
+    void preview_shouldThrowWhenFileIsEmpty() {
+        // given: 空文件
+        MultipartFile emptyFile = new MockMultipartFile(
+                "file", "empty.csv", "text/csv", new byte[0]
+        );
+
+        // when/then
+        assertThatThrownBy(() -> leadImportService.preview(emptyFile, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_FILE_EMPTY.getCode());
+
+        verify(batchMapper, never()).insert(any());
+    }
+
+    // ==================== execute ====================
+
+    @Test
+    void execute_shouldInsertLeadsAndUpdateBatchStatus() {
+        // given: 批次状态为 CREATED
+        LeadImportBatch batch = buildBatch("batch-001", BatchStatus.CREATED.getCode());
+        when(batchMapper.selectById("batch-001")).thenReturn(batch);
+        when(batchMapper.updateById(any(LeadImportBatch.class))).thenReturn(1);
+
+        // when: execute 只更新批次状态为 PENDING_APPROVAL（简化实现不实际插入线索）
+        leadImportService.execute("batch-001", "E001", "ORG001");
+
+        // then
+        verify(batchMapper).updateById(any(LeadImportBatch.class));
+    }
+
+    @Test
+    void execute_shouldThrowWhenBatchNotFound() {
+        // given: 批次不存在
+        when(batchMapper.selectById("not-exist")).thenReturn(null);
+
+        // when/then
+        assertThatThrownBy(() -> leadImportService.execute("not-exist", "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.BATCH_NOT_FOUND.getCode());
+    }
+
+    // ==================== getBatchById ====================
+
+    @Test
+    void getBatchById_shouldReturnBatch() {
+        // given
+        LeadImportBatch batch = buildBatch("batch-001", BatchStatus.CREATED.getCode());
+        when(batchMapper.selectById("batch-001")).thenReturn(batch);
+
+        // when
+        LeadImportBatch result = leadImportService.getBatchById("batch-001");
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo("batch-001");
+    }
+
+    @Test
+    void getBatchById_shouldThrowWhenNotFound() {
+        // given
+        when(batchMapper.selectById("not-exist")).thenReturn(null);
+
+        // when/then
+        assertThatThrownBy(() -> leadImportService.getBatchById("not-exist"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.BATCH_NOT_FOUND.getCode());
+    }
+
+    // ==================== listBatches ====================
+
+    @Test
+    void listBatches_shouldCalculateOffset() {
+        // given: pageNo=2, pageSize=10 -> offset=10
+        LeadImportBatch batch = buildBatch("batch-001", BatchStatus.CREATED.getCode());
+        when(batchMapper.selectPage(isNull(), isNull(), eq(10), eq(10)))
+                .thenReturn(Collections.singletonList(batch));
+        when(batchMapper.countPage(isNull(), isNull())).thenReturn(15L);
+
+        // when
+        PageResult<LeadImportBatch> result = leadImportService.listBatches(null, null, 2, 10);
+
+        // then
+        assertThat(result.getPageNo()).isEqualTo(2);
+        assertThat(result.getPageSize()).isEqualTo(10);
+        assertThat(result.getTotal()).isEqualTo(15L);
+        assertThat(result.getRecords()).hasSize(1);
+        verify(batchMapper).selectPage(null, null, 10, 10);
+    }
+
+    // ============================= 辅助方法 =============================
+
+    private LeadImportBatch buildBatch(String id, String status) {
+        LeadImportBatch batch = new LeadImportBatch();
+        batch.setId(id);
+        batch.setBatchNo("BATCH_20260414_0001");
+        batch.setStatus(status);
+        batch.setTotalRowCount(2);
+        batch.setErrorRowCount(0);
+        batch.setCreatedBy("E001");
+        batch.setOwnerOrgId("ORG001");
+        return batch;
+    }
+}

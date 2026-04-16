@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.bizapp.mapper.SupportRequestMapper">
+
+    <!-- support_request 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, request_no, submit_group_id, cust_id, source_touch_task_id, product_id,
+        support_dept_id, other_demand, dispatch_emp_id, dispatch_time, assigned_emp_id,
+        status, business_key, process_instance_id, owner_org_id, created_by,
+        created_time, updated_by, updated_time, deleted
+    </sql>
+
+    <!-- 按 id 查询（含逻辑删除过滤） -->
+    <select id="selectById" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE id = #{id}
+          AND deleted = 0
+    </select>
+
+    <!-- 按 id 查询并加 FOR UPDATE 行锁（并发保护） -->
+    <select id="selectForUpdate" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE id = #{id}
+          AND deleted = 0
+        FOR UPDATE
+    </select>
+
+    <!-- 按 business_key 查询 -->
+    <select id="selectByBusinessKey" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE business_key = #{businessKey}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 发起侧分页查询（SUPPORT 视图，按 owner_org_id 过滤） -->
+    <select id="selectPageForSupport" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND request_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 发起侧分页总数 -->
+    <select id="countPageForSupport" resultType="long">
+        SELECT COUNT(*) FROM support_request
+        WHERE deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND request_no LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="ownerOrgId != null and ownerOrgId != ''">
+            AND owner_org_id = #{ownerOrgId}
+        </if>
+    </select>
+
+    <!-- 承接侧分页查询（SUPPORT_DEPT 视图，按 support_dept_id 过滤） -->
+    <select id="selectPageForDept" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE deleted = 0
+        <if test="supportDeptId != null and supportDeptId != ''">
+            AND support_dept_id = #{supportDeptId}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="assignedEmpId != null and assignedEmpId != ''">
+            AND assigned_emp_id = #{assignedEmpId}
+        </if>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 承接侧分页总数 -->
+    <select id="countPageForDept" resultType="long">
+        SELECT COUNT(*) FROM support_request
+        WHERE deleted = 0
+        <if test="supportDeptId != null and supportDeptId != ''">
+            AND support_dept_id = #{supportDeptId}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="assignedEmpId != null and assignedEmpId != ''">
+            AND assigned_emp_id = #{assignedEmpId}
+        </if>
+    </select>
+
+    <!-- 插入新申请 -->
+    <insert id="insert" parameterType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        INSERT INTO support_request (
+            id, request_no, submit_group_id, cust_id, source_touch_task_id, product_id,
+            support_dept_id, other_demand, dispatch_emp_id, dispatch_time, assigned_emp_id,
+            status, business_key, process_instance_id, owner_org_id, created_by,
+            created_time, updated_by, updated_time, deleted
+        ) VALUES (
+            #{id}, #{requestNo}, #{submitGroupId}, #{custId}, #{sourceTouchTaskId}, #{productId},
+            #{supportDeptId}, #{otherDemand}, #{dispatchEmpId}, #{dispatchTime}, #{assignedEmpId},
+            #{status}, #{businessKey}, #{processInstanceId}, #{ownerOrgId}, #{createdBy},
+            #{createdTime}, #{updatedBy}, #{updatedTime}, #{deleted}
+        )
+    </insert>
+
+    <!-- 按 id 更新申请（动态 SET，仅更新非 null 字段） -->
+    <update id="updateById" parameterType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        UPDATE support_request
+        <set>
+            <if test="requestNo != null">request_no = #{requestNo},</if>
+            <if test="submitGroupId != null">submit_group_id = #{submitGroupId},</if>
+            <if test="custId != null">cust_id = #{custId},</if>
+            <if test="sourceTouchTaskId != null">source_touch_task_id = #{sourceTouchTaskId},</if>
+            <if test="productId != null">product_id = #{productId},</if>
+            <if test="supportDeptId != null">support_dept_id = #{supportDeptId},</if>
+            <if test="otherDemand != null">other_demand = #{otherDemand},</if>
+            <if test="dispatchEmpId != null">dispatch_emp_id = #{dispatchEmpId},</if>
+            <if test="dispatchTime != null">dispatch_time = #{dispatchTime},</if>
+            <if test="assignedEmpId != null">assigned_emp_id = #{assignedEmpId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="businessKey != null">business_key = #{businessKey},</if>
+            <if test="processInstanceId != null">process_instance_id = #{processInstanceId},</if>
+            <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            updated_time = NOW(),
+        </set>
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- 更新申请状态（状态流转专用） -->
+    <update id="updateStatusById">
+        UPDATE support_request
+        SET status = #{status},
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+
+    <!-- 按客户ID查询历史申请（最新在前） -->
+    <select id="selectByCustId" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE cust_id = #{custId}
+          AND deleted = 0
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 按 submit_group_id 查询同批提交的申请 -->
+    <select id="selectBySubmitGroupId" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE submit_group_id = #{submitGroupId}
+          AND deleted = 0
+        ORDER BY created_time ASC
+    </select>
+
+    <!-- 批量按ID查询 -->
+    <select id="selectByIds" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM support_request
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+          AND deleted = 0
+    </select>
+
+    <!-- 统计同客户同产品正在进行的申请数（防重复申请校验） -->
+    <select id="countActiveByCustomerAndProduct" resultType="long">
+        SELECT COUNT(*) FROM support_request
+        WHERE cust_id = #{custId}
+          AND product_id = #{productId}
+          AND status IN ('IN_APPROVAL', 'IN_PROGRESS')
+          AND deleted = 0
+    </select>
+
+    <!-- 按创建人+时间范围统计已完成数量（用于绩效统计） -->
+    <select id="countCompletedByCreator" resultType="long">
+        SELECT COUNT(*) FROM support_request
+        WHERE created_by = #{empId}
+          AND status = 'COMPLETED'
+          AND deleted = 0
+          AND updated_time BETWEEN #{start} AND #{end}
+    </select>
+
+    <!-- 按承接人+时间范围统计已完成数量（用于绩效统计） -->
+    <select id="countCompletedByAssignee" resultType="long">
+        SELECT COUNT(*) FROM support_request
+        WHERE assigned_emp_id = #{empId}
+          AND status = 'COMPLETED'
+          AND deleted = 0
+          AND updated_time BETWEEN #{start} AND #{end}
+    </select>
+
+    <!-- 统计客户正在运行的支持申请数（并行申请限流校验） -->
+    <select id="countRunningByCustomer" resultType="long">
+        SELECT COUNT(*) FROM support_request
+        WHERE cust_id = #{custId}
+          AND status IN ('IN_APPROVAL', 'IN_PROGRESS')
+          AND deleted = 0
+    </select>
+
+</mapper>

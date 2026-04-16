@@ -1,0 +1,121 @@
+package com.bank.branch.platform.bizapp.facade;
+
+import com.bank.branch.platform.bizapp.api.LoanQueryApi;
+import com.bank.branch.platform.bizapp.api.dto.LoanApplyDTO;
+import com.bank.branch.platform.bizapp.api.dto.LoanQueryConditionDTO;
+import com.bank.branch.platform.bizapp.entity.LoanApply;
+import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
+import com.bank.branch.platform.common.web.PageResult;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 贷款申请对外分页/统计查询接口实现。
+ * <p>
+ * 实现 {@link LoanQueryApi} 接口，委托 {@link LoanApplyMapper} 执行分页与聚合查询。
+ * </p>
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class LoanQueryApiImpl implements LoanQueryApi {
+
+    private final LoanApplyMapper loanApplyMapper;
+
+    /**
+     * 分页查询贷款申请。
+     *
+     * @param condition 查询条件（关键字、状态、机构、分页参数）
+     * @return 分页结果
+     */
+    @Override
+    public PageResult<LoanApplyDTO> pageQuery(LoanQueryConditionDTO condition) {
+        log.debug("[LoanQueryApiImpl.pageQuery] condition={}", condition);
+        int pageNo = condition.getPageNo();
+        int pageSize = condition.getPageSize();
+        // 计算数据库偏移量（从第1页开始）
+        int offset = (pageNo - 1) * pageSize;
+
+        long total = loanApplyMapper.countPage(condition.getKeyword(),
+                condition.getStatus(), condition.getOwnerOrgId());
+        if (total == 0) {
+            return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
+        }
+
+        List<LoanApply> entities = loanApplyMapper.selectPage(condition.getKeyword(),
+                condition.getStatus(), condition.getOwnerOrgId(), offset, pageSize);
+        List<LoanApplyDTO> records = entities == null ? Collections.emptyList()
+                : entities.stream().map(this::toDTO).collect(Collectors.toList());
+
+        return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 按机构和时间范围统计已完成的贷款申请数量。
+     *
+     * @param orgId  机构代码
+     * @param start  统计开始时间
+     * @param end    统计结束时间
+     * @return 已完成申请数量
+     */
+    @Override
+    public long countCompletedByOrg(String orgId, LocalDateTime start, LocalDateTime end) {
+        log.debug("[LoanQueryApiImpl.countCompletedByOrg] orgId={}, start={}, end={}", orgId, start, end);
+        return loanApplyMapper.countCompletedByOrg(orgId, start, end);
+    }
+
+    /**
+     * 按员工工号和时间范围汇总授信金额。
+     *
+     * @param empId  员工工号
+     * @param start  统计开始时间
+     * @param end    统计结束时间
+     * @return 授信金额汇总，mapper 返回 null 时返回 BigDecimal.ZERO
+     */
+    @Override
+    public BigDecimal sumCreditAmountByEmp(String empId, LocalDateTime start, LocalDateTime end) {
+        log.debug("[LoanQueryApiImpl.sumCreditAmountByEmp] empId={}, start={}, end={}", empId, start, end);
+        BigDecimal result = loanApplyMapper.sumCreditAmountByEmp(empId, start, end);
+        return result != null ? result : BigDecimal.ZERO;
+    }
+
+    // ------------------------------------------------------------------
+    // 私有转换方法
+    // ------------------------------------------------------------------
+
+    /**
+     * 将 LoanApply 实体转换为对外 DTO。
+     *
+     * @param entity 贷款申请实体
+     * @return 对外 DTO
+     */
+    private LoanApplyDTO toDTO(LoanApply entity) {
+        LoanApplyDTO dto = new LoanApplyDTO();
+        dto.setId(entity.getId());
+        dto.setApplyNo(entity.getApplyNo());
+        dto.setCustId(entity.getCustId());
+        dto.setSourceTouchTaskId(entity.getSourceTouchTaskId());
+        dto.setProjectType(entity.getProjectType());
+        dto.setBizType(entity.getBizType());
+        dto.setGuaranteeType(entity.getGuaranteeType());
+        dto.setCreditAmount(entity.getCreditAmount());
+        dto.setCreditExposureAmount(entity.getCreditExposureAmount());
+        dto.setStatus(entity.getStatus());
+        dto.setBusinessKey(entity.getBusinessKey());
+        dto.setProcessInstanceId(entity.getProcessInstanceId());
+        dto.setOwnerOrgId(entity.getOwnerOrgId());
+        dto.setCreatedBy(entity.getCreatedBy());
+        dto.setCreatedTime(entity.getCreatedTime());
+        dto.setUpdatedBy(entity.getUpdatedBy());
+        dto.setUpdatedTime(entity.getUpdatedTime());
+        dto.setDeleted(entity.getDeleted());
+        return dto;
+    }
+}
