@@ -7,7 +7,6 @@ import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.cmd.SwitchVersionCmd;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
 import com.bank.branch.platform.performance.support.SysControlTestDataBuilder;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -47,15 +46,11 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
     @InjectMocks
     private SysControlFacade sysControlFacade;
 
-    @BeforeEach
-    void setupRedis() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    }
-
     @Test
     @DisplayName("switchVersion 获取锁失败时抛 PERF-40904")
     void switchVersion_whenLockAcquireFailed_shouldThrow40904() {
         // Given: setIfAbsent 返回 false (锁已被占)
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(anyString(), any(), any(Duration.class)))
                 .thenReturn(Boolean.FALSE);
 
@@ -81,6 +76,7 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
     @DisplayName("switchVersion 成功时应 Lua 脚本释放锁")
     void switchVersion_whenSuccess_shouldReleaseLock() {
         // Given
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(anyString(), any(), any(Duration.class)))
                 .thenReturn(Boolean.TRUE);
         SysControl ok = SysControlTestDataBuilder.buildTest(
@@ -112,6 +108,7 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
     @DisplayName("switchVersion service 抛异常时依然释放锁")
     void switchVersion_whenServiceThrows_shouldStillReleaseLock() {
         // Given
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(anyString(), any(), any(Duration.class)))
                 .thenReturn(Boolean.TRUE);
         when(sysControlService.doSwitchVersion(any()))
