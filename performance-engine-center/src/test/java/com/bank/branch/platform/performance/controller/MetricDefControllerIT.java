@@ -10,6 +10,7 @@ import com.bank.branch.platform.performance.support.MetricTestDataBuilder;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
 
 import java.lang.reflect.Method;
 
@@ -116,6 +117,29 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
     }
 
     @Test
+    void list_whenPageNoIsZero_returnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/perf/metrics")
+                        .param("pageNo", "0")
+                        .param("pageSize", "20"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void list_whenPageSizeTooLarge_returnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/perf/metrics")
+                        .param("pageNo", "1")
+                        .param("pageSize", "101"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listSlots_whenBaseDimBlank_returnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/perf/metrics/val-slots")
+                        .param("baseDim", " "))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void readMethods_shouldDeclareBizAuth() throws Exception {
         assertBizAuth("list", new Class<?>[]{
                 String.class, Integer.class, String.class, String.class, int.class, int.class
@@ -124,6 +148,12 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
         assertBizAuth("listRefs", new Class<?>[]{String.class}, BizAction.READ);
         assertBizAuth("listRefBy", new Class<?>[]{String.class}, BizAction.READ);
         assertBizAuth("listSlots", new Class<?>[]{String.class}, BizAction.READ);
+    }
+
+    @Test
+    void controller_shouldEnableMethodValidation() throws Exception {
+        Class<?> controllerClass = Class.forName(CONTROLLER_FQCN);
+        assertThat(controllerClass.getAnnotation(Validated.class)).isNotNull();
     }
 
     private void assertBizAuth(String methodName, Class<?>[] parameterTypes, BizAction action) throws Exception {

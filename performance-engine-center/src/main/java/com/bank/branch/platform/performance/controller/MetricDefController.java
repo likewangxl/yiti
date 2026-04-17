@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,6 +30,7 @@ import java.util.Set;
 @RestController
 @RequestMapping("/api/perf/metrics")
 @Tag(name = "Performance Metric", description = "Metric definition read endpoints")
+@Validated
 @RequiredArgsConstructor
 public class MetricDefController {
 
@@ -49,6 +51,7 @@ public class MetricDefController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
+        validatePageArgs(pageNo, pageSize);
         log.debug("[MetricDefController.list] baseDim={}, metricLevel={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 baseDim, metricLevel, status, keyword, pageNo, pageSize);
         return ResponseWrapper.page(metricDefService.page(baseDim, metricLevel, status, keyword, pageNo, pageSize));
@@ -101,8 +104,24 @@ public class MetricDefController {
     @GetMapping("/val-slots")
     @Operation(summary = "List occupied value slots")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
-    public ResponseWrapper<Set<Integer>> listSlots(@RequestParam("baseDim") @NotBlank String baseDim) {
+    public ResponseWrapper<Set<Integer>> listSlots(@RequestParam("baseDim") String baseDim) {
+        validateBaseDim(baseDim);
         log.debug("[MetricDefController.listSlots] baseDim={}", baseDim);
         return ResponseWrapper.success(metricSlotService.listOccupied(baseDim));
+    }
+
+    private void validatePageArgs(int pageNo, int pageSize) {
+        if (pageNo < 1) {
+            throw new IllegalArgumentException("pageNo 必须大于等于 1");
+        }
+        if (pageSize > 100) {
+            throw new IllegalArgumentException("pageSize 必须小于等于 100");
+        }
+    }
+
+    private void validateBaseDim(String baseDim) {
+        if (baseDim == null || baseDim.isBlank()) {
+            throw new IllegalArgumentException("baseDim 不能为空");
+        }
     }
 }
