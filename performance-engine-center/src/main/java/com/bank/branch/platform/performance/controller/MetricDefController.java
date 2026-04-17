@@ -10,6 +10,8 @@ import com.bank.branch.platform.performance.service.MetricRefService;
 import com.bank.branch.platform.performance.service.MetricSlotService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,9 +51,8 @@ public class MetricDefController {
             @RequestParam(value = "metricLevel", required = false) Integer metricLevel,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
-            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        validatePageArgs(pageNo, pageSize);
+            @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) int pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[MetricDefController.list] baseDim={}, metricLevel={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 baseDim, metricLevel, status, keyword, pageNo, pageSize);
         return ResponseWrapper.page(metricDefService.page(baseDim, metricLevel, status, keyword, pageNo, pageSize));
@@ -104,24 +105,8 @@ public class MetricDefController {
     @GetMapping("/val-slots")
     @Operation(summary = "List occupied value slots")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
-    public ResponseWrapper<Set<Integer>> listSlots(@RequestParam("baseDim") String baseDim) {
-        validateBaseDim(baseDim);
+    public ResponseWrapper<Set<Integer>> listSlots(@RequestParam("baseDim") @NotBlank String baseDim) {
         log.debug("[MetricDefController.listSlots] baseDim={}", baseDim);
         return ResponseWrapper.success(metricSlotService.listOccupied(baseDim));
-    }
-
-    private void validatePageArgs(int pageNo, int pageSize) {
-        if (pageNo < 1) {
-            throw new IllegalArgumentException("pageNo 必须大于等于 1");
-        }
-        if (pageSize > 100) {
-            throw new IllegalArgumentException("pageSize 必须小于等于 100");
-        }
-    }
-
-    private void validateBaseDim(String baseDim) {
-        if (baseDim == null || baseDim.isBlank()) {
-            throw new IllegalArgumentException("baseDim 不能为空");
-        }
     }
 }

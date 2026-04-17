@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.controller;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricRefMapper;
@@ -10,16 +11,26 @@ import com.bank.branch.platform.performance.support.MetricTestDataBuilder;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import jakarta.validation.ConstraintViolationException;
 
 import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@Import(MetricDefControllerIT.MethodValidationTestAdvice.class)
 class MetricDefControllerIT extends PerformanceControllerTestBase {
 
     private static final String CONTROLLER_FQCN =
@@ -133,10 +144,22 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
     }
 
     @Test
-    void listSlots_whenBaseDimBlank_returnsBadRequest() throws Exception {
+    void list_whenPageSizeIsZero_returnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/perf/metrics")
+                        .param("pageNo", "1")
+                        .param("pageSize", "0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listSlots_whenBaseDimBlank_returnsBadRequestAndUnifiedError() throws Exception {
         mockMvc.perform(get("/api/perf/metrics/val-slots")
                         .param("baseDim", " "))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType("application/json"))
+                .andExpect(jsonPath("$.code").value("VALID_001"))
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
     }
 
     @Test
@@ -183,5 +206,17 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
             def.setRefMetricCodes("[]");
         }
         return def;
+    }
+
+    @RestControllerAdvice
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    static class MethodValidationTestAdvice {
+
+        @ExceptionHandler(ConstraintViolationException.class)
+        ResponseEntity<ResponseWrapper<?>> handleConstraintViolationException(
+                ConstraintViolationException ex) {
+            return ResponseEntity.badRequest()
+                    .body(ResponseWrapper.error("VALID_001", ex.getMessage()));
+        }
     }
 }
