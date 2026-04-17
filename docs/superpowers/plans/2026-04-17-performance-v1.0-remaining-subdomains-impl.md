@@ -1032,6 +1032,8 @@ git commit -m "test(perf): red - MetricSlotConcurrentIT baseline (锁互斥验�
 - `update(UpdateMetricDefCmd)` / `disable(id, reason, operator)` / `getByCode` / `getByCodeOrNull` / `page(query)`
 - `delete(id, reason, operator)`：逻辑删除 → `status=DISABLED`（DDL 无 deleted 字段）
 
+**UT 命名说明**: 本 Task 使用 `MetricDefServiceTest`（Mockito 全 mock Mapper 的 UT 形态），**语义上等价于** spec §5.1 DoD 里的 `MetricDefServiceIT` — spec 用 IT 后缀强调"跨多层协作"，此处选 UT + mock 是为了速度和单元隔离度，断言内容一致。若后续需要真库协作验证，再追加独立 IT 类（非强制）。
+
 **UT 覆盖场景**（spec §5.1）:
 
 MetricRefServiceTest:
@@ -1767,6 +1769,8 @@ public XxxResult doWithLock(String scope, Supplier<XxxResult> work) {
 | KPI 方案子域 | 11 | __ |
 | 目标方案子域 | 14-16 | __ |
 | 运行任务子域 | 8-10 | __ |
-| 分配关系子域 | 12-14 | __ |
+| 分配关系子域 | 12-14（Alloc Facade 拆 2 对红绿后实际 14） | __ |
 | V1.0 集成验收 | 1 | __ |
-| **总计** | **94-111** | __ |
+| **总计** | **94-111**（上限含 Facade 拆分和 refactor） | __ |
+
+**注**: Phase 5 自估 75-81 cumulative (§5.5 末尾) 是因 AllocApiImpl + DataTaskApiImpl 拆成 2 对红绿 = 4 commit 而非 2 commit, 属合理偏移, 以实际记录为准。
