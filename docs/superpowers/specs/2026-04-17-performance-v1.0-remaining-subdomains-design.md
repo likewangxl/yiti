@@ -313,6 +313,7 @@ refactor(perf): <子域> <边界场景> - <修复点>
 - [ ] `mvn clean test -pl performance-engine-center` 全绿
 - [ ] `mvn clean package -pl performance-engine-center -am` 通过
 - [ ] git 历史显示 `test: red → feat: green [→ refactor]` 节奏，**无混合 commit**
+- [ ] 涉及并发 IT 时，每个并发 IT 必须在 `@AfterEach` 或 `@Sql(AFTER_TEST_METHOD)` 显式清理自己的数据前缀（如 `CONCUR_METRIC_*` / `CONCUR_TGT_*`），不依赖事务回滚
 
 ### 5.1 指标库子域 DoD
 
@@ -347,6 +348,7 @@ refactor(perf): <子域> <边界场景> - <修复点>
 - [ ] `MetricDefControllerIT.post_whenUnauthenticated_returns401`
 - [ ] `MetricDefControllerIT.post_whenLackBizAuth_returns403`
 - [ ] `MetricDefControllerIT.delete_whenReasonMissing_returns400`
+- [ ] `MetricDefControllerIT.post_whenMetricCodeDup_returns409`（UK 冲突路径）
 - [ ] `MetricDefControllerIT.post_whenSuccess_returns200_andAuditLogRecorded`
 
 **注解检查**
@@ -410,6 +412,7 @@ refactor(perf): <子域> <边界场景> - <修复点>
 - [ ] `TargetValueMapperIT.upsert_existingRow_updates`
 - [ ] `TargetValueMapperIT.upsertBatch_mix_newAndExisting_ok`
 - [ ] `TargetPlanServiceUT.create_whenEffectiveAfterExpire_throws40001`
+- [ ] `TargetPlanServiceUT.create_whenEffectiveEqualsExpire_succeeds`（边界：`effective_date = expire_date` 合法，锁定 `<=` 语义）
 - [ ] `TargetPlanServiceUT.create_whenKpiSchemeDraft_throws40906`
 - [ ] `TargetValueServiceUT.upsertBatch_whenSizeExceeds500_throws40910`
 - [ ] `TargetValueServiceUT.upsertBatch_whenAllSuccess_returnsAffectedCount`
@@ -475,7 +478,7 @@ refactor(perf): <子域> <边界场景> - <修复点>
 - [ ] `AllocRelationServiceUT.hasAllocation_whenExists_returnsTrue`
 - [ ] `AllocRelationServiceUT.countCustomersByEmps_batchOk`
 - [ ] `AllocRelationServiceUT.getLatestAllocVersion_derivesFromSysControlCust`
-- [ ] `AllocRelationServiceUT.getAllocVersionAt_whenNoExactMatch_returnsClosestPast`
+- [ ] `AllocRelationServiceUT.getAllocVersionAt_whenNoExactMatch_returnsMostRecentBeforeAsOfDate`（只向过去回退，不选未来版本）
 - [ ] `AllocApiImplTest.getCurrentAllocations_hitsCache`
 - [ ] `AllocApiImplTest.batchGetCurrentAllocations_cacheMergesBatchQuery`
 - [ ] `DataTaskApiImplTest.reportDataTaskStatus_throwsUOE`
