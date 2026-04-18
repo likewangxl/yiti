@@ -3,13 +3,21 @@ package com.bank.branch.platform.performance.controller;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
+import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
+import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
+import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
+import com.bank.branch.platform.performance.controller.dto.UpdateMetricReqDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricRefMapper;
 import com.bank.branch.platform.performance.support.MetricTestDataBuilder;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.ConstraintViolationException;
@@ -18,7 +26,10 @@ import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -32,6 +43,10 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
 
     @Autowired
     private PerfMetricRefMapper metricRefMapper;
+
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     @Test
     void list_shouldReturnPageResult() throws Exception {
@@ -119,6 +134,107 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
     }
 
     @Test
+    void create_whenPayloadInvalid_returns400() throws Exception {
+        CreateMetricReqDTO req = new CreateMetricReqDTO();
+        req.setMetricCode("metric_lowercase");
+        req.setMetricName("invalid");
+        req.setBaseDim("EMP");
+        req.setMetricLevel(1);
+        req.setCalcFreq("DAY");
+        req.setCalcMode("AUTO");
+
+        mockMvc.perform(post("/api/perf/metrics")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void create_whenMetricCodeDup_returnsBizError() throws Exception {
+        metricDefMapper.insert(metric("CREATE_DUP", 1));
+
+        mockMvc.perform(post("/api/perf/metrics")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createReq("TEST_METRIC_CREATE_DUP"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PERF-40903"));
+    }
+
+    @Test
+    void create_whenSuccess_returns200() throws Exception {
+        mockMvc.perform(post("/api/perf/metrics")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createReq("TEST_METRIC_CREATE_OK"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.metricCode").value("TEST_METRIC_CREATE_OK"))
+                .andExpect(jsonPath("$.data.baseDim").value("EMP"))
+                .andExpect(jsonPath("$.data.metricLevel").value(1));
+
+        assertThat(metricDefMapper.selectByMetricCode("TEST_METRIC_CREATE_OK")).isNotNull();
+    }
+
+    @Test
+    void update_whenSuccess_returns200() throws Exception {
+        metricDefMapper.insert(metric("UPDATE_OK", 1, 11));
+
+        UpdateMetricReqDTO req = new UpdateMetricReqDTO();
+        req.setMetricName("updated-metric-name");
+        req.setMetricDesc("updated-desc");
+        req.setCalcFreq("MONTH");
+        req.setCalcMode("MANUAL");
+        req.setCalcLogicType("SQL");
+        req.setSqlText("SELECT 2");
+        req.setRefMetricCodes("[]");
+
+        mockMvc.perform(put("/api/perf/metrics/{metricCode}", "TEST_METRIC_UPDATE_OK")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.metricCode").value("TEST_METRIC_UPDATE_OK"))
+                .andExpect(jsonPath("$.data.metricName").value("updated-metric-name"))
+                .andExpect(jsonPath("$.data.metricDesc").value("updated-desc"))
+                .andExpect(jsonPath("$.data.calcFreq").value("MONTH"))
+                .andExpect(jsonPath("$.data.calcMode").value("MANUAL"));
+    }
+
+    @Test
+    void delete_whenReasonMissing_returns400() throws Exception {
+        metricDefMapper.insert(metric("DELETE_REASON", 1));
+
+        mockMvc.perform(delete("/api/perf/metrics/{metricCode}", "TEST_METRIC_DELETE_REASON")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ReleaseSlotReqDTO())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void statusChange_whenReasonMissing_returns400() throws Exception {
+        metricDefMapper.insert(metric("STATUS_REASON", 1));
+        ChangeStatusReqDTO req = new ChangeStatusReqDTO();
+        req.setStatus("DISABLED");
+
+        mockMvc.perform(put("/api/perf/metrics/{metricCode}/status", "TEST_METRIC_STATUS_REASON")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void releaseSlot_whenMetricNotDisabled_returnsBizError() throws Exception {
+        metricDefMapper.insert(metric("RELEASE_ACTIVE", 1, 21));
+        ReleaseSlotReqDTO req = new ReleaseSlotReqDTO();
+        req.setReason("release active metric");
+
+        mockMvc.perform(post("/api/perf/metrics/{metricCode}/slot/release", "TEST_METRIC_RELEASE_ACTIVE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PERF-40905"));
+    }
+
+    @Test
     void list_whenPageNoIsZero_returnsBadRequest() throws Exception {
         mockMvc.perform(get("/api/perf/metrics")
                         .param("pageNo", "0")
@@ -186,6 +302,24 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
         assertThat(controllerClass.getAnnotation(Validated.class)).isNotNull();
     }
 
+    @Test
+    void writeMethods_shouldDeclareExpectedBizAuthAndAuditLog() throws Exception {
+        assertBizAuth("create", new Class<?>[]{CreateMetricReqDTO.class}, BizAction.WRITE);
+        assertNoAuditLog("create", new Class<?>[]{CreateMetricReqDTO.class});
+
+        assertBizAuth("update", new Class<?>[]{String.class, UpdateMetricReqDTO.class}, BizAction.WRITE);
+        assertNoAuditLog("update", new Class<?>[]{String.class, UpdateMetricReqDTO.class});
+
+        assertBizAuth("delete", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, BizAction.DELETE);
+        assertAuditLog("delete", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, "DELETE");
+
+        assertBizAuth("changeStatus", new Class<?>[]{String.class, ChangeStatusReqDTO.class}, BizAction.CONFIG);
+        assertAuditLog("changeStatus", new Class<?>[]{String.class, ChangeStatusReqDTO.class}, "STATUS_CHANGE");
+
+        assertBizAuth("releaseSlot", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, BizAction.CONFIG);
+        assertAuditLog("releaseSlot", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, "SLOT_RELEASE");
+    }
+
     private void assertBizAuth(String methodName, Class<?>[] parameterTypes, BizAction action) throws Exception {
         Class<?> controllerClass = Class.forName(CONTROLLER_FQCN);
         Method method = controllerClass.getDeclaredMethod(methodName, parameterTypes);
@@ -193,6 +327,41 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
         assertThat(bizAuth).isNotNull();
         assertThat(bizAuth.bizType()).isEqualTo(BizType.PERF_CONFIG);
         assertThat(bizAuth.action()).isEqualTo(action);
+    }
+
+    private void assertAuditLog(String methodName,
+                                Class<?>[] parameterTypes,
+                                String action) throws Exception {
+        Class<?> controllerClass = Class.forName(CONTROLLER_FQCN);
+        Method method = controllerClass.getDeclaredMethod(methodName, parameterTypes);
+        AuditLog auditLog = method.getAnnotation(AuditLog.class);
+        assertThat(auditLog).isNotNull();
+        assertThat(auditLog.action()).isEqualTo(action);
+        assertThat(auditLog.resourceType()).isEqualTo("METRIC_DEF");
+        assertThat(auditLog.reasonRequired()).isTrue();
+    }
+
+    private void assertNoAuditLog(String methodName, Class<?>[] parameterTypes) throws Exception {
+        Class<?> controllerClass = Class.forName(CONTROLLER_FQCN);
+        Method method = controllerClass.getDeclaredMethod(methodName, parameterTypes);
+        assertThat(method.getAnnotation(AuditLog.class)).isNull();
+    }
+
+    private static CreateMetricReqDTO createReq(String metricCode) {
+        CreateMetricReqDTO req = new CreateMetricReqDTO();
+        req.setMetricCode(metricCode);
+        req.setMetricName("metric-name");
+        req.setMetricNameEn("metric-name-en");
+        req.setMetricDesc("metric-desc");
+        req.setBaseDim("EMP");
+        req.setMetricLevel(1);
+        req.setCalcFreq("DAY");
+        req.setCalcMode("AUTO");
+        req.setCalcLogicType("SQL");
+        req.setSqlText("SELECT 1");
+        req.setSummaryRule("SUM");
+        req.setRefMetricCodes("[]");
+        return req;
     }
 
     private static PerfMetricDef metric(String codeSuffix, int level) {
