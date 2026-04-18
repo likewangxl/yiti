@@ -92,10 +92,15 @@ public class MetricDefService {
     @Transactional(rollbackFor = Exception.class)
     public PerfMetricDef update(UpdateMetricDefCmd cmd) {
         PerfMetricDef existing = getByCode(cmd.getMetricCode());
-        List<String> refMetricCodes = parseRefMetricCodes(cmd.getRefMetricCodes());
-        Map<String, Integer> refMetricLevels = loadRefMetricLevels(refMetricCodes);
-        metricCycleDetectService.checkLevelConstraint(existing.getMetricLevel(), refMetricLevels);
-        metricCycleDetectService.checkNoCycle(metricRefService.loadFullGraph(), existing.getMetricCode(), refMetricCodes);
+        boolean refMetricCodesProvided = cmd.getRefMetricCodes() != null && !cmd.getRefMetricCodes().isBlank();
+        List<String> refMetricCodes = refMetricCodesProvided
+                ? parseRefMetricCodes(cmd.getRefMetricCodes())
+                : Collections.emptyList();
+        if (refMetricCodesProvided) {
+            Map<String, Integer> refMetricLevels = loadRefMetricLevels(refMetricCodes);
+            metricCycleDetectService.checkLevelConstraint(existing.getMetricLevel(), refMetricLevels);
+            metricCycleDetectService.checkNoCycle(metricRefService.loadFullGraph(), existing.getMetricCode(), refMetricCodes);
+        }
 
         PerfMetricDef patch = new PerfMetricDef();
         patch.setId(existing.getId());
@@ -108,10 +113,14 @@ public class MetricDefService {
         patch.setSqlText(cmd.getSqlText());
         patch.setExprText(cmd.getExprText());
         patch.setSummaryRule(cmd.getSummaryRule());
-        patch.setRefMetricCodes(toJson(refMetricCodes));
+        if (refMetricCodesProvided) {
+            patch.setRefMetricCodes(toJson(refMetricCodes));
+        }
         patch.setUpdatedBy(cmd.getOperator());
         mapper.updateByIdSelective(patch);
-        metricRefService.setRefs(existing.getMetricCode(), refMetricCodes);
+        if (refMetricCodesProvided) {
+            metricRefService.setRefs(existing.getMetricCode(), refMetricCodes);
+        }
 
         if (cmd.getMetricName() != null) {
             existing.setMetricName(cmd.getMetricName());
@@ -140,7 +149,9 @@ public class MetricDefService {
         if (cmd.getSummaryRule() != null) {
             existing.setSummaryRule(cmd.getSummaryRule());
         }
-        existing.setRefMetricCodes(toJson(refMetricCodes));
+        if (refMetricCodesProvided) {
+            existing.setRefMetricCodes(toJson(refMetricCodes));
+        }
         existing.setUpdatedBy(cmd.getOperator());
         existing.setUpdatedTime(LocalDateTime.now());
         return existing;

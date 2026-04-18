@@ -9,14 +9,19 @@ import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateMetricReqDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.facade.MetricLifecycleFacade;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricRefMapper;
+import com.bank.branch.platform.performance.service.MetricDefService;
+import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.support.MetricTestDataBuilder;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 
@@ -26,6 +31,8 @@ import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -44,9 +51,22 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
     @Autowired
     private PerfMetricRefMapper metricRefMapper;
 
+    @Autowired
+    private MetricDefService metricDefService;
+
+    @SpyBean
+    private MetricLifecycleFacade metricLifecycleFacade;
+
     private final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+    @BeforeEach
+    void setUpFacadeSpy() {
+        doAnswer(invocation -> metricDefService.create(invocation.getArgument(0, CreateMetricDefCmd.class)))
+                .when(metricLifecycleFacade)
+                .createMetric(any(CreateMetricDefCmd.class));
+    }
 
     @Test
     void list_shouldReturnPageResult() throws Exception {
@@ -200,6 +220,21 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
     }
 
     @Test
+    void delete_whenSuccess_marksMetricDisabled() throws Exception {
+        metricDefMapper.insert(metric("DELETE_OK", 1, 31));
+        ReleaseSlotReqDTO req = new ReleaseSlotReqDTO();
+        req.setReason("delete metric");
+
+        mockMvc.perform(delete("/api/perf/metrics/{metricCode}", "TEST_METRIC_DELETE_OK")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        assertThat(metricDefMapper.selectByMetricCode("TEST_METRIC_DELETE_OK").getStatus()).isEqualTo("DISABLED");
+    }
+
+    @Test
     void delete_whenReasonMissing_returns400() throws Exception {
         metricDefMapper.insert(metric("DELETE_REASON", 1));
 
@@ -222,6 +257,22 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
     }
 
     @Test
+    void statusChange_whenSuccess_marksMetricDisabled() throws Exception {
+        metricDefMapper.insert(metric("STATUS_OK", 1, 41));
+        ChangeStatusReqDTO req = new ChangeStatusReqDTO();
+        req.setStatus("DISABLED");
+        req.setReason("status disable");
+
+        mockMvc.perform(put("/api/perf/metrics/{metricCode}/status", "TEST_METRIC_STATUS_OK")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        assertThat(metricDefMapper.selectByMetricCode("TEST_METRIC_STATUS_OK").getStatus()).isEqualTo("DISABLED");
+    }
+
+    @Test
     void releaseSlot_whenMetricNotDisabled_returnsBizError() throws Exception {
         metricDefMapper.insert(metric("RELEASE_ACTIVE", 1, 21));
         ReleaseSlotReqDTO req = new ReleaseSlotReqDTO();
@@ -232,6 +283,24 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("PERF-40905"));
+    }
+
+    @Test
+    void releaseSlot_whenSuccess_clearsOccupiedSlot() throws Exception {
+        PerfMetricDef disabled = metric("RELEASE_OK", 1, 51);
+        disabled.setStatus("DISABLED");
+        metricDefMapper.insert(disabled);
+        ReleaseSlotReqDTO req = new ReleaseSlotReqDTO();
+        req.setReason("release slot");
+
+        mockMvc.perform(post("/api/perf/metrics/{metricCode}/slot/release", "TEST_METRIC_RELEASE_OK")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        PerfMetricDef reloaded = metricDefMapper.selectByMetricCode("TEST_METRIC_RELEASE_OK");
+        assertThat(reloaded.getValSlot()).isNull();
     }
 
     @Test
