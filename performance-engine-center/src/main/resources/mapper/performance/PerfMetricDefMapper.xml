@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfMetricDefMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
+        calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
+        ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        INSERT INTO perf_metric_def (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES (
+            #{id}, #{metricCode}, #{metricName}, #{metricNameEn}, #{metricDesc}, #{baseDim}, #{metricLevel},
+            #{calcFreq}, #{calcMode}, #{calcLogicType}, #{sqlText}, #{exprText}, #{summaryRule},
+            #{refMetricCodes}, #{valSlot}, #{status}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        UPDATE perf_metric_def
+        <set>
+            <if test="metricCode != null">metric_code = #{metricCode},</if>
+            <if test="metricName != null">metric_name = #{metricName},</if>
+            <if test="metricNameEn != null">metric_name_en = #{metricNameEn},</if>
+            <if test="metricDesc != null">metric_desc = #{metricDesc},</if>
+            <if test="baseDim != null">base_dim = #{baseDim},</if>
+            <if test="metricLevel != null">metric_level = #{metricLevel},</if>
+            <if test="calcFreq != null">calc_freq = #{calcFreq},</if>
+            <if test="calcMode != null">calc_mode = #{calcMode},</if>
+            <if test="calcLogicType != null">calc_logic_type = #{calcLogicType},</if>
+            <if test="sqlText != null">sql_text = #{sqlText},</if>
+            <if test="exprText != null">expr_text = #{exprText},</if>
+            <if test="summaryRule != null">summary_rule = #{summaryRule},</if>
+            <if test="refMetricCodes != null">ref_metric_codes = #{refMetricCodes},</if>
+            <if test="valSlot != null">val_slot = #{valSlot},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="createdBy != null">created_by = #{createdBy},</if>
+            <if test="createdTime != null">created_time = #{createdTime},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            updated_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusById">
+        UPDATE perf_metric_def
+        SET status = #{status},
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_def
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByMetricCode" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_def
+        WHERE metric_code = #{metricCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectByMetricCodes" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_def
+        <where>
+            <choose>
+                <when test="codes != null and codes.size() > 0">
+                    metric_code IN
+                    <foreach collection="codes" item="code" open="(" separator="," close=")">
+                        #{code}
+                    </foreach>
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+        </where>
+    </select>
+
+    <select id="selectOccupiedSlots" resultType="java.lang.Integer">
+        SELECT val_slot
+        FROM perf_metric_def
+        WHERE base_dim = #{baseDim}
+          AND val_slot IS NOT NULL
+    </select>
+
+    <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_def
+        <where>
+            <if test="baseDim != null and baseDim != ''">
+                AND base_dim = #{baseDim}
+            </if>
+            <if test="metricLevel != null">
+                AND metric_level = #{metricLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    metric_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR metric_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY metric_code ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByCondition" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_metric_def
+        <where>
+            <if test="baseDim != null and baseDim != ''">
+                AND base_dim = #{baseDim}
+            </if>
+            <if test="metricLevel != null">
+                AND metric_level = #{metricLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    metric_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR metric_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+    </select>
+
+    <update id="releaseSlotById">
+        UPDATE perf_metric_def
+        SET val_slot = NULL,
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND status = 'DISABLED'
+    </update>
+
+</mapper>

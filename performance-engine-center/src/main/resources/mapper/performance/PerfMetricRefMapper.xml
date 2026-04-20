@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfMetricRefMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, metric_code, ref_metric_code, created_time
+    </sql>
+
+    <insert id="insertBatch">
+        INSERT INTO perf_metric_ref (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.metricCode}, #{item.refMetricCode}, #{item.createdTime})
+        </foreach>
+    </insert>
+
+    <delete id="deleteByMetricCode">
+        DELETE FROM perf_metric_ref
+        WHERE metric_code = #{metricCode}
+    </delete>
+
+    <select id="selectByMetricCode" resultType="com.bank.branch.platform.performance.entity.PerfMetricRef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_ref
+        WHERE metric_code = #{metricCode}
+        ORDER BY ref_metric_code ASC
+    </select>
+
+    <select id="selectByRefMetricCode" resultType="com.bank.branch.platform.performance.entity.PerfMetricRef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_ref
+        WHERE ref_metric_code = #{refMetricCode}
+        ORDER BY metric_code ASC
+    </select>
+
+    <select id="selectAll" resultType="com.bank.branch.platform.performance.entity.PerfMetricRef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_ref
+        ORDER BY metric_code ASC, ref_metric_code ASC
+    </select>
+
+</mapper>
