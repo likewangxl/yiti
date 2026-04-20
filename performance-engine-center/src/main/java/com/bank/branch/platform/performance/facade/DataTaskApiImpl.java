@@ -17,10 +17,6 @@ import org.springframework.stereotype.Service;
  *
  * <p>UOE 消息: "V1.1 delivered", 与 {@link PerfCalcApiImpl} / {@link MetricApiImpl}
  * / {@link KpiApiImpl} 保持一致, 消费方可通过消息串统一识别"V1.1 才交付"的占位方法。
- *
- * <p>Step 1 (TDD 红): 本实现类仅声明方法签名, 实现为空体, UT 将验证:
- * 调用时抛出 {@link UnsupportedOperationException} 并携带 "V1.1 delivered" 消息。
- * 空体将导致 UT FAIL, 为 Step 2 绿实现作铺垫。
  */
 @Service
 public class DataTaskApiImpl implements DataTaskApi {
@@ -33,6 +29,6 @@ public class DataTaskApiImpl implements DataTaskApi {
      */
     @Override
     public void reportDataTaskStatus(DataTaskStatusCmd cmd) {
-        // Step 1 红: 空实现, Step 2 绿实现抛 UOE
+        throw new UnsupportedOperationException("V1.1 delivered");
     }
 }
