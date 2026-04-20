@@ -207,8 +207,8 @@ public class KpiSchemeController {
                                                @Valid @RequestBody AddKpiItemReqDTO req) {
         log.info("[KpiSchemeController.addItem] schemeId={}, metricCode={}, weight={}",
                 id, req.getMetricCode(), req.getWeight());
-        // 通过 getById 兜底校验 scheme 存在 (Service 内部无校验此分支).
-        kpiSchemeService.getById(id);
+        // 父方案存在性校验已下沉至 KpiItemService.addItem (Service 层), Controller 不再兜底;
+        // 这样 V1.1 Facade 路径也能复用同一校验, 同时减少双查询。
         AddKpiItemCmd cmd = AddKpiItemCmd.builder()
                 .schemeId(id)
                 .metricCode(req.getMetricCode())

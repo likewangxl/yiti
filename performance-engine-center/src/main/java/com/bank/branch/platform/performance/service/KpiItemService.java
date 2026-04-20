@@ -4,6 +4,7 @@ import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
+import com.bank.branch.platform.performance.mapper.PerfKpiSchemeMapper;
 import com.bank.branch.platform.performance.service.cmd.AddKpiItemCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateKpiItemCmd;
 import lombok.RequiredArgsConstructor;
@@ -44,12 +45,18 @@ public class KpiItemService {
     private static final BigDecimal DEFAULT_MULTIPLIER = new BigDecimal("1.0000");
 
     private final PerfKpiItemMapper itemMapper;
+    /**
+     * 父方案表 Mapper: 仅用于 {@link #addItem} 的父方案存在性校验, 避免让 Controller 层兜底校验,
+     * 也同步覆盖 V1.1 Facade 路径. 直接注入 Mapper 而非 {@code KpiSchemeService} 是为了规避
+     * 循环依赖 ({@code KpiSchemeService.create} 已依赖本 Service 批量添加 item).
+     */
+    private final PerfKpiSchemeMapper schemeMapper;
 
     /**
      * 新增方案项.
      *
-     * <p>先校验 (schemeId, metricCode) 在 UK 范围内不重复; 通过后补齐默认值并落库。
-     * 重复时抛 {@link PerfErrorCode#KPI_ITEM_DUP} 而非让 UK 冲突冒泡,
+     * <p>先校验父方案存在 (防御 REST / Facade 两条路径), 再做 (schemeId, metricCode) UK 预校验;
+     * 通过后补齐默认值并落库。重复时抛 {@link PerfErrorCode#KPI_ITEM_DUP} 而非让 UK 冲突冒泡,
      * 因为调用方在 create scheme 时会批量调用, 预校验更友好。
      *
      * @param cmd 新增命令 (schemeId + metricCode + weight 必填, 其余可空用默认值)
@@ -57,6 +64,10 @@ public class KpiItemService {
      */
     @Transactional(rollbackFor = Exception.class)
     public PerfKpiItem addItem(AddKpiItemCmd cmd) {
+        // 父方案存在性校验: 避免 Controller 层兜底 + Facade 路径漏校双重问题
+        if (schemeMapper.selectById(cmd.getSchemeId()) == null) {
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, cmd.getSchemeId());
+        }
         // UK 预校验: 同方案内 metric 必须唯一
         if (itemMapper.selectBySchemeAndMetric(cmd.getSchemeId(), cmd.getMetricCode()) != null) {
             throw new PerfException(PerfErrorCode.KPI_ITEM_DUP, cmd.getSchemeId(), cmd.getMetricCode());

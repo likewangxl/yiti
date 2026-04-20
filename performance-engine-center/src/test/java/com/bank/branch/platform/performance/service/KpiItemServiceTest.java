@@ -1,9 +1,11 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
+import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
+import com.bank.branch.platform.performance.mapper.PerfKpiSchemeMapper;
 import com.bank.branch.platform.performance.service.cmd.AddKpiItemCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateKpiItemCmd;
 import com.bank.branch.platform.performance.support.KpiTestDataBuilder;
@@ -37,12 +39,43 @@ class KpiItemServiceTest {
     @Mock
     private PerfKpiItemMapper itemMapper;
 
+    @Mock
+    private PerfKpiSchemeMapper schemeMapper;
+
     @InjectMocks
     private KpiItemService service;
+
+    /** 为同方案内重复 / 校验通过的场景统一 stub 父方案存在. */
+    private void stubSchemeExists(String schemeId) {
+        PerfKpiScheme parent = new PerfKpiScheme();
+        parent.setId(schemeId);
+        when(schemeMapper.selectById(schemeId)).thenReturn(parent);
+    }
+
+    @Test
+    @DisplayName("addItem: 父方案不存在时抛 PerfException (KPI_SCHEME_NOT_FOUND), 不查 item")
+    void addItem_whenSchemeNotFound_throws() {
+        when(schemeMapper.selectById("S_MISSING")).thenReturn(null);
+
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_MISSING")
+                .metricCode("TEST_KPI_METRIC_X")
+                .weight(new BigDecimal("50.0000"))
+                .operator("admin")
+                .build();
+
+        assertThatThrownBy(() -> service.addItem(cmd))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_SCHEME_NOT_FOUND));
+        // 父方案校验不过, UK 预校验与插入都不应触发
+        verify(itemMapper, never()).selectBySchemeAndMetric(any(), any());
+        verify(itemMapper, never()).insert(any(PerfKpiItem.class));
+    }
 
     @Test
     @DisplayName("同方案内 metricCode 重复时抛 PerfException (KPI_ITEM_DUP)")
     void addItem_whenDuplicateMetricInScheme_throws() {
+        stubSchemeExists("S_DUP");
         PerfKpiItem existing = KpiTestDataBuilder.item("S_DUP", "TEST_KPI_METRIC_A");
         when(itemMapper.selectBySchemeAndMetric("S_DUP", "TEST_KPI_METRIC_A")).thenReturn(existing);
 
@@ -62,6 +95,7 @@ class KpiItemServiceTest {
     @Test
     @DisplayName("新增方案项成功: 生成 id + 默认值补齐 + mapper.insert 被调用一次")
     void addItem_whenValid_insertsWithDefaults() {
+        stubSchemeExists("S_OK");
         when(itemMapper.selectBySchemeAndMetric("S_OK", "TEST_KPI_METRIC_B")).thenReturn(null);
 
         AddKpiItemCmd cmd = AddKpiItemCmd.builder()
