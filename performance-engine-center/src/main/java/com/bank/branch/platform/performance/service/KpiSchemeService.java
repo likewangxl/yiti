@@ -1,58 +1,271 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
+import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfKpiSchemeMapper;
+import com.bank.branch.platform.performance.service.cmd.AddKpiItemCmd;
 import com.bank.branch.platform.performance.service.cmd.CreateKpiSchemeCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateKpiSchemeCmd;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
- * KPI 方案服务 (骨架, 实现在 Step 4 填充).
+ * KPI 方案服务.
+ *
+ * <p>职责:
+ * <ul>
+ *   <li>方案 + 方案项的聚合写入 (父子表单事务)</li>
+ *   <li>发布校验: 遍历所有 item 的 metricCode, 调用 {@link MetricDefService#getByCodeOrNull}
+ *       校验 metric 存在且 status=ACTIVE, 任一不符抛 {@link PerfErrorCode#KPI_PUBLISH_METRIC_INVALID}</li>
+ *   <li>方案禁用 (高危, reason 必填)</li>
+ *   <li>只读查询 (按 id / 分页)</li>
+ * </ul>
+ *
+ * <p>**事务策略**: 写方法统一 {@code @Transactional(rollbackFor=Exception.class)}.
+ * {@link #create} 内对 {@code kpiItemService.addItem} 的调用依赖 Spring REQUIRED
+ * 传播, 共享同一事务; 任一 item 失败, 整个方案连同已插入的 item 一起回滚。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class KpiSchemeService {
+
+    /** 方案初始状态: DRAFT (与 DDL status 取值一致). */
+    private static final String STATUS_DRAFT = "DRAFT";
+    /** 方案已发布状态. */
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    /** 方案已禁用状态. */
+    private static final String STATUS_DISABLED = "DISABLED";
 
     private final PerfKpiSchemeMapper schemeMapper;
     private final KpiItemService kpiItemService;
     private final MetricDefService metricDefService;
 
-    /** 新建方案 (单事务 INSERT scheme + 遍历 items). */
+    /**
+     * 新建方案 + 方案项 (单事务).
+     *
+     * <p>流程:
+     * <ol>
+     *   <li>预校验 schemeCode 不重复 (UK + 业务层双保险)</li>
+     *   <li>构造并 INSERT scheme (status=DRAFT)</li>
+     *   <li>遍历 items 调 {@link KpiItemService#addItem}, 每项的 schemeId 被覆写为本方案 id</li>
+     * </ol>
+     * <p>任一步骤异常都会使整个事务回滚 (依赖 {@code @Transactional(rollbackFor=Exception.class)}).
+     *
+     * @param cmd 新建命令
+     * @return 新建的方案 (status=DRAFT)
+     */
+    @Transactional(rollbackFor = Exception.class)
     public PerfKpiScheme create(CreateKpiSchemeCmd cmd) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        // schemeCode UK 预校验 (提前抛业务异常, 避免 DB 层语义含糊的 DuplicateKey 冒泡)
+        if (schemeMapper.selectBySchemeCode(cmd.getSchemeCode()) != null) {
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_CODE_DUP, cmd.getSchemeCode());
+        }
+
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId(generateId());
+        scheme.setSchemeCode(cmd.getSchemeCode());
+        scheme.setSchemeName(cmd.getSchemeName());
+        scheme.setCycleType(cmd.getCycleType());
+        scheme.setOpenDetail(cmd.getOpenDetail() != null ? cmd.getOpenDetail() : 0);
+        scheme.setStatus(STATUS_DRAFT);
+        LocalDateTime now = LocalDateTime.now();
+        scheme.setCreatedBy(cmd.getOperator());
+        scheme.setCreatedTime(now);
+        scheme.setUpdatedBy(cmd.getOperator());
+        scheme.setUpdatedTime(now);
+
+        try {
+            schemeMapper.insert(scheme);
+        } catch (DuplicateKeyException ex) {
+            // 并发场景 UK 兜底 (预校验与 insert 之间有其他事务抢先插入)
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_CODE_DUP, ex, cmd.getSchemeCode());
+        }
+
+        // 遍历写入方案项: addItem 在同一事务内运行 (REQUIRED 传播);
+        // 任一项抛异常, 父事务整体回滚, scheme 也会被撤销。
+        List<AddKpiItemCmd> items = cmd.getItems() == null ? Collections.emptyList() : cmd.getItems();
+        for (AddKpiItemCmd itemCmd : items) {
+            itemCmd.setSchemeId(scheme.getId());
+            if (itemCmd.getOperator() == null) {
+                itemCmd.setOperator(cmd.getOperator());
+            }
+            kpiItemService.addItem(itemCmd);
+        }
+        log.info("[KpiSchemeService.create] 新建方案 schemeCode={}, id={}, itemCount={}",
+                scheme.getSchemeCode(), scheme.getId(), items.size());
+        return scheme;
     }
 
-    /** 更新方案 (选择性 patch). */
+    /**
+     * 按主键选择性更新方案.
+     *
+     * <p>方案编码 (scheme_code) 作为 UK 不允许修改, 不在 cmd 内; 只 patch 基础信息。
+     *
+     * @param id  方案主键
+     * @param cmd 更新命令
+     * @return 更新后的方案 (存量实体 merge 视图)
+     */
+    @Transactional(rollbackFor = Exception.class)
     public PerfKpiScheme updateById(String id, UpdateKpiSchemeCmd cmd) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        PerfKpiScheme existing = schemeMapper.selectById(id);
+        if (existing == null) {
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
+        }
+        PerfKpiScheme patch = new PerfKpiScheme();
+        patch.setId(id);
+        patch.setSchemeName(cmd.getSchemeName());
+        patch.setCycleType(cmd.getCycleType());
+        patch.setOpenDetail(cmd.getOpenDetail());
+        patch.setUpdatedBy(cmd.getOperator());
+        schemeMapper.updateByIdSelective(patch);
+
+        if (cmd.getSchemeName() != null) {
+            existing.setSchemeName(cmd.getSchemeName());
+        }
+        if (cmd.getCycleType() != null) {
+            existing.setCycleType(cmd.getCycleType());
+        }
+        if (cmd.getOpenDetail() != null) {
+            existing.setOpenDetail(cmd.getOpenDetail());
+        }
+        existing.setUpdatedBy(cmd.getOperator());
+        existing.setUpdatedTime(LocalDateTime.now());
+        return existing;
     }
 
-    /** 禁用方案 (高危, reason 必填). */
+    /**
+     * 禁用方案 (高危, reason 必填).
+     *
+     * <p>将状态流转为 DISABLED。审计由 Controller 层
+     * {@code @AuditLog(reasonRequired=true)} 保证; 本 Service 层只做 reason 非空兜底。
+     *
+     * @param id       方案主键
+     * @param reason   禁用原因 (不可空白)
+     * @param operator 操作人
+     */
+    @Transactional(rollbackFor = Exception.class)
     public void disable(String id, String reason, String operator) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        if (reason == null || reason.isBlank()) {
+            // 高危操作 reason 必填 - 这里做兜底, 正常应由 Controller DTO 层 @NotBlank 拦截
+            throw new PerfException(PerfErrorCode.PARAM_INVALID, "reason 必填");
+        }
+        PerfKpiScheme existing = schemeMapper.selectById(id);
+        if (existing == null) {
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
+        }
+        if (STATUS_DISABLED.equals(existing.getStatus())) {
+            throw new PerfException(PerfErrorCode.INVALID_STATE, "方案已禁用: " + id);
+        }
+        log.info("[KpiSchemeService.disable] id={}, schemeCode={}, operator={}, reason={}",
+                id, existing.getSchemeCode(), operator, reason);
+        schemeMapper.updateStatusById(id, STATUS_DISABLED, operator);
     }
 
-    /** 发布方案 (DRAFT/ACTIVE → ACTIVE, 校验所有 item 的 metric 可用). */
+    /**
+     * 发布方案: DRAFT/ACTIVE → ACTIVE.
+     *
+     * <p>**核心校验** (为什么): 方案发布即暴露给计算引擎, 必须保证所有引用指标都处于
+     * ACTIVE 状态。考虑并发场景 (A 发布方案 B 同时禁用 metric), 发布动作每次都需
+     * 重新校验, 不能依赖"添加 item 时校验过"的历史快照。
+     *
+     * <p>任一 item 的 metric 不存在 / 状态非 ACTIVE 均抛
+     * {@link PerfErrorCode#KPI_PUBLISH_METRIC_INVALID}, 不允许部分发布。
+     *
+     * @param id       方案主键
+     * @param operator 操作人
+     * @return 发布后的方案 (status=ACTIVE)
+     */
+    @Transactional(rollbackFor = Exception.class)
     public PerfKpiScheme publish(String id, String operator) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        PerfKpiScheme scheme = schemeMapper.selectById(id);
+        if (scheme == null) {
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
+        }
+        if (STATUS_DISABLED.equals(scheme.getStatus())) {
+            throw new PerfException(PerfErrorCode.INVALID_STATE, "已禁用方案不可发布: " + id);
+        }
+
+        List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
+        // 空方案也允许发布 (方案结构定型后再补 item 的使用场景),
+        // 若业务要求必须 >= 1 item, 在 Controller DTO 层加校验更灵活。
+        for (PerfKpiItem item : items) {
+            PerfMetricDef metricDef = metricDefService.getByCodeOrNull(item.getMetricCode());
+            if (metricDef == null || !STATUS_ACTIVE.equals(metricDef.getStatus())) {
+                throw new PerfException(PerfErrorCode.KPI_PUBLISH_METRIC_INVALID, item.getMetricCode());
+            }
+        }
+
+        schemeMapper.updateStatusById(id, STATUS_ACTIVE, operator);
+        scheme.setStatus(STATUS_ACTIVE);
+        scheme.setUpdatedBy(operator);
+        scheme.setUpdatedTime(LocalDateTime.now());
+        log.info("[KpiSchemeService.publish] 方案发布成功 id={}, schemeCode={}, itemCount={}, operator={}",
+                id, scheme.getSchemeCode(), items.size(), operator);
+        return scheme;
     }
 
-    /** 按主键查询, 不存在抛异常. */
+    /**
+     * 按主键查询, 不存在抛 {@link PerfErrorCode#KPI_SCHEME_NOT_FOUND}.
+     *
+     * @param id 主键
+     * @return 方案实体
+     */
+    @Transactional(readOnly = true)
     public PerfKpiScheme getById(String id) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        PerfKpiScheme scheme = schemeMapper.selectById(id);
+        if (scheme == null) {
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
+        }
+        return scheme;
     }
 
-    /** 按主键查询, 不存在返回 Optional.empty. */
+    /**
+     * 按主键查询, 不存在返回 {@link Optional#empty()} (供 Task 3 TargetPlan 引用校验).
+     *
+     * @param id 主键
+     * @return Optional 包装的方案
+     */
+    @Transactional(readOnly = true)
     public Optional<PerfKpiScheme> getByIdOrNull(String id) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return Optional.ofNullable(schemeMapper.selectById(id));
     }
 
-    /** 条件分页. */
+    /**
+     * 条件分页查询.
+     *
+     * @param cycleType 周期类型
+     * @param status    状态
+     * @param keyword   关键字 (编码/名称模糊)
+     * @param pageNo    页码 (从 1 起)
+     * @param pageSize  页大小
+     * @return 分页结果
+     */
+    @Transactional(readOnly = true)
     public PageResult<PerfKpiScheme> page(String cycleType, String status, String keyword, int pageNo, int pageSize) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        int offset = Math.max(pageNo - 1, 0) * pageSize;
+        long total = schemeMapper.countByCondition(cycleType, status, keyword);
+        if (total == 0) {
+            return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
+        }
+        List<PerfKpiScheme> records = schemeMapper.selectByCondition(cycleType, status, keyword, offset, pageSize);
+        return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    private String generateId() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 }
