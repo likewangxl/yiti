@@ -327,6 +327,8 @@ public class KpiSchemeService {
             });
         } else {
             // 无事务场景 (理论上写方法都带 @Transactional 不会走到, 这里兜底)
+            log.warn("[KpiSchemeService.registerAfterCommitEvict] 无活动事务, 立即 evict 缓存; id={}. "
+                    + "此为反模式, 调用方应在 @Transactional 上下文中触发写操作.", schemeId);
             cache.evict(schemeId);
         }
     }

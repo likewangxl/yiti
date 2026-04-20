@@ -44,6 +44,10 @@ public interface KpiApi {
     /**
      * 获取 KPI 方案定义.
      *
+     * <p><strong>本方法不走 Redis 缓存</strong>：write 方法 (update/publish/disable) 的 evict
+     * 只认 id 作 key, 无法定位 code 缓存键; 高频访问建议改用 {@link #getKpiSchemeById(String)}
+     * 并在调用方自行维护 code→id 映射.
+     *
      * @param schemeCode 方案编码
      * @return 方案详情 (含 items), 不存在返回 Optional.empty()
      */
