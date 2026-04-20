@@ -35,6 +35,10 @@ public interface PerfKpiItemMapper {
     /**
      * 按主键选择性更新.
      *
+     * <p>perf_kpi_item 表无 updated_time 列作为 {@code <set>} 兜底锚点,
+     * 调用方必须保证至少有一个非 id 字段非空, 否则生成非法 SQL (由 DB 抛
+     * {@link org.springframework.jdbc.BadSqlGrammarException}, fail-fast).
+     *
      * @param item 方案项
      * @return 受影响行数
      */

@@ -24,9 +24,8 @@
             <if test="cycleType != null">cycle_type = #{cycleType},</if>
             <if test="openDetail != null">open_detail = #{openDetail},</if>
             <if test="status != null">status = #{status},</if>
-            <if test="createdBy != null">created_by = #{createdBy},</if>
-            <if test="createdTime != null">created_time = #{createdTime},</if>
             <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            <!-- 创建字段 (created_by/created_time) 不可变, 刻意不提供 <if> 分支. -->
             updated_time = NOW()
         </set>
         WHERE id = #{id}

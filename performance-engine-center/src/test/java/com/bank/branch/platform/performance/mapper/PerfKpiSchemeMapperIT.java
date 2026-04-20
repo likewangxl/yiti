@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -130,6 +131,34 @@ class PerfKpiSchemeMapperIT extends PerformanceMapperTestBase {
         assertThat(loaded.getSchemeName()).isEqualTo("新名称");
         assertThat(loaded.getSchemeCode()).isEqualTo("TEST_KPI_UPD_T");
         assertThat(loaded.getUpdatedBy()).isEqualTo("patcher");
+    }
+
+    @Test
+    @DisplayName("updateByIdSelective 忽略 patch 的 created_by/created_time (创建字段不可变)")
+    void updateByIdSelective_whenPatchCreatedFields_ignored() {
+        // 创建字段必须不可变, XML 刻意不为 created_by/created_time 提供 <if> 分支.
+        // 即便调用方误传, 这里也应保持原始值不变.
+        PerfKpiScheme scheme = KpiTestDataBuilder.scheme("CF_IGN");
+        mapper.insert(scheme);
+        // 以数据库侧视角取回 created_by/created_time (datetime 列无纳秒精度, 经过一次往返后才能稳定比较)
+        PerfKpiScheme beforePatch = mapper.selectById(scheme.getId());
+        String origCreatedBy = beforePatch.getCreatedBy();
+        LocalDateTime origCreatedTime = beforePatch.getCreatedTime();
+
+        PerfKpiScheme patch = new PerfKpiScheme();
+        patch.setId(scheme.getId());
+        patch.setSchemeName("新名称"); // 非 id 字段至少一项, 避免空 <set>
+        patch.setCreatedBy("hacker");
+        patch.setCreatedTime(LocalDateTime.now().plusDays(1));
+        int rows = mapper.updateByIdSelective(patch);
+
+        assertThat(rows).isEqualTo(1);
+        PerfKpiScheme loaded = mapper.selectById(scheme.getId());
+        assertThat(loaded.getSchemeName()).isEqualTo("新名称");
+        // created_by/created_time 应保持 insert 时的值, 不被 patch 覆盖
+        assertThat(loaded.getCreatedBy()).isEqualTo(origCreatedBy);
+        assertThat(loaded.getCreatedBy()).isNotEqualTo("hacker");
+        assertThat(loaded.getCreatedTime()).isEqualTo(origCreatedTime);
     }
 
     @Test

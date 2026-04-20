@@ -26,6 +26,8 @@ public interface PerfKpiSchemeMapper {
     /**
      * 按主键选择性更新（非空字段才更新，updated_time 固定写入 NOW()）.
      *
+     * <p>不接受 patch created_by/created_time; 若传值将被忽略（XML 刻意不提供对应 {@code <if>} 分支）.
+     *
      * @param scheme KPI 方案
      * @return 受影响行数
      */

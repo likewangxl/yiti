@@ -126,6 +126,23 @@ class PerfKpiItemMapperIT extends PerformanceMapperTestBase {
     }
 
     @Test
+    @DisplayName("updateByIdSelective 空 patch (仅 id) 抛出非法 SQL 异常 (fail-fast)")
+    void updateByIdSelective_whenOnlyId_throws() {
+        // perf_kpi_item 没有 updated_time 列作为 <set> 兜底锚点, 空 patch 会生成
+        // "UPDATE perf_kpi_item SET WHERE id = ?" 语法错误. 由 DB 抛异常, 符合 fail-fast 原则.
+        // 调用方必须保证至少传一个非 id 字段非空, 否则由此 IT 覆盖的行为兜底.
+        String schemeId = insertParentScheme("I_UPD_EMPTY");
+        PerfKpiItem item = KpiTestDataBuilder.item(schemeId, "TEST_KPI_METRIC_UPD_EMPTY");
+        mapper.insert(item);
+
+        PerfKpiItem patch = new PerfKpiItem();
+        patch.setId(item.getId()); // 仅 id, 所有 <if> 均不命中
+
+        assertThatThrownBy(() -> mapper.updateByIdSelective(patch))
+                .isInstanceOf(org.springframework.jdbc.BadSqlGrammarException.class);
+    }
+
+    @Test
     @DisplayName("deleteById 可删除单条项")
     void deleteById_ok() {
         String schemeId = insertParentScheme("I_DEL");
