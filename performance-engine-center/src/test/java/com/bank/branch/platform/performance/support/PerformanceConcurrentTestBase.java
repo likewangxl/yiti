@@ -16,7 +16,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
  * </ul>
  */
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = PerfTestApp.class)
+@SpringBootTest(classes = {PerfTestApp.class, PerfTestConfig.class})
 @ActiveProfiles("test")
 public abstract class PerformanceConcurrentTestBase {
 }

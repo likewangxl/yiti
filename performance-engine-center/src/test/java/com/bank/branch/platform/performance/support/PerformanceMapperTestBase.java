@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>注意: 并发场景请使用 {@link PerformanceConcurrentTestBase}, 不要继承本类.
  */
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = PerfTestApp.class)
+@SpringBootTest(classes = {PerfTestApp.class, PerfTestConfig.class})
 @AutoConfigureMybatis
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
