@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfKpiItemMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, scheme_id, metric_code, weight, multiplier, min_score, max_score, created_time
+    </sql>
+
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfKpiItem">
+        INSERT INTO perf_kpi_item (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES (
+            #{id}, #{schemeId}, #{metricCode}, #{weight}, #{multiplier},
+            #{minScore}, #{maxScore}, #{createdTime}
+        )
+    </insert>
+
+    <insert id="insertBatch">
+        INSERT INTO perf_kpi_item (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.id}, #{item.schemeId}, #{item.metricCode}, #{item.weight}, #{item.multiplier},
+                #{item.minScore}, #{item.maxScore}, #{item.createdTime}
+            )
+        </foreach>
+    </insert>
+
+    <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfKpiItem">
+        UPDATE perf_kpi_item
+        <set>
+            <if test="schemeId != null">scheme_id = #{schemeId},</if>
+            <if test="metricCode != null">metric_code = #{metricCode},</if>
+            <if test="weight != null">weight = #{weight},</if>
+            <if test="multiplier != null">multiplier = #{multiplier},</if>
+            <if test="minScore != null">min_score = #{minScore},</if>
+            <if test="maxScore != null">max_score = #{maxScore},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM perf_kpi_item
+        WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteBySchemeId">
+        DELETE FROM perf_kpi_item
+        WHERE scheme_id = #{schemeId}
+    </delete>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_kpi_item
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectBySchemeId" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_kpi_item
+        WHERE scheme_id = #{schemeId}
+        ORDER BY created_time ASC, id ASC
+    </select>
+
+    <select id="selectBySchemeAndMetric" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_kpi_item
+        WHERE scheme_id = #{schemeId}
+          AND metric_code = #{metricCode}
+        LIMIT 1
+    </select>
+
+</mapper>

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfKpiSchemeMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, scheme_code, scheme_name, cycle_type, open_detail, status,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
+        INSERT INTO perf_kpi_scheme (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES (
+            #{id}, #{schemeCode}, #{schemeName}, #{cycleType}, #{openDetail}, #{status},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
+        UPDATE perf_kpi_scheme
+        <set>
+            <if test="schemeCode != null">scheme_code = #{schemeCode},</if>
+            <if test="schemeName != null">scheme_name = #{schemeName},</if>
+            <if test="cycleType != null">cycle_type = #{cycleType},</if>
+            <if test="openDetail != null">open_detail = #{openDetail},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="createdBy != null">created_by = #{createdBy},</if>
+            <if test="createdTime != null">created_time = #{createdTime},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            updated_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusById">
+        UPDATE perf_kpi_scheme
+        SET status = #{status},
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_kpi_scheme
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectBySchemeCode" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_kpi_scheme
+        WHERE scheme_code = #{schemeCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_kpi_scheme
+        <where>
+            <if test="cycleType != null and cycleType != ''">
+                AND cycle_type = #{cycleType}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    scheme_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR scheme_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY scheme_code ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByCondition" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_kpi_scheme
+        <where>
+            <if test="cycleType != null and cycleType != ''">
+                AND cycle_type = #{cycleType}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    scheme_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR scheme_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM perf_kpi_scheme
+        WHERE id = #{id}
+    </delete>
+
+</mapper>
