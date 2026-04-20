@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  CustAllocRelationMapper XML (只读).
+
+  V1.0 仅暴露读方法，覆盖 AllocApi 10 个查询方法所需的时间线查询 + 数据范围过滤。
+  写入 / 调整由 V1.2 通过工作流审批 (AllocAdjustService) 提供。
+
+  时间线语义:
+    某条记录 "在 asOfDate 时点生效" 的判定统一使用:
+      effective_date <= asOfDate AND (end_date IS NULL OR end_date >= asOfDate)
+    复用 SQL 片段 EFFECTIVE_CONDITION.
+
+  安全 (SQL 注入) 声明:
+    selectByEmpAndBiz / selectCurrentByCustIds / selectCurrentByBizPage / countCurrentByBiz 中的
+    ${dataScopeFilter} 为 common-dev-guide §5 允许的合法数据范围 SQL 片段注入；
+    调用方必须保证该参数由 common-security DataScopeApi 可信生成，
+    禁止接收任何用户输入直接拼入。其他参数一律使用 #{} 预编译占位符。
+-->
+<mapper namespace="com.bank.branch.platform.performance.mapper.CustAllocRelationMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, cust_id, alloc_dim, biz_kind, account_no, emp_id, ratio,
+        effective_date, end_date, source_batch_id, source_process_date,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!-- 时间线有效条件: effective_date <= asOfDate AND (end_date IS NULL OR end_date >= asOfDate). -->
+    <sql id="EFFECTIVE_CONDITION">
+        effective_date &lt;= #{asOfDate}
+        AND (end_date IS NULL OR end_date &gt;= #{asOfDate})
+    </sql>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectCurrentByCustAndBiz"
+            resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        WHERE cust_id = #{custId}
+          AND <include refid="EFFECTIVE_CONDITION"/>
+          <if test="bizKind != null and bizKind != ''">
+              AND biz_kind = #{bizKind}
+          </if>
+        ORDER BY effective_date DESC, id ASC
+    </select>
+
+    <select id="selectHistoryByCustAsOf"
+            resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        WHERE cust_id = #{custId}
+          AND <include refid="EFFECTIVE_CONDITION"/>
+        ORDER BY biz_kind ASC, emp_id ASC, id ASC
+    </select>
+
+    <select id="selectByEmpAndBiz"
+            resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        <where>
+            emp_id = #{empId}
+            AND <include refid="EFFECTIVE_CONDITION"/>
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <!--
+                数据范围 SQL 片段注入 (合法 ${}):
+                - null / 空串 -> 管理员全见
+                - 非空 -> 由 DataScopeApi 生成形如 " AND emp_id = 'xxx' "
+                调用方必须保证来源可信, 见 Mapper Javadoc 的安全声明.
+            -->
+            <if test="dataScopeFilter != null and dataScopeFilter != ''">
+                ${dataScopeFilter}
+            </if>
+        </where>
+        ORDER BY cust_id ASC, id ASC
+    </select>
+
+    <select id="selectCurrentByCustIds"
+            resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        <where>
+            <include refid="EFFECTIVE_CONDITION"/>
+            AND cust_id IN
+            <foreach collection="custIds" item="cid" open="(" separator="," close=")">
+                #{cid}
+            </foreach>
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <!-- 数据范围 SQL 片段注入, 语义同 selectByEmpAndBiz. -->
+            <if test="dataScopeFilter != null and dataScopeFilter != ''">
+                ${dataScopeFilter}
+            </if>
+        </where>
+        ORDER BY cust_id ASC, id ASC
+    </select>
+
+    <!--
+        按员工分组统计去重客户数.
+        注意: 同一员工 + 同一客户的不同 biz_kind 记录只计 1 次 (COUNT DISTINCT cust_id).
+    -->
+    <select id="countCustomersByEmps" resultType="java.util.Map">
+        SELECT
+            emp_id AS emp_id,
+            COUNT(DISTINCT cust_id) AS cust_count
+        FROM cust_alloc_relation
+        <where>
+            <include refid="EFFECTIVE_CONDITION"/>
+            AND emp_id IN
+            <foreach collection="empIds" item="eid" open="(" separator="," close=")">
+                #{eid}
+            </foreach>
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+        </where>
+        GROUP BY emp_id
+    </select>
+
+    <select id="countDistinctCustomers" resultType="long">
+        SELECT COUNT(DISTINCT cust_id)
+        FROM cust_alloc_relation
+        WHERE emp_id = #{empId}
+          AND <include refid="EFFECTIVE_CONDITION"/>
+          <if test="bizKind != null and bizKind != ''">
+              AND biz_kind = #{bizKind}
+          </if>
+    </select>
+
+    <select id="selectCurrentByBizPage"
+            resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        <where>
+            <include refid="EFFECTIVE_CONDITION"/>
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <!-- 数据范围 SQL 片段注入, 语义同 selectByEmpAndBiz. -->
+            <if test="dataScopeFilter != null and dataScopeFilter != ''">
+                ${dataScopeFilter}
+            </if>
+        </where>
+        ORDER BY cust_id ASC, id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countCurrentByBiz" resultType="long">
+        SELECT COUNT(*)
+        FROM cust_alloc_relation
+        <where>
+            <include refid="EFFECTIVE_CONDITION"/>
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <!-- 数据范围 SQL 片段注入, 语义同 selectByEmpAndBiz. -->
+            <if test="dataScopeFilter != null and dataScopeFilter != ''">
+                ${dataScopeFilter}
+            </if>
+        </where>
+    </select>
+
+    <!--
+        客户分配汇总: 按 emp_id + biz_kind 聚合 ratio_sum.
+        调用方可基于此进一步做 100% 总和校验 / 各员工占比展示.
+    -->
+    <select id="summaryByCust" resultType="java.util.Map">
+        SELECT
+            emp_id AS emp_id,
+            biz_kind AS biz_kind,
+            SUM(ratio) AS ratio_sum
+        FROM cust_alloc_relation
+        WHERE cust_id = #{custId}
+          AND <include refid="EFFECTIVE_CONDITION"/>
+        GROUP BY emp_id, biz_kind
+        ORDER BY emp_id ASC, biz_kind ASC
+    </select>
+
+</mapper>
