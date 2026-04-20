@@ -46,7 +46,7 @@ public class LoanService {
     private final ApplicationEventPublisher eventPublisher;
 
     /** 贷款审批流程定义Key */
-    private static final String PROCESS_DEFINITION_KEY = "loan_corp_review_v1";
+    private static final String PROCESS_DEFINITION_KEY = "loan_approve_v1";
 
     /**
      * 创建贷款申请草稿。

@@ -56,12 +56,11 @@ mvn clean package
 | `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
 | `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
 | `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
+| `portal-content-center` | com.bank.branch.platform.portal | 已完成 | 门户与内容中心 (工作台聚合/导航/通讯录/产品资料库) |
+| `customer-marketing-center` | com.bank.branch.platform.customer | 已完成 | 客户营销中心 (标签/线索/客户/认领/触达) |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
 **尚未实现的模块** (代码骨架和 DDL 已存在):
-- `portal-content-center` (门户与内容中心)
-- `customer-marketing-center` (客户营销中心)
-- `business-application-center` (业务申请中心)
 - `performance-engine-center` (绩效计算中心)
 - `report-analytics-center` (报表分析中心)
 
@@ -75,6 +74,12 @@ auth-permission-center (无其他业务模块依赖)
 system-governance-center (依赖 auth)  ← 被 workflow 依赖
   ↑
 workflow-center (依赖 auth + governance)
+  ↑
+portal-content-center (依赖 auth + governance + workflow)
+  ↑
+customer-marketing-center (依赖 auth + governance + workflow)
+  ↑
+business-application-center (依赖 auth + workflow + customer + portal + governance)
 
 bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ```
@@ -99,10 +104,10 @@ com.bank.branch.platform
 ├─ auth-permission-center        认证授权中心 ✅ 已完成
 ├─ system-governance-center      系统治理中心 ✅ 已完成
 ├─ workflow-center               工作流中心 ✅ 已完成
-├─ bootstrap                     启动入口 ✅ 已完成
-├─ portal-content-center         门户与内容中心 ⏳ 骨架
-├─ customer-marketing-center     客户营销中心 ⏳ 骨架
-├─ business-application-center   业务申请中心 ⏳ 骨架
+├─ portal-content-center         门户与内容中心 ✅ 已完成
+├─ customer-marketing-center     客户营销中心 ✅ 已完成
+├─ business-application-center   业务申请中心 ✅ 已完成
+├─ bootstrap                     启动入口 ✅ 已完成  业务申请中心 ⏳ 骨架
 ├─ performance-engine-center     绩效计算中心 ⏳ 骨架
 └─ report-analytics-center       报表分析中心 ⏳ 骨架
 ```

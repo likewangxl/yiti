@@ -12,5 +12,8 @@
   "enabledPlugins": {
     "superpowers@superpowers-marketplace": true
   },
+    "env": {
+    "CLAUDE_CODE_USE_POWERSHELL_TOOL": "1"
+  },  
   "bypassPermissions": true
 }

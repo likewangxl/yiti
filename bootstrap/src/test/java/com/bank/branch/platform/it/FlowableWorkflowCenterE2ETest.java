@@ -10,6 +10,7 @@ import org.flowable.engine.RepositoryService;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("flowable-e2e")
 @Import(FlowableE2ETestConfig.class)
 @AutoConfigureMockMvc
+@EnabledIfSystemProperty(named = "flowable.e2e.enabled", matches = "true")
 class FlowableWorkflowCenterE2ETest {
 
     @Autowired
