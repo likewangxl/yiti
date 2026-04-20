@@ -331,6 +331,45 @@ class AllocRelationServiceTest {
         assertThat(dto.getAvgAllocRatio()).isEqualByComparingTo(new BigDecimal("50.00"));
     }
 
+    /**
+     * Plan DoD 条目 "getAllocSummary_sumRatio_equals100_exactly" 显式补齐.
+     *
+     * <p>Plan 字面要求验证 "某员工名下各客户占比 sum=100.00 (精确值)". 但 {@link AllocSummaryDTO}
+     * 只暴露 {@code avgAllocRatio} (平均值) 字段, 未暴露 {@code ratioSum}. 因此通过
+     * <b>avg * custCount 等价推导</b>间接验证: 2 客户 ratio=60.00/40.00 → avg=50.00, sum=avg*2=100.00.
+     *
+     * <p>断言使用 {@link org.assertj.core.api.AbstractBigDecimalAssert#isEqualByComparingTo}
+     * 而非 {@code equals}, 避免 BigDecimal scale 差异 (50 vs 50.00) 造成的误报.
+     */
+    @Test
+    @DisplayName("batchSummaryByEmps: 2 客户 60.00+40.00 精确值 → avg=50.00, sum=avg*count=100.00 (Plan DoD)")
+    void batchSummaryByEmps_sumRatio_equals100_exactly() {
+        Set<String> empIds = new HashSet<>(List.of("ES_SUM"));
+        // 构造精确精度的 BigDecimal ratio, 断言不被 scale 偏差污染
+        CustAllocRelation r1 = AllocTestDataBuilder.relation("SUM1", "ES_SUM", "LOAN",
+                LocalDate.now().minusDays(10), null, new BigDecimal("60.00"));
+        r1.setCustId("CX_SUM_1");
+        CustAllocRelation r2 = AllocTestDataBuilder.relation("SUM2", "ES_SUM", "LOAN",
+                LocalDate.now().minusDays(5), null, new BigDecimal("40.00"));
+        r2.setCustId("CX_SUM_2");
+
+        when(allocMapper.selectByEmpAndBiz(eq("ES_SUM"), eq("LOAN"), any(LocalDate.class), isNull()))
+                .thenReturn(List.of(r1, r2));
+
+        List<AllocSummaryDTO> result = service.batchSummaryByEmps(empIds, "LOAN", null);
+
+        assertThat(result).hasSize(1);
+        AllocSummaryDTO dto = result.get(0);
+        // allocatedCustomers == 2 (对应 DTO.custCount)
+        assertThat(dto.getCustCount()).isEqualTo(2L);
+        // avgAllocRatio == 50.00 精确值
+        assertThat(dto.getAvgAllocRatio()).isEqualByComparingTo(new BigDecimal("50.00"));
+        // Plan DoD: sum=100.00 精确值. DTO 未暴露 ratioSum, 用 avg * custCount 等价推导.
+        BigDecimal ratioSum = dto.getAvgAllocRatio()
+                .multiply(BigDecimal.valueOf(dto.getCustCount()));
+        assertThat(ratioSum).isEqualByComparingTo(new BigDecimal("100.00"));
+    }
+
     @Test
     @DisplayName("batchSummaryByEmps: 入参空集合 → 返回空列表")
     void batchSummaryByEmps_whenEmptyEmpIds_returnsEmpty() {
