@@ -12,15 +12,17 @@ import java.util.List;
  * <p>职责仅做 Entity → DTO 字段映射, 不查 DB / 不调 Service, 以便 Facade 可单元测试隔离。
  *
  * <p>对外字段对齐 {@link CustAllocRelationDTO} 的 11 个字段:
- * id / custId / custName / allocDim / bizKind / accountNo / empId / empName /
- * ratio / effectiveDate / endDate; 其中 custName / empName 为可选冗余展示字段,
- * 来源 Mapper 暂不 join 客户 / 员工表, V1.0 统一映射为 null (调用方按需二次补齐)。
+ * <ul>
+ *   <li>核心映射字段: id / custId / allocDim / bizKind / accountNo / empId / ratio /
+ *       effectiveDate / endDate</li>
+ *   <li>可选冗余展示字段: custName / empName, 来源 Mapper 暂不 join 客户 / 员工表,
+ *       V1.0 统一映射为 null (调用方按需二次补齐)</li>
+ * </ul>
  *
  * <p>Entity 的审计字段 (createdBy / createdTime / updatedBy / updatedTime) 与来源批次字段
  * (sourceBatchId / sourceProcessDate) 不对外暴露。
  *
- * <p>Step 3 (TDD 红): 本 Assembler 骨架为 {@code toDto(null)} 和 {@code toDtoList(null/empty)}
- * 提供实现, 其余映射路径返回最简默认值使 UT 编译通过但断言失败, 为 Step 4 绿实现作铺垫。
+ * <p>v1.2: id 为 String (对齐生产 DDL varchar(32))。
  */
 public final class AllocAssembler {
 
@@ -37,8 +39,21 @@ public final class AllocAssembler {
         if (entity == null) {
             return null;
         }
-        // Step 3 红: 空 DTO 断言将 FAIL, Step 4 绿实现完整映射
-        return CustAllocRelationDTO.builder().build();
+        return CustAllocRelationDTO.builder()
+                .id(entity.getId())
+                .custId(entity.getCustId())
+                // custName 对外可选, Mapper 未 join 客户表, V1.0 统一 null
+                .custName(null)
+                .allocDim(entity.getAllocDim())
+                .bizKind(entity.getBizKind())
+                .accountNo(entity.getAccountNo())
+                .empId(entity.getEmpId())
+                // empName 对外可选, Mapper 未 join 员工表, V1.0 统一 null
+                .empName(null)
+                .ratio(entity.getRatio())
+                .effectiveDate(entity.getEffectiveDate())
+                .endDate(entity.getEndDate())
+                .build();
     }
 
     /**
@@ -51,7 +66,8 @@ public final class AllocAssembler {
         if (entities == null || entities.isEmpty()) {
             return Collections.emptyList();
         }
-        // Step 3 红: 返回空列表 (映射缺失) 使 UT FAIL, Step 4 绿实现
-        return Collections.emptyList();
+        return entities.stream()
+                .map(AllocAssembler::toDto)
+                .toList();
     }
 }
