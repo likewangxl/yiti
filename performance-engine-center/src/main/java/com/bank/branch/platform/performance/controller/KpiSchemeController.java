@@ -80,24 +80,26 @@ public class KpiSchemeController {
     /**
      * 分页查询 KPI 方案.
      *
-     * <p>{@code schemeCode} 单值过滤被归并到关键字查询 (Service 层 keyword 做 code/name 模糊),
-     * 由调用方 2 选 1 提供 schemeCode 或 keyword 即可。
+     * <p>过滤条件:
+     * <ul>
+     *   <li>{@code cycleType} / {@code status}: 精确过滤</li>
+     *   <li>{@code keyword}: scheme_code 或 scheme_name 的模糊匹配 (SQL LIKE)</li>
+     * </ul>
+     * <p>V1.0 不提供 schemeCode 精确过滤 RequestParam (之前曾作为 keyword 特例合并,
+     * 语义上会误命中 name 字段, 故移除; 如需精确查询单个方案用 GET /{id} 路径).
      */
     @GetMapping
     @Operation(summary = "分页查询 KPI 方案")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
     public ResponseWrapper<KpiSchemeDTO> list(
-            @RequestParam(value = "schemeCode", required = false) String schemeCode,
             @RequestParam(value = "cycleType", required = false) String cycleType,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        log.debug("[KpiSchemeController.list] schemeCode={}, cycleType={}, status={}, keyword={}, pageNo={}, pageSize={}",
-                schemeCode, cycleType, status, keyword, pageNo, pageSize);
-        // schemeCode 视为 keyword 的特例: 如果 keyword 为空且 schemeCode 有值, 用 schemeCode 做模糊.
-        String effectiveKeyword = (keyword == null || keyword.isEmpty()) ? schemeCode : keyword;
-        PageResult<PerfKpiScheme> raw = kpiSchemeService.page(cycleType, status, effectiveKeyword, pageNo, pageSize);
+        log.debug("[KpiSchemeController.list] cycleType={}, status={}, keyword={}, pageNo={}, pageSize={}",
+                cycleType, status, keyword, pageNo, pageSize);
+        PageResult<PerfKpiScheme> raw = kpiSchemeService.page(cycleType, status, keyword, pageNo, pageSize);
         List<KpiSchemeDTO> dtos = new ArrayList<>(raw.getRecords().size());
         for (PerfKpiScheme scheme : raw.getRecords()) {
             // 列表视图不含 items (减轻数据库压力), 仅返回方案主档信息。

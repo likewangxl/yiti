@@ -361,8 +361,9 @@ class KpiSchemeControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void readMethods_shouldDeclareBizAuth() throws Exception {
+        // list 签名: cycleType, status, keyword, pageNo, pageSize (schemeCode 精确过滤已移除)
         assertBizAuth("list", new Class<?>[]{
-                String.class, String.class, String.class, String.class, int.class, int.class
+                String.class, String.class, String.class, int.class, int.class
         }, BizAction.LIST);
         assertBizAuth("getById", new Class<?>[]{String.class}, BizAction.READ);
     }
