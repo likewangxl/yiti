@@ -22,6 +22,15 @@ public interface PerfTargetValueMapper {
      * <p>MySQL INSERT ... ON DUPLICATE KEY UPDATE 返回的"受影响行数"语义：新插入记 1，
      * 已存在且发生字段更新记 2；因此入参 N 条时，返回值介于 [N, 2N] 之间。
      *
+     * <p>**调用契约**（由 {@link com.bank.branch.platform.performance.service.TargetValueService} 保证）：
+     * <ul>
+     *   <li>{@code createdBy} 语义为本次操作人，冲突时 XML 的
+     *       {@code updated_by = VALUES(created_by)} 会将其覆盖到冲突行的 updated_by，
+     *       因此 Service 层必须在调用前统一覆写为当前操作人（防止调用方伪造审计字段）</li>
+     *   <li>{@code baseValue=null} 时 XML 的 {@code base_value = VALUES(base_value)} 会将
+     *       冲突行的 base_value 更新为 null（语义：显式清除基础值），调用方应按此约定传值</li>
+     * </ul>
+     *
      * @param list 目标值列表
      * @return 受影响行数（MySQL 语义：新增 1、更新 2）
      */
