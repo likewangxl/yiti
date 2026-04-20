@@ -1,0 +1,96 @@
+package com.bank.branch.platform.performance.mapper;
+
+import com.bank.branch.platform.performance.entity.PerfRunTask;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * 绩效任务执行日志 Mapper（只读）.
+ *
+ * <p>V1.0 限定只读场景：仅由前端/下游 Api 读取任务执行日志（列表 / 详情 / 计数）。
+ * 写入由 V1.1 计算引擎模块提供，此 Mapper 故意不提供 insert/update/delete 方法。
+ *
+ * <p><strong>安全 (SQL 注入) 注意</strong>：
+ * <ul>
+ *   <li>{@link #selectByCondition} 与 {@link #countByCondition} 的 {@code dataScopeFilter} 参数
+ *       在 XML 中以 <code>${dataScopeFilter}</code> 方式直接拼接到 SQL（为 common-dev-guide §5 允许的
+ *       合法例外：数据范围 SQL 片段注入）。</li>
+ *   <li>调用方 <strong>必须</strong> 保证该参数由 common-security 的 {@code DataScopeApi} 可信生成，
+ *       <strong>禁止</strong> 接受任何用户输入直接拼入，否则将形成 SQL 注入漏洞。</li>
+ *   <li>所有其他参数一律使用 {@code #{}} 预编译占位符。</li>
+ * </ul>
+ */
+@Mapper
+public interface PerfRunTaskMapper {
+
+    /**
+     * 按主键查询.
+     *
+     * @param id 主键
+     * @return 任务日志，不存在返回 null
+     */
+    PerfRunTask selectById(@Param("id") String id);
+
+    /**
+     * 按任务编号（task_key，作为 V1.0 的业务唯一标识）查询.
+     *
+     * <p>V1.0 语义：{@code task_key} 既承担"关键键"（如 metric_code），也承担"任务编号"。
+     * V1.1 若 DDL 新增独立 {@code task_no} 字段，仅需改 XML 底层列名，接口保持不变.
+     *
+     * @param taskNo 任务编号（对齐 DDL {@code task_key} 列）
+     * @return 任务日志，不存在返回 null
+     */
+    PerfRunTask selectByTaskNo(@Param("taskNo") String taskNo);
+
+    /**
+     * 条件分页查询（支持数据范围 SQL 片段注入）.
+     *
+     * <p>普通用户场景：{@code dataScopeFilter} 应由 DataScopeApi 传回 {@code " AND started_by = '#{empId}' "} 之类的片段；
+     * 管理员场景：{@code dataScopeFilter} 传 {@code null} 表示全见。
+     *
+     * @param taskType        类型（nullable）
+     * @param taskKey         关键键（nullable）
+     * @param status          状态（nullable）
+     * @param dataDate        数据日期（nullable）
+     * @param dataScopeFilter 数据范围 SQL 片段（nullable；管理员全见时传 null）
+     * @param offset          偏移量
+     * @param limit           每页大小
+     * @return 任务日志列表
+     */
+    List<PerfRunTask> selectByCondition(@Param("taskType") String taskType,
+                                        @Param("taskKey") String taskKey,
+                                        @Param("status") String status,
+                                        @Param("dataDate") LocalDate dataDate,
+                                        @Param("dataScopeFilter") String dataScopeFilter,
+                                        @Param("offset") int offset,
+                                        @Param("limit") int limit);
+
+    /**
+     * 条件计数（与 {@link #selectByCondition} 过滤条件保持一致，包含同样的数据范围片段）.
+     *
+     * @param taskType        类型（nullable）
+     * @param taskKey         关键键（nullable）
+     * @param status          状态（nullable）
+     * @param dataDate        数据日期（nullable）
+     * @param dataScopeFilter 数据范围 SQL 片段（nullable）
+     * @return 总数
+     */
+    long countByCondition(@Param("taskType") String taskType,
+                          @Param("taskKey") String taskKey,
+                          @Param("status") String status,
+                          @Param("dataDate") LocalDate dataDate,
+                          @Param("dataScopeFilter") String dataScopeFilter);
+
+    /**
+     * 按类型 + 日期统计（V1.1 SysControl 切版前置校验使用：判断当日是否仍有 RUNNING 任务）.
+     *
+     * @param taskType 任务类型
+     * @param dataDate 数据日期
+     * @return 任务数
+     */
+    long countByTypeAndDate(@Param("taskType") String taskType,
+                            @Param("dataDate") LocalDate dataDate);
+}
