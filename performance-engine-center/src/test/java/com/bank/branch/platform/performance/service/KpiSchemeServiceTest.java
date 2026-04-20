@@ -18,9 +18,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,6 +62,9 @@ class KpiSchemeServiceTest {
 
     @Mock
     private MetricDefService metricDefService;
+
+    @Mock
+    private CacheManager cacheManager;
 
     @InjectMocks
     private KpiSchemeService service;
@@ -269,6 +279,91 @@ class KpiSchemeServiceTest {
         PageResult<PerfKpiScheme> result = service.page("MONTHLY", "ACTIVE", "KW", 1, 10);
         assertThat(result.getTotal()).isEqualTo(1L);
         assertThat(result.getRecords()).hasSize(1);
+    }
+
+    // ------------------------------- afterCommit evict 场景 -------------------------------
+
+    @Test
+    @DisplayName("publish 成功时应注册 afterCommit 回调, 触发后 evict perf:kpi_scheme::{id}")
+    void publish_whenSuccess_registersAfterCommitEvict() {
+        PerfKpiScheme scheme = KpiTestDataBuilder.scheme("PUB_EVICT");
+        scheme.setId("S_PUB_EVICT");
+        when(schemeMapper.selectById("S_PUB_EVICT")).thenReturn(scheme);
+        when(kpiItemService.listBySchemeId("S_PUB_EVICT")).thenReturn(Collections.emptyList());
+
+        Cache cache = org.mockito.Mockito.mock(Cache.class);
+        when(cacheManager.getCache("perf:kpi_scheme")).thenReturn(cache);
+
+        List<TransactionSynchronization> captured = new ArrayList<>();
+        try (MockedStatic<TransactionSynchronizationManager> mocked = mockStatic(TransactionSynchronizationManager.class)) {
+            mocked.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
+            mocked.when(() -> TransactionSynchronizationManager.registerSynchronization(any()))
+                    .thenAnswer(inv -> {
+                        captured.add(inv.getArgument(0));
+                        return null;
+                    });
+
+            service.publish("S_PUB_EVICT", "admin");
+        }
+        // 模拟事务提交, 触发注册的 afterCommit 回调
+        assertThat(captured).isNotEmpty();
+        captured.forEach(TransactionSynchronization::afterCommit);
+        verify(cache).evict("S_PUB_EVICT");
+    }
+
+    @Test
+    @DisplayName("updateById 成功时应注册 afterCommit 回调, 触发后 evict perf:kpi_scheme::{id}")
+    void updateById_whenSuccess_registersAfterCommitEvict() {
+        PerfKpiScheme existing = KpiTestDataBuilder.scheme("UPD_EVICT");
+        existing.setId("S_UPD_EVICT");
+        when(schemeMapper.selectById("S_UPD_EVICT")).thenReturn(existing);
+
+        Cache cache = org.mockito.Mockito.mock(Cache.class);
+        when(cacheManager.getCache("perf:kpi_scheme")).thenReturn(cache);
+
+        List<TransactionSynchronization> captured = new ArrayList<>();
+        try (MockedStatic<TransactionSynchronizationManager> mocked = mockStatic(TransactionSynchronizationManager.class)) {
+            mocked.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
+            mocked.when(() -> TransactionSynchronizationManager.registerSynchronization(any()))
+                    .thenAnswer(inv -> {
+                        captured.add(inv.getArgument(0));
+                        return null;
+                    });
+
+            UpdateKpiSchemeCmd cmd = UpdateKpiSchemeCmd.builder()
+                    .schemeName("renamed").operator("admin").build();
+            service.updateById("S_UPD_EVICT", cmd);
+        }
+        assertThat(captured).isNotEmpty();
+        captured.forEach(TransactionSynchronization::afterCommit);
+        verify(cache).evict("S_UPD_EVICT");
+    }
+
+    @Test
+    @DisplayName("disable 成功时应注册 afterCommit 回调, 触发后 evict perf:kpi_scheme::{id}")
+    void disable_whenSuccess_registersAfterCommitEvict() {
+        PerfKpiScheme existing = KpiTestDataBuilder.scheme("DIS_EVICT");
+        existing.setId("S_DIS_EVICT");
+        existing.setStatus("ACTIVE");
+        when(schemeMapper.selectById("S_DIS_EVICT")).thenReturn(existing);
+
+        Cache cache = org.mockito.Mockito.mock(Cache.class);
+        when(cacheManager.getCache("perf:kpi_scheme")).thenReturn(cache);
+
+        List<TransactionSynchronization> captured = new ArrayList<>();
+        try (MockedStatic<TransactionSynchronizationManager> mocked = mockStatic(TransactionSynchronizationManager.class)) {
+            mocked.when(TransactionSynchronizationManager::isSynchronizationActive).thenReturn(true);
+            mocked.when(() -> TransactionSynchronizationManager.registerSynchronization(any()))
+                    .thenAnswer(inv -> {
+                        captured.add(inv.getArgument(0));
+                        return null;
+                    });
+
+            service.disable("S_DIS_EVICT", "停用原因", "admin");
+        }
+        assertThat(captured).isNotEmpty();
+        captured.forEach(TransactionSynchronization::afterCommit);
+        verify(cache).evict("S_DIS_EVICT");
     }
 
     // ------------------------------- helpers -------------------------------

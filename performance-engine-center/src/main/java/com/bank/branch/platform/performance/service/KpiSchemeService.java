@@ -12,9 +12,13 @@ import com.bank.branch.platform.performance.service.cmd.CreateKpiSchemeCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateKpiSchemeCmd;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -53,9 +57,13 @@ public class KpiSchemeService {
     /** 方案已禁用状态. */
     private static final String STATUS_DISABLED = "DISABLED";
 
+    /** KpiApiImpl 的 {@code @Cacheable} 缓存名, 写方法 afterCommit 时定向 evict. */
+    private static final String KPI_SCHEME_CACHE = "perf:kpi_scheme";
+
     private final PerfKpiSchemeMapper schemeMapper;
     private final KpiItemService kpiItemService;
     private final MetricDefService metricDefService;
+    private final CacheManager cacheManager;
 
     /**
      * 新建方案 + 方案项 (单事务).
@@ -252,6 +260,17 @@ public class KpiSchemeService {
     @Transactional(readOnly = true)
     public Optional<PerfKpiScheme> getByIdOrNull(String id) {
         return Optional.ofNullable(schemeMapper.selectById(id));
+    }
+
+    /**
+     * 按方案编码查询, 不存在返回 {@link Optional#empty()} (供 {@code KpiApi.getKpiScheme} 消费).
+     *
+     * @param schemeCode 方案编码
+     * @return Optional 包装的方案
+     */
+    @Transactional(readOnly = true)
+    public Optional<PerfKpiScheme> getBySchemeCodeOrNull(String schemeCode) {
+        return Optional.ofNullable(schemeMapper.selectBySchemeCode(schemeCode));
     }
 
     /**
