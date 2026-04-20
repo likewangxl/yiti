@@ -15,18 +15,22 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -65,7 +69,8 @@ class KpiSchemeServiceTest {
         when(schemeMapper.selectById("S_PUB_MISS")).thenReturn(scheme);
         PerfKpiItem item = KpiTestDataBuilder.item("S_PUB_MISS", "TEST_KPI_NO_METRIC");
         when(kpiItemService.listBySchemeId("S_PUB_MISS")).thenReturn(List.of(item));
-        when(metricDefService.getByCodeOrNull("TEST_KPI_NO_METRIC")).thenReturn(null);
+        // 批量查询返回空列表 = 该 code 不存在
+        when(metricDefService.getByCodes(anyList())).thenReturn(Collections.emptyList());
 
         assertThatThrownBy(() -> service.publish("S_PUB_MISS", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
@@ -85,7 +90,8 @@ class KpiSchemeServiceTest {
         PerfMetricDef disabled = new PerfMetricDef();
         disabled.setMetricCode("TEST_KPI_DISABLED_METRIC");
         disabled.setStatus("DISABLED");
-        when(metricDefService.getByCodeOrNull("TEST_KPI_DISABLED_METRIC")).thenReturn(disabled);
+        // 批量查询返回含该 code 但 status=DISABLED 的 MetricDef
+        when(metricDefService.getByCodes(anyList())).thenReturn(List.of(disabled));
 
         assertThatThrownBy(() -> service.publish("S_PUB_DIS", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
@@ -102,10 +108,9 @@ class KpiSchemeServiceTest {
         PerfKpiItem i1 = KpiTestDataBuilder.item("S_PUB_OK", "TEST_KPI_ACTIVE_A");
         PerfKpiItem i2 = KpiTestDataBuilder.item("S_PUB_OK", "TEST_KPI_ACTIVE_B");
         when(kpiItemService.listBySchemeId("S_PUB_OK")).thenReturn(List.of(i1, i2));
-        when(metricDefService.getByCodeOrNull("TEST_KPI_ACTIVE_A"))
-                .thenReturn(activeMetric("TEST_KPI_ACTIVE_A"));
-        when(metricDefService.getByCodeOrNull("TEST_KPI_ACTIVE_B"))
-                .thenReturn(activeMetric("TEST_KPI_ACTIVE_B"));
+        // 批量查询返回两个 code 都 ACTIVE 的 MetricDef
+        when(metricDefService.getByCodes(anyList()))
+                .thenReturn(List.of(activeMetric("TEST_KPI_ACTIVE_A"), activeMetric("TEST_KPI_ACTIVE_B")));
 
         PerfKpiScheme published = service.publish("S_PUB_OK", "admin");
 
@@ -152,6 +157,11 @@ class KpiSchemeServiceTest {
         assertThat(itemCaptor.getAllValues())
                 .extracting(AddKpiItemCmd::getMetricCode)
                 .containsExactly("TEST_KPI_CR_A", "TEST_KPI_CR_B");
+
+        // 父子事务顺序断言: 必须先 insert scheme, 再逐项 addItem (倒序写入会违反外键语义)
+        InOrder order = inOrder(schemeMapper, kpiItemService);
+        order.verify(schemeMapper).insert(any(PerfKpiScheme.class));
+        order.verify(kpiItemService, times(cmd.getItems().size())).addItem(any(AddKpiItemCmd.class));
     }
 
     @Test

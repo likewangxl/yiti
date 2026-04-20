@@ -19,8 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * KPI 方案服务.
@@ -28,7 +31,7 @@ import java.util.UUID;
  * <p>职责:
  * <ul>
  *   <li>方案 + 方案项的聚合写入 (父子表单事务)</li>
- *   <li>发布校验: 遍历所有 item 的 metricCode, 调用 {@link MetricDefService#getByCodeOrNull}
+ *   <li>发布校验: 一次批量读取所有 item 的 metricCode, 通过 {@link MetricDefService#getByCodes}
  *       校验 metric 存在且 status=ACTIVE, 任一不符抛 {@link PerfErrorCode#KPI_PUBLISH_METRIC_INVALID}</li>
  *   <li>方案禁用 (高危, reason 必填)</li>
  *   <li>只读查询 (按 id / 分页)</li>
@@ -202,8 +205,15 @@ public class KpiSchemeService {
         List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
         // 空方案也允许发布 (方案结构定型后再补 item 的使用场景),
         // 若业务要求必须 >= 1 item, 在 Controller DTO 层加校验更灵活。
+        // 批量读取所有引用的 metric (N+1 优化): 100 个 item 由 100 次查询降为 1 次。
+        List<String> metricCodes = items.stream()
+                .map(PerfKpiItem::getMetricCode)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, PerfMetricDef> defMap = metricDefService.getByCodes(metricCodes).stream()
+                .collect(Collectors.toMap(PerfMetricDef::getMetricCode, Function.identity()));
         for (PerfKpiItem item : items) {
-            PerfMetricDef metricDef = metricDefService.getByCodeOrNull(item.getMetricCode());
+            PerfMetricDef metricDef = defMap.get(item.getMetricCode());
             if (metricDef == null || !STATUS_ACTIVE.equals(metricDef.getStatus())) {
                 throw new PerfException(PerfErrorCode.KPI_PUBLISH_METRIC_INVALID, item.getMetricCode());
             }
