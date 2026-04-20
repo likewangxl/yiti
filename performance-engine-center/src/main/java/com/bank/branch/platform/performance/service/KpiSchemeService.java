@@ -155,6 +155,8 @@ public class KpiSchemeService {
         }
         existing.setUpdatedBy(cmd.getOperator());
         existing.setUpdatedTime(LocalDateTime.now());
+        // 事务外 evict 缓存: 避免读到旧值, 且避免事务内 evict 后因事务回滚造成缓存空洞
+        registerAfterCommitEvict(id);
         return existing;
     }
 
@@ -184,6 +186,7 @@ public class KpiSchemeService {
         log.info("[KpiSchemeService.disable] id={}, schemeCode={}, operator={}, reason={}",
                 id, existing.getSchemeCode(), operator, reason);
         schemeMapper.updateStatusById(id, STATUS_DISABLED, operator);
+        registerAfterCommitEvict(id);
     }
 
     /**
@@ -233,6 +236,7 @@ public class KpiSchemeService {
         scheme.setUpdatedTime(LocalDateTime.now());
         log.info("[KpiSchemeService.publish] 方案发布成功 id={}, schemeCode={}, itemCount={}, operator={}",
                 id, scheme.getSchemeCode(), items.size(), operator);
+        registerAfterCommitEvict(id);
         return scheme;
     }
 
@@ -296,5 +300,34 @@ public class KpiSchemeService {
 
     private String generateId() {
         return UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * 注册事务提交后的缓存 evict 回调.
+     *
+     * <p>为什么 afterCommit 而非事务内 evict: 事务内 evict 若后续事务回滚, 缓存会出现
+     * "已清空但 DB 未变" 的空洞 (下次读穿透到 DB 读回旧值再填回缓存), 违反一致性。
+     * afterCommit 保证只在提交成功后执行, 且此时 DB 已写入最新值。
+     *
+     * <p>无活动事务 (测试 / 非 @Transactional 调用方) 时降级为立即 evict, 以免丢失清理。
+     *
+     * @param schemeId 方案主键
+     */
+    private void registerAfterCommitEvict(String schemeId) {
+        Cache cache = cacheManager.getCache(KPI_SCHEME_CACHE);
+        if (cache == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    cache.evict(schemeId);
+                }
+            });
+        } else {
+            // 无事务场景 (理论上写方法都带 @Transactional 不会走到, 这里兜底)
+            cache.evict(schemeId);
+        }
     }
 }
