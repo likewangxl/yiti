@@ -158,6 +158,35 @@ class KpiSchemeRequestDtoValidationTest {
     }
 
     @Test
+    void addKpiItemReq_whenMetricCodeStartsWithDigit_shouldViolation() {
+        // Pattern 收严至 ^[A-Z][A-Z0-9_]*$ 后, 首字符必须是大写字母, 数字/下划线开头非法
+        AddKpiItemReqDTO req = new AddKpiItemReqDTO();
+        req.setMetricCode("1METRIC");
+        req.setWeight(new BigDecimal("10"));
+
+        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "metricCode");
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString)
+                .contains("metricCode");
+    }
+
+    @Test
+    void addKpiItemReq_whenMetricCodeStartsWithUnderscore_shouldViolation() {
+        AddKpiItemReqDTO req = new AddKpiItemReqDTO();
+        req.setMetricCode("_METRIC");
+        req.setWeight(new BigDecimal("10"));
+
+        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "metricCode");
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString)
+                .contains("metricCode");
+    }
+
+    @Test
     void updateKpiItemReq_whenAllNull_shouldNotViolate() {
         UpdateKpiItemReqDTO req = new UpdateKpiItemReqDTO();
 

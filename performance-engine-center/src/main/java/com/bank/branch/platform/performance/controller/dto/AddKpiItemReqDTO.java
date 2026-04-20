@@ -25,7 +25,9 @@ public class AddKpiItemReqDTO {
     @Schema(description = "指标编码", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "metricCode 不能为空")
     @Size(max = 64, message = "metricCode 长度不能超过 64")
-    @Pattern(regexp = "^[A-Z0-9_]+$", message = "metricCode 只允许大写字母、数字和下划线")
+    // 首字符必须是大写字母, 与 CreateKpiSchemeReqDTO.schemeCode 对齐, 避免 "123_FOO" 这类非法命名.
+    // CreateMetricReqDTO.metricCode (Task 1 历史既定, 允许首字符为数字/下划线) 留作未来统一.
+    @Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "metricCode 首字符必须为大写字母, 且只允许大写字母、数字和下划线")
     private String metricCode;
 
     /** 权重 (0.0000 ~ 100.0000). */
