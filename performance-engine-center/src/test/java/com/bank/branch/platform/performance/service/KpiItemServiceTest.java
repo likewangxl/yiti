@@ -1,0 +1,182 @@
+package com.bank.branch.platform.performance.service;
+
+import com.bank.branch.platform.performance.entity.PerfKpiItem;
+import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
+import com.bank.branch.platform.performance.service.cmd.AddKpiItemCmd;
+import com.bank.branch.platform.performance.service.cmd.UpdateKpiItemCmd;
+import com.bank.branch.platform.performance.support.KpiTestDataBuilder;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * KpiItemService 单元测试.
+ *
+ * <p>使用 MockitoExtension, 纯 Mock 模式 (不加载 Spring 上下文).
+ * <p>测试数据前缀统一 {@link KpiTestDataBuilder#CODE_PREFIX} = "TEST_KPI_".
+ */
+@ExtendWith(MockitoExtension.class)
+class KpiItemServiceTest {
+
+    @Mock
+    private PerfKpiItemMapper itemMapper;
+
+    @InjectMocks
+    private KpiItemService service;
+
+    @Test
+    @DisplayName("同方案内 metricCode 重复时抛 PerfException (KPI_ITEM_DUP)")
+    void addItem_whenDuplicateMetricInScheme_throws() {
+        PerfKpiItem existing = KpiTestDataBuilder.item("S_DUP", "TEST_KPI_METRIC_A");
+        when(itemMapper.selectBySchemeAndMetric("S_DUP", "TEST_KPI_METRIC_A")).thenReturn(existing);
+
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_DUP")
+                .metricCode("TEST_KPI_METRIC_A")
+                .weight(new BigDecimal("50.0000"))
+                .operator("admin")
+                .build();
+
+        assertThatThrownBy(() -> service.addItem(cmd))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_DUP));
+        verify(itemMapper, never()).insert(any(PerfKpiItem.class));
+    }
+
+    @Test
+    @DisplayName("新增方案项成功: 生成 id + 默认值补齐 + mapper.insert 被调用一次")
+    void addItem_whenValid_insertsWithDefaults() {
+        when(itemMapper.selectBySchemeAndMetric("S_OK", "TEST_KPI_METRIC_B")).thenReturn(null);
+
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_OK")
+                .metricCode("TEST_KPI_METRIC_B")
+                .weight(new BigDecimal("40.0000"))
+                .operator("admin")
+                .build();
+
+        PerfKpiItem created = service.addItem(cmd);
+
+        assertThat(created.getId()).isNotBlank();
+        assertThat(created.getSchemeId()).isEqualTo("S_OK");
+        assertThat(created.getMetricCode()).isEqualTo("TEST_KPI_METRIC_B");
+        assertThat(created.getWeight()).isEqualByComparingTo("40.0000");
+        // 默认值: multiplier=1, minScore=0, maxScore=999999
+        assertThat(created.getMultiplier()).isEqualByComparingTo("1");
+        assertThat(created.getMinScore()).isEqualByComparingTo("0");
+        assertThat(created.getMaxScore()).isEqualByComparingTo("999999");
+        assertThat(created.getCreatedTime()).isNotNull();
+
+        ArgumentCaptor<PerfKpiItem> captor = ArgumentCaptor.forClass(PerfKpiItem.class);
+        verify(itemMapper).insert(captor.capture());
+        assertThat(captor.getValue().getId()).isEqualTo(created.getId());
+    }
+
+    @Test
+    @DisplayName("updateItem: 找不到 item 时抛 KPI_ITEM_NOT_FOUND")
+    void updateItem_whenNotFound_throwsNotFound() {
+        when(itemMapper.selectById("NO_SUCH")).thenReturn(null);
+
+        UpdateKpiItemCmd cmd = UpdateKpiItemCmd.builder()
+                .weight(new BigDecimal("20.0000"))
+                .operator("admin")
+                .build();
+
+        assertThatThrownBy(() -> service.updateItem("NO_SUCH", cmd))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("updateItem: 选择性更新只 patch 非空字段")
+    void updateItem_whenFound_selectivePatch() {
+        PerfKpiItem existing = KpiTestDataBuilder.item("S_UPD", "TEST_KPI_METRIC_UPD");
+        existing.setId("ID_UPD");
+        when(itemMapper.selectById("ID_UPD")).thenReturn(existing);
+
+        UpdateKpiItemCmd cmd = UpdateKpiItemCmd.builder()
+                .weight(new BigDecimal("80.0000"))
+                .operator("admin")
+                .build();
+
+        PerfKpiItem updated = service.updateItem("ID_UPD", cmd);
+
+        assertThat(updated.getWeight()).isEqualByComparingTo("80.0000");
+        ArgumentCaptor<PerfKpiItem> captor = ArgumentCaptor.forClass(PerfKpiItem.class);
+        verify(itemMapper).updateByIdSelective(captor.capture());
+        PerfKpiItem patch = captor.getValue();
+        assertThat(patch.getId()).isEqualTo("ID_UPD");
+        assertThat(patch.getWeight()).isEqualByComparingTo("80.0000");
+        // 未提供的字段不应被写入 patch
+        assertThat(patch.getMultiplier()).isNull();
+        assertThat(patch.getMinScore()).isNull();
+        assertThat(patch.getMaxScore()).isNull();
+    }
+
+    @Test
+    @DisplayName("deleteItem: reason 为空白时抛 PARAM_INVALID, 不落库")
+    void deleteItem_whenReasonBlank_throws() {
+        assertThatThrownBy(() -> service.deleteItem("ID_ANY", "  ", "admin"))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+        verify(itemMapper, never()).deleteById(any());
+    }
+
+    @Test
+    @DisplayName("deleteItem: item 不存在时抛 KPI_ITEM_NOT_FOUND")
+    void deleteItem_whenNotFound_throws() {
+        when(itemMapper.selectById("NO_SUCH")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.deleteItem("NO_SUCH", "清理无效指标", "admin"))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("deleteItem: 正常路径调用 mapper.deleteById")
+    void deleteItem_whenValid_deletes() {
+        PerfKpiItem existing = KpiTestDataBuilder.item("S_DEL", "TEST_KPI_METRIC_DEL");
+        existing.setId("ID_DEL");
+        when(itemMapper.selectById("ID_DEL")).thenReturn(existing);
+
+        service.deleteItem("ID_DEL", "指标过期需清理", "admin");
+
+        verify(itemMapper).deleteById("ID_DEL");
+    }
+
+    @Test
+    @DisplayName("listBySchemeId 透传 mapper 结果")
+    void listBySchemeId_returnsMapperResult() {
+        PerfKpiItem a = KpiTestDataBuilder.item("S_L", "TEST_KPI_METRIC_L1");
+        PerfKpiItem b = KpiTestDataBuilder.item("S_L", "TEST_KPI_METRIC_L2");
+        when(itemMapper.selectBySchemeId("S_L")).thenReturn(List.of(a, b));
+
+        List<PerfKpiItem> list = service.listBySchemeId("S_L");
+        assertThat(list).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("getById: 不存在抛 KPI_ITEM_NOT_FOUND")
+    void getById_whenNotFound_throws() {
+        when(itemMapper.selectById("NO")).thenReturn(null);
+        assertThatThrownBy(() -> service.getById("NO"))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_NOT_FOUND));
+    }
+}
