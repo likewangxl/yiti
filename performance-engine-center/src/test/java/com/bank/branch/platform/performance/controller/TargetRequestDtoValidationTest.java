@@ -1,5 +1,7 @@
 package com.bank.branch.platform.performance.controller;
 
+import com.bank.branch.platform.performance.controller.dto.CreateTargetPlanReqDTO;
+import com.bank.branch.platform.performance.controller.dto.UpdateTargetPlanReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueBatchReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueReqDTO;
 import jakarta.validation.ConstraintViolation;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -168,7 +171,89 @@ class TargetRequestDtoValidationTest {
         assertThat(violations).isEmpty();
     }
 
+    // =================== CreateTargetPlanReqDTO ===================
+
+    @Test
+    void createPlanReq_whenPlanCodeLowercase_shouldViolation() {
+        CreateTargetPlanReqDTO req = okPlanReq();
+        req.setPlanCode("bad_lower");
+
+        Set<ConstraintViolation<CreateTargetPlanReqDTO>> violations = validator.validateProperty(req, "planCode");
+        assertThat(violations).extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString).contains("planCode");
+    }
+
+    @Test
+    void createPlanReq_whenTargetDimInvalid_shouldViolation() {
+        CreateTargetPlanReqDTO req = okPlanReq();
+        req.setTargetDim("CUST"); // DDL 仅允许 EMP/ORG
+
+        Set<ConstraintViolation<CreateTargetPlanReqDTO>> violations = validator.validateProperty(req, "targetDim");
+        assertThat(violations).extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString).contains("targetDim");
+    }
+
+    @Test
+    void createPlanReq_whenTargetCycleInvalid_shouldViolation() {
+        CreateTargetPlanReqDTO req = okPlanReq();
+        req.setTargetCycle("MONTH"); // DDL 仅允许 YEAR/QUARTER
+
+        Set<ConstraintViolation<CreateTargetPlanReqDTO>> violations = validator.validateProperty(req, "targetCycle");
+        assertThat(violations).extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString).contains("targetCycle");
+    }
+
+    @Test
+    void createPlanReq_whenEffectiveDateNull_shouldViolation() {
+        CreateTargetPlanReqDTO req = okPlanReq();
+        req.setEffectiveDate(null);
+
+        Set<ConstraintViolation<CreateTargetPlanReqDTO>> violations = validator.validateProperty(req, "effectiveDate");
+        assertThat(violations).extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString).contains("effectiveDate");
+    }
+
+    @Test
+    void createPlanReq_whenAllValid_shouldPass() {
+        CreateTargetPlanReqDTO req = okPlanReq();
+
+        Set<ConstraintViolation<CreateTargetPlanReqDTO>> violations = validator.validate(req);
+        assertThat(violations).isEmpty();
+    }
+
+    // =================== UpdateTargetPlanReqDTO ===================
+
+    @Test
+    void updatePlanReq_whenAllNull_shouldNotViolate() {
+        // plan L1406 钦定: update 不强制 reason, 全 null 合法
+        UpdateTargetPlanReqDTO req = new UpdateTargetPlanReqDTO();
+
+        Set<ConstraintViolation<UpdateTargetPlanReqDTO>> violations = validator.validate(req);
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void updatePlanReq_whenTargetCycleInvalid_shouldViolation() {
+        UpdateTargetPlanReqDTO req = new UpdateTargetPlanReqDTO();
+        req.setTargetCycle("DAILY");
+
+        Set<ConstraintViolation<UpdateTargetPlanReqDTO>> violations = validator.validate(req);
+        assertThat(violations).extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString).contains("targetCycle");
+    }
+
     // =================== helpers ===================
+
+    private static CreateTargetPlanReqDTO okPlanReq() {
+        CreateTargetPlanReqDTO req = new CreateTargetPlanReqDTO();
+        req.setPlanCode("TEST_PLAN_OK");
+        req.setPlanName("测试方案");
+        req.setKpiSchemeId("kpi-id-32-char");
+        req.setTargetDim("EMP");
+        req.setTargetCycle("YEAR");
+        req.setEffectiveDate(LocalDate.now());
+        return req;
+    }
 
     private static UpsertTargetValueReqDTO okValueReq() {
         UpsertTargetValueReqDTO req = new UpsertTargetValueReqDTO();
