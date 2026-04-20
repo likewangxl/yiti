@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfTargetValueMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, plan_id, subject_type, subject_id, cycle_key, metric_code,
+        target_value, base_value, created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <!--
+        批量 upsert: 基于 uk_plan_subject_cycle_metric 的 ON DUPLICATE KEY UPDATE.
+        详见 Plan Task 3.1 / spec §4.3.
+        新插入: created_time 用 NOW(); 冲突更新: 只改 target_value/base_value/
+        updated_by/updated_time, 其余字段保持不变.
+    -->
+    <insert id="upsertBatch">
+        INSERT INTO perf_target_value (id, plan_id, subject_type, subject_id,
+            cycle_key, metric_code, target_value, base_value, created_by, created_time)
+        VALUES
+        <foreach collection="list" item="v" separator=",">
+            (#{v.id}, #{v.planId}, #{v.subjectType}, #{v.subjectId},
+             #{v.cycleKey}, #{v.metricCode}, #{v.targetValue}, #{v.baseValue},
+             #{v.createdBy}, NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            target_value = VALUES(target_value),
+            base_value = VALUES(base_value),
+            updated_time = NOW(),
+            updated_by = VALUES(created_by)
+    </insert>
+
+    <select id="selectByUniqueKey" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_value
+        WHERE plan_id = #{planId}
+          AND subject_type = #{subjectType}
+          AND subject_id = #{subjectId}
+          AND cycle_key = #{cycleKey}
+          AND metric_code = #{metricCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_value
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="listByPlan" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_value
+        <where>
+            AND plan_id = #{planId}
+            <if test="subjectType != null and subjectType != ''">
+                AND subject_type = #{subjectType}
+            </if>
+            <if test="subjectId != null and subjectId != ''">
+                AND subject_id = #{subjectId}
+            </if>
+            <if test="cycleKey != null and cycleKey != ''">
+                AND cycle_key = #{cycleKey}
+            </if>
+        </where>
+        ORDER BY subject_type ASC, subject_id ASC, cycle_key ASC, metric_code ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByPlan" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_target_value
+        <where>
+            AND plan_id = #{planId}
+            <if test="subjectType != null and subjectType != ''">
+                AND subject_type = #{subjectType}
+            </if>
+            <if test="subjectId != null and subjectId != ''">
+                AND subject_id = #{subjectId}
+            </if>
+            <if test="cycleKey != null and cycleKey != ''">
+                AND cycle_key = #{cycleKey}
+            </if>
+        </where>
+    </select>
+
+    <delete id="deleteByPlanId">
+        DELETE FROM perf_target_value
+        WHERE plan_id = #{planId}
+    </delete>
+
+</mapper>

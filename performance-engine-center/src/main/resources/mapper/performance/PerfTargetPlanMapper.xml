@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, plan_code, plan_name, kpi_scheme_id, target_dim, target_cycle,
+        effective_date, status, created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
+        INSERT INTO perf_target_plan (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES (
+            #{id}, #{planCode}, #{planName}, #{kpiSchemeId}, #{targetDim}, #{targetCycle},
+            #{effectiveDate}, #{status}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
+        UPDATE perf_target_plan
+        <set>
+            <if test="planCode != null">plan_code = #{planCode},</if>
+            <if test="planName != null">plan_name = #{planName},</if>
+            <if test="kpiSchemeId != null">kpi_scheme_id = #{kpiSchemeId},</if>
+            <if test="targetDim != null">target_dim = #{targetDim},</if>
+            <if test="targetCycle != null">target_cycle = #{targetCycle},</if>
+            <if test="effectiveDate != null">effective_date = #{effectiveDate},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            <!-- 创建字段 (created_by/created_time) 不可变, 刻意不提供 <if> 分支. -->
+            updated_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusById">
+        UPDATE perf_target_plan
+        SET status = #{status},
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_plan
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByPlanCode" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_plan
+        WHERE plan_code = #{planCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_plan
+        <where>
+            <if test="kpiSchemeId != null and kpiSchemeId != ''">
+                AND kpi_scheme_id = #{kpiSchemeId}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    plan_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR plan_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY plan_code ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByCondition" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_target_plan
+        <where>
+            <if test="kpiSchemeId != null and kpiSchemeId != ''">
+                AND kpi_scheme_id = #{kpiSchemeId}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    plan_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR plan_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM perf_target_plan
+        WHERE id = #{id}
+    </delete>
+
+</mapper>
