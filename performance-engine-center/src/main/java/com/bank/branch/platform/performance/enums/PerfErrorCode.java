@@ -35,6 +35,7 @@ public enum PerfErrorCode {
     METRIC_LEVEL_INVALID("PERF-40911", "指标层级引用违规: %s"),
     METRIC_STILL_REFERENCED("PERF-40912", "指标仍被其他指标引用, 不可删除: %s"),
     SLOT_LOCK_ACQUIRE_FAILED("PERF-40913", "槽位分配锁获取失败, 请重试: baseDim=%s"),
+    KPI_PUBLISH_METRIC_INVALID("PERF-40914", "KPI方案发布时引用的指标不可用 (不存在或已停用): %s"),
 
     /* 500 服务端错误 */
     INTERNAL_ERROR("PERF-50001", "未预期的服务端错误"),
