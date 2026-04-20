@@ -10,7 +10,10 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.dto.TargetValueDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueBatchReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueReqDTO;
+import com.bank.branch.platform.performance.entity.PerfTargetValue;
+import com.bank.branch.platform.performance.facade.assembler.TargetAssembler;
 import com.bank.branch.platform.performance.service.TargetValueService;
+import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -27,6 +30,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 目标值 REST 控制器 (3 个端点, 对齐 PT_RESOURCE P_PERF_TGT_V_*).
  *
@@ -37,7 +43,12 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>POST /api/perf/target-values/batch   → P_PERF_TGT_V_BAT (批量 upsert, &lt;=500)</li>
  * </ul>
  *
- * <p>骨架阶段: 所有方法抛 UnsupportedOperationException, 仅供 IT "红" 阶段触发失败.
+ * <p>异常策略: Controller 不做 try-catch, PerfException 冒泡至全局异常处理器,
+ * 业务错误统一以 200 + 错误码返回; JSR-303 校验失败由 MethodArgumentNotValidException
+ * 全局处理器转 400.
+ *
+ * <p>批量 500 守卫: DTO {@code @Size(max=500)} (400 语义) + Service 层 BATCH_UPPER_LIMIT
+ * (PERF-40910) 双重防线, 避免 Controller 被绕过导致 DB 压力。
  */
 @Slf4j
 @RestController
@@ -52,6 +63,9 @@ public class TargetValueController {
 
     /**
      * 按方案分页查询目标值.
+     *
+     * <p>planId 为必填: Service 层 {@code listByPlan} 已做非空拦截, Controller
+     * 在此再加 {@code @NotBlank} 以保证缺参场景返 400 而非 PERF-40001。
      */
     @GetMapping
     @Operation(summary = "分页查询目标值")
@@ -63,28 +77,71 @@ public class TargetValueController {
             @RequestParam(value = "cycleKey", required = false) String cycleKey,
             @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        throw new UnsupportedOperationException("TargetValueController.list: red phase skeleton, awaiting green");
+        log.debug("[TargetValueController.list] planId={}, subjectType={}, subjectId={}, cycleKey={}, pageNo={}, pageSize={}",
+                planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
+        PageResult<PerfTargetValue> raw = targetValueService.listByPlan(
+                planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
+        List<TargetValueDTO> dtos = new ArrayList<>(raw.getRecords().size());
+        for (PerfTargetValue v : raw.getRecords()) {
+            dtos.add(TargetAssembler.toDto(v));
+        }
+        return ResponseWrapper.page(PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos));
     }
 
     /**
-     * 单值 upsert.
+     * 单值 upsert. 冲突 (UK 相同) 时更新 target_value / base_value, 否则新增。
+     *
+     * <p>返回受影响行数 (MySQL 语义: 新增 1 / 更新 2)。
      */
     @PostMapping
     @Operation(summary = "单值目标 upsert")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
     @AuditLog(action = "CREATE", resourceType = "TARGET_VALUE")
     public ResponseWrapper<Integer> create(@Valid @RequestBody UpsertTargetValueReqDTO req) {
-        throw new UnsupportedOperationException("TargetValueController.create: red phase skeleton, awaiting green");
+        log.info("[TargetValueController.create] planId={}, subjectType={}, subjectId={}, cycleKey={}, metricCode={}",
+                req.getPlanId(), req.getSubjectType(), req.getSubjectId(), req.getCycleKey(), req.getMetricCode());
+        UpsertTargetValueCmd cmd = UpsertTargetValueCmd.builder()
+                .planId(req.getPlanId())
+                .subjectType(req.getSubjectType())
+                .subjectId(req.getSubjectId())
+                .cycleKey(req.getCycleKey())
+                .metricCode(req.getMetricCode())
+                .targetValue(req.getTargetValue())
+                .baseValue(req.getBaseValue())
+                .operator(currentUserApi.getCurrentEmpId())
+                .build();
+        int affected = targetValueService.upsertOne(cmd);
+        return ResponseWrapper.success(affected);
     }
 
     /**
-     * 批量 upsert (单批上限 500, 超过则 400).
+     * 批量 upsert (单批上限 500, 超过则 400; 空列表 400).
+     *
+     * <p>Controller 层双重防线: DTO {@code @NotEmpty} + {@code @Size(max=500)} 先过滤,
+     * Service 层仍保留 BATCH_UPPER_LIMIT 守卫以兜底; 调用方若绕过 Controller 直接
+     * 调 Service, Service 层抛 PERF-40910。
      */
     @PostMapping("/batch")
     @Operation(summary = "批量目标 upsert (<=500)")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
     @AuditLog(action = "CREATE", resourceType = "TARGET_VALUE")
     public ResponseWrapper<Integer> batch(@Valid @RequestBody UpsertTargetValueBatchReqDTO req) {
-        throw new UnsupportedOperationException("TargetValueController.batch: red phase skeleton, awaiting green");
+        log.info("[TargetValueController.batch] size={}", req.getValues().size());
+        String operator = currentUserApi.getCurrentEmpId();
+        List<PerfTargetValue> list = new ArrayList<>(req.getValues().size());
+        for (UpsertTargetValueReqDTO item : req.getValues()) {
+            PerfTargetValue v = new PerfTargetValue();
+            v.setPlanId(item.getPlanId());
+            v.setSubjectType(item.getSubjectType());
+            v.setSubjectId(item.getSubjectId());
+            v.setCycleKey(item.getCycleKey());
+            v.setMetricCode(item.getMetricCode());
+            v.setTargetValue(item.getTargetValue());
+            v.setBaseValue(item.getBaseValue());
+            // createdBy 在 Service 层强制覆盖为 operator (安全契约 I-2), 此处不设置
+            list.add(v);
+        }
+        int affected = targetValueService.upsertBatch(list, operator);
+        return ResponseWrapper.success(affected);
     }
 }
