@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
 
 import java.util.Set;
 
@@ -53,6 +54,21 @@ class CrossModuleApiTest {
     @Autowired(required = false)
     private com.bank.branch.platform.workflow.api.WorkflowApi workflowApi;
 
+    @Autowired(required = false)
+    private com.bank.branch.platform.bizapp.api.LoanApi loanApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.bizapp.api.LoanQueryApi loanQueryApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.bizapp.api.SupportApi supportApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.bizapp.api.SupportQueryApi supportQueryApi;
+
+    @Autowired(required = false)
+    private com.bank.branch.platform.bizapp.api.BizApplyQueryApi bizApplyQueryApi;
+
     // ========== 测试 1: 所有 API Bean 可被注入 ==========
 
     @Test
@@ -76,6 +92,36 @@ class CrossModuleApiTest {
     @DisplayName("跨模块 API - Workflow 模块 API 可被注入")
     void workflowApi_injectable() {
         assertThat(workflowApi).as("WorkflowApi should be injectable").isNotNull();
+    }
+
+    @Test
+    @DisplayName("跨模块 API - BizApp 模块 API 可被注入")
+    void bizAppApis_allInjectable() {
+        assertThat(loanApi).as("LoanApi should be injectable").isNotNull();
+        assertThat(loanQueryApi).as("LoanQueryApi should be injectable").isNotNull();
+        assertThat(supportApi).as("SupportApi should be injectable").isNotNull();
+        assertThat(supportQueryApi).as("SupportQueryApi should be injectable").isNotNull();
+        assertThat(bizApplyQueryApi).as("BizApplyQueryApi should be injectable").isNotNull();
+    }
+
+    @Test
+    @DisplayName("跨模块 API - BizApp 查询 API 可返回基础业务数据")
+    @Sql(scripts = {
+            "/business-application-schema.sql",
+            "/business-application-data.sql"
+    })
+    void bizAppApis_basicQueryWorks() {
+        assertThat(loanApi.getLoanApply("loan-seed-001"))
+                .as("LoanApi should return seeded loan apply")
+                .isPresent();
+        assertThat(supportApi.getSupportRequest("support-seed-001"))
+                .as("SupportApi should return seeded support request")
+                .isPresent();
+        assertThat(bizApplyQueryApi.countRunningApplications("CUST_BIZ_SEED"))
+                .satisfies(dto -> {
+                    assertThat(dto.getRunningLoanCount()).isEqualTo(1L);
+                    assertThat(dto.getRunningSupportCount()).isEqualTo(1L);
+                });
     }
 
     // ========== 测试 2: OrgApi 功能验证 ==========
