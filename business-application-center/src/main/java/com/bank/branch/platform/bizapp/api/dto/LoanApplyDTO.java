@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
 /**
  * 资产投放申请对外传输对象。
  * <p>
- * 镜像 {@code LoanApply} 实体字段，用于跨模块数据传递。
+ * 跨模块 API 契约：不携带 deleted 等内部运维字段；
+ * 额外补充消费方所需的冗余展示字段（custName 等）。
  * </p>
  */
 @Data
@@ -65,6 +66,10 @@ public class LoanApplyDTO {
     /** 更新时间 */
     private LocalDateTime updatedTime;
 
-    /** 逻辑删除：0=未删，1=已删 */
-    private Integer deleted;
+    // ------------------------------------------------------------------
+    // 冗余展示字段（由 LoanApplyDTOConverter 填充，不从 DB 直接映射）
+    // ------------------------------------------------------------------
+
+    /** 客户名称（冗余展示字段，由 CustomerQueryApi 填充） */
+    private String custName;
 }

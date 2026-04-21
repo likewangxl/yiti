@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.facade;
 
 import com.bank.branch.platform.bizapp.api.SupportQueryApi;
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.SupportQueryConditionDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
@@ -13,13 +14,12 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 中场支持申请对外分页/统计查询接口实现。
  * <p>
  * 实现 {@link SupportQueryApi} 接口，委托 {@link SupportRequestMapper} 执行分页与聚合查询。
- * 分页使用发起侧视图（SUPPORT）接口，通过 keyword/status/ownerOrgId 过滤。
+ * 所有查询结果通过 {@link SupportRequestDTOConverter} 转换，确保不暴露 deleted 字段且补充冗余展示字段。
  * </p>
  */
 @Slf4j
@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 public class SupportQueryApiImpl implements SupportQueryApi {
 
     private final SupportRequestMapper supportRequestMapper;
+    private final SupportRequestDTOConverter supportRequestDTOConverter;
 
     /**
      * 分页查询支持申请（发起侧视图）。
@@ -53,7 +54,8 @@ public class SupportQueryApiImpl implements SupportQueryApi {
                 condition.getKeyword(), condition.getStatus(),
                 condition.getOwnerOrgId(), offset, pageSize);
         List<SupportRequestDTO> records = entities == null ? Collections.emptyList()
-                : entities.stream().map(this::toDTO).collect(Collectors.toList());
+                // 使用批量转换避免 N+1
+                : supportRequestDTOConverter.toDTOList(entities);
 
         return PageResult.of(pageNo, pageSize, total, records);
     }
@@ -84,40 +86,5 @@ public class SupportQueryApiImpl implements SupportQueryApi {
     public long countCompletedByAssignee(String empId, LocalDateTime start, LocalDateTime end) {
         log.debug("[SupportQueryApiImpl.countCompletedByAssignee] empId={}, start={}, end={}", empId, start, end);
         return supportRequestMapper.countCompletedByAssignee(empId, start, end);
-    }
-
-    // ------------------------------------------------------------------
-    // 私有转换方法
-    // ------------------------------------------------------------------
-
-    /**
-     * 将 SupportRequest 实体转换为对外 DTO。
-     *
-     * @param entity 支持申请实体
-     * @return 对外 DTO
-     */
-    private SupportRequestDTO toDTO(SupportRequest entity) {
-        SupportRequestDTO dto = new SupportRequestDTO();
-        dto.setId(entity.getId());
-        dto.setRequestNo(entity.getRequestNo());
-        dto.setSubmitGroupId(entity.getSubmitGroupId());
-        dto.setCustId(entity.getCustId());
-        dto.setSourceTouchTaskId(entity.getSourceTouchTaskId());
-        dto.setProductId(entity.getProductId());
-        dto.setSupportDeptId(entity.getSupportDeptId());
-        dto.setOtherDemand(entity.getOtherDemand());
-        dto.setDispatchEmpId(entity.getDispatchEmpId());
-        dto.setDispatchTime(entity.getDispatchTime());
-        dto.setAssignedEmpId(entity.getAssignedEmpId());
-        dto.setStatus(entity.getStatus());
-        dto.setBusinessKey(entity.getBusinessKey());
-        dto.setProcessInstanceId(entity.getProcessInstanceId());
-        dto.setOwnerOrgId(entity.getOwnerOrgId());
-        dto.setCreatedBy(entity.getCreatedBy());
-        dto.setCreatedTime(entity.getCreatedTime());
-        dto.setUpdatedBy(entity.getUpdatedBy());
-        dto.setUpdatedTime(entity.getUpdatedTime());
-        dto.setDeleted(entity.getDeleted());
-        return dto;
     }
 }

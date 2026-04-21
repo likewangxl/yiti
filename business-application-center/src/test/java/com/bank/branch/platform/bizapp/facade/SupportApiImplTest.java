@@ -1,5 +1,6 @@
 package com.bank.branch.platform.bizapp.facade;
 
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
@@ -18,12 +19,19 @@ import static org.mockito.Mockito.when;
 
 /**
  * {@link SupportApiImpl} 单元测试。
+ * <p>
+ * 测试重点：facade 正确委托 mapper 和 converter；
+ * converter 的内部逻辑（冗余字段填充、deleted 移除）由 SupportRequestDTOConverterTest 单独覆盖。
+ * </p>
  */
 @ExtendWith(MockitoExtension.class)
 class SupportApiImplTest {
 
     @Mock
     private SupportRequestMapper supportRequestMapper;
+
+    @Mock
+    private SupportRequestDTOConverter supportRequestDTOConverter;
 
     @InjectMocks
     private SupportApiImpl supportApiImpl;
@@ -58,6 +66,22 @@ class SupportApiImplTest {
         return entity;
     }
 
+    /** 构造测试用 DTO */
+    private SupportRequestDTO buildDTO(String id) {
+        SupportRequestDTO dto = new SupportRequestDTO();
+        dto.setId(id);
+        dto.setRequestNo("SR202401010001");
+        dto.setSubmitGroupId("GROUP001");
+        dto.setCustId("CUST001");
+        dto.setCustName("腾讯云计算");
+        dto.setProductId("PROD001");
+        dto.setProductName("数字化专项贷");
+        dto.setSupportDeptId("DEPT001");
+        dto.setSupportDeptName("公司金融部");
+        dto.setStatus("COMPLETED");
+        return dto;
+    }
+
     // ------------------------------------------------------------------
     // 测试用例
     // ------------------------------------------------------------------
@@ -67,7 +91,9 @@ class SupportApiImplTest {
         // Arrange
         String requestId = "req001";
         SupportRequest entity = buildSupportRequest(requestId);
+        SupportRequestDTO dto = buildDTO(requestId);
         when(supportRequestMapper.selectById(requestId)).thenReturn(entity);
+        when(supportRequestDTOConverter.toDTO(entity)).thenReturn(dto);
 
         // Act
         Optional<SupportRequestDTO> result = supportApiImpl.getSupportRequest(requestId);
@@ -77,8 +103,23 @@ class SupportApiImplTest {
         assertThat(result.get().getId()).isEqualTo(requestId);
         assertThat(result.get().getRequestNo()).isEqualTo("SR202401010001");
         assertThat(result.get().getCustId()).isEqualTo("CUST001");
+        assertThat(result.get().getCustName()).isEqualTo("腾讯云计算");
+        assertThat(result.get().getProductName()).isEqualTo("数字化专项贷");
+        assertThat(result.get().getSupportDeptName()).isEqualTo("公司金融部");
         assertThat(result.get().getStatus()).isEqualTo("COMPLETED");
         assertThat(result.get().getSubmitGroupId()).isEqualTo("GROUP001");
+    }
+
+    @Test
+    void getSupportRequest_notExists_shouldReturnEmpty() {
+        // Arrange
+        when(supportRequestMapper.selectById("notExist")).thenReturn(null);
+
+        // Act
+        Optional<SupportRequestDTO> result = supportApiImpl.getSupportRequest("notExist");
+
+        // Assert
+        assertThat(result).isEmpty();
     }
 
     @Test
@@ -88,7 +129,11 @@ class SupportApiImplTest {
         SupportRequest e1 = buildSupportRequest("req001");
         SupportRequest e2 = buildSupportRequest("req002");
         e2.setProductId("PROD002");
+        SupportRequestDTO d1 = buildDTO("req001");
+        SupportRequestDTO d2 = buildDTO("req002");
+        d2.setProductId("PROD002");
         when(supportRequestMapper.selectBySubmitGroupId(groupId)).thenReturn(List.of(e1, e2));
+        when(supportRequestDTOConverter.toDTOList(List.of(e1, e2))).thenReturn(List.of(d1, d2));
 
         // Act
         List<SupportRequestDTO> result = supportApiImpl.getBySubmitGroup(groupId);
@@ -97,6 +142,5 @@ class SupportApiImplTest {
         assertThat(result).hasSize(2);
         assertThat(result).extracting(SupportRequestDTO::getSubmitGroupId)
                 .containsOnly("GROUP001");
-        assertThat(result.get(1).getProductId()).isEqualTo("PROD002");
     }
 }
