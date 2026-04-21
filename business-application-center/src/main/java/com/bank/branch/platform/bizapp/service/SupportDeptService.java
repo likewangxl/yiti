@@ -44,12 +44,13 @@ public class SupportDeptService {
      * IN_APPROVAL -> IN_PROGRESS，设置 dispatch_emp_id、dispatch_time、assigned_emp_id。
      * </p>
      *
-     * @param id             申请ID
-     * @param assignedEmpId  被派工号
+     * @param id              申请ID
+     * @param assignedEmpId   被派工号
      * @param dispatcherEmpId 派单人工号（部门秘书）
+     * @param dispatchRemark  派单备注（可选，文档 §D.2）
      */
     @Transactional
-    public void dispatch(String id, String assignedEmpId, String dispatcherEmpId) {
+    public void dispatch(String id, String assignedEmpId, String dispatcherEmpId, String dispatchRemark) {
         log.info("[SupportDeptService.dispatch] id={}, assignedEmpId={}, dispatcher={}",
                 id, assignedEmpId, dispatcherEmpId);
 
@@ -72,9 +73,9 @@ public class SupportDeptService {
         request.setUpdatedTime(now);
         supportMapper.updateById(request);
 
-        // 发布派单事件
+        // 发布派单事件（携带 dispatchRemark，文档 §8.5）
         eventPublisher.publishEvent(new SupportDispatchedEvent(
-                id, request.getRequestNo(), assignedEmpId, dispatcherEmpId, request.getSupportDeptId()
+                id, request.getRequestNo(), assignedEmpId, dispatcherEmpId, request.getSupportDeptId(), dispatchRemark
         ));
 
         log.info("[SupportDeptService.dispatch] 申请 {} 已派单给 {}", id, assignedEmpId);

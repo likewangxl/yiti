@@ -74,7 +74,7 @@ public class SupportDeptController {
                                           @Valid @RequestBody DispatchReq req) {
         log.info("[SupportDeptController.dispatch] id={}, assignedEmpId={}", id, req.getAssignedEmpId());
         String empId = currentUserApi.getCurrentEmpId();
-        supportDeptService.dispatch(id, req.getAssignedEmpId(), empId);
+        supportDeptService.dispatch(id, req.getAssignedEmpId(), empId, req.getDispatchRemark());
         return ResponseWrapper.success();
     }
 
