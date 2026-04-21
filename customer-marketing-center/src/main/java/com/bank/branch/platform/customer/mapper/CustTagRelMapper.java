@@ -32,6 +32,15 @@ public interface CustTagRelMapper {
     List<CustTagRel> selectByTagId(@Param("tagId") String tagId);
 
     /**
+     * 查询某客户与某标签的关联记录（用于追加打标幂等判断）。
+     *
+     * @param custId 客户ID
+     * @param tagId  标签ID
+     * @return 关联实体，不存在则返回 null
+     */
+    CustTagRel selectByCustIdAndTagId(@Param("custId") String custId, @Param("tagId") String tagId);
+
+    /**
      * 物理删除指定客户与指定标签的关联记录（取消打标）。
      *
      * @param custId 客户ID

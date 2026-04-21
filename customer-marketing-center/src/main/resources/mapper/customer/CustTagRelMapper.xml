@@ -25,6 +25,16 @@
         ORDER BY created_time DESC
     </select>
 
+    <!-- 查询某客户与某标签的关联记录（追加打标幂等判断） -->
+    <select id="selectByCustIdAndTagId" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_tag_rel
+        WHERE cust_id = #{custId}
+          AND tag_id = #{tagId}
+        LIMIT 1
+    </select>
+
     <!-- 物理删除指定客户与指定标签的关联记录 -->
     <delete id="deleteByCustIdAndTagId">
         DELETE FROM cust_tag_rel

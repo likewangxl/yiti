@@ -20,6 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -116,5 +118,98 @@ class TagCustomerServiceTest {
         assertThat(result.get(0).getCustId()).isEqualTo("C001");
         assertThat(result.get(1).getCustId()).isEqualTo("C002");
         verify(tagRelMapper).selectByTagId("tag-001");
+    }
+
+    // ==================== addTagsToCustomer ====================
+
+    @Test
+    void addTagsToCustomer_shouldInsertNewTagsAndSkipExisting() {
+        // given: tag-002 已存在关联，tag-003 不存在（需要新增）
+        CustTagRel existing = new CustTagRel();
+        existing.setId("rel-exists");
+        existing.setCustId("C001");
+        existing.setTagId("tag-002");
+
+        when(tagRelMapper.selectByCustIdAndTagId("C001", "tag-002")).thenReturn(existing);
+        when(tagRelMapper.selectByCustIdAndTagId("C001", "tag-003")).thenReturn(null);
+        when(tagRelMapper.insert(any(CustTagRel.class))).thenReturn(1);
+
+        List<String> tagIds = Arrays.asList("tag-002", "tag-003");
+
+        // when
+        int added = tagCustomerService.addTagsToCustomer("C001", tagIds, "E001");
+
+        // then: 只有 tag-003 被新增，tag-002 已存在跳过
+        assertThat(added).isEqualTo(1);
+        verify(tagRelMapper, never()).insert(
+                argThat(rel -> rel.getTagId().equals("tag-002")));
+        ArgumentCaptor<CustTagRel> captor = ArgumentCaptor.forClass(CustTagRel.class);
+        verify(tagRelMapper).insert(captor.capture());
+        CustTagRel inserted = captor.getValue();
+        assertThat(inserted.getTagId()).isEqualTo("tag-003");
+        assertThat(inserted.getCustId()).isEqualTo("C001");
+        assertThat(inserted.getCreatedBy()).isEqualTo("E001");
+        assertThat(inserted.getId()).isNotNull();
+    }
+
+    @Test
+    void addTagsToCustomer_shouldInsertAllWhenNoneExist() {
+        // given: 两个标签都不存在
+        when(tagRelMapper.selectByCustIdAndTagId(eq("C001"), anyString())).thenReturn(null);
+        when(tagRelMapper.insert(any(CustTagRel.class))).thenReturn(1);
+
+        List<String> tagIds = Arrays.asList("tag-001", "tag-002");
+
+        // when
+        int added = tagCustomerService.addTagsToCustomer("C001", tagIds, "E002");
+
+        // then: 两个都被插入
+        assertThat(added).isEqualTo(2);
+        verify(tagRelMapper, org.mockito.Mockito.times(2)).insert(any(CustTagRel.class));
+    }
+
+    @Test
+    void addTagsToCustomer_shouldReturnZeroWhenAllExist() {
+        // given: 所有标签都已存在
+        CustTagRel existing = new CustTagRel();
+        existing.setId("rel-001");
+        when(tagRelMapper.selectByCustIdAndTagId(anyString(), anyString())).thenReturn(existing);
+
+        List<String> tagIds = Arrays.asList("tag-001", "tag-002");
+
+        // when
+        int added = tagCustomerService.addTagsToCustomer("C001", tagIds, "E001");
+
+        // then: 全部跳过，无新增
+        assertThat(added).isEqualTo(0);
+        verify(tagRelMapper, never()).insert(any(CustTagRel.class));
+    }
+
+    // ==================== removeTagFromCustomer ====================
+
+    @Test
+    void removeTagFromCustomer_shouldReturnTrueWhenRelationExists() {
+        // given: 关联存在，删除成功
+        when(tagRelMapper.deleteByCustIdAndTagId("C001", "tag-001")).thenReturn(1);
+
+        // when
+        boolean removed = tagCustomerService.removeTagFromCustomer("C001", "tag-001");
+
+        // then
+        assertThat(removed).isTrue();
+        verify(tagRelMapper).deleteByCustIdAndTagId("C001", "tag-001");
+    }
+
+    @Test
+    void removeTagFromCustomer_shouldReturnFalseWhenRelationNotExist() {
+        // given: 关联不存在，删除 0 行
+        when(tagRelMapper.deleteByCustIdAndTagId("C001", "tag-999")).thenReturn(0);
+
+        // when
+        boolean removed = tagCustomerService.removeTagFromCustomer("C001", "tag-999");
+
+        // then
+        assertThat(removed).isFalse();
+        verify(tagRelMapper).deleteByCustIdAndTagId("C001", "tag-999");
     }
 }
