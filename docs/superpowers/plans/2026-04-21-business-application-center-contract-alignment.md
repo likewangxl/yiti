@@ -179,7 +179,8 @@ public record ProcessCompletedEvent(
 Object approved = execution.getVariable("approved");
 String outcome = Boolean.FALSE.equals(approved) ? "REJECTED" : "APPROVED";
 String reason = asString(execution.getVariable("reason"));
-// ... 原有 biz_process_map 更新逻辑保持不变
+// ⚠️ 重要:biz_process_map.processStatus 继续写 CANCELLED / COMPLETED(workflow-center 自己的状态语义)
+//    event.outcome 是发给下游(bizapp)的业务语义(REJECTED vs APPROVED),二者独立不可混淆
 eventPublisher.publishEvent(new ProcessCompletedEvent(
         processInstanceId, map.getBusinessKey(), outcome, reason));
 ```
@@ -388,7 +389,7 @@ void listPage_returnsListItemDTO_notEntity() throws Exception {
 - [ ] **Step 3: 运行测试验证失败**
 
 ```bash
-mvn -f .../business-application-center/pom.xml -Dtest=LoanControllerTest#listPage_returnsListItemDTO_notEntity test
+mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml -Dtest=LoanControllerTest#listPage_returnsListItemDTO_notEntity test
 ```
 Expected: FAIL — `loanService.listPageAsDTO` 不存在。
 
@@ -399,15 +400,18 @@ Expected: FAIL — `loanService.listPageAsDTO` 不存在。
 - `LoanController.getById` 保持 `LoanDetailResp`(已经是 DTO,Task 2.5 进一步富化)
 - 同步修改 `SupportController` / `SupportDeptController` + 对应 Service
 
-- [ ] **Step 5: 运行测试验证通过 + Commit**
+- [ ] **Step 5: 运行测试验证通过 + 跨模块编译验证 + Commit**
 
 ```bash
-mvn -f .../business-application-center/pom.xml clean test
+# 先本模块
+mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml clean test
+# 再跨模块(防止 report-analytics / performance-engine 因 DTO 字段变更编译失败)
+mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/bootstrap/pom.xml clean install -DskipTests
 ```
 
 ```bash
-git add business-application-center/
-git commit -m "refactor(bizapp): Controller 改用 ListItemDTO 返回,停止暴露 Entity"
+git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd add business-application-center/
+git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd commit -m "refactor(bizapp): Controller 改用 ListItemDTO 返回,停止暴露 Entity"
 ```
 
 **通过标准:** 3 个 Controller 的 `listPage` / `getById` 不再引用 `LoanApply` / `SupportRequest` Entity 类;响应 JSON 无 `deleted` 字段;Controller 测试断言更新并全绿。
@@ -671,6 +675,8 @@ git commit -m "fix(bizapp): Listener AFTER_COMMIT + REJECTED 分支 + 条件 UPD
 
 **通过标准:** 两个 Listener 均用 `@TransactionalEventListener(AFTER_COMMIT)`;`LoanRejectedEvent` / `SupportRejectedEvent` 在 REJECTED 时发布;`rowsAffected=0` 时不发事件;新增测试全绿。
 
+**⚠️ 保留既有方法:** `updateStatusById(id, status, updatedBy)` 为 Service 层显式状态转换使用(submit/cancel 等主动调用路径),**保留不删除**;`conditionalUpdateStatus` 为 Listener 幂等写入专用。两者语义不同,共存无冲突。
+
 ---
 
 ### Task 1.6: 高危操作补齐 `@AuditLog`
@@ -869,6 +875,12 @@ git commit -m "feat(bizapp): batch API 补 500 条上限校验"
 
 **背景:** P1-6,派单备注信息丢失,审计 reason 缺失。
 
+**⚠️ Pre-Step(implementer 执行前先跑):** 用 Grep 搜索 `SupportDispatchedEvent` 的所有订阅者,确认无跨模块消费方需要同步修改:
+```bash
+# 预期只命中 event 类本身和可能的测试文件,无其他模块的 listener
+```
+如有命中,需在本任务中同步更新订阅方的字段匹配。
+
 - [ ] **Step 1: 写失败测试**
 
 ```java
@@ -919,7 +931,7 @@ void queryApiParamNames_matchesDoc() throws Exception {
 }
 ```
 
-(需要 pom 确认带 `-parameters` 编译选项;若不带,测试降级为"Mapper XML 中无 `#{start}`"断言。)
+(根 `pom.xml` 已确认启用 `<parameters>true</parameters>`,反射可读到真实参数名,无需降级。)
 
 - [ ] **Step 2-5:** 批量改名 → 测试绿 → commit。
 
