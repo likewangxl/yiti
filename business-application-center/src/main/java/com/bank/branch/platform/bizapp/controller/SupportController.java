@@ -6,6 +6,7 @@ import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CreateSupportReq;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.service.SupportService;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -88,6 +89,7 @@ public class SupportController {
      */
     @PostMapping
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "CREATE_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "创建中场支持申请")
     public ResponseWrapper<SupportRequestCreateRespDTO> create(@Valid @RequestBody CreateSupportReq req) {
         log.info("[SupportController.create] custId={}", req.getCustId());
@@ -104,6 +106,7 @@ public class SupportController {
      */
     @PostMapping("/{id}/submit")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "SUBMIT_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "提交中场支持申请")
     public ResponseWrapper<Void> submit(@PathVariable String id) {
         log.info("[SupportController.submit] id={}", id);
@@ -118,6 +121,7 @@ public class SupportController {
      */
     @DeleteMapping("/{id}")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "DELETE_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "删除草稿中场支持申请")
     public ResponseWrapper<Void> delete(@PathVariable String id) {
         log.info("[SupportController.delete] id={}", id);
@@ -131,6 +135,7 @@ public class SupportController {
      */
     @PostMapping("/{id}/cancel")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "CANCEL_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST", reasonRequired = true)
     @Operation(summary = "撤回中场支持申请")
     public ResponseWrapper<Void> cancel(@PathVariable String id) {
         log.info("[SupportController.cancel] id={}", id);
@@ -144,6 +149,7 @@ public class SupportController {
      */
     @GetMapping("/export")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.EXPORT)
+    @AuditLog(action = "EXPORT_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST", reasonRequired = true)
     @Operation(summary = "导出中场支持申请（预留）")
     public ResponseWrapper<?> export() {
         log.info("[SupportController.export] 导出功能暂未实现");

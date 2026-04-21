@@ -6,6 +6,7 @@ import com.bank.branch.platform.bizapp.dto.req.CompleteReq;
 import com.bank.branch.platform.bizapp.dto.req.DispatchReq;
 import com.bank.branch.platform.bizapp.dto.req.TransferReq;
 import com.bank.branch.platform.bizapp.service.SupportDeptService;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -67,6 +68,7 @@ public class SupportDeptController {
      */
     @PostMapping("/{id}/dispatch")
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.WRITE)
+    @AuditLog(action = "DISPATCH_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "承接侧派单")
     public ResponseWrapper<Void> dispatch(@PathVariable String id,
                                           @Valid @RequestBody DispatchReq req) {
@@ -81,6 +83,7 @@ public class SupportDeptController {
      */
     @PostMapping("/{id}/transfer")
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.TRANSFER)
+    @AuditLog(action = "TRANSFER_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST", reasonRequired = true)
     @Operation(summary = "承接侧转交承接人")
     public ResponseWrapper<Void> transfer(@PathVariable String id,
                                           @Valid @RequestBody TransferReq req) {
@@ -95,6 +98,7 @@ public class SupportDeptController {
      */
     @PostMapping("/{id}/complete")
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.WRITE)
+    @AuditLog(action = "COMPLETE_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "承接侧办理完成")
     public ResponseWrapper<Void> complete(@PathVariable String id,
                                           @RequestBody CompleteReq req) {

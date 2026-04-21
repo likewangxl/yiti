@@ -8,6 +8,7 @@ import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.service.LoanFormValidator;
 import com.bank.branch.platform.bizapp.service.LoanService;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -96,6 +97,7 @@ public class LoanController {
      */
     @PostMapping
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
+    @AuditLog(action = "CREATE_LOAN_APPLY", resourceType = "LOAN_APPLY")
     @Operation(summary = "创建贷款申请草稿")
     public ResponseWrapper<LoanDetailResp> create(@RequestBody @Valid CreateLoanReq req) {
         String empId = currentUserApi.getCurrentEmpId();
@@ -119,6 +121,7 @@ public class LoanController {
      */
     @PutMapping("/{id}")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
+    @AuditLog(action = "UPDATE_LOAN_APPLY", resourceType = "LOAN_APPLY")
     @Operation(summary = "更新贷款申请草稿")
     public ResponseWrapper<LoanDetailResp> update(@PathVariable String id,
                                                    @RequestBody @Valid UpdateLoanReq req) {
@@ -139,6 +142,7 @@ public class LoanController {
      */
     @PostMapping("/{id}/submit")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
+    @AuditLog(action = "SUBMIT_LOAN_APPLY", resourceType = "LOAN_APPLY")
     @Operation(summary = "提交贷款申请审批")
     public ResponseWrapper<Void> submit(@PathVariable String id) {
         String empId = currentUserApi.getCurrentEmpId();
@@ -156,6 +160,7 @@ public class LoanController {
      */
     @DeleteMapping("/{id}")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
+    @AuditLog(action = "DELETE_LOAN_APPLY", resourceType = "LOAN_APPLY")
     @Operation(summary = "删除贷款申请草稿")
     public ResponseWrapper<Void> delete(@PathVariable String id) {
         String empId = currentUserApi.getCurrentEmpId();
@@ -172,6 +177,7 @@ public class LoanController {
      */
     @PostMapping("/{id}/cancel")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
+    @AuditLog(action = "CANCEL_LOAN_APPLY", resourceType = "LOAN_APPLY", reasonRequired = true)
     @Operation(summary = "撤回贷款申请")
     public ResponseWrapper<Void> cancel(@PathVariable String id) {
         String empId = currentUserApi.getCurrentEmpId();
@@ -187,6 +193,7 @@ public class LoanController {
      */
     @GetMapping("/export")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.EXPORT)
+    @AuditLog(action = "EXPORT_LOAN_APPLY", resourceType = "LOAN_APPLY", reasonRequired = true)
     @Operation(summary = "导出贷款申请列表（待实现）")
     public ResponseWrapper<?> export() {
         log.info("[LoanController.export] V1 暂未实现导出功能");
