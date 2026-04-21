@@ -161,4 +161,45 @@
         FOR UPDATE
     </select>
 
+    <!-- 按工作流业务键查询线索（LEAD:{leadId} 单条 / LEAD:IMP_{batchId} 批量首条） -->
+    <select id="selectByBusinessKey" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_lead
+        WHERE deleted = 0
+          AND business_key = #{businessKey}
+        LIMIT 1
+    </select>
+
+    <!-- 按导入批次 ID 查询线索列表，按创建时间升序 -->
+    <select id="selectByImportBatchId" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_lead
+        WHERE deleted = 0
+          AND import_batch_id = #{batchId}
+        ORDER BY created_time ASC
+    </select>
+
+    <!-- 按源客户 ID 查询线索版本链，按 version_no 升序 -->
+    <select id="selectBySourceCustIdOrderByVersion" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_lead
+        WHERE deleted = 0
+          AND source_cust_id = #{sourceCustId}
+        ORDER BY version_no ASC
+    </select>
+
+    <!-- 统计客户名称重复数（仅统计 PENDING_APPROVAL / APPROVED 状态的有效线索） -->
+    <select id="countActiveByCustName" resultType="long">
+        SELECT COUNT(*) FROM cust_lead
+        WHERE deleted = 0
+          AND cust_name = #{custName}
+          AND lead_status IN ('PENDING_APPROVAL', 'APPROVED')
+        <if test="excludeLeadId != null and excludeLeadId != ''">
+            AND id != #{excludeLeadId}
+        </if>
+    </select>
+
 </mapper>

@@ -106,4 +106,44 @@ public interface CustLeadMapper {
      * @return 线索实体，不存在或已删除时返回 null
      */
     CustLead selectForUpdate(@Param("id") String id);
+
+    /**
+     * 按工作流业务键查询线索（business_key 唯一）。
+     * <p>
+     * 业务键格式：LEAD:{leadId} 单条 / LEAD:IMP_{batchId} 批量（取第一条）。
+     * </p>
+     *
+     * @param businessKey 业务键
+     * @return 线索实体，不存在或已删除时返回 null
+     */
+    CustLead selectByBusinessKey(@Param("businessKey") String businessKey);
+
+    /**
+     * 按导入批次 ID 查询线索列表（按创建时间升序）。
+     *
+     * @param batchId 导入批次 ID
+     * @return 线索列表；无数据时返回空列表
+     */
+    List<CustLead> selectByImportBatchId(@Param("batchId") String batchId);
+
+    /**
+     * 按源客户 ID 查询线索版本链，按 version_no 升序排列。
+     *
+     * @param sourceCustId 源客户 ID
+     * @return 线索版本链；无数据时返回空列表
+     */
+    List<CustLead> selectBySourceCustIdOrderByVersion(@Param("sourceCustId") String sourceCustId);
+
+    /**
+     * 统计状态为 PENDING_APPROVAL / APPROVED 的线索中客户名称重复数。
+     * <p>
+     * 编辑场景通过 excludeLeadId 排除自身记录以防误报。
+     * </p>
+     *
+     * @param custName      客户名称
+     * @param excludeLeadId 排除的线索 ID，可为 null
+     * @return 重复数量
+     */
+    Long countActiveByCustName(@Param("custName") String custName,
+                               @Param("excludeLeadId") String excludeLeadId);
 }
