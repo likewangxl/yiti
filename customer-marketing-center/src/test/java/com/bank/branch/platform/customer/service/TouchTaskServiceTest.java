@@ -462,6 +462,88 @@ class TouchTaskServiceTest {
                 .isInstanceOf(BizException.class);
     }
 
+    // ==================== listPageAdmin ====================
+
+    @Test
+    void listPageAdmin_shouldReturnAllOrgsData() {
+        // given: 管理后台查询，不限机构，pageNo=1, pageSize=10
+        TouchTask t1 = buildPendingTask("admin-task-001");
+        t1.setOrgId("ORG001");
+        TouchTask t2 = buildPendingTask("admin-task-002");
+        t2.setOrgId("ORG002");
+        List<TouchTask> mockList = List.of(t1, t2);
+
+        when(taskMapper.selectAdminPage(isNull(), isNull(), isNull(), isNull(), eq(0), eq(10)))
+                .thenReturn(mockList);
+        when(taskMapper.countAdminPage(isNull(), isNull(), isNull(), isNull())).thenReturn(2L);
+
+        // when
+        PageResult<TouchTask> result = touchTaskService.listPageAdmin(null, null, null, null, 1, 10);
+
+        // then: 两个不同机构的任务都返回
+        assertThat(result.getRecords()).hasSize(2);
+        assertThat(result.getTotal()).isEqualTo(2L);
+        assertThat(result.getPageNo()).isEqualTo(1);
+        assertThat(result.getPageSize()).isEqualTo(10);
+    }
+
+    // ==================== batchAssign ====================
+
+    @Test
+    void batchAssign_shouldUpdatePendingAndInProgressTasks() {
+        // given: 两个任务（PENDING + IN_PROGRESS）都允许重分配
+        TouchTask t1 = buildPendingTask("task-BA-1");
+        t1.setTaskStatus("PENDING");
+        TouchTask t2 = buildPendingTask("task-BA-2");
+        t2.setTaskStatus("IN_PROGRESS");
+
+        when(taskMapper.selectById("task-BA-1")).thenReturn(t1);
+        when(taskMapper.selectById("task-BA-2")).thenReturn(t2);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when
+        int updated = touchTaskService.batchAssign(List.of("task-BA-1", "task-BA-2"), "E99999");
+
+        // then: 两条均成功更新
+        assertThat(updated).isEqualTo(2);
+    }
+
+    @Test
+    void batchAssign_shouldSkipCompletedTasks() {
+        // given: 一个 PENDING，一个 SUCCESS（终态不允许重分配）
+        TouchTask pending = buildPendingTask("task-BA-P");
+        pending.setTaskStatus("PENDING");
+        TouchTask success = buildPendingTask("task-BA-S");
+        success.setTaskStatus("SUCCESS");
+
+        when(taskMapper.selectById("task-BA-P")).thenReturn(pending);
+        when(taskMapper.selectById("task-BA-S")).thenReturn(success);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when
+        int updated = touchTaskService.batchAssign(List.of("task-BA-P", "task-BA-S"), "E99999");
+
+        // then: 只有 PENDING 的任务被更新，SUCCESS 跳过
+        assertThat(updated).isEqualTo(1);
+    }
+
+    @Test
+    void batchAssign_shouldSkipNonExistentTasks() {
+        // given: 一个存在（PENDING），一个不存在
+        TouchTask existing = buildPendingTask("task-BA-E");
+        existing.setTaskStatus("PENDING");
+
+        when(taskMapper.selectById("task-BA-E")).thenReturn(existing);
+        when(taskMapper.selectById("task-BA-NA")).thenReturn(null);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when
+        int updated = touchTaskService.batchAssign(List.of("task-BA-E", "task-BA-NA"), "E99999");
+
+        // then: 只有存在的任务被更新，不存在的跳过
+        assertThat(updated).isEqualTo(1);
+    }
+
     // ==================== 测试辅助方法 ====================
 
     /**

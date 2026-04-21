@@ -244,6 +244,92 @@ public class TouchTaskService {
     }
 
     /**
+     * 管理后台全局分页查询触达任务（不按机构过滤，需 ADMIN 权限）。
+     * <p>
+     * keyword 模糊搜索 task_no，status、assigneeEmpId、orgId 精确匹配，均可为 null 表示不过滤。
+     * offset = (pageNo - 1) * pageSize
+     * </p>
+     *
+     * @param keyword       关键词（搜索 task_no），可为 null
+     * @param status        任务状态过滤，可为 null
+     * @param assigneeEmpId 执行人工号过滤，可为 null
+     * @param orgId         机构 ID 过滤，可为 null
+     * @param pageNo        页码（从 1 开始）
+     * @param pageSize      每页大小
+     * @return 分页的触达任务列表（跨机构全局视图）
+     */
+    public PageResult<TouchTask> listPageAdmin(String keyword, String status, String assigneeEmpId,
+                                               String orgId, int pageNo, int pageSize) {
+        log.info("[TouchTaskService.listPageAdmin] keyword={}, status={}, assigneeEmpId={}, orgId={}, pageNo={}, pageSize={}",
+                keyword, status, assigneeEmpId, orgId, pageNo, pageSize);
+
+        int offset = (pageNo - 1) * pageSize;
+        List<TouchTask> records = taskMapper.selectAdminPage(keyword, status, assigneeEmpId, orgId, offset, pageSize);
+        Long total = taskMapper.countAdminPage(keyword, status, assigneeEmpId, orgId);
+
+        log.info("[TouchTaskService.listPageAdmin] total={}", total);
+        return PageResult.of(pageNo, pageSize, total == null ? 0L : total, records);
+    }
+
+    /**
+     * 管理后台导出全量触达任务数据。
+     * <p>
+     * 支持 keyword、status、orgId 过滤，最多导出 maxRows 条记录，
+     * 适用于 CSV 导出场景，不分页直接返回列表。
+     * </p>
+     *
+     * @param keyword 关键词过滤，可为 null
+     * @param status  状态过滤，可为 null
+     * @param orgId   机构 ID 过滤，可为 null
+     * @param maxRows 最大导出行数（防止导出过多数据）
+     * @return 触达任务列表
+     */
+    public List<TouchTask> listAllForAdminExport(String keyword, String status, String orgId, int maxRows) {
+        log.info("[TouchTaskService.listAllForAdminExport] keyword={}, status={}, orgId={}, maxRows={}",
+                keyword, status, orgId, maxRows);
+        return taskMapper.selectAdminPage(keyword, status, null, orgId, 0, maxRows);
+    }
+
+    /**
+     * 批量分配触达任务给新执行人。
+     * <p>
+     * 仅允许对 PENDING 或 IN_PROGRESS 状态的任务进行重分配，
+     * 终态（SUCCESS/CANCELLED）任务自动跳过（不报错），
+     * 不存在的任务 ID 也自动跳过。
+     * 返回实际成功更新的任务数量。
+     * </p>
+     *
+     * @param taskIds       待分配的任务 ID 列表
+     * @param newAssigneeEmpId 新执行人员工工号
+     * @return 实际更新的任务数量
+     */
+    @Transactional
+    public int batchAssign(List<String> taskIds, String newAssigneeEmpId) {
+        log.info("[TouchTaskService.batchAssign] taskCount={}, newAssigneeEmpId={}", taskIds.size(), newAssigneeEmpId);
+
+        int updated = 0;
+        for (String id : taskIds) {
+            TouchTask task = taskMapper.selectById(id);
+            if (task == null) {
+                // 不存在的任务静默跳过，防止单个错误终止整批操作
+                log.warn("[TouchTaskService.batchAssign] task not found, skip: {}", id);
+                continue;
+            }
+            // 只允许对 PENDING / IN_PROGRESS 的任务重分配，终态静默跳过
+            if (!"PENDING".equals(task.getTaskStatus()) && !"IN_PROGRESS".equals(task.getTaskStatus())) {
+                log.debug("[TouchTaskService.batchAssign] task {} status={} is terminal, skip", id, task.getTaskStatus());
+                continue;
+            }
+            task.setAssigneeEmpId(newAssigneeEmpId);
+            taskMapper.updateById(task);
+            updated++;
+        }
+
+        log.info("[TouchTaskService.batchAssign] done, updated={}", updated);
+        return updated;
+    }
+
+    /**
      * 刷新 PENDING 任务的 SLA 状态（供定时任务调用）。
      * <p>
      * 规则：

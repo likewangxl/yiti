@@ -222,4 +222,42 @@ public interface TouchTaskMapper {
     Double avgDurationHoursByOrgBetween(@Param("orgCode") String orgCode,
                                          @Param("startDate") String startDate,
                                          @Param("endDate") String endDate);
+
+    // ===================== 管理后台扩展方法 =====================
+
+    /**
+     * 管理后台分页查询（不限机构，支持跨机构全局查看）。
+     * <p>
+     * keyword 模糊搜索 task_no，status、assigneeEmpId、orgId 精确匹配（均可为 null）。
+     * offset = (pageNo - 1) * pageSize
+     * </p>
+     *
+     * @param keyword       关键词（搜索 task_no），可为 null
+     * @param status        任务状态过滤，可为 null
+     * @param assigneeEmpId 执行人工号过滤，可为 null
+     * @param orgId         机构 ID 过滤，可为 null
+     * @param offset        偏移量
+     * @param limit         每页条数
+     * @return 触达任务列表
+     */
+    List<TouchTask> selectAdminPage(@Param("keyword") String keyword,
+                                    @Param("status") String status,
+                                    @Param("assigneeEmpId") String assigneeEmpId,
+                                    @Param("orgId") String orgId,
+                                    @Param("offset") int offset,
+                                    @Param("limit") int limit);
+
+    /**
+     * 管理后台统计分页总记录数（与 selectAdminPage 共享 WHERE 条件）。
+     *
+     * @param keyword       关键词，可为 null
+     * @param status        任务状态过滤，可为 null
+     * @param assigneeEmpId 执行人工号过滤，可为 null
+     * @param orgId         机构 ID 过滤，可为 null
+     * @return 总记录数
+     */
+    Long countAdminPage(@Param("keyword") String keyword,
+                        @Param("status") String status,
+                        @Param("assigneeEmpId") String assigneeEmpId,
+                        @Param("orgId") String orgId);
 }

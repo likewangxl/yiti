@@ -234,4 +234,47 @@
           AND task_status = 'SUCCESS'
     </select>
 
+
+    <!-- 管理后台分页查询（不限机构，跨机构全局视图） -->
+    <select id="selectAdminPage" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND task_no LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+            <if test="assigneeEmpId != null and assigneeEmpId != ''">
+                AND assignee_emp_id = #{assigneeEmpId}
+            </if>
+            <if test="orgId != null and orgId != ''">
+                AND org_id = #{orgId}
+            </if>
+        </where>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 管理后台统计分页总记录数 -->
+    <select id="countAdminPage" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND task_no LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+            <if test="assigneeEmpId != null and assigneeEmpId != ''">
+                AND assignee_emp_id = #{assigneeEmpId}
+            </if>
+            <if test="orgId != null and orgId != ''">
+                AND org_id = #{orgId}
+            </if>
+        </where>
+    </select>
+
 </mapper>
