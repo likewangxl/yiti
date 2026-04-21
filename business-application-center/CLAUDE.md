@@ -25,7 +25,10 @@ src/main/java/com/bank/branch/platform/bizapp/
 │   ├── LoanApi.java, LoanQueryApi.java
 │   ├── SupportApi.java, SupportQueryApi.java
 │   └── BizApplyQueryApi.java
-│   └── dto/          # API 层 DTO (6 个)
+│   ├── converter/    # API 层 DTO 转换器 (2 个，Phase 1 新增)
+│   │   ├── LoanApplyDTOConverter.java
+│   │   └── SupportRequestDTOConverter.java
+│   └── dto/          # API 层 DTO (8 个，Phase 1 新增 LoanApplyListItemDTO / SupportRequestListItemDTO)
 ├── config/           # 配置
 │   └── BizAppCacheConfig.java
 ├── controller/       # REST 控制器 (3 个)
@@ -34,7 +37,10 @@ src/main/java/com/bank/branch/platform/bizapp/
 │   └── SupportDeptController.java    # 4 端点 (承接侧 SUPPORT_DEPT)
 ├── dto/
 │   ├── req/          # 请求 DTO (6 个)
-│   └── resp/         # 响应 DTO (2 个)
+│   └── resp/         # 响应 DTO (3 个，Phase 2 新增 SubmitRespDTO / SupportRequestCreateRespDTO)
+│       ├── LoanDetailResp.java               # 富化：含 custInfo + canOperate
+│       ├── SubmitRespDTO.java                # Loan/Support 提交统一响应
+│       └── SupportRequestCreateRespDTO.java  # 含 submitGroupId
 ├── entity/           # 实体 (2 个)
 │   ├── LoanApply.java
 │   └── SupportRequest.java
@@ -43,17 +49,17 @@ src/main/java/com/bank/branch/platform/bizapp/
 │   ├── LoanStatus.java           # DRAFT/IN_APPROVAL/COMPLETED/REJECTED/CANCELLED
 │   ├── SupportStatus.java        # +IN_PROGRESS
 │   ├── SupportScenario.java      # A(产品直达) / B(部门承接)
-│   └── SupportSourceType.java    # EXISTING_CUSTOMER / TOUCH_TASK
-├── event/            # 领域事件 (6 个)
+│   └── SupportSourceType.java    # EXISTING_CUSTOMER / TOUCH_TASK（Phase 3：MANUAL → EXISTING_CUSTOMER）
+├── event/            # 领域事件 (7 个，Phase 3 新增 SupportRejectedEvent)
 │   ├── LoanSubmittedEvent, LoanApprovedEvent, LoanRejectedEvent
-│   └── SupportSubmittedEvent, SupportDispatchedEvent, SupportCompletedEvent
+│   └── SupportSubmittedEvent, SupportDispatchedEvent, SupportCompletedEvent, SupportRejectedEvent
 ├── facade/           # API 实现 (5 个 @Component)
-├── listener/         # 工作流事件监听 (2 个)
+├── listener/         # 工作流事件监听 (2 个，Phase 3 改造)
 │   ├── LoanWorkflowListener.java      # ProcessCompletedEvent → 贷款状态更新
-│   └── SupportWorkflowListener.java   # ProcessCompletedEvent → 支持状态更新
+│   └── SupportWorkflowListener.java   # ProcessCompletedEvent → 支持状态更新（含 REJECTED 分支）
 ├── mapper/           # MyBatis Mapper (2 个接口 + XML)
-│   ├── LoanApplyMapper
-│   └── SupportRequestMapper
+│   ├── LoanApplyMapper (+ LoanApplyMapper.xml)
+│   └── SupportRequestMapper (+ SupportRequestMapper.xml，Phase 3 新增 conditionalUpdateStatus)
 └── service/          # 业务逻辑 (8 个)
     ├── BizStateMachine.java              # 统一状态机 (Loan + Support)
     ├── BizNoGenerator.java               # 编号生成 (LA/SR+日期+序号)
@@ -70,39 +76,39 @@ src/main/java/com/bank/branch/platform/bizapp/
 
 ### LoanController (`/api/loans`) — 9 端点
 
-| 方法 | 端点 | BizAuth | 说明 |
-|------|------|---------|------|
-| GET | /api/loans | LOAN/LIST | 分页列表 |
-| GET | /api/loans/{id} | LOAN/READ | 详情 |
-| POST | /api/loans | LOAN/WRITE | 创建草稿 |
-| PUT | /api/loans/{id} | LOAN/WRITE | 更新草稿 |
-| POST | /api/loans/{id}/submit | LOAN/WRITE | 提交审批 |
-| DELETE | /api/loans/{id} | LOAN/WRITE | 删除草稿 |
-| POST | /api/loans/{id}/cancel | LOAN/WRITE | 撤回 |
-| GET | /api/loans/export | LOAN/EXPORT | 导出(预留) |
-| GET | /api/loans/{id}/node-form/{nodeKey} | LOAN/READ | 节点表单 |
+| 方法 | 端点 | BizAuth | 返回类型 | 说明 |
+|------|------|---------|----------|------|
+| GET | /api/loans | LOAN/LIST | `LoanApplyListItemDTO` | 分页列表（Phase 1 富化） |
+| GET | /api/loans/{id} | LOAN/READ | `LoanDetailResp`（含 custInfo/canOperate） | 详情（Phase 2 富化） |
+| POST | /api/loans | LOAN/WRITE | Void | 创建草稿 |
+| PUT | /api/loans/{id} | LOAN/WRITE | Void | 更新草稿 |
+| POST | /api/loans/{id}/submit | LOAN/WRITE | `SubmitRespDTO` | 提交审批（Phase 2：Void → SubmitRespDTO） |
+| DELETE | /api/loans/{id} | LOAN/WRITE | Void | 删除草稿 |
+| POST | /api/loans/{id}/cancel | LOAN/WRITE | Void | 撤回（@AuditLog reasonRequired=true） |
+| GET | /api/loans/export | LOAN/EXPORT | — | 导出（@AuditLog reasonRequired=true） |
+| GET | /api/loans/{id}/node-form/{nodeKey} | LOAN/READ | — | 节点表单 |
 
 ### SupportController (`/api/support-requests`) — 8 端点
 
-| 方法 | 端点 | BizAuth | 说明 |
-|------|------|---------|------|
-| GET | /api/support-requests | SUPPORT/LIST | 发起侧列表 |
-| GET | /api/support-requests/{id} | SUPPORT/READ | 详情 |
-| POST | /api/support-requests | SUPPORT/WRITE | 创建(含拆单) |
-| POST | /api/support-requests/{id}/submit | SUPPORT/WRITE | 草稿提交 |
-| DELETE | /api/support-requests/{id} | SUPPORT/WRITE | 删除草稿 |
-| POST | /api/support-requests/{id}/cancel | SUPPORT/WRITE | 撤回 |
-| GET | /api/support-requests/export | SUPPORT/EXPORT | 导出(预留) |
-| GET | /api/support-requests/available-products | SUPPORT/READ | 可用产品 |
+| 方法 | 端点 | BizAuth | 返回类型 | 说明 |
+|------|------|---------|----------|------|
+| GET | /api/support-requests | SUPPORT/LIST | `SupportRequestListItemDTO` | 发起侧列表（Phase 1 富化） |
+| GET | /api/support-requests/{id} | SUPPORT/READ | DTO（非 Entity） | 详情（Phase 2 不再暴露 Entity） |
+| POST | /api/support-requests | SUPPORT/WRITE | `SupportRequestCreateRespDTO`（含 submitGroupId） | 创建(含拆单)（Phase 2 富化） |
+| POST | /api/support-requests/{id}/submit | SUPPORT/WRITE | `SubmitRespDTO` | 草稿提交（Phase 2：Void → SubmitRespDTO） |
+| DELETE | /api/support-requests/{id} | SUPPORT/WRITE | Void | 删除草稿 |
+| POST | /api/support-requests/{id}/cancel | SUPPORT/WRITE | Void | 撤回（@AuditLog reasonRequired=true） |
+| GET | /api/support-requests/export | SUPPORT/EXPORT | — | 导出（@AuditLog reasonRequired=true） |
+| GET | /api/support-requests/available-products | SUPPORT/READ | — | 可用产品 |
 
 ### SupportDeptController (`/api/support-dept/requests`) — 4 端点
 
-| 方法 | 端点 | BizAuth | 说明 |
-|------|------|---------|------|
-| GET | /api/support-dept/requests | SUPPORT_DEPT/LIST | 承接侧列表 |
-| POST | /api/support-dept/requests/{id}/dispatch | SUPPORT_DEPT/WRITE | 秘书派单 |
-| POST | /api/support-dept/requests/{id}/transfer | SUPPORT_DEPT/TRANSFER | 转交(高危) |
-| POST | /api/support-dept/requests/{id}/complete | SUPPORT_DEPT/WRITE | 办理完成 |
+| 方法 | 端点 | BizAuth | 返回类型 | 说明 |
+|------|------|---------|----------|------|
+| GET | /api/support-dept/requests | SUPPORT_DEPT/LIST | `SupportRequestListItemDTO` | 承接侧列表（Phase 1 富化） |
+| POST | /api/support-dept/requests/{id}/dispatch | SUPPORT_DEPT/WRITE | Void | 秘书派单（Phase 3 新增 dispatchRemark 入参） |
+| POST | /api/support-dept/requests/{id}/transfer | SUPPORT_DEPT/TRANSFER | Void | 转交(高危)（@AuditLog reasonRequired=true） |
+| POST | /api/support-dept/requests/{id}/complete | SUPPORT_DEPT/WRITE | Void | 办理完成 |
 
 ## 数据库表 (2 张)
 
@@ -128,6 +134,23 @@ src/main/java/com/bank/branch/platform/bizapp/
 - SUPPORT (发起侧): 按 `owner_org_id` + `created_by` 控制
 - SUPPORT_DEPT (承接侧): 按 `support_dept_id` + `assigned_emp_id` 控制
 
+### @AuditLog 补齐（Phase 2-3）
+全模块 14 个高危端点均已补 `@AuditLog` 注解：
+- `transfer`、`cancel`（Loan + Support）、`export`（Loan + Support）使用 `reasonRequired=true`
+- `submit`、`dispatch`、`complete` 使用默认 `reasonRequired=false`
+
+### Listener 改造（Phase 3）
+`LoanWorkflowListener` / `SupportWorkflowListener` 由 `@EventListener` 改为：
+```java
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+```
+- 确保只在事务提交后触发，避免脏读；`fallbackExecution=true` 保证非事务上下文也可处理。
+- `SupportWorkflowListener` 新增 REJECTED 分支（发布 `SupportRejectedEvent`）。
+- Mapper 新增 `conditionalUpdateStatus`（条件 UPDATE）保证幂等性。
+
+### 枚举变更（Phase 3）
+`SupportSourceType.MANUAL` 重命名为 `EXISTING_CUSTOMER`，语义更明确。
+
 ## 错误码
 
 | 前缀 | 含义 |
@@ -140,7 +163,7 @@ src/main/java/com/bank/branch/platform/bizapp/
 
 ## 测试
 
-- **114 个测试用例**, 0 失败
+- **168 个测试用例**, 0 失败（Phase 1-3 共新增 54 个，较初始 114 个）
 - Service 单元测试: Mockito (`@ExtendWith(MockitoExtension.class)`)
 - Controller 集成测试: MockMvc + `AbstractControllerIntegrationTest`
 - Facade 单元测试: Mockito
@@ -148,4 +171,8 @@ src/main/java/com/bank/branch/platform/bizapp/
 
 ## PT_RESOURCE SQL
 
-`docs/superpowers/sql/2026-04-14-bizapp-pt-resource.sql` — 21 条记录
+`docs/superpowers/sql/2026-04-14-bizapp-pt-resource.sql` — 21 条记录，覆盖全部 21 个 REST 端点。
+
+> **契约对齐说明（Phase 1-3）**: 本轮契约对齐（2026-04）未新增或变更任何 REST URL，
+> 仅对返回类型、入参字段、Listener 机制、枚举值等做了内部补齐。
+> 因此**不需要新建 PT_RESOURCE SQL 脚本**，上述 2026-04-14 脚本仍为最新版本。

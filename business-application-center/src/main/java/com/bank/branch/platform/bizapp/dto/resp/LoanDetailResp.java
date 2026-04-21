@@ -1,8 +1,10 @@
 package com.bank.branch.platform.bizapp.dto.resp;
 
 import com.bank.branch.platform.bizapp.entity.LoanApply;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -52,6 +54,8 @@ public class LoanDetailResp {
      */
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CustInfoVO {
 
         /** 客户 ID */

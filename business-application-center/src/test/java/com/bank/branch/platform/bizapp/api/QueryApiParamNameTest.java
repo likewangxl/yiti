@@ -19,11 +19,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("QueryApi 参数名契约验证(反射)")
 class QueryApiParamNameTest {
 
+    /**
+     * 前置守护：断言方法的参数名在运行时可读。
+     * <p>
+     * 若 maven-compiler-plugin 未配置 {@code <parameters>true</parameters>}，
+     * 参数名将退化为 arg0/arg1/arg2，后续参数名断言会产生误导性的失败信息。
+     * 本方法提前给出明确的失败提示。
+     * </p>
+     *
+     * @param m 待检查的 Method
+     */
+    private void assertParametersPresent(Method m) {
+        if (m.getParameters().length > 0) {
+            assertThat(m.getParameters()[0].isNamePresent())
+                    .as("编译时必须启用 -parameters(maven-compiler-plugin <parameters>true</parameters>)，"
+                            + "否则参数名不可读 — 方法: %s", m.getName())
+                    .isTrue();
+        }
+    }
+
     @Test
     @DisplayName("LoanQueryApi.countCompletedByOrg 参数名必须为 orgId/startTime/endTime")
     void countCompletedByOrg_paramNames_matchesDoc() throws Exception {
         Method m = LoanQueryApi.class.getMethod("countCompletedByOrg",
                 String.class, LocalDateTime.class, LocalDateTime.class);
+        assertParametersPresent(m);
         assertThat(m.getParameters())
                 .extracting(Parameter::getName)
                 .containsExactly("orgId", "startTime", "endTime");
@@ -34,6 +54,7 @@ class QueryApiParamNameTest {
     void sumCreditAmountByEmp_paramNames_matchesDoc() throws Exception {
         Method m = LoanQueryApi.class.getMethod("sumCreditAmountByEmp",
                 String.class, LocalDateTime.class, LocalDateTime.class);
+        assertParametersPresent(m);
         assertThat(m.getParameters())
                 .extracting(Parameter::getName)
                 .containsExactly("empId", "startTime", "endTime");
@@ -45,6 +66,7 @@ class QueryApiParamNameTest {
         for (String method : new String[]{"countCompletedByCreator", "countCompletedByAssignee"}) {
             Method m = SupportQueryApi.class.getMethod(method,
                     String.class, LocalDateTime.class, LocalDateTime.class);
+            assertParametersPresent(m);
             assertThat(m.getParameters())
                     .as("%s 参数名", method)
                     .extracting(Parameter::getName)
