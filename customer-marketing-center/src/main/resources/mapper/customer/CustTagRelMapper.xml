@@ -47,6 +47,31 @@
         )
     </insert>
 
+    <!-- 查询某客户的所有标签 ID 列表 -->
+    <select id="selectTagIdsByCustId" resultType="java.lang.String">
+        SELECT tag_id
+        FROM cust_tag_rel
+        WHERE cust_id = #{custId}
+    </select>
+
+    <!-- 批量查询多个客户的标签关联（N+1 优化：一次查全部 rel） -->
+    <select id="selectByCustIds" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_tag_rel
+        WHERE cust_id IN
+        <foreach collection="custIds" item="custId" open="(" separator="," close=")">
+            #{custId}
+        </foreach>
+    </select>
+
+    <!-- 查询打了某标签的所有客户 ID 列表 -->
+    <select id="selectCustIdsByTagId" resultType="java.lang.String">
+        SELECT cust_id
+        FROM cust_tag_rel
+        WHERE tag_id = #{tagId}
+    </select>
+
     <!-- 批量插入关联记录 -->
     <insert id="insertBatch">
         INSERT INTO cust_tag_rel (

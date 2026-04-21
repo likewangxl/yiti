@@ -147,7 +147,9 @@ class CustomerMarketingCenterIT {
 
         touchTaskService.markSuccess(touchTaskId);
 
-        assertThat(tagApi.getById(tag.getId())).extracting(CustTag::getTagCode).isEqualTo("PHASE1_TAG");
+        assertThat(tagApi.getTagByCode("PHASE1_TAG")).isPresent()
+                .get().extracting(com.bank.branch.platform.customer.api.dto.TagDTO::getTagCode)
+                .isEqualTo("PHASE1_TAG");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM cust_tag_rel WHERE tag_id = ? AND cust_id = ?",
                 Long.class,

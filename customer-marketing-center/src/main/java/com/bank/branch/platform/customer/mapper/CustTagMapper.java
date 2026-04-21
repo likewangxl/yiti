@@ -88,4 +88,29 @@ public interface CustTagMapper {
      * @return 受影响行数
      */
     int updateById(CustTag entity);
+
+    /**
+     * 查询所有启用状态的标签，按 tag_priority 升序、tag_name 升序排列。
+     * 用于对外 TagApi.listEnabledTags()，兼容契约排序要求。
+     *
+     * @return 启用的标签列表
+     */
+    List<CustTag> selectEnabledSorted();
+
+    /**
+     * 按 ID 列表批量查询标签，只返回 status=ACTIVE 的记录。
+     * 用于 getCustomerTags / batchGetCustomerTags，天然过滤 DISABLED。
+     *
+     * @param ids 标签 ID 列表
+     * @return 启用状态的标签列表
+     */
+    List<CustTag> selectEnabledByIds(@Param("ids") List<String> ids);
+
+    /**
+     * 按标签名称统计记录数（含逻辑删除过滤），用于名称唯一性校验。
+     *
+     * @param tagName 标签名称
+     * @return 同名标签数量
+     */
+    Long countByTagName(@Param("tagName") String tagName);
 }
