@@ -7,10 +7,12 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.customer.dto.req.TagCustomerImportReqDTO;
+import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.CustTagRel;
 import com.bank.branch.platform.customer.service.TagCustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.List;
 
 /**
@@ -77,5 +81,60 @@ public class TagCustomerController {
     public ResponseWrapper<List<CustTagRel>> listCustomers(@PathVariable String tagId) {
         log.debug("[TagCustomerController.listCustomers] tagId={}", tagId);
         return ResponseWrapper.success(tagCustomerService.listCustomersByTag(tagId));
+    }
+
+    /**
+     * 导出标签关联的客户列表（高危操作，CSV 格式）。
+     * <p>
+     * 流式写出 CSV 至 HttpServletResponse，包含标签下所有关联客户主档信息。
+     * 高危操作，需要 READ 权限，@AuditLog reasonRequired=true 强制留痕。
+     * </p>
+     *
+     * @param tagId    标签 ID（路径参数）
+     * @param response HttpServletResponse 用于流式写出
+     * @throws IOException IO 异常（写出流时发生）
+     */
+    @GetMapping("/{tagId}/customers/export")
+    @BizAuth(bizType = BizType.TAG, action = BizAction.EXPORT)
+    @AuditLog(action = "EXPORT_TAG_CUSTOMERS", resourceType = "TAG", reasonRequired = true)
+    @Operation(summary = "导出标签关联客户列表（CSV，高危操作）")
+    public void exportTagCustomers(@PathVariable String tagId,
+                                   HttpServletResponse response) throws IOException {
+        log.info("[TagCustomerController.exportTagCustomers] tagId={}", tagId);
+
+        // 设置 CSV 响应头
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"tag_customers_" + tagId + "_" + System.currentTimeMillis() + ".csv\"");
+
+        List<CustMaster> list = tagCustomerService.listCustomersForExport(tagId);
+        log.info("[TagCustomerController.exportTagCustomers] tagId={}, 导出记录数={}", tagId, list.size());
+
+        try (PrintWriter out = response.getWriter()) {
+            // 写出 CSV 表头
+            out.println("客户编号,客户名称,统一社会信用代码,状态,创建时间");
+            // 逐行写出数据（流式，不积累内存）
+            for (CustMaster c : list) {
+                out.println(String.join(",",
+                        quote(c.getCustNo()),
+                        quote(c.getCustName()),
+                        quote(c.getUnifiedCreditCode()),
+                        quote(c.getStatus()),
+                        quote(c.getCreatedTime() != null ? c.getCreatedTime().toString() : "")));
+            }
+        }
+    }
+
+    /**
+     * CSV 字段安全引用：用双引号包裹，内部双引号转义为两个双引号（RFC 4180 规范）。
+     *
+     * @param s 原始字符串，null 时返回空字符串
+     * @return 安全引用后的 CSV 字段
+     */
+    private static String quote(String s) {
+        if (s == null) {
+            return "";
+        }
+        return "\"" + s.replace("\"", "\"\"") + "\"";
     }
 }

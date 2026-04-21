@@ -1,6 +1,8 @@
 package com.bank.branch.platform.customer.controller;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.customer.api.LeadApi;
+import com.bank.branch.platform.customer.api.dto.LeadDTO;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.enums.LeadStatus;
@@ -46,6 +48,9 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
 
     @MockBean
     LeadVersionService leadVersionService;
+
+    @MockBean
+    LeadApi leadApi;
 
     // ==================== GET /api/leads ====================
 
@@ -194,6 +199,44 @@ class LeadControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data").value("delete-version-001"));
+    }
+
+    // ==================== GET /api/leads/{id}/versions ====================
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void versions_returnsVersionChain() throws Exception {
+        // given: 版本链包含 v1、v2 两条记录
+        LeadDTO v1 = new LeadDTO();
+        v1.setId("L1_v1");
+        v1.setVersionNo(1);
+        v1.setCustName("测试企业");
+
+        LeadDTO v2 = new LeadDTO();
+        v2.setId("L1_v2");
+        v2.setVersionNo(2);
+        v2.setCustName("测试企业-更新");
+
+        when(leadApi.getLeadVersionChain("L1")).thenReturn(List.of(v1, v2));
+
+        mockMvc.perform(get("/api/leads/{id}/versions", "L1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].id").value("L1_v1"))
+                .andExpect(jsonPath("$.data[1].id").value("L1_v2"));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void versions_returnsEmptyForNonExistent() throws Exception {
+        // given: 不存在的线索，返回空列表
+        when(leadApi.getLeadVersionChain("NA")).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/leads/{id}/versions", "NA"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data").isEmpty());
     }
 
     // ============================= 辅助方法 =============================

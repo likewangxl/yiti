@@ -46,6 +46,9 @@ public class TouchTask {
     /** SLA 状态：GREEN/YELLOW/RED，对应 sla_status */
     private String slaStatus;
 
+    /** SLA 预警标记（契约字段），slaStatus 为 YELLOW 或 RED 时为 true，对应 sla_warning */
+    private Boolean slaWarning;
+
     /** 流程业务键（格式 TOUCH:{taskId}），对应 business_key */
     private String businessKey;
 

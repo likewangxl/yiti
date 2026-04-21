@@ -32,6 +32,15 @@ public interface CustTagRelMapper {
     List<CustTagRel> selectByTagId(@Param("tagId") String tagId);
 
     /**
+     * 查询某客户与某标签的关联记录（用于追加打标幂等判断）。
+     *
+     * @param custId 客户ID
+     * @param tagId  标签ID
+     * @return 关联实体，不存在则返回 null
+     */
+    CustTagRel selectByCustIdAndTagId(@Param("custId") String custId, @Param("tagId") String tagId);
+
+    /**
      * 物理删除指定客户与指定标签的关联记录（取消打标）。
      *
      * @param custId 客户ID
@@ -63,4 +72,28 @@ public interface CustTagRelMapper {
      * @return 受影响行数
      */
     int insertBatch(@Param("list") List<CustTagRel> list);
+
+    /**
+     * 查询某客户的所有标签 ID 列表（用于 getCustomerTags）。
+     *
+     * @param custId 客户 ID
+     * @return 该客户的标签 ID 列表
+     */
+    List<String> selectTagIdsByCustId(@Param("custId") String custId);
+
+    /**
+     * 批量查询多个客户的标签关联（用于 batchGetCustomerTags，避免 N+1）。
+     *
+     * @param custIds 客户 ID 列表
+     * @return 关联实体列表
+     */
+    List<CustTagRel> selectByCustIds(@Param("custIds") List<String> custIds);
+
+    /**
+     * 查询打了某标签的所有客户 ID 列表（用于 getCustomerIdsByTag）。
+     *
+     * @param tagId 标签 ID
+     * @return 客户 ID 列表
+     */
+    List<String> selectCustIdsByTagId(@Param("tagId") String tagId);
 }

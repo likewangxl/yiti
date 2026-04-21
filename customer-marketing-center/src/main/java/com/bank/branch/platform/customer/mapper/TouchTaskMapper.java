@@ -89,4 +89,175 @@ public interface TouchTaskMapper {
      * @return 受影响行数
      */
     int updateById(TouchTask entity);
+
+    /**
+     * 统计指定客户的在途触达任务数量（PENDING 或 IN_PROGRESS 状态）。
+     * <p>
+     * 供 CustomerQueryApi.hasRunningProcess("TOUCH_TASK") 使用。
+     * </p>
+     *
+     * @param custId 客户ID
+     * @return 在途任务数量
+     */
+    Long countActiveByCust(@Param("custId") String custId);
+
+    /**
+     * 查询指定客户的所有在途触达任务（PENDING 或 IN_PROGRESS 状态）。
+     * <p>
+     * 供 CustomerQueryApi.listRunningProcesses 使用，按 created_time DESC 排序。
+     * </p>
+     *
+     * @param custId 客户ID
+     * @return 在途触达任务列表
+     */
+    List<TouchTask> selectActiveByCust(@Param("custId") String custId);
+
+    // ===================== 契约 §5 扩展方法 =====================
+
+    /**
+     * 按工作流业务键查询触达任务（格式 TOUCH:{taskId}）。
+     *
+     * @param businessKey 工作流业务键
+     * @return 触达任务实体，不存在时返回 null
+     */
+    TouchTask selectByBusinessKey(@Param("businessKey") String businessKey);
+
+    /**
+     * 查询指定员工的所有触达任务（全状态，按 created_time DESC）。
+     *
+     * @param empId 员工工号
+     * @return 触达任务列表
+     */
+    List<TouchTask> selectByEmp(@Param("empId") String empId);
+
+    /**
+     * 查询指定员工指定状态的触达任务（按 created_time DESC）。
+     *
+     * @param empId  员工工号
+     * @param status 任务状态
+     * @return 触达任务列表
+     */
+    List<TouchTask> selectByEmpAndStatus(@Param("empId") String empId, @Param("status") String status);
+
+    /**
+     * 统计指定员工在给定状态列表中的触达任务数量。
+     * <p>
+     * 供 countRunningTouchTasks 使用，传入 ["PENDING","IN_PROGRESS"]。
+     * </p>
+     *
+     * @param empId    员工工号
+     * @param statuses 状态列表
+     * @return 任务数量
+     */
+    Long countByEmpAndStatuses(@Param("empId") String empId, @Param("statuses") List<String> statuses);
+
+    /**
+     * 查询指定客户的所有触达历史（含所有状态，按 created_time DESC）。
+     *
+     * @param custId 客户ID
+     * @return 触达任务列表
+     */
+    List<TouchTask> selectByCustOrderByCreatedDesc(@Param("custId") String custId);
+
+    /**
+     * 查询指定客户在指定机构的触达历史（按 created_time DESC）。
+     *
+     * @param custId  客户ID
+     * @param orgCode 机构代码（对应 org_id 字段）
+     * @return 触达任务列表
+     */
+    List<TouchTask> selectByCustAndOrg(@Param("custId") String custId, @Param("orgCode") String orgCode);
+
+    /**
+     * 统计指定客户在指定机构已完成首次触达的次数。
+     * <p>
+     * 查询条件：task_type='FIRST_TOUCH' AND task_status='SUCCESS'
+     * AND cust_id=? AND org_id=?
+     * </p>
+     *
+     * @param custId  客户ID
+     * @param orgCode 机构代码
+     * @return 完成首次触达的记录数
+     */
+    Long countFirstTouchSuccess(@Param("custId") String custId, @Param("orgCode") String orgCode);
+
+    /**
+     * 统计指定机构在时间范围内的触达任务数量（status 为 null 则统计全部状态）。
+     *
+     * @param orgCode   机构代码
+     * @param startDate 开始日期（yyyy-MM-dd）
+     * @param endDate   结束日期（yyyy-MM-dd）
+     * @param status    任务状态，为 null 时不过滤状态
+     * @return 任务数量
+     */
+    Long countByOrgBetween(@Param("orgCode") String orgCode,
+                            @Param("startDate") String startDate,
+                            @Param("endDate") String endDate,
+                            @Param("status") String status);
+
+    /**
+     * 统计指定机构在时间范围内 SLA 预警的触达任务数量（sla_warning=true）。
+     *
+     * @param orgCode   机构代码
+     * @param startDate 开始日期（yyyy-MM-dd）
+     * @param endDate   结束日期（yyyy-MM-dd）
+     * @return SLA 预警任务数量
+     */
+    Long countSlaWarningByOrgBetween(@Param("orgCode") String orgCode,
+                                      @Param("startDate") String startDate,
+                                      @Param("endDate") String endDate);
+
+    /**
+     * 统计指定机构在时间范围内已完成触达任务的平均完成时长（小时）。
+     * <p>
+     * 计算方式：TIMESTAMPDIFF(MINUTE, created_time, success_time) / 60.0
+     * 仅统计 task_status='SUCCESS' 且 success_time IS NOT NULL 的任务。
+     * </p>
+     *
+     * @param orgCode   机构代码
+     * @param startDate 开始日期（yyyy-MM-dd）
+     * @param endDate   结束日期（yyyy-MM-dd）
+     * @return 平均完成时长（小时），无数据时返回 null
+     */
+    Double avgDurationHoursByOrgBetween(@Param("orgCode") String orgCode,
+                                         @Param("startDate") String startDate,
+                                         @Param("endDate") String endDate);
+
+    // ===================== 管理后台扩展方法 =====================
+
+    /**
+     * 管理后台分页查询（不限机构，支持跨机构全局查看）。
+     * <p>
+     * keyword 模糊搜索 task_no，status、assigneeEmpId、orgId 精确匹配（均可为 null）。
+     * offset = (pageNo - 1) * pageSize
+     * </p>
+     *
+     * @param keyword       关键词（搜索 task_no），可为 null
+     * @param status        任务状态过滤，可为 null
+     * @param assigneeEmpId 执行人工号过滤，可为 null
+     * @param orgId         机构 ID 过滤，可为 null
+     * @param offset        偏移量
+     * @param limit         每页条数
+     * @return 触达任务列表
+     */
+    List<TouchTask> selectAdminPage(@Param("keyword") String keyword,
+                                    @Param("status") String status,
+                                    @Param("assigneeEmpId") String assigneeEmpId,
+                                    @Param("orgId") String orgId,
+                                    @Param("offset") int offset,
+                                    @Param("limit") int limit);
+
+    /**
+     * 管理后台统计分页总记录数（与 selectAdminPage 共享 WHERE 条件）。
+     *
+     * @param keyword       关键词，可为 null
+     * @param status        任务状态过滤，可为 null
+     * @param assigneeEmpId 执行人工号过滤，可为 null
+     * @param orgId         机构 ID 过滤，可为 null
+     * @return 总记录数
+     */
+    Long countAdminPage(@Param("keyword") String keyword,
+                        @Param("status") String status,
+                        @Param("assigneeEmpId") String assigneeEmpId,
+                        @Param("orgId") String orgId);
 }

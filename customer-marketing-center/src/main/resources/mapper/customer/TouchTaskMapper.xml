@@ -5,7 +5,7 @@
     <!-- touch_task 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
-        plan_finish_time, warning_time, sla_status, business_key,
+        plan_finish_time, warning_time, sla_status, sla_warning, business_key,
         success_time, cancel_time, created_time, updated_time
     </sql>
 
@@ -76,11 +76,11 @@
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
         INSERT INTO touch_task (
             id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
-            plan_finish_time, warning_time, sla_status, business_key,
+            plan_finish_time, warning_time, sla_status, sla_warning, business_key,
             success_time, cancel_time, created_time, updated_time
         ) VALUES (
             #{id}, #{taskNo}, #{custId}, #{orgId}, #{assigneeEmpId}, #{taskType}, #{taskStatus},
-            #{planFinishTime}, #{warningTime}, #{slaStatus}, #{businessKey},
+            #{planFinishTime}, #{warningTime}, #{slaStatus}, #{slaWarning}, #{businessKey},
             #{successTime}, #{cancelTime}, #{createdTime}, #{updatedTime}
         )
     </insert>
@@ -98,6 +98,7 @@
             <if test="planFinishTime != null">plan_finish_time = #{planFinishTime},</if>
             <if test="warningTime != null">warning_time = #{warningTime},</if>
             <if test="slaStatus != null">sla_status = #{slaStatus},</if>
+            <if test="slaWarning != null">sla_warning = #{slaWarning},</if>
             <if test="businessKey != null">business_key = #{businessKey},</if>
             <if test="successTime != null">success_time = #{successTime},</if>
             <if test="cancelTime != null">cancel_time = #{cancelTime},</if>
@@ -105,5 +106,175 @@
         </set>
         WHERE id = #{id}
     </update>
+
+    <!-- 统计指定客户的在途触达任务数量（PENDING 或 IN_PROGRESS 状态） -->
+    <select id="countActiveByCust" resultType="long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE cust_id = #{custId}
+          AND task_status IN ('PENDING', 'IN_PROGRESS')
+    </select>
+
+    <!-- 查询指定客户的所有在途触达任务（PENDING 或 IN_PROGRESS 状态） -->
+    <select id="selectActiveByCust" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE cust_id = #{custId}
+          AND task_status IN ('PENDING', 'IN_PROGRESS')
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 契约 §5 扩展 SQL -->
+
+    <!-- 按工作流业务键查询触达任务 -->
+    <select id="selectByBusinessKey" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE business_key = #{businessKey}
+        LIMIT 1
+    </select>
+
+    <!-- 查询指定员工全部触达任务（全状态，创建时间倒序） -->
+    <select id="selectByEmp" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE assignee_emp_id = #{empId}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 查询指定员工指定状态的触达任务 -->
+    <select id="selectByEmpAndStatus" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE assignee_emp_id = #{empId}
+          AND task_status = #{status}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 统计指定员工在状态列表内的任务数量 -->
+    <select id="countByEmpAndStatuses" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE assignee_emp_id = #{empId}
+          AND task_status IN
+          <foreach collection="statuses" item="s" open="(" separator="," close=")">
+              #{s}
+          </foreach>
+    </select>
+
+    <!-- 查询指定客户全部触达历史（含所有状态，创建时间倒序） -->
+    <select id="selectByCustOrderByCreatedDesc" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE cust_id = #{custId}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 查询指定客户在指定机构的触达历史 -->
+    <select id="selectByCustAndOrg" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE cust_id = #{custId}
+          AND org_id = #{orgCode}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 统计客户在机构已完成首次触达的次数 -->
+    <select id="countFirstTouchSuccess" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE task_type = 'FIRST_TOUCH'
+          AND task_status = 'SUCCESS'
+          AND cust_id = #{custId}
+          AND org_id = #{orgCode}
+    </select>
+
+    <!-- 统计机构在时间范围内的触达任务数量（status 为 null 则统计全部） -->
+    <select id="countByOrgBetween" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        <where>
+            AND org_id = #{orgCode}
+            AND DATE(created_time) &gt;= #{startDate}
+            AND DATE(created_time) &lt;= #{endDate}
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <!-- 统计机构在时间范围内 SLA 预警的触达任务数量 -->
+    <select id="countSlaWarningByOrgBetween" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE org_id = #{orgCode}
+          AND DATE(created_time) &gt;= #{startDate}
+          AND DATE(created_time) &lt;= #{endDate}
+          AND sla_warning = TRUE
+    </select>
+
+    <!-- 统计机构在时间范围内已完成触达任务的平均时长（小时）
+         H2 兼容：使用 DATEDIFF('MINUTE', created_time, success_time) / 60.0
+         MySQL 生产：TIMESTAMPDIFF(MINUTE, created_time, success_time) / 60.0
+         TODO: DBA 确认生产环境函数后切换为 MySQL 方言 -->
+    <select id="avgDurationHoursByOrgBetween" resultType="java.lang.Double">
+        SELECT
+            AVG(
+                CASE
+                    WHEN success_time IS NOT NULL
+                    THEN DATEDIFF('MINUTE', created_time, success_time) / 60.0
+                    ELSE NULL
+                END
+            )
+        FROM touch_task
+        WHERE org_id = #{orgCode}
+          AND DATE(created_time) &gt;= #{startDate}
+          AND DATE(created_time) &lt;= #{endDate}
+          AND task_status = 'SUCCESS'
+    </select>
+
+
+    <!-- 管理后台分页查询（不限机构，跨机构全局视图） -->
+    <select id="selectAdminPage" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND task_no LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+            <if test="assigneeEmpId != null and assigneeEmpId != ''">
+                AND assignee_emp_id = #{assigneeEmpId}
+            </if>
+            <if test="orgId != null and orgId != ''">
+                AND org_id = #{orgId}
+            </if>
+        </where>
+        ORDER BY created_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <!-- 管理后台统计分页总记录数 -->
+    <select id="countAdminPage" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND task_no LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+            <if test="assigneeEmpId != null and assigneeEmpId != ''">
+                AND assignee_emp_id = #{assigneeEmpId}
+            </if>
+            <if test="orgId != null and orgId != ''">
+                AND org_id = #{orgId}
+            </if>
+        </where>
+    </select>
 
 </mapper>

@@ -5,6 +5,9 @@ import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.LeadApi;
 import com.bank.branch.platform.customer.api.TagApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
+import com.bank.branch.platform.customer.api.dto.CustClaimDTO;
+import com.bank.branch.platform.customer.api.dto.LeadDTO;
+import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustTag;
@@ -144,9 +147,11 @@ class CustomerMarketingCenterIT {
                 OPERATOR_ORG_ID
         );
 
-        touchTaskService.complete(touchTaskId);
+        touchTaskService.markSuccess(touchTaskId);
 
-        assertThat(tagApi.getById(tag.getId())).extracting(CustTag::getTagCode).isEqualTo("PHASE1_TAG");
+        assertThat(tagApi.getTagByCode("PHASE1_TAG")).isPresent()
+                .get().extracting(com.bank.branch.platform.customer.api.dto.TagDTO::getTagCode)
+                .isEqualTo("PHASE1_TAG");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM cust_tag_rel WHERE tag_id = ? AND cust_id = ?",
                 Long.class,
@@ -154,19 +159,20 @@ class CustomerMarketingCenterIT {
                 CUSTOMER_ID
         )).isEqualTo(1L);
 
-        assertThat(leadApi.getById(lead.getId())).extracting(CustLead::getLeadNo).isEqualTo(lead.getLeadNo());
-        assertThat(leadApi.getByLeadNo(lead.getLeadNo())).extracting(CustLead::getId).isEqualTo(lead.getId());
+        // LeadApi 已迁移至 Optional<LeadDTO>，不再直接返回 CustLead 实体
+        LeadDTO leadDTO = leadApi.getLead(lead.getId()).orElseThrow();
+        assertThat(leadDTO.getId()).isEqualTo(lead.getId());
 
-        assertThat(claimApi.getClaimByCustIdAndOrgId(CUSTOMER_ID, OPERATOR_ORG_ID))
-                .extracting(CustClaim::getId)
-                .isEqualTo(claim.getId());
+        CustClaimDTO claimDTO = claimApi.getClaim(CUSTOMER_ID, OPERATOR_ORG_ID).orElseThrow();
+        assertThat(claimDTO.getId()).isEqualTo(claim.getId());
         assertThat(customerQueryApi.isValidCustomer(CUSTOMER_ID)).isTrue();
         assertThat(customerQueryApi.isClaimedByOrg(CUSTOMER_ID, OPERATOR_ORG_ID)).isTrue();
 
         assertThat(log.getTouchTaskId()).isEqualTo(touchTaskId);
-        assertThat(touchTaskQueryApi.getTaskById(touchTaskId)).isNotNull();
-        assertThat(touchTaskQueryApi.getTaskStatus(touchTaskId)).isEqualTo("SUCCESS");
-        assertThat(touchTaskQueryApi.getSlaStatus(touchTaskId)).isEqualTo("GREEN");
+        TouchTaskDTO taskDto = touchTaskQueryApi.getTouchTask(touchTaskId).orElseThrow();
+        assertThat(taskDto.getTaskStatus()).isEqualTo("SUCCESS");
+        // getSlaStatus 已从契约删除；slaWarning=false 表示 SLA 正常（GREEN）
+        assertThat(taskDto.getSlaWarning()).isFalse();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM touch_log WHERE touch_task_id = ?",
                 Long.class,

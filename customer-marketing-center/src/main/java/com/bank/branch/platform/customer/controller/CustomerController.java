@@ -9,7 +9,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.customer.dto.req.DeleteApplyReqDTO;
 import com.bank.branch.platform.customer.dto.req.TransferReqDTO;
-import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,14 +55,14 @@ public class CustomerController {
     @GetMapping
     @BizAuth(bizType = BizType.CUSTOMER, action = BizAction.LIST)
     @Operation(summary = "分页查询客户主档列表")
-    public ResponseWrapper<CustMaster> listPage(
+    public ResponseWrapper<CustomerDTO> listPage(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[CustomerController.listPage] keyword={}, status={}, pageNo={}, pageSize={}",
                 keyword, status, pageNo, pageSize);
-        PageResult<CustMaster> result = customerService.listPage(keyword, status, pageNo, pageSize);
+        PageResult<CustomerDTO> result = customerService.listPageAsDTO(keyword, status, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 
@@ -75,10 +75,10 @@ public class CustomerController {
     @GetMapping("/{id}")
     @BizAuth(bizType = BizType.CUSTOMER, action = BizAction.READ)
     @Operation(summary = "查询客户主档详情")
-    public ResponseWrapper<CustMaster> getById(@PathVariable String id) {
+    public ResponseWrapper<CustomerDTO> getById(@PathVariable String id) {
         log.info("[CustomerController.getById] id={}", id);
-        CustMaster master = customerService.getById(id);
-        return ResponseWrapper.success(master);
+        CustomerDTO dto = customerService.getByIdAsDTO(id);
+        return ResponseWrapper.success(dto);
     }
 
     /**

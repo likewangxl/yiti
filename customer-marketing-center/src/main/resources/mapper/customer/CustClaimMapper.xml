@@ -97,6 +97,40 @@
           AND (claimed_by = #{empId} OR maintainer_emp_id = #{empId})
     </select>
 
+    <!-- 查询某员工维护的所有有效认领记录 (maintainer_emp_id 且 CLAIMED) -->
+    <select id="selectActiveByEmp" resultType="com.bank.branch.platform.customer.entity.CustClaim">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_claim
+        WHERE maintainer_emp_id = #{empId}
+          AND claim_status = 'CLAIMED'
+        ORDER BY claim_time DESC
+    </select>
+
+    <!-- 查询某机构的所有有效认领记录 (org_id 且 CLAIMED) -->
+    <select id="selectActiveByOrg" resultType="com.bank.branch.platform.customer.entity.CustClaim">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_claim
+        WHERE org_id = #{orgCode}
+          AND claim_status = 'CLAIMED'
+        ORDER BY claim_time DESC
+    </select>
+
+    <!-- 统计某员工维护的有效认领数量 -->
+    <select id="countActiveByEmp" resultType="long">
+        SELECT COUNT(*) FROM cust_claim
+        WHERE maintainer_emp_id = #{empId}
+          AND claim_status = 'CLAIMED'
+    </select>
+
+    <!-- 统计某机构的有效认领数量 -->
+    <select id="countActiveByOrg" resultType="long">
+        SELECT COUNT(*) FROM cust_claim
+        WHERE org_id = #{orgCode}
+          AND claim_status = 'CLAIMED'
+    </select>
+
     <!-- 插入新认领记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustClaim">
         INSERT INTO cust_claim (

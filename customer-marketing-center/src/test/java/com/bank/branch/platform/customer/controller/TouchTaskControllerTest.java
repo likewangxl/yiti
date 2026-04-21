@@ -106,33 +106,33 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode()));
     }
 
-    // ==================== POST /api/touch-tasks/{id}/complete ====================
+    // ==================== POST /api/touch-tasks/{id}/success ====================
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void completeTask_shouldReturn200() throws Exception {
+    void markSuccessTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(touchTaskService).complete("task-001");
+        doNothing().when(touchTaskService).markSuccess("task-001");
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-001/complete"))
+        mockMvc.perform(post("/api/touch-tasks/task-001/success"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
     }
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void completeTask_shouldReturn400WhenNotPending() throws Exception {
-        // given: 任务非 PENDING 状态
+    void markSuccessTask_shouldReturn400WhenIllegalTransition() throws Exception {
+        // given: 非法状态转移（如已完成任务再次标记成功）
         doThrow(new BizException(
-                CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
-                CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage()))
-                .when(touchTaskService).complete("task-done");
+                CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode(),
+                CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getMessage()))
+                .when(touchTaskService).markSuccess("task-done");
 
         // when/then
-        mockMvc.perform(post("/api/touch-tasks/task-done/complete"))
+        mockMvc.perform(post("/api/touch-tasks/task-done/success"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode()));
+                .andExpect(jsonPath("$.code").value(CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode()));
     }
 
     // ==================== POST /api/touch-tasks/{id}/cancel ====================

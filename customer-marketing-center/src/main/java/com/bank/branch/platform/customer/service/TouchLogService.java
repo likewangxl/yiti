@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -32,6 +33,13 @@ public class TouchLogService {
 
     private final TouchLogMapper logMapper;
     private final TouchTaskMapper taskMapper;
+    private final TouchTaskService touchTaskService;
+
+    /** 允许提交触达日志的任务状态集合（PENDING 为首次日志，IN_PROGRESS 为后续日志）。 */
+    private static final Set<String> LOGGABLE_STATUSES = Set.of(
+            TouchTaskStatus.PENDING.getCode(),
+            TouchTaskStatus.IN_PROGRESS.getCode()
+    );
 
     /**
      * 新增触达日志（幂等接口）。
@@ -55,13 +63,14 @@ public class TouchLogService {
         log.info("[TouchLogService.addLog] touchTaskId={}, clientUuid={}, operatorEmpId={}",
                 touchTaskId, clientUuid, operatorEmpId);
 
-        // 检查触达任务存在且处于 PENDING 状态
+        // 检查触达任务存在且处于可提交日志的状态（PENDING 或 IN_PROGRESS）
         TouchTask task = taskMapper.selectById(touchTaskId);
         if (task == null) {
             throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
                     CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
         }
-        if (!TouchTaskStatus.PENDING.getCode().equals(task.getTaskStatus())) {
+        if (!LOGGABLE_STATUSES.contains(task.getTaskStatus())) {
+            // 终态任务（SUCCESS/CANCELLED）不允许再提交日志
             throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
                     CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage());
         }
@@ -98,6 +107,14 @@ public class TouchLogService {
         }
 
         log.info("[TouchLogService.addLog] log created, logId={}", entity.getId());
+
+        // 首次日志触发 PENDING → IN_PROGRESS 状态迁移（依据《功能规格》§7.3bis）
+        // 统计插入后的日志总数：count=1 说明本次是首条日志，驱动状态转移
+        long logCount = logMapper.countByTaskId(touchTaskId);
+        if (logCount == 1L && TouchTaskStatus.PENDING.getCode().equals(task.getTaskStatus())) {
+            touchTaskService.markInProgress(touchTaskId);
+        }
+
         return entity;
     }
 

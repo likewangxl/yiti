@@ -2,8 +2,7 @@ package com.bank.branch.platform.customer.controller;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.customer.entity.CustMaster;
-import com.bank.branch.platform.customer.enums.CustMasterStatus;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.service.CustomerService;
 import com.bank.branch.platform.customer.support.AbstractControllerIntegrationTest;
@@ -47,14 +46,15 @@ class CustomerControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void listPage_shouldReturn200() throws Exception {
-        CustMaster master = new CustMaster();
-        master.setId("cust-001");
-        master.setCustName("测试客户");
-        master.setStatus(CustMasterStatus.ACTIVE.getCode());
-        PageResult<CustMaster> page = PageResult.of(1, 20, 1L, Collections.singletonList(master));
+    void listPage_returnsCustomerDTOFields() throws Exception {
+        CustomerDTO dto = new CustomerDTO();
+        dto.setId("cust-001");
+        dto.setCustName("测试客户");
+        dto.setCustNo("CUST_00001");
+        dto.setStatus("ACTIVE");
+        PageResult<CustomerDTO> page = PageResult.of(1, 20, 1L, Collections.singletonList(dto));
 
-        when(customerService.listPage(isNull(), isNull(), eq(1), eq(20))).thenReturn(page);
+        when(customerService.listPageAsDTO(isNull(), isNull(), eq(1), eq(20))).thenReturn(page);
 
         mockMvc.perform(get("/api/customers")
                         .param("pageNo", "1")
@@ -62,31 +62,38 @@ class CustomerControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(1))
-                .andExpect(jsonPath("$.page.records[0].custName").value("测试客户"));
+                .andExpect(jsonPath("$.page.records[0].custName").value("测试客户"))
+                .andExpect(jsonPath("$.page.records[0].custNo").value("CUST_00001"))
+                .andExpect(jsonPath("$.page.records[0].deleted").doesNotExist())
+                .andExpect(jsonPath("$.page.records[0].createdTime").doesNotExist());
     }
 
     // ==================== GET /api/customers/{id} ====================
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void getById_shouldReturn200() throws Exception {
-        CustMaster master = new CustMaster();
-        master.setId("cust-001");
-        master.setCustName("测试客户");
-        master.setCustNo("CUST_00001");
-        when(customerService.getById("cust-001")).thenReturn(master);
+    void getById_returnsCustomerDTO() throws Exception {
+        CustomerDTO dto = new CustomerDTO();
+        dto.setId("cust-001");
+        dto.setCustName("测试客户");
+        dto.setCustNo("CUST_00001");
+        dto.setStatus("ACTIVE");
+        when(customerService.getByIdAsDTO("cust-001")).thenReturn(dto);
 
         mockMvc.perform(get("/api/customers/cust-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.id").value("cust-001"))
-                .andExpect(jsonPath("$.data.custName").value("测试客户"));
+                .andExpect(jsonPath("$.data.custName").value("测试客户"))
+                .andExpect(jsonPath("$.data.custNo").value("CUST_00001"))
+                .andExpect(jsonPath("$.data.deleted").doesNotExist())
+                .andExpect(jsonPath("$.data.createdTime").doesNotExist());
     }
 
     @Test
     @WithMockEmpContext(empId = "E10001")
     void getById_shouldReturn400WhenNotFound() throws Exception {
-        when(customerService.getById("not-exist"))
+        when(customerService.getByIdAsDTO("not-exist"))
                 .thenThrow(new BizException(CustomerErrorCode.CUSTOMER_NOT_FOUND.getCode(),
                         CustomerErrorCode.CUSTOMER_NOT_FOUND.getMessage()));
 

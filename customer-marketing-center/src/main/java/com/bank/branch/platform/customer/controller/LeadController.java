@@ -6,6 +6,8 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.customer.api.LeadApi;
+import com.bank.branch.platform.customer.api.dto.LeadDTO;
 import com.bank.branch.platform.customer.dto.req.LeadCreateReqDTO;
 import com.bank.branch.platform.customer.dto.req.LeadDeleteVersionReqDTO;
 import com.bank.branch.platform.customer.dto.req.LeadEditVersionReqDTO;
@@ -30,6 +32,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * 线索管理 REST 控制器。
  * <p>
@@ -48,6 +52,7 @@ public class LeadController {
     private final LeadService leadService;
     private final LeadVersionService leadVersionService;
     private final CurrentUserApi currentUserApi;
+    private final LeadApi leadApi;
 
     /**
      * 分页查询线索列表（只查最新版本 is_latest=1）。
@@ -220,5 +225,24 @@ public class LeadController {
         String orgCode = currentUserApi.getCurrentOrgCode();
         CustLead lead = leadVersionService.createDeleteVersion(req.getSourceCustId(), empId, orgCode);
         return ResponseWrapper.success(lead.getId());
+    }
+
+    /**
+     * 查询线索版本链（按 version_no 升序）。
+     * <p>
+     * 返回同一客户线索的所有历史版本记录，通过 sourceCustId 关联，
+     * 按 version_no 升序排列，可追溯线索完整变更历史。
+     * </p>
+     *
+     * @param id 线索ID（任意版本均可，系统自动查找关联的全部版本）
+     * @return 版本链 DTO 列表，按 version_no 升序；查不到时返回空列表
+     */
+    @GetMapping("/{id}/versions")
+    @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
+    @Operation(summary = "查询线索版本链")
+    public ResponseWrapper<List<LeadDTO>> versions(@PathVariable String id) {
+        log.info("[LeadController.versions] id={}", id);
+        List<LeadDTO> chain = leadApi.getLeadVersionChain(id);
+        return ResponseWrapper.success(chain);
     }
 }

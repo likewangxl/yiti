@@ -35,6 +35,7 @@ public class TouchTaskService {
 
     private final TouchTaskMapper taskMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final TouchTaskStateMachineService stateMachine;
 
     /**
      * 从认领事件创建首次触达任务。
@@ -87,25 +88,30 @@ public class TouchTaskService {
     }
 
     /**
-     * 完成触达任务。
+     * 标记触达任务为已完成。
      * <p>
-     * 前置条件：任务状态必须为 PENDING，否则抛出 TOUCH_TASK_NOT_PENDING。
-     * 完成后状态变更为 SUCCESS，记录 successTime，并发布 {@link TouchCompletedEvent}。
+     * 允许起始状态：PENDING、IN_PROGRESS。
+     * 状态转换由 {@link TouchTaskStateMachineService} 校验，非法转移抛 CUST-40010。
+     * 完成后 successTime=now，并发布 {@link TouchCompletedEvent}。
      * </p>
      *
      * @param taskId 任务ID
+     * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40010 非法状态转移（SUCCESS/CANCELLED 终态不允许再转移）
      */
     @Transactional
-    public void complete(String taskId) {
-        log.info("[TouchTaskService.complete] taskId={}", taskId);
+    public void markSuccess(String taskId) {
+        log.info("[TouchTaskService.markSuccess] taskId={}", taskId);
 
-        TouchTask task = getById(taskId);
-
-        // 非 PENDING 状态不允许完成
-        if (!TouchTaskStatus.PENDING.getCode().equals(task.getTaskStatus())) {
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage());
+        TouchTask task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
         }
+
+        // 通过状态机校验转移合法性：PENDING/IN_PROGRESS → SUCCESS 合法，终态不可转
+        TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
+        stateMachine.assertTransition(from, TouchTaskStatus.SUCCESS);
 
         LocalDateTime now = LocalDateTime.now();
         TouchTask updateEntity = new TouchTask();
@@ -121,19 +127,22 @@ public class TouchTaskService {
                 taskId, task.getTaskNo(), task.getCustId(),
                 task.getAssigneeEmpId(), task.getTaskType()));
 
-        log.info("[TouchTaskService.complete] task completed, taskId={}", taskId);
+        log.info("[TouchTaskService.markSuccess] task marked success, taskId={}", taskId);
     }
 
     /**
      * 取消触达任务。
      * <p>
-     * 前置条件：任务状态必须为 PENDING，否则抛出 TOUCH_TASK_NOT_PENDING。
+     * 允许起始状态：PENDING、IN_PROGRESS（由状态机校验）。
+     * SUCCESS/CANCELLED 终态不允许取消，抛 CUST-40010。
      * 取消后状态变更为 CANCELLED，记录 cancelTime。
      * reason 仅记录日志，TouchTask 表无 cancelReason 字段。
      * </p>
      *
      * @param taskId 任务ID
      * @param reason 取消原因（仅记日志，不持久化到 touch_task 表）
+     * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40010 非法状态转移（SUCCESS/CANCELLED 终态不允许再转移）
      */
     @Transactional
     public void cancel(String taskId, String reason) {
@@ -141,11 +150,9 @@ public class TouchTaskService {
 
         TouchTask task = getById(taskId);
 
-        // 非 PENDING 状态不允许取消
-        if (!TouchTaskStatus.PENDING.getCode().equals(task.getTaskStatus())) {
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage());
-        }
+        // 通过状态机校验转移合法性：PENDING/IN_PROGRESS → CANCELLED 合法，终态不可转
+        TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
+        stateMachine.assertTransition(from, TouchTaskStatus.CANCELLED);
 
         LocalDateTime now = LocalDateTime.now();
         TouchTask updateEntity = new TouchTask();
@@ -157,6 +164,40 @@ public class TouchTaskService {
         taskMapper.updateById(updateEntity);
 
         log.info("[TouchTaskService.cancel] task cancelled, taskId={}", taskId);
+    }
+
+    /**
+     * 将待处理任务迁移到进行中状态。
+     * <p>
+     * 由 {@link TouchLogService} 在首次日志插入后自动触发，实现 PENDING → IN_PROGRESS 自动状态迁移。
+     * 依据《功能规格》§7.3bis：首次追加触达日志时，任务状态从 PENDING 自动变为 IN_PROGRESS。
+     * </p>
+     *
+     * @param taskId 任务ID
+     * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40010 非法状态转移（当前状态不允许转移到 IN_PROGRESS）
+     */
+    @Transactional
+    public void markInProgress(String taskId) {
+        log.info("[TouchTaskService.markInProgress] taskId={}", taskId);
+
+        TouchTask task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
+        }
+
+        // 通过状态机校验转移合法性：PENDING → IN_PROGRESS 合法，其他状态均非法
+        TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
+        stateMachine.assertTransition(from, TouchTaskStatus.IN_PROGRESS);
+
+        TouchTask updateEntity = new TouchTask();
+        updateEntity.setId(taskId);
+        updateEntity.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
+        updateEntity.setUpdatedTime(LocalDateTime.now());
+        taskMapper.updateById(updateEntity);
+
+        log.info("[TouchTaskService.markInProgress] task {} transitioned PENDING→IN_PROGRESS", taskId);
     }
 
     /**
@@ -203,6 +244,92 @@ public class TouchTaskService {
     }
 
     /**
+     * 管理后台全局分页查询触达任务（不按机构过滤，需 ADMIN 权限）。
+     * <p>
+     * keyword 模糊搜索 task_no，status、assigneeEmpId、orgId 精确匹配，均可为 null 表示不过滤。
+     * offset = (pageNo - 1) * pageSize
+     * </p>
+     *
+     * @param keyword       关键词（搜索 task_no），可为 null
+     * @param status        任务状态过滤，可为 null
+     * @param assigneeEmpId 执行人工号过滤，可为 null
+     * @param orgId         机构 ID 过滤，可为 null
+     * @param pageNo        页码（从 1 开始）
+     * @param pageSize      每页大小
+     * @return 分页的触达任务列表（跨机构全局视图）
+     */
+    public PageResult<TouchTask> listPageAdmin(String keyword, String status, String assigneeEmpId,
+                                               String orgId, int pageNo, int pageSize) {
+        log.info("[TouchTaskService.listPageAdmin] keyword={}, status={}, assigneeEmpId={}, orgId={}, pageNo={}, pageSize={}",
+                keyword, status, assigneeEmpId, orgId, pageNo, pageSize);
+
+        int offset = (pageNo - 1) * pageSize;
+        List<TouchTask> records = taskMapper.selectAdminPage(keyword, status, assigneeEmpId, orgId, offset, pageSize);
+        Long total = taskMapper.countAdminPage(keyword, status, assigneeEmpId, orgId);
+
+        log.info("[TouchTaskService.listPageAdmin] total={}", total);
+        return PageResult.of(pageNo, pageSize, total == null ? 0L : total, records);
+    }
+
+    /**
+     * 管理后台导出全量触达任务数据。
+     * <p>
+     * 支持 keyword、status、orgId 过滤，最多导出 maxRows 条记录，
+     * 适用于 CSV 导出场景，不分页直接返回列表。
+     * </p>
+     *
+     * @param keyword 关键词过滤，可为 null
+     * @param status  状态过滤，可为 null
+     * @param orgId   机构 ID 过滤，可为 null
+     * @param maxRows 最大导出行数（防止导出过多数据）
+     * @return 触达任务列表
+     */
+    public List<TouchTask> listAllForAdminExport(String keyword, String status, String orgId, int maxRows) {
+        log.info("[TouchTaskService.listAllForAdminExport] keyword={}, status={}, orgId={}, maxRows={}",
+                keyword, status, orgId, maxRows);
+        return taskMapper.selectAdminPage(keyword, status, null, orgId, 0, maxRows);
+    }
+
+    /**
+     * 批量分配触达任务给新执行人。
+     * <p>
+     * 仅允许对 PENDING 或 IN_PROGRESS 状态的任务进行重分配，
+     * 终态（SUCCESS/CANCELLED）任务自动跳过（不报错），
+     * 不存在的任务 ID 也自动跳过。
+     * 返回实际成功更新的任务数量。
+     * </p>
+     *
+     * @param taskIds       待分配的任务 ID 列表
+     * @param newAssigneeEmpId 新执行人员工工号
+     * @return 实际更新的任务数量
+     */
+    @Transactional
+    public int batchAssign(List<String> taskIds, String newAssigneeEmpId) {
+        log.info("[TouchTaskService.batchAssign] taskCount={}, newAssigneeEmpId={}", taskIds.size(), newAssigneeEmpId);
+
+        int updated = 0;
+        for (String id : taskIds) {
+            TouchTask task = taskMapper.selectById(id);
+            if (task == null) {
+                // 不存在的任务静默跳过，防止单个错误终止整批操作
+                log.warn("[TouchTaskService.batchAssign] task not found, skip: {}", id);
+                continue;
+            }
+            // 只允许对 PENDING / IN_PROGRESS 的任务重分配，终态静默跳过
+            if (!"PENDING".equals(task.getTaskStatus()) && !"IN_PROGRESS".equals(task.getTaskStatus())) {
+                log.debug("[TouchTaskService.batchAssign] task {} status={} is terminal, skip", id, task.getTaskStatus());
+                continue;
+            }
+            task.setAssigneeEmpId(newAssigneeEmpId);
+            taskMapper.updateById(task);
+            updated++;
+        }
+
+        log.info("[TouchTaskService.batchAssign] done, updated={}", updated);
+        return updated;
+    }
+
+    /**
      * 刷新 PENDING 任务的 SLA 状态（供定时任务调用）。
      * <p>
      * 规则：
@@ -223,15 +350,18 @@ public class TouchTaskService {
         for (TouchTask task : pendingTasks) {
             String newSlaStatus = calcNewSlaStatus(task, now);
             if (newSlaStatus != null && !newSlaStatus.equals(task.getSlaStatus())) {
-                // 仅在状态有变化时执行更新
+                // 仅在状态有变化时执行更新；同步维护 slaWarning 契约字段
+                boolean warning = SlaStatus.YELLOW.getCode().equals(newSlaStatus)
+                        || SlaStatus.RED.getCode().equals(newSlaStatus);
                 TouchTask updateEntity = new TouchTask();
                 updateEntity.setId(task.getId());
                 updateEntity.setSlaStatus(newSlaStatus);
+                updateEntity.setSlaWarning(warning);
                 updateEntity.setUpdatedTime(now);
                 taskMapper.updateById(updateEntity);
                 updated++;
-                log.debug("[TouchTaskService.refreshSla] task={} SLA {} -> {}",
-                        task.getId(), task.getSlaStatus(), newSlaStatus);
+                log.debug("[TouchTaskService.refreshSla] task={} SLA {} -> {}, slaWarning={}",
+                        task.getId(), task.getSlaStatus(), newSlaStatus, warning);
             }
         }
 

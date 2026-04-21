@@ -11,6 +11,7 @@ import lombok.Getter;
 public enum TouchTaskStatus {
 
     PENDING("PENDING", "待处理"),
+    IN_PROGRESS("IN_PROGRESS", "进行中"),
     SUCCESS("SUCCESS", "已完成"),
     CANCELLED("CANCELLED", "已取消");
 

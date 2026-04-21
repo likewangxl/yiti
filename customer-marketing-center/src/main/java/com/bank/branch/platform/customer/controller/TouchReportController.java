@@ -11,6 +11,7 @@ import com.bank.branch.platform.customer.dto.resp.TouchStatisticVO;
 import com.bank.branch.platform.customer.service.TouchReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.List;
 
 /**
@@ -88,27 +91,70 @@ public class TouchReportController {
     }
 
     /**
-     * 导出触达报告（高危操作）。
+     * 导出触达报告（高危操作，CSV 格式）。
      * <p>
-     * 触达报告导出操作需审计，由 @AuditLog 切面记录操作日志。
-     * TODO: 当前为简化实现，返回 success 占位；后续集成 EasyExcel 实现真实导出逻辑。
-     * 完整实现需：1. 构建导出数据列表；2. 设置 HttpServletResponse Content-Disposition；
-     * 3. 通过 EasyExcel.write() 写出到 OutputStream。
+     * 流式写出 CSV 至 HttpServletResponse，避免大对象驻留内存。
+     * 单次最多导出 10000 行，超出部分截断。
+     * 高危操作，需要 EXPORT 权限，@AuditLog reasonRequired=true 强制留痕。
      * </p>
      *
-     * @return 操作结果（简化占位，正式实现时改为流式下载）
+     * @param keyword  关键词（模糊匹配 task_no 或 cust_name），可为 null
+     * @param status   任务状态过滤（PENDING/SUCCESS/CANCELLED），可为 null
+     * @param orgId    机构代码过滤，可为 null
+     * @param response HttpServletResponse 用于流式写出
+     * @throws IOException IO 异常（写出流时发生）
      */
     @GetMapping("/export")
     @BizAuth(bizType = BizType.TOUCH_REPORT, action = BizAction.EXPORT)
-    @AuditLog(action = "EXPORT", resourceType = "TOUCH_REPORT")
-    @Operation(summary = "导出触达报告")
-    public ResponseWrapper<Void> export() {
-        log.info("[TouchReportController.export] export touch reports");
-        // TODO: 集成 EasyExcel 实现真实的流式导出
-        // 1. 调用 touchReportService.listPage 获取全量数据（分批分页）
-        // 2. 设置 response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        // 3. 设置 response.setHeader("Content-Disposition", "attachment;filename=touch-reports.xlsx")
-        // 4. EasyExcel.write(response.getOutputStream(), TouchReportVO.class).sheet("触达报告").doWrite(records)
-        return ResponseWrapper.success();
+    @AuditLog(action = "EXPORT_TOUCH_REPORT", resourceType = "TOUCH_REPORT", reasonRequired = true)
+    @Operation(summary = "导出触达报告（CSV，高危操作）")
+    public void export(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String orgId,
+            HttpServletResponse response) throws IOException {
+
+        log.info("[TouchReportController.export] keyword={}, status={}, orgId={}", keyword, status, orgId);
+
+        // 设置 CSV 响应头
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"touch_reports_" + System.currentTimeMillis() + ".csv\"");
+
+        // 最多 10000 行保护
+        List<TouchReportVO> list = touchReportService.listAllForExport(keyword, status, orgId, 10000);
+        log.info("[TouchReportController.export] 导出记录数={}", list.size());
+
+        try (PrintWriter out = response.getWriter()) {
+            // 写出 CSV 表头
+            out.println("任务编号,任务类型,任务状态,SLA状态,客户名称,执行人工号,机构代码,计划完成时间,成功完成时间,日志条数");
+            // 逐行写出数据（流式，不积累内存）
+            for (TouchReportVO r : list) {
+                out.println(String.join(",",
+                        quote(r.getTaskNo()),
+                        quote(r.getTaskType()),
+                        quote(r.getTaskStatus()),
+                        quote(r.getSlaStatus()),
+                        quote(r.getCustName()),
+                        quote(r.getAssigneeEmpId()),
+                        quote(r.getOrgId()),
+                        quote(r.getPlanFinishTime() != null ? r.getPlanFinishTime().toString() : ""),
+                        quote(r.getSuccessTime() != null ? r.getSuccessTime().toString() : ""),
+                        quote(r.getLogCount() != null ? r.getLogCount().toString() : "0")));
+            }
+        }
+    }
+
+    /**
+     * CSV 字段安全引用：用双引号包裹，内部双引号转义为两个双引号（RFC 4180 规范）。
+     *
+     * @param s 原始字符串，null 时返回空字符串
+     * @return 安全引用后的 CSV 字段
+     */
+    private static String quote(String s) {
+        if (s == null) {
+            return "";
+        }
+        return "\"" + s.replace("\"", "\"\"") + "\"";
     }
 }

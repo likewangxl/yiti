@@ -59,7 +59,7 @@ src/main/java/com/bank/branch/platform/customer/
 │   ├── BatchStatus.java            # PENDING / PROCESSING / SUCCESS / FAIL
 │   ├── ClaimStatus.java            # ACTIVE / CANCELLED
 │   ├── CustMasterStatus.java       # ACTIVE / INACTIVE
-│   ├── TouchTaskStatus.java        # PENDING / IN_PROGRESS / COMPLETED / CANCELLED
+│   ├── TouchTaskStatus.java        # PENDING / IN_PROGRESS / SUCCESS / CANCELLED
 │   ├── TouchTaskType.java          # FIRST_TOUCH / FOLLOW_UP
 │   └── SlaStatus.java              # GREEN / YELLOW / RED
 ├── event/            # Spring 内部事件 (7 个)
@@ -107,11 +107,11 @@ src/main/java/com/bank/branch/platform/customer/
 
 | 接口 | 实现 | 主要方法 |
 |------|------|---------|
-| `TagApi` | TagApiImpl | getById, listEnabled, listByIds |
-| `LeadApi` | LeadApiImpl | getById, listByIds |
-| `CustomerQueryApi` | CustomerQueryApiImpl | getById, listByOrgId, countByOrgId |
-| `ClaimApi` | ClaimApiImpl | getByCustomerId, listByOrgId |
-| `TouchTaskQueryApi` | TouchTaskQueryApiImpl | getById, listByCustId, countPendingByOrg |
+| `TagApi` | TagApiImpl | listEnabledTags, getTagByCode, getCustomerTags, batchGetCustomerTags, getCustomerIdsByTag, isTagNameExists |
+| `LeadApi` | LeadApiImpl | getLead, getLeadByBusinessKey, getLeadsByBatch, getLeadVersionChain, isLeadCustNameAvailable |
+| `CustomerQueryApi` | CustomerQueryApiImpl | getCustomer, listCustomers, searchCustomers, isValidCustomer, isClaimedByOrg, getCustomerClaims, hasRunningProcess, listRunningProcesses, countCustomers |
+| `ClaimApi` | ClaimApiImpl | getClaim, getEmpClaims, getOrgClaims, isClaimActive, countEmpClaims, countOrgClaims |
+| `TouchTaskQueryApi` | TouchTaskQueryApiImpl | getTouchTask, getTouchTaskByBusinessKey, getEmpTouchTasks, countRunningTouchTasks, getCustomerTouchHistory, getCustomerTouchHistoryByOrg, hasCompletedFirstTouch, getOrgTouchSummary |
 
 ## REST 端点
 
@@ -182,10 +182,41 @@ src/main/java/com/bank/branch/platform/customer/
 |------|------|------|
 | GET | `/api/touch-tasks` | 分页触达任务列表 |
 | GET | `/api/touch-tasks/{id}` | 任务详情 |
-| POST | `/api/touch-tasks/{id}/complete` | 完成任务 |
+| POST | `/api/touch-tasks/{id}/success` | 标记任务成功（原 /complete）|
 | POST | `/api/touch-tasks/{id}/cancel` | 取消任务 |
 | POST | `/api/touch-tasks/{id}/logs` | 添加触达日志 (UK 幂等) |
 | GET | `/api/touch-tasks/{id}/logs` | 查询触达日志 |
+
+### CustomerHistoryController (`/api/customers`)
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/customers/{id}/history` | 跨机构全量历史查询（高危 / 独立审计）|
+
+### CustomerTagController (`/api/customers`)
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/customers/{id}/tags` | 客户追加打标 |
+| DELETE | `/api/customers/{id}/tags/{tagId}` | 客户取消单个标签 |
+
+### CustomerExportController (`/api/customers`)
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/customers/export` | 客户列表导出（高危）|
+
+### LeadController 新增端点
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/leads/{id}/versions` | 查询线索版本链 |
+
+### TagCustomerController 新增端点
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/tags/{tagId}/customers/export` | 标签客户导出（高危）|
 
 ### TouchReportController (`/api/touch-reports`)
 
@@ -193,7 +224,15 @@ src/main/java/com/bank/branch/platform/customer/
 |------|------|------|
 | GET | `/api/touch-reports` | 分页触达报表 |
 | GET | `/api/touch-reports/statistics` | 触达统计汇总 |
-| GET | `/api/touch-reports/export` | 导出报表 (预留) |
+| GET | `/api/touch-reports/export` | 触达报表导出（高危，已实现 CSV）|
+
+### AdminTouchTaskController (`/api/admin/touch-tasks`)
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/admin/touch-tasks` | 管理后台全局触达任务列表 |
+| GET | `/api/admin/touch-tasks/export` | 管理后台导出（高危）|
+| POST | `/api/admin/touch-tasks/batch-assign` | 批量分配触达任务（高危）|
 
 ## 数据库表 (8 张)
 
@@ -205,7 +244,7 @@ src/main/java/com/bank/branch/platform/customer/
 | `lead_import_batch` | LeadImportBatch | 线索导入批次 (sourceFileName, totalCount/successCount/failCount, businessKey) |
 | `cust_master` | CustMaster | 客户主档 (custNo, custName, idType/idNo, mobile, ownerOrgId, status) |
 | `cust_claim` | CustClaim | 客户认领 (custId + orgId UK, maintainerEmpId, claimStatus) |
-| `touch_task` | TouchTask | 触达任务 (taskNo, custId, assigneeEmpId, taskType, taskStatus, slaStatus) |
+| `touch_task` | TouchTask | 触达任务 (taskNo, custId, assigneeEmpId, taskType, taskStatus, slaStatus, slaWarning, planFinishTime 等) |
 | `touch_log` | TouchLog | 触达日志 (touchTaskId + clientUuid UK, logContent, logTime) |
 
 ## 事件驱动架构
@@ -239,11 +278,21 @@ src/main/java/com/bank/branch/platform/customer/
 ### 标签客户覆盖式导入
 `TagCustomerService.importCustomers()` 先 `deleteByTagId()` 再 `insertBatch()`，保证每次导入后标签下客户列表完全等于本次导入内容。
 
+### 触达任务状态机 (V1.0)
+依据《功能规格》§7.3bis：
+- PENDING → IN_PROGRESS / SUCCESS / CANCELLED
+- IN_PROGRESS → SUCCESS / CANCELLED
+- SUCCESS / CANCELLED 为终态
+
+首次触达日志自动驱动 PENDING → IN_PROGRESS（由 `TouchLogService` 触发）。
+状态转移由 `TouchTaskStateMachineService.assertTransition` 校验，非法抛 CUST-40010。
+
 ## 错误码
 
 | 错误码 | 含义 |
 |--------|------|
 | `CUST-400xx` | 参数/业务规则错误 (01-09) |
+| `CUST-40010` | 触达任务非法状态转移 |
 | `CUST-404xx` | 资源不存在 (01: 标签, 02: 线索, 03: 客户, 04: 认领, 05: 任务, 06: 批次) |
 | `CUST-409xx` | 冲突 (01-02: 标签重复, 03: 线索编号重复, 04: 重复认领, 05: 日志重复, 06: 编码不可改) |
 | `CUST-500xx` | 内部错误 (01: 通用, 02: 工作流调用) |
@@ -276,7 +325,7 @@ Cache-Aside 模式，所有 Key 前缀 `customer:`，默认 TTL 5 分钟 + 10% �
 - **集成测试**: MockMvc + H2 (Controller 层), 基类 `AbstractControllerIntegrationTest`
 - **测试配置**: `CustomerTestConfiguration.java` + `application-test.yml` (H2 MySQL 兼容模式)
 - **Mock 用户上下文**: `@WithMockEmpContext` 注解 + `MockEmpContextExtension`
-- **当前测试数**: 142 个测试用例, 0 失败
+- **当前测试数**: 321 个测试用例, 0 失败
 
 ## PT_RESOURCE 注册 SQL
 
@@ -287,3 +336,4 @@ Cache-Aside 模式，所有 Key 前缀 `customer:`，默认 TTL 5 分钟 + 10% �
 - `docs/superpowers/sql/2026-04-14-customer-pool-claim-pt-resource.sql` (4 条)
 - `docs/superpowers/sql/2026-04-14-customer-touch-pt-resource.sql` (6 条)
 - `docs/superpowers/sql/2026-04-14-customer-report-pt-resource.sql` (3 条)
+- `docs/superpowers/sql/2026-04-21-customer-contract-alignment-pt-resource.sql` (10 条，契约对齐新增端点)

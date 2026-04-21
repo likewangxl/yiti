@@ -93,21 +93,22 @@ public class TouchTaskController {
     }
 
     /**
-     * 完成触达任务。
+     * 标记触达任务成功。
      * <p>
-     * 任务状态必须为 PENDING，完成后发布 TouchCompletedEvent。
+     * 允许起始状态：PENDING、IN_PROGRESS。完成后发布 TouchCompletedEvent。
+     * 非法状态转移（如已完成/已取消任务）返回 CUST-40010。
      * </p>
      *
      * @param id 任务ID
      * @return 操作结果
      */
-    @PostMapping("/{id}/complete")
+    @PostMapping("/{id}/success")
     @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.WRITE)
-    @AuditLog(action = "COMPLETE_TOUCH_TASK", resourceType = "TOUCH_TASK")
-    @Operation(summary = "完成触达任务")
-    public ResponseWrapper<Void> complete(@PathVariable String id) {
-        log.info("[TouchTaskController.complete] id={}", id);
-        touchTaskService.complete(id);
+    @AuditLog(action = "MARK_TOUCH_TASK_SUCCESS", resourceType = "TOUCH_TASK")
+    @Operation(summary = "标记触达任务成功")
+    public ResponseWrapper<Void> markSuccess(@PathVariable String id) {
+        log.info("[TouchTaskController.markSuccess] id={}", id);
+        touchTaskService.markSuccess(id);
         return ResponseWrapper.success();
     }
 

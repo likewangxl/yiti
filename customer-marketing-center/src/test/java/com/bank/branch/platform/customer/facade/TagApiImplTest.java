@@ -1,85 +1,213 @@
 package com.bank.branch.platform.customer.facade;
 
+import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.api.dto.TagDTO;
 import com.bank.branch.platform.customer.entity.CustTag;
-import com.bank.branch.platform.customer.service.TagService;
+import com.bank.branch.platform.customer.entity.CustTagRel;
+import com.bank.branch.platform.customer.mapper.CustTagMapper;
+import com.bank.branch.platform.customer.mapper.CustTagRelMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 /**
- * TagApiImpl 单元测试（TDD）
- * 验证委托调用路径正确。
+ * TagApiImpl 单元测试（TDD Red → Green）
+ * 覆盖契约 §3 要求的 6 个方法。
  */
 @ExtendWith(MockitoExtension.class)
 class TagApiImplTest {
 
     @Mock
-    private TagService tagService;
+    private CustTagMapper custTagMapper;
+
+    @Mock
+    private CustTagRelMapper custTagRelMapper;
 
     @InjectMocks
     private TagApiImpl tagApiImpl;
 
+    // ==================== listEnabledTags ====================
+
     @Test
-    void listEnabled_shouldDelegateToTagService() {
-        // given
-        CustTag tag1 = new CustTag();
-        tag1.setId("tag-001");
-        tag1.setTagName("VIP客户");
+    void listEnabledTags_returnsOnlyEnabledSortedByPriority() {
+        List<CustTag> raw = List.of(
+                buildTag("t1", "T1", "ACTIVE", 20),
+                buildTag("t2", "T2", "ACTIVE", 10)
+        );
+        when(custTagMapper.selectEnabledSorted()).thenReturn(raw);
 
-        CustTag tag2 = new CustTag();
-        tag2.setId("tag-002");
-        tag2.setTagName("重点客户");
+        List<TagDTO> list = tagApiImpl.listEnabledTags();
 
-        when(tagService.listEnabled()).thenReturn(Arrays.asList(tag1, tag2));
-
-        // when
-        List<CustTag> result = tagApiImpl.listEnabled();
-
-        // then
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).getId()).isEqualTo("tag-001");
-        verify(tagService).listEnabled();
+        assertThat(list).hasSize(2);
+        assertThat(list.get(0).getId()).isEqualTo("t1");
+        assertThat(list.get(1).getId()).isEqualTo("t2");
     }
 
     @Test
-    void listEnabled_shouldReturnEmptyListWhenNoTags() {
-        // given
-        when(tagService.listEnabled()).thenReturn(Collections.emptyList());
+    void listEnabledTags_returnsEmptyWhenNoEnabledTags() {
+        when(custTagMapper.selectEnabledSorted()).thenReturn(Collections.emptyList());
 
-        // when
-        List<CustTag> result = tagApiImpl.listEnabled();
+        List<TagDTO> list = tagApiImpl.listEnabledTags();
 
-        // then
+        assertThat(list).isEmpty();
+    }
+
+    // ==================== getTagByCode ====================
+
+    @Test
+    void getTagByCode_returnsOptionalWhenFound() {
+        CustTag tag = buildTag("t1", "T", "ACTIVE", 10);
+        tag.setTagCode("CODE1");  // 覆盖辅助方法生成的默认编码
+        when(custTagMapper.selectByTagCode("CODE1")).thenReturn(tag);
+
+        Optional<TagDTO> result = tagApiImpl.getTagByCode("CODE1");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getTagCode()).isEqualTo("CODE1");
+    }
+
+    @Test
+    void getTagByCode_returnsEmptyWhenNotFound() {
+        when(custTagMapper.selectByTagCode("UNKNOWN")).thenReturn(null);
+
+        Optional<TagDTO> result = tagApiImpl.getTagByCode("UNKNOWN");
+
         assertThat(result).isEmpty();
-        verify(tagService).listEnabled();
+    }
+
+    // ==================== getCustomerTags ====================
+
+    @Test
+    void getCustomerTags_returnsOnlyEnabledTags() {
+        // custTagRelMapper 返回 3 个关联 tagId
+        List<CustTagRel> rels = List.of(
+                buildRel("C1", "t1"),
+                buildRel("C1", "t2"),
+                buildRel("C1", "t3")
+        );
+        when(custTagRelMapper.selectByCustId("C1")).thenReturn(rels);
+
+        // custTagMapper.selectEnabledByIds 只返回 ACTIVE 的 2 条（t3 是 DISABLED，不返回）
+        List<CustTag> enabledTags = List.of(
+                buildTag("t1", "T1", "ACTIVE", 10),
+                buildTag("t2", "T2", "ACTIVE", 20)
+        );
+        when(custTagMapper.selectEnabledByIds(List.of("t1", "t2", "t3"))).thenReturn(enabledTags);
+
+        List<TagDTO> result = tagApiImpl.getCustomerTags("C1");
+
+        assertThat(result).hasSize(2);
     }
 
     @Test
-    void getById_shouldDelegateToTagService() {
-        // given
+    void getCustomerTags_emptyForNoTags() {
+        when(custTagRelMapper.selectByCustId("C_EMPTY")).thenReturn(Collections.emptyList());
+
+        List<TagDTO> result = tagApiImpl.getCustomerTags("C_EMPTY");
+
+        assertThat(result).isEmpty();
+    }
+
+    // ==================== batchGetCustomerTags ====================
+
+    @Test
+    void batchGetCustomerTags_throwsForOver500() {
+        List<String> ids = IntStream.range(0, 501)
+                .mapToObj(i -> "C" + i)
+                .toList();
+
+        assertThatThrownBy(() -> tagApiImpl.batchGetCustomerTags(ids))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "COMMON-40000");
+    }
+
+    @Test
+    void batchGetCustomerTags_returnsMapKeyedByCustId() {
+        List<String> custIds = List.of("C1", "C2");
+
+        List<CustTagRel> rels = List.of(
+                buildRel("C1", "t1"),
+                buildRel("C2", "t2")
+        );
+        when(custTagRelMapper.selectByCustIds(custIds)).thenReturn(rels);
+
+        List<CustTag> tags = List.of(
+                buildTag("t1", "Tag1", "ACTIVE", 10),
+                buildTag("t2", "Tag2", "ACTIVE", 20)
+        );
+        // 两个 tagId 都是 ACTIVE，selectEnabledByIds 返回全部
+        when(custTagMapper.selectEnabledByIds(org.mockito.ArgumentMatchers.anyList())).thenReturn(tags);
+
+        Map<String, List<TagDTO>> result = tagApiImpl.batchGetCustomerTags(custIds);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get("C1")).isNotNull().hasSize(1);
+        assertThat(result.get("C2")).isNotNull().hasSize(1);
+    }
+
+    @Test
+    void batchGetCustomerTags_returnsEmptyForEmptyInput() {
+        Map<String, List<TagDTO>> result = tagApiImpl.batchGetCustomerTags(Collections.emptyList());
+
+        assertThat(result).isEmpty();
+    }
+
+    // ==================== getCustomerIdsByTag ====================
+
+    @Test
+    void getCustomerIdsByTag_returnsList() {
+        when(custTagRelMapper.selectCustIdsByTagId("t1"))
+                .thenReturn(List.of("C1", "C2", "C3"));
+
+        List<String> result = tagApiImpl.getCustomerIdsByTag("t1");
+
+        assertThat(result).containsExactly("C1", "C2", "C3");
+    }
+
+    // ==================== isTagNameExists ====================
+
+    @Test
+    void isTagNameExists_trueForExisting() {
+        when(custTagMapper.countByTagName("VIP")).thenReturn(1L);
+
+        assertThat(tagApiImpl.isTagNameExists("VIP")).isTrue();
+    }
+
+    @Test
+    void isTagNameExists_falseForNew() {
+        when(custTagMapper.countByTagName("NEW_TAG")).thenReturn(0L);
+
+        assertThat(tagApiImpl.isTagNameExists("NEW_TAG")).isFalse();
+    }
+
+    // ==================== 辅助方法 ====================
+
+    private CustTag buildTag(String id, String name, String status, int priority) {
         CustTag tag = new CustTag();
-        tag.setId("tag-001");
-        tag.setTagName("VIP客户");
-        tag.setTagCode("VIP_CUSTOMER");
-        when(tagService.getById("tag-001")).thenReturn(tag);
+        tag.setId(id);
+        tag.setTagName(name);
+        tag.setTagCode(id.toUpperCase() + "_CODE");
+        tag.setStatus(status);
+        tag.setTagPriority(priority);
+        return tag;
+    }
 
-        // when
-        CustTag result = tagApiImpl.getById("tag-001");
-
-        // then
-        assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo("tag-001");
-        assertThat(result.getTagCode()).isEqualTo("VIP_CUSTOMER");
-        verify(tagService).getById("tag-001");
+    private CustTagRel buildRel(String custId, String tagId) {
+        CustTagRel rel = new CustTagRel();
+        rel.setCustId(custId);
+        rel.setTagId(tagId);
+        return rel;
     }
 }
