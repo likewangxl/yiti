@@ -10,7 +10,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum SupportSourceType {
 
-    MANUAL("MANUAL", "手动创建"),
+    EXISTING_CUSTOMER("EXISTING_CUSTOMER", "存量客户"),
     TOUCH_TASK("TOUCH_TASK", "触达任务转入");
 
     private final String code;

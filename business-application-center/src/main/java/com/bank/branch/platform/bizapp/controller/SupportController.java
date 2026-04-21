@@ -4,7 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CreateSupportReq;
-import com.bank.branch.platform.bizapp.entity.SupportRequest;
+import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.service.SupportService;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
@@ -81,19 +81,22 @@ public class SupportController {
 
     /**
      * 创建中场支持申请（含场景路由和自动拆单）。
+     * <p>
+     * 返回 {@link SupportRequestCreateRespDTO}，含 submitGroupId 供消费方做同批追溯。
+     * 场景A（多产品）拆单后所有记录共享同一 submitGroupId；场景B（部门承接）单条记录独立生成。
+     * </p>
      */
     @PostMapping
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
     @Operation(summary = "创建中场支持申请")
-    public ResponseWrapper<List<String>> create(@Valid @RequestBody CreateSupportReq req) {
+    public ResponseWrapper<SupportRequestCreateRespDTO> create(@Valid @RequestBody CreateSupportReq req) {
         log.info("[SupportController.create] custId={}", req.getCustId());
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
-        List<SupportRequest> results = supportService.create(
+        SupportRequestCreateRespDTO result = supportService.create(
                 req.getProductIds(), req.getCustId(), req.getSourceTouchTaskId(),
                 req.getOtherDemand(), req.getSupportDeptId(), empId, orgCode);
-        List<String> ids = results.stream().map(SupportRequest::getId).toList();
-        return ResponseWrapper.success(ids);
+        return ResponseWrapper.success(result);
     }
 
     /**

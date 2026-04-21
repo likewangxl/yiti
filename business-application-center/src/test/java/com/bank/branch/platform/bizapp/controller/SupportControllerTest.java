@@ -2,7 +2,7 @@ package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
-import com.bank.branch.platform.bizapp.entity.SupportRequest;
+import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.service.SupportService;
 import com.bank.branch.platform.bizapp.support.AbstractControllerIntegrationTest;
@@ -16,11 +16,10 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Collections;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
@@ -129,12 +128,45 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void create_shouldReturn200() throws Exception {
-        SupportRequest sr = buildRequest("SR001");
+    @DisplayName("POST /api/support-requests 返回 SupportRequestCreateRespDTO 含 submitGroupId")
+    void create_returnsCreateRespWithSubmitGroupId() throws Exception {
+        SupportRequestCreateRespDTO resp = SupportRequestCreateRespDTO.builder()
+                .submitGroupId("grp001")
+                .productCount(2)
+                .requests(List.of(
+                        SupportRequestCreateRespDTO.CreatedItem.builder().id("sr001").scenario("A").build(),
+                        SupportRequestCreateRespDTO.CreatedItem.builder().id("sr002").scenario("A").build()))
+                .build();
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
         when(supportService.create(any(), anyString(), any(), any(), any(), anyString(), anyString()))
-                .thenReturn(List.of(sr));
+                .thenReturn(resp);
+
+        String body = "{\"custId\":\"CUST001\"}";
+
+        mockMvc.perform(post("/api/support-requests")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.submitGroupId").value("grp001"))
+                .andExpect(jsonPath("$.data.productCount").value(2))
+                .andExpect(jsonPath("$.data.requests", hasSize(2)));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void create_shouldReturn200() throws Exception {
+        SupportRequestCreateRespDTO resp = SupportRequestCreateRespDTO.builder()
+                .submitGroupId("grp001")
+                .productCount(1)
+                .requests(List.of(
+                        SupportRequestCreateRespDTO.CreatedItem.builder().id("sr001").scenario("B").build()))
+                .build();
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
+        when(supportService.create(any(), anyString(), any(), any(), any(), anyString(), anyString()))
+                .thenReturn(resp);
 
         String body = "{\"custId\":\"CUST001\"}";
 
@@ -213,17 +245,5 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value("0"));
     }
 
-    // ==================== 辅助方法 ====================
-
-    private SupportRequest buildRequest(String id) {
-        SupportRequest sr = new SupportRequest();
-        sr.setId(id);
-        sr.setRequestNo("SR20260414000001");
-        sr.setCustId("CUST001");
-        sr.setStatus(SupportStatus.DRAFT.getCode());
-        sr.setOwnerOrgId("ORG001");
-        sr.setCreatedBy("E10001");
-        sr.setDeleted(0);
-        return sr;
-    }
 }
+
