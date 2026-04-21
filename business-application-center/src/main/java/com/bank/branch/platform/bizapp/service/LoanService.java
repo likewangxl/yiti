@@ -324,7 +324,9 @@ public class LoanService {
      * @param id 申请ID
      * @return 贷款申请实体
      * @throws BizException BIZ-40401 如果不存在
+     * @deprecated REST 层请用 {@link #getDetail(String, String)} 返回 DTO；本方法仅供 IT 与 Service 内部流程使用。
      */
+    @Deprecated
     public LoanApply getById(String id) {
         return selectByIdOrThrow(id);
     }

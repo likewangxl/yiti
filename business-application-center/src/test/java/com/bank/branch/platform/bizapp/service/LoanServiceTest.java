@@ -1,6 +1,5 @@
 package com.bank.branch.platform.bizapp.service;
 
-import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
 import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
 import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
@@ -68,9 +67,6 @@ class LoanServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
-
-    @Mock
-    private LoanApplyDTOConverter loanApplyDTOConverter;
 
     @InjectMocks
     private LoanService loanService;
