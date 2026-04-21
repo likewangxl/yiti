@@ -5,25 +5,25 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 贷款申请审批驳回事件。
- * 在工作流完成且结果为驳回时发布。
+ * 中场支持申请审批驳回事件。
+ * 在工作流完成且结果为驳回（outcome=REJECTED）时发布。
  */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class LoanRejectedEvent {
+public class SupportRejectedEvent {
 
-    /** 贷款申请ID */
-    private String loanId;
+    /** 申请ID */
+    private String requestId;
 
     /** 申请编号 */
-    private String applyNo;
+    private String requestNo;
 
     /** 客户ID */
     private String custId;
 
-    /** 归属机构代码 */
-    private String ownerOrgId;
+    /** 发起人工号 */
+    private String createdBy;
 
     /**
      * 驳回原因。

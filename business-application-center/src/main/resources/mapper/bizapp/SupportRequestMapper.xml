@@ -157,6 +157,17 @@
           AND deleted = 0
     </update>
 
+    <!-- 条件更新状态（Listener 幂等写入专用）：仅当 status = expectedStatus 时才更新，防止多实例重复处理 -->
+    <update id="conditionalUpdateStatus">
+        UPDATE support_request
+        SET status       = #{targetStatus},
+            updated_by   = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND status = #{expectedStatus}
+          AND deleted = 0
+    </update>
+
     <!-- 按客户ID查询历史申请（最新在前） -->
     <select id="selectByCustId" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT

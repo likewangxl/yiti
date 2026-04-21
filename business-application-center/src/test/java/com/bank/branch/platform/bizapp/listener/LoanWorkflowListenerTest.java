@@ -3,8 +3,10 @@ package com.bank.branch.platform.bizapp.listener;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
 import com.bank.branch.platform.bizapp.event.LoanApprovedEvent;
+import com.bank.branch.platform.bizapp.event.LoanRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
 import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -12,6 +14,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -23,7 +28,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * LoanWorkflowListener 单元测试（TDD）。
- * 4 个测试用例。
+ * 覆盖 APPROVED / REJECTED / 幂等 / 注解结构 共 7 个用例。
  */
 @ExtendWith(MockitoExtension.class)
 class LoanWorkflowListenerTest {
@@ -37,12 +42,15 @@ class LoanWorkflowListenerTest {
     @InjectMocks
     private LoanWorkflowListener loanWorkflowListener;
 
-    // ==================== 正常路径 ====================
+    // ==================== APPROVED 分支 ====================
 
     @Test
-    void onProcessCompleted_loanBusinessKey_shouldUpdateStatusToCompleted() {
-        // given: 业务键为 LOAN:xxx
+    @DisplayName("APPROVED 结果：conditionalUpdateStatus 更新为 COMPLETED，发布 LoanApprovedEvent")
+    void onProcessCompleted_approved_updatesToCompleted_andPublishesApprovedEvent() {
+        // given
         LoanApply loan = buildLoan("LOAN001");
+        when(loanMapper.conditionalUpdateStatus("LOAN001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.COMPLETED.getCode(), "SYSTEM")).thenReturn(1);
         when(loanMapper.selectById("LOAN001")).thenReturn(loan);
 
         ProcessCompletedListener.ProcessCompletedEvent event =
@@ -51,62 +59,132 @@ class LoanWorkflowListenerTest {
         // when
         loanWorkflowListener.onProcessCompleted(event);
 
-        // then: 状态更新为 COMPLETED
-        ArgumentCaptor<String> statusCaptor = ArgumentCaptor.forClass(String.class);
-        verify(loanMapper).updateStatusById(anyString(), statusCaptor.capture(), anyString());
-        assertThat(statusCaptor.getValue()).isEqualTo(LoanStatus.COMPLETED.getCode());
+        // then: 使用条件更新，目标状态为 COMPLETED
+        verify(loanMapper).conditionalUpdateStatus("LOAN001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.COMPLETED.getCode(), "SYSTEM");
+        // then: 发布 LoanApprovedEvent
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue()).isInstanceOf(LoanApprovedEvent.class);
+        LoanApprovedEvent approvedEvent = (LoanApprovedEvent) captor.getValue();
+        assertThat(approvedEvent.getLoanId()).isEqualTo("LOAN001");
+    }
+
+    // ==================== REJECTED 分支 ====================
+
+    @Test
+    @DisplayName("REJECTED 结果：conditionalUpdateStatus 更新为 REJECTED，发布带 rejectReason 的 LoanRejectedEvent")
+    void onProcessCompleted_rejected_updatesToRejected_andPublishesRejectedEvent() {
+        // given
+        LoanApply loan = buildLoan("la001");
+        when(loanMapper.conditionalUpdateStatus("la001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.REJECTED.getCode(), "SYSTEM")).thenReturn(1);
+        when(loanMapper.selectById("la001")).thenReturn(loan);
+
+        ProcessCompletedListener.ProcessCompletedEvent event =
+                new ProcessCompletedListener.ProcessCompletedEvent("pi-1", "LOAN:la001", "REJECTED", "金额超限");
+
+        // when
+        loanWorkflowListener.onProcessCompleted(event);
+
+        // then: 条件更新到 REJECTED
+        verify(loanMapper).conditionalUpdateStatus("la001", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.REJECTED.getCode(), "SYSTEM");
+        // then: 发布 LoanRejectedEvent，携带 rejectReason
+        ArgumentCaptor<LoanRejectedEvent> captor = ArgumentCaptor.forClass(LoanRejectedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().getRejectReason()).isEqualTo("金额超限");
+        assertThat(captor.getValue().getLoanId()).isEqualTo("la001");
     }
 
     @Test
+    @DisplayName("REJECTED 结果 reason=null：rejectReason 字段为 null 且不抛异常")
+    void onProcessCompleted_rejected_reasonNull_doesNotThrow() {
+        // given
+        LoanApply loan = buildLoan("la002");
+        when(loanMapper.conditionalUpdateStatus("la002", LoanStatus.IN_APPROVAL.getCode(),
+                LoanStatus.REJECTED.getCode(), "SYSTEM")).thenReturn(1);
+        when(loanMapper.selectById("la002")).thenReturn(loan);
+
+        ProcessCompletedListener.ProcessCompletedEvent event =
+                new ProcessCompletedListener.ProcessCompletedEvent("pi-2", "LOAN:la002", "REJECTED", null);
+
+        // when / then
+        assertThatCode(() -> loanWorkflowListener.onProcessCompleted(event)).doesNotThrowAnyException();
+        ArgumentCaptor<LoanRejectedEvent> captor = ArgumentCaptor.forClass(LoanRejectedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().getRejectReason()).isNull();
+    }
+
+    // ==================== 幂等保护 ====================
+
+    @Test
+    @DisplayName("conditionalUpdateStatus 返回 0 时：不发布任何事件（幂等保护）")
+    void onProcessCompleted_whenRowsAffectedZero_doesNotPublishEvent() {
+        // given: 模拟已被其他实例处理（rowsAffected=0）
+        when(loanMapper.conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(0);
+
+        ProcessCompletedListener.ProcessCompletedEvent event =
+                new ProcessCompletedListener.ProcessCompletedEvent("pi-1", "LOAN:la001", "APPROVED", null);
+
+        // when
+        loanWorkflowListener.onProcessCompleted(event);
+
+        // then: 不发布任何事件
+        verify(eventPublisher, never()).publishEvent(any());
+        // 不需要再 selectById
+        verify(loanMapper, never()).selectById(anyString());
+    }
+
+    // ==================== 边界：非 LOAN 前缀 ====================
+
+    @Test
+    @DisplayName("非 LOAN: 前缀的 businessKey：直接忽略，不做任何操作")
     void onProcessCompleted_nonLoanBusinessKey_shouldIgnore() {
-        // given: 业务键不是 LOAN: 开头
+        // given
         ProcessCompletedListener.ProcessCompletedEvent event =
                 new ProcessCompletedListener.ProcessCompletedEvent("PI002", "LEAD:LEAD001", "APPROVED", null);
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
 
-        // then: 不做任何操作
-        verify(loanMapper, never()).selectById(any());
-        verify(loanMapper, never()).updateStatusById(any(), any(), any());
+        // then
+        verify(loanMapper, never()).conditionalUpdateStatus(any(), any(), any(), any());
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+    // ==================== 注解结构验证 ====================
+
     @Test
-    void onProcessCompleted_loanNotFound_shouldLogWarnAndSkip() {
-        // given: 贷款申请不存在
-        when(loanMapper.selectById("NOTEXIST")).thenReturn(null);
+    @DisplayName("onProcessCompleted 方法应标注 @TransactionalEventListener(AFTER_COMMIT)")
+    void onProcessCompleted_shouldBeAnnotatedWithTransactionalEventListenerAfterCommit() throws NoSuchMethodException {
+        Method method = LoanWorkflowListener.class.getMethod(
+                "onProcessCompleted", ProcessCompletedListener.ProcessCompletedEvent.class);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI003", "LOAN:NOTEXIST", "APPROVED", null);
+        TransactionalEventListener annotation = method.getAnnotation(TransactionalEventListener.class);
+        assertThat(annotation).as("方法应标注 @TransactionalEventListener").isNotNull();
+        assertThat(annotation.phase())
+                .as("phase 应为 AFTER_COMMIT")
+                .isEqualTo(org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT);
+        assertThat(annotation.fallbackExecution())
+                .as("fallbackExecution 应为 true（无事务时也执行）")
+                .isTrue();
+    }
 
-        // when: 不抛出异常
-        assertThatCode(() -> loanWorkflowListener.onProcessCompleted(event))
+    // ==================== 异常不传播 ====================
+
+    @Test
+    @DisplayName("处理过程中抛出异常：不应传播到调用方")
+    void onProcessCompleted_exceptionInHandler_shouldNotPropagate() {
+        // given: conditionalUpdateStatus 抛异常
+        when(loanMapper.conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("DB Error"));
+
+        // when / then
+        assertThatCode(() -> loanWorkflowListener.onProcessCompleted(
+                new ProcessCompletedListener.ProcessCompletedEvent("PI003", "LOAN:LOAN001", "APPROVED", null)))
                 .doesNotThrowAnyException();
-
-        // then: 不更新状态，不发布事件
-        verify(loanMapper, never()).updateStatusById(any(), any(), any());
-        verify(eventPublisher, never()).publishEvent(any());
-    }
-
-    @Test
-    void onProcessCompleted_shouldPublishLoanApprovedEvent() {
-        // given
-        LoanApply loan = buildLoan("LOAN001");
-        when(loanMapper.selectById("LOAN001")).thenReturn(loan);
-
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI004", "LOAN:LOAN001", "APPROVED", null);
-
-        // when
-        loanWorkflowListener.onProcessCompleted(event);
-
-        // then: 发布 LoanApprovedEvent
-        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue()).isInstanceOf(LoanApprovedEvent.class);
-        LoanApprovedEvent approvedEvent = (LoanApprovedEvent) eventCaptor.getValue();
-        assertThat(approvedEvent.getLoanId()).isEqualTo("LOAN001");
     }
 
     // ==================== 辅助方法 ====================
