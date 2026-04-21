@@ -87,6 +87,13 @@ class BizStateMachineTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    @org.junit.jupiter.api.DisplayName("Support IN_APPROVAL → REJECTED 应合法")
+    void supportTransition_inApproval_rejected_allowed() {
+        assertThatCode(() -> bizStateMachine.validateSupportTransition("IN_APPROVAL", "REJECTED"))
+                .doesNotThrowAnyException();
+    }
+
     // ==================== Support 非法迁移 ====================
 
     @Test
