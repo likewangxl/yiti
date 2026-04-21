@@ -1,9 +1,11 @@
 package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.CustTag;
 import com.bank.branch.platform.customer.entity.CustTagRel;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
+import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.CustTagMapper;
 import com.bank.branch.platform.customer.mapper.CustTagRelMapper;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class TagCustomerService {
 
     private final CustTagMapper tagMapper;
     private final CustTagRelMapper tagRelMapper;
+    private final CustMasterMapper masterMapper;
 
     /**
      * 覆盖式导入标签客户列表。
@@ -75,6 +78,26 @@ public class TagCustomerService {
 
         tagRelMapper.insertBatch(relList);
         log.info("[TagCustomerService.importCustomers] inserted {} relations for tagId={}", relList.size(), tagId);
+    }
+
+    /**
+     * 查询标签关联的客户主档列表，用于导出。
+     * <p>
+     * 先通过 tag_rel 查出 custId 列表，再批量查询客户主档。
+     * 标签下无客户时返回空列表，不调用 masterMapper。
+     * </p>
+     *
+     * @param tagId 标签 ID
+     * @return 该标签关联的客户主档列表
+     */
+    public List<CustMaster> listCustomersForExport(String tagId) {
+        log.info("[TagCustomerService.listCustomersForExport] tagId={}", tagId);
+        List<String> custIds = tagRelMapper.selectCustIdsByTagId(tagId);
+        if (custIds == null || custIds.isEmpty()) {
+            log.debug("[TagCustomerService.listCustomersForExport] tagId={} 无关联客户", tagId);
+            return List.of();
+        }
+        return masterMapper.selectByIds(custIds);
     }
 
     /**

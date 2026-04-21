@@ -150,16 +150,26 @@ class TouchReportControllerTest extends AbstractControllerIntegrationTest {
     }
 
     // ==================== GET /api/touch-reports/export ====================
+    // 详细导出端点测试见 TouchReportExportControllerTest（TDD Red-Green 闭环）
 
     /**
-     * 导出端点：返回 HTTP 200 以及导出结果（简化实现，标注 TODO）。
+     * 导出端点：返回 HTTP 200，Content-Type 为 text/csv（真实 CSV 导出实现）。
      */
     @Test
     @WithMockEmpContext(empId = "E10001", orgCode = "ORG_SZ_001")
-    void export_shouldReturn200() throws Exception {
-        // when/then: 导出接口是简化实现，只验证 HTTP 200 和 code=0
+    void export_shouldReturn200WithCsvContentType() throws Exception {
+        when(touchReportService.listAllForExport(
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq(10000)))
+                .thenReturn(java.util.Collections.emptyList());
+
+        // when/then: 导出接口返回 HTTP 200 且 Content-Type 为 text/csv
         mockMvc.perform(get("/api/touch-reports/export"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("0"));
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Content-Type",
+                                org.hamcrest.Matchers.startsWith("text/csv")));
     }
 }

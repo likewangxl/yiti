@@ -283,6 +283,23 @@ public class CustomerService {
         return vo;
     }
 
+    /**
+     * 查询全量客户主档用于导出（上限 maxRows 行保护）。
+     * <p>
+     * 以 offset=0, limit=maxRows 一次性查询，避免大量分页循环；
+     * 调用方须保证 maxRows &lt;= 10000，防止单次查询拖垮数据库。
+     * </p>
+     *
+     * @param keyword 关键词（模糊匹配 cust_name / unified_credit_code），可为 null
+     * @param status  客户状态过滤（ACTIVE / INACTIVE），可为 null
+     * @param maxRows 最大返回行数，防止无限制导出（建议 &lt;= 10000）
+     * @return 客户主档列表
+     */
+    public List<CustMaster> listAllForExport(String keyword, String status, int maxRows) {
+        log.info("[CustomerService.listAllForExport] keyword={}, status={}, maxRows={}", keyword, status, maxRows);
+        return masterMapper.selectPage(keyword, status, 0, maxRows);
+    }
+
     // ============================= 私有辅助方法 =============================
 
     /**

@@ -55,6 +55,25 @@ public class TouchReportService {
     }
 
     /**
+     * 查询全量触达报告用于导出（上限 maxRows 行保护）。
+     * <p>
+     * 以 offset=0, limit=maxRows 一次性查询，避免大量分页循环；
+     * 调用方须保证 maxRows &lt;= 10000，防止单次查询拖垮数据库。
+     * </p>
+     *
+     * @param keyword  关键词（模糊匹配 task_no 或 cust_name），可为 null
+     * @param status   任务状态（PENDING/SUCCESS/CANCELLED），可为 null
+     * @param orgId    机构代码过滤，可为 null
+     * @param maxRows  最大返回行数（建议 &lt;= 10000）
+     * @return 触达报告列表
+     */
+    public List<TouchReportVO> listAllForExport(String keyword, String status, String orgId, int maxRows) {
+        log.info("[TouchReportService.listAllForExport] keyword={}, status={}, orgId={}, maxRows={}",
+                keyword, status, orgId, maxRows);
+        return reportMapper.selectReportPage(keyword, status, orgId, 0, maxRows);
+    }
+
+    /**
      * 按状态分组统计触达任务数量。
      * <p>
      * orgId 为 null 时统计全量数据；不为 null 时限制在指定机构范围内。
