@@ -2,6 +2,7 @@ package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.service.SupportService;
@@ -181,10 +182,27 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
+    @DisplayName("POST /api/support-requests/{id}/submit 返回 SubmitRespDTO 含 processInstanceId")
+    void submit_returnsProcessInstanceId() throws Exception {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
+        when(supportService.submit(eq("SR001"), anyString(), anyString()))
+                .thenReturn(new SubmitRespDTO("pi-xyz", "SUPPORT:SR001", "IN_APPROVAL"));
+
+        mockMvc.perform(post("/api/support-requests/SR001/submit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.processInstanceId").value("pi-xyz"))
+                .andExpect(jsonPath("$.data.status").value("IN_APPROVAL"));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
     void submit_shouldReturn200() throws Exception {
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
-        doNothing().when(supportService).submit(eq("SR001"), anyString(), anyString());
+        when(supportService.submit(eq("SR001"), anyString(), anyString()))
+                .thenReturn(new SubmitRespDTO("pi-sr001", "SUPPORT:SR001", "IN_APPROVAL"));
 
         mockMvc.perform(post("/api/support-requests/SR001/submit"))
                 .andExpect(status().isOk())

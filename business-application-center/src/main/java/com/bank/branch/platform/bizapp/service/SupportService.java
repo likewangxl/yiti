@@ -3,6 +3,7 @@ package com.bank.branch.platform.bizapp.service;
 import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
@@ -154,13 +155,18 @@ public class SupportService {
 
     /**
      * 提交草稿（SELECT FOR UPDATE，validate DRAFT -> IN_APPROVAL，启动工作流）。
+     * <p>
+     * 场景A多拆单时，每条记录单独提交，每次 submit 只提交一条申请。
+     * 返回的 processInstanceId 只反映本次被提交的那一条申请对应的流程实例。
+     * </p>
      *
      * @param id            申请ID
      * @param operatorEmpId 操作人
      * @param orgCode       归属机构
+     * @return 提交响应 DTO，含 processInstanceId、businessKey 和状态
      */
     @Transactional
-    public void submit(String id, String operatorEmpId, String orgCode) {
+    public SubmitRespDTO submit(String id, String operatorEmpId, String orgCode) {
         log.info("[SupportService.submit] id={}, operator={}", id, operatorEmpId);
 
         // SELECT FOR UPDATE 防并发
@@ -217,6 +223,10 @@ public class SupportService {
 
         log.info("[SupportService.submit] 申请 {} 已提交工作流，processInstanceId={}",
                 id, resp.getProcessInstanceId());
+
+        // 返回提交响应（含 processInstanceId，供前端跳转流程详情页）
+        String businessKey = "SUPPORT:" + id;
+        return new SubmitRespDTO(resp.getProcessInstanceId(), businessKey, SupportStatus.IN_APPROVAL.getCode());
     }
 
     /**

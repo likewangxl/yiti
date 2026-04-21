@@ -2,6 +2,7 @@ package com.bank.branch.platform.bizapp.service;
 
 import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
@@ -225,14 +226,16 @@ public class LoanService {
      * <p>
      * 使用 SELECT FOR UPDATE 防并发提交，启动 Flowable 工作流，
      * 状态更新为 IN_APPROVAL，发布 LoanSubmittedEvent。
+     * 返回 {@link SubmitRespDTO}，含 processInstanceId，供前端跳转流程详情页使用。
      * </p>
      *
      * @param id            申请ID
      * @param operatorEmpId 操作人工号
      * @param orgCode       操作人归属机构
+     * @return 提交响应 DTO，含 processInstanceId、businessKey 和状态
      */
     @Transactional
-    public void submitForApproval(String id, String operatorEmpId, String orgCode) {
+    public SubmitRespDTO submitForApproval(String id, String operatorEmpId, String orgCode) {
         log.info("[LoanService.submitForApproval] id={}, operator={}", id, operatorEmpId);
 
         // 1. SELECT FOR UPDATE 防并发
@@ -286,6 +289,9 @@ public class LoanService {
         eventPublisher.publishEvent(new LoanSubmittedEvent(
                 id, existing.getApplyNo(), existing.getCustId(), orgCode, operatorEmpId
         ));
+
+        // 7. 返回提交响应（含 processInstanceId，供前端跳转流程详情页）
+        return new SubmitRespDTO(resp.getProcessInstanceId(), businessKey, LoanStatus.IN_APPROVAL.getCode());
     }
 
     /**

@@ -5,6 +5,7 @@ import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CreateLoanReq;
 import com.bank.branch.platform.bizapp.dto.req.UpdateLoanReq;
 import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.service.LoanFormValidator;
 import com.bank.branch.platform.bizapp.service.LoanService;
@@ -136,20 +137,23 @@ public class LoanController {
 
     /**
      * 提交贷款申请审批。
+     * <p>
+     * 返回 {@link SubmitRespDTO}，含 processInstanceId，供前端跳转流程详情页使用。
+     * </p>
      *
      * @param id 申请ID
-     * @return 成功响应
+     * @return 提交响应，含 processInstanceId、businessKey 和状态
      */
     @PostMapping("/{id}/submit")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.WRITE)
     @AuditLog(action = "SUBMIT_LOAN_APPLY", resourceType = "LOAN_APPLY")
     @Operation(summary = "提交贷款申请审批")
-    public ResponseWrapper<Void> submit(@PathVariable String id) {
+    public ResponseWrapper<SubmitRespDTO> submit(@PathVariable String id) {
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
         log.info("[LoanController.submit] id={}, operator={}", id, empId);
-        loanService.submitForApproval(id, empId, orgCode);
-        return ResponseWrapper.success();
+        SubmitRespDTO resp = loanService.submitForApproval(id, empId, orgCode);
+        return ResponseWrapper.success(resp);
     }
 
     /**

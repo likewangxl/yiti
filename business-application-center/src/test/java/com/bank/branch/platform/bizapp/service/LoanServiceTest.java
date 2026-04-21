@@ -1,5 +1,6 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.event.LoanSubmittedEvent;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
@@ -251,7 +252,7 @@ class LoanServiceTest {
     // ==================== submitForApproval ====================
 
     @Test
-    void submitForApproval_validDraft_shouldStartWorkflow() {
+    void submitForApproval_validDraft_shouldStartWorkflowAndReturnDTO() {
         // given
         LoanApply existing = buildDraftLoan("L001", "E001");
         when(loanMapper.selectForUpdate("L001")).thenReturn(existing);
@@ -260,7 +261,7 @@ class LoanServiceTest {
         when(loanMapper.updateById(any(LoanApply.class))).thenReturn(1);
 
         // when
-        loanService.submitForApproval("L001", "E001", "ORG001");
+        SubmitRespDTO result = loanService.submitForApproval("L001", "E001", "ORG001");
 
         // then
         verify(workflowApi).startProcess(any(StartProcessCmd.class));
@@ -268,6 +269,11 @@ class LoanServiceTest {
         verify(loanMapper).updateById(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(LoanStatus.IN_APPROVAL.getCode());
         verify(eventPublisher).publishEvent(any(LoanSubmittedEvent.class));
+        // 验证返回值含 processInstanceId
+        assertThat(result).isNotNull();
+        assertThat(result.getProcessInstanceId()).isEqualTo("PI001");
+        assertThat(result.getBusinessKey()).isEqualTo("LOAN:L001");
+        assertThat(result.getStatus()).isEqualTo(LoanStatus.IN_APPROVAL.getCode());
     }
 
     @Test

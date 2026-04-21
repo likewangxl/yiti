@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CreateSupportReq;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.service.SupportService;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
@@ -103,17 +104,21 @@ public class SupportController {
 
     /**
      * 提交草稿申请进入审批。
+     * <p>
+     * 返回 {@link SubmitRespDTO}，含 processInstanceId，供前端跳转流程详情页使用。
+     * 场景A多拆单时，每条申请单独提交，processInstanceId 只反映本次被提交的那一条。
+     * </p>
      */
     @PostMapping("/{id}/submit")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
     @AuditLog(action = "SUBMIT_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "提交中场支持申请")
-    public ResponseWrapper<Void> submit(@PathVariable String id) {
+    public ResponseWrapper<SubmitRespDTO> submit(@PathVariable String id) {
         log.info("[SupportController.submit] id={}", id);
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
-        supportService.submit(id, empId, orgCode);
-        return ResponseWrapper.success();
+        SubmitRespDTO resp = supportService.submit(id, empId, orgCode);
+        return ResponseWrapper.success(resp);
     }
 
     /**

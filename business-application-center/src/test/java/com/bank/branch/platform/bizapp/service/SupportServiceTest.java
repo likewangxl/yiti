@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.service;
 
 import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.SupportScenario;
@@ -193,7 +194,7 @@ class SupportServiceTest {
     // ==================== submit ====================
 
     @Test
-    void submit_validDraft_shouldStartWorkflow() {
+    void submit_validDraft_shouldStartWorkflowAndReturnDTO() {
         // given: 场景A（有productId，无supportDeptId）
         SupportRequest draft = buildRequest("SR001", SupportStatus.DRAFT);
         draft.setCreatedBy("E10001");
@@ -205,12 +206,17 @@ class SupportServiceTest {
         when(supportMapper.updateById(any(SupportRequest.class))).thenReturn(1);
 
         // when
-        supportService.submit("SR001", "E10001", "ORG001");
+        SubmitRespDTO result = supportService.submit("SR001", "E10001", "ORG001");
 
         // then
         verify(workflowApi).startProcess(any(StartProcessCmd.class));
         verify(supportMapper).updateById(any(SupportRequest.class));
         verify(eventPublisher).publishEvent(any(SupportSubmittedEvent.class));
+        // 验证返回值含 processInstanceId
+        assertThat(result).isNotNull();
+        assertThat(result.getProcessInstanceId()).isEqualTo("PID001");
+        assertThat(result.getBusinessKey()).isEqualTo("SUPPORT:SR001");
+        assertThat(result.getStatus()).isEqualTo(SupportStatus.IN_APPROVAL.getCode());
     }
 
     @Test

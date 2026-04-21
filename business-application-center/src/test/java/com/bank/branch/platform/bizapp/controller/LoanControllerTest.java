@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
 import com.bank.branch.platform.bizapp.service.LoanFormValidator;
@@ -154,10 +155,27 @@ class LoanControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
+    @DisplayName("POST /api/loans/{id}/submit 返回 SubmitRespDTO 含 processInstanceId")
+    void submit_returnsProcessInstanceId() throws Exception {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
+        when(loanService.submitForApproval(eq("L001"), anyString(), anyString()))
+                .thenReturn(new SubmitRespDTO("pi-abc", "LOAN:L001", "IN_APPROVAL"));
+
+        mockMvc.perform(post("/api/loans/L001/submit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.processInstanceId").value("pi-abc"))
+                .andExpect(jsonPath("$.data.status").value("IN_APPROVAL"));
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
     void submit_shouldReturn200() throws Exception {
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
-        doNothing().when(loanService).submitForApproval(eq("L001"), anyString(), anyString());
+        when(loanService.submitForApproval(eq("L001"), anyString(), anyString()))
+                .thenReturn(new SubmitRespDTO("pi-001", "LOAN:L001", "IN_APPROVAL"));
 
         mockMvc.perform(post("/api/loans/L001/submit"))
                 .andExpect(status().isOk())
