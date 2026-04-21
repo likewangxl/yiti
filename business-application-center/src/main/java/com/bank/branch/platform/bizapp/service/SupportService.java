@@ -125,7 +125,9 @@ public class SupportService {
             entity.setOtherDemand(otherDemand);
             entity.setSupportDeptId(supportDeptId);
             entity.setStatus(SupportStatus.DRAFT.getCode());
-            entity.setBusinessKey("SUPPORT:" + entity.getId());
+            // 统一 businessKey 格式 "SUPPORT:{id}"，与 BizStateMachine / SupportProductSplitService 保持一致
+            String businessKey = "SUPPORT:" + entity.getId();
+            entity.setBusinessKey(businessKey);
             entity.setOwnerOrgId(orgCode);
             entity.setCreatedBy(operatorEmpId);
             entity.setCreatedTime(now);

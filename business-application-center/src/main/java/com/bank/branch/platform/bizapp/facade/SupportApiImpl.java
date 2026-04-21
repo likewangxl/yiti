@@ -26,6 +26,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SupportApiImpl implements SupportApi {
 
+    /** 批量查询入参上限，超限直接拒绝，避免大查询打垮数据库（依据文档契约 §7.1）。 */
+    private static final int MAX_BATCH_SIZE = 500;
+
     private final SupportRequestMapper supportRequestMapper;
     private final SupportRequestDTOConverter supportRequestDTOConverter;
 
@@ -95,9 +98,9 @@ public class SupportApiImpl implements SupportApi {
      * 依据文档契约 §7.1，入参 ID 列表上限为 500 条，超限抛 IllegalArgumentException。
      * </p>
      *
-     * @param requestIds 申请ID列表，不可超过 500 条
+     * @param requestIds 申请ID列表，不可超过 {@value #MAX_BATCH_SIZE} 条
      * @return 支持申请 DTO 列表，无数据时返回空列表
-     * @throws IllegalArgumentException 当 requestIds 超过 500 条时
+     * @throws IllegalArgumentException 当 requestIds 超过 {@value #MAX_BATCH_SIZE} 条时
      */
     @Override
     public List<SupportRequestDTO> getSupportRequestBatch(List<String> requestIds) {
@@ -105,10 +108,10 @@ public class SupportApiImpl implements SupportApi {
         if (requestIds == null || requestIds.isEmpty()) {
             return Collections.emptyList();
         }
-        // 依据文档契约 §7.1：批量接口入参上限 500 条，超限直接拒绝，避免大查询打垮数据库
-        if (requestIds.size() > 500) {
+        // 依据文档契约 §7.1：批量接口入参上限 MAX_BATCH_SIZE 条，超限直接拒绝，避免大查询打垮数据库
+        if (requestIds.size() > MAX_BATCH_SIZE) {
             throw new IllegalArgumentException(
-                    "requestIds size cannot exceed 500, actual: " + requestIds.size());
+                    "requestIds size cannot exceed " + MAX_BATCH_SIZE + ", actual: " + requestIds.size());
         }
         List<SupportRequest> entities = supportRequestMapper.selectByIds(requestIds);
         if (entities == null || entities.isEmpty()) {
