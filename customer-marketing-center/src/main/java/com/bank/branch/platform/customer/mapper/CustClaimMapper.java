@@ -102,6 +102,38 @@ public interface CustClaimMapper {
     int insert(CustClaim entity);
 
     /**
+     * 查询某员工维护的所有有效认领记录（maintainer_emp_id 且 claim_status='CLAIMED'）。
+     *
+     * @param empId 员工工号
+     * @return 该员工维护的有效认领记录列表
+     */
+    List<CustClaim> selectActiveByEmp(@Param("empId") String empId);
+
+    /**
+     * 查询某机构的所有有效认领记录（org_id 且 claim_status='CLAIMED'）。
+     *
+     * @param orgCode 机构代码
+     * @return 该机构的有效认领记录列表
+     */
+    List<CustClaim> selectActiveByOrg(@Param("orgCode") String orgCode);
+
+    /**
+     * 统计某员工维护的有效认领数量（maintainer_emp_id 且 claim_status='CLAIMED'）。
+     *
+     * @param empId 员工工号
+     * @return 有效认领数量
+     */
+    Long countActiveByEmp(@Param("empId") String empId);
+
+    /**
+     * 统计某机构的有效认领数量（org_id 且 claim_status='CLAIMED'）。
+     *
+     * @param orgCode 机构代码
+     * @return 有效认领数量
+     */
+    Long countActiveByOrg(@Param("orgCode") String orgCode);
+
+    /**
      * 按 id 更新认领记录（动态 SET，仅更新非 null 字段）。
      *
      * @param entity 包含 id 及待更新字段的认领实体

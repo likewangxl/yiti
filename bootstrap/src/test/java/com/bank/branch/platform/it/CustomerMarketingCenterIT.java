@@ -5,6 +5,7 @@ import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.LeadApi;
 import com.bank.branch.platform.customer.api.TagApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
+import com.bank.branch.platform.customer.api.dto.CustClaimDTO;
 import com.bank.branch.platform.customer.api.dto.LeadDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
@@ -161,9 +162,8 @@ class CustomerMarketingCenterIT {
         LeadDTO leadDTO = leadApi.getLead(lead.getId()).orElseThrow();
         assertThat(leadDTO.getId()).isEqualTo(lead.getId());
 
-        assertThat(claimApi.getClaimByCustIdAndOrgId(CUSTOMER_ID, OPERATOR_ORG_ID))
-                .extracting(CustClaim::getId)
-                .isEqualTo(claim.getId());
+        CustClaimDTO claimDTO = claimApi.getClaim(CUSTOMER_ID, OPERATOR_ORG_ID).orElseThrow();
+        assertThat(claimDTO.getId()).isEqualTo(claim.getId());
         assertThat(customerQueryApi.isValidCustomer(CUSTOMER_ID)).isTrue();
         assertThat(customerQueryApi.isClaimedByOrg(CUSTOMER_ID, OPERATOR_ORG_ID)).isTrue();
 
