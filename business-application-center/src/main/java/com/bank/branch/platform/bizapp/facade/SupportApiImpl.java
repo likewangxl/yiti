@@ -91,15 +91,24 @@ public class SupportApiImpl implements SupportApi {
 
     /**
      * 批量按ID查询支持申请。
+     * <p>
+     * 依据文档契约 §7.1，入参 ID 列表上限为 500 条，超限抛 IllegalArgumentException。
+     * </p>
      *
-     * @param requestIds 申请ID列表
+     * @param requestIds 申请ID列表，不可超过 500 条
      * @return 支持申请 DTO 列表，无数据时返回空列表
+     * @throws IllegalArgumentException 当 requestIds 超过 500 条时
      */
     @Override
     public List<SupportRequestDTO> getSupportRequestBatch(List<String> requestIds) {
         log.debug("[SupportApiImpl.getSupportRequestBatch] count={}", requestIds == null ? 0 : requestIds.size());
         if (requestIds == null || requestIds.isEmpty()) {
             return Collections.emptyList();
+        }
+        // 依据文档契约 §7.1：批量接口入参上限 500 条，超限直接拒绝，避免大查询打垮数据库
+        if (requestIds.size() > 500) {
+            throw new IllegalArgumentException(
+                    "requestIds size cannot exceed 500, actual: " + requestIds.size());
         }
         List<SupportRequest> entities = supportRequestMapper.selectByIds(requestIds);
         if (entities == null || entities.isEmpty()) {

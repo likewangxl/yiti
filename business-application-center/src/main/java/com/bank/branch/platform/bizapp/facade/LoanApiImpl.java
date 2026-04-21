@@ -74,15 +74,24 @@ public class LoanApiImpl implements LoanApi {
 
     /**
      * 批量按ID查询贷款申请。
+     * <p>
+     * 依据文档契约 §7.1，入参 ID 列表上限为 500 条，超限抛 IllegalArgumentException。
+     * </p>
      *
-     * @param applyIds 申请ID列表
+     * @param applyIds 申请ID列表，不可超过 500 条
      * @return 贷款申请 DTO 列表，无数据时返回空列表
+     * @throws IllegalArgumentException 当 applyIds 超过 500 条时
      */
     @Override
     public List<LoanApplyDTO> getLoanApplyBatch(List<String> applyIds) {
         log.debug("[LoanApiImpl.getLoanApplyBatch] count={}", applyIds == null ? 0 : applyIds.size());
         if (applyIds == null || applyIds.isEmpty()) {
             return Collections.emptyList();
+        }
+        // 依据文档契约 §7.1：批量接口入参上限 500 条，超限直接拒绝，避免大查询打垮数据库
+        if (applyIds.size() > 500) {
+            throw new IllegalArgumentException(
+                    "applyIds size cannot exceed 500, actual: " + applyIds.size());
         }
         List<LoanApply> entities = loanApplyMapper.selectByIds(applyIds);
         if (entities == null || entities.isEmpty()) {

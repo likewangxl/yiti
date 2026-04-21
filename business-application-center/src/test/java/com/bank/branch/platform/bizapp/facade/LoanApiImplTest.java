@@ -4,6 +4,7 @@ import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -12,10 +13,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
@@ -155,5 +161,47 @@ class LoanApiImplTest {
         // Assert
         assertThat(result).hasSize(2);
         assertThat(result).extracting(LoanApplyDTO::getId).containsExactlyInAnyOrder("id1", "id2");
+    }
+
+    @Test
+    @DisplayName("getLoanApplyBatch 入参为 null 应返回空列表")
+    void getLoanApplyBatch_null_shouldReturnEmpty() {
+        // Act
+        List<LoanApplyDTO> result = loanApiImpl.getLoanApplyBatch(null);
+
+        // Assert
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getLoanApplyBatch 入参为空列表应返回空列表")
+    void getLoanApplyBatch_empty_shouldReturnEmpty() {
+        // Act
+        List<LoanApplyDTO> result = loanApiImpl.getLoanApplyBatch(Collections.emptyList());
+
+        // Assert
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getLoanApplyBatch 入参超过 500 条应抛 IllegalArgumentException")
+    void getLoanApplyBatch_exceeds500_throws() {
+        List<String> ids = Stream.generate(() -> UUID.randomUUID().toString())
+                .limit(501).toList();
+        assertThatThrownBy(() -> loanApiImpl.getLoanApplyBatch(ids))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("500");
+    }
+
+    @Test
+    @DisplayName("getLoanApplyBatch 入参恰好 500 条应正常返回")
+    void getLoanApplyBatch_exactly500_succeeds() {
+        List<String> ids = Stream.generate(() -> UUID.randomUUID().toString())
+                .limit(500).toList();
+        // mock mapper/converter 返回空列表，避免执行真实查询
+        when(loanApplyMapper.selectByIds(anyList())).thenReturn(Collections.emptyList());
+
+        assertThatCode(() -> loanApiImpl.getLoanApplyBatch(ids))
+                .doesNotThrowAnyException();
     }
 }
