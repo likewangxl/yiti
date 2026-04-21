@@ -196,11 +196,14 @@ public class SupportService {
                 ? SupportScenario.A.getProcessDefinitionKey()
                 : SupportScenario.B.getProcessDefinitionKey();
 
+        // businessKey 统一定义一次，后续 cmd 和 SubmitRespDTO 共用（与 LoanService 保持一致）
+        String businessKey = "SUPPORT:" + id;
+
         // 启动工作流
         StartProcessCmd cmd = new StartProcessCmd();
         cmd.setBizType("SUPPORT");
         cmd.setBizId(id);
-        cmd.setBusinessKey("SUPPORT:" + id);
+        cmd.setBusinessKey(businessKey);
         cmd.setProcessDefinitionKey(processDefinitionKey);
         cmd.setStartUser(operatorEmpId);
         cmd.setStartOrgId(orgCode);
@@ -225,7 +228,6 @@ public class SupportService {
                 id, resp.getProcessInstanceId());
 
         // 返回提交响应（含 processInstanceId，供前端跳转流程详情页）
-        String businessKey = "SUPPORT:" + id;
         return new SubmitRespDTO(resp.getProcessInstanceId(), businessKey, SupportStatus.IN_APPROVAL.getCode());
     }
 

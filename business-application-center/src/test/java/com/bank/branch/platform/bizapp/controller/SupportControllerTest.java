@@ -193,6 +193,7 @@ class SupportControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.processInstanceId").value("pi-xyz"))
+                .andExpect(jsonPath("$.data.businessKey").value("SUPPORT:SR001"))
                 .andExpect(jsonPath("$.data.status").value("IN_APPROVAL"));
     }
 

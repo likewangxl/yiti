@@ -166,6 +166,7 @@ class LoanControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.processInstanceId").value("pi-abc"))
+                .andExpect(jsonPath("$.data.businessKey").value("LOAN:L001"))
                 .andExpect(jsonPath("$.data.status").value("IN_APPROVAL"));
     }
 
