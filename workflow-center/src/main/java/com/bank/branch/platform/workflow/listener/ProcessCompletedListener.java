@@ -87,7 +87,7 @@ public class ProcessCompletedListener implements ExecutionListener {
      *
      * <p>语义说明：
      * <ul>
-     *   <li>{@code outcome} — 下游业务语义（APPROVED / REJECTED / CANCELLED），与
+     *   <li>{@code outcome} — 下游业务语义（APPROVED / REJECTED），与
      *       {@code biz_process_map.processStatus}（COMPLETED / CANCELLED）独立，不可混淆</li>
      *   <li>{@code reason} — 审批备注或驳回原因，可为 null</li>
      * </ul>
