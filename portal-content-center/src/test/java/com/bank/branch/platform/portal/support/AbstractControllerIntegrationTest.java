@@ -7,6 +7,13 @@ import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.portal.service.AddressBookService;
+import com.bank.branch.platform.portal.service.DocService;
+import com.bank.branch.platform.portal.service.NavService;
+import com.bank.branch.platform.portal.service.ProductExportService;
+import com.bank.branch.platform.portal.service.ProductService;
+import com.bank.branch.platform.portal.service.ShortcutService;
+import com.bank.branch.platform.portal.service.WorkspaceService;
 import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
 import org.junit.jupiter.api.Tag;
@@ -37,15 +44,34 @@ public abstract class AbstractControllerIntegrationTest {
 
     /**
      * 最小化 Spring Boot 测试入口
-     * 仅扫描 portal 包，避免拉起 auth/governance/workflow 的真实 Bean
+     * 仅扫描 controller 包，业务 Service 由各子类通过 @MockBean 提供，
+     * 避免拉起 mapper / mybatis / flowable 等与 Controller 测试无关的基础设施。
      *
      * <p>通过 @SpringBootTest(classes=...) 显式引用，确保子类在任意包路径下都能正确发现此配置。</p>
      */
     @SpringBootApplication(
-            scanBasePackages = "com.bank.branch.platform.portal",
-            exclude = {
-                    org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration.class,
-                    org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration.class
+            scanBasePackages = "com.bank.branch.platform.portal.controller",
+            excludeName = {
+                    "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration",
+                    "org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration",
+                    "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
+                    "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
+                    "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration",
+                    "org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration",
+                    "org.flowable.spring.boot.ProcessEngineAutoConfiguration",
+                    "org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration",
+                    "org.flowable.spring.boot.app.AppEngineAutoConfiguration",
+                    "org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration",
+                    "org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration",
+                    "org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration",
+                    "org.flowable.spring.boot.idm.IdmEngineAutoConfiguration",
+                    "org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration",
+                    "org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration",
+                    "org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration",
+                    "org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration",
+                    "org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration",
+                    "org.flowable.spring.boot.RestApiAutoConfiguration",
+                    "org.flowable.spring.boot.FlowableJpaAutoConfiguration"
             }
     )
     static class TestApp {
@@ -58,6 +84,13 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected FileApi fileApi;
     @MockBean protected NotifyApi notifyApi;
     @MockBean protected AuditApi auditApi;
+    @MockBean protected AddressBookService addressBookService;
+    @MockBean protected DocService docService;
+    @MockBean protected NavService navService;
+    @MockBean protected ProductService productService;
+    @MockBean protected ProductExportService productExportService;
+    @MockBean protected ShortcutService shortcutService;
+    @MockBean protected WorkspaceService workspaceService;
     @MockBean(name = "redisTemplate")
     protected RedisTemplate<String, Object> redisTemplate;
 }

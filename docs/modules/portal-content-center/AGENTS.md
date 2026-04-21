@@ -9,7 +9,7 @@
 
 ## 维护要求
 
-- 不能把 `workflow-center` 的 `WorkflowQueryApi` 当成已落地 Bean。当前 portal 代码实际使用本地 `WorkflowQueryAdapter` 占位降级，待办查询仍依赖 workflow-center 后续补齐查询 Java 契约或统一 REST 适配层。
+- `workflow-center` 的 `WorkflowQueryApi` 已落地为正式 Bean；portal 文档需描述“正式 QueryApi + `WorkflowQueryAdapter` 降级封装”的当前实现，不要再写成纯占位方案。
 - 涉及工作台聚合、待办数量、最近待办的章节，要优先和 `portal-content-center` 现有代码保持一致。
 - 性能模块仍属弱依赖，文档中必须保留降级策略说明。
 

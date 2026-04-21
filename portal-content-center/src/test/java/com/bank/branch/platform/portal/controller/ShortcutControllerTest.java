@@ -36,10 +36,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ShortcutControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
-    @MockBean ShortcutService shortcutService;
-    @MockBean NavService navService;
-    @MockBean ProductService productService;
-    @MockBean ProductExportService productExportService;
 
     // ────────── GET /api/portal/shortcuts ──────────
 

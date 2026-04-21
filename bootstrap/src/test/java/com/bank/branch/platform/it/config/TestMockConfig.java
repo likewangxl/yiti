@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.minio.MinioClient;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
@@ -35,6 +36,8 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @TestConfiguration
 @MapperScan(basePackages = {
         "com.bank.branch.platform.auth.mapper",
+        "com.bank.branch.platform.bizapp.mapper",
+        "com.bank.branch.platform.customer.mapper",
         "com.bank.branch.platform.governance.mapper",
         "com.bank.branch.platform.workflow.mapper"
 })
@@ -118,5 +121,11 @@ public class TestMockConfig {
     @Primary
     public HistoryService historyService() {
         return Mockito.mock(HistoryService.class);
+    }
+
+    @Bean
+    @Primary
+    public ProcessEngine processEngine() {
+        return Mockito.mock(ProcessEngine.class);
     }
 }

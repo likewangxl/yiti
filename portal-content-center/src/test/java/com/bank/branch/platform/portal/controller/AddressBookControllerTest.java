@@ -38,7 +38,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AddressBookControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
-    @MockBean AddressBookService addressBookService;
 
     // ===== C.1 GET /api/employees =====
 
@@ -158,7 +157,6 @@ class AddressBookControllerTest extends AbstractControllerIntegrationTest {
         e.setStatus("ACTIVE");
         e.setResponsibleProductIds(new ArrayList<>());
         e.setMaintainerEmpId("E999");
-        e.setCreatedBy("SYSTEM");
         e.setCreatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
         e.setUpdatedTime(LocalDateTime.of(2026, 4, 1, 10, 0));
         e.setDeleted(0);

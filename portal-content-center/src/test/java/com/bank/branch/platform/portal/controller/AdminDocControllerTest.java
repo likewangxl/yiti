@@ -33,9 +33,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AdminDocControllerTest extends AbstractControllerIntegrationTest {
 
     @Autowired MockMvc mockMvc;
-    @MockBean DocService docService;
-    @MockBean ProductService productService;
-    @MockBean ProductExportService productExportService;
 
     // ========== E.3 createDocument ==========
 

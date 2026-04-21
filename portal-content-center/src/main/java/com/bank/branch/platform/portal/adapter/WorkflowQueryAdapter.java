@@ -1,17 +1,21 @@
 package com.bank.branch.platform.portal.adapter;
 
 import com.bank.branch.platform.portal.adapter.dto.PortalTodoItem;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * WorkflowQueryApi 适配器，封装跨模块降级逻辑。
- * <p>V1 阶段 WorkflowQueryApi bean 不存在，自动返回空数据。</p>
+ * <p>优先调用 workflow-center 正式只读 Bean；当上游 Bean 缺失或异常时，仍返回降级空数据。</p>
  */
 @Slf4j
 @Service
@@ -49,14 +53,49 @@ public class WorkflowQueryAdapter {
      */
     public List<PortalTodoItem> listPending(String empId, int limit) {
         if (workflowQueryApi == null) {
-            log.debug("WorkflowQueryApi bean is null, returning empty list (V1 fallback)");
+            log.debug("WorkflowQueryApi bean is null, returning empty list fallback");
             return Collections.emptyList();
         }
         try {
-            return workflowQueryApi.listRecentPendingTasks(empId, limit);
+            return workflowQueryApi.listRecentPendingTasks(empId, limit).stream()
+                    .map(this::toPortalTodoItem)
+                    .filter(Objects::nonNull)
+                    .toList();
         } catch (Exception ex) {
             log.warn("WorkflowQueryApi.listRecentPendingTasks failed for empId={}", empId, ex);
             return Collections.emptyList();
         }
+    }
+
+    private PortalTodoItem toPortalTodoItem(TaskRespDTO taskRespDTO) {
+        if (taskRespDTO == null) {
+            return null;
+        }
+        PortalTodoItem item = new PortalTodoItem();
+        item.setTaskId(taskRespDTO.getTaskId());
+        item.setProcessInstanceId(taskRespDTO.getProcessInstanceId());
+        item.setProcessName(defaultIfBlank(taskRespDTO.getTitle(), taskRespDTO.getBizType()));
+        item.setTaskTitle(defaultIfBlank(taskRespDTO.getTaskName(), taskRespDTO.getTitle()));
+        item.setInitiatorName(defaultIfBlank(taskRespDTO.getStartUserName(), taskRespDTO.getStartUser()));
+        item.setInitiatedTime(formatTime(firstNonNull(taskRespDTO.getStartTime(), taskRespDTO.getTaskCreateTime())));
+        item.setLightStatus(taskRespDTO.getSlaStatus());
+        item.setOverdueInfo(null);
+        item.setBizDetailUrl(null);
+        return item;
+    }
+
+    private LocalDateTime firstNonNull(LocalDateTime preferred, LocalDateTime fallback) {
+        return preferred != null ? preferred : fallback;
+    }
+
+    private String formatTime(LocalDateTime time) {
+        return time == null ? null : time.toString();
+    }
+
+    private String defaultIfBlank(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return value;
     }
 }

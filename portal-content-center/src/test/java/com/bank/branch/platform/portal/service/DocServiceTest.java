@@ -3,6 +3,7 @@ package com.bank.branch.platform.portal.service;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.portal.controller.dto.doc.DocumentCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.doc.DocumentUpdateReqDTO;
@@ -43,6 +44,7 @@ class DocServiceTest {
     @Mock DocInfoMapper docInfoMapper;
     @Mock CurrentUserApi currentUserApi;
     @Mock FileApi fileApi;
+    @Mock AuditApi auditApi;
     @InjectMocks DocService docService;
 
     // ========== listDocuments ==========
@@ -144,6 +146,7 @@ class DocServiceTest {
         ArgumentCaptor<DocInfo> captor = ArgumentCaptor.forClass(DocInfo.class);
         verify(docInfoMapper).insert(captor.capture());
         assertThat(captor.getValue().getId()).isNotBlank();
+        verify(auditApi).log(any());
     }
 
     // ========== updateDocument ==========
@@ -165,6 +168,7 @@ class DocServiceTest {
         assertThat(patch.getId()).isEqualTo("doc-001");
         assertThat(patch.getDocTitle()).isEqualTo("新标题");
         assertThat(patch.getUpdatedBy()).isEqualTo("OPERATOR01");
+        verify(auditApi).log(any());
     }
 
     @Test
@@ -195,6 +199,7 @@ class DocServiceTest {
         docService.deleteDocument("doc-001");
 
         verify(docInfoMapper).softDeleteById("doc-001", "OPERATOR01");
+        verify(auditApi).log(any());
     }
 
     @Test

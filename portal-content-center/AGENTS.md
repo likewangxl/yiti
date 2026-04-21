@@ -12,7 +12,7 @@
 
 **定位**: 通用域，只做只读聚合，不持有业务状态。
 
-> **当前进度**: Phase 0 骨架阶段。本模块只有 Maven 工程结构，没有 Java 源代码。后续任务 (Task 0.2 ~ Task 0.N) 会陆续填充包结构、错误码枚举、配置类、测试基础设施等。
+> **当前进度**: V1 首版切片已落地。模块已包含 controller / service / mapper / api / facade / config / adapter / listener / test 基础设施，覆盖工作台聚合、快捷入口、导航、通讯录、产品资料库、文档管理等能力。
 
 ## 依赖关系
 
@@ -20,15 +20,15 @@
   - `common-web`, `common-trace`, `common-security`, `common-aop`, `common-db`
   - `auth-permission-center` (CurrentUserApi, BizScopeApi, OrgApi)
   - `system-governance-center` (DictApi, ConfigApi, FileApi, NotifyApi, AuditApi)
-  - `workflow-center` (WorkflowApi — 工作台待办查询)
+  - `workflow-center` (WorkflowApi + WorkflowQueryApi — 工作台待办/流程映射只读能力)
 - **不依赖**: `customer-marketing-center`, `business-application-center`, `performance-engine-center`, `report-analytics-center` (portal 只聚合，不依赖核心域)
 - **被依赖**: `customer-marketing-center`, `business-application-center` 等业务模块 (通过 `*Api` 接口复用产品库、文档库等能力)
 
-## 包结构 (Phase 0 完成后目标结构)
+## 包结构（当前已落地）
 
 ```
 src/main/java/com/bank/branch/platform/portal/
-├── api/              # 对外 API 接口 (Phase 1+ 填充)
+├── api/              # 对外 API 接口
 │   └── dto/          # 请求/响应 DTO
 ├── controller/       # REST 控制器
 ├── facade/           # API 实现
@@ -56,11 +56,10 @@ src/main/java/com/bank/branch/platform/portal/
 - 共享开发规范: `docs/common-dev-guide.md`
 - 错误码前缀: `PORTAL-{HTTP_STATUS}{SEQ}` (例如 PORTAL-40003, PORTAL-40905), 模块前缀注册见 `docs/common-dev-guide.md` §2
 
-## Phase 0 说明
+## 当前实现说明
 
-本文件目前只是最小化骨架说明。在 Phase 0 全部任务完成后，将补充：
-- 对外 API 接口清单和方法签名
-- REST 端点映射表
-- 数据库表清单
-- 缓存策略
-- 审计要求对齐说明
+- 已实现 REST 端点见 `src/main/java/com/bank/branch/platform/portal/controller/`
+- 已实现对外 `*Api` 见 `src/main/java/com/bank/branch/platform/portal/api/`
+- 已实现数据库实体/Mapper 见 `src/main/java/com/bank/branch/platform/portal/entity/` 与 `src/main/resources/mapper/portal/`
+- 当前对 workflow 待读查询通过正式 `WorkflowQueryApi` + 本地 `WorkflowQueryAdapter` 做降级封装
+- 当前产品导出为 **V1 同步导出**（`<=5000` 行），超过阈值直接拒绝，不做异步导出

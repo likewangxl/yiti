@@ -2,6 +2,7 @@ package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.portal.api.dto.NavDTO;
 import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.nav.NavCreateReqDTO;
@@ -47,6 +48,7 @@ class NavServiceTest {
 
     @Mock PortalNavMapper portalNavMapper;
     @Mock CurrentUserApi currentUserApi;
+    @Mock AuditApi auditApi;
     @Mock RedisTemplate<String, Object> redisTemplate;
     @InjectMocks NavService navService;
 
@@ -197,6 +199,7 @@ class NavServiceTest {
         navService.deleteNav("nav-001");
 
         verify(portalNavMapper).softDeleteById("nav-001", "OPERATOR01");
+        verify(auditApi).log(any());
     }
 
     @Test

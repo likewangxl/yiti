@@ -13,6 +13,7 @@
 **对外契约**: 5 个 `*Api` 接口 + 2 个 `*Adapter` 接口 + 24 个 REST 端点。
 
 **定位**: 通用域，只做只读聚合与内容管理，不持有核心业务状态。
+> **当前进度**: V1 首版切片已落地。模块已包含 controller / service / mapper / api / facade / config / adapter / listener / test 基础设施，覆盖工作台聚合、快捷入口、导航、通讯录、产品资料库、文档管理等能力。
 
 ## 依赖关系
 
@@ -244,4 +245,12 @@ Cache-Aside 模式，所有 Key 前缀 `portal:`，默认 TTL 5 分钟 + 10% 随
 - 模块设计文档: `docs/modules/portal-content-center/` (9 份)
 - 切片实现计划: `docs/superpowers/plans/` (portal V1 slice 计划 r3)
 - 共享开发规范: `docs/common-dev-guide.md`
-- 错误码前缀: `PORTAL-{HTTP_STATUS}{SEQ}`
+- 错误码前缀: `PORTAL-{HTTP_STATUS}{SEQ}` (例如 PORTAL-40003, PORTAL-40905), 模块前缀注册见 `docs/common-dev-guide.md` §2
+
+## 当前实现说明
+
+- 已实现 REST 端点见 `src/main/java/com/bank/branch/platform/portal/controller/`
+- 已实现对外 `*Api` 见 `src/main/java/com/bank/branch/platform/portal/api/`
+- 已实现数据库实体/Mapper 见 `src/main/java/com/bank/branch/platform/portal/entity/` 与 `src/main/resources/mapper/portal/`
+- 当前对 workflow 待读查询仍使用本地 `WorkflowQueryAdapter` 降级
+- 当前产品导出为 **V1 同步导出**（`<=5000` 行），超过阈值直接拒绝，不做异步导出

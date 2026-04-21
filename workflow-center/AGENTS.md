@@ -6,7 +6,7 @@
 
 - `workflow-center` 是平台内**唯一**直接调用 Flowable API 的模块。
 - 当前模块同时提供三类能力：
-  - `WorkflowApi`：跨模块同步 Java 契约。
+  - `WorkflowApi` / `WorkflowQueryApi`：跨模块同步 Java 契约。
   - `/api/workflow/**`：面向前端、联调和真实环境测试的 REST 入口。
   - `/api/admin/workflow/**`：流程配置管理入口。
 - 近期 Flowable 联调改动后，涉及控制器、DTO、事件、权限或流程映射的调整，必须同步本文件和 `docs/modules/workflow-center/04-对外API契约.md`。
@@ -15,8 +15,15 @@
 
 ### 跨模块 Java API
 
-当前真正对外公开并有实现的 Java 接口只有 `WorkflowApi`：
+当前真正对外公开并有实现的 Java 接口包括 `WorkflowApi` 与 `WorkflowQueryApi`：
 
+- `queryTodoList(...)`
+- `queryDoneList(...)`
+- `countPendingTasks(String empId)`
+- `listRecentPendingTasks(String empId, int limit)`
+- `getTaskDetail(String taskId, String empId)`
+- `getProcessHistory(String processInstanceId)`
+- `getProcessNodes(String processInstanceId)`
 - `startProcess(StartProcessCmd cmd)`
 - `cancelProcess(String processInstanceId, String reason)`
 - `getProcessByBusinessKey(String businessKey)`
@@ -24,9 +31,8 @@
 
 ### 当前未公开为 Java API 的能力
 
-下列名称在旧文档或规划稿中出现过，但**当前代码库中没有对应对外接口/Facade**：
+下列名称在旧文档或规划稿中出现过，但**当前代码库中仍没有对应对外接口/Facade**：
 
-- `WorkflowQueryApi`
 - `WorkflowConfigApi`
 - `WorkflowParticipantService`
 
@@ -41,7 +47,7 @@
 ```text
 workflow-center/
 ├─ src/main/java/com/bank/branch/platform/workflow/
-│  ├─ api/                      # 仅 WorkflowApi + DTO
+│  ├─ api/                      # WorkflowApi / WorkflowQueryApi + DTO
 │  ├─ config/                   # FlowableConfig
 │  ├─ controller/               # 5 个 REST 控制器
 │  │  ├─ ProcessCommandController
@@ -51,7 +57,7 @@ workflow-center/
 │  │  └─ WorkflowAdminController
 │  ├─ entity/                   # BizProcessMap / WfNodeCandidateConf / WfNodeFormConf / WfTimeoutRule
 │  ├─ enums/                    # ProcessStatus / SlaStatus / WfErrorCode
-│  ├─ facade/                   # WorkflowFacade（WorkflowApi 实现）
+│  ├─ facade/                   # WorkflowFacade / WorkflowQueryFacade
 │  ├─ listener/                 # TaskAssignmentListener / ProcessCompletedListener
 │  ├─ mapper/                   # 4 个 MyBatis Mapper
 │  └─ service/                  # 8 个 Service

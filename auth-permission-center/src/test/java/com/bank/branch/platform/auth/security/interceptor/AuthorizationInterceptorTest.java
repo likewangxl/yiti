@@ -104,7 +104,7 @@ class AuthorizationInterceptorTest {
     }
 
     @Test
-    void preHandle_noBizAuthAnnotation_returns403() throws Exception {
+    void preHandle_noBizAuthAnnotation_allowsRequestAndBuildsMinimalContext() throws Exception {
         PtResource res = makeResource("RES_01");
         when(resourceMatcher.match(any(), any())).thenReturn(Optional.of(res));
         when(rbacAuthorizer.authorize("E001", "RES_01")).thenReturn(true);
@@ -112,8 +112,13 @@ class AuthorizationInterceptorTest {
 
         boolean result = interceptor.preHandle(request, response, handler);
 
-        assertThat(result).isFalse();
-        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
+        assertThat(result).isTrue();
+        com.bank.branch.platform.common.security.context.DataScopeContext commonCtx =
+            com.bank.branch.platform.common.security.context.DataScopeContext.current();
+        assertThat(commonCtx).isNotNull();
+        assertThat(commonCtx.getEmpId()).isEqualTo("E001");
+        assertThat(commonCtx.getOrgCode()).isEqualTo("ORG001");
+        assertThat(commonCtx.getCandidateGroupKeys()).containsExactly("ROLE:CUST_MANAGER");
     }
 
     @Test

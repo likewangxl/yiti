@@ -1,8 +1,11 @@
 package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.portal.controller.dto.doc.DocumentCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.doc.DocumentUpdateReqDTO;
@@ -33,6 +36,7 @@ public class DocService {
     private final DocInfoMapper docInfoMapper;
     private final CurrentUserApi currentUserApi;
     private final FileApi fileApi;
+    private final AuditApi auditApi;
 
     /**
      * 分页查询文档列表。
@@ -110,6 +114,7 @@ public class DocService {
         entity.setUpdatedTime(LocalDateTime.now());
 
         docInfoMapper.insert(entity);
+        auditCreate(entity, currentEmpId);
         log.info("[DocService.createDocument] 新增文档成功, id={}, title={}", docId, req.getDocTitle());
         return entity;
     }
@@ -142,6 +147,7 @@ public class DocService {
         patch.setUpdatedBy(currentEmpId);
 
         docInfoMapper.updateById(patch);
+        auditUpdate(id, req, currentEmpId);
         log.info("[DocService.updateDocument] 更新文档成功, id={}", id);
     }
 
@@ -162,6 +168,7 @@ public class DocService {
 
         String currentEmpId = currentUserApi.getCurrentEmpId();
         docInfoMapper.softDeleteById(id, currentEmpId);
+        auditDelete(existing, currentEmpId);
         log.info("[DocService.deleteDocument] 逻辑删除文档成功, id={}", id);
     }
 
@@ -173,5 +180,52 @@ public class DocService {
      */
     public List<DocInfo> listActiveByCategory(String category) {
         return docInfoMapper.listActiveByCategory(category);
+    }
+
+    private void auditCreate(DocInfo entity, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("DOC")
+                .bizAction("CREATE")
+                .resourceUrl("/api/admin/documents")
+                .requestMethod("POST")
+                .requestParams("id=" + entity.getId() + "&docTitle=" + entity.getDocTitle() + "&fileObjectId=" + entity.getFileObjectId())
+                .responseStatus(200)
+                .build());
+    }
+
+    private void auditUpdate(String docId, DocumentUpdateReqDTO req, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("DOC")
+                .bizAction("EDIT")
+                .resourceUrl("/api/admin/documents/" + docId)
+                .requestMethod("PUT")
+                .requestParams("id=" + docId + "&docTitle=" + req.getDocTitle() + "&fileObjectId=" + req.getFileObjectId())
+                .responseStatus(200)
+                .build());
+    }
+
+    private void auditDelete(DocInfo entity, String operatorEmpId) {
+        safeAuditLog(AuditLogCmd.builder()
+                .traceId(MdcUtils.getTraceId())
+                .empId(operatorEmpId)
+                .bizType("DOC")
+                .bizAction("DELETE")
+                .resourceUrl("/api/admin/documents/" + entity.getId())
+                .requestMethod("DELETE")
+                .requestParams("id=" + entity.getId() + "&docTitle=" + entity.getDocTitle() + "&fileObjectId=" + entity.getFileObjectId())
+                .responseStatus(200)
+                .build());
+    }
+
+    private void safeAuditLog(AuditLogCmd cmd) {
+        try {
+            auditApi.log(cmd);
+        } catch (Exception ex) {
+            log.warn("[DocService] audit log failed, action={}", cmd.getBizAction(), ex);
+        }
     }
 }
