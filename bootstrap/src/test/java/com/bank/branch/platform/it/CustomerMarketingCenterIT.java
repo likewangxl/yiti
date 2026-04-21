@@ -144,7 +144,7 @@ class CustomerMarketingCenterIT {
                 OPERATOR_ORG_ID
         );
 
-        touchTaskService.complete(touchTaskId);
+        touchTaskService.markSuccess(touchTaskId);
 
         assertThat(tagApi.getById(tag.getId())).extracting(CustTag::getTagCode).isEqualTo("PHASE1_TAG");
         assertThat(jdbcTemplate.queryForObject(
