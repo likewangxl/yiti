@@ -70,41 +70,10 @@ public class LoanApplyDTOConverter {
         if (entities == null || entities.isEmpty()) {
             return Collections.emptyList();
         }
-
-        // 收集全部不重复的 custId，批量查询客户名称 Map
-        Set<String> custIds = entities.stream()
-                .map(LoanApply::getCustId)
-                .filter(StringUtils::hasText)
-                .collect(Collectors.toSet());
-
-        Map<String, String> custNameMap;
-        if (custIds.isEmpty()) {
-            custNameMap = Collections.emptyMap();
-        } else {
-            try {
-                custNameMap = customerQueryApi.listCustomers(new ArrayList<>(custIds))
-                        .stream()
-                        .filter(c -> c.getId() != null)
-                        .collect(Collectors.toMap(
-                                // CustomerDTO.id 字段存储的即是 custId(与 CustMaster 主键对应),
-                                // 可直接作为 custId 查找的 Map key；
-                                // 若将来 CustomerDTO 引入独立业务 id 字段, 此处必须同步更新, 否则 custName 全部变空
-                                CustomerDTO::getId,  // ← CustomerDTO.id == custId,非通用业务 id
-                                c -> Optional.ofNullable(c.getCustName()).orElse(""),
-                                (a, b) -> a));
-            } catch (Exception e) {
-                log.warn("[LoanApplyDTOConverter.toDTOList] 批量查询客户名称失败，将使用空名称降级", e);
-                custNameMap = Collections.emptyMap();
-            }
-        }
-
-        final Map<String, String> finalCustNameMap = custNameMap;
+        Map<String, String> custNameMap = buildCustNameMap(entities);
         return entities.stream().map(entity -> {
             LoanApplyDTO dto = toDTOWithoutCustName(entity);
-            String name = entity.getCustId() != null
-                    ? finalCustNameMap.getOrDefault(entity.getCustId(), "")
-                    : "";
-            dto.setCustName(name);
+            dto.setCustName(custNameMap.getOrDefault(entity.getCustId() != null ? entity.getCustId() : "", ""));
             return dto;
         }).collect(Collectors.toList());
     }
@@ -137,38 +106,10 @@ public class LoanApplyDTOConverter {
         if (entities == null || entities.isEmpty()) {
             return Collections.emptyList();
         }
-
-        // 收集全部不重复的 custId，批量查询客户名称 Map
-        Set<String> custIds = entities.stream()
-                .map(LoanApply::getCustId)
-                .filter(StringUtils::hasText)
-                .collect(Collectors.toSet());
-
-        Map<String, String> custNameMap;
-        if (custIds.isEmpty()) {
-            custNameMap = Collections.emptyMap();
-        } else {
-            try {
-                custNameMap = customerQueryApi.listCustomers(new ArrayList<>(custIds))
-                        .stream()
-                        .filter(c -> c.getId() != null)
-                        .collect(Collectors.toMap(
-                                CustomerDTO::getId,
-                                c -> Optional.ofNullable(c.getCustName()).orElse(""),
-                                (a, b) -> a));
-            } catch (Exception e) {
-                log.warn("[LoanApplyDTOConverter.toListItems] 批量查询客户名称失败，将使用空名称降级", e);
-                custNameMap = Collections.emptyMap();
-            }
-        }
-
-        final Map<String, String> finalCustNameMap = custNameMap;
+        Map<String, String> custNameMap = buildCustNameMap(entities);
         return entities.stream().map(entity -> {
             LoanApplyListItemDTO dto = toListItemWithoutCustName(entity);
-            String name = entity.getCustId() != null
-                    ? finalCustNameMap.getOrDefault(entity.getCustId(), "")
-                    : "";
-            dto.setCustName(name);
+            dto.setCustName(custNameMap.getOrDefault(entity.getCustId() != null ? entity.getCustId() : "", ""));
             return dto;
         }).collect(Collectors.toList());
     }
@@ -224,6 +165,38 @@ public class LoanApplyDTOConverter {
         dto.setCreatedTime(entity.getCreatedTime());
         // 注意：不复制 deleted、businessKey、processInstanceId、updatedBy、updatedTime
         return dto;
+    }
+
+    /**
+     * 批量查询客户名称，合并为 Map。
+     * <p>
+     * CustomerDTO.id 字段存储的即是 custId（与 CustMaster 主键对应），
+     * 可直接作为 custId 查找的 Map key；若将来 CustomerDTO 引入独立业务 id 字段，
+     * 此处必须同步更新，否则 custName 全部变空。
+     * </p>
+     *
+     * @param entities 贷款申请实体列表
+     * @return custId → custName Map；查询失败时返回空 Map
+     */
+    private Map<String, String> buildCustNameMap(List<LoanApply> entities) {
+        Set<String> custIds = entities.stream()
+                .map(LoanApply::getCustId)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        if (custIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return customerQueryApi.listCustomers(new ArrayList<>(custIds)).stream()
+                    .filter(c -> c.getId() != null)
+                    .collect(Collectors.toMap(
+                            CustomerDTO::getId,  // ← CustomerDTO.id == custId,非通用业务 id
+                            c -> Optional.ofNullable(c.getCustName()).orElse(""),
+                            (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("[LoanApplyDTOConverter.buildCustNameMap] 批量查询客户名称失败", e);
+            return Collections.emptyMap();
+        }
     }
 
     /**

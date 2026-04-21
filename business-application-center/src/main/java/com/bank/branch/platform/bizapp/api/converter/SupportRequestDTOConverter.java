@@ -188,16 +188,21 @@ public class SupportRequestDTOConverter {
      * <ul>
      *   <li>productId 非空 + supportDeptId 为空 → "A"（产品直达）</li>
      *   <li>其他情况 → "B"（部门承接）</li>
+     *   <li>productId 和 supportDeptId 均为空 → 降级返回 "B"，并输出 WARN 日志（可能为数据异常）</li>
      * </ul>
      * 规则依据 SupportService.submit 的场景路由逻辑。
      *
-     * @param productId    产品ID
+     * @param productId     产品ID
      * @param supportDeptId 承接部门ID
      * @return 场景标识 "A" 或 "B"
      */
     private String inferScenario(String productId, String supportDeptId) {
         boolean hasProduct = StringUtils.hasText(productId);
         boolean hasDept = StringUtils.hasText(supportDeptId);
+        if (!hasProduct && !hasDept) {
+            log.warn("[SupportRequestDTOConverter.inferScenario] productId 和 supportDeptId 均为空，"
+                    + "可能为数据异常，降级推断为 B");
+        }
         return (hasProduct && !hasDept) ? "A" : "B";
     }
 
