@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,14 +20,34 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - SupportController: create / submit / delete / cancel / export (5 个)
  * - SupportDeptController: dispatch / transfer / complete (3 个)
  * </p>
+ *
+ * <p><b>未覆盖的端点(待实现):</b> 文档 07-审计要求 §1 共 18 条,本测试覆盖 14 个已实现端点。
+ * 以下 4 个端点尚未在 Controller 中实现,待后续实现时需同步补齐 @AuditLog:
+ * <ul>
+ *   <li>§1 序号 7:POST /api/loans/\{id}/tasks/\{taskId}/complete (节点审批)</li>
+ *   <li>§1 序号 9:PUT /api/support-requests/\{id} (支持申请更新)</li>
+ *   <li>§1 序号 17:POST /api/support-dept/requests/\{id}/reject (承接侧驳回)</li>
+ *   <li>§1 序号 18:GET /api/support-dept/requests/export (承接侧导出)</li>
+ * </ul>
+ *
+ * @since Task 1.6
  */
 class HighRiskEndpointAuditTest {
 
-    /** 辅助方法：按方法名找第一个匹配的方法 */
+    /**
+     * 辅助方法：按方法名查找方法，存在重载时抛出异常以避免假绿。
+     * 若存在多个同名重载，请改用 {@link Class#getDeclaredMethod(String, Class[])} 精确匹配。
+     */
     private Method findMethod(Class<?> cls, String methodName) {
-        return Arrays.stream(cls.getDeclaredMethods())
+        List<Method> matches = Arrays.stream(cls.getDeclaredMethods())
                 .filter(m -> m.getName().equals(methodName))
-                .findFirst()
+                .collect(Collectors.toList());
+        if (matches.size() > 1) {
+            throw new IllegalStateException(
+                    "在 " + cls.getSimpleName() + " 中方法名 " + methodName + " 存在 " + matches.size()
+                            + " 个重载,请改用 getDeclaredMethod(name, paramTypes) 精确查找");
+        }
+        return matches.stream().findFirst()
                 .orElseThrow(() -> new IllegalStateException(
                         "在 " + cls.getSimpleName() + " 中未找到方法: " + methodName));
     }
