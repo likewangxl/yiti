@@ -42,9 +42,6 @@ public class SupportRequestListItemDTO {
     /** 状态：DRAFT/IN_APPROVAL/IN_PROGRESS/COMPLETED/REJECTED/CANCELLED */
     private String status;
 
-    /** 归属机构（发起侧ORG_CODE） */
-    private String ownerOrgId;
-
     /** 创建时间 */
     private LocalDateTime createdTime;
 }

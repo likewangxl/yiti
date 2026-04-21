@@ -3,6 +3,7 @@ package com.bank.branch.platform.bizapp.api.converter;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
@@ -212,5 +213,38 @@ class SupportRequestDTOConverterTest {
     @DisplayName("toDTOList null 输入时返回空列表，不抛异常")
     void toDTOList_nullInput_returnsEmptyList() {
         assertThat(converter.toDTOList(null)).isEmpty();
+    }
+
+    // -----------------------------------------------------------------------
+    // scenario 推断测试
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("toListItem scenario 推断 — productId 非空 + supportDeptId 空 → A")
+    void toListItem_scenarioA() {
+        // custId/supportDeptId 均为 null，resolveCustName/resolveDeptName 直接返回空串，无需 mock
+        SupportRequest entity = new SupportRequest();
+        entity.setId("sr1");
+        entity.setProductId("P001");
+        entity.setSupportDeptId(null);
+        // productId 非空，resolveProductName 会被调用，mock 使其返回空串
+        when(productApi.getProduct("P001")).thenReturn(Optional.empty());
+
+        SupportRequestListItemDTO dto = converter.toListItem(entity);
+        assertThat(dto.getScenario()).isEqualTo("A");
+    }
+
+    @Test
+    @DisplayName("toListItem scenario 推断 — 否则 → B")
+    void toListItem_scenarioB() {
+        // custId/productId 均为 null，resolveCustName/resolveProductName 直接返回空串，无需 mock
+        SupportRequest entity = new SupportRequest();
+        entity.setId("sr2");
+        entity.setProductId(null);
+        entity.setSupportDeptId("DEPT001");
+        when(orgApi.getOrg("DEPT001")).thenReturn(buildOrgDTO("DEPT001", "测试部门"));
+
+        SupportRequestListItemDTO dto = converter.toListItem(entity);
+        assertThat(dto.getScenario()).isEqualTo("B");
     }
 }

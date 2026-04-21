@@ -163,6 +163,10 @@ public class SupportRequestDTOConverter {
 
     /**
      * 纯字段复制到列表条目 DTO，不含冗余展示字段和敏感/内部字段。
+     * <p>
+     * ownerOrgId 为内部字段，不暴露到 API 列表层。
+     * scenario 由 productId/supportDeptId 组合推断后填入。
+     * </p>
      *
      * @param entity 支持申请实体
      * @return 未填充冗余字段的列表条目 DTO
@@ -173,10 +177,28 @@ public class SupportRequestDTOConverter {
         dto.setRequestNo(entity.getRequestNo());
         dto.setSubmitGroupId(entity.getSubmitGroupId());
         dto.setStatus(entity.getStatus());
-        dto.setOwnerOrgId(entity.getOwnerOrgId());
+        dto.setScenario(inferScenario(entity.getProductId(), entity.getSupportDeptId()));
         dto.setCreatedTime(entity.getCreatedTime());
-        // 注意：不复制 deleted、businessKey、processInstanceId、updatedBy、updatedTime
+        // 注意：不复制 deleted、businessKey、processInstanceId、updatedBy、updatedTime、ownerOrgId
         return dto;
+    }
+
+    /**
+     * 根据 productId / supportDeptId 组合推断场景。
+     * <ul>
+     *   <li>productId 非空 + supportDeptId 为空 → "A"（产品直达）</li>
+     *   <li>其他情况 → "B"（部门承接）</li>
+     * </ul>
+     * 规则依据 SupportService.submit 的场景路由逻辑。
+     *
+     * @param productId    产品ID
+     * @param supportDeptId 承接部门ID
+     * @return 场景标识 "A" 或 "B"
+     */
+    private String inferScenario(String productId, String supportDeptId) {
+        boolean hasProduct = StringUtils.hasText(productId);
+        boolean hasDept = StringUtils.hasText(supportDeptId);
+        return (hasProduct && !hasDept) ? "A" : "B";
     }
 
     /**

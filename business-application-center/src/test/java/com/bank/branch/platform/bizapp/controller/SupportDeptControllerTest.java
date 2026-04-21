@@ -1,7 +1,6 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
-import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.service.SupportDeptService;
 import com.bank.branch.platform.bizapp.support.AbstractControllerIntegrationTest;
@@ -136,17 +135,4 @@ class SupportDeptControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value("0"));
     }
 
-    // ==================== 辅助方法 ====================
-
-    private SupportRequest buildRequest(String id) {
-        SupportRequest sr = new SupportRequest();
-        sr.setId(id);
-        sr.setRequestNo("SR20260414000001");
-        sr.setCustId("CUST001");
-        sr.setStatus(SupportStatus.IN_PROGRESS.getCode());
-        sr.setSupportDeptId("DEPT001");
-        sr.setOwnerOrgId("ORG001");
-        sr.setDeleted(0);
-        return sr;
-    }
 }
