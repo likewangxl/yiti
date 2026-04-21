@@ -18,6 +18,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -136,6 +139,9 @@ class LoanApplyDTOConverterTest {
         // deleted 字段不存在
         assertThat(BeanUtils.getPropertyDescriptors(LoanApplyDTO.class))
                 .noneMatch(pd -> pd.getName().equals("deleted"));
+        // 防 N+1 回归：批量 API 必须只调用 1 次，单条查询必须从不调用
+        verify(customerQueryApi, times(1)).listCustomers(org.mockito.ArgumentMatchers.anyList());
+        verify(customerQueryApi, never()).getCustomer(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -143,5 +149,11 @@ class LoanApplyDTOConverterTest {
     void toDTOList_emptyInput_returnsEmptyList() {
         List<LoanApplyDTO> result = converter.toDTOList(List.of());
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("toDTOList null 输入时返回空列表，不抛异常")
+    void toDTOList_nullInput_returnsEmptyList() {
+        assertThat(converter.toDTOList(null)).isEmpty();
     }
 }

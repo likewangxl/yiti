@@ -85,7 +85,10 @@ public class LoanApplyDTOConverter {
                         .stream()
                         .filter(c -> c.getId() != null)
                         .collect(Collectors.toMap(
-                                CustomerDTO::getId,
+                                // CustomerDTO.id 字段存储的即是 custId(与 CustMaster 主键对应),
+                                // 可直接作为 custId 查找的 Map key；
+                                // 若将来 CustomerDTO 引入独立业务 id 字段, 此处必须同步更新, 否则 custName 全部变空
+                                CustomerDTO::getId,  // ← CustomerDTO.id == custId,非通用业务 id
                                 c -> Optional.ofNullable(c.getCustName()).orElse(""),
                                 (a, b) -> a));
             } catch (Exception e) {

@@ -22,6 +22,9 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -190,6 +193,12 @@ class SupportRequestDTOConverterTest {
         assertThat(result.get(0).getSupportDeptName()).isEqualTo("公司金融部");
         assertThat(result.get(1).getCustName()).isEqualTo("阿里巴巴");
         assertThat(result.get(1).getSupportDeptName()).isEqualTo("投行部");
+        // 防 N+1 回归：批量 API 必须只调用 1 次，单条查询必须从不调用
+        verify(customerQueryApi, times(1)).listCustomers(org.mockito.ArgumentMatchers.anyList());
+        verify(productApi, times(1)).getProducts(org.mockito.ArgumentMatchers.anyList());
+        verify(customerQueryApi, never()).getCustomer(org.mockito.ArgumentMatchers.anyString());
+        verify(productApi, never()).getProduct(org.mockito.ArgumentMatchers.anyString());
+        // 注意：OrgApi 因无批量接口，批量路径仍会逐条 getOrg，此处不加 never 断言
     }
 
     @Test
@@ -197,5 +206,11 @@ class SupportRequestDTOConverterTest {
     void toDTOList_emptyInput_returnsEmptyList() {
         List<SupportRequestDTO> result = converter.toDTOList(List.of());
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("toDTOList null 输入时返回空列表，不抛异常")
+    void toDTOList_nullInput_returnsEmptyList() {
+        assertThat(converter.toDTOList(null)).isEmpty();
     }
 }
