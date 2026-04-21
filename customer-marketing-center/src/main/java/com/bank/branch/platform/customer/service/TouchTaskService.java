@@ -133,13 +133,16 @@ public class TouchTaskService {
     /**
      * 取消触达任务。
      * <p>
-     * 前置条件：任务状态必须为 PENDING，否则抛出 TOUCH_TASK_NOT_PENDING。
+     * 允许起始状态：PENDING、IN_PROGRESS（由状态机校验）。
+     * SUCCESS/CANCELLED 终态不允许取消，抛 CUST-40010。
      * 取消后状态变更为 CANCELLED，记录 cancelTime。
      * reason 仅记录日志，TouchTask 表无 cancelReason 字段。
      * </p>
      *
      * @param taskId 任务ID
      * @param reason 取消原因（仅记日志，不持久化到 touch_task 表）
+     * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40010 非法状态转移（SUCCESS/CANCELLED 终态不允许再转移）
      */
     @Transactional
     public void cancel(String taskId, String reason) {
@@ -147,11 +150,9 @@ public class TouchTaskService {
 
         TouchTask task = getById(taskId);
 
-        // 非 PENDING 状态不允许取消
-        if (!TouchTaskStatus.PENDING.getCode().equals(task.getTaskStatus())) {
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage());
-        }
+        // 通过状态机校验转移合法性：PENDING/IN_PROGRESS → CANCELLED 合法，终态不可转
+        TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
+        stateMachine.assertTransition(from, TouchTaskStatus.CANCELLED);
 
         LocalDateTime now = LocalDateTime.now();
         TouchTask updateEntity = new TouchTask();
@@ -263,15 +264,18 @@ public class TouchTaskService {
         for (TouchTask task : pendingTasks) {
             String newSlaStatus = calcNewSlaStatus(task, now);
             if (newSlaStatus != null && !newSlaStatus.equals(task.getSlaStatus())) {
-                // 仅在状态有变化时执行更新
+                // 仅在状态有变化时执行更新；同步维护 slaWarning 契约字段
+                boolean warning = SlaStatus.YELLOW.getCode().equals(newSlaStatus)
+                        || SlaStatus.RED.getCode().equals(newSlaStatus);
                 TouchTask updateEntity = new TouchTask();
                 updateEntity.setId(task.getId());
                 updateEntity.setSlaStatus(newSlaStatus);
+                updateEntity.setSlaWarning(warning);
                 updateEntity.setUpdatedTime(now);
                 taskMapper.updateById(updateEntity);
                 updated++;
-                log.debug("[TouchTaskService.refreshSla] task={} SLA {} -> {}",
-                        task.getId(), task.getSlaStatus(), newSlaStatus);
+                log.debug("[TouchTaskService.refreshSla] task={} SLA {} -> {}, slaWarning={}",
+                        task.getId(), task.getSlaStatus(), newSlaStatus, warning);
             }
         }
 

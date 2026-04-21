@@ -284,6 +284,140 @@ class TouchTaskServiceTest {
         assertThat(captor.getValue().getSlaStatus()).isEqualTo(SlaStatus.RED.getCode());
     }
 
+    // ==================== cancel 状态机化 ====================
+
+    @Test
+    void cancel_allowsPending() {
+        // given: PENDING 状态 → CANCELLED 合法
+        TouchTask task = buildPendingTask("T-P");
+        when(taskMapper.selectById("T-P")).thenReturn(task);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when: 应当正常完成，不抛异常
+        touchTaskService.cancel("T-P", "客户取消");
+
+        // then: 状态更新为 CANCELLED
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getTaskStatus()).isEqualTo(TouchTaskStatus.CANCELLED.getCode());
+        assertThat(captor.getValue().getCancelTime()).isNotNull();
+    }
+
+    @Test
+    void cancel_allowsInProgress() {
+        // given: IN_PROGRESS 状态 → CANCELLED 也合法（状态机化后新增支持）
+        TouchTask task = buildPendingTask("T-IP");
+        task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
+        when(taskMapper.selectById("T-IP")).thenReturn(task);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when: 应当正常完成，不抛异常
+        touchTaskService.cancel("T-IP", "客户取消");
+
+        // then: 状态更新为 CANCELLED
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getTaskStatus()).isEqualTo(TouchTaskStatus.CANCELLED.getCode());
+    }
+
+    @Test
+    void cancel_rejectsAlreadySuccess() {
+        // given: SUCCESS 终态不允许取消
+        TouchTask t = new TouchTask();
+        t.setId("T-S");
+        t.setTaskStatus("SUCCESS");
+        when(taskMapper.selectById("T-S")).thenReturn(t);
+
+        // when/then: 状态机校验失败，抛 CUST-40010
+        assertThatThrownBy(() -> touchTaskService.cancel("T-S", "reason"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "CUST-40010");
+    }
+
+    @Test
+    void cancel_rejectsAlreadyCancelled() {
+        // given: CANCELLED 终态不允许再次取消
+        TouchTask t = new TouchTask();
+        t.setId("T-C");
+        t.setTaskStatus("CANCELLED");
+        when(taskMapper.selectById("T-C")).thenReturn(t);
+
+        // when/then: 状态机校验失败，抛 CUST-40010
+        assertThatThrownBy(() -> touchTaskService.cancel("T-C", "reason"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "CUST-40010");
+    }
+
+    // ==================== refreshSla + slaWarning 同步 ====================
+
+    @Test
+    void refreshSla_setsSlaWarningWhenYellow() {
+        // given: 任务进入预警窗口（warningTime 已过，planFinishTime 未到）
+        TouchTask task = buildPendingTask("T-Y");
+        task.setSlaStatus(SlaStatus.GREEN.getCode());
+        task.setWarningTime(LocalDateTime.now().minusMinutes(1));
+        task.setPlanFinishTime(LocalDateTime.now().plusDays(2));
+
+        when(taskMapper.selectPendingForSlaRefresh()).thenReturn(List.of(task));
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when
+        touchTaskService.refreshSla();
+
+        // then: slaStatus=YELLOW 且 slaWarning=true
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getSlaStatus()).isEqualTo(SlaStatus.YELLOW.getCode());
+        assertThat(captor.getValue().getSlaWarning()).isTrue();
+    }
+
+    @Test
+    void refreshSla_setsSlaWarningWhenRed() {
+        // given: 超出计划完成时间（RED）
+        TouchTask task = buildPendingTask("T-R");
+        task.setSlaStatus(SlaStatus.YELLOW.getCode());
+        task.setWarningTime(LocalDateTime.now().minusDays(3));
+        task.setPlanFinishTime(LocalDateTime.now().minusMinutes(1));
+
+        when(taskMapper.selectPendingForSlaRefresh()).thenReturn(List.of(task));
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when
+        touchTaskService.refreshSla();
+
+        // then: slaStatus=RED 且 slaWarning=true
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getSlaStatus()).isEqualTo(SlaStatus.RED.getCode());
+        assertThat(captor.getValue().getSlaWarning()).isTrue();
+    }
+
+    @Test
+    void refreshSla_keepsSlaWarningFalseWhenGreen() {
+        // given: 仍在 GREEN 状态（时间窗口内，无需变更 slaStatus）
+        // 但为验证初始值，构造一个 slaWarning=false 场景：创建一个任务
+        // 此任务 warningTime 还未到，calcNewSlaStatus 返回 null → 不调用 updateById
+        // 所以改用一个已是 GREEN 但之前有 slaWarning=true 的场景，验证它被置为 false
+        // 实际场景：任务从 YELLOW 恢复（不太可能，但用于单元测试边界验证）
+        // 简化：构建一个已被设为 YELLOW 的任务，但时间已恢复 GREEN 区间（不可能）
+        // → 换测试角度：GREEN 状态时 slaWarning 应为 false；
+        //   用一个没有状态变化的场景（calcNewSlaStatus=null）来确认 updateById 不被调用
+        TouchTask task = buildPendingTask("T-G");
+        task.setSlaStatus(SlaStatus.GREEN.getCode());
+        task.setSlaWarning(false);
+        // 预警时间未到（GREEN）
+        task.setWarningTime(LocalDateTime.now().plusDays(3));
+        task.setPlanFinishTime(LocalDateTime.now().plusDays(7));
+
+        when(taskMapper.selectPendingForSlaRefresh()).thenReturn(List.of(task));
+
+        // when
+        touchTaskService.refreshSla();
+
+        // then: 无状态变化，updateById 不被调用（GREEN 无需更新）
+        verify(taskMapper, org.mockito.Mockito.never()).updateById(any(TouchTask.class));
+    }
+
     // ==================== markInProgress ====================
 
     @Test

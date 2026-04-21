@@ -5,7 +5,7 @@
     <!-- touch_task 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
-        plan_finish_time, warning_time, sla_status, business_key,
+        plan_finish_time, warning_time, sla_status, sla_warning, business_key,
         success_time, cancel_time, created_time, updated_time
     </sql>
 
@@ -76,11 +76,11 @@
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
         INSERT INTO touch_task (
             id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
-            plan_finish_time, warning_time, sla_status, business_key,
+            plan_finish_time, warning_time, sla_status, sla_warning, business_key,
             success_time, cancel_time, created_time, updated_time
         ) VALUES (
             #{id}, #{taskNo}, #{custId}, #{orgId}, #{assigneeEmpId}, #{taskType}, #{taskStatus},
-            #{planFinishTime}, #{warningTime}, #{slaStatus}, #{businessKey},
+            #{planFinishTime}, #{warningTime}, #{slaStatus}, #{slaWarning}, #{businessKey},
             #{successTime}, #{cancelTime}, #{createdTime}, #{updatedTime}
         )
     </insert>
@@ -98,6 +98,7 @@
             <if test="planFinishTime != null">plan_finish_time = #{planFinishTime},</if>
             <if test="warningTime != null">warning_time = #{warningTime},</if>
             <if test="slaStatus != null">sla_status = #{slaStatus},</if>
+            <if test="slaWarning != null">sla_warning = #{slaWarning},</if>
             <if test="businessKey != null">business_key = #{businessKey},</if>
             <if test="successTime != null">success_time = #{successTime},</if>
             <if test="cancelTime != null">cancel_time = #{cancelTime},</if>
