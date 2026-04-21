@@ -76,18 +76,23 @@ public class LoanController {
     }
 
     /**
-     * 查询贷款申请详情。
+     * 查询贷款申请详情（富化版，含 custInfo 和 canOperate）。
+     * <p>
+     * 通过 {@link LoanService#getDetail} 补充客户基础信息和当前用户操作权限，
+     * 前端据此控制按钮可见性。
+     * </p>
      *
      * @param id 申请ID
-     * @return 申请详情
+     * @return 申请详情（含 custInfo 和 canOperate）
      */
     @GetMapping("/{id}")
     @BizAuth(bizType = BizType.LOAN, action = BizAction.READ)
     @Operation(summary = "查询贷款申请详情")
     public ResponseWrapper<LoanDetailResp> getById(@PathVariable String id) {
-        log.info("[LoanController.getById] id={}", id);
-        LoanApply entity = loanService.getById(id);
-        return ResponseWrapper.success(LoanDetailResp.from(entity));
+        String empId = currentUserApi.getCurrentEmpId();
+        log.info("[LoanController.getById] id={}, empId={}", id, empId);
+        LoanDetailResp resp = loanService.getDetail(id, empId);
+        return ResponseWrapper.success(resp);
     }
 
     /**

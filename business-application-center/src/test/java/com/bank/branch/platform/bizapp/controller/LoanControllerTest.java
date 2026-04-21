@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
 import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
@@ -99,14 +100,29 @@ class LoanControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void getById_shouldReturn200() throws Exception {
-        LoanApply loan = buildLoan("L001");
-        when(loanService.getById("L001")).thenReturn(loan);
+    @DisplayName("GET /api/loans/{id} 返回 LoanDetailResp 含 custInfo 和 canOperate")
+    void getById_shouldReturn200WithCustInfoAndCanOperate() throws Exception {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
+
+        LoanDetailResp.CustInfoVO custInfo = LoanDetailResp.CustInfoVO.builder()
+                .custId("CUST001")
+                .custName("测试客户")
+                .custType("CORP")
+                .build();
+        LoanDetailResp resp = new LoanDetailResp();
+        resp.setId("L001");
+        resp.setStatus(LoanStatus.DRAFT.getCode());
+        resp.setCustInfo(custInfo);
+        resp.setCanOperate(true);
+
+        when(loanService.getDetail(eq("L001"), eq("E10001"))).thenReturn(resp);
 
         mockMvc.perform(get("/api/loans/L001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.data.id").value("L001"));
+                .andExpect(jsonPath("$.data.id").value("L001"))
+                .andExpect(jsonPath("$.data.custInfo.custName").value("测试客户"))
+                .andExpect(jsonPath("$.data.canOperate").value(true));
     }
 
     // ==================== POST /api/loans ====================

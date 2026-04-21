@@ -1,5 +1,7 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
+import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
 import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.event.LoanSubmittedEvent;
@@ -9,10 +11,12 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +28,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -38,7 +43,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * LoanService 单元测试（TDD）。
- * 共17个测试用例。
+ * 共20个测试用例。
  */
 @ExtendWith(MockitoExtension.class)
 class LoanServiceTest {
@@ -63,6 +68,9 @@ class LoanServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private LoanApplyDTOConverter loanApplyDTOConverter;
 
     @InjectMocks
     private LoanService loanService;
@@ -353,6 +361,99 @@ class LoanServiceTest {
         assertThat(result.getRecords()).hasSize(1);
         assertThat(result.getTotal()).isEqualTo(1);
         assertThat(result.getPageNo()).isEqualTo(1);
+    }
+
+    // ==================== getDetail ====================
+
+    @Test
+    @DisplayName("getDetail 应填充 custInfo 和 canOperate — 创建人+DRAFT → canOperate=true")
+    void getDetail_populatesCustInfoAndCanOperate_creatorDraft_true() {
+        // given
+        LoanApply loan = new LoanApply();
+        loan.setId("la001");
+        loan.setCustId("cust001");
+        loan.setCreatedBy("emp001");
+        loan.setStatus(LoanStatus.DRAFT.getCode());
+        when(loanMapper.selectById("la001")).thenReturn(loan);
+
+        CustomerDTO cust = new CustomerDTO();
+        cust.setId("cust001");
+        cust.setCustName("测试客户");
+        cust.setCustomerType("CORP");
+        when(customerQueryApi.getCustomer("cust001")).thenReturn(Optional.of(cust));
+
+        // when: 创建人 emp001 查详情
+        LoanDetailResp resp1 = loanService.getDetail("la001", "emp001");
+
+        // then
+        assertThat(resp1.getCustInfo()).isNotNull();
+        assertThat(resp1.getCustInfo().getCustName()).isEqualTo("测试客户");
+        assertThat(resp1.getCustInfo().getCustType()).isEqualTo("CORP");
+        assertThat(resp1.getCanOperate()).isTrue();
+    }
+
+    @Test
+    @DisplayName("getDetail 非创建人 → canOperate=false")
+    void getDetail_nonCreator_canOperateFalse() {
+        // given
+        LoanApply loan = new LoanApply();
+        loan.setId("la001");
+        loan.setCustId("cust001");
+        loan.setCreatedBy("emp001");
+        loan.setStatus(LoanStatus.DRAFT.getCode());
+        when(loanMapper.selectById("la001")).thenReturn(loan);
+
+        CustomerDTO cust = new CustomerDTO();
+        cust.setId("cust001");
+        cust.setCustName("测试客户");
+        when(customerQueryApi.getCustomer("cust001")).thenReturn(Optional.of(cust));
+
+        // when: 非创建人 other 查详情
+        LoanDetailResp resp2 = loanService.getDetail("la001", "other");
+
+        // then
+        assertThat(resp2.getCanOperate()).isFalse();
+    }
+
+    @Test
+    @DisplayName("getDetail 对 COMPLETED 状态 canOperate=false（终态不可操作）")
+    void getDetail_completedStatus_canOperateFalse() {
+        // given
+        LoanApply loan = new LoanApply();
+        loan.setId("la001");
+        loan.setCustId("cust001");
+        loan.setCreatedBy("emp001");
+        loan.setStatus(LoanStatus.COMPLETED.getCode());
+        when(loanMapper.selectById("la001")).thenReturn(loan);
+        when(customerQueryApi.getCustomer(any())).thenReturn(Optional.empty());
+
+        // when: 即使是创建人，终态也不可操作
+        LoanDetailResp resp = loanService.getDetail("la001", "emp001");
+
+        // then
+        assertThat(resp.getCanOperate()).isFalse();
+    }
+
+    @Test
+    @DisplayName("getDetail 客户信息不存在时 custInfo 为 null")
+    void getDetail_customerNotFound_custInfoNull() {
+        // given
+        LoanApply loan = new LoanApply();
+        loan.setId("la001");
+        loan.setCustId("cust001");
+        loan.setCreatedBy("emp001");
+        loan.setStatus(LoanStatus.DRAFT.getCode());
+        when(loanMapper.selectById("la001")).thenReturn(loan);
+        when(customerQueryApi.getCustomer("cust001")).thenReturn(Optional.empty());
+
+        // when
+        LoanDetailResp resp = loanService.getDetail("la001", "emp001");
+
+        // then
+        assertThat(resp).isNotNull();
+        assertThat(resp.getCustInfo()).isNull();
+        // 客户不存在时，只要状态和创建人满足就 canOperate=true
+        assertThat(resp.getCanOperate()).isTrue();
     }
 
     // ==================== 辅助方法 ====================

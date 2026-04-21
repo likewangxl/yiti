@@ -2,6 +2,7 @@ package com.bank.branch.platform.bizapp.service;
 
 import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
 import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
@@ -12,6 +13,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -25,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -315,7 +319,7 @@ public class LoanService {
     }
 
     /**
-     * 按ID查询贷款申请详情。
+     * 按ID查询贷款申请详情（内部使用，供需要 Entity 的调用方）。
      *
      * @param id 申请ID
      * @return 贷款申请实体
@@ -323,6 +327,49 @@ public class LoanService {
      */
     public LoanApply getById(String id) {
         return selectByIdOrThrow(id);
+    }
+
+    /**
+     * 查询贷款申请详情（富化版，含客户基础信息和按钮可见性）。
+     * <p>
+     * 通过 {@link CustomerQueryApi#getCustomer} 补充 custInfo，
+     * 通过 {@link #determineCanOperate} 注入当前用户的操作权限信息。
+     * </p>
+     * <p>
+     * TODO V2: 集成 workflow-center 历史查询，补充 processMap / approvalLogs。
+     * </p>
+     *
+     * @param id           申请ID
+     * @param currentEmpId 当前操作人工号（用于计算 canOperate）
+     * @return 富化后的贷款申请详情响应 DTO
+     * @throws BizException BIZ-40401 如果不存在
+     */
+    public LoanDetailResp getDetail(String id, String currentEmpId) {
+        log.info("[LoanService.getDetail] id={}, currentEmpId={}", id, currentEmpId);
+
+        // 1. 查询实体（不存在则抛 BIZ-40401）
+        LoanApply entity = selectByIdOrThrow(id);
+
+        // 2. 基础字段转换
+        LoanDetailResp resp = LoanDetailResp.from(entity);
+
+        // 3. 补充客户基础信息（跨模块调用，失败时 custInfo=null，不中断主流程）
+        if (entity.getCustId() != null) {
+            Optional<CustomerDTO> custOpt = customerQueryApi.getCustomer(entity.getCustId());
+            custOpt.ifPresent(cust -> {
+                LoanDetailResp.CustInfoVO custInfo = LoanDetailResp.CustInfoVO.builder()
+                        .custId(cust.getId())
+                        .custName(cust.getCustName())
+                        .custType(cust.getCustomerType())
+                        .build();
+                resp.setCustInfo(custInfo);
+            });
+        }
+
+        // 4. 注入按钮可见性
+        resp.setCanOperate(determineCanOperate(entity, currentEmpId));
+
+        return resp;
     }
 
     /**
@@ -365,6 +412,32 @@ public class LoanService {
     }
 
     // ==================== 私有工具方法 ====================
+
+    /** 可操作的状态集合：DRAFT 和 IN_APPROVAL 为活跃态，允许创建人操作 */
+    private static final Set<String> OPERABLE_STATUSES = Set.of(
+            LoanStatus.DRAFT.getCode(),
+            LoanStatus.IN_APPROVAL.getCode()
+    );
+
+    /**
+     * 判断当前用户是否可操作（用于前端按钮可见性控制）。
+     * <p>
+     * 规则：DRAFT / IN_APPROVAL 状态下 && currentEmpId == createdBy → true，否则 false。
+     * 终态（COMPLETED / REJECTED / CANCELLED）一律不可操作。
+     * </p>
+     *
+     * @param entity       贷款申请实体
+     * @param currentEmpId 当前操作人工号
+     * @return 是否可操作
+     */
+    private boolean determineCanOperate(LoanApply entity, String currentEmpId) {
+        if (entity.getStatus() == null || !OPERABLE_STATUSES.contains(entity.getStatus())) {
+            // 终态或未知状态均不可操作
+            return false;
+        }
+        // 只有创建人才可操作
+        return currentEmpId != null && currentEmpId.equals(entity.getCreatedBy());
+    }
 
     /**
      * 按ID查询，不存在则抛出 BIZ-40401。
