@@ -24,6 +24,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,6 +43,9 @@ class TouchLogServiceTest {
     @Mock
     private TouchTaskMapper taskMapper;
 
+    @Mock
+    private TouchTaskService touchTaskService;
+
     @InjectMocks
     private TouchLogService touchLogService;
 
@@ -50,10 +54,12 @@ class TouchLogServiceTest {
     @Test
     void addLog_shouldInsertAndReturn() {
         // given: 任务存在且 PENDING，没有重复日志
+        // count 返回 2 表示非首次日志，不触发 PENDING→IN_PROGRESS 状态转移
         TouchTask task = buildPendingTask("task-001");
         when(taskMapper.selectById("task-001")).thenReturn(task);
         when(logMapper.selectByTaskIdAndClientUuid("task-001", "uuid-abc")).thenReturn(null);
         when(logMapper.insert(any(TouchLog.class))).thenReturn(1);
+        when(logMapper.countByTaskId("task-001")).thenReturn(2L);
 
         // when
         TouchLog result = touchLogService.addLog(
@@ -114,6 +120,38 @@ class TouchLogServiceTest {
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_LOG_DUPLICATE.getCode());
     }
 
+    @Test
+    void addLog_firstLogTransitionsPendingToInProgress() {
+        // given: 任务处于 PENDING 状态，count 返回 1 表示本次插入的是首条日志
+        TouchTask task = buildPendingTask("T001");
+        when(taskMapper.selectById("T001")).thenReturn(task);
+        when(logMapper.selectByTaskIdAndClientUuid("T001", "UUID-1")).thenReturn(null);
+        when(logMapper.insert(any(TouchLog.class))).thenReturn(1);
+        when(logMapper.countByTaskId("T001")).thenReturn(1L);
+
+        // when
+        touchLogService.addLog("T001", "UUID-1", "首次访谈", null, "E001", "ORG001");
+
+        // then: 首次日志触发 PENDING → IN_PROGRESS
+        verify(touchTaskService).markInProgress("T001");
+    }
+
+    @Test
+    void addLog_subsequentLogDoesNotTriggerTransition() {
+        // given: 任务处于 IN_PROGRESS 状态（首次日志已提交），count 返回 2 表示非首次
+        TouchTask task = buildInProgressTask("T001");
+        when(taskMapper.selectById("T001")).thenReturn(task);
+        when(logMapper.selectByTaskIdAndClientUuid("T001", "UUID-2")).thenReturn(null);
+        when(logMapper.insert(any(TouchLog.class))).thenReturn(1);
+        when(logMapper.countByTaskId("T001")).thenReturn(2L);
+
+        // when
+        touchLogService.addLog("T001", "UUID-2", "二次跟进", null, "E001", "ORG001");
+
+        // then: 非首次日志不触发状态转移
+        verify(touchTaskService, never()).markInProgress(anyString());
+    }
+
     // ==================== listByTaskId ====================
 
     @Test
@@ -161,6 +199,15 @@ class TouchLogServiceTest {
         task.setBusinessKey("TOUCH:" + id);
         task.setCreatedTime(LocalDateTime.now());
         task.setUpdatedTime(LocalDateTime.now());
+        return task;
+    }
+
+    /**
+     * 构建 IN_PROGRESS 状态的测试用触达任务
+     */
+    private TouchTask buildInProgressTask(String id) {
+        TouchTask task = buildPendingTask(id);
+        task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
         return task;
     }
 }

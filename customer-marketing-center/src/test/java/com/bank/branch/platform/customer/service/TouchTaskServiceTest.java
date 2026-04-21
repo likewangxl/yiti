@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -41,6 +42,9 @@ class TouchTaskServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Spy
+    private TouchTaskStateMachineService stateMachine = new TouchTaskStateMachineService();
 
     @InjectMocks
     private TouchTaskService touchTaskService;
@@ -233,6 +237,50 @@ class TouchTaskServiceTest {
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
         verify(taskMapper).updateById(captor.capture());
         assertThat(captor.getValue().getSlaStatus()).isEqualTo(SlaStatus.RED.getCode());
+    }
+
+    // ==================== markInProgress ====================
+
+    @Test
+    void markInProgress_setsStatusFromPendingToInProgress() {
+        // given
+        TouchTask existing = new TouchTask();
+        existing.setId("T001");
+        existing.setTaskStatus("PENDING");
+        when(taskMapper.selectById("T001")).thenReturn(existing);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        // when
+        touchTaskService.markInProgress("T001");
+
+        // then
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getTaskStatus()).isEqualTo("IN_PROGRESS");
+    }
+
+    @Test
+    void markInProgress_throwsWhenCurrentStatusIsNotPending() {
+        // given: 非 PENDING 状态（SUCCESS）不允许转移到 IN_PROGRESS
+        TouchTask existing = new TouchTask();
+        existing.setId("T001");
+        existing.setTaskStatus("SUCCESS");
+        when(taskMapper.selectById("T001")).thenReturn(existing);
+
+        // when/then
+        assertThatThrownBy(() -> touchTaskService.markInProgress("T001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "CUST-40010");
+    }
+
+    @Test
+    void markInProgress_throwsWhenTaskNotFound() {
+        // given: 任务不存在
+        when(taskMapper.selectById("T_NA")).thenReturn(null);
+
+        // when/then
+        assertThatThrownBy(() -> touchTaskService.markInProgress("T_NA"))
+                .isInstanceOf(BizException.class);
     }
 
     // ==================== 测试辅助方法 ====================

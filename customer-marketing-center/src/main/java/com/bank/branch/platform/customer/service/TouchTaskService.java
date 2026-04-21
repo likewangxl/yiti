@@ -35,6 +35,7 @@ public class TouchTaskService {
 
     private final TouchTaskMapper taskMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final TouchTaskStateMachineService stateMachine;
 
     /**
      * 从认领事件创建首次触达任务。
@@ -157,6 +158,40 @@ public class TouchTaskService {
         taskMapper.updateById(updateEntity);
 
         log.info("[TouchTaskService.cancel] task cancelled, taskId={}", taskId);
+    }
+
+    /**
+     * 将待处理任务迁移到进行中状态。
+     * <p>
+     * 由 {@link TouchLogService} 在首次日志插入后自动触发，实现 PENDING → IN_PROGRESS 自动状态迁移。
+     * 依据《功能规格》§7.3bis：首次追加触达日志时，任务状态从 PENDING 自动变为 IN_PROGRESS。
+     * </p>
+     *
+     * @param taskId 任务ID
+     * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40010 非法状态转移（当前状态不允许转移到 IN_PROGRESS）
+     */
+    @Transactional
+    public void markInProgress(String taskId) {
+        log.info("[TouchTaskService.markInProgress] taskId={}", taskId);
+
+        TouchTask task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
+        }
+
+        // 通过状态机校验转移合法性：PENDING → IN_PROGRESS 合法，其他状态均非法
+        TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
+        stateMachine.assertTransition(from, TouchTaskStatus.IN_PROGRESS);
+
+        TouchTask updateEntity = new TouchTask();
+        updateEntity.setId(taskId);
+        updateEntity.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
+        updateEntity.setUpdatedTime(LocalDateTime.now());
+        taskMapper.updateById(updateEntity);
+
+        log.info("[TouchTaskService.markInProgress] task {} transitioned PENDING→IN_PROGRESS", taskId);
     }
 
     /**

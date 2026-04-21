@@ -27,6 +27,11 @@
         LIMIT 1
     </select>
 
+    <!-- 统计某个触达任务的日志总数（用于判断是否为首次日志，驱动 PENDING→IN_PROGRESS 状态转移） -->
+    <select id="countByTaskId" resultType="long">
+        SELECT COUNT(*) FROM touch_log WHERE touch_task_id = #{taskId}
+    </select>
+
     <!-- 插入新触达日志 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchLog">
         INSERT INTO touch_log (

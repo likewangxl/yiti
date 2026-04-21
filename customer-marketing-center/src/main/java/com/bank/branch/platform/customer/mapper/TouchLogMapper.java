@@ -41,4 +41,12 @@ public interface TouchLogMapper {
      * @return 受影响行数
      */
     int insert(TouchLog entity);
+
+    /**
+     * 统计某个触达任务的日志总数（用于判断是否为首次日志）。
+     *
+     * @param taskId 触达任务ID
+     * @return 日志条数
+     */
+    Long countByTaskId(@Param("taskId") String taskId);
 }
