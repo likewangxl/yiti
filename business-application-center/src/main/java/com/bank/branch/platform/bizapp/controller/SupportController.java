@@ -1,6 +1,8 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CreateSupportReq;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.service.SupportService;
@@ -48,30 +50,32 @@ public class SupportController {
 
     /**
      * 分页查询支持申请列表（发起侧）。
+     * <p>返回 {@link SupportRequestListItemDTO}，不暴露 Entity 内部字段。</p>
      */
     @GetMapping
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.LIST)
     @Operation(summary = "查询中场支持申请列表")
-    public ResponseWrapper<SupportRequest> listPage(
+    public ResponseWrapper<SupportRequestListItemDTO> listPage(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[SupportController.listPage] pageNo={}, pageSize={}", pageNo, pageSize);
         String orgCode = currentUserApi.getCurrentOrgCode();
-        PageResult<SupportRequest> result = supportService.listPage(keyword, status, orgCode, pageNo, pageSize);
+        PageResult<SupportRequestListItemDTO> result = supportService.listPageAsDTO(keyword, status, orgCode, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 
     /**
      * 查询支持申请详情。
+     * <p>返回 {@link SupportRequestDTO}，不暴露 Entity 内部字段（如 deleted）。</p>
      */
     @GetMapping("/{id}")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.READ)
     @Operation(summary = "查询中场支持申请详情")
-    public ResponseWrapper<SupportRequest> getById(@PathVariable String id) {
+    public ResponseWrapper<SupportRequestDTO> getById(@PathVariable String id) {
         log.info("[SupportController.getById] id={}", id);
-        SupportRequest result = supportService.getById(id);
+        SupportRequestDTO result = supportService.getByIdAsDTO(id);
         return ResponseWrapper.success(result);
     }
 

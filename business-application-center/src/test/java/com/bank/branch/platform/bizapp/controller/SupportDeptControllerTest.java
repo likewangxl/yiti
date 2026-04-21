@@ -1,11 +1,13 @@
 package com.bank.branch.platform.bizapp.controller;
 
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.service.SupportDeptService;
 import com.bank.branch.platform.bizapp.support.AbstractControllerIntegrationTest;
 import com.bank.branch.platform.bizapp.support.WithMockEmpContext;
 import com.bank.branch.platform.common.web.PageResult;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -42,11 +44,37 @@ class SupportDeptControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void listPageForDept_shouldReturn200() throws Exception {
-        SupportRequest sr = buildRequest("SR001");
-        PageResult<SupportRequest> page = PageResult.of(1, 20, 1L, List.of(sr));
+    @DisplayName("GET /api/support-dept/requests 返回 SupportRequestListItemDTO 列表，不含 deleted 字段")
+    void listPageForDept_returnsListItemDTO_notEntity() throws Exception {
+        SupportRequestListItemDTO item = new SupportRequestListItemDTO();
+        item.setId("SR001");
+        item.setRequestNo("SR20260414000001");
+        item.setStatus(SupportStatus.IN_PROGRESS.getCode());
+        item.setSupportDeptName("业务承接部门");
+        PageResult<SupportRequestListItemDTO> page = PageResult.of(1, 20, 1L, List.of(item));
 
-        when(supportDeptService.listPageForDept(any(), any(), any(), anyInt(), anyInt()))
+        when(supportDeptService.listPageForDeptAsDTO(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/support-dept/requests")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.page.records[0].supportDeptName").value("业务承接部门"))
+                .andExpect(jsonPath("$.page.records[0].deleted").doesNotExist());
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void listPageForDept_shouldReturn200() throws Exception {
+        SupportRequestListItemDTO item = new SupportRequestListItemDTO();
+        item.setId("SR001");
+        item.setStatus(SupportStatus.IN_PROGRESS.getCode());
+        PageResult<SupportRequestListItemDTO> page = PageResult.of(1, 20, 1L, List.of(item));
+
+        when(supportDeptService.listPageForDeptAsDTO(any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(page);
 
         mockMvc.perform(get("/api/support-dept/requests")

@@ -1,5 +1,7 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
@@ -34,6 +36,7 @@ public class SupportDeptService {
     private final BizStateMachine bizStateMachine;
     private final AddressBookApi addressBookApi;
     private final ApplicationEventPublisher eventPublisher;
+    private final SupportRequestDTOConverter supportRequestDTOConverter;
 
     /**
      * 秘书派单（仅场景B）。
@@ -156,14 +159,14 @@ public class SupportDeptService {
     }
 
     /**
-     * 承接侧分页查询。
+     * 承接侧分页查询（返回 Entity，供内部使用）。
      *
      * @param supportDeptId 承接部门ID
      * @param status        状态筛选
      * @param assignedEmpId 承接人工号筛选
      * @param pageNo        页码
      * @param pageSize      每页大小
-     * @return 分页结果
+     * @return 分页结果（Entity）
      */
     public PageResult<SupportRequest> listPageForDept(String supportDeptId, String status,
                                                        String assignedEmpId, int pageNo, int pageSize) {
@@ -175,5 +178,26 @@ public class SupportDeptService {
         long total = supportMapper.countPageForDept(supportDeptId, status, assignedEmpId);
 
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 承接侧分页查询（返回 ListItemDTO，供 REST 层使用）。
+     * <p>
+     * 通过 {@link SupportRequestDTOConverter#toListItems} 批量转换并填充展示字段，避免 N+1 查询。
+     * REST 层禁止直接暴露 Entity，统一通过此方法获取列表数据。
+     * </p>
+     *
+     * @param supportDeptId 承接部门ID
+     * @param status        状态筛选
+     * @param assignedEmpId 承接人工号筛选
+     * @param pageNo        页码
+     * @param pageSize      每页大小
+     * @return 分页结果（ListItemDTO，不含 deleted 等内部字段）
+     */
+    public PageResult<SupportRequestListItemDTO> listPageForDeptAsDTO(String supportDeptId, String status,
+                                                                      String assignedEmpId, int pageNo, int pageSize) {
+        PageResult<SupportRequest> page = listPageForDept(supportDeptId, status, assignedEmpId, pageNo, pageSize);
+        List<SupportRequestListItemDTO> items = supportRequestDTOConverter.toListItems(page.getRecords());
+        return PageResult.of(pageNo, pageSize, page.getTotal(), items);
     }
 }

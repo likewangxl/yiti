@@ -1,5 +1,6 @@
 package com.bank.branch.platform.bizapp.controller;
 
+import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
 import com.bank.branch.platform.bizapp.service.LoanFormValidator;
@@ -7,6 +8,7 @@ import com.bank.branch.platform.bizapp.service.LoanService;
 import com.bank.branch.platform.bizapp.support.AbstractControllerIntegrationTest;
 import com.bank.branch.platform.bizapp.support.WithMockEmpContext;
 import com.bank.branch.platform.common.web.PageResult;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -51,11 +53,37 @@ class LoanControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void listPage_shouldReturn200() throws Exception {
-        LoanApply loan = buildLoan("L001");
-        PageResult<LoanApply> page = PageResult.of(1, 20, 1L, List.of(loan));
+    @DisplayName("GET /api/loans 返回 LoanApplyListItemDTO 列表，不含 deleted 字段")
+    void listPage_returnsListItemDTO_notEntity() throws Exception {
+        LoanApplyListItemDTO item = new LoanApplyListItemDTO();
+        item.setId("L001");
+        item.setApplyNo("LA20260414000001");
+        item.setCustName("测试客户");
+        item.setStatus(LoanStatus.DRAFT.getCode());
+        PageResult<LoanApplyListItemDTO> page = PageResult.of(1, 20, 1L, List.of(item));
 
-        when(loanService.listPage(isNull(), isNull(), isNull(), eq(1), eq(20)))
+        when(loanService.listPageAsDTO(isNull(), isNull(), isNull(), eq(1), eq(20)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/loans")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.page.total").value(1))
+                .andExpect(jsonPath("$.page.records[0].custName").value("测试客户"))
+                .andExpect(jsonPath("$.page.records[0].deleted").doesNotExist());
+    }
+
+    @Test
+    @WithMockEmpContext(empId = "E10001")
+    void listPage_shouldReturn200() throws Exception {
+        LoanApplyListItemDTO item = new LoanApplyListItemDTO();
+        item.setId("L001");
+        item.setStatus(LoanStatus.DRAFT.getCode());
+        PageResult<LoanApplyListItemDTO> page = PageResult.of(1, 20, 1L, List.of(item));
+
+        when(loanService.listPageAsDTO(isNull(), isNull(), isNull(), eq(1), eq(20)))
                 .thenReturn(page);
 
         mockMvc.perform(get("/api/loans")

@@ -1,5 +1,7 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
+import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
@@ -44,6 +46,7 @@ public class LoanService {
     private final CustomerQueryApi customerQueryApi;
     private final TouchTaskQueryApi touchTaskQueryApi;
     private final ApplicationEventPublisher eventPublisher;
+    private final LoanApplyDTOConverter loanApplyDTOConverter;
 
     /** 贷款审批流程定义Key */
     private static final String PROCESS_DEFINITION_KEY = "loan_approve_v1";
@@ -317,14 +320,14 @@ public class LoanService {
     }
 
     /**
-     * 分页查询贷款申请列表。
+     * 分页查询贷款申请列表（返回 Entity，供内部模块使用）。
      *
      * @param keyword    关键词（模糊匹配申请编号/客户名称）
      * @param status     状态过滤（可空）
      * @param ownerOrgId 归属机构过滤（可空）
      * @param pageNo     页码（从1开始）
      * @param pageSize   每页大小
-     * @return 分页结果
+     * @return 分页结果（Entity）
      */
     public PageResult<LoanApply> listPage(String keyword, String status,
                                            String ownerOrgId, int pageNo, int pageSize) {
@@ -332,6 +335,27 @@ public class LoanService {
         List<LoanApply> records = loanMapper.selectPage(keyword, status, ownerOrgId, offset, pageSize);
         long total = loanMapper.countPage(keyword, status, ownerOrgId);
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 分页查询贷款申请列表（返回 ListItemDTO，供 REST 层使用）。
+     * <p>
+     * 通过 {@link LoanApplyDTOConverter#toListItems} 批量转换并填充 custName，避免 N+1 查询。
+     * REST 层禁止直接暴露 Entity，统一通过此方法获取列表数据。
+     * </p>
+     *
+     * @param keyword    关键词（模糊匹配申请编号/客户名称）
+     * @param status     状态过滤（可空）
+     * @param ownerOrgId 归属机构过滤（可空）
+     * @param pageNo     页码（从1开始）
+     * @param pageSize   每页大小
+     * @return 分页结果（ListItemDTO，不含 deleted 等内部字段）
+     */
+    public PageResult<LoanApplyListItemDTO> listPageAsDTO(String keyword, String status,
+                                                          String ownerOrgId, int pageNo, int pageSize) {
+        PageResult<LoanApply> page = listPage(keyword, status, ownerOrgId, pageNo, pageSize);
+        List<LoanApplyListItemDTO> items = loanApplyDTOConverter.toListItems(page.getRecords());
+        return PageResult.of(pageNo, pageSize, page.getTotal(), items);
     }
 
     // ==================== 私有工具方法 ====================

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.api.converter;
 
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyDTO;
+import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
@@ -108,6 +109,70 @@ public class LoanApplyDTOConverter {
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 单条实体转列表条目 DTO，同时填充 custName 冗余字段。
+     *
+     * @param entity 贷款申请实体，为 null 时返回 null
+     * @return 填充完毕的列表条目 DTO
+     */
+    public LoanApplyListItemDTO toListItem(LoanApply entity) {
+        if (entity == null) {
+            return null;
+        }
+        LoanApplyListItemDTO dto = toListItemWithoutCustName(entity);
+        dto.setCustName(resolveCustName(entity.getCustId()));
+        return dto;
+    }
+
+    /**
+     * 批量实体转列表条目 DTO，批量查询 custName 避免 N+1。
+     * <p>
+     * 业务说明：当前分页 pageSize 上限为 100，不超过 CustomerQueryApi.listCustomers 的 500 上限。
+     * </p>
+     *
+     * @param entities 贷款申请实体列表，为 null 或空时返回空列表
+     * @return 填充完毕的列表条目 DTO 列表
+     */
+    public List<LoanApplyListItemDTO> toListItems(List<LoanApply> entities) {
+        if (entities == null || entities.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 收集全部不重复的 custId，批量查询客户名称 Map
+        Set<String> custIds = entities.stream()
+                .map(LoanApply::getCustId)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+
+        Map<String, String> custNameMap;
+        if (custIds.isEmpty()) {
+            custNameMap = Collections.emptyMap();
+        } else {
+            try {
+                custNameMap = customerQueryApi.listCustomers(new ArrayList<>(custIds))
+                        .stream()
+                        .filter(c -> c.getId() != null)
+                        .collect(Collectors.toMap(
+                                CustomerDTO::getId,
+                                c -> Optional.ofNullable(c.getCustName()).orElse(""),
+                                (a, b) -> a));
+            } catch (Exception e) {
+                log.warn("[LoanApplyDTOConverter.toListItems] 批量查询客户名称失败，将使用空名称降级", e);
+                custNameMap = Collections.emptyMap();
+            }
+        }
+
+        final Map<String, String> finalCustNameMap = custNameMap;
+        return entities.stream().map(entity -> {
+            LoanApplyListItemDTO dto = toListItemWithoutCustName(entity);
+            String name = entity.getCustId() != null
+                    ? finalCustNameMap.getOrDefault(entity.getCustId(), "")
+                    : "";
+            dto.setCustName(name);
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
     // -----------------------------------------------------------------------
     // 私有辅助方法
     // -----------------------------------------------------------------------
@@ -139,6 +204,25 @@ public class LoanApplyDTOConverter {
         dto.setUpdatedBy(entity.getUpdatedBy());
         dto.setUpdatedTime(entity.getUpdatedTime());
         // 注意：不复制 deleted 字段，API 层不暴露内部软删标记
+        return dto;
+    }
+
+    /**
+     * 纯字段复制到列表条目 DTO，不含 custName 和敏感/内部字段。
+     *
+     * @param entity 贷款申请实体
+     * @return 未填充 custName 的列表条目 DTO
+     */
+    private LoanApplyListItemDTO toListItemWithoutCustName(LoanApply entity) {
+        LoanApplyListItemDTO dto = new LoanApplyListItemDTO();
+        dto.setId(entity.getId());
+        dto.setApplyNo(entity.getApplyNo());
+        dto.setCustId(entity.getCustId());
+        dto.setCreditAmount(entity.getCreditAmount());
+        dto.setStatus(entity.getStatus());
+        dto.setOwnerOrgId(entity.getOwnerOrgId());
+        dto.setCreatedTime(entity.getCreatedTime());
+        // 注意：不复制 deleted、businessKey、processInstanceId、updatedBy、updatedTime
         return dto;
     }
 

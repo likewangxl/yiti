@@ -1,5 +1,8 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
 import com.bank.branch.platform.bizapp.enums.SupportScenario;
@@ -45,6 +48,7 @@ public class SupportService {
     private final WorkflowApi workflowApi;
     private final CustomerQueryApi customerQueryApi;
     private final ApplicationEventPublisher eventPublisher;
+    private final SupportRequestDTOConverter supportRequestDTOConverter;
 
     /**
      * 创建中场支持申请（含自动拆单逻辑）。
@@ -247,14 +251,14 @@ public class SupportService {
     }
 
     /**
-     * 发起侧分页查询。
+     * 发起侧分页查询（返回 Entity，供内部使用）。
      *
      * @param keyword    关键词
      * @param status     状态筛选
      * @param ownerOrgId 归属机构
      * @param pageNo     页码
      * @param pageSize   每页大小
-     * @return 分页结果
+     * @return 分页结果（Entity）
      */
     public PageResult<SupportRequest> listPage(String keyword, String status,
                                                 String ownerOrgId, int pageNo, int pageSize) {
@@ -265,5 +269,41 @@ public class SupportService {
         long total = supportMapper.countPageForSupport(keyword, status, ownerOrgId);
 
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 发起侧分页查询（返回 ListItemDTO，供 REST 层使用）。
+     * <p>
+     * 通过 {@link SupportRequestDTOConverter#toListItems} 批量转换并填充展示字段，避免 N+1 查询。
+     * REST 层禁止直接暴露 Entity，统一通过此方法获取列表数据。
+     * </p>
+     *
+     * @param keyword    关键词
+     * @param status     状态筛选
+     * @param ownerOrgId 归属机构
+     * @param pageNo     页码
+     * @param pageSize   每页大小
+     * @return 分页结果（ListItemDTO，不含 deleted 等内部字段）
+     */
+    public PageResult<SupportRequestListItemDTO> listPageAsDTO(String keyword, String status,
+                                                               String ownerOrgId, int pageNo, int pageSize) {
+        PageResult<SupportRequest> page = listPage(keyword, status, ownerOrgId, pageNo, pageSize);
+        List<SupportRequestListItemDTO> items = supportRequestDTOConverter.toListItems(page.getRecords());
+        return PageResult.of(pageNo, pageSize, page.getTotal(), items);
+    }
+
+    /**
+     * 按ID查询申请并转为 DTO（供 REST 层使用）。
+     * <p>
+     * REST 层禁止直接暴露 Entity，通过此方法获取详情数据，不含 deleted 等内部字段。
+     * </p>
+     *
+     * @param id 申请ID
+     * @return 申请 DTO（含 custName/productName/supportDeptName 冗余字段）
+     * @throws BizException BIZ-40401 如果不存在
+     */
+    public SupportRequestDTO getByIdAsDTO(String id) {
+        SupportRequest entity = getById(id);
+        return supportRequestDTOConverter.toDTO(entity);
     }
 }

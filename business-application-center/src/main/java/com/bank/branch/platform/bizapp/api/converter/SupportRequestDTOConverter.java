@@ -3,6 +3,7 @@ package com.bank.branch.platform.bizapp.api.converter;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
@@ -105,9 +106,78 @@ public class SupportRequestDTOConverter {
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 单条实体转列表条目 DTO，同时填充 custName/productName/supportDeptName 冗余字段。
+     *
+     * @param entity 支持申请实体，为 null 时返回 null
+     * @return 填充完毕的列表条目 DTO
+     */
+    public SupportRequestListItemDTO toListItem(SupportRequest entity) {
+        if (entity == null) {
+            return null;
+        }
+        SupportRequestListItemDTO dto = toListItemWithoutRedundant(entity);
+        dto.setCustName(resolveCustName(entity.getCustId()));
+        dto.setProductName(resolveProductName(entity.getProductId()));
+        dto.setSupportDeptName(resolveDeptName(entity.getSupportDeptId()));
+        return dto;
+    }
+
+    /**
+     * 批量实体转列表条目 DTO，批量查询 custName/productName 避免 N+1。
+     * <p>
+     * OrgApi 无批量接口，每条记录仍逐一查询，异常时降级为空字符串。
+     * 当前业务分页 pageSize 上限为 100，不会超过 CustomerQueryApi 500 条上限。
+     * </p>
+     *
+     * @param entities 支持申请实体列表，为 null 或空时返回空列表
+     * @return 填充完毕的列表条目 DTO 列表
+     */
+    public List<SupportRequestListItemDTO> toListItems(List<SupportRequest> entities) {
+        if (entities == null || entities.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 批量查询客户名称
+        Map<String, String> custNameMap = buildCustNameMap(entities);
+        // 批量查询产品名称
+        Map<String, String> productNameMap = buildProductNameMap(entities);
+
+        return entities.stream().map(entity -> {
+            SupportRequestListItemDTO dto = toListItemWithoutRedundant(entity);
+            dto.setCustName(entity.getCustId() != null
+                    ? custNameMap.getOrDefault(entity.getCustId(), "")
+                    : "");
+            dto.setProductName(entity.getProductId() != null
+                    ? productNameMap.getOrDefault(entity.getProductId(), "")
+                    : "");
+            // 承接部门名称（OrgApi 无批量，逐条 + try-catch）
+            dto.setSupportDeptName(resolveDeptName(entity.getSupportDeptId()));
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
     // -----------------------------------------------------------------------
     // 私有辅助方法
     // -----------------------------------------------------------------------
+
+    /**
+     * 纯字段复制到列表条目 DTO，不含冗余展示字段和敏感/内部字段。
+     *
+     * @param entity 支持申请实体
+     * @return 未填充冗余字段的列表条目 DTO
+     */
+    private SupportRequestListItemDTO toListItemWithoutRedundant(SupportRequest entity) {
+        SupportRequestListItemDTO dto = new SupportRequestListItemDTO();
+        dto.setId(entity.getId());
+        dto.setRequestNo(entity.getRequestNo());
+        dto.setSubmitGroupId(entity.getSubmitGroupId());
+        dto.setStatus(entity.getStatus());
+        dto.setOwnerOrgId(entity.getOwnerOrgId());
+        dto.setCreatedTime(entity.getCreatedTime());
+        // 注意：不复制 deleted、businessKey、processInstanceId、updatedBy、updatedTime
+        return dto;
+    }
 
     /**
      * 纯字段复制，不含冗余展示字段和 deleted。

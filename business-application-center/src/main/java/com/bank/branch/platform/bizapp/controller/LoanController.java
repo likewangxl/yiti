@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CreateLoanReq;
 import com.bank.branch.platform.bizapp.dto.req.UpdateLoanReq;
 import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
@@ -60,7 +61,7 @@ public class LoanController {
     @GetMapping
     @BizAuth(bizType = BizType.LOAN, action = BizAction.LIST)
     @Operation(summary = "分页查询贷款申请列表")
-    public ResponseWrapper<LoanApply> listPage(
+    public ResponseWrapper<LoanApplyListItemDTO> listPage(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String ownerOrgId,
@@ -68,7 +69,7 @@ public class LoanController {
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[LoanController.listPage] keyword={}, status={}, ownerOrgId={}, pageNo={}, pageSize={}",
                 keyword, status, ownerOrgId, pageNo, pageSize);
-        PageResult<LoanApply> result = loanService.listPage(keyword, status, ownerOrgId, pageNo, pageSize);
+        PageResult<LoanApplyListItemDTO> result = loanService.listPageAsDTO(keyword, status, ownerOrgId, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 

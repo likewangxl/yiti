@@ -1,10 +1,10 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CompleteReq;
 import com.bank.branch.platform.bizapp.dto.req.DispatchReq;
 import com.bank.branch.platform.bizapp.dto.req.TransferReq;
-import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.service.SupportDeptService;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
@@ -44,11 +44,12 @@ public class SupportDeptController {
 
     /**
      * 分页查询支持申请列表（承接侧）。
+     * <p>返回 {@link SupportRequestListItemDTO}，不暴露 Entity 内部字段。</p>
      */
     @GetMapping
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.LIST)
     @Operation(summary = "承接侧查询中场支持申请列表")
-    public ResponseWrapper<SupportRequest> listPageForDept(
+    public ResponseWrapper<SupportRequestListItemDTO> listPageForDept(
             @RequestParam(required = false) String supportDeptId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String assignedEmpId,
@@ -56,7 +57,7 @@ public class SupportDeptController {
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[SupportDeptController.listPageForDept] deptId={}, pageNo={}, pageSize={}",
                 supportDeptId, pageNo, pageSize);
-        PageResult<SupportRequest> result = supportDeptService.listPageForDept(
+        PageResult<SupportRequestListItemDTO> result = supportDeptService.listPageForDeptAsDTO(
                 supportDeptId, status, assignedEmpId, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
