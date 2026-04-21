@@ -34,7 +34,7 @@ src/main/java/com/bank/branch/platform/bizapp/
 │   └── SupportDeptController.java    # 4 端点 (承接侧 SUPPORT_DEPT)
 ├── dto/
 │   ├── req/          # 请求 DTO (6 个)
-│   └── resp/         # 响应 DTO (1 个)
+│   └── resp/         # 响应 DTO (2 个)
 ├── entity/           # 实体 (2 个)
 │   ├── LoanApply.java
 │   └── SupportRequest.java
@@ -43,7 +43,7 @@ src/main/java/com/bank/branch/platform/bizapp/
 │   ├── LoanStatus.java           # DRAFT/IN_APPROVAL/COMPLETED/REJECTED/CANCELLED
 │   ├── SupportStatus.java        # +IN_PROGRESS
 │   ├── SupportScenario.java      # A(产品直达) / B(部门承接)
-│   └── SupportSourceType.java    # MANUAL / TOUCH_TASK
+│   └── SupportSourceType.java    # EXISTING_CUSTOMER / TOUCH_TASK
 ├── event/            # 领域事件 (6 个)
 │   ├── LoanSubmittedEvent, LoanApprovedEvent, LoanRejectedEvent
 │   └── SupportSubmittedEvent, SupportDispatchedEvent, SupportCompletedEvent

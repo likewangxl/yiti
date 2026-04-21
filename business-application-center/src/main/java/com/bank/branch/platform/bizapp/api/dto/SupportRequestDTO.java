@@ -7,7 +7,8 @@ import java.time.LocalDateTime;
 /**
  * 中场支持申请对外传输对象。
  * <p>
- * 镜像 {@code SupportRequest} 实体字段，用于跨模块数据传递。
+ * 跨模块 API 契约：不携带 deleted 等内部运维字段；
+ * 额外补充消费方所需的冗余展示字段（custName/productName/supportDeptName）。
  * </p>
  */
 @Data
@@ -70,6 +71,16 @@ public class SupportRequestDTO {
     /** 更新时间 */
     private LocalDateTime updatedTime;
 
-    /** 逻辑删除 */
-    private Integer deleted;
+    // ------------------------------------------------------------------
+    // 冗余展示字段（由 SupportRequestDTOConverter 填充，不从 DB 直接映射）
+    // ------------------------------------------------------------------
+
+    /** 客户名称（冗余展示字段，由 CustomerQueryApi 填充） */
+    private String custName;
+
+    /** 产品名称（冗余展示字段，由 ProductApi 填充） */
+    private String productName;
+
+    /** 承接部门名称（冗余展示字段，由 OrgApi 填充） */
+    private String supportDeptName;
 }

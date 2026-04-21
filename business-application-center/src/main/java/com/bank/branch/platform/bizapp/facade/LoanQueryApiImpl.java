@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.facade;
 
 import com.bank.branch.platform.bizapp.api.LoanQueryApi;
+import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.LoanApplyDTO;
 import com.bank.branch.platform.bizapp.api.dto.LoanQueryConditionDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
@@ -14,12 +15,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 贷款申请对外分页/统计查询接口实现。
  * <p>
  * 实现 {@link LoanQueryApi} 接口，委托 {@link LoanApplyMapper} 执行分页与聚合查询。
+ * 所有查询结果通过 {@link LoanApplyDTOConverter} 转换，确保不暴露 deleted 字段且补充 custName 冗余字段。
  * </p>
  */
 @Slf4j
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 public class LoanQueryApiImpl implements LoanQueryApi {
 
     private final LoanApplyMapper loanApplyMapper;
+    private final LoanApplyDTOConverter loanApplyDTOConverter;
 
     /**
      * 分页查询贷款申请。
@@ -52,7 +54,8 @@ public class LoanQueryApiImpl implements LoanQueryApi {
         List<LoanApply> entities = loanApplyMapper.selectPage(condition.getKeyword(),
                 condition.getStatus(), condition.getOwnerOrgId(), offset, pageSize);
         List<LoanApplyDTO> records = entities == null ? Collections.emptyList()
-                : entities.stream().map(this::toDTO).collect(Collectors.toList());
+                // 使用批量转换避免 N+1
+                : loanApplyDTOConverter.toDTOList(entities);
 
         return PageResult.of(pageNo, pageSize, total, records);
     }
@@ -60,62 +63,29 @@ public class LoanQueryApiImpl implements LoanQueryApi {
     /**
      * 按机构和时间范围统计已完成的贷款申请数量。
      *
-     * @param orgId  机构代码
-     * @param start  统计开始时间
-     * @param end    统计结束时间
+     * @param orgId      机构代码
+     * @param startTime  统计开始时间
+     * @param endTime    统计结束时间
      * @return 已完成申请数量
      */
     @Override
-    public long countCompletedByOrg(String orgId, LocalDateTime start, LocalDateTime end) {
-        log.debug("[LoanQueryApiImpl.countCompletedByOrg] orgId={}, start={}, end={}", orgId, start, end);
-        return loanApplyMapper.countCompletedByOrg(orgId, start, end);
+    public long countCompletedByOrg(String orgId, LocalDateTime startTime, LocalDateTime endTime) {
+        log.debug("[LoanQueryApiImpl.countCompletedByOrg] orgId={}, startTime={}, endTime={}", orgId, startTime, endTime);
+        return loanApplyMapper.countCompletedByOrg(orgId, startTime, endTime);
     }
 
     /**
      * 按员工工号和时间范围汇总授信金额。
      *
-     * @param empId  员工工号
-     * @param start  统计开始时间
-     * @param end    统计结束时间
+     * @param empId      员工工号
+     * @param startTime  统计开始时间
+     * @param endTime    统计结束时间
      * @return 授信金额汇总，mapper 返回 null 时返回 BigDecimal.ZERO
      */
     @Override
-    public BigDecimal sumCreditAmountByEmp(String empId, LocalDateTime start, LocalDateTime end) {
-        log.debug("[LoanQueryApiImpl.sumCreditAmountByEmp] empId={}, start={}, end={}", empId, start, end);
-        BigDecimal result = loanApplyMapper.sumCreditAmountByEmp(empId, start, end);
+    public BigDecimal sumCreditAmountByEmp(String empId, LocalDateTime startTime, LocalDateTime endTime) {
+        log.debug("[LoanQueryApiImpl.sumCreditAmountByEmp] empId={}, startTime={}, endTime={}", empId, startTime, endTime);
+        BigDecimal result = loanApplyMapper.sumCreditAmountByEmp(empId, startTime, endTime);
         return result != null ? result : BigDecimal.ZERO;
-    }
-
-    // ------------------------------------------------------------------
-    // 私有转换方法
-    // ------------------------------------------------------------------
-
-    /**
-     * 将 LoanApply 实体转换为对外 DTO。
-     *
-     * @param entity 贷款申请实体
-     * @return 对外 DTO
-     */
-    private LoanApplyDTO toDTO(LoanApply entity) {
-        LoanApplyDTO dto = new LoanApplyDTO();
-        dto.setId(entity.getId());
-        dto.setApplyNo(entity.getApplyNo());
-        dto.setCustId(entity.getCustId());
-        dto.setSourceTouchTaskId(entity.getSourceTouchTaskId());
-        dto.setProjectType(entity.getProjectType());
-        dto.setBizType(entity.getBizType());
-        dto.setGuaranteeType(entity.getGuaranteeType());
-        dto.setCreditAmount(entity.getCreditAmount());
-        dto.setCreditExposureAmount(entity.getCreditExposureAmount());
-        dto.setStatus(entity.getStatus());
-        dto.setBusinessKey(entity.getBusinessKey());
-        dto.setProcessInstanceId(entity.getProcessInstanceId());
-        dto.setOwnerOrgId(entity.getOwnerOrgId());
-        dto.setCreatedBy(entity.getCreatedBy());
-        dto.setCreatedTime(entity.getCreatedTime());
-        dto.setUpdatedBy(entity.getUpdatedBy());
-        dto.setUpdatedTime(entity.getUpdatedTime());
-        dto.setDeleted(entity.getDeleted());
-        return dto;
     }
 }

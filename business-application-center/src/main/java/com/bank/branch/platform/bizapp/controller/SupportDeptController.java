@@ -1,11 +1,12 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CompleteReq;
 import com.bank.branch.platform.bizapp.dto.req.DispatchReq;
 import com.bank.branch.platform.bizapp.dto.req.TransferReq;
-import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.service.SupportDeptService;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -44,11 +45,12 @@ public class SupportDeptController {
 
     /**
      * 分页查询支持申请列表（承接侧）。
+     * <p>返回 {@link SupportRequestListItemDTO}，不暴露 Entity 内部字段。</p>
      */
     @GetMapping
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.LIST)
     @Operation(summary = "承接侧查询中场支持申请列表")
-    public ResponseWrapper<SupportRequest> listPageForDept(
+    public ResponseWrapper<SupportRequestListItemDTO> listPageForDept(
             @RequestParam(required = false) String supportDeptId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String assignedEmpId,
@@ -56,7 +58,7 @@ public class SupportDeptController {
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[SupportDeptController.listPageForDept] deptId={}, pageNo={}, pageSize={}",
                 supportDeptId, pageNo, pageSize);
-        PageResult<SupportRequest> result = supportDeptService.listPageForDept(
+        PageResult<SupportRequestListItemDTO> result = supportDeptService.listPageForDeptAsDTO(
                 supportDeptId, status, assignedEmpId, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
@@ -66,12 +68,13 @@ public class SupportDeptController {
      */
     @PostMapping("/{id}/dispatch")
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.WRITE)
+    @AuditLog(action = "DISPATCH_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "承接侧派单")
     public ResponseWrapper<Void> dispatch(@PathVariable String id,
                                           @Valid @RequestBody DispatchReq req) {
         log.info("[SupportDeptController.dispatch] id={}, assignedEmpId={}", id, req.getAssignedEmpId());
         String empId = currentUserApi.getCurrentEmpId();
-        supportDeptService.dispatch(id, req.getAssignedEmpId(), empId);
+        supportDeptService.dispatch(id, req.getAssignedEmpId(), empId, req.getDispatchRemark());
         return ResponseWrapper.success();
     }
 
@@ -80,6 +83,7 @@ public class SupportDeptController {
      */
     @PostMapping("/{id}/transfer")
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.TRANSFER)
+    @AuditLog(action = "TRANSFER_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST", reasonRequired = true)
     @Operation(summary = "承接侧转交承接人")
     public ResponseWrapper<Void> transfer(@PathVariable String id,
                                           @Valid @RequestBody TransferReq req) {
@@ -94,6 +98,7 @@ public class SupportDeptController {
      */
     @PostMapping("/{id}/complete")
     @BizAuth(bizType = BizType.SUPPORT_DEPT, action = BizAction.WRITE)
+    @AuditLog(action = "COMPLETE_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "承接侧办理完成")
     public ResponseWrapper<Void> complete(@PathVariable String id,
                                           @RequestBody CompleteReq req) {

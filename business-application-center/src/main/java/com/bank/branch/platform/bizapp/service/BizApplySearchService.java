@@ -71,20 +71,20 @@ public class BizApplySearchService {
      * 仅 completedLoans/completedSupports/totalCreditAmount 体现时段限制。
      * </p>
      *
-     * @param empId  员工工号
-     * @param start  统计开始时间（含）
-     * @param end    统计结束时间（含）
+     * @param empId      员工工号
+     * @param startTime  统计开始时间（含）
+     * @param endTime    统计结束时间（含）
      * @return 申请统计 DTO
      */
     public BizApplyStatDTO getEmpStatisticsByPeriod(String empId,
-                                                     LocalDateTime start,
-                                                     LocalDateTime end) {
-        log.debug("[BizApplySearchService.getEmpStatisticsByPeriod] empId={}, start={}, end={}",
-                empId, start, end);
+                                                     LocalDateTime startTime,
+                                                     LocalDateTime endTime) {
+        log.debug("[BizApplySearchService.getEmpStatisticsByPeriod] empId={}, startTime={}, endTime={}",
+                empId, startTime, endTime);
 
-        long completedLoans = loanMapper.countCompletedByOrg(null, start, end);
-        BigDecimal totalCreditAmount = loanMapper.sumCreditAmountByEmp(empId, start, end);
-        long completedSupports = supportMapper.countCompletedByCreator(empId, start, end);
+        long completedLoans = loanMapper.countCompletedByOrg(null, startTime, endTime);
+        BigDecimal totalCreditAmount = loanMapper.sumCreditAmountByEmp(empId, startTime, endTime);
+        long completedSupports = supportMapper.countCompletedByCreator(empId, startTime, endTime);
 
         BizApplyStatDTO stat = new BizApplyStatDTO();
         // 全量总数使用全时段（期间无按创建人过滤总数的 mapper 方法）

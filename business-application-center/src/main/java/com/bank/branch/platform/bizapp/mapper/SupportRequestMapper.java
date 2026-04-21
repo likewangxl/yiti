@@ -58,6 +58,22 @@ public interface SupportRequestMapper {
                          @Param("status") String status,
                          @Param("updatedBy") String updatedBy);
 
+    /**
+     * 条件更新状态（幂等专用）。
+     * 仅当记录当前状态等于 expectedStatus 时才执行更新，返回影响行数。
+     * Listener 使用此方法保证多实例环境下状态流转的幂等性。
+     *
+     * @param id             申请ID
+     * @param expectedStatus 期望的当前状态（前置条件）
+     * @param targetStatus   目标状态
+     * @param updatedBy      操作人
+     * @return 影响行数（0 表示状态已被其他实例处理，1 表示更新成功）
+     */
+    int conditionalUpdateStatus(@Param("id") String id,
+                                @Param("expectedStatus") String expectedStatus,
+                                @Param("targetStatus") String targetStatus,
+                                @Param("updatedBy") String updatedBy);
+
     /** 按客户ID查询历史 */
     List<SupportRequest> selectByCustId(@Param("custId") String custId);
 
@@ -73,13 +89,13 @@ public interface SupportRequestMapper {
 
     /** 按创建人+时间范围统计已完成数量 */
     long countCompletedByCreator(@Param("empId") String empId,
-                                 @Param("start") LocalDateTime start,
-                                 @Param("end") LocalDateTime end);
+                                 @Param("startTime") LocalDateTime startTime,
+                                 @Param("endTime") LocalDateTime endTime);
 
     /** 按承接人+时间范围统计已完成数量 */
     long countCompletedByAssignee(@Param("empId") String empId,
-                                  @Param("start") LocalDateTime start,
-                                  @Param("end") LocalDateTime end);
+                                  @Param("startTime") LocalDateTime startTime,
+                                  @Param("endTime") LocalDateTime endTime);
 
     /** 统计客户正在运行的支持申请数 */
     long countRunningByCustomer(@Param("custId") String custId);

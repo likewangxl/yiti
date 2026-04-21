@@ -145,7 +145,7 @@ flowable:
 | 事件 | 来源 | 载荷 |
 |------|------|------|
 | `ProcessStartedEvent` | ProcessStartService | processInstanceId, businessKey, bizType |
-| `ProcessCompletedEvent` | ProcessCompletedListener | processInstanceId, businessKey |
+| `ProcessCompletedEvent` | ProcessCompletedListener | processInstanceId, businessKey, outcome, reason |
 | `TaskApprovedEvent` | TaskOperationService | taskId, processInstanceId, empId |
 | `TaskRejectedEvent` | TaskOperationService | taskId, processInstanceId, empId |
 | `TaskTransferredEvent` | TaskOperationService | taskId, processInstanceId, fromEmpId, toEmpId |

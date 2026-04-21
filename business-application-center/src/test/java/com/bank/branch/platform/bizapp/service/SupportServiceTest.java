@@ -1,7 +1,11 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.SupportScenario;
+import com.bank.branch.platform.bizapp.enums.SupportSourceType;
 import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.event.SupportSubmittedEvent;
 import com.bank.branch.platform.common.web.PageResult;
@@ -11,6 +15,7 @@ import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -35,7 +40,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * SupportService 单元测试（TDD）。
- * 共 16 个测试用例。
+ * 含 SupportSourceType 枚举契约断言。
  */
 @ExtendWith(MockitoExtension.class)
 class SupportServiceTest {
@@ -64,8 +69,21 @@ class SupportServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private SupportRequestDTOConverter supportRequestDTOConverter;
+
     @InjectMocks
     private SupportService supportService;
+
+    // ==================== SupportSourceType 枚举契约 ====================
+
+    @Test
+    @DisplayName("SupportSourceType 字典：无 MANUAL，有 EXISTING_CUSTOMER 与 TOUCH_TASK")
+    void supportSourceType_enumContractMatchesDoc() {
+        assertThat(SupportSourceType.values())
+                .extracting(SupportSourceType::name)
+                .containsExactlyInAnyOrder("EXISTING_CUSTOMER", "TOUCH_TASK");
+    }
 
     // ==================== create ====================
 
@@ -75,15 +93,21 @@ class SupportServiceTest {
         when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
         when(scenarioRouter.route(any(), any(), any())).thenReturn(SupportScenario.A);
         SupportRequest sr = buildRequest("SR001", SupportStatus.DRAFT);
+        // splitService 负责写入 submitGroupId，模拟真实行为
+        sr.setSubmitGroupId("grp001");
+        sr.setProductId("P001");
         when(splitService.splitByProducts(any(), eq("CUST001"), any(), eq("E10001"), eq("ORG001")))
                 .thenReturn(List.of(sr));
 
         // when
-        List<SupportRequest> result = supportService.create(
+        SupportRequestCreateRespDTO result = supportService.create(
                 List.of("P001"), "CUST001", null, null, null, "E10001", "ORG001");
 
         // then
-        assertThat(result).hasSize(1);
+        assertThat(result.getProductCount()).isEqualTo(1);
+        assertThat(result.getSubmitGroupId()).isEqualTo("grp001");
+        assertThat(result.getRequests()).hasSize(1);
+        assertThat(result.getRequests().get(0).getScenario()).isEqualTo("A");
         verify(splitService).splitByProducts(any(), eq("CUST001"), any(), eq("E10001"), eq("ORG001"));
     }
 
@@ -93,16 +117,45 @@ class SupportServiceTest {
         when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
         when(scenarioRouter.route(any(), any(), any())).thenReturn(SupportScenario.A);
         SupportRequest sr1 = buildRequest("SR001", SupportStatus.DRAFT);
+        sr1.setSubmitGroupId("grpABC");
+        sr1.setProductId("P001");
         SupportRequest sr2 = buildRequest("SR002", SupportStatus.DRAFT);
+        sr2.setSubmitGroupId("grpABC");
+        sr2.setProductId("P002");
         when(splitService.splitByProducts(any(), eq("CUST001"), any(), eq("E10001"), eq("ORG001")))
                 .thenReturn(List.of(sr1, sr2));
 
         // when
-        List<SupportRequest> result = supportService.create(
+        SupportRequestCreateRespDTO result = supportService.create(
                 List.of("P001", "P002"), "CUST001", null, null, null, "E10001", "ORG001");
 
         // then
-        assertThat(result).hasSize(2);
+        assertThat(result.getProductCount()).isEqualTo(2);
+        assertThat(result.getRequests()).hasSize(2);
+        assertThat(result.getSubmitGroupId()).isEqualTo("grpABC");
+    }
+
+    @Test
+    void create_scenarioA_submitGroupId_sharedAcrossItems() {
+        // given: 场景A多产品，所有 CreatedItem 共享同一 submitGroupId
+        when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
+        when(scenarioRouter.route(any(), any(), any())).thenReturn(SupportScenario.A);
+        SupportRequest sr1 = buildRequest("SR001", SupportStatus.DRAFT);
+        sr1.setSubmitGroupId("grpXXX");
+        SupportRequest sr2 = buildRequest("SR002", SupportStatus.DRAFT);
+        sr2.setSubmitGroupId("grpXXX");
+        when(splitService.splitByProducts(any(), eq("CUST001"), any(), eq("E10001"), eq("ORG001")))
+                .thenReturn(List.of(sr1, sr2));
+
+        // when
+        SupportRequestCreateRespDTO result = supportService.create(
+                List.of("P001", "P002"), "CUST001", null, null, null, "E10001", "ORG001");
+
+        // then: submitGroupId 来自 entities（splitService 已写入）
+        assertThat(result.getSubmitGroupId()).isEqualTo("grpXXX");
+        assertThat(result.getProductCount()).isEqualTo(2);
+        assertThat(result.getRequests()).hasSize(2)
+                .allSatisfy(item -> assertThat(item.getScenario()).isEqualTo("A"));
     }
 
     @Test
@@ -114,11 +167,14 @@ class SupportServiceTest {
         when(supportMapper.insert(any(SupportRequest.class))).thenReturn(1);
 
         // when
-        List<SupportRequest> result = supportService.create(
+        SupportRequestCreateRespDTO result = supportService.create(
                 Collections.emptyList(), "CUST001", null, "咨询债券", "DEPT001", "E10001", "ORG001");
 
         // then
-        assertThat(result).hasSize(1);
+        assertThat(result.getProductCount()).isEqualTo(1);
+        assertThat(result.getSubmitGroupId()).isNotBlank();
+        assertThat(result.getRequests()).hasSize(1);
+        assertThat(result.getRequests().get(0).getScenario()).isEqualTo("B");
         verify(supportMapper).insert(any(SupportRequest.class));
         verify(splitService, never()).splitByProducts(any(), any(), any(), any(), any());
     }
@@ -138,7 +194,7 @@ class SupportServiceTest {
     // ==================== submit ====================
 
     @Test
-    void submit_validDraft_shouldStartWorkflow() {
+    void submit_validDraft_shouldStartWorkflowAndReturnDTO() {
         // given: 场景A（有productId，无supportDeptId）
         SupportRequest draft = buildRequest("SR001", SupportStatus.DRAFT);
         draft.setCreatedBy("E10001");
@@ -150,12 +206,17 @@ class SupportServiceTest {
         when(supportMapper.updateById(any(SupportRequest.class))).thenReturn(1);
 
         // when
-        supportService.submit("SR001", "E10001", "ORG001");
+        SubmitRespDTO result = supportService.submit("SR001", "E10001", "ORG001");
 
         // then
         verify(workflowApi).startProcess(any(StartProcessCmd.class));
         verify(supportMapper).updateById(any(SupportRequest.class));
         verify(eventPublisher).publishEvent(any(SupportSubmittedEvent.class));
+        // 验证返回值含 processInstanceId
+        assertThat(result).isNotNull();
+        assertThat(result.getProcessInstanceId()).isEqualTo("PID001");
+        assertThat(result.getBusinessKey()).isEqualTo("SUPPORT:SR001");
+        assertThat(result.getStatus()).isEqualTo(SupportStatus.IN_APPROVAL.getCode());
     }
 
     @Test

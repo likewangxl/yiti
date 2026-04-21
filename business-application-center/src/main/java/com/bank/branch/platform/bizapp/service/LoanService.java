@@ -1,5 +1,9 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.LoanApplyDTOConverter;
+import com.bank.branch.platform.bizapp.api.dto.LoanApplyListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.LoanDetailResp;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
 import com.bank.branch.platform.bizapp.enums.LoanStatus;
@@ -9,6 +13,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -22,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -44,6 +51,7 @@ public class LoanService {
     private final CustomerQueryApi customerQueryApi;
     private final TouchTaskQueryApi touchTaskQueryApi;
     private final ApplicationEventPublisher eventPublisher;
+    private final LoanApplyDTOConverter loanApplyDTOConverter;
 
     /** 贷款审批流程定义Key */
     private static final String PROCESS_DEFINITION_KEY = "loan_approve_v1";
@@ -222,14 +230,16 @@ public class LoanService {
      * <p>
      * 使用 SELECT FOR UPDATE 防并发提交，启动 Flowable 工作流，
      * 状态更新为 IN_APPROVAL，发布 LoanSubmittedEvent。
+     * 返回 {@link SubmitRespDTO}，含 processInstanceId，供前端跳转流程详情页使用。
      * </p>
      *
      * @param id            申请ID
      * @param operatorEmpId 操作人工号
      * @param orgCode       操作人归属机构
+     * @return 提交响应 DTO，含 processInstanceId、businessKey 和状态
      */
     @Transactional
-    public void submitForApproval(String id, String operatorEmpId, String orgCode) {
+    public SubmitRespDTO submitForApproval(String id, String operatorEmpId, String orgCode) {
         log.info("[LoanService.submitForApproval] id={}, operator={}", id, operatorEmpId);
 
         // 1. SELECT FOR UPDATE 防并发
@@ -283,6 +293,9 @@ public class LoanService {
         eventPublisher.publishEvent(new LoanSubmittedEvent(
                 id, existing.getApplyNo(), existing.getCustId(), orgCode, operatorEmpId
         ));
+
+        // 7. 返回提交响应（含 processInstanceId，供前端跳转流程详情页）
+        return new SubmitRespDTO(resp.getProcessInstanceId(), businessKey, LoanStatus.IN_APPROVAL.getCode());
     }
 
     /**
@@ -306,7 +319,7 @@ public class LoanService {
     }
 
     /**
-     * 按ID查询贷款申请详情。
+     * 按ID查询贷款申请详情（内部使用，供需要 Entity 的调用方）。
      *
      * @param id 申请ID
      * @return 贷款申请实体
@@ -317,14 +330,57 @@ public class LoanService {
     }
 
     /**
-     * 分页查询贷款申请列表。
+     * 查询贷款申请详情（富化版，含客户基础信息和按钮可见性）。
+     * <p>
+     * 通过 {@link CustomerQueryApi#getCustomer} 补充 custInfo，
+     * 通过 {@link #determineCanOperate} 注入当前用户的操作权限信息。
+     * </p>
+     * <p>
+     * TODO V2: 集成 workflow-center 历史查询，补充 processMap / approvalLogs。
+     * </p>
+     *
+     * @param id           申请ID
+     * @param currentEmpId 当前操作人工号（用于计算 canOperate）
+     * @return 富化后的贷款申请详情响应 DTO
+     * @throws BizException BIZ-40401 如果不存在
+     */
+    public LoanDetailResp getDetail(String id, String currentEmpId) {
+        log.info("[LoanService.getDetail] id={}, currentEmpId={}", id, currentEmpId);
+
+        // 1. 查询实体（不存在则抛 BIZ-40401）
+        LoanApply entity = selectByIdOrThrow(id);
+
+        // 2. 基础字段转换
+        LoanDetailResp resp = LoanDetailResp.from(entity);
+
+        // 3. 补充客户基础信息（跨模块调用，失败时 custInfo=null，不中断主流程）
+        if (entity.getCustId() != null) {
+            Optional<CustomerDTO> custOpt = customerQueryApi.getCustomer(entity.getCustId());
+            custOpt.ifPresent(cust -> {
+                LoanDetailResp.CustInfoVO custInfo = LoanDetailResp.CustInfoVO.builder()
+                        .custId(cust.getId())
+                        .custName(cust.getCustName())
+                        .custType(cust.getCustomerType())
+                        .build();
+                resp.setCustInfo(custInfo);
+            });
+        }
+
+        // 4. 注入按钮可见性
+        resp.setCanOperate(determineCanOperate(entity, currentEmpId));
+
+        return resp;
+    }
+
+    /**
+     * 分页查询贷款申请列表（返回 Entity，供内部模块使用）。
      *
      * @param keyword    关键词（模糊匹配申请编号/客户名称）
      * @param status     状态过滤（可空）
      * @param ownerOrgId 归属机构过滤（可空）
      * @param pageNo     页码（从1开始）
      * @param pageSize   每页大小
-     * @return 分页结果
+     * @return 分页结果（Entity）
      */
     public PageResult<LoanApply> listPage(String keyword, String status,
                                            String ownerOrgId, int pageNo, int pageSize) {
@@ -334,7 +390,54 @@ public class LoanService {
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
+    /**
+     * 分页查询贷款申请列表（返回 ListItemDTO，供 REST 层使用）。
+     * <p>
+     * 通过 {@link LoanApplyDTOConverter#toListItems} 批量转换并填充 custName，避免 N+1 查询。
+     * REST 层禁止直接暴露 Entity，统一通过此方法获取列表数据。
+     * </p>
+     *
+     * @param keyword    关键词（模糊匹配申请编号/客户名称）
+     * @param status     状态过滤（可空）
+     * @param ownerOrgId 归属机构过滤（可空）
+     * @param pageNo     页码（从1开始）
+     * @param pageSize   每页大小
+     * @return 分页结果（ListItemDTO，不含 deleted 等内部字段）
+     */
+    public PageResult<LoanApplyListItemDTO> listPageAsDTO(String keyword, String status,
+                                                          String ownerOrgId, int pageNo, int pageSize) {
+        PageResult<LoanApply> page = listPage(keyword, status, ownerOrgId, pageNo, pageSize);
+        List<LoanApplyListItemDTO> items = loanApplyDTOConverter.toListItems(page.getRecords());
+        return PageResult.of(pageNo, pageSize, page.getTotal(), items);
+    }
+
     // ==================== 私有工具方法 ====================
+
+    /** 可操作的状态集合：DRAFT 和 IN_APPROVAL 为活跃态，允许创建人操作 */
+    private static final Set<String> OPERABLE_STATUSES = Set.of(
+            LoanStatus.DRAFT.getCode(),
+            LoanStatus.IN_APPROVAL.getCode()
+    );
+
+    /**
+     * 判断当前用户是否可操作（用于前端按钮可见性控制）。
+     * <p>
+     * 规则：DRAFT / IN_APPROVAL 状态下 && currentEmpId == createdBy → true，否则 false。
+     * 终态（COMPLETED / REJECTED / CANCELLED）一律不可操作。
+     * </p>
+     *
+     * @param entity       贷款申请实体
+     * @param currentEmpId 当前操作人工号
+     * @return 是否可操作
+     */
+    private boolean determineCanOperate(LoanApply entity, String currentEmpId) {
+        if (entity.getStatus() == null || !OPERABLE_STATUSES.contains(entity.getStatus())) {
+            // 终态或未知状态均不可操作
+            return false;
+        }
+        // 只有创建人才可操作
+        return currentEmpId != null && currentEmpId.equals(entity.getCreatedBy());
+    }
 
     /**
      * 按ID查询，不存在则抛出 BIZ-40401。

@@ -1,9 +1,13 @@
 package com.bank.branch.platform.bizapp.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
 import com.bank.branch.platform.bizapp.dto.req.CreateSupportReq;
-import com.bank.branch.platform.bizapp.entity.SupportRequest;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.service.SupportService;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -48,62 +52,73 @@ public class SupportController {
 
     /**
      * 分页查询支持申请列表（发起侧）。
+     * <p>返回 {@link SupportRequestListItemDTO}，不暴露 Entity 内部字段。</p>
      */
     @GetMapping
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.LIST)
     @Operation(summary = "查询中场支持申请列表")
-    public ResponseWrapper<SupportRequest> listPage(
+    public ResponseWrapper<SupportRequestListItemDTO> listPage(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[SupportController.listPage] pageNo={}, pageSize={}", pageNo, pageSize);
         String orgCode = currentUserApi.getCurrentOrgCode();
-        PageResult<SupportRequest> result = supportService.listPage(keyword, status, orgCode, pageNo, pageSize);
+        PageResult<SupportRequestListItemDTO> result = supportService.listPageAsDTO(keyword, status, orgCode, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 
     /**
      * 查询支持申请详情。
+     * <p>返回 {@link SupportRequestDTO}，不暴露 Entity 内部字段（如 deleted）。</p>
      */
     @GetMapping("/{id}")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.READ)
     @Operation(summary = "查询中场支持申请详情")
-    public ResponseWrapper<SupportRequest> getById(@PathVariable String id) {
+    public ResponseWrapper<SupportRequestDTO> getById(@PathVariable String id) {
         log.info("[SupportController.getById] id={}", id);
-        SupportRequest result = supportService.getById(id);
+        SupportRequestDTO result = supportService.getByIdAsDTO(id);
         return ResponseWrapper.success(result);
     }
 
     /**
      * 创建中场支持申请（含场景路由和自动拆单）。
+     * <p>
+     * 返回 {@link SupportRequestCreateRespDTO}，含 submitGroupId 供消费方做同批追溯。
+     * 场景A（多产品）拆单后所有记录共享同一 submitGroupId；场景B（部门承接）单条记录独立生成。
+     * </p>
      */
     @PostMapping
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "CREATE_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "创建中场支持申请")
-    public ResponseWrapper<List<String>> create(@Valid @RequestBody CreateSupportReq req) {
+    public ResponseWrapper<SupportRequestCreateRespDTO> create(@Valid @RequestBody CreateSupportReq req) {
         log.info("[SupportController.create] custId={}", req.getCustId());
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
-        List<SupportRequest> results = supportService.create(
+        SupportRequestCreateRespDTO result = supportService.create(
                 req.getProductIds(), req.getCustId(), req.getSourceTouchTaskId(),
                 req.getOtherDemand(), req.getSupportDeptId(), empId, orgCode);
-        List<String> ids = results.stream().map(SupportRequest::getId).toList();
-        return ResponseWrapper.success(ids);
+        return ResponseWrapper.success(result);
     }
 
     /**
      * 提交草稿申请进入审批。
+     * <p>
+     * 返回 {@link SubmitRespDTO}，含 processInstanceId，供前端跳转流程详情页使用。
+     * 场景A多拆单时，每条申请单独提交，processInstanceId 只反映本次被提交的那一条。
+     * </p>
      */
     @PostMapping("/{id}/submit")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "SUBMIT_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "提交中场支持申请")
-    public ResponseWrapper<Void> submit(@PathVariable String id) {
+    public ResponseWrapper<SubmitRespDTO> submit(@PathVariable String id) {
         log.info("[SupportController.submit] id={}", id);
         String empId = currentUserApi.getCurrentEmpId();
         String orgCode = currentUserApi.getCurrentOrgCode();
-        supportService.submit(id, empId, orgCode);
-        return ResponseWrapper.success();
+        SubmitRespDTO resp = supportService.submit(id, empId, orgCode);
+        return ResponseWrapper.success(resp);
     }
 
     /**
@@ -111,6 +126,7 @@ public class SupportController {
      */
     @DeleteMapping("/{id}")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "DELETE_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST")
     @Operation(summary = "删除草稿中场支持申请")
     public ResponseWrapper<Void> delete(@PathVariable String id) {
         log.info("[SupportController.delete] id={}", id);
@@ -124,6 +140,7 @@ public class SupportController {
      */
     @PostMapping("/{id}/cancel")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.WRITE)
+    @AuditLog(action = "CANCEL_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST", reasonRequired = true)
     @Operation(summary = "撤回中场支持申请")
     public ResponseWrapper<Void> cancel(@PathVariable String id) {
         log.info("[SupportController.cancel] id={}", id);
@@ -137,6 +154,7 @@ public class SupportController {
      */
     @GetMapping("/export")
     @BizAuth(bizType = BizType.SUPPORT, action = BizAction.EXPORT)
+    @AuditLog(action = "EXPORT_SUPPORT_REQUEST", resourceType = "SUPPORT_REQUEST", reasonRequired = true)
     @Operation(summary = "导出中场支持申请（预留）")
     public ResponseWrapper<?> export() {
         log.info("[SupportController.export] 导出功能暂未实现");

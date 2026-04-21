@@ -22,8 +22,8 @@ import java.time.LocalDateTime;
  * 监听工作流中心发布的 {@link ProcessCompletedListener.ProcessCompletedEvent} 事件，
  * 根据 businessKey 前缀（LEAD:）识别线索相关流程，更新线索状态为 APPROVED 或 REJECTED。
  * <br>
- * 注意：{@link ProcessCompletedListener.ProcessCompletedEvent} 不携带审批结果（通过/拒绝），
- * 当前简化实现将所有完成的流程视为 APPROVED。生产中应从流程变量中读取 approved 标识。
+ * 注意：{@link ProcessCompletedListener.ProcessCompletedEvent} 已携带 outcome 字段（APPROVED/REJECTED），
+ * 当前实现暂未使用 outcome，将在 Task 1.5 改造时消费该字段以区分 APPROVED/REJECTED。
  * <br>
  * 审批结果：
  * - APPROVED + leadOp=CREATE/UPDATE → 发布 {@link LeadApprovedEvent}
@@ -67,8 +67,7 @@ public class WorkflowCallbackListener {
             return;
         }
 
-        // 简化实现：流程完成视为 APPROVED
-        // 生产中应通过 WorkflowApi.getProcessByBusinessKey() 获取流程变量 approved
+        // TODO(Task 1.5): 使用 event.outcome() 区分 APPROVED/REJECTED，当前暂时将所有完成流程视为 APPROVED
         handleApproved(lead, event.processInstanceId());
     }
 

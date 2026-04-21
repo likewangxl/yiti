@@ -26,20 +26,20 @@ public interface SupportQueryApi {
     /**
      * 按创建人工号和时间范围统计已完成的支持申请数量。
      *
-     * @param empId  创建人工号
-     * @param start  统计开始时间（含）
-     * @param end    统计结束时间（含）
+     * @param empId      创建人工号
+     * @param startTime  统计开始时间（含）
+     * @param endTime    统计结束时间（含）
      * @return 已完成申请数量
      */
-    long countCompletedByCreator(String empId, LocalDateTime start, LocalDateTime end);
+    long countCompletedByCreator(String empId, LocalDateTime startTime, LocalDateTime endTime);
 
     /**
      * 按承接人工号和时间范围统计已完成的支持申请数量。
      *
-     * @param empId  承接办理人工号
-     * @param start  统计开始时间（含）
-     * @param end    统计结束时间（含）
+     * @param empId      承接办理人工号
+     * @param startTime  统计开始时间（含）
+     * @param endTime    统计结束时间（含）
      * @return 已完成申请数量
      */
-    long countCompletedByAssignee(String empId, LocalDateTime start, LocalDateTime end);
+    long countCompletedByAssignee(String empId, LocalDateTime startTime, LocalDateTime endTime);
 }

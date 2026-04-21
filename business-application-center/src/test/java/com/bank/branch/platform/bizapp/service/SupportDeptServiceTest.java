@@ -62,7 +62,7 @@ class SupportDeptServiceTest {
         when(supportMapper.updateById(any(SupportRequest.class))).thenReturn(1);
 
         // when
-        supportDeptService.dispatch("SR001", "E20001", "E10001");
+        supportDeptService.dispatch("SR001", "E20001", "E10001", null);
 
         // then
         ArgumentCaptor<SupportRequest> captor = ArgumentCaptor.forClass(SupportRequest.class);
@@ -81,7 +81,7 @@ class SupportDeptServiceTest {
                         eq(SupportStatus.IN_PROGRESS.getCode())
                 );
 
-        assertThatThrownBy(() -> supportDeptService.dispatch("SR001", "E20001", "E10001"))
+        assertThatThrownBy(() -> supportDeptService.dispatch("SR001", "E20001", "E10001", null))
                 .isInstanceOf(BizException.class);
     }
 
@@ -95,7 +95,7 @@ class SupportDeptServiceTest {
         when(supportMapper.updateById(any(SupportRequest.class))).thenReturn(1);
 
         // when
-        supportDeptService.dispatch("SR001", "E20001", "E10001");
+        supportDeptService.dispatch("SR001", "E20001", "E10001", null);
 
         // then: 应设置 dispatch 相关字段
         ArgumentCaptor<SupportRequest> captor = ArgumentCaptor.forClass(SupportRequest.class);
@@ -104,6 +104,25 @@ class SupportDeptServiceTest {
         assertThat(captor.getValue().getDispatchEmpId()).isEqualTo("E10001");
         assertThat(captor.getValue().getDispatchTime()).isNotNull();
         verify(eventPublisher).publishEvent(any(SupportDispatchedEvent.class));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("dispatch Service 接收 dispatchRemark 并写入 SupportDispatchedEvent")
+    void dispatch_publishesEventWithDispatchRemark() {
+        // given
+        SupportRequest inApproval = buildRequest("SR001", SupportStatus.IN_APPROVAL);
+        inApproval.setSupportDeptId("DEPT001");
+        when(supportMapper.selectForUpdate("SR001")).thenReturn(inApproval);
+        doNothing().when(bizStateMachine).validateSupportTransition(anyString(), anyString());
+        when(supportMapper.updateById(any(SupportRequest.class))).thenReturn(1);
+
+        // when
+        supportDeptService.dispatch("SR001", "E20001", "E10001", "请优先处理");
+
+        // then: 事件载荷中包含 dispatchRemark
+        ArgumentCaptor<SupportDispatchedEvent> captor = ArgumentCaptor.forClass(SupportDispatchedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().getDispatchRemark()).isEqualTo("请优先处理");
     }
 
     // ==================== transfer ====================

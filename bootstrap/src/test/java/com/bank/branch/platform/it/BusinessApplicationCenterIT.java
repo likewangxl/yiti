@@ -4,7 +4,7 @@ import com.bank.branch.platform.bizapp.api.BizApplyQueryApi;
 import com.bank.branch.platform.bizapp.api.LoanApi;
 import com.bank.branch.platform.bizapp.api.SupportApi;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
-import com.bank.branch.platform.bizapp.entity.SupportRequest;
+import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.service.LoanService;
 import com.bank.branch.platform.bizapp.service.SupportService;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
@@ -113,7 +113,7 @@ class BusinessApplicationCenterIT {
         );
         loanService.submitForApproval(loanApply.getId(), OPERATOR_EMP_ID, OPERATOR_ORG_ID);
 
-        SupportRequest supportSimple = supportService.create(
+        SupportRequestCreateRespDTO.CreatedItem supportSimple = supportService.create(
                 List.of("PROD_BIZ_IT_001"),
                 CUSTOMER_ID,
                 null,
@@ -121,10 +121,10 @@ class BusinessApplicationCenterIT {
                 null,
                 OPERATOR_EMP_ID,
                 OPERATOR_ORG_ID
-        ).get(0);
+        ).getRequests().get(0);
         supportService.submit(supportSimple.getId(), OPERATOR_EMP_ID, OPERATOR_ORG_ID);
 
-        SupportRequest supportComplex = supportService.create(
+        SupportRequestCreateRespDTO.CreatedItem supportComplex = supportService.create(
                 List.of(),
                 CUSTOMER_ID,
                 null,
@@ -132,7 +132,7 @@ class BusinessApplicationCenterIT {
                 "DEPT_BIZ_IT_001",
                 OPERATOR_EMP_ID,
                 OPERATOR_ORG_ID
-        ).get(0);
+        ).getRequests().get(0);
         supportService.submit(supportComplex.getId(), OPERATOR_EMP_ID, OPERATOR_ORG_ID);
 
         ArgumentCaptor<StartProcessCmd> processCaptor = ArgumentCaptor.forClass(StartProcessCmd.class);

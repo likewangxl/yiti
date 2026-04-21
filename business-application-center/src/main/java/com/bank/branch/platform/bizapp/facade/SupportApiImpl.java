@@ -1,6 +1,7 @@
 package com.bank.branch.platform.bizapp.facade;
 
 import com.bank.branch.platform.bizapp.api.SupportApi;
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
 import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
@@ -11,13 +12,13 @@ import org.springframework.stereotype.Component;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 中场支持申请对外查询接口实现。
  * <p>
  * 实现 {@link SupportApi} 接口，直接委托 {@link SupportRequestMapper} 完成只读查询。
- * 所有查询结果通过私有 {@code toDTO()} 方法转换为跨模块传输对象。
+ * 所有查询结果通过 {@link SupportRequestDTOConverter} 转换为跨模块传输对象，
+ * converter 负责补充 custName/productName/supportDeptName 冗余字段并确保不暴露 deleted 字段。
  * </p>
  */
 @Slf4j
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 public class SupportApiImpl implements SupportApi {
 
     private final SupportRequestMapper supportRequestMapper;
+    private final SupportRequestDTOConverter supportRequestDTOConverter;
 
     /**
      * 按申请ID查询支持申请。
@@ -37,7 +39,7 @@ public class SupportApiImpl implements SupportApi {
     public Optional<SupportRequestDTO> getSupportRequest(String requestId) {
         log.debug("[SupportApiImpl.getSupportRequest] requestId={}", requestId);
         SupportRequest entity = supportRequestMapper.selectById(requestId);
-        return Optional.ofNullable(entity).map(this::toDTO);
+        return Optional.ofNullable(entity).map(supportRequestDTOConverter::toDTO);
     }
 
     /**
@@ -50,7 +52,7 @@ public class SupportApiImpl implements SupportApi {
     public Optional<SupportRequestDTO> getSupportRequestByBusinessKey(String businessKey) {
         log.debug("[SupportApiImpl.getSupportRequestByBusinessKey] businessKey={}", businessKey);
         SupportRequest entity = supportRequestMapper.selectByBusinessKey(businessKey);
-        return Optional.ofNullable(entity).map(this::toDTO);
+        return Optional.ofNullable(entity).map(supportRequestDTOConverter::toDTO);
     }
 
     /**
@@ -66,7 +68,8 @@ public class SupportApiImpl implements SupportApi {
         if (entities == null || entities.isEmpty()) {
             return Collections.emptyList();
         }
-        return entities.stream().map(this::toDTO).collect(Collectors.toList());
+        // 使用批量转换避免 N+1
+        return supportRequestDTOConverter.toDTOList(entities);
     }
 
     /**
@@ -82,14 +85,19 @@ public class SupportApiImpl implements SupportApi {
         if (entities == null || entities.isEmpty()) {
             return Collections.emptyList();
         }
-        return entities.stream().map(this::toDTO).collect(Collectors.toList());
+        // 使用批量转换避免 N+1
+        return supportRequestDTOConverter.toDTOList(entities);
     }
 
     /**
      * 批量按ID查询支持申请。
+     * <p>
+     * 依据文档契约 §7.1，入参 ID 列表上限为 500 条，超限抛 IllegalArgumentException。
+     * </p>
      *
-     * @param requestIds 申请ID列表
+     * @param requestIds 申请ID列表，不可超过 500 条
      * @return 支持申请 DTO 列表，无数据时返回空列表
+     * @throws IllegalArgumentException 当 requestIds 超过 500 条时
      */
     @Override
     public List<SupportRequestDTO> getSupportRequestBatch(List<String> requestIds) {
@@ -97,46 +105,16 @@ public class SupportApiImpl implements SupportApi {
         if (requestIds == null || requestIds.isEmpty()) {
             return Collections.emptyList();
         }
+        // 依据文档契约 §7.1：批量接口入参上限 500 条，超限直接拒绝，避免大查询打垮数据库
+        if (requestIds.size() > 500) {
+            throw new IllegalArgumentException(
+                    "requestIds size cannot exceed 500, actual: " + requestIds.size());
+        }
         List<SupportRequest> entities = supportRequestMapper.selectByIds(requestIds);
         if (entities == null || entities.isEmpty()) {
             return Collections.emptyList();
         }
-        return entities.stream().map(this::toDTO).collect(Collectors.toList());
-    }
-
-    // ------------------------------------------------------------------
-    // 私有转换方法
-    // ------------------------------------------------------------------
-
-    /**
-     * 将 SupportRequest 实体转换为对外 DTO。
-     * 手动逐字段赋值，避免引入额外的 mapping 框架依赖。
-     *
-     * @param entity 支持申请实体
-     * @return 对外 DTO
-     */
-    private SupportRequestDTO toDTO(SupportRequest entity) {
-        SupportRequestDTO dto = new SupportRequestDTO();
-        dto.setId(entity.getId());
-        dto.setRequestNo(entity.getRequestNo());
-        dto.setSubmitGroupId(entity.getSubmitGroupId());
-        dto.setCustId(entity.getCustId());
-        dto.setSourceTouchTaskId(entity.getSourceTouchTaskId());
-        dto.setProductId(entity.getProductId());
-        dto.setSupportDeptId(entity.getSupportDeptId());
-        dto.setOtherDemand(entity.getOtherDemand());
-        dto.setDispatchEmpId(entity.getDispatchEmpId());
-        dto.setDispatchTime(entity.getDispatchTime());
-        dto.setAssignedEmpId(entity.getAssignedEmpId());
-        dto.setStatus(entity.getStatus());
-        dto.setBusinessKey(entity.getBusinessKey());
-        dto.setProcessInstanceId(entity.getProcessInstanceId());
-        dto.setOwnerOrgId(entity.getOwnerOrgId());
-        dto.setCreatedBy(entity.getCreatedBy());
-        dto.setCreatedTime(entity.getCreatedTime());
-        dto.setUpdatedBy(entity.getUpdatedBy());
-        dto.setUpdatedTime(entity.getUpdatedTime());
-        dto.setDeleted(entity.getDeleted());
-        return dto;
+        // 使用批量转换避免 N+1
+        return supportRequestDTOConverter.toDTOList(entities);
     }
 }

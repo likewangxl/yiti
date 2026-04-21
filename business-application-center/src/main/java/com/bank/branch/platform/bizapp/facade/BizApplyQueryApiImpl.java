@@ -19,6 +19,10 @@ import java.util.List;
  * 实现 {@link BizApplyQueryApi} 接口，聚合贷款申请和中场支持申请两个域的查询。
  * 简单计数查询直接委托 Mapper；复杂聚合统计委托 {@link BizApplySearchService}。
  * </p>
+ * <p>
+ * 注：本 Facade 仅返回计数 / 统计类 DTO（RunningAppCountDTO / BizApplyStatDTO），
+ * 不返回 LoanApplyDTO / SupportRequestDTO，因此不依赖 Converter 层（Task 1.2）。
+ * </p>
  */
 @Slf4j
 @Component

@@ -1,5 +1,10 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestDTO;
+import com.bank.branch.platform.bizapp.api.dto.SupportRequestListItemDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SubmitRespDTO;
+import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.BizAppErrorCode;
 import com.bank.branch.platform.bizapp.enums.SupportScenario;
@@ -20,9 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 中场支持申请服务（发起侧视图）。
@@ -45,20 +50,28 @@ public class SupportService {
     private final WorkflowApi workflowApi;
     private final CustomerQueryApi customerQueryApi;
     private final ApplicationEventPublisher eventPublisher;
+    private final SupportRequestDTOConverter supportRequestDTOConverter;
 
     /**
      * 创建中场支持申请（含自动拆单逻辑）。
      * <p>
-     * 场景A：调用 splitService.splitByProducts() 创建多条 DRAFT 记录；
-     * 场景B：创建单条 DRAFT 记录，supportDeptId 必填。
+     * 场景A：调用 splitService.splitByProducts() 创建多条 DRAFT 记录，同批共享 submitGroupId；
+     * 场景B：创建单条 DRAFT 记录，supportDeptId 必填，自动生成 submitGroupId。
      * </p>
      *
-     * @return 创建的记录列表（A 可能多条，B 固定一条）
+     * @param productIds        产品ID列表（场景A使用）
+     * @param custId            客户ID
+     * @param sourceTouchTaskId 来源触达任务ID（可选）
+     * @param otherDemand       其他需求说明（场景B使用）
+     * @param supportDeptId     承接部门（场景B使用）
+     * @param operatorEmpId     操作人工号
+     * @param orgCode           归属机构编码
+     * @return 创建响应 DTO，含 submitGroupId、productCount 及各条申请明细
      */
     @Transactional
-    public List<SupportRequest> create(List<String> productIds, String custId,
-                                        String sourceTouchTaskId, String otherDemand,
-                                        String supportDeptId, String operatorEmpId, String orgCode) {
+    public SupportRequestCreateRespDTO create(List<String> productIds, String custId,
+                                               String sourceTouchTaskId, String otherDemand,
+                                               String supportDeptId, String operatorEmpId, String orgCode) {
         log.info("[SupportService.create] custId={}, operator={}", custId, operatorEmpId);
 
         // 1. 校验客户有效性
@@ -72,15 +85,41 @@ public class SupportService {
         // 2. 场景路由
         SupportScenario scenario = scenarioRouter.route(productIds, otherDemand, supportDeptId);
 
-        // 3. 按场景创建
+        // 3. 按场景创建并组装响应 DTO
         if (scenario == SupportScenario.A) {
-            return splitService.splitByProducts(productIds, custId, sourceTouchTaskId, operatorEmpId, orgCode);
+            // 场景A：splitService 负责生成 submitGroupId 并写入每条 entity
+            List<SupportRequest> entities =
+                    splitService.splitByProducts(productIds, custId, sourceTouchTaskId, operatorEmpId, orgCode);
+
+            // splitService 已保证同批记录共享同一 submitGroupId，取第一条即可
+            String submitGroupId = entities.isEmpty() ? "" : entities.get(0).getSubmitGroupId();
+
+            List<SupportRequestCreateRespDTO.CreatedItem> items = entities.stream()
+                    .map(e -> SupportRequestCreateRespDTO.CreatedItem.builder()
+                            .id(e.getId())
+                            .requestNo(e.getRequestNo())
+                            .productId(e.getProductId())
+                            .scenario(SupportScenario.A.name())
+                            .processInstanceId(null) // 草稿阶段尚未启动工作流
+                            .build())
+                    .collect(Collectors.toList());
+
+            log.info("[SupportService.create] 场景A，创建 {} 条 SupportRequest，submitGroupId={}",
+                    entities.size(), submitGroupId);
+
+            return SupportRequestCreateRespDTO.builder()
+                    .submitGroupId(submitGroupId)
+                    .productCount(entities.size())
+                    .requests(items)
+                    .build();
         } else {
-            // 场景B：创建单条记录
+            // 场景B：创建单条记录，自行生成 submitGroupId
+            String submitGroupId = UUID.randomUUID().toString().replace("-", "");
             LocalDateTime now = LocalDateTime.now();
             SupportRequest entity = new SupportRequest();
             entity.setId(UUID.randomUUID().toString().replace("-", ""));
             entity.setRequestNo(bizNoGenerator.generateSupportNo());
+            entity.setSubmitGroupId(submitGroupId);
             entity.setCustId(custId);
             entity.setSourceTouchTaskId(sourceTouchTaskId);
             entity.setOtherDemand(otherDemand);
@@ -95,20 +134,39 @@ public class SupportService {
             entity.setDeleted(0);
 
             supportMapper.insert(entity);
-            log.info("[SupportService.create] 场景B，创建 SupportRequest id={}", entity.getId());
-            return Collections.singletonList(entity);
+            log.info("[SupportService.create] 场景B，创建 SupportRequest id={}, submitGroupId={}",
+                    entity.getId(), submitGroupId);
+
+            SupportRequestCreateRespDTO.CreatedItem item = SupportRequestCreateRespDTO.CreatedItem.builder()
+                    .id(entity.getId())
+                    .requestNo(entity.getRequestNo())
+                    .productId(null) // 场景B无 productId
+                    .scenario(SupportScenario.B.name())
+                    .processInstanceId(null) // 草稿阶段尚未启动工作流
+                    .build();
+
+            return SupportRequestCreateRespDTO.builder()
+                    .submitGroupId(submitGroupId)
+                    .productCount(1)
+                    .requests(List.of(item))
+                    .build();
         }
     }
 
     /**
      * 提交草稿（SELECT FOR UPDATE，validate DRAFT -> IN_APPROVAL，启动工作流）。
+     * <p>
+     * 场景A多拆单时，每条记录单独提交，每次 submit 只提交一条申请。
+     * 返回的 processInstanceId 只反映本次被提交的那一条申请对应的流程实例。
+     * </p>
      *
      * @param id            申请ID
      * @param operatorEmpId 操作人
      * @param orgCode       归属机构
+     * @return 提交响应 DTO，含 processInstanceId、businessKey 和状态
      */
     @Transactional
-    public void submit(String id, String operatorEmpId, String orgCode) {
+    public SubmitRespDTO submit(String id, String operatorEmpId, String orgCode) {
         log.info("[SupportService.submit] id={}, operator={}", id, operatorEmpId);
 
         // SELECT FOR UPDATE 防并发
@@ -138,11 +196,14 @@ public class SupportService {
                 ? SupportScenario.A.getProcessDefinitionKey()
                 : SupportScenario.B.getProcessDefinitionKey();
 
+        // businessKey 统一定义一次，后续 cmd 和 SubmitRespDTO 共用（与 LoanService 保持一致）
+        String businessKey = "SUPPORT:" + id;
+
         // 启动工作流
         StartProcessCmd cmd = new StartProcessCmd();
         cmd.setBizType("SUPPORT");
         cmd.setBizId(id);
-        cmd.setBusinessKey("SUPPORT:" + id);
+        cmd.setBusinessKey(businessKey);
         cmd.setProcessDefinitionKey(processDefinitionKey);
         cmd.setStartUser(operatorEmpId);
         cmd.setStartOrgId(orgCode);
@@ -165,6 +226,9 @@ public class SupportService {
 
         log.info("[SupportService.submit] 申请 {} 已提交工作流，processInstanceId={}",
                 id, resp.getProcessInstanceId());
+
+        // 返回提交响应（含 processInstanceId，供前端跳转流程详情页）
+        return new SubmitRespDTO(resp.getProcessInstanceId(), businessKey, SupportStatus.IN_APPROVAL.getCode());
     }
 
     /**
@@ -247,14 +311,14 @@ public class SupportService {
     }
 
     /**
-     * 发起侧分页查询。
+     * 发起侧分页查询（返回 Entity，供内部使用）。
      *
      * @param keyword    关键词
      * @param status     状态筛选
      * @param ownerOrgId 归属机构
      * @param pageNo     页码
      * @param pageSize   每页大小
-     * @return 分页结果
+     * @return 分页结果（Entity）
      */
     public PageResult<SupportRequest> listPage(String keyword, String status,
                                                 String ownerOrgId, int pageNo, int pageSize) {
@@ -265,5 +329,41 @@ public class SupportService {
         long total = supportMapper.countPageForSupport(keyword, status, ownerOrgId);
 
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 发起侧分页查询（返回 ListItemDTO，供 REST 层使用）。
+     * <p>
+     * 通过 {@link SupportRequestDTOConverter#toListItems} 批量转换并填充展示字段，避免 N+1 查询。
+     * REST 层禁止直接暴露 Entity，统一通过此方法获取列表数据。
+     * </p>
+     *
+     * @param keyword    关键词
+     * @param status     状态筛选
+     * @param ownerOrgId 归属机构
+     * @param pageNo     页码
+     * @param pageSize   每页大小
+     * @return 分页结果（ListItemDTO，不含 deleted 等内部字段）
+     */
+    public PageResult<SupportRequestListItemDTO> listPageAsDTO(String keyword, String status,
+                                                               String ownerOrgId, int pageNo, int pageSize) {
+        PageResult<SupportRequest> page = listPage(keyword, status, ownerOrgId, pageNo, pageSize);
+        List<SupportRequestListItemDTO> items = supportRequestDTOConverter.toListItems(page.getRecords());
+        return PageResult.of(pageNo, pageSize, page.getTotal(), items);
+    }
+
+    /**
+     * 按ID查询申请并转为 DTO（供 REST 层使用）。
+     * <p>
+     * REST 层禁止直接暴露 Entity，通过此方法获取详情数据，不含 deleted 等内部字段。
+     * </p>
+     *
+     * @param id 申请ID
+     * @return 申请 DTO（含 custName/productName/supportDeptName 冗余字段）
+     * @throws BizException BIZ-40401 如果不存在
+     */
+    public SupportRequestDTO getByIdAsDTO(String id) {
+        SupportRequest entity = getById(id);
+        return supportRequestDTOConverter.toDTO(entity);
     }
 }

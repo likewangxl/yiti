@@ -27,4 +27,7 @@ public class SupportDispatchedEvent {
 
     /** 承接部门ORG_CODE */
     private String supportDeptId;
+
+    /** 派单备注（可选，文档 §8.5） */
+    private String dispatchRemark;
 }
