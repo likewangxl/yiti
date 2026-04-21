@@ -79,17 +79,17 @@ class TouchTaskServiceTest {
         verify(taskMapper).insert(any(TouchTask.class));
     }
 
-    // ==================== complete ====================
+    // ==================== markSuccess ====================
 
     @Test
-    void complete_shouldUpdateStatusToSuccess() {
+    void markSuccess_fromPending_shouldUpdateStatusToSuccess() {
         // given: PENDING 状态任务
         TouchTask task = buildPendingTask("task-001");
         when(taskMapper.selectById("task-001")).thenReturn(task);
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when
-        touchTaskService.complete("task-001");
+        touchTaskService.markSuccess("task-001");
 
         // then: 验证 updateById 中的任务状态更新为 SUCCESS
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
@@ -108,16 +108,61 @@ class TouchTaskServiceTest {
     }
 
     @Test
-    void complete_shouldThrowWhenNotPending() {
-        // given: 任务已完成，不允许再次完成
+    void markSuccess_fromInProgress_shouldUpdateStatusToSuccess() {
+        // given: IN_PROGRESS 状态任务也允许完成
         TouchTask task = buildPendingTask("task-002");
-        task.setTaskStatus(TouchTaskStatus.SUCCESS.getCode());
+        task.setTaskStatus(TouchTaskStatus.IN_PROGRESS.getCode());
         when(taskMapper.selectById("task-002")).thenReturn(task);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
-        // when/then
-        assertThatThrownBy(() -> touchTaskService.complete("task-002"))
+        // when
+        touchTaskService.markSuccess("task-002");
+
+        // then: 验证状态更新为 SUCCESS
+        ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
+        verify(taskMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getTaskStatus()).isEqualTo(TouchTaskStatus.SUCCESS.getCode());
+        assertThat(captor.getValue().getSuccessTime()).isNotNull();
+
+        // 验证发布了 TouchCompletedEvent
+        verify(eventPublisher).publishEvent(any(TouchCompletedEvent.class));
+    }
+
+    @Test
+    void markSuccess_shouldThrowWhenAlreadySuccess() {
+        // given: 任务已完成（终态），不允许再次完成
+        TouchTask task = buildPendingTask("task-003");
+        task.setTaskStatus(TouchTaskStatus.SUCCESS.getCode());
+        when(taskMapper.selectById("task-003")).thenReturn(task);
+
+        // when/then: 状态机校验失败，抛 CUST-40010
+        assertThatThrownBy(() -> touchTaskService.markSuccess("task-003"))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode());
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode());
+    }
+
+    @Test
+    void markSuccess_shouldThrowWhenCancelled() {
+        // given: 任务已取消（终态），不允许完成
+        TouchTask task = buildPendingTask("task-004");
+        task.setTaskStatus(TouchTaskStatus.CANCELLED.getCode());
+        when(taskMapper.selectById("task-004")).thenReturn(task);
+
+        // when/then: 状态机校验失败，抛 CUST-40010
+        assertThatThrownBy(() -> touchTaskService.markSuccess("task-004"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode());
+    }
+
+    @Test
+    void markSuccess_shouldThrowWhenTaskNotFound() {
+        // given: 任务不存在
+        when(taskMapper.selectById("not-exist")).thenReturn(null);
+
+        // when/then: 抛 CUST-40405
+        assertThatThrownBy(() -> touchTaskService.markSuccess("not-exist"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode());
     }
 
     // ==================== cancel ====================

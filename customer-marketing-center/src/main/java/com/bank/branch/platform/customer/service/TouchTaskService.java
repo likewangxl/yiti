@@ -88,25 +88,30 @@ public class TouchTaskService {
     }
 
     /**
-     * 完成触达任务。
+     * 标记触达任务为已完成。
      * <p>
-     * 前置条件：任务状态必须为 PENDING，否则抛出 TOUCH_TASK_NOT_PENDING。
-     * 完成后状态变更为 SUCCESS，记录 successTime，并发布 {@link TouchCompletedEvent}。
+     * 允许起始状态：PENDING、IN_PROGRESS。
+     * 状态转换由 {@link TouchTaskStateMachineService} 校验，非法转移抛 CUST-40010。
+     * 完成后 successTime=now，并发布 {@link TouchCompletedEvent}。
      * </p>
      *
      * @param taskId 任务ID
+     * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40010 非法状态转移（SUCCESS/CANCELLED 终态不允许再转移）
      */
     @Transactional
-    public void complete(String taskId) {
-        log.info("[TouchTaskService.complete] taskId={}", taskId);
+    public void markSuccess(String taskId) {
+        log.info("[TouchTaskService.markSuccess] taskId={}", taskId);
 
-        TouchTask task = getById(taskId);
-
-        // 非 PENDING 状态不允许完成
-        if (!TouchTaskStatus.PENDING.getCode().equals(task.getTaskStatus())) {
-            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getCode(),
-                    CustomerErrorCode.TOUCH_TASK_NOT_PENDING.getMessage());
+        TouchTask task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
         }
+
+        // 通过状态机校验转移合法性：PENDING/IN_PROGRESS → SUCCESS 合法，终态不可转
+        TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
+        stateMachine.assertTransition(from, TouchTaskStatus.SUCCESS);
 
         LocalDateTime now = LocalDateTime.now();
         TouchTask updateEntity = new TouchTask();
@@ -122,7 +127,7 @@ public class TouchTaskService {
                 taskId, task.getTaskNo(), task.getCustId(),
                 task.getAssigneeEmpId(), task.getTaskType()));
 
-        log.info("[TouchTaskService.complete] task completed, taskId={}", taskId);
+        log.info("[TouchTaskService.markSuccess] task marked success, taskId={}", taskId);
     }
 
     /**
