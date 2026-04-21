@@ -61,6 +61,7 @@ public class AdminTouchTaskController {
      */
     @GetMapping
     @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.LIST)
+    @AuditLog(action = "LIST_ADMIN_TOUCH_TASKS", resourceType = "TOUCH_TASK")
     @Operation(summary = "管理后台全局触达任务列表")
     public ResponseWrapper<TouchTask> listAll(
             @RequestParam(required = false) String keyword,
