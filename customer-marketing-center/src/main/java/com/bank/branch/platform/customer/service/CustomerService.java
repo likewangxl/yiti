@@ -4,6 +4,8 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.api.converter.CustomerDTOConverter;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustMaster;
@@ -77,6 +79,39 @@ public class CustomerService {
         List<CustMaster> records = masterMapper.selectPage(keyword, status, offset, pageSize);
         long total = masterMapper.countPage(keyword, status);
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 按 ID 查询客户主档并转换为 DTO，供 REST 出口使用，避免实体字段泄露。
+     *
+     * @param id 客户主档 ID
+     * @return CustomerDTO
+     * @throws BizException CUSTOMER_NOT_FOUND 客户不存在
+     */
+    public CustomerDTO getByIdAsDTO(String id) {
+        log.debug("[CustomerService.getByIdAsDTO] id={}", id);
+        CustMaster entity = requireExists(id);
+        return CustomerDTOConverter.toDTO(entity);
+    }
+
+    /**
+     * 分页查询客户主档列表并转换为 DTO，供 REST 出口使用，避免实体字段泄露。
+     *
+     * @param keyword  关键词，可为 null
+     * @param status   客户状态过滤，可为 null
+     * @param pageNo   页码（从 1 开始）
+     * @param pageSize 每页大小
+     * @return 分页结果（CustomerDTO）
+     */
+    public PageResult<CustomerDTO> listPageAsDTO(String keyword, String status, int pageNo, int pageSize) {
+        log.debug("[CustomerService.listPageAsDTO] keyword={}, status={}, pageNo={}, pageSize={}", keyword, status, pageNo, pageSize);
+        PageResult<CustMaster> raw = listPage(keyword, status, pageNo, pageSize);
+        PageResult<CustomerDTO> out = new PageResult<>();
+        out.setPageNo(raw.getPageNo());
+        out.setPageSize(raw.getPageSize());
+        out.setTotal(raw.getTotal());
+        out.setRecords(CustomerDTOConverter.toDTOList(raw.getRecords()));
+        return out;
     }
 
     /**

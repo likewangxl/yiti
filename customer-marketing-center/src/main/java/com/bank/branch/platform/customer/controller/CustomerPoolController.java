@@ -5,7 +5,7 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
-import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.service.CustomerPoolService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,12 +45,12 @@ public class CustomerPoolController {
     @GetMapping
     @BizAuth(bizType = BizType.CUSTOMER_POOL, action = BizAction.LIST)
     @Operation(summary = "分页查询客户池")
-    public ResponseWrapper<CustMaster> listPool(
+    public ResponseWrapper<CustomerDTO> listPool(
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         log.info("[CustomerPoolController.listPool] keyword={}, pageNo={}, pageSize={}", keyword, pageNo, pageSize);
-        PageResult<CustMaster> result = customerPoolService.listPool(keyword, pageNo, pageSize);
+        PageResult<CustomerDTO> result = customerPoolService.listPoolAsDTO(keyword, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 }

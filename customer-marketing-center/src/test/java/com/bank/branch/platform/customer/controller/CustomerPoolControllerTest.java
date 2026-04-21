@@ -1,7 +1,7 @@
 package com.bank.branch.platform.customer.controller;
 
 import com.bank.branch.platform.common.web.PageResult;
-import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.customer.service.CustomerPoolService;
 import com.bank.branch.platform.customer.support.AbstractControllerIntegrationTest;
 import com.bank.branch.platform.customer.support.WithMockEmpContext;
@@ -40,21 +40,19 @@ class CustomerPoolControllerTest extends AbstractControllerIntegrationTest {
 
     @Test
     @WithMockEmpContext(empId = "E10001")
-    void listPool_shouldReturn200WithPagedResult() throws Exception {
-        // given
-        CustMaster c1 = new CustMaster();
+    void listPool_returnsCustomerDTOFields() throws Exception {
+        CustomerDTO c1 = new CustomerDTO();
         c1.setId("cust-001");
         c1.setCustName("测试客户A");
         c1.setCustNo("C001");
-        CustMaster c2 = new CustMaster();
+        CustomerDTO c2 = new CustomerDTO();
         c2.setId("cust-002");
         c2.setCustName("测试客户B");
         c2.setCustNo("C002");
 
-        PageResult<CustMaster> page = PageResult.of(1, 20, 2L, Arrays.asList(c1, c2));
-        when(customerPoolService.listPool(isNull(), eq(1), eq(20))).thenReturn(page);
+        PageResult<CustomerDTO> page = PageResult.of(1, 20, 2L, Arrays.asList(c1, c2));
+        when(customerPoolService.listPoolAsDTO(isNull(), eq(1), eq(20))).thenReturn(page);
 
-        // when/then
         mockMvc.perform(get("/api/customer-pool")
                         .param("pageNo", "1")
                         .param("pageSize", "20"))
@@ -62,15 +60,16 @@ class CustomerPoolControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(2))
                 .andExpect(jsonPath("$.page.pageNo").value(1))
-                .andExpect(jsonPath("$.page.records[0].custName").value("测试客户A"));
+                .andExpect(jsonPath("$.page.records[0].custName").value("测试客户A"))
+                .andExpect(jsonPath("$.page.records[0].deleted").doesNotExist())
+                .andExpect(jsonPath("$.page.records[0].createdTime").doesNotExist());
     }
 
     @Test
     @WithMockEmpContext(empId = "E10001")
     void listPool_shouldPassKeywordToService() throws Exception {
-        // given
-        PageResult<CustMaster> emptyPage = PageResult.of(1, 20, 0L, Collections.emptyList());
-        when(customerPoolService.listPool(eq("关键词"), eq(1), eq(20))).thenReturn(emptyPage);
+        PageResult<CustomerDTO> emptyPage = PageResult.of(1, 20, 0L, Collections.emptyList());
+        when(customerPoolService.listPoolAsDTO(eq("关键词"), eq(1), eq(20))).thenReturn(emptyPage);
 
         // when/then
         mockMvc.perform(get("/api/customer-pool")
