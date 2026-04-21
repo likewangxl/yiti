@@ -71,11 +71,11 @@ public interface LoanApplyMapper {
 
     /** 按机构+时间范围统计已完成数量 */
     long countCompletedByOrg(@Param("orgId") String orgId,
-                             @Param("start") LocalDateTime start,
-                             @Param("end") LocalDateTime end);
+                             @Param("startTime") LocalDateTime startTime,
+                             @Param("endTime") LocalDateTime endTime);
 
     /** 按创建人+时间范围汇总授信金额 */
     BigDecimal sumCreditAmountByEmp(@Param("empId") String empId,
-                                    @Param("start") LocalDateTime start,
-                                    @Param("end") LocalDateTime end);
+                                    @Param("startTime") LocalDateTime startTime,
+                                    @Param("endTime") LocalDateTime endTime);
 }

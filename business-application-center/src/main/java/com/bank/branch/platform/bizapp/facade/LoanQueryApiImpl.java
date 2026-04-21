@@ -63,29 +63,29 @@ public class LoanQueryApiImpl implements LoanQueryApi {
     /**
      * 按机构和时间范围统计已完成的贷款申请数量。
      *
-     * @param orgId  机构代码
-     * @param start  统计开始时间
-     * @param end    统计结束时间
+     * @param orgId      机构代码
+     * @param startTime  统计开始时间
+     * @param endTime    统计结束时间
      * @return 已完成申请数量
      */
     @Override
-    public long countCompletedByOrg(String orgId, LocalDateTime start, LocalDateTime end) {
-        log.debug("[LoanQueryApiImpl.countCompletedByOrg] orgId={}, start={}, end={}", orgId, start, end);
-        return loanApplyMapper.countCompletedByOrg(orgId, start, end);
+    public long countCompletedByOrg(String orgId, LocalDateTime startTime, LocalDateTime endTime) {
+        log.debug("[LoanQueryApiImpl.countCompletedByOrg] orgId={}, startTime={}, endTime={}", orgId, startTime, endTime);
+        return loanApplyMapper.countCompletedByOrg(orgId, startTime, endTime);
     }
 
     /**
      * 按员工工号和时间范围汇总授信金额。
      *
-     * @param empId  员工工号
-     * @param start  统计开始时间
-     * @param end    统计结束时间
+     * @param empId      员工工号
+     * @param startTime  统计开始时间
+     * @param endTime    统计结束时间
      * @return 授信金额汇总，mapper 返回 null 时返回 BigDecimal.ZERO
      */
     @Override
-    public BigDecimal sumCreditAmountByEmp(String empId, LocalDateTime start, LocalDateTime end) {
-        log.debug("[LoanQueryApiImpl.sumCreditAmountByEmp] empId={}, start={}, end={}", empId, start, end);
-        BigDecimal result = loanApplyMapper.sumCreditAmountByEmp(empId, start, end);
+    public BigDecimal sumCreditAmountByEmp(String empId, LocalDateTime startTime, LocalDateTime endTime) {
+        log.debug("[LoanQueryApiImpl.sumCreditAmountByEmp] empId={}, startTime={}, endTime={}", empId, startTime, endTime);
+        BigDecimal result = loanApplyMapper.sumCreditAmountByEmp(empId, startTime, endTime);
         return result != null ? result : BigDecimal.ZERO;
     }
 }

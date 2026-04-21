@@ -215,7 +215,7 @@
         WHERE created_by = #{empId}
           AND status = 'COMPLETED'
           AND deleted = 0
-          AND updated_time BETWEEN #{start} AND #{end}
+          AND updated_time BETWEEN #{startTime} AND #{endTime}
     </select>
 
     <!-- 按承接人+时间范围统计已完成数量（用于绩效统计） -->
@@ -224,7 +224,7 @@
         WHERE assigned_emp_id = #{empId}
           AND status = 'COMPLETED'
           AND deleted = 0
-          AND updated_time BETWEEN #{start} AND #{end}
+          AND updated_time BETWEEN #{startTime} AND #{endTime}
     </select>
 
     <!-- 统计客户正在运行的支持申请数（并行申请限流校验） -->

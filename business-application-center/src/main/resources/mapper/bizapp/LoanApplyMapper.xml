@@ -157,7 +157,7 @@
         WHERE status = 'COMPLETED'
           AND owner_org_id = #{orgId}
           AND deleted = 0
-          AND updated_time BETWEEN #{start} AND #{end}
+          AND updated_time BETWEEN #{startTime} AND #{endTime}
     </select>
 
     <!-- 按创建人+时间范围汇总授信金额（用于绩效统计） -->
@@ -165,7 +165,7 @@
         SELECT COALESCE(SUM(credit_amount), 0) FROM loan_apply
         WHERE created_by = #{empId}
           AND deleted = 0
-          AND created_time BETWEEN #{start} AND #{end}
+          AND created_time BETWEEN #{startTime} AND #{endTime}
     </select>
 
 </mapper>

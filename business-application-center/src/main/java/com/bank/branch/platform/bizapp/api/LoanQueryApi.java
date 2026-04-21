@@ -27,20 +27,20 @@ public interface LoanQueryApi {
     /**
      * 按机构和时间范围统计已完成的贷款申请数量。
      *
-     * @param orgId  机构代码
-     * @param start  统计开始时间（含）
-     * @param end    统计结束时间（含）
+     * @param orgId      机构代码
+     * @param startTime  统计开始时间（含）
+     * @param endTime    统计结束时间（含）
      * @return 已完成申请数量
      */
-    long countCompletedByOrg(String orgId, LocalDateTime start, LocalDateTime end);
+    long countCompletedByOrg(String orgId, LocalDateTime startTime, LocalDateTime endTime);
 
     /**
      * 按员工工号和时间范围汇总授信金额。
      *
-     * @param empId  员工工号（创建人）
-     * @param start  统计开始时间（含）
-     * @param end    统计结束时间（含）
+     * @param empId      员工工号（创建人）
+     * @param startTime  统计开始时间（含）
+     * @param endTime    统计结束时间（含）
      * @return 授信金额汇总，无数据时返回 BigDecimal.ZERO
      */
-    BigDecimal sumCreditAmountByEmp(String empId, LocalDateTime start, LocalDateTime end);
+    BigDecimal sumCreditAmountByEmp(String empId, LocalDateTime startTime, LocalDateTime endTime);
 }

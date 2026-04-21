@@ -89,13 +89,13 @@ public interface SupportRequestMapper {
 
     /** 按创建人+时间范围统计已完成数量 */
     long countCompletedByCreator(@Param("empId") String empId,
-                                 @Param("start") LocalDateTime start,
-                                 @Param("end") LocalDateTime end);
+                                 @Param("startTime") LocalDateTime startTime,
+                                 @Param("endTime") LocalDateTime endTime);
 
     /** 按承接人+时间范围统计已完成数量 */
     long countCompletedByAssignee(@Param("empId") String empId,
-                                  @Param("start") LocalDateTime start,
-                                  @Param("end") LocalDateTime end);
+                                  @Param("startTime") LocalDateTime startTime,
+                                  @Param("endTime") LocalDateTime endTime);
 
     /** 统计客户正在运行的支持申请数 */
     long countRunningByCustomer(@Param("custId") String custId);
