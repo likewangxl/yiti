@@ -1,5 +1,6 @@
 package com.bank.branch.platform.bizapp.service;
 
+import com.bank.branch.platform.bizapp.api.converter.SupportRequestDTOConverter;
 import com.bank.branch.platform.bizapp.dto.resp.SupportRequestCreateRespDTO;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import com.bank.branch.platform.bizapp.enums.SupportScenario;
@@ -66,6 +67,9 @@ class SupportServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private SupportRequestDTOConverter supportRequestDTOConverter;
 
     @InjectMocks
     private SupportService supportService;
@@ -148,6 +152,9 @@ class SupportServiceTest {
 
         // then: submitGroupId 来自 entities（splitService 已写入）
         assertThat(result.getSubmitGroupId()).isEqualTo("grpXXX");
+        assertThat(result.getProductCount()).isEqualTo(2);
+        assertThat(result.getRequests()).hasSize(2)
+                .allSatisfy(item -> assertThat(item.getScenario()).isEqualTo("A"));
     }
 
     @Test
