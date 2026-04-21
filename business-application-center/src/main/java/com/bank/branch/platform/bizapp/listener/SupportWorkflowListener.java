@@ -56,8 +56,6 @@ public class SupportWorkflowListener {
     public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
         try {
             String businessKey = event.businessKey();
-            log.info("[SupportWorkflowListener.onProcessCompleted] processInstanceId={}, businessKey={}",
-                    event.processInstanceId(), businessKey);
 
             // 1. 只处理支持申请相关流程
             if (businessKey == null || !businessKey.startsWith("SUPPORT:")) {
@@ -65,6 +63,8 @@ public class SupportWorkflowListener {
             }
 
             String requestId = businessKey.substring("SUPPORT:".length());
+            log.debug("[SupportWorkflowListener.onProcessCompleted] processInstanceId={}, requestId={}",
+                    event.processInstanceId(), requestId);
 
             // 2. 按 outcome 确定目标状态
             String targetStatus = "REJECTED".equals(event.outcome())
