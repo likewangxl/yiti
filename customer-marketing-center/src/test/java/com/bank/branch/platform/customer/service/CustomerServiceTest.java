@@ -2,9 +2,11 @@ package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.dto.resp.CustomerCrossOrgHistoryVO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustMasterStatus;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
@@ -13,6 +15,7 @@ import com.bank.branch.platform.customer.event.ClaimTransferredEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -52,6 +55,9 @@ class CustomerServiceTest {
 
     @Mock
     private CustLeadMapper leadMapper;
+
+    @Mock
+    private TouchTaskMapper touchTaskMapper;
 
     @Mock
     private WorkflowApi workflowApi;
@@ -245,5 +251,88 @@ class CustomerServiceTest {
 
         verify(leadMapper, never()).insert(any());
         verify(workflowApi, never()).startProcess(any());
+    }
+
+    // ==================== getCrossOrgHistory ====================
+
+    @Test
+    void getCrossOrgHistory_shouldReturnAggregatedVO() {
+        // given: 客户存在，有 2 条认领记录（1 CLAIMED + 1 CANCELLED）和 3 条触达记录
+        String custId = "cust-001";
+        CustMaster master = new CustMaster();
+        master.setId(custId);
+        master.setCustName("测试客户");
+        master.setStatus(CustMasterStatus.ACTIVE.getCode());
+        when(masterMapper.selectById(custId)).thenReturn(master);
+
+        CustClaim activeClaim = new CustClaim();
+        activeClaim.setId("claim-001");
+        activeClaim.setCustId(custId);
+        activeClaim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
+
+        CustClaim cancelledClaim = new CustClaim();
+        cancelledClaim.setId("claim-002");
+        cancelledClaim.setCustId(custId);
+        cancelledClaim.setClaimStatus(ClaimStatus.CANCELLED.getCode());
+
+        when(claimMapper.selectByCustId(custId)).thenReturn(List.of(activeClaim, cancelledClaim));
+
+        TouchTask task1 = new TouchTask();
+        task1.setId("task-001");
+        task1.setCustId(custId);
+        TouchTask task2 = new TouchTask();
+        task2.setId("task-002");
+        task2.setCustId(custId);
+        TouchTask task3 = new TouchTask();
+        task3.setId("task-003");
+        task3.setCustId(custId);
+
+        when(touchTaskMapper.selectByCustOrderByCreatedDesc(custId)).thenReturn(List.of(task1, task2, task3));
+
+        // when
+        CustomerCrossOrgHistoryVO vo = customerService.getCrossOrgHistory(custId);
+
+        // then
+        assertThat(vo).isNotNull();
+        assertThat(vo.getCustomer()).isNotNull();
+        assertThat(vo.getClaims()).hasSize(2);
+        assertThat(vo.getTouchTasks()).hasSize(3);
+        assertThat(vo.getTotalClaimCount()).isEqualTo(2L);
+        assertThat(vo.getActiveClaimCount()).isEqualTo(1L);
+        assertThat(vo.getTotalTouchCount()).isEqualTo(3L);
+    }
+
+    @Test
+    void getCrossOrgHistory_shouldReturnEmptyListsWhenNoData() {
+        // given: 客户存在，但没有认领和触达记录
+        String custId = "cust-empty";
+        CustMaster master = new CustMaster();
+        master.setId(custId);
+        master.setCustName("空数据客户");
+        master.setStatus(CustMasterStatus.ACTIVE.getCode());
+        when(masterMapper.selectById(custId)).thenReturn(master);
+        when(claimMapper.selectByCustId(custId)).thenReturn(Collections.emptyList());
+        when(touchTaskMapper.selectByCustOrderByCreatedDesc(custId)).thenReturn(Collections.emptyList());
+
+        // when
+        CustomerCrossOrgHistoryVO vo = customerService.getCrossOrgHistory(custId);
+
+        // then
+        assertThat(vo.getClaims()).isEmpty();
+        assertThat(vo.getTouchTasks()).isEmpty();
+        assertThat(vo.getTotalClaimCount()).isEqualTo(0L);
+        assertThat(vo.getActiveClaimCount()).isEqualTo(0L);
+        assertThat(vo.getTotalTouchCount()).isEqualTo(0L);
+    }
+
+    @Test
+    void getCrossOrgHistory_shouldThrowWhenCustomerNotFound() {
+        // given: 客户不存在
+        when(masterMapper.selectById("not-exist")).thenReturn(null);
+
+        // when/then
+        assertThatThrownBy(() -> customerService.getCrossOrgHistory("not-exist"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CUSTOMER_NOT_FOUND.getCode());
     }
 }

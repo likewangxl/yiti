@@ -4,11 +4,15 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.api.converter.CustClaimDTOConverter;
 import com.bank.branch.platform.customer.api.converter.CustomerDTOConverter;
+import com.bank.branch.platform.customer.api.converter.TouchTaskDTOConverter;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.customer.dto.resp.CustomerCrossOrgHistoryVO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.enums.LeadOp;
@@ -17,6 +21,7 @@ import com.bank.branch.platform.customer.event.ClaimTransferredEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -46,6 +51,7 @@ public class CustomerService {
     private final CustMasterMapper masterMapper;
     private final CustClaimMapper claimMapper;
     private final CustLeadMapper leadMapper;
+    private final TouchTaskMapper touchTaskMapper;
     private final WorkflowApi workflowApi;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -229,6 +235,52 @@ public class CustomerService {
 
         log.info("[CustomerService.deleteApply] 删除申请已提交 custId={}, leadId={}, processInstanceId={}",
                 custId, leadId, resp.getProcessInstanceId());
+    }
+
+    /**
+     * 跨机构全量客户历史查询（高危操作）。
+     *
+     * <p>
+     * 聚合指定客户在全行范围内的所有认领记录（含 CANCELLED 历史）和触达任务历史，
+     * 用于总行部门进行客户全景分析。
+     * </p>
+     *
+     * <p>
+     * 调用层须已通过 @BizAuth 权限验证，且 @AuditLog(reasonRequired=true) 保证操作留痕。
+     * TODO: 待 @AuditLog 支持 specialCategory 属性后，补充 specialCategory=CROSS_ORG。
+     * </p>
+     *
+     * @param custId 客户 ID
+     * @return 跨机构聚合历史 VO
+     * @throws BizException CUSTOMER_NOT_FOUND 客户不存在
+     */
+    public CustomerCrossOrgHistoryVO getCrossOrgHistory(String custId) {
+        log.info("[CustomerService.getCrossOrgHistory] custId={}", custId);
+
+        // 校验客户存在
+        CustMaster master = requireExists(custId);
+
+        // 查询全行所有认领记录（含 CANCELLED 历史）
+        List<CustClaim> allClaims = claimMapper.selectByCustId(custId);
+
+        // 查询全行所有触达历史（全状态，按创建时间降序）
+        List<TouchTask> allTouchTasks = touchTaskMapper.selectByCustOrderByCreatedDesc(custId);
+
+        // 组装 VO
+        CustomerCrossOrgHistoryVO vo = new CustomerCrossOrgHistoryVO();
+        vo.setCustomer(CustomerDTOConverter.toDTO(master));
+        vo.setClaims(allClaims == null ? List.of() : CustClaimDTOConverter.toDTOList(allClaims));
+        vo.setTouchTasks(allTouchTasks == null ? List.of() : TouchTaskDTOConverter.toDTOList(allTouchTasks));
+        vo.setTotalClaimCount(vo.getClaims().size());
+        // 有效认领：claimStatus = CLAIMED
+        vo.setActiveClaimCount(vo.getClaims().stream()
+                .filter(c -> ClaimStatus.CLAIMED.getCode().equals(c.getClaimStatus()))
+                .count());
+        vo.setTotalTouchCount(vo.getTouchTasks().size());
+
+        log.info("[CustomerService.getCrossOrgHistory] custId={} 认领总数={} 有效认领={} 触达总数={}",
+                custId, vo.getTotalClaimCount(), vo.getActiveClaimCount(), vo.getTotalTouchCount());
+        return vo;
     }
 
     // ============================= 私有辅助方法 =============================
