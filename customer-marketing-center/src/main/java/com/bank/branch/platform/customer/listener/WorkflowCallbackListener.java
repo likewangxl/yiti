@@ -10,8 +10,9 @@ import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.LocalDateTime;
 
@@ -46,7 +47,7 @@ public class WorkflowCallbackListener {
      *
      * @param event 流程完成事件（来自 workflow-center ProcessCompletedListener）
      */
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         log.info("[WorkflowCallbackListener.onProcessCompleted] processInstanceId={}, businessKey={}",

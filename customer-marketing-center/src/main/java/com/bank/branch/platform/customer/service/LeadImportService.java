@@ -19,6 +19,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -118,8 +119,13 @@ public class LeadImportService {
         resp.setBatchNo(batchNo);
         resp.setTotalRows(totalRows);
         resp.setErrorRows(errorRows);
+        // TODO: 行级校验逻辑将在后续补齐；当前简化实现下默认全部成功，无错误样本
+        resp.setSuccessCount(totalRows);
+        resp.setFailCount(0);
+        resp.setErrorSamples(Collections.emptyList());
 
-        log.info("[LeadImportService.preview] batchId={}, totalRows={}, errorRows={}", batchId, totalRows, errorRows);
+        log.info("[LeadImportService.preview] batchId={}, totalRows={}, successCount={}, failCount={}",
+                batchId, totalRows, resp.getSuccessCount(), resp.getFailCount());
         return resp;
     }
 

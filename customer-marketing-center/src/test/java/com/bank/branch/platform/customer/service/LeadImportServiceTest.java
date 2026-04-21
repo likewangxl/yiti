@@ -158,6 +158,39 @@ class LeadImportServiceTest {
         verify(batchMapper).selectPage(null, null, 10, 10);
     }
 
+    // ==================== preview - successCount/failCount/errorSamples ====================
+
+    /**
+     * Task 8.2 TDD: 当前实现无行级校验，preview 应默认 successCount=totalCount, failCount=0, errorSamples 空列表。
+     */
+    @Test
+    void preview_defaultsAllSuccessWhenNoValidation() {
+        // given: 一个包含 CSV 头行 + 3 条数据行的文件
+        String csvContent = "客户名称,统一社会信用代码,联系人,手机号\n" +
+                "企业A,91110000123456789A,张三,13800000001\n" +
+                "企业B,91110000123456789B,李四,13900000002\n" +
+                "企业C,91110000123456789C,王五,13700000003\n";
+        MultipartFile file = new MockMultipartFile(
+                "file", "leads.csv", "text/csv", csvContent.getBytes()
+        );
+
+        when(batchMapper.insert(any(LeadImportBatch.class))).thenReturn(1);
+
+        // when
+        LeadImportPreviewResp resp = leadImportService.preview(file, "E1", "ORG1");
+
+        // then: 无校验时默认全部成功
+        assertThat(resp.getSuccessCount())
+                .as("无行级校验时 successCount 应等于 totalRows")
+                .isEqualTo(resp.getTotalRows());
+        assertThat(resp.getFailCount())
+                .as("无行级校验时 failCount 应为 0")
+                .isEqualTo(0);
+        assertThat(resp.getErrorSamples())
+                .as("无行级校验时 errorSamples 应为空列表")
+                .isEmpty();
+    }
+
     // ============================= 辅助方法 =============================
 
     private LeadImportBatch buildBatch(String id, String status) {

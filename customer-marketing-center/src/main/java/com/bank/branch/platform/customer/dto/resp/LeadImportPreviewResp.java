@@ -2,6 +2,8 @@ package com.bank.branch.platform.customer.dto.resp;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 线索导入预览响应 DTO。
  * <p>
@@ -26,4 +28,41 @@ public class LeadImportPreviewResp {
 
     /** 错误摘要（JSON格式，描述错误类型和样例） */
     private String errorSummary;
+
+    /**
+     * 校验通过的行数。
+     * <p>
+     * TODO: 行级校验逻辑将在后续补齐，当前简化实现下等于 totalRows。
+     * </p>
+     */
+    private int successCount;
+
+    /**
+     * 校验失败的行数。
+     * <p>
+     * TODO: 行级校验逻辑将在后续补齐，当前简化实现下固定为 0。
+     * </p>
+     */
+    private int failCount;
+
+    /**
+     * 错误样本（最多 10 条），供前端预览具体错误信息。
+     * <p>
+     * TODO: 行级校验逻辑将在后续补齐，当前简化实现下为空列表。
+     * </p>
+     */
+    private List<LeadImportErrorVO> errorSamples;
+
+    /**
+     * 单行导入错误信息 VO。
+     */
+    @Data
+    public static class LeadImportErrorVO {
+        /** 行号（从 1 开始，不含表头） */
+        private Integer rowIndex;
+        /** 字段名 */
+        private String field;
+        /** 错误描述 */
+        private String message;
+    }
 }
