@@ -21,6 +21,7 @@ public enum CustomerErrorCode {
     TOUCH_TASK_NOT_PENDING("CUST-40007", "触达任务非待处理状态"),
     TRANSFER_REASON_REQUIRED("CUST-40008", "转交原因不能为空"),
     CANCEL_REASON_REQUIRED("CUST-40009", "取消原因不能为空"),
+    TOUCH_TASK_ILLEGAL_TRANSITION("CUST-40010", "触达任务非法状态转移"),
 
     // 404 资源不存在
     TAG_NOT_FOUND("CUST-40401", "标签不存在"),
