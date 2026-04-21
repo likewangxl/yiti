@@ -124,4 +124,114 @@
         ORDER BY created_time DESC
     </select>
 
+    <!-- 契约 §5 扩展 SQL -->
+
+    <!-- 按工作流业务键查询触达任务 -->
+    <select id="selectByBusinessKey" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE business_key = #{businessKey}
+        LIMIT 1
+    </select>
+
+    <!-- 查询指定员工全部触达任务（全状态，创建时间倒序） -->
+    <select id="selectByEmp" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE assignee_emp_id = #{empId}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 查询指定员工指定状态的触达任务 -->
+    <select id="selectByEmpAndStatus" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE assignee_emp_id = #{empId}
+          AND task_status = #{status}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 统计指定员工在状态列表内的任务数量 -->
+    <select id="countByEmpAndStatuses" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE assignee_emp_id = #{empId}
+          AND task_status IN
+          <foreach collection="statuses" item="s" open="(" separator="," close=")">
+              #{s}
+          </foreach>
+    </select>
+
+    <!-- 查询指定客户全部触达历史（含所有状态，创建时间倒序） -->
+    <select id="selectByCustOrderByCreatedDesc" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE cust_id = #{custId}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 查询指定客户在指定机构的触达历史 -->
+    <select id="selectByCustAndOrg" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE cust_id = #{custId}
+          AND org_id = #{orgCode}
+        ORDER BY created_time DESC
+    </select>
+
+    <!-- 统计客户在机构已完成首次触达的次数 -->
+    <select id="countFirstTouchSuccess" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE task_type = 'FIRST_TOUCH'
+          AND task_status = 'SUCCESS'
+          AND cust_id = #{custId}
+          AND org_id = #{orgCode}
+    </select>
+
+    <!-- 统计机构在时间范围内的触达任务数量（status 为 null 则统计全部） -->
+    <select id="countByOrgBetween" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        <where>
+            AND org_id = #{orgCode}
+            AND DATE(created_time) &gt;= #{startDate}
+            AND DATE(created_time) &lt;= #{endDate}
+            <if test="status != null and status != ''">
+                AND task_status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <!-- 统计机构在时间范围内 SLA 预警的触达任务数量 -->
+    <select id="countSlaWarningByOrgBetween" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE org_id = #{orgCode}
+          AND DATE(created_time) &gt;= #{startDate}
+          AND DATE(created_time) &lt;= #{endDate}
+          AND sla_warning = TRUE
+    </select>
+
+    <!-- 统计机构在时间范围内已完成触达任务的平均时长（小时）
+         H2 兼容：使用 DATEDIFF('MINUTE', created_time, success_time) / 60.0
+         MySQL 生产：TIMESTAMPDIFF(MINUTE, created_time, success_time) / 60.0
+         TODO: DBA 确认生产环境函数后切换为 MySQL 方言 -->
+    <select id="avgDurationHoursByOrgBetween" resultType="java.lang.Double">
+        SELECT
+            AVG(
+                CASE
+                    WHEN success_time IS NOT NULL
+                    THEN DATEDIFF('MINUTE', created_time, success_time) / 60.0
+                    ELSE NULL
+                END
+            )
+        FROM touch_task
+        WHERE org_id = #{orgCode}
+          AND DATE(created_time) &gt;= #{startDate}
+          AND DATE(created_time) &lt;= #{endDate}
+          AND task_status = 'SUCCESS'
+    </select>
+
 </mapper>

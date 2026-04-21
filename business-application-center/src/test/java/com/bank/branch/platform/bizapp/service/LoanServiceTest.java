@@ -8,7 +8,7 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
-import com.bank.branch.platform.customer.entity.TouchTask;
+import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -128,9 +128,9 @@ class LoanServiceTest {
         // given
         when(customerQueryApi.isValidCustomer("CUST001")).thenReturn(true);
         when(customerQueryApi.isClaimedByOrg("CUST001", "ORG001")).thenReturn(true);
-        TouchTask task = new TouchTask();
+        TouchTaskDTO task = new TouchTaskDTO();
         task.setAssigneeEmpId("OTHER_EMP"); // 不是操作人
-        when(touchTaskQueryApi.getTaskById("TASK001")).thenReturn(task);
+        when(touchTaskQueryApi.getTouchTask("TASK001")).thenReturn(java.util.Optional.of(task));
 
         // when & then
         assertThatThrownBy(() -> loanService.createDraft(

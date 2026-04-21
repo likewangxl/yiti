@@ -7,6 +7,7 @@ import com.bank.branch.platform.customer.api.TagApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustClaimDTO;
 import com.bank.branch.platform.customer.api.dto.LeadDTO;
+import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustTag;
@@ -168,9 +169,10 @@ class CustomerMarketingCenterIT {
         assertThat(customerQueryApi.isClaimedByOrg(CUSTOMER_ID, OPERATOR_ORG_ID)).isTrue();
 
         assertThat(log.getTouchTaskId()).isEqualTo(touchTaskId);
-        assertThat(touchTaskQueryApi.getTaskById(touchTaskId)).isNotNull();
-        assertThat(touchTaskQueryApi.getTaskStatus(touchTaskId)).isEqualTo("SUCCESS");
-        assertThat(touchTaskQueryApi.getSlaStatus(touchTaskId)).isEqualTo("GREEN");
+        TouchTaskDTO taskDto = touchTaskQueryApi.getTouchTask(touchTaskId).orElseThrow();
+        assertThat(taskDto.getTaskStatus()).isEqualTo("SUCCESS");
+        // getSlaStatus 已从契约删除；slaWarning=false 表示 SLA 正常（GREEN）
+        assertThat(taskDto.getSlaWarning()).isFalse();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM touch_log WHERE touch_task_id = ?",
                 Long.class,

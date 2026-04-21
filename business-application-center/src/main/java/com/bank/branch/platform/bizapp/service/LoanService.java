@@ -9,7 +9,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
-import com.bank.branch.platform.customer.entity.TouchTask;
+import com.bank.branch.platform.customer.api.dto.TouchTaskDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -90,8 +90,13 @@ public class LoanService {
 
         // 3. 如果有来源触达任务，校验执行人是否为当前操作人
         if (sourceTouchTaskId != null) {
-            TouchTask task = touchTaskQueryApi.getTaskById(sourceTouchTaskId);
-            if (task == null || !operatorEmpId.equals(task.getAssigneeEmpId())) {
+            // 使用新 API：getTouchTask 返回 Optional<TouchTaskDTO>，任务不存在时直接抛出业务异常
+            TouchTaskDTO task = touchTaskQueryApi.getTouchTask(sourceTouchTaskId)
+                    .orElseThrow(() -> new BizException(
+                            BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getCode(),
+                            BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getMessage()
+                    ));
+            if (!operatorEmpId.equals(task.getAssigneeEmpId())) {
                 throw new BizException(
                         BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getCode(),
                         BizAppErrorCode.NOT_TOUCH_TASK_ASSIGNEE.getMessage()
