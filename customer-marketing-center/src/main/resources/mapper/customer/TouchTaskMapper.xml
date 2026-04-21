@@ -107,4 +107,21 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 统计指定客户的在途触达任务数量（PENDING 或 IN_PROGRESS 状态） -->
+    <select id="countActiveByCust" resultType="long">
+        SELECT COUNT(*) FROM touch_task
+        WHERE cust_id = #{custId}
+          AND task_status IN ('PENDING', 'IN_PROGRESS')
+    </select>
+
+    <!-- 查询指定客户的所有在途触达任务（PENDING 或 IN_PROGRESS 状态） -->
+    <select id="selectActiveByCust" resultType="com.bank.branch.platform.customer.entity.TouchTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM touch_task
+        WHERE cust_id = #{custId}
+          AND task_status IN ('PENDING', 'IN_PROGRESS')
+        ORDER BY created_time DESC
+    </select>
+
 </mapper>

@@ -89,4 +89,26 @@ public interface TouchTaskMapper {
      * @return 受影响行数
      */
     int updateById(TouchTask entity);
+
+    /**
+     * 统计指定客户的在途触达任务数量（PENDING 或 IN_PROGRESS 状态）。
+     * <p>
+     * 供 CustomerQueryApi.hasRunningProcess("TOUCH_TASK") 使用。
+     * </p>
+     *
+     * @param custId 客户ID
+     * @return 在途任务数量
+     */
+    Long countActiveByCust(@Param("custId") String custId);
+
+    /**
+     * 查询指定客户的所有在途触达任务（PENDING 或 IN_PROGRESS 状态）。
+     * <p>
+     * 供 CustomerQueryApi.listRunningProcesses 使用，按 created_time DESC 排序。
+     * </p>
+     *
+     * @param custId 客户ID
+     * @return 在途触达任务列表
+     */
+    List<TouchTask> selectActiveByCust(@Param("custId") String custId);
 }

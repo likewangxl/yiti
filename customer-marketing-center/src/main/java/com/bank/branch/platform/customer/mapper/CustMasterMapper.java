@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.bank.branch.platform.customer.api.dto.CustomerFilterDTO;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -74,4 +75,38 @@ public interface CustMasterMapper {
      * @return 受影响行数
      */
     int updateById(CustMaster entity);
+
+    /**
+     * 按 ID 列表批量查询客户主档（含逻辑删除过滤）。
+     * <p>
+     * 供 CustomerQueryApi.listCustomers 使用，调用方需确保 ids 非空。
+     * </p>
+     *
+     * @param ids 客户ID列表，不能为空
+     * @return 客户主档列表
+     */
+    List<CustMaster> selectByIds(@Param("ids") List<String> ids);
+
+    /**
+     * 按关键词模糊搜索客户主档（匹配 cust_name / cust_no / unified_credit_code）。
+     * <p>
+     * 结果按 updated_time DESC 排序，最多返回 limit 条记录。
+     * </p>
+     *
+     * @param keyword 搜索关键词，不能为空
+     * @param limit   最大返回条数
+     * @return 匹配的客户主档列表
+     */
+    List<CustMaster> searchByKeyword(@Param("keyword") String keyword, @Param("limit") int limit);
+
+    /**
+     * 按过滤条件统计客户数量。
+     * <p>
+     * 供 CustomerQueryApi.countCustomers 使用，默认过滤逻辑删除记录。
+     * </p>
+     *
+     * @param filter 过滤条件
+     * @return 符合条件的客户总数
+     */
+    long countByFilter(@Param("filter") CustomerFilterDTO filter);
 }

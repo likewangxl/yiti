@@ -103,4 +103,73 @@
           AND deleted = 0
     </update>
 
+    <!-- 按 ID 列表批量查询客户主档 -->
+    <select id="selectByIds" resultType="com.bank.branch.platform.customer.entity.CustMaster">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_master
+        WHERE deleted = 0
+          AND id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <!-- 按关键词模糊搜索客户主档（匹配 cust_name / cust_no / unified_credit_code） -->
+    <select id="searchByKeyword" resultType="com.bank.branch.platform.customer.entity.CustMaster">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_master
+        WHERE deleted = 0
+          AND (
+              cust_name LIKE CONCAT('%', #{keyword}, '%')
+              OR cust_no LIKE CONCAT('%', #{keyword}, '%')
+              OR unified_credit_code LIKE CONCAT('%', #{keyword}, '%')
+          )
+        ORDER BY updated_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 按过滤条件统计客户数量 -->
+    <select id="countByFilter" resultType="long">
+        SELECT COUNT(*) FROM cust_master
+        <where>
+            deleted = 0
+            <if test="filter.keyword != null and filter.keyword != ''">
+                AND (cust_name LIKE CONCAT('%', #{filter.keyword}, '%')
+                     OR cust_no LIKE CONCAT('%', #{filter.keyword}, '%'))
+            </if>
+            <if test="filter.status != null and filter.status != ''">
+                AND status = #{filter.status}
+            </if>
+            <if test="filter.isKeystone != null">
+                AND is_keystone = #{filter.isKeystone}
+            </if>
+            <if test="filter.industries != null and !filter.industries.isEmpty()">
+                AND industry IN
+                <foreach collection="filter.industries" item="i" open="(" close=")" separator=",">
+                    #{i}
+                </foreach>
+            </if>
+            <if test="filter.customerTypes != null and !filter.customerTypes.isEmpty()">
+                AND customer_type IN
+                <foreach collection="filter.customerTypes" item="t" open="(" close=")" separator=",">
+                    #{t}
+                </foreach>
+            </if>
+            <if test="filter.orgIds != null and !filter.orgIds.isEmpty()">
+                AND owner_org_id IN
+                <foreach collection="filter.orgIds" item="o" open="(" close=")" separator=",">
+                    #{o}
+                </foreach>
+            </if>
+            <if test="filter.createdStart != null">
+                AND created_time &gt;= #{filter.createdStart}
+            </if>
+            <if test="filter.createdEnd != null">
+                AND created_time &lt;= #{filter.createdEnd}
+            </if>
+        </where>
+    </select>
+
 </mapper>
