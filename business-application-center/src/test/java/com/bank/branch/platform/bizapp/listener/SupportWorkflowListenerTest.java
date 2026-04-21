@@ -45,7 +45,7 @@ class SupportWorkflowListenerTest {
         when(supportMapper.updateById(any(SupportRequest.class))).thenReturn(1);
 
         // when
-        listener.onProcessCompleted(new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001"));
+        listener.onProcessCompleted(new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null));
 
         // then
         ArgumentCaptor<SupportRequest> captor = ArgumentCaptor.forClass(SupportRequest.class);
@@ -56,7 +56,7 @@ class SupportWorkflowListenerTest {
     @Test
     void onProcessCompleted_nonSupportBusinessKey_shouldIgnore() {
         // given: LOAN: 前缀，不是 SUPPORT:
-        listener.onProcessCompleted(new ProcessCompletedListener.ProcessCompletedEvent("PID001", "LOAN:LA001"));
+        listener.onProcessCompleted(new ProcessCompletedListener.ProcessCompletedEvent("PID001", "LOAN:LA001", "APPROVED", null));
 
         // then: 不查询 support_request
         verify(supportMapper, never()).selectByBusinessKey(anyString());
@@ -70,7 +70,7 @@ class SupportWorkflowListenerTest {
 
         // when / then: 不应抛异常，静默跳过
         assertThatCode(() -> listener.onProcessCompleted(
-                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:NOTEXIST")))
+                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:NOTEXIST", "APPROVED", null)))
                 .doesNotThrowAnyException();
 
         verify(supportMapper, never()).updateById(any());
@@ -85,7 +85,7 @@ class SupportWorkflowListenerTest {
         when(supportMapper.updateById(any(SupportRequest.class))).thenReturn(1);
 
         // when
-        listener.onProcessCompleted(new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001"));
+        listener.onProcessCompleted(new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null));
 
         // then
         ArgumentCaptor<SupportCompletedEvent> captor = ArgumentCaptor.forClass(SupportCompletedEvent.class);
@@ -102,7 +102,7 @@ class SupportWorkflowListenerTest {
 
         // when / then: 异常不应传播到调用方
         assertThatCode(() -> listener.onProcessCompleted(
-                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001")))
+                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null)))
                 .doesNotThrowAnyException();
     }
 

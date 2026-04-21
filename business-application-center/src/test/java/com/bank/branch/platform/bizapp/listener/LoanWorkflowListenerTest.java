@@ -46,7 +46,7 @@ class LoanWorkflowListenerTest {
         when(loanMapper.selectById("LOAN001")).thenReturn(loan);
 
         ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI001", "LOAN:LOAN001");
+                new ProcessCompletedListener.ProcessCompletedEvent("PI001", "LOAN:LOAN001", "APPROVED", null);
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
@@ -61,7 +61,7 @@ class LoanWorkflowListenerTest {
     void onProcessCompleted_nonLoanBusinessKey_shouldIgnore() {
         // given: 业务键不是 LOAN: 开头
         ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI002", "LEAD:LEAD001");
+                new ProcessCompletedListener.ProcessCompletedEvent("PI002", "LEAD:LEAD001", "APPROVED", null);
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
@@ -78,7 +78,7 @@ class LoanWorkflowListenerTest {
         when(loanMapper.selectById("NOTEXIST")).thenReturn(null);
 
         ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI003", "LOAN:NOTEXIST");
+                new ProcessCompletedListener.ProcessCompletedEvent("PI003", "LOAN:NOTEXIST", "APPROVED", null);
 
         // when: 不抛出异常
         assertThatCode(() -> loanWorkflowListener.onProcessCompleted(event))
@@ -96,7 +96,7 @@ class LoanWorkflowListenerTest {
         when(loanMapper.selectById("LOAN001")).thenReturn(loan);
 
         ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI004", "LOAN:LOAN001");
+                new ProcessCompletedListener.ProcessCompletedEvent("PI004", "LOAN:LOAN001", "APPROVED", null);
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
