@@ -8,9 +8,11 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.InitSysControlReqDTO;
 import com.bank.branch.platform.performance.controller.dto.SwitchVersionReqDTO;
+import com.bank.branch.platform.performance.controller.dto.SysControlRespDTO;
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.BaseDimEnum;
 import com.bank.branch.platform.performance.facade.SysControlFacade;
+import com.bank.branch.platform.performance.facade.assembler.SysControlAssembler;
 import com.bank.branch.platform.performance.service.cmd.SwitchVersionCmd;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -52,21 +54,23 @@ public class SysControlController {
 
     /**
      * 查询指定维度当前生效版本.
+     * 返回 SysControlRespDTO，不暴露 entity 内部字段。
      *
      * @param scopeDim 维度 EMP / ORG / CUST
      */
     @GetMapping
     @Operation(summary = "查询当前生效版本")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
-    public ResponseWrapper<SysControl> getCurrent(
+    public ResponseWrapper<SysControlRespDTO> getCurrent(
             @NotBlank @RequestParam("scopeDim") String scopeDim) {
         log.debug("[SysControlController.getCurrent] scopeDim={}", scopeDim);
         SysControl sc = sysControlFacade.getCurrentVersion(scopeDim);
-        return ResponseWrapper.success(sc);
+        return ResponseWrapper.success(SysControlAssembler.toRespDTO(sc));
     }
 
     /**
      * 查询指定维度历史版本 (按 latest_data_date 倒序).
+     * 返回 SysControlRespDTO 列表，不暴露 entity 内部字段。
      *
      * @param scopeDim 维度
      * @param limit    最多返回条数, 默认 20
@@ -74,23 +78,24 @@ public class SysControlController {
     @GetMapping("/history")
     @Operation(summary = "查询历史版本")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
-    public ResponseWrapper<List<SysControl>> getHistory(
+    public ResponseWrapper<List<SysControlRespDTO>> getHistory(
             @NotBlank @RequestParam("scopeDim") String scopeDim,
             @RequestParam(value = "limit", defaultValue = "20") int limit) {
         log.debug("[SysControlController.getHistory] scopeDim={}, limit={}", scopeDim, limit);
         List<SysControl> list = sysControlFacade.listVersionHistory(scopeDim, limit);
-        return ResponseWrapper.success(list);
+        return ResponseWrapper.success(SysControlAssembler.toRespDTOList(list));
     }
 
     /**
      * 初始化 EMP / ORG / CUST 三个维度的版本记录.
      * <p>幂等: 已存在时不重复新增.
+     * 返回 SysControlRespDTO 列表，不暴露 entity 内部字段。
      */
     @PostMapping("/init")
     @Operation(summary = "版本初始化 (EMP/ORG/CUST)")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.CONFIG)
     @AuditLog(action = "INIT", resourceType = "SYS_CONTROL", reasonRequired = true)
-    public ResponseWrapper<List<SysControl>> init(@Valid @RequestBody InitSysControlReqDTO req) {
+    public ResponseWrapper<List<SysControlRespDTO>> init(@Valid @RequestBody InitSysControlReqDTO req) {
         log.info("[SysControlController.init] reason={}", req.getReason());
         List<SysControl> initialized = new ArrayList<>();
         // 基线日期使用 1970-01-01 (DDL 默认基线), 初始 version="V_INIT"
@@ -99,17 +104,18 @@ public class SysControlController {
             SysControl sc = sysControlFacade.initIfAbsent(dim.name(), baselineDate, "V_INIT");
             initialized.add(sc);
         }
-        return ResponseWrapper.success(initialized);
+        return ResponseWrapper.success(SysControlAssembler.toRespDTOList(initialized));
     }
 
     /**
      * 手工切换版本 (高危, @AuditLog reasonRequired=true).
+     * 返回 SysControlRespDTO，不暴露 entity 内部字段。
      */
     @PostMapping("/switch-version")
     @Operation(summary = "手工切换版本")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.CONFIG)
     @AuditLog(action = "SWITCH", resourceType = "SYS_CONTROL", reasonRequired = true)
-    public ResponseWrapper<SysControl> switchVersion(@Valid @RequestBody SwitchVersionReqDTO req) {
+    public ResponseWrapper<SysControlRespDTO> switchVersion(@Valid @RequestBody SwitchVersionReqDTO req) {
         log.info("[SysControlController.switchVersion] scopeDim={}, dataDate={}, newVersion={}, reason={}",
                 req.getScopeDim(), req.getDataDate(), req.getNewVersion(), req.getReason());
 
@@ -121,6 +127,6 @@ public class SysControlController {
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         SysControl sc = sysControlFacade.switchVersion(cmd);
-        return ResponseWrapper.success(sc);
+        return ResponseWrapper.success(SysControlAssembler.toRespDTO(sc));
     }
 }
