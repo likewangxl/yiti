@@ -5,13 +5,16 @@ import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
 import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateMetricReqDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.facade.MetricLifecycleFacade;
+import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.MetricRefService;
 import com.bank.branch.platform.performance.service.MetricSlotService;
@@ -38,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Metric definition read controller.
@@ -58,11 +62,12 @@ public class MetricDefController {
 
     /**
      * List metric definitions with page result.
+     * 返回 MetricDefRespDTO，不暴露 entity 内部字段。
      */
     @GetMapping
     @Operation(summary = "List metric definitions")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
-    public ResponseWrapper<PerfMetricDef> list(
+    public ResponseWrapper<MetricDefRespDTO> list(
             @RequestParam(value = "baseDim", required = false) String baseDim,
             @RequestParam(value = "metricLevel", required = false) Integer metricLevel,
             @RequestParam(value = "status", required = false) String status,
@@ -71,18 +76,29 @@ public class MetricDefController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[MetricDefController.list] baseDim={}, metricLevel={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 baseDim, metricLevel, status, keyword, pageNo, pageSize);
-        return ResponseWrapper.page(metricDefService.page(baseDim, metricLevel, status, keyword, pageNo, pageSize));
+        PageResult<PerfMetricDef> entityPage = metricDefService.page(baseDim, metricLevel, status, keyword, pageNo, pageSize);
+        // 将 entity 分页结果转换为 DTO 分页结果，屏蔽内部字段
+        PageResult<MetricDefRespDTO> dtoPage = PageResult.of(
+                entityPage.getPageNo(),
+                entityPage.getPageSize(),
+                entityPage.getTotal(),
+                entityPage.getRecords().stream()
+                        .map(MetricAssembler::toRespDTO)
+                        .collect(Collectors.toList())
+        );
+        return ResponseWrapper.page(dtoPage);
     }
 
     /**
      * Get metric definition by code.
+     * 返回 MetricDefRespDTO，不暴露 entity 内部字段。
      */
     @GetMapping("/{metricCode}")
     @Operation(summary = "Get metric definition by code")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
-    public ResponseWrapper<PerfMetricDef> getByCode(@PathVariable("metricCode") @NotBlank String metricCode) {
+    public ResponseWrapper<MetricDefRespDTO> getByCode(@PathVariable("metricCode") @NotBlank String metricCode) {
         log.debug("[MetricDefController.getByCode] metricCode={}", metricCode);
-        return ResponseWrapper.success(metricDefService.getByCode(metricCode));
+        return ResponseWrapper.success(MetricAssembler.toRespDTO(metricDefService.getByCode(metricCode)));
     }
 
     /**
@@ -128,11 +144,12 @@ public class MetricDefController {
 
     /**
      * Create metric definition.
+     * 返回 MetricDefRespDTO，不暴露 entity 内部字段。
      */
     @PostMapping
     @Operation(summary = "Create metric definition")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
-    public ResponseWrapper<PerfMetricDef> create(@Valid @RequestBody CreateMetricReqDTO req) {
+    public ResponseWrapper<MetricDefRespDTO> create(@Valid @RequestBody CreateMetricReqDTO req) {
         log.info("[MetricDefController.create] metricCode={}, baseDim={}, metricLevel={}",
                 req.getMetricCode(), req.getBaseDim(), req.getMetricLevel());
         CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
@@ -152,17 +169,18 @@ public class MetricDefController {
                 .preferredSlot(req.getPreferredSlot())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        return ResponseWrapper.success(metricLifecycleFacade.createMetric(cmd));
+        return ResponseWrapper.success(MetricAssembler.toRespDTO(metricLifecycleFacade.createMetric(cmd)));
     }
 
     /**
      * Update metric definition.
+     * 返回 MetricDefRespDTO，不暴露 entity 内部字段。
      */
     @PutMapping("/{metricCode}")
     @Operation(summary = "Update metric definition")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
-    public ResponseWrapper<PerfMetricDef> update(@PathVariable("metricCode") @NotBlank String metricCode,
-                                                 @Valid @RequestBody UpdateMetricReqDTO req) {
+    public ResponseWrapper<MetricDefRespDTO> update(@PathVariable("metricCode") @NotBlank String metricCode,
+                                                    @Valid @RequestBody UpdateMetricReqDTO req) {
         log.info("[MetricDefController.update] metricCode={}", metricCode);
         UpdateMetricDefCmd cmd = UpdateMetricDefCmd.builder()
                 .metricCode(metricCode)
@@ -178,7 +196,7 @@ public class MetricDefController {
                 .refMetricCodes(req.getRefMetricCodes())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        return ResponseWrapper.success(metricLifecycleFacade.updateMetric(cmd));
+        return ResponseWrapper.success(MetricAssembler.toRespDTO(metricLifecycleFacade.updateMetric(cmd)));
     }
 
     /**
