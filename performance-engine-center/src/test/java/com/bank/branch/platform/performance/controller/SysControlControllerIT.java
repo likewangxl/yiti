@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -165,5 +166,64 @@ class SysControlControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ===================== Task D2 Red：断言 SysControlController 响应体 DTO 化，不含 entity 内部字段 =====================
+
+    /**
+     * [Red] getCurrent 接口响应不应泄漏 entity 内部字段 createdTime / updatedTime.
+     * 当前 Controller 直接返回 SysControl entity，该测试应失败。
+     */
+    @Test
+    @DisplayName("[Red] getCurrent 响应不含 entity 内部字段")
+    void getCurrent_shouldNotExposeEntityFields() throws Exception {
+        // Given
+        SysControl sc = SysControlTestDataBuilder.buildTest(
+                "DTO01", "TEST_CT_DTO_EMP", LocalDate.of(2099, 1, 1), "V_DTO01", 1);
+        sysControlMapper.insert(sc);
+
+        // When / Then
+        String body = mockMvc.perform(get("/api/perf/sys-control")
+                        .param("scopeDim", "TEST_CT_DTO_EMP"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        // 断言业务字段存在
+        assertThat(body).contains("\"currentVersion\"");
+        assertThat(body).contains("\"scopeDim\"");
+        // 断言 entity 内部字段不存在
+        assertThat(body).doesNotContain("\"createdTime\"");
+        assertThat(body).doesNotContain("\"updatedTime\"");
+        assertThat(body).doesNotContain("\"publishTime\"");
+        assertThat(body).doesNotContain("\"publishBy\"");
+        assertThat(body).doesNotContain("\"publishSource\"");
+        assertThat(body).doesNotContain("\"updatedBy\"");
+    }
+
+    /**
+     * [Red] getHistory 接口响应不应泄漏 entity 内部字段.
+     */
+    @Test
+    @DisplayName("[Red] getHistory 响应不含 entity 内部字段")
+    void getHistory_shouldNotExposeEntityFields() throws Exception {
+        // Given
+        SysControl sc = SysControlTestDataBuilder.buildTest(
+                "DTO02", "TEST_CT_DTO_H", LocalDate.of(2099, 2, 1), "V_DTO02", 1);
+        sysControlMapper.insert(sc);
+
+        // When / Then
+        String body = mockMvc.perform(get("/api/perf/sys-control/history")
+                        .param("scopeDim", "TEST_CT_DTO_H")
+                        .param("limit", "5"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        // 断言 entity 内部字段不存在
+        assertThat(body).doesNotContain("\"createdTime\"");
+        assertThat(body).doesNotContain("\"updatedTime\"");
+        assertThat(body).doesNotContain("\"publishTime\"");
+        assertThat(body).doesNotContain("\"publishBy\"");
+        assertThat(body).doesNotContain("\"publishSource\"");
+        assertThat(body).doesNotContain("\"updatedBy\"");
     }
 }
