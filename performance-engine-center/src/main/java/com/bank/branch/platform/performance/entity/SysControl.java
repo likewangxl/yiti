@@ -8,10 +8,8 @@ import java.time.LocalDateTime;
 /**
  * 数据版本控制表 sys_control 贫血实体.
  *
- * <p>对齐生产 DDL (v1.2): 7 字段, 无 created_by / updated_by / deleted / version,
- * 不遵循业务审计字段规范 —— 这是版本控制基础设施表.
- *
- * <p>唯一键: (scope_dim, latest_data_date)
+ * <p>V1.0.3 对齐: 新增 5 个字段（remark / updated_by / publish_source / publish_by / publish_time）。
+ * <p>唯一键: (scope_dim, latest_data_date, current_version)（V1.0.3 扩展）
  * <p>索引: (scope_dim, is_valid)
  */
 @Data
@@ -37,4 +35,21 @@ public class SysControl {
 
     /** 更新时间, 对应 updated_time. */
     private LocalDateTime updatedTime;
+
+    // ===== V1.0.3 新增字段（Task B3）=====
+
+    /** 切版备注, 对应 remark. */
+    private String remark;
+
+    /** 最后更新人, 对应 updated_by. */
+    private String updatedBy;
+
+    /** 发布来源: MANUAL / AUTO / ROLLBACK, 对应 publish_source. */
+    private String publishSource;
+
+    /** 发布人, 对应 publish_by. */
+    private String publishBy;
+
+    /** 发布时间, 对应 publish_time. */
+    private LocalDateTime publishTime;
 }

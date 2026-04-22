@@ -9,8 +9,9 @@ import java.util.List;
 /**
  * sys_control 数据版本控制表 Mapper.
  *
- * <p>v1.2 版本控制表采用 7 字段生产 DDL, 不走审计字段填充, 禁止使用 common-db 的 AuditFieldFiller.
- * <p>UK: (scope_dim, latest_data_date), 索引: (scope_dim, is_valid).
+ * <p>V1.0.3 对齐：表新增 5 字段（remark/updated_by/publish_source/publish_by/publish_time）。
+ * <p>v1.2 版本控制表采用生产 DDL, 不走审计字段填充, 禁止使用 common-db 的 AuditFieldFiller.
+ * <p>UK: (scope_dim, latest_data_date, current_version)（V1.0.3 扩展），索引: (scope_dim, is_valid).
  */
 @Mapper
 public interface SysControlMapper {
@@ -58,6 +59,14 @@ public interface SysControlMapper {
      */
     int updateIsValid(@Param("id") String id,
                       @Param("isValid") int isValid);
+
+    /**
+     * 选择性更新（V1.0.3：含发布元数据字段）.
+     *
+     * @param sysControl 实体（只更新非 null 字段）
+     * @return 受影响行数
+     */
+    int updateByIdSelective(SysControl sysControl);
 
     /**
      * 条件查询 (支持 scopeDim / isValid 过滤, 分页).

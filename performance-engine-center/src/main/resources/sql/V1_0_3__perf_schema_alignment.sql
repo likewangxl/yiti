@@ -18,3 +18,14 @@
 ALTER TABLE sys_control DROP INDEX uk_scope_dim_date;
 ALTER TABLE sys_control
   ADD UNIQUE KEY uk_scope_dim_date_version (scope_dim, latest_data_date, current_version);
+
+-- =====================================================================
+-- Task B3: sys_control 补 5 个字段
+-- 文档 01 §2.2 要求字段：remark、updated_by、publish_source、publish_by、publish_time
+-- =====================================================================
+ALTER TABLE sys_control
+  ADD COLUMN remark VARCHAR(255) NULL COMMENT '切版备注' AFTER current_version,
+  ADD COLUMN updated_by VARCHAR(32) NULL COMMENT '最后更新人',
+  ADD COLUMN publish_source VARCHAR(32) NULL COMMENT '发布来源：MANUAL/AUTO/ROLLBACK',
+  ADD COLUMN publish_by VARCHAR(32) NULL COMMENT '发布人',
+  ADD COLUMN publish_time DATETIME NULL COMMENT '发布时间';
