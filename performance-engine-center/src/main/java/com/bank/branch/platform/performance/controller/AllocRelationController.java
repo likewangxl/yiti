@@ -37,7 +37,7 @@ import java.util.Set;
  *   <li>GET /api/perf/alloc-relations/summary  → P_PERF_ALLOC_SUM</li>
  * </ul>
  *
- * <p>读操作端点仅标注 {@code @BizAuth(READ)}, 不带 {@code @AuditLog}
+ * <p>读操作端点仅标注 {@code @BizAuth(LIST/READ)}, 不带 {@code @AuditLog}
  * (Plan Task 5.4 L1580 钦定, 读操作不审计)。
  *
  * <p>summary 端点 empId 设计决策 (方案 C): Controller 不接受 empId 参数,
