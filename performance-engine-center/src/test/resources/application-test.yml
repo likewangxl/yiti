@@ -1,4 +1,6 @@
 spring:
+  flyway:
+    enabled: false   # Mapper/Service/Controller IT 不需要 Flyway，由 PerformanceFlywayTestBase 覆盖启用
   datasource:
     url: jdbc:mysql://localhost:3306/onepl?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
