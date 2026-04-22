@@ -165,9 +165,10 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
     @DisplayName("getCustMetricValues：路由 CustIndexResultMapper")
     void getCustMetricValues_routesToCustMapper() {
         PerfMetricDef m1 = metric("MC01", "客户指标", "CUST", 3);
+        // helper 默认 slot=level=3，显式测试 slot=3 的路由
         when(metricDefService.getByCodes(List.of("MC01"))).thenReturn(List.of(m1));
         when(sysControlService.getCurrentVersion("CUST")).thenReturn(sysControl("v3"));
-        when(custIndexResultMapper.selectSlotValue(eq("C001"), any(LocalDate.class), eq("v3"), eq(1)))
+        when(custIndexResultMapper.selectSlotValue(eq("C001"), any(LocalDate.class), eq("v3"), eq(3)))
                 .thenReturn(new BigDecimal("123.45"));
 
         Map<String, BigDecimal> result = metricApi.getCustMetricValues(
