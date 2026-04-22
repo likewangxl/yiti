@@ -41,3 +41,13 @@ ALTER TABLE perf_metric_def
   ADD COLUMN description VARCHAR(500) NULL COMMENT '指标详细描述（补充 metric_desc）';
 -- 所有现存行 deleted=0
 UPDATE perf_metric_def SET deleted = 0 WHERE deleted IS NULL;
+
+-- =====================================================================
+-- Task B2: perf_metric_def 槽位唯一键（仅对未删除行）
+-- 依赖 Task B4 引入的 deleted 字段，必须在 B4 之后执行。
+-- MySQL 8 函数索引：仅当 deleted=0 时约束 (base_dim, val_slot) 唯一；
+-- deleted=1 时 IF 返回 NULL，NULL 不参与唯一键约束，允许同 slot 的软删除行。
+-- =====================================================================
+ALTER TABLE perf_metric_def
+  ADD UNIQUE KEY uk_base_dim_slot_alive
+  ((IF(deleted=0, CONCAT(base_dim,'#',val_slot), NULL)));
