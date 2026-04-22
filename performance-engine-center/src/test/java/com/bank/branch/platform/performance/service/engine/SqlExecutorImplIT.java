@@ -83,7 +83,9 @@ class SqlExecutorImplIT extends PerformanceMapperTestBase {
                 new LinkedHashMap<>(),
                 Duration.ofSeconds(30)))
                 .isInstanceOf(PerfException.class)
-                .hasMessageContaining(PerfErrorCode.METRIC_CALC_LOGIC_INVALID.getCode());
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.throwable(PerfException.class))
+                .extracting(PerfException::getErrorCode)
+                .isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID);
     }
 
     @Test
@@ -94,6 +96,8 @@ class SqlExecutorImplIT extends PerformanceMapperTestBase {
                 new LinkedHashMap<>(),
                 Duration.ofSeconds(30)))
                 .isInstanceOf(PerfException.class)
-                .hasMessageContaining(PerfErrorCode.METRIC_CALC_LOGIC_INVALID.getCode());
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.throwable(PerfException.class))
+                .extracting(PerfException::getErrorCode)
+                .isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID);
     }
 }
