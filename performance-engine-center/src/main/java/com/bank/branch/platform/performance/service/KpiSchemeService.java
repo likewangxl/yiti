@@ -83,7 +83,7 @@ public class KpiSchemeService {
     public PerfKpiScheme create(CreateKpiSchemeCmd cmd) {
         // schemeCode UK 预校验 (提前抛业务异常, 避免 DB 层语义含糊的 DuplicateKey 冒泡)
         if (schemeMapper.selectBySchemeCode(cmd.getSchemeCode()) != null) {
-            throw new PerfException(PerfErrorCode.KPI_SCHEME_CODE_DUP, cmd.getSchemeCode());
+            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getSchemeCode());
         }
 
         PerfKpiScheme scheme = new PerfKpiScheme();
@@ -103,7 +103,7 @@ public class KpiSchemeService {
             schemeMapper.insert(scheme);
         } catch (DuplicateKeyException ex) {
             // 并发场景 UK 兜底 (预校验与 insert 之间有其他事务抢先插入)
-            throw new PerfException(PerfErrorCode.KPI_SCHEME_CODE_DUP, ex, cmd.getSchemeCode());
+            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, ex, cmd.getSchemeCode());
         }
 
         // 遍历写入方案项: addItem 在同一事务内运行 (REQUIRED 传播);
@@ -174,14 +174,14 @@ public class KpiSchemeService {
     public void disable(String id, String reason, String operator) {
         if (reason == null || reason.isBlank()) {
             // 高危操作 reason 必填 - 这里做兜底, 正常应由 Controller DTO 层 @NotBlank 拦截
-            throw new PerfException(PerfErrorCode.PARAM_INVALID, "reason 必填");
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "reason 必填");
         }
         PerfKpiScheme existing = schemeMapper.selectById(id);
         if (existing == null) {
             throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
         if (STATUS_DISABLED.equals(existing.getStatus())) {
-            throw new PerfException(PerfErrorCode.INVALID_STATE, "方案已禁用: " + id);
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "方案已禁用: " + id);
         }
         log.info("[KpiSchemeService.disable] id={}, schemeCode={}, operator={}, reason={}",
                 id, existing.getSchemeCode(), operator, reason);
@@ -210,7 +210,7 @@ public class KpiSchemeService {
             throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
         if (STATUS_DISABLED.equals(scheme.getStatus())) {
-            throw new PerfException(PerfErrorCode.INVALID_STATE, "已禁用方案不可发布: " + id);
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "已禁用方案不可发布: " + id);
         }
 
         List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
@@ -226,7 +226,7 @@ public class KpiSchemeService {
         for (PerfKpiItem item : items) {
             PerfMetricDef metricDef = defMap.get(item.getMetricCode());
             if (metricDef == null || !STATUS_ACTIVE.equals(metricDef.getStatus())) {
-                throw new PerfException(PerfErrorCode.KPI_PUBLISH_METRIC_INVALID, item.getMetricCode());
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, item.getMetricCode());
             }
         }
 

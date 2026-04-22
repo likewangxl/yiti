@@ -3,66 +3,144 @@ package com.bank.branch.platform.performance.enums;
 /**
  * performance-engine-center 模块错误码定义.
  *
- * <p>格式: PERF-{HTTP_STATUS_LAST_TWO}{SEQ_3DIGIT}
+ * <p>格式: PERF-{HTTP_STATUS}{SEQ}
+ * <p>权威来源: docs/modules/performance-engine-center/03-接口设计与报文.md §K「错误码完整汇总」
  * <p>使用: throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
+ *
+ * <p>§K 共 25 条编码，METRIC_SLOT_CONFLICT 复用 PERF-40901，枚举常量总数 = 26。
+ * <p>2026-04-22 对齐 §K 权威清单，废弃旧编号体系（40401/40402/40403/40406/40407/
+ *    40903/40904/40905/40911/40912/40913/40914）。
  */
 public enum PerfErrorCode {
 
-    /* 400 参数校验 */
-    PARAM_INVALID("PERF-40001", "请求参数非法: %s"),
-    PAGE_OUT_OF_RANGE("PERF-40002", "分页参数越界"),
+    // =============================================
+    // K.1 400xx 参数错误 / 资源不存在
+    // =============================================
 
-    /* 404 资源不存在 */
-    METRIC_NOT_FOUND("PERF-40401", "指标不存在: %s"),
-    KPI_SCHEME_NOT_FOUND("PERF-40402", "KPI方案不存在: %s"),
-    TARGET_PLAN_NOT_FOUND("PERF-40403", "目标方案不存在: %s"),
-    TARGET_VALUE_NOT_FOUND("PERF-40404", "目标值不存在: %s"),
-    RUN_TASK_NOT_FOUND("PERF-40405", "运行任务不存在: %s"),
-    SYS_CONTROL_NOT_FOUND("PERF-40406", "版本控制记录不存在: scopeDim=%s"),
-    KPI_ITEM_NOT_FOUND("PERF-40407", "KPI指标项不存在: %s"),
+    /** 指标不存在 */
+    METRIC_NOT_FOUND("PERF-40001", "指标不存在"),
 
-    /* 409 冲突 */
-    METRIC_SLOT_CONFLICT("PERF-40901", "槽位已被占用: baseDim=%s, slot=%d"),
-    METRIC_CYCLE_DETECTED("PERF-40902", "指标引用形成环路: %s"),
-    METRIC_CODE_DUP("PERF-40903", "指标编码已存在: %s"),
-    SYS_CONTROL_CONFLICT("PERF-40904", "版本切换并发冲突"),
-    INVALID_STATE("PERF-40905", "当前状态不允许此操作: %s"),
-    PLAN_NOT_PUBLISHED("PERF-40906", "方案未发布不可绑定目标: %s"),
-    KPI_SCHEME_CODE_DUP("PERF-40907", "KPI方案编码已存在: %s"),
-    TARGET_PLAN_CODE_DUP("PERF-40908", "目标方案编码已存在: %s"),
-    KPI_ITEM_DUP("PERF-40909", "KPI方案内指标项已存在: schemeId=%s, metricCode=%s"),
-    TARGET_BATCH_TOO_BIG("PERF-40910", "批量目标值最多500条, 当前: %d"),
-    METRIC_LEVEL_INVALID("PERF-40911", "指标层级引用违规: %s"),
-    METRIC_STILL_REFERENCED("PERF-40912", "指标仍被其他指标引用, 不可删除: %s"),
-    SLOT_LOCK_ACQUIRE_FAILED("PERF-40913", "槽位分配锁获取失败, 请重试: baseDim=%s"),
-    KPI_PUBLISH_METRIC_INVALID("PERF-40914", "KPI方案发布时引用的指标不可用 (不存在或已停用): %s"),
-    TARGET_PLAN_KPI_SCHEME_INVALID("PERF-40915", "目标方案引用的 KPI 方案不可用 (未发布或已停用): %s"),
+    /** bizKind 参数无效 */
+    BIZ_KIND_INVALID("PERF-40002", "bizKind 参数无效"),
 
-    /* 500 服务端错误 */
-    INTERNAL_ERROR("PERF-50001", "未预期的服务端错误"),
-    DOWNSTREAM_ERROR("PERF-50002", "下游依赖异常: %s");
+    /** KPI 方案不存在 */
+    KPI_SCHEME_NOT_FOUND("PERF-40003", "KPI 方案不存在"),
+
+    /** 目标方案不存在 */
+    TARGET_PLAN_NOT_FOUND("PERF-40004", "目标方案不存在"),
+
+    /** sys_control 版本不存在 */
+    SYS_CONTROL_VERSION_NOT_FOUND("PERF-40012", "sys_control 版本不存在"),
+
+    /** 分配关系记录不存在 */
+    ALLOC_RELATION_NOT_FOUND("PERF-40014", "分配关系记录不存在"),
+
+    /** 导入批次不存在（V1.1 占位） */
+    IMPORT_BATCH_NOT_FOUND("PERF-40017", "导入批次不存在"),
+
+    /** 周期参数不合法（V1.1 占位） */
+    CYCLE_PARAM_INVALID("PERF-40019", "周期参数不合法"),
+
+    /** 目标修正申请不存在（V1.2 占位） */
+    TARGET_ADJUST_APPLY_NOT_FOUND("PERF-40020", "目标修正申请不存在"),
+
+    // =============================================
+    // K.2 409xx 业务冲突 / 幂等
+    // =============================================
+
+    /** 指标编码已存在 */
+    METRIC_CODE_DUP("PERF-40901", "指标编码已存在"),
+
+    /**
+     * 指标槽位已占用.
+     * 复用 PERF-40901 编号（HTTP 409），通过 message 区分语义。
+     */
+    METRIC_SLOT_CONFLICT("PERF-40901", "指标槽位已占用"),
+
+    /** 指标存在下游引用，不可删除（V1.1 占位） */
+    METRIC_HAS_DOWNSTREAM_REF("PERF-40902", "指标存在下游引用，不可删除"),
+
+    /** sys_control 同维度同日期版本冲突 */
+    SYS_CONTROL_VERSION_CONFLICT("PERF-40903", "sys_control 同维度同日期版本冲突"),
+
+    /** 目标修正申请流程已发起（V1.2 占位） */
+    TARGET_ADJUST_APPLY_RUNNING("PERF-40906", "目标修正申请流程已发起"),
+
+    // =============================================
+    // K.3 422xx 参数校验 / 业务规则
+    // =============================================
+
+    /** 参数校验失败（通用） */
+    VALIDATION_FAILED("PERF-42200", "参数校验失败"),
+
+    /**
+     * 指标计算逻辑非法.
+     * 覆盖场景：指标层级与上级不符、Groovy 语法/沙箱校验失败、循环依赖检测等。
+     */
+    METRIC_CALC_LOGIC_INVALID("PERF-42201", "指标计算逻辑非法"),
+
+    /** KPI 方案权重之和不等于 100 */
+    KPI_WEIGHT_SUM_INVALID("PERF-42202", "KPI 方案权重之和不等于 100"),
+
+    /** 目标值导入 Excel 列映射错误（V1.1 占位） */
+    IMPORT_COLUMN_MAPPING_INVALID("PERF-42203", "目标值导入 Excel 列映射错误"),
+
+    /** 试运行超时（30 秒）（V1.1 占位） */
+    TRIAL_RUN_TIMEOUT("PERF-42205", "试运行超时（30 秒）"),
+
+    /** 批量查询超过上限（500 条） */
+    BATCH_QUERY_EXCEEDS_LIMIT("PERF-42206", "批量查询超过上限（500 条）"),
+
+    /** 导出行数超过上限（200000）（V1.2 占位） */
+    EXPORT_ROWS_EXCEEDS_LIMIT("PERF-42207", "导出行数超过上限（200000）"),
+
+    /** 异步导出任务不存在或已过期（V1.2 占位） */
+    EXPORT_TASK_NOT_FOUND("PERF-42208", "异步导出任务不存在或已过期"),
+
+    /** 不能下载他人创建的导出任务（V1.2 占位，HTTP 403） */
+    EXPORT_TASK_OWNER_MISMATCH("PERF-42209", "不能下载他人创建的导出任务"),
+
+    /** 导出过滤条件未通过 DATA_SCOPE 校验（V1.2 占位） */
+    EXPORT_FILTER_SCOPE_VIOLATION("PERF-42210", "导出过滤条件未通过 DATA_SCOPE 校验"),
+
+    // =============================================
+    // K.4 500xx 系统错误
+    // =============================================
+
+    /** 导出文件生成失败（V1.2 占位） */
+    EXPORT_FILE_GENERATE_FAILED("PERF-50002", "导出文件生成失败"),
+
+    /** 指标/KPI 计算 Job 执行失败（V1.1 占位） */
+    CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败");
 
     private final String code;
-    private final String messageTemplate;
+    private final String message;
 
-    PerfErrorCode(String code, String messageTemplate) {
+    PerfErrorCode(String code, String message) {
         this.code = code;
-        this.messageTemplate = messageTemplate;
+        this.message = message;
     }
 
     public String getCode() {
         return code;
     }
 
-    public String getMessageTemplate() {
-        return messageTemplate;
+    public String getMessage() {
+        return message;
     }
 
-    /** 填充消息模板占位符, 返回最终异常消息. */
+    /**
+     * 填充消息模板占位符，返回最终异常消息.
+     *
+     * @param args 占位符参数
+     * @return 格式化后的消息
+     */
     public String format(Object... args) {
         if (args == null || args.length == 0) {
-            return messageTemplate;
+            return message;
         }
-        return String.format(messageTemplate, args);
+        return message + ": " + String.join(", ", java.util.Arrays.stream(args)
+                .map(String::valueOf)
+                .toArray(String[]::new));
     }
 }

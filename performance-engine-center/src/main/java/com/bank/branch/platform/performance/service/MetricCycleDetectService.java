@@ -29,13 +29,13 @@ public class MetricCycleDetectService {
      */
     public void checkLevelConstraint(Integer thisLevel, Map<String, Integer> refMetricLevels) {
         if (thisLevel == null || thisLevel < 1 || thisLevel > 3) {
-            throw new PerfException(PerfErrorCode.METRIC_LEVEL_INVALID, "指标层级仅支持 1/2/3");
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, "指标层级仅支持 1/2/3");
         }
         if (refMetricLevels == null || refMetricLevels.isEmpty()) {
             return;
         }
         if (thisLevel == 1) {
-            throw new PerfException(PerfErrorCode.METRIC_LEVEL_INVALID, "L1 指标不得引用其他指标");
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, "L1 指标不得引用其他指标");
         }
 
         int expectedRefLevel = thisLevel - 1;
@@ -43,7 +43,7 @@ public class MetricCycleDetectService {
             Integer actualLevel = entry.getValue();
             if (actualLevel == null || actualLevel != expectedRefLevel) {
                 throw new PerfException(
-                        PerfErrorCode.METRIC_LEVEL_INVALID,
+                        PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                         "L" + thisLevel + " 只能引用 L" + expectedRefLevel
                                 + "，refMetric=" + entry.getKey() + " 实际层级=" + actualLevel);
             }
@@ -65,7 +65,7 @@ public class MetricCycleDetectService {
             return;
         }
         if (newRefs.contains(newNode)) {
-            throw new PerfException(PerfErrorCode.METRIC_CYCLE_DETECTED, "指标 " + newNode + " 自引用");
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, "指标 " + newNode + " 自引用");
         }
 
         Map<String, List<String>> graph = new HashMap<>();
@@ -78,7 +78,7 @@ public class MetricCycleDetectService {
         for (String ref : newRefs) {
             if (reachStart(graph, ref, newNode, new HashSet<>(Set.of(newNode)))) {
                 throw new PerfException(
-                        PerfErrorCode.METRIC_CYCLE_DETECTED,
+                        PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                         "指标引用图形成环路，起点=" + newNode);
             }
         }

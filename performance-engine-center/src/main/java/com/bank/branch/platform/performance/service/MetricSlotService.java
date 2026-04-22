@@ -36,7 +36,7 @@ public class MetricSlotService {
         if (preferredSlot != null) {
             if (preferredSlot < range[0] || preferredSlot > range[1]) {
                 throw new PerfException(
-                        PerfErrorCode.PARAM_INVALID,
+                        PerfErrorCode.VALIDATION_FAILED,
                         "preferredSlot=" + preferredSlot + " 越出 L" + metricLevel + " 槽位区间");
             }
             if (occupied.contains(preferredSlot)) {
@@ -50,7 +50,7 @@ public class MetricSlotService {
                 return slot;
             }
         }
-        throw new PerfException(PerfErrorCode.INVALID_STATE, "L" + metricLevel + " 槽位区间已耗尽");
+        throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "L" + metricLevel + " 槽位区间已耗尽");
     }
 
     /**
@@ -79,20 +79,20 @@ public class MetricSlotService {
             throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, id);
         }
         if (!"DISABLED".equals(def.getStatus())) {
-            throw new PerfException(PerfErrorCode.INVALID_STATE, "仅 DISABLED 状态可释放槽位, 当前=" + def.getStatus());
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "仅 DISABLED 状态可释放槽位, 当前=" + def.getStatus());
         }
         mapper.releaseSlotById(id, operator);
     }
 
     private int[] rangeOf(Integer metricLevel) {
         if (metricLevel == null) {
-            throw new PerfException(PerfErrorCode.PARAM_INVALID, "metricLevel 不能为空");
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "metricLevel 不能为空");
         }
         return switch (metricLevel) {
             case 1 -> new int[]{1, 100};
             case 2 -> new int[]{101, 150};
             case 3 -> new int[]{151, 200};
-            default -> throw new PerfException(PerfErrorCode.PARAM_INVALID, "不支持的 metricLevel=" + metricLevel);
+            default -> throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "不支持的 metricLevel=" + metricLevel);
         };
     }
 }

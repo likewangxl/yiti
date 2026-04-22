@@ -62,7 +62,7 @@ class TargetValueServiceTest {
 
         assertThatThrownBy(() -> service.upsertBatch(list, "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_BATCH_TOO_BIG));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.BATCH_QUERY_EXCEEDS_LIMIT));
         verify(targetValueMapper, never()).upsertBatch(anyList());
     }
 
@@ -201,7 +201,7 @@ class TargetValueServiceTest {
     void listByPlan_whenPlanIdBlank_throws() {
         assertThatThrownBy(() -> service.listByPlan("  ", null, null, null, 1, 20))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(targetValueMapper, never()).listByPlan(eq("  "), isNull(), isNull(), isNull(),
                 org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
     }
@@ -211,7 +211,7 @@ class TargetValueServiceTest {
     void listByPlan_whenPlanIdNull_throws() {
         assertThatThrownBy(() -> service.listByPlan(null, null, null, null, 1, 20))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
     }
 
     @Test

@@ -47,7 +47,7 @@ public class SysControlService {
         SysControl sc = sysControlMapper.selectByScopeAndValid(scopeDim);
         if (sc == null) {
             log.warn("[SysControlService.getCurrentVersion] 当前版本不存在, scopeDim={}", scopeDim);
-            throw new PerfException(PerfErrorCode.SYS_CONTROL_NOT_FOUND, scopeDim);
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND, scopeDim);
         }
         return sc;
     }
@@ -82,7 +82,7 @@ public class SysControlService {
         // 1) 定位当前生效版本 (如果没有, 不允许切换, 业务要求先 init)
         SysControl curr = sysControlMapper.selectByScopeAndValid(cmd.getScopeDim());
         if (curr == null) {
-            throw new PerfException(PerfErrorCode.SYS_CONTROL_NOT_FOUND, cmd.getScopeDim());
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND, cmd.getScopeDim());
         }
 
         // 2) 将旧版本置失效
@@ -110,7 +110,7 @@ public class SysControlService {
         } catch (DuplicateKeyException e) {
             log.warn("[SysControlService.doSwitchVersion] UK 冲突, 判定为并发切换: scopeDim={}, dataDate={}",
                     cmd.getScopeDim(), cmd.getDataDate());
-            throw new PerfException(PerfErrorCode.SYS_CONTROL_CONFLICT, e);
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT, e);
         }
         return newSc;
     }

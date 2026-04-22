@@ -63,7 +63,7 @@ public class SysControlFacade {
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
         if (!Boolean.TRUE.equals(locked)) {
             log.warn("[SysControlFacade.switchVersion] 获锁失败, scopeDim={}", cmd.getScopeDim());
-            throw new PerfException(PerfErrorCode.SYS_CONTROL_CONFLICT);
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT);
         }
 
         try {

@@ -168,7 +168,7 @@ public class MetricDefService {
     public void disable(String metricCode, String reason, String operator) {
         PerfMetricDef existing = getByCode(metricCode);
         if (!"ACTIVE".equals(existing.getStatus())) {
-            throw new PerfException(PerfErrorCode.INVALID_STATE, "当前状态不可停用: " + existing.getStatus());
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "当前状态不可停用: " + existing.getStatus());
         }
         mapper.updateStatusById(existing.getId(), "DISABLED", operator);
     }
@@ -284,7 +284,7 @@ public class MetricDefService {
             List<String> refs = objectMapper.readValue(refMetricCodesJson, new TypeReference<List<String>>() {});
             return refs == null ? Collections.emptyList() : refs;
         } catch (IOException ex) {
-            throw new PerfException(PerfErrorCode.PARAM_INVALID, ex, "refMetricCodes JSON 非法");
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, ex, "refMetricCodes JSON 非法");
         }
     }
 
@@ -315,7 +315,7 @@ public class MetricDefService {
         try {
             return objectMapper.writeValueAsString(refMetricCodes == null ? Collections.emptyList() : refMetricCodes);
         } catch (IOException ex) {
-            throw new PerfException(PerfErrorCode.INTERNAL_ERROR, ex);
+            throw new PerfException(PerfErrorCode.CALC_JOB_FAILED, ex);
         }
     }
 

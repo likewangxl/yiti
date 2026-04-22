@@ -98,7 +98,7 @@ class MetricSlotServiceTest {
     void allocSlot_preferredSlotOutOfLevelRange_throws40001() {
         assertThatThrownBy(() -> service.allocSlot("EMP", 1, 200))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
     }
 
     @Test
@@ -124,7 +124,7 @@ class MetricSlotServiceTest {
 
         assertThatThrownBy(() -> service.releaseSlot("M001", "admin", "测试"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.INVALID_STATE));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
     }
 
     @Test

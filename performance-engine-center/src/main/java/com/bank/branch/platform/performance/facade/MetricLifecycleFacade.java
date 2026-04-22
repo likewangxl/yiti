@@ -43,7 +43,7 @@ public class MetricLifecycleFacade {
         String token = UUID.randomUUID().toString();
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
         if (!Boolean.TRUE.equals(locked)) {
-            throw new PerfException(PerfErrorCode.SLOT_LOCK_ACQUIRE_FAILED, cmd.getBaseDim());
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, cmd.getBaseDim());
         }
         try {
             return metricDefService.create(cmd);

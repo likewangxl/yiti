@@ -88,7 +88,7 @@ class KpiItemServiceTest {
 
         assertThatThrownBy(() -> service.addItem(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_DUP));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CODE_DUP));
         verify(itemMapper, never()).insert(any(PerfKpiItem.class));
     }
 
@@ -134,7 +134,7 @@ class KpiItemServiceTest {
 
         assertThatThrownBy(() -> service.updateItem("NO_SUCH", cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_NOT_FOUND));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_SCHEME_NOT_FOUND));
     }
 
     @Test
@@ -168,7 +168,7 @@ class KpiItemServiceTest {
     void deleteItem_whenReasonBlank_throws() {
         assertThatThrownBy(() -> service.deleteItem("ID_ANY", "  ", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(itemMapper, never()).deleteById(any());
     }
 
@@ -179,7 +179,7 @@ class KpiItemServiceTest {
 
         assertThatThrownBy(() -> service.deleteItem("NO_SUCH", "清理无效指标", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_NOT_FOUND));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_SCHEME_NOT_FOUND));
     }
 
     @Test
@@ -211,6 +211,6 @@ class KpiItemServiceTest {
         when(itemMapper.selectById("NO")).thenReturn(null);
         assertThatThrownBy(() -> service.getById("NO"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_NOT_FOUND));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_SCHEME_NOT_FOUND));
     }
 }

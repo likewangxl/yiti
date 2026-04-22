@@ -68,7 +68,7 @@ public class TargetValueService {
             return 0;
         }
         if (list.size() > BATCH_UPPER_LIMIT) {
-            throw new PerfException(PerfErrorCode.TARGET_BATCH_TOO_BIG, list.size());
+            throw new PerfException(PerfErrorCode.BATCH_QUERY_EXCEEDS_LIMIT, list.size());
         }
         // 强制覆盖 createdBy 为当前操作人 (I-2 安全契约)
         for (PerfTargetValue v : list) {
@@ -142,7 +142,7 @@ public class TargetValueService {
     public PageResult<PerfTargetValue> listByPlan(String planId, String subjectType, String subjectId,
                                                   String cycleKey, int pageNo, int pageSize) {
         if (planId == null || planId.isBlank()) {
-            throw new PerfException(PerfErrorCode.PARAM_INVALID, "planId 必填");
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "planId 必填");
         }
         long total = targetValueMapper.countByPlan(planId, subjectType, subjectId, cycleKey);
         if (total == 0) {

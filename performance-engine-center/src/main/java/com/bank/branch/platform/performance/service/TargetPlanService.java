@@ -79,18 +79,18 @@ public class TargetPlanService {
     @Transactional(rollbackFor = Exception.class)
     public PerfTargetPlan create(CreateTargetPlanCmd cmd) {
         if (cmd.getEffectiveDate() == null) {
-            throw new PerfException(PerfErrorCode.PARAM_INVALID, "effectiveDate 必填");
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "effectiveDate 必填");
         }
         // planCode UK 预校验先行, 提前拒绝避免后续 kpiScheme 查询浪费;
         // 预校验与 insert 之间的并发窗口由 DuplicateKeyException 兜底.
         if (targetPlanMapper.selectByPlanCode(cmd.getPlanCode()) != null) {
-            throw new PerfException(PerfErrorCode.TARGET_PLAN_CODE_DUP, cmd.getPlanCode());
+            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getPlanCode());
         }
 
         // 引用校验: KPI 方案必须 ACTIVE (发布态), DRAFT/DISABLED 均拒绝
         Optional<PerfKpiScheme> schemeOpt = kpiSchemeService.getByIdOrNull(cmd.getKpiSchemeId());
         if (schemeOpt.isEmpty() || !KPI_STATUS_ACTIVE.equals(schemeOpt.get().getStatus())) {
-            throw new PerfException(PerfErrorCode.TARGET_PLAN_KPI_SCHEME_INVALID, cmd.getKpiSchemeId());
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, cmd.getKpiSchemeId());
         }
 
         PerfTargetPlan plan = new PerfTargetPlan();
@@ -111,7 +111,7 @@ public class TargetPlanService {
         try {
             targetPlanMapper.insert(plan);
         } catch (DuplicateKeyException ex) {
-            throw new PerfException(PerfErrorCode.TARGET_PLAN_CODE_DUP, ex, cmd.getPlanCode());
+            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, ex, cmd.getPlanCode());
         }
         log.info("[TargetPlanService.create] 新建目标方案 planCode={}, id={}, kpiSchemeId={}",
                 plan.getPlanCode(), plan.getId(), plan.getKpiSchemeId());
@@ -175,14 +175,14 @@ public class TargetPlanService {
     @Transactional(rollbackFor = Exception.class)
     public void disable(String id, String reason, String operator) {
         if (reason == null || reason.isBlank()) {
-            throw new PerfException(PerfErrorCode.PARAM_INVALID, "reason 必填");
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "reason 必填");
         }
         PerfTargetPlan existing = targetPlanMapper.selectById(id);
         if (existing == null) {
             throw new PerfException(PerfErrorCode.TARGET_PLAN_NOT_FOUND, id);
         }
         if (STATUS_DISABLED.equals(existing.getStatus())) {
-            throw new PerfException(PerfErrorCode.INVALID_STATE, "目标方案已禁用: " + id);
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "目标方案已禁用: " + id);
         }
         log.info("[TargetPlanService.disable] id={}, planCode={}, operator={}, reason={}",
                 id, existing.getPlanCode(), operator, reason);

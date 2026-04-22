@@ -61,7 +61,7 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
         assertThatThrownBy(() -> sysControlService.getCurrentVersion("EMP"))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
-                        .isEqualTo(PerfErrorCode.SYS_CONTROL_NOT_FOUND));
+                        .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND));
     }
 
     @Test
@@ -124,7 +124,7 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
         assertThatThrownBy(() -> sysControlService.doSwitchVersion(cmd))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
-                        .isEqualTo(PerfErrorCode.SYS_CONTROL_CONFLICT));
+                        .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT));
     }
 
     @Test
@@ -174,7 +174,7 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
         assertThatThrownBy(() -> sysControlService.doSwitchVersion(cmd))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
-                        .isEqualTo(PerfErrorCode.SYS_CONTROL_NOT_FOUND));
+                        .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND));
     }
 
     @Test

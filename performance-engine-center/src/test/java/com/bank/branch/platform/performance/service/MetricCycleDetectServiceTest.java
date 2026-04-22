@@ -31,7 +31,7 @@ class MetricCycleDetectServiceTest {
     void checkLevelConstraint_L2RefL3_throws40911() {
         assertThatThrownBy(() -> service.checkLevelConstraint(2, Map.of("A", 3)))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_LEVEL_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test
@@ -39,7 +39,7 @@ class MetricCycleDetectServiceTest {
     void checkLevelConstraint_L3RefL1_throws40911() {
         assertThatThrownBy(() -> service.checkLevelConstraint(3, Map.of("A", 1)))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_LEVEL_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test
@@ -47,7 +47,7 @@ class MetricCycleDetectServiceTest {
     void checkLevelConstraint_L1HasAnyRef_throws40911() {
         assertThatThrownBy(() -> service.checkLevelConstraint(1, Map.of("A", 1)))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_LEVEL_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test
@@ -55,7 +55,7 @@ class MetricCycleDetectServiceTest {
     void checkNoCycle_selfRef_throws40902() {
         assertThatThrownBy(() -> service.checkNoCycle(Map.of(), "A", List.of("A")))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CYCLE_DETECTED));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test
@@ -64,7 +64,7 @@ class MetricCycleDetectServiceTest {
         Map<String, List<String>> graph = Map.of("B", List.of("A"));
         assertThatThrownBy(() -> service.checkNoCycle(graph, "A", List.of("B")))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CYCLE_DETECTED));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test
@@ -75,7 +75,7 @@ class MetricCycleDetectServiceTest {
                 "C", List.of("A"));
         assertThatThrownBy(() -> service.checkNoCycle(graph, "A", List.of("B")))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CYCLE_DETECTED));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test

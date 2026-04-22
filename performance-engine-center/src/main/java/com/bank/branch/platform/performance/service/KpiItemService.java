@@ -70,7 +70,7 @@ public class KpiItemService {
         }
         // UK 预校验: 同方案内 metric 必须唯一
         if (itemMapper.selectBySchemeAndMetric(cmd.getSchemeId(), cmd.getMetricCode()) != null) {
-            throw new PerfException(PerfErrorCode.KPI_ITEM_DUP, cmd.getSchemeId(), cmd.getMetricCode());
+            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getSchemeId(), cmd.getMetricCode());
         }
         PerfKpiItem item = new PerfKpiItem();
         item.setId(generateId());
@@ -99,7 +99,7 @@ public class KpiItemService {
     public PerfKpiItem updateItem(String id, UpdateKpiItemCmd cmd) {
         PerfKpiItem existing = itemMapper.selectById(id);
         if (existing == null) {
-            throw new PerfException(PerfErrorCode.KPI_ITEM_NOT_FOUND, id);
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
         PerfKpiItem patch = new PerfKpiItem();
         patch.setId(id);
@@ -138,11 +138,11 @@ public class KpiItemService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteItem(String id, String reason, String operator) {
         if (reason == null || reason.isBlank()) {
-            throw new PerfException(PerfErrorCode.PARAM_INVALID, "reason 必填");
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "reason 必填");
         }
         PerfKpiItem existing = itemMapper.selectById(id);
         if (existing == null) {
-            throw new PerfException(PerfErrorCode.KPI_ITEM_NOT_FOUND, id);
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
         log.info("[KpiItemService.deleteItem] id={}, schemeId={}, metricCode={}, operator={}, reason={}",
                 id, existing.getSchemeId(), existing.getMetricCode(), operator, reason);
@@ -170,7 +170,7 @@ public class KpiItemService {
     public PerfKpiItem getById(String id) {
         PerfKpiItem item = itemMapper.selectById(id);
         if (item == null) {
-            throw new PerfException(PerfErrorCode.KPI_ITEM_NOT_FOUND, id);
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
         return item;
     }

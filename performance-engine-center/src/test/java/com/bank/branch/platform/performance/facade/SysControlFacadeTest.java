@@ -66,7 +66,7 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
         assertThatThrownBy(() -> sysControlFacade.switchVersion(cmd))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
-                        .isEqualTo(PerfErrorCode.SYS_CONTROL_CONFLICT));
+                        .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT));
 
         // 验证: 未调 service, 未释放锁 (因为根本未获锁)
         verify(sysControlService, never()).doSwitchVersion(any());
@@ -112,7 +112,7 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
         when(valueOperations.setIfAbsent(anyString(), any(), any(Duration.class)))
                 .thenReturn(Boolean.TRUE);
         when(sysControlService.doSwitchVersion(any()))
-                .thenThrow(new PerfException(PerfErrorCode.SYS_CONTROL_NOT_FOUND, "EMP"));
+                .thenThrow(new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND, "EMP"));
 
         SwitchVersionCmd cmd = SwitchVersionCmd.builder()
                 .scopeDim("EMP")
@@ -126,7 +126,7 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
         assertThatThrownBy(() -> sysControlFacade.switchVersion(cmd))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
-                        .isEqualTo(PerfErrorCode.SYS_CONTROL_NOT_FOUND));
+                        .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND));
         // 锁依然被释放
         verify(redisTemplate).execute(any(RedisScript.class), any(List.class), any());
     }

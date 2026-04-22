@@ -105,7 +105,7 @@ class SysControlConcurrentIT extends PerformanceConcurrentTestBase {
                 sysControlFacade.switchVersion(cmdA);
                 successCount.incrementAndGet();
             } catch (PerfException e) {
-                if (PerfErrorCode.SYS_CONTROL_CONFLICT == e.getErrorCode()) {
+                if (PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT == e.getErrorCode()) {
                     conflictCount.incrementAndGet();
                 } else {
                     otherErrorCount.incrementAndGet();
@@ -122,7 +122,7 @@ class SysControlConcurrentIT extends PerformanceConcurrentTestBase {
                 sysControlFacade.switchVersion(cmdB);
                 successCount.incrementAndGet();
             } catch (PerfException e) {
-                if (PerfErrorCode.SYS_CONTROL_CONFLICT == e.getErrorCode()) {
+                if (PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT == e.getErrorCode()) {
                     conflictCount.incrementAndGet();
                 } else {
                     otherErrorCount.incrementAndGet();

@@ -84,7 +84,7 @@ class KpiSchemeServiceTest {
 
         assertThatThrownBy(() -> service.publish("S_PUB_MISS", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_PUBLISH_METRIC_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(schemeMapper, never()).updateStatusById(any(), any(), any());
     }
 
@@ -105,7 +105,7 @@ class KpiSchemeServiceTest {
 
         assertThatThrownBy(() -> service.publish("S_PUB_DIS", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_PUBLISH_METRIC_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(schemeMapper, never()).updateStatusById(any(), any(), any());
     }
 
@@ -194,11 +194,11 @@ class KpiSchemeServiceTest {
         // 第一次正常, 第二次抛 KPI_ITEM_DUP
         when(kpiItemService.addItem(any(AddKpiItemCmd.class)))
                 .thenReturn(new PerfKpiItem())
-                .thenThrow(new PerfException(PerfErrorCode.KPI_ITEM_DUP, "S", "TEST_KPI_RB_B"));
+                .thenThrow(new PerfException(PerfErrorCode.METRIC_CODE_DUP, "S", "TEST_KPI_RB_B"));
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_DUP));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CODE_DUP));
 
         // scheme 已 insert (没走 rollback mock, 仅断言顺序 + 异常外抛), 事务回滚依赖 @Transactional
         verify(schemeMapper).insert(any(PerfKpiScheme.class));
@@ -212,7 +212,7 @@ class KpiSchemeServiceTest {
     void disable_whenReasonMissing_throws() {
         assertThatThrownBy(() -> service.disable("ID_ANY", "  ", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(schemeMapper, never()).updateStatusById(any(), any(), any());
     }
 
@@ -253,7 +253,7 @@ class KpiSchemeServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_SCHEME_CODE_DUP));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CODE_DUP));
         verify(schemeMapper, never()).insert(any(PerfKpiScheme.class));
     }
 

@@ -115,7 +115,7 @@ public class PerfRunTaskController {
         log.debug("[PerfRunTaskController.getById] empId={}, id={}", empId, id);
 
         Optional<PerfRunTask> opt = perfRunTaskService.getById(id);
-        PerfRunTask task = opt.orElseThrow(() -> new PerfException(PerfErrorCode.RUN_TASK_NOT_FOUND, id));
+        PerfRunTask task = opt.orElseThrow(() -> new PerfException(PerfErrorCode.METRIC_NOT_FOUND, id));
         return ResponseWrapper.success(RunTaskAssembler.toDto(task));
     }
 }

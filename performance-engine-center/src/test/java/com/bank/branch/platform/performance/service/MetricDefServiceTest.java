@@ -144,12 +144,12 @@ class MetricDefServiceTest {
 
         when(mapper.selectByMetricCode("TEST_METRIC_BAD_LEVEL")).thenReturn(null);
         when(mapper.selectByMetricCodes(List.of("REF_BAD"))).thenReturn(List.of(metric("REF_BAD", 3)));
-        doThrow(new PerfException(PerfErrorCode.METRIC_LEVEL_INVALID, "bad"))
+        doThrow(new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, "bad"))
                 .when(metricCycleDetectService).checkLevelConstraint(eq(2), any(Map.class));
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_LEVEL_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test
@@ -167,12 +167,12 @@ class MetricDefServiceTest {
         when(mapper.selectByMetricCode("TEST_METRIC_CYCLE")).thenReturn(null);
         when(mapper.selectByMetricCodes(List.of("REF_A"))).thenReturn(List.of(metric("REF_A", 1)));
         when(metricRefService.loadFullGraph()).thenReturn(Map.of("REF_A", List.of("TEST_METRIC_CYCLE")));
-        doThrow(new PerfException(PerfErrorCode.METRIC_CYCLE_DETECTED, "cycle"))
+        doThrow(new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, "cycle"))
                 .when(metricCycleDetectService).checkNoCycle(any(Map.class), eq("TEST_METRIC_CYCLE"), eq(List.of("REF_A")));
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CYCLE_DETECTED));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID));
     }
 
     @Test
@@ -238,7 +238,7 @@ class MetricDefServiceTest {
 
         assertThatThrownBy(() -> service.disable("TEST_METRIC_DISABLED", "停用", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.INVALID_STATE));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
     }
 
     @Test

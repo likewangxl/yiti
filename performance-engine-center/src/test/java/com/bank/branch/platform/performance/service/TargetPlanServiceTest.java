@@ -75,7 +75,7 @@ class TargetPlanServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(targetPlanMapper, never()).insert(any(PerfTargetPlan.class));
     }
 
@@ -111,7 +111,7 @@ class TargetPlanServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_PLAN_KPI_SCHEME_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(targetPlanMapper, never()).insert(any(PerfTargetPlan.class));
     }
 
@@ -127,7 +127,7 @@ class TargetPlanServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_PLAN_KPI_SCHEME_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(targetPlanMapper, never()).insert(any(PerfTargetPlan.class));
     }
 
@@ -140,7 +140,7 @@ class TargetPlanServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_PLAN_KPI_SCHEME_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
     }
 
     @Test
@@ -152,7 +152,7 @@ class TargetPlanServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_PLAN_CODE_DUP));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CODE_DUP));
         // planCode UK 预校验先行, 绝不会走到 KpiSchemeService
         verify(kpiSchemeService, never()).getByIdOrNull(any());
         verify(targetPlanMapper, never()).insert(any(PerfTargetPlan.class));
@@ -233,7 +233,7 @@ class TargetPlanServiceTest {
     void disable_whenReasonMissing_throws() {
         assertThatThrownBy(() -> service.disable("ID_ANY", "  ", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.PARAM_INVALID));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(targetPlanMapper, never()).updateStatusById(any(), any(), any());
     }
 
@@ -257,7 +257,7 @@ class TargetPlanServiceTest {
 
         assertThatThrownBy(() -> service.disable("P_DIS", "reason", "admin"))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.INVALID_STATE));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
     }
 
     // ------------------------------- page -------------------------------

@@ -51,7 +51,7 @@ class MetricLifecycleFacadeTest extends PerformanceServiceTestBase {
 
         assertThatThrownBy(() -> metricLifecycleFacade.createMetric(cmd()))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.SLOT_LOCK_ACQUIRE_FAILED));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
         verify(metricDefService, never()).create(any());
     }
 
