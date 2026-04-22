@@ -8,10 +8,10 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 绩效任务执行日志 Mapper（只读）.
+ * 绩效任务执行日志 Mapper.
  *
- * <p>V1.0 限定只读场景：仅由前端/下游 Api 读取任务执行日志（列表 / 详情 / 计数）。
- * 写入由 V1.1 计算引擎模块提供，此 Mapper 故意不提供 insert/update/delete 方法。
+ * <p>V1.0 限定只读场景：前端/下游 Api 读取任务执行日志（列表 / 详情 / 计数）。
+ * <p>V1.1 Task P2.4 起扩展写方法（{@link #insert}, {@link #updateStatus}），由计算引擎调用。
  *
  * <p><strong>安全 (SQL 注入) 注意</strong>：
  * <ul>
@@ -93,4 +93,30 @@ public interface PerfRunTaskMapper {
      */
     long countByTypeAndDate(@Param("taskType") String taskType,
                             @Param("dataDate") LocalDate dataDate);
+
+    /**
+     * 插入任务记录（V1.1 Task P2.4 起由计算引擎调用）.
+     *
+     * <p>写 id / task_type / task_key / data_date / data_version / status / started_by
+     * / start_time / params_json 等字段；created_time 由 DB 默认值填充。
+     *
+     * @param task 任务实体（必填：id, taskType, taskKey, status）
+     * @return 受影响行数
+     */
+    int insert(PerfRunTask task);
+
+    /**
+     * 更新任务状态（V1.1 Task P2.4 起由计算引擎调用）.
+     *
+     * <p>当 status=SUCCESS/FAILED 时同时更新 end_time=NOW() 与 error_msg（可空）。
+     * errorMsg 为 null 时清空 error_msg 列。
+     *
+     * @param id       任务 ID
+     * @param status   新状态（RUNNING/SUCCESS/FAILED/PARTIAL/CANCELLED）
+     * @param errorMsg 错误信息（可选）
+     * @return 受影响行数
+     */
+    int updateStatus(@Param("id") String id,
+                     @Param("status") String status,
+                     @Param("errorMsg") String errorMsg);
 }
