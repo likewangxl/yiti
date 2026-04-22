@@ -173,6 +173,47 @@ public class KpiCalcService {
     }
 
     /**
+     * 对方案内全部员工批量计算 KPI.
+     *
+     * <p>员工集合策略：取 {@code emp_index_result} 中 {@code (data_date=asOfDate, version)}
+     * 维度下的 distinct empId。当前版本不区分方案员工范围；若 V1.2 引入"方案适用员工"表，
+     * 只需在本方法增加一层过滤即可。
+     *
+     * <p>失败隔离：单个员工计算失败只打 warn 日志，<em>不中断</em>后续员工；返回成功数量由调用方决策是否告警。
+     *
+     * @param schemeCode 方案编码
+     * @param cycleType  周期类型
+     * @param cycleDate  周期对应日期
+     * @param asOfDate   计算基准日（对齐宽表 data_date）
+     * @param version    数据版本
+     * @return 计算成功的员工数
+     */
+    public int calcScheme(String schemeCode,
+                          String cycleType,
+                          LocalDate cycleDate,
+                          LocalDate asOfDate,
+                          String version) {
+        List<String> empIds = empIndexResultMapper.selectDistinctEmpIds(asOfDate, version);
+        if (empIds == null || empIds.isEmpty()) {
+            log.info("[KpiCalc] scheme={} asOf={} 无员工数据，跳过", schemeCode, asOfDate);
+            return 0;
+        }
+        int success = 0;
+        for (String empId : empIds) {
+            try {
+                calcSingleEmp(empId, schemeCode, cycleType, cycleDate, asOfDate, version);
+                success++;
+            } catch (Exception ex) {
+                log.warn("[KpiCalc] scheme={} emp={} 计算失败: {}",
+                        schemeCode, empId, ex.getMessage());
+            }
+        }
+        log.info("[KpiCalc] scheme={} asOf={} 批量计算完成 success={}/total={}",
+                schemeCode, asOfDate, success, empIds.size());
+        return success;
+    }
+
+    /**
      * 序列化 detail 到 JSON 字符串；失败时退化为 toString，避免阻断主流程.
      *
      * @param payload 待序列化对象

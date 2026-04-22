@@ -90,4 +90,17 @@ public interface EmpIndexResultMapper {
      * @return 受影响行数
      */
     int insertRow(EmpIndexResult row);
+
+    /**
+     * 查询指定 data_date + version 下的 distinct empId 集合.
+     *
+     * <p>V1.1 Task P4.4 新增：KPI 批量计算需要定位"该日/版本下有数据的员工全集"，
+     * 避免对没有任何指标数据的员工跑空计算。
+     *
+     * @param dataDate 数据日期
+     * @param version  数据版本
+     * @return 员工工号列表（可能为空）
+     */
+    List<String> selectDistinctEmpIds(@Param("dataDate") LocalDate dataDate,
+                                      @Param("version") String version);
 }

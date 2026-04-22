@@ -53,4 +53,13 @@
             (#{empId}, #{dataDate}, #{version})
     </insert>
 
+    <!-- V1.1 P4.4：KPI 批量计算前置——获取某日/版本下的员工工号全集 -->
+    <select id="selectDistinctEmpIds" resultType="java.lang.String">
+        SELECT DISTINCT emp_id
+        FROM emp_index_result
+        WHERE data_date = #{dataDate}
+          AND version = #{version}
+        ORDER BY emp_id
+    </select>
+
 </mapper>

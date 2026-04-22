@@ -278,6 +278,19 @@ public class KpiSchemeService {
     }
 
     /**
+     * 列出所有 ACTIVE 状态方案（供 V1.1 {@code DailyKpiCalcJob} 使用）.
+     *
+     * <p>没有分页，基于方案通常 &lt; 100 的业务规模。若 V1.2 方案数量爆炸，
+     * 可改为 {@link #page(String, String, String, int, int)} 分批驱动。
+     *
+     * @return ACTIVE 方案列表（可能为空）
+     */
+    @Transactional(readOnly = true)
+    public List<PerfKpiScheme> listActiveSchemes() {
+        return schemeMapper.selectByCondition(null, STATUS_ACTIVE, null, 0, 1000);
+    }
+
+    /**
      * 条件分页查询.
      *
      * @param cycleType 周期类型
