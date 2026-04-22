@@ -47,7 +47,7 @@
 
 ```sql
 CREATE TABLE `sys_control` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `scope_dim` varchar(20) NOT NULL COMMENT '范围维度: EMP/ORG/CUST',
   `latest_data_date` date NOT NULL COMMENT '最新业务数据日期 (T-1)',
   `current_version` varchar(32) NOT NULL COMMENT '当前数据版本号, 建议格式: yyyyMMdd-VN',
@@ -84,7 +84,7 @@ LIMIT 1;
 
 ```sql
 CREATE TABLE `perf_metric_def` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `metric_code` varchar(64) NOT NULL COMMENT '指标编码 (全局唯一), 如 DEP_BAL_EMP',
   `metric_name` varchar(100) NOT NULL COMMENT '指标中文名',
   `metric_name_en` varchar(100) DEFAULT NULL COMMENT '指标英文名',
@@ -128,7 +128,7 @@ CREATE TABLE `perf_metric_def` (
 
 ```sql
 CREATE TABLE `perf_metric_ref` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `metric_code` varchar(64) NOT NULL COMMENT '主指标编码 (复合指标)',
   `ref_metric_code` varchar(64) NOT NULL COMMENT '被引用的指标编码',
   `ref_level` tinyint(1) NOT NULL DEFAULT '1' COMMENT '引用层级 (由解析时计算, 用于避免循环依赖)',
@@ -147,7 +147,7 @@ CREATE TABLE `perf_metric_ref` (
 
 ```sql
 CREATE TABLE `perf_kpi_scheme` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `scheme_code` varchar(64) NOT NULL COMMENT 'KPI 方案编码, 全局唯一',
   `scheme_name` varchar(100) NOT NULL COMMENT 'KPI 方案名称',
   `cycle_type` varchar(20) NOT NULL COMMENT '考核周期: MONTHLY/QUARTERLY',
@@ -175,8 +175,8 @@ CREATE TABLE `perf_kpi_scheme` (
 
 ```sql
 CREATE TABLE `perf_kpi_item` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `scheme_id` bigint(20) NOT NULL COMMENT '关联 perf_kpi_scheme.id',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
+  `scheme_id` varchar(32) NOT NULL COMMENT '关联 perf_kpi_scheme.id',
   `metric_code` varchar(64) NOT NULL COMMENT '指标编码 (引用 perf_metric_def.metric_code)',
   `weight` decimal(5,2) NOT NULL COMMENT '权重, 如 25.00 表示 25%',
   `multiplier` decimal(5,2) NOT NULL DEFAULT '1.00' COMMENT '系数/倍率, 用于灵活加权',
@@ -202,10 +202,10 @@ CREATE TABLE `perf_kpi_item` (
 
 ```sql
 CREATE TABLE `perf_target_plan` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `plan_code` varchar(64) NOT NULL COMMENT '目标方案编码, 全局唯一',
   `plan_name` varchar(100) NOT NULL COMMENT '目标方案名称',
-  `kpi_scheme_id` bigint(20) NOT NULL COMMENT '关联的 KPI 方案 id',
+  `kpi_scheme_id` varchar(32) NOT NULL COMMENT '关联的 KPI 方案 id',
   `target_dim` varchar(20) NOT NULL COMMENT '目标维度: EMP-按员工 ORG-按机构',
   `target_cycle` varchar(20) NOT NULL COMMENT '目标周期: YEAR/QUARTER/MONTH',
   `year` int(11) NOT NULL COMMENT '适用年份',
@@ -231,8 +231,8 @@ CREATE TABLE `perf_target_plan` (
 
 ```sql
 CREATE TABLE `perf_target_value` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `plan_id` bigint(20) NOT NULL COMMENT '关联 perf_target_plan.id',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
+  `plan_id` varchar(32) NOT NULL COMMENT '关联 perf_target_plan.id',
   `subject_type` varchar(20) NOT NULL COMMENT '对象类型: EMP/ORG',
   `subject_id` varchar(64) NOT NULL COMMENT '对象 ID (emp_id 或 org_code)',
   `cycle_key` varchar(20) NOT NULL COMMENT '周期键, 如 2026/2026Q1/2026-03',
@@ -258,7 +258,7 @@ CREATE TABLE `perf_target_value` (
 
 ```sql
 CREATE TABLE `perf_import_batch` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `batch_no` varchar(64) NOT NULL COMMENT '批次号, 格式: IMP-yyyyMMdd-HHmmss-xxxx',
   `import_type` varchar(32) NOT NULL COMMENT '导入类型: INDEX_RESULT/KPI_RESULT/TARGET_VALUE/ALLOC_RELATION',
   `dim` varchar(20) DEFAULT NULL COMMENT '维度: EMP/ORG/CUST (对结果类导入)',
@@ -291,7 +291,7 @@ CREATE TABLE `perf_import_batch` (
 
 ```sql
 CREATE TABLE `perf_run_task` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `task_id` varchar(64) NOT NULL COMMENT '任务 ID, 格式: TASK-yyyyMMdd-HHmmss-xxxx',
   `task_type` varchar(32) NOT NULL COMMENT '任务类型: METRIC_TRIAL/METRIC_RUN/KPI_RUN/RECALC/DATA_SYNC',
   `task_key` varchar(100) DEFAULT NULL COMMENT '任务关键字, 如 metric_code 或 scheme_code',
@@ -324,7 +324,7 @@ CREATE TABLE `perf_run_task` (
 
 ```sql
 CREATE TABLE `emp_index_result` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本号',
   `emp_id` varchar(32) NOT NULL COMMENT '员工 ID',
@@ -371,7 +371,7 @@ PARTITION BY RANGE (TO_DAYS(data_date)) (
 
 ```sql
 CREATE TABLE `org_index_result` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本号',
   `org_code` varchar(32) NOT NULL COMMENT '机构编码',
@@ -398,7 +398,7 @@ PARTITION BY RANGE (TO_DAYS(data_date)) (
 
 ```sql
 CREATE TABLE `cust_index_result` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本号',
   `cust_id` varchar(64) NOT NULL COMMENT '客户 ID',
@@ -425,9 +425,9 @@ PARTITION BY RANGE (TO_DAYS(data_date)) (
 
 ```sql
 CREATE TABLE `kpi_result` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `emp_id` varchar(32) NOT NULL COMMENT '员工 ID',
-  `scheme_id` bigint(20) NOT NULL COMMENT '关联 KPI 方案 id',
+  `scheme_id` varchar(32) NOT NULL COMMENT '关联 KPI 方案 id',
   `cycle_type` varchar(20) NOT NULL COMMENT '考核周期: MONTHLY/QUARTERLY',
   `cycle_date` date NOT NULL COMMENT '考核周期起始日期, 如 2026-03-01 代表 2026 年 3 月',
   `as_of_date` date NOT NULL COMMENT '数据截止日期 (每日快照)',
@@ -466,7 +466,7 @@ PARTITION BY RANGE (TO_DAYS(cycle_date)) (
 
 ```sql
 CREATE TABLE `cust_alloc_relation` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `cust_id` varchar(64) NOT NULL COMMENT '客户 ID',
   `alloc_dim` varchar(20) NOT NULL COMMENT '分配维度: RULE-按规则 ACCOUNT-按账户 RATIO-按比例',
   `biz_kind` varchar(32) DEFAULT NULL COMMENT '业务类型: DEPOSIT/LOAN/CARD/FUND/...',
@@ -504,7 +504,7 @@ CREATE TABLE `cust_alloc_relation` (
 
 ```sql
 CREATE TABLE `perf_alloc_adjust_apply` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `apply_no` varchar(64) NOT NULL COMMENT '申请单号, 格式: ALLOC-yyyyMMdd-xxxx',
   `cust_id` varchar(64) NOT NULL COMMENT '客户 ID',
   `cust_name` varchar(100) DEFAULT NULL COMMENT '客户名 (冗余)',
@@ -541,8 +541,8 @@ CREATE TABLE `perf_alloc_adjust_apply` (
 
 ```sql
 CREATE TABLE `perf_alloc_adjust_item` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `apply_id` bigint(20) NOT NULL COMMENT '关联 perf_alloc_adjust_apply.id',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
+  `apply_id` varchar(32) NOT NULL COMMENT '关联 perf_alloc_adjust_apply.id',
   `emp_id` varchar(32) NOT NULL COMMENT '分配到的员工 ID',
   `emp_name` varchar(100) DEFAULT NULL COMMENT '员工姓名 (冗余)',
   `ratio` decimal(5,2) NOT NULL COMMENT '分配比例 0-100',
@@ -561,9 +561,9 @@ CREATE TABLE `perf_alloc_adjust_item` (
 
 ```sql
 CREATE TABLE `perf_target_adjust_apply` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `apply_no` varchar(64) NOT NULL COMMENT '申请单号, 格式: TGTADJ-yyyyMMdd-xxxx',
-  `plan_id` bigint(20) NOT NULL COMMENT '关联 perf_target_plan.id',
+  `plan_id` varchar(32) NOT NULL COMMENT '关联 perf_target_plan.id',
   `subject_type` varchar(20) NOT NULL COMMENT 'EMP/ORG',
   `subject_id` varchar(64) NOT NULL COMMENT '对象 ID',
   `cycle_key` varchar(20) NOT NULL COMMENT '周期键',

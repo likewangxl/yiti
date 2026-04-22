@@ -7,6 +7,14 @@
 
 ---
 
+## 0. 全局约定
+
+### 0.5 主键类型统一为 String（2026-04-22 修订）
+
+生产 DDL（`docs/schema/ddl-performance.sql`）中 `perf_kpi_scheme.id` / `perf_target_plan.id` / `sys_control.id` / `perf_metric_def.id` 均为 `varchar(32)`（业务编码主键），与原 04 契约的 `Long` 冲突。V1.0 已全局对齐为 `String`，本条为 04/03/05 三份文档的正式统一修正。跨模块消费方应使用 `String` 类型。
+
+---
+
 ## 1. MetricApi (指标查询)
 
 **接口路径:** `com.bank.branch.platform.performance.api.MetricApi`
@@ -225,7 +233,7 @@ public interface KpiApi {
     /**
      * 按 ID 获取 KPI 方案.
      */
-    Optional<KpiSchemeDTO> getKpiSchemeById(Long schemeId);
+    Optional<KpiSchemeDTO> getKpiSchemeById(String schemeId);
 
     /**
      * 批量获取某组员工在某 cycle 的 KPI 总分.
@@ -273,7 +281,7 @@ public interface TargetApi {
     /**
      * 按 ID 获取目标方案.
      */
-    Optional<TargetPlanDTO> getTargetPlanById(Long planId);
+    Optional<TargetPlanDTO> getTargetPlanById(String planId);
 
     /**
      * 获取特定主体在特定周期的目标值.
@@ -286,7 +294,7 @@ public interface TargetApi {
      * @return 目标值, 不存在时 empty
      */
     Optional<BigDecimal> getTargetValue(
-        Long planId, String subjectType, String subjectId, String cycleKey, String metricCode);
+        String planId, String subjectType, String subjectId, String cycleKey, String metricCode);
 
     /**
      * 批量查询某主体在某周期的所有目标值.
@@ -296,7 +304,7 @@ public interface TargetApi {
      * @param subjectId   主体 ID
      * @param cycleKey    周期
      */
-    List<TargetValueDTO> listTargetValues(Long planId, String subjectType, String subjectId, String cycleKey);
+    List<TargetValueDTO> listTargetValues(String planId, String subjectType, String subjectId, String cycleKey);
 }
 ```
 
@@ -671,7 +679,7 @@ public class MetricCardDTO {
 
 ```java
 public class KpiResultDTO {
-    private Long id;
+    private String id;
     private String empId;
     private String empName;
     private String cycleType;       // MONTHLY/QUARTERLY/YEARLY
@@ -690,7 +698,7 @@ public class KpiResultDTO {
 
 ```java
 public class KpiSchemeDTO {
-    private Long id;
+    private String id;
     private String schemeCode;
     private String schemeName;
     private String cycleType;
@@ -701,7 +709,7 @@ public class KpiSchemeDTO {
 }
 
 public class KpiItemDTO {
-    private Long id;
+    private String id;
     private String metricCode;
     private String metricName;
     private BigDecimal weight;
@@ -716,10 +724,10 @@ public class KpiItemDTO {
 
 ```java
 public class TargetPlanDTO {
-    private Long id;
+    private String id;
     private String planCode;
     private String planName;
-    private Long kpiSchemeId;
+    private String kpiSchemeId;
     private String targetDim;
     private String targetCycle;
     private LocalDate effectiveDate;
@@ -732,8 +740,8 @@ public class TargetPlanDTO {
 
 ```java
 public class TargetValueDTO {
-    private Long id;
-    private Long planId;
+    private String id;
+    private String planId;
     private String subjectType;
     private String subjectId;
     private String cycleKey;
@@ -747,7 +755,7 @@ public class TargetValueDTO {
 
 ```java
 public class CustAllocRelationDTO {
-    private Long id;
+    private String id;
     private String custId;
     private String custName;
     private String allocDim;         // RULE/ACCOUNT
@@ -871,7 +879,7 @@ public class TargetAdjustmentApprovedEvent {
     private String traceId;
     private Instant occurredAt;
     private String applyNo;          // TA_20260410_0001
-    private Long planId;
+    private String planId;
     private String subjectType;
     private String subjectId;
     private String cycleKey;
