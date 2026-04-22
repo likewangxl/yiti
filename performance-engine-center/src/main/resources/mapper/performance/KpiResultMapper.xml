@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  KpiResultMapper XML（V1.1 Task P1.2）.
+
+  表结构与宽表不同：主键 bigint AUTO_INCREMENT（insert 使用 useGeneratedKeys 回填 id），
+  业务唯一键 uk_emp_cycle_asof(emp_id, cycle_type, cycle_date, as_of_date)。
+-->
+<mapper namespace="com.bank.branch.platform.performance.mapper.KpiResultMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, emp_id, cycle_type, cycle_date, as_of_date, data_version,
+        kpi_total_score, detail_json, calculated_time
+    </sql>
+
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.KpiResult"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO kpi_result (
+            emp_id, cycle_type, cycle_date, as_of_date, data_version,
+            kpi_total_score, detail_json
+        ) VALUES (
+            #{empId}, #{cycleType}, #{cycleDate}, #{asOfDate}, #{dataVersion},
+            #{kpiTotalScore}, #{detailJson}
+        )
+    </insert>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.KpiResult">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM kpi_result
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByEmpCycle" resultType="com.bank.branch.platform.performance.entity.KpiResult">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM kpi_result
+        WHERE emp_id = #{empId}
+          AND cycle_type = #{cycleType}
+        ORDER BY as_of_date DESC, id DESC
+    </select>
+
+</mapper>

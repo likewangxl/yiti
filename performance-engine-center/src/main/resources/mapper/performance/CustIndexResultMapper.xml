@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  CustIndexResultMapper XML（V1.1 Task P1.2）.
+
+  安全（SQL 注入）声明：同 EmpIndexResultMapper.xml，val_${slot} 为合法列名例外，
+  调用方必须在 Service 层强制校验 slot ∈ [1, 200]。
+-->
+<mapper namespace="com.bank.branch.platform.performance.mapper.CustIndexResultMapper">
+
+    <insert id="insertSlotValue">
+        INSERT INTO cust_index_result
+            (cust_id, data_date, version, val_${slot})
+        VALUES
+            (#{custId}, #{dataDate}, #{version}, #{value})
+        ON DUPLICATE KEY UPDATE
+            val_${slot} = VALUES(val_${slot})
+    </insert>
+
+    <select id="selectSlotValue" resultType="java.math.BigDecimal">
+        SELECT val_${slot}
+        FROM cust_index_result
+        WHERE cust_id = #{custId}
+          AND data_date = #{dataDate}
+          AND version = #{version}
+        LIMIT 1
+    </select>
+
+    <select id="selectSlotValuesByCusts"
+            resultType="com.bank.branch.platform.performance.mapper.CustMetricValueRow">
+        SELECT cust_id AS custId,
+               val_${slot} AS metricValue
+        FROM cust_index_result
+        WHERE data_date = #{dataDate}
+          AND version = #{version}
+          AND cust_id IN
+            <foreach collection="custIds" item="c" open="(" separator="," close=")">
+                #{c}
+            </foreach>
+    </select>
+
+    <insert id="insertRow" parameterType="com.bank.branch.platform.performance.entity.CustIndexResult">
+        INSERT INTO cust_index_result
+            (cust_id, data_date, version)
+        VALUES
+            (#{custId}, #{dataDate}, #{version})
+    </insert>
+
+</mapper>
