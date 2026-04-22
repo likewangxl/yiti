@@ -41,16 +41,17 @@ public class SqlExecutorImpl implements SqlExecutor {
     private static final String COL_METRIC_VALUE = "metric_value";
 
     private final NamedParameterJdbcTemplate namedJdbc;
+    private final SqlValidator sqlValidator;
 
-    public SqlExecutorImpl(DataSource dataSource) {
+    public SqlExecutorImpl(DataSource dataSource, SqlValidator sqlValidator) {
         this.namedJdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.sqlValidator = sqlValidator;
     }
 
     @Override
     public Map<String, BigDecimal> execute(String sql, Map<String, Object> params, Duration timeout) {
-        if (sql == null || sql.isBlank()) {
-            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, "SQL 文本不能为空");
-        }
+        // 前置黑名单/白名单拦截：任何 DML/DDL/存储过程都在此抛 METRIC_CALC_LOGIC_INVALID
+        sqlValidator.validate(sql);
         int timeoutSeconds = resolveTimeoutSeconds(timeout);
         // 每次调用独立设置 queryTimeout：由于 namedJdbc 是私有字段，不会污染容器内其他 Bean
         namedJdbc.getJdbcTemplate().setQueryTimeout(timeoutSeconds);
