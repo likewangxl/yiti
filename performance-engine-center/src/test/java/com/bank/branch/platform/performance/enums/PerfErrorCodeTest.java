@@ -71,4 +71,38 @@ class PerfErrorCodeTest {
                 .doesNotContain(c.getCode());
         }
     }
+
+    /**
+     * Task C2 架构守护测试：枚举常量总数 = 26（§K 的 25 条编码 + METRIC_SLOT_CONFLICT 复用 40901 独立常量）.
+     *
+     * <p>此测试作为"守护"（第一次运行即 PASS），防止未来在 §K 范围外随意新增枚举常量。
+     * 若 §K 授权清单更新，同步修改此数字并更新对应 §K 文档。
+     */
+    @Test
+    void enumSize_equalsSectionKTotal() {
+        // §K 共 25 条编码（K.1: 9 + K.2: 4 + K.3: 10 + K.4: 2）
+        // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 26
+        assertThat(PerfErrorCode.values()).hasSize(26);
+    }
+
+    /**
+     * Task C2 架构守护测试：所有枚举常量的编号必须在 §K 授权清单中.
+     *
+     * <p>防止 §K 范围外的编号（如旧体系的 PERF-50001）被意外引入。
+     */
+    @Test
+    void noLegacyOrUndocumentedCode_exists() {
+        List<String> allowedCodes = List.of(
+            "PERF-40001", "PERF-40002", "PERF-40003", "PERF-40004",
+            "PERF-40012", "PERF-40014", "PERF-40017", "PERF-40019", "PERF-40020",
+            "PERF-40901", "PERF-40902", "PERF-40903", "PERF-40906",
+            "PERF-42200", "PERF-42201", "PERF-42202", "PERF-42203",
+            "PERF-42205", "PERF-42206", "PERF-42207", "PERF-42208", "PERF-42209", "PERF-42210",
+            "PERF-50002", "PERF-50007");
+        for (PerfErrorCode c : PerfErrorCode.values()) {
+            assertThat(allowedCodes)
+                .as("常量 " + c.name() + " 编号 " + c.getCode() + " 不在 §K 授权清单")
+                .contains(c.getCode());
+        }
+    }
 }
