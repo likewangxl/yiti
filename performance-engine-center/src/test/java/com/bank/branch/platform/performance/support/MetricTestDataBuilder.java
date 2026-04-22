@@ -37,6 +37,7 @@ public final class MetricTestDataBuilder implements TestDataBuilder {
         def.setSummaryRule("SUM");
         def.setValSlot(slot);
         def.setStatus("ACTIVE");
+        def.setDeleted(0); // B4: 软删除字段默认 0（未删除），避免 AND deleted=0 过滤掉测试数据
         def.setCreatedBy("test");
         def.setCreatedTime(LocalDateTime.now());
         def.setUpdatedBy("test");

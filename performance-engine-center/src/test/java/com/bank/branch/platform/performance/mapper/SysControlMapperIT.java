@@ -69,18 +69,20 @@ class SysControlMapperIT extends PerformanceMapperTestBase {
     }
 
     @Test
-    @DisplayName("同一 scope_dim + latest_data_date 再次插入触发 UK 冲突")
+    @DisplayName("同一 scope_dim + latest_data_date + current_version 再次插入触发 UK 冲突（V1.0.3 新 UK）")
     void updateIsValid_whenUkViolation_shouldThrowDuplicateKey() {
+        // V1.0.3 Task B1: UK 扩展为 (scope_dim, latest_data_date, current_version)。
+        // 触发冲突需要三个字段完全相同，不同 version 的两条记录不再冲突。
         // Given: 第一条插入成功
         SysControl first = SysControlTestDataBuilder.buildTest(
-                "004", "ORG", LocalDate.of(2099, 3, 1), "V2099_03_1", 1);
+                "004", "ORG", LocalDate.of(2099, 3, 1), "V2099_03_SAME", 1);
         sysControlMapper.insert(first);
 
-        // When: 再插入一条同 scope_dim + latest_data_date (UK 冲突)
+        // When: 再插入一条同 scope_dim + latest_data_date + current_version (UK 冲突)
         SysControl dup = SysControlTestDataBuilder.buildTest(
-                "005", "ORG", LocalDate.of(2099, 3, 1), "V2099_03_2", 1);
+                "005", "ORG", LocalDate.of(2099, 3, 1), "V2099_03_SAME", 0);
 
-        // Then
+        // Then: 三字段 UK 完全相同，应抛 DuplicateKeyException
         assertThatThrownBy(() -> sysControlMapper.insert(dup))
                 .isInstanceOf(DuplicateKeyException.class);
     }

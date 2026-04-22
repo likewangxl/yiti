@@ -31,6 +31,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
     "spring.flyway.baseline-version=0",
     "spring.flyway.clean-disabled=false",
     "spring.flyway.clean-on-validation-error=false",
+    "spring.flyway.validate-on-migrate=false",
     "mybatis.mapper-locations=classpath*:mapper/**/*Mapper.xml",
     "mybatis.configuration.map-underscore-to-camel-case=true",
     "spring.data.redis.host=localhost",
