@@ -254,6 +254,26 @@ class MetricDefServiceTest {
         assertThat(result.getRecords()).hasSize(2);
     }
 
+    @Test
+    @DisplayName("Task B5：deleteMetric 执行软删除，删除后 getMetricById 返回 null")
+    void deleteMetric_isSoftDelete_notReturnedInQueries() {
+        PerfMetricDef m = metric("TEST_METRIC_B5", 1);
+        m.setId("ID_B5");
+        m.setDeleted(0);
+
+        // deleteMetric 应调用 softDelete（deleted=1），而非物理删除
+        when(mapper.softDelete("ID_B5")).thenReturn(1);
+
+        service.deleteMetric("ID_B5");
+
+        // 验证调用的是软删除而非 deleteById
+        verify(mapper).softDelete("ID_B5");
+
+        // getMetricById 底层 selectById 返回 null（已软删）
+        when(mapper.selectById("ID_B5")).thenReturn(null);
+        assertThat(service.getMetricById("ID_B5")).isNull();
+    }
+
     private static PerfMetricDef metric(String metricCode, int level) {
         PerfMetricDef def = new PerfMetricDef();
         def.setId("ID_" + metricCode);
@@ -265,6 +285,7 @@ class MetricDefServiceTest {
         def.setCalcMode("AUTO");
         def.setCalcLogicType("SQL");
         def.setStatus("ACTIVE");
+        def.setDeleted(0);
         return def;
     }
 }

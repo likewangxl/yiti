@@ -174,6 +174,30 @@ public class MetricDefService {
     }
 
     /**
+     * 软删除指标（Task B5）.
+     *
+     * <p>设置 deleted=1，删除后查询接口（selectByMetricCode/selectByCondition 等）
+     * 均通过 AND deleted=0 过滤，对调用方不可见。
+     *
+     * @param id 指标主键 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteMetric(String id) {
+        mapper.softDelete(id);
+    }
+
+    /**
+     * 按主键查询指标定义，不存在（含已软删除）时返回 null.
+     *
+     * @param id 指标主键 ID
+     * @return 指标定义或 null
+     */
+    @Transactional(readOnly = true)
+    public PerfMetricDef getMetricById(String id) {
+        return mapper.selectById(id);
+    }
+
+    /**
      * 查询指标定义，不存在则抛异常.
      *
      * @param metricCode 指标编码
