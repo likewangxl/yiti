@@ -70,8 +70,6 @@ class CascadeRefresherTest {
         when(metricRefService.listWhoRef("A")).thenReturn(Collections.emptyList());
         when(metricRefService.listWhoRef("B")).thenReturn(Collections.singletonList(ab));
         when(metricRefService.listWhoRef("C")).thenReturn(Collections.singletonList(bc));
-        // 全量图用于拓扑
-        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
         when(perfEngineProperties.getCascadeMaxDepth()).thenReturn(5);
 
         cascadeRefresher.refreshCascade("C", LocalDate.of(2026, 4, 22), "20260422");
@@ -105,7 +103,7 @@ class CascadeRefresherTest {
         when(metricRefService.listWhoRef("L3")).thenReturn(Collections.singletonList(buildRef("L4", "L3")));
         when(metricRefService.listWhoRef("L4")).thenReturn(Collections.singletonList(buildRef("L5", "L4")));
         when(metricRefService.listWhoRef("L5")).thenReturn(Collections.singletonList(buildRef("L6", "L5")));
-        when(metricRefService.listWhoRef("L6")).thenReturn(Collections.emptyList());
+        // L6 是深度 6 超限层级，CascadeRefresher 根本不会探到（poll L6 时先抛异常），无需 stub
 
         assertThatThrownBy(() -> cascadeRefresher.refreshCascade("R", LocalDate.now(), "v1"))
                 .isInstanceOf(PerfException.class)
