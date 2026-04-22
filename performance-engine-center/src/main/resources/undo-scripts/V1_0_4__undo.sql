@@ -8,8 +8,9 @@
 -- 警告：执行前确认 V1_0_4 已成功应用，否则此脚本无效果。
 -- =====================================================================
 
--- 还原 PT_RESOURCE 状态：将 V1_0_4 标记为 PENDING 的资源恢复为 ACTIVE
-UPDATE pt_resource SET STATUS = 'ACTIVE' WHERE RESOURCE_ID IN (
+-- 还原 PT_RESOURCE 状态：将 V1_0_4 标记为禁用（STATUS=1）的资源恢复为启用（STATUS=0）
+-- 注意：pt_resource.STATUS 是 tinyint（0=启用，1=禁用），不是字符串
+UPDATE pt_resource SET STATUS = 0 WHERE RESOURCE_ID IN (
   'P_PERF_METRIC_EXECUTE', 'P_PERF_METRIC_TRIAL_RUN', 'P_PERF_IMPORT_UPLOAD',
   'P_PERF_ALLOC_ADJUST_CREATE', 'P_PERF_KPI_TRIGGER', 'P_PERF_KPI_RECALC',
   'P_PERF_DATA_TASK_STATUS', 'P_PERF_SYS_CONTROL_ROLLBACK',

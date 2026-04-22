@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.migration;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,8 +28,8 @@ class UndoScriptSmokeIT extends PerformanceFlywayTestBase {
     private Flyway flyway;
 
     /**
-     * 每个测试方法执行前，确保数据库处于 V1_0_3 状态。
-     * 流程：执行 undo 还原（幂等）→ 修复 Flyway 历史 → 重新迁移至 V1_0_3。
+     * 每个测试方法执行前，确保数据库处于 V1_0_3+V1_0_4 已应用的完整状态。
+     * 流程：执行 V1_0_3 undo 还原（幂等）→ 删除 V1_0_3+V1_0_4 历史 → 修复 → 重新迁移。
      */
     @BeforeEach
     void ensureV103State() {
@@ -44,16 +45,67 @@ class UndoScriptSmokeIT extends PerformanceFlywayTestBase {
             // 若字段已不存在（已在 V1_0_2 状态），忽略错误
         }
 
-        // 2. 删除 flyway_schema_history 中 V1_0_3 记录（若存在），允许重新迁移
+        // 2. 删除 flyway_schema_history 中 V1_0_3 和 V1_0_4 记录，
+        //    确保 migrate 能按顺序重新应用 V1_0_3→V1_0_4
         try {
-            jdbc.execute("DELETE FROM flyway_schema_history WHERE version = '1.0.3'");
+            jdbc.execute("DELETE FROM flyway_schema_history WHERE version IN ('1.0.3', '1.0.4')");
         } catch (Exception ignored) {
             // 历史表可能不存在
         }
 
-        // 3. repair 清理任何 FAILED 标记后再 migrate，重新应用 V1_0_3
+        // 3. repair 清理任何 FAILED 标记后再 migrate，重新应用 V1_0_3 + V1_0_4
         flyway.repair();
         flyway.migrate();
+    }
+
+    /**
+     * 每个测试方法执行后，用 SQL 直接将关键 DDL 状态恢复到 V1_0_3+V1_0_4 完整版，
+     * 防止 undo 操作留下的状态污染后续 Flyway IT 测试类（V1_0_3FlywayIT / V1_0_4FlywayIT）。
+     */
+    @AfterEach
+    void restoreFullState() {
+        // 确保 sys_control 使用三列 UK（V1_0_3 状态）
+        try { jdbc.execute("ALTER TABLE sys_control DROP INDEX uk_scope_dim_date"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE sys_control DROP INDEX uk_scope_dim_date_version"); } catch (Exception ignored) {}
+        jdbc.execute("ALTER TABLE sys_control ADD UNIQUE KEY uk_scope_dim_date_version (scope_dim, latest_data_date, current_version)");
+
+        // 确保 sys_control 有 V1_0_3 新增字段
+        try { jdbc.execute("ALTER TABLE sys_control ADD COLUMN remark VARCHAR(255) NULL COMMENT '切版备注' AFTER current_version"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE sys_control ADD COLUMN updated_by VARCHAR(32) NULL COMMENT '最后更新人'"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE sys_control ADD COLUMN publish_source VARCHAR(32) NULL COMMENT '发布来源'"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE sys_control ADD COLUMN publish_by VARCHAR(32) NULL COMMENT '发布人'"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE sys_control ADD COLUMN publish_time DATETIME NULL COMMENT '发布时间'"); } catch (Exception ignored) {}
+
+        // 确保 perf_metric_def 有 V1_0_3 新增字段
+        try { jdbc.execute("ALTER TABLE perf_metric_def ADD COLUMN unit VARCHAR(16) NULL COMMENT '单位'"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE perf_metric_def ADD COLUMN decimal_places TINYINT DEFAULT 2 COMMENT '小数位数'"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE perf_metric_def ADD COLUMN deleted TINYINT DEFAULT 0 COMMENT '0=存在 1=删除'"); } catch (Exception ignored) {}
+        try { jdbc.execute("ALTER TABLE perf_metric_def ADD COLUMN description VARCHAR(500) NULL COMMENT '指标描述'"); } catch (Exception ignored) {}
+        jdbc.execute("UPDATE perf_metric_def SET deleted = 0 WHERE deleted IS NULL");
+
+        // 确保 perf_metric_def 有槽位唯一键
+        try { jdbc.execute("ALTER TABLE perf_metric_def DROP INDEX uk_base_dim_slot_alive"); } catch (Exception ignored) {}
+        jdbc.execute("ALTER TABLE perf_metric_def ADD UNIQUE KEY uk_base_dim_slot_alive ((IF(deleted=0, CONCAT(base_dim,'#',val_slot), NULL)))");
+
+        // 恢复 V1_0_4 中 pt_resource STATUS=1（10 条规划资源）
+        jdbc.execute("UPDATE pt_resource SET STATUS = 1 WHERE RESOURCE_ID IN (" +
+            "'P_PERF_METRIC_EXEC','P_PERF_METRIC_TRIAL','P_PERF_IMPORT_UPLOAD'," +
+            "'P_PERF_ALLOC_ADJ_ADD','P_PERF_KPI_TRIGGER','P_PERF_KPI_RECALC'," +
+            "'P_PERF_DTASK_STATUS','P_PERF_SC_ROLLBACK','P_PERF_EXPORT_KPI','P_PERF_EXPORT_ALLOC')");
+
+        // 恢复 Flyway 历史中 V1.0.3 和 V1.0.4 的成功记录（直接 INSERT，避免 migrate 重跑）
+        try {
+            jdbc.execute("DELETE FROM flyway_schema_history WHERE version IN ('1.0.3', '1.0.4')");
+            // 从已有版本的最高 installed_rank 开始追加
+            Integer maxRank = jdbc.queryForObject("SELECT MAX(installed_rank) FROM flyway_schema_history", Integer.class);
+            if (maxRank == null) maxRank = 0;
+            jdbc.execute("INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) VALUES (" +
+                (maxRank + 1) + ", '1.0.3', 'perf schema alignment', 'SQL', 'sql/V1_0_3__perf_schema_alignment.sql', NULL, 'restore', NOW(), 500, 1)");
+            jdbc.execute("INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) VALUES (" +
+                (maxRank + 2) + ", '1.0.4', 'perf resource cleanup', 'SQL', 'sql/V1_0_4__perf_resource_cleanup.sql', -1354510307, 'restore', NOW(), 300, 1)");
+        } catch (Exception ignored) {
+            // 忽略，确保不影响主流程
+        }
     }
 
     @Test
@@ -115,5 +167,14 @@ class UndoScriptSmokeIT extends PerformanceFlywayTestBase {
         populator.setIgnoreFailedDrops(true); // V1_0_4 可能 UPDATE 0 行，不算失败
         populator.execute(jdbc.getDataSource());
         // 执行无异常即认为 smoke 通过
+
+        // 恢复 V1_0_4 的状态（防止污染其他测试类的 pt_resource 数据）
+        // re-apply V1_0_4 迁移内容，让 STATUS=1（禁用）恢复原状
+        String forwardPath = "src/main/resources/sql/V1_0_4__perf_resource_cleanup.sql";
+        ResourceDatabasePopulator restore = new ResourceDatabasePopulator();
+        restore.addScript(new FileSystemResource(Paths.get(forwardPath).toAbsolutePath().toFile()));
+        restore.setSeparator(";");
+        restore.setIgnoreFailedDrops(true);
+        restore.execute(jdbc.getDataSource());
     }
 }
