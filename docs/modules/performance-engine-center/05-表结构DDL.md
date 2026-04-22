@@ -100,7 +100,7 @@ CREATE TABLE `perf_metric_def` (
   `val_slot` int(11) NOT NULL COMMENT '槽位号 1-200, 映射到结果宽表的 val_{slot} 列',
   `unit` varchar(20) DEFAULT NULL COMMENT '单位: 元/户/笔/%',
   `decimal_places` tinyint(1) DEFAULT '4' COMMENT '小数位数',
-  `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '状态: 1-启用 0-停用',
+  `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态: ACTIVE/DISABLED（V1.0；V1.1 规划扩展 DRAFT）',
   `description` varchar(500) DEFAULT NULL COMMENT '指标描述',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人 emp_id',
   `created_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
