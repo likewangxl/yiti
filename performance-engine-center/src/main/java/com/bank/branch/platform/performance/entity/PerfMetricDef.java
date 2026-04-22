@@ -73,4 +73,18 @@ public class PerfMetricDef {
 
     /** 更新时间. */
     private LocalDateTime updatedTime;
+
+    // ===== V1.0.3 新增字段（Task B4）=====
+
+    /** 单位：元/万元/%. */
+    private String unit;
+
+    /** 小数位数，默认 2. */
+    private Integer decimalPlaces;
+
+    /** 软删除标志：0=存在，1=已删除. */
+    private Integer deleted;
+
+    /** 指标描述（较详细的口径说明，区别于 metric_desc）. */
+    private String description;
 }

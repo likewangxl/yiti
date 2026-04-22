@@ -2,19 +2,25 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.performance.mapper.PerfMetricDefMapper">
 
+    <!-- V1.0.3：24 字段（含 Task B4 新增的 unit/decimal_places/deleted/description） -->
     <sql id="BASE_COLUMNS">
         id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
         calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
-        ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time
+        ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time,
+        unit, decimal_places, deleted, description
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         INSERT INTO perf_metric_def (
-            <include refid="BASE_COLUMNS"/>
+            id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
+            calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
+            ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time,
+            unit, decimal_places, deleted, description
         ) VALUES (
             #{id}, #{metricCode}, #{metricName}, #{metricNameEn}, #{metricDesc}, #{baseDim}, #{metricLevel},
             #{calcFreq}, #{calcMode}, #{calcLogicType}, #{sqlText}, #{exprText}, #{summaryRule},
-            #{refMetricCodes}, #{valSlot}, #{status}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+            #{refMetricCodes}, #{valSlot}, #{status}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime},
+            #{unit}, #{decimalPlaces}, #{deleted}, #{description}
         )
     </insert>
 
@@ -65,6 +71,7 @@
             <include refid="BASE_COLUMNS"/>
         FROM perf_metric_def
         WHERE metric_code = #{metricCode}
+          AND deleted = 0
         LIMIT 1
     </select>
 
@@ -73,15 +80,16 @@
             <include refid="BASE_COLUMNS"/>
         FROM perf_metric_def
         <where>
+            AND deleted = 0
             <choose>
                 <when test="codes != null and codes.size() > 0">
-                    metric_code IN
+                    AND metric_code IN
                     <foreach collection="codes" item="code" open="(" separator="," close=")">
                         #{code}
                     </foreach>
                 </when>
                 <otherwise>
-                    1 = 0
+                    AND 1 = 0
                 </otherwise>
             </choose>
         </where>
@@ -92,6 +100,7 @@
         FROM perf_metric_def
         WHERE base_dim = #{baseDim}
           AND val_slot IS NOT NULL
+          AND deleted = 0
     </select>
 
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
@@ -99,6 +108,7 @@
             <include refid="BASE_COLUMNS"/>
         FROM perf_metric_def
         <where>
+            AND deleted = 0
             <if test="baseDim != null and baseDim != ''">
                 AND base_dim = #{baseDim}
             </if>
@@ -123,6 +133,7 @@
         SELECT COUNT(*)
         FROM perf_metric_def
         <where>
+            AND deleted = 0
             <if test="baseDim != null and baseDim != ''">
                 AND base_dim = #{baseDim}
             </if>
@@ -148,6 +159,16 @@
             updated_time = NOW()
         WHERE id = #{id}
           AND status = 'DISABLED'
+          AND deleted = 0
+    </update>
+
+    <!-- Task B5：软删除（deleted=1）代替物理删除 -->
+    <update id="softDelete">
+        UPDATE perf_metric_def
+        SET deleted = 1,
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND deleted = 0
     </update>
 
 </mapper>

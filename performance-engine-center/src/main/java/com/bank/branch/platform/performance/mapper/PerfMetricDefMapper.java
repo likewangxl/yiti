@@ -114,4 +114,12 @@ public interface PerfMetricDefMapper {
      */
     int releaseSlotById(@Param("id") String id,
                         @Param("updatedBy") String updatedBy);
+
+    /**
+     * 软删除：设置 deleted=1（Task B5）.
+     *
+     * @param id 主键
+     * @return 受影响行数
+     */
+    int softDelete(@Param("id") String id);
 }

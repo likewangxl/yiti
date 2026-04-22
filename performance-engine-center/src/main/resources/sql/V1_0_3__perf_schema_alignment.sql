@@ -29,3 +29,15 @@ ALTER TABLE sys_control
   ADD COLUMN publish_source VARCHAR(32) NULL COMMENT '发布来源：MANUAL/AUTO/ROLLBACK',
   ADD COLUMN publish_by VARCHAR(32) NULL COMMENT '发布人',
   ADD COLUMN publish_time DATETIME NULL COMMENT '发布时间';
+
+-- =====================================================================
+-- Task B4: perf_metric_def 补 4 个字段
+-- 文档 05 §2.2 要求字段：unit、decimal_places、deleted、description
+-- =====================================================================
+ALTER TABLE perf_metric_def
+  ADD COLUMN unit VARCHAR(16) NULL COMMENT '单位：元/万元/%',
+  ADD COLUMN decimal_places TINYINT DEFAULT 2 COMMENT '小数位数',
+  ADD COLUMN deleted TINYINT DEFAULT 0 COMMENT '0=存在 1=删除',
+  ADD COLUMN description VARCHAR(500) NULL COMMENT '指标详细描述（补充 metric_desc）';
+-- 所有现存行 deleted=0
+UPDATE perf_metric_def SET deleted = 0 WHERE deleted IS NULL;
