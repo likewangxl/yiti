@@ -77,7 +77,7 @@ src/main/resources/
 
 **宽表仅建表** (4 张, V1.1 使用)：`emp_index_result` / `org_index_result` / `cust_index_result` / `kpi_result`
 
-**v1.2 决策**：全部采用 `docs/schema/ddl-performance.sql` 原始结构, 不做 DDL 修改。
+**V1.0 整改决策（2026-04-22）**：已通过 V1_0_3（DDL 字段与唯一键补齐）与 V1_0_4（PT_RESOURCE 规划资源注册+字典项同步）两批 Flyway 脚本补齐 DDL 偏离，详细过程见 `docs/superpowers/plans/2026-04-22-performance-v1.0-rectification-plan.md`。
 
 ## 关键设计原则
 
@@ -95,6 +95,8 @@ V1.0 无法实现的 13 个方法抛 `UnsupportedOperationException("V1.1 delive
 ### 3. planId 类型 String（v1.2 修订）
 
 **技术债声明**：04 契约文档原用 `Long planId`, 与生产 DDL `varchar(32)` 冲突。V1.0 对齐生产 DDL, 全局使用 `String planId`, 04 契约的修正由架构师后续统一处理。
+
+**Task A2 已结清（2026-04-22）**：03/04/05 三份文档的主键类型已统一修订为 `String (varchar(32))`，技术债已结清。
 
 ### 4. 配置表缓存策略
 
