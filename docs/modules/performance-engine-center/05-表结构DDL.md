@@ -833,8 +833,8 @@ ORDER BY update_time DESC LIMIT 1;
 | `cycle_type` | `MONTHLY` | 月度考核 |
 | | `QUARTERLY` | 季度考核 |
 | `target_cycle` | `YEAR` / `QUARTER` / `MONTH` | 目标周期 |
-| `metric_def.status` | `0` | 停用 |
-| | `1` | 启用 |
+| `metric_def.status` | `ACTIVE` | 启用 |
+| | `DISABLED` | 停用 |
 | `apply.status` (分配/目标调整) | `DRAFT` | 草稿 |
 | | `IN_APPROVAL` | 审批中 |
 | | `APPROVED` | 审批通过 (目标调整后进入 `APPLIED`, 分配调整后进入 `SYNCED`) |
