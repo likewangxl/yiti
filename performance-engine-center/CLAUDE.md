@@ -209,3 +209,42 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 - 对外 API 契约: `docs/modules/performance-engine-center/04-对外API契约.md`
 - DDL 权威源: `docs/schema/ddl-performance.sql`
 - 共通开发规范: `docs/common-dev-guide.md`
+
+## 技术债务（2026-04-22 整改后）
+
+本节记录 V1.0 整改后遗留的技术债，将在 V1.1/V1.2 迭代时逐项消化。
+
+### 1. 错误码语义归并（中等）
+
+**背景**：Phase B 整改对 `PerfErrorCode` 做了归并，导致以下三处语义偏差：
+
+- `KpiSchemeService.create` / `TargetPlanService.create` 中方案编码重复时抛 `METRIC_CODE_DUP(PERF-40901)`，
+  message 为 `"指标编码已存在: <schemeCode>/<planCode>"`，但 KPI/目标方案编码不是"指标编码"
+- `PerfRunTaskController.getById` 中执行任务不存在时抛 `METRIC_NOT_FOUND(PERF-40001)`，
+  message 为 `"指标不存在: <id>"`，但 RunTask 不是指标
+
+**根因**：`PerfException(PerfErrorCode, Object... args)` 的 `format()` 只能在 message 后追加参数，
+无法改变枚举 message 本身（`"指标编码已存在"` / `"指标不存在"`），错误码枚举 METRIC_CODE_DUP / METRIC_NOT_FOUND
+的前缀语义已在枚举定义层固化，本 Phase 不改代码避免引入回归风险。
+
+**解决方向**：V1.1 在 `docs/modules/performance-engine-center/03-接口设计与报文.md` §K 申请以下新错误码：
+  - `PERF-40005` `KPI_SCHEME_CODE_EXISTS` — KPI 方案编码已存在
+  - `PERF-40006` `TARGET_PLAN_CODE_EXISTS` — 目标方案编码已存在
+  - `PERF-40007` `RUN_TASK_NOT_FOUND` — 执行任务不存在
+
+### 2. 其他 Controller 局部变量 entity（低）
+
+5 个 Controller（KpiScheme / TargetPlan / TargetValue / AllocRelation / PerfRunTask）的方法体内
+仍直接使用 entity 作为 Service 返回值接收中间变量（如 `PerfKpiScheme scheme = kpiSchemeService.create(cmd)`），
+`TargetValueController.batch` 甚至在 Controller 层 `new PerfTargetValue()` 构造 entity 并填充字段，
+这部分 DTO 装配逻辑应移到 Service/Facade 层。
+
+**解决方向**：V1.1 重构为 Facade 层统一 DTO 装配，Controller 只做入参校验和响应封装。
+
+### 3. UndoScriptSmokeIT V1.0.3 checksum=NULL（低）
+
+`performance-engine-center/src/test/java/.../UndoScriptSmokeIT` 中 `@AfterEach` 手工插入
+`flyway_schema_history` 记录时，V1.0.3 的 checksum 字段使用 NULL 占位。
+若后续开启 `validate-on-migrate=true`（Flyway 校验模式），将因 checksum 不匹配导致启动失败。
+
+**解决方向**：若 V1.1 启用严格校验模式，需预先查询实际 checksum 值并更新测试夹具。
