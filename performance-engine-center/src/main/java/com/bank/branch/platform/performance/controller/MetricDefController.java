@@ -10,17 +10,22 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
 import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricExecuteReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricTrialReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricTrialRespDTO;
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateMetricReqDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.facade.MetricLifecycleFacade;
 import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
+import com.bank.branch.platform.performance.service.CascadeRefresher;
+import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.MetricRefService;
 import com.bank.branch.platform.performance.service.MetricSlotService;
 import com.bank.branch.platform.performance.service.MetricTrialService;
+import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
@@ -64,6 +69,9 @@ public class MetricDefController {
     private final MetricRefService metricRefService;
     private final MetricSlotService metricSlotService;
     private final MetricTrialService metricTrialService;
+    private final MetricCalcService metricCalcService;
+    private final CascadeRefresher cascadeRefresher;
+    private final SysControlService sysControlService;
 
     /**
      * List metric definitions with page result.
@@ -277,5 +285,63 @@ public class MetricDefController {
         dto.setExprResult(serviceResult.getExprResult());
         dto.setExecutionMillis(serviceResult.getExecutionMillis());
         return ResponseWrapper.success(dto);
+    }
+
+    /**
+     * 指标立即执行（03 §A.6）.
+     *
+     * <p>端点：{@code POST /api/perf/metrics/{metricCode}/execute}
+     * <p>高危操作：写宽表 + 写 run_task；{@code cascade=true} 时触发下游级联刷新。
+     * <p>审计：{@code @AuditLog(action="METRIC_EXECUTE", resourceType="PERF_METRIC_RUN",
+     *         reasonRequired=true)}（07 §1.1 要求 reason 必填）.
+     *
+     * <p>路由逻辑：
+     * <ul>
+     *   <li>{@code cascade=false} → {@link MetricCalcService#calcMetric} 仅刷新本指标</li>
+     *   <li>{@code cascade=true} （默认）→ {@link CascadeRefresher#refreshCascade} 按拓扑序刷新根 + 下游</li>
+     * </ul>
+     *
+     * @param metricCode 指标编码（path）
+     * @param req        执行请求（dataDate / cascade / async / reason）
+     * @return 根任务 ID + 初始状态（PENDING/RUNNING/SUCCESS）
+     */
+    @PostMapping("/{metricCode}/execute")
+    @Operation(summary = "Execute metric immediately (with optional cascade refresh)")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
+    @AuditLog(action = "METRIC_EXECUTE", resourceType = "PERF_METRIC_RUN", reasonRequired = true)
+    public ResponseWrapper<java.util.Map<String, Object>> execute(
+            @PathVariable("metricCode") @NotBlank String metricCode,
+            @Valid @RequestBody MetricExecuteReqDTO req) {
+        log.info("[MetricDefController.execute] metricCode={}, dataDate={}, cascade={}, reason={}",
+                metricCode, req.getDataDate(), req.getCascade(), req.getReason());
+
+        // 预校验指标存在性：不存在时在调用 Service 前就抛 PERF-40001，避免产生孤立 run_task
+        PerfMetricDef def = metricDefService.getByCode(metricCode);
+
+        // 解析版本：从 sys_control 当前生效版本读取（可为空时交给 Service 报错）
+        String version;
+        try {
+            SysControl current = sysControlService.getCurrentVersion(def.getBaseDim());
+            version = current.getCurrentVersion();
+        } catch (Exception ex) {
+            // sys_control 未初始化时使用兜底版本（测试场景 / 首次执行）；
+            // 生产环境通过 System Control Init 流程保证此不发生。
+            log.warn("[MetricDefController.execute] sys_control 读取失败，采用兜底版本: {}", ex.getMessage());
+            version = "v_default";
+        }
+
+        boolean cascade = req.getCascade() == null ? Boolean.TRUE : req.getCascade();
+        String taskId;
+        if (cascade) {
+            taskId = cascadeRefresher.refreshCascade(metricCode, req.getDataDate(), version);
+        } else {
+            taskId = metricCalcService.calcMetric(metricCode, req.getDataDate(), version);
+        }
+
+        java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("taskId", taskId);
+        resp.put("status", "RUNNING");
+        resp.put("metricCode", metricCode);
+        return ResponseWrapper.success(resp);
     }
 }

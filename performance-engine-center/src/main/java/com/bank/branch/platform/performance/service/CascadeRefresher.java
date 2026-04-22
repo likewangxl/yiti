@@ -62,12 +62,17 @@ public class CascadeRefresher {
     /**
      * 级联刷新：从根指标开始遍历所有下游，按拓扑序调用 {@link MetricCalcService#calcMetric}.
      *
+     * <p>V1.1 Task P3.2 起返回根指标计算的 run_task ID（原 {@code void} 签名）。
+     * 调用方通过根 taskId 轮询 {@code perf_run_task} 获取状态；下游每层计算
+     * 生成独立子任务（V1.2 会建立 parent_id 关联，当前 P3 仅记录根）。
+     *
      * @param rootMetricCode 根指标编码
      * @param dataDate       数据日期
      * @param version        数据版本
+     * @return 根指标计算的 run_task ID；上游下游子任务的 taskId 通过查询 run_task 表获得
      * @throws PerfException 深度越界 / 环路 / 计算失败透传
      */
-    public void refreshCascade(String rootMetricCode, LocalDate dataDate, String version) {
+    public String refreshCascade(String rootMetricCode, LocalDate dataDate, String version) {
         int maxDepth = Math.max(1, perfEngineProperties.getCascadeMaxDepth());
 
         // 1. BFS 收集下游集合（含根）+ 深度检查
@@ -115,12 +120,16 @@ public class CascadeRefresher {
             order.retainAll(affectedNodes);
         }
 
-        // 3. 按拓扑顺序调用 calcMetric
+        // 3. 按拓扑顺序调用 calcMetric；记录根的 taskId 返回
         Set<String> fired = new HashSet<>();
+        String rootTaskId = null;
         for (String code : order) {
             if (fired.add(code)) {
                 log.info("[CascadeRefresher] 刷新指标 {} （date={}, version={}）", code, dataDate, version);
-                metricCalcService.calcMetric(code, dataDate, version);
+                String taskId = metricCalcService.calcMetric(code, dataDate, version);
+                if (rootMetricCode.equals(code) && rootTaskId == null) {
+                    rootTaskId = taskId;
+                }
             }
         }
 
@@ -128,9 +137,13 @@ public class CascadeRefresher {
         for (String code : affectedNodes) {
             if (fired.add(code)) {
                 log.warn("[CascadeRefresher] 拓扑遗漏节点补算 {}", code);
-                metricCalcService.calcMetric(code, dataDate, version);
+                String taskId = metricCalcService.calcMetric(code, dataDate, version);
+                if (rootMetricCode.equals(code) && rootTaskId == null) {
+                    rootTaskId = taskId;
+                }
             }
         }
         Collections.emptyList();
+        return rootTaskId;
     }
 }
