@@ -73,7 +73,7 @@ public class AllocRelationController {
      */
     @GetMapping
     @Operation(summary = "当前分配关系")
-    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
     public ResponseWrapper<List<CustAllocRelationDTO>> list(
             @RequestParam(value = "custId") @NotBlank String custId,
             @RequestParam(value = "bizKind", required = false) String bizKind) {

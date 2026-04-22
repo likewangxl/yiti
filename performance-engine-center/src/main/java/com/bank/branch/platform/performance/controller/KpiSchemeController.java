@@ -188,7 +188,7 @@ public class KpiSchemeController {
      */
     @PostMapping("/{id}/publish")
     @Operation(summary = "发布 KPI 方案 (高危)")
-    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.CONFIG)
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
     @AuditLog(action = "PUBLISH", resourceType = "KPI_SCHEME", reasonRequired = true)
     public ResponseWrapper<KpiSchemeDTO> publish(@PathVariable("id") @NotBlank String id,
                                                  @Valid @RequestBody PublishKpiSchemeReqDTO req) {
