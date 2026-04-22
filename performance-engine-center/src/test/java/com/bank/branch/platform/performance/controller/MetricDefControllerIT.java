@@ -416,6 +416,107 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
         assertThat(method.getAnnotation(AuditLog.class)).isNull();
     }
 
+    // ===================== Task D1 Red：断言响应体 DTO 化，不含 entity 内部字段 =====================
+
+    /**
+     * [Red] list 接口响应不应泄漏 entity 内部字段 deleted / createdTime / updatedTime.
+     * 当前 Controller 直接返回 PerfMetricDef entity，该测试应失败。
+     */
+    @Test
+    void list_shouldNotExposeEntityFields() throws Exception {
+        metricDefMapper.insert(metric("DTO_LIST_A", 1, 91));
+
+        String body = mockMvc.perform(get("/api/perf/metrics")
+                        .param("baseDim", "EMP")
+                        .param("keyword", "TEST_METRIC_DTO_LIST_A")
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        // 断言 DTO 字段存在
+        assertThat(body).contains("\"metricCode\"");
+        assertThat(body).contains("\"metricName\"");
+        // 断言 entity 内部字段不存在
+        assertThat(body).doesNotContain("\"deleted\"");
+        assertThat(body).doesNotContain("\"createdTime\"");
+        assertThat(body).doesNotContain("\"updatedTime\"");
+        assertThat(body).doesNotContain("\"createdBy\"");
+        assertThat(body).doesNotContain("\"updatedBy\"");
+    }
+
+    /**
+     * [Red] getByCode 接口响应不应泄漏 entity 内部字段.
+     */
+    @Test
+    void getByCode_shouldNotExposeEntityFields() throws Exception {
+        metricDefMapper.insert(metric("DTO_GET_A", 1, 92));
+
+        String body = mockMvc.perform(get("/api/perf/metrics/{metricCode}", "TEST_METRIC_DTO_GET_A"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        // 断言 DTO 字段存在
+        assertThat(body).contains("\"metricCode\"");
+        // 断言 entity 内部字段不存在
+        assertThat(body).doesNotContain("\"deleted\"");
+        assertThat(body).doesNotContain("\"createdTime\"");
+        assertThat(body).doesNotContain("\"updatedTime\"");
+        assertThat(body).doesNotContain("\"createdBy\"");
+        assertThat(body).doesNotContain("\"updatedBy\"");
+    }
+
+    /**
+     * [Red] create 接口响应不应泄漏 entity 内部字段.
+     */
+    @Test
+    void create_shouldNotExposeEntityFields() throws Exception {
+        String body = mockMvc.perform(post("/api/perf/metrics")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createReq("TEST_METRIC_DTO_CREATE_A"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        // 断言 entity 内部字段不存在
+        assertThat(body).doesNotContain("\"deleted\"");
+        assertThat(body).doesNotContain("\"createdTime\"");
+        assertThat(body).doesNotContain("\"updatedTime\"");
+        assertThat(body).doesNotContain("\"createdBy\"");
+        assertThat(body).doesNotContain("\"updatedBy\"");
+    }
+
+    /**
+     * [Red] update 接口响应不应泄漏 entity 内部字段.
+     */
+    @Test
+    void update_shouldNotExposeEntityFields() throws Exception {
+        metricDefMapper.insert(metric("DTO_UPDATE_A", 1, 93));
+
+        UpdateMetricReqDTO req = new UpdateMetricReqDTO();
+        req.setMetricName("updated-dto-test");
+        req.setMetricDesc("desc");
+        req.setCalcFreq("DAY");
+        req.setCalcMode("AUTO");
+        req.setCalcLogicType("SQL");
+        req.setSqlText("SELECT 3");
+        req.setRefMetricCodes("[]");
+
+        String body = mockMvc.perform(put("/api/perf/metrics/{metricCode}", "TEST_METRIC_DTO_UPDATE_A")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        // 断言 entity 内部字段不存在
+        assertThat(body).doesNotContain("\"deleted\"");
+        assertThat(body).doesNotContain("\"createdTime\"");
+        assertThat(body).doesNotContain("\"updatedTime\"");
+        assertThat(body).doesNotContain("\"createdBy\"");
+        assertThat(body).doesNotContain("\"updatedBy\"");
+    }
+
     private static CreateMetricReqDTO createReq(String metricCode) {
         CreateMetricReqDTO req = new CreateMetricReqDTO();
         req.setMetricCode(metricCode);
