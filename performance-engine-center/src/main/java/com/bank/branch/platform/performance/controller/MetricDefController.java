@@ -10,6 +10,8 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
 import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricTrialReqDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricTrialRespDTO;
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateMetricReqDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
@@ -18,8 +20,10 @@ import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.MetricRefService;
 import com.bank.branch.platform.performance.service.MetricSlotService;
+import com.bank.branch.platform.performance.service.MetricTrialService;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
+import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -59,6 +63,7 @@ public class MetricDefController {
     private final MetricDefService metricDefService;
     private final MetricRefService metricRefService;
     private final MetricSlotService metricSlotService;
+    private final MetricTrialService metricTrialService;
 
     /**
      * List metric definitions with page result.
@@ -241,5 +246,36 @@ public class MetricDefController {
         PerfMetricDef metricDef = metricDefService.getByCode(metricCode);
         metricSlotService.releaseSlot(metricDef.getId(), currentUserApi.getCurrentEmpId(), req.getReason());
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 指标试运行（03 §A.5）.
+     *
+     * <p>端点：{@code POST /api/perf/metrics/{metricCode}/trial-run}
+     * <p>高危操作：执行指标 SQL / Groovy 但不写宽表、不写 run_task；仅返回样本。
+     * <p>审计：{@code @AuditLog(action="METRIC_TRIAL_RUN", resourceType="PERF_METRIC_TRIAL")}.
+     *
+     * @param metricCode 指标编码（path）
+     * @param req        请求体（dataDate / sampleSize / params）
+     * @return 样本结果
+     */
+    @PostMapping("/{metricCode}/trial-run")
+    @Operation(summary = "Trial run metric (execute without persistence)")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
+    @AuditLog(action = "METRIC_TRIAL_RUN", resourceType = "PERF_METRIC_TRIAL")
+    public ResponseWrapper<MetricTrialRespDTO> trialRun(@PathVariable("metricCode") @NotBlank String metricCode,
+                                                        @Valid @RequestBody MetricTrialReqDTO req) {
+        log.info("[MetricDefController.trialRun] metricCode={}, dataDate={}, sampleSize={}",
+                metricCode, req.getDataDate(), req.getSampleSize());
+        MetricTrialResult serviceResult = metricTrialService.trial(
+                metricCode, req.getDataDate(), req.getSampleSize(), req.getParams());
+        MetricTrialRespDTO dto = new MetricTrialRespDTO();
+        dto.setMetricCode(metricCode);
+        dto.setSampleSize(serviceResult.getSampleSize());
+        dto.setTotalRows(serviceResult.getTotalRows());
+        dto.setSamples(serviceResult.getSamples());
+        dto.setExprResult(serviceResult.getExprResult());
+        dto.setExecutionMillis(serviceResult.getExecutionMillis());
+        return ResponseWrapper.success(dto);
     }
 }
