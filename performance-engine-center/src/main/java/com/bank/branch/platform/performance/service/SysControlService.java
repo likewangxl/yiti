@@ -98,6 +98,12 @@ public class SysControlService {
         LocalDateTime now = LocalDateTime.now();
         newSc.setCreatedTime(now);
         newSc.setUpdatedTime(now);
+        // V1.0.3 Task B7：写入发布元数据
+        newSc.setRemark(cmd.getReason());
+        newSc.setPublishBy(cmd.getOperator());
+        newSc.setPublishSource(cmd.getPublishSource());
+        newSc.setPublishTime(now);
+        newSc.setUpdatedBy(cmd.getOperator());
 
         try {
             sysControlMapper.insert(newSc);

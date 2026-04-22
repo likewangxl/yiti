@@ -193,6 +193,35 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
     }
 
     @Test
+    @DisplayName("Task B7：doSwitchVersion 写入 publish 元数据（publishSource/publishBy/remark/publishTime）")
+    void doSwitchVersion_records_publishMetadata() {
+        // Given
+        SysControl curr = SysControlTestDataBuilder.buildTest(
+                "G07", "GLOBAL", LocalDate.of(2026, 3, 1), "v20260301", 1);
+        when(sysControlMapper.selectByScopeAndValid("GLOBAL")).thenReturn(curr);
+        when(sysControlMapper.updateIsValid(anyString(), eq(0))).thenReturn(1);
+        when(sysControlMapper.insert(any(SysControl.class))).thenReturn(1);
+
+        SwitchVersionCmd cmd = SwitchVersionCmd.builder()
+                .scopeDim("GLOBAL")
+                .dataDate(LocalDate.of(2026, 4, 1))
+                .newVersion("v20260401")
+                .reason("季度末")
+                .operator("admin")
+                .publishSource("MANUAL")
+                .build();
+
+        // When
+        SysControl result = sysControlService.doSwitchVersion(cmd);
+
+        // Then
+        assertThat(result.getPublishSource()).isEqualTo("MANUAL");
+        assertThat(result.getPublishBy()).isEqualTo("admin");
+        assertThat(result.getRemark()).isEqualTo("季度末");
+        assertThat(result.getPublishTime()).isNotNull();
+    }
+
+    @Test
     @DisplayName("initIfAbsent 当有历史记录但无生效版本时返回最近一条 (历史 is_valid=0)")
     void initIfAbsent_whenHasHistoryButNoneValid_shouldReturnLatest() {
         // Given: 存在一条历史记录 (is_valid=0), 但无当前生效版本
