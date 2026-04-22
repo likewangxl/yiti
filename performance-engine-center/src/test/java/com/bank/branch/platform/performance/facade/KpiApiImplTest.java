@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.facade;
 import com.bank.branch.platform.performance.api.dto.KpiSchemeDTO;
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
+import com.bank.branch.platform.performance.mapper.KpiResultMapper;
 import com.bank.branch.platform.performance.service.KpiItemService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
 import com.bank.branch.platform.performance.support.KpiTestDataBuilder;
@@ -13,13 +14,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -43,6 +42,9 @@ class KpiApiImplTest extends PerformanceServiceTestBase {
 
     @Mock
     private KpiItemService kpiItemService;
+
+    @Mock
+    private KpiResultMapper kpiResultMapper;
 
     @InjectMocks
     private KpiApiImpl kpiApi;
@@ -132,30 +134,5 @@ class KpiApiImplTest extends PerformanceServiceTestBase {
         verify(kpiItemService).listBySchemeId("S_NO_ITEM");
     }
 
-    // ------------------------- V1.1 契约: UOE 占位 -------------------------
-
-    @Test
-    @DisplayName("getCurrentKpiTotal: V1.0 抛 UnsupportedOperationException")
-    void getCurrentKpiTotal_throwsUoe() {
-        assertThatThrownBy(() -> kpiApi.getCurrentKpiTotal("E001", "MONTHLY"))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("V1.1 delivered");
-    }
-
-    @Test
-    @DisplayName("getCurrentKpiResult: V1.0 抛 UnsupportedOperationException")
-    void getCurrentKpiResult_throwsUoe() {
-        assertThatThrownBy(() -> kpiApi.getCurrentKpiResult("E001", "MONTHLY"))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("V1.1 delivered");
-    }
-
-    @Test
-    @DisplayName("getKpiHistory: V1.0 抛 UnsupportedOperationException")
-    void getKpiHistory_throwsUoe() {
-        assertThatThrownBy(() -> kpiApi.getKpiHistory("E001", "MONTHLY",
-                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 4, 1)))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("V1.1 delivered");
-    }
+    // ------------------------- V1.1 契约: 查询方法（细分场景见 KpiApiImplV11Test） -------------------------
 }

@@ -3,9 +3,11 @@ package com.bank.branch.platform.performance.facade;
 import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.dto.KpiResultDTO;
 import com.bank.branch.platform.performance.api.dto.KpiSchemeDTO;
+import com.bank.branch.platform.performance.entity.KpiResult;
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.facade.assembler.KpiAssembler;
+import com.bank.branch.platform.performance.mapper.KpiResultMapper;
 import com.bank.branch.platform.performance.service.KpiItemService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
 import lombok.RequiredArgsConstructor;
@@ -24,8 +26,13 @@ import java.util.Optional;
  * <p>V1.0 契约 (spec §5.2.3):
  * <ul>
  *   <li>{@link #getKpiScheme(String)} / {@link #getKpiSchemeById(String)} 返回方案 + 方案项组装 DTO</li>
- *   <li>{@link #getCurrentKpiTotal} / {@link #getCurrentKpiResult} / {@link #getKpiHistory}
- *       抛 {@link UnsupportedOperationException} ("V1.1 delivered")</li>
+ * </ul>
+ *
+ * <p>V1.1 Task P4.3 交付：
+ * <ul>
+ *   <li>{@link #getCurrentKpiTotal} → 最新一条 {@code kpi_result.kpi_total_score}</li>
+ *   <li>{@link #getCurrentKpiResult} → 最新一条完整 DTO</li>
+ *   <li>{@link #getKpiHistory} → {@code as_of_date} 落在 {@code [from, to]} 区间的 DTO 列表</li>
  * </ul>
  *
  * <p>缓存策略:
@@ -34,6 +41,7 @@ import java.util.Optional;
  *   <li>{@link #getKpiScheme}(code) 不缓存: 按 code 查本质是 code → scheme 的二级查询,
  *       加缓存会让写方法的 evict 难以定位 (不知道 code), 故 V1.0 直接穿透到 Service。
  *       写方法 evict 仅针对 id 缓存 ({@code KpiSchemeService.updateById/publish/disable})</li>
+ *   <li>V1.1 的 3 个结果查询方法不缓存：KPI 结果分钟级变动 + 按员工分散，命中率低。</li>
  * </ul>
  *
  * <p>消费方: portal-content-center, report-analytics-center.
@@ -44,20 +52,27 @@ public class KpiApiImpl implements KpiApi {
 
     private final KpiSchemeService kpiSchemeService;
     private final KpiItemService kpiItemService;
+    private final KpiResultMapper kpiResultMapper;
 
     @Override
     public BigDecimal getCurrentKpiTotal(String empId, String cycleType) {
-        throw new UnsupportedOperationException("V1.1 delivered");
+        KpiResult latest = kpiResultMapper.selectLatestByEmpCycle(empId, cycleType);
+        return latest == null ? null : latest.getKpiTotalScore();
     }
 
     @Override
     public Optional<KpiResultDTO> getCurrentKpiResult(String empId, String cycleType) {
-        throw new UnsupportedOperationException("V1.1 delivered");
+        KpiResult latest = kpiResultMapper.selectLatestByEmpCycle(empId, cycleType);
+        return Optional.ofNullable(latest).map(this::toResultDto);
     }
 
     @Override
     public List<KpiResultDTO> getKpiHistory(String empId, String cycleType, LocalDate from, LocalDate to) {
-        throw new UnsupportedOperationException("V1.1 delivered");
+        List<KpiResult> rows = kpiResultMapper.selectByEmpCycleRange(empId, cycleType, from, to);
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return rows.stream().map(this::toResultDto).toList();
     }
 
     @Override
@@ -82,5 +97,26 @@ public class KpiApiImpl implements KpiApi {
     private KpiSchemeDTO assembleWithItems(PerfKpiScheme scheme) {
         List<PerfKpiItem> items = kpiItemService.listBySchemeId(scheme.getId());
         return KpiAssembler.toDto(scheme, items == null ? Collections.emptyList() : items);
+    }
+
+    /**
+     * {@link KpiResult} → {@link KpiResultDTO} 字段直拷（不查 metricName / schemeName 关联，
+     * 这两列需要 Facade 层按需二级查询时再补；当前消费方只用结果字段）.
+     *
+     * @param r 实体
+     * @return DTO
+     */
+    private KpiResultDTO toResultDto(KpiResult r) {
+        return KpiResultDTO.builder()
+                .id(r.getId())
+                .empId(r.getEmpId())
+                .cycleType(r.getCycleType())
+                .cycleDate(r.getCycleDate())
+                .asOfDate(r.getAsOfDate())
+                .dataVersion(r.getDataVersion())
+                .kpiTotalScore(r.getKpiTotalScore())
+                .detailJson(r.getDetailJson())
+                .createTime(r.getCalculatedTime())
+                .build();
     }
 }

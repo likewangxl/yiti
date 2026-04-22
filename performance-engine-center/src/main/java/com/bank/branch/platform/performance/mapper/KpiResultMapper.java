@@ -4,6 +4,7 @@ import com.bank.branch.platform.performance.entity.KpiResult;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -51,4 +52,34 @@ public interface KpiResultMapper {
      */
     List<KpiResult> selectByEmpCycle(@Param("empId") String empId,
                                      @Param("cycleType") String cycleType);
+
+    /**
+     * 查询员工在某周期类型下的最新一条 KPI 结果（by as_of_date DESC LIMIT 1）.
+     *
+     * <p>V1.1 Task P4.3 新增：{@code KpiApi.getCurrentKpiTotal / getCurrentKpiResult}
+     * 直接调用本方法，避免调用方在全量列表上做 {@code .findFirst()} 带来的无谓 I/O。
+     *
+     * @param empId     员工工号
+     * @param cycleType 周期类型（MONTHLY/QUARTERLY）
+     * @return 最新一条 KPI 结果，不存在返回 null
+     */
+    KpiResult selectLatestByEmpCycle(@Param("empId") String empId,
+                                     @Param("cycleType") String cycleType);
+
+    /**
+     * 查询员工在某周期类型下、{@code as_of_date} 落在 [from, to] 区间内的 KPI 结果列表.
+     *
+     * <p>V1.1 Task P4.3 新增：{@code KpiApi.getKpiHistory} 使用本方法实现时间范围查询。
+     * 按 {@code as_of_date DESC, id DESC} 排序，便于"查最新"语义。
+     *
+     * @param empId     员工工号
+     * @param cycleType 周期类型
+     * @param from      起始日期（含）
+     * @param to        截止日期（含）
+     * @return KPI 结果列表（可能为空）
+     */
+    List<KpiResult> selectByEmpCycleRange(@Param("empId") String empId,
+                                          @Param("cycleType") String cycleType,
+                                          @Param("from") LocalDate from,
+                                          @Param("to") LocalDate to);
 }

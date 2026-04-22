@@ -41,4 +41,26 @@
         ORDER BY as_of_date DESC, id DESC
     </select>
 
+    <!-- V1.1 P4.3：查最新一条 -->
+    <select id="selectLatestByEmpCycle" resultType="com.bank.branch.platform.performance.entity.KpiResult">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM kpi_result
+        WHERE emp_id = #{empId}
+          AND cycle_type = #{cycleType}
+        ORDER BY as_of_date DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <!-- V1.1 P4.3：按 as_of_date [from, to] 范围查询 -->
+    <select id="selectByEmpCycleRange" resultType="com.bank.branch.platform.performance.entity.KpiResult">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM kpi_result
+        WHERE emp_id = #{empId}
+          AND cycle_type = #{cycleType}
+          AND as_of_date BETWEEN #{from} AND #{to}
+        ORDER BY as_of_date DESC, id DESC
+    </select>
+
 </mapper>
