@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.event;
 
+import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
 import com.bank.branch.platform.performance.listener.AllocAdjustCompletedListener;
@@ -8,6 +9,7 @@ import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.support.PerfTestApp;
 import com.bank.branch.platform.performance.support.PerfTestConfig;
+import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -67,6 +69,12 @@ class AllocationAdjustmentApprovedEventIT {
 
     @MockBean
     private CustAllocRelationMapper custAllocRelationMapper;
+
+    @MockBean
+    private CustomerQueryApi customerQueryApi;
+
+    @MockBean
+    private WorkflowApi workflowApi;
 
     @Autowired
     private PerfAllocAdjustApplyMapper applyMapper;
