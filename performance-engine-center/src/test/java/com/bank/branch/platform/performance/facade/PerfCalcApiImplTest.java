@@ -54,14 +54,14 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
     @InjectMocks
     private PerfCalcApiImpl perfCalcApi;
 
-    // ------------------------- V1.1 契约: triggerKpiCalc 仍 UOE -------------------------
+    // ------------------------- V1.2 契约: triggerKpiCalc 仍 UOE -------------------------
 
     @Test
-    @DisplayName("triggerKpiCalc: V1.0 抛 UnsupportedOperationException")
+    @DisplayName("triggerKpiCalc: V1.1 阶段仍抛 UOE（V1.1 KPI 计算已在 KpiApi 交付，本方法作为契约冗余保留至 V1.2）")
     void triggerKpiCalc_throwsUOE() {
         assertThatThrownBy(() -> perfCalcApi.triggerKpiCalc(LocalDate.of(2026, 4, 20)))
                 .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("V1.1 delivered");
+                .hasMessage("V1.2 delivered");
         verifyNoInteractions(perfRunTaskService);
     }
 

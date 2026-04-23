@@ -23,7 +23,9 @@ import java.util.Optional;
  *       委托 {@link MetricCalcService#calcMetric} 完成单指标计算</li>
  *   <li>{@link #triggerRecalc(String, LocalDate, LocalDate, String, String)} V1.1 P7.2 实现:
  *       委托 {@link HistoryRecalcService#recalc} 历史回算（5/7 参数重载同源）</li>
- *   <li>{@link #triggerKpiCalc(LocalDate)} V1.1 P4 UOE 占位（实际 P4 已在 KpiApi 交付）</li>
+ *   <li>{@link #triggerKpiCalc(LocalDate)} V1.2 UOE 占位：V1.1 的 KPI 计算已在
+ *       {@code KpiApi} 交付（{@code KpiApi.triggerKpiCalc}），本方法作为 PerfCalcApi
+ *       统一入口的契约冗余保留到 V1.2 再决定是否收敛委托</li>
  * </ul>
  *
  * <p>缓存策略: {@link #getRunTask} 不缓存, 直接穿透 Service。
@@ -31,8 +33,8 @@ import java.util.Optional;
  * 在计算过程中频繁变动 (秒级), 缓存收益低且一致性成本高; 与
  * {@link TargetApiImpl#getTargetValue} 的业务数据不缓存策略保持一致。
  *
- * <p>UOE 消息: "V1.1 delivered", 与 {@link MetricApiImpl} / {@link KpiApiImpl} 一致,
- * 消费方可通过消息串统一识别 "V1.1 才交付" 的占位方法。
+ * <p>UOE 消息: "V1.2 delivered"（V1.1 交付后由架构守护测试 {@code NoV11UOEArchTest}
+ * 守护，不允许 facade 层残留上一期的 UOE 占位消息）。
  *
  * <p>消费方 (V1.0): portal-content-center (任务进度查看), 运维后台 (任务审计)。
  * <p>消费方 (V1.1): 定时任务 / external 上报 / 运维补跑 (triggerMetricCalc)。
@@ -46,15 +48,18 @@ public class PerfCalcApiImpl implements PerfCalcApi {
     private final HistoryRecalcService historyRecalcService;
 
     /**
-     * 触发某日 KPI 计算 (V1.1 P4 交付).
+     * 触发某日 KPI 计算 (V1.2 UOE 占位).
+     *
+     * <p>V1.1 的 KPI 计算能力已通过 {@code KpiApi.triggerKpiCalc} 交付（P4 阶段），
+     * 本方法作为 PerfCalcApi 统一触发入口的契约冗余保留到 V1.2 再决定是否收敛委托。
      *
      * @param dataDate 数据日期
      * @return 任务 ID
-     * @throws UnsupportedOperationException V1.1 P3 未实现
+     * @throws UnsupportedOperationException 本契约方法 V1.2 交付
      */
     @Override
     public String triggerKpiCalc(LocalDate dataDate) {
-        throw new UnsupportedOperationException("V1.1 delivered");
+        throw new UnsupportedOperationException("V1.2 delivered");
     }
 
     /**
