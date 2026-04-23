@@ -144,4 +144,15 @@
         WHERE id = #{id}
     </update>
 
+    <!--
+        V1.2 Task Q5.2：清理 cutoff 之前全部 SUCCESS 状态任务.
+        FAILED / RUNNING / PENDING / PARTIAL / CANCELLED 保留；
+        RUNNING 任务 end_time 为 NULL 天然不会命中，SUCCESS 终态必然有 end_time.
+    -->
+    <delete id="deleteSuccessTasksBefore">
+        DELETE FROM perf_run_task
+        WHERE status = 'SUCCESS'
+          AND end_time &lt; #{cutoffTime}
+    </delete>
+
 </mapper>

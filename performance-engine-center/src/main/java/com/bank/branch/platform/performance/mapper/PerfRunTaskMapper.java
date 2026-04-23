@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -135,4 +136,16 @@ public interface PerfRunTaskMapper {
      */
     int updateResultPreviewJson(@Param("id") String id,
                                 @Param("resultPreviewJson") String resultPreviewJson);
+
+    /**
+     * 删除 cutoff 之前全部 {@code status = 'SUCCESS'} 的 run_task（V1.2 Task Q5.2）.
+     *
+     * <p>FAILED / RUNNING / PENDING / PARTIAL / CANCELLED 状态不删，保留给失败诊断与
+     * 异常回溯。筛选字段为 {@code end_time}（SUCCESS 任务必然有终态 end_time，
+     * RUNNING 任务的 end_time 为 NULL，自然不会命中）.
+     *
+     * @param cutoffTime 截止时刻，{@code end_time < cutoffTime} 的 SUCCESS 任务会被删
+     * @return 删除的行数
+     */
+    int deleteSuccessTasksBefore(@Param("cutoffTime") LocalDateTime cutoffTime);
 }
