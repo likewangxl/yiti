@@ -56,6 +56,28 @@
             <artifactId>system-governance-center</artifactId>
         </dependency>
 
+        <!--
+            workflow-center (V1.2 新增)
+            V1.2 分配关系调整审批、目标修正审批通过 WorkflowApi.startProcess 启动 BPMN 流程；
+            Flowable RepositoryService 作为传递依赖可用，用于 BPMN 显式部署.
+            workflow-center 自身不依赖任何业务模块，无循环依赖风险.
+        -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>workflow-center</artifactId>
+        </dependency>
+
+        <!--
+            customer-marketing-center (V1.2 新增)
+            V1.2 分配调整提交时调用 CustomerQueryApi.getCustomer 校验客户存在与归属，
+            必要时调 ClaimApi 校验认领状态.
+            customer-marketing-center 不依赖 performance-engine-center，无循环依赖风险.
+        -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>customer-marketing-center</artifactId>
+        </dependency>
+
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
