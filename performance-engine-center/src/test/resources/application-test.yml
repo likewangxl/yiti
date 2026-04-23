@@ -23,6 +23,33 @@ spring:
     # 需要测缓存的用例可在类上 @ImportAutoConfiguration(RedisCacheAutoConfiguration.class) 覆盖
     type: none
 
+# ====================================================================
+# Flowable 引擎测试配置（V1.2 Phase Q0.1 引入 workflow-center 依赖后新增）
+# 与 bootstrap/application.yml 保持一致：
+#   - 禁用 app/dmn/cmmn/form/eventregistry 子引擎避免多引擎共享 ACT_GE_PROPERTY 冲突
+#   - history-level=audit / database-schema-update=true 以便测试自动建 ACT_* 表
+# 扫描路径 process-definition-location-prefix=classpath*:/bpmn/ 支持 V1.2
+# 自动部署 performance 模块的调整审批 BPMN 文件（Task Q0.3 交付）.
+# ====================================================================
+flowable:
+  history-level: audit
+  process-definition-location-prefix: classpath*:/bpmn/
+  process-definition-location-suffixes:
+    - "**.bpmn20.xml"
+  idm:
+    enabled: false
+  database-schema-update: true
+  app:
+    enabled: false
+  eventregistry:
+    enabled: false
+  dmn:
+    enabled: false
+  cmmn:
+    enabled: false
+  form:
+    enabled: false
+
 mybatis:
   mapper-locations: classpath*:mapper/**/*Mapper.xml
   configuration:

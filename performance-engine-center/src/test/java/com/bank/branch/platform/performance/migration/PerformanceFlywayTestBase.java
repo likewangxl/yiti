@@ -38,7 +38,18 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
     "spring.data.redis.host=localhost",
     "spring.data.redis.port=6379",
     "spring.cache.type=none",
-    "spring.main.allow-bean-definition-overriding=true"
+    "spring.main.allow-bean-definition-overriding=true",
+    // V1.2 Phase Q0.1 引入 workflow-center 后 Flowable AutoConfig 会加载，
+    // 这里显式禁用不需要的 app/dmn/cmmn/form/eventregistry 子引擎，避免多引擎初始化冲突；
+    // history-level/database-schema-update 对齐 bootstrap/application.yml
+    "flowable.history-level=audit",
+    "flowable.database-schema-update=true",
+    "flowable.idm.enabled=false",
+    "flowable.app.enabled=false",
+    "flowable.eventregistry.enabled=false",
+    "flowable.dmn.enabled=false",
+    "flowable.cmmn.enabled=false",
+    "flowable.form.enabled=false"
 })
 public abstract class PerformanceFlywayTestBase {
 
