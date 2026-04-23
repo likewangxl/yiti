@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.job;
 import com.bank.branch.platform.performance.mapper.SysControlMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -54,6 +55,7 @@ public class SysControlCleanupJob {
      * 若未启用（默认状态），本任务只会在被 {@code @ConditionalOnProperty} 启用后才生效.
      */
     @Scheduled(cron = "${perf.job.sys-control-cleanup.cron:0 0 3 * * ?}")
+    @SchedulerLock(name = "SysControlCleanupJob", lockAtMostFor = "PT15M", lockAtLeastFor = "PT1M")
     public void scheduled() {
         run();
     }

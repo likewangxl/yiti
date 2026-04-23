@@ -5,6 +5,7 @@ import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -55,6 +56,7 @@ public class DailyKpiCalcJob {
      * 若未启用（默认状态），本任务只会在被 {@code @ConditionalOnProperty} 启用后才生效。
      */
     @Scheduled(cron = "${perf.job.daily-kpi.cron:0 30 1 * * ?}")
+    @SchedulerLock(name = "DailyKpiCalcJob", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5M")
     public void scheduled() {
         run();
     }

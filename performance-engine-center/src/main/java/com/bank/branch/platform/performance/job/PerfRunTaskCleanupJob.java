@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.job;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -51,6 +52,7 @@ public class PerfRunTaskCleanupJob {
      * {@code perf.job.run-task-cleanup.cron} 覆盖）.
      */
     @Scheduled(cron = "${perf.job.run-task-cleanup.cron:0 30 3 * * ?}")
+    @SchedulerLock(name = "PerfRunTaskCleanupJob", lockAtMostFor = "PT15M", lockAtLeastFor = "PT1M")
     public void scheduled() {
         run();
     }
