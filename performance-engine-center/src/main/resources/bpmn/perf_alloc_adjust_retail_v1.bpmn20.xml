@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  V1.2 Phase Q0.3 零售分配调整审批流程占位 BPMN.
+
+  流程：Start → 支行主管审批(branch_mgr_review) → 分行主管审批(hq_mgr_review) → End
+
+  说明：
+  - processDefinitionKey=perf_alloc_adjust_retail_v1；V1.2 Q2 零售分配调整走此流程.
+  - 对公（corp）与零售（retail）分拆独立 BPMN 是因为：
+      1. 两类候选组不同（对公：CORP_MGR / 零售：RETAIL_MGR）；
+      2. 审批时效 SLA 阈值可能不同；
+      3. 未来扩展（如零售增加客户经理确认环节）时彼此独立演进.
+  - 初期流程结构与对公相同，V1.2 Q2 实现时按需差异化.
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.bank.com/branch/platform/performance">
+
+    <process id="perf_alloc_adjust_retail_v1" name="零售分配关系调整审批" isExecutable="true">
+        <extensionElements>
+            <flowable:executionListener event="end" delegateExpression="${processCompletedListener}"/>
+        </extensionElements>
+
+        <startEvent id="start" name="开始"/>
+
+        <userTask id="branch_mgr_review" name="支行主管审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="hq_mgr_review" name="分行主管审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <endEvent id="end" name="结束"/>
+
+        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_mgr_review"/>
+        <sequenceFlow id="flow_branch_hq" sourceRef="branch_mgr_review" targetRef="hq_mgr_review"/>
+        <sequenceFlow id="flow_hq_end" sourceRef="hq_mgr_review" targetRef="end"/>
+    </process>
+</definitions>

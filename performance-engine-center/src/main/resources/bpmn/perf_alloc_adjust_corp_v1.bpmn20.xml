@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  V1.2 Phase Q0.3 对公分配调整审批流程占位 BPMN.
+
+  流程：Start → 支行主管审批(branch_mgr_review) → 分行主管审批(hq_mgr_review) → End
+
+  说明：
+  - processDefinitionKey=perf_alloc_adjust_corp_v1；performance-engine-center V1.2 Q2 启动此流程.
+  - 任务候选人通过 ${taskAssignmentListener}（来自 workflow-center）解析，
+    候选人配置存储在 wf_node_candidate_conf 表（V1.2 Q2 阶段通过 workflow-seed-v1.sql 补入）.
+  - 流程结束时 ${processCompletedListener} 发布 ProcessCompletedEvent，
+    V1.2 Q2 的 AllocAdjustCompletedListener 订阅后落地分配变更.
+  - V1.2 Q2 实现分配关系调整审批时才会填充完整的条件分支 / 驳回路径 / 网关.
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.bank.com/branch/platform/performance">
+
+    <process id="perf_alloc_adjust_corp_v1" name="对公分配关系调整审批" isExecutable="true">
+        <extensionElements>
+            <flowable:executionListener event="end" delegateExpression="${processCompletedListener}"/>
+        </extensionElements>
+
+        <startEvent id="start" name="开始"/>
+
+        <userTask id="branch_mgr_review" name="支行主管审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="hq_mgr_review" name="分行主管审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <endEvent id="end" name="结束"/>
+
+        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_mgr_review"/>
+        <sequenceFlow id="flow_branch_hq" sourceRef="branch_mgr_review" targetRef="hq_mgr_review"/>
+        <sequenceFlow id="flow_hq_end" sourceRef="hq_mgr_review" targetRef="end"/>
+    </process>
+</definitions>

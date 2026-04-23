@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  V1.2 Phase Q0.3 目标修正审批流程占位 BPMN.
+
+  流程：Start → 支行主管审批(branch_mgr_review) → 分行主管审批(hq_mgr_review) → End
+
+  说明：
+  - processDefinitionKey=perf_target_adjust_v1；V1.2 Q3 目标修正申请启动此流程.
+  - 流程结束后 V1.2 Q3 的 TargetAdjustCompletedListener 订阅 ProcessCompletedEvent，
+    审批通过则更新 perf_target_value 表对应的 (planId, subject, metricCode) 目标值，
+    并发布 TargetAdjustmentApprovedEvent（可能触发历史回算）.
+  - 初期最简两级审批；V1.2 Q3 实现时根据目标金额阈值可能拆分为单级/二级/三级审批.
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.bank.com/branch/platform/performance">
+
+    <process id="perf_target_adjust_v1" name="目标修正审批" isExecutable="true">
+        <extensionElements>
+            <flowable:executionListener event="end" delegateExpression="${processCompletedListener}"/>
+        </extensionElements>
+
+        <startEvent id="start" name="开始"/>
+
+        <userTask id="branch_mgr_review" name="支行主管审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="hq_mgr_review" name="分行主管审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <endEvent id="end" name="结束"/>
+
+        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_mgr_review"/>
+        <sequenceFlow id="flow_branch_hq" sourceRef="branch_mgr_review" targetRef="hq_mgr_review"/>
+        <sequenceFlow id="flow_hq_end" sourceRef="hq_mgr_review" targetRef="end"/>
+    </process>
+</definitions>
