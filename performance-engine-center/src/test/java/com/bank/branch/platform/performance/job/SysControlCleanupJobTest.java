@@ -2,12 +2,14 @@ package com.bank.branch.platform.performance.job;
 
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.mapper.SysControlMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -42,6 +44,13 @@ class SysControlCleanupJobTest {
     @InjectMocks
     private SysControlCleanupJob job;
 
+    @BeforeEach
+    void setUp() {
+        // @Value("${perf.job.sys-control-cleanup.keep-count:12}") 在纯 Mockito 场景不会被注入，
+        // 测试中通过反射显式设置为 12 以模拟 Spring 属性绑定后的状态.
+        ReflectionTestUtils.setField(job, "keepCount", 12);
+    }
+
     @Test
     @DisplayName("run：每个 scope_dim 保留最近 12 个历史版本，超出的全部硬删")
     void run_keepsRecent12Versions_deletesOverflow() {
@@ -52,10 +61,12 @@ class SysControlCleanupJobTest {
         List<String> empOverflow = List.of("SC_EMP_OLD_1", "SC_EMP_OLD_2", "SC_EMP_OLD_3");
         when(sysControlMapper.selectOldVersionIdsForCleanup(eq("EMP"), eq(12)))
                 .thenReturn(empOverflow);
+        when(sysControlMapper.deleteByIds(empOverflow)).thenReturn(empOverflow.size());
         // ORG 维度超出 keep=12 的要删 1 条
         List<String> orgOverflow = List.of("SC_ORG_OLD_1");
         when(sysControlMapper.selectOldVersionIdsForCleanup(eq("ORG"), eq(12)))
                 .thenReturn(orgOverflow);
+        when(sysControlMapper.deleteByIds(orgOverflow)).thenReturn(orgOverflow.size());
 
         int deleted = job.run();
 
@@ -75,6 +86,7 @@ class SysControlCleanupJobTest {
                 .thenThrow(new RuntimeException("boom EMP"));
         when(sysControlMapper.selectOldVersionIdsForCleanup(eq("ORG"), anyInt()))
                 .thenReturn(List.of("SC_ORG_OLD"));
+        when(sysControlMapper.deleteByIds(List.of("SC_ORG_OLD"))).thenReturn(1);
 
         int deleted = job.run();
 

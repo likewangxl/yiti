@@ -100,4 +100,37 @@
         </where>
     </select>
 
+    <!-- V1.2 Task Q5.1：distinct scope_dim 列表（历史版本清理驱动） -->
+    <select id="selectScopeDims" resultType="string">
+        SELECT DISTINCT scope_dim
+        FROM sys_control
+    </select>
+
+    <!--
+        V1.2 Task Q5.1：按 scope_dim 查询应被清理的历史版本 id.
+        语义：仅取 is_valid=0，按 publish_time / id 倒序保留最新 keepCount 条，超出部分返回 id 清单.
+        注意：publish_time 在 V1.0.3 之前历史数据可能为 NULL，为保证倒序稳定性，使用 id DESC 兜底.
+    -->
+    <select id="selectOldVersionIdsForCleanup" resultType="string">
+        SELECT id
+        FROM sys_control
+        WHERE scope_dim = #{scopeDim}
+          AND is_valid = 0
+        ORDER BY publish_time DESC, id DESC
+        LIMIT #{keepCount}, 1000000
+    </select>
+
+    <!--
+        V1.2 Task Q5.1：按 id 列表批量硬删除.
+        调用方必须保证 ids 来自 selectOldVersionIdsForCleanup（绝不含 is_valid=1 的当前行）.
+        ids 为空时 SQL 构造为 "WHERE id IN ()" 会报语法错，Service 层须前置判空.
+    -->
+    <delete id="deleteByIds">
+        DELETE FROM sys_control
+        WHERE id IN
+        <foreach item="id" collection="ids" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
 </mapper>

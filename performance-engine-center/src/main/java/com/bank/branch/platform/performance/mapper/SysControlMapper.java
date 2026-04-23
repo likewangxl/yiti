@@ -87,4 +87,44 @@ public interface SysControlMapper {
      */
     long countByCondition(@Param("scopeDim") String scopeDim,
                           @Param("isValid") Integer isValid);
+
+    // ===== V1.2 Task Q5.1：历史版本清理新增 3 个方法 =====
+
+    /**
+     * 列出 sys_control 表中出现过的全部 scope_dim（distinct）.
+     *
+     * <p>Q5.1 SysControlCleanupJob 启动时据此拿到需要清理的维度清单，
+     * 避免把"清理策略"硬编码为 EMP/ORG/CUST 三档.
+     *
+     * @return 所有 distinct 的 scope_dim，可能为空列表
+     */
+    List<String> selectScopeDims();
+
+    /**
+     * 查询某 scope_dim 下应被清理的历史版本 id 列表（V1.2 Task Q5.1）.
+     *
+     * <p>语义：
+     * <ul>
+     *   <li>仅考虑 {@code is_valid = 0} 的历史行，当前生效行 {@code is_valid = 1} 永不返回；</li>
+     *   <li>按 {@code publish_time DESC, id DESC} 倒序，保留最新 {@code keepCount} 条；</li>
+     *   <li>返回超出 keepCount 部分的 id 列表（OFFSET keepCount）.</li>
+     * </ul>
+     *
+     * @param scopeDim  维度
+     * @param keepCount 保留的历史条数
+     * @return 应清理的 id 列表（不含当前生效行）
+     */
+    List<String> selectOldVersionIdsForCleanup(@Param("scopeDim") String scopeDim,
+                                               @Param("keepCount") int keepCount);
+
+    /**
+     * 按 id 列表批量硬删除 sys_control 记录（V1.2 Task Q5.1）.
+     *
+     * <p>调用方 <strong>必须</strong> 保证 ids 全部来自 {@link #selectOldVersionIdsForCleanup}
+     * 的返回值，以避免误删当前生效版本.
+     *
+     * @param ids id 列表；为空时不执行 SQL，返回 0
+     * @return 实际删除的行数
+     */
+    int deleteByIds(@Param("ids") List<String> ids);
 }
