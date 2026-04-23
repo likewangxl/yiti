@@ -43,7 +43,7 @@ import static org.mockito.Mockito.when;
  * <p>采用 Mockito 单元测试：Mock 所有依赖的 Service/Mapper + PerfEventPublisher，
  * 事务后投递机制由 {@link com.bank.branch.platform.performance.event.PerfEventPublisherTest} 覆盖。
  */
-class KpiCalcServiceEventIT extends PerformanceServiceTestBase {
+class KpiCalcServiceEventTest extends PerformanceServiceTestBase {
 
     @Mock
     private KpiSchemeService kpiSchemeService;

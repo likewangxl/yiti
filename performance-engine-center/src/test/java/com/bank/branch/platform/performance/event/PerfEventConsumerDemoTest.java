@@ -51,10 +51,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(classes = {
         PerfTestApp.class,
         PerfTestConfig.class,
-        PerfEventConsumerDemoIT.DemoSubscriber.class
+        PerfEventConsumerDemoTest.DemoSubscriber.class
 })
 @ActiveProfiles("test")
-class PerfEventConsumerDemoIT {
+class PerfEventConsumerDemoTest {
 
     @Autowired
     private PerfEventPublisher publisher;
