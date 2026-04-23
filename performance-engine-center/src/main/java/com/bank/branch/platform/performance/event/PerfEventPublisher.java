@@ -56,13 +56,17 @@ public class PerfEventPublisher {
 
     /**
      * 实际投递动作 —— 发布失败不扩散异常.
+     *
+     * <p>V1.2 Q4.3：catch 范围从 {@link Exception} 扩展为 {@link Throwable}，
+     * 守护监听器/multicaster 抛 {@link Error}（例如未来切到自定义 multicaster
+     * 或 Kafka 客户端直接抛出原生 Error）的场景。事件总线故障不能阻塞业务主事务。
      */
     private void safePublish(PerfDomainEvent event) {
         try {
             delegate.publishEvent(event);
-        } catch (Exception e) {
+        } catch (Throwable t) {
             log.error("[PerfEventPublisher] publishEvent failed: topic={}, eventId={}",
-                    event.topic(), event.getEventId(), e);
+                    event.topic(), event.getEventId(), t);
         }
     }
 }
