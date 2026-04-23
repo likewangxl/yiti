@@ -308,12 +308,22 @@ public class AllocAdjustService {
     }
 
     /**
-     * 按 bizKind 前缀路由流程：
+     * 按 bizKind 前缀路由流程（对齐生产 DDL：不引入 adjust_type 字段，
+     * 对公/零售完全靠 biz_kind 判定）：
      * <ul>
-     *   <li>{@code CORP_*} → {@link #PROCESS_KEY_CORP}</li>
-     *   <li>{@code RETAIL_*} → {@link #PROCESS_KEY_RETAIL}</li>
-     *   <li>其他 → 抛 BIZ_KIND_INVALID</li>
+     *   <li>{@code CORP} / {@code CORP_*}（对公）→ {@link #PROCESS_KEY_CORP}
+     *       覆盖场景：CORP_LOAN / CORP_DEPOSIT / CORP_FOREX 等</li>
+     *   <li>{@code RETAIL} / {@code RETAIL_*}（零售）→ {@link #PROCESS_KEY_RETAIL}
+     *       覆盖场景：RETAIL_CARD / RETAIL_LOAN / RETAIL_MORTGAGE 等</li>
+     *   <li>其他 → 抛 BIZ_KIND_INVALID（未知业务前缀应在字典层预防，
+     *       此处作为最后防线）</li>
      * </ul>
+     *
+     * <p>大小写不敏感：内部统一 {@code toUpperCase} 后匹配.
+     *
+     * @param bizKind 业务种类（非空）
+     * @return BPMN 流程定义 key
+     * @throws PerfException BIZ_KIND_INVALID 当 bizKind 不以 CORP_ / RETAIL_ 开头
      */
     private String resolveProcessKey(String bizKind) {
         String upper = bizKind.toUpperCase();
