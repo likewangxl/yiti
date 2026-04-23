@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, plan_id, subject_type, subject_id, cycle_key, status,
+        business_key, process_instance_id, owner_org_id, remark,
+        created_by, created_time, updated_by, updated_time
+    </sql>
+
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
+        INSERT INTO perf_target_adjust_apply (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES (
+            #{id}, #{planId}, #{subjectType}, #{subjectId}, #{cycleKey}, #{status},
+            #{businessKey}, #{processInstanceId}, #{ownerOrgId}, #{remark},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+        )
+    </insert>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_adjust_apply
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByBusinessKey" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_adjust_apply
+        WHERE business_key = #{businessKey}
+        LIMIT 1
+    </select>
+
+    <!--
+      更新状态 + processInstanceId。
+      processInstanceId 为 null 时不覆写（保留历史值），避免 TargetAdjustCompletedListener
+      APPROVED 路径更新状态时清空流程 ID。
+    -->
+    <update id="updateStatus">
+        UPDATE perf_target_adjust_apply
+        <set>
+            status = #{status},
+            <if test="processInstanceId != null">
+                process_instance_id = #{processInstanceId},
+            </if>
+            updated_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <sql id="CONDITION_WHERE">
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="planId != null and planId != ''">
+                AND plan_id = #{planId}
+            </if>
+            <if test="subjectType != null and subjectType != ''">
+                AND subject_type = #{subjectType}
+            </if>
+            <if test="subjectId != null and subjectId != ''">
+                AND subject_id = #{subjectId}
+            </if>
+            <if test="ownerOrgId != null and ownerOrgId != ''">
+                AND owner_org_id = #{ownerOrgId}
+            </if>
+            <if test="createdBy != null and createdBy != ''">
+                AND created_by = #{createdBy}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectByConditions" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_adjust_apply
+        <include refid="CONDITION_WHERE"/>
+        ORDER BY created_time DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByConditions" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_target_adjust_apply
+        <include refid="CONDITION_WHERE"/>
+    </select>
+
+</mapper>
