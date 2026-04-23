@@ -207,4 +207,41 @@
         ORDER BY emp_id ASC, biz_kind ASC
     </select>
 
+    <!--
+        V1.2 Task Q6.3 导出查询: 按 effectiveDate 时间线 + bizKind/empId 过滤.
+        time-line 条件: effective_date <= effectiveDate AND (end_date IS NULL OR end_date >= effectiveDate)
+    -->
+    <select id="selectForExport" resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        <where>
+            effective_date &lt;= #{effectiveDate}
+            AND (end_date IS NULL OR end_date &gt;= #{effectiveDate})
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <if test="empId != null and empId != ''">
+                AND emp_id = #{empId}
+            </if>
+        </where>
+        ORDER BY cust_id ASC, emp_id ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countForExport" resultType="long">
+        SELECT COUNT(*)
+        FROM cust_alloc_relation
+        <where>
+            effective_date &lt;= #{effectiveDate}
+            AND (end_date IS NULL OR end_date &gt;= #{effectiveDate})
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <if test="empId != null and empId != ''">
+                AND emp_id = #{empId}
+            </if>
+        </where>
+    </select>
+
 </mapper>

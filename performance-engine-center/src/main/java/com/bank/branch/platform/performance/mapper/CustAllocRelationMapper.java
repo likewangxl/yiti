@@ -171,4 +171,37 @@ public interface CustAllocRelationMapper {
      */
     List<Map<String, Object>> summaryByCust(@Param("custId") String custId,
                                             @Param("asOfDate") LocalDate asOfDate);
+
+    /**
+     * 导出：按 effectiveDate/bizKind/empId 过滤后一次性取前 limit 条.
+     *
+     * <p>V1.2 Task Q6.3 AllocExportStrategy 专用。支持以下可选过滤：
+     * <ul>
+     *   <li>{@code bizKind}：业务种类（null 不过滤）</li>
+     *   <li>{@code empId}：员工工号（null 不过滤）</li>
+     *   <li>{@code effectiveDate}：时间线基准日（必填，筛选在该日生效的记录）</li>
+     * </ul>
+     *
+     * @param bizKind       业务种类（nullable）
+     * @param empId         员工工号（nullable）
+     * @param effectiveDate 时间线基准日
+     * @param limit         上限
+     * @return 分配关系列表
+     */
+    List<CustAllocRelation> selectForExport(@Param("bizKind") String bizKind,
+                                            @Param("empId") String empId,
+                                            @Param("effectiveDate") LocalDate effectiveDate,
+                                            @Param("limit") int limit);
+
+    /**
+     * 导出行数预检.
+     *
+     * @param bizKind       业务种类（nullable）
+     * @param empId         员工工号（nullable）
+     * @param effectiveDate 时间线基准日
+     * @return 行数
+     */
+    long countForExport(@Param("bizKind") String bizKind,
+                        @Param("empId") String empId,
+                        @Param("effectiveDate") LocalDate effectiveDate);
 }
