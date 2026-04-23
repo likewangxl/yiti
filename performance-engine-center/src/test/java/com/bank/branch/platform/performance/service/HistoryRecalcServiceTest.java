@@ -201,4 +201,38 @@ class HistoryRecalcServiceTest {
         verify(metricDefService).listActiveMetrics(null, null);
         verify(metricCalcService).calcMetric(eq("M_X"), eq(date), eq("v1"));
     }
+
+    /**
+     * V1.1 P8 Task C.1 Red：childTaskIds 须持久化到父 run_task.result_preview_json.
+     *
+     * <p>原 Javadoc 承诺："子任务 ID 列表记录在父任务的 result_preview_json 字段"，但实际
+     * 代码只在内存 List 中收集，未调用 Mapper 持久化。本测试断言必须调用
+     * {@link PerfRunTaskMapper#updateResultPreviewJson(String, String)}，并且 JSON 中包含
+     * 所有 childTaskIds。
+     */
+    @Test
+    @DisplayName("childTaskIds 持久化：父 task.result_preview_json 包含所有子 taskId 的 JSON 数组")
+    void recalc_shouldPersistChildTaskIdsToResultPreviewJson() {
+        LocalDate date = LocalDate.of(2026, 3, 1);
+        List<String> metricCodes = List.of("M_P1", "M_P2");
+
+        when(metricCalcService.calcMetric(eq("M_P1"), eq(date), anyString()))
+                .thenReturn("CHILD_TASK_001");
+        when(metricCalcService.calcMetric(eq("M_P2"), eq(date), anyString()))
+                .thenReturn("CHILD_TASK_002");
+
+        String parentTaskId = historyRecalcService.recalc(
+                date, date, metricCodes, "v1", "persist children", "op");
+
+        assertThat(parentTaskId).isNotBlank();
+
+        // 断言 updateResultPreviewJson 被调用一次，且 JSON 串包含两个 childTaskId
+        ArgumentCaptor<String> jsonCap = ArgumentCaptor.forClass(String.class);
+        verify(perfRunTaskMapper).updateResultPreviewJson(eq(parentTaskId), jsonCap.capture());
+        String json = jsonCap.getValue();
+        assertThat(json)
+                .as("result_preview_json 应包含两个子 taskId")
+                .contains("CHILD_TASK_001")
+                .contains("CHILD_TASK_002");
+    }
 }
