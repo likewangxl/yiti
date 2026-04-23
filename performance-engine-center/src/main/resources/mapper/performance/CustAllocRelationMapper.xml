@@ -25,6 +25,23 @@
         created_by, created_time, updated_by, updated_time
     </sql>
 
+    <!--
+        V1.1 Task P5.4 新增：导入通道 insert（仅供 AllocRelationImportStrategy 调用）.
+        created_by / created_time / updated_time 走 AuditFieldFiller 或 DB 默认值填充，
+        此处只赋业务字段 + sourceBatchId（导入批次追溯）。
+    -->
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        INSERT INTO cust_alloc_relation (
+            id, cust_id, alloc_dim, biz_kind, account_no, emp_id, ratio,
+            effective_date, end_date, source_batch_id, source_process_date,
+            created_by, updated_by
+        ) VALUES (
+            #{id}, #{custId}, #{allocDim}, #{bizKind}, #{accountNo}, #{empId}, #{ratio},
+            #{effectiveDate}, #{endDate}, #{sourceBatchId}, #{sourceProcessDate},
+            #{createdBy}, #{updatedBy}
+        )
+    </insert>
+
     <!-- 时间线有效条件: effective_date <= asOfDate AND (end_date IS NULL OR end_date >= asOfDate). -->
     <sql id="EFFECTIVE_CONDITION">
         effective_date &lt;= #{asOfDate}

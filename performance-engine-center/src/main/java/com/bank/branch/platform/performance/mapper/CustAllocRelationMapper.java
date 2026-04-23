@@ -10,11 +10,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 客户业绩分配关系 Mapper（只读）.
+ * 客户业绩分配关系 Mapper（V1.0 只读；V1.1 Task P5.4 新增 insert 入口用于导入通道）.
  *
  * <p>V1.0 限定只读场景：支撑 {@code AllocApi} 10 个查询方法所需的时间线查询 + 数据范围过滤。
- * 写入 / 调整由 V1.2 通过工作流审批 (AllocAdjustService) 提供，本 Mapper 故意不提供
- * insert/update/delete 方法.
+ * 写入 / 调整由 V1.2 通过工作流审批 (AllocAdjustService) 提供；V1.1 新增的 {@link #insert}
+ * 入口仅供 {@code AllocRelationImportStrategy} 在 {@code /api/perf/import?importType=ALLOC}
+ * 导入通道使用，不对业务模块暴露写权限（仍保持 V1.0 对外契约的"只读"语义）.
  *
  * <p>时间线语义：所有 "当前有效 / 某时点有效" 查询统一使用
  * {@code effective_date &lt;= asOfDate AND (end_date IS NULL OR end_date &gt;= asOfDate)}.
@@ -30,6 +31,18 @@ import java.util.Set;
  */
 @Mapper
 public interface CustAllocRelationMapper {
+
+    /**
+     * 新增分配关系（V1.1 Task P5.4 导入通道专用）.
+     *
+     * <p>仅插入必要的维度字段（id / custId / allocDim / bizKind / accountNo / empId / ratio /
+     * effectiveDate / endDate / sourceBatchId），其他字段由 DDL 默认值 / AuditFieldFiller 填充。
+     * 主键冲突（{@link org.springframework.dao.DuplicateKeyException}）由调用方捕获到 errorSummary。
+     *
+     * @param entity 分配关系实体（id 必填，由调用方生成 UUID）
+     * @return 受影响行数
+     */
+    int insert(CustAllocRelation entity);
 
     /**
      * 按主键查询.
