@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.event.PerfEventPublisher;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.SysControlMapper;
 import com.bank.branch.platform.performance.service.cmd.SwitchVersionCmd;
@@ -31,6 +32,10 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
 
     @Mock
     private SysControlMapper sysControlMapper;
+
+    /** V1.2 Q1.3：事件发布器依赖, 单测中 mock（不需验证调用, 只确保不 NPE）. */
+    @Mock
+    private PerfEventPublisher perfEventPublisher;
 
     @InjectMocks
     private SysControlService sysControlService;

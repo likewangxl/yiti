@@ -2,11 +2,14 @@ package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.event.PerfEventPublisher;
+import com.bank.branch.platform.performance.event.SysControlUpdatedEvent;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.SysControlMapper;
 import com.bank.branch.platform.performance.service.cmd.SwitchVersionCmd;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +38,9 @@ import java.util.UUID;
 public class SysControlService {
 
     private final SysControlMapper sysControlMapper;
+
+    /** V1.2 Q1.3：版本切换/回滚均通过此发布器投递 SysControlUpdatedEvent. */
+    private final PerfEventPublisher perfEventPublisher;
 
     /**
      * 查询指定维度当前生效版本.
@@ -112,6 +118,16 @@ public class SysControlService {
                     cmd.getScopeDim(), cmd.getDataDate());
             throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT, e);
         }
+
+        // V1.2 Q1.3：事务提交后发布 SysControlUpdatedEvent（publishSource 取自 cmd；默认 MANUAL）
+        String source = cmd.getPublishSource() != null ? cmd.getPublishSource() : "MANUAL";
+        perfEventPublisher.publish(new SysControlUpdatedEvent(
+                MDC.get("traceId"),
+                cmd.getScopeDim(),
+                curr.getCurrentVersion(),
+                cmd.getNewVersion(),
+                source,
+                cmd.getOperator()));
         return newSc;
     }
 
@@ -186,6 +202,15 @@ public class SysControlService {
                     scopeDim, rollbackTo);
             throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT, e);
         }
+
+        // V1.2 Q1.3：事务提交后发布 SysControlUpdatedEvent，publishSource=ROLLBACK
+        perfEventPublisher.publish(new SysControlUpdatedEvent(
+                MDC.get("traceId"),
+                scopeDim,
+                curr.getCurrentVersion(),
+                rollbackTo,
+                "ROLLBACK",
+                operatorId));
         return newSc;
     }
 

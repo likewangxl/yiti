@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.event.PerfEventPublisher;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.SysControlMapper;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
@@ -41,6 +42,9 @@ class SysControlServiceRollbackTest extends PerformanceServiceTestBase {
 
     @Mock
     private SysControlMapper sysControlMapper;
+
+    @Mock
+    private PerfEventPublisher perfEventPublisher;
 
     @InjectMocks
     private SysControlService service;
