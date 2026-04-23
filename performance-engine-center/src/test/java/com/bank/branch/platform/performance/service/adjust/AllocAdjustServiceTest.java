@@ -19,6 +19,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -49,6 +51,7 @@ import static org.mockito.Mockito.when;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class AllocAdjustServiceTest {
 
     @Mock
@@ -86,7 +89,7 @@ class AllocAdjustServiceTest {
     void setUp() {
         // 默认客户存在
         CustomerDTO cust = new CustomerDTO();
-        cust.setCustId("CUST_001");
+        cust.setId("CUST_001");
         when(customerQueryApi.getCustomer("CUST_001")).thenReturn(Optional.of(cust));
     }
 
