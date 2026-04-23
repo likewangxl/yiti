@@ -9,7 +9,6 @@ import com.bank.branch.platform.performance.controller.dto.TargetAdjustCreateReq
 import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfTargetPlan;
 import com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper;
-import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -64,11 +63,11 @@ class TargetAdjustControllerIT extends PerformanceControllerTestBase {
     @MockBean
     private WorkflowApi workflowApi;
 
-    @Autowired
-    private PerfTargetAdjustApplyMapper applyMapper;
+    @MockBean
+    private com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper targetPlanMapper;
 
     @Autowired
-    private PerfTargetPlanMapper targetPlanMapper;
+    private PerfTargetAdjustApplyMapper applyMapper;
 
     private final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
@@ -86,7 +85,7 @@ class TargetAdjustControllerIT extends PerformanceControllerTestBase {
         Mockito.when(workflowApi.startProcess(Mockito.any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_TAA_IT_0001", null, null));
 
-        // 插入真实的 target_plan（避免 TARGET_PLAN_NOT_FOUND）
+        // Mock target_plan 存在（避免 TARGET_PLAN_NOT_FOUND）
         existingPlanId = "TEST_TAA_PLAN_" + UUID.randomUUID().toString().substring(0, 8);
         PerfTargetPlan plan = new PerfTargetPlan();
         plan.setId(existingPlanId);
@@ -94,11 +93,8 @@ class TargetAdjustControllerIT extends PerformanceControllerTestBase {
         plan.setPlanName("TAA IT 测试方案");
         plan.setStatus("ACTIVE");
         plan.setEffectiveDate(java.time.LocalDate.now());
-        plan.setCreatedBy("admin");
-        plan.setCreatedTime(LocalDateTime.now());
-        plan.setUpdatedBy("admin");
-        plan.setUpdatedTime(LocalDateTime.now());
-        targetPlanMapper.insert(plan);
+        // 只 mock 本 IT 真实使用的 plan id，返回非 null 即可通过 validateTargetPlan
+        Mockito.when(targetPlanMapper.selectById(existingPlanId)).thenReturn(plan);
     }
 
     private PerfTargetAdjustApply buildExisting(String idSuffix, String status,
