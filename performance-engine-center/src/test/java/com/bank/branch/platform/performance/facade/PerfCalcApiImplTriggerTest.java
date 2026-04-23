@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.performance.service.HistoryRecalcService;
 import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
@@ -12,6 +13,8 @@ import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -36,6 +39,9 @@ class PerfCalcApiImplTriggerTest extends PerformanceServiceTestBase {
 
     @Mock
     private MetricCalcService metricCalcService;
+
+    @Mock
+    private HistoryRecalcService historyRecalcService;
 
     @InjectMocks
     private PerfCalcApiImpl perfCalcApi;
@@ -89,11 +95,22 @@ class PerfCalcApiImplTriggerTest extends PerformanceServiceTestBase {
     }
 
     @Test
-    @DisplayName("triggerRecalc 仍保持 V1.1 UOE 占位（P7 交付）")
-    void triggerRecalc_stillUOE() {
-        assertThatThrownBy(() -> perfCalcApi.triggerRecalc(
+    @DisplayName("triggerRecalc(5 参数) P7.2 已交付：委托 HistoryRecalcService.recalc")
+    void triggerRecalc_5args_delegatesToHistoryRecalcService() {
+        when(historyRecalcService.recalc(
+                eq(LocalDate.of(2026, 1, 1)),
+                eq(LocalDate.of(2026, 3, 31)),
+                any(), anyString(), eq("reason"), eq("op")))
+                .thenReturn("P7_TASK");
+
+        String taskId = perfCalcApi.triggerRecalc(
                 "MONTHLY", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 3, 31),
-                "reason", "op"))
-                .isInstanceOf(UnsupportedOperationException.class);
+                "reason", "op");
+
+        assertThat(taskId).isEqualTo("P7_TASK");
+        verify(historyRecalcService).recalc(
+                eq(LocalDate.of(2026, 1, 1)),
+                eq(LocalDate.of(2026, 3, 31)),
+                any(), anyString(), eq("reason"), eq("op"));
     }
 }

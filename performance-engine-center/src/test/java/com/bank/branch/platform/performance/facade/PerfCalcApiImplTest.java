@@ -2,6 +2,8 @@ package com.bank.branch.platform.performance.facade;
 
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
+import com.bank.branch.platform.performance.service.HistoryRecalcService;
+import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
 import com.bank.branch.platform.performance.support.RunTaskTestDataBuilder;
@@ -11,25 +13,30 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
  * PerfCalcApiImpl 单元测试.
  *
- * <p>覆盖 Plan Task 4.3 (plan L1471-1480) DoD:
+ * <p>覆盖:
  * <ul>
- *   <li>1 个 V1.0 实现方法 (getRunTask) 存在 / 不存在 / 全字段装配 3 场景</li>
- *   <li>2 个 V1.1 占位方法 (triggerKpiCalc / triggerRecalc) 统一抛
- *       {@link UnsupportedOperationException} ("V1.1 delivered")</li>
+ *   <li>getRunTask (V1.0 实现): 存在 / 不存在 / 全字段装配 3 场景</li>
+ *   <li>triggerRecalc (V1.1 P7.2 实现): 5/7 参数签名分别委托 HistoryRecalcService</li>
+ *   <li>triggerKpiCalc (V1.1 P4 交付前): 仍抛 UOE（其实 P4 已交付，但本 Test 保留兼容
+ *       —— 真实 P4 委托由 KpiApi / DailyKpiCalcJob 负责）</li>
  * </ul>
  *
- * <p>纯 Mock 测试, 不启动 Spring 容器; 无 @Cacheable 注解故无需 AOP 覆盖,
- * 本层只断言 Service 交互 + Assembler 映射正确性。
+ * <p>纯 Mock 测试, 不启动 Spring 容器.
  *
  * <p>测试数据前缀 {@code TEST_RT_} (由 {@link RunTaskTestDataBuilder} 统一约定)。
  */
@@ -38,10 +45,16 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
     @Mock
     private PerfRunTaskService perfRunTaskService;
 
+    @Mock
+    private MetricCalcService metricCalcService;
+
+    @Mock
+    private HistoryRecalcService historyRecalcService;
+
     @InjectMocks
     private PerfCalcApiImpl perfCalcApi;
 
-    // ------------------------- V1.1 契约: UOE 占位 -------------------------
+    // ------------------------- V1.1 契约: triggerKpiCalc 仍 UOE -------------------------
 
     @Test
     @DisplayName("triggerKpiCalc: V1.0 抛 UnsupportedOperationException")
@@ -52,18 +65,61 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
         verifyNoInteractions(perfRunTaskService);
     }
 
+    // ------------------------- V1.1 契约: triggerRecalc (P7.2 交付) -------------------------
+
     @Test
-    @DisplayName("triggerRecalc: V1.0 抛 UnsupportedOperationException")
-    void triggerRecalc_throwsUOE() {
-        assertThatThrownBy(() -> perfCalcApi.triggerRecalc(
+    @DisplayName("triggerRecalc(5 参数): 委托 HistoryRecalcService.recalc 并返回父 taskId")
+    void triggerRecalc_5args_delegatesToHistoryRecalcService() {
+        when(historyRecalcService.recalc(
+                eq(LocalDate.of(2026, 1, 1)),
+                eq(LocalDate.of(2026, 3, 31)),
+                any(), anyString(), eq("补录 Q1 数据"), eq("E001")))
+                .thenReturn("PARENT_TASK_001");
+
+        String taskId = perfCalcApi.triggerRecalc(
                 "MONTHLY",
                 LocalDate.of(2026, 1, 1),
                 LocalDate.of(2026, 3, 31),
                 "补录 Q1 数据",
-                "E001"))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("V1.1 delivered");
-        verifyNoInteractions(perfRunTaskService);
+                "E001");
+
+        assertThat(taskId).isEqualTo("PARENT_TASK_001");
+        verify(historyRecalcService).recalc(
+                eq(LocalDate.of(2026, 1, 1)),
+                eq(LocalDate.of(2026, 3, 31)),
+                any(), anyString(), eq("补录 Q1 数据"), eq("E001"));
+    }
+
+    @Test
+    @DisplayName("triggerRecalc(7 参数): 全字段透传 HistoryRecalcService.recalc")
+    void triggerRecalc_7args_delegatesToHistoryRecalcService() {
+        List<String> metricCodes = List.of("M_EMP_A", "M_EMP_B");
+        when(historyRecalcService.recalc(
+                eq(LocalDate.of(2026, 3, 1)),
+                eq(LocalDate.of(2026, 3, 31)),
+                eq(metricCodes),
+                eq("v20260301"),
+                eq("补录 3 月数据"),
+                eq("admin")))
+                .thenReturn("PARENT_TASK_002");
+
+        String taskId = perfCalcApi.triggerRecalc(
+                "MONTHLY",
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 31),
+                metricCodes,
+                "v20260301",
+                "补录 3 月数据",
+                "admin");
+
+        assertThat(taskId).isEqualTo("PARENT_TASK_002");
+        verify(historyRecalcService).recalc(
+                eq(LocalDate.of(2026, 3, 1)),
+                eq(LocalDate.of(2026, 3, 31)),
+                eq(metricCodes),
+                eq("v20260301"),
+                eq("补录 3 月数据"),
+                eq("admin"));
     }
 
     // ------------------------- V1.0 实现: getRunTask -------------------------
