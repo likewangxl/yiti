@@ -11,30 +11,38 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.UUID;
 
 /**
- * 外部数据任务上报服务（V1.1 Task P6.2 实现 / P6.3 幂等增强）.
+ * 外部数据任务上报服务（V1.1 Task P6.2 + P6.3 幂等）.
  *
  * <p>职责：
  * <ul>
- *   <li>以 {@code cmd.taskId} 为幂等键落库 {@code perf_run_task}（task_type=EXT_DATA）
- *   <li>SUCCESS 上报 → 直接把 run_task 置为 SUCCESS 状态（记录数据就绪）；
- *       后续下游编排（KPI 计算 / sys_control 版本发布）由对应模块监听此 run_task 或独立任务承担，
- *       V1.1 本 Phase 保持单体内松耦合：事件驱动 / 主动查询均可，不强制</li>
- *   <li>FAILED 上报 → run_task 置为 FAILED，errorMsg 回填 error_msg，不触发任何后续计算</li>
+ *   <li>以 {@code cmd.taskId} 为幂等键落库 {@code perf_run_task}（task_type=EXT_DATA）</li>
+ *   <li>SUCCESS 上报 → run_task 打标 SUCCESS（后续下游编排由独立任务承担）</li>
+ *   <li>FAILED 上报 → run_task 打标 FAILED + error_msg 回填，不触发任何后续计算</li>
  * </ul>
  *
- * <p><strong>幂等（P6.2）</strong>：先查再写，{@code task_key = taskId} 存在则返回 accepted=false 透传既有记录，
- * 不重复插入；并发安全由 P6.3 Redis SETNX 加固。
+ * <p><strong>幂等策略（P6.3）</strong>：
+ * <ol>
+ *   <li>DB 先查（便宜）：taskId 已存在则直接幂等返回 accepted=false，不进入写路径</li>
+ *   <li>Redis SETNX 互斥：{@code perf:data_task:{taskId}} 锁 TTL 30 秒，
+ *       防止两个线程 DB 查都为空时并发双写。获锁成功的线程进入写路径；
+ *       获锁失败 → 轮询等待（最多 3s），等胜出方释放锁后 DB 一定可查到行，
+ *       回落为 accepted=false 幂等返回</li>
+ *   <li>持锁写入 + finally 释放锁（Lua 比较 token 原子删）</li>
+ * </ol>
  *
- * <p><strong>事务</strong>：{@code @Transactional(rollbackFor=Exception.class)} 包起"查 + 写"，
- * 保证 run_task 插入与后续动作要么全成功要么回滚（当前无下游写动作，事务仅保证单一 insert 原子性，
- * 保留扩展位）。
+ * <p><strong>事务</strong>：{@link #report} 不持事务（锁需在事务外，同 {@code SysControlFacade} 模式）；
+ * 单条 run_task insert 走 MyBatis/Druid 默认 auto-commit，不需显式事务包装（原子性由单条 SQL 保证）。
  *
  * <p><strong>参数校验</strong>：
  * <ul>
@@ -50,6 +58,18 @@ public class DataTaskService {
     /** run_task.task_type 固定值. */
     static final String TASK_TYPE = "EXT_DATA";
 
+    /** 幂等锁 key 前缀（与 IT 清理逻辑保持一致）. */
+    static final String IDEMPOTENT_LOCK_KEY_PREFIX = "perf:data_task:";
+
+    /** 锁 TTL（30 秒，覆盖单条 insert + 次级查询最坏耗时）. */
+    private static final Duration LOCK_TTL = Duration.ofSeconds(30);
+
+    /** 获锁失败时的等待循环上限（3 秒）. */
+    private static final long WAIT_MAX_MILLIS = 3_000L;
+
+    /** 每次轮询间隔（毫秒）. */
+    private static final long WAIT_SLEEP_MILLIS = 50L;
+
     /** 合法 dataType 集合（与 03 §G.1 对齐）. */
     private static final java.util.Set<String> VALID_DATA_TYPES = java.util.Set.of(
             "ALLOC_RELATION", "EMP_INDEX_RESULT", "ORG_INDEX_RESULT", "CUST_INDEX_RESULT");
@@ -58,46 +78,119 @@ public class DataTaskService {
     private static final java.util.Set<String> VALID_STATUSES = java.util.Set.of(
             RunTaskStatusEnum.SUCCESS.name(), RunTaskStatusEnum.FAILED.name());
 
+    /** Lua 脚本：仅当 token 匹配时删锁（防止误删）. */
+    private static final RedisScript<Long> COMPARE_AND_DEL = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1])==ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            Long.class);
+
     private final PerfRunTaskMapper perfRunTaskMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    public DataTaskService(PerfRunTaskMapper perfRunTaskMapper) {
+    public DataTaskService(PerfRunTaskMapper perfRunTaskMapper,
+                           RedisTemplate<String, Object> redisTemplate) {
         this.perfRunTaskMapper = perfRunTaskMapper;
+        this.redisTemplate = redisTemplate;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     }
 
     /**
-     * 上报入口：幂等落库 + 按状态触发（或记录失败）.
+     * 上报入口：参数校验 + Redis SETNX 原子幂等 + 落库 + 按状态归档.
      *
      * @param cmd 上报命令（非空）
-     * @return 受理结果；{@code accepted=false} 表示幂等命中
+     * @return 受理结果；{@code accepted=false} 表示幂等命中既有 run_task
      */
-    @Transactional(rollbackFor = Exception.class)
     public DataTaskReportResultDTO report(DataTaskStatusCmd cmd) {
         validate(cmd);
 
-        // 幂等：taskId 查 run_task（V1.0 语义：task_key 即业务唯一 "任务编号"）
+        // 1. 便宜 DB 查重（未进入加锁路径，优化正常重复上报场景）
         PerfRunTask existing = perfRunTaskMapper.selectByTaskNo(cmd.getTaskId());
         if (existing != null) {
-            log.info("[DataTaskService.report] 幂等命中 taskId={} 既有 runTaskId={}",
+            log.info("[DataTaskService.report] 幂等命中（快查）taskId={} 既有 runTaskId={}",
                     cmd.getTaskId(), existing.getId());
-            return DataTaskReportResultDTO.builder()
-                    .taskId(cmd.getTaskId())
-                    .accepted(false)
-                    .perfRunTaskId(existing.getId())
-                    .build();
+            return idempotentResult(cmd.getTaskId(), existing.getId());
         }
 
-        // 新建 run_task
-        PerfRunTask task = buildRunTask(cmd);
-        perfRunTaskMapper.insert(task);
-        log.info("[DataTaskService.report] 新建 run_task id={} taskId={} status={} dataType={} dataDate={}",
-                task.getId(), cmd.getTaskId(), cmd.getStatus(), cmd.getDataType(), cmd.getDataDate());
+        // 2. 加 Redis 锁（原子互斥）。获锁失败 → 等待 + 重新 DB 查
+        String lockKey = IDEMPOTENT_LOCK_KEY_PREFIX + cmd.getTaskId();
+        String token = UUID.randomUUID().toString();
+        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
+        if (!Boolean.TRUE.equals(locked)) {
+            log.info("[DataTaskService.report] 获锁失败 taskId={}，等待既有写入完成", cmd.getTaskId());
+            return waitAndReturnExisting(cmd.getTaskId());
+        }
 
+        try {
+            // 3. 持锁双检查：获锁期间可能已有线程先写完释放；再查一次避免重复写
+            PerfRunTask rechecked = perfRunTaskMapper.selectByTaskNo(cmd.getTaskId());
+            if (rechecked != null) {
+                log.info("[DataTaskService.report] 幂等命中（持锁双检查）taskId={} runTaskId={}",
+                        cmd.getTaskId(), rechecked.getId());
+                return idempotentResult(cmd.getTaskId(), rechecked.getId());
+            }
+
+            // 4. 插入新 run_task（单条 SQL 自然原子，MyBatis/Druid 默认 auto-commit）
+            PerfRunTask task = buildRunTask(cmd);
+            perfRunTaskMapper.insert(task);
+            log.info("[DataTaskService.report] 新建 run_task id={} taskId={} status={} dataType={} dataDate={}",
+                    task.getId(), cmd.getTaskId(), cmd.getStatus(), cmd.getDataType(), cmd.getDataDate());
+
+            return DataTaskReportResultDTO.builder()
+                    .taskId(cmd.getTaskId())
+                    .accepted(true)
+                    .perfRunTaskId(task.getId())
+                    .build();
+        } finally {
+            // 5. 释放锁（Lua compare-and-del 避免误删）
+            try {
+                redisTemplate.execute(COMPARE_AND_DEL, Collections.singletonList(lockKey), token);
+            } catch (Exception e) {
+                // 释放失败只记日志，TTL 30s 后自动过期
+                log.warn("[DataTaskService.report] 释放锁失败, 依赖 TTL 自动释放. lockKey={}, err={}",
+                        lockKey, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 等待其他线程完成写入，然后再次查 DB 返回既有 run_task.
+     *
+     * <p>场景：并发 T1/T2 同 taskId 到达时，T1 拿到锁开始写入，T2 获锁失败进入本方法；
+     * T2 循环短睡眠直到锁释放或超时，然后 DB 查重应能查到 T1 写入的记录。
+     *
+     * <p>极端超时场景（T1 挂起超过 {@link #WAIT_MAX_MILLIS}）：降级为抛 PERF-50007 避免并发死循环。
+     *
+     * @param taskId 幂等键
+     * @return 幂等结果（accepted=false）
+     */
+    private DataTaskReportResultDTO waitAndReturnExisting(String taskId) {
+        long deadline = System.currentTimeMillis() + WAIT_MAX_MILLIS;
+        while (System.currentTimeMillis() < deadline) {
+            PerfRunTask existing = perfRunTaskMapper.selectByTaskNo(taskId);
+            if (existing != null) {
+                return idempotentResult(taskId, existing.getId());
+            }
+            try {
+                Thread.sleep(WAIT_SLEEP_MILLIS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        // 等待超时：既未拿到锁也未见 DB 记录，判定为异常状态
+        log.error("[DataTaskService.report] 幂等等待超时 taskId={}", taskId);
+        throw new PerfException(PerfErrorCode.CALC_JOB_FAILED,
+                "taskId=" + taskId + " 幂等等待超时");
+    }
+
+    /**
+     * 构造幂等（accepted=false）返回值.
+     */
+    private DataTaskReportResultDTO idempotentResult(String taskId, String runTaskId) {
         return DataTaskReportResultDTO.builder()
-                .taskId(cmd.getTaskId())
-                .accepted(true)
-                .perfRunTaskId(task.getId())
+                .taskId(taskId)
+                .accepted(false)
+                .perfRunTaskId(runTaskId)
                 .build();
     }
 
