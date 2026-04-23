@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, apply_id, emp_id, ratio, created_time
+    </sql>
+
+    <insert id="batchInsert">
+        INSERT INTO perf_alloc_adjust_item (id, apply_id, emp_id, ratio)
+        VALUES
+        <foreach collection="items" item="it" separator=",">
+            (#{it.id}, #{it.applyId}, #{it.empId}, #{it.ratio})
+        </foreach>
+    </insert>
+
+    <select id="selectByApplyId" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustItem">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_alloc_adjust_item
+        WHERE apply_id = #{applyId}
+        ORDER BY created_time ASC, id ASC
+    </select>
+
+    <delete id="deleteByApplyId">
+        DELETE FROM perf_alloc_adjust_item
+        WHERE apply_id = #{applyId}
+    </delete>
+
+</mapper>
