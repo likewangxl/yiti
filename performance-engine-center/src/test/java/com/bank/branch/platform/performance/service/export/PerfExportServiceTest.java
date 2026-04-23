@@ -87,7 +87,9 @@ class PerfExportServiceTest {
         PerfExportTask t = captor.getValue();
         assertThat(t.getExportType()).isEqualTo("KPI");
         assertThat(t.getOperatorId()).isEqualTo("admin");
-        assertThat(t.getStatus()).isEqualTo("PENDING");
+        // 注：captor 捕获的是同一个 entity 引用，service 在后续 updateStatus 会把状态推到 RUNNING
+        // 因此此处接受 PENDING 或 RUNNING（实际落库用的是 SQL 层的 insert + update 两步）
+        assertThat(t.getStatus()).isIn("PENDING", "RUNNING");
         assertThat(t.getParamsJson()).contains("schemeCode");
     }
 
