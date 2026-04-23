@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  PerfExportTaskMapper XML（V1.2 Task Q6.1）.
+  所有参数使用 #{} 预编译占位符。
+-->
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfExportTaskMapper">
+
+    <sql id="BASE_COLUMNS">
+        id, export_type, params_json, status, file_key, file_size, row_count,
+        expire_at, operator_id, error_msg, created_time, updated_time
+    </sql>
+
+    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfExportTask">
+        INSERT INTO perf_export_task (
+            id, export_type, params_json, status, file_key, file_size, row_count,
+            expire_at, operator_id, error_msg
+        ) VALUES (
+            #{id}, #{exportType}, #{paramsJson}, #{status}, #{fileKey}, #{fileSize}, #{rowCount},
+            #{expireAt}, #{operatorId}, #{errorMsg}
+        )
+    </insert>
+
+    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfExportTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_export_task
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <update id="updateStatus">
+        UPDATE perf_export_task
+        SET status = #{newStatus}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateSuccess">
+        UPDATE perf_export_task
+        <set>
+            status = 'SUCCESS',
+            <if test="fileKey != null">file_key = #{fileKey},</if>
+            <if test="rowCount != null">row_count = #{rowCount},</if>
+            <if test="fileSize != null">file_size = #{fileSize},</if>
+            <if test="expireAt != null">expire_at = #{expireAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateFailed">
+        UPDATE perf_export_task
+        <set>
+            status = 'FAILED',
+            <if test="errorMsg != null">error_msg = #{errorMsg},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectByOperator" resultType="com.bank.branch.platform.performance.entity.PerfExportTask">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_export_task
+        WHERE operator_id = #{operatorId}
+        ORDER BY created_time DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
