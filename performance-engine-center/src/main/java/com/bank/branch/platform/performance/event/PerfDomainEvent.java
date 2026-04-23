@@ -1,5 +1,7 @@
 package com.bank.branch.platform.performance.event;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -39,8 +41,12 @@ public abstract class PerfDomainEvent {
     /**
      * 事件 topic，格式 {@code performance.<topic>.<verb>.v<version>}.
      *
+     * <p>方法名不符合 JavaBean getter 规范，Jackson 默认不序列化，
+     * 故用 {@link JsonProperty} 显式暴露到 JSON 的 {@code topic} 字段。
+     *
      * @return topic 字符串
      */
+    @JsonProperty("topic")
     public abstract String topic();
 
     public String getEventId() {
