@@ -7,9 +7,11 @@ package com.bank.branch.platform.performance.enums;
  * <p>权威来源: docs/modules/performance-engine-center/03-接口设计与报文.md §K「错误码完整汇总」
  * <p>使用: throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
  *
- * <p>§K 共 25 条编码，METRIC_SLOT_CONFLICT 复用 PERF-40901，枚举常量总数 = 26。
+ * <p>§K 共 28 条编码，METRIC_SLOT_CONFLICT 复用 PERF-40901，枚举常量总数 = 29。
  * <p>2026-04-22 对齐 §K 权威清单，废弃旧编号体系（40401/40402/40403/40406/40407/
  *    40903/40904/40905/40911/40912/40913/40914）。
+ * <p>2026-04-23（V1.1 P8.1）新增 3 条语义细化编号：40005/40006/40007，
+ *    替代 V1.0 整改期临时复用的 METRIC_CODE_DUP/METRIC_NOT_FOUND（KPI/Target/RunTask 场景）。
  */
 public enum PerfErrorCode {
 
@@ -28,6 +30,15 @@ public enum PerfErrorCode {
 
     /** 目标方案不存在 */
     TARGET_PLAN_NOT_FOUND("PERF-40004", "目标方案不存在"),
+
+    /** KPI 方案编码已存在（V1.1 P8.1 新增，替代 KpiSchemeService.create 场景 METRIC_CODE_DUP 的错位复用） */
+    KPI_SCHEME_CODE_EXISTS("PERF-40005", "KPI 方案编码已存在"),
+
+    /** 目标方案编码已存在（V1.1 P8.1 新增，替代 TargetPlanService.create 场景 METRIC_CODE_DUP 的错位复用） */
+    TARGET_PLAN_CODE_EXISTS("PERF-40006", "目标方案编码已存在"),
+
+    /** 执行任务不存在（V1.1 P8.1 新增，替代 PerfRunTaskController.getById 场景 METRIC_NOT_FOUND 的错位复用） */
+    RUN_TASK_NOT_FOUND("PERF-40007", "执行任务不存在"),
 
     /** sys_control 版本不存在 */
     SYS_CONTROL_VERSION_NOT_FOUND("PERF-40012", "sys_control 版本不存在"),

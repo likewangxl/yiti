@@ -144,7 +144,7 @@ class TargetPlanServiceTest {
     }
 
     @Test
-    @DisplayName("create: planCode 已存在时抛 TARGET_PLAN_CODE_DUP, 不调 KpiSchemeService")
+    @DisplayName("create: planCode 已存在时抛 TARGET_PLAN_CODE_EXISTS, 不调 KpiSchemeService (V1.1 P8.1 语义对齐)")
     void create_whenPlanCodeDup_throws() {
         CreateTargetPlanCmd cmd = buildCmd("TP_DUP", "KS_ACTIVE", LocalDate.now());
         PerfTargetPlan existing = TargetTestDataBuilder.plan("TP_DUP", "KS_ACTIVE");
@@ -152,7 +152,7 @@ class TargetPlanServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CODE_DUP));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_PLAN_CODE_EXISTS));
         // planCode UK 预校验先行, 绝不会走到 KpiSchemeService
         verify(kpiSchemeService, never()).getByIdOrNull(any());
         verify(targetPlanMapper, never()).insert(any(PerfTargetPlan.class));

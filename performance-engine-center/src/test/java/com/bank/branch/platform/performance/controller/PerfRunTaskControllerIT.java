@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <ul>
  *   <li>get_whenUnauthenticated_returns401 (未登录 → AuthException → 401)</li>
  *   <li>list_regularUser_onlyShowsOwnStarted (普通用户 + 非 ALL 数据范围 → 仅见自己 started_by)</li>
- *   <li>get_whenTaskIdNotExist_returns404 (任务不存在 → PERF-40405, 业务 200 + 错误码)</li>
+ *   <li>get_whenTaskIdNotExist_returns404 (任务不存在 → PERF-40007, 业务 200 + 错误码)</li>
  * </ul>
  *
  * <p>Plan L1492 钦定: GET 方法只有 {@code @BizAuth}, 无 {@code @AuditLog} (读操作不审计)。
@@ -163,12 +163,12 @@ class PerfRunTaskControllerIT extends PerformanceControllerTestBase {
                 .andExpect(jsonPath("$.data.startedBy").value("USER_GET"));
     }
 
-    /** Plan L1490 钦定: 任务 id 不存在 → PERF-40405. */
+    /** Plan L1490 钦定: 任务 id 不存在 → PERF-40007 (V1.1 P8.1 语义对齐，原 PERF-40405 已废弃). */
     @Test
     void get_whenTaskIdNotExist_returns404() throws Exception {
         mockMvc.perform(get("/api/perf/run-tasks/{id}", "NON_EXIST_RT_ID"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40405"));
+                .andExpect(jsonPath("$.code").value("PERF-40007"));
     }
 
     /**

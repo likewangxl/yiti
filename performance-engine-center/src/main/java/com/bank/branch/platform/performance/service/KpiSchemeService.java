@@ -82,8 +82,10 @@ public class KpiSchemeService {
     @Transactional(rollbackFor = Exception.class)
     public PerfKpiScheme create(CreateKpiSchemeCmd cmd) {
         // schemeCode UK 预校验 (提前抛业务异常, 避免 DB 层语义含糊的 DuplicateKey 冒泡)
+        // V1.1 P8.1 修正：KPI 方案编码重复不再复用 METRIC_CODE_DUP（"指标编码已存在"），
+        // 改用语义准确的 KPI_SCHEME_CODE_EXISTS（PERF-40005）
         if (schemeMapper.selectBySchemeCode(cmd.getSchemeCode()) != null) {
-            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getSchemeCode());
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_CODE_EXISTS, cmd.getSchemeCode());
         }
 
         PerfKpiScheme scheme = new PerfKpiScheme();
@@ -103,7 +105,8 @@ public class KpiSchemeService {
             schemeMapper.insert(scheme);
         } catch (DuplicateKeyException ex) {
             // 并发场景 UK 兜底 (预校验与 insert 之间有其他事务抢先插入)
-            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, ex, cmd.getSchemeCode());
+            // V1.1 P8.1 语义对齐：同 schemeCode 预校验抛 KPI_SCHEME_CODE_EXISTS
+            throw new PerfException(PerfErrorCode.KPI_SCHEME_CODE_EXISTS, ex, cmd.getSchemeCode());
         }
 
         // 遍历写入方案项: addItem 在同一事务内运行 (REQUIRED 传播);

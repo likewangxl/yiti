@@ -48,7 +48,7 @@ import java.util.Optional;
  * 其他范围收敛为 "仅见自己 started_by" 的片段 (v1.0 简化实现)。
  *
  * <p>异常策略: Controller 不做 try-catch, {@code PerfException} 冒泡至全局异常处理器,
- * 业务错误统一以 200 + 错误码返回 (任务不存在 → PERF-40405)。
+ * 业务错误统一以 200 + 错误码返回 (任务不存在 → PERF-40007, V1.1 P8.1 语义对齐)。
  * 未登录场景由 {@link CurrentUserApi#getCurrentEmpId()} 抛 {@code AuthException},
  * 由全局异常处理器映射 HTTP 401.
  */
@@ -101,7 +101,7 @@ public class PerfRunTaskController {
     }
 
     /**
-     * 获取任务日志详情. 不存在抛 PERF-40405.
+     * 获取任务日志详情. 不存在抛 PERF-40007 (V1.1 P8.1 语义对齐，原为 METRIC_NOT_FOUND 错位复用).
      *
      * <p>未登录时 {@link CurrentUserApi#getCurrentEmpId()} 抛 {@code AuthException},
      * 由全局异常处理器映射 HTTP 401 (plan Task 4.4 L1488 DoD 场景)。
@@ -115,7 +115,9 @@ public class PerfRunTaskController {
         log.debug("[PerfRunTaskController.getById] empId={}, id={}", empId, id);
 
         Optional<PerfRunTask> opt = perfRunTaskService.getById(id);
-        PerfRunTask task = opt.orElseThrow(() -> new PerfException(PerfErrorCode.METRIC_NOT_FOUND, id));
+        // V1.1 P8.1 修正：run_task 不存在改抛 RUN_TASK_NOT_FOUND（PERF-40007），
+        // 不再复用 METRIC_NOT_FOUND（语义是"指标不存在"，与 run_task 场景不符）
+        PerfRunTask task = opt.orElseThrow(() -> new PerfException(PerfErrorCode.RUN_TASK_NOT_FOUND, id));
         return ResponseWrapper.success(RunTaskAssembler.toDto(task));
     }
 }

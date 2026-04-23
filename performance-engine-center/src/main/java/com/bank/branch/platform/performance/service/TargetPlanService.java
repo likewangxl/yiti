@@ -83,8 +83,10 @@ public class TargetPlanService {
         }
         // planCode UK 预校验先行, 提前拒绝避免后续 kpiScheme 查询浪费;
         // 预校验与 insert 之间的并发窗口由 DuplicateKeyException 兜底.
+        // V1.1 P8.1 修正：目标方案编码重复不再复用 METRIC_CODE_DUP（"指标编码已存在"），
+        // 改用语义准确的 TARGET_PLAN_CODE_EXISTS（PERF-40006）
         if (targetPlanMapper.selectByPlanCode(cmd.getPlanCode()) != null) {
-            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getPlanCode());
+            throw new PerfException(PerfErrorCode.TARGET_PLAN_CODE_EXISTS, cmd.getPlanCode());
         }
 
         // 引用校验: KPI 方案必须 ACTIVE (发布态), DRAFT/DISABLED 均拒绝
@@ -111,7 +113,8 @@ public class TargetPlanService {
         try {
             targetPlanMapper.insert(plan);
         } catch (DuplicateKeyException ex) {
-            throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, ex, cmd.getPlanCode());
+            // V1.1 P8.1 语义对齐：并发 UK 兜底同步改为 TARGET_PLAN_CODE_EXISTS
+            throw new PerfException(PerfErrorCode.TARGET_PLAN_CODE_EXISTS, ex, cmd.getPlanCode());
         }
         log.info("[TargetPlanService.create] 新建目标方案 planCode={}, id={}, kpiSchemeId={}",
                 plan.getPlanCode(), plan.getId(), plan.getKpiSchemeId());

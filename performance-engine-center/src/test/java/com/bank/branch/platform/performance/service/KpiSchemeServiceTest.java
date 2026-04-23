@@ -238,7 +238,7 @@ class KpiSchemeServiceTest {
     }
 
     @Test
-    @DisplayName("create: schemeCode 重复时抛 KPI_SCHEME_CODE_DUP")
+    @DisplayName("create: schemeCode 重复时抛 KPI_SCHEME_CODE_EXISTS (V1.1 P8.1 语义对齐)")
     void create_whenSchemeCodeDup_throws() {
         CreateKpiSchemeCmd cmd = CreateKpiSchemeCmd.builder()
                 .schemeCode("TEST_KPI_DUP_CODE")
@@ -253,7 +253,7 @@ class KpiSchemeServiceTest {
 
         assertThatThrownBy(() -> service.create(cmd))
                 .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.METRIC_CODE_DUP));
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_SCHEME_CODE_EXISTS));
         verify(schemeMapper, never()).insert(any(PerfKpiScheme.class));
     }
 
