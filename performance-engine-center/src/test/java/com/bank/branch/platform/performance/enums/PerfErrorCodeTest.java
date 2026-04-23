@@ -10,7 +10,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * PerfErrorCode 枚举与 03 §K 权威清单对齐测试.
  *
  * <p>权威来源: docs/modules/performance-engine-center/03-接口设计与报文.md §K「错误码完整汇总」
- * <p>§K 共 25 条编码, 含 METRIC_SLOT_CONFLICT 复用 40901 独立常量, 枚举总数 = 26
+ * <p>§K 共 28 条编码（V1.1 P8.1 新增 3 条语义细化编号 40005/40006/40007）,
+ *    含 METRIC_SLOT_CONFLICT 复用 40901 独立常量, 枚举总数 = 29.
  */
 class PerfErrorCodeTest {
 
@@ -20,6 +21,13 @@ class PerfErrorCodeTest {
         assertThat(PerfErrorCode.BIZ_KIND_INVALID.getCode()).isEqualTo("PERF-40002");
         assertThat(PerfErrorCode.KPI_SCHEME_NOT_FOUND.getCode()).isEqualTo("PERF-40003");
         assertThat(PerfErrorCode.TARGET_PLAN_NOT_FOUND.getCode()).isEqualTo("PERF-40004");
+        // V1.1 P8.1 语义细化新增 (替代 METRIC_CODE_DUP/METRIC_NOT_FOUND 在 KPI/Target/RunTask 场景的错位复用)
+        assertThat(PerfErrorCode.KPI_SCHEME_CODE_EXISTS.getCode()).isEqualTo("PERF-40005");
+        assertThat(PerfErrorCode.KPI_SCHEME_CODE_EXISTS.getMessage()).isEqualTo("KPI 方案编码已存在");
+        assertThat(PerfErrorCode.TARGET_PLAN_CODE_EXISTS.getCode()).isEqualTo("PERF-40006");
+        assertThat(PerfErrorCode.TARGET_PLAN_CODE_EXISTS.getMessage()).isEqualTo("目标方案编码已存在");
+        assertThat(PerfErrorCode.RUN_TASK_NOT_FOUND.getCode()).isEqualTo("PERF-40007");
+        assertThat(PerfErrorCode.RUN_TASK_NOT_FOUND.getMessage()).isEqualTo("执行任务不存在");
         assertThat(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND.getCode()).isEqualTo("PERF-40012");
         assertThat(PerfErrorCode.ALLOC_RELATION_NOT_FOUND.getCode()).isEqualTo("PERF-40014");
         assertThat(PerfErrorCode.IMPORT_BATCH_NOT_FOUND.getCode()).isEqualTo("PERF-40017");
@@ -73,16 +81,19 @@ class PerfErrorCodeTest {
     }
 
     /**
-     * Task C2 架构守护测试：枚举常量总数 = 26（§K 的 25 条编码 + METRIC_SLOT_CONFLICT 复用 40901 独立常量）.
+     * Task C2 架构守护测试：枚举常量总数 = 29（§K 的 28 条编码 + METRIC_SLOT_CONFLICT 复用 40901 独立常量）.
      *
      * <p>此测试作为"守护"（第一次运行即 PASS），防止未来在 §K 范围外随意新增枚举常量。
      * 若 §K 授权清单更新，同步修改此数字并更新对应 §K 文档。
+     *
+     * <p>V1.1 P8.1 新增 3 条：KPI_SCHEME_CODE_EXISTS/TARGET_PLAN_CODE_EXISTS/RUN_TASK_NOT_FOUND
+     * （40005/40006/40007），消化 V1.0 整改遗留的错误码语义错位。
      */
     @Test
     void enumSize_equalsSectionKTotal() {
-        // §K 共 25 条编码（K.1: 9 + K.2: 4 + K.3: 10 + K.4: 2）
-        // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 26
-        assertThat(PerfErrorCode.values()).hasSize(26);
+        // §K 共 28 条编码（K.1: 12 + K.2: 4 + K.3: 10 + K.4: 2）
+        // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 29
+        assertThat(PerfErrorCode.values()).hasSize(29);
     }
 
     /**
@@ -94,6 +105,7 @@ class PerfErrorCodeTest {
     void noLegacyOrUndocumentedCode_exists() {
         List<String> allowedCodes = List.of(
             "PERF-40001", "PERF-40002", "PERF-40003", "PERF-40004",
+            "PERF-40005", "PERF-40006", "PERF-40007",
             "PERF-40012", "PERF-40014", "PERF-40017", "PERF-40019", "PERF-40020",
             "PERF-40901", "PERF-40902", "PERF-40903", "PERF-40906",
             "PERF-42200", "PERF-42201", "PERF-42202", "PERF-42203",
