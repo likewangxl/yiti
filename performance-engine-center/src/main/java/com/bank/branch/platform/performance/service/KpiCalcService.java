@@ -5,6 +5,8 @@ import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.event.KpiCalcCompletedEvent;
+import com.bank.branch.platform.performance.event.PerfEventPublisher;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.KpiResultMapper;
@@ -12,6 +14,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -60,6 +63,8 @@ public class KpiCalcService {
     private final EmpIndexResultMapper empIndexResultMapper;
     private final KpiResultMapper kpiResultMapper;
     private final KpiFormulaService kpiFormulaService;
+    /** V1.2 Q4.1：批量完成后投递 {@link KpiCalcCompletedEvent}. */
+    private final PerfEventPublisher perfEventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -195,6 +200,7 @@ public class KpiCalcService {
                           String version) {
         List<String> empIds = empIndexResultMapper.selectDistinctEmpIds(asOfDate, version);
         if (empIds == null || empIds.isEmpty()) {
+            // 宽表无任何员工数据：视作"批次未真正启动"，不发事件，下游也无需刷新
             log.info("[KpiCalc] scheme={} asOf={} 无员工数据，跳过", schemeCode, asOfDate);
             return 0;
         }
@@ -204,12 +210,24 @@ public class KpiCalcService {
                 calcSingleEmp(empId, schemeCode, cycleType, cycleDate, asOfDate, version);
                 success++;
             } catch (Exception ex) {
+                // 单员工失败隔离：不中断，吞掉异常继续算；最终由事件 empCount 字段反映成功数
                 log.warn("[KpiCalc] scheme={} emp={} 计算失败: {}",
                         schemeCode, empId, ex.getMessage());
             }
         }
         log.info("[KpiCalc] scheme={} asOf={} 批量计算完成 success={}/total={}",
                 schemeCode, asOfDate, success, empIds.size());
+
+        // V1.2 Q4.1：批次已启动即发事件（empCount=本批成功落地员工数）。
+        // 即便 success=0 也发，让下游得知本次批次终态，避免"悬挂在运行中"的观察者等待。
+        perfEventPublisher.publish(new KpiCalcCompletedEvent(
+                MDC.get("traceId"),
+                schemeCode,
+                cycleType,
+                cycleDate,
+                asOfDate,
+                version,
+                success));
         return success;
     }
 
