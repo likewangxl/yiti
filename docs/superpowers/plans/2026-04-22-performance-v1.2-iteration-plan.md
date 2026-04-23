@@ -31,6 +31,69 @@ V1.2 首次引入 `workflow-center` 与 `customer-marketing-center` 依赖，通
 
 ---
 
+## 🚨 DDL 权威修订通知（2026-04-23，Q0 复核后）
+
+**本计划文档中 Task Q0.2 给出的 DDL 草案与生产 DDL 字段命名严重分叉。** Q0 子代理已正确选择以生产 DDL 为准实施，后续 Q2/Q3 所有 Task 的业务逻辑描述也须以生产 DDL 为准。
+
+### 生产权威 DDL 位置
+- **权威文件**：`docs/schema/ddl-performance.sql` §15-17（即 2026-04-22 版本）
+- **Q0.2 交付脚本**：`performance-engine-center/src/main/resources/sql/V1_2_0__perf_v12_adjust_tables.sql`（与生产 DDL 完全一致）
+- **模块 05 文档**：`docs/modules/performance-engine-center/05-表结构DDL.md` §2.15-2.17（字段设计更完整，**本 V1.2 不采用**，字段扩展留待后续对齐）
+
+### 三张表实际字段（与本计划 Q0.2 Step 3 草案的差异）
+
+#### 1. `perf_alloc_adjust_apply`（分配关系调整申请）
+
+| 实际字段 | 类型 | 本计划草案字段 | 差异 |
+|---|---|---|---|
+| `id` | varchar(32) PK | id varchar(32) PK | 一致 |
+| **`apply_no`** | varchar(100) UK | apply_code varchar(64) UK | **字段名不同** |
+| **`cust_id`** | varchar(32) NOT NULL | — | **新核心字段，单客户维度** |
+| **`alloc_dim`** | varchar(16) NOT NULL | — | **RULE/ACCOUNT** 维度 |
+| **`biz_kind`** | varchar(32) | — | 业务种类 |
+| `account_no` | varchar(64) | — | 账号（可选） |
+| `status` | varchar(20) | status varchar(20) | 枚举值改为 `DRAFT/IN_APPROVAL/APPROVED/REJECTED` |
+| `business_key` | varchar(100) | business_key varchar(64) | 长度 100 |
+| **`process_instance_id`** | varchar(64) | — | **流程实例 ID** |
+| **`owner_org_id`** | varchar(50) NOT NULL | — | **归属机构（数据范围）** |
+| `remark` | text | reason varchar(500) | 字段名改为 remark |
+| `created_by / created_time / updated_by / updated_time` | — | applicant/apply_time/approve_time 等 | 使用标准审计字段 |
+| — | — | adjust_type (CORP/RETAIL) | **生产 DDL 无 adjust_type**——对公/零售区分靠 `biz_kind` 字段 |
+| — | — | effective_date | **生产 DDL 无**——生效时机由审批完成时间隐式确定 |
+
+#### 2. `perf_alloc_adjust_item`（分配关系调整明细）
+
+| 实际字段 | 本计划草案字段 | 差异 |
+|---|---|---|
+| `id / apply_id / emp_id / ratio / created_time` | old_emp_id/new_emp_id/old_org_code/new_org_code 等 | **生产 DDL 非"新老对比"结构**，只记录调整后的 emp_id + ratio 比例，UK `(apply_id, emp_id)` |
+
+#### 3. `perf_target_adjust_apply`（目标修正申请）
+
+| 实际字段 | 类型 | 本计划草案字段 | 差异 |
+|---|---|---|---|
+| `id` | varchar(32) PK | id | 一致 |
+| **`plan_id`** | varchar(32) NOT NULL | target_plan_id | **生产用 plan_id** |
+| **`subject_type`** | varchar(20) | emp_id | **生产支持 EMP/ORG 双维度**，不仅限员工 |
+| **`subject_id`** | varchar(50) | — | 对象 ID（员工号或机构编码） |
+| **`cycle_key`** | varchar(20) | — | **周期键**（如 "2026-Q1"） |
+| — | — | metric_code / old_target_value / new_target_value | **生产 DDL 无**——新目标值在 item 明细表或 params JSON 中承载 |
+| `status / business_key / process_instance_id / owner_org_id / remark` | — | applicant / apply_time / approve_time | 使用标准审计字段 |
+
+### 对后续 Phase 的约束
+
+后续 Task Q2（分配调整审批）和 Task Q3（目标修正审批）实施时：
+
+1. **以生产 DDL 字段为准**，忽略本计划原 Step 3 示例 DDL 中的字段清单
+2. 对公/零售流程路由：改由 `biz_kind` 字段判定（如 "CORP_LOAN" → corp_v1，"RETAIL_CARD" → retail_v1），不用 `adjust_type`
+3. 分配调整明细：记录调整后的 `(emp_id, ratio)` 数组；原来的 `old/new` 对比语义通过"批前快照表或日志"或"申请表中 remark/params JSON"记录
+4. 目标修正：按 `(plan_id, subject_type, subject_id, cycle_key)` 四元组定位目标值，具体 metric_code + value 可放子表或 JSON 字段；V1.2 简化方案：直接把目标值修改记录在 `remark` 字段的结构化 JSON
+
+### 计划文档后续 Task 的"以实际生产 DDL 为准"原则
+
+Q2/Q3 的每个 Task 读取本计划文档时，如发现 Step 3 给出的 Entity 字段、Service 方法、测试断言中有 `applyCode / adjustType / effectiveDate / oldEmpId / newEmpId / oldOrgCode / newOrgCode / metricCode / oldTargetValue / newTargetValue` 等生产 DDL 不存在的字段，**请子代理自行对齐生产 DDL 字段**并在 commit message 说明"对齐生产 DDL"。不要引入 DDL 变更来匹配计划文档。
+
+---
+
 ## 阶段概览
 
 | 阶段 | 任务数 | 目标 | 预估 |
