@@ -55,7 +55,7 @@ mvn clean package
 | `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
 | `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
 | `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
-| `performance-engine-center` | com.bank.branch.platform.performance | V1.0 骨架已完成 | 绩效计算中心 (配置 CRUD + 版本管理骨架，V1.1/V1.2 规划中) |
+| `performance-engine-center` | com.bank.branch.platform.performance | V1.1 已交付 | 绩效计算中心 (V1.0 配置 CRUD + V1.1 指标计算/KPI/导入/外部上报/回算全线，V1.2 规划中) |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
 **尚未实现的模块** (代码骨架和 DDL 已存在):
@@ -75,7 +75,7 @@ system-governance-center (依赖 auth)  ← 被 workflow 依赖
   ↑
 workflow-center (依赖 auth + governance)
   ↑
-performance-engine-center (依赖 auth + governance) ← V1.0 骨架，不依赖 workflow
+performance-engine-center (依赖 auth + governance) ← V1.1 已交付，V1.2 才依赖 workflow
 
 bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ```
@@ -104,7 +104,7 @@ com.bank.branch.platform
 ├─ portal-content-center         门户与内容中心 ⏳ 骨架
 ├─ customer-marketing-center     客户营销中心 ⏳ 骨架
 ├─ business-application-center   业务申请中心 ⏳ 骨架
-├─ performance-engine-center     绩效计算中心 ✅ V1.0 骨架已完成
+├─ performance-engine-center     绩效计算中心 ✅ V1.1 已交付（计算/KPI/导入/上报/回算全线）
 └─ report-analytics-center       报表分析中心 ⏳ 骨架
 ```
 
