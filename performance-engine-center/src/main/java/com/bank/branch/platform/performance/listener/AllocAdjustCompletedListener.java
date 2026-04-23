@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -71,7 +72,7 @@ public class AllocAdjustCompletedListener {
      * @param event workflow-center 发布的流程完成事件（含 outcome 语义）
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         if (businessKey == null || !businessKey.startsWith(BIZ_KEY_PREFIX)) {

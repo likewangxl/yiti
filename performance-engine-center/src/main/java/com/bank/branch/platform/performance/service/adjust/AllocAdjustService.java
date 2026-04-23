@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service.adjust;
 
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
@@ -150,6 +151,97 @@ public class AllocAdjustService {
         log.info("[AllocAdjustService.submit] applyId={}, applyNo={}, processKey={}, pid={}",
                 applyId, applyNo, processKey, resp.getProcessInstanceId());
         return applyId;
+    }
+
+    /**
+     * 查询单条申请 + 明细.
+     *
+     * @param id 申请 ID
+     * @return [apply, items] 二元组
+     * @throws PerfException VALIDATION_FAILED 当申请不存在
+     */
+    public ApplyWithItems getById(String id) {
+        if (isBlank(id)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
+        }
+        PerfAllocAdjustApply apply = applyMapper.selectById(id);
+        if (apply == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "申请不存在: " + id);
+        }
+        List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(id);
+        return new ApplyWithItems(apply, items);
+    }
+
+    /**
+     * 分页查询申请列表（不含 items）.
+     *
+     * @param status     状态过滤（nullable）
+     * @param bizKind    业务种类过滤（nullable）
+     * @param custId     客户 ID 过滤（nullable）
+     * @param ownerOrgId 归属机构过滤（nullable）
+     * @param createdBy  申请人过滤（nullable）
+     * @param pageNo     页码（≥1）
+     * @param pageSize   页大小（≥1）
+     * @return 分页结果
+     */
+    public PageResult<PerfAllocAdjustApply> page(String status, String bizKind, String custId,
+                                                 String ownerOrgId, String createdBy,
+                                                 int pageNo, int pageSize) {
+        int offset = (pageNo - 1) * pageSize;
+        List<PerfAllocAdjustApply> rows = applyMapper.selectByConditions(
+                status, bizKind, custId, ownerOrgId, createdBy, offset, pageSize);
+        long total = applyMapper.countByConditions(status, bizKind, custId, ownerOrgId, createdBy);
+        return PageResult.of(pageNo, pageSize, total, rows);
+    }
+
+    /**
+     * 撤回申请：IN_APPROVAL → REJECTED.
+     *
+     * <p>V1.2 简化实现：仅将本地 apply 状态置为 REJECTED，保留流程实例不做取消。
+     * 生产完整方案需调 WorkflowApi.cancelProcess 同步取消 Flowable 流程（留待后续迭代）.
+     *
+     * @param id       申请 ID
+     * @param reason   撤回原因
+     * @param operator 操作人 empId
+     * @throws PerfException VALIDATION_FAILED
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void withdraw(String id, String reason, String operator) {
+        if (isBlank(id)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
+        }
+        PerfAllocAdjustApply apply = applyMapper.selectById(id);
+        if (apply == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "申请不存在: " + id);
+        }
+        if (!"IN_APPROVAL".equals(apply.getStatus()) && !"DRAFT".equals(apply.getStatus())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "申请状态不可撤回: " + apply.getStatus());
+        }
+        // processInstanceId 传 null 避免覆写历史值
+        applyMapper.updateStatus(id, "REJECTED", null);
+        log.info("[AllocAdjustService.withdraw] id={}, reason={}, operator={}", id, reason, operator);
+    }
+
+    /**
+     * apply + items 二元组（供 Facade/Controller 组装 DTO）.
+     */
+    public static final class ApplyWithItems {
+        private final PerfAllocAdjustApply apply;
+        private final List<PerfAllocAdjustItem> items;
+
+        public ApplyWithItems(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items) {
+            this.apply = apply;
+            this.items = items;
+        }
+
+        public PerfAllocAdjustApply getApply() {
+            return apply;
+        }
+
+        public List<PerfAllocAdjustItem> getItems() {
+            return items;
+        }
     }
 
     /**
