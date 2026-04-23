@@ -134,4 +134,14 @@
         WHERE id = #{id}
     </update>
 
+    <!--
+        V1.1 P8 Task C.1：单列更新 result_preview_json，不触碰 status/end_time/error_msg.
+        由 HistoryRecalcService 写入 childTaskIds JSON 数组。
+    -->
+    <update id="updateResultPreviewJson">
+        UPDATE perf_run_task
+        SET result_preview_json = #{resultPreviewJson}
+        WHERE id = #{id}
+    </update>
+
 </mapper>

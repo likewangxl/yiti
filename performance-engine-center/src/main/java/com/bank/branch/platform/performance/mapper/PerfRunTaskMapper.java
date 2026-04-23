@@ -119,4 +119,20 @@ public interface PerfRunTaskMapper {
     int updateStatus(@Param("id") String id,
                      @Param("status") String status,
                      @Param("errorMsg") String errorMsg);
+
+    /**
+     * 更新任务的 result_preview_json 字段（V1.1 P8 Task C.1 新增）.
+     *
+     * <p>用途：HistoryRecalcService 在所有子任务完成后，把 childTaskIds 的 JSON 数组
+     * 写回父 task，供下游从父 task 反查子任务清单（V1.1 简化方案；V1.2 引入 parent_id 后
+     * 此方法可下线）。
+     *
+     * <p>注意：本方法不动 status / end_time / error_msg，仅覆盖 result_preview_json 一列。
+     *
+     * @param id                 任务 ID
+     * @param resultPreviewJson  结果预览 JSON 字符串（通常为 childTaskIds 数组）
+     * @return 受影响行数
+     */
+    int updateResultPreviewJson(@Param("id") String id,
+                                @Param("resultPreviewJson") String resultPreviewJson);
 }

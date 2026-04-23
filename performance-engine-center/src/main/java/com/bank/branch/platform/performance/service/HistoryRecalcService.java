@@ -120,7 +120,14 @@ public class HistoryRecalcService {
             }
         }
 
-        // 6. 聚合父 task 终态
+        // 6. 持久化 childTaskIds 到父 task 的 result_preview_json（V1.1 P8 Task C.1）
+        //    用手工拼接 JSON 数组避免额外引入 ObjectMapper 依赖；childTaskId 由 UUID 生成，
+        //    字符集合法，不含 " \ 等需转义字符。
+        //    终态更新前执行，保证即使后续 updateStatus 抛异常 result_preview_json 也已落库。
+        String childTaskIdsJson = toJsonArray(childTaskIds);
+        perfRunTaskMapper.updateResultPreviewJson(parentTaskId, childTaskIdsJson);
+
+        // 7. 聚合父 task 终态
         String finalStatus = resolveFinalStatus(successCount, failureCount);
         String aggregatedMsg = buildAggregatedMessage(successCount, failureCount, failureDetails);
         perfRunTaskMapper.updateStatus(parentTaskId, finalStatus, aggregatedMsg);
@@ -128,6 +135,23 @@ public class HistoryRecalcService {
         log.info("[HistoryRecalc] parentTaskId={}, 总计 success={}, failed={}, 子任务数={}, 终态={}",
                 parentTaskId, successCount, failureCount, childTaskIds.size(), finalStatus);
         return parentTaskId;
+    }
+
+    /** 将 childTaskIds 转为 JSON 字符串数组（手工拼接；childTaskId 来自 UUID，无需转义）. */
+    private static String toJsonArray(List<String> childTaskIds) {
+        if (childTaskIds == null || childTaskIds.isEmpty()) {
+            return "[]";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        for (int i = 0; i < childTaskIds.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append('"').append(escapeJsonString(childTaskIds.get(i))).append('"');
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     /** 参数校验：非空 + 日期区间合法 + 范围 ≤ 365 天. */
