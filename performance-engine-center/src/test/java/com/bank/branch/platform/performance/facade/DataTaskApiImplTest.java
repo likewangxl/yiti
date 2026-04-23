@@ -14,27 +14,23 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * DataTaskApiImpl 单元测试.
  *
- * <p>覆盖 Plan Task 5.3 (plan L1554-1568) DoD:
- * <ul>
- *   <li>1 个 V1.1 占位方法 {@code reportDataTaskStatus} 抛
- *       {@link UnsupportedOperationException} ("V1.1 delivered")</li>
- * </ul>
+ * <p>V1.1 Task P6.1 阶段：Controller 已通过 {@code @MockBean} 隔离走通 IT；
+ * Facade 真实实现在 Task P6.2 交付前暂保留 UOE 占位，本测试守护该契约不被意外破坏.
  *
- * <p>纯 Mock 测试, 不启动 Spring 容器; 由于 V1.0 Facade 无任何协作者,
- * 本测试类直接 {@link InjectMocks} 空 Bean 验证 UOE 契约。
- *
- * <p>UOE 消息与 {@link PerfCalcApiImpl} / {@link MetricApiImpl} / {@link KpiApiImpl}
- * 保持一致, 消费方可通过消息串统一识别"V1.1 才交付"的占位方法。
+ * <p>Task P6.2 完成后，本类将被 {@code DataTaskApiImplV11Test} 覆盖的正向行为替代；
+ * 在此之前，仍校验方法签名返回 {@link com.bank.branch.platform.performance.api.dto.DataTaskReportResultDTO}
+ * 的 UOE 路径，消息串与 {@link PerfCalcApiImpl} / {@link MetricApiImpl} / {@link KpiApiImpl}
+ * 保持一致的 "V1.1 delivered"。
  */
 class DataTaskApiImplTest extends PerformanceServiceTestBase {
 
     @InjectMocks
     private DataTaskApiImpl dataTaskApi;
 
-    // ------------------------- V1.1 契约: UOE 占位 -------------------------
+    // ------------------------- UOE 占位契约（Task P6.2 前） -------------------------
 
     @Test
-    @DisplayName("reportDataTaskStatus: V1.0 抛 UnsupportedOperationException")
+    @DisplayName("reportDataTaskStatus: Task P6.2 前抛 UnsupportedOperationException")
     void reportDataTaskStatus_throwsUOE() {
         DataTaskStatusCmd cmd = DataTaskStatusCmd.builder()
                 .taskId("EXT_TASK_001")

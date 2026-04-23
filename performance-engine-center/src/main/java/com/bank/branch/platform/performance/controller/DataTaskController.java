@@ -2,6 +2,9 @@ package com.bank.branch.platform.performance.controller;
 
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.performance.api.DataTaskApi;
+import com.bank.branch.platform.performance.api.dto.DataTaskReportResultDTO;
+import com.bank.branch.platform.performance.api.dto.cmd.DataTaskStatusCmd;
 import com.bank.branch.platform.performance.controller.dto.DataTaskStatusReqDTO;
 import com.bank.branch.platform.performance.controller.dto.DataTaskStatusRespDTO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,16 +49,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class DataTaskController {
 
+    private final DataTaskApi dataTaskApi;
+
     /**
      * 接收外部数据同步系统的上报.
      *
-     * <p>处理流程（Task P6.2 交付）：
+     * <p>处理流程（Task P6.2 交付 Facade 真实实现）：
      * <ol>
-     *   <li>以 {@code taskId} 查 {@code perf_run_task}，存在则幂等返回</li>
-     *   <li>不存在则创建 EXT_DATA 任务记录</li>
-     *   <li>{@code status=SUCCESS} 时按 {@code dataType} 触发后续计算管线</li>
-     *   <li>{@code status=FAILED} 时只记录，不触发计算</li>
+     *   <li>DTO → Cmd 转换（reqDto.timestamp → cmd.reportedAt，其余字段同名直译）</li>
+     *   <li>委托 {@link DataTaskApi#reportDataTaskStatus(DataTaskStatusCmd)}：幂等查重 + 落库 + 触发计算</li>
+     *   <li>Facade 返回 {@link DataTaskReportResultDTO} 装配为 {@link DataTaskStatusRespDTO} 响应</li>
      * </ol>
+     *
+     * <p>校验错误由 {@code @Valid} 触发 {@code MethodArgumentNotValidException}，经全局异常处理器
+     * 映射为 HTTP 400（与 PerfImportController 一致）。
      *
      * @param req 上报请求
      * @return 本次受理结果（含 taskId / accepted / perfRunTaskId）
@@ -66,7 +73,24 @@ public class DataTaskController {
     public ResponseWrapper<DataTaskStatusRespDTO> reportStatus(@Valid @RequestBody DataTaskStatusReqDTO req) {
         log.info("[DataTaskController.reportStatus] taskId={}, dataType={}, dataDate={}, status={}",
                 req.getTaskId(), req.getDataType(), req.getDataDate(), req.getStatus());
-        // Task P6.1 骨架：真实处理在 P6.2 交付（替换 DataTaskApi.reportDataTaskStatus UOE）
-        throw new UnsupportedOperationException("V1.1 delivered");
+
+        DataTaskStatusCmd cmd = DataTaskStatusCmd.builder()
+                .taskId(req.getTaskId())
+                .dataType(req.getDataType())
+                .dataDate(req.getDataDate())
+                .version(req.getVersion())
+                .status(req.getStatus())
+                .rowCount(req.getRowCount())
+                .errorMsg(req.getErrorMsg())
+                .sourceSystem(req.getSourceSystem())
+                .reportedAt(req.getTimestamp())
+                .build();
+
+        DataTaskReportResultDTO result = dataTaskApi.reportDataTaskStatus(cmd);
+        return ResponseWrapper.success(DataTaskStatusRespDTO.builder()
+                .taskId(result.getTaskId())
+                .accepted(result.getAccepted())
+                .perfRunTaskId(result.getPerfRunTaskId())
+                .build());
     }
 }

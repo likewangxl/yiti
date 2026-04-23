@@ -1,19 +1,19 @@
 package com.bank.branch.platform.performance.facade;
 
 import com.bank.branch.platform.performance.api.DataTaskApi;
+import com.bank.branch.platform.performance.api.dto.DataTaskReportResultDTO;
 import com.bank.branch.platform.performance.api.dto.cmd.DataTaskStatusCmd;
 import org.springframework.stereotype.Service;
 
 /**
- * 外部数据任务状态上报对外 API 实现 (V1.0 占位).
+ * 外部数据任务状态上报对外 API 实现.
  *
- * <p>V1.0 契约 (spec §5.2.6):
+ * <p>V1.1 状态:
  * <ul>
- *   <li>{@link #reportDataTaskStatus(DataTaskStatusCmd)} V1.1 交付, V1.0 抛
- *       {@link UnsupportedOperationException} ("V1.1 delivered") 占位</li>
+ *   <li>{@link #reportDataTaskStatus(DataTaskStatusCmd)} Task P6.2 交付真实实现（幂等落库 +
+ *       触发后续计算管线）; Task P6.1 先保留 UOE 占位，Controller 通过 {@code @MockBean}
+ *       隔离 IT 覆盖路由 / DTO 校验 / 注解约束.</li>
  * </ul>
- *
- * <p>消费方 (V1.1): 独立的数据同步系统经 REST 层 (DataTaskController) 触发, V1.0 暂不接入。
  *
  * <p>UOE 消息: "V1.1 delivered", 与 {@link PerfCalcApiImpl} / {@link MetricApiImpl}
  * / {@link KpiApiImpl} 保持一致, 消费方可通过消息串统一识别"V1.1 才交付"的占位方法。
@@ -22,13 +22,14 @@ import org.springframework.stereotype.Service;
 public class DataTaskApiImpl implements DataTaskApi {
 
     /**
-     * 接收外部数据同步任务的完成状态 (V1.1 交付).
+     * 接收外部数据同步任务的完成状态 (Task P6.2 真实实现占位).
      *
      * @param cmd 上报命令
-     * @throws UnsupportedOperationException V1.0 未实现
+     * @return 受理结果
+     * @throws UnsupportedOperationException Task P6.2 前暂未实现
      */
     @Override
-    public void reportDataTaskStatus(DataTaskStatusCmd cmd) {
+    public DataTaskReportResultDTO reportDataTaskStatus(DataTaskStatusCmd cmd) {
         throw new UnsupportedOperationException("V1.1 delivered");
     }
 }

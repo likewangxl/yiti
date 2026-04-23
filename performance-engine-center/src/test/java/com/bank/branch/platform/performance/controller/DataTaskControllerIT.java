@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.controller;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.performance.api.DataTaskApi;
+import com.bank.branch.platform.performance.api.dto.DataTaskReportResultDTO;
 import com.bank.branch.platform.performance.api.dto.cmd.DataTaskStatusCmd;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,6 +52,16 @@ class DataTaskControllerIT extends PerformanceControllerTestBase {
     @BeforeEach
     void resetMocks() {
         Mockito.reset(dataTaskApi);
+        // 默认 mock 成功路径，个别用例可 override
+        Mockito.when(dataTaskApi.reportDataTaskStatus(Mockito.any(DataTaskStatusCmd.class)))
+                .thenAnswer(inv -> {
+                    DataTaskStatusCmd c = inv.getArgument(0);
+                    return DataTaskReportResultDTO.builder()
+                            .taskId(c.getTaskId())
+                            .accepted(true)
+                            .perfRunTaskId("RT_" + c.getTaskId())
+                            .build();
+                });
     }
 
     // =================== success ===================
