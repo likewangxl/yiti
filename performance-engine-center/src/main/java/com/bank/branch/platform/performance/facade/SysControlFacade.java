@@ -80,6 +80,39 @@ public class SysControlFacade {
     }
 
     /**
+     * 回滚到历史版本（V1.2 Q1.2，分布式锁保护）.
+     *
+     * <p>与 switchVersion 共用同一把 scopeDim 级锁，防止切换与回滚并发冲突。
+     *
+     * @param scopeDim   维度
+     * @param rollbackTo 回滚到的历史版本号
+     * @param reason     回滚原因
+     * @param operatorId 操作人 empId
+     * @return 新入库的 SysControl
+     */
+    public SysControl rollback(String scopeDim, String rollbackTo, String reason, String operatorId) {
+        String lockKey = LOCK_KEY_PREFIX + scopeDim;
+        String token = UUID.randomUUID().toString();
+
+        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
+        if (!Boolean.TRUE.equals(locked)) {
+            log.warn("[SysControlFacade.rollback] 获锁失败, scopeDim={}", scopeDim);
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT);
+        }
+
+        try {
+            return sysControlService.rollback(scopeDim, rollbackTo, reason, operatorId);
+        } finally {
+            try {
+                redisTemplate.execute(COMPARE_AND_DEL, Collections.singletonList(lockKey), token);
+            } catch (Exception e) {
+                log.warn("[SysControlFacade.rollback] 释放锁失败, 依赖 TTL 自动释放. lockKey={}, err={}",
+                        lockKey, e.getMessage());
+            }
+        }
+    }
+
+    /**
      * 查询指定维度当前生效版本 (直接委托 Service).
      */
     public SysControl getCurrentVersion(String scopeDim) {

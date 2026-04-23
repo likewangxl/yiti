@@ -7,6 +7,7 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.InitSysControlReqDTO;
+import com.bank.branch.platform.performance.controller.dto.RollbackReqDTO;
 import com.bank.branch.platform.performance.controller.dto.SwitchVersionReqDTO;
 import com.bank.branch.platform.performance.controller.dto.SysControlRespDTO;
 import com.bank.branch.platform.performance.entity.SysControl;
@@ -34,12 +35,13 @@ import java.util.List;
 /**
  * sys_control 版本控制 REST 控制器.
  *
- * <p>对应 4 条 PT_RESOURCE:
+ * <p>对应 PT_RESOURCE:
  * <ul>
  *   <li>GET /api/perf/sys-control           (P_PERF_SC_GET)</li>
  *   <li>GET /api/perf/sys-control/history   (P_PERF_SC_HIS)</li>
  *   <li>POST /api/perf/sys-control/init     (P_PERF_SC_INIT, @AuditLog INIT)</li>
  *   <li>POST /api/perf/sys-control/switch-version (P_PERF_SC_SW, @AuditLog SWITCH)</li>
+ *   <li>POST /api/perf/sys-control/rollback (P_PERF_SYS_CONTROL_ROLLBACK, @AuditLog SYS_CONTROL_ROLLBACK 高危, V1.2 Q1.2)</li>
  * </ul>
  */
 @Slf4j
@@ -127,6 +129,29 @@ public class SysControlController {
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         SysControl sc = sysControlFacade.switchVersion(cmd);
+        return ResponseWrapper.success(SysControlAssembler.toRespDTO(sc));
+    }
+
+    /**
+     * 回滚到历史版本（V1.2 Q1.2）.
+     *
+     * <p>高危操作：{@code @AuditLog(reasonRequired=true)}，
+     * 权限由 P_PERF_SYS_CONTROL_ROLLBACK（绑定"绩效管理员"角色）控制。
+     *
+     * <p>返回 SysControlRespDTO，不暴露 entity 内部字段。
+     */
+    @PostMapping("/rollback")
+    @Operation(summary = "回滚到历史版本（高危）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
+    @AuditLog(action = "SYS_CONTROL_ROLLBACK", resourceType = "SYS_CONTROL", reasonRequired = true)
+    public ResponseWrapper<SysControlRespDTO> rollback(@Valid @RequestBody RollbackReqDTO req) {
+        log.info("[SysControlController.rollback] scopeDim={}, rollbackTo={}, reason={}",
+                req.getScopeDim(), req.getRollbackTo(), req.getReason());
+        SysControl sc = sysControlFacade.rollback(
+                req.getScopeDim(),
+                req.getRollbackTo(),
+                req.getReason(),
+                currentUserApi.getCurrentEmpId());
         return ResponseWrapper.success(SysControlAssembler.toRespDTO(sc));
     }
 }

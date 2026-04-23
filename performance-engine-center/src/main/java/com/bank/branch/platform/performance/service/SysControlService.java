@@ -116,6 +116,80 @@ public class SysControlService {
     }
 
     /**
+     * 回滚到指定历史版本（V1.2 Q1.2）.
+     *
+     * <p>流程：
+     * <ol>
+     *   <li>校验 (scopeDim, rollbackTo) 历史记录存在，不存在则抛 PERF-40012</li>
+     *   <li>查询当前生效版本，不存在则抛 PERF-40012</li>
+     *   <li>将当前生效记录 is_valid=0</li>
+     *   <li>新建一条 current_version=rollbackTo 的 is_valid=1 记录，publishSource=ROLLBACK</li>
+     * </ol>
+     *
+     * <p>latestDataDate 取 {@link LocalDate#now()} —— 回滚也是一次发布事件，需要新的数据日期。
+     *
+     * <p>高危操作：Controller 层必须带 {@code @AuditLog(reasonRequired=true)}。
+     *
+     * @param scopeDim   维度（EMP / ORG / CUST）
+     * @param rollbackTo 回滚到的历史版本号
+     * @param reason     回滚原因（必填，写入 remark）
+     * @param operatorId 操作人 empId
+     * @return 回滚后新入库的 SysControl 实体
+     * @throws PerfException PERF-40012 当 rollbackTo 不存在或当前无生效版本
+     * @throws PerfException PERF-40903 并发 UK 冲突
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SysControl rollback(String scopeDim, String rollbackTo, String reason, String operatorId) {
+        log.info("[SysControlService.rollback] scopeDim={}, rollbackTo={}, operator={}, reason={}",
+                scopeDim, rollbackTo, operatorId, reason);
+
+        // 1) 校验 rollbackTo 版本存在于历史记录（不论 is_valid）
+        List<SysControl> history = sysControlMapper.listByScope(scopeDim, Integer.MAX_VALUE);
+        boolean targetExists = history.stream()
+                .anyMatch(sc -> rollbackTo.equals(sc.getCurrentVersion()));
+        if (!targetExists) {
+            log.warn("[SysControlService.rollback] rollbackTo 版本不存在: scopeDim={}, rollbackTo={}",
+                    scopeDim, rollbackTo);
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND, scopeDim, rollbackTo);
+        }
+
+        // 2) 当前生效版本必须存在（业务前置条件）
+        SysControl curr = sysControlMapper.selectByScopeAndValid(scopeDim);
+        if (curr == null) {
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND, scopeDim);
+        }
+
+        // 3) 旧版置失效
+        sysControlMapper.updateIsValid(curr.getId(), 0);
+
+        // 4) 插入 rollbackTo 版本 is_valid=1，publishSource=ROLLBACK
+        SysControl newSc = new SysControl();
+        newSc.setId(generateId());
+        newSc.setScopeDim(scopeDim);
+        // latestDataDate 使用今日：回滚也是一次新发布，避免与旧记录 UK 冲突
+        newSc.setLatestDataDate(LocalDate.now());
+        newSc.setCurrentVersion(rollbackTo);
+        newSc.setIsValid(1);
+        LocalDateTime now = LocalDateTime.now();
+        newSc.setCreatedTime(now);
+        newSc.setUpdatedTime(now);
+        newSc.setRemark(reason);
+        newSc.setPublishBy(operatorId);
+        newSc.setPublishSource("ROLLBACK");
+        newSc.setPublishTime(now);
+        newSc.setUpdatedBy(operatorId);
+
+        try {
+            sysControlMapper.insert(newSc);
+        } catch (DuplicateKeyException e) {
+            log.warn("[SysControlService.rollback] UK 冲突, scopeDim={}, rollbackTo={}",
+                    scopeDim, rollbackTo);
+            throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT, e);
+        }
+        return newSc;
+    }
+
+    /**
      * 幂等初始化: 若该 scope_dim 已有记录则返回既有 (优先生效版本, 否则返回最近一条),
      * 无任何记录时才 insert 一条新基线.
      *
