@@ -63,4 +63,31 @@
         ORDER BY as_of_date DESC, id DESC
     </select>
 
+    <!-- V1.2 Q6.2：按 (cycleType, cycleDate, asOfDate) 批量导出查询 -->
+    <select id="selectForExport" resultType="com.bank.branch.platform.performance.entity.KpiResult">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM kpi_result
+        WHERE cycle_type = #{cycleType}
+          AND cycle_date = #{cycleDate}
+          AND as_of_date = #{asOfDate}
+          <if test="dataVersion != null and dataVersion != ''">
+              AND data_version = #{dataVersion}
+          </if>
+        ORDER BY emp_id ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- V1.2 Q6.2：计数，用于导出前行数预检 -->
+    <select id="countForExport" resultType="long">
+        SELECT COUNT(*)
+        FROM kpi_result
+        WHERE cycle_type = #{cycleType}
+          AND cycle_date = #{cycleDate}
+          AND as_of_date = #{asOfDate}
+          <if test="dataVersion != null and dataVersion != ''">
+              AND data_version = #{dataVersion}
+          </if>
+    </select>
+
 </mapper>

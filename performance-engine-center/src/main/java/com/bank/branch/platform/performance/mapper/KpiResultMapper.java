@@ -82,4 +82,39 @@ public interface KpiResultMapper {
                                           @Param("cycleType") String cycleType,
                                           @Param("from") LocalDate from,
                                           @Param("to") LocalDate to);
+
+    /**
+     * 按 (cycleType, cycleDate, asOfDate) 查询该周期下所有员工 KPI 结果（导出场景用）.
+     *
+     * <p>V1.2 Task Q6.2 新增：KpiExportStrategy 按方案周期批量导出；
+     * dataVersion 可选过滤（null 时不过滤）；limit 控制上限，超过 limit 则视为"行数超限"
+     * 由调用方抛 {@code EXPORT_ROWS_EXCEEDS_LIMIT}。
+     *
+     * @param cycleType   周期类型
+     * @param cycleDate   周期日期
+     * @param asOfDate    基准日
+     * @param dataVersion 数据版本（可空）
+     * @param limit       查询上限（含）
+     * @return KPI 结果列表
+     */
+    List<KpiResult> selectForExport(@Param("cycleType") String cycleType,
+                                    @Param("cycleDate") LocalDate cycleDate,
+                                    @Param("asOfDate") LocalDate asOfDate,
+                                    @Param("dataVersion") String dataVersion,
+                                    @Param("limit") int limit);
+
+    /**
+     * 统计某周期 (cycleType, cycleDate, asOfDate) 下符合条件的 KPI 结果行数，
+     * 用于导出前的 "行数是否超限" 预检.
+     *
+     * @param cycleType   周期类型
+     * @param cycleDate   周期日期
+     * @param asOfDate    基准日
+     * @param dataVersion 数据版本（可空）
+     * @return 行数
+     */
+    long countForExport(@Param("cycleType") String cycleType,
+                        @Param("cycleDate") LocalDate cycleDate,
+                        @Param("asOfDate") LocalDate asOfDate,
+                        @Param("dataVersion") String dataVersion);
 }
