@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.WeekFields;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -195,7 +196,8 @@ public class MetricApiImpl implements MetricApi {
                                     String version, LocalDate latestDate) {
         // V1.5 P4.1：收集 current / previous / yearAgo 三个日期，单次 IN 查询拿回
         LocalDate previousDate = calculatePreviousDate(cycleType, latestDate);
-        LocalDate yearAgoDate = latestDate == null ? null : latestDate.minusYears(1);
+        // V1.5 P5.1：按 cycleType 分支的去年同期日期，WEEKLY 走 -52 周对齐 ISO 周
+        LocalDate yearAgoDate = calculateYearAgoDate(cycleType, latestDate);
 
         List<LocalDate> dates = new ArrayList<>(3);
         if (latestDate != null) {
@@ -351,6 +353,33 @@ public class MetricApiImpl implements MetricApi {
             case "QUARTERLY" -> date.minusMonths(3);
             case "MONTHLY" -> date.minusMonths(1);
             case "WEEKLY" -> date.minusWeeks(1);
+            default -> date.minusYears(1);
+        };
+    }
+
+    /**
+     * V1.5 P5.1：按 cycleType 分支的"去年同期"日期.
+     *
+     * <ul>
+     *   <li>YEARLY / QUARTERLY / MONTHLY / 兜底 → {@code minusYears(1)}</li>
+     *   <li>WEEKLY → {@code minus(52, ChronoUnit.WEEKS)}（对齐 ISO 周次，避免
+     *       跨 ISO 年 53 周边界的语义倒置）</li>
+     * </ul>
+     *
+     * @param cycleType 周期类型（大小写不敏感；null 走年兜底）
+     * @param date      当期日期（null 时返回 null）
+     * @return 去年同期日期
+     */
+    private LocalDate calculateYearAgoDate(String cycleType, LocalDate date) {
+        if (date == null) {
+            return null;
+        }
+        if (cycleType == null) {
+            return date.minusYears(1);
+        }
+        return switch (cycleType.toUpperCase()) {
+            case "WEEKLY" -> date.minus(52, ChronoUnit.WEEKS);
+            case "YEARLY", "QUARTERLY", "MONTHLY" -> date.minusYears(1);
             default -> date.minusYears(1);
         };
     }
