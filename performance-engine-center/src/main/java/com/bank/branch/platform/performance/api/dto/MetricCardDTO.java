@@ -37,4 +37,8 @@ public class MetricCardDTO {
     private Integer sortNo;
     /** 数据日期. */
     private LocalDate dataDate;
+    /** V1.4 S3.1 新增: 环比变化率 (%, 两位小数, 保留 null 表示不适用/上期为 0/未命中). */
+    private BigDecimal mom;
+    /** V1.4 S3.1 新增: 同比变化率 (%, 两位小数, 保留 null 表示不适用/去年同期为 0/未命中). */
+    private BigDecimal yoy;
 }
