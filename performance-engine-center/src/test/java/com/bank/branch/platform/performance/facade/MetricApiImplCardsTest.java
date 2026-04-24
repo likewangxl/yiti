@@ -23,13 +23,20 @@ import org.mockito.Mock;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -598,6 +605,59 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         assertThat(cards).hasSize(1);
         assertThat(cards.get(0).getMetricCode()).isEqualTo("M_Y");
         assertThat(cards.get(0).getTargetValue()).isEqualByComparingTo("10");
+    }
+
+    // ============ V1.5 P4.1 buildCard 宽表查询 batch 合并 ============
+
+    /**
+     * V1.5 P4.1 Red：buildCard 必须改为调用 selectSlotValuesByDates batch API，
+     * 而不是 3 次单点 selectSlotValue.
+     */
+    @Test
+    @DisplayName("[V1.5 P4.1] buildCard 改用 batch 查询：每卡片只调一次 selectSlotValuesByDates")
+    void getUserMetricCards_batchesWideTableQueries() {
+        String empId = "E001";
+        LocalDate latest = LocalDate.of(2026, 4, 1);
+        LocalDate previous = LocalDate.of(2026, 1, 1);
+        LocalDate yearAgo = LocalDate.of(2025, 4, 1);
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v1");
+        sc.setLatestDataDate(latest);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("QUARTERLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+
+        // 期望 Facade 调 batch API 一次拿 3 个日期
+        Map<LocalDate, BigDecimal> batchMap = new HashMap<>();
+        batchMap.put(latest, new BigDecimal("120"));
+        batchMap.put(previous, new BigDecimal("100"));
+        batchMap.put(yearAgo, new BigDecimal("80"));
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), argThat(list -> list != null && list.containsAll(List.of(latest, previous, yearAgo))),
+                eq("v1"), eq(5)))
+                .thenReturn(batchMap);
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getCurrentValue()).isEqualByComparingTo("120");
+        assertThat(cards.get(0).getPreviousValue()).isEqualByComparingTo("100");
+        // yoy = (120-80)/80 * 100 = 50.00
+        assertThat(cards.get(0).getYoy()).isEqualByComparingTo("50.00");
+
+        // 关键断言：batch 方法调用次数 = 卡片数 = 1（而非 3 次单点）
+        verify(empIndexResultMapper, times(1))
+                .selectSlotValuesByDates(anyString(), anyList(), anyString(), anyInt());
+        // 旧单点方法不应再被调用
+        verify(empIndexResultMapper, never())
+                .selectSlotValue(anyString(), any(LocalDate.class), anyString(), anyInt());
     }
 
     // ============ helpers ============
