@@ -187,4 +187,54 @@ class PerfTargetValueMapperIT extends PerformanceMapperTestBase {
         assertThat(rows).isEqualTo(3);
         assertThat(mapper.countByPlan(planId, null, null, null)).isEqualTo(0);
     }
+
+    // =====================================================================
+    // V1.4 S2.2: owner_emp_id / owner_org_code 字段 CRUD 守护
+    // =====================================================================
+
+    @Test
+    @DisplayName("V1.4 S2.2: upsertBatch 带 owner 字段 + selectByUniqueKey 往返校验")
+    void upsert_andSelectByUk_roundtrips_ownerFields() {
+        String planId = randomPlanId();
+        PerfTargetValue v = TargetTestDataBuilder.value(
+                planId, "EMP", "E_OWN_RT", "2026", "TEST_TGT_METRIC_OWN", new BigDecimal("100.0000"));
+        v.setOwnerEmpId("USER_VAL_OWN_A");
+        v.setOwnerOrgCode("BRANCH_VAL_OWN_01");
+
+        mapper.upsertBatch(Collections.singletonList(v));
+
+        PerfTargetValue loaded = mapper.selectByUniqueKey(
+                planId, "EMP", "E_OWN_RT", "2026", "TEST_TGT_METRIC_OWN");
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.getOwnerEmpId())
+            .as("owner_emp_id 应 roundtrip")
+            .isEqualTo("USER_VAL_OWN_A");
+        assertThat(loaded.getOwnerOrgCode())
+            .as("owner_org_code 应 roundtrip")
+            .isEqualTo("BRANCH_VAL_OWN_01");
+    }
+
+    @Test
+    @DisplayName("V1.4 S2.2: selectByConditionWithScope 基于 owner_emp_id 片段过滤返回匹配目标值")
+    void selectByConditionWithScope_filtersByOwnerEmpId() {
+        String planId = randomPlanId();
+
+        PerfTargetValue hit = TargetTestDataBuilder.value(
+                planId, "EMP", "E_SCP_HIT", "2026", "TEST_TGT_SCP_A", new BigDecimal("100"));
+        hit.setOwnerEmpId("USER_SCP_HIT");
+        PerfTargetValue miss = TargetTestDataBuilder.value(
+                planId, "EMP", "E_SCP_MISS", "2026", "TEST_TGT_SCP_B", new BigDecimal("200"));
+        miss.setOwnerEmpId("USER_SCP_MISS");
+        mapper.upsertBatch(Arrays.asList(hit, miss));
+
+        java.util.Map<String, Object> scopeParams = new java.util.HashMap<>();
+        scopeParams.put("ownerEmpId", "USER_SCP_HIT");
+        List<PerfTargetValue> list = mapper.selectByConditionWithScope(
+                planId, "EMP", null, "2026",
+                0, 10,
+                "owner_emp_id = #{scopeParams.ownerEmpId}", scopeParams);
+
+        assertThat(list).extracting(PerfTargetValue::getSubjectId)
+                .containsExactly("E_SCP_HIT");
+    }
 }

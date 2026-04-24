@@ -182,4 +182,52 @@ class PerfTargetPlanMapperIT extends PerformanceMapperTestBase {
         assertThat(rows).isEqualTo(1);
         assertThat(mapper.selectById(plan.getId())).isNull();
     }
+
+    // =====================================================================
+    // V1.4 S2.2: owner_emp_id / owner_org_code 字段 CRUD 守护
+    // =====================================================================
+
+    @Test
+    @DisplayName("V1.4 S2.2: insert 带 owner 字段 + selectById 往返校验")
+    void insert_andSelectById_roundtrips_ownerFields() {
+        PerfTargetPlan plan = TargetTestDataBuilder.plan("OWN_RT", fakeKpiSchemeId());
+        plan.setOwnerEmpId("USER_OWN_A");
+        plan.setOwnerOrgCode("BRANCH_OWN_01");
+        mapper.insert(plan);
+
+        PerfTargetPlan loaded = mapper.selectById(plan.getId());
+
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.getOwnerEmpId())
+            .as("owner_emp_id 应 roundtrip")
+            .isEqualTo("USER_OWN_A");
+        assertThat(loaded.getOwnerOrgCode())
+            .as("owner_org_code 应 roundtrip")
+            .isEqualTo("BRANCH_OWN_01");
+    }
+
+    @Test
+    @DisplayName("V1.4 S2.2: selectByConditionWithScope 基于 owner_emp_id 片段过滤返回匹配方案")
+    void selectByConditionWithScope_filtersByOwnerEmpId() {
+        String kpiSchemeId = fakeKpiSchemeId();
+        PerfTargetPlan matched = TargetTestDataBuilder.plan("OWN_SCP_A", kpiSchemeId);
+        matched.setOwnerEmpId("USER_SCP_HIT");
+        matched.setOwnerOrgCode("BRANCH_SCP_01");
+        mapper.insert(matched);
+
+        PerfTargetPlan notMatched = TargetTestDataBuilder.plan("OWN_SCP_B", kpiSchemeId);
+        notMatched.setOwnerEmpId("USER_SCP_MISS");
+        notMatched.setOwnerOrgCode("BRANCH_SCP_02");
+        mapper.insert(notMatched);
+
+        java.util.Map<String, Object> scopeParams = new java.util.HashMap<>();
+        scopeParams.put("ownerEmpId", "USER_SCP_HIT");
+        List<PerfTargetPlan> list = mapper.selectByConditionWithScope(
+                kpiSchemeId, null, "OWN_SCP_",
+                0, 10,
+                "owner_emp_id = #{scopeParams.ownerEmpId}", scopeParams);
+
+        assertThat(list).extracting(PerfTargetPlan::getPlanCode)
+                .containsExactly("TEST_TGT_OWN_SCP_A");
+    }
 }
