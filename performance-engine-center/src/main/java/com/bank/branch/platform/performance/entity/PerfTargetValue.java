@@ -39,6 +39,22 @@ public class PerfTargetValue {
     /** 基础值（decimal(20,4)，可空）. */
     private BigDecimal baseValue;
 
+    /**
+     * 归属员工 ID（V1.4 S2.1 新增，SELF / SELF_ASSIGNED scope 列）.
+     *
+     * <p>V1.4 前 ScopeColumns 降级到 created_by 作为 owner 兜底；V1.4 S2 引入独立字段后
+     * SELF scope 可精确匹配"我负责的目标值"而非"我上传的目标值".
+     */
+    private String ownerEmpId;
+
+    /**
+     * 归属机构编码（V1.4 S2.1 新增，ORG / ORG_SUBTREE scope 列）.
+     *
+     * <p>V1.4 前因无此列，ORG scope 被迫降级到 created_by（语义错）；V1.4 S2 真实支持
+     * 机构维度过滤（分行管理员可见本分行目标值）.
+     */
+    private String ownerOrgCode;
+
     /** 创建人. */
     private String createdBy;
 

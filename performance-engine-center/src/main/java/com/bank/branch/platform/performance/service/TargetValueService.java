@@ -113,6 +113,9 @@ public class TargetValueService {
         v.setMetricCode(cmd.getMetricCode());
         v.setTargetValue(cmd.getTargetValue());
         v.setBaseValue(cmd.getBaseValue());
+        // V1.4 S2.2: 透传 owner 字段（可空）
+        v.setOwnerEmpId(cmd.getOwnerEmpId());
+        v.setOwnerOrgCode(cmd.getOwnerOrgCode());
         // createdBy 在 upsertBatch 内部强制覆盖, 此处不设置
         return upsertBatch(Collections.singletonList(v), cmd.getOperator());
     }
@@ -263,6 +266,9 @@ public class TargetValueService {
             v.setMetricCode(item.getMetricCode());
             v.setTargetValue(item.getTargetValue());
             v.setBaseValue(item.getBaseValue());
+            // V1.4 S2.2: 透传 owner 字段（可空）
+            v.setOwnerEmpId(item.getOwnerEmpId());
+            v.setOwnerOrgCode(item.getOwnerOrgCode());
             // createdBy 在 upsertBatch 内部强制覆盖为 operator (I-2), 此处不设置
             list.add(v);
         }

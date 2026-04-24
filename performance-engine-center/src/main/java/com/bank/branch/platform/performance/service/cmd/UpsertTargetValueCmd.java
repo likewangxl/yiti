@@ -44,6 +44,21 @@ public class UpsertTargetValueCmd {
     /** 基础值 (可空). */
     private BigDecimal baseValue;
 
+    /**
+     * 归属员工 ID（V1.4 S2.2 新增，可空）.
+     *
+     * <p>非空时写入 perf_target_value.owner_emp_id；为空时该行 owner_emp_id 为 NULL
+     * （后续按业务批量回填，不走脚本兜底的 created_by 回填）.
+     */
+    private String ownerEmpId;
+
+    /**
+     * 归属机构编码（V1.4 S2.2 新增，可空）.
+     *
+     * <p>非空时写入 perf_target_value.owner_org_code；为空时该行保持 NULL（ORG scope 不命中）.
+     */
+    private String ownerOrgCode;
+
     /** 操作人 (必填, 覆写 createdBy). */
     private String operator;
 }

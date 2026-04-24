@@ -4,7 +4,8 @@
 
     <sql id="BASE_COLUMNS">
         id, plan_code, plan_name, kpi_scheme_id, target_dim, target_cycle,
-        effective_date, status, created_by, created_time, updated_by, updated_time
+        effective_date, status, owner_emp_id, owner_org_code,
+        created_by, created_time, updated_by, updated_time
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
@@ -12,7 +13,8 @@
             <include refid="BASE_COLUMNS"/>
         ) VALUES (
             #{id}, #{planCode}, #{planName}, #{kpiSchemeId}, #{targetDim}, #{targetCycle},
-            #{effectiveDate}, #{status}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
+            #{effectiveDate}, #{status}, #{ownerEmpId}, #{ownerOrgCode},
+            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
         )
     </insert>
 
