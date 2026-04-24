@@ -666,6 +666,98 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
                 .selectSlotValue(anyString(), any(LocalDate.class), anyString(), anyInt());
     }
 
+    // ============ V1.5 P5.1 WEEKLY yoy 走 minusWeeks(52) 分支 ============
+
+    /**
+     * V1.5 P5.1 Red：WEEKLY cycleType 的 yoy 必须走 -52 周，而非 -1 年.
+     *
+     * <p>V1.4 reviewer M03 观察：统一 minusYears(1) 在 WEEKLY 下跨 ISO 年边界时
+     * 周次偏移。V1.5 分支处理：WEEKLY → minusWeeks(52)，其他不变.
+     */
+    @Test
+    @DisplayName("[V1.5 P5.1] WEEKLY yoy：yearAgoDate 走 minusWeeks(52)，不同于 minusYears(1)")
+    void getUserMetricCards_weeklyYoy_usesMinusWeeks52() {
+        String empId = "E001";
+        LocalDate current = LocalDate.of(2026, 12, 28); // ISO 2026W53
+        LocalDate previousWeek = current.minusWeeks(1); // WEEKLY 前一周 = 2026-12-21
+        LocalDate yearAgoWeek52 = current.minus(52, java.time.temporal.ChronoUnit.WEEKS); // 2026-01-05 = ISO 2026W01
+        LocalDate minusYearsFallback = current.minusYears(1); // 2025-12-28 = ISO 2025W52 (若走旧逻辑)
+
+        // Red 设计：仅 stub minus-52-week 路径，旧 minusYears 路径未 stub，走旧逻辑会拿 null
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v1");
+        sc.setLatestDataDate(current);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("WEEKLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_W")));
+        when(metricDefService.getByCodes(List.of("M_W")))
+                .thenReturn(List.of(def("M_W", "EMP", 7, "W", "户")));
+
+        // V1.5 P4.1 后用 batch Map；Mock 按"-52 周"路径返回值
+        Map<LocalDate, BigDecimal> batch = new HashMap<>();
+        batch.put(current, new BigDecimal("200"));
+        batch.put(previousWeek, new BigDecimal("180"));
+        batch.put(yearAgoWeek52, new BigDecimal("150")); // 关键：只在 -52 周命中
+        // 故意不 put minusYearsFallback，走旧逻辑会 yearAgoValue=null → yoy=null
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(7)))
+                .thenReturn(batch);
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        assertThat(cards).hasSize(1);
+        // 走 -52 周路径：yoy = (200-150)/150*100 = 33.33
+        assertThat(cards.get(0).getYoy())
+                .as("WEEKLY cycleType 应走 minusWeeks(52)，命中 150 的 yearAgo 值")
+                .isEqualByComparingTo("33.33");
+    }
+
+    /**
+     * V1.5 P5.1 Red：非 WEEKLY cycleType 的 yoy 行为保持不变（仍 minusYears(1)）.
+     */
+    @Test
+    @DisplayName("[V1.5 P5.1] YEARLY/QUARTERLY/MONTHLY yoy 保持 minusYears(1) 不变")
+    void getUserMetricCards_nonWeeklyYoy_unchanged_usesMinusYears1() {
+        String empId = "E001";
+        LocalDate current = LocalDate.of(2026, 4, 1);
+        LocalDate previous = LocalDate.of(2026, 1, 1);       // QUARTERLY 上一季
+        LocalDate yearAgo = LocalDate.of(2025, 4, 1);         // minusYears(1)
+        LocalDate wrongMinus52Weeks = current.minus(52, java.time.temporal.ChronoUnit.WEEKS); // 2025-04-02（与 yearAgo 差 1 天）
+
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v");
+        sc.setLatestDataDate(current);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("QUARTERLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_Q")));
+        when(metricDefService.getByCodes(List.of("M_Q")))
+                .thenReturn(List.of(def("M_Q", "EMP", 8, "Q", "万元")));
+
+        // 只 stub minusYears(1) 路径；-52 周路径故意不填值
+        Map<LocalDate, BigDecimal> batch = new HashMap<>();
+        batch.put(current, new BigDecimal("150"));
+        batch.put(previous, new BigDecimal("130"));
+        batch.put(yearAgo, new BigDecimal("100"));
+        // 故意不 put wrongMinus52Weeks
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v"), eq(8)))
+                .thenReturn(batch);
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        assertThat(cards).hasSize(1);
+        // QUARTERLY 仍走 minusYears(1)：yoy = (150-100)/100*100 = 50.00
+        assertThat(cards.get(0).getYoy()).isEqualByComparingTo("50.00");
+    }
+
     // ============ helpers ============
 
     private static PerfKpiItem kpiItem(String schemeId, String metricCode) {
