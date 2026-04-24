@@ -15,6 +15,7 @@ import com.bank.branch.platform.performance.service.KpiSchemeService;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -233,6 +234,36 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
 
         assertThat(cards).hasSize(1);
         assertThat(cards.get(0).getMetricCode()).isEqualTo("M_EMP_OK");
+    }
+
+    // ============ V1.4 S3.1 扩字段存在断言 ============
+
+    @Test
+    @DisplayName("[V1.4 S3.1] MetricCardDTO 包含 previousValue/mom/yoy 3 个字段且可 JSON 序列化")
+    void metricCardDTO_hasExtendedFields() throws Exception {
+        MetricCardDTO dto = MetricCardDTO.builder()
+                .metricCode("M_X")
+                .currentValue(new BigDecimal("120"))
+                .targetValue(new BigDecimal("100"))
+                .previousValue(new BigDecimal("100"))
+                .mom(new BigDecimal("20.00"))
+                .yoy(new BigDecimal("50.00"))
+                .build();
+        String json = new ObjectMapper().writeValueAsString(dto);
+        assertThat(json).contains("\"previousValue\"").contains("\"mom\"").contains("\"yoy\"");
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.1] previousValue/mom/yoy 允许 null（兼容 V1.3 简化策略）")
+    void metricCardDTO_extendedFields_allowsNull() {
+        MetricCardDTO dto = MetricCardDTO.builder()
+                .metricCode("M_X")
+                .currentValue(new BigDecimal("100"))
+                .targetValue(new BigDecimal("100"))
+                .build();
+        assertThat(dto.getPreviousValue()).isNull();
+        assertThat(dto.getMom()).isNull();
+        assertThat(dto.getYoy()).isNull();
     }
 
     // ============ helpers ============
