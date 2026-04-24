@@ -14,11 +14,14 @@ import com.bank.branch.platform.performance.controller.dto.MetricExecuteReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricTrialReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricTrialRespDTO;
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
+import com.bank.branch.platform.performance.controller.dto.RunTaskInfoDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateMetricReqDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.facade.MetricLifecycleFacade;
 import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
+import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.CascadeRefresher;
 import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.MetricDefService;
@@ -72,6 +75,7 @@ public class MetricDefController {
     private final MetricCalcService metricCalcService;
     private final CascadeRefresher cascadeRefresher;
     private final SysControlService sysControlService;
+    private final PerfRunTaskMapper perfRunTaskMapper;
 
     /**
      * List metric definitions with page result.
@@ -327,7 +331,7 @@ public class MetricDefController {
     @Operation(summary = "Execute metric immediately (with optional cascade refresh)")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
     @AuditLog(action = "METRIC_EXECUTE", resourceType = "PERF_METRIC_RUN", reasonRequired = true)
-    public ResponseWrapper<java.util.Map<String, Object>> execute(
+    public ResponseWrapper<RunTaskInfoDTO> execute(
             @PathVariable("metricCode") @NotBlank String metricCode,
             @Valid @RequestBody MetricExecuteReqDTO req) {
         log.info("[MetricDefController.execute] metricCode={}, dataDate={}, cascade={}, reason={}",
@@ -336,7 +340,7 @@ public class MetricDefController {
         // 预校验指标存在性：不存在时在调用 Service 前就抛 PERF-40001，避免产生孤立 run_task
         PerfMetricDef def = metricDefService.getByCode(metricCode);
 
-        // 解析版本：从 sys_control 当前生效版本读取（可为空时交给 Service 报错）
+        // 解析版本：从 sys_control 当前生效版本读取（可为空时使用兜底版本）
         String version;
         try {
             SysControl current = sysControlService.getCurrentVersion(def.getBaseDim());
@@ -356,10 +360,17 @@ public class MetricDefController {
             taskId = metricCalcService.calcMetric(metricCode, req.getDataDate(), version);
         }
 
-        java.util.Map<String, Object> resp = new java.util.LinkedHashMap<>();
-        resp.put("taskId", taskId);
-        resp.put("status", "RUNNING");
-        resp.put("metricCode", metricCode);
-        return ResponseWrapper.success(resp);
+        // V1.3 R3.3：回归 03 §A.6 契约，使用 RunTaskInfoDTO 替代临时 Map<String,Object>.
+        // 从 perf_run_task 读取真实状态（Service 可能已同步完成为 SUCCESS/FAILED，也可能仍 RUNNING）；
+        // 查不到时退化为 RUNNING 占位（极端竞态下 Service 未及时 commit）。
+        PerfRunTask task = perfRunTaskMapper.selectById(taskId);
+        String status = task != null && task.getStatus() != null ? task.getStatus() : "RUNNING";
+        return ResponseWrapper.success(RunTaskInfoDTO.builder()
+                .taskId(taskId)
+                .status(status)
+                .metricCode(metricCode)
+                .dataDate(req.getDataDate())
+                .version(version)
+                .build());
     }
 }
