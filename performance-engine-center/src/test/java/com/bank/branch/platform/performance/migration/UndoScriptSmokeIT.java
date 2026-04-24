@@ -3,7 +3,6 @@ package com.bank.branch.platform.performance.migration;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -23,10 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>@BeforeEach 保证数据库处于 V1_0_3 状态：
  * 先执行 undo 还原到 V1_0_2（幂等），再修复 Flyway 历史，再 migrate 重新应用 V1_0_3。
  */
-@Disabled("V1.2 Q8.5c: V1.1+ 新增 Flyway 版本（V1_1_0 / V1_1_1 / V1_2_0 / V1_2_1 / V1_2_2）后，"
-        + " @BeforeEach 的 flyway.migrate() 会迁移到最新版，而 undoV1_0_3_revertsDdlChanges 的"
-        + " 断言仍以 V1_0_3 终态为基准，导致 ukBefore=0 失败。V1.0 已登记为技术债（CLAUDE.md §2）。"
-        + " 若 V1.3 启用严格 Flyway validate，需重写为只针对 V1_0_3/V1_0_4 的局部 undo 验证。")
 class UndoScriptSmokeIT extends PerformanceFlywayTestBase {
 
     @Autowired
