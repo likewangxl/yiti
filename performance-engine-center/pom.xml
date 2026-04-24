@@ -180,5 +180,35 @@
             <artifactId>shedlock-provider-redis-spring</artifactId>
             <version>5.13.0</version>
         </dependency>
+
+        <!--
+            V1.3 Task R5.1 Testcontainers-redis 接入.
+            用途：DataTaskServiceIdempotentIT / SysControlConcurrentIT 等并发 IT
+            依赖真实 Redis，过往需要开发者本地 localhost:6379 已启动；
+            V1.3 引入 Testcontainers-redis 让 IT 自启 Redis 容器，无需手动预置。
+
+            版本选择：com.redis:testcontainers-redis 不在 org.testcontainers:testcontainers-bom
+            管理范围内（第三方扩展，非官方 org.testcontainers GroupId），需独立 version。
+            2.2.2 是 2024 年维护版本，兼容 testcontainers-core 1.19.7（本 POM parent 已引）。
+
+            Docker 依赖：无 Docker 环境会在 Testcontainers 尝试启动容器时抛异常，
+            PerformanceRedisTestBase 默认 @EnabledIfSystemProperty 守护，CI 通过
+            -Dtestcontainers.enabled=true 启用；本地开发跑 mvn verify 时默认跳过避免阻塞。
+        -->
+        <dependency>
+            <groupId>com.redis</groupId>
+            <artifactId>testcontainers-redis</artifactId>
+            <version>2.2.2</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            testcontainers JUnit 5 扩展（@Testcontainers / @Container 注解所在包）
+            版本由根 POM 的 testcontainers-bom (1.19.7) 统一管理，无需显式 version。
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

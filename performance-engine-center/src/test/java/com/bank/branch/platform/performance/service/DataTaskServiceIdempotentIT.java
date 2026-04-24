@@ -2,12 +2,12 @@ package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.api.dto.DataTaskReportResultDTO;
 import com.bank.branch.platform.performance.api.dto.cmd.DataTaskStatusCmd;
-import com.bank.branch.platform.performance.support.PerformanceConcurrentTestBase;
+import com.bank.branch.platform.performance.support.PerformanceConcurrentRedisTestBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,10 +37,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>P6.2 已实现 "先查再写"的乐观幂等，但两个线程 T1/T2 同时 selectByTaskNo 都拿到 null 时，
  * 会并发双写；P6.3 需通过 Redis SETNX (或双检+互斥) 保证原子幂等，本 IT 即此约束的守护。
  */
-@Disabled("V1.2 Q8.5c: 依赖本地 Redis（localhost:6379）运行时连接。CI/无 Redis 环境会卡死"
-        + " @BeforeEach 的 redisTemplate.delete 连接上。并发 IT 保留在代码库作为运维演练手册,"
-        + " 需在有 Redis 的环境手动 -Dtest= 运行。V1.3 若接入 Testcontainers-redis 可取消 @Disabled。")
-class DataTaskServiceIdempotentIT extends PerformanceConcurrentTestBase {
+/**
+ * V1.3 Task R5.1 升级：改继承 {@link PerformanceConcurrentRedisTestBase} 获取
+ * Testcontainers 启动的 Redis 容器；{@code @EnabledIfSystemProperty} 保护本 IT
+ * 仅在 CI (-Dtestcontainers.enabled=true) 或开发者显式指定时运行，无 Docker
+ * 本地环境默认跳过，避免 `mvn verify` 因容器启动失败阻塞构建。
+ */
+@EnabledIfSystemProperty(named = "testcontainers.enabled", matches = "true")
+class DataTaskServiceIdempotentIT extends PerformanceConcurrentRedisTestBase {
 
     /** 并发上报使用的 taskId（CONCUR_EXT_ 前缀便于清理）. */
     private static final String TASK_ID = "CONCUR_EXT_P63_TASK_001";
