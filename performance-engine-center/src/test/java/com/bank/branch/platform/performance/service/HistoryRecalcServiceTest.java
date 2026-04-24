@@ -231,6 +231,65 @@ class HistoryRecalcServiceTest {
     }
 
     /**
+     * V1.4 S4.2 Red：cycleType=null 时，params_json 必须跳过该字段（不输出 "cycleType":""）.
+     *
+     * <p>V1.3 R4.3 为简化实现，当 cycleType=null 时写了空字符串值 {@code "cycleType":""}。
+     * 但运维以 {@code IS NULL} vs {@code = ''} 查询时语义不等价——前者表示"字段缺失"，
+     * 后者表示"显式空字符串"。Reviewer R4.3 建议统一为"null 不写字段"，运维只需
+     * {@code JSON_EXTRACT(params_json, '$.cycleType') IS NULL} 即可筛出该类记录.
+     *
+     * <p>本测试作为 S4.2 Red：断言 null 时 paramsJson 不包含 "cycleType" 字段，但
+     * 其他必填字段（startDate/endDate/reason）仍在。
+     */
+    @Test
+    @DisplayName("V1.4 S4.2：cycleType=null 时 params_json 跳过该字段（不输出空串）")
+    void recalc_cycleTypeNull_skipsFieldInParamsJson() {
+        LocalDate date = LocalDate.of(2026, 3, 1);
+        List<String> metricCodes = List.of("M_A");
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+                .thenReturn("CHILD_NULL");
+
+        // cycleType 传 null，走 6 参签名兜底到 7 参重载 cycleType=null
+        historyRecalcService.recalc(date, date, metricCodes, "v1", "原因 S4.2 null", "op");
+
+        ArgumentCaptor<PerfRunTask> cap = ArgumentCaptor.forClass(PerfRunTask.class);
+        verify(perfRunTaskMapper).insert(cap.capture());
+        String paramsJson = cap.getValue().getParamsJson();
+        assertThat(paramsJson)
+                .as("V1.4 新语义：cycleType=null 时不出现在 JSON 中")
+                .doesNotContain("cycleType");
+        // 其他字段不受影响
+        assertThat(paramsJson)
+                .contains("\"startDate\"")
+                .contains("\"endDate\"")
+                .contains("\"reason\"");
+    }
+
+    /**
+     * V1.4 S4.2 Red 配对：cycleType 非 null 时行为保持不变（向后兼容保护）.
+     *
+     * <p>与 V1.3 R4.3 既有断言 {@link #recalc_writesCycleTypeIntoParamsJson} 等价，
+     * 这里显式命名为 V14_behaviorUnchanged 以守护重构后非 null 路径的完整性：
+     * 当 cycleType 非 null 时，paramsJson 仍包含 {@code "cycleType":"QUARTERLY"}。
+     */
+    @Test
+    @DisplayName("V1.4 S4.2：cycleType 非 null 时 params_json 仍包含字段（行为不变）")
+    void recalc_cycleTypeNotNull_includesField_V14_behaviorUnchanged() {
+        LocalDate date = LocalDate.of(2026, 3, 1);
+        List<String> metricCodes = List.of("M_A");
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+                .thenReturn("CHILD_Q");
+
+        historyRecalcService.recalc(
+                date, date, metricCodes, "v1", "原因 S4.2 non-null", "op", "QUARTERLY");
+
+        ArgumentCaptor<PerfRunTask> cap = ArgumentCaptor.forClass(PerfRunTask.class);
+        verify(perfRunTaskMapper).insert(cap.capture());
+        String paramsJson = cap.getValue().getParamsJson();
+        assertThat(paramsJson).contains("\"cycleType\":\"QUARTERLY\"");
+    }
+
+    /**
      * V1.1 P8 Task C.1 Red：childTaskIds 须持久化到父 run_task.result_preview_json.
      *
      * <p>原 Javadoc 承诺："子任务 ID 列表记录在父任务的 result_preview_json 字段"，但实际
