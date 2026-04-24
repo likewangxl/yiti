@@ -75,6 +75,27 @@ public class HistoryRecalcService {
      */
     public String recalc(LocalDate startDate, LocalDate endDate, List<String> metricCodes,
                          String version, String reason, String operator) {
+        return recalc(startDate, endDate, metricCodes, version, reason, operator, null);
+    }
+
+    /**
+     * V1.3 R4.3 重载：接受 cycleType 参数并写入父级 run_task.params_json 供运维审计.
+     *
+     * <p>运维需要从 DB 回溯每次回算的 cycleType（DAILY/MONTHLY/QUARTERLY），V1.1 的
+     * 6 参签名只能通过日志读取；V1.3 起把 cycleType 持久化到 params_json，保留
+     * 6 参签名作为 cycleType=null 的兼容入口。
+     *
+     * @param startDate   起始日期（含）
+     * @param endDate     截止日期（含）
+     * @param metricCodes 指标编码列表（null/空表示所有 ACTIVE 指标）
+     * @param version     数据版本
+     * @param reason      回算原因
+     * @param operator    发起人 emp_id
+     * @param cycleType   周期类型（nullable；DAILY/MONTHLY/QUARTERLY 等）
+     * @return 父级 run_task 主键
+     */
+    public String recalc(LocalDate startDate, LocalDate endDate, List<String> metricCodes,
+                         String version, String reason, String operator, String cycleType) {
         // 1. 参数校验
         validate(startDate, endDate, version, reason, operator);
 

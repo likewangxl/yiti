@@ -203,6 +203,34 @@ class HistoryRecalcServiceTest {
     }
 
     /**
+     * V1.3 R4.3 Red：cycleType 必须写入 params_json，供运维从 DB 审计回溯.
+     *
+     * <p>V1.2 Q7 reviewer 指出：PerfCalcApiImpl 透传 cycleType 但只记日志，未写入
+     * run_task.params_json，运维无法从 DB 审计回溯。本测试守护 V1.3 R4.3 修复目标：
+     * HistoryRecalcService 必须提供一个接收 cycleType 的重载，并把 cycleType 写入
+     * 父级 perf_run_task.params_json.
+     */
+    @Test
+    @DisplayName("V1.3 R4.3：cycleType 写入父级 run_task.params_json")
+    void recalc_writesCycleTypeIntoParamsJson() {
+        LocalDate date = LocalDate.of(2026, 3, 1);
+        List<String> metricCodes = List.of("M_A");
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+                .thenReturn("CHILD_Q1");
+
+        historyRecalcService.recalc(
+                date, date, metricCodes, "v1", "Q1 审计原因", "operator", "QUARTERLY");
+
+        ArgumentCaptor<PerfRunTask> cap = ArgumentCaptor.forClass(PerfRunTask.class);
+        verify(perfRunTaskMapper).insert(cap.capture());
+        String paramsJson = cap.getValue().getParamsJson();
+        assertThat(paramsJson)
+                .as("params_json 必须包含 cycleType（运维审计回溯依赖）")
+                .contains("\"cycleType\":\"QUARTERLY\"");
+        assertThat(paramsJson).contains("\"startDate\"").contains("\"endDate\"");
+    }
+
+    /**
      * V1.1 P8 Task C.1 Red：childTaskIds 须持久化到父 run_task.result_preview_json.
      *
      * <p>原 Javadoc 承诺："子任务 ID 列表记录在父任务的 result_preview_json 字段"，但实际
