@@ -6,10 +6,11 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.performance.api.dto.AllocSummaryDTO;
 import com.bank.branch.platform.performance.api.dto.AllocVersionDTO;
+import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.performance.entity.CustAllocRelation;
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
-import lombok.RequiredArgsConstructor;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -55,7 +56,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AllocRelationService {
 
     private final CustAllocRelationMapper allocMapper;
@@ -63,6 +63,29 @@ public class AllocRelationService {
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
     private final RedisTemplate<String, Object> redisTemplate;
+    /**
+     * Q7.2 新增：统一数据范围 SQL 片段生成器.
+     * 将 7 种 {@link DataScopeType} 转换为 (scopeFragment, scopeParams) 对给 Mapper,
+     * 取代原 {@link #resolveScopeFilter} 字符串拼接方式.
+     */
+    private final PerfScopeHelper perfScopeHelper;
+
+    /**
+     * 构造器注入（手写, 因 Q7.2 新增 helper 字段与其他字段非等价语义）.
+     */
+    public AllocRelationService(CustAllocRelationMapper allocMapper,
+                                SysControlService sysControlService,
+                                CurrentUserApi currentUserApi,
+                                BizScopeApi bizScopeApi,
+                                RedisTemplate<String, Object> redisTemplate,
+                                PerfScopeHelper perfScopeHelper) {
+        this.allocMapper = allocMapper;
+        this.sysControlService = sysControlService;
+        this.currentUserApi = currentUserApi;
+        this.bizScopeApi = bizScopeApi;
+        this.redisTemplate = redisTemplate;
+        this.perfScopeHelper = perfScopeHelper;
+    }
 
     /** 缓存 key 前缀. */
     private static final String CACHE_KEY_PREFIX = "perf:alloc:cust:";
@@ -112,6 +135,52 @@ public class AllocRelationService {
         Assert.hasText(empId, "empId 不能为空");
         String dataScopeFilter = resolveScopeFilter();
         return allocMapper.selectByEmpAndBiz(empId, bizKind, LocalDate.now(), dataScopeFilter);
+    }
+
+    /**
+     * Q7.2 新增：基于 {@link PerfScopeHelper} 的数据范围注入查询.
+     *
+     * <p>和老方法 {@link #listCustomersByEmp} 的差异：
+     * <ul>
+     *   <li>老方法只支持"ALL 全见 / 非 ALL 收敛自己"的二值逻辑（字符串拼接 empId）</li>
+     *   <li>新方法支持全部 7 种 {@link DataScopeType}, 参数走 {@code #{scopeParams.*}} 预编译
+     *       彻底杜绝 SQL 注入</li>
+     * </ul>
+     *
+     * <p>ScopeColumns 约定（Alloc 表）：
+     * <ul>
+     *   <li>ownerEmpCol = "emp_id" (SELF 用)</li>
+     *   <li>assigneeCol = "emp_id" (Alloc 无独立 assignee 列, 映射同 emp_id)</li>
+     *   <li>createdByCol = "created_by" (SELF_CREATED 用)</li>
+     *   <li>ownerOrgCol = "emp_id" (Alloc 表无 org_code, 降级为按 emp_id 过滤; ORG scope 等价于 SELF)</li>
+     * </ul>
+     *
+     * <p><b>注意</b>：Alloc 表物理上无 org_code 列, 因此 ORG / ORG_SUBTREE scope 会注入
+     * 类似 "emp_id = #{orgCode}" 的错乱片段. V1.2 的 Alloc 查询不支持 ORG 级过滤;
+     * 本方法使用 {@code Set<String>} 降级到 SELF 语义, ORG/ORG_SUBTREE scope
+     * 在 Alloc 表场景下应由上层 Facade 控制或等待 V1.3 引入 emp→org 映射.
+     *
+     * <p>Fail-Close: 若用户无权限或 ctx 为 null, scopeFragment="1=0", Mapper 查无结果.
+     *
+     * @param empId   员工工号（主查询主体）
+     * @param bizKind 业务种类（nullable）
+     * @return 分配关系列表（已经数据范围过滤）
+     */
+    @Transactional(readOnly = true)
+    public List<CustAllocRelation> listCustomersByEmpWithScope(String empId, String bizKind) {
+        Assert.hasText(empId, "empId 不能为空");
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        // Alloc 表 4 列映射：无 org_code 字段, 这里 ownerEmpCol 用 emp_id 做语义基准
+        PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
+                "emp_id",       // ownerEmpCol (SELF)
+                "emp_id",       // assigneeCol (Alloc 无独立 assignee 列)
+                "created_by",   // createdByCol (SELF_CREATED)
+                "emp_id"        // ownerOrgCol (Alloc 表无 org_code, 降级为 emp_id; ORG scope 语义等价 SELF)
+        );
+        PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
+                currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
+        return allocMapper.selectByEmpAndBizWithScope(
+                empId, bizKind, LocalDate.now(), frag.getSql(), frag.getParams());
     }
 
     // ==================== 批量查询（含缓存合并）====================

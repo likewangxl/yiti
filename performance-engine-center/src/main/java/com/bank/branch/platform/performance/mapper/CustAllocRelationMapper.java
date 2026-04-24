@@ -92,6 +92,32 @@ public interface CustAllocRelationMapper {
                                              @Param("dataScopeFilter") String dataScopeFilter);
 
     /**
+     * Q7.2 新增：基于 {@link com.bank.branch.platform.performance.service.scope.PerfScopeHelper}
+     * 生成的 scopeFragment + scopeParams 注入数据范围条件。
+     *
+     * <p>与老的 {@link #selectByEmpAndBiz} 区别：
+     * <ul>
+     *   <li>老方法只支持单字符串 dataScopeFilter（形如 " AND emp_id = 'xxx' "，手工拼 empId 字面值）；</li>
+     *   <li>新方法通过 PerfScopeHelper 统一生成 7 种 DataScopeType 对应片段，
+     *       参数走 {@code #{scopeParams.*}} 预编译，彻底杜绝 SQL 注入。</li>
+     * </ul>
+     *
+     * <p>XML 采用 {@code AND (${scopeFragment})} 注入片段，scopeFragment 来自可信 Helper 生成。
+     *
+     * @param empId         员工工号（主查询主体）
+     * @param bizKind       业务种类（nullable）
+     * @param asOfDate      时间线基准日期
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()（空串 → 无过滤 / "1=0" → fail-close / 其他 → 注入）
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()（预编译参数, 对应 #{scopeParams.*}）
+     * @return 分配关系列表
+     */
+    List<CustAllocRelation> selectByEmpAndBizWithScope(@Param("empId") String empId,
+                                                      @Param("bizKind") String bizKind,
+                                                      @Param("asOfDate") LocalDate asOfDate,
+                                                      @Param("scopeFragment") String scopeFragment,
+                                                      @Param("scopeParams") Map<String, Object> scopeParams);
+
+    /**
      * 批量查多个客户在 asOfDate 时点的分配关系（缓存未命中合并回查使用）.
      *
      * @param custIds         客户 ID 集合（上限由调用方保证 ≤ 500）

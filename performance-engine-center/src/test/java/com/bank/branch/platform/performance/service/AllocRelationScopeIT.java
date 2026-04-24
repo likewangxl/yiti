@@ -134,16 +134,17 @@ class AllocRelationScopeIT extends PerformanceMapperTestBase {
                         BizType.PERF_CONFIG, BizAction.LIST));
 
         LocalDate today = LocalDate.now();
-        // 当前生效
-        insertRaw(AllocTestDataBuilder.relation("TEST_ARS_EFF",
+        // 当前生效 (custId=TEST_AR_ARS_EFF)
+        insertRaw(AllocTestDataBuilder.relation("ARS_EFF",
                 "EMP_TIME", "LOAN", today.minusDays(3), null));
-        // 已失效
-        insertRaw(AllocTestDataBuilder.relation("TEST_ARS_EXP",
+        // 已失效 (custId=TEST_AR_ARS_EXP)
+        insertRaw(AllocTestDataBuilder.relation("ARS_EXP",
                 "EMP_TIME", "LOAN", today.minusDays(10), today.minusDays(5)));
 
         List<CustAllocRelation> list = allocRelationService.listCustomersByEmpWithScope("EMP_TIME", "LOAN");
 
+        // 只有当前生效的那条应被返回（end_date 过期的被时间线条件排除）
         assertThat(list).hasSize(1);
-        assertThat(list.get(0).getId()).isEqualTo("TEST_ARS_EFF");
+        assertThat(list.get(0).getCustId()).isEqualTo("TEST_AR_ARS_EFF");
     }
 }

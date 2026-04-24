@@ -103,6 +103,31 @@
         ORDER BY cust_id ASC, id ASC
     </select>
 
+    <!--
+      Q7.2 新增：基于 PerfScopeHelper 的 scopeFragment + scopeParams 注入数据范围条件。
+      - scopeFragment 通过 ${} 注入（来源: PerfScopeHelper 受控生成，不接受用户输入）
+      - scopeParams 通过 #{scopeParams.xxx} 预编译（Map 形式，键来自 Fragment.getParams()）
+      - 空 scopeFragment → 无过滤（ALL 范围）
+      - "1=0" → fail-close, 0 行结果
+    -->
+    <select id="selectByEmpAndBizWithScope"
+            resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_alloc_relation
+        <where>
+            emp_id = #{empId}
+            AND <include refid="EFFECTIVE_CONDITION"/>
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+        ORDER BY cust_id ASC, id ASC
+    </select>
+
     <select id="selectCurrentByCustIds"
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
