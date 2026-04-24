@@ -245,89 +245,102 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 - DDL 权威源: `docs/schema/ddl-performance.sql`
 - 共通开发规范: `docs/common-dev-guide.md`
 
-## 技术债务（V1.2 交付后）
+## 技术债务（V1.3 交付后）
 
-本节记录 V1.2 交付后遗留的技术债，将在 V1.3 迭代时逐项消化。
+本节记录 V1.3 交付后的技术债残量：V1.3 R0-R5 已消化 13 项大额债务，V1.4 新登记 8 项遗留（含 R6 WORKFLOW_PARTICIPANT 整体延期）。
 
-### V1.2 已消化项（2026-04-24）
+### V1.3 已消化项（2026-04-24）
 
-**V1.1 遗留项全部或部分消化**：
-- childTaskIds 持久化：V1.1 P8.C.1 已在双循环后写 `updateResultPreviewJson(parentTaskId, JSON)`，消费方可据此读出子任务 ID 列表。
-- 错误码语义归并：V1.1 P8.A 已落地 `PERF-40005/40006/40007`，`KpiSchemeService.create` / `TargetPlanService.create` / `PerfRunTaskController.getById` 抛错点已迁移。
-- `MetricTrialRespDTO` 字段命名：Q3 执行期 MetricAssembler 字段兼容性校验通过。
-- **perf_run_task.task_key UNIQUE KEY**：V1.3 R0.2 通过 `V1_3_0__perf_run_task_uk.sql` 补齐（V1.2 曾声称已加但实际未执行，V1.3 勘误）。配合 DataTaskService.report 的 DuplicateKeyException catch 分支，作为 Redis SETNX 幂等的 DB 兜底。
-- 04 契约文档 `reportDataTaskStatus` void 签名：V1.2 Q8.2 已同步改为 `DataTaskReportResultDTO`。
+V1.3 R0-R5 共 18 个 Task 消化以下 13 项 V1.0-V1.2 累积技术债：
 
-**V1.2 Q8 收尾消化项**：
-- surefire 假绿（47+ IT 历史不被扫描）：Q8.3 pom.xml 新增 `<include>**/*IT.java</include>`，测试数从 519 → 842。
-- AllocRelationControllerIT action bug：Q8.4 list 断言 READ → LIST 对齐 Controller。
-- V1.0 历史 Controller IT 错误码断言过期：Q8.5a 全部对齐 PerfErrorCode §K 权威清单。
-- MetricDefControllerIT dataset 污染 + MetricDefService.create deleted=0 漏设置：Q8.5b 已修。
-- V1.0/V1.1 遗留 PT_RESOURCE 规划资源未激活：Q8.6 V1_2_4 已激活 7 条（METRIC_EXEC / METRIC_TRIAL / KPI_TRIGGER / DTASK_STATUS / ALLOC_ADJ_ADD / KPI_RECALC / SC_ROLLBACK），全量 45 条启用。
-- V1.2 业务种子数据缺失：Q8.1 V1_2_3 已预置 5 指标 + 2 KPI 方案 + 1 目标方案。
+**DDL 与基础设施**：
+- V1.0 NULL deleted 历史数据：V1.3 R0.1 通过 `V1_2_5__perf_cleanup_null_deleted.sql` 将 perf_target_value / perf_target_plan / perf_kpi_item 三表 NULL 置 0（兜底而非误删）。
+- **perf_run_task.task_key UNIQUE KEY**：V1.3 R0.2 通过 `V1_3_0__perf_run_task_uk.sql` 补齐（V1.2 曾声称已加但实际未执行的勘误），配合 `DataTaskService.report` 的 DuplicateKeyException 降级路径，作为 Redis SETNX 幂等的 DB 兜底。
+- failsafe 分层：V1.3 R0.3 pom.xml 新增 maven-failsafe-plugin，surefire 改为单元测试（549）+ failsafe 集成测试（339）分层，总 888 测试。
+- 模块 CLAUDE.md uk_task_key 勘误：V1.3 R0.4 清理 V1.2 声称"已加但实际没做"的误述。
 
-### V1.2 遗留项（留 V1.3 消化）
+**Target 数据范围注入（V1.2 遗留#1 消化）**：
+- V1.3 R1.1/R1.2/R1.3 在 TargetValue / TargetPlan 两表的 Service `pageWithScope` + Controller list 端点三级落地 PerfScopeHelper 注入（复用 V1.2 Q7 `ScopeColumns` 模式）。ScopeColumns Target 目前降级到 `created_by`，V1.4 引入 owner_emp_id / owner_org_code 字段后可细化。
 
-#### 1. Target 数据范围注入未落地（中）
+**5 处 V1.2 Facade UOE 实际实现（V1.2 UOE 清零）**：
+- `PerfCalcApi.triggerKpiCalc`（V1.3 R2.1）：委托 KpiCalcService.calcScheme，签名从 `(LocalDate) → String` 破坏性升级为 `(schemeCode, cycleType, cycleDate, asOfDate, version) → int`。
+- `MetricQueryApi.batchQueryEmpSnapshots` / `batchQueryOrgSnapshots` / `batchQueryCustSnapshots`（V1.3 R2.2/R2.3/R2.4）：三个宽表 Mapper 批量查询，500 subject + 50 metricCode 上限。
+- `MetricApi.getUserMetricCards`（V1.3 R2.5）：ACTIVE KPI 方案并集 + EMP 宽表 slot 读取 + TargetValue planId=null 近似查询。
 
-Q7.3 已完成 AllocRelation + Kpi + Metric 3 处数据范围示例，但 Target 侧（TargetPlan / TargetValue）
-仍由 Service 直接 Mapper，未经 PerfScopeHelper 注入。
+**错误码与 DTO 细化**：
+- IDEMPOTENCY_WAIT_TIMEOUT（CALC_JOB_FAILED 语义过载）：V1.3 R3.1 新增 `PERF-50003 IDEMPOTENCY_WAIT_TIMEOUT`，DataTaskService 替换原 `CALC_JOB_FAILED`。
+- MetricTrialRespDTO 字段对齐 03 §A.5：V1.3 R3.2 将 `samples` 字段重命名为 `sampleRows`，`@JsonAlias({"samples"})` + `@Deprecated getSamples()` 兼容 1 版本（V1.5 清理）。
+- execute 返回类型 Map → RunTaskInfoDTO：V1.3 R3.3 MetricDefController.execute 回归 03 §A.6 契约。
 
-**解决方向**：V1.3 参照 Kpi 的示范（PerfScopeHelper.applyScope + *ScopeIntegrationTest）
-补全 TargetPlanService.list / TargetValueService.list 的数据范围注入。
+**Controller 与 Listener 收敛**：
+- V1.2 遗留#6 其他 Controller 局部变量 entity：V1.3 R4.1 对 11 个 Controller（原 V1.2 计划 5 个，审查加码到 11 个）重构，DTO 装配下沉至 Facade/Service，新增架构守护 `NoEntityInControllerLocalsArchTest` 防回归。
+- V1.2 遗留#7 P7 recalc 同步 RUNNING 状态：V1.3 R4.2 `/api/perf/recalc` Controller 响应 status 改读 `getRunTask(parentId)` 真实终态。
+- V1.2 遗留#7 cycleType 仅审计字段透传：V1.3 R4.3 HistoryRecalcService 把 cycleType 写入 params_json，作为字段级审计留痕。
 
-#### 2. WORKFLOW_PARTICIPANT scope 未落地（低）
+**测试基础设施**：
+- V1.2 遗留#4 并发 IT 依赖本地 Redis：V1.3 R5.1 `PerformanceRedisTestBase` + Testcontainers-redis 接入，SysControlConcurrentIT + DataTaskServiceIdempotentIT 可在有 Docker 环境激活。
+- V1.2 遗留#3 UndoScriptSmokeIT 过期：V1.3 R5.2 重写支持 V1_3_0 基线（R0.2 uk 补齐、R0.1 NULL 清理与原脚本共存）。
+- V1.2 遗留#8 V1.0 UOE 测试资产：V1.3 R2 实施过程已将 MetricQueryApiImplTest / PerfCalcApiImplTest / MetricApiImplTest 的 UOE 断言替换为行为断言（Mock Service、入出参交互），R5.3 新增架构守护 `NoUoeInFacadeTestsArchTest` 防回归。
 
-PerfScopeHelper 在 Q7.1 已枚举 7 种 DataScopeType，但 `WORKFLOW_PARTICIPANT` 目前 fall-back 到
-SELF 语义（实际 fail-close 路径），原因：需查询 Flowable act_ru_identitylink 得出候选组 empId 集合，
-跨域查询性能未评估。
+### V1.4 遗留项（已登记）
 
-**解决方向**：V1.3 引入 WorkflowParticipantResolver 协作接口，经 workflow-center 提供
-`resolveParticipantScope(bizType)` 返回可见 empId/orgCode 集合，再由 PerfScopeHelper 透传到 SQL 片段。
+V1.3 仅做技术债清偿，未引入新业务能力。以下 8 项遗留项转入 V1.4 规划：
 
-#### 3. UndoScriptSmokeIT 过期（低）
+#### 1. WORKFLOW_PARTICIPANT scope 未落地（中，V1.3 R6 整体延期）
 
-V1.0 登记的 UndoScriptSmokeIT 基线是 V1_0_3 终态。V1.1/V1.2 新增版本后，flyway.migrate()
-会迁移到最新版，断言失效。V1.2 Q8.5c 已标 @Disabled 并登记取消条件。
+PerfScopeHelper Q7.1 已枚举 7 种 DataScopeType，`WORKFLOW_PARTICIPANT` 当前 fail-close 到 SELF 语义。
+V1.3 R6 原计划落地但需 workflow-center 先提供 `WorkflowQueryApi.queryParticipatedBusinessKeys` 跨模块 API，
+该 API 变更面大（工作流模块有独立 release cadence），整体转入 V1.4。
 
-**解决方向**：V1.3 重写为"只针对 V1_0_3 /V1_0_4 的局部 undo 验证"，或接入 Flyway Teams 原生 undo API。
+**V1.4 解决方向**：workflow-center 先加 `queryParticipatedBusinessKeys(empId)` 返回候选组 businessKey 集合，
+PerfScopeHelper 再包一层 Resolver 组件透传到 SQL 过滤片段。
 
-#### 4. 并发 IT 依赖本地 Redis（低）
+#### 2. MetricApi.getUserMetricCards mom/yoy 字段（中，V1.3 R2.5 简化）
 
-DataTaskServiceIdempotentIT 和 SysControlConcurrentIT 要求 localhost:6379 运行。
-V1.2 Q8.5c 已标 @Disabled。
+V1.3 R2.5 交付的简化方案只填充 `target + actual`，`mom`（环比）/ `yoy`（同比）/ `previousValue` 字段留 null。
+V1.4 需引入周期推导规则（MONTHLY 环比上月 / QUARTERLY 环比上季度 / YEARLY 同比上年）+ 读取历史版本
+宽表数据。
 
-**解决方向**：V1.3 接入 Testcontainers-redis（parent pom 已引入 testcontainers-bom），
-@BeforeAll 启动 Redis 容器并动态注入 spring.data.redis.host。
+#### 3. MetricTrialRespDTO @Deprecated getSamples() 1 版本后删除（低，V1.5 清理）
 
-#### 5. V1.0/V1.1 Controller.list 返回类型签名（低）
+V1.3 R3.2 为保证前端兼容而保留 `@JsonAlias({"samples"}) getSamples()` getter，标 @Deprecated 1 版本后删除。
+按"V1.3 → V1.4 → V1.5"的节奏，V1.5 删除该 getter 与 alias。
+
+#### 4. MetricApi.getUserMetricCards cycleKey 按年口径近似（低，V1.3 R2.5 简化）
+
+V1.3 R2.5 将 `cycleKey = latestDataDate.getYear()` 字符串化，对 MONTHLY/QUARTERLY 方案
+可能与 perf_target_value 实际 cycleKey 不匹配。
+
+**V1.4 解决方向**：按方案 cycleType 精确匹配（MONTHLY → `yyyyMM` / QUARTERLY → `yyyyQn` / YEARLY → `yyyy`）。
+
+#### 5. ScopeColumns Target 降级到 created_by（低，V1.3 R1 简化）
+
+V1.3 R1.1/R1.2 Target 侧 ScopeColumns 降级到 `created_by` 作为 owner 字段，未按 Kpi 的
+`owner_emp_id` / `owner_org_code` 标准字段模型。
+
+**V1.4 解决方向**：引入 `perf_target_plan.owner_emp_id` / `owner_org_code` 字段（DDL 变更），
+ScopeColumns 切换到标准字段。
+
+#### 6. V1.0/V1.1 Controller.list 返回类型签名（低，跨模块影响，V1.3 未改）
 
 V1.0/V1.1 共 6 个 Controller（MetricDef / KpiScheme / TargetPlan / TargetValue / PerfRunTask / AllocAdjust / TargetAdjust）
-的 list 方法均签名 `ResponseWrapper<XxxDTO>`（元素类型）+ return `ResponseWrapper.page(PageResult<XxxDTO>)`。
-这本是 common-web `ResponseWrapper.page` 的契约设计（ResponseWrapper 内部同时持有 data / page 两字段），
-V1.2 Q8.5d 曾误判为瑕疵，实际无需修改——已验证撤销。
+的 list 方法均签名 `ResponseWrapper<XxxDTO>` + return `ResponseWrapper.page(PageResult<XxxDTO>)`。
+该写法是 common-web `ResponseWrapper.page` 契约设计（ResponseWrapper 同时持有 data / page 两字段），
+但"返回类型未直接反映分页语义"。需 common-web API 统一修改，跨模块影响面大，V1.3 不处理。
 
-若后续希望"返回类型直接反映分页语义"，需统一修改 common-web 的 ResponseWrapper API 契约，
-非单模块改动，暂不处理。
+#### 7. MetricCalcApi execute fallback 日志（低，R4.2 reviewer 建议）
 
-#### 6. 其他 Controller 局部变量 entity（低，V1.1 遗留）
+V1.3 R4.2 P7 recalc Controller 响应 status 从真实 `getRunTask(parentId)` 读取，
+但底层 recalc 过程异常时，Controller 层现阶段未留 fallback 日志。
 
-5 个 Controller（KpiScheme / TargetPlan / TargetValue / AllocRelation / PerfRunTask）的方法体内
-仍直接使用 entity 作为 Service 返回值接收中间变量。DTO 装配分散在 Controller 层。
+**V1.4 解决方向**：Controller 层加 try/catch + warn log，防止 recalc 异常时前端拿到误导性 RUNNING。
 
-**解决方向**：V1.3 重构为 Facade 层统一 DTO 装配，Controller 只做入参校验和响应封装。
+#### 8. cycleType=null 语义（低，R4.3 reviewer 建议）
 
-#### 7. P7 回算接口遗留项（低，V1.1 遗留）
+V1.3 R4.3 `params_json` 写入 cycleType 时，未明确区分 `null` 与 `""`（空串）两种情况。
+Facade 层可能透传任一形式，当前实现按 `null` 写入（jackson 会忽略字段）。
 
-- `PerfCalcApi.triggerRecalc(5 参数)` 当 `from>to` 或 `metricCodes` 包含不存在的 code 时异常传播路径未显式覆盖，依赖 `HistoryRecalcService` 兜底抛 `PerfException`。
-- `cycleType` 参数当前在 Facade 层仅作审计字段透传，Service 层按日切分。
-- 同步返回的父 `run_task` 状态在 `recalc()` 返回瞬间为 `RUNNING`，消费方需通过 `getRunTask(parentId)` 轮询或订阅 V1.2 已发布的 4 类事件。
-
-#### 8. V1.0 UOE 测试资产（低，V1.0 遗留）
-
-`MetricQueryApiImplTest.batchQuery*Snapshots_throwsUoe` / `PerfCalcApiImplTest.triggerKpiCalc_throwsUOE`
-目前均断言 UOE + `"V1.2 delivered"` 消息。V1.3 真正交付时需把这些测试替换为行为断言
-（Mock Service、验证入参/出参/交互）。
+**V1.4 解决方向**：明确合约——null 不写字段，空串显式写 `{"cycleType": ""}`，或强制 cycleType 必填。
 
 ## 运维 Runbook（V1.2 + V1.3 交付）
 
