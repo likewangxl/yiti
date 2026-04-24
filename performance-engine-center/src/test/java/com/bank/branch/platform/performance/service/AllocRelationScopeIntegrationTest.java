@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>前缀 {@code TEST_ARS_*} 用于和其他 Alloc IT 隔离（事务回滚）.
  */
-class AllocRelationScopeIT extends PerformanceMapperTestBase {
+class AllocRelationScopeIntegrationTest extends PerformanceMapperTestBase {
 
     @MockBean
     private CurrentUserApi currentUserApi;
