@@ -370,6 +370,7 @@ public interface PerfCalcApi {
 ```java
 package com.bank.branch.platform.performance.api;
 
+import com.bank.branch.platform.performance.api.dto.DataTaskReportResultDTO;
 import com.bank.branch.platform.performance.api.dto.cmd.DataTaskStatusCmd;
 
 /**
@@ -382,10 +383,21 @@ public interface DataTaskApi {
      * 幂等, 同一 taskId 重复上报返回相同结果.
      *
      * @param cmd 上报命令
+     * @return 受理结果 (taskId / accepted / perfRunTaskId)
      */
-    void reportDataTaskStatus(DataTaskStatusCmd cmd);
+    DataTaskReportResultDTO reportDataTaskStatus(DataTaskStatusCmd cmd);
 }
 ```
+
+**DataTaskReportResultDTO 字段:**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `taskId` | `String` | 外部系统上报的 taskId（与入参一致） |
+| `accepted` | `boolean` | 首次受理为 true，重复上报返回 false（幂等） |
+| `perfRunTaskId` | `String` | 本次落库的 perf_run_task.id（幂等场景下为已有记录 ID） |
+
+**返回契约修订（V1.2 Q8.2 同步）：** V1.1 原签名为 `void`，V1.2 执行期补充为 `DataTaskReportResultDTO`，以便外部系统在重复上报时拿到既有的 `perfRunTaskId` 而无需再查询。
 
 ---
 
@@ -863,28 +875,43 @@ public class DataTaskStatusCmd {
 
 ---
 
-## 10. 领域事件
+## 10. 领域事件（V1.2 交付）
 
 本模块发布的领域事件遵循 `docs/common-dev-guide.md` 中的事件规范, 使用 Spring `ApplicationEventPublisher`, 后续可接入 RocketMQ。
 
-### 10.1 performance.target-adjustment.approved.v1
-
-**发布时机:** 目标修正审批流通过, `TargetAdjustCompletedListener` 执行完 `perf_target_value` 更新后
-
-**载荷:**
+V1.2 通过 `PerfEventPublisher` 发布 4 类事件，所有事件继承 `PerfDomainEvent` 抽象基类。基类字段：
 
 ```java
-public class TargetAdjustmentApprovedEvent {
-    private String eventId;
-    private String traceId;
-    private Instant occurredAt;
-    private String applyNo;          // TA_20260410_0001
-    private String planId;
-    private String subjectType;
-    private String subjectId;
-    private String cycleKey;
-    private List<String> adjustedMetricCodes;
-    private String approvedBy;
+public abstract class PerfDomainEvent {
+    /** 事件唯一 ID（UUID 去横线，32 字符）. */
+    private final String eventId;
+    /** 链路 traceId（从 MDC 读取；为 null 时由订阅者自行补全）. */
+    private final String traceId;
+    /** 事件产生时间. */
+    private final LocalDateTime occurredAt;
+    /** 事件 topic，格式 performance.<subject>.<verb>.v<version>. */
+    public abstract String topic();
+}
+```
+
+### 10.1 performance.target-adjustment.approved.v1 （V1.2 Q4 交付）
+
+**发布类:** `TargetAdjustmentApprovedEvent`
+
+**发布时机:** 目标修正审批流通过后，BPMN End Event Listener 调用 `TargetAdjustService.completeApproved` 写回 `perf_target_value` + 标记 `perf_target_adjust_apply.STATUS=APPROVED` 事务提交（AFTER_COMMIT 阶段）。
+
+**载荷（V1.2 实际字段）:**
+
+```java
+public class TargetAdjustmentApprovedEvent extends PerfDomainEvent {
+    // 基类字段：eventId / traceId / occurredAt / topic()
+
+    private final String applyId;          // 目标调整申请 ID（varchar(32)）
+    private final String planId;           // 目标方案 ID（varchar(32)）
+    private final String subjectType;      // 主体类型：EMP / ORG
+    private final String subjectId;        // 主体 ID (emp_id / org_code)
+    private final String cycleKey;         // 周期键，形如 "2026Q2" / "202604" / "2026"
+    private final String approvedBy;       // 审批通过人 empId
 }
 ```
 
@@ -892,28 +919,28 @@ public class TargetAdjustmentApprovedEvent {
 
 | 消费者 | 动作 |
 |---|---|
-| 本模块 `HistoryRecalcService` | 触发未冻结年度的 KPI 历史回算 |
+| 本模块 `HistoryRecalcService` | 触发未冻结年度的 KPI 历史回算（规划 V1.3） |
 | `report-analytics-center` | 刷新报表快照 (可选) |
+| 配置缓存 `perf:target_value:*` | 失效 |
 
-### 10.2 performance.allocation-adjustment.approved.v1
+### 10.2 performance.allocation-adjustment.approved.v1 （V1.2 Q4 交付）
 
-**发布时机:** 分配关系调整审批流通过, `AllocAdjustCompletedListener` 标记申请单为 APPROVED 之后
+**发布类:** `AllocationAdjustmentApprovedEvent`
 
-**载荷:**
+**发布时机:** 客户分配调整审批流通过后，BPMN End Event Listener 调用 `AllocAdjustService.completeApproved` 更新 `cust_alloc_relation` + 标记 `perf_alloc_adjust_apply.STATUS=APPROVED` 事务提交（AFTER_COMMIT 阶段）。
+
+**载荷（V1.2 实际字段）:**
 
 ```java
-public class AllocationAdjustmentApprovedEvent {
-    private String eventId;
-    private String traceId;
-    private Instant occurredAt;
-    private String applyNo;           // AA_20260410_0001
-    private String custId;
-    private String custType;          // CORP / RETAIL
-    private String allocDim;
-    private List<String> bizKinds;
-    private String accountNo;
-    private LocalDate effectiveDate;
-    private String approvedBy;
+public class AllocationAdjustmentApprovedEvent extends PerfDomainEvent {
+    // 基类字段：eventId / traceId / occurredAt / topic()
+
+    private final String applyId;          // 调整申请 ID
+    private final String custId;           // 客户 ID
+    private final String allocDim;         // 分配维度 (OWNER / SERVICE / CHANNEL)
+    private final String bizKind;          // 业务种类 (DEPOSIT / LOAN ...)
+    private final int itemCount;           // 本次调整涉及的明细条目数
+    private final String approvedBy;       // 审批通过人 empId
 }
 ```
 
@@ -921,27 +948,28 @@ public class AllocationAdjustmentApprovedEvent {
 
 | 消费者 | 动作 |
 |---|---|
-| 本模块 `ExternalDataTaskListener` | 等待次日外部系统上报同步结果 |
+| `cust_alloc_relation` 缓存 `alloc:cur:*` / `alloc:his:*` | 失效 |
 | `system-governance-center` 通知子域 | 推送通知给资财部, 提醒线下 CCRM/PCRM 操作 |
-| 审计 | 留痕 |
+| 审计 | 留痕（`audit_log` 表） |
 
-### 10.3 performance.kpi-calc.completed.v1
+### 10.3 performance.kpi-calc.completed.v1 （V1.2 Q4 交付）
 
-**发布时机:** KPI 批量计算任务 (`DailyKpiCalcJob` 或 `HistoryRecalcService`) 成功完成后
+**发布类:** `KpiCalcCompletedEvent`
 
-**载荷:**
+**发布时机:** `KpiCalcService.calcKpi(schemeCode, cycleType, cycleDate)` 成功写入 `kpi_result` 后（AFTER_COMMIT 阶段）。无论是 `DailyKpiCalcJob` 定时触发还是 `HistoryRecalcService` 回算触发。
+
+**载荷（V1.2 实际字段）:**
 
 ```java
-public class KpiCalcCompletedEvent {
-    private String eventId;
-    private String traceId;
-    private Instant occurredAt;
-    private String taskId;
-    private LocalDate dataDate;
-    private String dataVersion;
-    private List<String> cycleTypes;    // 本次计算涉及的 cycle
-    private Integer affectedEmpCount;
-    private Boolean recalc;              // true 表示历史回算, false 表示日常计算
+public class KpiCalcCompletedEvent extends PerfDomainEvent {
+    // 基类字段：eventId / traceId / occurredAt / topic()
+
+    private final String schemeCode;       // KPI 方案编码
+    private final String cycleType;        // DAY / WEEK / MONTH / QUARTER / YEAR
+    private final LocalDate cycleDate;     // 周期日期
+    private final LocalDate asOfDate;      // 截止业务日期
+    private final String version;          // 使用的 sys_control 版本号
+    private final int empCount;            // 落地员工数 (kpi_result 行数)
 }
 ```
 
@@ -952,22 +980,23 @@ public class KpiCalcCompletedEvent {
 | `report-analytics-center` | 重新生成快照数据, 失效相关缓存 |
 | `portal-content-center` | 清理工作台 `perf:card:user:*` 缓存 |
 
-### 10.4 performance.sys-control.updated.v1
+### 10.4 performance.sys-control.updated.v1 （V1.2 Q4 交付）
 
-**发布时机:** `sys_control` 新版本发布 (无论 TIMER / IMPORT / RECALC / MANUAL)
+**发布类:** `SysControlUpdatedEvent`
 
-**载荷:**
+**发布时机:** `SysControlService.doSwitchVersion`（手动 MANUAL）或 `SysControlService.rollback`（回滚 ROLLBACK）执行成功后（AFTER_COMMIT 阶段）。
+
+**载荷（V1.2 实际字段）:**
 
 ```java
-public class SysControlUpdatedEvent {
-    private String eventId;
-    private String traceId;
-    private Instant occurredAt;
-    private String dim;               // EMP/ORG/CUST
-    private LocalDate latestDataDate;
-    private String currentVersion;
-    private String publishSource;     // TIMER/IMPORT/RECALC/MANUAL
-    private String publishBy;
+public class SysControlUpdatedEvent extends PerfDomainEvent {
+    // 基类字段：eventId / traceId / occurredAt / topic()
+
+    private final String scopeDim;         // EMP / ORG / CUST / GLOBAL
+    private final String oldVersion;       // 切换前的版本号
+    private final String newVersion;       // 切换后的版本号
+    private final String publishSource;    // MANUAL / AUTO / ROLLBACK
+    private final String publishBy;        // 发布人 empId
 }
 ```
 
@@ -981,9 +1010,9 @@ public class SysControlUpdatedEvent {
 
 ### 10.5 事件发布可靠性
 
-- V1 使用 Spring `@TransactionalEventListener(phase = AFTER_COMMIT)` 保证事件在事务提交后发布
-- 事件订阅者抛出异常, 不回滚主事务, 只记录错误日志并在 `sys_event_dead_letter` 表中留痕
-- V2 迁移到 RocketMQ 时, 发布端使用"本地消息表 + 定时重发"保证最终一致
+- V1.2 使用 Spring `@TransactionalEventListener(phase = AFTER_COMMIT)` 保证事件在事务提交后发布。
+- 订阅者抛出异常不回滚主事务，`PerfEventPublisher` 捕获后只记录 ERROR 日志（V1.3 规划：落 `sys_event_dead_letter` 表留痕）。
+- V2 迁移到 RocketMQ 时, 发布端使用"本地消息表 + 定时重发"保证最终一致。
 
 ---
 

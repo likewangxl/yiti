@@ -4,9 +4,16 @@
 
 ## 模块概述
 
-**performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制等能力。
+**performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.1（指标计算 + KPI + 导入 + 外部上报 + 回算）—— 在 V1.0 配置骨架之上补齐 MetricCalcService（SQL+Groovy 路由）、KpiCalcService、PerfImportService（3 策略：Excel/SQL/外部上报）、DailyKpiCalcJob 定时任务、HistoryRecalcService 历史回算（父子 run_task + childTaskIds 持久化）。
+**当前版本**: V1.2（流程 + 事件 + 导出 + 数据范围）—— 在 V1.1 指标/KPI/导入/回算全线之上补齐：
+- Q1 版本回滚 + SysControlCleanup
+- Q2/Q3 分配/目标调整审批（BPMN + 事件监听 + Facade 编排）
+- Q4 4 类领域事件发布（SysControlUpdated / KpiCalcCompleted / TargetAdjustmentApproved / AllocationAdjustmentApproved）
+- Q5 ShedLock 分布式锁 + 3 Job 接入
+- Q6 4 导出策略（KPI / Metric / Alloc / Detail）+ 异步导出框架
+- Q7 PerfScopeHelper 7 种 DataScopeType + fail-close + AllocRelation/Kpi/Metric 数据范围注入
+- Q8 surefire 假绿修复 + PT_RESOURCE 资源全量激活 + 业务种子数据
 
 **基础包名**: `com.bank.branch.platform.performance`
 **Maven 坐标**: `com.bank.branch.platform:performance-engine-center`
@@ -19,8 +26,21 @@
 | 版本 | 范围 | 状态 |
 |---|---|---|
 | V1.0 | 配置态 CRUD + 版本管理骨架 + 只读查询 + 7 个 Api（契约定型）| 已交付 |
-| **V1.1** | 指标执行（SQL+Groovy+级联）、KPI 计算（定时任务+手动触发）、数据导入（Excel/SQL/外部上报 3 策略）、历史回算（父子 run_task） | **本期交付** |
-| V1.2 | 分配/目标调整审批、导出接口、事件发布、报表专用批量快照（MetricQueryApi.batchQuery*Snapshots）、user 级指标卡片（MetricApi.getUserMetricCards）、PerfCalcApi.triggerKpiCalc 统一入口委托 | 规划中 |
+| V1.1 | 指标执行（SQL+Groovy+级联）、KPI 计算（定时任务+手动触发）、数据导入（Excel/SQL/外部上报 3 策略）、历史回算（父子 run_task） | 已交付 |
+| **V1.2** | 分配/目标调整审批（BPMN + Flowable）、4 类领域事件发布、4 导出策略（异步任务 + MinIO）、ShedLock 分布式锁、PerfScopeHelper 数据范围注入、PT_RESOURCE 资源全量激活（45 条） | **本期交付（2026-04-24）** |
+| V1.3 | Target 数据范围注入、WORKFLOW_PARTICIPANT scope 落地、Testcontainers-redis 接入、剩余 UOE（MetricApi.getUserMetricCards 等）、Controller.list 返回类型泛化（V1.0/V1.1 Controller 系统性瑕疵） | 规划中 |
+
+### V1.2 UOE 清单交付说明（Facade 5 方法）
+
+| Api.方法 | V1.2 状态 | 说明 |
+|---|---|---|
+| `MetricApi.getUserMetricCards` | 延期 V1.3 | 仍抛 UOE("V1.2 delivered" 已改为正确的延期 message)。依赖 KPI 方案-目标-实绩联动 + 同比/环比展示层聚合，V1.2 未完整覆盖。 |
+| `MetricQueryApi.batchQueryEmpSnapshots` | 延期 V1.3 | report-analytics 专用批量快照，500 条上限语义需 ScopeHelper 细化后启用。 |
+| `MetricQueryApi.batchQueryOrgSnapshots` | 延期 V1.3 | 同上 |
+| `MetricQueryApi.batchQueryCustSnapshots` | 延期 V1.3 | 同上 |
+| `PerfCalcApi.triggerKpiCalc` | 契约冗余 | KpiApi.triggerKpiCalc 已于 V1.1 交付，PerfCalcApi 侧的同名方法保留为契约占位避免破坏 04 契约文档。Facade 实现抛 UOE 但 CLI 不会调用该入口。|
+
+架构测试 `NoV11UOEArchTest` 守护：facade/*.java 不得再出现 `"V1.1 delivered"` 字面量（message 统一为 `"V1.2 delivered"`）。
 
 ## 依赖关系
 
@@ -219,46 +239,130 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 - DDL 权威源: `docs/schema/ddl-performance.sql`
 - 共通开发规范: `docs/common-dev-guide.md`
 
-## 技术债务（V1.1 交付后）
+## 技术债务（V1.2 交付后）
 
-本节记录 V1.1 交付后遗留的技术债，将在 V1.2 迭代时逐项消化。
+本节记录 V1.2 交付后遗留的技术债，将在 V1.3 迭代时逐项消化。
 
-**V1.1 已消化项**：
-- 错误码语义归并（原 V1.0 遗留）：P8.A 已落地 `PERF-40005 TARGET_PLAN_EXISTS` / `PERF-40006 KPI_SCHEME_EXISTS` / `PERF-40007 RUN_TASK_NOT_FOUND`，`KpiSchemeService.create` / `TargetPlanService.create` / `PerfRunTaskController.getById` 抛错点已迁移。
-- HistoryRecalcService childTaskIds 未持久化：P8.C.1 已在双循环后写 `updateResultPreviewJson(parentTaskId, JSON)`，消费方可据此读出子任务 ID 列表。
+### V1.2 已消化项（2026-04-24）
 
-### 1. 其他 Controller 局部变量 entity（低）
+**V1.1 遗留项全部或部分消化**：
+- childTaskIds 持久化：V1.1 P8.C.1 已在双循环后写 `updateResultPreviewJson(parentTaskId, JSON)`，消费方可据此读出子任务 ID 列表。
+- 错误码语义归并：V1.1 P8.A 已落地 `PERF-40005/40006/40007`，`KpiSchemeService.create` / `TargetPlanService.create` / `PerfRunTaskController.getById` 抛错点已迁移。
+- `MetricTrialRespDTO` 字段命名：Q3 执行期 MetricAssembler 字段兼容性校验通过。
+- `perf_run_task` 唯一键：V1.2 Q0.2 DDL 增加 `uk_task_key (task_key)` 幂等唯一键。
+- 04 契约文档 `reportDataTaskStatus` void 签名：V1.2 Q8.2 已同步改为 `DataTaskReportResultDTO`。
+
+**V1.2 Q8 收尾消化项**：
+- surefire 假绿（47+ IT 历史不被扫描）：Q8.3 pom.xml 新增 `<include>**/*IT.java</include>`，测试数从 519 → 842。
+- AllocRelationControllerIT action bug：Q8.4 list 断言 READ → LIST 对齐 Controller。
+- V1.0 历史 Controller IT 错误码断言过期：Q8.5a 全部对齐 PerfErrorCode §K 权威清单。
+- MetricDefControllerIT dataset 污染 + MetricDefService.create deleted=0 漏设置：Q8.5b 已修。
+- V1.0/V1.1 遗留 PT_RESOURCE 规划资源未激活：Q8.6 V1_2_4 已激活 7 条（METRIC_EXEC / METRIC_TRIAL / KPI_TRIGGER / DTASK_STATUS / ALLOC_ADJ_ADD / KPI_RECALC / SC_ROLLBACK），全量 45 条启用。
+- V1.2 业务种子数据缺失：Q8.1 V1_2_3 已预置 5 指标 + 2 KPI 方案 + 1 目标方案。
+
+### V1.2 遗留项（留 V1.3 消化）
+
+#### 1. Target 数据范围注入未落地（中）
+
+Q7.3 已完成 AllocRelation + Kpi + Metric 3 处数据范围示例，但 Target 侧（TargetPlan / TargetValue）
+仍由 Service 直接 Mapper，未经 PerfScopeHelper 注入。
+
+**解决方向**：V1.3 参照 Kpi 的示范（PerfScopeHelper.applyScope + *ScopeIntegrationTest）
+补全 TargetPlanService.list / TargetValueService.list 的数据范围注入。
+
+#### 2. WORKFLOW_PARTICIPANT scope 未落地（低）
+
+PerfScopeHelper 在 Q7.1 已枚举 7 种 DataScopeType，但 `WORKFLOW_PARTICIPANT` 目前 fall-back 到
+SELF 语义（实际 fail-close 路径），原因：需查询 Flowable act_ru_identitylink 得出候选组 empId 集合，
+跨域查询性能未评估。
+
+**解决方向**：V1.3 引入 WorkflowParticipantResolver 协作接口，经 workflow-center 提供
+`resolveParticipantScope(bizType)` 返回可见 empId/orgCode 集合，再由 PerfScopeHelper 透传到 SQL 片段。
+
+#### 3. UndoScriptSmokeIT 过期（低）
+
+V1.0 登记的 UndoScriptSmokeIT 基线是 V1_0_3 终态。V1.1/V1.2 新增版本后，flyway.migrate()
+会迁移到最新版，断言失效。V1.2 Q8.5c 已标 @Disabled 并登记取消条件。
+
+**解决方向**：V1.3 重写为"只针对 V1_0_3 /V1_0_4 的局部 undo 验证"，或接入 Flyway Teams 原生 undo API。
+
+#### 4. 并发 IT 依赖本地 Redis（低）
+
+DataTaskServiceIdempotentIT 和 SysControlConcurrentIT 要求 localhost:6379 运行。
+V1.2 Q8.5c 已标 @Disabled。
+
+**解决方向**：V1.3 接入 Testcontainers-redis（parent pom 已引入 testcontainers-bom），
+@BeforeAll 启动 Redis 容器并动态注入 spring.data.redis.host。
+
+#### 5. V1.0/V1.1 Controller.list 返回类型签名（低）
+
+V1.0/V1.1 共 6 个 Controller（MetricDef / KpiScheme / TargetPlan / TargetValue / PerfRunTask / AllocAdjust / TargetAdjust）
+的 list 方法均签名 `ResponseWrapper<XxxDTO>`（元素类型）+ return `ResponseWrapper.page(PageResult<XxxDTO>)`。
+这本是 common-web `ResponseWrapper.page` 的契约设计（ResponseWrapper 内部同时持有 data / page 两字段），
+V1.2 Q8.5d 曾误判为瑕疵，实际无需修改——已验证撤销。
+
+若后续希望"返回类型直接反映分页语义"，需统一修改 common-web 的 ResponseWrapper API 契约，
+非单模块改动，暂不处理。
+
+#### 6. 其他 Controller 局部变量 entity（低，V1.1 遗留）
 
 5 个 Controller（KpiScheme / TargetPlan / TargetValue / AllocRelation / PerfRunTask）的方法体内
-仍直接使用 entity 作为 Service 返回值接收中间变量（如 `PerfKpiScheme scheme = kpiSchemeService.create(cmd)`），
-`TargetValueController.batch` 甚至在 Controller 层 `new PerfTargetValue()` 构造 entity 并填充字段，
-这部分 DTO 装配逻辑应移到 Service/Facade 层。
+仍直接使用 entity 作为 Service 返回值接收中间变量。DTO 装配分散在 Controller 层。
 
-**解决方向**：V1.2 重构为 Facade 层统一 DTO 装配，Controller 只做入参校验和响应封装。
+**解决方向**：V1.3 重构为 Facade 层统一 DTO 装配，Controller 只做入参校验和响应封装。
 
-### 2. UndoScriptSmokeIT V1.0.3 checksum=NULL（低）
+#### 7. P7 回算接口遗留项（低，V1.1 遗留）
 
-`performance-engine-center/src/test/java/.../UndoScriptSmokeIT` 中 `@AfterEach` 手工插入
-`flyway_schema_history` 记录时，V1.0.3 的 checksum 字段使用 NULL 占位。
-若后续开启 `validate-on-migrate=true`（Flyway 校验模式），将因 checksum 不匹配导致启动失败。
+- `PerfCalcApi.triggerRecalc(5 参数)` 当 `from>to` 或 `metricCodes` 包含不存在的 code 时异常传播路径未显式覆盖，依赖 `HistoryRecalcService` 兜底抛 `PerfException`。
+- `cycleType` 参数当前在 Facade 层仅作审计字段透传，Service 层按日切分。
+- 同步返回的父 `run_task` 状态在 `recalc()` 返回瞬间为 `RUNNING`，消费方需通过 `getRunTask(parentId)` 轮询或订阅 V1.2 已发布的 4 类事件。
 
-**解决方向**：若 V1.2 启用严格校验模式，需预先查询实际 checksum 值并更新测试夹具。
+#### 8. V1.0 UOE 测试资产（低，V1.0 遗留）
 
-### 3. P7 回算接口遗留项（低）
+`MetricQueryApiImplTest.batchQuery*Snapshots_throwsUoe` / `PerfCalcApiImplTest.triggerKpiCalc_throwsUOE`
+目前均断言 UOE + `"V1.2 delivered"` 消息。V1.3 真正交付时需把这些测试替换为行为断言
+（Mock Service、验证入参/出参/交互）。
 
-- `PerfCalcApi.triggerRecalc(5 参数)` 当 `from>to` 或 `metricCodes` 包含不存在的 code 时异常传播路径未显式覆盖，
-  依赖 `HistoryRecalcService` 兜底抛 `PerfException`，未来如引入显式前置校验需补契约测试。
-- `cycleType` 参数当前在 Facade 层仅作审计字段透传，Service 层按日切分，若 V1.2 需要按周/月切分需回流此参数到 `HistoryRecalcService.recalc` 签名。
-- 同步返回的父 `run_task` 状态在 `recalc()` 返回瞬间为 `RUNNING`，不是最终态；消费方需通过 `getRunTask(parentId)` 轮询或订阅事件（V1.2 事件总线）获取终态。
+## 运维 Runbook（V1.2 交付）
 
-### 4. P3/P5/P6 阶段遗留项（低）
+### 3 个定时任务默认关闭策略
 
-- `MetricTrialRespDTO` 字段命名与 `MetricCalcService.trialRun` 返回结构存在部分重命名历史，后续 DTO 字段字面量如有迁移需在 `MetricAssembler` 保持兼容。
-- `docs/modules/performance-engine-center/04-对外API契约.md` §10 存在"void 返回"与实际 Java 签名不完全一致的小瑕疵（架构师决策延后合并）。
-- `perf_run_task` 当前无业务唯一键（仅主键），若 V1.2 要求"同日+同指标+同版本"幂等触发，需在 DDL 补 UK 或在 Service 层做防重。
+V1.2 Q5 引入 3 个 `@Scheduled` 任务，均受 `perf.engine.enabled-jobs` 属性控制，**默认 OFF**
+避免开发 / 测试环境误触发。生产启用步骤：
 
-### 5. V1.0 遗留的测试资产（低）
+1. 在 `application-prod.yml` 追加：
+   ```yaml
+   perf:
+     engine:
+       enabled-jobs:
+         daily-kpi-calc: true           # 每日 KPI 计算（原 Cron: 0 0 2 * * *）
+         sys-control-cleanup: true      # 版本历史清理（Cron: 0 0 3 * * SUN）
+         perf-run-task-cleanup: true    # 过期 run_task 清理（Cron: 0 0 4 * * *）
+   ```
 
-V1.0 `MetricQueryApiImplTest.batchQuery*Snapshots_throwsUoe` / `PerfCalcApiImplTest.triggerKpiCalc_throwsUOE`
-目前均断言 UOE，P8.2 已同步将 `PerfCalcApiImplTest` message 断言从 V1.1 delivered 改为 V1.2 delivered。
-V1.2 实际交付时需把这些测试一并替换为行为断言（Mock Service、验证入参/出参/交互）。
+2. 确保 Redis 可用（ShedLock 依赖，无 Redis 时 Job 会跳过执行但不报错，仅单机状态）。
+
+3. 生产启用后，首次触发前**必须**验证：
+   - `sys_control` 已有有效 is_valid=1 基线版本（无则 DailyKpiCalcJob 会 warn + 跳过）
+   - `perf_run_task` 的保留期策略（默认 90 天）符合审计要求
+
+4. 紧急停止：
+   - 修改 enabled-jobs → false 滚动重启服务；或
+   - `flowable act_ru_job` 表手动删除 schedule
+
+### 导出任务生命周期
+
+- 成功/失败状态均保留 7 天（`perf_run_task` 自动过期清理）
+- MinIO bucket: `perf-exports`, 文件 TTL: 3 天（MinIO 生命周期策略）
+- 用户下载：通过 `GET /api/perf/export/task/{taskId}` 拿到 presigned URL（含 MinIO 1 小时签名）
+
+### 事件总线消费者接入
+
+V1.2 已发布 4 类领域事件到 Spring ApplicationEvent：
+- `SysControlUpdatedEvent`（切版/回滚）
+- `KpiCalcCompletedEvent`（KPI 计算完成）
+- `TargetAdjustmentApprovedEvent`（目标调整审批通过）
+- `AllocationAdjustmentApprovedEvent`（分配调整审批通过）
+
+消费端通过 `@EventListener` 订阅，建议单独的 `@Async` 方法避免阻塞主流程。
+事件字段契约见 `docs/modules/performance-engine-center/04-对外API契约.md` §10。
