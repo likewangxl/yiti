@@ -105,7 +105,13 @@ public class PerfCalcController {
         // HistoryRecalcService 为同步执行，父 task 在 triggerRecalc 返回瞬间已是
         // SUCCESS / PARTIAL / FAILED 终态；查不到时（极端竞态 Service 未及时 commit）
         // 退化到 "RUNNING" 占位，保持调用方侧 getRunTask 轮询语义。
+        // V1.4 S4.1：fallback 分支打 warn 日志，便于运维从日志中定位
+        //   "Service 未 commit / 库主从延迟" 等极端竞态（Reviewer R4.2 建议项）。
         Optional<PerfRunTaskDTO> taskOpt = perfCalcApi.getRunTask(parentTaskId);
+        if (taskOpt.isEmpty()) {
+            log.warn("[recalc] 父 task {} 查不到，退化 RUNNING 状态（可能 Service 未 commit）",
+                    parentTaskId);
+        }
         String realStatus = taskOpt
                 .map(PerfRunTaskDTO::getStatus)
                 .orElse("RUNNING");
