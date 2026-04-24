@@ -249,7 +249,7 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 - childTaskIds 持久化：V1.1 P8.C.1 已在双循环后写 `updateResultPreviewJson(parentTaskId, JSON)`，消费方可据此读出子任务 ID 列表。
 - 错误码语义归并：V1.1 P8.A 已落地 `PERF-40005/40006/40007`，`KpiSchemeService.create` / `TargetPlanService.create` / `PerfRunTaskController.getById` 抛错点已迁移。
 - `MetricTrialRespDTO` 字段命名：Q3 执行期 MetricAssembler 字段兼容性校验通过。
-- `perf_run_task` 唯一键：V1.2 Q0.2 DDL 增加 `uk_task_key (task_key)` 幂等唯一键。
+- **perf_run_task.task_key UNIQUE KEY**：V1.3 R0.2 通过 `V1_3_0__perf_run_task_uk.sql` 补齐（V1.2 曾声称已加但实际未执行，V1.3 勘误）。配合 DataTaskService.report 的 DuplicateKeyException catch 分支，作为 Redis SETNX 幂等的 DB 兜底。
 - 04 契约文档 `reportDataTaskStatus` void 签名：V1.2 Q8.2 已同步改为 `DataTaskReportResultDTO`。
 
 **V1.2 Q8 收尾消化项**：
