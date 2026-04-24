@@ -178,36 +178,71 @@
                     </configuration>
                 </plugin>
                 <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.2.5</version>
-                    <configuration>
-                        <!--
-                            启用 JDK 17+ 的 Dynamic Agent Loading，满足 Mockito 5.x 的 inline mock maker
-                            对 self-attach 的要求。缺此项会在 JDK 17.0.18 + Windows 等环境出现
-                            "Could not self-attach to current VM using external process" 错误。
-                        -->
-                        <argLine>-XX:+EnableDynamicAgentLoading</argLine>
-                        <!--
-                            V1.2 Task Q8.3：扩充 surefire 默认包含规则，使 `*IT.java` 也参与 `mvn test` 扫描。
-                            默认 surefire 只扫描 `*Test.java` / `*Tests.java` / `*TestCase.java`，
-                            导致历史遗留的 47+ 个 *IT 文件被静默跳过（"假绿"问题，详见 Q4 reviewer 发现）。
-                            本项目暂未引入 maven-failsafe-plugin 的 IT 分层执行，
-                            统一让所有测试（包括集成测试）在 `mvn test` 阶段执行，避免遗漏。
-                        -->
-                        <includes>
-                            <include>**/*Test.java</include>
-                            <include>**/*Tests.java</include>
-                            <include>**/*IT.java</include>
-                        </includes>
-                    </configuration>
-                </plugin>
-                <plugin>
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
+        <!--
+            V1.3 Task R0.3：surefire + failsafe 必须挂在 <build><plugins> 下被所有子模块继承，
+            不能挂在 <pluginManagement> 下（failsafe 不是 Maven default lifecycle bindings，
+            pluginManagement 只提供配置模板，不会自动执行 goals）。
+        -->
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <!--
+                        启用 JDK 17+ 的 Dynamic Agent Loading，满足 Mockito 5.x 的 inline mock maker
+                        对 self-attach 的要求。缺此项会在 JDK 17.0.18 + Windows 等环境出现
+                        "Could not self-attach to current VM using external process" 错误。
+                    -->
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <!--
+                        V1.3 Task R0.3：分层 Test / IT 执行。
+                        - surefire 负责 *Test.java / *Tests.java（单元测试）→ `mvn test` 阶段执行
+                        - failsafe 负责 *IT.java（集成测试）→ `mvn verify` 阶段执行
+                        历史背景：V1.2 Q8.3 曾把 *IT.java 加到 surefire includes 以避免"假绿"，
+                        V1.3 R0.3 正式引入 maven-failsafe-plugin 分层，回归 Maven 标准分工。
+                        `mvn test` 只跑单元测试，快速反馈；`mvn verify` 跑全量包含 IT。
+                    -->
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                    </includes>
+                    <excludes>
+                        <!-- V1.3 R0.3：改由 maven-failsafe-plugin 执行 -->
+                        <exclude>**/*IT.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <!--
+                V1.3 Task R0.3：maven-failsafe-plugin 集成测试分层执行.
+                绑定 integration-test + verify 两个标准生命周期 goal，触发条件：`mvn verify`.
+                与 surefire 共享 argLine（-XX:+EnableDynamicAgentLoading）保证 Mockito 一致行为.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.2.5</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <includes>
+                        <include>**/*IT.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+        </plugins>
     </build>
 </project>
