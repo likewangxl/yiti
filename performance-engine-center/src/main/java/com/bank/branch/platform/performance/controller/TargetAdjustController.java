@@ -9,7 +9,6 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.TargetAdjustCreateReqDTO;
 import com.bank.branch.platform.performance.controller.dto.TargetAdjustRespDTO;
-import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
 import com.bank.branch.platform.performance.service.adjust.TargetAdjustService;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitTargetAdjustCmd;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,6 +50,10 @@ import java.util.Map;
  *
  * <p>V1.2 简化：不同步 Flowable cancelProcess（与 Q2 AllocAdjust 一致），
  * withdraw 仅置本地状态为 REJECTED，技术债留待后续迭代.
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，所有装配下沉到
+ * {@link TargetAdjustService#submitDto} / {@link TargetAdjustService#getByIdDto}
+ * / {@link TargetAdjustService#pageDto}.
  */
 @Slf4j
 @RestController
@@ -88,11 +91,7 @@ public class TargetAdjustController {
                 .adjustments(toCmdAdjustments(req.getAdjustments()))
                 .build();
 
-        String id = targetAdjustService.submit(cmd);
-        PerfTargetAdjustApply loaded = targetAdjustService.getById(id);
-        return ResponseWrapper.success(Map.of(
-                "id", loaded.getId(),
-                "status", loaded.getStatus()));
+        return ResponseWrapper.success(targetAdjustService.submitDto(cmd));
     }
 
     /**
@@ -103,8 +102,7 @@ public class TargetAdjustController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
     public ResponseWrapper<TargetAdjustRespDTO> getById(@PathVariable("id") @NotBlank String id) {
         log.debug("[TargetAdjustController.getById] id={}", id);
-        PerfTargetAdjustApply apply = targetAdjustService.getById(id);
-        return ResponseWrapper.success(toDto(apply));
+        return ResponseWrapper.success(targetAdjustService.getByIdDto(id));
     }
 
     /**
@@ -127,13 +125,9 @@ public class TargetAdjustController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[TargetAdjustController.list] status={}, planId={}, subjectType={}, pageNo={}",
                 status, planId, subjectType, pageNo);
-        PageResult<PerfTargetAdjustApply> raw = targetAdjustService.page(
+        PageResult<TargetAdjustRespDTO> dtoPage = targetAdjustService.pageDto(
                 status, planId, subjectType, subjectId, ownerOrgId, createdBy, pageNo, pageSize);
-        List<TargetAdjustRespDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfTargetAdjustApply apply : raw.getRecords()) {
-            dtos.add(toDto(apply));
-        }
-        return ResponseWrapper.page(PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos));
+        return ResponseWrapper.page(dtoPage);
     }
 
     /**
@@ -150,28 +144,6 @@ public class TargetAdjustController {
         String reason = req == null ? null : req.getReason();
         targetAdjustService.withdraw(id, reason, currentUserApi.getCurrentEmpId());
         return ResponseWrapper.success();
-    }
-
-    /**
-     * DTO 装配：Entity → 响应 DTO.
-     */
-    private TargetAdjustRespDTO toDto(PerfTargetAdjustApply apply) {
-        TargetAdjustRespDTO dto = new TargetAdjustRespDTO();
-        dto.setId(apply.getId());
-        dto.setPlanId(apply.getPlanId());
-        dto.setSubjectType(apply.getSubjectType());
-        dto.setSubjectId(apply.getSubjectId());
-        dto.setCycleKey(apply.getCycleKey());
-        dto.setStatus(apply.getStatus());
-        dto.setBusinessKey(apply.getBusinessKey());
-        dto.setProcessInstanceId(apply.getProcessInstanceId());
-        dto.setOwnerOrgId(apply.getOwnerOrgId());
-        dto.setRemark(apply.getRemark());
-        dto.setCreatedBy(apply.getCreatedBy());
-        dto.setCreatedTime(apply.getCreatedTime());
-        dto.setUpdatedBy(apply.getUpdatedBy());
-        dto.setUpdatedTime(apply.getUpdatedTime());
-        return dto;
     }
 
     /**

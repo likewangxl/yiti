@@ -6,9 +6,11 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.performance.api.dto.AllocSummaryDTO;
 import com.bank.branch.platform.performance.api.dto.AllocVersionDTO;
+import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.performance.entity.CustAllocRelation;
 import com.bank.branch.platform.performance.entity.SysControl;
+import com.bank.branch.platform.performance.facade.assembler.AllocAssembler;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import lombok.extern.slf4j.Slf4j;
@@ -122,6 +124,25 @@ public class AllocRelationService {
         Assert.hasText(custId, "custId 不能为空");
         Assert.notNull(asOfDate, "asOfDate 不能为空");
         return allocMapper.selectHistoryByCustAsOf(custId, asOfDate);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本当前分配查询.
+     *
+     * <p>内部委托 {@link #getCurrentAllocations}，再通过 {@link AllocAssembler#toDtoList}
+     * 装配成 DTO 列表，使 Controller 不再感知 entity。
+     */
+    @Transactional(readOnly = true)
+    public List<CustAllocRelationDTO> getCurrentAllocationsDto(String custId, String bizKind) {
+        return AllocAssembler.toDtoList(getCurrentAllocations(custId, bizKind));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本历史快照查询.
+     */
+    @Transactional(readOnly = true)
+    public List<CustAllocRelationDTO> getAllocationHistoryDto(String custId, LocalDate asOfDate) {
+        return AllocAssembler.toDtoList(getAllocationHistory(custId, asOfDate));
     }
 
     /**

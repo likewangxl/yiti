@@ -1,8 +1,10 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.performance.api.dto.KpiItemDTO;
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.facade.assembler.KpiAssembler;
 import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
 import com.bank.branch.platform.performance.mapper.PerfKpiSchemeMapper;
 import com.bank.branch.platform.performance.service.cmd.AddKpiItemCmd;
@@ -173,6 +175,22 @@ public class KpiItemService {
             throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
         return item;
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 addItem.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public KpiItemDTO addItemDto(AddKpiItemCmd cmd) {
+        return KpiAssembler.toItemDto(addItem(cmd));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 updateItem.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public KpiItemDTO updateItemDto(String id, UpdateKpiItemCmd cmd) {
+        return KpiAssembler.toItemDto(updateItem(id, cmd));
     }
 
     private String generateId() {

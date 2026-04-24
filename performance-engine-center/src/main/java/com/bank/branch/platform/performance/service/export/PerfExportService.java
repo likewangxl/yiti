@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service.export;
 
+import com.bank.branch.platform.performance.controller.dto.ExportTaskRespDTO;
 import com.bank.branch.platform.performance.entity.PerfExportTask;
 
 import java.util.Map;
@@ -54,4 +55,14 @@ public interface PerfExportService {
      * @return 任务实体；operatorId 与任务归属不符时抛 {@code EXPORT_TASK_OWNER_MISMATCH}
      */
     PerfExportTask getTaskForOwner(String taskId, String operatorId);
+
+    /**
+     * V1.3 R4.1：创建任务并返回 DTO（Controller 不再接触 entity）.
+     */
+    ExportTaskRespDTO createTaskDto(String exportType, Map<String, Object> params, String operatorId);
+
+    /**
+     * V1.3 R4.1：查询任务 DTO.
+     */
+    ExportTaskRespDTO getTaskDto(String taskId);
 }

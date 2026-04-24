@@ -1,8 +1,11 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.performance.controller.dto.SysControlRespDTO;
 import com.bank.branch.platform.performance.entity.SysControl;
+import com.bank.branch.platform.performance.enums.BaseDimEnum;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.facade.assembler.SysControlAssembler;
 import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.cmd.SwitchVersionCmd;
 import lombok.RequiredArgsConstructor;
@@ -131,5 +134,48 @@ public class SysControlFacade {
      */
     public SysControl initIfAbsent(String scopeDim, LocalDate dataDate, String version) {
         return sysControlService.initIfAbsent(scopeDim, dataDate, version);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 getCurrentVersion.
+     */
+    public SysControlRespDTO getCurrentVersionDto(String scopeDim) {
+        return SysControlAssembler.toRespDTO(getCurrentVersion(scopeDim));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 listVersionHistory.
+     */
+    public List<SysControlRespDTO> listVersionHistoryDto(String scopeDim, int limit) {
+        return SysControlAssembler.toRespDTOList(listVersionHistory(scopeDim, limit));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 switchVersion.
+     */
+    public SysControlRespDTO switchVersionDto(SwitchVersionCmd cmd) {
+        return SysControlAssembler.toRespDTO(switchVersion(cmd));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 rollback.
+     */
+    public SysControlRespDTO rollbackDto(String scopeDim, String rollbackTo, String reason, String operatorId) {
+        return SysControlAssembler.toRespDTO(rollback(scopeDim, rollbackTo, reason, operatorId));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 init（批量三维度 EMP/ORG/CUST）.
+     *
+     * <p>把 SysControlController.init 的 for 循环 + 默认 baseline 语义下沉到 Facade，
+     * Controller 不再构造 entity 列表.
+     */
+    public List<SysControlRespDTO> initAllDto() {
+        LocalDate baselineDate = LocalDate.of(1970, 1, 1);
+        List<SysControl> initialized = new java.util.ArrayList<>();
+        for (BaseDimEnum dim : BaseDimEnum.values()) {
+            initialized.add(initIfAbsent(dim.name(), baselineDate, "V_INIT"));
+        }
+        return SysControlAssembler.toRespDTOList(initialized);
     }
 }

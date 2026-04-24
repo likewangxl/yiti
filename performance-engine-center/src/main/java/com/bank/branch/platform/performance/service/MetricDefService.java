@@ -4,9 +4,11 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
@@ -304,6 +306,28 @@ public class MetricDefService {
                 baseDim, metricLevel, status, keyword, offset, pageSize,
                 frag.getSql(), frag.getParams());
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本分页查询.
+     */
+    @Transactional(readOnly = true)
+    public PageResult<MetricDefRespDTO> pageDto(String baseDim, Integer metricLevel, String status,
+                                                String keyword, int pageNo, int pageSize) {
+        PageResult<PerfMetricDef> raw = page(baseDim, metricLevel, status, keyword, pageNo, pageSize);
+        List<MetricDefRespDTO> dtos = new ArrayList<>(raw.getRecords().size());
+        for (PerfMetricDef def : raw.getRecords()) {
+            dtos.add(MetricAssembler.toRespDTO(def));
+        }
+        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 getByCode.
+     */
+    @Transactional(readOnly = true)
+    public MetricDefRespDTO getByCodeDto(String metricCode) {
+        return MetricAssembler.toRespDTO(getByCode(metricCode));
     }
 
     /**

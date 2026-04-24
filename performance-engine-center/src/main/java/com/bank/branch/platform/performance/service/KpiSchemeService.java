@@ -1,11 +1,14 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.dto.KpiItemDTO;
+import com.bank.branch.platform.performance.api.dto.KpiSchemeDTO;
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.facade.assembler.KpiAssembler;
 import com.bank.branch.platform.performance.mapper.PerfKpiSchemeMapper;
 import com.bank.branch.platform.performance.service.cmd.AddKpiItemCmd;
 import com.bank.branch.platform.performance.service.cmd.CreateKpiSchemeCmd;
@@ -312,6 +315,76 @@ public class KpiSchemeService {
         }
         List<PerfKpiScheme> records = schemeMapper.selectByCondition(cycleType, status, keyword, offset, pageSize);
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本分页查询。列表视图不携带 items，
+     * 与既有 Controller.list 行为一致（减少数据库压力）.
+     */
+    @Transactional(readOnly = true)
+    public PageResult<KpiSchemeDTO> pageDto(String cycleType, String status, String keyword,
+                                            int pageNo, int pageSize) {
+        PageResult<PerfKpiScheme> raw = page(cycleType, status, keyword, pageNo, pageSize);
+        List<KpiSchemeDTO> dtos = new java.util.ArrayList<>(raw.getRecords().size());
+        for (PerfKpiScheme scheme : raw.getRecords()) {
+            dtos.add(KpiAssembler.toDto(scheme, List.of()));
+        }
+        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本详情查询（含 items）.
+     *
+     * <p>不存在抛 {@link PerfErrorCode#KPI_SCHEME_NOT_FOUND}.
+     */
+    @Transactional(readOnly = true)
+    public KpiSchemeDTO getByIdDto(String id) {
+        PerfKpiScheme scheme = getById(id);
+        List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
+        return KpiAssembler.toDto(scheme, items);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本创建（含 items 聚合）.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public KpiSchemeDTO createDto(CreateKpiSchemeCmd cmd) {
+        PerfKpiScheme scheme = create(cmd);
+        List<PerfKpiItem> items = kpiItemService.listBySchemeId(scheme.getId());
+        return KpiAssembler.toDto(scheme, items);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本更新（含 items）.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public KpiSchemeDTO updateByIdDto(String id, UpdateKpiSchemeCmd cmd) {
+        PerfKpiScheme scheme = updateById(id, cmd);
+        List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
+        return KpiAssembler.toDto(scheme, items);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本发布（含 items）.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public KpiSchemeDTO publishDto(String id, String operator) {
+        PerfKpiScheme scheme = publish(id, operator);
+        List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
+        return KpiAssembler.toDto(scheme, items);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 item 查询（补足 KpiItemDTO 列表消费者）.
+     */
+    @Transactional(readOnly = true)
+    public List<KpiItemDTO> listItemsDto(String schemeId) {
+        List<PerfKpiItem> items = kpiItemService.listBySchemeId(schemeId);
+        List<KpiItemDTO> dtos = new java.util.ArrayList<>(items.size());
+        for (PerfKpiItem item : items) {
+            dtos.add(KpiAssembler.toItemDto(item));
+        }
+        return dtos;
     }
 
     private String generateId() {

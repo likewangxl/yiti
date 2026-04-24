@@ -4,7 +4,7 @@ import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
-import com.bank.branch.platform.performance.entity.PerfImportBatch;
+import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.importer.PerfImportService;
@@ -104,8 +104,8 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void getBatch_whenExists_returnsDTO() throws Exception {
-        PerfImportBatch b = sampleBatch("B_OK", "SUCCESS");
-        Mockito.when(perfImportService.getBatch("B_OK")).thenReturn(b);
+        PerfImportBatchRespDTO dto = sampleDto("B_OK", "SUCCESS");
+        Mockito.when(perfImportService.getBatchDto("B_OK")).thenReturn(dto);
 
         mockMvc.perform(get("/api/perf/import/batches/{batchId}", "B_OK"))
                 .andExpect(status().isOk())
@@ -121,7 +121,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void getBatch_whenNotFound_returnsBusinessError() throws Exception {
-        Mockito.when(perfImportService.getBatch("MISSING"))
+        Mockito.when(perfImportService.getBatchDto("MISSING"))
                 .thenThrow(new PerfException(PerfErrorCode.IMPORT_BATCH_NOT_FOUND, "MISSING"));
 
         mockMvc.perform(get("/api/perf/import/batches/{batchId}", "MISSING"))
@@ -264,20 +264,23 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     // =================== helpers ===================
 
-    private static PerfImportBatch sampleBatch(String id, String status) {
-        PerfImportBatch b = new PerfImportBatch();
-        b.setId(id);
-        b.setBatchNo("IMP20260423001");
-        b.setImportType("TARGET");
-        b.setFileName("targets.xlsx");
-        b.setStatus(status);
-        b.setTotalRows(10);
-        b.setSuccessRows(10);
-        b.setErrorRows(0);
-        b.setRemark(null);
-        b.setCreatedBy("admin");
-        b.setCreatedTime(LocalDateTime.now());
-        b.setUpdatedTime(LocalDateTime.now());
-        return b;
+    /**
+     * V1.3 R4.1：Controller 改为返回 DTO，测试构造 DTO 样本代替 entity.
+     */
+    private static PerfImportBatchRespDTO sampleDto(String id, String status) {
+        return PerfImportBatchRespDTO.builder()
+                .id(id)
+                .batchNo("IMP20260423001")
+                .importType("TARGET")
+                .fileName("targets.xlsx")
+                .status(status)
+                .totalRows(10)
+                .successRows(10)
+                .errorRows(0)
+                .remark(null)
+                .createdBy("admin")
+                .createdTime(LocalDateTime.now())
+                .updatedTime(LocalDateTime.now())
+                .build();
     }
 }

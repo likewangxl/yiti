@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service.importer;
 
+import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -69,4 +70,13 @@ public interface PerfImportService {
      * @param batchId 批次 ID
      */
     void delete(String batchId);
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本，内部调用 {@link #getBatch}，再装配成
+     * {@link PerfImportBatchRespDTO}.
+     *
+     * @param batchId 批次 ID
+     * @return 响应 DTO（不存在则抛 IMPORT_BATCH_NOT_FOUND）
+     */
+    PerfImportBatchRespDTO getBatchDto(String batchId);
 }

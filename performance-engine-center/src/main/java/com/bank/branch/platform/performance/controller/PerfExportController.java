@@ -10,7 +10,6 @@ import com.bank.branch.platform.performance.controller.dto.ExportAllocReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ExportKpiReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ExportMetricReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ExportTaskRespDTO;
-import com.bank.branch.platform.performance.entity.PerfExportTask;
 import com.bank.branch.platform.performance.service.export.PerfExportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,8 +43,8 @@ import java.util.Map;
  * <p>单档授权：全部端点 {@code @BizAuth(bizType=PERF_CONFIG, action=...)}，
  * 细粒度资源 ID 见 V1_2_2 脚本（P_PERF_EXPORT_KPI/ALLOC + P_PERF_EXPT_MTR/DTL/TASK）.
  *
- * <p>Controller 不直接返回 entity（NoEntityInControllerArchTest 守护），
- * 所有 PerfExportTask 通过 {@link #toDto} 装配为 {@link ExportTaskRespDTO}.
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，DTO 装配全部下沉到
+ * {@link PerfExportService#createTaskDto} / {@link PerfExportService#getTaskDto}.
  */
 @Slf4j
 @RestController
@@ -75,9 +74,8 @@ public class PerfExportController {
         if (req.getDataVersion() != null) {
             params.put("dataVersion", req.getDataVersion());
         }
-        String taskId = perfExportService.createTask("KPI", params, currentUserApi.getCurrentEmpId());
-        PerfExportTask task = perfExportService.getTask(taskId);
-        return ResponseWrapper.success(toDto(task));
+        return ResponseWrapper.success(perfExportService.createTaskDto(
+                "KPI", params, currentUserApi.getCurrentEmpId()));
     }
 
     /**
@@ -98,9 +96,8 @@ public class PerfExportController {
         if (req.getOrgCodes() != null) {
             params.put("orgCodes", req.getOrgCodes());
         }
-        String taskId = perfExportService.createTask("METRIC", params, currentUserApi.getCurrentEmpId());
-        PerfExportTask task = perfExportService.getTask(taskId);
-        return ResponseWrapper.success(toDto(task));
+        return ResponseWrapper.success(perfExportService.createTaskDto(
+                "METRIC", params, currentUserApi.getCurrentEmpId()));
     }
 
     /**
@@ -121,9 +118,8 @@ public class PerfExportController {
         if (req.getEmpId() != null) {
             params.put("empId", req.getEmpId());
         }
-        String taskId = perfExportService.createTask("ALLOC", params, currentUserApi.getCurrentEmpId());
-        PerfExportTask task = perfExportService.getTask(taskId);
-        return ResponseWrapper.success(toDto(task));
+        return ResponseWrapper.success(perfExportService.createTaskDto(
+                "ALLOC", params, currentUserApi.getCurrentEmpId()));
     }
 
     /**
@@ -143,9 +139,8 @@ public class PerfExportController {
         if (req.getDataVersion() != null) {
             params.put("dataVersion", req.getDataVersion());
         }
-        String taskId = perfExportService.createTask("DETAIL", params, currentUserApi.getCurrentEmpId());
-        PerfExportTask task = perfExportService.getTask(taskId);
-        return ResponseWrapper.success(toDto(task));
+        return ResponseWrapper.success(perfExportService.createTaskDto(
+                "DETAIL", params, currentUserApi.getCurrentEmpId()));
     }
 
     /**
@@ -159,27 +154,6 @@ public class PerfExportController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
     public ResponseWrapper<ExportTaskRespDTO> getTask(@PathVariable("taskId") @NotBlank String taskId) {
         log.debug("[PerfExportController.getTask] taskId={}", taskId);
-        PerfExportTask task = perfExportService.getTask(taskId);
-        return ResponseWrapper.success(toDto(task));
-    }
-
-    /** entity → DTO 装配（遵守 NoEntityInControllerArchTest 约束）. */
-    private static ExportTaskRespDTO toDto(PerfExportTask t) {
-        if (t == null) {
-            return null;
-        }
-        return ExportTaskRespDTO.builder()
-                .id(t.getId())
-                .exportType(t.getExportType())
-                .status(t.getStatus())
-                .fileKey(t.getFileKey())
-                .fileSize(t.getFileSize())
-                .rowCount(t.getRowCount())
-                .expireAt(t.getExpireAt())
-                .operatorId(t.getOperatorId())
-                .errorMsg(t.getErrorMsg())
-                .createdTime(t.getCreatedTime())
-                .updatedTime(t.getUpdatedTime())
-                .build();
+        return ResponseWrapper.success(perfExportService.getTaskDto(taskId));
     }
 }

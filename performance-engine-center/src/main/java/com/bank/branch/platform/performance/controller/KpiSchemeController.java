@@ -15,9 +15,6 @@ import com.bank.branch.platform.performance.controller.dto.PublishKpiSchemeReqDT
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateKpiItemReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateKpiSchemeReqDTO;
-import com.bank.branch.platform.performance.entity.PerfKpiItem;
-import com.bank.branch.platform.performance.entity.PerfKpiScheme;
-import com.bank.branch.platform.performance.facade.assembler.KpiAssembler;
 import com.bank.branch.platform.performance.service.KpiItemService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
 import com.bank.branch.platform.performance.service.cmd.AddKpiItemCmd;
@@ -64,6 +61,9 @@ import java.util.List;
  *
  * <p>异常策略: Controller 不做 try-catch, PerfException 冒泡至全局异常处理器,
  * 业务错误统一以 200 + 错误码返回。
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，所有 CRUD 改调
+ * {@link KpiSchemeService#pageDto} / {@link KpiSchemeService#getByIdDto} 等 DTO 方法.
  */
 @Slf4j
 @RestController
@@ -99,13 +99,8 @@ public class KpiSchemeController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[KpiSchemeController.list] cycleType={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 cycleType, status, keyword, pageNo, pageSize);
-        PageResult<PerfKpiScheme> raw = kpiSchemeService.page(cycleType, status, keyword, pageNo, pageSize);
-        List<KpiSchemeDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfKpiScheme scheme : raw.getRecords()) {
-            // 列表视图不含 items (减轻数据库压力), 仅返回方案主档信息。
-            dtos.add(KpiAssembler.toDto(scheme, List.of()));
-        }
-        return ResponseWrapper.page(PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos));
+        PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, status, keyword, pageNo, pageSize);
+        return ResponseWrapper.page(dtoPage);
     }
 
     /**
@@ -116,9 +111,7 @@ public class KpiSchemeController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
     public ResponseWrapper<KpiSchemeDTO> getById(@PathVariable("id") @NotBlank String id) {
         log.debug("[KpiSchemeController.getById] id={}", id);
-        PerfKpiScheme scheme = kpiSchemeService.getById(id);
-        List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
-        return ResponseWrapper.success(KpiAssembler.toDto(scheme, items));
+        return ResponseWrapper.success(kpiSchemeService.getByIdDto(id));
     }
 
     /**
@@ -140,9 +133,7 @@ public class KpiSchemeController {
                 .items(toAddItemCmds(req.getItems()))
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        PerfKpiScheme scheme = kpiSchemeService.create(cmd);
-        List<PerfKpiItem> items = kpiItemService.listBySchemeId(scheme.getId());
-        return ResponseWrapper.success(KpiAssembler.toDto(scheme, items));
+        return ResponseWrapper.success(kpiSchemeService.createDto(cmd));
     }
 
     /**
@@ -162,9 +153,7 @@ public class KpiSchemeController {
                 .openDetail(req.getOpenDetail() == null ? null : (Boolean.TRUE.equals(req.getOpenDetail()) ? 1 : 0))
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        PerfKpiScheme scheme = kpiSchemeService.updateById(id, cmd);
-        List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
-        return ResponseWrapper.success(KpiAssembler.toDto(scheme, items));
+        return ResponseWrapper.success(kpiSchemeService.updateByIdDto(id, cmd));
     }
 
     /**
@@ -193,9 +182,7 @@ public class KpiSchemeController {
     public ResponseWrapper<KpiSchemeDTO> publish(@PathVariable("id") @NotBlank String id,
                                                  @Valid @RequestBody PublishKpiSchemeReqDTO req) {
         log.info("[KpiSchemeController.publish] id={}, reason={}", id, req.getReason());
-        PerfKpiScheme scheme = kpiSchemeService.publish(id, currentUserApi.getCurrentEmpId());
-        List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
-        return ResponseWrapper.success(KpiAssembler.toDto(scheme, items));
+        return ResponseWrapper.success(kpiSchemeService.publishDto(id, currentUserApi.getCurrentEmpId()));
     }
 
     /**
@@ -220,8 +207,7 @@ public class KpiSchemeController {
                 .maxScore(req.getMaxScore())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        PerfKpiItem item = kpiItemService.addItem(cmd);
-        return ResponseWrapper.success(KpiAssembler.toItemDto(item));
+        return ResponseWrapper.success(kpiItemService.addItemDto(cmd));
     }
 
     /**
@@ -242,8 +228,7 @@ public class KpiSchemeController {
                 .maxScore(req.getMaxScore())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        PerfKpiItem item = kpiItemService.updateItem(itemId, cmd);
-        return ResponseWrapper.success(KpiAssembler.toItemDto(item));
+        return ResponseWrapper.success(kpiItemService.updateItemDto(itemId, cmd));
     }
 
     /**

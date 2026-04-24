@@ -10,8 +10,6 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.dto.TargetPlanDTO;
 import com.bank.branch.platform.performance.controller.dto.CreateTargetPlanReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpdateTargetPlanReqDTO;
-import com.bank.branch.platform.performance.entity.PerfTargetPlan;
-import com.bank.branch.platform.performance.facade.assembler.TargetAssembler;
 import com.bank.branch.platform.performance.service.TargetPlanService;
 import com.bank.branch.platform.performance.service.cmd.CreateTargetPlanCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateTargetPlanCmd;
@@ -33,9 +31,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * 目标方案 REST 控制器 (4 个端点, 对齐 PT_RESOURCE P_PERF_TGT_P_*).
  *
@@ -50,6 +45,9 @@ import java.util.List;
  * <p>异常策略: Controller 不做 try-catch, PerfException 冒泡至全局异常处理器,
  * 业务错误统一以 200 + 错误码返回 (NOT_FOUND → PERF-40403, CODE_DUP → PERF-40908,
  * KPI_SCHEME_INVALID → PERF-40915).
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，CRUD 统一调用
+ * Service 的 {@code xxxDto} 方法，DTO 装配下沉到 Service 层.
  */
 @Slf4j
 @RestController
@@ -67,7 +65,7 @@ public class TargetPlanController {
      *
      * <p>过滤条件: kpiSchemeId / status / keyword (plan_code / plan_name 模糊匹配).
      *
-     * <p>V1.3 R1.3 改造：切换到 {@link TargetPlanService#pageWithScope} 以启用
+     * <p>V1.3 R1.3 改造：切换到 {@link TargetPlanService#pageWithScopeDto} 以启用
      * 基于 {@code PerfScopeHelper} 的数据范围注入（普通绩效配置员仅见自建方案）。
      * 原 {@code page} 路径保留为 Service 层内部方法, 供未经数据范围限制的编排复用。
      */
@@ -83,12 +81,9 @@ public class TargetPlanController {
         log.debug("[TargetPlanController.list] kpiSchemeId={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 kpiSchemeId, status, keyword, pageNo, pageSize);
         // V1.3 R1.3：改用 pageWithScope 注入 PerfScopeHelper 数据范围
-        PageResult<PerfTargetPlan> raw = targetPlanService.pageWithScope(kpiSchemeId, status, keyword, pageNo, pageSize);
-        List<TargetPlanDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfTargetPlan plan : raw.getRecords()) {
-            dtos.add(TargetAssembler.toDto(plan));
-        }
-        return ResponseWrapper.page(PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos));
+        // V1.3 R4.1：Controller 不再感知 entity，改调 pageWithScopeDto
+        PageResult<TargetPlanDTO> dtoPage = targetPlanService.pageWithScopeDto(kpiSchemeId, status, keyword, pageNo, pageSize);
+        return ResponseWrapper.page(dtoPage);
     }
 
     /**
@@ -99,8 +94,7 @@ public class TargetPlanController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
     public ResponseWrapper<TargetPlanDTO> getById(@PathVariable("id") @NotBlank String id) {
         log.debug("[TargetPlanController.getById] id={}", id);
-        PerfTargetPlan plan = targetPlanService.getById(id);
-        return ResponseWrapper.success(TargetAssembler.toDto(plan));
+        return ResponseWrapper.success(targetPlanService.getByIdDto(id));
     }
 
     /**
@@ -126,8 +120,7 @@ public class TargetPlanController {
                 .effectiveDate(req.getEffectiveDate())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        PerfTargetPlan plan = targetPlanService.create(cmd);
-        return ResponseWrapper.success(TargetAssembler.toDto(plan));
+        return ResponseWrapper.success(targetPlanService.createDto(cmd));
     }
 
     /**
@@ -151,7 +144,6 @@ public class TargetPlanController {
                 .effectiveDate(req.getEffectiveDate())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        PerfTargetPlan plan = targetPlanService.updateById(id, cmd);
-        return ResponseWrapper.success(TargetAssembler.toDto(plan));
+        return ResponseWrapper.success(targetPlanService.updateByIdDto(id, cmd));
     }
 }

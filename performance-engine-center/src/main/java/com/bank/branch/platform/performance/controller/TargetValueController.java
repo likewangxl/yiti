@@ -10,9 +10,8 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.dto.TargetValueDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueBatchReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueReqDTO;
-import com.bank.branch.platform.performance.entity.PerfTargetValue;
-import com.bank.branch.platform.performance.facade.assembler.TargetAssembler;
 import com.bank.branch.platform.performance.service.TargetValueService;
+import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueBatchCmd;
 import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,6 +48,9 @@ import java.util.List;
  *
  * <p>批量 500 守卫: DTO {@code @Size(max=500)} (400 语义) + Service 层 BATCH_UPPER_LIMIT
  * (PERF-40910) 双重防线, 避免 Controller 被绕过导致 DB 压力。
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 {@code new PerfTargetValue()}，批量 upsert 改为
+ * 传 {@link UpsertTargetValueBatchCmd} 给 Service，entity 构造下沉到 Service 层.
  */
 @Slf4j
 @RestController
@@ -64,7 +66,7 @@ public class TargetValueController {
     /**
      * 按方案分页查询目标值.
      *
-     * <p>V1.3 R1.3 改造：切换到 {@link TargetValueService#pageWithScope} 以启用
+     * <p>V1.3 R1.3 改造：切换到 {@link TargetValueService#pageWithScopeDto} 以启用
      * 基于 {@code PerfScopeHelper} 的数据范围注入（普通绩效配置员仅见自建目标值）。
      *
      * <p>planId 仍保留 {@code @NotBlank} 以满足客户端「必须在方案上下文内查询」的使用惯例,
@@ -84,13 +86,10 @@ public class TargetValueController {
         log.debug("[TargetValueController.list] planId={}, subjectType={}, subjectId={}, cycleKey={}, pageNo={}, pageSize={}",
                 planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
         // V1.3 R1.3：改用 pageWithScope 注入 PerfScopeHelper 数据范围（原 listByPlan 保留为 Service 层内部方法）
-        PageResult<PerfTargetValue> raw = targetValueService.pageWithScope(
+        // V1.3 R4.1：Controller 不再感知 entity，改调 pageWithScopeDto
+        PageResult<TargetValueDTO> dtoPage = targetValueService.pageWithScopeDto(
                 planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
-        List<TargetValueDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfTargetValue v : raw.getRecords()) {
-            dtos.add(TargetAssembler.toDto(v));
-        }
-        return ResponseWrapper.page(PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos));
+        return ResponseWrapper.page(dtoPage);
     }
 
     /**
@@ -125,6 +124,9 @@ public class TargetValueController {
      * <p>Controller 层双重防线: DTO {@code @NotEmpty} + {@code @Size(max=500)} 先过滤,
      * Service 层仍保留 BATCH_UPPER_LIMIT 守卫以兜底; 调用方若绕过 Controller 直接
      * 调 Service, Service 层抛 PERF-40910。
+     *
+     * <p>V1.3 R4.1 改造：Controller 不再 {@code new PerfTargetValue()}，改为装配
+     * {@link UpsertTargetValueBatchCmd} 交给 {@link TargetValueService#upsertBatchFromCmd}.
      */
     @PostMapping("/batch")
     @Operation(summary = "批量目标 upsert (<=500)")
@@ -133,20 +135,24 @@ public class TargetValueController {
     public ResponseWrapper<Integer> batch(@Valid @RequestBody UpsertTargetValueBatchReqDTO req) {
         log.info("[TargetValueController.batch] size={}", req.getValues().size());
         String operator = currentUserApi.getCurrentEmpId();
-        List<PerfTargetValue> list = new ArrayList<>(req.getValues().size());
+        List<UpsertTargetValueCmd> cmds = new ArrayList<>(req.getValues().size());
         for (UpsertTargetValueReqDTO item : req.getValues()) {
-            PerfTargetValue v = new PerfTargetValue();
-            v.setPlanId(item.getPlanId());
-            v.setSubjectType(item.getSubjectType());
-            v.setSubjectId(item.getSubjectId());
-            v.setCycleKey(item.getCycleKey());
-            v.setMetricCode(item.getMetricCode());
-            v.setTargetValue(item.getTargetValue());
-            v.setBaseValue(item.getBaseValue());
-            // createdBy 在 Service 层强制覆盖为 operator (安全契约 I-2), 此处不设置
-            list.add(v);
+            cmds.add(UpsertTargetValueCmd.builder()
+                    .planId(item.getPlanId())
+                    .subjectType(item.getSubjectType())
+                    .subjectId(item.getSubjectId())
+                    .cycleKey(item.getCycleKey())
+                    .metricCode(item.getMetricCode())
+                    .targetValue(item.getTargetValue())
+                    .baseValue(item.getBaseValue())
+                    // operator 仅在 batchCmd 顶层设置，I-2 强制覆盖 created_by 在 Service 侧处理
+                    .build());
         }
-        int affected = targetValueService.upsertBatch(list, operator);
+        UpsertTargetValueBatchCmd batchCmd = UpsertTargetValueBatchCmd.builder()
+                .items(cmds)
+                .operator(operator)
+                .build();
+        int affected = targetValueService.upsertBatchFromCmd(batchCmd);
         return ResponseWrapper.success(affected);
     }
 }

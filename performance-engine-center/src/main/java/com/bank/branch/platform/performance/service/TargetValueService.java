@@ -4,10 +4,13 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.dto.TargetValueDTO;
 import com.bank.branch.platform.performance.entity.PerfTargetValue;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.facade.assembler.TargetAssembler;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
+import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueBatchCmd;
 import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import lombok.RequiredArgsConstructor;
@@ -217,6 +220,52 @@ public class TargetValueService {
                 planId, subjectType, subjectId, cycleKey, offset, pageSize,
                 frag.getSql(), frag.getParams());
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本分页查询（带数据范围注入）.
+     *
+     * <p>内部委托 {@link #pageWithScope}，再通过 {@link TargetAssembler#toDto}
+     * 装配，使 Controller 不再感知 entity。
+     */
+    @Transactional(readOnly = true)
+    public PageResult<TargetValueDTO> pageWithScopeDto(String planId, String subjectType, String subjectId,
+                                                       String cycleKey, int pageNo, int pageSize) {
+        PageResult<PerfTargetValue> raw = pageWithScope(planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
+        List<TargetValueDTO> dtos = new java.util.ArrayList<>(raw.getRecords().size());
+        for (PerfTargetValue v : raw.getRecords()) {
+            dtos.add(TargetAssembler.toDto(v));
+        }
+        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.3 R4.1：批量 upsert Cmd 版本，内部完成 entity 构造 + 复用既有 {@link #upsertBatch}.
+     *
+     * <p>Controller 只传 {@link UpsertTargetValueBatchCmd}，避免 Controller 层 {@code new PerfTargetValue()}.
+     *
+     * @param batchCmd 批量命令（含 items 与 operator）
+     * @return 受影响行数（MySQL 语义：新增 1 / 更新 2）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int upsertBatchFromCmd(UpsertTargetValueBatchCmd batchCmd) {
+        if (batchCmd == null || batchCmd.getItems() == null || batchCmd.getItems().isEmpty()) {
+            return 0;
+        }
+        List<PerfTargetValue> list = new java.util.ArrayList<>(batchCmd.getItems().size());
+        for (UpsertTargetValueCmd item : batchCmd.getItems()) {
+            PerfTargetValue v = new PerfTargetValue();
+            v.setPlanId(item.getPlanId());
+            v.setSubjectType(item.getSubjectType());
+            v.setSubjectId(item.getSubjectId());
+            v.setCycleKey(item.getCycleKey());
+            v.setMetricCode(item.getMetricCode());
+            v.setTargetValue(item.getTargetValue());
+            v.setBaseValue(item.getBaseValue());
+            // createdBy 在 upsertBatch 内部强制覆盖为 operator (I-2), 此处不设置
+            list.add(v);
+        }
+        return upsertBatch(list, batchCmd.getOperator());
     }
 
     private String generateId() {

@@ -7,10 +7,6 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
-import com.bank.branch.platform.performance.entity.PerfRunTask;
-import com.bank.branch.platform.performance.enums.PerfErrorCode;
-import com.bank.branch.platform.performance.exception.PerfException;
-import com.bank.branch.platform.performance.facade.assembler.RunTaskAssembler;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,9 +24,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * 绩效任务执行日志 REST 控制器 (2 个只读端点, 对齐 PT_RESOURCE P_PERF_RT_*).
@@ -44,13 +37,16 @@ import java.util.Optional;
  * <p>读操作端点仅标注 {@code @BizAuth(READ/LIST)}, 不带 {@code @AuditLog}
  * (Plan Task 4.4 L1492 钦定, 符合审计只记录写/高危操作的通用约束)。
  *
- * <p>数据范围过滤由 {@link PerfRunTaskService#page} 统一处理: 管理员/ALL 范围全见,
+ * <p>数据范围过滤由 {@link PerfRunTaskService#pageDto} 统一处理: 管理员/ALL 范围全见,
  * 其他范围收敛为 "仅见自己 started_by" 的片段 (v1.0 简化实现)。
  *
  * <p>异常策略: Controller 不做 try-catch, {@code PerfException} 冒泡至全局异常处理器,
  * 业务错误统一以 200 + 错误码返回 (任务不存在 → PERF-40007, V1.1 P8.1 语义对齐)。
  * 未登录场景由 {@link CurrentUserApi#getCurrentEmpId()} 抛 {@code AuthException},
  * 由全局异常处理器映射 HTTP 401.
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，所有装配下沉到
+ * {@link PerfRunTaskService#pageDto} / {@link PerfRunTaskService#getByIdDto}。
  */
 @Slf4j
 @RestController
@@ -91,13 +87,9 @@ public class PerfRunTaskController {
         log.debug("[PerfRunTaskController.list] empId={}, taskType={}, status={}, dataDate={}, pageNo={}, pageSize={}",
                 empId, taskType, status, dataDate, pageNo, pageSize);
 
-        PageResult<PerfRunTask> raw = perfRunTaskService.page(
+        PageResult<PerfRunTaskDTO> dtoPage = perfRunTaskService.pageDto(
                 taskType, null, status, dataDate, pageNo, pageSize);
-        List<PerfRunTaskDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfRunTask task : raw.getRecords()) {
-            dtos.add(RunTaskAssembler.toDto(task));
-        }
-        return ResponseWrapper.page(PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos));
+        return ResponseWrapper.page(dtoPage);
     }
 
     /**
@@ -114,10 +106,9 @@ public class PerfRunTaskController {
         String empId = currentUserApi.getCurrentEmpId();
         log.debug("[PerfRunTaskController.getById] empId={}, id={}", empId, id);
 
-        Optional<PerfRunTask> opt = perfRunTaskService.getById(id);
         // V1.1 P8.1 修正：run_task 不存在改抛 RUN_TASK_NOT_FOUND（PERF-40007），
         // 不再复用 METRIC_NOT_FOUND（语义是"指标不存在"，与 run_task 场景不符）
-        PerfRunTask task = opt.orElseThrow(() -> new PerfException(PerfErrorCode.RUN_TASK_NOT_FOUND, id));
-        return ResponseWrapper.success(RunTaskAssembler.toDto(task));
+        // V1.3 R4.1：Service.getByIdDto 内部完成 entity 装配 + 不存在抛异常
+        return ResponseWrapper.success(perfRunTaskService.getByIdDto(id));
     }
 }

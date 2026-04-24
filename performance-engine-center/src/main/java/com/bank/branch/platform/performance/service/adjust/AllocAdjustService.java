@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.service.adjust;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -221,6 +222,76 @@ public class AllocAdjustService {
         // processInstanceId 传 null 避免覆写历史值
         applyMapper.updateStatus(id, "REJECTED", null);
         log.info("[AllocAdjustService.withdraw] id={}, reason={}, operator={}", id, reason, operator);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 submit + 回显.
+     */
+    public Map<String, String> submitDto(SubmitAllocAdjustCmd cmd) {
+        String id = submit(cmd);
+        ApplyWithItems loaded = getById(id);
+        return Map.of(
+                "id", loaded.getApply().getId(),
+                "applyNo", loaded.getApply().getApplyNo(),
+                "status", loaded.getApply().getStatus());
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本详情查询（含 items）.
+     */
+    public AllocAdjustRespDTO getByIdDto(String id) {
+        ApplyWithItems bundle = getById(id);
+        return toRespDto(bundle.getApply(), bundle.getItems());
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本分页（列表不含 items）.
+     */
+    public PageResult<AllocAdjustRespDTO> pageDto(String status, String bizKind, String custId,
+                                                  String ownerOrgId, String createdBy,
+                                                  int pageNo, int pageSize) {
+        PageResult<PerfAllocAdjustApply> raw = page(status, bizKind, custId, ownerOrgId, createdBy,
+                pageNo, pageSize);
+        List<AllocAdjustRespDTO> dtos = new ArrayList<>(raw.getRecords().size());
+        for (PerfAllocAdjustApply apply : raw.getRecords()) {
+            dtos.add(toRespDto(apply, java.util.Collections.emptyList()));
+        }
+        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.3 R4.1：entity → DTO 装配下沉到 Service.
+     */
+    private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items) {
+        AllocAdjustRespDTO dto = new AllocAdjustRespDTO();
+        dto.setId(apply.getId());
+        dto.setApplyNo(apply.getApplyNo());
+        dto.setCustId(apply.getCustId());
+        dto.setAllocDim(apply.getAllocDim());
+        dto.setBizKind(apply.getBizKind());
+        dto.setAccountNo(apply.getAccountNo());
+        dto.setStatus(apply.getStatus());
+        dto.setBusinessKey(apply.getBusinessKey());
+        dto.setProcessInstanceId(apply.getProcessInstanceId());
+        dto.setOwnerOrgId(apply.getOwnerOrgId());
+        dto.setRemark(apply.getRemark());
+        dto.setCreatedBy(apply.getCreatedBy());
+        dto.setCreatedTime(apply.getCreatedTime());
+        dto.setUpdatedBy(apply.getUpdatedBy());
+        dto.setUpdatedTime(apply.getUpdatedTime());
+        List<AllocAdjustRespDTO.Item> itemDtos = new ArrayList<>(items == null ? 0 : items.size());
+        if (items != null) {
+            for (PerfAllocAdjustItem it : items) {
+                AllocAdjustRespDTO.Item iDto = new AllocAdjustRespDTO.Item();
+                iDto.setId(it.getId());
+                iDto.setEmpId(it.getEmpId());
+                iDto.setRatio(it.getRatio());
+                iDto.setCreatedTime(it.getCreatedTime());
+                itemDtos.add(iDto);
+            }
+        }
+        dto.setItems(itemDtos);
+        return dto;
     }
 
     /**

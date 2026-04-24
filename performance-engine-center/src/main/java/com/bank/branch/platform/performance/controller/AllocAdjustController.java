@@ -9,8 +9,6 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.AllocAdjustCreateReqDTO;
 import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
-import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
-import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustService;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +47,10 @@ import java.util.Map;
  * <p>单档授权：所有端点 {@code @BizAuth(bizType=PERF_CONFIG, action=<具体动作>)}，
  * 细粒度资源通过 PT_RESOURCE 绑定，当前阶段未新增 P_PERF_ALLOC_ADJ_* 资源条目，
  * 留待 Q8 种子数据阶段补齐.
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，装配全部下沉到
+ * {@link AllocAdjustService#submitDto} / {@link AllocAdjustService#getByIdDto}
+ * / {@link AllocAdjustService#pageDto}.
  */
 @Slf4j
 @RestController
@@ -86,13 +88,7 @@ public class AllocAdjustController {
                 .items(toCmdItems(req.getItems()))
                 .build();
 
-        String id = allocAdjustService.submit(cmd);
-        // Submit 后立即查询，返回完整状态给前端
-        AllocAdjustService.ApplyWithItems loaded = allocAdjustService.getById(id);
-        return ResponseWrapper.success(Map.of(
-                "id", loaded.getApply().getId(),
-                "applyNo", loaded.getApply().getApplyNo(),
-                "status", loaded.getApply().getStatus()));
+        return ResponseWrapper.success(allocAdjustService.submitDto(cmd));
     }
 
     /**
@@ -103,8 +99,7 @@ public class AllocAdjustController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
     public ResponseWrapper<AllocAdjustRespDTO> getById(@PathVariable("id") @NotBlank String id) {
         log.debug("[AllocAdjustController.getById] id={}", id);
-        AllocAdjustService.ApplyWithItems bundle = allocAdjustService.getById(id);
-        return ResponseWrapper.success(toDto(bundle.getApply(), bundle.getItems()));
+        return ResponseWrapper.success(allocAdjustService.getByIdDto(id));
     }
 
     /**
@@ -126,14 +121,9 @@ public class AllocAdjustController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[AllocAdjustController.list] status={}, bizKind={}, custId={}, pageNo={}",
                 status, bizKind, custId, pageNo);
-        PageResult<PerfAllocAdjustApply> raw = allocAdjustService.page(
+        PageResult<AllocAdjustRespDTO> dtoPage = allocAdjustService.pageDto(
                 status, bizKind, custId, ownerOrgId, createdBy, pageNo, pageSize);
-        List<AllocAdjustRespDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfAllocAdjustApply apply : raw.getRecords()) {
-            // 列表视图不带 items 减少数据库压力
-            dtos.add(toDto(apply, Collections.emptyList()));
-        }
-        return ResponseWrapper.page(PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos));
+        return ResponseWrapper.page(dtoPage);
     }
 
     /**
@@ -152,41 +142,6 @@ public class AllocAdjustController {
         String reason = req == null ? null : req.getReason();
         allocAdjustService.withdraw(id, reason, currentUserApi.getCurrentEmpId());
         return ResponseWrapper.success();
-    }
-
-    /**
-     * DTO 装配：Entity → 响应 DTO.
-     */
-    private AllocAdjustRespDTO toDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items) {
-        AllocAdjustRespDTO dto = new AllocAdjustRespDTO();
-        dto.setId(apply.getId());
-        dto.setApplyNo(apply.getApplyNo());
-        dto.setCustId(apply.getCustId());
-        dto.setAllocDim(apply.getAllocDim());
-        dto.setBizKind(apply.getBizKind());
-        dto.setAccountNo(apply.getAccountNo());
-        dto.setStatus(apply.getStatus());
-        dto.setBusinessKey(apply.getBusinessKey());
-        dto.setProcessInstanceId(apply.getProcessInstanceId());
-        dto.setOwnerOrgId(apply.getOwnerOrgId());
-        dto.setRemark(apply.getRemark());
-        dto.setCreatedBy(apply.getCreatedBy());
-        dto.setCreatedTime(apply.getCreatedTime());
-        dto.setUpdatedBy(apply.getUpdatedBy());
-        dto.setUpdatedTime(apply.getUpdatedTime());
-        List<AllocAdjustRespDTO.Item> itemDtos = new ArrayList<>(items == null ? 0 : items.size());
-        if (items != null) {
-            for (PerfAllocAdjustItem it : items) {
-                AllocAdjustRespDTO.Item iDto = new AllocAdjustRespDTO.Item();
-                iDto.setId(it.getId());
-                iDto.setEmpId(it.getEmpId());
-                iDto.setRatio(it.getRatio());
-                iDto.setCreatedTime(it.getCreatedTime());
-                itemDtos.add(iDto);
-            }
-        }
-        dto.setItems(itemDtos);
-        return dto;
     }
 
     /**

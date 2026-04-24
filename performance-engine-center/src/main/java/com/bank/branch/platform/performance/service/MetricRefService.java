@@ -60,6 +60,14 @@ public class MetricRefService {
     }
 
     /**
+     * V1.3 R4.1：返回 metric 所引用的 metricCode 列表（字符串视图，Controller 专用）.
+     */
+    @Transactional(readOnly = true)
+    public List<String> listRefCodesOf(String metricCode) {
+        return listRefsOf(metricCode).stream().map(PerfMetricRef::getRefMetricCode).toList();
+    }
+
+    /**
      * 查询哪些指标引用了指定指标.
      *
      * @param refMetricCode 被引用指标编码
@@ -68,6 +76,14 @@ public class MetricRefService {
     @Transactional(readOnly = true)
     public List<PerfMetricRef> listWhoRef(String refMetricCode) {
         return mapper.selectByRefMetricCode(refMetricCode);
+    }
+
+    /**
+     * V1.3 R4.1：返回"引用本指标"的上游 metricCode 列表（字符串视图，Controller 专用）.
+     */
+    @Transactional(readOnly = true)
+    public List<String> listCodesWhoRef(String refMetricCode) {
+        return listWhoRef(refMetricCode).stream().map(PerfMetricRef::getMetricCode).toList();
     }
 
     /**

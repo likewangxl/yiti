@@ -7,8 +7,6 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.dto.AllocSummaryDTO;
 import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
-import com.bank.branch.platform.performance.entity.CustAllocRelation;
-import com.bank.branch.platform.performance.facade.assembler.AllocAssembler;
 import com.bank.branch.platform.performance.service.AllocRelationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,6 +51,9 @@ import java.util.Set;
  *
  * <p>异常策略: Controller 不做 try-catch, 未登录时 {@link CurrentUserApi#getCurrentEmpId()}
  * 抛 {@code AuthException}, 由全局异常处理器映射 HTTP 401.
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，{@code list} / {@code history}
+ * 改调 Service 的 {@code getCurrentAllocationsDto} / {@code getAllocationHistoryDto}。
  */
 @Slf4j
 @RestController
@@ -82,8 +83,7 @@ public class AllocRelationController {
         log.debug("[AllocRelationController.list] empId={}, custId={}, bizKind={}",
                 empId, custId, bizKind);
 
-        List<CustAllocRelation> entities = allocRelationService.getCurrentAllocations(custId, bizKind);
-        return ResponseWrapper.success(AllocAssembler.toDtoList(entities));
+        return ResponseWrapper.success(allocRelationService.getCurrentAllocationsDto(custId, bizKind));
     }
 
     /**
@@ -103,8 +103,7 @@ public class AllocRelationController {
         log.debug("[AllocRelationController.history] empId={}, custId={}, asOfDate={}",
                 empId, custId, asOfDate);
 
-        List<CustAllocRelation> entities = allocRelationService.getAllocationHistory(custId, asOfDate);
-        return ResponseWrapper.success(AllocAssembler.toDtoList(entities));
+        return ResponseWrapper.success(allocRelationService.getAllocationHistoryDto(custId, asOfDate));
     }
 
     /**

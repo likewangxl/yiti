@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.service.adjust;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.controller.dto.TargetAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfTargetPlan;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -185,6 +186,65 @@ public class TargetAdjustService {
         long total = applyMapper.countByConditions(
                 status, planId, subjectType, subjectId, ownerOrgId, createdBy);
         return PageResult.of(pageNo, pageSize, total, rows);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 submit + 装配回显.
+     *
+     * <p>返回 Map 字段（id / status），与既有 Controller 保持前端契约兼容；
+     * DTO 装配下沉到本 Service，Controller 不再感知 entity.
+     */
+    public Map<String, String> submitDto(SubmitTargetAdjustCmd cmd) {
+        String id = submit(cmd);
+        PerfTargetAdjustApply loaded = getById(id);
+        return Map.of(
+                "id", loaded.getId(),
+                "status", loaded.getStatus());
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本 getById.
+     */
+    public TargetAdjustRespDTO getByIdDto(String id) {
+        return toRespDto(getById(id));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本分页列表.
+     */
+    public PageResult<TargetAdjustRespDTO> pageDto(String status, String planId,
+                                                   String subjectType, String subjectId,
+                                                   String ownerOrgId, String createdBy,
+                                                   int pageNo, int pageSize) {
+        PageResult<PerfTargetAdjustApply> raw = page(status, planId, subjectType, subjectId,
+                ownerOrgId, createdBy, pageNo, pageSize);
+        List<TargetAdjustRespDTO> dtos = new java.util.ArrayList<>(raw.getRecords().size());
+        for (PerfTargetAdjustApply apply : raw.getRecords()) {
+            dtos.add(toRespDto(apply));
+        }
+        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.3 R4.1：entity → DTO 装配下沉到 Service.
+     */
+    private TargetAdjustRespDTO toRespDto(PerfTargetAdjustApply apply) {
+        TargetAdjustRespDTO dto = new TargetAdjustRespDTO();
+        dto.setId(apply.getId());
+        dto.setPlanId(apply.getPlanId());
+        dto.setSubjectType(apply.getSubjectType());
+        dto.setSubjectId(apply.getSubjectId());
+        dto.setCycleKey(apply.getCycleKey());
+        dto.setStatus(apply.getStatus());
+        dto.setBusinessKey(apply.getBusinessKey());
+        dto.setProcessInstanceId(apply.getProcessInstanceId());
+        dto.setOwnerOrgId(apply.getOwnerOrgId());
+        dto.setRemark(apply.getRemark());
+        dto.setCreatedBy(apply.getCreatedBy());
+        dto.setCreatedTime(apply.getCreatedTime());
+        dto.setUpdatedBy(apply.getUpdatedBy());
+        dto.setUpdatedTime(apply.getUpdatedTime());
+        return dto;
     }
 
     /**

@@ -10,10 +10,7 @@ import com.bank.branch.platform.performance.controller.dto.InitSysControlReqDTO;
 import com.bank.branch.platform.performance.controller.dto.RollbackReqDTO;
 import com.bank.branch.platform.performance.controller.dto.SwitchVersionReqDTO;
 import com.bank.branch.platform.performance.controller.dto.SysControlRespDTO;
-import com.bank.branch.platform.performance.entity.SysControl;
-import com.bank.branch.platform.performance.enums.BaseDimEnum;
 import com.bank.branch.platform.performance.facade.SysControlFacade;
-import com.bank.branch.platform.performance.facade.assembler.SysControlAssembler;
 import com.bank.branch.platform.performance.service.cmd.SwitchVersionCmd;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,8 +25,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -43,6 +38,9 @@ import java.util.List;
  *   <li>POST /api/perf/sys-control/switch-version (P_PERF_SC_SW, @AuditLog SWITCH)</li>
  *   <li>POST /api/perf/sys-control/rollback (P_PERF_SYS_CONTROL_ROLLBACK, @AuditLog SYS_CONTROL_ROLLBACK 高危, V1.2 Q1.2)</li>
  * </ul>
+ *
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，所有装配下沉到
+ * {@link SysControlFacade} 的 {@code xxxDto} 方法。
  */
 @Slf4j
 @RestController
@@ -66,8 +64,7 @@ public class SysControlController {
     public ResponseWrapper<SysControlRespDTO> getCurrent(
             @NotBlank @RequestParam("scopeDim") String scopeDim) {
         log.debug("[SysControlController.getCurrent] scopeDim={}", scopeDim);
-        SysControl sc = sysControlFacade.getCurrentVersion(scopeDim);
-        return ResponseWrapper.success(SysControlAssembler.toRespDTO(sc));
+        return ResponseWrapper.success(sysControlFacade.getCurrentVersionDto(scopeDim));
     }
 
     /**
@@ -84,8 +81,7 @@ public class SysControlController {
             @NotBlank @RequestParam("scopeDim") String scopeDim,
             @RequestParam(value = "limit", defaultValue = "20") int limit) {
         log.debug("[SysControlController.getHistory] scopeDim={}, limit={}", scopeDim, limit);
-        List<SysControl> list = sysControlFacade.listVersionHistory(scopeDim, limit);
-        return ResponseWrapper.success(SysControlAssembler.toRespDTOList(list));
+        return ResponseWrapper.success(sysControlFacade.listVersionHistoryDto(scopeDim, limit));
     }
 
     /**
@@ -99,14 +95,8 @@ public class SysControlController {
     @AuditLog(action = "INIT", resourceType = "SYS_CONTROL", reasonRequired = true)
     public ResponseWrapper<List<SysControlRespDTO>> init(@Valid @RequestBody InitSysControlReqDTO req) {
         log.info("[SysControlController.init] reason={}", req.getReason());
-        List<SysControl> initialized = new ArrayList<>();
-        // 基线日期使用 1970-01-01 (DDL 默认基线), 初始 version="V_INIT"
-        LocalDate baselineDate = LocalDate.of(1970, 1, 1);
-        for (BaseDimEnum dim : BaseDimEnum.values()) {
-            SysControl sc = sysControlFacade.initIfAbsent(dim.name(), baselineDate, "V_INIT");
-            initialized.add(sc);
-        }
-        return ResponseWrapper.success(SysControlAssembler.toRespDTOList(initialized));
+        // V1.3 R4.1：Facade.initAllDto 内部完成 BaseDimEnum 遍历 + 默认 baseline
+        return ResponseWrapper.success(sysControlFacade.initAllDto());
     }
 
     /**
@@ -128,8 +118,7 @@ public class SysControlController {
                 .reason(req.getReason())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
-        SysControl sc = sysControlFacade.switchVersion(cmd);
-        return ResponseWrapper.success(SysControlAssembler.toRespDTO(sc));
+        return ResponseWrapper.success(sysControlFacade.switchVersionDto(cmd));
     }
 
     /**
@@ -147,11 +136,8 @@ public class SysControlController {
     public ResponseWrapper<SysControlRespDTO> rollback(@Valid @RequestBody RollbackReqDTO req) {
         log.info("[SysControlController.rollback] scopeDim={}, rollbackTo={}, reason={}",
                 req.getScopeDim(), req.getRollbackTo(), req.getReason());
-        SysControl sc = sysControlFacade.rollback(
-                req.getScopeDim(),
-                req.getRollbackTo(),
-                req.getReason(),
-                currentUserApi.getCurrentEmpId());
-        return ResponseWrapper.success(SysControlAssembler.toRespDTO(sc));
+        return ResponseWrapper.success(sysControlFacade.rollbackDto(
+                req.getScopeDim(), req.getRollbackTo(), req.getReason(),
+                currentUserApi.getCurrentEmpId()));
     }
 }

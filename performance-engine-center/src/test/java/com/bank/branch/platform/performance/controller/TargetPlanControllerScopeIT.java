@@ -1,7 +1,7 @@
 package com.bank.branch.platform.performance.controller;
 
 import com.bank.branch.platform.common.web.PageResult;
-import com.bank.branch.platform.performance.entity.PerfTargetPlan;
+import com.bank.branch.platform.performance.api.dto.TargetPlanDTO;
 import com.bank.branch.platform.performance.service.TargetPlanService;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import org.junit.jupiter.api.Test;
@@ -42,8 +42,9 @@ class TargetPlanControllerScopeIT extends PerformanceControllerTestBase {
 
     @Test
     void list_delegatesToPageWithScope_notPage() throws Exception {
-        when(targetPlanService.pageWithScope(any(), any(), any(), anyInt(), anyInt()))
-                .thenReturn(PageResult.of(1, 20, 0L, Collections.<PerfTargetPlan>emptyList()));
+        // V1.3 R4.1：Controller 改调 pageWithScopeDto；验证 Controller 不再走 page
+        when(targetPlanService.pageWithScopeDto(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(PageResult.of(1, 20, 0L, Collections.<TargetPlanDTO>emptyList()));
 
         mockMvc.perform(get("/api/perf/target-plans")
                         .param("pageNo", "1")
@@ -51,7 +52,7 @@ class TargetPlanControllerScopeIT extends PerformanceControllerTestBase {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<String> kpiSchemeIdCap = ArgumentCaptor.forClass(String.class);
-        verify(targetPlanService).pageWithScope(
+        verify(targetPlanService).pageWithScopeDto(
                 kpiSchemeIdCap.capture(), any(), any(), anyInt(), anyInt());
         // 未传入 kpiSchemeId → null
         assertThat(kpiSchemeIdCap.getValue()).isNull();
@@ -60,8 +61,8 @@ class TargetPlanControllerScopeIT extends PerformanceControllerTestBase {
 
     @Test
     void list_passesAllFilterParamsToScopeMethod() throws Exception {
-        when(targetPlanService.pageWithScope(any(), any(), any(), anyInt(), anyInt()))
-                .thenReturn(PageResult.of(2, 15, 0L, Collections.<PerfTargetPlan>emptyList()));
+        when(targetPlanService.pageWithScopeDto(any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(PageResult.of(2, 15, 0L, Collections.<TargetPlanDTO>emptyList()));
 
         mockMvc.perform(get("/api/perf/target-plans")
                         .param("kpiSchemeId", "KS_001")
@@ -71,7 +72,7 @@ class TargetPlanControllerScopeIT extends PerformanceControllerTestBase {
                         .param("pageSize", "15"))
                 .andExpect(status().isOk());
 
-        verify(targetPlanService).pageWithScope(
+        verify(targetPlanService).pageWithScopeDto(
                 eq("KS_001"), eq("ACTIVE"), eq("TEST"), eq(2), eq(15));
     }
 }

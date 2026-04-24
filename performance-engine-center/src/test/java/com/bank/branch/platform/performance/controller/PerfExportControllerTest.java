@@ -7,7 +7,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.performance.controller.dto.ExportAllocReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ExportKpiReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ExportMetricReqDTO;
-import com.bank.branch.platform.performance.entity.PerfExportTask;
+import com.bank.branch.platform.performance.controller.dto.ExportTaskRespDTO;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.export.PerfExportService;
@@ -70,10 +70,8 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     @Test
     void exportKpi_success_returnsTaskId() throws Exception {
-        Mockito.when(perfExportService.createTask(eq("KPI"), any(), anyString()))
-                .thenReturn("TASK_KPI_001");
-        Mockito.when(perfExportService.getTask("TASK_KPI_001"))
-                .thenReturn(sampleTask("TASK_KPI_001", "KPI", "SUCCESS"));
+        Mockito.when(perfExportService.createTaskDto(eq("KPI"), any(), anyString()))
+                .thenReturn(sampleDto("TASK_KPI_001", "KPI", "SUCCESS"));
 
         ExportKpiReqDTO req = new ExportKpiReqDTO();
         req.setCycleType("MONTHLY");
@@ -92,7 +90,7 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     @Test
     void exportKpi_rowsExceedLimit_returnsBusinessError() throws Exception {
-        Mockito.when(perfExportService.createTask(eq("KPI"), any(), anyString()))
+        Mockito.when(perfExportService.createTaskDto(eq("KPI"), any(), anyString()))
                 .thenThrow(new PerfException(PerfErrorCode.EXPORT_ROWS_EXCEEDS_LIMIT, 300000, 200000));
 
         ExportKpiReqDTO req = new ExportKpiReqDTO();
@@ -111,10 +109,8 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     @Test
     void exportMetric_success_returnsTaskId() throws Exception {
-        Mockito.when(perfExportService.createTask(eq("METRIC"), any(), anyString()))
-                .thenReturn("TASK_METRIC_001");
-        Mockito.when(perfExportService.getTask("TASK_METRIC_001"))
-                .thenReturn(sampleTask("TASK_METRIC_001", "METRIC", "SUCCESS"));
+        Mockito.when(perfExportService.createTaskDto(eq("METRIC"), any(), anyString()))
+                .thenReturn(sampleDto("TASK_METRIC_001", "METRIC", "SUCCESS"));
 
         ExportMetricReqDTO req = new ExportMetricReqDTO();
         req.setMetricCodes(List.of("M_TEST"));
@@ -135,10 +131,8 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     @Test
     void exportAlloc_success_returnsTaskId() throws Exception {
-        Mockito.when(perfExportService.createTask(eq("ALLOC"), any(), anyString()))
-                .thenReturn("TASK_ALLOC_001");
-        Mockito.when(perfExportService.getTask("TASK_ALLOC_001"))
-                .thenReturn(sampleTask("TASK_ALLOC_001", "ALLOC", "SUCCESS"));
+        Mockito.when(perfExportService.createTaskDto(eq("ALLOC"), any(), anyString()))
+                .thenReturn(sampleDto("TASK_ALLOC_001", "ALLOC", "SUCCESS"));
 
         ExportAllocReqDTO req = new ExportAllocReqDTO();
         req.setEffectiveDate(LocalDate.of(2026, 4, 1));
@@ -155,10 +149,8 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     @Test
     void exportDetail_success_returnsTaskId() throws Exception {
-        Mockito.when(perfExportService.createTask(eq("DETAIL"), any(), anyString()))
-                .thenReturn("TASK_DETAIL_001");
-        Mockito.when(perfExportService.getTask("TASK_DETAIL_001"))
-                .thenReturn(sampleTask("TASK_DETAIL_001", "DETAIL", "SUCCESS"));
+        Mockito.when(perfExportService.createTaskDto(eq("DETAIL"), any(), anyString()))
+                .thenReturn(sampleDto("TASK_DETAIL_001", "DETAIL", "SUCCESS"));
 
         ExportKpiReqDTO req = new ExportKpiReqDTO();
         req.setCycleType("MONTHLY");
@@ -177,8 +169,8 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     @Test
     void getTask_exists_returnsDTO() throws Exception {
-        Mockito.when(perfExportService.getTask("T_OK"))
-                .thenReturn(sampleTask("T_OK", "KPI", "SUCCESS"));
+        Mockito.when(perfExportService.getTaskDto("T_OK"))
+                .thenReturn(sampleDto("T_OK", "KPI", "SUCCESS"));
 
         mockMvc.perform(get("/api/perf/export/task/{id}", "T_OK"))
                 .andExpect(status().isOk())
@@ -190,7 +182,7 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     @Test
     void getTask_notFound_returnsError() throws Exception {
-        Mockito.when(perfExportService.getTask("MISSING"))
+        Mockito.when(perfExportService.getTaskDto("MISSING"))
                 .thenThrow(new PerfException(PerfErrorCode.EXPORT_TASK_NOT_FOUND, "MISSING"));
 
         mockMvc.perform(get("/api/perf/export/task/{id}", "MISSING"))
@@ -269,19 +261,22 @@ class PerfExportControllerTest extends PerformanceControllerTestBase {
 
     // =================== helpers ===================
 
-    private static PerfExportTask sampleTask(String id, String exportType, String status) {
-        PerfExportTask t = new PerfExportTask();
-        t.setId(id);
-        t.setExportType(exportType);
-        t.setStatus(status);
-        t.setFileKey("perf/export/" + id + "/kpi_result.xlsx");
-        t.setFileSize(2048L);
-        t.setRowCount(100);
-        t.setExpireAt(LocalDateTime.now().plusDays(7));
-        t.setOperatorId("admin");
-        t.setCreatedTime(LocalDateTime.now());
-        t.setUpdatedTime(LocalDateTime.now());
-        return t;
+    /**
+     * V1.3 R4.1：Controller 改为返回 DTO，测试构造 DTO 样本代替 entity.
+     */
+    private static ExportTaskRespDTO sampleDto(String id, String exportType, String status) {
+        return ExportTaskRespDTO.builder()
+                .id(id)
+                .exportType(exportType)
+                .status(status)
+                .fileKey("perf/export/" + id + "/kpi_result.xlsx")
+                .fileSize(2048L)
+                .rowCount(100)
+                .expireAt(LocalDateTime.now().plusDays(7))
+                .operatorId("admin")
+                .createdTime(LocalDateTime.now())
+                .updatedTime(LocalDateTime.now())
+                .build();
     }
 
     @SuppressWarnings("unused")

@@ -5,7 +5,11 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
+import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.facade.assembler.RunTaskAssembler;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -122,6 +127,51 @@ public class PerfRunTaskService {
         Assert.hasText(taskType, "taskType 不能为空");
         Assert.notNull(dataDate, "dataDate 不能为空");
         return runTaskMapper.countByTypeAndDate(taskType, dataDate);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本分页查询，内部委托 {@link #page}
+     * 并使用 {@link RunTaskAssembler} 装配 DTO。
+     *
+     * <p>引入理由：Controller 层不得感知 entity（{@code NoEntityInControllerLocalsArchTest}
+     * 守护），本方法为 Controller 提供"入 DTO 出 DTO"的纯接口，entity 装配收敛到
+     * Service 层完成。
+     *
+     * @param taskType 任务类型（nullable）
+     * @param taskKey  任务关键键（nullable）
+     * @param status   状态（nullable）
+     * @param dataDate 数据日期（nullable）
+     * @param pageNo   页码（从 1 起）
+     * @param pageSize 页大小
+     * @return 分页 DTO 结果
+     */
+    @Transactional(readOnly = true)
+    public PageResult<PerfRunTaskDTO> pageDto(String taskType, String taskKey, String status,
+                                              LocalDate dataDate, int pageNo, int pageSize) {
+        PageResult<PerfRunTask> raw = page(taskType, taskKey, status, dataDate, pageNo, pageSize);
+        List<PerfRunTaskDTO> dtos = new ArrayList<>(raw.getRecords().size());
+        for (PerfRunTask task : raw.getRecords()) {
+            dtos.add(RunTaskAssembler.toDto(task));
+        }
+        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本详情查询。
+     *
+     * <p>任务不存在时抛 {@link PerfErrorCode#RUN_TASK_NOT_FOUND}（PERF-40007），
+     * 语义与 {@code PerfRunTaskController.getById} 一致，避免 Controller 再持有
+     * {@code Optional<PerfRunTask>} 并手工抛异常。
+     *
+     * @param id 任务主键
+     * @return 任务 DTO（绝不返回 null；不存在则抛异常）
+     * @throws PerfException {@code RUN_TASK_NOT_FOUND} 任务不存在
+     */
+    @Transactional(readOnly = true)
+    public PerfRunTaskDTO getByIdDto(String id) {
+        PerfRunTask task = getById(id)
+                .orElseThrow(() -> new PerfException(PerfErrorCode.RUN_TASK_NOT_FOUND, id));
+        return RunTaskAssembler.toDto(task);
     }
 
     /**

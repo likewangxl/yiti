@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service.importer.impl;
 
+import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -174,6 +175,26 @@ public class PerfImportServiceImpl implements PerfImportService {
         }
         // 简化实现：软删标记（V1.1 无专用 delete 方法，复用 updateStatus 标记 DELETED）
         batchMapper.updateStatus(batchId, "DELETED", null);
+    }
+
+    @Override
+    public PerfImportBatchRespDTO getBatchDto(String batchId) {
+        // V1.3 R4.1：DTO 装配下沉到 Service，Controller 不再持有 PerfImportBatch
+        PerfImportBatch b = getBatch(batchId);
+        return PerfImportBatchRespDTO.builder()
+                .id(b.getId())
+                .batchNo(b.getBatchNo())
+                .importType(b.getImportType())
+                .fileName(b.getFileName())
+                .status(b.getStatus())
+                .totalRows(b.getTotalRows())
+                .successRows(b.getSuccessRows())
+                .errorRows(b.getErrorRows())
+                .remark(b.getRemark())
+                .createdBy(b.getCreatedBy())
+                .createdTime(b.getCreatedTime())
+                .updatedTime(b.getUpdatedTime())
+                .build();
     }
 
     private static String generateId() {

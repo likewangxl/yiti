@@ -7,7 +7,6 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
-import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.importer.PerfImportService;
@@ -45,8 +44,8 @@ import java.util.List;
  *
  * <p>审计：upload / retry / delete 走 {@code @AuditLog}；delete 为高危走 {@code reasonRequired=true}。
  *
- * <p>Controller 不直接返回 entity（{@code NoEntityInControllerArchTest} 守护），
- * 所有 PerfImportBatch 通过 {@link #toDto} 装配为 {@link PerfImportBatchRespDTO}.
+ * <p>V1.3 R4.1 改造：Controller 不再 import / 使用 entity，DTO 装配全部下沉到
+ * {@link PerfImportService#getBatchDto}.
  */
 @Slf4j
 @RestController
@@ -91,8 +90,7 @@ public class PerfImportController {
     public ResponseWrapper<PerfImportBatchRespDTO> getBatch(
             @PathVariable("batchId") @NotBlank String batchId) {
         log.debug("[PerfImportController.getBatch] batchId={}", batchId);
-        PerfImportBatch b = perfImportService.getBatch(batchId);
-        return ResponseWrapper.success(toDto(b));
+        return ResponseWrapper.success(perfImportService.getBatchDto(batchId));
     }
 
     /**
@@ -132,26 +130,5 @@ public class PerfImportController {
         log.info("[PerfImportController.delete] batchId={}", batchId);
         perfImportService.delete(batchId);
         return ResponseWrapper.success();
-    }
-
-    /** entity → DTO 装配（遵守 NoEntityInControllerArchTest 约束）. */
-    private static PerfImportBatchRespDTO toDto(PerfImportBatch b) {
-        if (b == null) {
-            return null;
-        }
-        return PerfImportBatchRespDTO.builder()
-                .id(b.getId())
-                .batchNo(b.getBatchNo())
-                .importType(b.getImportType())
-                .fileName(b.getFileName())
-                .status(b.getStatus())
-                .totalRows(b.getTotalRows())
-                .successRows(b.getSuccessRows())
-                .errorRows(b.getErrorRows())
-                .remark(b.getRemark())
-                .createdBy(b.getCreatedBy())
-                .createdTime(b.getCreatedTime())
-                .updatedTime(b.getUpdatedTime())
-                .build();
     }
 }

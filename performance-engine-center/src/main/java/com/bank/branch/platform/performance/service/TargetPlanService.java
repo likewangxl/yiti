@@ -4,10 +4,12 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.dto.TargetPlanDTO;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.entity.PerfTargetPlan;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.facade.assembler.TargetAssembler;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.service.cmd.CreateTargetPlanCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateTargetPlanCmd;
@@ -312,6 +314,47 @@ public class TargetPlanService {
                 kpiSchemeId, status, keyword, offset, pageSize,
                 frag.getSql(), frag.getParams());
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本分页查询（带数据范围注入）.
+     *
+     * <p>内部委托 {@link #pageWithScope}，再通过 {@link TargetAssembler#toDto}
+     * 装配，使 Controller 不再感知 entity。
+     */
+    @Transactional(readOnly = true)
+    public PageResult<TargetPlanDTO> pageWithScopeDto(String kpiSchemeId, String status, String keyword,
+                                                      int pageNo, int pageSize) {
+        PageResult<PerfTargetPlan> raw = pageWithScope(kpiSchemeId, status, keyword, pageNo, pageSize);
+        List<TargetPlanDTO> dtos = new java.util.ArrayList<>(raw.getRecords().size());
+        for (PerfTargetPlan plan : raw.getRecords()) {
+            dtos.add(TargetAssembler.toDto(plan));
+        }
+        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本详情查询（不存在抛 TARGET_PLAN_NOT_FOUND）.
+     */
+    @Transactional(readOnly = true)
+    public TargetPlanDTO getByIdDto(String id) {
+        return TargetAssembler.toDto(getById(id));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本创建，内部调用 {@link #create}.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TargetPlanDTO createDto(CreateTargetPlanCmd cmd) {
+        return TargetAssembler.toDto(create(cmd));
+    }
+
+    /**
+     * V1.3 R4.1：Controller 专用 DTO 版本更新.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TargetPlanDTO updateByIdDto(String id, UpdateTargetPlanCmd cmd) {
+        return TargetAssembler.toDto(updateById(id, cmd));
     }
 
     private String generateId() {

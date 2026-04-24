@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service.export.impl;
 
+import com.bank.branch.platform.performance.controller.dto.ExportTaskRespDTO;
 import com.bank.branch.platform.performance.entity.PerfExportTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -138,6 +139,37 @@ public class PerfExportServiceImpl implements PerfExportService {
                     taskId, operatorId);
         }
         return t;
+    }
+
+    @Override
+    public ExportTaskRespDTO createTaskDto(String exportType, Map<String, Object> params, String operatorId) {
+        String taskId = createTask(exportType, params, operatorId);
+        return toDto(getTask(taskId));
+    }
+
+    @Override
+    public ExportTaskRespDTO getTaskDto(String taskId) {
+        return toDto(getTask(taskId));
+    }
+
+    /** V1.3 R4.1：entity → DTO 装配下沉到 Service，Controller 不再接触 {@link PerfExportTask}. */
+    private static ExportTaskRespDTO toDto(PerfExportTask t) {
+        if (t == null) {
+            return null;
+        }
+        return ExportTaskRespDTO.builder()
+                .id(t.getId())
+                .exportType(t.getExportType())
+                .status(t.getStatus())
+                .fileKey(t.getFileKey())
+                .fileSize(t.getFileSize())
+                .rowCount(t.getRowCount())
+                .expireAt(t.getExpireAt())
+                .operatorId(t.getOperatorId())
+                .errorMsg(t.getErrorMsg())
+                .createdTime(t.getCreatedTime())
+                .updatedTime(t.getUpdatedTime())
+                .build();
     }
 
     /** 将 params Map 序列化为 JSON；null/empty 返回 "{}". */
