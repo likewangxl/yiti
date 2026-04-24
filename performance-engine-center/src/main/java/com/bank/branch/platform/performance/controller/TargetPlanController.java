@@ -66,6 +66,10 @@ public class TargetPlanController {
      * 分页查询目标方案.
      *
      * <p>过滤条件: kpiSchemeId / status / keyword (plan_code / plan_name 模糊匹配).
+     *
+     * <p>V1.3 R1.3 改造：切换到 {@link TargetPlanService#pageWithScope} 以启用
+     * 基于 {@code PerfScopeHelper} 的数据范围注入（普通绩效配置员仅见自建方案）。
+     * 原 {@code page} 路径保留为 Service 层内部方法, 供未经数据范围限制的编排复用。
      */
     @GetMapping
     @Operation(summary = "分页查询目标方案")
@@ -78,7 +82,8 @@ public class TargetPlanController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[TargetPlanController.list] kpiSchemeId={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 kpiSchemeId, status, keyword, pageNo, pageSize);
-        PageResult<PerfTargetPlan> raw = targetPlanService.page(kpiSchemeId, status, keyword, pageNo, pageSize);
+        // V1.3 R1.3：改用 pageWithScope 注入 PerfScopeHelper 数据范围
+        PageResult<PerfTargetPlan> raw = targetPlanService.pageWithScope(kpiSchemeId, status, keyword, pageNo, pageSize);
         List<TargetPlanDTO> dtos = new ArrayList<>(raw.getRecords().size());
         for (PerfTargetPlan plan : raw.getRecords()) {
             dtos.add(TargetAssembler.toDto(plan));

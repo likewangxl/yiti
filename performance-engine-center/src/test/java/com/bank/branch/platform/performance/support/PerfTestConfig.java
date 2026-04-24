@@ -2,6 +2,8 @@ package com.bank.branch.platform.performance.support;
 
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.dto.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
@@ -15,6 +17,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 测试环境 Bean 装配: 因 PerfTestApp 只扫描 performance 子包,
@@ -37,6 +40,11 @@ public class PerfTestConfig {
     /**
      * 测试用 BizScopeApi: 默认所有 empId 对 PERF_CONFIG 返回 ALL (管理员全见),
      * 使 Mapper IT 不受数据范围过滤影响; 单测若需覆盖可以 {@code @MockBean} 替换.
+     *
+     * <p>V1.3 R1.3 补充：同步 mock {@code buildScopeContext}, 否则默认返回 null 会被
+     * {@link com.bank.branch.platform.performance.service.scope.PerfScopeHelper} 判为
+     * fail-close "1=0"，导致 V1.3 接入 pageWithScope 的 Controller IT（默认上下文 admin/ALL）
+     * 读不到数据，破坏既有 TargetValue/TargetPlan Controller IT。
      */
     @Bean
     @Primary
@@ -44,6 +52,17 @@ public class PerfTestConfig {
         BizScopeApi m = Mockito.mock(BizScopeApi.class);
         Mockito.when(m.resolveScope(Mockito.anyString(), Mockito.any(BizType.class)))
                 .thenReturn(DataScopeType.ALL);
+        // V1.3 R1.3：buildScopeContext 默认行为与 resolveScope 对齐 (ALL),
+        // 让 PerfScopeHelper.getFragment 返回空片段（无 WHERE 附加条件）.
+        Mockito.when(m.buildScopeContext(
+                        Mockito.anyString(), Mockito.any(BizType.class), Mockito.any(BizAction.class)))
+                .thenAnswer(inv -> new DataScopeContext(
+                        DataScopeType.ALL,
+                        inv.getArgument(0),
+                        "HQ",
+                        Set.of(),
+                        inv.getArgument(1),
+                        inv.getArgument(2)));
         return m;
     }
 

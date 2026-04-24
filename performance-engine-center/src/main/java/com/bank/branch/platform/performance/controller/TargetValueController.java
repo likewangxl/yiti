@@ -64,8 +64,12 @@ public class TargetValueController {
     /**
      * 按方案分页查询目标值.
      *
-     * <p>planId 为必填: Service 层 {@code listByPlan} 已做非空拦截, Controller
-     * 在此再加 {@code @NotBlank} 以保证缺参场景返 400 而非 PERF-40001。
+     * <p>V1.3 R1.3 改造：切换到 {@link TargetValueService#pageWithScope} 以启用
+     * 基于 {@code PerfScopeHelper} 的数据范围注入（普通绩效配置员仅见自建目标值）。
+     *
+     * <p>planId 仍保留 {@code @NotBlank} 以满足客户端「必须在方案上下文内查询」的使用惯例,
+     * Service 层 pageWithScope 已允许 planId 为空, 但 Controller 层主动收紧到非空避免
+     * 泄露全库目标值;{@code listByPlan} 路径保留为内部 Service 方法供其他编排复用。
      */
     @GetMapping
     @Operation(summary = "分页查询目标值")
@@ -79,7 +83,8 @@ public class TargetValueController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[TargetValueController.list] planId={}, subjectType={}, subjectId={}, cycleKey={}, pageNo={}, pageSize={}",
                 planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
-        PageResult<PerfTargetValue> raw = targetValueService.listByPlan(
+        // V1.3 R1.3：改用 pageWithScope 注入 PerfScopeHelper 数据范围（原 listByPlan 保留为 Service 层内部方法）
+        PageResult<PerfTargetValue> raw = targetValueService.pageWithScope(
                 planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
         List<TargetValueDTO> dtos = new ArrayList<>(raw.getRecords().size());
         for (PerfTargetValue v : raw.getRecords()) {
