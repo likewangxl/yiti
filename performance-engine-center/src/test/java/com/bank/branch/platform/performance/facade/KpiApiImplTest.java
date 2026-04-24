@@ -29,8 +29,8 @@ import static org.mockito.Mockito.when;
  * <p>覆盖 spec §5.2.3 DoD:
  * <ul>
  *   <li>2 个 V1.0 实现方法 (getKpiScheme/getKpiSchemeById) 的存在/不存在分支</li>
- *   <li>V1.0 定型时 3 个 V1.1 占位方法曾统一抛 "V1.1 delivered"，V1.1 交付后
- *       实际已实现或改为 "V1.2 delivered"（本文件断言不再依赖具体 message）</li>
+ *   <li>V1.0 定型时 3 个 V1.1/V1.2 占位方法曾统一抛 UOE 占位，V1.1/V1.2/V1.3 分阶段
+ *       交付后已全部替换为真实行为断言（本文件断言不再涉及任何 UOE 相关约定）</li>
  * </ul>
  *
  * <p>Facade 纯 Mock 测试, 不启动 Spring 容器; {@code @Cacheable} 由 Spring AOP 在集成测试中验证,
