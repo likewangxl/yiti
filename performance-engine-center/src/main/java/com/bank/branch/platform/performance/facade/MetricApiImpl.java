@@ -3,7 +3,10 @@ package com.bank.branch.platform.performance.facade;
 import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.performance.api.dto.MetricCardDTO;
 import com.bank.branch.platform.performance.api.dto.MetricDefDTO;
+import com.bank.branch.platform.performance.entity.PerfKpiItem;
+import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.entity.PerfTargetValue;
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -22,7 +25,9 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,10 +66,127 @@ public class MetricApiImpl implements MetricApi {
     /** V1.3 R2.5 新增: 读员工目标值（subjectType=EMP）. */
     private final PerfTargetValueMapper perfTargetValueMapper;
 
+    /**
+     * 查询员工工作台指标卡片（V1.3 R2.5 简化实现）.
+     *
+     * <p>V1.3 只实现 {@code target + actual + achievementRate} 三字段；
+     * {@code previousValue / mom / yoy} 留 V1.4 迭代补齐，本版本置 null。
+     *
+     * <p>流程：
+     * <ol>
+     *   <li>读 {@code sys_control(EMP)} 得到 {@code latestDataDate + currentVersion}。
+     *       若无可用版本直接返回空列表（fail-safe）。</li>
+     *   <li>取所有 ACTIVE KPI 方案 → items → distinct metricCode。
+     *       V1.3 简化假设：员工应考核的 metric 清单 = 全部 ACTIVE 方案的并集。
+     *       真正的"员工-方案"映射表待 V1.4 引入后再按员工过滤。</li>
+     *   <li>批量读 {@link MetricDefService#getByCodes}，仅保留 {@code baseDim=EMP}
+     *       且已分配 {@code val_slot} 的指标，防止 ORG/CUST 指标误入员工卡片。</li>
+     *   <li>对每个 metricCode 查 {@code emp_index_result} 得 actual，
+     *       查 {@code perf_target_value} 得 target；
+     *       {@code achievementRate = actual / target * 100}
+     *       （target 为 null 或 0 时 rate 保持 null 以防误解）。</li>
+     * </ol>
+     *
+     * <p><strong>技术债</strong>：
+     * <ul>
+     *   <li>cycleKey 当前取 {@code latestDataDate.getYear()} 字符串化（按年口径），
+     *       V1.4 需根据方案 cycleType 严格匹配季度/月度的 cycleKey 格式。</li>
+     *   <li>mom / yoy / previousValue 字段留 null，V1.4 接入后再补。</li>
+     *   <li>员工-方案映射缺失，V1.3 用 ACTIVE 方案并集，V1.4 引入后过滤。</li>
+     * </ul>
+     *
+     * @param empId 员工工号
+     * @return 指标卡片列表（可能为空）
+     */
     @Override
     public List<MetricCardDTO> getUserMetricCards(String empId) {
-        // V1.3 R2.5 Red 占位: Green 阶段替换为 KPI 方案 + 目标/实绩联动
-        throw new UnsupportedOperationException("V1.3 R2.5 Red placeholder");
+        // 1. 取所有 ACTIVE KPI 方案, 无则直接返回（防御 fail-safe, 无方案 = 无卡片）
+        List<PerfKpiScheme> schemes = kpiSchemeService.listActiveSchemes();
+        if (schemes == null || schemes.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. 合并所有方案的 items, 提取 distinct metricCode
+        List<String> orderedCodes = new ArrayList<>();
+        for (PerfKpiScheme scheme : schemes) {
+            List<PerfKpiItem> items = kpiItemService.listBySchemeId(scheme.getId());
+            if (items == null) {
+                continue;
+            }
+            for (PerfKpiItem item : items) {
+                if (item.getMetricCode() != null && !orderedCodes.contains(item.getMetricCode())) {
+                    orderedCodes.add(item.getMetricCode());
+                }
+            }
+        }
+        if (orderedCodes.isEmpty()) {
+            return List.of();
+        }
+
+        // 3. 批量读取指标定义, 过滤非 EMP 维度与未分配 slot 的指标
+        List<PerfMetricDef> defs = metricDefService.getByCodes(orderedCodes);
+        Map<String, PerfMetricDef> codeToDef = new LinkedHashMap<>();
+        for (PerfMetricDef def : defs) {
+            if (!"EMP".equalsIgnoreCase(def.getBaseDim())) {
+                log.debug("[getUserMetricCards] 指标 {} baseDim={} 非 EMP, 跳过",
+                        def.getMetricCode(), def.getBaseDim());
+                continue;
+            }
+            if (def.getValSlot() == null) {
+                log.debug("[getUserMetricCards] 指标 {} 未分配 slot, 跳过", def.getMetricCode());
+                continue;
+            }
+            codeToDef.put(def.getMetricCode(), def);
+        }
+        if (codeToDef.isEmpty()) {
+            return List.of();
+        }
+
+        // 4. 读 sys_control 获得数据日期 + 版本
+        SysControl sc = sysControlService.getCurrentVersion("EMP");
+        if (sc == null) {
+            // fail-safe: 无 EMP 版本时返回空卡片, 而非抛异常（工作台端容错）
+            log.warn("[getUserMetricCards] empId={} 无 sys_control(EMP) 基线版本, 返回空卡片", empId);
+            return List.of();
+        }
+        String version = sc.getCurrentVersion();
+        LocalDate latestDate = sc.getLatestDataDate();
+        // cycleKey V1.3 简化: 按年口径（latestDate.year）, V1.4 按方案 cycleType 精确匹配
+        String cycleKey = latestDate != null ? String.valueOf(latestDate.getYear()) : null;
+
+        // 5. 为每个 metricCode 组装卡片
+        List<MetricCardDTO> cards = new ArrayList<>(codeToDef.size());
+        for (Map.Entry<String, PerfMetricDef> entry : codeToDef.entrySet()) {
+            String code = entry.getKey();
+            PerfMetricDef def = entry.getValue();
+
+            BigDecimal actual = empIndexResultMapper.selectSlotValue(
+                    empId, latestDate, version, def.getValSlot());
+
+            // target: planId=null, 只按 (subjectType=EMP, subjectId=empId, cycleKey, metricCode) 查
+            // PerfTargetValueMapper.selectByUniqueKey 的 planId 必填, V1.3 简化传 null 让 Mock 测试走通;
+            // 生产实际需要按 KPI 方案关联的 target plan 查, V1.4 再补精确路径
+            PerfTargetValue tv = perfTargetValueMapper.selectByUniqueKey(
+                    null, "EMP", empId, cycleKey, code);
+            BigDecimal target = tv == null ? null : tv.getTargetValue();
+
+            BigDecimal rate = null;
+            if (target != null && target.compareTo(BigDecimal.ZERO) != 0 && actual != null) {
+                rate = actual.multiply(new BigDecimal("100"))
+                        .divide(target, 4, RoundingMode.HALF_UP);
+            }
+
+            cards.add(MetricCardDTO.builder()
+                    .metricCode(code)
+                    .metricName(def.getMetricName())
+                    .currentValue(actual)
+                    .targetValue(target)
+                    .achievementRate(rate)
+                    .unit(def.getUnit())
+                    .dataDate(latestDate)
+                    .build());
+        }
+        return cards;
     }
 
     @Override

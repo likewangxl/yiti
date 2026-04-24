@@ -56,12 +56,8 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
     @InjectMocks
     private MetricApiImpl metricApi;
 
-    @Test
-    @DisplayName("工作台指标卡片在 V1.0 抛 UOE（V1.2 才实现）")
-    void getUserMetricCards_throwsUoe() {
-        assertThatThrownBy(() -> metricApi.getUserMetricCards("E001"))
-                .isInstanceOf(UnsupportedOperationException.class);
-    }
+    // V1.3 R2.5 起 getUserMetricCards 已落地; UOE 断言迁移到 MetricApiImplCardsTest 的行为断言.
+    // 本 TestBase 保留原 Test 类的其他用例 (getEmpMetricValues 等), 不再断言 getUserMetricCards UOE.
 
     @Test
     @DisplayName("getEmpMetricValues：按 metricCodes 映射到 slot 并查 EMP 宽表，返回 (metricCode -> value)")
