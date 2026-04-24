@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -101,10 +102,11 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_EMP_A", "M_EMP_B")))
                 .thenReturn(List.of(defA, defB));
 
-        // actual
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
+        // actual: V1.4 S3.3 后生产会额外查上期 (latest.minusMonths(1)) 与去年同期,
+        // 用 lenient 避免未 stub 调用触发 PotentialStubbingProblem, 未命中默认返 null.
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
                 .thenReturn(new BigDecimal("80"));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(6)))
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(6)))
                 .thenReturn(new BigDecimal("50"));
 
         // target
@@ -151,7 +153,7 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_EMP_A")));
         when(metricDefService.getByCodes(List.of("M_EMP_A")))
                 .thenReturn(List.of(def("M_EMP_A", "EMP", 5, "A", "万元")));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
                 .thenReturn(new BigDecimal("10"));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), anyString(), eq("M_EMP_A")))
                 .thenReturn(null);
@@ -182,7 +184,7 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_EMP_A")));
         when(metricDefService.getByCodes(List.of("M_EMP_A")))
                 .thenReturn(List.of(def("M_EMP_A", "EMP", 5, "A", "万元")));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
                 .thenReturn(new BigDecimal("10"));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), anyString(), eq("M_EMP_A")))
                 .thenReturn(targetValue(BigDecimal.ZERO));
@@ -225,7 +227,7 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
                 .thenReturn(List.of(
                         def("M_EMP_OK", "EMP", 1, "EMP ok", "万元"),
                         def("M_ORG_SKIP", "ORG", 2, "ORG skip", "户")));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(1)))
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(1)))
                 .thenReturn(new BigDecimal("5"));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), anyString(), eq("M_EMP_OK")))
                 .thenReturn(targetValue(new BigDecimal("10")));
@@ -291,7 +293,7 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(5)))
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(5)))
                 .thenReturn(new BigDecimal("10"));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq(expectedCycleKey), eq("M_X")))
                 .thenReturn(targetValue(new BigDecimal("20")));

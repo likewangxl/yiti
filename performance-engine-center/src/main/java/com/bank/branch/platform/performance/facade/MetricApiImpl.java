@@ -185,12 +185,21 @@ public class MetricApiImpl implements MetricApi {
                         .divide(target, 4, RoundingMode.HALF_UP);
             }
 
+            // V1.4 S3.3: 上期值 (环比) = 按 cycleType 回退一个周期的宽表值
+            LocalDate previousDate = calculatePreviousDate(cycleType, latestDate);
+            BigDecimal previousValue = previousDate == null ? null
+                    : empIndexResultMapper.selectSlotValue(
+                            empId, previousDate, version, def.getValSlot());
+            BigDecimal mom = calculateMom(actual, previousValue);
+
             cards.add(MetricCardDTO.builder()
                     .metricCode(code)
                     .metricName(def.getMetricName())
                     .currentValue(actual)
+                    .previousValue(previousValue)
                     .targetValue(target)
                     .achievementRate(rate)
+                    .mom(mom)
                     .unit(def.getUnit())
                     .dataDate(latestDate)
                     .build());
@@ -270,6 +279,59 @@ public class MetricApiImpl implements MetricApi {
                     date.get(WeekFields.ISO.weekOfWeekBasedYear()));
             default -> String.valueOf(date.getYear());
         };
+    }
+
+    /**
+     * V1.4 S3.3: 根据 cycleType 回退一个周期的日期, 用于查上期宽表值.
+     *
+     * <ul>
+     *   <li>YEARLY → minusYears(1)</li>
+     *   <li>QUARTERLY → minusMonths(3)</li>
+     *   <li>MONTHLY → minusMonths(1)</li>
+     *   <li>WEEKLY → minusWeeks(1)</li>
+     *   <li>其他 / null → 按年回退 (minusYears(1)) 兜底</li>
+     * </ul>
+     *
+     * @param cycleType 周期类型 (大小写不敏感)
+     * @param date      当前日期 (null 时返回 null)
+     * @return 上一周期日期
+     */
+    private LocalDate calculatePreviousDate(String cycleType, LocalDate date) {
+        if (date == null) {
+            return null;
+        }
+        if (cycleType == null) {
+            return date.minusYears(1);
+        }
+        return switch (cycleType.toUpperCase()) {
+            case "YEARLY" -> date.minusYears(1);
+            case "QUARTERLY" -> date.minusMonths(3);
+            case "MONTHLY" -> date.minusMonths(1);
+            case "WEEKLY" -> date.minusWeeks(1);
+            default -> date.minusYears(1);
+        };
+    }
+
+    /**
+     * V1.4 S3.3: 计算环比变化率 mom = (current - previous) / |previous| * 100, 保留 2 位小数.
+     *
+     * <p>除零保护：previous=0 或任一侧为 null 直接返回 null, 避免误导性 0.00%.
+     *
+     * @param current  当期值
+     * @param previous 上期值
+     * @return mom 百分比 (2 位小数) 或 null
+     */
+    private BigDecimal calculateMom(BigDecimal current, BigDecimal previous) {
+        if (current == null || previous == null) {
+            return null;
+        }
+        if (previous.compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+        return current.subtract(previous)
+                .divide(previous.abs(), 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     /**
