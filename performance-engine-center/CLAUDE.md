@@ -57,11 +57,11 @@ Facade 层 UOE 清零，**新增**架构测试 `NoUoeInFacadeTestsArchTest` 守�
 ```
 src/main/java/com/bank/branch/platform/performance/
 ├── api/                    # 7 个对外 Api 接口 + 14 DTO + 1 Cmd
-│   ├── MetricApi.java          (7 方法, V1.1 交付 6 实现 + 1 V1.2 UOE: getUserMetricCards)
-│   ├── MetricQueryApi.java     (3 方法, 全部 V1.2 UOE: batchQuery*Snapshots 报表专用快照)
-│   ├── KpiApi.java             (5 方法, V1.1 交付 4 实现 + 1 V1.2 UOE: triggerKpiCalc 统一入口由 KpiApi 承接)
+│   ├── MetricApi.java          (7 方法, V1.1 交付 6 实现 + V1.3 R2.5 交付 getUserMetricCards)
+│   ├── MetricQueryApi.java     (3 方法, V1.3 R2.2/R2.3/R2.4 全部交付 batchQuery*Snapshots)
+│   ├── KpiApi.java             (5 方法, V1.1 交付 4 实现 + V1.3 沿用 triggerKpiCalc 双入口之一)
 │   ├── TargetApi.java          (4 方法, 全部 V1.0 实现)
-│   ├── PerfCalcApi.java        (3 方法, V1.1 交付 2 实现 + 1 V1.2 UOE: triggerKpiCalc 契约冗余占位)
+│   ├── PerfCalcApi.java        (3 方法, V1.1 交付 2 + V1.3 R2.1 交付 triggerKpiCalc 按方案批量计算)
 │   ├── DataTaskApi.java        (1 方法, V1.1 交付)
 │   ├── AllocApi.java           (10 方法, 全部 V1.0 实现)
 │   └── dto/ (14 DTO + cmd/1 Cmd)

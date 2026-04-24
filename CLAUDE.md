@@ -75,7 +75,7 @@ system-governance-center (依赖 auth)  ← 被 workflow 依赖
   ↑
 workflow-center (依赖 auth + governance)
   ↑
-performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.2 已交付
+performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.3 已交付（技术债清偿）
 
 bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ```
@@ -104,7 +104,7 @@ com.bank.branch.platform
 ├─ portal-content-center         门户与内容中心 ⏳ 骨架
 ├─ customer-marketing-center     客户营销中心 ⏳ 骨架
 ├─ business-application-center   业务申请中心 ⏳ 骨架
-├─ performance-engine-center     绩效计算中心 ✅ V1.2 已交付（流程/事件/导出/数据范围全线）
+├─ performance-engine-center     绩效计算中心 ✅ V1.3 已交付（技术债清偿：Target 数据范围 / 5 UOE 实现 / 6 架构守护）
 └─ report-analytics-center       报表分析中心 ⏳ 骨架
 ```
 
