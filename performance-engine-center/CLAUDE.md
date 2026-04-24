@@ -262,12 +262,13 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 - DDL 权威源: `docs/schema/ddl-performance.sql`
 - 共通开发规范: `docs/common-dev-guide.md`
 
-## 技术债务（V1.4 交付后）
+## 技术债务（V1.5 交付后）
 
-本节记录 V1.4 交付后的技术债残量：
+本节记录 V1.5 交付后的技术债残量：
 - V1.3 R0-R5 已消化 13 项大额债务（V1.0-V1.2 累积债务）
 - V1.4 S1-S4 已消化 **9 项** V1.3 遗留（含 S4.3 澄清为契约设计的 1 项）
-- V1.5+ 遗留清单见"V1.5+ 遗留项"章节
+- V1.5 P1-P6 已消化 **6 项** V1.4 遗留（2026-04-24）
+- performance 模块技术债清零，V1.6+ 遗留项清单见末尾
 
 ### V1.3 已消化项（2026-04-24）
 
@@ -419,18 +420,49 @@ Facade 层可能透传任一形式，当前实现按 `null` 写入（jackson 会
 （TDD：test Red e1bbe86 → fix Green 860e0f4）
 - **非阻塞观察**：`cycleType=""` 空串入参在当前测试里跳过了 behavior 测试覆盖，留待 V1.5 补齐。
 
-### V1.5+ 遗留项（已登记）
+### V1.4 遗留清单（V1.5 已全部消化）
 
-V1.4 交付后，剩余的技术债残量如下，按优先级与风险归档：
+V1.4 交付后登记的 6 项技术债残量在 V1.5 P1-P6 全部消化（2026-04-24）：
 
-| 序号 | 标题 | 优先级 | 来源 | 说明 |
+| 序号 | 标题 | 优先级 | 来源 | 状态 |
 |---|---|---|---|---|
-| 1 | `MetricTrialRespDTO.@Deprecated getSamples()` 彻底删除 | 低 | V1.3 R3.2 遗留 | 按 V1.3→V1.4→V1.5 节奏，V1.5 删除该 getter + `@JsonAlias({"samples"})` alias |
-| 2 | `cycleType=""` 空串入参 behavior 测试 | 低 | V1.4 S4.2 code-reviewer 观察 | `HistoryRecalcServiceCycleTypeNullTest` 仅覆盖 null，空串语义待补充断言 |
-| 3 | 多 scheme 共享 metric 时 `codeToCycleType` 取首命中的歧义（M01） | 中 | V1.4 S3 code-reviewer 观察 | `MetricApiImpl` 需补 scheme 优先级或前端按 scheme 分组；影响跨方案 metric 的 cycleKey/mom/yoy 准确性 |
-| 4 | 每 metric 3 次宽表查询（current/previous/yearAgo）的 batch 优化（M02） | 中 | V1.4 S3 code-reviewer 观察 | 当前 `getUserMetricCards` 对每个 metric 串行 3 次 EMP 宽表查询，N metric 下 3N 查询；建议拼入单 IN 查询或同会话批处理 |
-| 5 | yoy 不按 cycleType 分支，统一 `-1 年`（M03） | 低 | V1.4 S3 code-reviewer 观察 | WEEKLY yoy 可能 ISO 周跨年漂移，MONTHLY/QUARTERLY 在闰年/季度切换时偏一期；当前统一 `cycleDate.minusYears(1)` |
-| 6 | `PerfTargetPlanMapper.xml updateByIdSelective` owner 字段 `<if>` 分支缺 | 低 | V1.4 S2 code-reviewer 观察 | 新增的 `owner_emp_id` / `owner_org_code` 在 updateByIdSelective 未加 `<if>` 动态分支，本期仅通过 upsert 路径写入；如有独立 update 场景需补 |
+| 1 | `MetricTrialRespDTO.@Deprecated getSamples()` 彻底删除 | 低 | V1.3 R3.2 遗留 | ✅ 已消化（V1.5 P1.1） |
+| 2 | `cycleType=""` 空串入参 behavior 测试 | 低 | V1.4 S4.2 code-reviewer 观察 | ✅ 已消化（V1.5 P2.1） |
+| 3 | 多 scheme 共享 metric 时 `codeToCycleType` 取首命中的歧义（M01） | 中 | V1.4 S3 code-reviewer 观察 | ✅ 已消化（V1.5 P3.1） |
+| 4 | 每 metric 3 次宽表查询（current/previous/yearAgo）的 batch 优化（M02） | 中 | V1.4 S3 code-reviewer 观察 | ✅ 已消化（V1.5 P4.1） |
+| 5 | yoy 不按 cycleType 分支，统一 `-1 年`（M03） | 低 | V1.4 S3 code-reviewer 观察 | ✅ 已消化（V1.5 P5.1） |
+| 6 | `PerfTargetPlanMapper.xml updateByIdSelective` owner 字段 `<if>` 分支缺 | 低 | V1.4 S2 code-reviewer 观察 | ✅ 已消化（V1.5 P6.1） |
+
+### V1.5 已消化项（2026-04-24）
+
+V1.5 P1-P6 共 6 个 Task 消化以下 6 项 V1.4 遗留技术债：
+
+- **P1.1 MetricTrialRespDTO @Deprecated getSamples() 彻底删除**
+  - 删除 `@Deprecated @JsonIgnore getSamples()` 方法 + `@JsonAlias({"samples"})` 反序列化别名
+  - 反射 + FAIL_ON_UNKNOWN_PROPERTIES 双守护
+  - 生产代码 zero consumer，删除零风险
+- **P2.1 HistoryRecalcService cycleType=""/"   " behavior 测试**
+  - V1.4 S4.2 实现 `isBlank()` 已覆盖空串与纯空格，V1.5 补 2 case 守护
+  - 不改代码，仅补测试
+- **P3.1 MetricApi.getUserMetricCards 多 scheme 首命中歧义修复**
+  - 将 `codeToCycleType` LinkedHashMap 替换为 `LinkedHashSet<MetricKey>` 组合键
+  - 同 metricCode 跨方案 cycleType 不同 → 多卡片；相同 → 去重 1 卡
+  - 抽 `buildCard(...)` 私有方法降低圈复杂度
+- **P4.1 mom/yoy 3 次宽表查询 batch 优化**
+  - 新增 `EmpIndexResultMapper.selectSlotValuesByDates` + `EmpDateValueRow` Row 投影类
+  - 20 metric 场景从 60 次宽表查询降至 20 次（-66%）
+  - 使用 MyBatis default 方法聚合，Facade 调用零感知
+- **P5.1 yoy WEEKLY cycleType 走 -52 周**
+  - 新增 `calculateYearAgoDate(cycleType, date)`：WEEKLY → `minus(52, WEEKS)`，其他 `minusYears(1)`
+  - 消除跨 ISO 年 53 周边界时周次偏移的 yoy 歧义
+- **P6.1 PerfTargetPlanMapper.xml updateByIdSelective owner <if> 补齐**
+  - 追加 `ownerEmpId` / `ownerOrgCode` 两个 `<if>` 动态分支
+  - 3 IT case 守护行为（非 null 更新 / null 保持 / 非 owner 字段单独更新不影响 owner）
+  - PerfTargetValueMapper.xml 无 updateByIdSelective 方法，无需补
+
+### V1.6+ 遗留项（登记）
+
+V1.5 交付后无明确已登记的观察项。若未来 reviewer 或生产运维发现新技术债，在此登记。
 
 ## 运维 Runbook（V1.2 + V1.3 + V1.4 交付）
 
