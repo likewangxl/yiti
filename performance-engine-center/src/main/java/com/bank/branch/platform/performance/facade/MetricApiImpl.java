@@ -11,6 +11,9 @@ import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
 import com.bank.branch.platform.performance.mapper.CustIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
+import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
+import com.bank.branch.platform.performance.service.KpiItemService;
+import com.bank.branch.platform.performance.service.KpiSchemeService;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.SysControlService;
 import lombok.RequiredArgsConstructor;
@@ -51,11 +54,17 @@ public class MetricApiImpl implements MetricApi {
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
     private final CustIndexResultMapper custIndexResultMapper;
+    /** V1.3 R2.5 新增: 取员工 KPI 方案列表以组装卡片的指标清单. */
+    private final KpiSchemeService kpiSchemeService;
+    /** V1.3 R2.5 新增: 读 KPI 方案项. */
+    private final KpiItemService kpiItemService;
+    /** V1.3 R2.5 新增: 读员工目标值（subjectType=EMP）. */
+    private final PerfTargetValueMapper perfTargetValueMapper;
 
     @Override
     public List<MetricCardDTO> getUserMetricCards(String empId) {
-        // V1.2 交付：需要绑定用户 KPI 方案 + 目标/实绩 + 同环比，不在 V1.1 P2 scope
-        throw new UnsupportedOperationException("V1.2 delivered");
+        // V1.3 R2.5 Red 占位: Green 阶段替换为 KPI 方案 + 目标/实绩联动
+        throw new UnsupportedOperationException("V1.3 R2.5 Red placeholder");
     }
 
     @Override
