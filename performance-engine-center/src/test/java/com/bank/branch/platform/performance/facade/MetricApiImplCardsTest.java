@@ -266,6 +266,71 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         assertThat(dto.getYoy()).isNull();
     }
 
+    // ============ V1.4 S3.2 cycleKey 按 cycleType 精确匹配 ============
+
+    /**
+     * 给定 cycleType + latestDataDate, 断言查 TargetValue 时传的 cycleKey 与期望一致.
+     *
+     * <p>现状签名 getUserMetricCards(empId) 单参, cycleType 从 scheme.cycleType 读,
+     * latestDataDate 从 sys_control 读. 本组 case 用 Mock 替换依赖, 捕获
+     * perfTargetValueMapper.selectByUniqueKey 的 cycleKey 入参.
+     */
+    private void runCycleKeyCase(String cycleType, LocalDate latest, String expectedCycleKey) {
+        String empId = "E001";
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v1");
+        sc.setLatestDataDate(latest);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setSchemeCode("S_X");
+        s1.setCycleType(cycleType);
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+        when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(5)))
+                .thenReturn(new BigDecimal("10"));
+        when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq(expectedCycleKey), eq("M_X")))
+                .thenReturn(targetValue(new BigDecimal("20")));
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        // 严格验证 cycleKey 形态: 命中 targetValue 说明 expectedCycleKey 被调用;
+        // 若未命中则 targetValue=null → achievementRate=null, 本断言失败
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getTargetValue())
+                .as("cycleType=%s latest=%s 期望 cycleKey=%s", cycleType, latest, expectedCycleKey)
+                .isEqualByComparingTo("20");
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.2] YEARLY → cycleKey = yyyy")
+    void getUserMetricCards_yearlyCycleType_buildsYearKey() {
+        runCycleKeyCase("YEARLY", LocalDate.of(2026, 7, 15), "2026");
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.2] QUARTERLY → cycleKey = yyyyQn (Q2)")
+    void getUserMetricCards_quarterlyCycleType_buildsQuarterKey() {
+        runCycleKeyCase("QUARTERLY", LocalDate.of(2026, 5, 15), "2026Q2");
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.2] MONTHLY → cycleKey = yyyyMM")
+    void getUserMetricCards_monthlyCycleType_buildsMonthKey() {
+        runCycleKeyCase("MONTHLY", LocalDate.of(2026, 7, 15), "202607");
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.2] WEEKLY → cycleKey = yyyyWww (ISO)")
+    void getUserMetricCards_weeklyCycleType_buildsWeekKey() {
+        // 2026-01-15 为 ISO 周 year=2026, week=03
+        runCycleKeyCase("WEEKLY", LocalDate.of(2026, 1, 15), "2026W03");
+    }
+
     // ============ helpers ============
 
     private static PerfKpiItem kpiItem(String schemeId, String metricCode) {
