@@ -1,13 +1,17 @@
 package com.bank.branch.platform.performance.service.adjust;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -65,6 +69,12 @@ class AllocAdjustServiceTest {
 
     @Mock
     private WorkflowApi workflowApi;
+
+    @Mock
+    private CurrentUserApi currentUserApi;
+
+    @Mock
+    private PerfScopeHelper perfScopeHelper;
 
     @InjectMocks
     private AllocAdjustService service;
@@ -235,5 +245,95 @@ class AllocAdjustServiceTest {
 
         assertThatThrownBy(() -> service.submit(cmd))
                 .isInstanceOf(PerfException.class);
+    }
+
+    // ========== V1.4 S1.3: WORKFLOW_PARTICIPANT scope 路径 ==========
+
+    @Test
+    @DisplayName("V1.4 S1.3: pageDto → 调 PerfScopeHelper 5 参 overload，bizKeyCol=\"business_key\"，prefix=\"perf_alloc_adjust_\"")
+    void pageDto_callsPerfScopeHelperWithBusinessKeyColAndAllocPrefix() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("USER_WF");
+        // Mock scope helper 返回 business_key IN (...) 片段
+        PerfScopeHelper.Fragment frag = new PerfScopeHelper.Fragment(
+                "business_key IN (#{scopeParams.bizKey0})",
+                java.util.Map.of("bizKey0", "ALLOC_ADJUST:APPLY_001"));
+        when(perfScopeHelper.getFragment(
+                org.mockito.ArgumentMatchers.eq("USER_WF"),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.argThat(cols ->
+                        cols != null && "business_key".equals(cols.bizKeyCol())),
+                org.mockito.ArgumentMatchers.eq("perf_alloc_adjust_")))
+                .thenReturn(frag);
+        // Mock mapper 返回空列表（不关心结果）
+        when(applyMapper.selectByConditionsWithScope(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Collections.emptyList());
+        when(applyMapper.countByConditionsWithScope(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(0L);
+
+        service.pageDto(null, null, null, null, null, 1, 20);
+
+        // 验证 perfScopeHelper 被调用时 bizKeyCol="business_key" + prefix="perf_alloc_adjust_"
+        verify(perfScopeHelper).getFragment(
+                org.mockito.ArgumentMatchers.eq("USER_WF"),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.argThat(cols ->
+                        cols != null && "business_key".equals(cols.bizKeyCol())),
+                org.mockito.ArgumentMatchers.eq("perf_alloc_adjust_"));
+    }
+
+    @Test
+    @DisplayName("V1.4 S1.3: WORKFLOW_PARTICIPANT 无参与记录（fail-close）→ 分页结果空")
+    void pageDto_workflowParticipantFailClose_returnsEmptyPage() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("USER_NOWF");
+        when(perfScopeHelper.getFragment(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(PerfScopeHelper.ScopeColumns.class),
+                org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(PerfScopeHelper.Fragment.failClose());
+        when(applyMapper.selectByConditionsWithScope(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.eq("1=0"),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Collections.emptyList());
+        when(applyMapper.countByConditionsWithScope(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("1=0"),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(0L);
+
+        PageResult<AllocAdjustRespDTO> result = service.pageDto(null, null, null, null, null, 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(0);
+        assertThat(result.getRecords()).isEmpty();
     }
 }
