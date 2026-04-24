@@ -76,7 +76,13 @@ class MetricTrialControllerIT extends PerformanceControllerTestBase {
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.sampleSize").value(1))
                 .andExpect(jsonPath("$.data.totalRows").value(1))
-                .andExpect(jsonPath("$.data.samples[0].baseKey").value("E_TRIAL_001"));
+                // V1.3 R3.2：samples 已重命名为 sampleRows 对齐 03 §A.5
+                .andExpect(jsonPath("$.data.sampleRows[0].baseKey").value("E_TRIAL_001"))
+                // V1.3 新增元数据字段
+                .andExpect(jsonPath("$.data.taskId").exists())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.startedAt").exists())
+                .andExpect(jsonPath("$.data.endedAt").exists());
 
         // 侧效零容忍：不得写入宽表，不得创建 run_task
         // （这里不能直接数全表，但因 emp_index_result 无该 base_key 的插入，可以间接断言）

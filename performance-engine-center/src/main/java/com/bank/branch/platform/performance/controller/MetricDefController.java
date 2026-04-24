@@ -275,15 +275,33 @@ public class MetricDefController {
                                                         @Valid @RequestBody MetricTrialReqDTO req) {
         log.info("[MetricDefController.trialRun] metricCode={}, dataDate={}, sampleSize={}",
                 metricCode, req.getDataDate(), req.getSampleSize());
-        MetricTrialResult serviceResult = metricTrialService.trial(
-                metricCode, req.getDataDate(), req.getSampleSize(), req.getParams());
-        MetricTrialRespDTO dto = new MetricTrialRespDTO();
-        dto.setMetricCode(metricCode);
-        dto.setSampleSize(serviceResult.getSampleSize());
-        dto.setTotalRows(serviceResult.getTotalRows());
-        dto.setSamples(serviceResult.getSamples());
-        dto.setExprResult(serviceResult.getExprResult());
-        dto.setExecutionMillis(serviceResult.getExecutionMillis());
+        // V1.3 R3.2：装配 03 §A.5 对齐的元数据字段（taskId/status/startedAt/endedAt）。
+        // Trial 不落 perf_run_task（P3.1 契约：全程无侧效），taskId 生成一个 UUID 用于消费方追踪。
+        java.time.LocalDateTime startedAt = java.time.LocalDateTime.now();
+        String trialTaskId = java.util.UUID.randomUUID().toString().replace("-", "");
+        MetricTrialResult serviceResult;
+        try {
+            serviceResult = metricTrialService.trial(
+                    metricCode, req.getDataDate(), req.getSampleSize(), req.getParams());
+        } catch (RuntimeException ex) {
+            // 失败时继续走统一异常处理，Service 抛出的 PerfException 由全局 handler 转 ResponseWrapper；
+            // 本 catch 只在需要装配 FAILED 状态 DTO 时介入——目前异常直接透传，保持 V1.1 行为不变。
+            throw ex;
+        }
+        java.time.LocalDateTime endedAt = java.time.LocalDateTime.now();
+        MetricTrialRespDTO dto = MetricTrialRespDTO.builder()
+                .taskId(trialTaskId)
+                .metricCode(metricCode)
+                .sampleSize(serviceResult.getSampleSize())
+                .totalRows(serviceResult.getTotalRows())
+                .status("SUCCESS")
+                .startedAt(startedAt)
+                .endedAt(endedAt)
+                .errorMsg(null)
+                .exprResult(serviceResult.getExprResult())
+                .executionMillis(serviceResult.getExecutionMillis())
+                .sampleRows(serviceResult.getSamples())
+                .build();
         return ResponseWrapper.success(dto);
     }
 
