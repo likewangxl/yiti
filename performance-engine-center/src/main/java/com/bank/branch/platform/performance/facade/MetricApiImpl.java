@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.temporal.WeekFields;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -106,16 +107,21 @@ public class MetricApiImpl implements MetricApi {
             return List.of();
         }
 
-        // 2. 合并所有方案的 items, 提取 distinct metricCode
+        // 2. 合并所有方案的 items, 提取 distinct metricCode,
+        //    同时记录每个 metricCode 首次命中的 scheme.cycleType（V1.4 S3.2）——
+        //    用于后续按 cycleType 精确组装 cycleKey.
         List<String> orderedCodes = new ArrayList<>();
+        Map<String, String> codeToCycleType = new LinkedHashMap<>();
         for (PerfKpiScheme scheme : schemes) {
             List<PerfKpiItem> items = kpiItemService.listBySchemeId(scheme.getId());
             if (items == null) {
                 continue;
             }
             for (PerfKpiItem item : items) {
-                if (item.getMetricCode() != null && !orderedCodes.contains(item.getMetricCode())) {
-                    orderedCodes.add(item.getMetricCode());
+                String code = item.getMetricCode();
+                if (code != null && !orderedCodes.contains(code)) {
+                    orderedCodes.add(code);
+                    codeToCycleType.put(code, scheme.getCycleType());
                 }
             }
         }
@@ -151,8 +157,6 @@ public class MetricApiImpl implements MetricApi {
         }
         String version = sc.getCurrentVersion();
         LocalDate latestDate = sc.getLatestDataDate();
-        // cycleKey V1.3 简化: 按年口径（latestDate.year）, V1.4 按方案 cycleType 精确匹配
-        String cycleKey = latestDate != null ? String.valueOf(latestDate.getYear()) : null;
 
         // 5. 为每个 metricCode 组装卡片
         List<MetricCardDTO> cards = new ArrayList<>(codeToDef.size());
@@ -162,6 +166,11 @@ public class MetricApiImpl implements MetricApi {
 
             BigDecimal actual = empIndexResultMapper.selectSlotValue(
                     empId, latestDate, version, def.getValSlot());
+
+            // V1.4 S3.2: cycleKey 按 scheme.cycleType 精确组装
+            // (YEARLY=yyyy / QUARTERLY=yyyyQn / MONTHLY=yyyyMM / WEEKLY=yyyyWww)
+            String cycleType = codeToCycleType.get(code);
+            String cycleKey = buildCycleKey(cycleType, latestDate);
 
             // target: planId=null, 只按 (subjectType=EMP, subjectId=empId, cycleKey, metricCode) 查
             // PerfTargetValueMapper.selectByUniqueKey 的 planId 必填, V1.3 简化传 null 让 Mock 测试走通;
@@ -228,6 +237,39 @@ public class MetricApiImpl implements MetricApi {
     public Map<String, BigDecimal> getCustMetricValues(String custId, LocalDate dataDate,
                                                       List<String> metricCodes) {
         return queryValues("CUST", custId, dataDate, metricCodes);
+    }
+
+    /**
+     * V1.4 S3.2: 按 cycleType 精确组装 cycleKey, 用于查 perf_target_value.
+     *
+     * <ul>
+     *   <li>YEARLY → "yyyy" (如 2026)</li>
+     *   <li>QUARTERLY → "yyyyQn" (如 2026Q2)</li>
+     *   <li>MONTHLY → "yyyyMM" (如 202607)</li>
+     *   <li>WEEKLY → "yyyyWww" (ISO 周, 如 2026W03)</li>
+     *   <li>cycleType 为 null / 其他值 → 按年兜底 (yyyy), 保证向后兼容 V1.3 行为</li>
+     * </ul>
+     *
+     * @param cycleType 周期类型 (大小写不敏感), null 时按年兜底
+     * @param date      基准日期 (null 时返回 null)
+     * @return 组装的 cycleKey 字符串
+     */
+    private String buildCycleKey(String cycleType, LocalDate date) {
+        if (date == null) {
+            return null;
+        }
+        if (cycleType == null) {
+            return String.valueOf(date.getYear());
+        }
+        return switch (cycleType.toUpperCase()) {
+            case "YEARLY" -> String.valueOf(date.getYear());
+            case "QUARTERLY" -> date.getYear() + "Q" + ((date.getMonthValue() - 1) / 3 + 1);
+            case "MONTHLY" -> String.format("%04d%02d", date.getYear(), date.getMonthValue());
+            case "WEEKLY" -> String.format("%04dW%02d",
+                    date.get(WeekFields.ISO.weekBasedYear()),
+                    date.get(WeekFields.ISO.weekOfWeekBasedYear()));
+            default -> String.valueOf(date.getYear());
+        };
     }
 
     /**
