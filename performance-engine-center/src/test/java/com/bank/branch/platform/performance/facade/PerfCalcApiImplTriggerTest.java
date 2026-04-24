@@ -111,10 +111,11 @@ class PerfCalcApiImplTriggerTest extends PerformanceServiceTestBase {
     @Test
     @DisplayName("triggerRecalc(5 参数) P7.2 已交付：委托 HistoryRecalcService.recalc")
     void triggerRecalc_5args_delegatesToHistoryRecalcService() {
+        // V1.3 R4.3：PerfCalcApiImpl 改调 7 参数 recalc（cycleType 透传）
         when(historyRecalcService.recalc(
                 eq(LocalDate.of(2026, 1, 1)),
                 eq(LocalDate.of(2026, 3, 31)),
-                any(), anyString(), eq("reason"), eq("op")))
+                any(), anyString(), eq("reason"), eq("op"), eq("MONTHLY")))
                 .thenReturn("P7_TASK");
 
         String taskId = perfCalcApi.triggerRecalc(
@@ -125,6 +126,6 @@ class PerfCalcApiImplTriggerTest extends PerformanceServiceTestBase {
         verify(historyRecalcService).recalc(
                 eq(LocalDate.of(2026, 1, 1)),
                 eq(LocalDate.of(2026, 3, 31)),
-                any(), anyString(), eq("reason"), eq("op"));
+                any(), anyString(), eq("reason"), eq("op"), eq("MONTHLY"));
     }
 }

@@ -83,10 +83,11 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
     @Test
     @DisplayName("triggerRecalc(5 参数): 委托 HistoryRecalcService.recalc 并返回父 taskId")
     void triggerRecalc_5args_delegatesToHistoryRecalcService() {
+        // V1.3 R4.3：PerfCalcApiImpl 改调 7 参数 recalc（cycleType 透传）
         when(historyRecalcService.recalc(
                 eq(LocalDate.of(2026, 1, 1)),
                 eq(LocalDate.of(2026, 3, 31)),
-                any(), anyString(), eq("补录 Q1 数据"), eq("E001")))
+                any(), anyString(), eq("补录 Q1 数据"), eq("E001"), eq("MONTHLY")))
                 .thenReturn("PARENT_TASK_001");
 
         String taskId = perfCalcApi.triggerRecalc(
@@ -100,7 +101,7 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
         verify(historyRecalcService).recalc(
                 eq(LocalDate.of(2026, 1, 1)),
                 eq(LocalDate.of(2026, 3, 31)),
-                any(), anyString(), eq("补录 Q1 数据"), eq("E001"));
+                any(), anyString(), eq("补录 Q1 数据"), eq("E001"), eq("MONTHLY"));
     }
 
     @Test
@@ -113,7 +114,8 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
                 eq(metricCodes),
                 eq("v20260301"),
                 eq("补录 3 月数据"),
-                eq("admin")))
+                eq("admin"),
+                eq("MONTHLY")))
                 .thenReturn("PARENT_TASK_002");
 
         String taskId = perfCalcApi.triggerRecalc(
@@ -132,7 +134,8 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
                 eq(metricCodes),
                 eq("v20260301"),
                 eq("补录 3 月数据"),
-                eq("admin"));
+                eq("admin"),
+                eq("MONTHLY"));
     }
 
     // ------------------------- V1.0 实现: getRunTask -------------------------

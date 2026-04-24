@@ -133,8 +133,9 @@ public class PerfCalcApiImpl implements PerfCalcApi {
     public String triggerRecalc(String cycleType, LocalDate from, LocalDate to,
                                 List<String> metricCodes, String version,
                                 String reason, String operator) {
-        // cycleType 当前仅留作审计/日志字段；V1.1 实际按日切分，由 Service 处理
-        return historyRecalcService.recalc(from, to, metricCodes, version, reason, operator);
+        // V1.3 R4.3：cycleType 透传到 Service 写入 params_json（运维 DB 审计回溯），
+        // 不再仅作审计/日志字段；实际日切分仍由 Service 处理.
+        return historyRecalcService.recalc(from, to, metricCodes, version, reason, operator, cycleType);
     }
 
     /**

@@ -78,7 +78,7 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
     void recalc_validRequest_returnsTaskId() throws Exception {
         Mockito.when(historyRecalcService.recalc(
                 any(LocalDate.class), any(LocalDate.class),
-                any(), anyString(), anyString(), anyString()))
+                any(), anyString(), anyString(), anyString(), any()))
                 .thenReturn("PARENT_TASK_001");
 
         RecalcReqDTO req = new RecalcReqDTO();
@@ -119,7 +119,7 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
     void recalc_invalidDateRange_returnsValidationFailed() throws Exception {
         Mockito.when(historyRecalcService.recalc(
                 any(LocalDate.class), any(LocalDate.class),
-                any(), anyString(), anyString(), anyString()))
+                any(), anyString(), anyString(), anyString(), any()))
                 .thenThrow(new PerfException(PerfErrorCode.VALIDATION_FAILED,
                         "startDate 不能晚于 endDate"));
 
@@ -159,7 +159,7 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
         // HistoryRecalcService 已同步执行完成，返回父 taskId
         Mockito.when(historyRecalcService.recalc(
                 any(LocalDate.class), any(LocalDate.class),
-                any(), anyString(), anyString(), anyString()))
+                any(), anyString(), anyString(), anyString(), any()))
                 .thenReturn("PARENT_TASK_REAL");
         // PerfRunTaskService.getById 返回终态为 SUCCESS 的 task（PerfCalcApi.getRunTask 底层）
         PerfRunTask finished = new PerfRunTask();
@@ -192,7 +192,7 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
     void recalc_whenTaskMissing_fallsBackToRunning() throws Exception {
         Mockito.when(historyRecalcService.recalc(
                 any(LocalDate.class), any(LocalDate.class),
-                any(), anyString(), anyString(), anyString()))
+                any(), anyString(), anyString(), anyString(), any()))
                 .thenReturn("PARENT_TASK_MISSING");
         // 极端竞态：Service 尚未 commit，Controller 读不到，退化到占位 RUNNING
         Mockito.when(perfRunTaskService.getById("PARENT_TASK_MISSING"))
