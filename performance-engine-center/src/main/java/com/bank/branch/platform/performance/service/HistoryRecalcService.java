@@ -234,8 +234,11 @@ public class HistoryRecalcService {
     /**
      * 构造父级 run_task 并插入（PENDING 状态）.
      *
-     * <p>V1.3 R4.3：params_json 新增 cycleType 字段，nullable 时回退为 JSON 字符串 ""（空值），
-     * 供运维从 DB 审计回溯每次回算的周期类型.
+     * <p>V1.3 R4.3：params_json 新增 cycleType 字段，供运维从 DB 审计回溯每次回算的周期类型.
+     *
+     * <p>V1.4 S4.2：cycleType=null 时跳过该字段（不再输出 {@code "cycleType":""}），
+     * 以便运维用 {@code JSON_EXTRACT(params_json, '$.cycleType') IS NULL} 精确筛选
+     * 无周期语义的回算；原空字符串写法会污染 IS NULL / = '' 的运维语义。
      */
     private void insertParentTask(String taskId, LocalDate start, LocalDate end,
                                   String version, String operator, String reason,
@@ -249,13 +252,19 @@ public class HistoryRecalcService {
         parent.setStatus("PENDING");
         parent.setStartedBy(operator);
         parent.setStartTime(LocalDateTime.now());
-        // V1.3 R4.3：cycleType 写入 params_json（null 时输出空字符串值 ""）
-        parent.setParamsJson(String.format(
-                "{\"startDate\":\"%s\",\"endDate\":\"%s\",\"metricCount\":%d,\"dateCount\":%d,"
-                        + "\"cycleType\":\"%s\",\"reason\":\"%s\"}",
-                start, end, metricCount, dateCount,
-                cycleType == null ? "" : escapeJsonString(cycleType),
-                escapeJsonString(reason)));
+        // V1.4 S4.2：改 StringBuilder 条件拼接，cycleType=null 时跳过字段
+        StringBuilder json = new StringBuilder(128);
+        json.append('{')
+                .append("\"startDate\":\"").append(start).append('"')
+                .append(",\"endDate\":\"").append(end).append('"')
+                .append(",\"metricCount\":").append(metricCount)
+                .append(",\"dateCount\":").append(dateCount);
+        if (cycleType != null && !cycleType.isBlank()) {
+            json.append(",\"cycleType\":\"").append(escapeJsonString(cycleType)).append('"');
+        }
+        json.append(",\"reason\":\"").append(escapeJsonString(reason)).append('"')
+                .append('}');
+        parent.setParamsJson(json.toString());
         perfRunTaskMapper.insert(parent);
     }
 
