@@ -91,4 +91,56 @@
         WHERE plan_id = #{planId}
     </delete>
 
+    <!--
+      V1.3 R1.1 新增: 基于 PerfScopeHelper 的 scopeFragment + scopeParams 注入数据范围条件.
+      scopeFragment 来自 PerfScopeHelper 受控生成, 通过 ${} 注入; 参数走 #{scopeParams.*} 预编译.
+      planId 可空（null 时不加 plan_id 条件, 允许跨方案查询）.
+    -->
+    <select id="selectByConditionWithScope" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_value
+        <where>
+            <if test="planId != null and planId != ''">
+                AND plan_id = #{planId}
+            </if>
+            <if test="subjectType != null and subjectType != ''">
+                AND subject_type = #{subjectType}
+            </if>
+            <if test="subjectId != null and subjectId != ''">
+                AND subject_id = #{subjectId}
+            </if>
+            <if test="cycleKey != null and cycleKey != ''">
+                AND cycle_key = #{cycleKey}
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+        ORDER BY subject_type ASC, subject_id ASC, cycle_key ASC, metric_code ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByConditionWithScope" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_target_value
+        <where>
+            <if test="planId != null and planId != ''">
+                AND plan_id = #{planId}
+            </if>
+            <if test="subjectType != null and subjectType != ''">
+                AND subject_type = #{subjectType}
+            </if>
+            <if test="subjectId != null and subjectId != ''">
+                AND subject_id = #{subjectId}
+            </if>
+            <if test="cycleKey != null and cycleKey != ''">
+                AND cycle_key = #{cycleKey}
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+    </select>
+
 </mapper>

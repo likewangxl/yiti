@@ -1,11 +1,15 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.entity.PerfTargetValue;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +45,10 @@ public class TargetValueService {
     private static final int BATCH_UPPER_LIMIT = 500;
 
     private final PerfTargetValueMapper targetValueMapper;
+    /** V1.3 R1.1 新增：当前用户读取（数据范围注入路径使用）. */
+    private final CurrentUserApi currentUserApi;
+    /** V1.3 R1.1 新增：数据范围 SQL 片段生成器. */
+    private final PerfScopeHelper perfScopeHelper;
 
     /**
      * 批量 upsert 目标值.
@@ -151,6 +159,63 @@ public class TargetValueService {
         int offset = Math.max(pageNo - 1, 0) * pageSize;
         List<PerfTargetValue> records = targetValueMapper.listByPlan(
                 planId, subjectType, subjectId, cycleKey, offset, pageSize);
+        return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * V1.3 R1.1 新增：基于 {@link PerfScopeHelper} 的数据范围注入分页查询.
+     *
+     * <p>场景:
+     * <ul>
+     *   <li>普通绩效配置员 SELF_CREATED → 只看到自己创建的目标值</li>
+     *   <li>绩效查询员 ALL → 可见全部目标值（scope=ALL 无片段）</li>
+     *   <li>无权限 / fail-close → 返回 total=0 的空页</li>
+     * </ul>
+     *
+     * <p>ScopeColumns 映射（perf_target_value 业务列仅 created_by 可用）:
+     * <ul>
+     *   <li>ownerEmpCol   = "created_by" (SELF 降级到创建人, 该表无独立 owner/emp_id 列)</li>
+     *   <li>assigneeCol   = "created_by" (同上, 无 assignee 列)</li>
+     *   <li>createdByCol  = "created_by" (SELF_CREATED 语义准确)</li>
+     *   <li>ownerOrgCol   = "created_by" (perf_target_value 无 org_code, ORG scope 降级)</li>
+     * </ul>
+     *
+     * <p>与既有 {@link #listByPlan} 的差异：
+     * <ul>
+     *   <li>listByPlan: 强制 planId 非空（Controller 侧手动指定方案上下文）, 不带数据范围</li>
+     *   <li>pageWithScope: planId 可空（V1.3 为向后兼容保留可选）, 内部注入数据范围片段</li>
+     * </ul>
+     *
+     * <p>V1.3 规划：可在 V1.4 考虑扩展 perf_target_value 增加 owner_emp_id / owner_org_code
+     * 字段，届时 SELF / ORG 不再降级到 created_by.
+     *
+     * @param planId      目标方案ID (可空，空则按 scope 跨方案查询)
+     * @param subjectType 对象类型 EMP/ORG (可空)
+     * @param subjectId   对象ID (可空)
+     * @param cycleKey    周期键 (可空)
+     * @param pageNo      页码 (从 1 起)
+     * @param pageSize    页大小
+     * @return 经过数据范围过滤的分页结果
+     */
+    @Transactional(readOnly = true)
+    public PageResult<PerfTargetValue> pageWithScope(String planId, String subjectType, String subjectId,
+                                                     String cycleKey, int pageNo, int pageSize) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
+                "created_by",   // ownerEmpCol (SELF)
+                "created_by",   // assigneeCol (无 assignee)
+                "created_by",   // createdByCol (SELF_CREATED)
+                "created_by"    // ownerOrgCol (无 org_code, 降级)
+        );
+        PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
+                currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
+
+        int offset = Math.max(pageNo - 1, 0) * pageSize;
+        long total = targetValueMapper.countByConditionWithScope(
+                planId, subjectType, subjectId, cycleKey, frag.getSql(), frag.getParams());
+        List<PerfTargetValue> records = targetValueMapper.selectByConditionWithScope(
+                planId, subjectType, subjectId, cycleKey, offset, pageSize,
+                frag.getSql(), frag.getParams());
         return PageResult.of(pageNo, pageSize, total, records);
     }
 

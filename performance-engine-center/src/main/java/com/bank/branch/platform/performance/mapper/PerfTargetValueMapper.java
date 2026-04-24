@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 目标值/基础值表 Mapper.
@@ -99,4 +100,45 @@ public interface PerfTargetValueMapper {
      * @return 受影响行数
      */
     int deleteByPlanId(@Param("planId") String planId);
+
+    /**
+     * V1.3 R1.1 新增: 基于 {@link com.bank.branch.platform.performance.service.scope.PerfScopeHelper}
+     * 的数据范围注入分页查询. planId 可空（null 时不加 plan_id 条件, 允许跨方案按 scope 查询）.
+     *
+     * @param planId        方案ID (可空)
+     * @param subjectType   对象类型 (可空)
+     * @param subjectId     对象ID (可空)
+     * @param cycleKey      周期键 (可空)
+     * @param offset        偏移量
+     * @param limit         每页大小
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()
+     * @return 目标值列表
+     */
+    List<PerfTargetValue> selectByConditionWithScope(@Param("planId") String planId,
+                                                     @Param("subjectType") String subjectType,
+                                                     @Param("subjectId") String subjectId,
+                                                     @Param("cycleKey") String cycleKey,
+                                                     @Param("offset") int offset,
+                                                     @Param("limit") int limit,
+                                                     @Param("scopeFragment") String scopeFragment,
+                                                     @Param("scopeParams") Map<String, Object> scopeParams);
+
+    /**
+     * V1.3 R1.1 新增: 基于 PerfScopeHelper 的数据范围注入计数.
+     *
+     * @param planId        方案ID (可空)
+     * @param subjectType   对象类型 (可空)
+     * @param subjectId     对象ID (可空)
+     * @param cycleKey      周期键 (可空)
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()
+     * @return 总数
+     */
+    long countByConditionWithScope(@Param("planId") String planId,
+                                   @Param("subjectType") String subjectType,
+                                   @Param("subjectId") String subjectId,
+                                   @Param("cycleKey") String cycleKey,
+                                   @Param("scopeFragment") String scopeFragment,
+                                   @Param("scopeParams") Map<String, Object> scopeParams);
 }
