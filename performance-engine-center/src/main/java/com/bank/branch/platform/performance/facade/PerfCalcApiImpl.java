@@ -48,9 +48,10 @@ public class PerfCalcApiImpl implements PerfCalcApi {
     private final KpiCalcService kpiCalcService;
 
     /**
-     * 触发某方案的 KPI 批量计算 (V1.3 R2.1 占位：Red 阶段).
+     * 触发某方案的 KPI 批量计算 (V1.3 R2.1 实现).
      *
-     * <p>Red 阶段保留 UOE，Green 阶段将委托 {@link KpiCalcService#calcScheme}。
+     * <p>直接委托 {@link KpiCalcService#calcScheme}，返回本次批量计算成功的员工数。
+     * 与 {@code KpiApi.triggerKpiCalc} 为双入口语义，避免破坏既有 04 契约文档的调用方。
      *
      * @param schemeCode KPI 方案编码
      * @param cycleType  周期类型
@@ -62,7 +63,7 @@ public class PerfCalcApiImpl implements PerfCalcApi {
     @Override
     public int triggerKpiCalc(String schemeCode, String cycleType,
                               LocalDate cycleDate, LocalDate asOfDate, String version) {
-        throw new UnsupportedOperationException("V1.3 R2.1 Red placeholder");
+        return kpiCalcService.calcScheme(schemeCode, cycleType, cycleDate, asOfDate, version);
     }
 
     /**
