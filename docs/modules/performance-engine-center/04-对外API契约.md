@@ -50,15 +50,32 @@ public interface MetricApi {
      *   <li>ACTIVE KPI 方案并集：从 {@code kpi_item.metric_code} 采集 distinct 列表（V1.3 未引入员工-方案绑定，用"所有 ACTIVE"近似）</li>
      *   <li>过滤 baseDim != EMP 与未分配 val_slot 的指标</li>
      *   <li>actual 值：读 sys_control(EMP) 当前版本 + latest_data_date → emp_index_result slot 值</li>
-     *   <li>target 值：{@code perf_target_value.selectByUniqueKey(planId=null, subjectType=EMP, subjectId=empId, cycleKey, metricCode)} 近似查询（V1.4 按方案关联精确）</li>
-     *   <li>{@code cycleKey} = {@code latestDataDate.getYear()} 字符串化（按年口径，V1.4 按方案 cycleType 精确匹配）</li>
+     *   <li>target 值：{@code perf_target_value.selectByUniqueKey(planId=null, subjectType=EMP, subjectId=empId, cycleKey, metricCode)} 近似查询</li>
+     *   <li>{@code cycleKey} 按方案 {@code cycleType} 精确匹配（V1.4 S3 交付，2026-04-24）：
+     *     <ul>
+     *       <li>YEARLY    → {@code yyyy}（如 {@code 2026}）</li>
+     *       <li>QUARTERLY → {@code yyyyQn}（如 {@code 2026Q2}）</li>
+     *       <li>MONTHLY   → {@code yyyyMM}（如 {@code 202604}）</li>
+     *       <li>WEEKLY    → {@code yyyyWnn}（如 {@code 2026W15}）</li>
+     *     </ul>
+     *   </li>
      *   <li>无 EMP 基线版本 / 无 ACTIVE 方案 / 无匹配 metric 时均返回空列表（fail-safe）</li>
      * </ul>
      *
-     * <p><b>V1.3 简化项（V1.4 补齐）：</b>
+     * <p><b>V1.4 新增字段（2026-04-24，Task S3）：</b>
      * <ul>
-     *   <li>{@code mom} / {@code yoy} / {@code previousValue} 字段留 null</li>
-     *   <li>员工-KPI 方案个人绑定（当前是 ACTIVE 方案并集）</li>
+     *   <li>{@code previousValue}：同周期上一期实际值（读历史版本宽表）</li>
+     *   <li>{@code mom}：环比（MONTHLY→上月，QUARTERLY→上季度，YEARLY→上年同周期）</li>
+     *   <li>{@code yoy}：同比（统一 -1 年；WEEKLY 可能跨年漂移，接受约束）</li>
+     *   <li>当 previousValue 缺失时 mom / yoy 自动降级为 null</li>
+     * </ul>
+     *
+     * <p><b>V1.4 仍遗留（V1.5 规划）：</b>
+     * <ul>
+     *   <li>员工-KPI 方案个人绑定（当前仍是 ACTIVE 方案并集）</li>
+     *   <li>多 scheme 共享 metric 时 {@code codeToCycleType} 取首命中的歧义（M01）</li>
+     *   <li>每 metric 3 次宽表查询（current/previous/yearAgo）的 batch 优化（M02）</li>
+     *   <li>yoy 未按 cycleType 分支（统一 -1 年）（M03）</li>
      * </ul>
      *
      * @param empId 员工工号
@@ -730,13 +747,15 @@ public class MetricCardDTO {
     private String metricCode;
     private String metricName;
     private BigDecimal currentValue;
-    private BigDecimal previousValue;   // 同比/环比参考
+    private BigDecimal previousValue;   // 上一期实际值
     private BigDecimal targetValue;     // 当前周期目标
     private BigDecimal baseValue;
     private BigDecimal achievementRate; // 达成率 %
     private String unit;                // 单位, 万元/笔/人等
     private Integer sortNo;
     private LocalDate dataDate;
+    private BigDecimal mom;             // V1.4 S3.1 新增: 环比变化率 (%, 两位小数, null=不适用/上期为 0/未命中)
+    private BigDecimal yoy;             // V1.4 S3.1 新增: 同比变化率 (%, 两位小数, null=不适用/去年同期为 0/未命中)
 }
 ```
 

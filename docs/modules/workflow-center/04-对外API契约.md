@@ -178,10 +178,28 @@ public interface WorkflowQueryApi {
     BizProcessMapDTO getProcessByBusinessKey(String businessKey);
 
     BizProcessMapDTO getProcessByBizTypeAndBizId(String bizType, String bizId);
+
+    /**
+     * 查询员工近 {@code days} 天参与过的流程 businessKey 集合（V1.4 新增，2026-04-24）。
+     *
+     * <p>实现基于 Flowable 历史 API（historyService）查询 ACT_HI_TASKINST 中：
+     * <ul>
+     *   <li>ASSIGNEE = empId（直接办理人）</li>
+     *   <li>INVOLVED_USER = empId（候选组成员等间接参与者）</li>
+     * </ul>
+     * 联合去重后取对应 processInstance 的 business_key，按 prefix 前缀过滤。
+     *
+     * @param empId  员工工号, 必填
+     * @param prefix businessKey 前缀（如 {@code "PERF-TARGET:"}），用于按模块/业务域筛选
+     * @param days   回看天数, 推荐 30~90；&lt;=0 时视为默认 90
+     * @param limit  返回上限, 推荐 200；&lt;=0 时视为默认 200
+     * @return 去重后的 businessKey 集合；空结果返回空 Set（非 null）
+     */
+    Set<String> queryParticipatedBusinessKeys(String empId, String prefix, int days, int limit);
 }
 ```
 
-当前实现路径：`WorkflowQueryFacade -> TodoQueryService / ProcessQueryService / ProcessStartService`
+当前实现路径：`WorkflowQueryFacade -> TodoQueryService / ProcessQueryService / ProcessStartService / HistoryService(Flowable)`
 
 ### 2.10 WorkflowQueryApi 能力说明
 
@@ -196,6 +214,7 @@ public interface WorkflowQueryApi {
 | `getProcessNodes(processInstanceId)` | `ProcessQueryService.getProcessNodes(...)` | 获取流程节点图数据 |
 | `getProcessByBusinessKey(...)` | `ProcessStartService.getProcessByBusinessKey(...)` | 查询流程映射 |
 | `getProcessByBizTypeAndBizId(...)` | `ProcessStartService.getProcessByBizTypeAndBizId(...)` | 查询流程映射 |
+| `queryParticipatedBusinessKeys(empId, prefix, days, limit)` | Flowable `HistoryService` 双路查询 ASSIGNEE + INVOLVED_USER → businessKey 去重 | 支撑 performance 模块 WORKFLOW_PARTICIPANT 数据范围语义（V1.4 新增） |
 
 ---
 

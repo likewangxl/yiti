@@ -6,7 +6,14 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.3（技术债清偿）—— 在 V1.2 流程/事件/导出/数据范围之上清偿 V1.1/V1.2 累积技术债：
+**当前版本**: V1.4（WORKFLOW_PARTICIPANT + Target DDL + mom/yoy 交付）—— 在 V1.3 技术债清偿之上消化 9 项 V1.3 遗留技术债：
+- S1 WORKFLOW_PARTICIPANT 真实查询落地（workflow-center 新增 `WorkflowQueryApi.queryParticipatedBusinessKeys` + PerfScopeHelper 透传）
+- S2 Target owner 字段 DDL（V1_4_0 perf_target_plan / perf_target_value 加 `owner_emp_id` / `owner_org_code` + Entity/Mapper/Cmd/Service ScopeColumns 升级）
+- S3 MetricApi.getUserMetricCards mom/yoy/previousValue 字段计算（cycleType 按方案精确匹配 yyyyMM / yyyyQn / yyyy）
+- S4 reviewer 建议消化（P7 recalc fallback 日志 + cycleType null 与空串语义澄清 + Controller.list 返回类型澄清为 common-web 契约）
+- S5 收尾（全量回归 + 文档同步 + 技术债清算）
+
+V1.3（技术债清偿）历史：
 - R0 V1_2_5 NULL deleted 清理 + V1_3_0 uk_task_key 补齐 + failsafe 分层 + CLAUDE.md 勘误
 - R1 Target 数据范围注入（TargetValue + TargetPlan + Controller 三级，复用 PerfScopeHelper）
 - R2 5 处 V1.2 UOE 全部实际实现（PerfCalcApi.triggerKpiCalc / MetricQueryApi.3 snapshot / MetricApi.getUserMetricCards），Facade UOE 清零
@@ -29,7 +36,8 @@
 | V1.0 | 配置态 CRUD + 版本管理骨架 + 只读查询 + 7 个 Api（契约定型）| 已交付 |
 | V1.1 | 指标执行（SQL+Groovy+级联）、KPI 计算（定时任务+手动触发）、数据导入（Excel/SQL/外部上报 3 策略）、历史回算（父子 run_task） | 已交付 |
 | V1.2 | 分配/目标调整审批（BPMN + Flowable）、4 类领域事件发布、4 导出策略（异步任务 + MinIO）、ShedLock 分布式锁、PerfScopeHelper 数据范围注入、PT_RESOURCE 资源全量激活（45 条） | 已交付 |
-| **V1.3** | 技术债清偿：V1_2_5/V1_3_0 DDL 兜底、Target 数据范围注入、5 处 V1.2 UOE 实际实现、PERF-50003 新增、MetricTrialRespDTO 对齐 03 §A.5、execute 返回 RunTaskInfoDTO、11 Controller 局部 entity 清零、P7 recalc 真实 status、cycleType 写 params_json、Testcontainers-redis 接入、UndoScriptSmokeIT 重写、2 个新架构守护（NoEntityInControllerLocalsArchTest + NoUoeInFacadeTestsArchTest） | **本期交付（2026-04-24）** |
+| V1.3 | 技术债清偿：V1_2_5/V1_3_0 DDL 兜底、Target 数据范围注入、5 处 V1.2 UOE 实际实现、PERF-50003 新增、MetricTrialRespDTO 对齐 03 §A.5、execute 返回 RunTaskInfoDTO、11 Controller 局部 entity 清零、P7 recalc 真实 status、cycleType 写 params_json、Testcontainers-redis 接入、UndoScriptSmokeIT 重写、2 个新架构守护（NoEntityInControllerLocalsArchTest + NoUoeInFacadeTestsArchTest） | 已交付 |
+| **V1.4** | 9 项 V1.3 遗留技术债消化：WORKFLOW_PARTICIPANT 真实查询（workflow-center `WorkflowQueryApi.queryParticipatedBusinessKeys` 新增 + PerfScopeHelper 透传）、Target owner 字段 DDL（V1_4_0 `owner_emp_id` / `owner_org_code` + Entity/Mapper/Cmd/Service ScopeColumns 精化）、MetricApi.getUserMetricCards mom/yoy/previousValue 字段计算（cycleType 按方案精确匹配 yyyyMM / yyyyQn / yyyy）、P7 recalc fallback 日志、cycleType null/空串语义澄清、Controller.list 返回类型澄清为 common-web 契约（非 bug） | **本期交付（2026-04-24）** |
 
 ### V1.3 UOE 清单（Facade UOE 已清零）
 
@@ -369,7 +377,39 @@ Facade 层可能透传任一形式，当前实现按 `null` 写入（jackson 会
 
 **V1.4 解决方向**：明确合约——null 不写字段，空串显式写 `{"cycleType": ""}`，或强制 cycleType 必填。
 
-## 运维 Runbook（V1.2 + V1.3 交付）
+## 运维 Runbook（V1.2 + V1.3 + V1.4 交付）
+
+### V1.4 启用前置检查（DDL 迁移安全门）
+
+V1.4 引入 `V1_4_0__perf_target_owner_cols.sql`，为 `perf_target_plan` / `perf_target_value` 两表
+各加 `owner_emp_id` / `owner_org_code` 字段 + 2 个索引（`idx_plan_owner_emp` / `idx_value_owner_emp` 等），
+并以 `UPDATE SET owner_emp_id = created_by` 回填历史数据作为兜底（与 V1.3 ScopeColumns 降级行为等价）。
+
+```sql
+-- 预检 1：确认两表字段尚未存在（幂等兜底）
+SELECT COLUMN_NAME
+  FROM INFORMATION_SCHEMA.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE()
+   AND TABLE_NAME IN ('perf_target_plan', 'perf_target_value')
+   AND COLUMN_NAME IN ('owner_emp_id', 'owner_org_code');
+-- 无结果 → 安全执行
+-- 有结果 → 脚本本身是 ADD COLUMN IF NOT EXISTS, 直接跑也可
+
+-- 预检 2：历史行 created_by 分布（用于估计 owner_emp_id 回填后的准确率）
+SELECT COUNT(*), COUNT(DISTINCT created_by)
+  FROM perf_target_plan WHERE created_by IS NOT NULL;
+SELECT COUNT(*), COUNT(DISTINCT created_by)
+  FROM perf_target_value WHERE created_by IS NOT NULL;
+```
+
+**回填语义**：`V1_4_0` 的 `UPDATE SET owner_emp_id = created_by` 仅作**历史数据兜底**，
+- `owner_org_code` 留空需走业务侧主动回填（通过 perf_org 字典关联员工 → 机构）或接受 ORG scope 漏匹配。
+- 未来新增数据**必须**显式传 `ownerEmpId` / `ownerOrgCode`（UpsertTargetValueCmd / TargetPlan 新建场景）。
+
+**undo 脚本**（`U1_4_0__perf_target_owner_cols.sql`）：
+- `ALTER TABLE perf_target_plan DROP COLUMN owner_emp_id, DROP COLUMN owner_org_code` + DROP 索引
+- `ALTER TABLE perf_target_value DROP COLUMN owner_emp_id, DROP COLUMN owner_org_code` + DROP 索引
+- 注意：undo 前确认 Service 已退回到 V1.3 ScopeColumns `created_by` 配置，否则查询会报"未知列"。
 
 ### V1.3 启用前置检查（DDL 迁移安全门）
 
