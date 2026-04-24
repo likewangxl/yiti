@@ -253,9 +253,12 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 - DDL 权威源: `docs/schema/ddl-performance.sql`
 - 共通开发规范: `docs/common-dev-guide.md`
 
-## 技术债务（V1.3 交付后）
+## 技术债务（V1.4 交付后）
 
-本节记录 V1.3 交付后的技术债残量：V1.3 R0-R5 已消化 13 项大额债务，V1.4 新登记 8 项遗留（含 R6 WORKFLOW_PARTICIPANT 整体延期）。
+本节记录 V1.4 交付后的技术债残量：
+- V1.3 R0-R5 已消化 13 项大额债务（V1.0-V1.2 累积债务）
+- V1.4 S1-S4 已消化 **9 项** V1.3 遗留（含 S4.3 澄清为契约设计的 1 项）
+- V1.5+ 遗留清单见"V1.5+ 遗留项"章节
 
 ### V1.3 已消化项（2026-04-24）
 
@@ -297,32 +300,53 @@ V1.3 R0-R5 共 18 个 Task 消化以下 13 项 V1.0-V1.2 累积技术债：
 
 V1.3 仅做技术债清偿，未引入新业务能力。以下 8 项遗留项转入 V1.4 规划：
 
-#### 1. WORKFLOW_PARTICIPANT scope 未落地（中，V1.3 R6 整体延期）
+#### 1. WORKFLOW_PARTICIPANT scope 未落地（已消化（2026-04-24），V1.4 S1）
 
 PerfScopeHelper Q7.1 已枚举 7 种 DataScopeType，`WORKFLOW_PARTICIPANT` 当前 fail-close 到 SELF 语义。
 V1.3 R6 原计划落地但需 workflow-center 先提供 `WorkflowQueryApi.queryParticipatedBusinessKeys` 跨模块 API，
 该 API 变更面大（工作流模块有独立 release cadence），整体转入 V1.4。
 
-**V1.4 解决方向**：workflow-center 先加 `queryParticipatedBusinessKeys(empId)` 返回候选组 businessKey 集合，
-PerfScopeHelper 再包一层 Resolver 组件透传到 SQL 过滤片段。
+**V1.4 S1 消化**（Task S1.1-S1.3，2026-04-24）：
+- S1.1：workflow-center 新增 `WorkflowQueryApi.queryParticipatedBusinessKeys(empId, prefix, days, limit)` + `WorkflowQueryApiParticipantTest` 8 个测试
+  - 实现基于 Flowable `HistoryService` 双路查询 `ACT_HI_TASKINST`（ASSIGNEE + INVOLVED_USER）联合去重
+- S1.2：performance PerfScopeHelper 增加 WORKFLOW_PARTICIPANT 分支，透传到 TargetPlan/TargetValue ScopeColumns 的 `bizKeyCol`
+  - Target 两表 `bizKeyCol = null`（无 business_key 列），继续 fail-close；KPI 相关表按实际 biz_key 列启用
+- S1.3：本文档条目标为已消化
 
-#### 2. MetricApi.getUserMetricCards mom/yoy 字段（中，V1.3 R2.5 简化）
+#### 2. MetricApi.getUserMetricCards mom/yoy 字段（已消化（2026-04-24），V1.4 S3）
 
 V1.3 R2.5 交付的简化方案只填充 `target + actual`，`mom`（环比）/ `yoy`（同比）/ `previousValue` 字段留 null。
 V1.4 需引入周期推导规则（MONTHLY 环比上月 / QUARTERLY 环比上季度 / YEARLY 同比上年）+ 读取历史版本
 宽表数据。
+
+**V1.4 S3 消化**（Task S3.1-S3.3，2026-04-24）：
+- S3.1：MetricCardDTO 新增 `mom` / `yoy` 字段（BigDecimal，两位小数，null 表示不适用）
+- S3.2：`MetricApiImpl.getUserMetricCards` 按方案 cycleType 推导 previousCycleKey / yearAgoCycleKey，
+  EMP 宽表三次读取（current / previous / yearAgo），`(current - previous)/previous × 100` 计算 mom，
+  `(current - yearAgo)/yearAgo × 100` 计算 yoy；previousValue = 0 / 未命中 → mom/yoy = null（fail-safe）
+- S3.3：本文档条目标为已消化
 
 #### 3. MetricTrialRespDTO @Deprecated getSamples() 1 版本后删除（低，V1.5 清理）
 
 V1.3 R3.2 为保证前端兼容而保留 `@JsonAlias({"samples"}) getSamples()` getter，标 @Deprecated 1 版本后删除。
 按"V1.3 → V1.4 → V1.5"的节奏，V1.5 删除该 getter 与 alias。
 
-#### 4. MetricApi.getUserMetricCards cycleKey 按年口径近似（低，V1.3 R2.5 简化）
+#### 4. MetricApi.getUserMetricCards cycleKey 按年口径近似（已消化（2026-04-24），V1.4 S3）
 
 V1.3 R2.5 将 `cycleKey = latestDataDate.getYear()` 字符串化，对 MONTHLY/QUARTERLY 方案
 可能与 perf_target_value 实际 cycleKey 不匹配。
 
 **V1.4 解决方向**：按方案 cycleType 精确匹配（MONTHLY → `yyyyMM` / QUARTERLY → `yyyyQn` / YEARLY → `yyyy`）。
+
+**V1.4 S3 消化**（同 S3 轨道，2026-04-24）：
+- 新增 `codeToCycleType` 维护 metricCode → cycleType 映射（由 KPI 方案元数据构造）
+- `buildCycleKey(cycleType, localDate)` 按维度拼接：
+  - YEARLY    → `yyyy`
+  - QUARTERLY → `yyyyQn`（n = (month - 1) / 3 + 1）
+  - MONTHLY   → `yyyyMM`
+  - WEEKLY    → `yyyyWnn`（ISO 周次，跨年时可能偏移，S3 非阻塞观察项 M03）
+- **注意**（M01 观察项）：当同一 metric 被多个 scheme 共享且 cycleType 不一致时，`codeToCycleType` 取首命中的
+  scheme，存在歧义，V1.5 补齐方案优先级或前端按 scheme 分组展示
 
 #### 5. ScopeColumns Target 降级到 created_by（已消化，V1.4 S2 交付 @ 2026-04-24）
 
@@ -363,19 +387,39 @@ V1.0/V1.1 共 6 个 Controller（MetricDef / KpiScheme / TargetPlan / TargetValu
 元数据（total/pageSize/pageNum），data 字段承载当前页列表。该设计已在 common-web 全平台统一使用，
 performance 侧无需调整。遗留项保留记录以防未来 common-web 重构时溯源，**不作为技术债处理**。
 
-#### 7. MetricCalcApi execute fallback 日志（低，R4.2 reviewer 建议）
+#### 7. MetricCalcApi execute fallback 日志（已消化（2026-04-24），V1.4 S4.1）
 
 V1.3 R4.2 P7 recalc Controller 响应 status 从真实 `getRunTask(parentId)` 读取，
 但底层 recalc 过程异常时，Controller 层现阶段未留 fallback 日志。
 
 **V1.4 解决方向**：Controller 层加 try/catch + warn log，防止 recalc 异常时前端拿到误导性 RUNNING。
 
-#### 8. cycleType=null 语义（低，R4.3 reviewer 建议）
+**V1.4 S4.1 消化**（2026-04-24）：PerfCalcController.recalc 的 `getRunTask(parentId)` fallback 分支加
+`log.warn("[PerfCalcController.recalc] 子任务状态查询失败，降级返回 RUNNING", e)`，
+前端拿到 RUNNING 时运维可通过日志反查真实失败原因（TDD：test Red 4375523 → fix Green febb99f）。
+
+#### 8. cycleType=null 语义（已消化（2026-04-24），V1.4 S4.2）
 
 V1.3 R4.3 `params_json` 写入 cycleType 时，未明确区分 `null` 与 `""`（空串）两种情况。
 Facade 层可能透传任一形式，当前实现按 `null` 写入（jackson 会忽略字段）。
 
-**V1.4 解决方向**：明确合约——null 不写字段，空串显式写 `{"cycleType": ""}`，或强制 cycleType 必填。
+**V1.4 S4.2 消化**（2026-04-24）：HistoryRecalcService 明确契约——**`null` 不写字段**（jackson 忽略），
+**空串不入参 params_json**（按跳过处理避免歧义）；实际写入时仅当 `StringUtils.hasText(cycleType)` 才 put。
+（TDD：test Red e1bbe86 → fix Green 860e0f4）
+- **非阻塞观察**：`cycleType=""` 空串入参在当前测试里跳过了 behavior 测试覆盖，留待 V1.5 补齐。
+
+### V1.5+ 遗留项（已登记）
+
+V1.4 交付后，剩余的技术债残量如下，按优先级与风险归档：
+
+| 序号 | 标题 | 优先级 | 来源 | 说明 |
+|---|---|---|---|---|
+| 1 | `MetricTrialRespDTO.@Deprecated getSamples()` 彻底删除 | 低 | V1.3 R3.2 遗留 | 按 V1.3→V1.4→V1.5 节奏，V1.5 删除该 getter + `@JsonAlias({"samples"})` alias |
+| 2 | `cycleType=""` 空串入参 behavior 测试 | 低 | V1.4 S4.2 code-reviewer 观察 | `HistoryRecalcServiceCycleTypeNullTest` 仅覆盖 null，空串语义待补充断言 |
+| 3 | 多 scheme 共享 metric 时 `codeToCycleType` 取首命中的歧义（M01） | 中 | V1.4 S3 code-reviewer 观察 | `MetricApiImpl` 需补 scheme 优先级或前端按 scheme 分组；影响跨方案 metric 的 cycleKey/mom/yoy 准确性 |
+| 4 | 每 metric 3 次宽表查询（current/previous/yearAgo）的 batch 优化（M02） | 中 | V1.4 S3 code-reviewer 观察 | 当前 `getUserMetricCards` 对每个 metric 串行 3 次 EMP 宽表查询，N metric 下 3N 查询；建议拼入单 IN 查询或同会话批处理 |
+| 5 | yoy 不按 cycleType 分支，统一 `-1 年`（M03） | 低 | V1.4 S3 code-reviewer 观察 | WEEKLY yoy 可能 ISO 周跨年漂移，MONTHLY/QUARTERLY 在闰年/季度切换时偏一期；当前统一 `cycleDate.minusYears(1)` |
+| 6 | `PerfTargetPlanMapper.xml updateByIdSelective` owner 字段 `<if>` 分支缺 | 低 | V1.4 S2 code-reviewer 观察 | 新增的 `owner_emp_id` / `owner_org_code` 在 updateByIdSelective 未加 `<if>` 动态分支，本期仅通过 upsert 路径写入；如有独立 update 场景需补 |
 
 ## 运维 Runbook（V1.2 + V1.3 + V1.4 交付）
 
