@@ -69,7 +69,7 @@ class TargetValueServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi);
+        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
         this.service = new TargetValueService(targetValueMapper, currentUserApi, perfScopeHelper);
     }
 

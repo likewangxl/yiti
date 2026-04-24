@@ -54,7 +54,7 @@ class MetricDefServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi);
+        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
         // pageWithScope 只依赖 mapper / currentUserApi / perfScopeHelper,
         // 其他字段传 null 不影响本测试覆盖面
         this.service = new MetricDefService(

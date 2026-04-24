@@ -69,7 +69,7 @@ class AllocRelationServiceScopeTest {
     private AllocRelationService service;
 
     private void wireScopeHelper() {
-        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi);
+        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
         // 使用反射或手动 setter 注入 helper（Service 新增字段后 @InjectMocks 会识别）
         // 这里直接重新组装 service
         this.service = new AllocRelationService(

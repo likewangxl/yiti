@@ -294,7 +294,8 @@ public class MetricDefService {
                 "created_by",   // ownerEmpCol
                 "created_by",   // assigneeCol (metric 无 assignee)
                 "created_by",   // createdByCol (SELF_CREATED)
-                "created_by"    // ownerOrgCol (metric 表无 org_code, 降级为 created_by)
+                "created_by",   // ownerOrgCol (metric 表无 org_code, 降级为 created_by)
+                null            // bizKeyCol (metric 无 business_key, V1.4 WORKFLOW_PARTICIPANT 退化 fail-close)
         );
         PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
                 currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);

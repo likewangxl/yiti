@@ -71,7 +71,7 @@ class TargetPlanServiceScopeTest {
 
     @BeforeEach
     void setUp() {
-        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi);
+        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
         this.service = new TargetPlanService(
                 targetPlanMapper, kpiSchemeService, cacheManager,
                 currentUserApi, perfScopeHelper);

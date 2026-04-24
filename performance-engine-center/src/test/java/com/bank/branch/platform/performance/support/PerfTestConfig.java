@@ -9,6 +9,7 @@ import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import org.mockito.Mockito;
@@ -96,6 +97,23 @@ public class PerfTestConfig {
         WorkflowApi m = Mockito.mock(WorkflowApi.class);
         Mockito.when(m.startProcess(Mockito.any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_MOCK_DEFAULT", null, null));
+        return m;
+    }
+
+    /**
+     * 测试用 WorkflowQueryApi (V1.4 S1.2 新增)：
+     * PerfScopeHelper 的主构造器 2 参注入 WorkflowQueryApi 以支持
+     * WORKFLOW_PARTICIPANT 真实查询。测试环境默认 mock 返回空集，
+     * 使 WORKFLOW_PARTICIPANT 分支 fail-close（等价 V1.3 既有行为）；
+     * 需要验证具体 WORKFLOW_PARTICIPANT 行为的单测可 {@code @MockBean} 覆盖。
+     */
+    @Bean
+    @Primary
+    public WorkflowQueryApi workflowQueryApi() {
+        WorkflowQueryApi m = Mockito.mock(WorkflowQueryApi.class);
+        Mockito.when(m.queryParticipatedBusinessKeys(
+                        Mockito.anyString(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Set.of());
         return m;
     }
 }

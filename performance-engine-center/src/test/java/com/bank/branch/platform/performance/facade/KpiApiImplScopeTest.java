@@ -68,7 +68,7 @@ class KpiApiImplScopeTest {
 
     @BeforeEach
     void setUp() {
-        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi);
+        this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
         this.facade = new KpiApiImpl(kpiSchemeService, kpiItemService, kpiResultMapper,
                 currentUserApi, perfScopeHelper);
     }

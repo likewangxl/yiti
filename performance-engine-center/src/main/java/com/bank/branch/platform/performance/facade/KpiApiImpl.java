@@ -124,7 +124,8 @@ public class KpiApiImpl implements KpiApi {
                 "emp_id",       // ownerEmpCol (SELF)
                 "emp_id",       // assigneeCol (kpi_result 无 assignee 概念)
                 "emp_id",       // createdByCol (kpi_result 由 Job 计算生成, 降级为 emp_id)
-                "emp_id"        // ownerOrgCol (kpi_result 表无 org_code, 降级为 emp_id)
+                "emp_id",       // ownerOrgCol (kpi_result 表无 org_code, 降级为 emp_id)
+                null            // bizKeyCol (kpi_result 无 business_key, V1.4 WORKFLOW_PARTICIPANT 退化 fail-close)
         );
         PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
                 currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);

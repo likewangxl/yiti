@@ -196,7 +196,8 @@ public class AllocRelationService {
                 "emp_id",       // ownerEmpCol (SELF)
                 "emp_id",       // assigneeCol (Alloc 无独立 assignee 列)
                 "created_by",   // createdByCol (SELF_CREATED)
-                "emp_id"        // ownerOrgCol (Alloc 表无 org_code, 降级为 emp_id; ORG scope 语义等价 SELF)
+                "emp_id",       // ownerOrgCol (Alloc 表无 org_code, 降级为 emp_id; ORG scope 语义等价 SELF)
+                null            // bizKeyCol (Alloc 表无 business_key, WORKFLOW_PARTICIPANT 退化 fail-close)
         );
         PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
                 currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
