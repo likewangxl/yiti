@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -501,6 +502,102 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         List<MetricCardDTO> cards = api.getUserMetricCards(empId);
         assertThat(cards).hasSize(1);
         assertThat(cards.get(0).getYoy()).isNull();
+    }
+
+    // ============ V1.5 P3.1 多 scheme 共享 metric 按 (metricCode, cycleType) 组合分组 ============
+
+    /**
+     * V1.5 P3.1 Red：同一 metricCode 被多个 scheme 引用且 cycleType 不同时，
+     * 生成按 (metricCode, cycleType) 分组的多张卡片.
+     *
+     * <p>V1.4 reviewer M01 观察项：当前首命中策略会让 YEARLY scheme 的目标值永远查不到.
+     * V1.5 修复：按 cycleType 分组 × metricCode，每个组合一张卡片.
+     */
+    @Test
+    @DisplayName("[V1.5 P3.1] 多 scheme 共享 metric 不同 cycleType：按 (metric, cycleType) 分组生成多卡片")
+    void getUserMetricCards_multiSchemesDifferentCycleType_generatesCardPerCombo() {
+        String empId = "E001";
+        LocalDate latest = LocalDate.of(2026, 7, 15);
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v1");
+        sc.setLatestDataDate(latest);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        // scheme A (QUARTERLY) + scheme B (YEARLY) 都引用 M_X
+        PerfKpiScheme sA = new PerfKpiScheme();
+        sA.setId("SA");
+        sA.setCycleType("QUARTERLY");
+        sA.setStatus("ACTIVE");
+        PerfKpiScheme sB = new PerfKpiScheme();
+        sB.setId("SB");
+        sB.setCycleType("YEARLY");
+        sB.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(sA, sB));
+        when(kpiItemService.listBySchemeId("SA")).thenReturn(List.of(kpiItem("SA", "M_X")));
+        when(kpiItemService.listBySchemeId("SB")).thenReturn(List.of(kpiItem("SB", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(5)))
+                .thenReturn(new BigDecimal("80"));
+
+        // QUARTERLY 方向下 cycleKey=2026Q3；YEARLY 方向下 cycleKey=2026
+        when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("2026Q3"), eq("M_X")))
+                .thenReturn(targetValue(new BigDecimal("100")));
+        when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("2026"), eq("M_X")))
+                .thenReturn(targetValue(new BigDecimal("400")));
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        // V1.5：同一 metricCode 分 2 张卡片，分别命中不同 cycleType 的 target
+        assertThat(cards).hasSize(2);
+        assertThat(cards).extracting(MetricCardDTO::getTargetValue)
+                .extracting(bd -> bd == null ? null : bd.stripTrailingZeros().toPlainString())
+                .containsExactlyInAnyOrder("1E+2", "4E+2"); // 100 和 400
+
+        // 验证两张卡片分别对两个 cycleType 的 target 做了精确查询
+        verify(perfTargetValueMapper).selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("2026Q3"), eq("M_X"));
+        verify(perfTargetValueMapper).selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("2026"), eq("M_X"));
+    }
+
+    /**
+     * V1.5 P3.1 Red：同一 metricCode 多个 scheme cycleType 相同时，仍只出一张卡片（去重）.
+     *
+     * <p>防止 P3 过度修复变成"每 scheme 一卡"，保持"按 cycleType 去重"语义.
+     */
+    @Test
+    @DisplayName("[V1.5 P3.1] 多 scheme 同 cycleType 引用同 metric：去重后仅一张卡片")
+    void getUserMetricCards_multiSchemesSameCycleType_generatesSingleCard() {
+        String empId = "E001";
+        LocalDate latest = LocalDate.of(2026, 7, 15);
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v1");
+        sc.setLatestDataDate(latest);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme sA = new PerfKpiScheme();
+        sA.setId("SA");
+        sA.setCycleType("MONTHLY");
+        sA.setStatus("ACTIVE");
+        PerfKpiScheme sB = new PerfKpiScheme();
+        sB.setId("SB");
+        sB.setCycleType("MONTHLY");
+        sB.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(sA, sB));
+        when(kpiItemService.listBySchemeId("SA")).thenReturn(List.of(kpiItem("SA", "M_Y")));
+        when(kpiItemService.listBySchemeId("SB")).thenReturn(List.of(kpiItem("SB", "M_Y")));
+        when(metricDefService.getByCodes(List.of("M_Y")))
+                .thenReturn(List.of(def("M_Y", "EMP", 6, "Y", "户")));
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(6)))
+                .thenReturn(new BigDecimal("5"));
+        when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("202607"), eq("M_Y")))
+                .thenReturn(targetValue(new BigDecimal("10")));
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getMetricCode()).isEqualTo("M_Y");
+        assertThat(cards.get(0).getTargetValue()).isEqualByComparingTo("10");
     }
 
     // ============ helpers ============
