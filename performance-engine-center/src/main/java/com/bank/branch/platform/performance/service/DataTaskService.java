@@ -11,6 +11,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -31,7 +32,7 @@ import java.util.UUID;
  *   <li>FAILED 上报 → run_task 打标 FAILED + error_msg 回填，不触发任何后续计算</li>
  * </ul>
  *
- * <p><strong>幂等策略（P6.3）</strong>：
+ * <p><strong>幂等策略（P6.3 + V1.3 R0.2）</strong>：
  * <ol>
  *   <li>DB 先查（便宜）：taskId 已存在则直接幂等返回 accepted=false，不进入写路径</li>
  *   <li>Redis SETNX 互斥：{@code perf:data_task:{taskId}} 锁 TTL 30 秒，
@@ -39,6 +40,9 @@ import java.util.UUID;
  *       获锁失败 → 轮询等待（最多 3s），等胜出方释放锁后 DB 一定可查到行，
  *       回落为 accepted=false 幂等返回</li>
  *   <li>持锁写入 + finally 释放锁（Lua 比较 token 原子删）</li>
+ *   <li><strong>V1.3 R0.2 DB 兜底：</strong> perf_run_task 加 uk_task_key 唯一键后，
+ *       Redis 宕机或并发穿透场景下 insert 若抛 DuplicateKeyException，
+ *       即"DB 层阻止了同 task_key 双写"，此时回查既有行返回 accepted=false</li>
  * </ol>
  *
  * <p><strong>事务</strong>：{@link #report} 不持事务（锁需在事务外，同 {@code SysControlFacade} 模式）；
@@ -131,7 +135,23 @@ public class DataTaskService {
 
             // 4. 插入新 run_task（单条 SQL 自然原子，MyBatis/Druid 默认 auto-commit）
             PerfRunTask task = buildRunTask(cmd);
-            perfRunTaskMapper.insert(task);
+            try {
+                perfRunTaskMapper.insert(task);
+            } catch (DuplicateKeyException dup) {
+                // V1.3 R0.2：Redis 宕机或并发穿透下，DB uk_task_key 兜底阻止同 task_key 双写
+                // 回查既有行返回 accepted=false 的幂等结果，不抛异常
+                PerfRunTask dbExisting = perfRunTaskMapper.selectByTaskNo(cmd.getTaskId());
+                if (dbExisting == null) {
+                    // 理论不应到达：唯一键冲突说明行已存在；若仍查不到，判定为异常状态
+                    log.error("[DataTaskService.report] uk_task_key 冲突但回查不到既有行 taskId={} err={}",
+                            cmd.getTaskId(), dup.getMessage());
+                    throw new PerfException(PerfErrorCode.CALC_JOB_FAILED,
+                            "task_key=" + cmd.getTaskId() + " DB 唯一键冲突但查不到既有行");
+                }
+                log.info("[DataTaskService.report] DB uk_task_key 兜底命中 taskId={} 既有 runTaskId={}",
+                        cmd.getTaskId(), dbExisting.getId());
+                return idempotentResult(cmd.getTaskId(), dbExisting.getId());
+            }
             log.info("[DataTaskService.report] 新建 run_task id={} taskId={} status={} dataType={} dataDate={}",
                     task.getId(), cmd.getTaskId(), cmd.getStatus(), cmd.getDataType(), cmd.getDataDate());
 

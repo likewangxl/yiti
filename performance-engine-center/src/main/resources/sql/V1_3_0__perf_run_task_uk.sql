@@ -1,0 +1,54 @@
+-- =====================================================================
+-- performance-engine-center V1.3 Phase R0.2 perf_run_task 唯一键补齐
+-- Version: V1_3_0
+-- Date: 2026-04-24
+-- Task: R0.2
+--
+-- 背景：V1.1 Q6 DataTaskService 以 Redis SETNX 实现幂等：
+--   - 正常：多线程并发上报同 taskId → 只有一个线程胜出写入
+--   - 异常：Redis 宕机时，并发线程可能 DB 快查都为 null 后双写，造成同
+--     task_key 的重复行
+--
+-- 本脚本作为 DB 层兜底：ALTER TABLE 增加 uk_task_key 唯一键，强制 task_key
+-- 唯一；配合 R0.2 Step 4 的 DataTaskService 在 insert 抛 DuplicateKeyException
+-- 时 selectByTaskKey 降级回查返回 accepted=false 的幂等结果。
+--
+-- V1.2 模块 CLAUDE.md 技术债章节曾声称 "V1.2 Q0.2 DDL 增加 uk_task_key"，
+-- 但实际 V1_2_0~V1_2_4 脚本均未执行此 ALTER。V1.3 R0.2 真实补齐，R0.4
+-- 同步修订模块 CLAUDE.md 将错误声明改为 "V1.3 R0.2 补齐"。
+--
+-- ---------------------------------------------------------------------
+-- 【生产前置检查 runbook（必须运维在应用前人工执行）】
+-- ---------------------------------------------------------------------
+-- 1) 查重复 task_key：
+--    SELECT task_key, COUNT(*) AS cnt FROM perf_run_task
+--    WHERE task_key IS NOT NULL
+--    GROUP BY task_key HAVING COUNT(*) > 1;
+--
+--    若有结果：按业务规则保留最早 / 最晚一条，DELETE 其余行。建议：
+--    - 优先保留 status='SUCCESS' 的行
+--    - 多条均 SUCCESS 时保留 end_time 最早
+--    - 多条均 FAILED/RUNNING 时保留 start_time 最早
+--
+-- 2) 查空 task_key（MySQL UNIQUE 允许多 NULL，生产不阻塞 ALTER，但建议审计）：
+--    SELECT COUNT(*) AS null_task_key_rows FROM perf_run_task
+--    WHERE task_key IS NULL;
+--
+-- 3) 若步骤 1 有重复且清理完毕，再应用本脚本
+--
+-- ---------------------------------------------------------------------
+-- 【回滚策略】
+-- ---------------------------------------------------------------------
+-- 若 ALTER 失败（存量重复未清理）：
+--   - 脚本未生效，Flyway 标记 FAILED，阻塞后续 V1_3_x 脚本
+--   - 解决：(a) 人工清理重复行；(b) DELETE FROM flyway_schema_history
+--           WHERE version='1.3.0' AND success=0; (c) 重新 mvn flyway:migrate
+--   - 严禁：直接从下个版本跳过此脚本
+--
+-- 若 ALTER 成功但后续出现 "Duplicate entry for key 'uk_task_key'"：
+--   - DB 层阻止了并发写入，由 DataTaskService 的 DuplicateKeyException
+--     catch 分支降级处理，是设计预期
+-- =====================================================================
+
+ALTER TABLE perf_run_task
+    ADD UNIQUE KEY uk_task_key (task_key);
