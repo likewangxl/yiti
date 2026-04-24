@@ -113,8 +113,8 @@ public class MetricQueryApiImpl implements MetricQueryApi {
                                                              LocalDate dateFrom,
                                                              LocalDate dateTo,
                                                              List<String> metricCodes) {
-        // R2.3 未实现, 保持 UOE
-        throw new UnsupportedOperationException("V1.2 delivered");
+        // V1.3 R2.3 Red 占位: Green 阶段替换为宽表查询
+        throw new UnsupportedOperationException("V1.3 R2.3 Red placeholder");
     }
 
     @Override
@@ -122,8 +122,8 @@ public class MetricQueryApiImpl implements MetricQueryApi {
                                                                LocalDate dateFrom,
                                                                LocalDate dateTo,
                                                                List<String> metricCodes) {
-        // R2.4 未实现, 保持 UOE
-        throw new UnsupportedOperationException("V1.2 delivered");
+        // V1.3 R2.4 Red 占位: Green 阶段替换为宽表查询
+        throw new UnsupportedOperationException("V1.3 R2.4 Red placeholder");
     }
 
     /**

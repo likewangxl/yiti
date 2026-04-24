@@ -1,14 +1,18 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.performance.api.dto.CustMetricSnapshotDTO;
 import com.bank.branch.platform.performance.api.dto.EmpMetricSnapshotDTO;
+import com.bank.branch.platform.performance.api.dto.OrgMetricSnapshotDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.CustIndexResultMapper;
+import com.bank.branch.platform.performance.mapper.CustMetricValueRow;
 import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.EmpMetricValueRow;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
+import com.bank.branch.platform.performance.mapper.OrgMetricValueRow;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
@@ -126,22 +130,124 @@ class MetricQueryApiImplTest extends PerformanceServiceTestBase {
         assertThat(result).isEmpty();
     }
 
-    // ================= R2.3/R2.4 仍处于 UOE 占位，本阶段 Red 只覆盖 Emp =================
+    // ================= R2.3 batchQueryOrgSnapshots =================
 
     @Test
-    @DisplayName("机构快照批量查询：R2.3 实现前仍保持 UOE 占位")
-    void batchQueryOrgSnapshots_throwsUoe() {
-        assertThatThrownBy(() ->
-                api.batchQueryOrgSnapshots(List.of("O001"), LocalDate.now(), LocalDate.now(), List.of("M1")))
-                .isInstanceOf(UnsupportedOperationException.class);
+    @DisplayName("batchQueryOrgSnapshots: 按 slot 查 ORG 宽表并组装 DTO (orgCode + metricValues)")
+    void batchQueryOrgSnapshots_returnsDtoListWithMetricValues() {
+        List<String> orgCodes = List.of("ORG_001", "ORG_002");
+        List<String> metricCodes = List.of("M_ORG_DEP_TOTAL");
+        LocalDate dataDate = LocalDate.of(2026, 4, 1);
+
+        when(metricDefService.getByCodes(metricCodes)).thenReturn(List.of(
+                metric("M_ORG_DEP_TOTAL", "ORG", 10)));
+        when(sysControlService.getCurrentVersion("ORG")).thenReturn(sysControl("v1"));
+        when(orgIndexResultMapper.selectSlotValuesByOrgs(eq(orgCodes), eq(dataDate), eq("v1"), eq(10)))
+                .thenReturn(List.of(
+                        orgRow("ORG_001", new BigDecimal("1000")),
+                        orgRow("ORG_002", new BigDecimal("2000"))));
+
+        List<OrgMetricSnapshotDTO> result =
+                api.batchQueryOrgSnapshots(orgCodes, dataDate, dataDate, metricCodes);
+
+        assertThat(result).hasSize(2);
+        OrgMetricSnapshotDTO o1 = result.stream().filter(d -> "ORG_001".equals(d.getOrgCode())).findFirst().orElseThrow();
+        assertThat(o1.getDataDate()).isEqualTo(dataDate);
+        assertThat(o1.getVersion()).isEqualTo("v1");
+        assertThat(o1.getMetricValues()).containsEntry("M_ORG_DEP_TOTAL", new BigDecimal("1000"));
+        OrgMetricSnapshotDTO o2 = result.stream().filter(d -> "ORG_002".equals(d.getOrgCode())).findFirst().orElseThrow();
+        assertThat(o2.getMetricValues()).containsEntry("M_ORG_DEP_TOTAL", new BigDecimal("2000"));
     }
 
     @Test
-    @DisplayName("客户快照批量查询：R2.4 实现前仍保持 UOE 占位")
-    void batchQueryCustSnapshots_throwsUoe() {
+    @DisplayName("batchQueryOrgSnapshots: orgCodes > 500 抛 BATCH_QUERY_EXCEEDS_LIMIT(PERF-42206)")
+    void batchQueryOrgSnapshots_orgCodesOverLimit_throws42206() {
+        List<String> tooMany = IntStream.range(0, 501).mapToObj(i -> "O_" + i).toList();
+        LocalDate date = LocalDate.of(2026, 4, 1);
         assertThatThrownBy(() ->
-                api.batchQueryCustSnapshots(List.of("C001"), LocalDate.now(), LocalDate.now(), List.of("M1")))
-                .isInstanceOf(UnsupportedOperationException.class);
+                api.batchQueryOrgSnapshots(tooMany, date, date, List.of("M1")))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.BATCH_QUERY_EXCEEDS_LIMIT);
+    }
+
+    @Test
+    @DisplayName("batchQueryOrgSnapshots: metricCodes > 50 抛 BATCH_QUERY_EXCEEDS_LIMIT(PERF-42206)")
+    void batchQueryOrgSnapshots_metricCodesOverLimit_throws42206() {
+        List<String> codes = IntStream.range(0, 51).mapToObj(i -> "M" + i).toList();
+        LocalDate date = LocalDate.of(2026, 4, 1);
+        assertThatThrownBy(() ->
+                api.batchQueryOrgSnapshots(List.of("O001"), date, date, codes))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.BATCH_QUERY_EXCEEDS_LIMIT);
+    }
+
+    @Test
+    @DisplayName("batchQueryOrgSnapshots: 非 ORG 维度 metric 被过滤, 返回空列表")
+    void batchQueryOrgSnapshots_nonOrgMetricSkipped() {
+        List<String> orgCodes = List.of("ORG_001");
+        List<String> codes = List.of("M_EMP_X");
+        LocalDate date = LocalDate.of(2026, 4, 1);
+        when(metricDefService.getByCodes(codes)).thenReturn(List.of(
+                metric("M_EMP_X", "EMP", 1)));
+
+        List<OrgMetricSnapshotDTO> result = api.batchQueryOrgSnapshots(orgCodes, date, date, codes);
+
+        assertThat(result).isEmpty();
+    }
+
+    // ================= R2.4 batchQueryCustSnapshots =================
+
+    @Test
+    @DisplayName("batchQueryCustSnapshots: 按 slot 查 CUST 宽表并组装 DTO (custId + metricValues)")
+    void batchQueryCustSnapshots_returnsDtoListWithMetricValues() {
+        List<String> custIds = List.of("C001", "C002");
+        List<String> metricCodes = List.of("M_CUST_AUM");
+        LocalDate dataDate = LocalDate.of(2026, 4, 1);
+
+        when(metricDefService.getByCodes(metricCodes)).thenReturn(List.of(
+                metric("M_CUST_AUM", "CUST", 7)));
+        when(sysControlService.getCurrentVersion("CUST")).thenReturn(sysControl("v1"));
+        when(custIndexResultMapper.selectSlotValuesByCusts(eq(custIds), eq(dataDate), eq("v1"), eq(7)))
+                .thenReturn(List.of(
+                        custRow("C001", new BigDecimal("500000")),
+                        custRow("C002", new BigDecimal("888000"))));
+
+        List<CustMetricSnapshotDTO> result =
+                api.batchQueryCustSnapshots(custIds, dataDate, dataDate, metricCodes);
+
+        assertThat(result).hasSize(2);
+        CustMetricSnapshotDTO c1 = result.stream().filter(d -> "C001".equals(d.getCustId())).findFirst().orElseThrow();
+        assertThat(c1.getDataDate()).isEqualTo(dataDate);
+        assertThat(c1.getVersion()).isEqualTo("v1");
+        assertThat(c1.getMetricValues()).containsEntry("M_CUST_AUM", new BigDecimal("500000"));
+        CustMetricSnapshotDTO c2 = result.stream().filter(d -> "C002".equals(d.getCustId())).findFirst().orElseThrow();
+        assertThat(c2.getMetricValues()).containsEntry("M_CUST_AUM", new BigDecimal("888000"));
+    }
+
+    @Test
+    @DisplayName("batchQueryCustSnapshots: custIds > 500 抛 BATCH_QUERY_EXCEEDS_LIMIT(PERF-42206)")
+    void batchQueryCustSnapshots_custIdsOverLimit_throws42206() {
+        List<String> tooMany = IntStream.range(0, 501).mapToObj(i -> "C_" + i).toList();
+        LocalDate date = LocalDate.of(2026, 4, 1);
+        assertThatThrownBy(() ->
+                api.batchQueryCustSnapshots(tooMany, date, date, List.of("M1")))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.BATCH_QUERY_EXCEEDS_LIMIT);
+    }
+
+    @Test
+    @DisplayName("batchQueryCustSnapshots: metricCodes > 50 抛 BATCH_QUERY_EXCEEDS_LIMIT(PERF-42206)")
+    void batchQueryCustSnapshots_metricCodesOverLimit_throws42206() {
+        List<String> codes = IntStream.range(0, 51).mapToObj(i -> "M" + i).toList();
+        LocalDate date = LocalDate.of(2026, 4, 1);
+        assertThatThrownBy(() ->
+                api.batchQueryCustSnapshots(List.of("C001"), date, date, codes))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.BATCH_QUERY_EXCEEDS_LIMIT);
     }
 
     // ================= 辅助构造 =================
@@ -166,6 +272,20 @@ class MetricQueryApiImplTest extends PerformanceServiceTestBase {
     private static EmpMetricValueRow empRow(String empId, BigDecimal value) {
         EmpMetricValueRow r = new EmpMetricValueRow();
         r.setEmpId(empId);
+        r.setMetricValue(value);
+        return r;
+    }
+
+    private static OrgMetricValueRow orgRow(String orgCode, BigDecimal value) {
+        OrgMetricValueRow r = new OrgMetricValueRow();
+        r.setOrgCode(orgCode);
+        r.setMetricValue(value);
+        return r;
+    }
+
+    private static CustMetricValueRow custRow(String custId, BigDecimal value) {
+        CustMetricValueRow r = new CustMetricValueRow();
+        r.setCustId(custId);
         r.setMetricValue(value);
         return r;
     }
