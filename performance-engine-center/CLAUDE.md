@@ -316,13 +316,32 @@ V1.3 R2.5 将 `cycleKey = latestDataDate.getYear()` 字符串化，对 MONTHLY/Q
 
 **V1.4 解决方向**：按方案 cycleType 精确匹配（MONTHLY → `yyyyMM` / QUARTERLY → `yyyyQn` / YEARLY → `yyyy`）。
 
-#### 5. ScopeColumns Target 降级到 created_by（低，V1.3 R1 简化）
+#### 5. ScopeColumns Target 降级到 created_by（已消化，V1.4 S2 交付 @ 2026-04-24）
 
-V1.3 R1.1/R1.2 Target 侧 ScopeColumns 降级到 `created_by` 作为 owner 字段，未按 Kpi 的
-`owner_emp_id` / `owner_org_code` 标准字段模型。
+**原问题**（V1.3 R1 简化）：V1.3 R1.1/R1.2 Target 侧 ScopeColumns 降级到 `created_by` 作为 owner 字段，
+未按 Kpi 的 `owner_emp_id` / `owner_org_code` 标准字段模型。SELF 语义"我负责的"偏成"我创建的"，
+ORG 语义"本机构"直接错成"我创建的"。
 
-**V1.4 解决方向**：引入 `perf_target_plan.owner_emp_id` / `owner_org_code` 字段（DDL 变更），
-ScopeColumns 切换到标准字段。
+**V1.4 S2 消化**（Task S2.1-S2.4，2026-04-24）：
+- S2.1：`V1_4_0__perf_target_owner_cols.sql` 为 perf_target_plan / perf_target_value 各加
+  `owner_emp_id` / `owner_org_code` 2 字段 + 2 索引，历史数据以 `owner_emp_id = created_by` 兜底回填
+- S2.2：Entity / Mapper XML (BASE_COLUMNS + insert + upsert UK 冲突同步) / UpsertTargetValueCmd
+  全链路补齐新字段
+- S2.3：TargetValueService / TargetPlanService pageWithScope ScopeColumns 升级：
+  - `ownerEmpCol`  : `created_by` → `owner_emp_id`（SELF 精确）
+  - `assigneeCol`  : `created_by` → `owner_emp_id`（SELF_ASSIGNED 复用）
+  - `createdByCol` : `created_by`（SELF_CREATED 保持）
+  - `ownerOrgCol`  : `created_by` → `owner_org_code`（ORG 精确）
+  - `bizKeyCol`    : `null`（两表无 business_key, WORKFLOW_PARTICIPANT fail-close）
+- S2.4：本文档条目标为已消化
+
+**依据**：
+- commit 7245f31 test Red（V1_4_0FlywayIT）
+- commit 4dcbb9b fix Green（V1_4_0 DDL + undo）
+- commit 3bcf166 test Red（Entity + Mapper IT）
+- commit d2b2b38 feat Green（Entity + Mapper XML + Cmd）
+- commit adb68aa test Red（Service ScopeColumns 精化）
+- commit 437c6db feat Green（Service 切列）
 
 #### 6. V1.0/V1.1 Controller.list 返回类型签名（低，跨模块影响，V1.3 未改）
 
