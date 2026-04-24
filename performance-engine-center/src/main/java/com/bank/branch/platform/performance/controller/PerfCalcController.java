@@ -7,8 +7,11 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.PerfCalcApi;
+import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
 import com.bank.branch.platform.performance.controller.dto.RecalcReqDTO;
 import com.bank.branch.platform.performance.controller.dto.RecalcRespDTO;
+
+import java.util.Optional;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -98,11 +101,17 @@ public class PerfCalcController {
                 req.getReason(),
                 operator);
 
-        // 返回 RUNNING 语义上是"已受理"初始态；Service 同步执行完成后父 task 状态
-        // 已是 SUCCESS/PARTIAL/FAILED，调用方应通过 GET /api/perf/run-tasks/{id} 查实际状态
+        // V1.3 R4.2：读 perf_run_task 真实终态，不再硬编码 "RUNNING"。
+        // HistoryRecalcService 为同步执行，父 task 在 triggerRecalc 返回瞬间已是
+        // SUCCESS / PARTIAL / FAILED 终态；查不到时（极端竞态 Service 未及时 commit）
+        // 退化到 "RUNNING" 占位，保持调用方侧 getRunTask 轮询语义。
+        Optional<PerfRunTaskDTO> taskOpt = perfCalcApi.getRunTask(parentTaskId);
+        String realStatus = taskOpt
+                .map(PerfRunTaskDTO::getStatus)
+                .orElse("RUNNING");
         return ResponseWrapper.success(RecalcRespDTO.builder()
                 .taskId(parentTaskId)
-                .status("RUNNING")
+                .status(realStatus)
                 .build());
     }
 }

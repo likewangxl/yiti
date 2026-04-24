@@ -8,8 +8,8 @@ import com.bank.branch.platform.performance.controller.dto.RecalcReqDTO;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
-import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.HistoryRecalcService;
+import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -55,10 +55,13 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
     private HistoryRecalcService historyRecalcService;
 
     /**
-     * V1.3 R4.2：mock PerfRunTaskMapper 以控制 recalc 响应 status 读取链路的上游数据。
+     * V1.3 R4.2：mock PerfRunTaskService 以控制 recalc 响应 status 读取链路的上游数据。
+     *
+     * <p>Controller 通过 PerfCalcApi.getRunTask 读 status，其底层由
+     * PerfRunTaskService.getById 提供 entity.
      */
     @MockBean
-    private PerfRunTaskMapper perfRunTaskMapper;
+    private PerfRunTaskService perfRunTaskService;
 
     private ObjectMapper objectMapper;
 
@@ -67,7 +70,7 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        Mockito.reset(historyRecalcService, perfRunTaskMapper);
+        Mockito.reset(historyRecalcService, perfRunTaskService);
     }
 
     @Test
@@ -158,11 +161,12 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
                 any(LocalDate.class), any(LocalDate.class),
                 any(), anyString(), anyString(), anyString()))
                 .thenReturn("PARENT_TASK_REAL");
-        // PerfRunTaskMapper.selectById 返回终态为 SUCCESS 的 task
+        // PerfRunTaskService.getById 返回终态为 SUCCESS 的 task（PerfCalcApi.getRunTask 底层）
         PerfRunTask finished = new PerfRunTask();
         finished.setId("PARENT_TASK_REAL");
         finished.setStatus("SUCCESS");
-        Mockito.when(perfRunTaskMapper.selectById("PARENT_TASK_REAL")).thenReturn(finished);
+        Mockito.when(perfRunTaskService.getById("PARENT_TASK_REAL"))
+                .thenReturn(java.util.Optional.of(finished));
 
         RecalcReqDTO req = new RecalcReqDTO();
         req.setCycleType("MONTHLY");
@@ -191,7 +195,8 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
                 any(), anyString(), anyString(), anyString()))
                 .thenReturn("PARENT_TASK_MISSING");
         // 极端竞态：Service 尚未 commit，Controller 读不到，退化到占位 RUNNING
-        Mockito.when(perfRunTaskMapper.selectById("PARENT_TASK_MISSING")).thenReturn(null);
+        Mockito.when(perfRunTaskService.getById("PARENT_TASK_MISSING"))
+                .thenReturn(java.util.Optional.empty());
 
         RecalcReqDTO req = new RecalcReqDTO();
         req.setCycleType("MONTHLY");
