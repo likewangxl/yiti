@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.dto.DataScopeContext;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,13 +17,17 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * PerfScopeHelper 单元测试（Task Q7.1 Red）.
+ * PerfScopeHelper 单元测试（V1.2 Task Q7.1 + V1.4 Task S1.2）.
  *
- * <p>PerfScopeHelper 负责封装 {@link BizScopeApi#buildScopeContext} 调用结果，
- * 按 {@link DataScopeType} 转换为可供 Mapper 拼接的 SQL 片段（sql + params）。
+ * <p>V1.4 S1.2：ScopeColumns 扩第 5 字段 bizKeyCol；WORKFLOW_PARTICIPANT 分支
+ * 从 V1.2 fail-close 切换到调 {@link WorkflowQueryApi#queryParticipatedBusinessKeys}
+ * 生成 {@code <bizKeyCol> IN (...)} 片段。
  *
  * <p>本测试覆盖全部 7 种 {@link DataScopeType} 以及管理员/空上下文兜底：
  * <ul>
@@ -32,18 +37,23 @@ import static org.mockito.Mockito.when;
  *   <li>SELF_ASSIGNED：sql="{assigneeCol} = #{ownerEmpId}" + params.ownerEmpId</li>
  *   <li>ORG：sql="{ownerOrgCol} = #{ownerOrgCode}" + params.ownerOrgCode</li>
  *   <li>ORG_SUBTREE：sql="{ownerOrgCol} IN (&lt;subtree codes&gt;)" + 动态 IN 参数</li>
- *   <li>WORKFLOW_PARTICIPANT：降级为 "1=0"（performance 模块不做工作流过滤，V1.3 再做）</li>
+ *   <li>WORKFLOW_PARTICIPANT（V1.4 S1.2 实现）：调 WorkflowQueryApi 返回 businessKey
+ *       集合 → sql="{bizKeyCol} IN (#{bizKey0}, #{bizKey1})"；
+ *       businessKeys 空集/bizKeyCol null → fail-close "1=0"</li>
  *   <li>buildScopeContext 返回 null：降级为 "1=0" 防止越权</li>
  * </ul>
  *
- * <p>SQL 注入防护约束：ownerEmpId/ownerOrgCode 走 {@code #{}} 预编译（Fragment.params），
- * 仅 sql 字段通过 {@code ${}} 注入，params 绝不出现在 sql 字段内。
+ * <p>SQL 注入防护约束：ownerEmpId/ownerOrgCode/bizKey* 走 {@code #{}} 预编译
+ * （Fragment.params），仅 sql 字段通过 {@code ${}} 注入，params 绝不出现在 sql 字段内。
  */
 @ExtendWith(MockitoExtension.class)
 class PerfScopeHelperTest {
 
     @Mock
     private BizScopeApi bizScopeApi;
+
+    @Mock
+    private WorkflowQueryApi workflowQueryApi;
 
     @InjectMocks
     private PerfScopeHelper helper;
@@ -56,7 +66,7 @@ class PerfScopeHelperTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
         PerfScopeHelper.Fragment frag = helper.getFragment("admin", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code", null));
 
         assertThat(frag.isEmpty()).isTrue();
         assertThat(frag.getSql()).isEmpty();
@@ -72,7 +82,7 @@ class PerfScopeHelperTest {
 
         // createdByCol 指定为 "created_by"
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_A", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "assignee_id", "created_by", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "assignee_id", "created_by", "org_code", null));
 
         assertThat(frag.isEmpty()).isFalse();
         // ${scopeFragment} 注入 "created_by = #{scopeParams.ownerEmpId}"
@@ -88,7 +98,7 @@ class PerfScopeHelperTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_B", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "assignee_id", "created_by", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "assignee_id", "created_by", "org_code", null));
 
         assertThat(frag.getSql()).isEqualTo("emp_id = #{scopeParams.ownerEmpId}");
         assertThat(frag.getParams()).containsEntry("ownerEmpId", "USER_B");
@@ -102,7 +112,7 @@ class PerfScopeHelperTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_C", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "assignee_id", "created_by", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "assignee_id", "created_by", "org_code", null));
 
         assertThat(frag.getSql()).isEqualTo("assignee_id = #{scopeParams.ownerEmpId}");
         assertThat(frag.getParams()).containsEntry("ownerEmpId", "USER_C");
@@ -116,7 +126,7 @@ class PerfScopeHelperTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_D", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code", null));
 
         assertThat(frag.getSql()).isEqualTo("org_code = #{scopeParams.ownerOrgCode}");
         assertThat(frag.getParams()).containsEntry("ownerOrgCode", "BRANCH_01");
@@ -131,7 +141,7 @@ class PerfScopeHelperTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_E", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code", null));
 
         assertThat(frag.getSql())
                 .startsWith("org_code IN (")
@@ -152,7 +162,7 @@ class PerfScopeHelperTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_F", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code", null));
 
         // subtree 空集应 fail-close, 返回 "1=0" 让 Mapper 查无结果
         assertThat(frag.getSql()).isEqualTo("1=0");
@@ -160,18 +170,88 @@ class PerfScopeHelperTest {
     }
 
     @Test
-    @DisplayName("WORKFLOW_PARTICIPANT → sql=\"1=0\"（performance V1.2 不支持流程参与者过滤）")
-    void whenScopeWorkflowParticipant_failClose() {
+    @DisplayName("V1.4 S1.2：WORKFLOW_PARTICIPANT + processDefKeyPrefix → 调 WorkflowQueryApi 返回 businessKey IN 片段")
+    void workflowParticipant_queriesWorkflowApi_andReturnsInClauseFragment() {
         DataScopeContext ctx = new DataScopeContext(
-                DataScopeType.WORKFLOW_PARTICIPANT, "USER_G", "BRANCH_01",
-                Set.of(), BizType.PERF_CONFIG, BizAction.LIST);
+                DataScopeType.WORKFLOW_PARTICIPANT, "E001", "BRANCH_01", Set.of(),
+                BizType.PERF_CONFIG, BizAction.LIST);
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
-        PerfScopeHelper.Fragment frag = helper.getFragment("USER_G", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code"));
+        // 显式传递 processDefKeyPrefix 由调用方决定（如 AllocAdjustService 传 "perf_alloc_adjust_"）
+        when(workflowQueryApi.queryParticipatedBusinessKeys(
+                eq("E001"), eq("perf_alloc_adjust_"), eq(180), eq(5000)))
+                .thenReturn(new java.util.LinkedHashSet<>(java.util.List.of("BK_001", "BK_002")));
+
+        PerfScopeHelper.Fragment frag = helper.getFragment(
+                "E001", BizType.PERF_CONFIG, BizAction.LIST,
+                new PerfScopeHelper.ScopeColumns(null, null, null, null, "business_key"),
+                "perf_alloc_adjust_");
+
+        assertThat(frag.getSql())
+                .startsWith("business_key IN (")
+                .endsWith(")")
+                .contains("#{scopeParams.bizKey0}")
+                .contains("#{scopeParams.bizKey1}");
+        assertThat(frag.getParams()).containsEntry("bizKey0", "BK_001");
+        assertThat(frag.getParams()).containsEntry("bizKey1", "BK_002");
+    }
+
+    @Test
+    @DisplayName("V1.4 S1.2：WORKFLOW_PARTICIPANT businessKeys 空集 → fail-close \"1=0\"")
+    void workflowParticipant_emptyBusinessKeys_failClose() {
+        DataScopeContext ctx = new DataScopeContext(
+                DataScopeType.WORKFLOW_PARTICIPANT, "E002", "BRANCH_01", Set.of(),
+                BizType.PERF_CONFIG, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
+
+        when(workflowQueryApi.queryParticipatedBusinessKeys(any(), any(), any(), any()))
+                .thenReturn(Set.of());
+
+        PerfScopeHelper.Fragment frag = helper.getFragment(
+                "E002", BizType.PERF_CONFIG, BizAction.LIST,
+                new PerfScopeHelper.ScopeColumns(null, null, null, null, "business_key"),
+                "perf_alloc_adjust_");
 
         assertThat(frag.getSql()).isEqualTo("1=0");
         assertThat(frag.getParams()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("V1.4 S1.2：WORKFLOW_PARTICIPANT bizKeyCol=null → 防御 fail-close，不调 WorkflowQueryApi")
+    void workflowParticipant_bizKeyColNull_failCloseDefensive() {
+        DataScopeContext ctx = new DataScopeContext(
+                DataScopeType.WORKFLOW_PARTICIPANT, "E003", "BRANCH_01", Set.of(),
+                BizType.PERF_CONFIG, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
+
+        PerfScopeHelper.Fragment frag = helper.getFragment(
+                "E003", BizType.PERF_CONFIG, BizAction.LIST,
+                new PerfScopeHelper.ScopeColumns(null, null, null, null, null),
+                "perf_alloc_adjust_");
+
+        assertThat(frag.getSql()).isEqualTo("1=0");
+        assertThat(frag.getParams()).isEmpty();
+        // bizKeyCol=null 时本方法应直接 fail-close, 不触发 workflow 查询（避免浪费 Flowable IO）
+        verify(workflowQueryApi, never()).queryParticipatedBusinessKeys(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("V1.4 S1.2：WORKFLOW_PARTICIPANT 走 4 参 getFragment（未传 prefix）→ fail-close，保持 V1.3 既有调用安全")
+    void workflowParticipant_legacyFourArgOverload_failClose() {
+        DataScopeContext ctx = new DataScopeContext(
+                DataScopeType.WORKFLOW_PARTICIPANT, "E004", "BRANCH_01", Set.of(),
+                BizType.PERF_CONFIG, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
+
+        // V1.3 既有 5 处调用用 4 参数 getFragment, 没传 workflow prefix → WORKFLOW_PARTICIPANT 分支
+        // 仍保持 fail-close（不破坏既有行为）
+        PerfScopeHelper.Fragment frag = helper.getFragment(
+                "E004", BizType.PERF_CONFIG, BizAction.LIST,
+                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code", "business_key"));
+
+        assertThat(frag.getSql()).isEqualTo("1=0");
+        assertThat(frag.getParams()).isEmpty();
+        verify(workflowQueryApi, never()).queryParticipatedBusinessKeys(any(), any(), any(), any());
     }
 
     @Test
@@ -180,7 +260,7 @@ class PerfScopeHelperTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(null);
 
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_H", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code", null));
 
         assertThat(frag.getSql()).isEqualTo("1=0");
         assertThat(frag.getParams()).isEmpty();
