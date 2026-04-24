@@ -331,6 +331,104 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         runCycleKeyCase("WEEKLY", LocalDate.of(2026, 1, 15), "2026W03");
     }
 
+    // ============ V1.4 S3.3 mom 环比计算 ============
+
+    @Test
+    @DisplayName("[V1.4 S3.3] mom: previous 非 0 时 = (current-previous)/|previous|*100, 2 位小数")
+    void getUserMetricCards_calculatesMom_whenPreviousValueAvailable() {
+        String empId = "E001";
+        LocalDate current = LocalDate.of(2026, 4, 1);  // QUARTERLY: Q2 起始
+        LocalDate previous = LocalDate.of(2026, 1, 1); // QUARTERLY 上一季起始 (current.minusMonths(3))
+
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v20260401");
+        sc.setLatestDataDate(current);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("QUARTERLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v20260401"), eq(5)))
+                .thenReturn(new BigDecimal("120"));
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v20260401"), eq(5)))
+                .thenReturn(new BigDecimal("100"));
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getPreviousValue()).isEqualByComparingTo("100");
+        assertThat(cards.get(0).getMom()).isEqualByComparingTo("20.00"); // (120-100)/100*100
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.3] mom: previous=0 时返回 null 防除零")
+    void getUserMetricCards_momZeroWhenPreviousIsZero_returnsNullSafely() {
+        String empId = "E001";
+        LocalDate current = LocalDate.of(2026, 4, 1);
+        LocalDate previous = LocalDate.of(2026, 1, 1);
+
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v1");
+        sc.setLatestDataDate(current);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("QUARTERLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v1"), eq(5)))
+                .thenReturn(new BigDecimal("120"));
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v1"), eq(5)))
+                .thenReturn(BigDecimal.ZERO);
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getMom()).isNull();
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.3] mom: previous 未命中时 previousValue + mom 同步为 null")
+    void getUserMetricCards_momNullWhenPreviousNotFound() {
+        String empId = "E001";
+        LocalDate current = LocalDate.of(2026, 4, 1);
+        LocalDate previous = LocalDate.of(2026, 1, 1);
+
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v1");
+        sc.setLatestDataDate(current);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("QUARTERLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v1"), eq(5)))
+                .thenReturn(new BigDecimal("120"));
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v1"), eq(5)))
+                .thenReturn(null);
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getPreviousValue()).isNull();
+        assertThat(cards.get(0).getMom()).isNull();
+    }
+
     // ============ helpers ============
 
     private static PerfKpiItem kpiItem(String schemeId, String metricCode) {
