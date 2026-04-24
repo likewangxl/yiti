@@ -254,7 +254,10 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 V1.3 R0-R5 共 18 个 Task 消化以下 13 项 V1.0-V1.2 累积技术债：
 
 **DDL 与基础设施**：
-- V1.0 NULL deleted 历史数据：V1.3 R0.1 通过 `V1_2_5__perf_cleanup_null_deleted.sql` 将 perf_target_value / perf_target_plan / perf_kpi_item 三表 NULL 置 0（兜底而非误删）。
+- **V1_2_5 NULL deleted 清理（V1.3 R0.1 交付）**：
+  - 仅处理 `perf_metric_def`（V1.0 MetricDefService.create 漏填 deleted 字段的特定 bug，V1_0_3 才引入 deleted 列，V1_2_5 对历史 NULL 行幂等兜底 UPDATE = 0）。
+  - `perf_target_plan` / `perf_target_value` / `perf_kpi_item` 根本无 deleted 字段（V1.0 DDL 设计即通过 status / 业务字段实现逻辑态，不做软删除列），不存在同类问题。
+  - V1.3 R7.3 commit message + 本文原"三表 NULL 置 0"是纯文字误述，不对应任何物理列。V1.4 S0.1 勘误（无需迁移脚本）。
 - **perf_run_task.task_key UNIQUE KEY**：V1.3 R0.2 通过 `V1_3_0__perf_run_task_uk.sql` 补齐（V1.2 曾声称已加但实际未执行的勘误），配合 `DataTaskService.report` 的 DuplicateKeyException 降级路径，作为 Redis SETNX 幂等的 DB 兜底。
 - failsafe 分层：V1.3 R0.3 pom.xml 新增 maven-failsafe-plugin，surefire 改为单元测试（549）+ failsafe 集成测试（339）分层，总 888 测试。
 - 模块 CLAUDE.md uk_task_key 勘误：V1.3 R0.4 清理 V1.2 声称"已加但实际没做"的误述。
@@ -350,11 +353,13 @@ V1.3 引入两个关键 Flyway 脚本，生产启用前**必须**先做预检，
 
 **1. V1_2_5__perf_cleanup_null_deleted.sql（V1.0 NULL deleted 历史数据清理）**
 
+> **范围勘误（V1.4 S0.1）**：本脚本仅处理 `perf_metric_def` 一张表，
+> `perf_target_plan` / `perf_target_value` / `perf_kpi_item` **无 deleted 字段**，
+> 不需要（也不能）在这三表上做 `WHERE deleted IS NULL` 预检。
+
 ```sql
--- 预检：查看有多少历史行 deleted 为 NULL
-SELECT COUNT(*) FROM perf_target_value WHERE deleted IS NULL;
-SELECT COUNT(*) FROM perf_target_plan  WHERE deleted IS NULL;
-SELECT COUNT(*) FROM perf_kpi_item     WHERE deleted IS NULL;
+-- 预检：查看 perf_metric_def 有多少历史行 deleted 为 NULL
+SELECT COUNT(*) FROM perf_metric_def WHERE deleted IS NULL;
 -- V1_2_5 会将这些 NULL 置为 0（未删除），等价于"兜底"而非"误删"
 ```
 
