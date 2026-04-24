@@ -9,9 +9,11 @@ import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.CustIndexResultMapper;
+import com.bank.branch.platform.performance.mapper.CustMetricValueRow;
 import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.EmpMetricValueRow;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
+import com.bank.branch.platform.performance.mapper.OrgMetricValueRow;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.SysControlService;
 import lombok.RequiredArgsConstructor;
@@ -113,8 +115,50 @@ public class MetricQueryApiImpl implements MetricQueryApi {
                                                              LocalDate dateFrom,
                                                              LocalDate dateTo,
                                                              List<String> metricCodes) {
-        // V1.3 R2.3 Red 占位: Green 阶段替换为宽表查询
-        throw new UnsupportedOperationException("V1.3 R2.3 Red placeholder");
+        validateBatch(orgCodes, MAX_SUBJECT_BATCH, metricCodes, MAX_METRIC_CODE_BATCH);
+        LocalDate dataDate = validateAndGetDate(dateFrom, dateTo);
+
+        Map<String, PerfMetricDef> defs = loadMetricDefsForDim(metricCodes, "ORG");
+        if (defs.isEmpty()) {
+            return List.of();
+        }
+
+        SysControl sc = sysControlService.getCurrentVersion("ORG");
+        String version = sc == null ? null : sc.getCurrentVersion();
+
+        Map<String, Map<String, BigDecimal>> orgToCodeToValue = new LinkedHashMap<>();
+        for (Map.Entry<String, PerfMetricDef> entry : defs.entrySet()) {
+            String code = entry.getKey();
+            Integer slot = entry.getValue().getValSlot();
+            List<OrgMetricValueRow> rows = orgIndexResultMapper.selectSlotValuesByOrgs(
+                    orgCodes, dataDate, version, slot);
+            if (rows == null) {
+                continue;
+            }
+            for (OrgMetricValueRow row : rows) {
+                if (row.getMetricValue() == null) {
+                    continue;
+                }
+                orgToCodeToValue
+                        .computeIfAbsent(row.getOrgCode(), k -> new LinkedHashMap<>())
+                        .put(code, row.getMetricValue());
+            }
+        }
+
+        List<OrgMetricSnapshotDTO> result = new ArrayList<>(orgToCodeToValue.size());
+        for (String orgCode : orgCodes) {
+            Map<String, BigDecimal> values = orgToCodeToValue.get(orgCode);
+            if (values == null) {
+                continue;
+            }
+            result.add(OrgMetricSnapshotDTO.builder()
+                    .orgCode(orgCode)
+                    .dataDate(dataDate)
+                    .version(version)
+                    .metricValues(values)
+                    .build());
+        }
+        return result;
     }
 
     @Override
@@ -122,8 +166,50 @@ public class MetricQueryApiImpl implements MetricQueryApi {
                                                                LocalDate dateFrom,
                                                                LocalDate dateTo,
                                                                List<String> metricCodes) {
-        // V1.3 R2.4 Red 占位: Green 阶段替换为宽表查询
-        throw new UnsupportedOperationException("V1.3 R2.4 Red placeholder");
+        validateBatch(custIds, MAX_SUBJECT_BATCH, metricCodes, MAX_METRIC_CODE_BATCH);
+        LocalDate dataDate = validateAndGetDate(dateFrom, dateTo);
+
+        Map<String, PerfMetricDef> defs = loadMetricDefsForDim(metricCodes, "CUST");
+        if (defs.isEmpty()) {
+            return List.of();
+        }
+
+        SysControl sc = sysControlService.getCurrentVersion("CUST");
+        String version = sc == null ? null : sc.getCurrentVersion();
+
+        Map<String, Map<String, BigDecimal>> custToCodeToValue = new LinkedHashMap<>();
+        for (Map.Entry<String, PerfMetricDef> entry : defs.entrySet()) {
+            String code = entry.getKey();
+            Integer slot = entry.getValue().getValSlot();
+            List<CustMetricValueRow> rows = custIndexResultMapper.selectSlotValuesByCusts(
+                    custIds, dataDate, version, slot);
+            if (rows == null) {
+                continue;
+            }
+            for (CustMetricValueRow row : rows) {
+                if (row.getMetricValue() == null) {
+                    continue;
+                }
+                custToCodeToValue
+                        .computeIfAbsent(row.getCustId(), k -> new LinkedHashMap<>())
+                        .put(code, row.getMetricValue());
+            }
+        }
+
+        List<CustMetricSnapshotDTO> result = new ArrayList<>(custToCodeToValue.size());
+        for (String custId : custIds) {
+            Map<String, BigDecimal> values = custToCodeToValue.get(custId);
+            if (values == null) {
+                continue;
+            }
+            result.add(CustMetricSnapshotDTO.builder()
+                    .custId(custId)
+                    .dataDate(dataDate)
+                    .version(version)
+                    .metricValues(values)
+                    .build());
+        }
+        return result;
     }
 
     /**
