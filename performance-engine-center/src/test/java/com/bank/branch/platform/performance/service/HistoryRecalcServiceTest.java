@@ -266,6 +266,59 @@ class HistoryRecalcServiceTest {
     }
 
     /**
+     * V1.5 P2.1 Red 守护：cycleType="" 空串时 params_json 跳过该字段.
+     *
+     * <p>V1.4 S4.2 的 Green 实现用 StringUtils.isNotBlank (isBlank 同义逆) 同时
+     * 覆盖 null / "" / "   "；V1.4 reviewer 指出测试仅显式覆盖 null，留观察项。
+     * V1.5 P2.1 补齐：Facade 层可能透传空串 → 期望与 null 行为一致（跳过字段）。
+     */
+    @Test
+    @DisplayName("V1.5 P2.1：cycleType=\"\" 空串时 params_json 跳过 cycleType 字段")
+    void recalc_cycleTypeEmptyString_skipsFieldInParamsJson() {
+        LocalDate date = LocalDate.of(2026, 3, 1);
+        List<String> metricCodes = List.of("M_A");
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+                .thenReturn("CHILD_EMPTY");
+
+        // 显式传 ""，避开 6 参兜底到 null 的路径
+        historyRecalcService.recalc(date, date, metricCodes, "v1", "原因 P2 empty", "op", "");
+
+        ArgumentCaptor<PerfRunTask> cap = ArgumentCaptor.forClass(PerfRunTask.class);
+        verify(perfRunTaskMapper).insert(cap.capture());
+        String paramsJson = cap.getValue().getParamsJson();
+        assertThat(paramsJson)
+                .as("空串 cycleType 应与 null 行为一致，不出现在 JSON 中")
+                .doesNotContain("cycleType");
+        assertThat(paramsJson)
+                .contains("\"startDate\"")
+                .contains("\"endDate\"")
+                .contains("\"reason\"");
+    }
+
+    /**
+     * V1.5 P2.1 Red 守护：cycleType="   " 纯空格时也跳过字段.
+     *
+     * <p>blank 语义的边界守护——防 UI/Facade 层透传未 trim 的空白字符串。
+     */
+    @Test
+    @DisplayName("V1.5 P2.1：cycleType=\"   \" 纯空格时 params_json 跳过 cycleType 字段")
+    void recalc_cycleTypeWhitespace_skipsFieldInParamsJson() {
+        LocalDate date = LocalDate.of(2026, 3, 1);
+        List<String> metricCodes = List.of("M_A");
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+                .thenReturn("CHILD_WS");
+
+        historyRecalcService.recalc(date, date, metricCodes, "v1", "原因 P2 whitespace", "op", "   ");
+
+        ArgumentCaptor<PerfRunTask> cap = ArgumentCaptor.forClass(PerfRunTask.class);
+        verify(perfRunTaskMapper).insert(cap.capture());
+        String paramsJson = cap.getValue().getParamsJson();
+        assertThat(paramsJson)
+                .as("纯空格 cycleType 应按 blank 处理跳过字段")
+                .doesNotContain("cycleType");
+    }
+
+    /**
      * V1.4 S4.2 Red 配对：cycleType 非 null 时行为保持不变（向后兼容保护）.
      *
      * <p>与 V1.3 R4.3 既有断言 {@link #recalc_writesCycleTypeIntoParamsJson} 等价，
