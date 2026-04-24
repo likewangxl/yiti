@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 目标方案表 Mapper.
@@ -96,4 +97,41 @@ public interface PerfTargetPlanMapper {
      * @return 受影响行数
      */
     int deleteById(@Param("id") String id);
+
+    /**
+     * V1.3 R1.2 新增: 基于 {@link com.bank.branch.platform.performance.service.scope.PerfScopeHelper}
+     * 的数据范围注入分页查询.
+     *
+     * @param kpiSchemeId   关联 KPI 方案ID (可空)
+     * @param status        状态 (可空)
+     * @param keyword       关键字 (可空)
+     * @param offset        偏移量
+     * @param limit         每页大小
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()
+     * @return 方案列表
+     */
+    List<PerfTargetPlan> selectByConditionWithScope(@Param("kpiSchemeId") String kpiSchemeId,
+                                                    @Param("status") String status,
+                                                    @Param("keyword") String keyword,
+                                                    @Param("offset") int offset,
+                                                    @Param("limit") int limit,
+                                                    @Param("scopeFragment") String scopeFragment,
+                                                    @Param("scopeParams") Map<String, Object> scopeParams);
+
+    /**
+     * V1.3 R1.2 新增: 基于 PerfScopeHelper 的数据范围注入计数.
+     *
+     * @param kpiSchemeId   关联 KPI 方案ID (可空)
+     * @param status        状态 (可空)
+     * @param keyword       关键字 (可空)
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()
+     * @return 总数
+     */
+    long countByConditionWithScope(@Param("kpiSchemeId") String kpiSchemeId,
+                                   @Param("status") String status,
+                                   @Param("keyword") String keyword,
+                                   @Param("scopeFragment") String scopeFragment,
+                                   @Param("scopeParams") Map<String, Object> scopeParams);
 }

@@ -103,4 +103,55 @@
         WHERE id = #{id}
     </delete>
 
+    <!--
+      V1.3 R1.2 新增: 基于 PerfScopeHelper 的 scopeFragment + scopeParams 注入数据范围条件.
+      scopeFragment 来自 PerfScopeHelper 受控生成, 通过 ${} 注入; 参数走 #{scopeParams.*} 预编译.
+    -->
+    <select id="selectByConditionWithScope" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_target_plan
+        <where>
+            <if test="kpiSchemeId != null and kpiSchemeId != ''">
+                AND kpi_scheme_id = #{kpiSchemeId}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    plan_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR plan_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+        ORDER BY plan_code ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByConditionWithScope" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_target_plan
+        <where>
+            <if test="kpiSchemeId != null and kpiSchemeId != ''">
+                AND kpi_scheme_id = #{kpiSchemeId}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    plan_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR plan_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+    </select>
+
 </mapper>

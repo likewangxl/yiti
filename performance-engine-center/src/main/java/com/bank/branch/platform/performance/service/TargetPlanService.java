@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.entity.PerfTargetPlan;
@@ -8,6 +11,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.service.cmd.CreateTargetPlanCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateTargetPlanCmd;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
@@ -62,6 +66,10 @@ public class TargetPlanService {
     private final PerfTargetPlanMapper targetPlanMapper;
     private final KpiSchemeService kpiSchemeService;
     private final CacheManager cacheManager;
+    /** V1.3 R1.2 新增：当前用户读取（数据范围注入路径使用）. */
+    private final CurrentUserApi currentUserApi;
+    /** V1.3 R1.2 新增：数据范围 SQL 片段生成器. */
+    private final PerfScopeHelper perfScopeHelper;
 
     /**
      * 新建目标方案.
@@ -250,6 +258,59 @@ public class TargetPlanService {
         int offset = Math.max(pageNo - 1, 0) * pageSize;
         List<PerfTargetPlan> records = targetPlanMapper.selectByCondition(
                 kpiSchemeId, status, keyword, offset, pageSize);
+        return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * V1.3 R1.2 新增：基于 {@link PerfScopeHelper} 的数据范围注入分页查询.
+     *
+     * <p>场景:
+     * <ul>
+     *   <li>普通绩效配置员 SELF_CREATED → 只看到自己创建的目标方案</li>
+     *   <li>绩效查询员 ALL → 可见全部方案（scope=ALL 无片段）</li>
+     *   <li>无权限 / fail-close → 返回 total=0 的空页</li>
+     * </ul>
+     *
+     * <p>ScopeColumns 映射（perf_target_plan 业务列仅 created_by 可用）:
+     * <ul>
+     *   <li>ownerEmpCol   = "created_by" (SELF 降级到创建人, 该表无独立 emp_id / owner 列)</li>
+     *   <li>assigneeCol   = "created_by"</li>
+     *   <li>createdByCol  = "created_by" (SELF_CREATED 语义准确)</li>
+     *   <li>ownerOrgCol   = "created_by" (perf_target_plan 无 org_code, ORG scope 降级)</li>
+     * </ul>
+     *
+     * <p>与既有 {@link #page} 的差异：page 不带数据范围（向后兼容老调用方）,
+     * pageWithScope 内部注入数据范围片段。V1.3 R1.3 的 Controller 改造会切到本方法。
+     *
+     * <p>V1.3 规划：可在 V1.4 考虑扩展 perf_target_plan 增加 owner_emp_id / owner_org_code
+     * 字段, 届时 SELF / ORG 不再降级到 created_by。
+     *
+     * @param kpiSchemeId 关联 KPI 方案ID (可空)
+     * @param status      状态 (可空)
+     * @param keyword     关键字 (编码/名称模糊, 可空)
+     * @param pageNo      页码 (从 1 起)
+     * @param pageSize    页大小
+     * @return 经过数据范围过滤的分页结果
+     */
+    @Transactional(readOnly = true)
+    public PageResult<PerfTargetPlan> pageWithScope(String kpiSchemeId, String status, String keyword,
+                                                    int pageNo, int pageSize) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
+                "created_by",   // ownerEmpCol (SELF)
+                "created_by",   // assigneeCol
+                "created_by",   // createdByCol (SELF_CREATED)
+                "created_by"    // ownerOrgCol (无 org_code, 降级)
+        );
+        PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
+                currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
+
+        int offset = Math.max(pageNo - 1, 0) * pageSize;
+        long total = targetPlanMapper.countByConditionWithScope(
+                kpiSchemeId, status, keyword, frag.getSql(), frag.getParams());
+        List<PerfTargetPlan> records = targetPlanMapper.selectByConditionWithScope(
+                kpiSchemeId, status, keyword, offset, pageSize,
+                frag.getSql(), frag.getParams());
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
