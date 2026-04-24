@@ -16,8 +16,11 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 
 import java.lang.reflect.Method;
@@ -46,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>使用 @MockBean {@link HistoryRecalcService} 隔离 DB/计算逻辑，专注 Controller 路由 + DTO 映射.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
 
     private static final String CONTROLLER_FQCN =
@@ -212,6 +216,47 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.taskId").value("PARENT_TASK_MISSING"))
                 .andExpect(jsonPath("$.data.status").value("RUNNING"));
+    }
+
+    /**
+     * V1.4 S4.1 Red：getRunTask 返回 Optional.empty 退化到占位 RUNNING 时，必须打 warn 日志
+     * 以便运维从日志中定位"Service 未 commit"类极端竞态。Reviewer R4.2 建议项。
+     *
+     * <p>背景：V1.3 R4.2 已把 /api/perf/recalc 响应 status 改为读 perf_run_task 真实终态。
+     * 但 Optional.empty 的 fallback 分支当前沉默返回 "RUNNING"，无日志；极端竞态（Service
+     * 未及时 commit 到 Controller 读库之间）发生时，运维无任何可观测性。
+     * V1.4 S4.1 要求 fallback 时输出 log.warn 含 parentTaskId + "查不到" 关键字.
+     */
+    @Test
+    @DisplayName("V1.4 S4.1：fallback 到 RUNNING 占位时必须 log.warn 含 parentTaskId + '查不到'")
+    void recalc_whenTaskMissing_logsWarning(CapturedOutput output) throws Exception {
+        Mockito.when(historyRecalcService.recalc(
+                any(LocalDate.class), any(LocalDate.class),
+                any(), anyString(), anyString(), anyString(), any()))
+                .thenReturn("PARENT_TASK_WARN");
+        // 触发 Optional.empty fallback 分支
+        Mockito.when(perfRunTaskService.getById("PARENT_TASK_WARN"))
+                .thenReturn(java.util.Optional.empty());
+
+        RecalcReqDTO req = new RecalcReqDTO();
+        req.setCycleType("MONTHLY");
+        req.setCycleDateFrom(LocalDate.of(2026, 3, 1));
+        req.setCycleDateTo(LocalDate.of(2026, 3, 31));
+        req.setVersion("v1");
+        req.setReason("warn log check");
+
+        mockMvc.perform(post("/api/perf/recalc")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RUNNING"));
+
+        // 断言 fallback 时输出 warn 日志，包含 [recalc] 前缀 + parentTaskId + "查不到"
+        assertThat(output.getAll())
+                .as("fallback 到 RUNNING 必须打 warn 日志供运维审计")
+                .contains("[recalc]")
+                .contains("PARENT_TASK_WARN")
+                .contains("查不到");
     }
 
     @Test
