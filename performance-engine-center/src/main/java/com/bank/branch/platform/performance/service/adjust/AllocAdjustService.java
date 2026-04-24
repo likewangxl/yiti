@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.service.adjust;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
@@ -11,6 +14,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -68,6 +72,12 @@ public class AllocAdjustService {
     /** 流程业务类型（对齐 workflow-center 支持的 bizType 枚举）. */
     public static final String BIZ_TYPE = "ALLOC_ADJUST";
 
+    /**
+     * V1.4 S1.3：WORKFLOW_PARTICIPANT scope 的流程定义 key 前缀，
+     * 配合 PerfScopeHelper.workflowParticipantFragment 查询分配调整相关流程.
+     */
+    public static final String WORKFLOW_PREFIX = "perf_alloc_adjust_";
+
     /** 申请编号日期前缀格式（如 AA20260423xxxx）. */
     private static final DateTimeFormatter APPLY_NO_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -75,6 +85,8 @@ public class AllocAdjustService {
     private final PerfAllocAdjustItemMapper itemMapper;
     private final CustomerQueryApi customerQueryApi;
     private final WorkflowApi workflowApi;
+    private final CurrentUserApi currentUserApi;
+    private final PerfScopeHelper perfScopeHelper;
 
     /**
      * 提交分配关系调整申请.
@@ -245,18 +257,48 @@ public class AllocAdjustService {
     }
 
     /**
-     * V1.3 R4.1：Controller 专用 DTO 版本分页（列表不含 items）.
+     * V1.3 R4.1 / V1.4 S1.3：Controller 专用 DTO 版本分页（列表不含 items）.
+     *
+     * <p>V1.4 S1.3 增强：注入 PerfScopeHelper 5 参 overload，bizKeyCol="business_key"，
+     * workflowPrefix="perf_alloc_adjust_"，使 WORKFLOW_PARTICIPANT 角色的用户可以看到
+     * 自己参与过的分配调整申请（按 businessKey 过滤）。
+     *
+     * <p>ScopeColumns 映射（perf_alloc_adjust_apply 表）：
+     * <ul>
+     *   <li>ownerEmpCol = "created_by"（SELF 降级到 created_by，该表无独立 owner_emp_id）</li>
+     *   <li>assigneeCol = "created_by"（无 assignee 列）</li>
+     *   <li>createdByCol = "created_by"（SELF_CREATED 语义准确）</li>
+     *   <li>ownerOrgCol = "owner_org_id"（ORG 对应列）</li>
+     *   <li>bizKeyCol = "business_key"（V1.4 S1.3 新增：WORKFLOW_PARTICIPANT 对应列）</li>
+     * </ul>
      */
     public PageResult<AllocAdjustRespDTO> pageDto(String status, String bizKind, String custId,
                                                   String ownerOrgId, String createdBy,
                                                   int pageNo, int pageSize) {
-        PageResult<PerfAllocAdjustApply> raw = page(status, bizKind, custId, ownerOrgId, createdBy,
-                pageNo, pageSize);
-        List<AllocAdjustRespDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfAllocAdjustApply apply : raw.getRecords()) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
+                "created_by",      // ownerEmpCol (SELF 降级)
+                "created_by",      // assigneeCol (无 assignee)
+                "created_by",      // createdByCol (SELF_CREATED)
+                "owner_org_id",    // ownerOrgCol (ORG)
+                "business_key"     // bizKeyCol (V1.4 S1.3: WORKFLOW_PARTICIPANT)
+        );
+        PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
+                currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns, WORKFLOW_PREFIX);
+
+        int offset = Math.max(pageNo - 1, 0) * pageSize;
+        long total = applyMapper.countByConditionsWithScope(
+                status, bizKind, custId, ownerOrgId, createdBy,
+                frag.getSql(), frag.getParams());
+        List<PerfAllocAdjustApply> rows = applyMapper.selectByConditionsWithScope(
+                status, bizKind, custId, ownerOrgId, createdBy, offset, pageSize,
+                frag.getSql(), frag.getParams());
+
+        List<AllocAdjustRespDTO> dtos = new ArrayList<>(rows.size());
+        for (PerfAllocAdjustApply apply : rows) {
             dtos.add(toRespDto(apply, java.util.Collections.emptyList()));
         }
-        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+        return PageResult.of(pageNo, pageSize, total, dtos);
     }
 
     /**

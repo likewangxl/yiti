@@ -94,4 +94,47 @@
         <include refid="CONDITION_WHERE"/>
     </select>
 
+    <!--
+      V1.4 S1.3 新增: 带 scopeFragment 注入的条件分页与计数.
+      scopeFragment 由 PerfScopeHelper 受控生成, 通过 ${} 注入;
+      参数走 #{scopeParams.*} 预编译. 空片段 → 不附加; "1=0" → fail-close.
+    -->
+    <sql id="CONDITION_WHERE_WITH_SCOPE">
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="bizKind != null and bizKind != ''">
+                AND biz_kind = #{bizKind}
+            </if>
+            <if test="custId != null and custId != ''">
+                AND cust_id = #{custId}
+            </if>
+            <if test="ownerOrgId != null and ownerOrgId != ''">
+                AND owner_org_id = #{ownerOrgId}
+            </if>
+            <if test="createdBy != null and createdBy != ''">
+                AND created_by = #{createdBy}
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectByConditionsWithScope" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_alloc_adjust_apply
+        <include refid="CONDITION_WHERE_WITH_SCOPE"/>
+        ORDER BY created_time DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByConditionsWithScope" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_alloc_adjust_apply
+        <include refid="CONDITION_WHERE_WITH_SCOPE"/>
+    </select>
+
 </mapper>

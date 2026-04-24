@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 目标修正申请 Mapper (V1.2 Q3.1).
@@ -99,4 +100,34 @@ public interface PerfTargetAdjustApplyMapper {
                            @Param("subjectId") String subjectId,
                            @Param("ownerOrgId") String ownerOrgId,
                            @Param("createdBy") String createdBy);
+
+    /**
+     * V1.4 S1.3 新增：带数据范围片段的分页查询（配合 PerfScopeHelper
+     * WORKFLOW_PARTICIPANT 分支注入 {@code business_key IN (...)}）.
+     *
+     * @param scopeFragment SQL 片段（PerfScopeHelper 受控生成，ALL 时为 ""，fail-close 时为 "1=0"）
+     * @param scopeParams   预编译参数 Map（走 {@code #{scopeParams.xxx}} 占位符）
+     */
+    List<PerfTargetAdjustApply> selectByConditionsWithScope(@Param("status") String status,
+                                                            @Param("planId") String planId,
+                                                            @Param("subjectType") String subjectType,
+                                                            @Param("subjectId") String subjectId,
+                                                            @Param("ownerOrgId") String ownerOrgId,
+                                                            @Param("createdBy") String createdBy,
+                                                            @Param("offset") int offset,
+                                                            @Param("limit") int limit,
+                                                            @Param("scopeFragment") String scopeFragment,
+                                                            @Param("scopeParams") Map<String, Object> scopeParams);
+
+    /**
+     * V1.4 S1.3 新增：带数据范围片段的条件计数（与 {@link #selectByConditionsWithScope} 语义一致）.
+     */
+    long countByConditionsWithScope(@Param("status") String status,
+                                    @Param("planId") String planId,
+                                    @Param("subjectType") String subjectType,
+                                    @Param("subjectId") String subjectId,
+                                    @Param("ownerOrgId") String ownerOrgId,
+                                    @Param("createdBy") String createdBy,
+                                    @Param("scopeFragment") String scopeFragment,
+                                    @Param("scopeParams") Map<String, Object> scopeParams);
 }

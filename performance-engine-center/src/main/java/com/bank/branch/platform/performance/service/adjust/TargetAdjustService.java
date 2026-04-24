@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.service.adjust;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.controller.dto.TargetAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
@@ -9,6 +12,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitTargetAdjustCmd;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
@@ -60,20 +64,32 @@ public class TargetAdjustService {
     /** businessKey 前缀. */
     public static final String BIZ_KEY_PREFIX = "TARGET_ADJUST:";
 
+    /**
+     * V1.4 S1.3：WORKFLOW_PARTICIPANT scope 的流程定义 key 前缀，
+     * 配合 PerfScopeHelper.workflowParticipantFragment 查询目标调整相关流程.
+     */
+    public static final String WORKFLOW_PREFIX = "perf_target_adjust_";
+
     /** 申请编号日期前缀格式（TA{yyyyMMdd}{8 位 UUID}）. */
     private static final DateTimeFormatter APPLY_NO_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final PerfTargetAdjustApplyMapper applyMapper;
     private final PerfTargetPlanMapper targetPlanMapper;
     private final WorkflowApi workflowApi;
+    private final CurrentUserApi currentUserApi;
+    private final PerfScopeHelper perfScopeHelper;
     private final ObjectMapper objectMapper;
 
     public TargetAdjustService(PerfTargetAdjustApplyMapper applyMapper,
                                PerfTargetPlanMapper targetPlanMapper,
-                               WorkflowApi workflowApi) {
+                               WorkflowApi workflowApi,
+                               CurrentUserApi currentUserApi,
+                               PerfScopeHelper perfScopeHelper) {
         this.applyMapper = applyMapper;
         this.targetPlanMapper = targetPlanMapper;
         this.workflowApi = workflowApi;
+        this.currentUserApi = currentUserApi;
+        this.perfScopeHelper = perfScopeHelper;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -210,19 +226,49 @@ public class TargetAdjustService {
     }
 
     /**
-     * V1.3 R4.1：Controller 专用 DTO 版本分页列表.
+     * V1.3 R4.1 / V1.4 S1.3：Controller 专用 DTO 版本分页列表.
+     *
+     * <p>V1.4 S1.3 增强：注入 PerfScopeHelper 5 参 overload，bizKeyCol="business_key"，
+     * workflowPrefix="perf_target_adjust_"，使 WORKFLOW_PARTICIPANT 角色的用户可以看到
+     * 自己参与过的目标调整申请（按 businessKey 过滤）。
+     *
+     * <p>ScopeColumns 映射（perf_target_adjust_apply 表）：
+     * <ul>
+     *   <li>ownerEmpCol = "created_by"（SELF 降级）</li>
+     *   <li>assigneeCol = "created_by"（无 assignee）</li>
+     *   <li>createdByCol = "created_by"（SELF_CREATED）</li>
+     *   <li>ownerOrgCol = "owner_org_id"（ORG）</li>
+     *   <li>bizKeyCol = "business_key"（V1.4 S1.3 新增：WORKFLOW_PARTICIPANT）</li>
+     * </ul>
      */
     public PageResult<TargetAdjustRespDTO> pageDto(String status, String planId,
                                                    String subjectType, String subjectId,
                                                    String ownerOrgId, String createdBy,
                                                    int pageNo, int pageSize) {
-        PageResult<PerfTargetAdjustApply> raw = page(status, planId, subjectType, subjectId,
-                ownerOrgId, createdBy, pageNo, pageSize);
-        List<TargetAdjustRespDTO> dtos = new java.util.ArrayList<>(raw.getRecords().size());
-        for (PerfTargetAdjustApply apply : raw.getRecords()) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
+                "created_by",      // ownerEmpCol (SELF 降级)
+                "created_by",      // assigneeCol (无 assignee)
+                "created_by",      // createdByCol (SELF_CREATED)
+                "owner_org_id",    // ownerOrgCol (ORG)
+                "business_key"     // bizKeyCol (V1.4 S1.3: WORKFLOW_PARTICIPANT)
+        );
+        PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
+                currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns, WORKFLOW_PREFIX);
+
+        int offset = Math.max(pageNo - 1, 0) * pageSize;
+        long total = applyMapper.countByConditionsWithScope(
+                status, planId, subjectType, subjectId, ownerOrgId, createdBy,
+                frag.getSql(), frag.getParams());
+        List<PerfTargetAdjustApply> rows = applyMapper.selectByConditionsWithScope(
+                status, planId, subjectType, subjectId, ownerOrgId, createdBy,
+                offset, pageSize, frag.getSql(), frag.getParams());
+
+        List<TargetAdjustRespDTO> dtos = new java.util.ArrayList<>(rows.size());
+        for (PerfTargetAdjustApply apply : rows) {
             dtos.add(toRespDto(apply));
         }
-        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+        return PageResult.of(pageNo, pageSize, total, dtos);
     }
 
     /**
