@@ -192,6 +192,13 @@ public class MetricApiImpl implements MetricApi {
                             empId, previousDate, version, def.getValSlot());
             BigDecimal mom = calculateMom(actual, previousValue);
 
+            // V1.4 S3.4: 去年同期值 (同比) = latestDate.minusYears(1) 的宽表值
+            LocalDate yearAgoDate = latestDate == null ? null : latestDate.minusYears(1);
+            BigDecimal yearAgoValue = yearAgoDate == null ? null
+                    : empIndexResultMapper.selectSlotValue(
+                            empId, yearAgoDate, version, def.getValSlot());
+            BigDecimal yoy = calculateYoy(actual, yearAgoValue);
+
             cards.add(MetricCardDTO.builder()
                     .metricCode(code)
                     .metricName(def.getMetricName())
@@ -200,6 +207,7 @@ public class MetricApiImpl implements MetricApi {
                     .targetValue(target)
                     .achievementRate(rate)
                     .mom(mom)
+                    .yoy(yoy)
                     .unit(def.getUnit())
                     .dataDate(latestDate)
                     .build());
@@ -330,6 +338,28 @@ public class MetricApiImpl implements MetricApi {
         }
         return current.subtract(previous)
                 .divide(previous.abs(), 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * V1.4 S3.4: 计算同比变化率 yoy = (current - yearAgo) / |yearAgo| * 100, 保留 2 位小数.
+     *
+     * <p>除零保护：yearAgo=0 或任一侧为 null 直接返回 null, 同 calculateMom.
+     *
+     * @param current  当期值
+     * @param yearAgo  去年同期值 (date.minusYears(1))
+     * @return yoy 百分比 (2 位小数) 或 null
+     */
+    private BigDecimal calculateYoy(BigDecimal current, BigDecimal yearAgo) {
+        if (current == null || yearAgo == null) {
+            return null;
+        }
+        if (yearAgo.compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+        return current.subtract(yearAgo)
+                .divide(yearAgo.abs(), 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100))
                 .setScale(2, RoundingMode.HALF_UP);
     }
