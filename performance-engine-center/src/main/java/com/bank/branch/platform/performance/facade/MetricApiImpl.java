@@ -174,14 +174,15 @@ public class MetricApiImpl implements MetricApi {
      *
      * <p>每次调用对单个 {@code (metricCode, cycleType)} 组合生效：
      * <ul>
-     *   <li>actual：{@code empIndexResultMapper.selectSlotValue(empId, latestDate, version, slot)}</li>
+     *   <li>actual：latestDate 的宽表值</li>
      *   <li>target：按 {@code buildCycleKey(cycleType, latestDate)} 查 perf_target_value</li>
-     *   <li>previous：按 {@code calculatePreviousDate(cycleType, latestDate)} 再查宽表</li>
+     *   <li>previous：按 {@code calculatePreviousDate(cycleType, latestDate)} 的宽表值</li>
      *   <li>yearAgo：{@code latestDate.minusYears(1)} 的宽表值</li>
      * </ul>
      *
-     * <p><strong>查询次数</strong>：当前每 metric 3 次宽表查询（current/previous/yearAgo），
-     * batch 合并留 V1.5+ M02 优化。
+     * <p><strong>V1.5 P4.1 优化</strong>：把原 3 次串行单点 {@code selectSlotValue} 合并为
+     * 1 次 {@code selectSlotValuesByDates} IN 查询，20 metric 场景查询数从 60 降至 20（-66%）。
+     * 调用方在 Map 内按 key 取值，未命中日期对应 {@code map.get(...) == null}。
      *
      * @param empId      员工工号
      * @param def        指标定义（baseDim=EMP 且 slot 已分配）
@@ -192,8 +193,28 @@ public class MetricApiImpl implements MetricApi {
      */
     private MetricCardDTO buildCard(String empId, PerfMetricDef def, String cycleType,
                                     String version, LocalDate latestDate) {
-        BigDecimal actual = empIndexResultMapper.selectSlotValue(
-                empId, latestDate, version, def.getValSlot());
+        // V1.5 P4.1：收集 current / previous / yearAgo 三个日期，单次 IN 查询拿回
+        LocalDate previousDate = calculatePreviousDate(cycleType, latestDate);
+        LocalDate yearAgoDate = latestDate == null ? null : latestDate.minusYears(1);
+
+        List<LocalDate> dates = new ArrayList<>(3);
+        if (latestDate != null) {
+            dates.add(latestDate);
+        }
+        if (previousDate != null) {
+            dates.add(previousDate);
+        }
+        if (yearAgoDate != null) {
+            dates.add(yearAgoDate);
+        }
+
+        Map<LocalDate, BigDecimal> batchValues = empIndexResultMapper.selectSlotValuesByDates(
+                empId, dates, version, def.getValSlot());
+
+        BigDecimal actual = latestDate == null ? null : batchValues.get(latestDate);
+        BigDecimal previousValue = previousDate == null ? null : batchValues.get(previousDate);
+        BigDecimal yearAgoValue = yearAgoDate == null ? null : batchValues.get(yearAgoDate);
+
         String cycleKey = buildCycleKey(cycleType, latestDate);
         PerfTargetValue tv = perfTargetValueMapper.selectByUniqueKey(
                 null, "EMP", empId, cycleKey, def.getMetricCode());
@@ -203,13 +224,7 @@ public class MetricApiImpl implements MetricApi {
             rate = actual.multiply(new BigDecimal("100"))
                     .divide(target, 4, RoundingMode.HALF_UP);
         }
-        LocalDate previousDate = calculatePreviousDate(cycleType, latestDate);
-        BigDecimal previousValue = previousDate == null ? null
-                : empIndexResultMapper.selectSlotValue(empId, previousDate, version, def.getValSlot());
         BigDecimal mom = calculateMom(actual, previousValue);
-        LocalDate yearAgoDate = latestDate == null ? null : latestDate.minusYears(1);
-        BigDecimal yearAgoValue = yearAgoDate == null ? null
-                : empIndexResultMapper.selectSlotValue(empId, yearAgoDate, version, def.getValSlot());
         BigDecimal yoy = calculateYoy(actual, yearAgoValue);
         return MetricCardDTO.builder()
                 .metricCode(def.getMetricCode())

@@ -110,12 +110,15 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_EMP_A", "M_EMP_B")))
                 .thenReturn(List.of(defA, defB));
 
-        // actual: V1.4 S3.3 后生产会额外查上期 (latest.minusMonths(1)) 与去年同期,
-        // 用 lenient 避免未 stub 调用触发 PotentialStubbingProblem, 未命中默认返 null.
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
-                .thenReturn(new BigDecimal("80"));
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(6)))
-                .thenReturn(new BigDecimal("50"));
+        // V1.5 P4.1: actual 走 batch API 一次拿回 current/previous/yearAgo 的 slot 值.
+        // 本 case 只关注 currentValue + targetValue, previousValue/yearAgo 用 null 不构造
+        // (Map 未命中 key 返 null, 等价 V1.4 单点 null 的表现).
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(5)))
+                .thenReturn(Map.of(latest, new BigDecimal("80")));
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(6)))
+                .thenReturn(Map.of(latest, new BigDecimal("50")));
 
         // target
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), anyString(), eq("M_EMP_A")))
@@ -161,8 +164,9 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_EMP_A")));
         when(metricDefService.getByCodes(List.of("M_EMP_A")))
                 .thenReturn(List.of(def("M_EMP_A", "EMP", 5, "A", "万元")));
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
-                .thenReturn(new BigDecimal("10"));
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(5)))
+                .thenReturn(Map.of(latest, new BigDecimal("10")));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), anyString(), eq("M_EMP_A")))
                 .thenReturn(null);
 
@@ -192,8 +196,9 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_EMP_A")));
         when(metricDefService.getByCodes(List.of("M_EMP_A")))
                 .thenReturn(List.of(def("M_EMP_A", "EMP", 5, "A", "万元")));
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(5)))
-                .thenReturn(new BigDecimal("10"));
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(5)))
+                .thenReturn(Map.of(latest, new BigDecimal("10")));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), anyString(), eq("M_EMP_A")))
                 .thenReturn(targetValue(BigDecimal.ZERO));
 
@@ -235,8 +240,9 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
                 .thenReturn(List.of(
                         def("M_EMP_OK", "EMP", 1, "EMP ok", "万元"),
                         def("M_ORG_SKIP", "ORG", 2, "ORG skip", "户")));
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(latest), eq("v1"), eq(1)))
-                .thenReturn(new BigDecimal("5"));
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(1)))
+                .thenReturn(Map.of(latest, new BigDecimal("5")));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), anyString(), eq("M_EMP_OK")))
                 .thenReturn(targetValue(new BigDecimal("10")));
 
@@ -301,8 +307,9 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(5)))
-                .thenReturn(new BigDecimal("10"));
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(5)))
+                .thenReturn(Map.of(latest, new BigDecimal("10")));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq(expectedCycleKey), eq("M_X")))
                 .thenReturn(targetValue(new BigDecimal("20")));
 
@@ -364,10 +371,10 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
 
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v20260401"), eq(5)))
-                .thenReturn(new BigDecimal("120"));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v20260401"), eq(5)))
-                .thenReturn(new BigDecimal("100"));
+        // V1.5 P4.1: batch API 一次拿回 current=120 / previous=100, yearAgo 未 stub → null
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v20260401"), eq(5)))
+                .thenReturn(Map.of(current, new BigDecimal("120"), previous, new BigDecimal("100")));
 
         List<MetricCardDTO> cards = api.getUserMetricCards(empId);
 
@@ -397,10 +404,10 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
 
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v1"), eq(5)))
-                .thenReturn(new BigDecimal("120"));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v1"), eq(5)))
-                .thenReturn(BigDecimal.ZERO);
+        // V1.5 P4.1: batch API 一次返回 current=120 / previous=ZERO
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(5)))
+                .thenReturn(Map.of(current, new BigDecimal("120"), previous, BigDecimal.ZERO));
 
         List<MetricCardDTO> cards = api.getUserMetricCards(empId);
         assertThat(cards).hasSize(1);
@@ -428,10 +435,10 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
 
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v1"), eq(5)))
-                .thenReturn(new BigDecimal("120"));
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v1"), eq(5)))
-                .thenReturn(null);
+        // V1.5 P4.1: batch 返回仅含 current（previous 未命中 → Map 不含 key = null）
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(5)))
+                .thenReturn(Map.of(current, new BigDecimal("120")));
 
         List<MetricCardDTO> cards = api.getUserMetricCards(empId);
         assertThat(cards).hasSize(1);
@@ -463,13 +470,10 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
 
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v"), eq(5)))
-                .thenReturn(new BigDecimal("150"));
-        // previous 显式返 null，聚焦本 case 的 yoy 断言（不关心 mom）
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v"), eq(5)))
-                .thenReturn(null);
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(yearAgo), eq("v"), eq(5)))
-                .thenReturn(new BigDecimal("100"));
+        // V1.5 P4.1: batch 返回 current=150 / yearAgo=100; previous 不入 Map → null（聚焦 yoy）
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v"), eq(5)))
+                .thenReturn(Map.of(current, new BigDecimal("150"), yearAgo, new BigDecimal("100")));
 
         List<MetricCardDTO> cards = api.getUserMetricCards(empId);
 
@@ -499,12 +503,10 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
 
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v"), eq(5)))
-                .thenReturn(new BigDecimal("150"));
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v"), eq(5)))
-                .thenReturn(null);
-        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(yearAgo), eq("v"), eq(5)))
-                .thenReturn(null);
+        // V1.5 P4.1: batch 仅返回 current, previous / yearAgo 不入 Map → null
+        when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v"), eq(5)))
+                .thenReturn(Map.of(current, new BigDecimal("150")));
 
         List<MetricCardDTO> cards = api.getUserMetricCards(empId);
         assertThat(cards).hasSize(1);
@@ -545,8 +547,10 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(metricDefService.getByCodes(List.of("M_X")))
                 .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
 
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(5)))
-                .thenReturn(new BigDecimal("80"));
+        // V1.5 P4.1: batch API 每卡片 1 次, 用 latest 做 current 即可
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(5)))
+                .thenReturn(Map.of(latest, new BigDecimal("80")));
 
         // QUARTERLY 方向下 cycleKey=2026Q3；YEARLY 方向下 cycleKey=2026
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("2026Q3"), eq("M_X")))
@@ -595,8 +599,10 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         when(kpiItemService.listBySchemeId("SB")).thenReturn(List.of(kpiItem("SB", "M_Y")));
         when(metricDefService.getByCodes(List.of("M_Y")))
                 .thenReturn(List.of(def("M_Y", "EMP", 6, "Y", "户")));
-        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), any(), eq("v1"), eq(6)))
-                .thenReturn(new BigDecimal("5"));
+        // V1.5 P4.1: batch API, 两 scheme 共 1 卡片（去重后），1 次 batch 调用
+        lenient().when(empIndexResultMapper.selectSlotValuesByDates(
+                eq(empId), anyList(), eq("v1"), eq(6)))
+                .thenReturn(Map.of(latest, new BigDecimal("5")));
         when(perfTargetValueMapper.selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("202607"), eq("M_Y")))
                 .thenReturn(targetValue(new BigDecimal("10")));
 
