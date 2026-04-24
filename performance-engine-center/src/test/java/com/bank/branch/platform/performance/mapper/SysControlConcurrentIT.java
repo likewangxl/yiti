@@ -9,6 +9,7 @@ import com.bank.branch.platform.performance.support.PerformanceConcurrentTestBas
 import com.bank.branch.platform.performance.support.TestDbCleaner;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>验证: 两个线程并发切同一 scope_dim 的版本, 只有一个成功, 另一个被拒绝 (锁或 DB UK 兜底).
  */
+@Disabled("V1.2 Q8.5c: 依赖本地 Redis（localhost:6379）。SysControlFacade.switchVersion 会先"
+        + " setIfAbsent 申请锁，无 Redis 环境时 @BeforeEach 的 redisTemplate.delete 卡住。"
+        + " 保留作为并发切版场景演练，CI 启用 Testcontainers-redis 后可取消 @Disabled。")
 class SysControlConcurrentIT extends PerformanceConcurrentTestBase {
 
     private static final String SCOPE_DIM = "CONCUR_DIM_EMP_X";
