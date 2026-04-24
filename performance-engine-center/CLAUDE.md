@@ -6,14 +6,15 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.2（流程 + 事件 + 导出 + 数据范围）—— 在 V1.1 指标/KPI/导入/回算全线之上补齐：
-- Q1 版本回滚 + SysControlCleanup
-- Q2/Q3 分配/目标调整审批（BPMN + 事件监听 + Facade 编排）
-- Q4 4 类领域事件发布（SysControlUpdated / KpiCalcCompleted / TargetAdjustmentApproved / AllocationAdjustmentApproved）
-- Q5 ShedLock 分布式锁 + 3 Job 接入
-- Q6 4 导出策略（KPI / Metric / Alloc / Detail）+ 异步导出框架
-- Q7 PerfScopeHelper 7 种 DataScopeType + fail-close + AllocRelation/Kpi/Metric 数据范围注入
-- Q8 surefire 假绿修复 + PT_RESOURCE 资源全量激活 + 业务种子数据
+**当前版本**: V1.3（技术债清偿）—— 在 V1.2 流程/事件/导出/数据范围之上清偿 V1.1/V1.2 累积技术债：
+- R0 V1_2_5 NULL deleted 清理 + V1_3_0 uk_task_key 补齐 + failsafe 分层 + CLAUDE.md 勘误
+- R1 Target 数据范围注入（TargetValue + TargetPlan + Controller 三级，复用 PerfScopeHelper）
+- R2 5 处 V1.2 UOE 全部实际实现（PerfCalcApi.triggerKpiCalc / MetricQueryApi.3 snapshot / MetricApi.getUserMetricCards），Facade UOE 清零
+- R3 PERF-50003 IDEMPOTENCY_WAIT_TIMEOUT 新增 + MetricTrialRespDTO 字段对齐 03 §A.5 + MetricDefController.execute 返回 RunTaskInfoDTO
+- R4 11 Controller 局部 entity 清零（NoEntityInControllerLocalsArchTest 守护）+ P7 recalc 真实 status + cycleType 写 params_json
+- R5 Testcontainers-redis 接入（2 个 Redis IT 激活）+ UndoScriptSmokeIT 重写支持 V1_3_0 基线 + NoUoeInFacadeTestsArchTest 守护（facade 测试层 UOE 清零）
+
+（V1.2 历史：Q1 版本回滚 / Q2-Q3 审批 BPMN / Q4 4 类领域事件 / Q5 ShedLock / Q6 4 导出策略 / Q7 7 种 DataScopeType / Q8 surefire 假绿修复 + 45 资源激活）
 
 **基础包名**: `com.bank.branch.platform.performance`
 **Maven 坐标**: `com.bank.branch.platform:performance-engine-center`
@@ -27,20 +28,23 @@
 |---|---|---|
 | V1.0 | 配置态 CRUD + 版本管理骨架 + 只读查询 + 7 个 Api（契约定型）| 已交付 |
 | V1.1 | 指标执行（SQL+Groovy+级联）、KPI 计算（定时任务+手动触发）、数据导入（Excel/SQL/外部上报 3 策略）、历史回算（父子 run_task） | 已交付 |
-| **V1.2** | 分配/目标调整审批（BPMN + Flowable）、4 类领域事件发布、4 导出策略（异步任务 + MinIO）、ShedLock 分布式锁、PerfScopeHelper 数据范围注入、PT_RESOURCE 资源全量激活（45 条） | **本期交付（2026-04-24）** |
-| V1.3 | Target 数据范围注入、WORKFLOW_PARTICIPANT scope 落地、Testcontainers-redis 接入、剩余 UOE（MetricApi.getUserMetricCards 等）、Controller.list 返回类型泛化（V1.0/V1.1 Controller 系统性瑕疵） | 规划中 |
+| V1.2 | 分配/目标调整审批（BPMN + Flowable）、4 类领域事件发布、4 导出策略（异步任务 + MinIO）、ShedLock 分布式锁、PerfScopeHelper 数据范围注入、PT_RESOURCE 资源全量激活（45 条） | 已交付 |
+| **V1.3** | 技术债清偿：V1_2_5/V1_3_0 DDL 兜底、Target 数据范围注入、5 处 V1.2 UOE 实际实现、PERF-50003 新增、MetricTrialRespDTO 对齐 03 §A.5、execute 返回 RunTaskInfoDTO、11 Controller 局部 entity 清零、P7 recalc 真实 status、cycleType 写 params_json、Testcontainers-redis 接入、UndoScriptSmokeIT 重写、2 个新架构守护（NoEntityInControllerLocalsArchTest + NoUoeInFacadeTestsArchTest） | **本期交付（2026-04-24）** |
 
-### V1.2 UOE 清单交付说明（Facade 5 方法）
+### V1.3 UOE 清单（Facade UOE 已清零）
 
-| Api.方法 | V1.2 状态 | 说明 |
+V1.2 遗留的 5 处 Facade UOE 在 V1.3 R2 全部转为真实实现：
+
+| Api.方法 | V1.3 交付任务 | 实现入口 |
 |---|---|---|
-| `MetricApi.getUserMetricCards` | 延期 V1.3 | 仍抛 UOE("V1.2 delivered" 已改为正确的延期 message)。依赖 KPI 方案-目标-实绩联动 + 同比/环比展示层聚合，V1.2 未完整覆盖。 |
-| `MetricQueryApi.batchQueryEmpSnapshots` | 延期 V1.3 | report-analytics 专用批量快照，500 条上限语义需 ScopeHelper 细化后启用。 |
-| `MetricQueryApi.batchQueryOrgSnapshots` | 延期 V1.3 | 同上 |
-| `MetricQueryApi.batchQueryCustSnapshots` | 延期 V1.3 | 同上 |
-| `PerfCalcApi.triggerKpiCalc` | 契约冗余 | KpiApi.triggerKpiCalc 已于 V1.1 交付，PerfCalcApi 侧的同名方法保留为契约占位避免破坏 04 契约文档。Facade 实现抛 UOE 但 CLI 不会调用该入口。|
+| `PerfCalcApi.triggerKpiCalc` | R2.1 | `KpiCalcService.calcScheme(schemeCode, cycleType, cycleDate, asOfDate, version)` 委托入口，返回成功员工数 |
+| `MetricQueryApi.batchQueryEmpSnapshots` | R2.2 | EmpIndexResultMapper.selectSlotValuesByEmps，500 条 subject + 50 条 metricCode 上限 |
+| `MetricQueryApi.batchQueryOrgSnapshots` | R2.3 | OrgIndexResultMapper.selectSlotValuesByOrgs 同上 |
+| `MetricQueryApi.batchQueryCustSnapshots` | R2.4 | CustIndexResultMapper.selectSlotValuesByCusts 同上 |
+| `MetricApi.getUserMetricCards` | R2.5 | ACTIVE KPI 方案并集 + EMP 宽表 slot 读取 + TargetValue 按 planId=null 近似，mom/yoy 留 V1.4 |
 
-架构测试 `NoV11UOEArchTest` 守护：facade/*.java 不得再出现 `"V1.1 delivered"` 字面量（message 统一为 `"V1.2 delivered"`）。
+Facade 层 UOE 清零，**新增**架构测试 `NoUoeInFacadeTestsArchTest` 守护 facade 测试层不得再写 `assertThrows(UnsupportedOperationException.class, ...)`（Task R5.3）。
+旧守护 `NoV11UOEArchTest` 继续守护 facade/*.java 不出现 `"V1.1 delivered"` 字面量。
 
 ## 依赖关系
 
@@ -68,7 +72,7 @@ src/main/java/com/bank/branch/platform/performance/
 ├── mapper/                 # MyBatis Mapper 接口 (V1.1: 含 *IndexResult/KpiResult Mapper, 模块私有)
 ├── entity/                 # 贫血模型 (V1.1: 含 *IndexResult/KpiResult 宽表 Entity)
 ├── enums/                  # 枚举 + 错误码
-│   ├── PerfErrorCode.java      (29 个 PERF-* 错误码：V1.0 25 个 + V1.1 新增 4 个：42206 批量上限 / 40005 KPI 方案重复 / 40006 目标方案重复 / 40007 RunTask 不存在)
+│   ├── PerfErrorCode.java      (30 个 PERF-* 错误码：V1.0 25 个 + V1.1 新增 4 个：42206 批量上限 / 40005 KPI 方案重复 / 40006 目标方案重复 / 40007 RunTask 不存在 + V1.3 R3.1 新增 1 个：50003 IDEMPOTENCY_WAIT_TIMEOUT)
 │   ├── BaseDimEnum.java
 │   ├── MetricLevelEnum.java
 │   ├── CalcLogicTypeEnum.java
@@ -107,17 +111,19 @@ src/main/resources/
 - 每步独立 commit, 禁止批量提交
 - code-reviewer 审查 git 历史, 不符合 TDD 节奏视为 Must Fix
 
-### 2. 7 个对外 Api 契约 V1.0 定型, V1.1 替换实现, 剩余 V1.2 UOE 占位
+### 2. 7 个对外 Api 契约 V1.0 定型, V1.1-V1.3 全部替换为实现（Facade UOE 清零）
 
 V1.0 的 7 个对外 Api 签名全部按 `docs/modules/performance-engine-center/04-对外API契约.md` 定型。
-V1.0 无法实现的 13 个方法原抛 `UnsupportedOperationException("V1.1 delivered")` 占位；
-V1.1 交付后，实际落地 9 个方法（MetricApi 3 + KpiApi 2 + PerfCalcApi 2 + DataTaskApi 1 + 内部补充 1），
-剩余 5 个保留 UOE 占位但 message 已改为 `"V1.2 delivered"`：
-- `MetricApi.getUserMetricCards`（依赖 V1.2 的 KPI 方案绑定 + 目标/实绩联动 + 同环比）
-- `MetricQueryApi.batchQueryEmpSnapshots / batchQueryOrgSnapshots / batchQueryCustSnapshots`（report-analytics 专用大批量快照）
-- `PerfCalcApi.triggerKpiCalc`（契约冗余：V1.1 已在 KpiApi.triggerKpiCalc 交付）
+V1.0 无法实现的 13 个方法原抛 `UnsupportedOperationException` 占位：
+- V1.1 P 阶段交付 9 个方法（MetricApi 3 + KpiApi 2 + PerfCalcApi 2 + DataTaskApi 1 + 内部补充 1）
+- V1.3 R2 阶段交付剩余 5 个方法（Facade UOE 清零）：
+  - `MetricApi.getUserMetricCards`（R2.5：ACTIVE KPI 方案并集 + EMP 宽表 slot 读取 + TargetValue 按 planId=null 近似；mom/yoy/previousValue 字段留 V1.4）
+  - `MetricQueryApi.batchQueryEmpSnapshots / batchQueryOrgSnapshots / batchQueryCustSnapshots`（R2.2/R2.3/R2.4：宽表 selectSlotValuesByEmps/Orgs/Custs，500 subject + 50 metricCode 上限）
+  - `PerfCalcApi.triggerKpiCalc`（R2.1：委托 `KpiCalcService.calcScheme`，签名从 V1.0 占位的 `(LocalDate) → String` 改为 V1.3 的 `(schemeCode, cycleType, cycleDate, asOfDate, version) → int`；与 `KpiApi.triggerKpiCalc` 双入口共存）
 
-架构测试 `NoV11UOEArchTest` 守护：facade/*.java 不得再出现 `"V1.1 delivered"` 字面量。
+V1.3 相关架构守护：
+- `NoV11UOEArchTest`：facade/*.java 不得再出现 `"V1.1 delivered"` 字面量（V1.1 引入）
+- `NoUoeInFacadeTestsArchTest`：facade 测试层不得再写 `assertThrows(UnsupportedOperationException.class, ...)`（V1.3 R5.3 新增）
 
 ### 3. planId 类型 String（v1.2 修订）
 
@@ -323,7 +329,42 @@ V1.2 Q8.5d 曾误判为瑕疵，实际无需修改——已验证撤销。
 目前均断言 UOE + `"V1.2 delivered"` 消息。V1.3 真正交付时需把这些测试替换为行为断言
 （Mock Service、验证入参/出参/交互）。
 
-## 运维 Runbook（V1.2 交付）
+## 运维 Runbook（V1.2 + V1.3 交付）
+
+### V1.3 启用前置检查（DDL 迁移安全门）
+
+V1.3 引入两个关键 Flyway 脚本，生产启用前**必须**先做预检，防止 ALTER 失败阻塞后续迁移：
+
+**1. V1_2_5__perf_cleanup_null_deleted.sql（V1.0 NULL deleted 历史数据清理）**
+
+```sql
+-- 预检：查看有多少历史行 deleted 为 NULL
+SELECT COUNT(*) FROM perf_target_value WHERE deleted IS NULL;
+SELECT COUNT(*) FROM perf_target_plan  WHERE deleted IS NULL;
+SELECT COUNT(*) FROM perf_kpi_item     WHERE deleted IS NULL;
+-- V1_2_5 会将这些 NULL 置为 0（未删除），等价于"兜底"而非"误删"
+```
+
+**2. V1_3_0__perf_run_task_uk.sql（uk_task_key 唯一键补齐）**
+
+```sql
+-- 预检：是否有重复 task_key 导致 ALTER 失败？
+SELECT task_key, COUNT(*)
+FROM perf_run_task
+WHERE task_key IS NOT NULL
+GROUP BY task_key
+HAVING COUNT(*) > 1;
+-- 有结果 → 手工清理重复后再跑 flyway:migrate
+-- 无结果 → 直接跑 flyway:migrate
+```
+
+若 `V1_3_0` 迁移失败（存量重复）：
+- (a) 按业务规则手工清理重复行；
+- (b) 在 `flyway_schema_history` 删除 FAILED 对应行；
+- (c) 重跑 `mvn flyway:migrate`。
+- **严禁**直接跳到下个 V1_3_x 脚本，否则 schema 状态不一致。
+
+配套 `DataTaskService.report` 已在 V1.3 R0.2 增加 `DuplicateKeyException` 降级路径（Redis 宕机时 DB 唯一键兜底）。
 
 ### 3 个定时任务默认关闭策略
 

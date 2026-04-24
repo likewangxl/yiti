@@ -42,8 +42,24 @@ public interface MetricApi {
 
     /**
      * 获取员工工作台的指标卡片聚合数据.
-     * 返回该员工当前周期可见的全部指标卡片, 包含标题、当前值、同比、达成率.
+     * 返回该员工当前周期可见的全部指标卡片, 包含标题、当前值、达成率.
      * portal-content-center 的工作台首屏聚合入口, 建议缓存 5 分钟.
+     *
+     * <p><b>V1.3 交付范围（2026-04-24 Task R2.5 实际实现）：</b>
+     * <ul>
+     *   <li>ACTIVE KPI 方案并集：从 {@code kpi_item.metric_code} 采集 distinct 列表（V1.3 未引入员工-方案绑定，用"所有 ACTIVE"近似）</li>
+     *   <li>过滤 baseDim != EMP 与未分配 val_slot 的指标</li>
+     *   <li>actual 值：读 sys_control(EMP) 当前版本 + latest_data_date → emp_index_result slot 值</li>
+     *   <li>target 值：{@code perf_target_value.selectByUniqueKey(planId=null, subjectType=EMP, subjectId=empId, cycleKey, metricCode)} 近似查询（V1.4 按方案关联精确）</li>
+     *   <li>{@code cycleKey} = {@code latestDataDate.getYear()} 字符串化（按年口径，V1.4 按方案 cycleType 精确匹配）</li>
+     *   <li>无 EMP 基线版本 / 无 ACTIVE 方案 / 无匹配 metric 时均返回空列表（fail-safe）</li>
+     * </ul>
+     *
+     * <p><b>V1.3 简化项（V1.4 补齐）：</b>
+     * <ul>
+     *   <li>{@code mom} / {@code yoy} / {@code previousValue} 字段留 null</li>
+     *   <li>员工-KPI 方案个人绑定（当前是 ACTIVE 方案并集）</li>
+     * </ul>
      *
      * @param empId 员工工号
      * @return 指标卡片列表, 按 sortNo 排序
@@ -144,25 +160,45 @@ public interface MetricQueryApi {
 
     /**
      * 批量查询员工指标快照.
-     * 支持多员工 × 多日期 × 多指标的矩阵查询, 适合报表生成.
      *
-     * @param empIds      员工 ID 列表, 最多 1000 个
-     * @param dateFrom    起始日期
-     * @param dateTo      结束日期
-     * @param metricCodes 指标编码
-     * @return 快照列表, 每行对应 (empId, dataDate) 组合
+     * <p><b>V1.3 交付（2026-04-24 Task R2.2 实际实现）：</b>
+     * <ul>
+     *   <li>支持单日点查询（dateFrom == dateTo），跨日期区间查询留 V1.4 迭代</li>
+     *   <li>按 metricCode 循环调用 {@code EmpIndexResultMapper.selectSlotValuesByEmps(empIds, dataDate, version, slot)}</li>
+     *   <li>version 从 {@code sys_control(EMP)} 当前基线版本读取（调用方无法指定）</li>
+     *   <li>返回结构：每个 empId 对应一个 {@code EmpMetricSnapshotDTO}，内含 metricCode → BigDecimal 映射</li>
+     *   <li>过滤 baseDim != EMP 与未分配 val_slot 的指标定义（同时过滤 null metricValue）</li>
+     * </ul>
+     *
+     * @param empIds      员工 ID 列表, 最多 500 个（超限抛 PERF-40002 BATCH_QUERY_EXCEEDS_LIMIT）
+     * @param dateFrom    起始日期（V1.3 必须等于 dateTo）
+     * @param dateTo      结束日期（V1.3 必须等于 dateFrom）
+     * @param metricCodes 指标编码, 最多 50 个（超限抛 PERF-40002 BATCH_QUERY_EXCEEDS_LIMIT）
+     * @return 快照列表, 输入 empIds 顺序保留
      */
     List<EmpMetricSnapshotDTO> batchQueryEmpSnapshots(
         List<String> empIds, LocalDate dateFrom, LocalDate dateTo, List<String> metricCodes);
 
     /**
      * 批量查询机构指标快照.
+     *
+     * <p><b>V1.3 交付（2026-04-24 Task R2.3 实际实现）：</b>
+     * <ul>
+     *   <li>与 {@link #batchQueryEmpSnapshots} 同构，baseDim 过滤 ORG，version 取 sys_control(ORG)</li>
+     *   <li>Mapper 使用 {@code OrgIndexResultMapper.selectSlotValuesByOrgs}</li>
+     * </ul>
      */
     List<OrgMetricSnapshotDTO> batchQueryOrgSnapshots(
         List<String> orgCodes, LocalDate dateFrom, LocalDate dateTo, List<String> metricCodes);
 
     /**
      * 批量查询客户指标快照.
+     *
+     * <p><b>V1.3 交付（2026-04-24 Task R2.4 实际实现）：</b>
+     * <ul>
+     *   <li>与 {@link #batchQueryEmpSnapshots} 同构，baseDim 过滤 CUST，version 取 sys_control(CUST)</li>
+     *   <li>Mapper 使用 {@code CustIndexResultMapper.selectSlotValuesByCusts}</li>
+     * </ul>
      */
     List<CustMetricSnapshotDTO> batchQueryCustSnapshots(
         List<String> custIds, LocalDate dateFrom, LocalDate dateTo, List<String> metricCodes);
@@ -172,7 +208,8 @@ public interface MetricQueryApi {
 **约束:**
 
 - 该接口绕过缓存, 直连数据库 (从库)
-- 单次调用行数不超过 `empIds.size() * (dateTo-dateFrom) * metricCodes.size() ≤ 100000`, 超过抛 `PERF-42207`
+- V1.3 批量上限细化：subject（empIds/orgCodes/custIds）≤ 500，metricCodes ≤ 50，任一超限均抛 `PERF-40002 BATCH_QUERY_EXCEEDS_LIMIT`
+- V1.3 时间窗口简化：dateFrom 必须等于 dateTo（单日点查询），跨日期矩阵查询留 V1.4
 - 只读接口, 不需要事务
 
 ---
@@ -330,13 +367,29 @@ import java.util.Optional;
 public interface PerfCalcApi {
 
     /**
-     * 触发某日的 KPI 计算.
-     * 由 system-governance-center 的定时任务每日 02:00 调用.
+     * 触发某方案的 KPI 批量计算（V1.3 R2.1 实际实现）.
      *
-     * @param dataDate 数据日期
-     * @return 任务 ID
+     * <p><b>2026-04-24 V1.3 签名变更（破坏性升级）：</b>
+     * <ul>
+     *   <li>V1.0 占位签名：{@code String triggerKpiCalc(LocalDate dataDate)} 抛 UOE</li>
+     *   <li>V1.3 真实签名：{@code int triggerKpiCalc(String schemeCode, String cycleType, LocalDate cycleDate, LocalDate asOfDate, String version)}</li>
+     * </ul>
+     *
+     * <p>V1.3 交付方式：直接委托 {@code KpiCalcService.calcScheme}，对方案内所有员工计算 KPI 并写入 {@code kpi_result}。
+     * 返回本次批量计算成功的员工数（int），不再返回 run_task ID。
+     *
+     * <p><b>双入口共存：</b>与 {@code KpiApi.triggerKpiCalc} 语义完全相同，两者均可使用，消费方自行选择。
+     * 保留双入口是为了避免破坏 V1.0/V1.1/V1.2 既有 04 契约文档（PerfCalcApi 一直声明了该方法，只是实现抛 UOE）。
+     *
+     * @param schemeCode KPI 方案编码（必填）
+     * @param cycleType  周期类型（MONTHLY / QUARTERLY / YEARLY）
+     * @param cycleDate  周期对应日期
+     * @param asOfDate   计算基准日（对齐宽表 data_date）
+     * @param version    数据版本（对齐宽表 version）
+     * @return 本次批量计算成功的员工数
      */
-    String triggerKpiCalc(LocalDate dataDate);
+    int triggerKpiCalc(String schemeCode, String cycleType,
+                       LocalDate cycleDate, LocalDate asOfDate, String version);
 
     /**
      * 触发历史回算.

@@ -55,7 +55,7 @@ mvn clean package
 | `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
 | `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
 | `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
-| `performance-engine-center` | com.bank.branch.platform.performance | V1.2 已交付 | 绩效计算中心 (V1.0 配置 + V1.1 指标/KPI/导入/回算 + V1.2 流程/事件/导出/数据范围全线，V1.3 规划中) |
+| `performance-engine-center` | com.bank.branch.platform.performance | V1.3 已交付（技术债清偿） | 绩效计算中心 (V1.0 配置 + V1.1 指标/KPI/导入/回算 + V1.2 流程/事件/导出/数据范围 + V1.3 Target 数据范围/5 UOE 实现/错误码细化/Controller 收敛/Testcontainers-redis) |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
 **尚未实现的模块** (代码骨架和 DDL 已存在):
