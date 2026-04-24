@@ -102,9 +102,10 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void getByCode_whenMissing_returnsBizError() throws Exception {
+        // Q8.5a 对齐 PerfErrorCode §K：指标不存在 → PERF-40001
         mockMvc.perform(get("/api/perf/metrics/{metricCode}", "TEST_METRIC_MISSING"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40401"));
+                .andExpect(jsonPath("$.code").value("PERF-40001"));
     }
 
     @Test
@@ -177,7 +178,8 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createReq("TEST_METRIC_CREATE_DUP"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40903"));
+                // Q8.5a 对齐 PerfErrorCode §K：指标编码已存在 → PERF-40901
+                .andExpect(jsonPath("$.code").value("PERF-40901"));
     }
 
     @Test
@@ -282,7 +284,8 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40905"));
+                // Q8.5a 对齐 PerfErrorCode §K：非禁用指标不得释放槽位 → VALIDATION_FAILED → PERF-42200
+                .andExpect(jsonPath("$.code").value("PERF-42200"));
     }
 
     @Test

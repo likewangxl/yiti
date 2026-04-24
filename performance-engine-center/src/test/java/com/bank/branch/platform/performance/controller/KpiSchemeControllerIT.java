@@ -95,9 +95,10 @@ class KpiSchemeControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void getById_whenNotFound_returns404BizError() throws Exception {
+        // Q8.5a 对齐 PerfErrorCode §K 权威清单：KPI 方案不存在 → PERF-40003（V1.0 整改后）
         mockMvc.perform(get("/api/perf/kpi-schemes/{id}", "NON_EXIST_ID"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40402"));
+                .andExpect(jsonPath("$.code").value("PERF-40003"));
     }
 
     // =================== create ===================
@@ -127,7 +128,8 @@ class KpiSchemeControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40907"));
+                // Q8.5a 对齐 PerfErrorCode §K：KPI 方案编码已存在 → PERF-40005（V1.1 P8.1 新增语义细分）
+                .andExpect(jsonPath("$.code").value("PERF-40005"));
     }
 
     @Test
@@ -247,7 +249,8 @@ class KpiSchemeControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40905"));
+                // Q8.5a 对齐 PerfErrorCode §K：方案已禁用不可发布 → 走 VALIDATION_FAILED（PERF-42200）
+                .andExpect(jsonPath("$.code").value("PERF-42200"));
     }
 
     @Test
@@ -294,7 +297,8 @@ class KpiSchemeControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40909"));
+                // Q8.5a 对齐 PerfErrorCode §K：方案内指标重复复用 METRIC_CODE_DUP → PERF-40901
+                .andExpect(jsonPath("$.code").value("PERF-40901"));
     }
 
     // =================== updateItem ===================
@@ -379,7 +383,9 @@ class KpiSchemeControllerIT extends PerformanceControllerTestBase {
         assertBizAuth("delete", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, BizAction.DELETE);
         assertAuditLog("delete", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, "DELETE", true);
 
-        assertBizAuth("publish", new Class<?>[]{String.class, PublishKpiSchemeReqDTO.class}, BizAction.CONFIG);
+        // Q8.5a 对齐 Controller 实际注解与 CLAUDE.md §7.1.1 对照表：
+        // POST /api/perf/kpi-schemes/{id}/publish → action=EXECUTE → P_PERF_KPI_PUB
+        assertBizAuth("publish", new Class<?>[]{String.class, PublishKpiSchemeReqDTO.class}, BizAction.EXECUTE);
         assertAuditLog("publish", new Class<?>[]{String.class, PublishKpiSchemeReqDTO.class}, "PUBLISH", true);
 
         assertBizAuth("addItem", new Class<?>[]{String.class, AddKpiItemReqDTO.class}, BizAction.WRITE);

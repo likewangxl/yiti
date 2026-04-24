@@ -93,10 +93,10 @@ class TargetPlanControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void getById_whenNotFound_returns404() throws Exception {
-        // 业务异常 TARGET_PLAN_NOT_FOUND (PERF-40403) 冒泡到全局异常处理器
+        // Q8.5a 对齐 PerfErrorCode §K：目标方案不存在 TARGET_PLAN_NOT_FOUND → PERF-40004
         mockMvc.perform(get("/api/perf/target-plans/{id}", "NON_EXIST_ID"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40403"));
+                .andExpect(jsonPath("$.code").value("PERF-40004"));
     }
 
     // =================== create ===================
@@ -128,19 +128,21 @@ class TargetPlanControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40908"));
+                // Q8.5a 对齐 PerfErrorCode §K：目标方案编码已存在 → PERF-40006（V1.1 P8.1 新增）
+                .andExpect(jsonPath("$.code").value("PERF-40006"));
     }
 
     @Test
     void post_whenKpiSchemeMissing_returns409() throws Exception {
-        // Plan L1407 钦定: 引用的 kpiSchemeId 不存在 → PERF-40915 (409 语义)
+        // Q8.5a 对齐 PerfErrorCode §K：KPI 方案引用不存在的场景在 Service 层走
+        //   VALIDATION_FAILED → PERF-42200；原计划中的 PERF-40915 已未采纳进权威清单
         CreateTargetPlanReqDTO req = createReq("KPI_MISSING", "NON_EXIST_KPI_ID");
 
         mockMvc.perform(post("/api/perf/target-plans")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40915"));
+                .andExpect(jsonPath("$.code").value("PERF-42200"));
     }
 
     @Test
@@ -200,7 +202,8 @@ class TargetPlanControllerIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40403"));
+                // Q8.5a 对齐 PerfErrorCode §K：目标方案不存在 → PERF-40004
+                .andExpect(jsonPath("$.code").value("PERF-40004"));
     }
 
     // =================== 注解约束 ===================

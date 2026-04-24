@@ -46,13 +46,14 @@ class SysControlControllerIT extends PerformanceControllerTestBase {
     }
 
     @Test
-    @DisplayName("GET /api/perf/sys-control?scopeDim=X 无记录应返回 40406")
+    @DisplayName("GET /api/perf/sys-control?scopeDim=X 无记录应返回 PERF-40012")
     void getCurrent_whenNotFound_shouldReturnErrorCode() throws Exception {
+        // Q8.5a 对齐 PerfErrorCode §K：sys_control 版本不存在 → PERF-40012
         mockMvc.perform(get("/api/perf/sys-control")
                         .param("scopeDim", "TEST_NONE_DIM")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("PERF-40406"));
+                .andExpect(jsonPath("$.code").value("PERF-40012"));
     }
 
     @Test
