@@ -70,8 +70,9 @@ class PerfScopeHelperTest {
                 DataScopeType.SELF_CREATED, "USER_A", "BRANCH_01", Set.of(), BizType.PERF_CONFIG, BizAction.LIST);
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(ctx);
 
+        // createdByCol 指定为 "created_by"
         PerfScopeHelper.Fragment frag = helper.getFragment("USER_A", BizType.PERF_CONFIG, BizAction.LIST,
-                new PerfScopeHelper.ScopeColumns("emp_id", "emp_id", "emp_id", "org_code"));
+                new PerfScopeHelper.ScopeColumns("emp_id", "assignee_id", "created_by", "org_code"));
 
         assertThat(frag.isEmpty()).isFalse();
         // ${scopeFragment} 注入 "created_by = #{scopeParams.ownerEmpId}"
