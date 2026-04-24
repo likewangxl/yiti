@@ -178,12 +178,13 @@ public class TargetValueService {
      *   <li>无权限 / fail-close → 返回 total=0 的空页</li>
      * </ul>
      *
-     * <p>ScopeColumns 映射（perf_target_value 业务列仅 created_by 可用）:
+     * <p>ScopeColumns 映射（V1.4 S2.3 从 V1.3 全部 created_by 精化为独立 owner 字段）:
      * <ul>
-     *   <li>ownerEmpCol   = "created_by" (SELF 降级到创建人, 该表无独立 owner/emp_id 列)</li>
-     *   <li>assigneeCol   = "created_by" (同上, 无 assignee 列)</li>
-     *   <li>createdByCol  = "created_by" (SELF_CREATED 语义准确)</li>
-     *   <li>ownerOrgCol   = "created_by" (perf_target_value 无 org_code, ORG scope 降级)</li>
+     *   <li>ownerEmpCol   = "owner_emp_id" (SELF 精确匹配归属员工, V1.4 S2.1 引入字段)</li>
+     *   <li>assigneeCol   = "owner_emp_id" (SELF_ASSIGNED, 复用同列)</li>
+     *   <li>createdByCol  = "created_by" (SELF_CREATED 语义保持)</li>
+     *   <li>ownerOrgCol   = "owner_org_code" (ORG 精确匹配归属机构, V1.4 S2.1 引入字段)</li>
+     *   <li>bizKeyCol     = null (TargetValue 无 business_key, WORKFLOW_PARTICIPANT fail-close)</li>
      * </ul>
      *
      * <p>与既有 {@link #listByPlan} 的差异：
@@ -192,8 +193,9 @@ public class TargetValueService {
      *   <li>pageWithScope: planId 可空（V1.3 为向后兼容保留可选）, 内部注入数据范围片段</li>
      * </ul>
      *
-     * <p>V1.3 规划：可在 V1.4 考虑扩展 perf_target_value 增加 owner_emp_id / owner_org_code
-     * 字段，届时 SELF / ORG 不再降级到 created_by.
+     * <p>V1.4 S2.3 演进：V1.3 R1.1 因 DDL 无 owner_emp_id / owner_org_code 列,
+     * SELF / ORG 全部降级到 created_by；V1.4 S2.1 引入独立字段后, 本方法升级
+     * ScopeColumns 切到精确列, 模块 CLAUDE.md 技术债 #5 标记已消化.
      *
      * @param planId      目标方案ID (可空，空则按 scope 跨方案查询)
      * @param subjectType 对象类型 EMP/ORG (可空)
@@ -208,11 +210,11 @@ public class TargetValueService {
                                                      String cycleKey, int pageNo, int pageSize) {
         String currentEmpId = currentUserApi.getCurrentEmpId();
         PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
-                "created_by",   // ownerEmpCol (SELF)
-                "created_by",   // assigneeCol (无 assignee)
-                "created_by",   // createdByCol (SELF_CREATED)
-                "created_by",   // ownerOrgCol (无 org_code, 降级)
-                null            // bizKeyCol (TargetValue 无 business_key, V1.4 WORKFLOW_PARTICIPANT 退化 fail-close)
+                "owner_emp_id",   // ownerEmpCol (SELF, V1.4 S2.3 从 created_by 切到精确列)
+                "owner_emp_id",   // assigneeCol (SELF_ASSIGNED, 复用归属员工列)
+                "created_by",     // createdByCol (SELF_CREATED 语义保持)
+                "owner_org_code", // ownerOrgCol (ORG, V1.4 S2.3 从 created_by 切到精确列)
+                null              // bizKeyCol (TargetValue 无 business_key, WORKFLOW_PARTICIPANT fail-close)
         );
         PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
                 currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
