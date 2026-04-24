@@ -8,6 +8,7 @@ import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 工作流只读查询 API。
@@ -100,4 +101,45 @@ public interface WorkflowQueryApi {
      * @return 流程映射
      */
     BizProcessMapDTO getProcessByBizTypeAndBizId(String bizType, String bizId);
+
+    /**
+     * 查询指定员工参与过的流程实例 businessKey 集合（去重，V1.4 S1.1 新增）。
+     *
+     * <p>"参与"定义（模式 B 简化版）：
+     * <ul>
+     *   <li>主路径：{@code HistoricProcessInstanceQuery.involvedUser(empId)} 覆盖
+     *       assignee / owner / 显式 {@code addUserIdentityLink} 的用户
+     *       （Flowable 在任务 claim / complete 时会自动登记 involvedUser）</li>
+     *   <li>辅助路径：若 {@code empId} 为当前登录用户
+     *       （{@link com.bank.branch.platform.auth.api.CurrentUserApi#getCurrentEmpId}），
+     *       合并当前候选组下未领取的任务
+     *       （{@code TaskService.createTaskQuery().taskCandidateGroupIn(groups).taskUnassigned()}）。
+     *       若 empId ≠ 当前用户则仅走主路径（避免 workflow-center 反查其他用户的
+     *       候选组，此场景通常出现在跨模块 scope 过滤：performance ctx.empId() 恒等于
+     *       当前登录用户）</li>
+     * </ul>
+     *
+     * <p>processDefinitionKey 前缀过滤在 Java 侧做 {@code startsWith} 过滤
+     * （Flowable 7 {@code HistoricProcessInstanceQuery} 只支持精确 key
+     * 或 keyIn，不支持 keyLike）。
+     *
+     * <p>Fail-safe 设计：
+     * <ul>
+     *   <li>empId 为 null/空 → 返回空集，不调用 Flowable（避免 NPE 和无效查询）</li>
+     *   <li>结果 businessKey 为 null/空 的历史实例会被过滤</li>
+     *   <li>limit null 或 ≤ 0 → 兜底 10000；&gt;10000 → 截断 10000</li>
+     * </ul>
+     *
+     * @param empId 员工 ID（null/空则返回空集）
+     * @param processDefinitionKeyPrefix 流程定义 key 前缀（null/空 = 不过滤，
+     *                                    如 "perf_alloc_adjust_" 限定本模块）
+     * @param timeWindowDays 时间窗口（天）；null/≤0 = 无限制；推荐 ≤ 365
+     * @param limit 最大返回数量（兜底防 OOM）；null/≤0 = 10000；上限 10000
+     * @return businessKey 集合（去重，保持查询顺序；永不返回 null）
+     * @since V1.4 S1.1
+     */
+    Set<String> queryParticipatedBusinessKeys(String empId,
+                                              String processDefinitionKeyPrefix,
+                                              Integer timeWindowDays,
+                                              Integer limit);
 }
