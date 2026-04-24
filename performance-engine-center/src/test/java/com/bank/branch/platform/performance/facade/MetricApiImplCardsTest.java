@@ -552,8 +552,8 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         // V1.5：同一 metricCode 分 2 张卡片，分别命中不同 cycleType 的 target
         assertThat(cards).hasSize(2);
         assertThat(cards).extracting(MetricCardDTO::getTargetValue)
-                .extracting(bd -> bd == null ? null : bd.stripTrailingZeros().toPlainString())
-                .containsExactlyInAnyOrder("1E+2", "4E+2"); // 100 和 400
+                .extracting(bd -> bd == null ? null : bd.stripTrailingZeros().toString())
+                .containsExactlyInAnyOrder("1E+2", "4E+2"); // 100 和 400 经 strip 后为 1E+2 / 4E+2
 
         // 验证两张卡片分别对两个 cycleType 的 target 做了精确查询
         verify(perfTargetValueMapper).selectByUniqueKey(any(), eq("EMP"), eq(empId), eq("2026Q3"), eq("M_X"));

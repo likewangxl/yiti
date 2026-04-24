@@ -30,19 +30,21 @@ import java.time.LocalDate;
 import java.time.temporal.WeekFields;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * 指标查询对外 API 实现（V1.1 Task P2.6）.
+ * 指标查询对外 API 实现（V1.5 P3.1: 按 (metricCode, cycleType) 组合去重，修复 V1.4 M01 首命中歧义）.
  *
  * <p>V1.1 P2.6 交付：将原 3 个 UOE 占位的宽表查询 {@code getEmpMetricValues / getOrgMetricValues /
- * getCustMetricValues} 替换为真实实现——
- * 批量读取指标定义的 {@code val_slot} → 按 base_dim 路由对应宽表 → 返回
- * {@code (metricCode -> metricValue)} 映射。
+ * getCustMetricValues} 替换为真实实现——批量读取指标定义的 {@code val_slot} → 按 base_dim 路由
+ * 对应宽表 → 返回 {@code (metricCode -> metricValue)} 映射。
  *
- * <p>V1.1 P2 不实现 {@link #getUserMetricCards(String)}（V1.2 目标/实绩联动）.
+ * <p>V1.3 R2.5 交付 {@link #getUserMetricCards(String)}；V1.4 S3 补 mom/yoy 字段与 cycleKey
+ * 精确匹配；V1.5 P3.1 改为按 (metricCode, cycleType) 组合去重，同 metric 不同 cycleType
+ * 时生成多张卡片（前端按 metricCode+cycleType 作为唯一键展示）。
  *
  * <p><strong>批量上限</strong>：metricCodes.size() &gt; 100 抛
  * {@link PerfErrorCode#BATCH_QUERY_EXCEEDS_LIMIT}（PERF-42206）.
@@ -68,36 +70,30 @@ public class MetricApiImpl implements MetricApi {
     private final PerfTargetValueMapper perfTargetValueMapper;
 
     /**
-     * 查询员工工作台指标卡片（V1.3 R2.5 简化实现）.
+     * 查询员工工作台指标卡片（V1.5 P3.1: 按 (metricCode, cycleType) 组合去重，修复 V1.4 M01 首命中歧义）.
      *
-     * <p>V1.3 只实现 {@code target + actual + achievementRate} 三字段；
-     * {@code previousValue / mom / yoy} 留 V1.4 迭代补齐，本版本置 null。
+     * <p>V1.5 P3.1 策略：替换 V1.4 的 {@code codeToCycleType = new LinkedHashMap<>()} 首命中方案为
+     * {@code LinkedHashSet<MetricKey>} 组合键去重。同一 metricCode 被多 scheme 不同 cycleType
+     * 引用时生成多张卡片（每 cycleType 一张）；同 cycleType 时仍去重。签名 / 契约不变，
+     * 前端按 {@code metricCode + cycleType} 作为唯一键展示。
      *
      * <p>流程：
      * <ol>
-     *   <li>读 {@code sys_control(EMP)} 得到 {@code latestDataDate + currentVersion}。
-     *       若无可用版本直接返回空列表（fail-safe）。</li>
-     *   <li>取所有 ACTIVE KPI 方案 → items → distinct metricCode。
-     *       V1.3 简化假设：员工应考核的 metric 清单 = 全部 ACTIVE 方案的并集。
-     *       真正的"员工-方案"映射表待 V1.4 引入后再按员工过滤。</li>
-     *   <li>批量读 {@link MetricDefService#getByCodes}，仅保留 {@code baseDim=EMP}
-     *       且已分配 {@code val_slot} 的指标，防止 ORG/CUST 指标误入员工卡片。</li>
-     *   <li>对每个 metricCode 查 {@code emp_index_result} 得 actual，
-     *       查 {@code perf_target_value} 得 target；
-     *       {@code achievementRate = actual / target * 100}
-     *       （target 为 null 或 0 时 rate 保持 null 以防误解）。</li>
+     *   <li>取所有 ACTIVE KPI 方案，按 {@code (metricCode, cycleType)} 组合键登记到
+     *       {@link LinkedHashSet}（首次出现顺序稳定）。</li>
+     *   <li>去重后的 distinct metricCode 批量读 {@link MetricDefService#getByCodes}，
+     *       仅保留 {@code baseDim=EMP} 且已分配 {@code val_slot} 的指标。</li>
+     *   <li>读 {@code sys_control(EMP)} 得到 {@code latestDataDate + currentVersion}，
+     *       无可用版本直接返回空列表（fail-safe）。</li>
+     *   <li>为每个 {@code MetricKey} 组合调用 {@link #buildCard} 组装单张卡片：
+     *       宽表读 actual / previous / yearAgo，计算 mom / yoy / achievementRate。</li>
      * </ol>
      *
-     * <p><strong>技术债</strong>：
-     * <ul>
-     *   <li>cycleKey 当前取 {@code latestDataDate.getYear()} 字符串化（按年口径），
-     *       V1.4 需根据方案 cycleType 严格匹配季度/月度的 cycleKey 格式。</li>
-     *   <li>mom / yoy / previousValue 字段留 null，V1.4 接入后再补。</li>
-     *   <li>员工-方案映射缺失，V1.3 用 ACTIVE 方案并集，V1.4 引入后过滤。</li>
-     * </ul>
+     * <p><strong>V1.4 S3.3/S3.4 维持</strong>：每 metric 仍串行 3 次宽表查询（current/previous/yearAgo），
+     * N metric 下 3N 查询；batch 合并优化留 V1.5+ M02 处理。
      *
      * @param empId 员工工号
-     * @return 指标卡片列表（可能为空）
+     * @return 指标卡片列表（同一 metricCode 可能出现多次，每 cycleType 一条；可能为空）
      */
     @Override
     public List<MetricCardDTO> getUserMetricCards(String empId) {
@@ -107,11 +103,9 @@ public class MetricApiImpl implements MetricApi {
             return List.of();
         }
 
-        // 2. 合并所有方案的 items, 提取 distinct metricCode,
-        //    同时记录每个 metricCode 首次命中的 scheme.cycleType（V1.4 S3.2）——
-        //    用于后续按 cycleType 精确组装 cycleKey.
-        List<String> orderedCodes = new ArrayList<>();
-        Map<String, String> codeToCycleType = new LinkedHashMap<>();
+        // 2. V1.5 P3.1: 按 (metricCode, cycleType) 作为组合键去重, 避免 V1.4 首命中歧义.
+        //    LinkedHashSet 保持首次出现顺序, 前端展示时顺序稳定.
+        LinkedHashSet<MetricKey> metricKeys = new LinkedHashSet<>();
         for (PerfKpiScheme scheme : schemes) {
             List<PerfKpiItem> items = kpiItemService.listBySchemeId(scheme.getId());
             if (items == null) {
@@ -119,18 +113,23 @@ public class MetricApiImpl implements MetricApi {
             }
             for (PerfKpiItem item : items) {
                 String code = item.getMetricCode();
-                if (code != null && !orderedCodes.contains(code)) {
-                    orderedCodes.add(code);
-                    codeToCycleType.put(code, scheme.getCycleType());
+                if (code == null) {
+                    continue;
                 }
+                metricKeys.add(new MetricKey(code, scheme.getCycleType()));
             }
         }
-        if (orderedCodes.isEmpty()) {
+        if (metricKeys.isEmpty()) {
             return List.of();
         }
 
-        // 3. 批量读取指标定义, 过滤非 EMP 维度与未分配 slot 的指标
-        List<PerfMetricDef> defs = metricDefService.getByCodes(orderedCodes);
+        // 3. 批量读取指标定义 (distinct metricCode 避免重复查询),
+        //    过滤非 EMP 维度与未分配 slot 的指标.
+        List<String> distinctCodes = metricKeys.stream()
+                .map(MetricKey::metricCode)
+                .distinct()
+                .toList();
+        List<PerfMetricDef> defs = metricDefService.getByCodes(distinctCodes);
         Map<String, PerfMetricDef> codeToDef = new LinkedHashMap<>();
         for (PerfMetricDef def : defs) {
             if (!"EMP".equalsIgnoreCase(def.getBaseDim())) {
@@ -158,61 +157,82 @@ public class MetricApiImpl implements MetricApi {
         String version = sc.getCurrentVersion();
         LocalDate latestDate = sc.getLatestDataDate();
 
-        // 5. 为每个 metricCode 组装卡片
-        List<MetricCardDTO> cards = new ArrayList<>(codeToDef.size());
-        for (Map.Entry<String, PerfMetricDef> entry : codeToDef.entrySet()) {
-            String code = entry.getKey();
-            PerfMetricDef def = entry.getValue();
-
-            BigDecimal actual = empIndexResultMapper.selectSlotValue(
-                    empId, latestDate, version, def.getValSlot());
-
-            // V1.4 S3.2: cycleKey 按 scheme.cycleType 精确组装
-            // (YEARLY=yyyy / QUARTERLY=yyyyQn / MONTHLY=yyyyMM / WEEKLY=yyyyWww)
-            String cycleType = codeToCycleType.get(code);
-            String cycleKey = buildCycleKey(cycleType, latestDate);
-
-            // target: planId=null, 只按 (subjectType=EMP, subjectId=empId, cycleKey, metricCode) 查
-            // PerfTargetValueMapper.selectByUniqueKey 的 planId 必填, V1.3 简化传 null 让 Mock 测试走通;
-            // 生产实际需要按 KPI 方案关联的 target plan 查, V1.4 再补精确路径
-            PerfTargetValue tv = perfTargetValueMapper.selectByUniqueKey(
-                    null, "EMP", empId, cycleKey, code);
-            BigDecimal target = tv == null ? null : tv.getTargetValue();
-
-            BigDecimal rate = null;
-            if (target != null && target.compareTo(BigDecimal.ZERO) != 0 && actual != null) {
-                rate = actual.multiply(new BigDecimal("100"))
-                        .divide(target, 4, RoundingMode.HALF_UP);
+        // 5. 为每个 (metricCode, cycleType) 组合组装卡片
+        List<MetricCardDTO> cards = new ArrayList<>(metricKeys.size());
+        for (MetricKey key : metricKeys) {
+            PerfMetricDef def = codeToDef.get(key.metricCode());
+            if (def == null) {
+                continue; // 已在 codeToDef 过滤掉（非 EMP / 无 slot）
             }
-
-            // V1.4 S3.3: 上期值 (环比) = 按 cycleType 回退一个周期的宽表值
-            LocalDate previousDate = calculatePreviousDate(cycleType, latestDate);
-            BigDecimal previousValue = previousDate == null ? null
-                    : empIndexResultMapper.selectSlotValue(
-                            empId, previousDate, version, def.getValSlot());
-            BigDecimal mom = calculateMom(actual, previousValue);
-
-            // V1.4 S3.4: 去年同期值 (同比) = latestDate.minusYears(1) 的宽表值
-            LocalDate yearAgoDate = latestDate == null ? null : latestDate.minusYears(1);
-            BigDecimal yearAgoValue = yearAgoDate == null ? null
-                    : empIndexResultMapper.selectSlotValue(
-                            empId, yearAgoDate, version, def.getValSlot());
-            BigDecimal yoy = calculateYoy(actual, yearAgoValue);
-
-            cards.add(MetricCardDTO.builder()
-                    .metricCode(code)
-                    .metricName(def.getMetricName())
-                    .currentValue(actual)
-                    .previousValue(previousValue)
-                    .targetValue(target)
-                    .achievementRate(rate)
-                    .mom(mom)
-                    .yoy(yoy)
-                    .unit(def.getUnit())
-                    .dataDate(latestDate)
-                    .build());
+            cards.add(buildCard(empId, def, key.cycleType(), version, latestDate));
         }
         return cards;
+    }
+
+    /**
+     * V1.5 P3.1: 单张卡片组装抽取，读 actual / target / previous / yearAgo 并算 mom / yoy / rate.
+     *
+     * <p>每次调用对单个 {@code (metricCode, cycleType)} 组合生效：
+     * <ul>
+     *   <li>actual：{@code empIndexResultMapper.selectSlotValue(empId, latestDate, version, slot)}</li>
+     *   <li>target：按 {@code buildCycleKey(cycleType, latestDate)} 查 perf_target_value</li>
+     *   <li>previous：按 {@code calculatePreviousDate(cycleType, latestDate)} 再查宽表</li>
+     *   <li>yearAgo：{@code latestDate.minusYears(1)} 的宽表值</li>
+     * </ul>
+     *
+     * <p><strong>查询次数</strong>：当前每 metric 3 次宽表查询（current/previous/yearAgo），
+     * batch 合并留 V1.5+ M02 优化。
+     *
+     * @param empId      员工工号
+     * @param def        指标定义（baseDim=EMP 且 slot 已分配）
+     * @param cycleType  scheme.cycleType（YEARLY/QUARTERLY/MONTHLY/WEEKLY 或 null）
+     * @param version    sys_control 当前基线版本
+     * @param latestDate sys_control 当前基线数据日期
+     * @return 组装好的单张 MetricCardDTO
+     */
+    private MetricCardDTO buildCard(String empId, PerfMetricDef def, String cycleType,
+                                    String version, LocalDate latestDate) {
+        BigDecimal actual = empIndexResultMapper.selectSlotValue(
+                empId, latestDate, version, def.getValSlot());
+        String cycleKey = buildCycleKey(cycleType, latestDate);
+        PerfTargetValue tv = perfTargetValueMapper.selectByUniqueKey(
+                null, "EMP", empId, cycleKey, def.getMetricCode());
+        BigDecimal target = tv == null ? null : tv.getTargetValue();
+        BigDecimal rate = null;
+        if (target != null && target.compareTo(BigDecimal.ZERO) != 0 && actual != null) {
+            rate = actual.multiply(new BigDecimal("100"))
+                    .divide(target, 4, RoundingMode.HALF_UP);
+        }
+        LocalDate previousDate = calculatePreviousDate(cycleType, latestDate);
+        BigDecimal previousValue = previousDate == null ? null
+                : empIndexResultMapper.selectSlotValue(empId, previousDate, version, def.getValSlot());
+        BigDecimal mom = calculateMom(actual, previousValue);
+        LocalDate yearAgoDate = latestDate == null ? null : latestDate.minusYears(1);
+        BigDecimal yearAgoValue = yearAgoDate == null ? null
+                : empIndexResultMapper.selectSlotValue(empId, yearAgoDate, version, def.getValSlot());
+        BigDecimal yoy = calculateYoy(actual, yearAgoValue);
+        return MetricCardDTO.builder()
+                .metricCode(def.getMetricCode())
+                .metricName(def.getMetricName())
+                .currentValue(actual)
+                .previousValue(previousValue)
+                .targetValue(target)
+                .achievementRate(rate)
+                .mom(mom)
+                .yoy(yoy)
+                .unit(def.getUnit())
+                .dataDate(latestDate)
+                .build();
+    }
+
+    /**
+     * V1.5 P3.1: (metricCode, cycleType) 组合键, 用于 LinkedHashSet 去重.
+     *
+     * <p>cycleType 可为 null（老数据或未配方案）: record 默认 equals/hashCode 支持 null 字段,
+     * {@code (code, null)} 与 {@code (code, "")} 被视为不同组合; {@link #buildCycleKey}
+     * 内部对 null cycleType 已按年兜底.
+     */
+    private record MetricKey(String metricCode, String cycleType) {
     }
 
     @Override
