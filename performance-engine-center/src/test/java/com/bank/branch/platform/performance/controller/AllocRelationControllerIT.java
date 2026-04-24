@@ -184,7 +184,10 @@ class AllocRelationControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void readMethods_shouldDeclareBizAuth() throws Exception {
-        assertBizAuth("list", new Class<?>[]{String.class, String.class}, BizAction.READ);
+        // Q8.4 修正：list 方法 action 对齐 Controller 实际注解 BizAction.LIST（与 CLAUDE.md §7.1.1
+        // 对照表一致：GET /api/perf/alloc-relations → LIST → P_PERF_ALLOC_CUR）；
+        // history / summary 为单资源/聚合读取，保持 READ 语义不变。
+        assertBizAuth("list", new Class<?>[]{String.class, String.class}, BizAction.LIST);
         assertBizAuth("history", new Class<?>[]{String.class, LocalDate.class}, BizAction.READ);
         assertBizAuth("summary", new Class<?>[]{String.class, LocalDate.class}, BizAction.READ);
     }
