@@ -188,6 +188,18 @@
                             "Could not self-attach to current VM using external process" 错误。
                         -->
                         <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                        <!--
+                            V1.2 Task Q8.3：扩充 surefire 默认包含规则，使 `*IT.java` 也参与 `mvn test` 扫描。
+                            默认 surefire 只扫描 `*Test.java` / `*Tests.java` / `*TestCase.java`，
+                            导致历史遗留的 47+ 个 *IT 文件被静默跳过（"假绿"问题，详见 Q4 reviewer 发现）。
+                            本项目暂未引入 maven-failsafe-plugin 的 IT 分层执行，
+                            统一让所有测试（包括集成测试）在 `mvn test` 阶段执行，避免遗漏。
+                        -->
+                        <includes>
+                            <include>**/*Test.java</include>
+                            <include>**/*Tests.java</include>
+                            <include>**/*IT.java</include>
+                        </includes>
                     </configuration>
                 </plugin>
                 <plugin>
