@@ -70,12 +70,19 @@ public interface MetricApi {
      *   <li>当 previousValue 缺失时 mom / yoy 自动降级为 null</li>
      * </ul>
      *
-     * <p><b>V1.4 仍遗留（V1.5 规划）：</b>
+     * <p><b>V1.5 已消化项（2026-04-24）：</b>
+     * <ul>
+     *   <li>P3.1 多 scheme 共享 metric 时 {@code codeToCycleType} 取首命中的歧义（M01）：
+     *       改 {@code LinkedHashSet<MetricKey>} 组合键，同 metricCode 跨方案 cycleType 不同 → 多卡片；相同 → 去重 1 卡</li>
+     *   <li>P4.1 每 metric 3 次宽表查询 batch 化（M02）：新增 {@code EmpIndexResultMapper.selectSlotValuesByDates}，
+     *       20 metric 从 60 次降至 20 次（-66%）</li>
+     *   <li>P5.1 yoy 按 cycleType 分支（M03）：{@code calculateYearAgoDate(cycleType, date)}，
+     *       WEEKLY → {@code minus(52, ChronoUnit.WEEKS)}；其他 → {@code minusYears(1)}</li>
+     * </ul>
+     *
+     * <p><b>V1.4 仍遗留（V1.6+ 规划）：</b>
      * <ul>
      *   <li>员工-KPI 方案个人绑定（当前仍是 ACTIVE 方案并集）</li>
-     *   <li>多 scheme 共享 metric 时 {@code codeToCycleType} 取首命中的歧义（M01）</li>
-     *   <li>每 metric 3 次宽表查询（current/previous/yearAgo）的 batch 优化（M02）</li>
-     *   <li>yoy 未按 cycleType 分支（统一 -1 年）（M03）</li>
      * </ul>
      *
      * @param empId 员工工号
@@ -150,6 +157,12 @@ public interface MetricApi {
 | 数据范围 | 不强制应用 `DATA_SCOPE`, 由调用方自己保证传入合法 empId (通常 portal 已基于登录上下文过滤) |
 | 版本 | 所有查询以 `sys_control is_valid=1` 的版本为准 |
 | 空值 | 返回 `Map` 时, 指标值为 `null` 的条目不出现在 map 中, 调用方自行处理缺失 |
+
+#### 返回卡片分组语义（V1.5 P3.1 更新）
+
+- 同一 metricCode 被多个 KPI 方案共享且 cycleType 不同时，返回多张卡片（每个 cycleType 一张）
+- 前端须按 (metricCode, cycleType) 作为唯一显示键；MetricCardDTO 未新增 cycleType 字段，保持既有契约
+- 未来若需显式区分 cycleType，以新字段 + 向后兼容方式引入
 
 ---
 

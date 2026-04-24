@@ -55,7 +55,7 @@ mvn clean package
 | `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
 | `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
 | `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
-| `performance-engine-center` | com.bank.branch.platform.performance | V1.4 已交付（WORKFLOW_PARTICIPANT + Target DDL + mom/yoy） | 绩效计算中心 (V1.0 配置 + V1.1 指标/KPI/导入/回算 + V1.2 流程/事件/导出/数据范围 + V1.3 Target 数据范围/5 UOE 实现/错误码细化/Controller 收敛/Testcontainers-redis + V1.4 消化 9 项技术债（WORKFLOW_PARTICIPANT 真实查询 + Target owner 字段 + mom/yoy）) |
+| `performance-engine-center` | com.bank.branch.platform.performance | V1.5 已交付（V1.4 遗留清零） | 绩效计算中心 (V1.0-V1.4 累积能力 + V1.5 6 项技术债清零) |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
 **尚未实现的模块** (代码骨架和 DDL 已存在):
@@ -75,7 +75,7 @@ system-governance-center (依赖 auth)  ← 被 workflow 依赖
   ↑
 workflow-center (依赖 auth + governance)
   ↑
-performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.4 已交付
+performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.5 已交付（V1.4 遗留清零）
 
 bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ```
@@ -104,7 +104,7 @@ com.bank.branch.platform
 ├─ portal-content-center         门户与内容中心 ⏳ 骨架
 ├─ customer-marketing-center     客户营销中心 ⏳ 骨架
 ├─ business-application-center   业务申请中心 ⏳ 骨架
-├─ performance-engine-center     绩效计算中心 ✅ V1.4 已交付（WORKFLOW_PARTICIPANT 真实查询 + Target owner 字段 + mom/yoy 同环比）
+├─ performance-engine-center     绩效计算中心 ✅ V1.5 已交付（V1.4 遗留 6 项清零：@Deprecated 删除 + cycleType 空串守护 + codeToCycleType 分组 + batch 宽表 + yoy WEEKLY + owner <if>）
 └─ report-analytics-center       报表分析中心 ⏳ 骨架
 ```
 

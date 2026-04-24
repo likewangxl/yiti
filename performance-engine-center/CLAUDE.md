@@ -6,7 +6,15 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.4（WORKFLOW_PARTICIPANT + Target DDL + mom/yoy 交付）—— 在 V1.3 技术债清偿之上消化 9 项 V1.3 遗留技术债：
+**当前版本**: V1.5（V1.4 遗留 6 项清零）—— 在 V1.4 交付之上清理最后 6 项观察/兼容项：
+- P1 MetricTrialRespDTO @Deprecated getSamples() 删除 + @JsonAlias 移除
+- P2 HistoryRecalcService cycleType=""/"   " 空串 behavior 测试补齐
+- P3 MetricApi.getUserMetricCards 多 scheme 首命中歧义修复（按 metricCode+cycleType 分组）
+- P4 mom/yoy 宽表查询 batch 化（20 metric 从 60 次降至 20 次，-66%）
+- P5 yoy 按 cycleType 分支（WEEKLY 走 -52 周 ISO 对齐）
+- P6 PerfTargetPlanMapper.xml updateByIdSelective owner <if> 分支补齐
+
+V1.4（WORKFLOW_PARTICIPANT + Target DDL + mom/yoy 交付）历史：在 V1.3 技术债清偿之上消化 9 项 V1.3 遗留技术债：
 - S1 WORKFLOW_PARTICIPANT 真实查询落地（workflow-center 新增 `WorkflowQueryApi.queryParticipatedBusinessKeys` + PerfScopeHelper 透传）
 - S2 Target owner 字段 DDL（V1_4_0 perf_target_plan / perf_target_value 加 `owner_emp_id` / `owner_org_code` + Entity/Mapper/Cmd/Service ScopeColumns 升级）
 - S3 MetricApi.getUserMetricCards mom/yoy/previousValue 字段计算（cycleType 按方案精确匹配 yyyyMM / yyyyQn / yyyy）
@@ -37,7 +45,8 @@ V1.3（技术债清偿）历史：
 | V1.1 | 指标执行（SQL+Groovy+级联）、KPI 计算（定时任务+手动触发）、数据导入（Excel/SQL/外部上报 3 策略）、历史回算（父子 run_task） | 已交付 |
 | V1.2 | 分配/目标调整审批（BPMN + Flowable）、4 类领域事件发布、4 导出策略（异步任务 + MinIO）、ShedLock 分布式锁、PerfScopeHelper 数据范围注入、PT_RESOURCE 资源全量激活（45 条） | 已交付 |
 | V1.3 | 技术债清偿：V1_2_5/V1_3_0 DDL 兜底、Target 数据范围注入、5 处 V1.2 UOE 实际实现、PERF-50003 新增、MetricTrialRespDTO 对齐 03 §A.5、execute 返回 RunTaskInfoDTO、11 Controller 局部 entity 清零、P7 recalc 真实 status、cycleType 写 params_json、Testcontainers-redis 接入、UndoScriptSmokeIT 重写、2 个新架构守护（NoEntityInControllerLocalsArchTest + NoUoeInFacadeTestsArchTest） | 已交付 |
-| **V1.4** | 9 项 V1.3 遗留技术债消化：WORKFLOW_PARTICIPANT 真实查询（workflow-center `WorkflowQueryApi.queryParticipatedBusinessKeys` 新增 + PerfScopeHelper 透传）、Target owner 字段 DDL（V1_4_0 `owner_emp_id` / `owner_org_code` + Entity/Mapper/Cmd/Service ScopeColumns 精化）、MetricApi.getUserMetricCards mom/yoy/previousValue 字段计算（cycleType 按方案精确匹配 yyyyMM / yyyyQn / yyyy）、P7 recalc fallback 日志、cycleType null/空串语义澄清、Controller.list 返回类型澄清为 common-web 契约（非 bug） | **本期交付（2026-04-24）** |
+| V1.4 | 9 项 V1.3 遗留技术债消化：WORKFLOW_PARTICIPANT 真实查询（workflow-center `WorkflowQueryApi.queryParticipatedBusinessKeys` 新增 + PerfScopeHelper 透传）、Target owner 字段 DDL（V1_4_0 `owner_emp_id` / `owner_org_code` + Entity/Mapper/Cmd/Service ScopeColumns 精化）、MetricApi.getUserMetricCards mom/yoy/previousValue 字段计算（cycleType 按方案精确匹配 yyyyMM / yyyyQn / yyyy）、P7 recalc fallback 日志、cycleType null/空串语义澄清、Controller.list 返回类型澄清为 common-web 契约（非 bug） | 已交付 |
+| **V1.5** | 6 项 V1.4 遗留清零：@Deprecated getSamples 删除 / cycleType 空串测试 / codeToCycleType 分组修复 / batch 宽表 / yoy WEEKLY 分支 / updateByIdSelective owner <if> | **本期交付（2026-04-24）** |
 
 ### V1.3 UOE 清单（Facade UOE 已清零）
 
@@ -326,10 +335,12 @@ V1.4 需引入周期推导规则（MONTHLY 环比上月 / QUARTERLY 环比上季
   `(current - yearAgo)/yearAgo × 100` 计算 yoy；previousValue = 0 / 未命中 → mom/yoy = null（fail-safe）
 - S3.3：本文档条目标为已消化
 
-#### 3. MetricTrialRespDTO @Deprecated getSamples() 1 版本后删除（低，V1.5 清理）
+#### 3. MetricTrialRespDTO @Deprecated getSamples() 1 版本后删除（已消化（2026-04-24），V1.5 P1）
 
 V1.3 R3.2 为保证前端兼容而保留 `@JsonAlias({"samples"}) getSamples()` getter，标 @Deprecated 1 版本后删除。
 按"V1.3 → V1.4 → V1.5"的节奏，V1.5 删除该 getter 与 alias。
+
+**V1.5 P1 消化**（Task P1.1，2026-04-24）：删除 `@Deprecated @JsonIgnore getSamples()` 方法 + `@JsonAlias({"samples"})` 反序列化别名；反射 + FAIL_ON_UNKNOWN_PROPERTIES 双守护；生产代码 zero consumer。
 
 #### 4. MetricApi.getUserMetricCards cycleKey 按年口径近似（已消化（2026-04-24），V1.4 S3）
 
