@@ -5,8 +5,10 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.performance.controller.dto.RecalcReqDTO;
+import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.HistoryRecalcService;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +54,12 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
     @MockBean
     private HistoryRecalcService historyRecalcService;
 
+    /**
+     * V1.3 R4.2：mock PerfRunTaskMapper 以控制 recalc 响应 status 读取链路的上游数据。
+     */
+    @MockBean
+    private PerfRunTaskMapper perfRunTaskMapper;
+
     private ObjectMapper objectMapper;
 
     @BeforeEach
@@ -59,7 +67,7 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        Mockito.reset(historyRecalcService);
+        Mockito.reset(historyRecalcService, perfRunTaskMapper);
     }
 
     @Test
@@ -140,6 +148,65 @@ class PerfCalcControllerRecalcIT extends PerformanceControllerTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(req)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("V1.3 R4.2：POST /api/perf/recalc status 读取 perf_run_task 真实终态，非硬编码 RUNNING")
+    void recalc_returnsRealStatus_notHardcodedRunning() throws Exception {
+        // HistoryRecalcService 已同步执行完成，返回父 taskId
+        Mockito.when(historyRecalcService.recalc(
+                any(LocalDate.class), any(LocalDate.class),
+                any(), anyString(), anyString(), anyString()))
+                .thenReturn("PARENT_TASK_REAL");
+        // PerfRunTaskMapper.selectById 返回终态为 SUCCESS 的 task
+        PerfRunTask finished = new PerfRunTask();
+        finished.setId("PARENT_TASK_REAL");
+        finished.setStatus("SUCCESS");
+        Mockito.when(perfRunTaskMapper.selectById("PARENT_TASK_REAL")).thenReturn(finished);
+
+        RecalcReqDTO req = new RecalcReqDTO();
+        req.setCycleType("MONTHLY");
+        req.setCycleDateFrom(LocalDate.of(2026, 3, 1));
+        req.setCycleDateTo(LocalDate.of(2026, 3, 31));
+        req.setMetricCodes(List.of("M_EMP_A"));
+        req.setVersion("v20260301");
+        req.setReason("Q1 补录");
+
+        mockMvc.perform(post("/api/perf/recalc")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.taskId").value("PARENT_TASK_REAL"))
+                // V1.3 R4.2 断言：Controller 必须读 perf_run_task 真实 status，
+                // 不能再硬编码 "RUNNING"
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+    }
+
+    @Test
+    @DisplayName("V1.3 R4.2：perf_run_task 查不到时退化到 RUNNING 占位")
+    void recalc_whenTaskMissing_fallsBackToRunning() throws Exception {
+        Mockito.when(historyRecalcService.recalc(
+                any(LocalDate.class), any(LocalDate.class),
+                any(), anyString(), anyString(), anyString()))
+                .thenReturn("PARENT_TASK_MISSING");
+        // 极端竞态：Service 尚未 commit，Controller 读不到，退化到占位 RUNNING
+        Mockito.when(perfRunTaskMapper.selectById("PARENT_TASK_MISSING")).thenReturn(null);
+
+        RecalcReqDTO req = new RecalcReqDTO();
+        req.setCycleType("MONTHLY");
+        req.setCycleDateFrom(LocalDate.of(2026, 3, 1));
+        req.setCycleDateTo(LocalDate.of(2026, 3, 31));
+        req.setVersion("v1");
+        req.setReason("test");
+
+        mockMvc.perform(post("/api/perf/recalc")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.taskId").value("PARENT_TASK_MISSING"))
+                .andExpect(jsonPath("$.data.status").value("RUNNING"));
     }
 
     @Test
