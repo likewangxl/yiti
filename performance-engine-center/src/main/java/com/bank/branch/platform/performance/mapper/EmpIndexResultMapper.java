@@ -6,7 +6,10 @@ import org.apache.ibatis.annotations.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 员工指标结果宽表 Mapper（emp_index_result）.
@@ -103,4 +106,57 @@ public interface EmpIndexResultMapper {
      */
     List<String> selectDistinctEmpIds(@Param("dataDate") LocalDate dataDate,
                                       @Param("version") String version);
+
+    /**
+     * V1.5 P4.1 新增：按 dataDate 列表批量查询同一 slot 的值.
+     *
+     * <p>用途：{@code MetricApi.getUserMetricCards} 的 mom/yoy 场景，一次 IN 查询
+     * 拿回 current / previous / yearAgo 三个日期的 slot 值，取代原 3 次单点查询。
+     * 20 metric 场景由 60 次查询降到 20 次（-66%）。
+     *
+     * <p>默认方法在 Mapper 接口层做 null/empty short-circuit + List→Map 聚合，
+     * 把聚合责任留在 Mapper 接口内，Facade 调用方零感知聚合细节。
+     * 返回 Map 中未命中的日期不出现（调用方需 null 判断）。
+     *
+     * @param empId    员工工号
+     * @param dates    数据日期列表（可空；为 null 或空时返回空 Map，不下发 SQL）
+     * @param version  数据版本
+     * @param slot     值槽（1..200，<strong>调用方必须校验</strong>）
+     * @return (dataDate → metricValue) 映射；未命中日期不入 Map
+     */
+    default Map<LocalDate, BigDecimal> selectSlotValuesByDates(String empId,
+                                                               List<LocalDate> dates,
+                                                               String version,
+                                                               Integer slot) {
+        if (dates == null || dates.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<EmpDateValueRow> rows = selectSlotValuesByDatesRaw(empId, dates, version, slot);
+        Map<LocalDate, BigDecimal> result = new LinkedHashMap<>();
+        for (EmpDateValueRow row : rows) {
+            if (row.getMetricValue() != null) {
+                result.put(row.getDataDate(), row.getMetricValue());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * V1.5 P4.1 新增：{@link #selectSlotValuesByDates} 的底层原始投影查询.
+     *
+     * <p>一次 IN 查询返回 {@code (dataDate, val_{slot})} 的行列表。
+     * 未命中日期不返回（与 {@code selectSlotValue} 返回 null 语义一致）。
+     * 调用方一般走 {@link #selectSlotValuesByDates} 拿聚合 Map；本方法作为
+     * 直接行查询入口暴露，方便排查时看原始投影。
+     *
+     * @param empId    员工工号
+     * @param dates    数据日期列表（调用方已确保非空；为空/ null 的 short-circuit 已在 default 方法完成）
+     * @param version  数据版本
+     * @param slot     值槽（1..200，<strong>调用方必须校验</strong>）
+     * @return 每个命中日期对应的 (dataDate, metricValue) 行列表；未命中日期不返回
+     */
+    List<EmpDateValueRow> selectSlotValuesByDatesRaw(@Param("empId") String empId,
+                                                     @Param("dates") List<LocalDate> dates,
+                                                     @Param("version") String version,
+                                                     @Param("slot") Integer slot);
 }

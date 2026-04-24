@@ -62,4 +62,24 @@
         ORDER BY emp_id
     </select>
 
+    <!--
+      V1.5 P4.1：按 dataDate 列表批量查询同一 slot 值.
+      一次 IN 查询返回 (data_date, val_{slot}) 行投影列表，
+      Java default 方法在 Mapper 接口内做 null-skip + List→Map 聚合。
+      列名 val_${slot} 属于 common-dev-guide §5 允许的动态列名例外，
+      调用方必须在 Service 层强制校验 slot ∈ [1, 200]。
+    -->
+    <select id="selectSlotValuesByDatesRaw"
+            resultType="com.bank.branch.platform.performance.mapper.EmpDateValueRow">
+        SELECT data_date AS dataDate,
+               val_${slot} AS metricValue
+        FROM emp_index_result
+        WHERE emp_id = #{empId}
+          AND version = #{version}
+          AND data_date IN
+            <foreach collection="dates" item="d" open="(" separator="," close=")">
+                #{d}
+            </foreach>
+    </select>
+
 </mapper>
