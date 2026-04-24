@@ -9,23 +9,34 @@ import java.util.Optional;
 /**
  * 绩效计算触发对外 API (仅允许运维/定时任务模块调用).
  *
- * <p>V1.0/V1.1 实现状态:
+ * <p>V1.0/V1.1/V1.2/V1.3 实现状态:
  * <ul>
  *   <li>✅ V1.0 实现: getRunTask (任务查询, 读 perf_run_task)</li>
  *   <li>✅ V1.1 P3.3 实现: triggerMetricCalc (单指标计算触发, 委托 MetricCalcService)</li>
  *   <li>✅ V1.1 P7.2 实现: triggerRecalc (历史回算触发, 委托 HistoryRecalcService)</li>
- *   <li>⏳ V1.1 UOE 占位: triggerKpiCalc (P4 交付，签名按 dataDate 传入)</li>
+ *   <li>✅ V1.3 R2.1 实现: triggerKpiCalc (按方案批量计算, 委托 KpiCalcService.calcScheme)</li>
  * </ul>
  */
 public interface PerfCalcApi {
 
     /**
-     * 触发某日的 KPI 计算.
-     * <p>V1.0/V1.1 P3 抛 UnsupportedOperationException; V1.1 P4 实现.
+     * 触发某方案的 KPI 批量计算（V1.3 Task R2.1 交付）.
      *
-     * @return 任务 ID
+     * <p>委托 {@link com.bank.branch.platform.performance.service.KpiCalcService#calcScheme}，
+     * 对方案内所有员工计算 KPI 并写入 {@code kpi_result}。
+     *
+     * <p>V1.0/V1.1/V1.2 曾因"入口唯一"保留 UOE 占位，V1.3 决定统一由 PerfCalcApi 暴露。
+     * 与 {@code KpiApi.triggerKpiCalc} 语义相同，双入口均可使用。
+     *
+     * @param schemeCode KPI 方案编码
+     * @param cycleType  周期类型（MONTHLY / QUARTERLY / YEARLY）
+     * @param cycleDate  周期对应日期（如月末）
+     * @param asOfDate   计算基准日（与宽表 data_date 对齐）
+     * @param version    数据版本（与宽表 version 对齐）
+     * @return 本次批量计算成功的员工数
      */
-    String triggerKpiCalc(LocalDate dataDate);
+    int triggerKpiCalc(String schemeCode, String cycleType,
+                       LocalDate cycleDate, LocalDate asOfDate, String version);
 
     /**
      * 触发单个指标的计算（V1.1 Task P3.3 交付）.

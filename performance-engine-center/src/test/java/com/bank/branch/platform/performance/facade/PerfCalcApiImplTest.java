@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.facade;
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.service.HistoryRecalcService;
+import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
@@ -32,8 +33,7 @@ import static org.mockito.Mockito.when;
  * <ul>
  *   <li>getRunTask (V1.0 实现): 存在 / 不存在 / 全字段装配 3 场景</li>
  *   <li>triggerRecalc (V1.1 P7.2 实现): 5/7 参数签名分别委托 HistoryRecalcService</li>
- *   <li>triggerKpiCalc (V1.1 P4 交付前): 仍抛 UOE（其实 P4 已交付，但本 Test 保留兼容
- *       —— 真实 P4 委托由 KpiApi / DailyKpiCalcJob 负责）</li>
+ *   <li>triggerKpiCalc (V1.3 R2.1 实现): 5 参数签名委托 KpiCalcService.calcScheme 并返回成功员工数</li>
  * </ul>
  *
  * <p>纯 Mock 测试, 不启动 Spring 容器.
@@ -51,17 +51,30 @@ class PerfCalcApiImplTest extends PerformanceServiceTestBase {
     @Mock
     private HistoryRecalcService historyRecalcService;
 
+    @Mock
+    private KpiCalcService kpiCalcService;
+
     @InjectMocks
     private PerfCalcApiImpl perfCalcApi;
 
-    // ------------------------- V1.2 契约: triggerKpiCalc 仍 UOE -------------------------
+    // ------------------------- V1.3 R2.1: triggerKpiCalc 委托 KpiCalcService.calcScheme -------------------------
 
     @Test
-    @DisplayName("triggerKpiCalc: V1.1 阶段仍抛 UOE（V1.1 KPI 计算已在 KpiApi 交付，本方法作为契约冗余保留至 V1.2）")
-    void triggerKpiCalc_throwsUOE() {
-        assertThatThrownBy(() -> perfCalcApi.triggerKpiCalc(LocalDate.of(2026, 4, 20)))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("V1.2 delivered");
+    @DisplayName("triggerKpiCalc(V1.3 R2.1)：委托 KpiCalcService.calcScheme 并返回成功员工数")
+    void triggerKpiCalc_delegatesToKpiCalcService() {
+        LocalDate cycleDate = LocalDate.of(2026, 3, 31);
+        LocalDate asOfDate = LocalDate.of(2026, 4, 1);
+        when(kpiCalcService.calcScheme(
+                eq("SCHEME_001"), eq("QUARTERLY"),
+                eq(cycleDate), eq(asOfDate), eq("v20260401")))
+                .thenReturn(10);
+
+        int count = perfCalcApi.triggerKpiCalc(
+                "SCHEME_001", "QUARTERLY", cycleDate, asOfDate, "v20260401");
+
+        assertThat(count).isEqualTo(10);
+        verify(kpiCalcService).calcScheme(
+                "SCHEME_001", "QUARTERLY", cycleDate, asOfDate, "v20260401");
         verifyNoInteractions(perfRunTaskService);
     }
 

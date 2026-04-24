@@ -4,6 +4,7 @@ import com.bank.branch.platform.performance.api.PerfCalcApi;
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
 import com.bank.branch.platform.performance.facade.assembler.RunTaskAssembler;
 import com.bank.branch.platform.performance.service.HistoryRecalcService;
+import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import lombok.RequiredArgsConstructor;
@@ -16,16 +17,15 @@ import java.util.Optional;
 /**
  * 绩效计算触发对外 API 实现.
  *
- * <p>V1.0/V1.1 契约 (spec §5.2.5):
+ * <p>V1.0/V1.1/V1.3 契约 (spec §5.2.5):
  * <ul>
  *   <li>{@link #getRunTask(String)} V1.0 实现: 读 perf_run_task 并装配 DTO</li>
  *   <li>{@link #triggerMetricCalc(String, LocalDate, String)} V1.1 P3.3 实现:
  *       委托 {@link MetricCalcService#calcMetric} 完成单指标计算</li>
  *   <li>{@link #triggerRecalc(String, LocalDate, LocalDate, String, String)} V1.1 P7.2 实现:
  *       委托 {@link HistoryRecalcService#recalc} 历史回算（5/7 参数重载同源）</li>
- *   <li>{@link #triggerKpiCalc(LocalDate)} V1.2 UOE 占位：V1.1 的 KPI 计算已在
- *       {@code KpiApi} 交付（{@code KpiApi.triggerKpiCalc}），本方法作为 PerfCalcApi
- *       统一入口的契约冗余保留到 V1.2 再决定是否收敛委托</li>
+ *   <li>{@link #triggerKpiCalc(String, String, LocalDate, LocalDate, String)} V1.3 R2.1 实现：
+ *       委托 {@link KpiCalcService#calcScheme} 对方案内所有员工做 KPI 批量计算</li>
  * </ul>
  *
  * <p>缓存策略: {@link #getRunTask} 不缓存, 直接穿透 Service。
@@ -33,11 +33,9 @@ import java.util.Optional;
  * 在计算过程中频繁变动 (秒级), 缓存收益低且一致性成本高; 与
  * {@link TargetApiImpl#getTargetValue} 的业务数据不缓存策略保持一致。
  *
- * <p>UOE 消息: "V1.2 delivered"（V1.1 交付后由架构守护测试 {@code NoV11UOEArchTest}
- * 守护，不允许 facade 层残留上一期的 UOE 占位消息）。
- *
  * <p>消费方 (V1.0): portal-content-center (任务进度查看), 运维后台 (任务审计)。
  * <p>消费方 (V1.1): 定时任务 / external 上报 / 运维补跑 (triggerMetricCalc)。
+ * <p>消费方 (V1.3): 运维后台 / 调度系统 (triggerKpiCalc 按方案批量触发)。
  */
 @Service
 @RequiredArgsConstructor
@@ -46,20 +44,25 @@ public class PerfCalcApiImpl implements PerfCalcApi {
     private final PerfRunTaskService perfRunTaskService;
     private final MetricCalcService metricCalcService;
     private final HistoryRecalcService historyRecalcService;
+    /** V1.3 R2.1 新增：KPI 批量计算服务，{@link #triggerKpiCalc} 委托入口. */
+    private final KpiCalcService kpiCalcService;
 
     /**
-     * 触发某日 KPI 计算 (V1.2 UOE 占位).
+     * 触发某方案的 KPI 批量计算 (V1.3 R2.1 占位：Red 阶段).
      *
-     * <p>V1.1 的 KPI 计算能力已通过 {@code KpiApi.triggerKpiCalc} 交付（P4 阶段），
-     * 本方法作为 PerfCalcApi 统一触发入口的契约冗余保留到 V1.2 再决定是否收敛委托。
+     * <p>Red 阶段保留 UOE，Green 阶段将委托 {@link KpiCalcService#calcScheme}。
      *
-     * @param dataDate 数据日期
-     * @return 任务 ID
-     * @throws UnsupportedOperationException 本契约方法 V1.2 交付
+     * @param schemeCode KPI 方案编码
+     * @param cycleType  周期类型
+     * @param cycleDate  周期对应日期
+     * @param asOfDate   计算基准日（对齐宽表 data_date）
+     * @param version    数据版本（对齐宽表 version）
+     * @return 计算成功的员工数
      */
     @Override
-    public String triggerKpiCalc(LocalDate dataDate) {
-        throw new UnsupportedOperationException("V1.2 delivered");
+    public int triggerKpiCalc(String schemeCode, String cycleType,
+                              LocalDate cycleDate, LocalDate asOfDate, String version) {
+        throw new UnsupportedOperationException("V1.3 R2.1 Red placeholder");
     }
 
     /**

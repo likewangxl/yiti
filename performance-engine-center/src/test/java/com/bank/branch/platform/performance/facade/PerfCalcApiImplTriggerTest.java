@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.facade;
 
 import com.bank.branch.platform.performance.service.HistoryRecalcService;
+import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import com.bank.branch.platform.performance.support.PerformanceServiceTestBase;
@@ -42,6 +43,9 @@ class PerfCalcApiImplTriggerTest extends PerformanceServiceTestBase {
 
     @Mock
     private HistoryRecalcService historyRecalcService;
+
+    @Mock
+    private KpiCalcService kpiCalcService;
 
     @InjectMocks
     private PerfCalcApiImpl perfCalcApi;
@@ -88,10 +92,20 @@ class PerfCalcApiImplTriggerTest extends PerformanceServiceTestBase {
     }
 
     @Test
-    @DisplayName("triggerKpiCalc 仍保持 V1.1 UOE 占位（P4 交付）")
-    void triggerKpiCalc_stillUOE() {
-        assertThatThrownBy(() -> perfCalcApi.triggerKpiCalc(LocalDate.of(2026, 4, 22)))
-                .isInstanceOf(UnsupportedOperationException.class);
+    @DisplayName("triggerKpiCalc V1.3 R2.1 委托 KpiCalcService.calcScheme（Red 阶段仍 UOE，Green 后通过）")
+    void triggerKpiCalc_delegatesToKpiCalcService() {
+        LocalDate cycleDate = LocalDate.of(2026, 4, 30);
+        LocalDate asOfDate = LocalDate.of(2026, 5, 1);
+        when(kpiCalcService.calcScheme(
+                eq("SCHEME_X"), eq("MONTHLY"), eq(cycleDate), eq(asOfDate), eq("v1")))
+                .thenReturn(3);
+
+        int count = perfCalcApi.triggerKpiCalc(
+                "SCHEME_X", "MONTHLY", cycleDate, asOfDate, "v1");
+
+        assertThat(count).isEqualTo(3);
+        verify(kpiCalcService).calcScheme(
+                "SCHEME_X", "MONTHLY", cycleDate, asOfDate, "v1");
     }
 
     @Test
