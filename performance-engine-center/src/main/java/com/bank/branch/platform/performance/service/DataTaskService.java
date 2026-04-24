@@ -178,7 +178,9 @@ public class DataTaskService {
      * <p>场景：并发 T1/T2 同 taskId 到达时，T1 拿到锁开始写入，T2 获锁失败进入本方法；
      * T2 循环短睡眠直到锁释放或超时，然后 DB 查重应能查到 T1 写入的记录。
      *
-     * <p>极端超时场景（T1 挂起超过 {@link #WAIT_MAX_MILLIS}）：降级为抛 PERF-50007 避免并发死循环。
+     * <p>极端超时场景（T1 挂起超过 {@link #WAIT_MAX_MILLIS}）：
+     * V1.3 R3.1 起抛 PERF-50003 IDEMPOTENCY_WAIT_TIMEOUT（原 PERF-50007 语义不清），
+     * 避免并发死循环。
      *
      * @param taskId 幂等键
      * @return 幂等结果（accepted=false）
@@ -198,9 +200,10 @@ public class DataTaskService {
             }
         }
         // 等待超时：既未拿到锁也未见 DB 记录，判定为异常状态
+        // V1.3 R3.1：从 CALC_JOB_FAILED 改为 IDEMPOTENCY_WAIT_TIMEOUT（语义专属：幂等协商超时）
         log.error("[DataTaskService.report] 幂等等待超时 taskId={}", taskId);
-        throw new PerfException(PerfErrorCode.CALC_JOB_FAILED,
-                "taskId=" + taskId + " 幂等等待超时");
+        throw new PerfException(PerfErrorCode.IDEMPOTENCY_WAIT_TIMEOUT,
+                "taskId=" + taskId + " 等待 " + WAIT_MAX_MILLIS + "ms 后仍未见 DB 记录");
     }
 
     /**

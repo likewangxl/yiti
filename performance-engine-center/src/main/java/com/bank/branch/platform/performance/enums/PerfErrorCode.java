@@ -7,11 +7,13 @@ package com.bank.branch.platform.performance.enums;
  * <p>权威来源: docs/modules/performance-engine-center/03-接口设计与报文.md §K「错误码完整汇总」
  * <p>使用: throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
  *
- * <p>§K 共 28 条编码，METRIC_SLOT_CONFLICT 复用 PERF-40901，枚举常量总数 = 29。
+ * <p>§K 共 29 条编码，METRIC_SLOT_CONFLICT 复用 PERF-40901，枚举常量总数 = 30。
  * <p>2026-04-22 对齐 §K 权威清单，废弃旧编号体系（40401/40402/40403/40406/40407/
  *    40903/40904/40905/40911/40912/40913/40914）。
  * <p>2026-04-23（V1.1 P8.1）新增 3 条语义细化编号：40005/40006/40007，
  *    替代 V1.0 整改期临时复用的 METRIC_CODE_DUP/METRIC_NOT_FOUND（KPI/Target/RunTask 场景）。
+ * <p>2026-04-24（V1.3 R3.1）新增 1 条：50003 IDEMPOTENCY_WAIT_TIMEOUT，拆分
+ *    DataTaskService 幂等等待超时语义（原复用 CALC_JOB_FAILED 语义不清）。
  */
 public enum PerfErrorCode {
 
@@ -120,6 +122,14 @@ public enum PerfErrorCode {
 
     /** 导出文件生成失败（V1.2 占位） */
     EXPORT_FILE_GENERATE_FAILED("PERF-50002", "导出文件生成失败"),
+
+    /**
+     * 幂等等待超时（V1.3 R3.1 新增）.
+     * <p>场景：DataTaskService.report 获 Redis 锁失败进入等待路径，循环 3s 后 DB 仍查不到既有记录。
+     * <p>与 {@link #CALC_JOB_FAILED} 的区别：本码专用于"幂等协商超时"，后者用于
+     * DuplicateKey 回查 null 等"DB 层异常状态"场景。
+     */
+    IDEMPOTENCY_WAIT_TIMEOUT("PERF-50003", "幂等等待超时（Redis 锁释放后仍无 DB 记录）"),
 
     /** 指标/KPI 计算 Job 执行失败（V1.1 占位） */
     CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败");
