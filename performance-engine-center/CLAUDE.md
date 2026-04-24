@@ -460,9 +460,24 @@ V1.5 P1-P6 共 6 个 Task 消化以下 6 项 V1.4 遗留技术债：
   - 3 IT case 守护行为（非 null 更新 / null 保持 / 非 owner 字段单独更新不影响 owner）
   - PerfTargetValueMapper.xml 无 updateByIdSelective 方法，无需补
 
+### V1.5 测试计数说明
+
+实测：surefire 580 + failsafe 354 = **934 全绿**（基线 V1.4 末 573+349=922，净增 +12）
+Plan 估算 950-965，实际略低。差异来源：
+- P1.1 删除 2 个过时兼容 case + 新增 2 个守护 case = +0 净增（Plan 估算已隐含考虑）
+- P2.1 合并 Red+Green 单 commit + 仅补 2 case（Plan 估算 +2 实际 +2）
+- P3.1 新增 2 case（Plan 估算 +2 实际 +2）
+- P4.1 新增 1 surefire + 2 failsafe（Plan 估算 +1+2 实际相符）
+- P5.1 新增 2 case（Plan 估算 +2 实际 +2）
+- P6.1 新增 3 IT case（Plan 估算 +3 实际相符）
+
+Plan 估算 950-965 偏高约 16-31 case，源于估算时未考虑"既有用例 stub 升级不净增"的因素，实际 +12 与按 Phase 拆解的 +12 完全吻合。
+
 ### V1.6+ 遗留项（登记）
 
 V1.5 交付后无明确已登记的观察项。若未来 reviewer 或生产运维发现新技术债，在此登记。
+
+注：04 对外 API 契约文档登记的"员工-KPI 方案个人绑定"属业务规划范畴（非技术债），不在此清单。
 
 ## 运维 Runbook（V1.2 + V1.3 + V1.4 交付）
 

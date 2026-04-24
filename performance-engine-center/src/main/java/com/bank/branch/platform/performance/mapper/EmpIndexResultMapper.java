@@ -119,7 +119,10 @@ public interface EmpIndexResultMapper {
      * 返回 Map 中未命中的日期不出现（调用方需 null 判断）。
      *
      * @param empId    员工工号
-     * @param dates    数据日期列表（可空；为 null 或空时返回空 Map，不下发 SQL）
+     * @param dates    数据日期列表（可空；为 null 或空时返回空 Map，不下发 SQL）。
+     *                 <strong>调用方约束</strong>：dates 长度建议 ≤ 100；当前 buildCard 最多传 3 个
+     *                 （current/previous/yearAgo），生产无超限风险。若未来调用方场景扩大，
+     *                 需评估 IN 子句长度（MySQL max_allowed_packet / 优化器解析成本）。
      * @param version  数据版本
      * @param slot     值槽（1..200，<strong>调用方必须校验</strong>）
      * @return (dataDate → metricValue) 映射；未命中日期不入 Map
