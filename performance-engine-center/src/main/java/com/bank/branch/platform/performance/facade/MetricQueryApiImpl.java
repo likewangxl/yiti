@@ -5,10 +5,12 @@ import com.bank.branch.platform.performance.api.dto.CustMetricSnapshotDTO;
 import com.bank.branch.platform.performance.api.dto.EmpMetricSnapshotDTO;
 import com.bank.branch.platform.performance.api.dto.OrgMetricSnapshotDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.CustIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
+import com.bank.branch.platform.performance.mapper.EmpMetricValueRow;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.SysControlService;
@@ -16,7 +18,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,8 +59,53 @@ public class MetricQueryApiImpl implements MetricQueryApi {
                                                              LocalDate dateFrom,
                                                              LocalDate dateTo,
                                                              List<String> metricCodes) {
-        // V1.3 R2.2 Red 占位: Step 3 Green 阶段替换为宽表查询
-        throw new UnsupportedOperationException("V1.3 R2.2 Red placeholder");
+        validateBatch(empIds, MAX_SUBJECT_BATCH, metricCodes, MAX_METRIC_CODE_BATCH);
+        LocalDate dataDate = validateAndGetDate(dateFrom, dateTo);
+
+        Map<String, PerfMetricDef> defs = loadMetricDefsForDim(metricCodes, "EMP");
+        if (defs.isEmpty()) {
+            return List.of();
+        }
+
+        // 从 sys_control 取当前 EMP 维度版本（V1.3 R2.2 简化: 不允许调用方指定 version）
+        SysControl sc = sysControlService.getCurrentVersion("EMP");
+        String version = sc == null ? null : sc.getCurrentVersion();
+
+        // 按 metric 轮询, 累积每个 empId 的 (code -> value) 映射
+        Map<String, Map<String, BigDecimal>> empToCodeToValue = new LinkedHashMap<>();
+        for (Map.Entry<String, PerfMetricDef> entry : defs.entrySet()) {
+            String code = entry.getKey();
+            Integer slot = entry.getValue().getValSlot();
+            List<EmpMetricValueRow> rows = empIndexResultMapper.selectSlotValuesByEmps(
+                    empIds, dataDate, version, slot);
+            if (rows == null) {
+                continue;
+            }
+            for (EmpMetricValueRow row : rows) {
+                if (row.getMetricValue() == null) {
+                    continue;
+                }
+                empToCodeToValue
+                        .computeIfAbsent(row.getEmpId(), k -> new LinkedHashMap<>())
+                        .put(code, row.getMetricValue());
+            }
+        }
+
+        // 组装 DTO 列表（输入 empIds 顺序保留）
+        List<EmpMetricSnapshotDTO> result = new ArrayList<>(empToCodeToValue.size());
+        for (String empId : empIds) {
+            Map<String, BigDecimal> values = empToCodeToValue.get(empId);
+            if (values == null) {
+                continue;
+            }
+            result.add(EmpMetricSnapshotDTO.builder()
+                    .empId(empId)
+                    .dataDate(dataDate)
+                    .version(version)
+                    .metricValues(values)
+                    .build());
+        }
+        return result;
     }
 
     @Override
@@ -101,7 +150,6 @@ public class MetricQueryApiImpl implements MetricQueryApi {
     /**
      * 校验日期参数（V1.3 仅支持单日点查询，后续 V1.4 支持跨日期）.
      */
-    @SuppressWarnings("unused")
     private static LocalDate validateAndGetDate(LocalDate dateFrom, LocalDate dateTo) {
         if (dateFrom == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "dateFrom 不能为空");
@@ -118,7 +166,6 @@ public class MetricQueryApiImpl implements MetricQueryApi {
      * 统一加载 metricDef 且按维度过滤, 返回 (metricCode -> def) 映射，
      * 同时只保留 baseDim == expectedDim 且已分配 slot 的指标.
      */
-    @SuppressWarnings("unused")
     private Map<String, PerfMetricDef> loadMetricDefsForDim(List<String> metricCodes, String expectedDim) {
         Map<String, PerfMetricDef> defs = new LinkedHashMap<>();
         List<PerfMetricDef> loaded = metricDefService.getByCodes(metricCodes);

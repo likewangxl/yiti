@@ -119,7 +119,7 @@ class MetricQueryApiImplTest extends PerformanceServiceTestBase {
         LocalDate date = LocalDate.of(2026, 4, 1);
         when(metricDefService.getByCodes(codes)).thenReturn(List.of(
                 metric("M_ORG_X", "ORG", 2)));
-        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sysControl("v1"));
+        // 无 EMP 维度指标时, Facade 提前短路返回空列表, 不需要查 sys_control
 
         List<EmpMetricSnapshotDTO> result = api.batchQueryEmpSnapshots(empIds, date, date, codes);
 
