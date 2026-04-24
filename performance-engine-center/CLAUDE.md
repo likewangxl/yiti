@@ -343,12 +343,17 @@ ORG 语义"本机构"直接错成"我创建的"。
 - commit adb68aa test Red（Service ScopeColumns 精化）
 - commit 437c6db feat Green（Service 切列）
 
-#### 6. V1.0/V1.1 Controller.list 返回类型签名（低，跨模块影响，V1.3 未改）
+#### 6. V1.0/V1.1 Controller.list 返回类型签名（已澄清，V1.4 S4.3 @ 2026-04-24）
 
 V1.0/V1.1 共 6 个 Controller（MetricDef / KpiScheme / TargetPlan / TargetValue / PerfRunTask / AllocAdjust / TargetAdjust）
 的 list 方法均签名 `ResponseWrapper<XxxDTO>` + return `ResponseWrapper.page(PageResult<XxxDTO>)`。
 该写法是 common-web `ResponseWrapper.page` 契约设计（ResponseWrapper 同时持有 data / page 两字段），
 但"返回类型未直接反映分页语义"。需 common-web API 统一修改，跨模块影响面大，V1.3 不处理。
+
+**V1.4 S4.3 澄清（2026-04-24）**：common-web `ResponseWrapper.page(PageResult<T>)` 返回 `ResponseWrapper<T>`
+是契约设计，不是 bug。ResponseWrapper 同时持有 `data: T` 与 `page: PageInfo` 两字段，page 字段承载分页
+元数据（total/pageSize/pageNum），data 字段承载当前页列表。该设计已在 common-web 全平台统一使用，
+performance 侧无需调整。遗留项保留记录以防未来 common-web 重构时溯源，**不作为技术债处理**。
 
 #### 7. MetricCalcApi execute fallback 日志（低，R4.2 reviewer 建议）
 
