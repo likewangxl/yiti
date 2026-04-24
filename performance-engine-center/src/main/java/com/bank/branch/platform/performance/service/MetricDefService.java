@@ -77,6 +77,11 @@ public class MetricDefService {
         def.setRefMetricCodes(toJson(refMetricCodes));
         def.setValSlot(metricSlotService.allocSlot(cmd.getBaseDim(), cmd.getMetricLevel(), cmd.getPreferredSlot()));
         def.setStatus("ACTIVE");
+        // Q8.5b: 显式初始化 deleted=0（未删除）。entity 字段为 Integer（非基本类型），
+        // 默认 null 会导致 selectByMetricCode（WHERE deleted=0）读不到刚插入的行。
+        // DB 层虽然有 default 0，但 Mapper XML 使用 #{deleted} 会把 null 显式写入列，
+        // 覆盖 DB default，造成"创建成功但查询不到"的假绿问题。
+        def.setDeleted(0);
         def.setCreatedBy(cmd.getOperator());
         def.setCreatedTime(LocalDateTime.now());
         def.setUpdatedBy(cmd.getOperator());

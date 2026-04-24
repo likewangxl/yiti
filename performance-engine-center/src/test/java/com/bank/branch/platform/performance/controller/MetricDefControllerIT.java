@@ -110,11 +110,14 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void listRefs_whenExists_returns200() throws Exception {
-        PerfMetricDef main = metric("REF_MAIN", 2);
+        // Q8.5b: 为避免 perf_metric_def.uk_base_dim_slot_alive (EMP#slot) 冲突，
+        // 3 个指标使用不同槽位（61/62/63）。V1.0 默认 slot=level 的隐式策略
+        // 导致多个 level=1 指标共用 EMP#1 而插入失败。
+        PerfMetricDef main = metric("REF_MAIN", 2, 61);
         main.setRefMetricCodes("[\"TEST_METRIC_REF_A\",\"TEST_METRIC_REF_B\"]");
         metricDefMapper.insert(main);
-        metricDefMapper.insert(metric("REF_A", 1));
-        metricDefMapper.insert(metric("REF_B", 1));
+        metricDefMapper.insert(metric("REF_A", 1, 62));
+        metricDefMapper.insert(metric("REF_B", 1, 63));
         metricRefMapper.insertBatch(java.util.List.of(
                 MetricTestDataBuilder.ref("TEST_METRIC_REF_MAIN", "TEST_METRIC_REF_A"),
                 MetricTestDataBuilder.ref("TEST_METRIC_REF_MAIN", "TEST_METRIC_REF_B")
@@ -128,9 +131,10 @@ class MetricDefControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void listRefBy_whenExists_returns200() throws Exception {
-        metricDefMapper.insert(metric("REF_BY_TARGET", 1));
-        metricDefMapper.insert(metric("REF_BY_UP_1", 2));
-        metricDefMapper.insert(metric("REF_BY_UP_2", 2));
+        // Q8.5b: 同上，3 个指标使用不同槽位（71/72/73）避免唯一键冲突
+        metricDefMapper.insert(metric("REF_BY_TARGET", 1, 71));
+        metricDefMapper.insert(metric("REF_BY_UP_1", 2, 72));
+        metricDefMapper.insert(metric("REF_BY_UP_2", 2, 73));
         metricRefMapper.insertBatch(java.util.List.of(
                 MetricTestDataBuilder.ref("TEST_METRIC_REF_BY_UP_1", "TEST_METRIC_REF_BY_TARGET"),
                 MetricTestDataBuilder.ref("TEST_METRIC_REF_BY_UP_2", "TEST_METRIC_REF_BY_TARGET")
