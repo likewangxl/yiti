@@ -431,6 +431,78 @@ class MetricApiImplCardsTest extends PerformanceServiceTestBase {
         assertThat(cards.get(0).getMom()).isNull();
     }
 
+    // ============ V1.4 S3.4 yoy 同比计算 ============
+
+    @Test
+    @DisplayName("[V1.4 S3.4] yoy: yearAgo 非 0 时 = (current-yearAgo)/|yearAgo|*100, 2 位小数")
+    void getUserMetricCards_calculatesYoy_whenYearAgoAvailable() {
+        String empId = "E001";
+        LocalDate current = LocalDate.of(2026, 4, 1);
+        LocalDate previous = LocalDate.of(2026, 1, 1); // QUARTERLY 上一季
+        LocalDate yearAgo = LocalDate.of(2025, 4, 1);  // current.minusYears(1)
+
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v");
+        sc.setLatestDataDate(current);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("QUARTERLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v"), eq(5)))
+                .thenReturn(new BigDecimal("150"));
+        // previous 显式返 null，聚焦本 case 的 yoy 断言（不关心 mom）
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v"), eq(5)))
+                .thenReturn(null);
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(yearAgo), eq("v"), eq(5)))
+                .thenReturn(new BigDecimal("100"));
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getYoy()).isEqualByComparingTo("50.00"); // (150-100)/100*100
+    }
+
+    @Test
+    @DisplayName("[V1.4 S3.4] yoy: yearAgo 未命中时返回 null")
+    void getUserMetricCards_yoyNullWhenYearAgoNotFound() {
+        String empId = "E001";
+        LocalDate current = LocalDate.of(2026, 4, 1);
+        LocalDate previous = LocalDate.of(2026, 1, 1);
+        LocalDate yearAgo = LocalDate.of(2025, 4, 1);
+
+        SysControl sc = new SysControl();
+        sc.setCurrentVersion("v");
+        sc.setLatestDataDate(current);
+        when(sysControlService.getCurrentVersion("EMP")).thenReturn(sc);
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1");
+        s1.setCycleType("QUARTERLY");
+        s1.setStatus("ACTIVE");
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(s1));
+        when(kpiItemService.listBySchemeId("S1")).thenReturn(List.of(kpiItem("S1", "M_X")));
+        when(metricDefService.getByCodes(List.of("M_X")))
+                .thenReturn(List.of(def("M_X", "EMP", 5, "X", "万元")));
+
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(current), eq("v"), eq(5)))
+                .thenReturn(new BigDecimal("150"));
+        lenient().when(empIndexResultMapper.selectSlotValue(eq(empId), eq(previous), eq("v"), eq(5)))
+                .thenReturn(null);
+        when(empIndexResultMapper.selectSlotValue(eq(empId), eq(yearAgo), eq("v"), eq(5)))
+                .thenReturn(null);
+
+        List<MetricCardDTO> cards = api.getUserMetricCards(empId);
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).getYoy()).isNull();
+    }
+
     // ============ helpers ============
 
     private static PerfKpiItem kpiItem(String schemeId, String metricCode) {
