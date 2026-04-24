@@ -152,6 +152,65 @@
         </where>
     </select>
 
+    <!--
+      Q7.3 新增：基于 PerfScopeHelper 的 scopeFragment + scopeParams 注入数据范围条件.
+      scopeFragment 来自 PerfScopeHelper 受控生成，通过 ${} 注入；参数走 #{scopeParams.*} 预编译.
+    -->
+    <select id="selectByConditionWithScope" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM perf_metric_def
+        <where>
+            AND deleted = 0
+            <if test="baseDim != null and baseDim != ''">
+                AND base_dim = #{baseDim}
+            </if>
+            <if test="metricLevel != null">
+                AND metric_level = #{metricLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    metric_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR metric_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+        ORDER BY metric_code ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByConditionWithScope" resultType="long">
+        SELECT COUNT(*)
+        FROM perf_metric_def
+        <where>
+            AND deleted = 0
+            <if test="baseDim != null and baseDim != ''">
+                AND base_dim = #{baseDim}
+            </if>
+            <if test="metricLevel != null">
+                AND metric_level = #{metricLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    metric_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR metric_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+    </select>
+
     <update id="releaseSlotById">
         UPDATE perf_metric_def
         SET val_slot = NULL,

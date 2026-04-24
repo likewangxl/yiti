@@ -63,6 +63,26 @@
         ORDER BY as_of_date DESC, id DESC
     </select>
 
+    <!--
+      Q7.3 新增：基于 PerfScopeHelper 的数据范围注入版本.
+      scopeFragment 由 PerfScopeHelper 生成 (SELF → "emp_id = #{scopeParams.ownerEmpId}"),
+      Mapper 通过 AND (${scopeFragment}) 拼接, 参数走 #{scopeParams.xxx} 预编译.
+    -->
+    <select id="selectByEmpCycleRangeWithScope" resultType="com.bank.branch.platform.performance.entity.KpiResult">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM kpi_result
+        <where>
+            emp_id = #{empId}
+            AND cycle_type = #{cycleType}
+            AND as_of_date BETWEEN #{from} AND #{to}
+            <if test="scopeFragment != null and scopeFragment != ''">
+                AND (${scopeFragment})
+            </if>
+        </where>
+        ORDER BY as_of_date DESC, id DESC
+    </select>
+
     <!-- V1.2 Q6.2：按 (cycleType, cycleDate, asOfDate) 批量导出查询 -->
     <select id="selectForExport" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT

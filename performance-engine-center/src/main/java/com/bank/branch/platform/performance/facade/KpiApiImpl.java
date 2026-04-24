@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.dto.KpiResultDTO;
 import com.bank.branch.platform.performance.api.dto.KpiSchemeDTO;
@@ -10,7 +13,7 @@ import com.bank.branch.platform.performance.facade.assembler.KpiAssembler;
 import com.bank.branch.platform.performance.mapper.KpiResultMapper;
 import com.bank.branch.platform.performance.service.KpiItemService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
-import lombok.RequiredArgsConstructor;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -47,12 +50,30 @@ import java.util.Optional;
  * <p>消费方: portal-content-center, report-analytics-center.
  */
 @Service
-@RequiredArgsConstructor
 public class KpiApiImpl implements KpiApi {
 
     private final KpiSchemeService kpiSchemeService;
     private final KpiItemService kpiItemService;
     private final KpiResultMapper kpiResultMapper;
+    /** Q7.3 新增: 当前用户读取（用于数据范围解析）. */
+    private final CurrentUserApi currentUserApi;
+    /** Q7.3 新增: 数据范围 SQL 片段生成器. */
+    private final PerfScopeHelper perfScopeHelper;
+
+    /**
+     * 构造器（Q7.3 后手写，取代 @RequiredArgsConstructor 以便明确控制字段顺序）.
+     */
+    public KpiApiImpl(KpiSchemeService kpiSchemeService,
+                      KpiItemService kpiItemService,
+                      KpiResultMapper kpiResultMapper,
+                      CurrentUserApi currentUserApi,
+                      PerfScopeHelper perfScopeHelper) {
+        this.kpiSchemeService = kpiSchemeService;
+        this.kpiItemService = kpiItemService;
+        this.kpiResultMapper = kpiResultMapper;
+        this.currentUserApi = currentUserApi;
+        this.perfScopeHelper = perfScopeHelper;
+    }
 
     @Override
     public BigDecimal getCurrentKpiTotal(String empId, String cycleType) {
@@ -69,6 +90,46 @@ public class KpiApiImpl implements KpiApi {
     @Override
     public List<KpiResultDTO> getKpiHistory(String empId, String cycleType, LocalDate from, LocalDate to) {
         List<KpiResult> rows = kpiResultMapper.selectByEmpCycleRange(empId, cycleType, from, to);
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return rows.stream().map(this::toResultDto).toList();
+    }
+
+    /**
+     * Q7.3 示范方法：基于 {@link PerfScopeHelper} 的 KPI 历史查询.
+     *
+     * <p>比原 {@link #getKpiHistory} 更安全:
+     * <ul>
+     *   <li>ALL → 无过滤（管理员全见）</li>
+     *   <li>SELF → 强制 "emp_id = 当前用户 empId"（即便入参 empId 为其他人）</li>
+     *   <li>ctx=null → fail-close "1=0", 查无结果</li>
+     * </ul>
+     *
+     * <p>ScopeColumns 映射: ownerEmpCol="emp_id" (kpi_result 表的业务主体列).
+     *
+     * <p>消费方建议: 从 V1.3 起，所有员工 KPI 历史查询统一切换到本方法；
+     * V1.2 阶段 getKpiHistory 保留不变以保持 KpiApi 契约稳定。
+     *
+     * @param empId     员工工号（Mapper 主查询条件）
+     * @param cycleType 周期类型
+     * @param from      起始日期
+     * @param to        截止日期
+     * @return KPI 历史列表（已经数据范围过滤）
+     */
+    public List<KpiResultDTO> getKpiHistoryWithScope(String empId, String cycleType, LocalDate from, LocalDate to) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        // kpi_result 表仅 emp_id 一个业务主体列, 其他 scope 列降级语义
+        PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
+                "emp_id",       // ownerEmpCol (SELF)
+                "emp_id",       // assigneeCol (kpi_result 无 assignee 概念)
+                "emp_id",       // createdByCol (kpi_result 由 Job 计算生成, 降级为 emp_id)
+                "emp_id"        // ownerOrgCol (kpi_result 表无 org_code, 降级为 emp_id)
+        );
+        PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
+                currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
+        List<KpiResult> rows = kpiResultMapper.selectByEmpCycleRangeWithScope(
+                empId, cycleType, from, to, frag.getSql(), frag.getParams());
         if (rows == null || rows.isEmpty()) {
             return Collections.emptyList();
         }

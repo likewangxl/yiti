@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -104,6 +105,46 @@ public interface PerfMetricDefMapper {
                           @Param("metricLevel") Integer metricLevel,
                           @Param("status") String status,
                           @Param("keyword") String keyword);
+
+    /**
+     * Q7.3 新增: 基于 PerfScopeHelper 的数据范围注入分页查询.
+     *
+     * @param baseDim       基础维度
+     * @param metricLevel   指标层级
+     * @param status        状态
+     * @param keyword       关键字
+     * @param offset        偏移量
+     * @param limit         每页大小
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()
+     * @return 指标定义列表
+     */
+    List<PerfMetricDef> selectByConditionWithScope(@Param("baseDim") String baseDim,
+                                                    @Param("metricLevel") Integer metricLevel,
+                                                    @Param("status") String status,
+                                                    @Param("keyword") String keyword,
+                                                    @Param("offset") int offset,
+                                                    @Param("limit") int limit,
+                                                    @Param("scopeFragment") String scopeFragment,
+                                                    @Param("scopeParams") Map<String, Object> scopeParams);
+
+    /**
+     * Q7.3 新增: 基于 PerfScopeHelper 的数据范围注入计数.
+     *
+     * @param baseDim       基础维度
+     * @param metricLevel   指标层级
+     * @param status        状态
+     * @param keyword       关键字
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()
+     * @return 总数
+     */
+    long countByConditionWithScope(@Param("baseDim") String baseDim,
+                                   @Param("metricLevel") Integer metricLevel,
+                                   @Param("status") String status,
+                                   @Param("keyword") String keyword,
+                                   @Param("scopeFragment") String scopeFragment,
+                                   @Param("scopeParams") Map<String, Object> scopeParams);
 
     /**
      * 释放槽位，仅允许 DISABLED 状态的指标执行.

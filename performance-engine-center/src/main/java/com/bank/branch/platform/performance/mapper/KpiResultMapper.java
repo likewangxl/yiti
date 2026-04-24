@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * KPI 结果表 Mapper（kpi_result）.
@@ -82,6 +83,28 @@ public interface KpiResultMapper {
                                           @Param("cycleType") String cycleType,
                                           @Param("from") LocalDate from,
                                           @Param("to") LocalDate to);
+
+    /**
+     * Q7.3 新增：基于 {@link com.bank.branch.platform.performance.service.scope.PerfScopeHelper}
+     * 生成的 scopeFragment + scopeParams 注入数据范围条件.
+     *
+     * <p>XML 采用 {@code AND (${scopeFragment})} 注入片段，参数走 {@code #{scopeParams.*}} 预编译.
+     * 空片段 → 无过滤 (ALL); "1=0" → fail-close.
+     *
+     * @param empId         员工工号
+     * @param cycleType     周期类型
+     * @param from          起始日期
+     * @param to            截止日期
+     * @param scopeFragment PerfScopeHelper.Fragment#getSql()
+     * @param scopeParams   PerfScopeHelper.Fragment#getParams()
+     * @return KPI 结果列表
+     */
+    List<KpiResult> selectByEmpCycleRangeWithScope(@Param("empId") String empId,
+                                                   @Param("cycleType") String cycleType,
+                                                   @Param("from") LocalDate from,
+                                                   @Param("to") LocalDate to,
+                                                   @Param("scopeFragment") String scopeFragment,
+                                                   @Param("scopeParams") Map<String, Object> scopeParams);
 
     /**
      * 按 (cycleType, cycleDate, asOfDate) 查询该周期下所有员工 KPI 结果（导出场景用）.

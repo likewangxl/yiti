@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -7,6 +10,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
+import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +39,10 @@ public class MetricDefService {
     private final MetricSlotService metricSlotService;
     private final MetricCycleDetectService metricCycleDetectService;
     private final ObjectMapper objectMapper;
+    /** Q7.3 新增: 当前用户读取. */
+    private final CurrentUserApi currentUserApi;
+    /** Q7.3 新增: 数据范围 SQL 片段生成器. */
+    private final PerfScopeHelper perfScopeHelper;
 
     /**
      * 新建指标定义.
@@ -247,6 +255,49 @@ public class MetricDefService {
             return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
         }
         List<PerfMetricDef> records = mapper.selectByCondition(baseDim, metricLevel, status, keyword, offset, pageSize);
+        return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * Q7.3 示范方法：基于 {@link PerfScopeHelper} 的数据范围注入分页查询.
+     *
+     * <p>场景: SELF_CREATED → 只看到自己创建的 metric 定义.
+     * 适用于"个人指标沙盒"或"部门隔离"的 metric 管理场景.
+     *
+     * <p>ScopeColumns 映射 (metric 表):
+     * <ul>
+     *   <li>createdByCol = "created_by" (SELF_CREATED 用)</li>
+     *   <li>其他列复用 created_by (metric 表无 emp_id/org_code 业务列, 降级统一)</li>
+     * </ul>
+     *
+     * <p>V1.3 规划: 根据实际业务场景可扩展 perf_metric_def 表增加 owner_org_id 字段,
+     * 届时 ownerOrgCol 可映射到真实组织列.
+     *
+     * @return 经过数据范围过滤的分页结果
+     */
+    @Transactional(readOnly = true)
+    public PageResult<PerfMetricDef> pageWithScope(String baseDim,
+                                                   Integer metricLevel,
+                                                   String status,
+                                                   String keyword,
+                                                   int pageNo,
+                                                   int pageSize) {
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
+                "created_by",   // ownerEmpCol
+                "created_by",   // assigneeCol (metric 无 assignee)
+                "created_by",   // createdByCol (SELF_CREATED)
+                "created_by"    // ownerOrgCol (metric 表无 org_code, 降级为 created_by)
+        );
+        PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
+                currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
+
+        int offset = Math.max(pageNo - 1, 0) * pageSize;
+        long total = mapper.countByConditionWithScope(
+                baseDim, metricLevel, status, keyword, frag.getSql(), frag.getParams());
+        List<PerfMetricDef> records = mapper.selectByConditionWithScope(
+                baseDim, metricLevel, status, keyword, offset, pageSize,
+                frag.getSql(), frag.getParams());
         return PageResult.of(pageNo, pageSize, total, records);
     }
 

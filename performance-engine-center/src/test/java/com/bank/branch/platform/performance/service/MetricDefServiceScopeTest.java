@@ -55,8 +55,16 @@ class MetricDefServiceScopeTest {
     @BeforeEach
     void setUp() {
         this.perfScopeHelper = new PerfScopeHelper(bizScopeApi);
-        // Q7.3: pageWithScope 为新增方法，需扩展 MetricDefService 构造器
-        this.service = new MetricDefService(metricDefMapper, currentUserApi, perfScopeHelper);
+        // pageWithScope 只依赖 mapper / currentUserApi / perfScopeHelper,
+        // 其他字段传 null 不影响本测试覆盖面
+        this.service = new MetricDefService(
+                metricDefMapper,
+                null,   // metricRefService
+                null,   // metricSlotService
+                null,   // metricCycleDetectService
+                null,   // objectMapper
+                currentUserApi,
+                perfScopeHelper);
     }
 
     @Test
