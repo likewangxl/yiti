@@ -2,7 +2,7 @@
 
 > 由 `RestEndpointInventoryIT.auditEndpointVsResource_shouldGenerateReport` 自动生成，请勿手工编辑。
 
-**生成时间**：2026-04-25T17:27:59.5585701
+**生成时间**：2026-04-25T20:10:49.0130212
 
 ## 概览
 

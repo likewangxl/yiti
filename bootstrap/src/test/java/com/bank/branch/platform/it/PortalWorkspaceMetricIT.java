@@ -16,7 +16,6 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.jdbc.Sql.ExecutionPhase;
-import org.springframework.test.context.jdbc.SqlConfig;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -95,14 +94,10 @@ class PortalWorkspaceMetricIT {
      */
     @Test
     @DisplayName("Option B.1 - GET /api/portal/workspace 应返回 metricCards 含 DEPOSIT 卡片，trend=UP")
-    // SqlConfig.encoding=UTF-8 关键：保证 fake-data.sql 中的中文（'存款余额' / '元'）
-    // 通过 ResourceDatabasePopulator 加载时不被 ISO-8859-1/GBK 错误解码
-    @Sql(scripts = "/it/perf-fake-data.sql",
-            executionPhase = ExecutionPhase.BEFORE_TEST_METHOD,
-            config = @SqlConfig(encoding = "UTF-8"))
-    @Sql(scripts = "/it/perf-fake-data-cleanup.sql",
-            executionPhase = ExecutionPhase.AFTER_TEST_METHOD,
-            config = @SqlConfig(encoding = "UTF-8"))
+    // UTF-8 编码由 root pom.xml surefire/failsafe argLine 全局 -Dfile.encoding=UTF-8 保证，
+    // 不再需要 @SqlConfig(encoding="UTF-8") 局部声明（V1.6 reviewer §E nitpick 整改）
+    @Sql(scripts = "/it/perf-fake-data.sql", executionPhase = ExecutionPhase.BEFORE_TEST_METHOD)
+    @Sql(scripts = "/it/perf-fake-data-cleanup.sql", executionPhase = ExecutionPhase.AFTER_TEST_METHOD)
     void workspace_shouldReturnMetricCardsWithUpTrend_whenEmpIndexResultPresent() throws Exception {
         // mock session 通过 TestSecurityConfig 的最小化 filter（其逻辑：session.empId != null 即放行）
         MockHttpSession session = new MockHttpSession();
