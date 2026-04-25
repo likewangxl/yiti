@@ -433,3 +433,24 @@ public class SysControlUpdatedListener {
 - `docs/common-dev-guide.md` — 共享开发规范
 - `project_ana.md` 第 4.5 节 — 报表功能业务描述
 - `project_ana_技术方案与架构拆分.md` — 架构设计
+
+---
+
+## V1.0 交付状态备注（2026-04-25）
+
+**V1.0 已交付**：25 PT_RESOURCE 全部落地（24 实现 + 1 占位 = R_RPT_SQL_EXP V1.1+ 启用）。
+
+**契约红线维持**：本文档 §1.1 "本模块不暴露任何 `*Api` 接口" 在 V1.0 交付后**继续生效**：
+- `report-analytics-center/src/main/java/com/bank/branch/platform/report/api/` 目录下仅有 `package-info.java` 占位
+- 没有任何生产 `*Api` / `*QueryApi` 类
+- 由 `RptModuleStructureArchTest` 架构守护（任何未来提交在 `api/` 包下新增 `*Api.java` 都会编译期触发架构测试失败）
+
+**V1.0 跨模块依赖侧**：报表只读消费 4 个上游模块的 *Api（共 10 个接口）：
+- auth-permission-center: `CurrentUserApi` / `BizScopeApi` / `OrgApi`
+- system-governance-center: `DictApi` / `AuditApi` / `FileApi`
+- performance-engine-center: `MetricApi` / `KpiApi`
+- customer-marketing-center: `CustomerQueryApi` / `TouchTaskQueryApi`
+
+**Plan 来源**：`docs/superpowers/plans/2026-04-25-report-analytics-center-v1.0-plan.md`（Milestone M0-M6）
+
+**测试基线（M6 末）**：surefire 103 + failsafe 70 = 173 全绿，6 架构守护全绿，Flyway V1_0_0 → V1_0_7 共 8 脚本.
