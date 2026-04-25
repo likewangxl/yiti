@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.report.mapper.RptExportTaskMapper">
+
+    <resultMap id="BaseMap" type="com.bank.branch.platform.report.entity.RptExportTask">
+        <id     column="id"            property="id"/>
+        <result column="export_type"   property="exportType"/>
+        <result column="params_json"   property="paramsJson"/>
+        <result column="status"        property="status"/>
+        <result column="file_key"      property="fileKey"/>
+        <result column="file_size"     property="fileSize"/>
+        <result column="row_count"     property="rowCount"/>
+        <result column="expire_at"     property="expireAt"/>
+        <result column="operator_id"   property="operatorId"/>
+        <result column="error_msg"     property="errorMsg"/>
+        <result column="created_time"  property="createdTime"/>
+        <result column="updated_time"  property="updatedTime"/>
+    </resultMap>
+
+    <sql id="BASE_COLUMNS">
+        id, export_type, params_json, status, file_key, file_size, row_count,
+        expire_at, operator_id, error_msg, created_time, updated_time
+    </sql>
+
+    <insert id="insert">
+        INSERT INTO rpt_export_task (<include refid="BASE_COLUMNS"/>)
+        VALUES (#{id}, #{exportType}, #{paramsJson}, #{status}, #{fileKey}, #{fileSize},
+                #{rowCount}, #{expireAt}, #{operatorId}, #{errorMsg},
+                #{createdTime}, #{updatedTime})
+    </insert>
+
+    <select id="selectById" resultMap="BaseMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+          FROM rpt_export_task
+         WHERE id = #{id}
+    </select>
+
+</mapper>

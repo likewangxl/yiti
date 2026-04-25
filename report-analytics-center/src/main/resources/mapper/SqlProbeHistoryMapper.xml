@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.report.mapper.SqlProbeHistoryMapper">
+
+    <resultMap id="BaseMap" type="com.bank.branch.platform.report.entity.SqlProbeHistory">
+        <id     column="id"                property="id"/>
+        <result column="emp_id"            property="empId"/>
+        <result column="sql_text"          property="sqlText"/>
+        <result column="remark"            property="remark"/>
+        <result column="row_count"         property="rowCount"/>
+        <result column="execution_time_ms" property="executionTimeMs"/>
+        <result column="status"            property="status"/>
+        <result column="error_msg"         property="errorMsg"/>
+        <result column="created_time"      property="createdTime"/>
+    </resultMap>
+
+    <sql id="BASE_COLUMNS">
+        id, emp_id, sql_text, remark, row_count, execution_time_ms, status, error_msg, created_time
+    </sql>
+
+    <insert id="insert">
+        INSERT INTO sql_probe_history (<include refid="BASE_COLUMNS"/>)
+        VALUES (#{id}, #{empId}, #{sqlText}, #{remark}, #{rowCount}, #{executionTimeMs},
+                #{status}, #{errorMsg}, #{createdTime})
+    </insert>
+
+    <select id="selectById" resultMap="BaseMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+          FROM sql_probe_history
+         WHERE id = #{id}
+    </select>
+
+    <update id="updateTerminalStatus">
+        UPDATE sql_probe_history
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="rowCount != null">row_count = #{rowCount},</if>
+            <if test="executionTimeMs != null">execution_time_ms = #{executionTimeMs},</if>
+            <if test="errorMsg != null">error_msg = #{errorMsg},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+</mapper>

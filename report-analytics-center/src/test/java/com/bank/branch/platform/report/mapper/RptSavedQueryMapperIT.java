@@ -1,16 +1,10 @@
 package com.bank.branch.platform.report.mapper;
 
-import com.bank.branch.platform.report.ReportTestApplication;
 import com.bank.branch.platform.report.entity.RptSavedQuery;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import com.bank.branch.platform.report.sql.ReportFlywayTestBase;
 import org.junit.jupiter.api.Test;
-import org.mybatis.spring.boot.test.autoconfigure.AutoConfigureMybatis;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Rollback;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -27,33 +21,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>countByEmpId 插入 1 条后返回 1（计数准确性）</li>
  * </ul>
  *
- * <p>使用前缀约定：TEST_SQ_M0_5_* 避免与 M1+ 阶段测试数据冲突.
+ * <p>继承 {@link ReportFlywayTestBase} 在测试启动时自动执行 V1_0_0__rpt_init.sql
+ * 创建/校验 4 张 rpt_* 表，测试方法使用 {@code @Transactional + @Rollback(true)}
+ * 保证测试数据不会污染库.
  *
- * <p>继承 Spring 默认事务语义：{@code @Transactional + @Rollback(true)} 保证测试隔离.
+ * <p>使用前缀约定：TEST_SQ_M0_5_* 避免与 M1+ 阶段测试数据冲突.
  */
-@SpringBootTest(classes = ReportTestApplication.class)
-@AutoConfigureMybatis
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@ActiveProfiles("test")
 @Transactional
 @Rollback(true)
-class RptSavedQueryMapperIT {
+class RptSavedQueryMapperIT extends ReportFlywayTestBase {
 
     @Autowired
     private RptSavedQueryMapper mapper;
 
     private static final String TEST_ID_1 = "TEST_SQ_M0_5_001";
+    private static final String TEST_ID_2 = "TEST_SQ_M0_5_002";
     private static final String TEST_EMP_ID = "TEST_SQ_M0_5_EMP";
-
-    @BeforeEach
-    void cleanup() {
-        // 继承 @Transactional rollback 即可，不需要手动清理
-    }
-
-    @AfterEach
-    void verifyRollback() {
-        // 由 @Rollback(true) 事务回滚自动接管
-    }
 
     @Test
     void insertAndSelectById_shouldRoundTrip() {
@@ -89,7 +72,7 @@ class RptSavedQueryMapperIT {
     @Test
     void countByEmpId_shouldReturnOne_afterInsert() {
         RptSavedQuery e = new RptSavedQuery();
-        e.setId("TEST_SQ_M0_5_002");
+        e.setId(TEST_ID_2);
         e.setEmpId(TEST_EMP_ID);
         e.setName("计数测试方案");
         e.setDim("ORG");
