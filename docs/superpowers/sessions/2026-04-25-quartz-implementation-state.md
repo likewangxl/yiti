@@ -2,7 +2,7 @@
 
 **创建时间**: 2026-04-25
 **目的**: compact 后无缝续接 subagent-driven-development 实施流程
-**当前位置**: P1.1 implementer 已 DONE（commit f9da831），**待派发 P1.1 综合 reviewer**
+**当前位置**: **P1.1 已完成（implementer + 综合 reviewer 双 ✅）**，下一步派发 **P1.2 implementer**
 
 ---
 
@@ -37,8 +37,8 @@
 
 | # | Task | 状态 | Implementer commit | Reviewer 状态 |
 |---|---|---|---|---|
-| **P1.1** | Maven 依赖调整（pom.xml × 3） | 🟡 implementer DONE | **f9da831** | **待派发** |
-| P1.2 | ddl-quartz.sql 11 张 QRTZ_* 表 | ⏳ | | |
+| **P1.1** | Maven 依赖调整（pom.xml × 3） | ✅ **完成** | **f9da831** | **APPROVED** |
+| **P1.2** | ddl-quartz.sql 11 张 QRTZ_* 表 | ⏳ **下一个**（implementer 待派发） | | |
 | P1.3 | sys_job_conf/sys_job_run_log 字段扩展 + 3 INSERT | ⏳ | | |
 | P1.4 | AutowiringSpringBeanJobFactory + 2 测试 | ⏳ | | |
 | P1.5 | JobExecutionLogger + 5 测试 + Mapper 扩展 | ⏳ | | |
@@ -106,28 +106,30 @@
 
 读完本文档后，立即从以下位置开始：
 
-### 1. 派发 P1.1 综合 reviewer（合并版）
+### 1. 派发 P1.2 implementer
 
-按 user memory `feedback_subagent_review_pacing.md`，**spec + code quality 合并为 1 个 reviewer**。模型：opus（按 user memory `feedback_subagent_model.md`）。
+P1.1 已完成（commit f9da831 + reviewer Approved）。下一个 task 是 **P1.2: 创建 docs/schema/ddl-quartz.sql（11 张 QRTZ_* 表 DDL）**。
 
-reviewer prompt 必须包含：
-- **完整的 P1.1 task text**（见上文 "P1.1 implementer 完整报告" 上方的 task 描述）
-- **commit SHA 范围**: 上一次 commit（base）到 `f9da831`（head），用于 git diff 检视代码
-- **Implementer 报告**（不可信，必须独立验证）
-- **检查双维度**：
-  - Spec 符合度：missing/extra/misunderstood
-  - Code quality：strengths/issues (critical/important/minor)
-- 输出格式：`Spec Compliance: ✅/❌` + `Code Quality: Approved/Issues found` + 合并 issue 列表
+**完整 task 描述见 plan**: `docs/superpowers/plans/2026-04-25-quartz-integration-impl.md` 的 "Task P1.2" 章节（约 100 行 DDL 代码 + 4 步骤）。
 
-### 2. reviewer 通过后
+**派发要点**：
+- 模型：opus（user memory `feedback_subagent_model.md`）
+- 不让 implementer 读 plan 文件，**主代理读 plan 后把完整 task text 粘到 prompt**
+- 包含：4 个 Step（创建 ddl-quartz.sql / 在 onepl 库执行 / 同步 docs/schema/CLAUDE.md / Commit）
+- 工作目录：`D:/Project/oneplate/.claude/worktrees/refactor-quartz-job`
 
-- 标 P1.1 完成（TodoWrite）
-- 派发 P1.2 implementer
+### 2. P1.2 implementer DONE → 派发 P1.2 综合 reviewer
 
-### 3. reviewer 不通过
+按 user memory `feedback_subagent_review_pacing.md`：spec + code quality **合并 1 个 reviewer**。
+reviewer 关键检查项：
+- 11 张 QRTZ_* 表是否齐全
+- ENGINE=InnoDB（不是官方 SQL 的 TYPE=InnoDB）+ DEFAULT CHARSET=utf8mb4
+- 索引 21 个是否齐全
+- docs/schema/CLAUDE.md 文件清单是否同步
 
-- 派发 same implementer（或新 implementer，因为状态丢失影响小）修复 issue
-- 复审循环
+### 3. P1.2 reviewer Approved → 派发 P1.3
+
+依次按 plan 推进 P1.3 → P1.4 → ... → P4.6（共 26 个 task 待办）。
 
 ### 4. 后续 task 派发节奏（统一）
 
