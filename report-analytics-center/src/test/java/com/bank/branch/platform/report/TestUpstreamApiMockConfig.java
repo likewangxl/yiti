@@ -6,6 +6,7 @@ import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.MetricApi;
 import org.mockito.Mockito;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,11 @@ public class TestUpstreamApiMockConfig {
     @Bean
     public MetricApi metricApi() {
         return Mockito.mock(MetricApi.class);
+    }
+
+    @Bean
+    public KpiApi kpiApi() {
+        return Mockito.mock(KpiApi.class);
     }
 
     @Bean

@@ -4,14 +4,19 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.report.dto.resp.EmpDashboardRespDTO;
+import com.bank.branch.platform.report.dto.resp.OrgDashboardRespDTO;
 import com.bank.branch.platform.report.dto.resp.PresidentDashboardRespDTO;
 import com.bank.branch.platform.report.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,6 +35,7 @@ import java.time.LocalDate;
 @RestController
 @RequestMapping("/api/reports/dashboard")
 @Tag(name = "报表-仪表盘", description = "C 章 3 接口（president/org/emp）")
+@Validated
 @RequiredArgsConstructor
 public class DashboardController {
 
@@ -47,5 +53,31 @@ public class DashboardController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataDate) {
         return ResponseWrapper.success(dashboardService.getPresidentDashboard(dataDate));
+    }
+
+    /**
+     * C.2 机构仪表盘.
+     */
+    @GetMapping("/org/{orgCode}")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
+    @Operation(summary = "C.2 机构仪表盘")
+    public ResponseWrapper<OrgDashboardRespDTO> getOrgDashboard(
+            @PathVariable @NotBlank(message = "orgCode 不能为空") String orgCode,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataDate) {
+        return ResponseWrapper.success(dashboardService.getOrgDashboard(orgCode, dataDate));
+    }
+
+    /**
+     * C.3 员工仪表盘.
+     */
+    @GetMapping("/emp/{empId}")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
+    @Operation(summary = "C.3 员工仪表盘")
+    public ResponseWrapper<EmpDashboardRespDTO> getEmpDashboard(
+            @PathVariable @NotBlank(message = "empId 不能为空") String empId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataDate) {
+        return ResponseWrapper.success(dashboardService.getEmpDashboard(empId, dataDate));
     }
 }

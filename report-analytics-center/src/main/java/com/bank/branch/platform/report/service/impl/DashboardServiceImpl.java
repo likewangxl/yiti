@@ -7,10 +7,13 @@ import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
+import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.report.config.DashboardPresidentMetrics;
 import com.bank.branch.platform.report.dto.resp.ChartDataDTO;
 import com.bank.branch.platform.report.dto.resp.ChartSeriesDTO;
+import com.bank.branch.platform.report.dto.resp.EmpDashboardRespDTO;
+import com.bank.branch.platform.report.dto.resp.OrgDashboardRespDTO;
 import com.bank.branch.platform.report.dto.resp.OrgRankingItemDTO;
 import com.bank.branch.platform.report.dto.resp.PresidentDashboardRespDTO;
 import com.bank.branch.platform.report.dto.resp.TopCustomerDTO;
@@ -78,6 +81,12 @@ public class DashboardServiceImpl implements DashboardService {
 
     private final AuditApi auditApi;
 
+    /**
+     * KpiApi V1.1 占位（getCurrentKpiTotal 抛 UOE 时 fail-soft 返回 null）.
+     * 通过 ObjectProvider 容忍 bean 缺失，让 V1.0 测试不强依赖 KpiApi 装配.
+     */
+    private final org.springframework.beans.factory.ObjectProvider<KpiApi> kpiApiProvider;
+
     @Override
     @Cacheable(value = "rpt:dashboard:president",
             key = "T(java.lang.String).format('%s:%s', #dataDate, @currentUserApi.getCurrentOrgCode())",
@@ -125,6 +134,125 @@ public class DashboardServiceImpl implements DashboardService {
                 .loanTrend(loanTrend)
                 .orgRanking(ranking)
                 .topCustomers(topCusts)
+                .build();
+    }
+
+    @Override
+    @Cacheable(value = "rpt:dashboard:org",
+            key = "T(java.lang.String).format('%s:%s', #orgCode, #dataDate)",
+            unless = "#result == null")
+    public OrgDashboardRespDTO getOrgDashboard(String orgCode, LocalDate dataDate) {
+        // 1) dataDate 默认值
+        LocalDate resolvedDate = dataDate != null ? dataDate : LocalDate.now();
+        // 2) 机构信息
+        String orgName = resolveOrgName(orgCode);
+        // 3) summaryMetrics（CORE_METRICS）
+        Map<String, BigDecimal> summary = safeGetOrgMetrics(orgCode, resolvedDate,
+                DashboardPresidentMetrics.CORE_METRICS);
+        // 4) achievementMetrics（ACHIEVEMENT_METRICS）
+        Map<String, BigDecimal> achievement = safeGetOrgMetrics(orgCode, resolvedDate,
+                DashboardPresidentMetrics.ACHIEVEMENT_METRICS);
+        // 5) 直属子机构排名
+        List<OrgRankingItemDTO> subRanking = buildOrgRanking(orgCode, resolvedDate);
+        // 6) 异步审计
+        try {
+            auditApi.log(buildAuditCmdForOrg(orgCode, resolvedDate));
+        } catch (RuntimeException e) {
+            log.warn("[DashboardService] 机构仪表盘审计失败 orgCode={}", orgCode);
+        }
+        return OrgDashboardRespDTO.builder()
+                .orgCode(orgCode)
+                .orgName(orgName)
+                .dataDate(resolvedDate)
+                .summaryMetrics(summary)
+                .achievementMetrics(achievement)
+                .subOrgRanking(subRanking)
+                .build();
+    }
+
+    @Override
+    @Cacheable(value = "rpt:dashboard:emp",
+            key = "T(java.lang.String).format('%s:%s', #empId, #dataDate)",
+            unless = "#result == null")
+    public EmpDashboardRespDTO getEmpDashboard(String empId, LocalDate dataDate) {
+        // 1) dataDate 默认值
+        LocalDate resolvedDate = dataDate != null ? dataDate : LocalDate.now();
+        // 2) 员工维度 CORE_METRICS（V1.0 复用 ORG 同款 metricCode 列表，由 metric_def 表实际归属决定）
+        Map<String, BigDecimal> summary = safeGetEmpMetrics(empId, resolvedDate,
+                DashboardPresidentMetrics.CORE_METRICS);
+        // 3) KPI 总分（V1.0 KpiApi 抛 UOE 时 fail-soft 返回 null）
+        BigDecimal kpiTotal = safeGetCurrentKpiTotal(empId);
+        // 4) 异步审计
+        try {
+            auditApi.log(buildAuditCmdForEmp(empId, resolvedDate));
+        } catch (RuntimeException e) {
+            log.warn("[DashboardService] 员工仪表盘审计失败 empId={}", empId);
+        }
+        return EmpDashboardRespDTO.builder()
+                .empId(empId)
+                .dataDate(resolvedDate)
+                .summaryMetrics(summary)
+                .kpiTotalScore(kpiTotal)
+                .build();
+    }
+
+    /**
+     * 安全取员工指标值.
+     */
+    private Map<String, BigDecimal> safeGetEmpMetrics(String empId, LocalDate dataDate,
+                                                     List<String> metricCodes) {
+        try {
+            Map<String, BigDecimal> v = metricApi.getEmpMetricValues(empId, dataDate, metricCodes);
+            return v != null ? v : Map.of();
+        } catch (RuntimeException e) {
+            log.warn("[DashboardService] 取员工指标失败 empId={} dataDate={} cause={}",
+                    empId, dataDate, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    /**
+     * 安全取 KPI 总分（V1.0 KpiApi 占位实现会抛 UOE，fail-soft 返回 null）.
+     */
+    private BigDecimal safeGetCurrentKpiTotal(String empId) {
+        try {
+            KpiApi api = kpiApiProvider != null ? kpiApiProvider.getIfAvailable() : null;
+            if (api == null) {
+                return null;
+            }
+            return api.getCurrentKpiTotal(empId, "MONTH");
+        } catch (UnsupportedOperationException uoe) {
+            log.debug("[DashboardService] KpiApi V1.1 占位 UOE，返回 null");
+            return null;
+        } catch (RuntimeException e) {
+            log.warn("[DashboardService] 取 KPI 总分失败 empId={} cause={}", empId, e.getMessage());
+            return null;
+        }
+    }
+
+    private AuditLogCmd buildAuditCmdForOrg(String orgCode, LocalDate dataDate) {
+        return AuditLogCmd.builder()
+                .empId(currentUserApi.getCurrentEmpId())
+                .bizType("REPORT")
+                .bizAction("DASHBOARD_ORG_VIEW")
+                .resourceUrl("/api/reports/dashboard/org/" + orgCode)
+                .requestMethod("GET")
+                .requestParams("orgCode=" + orgCode + ", dataDate=" + dataDate)
+                .responseStatus(200)
+                .errorMsg("SUCCESS")
+                .build();
+    }
+
+    private AuditLogCmd buildAuditCmdForEmp(String empId, LocalDate dataDate) {
+        return AuditLogCmd.builder()
+                .empId(currentUserApi.getCurrentEmpId())
+                .bizType("REPORT")
+                .bizAction("DASHBOARD_EMP_VIEW")
+                .resourceUrl("/api/reports/dashboard/emp/" + empId)
+                .requestMethod("GET")
+                .requestParams("empId=" + empId + ", dataDate=" + dataDate)
+                .responseStatus(200)
+                .errorMsg("SUCCESS")
                 .build();
     }
 

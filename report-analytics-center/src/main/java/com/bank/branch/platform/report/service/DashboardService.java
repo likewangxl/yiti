@@ -1,5 +1,7 @@
 package com.bank.branch.platform.report.service;
 
+import com.bank.branch.platform.report.dto.resp.EmpDashboardRespDTO;
+import com.bank.branch.platform.report.dto.resp.OrgDashboardRespDTO;
 import com.bank.branch.platform.report.dto.resp.PresidentDashboardRespDTO;
 
 import java.time.LocalDate;
@@ -25,4 +27,20 @@ public interface DashboardService {
      * @return 仪表盘 5 区块数据
      */
     PresidentDashboardRespDTO getPresidentDashboard(LocalDate dataDate);
+
+    /**
+     * 获取机构仪表盘（C.2 GET /dashboard/org/{orgCode}）.
+     *
+     * @param orgCode  目标机构编码
+     * @param dataDate 数据日期（null 时回填 today）
+     */
+    OrgDashboardRespDTO getOrgDashboard(String orgCode, LocalDate dataDate);
+
+    /**
+     * 获取员工仪表盘（C.3 GET /dashboard/emp/{empId}）.
+     *
+     * @param empId    目标员工
+     * @param dataDate 数据日期（null 时回填 today）
+     */
+    EmpDashboardRespDTO getEmpDashboard(String empId, LocalDate dataDate);
 }

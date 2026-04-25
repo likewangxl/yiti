@@ -7,6 +7,7 @@ import com.bank.branch.platform.auth.security.interceptor.AuthorizationIntercept
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.MetricApi;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +77,9 @@ public abstract class BaseControllerIT {
      */
     @MockBean
     protected MetricApi metricApi;
+
+    @MockBean
+    protected KpiApi kpiApi;
 
     @MockBean
     protected DictApi dictApi;
