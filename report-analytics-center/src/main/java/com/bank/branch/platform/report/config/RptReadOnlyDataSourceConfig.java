@@ -5,19 +5,28 @@ import com.alibaba.druid.pool.DruidPooledConnection;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
 
 /**
- * SQL 探查独立只读数据源（Task M4.2.2，Green，对应 02 §5 + BR-1）.
+ * SQL 探查独立只读数据源 + 主 DataSource 显式声明（Task M4.2.2，Green，对应 02 §5 + BR-1）.
  *
- * <p><strong>用途</strong>：与主 DataSource 物理隔离，使用独立账号
- * （通常仅授予 SELECT 权限 + 仅白名单表）。配置项：{@code rpt.datasource.read-only.*}.
+ * <p><strong>背景（关键）</strong>：自定义 {@code @Bean public DataSource rptReadOnlyDataSource()}
+ * 会触发 Spring Boot {@code DataSourceAutoConfiguration} 的 {@code @ConditionalOnMissingBean(DataSource.class)}
+ * 短路，导致默认 {@code dataSource} 不再创建。FlywayAutoConfiguration 只能选到 readOnly 的 bean，
+ * 然后 setReadOnly(true) 让 Flyway 写迁移历史时炸成 {@code Cannot execute statement in a READ ONLY transaction}.
  *
- * <p><strong>双层防御</strong>：
+ * <p><strong>解决</strong>：本 Configuration 同时显式声明 {@code @Primary} 主 DataSource，
+ * 复用 spring-boot 的 {@link DataSourceProperties}（绑定 {@code spring.datasource.*}），
+ * 让 Flyway / MyBatis / 业务 Service 全部走主 DataSource，仅 SQL 探查 service 显式 {@code @Qualifier} 切到 readOnly.
+ *
+ * <p><strong>readOnly 双层防御</strong>：
  * <ol>
  *   <li>{@code defaultReadOnly = true}（Druid 池级 setReadOnly）</li>
  *   <li>覆盖 {@code getConnection()} 强制 {@code conn.setReadOnly(true)}（Service 层进一步兜底）</li>
@@ -32,7 +41,32 @@ import java.sql.SQLException;
 public class RptReadOnlyDataSourceConfig {
 
     /**
-     * 独立只读 Druid DataSource.
+     * 主 DataSource Properties（绑定 {@code spring.datasource.*}），
+     * 显式声明以避免被自定义 readOnly DataSource 短路掉.
+     */
+    @Bean
+    @Primary
+    @ConfigurationProperties("spring.datasource")
+    public DataSourceProperties primaryDataSourceProperties() {
+        return new DataSourceProperties();
+    }
+
+    /**
+     * 主 DataSource（@Primary）—— FlywayAutoConfiguration / MyBatis / Service 默认走它.
+     */
+    @Bean
+    @Primary
+    @ConfigurationProperties("spring.datasource.druid")
+    public DataSource primaryDataSource(DataSourceProperties properties) {
+        DataSource ds = properties.initializeDataSourceBuilder()
+                .type(DruidDataSource.class)
+                .build();
+        log.info("[RptPrimaryDataSource] initialized url={}", properties.getUrl());
+        return ds;
+    }
+
+    /**
+     * 独立只读 Druid DataSource（SQL 探查专用，物理隔离）.
      *
      * <p>配置回退顺序：
      * <ol>

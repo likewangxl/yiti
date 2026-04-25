@@ -50,9 +50,11 @@ public class SqlProbeController {
      * D.1 执行 SQL 探查（高危：仅 R_BACK_TECH 角色 + reason 必填 + 双写审计）.
      */
     @PostMapping("/execute")
-    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.EXECUTE_SQL)
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.EXECUTE_SQL)
     @Operation(summary = "D.1 执行 SQL 探查")
     public ResponseWrapper<SqlProbeExecuteRespDTO> execute(@Valid @RequestBody SqlProbeExecuteReqDTO req) {
+        // bizType 走 REPORT 是 report 模块单档策略（架构守护 RptBizAuthConsistencyArchTest）；
+        // 实际"高危 SQL 执行"语义通过 BizAction.EXECUTE_SQL + R_BACK_TECH 角色双层约束保证.
         return ResponseWrapper.success(sqlProbeService.execute(req));
     }
 
