@@ -12,10 +12,11 @@ import java.util.Optional;
 /**
  * 指标查询对外 API (跨模块指标相关查询的唯一入口).
  *
- * <p>V1.0 实现状态 (阶段 1 各子代理交付):
+ * <p>V1.x 实现状态:
  * <ul>
  *   <li>✅ V1.0 实现: getMetricDef / getMetricDefs / listMetrics (配置查询)</li>
- *   <li>⏳ V1.1 UOE 占位: getUserMetricCards / getEmpMetricValues / getOrgMetricValues / getCustMetricValues</li>
+ *   <li>✅ V1.1 P2.6 已交付: getUserMetricCards / getEmpMetricValues / getOrgMetricValues / getCustMetricValues
+ *       （详见 MetricApiImpl L42 / L279 / L285 / L291，原 V1.0 UOE 占位已清零）</li>
  * </ul>
  *
  * <p>消费方:

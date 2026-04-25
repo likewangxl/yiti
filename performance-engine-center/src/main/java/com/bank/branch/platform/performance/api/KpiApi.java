@@ -11,10 +11,11 @@ import java.util.Optional;
 /**
  * KPI 查询对外 API.
  *
- * <p>V1.0 实现状态:
+ * <p>V1.x 实现状态:
  * <ul>
  *   <li>✅ V1.0 实现: getKpiScheme / getKpiSchemeById (方案配置查询)</li>
- *   <li>⏳ V1.1 UOE 占位: getCurrentKpiTotal / getCurrentKpiResult / getKpiHistory (结果查询, 需要计算能力)</li>
+ *   <li>✅ V1.1 P2.6 已交付: getCurrentKpiTotal / getCurrentKpiResult / getKpiHistory
+ *       （详见 KpiApiImpl L36-38 / L79 / L85 / L91，原 V1.0 UOE 占位已清零）</li>
  * </ul>
  *
  * <p>消费方: portal-content-center, report-analytics-center.
