@@ -212,4 +212,81 @@ class JobControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("GOV-40004"));
     }
+
+    // ── P3.6：5 端点 × 2 测试覆盖收尾（listJobs / listRunLogs 错误路径 + pause/resume Scheduler 错误） ──
+
+    /**
+     * P3.6：listJobs 端点业务错误路径——Service 抛 BizException 时 Controller 透传到响应 code.
+     *
+     * <p>说明：本测试用 standaloneSetup MockMvc，不装配 SecurityFilterChain，无法直接验证
+     * @BizAuth 鉴权失败链路（403 Forbidden），故以业务错误路径覆盖代替（接受现状），
+     * 保持 5 端点都有成功 + 错误两类测试覆盖。
+     */
+    @Test
+    void listJobs_serviceThrows_returnsBizError() throws Exception {
+        when(jobService.listJobs(any(), anyInt(), anyInt()))
+                .thenThrow(new BizException("GOV-50002", "Redis缓存异常"));
+
+        mockMvc.perform(get("/api/admin/sys/jobs")
+                .param("pageNo", "1")
+                .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-50002"));
+    }
+
+    /**
+     * P3.6：listRunLogs 端点业务错误路径——Service 抛 BizException（如任务不存在）时 Controller 透传.
+     */
+    @Test
+    void listRunLogs_serviceThrows_returnsBizError() throws Exception {
+        when(jobService.listRunLogs(anyString(), anyInt(), anyInt()))
+                .thenThrow(new BizException("GOV-40004", "任务不存在"));
+
+        mockMvc.perform(get("/api/admin/sys/jobs/NOT_EXIST/logs")
+                .param("pageNo", "1")
+                .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-40004"));
+    }
+
+    /**
+     * P3.6：pauseJob Scheduler 失败路径——Service 抛 GOV-50005 时 Controller 透传到响应 code.
+     */
+    @Test
+    void pauseJob_schedulerError_returnsBizError() throws Exception {
+        doThrow(new BizException("GOV-50005", "Job 暂停失败"))
+                .when(jobService).pauseJob(anyString());
+
+        mockMvc.perform(put("/api/admin/sys/jobs/J_001/pause"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-50005"));
+    }
+
+    /**
+     * P3.6：resumeJob Scheduler 失败路径——Service 抛 GOV-50006 时 Controller 透传到响应 code.
+     */
+    @Test
+    void resumeJob_schedulerError_returnsBizError() throws Exception {
+        doThrow(new BizException("GOV-50006", "Job 恢复失败"))
+                .when(jobService).resumeJob(anyString());
+
+        mockMvc.perform(put("/api/admin/sys/jobs/J_001/resume"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-50006"));
+    }
+
+    /**
+     * P3.6：triggerJob Scheduler 失败路径——Service 抛 GOV-50004 时 Controller 透传到响应 code.
+     */
+    @Test
+    void triggerJob_schedulerError_returnsBizError() throws Exception {
+        when(jobService.triggerJob(anyString(), anyString(), anyString()))
+                .thenThrow(new BizException("GOV-50004", "任务触发失败"));
+
+        mockMvc.perform(post("/api/admin/sys/jobs/J_001/trigger")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\": \"测试\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("GOV-50004"));
+    }
 }
