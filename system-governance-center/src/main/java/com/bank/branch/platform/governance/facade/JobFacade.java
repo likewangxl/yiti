@@ -10,12 +10,16 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * 任务调度 Facade 实现
- * <p>
- * 实现 JobApi 接口，委托给 JobService 处理业务逻辑。
- * getJobConf 方法将 Service 层的异常转换为 Optional.empty()，
+ * 任务调度 Facade 实现（V1.6 quartz 整合后精简）.
+ *
+ * <p>实现 {@link JobApi}，仅委托 {@link JobService#getJobConf} 这一只读查询方法。
+ * Service 层找不到时抛异常，Facade 层捕获后返回 {@link Optional#empty()}，
  * 符合 API 契约中"不存在时返回 Optional.empty()"的约定。
- * </p>
+ *
+ * <p><strong>历史</strong>：V1.0-V1.5 曾持有 {@code startJobRun} / {@code completeJobRun} /
+ * {@code failJobRun} 三个 facade 方法。V1.6 quartz 整合后，写日志由
+ * {@code JobExecutionLogger} 直接调用 {@code JobConfMapper} / {@code JobRunLogMapper}
+ * 完成，不再走 facade。
  */
 @Slf4j
 @Service
@@ -25,8 +29,8 @@ public class JobFacade implements JobApi {
     private final JobService jobService;
 
     /**
-     * 获取任务配置
-     * Service 层找不到时抛异常，Facade 层捕获后返回 Optional.empty()
+     * 获取任务配置.
+     * Service 层找不到时抛异常，Facade 层捕获后返回 {@link Optional#empty()}.
      *
      * @param jobKey 任务唯一标识
      * @return 任务配置 Optional
@@ -39,39 +43,5 @@ public class JobFacade implements JobApi {
             log.debug("[JobFacade.getJobConf] 任务配置不存在 jobKey={}", jobKey);
             return Optional.empty();
         }
-    }
-
-    /**
-     * 记录任务执行开始
-     *
-     * @param jobId         任务ID
-     * @param triggerType   触发类型
-     * @param operatorEmpId 触发人工号
-     * @return 执行日志ID
-     */
-    @Override
-    public String startJobRun(String jobId, String triggerType, String operatorEmpId) {
-        return jobService.startJobRun(jobId, triggerType, operatorEmpId);
-    }
-
-    /**
-     * 记录任务执行结束（成功）
-     *
-     * @param runLogId 执行日志ID
-     */
-    @Override
-    public void completeJobRun(String runLogId) {
-        jobService.completeJobRun(runLogId);
-    }
-
-    /**
-     * 记录任务执行结束（失败）
-     *
-     * @param runLogId 执行日志ID
-     * @param errorMsg 错误信息
-     */
-    @Override
-    public void failJobRun(String runLogId, String errorMsg) {
-        jobService.failJobRun(runLogId, errorMsg);
     }
 }
