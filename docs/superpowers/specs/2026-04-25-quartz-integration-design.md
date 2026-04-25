@@ -258,20 +258,80 @@ spring:
 
 ### 4.3 业务 Job（保留原位，最小改动）
 
+**3 个业务 Job 类的真实结构（重构后保留以下，仅删除 `@Scheduled`/`@SchedulerLock`/`scheduled()` 包装方法 + 其上的 `@ConditionalOnProperty`）**：
+
 `performance-engine-center/job/DailyKpiCalcJob.java`：
 ```java
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class DailyKpiCalcJob {                      // 删 @Scheduled, @SchedulerLock
+// 删除：@ConditionalOnProperty(prefix = "perf.job.daily-kpi", ...)
+public class DailyKpiCalcJob {
+    private static final DateTimeFormatter VERSION_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private final KpiSchemeService kpiSchemeService;     // 真实注入
     private final KpiCalcService kpiCalcService;
-    private final EvalSchemeService evalSchemeService;
 
-    public void run() {                             // 仍叫 run()，业务逻辑不变
-        // 原 @Scheduled 方法体完整保留
+    // 删除：@Scheduled(cron="${perf.job.daily-kpi.cron:0 30 1 * * ?}")
+    // 删除：@SchedulerLock(name="DailyKpiCalcJob", lockAtMostFor="PT30M", lockAtLeastFor="PT5M")
+    // 删除：public void scheduled() { run(); }
+
+    public void run() {                                  // 保留：返回 void，业务逻辑不变
+        List<PerfKpiScheme> schemes = kpiSchemeService.listActiveSchemes();
+        // ... T-1 cycleDate / asOfDate 推导 + for 循环调 calcScheme（异常单方案 catch warn）
     }
 }
 ```
+
+`performance-engine-center/job/SysControlCleanupJob.java`：
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+// 删除：@ConditionalOnProperty(prefix = "perf.job.sys-control-cleanup", ...)
+public class SysControlCleanupJob {
+    private final SysControlMapper sysControlMapper;
+    @Value("${perf.job.sys-control-cleanup.keep-count:12}")
+    private int keepCount;                                // 保留：可继续从 application.yml 配置
+
+    // 删除：@Scheduled / @SchedulerLock / scheduled()
+
+    public int run() {                                    // 保留：返回 int（删除行数总和），业务逻辑不变
+        // ... selectScopeDims → 每个 scope 查 oldVersionIds → deleteByIds → 累加 totalDeleted
+        return totalDeleted;
+    }
+}
+```
+
+`performance-engine-center/job/PerfRunTaskCleanupJob.java`：
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+// 删除：@ConditionalOnProperty(prefix = "perf.job.run-task-cleanup", ...)
+public class PerfRunTaskCleanupJob {
+    private final PerfRunTaskMapper perfRunTaskMapper;
+    @Value("${perf.job.run-task-cleanup.retention-days:90}")
+    private int retentionDays;                            // 保留：可继续从 application.yml 配置
+
+    // 删除：@Scheduled / @SchedulerLock / scheduled()
+
+    public int run() {                                    // 保留：返回 int（删除行数），业务逻辑不变
+        // ... cutoff = now - retentionDays → deleteSuccessTasksBefore(cutoff) → return deleted
+        return deleted;
+    }
+}
+```
+
+**关键差异说明**：
+- `DailyKpiCalcJob.run()` 返回 **void**
+- `SysControlCleanupJob.run()` / `PerfRunTaskCleanupJob.run()` 返回 **int**（实际删除行数）
+- Quartz 包装类调用 `run()` 时**忽略返回值**（int 返回值仅用于日志/单元测试断言，调度链路不需要）
+- 删除 `@ConditionalOnProperty` 注解：现在通过 `sys_job_conf.status='ACTIVE'` 控制启停，application.yml 不再控制 Job Bean 是否注册
+
+**保留项**：
+- `@Component` 不删（业务 Bean 仍需 Spring 管理）
+- `keepCount` / `retentionDays` 的 `@Value("${...}")` 不删（业务参数与调度无关）
+- `run()` 内的异常隔离 + log warn 模式不删
 
 ### 4.4 Quartz 包装 Job（新增）
 
@@ -279,12 +339,15 @@ public class DailyKpiCalcJob {                      // 删 @Scheduled, @Schedule
 ```java
 @Slf4j
 public class DailyKpiCalcQuartzJob implements Job {  // 注意：不加 @Component
+    // 注：以下 @Autowired 字段注入依赖 §4.1 的 AutowiringSpringBeanJobFactory
+    //     （Quartz 通过反射 newInstance() 创建本对象 → JobFactory 调用
+    //      applicationContext.getAutowireCapableBeanFactory().autowireBean(job) 完成注入）
     @Autowired private DailyKpiCalcJob dailyKpiCalcJob;
 
     @Override
     public void execute(JobExecutionContext context) throws JobExecutionException {
         try {
-            dailyKpiCalcJob.run();
+            dailyKpiCalcJob.run();   // void，无返回值
         } catch (Exception e) {
             log.error("DailyKpiCalcJob 执行异常", e);
             throw new JobExecutionException(e, false);   // false = 不立即重试
@@ -293,7 +356,20 @@ public class DailyKpiCalcQuartzJob implements Job {  // 注意：不加 @Compone
 }
 ```
 
-**关键点**：不加 `@Component`！Quartz 通过反射 + SpringBeanJobFactory 实例化（每次执行 new 一个），@Autowired 由 Factory 注入。
+`SysControlCleanupQuartzJob.java` / `PerfRunTaskCleanupQuartzJob.java` 结构相同，但调用业务 `run()` 返回值会被**显式忽略**（无赋值即可），例如：
+```java
+@Override
+public void execute(JobExecutionContext context) throws JobExecutionException {
+    try {
+        sysControlCleanupJob.run();   // 返回 int，但调度链路不消费 → 直接丢弃
+    } catch (Exception e) {
+        log.error("SysControlCleanupJob 执行异常", e);
+        throw new JobExecutionException(e, false);
+    }
+}
+```
+
+**关键点**：不加 `@Component`！Quartz 通过反射 + SpringBeanJobFactory 实例化（每次执行 new 一个），@Autowired 由 Factory 注入（详见 §4.1）。
 
 ### 4.5 JobExecutionLogger（system-governance-center/listener/）
 
@@ -438,6 +514,12 @@ JobConfService.@PostConstruct.syncJobsOnStartup()
   │   └─ scheduler.scheduleJob(detail, trigger)（overwriteExistingJobs=true 覆盖 cron 变更）
   └─ 完成
 ```
+
+**Spring 生命周期实际顺序说明**：
+- `@PostConstruct` 在 Bean 初始化阶段执行（Spring `BeanPostProcessor` 完成依赖注入后立即调用），**早于** `SchedulerFactoryBean.start()`（后者在 LifecycleProcessor 阶段、所有 Bean 初始化完成后才执行）
+- Quartz 的 `Scheduler.scheduleJob()` 在 Scheduler 未 start 时**也是合法的**（仅写入 QRTZ_* 表，trigger 不会触发；待 Scheduler.start() 后由触发器扫描激活）
+- 因此 `syncJobsOnStartup()` 在 `Scheduler.start()` 之前执行**不影响功能正确性**，只是前者负责"配置同步到 QRTZ_* 表"，后者负责"开始触发"
+- 上面流程图的"先 SchedulerFactoryBean 启动 → 后 syncJobsOnStartup"是按**逻辑成立时序**呈现，实际 Spring 容器执行顺序是相反的
 
 ### 5.2 调度执行流程（自动触发）
 
@@ -712,28 +794,56 @@ class JobExecutionLoggerTest {
 
 #### C. 业务 Job 单元测试模式
 
+`DailyKpiCalcJob`（注入 `KpiSchemeService` + `KpiCalcService`，run() 返回 void）：
 ```java
 @ExtendWith(MockitoExtension.class)
 class DailyKpiCalcJobTest {
+    @Mock KpiSchemeService kpiSchemeService;     // 真实注入字段名
     @Mock KpiCalcService kpiCalcService;
-    @Mock EvalSchemeService evalSchemeService;
     @InjectMocks DailyKpiCalcJob job;
 
     @Test
     void run_withActiveSchemes_callsCalcSchemeForEach() {
-        when(evalSchemeService.findActiveSchemes()).thenReturn(List.of(scheme1, scheme2));
-        job.run();
-        verify(kpiCalcService).calcScheme(eq(scheme1.getId()), any(LocalDate.class));
-        verify(kpiCalcService).calcScheme(eq(scheme2.getId()), any(LocalDate.class));
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(scheme1, scheme2));
+        job.run();   // void
+        verify(kpiCalcService).calcScheme(
+            eq(scheme1.getSchemeCode()), eq(scheme1.getCycleType()),
+            any(LocalDate.class), any(LocalDate.class), anyString());
+        verify(kpiCalcService).calcScheme(
+            eq(scheme2.getSchemeCode()), eq(scheme2.getCycleType()),
+            any(LocalDate.class), any(LocalDate.class), anyString());
     }
 
     @Test
-    void run_withNoActiveSchemes_doesNothing() { ... }
+    void run_withNoActiveSchemes_doesNothing() {
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of());
+        job.run();
+        verifyNoInteractions(kpiCalcService);
+    }
 
     @Test
     void run_singleSchemeFails_continuesOtherSchemes() {
-        // 验证一个方案抛异常不影响其他方案（如果业务原本如此）
+        // 验证现状：单方案 catch 并 log warn，不中断循环
+        when(kpiSchemeService.listActiveSchemes()).thenReturn(List.of(scheme1, scheme2));
+        when(kpiCalcService.calcScheme(eq(scheme1.getSchemeCode()), any(), any(), any(), any()))
+            .thenThrow(new RuntimeException("scheme1 异常"));
+        job.run();   // 不抛
+        verify(kpiCalcService).calcScheme(eq(scheme2.getSchemeCode()), any(), any(), any(), any());
     }
+}
+```
+
+`SysControlCleanupJob` / `PerfRunTaskCleanupJob`（run() 返回 int）测试模式类似但需断言返回值：
+```java
+@Test
+void run_returnsTotalDeleted() {
+    when(sysControlMapper.selectScopeDims()).thenReturn(List.of("scope1", "scope2"));
+    when(sysControlMapper.selectOldVersionIdsForCleanup("scope1", 12)).thenReturn(List.of("id1", "id2"));
+    when(sysControlMapper.deleteByIds(List.of("id1", "id2"))).thenReturn(2);
+    when(sysControlMapper.selectOldVersionIdsForCleanup("scope2", 12)).thenReturn(List.of());
+
+    int total = job.run();   // 返回 int
+    assertThat(total).isEqualTo(2);
 }
 ```
 
@@ -867,17 +977,39 @@ grep -r "JobApi\." --include="*.java" | grep -E "startJobRun|completeJobRun|fail
 
 **新增**：见 §4.2 quartz 配置块全文
 
-**删除**（旧 Job cron 配置项 — 不再生效，迁移到 sys_job_conf 表）：
+**删除**（旧 Job cron 与 enabled 配置项 — 不再生效，迁移到 sys_job_conf 表）：
 ```yaml
-# 删除：
-performance:
+# 删除（真实 EL 表达式前缀为 perf.job.*，不是 performance.job.*）：
+perf:
   job:
-    daily-kpi-calc:
-      cron: "0 30 1 * * ?"
+    daily-kpi:
+      enabled: true                  # 不再生效（启停由 sys_job_conf.status 控制）
+      cron: "0 30 1 * * ?"           # 不再生效（cron 由 sys_job_conf.cron_expr 控制）
     sys-control-cleanup:
+      enabled: true
       cron: "0 0 3 * * ?"
-    perf-run-task-cleanup:
+      # keep-count: 12               # 保留！业务参数，业务 Job 仍读取
+    run-task-cleanup:
+      enabled: true
       cron: "0 30 3 * * ?"
+      # retention-days: 90           # 保留！业务参数，业务 Job 仍读取
+```
+
+**保留项说明**：
+- `perf.job.sys-control-cleanup.keep-count`（默认 12）→ `SysControlCleanupJob.@Value` 仍读取
+- `perf.job.run-task-cleanup.retention-days`（默认 90）→ `PerfRunTaskCleanupJob.@Value` 仍读取
+- 这两个**业务参数**与调度无关，不迁移到 sys_job_conf
+
+**清理时的 grep 验证**（防漏删/误删）：
+```bash
+# 应被删除（验证返回 0 行）
+grep -rn "perf\.job\.daily-kpi\.\(enabled\|cron\)" --include="*.yml" --include="*.properties"
+grep -rn "perf\.job\.sys-control-cleanup\.\(enabled\|cron\)" --include="*.yml" --include="*.properties"
+grep -rn "perf\.job\.run-task-cleanup\.\(enabled\|cron\)" --include="*.yml" --include="*.properties"
+
+# 应保留（验证仍存在）
+grep -rn "perf\.job\.sys-control-cleanup\.keep-count" --include="*.yml" --include="*.properties"
+grep -rn "perf\.job\.run-task-cleanup\.retention-days" --include="*.yml" --include="*.properties"
 ```
 
 **删除**（ShedLock 已移除）：
