@@ -6,11 +6,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 指标卡片 DTO —— 工作台指标概览使用。
+ * 门户工作台指标卡片视图层 DTO（防腐层）。
  *
- * @deprecated V1 临时占位，待 performance-engine-center 模块创建后迁移
+ * <p>由 {@code PerformanceMetricApiBridge} 从
+ * {@code com.bank.branch.platform.performance.api.dto.MetricCardDTO} 投影而来，
+ * trend 字段由 {@code performance.mom} 推导：
+ * &gt;0 UP / =0 FLAT / &lt;0 DOWN / null null。</p>
  */
-@Deprecated
 @Data
 public class MetricCardDTO {
 
