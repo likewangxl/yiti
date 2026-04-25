@@ -1,15 +1,16 @@
 -- ============================================================================
 -- 模块：报表分析中心 (report-analytics-center)
--- 描述：动态查询保存方案 + SQL 探查历史 + 快照任务配置（V1 预留）
+-- 描述：动态查询保存方案 + SQL 探查历史 + 快照任务配置（V1 预留）+ 异步导出任务
 -- 版本：V1
--- 更新日期：2026-04-10（从 docs/modules/report-analytics-center/05-表结构DDL.md 对齐）
+-- 更新日期：2026-04-25（从 V1.0 M5 实际交付对齐：新增 rpt_export_task）
 -- ============================================================================
 --
 -- 重要说明：
--- 1. 本模块是"纯只读支撑域"，只有 3 张自有表：
+-- 1. 本模块是"纯只读支撑域"，4 张自有表：
 --    - rpt_saved_query     动态查询保存方案（每用户最多 10 条）
 --    - sql_probe_history   SQL 探查历史（审计 + 技术运维复盘，保留 3 个月）
 --    - rpt_snapshot_task   快照任务配置（V1 仅建表不启用，V2 扩展）
+--    - rpt_export_task     报表异步导出任务（V1 M5 启用，与 perf_export_task 同构）
 --
 -- 2. 本模块不维护任何业务汇总快照表，所有业务数据通过 *Api 实时查询：
 --    - 员工/机构/客户指标值  → performance.MetricApi
@@ -17,7 +18,8 @@
 --    - 客户信息               → customer-marketing.CustomerQueryApi
 --    - 审计日志               → governance.AuditApi
 --
--- 3. 异步导出任务表 sys_async_task 由 governance 模块统一提供，本模块不重复建表
+-- 3. 异步导出任务表 rpt_export_task 由 report 模块自有维护（V1.0 M5 落地，
+--    与 perf_export_task 同构）；governance 的 sys_async_task 不再用于本模块。
 --
 -- 4. 所有表遵循 docs/common-dev-guide.md 的通用字段规范
 -- ============================================================================
@@ -99,11 +101,47 @@ CREATE TABLE `rpt_snapshot_task` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='快照任务配置（V1预留）';
 
+-- ----------------------------------------------------------------------------
+-- 4. rpt_export_task — 报表异步导出任务
+-- ----------------------------------------------------------------------------
+-- 业务约束（与 performance-engine-center.perf_export_task 同构）：
+--   - export_type: 报表导出策略（V1 M5 落地：DYNAMIC_QUERY / TOUCH_SUMMARY /
+--                  PERF_SUMMARY / CUSTPOOL_SUMMARY；V1.1+ 扩展 SQL_PROBE 等）
+--   - status 机：PENDING → RUNNING → SUCCESS / FAILED
+--   - file_key 保存 governance.file_object 主键（FileObjectDTO.id），下载链路
+--                委托 governance.FileApi.getDownloadUrl(fileKey) 拉 1 小时预签名 URL
+--   - expire_at 文件过期时间（消费方判定文件是否可下载，默认 +7 天）
+--   - params_json 保存导出参数 JSON（策略按需反序列化）
+--   - operator_id 归属字段，下载时用于 EXPORT_TASK_OWNER_MISMATCH 校验
+--
+-- 来源：performance-engine-center V1_2_1__perf_export_task.sql 同构
+-- ----------------------------------------------------------------------------
+DROP TABLE IF EXISTS `rpt_export_task`;
+CREATE TABLE `rpt_export_task` (
+  `id`             VARCHAR(32)  NOT NULL COMMENT '导出任务ID',
+  `export_type`    VARCHAR(32)  NOT NULL COMMENT '类型：DYNAMIC_QUERY/FIXED_REPORT/SQL_PROBE 等',
+  `params_json`    TEXT         DEFAULT NULL COMMENT '导出参数 JSON',
+  `status`         VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/RUNNING/SUCCESS/FAILED',
+  `file_key`       VARCHAR(200) DEFAULT NULL COMMENT 'governance.file_object 主键 (FileObjectDTO.id)',
+  `file_size`      BIGINT       DEFAULT NULL COMMENT '文件大小（字节）',
+  `row_count`      INT(11)      DEFAULT NULL COMMENT '导出行数',
+  `expire_at`      DATETIME     DEFAULT NULL COMMENT '文件过期时间',
+  `operator_id`    VARCHAR(32)  NOT NULL COMMENT '操作人员工号',
+  `error_msg`      TEXT         DEFAULT NULL COMMENT '失败原因',
+  `created_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_operator` (`operator_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_export_type` (`export_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='报表异步导出任务';
+
 -- ============================================================================
 -- 建表执行顺序：
--- 1) 先建 rpt_saved_query（无外部依赖）
--- 2) 再建 sql_probe_history（无外部依赖）
--- 3) 最后建 rpt_snapshot_task（V1 预留，不启用）
+-- 1) 先建 rpt_saved_query     无外部依赖
+-- 2) 再建 sql_probe_history   无外部依赖
+-- 3) 再建 rpt_snapshot_task   V1 预留，不启用
+-- 4) 最后建 rpt_export_task   V1 M5 启用，与 perf_export_task 同构
 --
 -- V1 不需要种子数据，相关配置（SQL 探查白名单等）在 docs/schema/seed-v1.sql 第 10 节
 -- ============================================================================
