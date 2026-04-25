@@ -11,10 +11,10 @@ import java.time.LocalDateTime;
 /**
  * perf_run_task 过期任务清理业务逻辑（Task Q5.2）.
  *
- * <p><strong>V1.6 quartz-B 重构（2026-04-25, P2.3）</strong>：删除 Spring `@Scheduled` / ShedLock
- * `@SchedulerLock` / `@ConditionalOnProperty` 注解与 `scheduled()` 包装方法，调度改由 Quartz
+ * <p><strong>V1.6 quartz-B 重构（2026-04-25, P2.3）</strong>：删除 Spring `@Scheduled`
+ * / `@ConditionalOnProperty` 注解与 `scheduled()` 包装方法，调度改由 Quartz
  * 调度器（quartz-B 子项目交付）调用裸 {@link #run()}。本类仅保留业务执行体，分布式互斥语义
- * 由 Quartz JobStoreCMT/JDBC-JobStore 提供。
+ * 由 Quartz JobStoreCMT/JDBC-JobStore 通过 QRTZ_LOCKS 行锁提供。
  *
  * <p><strong>清理策略</strong>：
  * <ul>

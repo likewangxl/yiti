@@ -175,23 +175,6 @@
         </dependency>
 
         <!--
-            V1.2 Task Q5.3 ShedLock 分布式锁 (5.13.0).
-            用途：3 个定时任务（DailyKpiCalcJob / SysControlCleanupJob / PerfRunTaskCleanupJob）
-            在多节点部署时通过 Redis 锁防止重复执行；@SchedulerLock 注解标在 scheduled() 方法上.
-            GroupId 为 net.javacrumbs.shedlock（注意末尾 s），已在 aliyunmaven 镜像验证可用.
-        -->
-        <dependency>
-            <groupId>net.javacrumbs.shedlock</groupId>
-            <artifactId>shedlock-spring</artifactId>
-            <version>5.13.0</version>
-        </dependency>
-        <dependency>
-            <groupId>net.javacrumbs.shedlock</groupId>
-            <artifactId>shedlock-provider-redis-spring</artifactId>
-            <version>5.13.0</version>
-        </dependency>
-
-        <!--
             V1.3 Task R5.1 Testcontainers-redis 接入.
             用途：DataTaskServiceIdempotentIT / SysControlConcurrentIT 等并发 IT
             依赖真实 Redis，过往需要开发者本地 localhost:6379 已启动；

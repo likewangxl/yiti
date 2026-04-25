@@ -12,9 +12,9 @@ import java.util.List;
  * sys_control 历史版本清理定时任务（Task Q5.1）.
  *
  * <p><strong>V1.6 quartz-B 改造（2026-04-25）</strong>：
- * 删除 Spring {@code @Scheduled} / ShedLock {@code @SchedulerLock} / {@code @ConditionalOnProperty} 注解，
+ * 删除 Spring {@code @Scheduled} / {@code @ConditionalOnProperty} 注解，
  * 改由 Quartz 调度器（PerfQuartzConfig 注册的 JobDetail/Trigger）调用裸业务方法 {@link #run()}。
- * 分布式互斥由 Quartz JobStoreCMT + JOB_GROUP/JOB_NAME 唯一性保证（替代 ShedLock + Redis）。
+ * 分布式互斥由 Quartz JobStoreCMT + QRTZ_LOCKS 行锁保证（无需额外的分布式锁）。
  * 启停开关迁移到 Quartz 调度配置层（P3.x 阶段交付），本类回归"纯业务逻辑"语义。
  *
  * <p><strong>保留策略</strong>：

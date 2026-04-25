@@ -16,9 +16,9 @@ import java.util.List;
  *
  * <p><strong>调度方式</strong>：本类只承载业务逻辑（{@link #run()}），调度由 Quartz 集群（{@code isClustered=true}
  * + JDBC JobStore）通过 Quartz 包装类（见 {@code DailyKpiCalcQuartzJob}）触发。
- * Quartz JDBC JobStore 已提供单一防重，{@code @SchedulerLock} / ShedLock 不再需要。
+ * Quartz JDBC JobStore 通过 QRTZ_LOCKS 行锁提供单一防重语义，无需额外的分布式锁。
  *
- * <p><strong>历史</strong>：V1.0-V1.5 时本类持有 {@code @Scheduled} + {@code @SchedulerLock}
+ * <p><strong>历史</strong>：V1.0-V1.5 时本类持有 Spring {@code @Scheduled}
  * + {@code @ConditionalOnProperty}，由 Spring Scheduling 触发。V1.6 quartz-B 改造移除上述注解
  * 与 {@code scheduled()} 包装方法，调度统一收敛到 Quartz。
  *
