@@ -42,4 +42,18 @@
         WHERE id = #{id}
     </update>
 
+    <select id="selectByEmpIdPaged" resultMap="BaseMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+          FROM sql_probe_history
+         WHERE emp_id = #{empId}
+         ORDER BY created_time DESC
+         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByEmpId" resultType="long">
+        SELECT COUNT(1)
+          FROM sql_probe_history
+         WHERE emp_id = #{empId}
+    </select>
+
 </mapper>
