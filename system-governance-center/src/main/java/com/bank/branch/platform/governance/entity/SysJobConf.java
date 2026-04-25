@@ -26,6 +26,12 @@ public class SysJobConf {
     /** Cron表达式，对应 cron_expr */
     private String cronExpr;
 
+    /** Quartz 包装 Job 类全限定名（V1.6 新增），对应 quartz_job_class */
+    private String quartzJobClass;
+
+    /** misfire 处理策略：FIRE_ONCE_NOW/DO_NOTHING/IGNORE_MISFIRE_POLICY（V1.6 新增），对应 misfire_policy */
+    private String misfirePolicy;
+
     /** 状态：ACTIVE/PAUSED，对应 status */
     private String status;
 

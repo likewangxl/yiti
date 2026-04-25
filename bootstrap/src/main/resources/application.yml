@@ -21,6 +21,26 @@ spring:
   session:
     store-type: redis
     timeout: 7200s
+  quartz:
+    enabled: true
+    job-store-type: jdbc
+    auto-startup: true
+    startup-delay: 10s                                      # 应用启动 10s 后再启动调度，避免与启动期 syncJobsOnStartup 抢资源
+    overwrite-existing-jobs: true                           # JobDetail/Trigger 配置变更后启动期可覆盖 QRTZ_* 数据
+    wait-for-jobs-to-complete-on-shutdown: true             # 优雅关闭：等待运行中 Job 完成
+    jdbc:
+      initialize-schema: never                              # DDL 由 docs/schema/ddl-quartz.sql 手动初始化
+    properties:
+      org.quartz.scheduler.instanceName: BranchPlatformScheduler
+      org.quartz.scheduler.instanceId: AUTO                 # 自动生成节点 ID
+      org.quartz.threadPool.threadCount: 5
+      org.quartz.threadPool.threadPriority: 5
+      org.quartz.jobStore.class: org.quartz.impl.jdbcjobstore.JobStoreTX
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+      org.quartz.jobStore.tablePrefix: QRTZ_
+      org.quartz.jobStore.isClustered: true
+      org.quartz.jobStore.clusterCheckinInterval: 20000
+      org.quartz.jobStore.misfireThreshold: 60000
 flowable:
   history-level: audit
   process-definition-location-prefix: classpath*:/bpmn/

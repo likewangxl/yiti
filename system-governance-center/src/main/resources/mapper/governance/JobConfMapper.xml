@@ -2,9 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.JobConfMapper">
 
-    <!-- sys_job_conf 全列查询片段 -->
+    <!-- sys_job_conf 全列查询片段（V1.6 新增 quartz_job_class / misfire_policy） -->
     <sql id="BASE_COLUMNS">
-        id, job_key, job_name, cron_expr, status,
+        id, job_key, job_name, cron_expr, quartz_job_class, misfire_policy, status,
         allow_manual_trigger, last_run_time, next_run_time, remark,
         created_by, created_time, updated_by, updated_time
     </sql>
@@ -54,25 +54,27 @@
         </where>
     </select>
 
-    <!-- 新增任务配置记录 -->
+    <!-- 新增任务配置记录（V1.6 新增 quartz_job_class / misfire_policy） -->
     <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
         INSERT INTO sys_job_conf (
-            id, job_key, job_name, cron_expr, status,
+            id, job_key, job_name, cron_expr, quartz_job_class, misfire_policy, status,
             allow_manual_trigger, last_run_time, next_run_time, remark,
             created_by, created_time, updated_by, updated_time
         ) VALUES (
-            #{id}, #{jobKey}, #{jobName}, #{cronExpr}, #{status},
+            #{id}, #{jobKey}, #{jobName}, #{cronExpr}, #{quartzJobClass}, #{misfirePolicy}, #{status},
             #{allowManualTrigger}, #{lastRunTime}, #{nextRunTime}, #{remark},
             #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
         )
     </insert>
 
-    <!-- 按主键动态更新任务配置 -->
+    <!-- 按主键动态更新任务配置（V1.6 新增 quartz_job_class / misfire_policy 分支） -->
     <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
         UPDATE sys_job_conf
         <set>
             <if test="jobName != null">job_name = #{jobName},</if>
             <if test="cronExpr != null">cron_expr = #{cronExpr},</if>
+            <if test="quartzJobClass != null">quartz_job_class = #{quartzJobClass},</if>
+            <if test="misfirePolicy != null">misfire_policy = #{misfirePolicy},</if>
             <if test="status != null">status = #{status},</if>
             <if test="allowManualTrigger != null">allow_manual_trigger = #{allowManualTrigger},</if>
             <if test="lastRunTime != null">last_run_time = #{lastRunTime},</if>
