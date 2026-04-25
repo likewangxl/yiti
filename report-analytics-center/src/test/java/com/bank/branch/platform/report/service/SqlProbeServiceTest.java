@@ -87,11 +87,21 @@ class SqlProbeServiceTest {
     @Mock
     private ResultSetMetaData metaData;
 
-    @InjectMocks
     private SqlProbeServiceImpl service;
 
     @BeforeEach
     void setUp() throws SQLException {
+        // 手动构造（@InjectMocks 不支持含 @Value 多参数构造器）
+        service = new SqlProbeServiceImpl(
+                validator,
+                historyMapper,
+                currentUserApi,
+                auditApi,
+                readOnlyDataSource,
+                List.of("cust_master", "kpi_result"),
+                List.of("DROP", "DELETE", "UPDATE", "INSERT"),
+                1000, 5000, 3);
+
         // 默认放行：当前用户具备 R_BACK_TECH（具体 case 可覆盖）
         lenient().when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_BACK_TECH"));
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E_TECH001");
