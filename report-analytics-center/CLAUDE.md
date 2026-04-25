@@ -59,7 +59,7 @@ src/main/java/com/bank/branch/platform/report/
 │   ├── TouchSummaryController.java          (C.4-view + C.4-export)
 │   ├── PerfSummaryController.java           (C.5-view + C.5-export)
 │   ├── CustPoolSummaryController.java       (C.6-view + C.6-export)
-│   ├── SqlProbeController.java              (D.1-D.4)
+│   ├── RptSqlProbeController.java           (D.1-D.4)
 │   └── RptExportController.java             (E.1-E.3)
 ├── facade/           # 跨层编排（RptExportFacade）
 ├── service/          # 业务逻辑 + 4 个 ExportStrategy
@@ -126,10 +126,10 @@ src/main/resources/
 | PerfSummaryController | POST /api/reports/perf-summary/export | REPORT/EXPORT | R_RPT_SUM_PERF_EXP |
 | CustPoolSummaryController | GET /api/reports/customer-pool-summary | REPORT/READ | R_RPT_SUM_CUST_VW |
 | CustPoolSummaryController | POST /api/reports/customer-pool-summary/export | REPORT/EXPORT | R_RPT_SUM_CUST_EXP |
-| SqlProbeController | POST /api/reports/sql-probe/execute | REPORT/EXECUTE_SQL | R_RPT_SQL_EXEC |
-| SqlProbeController | GET  /api/reports/sql-probe/history | REPORT/LIST | R_RPT_SQL_HIST |
-| SqlProbeController | GET  /api/reports/sql-probe/history/{id} | REPORT/READ | R_RPT_SQL_HIST_DTL |
-| SqlProbeController | GET  /api/reports/sql-probe/schema-whitelist | REPORT/READ | R_RPT_SQL_WL |
+| RptSqlProbeController | POST /api/reports/sql-probe/execute | REPORT/EXECUTE_SQL | R_RPT_SQL_EXEC |
+| RptSqlProbeController | GET  /api/reports/sql-probe/history | REPORT/LIST | R_RPT_SQL_HIST |
+| RptSqlProbeController | GET  /api/reports/sql-probe/history/{id} | REPORT/READ | R_RPT_SQL_HIST_DTL |
+| RptSqlProbeController | GET  /api/reports/sql-probe/schema-whitelist | REPORT/READ | R_RPT_SQL_WL |
 | RptExportController | GET    /api/reports/export-tasks/{taskId} | REPORT/READ | R_RPT_EXP_STATUS |
 | RptExportController | DELETE /api/reports/export-tasks/{taskId} | REPORT/WRITE | R_RPT_EXP_CANCEL |
 | RptExportController | GET    /api/reports/export-tasks/{taskId}/download | REPORT/EXPORT | R_RPT_EXP_DOWNLOAD |

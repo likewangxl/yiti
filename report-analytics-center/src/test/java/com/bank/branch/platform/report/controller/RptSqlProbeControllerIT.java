@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 仅守护 Controller 路由 + JSON 序列化 + @BizAuth 标注（与 BaseControllerIT 的 @MockBean
  * AuthorizationInterceptor 配合放行）.
  */
-class SqlProbeControllerIT extends BaseControllerIT {
+class RptSqlProbeControllerIT extends BaseControllerIT {
 
     @MockBean
     private SqlProbeService sqlProbeService;

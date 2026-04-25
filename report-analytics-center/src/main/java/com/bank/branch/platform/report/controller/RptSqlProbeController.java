@@ -42,7 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "报表-SQL 探查", description = "D 章 4 接口（execute / history / detail / whitelist）")
 @Validated
 @RequiredArgsConstructor
-public class SqlProbeController {
+public class RptSqlProbeController {
 
     private final SqlProbeService sqlProbeService;
 
