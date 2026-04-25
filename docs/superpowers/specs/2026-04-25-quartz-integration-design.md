@@ -186,6 +186,8 @@ INSERT INTO sys_job_conf (job_key, job_name, cron_expr, quartz_job_class, misfir
 ('PERF_RUN_TASK_CLEANUP',  '绩效执行任务清理', '0 30 3 * * ?', 'com.bank.branch.platform.performance.job.quartz.PerfRunTaskCleanupQuartzJob', 'DO_NOTHING',    'ACTIVE', ...);
 ```
 
+> **注**：以上 INSERT 仅作字段示例。**完整字段顺序与所有列以 §8.5 数据库迁移脚本为准**（§8.5 包含 `id` / `allow_manual_trigger` / 审计字段等完整列）。
+
 ### 3.5 文档同步
 
 `docs/schema/ddl-governance.sql` 在原 sys_job_conf/sys_job_run_log DDL 同位置添加 ALTER 注释（标注 V1.6 quartz 引入）。
