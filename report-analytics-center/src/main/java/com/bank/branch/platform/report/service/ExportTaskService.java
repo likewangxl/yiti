@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.service;
 
 import com.bank.branch.platform.report.dto.req.DynamicQueryReqDTO;
+import com.bank.branch.platform.report.dto.req.PerfSummaryReqDTO;
 import com.bank.branch.platform.report.dto.req.TouchSummaryReqDTO;
 import com.bank.branch.platform.report.dto.resp.ExportTaskRespDTO;
 
@@ -27,4 +28,12 @@ public interface ExportTaskService {
      * @return 任务 ID + PENDING 状态
      */
     ExportTaskRespDTO submitTouchSummaryExport(TouchSummaryReqDTO req);
+
+    /**
+     * 创建绩效汇总导出任务（M3.2.2）.
+     *
+     * @param req 入参（与 C.3 同款）
+     * @return 任务 ID + PENDING 状态
+     */
+    ExportTaskRespDTO submitPerfSummaryExport(PerfSummaryReqDTO req);
 }

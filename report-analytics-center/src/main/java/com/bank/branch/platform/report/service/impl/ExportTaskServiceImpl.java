@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.service.impl;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.report.dto.req.DynamicQueryReqDTO;
+import com.bank.branch.platform.report.dto.req.PerfSummaryReqDTO;
 import com.bank.branch.platform.report.dto.req.TouchSummaryReqDTO;
 import com.bank.branch.platform.report.dto.resp.ExportTaskRespDTO;
 import com.bank.branch.platform.report.entity.RptExportTask;
@@ -39,6 +40,8 @@ public class ExportTaskServiceImpl implements ExportTaskService {
     private static final String EXPORT_TYPE_DYNAMIC_QUERY = "DYNAMIC_QUERY";
 
     private static final String EXPORT_TYPE_TOUCH_SUMMARY = "TOUCH_SUMMARY";
+
+    private static final String EXPORT_TYPE_PERF_SUMMARY = "PERF_SUMMARY";
 
     private static final String STATUS_PENDING = "PENDING";
 
@@ -113,6 +116,39 @@ public class ExportTaskServiceImpl implements ExportTaskService {
             return paramsObjectMapper.writeValueAsString(req);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("TouchSummary 导出 params 序列化失败", e);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ExportTaskRespDTO submitPerfSummaryExport(PerfSummaryReqDTO req) {
+        String empId = currentUserApi.getCurrentEmpId();
+        String paramsJson = serializePerfSummaryParams(req);
+
+        RptExportTask task = new RptExportTask();
+        task.setId(UUID.randomUUID().toString().replace("-", ""));
+        task.setExportType(EXPORT_TYPE_PERF_SUMMARY);
+        task.setParamsJson(paramsJson);
+        task.setStatus(STATUS_PENDING);
+        task.setOperatorId(empId);
+        task.setCreatedTime(LocalDateTime.now());
+        task.setUpdatedTime(LocalDateTime.now());
+        exportTaskMapper.insert(task);
+
+        log.info("[ExportTask] 已创建绩效汇总导出任务 taskId={} operatorId={} dim={} cycleType={}",
+                task.getId(), empId, req.getDim(), req.getCycleType());
+
+        return ExportTaskRespDTO.builder()
+                .taskId(task.getId())
+                .status(STATUS_PENDING)
+                .build();
+    }
+
+    private String serializePerfSummaryParams(PerfSummaryReqDTO req) {
+        try {
+            return paramsObjectMapper.writeValueAsString(req);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("PerfSummary 导出 params 序列化失败", e);
         }
     }
 }
