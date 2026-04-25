@@ -229,6 +229,9 @@ DATA_SCOPE 类型在 3 处生效：
 | 10 | M5 reviewer #2：错误码 42210/42211/42207/42208 当前 0 消费（M6.0 切真 upload 后 42210/42211 仍未消费）| 低 | M5 reviewer | V1.1 真正调用方落地后激活 |
 | 11 | M5 reviewer #3：error_msg truncate 阈值 3900 提取 common 常量 | 低 | M5 reviewer | V1.1 收敛 |
 | 12 | M5 reviewer #4：ObjectMapper 独立实例 → 共享 Spring Bean | 低 | M5 reviewer | V1.1 替换为 @Qualifier 注入 |
+| 13 | SqlProbeServiceImpl#getHistoryDetail 不存在时错误码错配（用 SAVED_QUERY_NOT_FOUND） | 中 | code 审查 I-1 | 待 V1.1 新增 SQL_PROBE_HISTORY_NOT_FOUND |
+| 14 | PerfSummaryServiceImpl#L75 subjectName = subjectId 兜底，未通过 OrgApi/CustomerQueryApi 翻译 | 低 | code 审查 M-2 | V1.1 引入 OrgApi/CustQueryApi 翻译 |
+| 15 | 仪表盘 Caffeine 单实例（V1.1 切 Redis 共享缓存） | 低 | code 审查观察 | V1.1 切共享缓存 |
 
 ## V1.1 规划
 
