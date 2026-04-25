@@ -64,24 +64,25 @@ class RptExportControllerIT extends BaseControllerIT {
     }
 
     @Test
-    void getStatus_nonOwner_shouldReturn4xx() throws Exception {
+    void getStatus_nonOwner_shouldReturnBizError42209() throws Exception {
         when(currentUserApi.getCurrentEmpId()).thenReturn("E002");
         when(exportService.getTaskForOwner("EXP001", "E002"))
             .thenThrow(new RptException(RptErrorCode.EXPORT_DOWNLOAD_FORBIDDEN));
 
+        // common-web 契约：BizException 走 200 + code 字段携带具体错误码
         mvc.perform(get("/api/reports/export-tasks/EXP001"))
-            .andExpect(status().is4xxClientError())
+            .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value("RPT-42209"));
     }
 
     @Test
-    void getStatus_notFound_shouldReturn4xx() throws Exception {
+    void getStatus_notFound_shouldReturnBizError40009() throws Exception {
         when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         when(exportService.getTaskForOwner("NOEXIST", "E001"))
             .thenThrow(new RptException(RptErrorCode.EXPORT_TASK_NOT_FOUND));
 
         mvc.perform(get("/api/reports/export-tasks/NOEXIST"))
-            .andExpect(status().is4xxClientError())
+            .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value("RPT-40009"));
     }
 
@@ -102,13 +103,13 @@ class RptExportControllerIT extends BaseControllerIT {
     }
 
     @Test
-    void cancel_alreadySuccess_shouldReturn4xx() throws Exception {
+    void cancel_alreadySuccess_shouldReturnBizError40010() throws Exception {
         when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         doThrow(new RptException(RptErrorCode.EXPORT_TASK_NOT_READY))
             .when(exportService).cancelTask("EXP001", "E001");
 
         mvc.perform(delete("/api/reports/export-tasks/EXP001"))
-            .andExpect(status().is4xxClientError())
+            .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value("RPT-40010"));
     }
 
@@ -134,7 +135,7 @@ class RptExportControllerIT extends BaseControllerIT {
     }
 
     @Test
-    void download_runningTask_shouldReturn4xx() throws Exception {
+    void download_runningTask_shouldReturnBizError40010() throws Exception {
         RptExportTask t = new RptExportTask();
         t.setId("EXP001");
         t.setStatus("RUNNING");
@@ -143,7 +144,7 @@ class RptExportControllerIT extends BaseControllerIT {
         when(exportService.getTaskForOwner("EXP001", "E001")).thenReturn(t);
 
         mvc.perform(get("/api/reports/export-tasks/EXP001/download"))
-            .andExpect(status().is4xxClientError())
+            .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value("RPT-40010"));
     }
 }
