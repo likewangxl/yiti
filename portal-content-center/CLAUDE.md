@@ -252,5 +252,12 @@ Cache-Aside 模式，所有 Key 前缀 `portal:`，默认 TTL 5 分钟 + 10% 随
 - 已实现 REST 端点见 `src/main/java/com/bank/branch/platform/portal/controller/`
 - 已实现对外 `*Api` 见 `src/main/java/com/bank/branch/platform/portal/api/`
 - 已实现数据库实体/Mapper 见 `src/main/java/com/bank/branch/platform/portal/entity/` 与 `src/main/resources/mapper/portal/`
-- 当前对 workflow 待读查询仍使用本地 `WorkflowQueryAdapter` 降级
+- Portal MetricAdapter 通过 `com.bank.branch.platform.bridge.PerformanceMetricApiBridge`（bootstrap 模块）桥接 performance-engine-center 的正式 `MetricApi`，遵循 DIP（portal 定义抽象，bootstrap 提供具体实现），portal 通用域设计原则保持「不依赖核心域」
 - 当前产品导出为 **V1 同步导出**（`<=5000` 行），超过阈值直接拒绝，不做异步导出
+
+## V1.0 已知技术债（2026-04-25）
+
+| # | 标题 | 优先级 | 备注 |
+|---|---|---|---|
+| 1 | WorkflowQueryAdapter:82-83 overdueInfo / bizDetailUrl 硬编码 null | 低 | V1.1 待 workflow-center 提供超期信息 + 业务详情 URL 解析能力后接入 |
+| 2 | portal/adapter/dto/PortalTodoItem.java 仍标 @Deprecated 但被生产代码使用 | 低 | V1.1 决议保留并去 @Deprecated（或改名 PortalTodoVO 等） |

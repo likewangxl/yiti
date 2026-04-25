@@ -337,3 +337,15 @@ Cache-Aside 模式，所有 Key 前缀 `customer:`，默认 TTL 5 分钟 + 10% �
 - `docs/superpowers/sql/2026-04-14-customer-touch-pt-resource.sql` (6 条)
 - `docs/superpowers/sql/2026-04-14-customer-report-pt-resource.sql` (3 条)
 - `docs/superpowers/sql/2026-04-21-customer-contract-alignment-pt-resource.sql` (10 条，契约对齐新增端点)
+
+## V1.0 已知技术债（2026-04-25）
+
+| # | 标题 | 优先级 | 来源 |
+|---|---|---|---|
+| 1 | 错误码 26 vs 设计 35，缺 403 系列 7 条 + 422 系列 8 条 + 部分 500 | 中 | 健康检查 |
+| 2 | 零 ArchUnit 守护（无 arch/ 子目录） | 中 | 健康检查 |
+| 3 | 线索导入行级校验简化未实现（4 处 TODO） | 低 | 代码 TODO |
+| 4 | CROSS_ORG 审计待 @AuditLog 升级（3 处 TODO） | 低 | 代码 TODO |
+| 5 | WorkflowCallbackListener 未区分 APPROVED/REJECTED | 低 | 代码 TODO |
+| 6 | LeadDeletedListener 线索独立标签清理预留 | 低 | 代码 TODO |
+| 7 | TouchTaskMapper.xml H2/MySQL 函数方言 TODO | 低 | 代码 TODO |

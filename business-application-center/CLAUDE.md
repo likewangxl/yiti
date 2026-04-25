@@ -176,3 +176,12 @@ src/main/java/com/bank/branch/platform/bizapp/
 > **契约对齐说明（Phase 1-3）**: 本轮契约对齐（2026-04）未新增或变更任何 REST URL，
 > 仅对返回类型、入参字段、Listener 机制、枚举值等做了内部补齐。
 > 因此**不需要新建 PT_RESOURCE SQL 脚本**，上述 2026-04-14 脚本仍为最新版本。
+
+## V1.0 已知技术债（2026-04-25）
+
+| # | 标题 | 优先级 | 来源 |
+|---|---|---|---|
+| 1 | 错误码缺 5 条（BIZ-40306 / 42203 / 42204 / 42302 / 50003），近义码语义等价覆盖 | 低 | 健康检查 |
+| 2 | LoanService.java:341 V2 集成 workflow 历史查询补 processMap/approvalLogs | 低 | 代码 TODO |
+| 3 | LoanDetailResp.java:16 V2 通过 ClaimApi 补 ownerEmpId | 低 | 代码 TODO |
+| 4 | LoanDetailResp.java:69 V2 通过 ClaimApi 补 claimedTime | 低 | 代码 TODO |
