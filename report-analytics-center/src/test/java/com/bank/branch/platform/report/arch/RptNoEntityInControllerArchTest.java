@@ -29,9 +29,8 @@ public class RptNoEntityInControllerArchTest {
             methods()
                     .that().areDeclaredInClassesThat().haveSimpleNameEndingWith("Controller")
                     .and().arePublic()
-                    .should(notExposeEntityInReturnType())
-                    // M0 阶段 controller 包尚无 Controller；M1+ 接入真 Controller 后规则生效
-                    .allowEmptyShould(true);
+                    .should(notExposeEntityInReturnType());
+                    // M1.1+ 起 Controller 包至少有 MetaController 一个类，allowEmptyShould 守护已转为实质检查
 
     private static ArchCondition<JavaMethod> notExposeEntityInReturnType() {
         return new ArchCondition<JavaMethod>("return type must not reference entity package") {

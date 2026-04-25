@@ -44,7 +44,6 @@ public class RptBizAuthConsistencyArchTest {
                           method.getFullName() + " 使用了非 REPORT 的 BizType: " + ann.bizType()));
                   }
               }
-          })
-          // M0 阶段 controller 包尚无 Controller；M1+ 接入真 Controller 后规则生效
-          .allowEmptyShould(true);
+          });
+    // M1.1+ 起 Controller 包至少有 MetaController 一个类，allowEmptyShould 守护已转为实质检查
 }

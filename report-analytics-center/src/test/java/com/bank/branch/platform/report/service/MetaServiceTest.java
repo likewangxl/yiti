@@ -5,6 +5,7 @@ import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.performance.api.dto.MetricDefDTO;
 import com.bank.branch.platform.report.dto.resp.MetricTreeNodeDTO;
 import com.bank.branch.platform.report.dto.resp.QueryDimensionRespDTO;
+import com.bank.branch.platform.report.exception.RptException;
 import com.bank.branch.platform.report.service.impl.MetaServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,13 +78,15 @@ class MetaServiceTest {
     @Test
     void getQueryDimensions_invalidDim_throwsRpt40006() {
         assertThatThrownBy(() -> service.getQueryDimensions("INVALID"))
-                .hasMessageContaining("RPT-40006");
+                .isInstanceOf(RptException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-40006");
     }
 
     @Test
     void getQueryDimensions_nullDim_throwsRpt40006() {
         assertThatThrownBy(() -> service.getQueryDimensions(null))
-                .hasMessageContaining("RPT-40006");
+                .isInstanceOf(RptException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-40006");
     }
 
     private MetricDefDTO buildMetric(String code, String name, String baseDim) {
