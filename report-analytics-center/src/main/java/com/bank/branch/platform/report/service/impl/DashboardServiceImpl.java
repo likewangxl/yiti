@@ -216,16 +216,14 @@ public class DashboardServiceImpl implements DashboardService {
     /**
      * 安全取 KPI 总分.
      *
-     * <p>KpiApi.getCurrentKpiTotal 在 V1.1 P4.3 已真实交付（返回 BigDecimal 或 null，无数据时 null）.
+     * <p>KpiApi.getCurrentKpiTotal 在 V1.1 P2.6 已真实交付（返回 BigDecimal 或 null，无数据时 null）.
      * 异常时记 warn 并返回 null，避免单点失败影响仪表盘整体展示.
+     *
+     * <p>M6.3 顺手清理（M3 reviewer 观察项 #4）：原 UOE catch 分支删除，KpiApi V1.1 后无 UOE 路径.
      */
     private BigDecimal safeGetCurrentKpiTotal(String empId) {
         try {
             return kpiApi.getCurrentKpiTotal(empId, "MONTH");
-        } catch (UnsupportedOperationException uoe) {
-            // 兜底：若 KpiApi 某些 cycleType 尚未实装，fail-soft
-            log.debug("[DashboardService] KpiApi.getCurrentKpiTotal UOE，fail-soft 返回 null empId={}", empId);
-            return null;
         } catch (RuntimeException e) {
             log.warn("[DashboardService] 取 KPI 总分失败 empId={} cause={}", empId, e.getMessage());
             return null;
