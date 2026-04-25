@@ -1,0 +1,200 @@
+package com.bank.branch.platform.report.support;
+
+import com.bank.branch.platform.common.web.exception.BizException;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * SqlSafeValidator 边界用例守护测试（Task M4.1.1，Red）.
+ *
+ * <p>覆盖 plan L2204-L2310 「≥15 case」要求，分组：
+ * <ol>
+ *   <li>通过用例（3）：simple SELECT、Whitelist JOIN、Subquery depth ≤ 3</li>
+ *   <li>白名单拒绝（1）：未登记表 → RPT-42002</li>
+ *   <li>禁用关键字（5）：DROP / DELETE / UPDATE / INSERT / 大小写不敏感 → RPT-42003</li>
+ *   <li>仅 SELECT（1）：SHOW TABLES → RPT-42007</li>
+ *   <li>UNION / EXCEPT / INTERSECT 拒绝（1）→ RPT-42001</li>
+ *   <li>子查询深度（1）：4 层 → RPT-42001</li>
+ *   <li>LIMIT 标准化（3）：无 LIMIT 自动 1000 / 超 1000 截断 / &lt;1000 保留</li>
+ *   <li>SQL 长度上限（1）：&gt;5000 → RPT-42008</li>
+ *   <li>解析失败（1）：非法语法 → RPT-42001</li>
+ * </ol>
+ *
+ * <p>共 16 个 case，全部走 {@link SqlSafeValidator#validateAndNormalize(String)} 单一入口。
+ */
+class SqlSafeValidatorTest {
+
+    /** 测试专用校验器：3 张白名单表 + 4 个禁用关键字 + maxRows=1000 + maxSqlLength=5000 + depth=3. */
+    private final SqlSafeValidator v = new SqlSafeValidator(
+            List.of("cust_master", "kpi_result", "metric_def"),
+            List.of("DROP", "DELETE", "UPDATE", "INSERT"),
+            1000, 5000, 3);
+
+    // =====================================================================
+    // 1) 通过用例
+    // =====================================================================
+
+    @Test
+    void validate_simpleSelect_passes() {
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master WHERE id=1");
+        assertThat(r.isAllowed()).isTrue();
+        assertThat(r.getNormalizedSql()).contains("LIMIT 1000");
+    }
+
+    @Test
+    void validate_selectWithWhitelistJoin_passes() {
+        SqlSafeResult r = v.validateAndNormalize(
+                "SELECT k.score FROM kpi_result k JOIN cust_master c ON k.emp_id = c.id LIMIT 100");
+        assertThat(r.isAllowed()).isTrue();
+        assertThat(r.getReferencedTables()).contains("kpi_result", "cust_master");
+    }
+
+    @Test
+    void validate_selectWithSubquery_passesIfDepthLE3() {
+        SqlSafeResult r = v.validateAndNormalize(
+                "SELECT * FROM cust_master WHERE id IN (SELECT emp_id FROM kpi_result) LIMIT 100");
+        assertThat(r.isAllowed()).isTrue();
+    }
+
+    // =====================================================================
+    // 2) 拒绝用例（白名单）
+    // =====================================================================
+
+    @Test
+    void validate_tableNotInWhitelist_rejects42002() {
+        assertThatThrownBy(() -> v.validateAndNormalize("SELECT * FROM secret_table"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42002");
+    }
+
+    // =====================================================================
+    // 3) 拒绝用例（禁用关键字）
+    // =====================================================================
+
+    @Test
+    void validate_dropKeyword_rejects42003() {
+        assertThatThrownBy(() -> v.validateAndNormalize("DROP TABLE cust_master"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42003");
+    }
+
+    @Test
+    void validate_deleteKeyword_rejects42003() {
+        assertThatThrownBy(() -> v.validateAndNormalize("DELETE FROM cust_master"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42003");
+    }
+
+    @Test
+    void validate_updateKeyword_rejects42003() {
+        assertThatThrownBy(() -> v.validateAndNormalize("UPDATE cust_master SET name='x'"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42003");
+    }
+
+    @Test
+    void validate_insertKeyword_rejects42003() {
+        assertThatThrownBy(() -> v.validateAndNormalize("INSERT INTO cust_master VALUES (1)"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42003");
+    }
+
+    @Test
+    void validate_lowercaseKeyword_rejects42003() {
+        assertThatThrownBy(() -> v.validateAndNormalize("drop table cust_master"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42003");
+    }
+
+    // =====================================================================
+    // 4) 仅 SELECT
+    // =====================================================================
+
+    @Test
+    void validate_nonSelectStatement_rejects42007() {
+        // SHOW TABLES 不命中 4 个禁用关键字，但属于非 Select 语句（JSqlParser 解析为 Statement
+        // 但不是 Select 子类型），应该被 SQL_ONLY_SELECT_ALLOWED 拒绝
+        assertThatThrownBy(() -> v.validateAndNormalize("SHOW TABLES"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42007");
+    }
+
+    // =====================================================================
+    // 5) UNION / EXCEPT / INTERSECT 拒绝
+    // =====================================================================
+
+    @Test
+    void validate_unionAll_rejects42001() {
+        assertThatThrownBy(() -> v.validateAndNormalize(
+                "SELECT * FROM cust_master UNION ALL SELECT * FROM kpi_result"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42001");
+    }
+
+    // =====================================================================
+    // 6) 子查询深度
+    // =====================================================================
+
+    @Test
+    void validate_subqueryDepth4_rejects42001() {
+        // 5 层 SELECT 嵌套 = 子查询深度 5 > 3，应当拒绝
+        String sql = "SELECT * FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master))))";
+        assertThatThrownBy(() -> v.validateAndNormalize(sql))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42001");
+    }
+
+    // =====================================================================
+    // 7) LIMIT 自动追加 / clamp / 保留
+    // =====================================================================
+
+    @Test
+    void validate_noLimit_autoAppends1000() {
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master");
+        assertThat(r.getNormalizedSql()).endsWith("LIMIT 1000");
+    }
+
+    @Test
+    void validate_limitOver1000_clampsTo1000() {
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master LIMIT 5000");
+        assertThat(r.getNormalizedSql()).endsWith("LIMIT 1000");
+    }
+
+    @Test
+    void validate_limitUnder1000_keeps() {
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master LIMIT 50");
+        assertThat(r.getNormalizedSql()).endsWith("LIMIT 50");
+    }
+
+    // =====================================================================
+    // 8) SQL 长度上限
+    // =====================================================================
+
+    @Test
+    void validate_sqlLengthOver5000_rejects42008() {
+        // 5100 个 '1' 字符，远超 5000 上限
+        String longSql = "SELECT * FROM cust_master WHERE id=" + "1".repeat(5100);
+        assertThatThrownBy(() -> v.validateAndNormalize(longSql))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42008");
+    }
+
+    // =====================================================================
+    // 9) 解析失败
+    // =====================================================================
+
+    @Test
+    void validate_invalidSyntax_rejects42001() {
+        assertThatThrownBy(() -> v.validateAndNormalize("SELECT FROM ;;"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("RPT-42001");
+    }
+}
