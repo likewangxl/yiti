@@ -15,10 +15,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.quartz.CronScheduleBuilder;
+import org.quartz.CronTrigger;
 import org.quartz.JobDataMap;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
+import org.quartz.Trigger;
+import org.quartz.TriggerBuilder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -425,6 +429,83 @@ class JobServiceTest {
         assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40302"));
+    }
+
+    // ── applyMisfirePolicy (P3.5: misfire 策略映射单测) ────────────
+
+    /**
+     * P3.5：FIRE_ONCE_NOW → withMisfireHandlingInstructionFireAndProceed
+     * → CronTrigger.getMisfireInstruction() == MISFIRE_INSTRUCTION_FIRE_ONCE_NOW.
+     *
+     * <p>校验断言：CronTrigger 的 misfire 指令常量 {@code MISFIRE_INSTRUCTION_FIRE_ONCE_NOW=1}
+     * 即 Quartz 中 FireAndProceed 的具体落值（非 {@link Trigger#MISFIRE_INSTRUCTION_SMART_POLICY=0}
+     * 默认值，也非 0/2/-1 其他三档）.
+     */
+    @Test
+    void applyMisfirePolicy_fireOnceNow_callsFireAndProceed() {
+        CronScheduleBuilder builder = CronScheduleBuilder.cronSchedule("0 0 1 * * ?");
+        CronScheduleBuilder result = (CronScheduleBuilder) ReflectionTestUtils.invokeMethod(
+                jobService, "applyMisfirePolicy", builder, "FIRE_ONCE_NOW");
+
+        // 用 result 构造 CronTrigger 验证 misfireInstruction
+        CronTrigger trigger = TriggerBuilder.newTrigger()
+                .withIdentity("misfire_test_fireonce", "DEFAULT")
+                .withSchedule(result)
+                .build();
+        assertThat(trigger.getMisfireInstruction())
+                .isEqualTo(CronTrigger.MISFIRE_INSTRUCTION_FIRE_ONCE_NOW);
+    }
+
+    /**
+     * P3.5：DO_NOTHING → withMisfireHandlingInstructionDoNothing
+     * → CronTrigger.getMisfireInstruction() == MISFIRE_INSTRUCTION_DO_NOTHING (=2).
+     */
+    @Test
+    void applyMisfirePolicy_doNothing_callsDoNothing() {
+        CronScheduleBuilder builder = CronScheduleBuilder.cronSchedule("0 0 2 * * ?");
+        CronScheduleBuilder result = (CronScheduleBuilder) ReflectionTestUtils.invokeMethod(
+                jobService, "applyMisfirePolicy", builder, "DO_NOTHING");
+
+        CronTrigger trigger = TriggerBuilder.newTrigger()
+                .withIdentity("misfire_test_donothing", "DEFAULT")
+                .withSchedule(result)
+                .build();
+        assertThat(trigger.getMisfireInstruction())
+                .isEqualTo(CronTrigger.MISFIRE_INSTRUCTION_DO_NOTHING);
+    }
+
+    /**
+     * P3.5：IGNORE_MISFIRE_POLICY → withMisfireHandlingInstructionIgnoreMisfires
+     * → CronTrigger.getMisfireInstruction() == MISFIRE_INSTRUCTION_IGNORE_MISFIRE_POLICY (=-1).
+     */
+    @Test
+    void applyMisfirePolicy_ignoreMisfirePolicy_callsIgnoreMisfires() {
+        CronScheduleBuilder builder = CronScheduleBuilder.cronSchedule("0 0 3 * * ?");
+        CronScheduleBuilder result = (CronScheduleBuilder) ReflectionTestUtils.invokeMethod(
+                jobService, "applyMisfirePolicy", builder, "IGNORE_MISFIRE_POLICY");
+
+        CronTrigger trigger = TriggerBuilder.newTrigger()
+                .withIdentity("misfire_test_ignore", "DEFAULT")
+                .withSchedule(result)
+                .build();
+        assertThat(trigger.getMisfireInstruction())
+                .isEqualTo(Trigger.MISFIRE_INSTRUCTION_IGNORE_MISFIRE_POLICY);
+    }
+
+    /**
+     * P3.5：未知策略 → IllegalArgumentException（switch default 分支）.
+     *
+     * <p>ReflectionTestUtils.invokeMethod 直接重抛 RuntimeException 子类（含 IllegalArgumentException），
+     * 不再额外包装，所以直接断言 isInstanceOf 即可.
+     */
+    @Test
+    void applyMisfirePolicy_unknownPolicy_throwsIllegalArgumentException() {
+        CronScheduleBuilder builder = CronScheduleBuilder.cronSchedule("0 0 4 * * ?");
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                jobService, "applyMisfirePolicy", builder, "WTF_UNKNOWN_POLICY"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("WTF_UNKNOWN_POLICY");
     }
 
     // ── Helper Methods ──────────────────────────────────────────
