@@ -6,6 +6,7 @@ import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.report.config.DashboardPresidentMetrics;
 import com.bank.branch.platform.report.dto.resp.PresidentDashboardRespDTO;
@@ -66,6 +67,8 @@ class DashboardServiceTest {
     CustomerQueryApi customerQueryApi;
     @Mock
     AuditApi auditApi;
+    @Mock
+    KpiApi kpiApi;
 
     @InjectMocks
     DashboardServiceImpl service;

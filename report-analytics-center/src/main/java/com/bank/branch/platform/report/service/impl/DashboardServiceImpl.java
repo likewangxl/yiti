@@ -82,10 +82,12 @@ public class DashboardServiceImpl implements DashboardService {
     private final AuditApi auditApi;
 
     /**
-     * KpiApi V1.1 占位（getCurrentKpiTotal 抛 UOE 时 fail-soft 返回 null）.
-     * 通过 ObjectProvider 容忍 bean 缺失，让 V1.0 测试不强依赖 KpiApi 装配.
+     * KpiApi V1.1 P4.3 已真实交付（返回 BigDecimal KPI 总分）.
+     *
+     * <p>M3 入场清理 M2 reviewer 观察项 #1：去掉 ObjectProvider&lt;KpiApi&gt; 过度防御，
+     * 直接 @Autowired 注入；测试侧通过 @MockBean / @Mock 装配，不再需要 provider 容错。
      */
-    private final org.springframework.beans.factory.ObjectProvider<KpiApi> kpiApiProvider;
+    private final KpiApi kpiApi;
 
     @Override
     @Cacheable(value = "rpt:dashboard:president",
@@ -212,17 +214,17 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     /**
-     * 安全取 KPI 总分（V1.0 KpiApi 占位实现会抛 UOE，fail-soft 返回 null）.
+     * 安全取 KPI 总分.
+     *
+     * <p>KpiApi.getCurrentKpiTotal 在 V1.1 P4.3 已真实交付（返回 BigDecimal 或 null，无数据时 null）.
+     * 异常时记 warn 并返回 null，避免单点失败影响仪表盘整体展示.
      */
     private BigDecimal safeGetCurrentKpiTotal(String empId) {
         try {
-            KpiApi api = kpiApiProvider != null ? kpiApiProvider.getIfAvailable() : null;
-            if (api == null) {
-                return null;
-            }
-            return api.getCurrentKpiTotal(empId, "MONTH");
+            return kpiApi.getCurrentKpiTotal(empId, "MONTH");
         } catch (UnsupportedOperationException uoe) {
-            log.debug("[DashboardService] KpiApi V1.1 占位 UOE，返回 null");
+            // 兜底：若 KpiApi 某些 cycleType 尚未实装，fail-soft
+            log.debug("[DashboardService] KpiApi.getCurrentKpiTotal UOE，fail-soft 返回 null empId={}", empId);
             return null;
         } catch (RuntimeException e) {
             log.warn("[DashboardService] 取 KPI 总分失败 empId={} cause={}", empId, e.getMessage());

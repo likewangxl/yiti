@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.service.impl;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.report.dto.req.DynamicQueryReqDTO;
+import com.bank.branch.platform.report.dto.req.TouchSummaryReqDTO;
 import com.bank.branch.platform.report.dto.resp.ExportTaskRespDTO;
 import com.bank.branch.platform.report.entity.RptExportTask;
 import com.bank.branch.platform.report.mapper.RptExportTaskMapper;
@@ -36,6 +37,8 @@ import java.util.UUID;
 public class ExportTaskServiceImpl implements ExportTaskService {
 
     private static final String EXPORT_TYPE_DYNAMIC_QUERY = "DYNAMIC_QUERY";
+
+    private static final String EXPORT_TYPE_TOUCH_SUMMARY = "TOUCH_SUMMARY";
 
     private static final String STATUS_PENDING = "PENDING";
 
@@ -77,6 +80,39 @@ public class ExportTaskServiceImpl implements ExportTaskService {
         } catch (JsonProcessingException e) {
             // M1.3 占位阶段不细化错误码，由全局异常处理器兜底；M5 再切到 RPT-50003
             throw new IllegalStateException("Export params 序列化失败", e);
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ExportTaskRespDTO submitTouchSummaryExport(TouchSummaryReqDTO req) {
+        String empId = currentUserApi.getCurrentEmpId();
+        String paramsJson = serializeTouchSummaryParams(req);
+
+        RptExportTask task = new RptExportTask();
+        task.setId(UUID.randomUUID().toString().replace("-", ""));
+        task.setExportType(EXPORT_TYPE_TOUCH_SUMMARY);
+        task.setParamsJson(paramsJson);
+        task.setStatus(STATUS_PENDING);
+        task.setOperatorId(empId);
+        task.setCreatedTime(LocalDateTime.now());
+        task.setUpdatedTime(LocalDateTime.now());
+        exportTaskMapper.insert(task);
+
+        log.info("[ExportTask] 已创建触达汇总导出任务 taskId={} operatorId={} orgId={}",
+                task.getId(), empId, req.getOrgId());
+
+        return ExportTaskRespDTO.builder()
+                .taskId(task.getId())
+                .status(STATUS_PENDING)
+                .build();
+    }
+
+    private String serializeTouchSummaryParams(TouchSummaryReqDTO req) {
+        try {
+            return paramsObjectMapper.writeValueAsString(req);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("TouchSummary 导出 params 序列化失败", e);
         }
     }
 }
