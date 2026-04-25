@@ -5,9 +5,6 @@ import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -15,12 +12,15 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * 每日 KPI 计算定时任务（Task P4.4）.
+ * 每日 KPI 计算业务方法（V1.6 quartz-B 改造）.
  *
- * <p>默认 cron：{@code 0 30 1 * * ?}（每天 01:30），对齐计划 P4.4 要求.
+ * <p><strong>调度方式</strong>：本类只承载业务逻辑（{@link #run()}），调度由 Quartz 集群（{@code isClustered=true}
+ * + JDBC JobStore）通过 Quartz 包装类（见 {@code DailyKpiCalcQuartzJob}）触发。
+ * Quartz JDBC JobStore 已提供单一防重，{@code @SchedulerLock} / ShedLock 不再需要。
  *
- * <p><strong>开关</strong>：{@code perf.job.daily-kpi.enabled=true} 才会启用 Spring Scheduling;
- * <em>默认关闭</em>（{@code matchIfMissing=false}），避免在未显式启用 {@code @EnableScheduling} 的环境下意外执行。
+ * <p><strong>历史</strong>：V1.0-V1.5 时本类持有 {@code @Scheduled} + {@code @SchedulerLock}
+ * + {@code @ConditionalOnProperty}，由 Spring Scheduling 触发。V1.6 quartz-B 改造移除上述注解
+ * 与 {@code scheduled()} 包装方法，调度统一收敛到 Quartz。
  *
  * <p><strong>流程</strong>：
  * <ol>
@@ -33,15 +33,10 @@ import java.util.List;
  *   </li>
  *   <li>单方案异常 catch 并打 warn 日志，<em>不中断</em>整体循环</li>
  * </ol>
- *
- * <p>V1.2 若需改为 workflow-center 的调度编排 + ShedLock 分布式锁，只需在本 Job 上叠加
- * {@code @SchedulerLock} 注解，不影响业务逻辑。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "perf.job.daily-kpi", name = "enabled",
-        havingValue = "true", matchIfMissing = false)
 public class DailyKpiCalcJob {
 
     private static final DateTimeFormatter VERSION_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -50,19 +45,7 @@ public class DailyKpiCalcJob {
     private final KpiCalcService kpiCalcService;
 
     /**
-     * Spring Scheduler 入口：每日 01:30 触发（cron 可通过 {@code perf.job.daily-kpi.cron} 覆盖）.
-     *
-     * <p>注意：Spring {@code @Scheduled} 需要全局 {@code @EnableScheduling}；
-     * 若未启用（默认状态），本任务只会在被 {@code @ConditionalOnProperty} 启用后才生效。
-     */
-    @Scheduled(cron = "${perf.job.daily-kpi.cron:0 30 1 * * ?}")
-    @SchedulerLock(name = "DailyKpiCalcJob", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5M")
-    public void scheduled() {
-        run();
-    }
-
-    /**
-     * 实际执行体：可被单测直接调用（绕开 Spring 调度器）.
+     * 实际执行体：由 Quartz 包装类调用，也可被单测直接调用.
      */
     public void run() {
         List<PerfKpiScheme> schemes = kpiSchemeService.listActiveSchemes();
