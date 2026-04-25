@@ -1,5 +1,7 @@
 package com.bank.branch.platform.report.service;
 
+import com.bank.branch.platform.report.dto.req.SavedQuerySaveReqDTO;
+import com.bank.branch.platform.report.dto.req.SavedQueryUpdateReqDTO;
 import com.bank.branch.platform.report.dto.resp.SavedQueryDetailRespDTO;
 import com.bank.branch.platform.report.dto.resp.SavedQuerySummaryDTO;
 
@@ -32,4 +34,26 @@ public interface SavedQueryService {
      * @return 详情
      */
     SavedQueryDetailRespDTO getDetail(String id);
+
+    /**
+     * 保存方案（B.2 POST）.
+     * <p>单事务内：count → 超 10 删最旧 → INSERT。
+     *
+     * @param req 入参
+     * @return 新方案 ID
+     */
+    String saveQuery(SavedQuerySaveReqDTO req);
+
+    /**
+     * 更新方案（B.3 PUT，含乐观锁）.
+     *
+     * @param id  方案 ID
+     * @param req 入参（含 expectedVersion）
+     */
+    void updateQuery(String id, SavedQueryUpdateReqDTO req);
+
+    /**
+     * 删除方案（B.4 DELETE，仅本人）.
+     */
+    void deleteQuery(String id);
 }
