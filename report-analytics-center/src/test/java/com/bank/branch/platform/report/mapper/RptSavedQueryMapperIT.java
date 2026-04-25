@@ -85,4 +85,85 @@ class RptSavedQueryMapperIT extends ReportFlywayTestBase {
         mapper.insert(e);
         assertThat(mapper.countByEmpId(TEST_EMP_ID)).isEqualTo(1);
     }
+
+    // ===== M1.4 / M1.5 增量 Mapper 方法守护 =====
+
+    @Test
+    void listByEmpAndDim_filterByDim_returnsOnlyMatched() {
+        // 插两条 EMP + 一条 ORG，按 dim=EMP 过滤应只命中 2 条
+        insertEntity("TEST_SQ_M1_LIST_1", TEST_EMP_ID, "EMP", "EMP-A");
+        insertEntity("TEST_SQ_M1_LIST_2", TEST_EMP_ID, "EMP", "EMP-B");
+        insertEntity("TEST_SQ_M1_LIST_3", TEST_EMP_ID, "ORG", "ORG-A");
+
+        var list = mapper.listByEmpAndDim(TEST_EMP_ID, "EMP");
+        assertThat(list).hasSize(2);
+        assertThat(list).extracting(RptSavedQuery::getDim)
+                .allMatch(d -> "EMP".equals(d));
+    }
+
+    @Test
+    void listByEmpAndDim_nullDim_returnsAll() {
+        insertEntity("TEST_SQ_M1_LIST_4", TEST_EMP_ID, "EMP", "any-A");
+        insertEntity("TEST_SQ_M1_LIST_5", TEST_EMP_ID, "ORG", "any-B");
+        var list = mapper.listByEmpAndDim(TEST_EMP_ID, null);
+        assertThat(list).hasSizeGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void findOldestId_returnsFirstCreated() throws InterruptedException {
+        insertEntity("TEST_SQ_M1_OLD_1", TEST_EMP_ID, "EMP", "first");
+        // 略微等待保证 created_time 有差异（datetime 精度到秒）
+        Thread.sleep(1100);
+        insertEntity("TEST_SQ_M1_OLD_2", TEST_EMP_ID, "EMP", "second");
+        String oldest = mapper.findOldestId(TEST_EMP_ID);
+        assertThat(oldest).isEqualTo("TEST_SQ_M1_OLD_1");
+    }
+
+    @Test
+    void updateWithOptimisticLock_versionMatch_succeeds() {
+        insertEntityWithVersion("TEST_SQ_M1_OL_1", TEST_EMP_ID, "EMP", "orig", 1);
+
+        RptSavedQuery patch = new RptSavedQuery();
+        patch.setId("TEST_SQ_M1_OL_1");
+        patch.setName("renamed");
+        int rows = mapper.updateWithOptimisticLock(patch, 1);
+        assertThat(rows).isEqualTo(1);
+
+        RptSavedQuery loaded = mapper.selectById("TEST_SQ_M1_OL_1");
+        assertThat(loaded.getName()).isEqualTo("renamed");
+        assertThat(loaded.getVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void updateWithOptimisticLock_versionMismatch_returnsZero() {
+        insertEntityWithVersion("TEST_SQ_M1_OL_2", TEST_EMP_ID, "EMP", "orig", 5);
+
+        RptSavedQuery patch = new RptSavedQuery();
+        patch.setId("TEST_SQ_M1_OL_2");
+        patch.setName("blocked");
+        int rows = mapper.updateWithOptimisticLock(patch, 1);
+        assertThat(rows).isZero();
+
+        RptSavedQuery loaded = mapper.selectById("TEST_SQ_M1_OL_2");
+        assertThat(loaded.getName()).isEqualTo("orig");
+        assertThat(loaded.getVersion()).isEqualTo(5);
+    }
+
+    private void insertEntity(String id, String empId, String dim, String name) {
+        insertEntityWithVersion(id, empId, dim, name, 0);
+    }
+
+    private void insertEntityWithVersion(String id, String empId, String dim, String name, int version) {
+        RptSavedQuery e = new RptSavedQuery();
+        e.setId(id);
+        e.setEmpId(empId);
+        e.setName(name);
+        e.setDim(dim);
+        e.setSubjectIds("[]");
+        e.setMetricCodes("[]");
+        e.setVersion(version);
+        e.setCreatedTime(LocalDateTime.now());
+        e.setUpdatedTime(LocalDateTime.now());
+        mapper.insert(e);
+    }
 }

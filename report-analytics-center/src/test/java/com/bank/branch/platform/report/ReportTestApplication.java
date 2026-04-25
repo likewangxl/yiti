@@ -17,6 +17,7 @@ import org.flowable.spring.boot.idm.IdmEngineAutoConfiguration;
 import org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Import;
 
 /**
  * report-analytics-center 测试专用 Spring Boot 启动类（M0.2.1）.
@@ -49,6 +50,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         FlowableInfoAutoConfiguration.class
     }
 )
+@Import(TestUpstreamApiMockConfig.class)
 public class ReportTestApplication {
     public static void main(String[] args) {
         SpringApplication.run(ReportTestApplication.class, args);
