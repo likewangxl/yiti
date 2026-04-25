@@ -140,6 +140,54 @@ class PortalWorkspaceMetricIT {
     }
 
     // ======================================================================
+    // V1.6 reviewer §G-1 整改：WorkspaceService 6 路并行剩余 5 路覆盖
+    //
+    //   并行路             | 验证类型     | 备注
+    //   ------------------|------------|------------------------------------
+    //   metricCards       | 真实链路    | 由前 4 个 trend case 覆盖
+    //   shortcuts         | 真实链路    | 本 case：portal_shortcut SYSTEM+CUSTOM 2 行
+    //   todoCount         | graceful    | application-test.yml 排除 Flowable AutoConfig
+    //   recentTodos       | graceful    | → WorkflowQueryAdapter 上游 Bean 缺失 → 0/empty
+    //   unreadNotifyCount | 真实链路    | schema.sql:168 含 user_notification → 空表返回 0
+    //   recentNotif       | 真实链路    | NotifyApi.queryNotifications 真查表（空 → []）
+    //   aggregateErrors   | graceful    | 6 路全部成功（含 graceful 降级），errors map 应为空
+    // ======================================================================
+
+    @Test
+    @DisplayName("Option B.1 - empId=E10001 → shortcut 真实链路 2 行 + workflow graceful + notification 真实链路空表")
+    void workspace_shouldAggregateShortcuts_andGracefullyDegradeOtherPaths() throws Exception {
+        // empId=E10001（setUp 默认 stub），fake data 含 SYSTEM + CUSTOM(E10001) 共 2 行 portal_shortcut
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("empId", "E10001");
+
+        mockMvc.perform(get("/api/portal/workspace").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                // ============ shortcut 真实链路 ============
+                // ShortcutService.listMyShortcuts → listByEmpIdOrSystem(empId) → portal_shortcut 表
+                // 期望：SYSTEM(SC_SYS_01) + CUSTOM(SC_CUST_E10001) = 2 行
+                .andExpect(jsonPath("$.data.shortcuts").isArray())
+                .andExpect(jsonPath("$.data.shortcuts.length()").value(2))
+                // ============ workflow graceful 降级 ============
+                // application-test.yml 排除 Flowable 全部 AutoConfig + flowable.enabled=false
+                // → WorkflowQueryAdapter.workflowQueryApi 为 null（@Autowired(required=false)）
+                // → countPending / listPending fallback 0 / empty
+                .andExpect(jsonPath("$.data.todoCount").value(0))
+                .andExpect(jsonPath("$.data.recentTodos").isArray())
+                .andExpect(jsonPath("$.data.recentTodos").isEmpty())
+                // ============ notification 真实链路（空表） ============
+                // schema.sql:168 已建 user_notification 表 → NotifyApi.countUnread / queryNotifications
+                // 真查表，E10001 无 fake data → 返回 0 / 空列表
+                .andExpect(jsonPath("$.data.unreadNotificationCount").value(0))
+                .andExpect(jsonPath("$.data.recentNotifications").isArray())
+                .andExpect(jsonPath("$.data.recentNotifications").isEmpty())
+                // ============ aggregateErrors 空 ============
+                // 6 路全部成功（含 workflow graceful 降级路径不计入 errors）
+                .andExpect(jsonPath("$.data.aggregateErrors").isMap())
+                .andExpect(jsonPath("$.data.aggregateErrors").isEmpty());
+    }
+
+    // ======================================================================
     // helper：4 个 case 共享的基础断言（HTTP 200 + 卡片基础字段）
     // ======================================================================
 

@@ -10,3 +10,4 @@ DELETE FROM perf_kpi_item WHERE scheme_id = 'KPI01';
 DELETE FROM perf_kpi_scheme WHERE id = 'KPI01';
 DELETE FROM perf_metric_def WHERE metric_code = 'DEPOSIT';
 DELETE FROM sys_control WHERE id = 'SC_EMP';
+DELETE FROM portal_shortcut WHERE id IN ('SC_SYS_01', 'SC_CUST_E10001');

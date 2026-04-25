@@ -16,6 +16,7 @@ DELETE FROM perf_kpi_item WHERE scheme_id = 'KPI01';
 DELETE FROM perf_kpi_scheme WHERE id = 'KPI01';
 DELETE FROM perf_metric_def WHERE metric_code = 'DEPOSIT';
 DELETE FROM sys_control WHERE id = 'SC_EMP';
+DELETE FROM portal_shortcut WHERE id IN ('SC_SYS_01', 'SC_CUST_E10001');
 
 -- 1. 指标定义（baseDim=EMP，valSlot=1，对应 emp_index_result.val_1）
 INSERT INTO perf_metric_def
@@ -56,3 +57,13 @@ INSERT INTO emp_index_result (emp_id, data_date, version, val_1) VALUES
     -- E10004 → previous=0 → mom=null → trend=null
     ('E10004', '2026-04-01', 'V1', 1000000.00),
     ('E10004', '2026-03-01', 'V1', 0.00);
+
+-- 6. portal_shortcut（V1.6 reviewer §G-1 整改：补 shortcut 真实链路覆盖）
+--    SYSTEM 1 行（全员可见）+ CUSTOM 1 行（仅 E10001 可见）
+--    case workspace_shouldAggregateShortcutsAndGracefullyDegradeOtherPaths 验证：
+--      - empId=E10001 看到 2 行（SYSTEM + 自己 CUSTOM）
+INSERT INTO portal_shortcut
+    (id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type, target_type, emp_id, sort_order, status, created_by, created_time, updated_by, updated_time)
+VALUES
+    ('SC_SYS_01',      '系统快捷-客户中心', '/customers',    'icon-customer', 'SYSTEM', 'INTERNAL', NULL,    10, 'ACTIVE', 'seed', CURRENT_TIMESTAMP, 'seed', CURRENT_TIMESTAMP),
+    ('SC_CUST_E10001', '我的快捷-工作台',   '/portal/myhome', 'icon-home',     'CUSTOM', 'INTERNAL', 'E10001', 20, 'ACTIVE', 'E10001', CURRENT_TIMESTAMP, 'E10001', CURRENT_TIMESTAMP);
