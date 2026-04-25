@@ -1,11 +1,8 @@
 package com.bank.branch.platform.report.controller;
 
-import com.bank.branch.platform.governance.api.DictApi;
-import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.performance.api.dto.MetricDefDTO;
 import com.bank.branch.platform.report.BaseControllerIT;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.util.List;
 
@@ -23,12 +20,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 以 @MockBean 注入假数据。
  */
 class MetaControllerIT extends BaseControllerIT {
-
-    @MockBean
-    private MetricApi metricApi;
-
-    @MockBean
-    private DictApi dictApi;
 
     @Test
     void getQueryDimensions_EMP_returns200AndTree() throws Exception {
