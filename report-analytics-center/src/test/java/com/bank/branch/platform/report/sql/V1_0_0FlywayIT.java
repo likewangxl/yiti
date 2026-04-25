@@ -28,16 +28,17 @@ class V1_0_0FlywayIT extends ReportFlywayTestBase {
 
     @Test
     void v100ScriptFile_existsInClasspath() {
-        Resource r = resourceLoader.getResource("classpath:sql/V1_0_0__rpt_init.sql");
+        Resource r = resourceLoader.getResource("classpath:sql/report/V1_0_0__rpt_init.sql");
         assertThat(r.exists())
-            .as("V1_0_0__rpt_init.sql 必须存在于 classpath:sql/ 下")
+            .as("V1_0_0__rpt_init.sql 必须存在于 classpath:sql/report/ 下")
             .isTrue();
     }
 
     @Test
     void v100Script_registered_inFlywayHistory() {
+        // 使用独立 schema_history 表 flyway_schema_history_rpt 避免与 perf 模块 V1_0_0 重号冲突
         Integer count = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM flyway_schema_history WHERE version='1.0.0' AND success=1",
+            "SELECT COUNT(*) FROM flyway_schema_history_rpt WHERE version='1.0.0' AND success=1",
             Integer.class);
         assertThat(count).isEqualTo(1);
     }

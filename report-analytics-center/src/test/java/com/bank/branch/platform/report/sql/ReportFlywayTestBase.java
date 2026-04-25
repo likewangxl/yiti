@@ -31,7 +31,12 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
     "spring.datasource.password=123456",
     "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
     "spring.flyway.enabled=true",
-    "spring.flyway.locations=classpath:sql",
+    // 使用模块命名空间子目录 sql/report/ 避免与 performance-engine-center 的 V1_0_0__performance_ddl.sql
+    // 同版本号冲突（FlywayException: Found more than one migration with version 1.0.0）
+    "spring.flyway.locations=classpath:sql/report",
+    // 使用独立 schema_history 表避免与 perf 模块的 V1_0_0__performance_ddl 已登记记录冲突
+    // （否则 Flyway 看到 1.0.0 已 success=1 会跳过执行 V1_0_0__rpt_init.sql）
+    "spring.flyway.table=flyway_schema_history_rpt",
     "spring.flyway.baseline-on-migrate=true",
     "spring.flyway.baseline-version=0",
     "spring.flyway.clean-disabled=false",
