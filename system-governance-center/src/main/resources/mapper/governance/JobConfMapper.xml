@@ -84,4 +84,11 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 根据 jobKey 同步更新 last_run_time（V1.6 quartz 整合 P1.5 引入） -->
+    <update id="updateLastRunTime">
+        UPDATE sys_job_conf
+        SET last_run_time = #{lastRunTime}
+        WHERE job_key = #{jobKey}
+    </update>
+
 </mapper>

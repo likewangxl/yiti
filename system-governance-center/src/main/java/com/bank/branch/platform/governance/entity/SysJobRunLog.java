@@ -43,4 +43,7 @@ public class SysJobRunLog {
 
     /** 创建时间，对应 created_time */
     private LocalDateTime createdTime;
+
+    /** Quartz 计划触发时间（V1.6 新增，用于 misfire 排查），对应 scheduled_fire_time */
+    private LocalDateTime scheduledFireTime;
 }

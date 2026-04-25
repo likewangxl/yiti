@@ -4,6 +4,7 @@ import com.bank.branch.platform.governance.entity.SysJobRunLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -63,4 +64,32 @@ public interface JobRunLogMapper {
      * @return 总记录数
      */
     long countByJobId(String jobId);
+
+    /**
+     * 标记执行日志为 SUCCESS（V1.6 quartz 整合 P1.5 引入）。
+     *
+     * <p>由 JobExecutionLogger.jobWasExecuted 在 jobException == null 时调用。
+     * 仅更新 status / end_time，不写 error_msg。</p>
+     *
+     * @param id      日志主键
+     * @param endTime 结束时间
+     * @return 受影响行数
+     */
+    int updateSuccess(@Param("id") String id,
+                      @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * 标记执行日志为 FAILED 并写入错误信息（V1.6 quartz 整合 P1.5 引入）。
+     *
+     * <p>由 JobExecutionLogger.jobWasExecuted 在 jobException != null 时调用。
+     * errorMsg 调用前已截断到 4000 字符以内，防止 TEXT 列爆炸。</p>
+     *
+     * @param id       日志主键
+     * @param endTime  结束时间
+     * @param errorMsg 异常堆栈（截断后，长度 ≤ 4000）
+     * @return 受影响行数
+     */
+    int updateFailed(@Param("id") String id,
+                     @Param("endTime") LocalDateTime endTime,
+                     @Param("errorMsg") String errorMsg);
 }

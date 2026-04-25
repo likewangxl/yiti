@@ -2,11 +2,11 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.JobRunLogMapper">
 
-    <!-- sys_job_run_log 全列查询片段 -->
+    <!-- sys_job_run_log 全列查询片段（V1.6 新增 scheduled_fire_time） -->
     <sql id="BASE_COLUMNS">
         id, job_id, trigger_type, reason,
         start_time, end_time, status, error_msg,
-        created_by, created_time
+        created_by, created_time, scheduled_fire_time
     </sql>
 
     <!-- 新增执行日志记录 -->
@@ -14,11 +14,11 @@
         INSERT INTO sys_job_run_log (
             id, job_id, trigger_type, reason,
             start_time, end_time, status, error_msg,
-            created_by, created_time
+            created_by, created_time, scheduled_fire_time
         ) VALUES (
             #{id}, #{jobId}, #{triggerType}, #{reason},
             #{startTime}, #{endTime}, #{status}, #{errorMsg},
-            #{createdBy}, #{createdTime}
+            #{createdBy}, #{createdTime}, #{scheduledFireTime}
         )
     </insert>
 
@@ -66,5 +66,22 @@
         FROM sys_job_run_log
         WHERE job_id = #{jobId}
     </select>
+
+    <!-- 标记 SUCCESS（V1.6 quartz 整合 P1.5 引入） -->
+    <update id="updateSuccess">
+        UPDATE sys_job_run_log
+        SET status = 'SUCCESS',
+            end_time = #{endTime}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 标记 FAILED 并写入错误信息（V1.6 quartz 整合 P1.5 引入；errorMsg 调用前已截断 ≤ 4000） -->
+    <update id="updateFailed">
+        UPDATE sys_job_run_log
+        SET status = 'FAILED',
+            end_time = #{endTime},
+            error_msg = #{errorMsg}
+        WHERE id = #{id}
+    </update>
 
 </mapper>

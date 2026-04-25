@@ -4,6 +4,7 @@ import com.bank.branch.platform.governance.entity.SysJobConf;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -63,4 +64,17 @@ public interface JobConfMapper {
      * @return 受影响行数
      */
     int insert(SysJobConf conf);
+
+    /**
+     * 根据 jobKey 同步更新 last_run_time（V1.6 quartz 整合 P1.5 引入）。
+     *
+     * <p>由 JobExecutionLogger.jobWasExecuted 在每次任务执行结束后调用，
+     * 记录最近一次实际触发时间。</p>
+     *
+     * @param jobKey      任务唯一标识
+     * @param lastRunTime 最近一次执行结束时间
+     * @return 受影响行数
+     */
+    int updateLastRunTime(@Param("jobKey") String jobKey,
+                          @Param("lastRunTime") LocalDateTime lastRunTime);
 }
