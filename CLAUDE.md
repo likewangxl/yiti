@@ -83,7 +83,7 @@ pom.xml `surefire/failsafe` 的 argLine 已含 `-Dfile.encoding=UTF-8`，无需�
 | `customer-marketing-center` | com.bank.branch.platform.customer | 已完成 | 客户营销中心 (113 Java + 46 测试，0 UOE) |
 | `business-application-center` | com.bank.branch.platform.bizapp | 已完成 | 业务申请中心 (60 Java + 26 测试，0 UOE) |
 | `portal-content-center` | com.bank.branch.platform.portal | 已完成 | 门户与内容中心 (108 Java + 38 测试，0 UOE) |
-| `performance-engine-center` | com.bank.branch.platform.performance | V1.5 已交付（V1.4 遗留清零） | 绩效计算中心 (V1.0-V1.4 累积能力 + V1.5 6 项技术债清零) |
+| `performance-engine-center` | com.bank.branch.platform.performance | V1.6 已交付（quartz 整合） | 绩效计算中心 (V1.0-V1.5 累积能力 + V1.6 Spring `@Scheduled`/ShedLock → Quartz 集群调度迁移) |
 | `report-analytics-center` | com.bank.branch.platform.report | V1.0 已交付（2026-04-25） | 报表分析中心 (25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步 + SQL 探查) |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
@@ -103,7 +103,7 @@ workflow-center (依赖 auth + governance)
 portal-content-center (依赖 auth + governance + workflow，通用域不持有核心域状态) ← 已交付
 customer-marketing-center (依赖 auth + governance + workflow) ← 已交付
 business-application-center (依赖 auth + governance + workflow + customer-marketing + portal) ← 已交付
-performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.5 已交付（V1.4 遗留清零）
+performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.6 已交付（Quartz 整合）
 
 report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖) ← V1.0 已交付（2026-04-25）
 
@@ -134,7 +134,7 @@ com.bank.branch.platform
 ├─ portal-content-center         门户与内容中心 ✅ 已完成（108 Java + 38 测试）
 ├─ customer-marketing-center     客户营销中心 ✅ 已完成（113 Java + 46 测试）
 ├─ business-application-center   业务申请中心 ✅ 已完成（60 Java + 26 测试）
-├─ performance-engine-center     绩效计算中心 ✅ V1.5 已交付（V1.4 遗留 6 项清零：@Deprecated 删除 + cycleType 空串守护 + codeToCycleType 分组 + batch 宽表 + yoy WEEKLY + owner <if>）
+├─ performance-engine-center     绩效计算中心 ✅ V1.6 已交付（Quartz 整合：Spring `@Scheduled`/ShedLock 全部迁移到 Quartz 集群调度，QRTZ_LOCKS 行锁接管防重；JobApi 精简到 1 方法 getJobConf；JobExecutionLogger 全局 Quartz JobListener 统一写日志）
 └─ report-analytics-center       报表分析中心 ✅ V1.0 已交付（25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步导出 + SQL 探查 / surefire 103 + failsafe 70 = 173 全绿）
 ```
 

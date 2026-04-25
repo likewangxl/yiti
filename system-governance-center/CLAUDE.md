@@ -95,14 +95,20 @@ src/main/java/com/bank/branch/platform/governance/
 | `listBizFiles(bizType, bizId)` | 获取业务对象关联的文件列表 |
 | `deleteFile(fileId)` | 删除文件及所有关联 |
 
-### JobApi
+### JobApi (V1.6 quartz 整合后精简到 1 方法)
 
 | 方法 | 用途 |
 |------|------|
-| `getJobConf(jobKey)` | 获取定时任务配置 |
-| `startJobRun(jobId, trigger, empId)` | 记录任务执行开始, 返回 runLogId |
-| `completeJobRun(runLogId)` | 标记执行为 SUCCESS |
-| `failJobRun(runLogId, errorMsg)` | 标记执行为 FAILED |
+| `getJobConf(jobKey)` | 获取定时任务配置（只读） |
+
+**V1.6 精简说明（2026-04-25）**：V1.0-V1.5 曾持有 `startJobRun(jobId, trigger, empId)` /
+`completeJobRun(runLogId)` / `failJobRun(runLogId, errorMsg)` 三个写日志方法，由各业务模块的
+`@Scheduled` 任务在执行前后显式调用。V1.6 quartz 整合后：
+
+- 调度统一收敛到 Quartz 集群（`isClustered=true` + JDBC JobStore），防重由 `QRTZ_LOCKS` 行锁接管（不再依赖 ShedLock）
+- 写日志改由 `JobExecutionLogger`（全局 Quartz `JobListener`）在 `jobToBeExecuted` / `jobWasExecuted` 回调中统一处理
+- `JobApi` 仅保留 `getJobConf` 一个只读查询方法，业务模块不再需要写日志方法（spec 决策 #5=B）
+- `JobService.startJobRun/completeJobRun/failJobRun` 被 `JobController` + `JobServiceTest` 内部使用，public 可见性保持不变（spec §8.2 不强制收敛）
 
 ## REST 端点
 
@@ -144,3 +150,31 @@ src/main/java/com/bank/branch/platform/governance/
 |--------|------|
 | `GovCacheConfig` | 定义 `RedisTemplate<String, Object>` (String key 序列化, JSON value 序列化), `@ConditionalOnMissingBean` 避免与其他模块冲突 |
 | `MinioConfig` | 创建 `MinioClient` bean (从 `minio.endpoint`, `minio.access-key`, `minio.secret-key`, `minio.bucket` 读取) |
+| `QuartzConfig` | V1.6 引入：定义 `SchedulerFactoryBeanCustomizer`，注册 `JobExecutionLogger` 为全局 `JobListener`；`JobService.syncJobsOnStartup` 在 `ApplicationReadyEvent` 后扫描 `sys_job_conf` 表批量同步 JobDetail / Trigger 到 Quartz |
+
+## Quartz 集群调度（V1.6 引入）
+
+V1.6 quartz 整合后，治理中心成为平台唯一的 Quartz 集成点，业务模块仅需提供"裸业务方法"
+和 Quartz 包装类（`QuartzJobBean` 子类）：
+
+### 关键组件
+
+| 组件 | 路径 | 说明 |
+|---|---|---|
+| `QuartzConfig` | `config/QuartzConfig.java` | 注册 `JobExecutionLogger` 为全局 JobListener |
+| `JobExecutionLogger` | `listener/JobExecutionLogger.java` | 全局 Quartz `JobListener`：`jobToBeExecuted` 写 RUNNING 日志 + `jobWasExecuted` 写 SUCCESS/FAILED 日志，异常隔离不影响业务调度 |
+| `JobService.syncJobsOnStartup` | `service/JobService.java` | 应用启动期扫描 `sys_job_conf` 表，按 `jobKey` 批量同步 `JobDetail` / `Trigger` 到 Quartz（`overwrite-existing-jobs=true`，配置变更可覆盖 QRTZ_* 数据） |
+
+### 集群与防重
+
+- `spring.quartz.properties.org.quartz.jobStore.isClustered=true`：多节点部署时通过 `QRTZ_LOCKS` 行锁实现单一执行（替代 ShedLock + Redis）
+- `JobStore` 由 `SchedulerFactoryBean.afterPropertiesSet` 通过 `putIfAbsent` 注入 `LocalDataSourceJobStore`（JobStoreCMT 子类）
+- DDL 由 `docs/schema/ddl-quartz.sql` 手动初始化（`spring.quartz.jdbc.initialize-schema=never`）
+
+### 业务模块接入约定
+
+业务模块只需：
+1. 持有"裸业务方法"（如 `DailyKpiCalcJob.run()`），不带任何调度注解
+2. 提供 `QuartzJobBean` 子类作为包装（如 `DailyKpiCalcQuartzJob`），在 `executeInternal` 中调用裸方法
+3. 在自己模块的 Quartz 配置类中（如 `PerfQuartzConfig`）声明 `JobDetail` + `Trigger` bean
+4. **不需要**再调用 `JobApi.startJobRun/completeJobRun/failJobRun`，写日志由 `JobExecutionLogger` 统一处理

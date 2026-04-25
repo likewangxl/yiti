@@ -81,6 +81,20 @@ docs/
 | 基线 DDL + 初始种子 | `docs/schema/` | `ddl-*.sql` / `seed-v1.sql` / `workflow-seed-v1.sql` | 从 0 搭库用，定义表结构和最小可用种子 | 仅首次建库 |
 | 运维/对齐/测试种子 | `docs/superpowers/sql/` | `YYYY-MM-DD-*-align*.sql` 等 | 在已有库上按日期做增量对齐、测试数据重建 | 每次跑前必须备份到 `sql/backup/` |
 
+### `docs/schema/` DDL 文件清单
+
+| 文件 | 模块 | 说明 |
+|---|---|---|
+| `ddl-auth.sql` | auth-permission-center | 认证授权 + RBAC + 数据范围 |
+| `ddl-governance.sql` | system-governance-center | 字典 / 配置 / 日历 / 审计 / 通知 / 文件 / 任务（不含 Quartz QRTZ_*） |
+| `ddl-workflow.sql` | workflow-center | Flowable 嵌入式表 |
+| `ddl-customer.sql` | customer-marketing-center | 客户营销 |
+| `ddl-bizapp.sql` | business-application-center | 业务申请 |
+| `ddl-portal.sql` | portal-content-center | 门户内容 |
+| `ddl-performance.sql` | performance-engine-center | 绩效计算配置 + 业务数据表 |
+| `ddl-report.sql` | report-analytics-center | 报表分析（待实现） |
+| `ddl-quartz.sql` | system-governance-center（V1.6 引入） | Quartz JDBC JobStore 集群所需 11 张 `QRTZ_*` 表，由 `spring.quartz.jdbc.initialize-schema=never` 触发手动初始化 |
+
 ### 2026-04-10 PT_* 对齐脚本（当前最新版）
 
 | 文件 | 内容 | 说明 |

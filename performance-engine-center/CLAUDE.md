@@ -6,7 +6,13 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.5（V1.4 遗留 6 项清零）—— 在 V1.4 交付之上清理最后 6 项观察/兼容项：
+**当前版本**: V1.6（quartz 整合）—— 在 V1.5 交付之上完成 Spring `@Scheduled` / ShedLock → Quartz 集群调度迁移：
+- P1 governance 新增 Quartz 基础设施（QuartzConfig + JobExecutionLogger + JobService.syncJobsOnStartup + ddl-quartz.sql + bootstrap quartz 配置块）
+- P2 3 个业务 Job 删 `@Scheduled` / `@SchedulerLock` / `@ConditionalOnProperty` / `scheduled()` 包装方法 + 新增 3 个 Quartz 包装类（DailyKpiCalcQuartzJob / SysControlCleanupQuartzJob / PerfRunTaskCleanupQuartzJob）
+- P3 PerfQuartzConfig 注册 3 个 JobDetail + Trigger（cron 配置走 sys_job_conf 表，`overwrite-existing-jobs=true` 启动期可覆盖）
+- P4 ShedLock 全部痕迹删除（pom.xml + ShedLockConfig.java + ShedLockConfigTest.java），JobApi 精简到 1 方法 getJobConf
+
+V1.5（V1.4 遗留 6 项清零）历史：
 - P1 MetricTrialRespDTO @Deprecated getSamples() 删除 + @JsonAlias 移除
 - P2 HistoryRecalcService cycleType=""/"   " 空串 behavior 测试补齐
 - P3 MetricApi.getUserMetricCards 多 scheme 首命中歧义修复（按 metricCode+cycleType 分组）
@@ -46,7 +52,8 @@ V1.3（技术债清偿）历史：
 | V1.2 | 分配/目标调整审批（BPMN + Flowable）、4 类领域事件发布、4 导出策略（异步任务 + MinIO）、ShedLock 分布式锁、PerfScopeHelper 数据范围注入、PT_RESOURCE 资源全量激活（45 条） | 已交付 |
 | V1.3 | 技术债清偿：V1_2_5/V1_3_0 DDL 兜底、Target 数据范围注入、5 处 V1.2 UOE 实际实现、PERF-50003 新增、MetricTrialRespDTO 对齐 03 §A.5、execute 返回 RunTaskInfoDTO、11 Controller 局部 entity 清零、P7 recalc 真实 status、cycleType 写 params_json、Testcontainers-redis 接入、UndoScriptSmokeIT 重写、2 个新架构守护（NoEntityInControllerLocalsArchTest + NoUoeInFacadeTestsArchTest） | 已交付 |
 | V1.4 | 9 项 V1.3 遗留技术债消化：WORKFLOW_PARTICIPANT 真实查询（workflow-center `WorkflowQueryApi.queryParticipatedBusinessKeys` 新增 + PerfScopeHelper 透传）、Target owner 字段 DDL（V1_4_0 `owner_emp_id` / `owner_org_code` + Entity/Mapper/Cmd/Service ScopeColumns 精化）、MetricApi.getUserMetricCards mom/yoy/previousValue 字段计算（cycleType 按方案精确匹配 yyyyMM / yyyyQn / yyyy）、P7 recalc fallback 日志、cycleType null/空串语义澄清、Controller.list 返回类型澄清为 common-web 契约（非 bug） | 已交付 |
-| **V1.5** | 6 项 V1.4 遗留清零：@Deprecated getSamples 删除 / cycleType 空串测试 / codeToCycleType 分组修复 / batch 宽表 / yoy WEEKLY 分支 / updateByIdSelective owner <if> | **本期交付（2026-04-24）** |
+| V1.5 | 6 项 V1.4 遗留清零：@Deprecated getSamples 删除 / cycleType 空串测试 / codeToCycleType 分组修复 / batch 宽表 / yoy WEEKLY 分支 / updateByIdSelective owner <if> | 已交付（2026-04-24） |
+| **V1.6** | quartz 整合：governance Quartz 基础设施（QuartzConfig + JobExecutionLogger + syncJobsOnStartup）、3 个 Job 删 @Scheduled/@SchedulerLock + 新增 3 个 Quartz 包装类、PerfQuartzConfig 注册 JobDetail/Trigger、删 ShedLock 全部痕迹、JobApi 精简到 1 方法 | **本期交付（2026-04-25）** |
 
 ### V1.3 UOE 清单（Facade UOE 已清零）
 
@@ -550,30 +557,37 @@ HAVING COUNT(*) > 1;
 
 配套 `DataTaskService.report` 已在 V1.3 R0.2 增加 `DuplicateKeyException` 降级路径（Redis 宕机时 DB 唯一键兜底）。
 
-### 3 个定时任务默认关闭策略
+### 3 个定时任务调度（V1.6 quartz 整合后）
 
-V1.2 Q5 引入 3 个 `@Scheduled` 任务，均受 `perf.engine.enabled-jobs` 属性控制，**默认 OFF**
-避免开发 / 测试环境误触发。生产启用步骤：
+V1.2 Q5 曾引入 3 个 `@Scheduled` 任务（`perf.engine.enabled-jobs` 属性控制 + ShedLock 防重）。
+**V1.6 quartz 整合（2026-04-25）改造后**：调度统一收敛到 Quartz 集群（`isClustered=true` + JDBC JobStore），
+防重由 `QRTZ_LOCKS` 行锁接管（不再依赖 ShedLock + Redis）：
 
-1. 在 `application-prod.yml` 追加：
-   ```yaml
-   perf:
-     engine:
-       enabled-jobs:
-         daily-kpi-calc: true           # 每日 KPI 计算（原 Cron: 0 0 2 * * *）
-         sys-control-cleanup: true      # 版本历史清理（Cron: 0 0 3 * * SUN）
-         perf-run-task-cleanup: true    # 过期 run_task 清理（Cron: 0 0 4 * * *）
-   ```
+| 业务 Job | Quartz 包装类 | 默认 cron（来自 `sys_job_conf`） |
+|---|---|---|
+| `DailyKpiCalcJob.run()` | `DailyKpiCalcQuartzJob` | `0 0 2 * * ?` 每日凌晨 2 点 |
+| `SysControlCleanupJob.run()` | `SysControlCleanupQuartzJob` | `0 0 3 ? * SUN` 每周日凌晨 3 点 |
+| `PerfRunTaskCleanupJob.run()` | `PerfRunTaskCleanupQuartzJob` | `0 0 4 * * ?` 每日凌晨 4 点 |
 
-2. 确保 Redis 可用（ShedLock 依赖，无 Redis 时 Job 会跳过执行但不报错，仅单机状态）。
+**业务方法持有者**（`*Job` 类）：仅承载业务逻辑（`run()` 方法），**不带任何调度注解**。
+**Quartz 包装类**（`*QuartzJob` 类）：继承 `QuartzJobBean`，在 `executeInternal` 中调用裸 `run()`。
+**JobDetail / Trigger 注册**：`PerfQuartzConfig` 在 Spring 上下文初始化期声明对应 bean。
+**配置可覆盖**：`spring.quartz.overwrite-existing-jobs=true`，启动期 `JobService.syncJobsOnStartup`
+扫描 `sys_job_conf` 表的 cron / status 字段同步到 QRTZ_*。
 
-3. 生产启用后，首次触发前**必须**验证：
-   - `sys_control` 已有有效 is_valid=1 基线版本（无则 DailyKpiCalcJob 会 warn + 跳过）
-   - `perf_run_task` 的保留期策略（默认 90 天）符合审计要求
+**生产启用步骤**：
+1. 确保 `docs/schema/ddl-quartz.sql` 已部署（`spring.quartz.jdbc.initialize-schema=never`，DDL 手动初始化）
+2. `sys_job_conf` 表插入 3 行任务定义（`status=ACTIVE` 启用、`status=PAUSED` 暂停）
+3. 首次触发前验证：
+   - `sys_control` 有有效 `is_valid=1` 基线版本（无则 `DailyKpiCalcJob` warn + 跳过）
+   - `perf_run_task` 的保留期策略（默认 90 天，可通过 `perf.job.run-task-cleanup.retention-days` 覆盖）符合审计要求
 
-4. 紧急停止：
-   - 修改 enabled-jobs → false 滚动重启服务；或
-   - `flowable act_ru_job` 表手动删除 schedule
+**紧急停止**：
+- 修改 `sys_job_conf.status = PAUSED`，重启或调用 `JobController` 触发重新同步
+- 直接 `pause` Quartz Trigger（通过 `JobController` REST 端点或 SQL 操作 `QRTZ_TRIGGERS` 表）
+
+**写日志**：`JobExecutionLogger`（governance 模块的全局 Quartz `JobListener`）在 `jobToBeExecuted` /
+`jobWasExecuted` 回调中统一写 `sys_job_run_log`，业务模块**不需要**调用 `JobApi` 的写日志方法。
 
 ### 导出任务生命周期
 
