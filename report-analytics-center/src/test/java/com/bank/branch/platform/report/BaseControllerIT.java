@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.security.interceptor.AuthorizationInterceptor;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
+import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.api.KpiApi;
@@ -95,6 +96,9 @@ public abstract class BaseControllerIT {
 
     @MockBean
     protected CustomerQueryApi customerQueryApi;
+
+    @MockBean
+    protected TouchTaskQueryApi touchTaskQueryApi;
 
     @MockBean
     protected AuditApi auditApi;

@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
+import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.api.KpiApi;
@@ -60,6 +61,11 @@ public class TestUpstreamApiMockConfig {
     @Bean
     public CustomerQueryApi customerQueryApi() {
         return Mockito.mock(CustomerQueryApi.class);
+    }
+
+    @Bean
+    public TouchTaskQueryApi touchTaskQueryApi() {
+        return Mockito.mock(TouchTaskQueryApi.class);
     }
 
     @Bean
