@@ -77,4 +77,15 @@ public interface JobConfMapper {
      */
     int updateLastRunTime(@Param("jobKey") String jobKey,
                           @Param("lastRunTime") LocalDateTime lastRunTime);
+
+    /**
+     * 按状态查询任务配置列表（V1.6 quartz 整合 P3.1 引入）。
+     *
+     * <p>用于 JobService.@PostConstruct.syncJobsOnStartup 启动时同步：
+     * 遍历 status='ACTIVE' 的所有任务并注册到 Quartz Scheduler。</p>
+     *
+     * @param status 任务状态：ACTIVE / PAUSED
+     * @return 任务配置列表，按 id 升序
+     */
+    List<SysJobConf> selectByStatus(@Param("status") String status);
 }

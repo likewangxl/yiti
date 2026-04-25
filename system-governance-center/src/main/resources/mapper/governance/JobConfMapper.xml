@@ -93,4 +93,13 @@
         WHERE job_key = #{jobKey}
     </update>
 
+    <!-- 按状态查询任务配置列表（V1.6 quartz 整合 P3.1 引入） -->
+    <select id="selectByStatus" resultType="com.bank.branch.platform.governance.entity.SysJobConf">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM sys_job_conf
+        WHERE status = #{status}
+        ORDER BY id
+    </select>
+
 </mapper>

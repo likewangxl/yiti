@@ -12,8 +12,18 @@ import com.bank.branch.platform.governance.enums.JobRunStatus;
 import com.bank.branch.platform.governance.enums.JobStatus;
 import com.bank.branch.platform.governance.mapper.JobConfMapper;
 import com.bank.branch.platform.governance.mapper.JobRunLogMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.quartz.CronScheduleBuilder;
+import org.quartz.CronTrigger;
+import org.quartz.Job;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.TriggerBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +32,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static org.quartz.CronScheduleBuilder.cronSchedule;
 
 /**
  * 任务调度服务
@@ -39,7 +51,111 @@ public class JobService {
     private final JobConfMapper jobConfMapper;
     private final JobRunLogMapper jobRunLogMapper;
 
+    /**
+     * Quartz Scheduler bean（V1.6 P3.1 启动同步引入）。
+     * <p>使用 {@code @Autowired(required = false)}：测试上下文（如 application-test.yml）已通过
+     * {@code spring.autoconfigure.exclude=QuartzAutoConfiguration} 禁用 Quartz，此时 bean 不存在；
+     * {@link #syncJobsOnStartup()} 会检查 null 并跳过同步，避免阻塞 ApplicationContext 加载。</p>
+     */
+    @Autowired(required = false)
+    private Scheduler scheduler;
+
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+    // ── 启动同步（V1.6 quartz 整合 P3.1） ──────────────────────────
+
+    /**
+     * 应用启动时遍历 sys_job_conf 表 status='ACTIVE' 的任务并注册到 Quartz Scheduler.
+     *
+     * <p>调用时机：Spring 完成依赖注入后通过 {@link PostConstruct} 自动触发。
+     *
+     * <p>容错语义：单条任务同步失败（如 quartz_job_class 反射失败、cron 表达式非法、
+     * scheduler.scheduleJob 异常）记 {@code log.error} 后继续处理下一条，整体方法不抛异常，
+     * 避免一条配置错误导致整个应用启动失败。
+     *
+     * <p>测试/无 Scheduler 场景：{@link #scheduler} 为 null 时直接跳过（应用上下文不集成 Quartz）.
+     *
+     * <p>覆盖语义：依赖 Quartz {@code overwriteExistingJobs=true}（默认开启）实现 cron 变更后
+     * 重启自动覆盖旧的 JobDetail/Trigger，无需删除再注册。
+     */
+    @PostConstruct
+    public void syncJobsOnStartup() {
+        if (scheduler == null) {
+            log.warn("[JobService.syncJobsOnStartup] Scheduler bean 不可用（测试或禁用 Quartz 场景），跳过启动同步");
+            return;
+        }
+        List<SysJobConf> activeJobs = jobConfMapper.selectByStatus(JobStatus.ACTIVE.getCode());
+        if (activeJobs == null || activeJobs.isEmpty()) {
+            log.info("[JobService.syncJobsOnStartup] 无 ACTIVE 任务需同步，跳过");
+            return;
+        }
+        int success = 0;
+        int failed = 0;
+        for (SysJobConf job : activeJobs) {
+            try {
+                scheduleQuartzJob(job);
+                success++;
+            } catch (Exception e) {
+                log.error("[JobService.syncJobsOnStartup] jobKey={} 同步失败，跳过继续",
+                        job.getJobKey(), e);
+                failed++;
+            }
+        }
+        log.info("[JobService.syncJobsOnStartup] 完成：成功={}, 失败={}", success, failed);
+    }
+
+    /**
+     * 按单条 SysJobConf 注册 Quartz JobDetail + CronTrigger 到 Scheduler.
+     *
+     * <p>反射加载 {@code quartz_job_class}，按 {@code cron_expr} 构造 CronScheduleBuilder，
+     * 应用 {@code misfire_policy} 后注册。同 jobKey 重复注册时由 Scheduler 默认覆盖
+     * （SchedulerFactoryBean 默认 overwriteExistingJobs=true，cron 变更场景免删除）.
+     *
+     * @param job 任务配置实体
+     * @throws SchedulerException     Scheduler 注册异常
+     * @throws ClassNotFoundException quartz_job_class 反射加载失败
+     */
+    @SuppressWarnings("unchecked")
+    private void scheduleQuartzJob(SysJobConf job) throws SchedulerException, ClassNotFoundException {
+        Class<? extends Job> clazz = (Class<? extends Job>) Class.forName(job.getQuartzJobClass());
+        JobDetail detail = JobBuilder.newJob(clazz)
+                .withIdentity(job.getJobKey(), "DEFAULT")
+                .storeDurably()
+                .build();
+        CronScheduleBuilder cron = applyMisfirePolicy(
+                cronSchedule(job.getCronExpr()), job.getMisfirePolicy());
+        CronTrigger trigger = TriggerBuilder.newTrigger()
+                .withIdentity(job.getJobKey() + "_TRIGGER", "DEFAULT")
+                .withSchedule(cron)
+                .forJob(detail)
+                .build();
+        scheduler.scheduleJob(detail, trigger);
+    }
+
+    /**
+     * 把 sys_job_conf.misfire_policy 字符串映射到 Quartz CronScheduleBuilder 的 misfire 处理指令.
+     *
+     * <ul>
+     *   <li>FIRE_ONCE_NOW          → withMisfireHandlingInstructionFireAndProceed</li>
+     *   <li>DO_NOTHING             → withMisfireHandlingInstructionDoNothing</li>
+     *   <li>IGNORE_MISFIRE_POLICY  → withMisfireHandlingInstructionIgnoreMisfires</li>
+     * </ul>
+     *
+     * @param builder 原始 CronScheduleBuilder
+     * @param policy  misfire 策略字符串
+     * @return 应用 misfire 策略后的 CronScheduleBuilder
+     * @throws IllegalArgumentException policy 不在已知三档内
+     */
+    private CronScheduleBuilder applyMisfirePolicy(CronScheduleBuilder builder, String policy) {
+        return switch (policy) {
+            case "FIRE_ONCE_NOW" -> builder.withMisfireHandlingInstructionFireAndProceed();
+            case "DO_NOTHING" -> builder.withMisfireHandlingInstructionDoNothing();
+            case "IGNORE_MISFIRE_POLICY" -> builder.withMisfireHandlingInstructionIgnoreMisfires();
+            default -> throw new IllegalArgumentException("未知 misfire_policy: " + policy);
+        };
+    }
+
+    // ── 业务方法 ───────────────────────────────────────────────
 
     /**
      * 获取任务配置
