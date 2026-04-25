@@ -4,22 +4,22 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * report-analytics-center 模块错误码定义（Task M0.3.1）.
+ * report-analytics-center 模块错误码定义（Task M0.3.1，M5.4.1 扩展至 30 条）.
  *
  * <p>格式: RPT-{HTTP_STATUS}{SEQ}
- * <p>权威来源: docs/modules/report-analytics-center/02-后端架构.md §6.5「基线 25 条」
+ * <p>权威来源: docs/modules/report-analytics-center/02-后端架构.md §6.5「基线 25 条」+ 03 §J.4「J 章导出 5 条」
  * <p>使用: throw new RptException(RptErrorCode.SAVED_QUERY_NOT_FOUND, id);
  *
- * <p>V1 基线 25 条（业务 10 + 权限 3 + SQL 探查 9 + 系统 3）：
+ * <p>V1 合计 30 条（业务 10 + 权限 3 + SQL 探查 9 + J 章导出 5 + 系统 3）：
  * <ul>
  *   <li>400xx 业务错误 10 条（saved-query / data-version / subject / metric / export-task）</li>
  *   <li>403xx 权限 3 条（DASHBOARD / SQL_PROBE / DATA_SCOPE）</li>
  *   <li>420xx SQL 探查 9 条（含 plan F1 漏项 42004 / 42006 / 42009）</li>
+ *   <li>422xx J 章导出 5 条（M5.4.1 扩展，42207~42211）</li>
  *   <li>500xx 系统 3 条（含 plan F1 漏项 50002 / 50003 EXPORT_START_FAILED）</li>
  * </ul>
  *
- * <p>M5.4 异步导出再扩展 5 条 J 章导出限制码（RPT-42207~42211），最终合计 30 条。
- * 新增时必须同步更新 {@code RptErrorCodeTest}。
+ * <p>新增时必须同步更新 {@code RptErrorCodeTest}（守护 hasSize 与抽样断言）。
  */
 @Getter
 @AllArgsConstructor
@@ -102,6 +102,25 @@ public enum RptErrorCode {
 
     /** SQL 执行失败 */
     SQL_EXECUTION_FAILED("RPT-42009", "SQL 执行失败"),
+
+    // =============================================
+    // 422xx J 章导出业务限制（5 条，M5.4.1 扩展）
+    // =============================================
+
+    /** 导出行数超过上限（默认 500000，可由 sys_config_kv 调整） */
+    EXPORT_ROW_LIMIT_EXCEEDED("RPT-42207", "导出行数超过上限（500000）"),
+
+    /** 异步导出任务不存在或已过期（含 file_key 已过期但 task 尚在的场景） */
+    EXPORT_TASK_NOT_FOUND_OR_EXPIRED("RPT-42208", "异步导出任务不存在或已过期"),
+
+    /** 不能下载/取消他人创建的导出任务（operator_id 归属校验） */
+    EXPORT_DOWNLOAD_FORBIDDEN("RPT-42209", "不能下载他人创建的导出任务"),
+
+    /** 导出过滤条件未通过 DATA_SCOPE 校验 */
+    EXPORT_FILTER_DATA_SCOPE_VIOLATION("RPT-42210", "导出过滤条件未通过 DATA_SCOPE 校验"),
+
+    /** metricCodes 为空或包含未授权指标 */
+    EXPORT_METRIC_CODES_INVALID("RPT-42211", "metricCodes 为空或包含未授权指标"),
 
     // =============================================
     // 500xx 系统错误（3 条）

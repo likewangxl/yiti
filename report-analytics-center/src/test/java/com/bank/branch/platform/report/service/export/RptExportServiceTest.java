@@ -62,17 +62,29 @@ class RptExportServiceTest {
         Map<String, Object> params = new HashMap<>();
         params.put("dim", "EMP");
 
+        // Mockito 陷阱：捕获到的对象是引用，service 后续 setStatus("RUNNING") 会污染原对象。
+        // 用 doAnswer 在 insert 时取 status 快照
+        final String[] statusOnInsert = new String[1];
+        org.mockito.Mockito.doAnswer(inv -> {
+            RptExportTask t = inv.getArgument(0);
+            statusOnInsert[0] = t.getStatus();
+            return 1;
+        }).when(taskMapper).insert(any());
+
         String taskId = service.createTask("DYNAMIC_QUERY", params, "E001");
         assertThat(taskId).isNotBlank();
 
-        // verify 三段式状态机
+        // insert 时刻 status 必须是 PENDING
+        assertThat(statusOnInsert[0]).isEqualTo("PENDING");
+
+        // 校验 insert 入参的不变字段
         ArgumentCaptor<RptExportTask> insertCap = ArgumentCaptor.forClass(RptExportTask.class);
         verify(taskMapper, times(1)).insert(insertCap.capture());
-        assertThat(insertCap.getValue().getStatus()).isEqualTo("PENDING");
         assertThat(insertCap.getValue().getOperatorId()).isEqualTo("E001");
         assertThat(insertCap.getValue().getExportType()).isEqualTo("DYNAMIC_QUERY");
         assertThat(insertCap.getValue().getParamsJson()).contains("EMP");
 
+        // verify 三段式状态机
         verify(taskMapper, times(1)).updateStatus(eq(taskId), eq("RUNNING"));
         verify(taskMapper, times(1)).updateSuccess(eq(taskId), anyString(),
             anyInt(), anyLong(), any());
