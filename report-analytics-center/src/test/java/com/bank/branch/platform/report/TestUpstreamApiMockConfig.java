@@ -7,6 +7,7 @@ import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.MetricApi;
 import org.mockito.Mockito;
@@ -71,5 +72,10 @@ public class TestUpstreamApiMockConfig {
     @Bean
     public AuditApi auditApi() {
         return Mockito.mock(AuditApi.class);
+    }
+
+    @Bean
+    public FileApi fileApi() {
+        return Mockito.mock(FileApi.class);
     }
 }
