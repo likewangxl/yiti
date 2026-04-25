@@ -38,7 +38,8 @@ public enum GovErrorCode {
     // 500 内部错误
     MINIO_ERROR("GOV-50001", "MinIO服务异常"),
     REDIS_CACHE_ERROR("GOV-50002", "Redis缓存异常"),
-    SQL_EXECUTION_TIMEOUT("GOV-50003", "SQL执行超时");
+    SQL_EXECUTION_TIMEOUT("GOV-50003", "SQL执行超时"),
+    JOB_TRIGGER_FAILED("GOV-50004", "任务触发失败");
 
     private final String code;
     private final String message;

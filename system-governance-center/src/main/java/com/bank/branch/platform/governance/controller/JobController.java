@@ -1,6 +1,7 @@
 package com.bank.branch.platform.governance.controller;
 
 import com.bank.branch.platform.common.security.annotation.BizAuth;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
@@ -78,11 +79,14 @@ public class JobController {
     }
 
     /**
-     * 手动触发任务执行（C.3）
+     * 手动触发任务执行（V1.6 P3.2：联调 Quartz Scheduler）.
+     *
+     * <p>从 {@link DataScopeContext#current()} 获取当前操作人 empId 透传给 Service，
+     * Service 写入 JobDataMap.operatorEmpId，被 Quartz JobListener 读取写入 sys_job_run_log.created_by.
      *
      * @param jobId   任务ID（路径参数）
-     * @param reqDTO  触发请求（包含原因）
-     * @return 执行结果
+     * @param reqDTO  触发请求（包含原因，必填）
+     * @return 触发响应（jobId / triggerType=MANUAL / triggerTime）
      */
     @PostMapping("/{jobId}/trigger")
     @Operation(summary = "手动触发任务")
@@ -90,8 +94,10 @@ public class JobController {
     public ResponseWrapper<JobTriggerRespDTO> triggerJob(
             @PathVariable(value = "jobId") String jobId,
             @Valid @RequestBody JobTriggerReqDTO reqDTO) {
-        log.info("[JobController.triggerJob] jobId={}, reason={}", jobId, reqDTO.getReason());
-        JobTriggerRespDTO resp = jobService.triggerJob(jobId, reqDTO.getReason());
+        String operatorEmpId = DataScopeContext.current().getEmpId();
+        log.info("[JobController.triggerJob] jobId={}, reason={}, operatorEmpId={}",
+                jobId, reqDTO.getReason(), operatorEmpId);
+        JobTriggerRespDTO resp = jobService.triggerJob(jobId, reqDTO.getReason(), operatorEmpId);
         return ResponseWrapper.success(resp);
     }
 

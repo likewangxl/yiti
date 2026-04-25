@@ -4,15 +4,21 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
 import com.bank.branch.platform.governance.api.dto.JobRunLogDTO;
+import com.bank.branch.platform.governance.api.dto.JobTriggerRespDTO;
 import com.bank.branch.platform.governance.entity.SysJobConf;
 import com.bank.branch.platform.governance.entity.SysJobRunLog;
 import com.bank.branch.platform.governance.mapper.JobConfMapper;
 import com.bank.branch.platform.governance.mapper.JobRunLogMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.quartz.JobDataMap;
+import org.quartz.JobKey;
+import org.quartz.Scheduler;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -284,6 +290,70 @@ class JobServiceTest {
 
         assertThat(page.getTotal()).isEqualTo(0L);
         assertThat(page.getRecords()).isEmpty();
+    }
+
+    // ── triggerJob (P3.2: scheduler 联动) ────────────────────────
+
+    /**
+     * P3.2 关键测试：手动触发任务时调用 scheduler.triggerJob(JobKey, JobDataMap),
+     * dataMap 含 triggerType=MANUAL + operatorEmpId + triggerReason.
+     */
+    @Test
+    void triggerJob_existingJob_callsScheduler() throws Exception {
+        // given
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        Scheduler scheduler = mock(Scheduler.class);
+        ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
+
+        // when
+        JobTriggerRespDTO resp = jobService.triggerJob("JOB_001", "手动测试", "emp001");
+
+        // then - 验证 scheduler.triggerJob(JobKey, JobDataMap) 被调用
+        ArgumentCaptor<JobKey> keyCap = ArgumentCaptor.forClass(JobKey.class);
+        ArgumentCaptor<JobDataMap> dataCap = ArgumentCaptor.forClass(JobDataMap.class);
+        verify(scheduler).triggerJob(keyCap.capture(), dataCap.capture());
+        // JobKey 来自 sys_job_conf.job_key，组采用 "DEFAULT"（与 P3.1 syncJobsOnStartup 一致）
+        assertThat(keyCap.getValue().getName()).isEqualTo("PERF_DAILY_CALC");
+        assertThat(keyCap.getValue().getGroup()).isEqualTo("DEFAULT");
+        // dataMap 字段与 JobExecutionLogger.jobToBeExecuted 读取的 key 一致
+        JobDataMap data = dataCap.getValue();
+        assertThat(data.getString("triggerType")).isEqualTo("MANUAL");
+        assertThat(data.getString("operatorEmpId")).isEqualTo("emp001");
+        assertThat(data.getString("triggerReason")).isEqualTo("手动测试");
+
+        // 响应 DTO 含 jobId / triggerType=MANUAL / triggerTime
+        assertThat(resp).isNotNull();
+        assertThat(resp.getJobId()).isEqualTo("JOB_001");
+        assertThat(resp.getTriggerType()).isEqualTo("MANUAL");
+        assertThat(resp.getTriggerTime()).isNotBlank();
+    }
+
+    /**
+     * P3.2: 任务不存在时抛 GOV-40004（复用 TASK_NOT_FOUND）.
+     */
+    @Test
+    void triggerJob_jobNotFound_throwsGov40004() {
+        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.triggerJob("NOT_EXIST", "原因", "emp001"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    /**
+     * P3.2: scheduler 未启用（null）时必须显式抛 BizException（区别于 P3.1 启动同步可静默跳过）.
+     * 用户主动触发场景下，scheduler 不可用必须明确报错。
+     */
+    @Test
+    void triggerJob_schedulerNull_throwsTriggerFailed() {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        // 不注入 scheduler，保持 null
+
+        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", "emp001"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-50004"));
     }
 
     // ── Helper Methods ──────────────────────────────────────────

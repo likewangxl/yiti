@@ -19,7 +19,9 @@ import org.quartz.CronScheduleBuilder;
 import org.quartz.CronTrigger;
 import org.quartz.Job;
 import org.quartz.JobBuilder;
+import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.TriggerBuilder;
@@ -347,42 +349,74 @@ public class JobService {
     }
 
     /**
-     * 手动触发任务（返回响应DTO）
-     * <p>
-     * 基于 startJobRun 方法，增加返回 JobTriggerRespDTO，包含日志ID、任务KEY和触发时间。
-     * </p>
+     * 手动触发任务（V1.6 P3.2：走 Quartz Scheduler 路径）.
      *
-     * @param jobId   任务ID
-     * @param reason  触发原因
-     * @return 触发响应DTO
+     * <p>核心流程：
+     * <ol>
+     *   <li>校验 sys_job_conf 中存在</li>
+     *   <li>校验 allow_manual_trigger=1（不允许手动触发的任务直接拒绝）</li>
+     *   <li>scheduler null 守护：用户主动触发场景下 scheduler 不可用必须显式抛
+     *       {@link GovErrorCode#JOB_TRIGGER_FAILED}（区别于 P3.1 启动同步可静默跳过）</li>
+     *   <li>构造 JobDataMap：triggerType=MANUAL + operatorEmpId + 可选 triggerReason，
+     *       键名与 {@link com.bank.branch.platform.governance.listener.JobExecutionLogger#jobToBeExecuted}
+     *       读取的 key 严格一致</li>
+     *   <li>scheduler.triggerJob(JobKey, JobDataMap) 立即触发；JobListener 异步写入 RUNNING 日志</li>
+     * </ol>
+     *
+     * @param jobId         任务ID
+     * @param reason        触发原因（透传到 dataMap.triggerReason）
+     * @param operatorEmpId 操作人工号（来自 SecurityContext）
+     * @return 触发响应DTO（jobId / triggerType=MANUAL / triggerTime）
      * @throws BizException GOV-40004 任务不存在
-     * @throws BizException GOV-40901 任务正在执行中
+     * @throws BizException GOV-40903 任务不允许手动触发
+     * @throws BizException GOV-50004 Scheduler 不可用 / SchedulerException
      */
-    public JobTriggerRespDTO triggerJob(String jobId, String reason) {
-        log.info("[JobService.triggerJob] jobId={}, reason={}", jobId, reason);
+    public JobTriggerRespDTO triggerJob(String jobId, String reason, String operatorEmpId) {
+        log.info("[JobService.triggerJob] jobId={}, reason={}, operatorEmpId={}", jobId, reason, operatorEmpId);
 
-        // 获取任务配置
+        // 1. 校验任务配置存在
         SysJobConf conf = jobConfMapper.selectById(jobId);
         if (conf == null) {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
 
-        // 检查是否允许手动触发
+        // 2. 校验是否允许手动触发
         if (conf.getAllowManualTrigger() == null || conf.getAllowManualTrigger() != 1) {
             throw new BizException(GovErrorCode.TASK_ALREADY_RUNNING.getCode(),
                     "该任务不允许手动触发");
         }
 
-        // 启动执行
-        String runLogId = startJobRun(jobId, "MANUAL", "SYSTEM");
+        // 3. scheduler null 守护：用户主动触发必须显式失败（不像 P3.1 启动同步可静默跳过）
+        if (scheduler == null) {
+            throw new BizException(GovErrorCode.JOB_TRIGGER_FAILED.getCode(),
+                    "Scheduler 未启用，无法手动触发任务");
+        }
 
-        // 返回响应
-        JobTriggerRespDTO resp = new JobTriggerRespDTO();
-        resp.setRunLogId(runLogId);
-        resp.setJobKey(conf.getJobKey());
-        resp.setTriggerTime(LocalDateTime.now().format(ISO_FORMATTER));
-        return resp;
+        // 4. 构造 JobDataMap：键名与 JobExecutionLogger 读取保持一致
+        JobDataMap data = new JobDataMap();
+        data.put("triggerType", "MANUAL");
+        data.put("operatorEmpId", operatorEmpId);
+        if (reason != null && !reason.isBlank()) {
+            // reason 透传到 dataMap，JobListener 可写入 sys_job_run_log.reason
+            data.put("triggerReason", reason);
+        }
+
+        // 5. 立即触发（JobKey 组与 P3.1 syncJobsOnStartup 一致：DEFAULT）
+        try {
+            scheduler.triggerJob(JobKey.jobKey(conf.getJobKey(), "DEFAULT"), data);
+        } catch (SchedulerException e) {
+            log.error("[JobService.triggerJob] scheduler.triggerJob 失败 jobKey={}", conf.getJobKey(), e);
+            throw new BizException(GovErrorCode.JOB_TRIGGER_FAILED.getCode(),
+                    "触发失败: " + e.getMessage());
+        }
+
+        return JobTriggerRespDTO.builder()
+                .jobId(jobId)
+                .triggerType("MANUAL")
+                .jobKey(conf.getJobKey())
+                .triggerTime(LocalDateTime.now().format(ISO_FORMATTER))
+                .build();
     }
 
     // ── 私有方法：实体 → DTO 转换 ──────────────────────────────────
