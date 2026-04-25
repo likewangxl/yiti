@@ -4,10 +4,12 @@ import com.bank.branch.platform.report.entity.RptSavedQuery;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
- * rpt_saved_query Mapper —— 动态查询保存方案（M0.5.1 雏形）.
+ * rpt_saved_query Mapper —— 动态查询保存方案.
  *
- * <p>M1.4 会追加 {@code selectByEmpIdPaged / selectOldest}（删除最旧方案场景）等方法.
+ * <p>M0.5.1 雏形 4 方法 + M1.4/M1.5 增量 3 方法（list / oldest / 乐观锁删除）.
  */
 @Mapper
 public interface RptSavedQueryMapper {
@@ -18,12 +20,29 @@ public interface RptSavedQueryMapper {
     /** 按 id 精确查询 */
     RptSavedQuery selectById(@Param("id") String id);
 
-    /** 按 empId 计数（用于 M1.4 最多 10 条方案上限判定） */
+    /** 按 empId 计数（用于 M1.5 最多 10 条方案上限判定） */
     int countByEmpId(@Param("empId") String empId);
 
     /** 选择更新（name / subjectIds / metricCodes / version / updatedTime 按需） */
     int updateByIdSelective(RptSavedQuery e);
 
-    /** 按 id 物理删除（M1.4 超限时删除最旧一条） */
+    /** 按 id 物理删除（M1.5 超限时删除最旧一条 / B.4 用户主动删除） */
     int deleteById(@Param("id") String id);
+
+    /**
+     * 按 empId + 可选 dim 列表查询（M1.4 B.1 新增）.
+     * dim 为 null 时不过滤，按 created_time DESC 排序.
+     */
+    List<RptSavedQuery> listByEmpAndDim(@Param("empId") String empId, @Param("dim") String dim);
+
+    /**
+     * 查询某用户最旧一条方案的 id（M1.5 自动删最旧用）.
+     * 按 created_time ASC LIMIT 1.
+     */
+    String findOldestId(@Param("empId") String empId);
+
+    /**
+     * 乐观锁更新（M1.5 PUT 用）：仅当 id+expectedVersion 匹配时才更新，否则返回 0.
+     */
+    int updateWithOptimisticLock(RptSavedQuery e, @Param("expectedVersion") int expectedVersion);
 }

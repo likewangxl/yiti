@@ -54,4 +54,34 @@
         DELETE FROM rpt_saved_query WHERE id = #{id}
     </delete>
 
+    <select id="listByEmpAndDim" resultMap="BaseMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+          FROM rpt_saved_query
+         WHERE emp_id = #{empId}
+        <if test="dim != null and dim != ''">
+            AND dim = #{dim}
+        </if>
+         ORDER BY created_time DESC
+    </select>
+
+    <select id="findOldestId" resultType="string">
+        SELECT id FROM rpt_saved_query
+         WHERE emp_id = #{empId}
+         ORDER BY created_time ASC LIMIT 1
+    </select>
+
+    <update id="updateWithOptimisticLock">
+        UPDATE rpt_saved_query
+        <set>
+            <if test="param1.name != null">name = #{param1.name},</if>
+            <if test="param1.dim != null">dim = #{param1.dim},</if>
+            <if test="param1.subjectIds != null">subject_ids = #{param1.subjectIds},</if>
+            <if test="param1.metricCodes != null">metric_codes = #{param1.metricCodes},</if>
+            version = version + 1,
+            updated_time = NOW()
+        </set>
+        WHERE id = #{param1.id}
+          AND version = #{expectedVersion}
+    </update>
+
 </mapper>
