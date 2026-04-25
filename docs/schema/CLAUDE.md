@@ -16,6 +16,7 @@
 | `ddl-bizapp.sql` | business-application-center | `support_request`, `loan_apply` |
 | `ddl-report.sql` | report-analytics-center | 动态查询保存计划等报表配置表 |
 | `ddl-performance.sql` | performance-engine-center | 数据版本、指标定义、KPI 方案、目标方案、绩效分配及调整等大量表 |
+| `ddl-quartz.sql` | system-governance-center (V1.6) | `QRTZ_JOB_DETAILS`, `QRTZ_TRIGGERS`, `QRTZ_CRON_TRIGGERS`, `QRTZ_SIMPLE_TRIGGERS`, `QRTZ_SIMPROP_TRIGGERS`, `QRTZ_BLOB_TRIGGERS`, `QRTZ_CALENDARS`, `QRTZ_FIRED_TRIGGERS`, `QRTZ_PAUSED_TRIGGER_GRPS`, `QRTZ_SCHEDULER_STATE`, `QRTZ_LOCKS`（11 张 Quartz 集群模式标准表） |
 
 ### 种子数据脚本
 
