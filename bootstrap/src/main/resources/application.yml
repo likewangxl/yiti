@@ -35,7 +35,10 @@ spring:
       org.quartz.scheduler.instanceId: AUTO                 # 自动生成节点 ID
       org.quartz.threadPool.threadCount: 5
       org.quartz.threadPool.threadPriority: 5
-      org.quartz.jobStore.class: org.quartz.impl.jdbcjobstore.JobStoreTX
+      # 注：org.quartz.jobStore.class 不显式声明 —— 让 SchedulerFactoryBean.afterPropertiesSet
+      # 通过 putIfAbsent 注入 LocalDataSourceJobStore（JobStoreCMT 子类，与 JobStoreTX 同源
+      # 自 JobStoreSupport，支持 isClustered/tablePrefix/misfireThreshold；显式 JobStoreTX 会
+      # 阻挡此路径并要求手动配置 jobStore.dataSource，与 spring-boot 的 setDataSource customizer 冲突）
       org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
       org.quartz.jobStore.tablePrefix: QRTZ_
       org.quartz.jobStore.isClustered: true

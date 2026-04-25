@@ -15,12 +15,19 @@ spring:
     username: sa
     password:
     type: com.zaxxer.hikari.HikariDataSource
+  quartz:
+    # 测试环境禁用 Quartz：governance QuartzConfig 走 @ConditionalOnProperty(matchIfMissing=true)
+    # 在此显式 false 即跳过；spring-boot QuartzAutoConfiguration 类级未使用 enabled 条件，
+    # 因此另在下方 autoconfigure.exclude 中排除该自动配置类（双重禁用，语义一致）。
+    enabled: false
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
       - org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
       - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
+      # 测试环境无 QRTZ_* 表，禁用 Quartz 自动装配，避免 quartzScheduler bean 创建失败
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
       # 全部 Flowable 自动配置 — 测试环境无 Flowable 内部表，且不需要流程引擎
       - org.flowable.spring.boot.ProcessEngineAutoConfiguration
       - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
