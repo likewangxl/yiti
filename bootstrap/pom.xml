@@ -85,6 +85,14 @@
             <groupId>com.bank.branch.platform</groupId>
             <artifactId>business-application-center</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>performance-engine-center</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>report-analytics-center</artifactId>
+        </dependency>
 
         <!-- 测试 -->
         <dependency>
