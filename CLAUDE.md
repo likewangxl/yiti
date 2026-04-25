@@ -59,10 +59,10 @@ mvn clean package
 | `business-application-center` | com.bank.branch.platform.bizapp | 已完成 | 业务申请中心 (60 Java + 26 测试，0 UOE) |
 | `portal-content-center` | com.bank.branch.platform.portal | 已完成 | 门户与内容中心 (108 Java + 38 测试，0 UOE) |
 | `performance-engine-center` | com.bank.branch.platform.performance | V1.5 已交付（V1.4 遗留清零） | 绩效计算中心 (V1.0-V1.4 累积能力 + V1.5 6 项技术债清零) |
+| `report-analytics-center` | com.bank.branch.platform.report | V1.0 已交付（2026-04-25） | 报表分析中心 (25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步 + SQL 探查) |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
-**尚未实现的模块** (仅 DDL 与设计文档就绪，无 Java 代码):
-- `report-analytics-center` (报表分析中心，0 Java 文件，9/9 设计文档就绪，3 张配置表 DDL 就绪)
+**全部 9 个业务模块已交付**，无尚未实现模块。
 
 ### 当前模块依赖图
 
@@ -80,7 +80,7 @@ customer-marketing-center (依赖 auth + governance + workflow) ← 已交付
 business-application-center (依赖 auth + governance + workflow + customer-marketing + portal) ← 已交付
 performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.5 已交付（V1.4 遗留清零）
 
-report-analytics-center (只读，依赖 performance/customer/governance 的 *Api，不被业务模块依赖) ← 待实现
+report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖) ← V1.0 已交付（2026-04-25）
 
 bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ```
@@ -110,7 +110,7 @@ com.bank.branch.platform
 ├─ customer-marketing-center     客户营销中心 ✅ 已完成（113 Java + 46 测试）
 ├─ business-application-center   业务申请中心 ✅ 已完成（60 Java + 26 测试）
 ├─ performance-engine-center     绩效计算中心 ✅ V1.5 已交付（V1.4 遗留 6 项清零：@Deprecated 删除 + cycleType 空串守护 + codeToCycleType 分组 + batch 宽表 + yoy WEEKLY + owner <if>）
-└─ report-analytics-center       报表分析中心 ⏳ 骨架（0 Java，仅设计文档 + DDL）
+└─ report-analytics-center       报表分析中心 ✅ V1.0 已交付（25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步导出 + SQL 探查 / surefire 103 + failsafe 70 = 173 全绿）
 ```
 
 ```
