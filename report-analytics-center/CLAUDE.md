@@ -10,7 +10,7 @@
 
 V1.0 交付内容：
 - 24 REST 接口（query-dimensions / dynamic-query / saved-queries×4 / dashboard×3 / 3 类汇总×2 + 4 SQL 探查 + 3 export-tasks + 1 占位 = 25 PT_RESOURCE）
-- 4 张自有表（rpt_saved_query / rpt_query_audit / sql_probe_history / rpt_export_task）
+- 4 张自有表（rpt_saved_query / rpt_snapshot_task / sql_probe_history / rpt_export_task）
 - 4 个 ExportStrategy（DYNAMIC_QUERY / TOUCH_SUMMARY / PERF_SUMMARY / CUSTPOOL_SUMMARY，走 governance.FileApi.upload 真实上传 MinIO）
 - SQL 探查（独立 readOnlyDataSource + JSqlParser AST 校验 + 双写审计）
 - 30 条 RptErrorCode（25 基线 + 5 J 章扩展）
@@ -74,7 +74,7 @@ src/main/java/com/bank/branch/platform/report/
 │       ├── RptExportService / *Impl（同步执行状态机）
 │       ├── model/*Row（4 个 EasyExcel 行模型）
 │       └── impl/4 个 *ExportStrategy（DYNAMIC / TOUCH / PERF / CUSTPOOL）
-├── mapper/           # MyBatis Mapper（4 个：RptSavedQueryMapper / RptQueryAuditMapper / SqlProbeHistoryMapper / RptExportTaskMapper）
+├── mapper/           # MyBatis Mapper（4 个：RptSavedQueryMapper / RptSnapshotTaskMapper / SqlProbeHistoryMapper / RptExportTaskMapper）
 ├── entity/           # 贫血模型（4 个）
 ├── enums/            # 错误码 + 状态枚举
 │   └── RptErrorCode.java（30 条 RPT-* 错误码）
