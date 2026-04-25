@@ -22,6 +22,7 @@ public enum GovErrorCode {
 
     // 403 禁止操作
     PAST_DATE_NOT_MODIFIABLE("GOV-40301", "过去日期不可修改"),
+    JOB_MANUAL_NOT_ALLOWED("GOV-40302", "该任务不允许手动触发"),
 
     // 409 冲突
     DICT_CODE_DUPLICATE("GOV-40901", "字典编码重复"),
@@ -39,7 +40,9 @@ public enum GovErrorCode {
     MINIO_ERROR("GOV-50001", "MinIO服务异常"),
     REDIS_CACHE_ERROR("GOV-50002", "Redis缓存异常"),
     SQL_EXECUTION_TIMEOUT("GOV-50003", "SQL执行超时"),
-    JOB_TRIGGER_FAILED("GOV-50004", "任务触发失败");
+    JOB_TRIGGER_FAILED("GOV-50004", "任务触发失败"),
+    JOB_PAUSE_FAILED("GOV-50005", "Job 暂停失败"),
+    JOB_RESUME_FAILED("GOV-50006", "Job 恢复失败");
 
     private final String code;
     private final String message;

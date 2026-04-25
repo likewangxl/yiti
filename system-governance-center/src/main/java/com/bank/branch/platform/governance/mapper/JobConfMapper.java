@@ -88,4 +88,18 @@ public interface JobConfMapper {
      * @return 任务配置列表，按 id 升序
      */
     List<SysJobConf> selectByStatus(@Param("status") String status);
+
+    /**
+     * 按主键单独更新任务状态（V1.6 quartz 整合 P3.3 引入）。
+     *
+     * <p>用于 JobService.pauseJob / resumeJob：在调用 Quartz scheduler 之前
+     * 先持久化数据库状态变更（PAUSED / ACTIVE），与 scheduler.pauseJob / resumeJob
+     * 在 {@code @Transactional} 范围内一起执行——若 mapper 写库失败则不会调用 scheduler，
+     * 保证两边状态一致。</p>
+     *
+     * @param id     任务ID
+     * @param status 目标状态：ACTIVE / PAUSED
+     * @return 受影响行数
+     */
+    int updateStatus(@Param("id") String id, @Param("status") String status);
 }

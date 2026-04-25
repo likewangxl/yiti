@@ -309,10 +309,24 @@ public class JobService {
     }
 
     /**
-     * 暂停任务
+     * 暂停任务（V1.6 P3.3：联动 Quartz Scheduler）.
+     *
+     * <p>核心流程：
+     * <ol>
+     *   <li>校验 sys_job_conf 存在（不存在抛 GOV-40004）</li>
+     *   <li>scheduler null 守护：不可用时显式抛 GOV-50005（区别于 P3.1 启动同步可静默跳过）</li>
+     *   <li>jobConfMapper.updateStatus(jobId, "PAUSED") 持久化数据库状态</li>
+     *   <li>scheduler.pauseJob(JobKey) 触发 Quartz 暂停；失败时抛 GOV-50005，
+     *       由于 @Transactional 的存在，事务回滚保证库状态与 Quartz 一致</li>
+     * </ol>
+     *
+     * <p>事务语义：mapper.updateStatus 与 scheduler.pauseJob 在 {@code @Transactional}
+     * 作用域内，scheduler.pauseJob 抛异常会触发 BizException → 事务回滚，库状态不会
+     * 残留 PAUSED。</p>
      *
      * @param jobId 任务ID
      * @throws BizException GOV-40004 任务不存在
+     * @throws BizException GOV-50005 Scheduler 不可用 / SchedulerException
      */
     @Transactional
     public void pauseJob(String jobId) {
@@ -322,17 +336,30 @@ public class JobService {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
-        conf.setStatus(JobStatus.PAUSED.getCode());
-        conf.setUpdatedTime(LocalDateTime.now());
-        jobConfMapper.updateById(conf);
+        if (scheduler == null) {
+            throw new BizException(GovErrorCode.JOB_PAUSE_FAILED.getCode(),
+                    "Scheduler 未启用，无法暂停任务");
+        }
+        jobConfMapper.updateStatus(jobId, JobStatus.PAUSED.getCode());
+        try {
+            scheduler.pauseJob(JobKey.jobKey(conf.getJobKey(), "DEFAULT"));
+        } catch (SchedulerException e) {
+            log.error("[JobService.pauseJob] scheduler.pauseJob 失败 jobKey={}", conf.getJobKey(), e);
+            throw new BizException(GovErrorCode.JOB_PAUSE_FAILED.getCode(),
+                    "暂停失败: " + e.getMessage());
+        }
         log.info("[JobService.pauseJob] 任务已暂停 jobId={}", jobId);
     }
 
     /**
-     * 恢复任务
+     * 恢复任务（V1.6 P3.3：联动 Quartz Scheduler）.
+     *
+     * <p>核心流程参见 {@link #pauseJob(String)}，对称地调用
+     * {@code mapper.updateStatus(jobId, "ACTIVE")} + {@code scheduler.resumeJob}.</p>
      *
      * @param jobId 任务ID
      * @throws BizException GOV-40004 任务不存在
+     * @throws BizException GOV-50006 Scheduler 不可用 / SchedulerException
      */
     @Transactional
     public void resumeJob(String jobId) {
@@ -342,9 +369,18 @@ public class JobService {
             throw new BizException(GovErrorCode.TASK_NOT_FOUND.getCode(),
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
-        conf.setStatus(JobStatus.ACTIVE.getCode());
-        conf.setUpdatedTime(LocalDateTime.now());
-        jobConfMapper.updateById(conf);
+        if (scheduler == null) {
+            throw new BizException(GovErrorCode.JOB_RESUME_FAILED.getCode(),
+                    "Scheduler 未启用，无法恢复任务");
+        }
+        jobConfMapper.updateStatus(jobId, JobStatus.ACTIVE.getCode());
+        try {
+            scheduler.resumeJob(JobKey.jobKey(conf.getJobKey(), "DEFAULT"));
+        } catch (SchedulerException e) {
+            log.error("[JobService.resumeJob] scheduler.resumeJob 失败 jobKey={}", conf.getJobKey(), e);
+            throw new BizException(GovErrorCode.JOB_RESUME_FAILED.getCode(),
+                    "恢复失败: " + e.getMessage());
+        }
         log.info("[JobService.resumeJob] 任务已恢复 jobId={}", jobId);
     }
 
@@ -368,7 +404,7 @@ public class JobService {
      * @param operatorEmpId 操作人工号（来自 SecurityContext）
      * @return 触发响应DTO（jobId / triggerType=MANUAL / triggerTime）
      * @throws BizException GOV-40004 任务不存在
-     * @throws BizException GOV-40903 任务不允许手动触发
+     * @throws BizException GOV-40302 任务不允许手动触发（P3.3 修复 P3.2 错误码语义错配，原误用 GOV-40903）
      * @throws BizException GOV-50004 Scheduler 不可用 / SchedulerException
      */
     public JobTriggerRespDTO triggerJob(String jobId, String reason, String operatorEmpId) {
@@ -381,10 +417,12 @@ public class JobService {
                     GovErrorCode.TASK_NOT_FOUND.getMessage());
         }
 
-        // 2. 校验是否允许手动触发
+        // 2. 校验是否允许手动触发（P3.3 修复 P3.2 错误码语义错配：
+        //    原误用 TASK_ALREADY_RUNNING (GOV-40903)，与抛出消息严重不符；
+        //    改为新增的 JOB_MANUAL_NOT_ALLOWED (GOV-40302)，403 Forbidden 语义）
         if (conf.getAllowManualTrigger() == null || conf.getAllowManualTrigger() != 1) {
-            throw new BizException(GovErrorCode.TASK_ALREADY_RUNNING.getCode(),
-                    "该任务不允许手动触发");
+            throw new BizException(GovErrorCode.JOB_MANUAL_NOT_ALLOWED.getCode(),
+                    GovErrorCode.JOB_MANUAL_NOT_ALLOWED.getMessage());
         }
 
         // 3. scheduler null 守护：用户主动触发必须显式失败（不像 P3.1 启动同步可静默跳过）

@@ -102,4 +102,12 @@
         ORDER BY id
     </select>
 
+    <!-- 按主键单独更新状态（V1.6 quartz 整合 P3.3 引入：pauseJob / resumeJob 专用） -->
+    <update id="updateStatus">
+        UPDATE sys_job_conf
+        SET status = #{status},
+            updated_time = NOW()
+        WHERE id = #{id}
+    </update>
+
 </mapper>

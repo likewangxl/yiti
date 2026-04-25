@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.quartz.JobDataMap;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -172,36 +173,111 @@ class JobServiceTest {
         ));
     }
 
-    // ── pauseJob / resumeJob ────────────────────────────────────
+    // ── pauseJob / resumeJob (P3.3: scheduler 联动) ───────────────
 
     /**
-     * 测试暂停任务 - 更新状态为 PAUSED
+     * P3.3 关键测试：暂停任务时同时调用 mapper.updateStatus(jobId, "PAUSED")
+     * 与 scheduler.pauseJob(JobKey) —— 数据库与 Quartz 一致。
      */
     @Test
-    void pauseJob_updatesStatus() {
+    void pauseJob_existingJob_callsScheduler() throws Exception {
+        // given
         SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
-        conf.setStatus("ACTIVE");
         when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
-        when(jobConfMapper.updateById(any())).thenReturn(1);
+        Scheduler scheduler = mock(Scheduler.class);
+        ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
 
+        // when
         jobService.pauseJob("JOB_001");
 
-        verify(jobConfMapper).updateById(argThat(c -> "PAUSED".equals(c.getStatus())));
+        // then - mapper.updateStatus 被调用，参数为 ("JOB_001", "PAUSED")
+        verify(jobConfMapper).updateStatus("JOB_001", "PAUSED");
+        // scheduler.pauseJob 被调用，JobKey name=jobKey, group=DEFAULT
+        ArgumentCaptor<JobKey> keyCap = ArgumentCaptor.forClass(JobKey.class);
+        verify(scheduler).pauseJob(keyCap.capture());
+        assertThat(keyCap.getValue().getName()).isEqualTo("PERF_DAILY_CALC");
+        assertThat(keyCap.getValue().getGroup()).isEqualTo("DEFAULT");
     }
 
     /**
-     * 测试恢复任务 - 更新状态为 ACTIVE
+     * P3.3: 暂停任务时任务不存在抛 GOV-40004（复用 TASK_NOT_FOUND）.
      */
     @Test
-    void resumeJob_updatesStatus() {
-        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
-        conf.setStatus("PAUSED");
-        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
-        when(jobConfMapper.updateById(any())).thenReturn(1);
+    void pauseJob_jobNotFound_throwsException() {
+        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
 
+        assertThatThrownBy(() -> jobService.pauseJob("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    /**
+     * P3.3: scheduler.pauseJob 抛 SchedulerException 时显式抛 JOB_PAUSE_FAILED (GOV-50005).
+     */
+    @Test
+    void pauseJob_schedulerThrows_throwsPauseFailed() throws Exception {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        Scheduler scheduler = mock(Scheduler.class);
+        ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
+        doThrow(new SchedulerException("quartz internal error"))
+                .when(scheduler).pauseJob(any(JobKey.class));
+
+        assertThatThrownBy(() -> jobService.pauseJob("JOB_001"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-50005"));
+    }
+
+    /**
+     * P3.3 关键测试：恢复任务时同时调用 mapper.updateStatus(jobId, "ACTIVE")
+     * 与 scheduler.resumeJob(JobKey).
+     */
+    @Test
+    void resumeJob_existingJob_callsScheduler() throws Exception {
+        // given
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        Scheduler scheduler = mock(Scheduler.class);
+        ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
+
+        // when
         jobService.resumeJob("JOB_001");
 
-        verify(jobConfMapper).updateById(argThat(c -> "ACTIVE".equals(c.getStatus())));
+        // then
+        verify(jobConfMapper).updateStatus("JOB_001", "ACTIVE");
+        ArgumentCaptor<JobKey> keyCap = ArgumentCaptor.forClass(JobKey.class);
+        verify(scheduler).resumeJob(keyCap.capture());
+        assertThat(keyCap.getValue().getName()).isEqualTo("PERF_DAILY_CALC");
+        assertThat(keyCap.getValue().getGroup()).isEqualTo("DEFAULT");
+    }
+
+    /**
+     * P3.3: 恢复任务时任务不存在抛 GOV-40004.
+     */
+    @Test
+    void resumeJob_jobNotFound_throwsException() {
+        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
+
+        assertThatThrownBy(() -> jobService.resumeJob("NOT_EXIST"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
+    }
+
+    /**
+     * P3.3: scheduler.resumeJob 抛 SchedulerException 时显式抛 JOB_RESUME_FAILED (GOV-50006).
+     */
+    @Test
+    void resumeJob_schedulerThrows_throwsResumeFailed() throws Exception {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+        Scheduler scheduler = mock(Scheduler.class);
+        ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
+        doThrow(new SchedulerException("quartz internal error"))
+                .when(scheduler).resumeJob(any(JobKey.class));
+
+        assertThatThrownBy(() -> jobService.resumeJob("JOB_001"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-50006"));
     }
 
     // ── listJobs ────────────────────────────────────────────────
@@ -241,30 +317,6 @@ class JobServiceTest {
     }
 
     // ── L1 补全测试 ──────────────────────────────────────────────
-
-    /**
-     * 测试暂停任务：任务不存在时抛出 GOV-40004
-     */
-    @Test
-    void pauseJob_notFound_throwsGov40004() {
-        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
-
-        assertThatThrownBy(() -> jobService.pauseJob("NOT_EXIST"))
-                .isInstanceOf(BizException.class)
-                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
-    }
-
-    /**
-     * 测试恢复任务：任务不存在时抛出 GOV-40004
-     */
-    @Test
-    void resumeJob_notFound_throwsGov40004() {
-        when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
-
-        assertThatThrownBy(() -> jobService.resumeJob("NOT_EXIST"))
-                .isInstanceOf(BizException.class)
-                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
-    }
 
     /**
      * 测试 failJobRun：日志不存在时抛出 GOV-40007
@@ -354,6 +406,25 @@ class JobServiceTest {
         assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-50004"));
+    }
+
+    /**
+     * P3.3 修复 P3.2 错误码语义错配：allow_manual_trigger != 1 时
+     * 必须抛 JOB_MANUAL_NOT_ALLOWED (GOV-40302) 而非 TASK_ALREADY_RUNNING (GOV-40903).
+     *
+     * <p>P3.2 实现误用 GOV-40903（"任务正在执行中"），与抛出消息 "该任务不允许手动触发" 严重错配；
+     * P3.3 引入 JOB_MANUAL_NOT_ALLOWED (GOV-40302) 作为 403 Forbidden 语义，本测试验证修复。</p>
+     */
+    @Test
+    void triggerJob_allowManualFalse_throwsManualNotAllowed() {
+        SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
+        // 强制 allowManualTrigger=0：不允许手动触发
+        conf.setAllowManualTrigger(0);
+        when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
+
+        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", "emp001"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40302"));
     }
 
     // ── Helper Methods ──────────────────────────────────────────
