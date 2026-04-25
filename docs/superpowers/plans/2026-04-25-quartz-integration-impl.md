@@ -72,10 +72,10 @@
 | Phase | 范围 | Task 数 | 依赖关系 |
 |-------|------|---------|---------|
 | **P1 基础设施** | pom 依赖 + DDL + 迁移脚本 + JobFactory + JobListener + QuartzConfig | 7 | 内部按顺序，P1 全部完成才进入 P2 |
-| **P2 Job 改造** | 3 业务 Job 删旧注解 + 3 Quartz 包装 Job 新增 | 6 | 依赖 P1.1（pom）+ P1.4（JobFactory） |
-| **P3 服务层** | JobService 重构 + 5 端点真正实现 + 集成测试 | 7 | 依赖 P1.5（JobListener）+ P1.6（QuartzConfig） |
-| **P4 清理与文档** | 删 ShedLock + 精简 JobApi + 文档更新 + 全量验证 | 6 | 依赖前 3 Phase 全部完成 |
-| **总计** | | **26 task** | |
+| **P2 Job 改造** | 3 业务 Job 删旧注解 + 3 Quartz 包装 Job 新增 + Phase 末构建 push | 7 | 依赖 P1.1（pom）+ P1.4（JobFactory） |
+| **P3 服务层** | JobService 重构 + 5 端点真正实现 + 集成测试 + Phase 末构建 push | 7 | 依赖 P1.5（JobListener）+ P1.6（QuartzConfig） |
+| **P4 清理与文档** | 删 ShedLock + 精简 JobApi + 文档更新 + 全量验证 + Phase 末 push | 6 | 依赖前 3 Phase 全部完成 |
+| **总计** | | **27 task** | |
 
 **子代理派发节奏**（按用户确认的子项目 A 末期 B 节奏）：
 - 每个 task 派发 **1 个 implementer**（opus 1m）
@@ -777,7 +777,7 @@ int updateSuccess(@Param("id") String id, @Param("endTime") LocalDateTime endTim
 int updateFailed(@Param("id") String id, @Param("endTime") LocalDateTime endTime, @Param("errorMsg") String errorMsg);
 ```
 
-对应 XML 添加 SQL（参考现有 SysJobConfMapper.xml / SysJobRunLogMapper.xml 的 select/update 模式）。
+对应 XML 添加 SQL（**参考 `system-governance-center/src/main/resources/mapper/SysConfigKvMapper.xml` 中 selectByConfigKey / updateValue 的列序与命名模式**，确保与 BASE_COLUMN_LIST 一致）。
 
 - [ ] **Step 4: 实现 JobExecutionLogger（Green）**
 
@@ -1369,7 +1369,22 @@ git commit -m "feat(quartz-B): P2.6 PerfRunTaskCleanupQuartzJob + 2 单元测试
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
 
-**Phase 2 末尾**：执行 `mvn clean install -DskipTests=false -q` 验证全模块通过；`git push origin refactor/quartz-job-integration`。
+---
+
+## Task P2.7: Phase 2 全模块构建 + Push 远程
+
+- [ ] **Step 1: 全模块构建验证**
+
+```bash
+mvn clean install -DskipTests=false -q
+```
+预期：BUILD SUCCESS。如有失败定位修复，**不**进入 P3。
+
+- [ ] **Step 2: 推送 P2 到远程**
+
+```bash
+git push origin refactor/quartz-job-integration
+```
 
 ---
 
@@ -1444,7 +1459,7 @@ List<SysJobConf> selectByStatus(@Param("status") String status);
 
 ---
 
-## Task P3.2: JobService.triggerJobNow + JobController.triggerJob 联调 + MockMvc 测试
+## Task P3.2: JobService.triggerJob + JobController.triggerJob 联调 + MockMvc 测试
 
 **Files:**
 - Modify: `system-governance-center/src/main/java/com/bank/branch/platform/governance/service/JobService.java`
@@ -1452,11 +1467,16 @@ List<SysJobConf> selectByStatus(@Param("status") String status);
 - Modify: `system-governance-center/src/test/java/com/bank/branch/platform/governance/service/JobServiceTest.java`
 - Modify: `system-governance-center/src/test/java/com/bank/branch/platform/governance/controller/JobControllerTest.java`
 
-- [ ] **Step 1: 写测试**：JobService.triggerJobNow_existingJob_callsScheduler + JobController.trigger_returnsOk_passesEmpId
-- [ ] **Step 2: 实现 JobService.triggerJobNow**
+**重要命名说明**：JobService 中已存在 `triggerJob(String jobId, String reason)` 方法（被 JobController.triggerJob 调用）但内部为空/无 Scheduler 联动。本 task **复用现有方法名 `triggerJob`，扩展签名为 `(String jobId, String reason, String operatorEmpId)`**，**不**新建 `triggerJobNow`（避免遗留死方法）。
+
+- [ ] **Step 1: 写测试**：
+  - `JobServiceTest.triggerJob_existingJob_callsScheduler`：mock scheduler，验证 `scheduler.triggerJob(JobKey, JobDataMap)` 被调用，dataMap 含 triggerType=MANUAL + operatorEmpId + triggerReason
+  - `JobControllerTest.trigger_returnsOk_passesEmpId`：MockMvc + WithMockUser，验证 service.triggerJob 被传入正确的 empId
+
+- [ ] **Step 2: 实现 JobService.triggerJob（扩展现有方法签名）**
 
 ```java
-public void triggerJobNow(String jobId, String operatorEmpId) {
+public void triggerJob(String jobId, String reason, String operatorEmpId) {
     SysJobConf job = jobConfMapper.selectById(jobId);
     if (job == null) {
         throw new BizException(GovErrorCode.JOB_NOT_FOUND, "Job 不存在: " + jobId);
@@ -1464,6 +1484,9 @@ public void triggerJobNow(String jobId, String operatorEmpId) {
     JobDataMap data = new JobDataMap();
     data.put("triggerType", "MANUAL");
     data.put("operatorEmpId", operatorEmpId);
+    if (reason != null && !reason.isBlank()) {
+        data.put("triggerReason", reason);   // reason 透传到 dataMap，JobListener 可写入 sys_job_run_log.reason
+    }
     try {
         scheduler.triggerJob(JobKey.jobKey(job.getJobKey(), "DEFAULT"), data);
     } catch (SchedulerException e) {
@@ -1472,7 +1495,24 @@ public void triggerJobNow(String jobId, String operatorEmpId) {
 }
 ```
 
-- [ ] **Step 3: JobController.triggerJob 改为传 currentEmpId**（从 SecurityContext 取）
+- [ ] **Step 3: JobController.triggerJob 增加 currentEmpId 获取**
+
+获取当前用户 empId 的方式：**参考其他 Controller 的现有模式**（如 `AuditLogController` / `SqlProbeController` 中获取当前用户的写法，通常是 `SecurityContextHolderUtil.getCurrentEmpId()` 或类似 Util）。implementer 应先 grep `getCurrentEmp\|currentEmpId\|@CurrentUser` 在 system-governance-center 找现有用法照搬。
+
+```java
+@PostMapping("/{jobId}/trigger")
+@BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.JOB_TRIGGER)
+public ResponseWrapper<JobTriggerRespDTO> triggerJob(
+        @PathVariable("jobId") String jobId,
+        @Valid @RequestBody JobTriggerReqDTO reqDTO) {
+    String operatorEmpId = /* 从 SecurityContext 取，参考其他 Controller */;
+    JobTriggerRespDTO resp = jobService.triggerJob(jobId, reqDTO.getReason(), operatorEmpId);
+    return ResponseWrapper.success(resp);
+}
+```
+
+注：JobService.triggerJob 当前返回 void，但 Controller 期望 JobTriggerRespDTO。本 task 同步调整 Service 返回 `JobTriggerRespDTO`（含 jobId / triggerType=MANUAL / triggerTime），或 Controller 自己构造响应（implementer 选其一，与现有 JobFacade 模式对齐）。
+
 - [ ] **Step 4: 运行测试通过 + Commit**
 
 ---
@@ -1549,13 +1589,18 @@ class JobServiceQuartzIntegrationIT {
 
 ---
 
-## Task P3.5: misfire policy 应用 + 单元测试
+## Task P3.5: misfire policy 单元测试
 
 **Files:**
-- Modify: JobService.java（applyMisfirePolicy 方法已在 P3.1 引入，本 task 完善 + 补测试）
-- Test: JobServiceTest.java 新增 4 case
+- Test: `system-governance-center/src/test/java/com/bank/branch/platform/governance/service/JobServiceMisfirePolicyTest.java`（或扩展 JobServiceTest.java）
 
-测试 4 case：FIRE_ONCE_NOW / DO_NOTHING / IGNORE_MISFIRE_POLICY / 未知策略抛 IllegalArgumentException
+**说明**：`applyMisfirePolicy` 私有方法已在 P3.1 完整实现（含未知策略抛 IllegalArgumentException）。本 task **仅补单元测试**，不改业务代码。如 `applyMisfirePolicy` 是 private，可通过 P3.1 的 `scheduleQuartzJob`（含 misfire 调用链）间接验证，或临时改为 package-private 让测试直接调用。
+
+测试 4 case：
+- `applyMisfirePolicy_fireOnceNow_callsFireAndProceed`
+- `applyMisfirePolicy_doNothing_callsDoNothing`
+- `applyMisfirePolicy_ignoreMisfirePolicy_callsIgnoreMisfires`
+- `applyMisfirePolicy_unknownPolicy_throwsIllegalArgumentException`
 
 ---
 
@@ -1667,6 +1712,8 @@ grep -rn "JobApi\.\(startJobRun\|completeJobRun\|failJobRun\)\|jobApi\.\(startJo
 剩余只有 `Optional<JobConfDTO> getJobConf(String jobKey);`
 
 - [ ] **Step 3: 删 JobFacade.java 对应实现**
+
+**SysJobRunLogService 处理说明**：spec §8.2 提到"SysJobRunLogService 中 startJobRun/completeJobRun/failJobRun 方法保留（被 JobExecutionLogger 内部调用），但变为 package-private"。本 task **不强制可见性收敛**——如果 JobExecutionLogger 通过 `@Autowired SysJobRunLogService`（跨包注入），则 public 必须保留；package-private 是 nice-to-have 不是硬约束。implementer 按现状最小改动（保持 public）即可。
 
 - [ ] **Step 4: 删 JobFacadeTest 中 3 方法的所有 case**
 
