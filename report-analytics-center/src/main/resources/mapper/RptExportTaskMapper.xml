@@ -36,4 +36,44 @@
          WHERE id = #{id}
     </select>
 
+    <update id="updateStatus">
+        UPDATE rpt_export_task
+           SET status = #{status},
+               updated_time = NOW()
+         WHERE id = #{id}
+    </update>
+
+    <update id="updateSuccess">
+        UPDATE rpt_export_task
+        <set>
+            status = 'SUCCESS',
+            <if test="fileKey != null">file_key = #{fileKey},</if>
+            <if test="rowCount != null">row_count = #{rowCount},</if>
+            <if test="fileSize != null">file_size = #{fileSize},</if>
+            <if test="expireAt != null">expire_at = #{expireAt},</if>
+            updated_time = NOW(),
+        </set>
+         WHERE id = #{id}
+    </update>
+
+    <update id="updateFailed">
+        UPDATE rpt_export_task
+        <set>
+            status = 'FAILED',
+            <if test="errorMsg != null">error_msg = #{errorMsg},</if>
+            updated_time = NOW(),
+        </set>
+         WHERE id = #{id}
+    </update>
+
+    <select id="selectByOperator" resultMap="BaseMap">
+        SELECT <include refid="BASE_COLUMNS"/>
+          FROM rpt_export_task
+         WHERE operator_id = #{operatorId}
+        <if test="status != null and status != ''">
+           AND status = #{status}
+        </if>
+         ORDER BY created_time DESC, id DESC
+    </select>
+
 </mapper>
