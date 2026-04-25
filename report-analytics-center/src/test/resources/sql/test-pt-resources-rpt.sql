@@ -1,0 +1,25 @@
+-- =====================================================================
+-- test-pt-resources-rpt.sql
+-- Task M0.6.1: F11 修补 —— Controller IT 测试 PT_RESOURCE 种子骨架.
+-- =====================================================================
+--
+-- 用途：BaseControllerIT 默认使用「约定 A」@MockBean AuthorizationInterceptor
+-- 放行所有请求；但某些 IT 如果不方便 mock 拦截器（例如真实鉴权链路冒烟），
+-- 可以在测试类上加：
+--
+--   @Sql(scripts = "/sql/test-pt-resources-rpt.sql",
+--        executionPhase = BEFORE_TEST_CLASS)
+--   @Sql(scripts = "/sql/test-pt-resources-rpt-cleanup.sql",
+--        executionPhase = AFTER_TEST_CLASS)
+--
+-- 本脚本 M0 阶段保持为空骨架；M1 / M2 / M3 / M4 / M5 阶段按需 INSERT
+-- 各自负责的 R_RPT_* PT_RESOURCE 行。
+--
+-- 约定：
+--   * RESOURCE_ID 命名：R_RPT_<子域>_<动作>，如 R_RPT_DQ_LIST / R_RPT_EXP_CREATE
+--   * RESOURCE_URL 用 AntPath 格式（与 ResourceMatcher 匹配）
+--   * RESOURCE_METHOD 精确到 HTTP 方法
+--   * 测试 PT_ROLE_RESOURCE 授权由各子域 IT 自己提供补丁 SQL
+-- =====================================================================
+
+-- M0 阶段：空骨架。M1+ 阶段按需追加 INSERT 语句。
