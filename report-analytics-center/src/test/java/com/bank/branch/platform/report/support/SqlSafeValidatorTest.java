@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.support;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.report.exception.RptException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -68,7 +69,7 @@ class SqlSafeValidatorTest {
     void validate_tableNotInWhitelist_rejects42002() {
         assertThatThrownBy(() -> v.validateAndNormalize("SELECT * FROM secret_table"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42002");
+                .hasFieldOrPropertyWithValue("code", "RPT-42002");
     }
 
     // =====================================================================
@@ -79,35 +80,35 @@ class SqlSafeValidatorTest {
     void validate_dropKeyword_rejects42003() {
         assertThatThrownBy(() -> v.validateAndNormalize("DROP TABLE cust_master"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42003");
+                .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_deleteKeyword_rejects42003() {
         assertThatThrownBy(() -> v.validateAndNormalize("DELETE FROM cust_master"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42003");
+                .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_updateKeyword_rejects42003() {
         assertThatThrownBy(() -> v.validateAndNormalize("UPDATE cust_master SET name='x'"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42003");
+                .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_insertKeyword_rejects42003() {
         assertThatThrownBy(() -> v.validateAndNormalize("INSERT INTO cust_master VALUES (1)"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42003");
+                .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_lowercaseKeyword_rejects42003() {
         assertThatThrownBy(() -> v.validateAndNormalize("drop table cust_master"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42003");
+                .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     // =====================================================================
@@ -120,7 +121,7 @@ class SqlSafeValidatorTest {
         // 但不是 Select 子类型），应该被 SQL_ONLY_SELECT_ALLOWED 拒绝
         assertThatThrownBy(() -> v.validateAndNormalize("SHOW TABLES"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42007");
+                .hasFieldOrPropertyWithValue("code", "RPT-42007");
     }
 
     // =====================================================================
@@ -132,7 +133,7 @@ class SqlSafeValidatorTest {
         assertThatThrownBy(() -> v.validateAndNormalize(
                 "SELECT * FROM cust_master UNION ALL SELECT * FROM kpi_result"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42001");
+                .hasFieldOrPropertyWithValue("code", "RPT-42001");
     }
 
     // =====================================================================
@@ -149,7 +150,7 @@ class SqlSafeValidatorTest {
                 + "(SELECT id FROM cust_master))))";
         assertThatThrownBy(() -> v.validateAndNormalize(sql))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42001");
+                .hasFieldOrPropertyWithValue("code", "RPT-42001");
     }
 
     // =====================================================================
@@ -184,7 +185,7 @@ class SqlSafeValidatorTest {
         String longSql = "SELECT * FROM cust_master WHERE id=" + "1".repeat(5100);
         assertThatThrownBy(() -> v.validateAndNormalize(longSql))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42008");
+                .hasFieldOrPropertyWithValue("code", "RPT-42008");
     }
 
     // =====================================================================
@@ -195,6 +196,6 @@ class SqlSafeValidatorTest {
     void validate_invalidSyntax_rejects42001() {
         assertThatThrownBy(() -> v.validateAndNormalize("SELECT FROM ;;"))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("RPT-42001");
+                .hasFieldOrPropertyWithValue("code", "RPT-42001");
     }
 }
