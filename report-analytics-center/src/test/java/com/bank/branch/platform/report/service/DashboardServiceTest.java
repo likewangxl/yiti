@@ -9,6 +9,8 @@ import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.performance.api.MetricApi;
 import com.bank.branch.platform.report.config.DashboardPresidentMetrics;
 import com.bank.branch.platform.report.dto.resp.PresidentDashboardRespDTO;
+import com.bank.branch.platform.report.enums.RptErrorCode;
+import com.bank.branch.platform.report.exception.RptException;
 import com.bank.branch.platform.report.service.impl.DashboardServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -152,8 +154,11 @@ class DashboardServiceTest {
     void getPresidentDashboard_withoutRolePresident_throwsRpt40301() {
         when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RM", "R_TELLER"));
 
+        // RptException.message 仅含 msg（不含 code），用 errorCode 字段断言更精确
         assertThatThrownBy(() -> service.getPresidentDashboard(LocalDate.parse("2026-04-09")))
-                .hasMessageContaining("RPT-40301");
+                .isInstanceOf(RptException.class)
+                .satisfies(ex -> assertThat(((RptException) ex).getErrorCode())
+                        .isEqualTo(RptErrorCode.DASHBOARD_NO_ACCESS));
     }
 
     @Test
