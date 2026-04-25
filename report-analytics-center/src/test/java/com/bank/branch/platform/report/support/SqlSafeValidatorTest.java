@@ -137,7 +137,7 @@ class SqlSafeValidatorTest {
     }
 
     // =====================================================================
-    // 6) 子查询深度
+    // 6) 子查询深度（含 V1.0 M5 顺手补的"3 通过 / 4 拒绝"精确边界）
     // =====================================================================
 
     @Test
@@ -148,6 +148,30 @@ class SqlSafeValidatorTest {
                 + "(SELECT id FROM cust_master WHERE id IN "
                 + "(SELECT id FROM cust_master WHERE id IN "
                 + "(SELECT id FROM cust_master))))";
+        assertThatThrownBy(() -> v.validateAndNormalize(sql))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-42001");
+    }
+
+    /** M4 reviewer 观察项 #1：精确深度 3 应通过（边界等于上限）. */
+    @Test
+    void validate_subqueryDepthExactly3_passes() {
+        // computeDepth 起始 depth=1，3 层 SELECT 嵌套（主 + 2 子查询）= depth 3 = 上限，应通过
+        String sql = "SELECT * FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master))";
+        SqlSafeResult r = v.validateAndNormalize(sql);
+        assertThat(r.isAllowed()).isTrue();
+    }
+
+    /** M4 reviewer 观察项 #1：精确深度 4 应拒绝（恰好越过上限）. */
+    @Test
+    void validate_subqueryDepthExactly4_rejects42001() {
+        // 4 层 SELECT 嵌套（主 + 3 子查询）= depth 4 > 3，恰好越过上限
+        String sql = "SELECT * FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master WHERE id IN "
+                + "(SELECT id FROM cust_master)))";
         assertThatThrownBy(() -> v.validateAndNormalize(sql))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42001");

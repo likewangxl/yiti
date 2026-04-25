@@ -11,7 +11,9 @@
 --
 -- v1.0 note：
 --   - RESOURCE_ID < 20 字符（pt_resource 列约束）
---   - @BizAuth: SYS_CONFIG/EXECUTE_SQL（D.1）+ REPORT/LIST|READ（D.2-D.4）
+--   - @BizAuth: REPORT/EXECUTE_SQL（D.1）+ REPORT/LIST|READ（D.2-D.4）
+--     （bizType 全部 REPORT，由 RptBizAuthConsistencyArchTest 守护单档策略；
+--      action EXECUTE_SQL 复用 common-security 现有枚举值）
 --   - 角色绑定：D.1 仅 R_BACK_TECH（SQL 探查执行高危）；D.2-D.4 R_ADMIN + R_BACK_TECH
 --     （历史 / 白名单仅技术运维使用，业务角色无需）
 --
