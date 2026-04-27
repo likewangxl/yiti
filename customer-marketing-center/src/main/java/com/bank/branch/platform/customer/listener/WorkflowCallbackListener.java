@@ -166,44 +166,4 @@ public class WorkflowCallbackListener {
         log.info("[WorkflowCallbackListener] 发布 LeadRejectedEvent, leadId={}, leadOp={}, reason={}",
                 leadId, lead.getLeadOp(), rejectReason);
     }
-
-    /**
-     * 外部回调入口（供工作流模块在无 Spring 事件时直接调用）。
-     * <p>
-     * 当工作流回调通过 REST 方式触发时，由 Controller 层调用此方法。
-     * approved=true 表示通过，false 表示拒绝。
-     * </p>
-     *
-     * @param leadId            线索ID
-     * @param approved          审批结果
-     * @param operatorEmpId     审批人
-     */
-    public void handleWorkflowCallback(String leadId, boolean approved, String operatorEmpId) {
-        log.info("[WorkflowCallbackListener.handleWorkflowCallback] leadId={}, approved={}, operator={}",
-                leadId, approved, operatorEmpId);
-
-        CustLead lead = leadMapper.selectById(leadId);
-        if (lead == null) {
-            log.warn("[WorkflowCallbackListener] 线索 {} 不存在，跳过回调处理", leadId);
-            return;
-        }
-
-        if (approved) {
-            // 审批通过
-            leadMapper.updateStatusById(leadId, LeadStatus.APPROVED.getCode(), operatorEmpId);
-
-            if (LeadOp.DELETE.getCode().equals(lead.getLeadOp())) {
-                eventPublisher.publishEvent(new LeadDeletedEvent(
-                        leadId, lead.getLeadNo(), lead.getSourceCustId(), operatorEmpId));
-            } else {
-                eventPublisher.publishEvent(new LeadApprovedEvent(
-                        leadId, lead.getLeadNo(), lead.getLeadOp(),
-                        lead.getSourceCustId(), lead.getOwnerOrgId(), operatorEmpId));
-            }
-        } else {
-            // 审批拒绝
-            leadMapper.updateStatusById(leadId, LeadStatus.REJECTED.getCode(), operatorEmpId);
-            log.info("[WorkflowCallbackListener] 线索 {} 审批拒绝，状态更新为 REJECTED", leadId);
-        }
-    }
 }
