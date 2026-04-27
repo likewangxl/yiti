@@ -14,6 +14,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.lang.reflect.Method;
@@ -149,7 +151,7 @@ class SupportWorkflowListenerTest {
     // ==================== 注解结构验证 ====================
 
     @Test
-    @DisplayName("onProcessCompleted 方法应标注 @TransactionalEventListener(AFTER_COMMIT)")
+    @DisplayName("onProcessCompleted 方法应标注 @TransactionalEventListener(AFTER_COMMIT) + @Transactional(REQUIRES_NEW)")
     void onProcessCompleted_shouldBeAnnotatedWithTransactionalEventListenerAfterCommit() throws NoSuchMethodException {
         Method method = SupportWorkflowListener.class.getMethod(
                 "onProcessCompleted", ProcessCompletedListener.ProcessCompletedEvent.class);
@@ -160,8 +162,20 @@ class SupportWorkflowListenerTest {
                 .as("phase 应为 AFTER_COMMIT")
                 .isEqualTo(org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT);
         assertThat(annotation.fallbackExecution())
-                .as("fallbackExecution 应为 true（无事务时也执行）")
-                .isTrue();
+                .as("fallbackExecution 应为 false：与 @Transactional(REQUIRES_NEW) 配合后无需 fallback 路径"
+                        + "（与 customer.WorkflowCallbackListener P0 修复 pattern 一致）")
+                .isFalse();
+
+        // P0 bug 防御性修复：要求 @Transactional(REQUIRES_NEW)，让本方法内 publishEvent 在新事务内 publish，
+        // 未来若新增下游 AFTER_COMMIT listener 订阅 SupportCompleted/SupportRejected 也无需 fallbackExecution 即可正确触发
+        Transactional transactional = method.getAnnotation(Transactional.class);
+        assertThat(transactional).as("方法应标注 @Transactional 以让 publishEvent 在新事务内发布").isNotNull();
+        assertThat(transactional.propagation())
+                .as("propagation 应为 REQUIRES_NEW")
+                .isEqualTo(Propagation.REQUIRES_NEW);
+        assertThat(transactional.rollbackFor())
+                .as("rollbackFor 应包含 Exception.class")
+                .contains(Exception.class);
     }
 
     // ==================== 异常不传播 ====================

@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -45,9 +47,24 @@ public class WorkflowCallbackListener {
      * 简化实现：流程完成即视为 APPROVED；生产中需从流程变量 approved=true/false 判断。
      * </p>
      *
+     * <p>
+     * <strong>事务策略（P0 bug 修复）</strong>：
+     * <ul>
+     *   <li>{@code @Transactional(REQUIRES_NEW)}：在 AFTER_COMMIT 阶段开启新事务，
+     *       让本方法内 {@code publishEvent(LeadApprovedEvent / LeadDeletedEvent)} 在新事务内 publish；</li>
+     *   <li>下游 {@link LeadApprovedListener} / {@link LeadDeletedListener} 都是
+     *       {@code @TransactionalEventListener(AFTER_COMMIT)} 无 fallbackExecution，
+     *       必须在事务内 publish 它们才能正确触发；</li>
+     *   <li>移除 {@code fallbackExecution = true}：与 REQUIRES_NEW 配合时，
+     *       AFTER_COMMIT + 显式新事务 = 既保证流程完成事务已 commit，又能让下游 listener 正确链接。</li>
+     * </ul>
+     * 详见红 IT {@code WorkflowCallbackEventChainBugIT}（commit message 中引用）。
+     * </p>
+     *
      * @param event 流程完成事件（来自 workflow-center ProcessCompletedListener）
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         log.info("[WorkflowCallbackListener.onProcessCompleted] processInstanceId={}, businessKey={}",
