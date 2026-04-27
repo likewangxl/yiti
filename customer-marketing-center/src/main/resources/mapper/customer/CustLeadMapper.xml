@@ -213,4 +213,16 @@
         </if>
     </select>
 
+    <!-- 查询 stuck IN_APPROVAL 线索（FU-14 补偿任务专用），按 updated_time asc 优先处理最久未推进 -->
+    <select id="selectStuckInApproval" resultType="com.bank.branch.platform.customer.entity.CustLead">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM cust_lead
+        WHERE lead_status = 'IN_APPROVAL'
+          AND updated_time &lt; #{cutoff}
+          AND deleted = 0
+        ORDER BY updated_time ASC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

@@ -1,12 +1,18 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * 孤儿 lead 数据补偿 Service。
@@ -35,16 +41,22 @@ import org.springframework.stereotype.Service;
  * {@code conditionalUpdateStatus} 实现 CAS-like 推进，与 listener 主路径竞态
  * 无害（先到者抢到状态推进权 + 事件发布权）。
  * </p>
- * <p>
- * <strong>红 commit skeleton</strong>：{@link #scanAndCompensate()} 抛
- * {@link UnsupportedOperationException}，让 LeadCallbackCompensationIT 在红
- * 阶段 fail；绿 commit 中替换为完整实现。
- * </p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class LeadCallbackCompensationService {
+
+    /** 补偿任务给 reconcileRejected 填的占位 reason —— 真实 reason 已丢失（listener 异常吞掉）。 */
+    private static final String COMPENSATION_REJECT_REASON = "由补偿任务推进，原因不明";
+
+    /**
+     * Flowable 流程已结束的两个终态码（与 {@code workflow-center} 的
+     * {@code ProcessStatus} 枚举常量保持一致，但为避免跨模块依赖内部枚举，
+     * 此处以 String 字面量声明）。
+     */
+    private static final String PROCESS_STATUS_COMPLETED = "COMPLETED";
+    private static final String PROCESS_STATUS_CANCELLED = "CANCELLED";
 
     private final CustLeadMapper leadMapper;
     private final WorkflowApi workflowApi;
@@ -91,7 +103,83 @@ public class LeadCallbackCompensationService {
      * </p>
      */
     public void scanAndCompensate() {
-        throw new UnsupportedOperationException("FU-14 scanAndCompensate not implemented yet");
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(stuckThresholdMinutes);
+        List<CustLead> stuckLeads = leadMapper.selectStuckInApproval(cutoff, batchSize);
+
+        if (stuckLeads.isEmpty()) {
+            log.debug("[LeadCallbackCompensationService.scanAndCompensate] 无 stuck IN_APPROVAL 线索，跳过");
+            return;
+        }
+
+        log.info("[LeadCallbackCompensationService.scanAndCompensate] 发现 {} 条 stuck IN_APPROVAL 线索，开始补偿巡检",
+                stuckLeads.size());
+
+        int approvedCount = 0;
+        int rejectedCount = 0;
+        int skippedCount = 0;
+
+        for (CustLead lead : stuckLeads) {
+            String leadId = lead.getId();
+            try {
+                // 1. 反查流程真实状态
+                BizProcessMapDTO processMap;
+                try {
+                    processMap = workflowApi.getProcessByBizTypeAndBizId("LEAD", leadId);
+                } catch (Exception e) {
+                    // BizException(WF-40402) 或其他异常 → 视作"流程不存在"
+                    log.warn("[LeadCallbackCompensationService] 线索 {} 反查流程映射失败，跳过: {}",
+                            leadId, e.getMessage());
+                    skippedCount++;
+                    continue;
+                }
+
+                if (processMap == null) {
+                    log.warn("[LeadCallbackCompensationService] 线索 {} 无流程映射记录，跳过", leadId);
+                    skippedCount++;
+                    continue;
+                }
+
+                String processStatus = processMap.getProcessStatus();
+                String processInstanceId = processMap.getProcessInstanceId();
+
+                // 2. 流程仍在跑 → 跳过（让正常路径处理）
+                if (!PROCESS_STATUS_COMPLETED.equals(processStatus)
+                        && !PROCESS_STATUS_CANCELLED.equals(processStatus)) {
+                    log.debug("[LeadCallbackCompensationService] 线索 {} 流程仍 {}，跳过", leadId, processStatus);
+                    skippedCount++;
+                    continue;
+                }
+
+                // 3. 流程已结束 → 反查 outcome
+                Optional<String> outcomeOpt = workflowApi.getProcessOutcome(processInstanceId);
+                if (outcomeOpt.isEmpty()) {
+                    log.warn("[LeadCallbackCompensationService] 线索 {} 流程 {} 已结束但 outcome 未知，跳过",
+                            leadId, processInstanceId);
+                    skippedCount++;
+                    continue;
+                }
+
+                // 4. 按 outcome 委托 reconcile
+                String outcome = outcomeOpt.get();
+                if ("APPROVED".equals(outcome)) {
+                    reconcileService.reconcileApproved(lead, processInstanceId);
+                    approvedCount++;
+                } else if ("REJECTED".equals(outcome)) {
+                    reconcileService.reconcileRejected(lead, processInstanceId, COMPENSATION_REJECT_REASON);
+                    rejectedCount++;
+                } else {
+                    log.warn("[LeadCallbackCompensationService] 线索 {} outcome={} 非预期值，跳过", leadId, outcome);
+                    skippedCount++;
+                }
+            } catch (Exception e) {
+                // 单条线索异常不影响其它线索的补偿
+                log.error("[LeadCallbackCompensationService] 线索 {} 补偿异常，跳过本条", leadId, e);
+                skippedCount++;
+            }
+        }
+
+        log.info("[LeadCallbackCompensationService.scanAndCompensate] 补偿巡检完成 total={} approved={} rejected={} skipped={}",
+                stuckLeads.size(), approvedCount, rejectedCount, skippedCount);
     }
 
     /**
