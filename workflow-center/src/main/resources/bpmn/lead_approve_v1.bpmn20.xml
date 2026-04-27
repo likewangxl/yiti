@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    线索审批流程定义（lead_approve_v1）
+    Phase 2 (b) E2E IT 用，简化为 2 节点闭环：
+        startEvent → branch_manager_approve userTask → exclusiveGateway → endEvent (approved/rejected)
+    候选人通过 wf_node_candidate_conf（process_definition_key=lead_approve_v1, node_key=branch_manager_approve）注入。
+    审批通过条件：${approved}；驳回条件：${!approved}（与 loan_approve_v1 一致）。
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://www.bank.com/branch/platform/workflow">
+
+    <process id="lead_approve_v1" name="线索审批" isExecutable="true">
+        <extensionElements>
+            <flowable:executionListener event="end" delegateExpression="${processCompletedListener}"/>
+        </extensionElements>
+
+        <startEvent id="start" name="开始"/>
+
+        <userTask id="branch_manager_approve" name="分行经理审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="branch_manager_decision" name="分行经理决策"/>
+
+        <endEvent id="approved_end" name="通过结束"/>
+        <endEvent id="rejected_end" name="驳回结束"/>
+
+        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_manager_approve"/>
+        <sequenceFlow id="flow_branch_gateway" sourceRef="branch_manager_approve" targetRef="branch_manager_decision"/>
+        <sequenceFlow id="flow_branch_pass" sourceRef="branch_manager_decision" targetRef="approved_end">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${approved}]]></conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow_branch_reject" sourceRef="branch_manager_decision" targetRef="rejected_end">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${!approved}]]></conditionExpression>
+        </sequenceFlow>
+    </process>
+</definitions>
