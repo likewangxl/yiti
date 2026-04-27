@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -26,7 +28,20 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * 返回 rowsAffected=0 表示已被其他实例处理，跳过事件发布。
  * <br>
  * 注解 {@code @TransactionalEventListener(AFTER_COMMIT)} 保证监听器在工作流事务提交后触发，
- * 避免读到未提交数据；{@code fallbackExecution=true} 保证无事务上下文（如测试/启动）时也能执行。
+ * 避免读到未提交数据。
+ * </p>
+ * <p>
+ * <strong>事务策略（P0 bug 防御性修复，与 customer 模块对齐）</strong>：
+ * <ul>
+ *   <li>{@code @Transactional(REQUIRES_NEW)}：在 AFTER_COMMIT 阶段开启新事务，让本方法内
+ *       {@code conditionalUpdateStatus} 与 {@code publishEvent(LoanApprovedEvent / LoanRejectedEvent)}
+ *       在新事务内执行；</li>
+ *   <li>未来若新增 {@code @TransactionalEventListener(AFTER_COMMIT)} 的下游 listener 订阅
+ *       LoanApproved/LoanRejected 事件，下游 listener 无需配置 fallbackExecution 即可正确触发；</li>
+ *   <li>移除 {@code fallbackExecution = true}：与 REQUIRES_NEW 显式开新事务方案兼容，
+ *       与 customer.WorkflowCallbackListener 修复 pattern 一致。</li>
+ * </ul>
+ * 详见 customer 模块红 IT {@code WorkflowCallbackEventChainBugIT}。
  * </p>
  */
 @Slf4j
@@ -49,7 +64,8 @@ public class LoanWorkflowListener {
      *
      * @param event 流程完成事件
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         String processInstanceId = event.processInstanceId();

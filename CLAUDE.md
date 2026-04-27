@@ -46,6 +46,31 @@ mvn test
 mvn clean package
 ```
 
+## 测试 / IT 执行注意事项
+
+### Stale jar 处理（跨模块改动后必跑）
+当 IT（特别是 bootstrap 模块的 `@SpringBootTest`）依赖另一个模块的最新 java 类时，必须**先把上游模块 install 到本地 .m2 仓库**，否则 bootstrap test 会用旧 jar 加载到旧类，引发奇怪的 `ConflictingBeanDefinitionException` 等错误。
+
+```bash
+# 安全做法：清缓存 + 重新 install 全部模块
+mvn clean install -DskipTests
+
+# 然后跑 IT
+mvn test -pl bootstrap
+
+# 或者跑全量含 IT
+mvn verify
+```
+
+**典型症状**：bootstrap test 启动时报 "ConflictingBeanDefinitionException ... bean class [com.bank.branch.platform.report.controller.SqlProbeController] conflicts with existing"。这是 stale jar 残留旧类（已重命名为 RptSqlProbeController）+ 新源码冲突。`mvn clean install` 立即解决。
+
+### Surefire vs Failsafe 分工
+- `*Test.java` / `*Tests.java` → surefire（`mvn test` 触发）
+- `*IT.java` → failsafe（`mvn verify` 触发，`mvn test` 不跑）
+- 写新集成测试时按 `*IT.java` 命名
+
+### UTF-8 编码已全局配置
+pom.xml `surefire/failsafe` 的 argLine 已含 `-Dfile.encoding=UTF-8`，无需在每个 `@Sql` 注解上加 `@SqlConfig(encoding="UTF-8")`。Windows JVM 默认 file.encoding=GBK 不再影响 H2 中文 fake data 加载。
 
 ## 当前已实现的模块
 

@@ -2,7 +2,7 @@
 -- seed-v1.sql — 公共种子数据（DEV/TEST only）
 -- 版本：V1.0
 -- 描述：字典 / 角色 / 资源 / 角色-资源绑定 / 角色-BizType-数据范围 种子数据
--- 日期：2026-03-25
+-- 日期：2026-04-25（与 onepl 实际状态对齐：272 资源 + 565 绑定 + 83 范围 + 用户机构数据）
 -- 执行前提：create-table.sql + docs/schema/v1-additions.sql 已执行
 -- 幂等策略：INSERT IGNORE（依赖主键/唯一约束防重复）
 -- ============================================================================
@@ -301,858 +301,1088 @@ VALUES
 ('D_DC_GUIDE',   'DOC_CATEGORY', 'GUIDE',     '操作指引',   'GUIDE',     2, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_DC_TEMPLATE','DOC_CATEGORY', 'TEMPLATE',  '模板表单',   'TEMPLATE',  3, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_DC_TRAIN',   'DOC_CATEGORY', 'TRAINING',  '培训材料',   'TRAINING',  4, 'ACTIVE', 'V1 seed', 'seed');
+-- =========================================================
+-- 2) PT_ROLE 角色种子数据（当前 onepl 实际 13 行）
+-- 注：12 设计期角色 + 1 测试残留角色 R_77EBD269（R_TESTZ）
+-- 顺序：按 ROLE_ID 字典序（mysqldump 输出）
+-- =========================================================
+
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_77EBD269','R_TESTZ','retest-v2',1,'PLATFORM','2026-04-10 12:20:00',NULL,'2026-04-10 12:20:01',NULL,'upd');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_ADMIN','SYS_ADMIN','系统管理员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 超级管理员，运维与权限管理');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_FINANCE','BACK_FINAN','中后台员工(资财)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 财务会计部等后台支持');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_TECH','BACK_TECH','中后台员工(科技)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 信息技术部');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BRANCH_MGR','BRANCH_HEA','经营机构负责人',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CORP_DEPT','CORP_DEPT','公司部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CREDIT_APPROVER','CREDIT_APP','授信批复人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CREDIT_REVIEWER','CREDIT_REV','授信审查人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_PRESIDENT','BRANCH_PRE','分行行长',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 分行最高管理者');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RETAIL_DEPT','RETAIL_DEP','零售部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 分行零售业务管理部门');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RM','R_RM','客户经理',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_SUPPORT_SEC','SUPPORT_SE','中场支持部门秘书',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 中场支持部门秘书岗');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_SUPPORT_STAFF','SUPPORT_ST','中场支持部门人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 中台部门员工');
 
 
 -- =========================================================
--- 2) PT_ROLE 角色种子数据（V1 全部12个角色）
+-- 3) PT_RESOURCE 接口资源种子数据（当前 onepl 实际 298 行）
+-- 顺序：按 RESOURCE_ID 字典序（mysqldump 输出，含 8 模块全部资源）
+-- 命名风格：业务模块用字母前缀（A_/G_/W_/C_/B_/P_PERF_/R_RPT_）
+--           portal/通用资源沿用 RES_* 前缀
+-- 状态：STATUS=0 启用 / STATUS=1 禁用（11 条 customer 旧端点 V1.1 已下线 STATUS=1）
 -- =========================================================
 
-INSERT IGNORE INTO PT_ROLE (ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('R_ADMIN',            'SYS_ADMIN',        '系统管理员',         0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 超级管理员，运维与权限管理'),
-('R_RM',               'CUST_MANAGER',     '客户经理',           0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 经营机构一线营销人员'),
-('R_BRANCH_MGR',       'BRANCH_HEAD',      '经营机构负责人',     0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 支行/二级分行负责人'),
-('R_CORP_DEPT',        'CORP_DEPT',        '公司部人员',         0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 分行公司业务管理部门'),
-('R_RETAIL_DEPT',      'RETAIL_DEPT',      '零售部人员',         0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 分行零售业务管理部门'),
-('R_BACK_FINANCE',     'BACK_FINANCE',     '中后台员工(资财)',   0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 财务会计部等后台支持'),
-('R_BACK_TECH',        'BACK_TECH',        '中后台员工(科技)',   0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 信息技术部'),
-('R_SUPPORT_SEC',      'SUPPORT_SECRETARY','中场支持部门秘书',   0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 中场支持部门秘书岗'),
-('R_SUPPORT_STAFF',    'SUPPORT_STAFF',    '中场支持部门人员',   0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 中台部门员工'),
-('R_CREDIT_REVIEWER',  'CREDIT_REVIEWER',  '授信审查人员',       0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 授信审查岗'),
-('R_CREDIT_APPROVER',  'CREDIT_APPROVER',  '授信批复人员',       0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 授信批复岗'),
-('R_PRESIDENT',        'BRANCH_PRESIDENT', '分行行长',           0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed - 分行最高管理者');
-
-
--- =========================================================
--- 3) PT_RESOURCE 接口资源种子数据
--- =========================================================
-
--- ---------------------------------------------------------
--- 3.1 auth-permission-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_AUTH_CURRENT',       '/api/auth/current-user',                  'GET',  '当前用户信息',      1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ORG_TREE',           '/api/org/tree',                           'GET',  '组织树',            1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ORG_SUBTREE',        '/api/org/subtree',                        'GET',  '组织子树',          1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ROLE_LIST',          '/api/sys/roles',                          'GET',  '角色列表',          1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ROLE_CREATE',        '/api/sys/roles',                          'POST', '角色创建',          1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ROLE_UPDATE',        '/api/sys/roles/*',                        'PUT',  '角色更新',          1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ROLE_RES_LIST',      '/api/sys/roles/*/resources',              'GET',  '角色资源查询',      1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ROLE_RES_REPLACE',   '/api/sys/roles/*/resources/replace',      'POST', '角色资源覆盖绑定',  1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ROLE_SCOPE_LIST',    '/api/sys/roles/*/biz-scopes',             'GET',  '角色BizScope查询',  1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ROLE_SCOPE_REPLACE', '/api/sys/roles/*/biz-scopes/replace',     'POST', '角色范围覆盖配置',  1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 3.2 portal-content-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_PORTAL_TODOS',       '/api/portal/dashboard/todos',              'GET',    '工作台待办',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PORTAL_NOTIFY',      '/api/portal/dashboard/notifications',      'GET',    '工作台通知',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PORTAL_NOTIFY_READ', '/api/portal/dashboard/notifications/*/read','PUT',   '通知已读',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PORTAL_CARDS',       '/api/portal/dashboard/cards',              'GET',    '工作台卡片',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_NAV_LIST',           '/api/portal/navs',                         'GET',    '导航列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_NAV_CREATE',         '/api/portal/navs',                         'POST',   '导航新增',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_NAV_UPDATE',         '/api/portal/navs/*',                       'PUT',    '导航编辑',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_NAV_DELETE',         '/api/portal/navs/*',                       'DELETE', '导航删除',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SHORTCUT_LIST',      '/api/portal/shortcuts',                    'GET',    '快捷入口列表',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SHORTCUT_CREATE',    '/api/portal/shortcuts',                    'POST',   '快捷入口新增',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SHORTCUT_UPDATE',    '/api/portal/shortcuts/*',                  'PUT',    '快捷入口编辑',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SHORTCUT_DELETE',    '/api/portal/shortcuts/*',                  'DELETE', '快捷入口删除',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SHORTCUT_REPLACE',   '/api/portal/shortcuts/replace',            'POST',   '快捷入口覆盖替换', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ADDRBOOK_LIST',      '/api/addrbook/employees',                  'GET',    '通讯录查询',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ADDRBOOK_SEARCH',    '/api/addrbook/employees/search',           'GET',    '员工搜索',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_ADDRBOOK_UPDATE',    '/api/addrbook/employees/*',                'PUT',    '通讯录维护',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PRODUCT_LIST',       '/api/products',                            'GET',    '产品列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PRODUCT_DETAIL',     '/api/products/*',                          'GET',    '产品详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PRODUCT_CREATE',     '/api/products',                            'POST',   '产品新增',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PRODUCT_UPDATE',     '/api/products/*',                          'PUT',    '产品编辑',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PRODUCT_DELETE',     '/api/products/*',                          'DELETE', '产品删除',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PRODUCT_EXPORT',     '/api/products/export',                     'GET',    '产品导出',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_DOC_LIST',           '/api/docs',                                'GET',    '文档列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_DOC_DETAIL',         '/api/docs/*',                              'GET',    '文档详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_DOC_UPLOAD',         '/api/docs',                                'POST',   '文档上传',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_DOC_UPDATE',         '/api/docs/*',                              'PUT',    '文档更新',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_DOC_DELETE',         '/api/docs/*',                              'DELETE', '文档删除',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_DOC_DOWNLOAD',       '/api/docs/*/download',                     'GET',    '文档下载',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_FILE_UPLOAD',        '/api/files',                               'POST',   '文件上传',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_FILE_DOWNLOAD',      '/api/files/*/download',                    'GET',    '文件下载',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 3.3 customer-marketing-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_TAG_LIST',           '/api/tags',                        'GET',  '标签列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_CREATE',         '/api/tags',                        'POST', '新增标签',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_UPDATE',         '/api/tags/*',                      'PUT',  '编辑标签',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_DETAIL',         '/api/tags/*',                      'GET',  '标签详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_ENABLE',         '/api/tags/*/enable',               'POST', '标签启用',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_DISABLE',        '/api/tags/*/disable',              'POST', '标签禁用',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_CUST_REPLACE',   '/api/tags/*/customers/replace',    'POST', '标签覆盖替换客户', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_IMPORT_PREVIEW', '/api/tags/*/import/preview',       'POST', '标签导入预检',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_IMPORT_CONFIRM', '/api/tags/*/import/confirm',       'POST', '标签导入执行',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TAG_EXPORT',         '/api/tags/*/export',               'POST', '标签导出',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_LIST',          '/api/leads',                       'GET',  '线索列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_CREATE',        '/api/leads',                       'POST', '线索新增草稿',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_UPDATE',        '/api/leads/*',                     'PUT',  '线索编辑草稿',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_DETAIL',        '/api/leads/*',                     'GET',  '线索详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_SUBMIT',        '/api/leads/*/submit',              'POST', '线索提交审批',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_IMPORT',        '/api/leads/import',                'POST', '线索批量导入',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_EXPORT',        '/api/leads/export',                'POST', '线索导出',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LEAD_IMP_BATCH',     '/api/leads/import-batches/*',      'GET',  '导入批次详情',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CUST_POOL',          '/api/customers/pool',              'GET',  '待认领客户池',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CLAIM_CREATE',       '/api/claims',                      'POST', '认领客户',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CLAIM_CANCEL',       '/api/claims/*/cancel',             'POST', '取消认领',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CLAIM_RESTART',      '/api/claims/*/restart-touch',      'POST', '重新发起触达',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CUSTOMER_LIST',      '/api/customers',                   'GET',  '客户列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CUSTOMER_DETAIL',    '/api/customers/*',                 'GET',  '客户详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CUSTOMER_HISTORY',   '/api/customers/*/history',         'GET',  '客户历史只读',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CUSTOMER_EDIT',      '/api/customers/*/edit',            'POST', '客户编辑',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CUSTOMER_TRANSFER',  '/api/customers/*/transfer',        'POST', '客户转交维护人',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_CUSTOMER_DEL_APPLY', '/api/customers/*/delete-apply',    'POST', '客户删除申请',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TOUCH_LIST',         '/api/touch-tasks',                 'GET',  '触达任务列表',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TOUCH_DETAIL',       '/api/touch-tasks/*',               'GET',  '触达任务详情',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TOUCH_LOG',          '/api/touch-tasks/*/logs',          'POST', '追加触达日志',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TOUCH_SUCCESS',      '/api/touch-tasks/*/success',       'POST', '触达成功',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TOUCH_CANCEL',       '/api/touch-tasks/*/cancel',        'POST', '触达取消',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TOUCH_RPT_LIST',     '/api/touch-report/list',           'GET',  '触达报表查询',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_TOUCH_RPT_EXPORT',   '/api/touch-report/export',         'POST', '触达报表导出',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 3.4 business-application-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_LOAN_LIST',          '/api/loans',                              'GET',  '资产投放列表',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LOAN_DETAIL',        '/api/loans/*',                            'GET',  '资产投放详情',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LOAN_CREATE',        '/api/loans',                              'POST', '资产投放草稿新增',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LOAN_UPDATE',        '/api/loans/*',                            'PUT',  '资产投放草稿编辑',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LOAN_SUBMIT',        '/api/loans/*/submit',                     'POST', '资产投放提交',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_LOAN_EXPORT',        '/api/loans/export',                       'POST', '资产投放导出',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPPORT_LIST',       '/api/supports',                           'GET',  '中场支持列表',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPPORT_DETAIL',     '/api/supports/*',                         'GET',  '中场支持详情',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPPORT_CREATE',     '/api/supports',                           'POST', '中场支持草稿新增',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPPORT_UPDATE',     '/api/supports/*',                         'PUT',  '中场支持草稿编辑',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPPORT_SUBMIT',     '/api/supports/groups/*/submit',           'POST', '中场支持提交',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPPORT_EXPORT',     '/api/supports/export',                    'POST', '中场支持导出',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPDEPT_LIST',       '/api/support-dept/requests',              'GET',  '承接列表',           1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPDEPT_DETAIL',     '/api/support-dept/requests/*',            'GET',  '承接详情',           1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SUPDEPT_DISPATCH',   '/api/support-dept/requests/*/dispatch',   'POST', '承接派单',           1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 3.5 workflow-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_WF_TODO',        '/api/workflow/tasks/todo',                    'GET',  '工作流待办列表',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_DONE',        '/api/workflow/tasks/done',                    'GET',  '工作流已办列表',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_DETAIL',      '/api/workflow/tasks/*',                       'GET',  '工作流任务详情',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_CLAIM',       '/api/workflow/tasks/*/claim',                 'POST', '工作流任务Claim',  1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_APPROVE',     '/api/workflow/tasks/*/approve',               'POST', '工作流任务同意',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_REJECT',      '/api/workflow/tasks/*/reject',                'POST', '工作流任务驳回',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_TRANSFER',    '/api/workflow/tasks/*/transfer',              'POST', '工作流任务转交',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_SUBMIT',      '/api/workflow/processes/submit',              'POST', '工作流流程提交',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_CANCEL',      '/api/workflow/processes/*/cancel',            'POST', '工作流流程撤回',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_HISTORY',     '/api/workflow/process/history',               'GET',  '流程历史',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_IS_PART',     '/api/workflow/participants/is-participant',   'GET',  '参与者判定',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_CFG_CAND',    '/api/workflow/config/node-candidates',        'POST', '流程节点候选配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_CFG_FORM',    '/api/workflow/config/node-form',              'POST', '流程节点表单配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_CFG_SLA',     '/api/workflow/config/timeout-rule',           'POST', '流程超时规则配置', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_PROC_INST',   '/api/workflow/process/instance/*',          'GET',  '流程实例详情',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_PROC_DIAGRAM','/api/workflow/process/*/diagram',            'GET',  '流程进度图',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_SLA_L',   '/api/admin/workflow/timeout-rules',         'GET',  '超时规则列表(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_SLA_I',   '/api/admin/workflow/timeout-rules/item/*',   'GET',  '超时规则详情(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_SLA_U',   '/api/admin/workflow/timeout-rules/item/*',   'PUT',  '超时规则编辑(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_CAND_L',  '/api/admin/workflow/candidate-configs',     'GET',  '节点候选配置列表(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_CAND_I',  '/api/admin/workflow/candidate-configs/item/*','GET', '节点候选配置详情(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_CAND_U',  '/api/admin/workflow/candidate-configs/item/*','PUT', '节点候选配置编辑(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_FORM_L',   '/api/admin/workflow/node-form-configs',     'GET',  '节点表单配置列表(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_FORM_I',  '/api/admin/workflow/node-form-configs/item/*','GET', '节点表单配置详情(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_WF_ADM_FORM_U',  '/api/admin/workflow/node-form-configs/item/*','PUT', '节点表单配置编辑(管理)', 1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 3.6 performance-engine-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_PERF_METRIC_LIST',   '/api/perf/metrics',                      'GET',  '指标列表',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_METRIC_DETAIL', '/api/perf/metrics/*',                    'GET',  '指标详情',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_METRIC_CREATE', '/api/perf/metrics',                      'POST', '指标新增',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_METRIC_UPDATE', '/api/perf/metrics/*',                    'PUT',  '指标编辑',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_METRIC_ENABLE', '/api/perf/metrics/*/enable',             'POST', '指标启用',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_METRIC_DISABLE','/api/perf/metrics/*/disable',            'POST', '指标禁用',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_METRIC_TRIAL',  '/api/perf/metrics/*/trial-run',          'POST', '指标试运行',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_METRIC_RUN',    '/api/perf/metrics/*/run-now',            'POST', '指标立即执行',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_KPI_LIST',      '/api/perf/kpi-schemes',                  'GET',  'KPI方案列表',    1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_KPI_DETAIL',    '/api/perf/kpi-schemes/*',                'GET',  'KPI方案详情',    1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_KPI_CREATE',    '/api/perf/kpi-schemes',                  'POST', 'KPI方案新增',    1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_KPI_UPDATE',    '/api/perf/kpi-schemes/*',                'PUT',  'KPI方案编辑',    1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_KPI_ITEMS',     '/api/perf/kpi-schemes/*/items/replace',  'POST', 'KPI项配置替换',  1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_TGT_LIST',      '/api/perf/target-plans',                 'GET',  '目标方案列表',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_TGT_DETAIL',    '/api/perf/target-plans/*',               'GET',  '目标方案详情',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_TGT_CREATE',    '/api/perf/target-plans',                 'POST', '目标方案新增',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_TGT_UPDATE',    '/api/perf/target-plans/*',               'PUT',  '目标方案编辑',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_TGT_IMPORT',    '/api/perf/target-plans/*/import',        'POST', '目标导入',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_IDX_IMPORT',    '/api/perf/imports/index-result',         'POST', '指标结果导入',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_KPI_IMPORT',    '/api/perf/imports/kpi-result',           'POST', 'KPI结果导入',    1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_KPI_EXEC',      '/api/perf/kpi/execute',                  'POST', 'KPI执行',        1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_RECALC',        '/api/perf/recalc',                       'POST', '历史重算',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_TASKS',         '/api/perf/run-tasks',                    'GET',  '执行任务列表',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_IMP_BATCH_LIST','/api/perf/import-batches',               'GET',  '导入批次列表',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_IMP_BATCH_DET', '/api/perf/import-batches/*',             'GET',  '导入批次详情',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_PERF_TASK_STATUS',   '/api/data-task/status',                  'POST', '任务状态查询',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 3.7 report-analytics-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_RPT_DYN_QUERY',    '/api/report/dynamic/query',                          'POST', '动态指标查询',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_RPT_DYN_EXPORT',   '/api/report/dynamic/export',                         'POST', '动态指标导出',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_RPT_DYN_SAVE',     '/api/report/dynamic/saved',                          'POST', '保存查询方案',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_RPT_DYN_LIST',     '/api/report/dynamic/saved',                          'GET',  '查询保存方案列表',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_RPT_FIX_DASH',     '/api/report/fixed/branch-president/dashboard',       'GET',  '行长仪表盘',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_RPT_FIX_DASH_EXP', '/api/report/fixed/branch-president/dashboard/export','POST', '行长仪表盘导出',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_RPT_SQL_EXEC',     '/api/report/sql-probe/execute',                      'POST', 'SQL探查执行',        1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_RPT_SQL_HIST',     '/api/report/sql-probe/history',                      'GET',  'SQL探查历史',        1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 3.8 system-governance-center 资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK)
-VALUES
-('RES_SYS_DICT_LIST',     '/api/sys/dicts',                   'GET',  '字典查询',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_DICT_CREATE',   '/api/sys/dicts',                   'POST', '字典新增',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_DICT_UPDATE',   '/api/sys/dicts/*',                 'PUT',  '字典编辑',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CAL_MONTH',     '/api/sys/calendar/month',          'GET',  '日历月查询',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CAL_SET',       '/api/sys/calendar/set-day',        'POST', '日历设置',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CAL_IMPORT',    '/api/sys/calendar/batch-import',   'POST', '日历批量导入',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CAL_INIT',      '/api/sys/calendar/init-year',      'POST', '日历年初初始化',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CFG_LIST',      '/api/sys/configs',                 'GET',  '配置列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CFG_DETAIL',    '/api/sys/configs/*',               'GET',  '配置详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CFG_CREATE',    '/api/sys/configs',                 'POST', '配置新增',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CFG_UPDATE',    '/api/sys/configs/*',               'PUT',  '配置编辑',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CFG_ENABLE',    '/api/sys/configs/*/enable',        'POST', '配置启用',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_CFG_DISABLE',   '/api/sys/configs/*/disable',       'POST', '配置禁用',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_JOB_LIST',      '/api/sys/jobs',                    'GET',  '任务列表',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_JOB_CREATE',    '/api/sys/jobs',                    'POST', '任务新增',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_JOB_UPDATE',    '/api/sys/jobs/*',                  'PUT',  '任务编辑',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_JOB_PAUSE',     '/api/sys/jobs/*/pause',            'POST', '任务暂停',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_JOB_RESUME',    '/api/sys/jobs/*/resume',           'POST', '任务恢复',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_JOB_TRIGGER',   '/api/sys/jobs/*/trigger',          'POST', '任务手动触发',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_JOB_RUNS',      '/api/sys/jobs/*/runs',             'GET',  '任务执行日志',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_SLA_LIST',      '/api/sys/timeout-rules',           'GET',  '超时规则列表',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_SLA_CREATE',    '/api/sys/timeout-rules',           'POST', '超时规则新增',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_SLA_UPDATE',    '/api/sys/timeout-rules/*',         'PUT',  '超时规则编辑',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_NOTIFY_LIST',   '/api/notify/list',                 'GET',  '我的通知列表',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_NOTIFY_READ',   '/api/notify/*/read',               'POST', '通知标已读',       1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_NOTIFY_BATCH',  '/api/notify/batch-read',           'POST', '通知批量已读',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_FILE_UPLOAD',   '/api/sys/files/upload',            'POST', '文件上传(治理)',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_FILE_DOWNLOAD', '/api/sys/files/*/download',        'GET',  '文件下载(治理)',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_FILE_BY_BIZ',   '/api/sys/files/by-biz',            'GET',  '文件按业务查询',   1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_AUDIT_LIST',    '/api/admin/audit-logs',                 'GET',  '审计查询',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_AUDIT_DETAIL', '/api/admin/audit-logs/*',               'GET',  '审计详情',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_AUDIT_EXPORT', '/api/admin/audit-logs/export',          'POST', '审计导出',         1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed'),
-('RES_SYS_DICT_STATUS',  '/api/admin/sys/dicts/*/status',         'PUT',  '字典状态更新',     1, '1', 0, 'PLATFORM', NOW(), 'seed', NOW(), 'seed', 'V1 seed');
-
-
--- =========================================================
--- 4) PT_ROLE_RESOURCE 角色-资源绑定种子数据
---    按 project_ana.md 2.1.2 权限矩阵生成
--- =========================================================
-
--- ---------------------------------------------------------
--- 4.1 系统管理员（R_ADMIN）: 绑定所有资源
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-SELECT CONCAT('RR_ADMIN_', RESOURCE_ID), 'R_ADMIN', RESOURCE_ID, 'PLATFORM', NOW()
-FROM PT_RESOURCE WHERE SYS_CODE = 'PLATFORM';
-
--- ---------------------------------------------------------
--- 4.2 客户经理（R_RM）: 通用只读 + 客户营销写 + 业务申请写 + 工作流办理 + 个人报表
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
--- 公共：当前用户、组织树、通知
-('RR_RM_AUTH',      'R_RM', 'RES_AUTH_CURRENT',       'PLATFORM', NOW()),
-('RR_RM_ORG',       'R_RM', 'RES_ORG_TREE',           'PLATFORM', NOW()),
-('RR_RM_NOTIFY_L',  'R_RM', 'RES_SYS_NOTIFY_LIST',    'PLATFORM', NOW()),
-('RR_RM_NOTIFY_R',  'R_RM', 'RES_SYS_NOTIFY_READ',    'PLATFORM', NOW()),
-('RR_RM_NOTIFY_B',  'R_RM', 'RES_SYS_NOTIFY_BATCH',   'PLATFORM', NOW()),
--- 门户：工作台待办/通知/卡片/快捷入口
-('RR_RM_PTODO',     'R_RM', 'RES_PORTAL_TODOS',       'PLATFORM', NOW()),
-('RR_RM_PNOTIFY',   'R_RM', 'RES_PORTAL_NOTIFY',      'PLATFORM', NOW()),
-('RR_RM_PNREAD',    'R_RM', 'RES_PORTAL_NOTIFY_READ', 'PLATFORM', NOW()),
-('RR_RM_PCARDS',    'R_RM', 'RES_PORTAL_CARDS',       'PLATFORM', NOW()),
-('RR_RM_SCLIST',    'R_RM', 'RES_SHORTCUT_LIST',      'PLATFORM', NOW()),
-('RR_RM_SCCREATE',  'R_RM', 'RES_SHORTCUT_CREATE',    'PLATFORM', NOW()),
-('RR_RM_SCUPDATE',  'R_RM', 'RES_SHORTCUT_UPDATE',    'PLATFORM', NOW()),
-('RR_RM_SCDELETE',  'R_RM', 'RES_SHORTCUT_DELETE',    'PLATFORM', NOW()),
-('RR_RM_SCREPLACE', 'R_RM', 'RES_SHORTCUT_REPLACE',   'PLATFORM', NOW()),
--- 通讯录：读+维护本人
-('RR_RM_ADDR_L',    'R_RM', 'RES_ADDRBOOK_LIST',      'PLATFORM', NOW()),
-('RR_RM_ADDR_S',    'R_RM', 'RES_ADDRBOOK_SEARCH',    'PLATFORM', NOW()),
-('RR_RM_ADDR_U',    'R_RM', 'RES_ADDRBOOK_UPDATE',    'PLATFORM', NOW()),
--- 产品/文档：只读
-('RR_RM_PROD_L',    'R_RM', 'RES_PRODUCT_LIST',       'PLATFORM', NOW()),
-('RR_RM_PROD_D',    'R_RM', 'RES_PRODUCT_DETAIL',     'PLATFORM', NOW()),
-('RR_RM_DOC_L',     'R_RM', 'RES_DOC_LIST',           'PLATFORM', NOW()),
-('RR_RM_DOC_D',     'R_RM', 'RES_DOC_DETAIL',         'PLATFORM', NOW()),
-('RR_RM_DOC_DL',    'R_RM', 'RES_DOC_DOWNLOAD',       'PLATFORM', NOW()),
-('RR_RM_NAV_L',     'R_RM', 'RES_NAV_LIST',           'PLATFORM', NOW()),
--- 标签：只读
-('RR_RM_TAG_L',     'R_RM', 'RES_TAG_LIST',           'PLATFORM', NOW()),
-('RR_RM_TAG_D',     'R_RM', 'RES_TAG_DETAIL',         'PLATFORM', NOW()),
--- 线索：CRUD + 导入
-('RR_RM_LEAD_L',    'R_RM', 'RES_LEAD_LIST',          'PLATFORM', NOW()),
-('RR_RM_LEAD_C',    'R_RM', 'RES_LEAD_CREATE',        'PLATFORM', NOW()),
-('RR_RM_LEAD_U',    'R_RM', 'RES_LEAD_UPDATE',        'PLATFORM', NOW()),
-('RR_RM_LEAD_D',    'R_RM', 'RES_LEAD_DETAIL',        'PLATFORM', NOW()),
-('RR_RM_LEAD_S',    'R_RM', 'RES_LEAD_SUBMIT',        'PLATFORM', NOW()),
-('RR_RM_LEAD_I',    'R_RM', 'RES_LEAD_IMPORT',        'PLATFORM', NOW()),
-('RR_RM_LEAD_E',    'R_RM', 'RES_LEAD_EXPORT',        'PLATFORM', NOW()),
-('RR_RM_LEAD_IB',   'R_RM', 'RES_LEAD_IMP_BATCH',     'PLATFORM', NOW()),
--- 客户池只读 + 认领
-('RR_RM_POOL',      'R_RM', 'RES_CUST_POOL',          'PLATFORM', NOW()),
-('RR_RM_CLAIM_C',   'R_RM', 'RES_CLAIM_CREATE',       'PLATFORM', NOW()),
-('RR_RM_CLAIM_X',   'R_RM', 'RES_CLAIM_CANCEL',       'PLATFORM', NOW()),
-('RR_RM_CLAIM_R',   'R_RM', 'RES_CLAIM_RESTART',      'PLATFORM', NOW()),
--- 触达任务
-('RR_RM_TOUCH_L',   'R_RM', 'RES_TOUCH_LIST',         'PLATFORM', NOW()),
-('RR_RM_TOUCH_D',   'R_RM', 'RES_TOUCH_DETAIL',       'PLATFORM', NOW()),
-('RR_RM_TOUCH_LOG', 'R_RM', 'RES_TOUCH_LOG',          'PLATFORM', NOW()),
-('RR_RM_TOUCH_S',   'R_RM', 'RES_TOUCH_SUCCESS',      'PLATFORM', NOW()),
-('RR_RM_TOUCH_X',   'R_RM', 'RES_TOUCH_CANCEL',       'PLATFORM', NOW()),
--- 资产投放
-('RR_RM_LOAN_L',    'R_RM', 'RES_LOAN_LIST',          'PLATFORM', NOW()),
-('RR_RM_LOAN_D',    'R_RM', 'RES_LOAN_DETAIL',        'PLATFORM', NOW()),
-('RR_RM_LOAN_C',    'R_RM', 'RES_LOAN_CREATE',        'PLATFORM', NOW()),
-('RR_RM_LOAN_U',    'R_RM', 'RES_LOAN_UPDATE',        'PLATFORM', NOW()),
-('RR_RM_LOAN_S',    'R_RM', 'RES_LOAN_SUBMIT',        'PLATFORM', NOW()),
-('RR_RM_LOAN_E',    'R_RM', 'RES_LOAN_EXPORT',        'PLATFORM', NOW()),
--- 中场支持（发起方）
-('RR_RM_SUP_L',     'R_RM', 'RES_SUPPORT_LIST',       'PLATFORM', NOW()),
-('RR_RM_SUP_D',     'R_RM', 'RES_SUPPORT_DETAIL',     'PLATFORM', NOW()),
-('RR_RM_SUP_C',     'R_RM', 'RES_SUPPORT_CREATE',     'PLATFORM', NOW()),
-('RR_RM_SUP_U',     'R_RM', 'RES_SUPPORT_UPDATE',     'PLATFORM', NOW()),
-('RR_RM_SUP_S',     'R_RM', 'RES_SUPPORT_SUBMIT',     'PLATFORM', NOW()),
-('RR_RM_SUP_E',     'R_RM', 'RES_SUPPORT_EXPORT',     'PLATFORM', NOW()),
--- 工作流办理
-('RR_RM_WF_TODO',   'R_RM', 'RES_WF_TODO',            'PLATFORM', NOW()),
-('RR_RM_WF_DONE',   'R_RM', 'RES_WF_DONE',            'PLATFORM', NOW()),
-('RR_RM_WF_DET',    'R_RM', 'RES_WF_DETAIL',          'PLATFORM', NOW()),
-('RR_RM_WF_CLM',    'R_RM', 'RES_WF_CLAIM',           'PLATFORM', NOW()),
-('RR_RM_WF_APV',    'R_RM', 'RES_WF_APPROVE',         'PLATFORM', NOW()),
-('RR_RM_WF_REJ',    'R_RM', 'RES_WF_REJECT',          'PLATFORM', NOW()),
-('RR_RM_WF_TRF',    'R_RM', 'RES_WF_TRANSFER',        'PLATFORM', NOW()),
-('RR_RM_WF_SUBMIT', 'R_RM', 'RES_WF_SUBMIT',          'PLATFORM', NOW()),
-('RR_RM_WF_CANCEL', 'R_RM', 'RES_WF_CANCEL',          'PLATFORM', NOW()),
-('RR_RM_WF_HIS',    'R_RM', 'RES_WF_HISTORY',         'PLATFORM', NOW()),
-('RR_RM_WF_PART',   'R_RM', 'RES_WF_IS_PART',         'PLATFORM', NOW()),
--- 报表：个人只读
-('RR_RM_RPT_Q',     'R_RM', 'RES_RPT_DYN_QUERY',     'PLATFORM', NOW()),
-('RR_RM_RPT_SL',    'R_RM', 'RES_RPT_DYN_LIST',      'PLATFORM', NOW()),
-('RR_RM_RPT_SS',    'R_RM', 'RES_RPT_DYN_SAVE',      'PLATFORM', NOW()),
--- 文件
-('RR_RM_FILE_U',    'R_RM', 'RES_FILE_UPLOAD',        'PLATFORM', NOW()),
-('RR_RM_FILE_D',    'R_RM', 'RES_FILE_DOWNLOAD',      'PLATFORM', NOW());
-
--- ---------------------------------------------------------
--- 4.3 经营机构负责人（R_BRANCH_MGR）: 审批+机构视角+报表
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_BM_AUTH',     'R_BRANCH_MGR', 'RES_AUTH_CURRENT',       'PLATFORM', NOW()),
-('RR_BM_ORG',      'R_BRANCH_MGR', 'RES_ORG_TREE',           'PLATFORM', NOW()),
-('RR_BM_ORG_SUB',  'R_BRANCH_MGR', 'RES_ORG_SUBTREE',        'PLATFORM', NOW()),
-('RR_BM_NTF_L',    'R_BRANCH_MGR', 'RES_SYS_NOTIFY_LIST',    'PLATFORM', NOW()),
-('RR_BM_NTF_R',    'R_BRANCH_MGR', 'RES_SYS_NOTIFY_READ',    'PLATFORM', NOW()),
-('RR_BM_PTODO',    'R_BRANCH_MGR', 'RES_PORTAL_TODOS',       'PLATFORM', NOW()),
-('RR_BM_PNOTIFY',  'R_BRANCH_MGR', 'RES_PORTAL_NOTIFY',      'PLATFORM', NOW()),
-('RR_BM_PCARDS',   'R_BRANCH_MGR', 'RES_PORTAL_CARDS',       'PLATFORM', NOW()),
-('RR_BM_LEAD_L',   'R_BRANCH_MGR', 'RES_LEAD_LIST',          'PLATFORM', NOW()),
-('RR_BM_LEAD_D',   'R_BRANCH_MGR', 'RES_LEAD_DETAIL',        'PLATFORM', NOW()),
-('RR_BM_CUST_L',   'R_BRANCH_MGR', 'RES_CUSTOMER_LIST',      'PLATFORM', NOW()),
-('RR_BM_CUST_D',   'R_BRANCH_MGR', 'RES_CUSTOMER_DETAIL',    'PLATFORM', NOW()),
-('RR_BM_CUST_H',   'R_BRANCH_MGR', 'RES_CUSTOMER_HISTORY',   'PLATFORM', NOW()),
-('RR_BM_CUST_E',   'R_BRANCH_MGR', 'RES_CUSTOMER_EDIT',      'PLATFORM', NOW()),
-('RR_BM_CUST_T',   'R_BRANCH_MGR', 'RES_CUSTOMER_TRANSFER',  'PLATFORM', NOW()),
-('RR_BM_CUST_DEL', 'R_BRANCH_MGR', 'RES_CUSTOMER_DEL_APPLY', 'PLATFORM', NOW()),
-('RR_BM_TRPT_L',   'R_BRANCH_MGR', 'RES_TOUCH_RPT_LIST',     'PLATFORM', NOW()),
-('RR_BM_TRPT_E',   'R_BRANCH_MGR', 'RES_TOUCH_RPT_EXPORT',   'PLATFORM', NOW()),
-('RR_BM_SUP_L',    'R_BRANCH_MGR', 'RES_SUPPORT_LIST',       'PLATFORM', NOW()),
-('RR_BM_SUP_D',    'R_BRANCH_MGR', 'RES_SUPPORT_DETAIL',     'PLATFORM', NOW()),
-('RR_BM_WF_TODO',  'R_BRANCH_MGR', 'RES_WF_TODO',            'PLATFORM', NOW()),
-('RR_BM_WF_DONE',  'R_BRANCH_MGR', 'RES_WF_DONE',            'PLATFORM', NOW()),
-('RR_BM_WF_DET',   'R_BRANCH_MGR', 'RES_WF_DETAIL',          'PLATFORM', NOW()),
-('RR_BM_WF_CLM',   'R_BRANCH_MGR', 'RES_WF_CLAIM',           'PLATFORM', NOW()),
-('RR_BM_WF_APV',   'R_BRANCH_MGR', 'RES_WF_APPROVE',         'PLATFORM', NOW()),
-('RR_BM_WF_REJ',   'R_BRANCH_MGR', 'RES_WF_REJECT',          'PLATFORM', NOW()),
-('RR_BM_WF_TRF',   'R_BRANCH_MGR', 'RES_WF_TRANSFER',        'PLATFORM', NOW()),
-('RR_BM_WF_HIS',   'R_BRANCH_MGR', 'RES_WF_HISTORY',         'PLATFORM', NOW()),
-('RR_BM_RPT_Q',    'R_BRANCH_MGR', 'RES_RPT_DYN_QUERY',      'PLATFORM', NOW()),
-('RR_BM_RPT_E',    'R_BRANCH_MGR', 'RES_RPT_DYN_EXPORT',     'PLATFORM', NOW()),
-('RR_BM_RPT_SL',   'R_BRANCH_MGR', 'RES_RPT_DYN_LIST',       'PLATFORM', NOW()),
-('RR_BM_RPT_SS',   'R_BRANCH_MGR', 'RES_RPT_DYN_SAVE',       'PLATFORM', NOW()),
-('RR_BM_NAV_L',    'R_BRANCH_MGR', 'RES_NAV_LIST',            'PLATFORM', NOW()),
-('RR_BM_FILE_U',   'R_BRANCH_MGR', 'RES_FILE_UPLOAD',         'PLATFORM', NOW()),
-('RR_BM_FILE_D',   'R_BRANCH_MGR', 'RES_FILE_DOWNLOAD',       'PLATFORM', NOW());
-
--- ---------------------------------------------------------
--- 4.4 公司部人员（R_CORP_DEPT）: 标签管理+线索审批+客户+触达监控+资产投放审批+报表
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_CD_AUTH',      'R_CORP_DEPT', 'RES_AUTH_CURRENT',        'PLATFORM', NOW()),
-('RR_CD_ORG',       'R_CORP_DEPT', 'RES_ORG_TREE',            'PLATFORM', NOW()),
-('RR_CD_NTF_L',     'R_CORP_DEPT', 'RES_SYS_NOTIFY_LIST',     'PLATFORM', NOW()),
-('RR_CD_NTF_R',     'R_CORP_DEPT', 'RES_SYS_NOTIFY_READ',     'PLATFORM', NOW()),
-('RR_CD_PTODO',     'R_CORP_DEPT', 'RES_PORTAL_TODOS',        'PLATFORM', NOW()),
-('RR_CD_PNOTIFY',   'R_CORP_DEPT', 'RES_PORTAL_NOTIFY',       'PLATFORM', NOW()),
-('RR_CD_PCARDS',    'R_CORP_DEPT', 'RES_PORTAL_CARDS',        'PLATFORM', NOW()),
--- 标签全功能
-('RR_CD_TAG_L',     'R_CORP_DEPT', 'RES_TAG_LIST',            'PLATFORM', NOW()),
-('RR_CD_TAG_C',     'R_CORP_DEPT', 'RES_TAG_CREATE',          'PLATFORM', NOW()),
-('RR_CD_TAG_U',     'R_CORP_DEPT', 'RES_TAG_UPDATE',          'PLATFORM', NOW()),
-('RR_CD_TAG_D',     'R_CORP_DEPT', 'RES_TAG_DETAIL',          'PLATFORM', NOW()),
-('RR_CD_TAG_EN',    'R_CORP_DEPT', 'RES_TAG_ENABLE',          'PLATFORM', NOW()),
-('RR_CD_TAG_DIS',   'R_CORP_DEPT', 'RES_TAG_DISABLE',         'PLATFORM', NOW()),
-('RR_CD_TAG_CR',    'R_CORP_DEPT', 'RES_TAG_CUST_REPLACE',    'PLATFORM', NOW()),
-('RR_CD_TAG_IP',    'R_CORP_DEPT', 'RES_TAG_IMPORT_PREVIEW',  'PLATFORM', NOW()),
-('RR_CD_TAG_IC',    'R_CORP_DEPT', 'RES_TAG_IMPORT_CONFIRM',  'PLATFORM', NOW()),
-('RR_CD_TAG_EX',    'R_CORP_DEPT', 'RES_TAG_EXPORT',          'PLATFORM', NOW()),
--- 线索审批
-('RR_CD_LEAD_L',    'R_CORP_DEPT', 'RES_LEAD_LIST',           'PLATFORM', NOW()),
-('RR_CD_LEAD_D',    'R_CORP_DEPT', 'RES_LEAD_DETAIL',         'PLATFORM', NOW()),
-('RR_CD_LEAD_E',    'R_CORP_DEPT', 'RES_LEAD_EXPORT',         'PLATFORM', NOW()),
--- 客户全功能
-('RR_CD_CUST_L',    'R_CORP_DEPT', 'RES_CUSTOMER_LIST',       'PLATFORM', NOW()),
-('RR_CD_CUST_D',    'R_CORP_DEPT', 'RES_CUSTOMER_DETAIL',     'PLATFORM', NOW()),
-('RR_CD_CUST_H',    'R_CORP_DEPT', 'RES_CUSTOMER_HISTORY',    'PLATFORM', NOW()),
-('RR_CD_CUST_E',    'R_CORP_DEPT', 'RES_CUSTOMER_EDIT',       'PLATFORM', NOW()),
-('RR_CD_CUST_T',    'R_CORP_DEPT', 'RES_CUSTOMER_TRANSFER',   'PLATFORM', NOW()),
-('RR_CD_CUST_DEL',  'R_CORP_DEPT', 'RES_CUSTOMER_DEL_APPLY',  'PLATFORM', NOW()),
--- 触达监控
-('RR_CD_TRPT_L',    'R_CORP_DEPT', 'RES_TOUCH_RPT_LIST',      'PLATFORM', NOW()),
-('RR_CD_TRPT_E',    'R_CORP_DEPT', 'RES_TOUCH_RPT_EXPORT',    'PLATFORM', NOW()),
--- 资产投放（审批）
-('RR_CD_LOAN_L',    'R_CORP_DEPT', 'RES_LOAN_LIST',           'PLATFORM', NOW()),
-('RR_CD_LOAN_D',    'R_CORP_DEPT', 'RES_LOAN_DETAIL',         'PLATFORM', NOW()),
--- 工作流
-('RR_CD_WF_TODO',   'R_CORP_DEPT', 'RES_WF_TODO',             'PLATFORM', NOW()),
-('RR_CD_WF_DONE',   'R_CORP_DEPT', 'RES_WF_DONE',             'PLATFORM', NOW()),
-('RR_CD_WF_DET',    'R_CORP_DEPT', 'RES_WF_DETAIL',           'PLATFORM', NOW()),
-('RR_CD_WF_CLM',    'R_CORP_DEPT', 'RES_WF_CLAIM',            'PLATFORM', NOW()),
-('RR_CD_WF_APV',    'R_CORP_DEPT', 'RES_WF_APPROVE',          'PLATFORM', NOW()),
-('RR_CD_WF_REJ',    'R_CORP_DEPT', 'RES_WF_REJECT',           'PLATFORM', NOW()),
-('RR_CD_WF_TRF',    'R_CORP_DEPT', 'RES_WF_TRANSFER',         'PLATFORM', NOW()),
-('RR_CD_WF_HIS',    'R_CORP_DEPT', 'RES_WF_HISTORY',          'PLATFORM', NOW()),
--- 报表
-('RR_CD_RPT_Q',     'R_CORP_DEPT', 'RES_RPT_DYN_QUERY',      'PLATFORM', NOW()),
-('RR_CD_RPT_E',     'R_CORP_DEPT', 'RES_RPT_DYN_EXPORT',     'PLATFORM', NOW()),
-('RR_CD_RPT_SL',    'R_CORP_DEPT', 'RES_RPT_DYN_LIST',       'PLATFORM', NOW()),
-('RR_CD_RPT_SS',    'R_CORP_DEPT', 'RES_RPT_DYN_SAVE',       'PLATFORM', NOW()),
-('RR_CD_NAV_L',     'R_CORP_DEPT', 'RES_NAV_LIST',            'PLATFORM', NOW()),
-('RR_CD_FILE_U',    'R_CORP_DEPT', 'RES_FILE_UPLOAD',         'PLATFORM', NOW()),
-('RR_CD_FILE_D',    'R_CORP_DEPT', 'RES_FILE_DOWNLOAD',       'PLATFORM', NOW());
-
--- ---------------------------------------------------------
--- 4.5 零售部人员（R_RETAIL_DEPT）: 与公司部基本一致
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-SELECT CONCAT('RR_RD_', SUBSTRING(ID, 7)), 'R_RETAIL_DEPT', RESOURCE_ID, 'PLATFORM', NOW()
-FROM PT_ROLE_RESOURCE WHERE ROLE_ID = 'R_CORP_DEPT';
-
--- ---------------------------------------------------------
--- 4.6 中后台员工-资财（R_BACK_FINANCE）: 绩效全功能 + 报表
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_BF_AUTH',     'R_BACK_FINANCE', 'RES_AUTH_CURRENT',         'PLATFORM', NOW()),
-('RR_BF_ORG',      'R_BACK_FINANCE', 'RES_ORG_TREE',             'PLATFORM', NOW()),
-('RR_BF_NTF_L',    'R_BACK_FINANCE', 'RES_SYS_NOTIFY_LIST',      'PLATFORM', NOW()),
-('RR_BF_NTF_R',    'R_BACK_FINANCE', 'RES_SYS_NOTIFY_READ',      'PLATFORM', NOW()),
-('RR_BF_PTODO',    'R_BACK_FINANCE', 'RES_PORTAL_TODOS',         'PLATFORM', NOW()),
-('RR_BF_PNOTIFY',  'R_BACK_FINANCE', 'RES_PORTAL_NOTIFY',        'PLATFORM', NOW()),
-('RR_BF_PCARDS',   'R_BACK_FINANCE', 'RES_PORTAL_CARDS',         'PLATFORM', NOW()),
--- 绩效全功能
-('RR_BF_PM_L',     'R_BACK_FINANCE', 'RES_PERF_METRIC_LIST',     'PLATFORM', NOW()),
-('RR_BF_PM_D',     'R_BACK_FINANCE', 'RES_PERF_METRIC_DETAIL',   'PLATFORM', NOW()),
-('RR_BF_PM_C',     'R_BACK_FINANCE', 'RES_PERF_METRIC_CREATE',   'PLATFORM', NOW()),
-('RR_BF_PM_U',     'R_BACK_FINANCE', 'RES_PERF_METRIC_UPDATE',   'PLATFORM', NOW()),
-('RR_BF_PM_EN',    'R_BACK_FINANCE', 'RES_PERF_METRIC_ENABLE',   'PLATFORM', NOW()),
-('RR_BF_PM_DIS',   'R_BACK_FINANCE', 'RES_PERF_METRIC_DISABLE',  'PLATFORM', NOW()),
-('RR_BF_PM_TR',    'R_BACK_FINANCE', 'RES_PERF_METRIC_TRIAL',    'PLATFORM', NOW()),
-('RR_BF_PM_RUN',   'R_BACK_FINANCE', 'RES_PERF_METRIC_RUN',      'PLATFORM', NOW()),
-('RR_BF_KPI_L',    'R_BACK_FINANCE', 'RES_PERF_KPI_LIST',        'PLATFORM', NOW()),
-('RR_BF_KPI_D',    'R_BACK_FINANCE', 'RES_PERF_KPI_DETAIL',      'PLATFORM', NOW()),
-('RR_BF_KPI_C',    'R_BACK_FINANCE', 'RES_PERF_KPI_CREATE',      'PLATFORM', NOW()),
-('RR_BF_KPI_U',    'R_BACK_FINANCE', 'RES_PERF_KPI_UPDATE',      'PLATFORM', NOW()),
-('RR_BF_KPI_IT',   'R_BACK_FINANCE', 'RES_PERF_KPI_ITEMS',       'PLATFORM', NOW()),
-('RR_BF_TGT_L',    'R_BACK_FINANCE', 'RES_PERF_TGT_LIST',        'PLATFORM', NOW()),
-('RR_BF_TGT_D',    'R_BACK_FINANCE', 'RES_PERF_TGT_DETAIL',      'PLATFORM', NOW()),
-('RR_BF_TGT_C',    'R_BACK_FINANCE', 'RES_PERF_TGT_CREATE',      'PLATFORM', NOW()),
-('RR_BF_TGT_U',    'R_BACK_FINANCE', 'RES_PERF_TGT_UPDATE',      'PLATFORM', NOW()),
-('RR_BF_TGT_I',    'R_BACK_FINANCE', 'RES_PERF_TGT_IMPORT',      'PLATFORM', NOW()),
-('RR_BF_IDX_I',    'R_BACK_FINANCE', 'RES_PERF_IDX_IMPORT',      'PLATFORM', NOW()),
-('RR_BF_KPI_I',    'R_BACK_FINANCE', 'RES_PERF_KPI_IMPORT',      'PLATFORM', NOW()),
-('RR_BF_KPI_EX',   'R_BACK_FINANCE', 'RES_PERF_KPI_EXEC',        'PLATFORM', NOW()),
-('RR_BF_RECALC',   'R_BACK_FINANCE', 'RES_PERF_RECALC',          'PLATFORM', NOW()),
-('RR_BF_TASKS',    'R_BACK_FINANCE', 'RES_PERF_TASKS',            'PLATFORM', NOW()),
-('RR_BF_IB_L',     'R_BACK_FINANCE', 'RES_PERF_IMP_BATCH_LIST',  'PLATFORM', NOW()),
-('RR_BF_IB_D',     'R_BACK_FINANCE', 'RES_PERF_IMP_BATCH_DET',   'PLATFORM', NOW()),
-('RR_BF_TS',       'R_BACK_FINANCE', 'RES_PERF_TASK_STATUS',      'PLATFORM', NOW()),
--- 报表
-('RR_BF_RPT_Q',    'R_BACK_FINANCE', 'RES_RPT_DYN_QUERY',        'PLATFORM', NOW()),
-('RR_BF_RPT_E',    'R_BACK_FINANCE', 'RES_RPT_DYN_EXPORT',       'PLATFORM', NOW()),
-('RR_BF_RPT_SL',   'R_BACK_FINANCE', 'RES_RPT_DYN_LIST',         'PLATFORM', NOW()),
-('RR_BF_RPT_SS',   'R_BACK_FINANCE', 'RES_RPT_DYN_SAVE',         'PLATFORM', NOW()),
--- 工作流（参与审批）
-('RR_BF_WF_TODO',  'R_BACK_FINANCE', 'RES_WF_TODO',               'PLATFORM', NOW()),
-('RR_BF_WF_DONE',  'R_BACK_FINANCE', 'RES_WF_DONE',               'PLATFORM', NOW()),
-('RR_BF_WF_DET',   'R_BACK_FINANCE', 'RES_WF_DETAIL',             'PLATFORM', NOW()),
-('RR_BF_WF_CLM',   'R_BACK_FINANCE', 'RES_WF_CLAIM',              'PLATFORM', NOW()),
-('RR_BF_WF_APV',   'R_BACK_FINANCE', 'RES_WF_APPROVE',            'PLATFORM', NOW()),
-('RR_BF_WF_REJ',   'R_BACK_FINANCE', 'RES_WF_REJECT',             'PLATFORM', NOW()),
-('RR_BF_WF_HIS',   'R_BACK_FINANCE', 'RES_WF_HISTORY',            'PLATFORM', NOW()),
-('RR_BF_NAV_L',    'R_BACK_FINANCE', 'RES_NAV_LIST',               'PLATFORM', NOW()),
-('RR_BF_FILE_U',   'R_BACK_FINANCE', 'RES_FILE_UPLOAD',            'PLATFORM', NOW()),
-('RR_BF_FILE_D',   'R_BACK_FINANCE', 'RES_FILE_DOWNLOAD',          'PLATFORM', NOW());
-
--- ---------------------------------------------------------
--- 4.7 中后台员工-科技（R_BACK_TECH）: 导航/文档/系统配置全功能 + SQL探查
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_BT_AUTH',     'R_BACK_TECH', 'RES_AUTH_CURRENT',        'PLATFORM', NOW()),
-('RR_BT_ORG',      'R_BACK_TECH', 'RES_ORG_TREE',            'PLATFORM', NOW()),
-('RR_BT_NTF_L',    'R_BACK_TECH', 'RES_SYS_NOTIFY_LIST',     'PLATFORM', NOW()),
-('RR_BT_NTF_R',    'R_BACK_TECH', 'RES_SYS_NOTIFY_READ',     'PLATFORM', NOW()),
-('RR_BT_PTODO',    'R_BACK_TECH', 'RES_PORTAL_TODOS',        'PLATFORM', NOW()),
-('RR_BT_PNOTIFY',  'R_BACK_TECH', 'RES_PORTAL_NOTIFY',       'PLATFORM', NOW()),
-('RR_BT_PCARDS',   'R_BACK_TECH', 'RES_PORTAL_CARDS',        'PLATFORM', NOW()),
--- 导航管理
-('RR_BT_NAV_L',    'R_BACK_TECH', 'RES_NAV_LIST',            'PLATFORM', NOW()),
-('RR_BT_NAV_C',    'R_BACK_TECH', 'RES_NAV_CREATE',          'PLATFORM', NOW()),
-('RR_BT_NAV_U',    'R_BACK_TECH', 'RES_NAV_UPDATE',          'PLATFORM', NOW()),
-('RR_BT_NAV_D',    'R_BACK_TECH', 'RES_NAV_DELETE',          'PLATFORM', NOW()),
--- 文档管理
-('RR_BT_DOC_L',    'R_BACK_TECH', 'RES_DOC_LIST',            'PLATFORM', NOW()),
-('RR_BT_DOC_D',    'R_BACK_TECH', 'RES_DOC_DETAIL',          'PLATFORM', NOW()),
-('RR_BT_DOC_UL',   'R_BACK_TECH', 'RES_DOC_UPLOAD',          'PLATFORM', NOW()),
-('RR_BT_DOC_UP',   'R_BACK_TECH', 'RES_DOC_UPDATE',          'PLATFORM', NOW()),
-('RR_BT_DOC_DEL',  'R_BACK_TECH', 'RES_DOC_DELETE',          'PLATFORM', NOW()),
-('RR_BT_DOC_DL',   'R_BACK_TECH', 'RES_DOC_DOWNLOAD',        'PLATFORM', NOW()),
--- 系统治理全功能
-('RR_BT_DICT_L',   'R_BACK_TECH', 'RES_SYS_DICT_LIST',       'PLATFORM', NOW()),
-('RR_BT_DICT_C',   'R_BACK_TECH', 'RES_SYS_DICT_CREATE',     'PLATFORM', NOW()),
-('RR_BT_DICT_U',   'R_BACK_TECH', 'RES_SYS_DICT_UPDATE',     'PLATFORM', NOW()),
-('RR_BT_CAL_M',    'R_BACK_TECH', 'RES_SYS_CAL_MONTH',       'PLATFORM', NOW()),
-('RR_BT_CAL_S',    'R_BACK_TECH', 'RES_SYS_CAL_SET',         'PLATFORM', NOW()),
-('RR_BT_CAL_I',    'R_BACK_TECH', 'RES_SYS_CAL_IMPORT',      'PLATFORM', NOW()),
-('RR_BT_CAL_INIT', 'R_BACK_TECH', 'RES_SYS_CAL_INIT',        'PLATFORM', NOW()),
-('RR_BT_CFG_L',    'R_BACK_TECH', 'RES_SYS_CFG_LIST',        'PLATFORM', NOW()),
-('RR_BT_CFG_D',    'R_BACK_TECH', 'RES_SYS_CFG_DETAIL',      'PLATFORM', NOW()),
-('RR_BT_CFG_C',    'R_BACK_TECH', 'RES_SYS_CFG_CREATE',      'PLATFORM', NOW()),
-('RR_BT_CFG_U',    'R_BACK_TECH', 'RES_SYS_CFG_UPDATE',      'PLATFORM', NOW()),
-('RR_BT_CFG_EN',   'R_BACK_TECH', 'RES_SYS_CFG_ENABLE',      'PLATFORM', NOW()),
-('RR_BT_CFG_DIS',  'R_BACK_TECH', 'RES_SYS_CFG_DISABLE',     'PLATFORM', NOW()),
-('RR_BT_JOB_L',    'R_BACK_TECH', 'RES_SYS_JOB_LIST',        'PLATFORM', NOW()),
-('RR_BT_JOB_C',    'R_BACK_TECH', 'RES_SYS_JOB_CREATE',      'PLATFORM', NOW()),
-('RR_BT_JOB_U',    'R_BACK_TECH', 'RES_SYS_JOB_UPDATE',      'PLATFORM', NOW()),
-('RR_BT_JOB_P',    'R_BACK_TECH', 'RES_SYS_JOB_PAUSE',       'PLATFORM', NOW()),
-('RR_BT_JOB_R',    'R_BACK_TECH', 'RES_SYS_JOB_RESUME',      'PLATFORM', NOW()),
-('RR_BT_JOB_T',    'R_BACK_TECH', 'RES_SYS_JOB_TRIGGER',     'PLATFORM', NOW()),
-('RR_BT_JOB_RUNS', 'R_BACK_TECH', 'RES_SYS_JOB_RUNS',        'PLATFORM', NOW()),
-('RR_BT_SLA_L',    'R_BACK_TECH', 'RES_SYS_SLA_LIST',        'PLATFORM', NOW()),
-('RR_BT_SLA_C',    'R_BACK_TECH', 'RES_SYS_SLA_CREATE',      'PLATFORM', NOW()),
-('RR_BT_SLA_U',    'R_BACK_TECH', 'RES_SYS_SLA_UPDATE',      'PLATFORM', NOW()),
-('RR_BT_AUD_L',    'R_BACK_TECH', 'RES_SYS_AUDIT_LIST',      'PLATFORM', NOW()),
-('RR_BT_AUD_E',    'R_BACK_TECH', 'RES_SYS_AUDIT_EXPORT',    'PLATFORM', NOW()),
--- SQL探查
-('RR_BT_SQL_X',    'R_BACK_TECH', 'RES_RPT_SQL_EXEC',        'PLATFORM', NOW()),
-('RR_BT_SQL_H',    'R_BACK_TECH', 'RES_RPT_SQL_HIST',        'PLATFORM', NOW()),
--- 工作流配置
-('RR_BT_WF_CC',    'R_BACK_TECH', 'RES_WF_CFG_CAND',         'PLATFORM', NOW()),
-('RR_BT_WF_CF',    'R_BACK_TECH', 'RES_WF_CFG_FORM',         'PLATFORM', NOW()),
-('RR_BT_WF_CS',    'R_BACK_TECH', 'RES_WF_CFG_SLA',          'PLATFORM', NOW()),
-('RR_BT_FILE_U',   'R_BACK_TECH', 'RES_SYS_FILE_UPLOAD',     'PLATFORM', NOW()),
-('RR_BT_FILE_D',   'R_BACK_TECH', 'RES_SYS_FILE_DOWNLOAD',   'PLATFORM', NOW()),
-('RR_BT_FILE_B',   'R_BACK_TECH', 'RES_SYS_FILE_BY_BIZ',     'PLATFORM', NOW()),
--- 审计+字典+流程实例新增资源
-('RR_BT_AUD_I',   'R_BACK_TECH', 'RES_SYS_AUDIT_DETAIL',   'PLATFORM', NOW()),
-('RR_BT_DICT_S',  'R_BACK_TECH', 'RES_SYS_DICT_STATUS',     'PLATFORM', NOW()),
-('RR_BT_WF_PI',   'R_BACK_TECH', 'RES_WF_PROC_INST',       'PLATFORM', NOW()),
-('RR_BT_WF_PD',   'R_BACK_TECH', 'RES_WF_PROC_DIAGRAM',    'PLATFORM', NOW()),
-('RR_BT_WF_ADM_SL','R_BACK_TECH', 'RES_WF_ADM_SLA_L',       'PLATFORM', NOW()),
-('RR_BT_WF_ADM_SI','R_BACK_TECH', 'RES_WF_ADM_SLA_I',      'PLATFORM', NOW()),
-('RR_BT_WF_ADM_SU','R_BACK_TECH', 'RES_WF_ADM_SLA_U',      'PLATFORM', NOW()),
-('RR_BT_WF_ADM_CL','R_BACK_TECH', 'RES_WF_ADM_CAND_L',     'PLATFORM', NOW()),
-('RR_BT_WF_ADM_CI','R_BACK_TECH', 'RES_WF_ADM_CAND_I',     'PLATFORM', NOW()),
-('RR_BT_WF_ADM_CU','R_BACK_TECH', 'RES_WF_ADM_CAND_U',     'PLATFORM', NOW()),
-('RR_BT_WF_ADM_FL','R_BACK_TECH', 'RES_WF_ADM_FORM_L',     'PLATFORM', NOW()),
-('RR_BT_WF_ADM_FI','R_BACK_TECH', 'RES_WF_ADM_FORM_I',     'PLATFORM', NOW()),
-('RR_BT_WF_ADM_FU','R_BACK_TECH', 'RES_WF_ADM_FORM_U',     'PLATFORM', NOW());
-
-
--- ---------------------------------------------------------
--- 4.8 中场支持部门秘书（R_SUPPORT_SEC）: 承接列表+派单
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_SS_AUTH',     'R_SUPPORT_SEC', 'RES_AUTH_CURRENT',       'PLATFORM', NOW()),
-('RR_SS_ORG',      'R_SUPPORT_SEC', 'RES_ORG_TREE',           'PLATFORM', NOW()),
-('RR_SS_NTF_L',    'R_SUPPORT_SEC', 'RES_SYS_NOTIFY_LIST',    'PLATFORM', NOW()),
-('RR_SS_NTF_R',    'R_SUPPORT_SEC', 'RES_SYS_NOTIFY_READ',    'PLATFORM', NOW()),
-('RR_SS_PTODO',    'R_SUPPORT_SEC', 'RES_PORTAL_TODOS',       'PLATFORM', NOW()),
-('RR_SS_PNOTIFY',  'R_SUPPORT_SEC', 'RES_PORTAL_NOTIFY',      'PLATFORM', NOW()),
-('RR_SS_PCARDS',   'R_SUPPORT_SEC', 'RES_PORTAL_CARDS',       'PLATFORM', NOW()),
-('RR_SS_SD_L',     'R_SUPPORT_SEC', 'RES_SUPDEPT_LIST',       'PLATFORM', NOW()),
-('RR_SS_SD_D',     'R_SUPPORT_SEC', 'RES_SUPDEPT_DETAIL',     'PLATFORM', NOW()),
-('RR_SS_SD_DISP',  'R_SUPPORT_SEC', 'RES_SUPDEPT_DISPATCH',   'PLATFORM', NOW()),
-('RR_SS_PROD_L',   'R_SUPPORT_SEC', 'RES_PRODUCT_LIST',       'PLATFORM', NOW()),
-('RR_SS_PROD_D',   'R_SUPPORT_SEC', 'RES_PRODUCT_DETAIL',     'PLATFORM', NOW()),
-('RR_SS_PROD_C',   'R_SUPPORT_SEC', 'RES_PRODUCT_CREATE',     'PLATFORM', NOW()),
-('RR_SS_PROD_U',   'R_SUPPORT_SEC', 'RES_PRODUCT_UPDATE',     'PLATFORM', NOW()),
-('RR_SS_WF_TODO',  'R_SUPPORT_SEC', 'RES_WF_TODO',            'PLATFORM', NOW()),
-('RR_SS_WF_DONE',  'R_SUPPORT_SEC', 'RES_WF_DONE',            'PLATFORM', NOW()),
-('RR_SS_WF_DET',   'R_SUPPORT_SEC', 'RES_WF_DETAIL',          'PLATFORM', NOW()),
-('RR_SS_WF_CLM',   'R_SUPPORT_SEC', 'RES_WF_CLAIM',           'PLATFORM', NOW()),
-('RR_SS_WF_APV',   'R_SUPPORT_SEC', 'RES_WF_APPROVE',         'PLATFORM', NOW()),
-('RR_SS_WF_REJ',   'R_SUPPORT_SEC', 'RES_WF_REJECT',          'PLATFORM', NOW()),
-('RR_SS_WF_TRF',   'R_SUPPORT_SEC', 'RES_WF_TRANSFER',        'PLATFORM', NOW()),
-('RR_SS_WF_HIS',   'R_SUPPORT_SEC', 'RES_WF_HISTORY',         'PLATFORM', NOW()),
-('RR_SS_NAV_L',    'R_SUPPORT_SEC', 'RES_NAV_LIST',            'PLATFORM', NOW());
-
--- ---------------------------------------------------------
--- 4.9 中场支持部门人员（R_SUPPORT_STAFF）: 承接列表+办理
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_ST_AUTH',     'R_SUPPORT_STAFF', 'RES_AUTH_CURRENT',       'PLATFORM', NOW()),
-('RR_ST_ORG',      'R_SUPPORT_STAFF', 'RES_ORG_TREE',           'PLATFORM', NOW()),
-('RR_ST_NTF_L',    'R_SUPPORT_STAFF', 'RES_SYS_NOTIFY_LIST',    'PLATFORM', NOW()),
-('RR_ST_NTF_R',    'R_SUPPORT_STAFF', 'RES_SYS_NOTIFY_READ',    'PLATFORM', NOW()),
-('RR_ST_PTODO',    'R_SUPPORT_STAFF', 'RES_PORTAL_TODOS',       'PLATFORM', NOW()),
-('RR_ST_PNOTIFY',  'R_SUPPORT_STAFF', 'RES_PORTAL_NOTIFY',      'PLATFORM', NOW()),
-('RR_ST_PCARDS',   'R_SUPPORT_STAFF', 'RES_PORTAL_CARDS',       'PLATFORM', NOW()),
-('RR_ST_SD_L',     'R_SUPPORT_STAFF', 'RES_SUPDEPT_LIST',       'PLATFORM', NOW()),
-('RR_ST_SD_D',     'R_SUPPORT_STAFF', 'RES_SUPDEPT_DETAIL',     'PLATFORM', NOW()),
-('RR_ST_WF_TODO',  'R_SUPPORT_STAFF', 'RES_WF_TODO',            'PLATFORM', NOW()),
-('RR_ST_WF_DONE',  'R_SUPPORT_STAFF', 'RES_WF_DONE',            'PLATFORM', NOW()),
-('RR_ST_WF_DET',   'R_SUPPORT_STAFF', 'RES_WF_DETAIL',          'PLATFORM', NOW()),
-('RR_ST_WF_CLM',   'R_SUPPORT_STAFF', 'RES_WF_CLAIM',           'PLATFORM', NOW()),
-('RR_ST_WF_APV',   'R_SUPPORT_STAFF', 'RES_WF_APPROVE',         'PLATFORM', NOW()),
-('RR_ST_WF_REJ',   'R_SUPPORT_STAFF', 'RES_WF_REJECT',          'PLATFORM', NOW()),
-('RR_ST_WF_HIS',   'R_SUPPORT_STAFF', 'RES_WF_HISTORY',         'PLATFORM', NOW()),
-('RR_ST_NAV_L',    'R_SUPPORT_STAFF', 'RES_NAV_LIST',            'PLATFORM', NOW());
-
--- ---------------------------------------------------------
--- 4.10 授信审查人员（R_CREDIT_REVIEWER）: 资产投放审查
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_CR_AUTH',     'R_CREDIT_REVIEWER', 'RES_AUTH_CURRENT',       'PLATFORM', NOW()),
-('RR_CR_ORG',      'R_CREDIT_REVIEWER', 'RES_ORG_TREE',           'PLATFORM', NOW()),
-('RR_CR_NTF_L',    'R_CREDIT_REVIEWER', 'RES_SYS_NOTIFY_LIST',    'PLATFORM', NOW()),
-('RR_CR_NTF_R',    'R_CREDIT_REVIEWER', 'RES_SYS_NOTIFY_READ',    'PLATFORM', NOW()),
-('RR_CR_PTODO',    'R_CREDIT_REVIEWER', 'RES_PORTAL_TODOS',       'PLATFORM', NOW()),
-('RR_CR_PNOTIFY',  'R_CREDIT_REVIEWER', 'RES_PORTAL_NOTIFY',      'PLATFORM', NOW()),
-('RR_CR_PCARDS',   'R_CREDIT_REVIEWER', 'RES_PORTAL_CARDS',       'PLATFORM', NOW()),
-('RR_CR_LOAN_L',   'R_CREDIT_REVIEWER', 'RES_LOAN_LIST',          'PLATFORM', NOW()),
-('RR_CR_LOAN_D',   'R_CREDIT_REVIEWER', 'RES_LOAN_DETAIL',        'PLATFORM', NOW()),
-('RR_CR_WF_TODO',  'R_CREDIT_REVIEWER', 'RES_WF_TODO',            'PLATFORM', NOW()),
-('RR_CR_WF_DONE',  'R_CREDIT_REVIEWER', 'RES_WF_DONE',            'PLATFORM', NOW()),
-('RR_CR_WF_DET',   'R_CREDIT_REVIEWER', 'RES_WF_DETAIL',          'PLATFORM', NOW()),
-('RR_CR_WF_CLM',   'R_CREDIT_REVIEWER', 'RES_WF_CLAIM',           'PLATFORM', NOW()),
-('RR_CR_WF_APV',   'R_CREDIT_REVIEWER', 'RES_WF_APPROVE',         'PLATFORM', NOW()),
-('RR_CR_WF_REJ',   'R_CREDIT_REVIEWER', 'RES_WF_REJECT',          'PLATFORM', NOW()),
-('RR_CR_WF_HIS',   'R_CREDIT_REVIEWER', 'RES_WF_HISTORY',         'PLATFORM', NOW()),
-('RR_CR_NAV_L',    'R_CREDIT_REVIEWER', 'RES_NAV_LIST',            'PLATFORM', NOW());
-
--- ---------------------------------------------------------
--- 4.11 授信批复人员（R_CREDIT_APPROVER）: 资产投放批复
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-SELECT CONCAT('RR_CA_', SUBSTRING(ID, 7)), 'R_CREDIT_APPROVER', RESOURCE_ID, 'PLATFORM', NOW()
-FROM PT_ROLE_RESOURCE WHERE ROLE_ID = 'R_CREDIT_REVIEWER';
-
--- ---------------------------------------------------------
--- 4.12 分行行长（R_PRESIDENT）: 报表只读 + 仪表盘
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-VALUES
-('RR_PR_AUTH',     'R_PRESIDENT', 'RES_AUTH_CURRENT',       'PLATFORM', NOW()),
-('RR_PR_ORG',      'R_PRESIDENT', 'RES_ORG_TREE',           'PLATFORM', NOW()),
-('RR_PR_NTF_L',    'R_PRESIDENT', 'RES_SYS_NOTIFY_LIST',    'PLATFORM', NOW()),
-('RR_PR_NTF_R',    'R_PRESIDENT', 'RES_SYS_NOTIFY_READ',    'PLATFORM', NOW()),
-('RR_PR_PTODO',    'R_PRESIDENT', 'RES_PORTAL_TODOS',       'PLATFORM', NOW()),
-('RR_PR_PNOTIFY',  'R_PRESIDENT', 'RES_PORTAL_NOTIFY',      'PLATFORM', NOW()),
-('RR_PR_PCARDS',   'R_PRESIDENT', 'RES_PORTAL_CARDS',       'PLATFORM', NOW()),
-('RR_PR_NAV_L',    'R_PRESIDENT', 'RES_NAV_LIST',           'PLATFORM', NOW()),
-('RR_PR_RPT_Q',    'R_PRESIDENT', 'RES_RPT_DYN_QUERY',     'PLATFORM', NOW()),
-('RR_PR_RPT_E',    'R_PRESIDENT', 'RES_RPT_DYN_EXPORT',    'PLATFORM', NOW()),
-('RR_PR_RPT_SL',   'R_PRESIDENT', 'RES_RPT_DYN_LIST',      'PLATFORM', NOW()),
-('RR_PR_RPT_SS',   'R_PRESIDENT', 'RES_RPT_DYN_SAVE',      'PLATFORM', NOW()),
-('RR_PR_DASH',     'R_PRESIDENT', 'RES_RPT_FIX_DASH',      'PLATFORM', NOW()),
-('RR_PR_DASH_E',   'R_PRESIDENT', 'RES_RPT_FIX_DASH_EXP',  'PLATFORM', NOW());
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_BZ_DELETE','/api/admin/biz-scopes/*','DELETE','删除业务范围',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_BZ_LIST','/api/admin/biz-scopes','GET','业务范围列表',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_BZ_MATRIX','/api/admin/biz-scopes/matrix','GET','业务范围矩阵',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_BZ_SAVE','/api/admin/biz-scopes','POST','保存业务范围',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_CHECK_PERM','/api/auth/check-permission','POST','权限校验',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_CURR_USER','/api/auth/current-user','GET','当前用户信息',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_LOGIN','/api/auth/login','POST','用户登录',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_LOGOUT','/api/auth/logout','POST','用户登出',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ORG_SUBTREE','/api/orgs/subtree','GET','当前机构子树',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ORG_TREE','/api/orgs/tree','GET','组织机构树',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ORG_USERS','/api/orgs/*/users','GET','机构下用户',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_PERMS','/api/auth/permissions','GET','当前用户权限集',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_RES_CREATE','/api/admin/resources','POST','创建资源',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_RES_DELETE','/api/admin/resources/*','DELETE','删除资源',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_RES_TREE','/api/admin/resources/tree','GET','资源树',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_RES_UPDATE','/api/admin/resources/*','PUT','更新资源',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ROLE_CREATE','/api/admin/roles/','POST','创建角色',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ROLE_DELETE','/api/admin/roles/*','DELETE','删除角色',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ROLE_LIST','/api/admin/roles/','GET','角色列表',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ROLE_UPDATE','/api/admin/roles/*','PUT','更新角色',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_ROLE_USERS','/api/admin/roles/*/users','GET','角色下用户列表',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_RR_BIND','/api/admin/roles/*/resources','POST','增量绑定角色资源',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_RR_LIST','/api/admin/roles/*/resources','GET','角色资源列表',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_RR_REPLACE','/api/admin/roles/*/resources','PUT','全量替换角色资源',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_UR_BIND','/api/admin/users/*/roles','POST','绑定用户角色',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_UR_DEL','/api/admin/users/*/roles/*','DELETE','解绑用户角色',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('A_UR_LIST','/api/admin/users/*/roles','GET','用户角色列表',NULL,0,0,'0',NULL,0,'AUTH','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_CANCEL','/api/loans/*/cancel','POST','撤回资产投放',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','撤回资产投放申请');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_CREATE','/api/loans','POST','创建资产投放',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','创建资产投放草稿');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_DELETE','/api/loans/*','DELETE','删除资产投放',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','删除资产投放草稿');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_EXPORT','/api/loans/export','GET','导出资产投放',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','导出资产投放申请(高危)');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_FORM','/api/loans/*/node-form/*','GET','节点表单配置',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','获取节点表单配置');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_LIST','/api/loans','GET','资产投放列表',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','资产投放分页列表');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_READ','/api/loans/*','GET','资产投放详情',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','资产投放申请详情');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_SUBMIT','/api/loans/*/submit','POST','提交资产投放审批',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','提交资产投放审批');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_LOAN_UPDATE','/api/loans/*','PUT','更新资产投放',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','更新资产投放草稿');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUPD_DISP','/api/support-dept/requests/*/dispatch','POST','秘书派单',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','秘书派单');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUPD_DONE','/api/support-dept/requests/*/complete','POST','办理完成',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','支持人员办理完成');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUPD_LIST','/api/support-dept/requests','GET','承接侧列表',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','承接侧申请列表');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUPD_XFER','/api/support-dept/requests/*/transfer','POST','秘书转交',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','秘书转交(高危)');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_CANCEL','/api/support-requests/*/cancel','POST','撤回中场支持',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','撤回中场支持申请');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_CREATE','/api/support-requests','POST','创建中场支持',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','创建中场支持申请');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_DELETE','/api/support-requests/*','DELETE','删除中场支持',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','删除中场支持草稿');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_EXPORT','/api/support-requests/export','GET','导出中场支持',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','导出中场支持申请(高危)');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_LIST','/api/support-requests','GET','中场支持列表',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','中场支持发起侧列表');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_PROD','/api/support-requests/available-products','GET','可用产品列表',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','中场支持可用产品');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_READ','/api/support-requests/*','GET','中场支持详情',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','中场支持申请详情');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('B_SUP_SUBMIT','/api/support-requests/*/submit','POST','提交中场支持',NULL,0,0,'0',NULL,0,'BRANCH','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','提交中场支持审批');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_ADM_TT_ASSIGN','/api/admin/touch-tasks/batch-assign','POST','批量分配触达任务',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_ADM_TT_EXPORT','/api/admin/touch-tasks/export','GET','管理后台触达任务导出',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_ADM_TT_LIST','/api/admin/touch-tasks','GET','管理后台触达任务列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CLAIM_CANCEL','/api/claims/*/cancel','POST','取消认领',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CLAIM_CREATE','/api/claims','POST','认领客户',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CLAIM_MINE','/api/claims/mine','GET','我的认领列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_DEL_APPLY','/api/customers/*/delete-apply','POST','客户删除申请',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_DETAIL','/api/customers/*','GET','客户主档详情',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_EXPORT','/api/customers/export','GET','客户列表导出',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_HIST_XORG','/api/customers/*/history','GET','客户跨机构历史查询',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_LIST','/api/customers','GET','客户主档列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_TAG_ADD','/api/customers/*/tags','POST','客户追加打标',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_TAG_DEL','/api/customers/*/tags/*','DELETE','客户取消单个标签',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_CUST_TRANSFER','/api/customers/*/claims/*/transfer','POST','转交维护人',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_BATCHES','/api/leads/batches','GET','导入批次列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_CREATE','/api/leads','POST','新建线索',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_DELETE','/api/leads/*','DELETE','删除线索',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_DEL_VER','/api/leads/delete-version','POST','创建删除版本',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_DETAIL','/api/leads/*','GET','线索详情',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_EDIT_VER','/api/leads/edit-version','POST','创建修改版本',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_IMP_EXEC','/api/leads/import/execute','POST','执行导入',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_IMP_PRE','/api/leads/import/preview','POST','导入预览',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_LIST','/api/leads','GET','线索列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_SUBMIT','/api/leads/*/submit','POST','提交审批',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_UPDATE','/api/leads/*','PUT','编辑线索',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_LEAD_VERSIONS','/api/leads/*/versions','GET','查询线索版本链',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_POOL_LIST','/api/customer-pool','GET','客户池列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_CREATE','/api/tags','POST','新增标签',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_CUST_EXPORT','/api/tags/*/customers/export','GET','标签客户导出',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_CUST_IMP','/api/tags/*/customers/import','POST','标签客户导入',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_CUST_LIST','/api/tags/*/customers','GET','标签客户列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_ENABLED','/api/tags/enabled','GET','启用标签列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_LIST','/api/tags','GET','标签列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_STATUS','/api/tags/*/status','PUT','标签启停',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TAG_UPDATE','/api/tags/*','PUT','编辑标签',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TR_EXPORT','/api/touch-reports/export','GET','触达报告导出',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TR_LIST','/api/touch-reports','GET','触达报告列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TR_STAT','/api/touch-reports/statistics','GET','触达统计',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TT_CANCEL','/api/touch-tasks/*/cancel','POST','取消触达任务',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TT_DETAIL','/api/touch-tasks/*','GET','触达任务详情',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TT_LIST','/api/touch-tasks','GET','触达任务列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TT_LOG_ADD','/api/touch-tasks/*/logs','POST','新增触达日志',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TT_LOG_LIST','/api/touch-tasks/*/logs','GET','触达日志列表',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('C_TT_SUCCESS','/api/touch-tasks/*/success','POST','标记触达任务成功',NULL,0,0,'0',NULL,0,'CUSTOMER','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_AUDIT_DETAIL','/api/admin/sys/audit-logs/*','GET','审计日志详情',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_AUDIT_EXPORT','/api/admin/sys/audit-logs/export','POST','导出审计日志',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_AUDIT_LIST','/api/admin/sys/audit-logs','GET','审计日志列表',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_CAL_GET','/api/admin/sys/calendar','GET','查询工作日',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_CAL_IMPORT','/api/admin/sys/calendar/import','POST','导入节假日',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_CAL_INIT','/api/admin/sys/calendar/init','POST','初始化年份',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_CAL_PUBLIC','/api/sys/calendar','GET','公共日历查询',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_CAL_SET','/api/admin/sys/calendar/*','PUT','设置工作日',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_CFG_LIST','/api/admin/sys/configs','GET','配置列表',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_CFG_UPDATE','/api/admin/sys/configs/*','PUT','更新配置',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_DICT_CREATE','/api/admin/sys/dicts','POST','创建字典项',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_DICT_DELETE','/api/admin/sys/dicts/*','DELETE','删除字典项',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_DICT_ITEMS','/api/sys/dicts/*/items','GET','字典项列表(公共)',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_DICT_LIST','/api/sys/dicts','GET','字典类型列表(公共)',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_DICT_STATUS','/api/admin/sys/dicts/*/status','PUT','启禁字典项',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_DICT_UPDATE','/api/admin/sys/dicts/*','PUT','更新字典项',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_FILE_DELETE','/api/files/*','DELETE','删除文件',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_FILE_DOWNLOAD','/api/files/*/download','GET','下载文件',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_FILE_LIST','/api/files','GET','业务文件列表',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_FILE_UPLOAD','/api/files/upload','POST','上传文件',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_JOB_LIST','/api/admin/sys/jobs','GET','任务列表',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_JOB_LOGS','/api/admin/sys/jobs/*/logs','GET','任务执行日志',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_JOB_PAUSE','/api/admin/sys/jobs/*/pause','PUT','暂停任务',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_JOB_RESUME','/api/admin/sys/jobs/*/resume','PUT','恢复任务',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_JOB_TRIGGER','/api/admin/sys/jobs/*/trigger','POST','手动触发任务',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_NOTIFY_COUNT','/api/notifications/unread-count','GET','未读通知数',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_NOTIFY_DETAIL','/api/notifications/*','GET','通知详情',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_NOTIFY_LIST','/api/notifications','GET','通知列表',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_NOTIFY_READ','/api/notifications/*/read','PUT','标记已读',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_NOTIFY_READ_ALL','/api/notifications/read-all','PUT','全部已读',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_SQL_EXEC','/api/admin/sql-probe/execute','POST','SQL 执行探查',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('G_SQL_HIST','/api/admin/sql-probe/history','GET','SQL 执行历史',NULL,0,0,'0',NULL,0,'GOV','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_ALLOC_AD_CRE','/api/perf/alloc-adjust/create','POST','创建分配调整申请',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_ALLOC_AD_GET','/api/perf/alloc-adjust/*','GET','分配调整申请详情',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_ALLOC_AD_LST','/api/perf/alloc-adjust/list','GET','分配调整申请列表',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_ALLOC_AD_WD','/api/perf/alloc-adjust/*/withdraw','POST','撤回分配调整申请',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_ALLOC_CUR','/api/perf/alloc-relations','GET','当前分配关系',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_ALLOC_HIS','/api/perf/alloc-relations/history','GET','历史分配关系',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_ALLOC_SUM','/api/perf/alloc-relations/summary','GET','分配关系汇总',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_DATA_TASK_ST','/api/data-task/status','POST','任务状态查询',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_EXPT_DTL','/api/perf/export/detail','POST','KPI 明细导出',NULL,0,0,'0',NULL,0,'PERF','2026-04-24 08:05:37','seed','2026-04-24 08:05:37',NULL,'V1.2 Q6.4 高危');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_EXPT_MTR','/api/perf/export/metric','POST','指标宽表导出',NULL,0,0,'0',NULL,0,'PERF','2026-04-24 08:05:37','seed','2026-04-24 08:05:37',NULL,'V1.2 Q6.4');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_EXPT_TASK','/api/perf/export/task/*','GET','导出任务状态',NULL,0,0,'0',NULL,0,'PERF','2026-04-24 08:05:37','seed','2026-04-24 08:05:37',NULL,'V1.2 Q6.4');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_EXP_ALLOC','/api/perf/export/alloc','POST','导出绩效分配',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_EXP_KPI','/api/perf/export/kpi','POST','导出 KPI 结果',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_IMP_BTC_DEL','/api/perf/import/batches/*','DELETE','删除导入批次',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_IMP_BTC_ERR','/api/perf/import/batches/*/errors','GET','导入批次错误清单',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_IMP_BTC_GET','/api/perf/import/batches/*','GET','导入批次详情',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_IMP_BTC_RTY','/api/perf/import/batches/*/retry','POST','重试导入批次',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_IMP_UPLOAD','/api/perf/import/upload','POST','导入文件上传',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_ADD','/api/perf/kpi-schemes','POST','新增KPI方案',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_DEL','/api/perf/kpi-schemes/*','DELETE','删除KPI方案',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_GET','/api/perf/kpi-schemes/*','GET','KPI方案详情',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_IADD','/api/perf/kpi-schemes/*/items','POST','添加指标项',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_IDEL','/api/perf/kpi-schemes/*/items/*','DELETE','删除指标项',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_IUPD','/api/perf/kpi-schemes/*/items/*','PUT','编辑指标项',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_LIST','/api/perf/kpi-schemes','GET','KPI方案列表',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_PUB','/api/perf/kpi-schemes/*/publish','POST','发布KPI方案',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_KPI_UPD','/api/perf/kpi-schemes/*','PUT','编辑KPI方案',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_ADD','/api/perf/metrics','POST','新增指标',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_DEL','/api/perf/metrics/*','DELETE','删除指标',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_GET','/api/perf/metrics/*','GET','指标详情',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_LIST','/api/perf/metrics','GET','指标列表',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_RBY','/api/perf/metrics/*/ref-by','GET','查谁引用了我',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_REFS','/api/perf/metrics/*/refs','GET','查指标上游依赖',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_SLOT','/api/perf/metrics/val-slots','GET','槽位占用查询',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_SREL','/api/perf/metrics/*/slot/release','POST','强制释放槽位',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_STAT','/api/perf/metrics/*/status','PUT','指标状态流转',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_METRIC_UPD','/api/perf/metrics/*','PUT','编辑指标',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_MTR_EXEC','/api/perf/metrics/*/execute','POST','指标立即执行',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_MTR_TRIAL','/api/perf/metrics/*/trial-run','POST','指标试运行',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_RECALC','/api/perf/recalc','POST','历史重算',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_RT_GET','/api/perf/run-tasks/*','GET','任务日志详情',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_RT_LIST','/api/perf/run-tasks','GET','任务日志列表',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_SC_GET','/api/perf/sys-control','GET','版本查询',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_SC_HIS','/api/perf/sys-control/history','GET','版本历史',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_SC_INIT','/api/perf/sys-control/init','POST','版本初始化',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_SC_SW','/api/perf/sys-control/switch-version','POST','版本切换',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_SYS_RB','/api/perf/sys-control/rollback','POST','系统控制回滚',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_AD_CRE','/api/perf/target-adjust/create','POST','创建目标调整申请',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_AD_GET','/api/perf/target-adjust/*','GET','目标调整申请详情',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_AD_LST','/api/perf/target-adjust/list','GET','目标调整申请列表',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_AD_WD','/api/perf/target-adjust/*/withdraw','POST','撤回目标调整申请',NULL,0,0,'0',NULL,0,'PERF','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_P_ADD','/api/perf/target-plans','POST','新增目标方案',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_P_GET','/api/perf/target-plans/*','GET','目标方案详情',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_P_LIST','/api/perf/target-plans','GET','目标方案列表',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_P_UPD','/api/perf/target-plans/*','PUT','编辑目标方案',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_V_ADD','/api/perf/target-values','POST','目标值upsert',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_V_BAT','/api/perf/target-values/batch','POST','目标值批量',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('P_PERF_TGT_V_LIST','/api/perf/target-values','GET','目标值查询',NULL,0,0,'0',NULL,0,'PERF','2026-04-16 15:05:22','seed','2026-04-16 15:05:56','seed','v1.0');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUSTOMER_EDIT','/api/customers/*/edit','POST','编辑客户',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CLAIM_CANCE','/api/claims/*/cancel','POST','取消认领',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CLAIM_LST','/api/my-claims','GET','已认领客户',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CLAIM_RETOU','/api/claims/*/re-touch','POST','重新触达',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CUST_DELETE','/api/customers/*/delete-apply','POST','删除申请',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CUST_DETAIL','/api/customers/*','GET','客户详情',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CUST_EXPORT','/api/customers/export','GET','导出客户',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CUST_HIST','/api/customers/*/history','GET','跨机构历史',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CUST_TRANS','/api/customers/*/transfer','POST','转交',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_CUST_UPDATE','/api/customers/*','PUT','编辑客户',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LD_IMP_BATC','/api/leads/import/batches','GET','批次列表',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LD_IMP_BTCH','/api/leads/import/batches/*','GET','批次详情',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LD_IMP_PRE','/api/leads/import/preview','POST','导入预览',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LEAD_DELETE','/api/leads/*','DELETE','删除线索',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LEAD_DETAIL','/api/leads/*','GET','线索详情',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LEAD_EDIT','/api/leads/*/edit','POST','编辑已通过线索',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LEAD_SUBMIT','/api/leads/*/submit','POST','提交审批',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_LEAD_UPDATE','/api/leads/*','PUT','编辑线索',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_POOL_CLAIM','/api/customer-pool/*/claim','POST','认领客户',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_POOL_LIST','/api/customer-pool','GET','客户池列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TAG_ENA','/api/tags/enabled','GET','启用标签列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TAG_EXPORT','/api/tags/*/customers/export','GET','标签客户导出',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TAG_IMPORT','/api/tags/*/customers/import','POST','标签客户导入',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TAG_READ','/api/tags/*','GET','标签详情',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TAG_STATUS','/api/tags/*/status','PUT','启用/禁用标签',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TAG_UPDATE','/api/tags/*','PUT','编辑标签',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TRPT_EXP','/api/touch-reports/export','GET','触达导出',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TRPT_LST','/api/touch-reports','GET','触达明细',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TRPT_SUM','/api/touch-reports/summary','GET','触达汇总',NULL,0,0,'0',NULL,1,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 17:23:17','align-2026-04-25',' [V1.1 已下线: 代码无对应 controller, 2026-04-25 audit 标记孤儿]');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TSK_CANCEL','/api/touch-tasks/*/cancel','POST','触达取消',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TSK_LOGS','/api/touch-tasks/*/logs','POST','触达日志',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TSK_READ','/api/touch-tasks/*','GET','触达任务详情',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_CUST_TSK_SUCCESS','/api/touch-tasks/*/success','POST','触达成功',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PORTAL_WORKSPACE','/api/portal/workspace','GET','工作台聚合',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 15:59:45','align-2026-04-25','2026-04-25 15:59:45','align-2026-04-25','V1 portal slice');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PRODUCT_CREATE','/api/products','POST','产品新增',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PRODUCT_DELETE','/api/products/*','DELETE','产品删除',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PRODUCT_DETAIL','/api/products/*','GET','产品详情',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PRODUCT_LIST','/api/products','GET','产品列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PRODUCT_UPDATE','/api/products/*','PUT','产品编辑',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PROD_SUP_AVL','/api/products/support-available','GET','中场支持产品查询',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33','align-2026-04-25','2026-04-25 16:01:33','align-2026-04-25','V1 portal slice');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_ADDR_LIST','/api/employees','GET','通讯录列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_ADDR_READ','/api/employees/*','GET','员工详情',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_ADDR_SRCH','/api/employees/search','GET','员工搜索',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_ADDR_UPDATE','/api/employees/*','PUT','编辑员工',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_DOC_CREATE','/api/admin/documents','POST','上传文档',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_DOC_DEL','/api/admin/documents/*','DELETE','删除文档',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_DOC_DOWNLOAD','/api/documents/*/download','GET','文档下载',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_DOC_LIST','/api/documents','GET','文档列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_DOC_UPDATE','/api/admin/documents/*','PUT','编辑文档',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_NAV_CREATE','/api/admin/nav','POST','新增导航',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_NAV_DELETE','/api/admin/nav/*','DELETE','删除导航',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_NAV_LIST','/api/nav','GET','导航列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_NAV_SORT','/api/admin/nav/sort','PUT','批量排序',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_NAV_UPDATE','/api/admin/nav/*','PUT','编辑导航',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_PTL_PRD_EXPRT','/api/products/export','GET','导出产品',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_SHORTCUT_LIST','/api/portal/shortcuts','GET','快捷入口列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 17:23:17','align-2026-04-25','2026-04-25 17:23:17','align-2026-04-25','V1.1 PT 资源对账补齐');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_SHORTCUT_PUT','/api/portal/shortcuts','PUT','快捷入口全量替换',NULL,0,0,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33','align-2026-04-25','2026-04-25 16:01:33','align-2026-04-25','V1 portal slice');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_APPROVE','/api/workflow/tasks/*/approve','POST','工作流任务审批通过',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_CANCEL','/api/workflow/processes/*/cancel','POST','工作流流程撤回',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_CLAIM','/api/workflow/tasks/*/claim','POST','工作流任务签收',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_DETAIL','/api/workflow/tasks/*','GET','工作流任务详情',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_DONE','/api/workflow/tasks/done','GET','工作流已办列表',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_REJECT','/api/workflow/tasks/*/reject','POST','工作流任务驳回',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_SUBMIT','/api/workflow/processes/submit','POST','工作流流程提交',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_TODO','/api/workflow/tasks','GET','工作流待办列表',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('RES_WF_TRANSFER','/api/workflow/tasks/*/transfer','POST','工作流任务转交',NULL,0,1,'0',NULL,0,'PLATFORM','2026-04-25 16:01:33',NULL,'2026-04-25 16:01:33',NULL,NULL);
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_DASH_EMP','/api/reports/dashboard/emp/*','GET','员工仪表盘',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M2.3 C.3');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_DASH_ORG','/api/reports/dashboard/org/*','GET','机构仪表盘',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M2.3 C.2');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_DASH_PRES','/api/reports/dashboard/president','GET','行长仪表盘',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M2.2 C.1');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_DQ_EXEC','/api/reports/dynamic-query','POST','动态查询执行',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.2');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_DQ_EXPORT','/api/reports/dynamic-query/export','POST','动态查询导出',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.3 占位');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_EXP_CANCEL','/api/reports/export-tasks/*','DELETE','导出任务取消',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M5.3 E.2');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_EXP_DOWNLOAD','/api/reports/export-tasks/*/download','GET','导出任务下载',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M5.3 E.3');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_EXP_STATUS','/api/reports/export-tasks/*','GET','导出任务状态查询',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M5.3 E.1');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_META_QD','/api/reports/query-dimensions','GET','维度+指标树',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.1');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQL_EXEC','/api/reports/sql-probe/execute','POST','SQL 探查执行',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M4.2 D.1');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQL_EXP','/api/reports/sql-probe/export','POST','SQL 探查结果导出',NULL,0,0,'0',NULL,1,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M6.1 占位（V1.1+ 启用）');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQL_HIST','/api/reports/sql-probe/history','GET','SQL 探查历史列表',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M4.3 D.2');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQL_HIST_DTL','/api/reports/sql-probe/history/*','GET','SQL 探查历史详情',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M4.3 D.3');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQL_WL','/api/reports/sql-probe/schema-whitelist','GET','SQL 探查白名单展示',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M4.3 D.4');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQ_DEL','/api/reports/saved-queries/*','DELETE','删除查询方案',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.5');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQ_GET','/api/reports/saved-queries/*','GET','查询方案详情',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.4');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQ_LIST','/api/reports/saved-queries','GET','查询方案列表',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.4');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQ_SAVE','/api/reports/saved-queries','POST','保存查询方案',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.5');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SQ_UPD','/api/reports/saved-queries/*','PUT','更新查询方案',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M1.5');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SUM_CUST_EXP','/api/reports/customer-pool-summary/export','POST','客户池统计导出',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M3.3 C.4');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SUM_CUST_VW','/api/reports/customer-pool-summary','GET','客户池统计查看',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M3.3 C.4');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SUM_PERF_EXP','/api/reports/perf-summary/export','POST','绩效汇总导出',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M3.2 C.3');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SUM_PERF_VW','/api/reports/perf-summary','GET','绩效汇总查看',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M3.2 C.3');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SUM_TOUCH_EXP','/api/reports/touch-task-summary/export','POST','触达汇总导出',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M3.1 C.2');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RPT_SUM_TOUCH_VW','/api/reports/touch-task-summary','GET','触达汇总查看',NULL,0,0,'0',NULL,0,'RPT','2026-04-25 16:01:33','seed','2026-04-25 16:01:33',NULL,'v1.0 M3.1 C.2');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NC_CREATE','/api/admin/workflow/node-candidates','POST','新增候选人配置',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NC_GET','/api/admin/workflow/node-candidates/item/*','GET','候选人配置详情',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NC_LIST','/api/admin/workflow/node-candidates','GET','候选人配置列表',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NC_UPDATE','/api/admin/workflow/node-candidates/*','PUT','更新候选人配置',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NF_CREATE','/api/admin/workflow/node-forms','POST','新增节点表单',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NF_GET','/api/admin/workflow/node-forms/item/*','GET','节点表单详情',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NF_LIST','/api/admin/workflow/node-forms','GET','节点表单列表',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_NF_UPDATE','/api/admin/workflow/node-forms/*','PUT','更新节点表单',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_PROC_DEFS','/api/admin/workflow/process-definitions','GET','流程定义列表',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_PROC_DETAIL','/api/workflow/processes/*','GET','流程实例详情',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_PROC_DIAGRAM','/api/workflow/processes/*/diagram','GET','流程进度图',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_PROC_HISTORY','/api/workflow/processes/*/history','GET','流程历史',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_PROC_MAP','/api/workflow/process-map','GET','流程映射查询',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_PROC_NODES','/api/workflow/processes/*/nodes','GET','流程节点结构',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TASK_APPROVE','/api/workflow/tasks/*/approve','POST','审批通过',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TASK_CLAIM','/api/workflow/tasks/*/claim','POST','签收任务',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TASK_DETAIL','/api/workflow/tasks/*','GET','任务详情',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TASK_DONE','/api/workflow/tasks/done','GET','已办任务列表',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TASK_REJECT','/api/workflow/tasks/*/reject','POST','驳回任务',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TASK_TODO','/api/workflow/tasks','GET','待办任务列表',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TASK_TRANSFER','/api/workflow/tasks/*/transfer','POST','转交任务',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TR_CREATE','/api/admin/workflow/timeout-rules','POST','新增超时规则',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TR_GET','/api/admin/workflow/timeout-rules/item/*','GET','超时规则详情',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TR_LIST','/api/admin/workflow/timeout-rules','GET','超时规则列表',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('W_TR_UPDATE','/api/admin/workflow/timeout-rules/*','PUT','更新超时规则',NULL,0,0,'0',NULL,0,'WF','2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1 aligned 2026-04-10');
 
 
 -- =========================================================
--- 5) PT_ROLE_BIZ_SCOPE 角色-BizType-数据范围种子数据
---    按 project_ana.md 2.1.2 权限矩阵生成
+-- 4) PT_ROLE_RESOURCE 角色-资源绑定（当前 onepl 实际 565 行）
+-- 各角色资源数：
+--   R_ADMIN 119 / R_BACK_TECH 119 / R_RM 38
+--   R_BRANCH_MGR / R_CORP_DEPT / R_CREDIT_APPROVER / R_CREDIT_REVIEWER 各 36
+--   R_BACK_FINANCE / R_PRESIDENT / R_RETAIL_DEPT / R_SUPPORT_SEC / R_SUPPORT_STAFF 各 29
+-- 顺序：按 ID 字典序（mysqldump 输出）
+-- =========================================================
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66408c348b11f191754c496c37265b','R_ADMIN','A_BZ_DELETE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6647a9348b11f191754c496c37265b','R_ADMIN','A_BZ_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664882348b11f191754c496c37265b','R_ADMIN','A_BZ_MATRIX','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66491a348b11f191754c496c37265b','R_ADMIN','A_BZ_SAVE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6649a7348b11f191754c496c37265b','R_ADMIN','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664a37348b11f191754c496c37265b','R_ADMIN','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664cd1348b11f191754c496c37265b','R_ADMIN','A_LOGIN','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664dbf348b11f191754c496c37265b','R_ADMIN','A_LOGOUT','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664e5a348b11f191754c496c37265b','R_ADMIN','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664edc348b11f191754c496c37265b','R_ADMIN','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664f56348b11f191754c496c37265b','R_ADMIN','A_ORG_USERS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da664fd2348b11f191754c496c37265b','R_ADMIN','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665042348b11f191754c496c37265b','R_ADMIN','A_RES_CREATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6650b7348b11f191754c496c37265b','R_ADMIN','A_RES_DELETE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66513b348b11f191754c496c37265b','R_ADMIN','A_RES_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6651ba348b11f191754c496c37265b','R_ADMIN','A_RES_UPDATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66522d348b11f191754c496c37265b','R_ADMIN','A_ROLE_CREATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6652aa348b11f191754c496c37265b','R_ADMIN','A_ROLE_DELETE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66531f348b11f191754c496c37265b','R_ADMIN','A_ROLE_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665390348b11f191754c496c37265b','R_ADMIN','A_ROLE_UPDATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665402348b11f191754c496c37265b','R_ADMIN','A_ROLE_USERS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665477348b11f191754c496c37265b','R_ADMIN','A_RR_BIND','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6654e9348b11f191754c496c37265b','R_ADMIN','A_RR_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66555a348b11f191754c496c37265b','R_ADMIN','A_RR_REPLACE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6655cc348b11f191754c496c37265b','R_ADMIN','A_UR_BIND','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66563d348b11f191754c496c37265b','R_ADMIN','A_UR_DEL','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6656af348b11f191754c496c37265b','R_ADMIN','A_UR_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66571f348b11f191754c496c37265b','R_ADMIN','G_AUDIT_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665794348b11f191754c496c37265b','R_ADMIN','G_AUDIT_EXPORT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66580a348b11f191754c496c37265b','R_ADMIN','G_AUDIT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665881348b11f191754c496c37265b','R_ADMIN','G_CAL_GET','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6658f3348b11f191754c496c37265b','R_ADMIN','G_CAL_IMPORT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665963348b11f191754c496c37265b','R_ADMIN','G_CAL_INIT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6659e1348b11f191754c496c37265b','R_ADMIN','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665a53348b11f191754c496c37265b','R_ADMIN','G_CAL_SET','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665ac6348b11f191754c496c37265b','R_ADMIN','G_CFG_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665b3a348b11f191754c496c37265b','R_ADMIN','G_CFG_UPDATE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665bae348b11f191754c496c37265b','R_ADMIN','G_DICT_CREATE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665c20348b11f191754c496c37265b','R_ADMIN','G_DICT_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665c94348b11f191754c496c37265b','R_ADMIN','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665d06348b11f191754c496c37265b','R_ADMIN','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665d7b348b11f191754c496c37265b','R_ADMIN','G_DICT_STATUS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665deb348b11f191754c496c37265b','R_ADMIN','G_DICT_UPDATE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665e5d348b11f191754c496c37265b','R_ADMIN','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665ed0348b11f191754c496c37265b','R_ADMIN','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665f49348b11f191754c496c37265b','R_ADMIN','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da665fb7348b11f191754c496c37265b','R_ADMIN','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da666029348b11f191754c496c37265b','R_ADMIN','G_JOB_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da666098348b11f191754c496c37265b','R_ADMIN','G_JOB_LOGS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66614a348b11f191754c496c37265b','R_ADMIN','G_JOB_PAUSE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6661c0348b11f191754c496c37265b','R_ADMIN','G_JOB_RESUME','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da666235348b11f191754c496c37265b','R_ADMIN','G_JOB_TRIGGER','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6662ae348b11f191754c496c37265b','R_ADMIN','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da666321348b11f191754c496c37265b','R_ADMIN','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da666393348b11f191754c496c37265b','R_ADMIN','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da666406348b11f191754c496c37265b','R_ADMIN','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66647c348b11f191754c496c37265b','R_ADMIN','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6664f0348b11f191754c496c37265b','R_ADMIN','G_SQL_EXEC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da666564348b11f191754c496c37265b','R_ADMIN','G_SQL_HIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da667bec348b11f191754c496c37265b','R_ADMIN','W_NC_CREATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da667d1d348b11f191754c496c37265b','R_ADMIN','W_NC_GET','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da667e25348b11f191754c496c37265b','R_ADMIN','W_NC_LIST','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da667f1d348b11f191754c496c37265b','R_ADMIN','W_NC_UPDATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66800c348b11f191754c496c37265b','R_ADMIN','W_NF_CREATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6680fa348b11f191754c496c37265b','R_ADMIN','W_NF_GET','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da668201348b11f191754c496c37265b','R_ADMIN','W_NF_LIST','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6682ee348b11f191754c496c37265b','R_ADMIN','W_NF_UPDATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6683d5348b11f191754c496c37265b','R_ADMIN','W_PROC_DEFS','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6684b9348b11f191754c496c37265b','R_ADMIN','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6685d0348b11f191754c496c37265b','R_ADMIN','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6686bb348b11f191754c496c37265b','R_ADMIN','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6689a4348b11f191754c496c37265b','R_ADMIN','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da668aa0348b11f191754c496c37265b','R_ADMIN','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da668b96348b11f191754c496c37265b','R_ADMIN','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da668c88348b11f191754c496c37265b','R_ADMIN','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da668d7b348b11f191754c496c37265b','R_ADMIN','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da668e63348b11f191754c496c37265b','R_ADMIN','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66900a348b11f191754c496c37265b','R_ADMIN','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66910d348b11f191754c496c37265b','R_ADMIN','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6691fe348b11f191754c496c37265b','R_ADMIN','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6692d7348b11f191754c496c37265b','R_ADMIN','W_TR_CREATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6693b7348b11f191754c496c37265b','R_ADMIN','W_TR_GET','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66948b348b11f191754c496c37265b','R_ADMIN','W_TR_LIST','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da669562348b11f191754c496c37265b','R_ADMIN','W_TR_UPDATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66a7f6348b11f191754c496c37265b','R_BACK_TECH','A_BZ_DELETE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66a98a348b11f191754c496c37265b','R_BACK_TECH','A_BZ_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66aa31348b11f191754c496c37265b','R_BACK_TECH','A_BZ_MATRIX','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66aac9348b11f191754c496c37265b','R_BACK_TECH','A_BZ_SAVE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ab45348b11f191754c496c37265b','R_BACK_TECH','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66abbd348b11f191754c496c37265b','R_BACK_TECH','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ac2e348b11f191754c496c37265b','R_BACK_TECH','A_LOGIN','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ac9e348b11f191754c496c37265b','R_BACK_TECH','A_LOGOUT','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ad21348b11f191754c496c37265b','R_BACK_TECH','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66c7b1348b11f191754c496c37265b','R_BACK_TECH','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66c87c348b11f191754c496c37265b','R_BACK_TECH','A_ORG_USERS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66c903348b11f191754c496c37265b','R_BACK_TECH','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66c97a348b11f191754c496c37265b','R_BACK_TECH','A_RES_CREATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66c9f2348b11f191754c496c37265b','R_BACK_TECH','A_RES_DELETE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ca63348b11f191754c496c37265b','R_BACK_TECH','A_RES_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cad4348b11f191754c496c37265b','R_BACK_TECH','A_RES_UPDATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cb4e348b11f191754c496c37265b','R_BACK_TECH','A_ROLE_CREATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cbbd348b11f191754c496c37265b','R_BACK_TECH','A_ROLE_DELETE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cc30348b11f191754c496c37265b','R_BACK_TECH','A_ROLE_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cca1348b11f191754c496c37265b','R_BACK_TECH','A_ROLE_UPDATE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cd0e348b11f191754c496c37265b','R_BACK_TECH','A_ROLE_USERS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cd97348b11f191754c496c37265b','R_BACK_TECH','A_RR_BIND','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ce09348b11f191754c496c37265b','R_BACK_TECH','A_RR_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ce7e348b11f191754c496c37265b','R_BACK_TECH','A_RR_REPLACE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ceeb348b11f191754c496c37265b','R_BACK_TECH','A_UR_BIND','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cf57348b11f191754c496c37265b','R_BACK_TECH','A_UR_DEL','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66cfc2348b11f191754c496c37265b','R_BACK_TECH','A_UR_LIST','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d035348b11f191754c496c37265b','R_BACK_TECH','G_AUDIT_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d0a9348b11f191754c496c37265b','R_BACK_TECH','G_AUDIT_EXPORT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d1c9348b11f191754c496c37265b','R_BACK_TECH','G_AUDIT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d240348b11f191754c496c37265b','R_BACK_TECH','G_CAL_GET','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d2c3348b11f191754c496c37265b','R_BACK_TECH','G_CAL_IMPORT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d337348b11f191754c496c37265b','R_BACK_TECH','G_CAL_INIT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d3a9348b11f191754c496c37265b','R_BACK_TECH','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d419348b11f191754c496c37265b','R_BACK_TECH','G_CAL_SET','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d48a348b11f191754c496c37265b','R_BACK_TECH','G_CFG_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d4f6348b11f191754c496c37265b','R_BACK_TECH','G_CFG_UPDATE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d564348b11f191754c496c37265b','R_BACK_TECH','G_DICT_CREATE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d5d2348b11f191754c496c37265b','R_BACK_TECH','G_DICT_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d64b348b11f191754c496c37265b','R_BACK_TECH','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d6ba348b11f191754c496c37265b','R_BACK_TECH','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d728348b11f191754c496c37265b','R_BACK_TECH','G_DICT_STATUS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d798348b11f191754c496c37265b','R_BACK_TECH','G_DICT_UPDATE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d80b348b11f191754c496c37265b','R_BACK_TECH','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d878348b11f191754c496c37265b','R_BACK_TECH','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d8eb348b11f191754c496c37265b','R_BACK_TECH','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d962348b11f191754c496c37265b','R_BACK_TECH','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66d9d5348b11f191754c496c37265b','R_BACK_TECH','G_JOB_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66da44348b11f191754c496c37265b','R_BACK_TECH','G_JOB_LOGS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ec72348b11f191754c496c37265b','R_BACK_TECH','G_JOB_PAUSE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ed28348b11f191754c496c37265b','R_BACK_TECH','G_JOB_RESUME','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ed9b348b11f191754c496c37265b','R_BACK_TECH','G_JOB_TRIGGER','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ee05348b11f191754c496c37265b','R_BACK_TECH','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ee78348b11f191754c496c37265b','R_BACK_TECH','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66eee3348b11f191754c496c37265b','R_BACK_TECH','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ef52348b11f191754c496c37265b','R_BACK_TECH','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66efb8348b11f191754c496c37265b','R_BACK_TECH','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66f021348b11f191754c496c37265b','R_BACK_TECH','G_SQL_EXEC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66f091348b11f191754c496c37265b','R_BACK_TECH','G_SQL_HIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66fc3f348b11f191754c496c37265b','R_BACK_TECH','W_NC_CREATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66fcc9348b11f191754c496c37265b','R_BACK_TECH','W_NC_GET','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66fd4c348b11f191754c496c37265b','R_BACK_TECH','W_NC_LIST','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66fdd2348b11f191754c496c37265b','R_BACK_TECH','W_NC_UPDATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66fe42348b11f191754c496c37265b','R_BACK_TECH','W_NF_CREATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66feb0348b11f191754c496c37265b','R_BACK_TECH','W_NF_GET','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ff1f348b11f191754c496c37265b','R_BACK_TECH','W_NF_LIST','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66ff8d348b11f191754c496c37265b','R_BACK_TECH','W_NF_UPDATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da66fffa348b11f191754c496c37265b','R_BACK_TECH','W_PROC_DEFS','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da670fc2348b11f191754c496c37265b','R_BACK_TECH','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67106f348b11f191754c496c37265b','R_BACK_TECH','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6710e6348b11f191754c496c37265b','R_BACK_TECH','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67115e348b11f191754c496c37265b','R_BACK_TECH','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6711d2348b11f191754c496c37265b','R_BACK_TECH','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da671240348b11f191754c496c37265b','R_BACK_TECH','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6712b1348b11f191754c496c37265b','R_BACK_TECH','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da671322348b11f191754c496c37265b','R_BACK_TECH','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da671392348b11f191754c496c37265b','R_BACK_TECH','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da671400348b11f191754c496c37265b','R_BACK_TECH','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67146a348b11f191754c496c37265b','R_BACK_TECH','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6714dc348b11f191754c496c37265b','R_BACK_TECH','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da671548348b11f191754c496c37265b','R_BACK_TECH','W_TR_CREATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da672995348b11f191754c496c37265b','R_BACK_TECH','W_TR_GET','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da672a92348b11f191754c496c37265b','R_BACK_TECH','W_TR_LIST','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da672b05348b11f191754c496c37265b','R_BACK_TECH','W_TR_UPDATE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674945348b11f191754c496c37265b','R_SUPPORT_STAFF','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674a92348b11f191754c496c37265b','R_SUPPORT_SEC','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674b10348b11f191754c496c37265b','R_RM','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674b7e348b11f191754c496c37265b','R_RETAIL_DEPT','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674be2348b11f191754c496c37265b','R_PRESIDENT','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674c4b348b11f191754c496c37265b','R_CREDIT_REVIEWER','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674cab348b11f191754c496c37265b','R_CREDIT_APPROVER','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674d07348b11f191754c496c37265b','R_CORP_DEPT','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674d63348b11f191754c496c37265b','R_BRANCH_MGR','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da674df5348b11f191754c496c37265b','R_BACK_FINANCE','A_CHECK_PERM','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da676905348b11f191754c496c37265b','R_SUPPORT_STAFF','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6769aa348b11f191754c496c37265b','R_SUPPORT_SEC','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677844348b11f191754c496c37265b','R_RM','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6778e8348b11f191754c496c37265b','R_RETAIL_DEPT','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677957348b11f191754c496c37265b','R_PRESIDENT','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6779cf348b11f191754c496c37265b','R_CREDIT_REVIEWER','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677aad348b11f191754c496c37265b','R_CREDIT_APPROVER','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677b1a348b11f191754c496c37265b','R_CORP_DEPT','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677b83348b11f191754c496c37265b','R_BRANCH_MGR','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677beb348b11f191754c496c37265b','R_BACK_FINANCE','A_CURR_USER','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677cc8348b11f191754c496c37265b','R_SUPPORT_STAFF','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677d3f348b11f191754c496c37265b','R_SUPPORT_SEC','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677eae348b11f191754c496c37265b','R_RM','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da677f91348b11f191754c496c37265b','R_RETAIL_DEPT','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678000348b11f191754c496c37265b','R_PRESIDENT','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6780f5348b11f191754c496c37265b','R_CREDIT_REVIEWER','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6781cf348b11f191754c496c37265b','R_CREDIT_APPROVER','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67823d348b11f191754c496c37265b','R_CORP_DEPT','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6782a3348b11f191754c496c37265b','R_BRANCH_MGR','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678306348b11f191754c496c37265b','R_BACK_FINANCE','A_ORG_SUBTREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6783c9348b11f191754c496c37265b','R_SUPPORT_STAFF','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678445348b11f191754c496c37265b','R_SUPPORT_SEC','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67853b348b11f191754c496c37265b','R_RM','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6785aa348b11f191754c496c37265b','R_RETAIL_DEPT','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678618348b11f191754c496c37265b','R_PRESIDENT','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678685348b11f191754c496c37265b','R_CREDIT_REVIEWER','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6786e7348b11f191754c496c37265b','R_CREDIT_APPROVER','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678747348b11f191754c496c37265b','R_CORP_DEPT','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6787a8348b11f191754c496c37265b','R_BRANCH_MGR','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678807348b11f191754c496c37265b','R_BACK_FINANCE','A_ORG_TREE','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678898348b11f191754c496c37265b','R_SUPPORT_STAFF','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678900348b11f191754c496c37265b','R_SUPPORT_SEC','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678963348b11f191754c496c37265b','R_RM','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6789c3348b11f191754c496c37265b','R_RETAIL_DEPT','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678a23348b11f191754c496c37265b','R_PRESIDENT','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678a91348b11f191754c496c37265b','R_CREDIT_REVIEWER','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678af5348b11f191754c496c37265b','R_CREDIT_APPROVER','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678b56348b11f191754c496c37265b','R_CORP_DEPT','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678bb8348b11f191754c496c37265b','R_BRANCH_MGR','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678c19348b11f191754c496c37265b','R_BACK_FINANCE','A_PERMS','AUTH','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678dd9348b11f191754c496c37265b','R_SUPPORT_STAFF','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da678e47348b11f191754c496c37265b','R_SUPPORT_SEC','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679014348b11f191754c496c37265b','R_RM','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6790ac348b11f191754c496c37265b','R_RETAIL_DEPT','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679119348b11f191754c496c37265b','R_PRESIDENT','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6791a7348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67920f348b11f191754c496c37265b','R_CREDIT_APPROVER','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67926b348b11f191754c496c37265b','R_CORP_DEPT','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6792c5348b11f191754c496c37265b','R_BRANCH_MGR','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679323348b11f191754c496c37265b','R_BACK_FINANCE','G_CAL_PUBLIC','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67943a348b11f191754c496c37265b','R_SUPPORT_STAFF','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6794a4348b11f191754c496c37265b','R_SUPPORT_SEC','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679503348b11f191754c496c37265b','R_RM','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67955c348b11f191754c496c37265b','R_RETAIL_DEPT','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6795b5348b11f191754c496c37265b','R_PRESIDENT','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67960f348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679668348b11f191754c496c37265b','R_CREDIT_APPROVER','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6796c5348b11f191754c496c37265b','R_CORP_DEPT','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67971f348b11f191754c496c37265b','R_BRANCH_MGR','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679777348b11f191754c496c37265b','R_BACK_FINANCE','G_DICT_ITEMS','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6797e1348b11f191754c496c37265b','R_SUPPORT_STAFF','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679841348b11f191754c496c37265b','R_SUPPORT_SEC','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67989b348b11f191754c496c37265b','R_RM','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679d0f348b11f191754c496c37265b','R_RETAIL_DEPT','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679e00348b11f191754c496c37265b','R_PRESIDENT','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679e6f348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679ed6348b11f191754c496c37265b','R_CREDIT_APPROVER','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679f38348b11f191754c496c37265b','R_CORP_DEPT','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679f9b348b11f191754c496c37265b','R_BRANCH_MGR','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da679ffc348b11f191754c496c37265b','R_BACK_FINANCE','G_DICT_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a0c2348b11f191754c496c37265b','R_SUPPORT_STAFF','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a274348b11f191754c496c37265b','R_SUPPORT_SEC','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a33f348b11f191754c496c37265b','R_RM','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a3a6348b11f191754c496c37265b','R_RETAIL_DEPT','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a405348b11f191754c496c37265b','R_PRESIDENT','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a466348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a4c4348b11f191754c496c37265b','R_CREDIT_APPROVER','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a522348b11f191754c496c37265b','R_CORP_DEPT','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a57f348b11f191754c496c37265b','R_BRANCH_MGR','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a5f1348b11f191754c496c37265b','R_BACK_FINANCE','G_FILE_DELETE','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a69c348b11f191754c496c37265b','R_SUPPORT_STAFF','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a701348b11f191754c496c37265b','R_SUPPORT_SEC','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a75c348b11f191754c496c37265b','R_RM','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a7b7348b11f191754c496c37265b','R_RETAIL_DEPT','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a813348b11f191754c496c37265b','R_PRESIDENT','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a86c348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a8c8348b11f191754c496c37265b','R_CREDIT_APPROVER','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a92f348b11f191754c496c37265b','R_CORP_DEPT','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67a989348b11f191754c496c37265b','R_BRANCH_MGR','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67abd4348b11f191754c496c37265b','R_BACK_FINANCE','G_FILE_DOWNLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ad89348b11f191754c496c37265b','R_SUPPORT_STAFF','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ae34348b11f191754c496c37265b','R_SUPPORT_SEC','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67aeb7348b11f191754c496c37265b','R_RM','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67af41348b11f191754c496c37265b','R_RETAIL_DEPT','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67afad348b11f191754c496c37265b','R_PRESIDENT','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b009348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b064348b11f191754c496c37265b','R_CREDIT_APPROVER','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b0bf348b11f191754c496c37265b','R_CORP_DEPT','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b117348b11f191754c496c37265b','R_BRANCH_MGR','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b170348b11f191754c496c37265b','R_BACK_FINANCE','G_FILE_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b1e9348b11f191754c496c37265b','R_SUPPORT_STAFF','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b24e348b11f191754c496c37265b','R_SUPPORT_SEC','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b2ab348b11f191754c496c37265b','R_RM','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b305348b11f191754c496c37265b','R_RETAIL_DEPT','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b35f348b11f191754c496c37265b','R_PRESIDENT','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b3b9348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b412348b11f191754c496c37265b','R_CREDIT_APPROVER','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b475348b11f191754c496c37265b','R_CORP_DEPT','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b517348b11f191754c496c37265b','R_BRANCH_MGR','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b57b348b11f191754c496c37265b','R_BACK_FINANCE','G_FILE_UPLOAD','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b63a348b11f191754c496c37265b','R_SUPPORT_STAFF','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b69d348b11f191754c496c37265b','R_SUPPORT_SEC','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b6f9348b11f191754c496c37265b','R_RM','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b754348b11f191754c496c37265b','R_RETAIL_DEPT','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b7af348b11f191754c496c37265b','R_PRESIDENT','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b80b348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b867348b11f191754c496c37265b','R_CREDIT_APPROVER','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b8d2348b11f191754c496c37265b','R_CORP_DEPT','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b931348b11f191754c496c37265b','R_BRANCH_MGR','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67b997348b11f191754c496c37265b','R_BACK_FINANCE','G_NOTIFY_COUNT','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ba04348b11f191754c496c37265b','R_SUPPORT_STAFF','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ba65348b11f191754c496c37265b','R_SUPPORT_SEC','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67bac4348b11f191754c496c37265b','R_RM','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67bb20348b11f191754c496c37265b','R_RETAIL_DEPT','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67bb79348b11f191754c496c37265b','R_PRESIDENT','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67bbd2348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ce5f348b11f191754c496c37265b','R_CREDIT_APPROVER','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67cf1d348b11f191754c496c37265b','R_CORP_DEPT','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67cf8c348b11f191754c496c37265b','R_BRANCH_MGR','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67cff8348b11f191754c496c37265b','R_BACK_FINANCE','G_NOTIFY_DETAIL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67d090348b11f191754c496c37265b','R_SUPPORT_STAFF','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e542348b11f191754c496c37265b','R_SUPPORT_SEC','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e5de348b11f191754c496c37265b','R_RM','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e641348b11f191754c496c37265b','R_RETAIL_DEPT','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e698348b11f191754c496c37265b','R_PRESIDENT','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e7b7348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e81b348b11f191754c496c37265b','R_CREDIT_APPROVER','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e877348b11f191754c496c37265b','R_CORP_DEPT','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e8cf348b11f191754c496c37265b','R_BRANCH_MGR','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e924348b11f191754c496c37265b','R_BACK_FINANCE','G_NOTIFY_LIST','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67e9b1348b11f191754c496c37265b','R_SUPPORT_STAFF','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ea0c348b11f191754c496c37265b','R_SUPPORT_SEC','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ea63348b11f191754c496c37265b','R_RM','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67eabe348b11f191754c496c37265b','R_RETAIL_DEPT','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67eb16348b11f191754c496c37265b','R_PRESIDENT','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67eb6b348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ebc1348b11f191754c496c37265b','R_CREDIT_APPROVER','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ec16348b11f191754c496c37265b','R_CORP_DEPT','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ec6e348b11f191754c496c37265b','R_BRANCH_MGR','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ecc4348b11f191754c496c37265b','R_BACK_FINANCE','G_NOTIFY_READ','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ed2d348b11f191754c496c37265b','R_SUPPORT_STAFF','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ed94348b11f191754c496c37265b','R_SUPPORT_SEC','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67edec348b11f191754c496c37265b','R_RM','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ee43348b11f191754c496c37265b','R_RETAIL_DEPT','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ee9c348b11f191754c496c37265b','R_PRESIDENT','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67eef2348b11f191754c496c37265b','R_CREDIT_REVIEWER','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ef48348b11f191754c496c37265b','R_CREDIT_APPROVER','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ef9e348b11f191754c496c37265b','R_CORP_DEPT','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67eff3348b11f191754c496c37265b','R_BRANCH_MGR','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67f04b348b11f191754c496c37265b','R_BACK_FINANCE','G_NOTIFY_READ_ALL','GOV','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da67ff1c348b11f191754c496c37265b','R_SUPPORT_STAFF','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6801d5348b11f191754c496c37265b','R_SUPPORT_SEC','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da680241348b11f191754c496c37265b','R_RM','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68030d348b11f191754c496c37265b','R_RETAIL_DEPT','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da680367348b11f191754c496c37265b','R_PRESIDENT','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6803c7348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da680423348b11f191754c496c37265b','R_CREDIT_APPROVER','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da680479348b11f191754c496c37265b','R_CORP_DEPT','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6804cf348b11f191754c496c37265b','R_BRANCH_MGR','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68052c348b11f191754c496c37265b','R_BACK_FINANCE','W_PROC_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da680599348b11f191754c496c37265b','R_SUPPORT_STAFF','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6805f7348b11f191754c496c37265b','R_SUPPORT_SEC','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da681f17348b11f191754c496c37265b','R_RM','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da681fbd348b11f191754c496c37265b','R_RETAIL_DEPT','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682020348b11f191754c496c37265b','R_PRESIDENT','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68207e348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6820dd348b11f191754c496c37265b','R_CREDIT_APPROVER','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682137348b11f191754c496c37265b','R_CORP_DEPT','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68218f348b11f191754c496c37265b','R_BRANCH_MGR','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6821e9348b11f191754c496c37265b','R_BACK_FINANCE','W_PROC_DIAGRAM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682284348b11f191754c496c37265b','R_SUPPORT_STAFF','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6822f6348b11f191754c496c37265b','R_SUPPORT_SEC','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682351348b11f191754c496c37265b','R_RM','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6823a8348b11f191754c496c37265b','R_RETAIL_DEPT','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6823fc348b11f191754c496c37265b','R_PRESIDENT','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682456348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6824ab348b11f191754c496c37265b','R_CREDIT_APPROVER','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6824ff348b11f191754c496c37265b','R_CORP_DEPT','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682559348b11f191754c496c37265b','R_BRANCH_MGR','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6825b0348b11f191754c496c37265b','R_BACK_FINANCE','W_PROC_HISTORY','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68261a348b11f191754c496c37265b','R_SUPPORT_STAFF','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682677348b11f191754c496c37265b','R_SUPPORT_SEC','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6826e6348b11f191754c496c37265b','R_RM','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68273f348b11f191754c496c37265b','R_RETAIL_DEPT','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6827ab348b11f191754c496c37265b','R_PRESIDENT','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682804348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68285b348b11f191754c496c37265b','R_CREDIT_APPROVER','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6828f0348b11f191754c496c37265b','R_CORP_DEPT','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682947348b11f191754c496c37265b','R_BRANCH_MGR','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6829a4348b11f191754c496c37265b','R_BACK_FINANCE','W_PROC_MAP','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682a13348b11f191754c496c37265b','R_SUPPORT_STAFF','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682a71348b11f191754c496c37265b','R_SUPPORT_SEC','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682ace348b11f191754c496c37265b','R_RM','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682b28348b11f191754c496c37265b','R_RETAIL_DEPT','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682b7d348b11f191754c496c37265b','R_PRESIDENT','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682bd4348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682c29348b11f191754c496c37265b','R_CREDIT_APPROVER','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682c80348b11f191754c496c37265b','R_CORP_DEPT','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da682cd7348b11f191754c496c37265b','R_BRANCH_MGR','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683b92348b11f191754c496c37265b','R_BACK_FINANCE','W_PROC_NODES','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683c6e348b11f191754c496c37265b','R_SUPPORT_STAFF','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683cd7348b11f191754c496c37265b','R_SUPPORT_SEC','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683d31348b11f191754c496c37265b','R_RM','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683d8c348b11f191754c496c37265b','R_RETAIL_DEPT','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683de4348b11f191754c496c37265b','R_PRESIDENT','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683e3d348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683e94348b11f191754c496c37265b','R_CREDIT_APPROVER','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683eed348b11f191754c496c37265b','R_CORP_DEPT','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683f48348b11f191754c496c37265b','R_BRANCH_MGR','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da683fa4348b11f191754c496c37265b','R_BACK_FINANCE','W_TASK_APPROVE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68400b348b11f191754c496c37265b','R_SUPPORT_STAFF','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684066348b11f191754c496c37265b','R_SUPPORT_SEC','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6840bc348b11f191754c496c37265b','R_RM','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68414b348b11f191754c496c37265b','R_RETAIL_DEPT','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6841a4348b11f191754c496c37265b','R_PRESIDENT','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6841fd348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684252348b11f191754c496c37265b','R_CREDIT_APPROVER','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6842a9348b11f191754c496c37265b','R_CORP_DEPT','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684300348b11f191754c496c37265b','R_BRANCH_MGR','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684357348b11f191754c496c37265b','R_BACK_FINANCE','W_TASK_CLAIM','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6843be348b11f191754c496c37265b','R_SUPPORT_STAFF','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684419348b11f191754c496c37265b','R_SUPPORT_SEC','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684470348b11f191754c496c37265b','R_RM','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6844c5348b11f191754c496c37265b','R_RETAIL_DEPT','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68451b348b11f191754c496c37265b','R_PRESIDENT','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684572348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6845c7348b11f191754c496c37265b','R_CREDIT_APPROVER','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68461e348b11f191754c496c37265b','R_CORP_DEPT','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684676348b11f191754c496c37265b','R_BRANCH_MGR','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6846d0348b11f191754c496c37265b','R_BACK_FINANCE','W_TASK_DETAIL','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684738348b11f191754c496c37265b','R_SUPPORT_STAFF','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68479b348b11f191754c496c37265b','R_SUPPORT_SEC','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6847f3348b11f191754c496c37265b','R_RM','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68484a348b11f191754c496c37265b','R_RETAIL_DEPT','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6848a1348b11f191754c496c37265b','R_PRESIDENT','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6848f9348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68494f348b11f191754c496c37265b','R_CREDIT_APPROVER','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6849a6348b11f191754c496c37265b','R_CORP_DEPT','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6849fb348b11f191754c496c37265b','R_BRANCH_MGR','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684a53348b11f191754c496c37265b','R_BACK_FINANCE','W_TASK_DONE','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684ac1348b11f191754c496c37265b','R_SUPPORT_STAFF','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684b1e348b11f191754c496c37265b','R_SUPPORT_SEC','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684b7f348b11f191754c496c37265b','R_RM','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684bd8348b11f191754c496c37265b','R_RETAIL_DEPT','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684c2f348b11f191754c496c37265b','R_PRESIDENT','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684c8a348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684ce0348b11f191754c496c37265b','R_CREDIT_APPROVER','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684d3a348b11f191754c496c37265b','R_CORP_DEPT','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684d91348b11f191754c496c37265b','R_BRANCH_MGR','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684dea348b11f191754c496c37265b','R_BACK_FINANCE','W_TASK_REJECT','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684e5b348b11f191754c496c37265b','R_SUPPORT_STAFF','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684eb8348b11f191754c496c37265b','R_SUPPORT_SEC','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684f0f348b11f191754c496c37265b','R_RM','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684f64348b11f191754c496c37265b','R_RETAIL_DEPT','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da684fb9348b11f191754c496c37265b','R_PRESIDENT','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68500e348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da685063348b11f191754c496c37265b','R_CREDIT_APPROVER','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6850bf348b11f191754c496c37265b','R_CORP_DEPT','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da685117348b11f191754c496c37265b','R_BRANCH_MGR','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68516b348b11f191754c496c37265b','R_BACK_FINANCE','W_TASK_TODO','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6851d9348b11f191754c496c37265b','R_SUPPORT_STAFF','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da685235348b11f191754c496c37265b','R_SUPPORT_SEC','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68528c348b11f191754c496c37265b','R_RM','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6852e1348b11f191754c496c37265b','R_RETAIL_DEPT','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da685339348b11f191754c496c37265b','R_PRESIDENT','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da685391348b11f191754c496c37265b','R_CREDIT_REVIEWER','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6853e6348b11f191754c496c37265b','R_CREDIT_APPROVER','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da68543a348b11f191754c496c37265b','R_CORP_DEPT','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da685490348b11f191754c496c37265b','R_BRANCH_MGR','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('da6854e7348b11f191754c496c37265b','R_BACK_FINANCE','W_TASK_TRANSFER','WF','2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_APPROVE_BM','R_BRANCH_MGR','RES_WF_APPROVE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_APPROVE_CA','R_CREDIT_APPROVER','RES_WF_APPROVE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_APPROVE_CD','R_CORP_DEPT','RES_WF_APPROVE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_APPROVE_CR','R_CREDIT_REVIEWER','RES_WF_APPROVE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_APPROVE_RM','R_RM','RES_WF_APPROVE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('RR_RM_WF_CANCEL','R_RM','RES_WF_CANCEL','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_CLAIM_BM','R_BRANCH_MGR','RES_WF_CLAIM','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_CLAIM_CA','R_CREDIT_APPROVER','RES_WF_CLAIM','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_CLAIM_CD','R_CORP_DEPT','RES_WF_CLAIM','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_CLAIM_CR','R_CREDIT_REVIEWER','RES_WF_CLAIM','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_CLAIM_RM','R_RM','RES_WF_CLAIM','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DETAIL_BM','R_BRANCH_MGR','RES_WF_DETAIL','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DETAIL_CA','R_CREDIT_APPROVER','RES_WF_DETAIL','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DETAIL_CD','R_CORP_DEPT','RES_WF_DETAIL','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DETAIL_CR','R_CREDIT_REVIEWER','RES_WF_DETAIL','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DETAIL_RM','R_RM','RES_WF_DETAIL','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DONE_BM','R_BRANCH_MGR','RES_WF_DONE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DONE_CA','R_CREDIT_APPROVER','RES_WF_DONE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DONE_CD','R_CORP_DEPT','RES_WF_DONE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DONE_CR','R_CREDIT_REVIEWER','RES_WF_DONE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_DONE_RM','R_RM','RES_WF_DONE','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_REJECT_BM','R_BRANCH_MGR','RES_WF_REJECT','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_REJECT_CA','R_CREDIT_APPROVER','RES_WF_REJECT','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_REJECT_CD','R_CORP_DEPT','RES_WF_REJECT','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_REJECT_CR','R_CREDIT_REVIEWER','RES_WF_REJECT','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_REJECT_RM','R_RM','RES_WF_REJECT','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('RR_RM_WF_SUBMIT','R_RM','RES_WF_SUBMIT','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TODO_BM','R_BRANCH_MGR','RES_WF_TODO','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TODO_CA','R_CREDIT_APPROVER','RES_WF_TODO','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TODO_CD','R_CORP_DEPT','RES_WF_TODO','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TODO_CR','R_CREDIT_REVIEWER','RES_WF_TODO','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TODO_RM','R_RM','RES_WF_TODO','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TRANSFER_BM','R_BRANCH_MGR','RES_WF_TRANSFER','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TRANSFER_CA','R_CREDIT_APPROVER','RES_WF_TRANSFER','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TRANSFER_CD','R_CORP_DEPT','RES_WF_TRANSFER','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TRANSFER_CR','R_CREDIT_REVIEWER','RES_WF_TRANSFER','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('FER_WF_TRANSFER_RM','R_RM','RES_WF_TRANSFER','PLATFORM','2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_ALLOC_CUR','R_ADMIN','P_PERF_ALLOC_CUR','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_ALLOC_HIS','R_ADMIN','P_PERF_ALLOC_HIS','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_ALLOC_SUM','R_ADMIN','P_PERF_ALLOC_SUM','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_ADD','R_ADMIN','P_PERF_KPI_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_DEL','R_ADMIN','P_PERF_KPI_DEL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_GET','R_ADMIN','P_PERF_KPI_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_IADD','R_ADMIN','P_PERF_KPI_IADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_IDEL','R_ADMIN','P_PERF_KPI_IDEL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_IUPD','R_ADMIN','P_PERF_KPI_IUPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_LIST','R_ADMIN','P_PERF_KPI_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_PUB','R_ADMIN','P_PERF_KPI_PUB','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_KPI_UPD','R_ADMIN','P_PERF_KPI_UPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_ADD','R_ADMIN','P_PERF_METRIC_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_DEL','R_ADMIN','P_PERF_METRIC_DEL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_GET','R_ADMIN','P_PERF_METRIC_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_LIST','R_ADMIN','P_PERF_METRIC_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_RBY','R_ADMIN','P_PERF_METRIC_RBY','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_REFS','R_ADMIN','P_PERF_METRIC_REFS','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_SLOT','R_ADMIN','P_PERF_METRIC_SLOT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_SREL','R_ADMIN','P_PERF_METRIC_SREL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_STAT','R_ADMIN','P_PERF_METRIC_STAT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_METRIC_UPD','R_ADMIN','P_PERF_METRIC_UPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_RT_GET','R_ADMIN','P_PERF_RT_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_RT_LIST','R_ADMIN','P_PERF_RT_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_SC_GET','R_ADMIN','P_PERF_SC_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_SC_HIS','R_ADMIN','P_PERF_SC_HIS','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_SC_INIT','R_ADMIN','P_PERF_SC_INIT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_SC_SW','R_ADMIN','P_PERF_SC_SW','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_TGT_P_ADD','R_ADMIN','P_PERF_TGT_P_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_TGT_P_GET','R_ADMIN','P_PERF_TGT_P_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_TGT_P_LIST','R_ADMIN','P_PERF_TGT_P_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_TGT_P_UPD','R_ADMIN','P_PERF_TGT_P_UPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_TGT_V_ADD','R_ADMIN','P_PERF_TGT_V_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_TGT_V_BAT','R_ADMIN','P_PERF_TGT_V_BAT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_ADMIN_P_PERF_TGT_V_LIST','R_ADMIN','P_PERF_TGT_V_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_ALLOC_CUR','R_BACK_TECH','P_PERF_ALLOC_CUR','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_ALLOC_HIS','R_BACK_TECH','P_PERF_ALLOC_HIS','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_ALLOC_SUM','R_BACK_TECH','P_PERF_ALLOC_SUM','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_ADD','R_BACK_TECH','P_PERF_KPI_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_DEL','R_BACK_TECH','P_PERF_KPI_DEL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_GET','R_BACK_TECH','P_PERF_KPI_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_IADD','R_BACK_TECH','P_PERF_KPI_IADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_IDEL','R_BACK_TECH','P_PERF_KPI_IDEL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_IUPD','R_BACK_TECH','P_PERF_KPI_IUPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_LIST','R_BACK_TECH','P_PERF_KPI_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_PUB','R_BACK_TECH','P_PERF_KPI_PUB','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_KPI_UPD','R_BACK_TECH','P_PERF_KPI_UPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_ADD','R_BACK_TECH','P_PERF_METRIC_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_DEL','R_BACK_TECH','P_PERF_METRIC_DEL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_GET','R_BACK_TECH','P_PERF_METRIC_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_LIST','R_BACK_TECH','P_PERF_METRIC_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_RBY','R_BACK_TECH','P_PERF_METRIC_RBY','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_REFS','R_BACK_TECH','P_PERF_METRIC_REFS','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_SLOT','R_BACK_TECH','P_PERF_METRIC_SLOT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_SREL','R_BACK_TECH','P_PERF_METRIC_SREL','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_STAT','R_BACK_TECH','P_PERF_METRIC_STAT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_METRIC_UPD','R_BACK_TECH','P_PERF_METRIC_UPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_RT_GET','R_BACK_TECH','P_PERF_RT_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_RT_LIST','R_BACK_TECH','P_PERF_RT_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_SC_GET','R_BACK_TECH','P_PERF_SC_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_SC_HIS','R_BACK_TECH','P_PERF_SC_HIS','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_SC_INIT','R_BACK_TECH','P_PERF_SC_INIT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_SC_SW','R_BACK_TECH','P_PERF_SC_SW','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_TGT_P_ADD','R_BACK_TECH','P_PERF_TGT_P_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_TGT_P_GET','R_BACK_TECH','P_PERF_TGT_P_GET','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_TGT_P_LIST','R_BACK_TECH','P_PERF_TGT_P_LIST','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_TGT_P_UPD','R_BACK_TECH','P_PERF_TGT_P_UPD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_TGT_V_ADD','R_BACK_TECH','P_PERF_TGT_V_ADD','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_TGT_V_BAT','R_BACK_TECH','P_PERF_TGT_V_BAT','PERF','2026-04-16 15:05:56');
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES ('R_BACK_TECH_P_PERF_TGT_V_LIST','R_BACK_TECH','P_PERF_TGT_V_LIST','PERF','2026-04-16 15:05:56');
+
+-- =========================================================
+-- 5) PT_ROLE_BIZ_SCOPE 角色-BizType-数据范围（当前 onepl 实际 83 行）
+-- 各角色范围数：
+--   R_ADMIN 18 / R_RM 13 / R_BRANCH_MGR 11 / R_CORP_DEPT 8 / R_RETAIL_DEPT 8
+--   R_BACK_FINANCE / R_BACK_TECH / R_PRESIDENT / R_SUPPORT_SEC 各 4
+--   R_CREDIT_APPROVER / R_CREDIT_REVIEWER / R_SUPPORT_STAFF 各 3
+-- 顺序：按 ID 字典序（mysqldump 输出）
+-- =========================================================
+
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('b6d4ea5b396211f1a12bc84d4421b4d8','R_BACK_TECH','PERF_CONFIG','ALL',0,'2026-04-16 15:05:56','seed','2026-04-16 15:05:56',NULL,'perf v1.0 - full access');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d79564de349011f191754c496c37265b','R_BACK_FINANCE','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d795651b349011f191754c496c37265b','R_BRANCH_MGR','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d7956528349011f191754c496c37265b','R_CORP_DEPT','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d7956536349011f191754c496c37265b','R_CREDIT_APPROVER','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d7956542349011f191754c496c37265b','R_CREDIT_REVIEWER','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d795654e349011f191754c496c37265b','R_PRESIDENT','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d795655b349011f191754c496c37265b','R_RETAIL_DEPT','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d7956566349011f191754c496c37265b','R_RM','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d7956574349011f191754c496c37265b','R_SUPPORT_SEC','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('d795657f349011f191754c496c37265b','R_SUPPORT_STAFF','SYS_CONFIG','SELF',0,'2026-04-10 11:53:32','seed','2026-04-10 11:53:32',NULL,'auto-fill for current-user/check-permission endpoints');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('da68abe1348b11f191754c496c37265b','R_ADMIN','ORG','ALL',0,'2026-04-10 11:17:49','seed','2026-04-10 11:17:49',NULL,'v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('FER_SCOPE_BM_LOAN','R_BRANCH_MGR','LOAN','ORG',0,'2026-04-25 16:01:33','flowable-real-env','2026-04-25 16:01:33','flowable-real-env','flowable real env scope');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_ADDRBOOK','R_ADMIN','ADDRBOOK','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_CLAIM','R_ADMIN','CLAIM','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_CUSTOMER','R_ADMIN','CUSTOMER','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_CUSTOMER_POOL','R_ADMIN','CUSTOMER_POOL','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_DOC','R_ADMIN','DOC','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_LEAD','R_ADMIN','LEAD','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_LOAN','R_ADMIN','LOAN','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_NAV','R_ADMIN','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_PERF_CONFIG','R_ADMIN','PERF_CONFIG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-16 15:05:56','seed','perf v1.0 - full access');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_PRODUCT','R_ADMIN','PRODUCT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_REPORT','R_ADMIN','REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_SUPPORT','R_ADMIN','SUPPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_SUPPORT_DEPT','R_ADMIN','SUPPORT_DEPT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_SYS_CONFIG','R_ADMIN','SYS_CONFIG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_TAG','R_ADMIN','TAG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_TOUCH_REPORT','R_ADMIN','TOUCH_REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_ADMIN_TOUCH_TASK','R_ADMIN','TOUCH_TASK','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BF_NAV','R_BACK_FINANCE','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BF_PERF_CONFIG','R_BACK_FINANCE','PERF_CONFIG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BF_REPORT','R_BACK_FINANCE','REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_ADDRBOOK','R_BRANCH_MGR','ADDRBOOK','ALL',0,'2026-04-03 22:43:46','seed','2026-04-03 22:43:46',NULL,'V1 seed');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_CUSTOMER','R_BRANCH_MGR','CUSTOMER','ORG_SUBTREE',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_DOC','R_BRANCH_MGR','DOC','ALL',0,'2026-04-03 22:43:46','seed','2026-04-03 22:43:46',NULL,'V1 seed');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_LEAD','R_BRANCH_MGR','LEAD','ORG_SUBTREE',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_NAV','R_BRANCH_MGR','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_PRODUCT','R_BRANCH_MGR','PRODUCT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-03 22:43:46',NULL,'V1 seed');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_REPORT','R_BRANCH_MGR','REPORT','ORG_SUBTREE',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_SUPPORT','R_BRANCH_MGR','SUPPORT','ORG_SUBTREE',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BM_TOUCH_REPORT','R_BRANCH_MGR','TOUCH_REPORT','ORG_SUBTREE',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BRANCH_PRE_TAG','R_PRESIDENT','TAG','ALL',0,NULL,NULL,NULL,NULL,NULL);
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BT_DOC','R_BACK_TECH','DOC','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BT_NAV','R_BACK_TECH','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_BT_SYS_CONFIG','R_BACK_TECH','SYS_CONFIG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CAP_LOAN','R_CREDIT_APPROVER','LOAN','ALL',0,'2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env scope');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CAP_NAV','R_CREDIT_APPROVER','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CD_CUSTOMER','R_CORP_DEPT','CUSTOMER','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CD_LEAD','R_CORP_DEPT','LEAD','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CD_LOAN','R_CORP_DEPT','LOAN','ALL',0,'2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env scope');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CD_NAV','R_CORP_DEPT','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CD_REPORT','R_CORP_DEPT','REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CD_TAG','R_CORP_DEPT','TAG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CD_TOUCH_REPORT','R_CORP_DEPT','TOUCH_REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CRV_LOAN','R_CREDIT_REVIEWER','LOAN','ALL',0,'2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env scope');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_CRV_NAV','R_CREDIT_REVIEWER','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_PR_NAV','R_PRESIDENT','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_PR_REPORT','R_PRESIDENT','REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RD_CUSTOMER','R_RETAIL_DEPT','CUSTOMER','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RD_LEAD','R_RETAIL_DEPT','LEAD','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RD_LOAN','R_RETAIL_DEPT','LOAN','WORKFLOW_PARTICIPANT',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RD_NAV','R_RETAIL_DEPT','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RD_REPORT','R_RETAIL_DEPT','REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RD_TAG','R_RETAIL_DEPT','TAG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RD_TOUCH_REPORT','R_RETAIL_DEPT','TOUCH_REPORT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_ADDRBOOK','R_RM','ADDRBOOK','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_CLAIM','R_RM','CLAIM','ORG',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_CUSTOMER_POOL','R_RM','CUSTOMER_POOL','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_DOC','R_RM','DOC','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_LEAD','R_RM','LEAD','SELF_CREATED',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_LOAN','R_RM','LOAN','SELF_CREATED',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_NAV','R_RM','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_PRODUCT','R_RM','PRODUCT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_REPORT','R_RM','REPORT','SELF',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_SUPPORT','R_RM','SUPPORT','SELF_CREATED',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_TAG','R_RM','TAG','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_RM_TOUCH_TASK','R_RM','TOUCH_TASK','SELF_ASSIGNED',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_SF_NAV','R_SUPPORT_STAFF','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_SF_SUPPORT_DEPT','R_SUPPORT_STAFF','SUPPORT_DEPT','SELF_ASSIGNED',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_SS_NAV','R_SUPPORT_SEC','NAV','ALL',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_SS_PRODUCT','R_SUPPORT_SEC','PRODUCT','ALL',0,'2026-04-03 22:43:46','seed','2026-04-03 22:43:46',NULL,'V1 seed');
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('S_SS_SUPPORT_DEPT','R_SUPPORT_SEC','SUPPORT_DEPT','ORG',0,'2026-04-03 22:43:46','seed','2026-04-10 11:17:49','seed','v1');
+
+-- =========================================================
+-- 6) PT_USER 用户种子数据（当前 onepl 实际 15 行）
+-- 含 admin / user001 / user002（设计期）+ E10001-E60002（10 个业务测试账户）
+--   + E90001（无工作流权限测试账户）
+-- 密码均为 123456，BCrypt hash 见各行 PWD 列
+-- 顺序：按 USER_ID 字典序（mysqldump 输出）
+-- =========================================================
+
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('admin','admin','系统管理员','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m','admin@test.com',0,0,0,0,'2026-04-07 15:49:20',NULL,'2026-04-10 11:25:23',NULL,NULL,NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E10001','rm_zhang','张客户经理','$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy','rm_zhang@test.com',0,0,0,0,'2026-04-25 16:01:33','flowable-real-env','2026-04-25 16:01:33','flowable-real-env','flowable real env test user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E10002','rm_li','李四(客户经理)','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m',NULL,0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-10 11:25:23',NULL,'test-user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E20001','branch_wang','王分行负责人','$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy','branch_wang@test.com',0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env test user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E30001','corp_zhao','赵公司部审核','$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy','corp_zhao@test.com',0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env test user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E30002','retail_sun','孙七(零售部)','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m',NULL,0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-10 11:25:23',NULL,'test-user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E40001','finance_zhou','周八(资财)','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m',NULL,0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-10 11:25:23',NULL,'test-user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E40002','tech_wu','吴九(科技)','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m',NULL,0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-10 11:25:23',NULL,'test-user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E50001','sec_zheng','郑十(中场秘书)','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m',NULL,0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-10 11:25:23',NULL,'test-user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E50002','staff_qian','钱十一(中场人员)','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m',NULL,0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-10 11:25:23',NULL,'test-user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E60001','reviewer_chen','陈授信审查','$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy','reviewer_chen@test.com',0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env test user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E60002','approver_he','何授信批复','$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy','approver_he@test.com',0,0,0,0,'2026-04-10 11:17:49','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env test user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('E90001','no_workflow_user','无工作流权限用户','$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy','no_workflow@test.com',0,0,0,0,'2026-04-25 16:01:33','flowable-real-env','2026-04-25 16:01:33','flowable-real-env','flowable real env test user',NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('user001','user001','张三','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m','zhangsan@test.com',0,0,0,0,'2026-04-07 15:49:20',NULL,'2026-04-10 11:25:23',NULL,NULL,NULL);
+INSERT IGNORE INTO PT_USER (`USER_ID`, `USERNAME`, `USERCHNNAME`, `PWD`, `EMAIL`, `ISEXPIRED`, `ISLOCKED`, `PASS_WRONG_COUNT`, `ISENABLED`, `CREATE_TIME`, `CREATE_AUTHOR`, `UPDATE_TIME`, `UPDATE_AUTHOR`, `REMARK`, `PWD_UPDATE_TIME`) VALUES ('user002','user002','李四','$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m','lisi@test.com',0,0,0,0,'2026-04-07 15:49:20',NULL,'2026-04-10 11:25:23',NULL,NULL,NULL);
+
+-- =========================================================
+-- 7) PT_USER_ROLE 用户-角色绑定（当前 onepl 实际 14 行）
+-- 顺序：按 (USER_ID, ROLE_ID) 字典序（mysqldump 输出）
+-- =========================================================
+
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('admin','R_ADMIN',1,0,0,'2026-04-07 19:20:37');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E10001','R_RM',1,0,0,'2026-04-25 16:01:33');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E10002','R_RM',0,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E20001','R_BRANCH_MGR',1,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E30001','R_CORP_DEPT',1,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E30002','R_RETAIL_DEPT',0,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E40001','R_BACK_FINANCE',0,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E40002','R_BACK_TECH',0,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E50001','R_SUPPORT_SEC',0,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E50002','R_SUPPORT_STAFF',0,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E60001','R_CREDIT_REVIEWER',1,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('E60002','R_CREDIT_APPROVER',1,0,0,'2026-04-10 11:17:49');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('user001','R_RM',1,0,0,'2026-04-07 19:20:37');
+INSERT IGNORE INTO PT_USER_ROLE (`USER_ID`, `ROLE_ID`, `DEFAULT_ASSIGN`, `INHERIT_ASSIGN`, `GROUP_ASSING`, `CREATE_TIME`) VALUES ('user002','R_PRESIDENT',1,0,0,'2026-04-07 19:20:37');
+
+-- =========================================================
+-- 8) EXT_USER_ORG 用户-机构绑定（当前 onepl 实际 15 行）
+-- 顺序：按 USER_ID 字典序（mysqldump 输出）
+-- =========================================================
+
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('admin','HQ','2026-04-07 15:49:38');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E10001','BJ_CY','2026-04-25 16:01:33');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E10002','SH_PD','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E20001','BJ_CY','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E30001','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E30002','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E40001','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E40002','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E50001','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E50002','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E60001','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E60002','HQ','2026-04-10 11:17:49');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('E90001','HQ','2026-04-25 16:01:33');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('user001','BJ_CY','2026-04-07 15:49:38');
+INSERT IGNORE INTO EXT_USER_ORG (`USER_ID`, `ORG_CODE`, `CREATE_TIME`) VALUES ('user002','SH_PD','2026-04-07 15:49:38');
+
+-- =========================================================
+-- 9) EXT_ORG_INFO 机构信息（当前 onepl 实际 5 行）
+-- HQ 总行 → BJ/SH 二级分行 → BJ_CY/SH_PD 三级支行
+-- 顺序：按 ID 字典序（mysqldump 输出）
+-- =========================================================
+
+INSERT IGNORE INTO EXT_ORG_INFO (`ID`, `ORG_CODE`, `ORG_NAME`, `ORG_LEVEL`, `P_ID`, `ORGAN_STATE`, `ADM_DIVISION_CODE`, `ADM_DIVISION_NAME`, `CREATE_TIME`, `CREATE_USER`) VALUES (1,'HQ','总行',1,NULL,0,NULL,NULL,'2026-04-07 15:49:38',NULL);
+INSERT IGNORE INTO EXT_ORG_INFO (`ID`, `ORG_CODE`, `ORG_NAME`, `ORG_LEVEL`, `P_ID`, `ORGAN_STATE`, `ADM_DIVISION_CODE`, `ADM_DIVISION_NAME`, `CREATE_TIME`, `CREATE_USER`) VALUES (2,'BJ','北京分行',2,'HQ',0,NULL,NULL,'2026-04-07 15:49:38',NULL);
+INSERT IGNORE INTO EXT_ORG_INFO (`ID`, `ORG_CODE`, `ORG_NAME`, `ORG_LEVEL`, `P_ID`, `ORGAN_STATE`, `ADM_DIVISION_CODE`, `ADM_DIVISION_NAME`, `CREATE_TIME`, `CREATE_USER`) VALUES (3,'SH','上海分行',2,'HQ',0,NULL,NULL,'2026-04-07 15:49:38',NULL);
+INSERT IGNORE INTO EXT_ORG_INFO (`ID`, `ORG_CODE`, `ORG_NAME`, `ORG_LEVEL`, `P_ID`, `ORGAN_STATE`, `ADM_DIVISION_CODE`, `ADM_DIVISION_NAME`, `CREATE_TIME`, `CREATE_USER`) VALUES (4,'BJ_CY','北京分行朝阳支行',3,'BJ',0,NULL,NULL,'2026-04-07 15:49:38',NULL);
+INSERT IGNORE INTO EXT_ORG_INFO (`ID`, `ORG_CODE`, `ORG_NAME`, `ORG_LEVEL`, `P_ID`, `ORGAN_STATE`, `ADM_DIVISION_CODE`, `ADM_DIVISION_NAME`, `CREATE_TIME`, `CREATE_USER`) VALUES (5,'SH_PD','上海分行浦东支行',3,'SH',0,NULL,NULL,'2026-04-07 15:49:38',NULL);
+
+
+
+-- =========================================================
+-- 10) 其他模块初始数据
 -- =========================================================
 
 -- ---------------------------------------------------------
--- 5.1 系统管理员（R_ADMIN）: 所有 BizType = ALL
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_ADMIN_NAV',          'R_ADMIN', 'NAV',           'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_ADDRBOOK',     'R_ADMIN', 'ADDRBOOK',      'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_PRODUCT',      'R_ADMIN', 'PRODUCT',       'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_DOC',          'R_ADMIN', 'DOC',           'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_TAG',          'R_ADMIN', 'TAG',           'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_LEAD',         'R_ADMIN', 'LEAD',          'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_CUSTOMER',     'R_ADMIN', 'CUSTOMER',      'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_CUSTOMER_POOL','R_ADMIN', 'CUSTOMER_POOL', 'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_CLAIM',        'R_ADMIN', 'CLAIM',         'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_TOUCH_TASK',   'R_ADMIN', 'TOUCH_TASK',    'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_TOUCH_REPORT', 'R_ADMIN', 'TOUCH_REPORT',  'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_LOAN',         'R_ADMIN', 'LOAN',          'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_SUPPORT',      'R_ADMIN', 'SUPPORT',       'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_SUPPORT_DEPT', 'R_ADMIN', 'SUPPORT_DEPT',  'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_REPORT',       'R_ADMIN', 'REPORT',        'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_PERF_CONFIG',  'R_ADMIN', 'PERF_CONFIG',   'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_ADMIN_SYS_CONFIG',   'R_ADMIN', 'SYS_CONFIG',    'ALL', 0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.2 客户经理（R_RM）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_RM_ADDRBOOK',      'R_RM', 'ADDRBOOK',      'ALL',           0, NOW(), 'seed', 'V1 seed'),
-('S_RM_PRODUCT',       'R_RM', 'PRODUCT',       'ALL',           0, NOW(), 'seed', 'V1 seed'),
-('S_RM_DOC',           'R_RM', 'DOC',           'ALL',           0, NOW(), 'seed', 'V1 seed'),
-('S_RM_TAG',           'R_RM', 'TAG',           'ALL',           0, NOW(), 'seed', 'V1 seed'),
-('S_RM_LEAD',          'R_RM', 'LEAD',          'SELF_CREATED',  0, NOW(), 'seed', 'V1 seed'),
-('S_RM_CUSTOMER_POOL', 'R_RM', 'CUSTOMER_POOL', 'ALL',           0, NOW(), 'seed', 'V1 seed'),
-('S_RM_CLAIM',         'R_RM', 'CLAIM',         'ORG',           0, NOW(), 'seed', 'V1 seed'),
-('S_RM_TOUCH_TASK',    'R_RM', 'TOUCH_TASK',    'SELF_ASSIGNED', 0, NOW(), 'seed', 'V1 seed'),
-('S_RM_LOAN',          'R_RM', 'LOAN',          'SELF_CREATED',  0, NOW(), 'seed', 'V1 seed'),
-('S_RM_SUPPORT',       'R_RM', 'SUPPORT',       'SELF_CREATED',  0, NOW(), 'seed', 'V1 seed'),
-('S_RM_REPORT',        'R_RM', 'REPORT',        'SELF',          0, NOW(), 'seed', 'V1 seed'),
-('S_RM_NAV',           'R_RM', 'NAV',           'ALL',           0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.3 经营机构负责人（R_BRANCH_MGR）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_BM_LEAD',         'R_BRANCH_MGR', 'LEAD',         'ORG_SUBTREE', 0, NOW(), 'seed', 'V1 seed'),
-('S_BM_CUSTOMER',     'R_BRANCH_MGR', 'CUSTOMER',     'ORG_SUBTREE', 0, NOW(), 'seed', 'V1 seed'),
-('S_BM_TOUCH_REPORT', 'R_BRANCH_MGR', 'TOUCH_REPORT', 'ORG_SUBTREE', 0, NOW(), 'seed', 'V1 seed'),
-('S_BM_SUPPORT',      'R_BRANCH_MGR', 'SUPPORT',      'ORG_SUBTREE', 0, NOW(), 'seed', 'V1 seed'),
-('S_BM_REPORT',       'R_BRANCH_MGR', 'REPORT',       'ORG_SUBTREE', 0, NOW(), 'seed', 'V1 seed'),
-('S_BM_NAV',          'R_BRANCH_MGR', 'NAV',          'ALL',         0, NOW(), 'seed', 'V1 seed'),
-('S_BM_ADDRBOOK',     'R_BRANCH_MGR', 'ADDRBOOK',     'ALL',         0, NOW(), 'seed', 'V1 seed'),
-('S_BM_PRODUCT',      'R_BRANCH_MGR', 'PRODUCT',      'ALL',         0, NOW(), 'seed', 'V1 seed'),
-('S_BM_DOC',          'R_BRANCH_MGR', 'DOC',          'ALL',         0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.4 公司部人员（R_CORP_DEPT）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_CD_TAG',          'R_CORP_DEPT', 'TAG',           'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_CD_LEAD',         'R_CORP_DEPT', 'LEAD',          'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_CD_CUSTOMER',     'R_CORP_DEPT', 'CUSTOMER',      'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_CD_TOUCH_REPORT', 'R_CORP_DEPT', 'TOUCH_REPORT',  'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_CD_LOAN',         'R_CORP_DEPT', 'LOAN',          'WORKFLOW_PARTICIPANT',   0, NOW(), 'seed', 'V1 seed'),
-('S_CD_REPORT',       'R_CORP_DEPT', 'REPORT',        'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_CD_NAV',          'R_CORP_DEPT', 'NAV',           'ALL',                   0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.5 零售部人员（R_RETAIL_DEPT）: 与公司部相同
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_RD_TAG',          'R_RETAIL_DEPT', 'TAG',           'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_RD_LEAD',         'R_RETAIL_DEPT', 'LEAD',          'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_RD_CUSTOMER',     'R_RETAIL_DEPT', 'CUSTOMER',      'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_RD_TOUCH_REPORT', 'R_RETAIL_DEPT', 'TOUCH_REPORT',  'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_RD_LOAN',         'R_RETAIL_DEPT', 'LOAN',          'WORKFLOW_PARTICIPANT',   0, NOW(), 'seed', 'V1 seed'),
-('S_RD_REPORT',       'R_RETAIL_DEPT', 'REPORT',        'ALL',                   0, NOW(), 'seed', 'V1 seed'),
-('S_RD_NAV',          'R_RETAIL_DEPT', 'NAV',           'ALL',                   0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.6 中后台员工-资财（R_BACK_FINANCE）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_BF_PERF_CONFIG', 'R_BACK_FINANCE', 'PERF_CONFIG', 'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_BF_REPORT',      'R_BACK_FINANCE', 'REPORT',      'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_BF_NAV',         'R_BACK_FINANCE', 'NAV',         'ALL', 0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.7 中后台员工-科技（R_BACK_TECH）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_BT_NAV',        'R_BACK_TECH', 'NAV',        'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_BT_DOC',        'R_BACK_TECH', 'DOC',        'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_BT_SYS_CONFIG', 'R_BACK_TECH', 'SYS_CONFIG', 'ALL', 0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.8 中场支持部门秘书（R_SUPPORT_SEC）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_SS_SUPPORT_DEPT', 'R_SUPPORT_SEC', 'SUPPORT_DEPT', 'ORG',  0, NOW(), 'seed', 'V1 seed'),
-('S_SS_PRODUCT',      'R_SUPPORT_SEC', 'PRODUCT',      'ALL',  0, NOW(), 'seed', 'V1 seed'),
-('S_SS_NAV',          'R_SUPPORT_SEC', 'NAV',          'ALL',  0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.9 中场支持部门人员（R_SUPPORT_STAFF）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_SF_SUPPORT_DEPT', 'R_SUPPORT_STAFF', 'SUPPORT_DEPT', 'SELF_ASSIGNED', 0, NOW(), 'seed', 'V1 seed'),
-('S_SF_NAV',          'R_SUPPORT_STAFF', 'NAV',          'ALL',           0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.10 授信审查人员（R_CREDIT_REVIEWER）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_CRV_LOAN', 'R_CREDIT_REVIEWER', 'LOAN', 'WORKFLOW_PARTICIPANT', 0, NOW(), 'seed', 'V1 seed'),
-('S_CRV_NAV',  'R_CREDIT_REVIEWER', 'NAV',  'ALL',                 0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.11 授信批复人员（R_CREDIT_APPROVER）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_CAP_LOAN', 'R_CREDIT_APPROVER', 'LOAN', 'WORKFLOW_PARTICIPANT', 0, NOW(), 'seed', 'V1 seed'),
-('S_CAP_NAV',  'R_CREDIT_APPROVER', 'NAV',  'ALL',                 0, NOW(), 'seed', 'V1 seed');
-
--- ---------------------------------------------------------
--- 5.12 分行行长（R_PRESIDENT）
--- ---------------------------------------------------------
-INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
-VALUES
-('S_PR_REPORT', 'R_PRESIDENT', 'REPORT', 'ALL', 0, NOW(), 'seed', 'V1 seed'),
-('S_PR_NAV',    'R_PRESIDENT', 'NAV',    'ALL', 0, NOW(), 'seed', 'V1 seed');
-
-
--- =========================================================
--- 6) 其他模块初始数据
--- =========================================================
-
--- ---------------------------------------------------------
--- 6.1 sys_control 初始维度（绩效引擎）
+-- 10.1 sys_control 初始维度（绩效引擎）
 -- ---------------------------------------------------------
 INSERT IGNORE INTO sys_control (id, scope_dim, latest_data_date, current_version, is_valid)
 VALUES
@@ -1161,7 +1391,7 @@ VALUES
 ('SC_INIT_CUST', 'CUST', '1970-01-01', NULL, 0);
 
 -- ---------------------------------------------------------
--- 6.2 sys_config_kv 推荐配置（系统治理中心）
+-- 10.2 sys_config_kv 推荐配置（系统治理中心）
 -- ---------------------------------------------------------
 INSERT IGNORE INTO sys_config_kv (id, config_key, config_value, value_type, status, remark, created_by)
 VALUES
@@ -1172,7 +1402,7 @@ VALUES
 ('CFG_AUDIT_EXPORT_MAX_ROWS',     'AUDIT_EXPORT_MAX_ROWS',     '200000',                      'NUMBER', 'ACTIVE', '审计导出最大行数',    'seed');
 
 -- ---------------------------------------------------------
--- 6.3 网址导航初始数据
+-- 10.3 网址导航初始数据
 -- ---------------------------------------------------------
 INSERT IGNORE INTO portal_nav (id, nav_name, nav_url, nav_icon, nav_category, sort_order, status, created_by)
 VALUES
@@ -1183,7 +1413,7 @@ VALUES
 ('NAV005', 'OA系统',        'https://oa.bank.com',     'icon-oa',     '办公系统', 5, 'ACTIVE', 'SYSTEM');
 
 -- ---------------------------------------------------------
--- 6.4 产品资料初始数据（联调最小集）
+-- 10.4 产品资料初始数据（联调最小集）
 -- ---------------------------------------------------------
 INSERT IGNORE INTO product_info (id, product_code, product_name, product_category, description, status, created_by, deleted)
 VALUES
@@ -1193,7 +1423,7 @@ VALUES
 ('PROD004', 'CORP_LOAN',       '公司-流动资金贷款',   '公司银行', '流动资金贷款产品',     'ACTIVE', 'SYSTEM', 0);
 
 -- ---------------------------------------------------------
--- 6.5 工作日历样例数据（2026年节假日示例）
+-- 10.5 工作日历样例数据（2026年节假日示例）
 -- ---------------------------------------------------------
 INSERT IGNORE INTO sys_calendar_day (day, is_workday, remark, created_by)
 VALUES
@@ -1212,9 +1442,9 @@ VALUES
 ('2026-10-07', 0, '国庆节假期', 'seed');
 
 -- ============================================================================
--- 7. PT_ROLE 旧数据清理（解决 R001/R002/R003/R_ADMIN 等重复）
+-- 11. PT_ROLE 旧数据清理（解决 R001/R002/R003/R_ADMIN 等重复）
 -- ============================================================================
--- 7.1 修复审计日志资源 URL（旧路径 /api/sys/audits -> 新路径 /api/admin/audit-logs）
+-- 11.1 修复审计日志资源 URL（旧路径 /api/sys/audits -> 新路径 /api/admin/audit-logs）
 UPDATE PT_RESOURCE SET RESOURCE_URL = '/api/admin/audit-logs', UPDATE_TIME = NOW(), UPDATE_USER = 'seed'
 WHERE RESOURCE_ID IN ('RES_SYS_AUDIT_LIST', 'RES_SYS_AUDIT_DETAIL')
   AND RESOURCE_URL = '/api/sys/audits';
@@ -1222,33 +1452,33 @@ UPDATE PT_RESOURCE SET RESOURCE_URL = '/api/admin/audit-logs/export', UPDATE_TIM
 WHERE RESOURCE_ID = 'RES_SYS_AUDIT_EXPORT'
   AND RESOURCE_URL = '/api/sys/audits/export';
 
--- 7.2 V1 规范角色 ID 集合（保留）
--- R_SYS_ADMIN, R_BRANCH_PRESIDENT, R_BRANCH_MGR, R_CORP_DEPT, R_RETAIL_DEPT,
+-- 11.2 V1 规范角色 ID 集合（保留）
+-- R_ADMIN, R_RM, R_BRANCH_MGR, R_CORP_DEPT, R_RETAIL_DEPT,
 -- R_BACK_FINANCE, R_BACK_TECH, R_SUPPORT_SEC, R_SUPPORT_STAFF,
--- R_CREDIT_REVIEWER, R_CREDIT_APPROVER, R_TAG_ADMIN
+-- R_CREDIT_REVIEWER, R_CREDIT_APPROVER, R_PRESIDENT
 -- 以上之外的 ROLE_ID 均视为旧数据，予以清理
 DELETE FROM PT_ROLE WHERE ROLE_ID NOT IN (
-    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_ADMIN', 'R_RM', 'R_BRANCH_MGR', 'R_CORP_DEPT',
     'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
-    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_PRESIDENT'
 );
 -- 清理关联的角色-资源数据（旧角色）
 DELETE FROM PT_ROLE_RESOURCE WHERE ROLE_ID NOT IN (
-    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_ADMIN', 'R_RM', 'R_BRANCH_MGR', 'R_CORP_DEPT',
     'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
-    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_PRESIDENT'
 );
 -- 清理关联的用户-角色数据（旧角色）
 DELETE FROM PT_USER_ROLE WHERE ROLE_ID NOT IN (
-    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_ADMIN', 'R_RM', 'R_BRANCH_MGR', 'R_CORP_DEPT',
     'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
-    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_PRESIDENT'
 );
 -- 清理关联的角色-BizScope数据（旧角色）
 DELETE FROM PT_ROLE_BIZ_SCOPE WHERE ROLE_ID NOT IN (
-    'R_SYS_ADMIN', 'R_BRANCH_PRESIDENT', 'R_BRANCH_MGR', 'R_CORP_DEPT',
+    'R_ADMIN', 'R_RM', 'R_BRANCH_MGR', 'R_CORP_DEPT',
     'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
-    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_TAG_ADMIN'
+    'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_PRESIDENT'
 );
 
 -- ============================================================================

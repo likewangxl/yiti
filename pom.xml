@@ -204,11 +204,16 @@
                 <version>3.2.5</version>
                 <configuration>
                     <!--
-                        启用 JDK 17+ 的 Dynamic Agent Loading，满足 Mockito 5.x 的 inline mock maker
-                        对 self-attach 的要求。缺此项会在 JDK 17.0.18 + Windows 等环境出现
-                        "Could not self-attach to current VM using external process" 错误。
+                        argLine 含两项：
+                        1. -XX:+EnableDynamicAgentLoading：启用 JDK 17+ Dynamic Agent Loading，满足
+                           Mockito 5.x inline mock maker 的 self-attach 需求。缺此项会在 JDK 17.0.18 +
+                           Windows 出现 "Could not self-attach to current VM using external process"。
+                        2. -Dfile.encoding=UTF-8：强制 JVM 文件编码为 UTF-8。Windows JVM 默认
+                           file.encoding=GBK，会导致 @Sql 注解加载 UTF-8 sql 文件时按 GBK 解码，中文
+                           写入 H2 乱码（V1.6 audit 整改 commit c65a290 暴露此问题，原 hack 是局部加
+                           @SqlConfig(encoding="UTF-8")，本配置改为全局根治）。
                     -->
-                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <argLine>-XX:+EnableDynamicAgentLoading -Dfile.encoding=UTF-8</argLine>
                     <!--
                         V1.3 Task R0.3：分层 Test / IT 执行。
                         - surefire 负责 *Test.java / *Tests.java（单元测试）→ `mvn test` 阶段执行
@@ -245,7 +250,8 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <!-- 与 surefire 同步：Mockito JDK 17+ + UTF-8 全局编码 -->
+                    <argLine>-XX:+EnableDynamicAgentLoading -Dfile.encoding=UTF-8</argLine>
                     <includes>
                         <include>**/*IT.java</include>
                     </includes>

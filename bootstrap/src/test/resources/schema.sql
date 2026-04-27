@@ -280,3 +280,129 @@ CREATE TABLE IF NOT EXISTS wf_timeout_rule (
     created_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_time DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ====== PERFORMANCE TABLES (Option B.1 工作台聚合 IT) ======
+-- 仅保留 portal MetricAdapter → bridge → MetricApiImpl → 宽表 链路所需 7 张表
+
+-- 1. 数据版本控制表
+CREATE TABLE IF NOT EXISTS sys_control (
+    id VARCHAR(32) NOT NULL PRIMARY KEY,
+    scope_dim VARCHAR(20) NOT NULL,
+    latest_data_date DATE NOT NULL,
+    current_version VARCHAR(32) DEFAULT NULL,
+    is_valid INT NOT NULL DEFAULT 1,
+    created_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    remark VARCHAR(500) DEFAULT NULL,
+    updated_by VARCHAR(32) DEFAULT NULL,
+    publish_source VARCHAR(20) DEFAULT NULL,
+    publish_by VARCHAR(32) DEFAULT NULL,
+    publish_time DATETIME DEFAULT NULL
+);
+
+-- 2. 指标定义表 (24 字段, 含 V1.0.3 后新增 unit/decimal_places/deleted/description)
+CREATE TABLE IF NOT EXISTS perf_metric_def (
+    id VARCHAR(32) NOT NULL PRIMARY KEY,
+    metric_code VARCHAR(64) NOT NULL,
+    metric_name VARCHAR(200) NOT NULL,
+    metric_name_en VARCHAR(200) DEFAULT NULL,
+    metric_desc TEXT,
+    base_dim VARCHAR(20) NOT NULL,
+    metric_level INT NOT NULL,
+    calc_freq VARCHAR(20) NOT NULL,
+    calc_mode VARCHAR(20) NOT NULL,
+    calc_logic_type VARCHAR(50) DEFAULT NULL,
+    sql_text LONGTEXT,
+    expr_text TEXT,
+    summary_rule VARCHAR(20) DEFAULT NULL,
+    ref_metric_codes TEXT,
+    val_slot INT DEFAULT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_by VARCHAR(32) DEFAULT NULL,
+    created_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(32) DEFAULT NULL,
+    updated_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    unit VARCHAR(20) DEFAULT NULL,
+    decimal_places INT DEFAULT 2,
+    deleted INT DEFAULT 0,
+    description TEXT
+);
+
+-- 3. KPI 方案
+CREATE TABLE IF NOT EXISTS perf_kpi_scheme (
+    id VARCHAR(32) NOT NULL PRIMARY KEY,
+    scheme_code VARCHAR(64) NOT NULL,
+    scheme_name VARCHAR(200) NOT NULL,
+    cycle_type VARCHAR(20) NOT NULL,
+    open_detail INT NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_by VARCHAR(32) DEFAULT NULL,
+    created_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(32) DEFAULT NULL,
+    updated_time DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. KPI 方案项
+CREATE TABLE IF NOT EXISTS perf_kpi_item (
+    id VARCHAR(32) NOT NULL PRIMARY KEY,
+    scheme_id VARCHAR(32) NOT NULL,
+    metric_code VARCHAR(64) NOT NULL,
+    weight DECIMAL(10,4) NOT NULL,
+    multiplier DECIMAL(10,4) NOT NULL DEFAULT 1,
+    min_score DECIMAL(10,4) NOT NULL DEFAULT 0,
+    max_score DECIMAL(10,4) NOT NULL DEFAULT 999999,
+    created_time DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. 目标值/基础值表 (含 V1.4 owner_emp_id / owner_org_code)
+CREATE TABLE IF NOT EXISTS perf_target_value (
+    id VARCHAR(32) NOT NULL PRIMARY KEY,
+    plan_id VARCHAR(32) DEFAULT NULL,
+    subject_type VARCHAR(20) NOT NULL,
+    subject_id VARCHAR(50) NOT NULL,
+    cycle_key VARCHAR(20) NOT NULL,
+    metric_code VARCHAR(64) NOT NULL,
+    target_value DECIMAL(20,4) DEFAULT NULL,
+    base_value DECIMAL(20,4) DEFAULT NULL,
+    owner_emp_id VARCHAR(32) DEFAULT NULL,
+    owner_org_code VARCHAR(50) DEFAULT NULL,
+    created_by VARCHAR(32) DEFAULT NULL,
+    created_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(32) DEFAULT NULL,
+    updated_time DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. 员工指标结果宽表（H2 测试只保留 val_1..val_5 ；val_slot=1 测 DEPOSIT）
+--    生产 DDL 为 200 列 val_1..val_200，测试场景用不到那么多；保留 5 列足够覆盖
+CREATE TABLE IF NOT EXISTS emp_index_result (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    emp_id VARCHAR(50) NOT NULL,
+    data_date DATE NOT NULL,
+    version VARCHAR(32) NOT NULL,
+    val_1 DECIMAL(20,4) DEFAULT NULL,
+    val_2 DECIMAL(20,4) DEFAULT NULL,
+    val_3 DECIMAL(20,4) DEFAULT NULL,
+    val_4 DECIMAL(20,4) DEFAULT NULL,
+    val_5 DECIMAL(20,4) DEFAULT NULL,
+    created_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_subject_date_ver UNIQUE (emp_id, data_date, version)
+);
+
+-- ====== PORTAL TABLES (Option B.1 仅 portal_shortcut；其他 portal 表本期 IT 不依赖) ======
+
+-- 7. 工作台快捷入口表（空表即可，不影响 metric 路径断言）
+CREATE TABLE IF NOT EXISTS portal_shortcut (
+    id VARCHAR(32) NOT NULL PRIMARY KEY,
+    shortcut_name VARCHAR(100) NOT NULL,
+    shortcut_url VARCHAR(500) NOT NULL,
+    shortcut_icon VARCHAR(100) DEFAULT NULL,
+    shortcut_type VARCHAR(50) DEFAULT NULL,
+    target_type VARCHAR(50) DEFAULT NULL,
+    emp_id VARCHAR(32) DEFAULT NULL,
+    sort_order INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    created_by VARCHAR(32) DEFAULT NULL,
+    created_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(32) DEFAULT NULL,
+    updated_time DATETIME DEFAULT CURRENT_TIMESTAMP
+);
