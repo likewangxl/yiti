@@ -95,7 +95,14 @@ public class WorkflowCallbackListener {
     }
 
     /**
-     * 处理审批通过逻辑：更新线索状态为 APPROVED，根据操作类型发布对应事件。
+     * 处理审批通过逻辑：以条件更新方式幂等推进线索状态为 APPROVED，根据操作类型发布对应事件。
+     * <p>
+     * <strong>幂等保护（FU-1）</strong>：使用 {@code conditionalUpdateStatus(IN_APPROVAL → APPROVED)}
+     * 替代无条件 {@code updateStatusById}。当 ProcessCompletedEvent 因多实例 / 网络抖动 / 重发等
+     * 异常路径被重复 publish 时，第二次进入 handleApproved 会因 lead_status 已是 APPROVED 不匹配
+     * expectedStatus 而返回 0，提前返回不再 publish LeadApprovedEvent，避免 cust_master 重复创建。
+     * 与 {@code bizapp.LoanWorkflowListener} pattern 对齐。
+     * </p>
      *
      * @param lead              线索实体
      * @param processInstanceId 流程实例ID
@@ -103,8 +110,14 @@ public class WorkflowCallbackListener {
     private void handleApproved(CustLead lead, String processInstanceId) {
         String leadId = lead.getId();
 
-        // 更新状态为 APPROVED
-        leadMapper.updateStatusById(leadId, LeadStatus.APPROVED.getCode(), "SYSTEM");
+        // 幂等保护：仅当当前状态为 IN_APPROVAL 时才推进为 APPROVED
+        int rowsAffected = leadMapper.conditionalUpdateStatus(
+                leadId, LeadStatus.IN_APPROVAL.getCode(), LeadStatus.APPROVED.getCode(), "SYSTEM");
+        if (rowsAffected == 0) {
+            log.warn("[WorkflowCallbackListener] 线索 {} 状态已被其他实例处理，跳过 APPROVED 事件发布，processInstanceId={}",
+                    leadId, processInstanceId);
+            return;
+        }
         log.info("[WorkflowCallbackListener] 线索 {} 审批通过，状态更新为 APPROVED", leadId);
 
         // 根据操作类型发布不同事件
@@ -134,10 +147,15 @@ public class WorkflowCallbackListener {
     }
 
     /**
-     * 处理审批驳回逻辑：更新线索状态为 REJECTED，发布 {@link LeadRejectedEvent}。
+     * 处理审批驳回逻辑：以条件更新方式幂等推进线索状态为 REJECTED，发布 {@link LeadRejectedEvent}。
      * <p>
      * <strong>注意</strong>：驳回路径既不创建 cust_master（CREATE/UPDATE 时）也不失效（DELETE 时），
      * 仅推进线索状态并发布事件供未来扩展点订阅。
+     * </p>
+     * <p>
+     * <strong>幂等保护（FU-1）</strong>：使用 {@code conditionalUpdateStatus(IN_APPROVAL → REJECTED)}
+     * 替代无条件 {@code updateStatusById}。重复 ProcessCompletedEvent 进入时第二次因状态不匹配
+     * 返回 0，提前返回不再 publish LeadRejectedEvent。与 {@code bizapp.LoanWorkflowListener} pattern 对齐。
      * </p>
      *
      * @param lead              线索实体
@@ -147,8 +165,14 @@ public class WorkflowCallbackListener {
     private void handleRejected(CustLead lead, String processInstanceId, String rejectReason) {
         String leadId = lead.getId();
 
-        // 更新状态为 REJECTED
-        leadMapper.updateStatusById(leadId, LeadStatus.REJECTED.getCode(), "SYSTEM");
+        // 幂等保护：仅当当前状态为 IN_APPROVAL 时才推进为 REJECTED
+        int rowsAffected = leadMapper.conditionalUpdateStatus(
+                leadId, LeadStatus.IN_APPROVAL.getCode(), LeadStatus.REJECTED.getCode(), "SYSTEM");
+        if (rowsAffected == 0) {
+            log.warn("[WorkflowCallbackListener] 线索 {} 状态已被其他实例处理，跳过 REJECTED 事件发布，processInstanceId={}",
+                    leadId, processInstanceId);
+            return;
+        }
         log.info("[WorkflowCallbackListener] 线索 {} 审批驳回，状态更新为 REJECTED，processInstanceId={}",
                 leadId, processInstanceId);
 
