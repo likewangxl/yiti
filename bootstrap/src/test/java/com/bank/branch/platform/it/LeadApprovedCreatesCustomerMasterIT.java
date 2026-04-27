@@ -5,11 +5,11 @@ import com.bank.branch.platform.customer.entity.CustLead;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.enums.LeadOp;
 import com.bank.branch.platform.customer.enums.LeadStatus;
-import com.bank.branch.platform.customer.listener.WorkflowCallbackListener;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.it.config.TestMockConfig;
 import com.bank.branch.platform.it.config.TestSecurityConfig;
+import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,12 +17,13 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,48 +34,42 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Option B.2 Phase 1 (a) — 最小可信集 IT，验证 LeadApproved 事件链触发 cust_master 创建。
  *
- * <p>覆盖事件链路（绕过 Flowable，直接调 WorkflowCallbackListener 公开方法触发）：</p>
+ * <p>覆盖事件链路（绕过 Flowable，但走真实 Spring 事件路径）：</p>
  * <pre>
- *   TransactionTemplate
- *     → WorkflowCallbackListener.handleWorkflowCallback(leadId, true, opEmpId)
- *       → leadMapper.updateStatusById(leadId, "APPROVED")        ← 事务内
- *       → eventPublisher.publishEvent(LeadApprovedEvent)         ← 事务内（关键！）
- *   ↓ 事务提交
- *   AFTER_COMMIT 异步广播
- *     → LeadApprovedListener.handle (@TransactionalEventListener AFTER_COMMIT)
- *       → leadMapper.selectById（重读 lead 完整字段）
- *       → CustMasterAssemblerService.assembleFromLead(lead)
- *         → masterMapper.insert(CustMaster)   ← 测试断言 1
+ *   @Transactional 方法
+ *     → eventPublisher.publishEvent(new ProcessCompletedEvent(APPROVED))   ← 事务内 publish
+ *   ↓ 事务 commit
+ *   AFTER_COMMIT 阶段触发：
+ *     WorkflowCallbackListener.onProcessCompleted (REQUIRES_NEW + AFTER_COMMIT)
+ *       → leadMapper.updateStatusById(leadId, "APPROVED")
+ *       → eventPublisher.publishEvent(new LeadApprovedEvent)   ← 事务内 publish
+ *   ↓ 内事务 commit
+ *   AFTER_COMMIT 阶段触发：
+ *     LeadApprovedListener.handle (@TransactionalEventListener AFTER_COMMIT)
+ *       → CustMasterAssemblerService.assembleFromLead → masterMapper.insert
  * </pre>
  *
- * <p><strong>为什么不直接 publishEvent(ProcessCompletedEvent)？</strong></p>
+ * <p><strong>FU-6 重构（2026-04-27）</strong>：</p>
  * <ul>
- *   <li>WorkflowCallbackListener.onProcessCompleted 是 @TransactionalEventListener(AFTER_COMMIT, fallbackExecution=true)；</li>
- *   <li>fallbackExecution=true 会让它在外层事务已提交（AFTER_COMMIT 阶段）的"事务外"上下文中执行；</li>
- *   <li>此时它内部 publishEvent(LeadApprovedEvent) 也在事务外，
- *       而 LeadApprovedListener 没有 fallbackExecution，AFTER_COMMIT 阶段无法触发；</li>
- *   <li>所以改为直接调用 handleWorkflowCallback 公开方法，并用 TransactionTemplate 包装，
- *       让 publishEvent(LeadApprovedEvent) 运行在事务内，事务提交后 LeadApprovedListener 才能正确触发。</li>
- *   <li>这种调用方式与 workflow REST 回调的真实调用路径一致（参见 WorkflowCallbackListener.handleWorkflowCallback javadoc）。</li>
+ *   <li>之前直接调 {@code workflowCallbackListener.handleWorkflowCallback(leadId, true, ...)} 公开方法
+ *       绕开真实事件路径假绿覆盖 P0 bug（reviewer §G-3）；</li>
+ *   <li>Phase 2 (c) 已通过 {@code WorkflowCallbackEventChainBugIT} 验证真实事件路径，本 IT 也切到
+ *       TxPublisher 模式真实模拟 Flowable {@code ProcessCompletedListener.notify()} 的事务内
+ *       publishEvent 路径；</li>
+ *   <li>切换后 dead code {@code handleWorkflowCallback} 才能在 FU-6 主修复 commit 中被删除。</li>
  * </ul>
  *
  * <p><strong>测试约束</strong>：</p>
  * <ul>
  *   <li>仅 mock {@link CurrentUserApi}（不影响事件链路）</li>
  *   <li>不 mock 任何 listener / service / mapper（这是测试目标，必须走真实链路）</li>
- *   <li>不依赖 BPMN / Flowable，仅依赖 Spring 事件机制</li>
+ *   <li>不依赖 BPMN / Flowable，仅依赖 Spring 事件机制 + WorkflowCallbackListener.onProcessCompleted</li>
  *   <li>cust_claim 链路不在本范围（属 ClaimService.claim 主动认领，独立次链路）</li>
- * </ul>
- *
- * <p><strong>未覆盖的下一阶段（Phase 2 b+c）</strong>：</p>
- * <ul>
- *   <li>(b) BPMN → ProcessCompletedListener 完整闭环</li>
- *   <li>(c) WorkflowCallbackListener TODO 修复（消费 outcome 区分 APPROVED/REJECTED）</li>
  * </ul>
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Import({TestMockConfig.class, TestSecurityConfig.class})
+@Import({TestMockConfig.class, TestSecurityConfig.class, LeadApprovedCreatesCustomerMasterIT.TxPublisher.class})
 @Sql(scripts = {
         "/customer-marketing-schema.sql",
         "/customer-marketing-data.sql"
@@ -83,9 +78,6 @@ class LeadApprovedCreatesCustomerMasterIT {
 
     private static final String OPERATOR_EMP_ID = "user001";
     private static final String OPERATOR_ORG_ID = "BJ_CY";
-
-    @Autowired
-    private WorkflowCallbackListener workflowCallbackListener;
 
     @Autowired
     private CustLeadMapper leadMapper;
@@ -97,7 +89,7 @@ class LeadApprovedCreatesCustomerMasterIT {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private PlatformTransactionManager transactionManager;
+    private TxPublisher txPublisher;
 
     /**
      * 仅 mock CurrentUserApi。
@@ -122,6 +114,7 @@ class LeadApprovedCreatesCustomerMasterIT {
         String leadId = "lead-b2-001";
         String leadNo = "LEAD_B2_001";
         String businessKey = "LEAD:" + leadId;
+        String processInstanceId = "PI_B2_001";
 
         CustLead lead = new CustLead();
         lead.setId(leadId);
@@ -164,16 +157,12 @@ class LeadApprovedCreatesCustomerMasterIT {
         );
         assertThat(preCount).isZero();
 
-        // ========== 触发：在事务边界内调 handleWorkflowCallback，让 AFTER_COMMIT 链路完整触发 ==========
-        // TransactionTemplate 创建真实事务：handleWorkflowCallback 内 publishEvent(LeadApprovedEvent)
-        // 在事务内入队，事务 commit 后 LeadApprovedListener.handle (AFTER_COMMIT) 才能正确触发
-        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
-        txTemplate.executeWithoutResult(status ->
-                workflowCallbackListener.handleWorkflowCallback(leadId, true, OPERATOR_EMP_ID)
-        );
+        // ========== 触发：在 @Transactional 方法内 publishEvent(ProcessCompletedEvent, APPROVED) ==========
+        // 真实模拟 workflow-center ProcessCompletedListener.notify() 的事务内 publishEvent 行为
+        txPublisher.publishProcessCompletedInTransaction(processInstanceId, businessKey, "APPROVED");
 
         // ========== 断言 1：cust_lead.lead_status 由 IN_APPROVAL 变为 APPROVED ==========
-        // WorkflowCallbackListener.onProcessCompleted → leadMapper.updateStatusById
+        // WorkflowCallbackListener.onProcessCompleted → handleApproved → leadMapper.updateStatusById
         CustLead approvedLead = leadMapper.selectById(leadId);
         assertThat(approvedLead).isNotNull();
         assertThat(approvedLead.getLeadStatus()).isEqualTo(LeadStatus.APPROVED.getCode());
@@ -207,5 +196,40 @@ class LeadApprovedCreatesCustomerMasterIT {
         assertThat(created.getDeleted()).isZero();
         // custNo 由 CustMasterAssemblerService.generateCustNo() 自动生成，格式：CUST_{millis}_{rand4}
         assertThat(created.getCustNo()).startsWith("CUST_");
+    }
+
+    /**
+     * 包装类：在 @Transactional 方法内 publishEvent(ProcessCompletedEvent)，
+     * 真实模拟 workflow-center ProcessCompletedListener.notify() 的事务内 publish 行为。
+     *
+     * <p>之所以单独抽一个 @Component：@Transactional 走 Spring AOP 代理，
+     * 必须从外部 bean 调用才能生效（self-invocation 会绕过代理）。</p>
+     */
+    @Component
+    public static class TxPublisher {
+
+        private final ApplicationEventPublisher eventPublisher;
+
+        public TxPublisher(ApplicationEventPublisher eventPublisher) {
+            this.eventPublisher = eventPublisher;
+        }
+
+        /**
+         * 在事务内发布 ProcessCompletedEvent，模拟 Flowable 流程结束时
+         * ProcessCompletedListener.notify() 的真实路径。
+         *
+         * @param processInstanceId 流程实例 ID
+         * @param businessKey       业务键 LEAD:xxx
+         * @param outcome           审批结果（APPROVED / REJECTED）
+         */
+        @Transactional(rollbackFor = Exception.class)
+        public void publishProcessCompletedInTransaction(String processInstanceId, String businessKey, String outcome) {
+            eventPublisher.publishEvent(new ProcessCompletedListener.ProcessCompletedEvent(
+                    processInstanceId,
+                    businessKey,
+                    outcome,
+                    null
+            ));
+        }
     }
 }
