@@ -14,13 +14,23 @@
 | 5 | **P0 生产 bug 修复（WorkflowCallbackListener 链路中断 + 5 listener 审计）** | ✅ 已完成 | `3f1e3c0` `7a90e47` |
 | 6 | Phase 2 (c)：WorkflowCallbackListener:87 TODO 修复（区分 APPROVED/REJECTED） | ✅ 已完成 | `1bd5301` `c29046a` |
 | 7 | Phase 2 (b)：lead_approve_v1.bpmn20.xml + lead-e2e profile + LeadWorkflowE2EIT 真 BPMN E2E（APPROVED + REJECTED 双分支） | ✅ 已完成 | `a6b2290` |
-| 8 | 合并 master：本期累计 16 commits + Phase 2 (b) 后续合并（共 17 commits 入 master） | ✅ 已完成 | merge `3fd9cba` + ff/合并 a6b2290 |
+| 8 | 合并 master（第一次）：本期前 16 commits + Phase 2 (b) 后续合并 | ✅ 已完成 | merge `3fd9cba` + 后续 `349c563` |
+| 9 | Phase 2.5：FU-1/2/6/9 鲁棒性补齐（H2 schema + dead code 删除 + 幂等保护 + 异常兜底）| ✅ 已完成 | `aab052f` `e033d7b` `4efde7e` `6615740` `2195cd8` `075fb9a` `7f14aca` |
+| 10 | 合并 master（第二次）：Phase 2.5 7 commits + handover 续接 | ⏳ 进行中 | — |
 
 ---
 
-## 累计 17 commits + handover 续接更新（origin/claude/crazy-joliot-0e2a1f，已全部合并 master）
+## 累计 24+ commits + handover 多次续接更新（origin/claude/crazy-joliot-0e2a1f）
 
 ```
+7f14aca fix(workflow-callback): try-catch 兜底（FU-2 绿）  ← Phase 2.5
+075fb9a test(workflow-callback-exception): 红 IT 复现异常未兜底（FU-2 红）
+2195cd8 fix(workflow-callback): conditionalUpdateStatus 幂等保护（FU-1 绿）
+6615740 test(workflow-callback-idempotency): 红 IT 复现重复触发 cust_master 重复创建（FU-1 红）
+4efde7e fix(workflow-callback): 删除 dead code handleWorkflowCallback（FU-6 主修）
+e033d7b refactor(test): LeadApprovedCreatesCustomerMasterIT 切真事件路径（FU-6 准备）
+aab052f fix(test-config): schema.sql TINYINT(1) → TINYINT + 去反引号 is_read（FU-9）
+b495c12 docs(session): handover 续接更新 — Phase 2 (b) 完成 + 4 项 reviewer nitpick + 本期最终交付清单
 a6b2290 feat(option-b-phase2-b): 补 lead_approve_v1 真 BPMN E2E IT（APPROVED+REJECTED）  ← Phase 2 (b)
 293ff04 docs(session): handover 续接更新 — Phase 2 (c) 完成 + 6 项 reviewer follow-up
 c29046a fix(workflow-callback): 区分 APPROVED/REJECTED 分支（Phase 2 (c)）
@@ -102,6 +112,37 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 - `RES_PROD_SUP_AVL`（16）
 - `RES_SHORTCUT_PUT`（16）
 
+### 决策 10：Phase 2.5 FU-1/2/6/9 鲁棒性补齐（7 commits `aab052f` ~ `7f14aca`）
+
+**起因**：Phase 2 (b) reviewer 列出 4 项中等优先级 nitpick + Phase 2 (c) reviewer 列出 6 项 nitpick，本期一并清理 4 项核心：
+
+**FU-9（commit `aab052f`）— H2 LEGACY schema 修复**：
+- 真因诊断（implementer 调研发现）：`schema.sql` 中 `TINYINT(1)` 在 LEGACY 模式 syntax error，三张表（user_notification / sys_job_conf / touch_task）建表失败被 `continue-on-error` 吞掉，后续 `INSERT INTO user_notification` 报 `Table not found` 又被 NotificationService.try-catch 吞掉
+- 方案 A 否决（统一 MODE=MYSQL）：MYSQL 模式下 H2 不识别 Flowable 官方 IDENTITY 数据类型，启动挂掉
+- 方案 B 采用：`TINYINT(1) → TINYINT`（MySQL 8 内部存储等价）+ 去反引号 `is_read`（is_read 不是保留字，去掉无副作用）
+- 修改最小化：6 行 diff，仅动 `bootstrap/src/test/resources/schema.sql`
+
+**FU-6（commits `e033d7b` + `4efde7e`）— 删 dead code handleWorkflowCallback**：
+- 调研结论：grep 全仓库无任何 Controller / Service 调用 `handleWorkflowCallback`，仅 `LeadApprovedCreatesCustomerMasterIT` 在用（绕开真实事件路径假绿覆盖）
+- 修复方案：先 commit e033d7b 把 IT 切到 TxPublisher 真事件路径（与 EventChainBugIT 同 pattern），再 commit 4efde7e 删除 line 181-208 整个 dead 方法
+- WorkflowCallbackListener 精简到只剩 onProcessCompleted + handleApproved + handleRejected
+
+**FU-1（commits `6615740` 红 + `2195cd8` 绿）— conditionalUpdateStatus 幂等保护**：
+- 红 IT `WorkflowCallbackIdempotencyBugIT`：双 publishEvent(ProcessCompletedEvent) 模拟重复触发，断言 cust_master 行数=1（cust_master.lead_id 无 UK，旧代码下会得 2 行重复）
+- 绿 fix：新增 `CustLeadMapper.conditionalUpdateStatus` 方法（与 `LoanApplyMapper.conditionalUpdateStatus` 完全对齐 @Param 名 + SQL pattern），handleApproved/handleRejected 第一行用 `conditionalUpdateStatus(IN_APPROVAL → APPROVED/REJECTED)`，rowsAffected=0 时 log.warn 早返回不发事件
+
+**FU-2（commits `075fb9a` 红 + `7f14aca` 绿）— 整体 try-catch 异常兜底**：
+- **设计创新**：implementer 用 logback ListAppender 抓 Spring `TransactionSynchronizationUtils.invokeAfterCompletion` 的 ERROR 日志做差异断言。原理：AFTER_COMMIT listener 异常 Spring 不让冒泡到调用方，但 Spring 框架会内部 catch + log.error("TransactionSynchronization.afterCompletion threw exception", e)。红 IT 验证 fix 前抓到此 ERROR，fix 后业务自吞 → 此 ERROR 不再出现
+- 红 IT `WorkflowCallbackExceptionSwallowBugIT`：`@SpyBean CustLeadMapper.selectById` 抛 RuntimeException 注入故障
+- 绿 fix：onProcessCompleted 整体 try { 业务 } catch (Exception e) { log.error 不重抛 }，与 `LoanWorkflowListener.onProcessCompleted` line 73-131 完全对齐
+
+**reviewer 综合 review 结论**：✅ 通过（A/B/C/D/E/F/G/H 全过），列 6 项 nitpick（详见 V1.7+ 跟踪段，全不阻塞）
+
+**测试覆盖**：
+- 6 模块 surefire 1502 case 全绿（无回归）
+- bootstrap failsafe 默认 profile 19 IT PASS（含新增 Idempotency + ExceptionSwallow 2 个）
+- bootstrap failsafe lead-e2e profile：LeadWorkflowE2EIT 2 case PASS，user_notification 不再报错
+
 ### 决策 9：Phase 2 (b) 真 BPMN E2E IT（commit `a6b2290`）
 
 **目标**：补真 BPMN 端到端 IT 防回归 lead 审批 APPROVED + REJECTED 双分支，CI 默认跳过 + 本地 `-Dlead.e2e.enabled=true` 触发。
@@ -154,6 +195,8 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 | **WorkflowCallbackEventChainBugIT** | **1** | 红 IT 防回归 fallbackExecution P0 bug |
 | **WorkflowCallbackRejectedBranchBugIT** | **1** | 红 IT 防回归 REJECTED 分支被忽略语义 bug（Phase 2 (c)）|
 | **LeadWorkflowE2EIT**（CI 默认跳过） | **2** | 真 BPMN E2E：APPROVED 分支 cust_master 创建 / REJECTED 分支 cust_master 不创建（Phase 2 (b)）|
+| **WorkflowCallbackIdempotencyBugIT** | **1** | 红 IT 防回归 listener 缺幂等保护致 cust_master 重复创建（Phase 2.5 FU-1）|
+| **WorkflowCallbackExceptionSwallowBugIT** | **1** | 红 IT 防回归 listener 异常未自吞致 Spring 框架 ERROR 日志（Phase 2.5 FU-2）|
 | FlowableWorkflowCenterE2ETest | ? | Flowable E2E（@EnabledIfSystemProperty 保护） |
 | FlowableWorkflowCenterRealEnvTest | ? | 真 MySQL Flowable E2E |
 | PerformanceMetricApiBridgeTest | 10 | bridge 单元测试 |
@@ -223,8 +266,21 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 |---|---|---|---|
 | FU-7 | `FlowableE2ETestConfig` 与 `LeadE2ETestConfig` 90% 重复 | 低 | 仅 MapperScan 多 1 项 + Profile 名不一样；可抽公共 abstract base class |
 | FU-8 | `LeadWorkflowE2EIT` REJECTED case 没像 APPROVED 那样校验 preCount=0 | 低 | 对称性微优化，1 行可补 |
-| FU-9 | **H2 LEGACY mode `user_notification` 大小写问题**（预存在）| 中 | NotificationMapper.xml `INSERT INTO user_notification` 在 LEGACY mode 解析为大写 `USER_NOTIFICATION`，schema 实际表名小写 → insert 失败被吞，掩盖告警；推荐 schema.sql 全双引号或 H2 url 改 MODE=MYSQL |
+| ~~FU-9~~ | **H2 LEGACY mode 修复** | ~~中~~ | **✅ Phase 2.5 已修（commit `aab052f`）**：真因不是大小写而是 `TINYINT(1)` syntax，已改 TINYINT + 去反引号 |
 | FU-10 | `lead_approve_v1.bpmn` 长期不存在但 `LeadService.PROCESS_DEFINITION_KEY` 早就引用 | 已修 | Phase 2 (b) commit `a6b2290` 顺手补上，记录作为历史技术债已清零 |
+
+### Phase 2.5 reviewer 6 个 nitpick（V1.7+ 跟踪，不阻塞合并）
+
+| # | 项 | 优先级 | 来源 |
+|---|---|---|---|
+| FU-11 | `WorkflowCallbackEventChainBugIT.java:57` javadoc 仍引用已删除的 `handleWorkflowCallback` 方法 | nitpick | Phase 2.5 reviewer §B-2 |
+| FU-12 | `conditionalUpdateStatus` 的 `updatedBy` 硬编码 `"SYSTEM"`（与 LoanWorkflowListener 一致），未来可通过 ProcessCompletedEvent 携带 approverEmpId 提升审计精度 | 低 | Phase 2.5 reviewer §C.nit-1 |
+| FU-13 | `WorkflowCallbackListener.handleApproved/handleRejected` 状态机假设（fromStatus=IN_APPROVAL）应在 javadoc 中显式说明 | 低 | Phase 2.5 reviewer §H-1 |
+| **FU-14** | **listener 异常兜底后 lead.status 可能停留在 IN_APPROVAL 形成孤儿数据，需要补偿机制（定时巡检 + 重发 ProcessCompletedEvent）** | **中** | Phase 2.5 reviewer §H-2 |
+| **FU-15** | **测试 schema 与生产 DDL 长期不一致**（本次仅治 H2 LEGACY 标症），长期方向：testcontainers 真 MySQL | **中** | Phase 2.5 reviewer §H-3 |
+| FU-16 | `audit-report.md` 自动生成时间戳每跑一次 IT 就变，建议改为不带时间戳或用 `.gitignore` 忽略 | nitpick | 工作树多次出现 unstaged 状态 |
+
+**Phase 2.5 reviewer 总评**：implementer 的 FU-9 真因诊断（TINYINT(1) syntax）+ FU-2 logback ListAppender 抓 Spring 框架 ERROR 日志的设计巧妙，是 Spring AFTER_COMMIT listener 异常断言的标准做法之一。TDD 红绿严格分离（红 commit 仅 IT、绿 commit 仅业务），与 LoanWorkflowListener pattern 100% 对齐。可合并。
 
 ---
 
@@ -245,13 +301,13 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 ### 快速入口
 
-读本文档了解全貌（Phase 2 (b) (c) 均已完成 + 已合并 master），然后选择以下方向之一：
+读本文档了解全貌（Phase 2 (b) (c) (2.5) 均已完成 + 已合并 master），然后选择以下方向之一：
 
-1. **进入 Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
-2. **进入 Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
-3. **跑 reviewer follow-up FU-1/FU-2/FU-6/FU-9**：「WorkflowCallbackListener + H2 LEGACY 鲁棒性补齐」一次性收尾
-4. **跑 reviewer nitpick FU-7（抽 E2ETestConfig 基类）+ FU-8（IT 对称性）**：测试基础设施轻量重构
-5. **关闭本期会话归档**：本期已交付完整闭环（Option A → B.1 → B.2-a → P0 → Phase 2 (c) → Phase 2 (b)），可视为本期工作完成
+1. **关闭本期会话归档**：本期已交付完整闭环（Option A → B.1 → B.2-a → P0 → Phase 2 (c) → Phase 2 (b) → Phase 2.5 鲁棒性补齐），可视为本期工作完成
+2. **进入 Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
+3. **进入 Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
+4. **跑 V1.7+ 优先级"中"的 follow-up**：FU-6 / FU-14（孤儿数据补偿机制）/ FU-15（testcontainers 真 MySQL）
+5. **跑剩余 nitpick FU-7/FU-8/FU-11/FU-12/FU-13/FU-16**：测试基础设施轻量重构
 
 ### 验证当前状态命令
 
@@ -278,12 +334,12 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27）
-**对应 git HEAD**：`a6b2290`（Phase 2 (b)）→ origin/master 已合并至 `3fd9cba` + a6b2290 ff
-**会话累计 commit（本期分量）**：17 commits + 本 handover 多次续接更新（共约 19 commits）
-**平台累计 commit（含历史）**：241（上期累计） + 17（本期） = **258 commits**
+**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次）
+**对应 git HEAD**：`7f14aca`（Phase 2.5 FU-2 绿）→ origin/master 已合并至 `349c563` + Phase 2.5 待第二次 master merge
+**会话累计 commit（本期分量）**：24 commits + 本 handover 多次续接更新（共约 26 commits）
+**平台累计 commit（含历史）**：241（上期累计） + 24（本期） = **265 commits**
 
-**本期最终交付清单**（均已合并 master）：
+**本期最终交付清单**（均已合并/即将合并 master）：
 - Option A 启动级 IT（5 case）
 - V1.1 PT_RESOURCE 整改（清零 audit 类型 A 26 + 类型 B 11）
 - Option B.1 portal workspace IT（5 case）
@@ -291,5 +347,15 @@ mvn verify -pl bootstrap
 - P0 fallbackExecution 修复（5 listener 审计，3 个修复）
 - Phase 2 (c) WorkflowCallbackListener APPROVED/REJECTED 分发（含 LeadRejectedEvent 新增）
 - Phase 2 (b) lead_approve_v1.bpmn20.xml + LeadWorkflowE2EIT 真 BPMN E2E（CI 默认跳过，本地 -D 触发）
+- **Phase 2.5 鲁棒性补齐**：H2 LEGACY schema TINYINT(1) 修复 + handleWorkflowCallback dead code 删除 + conditionalUpdateStatus 幂等保护 + 整体 try-catch 异常兜底
 - 测试基础设施：UTF-8 全局编码 + stale jar 文档化 + LeadE2ETestConfig
 - 数据库对齐：onepl PT_RESOURCE 122→272→298 + docs/schema mysqldump 同步
+
+**WorkflowCallbackListener 演进总结**（本期重点路径）：
+1. 原始：fallbackExecution=true（P0 链路 bug，cust_master 永不创建）
+2. P0 修复（commit `7a90e47`）：去 fallbackExecution + 加 @Transactional REQUIRES_NEW
+3. Phase 2 (c)（`c29046a`）：按 outcome 分发 APPROVED/REJECTED
+4. Phase 2.5 FU-1（`2195cd8`）：conditionalUpdateStatus 幂等保护
+5. Phase 2.5 FU-2（`7f14aca`）：整体 try-catch 异常兜底
+6. Phase 2.5 FU-6（`4efde7e`）：删除 dead code handleWorkflowCallback
+7. **当前状态**：与 bizapp.LoanWorkflowListener pattern 完全对齐 ✅

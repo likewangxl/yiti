@@ -100,6 +100,26 @@ public interface CustLeadMapper {
                          @Param("updatedBy") String updatedBy);
 
     /**
+     * 条件更新线索状态（幂等专用）。
+     * <p>
+     * 仅当记录当前 lead_status 等于 expectedStatus 时才执行更新，返回影响行数。
+     * 用于 WorkflowCallbackListener 防止 ProcessCompletedEvent 被重复 publish 时重复
+     * 处理（多实例 / 网络抖动 / 重发场景），返回 0 表示已被其他实例处理，跳过事件发布。
+     * 与 {@code business-application-center.LoanApplyMapper.conditionalUpdateStatus} pattern 对齐。
+     * </p>
+     *
+     * @param id             线索ID
+     * @param expectedStatus 期望的当前状态（如 IN_APPROVAL）
+     * @param targetStatus   目标状态（如 APPROVED / REJECTED）
+     * @param updatedBy      操作人
+     * @return 影响行数（0 = 状态已被其他实例处理，跳过；1 = 成功更新）
+     */
+    int conditionalUpdateStatus(@Param("id") String id,
+                                @Param("expectedStatus") String expectedStatus,
+                                @Param("targetStatus") String targetStatus,
+                                @Param("updatedBy") String updatedBy);
+
+    /**
      * 按 id 查询并加 FOR UPDATE 行锁（状态变更前用于并发保护）。
      *
      * @param id 线索ID

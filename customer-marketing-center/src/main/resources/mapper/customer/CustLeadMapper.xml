@@ -151,6 +151,17 @@
           AND deleted = 0
     </update>
 
+    <!-- 条件更新线索状态（幂等专用，仅当 lead_status = expectedStatus 时才更新） -->
+    <update id="conditionalUpdateStatus">
+        UPDATE cust_lead
+        SET lead_status = #{targetStatus},
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+          AND lead_status = #{expectedStatus}
+          AND deleted = 0
+    </update>
+
     <!-- 按 id 查询并加 FOR UPDATE 行锁（并发保护） -->
     <select id="selectForUpdate" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
