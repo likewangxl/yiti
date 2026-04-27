@@ -12,14 +12,17 @@
 | 3 | Option B.1 portal 工作台聚合 IT 含 5 case（trend UP/FLAT/DOWN/null + shortcut+graceful 4 路）+ reviewer 全 nitpick 整改（UTF-8 全局 / stale jar 文档化 / CurrentUserApi mock 全方法 / 5 路 graceful） | ✅ 已完成 | `c65a290` `c5121fc` `32cf3fd` `b9a8982` |
 | 4 | Option B.2-a 最小可信集 IT（LeadApprovedCreatesCustomerMasterIT） | ✅ 已完成 | `532896d` |
 | 5 | **P0 生产 bug 修复（WorkflowCallbackListener 链路中断 + 5 listener 审计）** | ✅ 已完成 | `3f1e3c0` `7a90e47` |
-| 6 | Phase 2 (c)：WorkflowCallbackListener:87 TODO 修复（区分 APPROVED/REJECTED） | ⏳ 待启动 | implementer 已被停止于调研阶段 |
+| 6 | Phase 2 (c)：WorkflowCallbackListener:87 TODO 修复（区分 APPROVED/REJECTED） | ✅ 已完成 | `1bd5301` `c29046a` |
 | 7 | Phase 2 (b)：lead_approve_v1.bpmn20.xml + flowable-lead-e2e profile + LeadWorkflowE2EIT 真 BPMN E2E | ⏳ 待启动 | — |
 
 ---
 
-## 累计 12 commits（origin/claude/crazy-joliot-0e2a1f，领先 master 12 commits）
+## 累计 14+ commits（origin/claude/crazy-joliot-0e2a1f）
 
 ```
+c29046a fix(workflow-callback): 区分 APPROVED/REJECTED 分支（Phase 2 (c)）  ← compact 后新增
+1bd5301 test(workflow-callback-reject): 红 IT 复现 REJECTED 分支被忽略 bug  ← compact 后新增
+6e1a709 docs(session): 本会话 12 commits 状态归档（compact 暂停续接锚点）
 7a90e47 fix(workflow-callback): 修复 P0 链路中断 — 去 fallbackExecution + 加 @Transactional REQUIRES_NEW
 3f1e3c0 test(workflow-callback-bug): 红 IT 复现 WorkflowCallbackListener 链路中断 P0 bug
 532896d feat(option-b2-a): customer 事件链 IT — LeadApproved 触发 cust_master 创建
@@ -96,6 +99,22 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 - `RES_PROD_SUP_AVL`（16）
 - `RES_SHORTCUT_PUT`（16）
 
+### 决策 8：Phase 2 (c) WorkflowCallbackListener APPROVED/REJECTED 分发（commits `1bd5301` `c29046a`）
+
+**bug 描述**：`WorkflowCallbackListener.onProcessCompleted:87` TODO 长期忽略 `event.outcome()`，无论流程审批结果如何都走 `handleApproved` → 驳回流程被错误标 APPROVED + 错误创建 cust_master / 错误失效（DELETE 路径）。语义层 bug，与 P0 fallbackExecution bug 正交。
+
+**修复方案**（参考 `bizapp.LoanWorkflowListener` 已有 pattern）：
+- 按 `"REJECTED".equals(event.outcome())` 分发（字面量在前防 NPE）
+- 保留 `handleApproved` 不动
+- 新增 `handleRejected`：updateStatus(REJECTED) + publish LeadRejectedEvent（携带 reason）
+- 新增 `LeadRejectedEvent`（与 LoanRejectedEvent 设计对齐，V1 暂无下游消费保留扩展点）
+
+**TDD 红-绿 严格分 commit**：
+- `1bd5301`：纯红 IT（仅 +207 行 IT 文件，零业务代码改动），WorkflowCallbackRejectedBranchBugIT 用 TxPublisher @Transactional 模式真实模拟 Flowable 路径
+- `c29046a`：fix（+41 LeadRejectedEvent + +66/-13 WorkflowCallbackListener），红 IT 转绿，6 模块 1502 case 全回归 PASS
+
+**reviewer 综合 review 结论**：⚠️ 通过（A/B/C/D/E/F/G 全过），列 6 个 follow-up（详见末尾 V1.7+ 跟踪段）。
+
 ---
 
 ## 当前 IT 测试覆盖（bootstrap 模块）
@@ -113,6 +132,7 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 | **PortalWorkspaceMetricIT** | **5** | trend UP/FLAT/DOWN/null + shortcut 真实链路 + 4 路 graceful |
 | **LeadApprovedCreatesCustomerMasterIT** | **1** | LeadApproved → CustMasterAssemblerService → cust_master |
 | **WorkflowCallbackEventChainBugIT** | **1** | 红 IT 防回归 fallbackExecution P0 bug |
+| **WorkflowCallbackRejectedBranchBugIT** | **1** | 红 IT 防回归 REJECTED 分支被忽略语义 bug（Phase 2 (c)）|
 | FlowableWorkflowCenterE2ETest | ? | Flowable E2E（@EnabledIfSystemProperty 保护） |
 | FlowableWorkflowCenterRealEnvTest | ? | 真 MySQL Flowable E2E |
 | PerformanceMetricApiBridgeTest | 10 | bridge 单元测试 |
@@ -125,25 +145,9 @@ bootstrap 全模块（含 surefire + failsafe）：**42 + 11 = 53 case PASS / 3 
 
 ## 待办（Phase 2 续接锚点）
 
-### Phase 2 (c) — WorkflowCallbackListener:87 TODO 修复
+### Phase 2 (c) — ✅ 已完成（compact 后续接交付）
 
-**bug 描述**：当 workflow 流程被驳回（outcome=REJECTED）时，`WorkflowCallbackListener.onProcessCompleted` 仍走 APPROVED 路径，错误地把 cust_lead 标 APPROVED + 创建 cust_master。生产已存在的语义层 bug，与 P0 fallbackExecution bug 正交。
-
-**实施步骤**（implementer 任务清单已在 `aab42d80f0602c72a` agent prompt 中定义）：
-1. 调研 LoanWorkflowListener 已有正确 APPROVED/REJECTED 分发 pattern
-2. 检查 customer 模块是否已有 `LeadRejectedEvent`
-3. 写红 IT `WorkflowCallbackRejectedBranchBugIT`
-4. 修代码：按 outcome 分发（保留 handleApproved + 新增 handleRejected）
-5. 红 IT 转绿 + 5 模块全回归
-6. 分 2 commit (test 红 + fix 绿) push origin
-
-**关键文件路径**：
-- 修改对象：`customer-marketing-center/src/main/java/com/bank/branch/platform/customer/listener/WorkflowCallbackListener.java:87` TODO
-- 参考 pattern：`business-application-center/src/main/java/com/bank/branch/platform/bizapp/listener/LoanWorkflowListener.java`
-- 复用 schema/data：`bootstrap/src/test/resources/customer-marketing-schema.sql` + `customer-marketing-data.sql`
-- 红 IT 模板：`bootstrap/src/test/java/com/bank/branch/platform/it/WorkflowCallbackEventChainBugIT.java`
-
-**预计工时**：30-45 分钟，2 commits。
+commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45 分钟，实际约 35 分钟（含 reviewer review）。reviewer ⚠️ 通过 + 6 个 follow-up（不阻塞，详见末尾 V1.7+ 跟踪段）。
 
 ### Phase 2 (b) — 真 BPMN E2E IT（防回归终极屏障）
 
@@ -175,6 +179,19 @@ bootstrap 全模块（含 surefire + failsafe）：**42 + 11 = 53 case PASS / 3 
 
 留作 V1.7+ 跟踪项。
 
+### Phase 2 (c) reviewer 6 个 follow-up（V1.7+ 跟踪，不阻塞合并）
+
+| # | 项 | 优先级 | 说明 |
+|---|---|---|---|
+| FU-1 | `WorkflowCallbackListener.handleApproved/handleRejected` 缺幂等保护 | 中 | vs LoanWorkflowListener 的 `conditionalUpdateStatus(IN_APPROVAL → target)` + `rowsAffected==0 早返回`；需补 `CustLeadMapper.conditionalUpdateStatus` |
+| FU-2 | `WorkflowCallbackListener.onProcessCompleted` 缺整体 try-catch 兜底 | 低 | vs LoanWorkflowListener line 73/127 的 `try { 全部业务 } catch { log.error 不重抛 }` |
+| FU-3 | `operatorEmpId` 硬编码 `"SYSTEM"` | 低 | 应从 Flowable 历史拿 lastApproverEmpId 注入；当前 ProcessCompletedEvent 载荷无 operator 信息 |
+| FU-4 | 红 IT 仅覆盖 `LeadOp.CREATE`，缺 UPDATE/DELETE | 低 | 建议补 DELETE 验证 cust_master 仍 ACTIVE / UPDATE 验证 cust_master 字段不更新 |
+| FU-5 | 红 IT 未直接断言 `LeadRejectedEvent` 被 publish | 低 | 建议加 `@SpyBean ApplicationEventPublisher` 验证 publish 调用次数 |
+| FU-6 | **`handleWorkflowCallback`（line 181-208 外部入口）REJECTED 路径不发布 LeadRejectedEvent** | **中** | 与 onProcessCompleted REJECTED 路径不一致；将来某天有人通过外部 REST 入口走该方法驳回，会得到「lead.status==REJECTED 但事件未发布」的不一致状态 |
+
+**reviewer 特别提醒**：commit message 里 "与 LoanWorkflowListener pattern 对齐" 略有夸大 — 实际只对齐了 outcome 分发，没对齐幂等（conditionalUpdateStatus）和整体异常兜底（try-catch）。建议 V1.7+ 把 FU-1 / FU-2 / FU-6 合并成一个「WorkflowCallbackListener 鲁棒性补齐」任务统一跟踪。
+
 ---
 
 ## 用户偏好沿用
@@ -194,13 +211,13 @@ bootstrap 全模块（含 surefire + failsafe）：**42 + 11 = 53 case PASS / 3 
 
 ### 快速入口
 
-读本文档了解全貌，然后选择以下方向之一：
+读本文档了解全貌，然后选择以下方向之一（Phase 2 (c) 已完成，余下选项按当前优先级排序）：
 
-1. **继续 Phase 2 (c)**：派 implementer 修 WorkflowCallbackListener:87 TODO（清单见上文 §"Phase 2 (c)"）
-2. **继续 Phase 2 (b)**：派 implementer 写真 BPMN E2E IT（清单见上文 §"Phase 2 (b)"，注意 (b) 的 REJECTED 分支验证依赖 (c) 已修）
-3. **跳过 b/c，进入 Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
-4. **进入 Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
-5. **本会话收尾合并 master**：将 12 commits 合并到 master 分支
+1. **继续 Phase 2 (b)**：派 implementer 写真 BPMN E2E IT（清单见上文 §"Phase 2 (b)"；REJECTED 分支验证现已可用，因 (c) 已修复）
+2. **跳过 (b)，进入 Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
+3. **进入 Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
+4. **本会话收尾合并 master**：将 14+ commits 合并到 master 分支
+5. **跑 Phase 2 (c) reviewer follow-up FU-1/FU-2/FU-6**：「WorkflowCallbackListener 鲁棒性补齐」一次性收尾
 
 ### 验证当前状态命令
 
@@ -227,7 +244,7 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（会话因 compact 暂停）
-**对应 git HEAD**：`7a90e47`
-**会话累计 commit（本期分量）**：12 commits
-**平台累计 commit（含历史）**：241（上期累计） + 12（本期） = **253 commits**
+**文档生成时间**：2026-04-25（compact 后续接更新于 2026-04-27）
+**对应 git HEAD**：`c29046a`（compact 前 `7a90e47`，compact 归档 `6e1a709`，后 Phase 2 (c) 红 `1bd5301` + 绿 `c29046a`）
+**会话累计 commit（本期分量）**：14 commits + 本 handover 续接更新
+**平台累计 commit（含历史）**：241（上期累计） + 14（本期） = **255 commits**
