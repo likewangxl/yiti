@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS user_notification (
     biz_type VARCHAR(50) DEFAULT NULL,
     biz_id VARCHAR(100) DEFAULT NULL,
     link_url VARCHAR(500) DEFAULT NULL,
-    `is_read` TINYINT(1) DEFAULT 0,
+    is_read TINYINT DEFAULT 0,
     read_time DATETIME DEFAULT NULL,
     created_time DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS sys_job_conf (
     job_name VARCHAR(100),
     cron_expr VARCHAR(64),
     status VARCHAR(20) DEFAULT 'ACTIVE',
-    allow_manual_trigger TINYINT(1) DEFAULT 1,
+    allow_manual_trigger TINYINT DEFAULT 1,
     last_run_time DATETIME DEFAULT NULL,
     next_run_time DATETIME DEFAULT NULL,
     remark VARCHAR(500) DEFAULT NULL,

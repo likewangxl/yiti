@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS touch_task (
     plan_finish_time DATETIME,
     warning_time DATETIME,
     sla_status VARCHAR(20),
-    sla_warning TINYINT(1) DEFAULT 0,
+    sla_warning TINYINT DEFAULT 0,
     business_key VARCHAR(100),
     success_time DATETIME,
     cancel_time DATETIME,
