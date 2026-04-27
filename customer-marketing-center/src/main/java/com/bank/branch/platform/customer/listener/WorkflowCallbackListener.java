@@ -69,28 +69,39 @@ public class WorkflowCallbackListener {
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
+        String processInstanceId = event.processInstanceId();
         log.info("[WorkflowCallbackListener.onProcessCompleted] processInstanceId={}, businessKey={}, outcome={}",
-                event.processInstanceId(), businessKey, event.outcome());
+                processInstanceId, businessKey, event.outcome());
 
-        // 只处理线索相关流程
-        if (businessKey == null || !businessKey.startsWith("LEAD:")) {
-            return;
-        }
+        // 整体 try-catch 兜底（FU-2）：捕获所有异常，仅记录业务自定义 ERROR 日志，
+        // 避免冒泡到 Spring AFTER_COMMIT 调用栈触发框架级
+        // "TransactionSynchronization.afterCompletion threw exception" ERROR，
+        // 与 bizapp.LoanWorkflowListener pattern 对齐。
+        try {
+            // 只处理线索相关流程
+            if (businessKey == null || !businessKey.startsWith("LEAD:")) {
+                return;
+            }
 
-        String leadId = businessKey.substring("LEAD:".length());
+            String leadId = businessKey.substring("LEAD:".length());
 
-        // 查询线索，如果不存在则跳过（幂等保护）
-        CustLead lead = leadMapper.selectById(leadId);
-        if (lead == null) {
-            log.warn("[WorkflowCallbackListener] 线索 {} 不存在，跳过状态更新", leadId);
-            return;
-        }
+            // 查询线索，如果不存在则跳过（幂等保护）
+            CustLead lead = leadMapper.selectById(leadId);
+            if (lead == null) {
+                log.warn("[WorkflowCallbackListener] 线索 {} 不存在，跳过状态更新", leadId);
+                return;
+            }
 
-        // 按 event.outcome() 分发审批结果（与 bizapp.LoanWorkflowListener pattern 对齐）
-        if ("REJECTED".equals(event.outcome())) {
-            handleRejected(lead, event.processInstanceId(), event.reason());
-        } else {
-            handleApproved(lead, event.processInstanceId());
+            // 按 event.outcome() 分发审批结果（与 bizapp.LoanWorkflowListener pattern 对齐）
+            if ("REJECTED".equals(event.outcome())) {
+                handleRejected(lead, processInstanceId, event.reason());
+            } else {
+                handleApproved(lead, processInstanceId);
+            }
+        } catch (Exception e) {
+            // 业务自定义 ERROR 日志：统一告警面，不影响 Spring 事件循环 / 后续 listener 链
+            log.error("[WorkflowCallbackListener] 处理流程完成事件异常 businessKey={} processInstanceId={}",
+                    businessKey, processInstanceId, e);
         }
     }
 
