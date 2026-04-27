@@ -13,15 +13,18 @@
 | 4 | Option B.2-a 最小可信集 IT（LeadApprovedCreatesCustomerMasterIT） | ✅ 已完成 | `532896d` |
 | 5 | **P0 生产 bug 修复（WorkflowCallbackListener 链路中断 + 5 listener 审计）** | ✅ 已完成 | `3f1e3c0` `7a90e47` |
 | 6 | Phase 2 (c)：WorkflowCallbackListener:87 TODO 修复（区分 APPROVED/REJECTED） | ✅ 已完成 | `1bd5301` `c29046a` |
-| 7 | Phase 2 (b)：lead_approve_v1.bpmn20.xml + flowable-lead-e2e profile + LeadWorkflowE2EIT 真 BPMN E2E | ⏳ 待启动 | — |
+| 7 | Phase 2 (b)：lead_approve_v1.bpmn20.xml + lead-e2e profile + LeadWorkflowE2EIT 真 BPMN E2E（APPROVED + REJECTED 双分支） | ✅ 已完成 | `a6b2290` |
+| 8 | 合并 master：本期累计 16 commits + Phase 2 (b) 后续合并（共 17 commits 入 master） | ✅ 已完成 | merge `3fd9cba` + ff/合并 a6b2290 |
 
 ---
 
-## 累计 14+ commits（origin/claude/crazy-joliot-0e2a1f）
+## 累计 17 commits + handover 续接更新（origin/claude/crazy-joliot-0e2a1f，已全部合并 master）
 
 ```
-c29046a fix(workflow-callback): 区分 APPROVED/REJECTED 分支（Phase 2 (c)）  ← compact 后新增
-1bd5301 test(workflow-callback-reject): 红 IT 复现 REJECTED 分支被忽略 bug  ← compact 后新增
+a6b2290 feat(option-b-phase2-b): 补 lead_approve_v1 真 BPMN E2E IT（APPROVED+REJECTED）  ← Phase 2 (b)
+293ff04 docs(session): handover 续接更新 — Phase 2 (c) 完成 + 6 项 reviewer follow-up
+c29046a fix(workflow-callback): 区分 APPROVED/REJECTED 分支（Phase 2 (c)）
+1bd5301 test(workflow-callback-reject): 红 IT 复现 REJECTED 分支被忽略 bug
 6e1a709 docs(session): 本会话 12 commits 状态归档（compact 暂停续接锚点）
 7a90e47 fix(workflow-callback): 修复 P0 链路中断 — 去 fallbackExecution + 加 @Transactional REQUIRES_NEW
 3f1e3c0 test(workflow-callback-bug): 红 IT 复现 WorkflowCallbackListener 链路中断 P0 bug
@@ -99,6 +102,23 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 - `RES_PROD_SUP_AVL`（16）
 - `RES_SHORTCUT_PUT`（16）
 
+### 决策 9：Phase 2 (b) 真 BPMN E2E IT（commit `a6b2290`）
+
+**目标**：补真 BPMN 端到端 IT 防回归 lead 审批 APPROVED + REJECTED 双分支，CI 默认跳过 + 本地 `-Dlead.e2e.enabled=true` 触发。
+
+**5 个新建文件**：
+1. `workflow-center/src/main/resources/bpmn/lead_approve_v1.bpmn20.xml`（41 行）— 2 节点 BPMN：startEvent → branch_manager_approve userTask → exclusiveGateway → 2 endEvent；processDefinitionKey 与 LeadService.PROCESS_DEFINITION_KEY 严格对齐
+2. `bootstrap/src/test/resources/application-lead-e2e.yml`（56 行）— lead-e2e profile，独立 H2 内存库 + Flowable embedded
+3. `bootstrap/src/test/resources/lead-e2e-data.sql`（65 行）— PT_USER + 角色 + wf_node_candidate_conf + EXT_ORG_INFO，候选组键格式严格匹配 ROLE:R_LEAD_BRANCH_MGR
+4. `bootstrap/src/test/java/com/bank/branch/platform/it/config/LeadE2ETestConfig.java`（70 行）— 独立 @Profile("lead-e2e") + MapperScan 加 customer.mapper（不能复用 FlowableE2ETestConfig：profile 不同 + customer 模块 mapper 缺失）
+5. `bootstrap/src/test/java/com/bank/branch/platform/it/LeadWorkflowE2EIT.java`（287 行）— 2 case 端到端覆盖 createDraft → submit → claim → approve/reject → 断言 cust_lead 状态 + cust_master count
+
+**关键链路验证**：
+- APPROVED：approve task → AFTER_COMMIT 链路同步执行（Phase 2 (c) 修复后 WorkflowCallbackListener 用 REQUIRES_NEW 显式新事务）→ LeadApprovedListener → CustMasterAssemblerService → cust_master 创建
+- REJECTED：reject task → outcome=REJECTED → WorkflowCallbackListener.handleRejected（Phase 2 (c) 引入）→ 仅更新 lead.status + publish LeadRejectedEvent，不创 cust_master
+
+**reviewer 综合 review 结论**：✅ 通过（A/B/C/D/E/F/G/H/I/J 全过），列 4 个 nitpick follow-up（详见 V1.7+ 跟踪段）。
+
 ### 决策 8：Phase 2 (c) WorkflowCallbackListener APPROVED/REJECTED 分发（commits `1bd5301` `c29046a`）
 
 **bug 描述**：`WorkflowCallbackListener.onProcessCompleted:87` TODO 长期忽略 `event.outcome()`，无论流程审批结果如何都走 `handleApproved` → 驳回流程被错误标 APPROVED + 错误创建 cust_master / 错误失效（DELETE 路径）。语义层 bug，与 P0 fallbackExecution bug 正交。
@@ -133,6 +153,7 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 | **LeadApprovedCreatesCustomerMasterIT** | **1** | LeadApproved → CustMasterAssemblerService → cust_master |
 | **WorkflowCallbackEventChainBugIT** | **1** | 红 IT 防回归 fallbackExecution P0 bug |
 | **WorkflowCallbackRejectedBranchBugIT** | **1** | 红 IT 防回归 REJECTED 分支被忽略语义 bug（Phase 2 (c)）|
+| **LeadWorkflowE2EIT**（CI 默认跳过） | **2** | 真 BPMN E2E：APPROVED 分支 cust_master 创建 / REJECTED 分支 cust_master 不创建（Phase 2 (b)）|
 | FlowableWorkflowCenterE2ETest | ? | Flowable E2E（@EnabledIfSystemProperty 保护） |
 | FlowableWorkflowCenterRealEnvTest | ? | 真 MySQL Flowable E2E |
 | PerformanceMetricApiBridgeTest | 10 | bridge 单元测试 |
@@ -149,7 +170,11 @@ bootstrap 全模块（含 surefire + failsafe）：**42 + 11 = 53 case PASS / 3 
 
 commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45 分钟，实际约 35 分钟（含 reviewer review）。reviewer ⚠️ 通过 + 6 个 follow-up（不阻塞，详见末尾 V1.7+ 跟踪段）。
 
-### Phase 2 (b) — 真 BPMN E2E IT（防回归终极屏障）
+### Phase 2 (b) — ✅ 已完成（compact 后续接交付，commit `a6b2290`）
+
+详见上文「决策 9」。预估 1.5-2h，实际约 50 分钟（implementer + reviewer）。reviewer ✅ 通过 + 4 个 nitpick（不阻塞，详见末尾 V1.7+ 跟踪段）。
+
+#### 已废弃的原 Phase 2 (b) 待办说明（保留作历史参考）
 
 **目标**：补 `lead_approve_v1.bpmn20.xml` + `flowable-lead-e2e` profile + `LeadWorkflowE2EIT`，端到端验证：
 - createDraft → submitForApproval → claim task → approve → cust_master 创建 → createLoanDraft → submitLoan → loan_apply IN_APPROVAL（通过分支）
@@ -192,6 +217,15 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 **reviewer 特别提醒**：commit message 里 "与 LoanWorkflowListener pattern 对齐" 略有夸大 — 实际只对齐了 outcome 分发，没对齐幂等（conditionalUpdateStatus）和整体异常兜底（try-catch）。建议 V1.7+ 把 FU-1 / FU-2 / FU-6 合并成一个「WorkflowCallbackListener 鲁棒性补齐」任务统一跟踪。
 
+### Phase 2 (b) reviewer 4 个 nitpick（V1.7+ 跟踪，不阻塞合并）
+
+| # | 项 | 优先级 | 说明 |
+|---|---|---|---|
+| FU-7 | `FlowableE2ETestConfig` 与 `LeadE2ETestConfig` 90% 重复 | 低 | 仅 MapperScan 多 1 项 + Profile 名不一样；可抽公共 abstract base class |
+| FU-8 | `LeadWorkflowE2EIT` REJECTED case 没像 APPROVED 那样校验 preCount=0 | 低 | 对称性微优化，1 行可补 |
+| FU-9 | **H2 LEGACY mode `user_notification` 大小写问题**（预存在）| 中 | NotificationMapper.xml `INSERT INTO user_notification` 在 LEGACY mode 解析为大写 `USER_NOTIFICATION`，schema 实际表名小写 → insert 失败被吞，掩盖告警；推荐 schema.sql 全双引号或 H2 url 改 MODE=MYSQL |
+| FU-10 | `lead_approve_v1.bpmn` 长期不存在但 `LeadService.PROCESS_DEFINITION_KEY` 早就引用 | 已修 | Phase 2 (b) commit `a6b2290` 顺手补上，记录作为历史技术债已清零 |
+
 ---
 
 ## 用户偏好沿用
@@ -211,13 +245,13 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 ### 快速入口
 
-读本文档了解全貌，然后选择以下方向之一（Phase 2 (c) 已完成，余下选项按当前优先级排序）：
+读本文档了解全貌（Phase 2 (b) (c) 均已完成 + 已合并 master），然后选择以下方向之一：
 
-1. **继续 Phase 2 (b)**：派 implementer 写真 BPMN E2E IT（清单见上文 §"Phase 2 (b)"；REJECTED 分支验证现已可用，因 (c) 已修复）
-2. **跳过 (b)，进入 Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
-3. **进入 Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
-4. **本会话收尾合并 master**：将 14+ commits 合并到 master 分支
-5. **跑 Phase 2 (c) reviewer follow-up FU-1/FU-2/FU-6**：「WorkflowCallbackListener 鲁棒性补齐」一次性收尾
+1. **进入 Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
+2. **进入 Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
+3. **跑 reviewer follow-up FU-1/FU-2/FU-6/FU-9**：「WorkflowCallbackListener + H2 LEGACY 鲁棒性补齐」一次性收尾
+4. **跑 reviewer nitpick FU-7（抽 E2ETestConfig 基类）+ FU-8（IT 对称性）**：测试基础设施轻量重构
+5. **关闭本期会话归档**：本期已交付完整闭环（Option A → B.1 → B.2-a → P0 → Phase 2 (c) → Phase 2 (b)），可视为本期工作完成
 
 ### 验证当前状态命令
 
@@ -244,7 +278,18 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（compact 后续接更新于 2026-04-27）
-**对应 git HEAD**：`c29046a`（compact 前 `7a90e47`，compact 归档 `6e1a709`，后 Phase 2 (c) 红 `1bd5301` + 绿 `c29046a`）
-**会话累计 commit（本期分量）**：14 commits + 本 handover 续接更新
-**平台累计 commit（含历史）**：241（上期累计） + 14（本期） = **255 commits**
+**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27）
+**对应 git HEAD**：`a6b2290`（Phase 2 (b)）→ origin/master 已合并至 `3fd9cba` + a6b2290 ff
+**会话累计 commit（本期分量）**：17 commits + 本 handover 多次续接更新（共约 19 commits）
+**平台累计 commit（含历史）**：241（上期累计） + 17（本期） = **258 commits**
+
+**本期最终交付清单**（均已合并 master）：
+- Option A 启动级 IT（5 case）
+- V1.1 PT_RESOURCE 整改（清零 audit 类型 A 26 + 类型 B 11）
+- Option B.1 portal workspace IT（5 case）
+- Option B.2-a customer 事件链 IT（1 case）
+- P0 fallbackExecution 修复（5 listener 审计，3 个修复）
+- Phase 2 (c) WorkflowCallbackListener APPROVED/REJECTED 分发（含 LeadRejectedEvent 新增）
+- Phase 2 (b) lead_approve_v1.bpmn20.xml + LeadWorkflowE2EIT 真 BPMN E2E（CI 默认跳过，本地 -D 触发）
+- 测试基础设施：UTF-8 全局编码 + stale jar 文档化 + LeadE2ETestConfig
+- 数据库对齐：onepl PT_RESOURCE 122→272→298 + docs/schema mysqldump 同步
