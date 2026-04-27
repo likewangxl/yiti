@@ -4,6 +4,8 @@ import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 
+import java.util.Optional;
+
 /**
  * 工作流核心 API -- 流程启动与控制
  * <p>
@@ -53,4 +55,30 @@ public interface WorkflowApi {
      * @throws com.bank.branch.platform.common.web.exception.BizException WF-40402 流程实例不存在
      */
     BizProcessMapDTO getProcessByBizTypeAndBizId(String bizType, String bizId);
+
+    /**
+     * 查询已完成流程的审批结论（用于补偿场景）。
+     * <p>
+     * 调用方在已知流程 status=COMPLETED 的前提下，通过该方法读取 Flowable
+     * {@code HistoryService} 历史变量 {@code approved}（Boolean 类型），并按业务语义
+     * 转换为 {@code "APPROVED"}（{@code true}）/ {@code "REJECTED"}（{@code false}）。
+     * </p>
+     * <p>
+     * <strong>语义对齐</strong>：返回值与 {@code ProcessCompletedListener} 发布
+     * {@code ProcessCompletedEvent.outcome()} 字段保持一致，便于补偿任务复用 listener
+     * 现有分支处理逻辑。
+     * </p>
+     * <p>
+     * <strong>边界</strong>：
+     * <ul>
+     *   <li>流程不存在 / 仍 RUNNING / 历史变量未设置 → 返回 {@link Optional#empty()}（不抛异常）；</li>
+     *   <li>调用方应自行先经 {@link #getProcessByBizTypeAndBizId} 等接口确认 processStatus=COMPLETED
+     *       后再调用，避免对未完成流程产生误判。</li>
+     * </ul>
+     * </p>
+     *
+     * @param processInstanceId Flowable 流程实例 ID
+     * @return {@code Optional.of("APPROVED" / "REJECTED")} 或 {@link Optional#empty()}
+     */
+    Optional<String> getProcessOutcome(String processInstanceId);
 }

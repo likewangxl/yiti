@@ -10,6 +10,8 @@ import com.bank.branch.platform.workflow.service.ProcessStartService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 /**
  * 工作流 Facade 实现
  * <p>
@@ -56,5 +58,17 @@ public class WorkflowFacade implements WorkflowApi {
     @Override
     public BizProcessMapDTO getProcessByBizTypeAndBizId(String bizType, String bizId) {
         return processStartService.getProcessByBizTypeAndBizId(bizType, bizId);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>红 commit skeleton</strong>：暂返 {@link Optional#empty()}，
+     * 让 LeadCallbackCompensationIT 的 APPROVED/REJECTED case 在红阶段保持 fail；
+     * 绿 commit 中替换为基于 {@code HistoryService} 的真实查询。</p>
+     */
+    @Override
+    public Optional<String> getProcessOutcome(String processInstanceId) {
+        return Optional.empty();
     }
 }
