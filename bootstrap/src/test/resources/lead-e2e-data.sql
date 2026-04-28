@@ -8,15 +8,8 @@
 --   明文 password="password"，BCrypt hash=$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy
 -- ============================================================
 
--- ====== FU-15 B C4 切真 MySQL onepl_test_bootstrap 后冲突清理 ======
--- 共享库下，flowable-e2e profile 之前留下了 100-105 资源（与 LR101-105 同 URL/METHOD），
--- 触发 uk_pt_resource_url_method_sys 唯一键冲突，导致 LR101-105 INSERT IGNORE 跳过 → R_LEAD_BRANCH_MGR 缺权限。
--- 在 lead-e2e profile 启动前，主动删除 100-105 关联（PT_ROLE_RESOURCE 引用 + PT_RESOURCE 本体）。
--- 同时清理 flowable-e2e profile 留下的 WRR* 绑定行 → 让两 profile 互不污染（flowable-e2e 下次跑会再插）。
--- DELETE 顺序：先删依赖（ROLE_RESOURCE 引用 100-105 / WRR 全表）→ 再删主体 PT_RESOURCE。
-DELETE FROM PT_ROLE_RESOURCE WHERE RESOURCE_ID IN ('100','101','102','103','104','105')
-   OR ID LIKE 'WRR%';
-DELETE FROM PT_RESOURCE WHERE RESOURCE_ID IN ('100','101','102','103','104','105');
+-- 注：共享库 PT_RESOURCE 100-105 vs LR101-105 互冲突清理已抽到 it-cleanup.sql（FU-25，2026-04-29）
+-- application-lead-e2e.yml 在 data-locations 第一个加载 it-cleanup.sql 完成前置清理。
 
 -- ====== PT_USER：发起人 + 审批人 ======
 INSERT IGNORE INTO PT_USER (USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL, ISENABLED) VALUES

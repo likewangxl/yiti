@@ -12,9 +12,9 @@ spring:
     allow-bean-definition-overriding: true
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # tinyInt1isBit=false：让 MySQL 驱动把 tinyint(1) 视作 Number 而非 Boolean
-    # （LeadWorkflowE2EIT 的 jdbcTemplate.queryForMap("SELECT ... deleted ...") 期望 Number cast）
-    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&tinyInt1isBit=false
+    # FU-23（2026-04-29）：去除 tinyInt1isBit=false 配置漂移，url 与 default/flowable-e2e profile 一致
+    # LeadWorkflowE2EIT 的 deleted 字段断言已改为 RowMapper 显式 rs.getInt
+    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: 123456
     type: com.zaxxer.hikari.HikariDataSource
@@ -29,7 +29,8 @@ spring:
       # always：MySQL 也跑 data.sql（embedded 仅探测嵌入式 DB）
       # 库表由 docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql 初始化，无需 schema.sql
       mode: always
-      data-locations: classpath:data.sql,classpath:lead-e2e-data.sql
+      # FU-25：it-cleanup.sql 在 data.sql 之前，统一清理三 profile 共享库的 PT_RESOURCE 100-105 / LR* 互冲突
+      data-locations: classpath:it-cleanup.sql,classpath:data.sql,classpath:lead-e2e-data.sql
       encoding: UTF-8
       continue-on-error: true
 

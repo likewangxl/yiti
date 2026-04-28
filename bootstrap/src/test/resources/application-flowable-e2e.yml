@@ -26,7 +26,8 @@ spring:
       # always：MySQL 也跑 data.sql（embedded 仅探测嵌入式 DB）
       # 库表由 docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql 初始化，无需 schema.sql
       mode: always
-      data-locations: classpath:data.sql,classpath:flowable-e2e-data.sql
+      # FU-25：it-cleanup.sql 在 data.sql 之前，统一清理三 profile 共享库的 PT_RESOURCE 100-105 / LR* 互冲突
+      data-locations: classpath:it-cleanup.sql,classpath:data.sql,classpath:flowable-e2e-data.sql
       encoding: UTF-8
       continue-on-error: true
 

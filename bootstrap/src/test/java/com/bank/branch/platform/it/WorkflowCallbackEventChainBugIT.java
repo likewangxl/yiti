@@ -54,8 +54,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><strong>区别于 LeadApprovedCreatesCustomerMasterIT</strong>：</p>
  * <ul>
- *   <li>{@code LeadApprovedCreatesCustomerMasterIT} 通过 {@code handleWorkflowCallback} 公开方法 + TransactionTemplate
- *       绕过了 {@code onProcessCompleted} 事件路径，假绿覆盖 bug；</li>
+ *   <li>历史版本的 {@code LeadApprovedCreatesCustomerMasterIT} 通过 {@code handleWorkflowCallback} 公开方法 + TransactionTemplate
+ *       绕过了 {@code onProcessCompleted} 事件路径，假绿覆盖 bug；
+ *       <strong>注</strong>：FU-6（commit {@code 4efde7e}）已删除 {@code handleWorkflowCallback} dead code，
+ *       该 IT 已改为 TxPublisher 真事件路径（与本 IT 对齐）；</li>
  *   <li>本 IT 通过 {@code eventPublisher.publishEvent(ProcessCompletedEvent)} 在 @Transactional
  *       方法内发布事件，真实模拟 Flowable {@code ProcessCompletedListener.notify()} 的事务内 publish 行为，
  *       触发 {@code WorkflowCallbackListener.onProcessCompleted} 的真实 bug 路径。</li>
