@@ -1,3 +1,8 @@
+# ============================================================
+# Flowable E2E Profile（含 Flowable 流程引擎，跑真 BPMN 端到端 IT）
+# 切到本地真 MySQL onepl_test_bootstrap（FU-15 B C3，2026-04-28）
+# act_*/flw_*/qrtz_* 共 75 张表由 Flowable 启动时自动建表（database-schema-update: true）
+# ============================================================
 server:
   port: 0
 
@@ -5,10 +10,10 @@ spring:
   main:
     allow-bean-definition-overriding: true
   datasource:
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:flowable-e2e;DB_CLOSE_DELAY=-1;MODE=LEGACY;NON_KEYWORDS=DAY,READ
-    username: sa
-    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
     type: com.zaxxer.hikari.HikariDataSource
   autoconfigure:
     exclude:
@@ -18,8 +23,9 @@ spring:
       - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
   sql:
     init:
-      mode: embedded
-      schema-locations: classpath:schema.sql
+      # always：MySQL 也跑 data.sql（embedded 仅探测嵌入式 DB）
+      # 库表由 docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql 初始化，无需 schema.sql
+      mode: always
       data-locations: classpath:data.sql,classpath:flowable-e2e-data.sql
       encoding: UTF-8
       continue-on-error: true

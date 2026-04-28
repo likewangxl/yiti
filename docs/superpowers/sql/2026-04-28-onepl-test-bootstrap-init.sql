@@ -80,12 +80,54 @@ CREATE DATABASE IF NOT EXISTS onepl_test_bootstrap
 -- TODO（FU-X）：后续把 sla_warning 列补到 ddl-customer.sql + 提供 V1_x 迁移脚本。
 --
 -- ============================================================
--- 步骤 5：Flowable / Quartz 表（不在本脚本范围）
+-- 步骤 5：Flowable / Quartz 表（act_* / flw_* / qrtz_* 共 81 张）
 -- ============================================================
 --
--- act_* / flw_* / qrtz_* 共 75 张表由 Flowable 启动时根据 application-flowable-e2e.yml /
--- application-lead-e2e.yml 中 `flowable.database-schema-update: true` 自动创建，无需预建。
--- 仅在跑 flowable-e2e 或 lead-e2e profile IT 时才会建表。
+-- 经实测，Flowable 7.0.1 在真 MySQL 8 + Druid 连接池组合下，首次启动时
+-- `flowable.database-schema-update: true` 的 schemaUpdate 路径会因 ACT_GE_PROPERTY
+-- 表读取异常进入死循环（schemaUpdate Flowable 内部需要 Property 数据兜底，但 Liquibase
+-- 建表+插入元数据的事务边界与 Druid PreparedStatement 缓存冲突），导致 ApplicationContext
+-- 启动失败。
+--
+-- 规避方案：从生产 onepl 库直接复制 act_* / flw_* / qrtz_* 共 81 张表的 schema + 元数据
+-- （Liquibase databasechangelog + act_ge_property 13 行 schema.version 数据）到测试库，
+-- Flowable 启动时直接走 schemaCheckVersion() 成功路径，无需走 schemaUpdate() 重建。
+--
+-- bash（首次搭建测试库时跑一次）：
+--   # 5.1 导出表清单
+--   mysql -uroot -p123456 onepl -e "SHOW TABLES LIKE 'act_%'" -B -N > /tmp/flowable_tables.txt
+--   mysql -uroot -p123456 onepl -e "SHOW TABLES LIKE 'flw_%'" -B -N >> /tmp/flowable_tables.txt
+--   mysql -uroot -p123456 onepl -e "SHOW TABLES LIKE 'qrtz_%'" -B -N >> /tmp/flowable_tables.txt
+--   tr -d '\r' < /tmp/flowable_tables.txt > /tmp/flowable_tables_lf.txt
+--
+--   # 5.2 导出 schema (DDL)，逐表防 word splitting
+--   > /tmp/flowable_schema.sql
+--   while read t; do
+--     mysqldump -uroot -p123456 --no-data --skip-add-locks --skip-comments \
+--       --skip-set-charset --no-create-db onepl "$t" 2>/dev/null >> /tmp/flowable_schema.sql
+--   done < /tmp/flowable_tables_lf.txt
+--
+--   # 5.3 导出元数据 (Liquibase changelog + act_ge_property schema.version)
+--   > /tmp/flowable_meta.sql
+--   for t in act_ge_property act_app_databasechangelog act_app_databasechangeloglock \
+--            act_cmmn_databasechangelog act_cmmn_databasechangeloglock \
+--            act_dmn_databasechangelog act_dmn_databasechangeloglock \
+--            flw_ev_databasechangelog flw_ev_databasechangeloglock; do
+--     mysqldump -uroot -p123456 --no-create-info --skip-add-locks --skip-comments \
+--       --skip-set-charset --no-create-db --skip-extended-insert onepl "$t" 2>/dev/null \
+--       | grep -E "^(INSERT|/\*!40000)" >> /tmp/flowable_meta.sql
+--   done
+--
+--   # 5.4 导入测试库
+--   mysql -uroot -p123456 --default-character-set=utf8mb4 onepl_test_bootstrap < /tmp/flowable_schema.sql
+--   mysql -uroot -p123456 --default-character-set=utf8mb4 onepl_test_bootstrap < /tmp/flowable_meta.sql
+--
+-- 验证：
+--   mysql -uroot -p123456 onepl_test_bootstrap -e "SELECT COUNT(*) FROM act_ge_property;"
+--   期望：13（schema.version 等 Flowable 元数据 13 行）
+--   mysql -uroot -p123456 onepl_test_bootstrap -e "SELECT COUNT(*) FROM information_schema.tables
+--     WHERE table_schema='onepl_test_bootstrap' AND (table_name LIKE 'act_%' OR table_name LIKE 'flw_%' OR table_name LIKE 'qrtz_%');"
+--   期望：81
 --
 -- ============================================================
 -- 验证
