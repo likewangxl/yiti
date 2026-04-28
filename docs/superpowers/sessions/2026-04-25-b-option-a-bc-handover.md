@@ -20,7 +20,7 @@
 | 11 | onepl MySQL 幂等导入最新 docs/schema DDL + SEED + 备份 | ✅ 已完成 | 备份 `docs/superpowers/sql/backup/2026-04-27-pre-fu1415-import-backup.sql`（7553 行）|
 | 12 | **Phase 2.6 FU-14：孤儿 lead 数据补偿机制（@Scheduled 5min 巡检 + reconcile 抽取 + WorkflowApi.getProcessOutcome）** | ✅ 已完成（compact 后续接交付，reviewer ✅ 通过+5 follow-up） | `5602b52` `28b1bbc` |
 | 13 | **Phase 2.6 FU-15 B：用本地 onepl_test_bootstrap MySQL 替代 testcontainers**（本地无 Docker 调整方案） | ✅ 已完成（compact 后续接交付，5 commits，reviewer ✅ 通过+9 follow-up） | `2ec276e` `ccd0eb1` `3b379d9` `884fad2` `a71ef53` |
-| 14 | **第四次 master merge：Phase 2.6 (FU-14 + FU-15 B) 共 7 commits 合并** | ⏳ 待执行 | 待执行 |
+| 14 | **第四次 master merge：Phase 2.6 FU-15 B 6 commits + V1.6 quartz 整合 21 commits 自动合并** | ✅ 已完成 | merge `cf7b64c` |
 
 ---
 
@@ -212,6 +212,34 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 - 双 profile 同时激活：64 case 全绿
 
 **初始化归档**：`docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql`（149 行，含步骤 1-5 + 4bis）
+
+### 决策 13：第四次 master merge 与 V1.6 quartz 整合并行处理（merge `cf7b64c`，2026-04-28）
+
+**背景**：FU-15 B 5 commits + 1 handover commit 完成后，发现 origin/master 在 acd94db（第三次 merge + FU-14 合并）之后已自演进 21 个 V1.6 quartz 整合 commits（`36ca766` ~ `bc2f74f`）+ 2 个 customer DDL 文档对齐 commits（`6a8f186` `b01ffda`），共 23 commits。
+
+**冲突评估**（merge-tree dry-run）：✅ 自动合并无冲突
+- 仅 `bootstrap/src/test/resources/application-test.yml` 双方都改但不同行：master 加 `spring.quartz.enabled=false` + `QuartzAutoConfiguration` exclude，本地切 datasource 到 onepl_test_bootstrap，git ort 策略自动并存
+- master 6a8f186 已把 `sla_warning` 加到 `docs/schema/ddl-customer.sql` → **FU-29 已解** ✅
+
+**合并执行**：
+1. `git checkout master && git pull --ff-only origin master` → 同步至 b01ffda
+2. `git merge --no-ff claude/crazy-joliot-0e2a1f` → 自动合并产生 cf7b64c
+3. **测试库 V1.6 quartz schema 同步**：跑 `docs/schema/migrations/2026-04-25-quartz-integration.sql`
+   - sys_job_conf 加 `quartz_job_class` + `misfire_policy` 字段
+   - sys_job_run_log 加 `scheduled_fire_time` 字段
+   - INSERT 3 条 V1.6 业务 Job（JOB_DAILY_KPI_CALC / JOB_SYS_CONTROL_CLEANUP / JOB_PERF_RUN_TASK_CLEANUP）
+   - **QRTZ_* 11 表已存在**（FU-15 B C3 mysqldump 时从 onepl 一并复制过来）
+   - backup：`docs/superpowers/sql/backup/2026-04-28-pre-v16-quartz-migration-backup.sql`
+4. 全量构建 `mvn clean install -DskipTests` → 16 模块 BUILD SUCCESS（48 秒）
+5. bootstrap IT 验证 `mvn verify -pl bootstrap` → **surefire 42（2 skip）+ failsafe 22（2 skip）= 64 全绿** ✅
+6. push origin master：cf7b64c
+
+**关键日志验证**：
+- `JobService.syncJobsOnStartup - Scheduler bean 不可用（测试或禁用 Quartz 场景），跳过启动同步` ← V1.6 Quartz 在测试环境正确禁用
+- `RptReadOnlyDataSource initialized url=jdbc:mysql://localhost:3306/onepl_test_bootstrap` ← FU-15 B 真 MySQL 用上了
+- `LeadCallbackCompensationService.scanAndCompensate - 无 stuck IN_APPROVAL 线索，跳过` ← FU-14 @Scheduled 5min 巡检正常运行
+
+**风险点**：无。V1.6 quartz 整合在 master 上已经独立测试通过（用 H2 schema.sql），与 FU-15 B 真 MySQL 切换在 application-test.yml 共存（quartz disabled + datasource MySQL），互不干扰。
 
 ### 决策 11：Phase 2.6 FU-14 — 孤儿 lead 数据补偿机制（commits `5602b52` `28b1bbc`）
 
@@ -518,10 +546,10 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14 + FU-15 B 完成续接）
-**对应 git HEAD**：`a71ef53`（Phase 2.6 FU-15 B C5）→ origin/master 已合并至 `0af1635`（Phase 2.5）+ Phase 2.6 FU-14 + FU-15 B 共 7 commits 待第四次 master merge
-**会话累计 commit（本期分量）**：31 commits + 本 handover 多次续接更新（共约 33 commits）
-**平台累计 commit（含历史）**：241（上期累计） + 31（本期） = **272 commits**
+**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14 + FU-15 B 完成续接 + 第四次 master merge 完成）
+**对应 git HEAD**：`cf7b64c`（master 第四次合并节点，含 V1.6 quartz 整合 21 commits + Phase 2.6 FU-15 B 6 commits）→ origin/master 已推送
+**会话累计 commit（本期分量）**：31 commits + handover 多次续接更新 + 第四次 merge commit（共约 34 commits）
+**平台累计 commit（含历史）**：241（上期累计） + 31（本期） = **272 commits**（不计 master merge commits 与 V1.6 quartz 21 个 master 自演进 commits）
 
 **本期最终交付清单**（已合并/即将合并 master）：
 - Option A 启动级 IT（5 case）

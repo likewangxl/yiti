@@ -146,13 +146,21 @@ class LeadWorkflowE2EIT {
                 .isEqualTo(1L);
 
         // 同时校验生成的 cust_master 关键字段
-        Map<String, Object> created = jdbcTemplate.queryForMap(
+        // FU-23：用 RowMapper 显式 rs.getInt("deleted") 替代 (Number) cast，
+        // 避免 MySQL 驱动默认 tinyInt1isBit=true 把 TINYINT(1) 当 Boolean 导致 ClassCastException，
+        // 让 application-lead-e2e.yml 不再需要 url 加 tinyInt1isBit=false（与 default/flowable-e2e profile 一致）。
+        Map<String, Object> created = jdbcTemplate.queryForObject(
                 "SELECT cust_name, status, deleted FROM cust_master WHERE lead_id = ?",
+                (rs, rowNum) -> Map.of(
+                        "cust_name", rs.getString("cust_name"),
+                        "status", rs.getString("status"),
+                        "deleted", rs.getInt("deleted")
+                ),
                 leadId
         );
         assertThat(created.get("cust_name")).isEqualTo(custName);
         assertThat(created.get("status")).isEqualTo("ACTIVE");
-        assertThat(((Number) created.get("deleted")).intValue()).isZero();
+        assertThat((Integer) created.get("deleted")).isZero();
     }
 
     @Test
