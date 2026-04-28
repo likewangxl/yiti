@@ -160,3 +160,113 @@
 3. **补 09 文档 BizType / DataScopeType 枚举值**：以 `auth-permission-center` 当前实际值为准重写。
 4. **同步 05 文档状态机**：`lead_status` 枚举改为 4 态、`task_status` 增列 `IN_PROGRESS`，与 01 §7.3bis、`TouchTaskStateMachineService` 对齐。
 5. **02 §3 包结构改写**：删 `CustomerApi`/`TouchTaskApi`/`util/`/`ParallelFlowChecker` 等未落地条目，加入 `TouchTaskStateMachineService` / `LeadCallbackReconcileService` / `CustMasterAssemblerService` / `controller/admin/AdminTouchTaskController`。
+
+---
+
+## 10. 2026-04-28 子代理深核增量（4 路并行复核）
+
+> 由 4 个 sonnet 只读代理并行核验 §1/§4/§6/§3+§5，本节为补充结论与证据。原 §0~§9 不动以保留时间线。
+
+### 10.1 推翻原稿判断
+
+| 原稿位置 | 原结论 | 复核结论 | 证据 |
+|---|---|---|---|
+| §3 末尾 "枚举值偏离" | DDL 文档 §5.3 落后于代码 | **错**。代码 + `ddl-customer.sql` + 05 §5.3 三方完全一致使用 5 值方案 (`DRAFT/SUBMITTED/IN_APPROVAL/APPROVED/REJECTED`) | 真正落后的是 **01-功能规格.md §3.6** 写作 `PENDING_APPROVAL`，以及模块 CLAUDE.md 错误地概括为 4 态 |
+| §3 TouchTaskStatus | 方向正确 | 加强：`ddl-customer.sql` 与 05 §5.8 注释**双双漏写** `IN_PROGRESS`，需同步两份；代码 + 01 §7.3bis 是真值 | `TouchTaskStateMachineService.assertTransition` 实际允许 `PENDING→{IN_PROGRESS,SUCCESS,CANCELLED}`、`IN_PROGRESS→{SUCCESS,CANCELLED}` |
+| §4 "24 vs 35" | 数量差异 | **数量是假象**：编号体系已完全分叉，"双方编号+message 完全一致"条目数 = **0** | 文档用 `CUST-400xx` 混编 400/404，代码已分离 `400xx/404xx/409xx` |
+
+### 10.2 原稿未列的新发现
+
+- **`CustMasterStatus` 偏离**：02 后端架构 §3 标注 `VALID/DELETED` vs 代码实际 `ACTIVE/INACTIVE`
+- **错误码同号双义（高危，生产风险）**：`CUST-40904` 文档=客户在途流程不允许删除 / 代码=客户已被认领 → 必须立即拆分
+- **错误码同号语义偏**：`CUST-40901` 文档=客户名称已存在 / 代码=标签名称已存在
+- **跨模块通用码硬编码**：`CustomerQueryApiImpl` 与 `TagApiImpl` 共 4 处 `throw new BizException("COMMON-40000", ...)` 未走 `CustomerErrorCode`，待复核 `TouchTaskStateMachineService` 第 53/58 行 2 处 throw
+
+### 10.3 09 §1.2 真值（取代原稿 §6 的描述）
+
+`BizType`（定义在 common-security 模块，**实际 18 值**）：
+```
+NAV, ADDRBOOK, PRODUCT, DOC, TAG, LEAD, CUSTOMER, CUSTOMER_POOL,
+CLAIM, TOUCH_TASK, TOUCH_REPORT, LOAN, SUPPORT, SUPPORT_DEPT,
+REPORT, PERF_CONFIG, SYS_CONFIG, ORG
+```
+- 仅文档存在（**虚构**）：`TOUCH`、`LEAD_BATCH`
+- customer-marketing-center 实际 `@BizAuth` 用到 7 值：`TAG, LEAD, CUSTOMER, CUSTOMER_POOL, CLAIM, TOUCH_TASK, TOUCH_REPORT`
+
+`DataScopeType`（定义在 auth-permission-center，**实际 7 值**）：
+```
+SELF_CREATED, SELF, SELF_ASSIGNED, ORG, ORG_SUBTREE, ALL, WORKFLOW_PARTICIPANT
+```
+- 仅文档存在（**全部虚构**）：`DEPARTMENT_AND_BELOW`、`DEPARTMENT`、`PERSONAL` — auth-permission-center 代码中均无此名
+
+09 §5 下游 API 名核验（5 个全错）：
+- `CustomerQueryApi.getCustomerById` → 真名 `getCustomer(custId)` 返 `Optional`
+- `CustomerQueryApi.isMaintainedBy` → ✗ 不存在；最近的是 `isClaimedByOrg(custId, orgCode)`，**语义不同**（机构是否认领，非维护人校验）
+- `CustomerQueryApi.listCustomersByEmp` → ✗ 不存在
+- `TouchQueryApi` → 接口名错；真名 `TouchTaskQueryApi`
+- `LeadQueryApi.countApprovedByEmpAndPeriod` → ✗ 不存在；接口真名为 `LeadApi`，无 `countApproved*` 方法
+
+### 10.4 REST 端点 file:line 全证据（补充 §1）
+
+A 类「改文档」12 条（路径以代码为准）：
+
+| Controller:line | 实际 | 文档（03 节） |
+|---|---|---|
+| LeadImportController.java:55 / :73 | `POST /api/leads/import/preview` + `/execute`（拆为 2 端点） | C.2 仅列单一 `/import` |
+| LeadImportController.java:93 | `GET /api/leads/batches` | C.3 写作 `/leads/import/batches` |
+| LeadController.java:192 | `POST /api/leads/edit-version`（sourceLeadId 在 body） | B.7 写作 `/leads/{id}/edit` |
+| CustomerController.java:92 | `POST /api/customers/{custId}/claims/{claimId}/transfer` | D.4 写作 `/customers/{id}/transfer` |
+| ClaimController.java:55 | `POST /api/claims`（custId 在 body） | E.2 写作 `/customer-pool/{custId}/claim` |
+| ClaimController.java:95 | `GET /api/claims/mine` | F.1 写作 `/my-claims` |
+| CustomerTagController.java:55 / :77 | `POST/DELETE /api/customers/{id}/tags(/{tagId})` | 文档未列 |
+| CustomerHistoryController.java:59 | `GET /api/customers/{id}/history` | D.3 存在但报文未展开 |
+| LeadController.java:219 / :240 | `POST /api/leads/delete-version` + `GET /api/leads/{id}/versions` | 文档未列 |
+| TouchTaskController.java:178 | `GET /api/touch-tasks/{id}/logs` | 文档仅 G.5 写入端点 |
+| TouchReportController.java:58 / :83 / :107 | 报表 3 端点 | 文档未列 |
+| AdminTouchTaskController.java:62 / :140 | `GET /api/admin/touch-tasks` + `POST /batch-assign` | 文档仅 H.3 export |
+
+B 类「改代码」3 条：`POST /api/claims/{claimId}/re-touch`（F.3）、`GET /api/admin/touch-tasks/summary`（H.1）、`GET /api/leads/import/batches/{batchId}`（C.4）— 全模块 grep 0 命中。
+
+### 10.5 `@BizAuth.highRisk` 缺失全量清单（补 §1.4）
+
+文档 J 节标注 `highRisk=true` 但代码注解全部缺该参数，9 处具体落地：
+
+```
+LeadImportController.java:56  (IMPORT preview)
+LeadImportController.java:74  (IMPORT execute)
+CustomerExportController.java:58  (EXPORT)
+TagCustomerController.java:61   (TAG IMPORT)
+TagCustomerController.java:98   (TAG EXPORT)
+TouchReportController.java:108  (REPORT EXPORT)
+CustomerController.java:92      (TRANSFER)
+AdminTouchTaskController.java:140 (BATCH_ASSIGN)
+LeadController.java:158         (DELETE)
+```
+
+待业务确认：`@BizAuth` 注解类是否支持 `highRisk` 字段；若支持需补 9 处，若框架未实现则记技术债。
+
+### 10.6 错误码全量分类（取代原 §4 的概要）
+
+- **仅文档存在（待确认是否补实现）16 条**：`CUST-40301~40307`（403 系列 7 条）+ `CUST-42201~42208`（422 系列 8 条）+ `CUST-50003`（MinIO 上传失败）
+- **仅代码存在（待补回文档）17 条**：`CUST-40001/40002/40004~40009`（参数校验 8 条）+ `CUST-40401~40406`（404 资源不存在 6 条）+ `CUST-40902/40903/40906`（409 冲突 3 条）
+- **同号但语义/message 不同 2 条（最危险）**：`CUST-40904`（双义，必修）、`CUST-40901`（语义偏）
+- **双方编号+message 完全一致：0 条**
+- **实际 throw 但 `CustomerErrorCode` 未定义**：4 处硬编码 `COMMON-40000`（`CustomerQueryApiImpl` / `TagApiImpl`），2 处 `TouchTaskStateMachineService:53/58` 待复核是否内联字符串
+
+### 10.7 包结构核验（补 §5）
+
+| 类别 | 条目 |
+|---|---|
+| ⚠ 位置/命名不同 | `convert/` → `api/converter/`（5 个转换器） |
+| ➕ 代码多出（02 未列） | `CustomerExportController`、`CustomerTagController`、`controller/admin/AdminTouchTaskController`、`TouchTaskStateMachineService`、`LeadCallbackReconcileService`、`LeadCallbackCompensationService`、`CustomerSchedulingConfig` |
+| ✗ 02 列出但代码不存在 | `controller/TagImportController`、`service/{ParallelFlowChecker, CustomerHistoryService, TagImportService}`、`config/{CustomerModuleConfig, ExcelTemplateConfig, CustomerEventPublisher}`、`util/` 整目录 4 个工具类、`facade/{CustomerApiImpl, TouchTaskApiImpl}`、`api/{CustomerApi, TouchTaskApi}` |
+
+### 10.8 修复优先级修订（取代原 §9）
+
+| 优先级 | 类型 | 任务 |
+|---|---|---|
+| **P0** | 改代码 | `CUST-40904` 编号双义拆分（生产风险） |
+| **P0** | 改文档 | 09 §1.2 `BizType`/`DataScopeType` 用真值整体重写；09 §5 删除 5 个虚构 API 名或更名 |
+| **P1** | 改文档 | `ddl-customer.sql` + 05 §5.8 `task_status` COMMENT 补 `IN_PROGRESS`；01 §3.6 `LeadStatus` 改 5 值；02 §3 `CustMasterStatus` 改 `ACTIVE/INACTIVE`、删 `CustomerApi/TouchTaskApi/util/` 等未落地条目 |
+| **P1** | 业务确认 | 3 个真缺失 REST 端点（re-touch / summary / batch detail）是否要补；`@BizAuth.highRisk` 字段是否落地 9 处；403/422 系列 16 条错误码补实现 vs 删文档 |
+| **P2** | 长期 | 错误码编号体系整体重对齐（双方零一致条目，需统一规划而非逐条修） |
