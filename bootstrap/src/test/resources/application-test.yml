@@ -1,5 +1,7 @@
 # ============================================================
-# 测试环境配置 - 使用 H2 内存数据库 + Redis 禁用 + Flowable 禁用
+# 测试环境配置 - 使用本地真 MySQL (onepl_test_bootstrap) + Redis 禁用 + Flowable 禁用
+# 切换原因：H2 LEGACY/MYSQL 与生产 MySQL 8.0 行为差异多次踩坑（FU-9 user_notification 大小写、TINYINT(1) 等）
+# 改为本地真 MySQL，与 performance/report 模块统一架构（FU-15 B 方案，2026-04-28）
 # ============================================================
 
 server:
@@ -10,10 +12,10 @@ spring:
   main:
     allow-bean-definition-overriding: true
   datasource:
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MYSQL;NON_KEYWORDS=DAY,READ
-    username: sa
-    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
     type: com.zaxxer.hikari.HikariDataSource
   quartz:
     # 测试环境禁用 Quartz：governance QuartzConfig 走 @ConditionalOnProperty(matchIfMissing=true)
@@ -48,14 +50,12 @@ spring:
       - org.flowable.spring.boot.actuate.info.FlowableInfoAutoConfiguration
   sql:
     init:
-      # embedded 模式：仅当检测到嵌入式数据库时执行脚本，
-      # 且仅执行显式指定的 schema-locations/data-locations，
-      # 不会额外自动检测 classpath 上的 schema.sql/data.sql
-      mode: embedded
-      schema-locations: classpath:schema.sql
+      # always：让 MySQL 也跑 data.sql（embedded 仅探测嵌入式 DB，对 MySQL 不跑）
+      # 库表已通过 docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql 初始化，无需 schema.sql
+      mode: always
       data-locations: classpath:data.sql
       encoding: UTF-8
-      # 忽略单条语句执行失败（如 IF NOT EXISTS 的重复表创建）
+      # data.sql 用 INSERT IGNORE 兼容多次启动（unique key 冲突时静默忽略）
       continue-on-error: true
 
 # 额外关闭 Flowable 的自动初始化（Flowable 在 classpath 上时默认会尝试初始化）

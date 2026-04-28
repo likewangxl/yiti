@@ -1,3 +1,6 @@
+-- 注：UNIQUE KEY 内联在 CREATE TABLE 中（兼容 MySQL 真库 + H2 IF NOT EXISTS 语义）
+-- MySQL 不支持独立的 CREATE UNIQUE INDEX IF NOT EXISTS，改成内联 UNIQUE KEY 子句
+
 CREATE TABLE IF NOT EXISTS cust_tag (
     id VARCHAR(32) PRIMARY KEY,
     tag_name VARCHAR(100) NOT NULL,
@@ -10,21 +13,19 @@ CREATE TABLE IF NOT EXISTS cust_tag (
     created_time DATETIME,
     updated_by VARCHAR(32),
     updated_time DATETIME,
-    deleted TINYINT DEFAULT 0
+    deleted TINYINT DEFAULT 0,
+    UNIQUE KEY uk_cust_tag_name (tag_name),
+    UNIQUE KEY uk_cust_tag_code (tag_code)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_cust_tag_name ON cust_tag (tag_name);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_cust_tag_code ON cust_tag (tag_code);
 
 CREATE TABLE IF NOT EXISTS cust_tag_rel (
     id VARCHAR(32) PRIMARY KEY,
     cust_id VARCHAR(32) NOT NULL,
     tag_id VARCHAR(32) NOT NULL,
     created_by VARCHAR(32),
-    created_time DATETIME
+    created_time DATETIME,
+    UNIQUE KEY uk_cust_tag_rel (cust_id, tag_id)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_cust_tag_rel ON cust_tag_rel (cust_id, tag_id);
 
 CREATE TABLE IF NOT EXISTS cust_lead (
     id VARCHAR(32) PRIMARY KEY,
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS cust_lead (
     enterprise_type VARCHAR(50),
     group_name VARCHAR(200),
     is_account_opened TINYINT,
-    customer_desc CLOB,
+    customer_desc TEXT,
     credit_amount DECIMAL(18, 2),
     credit_exposure_amount DECIMAL(18, 2),
     lead_source VARCHAR(50),
@@ -61,10 +62,9 @@ CREATE TABLE IF NOT EXISTS cust_lead (
     created_time DATETIME,
     updated_by VARCHAR(32),
     updated_time DATETIME,
-    deleted TINYINT DEFAULT 0
+    deleted TINYINT DEFAULT 0,
+    UNIQUE KEY uk_cust_lead_no (lead_no)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_cust_lead_no ON cust_lead (lead_no);
 
 CREATE TABLE IF NOT EXISTS lead_import_batch (
     id VARCHAR(32) PRIMARY KEY,
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS cust_master (
     enterprise_type VARCHAR(50),
     group_name VARCHAR(200),
     is_account_opened TINYINT,
-    customer_desc CLOB,
+    customer_desc TEXT,
     credit_amount DECIMAL(18, 2),
     credit_exposure_amount DECIMAL(18, 2),
     owner_org_id VARCHAR(32),
@@ -103,10 +103,9 @@ CREATE TABLE IF NOT EXISTS cust_master (
     status VARCHAR(20) NOT NULL,
     deleted TINYINT DEFAULT 0,
     created_time DATETIME,
-    updated_time DATETIME
+    updated_time DATETIME,
+    UNIQUE KEY uk_cust_master_no (cust_no)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_cust_master_no ON cust_master (cust_no);
 
 CREATE TABLE IF NOT EXISTS cust_claim (
     id VARCHAR(32) PRIMARY KEY,
@@ -119,10 +118,9 @@ CREATE TABLE IF NOT EXISTS cust_claim (
     cancel_time DATETIME,
     cancel_reason VARCHAR(500),
     created_time DATETIME,
-    updated_time DATETIME
+    updated_time DATETIME,
+    UNIQUE KEY uk_cust_claim_org (cust_id, org_id)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_cust_claim_org ON cust_claim (cust_id, org_id);
 
 CREATE TABLE IF NOT EXISTS touch_task (
     id VARCHAR(32) PRIMARY KEY,
@@ -140,10 +138,9 @@ CREATE TABLE IF NOT EXISTS touch_task (
     success_time DATETIME,
     cancel_time DATETIME,
     created_time DATETIME,
-    updated_time DATETIME
+    updated_time DATETIME,
+    UNIQUE KEY uk_touch_task_no (task_no)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_touch_task_no ON touch_task (task_no);
 
 CREATE TABLE IF NOT EXISTS touch_log (
     id VARCHAR(32) PRIMARY KEY,
@@ -154,7 +151,6 @@ CREATE TABLE IF NOT EXISTS touch_log (
     photo_urls VARCHAR(2000),
     owner_org_id VARCHAR(32),
     created_by VARCHAR(32),
-    created_time DATETIME
+    created_time DATETIME,
+    UNIQUE KEY uk_touch_log_client (touch_task_id, client_uuid)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_touch_log_client ON touch_log (touch_task_id, client_uuid);

@@ -1,8 +1,8 @@
 # ============================================================
 # Lead E2E Profile
 # Phase 2 (b) lead_approve_v1 真 BPMN 端到端 IT 用
-# 基于 application-flowable-e2e.yml，叠加 customer-marketing 表 schema 和数据
-# H2 内存库 + Flowable 嵌入式（不切真 MySQL）
+# 切到本地真 MySQL onepl_test_bootstrap（FU-15 B C4，2026-04-28）
+# act_*/flw_*/qrtz_* 共 81 张表已预建（见 docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql 步骤 5）
 # ============================================================
 server:
   port: 0
@@ -11,10 +11,12 @@ spring:
   main:
     allow-bean-definition-overriding: true
   datasource:
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:lead-e2e;DB_CLOSE_DELAY=-1;MODE=LEGACY;NON_KEYWORDS=DAY,READ
-    username: sa
-    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # tinyInt1isBit=false：让 MySQL 驱动把 tinyint(1) 视作 Number 而非 Boolean
+    # （LeadWorkflowE2EIT 的 jdbcTemplate.queryForMap("SELECT ... deleted ...") 期望 Number cast）
+    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&tinyInt1isBit=false
+    username: root
+    password: 123456
     type: com.zaxxer.hikari.HikariDataSource
   autoconfigure:
     exclude:
@@ -24,8 +26,9 @@ spring:
       - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
   sql:
     init:
-      mode: embedded
-      schema-locations: classpath:schema.sql,classpath:customer-marketing-schema.sql
+      # always：MySQL 也跑 data.sql（embedded 仅探测嵌入式 DB）
+      # 库表由 docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql 初始化，无需 schema.sql
+      mode: always
       data-locations: classpath:data.sql,classpath:lead-e2e-data.sql
       encoding: UTF-8
       continue-on-error: true
