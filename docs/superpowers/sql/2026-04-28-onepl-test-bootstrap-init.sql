@@ -1,0 +1,92 @@
+-- ============================================================
+-- bootstrap 模块 IT 测试库初始化脚本
+-- 创建日期：2026-04-28
+-- 适用版本：FU-15 B 方案（用本地真 MySQL 替代 H2 测试，独立测试库不污染 onepl）
+-- ============================================================
+--
+-- 背景：
+--   bootstrap 模块 IT 测试此前用 H2 LEGACY/MYSQL 内存库，但 H2 与生产 MySQL 8.0 行为差异
+--   多次踩坑（FU-9 user_notification 大小写、TINYINT(1) syntax 等）。FU-15 B 方案改用本地
+--   真 MySQL 8.0 + 独立测试库 onepl_test_bootstrap，与 performance/report 模块统一架构。
+--
+-- 用法：
+--   1) 第一次搭建本地开发环境时执行：
+--      mysql -uroot -p123456 < docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql
+--      然后按下方"步骤 2"清单执行 8 个 DDL + 15 个 perf 迁移 + 8 个 report 迁移
+--   2) 后续如需重置，先 mysqldump 备份到 docs/superpowers/sql/backup/，再 DROP DATABASE
+--      onepl_test_bootstrap; 重新执行本脚本
+--
+-- ============================================================
+-- 步骤 1：创建独立测试库
+-- ============================================================
+
+CREATE DATABASE IF NOT EXISTS onepl_test_bootstrap
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_general_ci
+    COMMENT 'bootstrap 模块 IT 专用库（FU-15 B）';
+
+-- ============================================================
+-- 步骤 2：导入业务模块 DDL（8 个，无 FK 跨表约束，顺序无关）
+-- ============================================================
+--
+-- bash:
+--   for f in docs/schema/ddl-auth.sql docs/schema/ddl-governance.sql \
+--            docs/schema/ddl-workflow.sql docs/schema/ddl-customer.sql \
+--            docs/schema/ddl-portal.sql docs/schema/ddl-bizapp.sql \
+--            docs/schema/ddl-performance.sql docs/schema/ddl-report.sql; do
+--     mysql -uroot -p123456 --default-character-set=utf8mb4 onepl_test_bootstrap < "$f"
+--   done
+--
+-- 完成后表数：58
+--
+-- ============================================================
+-- 步骤 3：导入 performance 模块 V1.x.y 增量迁移脚本（15 个，按文件名顺序）
+-- ============================================================
+--
+-- 这些迁移脚本含 V1.2 perf_export_task / V1.3 perf_run_task uk / V1.4 perf_target_owner 等
+-- ALTER TABLE 增量，与生产 onepl 库 schema 状态对齐。
+--
+-- bash:
+--   for f in $(ls performance-engine-center/src/main/resources/sql/V1_*.sql | sort); do
+--     mysql -uroot -p123456 --default-character-set=utf8mb4 onepl_test_bootstrap < "$f"
+--   done
+--
+-- 完成后表数：59（+1 perf_export_task）
+--
+-- ============================================================
+-- 步骤 4：导入 report 模块 V1.0.x 增量迁移脚本（8 个，按文件名顺序）
+-- ============================================================
+--
+-- bash:
+--   for f in $(ls report-analytics-center/src/main/resources/sql/report/V1_*.sql | sort); do
+--     mysql -uroot -p123456 --default-character-set=utf8mb4 onepl_test_bootstrap < "$f"
+--   done
+--
+-- 完成后表数：59（report 增量主要是 PT_RESOURCE 数据 + rpt_export_task 已含在 ddl-report.sql）
+--
+-- ============================================================
+-- 步骤 5：Flowable / Quartz 表（不在本脚本范围）
+-- ============================================================
+--
+-- act_* / flw_* / qrtz_* 共 75 张表由 Flowable 启动时根据 application-flowable-e2e.yml /
+-- application-lead-e2e.yml 中 `flowable.database-schema-update: true` 自动创建，无需预建。
+-- 仅在跑 flowable-e2e 或 lead-e2e profile IT 时才会建表。
+--
+-- ============================================================
+-- 验证
+-- ============================================================
+--
+-- mysql -uroot -p123456 -e "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE
+--   table_schema='onepl_test_bootstrap' AND table_name NOT LIKE 'act_%' AND table_name NOT
+--   LIKE 'flw_%' AND table_name NOT LIKE 'qrtz_%';"
+-- 期望输出：cnt = 59
+--
+-- ============================================================
+-- 与 onepl_test_v103 / onepl 的关系
+-- ============================================================
+--
+--   onepl                    生产/集成环境主库（performance 模块 IT 也用此库）
+--   onepl_test_v103          report 模块 IT 专用库
+--   onepl_test_bootstrap     bootstrap 模块 IT 专用库（本脚本）
+--
+-- 三库独立，避免相互污染。
