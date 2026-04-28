@@ -54,7 +54,7 @@ src/main/java/com/bank/branch/platform/customer/
 ├── enums/            # 枚举 (10 个)
 │   ├── CustomerErrorCode.java      # CUST-400xx / CUST-404xx / CUST-409xx / CUST-500xx
 │   ├── TagStatus.java              # ENABLED / DISABLED
-│   ├── LeadStatus.java             # DRAFT / PENDING / APPROVED / REJECTED
+│   ├── LeadStatus.java             # DRAFT / SUBMITTED / IN_APPROVAL / APPROVED / REJECTED
 │   ├── LeadOp.java                 # CREATE / UPDATE / DELETE
 │   ├── BatchStatus.java            # PENDING / PROCESSING / SUCCESS / FAIL
 │   ├── ClaimStatus.java            # ACTIVE / CANCELLED

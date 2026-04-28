@@ -215,7 +215,7 @@ CREATE TABLE `touch_task` (
   `org_id`                  VARCHAR(50)  NOT NULL COMMENT '所属机构代码',
   `assignee_emp_id`         VARCHAR(32)  NOT NULL COMMENT '执行人（员工工号）',
   `task_type`               VARCHAR(50)  DEFAULT NULL COMMENT '任务类型：FIRST_TOUCH-首次触达/FOLLOW_UP-后续跟进',
-  `task_status`             VARCHAR(50)  DEFAULT 'PENDING' COMMENT '任务状态：PENDING/SUCCESS/CANCELLED',
+  `task_status`             VARCHAR(50)  DEFAULT 'PENDING' COMMENT '任务状态：PENDING/IN_PROGRESS/SUCCESS/CANCELLED',
   `plan_finish_time`        DATETIME     DEFAULT NULL COMMENT '计划完成时间',
   `warning_time`            DATETIME     DEFAULT NULL COMMENT '预警时间（SLA 黄灯阈值）',
   `sla_status`              VARCHAR(20)  DEFAULT NULL COMMENT 'SLA 状态：GREEN/YELLOW/RED',
