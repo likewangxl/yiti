@@ -38,6 +38,7 @@ public enum CustomerErrorCode {
     CUSTOMER_ALREADY_CLAIMED("CUST-40904", "客户已被该机构认领"),
     TOUCH_LOG_DUPLICATE("CUST-40905", "触达日志重复提交"),
     TAG_CODE_IMMUTABLE("CUST-40906", "标签编码创建后不可修改"),
+    CUSTOMER_HAS_RUNNING_PROCESS("CUST-40912", "客户存在在途流程不允许删除"),
 
     // 500 内部错误
     INTERNAL_ERROR("CUST-50001", "客户营销服务内部错误"),
