@@ -65,6 +65,21 @@ CREATE DATABASE IF NOT EXISTS onepl_test_bootstrap
 -- 完成后表数：59（report 增量主要是 PT_RESOURCE 数据 + rpt_export_task 已含在 ddl-report.sql）
 --
 -- ============================================================
+-- 步骤 4bis：DDL 与生产代码字段对齐补齐
+-- ============================================================
+--
+-- ddl-customer.sql 缺 touch_task.sla_warning 列（代码 TouchTask.java:50 / TouchTaskMapper.xml 用），
+-- bootstrap CustomerMarketingCenterIT 切真 MySQL 后必须补齐：
+--
+-- ALTER TABLE touch_task
+--   ADD COLUMN sla_warning TINYINT(1) DEFAULT 0
+--   COMMENT 'SLA预警标记(代码契约字段，DDL补齐)';
+--
+-- 此为生产 DDL 偏差，本期跨任务范围不修 docs/schema/ddl-customer.sql 源文件，
+-- 仅在 onepl_test_bootstrap 测试库中补齐让 IT 通过。
+-- TODO（FU-X）：后续把 sla_warning 列补到 ddl-customer.sql + 提供 V1_x 迁移脚本。
+--
+-- ============================================================
 -- 步骤 5：Flowable / Quartz 表（不在本脚本范围）
 -- ============================================================
 --

@@ -18,6 +18,11 @@ DELETE FROM perf_metric_def WHERE metric_code = 'DEPOSIT';
 DELETE FROM sys_control WHERE id = 'SC_EMP';
 DELETE FROM portal_shortcut WHERE id IN ('SC_SYS_01', 'SC_CUST_E10001');
 
+-- 0bis. FU-15 B 切真 MySQL（onepl_test_bootstrap）后必须清掉生产种子方案，
+-- 否则 listActiveSchemes 会同时返回 SEED_KS_EMP_2026 (M_EMP_DEP_AVG_BAL/M_EMP_FEE_INCOME) 污染断言
+DELETE FROM perf_kpi_item WHERE scheme_id LIKE 'SEED_%';
+DELETE FROM perf_kpi_scheme WHERE id LIKE 'SEED_%';
+
 -- 1. 指标定义（baseDim=EMP，valSlot=1，对应 emp_index_result.val_1）
 INSERT INTO perf_metric_def
     (id, metric_code, metric_name, base_dim, metric_level, calc_freq, calc_mode, val_slot, status, unit, decimal_places, deleted)

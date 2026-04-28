@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS support_request (
   source_touch_task_id   VARCHAR(32)    DEFAULT NULL,
   product_id             VARCHAR(64)    DEFAULT NULL,
   support_dept_id        VARCHAR(50)    DEFAULT NULL,
-  other_demand           CLOB           DEFAULT NULL,
+  other_demand           TEXT           DEFAULT NULL,
   dispatch_emp_id        VARCHAR(32)    DEFAULT NULL,
   dispatch_time          TIMESTAMP      DEFAULT NULL,
   assigned_emp_id        VARCHAR(32)    DEFAULT NULL,
