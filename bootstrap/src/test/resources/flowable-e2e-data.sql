@@ -1,5 +1,13 @@
 -- ====== FLOWABLE E2E AUTH / WORKFLOW OVERLAY ======
 
+-- ====== FU-15 B C4 切真 MySQL onepl_test_bootstrap 后冲突清理 ======
+-- 共享库下，lead-e2e profile 之前可能 DELETE 过 100-105 / WRR* 行，
+-- 同时 PT_RESOURCE 100-105 通过 INSERT IGNORE 重新插入会成功，但 PT_ROLE_RESOURCE WRR* 因 ID 冲突跳过 → 角色失权。
+-- 在 flowable-e2e profile 启动前主动清掉本 SQL 涉及的 ID 行（保证下面 INSERT IGNORE 全量生效）。
+DELETE FROM PT_ROLE_RESOURCE WHERE ID LIKE 'WRR%' OR ID LIKE 'LRR%';
+DELETE FROM PT_RESOURCE WHERE RESOURCE_ID IN ('100','101','102','103','104','105')
+    OR RESOURCE_ID IN ('LR001','LR002','LR003','LR101','LR102','LR103','LR104','LR105');
+
 INSERT IGNORE INTO PT_USER (USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL, ISENABLED) VALUES
     ('E10001', 'rm_zhang', '张客户经理', '$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy', 'rm_zhang@test.com', 0),
     ('E20001', 'branch_wang', '王分行负责人', '$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy', 'branch_wang@test.com', 0),
