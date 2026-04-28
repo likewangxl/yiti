@@ -4,6 +4,7 @@ import com.bank.branch.platform.customer.entity.CustLead;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -166,4 +167,19 @@ public interface CustLeadMapper {
      */
     Long countActiveByCustName(@Param("custName") String custName,
                                @Param("excludeLeadId") String excludeLeadId);
+
+    /**
+     * 查询 stuck IN_APPROVAL 线索（FU-14 补偿任务专用）。
+     * <p>
+     * 返回 {@code lead_status='IN_APPROVAL'} 且 {@code updated_time < cutoff} 的有效线索
+     * （deleted=0），按 {@code updated_time asc} 排列以优先处理最久未推进的记录，
+     * 防止 listener 异常吞错时孤儿数据持续累积。
+     * </p>
+     *
+     * @param cutoff 截止时间（一般为 {@code LocalDateTime.now().minusMinutes(stuckThresholdMinutes)}）
+     * @param limit  单次扫描批次上限（防长事务，生产保守取 100）
+     * @return stuck 线索列表，无数据时返回空列表
+     */
+    List<CustLead> selectStuckInApproval(@Param("cutoff") LocalDateTime cutoff,
+                                         @Param("limit") int limit);
 }

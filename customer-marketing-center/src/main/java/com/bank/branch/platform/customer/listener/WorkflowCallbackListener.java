@@ -1,35 +1,38 @@
 package com.bank.branch.platform.customer.listener;
 
 import com.bank.branch.platform.customer.entity.CustLead;
-import com.bank.branch.platform.customer.enums.LeadOp;
-import com.bank.branch.platform.customer.enums.LeadStatus;
 import com.bank.branch.platform.customer.event.LeadApprovedEvent;
 import com.bank.branch.platform.customer.event.LeadDeletedEvent;
 import com.bank.branch.platform.customer.event.LeadRejectedEvent;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
+import com.bank.branch.platform.customer.service.LeadCallbackReconcileService;
 import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.time.LocalDateTime;
-
 /**
  * 工作流回调监听器。
  * <p>
  * 监听工作流中心发布的 {@link ProcessCompletedListener.ProcessCompletedEvent} 事件，
- * 根据 businessKey 前缀（LEAD:）识别线索相关流程，按 outcome 分发审批结果（与
+ * 根据 businessKey 前缀（LEAD:）识别线索相关流程，按 outcome 委托
+ * {@link LeadCallbackReconcileService} 处理审批结果（与
  * {@code bizapp.LoanWorkflowListener} pattern 对齐）：
  * <ul>
  *   <li>APPROVED + leadOp=CREATE/UPDATE → 状态更新为 APPROVED，发布 {@link LeadApprovedEvent}</li>
  *   <li>APPROVED + leadOp=DELETE → 状态更新为 APPROVED，发布 {@link LeadDeletedEvent}</li>
  *   <li>REJECTED → 状态更新为 REJECTED，发布 {@link LeadRejectedEvent}（不创建/失效 cust_master）</li>
  * </ul>
+ * </p>
+ * <p>
+ * <strong>FU-14 重构</strong>：原 {@code handleApproved} / {@code handleRejected} private
+ * 方法被抽到 {@link LeadCallbackReconcileService}，支持
+ * {@code LeadCallbackCompensationService} 补偿任务以同样的语义推进 stuck IN_APPROVAL leads。
+ * 行为完全等价，仅做"代码移动 + 共用"。
  * </p>
  */
 @Slf4j
@@ -38,15 +41,13 @@ import java.time.LocalDateTime;
 public class WorkflowCallbackListener {
 
     private final CustLeadMapper leadMapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final LeadCallbackReconcileService reconcileService;
 
     /**
      * 监听工作流流程完成事件，处理线索状态流转。
      * <p>
      * businessKey 格式为 {@code LEAD:{leadId}}，非线索相关流程直接忽略。
-     * 按 {@code event.outcome()} 分发：
-     * APPROVED → {@link #handleApproved}；REJECTED → {@link #handleRejected}。
-     * 与 {@code bizapp.LoanWorkflowListener} pattern 对齐。
+     * 按 {@code event.outcome()} 分发委托 {@link LeadCallbackReconcileService}。
      * </p>
      *
      * <p>
@@ -60,7 +61,14 @@ public class WorkflowCallbackListener {
      *   <li>移除 {@code fallbackExecution = true}：与 REQUIRES_NEW 配合时，
      *       AFTER_COMMIT + 显式新事务 = 既保证流程完成事务已 commit，又能让下游 listener 正确链接。</li>
      * </ul>
-     * 详见红 IT {@code WorkflowCallbackEventChainBugIT}（commit message 中引用）。
+     * </p>
+     *
+     * <p>
+     * <strong>FU-2 异常兜底</strong>：整体 try-catch 捕获所有异常，仅记录业务自定义 ERROR 日志，
+     * 避免冒泡到 Spring AFTER_COMMIT 调用栈触发框架级
+     * "TransactionSynchronization.afterCompletion threw exception" ERROR。
+     * 副作用：listener 异常被自吞后，{@code cust_lead.lead_status} 可能停留在 IN_APPROVAL。
+     * <strong>FU-14 通过定时补偿任务 {@code LeadCallbackCompensationService} 兜底</strong>。
      * </p>
      *
      * @param event 流程完成事件（来自 workflow-center ProcessCompletedListener）
@@ -73,10 +81,6 @@ public class WorkflowCallbackListener {
         log.info("[WorkflowCallbackListener.onProcessCompleted] processInstanceId={}, businessKey={}, outcome={}",
                 processInstanceId, businessKey, event.outcome());
 
-        // 整体 try-catch 兜底（FU-2）：捕获所有异常，仅记录业务自定义 ERROR 日志，
-        // 避免冒泡到 Spring AFTER_COMMIT 调用栈触发框架级
-        // "TransactionSynchronization.afterCompletion threw exception" ERROR，
-        // 与 bizapp.LoanWorkflowListener pattern 对齐。
         try {
             // 只处理线索相关流程
             if (businessKey == null || !businessKey.startsWith("LEAD:")) {
@@ -92,113 +96,16 @@ public class WorkflowCallbackListener {
                 return;
             }
 
-            // 按 event.outcome() 分发审批结果（与 bizapp.LoanWorkflowListener pattern 对齐）
+            // 按 event.outcome() 分发委托 LeadCallbackReconcileService（FU-14 抽出公共逻辑）
             if ("REJECTED".equals(event.outcome())) {
-                handleRejected(lead, processInstanceId, event.reason());
+                reconcileService.reconcileRejected(lead, processInstanceId, event.reason());
             } else {
-                handleApproved(lead, processInstanceId);
+                reconcileService.reconcileApproved(lead, processInstanceId);
             }
         } catch (Exception e) {
             // 业务自定义 ERROR 日志：统一告警面，不影响 Spring 事件循环 / 后续 listener 链
             log.error("[WorkflowCallbackListener] 处理流程完成事件异常 businessKey={} processInstanceId={}",
                     businessKey, processInstanceId, e);
         }
-    }
-
-    /**
-     * 处理审批通过逻辑：以条件更新方式幂等推进线索状态为 APPROVED，根据操作类型发布对应事件。
-     * <p>
-     * <strong>幂等保护（FU-1）</strong>：使用 {@code conditionalUpdateStatus(IN_APPROVAL → APPROVED)}
-     * 替代无条件 {@code updateStatusById}。当 ProcessCompletedEvent 因多实例 / 网络抖动 / 重发等
-     * 异常路径被重复 publish 时，第二次进入 handleApproved 会因 lead_status 已是 APPROVED 不匹配
-     * expectedStatus 而返回 0，提前返回不再 publish LeadApprovedEvent，避免 cust_master 重复创建。
-     * 与 {@code bizapp.LoanWorkflowListener} pattern 对齐。
-     * </p>
-     *
-     * @param lead              线索实体
-     * @param processInstanceId 流程实例ID
-     */
-    private void handleApproved(CustLead lead, String processInstanceId) {
-        String leadId = lead.getId();
-
-        // 幂等保护：仅当当前状态为 IN_APPROVAL 时才推进为 APPROVED
-        int rowsAffected = leadMapper.conditionalUpdateStatus(
-                leadId, LeadStatus.IN_APPROVAL.getCode(), LeadStatus.APPROVED.getCode(), "SYSTEM");
-        if (rowsAffected == 0) {
-            log.warn("[WorkflowCallbackListener] 线索 {} 状态已被其他实例处理，跳过 APPROVED 事件发布，processInstanceId={}",
-                    leadId, processInstanceId);
-            return;
-        }
-        log.info("[WorkflowCallbackListener] 线索 {} 审批通过，状态更新为 APPROVED", leadId);
-
-        // 根据操作类型发布不同事件
-        if (LeadOp.DELETE.getCode().equals(lead.getLeadOp())) {
-            // 删除类型：发布 LeadDeletedEvent
-            LeadDeletedEvent deletedEvent = new LeadDeletedEvent(
-                    leadId,
-                    lead.getLeadNo(),
-                    lead.getSourceCustId(),
-                    "SYSTEM"
-            );
-            eventPublisher.publishEvent(deletedEvent);
-            log.info("[WorkflowCallbackListener] 发布 LeadDeletedEvent, leadId={}", leadId);
-        } else {
-            // CREATE/UPDATE 类型：发布 LeadApprovedEvent
-            LeadApprovedEvent approvedEvent = new LeadApprovedEvent(
-                    leadId,
-                    lead.getLeadNo(),
-                    lead.getLeadOp(),
-                    lead.getSourceCustId(),
-                    lead.getOwnerOrgId(),
-                    "SYSTEM"
-            );
-            eventPublisher.publishEvent(approvedEvent);
-            log.info("[WorkflowCallbackListener] 发布 LeadApprovedEvent, leadId={}, leadOp={}", leadId, lead.getLeadOp());
-        }
-    }
-
-    /**
-     * 处理审批驳回逻辑：以条件更新方式幂等推进线索状态为 REJECTED，发布 {@link LeadRejectedEvent}。
-     * <p>
-     * <strong>注意</strong>：驳回路径既不创建 cust_master（CREATE/UPDATE 时）也不失效（DELETE 时），
-     * 仅推进线索状态并发布事件供未来扩展点订阅。
-     * </p>
-     * <p>
-     * <strong>幂等保护（FU-1）</strong>：使用 {@code conditionalUpdateStatus(IN_APPROVAL → REJECTED)}
-     * 替代无条件 {@code updateStatusById}。重复 ProcessCompletedEvent 进入时第二次因状态不匹配
-     * 返回 0，提前返回不再 publish LeadRejectedEvent。与 {@code bizapp.LoanWorkflowListener} pattern 对齐。
-     * </p>
-     *
-     * @param lead              线索实体
-     * @param processInstanceId 流程实例ID
-     * @param rejectReason      驳回原因（来自 ProcessCompletedEvent.reason，可为 null）
-     */
-    private void handleRejected(CustLead lead, String processInstanceId, String rejectReason) {
-        String leadId = lead.getId();
-
-        // 幂等保护：仅当当前状态为 IN_APPROVAL 时才推进为 REJECTED
-        int rowsAffected = leadMapper.conditionalUpdateStatus(
-                leadId, LeadStatus.IN_APPROVAL.getCode(), LeadStatus.REJECTED.getCode(), "SYSTEM");
-        if (rowsAffected == 0) {
-            log.warn("[WorkflowCallbackListener] 线索 {} 状态已被其他实例处理，跳过 REJECTED 事件发布，processInstanceId={}",
-                    leadId, processInstanceId);
-            return;
-        }
-        log.info("[WorkflowCallbackListener] 线索 {} 审批驳回，状态更新为 REJECTED，processInstanceId={}",
-                leadId, processInstanceId);
-
-        // 发布 LeadRejectedEvent（V1 暂无下游消费，保留扩展点）
-        LeadRejectedEvent rejectedEvent = new LeadRejectedEvent(
-                leadId,
-                lead.getLeadNo(),
-                lead.getLeadOp(),
-                lead.getSourceCustId(),
-                lead.getOwnerOrgId(),
-                rejectReason,
-                "SYSTEM"
-        );
-        eventPublisher.publishEvent(rejectedEvent);
-        log.info("[WorkflowCallbackListener] 发布 LeadRejectedEvent, leadId={}, leadOp={}, reason={}",
-                leadId, lead.getLeadOp(), rejectReason);
     }
 }

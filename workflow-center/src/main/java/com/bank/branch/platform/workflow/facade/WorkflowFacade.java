@@ -8,7 +8,12 @@ import com.bank.branch.platform.workflow.api.dto.CancelProcessReqDTO;
 import com.bank.branch.platform.workflow.service.ProcessCommandService;
 import com.bank.branch.platform.workflow.service.ProcessStartService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.HistoryService;
+import org.flowable.variable.api.history.HistoricVariableInstance;
 import org.springframework.stereotype.Service;
+
+import java.util.Optional;
 
 /**
  * 工作流 Facade 实现
@@ -17,12 +22,14 @@ import org.springframework.stereotype.Service;
  * 作为跨模块调用的统一入口。
  * </p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WorkflowFacade implements WorkflowApi {
 
     private final ProcessStartService processStartService;
     private final ProcessCommandService processCommandService;
+    private final HistoryService historyService;
 
     /**
      * {@inheritDoc}
@@ -56,5 +63,51 @@ public class WorkflowFacade implements WorkflowApi {
     @Override
     public BizProcessMapDTO getProcessByBizTypeAndBizId(String bizType, String bizId) {
         return processStartService.getProcessByBizTypeAndBizId(bizType, bizId);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p><strong>实现策略</strong>：</p>
+     * <ul>
+     *   <li>调 Flowable {@code HistoryService.createHistoricVariableInstanceQuery}
+     *       按 {@code processInstanceId} + {@code variableName=approved} 查历史变量；</li>
+     *   <li>变量值类型为 {@code Boolean}：
+     *     <ul>
+     *       <li>{@code Boolean.TRUE} → "APPROVED"</li>
+     *       <li>{@code Boolean.FALSE} → "REJECTED"</li>
+     *       <li>null（变量未设置 / 非 Boolean 类型）→ {@link Optional#empty()}</li>
+     *     </ul>
+     *   </li>
+     *   <li>语义与 {@code ProcessCompletedListener.notify()} 内 {@code event.outcome()}
+     *       计算逻辑保持一致，确保补偿路径与主路径行为对齐。</li>
+     * </ul>
+     */
+    @Override
+    public Optional<String> getProcessOutcome(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            HistoricVariableInstance variable = historyService.createHistoricVariableInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .variableName("approved")
+                    .singleResult();
+            if (variable == null || variable.getValue() == null) {
+                return Optional.empty();
+            }
+            Object value = variable.getValue();
+            if (!(value instanceof Boolean)) {
+                log.warn("[WorkflowFacade.getProcessOutcome] 流程 {} 的 approved 变量类型异常: {}",
+                        processInstanceId, value.getClass().getName());
+                return Optional.empty();
+            }
+            return Optional.of(Boolean.TRUE.equals(value) ? "APPROVED" : "REJECTED");
+        } catch (Exception e) {
+            // Flowable 查询异常（如 H2 测试环境 ACT_HI_VARINST 表不存在）—— 返 empty 让调用方按"未知 outcome"处理
+            log.warn("[WorkflowFacade.getProcessOutcome] 查询流程 {} 历史变量失败: {}",
+                    processInstanceId, e.getMessage());
+            return Optional.empty();
+        }
     }
 }

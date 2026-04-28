@@ -16,13 +16,19 @@
 | 7 | Phase 2 (b)：lead_approve_v1.bpmn20.xml + lead-e2e profile + LeadWorkflowE2EIT 真 BPMN E2E（APPROVED + REJECTED 双分支） | ✅ 已完成 | `a6b2290` |
 | 8 | 合并 master（第一次）：本期前 16 commits + Phase 2 (b) 后续合并 | ✅ 已完成 | merge `3fd9cba` + 后续 `349c563` |
 | 9 | Phase 2.5：FU-1/2/6/9 鲁棒性补齐（H2 schema + dead code 删除 + 幂等保护 + 异常兜底）| ✅ 已完成 | `aab052f` `e033d7b` `4efde7e` `6615740` `2195cd8` `075fb9a` `7f14aca` |
-| 10 | 合并 master（第二次）：Phase 2.5 7 commits + handover 续接 | ⏳ 进行中 | — |
+| 10 | 合并 master（第三次）：Phase 2.5 7 commits + handover 续接 | ✅ 已完成 | merge `0af1635` |
+| 11 | onepl MySQL 幂等导入最新 docs/schema DDL + SEED + 备份 | ✅ 已完成 | 备份 `docs/superpowers/sql/backup/2026-04-27-pre-fu1415-import-backup.sql`（7553 行）|
+| 12 | **Phase 2.6 FU-14：孤儿 lead 数据补偿机制（@Scheduled 5min 巡检 + reconcile 抽取 + WorkflowApi.getProcessOutcome）** | ✅ 已完成（compact 后续接交付，reviewer ✅ 通过+5 follow-up） | `5602b52` `28b1bbc` |
+| 13 | **Phase 2.6 FU-15：testcontainers 真 MySQL** | ⏸️ 待续接（4-6h，下次 compact 后会话执行）| 待续接 |
 
 ---
 
-## 累计 24+ commits + handover 多次续接更新（origin/claude/crazy-joliot-0e2a1f）
+## 累计 26+ commits + handover 多次续接更新（origin/claude/crazy-joliot-0e2a1f）
 
 ```
+28b1bbc fix(lead-compensation): 实现孤儿 lead 补偿机制（FU-14 绿）  ← Phase 2.6
+5602b52 test(lead-compensation): 红 IT + 编译骨架（FU-14 红）
+c63c03a docs(session): handover Phase 2.6 续接锚点（compact 50% 阈值触发存档）
 7f14aca fix(workflow-callback): try-catch 兜底（FU-2 绿）  ← Phase 2.5
 075fb9a test(workflow-callback-exception): 红 IT 复现异常未兜底（FU-2 红）
 2195cd8 fix(workflow-callback): conditionalUpdateStatus 幂等保护（FU-1 绿）
@@ -112,6 +118,44 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 - `RES_PROD_SUP_AVL`（16）
 - `RES_SHORTCUT_PUT`（16）
 
+### 决策 11：Phase 2.6 FU-14 — 孤儿 lead 数据补偿机制（commits `5602b52` `28b1bbc`）
+
+**起因**：Phase 2.5 FU-2 给 `WorkflowCallbackListener.onProcessCompleted` 加 try-catch 兜底（避免 Spring `TransactionSynchronizationUtils` ERROR 日志），副作用是 listener 异常被自吞后，`cust_lead.lead_status` 可能停留 `IN_APPROVAL` 但 Flowable 流程已 COMPLETED，形成孤儿数据。reviewer §H-2 列为中等优先级 follow-up（FU-14），本期解决。
+
+**重大调研发现（implementer brief 前）**：
+- **`@EnableScheduling` 全仓库未声明** — performance 的 3 个 `@Scheduled` job（DailyKpi / SysControlCleanup / PerfRunTaskCleanup）实际从未跑过，是 dead code！本次必须开启。
+- **`biz_process_map` 表无 `outcome` 字段** — outcome 仅活在 `ProcessCompletedEvent` Spring 事件中
+- **Flowable history-level=audit 已启用** — `historyService.createHistoricVariableInstanceQuery().variableName("approved")` 可查到 boolean 变量
+- **`WorkflowCallbackListener.handleApproved/handleRejected` 是 private** — 跨包补偿 Service 无法直接调用
+
+**采用方案**：方案 A（最小侵入，不动表结构）
+- WorkflowApi 加 `getProcessOutcome(processInstanceId): Optional<String>`，用 HistoryService 查 `approved` boolean 变量
+- 抽出 `LeadCallbackReconcileService`（public reconcile 方法，listener 与补偿 Service 共用）
+- WorkflowCallbackListener 重构为委托 reconciler
+
+**8 项交付**：
+1. `WorkflowApi.getProcessOutcome` 接口 + WorkflowFacade 实现（用 HistoryService）
+2. `LeadCallbackReconcileService.java` 抽出 reconcileApproved / reconcileRejected 公共方法（@Transactional REQUIRES_NEW，同时支持 listener 主路径 + 补偿路径）
+3. `WorkflowCallbackListener` handleApproved/handleRejected 改为简单委托
+4. `customer.config.CustomerSchedulingConfig` 新建 (`@EnableScheduling`，全局开启 scheduling)
+5. `CustLeadMapper.selectStuckInApproval(cutoff, limit)` + xml
+6. `LeadCallbackCompensationService.scanAndCompensate()`（核心方法）+ `scheduledScan()` (`@Scheduled fixedDelayString=300000`，5 分钟一次)
+7. 红 IT `LeadCallbackCompensationIT` 3 case：APPROVED 推进 / REJECTED 推进 / RUNNING 跳过
+8. TDD 红绿严格分 commit（红 commit 含 IT + 编译骨架 throw UOE，绿 commit 仅业务实现）
+
+**关键设计决策（与 brief 偏离/精化）**：
+- **CANCELLED 也视为流程已结束**：`ProcessCompletedListener` 把 `approved=false` 写为 `processStatus=CANCELLED`（不是 COMPLETED！），补偿覆盖 COMPLETED + CANCELLED 双终态
+- **嵌套 REQUIRES_NEW**：listener 主路径外层 REQUIRES_NEW + reconcile 内层 REQUIRES_NEW，2 层嵌套 tx，生产 OLTP 频次低（<1k/day）影响可忽略
+- **不直接 import `workflow.enums.ProcessStatus`**：跨模块依赖规则，用字符串字面量常量
+- **getProcessOutcome 全 try-catch 兜底**：Flowable HistoryService 在测试环境若 ACT_HI_VARINST 表不存在会抛异常，调用方 fail-safe 视为 outcome 未知
+
+**reviewer 综合 review 结论**：✅ 通过（A/B/C/D/E/F/G/H 全过），列 5 项 follow-up（详见末尾 V1.7+ 跟踪段，全不阻塞）
+
+**测试覆盖**：
+- 6 模块 surefire 全绿
+- bootstrap surefire 42 + failsafe 22（含 LeadCallbackCompensationIT 3 case）全绿
+- 注：`@EnableScheduling` 全局开启后，performance 3 job 默认 `enabled=false` 仍 OFF，无副作用
+
 ### 决策 10：Phase 2.5 FU-1/2/6/9 鲁棒性补齐（7 commits `aab052f` ~ `7f14aca`）
 
 **起因**：Phase 2 (b) reviewer 列出 4 项中等优先级 nitpick + Phase 2 (c) reviewer 列出 6 项 nitpick，本期一并清理 4 项核心：
@@ -197,6 +241,7 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 | **LeadWorkflowE2EIT**（CI 默认跳过） | **2** | 真 BPMN E2E：APPROVED 分支 cust_master 创建 / REJECTED 分支 cust_master 不创建（Phase 2 (b)）|
 | **WorkflowCallbackIdempotencyBugIT** | **1** | 红 IT 防回归 listener 缺幂等保护致 cust_master 重复创建（Phase 2.5 FU-1）|
 | **WorkflowCallbackExceptionSwallowBugIT** | **1** | 红 IT 防回归 listener 异常未自吞致 Spring 框架 ERROR 日志（Phase 2.5 FU-2）|
+| **LeadCallbackCompensationIT** | **3** | 补偿 Service 巡检 stuck IN_APPROVAL：APPROVED 推进 / REJECTED 推进 / RUNNING 跳过（Phase 2.6 FU-14）|
 | FlowableWorkflowCenterE2ETest | ? | Flowable E2E（@EnabledIfSystemProperty 保护） |
 | FlowableWorkflowCenterRealEnvTest | ? | 真 MySQL Flowable E2E |
 | PerformanceMetricApiBridgeTest | 10 | bridge 单元测试 |
@@ -216,6 +261,38 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 ### Phase 2 (b) — ✅ 已完成（compact 后续接交付，commit `a6b2290`）
 
 详见上文「决策 9」。预估 1.5-2h，实际约 50 分钟（implementer + reviewer）。reviewer ✅ 通过 + 4 个 nitpick（不阻塞，详见末尾 V1.7+ 跟踪段）。
+
+### Phase 2.6 FU-14 — ✅ 已完成（compact 后续接交付，commits `5602b52` `28b1bbc`）
+
+详见上文「决策 11」。预估 2-3h，实际约 1.5h（含 2 次轻调研 + implementer + reviewer）。reviewer ✅ 通过 + 5 项 follow-up（不阻塞，详见末尾 V1.7+ 跟踪段）。
+
+### Phase 2.6 FU-15 — ⏸️ 待续接（下次 compact 后会话执行）
+
+**问题背景**：测试 schema 与生产 DDL 长期不一致（H2 LEGACY 与 MySQL 8 行为差异多次踩坑：FU-9 user_notification 大小写就是典型），长期方向用 testcontainers 跑真 MySQL 8。
+
+**预计工时**：4-6h，多个 commits（按模块或按问题域分），可能跨多个 compact 周期。
+
+**实施清单**（待续接执行）：
+1. 调研：bootstrap 当前 IT 数（应 19+ default profile + 6 模块 surefire ~1500），评估改 testcontainers 工作量
+2. 加 `org.testcontainers:mysql` Maven 依赖（version 与 spring-boot 兼容）
+3. 写 `bootstrap/src/test/java/com/bank/branch/platform/it/config/MySQLTestContainerConfig.java`（@Container + DynamicPropertySource 注入 jdbc url）
+4. 改 `application-test.yml` / `application-flowable-e2e.yml` / `application-lead-e2e.yml` datasource 由 testcontainers 注入
+5. 跑全部 IT，识别在真 MySQL 下 fail 的 case（H2 specific 行为依赖），逐一 fix
+6. 6 模块全回归 + bootstrap failsafe 全回归
+7. 多个 commits（按模块或按问题域分）+ push + reviewer
+
+**关键风险**：
+- 真 MySQL 启动慢（每 IT 模块 30s-1min 启动开销，全模块跑可能 5-10min）
+- H2 specific 行为依赖识别 + fix（可能涉及多个 mapper xml 微调）
+- CI 环境 Docker 可用性（本地有 Docker Desktop / WSL2 应该 OK，CI 待评估）
+
+**关键文件**：
+- pom.xml（加依赖）
+- `bootstrap/src/test/java/com/bank/branch/platform/it/config/MySQLTestContainerConfig.java`（新建）
+- 多个 `application-*.yml` 改 datasource
+
+**续接命令模板**（compact 后预期）：
+> "读 docs/superpowers/sessions/2026-04-25-b-option-a-bc-handover.md，继续 Phase 2.6 FU-15"
 
 #### 已废弃的原 Phase 2 (b) 待办说明（保留作历史参考）
 
@@ -276,11 +353,23 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 | FU-11 | `WorkflowCallbackEventChainBugIT.java:57` javadoc 仍引用已删除的 `handleWorkflowCallback` 方法 | nitpick | Phase 2.5 reviewer §B-2 |
 | FU-12 | `conditionalUpdateStatus` 的 `updatedBy` 硬编码 `"SYSTEM"`（与 LoanWorkflowListener 一致），未来可通过 ProcessCompletedEvent 携带 approverEmpId 提升审计精度 | 低 | Phase 2.5 reviewer §C.nit-1 |
 | FU-13 | `WorkflowCallbackListener.handleApproved/handleRejected` 状态机假设（fromStatus=IN_APPROVAL）应在 javadoc 中显式说明 | 低 | Phase 2.5 reviewer §H-1 |
-| **FU-14** | **listener 异常兜底后 lead.status 可能停留在 IN_APPROVAL 形成孤儿数据，需要补偿机制（定时巡检 + 重发 ProcessCompletedEvent）** | **中** | Phase 2.5 reviewer §H-2 |
-| **FU-15** | **测试 schema 与生产 DDL 长期不一致**（本次仅治 H2 LEGACY 标症），长期方向：testcontainers 真 MySQL | **中** | Phase 2.5 reviewer §H-3 |
+| ~~FU-14~~ | **listener 异常兜底后 lead.status 可能停留在 IN_APPROVAL 形成孤儿数据，需要补偿机制（定时巡检 + 重发 ProcessCompletedEvent）** | ~~中~~ | **✅ Phase 2.6 已完成（commits `5602b52` `28b1bbc`）** |
+| **FU-15** | **测试 schema 与生产 DDL 长期不一致**（本次仅治 H2 LEGACY 标症），长期方向：testcontainers 真 MySQL | **中** | Phase 2.5 reviewer §H-3，Phase 2.6 待续接 |
 | FU-16 | `audit-report.md` 自动生成时间戳每跑一次 IT 就变，建议改为不带时间戳或用 `.gitignore` 忽略 | nitpick | 工作树多次出现 unstaged 状态 |
 
 **Phase 2.5 reviewer 总评**：implementer 的 FU-9 真因诊断（TINYINT(1) syntax）+ FU-2 logback ListAppender 抓 Spring 框架 ERROR 日志的设计巧妙，是 Spring AFTER_COMMIT listener 异常断言的标准做法之一。TDD 红绿严格分离（红 commit 仅 IT、绿 commit 仅业务），与 LoanWorkflowListener pattern 100% 对齐。可合并。
+
+### Phase 2.6 FU-14 reviewer 5 项 follow-up（V1.7+ 跟踪，不阻塞合并）
+
+| # | 项 | 优先级 | 来源 |
+|---|---|---|---|
+| FU-17 | `ProcessCompletedEvent` record 应从 `workflow.listener` 提到 `workflow.api.event` 子包，让 customer 模块只依赖 api 包。当前 `WorkflowCallbackListener.java:9` 引用 listener 内部 record，跨模块边界泄漏（历史遗留，非 Phase 2.6 引入） | M | Phase 2.6 reviewer §D |
+| FU-18 | testcontainers 接入后（FU-15），新增 1 条 IT 验证 H2/MySQL 下 CANCELLED outcome 语义一致性（CANCELLED 流程 outcome 通常是 null，目前补偿走 outcome empty 跳过分支，但需要确认） | M | Phase 2.6 reviewer §H |
+| FU-19 | listener 主路径嵌套 REQUIRES_NEW（外层 tx + 内层 reconcile tx）压测下连接池水位监控，必要时把 listener 改成无 tx + reconcile 单层 tx | L | Phase 2.6 reviewer §E/§H |
+| FU-20 | `CompensationService.COMPENSATION_REJECT_REASON = "由补偿任务推进，原因不明"` 字面量考虑挪到 i18n 或 enum，便于将来按业务方扩展（如审计要求区分 Phase 来源） | L | Phase 2.6 reviewer §A |
+| FU-21 | handover doc 推送后回写 FU-14 完成节点 + commit hash + 测试数据 | L | Phase 2.6 reviewer §G |
+
+**Phase 2.6 FU-14 reviewer 总评**：✅ 通过。红绿分离严格、跨模块依赖合规、边界条件覆盖到位（CANCELLED + RUNNING + outcome empty + Flowable 异常兜底全有），IT 断言强度足够（不只 status 还查 cust_master 全链路），幂等保护双层（conditionalUpdate + REQUIRES_NEW）。无阻塞问题。
 
 ---
 
@@ -299,15 +388,66 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 ## 下次会话续接指引
 
-### 快速入口
+### 快速入口（compact 后续接专用）
 
-读本文档了解全貌（Phase 2 (b) (c) (2.5) 均已完成 + 已合并 master），然后选择以下方向之一：
+**当前状态（2026-04-28）**：FU-14 已完成（commits `5602b52` `28b1bbc`），handover doc 第二次 compact 阈值触发归档。下次会话目标是 **Phase 2.6 FU-15（testcontainers 真 MySQL）+ 第四次 master merge**。
 
-1. **关闭本期会话归档**：本期已交付完整闭环（Option A → B.1 → B.2-a → P0 → Phase 2 (c) → Phase 2 (b) → Phase 2.5 鲁棒性补齐），可视为本期工作完成
-2. **进入 Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
-3. **进入 Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
-4. **跑 V1.7+ 优先级"中"的 follow-up**：FU-6 / FU-14（孤儿数据补偿机制）/ FU-15（testcontainers 真 MySQL）
-5. **跑剩余 nitpick FU-7/FU-8/FU-11/FU-12/FU-13/FU-16**：测试基础设施轻量重构
+compact 前已完成的全部前置工作：
+- ✅ 新偏好已记录到 memory：`feedback_compact_threshold.md`（上下文 50% 阈值自动 compact）
+- ✅ 本机 onepl MySQL 已幂等重跑 docs/schema 最新 DDL + SEED（PT_RESOURCE 298 / 286 active / 12 deleted；PT_USER 15；PT_ROLE 12；PT_ROLE_RESOURCE 567）
+- ✅ 数据库备份归档：`docs/superpowers/sql/backup/2026-04-27-pre-fu1415-import-backup.sql`（7553 行）
+- ✅ 本地 Redis 服务已启动，MySQL 已启动（root/123456 @ localhost:3306/onepl）
+- ✅ Phase 2.6 FU-14 已交付（@Scheduled 5min 补偿巡检 + reconcile 抽取 + WorkflowApi.getProcessOutcome）
+
+**Phase 2.6 续接清单（compact 后第一步）**：
+
+#### ~~FU-14（孤儿数据补偿机制）~~ — ✅ 已完成
+
+详见上文「决策 11」。commits `5602b52` `28b1bbc` 已 push。reviewer ✅ 通过 + 5 项 follow-up（详见末尾 V1.7+ 跟踪段）。
+
+#### FU-15（testcontainers 真 MySQL）
+
+**问题**：测试 schema 与生产 DDL 不一致（H2 LEGACY 与 MySQL 8 行为差异多次踩坑：FU-9 user_notification 大小写就是典型）。长期方向是用 testcontainers 跑真 MySQL 8。
+
+**实施清单**：
+1. 调研：bootstrap 当前 IT 数（应该 19 + 6 模块 = ~50+），评估改 testcontainers 工作量
+2. 加 `org.testcontainers:mysql` Maven 依赖
+3. 写 `MySQLTestContainerConfig.java` 或类似（@Container + DynamicPropertySource 注入 jdbc url）
+4. 改 `application-test.yml` / `application-flowable-e2e.yml` / `application-lead-e2e.yml` 等让 datasource 由 testcontainers 注入
+5. 跑全部 IT，识别在真 MySQL 下 fail 的 case（H2 specific 行为依赖），逐一 fix
+6. 6 模块全回归 + bootstrap failsafe 全回归
+7. 多个 commit（按模块或按问题域分）+ push + reviewer
+
+**预计工时**：4-6h（大概率需要分次 commit，可能跨多个 compact 周期）。
+
+**关键风险**：
+- 真 MySQL 启动慢（测试时间显著延长）
+- H2 specific 行为依赖识别 + fix
+- CI 环境 docker 可用性（本地已有 Docker Desktop / WSL2 应该 OK）
+
+**关键文件**：
+- pom.xml（加依赖）
+- `bootstrap/src/test/java/com/bank/branch/platform/it/config/MySQLTestContainerConfig.java`（新建）
+- 多个 application-*.yml 改 datasource
+
+### 续接命令模板
+
+compact 后，用户预期发出："读 docs/superpowers/sessions/2026-04-25-b-option-a-bc-handover.md，继续 Phase 2.6 FU-15"。
+主代理应：
+1. Read 本 handover doc 全文
+2. 派 sonnet 做 testcontainers 接入预调研（pom.xml 现有依赖 + Maven 兼容性 + 现有 IT profile 清单）
+3. 派 opus implementer（按问题域分多个 commit，TDD 红绿严格分离）
+4. 派 opus reviewer
+5. 完成后 push + master merge（第四次 + 第五次合并）+ handover update
+6. 中途监控上下文，若再次接近 50% 阈值则再次 compact
+
+**注意**：FU-15 工作量 4-6h，大概率跨多个 compact 周期。每个 compact 周期完成 1-2 模块的真 MySQL 适配 + commit + push + 阶段性 master merge 是合理节奏。
+
+### 历史选项（仍可选）
+
+1. **Option B.3 / B.4**：report SqlProbe 异步导出 / perf→report 跨模块只读
+2. **Option C**：100+60 条 curl 回归（需 docker-compose 完整环境）
+3. **nitpick 清理**：FU-7/FU-8/FU-11/FU-12/FU-13/FU-16
 
 ### 验证当前状态命令
 
@@ -334,12 +474,12 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次）
-**对应 git HEAD**：`7f14aca`（Phase 2.5 FU-2 绿）→ origin/master 已合并至 `349c563` + Phase 2.5 待第二次 master merge
-**会话累计 commit（本期分量）**：24 commits + 本 handover 多次续接更新（共约 26 commits）
-**平台累计 commit（含历史）**：241（上期累计） + 24（本期） = **265 commits**
+**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14 完成续接）
+**对应 git HEAD**：`28b1bbc`（Phase 2.6 FU-14 绿）→ origin/master 已合并至 `0af1635`（Phase 2.5）+ Phase 2.6 FU-14 待第四次 master merge
+**会话累计 commit（本期分量）**：26 commits + 本 handover 多次续接更新（共约 28 commits）
+**平台累计 commit（含历史）**：241（上期累计） + 26（本期） = **267 commits**
 
-**本期最终交付清单**（均已合并/即将合并 master）：
+**本期最终交付清单**（已合并/即将合并 master）：
 - Option A 启动级 IT（5 case）
 - V1.1 PT_RESOURCE 整改（清零 audit 类型 A 26 + 类型 B 11）
 - Option B.1 portal workspace IT（5 case）
@@ -348,6 +488,7 @@ mvn verify -pl bootstrap
 - Phase 2 (c) WorkflowCallbackListener APPROVED/REJECTED 分发（含 LeadRejectedEvent 新增）
 - Phase 2 (b) lead_approve_v1.bpmn20.xml + LeadWorkflowE2EIT 真 BPMN E2E（CI 默认跳过，本地 -D 触发）
 - **Phase 2.5 鲁棒性补齐**：H2 LEGACY schema TINYINT(1) 修复 + handleWorkflowCallback dead code 删除 + conditionalUpdateStatus 幂等保护 + 整体 try-catch 异常兜底
+- **Phase 2.6 FU-14 孤儿数据补偿**：@EnableScheduling 全局开启 + LeadCallbackCompensationService 5min 巡检 + LeadCallbackReconcileService 抽取 + WorkflowApi.getProcessOutcome 新增 + 3 case 红 IT
 - 测试基础设施：UTF-8 全局编码 + stale jar 文档化 + LeadE2ETestConfig
 - 数据库对齐：onepl PT_RESOURCE 122→272→298 + docs/schema mysqldump 同步
 
@@ -358,4 +499,5 @@ mvn verify -pl bootstrap
 4. Phase 2.5 FU-1（`2195cd8`）：conditionalUpdateStatus 幂等保护
 5. Phase 2.5 FU-2（`7f14aca`）：整体 try-catch 异常兜底
 6. Phase 2.5 FU-6（`4efde7e`）：删除 dead code handleWorkflowCallback
-7. **当前状态**：与 bizapp.LoanWorkflowListener pattern 完全对齐 ✅
+7. Phase 2.6 FU-14（`28b1bbc`）：handleApproved/handleRejected 抽到 LeadCallbackReconcileService + 补偿 Service 共享 reconcile 逻辑
+8. **当前状态**：与 bizapp.LoanWorkflowListener pattern 完全对齐 ✅，并形成补偿兜底闭环
