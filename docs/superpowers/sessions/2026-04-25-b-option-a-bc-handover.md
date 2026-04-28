@@ -19,14 +19,20 @@
 | 10 | 合并 master（第三次）：Phase 2.5 7 commits + handover 续接 | ✅ 已完成 | merge `0af1635` |
 | 11 | onepl MySQL 幂等导入最新 docs/schema DDL + SEED + 备份 | ✅ 已完成 | 备份 `docs/superpowers/sql/backup/2026-04-27-pre-fu1415-import-backup.sql`（7553 行）|
 | 12 | **Phase 2.6 FU-14：孤儿 lead 数据补偿机制（@Scheduled 5min 巡检 + reconcile 抽取 + WorkflowApi.getProcessOutcome）** | ✅ 已完成（compact 后续接交付，reviewer ✅ 通过+5 follow-up） | `5602b52` `28b1bbc` |
-| 13 | **Phase 2.6 FU-15：testcontainers 真 MySQL** | ⏸️ 待续接（4-6h，下次 compact 后会话执行）| 待续接 |
+| 13 | **Phase 2.6 FU-15 B：用本地 onepl_test_bootstrap MySQL 替代 testcontainers**（本地无 Docker 调整方案） | ✅ 已完成（compact 后续接交付，5 commits，reviewer ✅ 通过+9 follow-up） | `2ec276e` `ccd0eb1` `3b379d9` `884fad2` `a71ef53` |
+| 14 | **第四次 master merge：Phase 2.6 (FU-14 + FU-15 B) 共 7 commits 合并** | ⏳ 待执行 | 待执行 |
 
 ---
 
-## 累计 26+ commits + handover 多次续接更新（origin/claude/crazy-joliot-0e2a1f）
+## 累计 31+ commits + handover 多次续接更新（origin/claude/crazy-joliot-0e2a1f）
 
 ```
-28b1bbc fix(lead-compensation): 实现孤儿 lead 补偿机制（FU-14 绿）  ← Phase 2.6
+a71ef53 chore(cleanup): 删除 H2 hack 残留（FU-15 B C5 收尾）  ← Phase 2.6 FU-15 B
+884fad2 refactor(application-lead-e2e): lead-e2e profile datasource 切到真 MySQL（FU-15 B C4）
+3b379d9 refactor(application-flowable-e2e): flowable-e2e profile datasource 切到真 MySQL（FU-15 B C3）
+ccd0eb1 refactor(application-test): default profile datasource 切到真 MySQL（FU-15 B C2）
+2ec276e chore(test-mysql): 归档 onepl_test_bootstrap 初始化脚本 + data.sql INSERT IGNORE（FU-15 B C1）
+28b1bbc fix(lead-compensation): 实现孤儿 lead 补偿机制（FU-14 绿）  ← Phase 2.6 FU-14
 5602b52 test(lead-compensation): 红 IT + 编译骨架（FU-14 红）
 c63c03a docs(session): handover Phase 2.6 续接锚点（compact 50% 阈值触发存档）
 7f14aca fix(workflow-callback): try-catch 兜底（FU-2 绿）  ← Phase 2.5
@@ -156,6 +162,61 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 - bootstrap surefire 42 + failsafe 22（含 LeadCallbackCompensationIT 3 case）全绿
 - 注：`@EnableScheduling` 全局开启后，performance 3 job 默认 `enabled=false` 仍 OFF，无副作用
 
+### 决策 12：Phase 2.6 FU-15 B — 用本地 onepl_test_bootstrap MySQL 替代 testcontainers（5 commits `2ec276e` ~ `a71ef53`）
+
+**起因**：FU-15 原方案是 testcontainers 跑真 MySQL 8（消除 H2 LEGACY/MYSQL 与生产 MySQL 的行为差异，FU-9 user_notification 大小写、TINYINT(1) syntax 等长期踩坑）。但本会话开始后探测发现：
+- `where docker` 返回找不到文件
+- `C:\Program Files\Docker\` 目录不存在
+- WSL 未安装
+- 无 docker / wsl 进程
+
+**用户选择路径 B**：用本地真 MySQL（独立 onepl_test_bootstrap 库），与 performance/report 模块统一架构（它们已经用 onepl / onepl_test_v103）。
+
+**重大调研发现（implementer brief 前）**：
+- **0 个 IT 用 class/method 级 @Transactional + @Rollback**（受限于 @SpringBootTest webEnvironment）
+- 11/12 IT 用 @Sql BEFORE_CLASS（含 DELETE + INSERT）每次先清再插，依赖此模式做数据隔离
+- bootstrap data.sql 是 IT 专用固定 ID（admin/user001/user002 + 10 PT_RESOURCE 等），**不**等同 seed-v1.sql
+- `NON_KEYWORDS=DAY,READE` H2 hack 暗示 schema 含关键字列，docs/schema 已用反引号转义
+- testcontainers BOM 1.19.7 已在根 pom，但 docker 不可用导致硬阻塞
+
+**采用方案**：方案 B（用本地 onepl_test_bootstrap 库 + 直连 localhost:3306）
+- 不动 IT 代码（@Sql 等保持），仅改 application-*.yml + schema/data 资源
+- 三 profile（test / flowable-e2e / lead-e2e）共用同一物理库（DELETE 矩阵防冲突）
+- 测试库一次性初始化：8 个 ddl + 15 perf 迁移 + 8 report 迁移 = 59 业务表
+- Flowable 81 表（act_/flw_/qrtz_）从 onepl 生产库 mysqldump 复制（绕开 Flowable 7.0.1 schemaUpdate 死循环 bug）
+- bootstrap data.sql 改 INSERT IGNORE 兼容多次 ApplicationContext 启动
+
+**5 个 commit 切分**：
+
+| Commit | 内容 |
+|---|---|
+| C1 `2ec276e` | 归档 init 脚本 + 3 个 data.sql 全部 INSERT INTO → INSERT IGNORE INTO（H2 也兼容）|
+| C2 `ccd0eb1` | application-test.yml datasource 切真 MySQL + 修 H2 specific 兼容（CLOB→TEXT × 3 处、CREATE UNIQUE INDEX → 内联 UNIQUE KEY × 8 处、SEED_KS_EMP_* 污染防护）|
+| C3 `3b379d9` | application-flowable-e2e.yml 切 + 81 张 Flowable 表从 onepl 复制 + flowable-e2e-data.sql 加 DELETE 兜底 |
+| C4 `884fad2` | application-lead-e2e.yml 切 + 加 tinyInt1isBit=false 修 LeadWorkflowE2EIT:155 ClassCastException + lead-e2e-data.sql DELETE 兜底 |
+| C5 `a71ef53` | 删除 schema.sql 408 行 + bootstrap/pom.xml 移除 com.h2database:h2 依赖 |
+
+**关键设计决策**：
+- **共享库 PT_RESOURCE 冲突 DELETE 矩阵**：三 profile 共用 onepl_test_bootstrap，flowable-e2e 与 lead-e2e 互删对方残留绑定（PT_RESOURCE 100-105 与 LR101-105 URL+METHOD 唯一键冲突）
+- **CLOB → TEXT**：H2 CLOB → MySQL TEXT 等价但容量从 1GB 降至 64KB；生产 ddl-customer.sql 实际字段类型待核（FU-24 follow-up）
+- **tinyInt1isBit=false**：仅 lead-e2e profile 加，因 LeadWorkflowE2EIT:155 jdbcTemplate.queryForMap 强转 Number；其他 profile 同库不加形成配置漂移（FU-23 follow-up）
+- **Flowable 表绕开 schemaUpdate**：Flowable 7.0.1 + 真 MySQL 8 死循环 bug，实测从 onepl 生产库复制 81 表 schema + 13 行 act_ge_property schema.version 元数据可启动；真因待排查（FU-30 follow-up）
+- **DDL 偏差发现（FU-29）**：docs/schema/ddl-customer.sql 缺 `touch_task.sla_warning` 列，但 TouchTask.java + TouchTaskMapper.xml 全员使用，是源头 DDL 偏差。本期手工 ALTER TABLE 补齐测试库 + 写到归档脚本步骤 4bis，**未改源 DDL**避免范围扩散
+
+**reviewer 综合 review 结论**：✅ 通过（A/B/G/H/I 全✅ + C/J ✅弱 + D/E/F ⚠️ 可接受），列 9 项 follow-up（FU-22 ~ FU-30，全不阻塞）
+
+**测试覆盖**：
+- bootstrap default profile：surefire 42（2 skip）+ failsafe 22（2 skip）= 64 全绿
+- flowable-e2e profile（-Dflowable.e2e.enabled=true）：FlowableWorkflowCenterE2ETest 1 case 跑通
+- lead-e2e profile（-Dlead.e2e.enabled=true）：LeadWorkflowE2EIT 2 case 跑通
+- 双 profile 同时激活：64 case 全绿
+
+**初始化归档**：`docs/superpowers/sql/2026-04-28-onepl-test-bootstrap-init.sql`（149 行，含步骤 1-5 + 4bis）
+
+### 决策 11：Phase 2.6 FU-14 — 孤儿 lead 数据补偿机制（commits `5602b52` `28b1bbc`）
+
+（详见上文）
+
 ### 决策 10：Phase 2.5 FU-1/2/6/9 鲁棒性补齐（7 commits `aab052f` ~ `7f14aca`）
 
 **起因**：Phase 2 (b) reviewer 列出 4 项中等优先级 nitpick + Phase 2 (c) reviewer 列出 6 项 nitpick，本期一并清理 4 项核心：
@@ -266,33 +327,11 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 详见上文「决策 11」。预估 2-3h，实际约 1.5h（含 2 次轻调研 + implementer + reviewer）。reviewer ✅ 通过 + 5 项 follow-up（不阻塞，详见末尾 V1.7+ 跟踪段）。
 
-### Phase 2.6 FU-15 — ⏸️ 待续接（下次 compact 后会话执行）
+### Phase 2.6 FU-15 B — ✅ 已完成（compact 后续接交付，commits `2ec276e` ~ `a71ef53`）
 
-**问题背景**：测试 schema 与生产 DDL 长期不一致（H2 LEGACY 与 MySQL 8 行为差异多次踩坑：FU-9 user_notification 大小写就是典型），长期方向用 testcontainers 跑真 MySQL 8。
+详见上文「决策 12」。预估 4-6h，实际约 3.5h（含 2 次轻调研 + Docker 阻塞决策切 B 方案 + opus implementer 5 commits + opus reviewer ✅）。reviewer ✅ 通过 + 9 项 follow-up（FU-22 ~ FU-30，全不阻塞，详见末尾 V1.7+ 跟踪段）。
 
-**预计工时**：4-6h，多个 commits（按模块或按问题域分），可能跨多个 compact 周期。
-
-**实施清单**（待续接执行）：
-1. 调研：bootstrap 当前 IT 数（应 19+ default profile + 6 模块 surefire ~1500），评估改 testcontainers 工作量
-2. 加 `org.testcontainers:mysql` Maven 依赖（version 与 spring-boot 兼容）
-3. 写 `bootstrap/src/test/java/com/bank/branch/platform/it/config/MySQLTestContainerConfig.java`（@Container + DynamicPropertySource 注入 jdbc url）
-4. 改 `application-test.yml` / `application-flowable-e2e.yml` / `application-lead-e2e.yml` datasource 由 testcontainers 注入
-5. 跑全部 IT，识别在真 MySQL 下 fail 的 case（H2 specific 行为依赖），逐一 fix
-6. 6 模块全回归 + bootstrap failsafe 全回归
-7. 多个 commits（按模块或按问题域分）+ push + reviewer
-
-**关键风险**：
-- 真 MySQL 启动慢（每 IT 模块 30s-1min 启动开销，全模块跑可能 5-10min）
-- H2 specific 行为依赖识别 + fix（可能涉及多个 mapper xml 微调）
-- CI 环境 Docker 可用性（本地有 Docker Desktop / WSL2 应该 OK，CI 待评估）
-
-**关键文件**：
-- pom.xml（加依赖）
-- `bootstrap/src/test/java/com/bank/branch/platform/it/config/MySQLTestContainerConfig.java`（新建）
-- 多个 `application-*.yml` 改 datasource
-
-**续接命令模板**（compact 后预期）：
-> "读 docs/superpowers/sessions/2026-04-25-b-option-a-bc-handover.md，继续 Phase 2.6 FU-15"
+**为什么从 testcontainers 改成 B 方案**：本会话开始后探测发现 Windows 本地无 Docker（where docker 找不到 + Docker Desktop 未装 + WSL 未装），用户选 B 方案（用本地 onepl_test_bootstrap 库 + 直连 localhost:3306）。与 performance/report 模块统一架构，无需 Docker 即可达到 FU-15 根本目标"测试与生产 DDL 完全一致"。
 
 #### 已废弃的原 Phase 2 (b) 待办说明（保留作历史参考）
 
@@ -364,12 +403,29 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 | # | 项 | 优先级 | 来源 |
 |---|---|---|---|
 | FU-17 | `ProcessCompletedEvent` record 应从 `workflow.listener` 提到 `workflow.api.event` 子包，让 customer 模块只依赖 api 包。当前 `WorkflowCallbackListener.java:9` 引用 listener 内部 record，跨模块边界泄漏（历史遗留，非 Phase 2.6 引入） | M | Phase 2.6 reviewer §D |
-| FU-18 | testcontainers 接入后（FU-15），新增 1 条 IT 验证 H2/MySQL 下 CANCELLED outcome 语义一致性（CANCELLED 流程 outcome 通常是 null，目前补偿走 outcome empty 跳过分支，但需要确认） | M | Phase 2.6 reviewer §H |
+| ~~FU-18~~ | ~~testcontainers 接入后（FU-15），新增 1 条 IT 验证 H2/MySQL 下 CANCELLED outcome 语义一致性~~ | ~~M~~ | **改写为 FU-31**：FU-15 B 实际不用 testcontainers，但 default profile 已切真 MySQL，CANCELLED IT 仍可补 |
 | FU-19 | listener 主路径嵌套 REQUIRES_NEW（外层 tx + 内层 reconcile tx）压测下连接池水位监控，必要时把 listener 改成无 tx + reconcile 单层 tx | L | Phase 2.6 reviewer §E/§H |
-| FU-20 | `CompensationService.COMPENSATION_REJECT_REASON = "由补偿任务推进，原因不明"` 字面量考虑挪到 i18n 或 enum，便于将来按业务方扩展（如审计要求区分 Phase 来源） | L | Phase 2.6 reviewer §A |
+| FU-20 | `CompensationService.COMPENSATION_REJECT_REASON = "由补偿任务推进，原因不明"` 字面量考虑挪到 i18n 或 enum | L | Phase 2.6 reviewer §A |
 | FU-21 | handover doc 推送后回写 FU-14 完成节点 + commit hash + 测试数据 | L | Phase 2.6 reviewer §G |
 
 **Phase 2.6 FU-14 reviewer 总评**：✅ 通过。红绿分离严格、跨模块依赖合规、边界条件覆盖到位（CANCELLED + RUNNING + outcome empty + Flowable 异常兜底全有），IT 断言强度足够（不只 status 还查 cust_master 全链路），幂等保护双层（conditionalUpdate + REQUIRES_NEW）。无阻塞问题。
+
+### Phase 2.6 FU-15 B reviewer 9 项 follow-up（V1.7+ 跟踪，不阻塞合并）
+
+| # | 项 | 优先级 | 来源 |
+|---|---|---|---|
+| FU-22 | CI 加"启动后断言关键种子行数"健康检查（防 INSERT IGNORE 静默吞错）| L | reviewer 维度 B |
+| FU-23 | tinyInt1isBit 配置漂移：3 profile 一致化或改 IT 用 `getObject(..)` 而非 `(Number)` cast | M | reviewer 维度 C |
+| FU-24 | 核实生产 DDL 中 `support_request.other_demand` / `cust_lead.customer_desc` / `cust_master.customer_desc` 是否 TEXT/MEDIUMTEXT/LONGTEXT，对齐测试库容量上限（H2 CLOB 默认 1GB → MySQL TEXT 64KB）| M | reviewer 维度 D |
+| FU-25 | 抽 `it-cleanup.sql` 独立前置 cleanup，三 profile 引用，去除互删耦合（共享库 PT_RESOURCE 100-105 vs LR101-105 双向 DELETE 矩阵难维护）| M | reviewer 维度 E |
+| FU-26 | 归档脚本 §5：(a) bash 加 PowerShell 等价命令 (b) 显式声明禁止 dump act_hi_*/act_ru_* 实例数据 | L | reviewer 维度 F |
+| FU-27 | ~~合并 master 前跑全量 mvn verify 确认 6 模块 1502 case 不受影响~~ ✅ 已执行（exit 0）| - | reviewer 维度 H |
+| FU-28 | ~~handover doc 更新：FU-15 ⏸️→✅，回写步骤 4bis/5 关键发现~~ ✅ 已执行 | - | reviewer 维度 J |
+| FU-29 | sla_warning 修源 DDL：`docs/schema/ddl-customer.sql` 补字段 + 提供 V1_x 迁移脚本（implementer 已登记） | M | implementer 报告 |
+| FU-30 | 排查 Flowable 7.0.1 schemaUpdate 死循环真因（已 exclude Druid 仍报，疑似非 Druid 问题） | L | reviewer 维度 F |
+| FU-31 | 补 1 条真 MySQL CANCELLED outcome IT（替代原 FU-18，因 default profile 已切真 MySQL 不再需要等 testcontainers）| L | FU-18 改写 |
+
+**Phase 2.6 FU-15 B reviewer 总评**：✅ 通过。5 commit 切片清晰（INSERT IGNORE 准备 → 3 profile 序列切换 → 清理），每个 commit 末附完整测试证据；归档脚本写得详细（含 4bis sla_warning 补齐 + 步骤 5 Flowable 81 表 mysqldump 复制），具备可重复执行性。CLOB→TEXT、CREATE UNIQUE INDEX 内联化、tinyInt1isBit=false 是必要的 MySQL 兼容修复。FU-15 B 完整达到 FU-15 根本目标"测试与生产 DDL 一致"，与 performance/report 模块统一架构。无阻塞，可合并 master。
 
 ---
 
@@ -399,49 +455,37 @@ compact 前已完成的全部前置工作：
 - ✅ 本地 Redis 服务已启动，MySQL 已启动（root/123456 @ localhost:3306/onepl）
 - ✅ Phase 2.6 FU-14 已交付（@Scheduled 5min 补偿巡检 + reconcile 抽取 + WorkflowApi.getProcessOutcome）
 
-**Phase 2.6 续接清单（compact 后第一步）**：
+**Phase 2.6 续接清单（已全部完成）**：
 
 #### ~~FU-14（孤儿数据补偿机制）~~ — ✅ 已完成
 
 详见上文「决策 11」。commits `5602b52` `28b1bbc` 已 push。reviewer ✅ 通过 + 5 项 follow-up（详见末尾 V1.7+ 跟踪段）。
 
-#### FU-15（testcontainers 真 MySQL）
+#### ~~FU-15 B（用本地 onepl_test_bootstrap MySQL 替代 testcontainers）~~ — ✅ 已完成
 
-**问题**：测试 schema 与生产 DDL 不一致（H2 LEGACY 与 MySQL 8 行为差异多次踩坑：FU-9 user_notification 大小写就是典型）。长期方向是用 testcontainers 跑真 MySQL 8。
+详见上文「决策 12」。commits `2ec276e` `ccd0eb1` `3b379d9` `884fad2` `a71ef53` 已 push。reviewer ✅ 通过 + 9 项 follow-up（详见末尾 V1.7+ 跟踪段）。
 
-**实施清单**：
-1. 调研：bootstrap 当前 IT 数（应该 19 + 6 模块 = ~50+），评估改 testcontainers 工作量
-2. 加 `org.testcontainers:mysql` Maven 依赖
-3. 写 `MySQLTestContainerConfig.java` 或类似（@Container + DynamicPropertySource 注入 jdbc url）
-4. 改 `application-test.yml` / `application-flowable-e2e.yml` / `application-lead-e2e.yml` 等让 datasource 由 testcontainers 注入
-5. 跑全部 IT，识别在真 MySQL 下 fail 的 case（H2 specific 行为依赖），逐一 fix
-6. 6 模块全回归 + bootstrap failsafe 全回归
-7. 多个 commit（按模块或按问题域分）+ push + reviewer
+**关键调整**：原 FU-15 计划用 testcontainers 真 MySQL，本会话开始后探测发现本地无 Docker（where docker 找不到 + Docker Desktop 未装 + WSL 未装），用户选 B 方案（用本地 onepl_test_bootstrap 库 + 直连 localhost:3306）。与 performance/report 模块统一架构，无需 Docker 即可达到 FU-15 根本目标"测试与生产 DDL 完全一致"。
 
-**预计工时**：4-6h（大概率需要分次 commit，可能跨多个 compact 周期）。
+#### Phase 2.6 完成 → 第四次 master merge
 
-**关键风险**：
-- 真 MySQL 启动慢（测试时间显著延长）
-- H2 specific 行为依赖识别 + fix
-- CI 环境 docker 可用性（本地已有 Docker Desktop / WSL2 应该 OK）
+Phase 2.6 = FU-14 + FU-15 B 共 7 commits 已全部交付，等待第四次 master merge（与第三次 0af1635 之后累计 7 commits 上 master）。
 
-**关键文件**：
-- pom.xml（加依赖）
-- `bootstrap/src/test/java/com/bank/branch/platform/it/config/MySQLTestContainerConfig.java`（新建）
-- 多个 application-*.yml 改 datasource
+mvn 全量回归验证（FU-27）：`mvn clean install -DskipTests + mvn verify -pl bootstrap` 已跑过 exit code 0（含 LeadCallbackCompensationIT 全 3 case 跑通），bootstrap 64 case 全绿。
 
-### 续接命令模板
+### 续接命令模板（如需再次启动会话）
 
-compact 后，用户预期发出："读 docs/superpowers/sessions/2026-04-25-b-option-a-bc-handover.md，继续 Phase 2.6 FU-15"。
+如果第四次 master merge 因 compact 阈值触发未在本会话完成，下次会话用户预期发出：
+> "读 docs/superpowers/sessions/2026-04-25-b-option-a-bc-handover.md，执行第四次 master merge"
+
 主代理应：
-1. Read 本 handover doc 全文
-2. 派 sonnet 做 testcontainers 接入预调研（pom.xml 现有依赖 + Maven 兼容性 + 现有 IT profile 清单）
-3. 派 opus implementer（按问题域分多个 commit，TDD 红绿严格分离）
-4. 派 opus reviewer
-5. 完成后 push + master merge（第四次 + 第五次合并）+ handover update
-6. 中途监控上下文，若再次接近 50% 阈值则再次 compact
+1. Read 本 handover doc（确认 FU-14 + FU-15 B 全部 ✅）
+2. 验证 git status clean + 7 commits ahead of origin/master
+3. `git checkout master && git merge --no-ff claude/crazy-joliot-0e2a1f -m "..."` 第四次合并
+4. push master + push branch
+5. handover doc 末尾元数据更新（HEAD / commit count）
 
-**注意**：FU-15 工作量 4-6h，大概率跨多个 compact 周期。每个 compact 周期完成 1-2 模块的真 MySQL 适配 + commit + push + 阶段性 master merge 是合理节奏。
+如想继续 V1.7+ follow-up，可挑：FU-7/8/11/12/13/16/17/19/20/22/23/24/25/26/29/30/31，或 Option B.3 / B.4。
 
 ### 历史选项（仍可选）
 
@@ -474,10 +518,10 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14 完成续接）
-**对应 git HEAD**：`28b1bbc`（Phase 2.6 FU-14 绿）→ origin/master 已合并至 `0af1635`（Phase 2.5）+ Phase 2.6 FU-14 待第四次 master merge
-**会话累计 commit（本期分量）**：26 commits + 本 handover 多次续接更新（共约 28 commits）
-**平台累计 commit（含历史）**：241（上期累计） + 26（本期） = **267 commits**
+**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14 + FU-15 B 完成续接）
+**对应 git HEAD**：`a71ef53`（Phase 2.6 FU-15 B C5）→ origin/master 已合并至 `0af1635`（Phase 2.5）+ Phase 2.6 FU-14 + FU-15 B 共 7 commits 待第四次 master merge
+**会话累计 commit（本期分量）**：31 commits + 本 handover 多次续接更新（共约 33 commits）
+**平台累计 commit（含历史）**：241（上期累计） + 31（本期） = **272 commits**
 
 **本期最终交付清单**（已合并/即将合并 master）：
 - Option A 启动级 IT（5 case）
@@ -489,8 +533,9 @@ mvn verify -pl bootstrap
 - Phase 2 (b) lead_approve_v1.bpmn20.xml + LeadWorkflowE2EIT 真 BPMN E2E（CI 默认跳过，本地 -D 触发）
 - **Phase 2.5 鲁棒性补齐**：H2 LEGACY schema TINYINT(1) 修复 + handleWorkflowCallback dead code 删除 + conditionalUpdateStatus 幂等保护 + 整体 try-catch 异常兜底
 - **Phase 2.6 FU-14 孤儿数据补偿**：@EnableScheduling 全局开启 + LeadCallbackCompensationService 5min 巡检 + LeadCallbackReconcileService 抽取 + WorkflowApi.getProcessOutcome 新增 + 3 case 红 IT
-- 测试基础设施：UTF-8 全局编码 + stale jar 文档化 + LeadE2ETestConfig
-- 数据库对齐：onepl PT_RESOURCE 122→272→298 + docs/schema mysqldump 同步
+- **Phase 2.6 FU-15 B 测试库切真 MySQL**：onepl_test_bootstrap 独立测试库（59 表）+ bootstrap 三 profile datasource 切换 + H2 hack 清零（CLOB→TEXT × 3 / CREATE UNIQUE INDEX 内联化 × 8 / schema.sql 408 行删除 / pom.xml 移除 h2 依赖）+ Flowable 81 表 mysqldump 复制绕开 schemaUpdate 死循环
+- 测试基础设施：UTF-8 全局编码 + stale jar 文档化 + LeadE2ETestConfig + onepl_test_bootstrap 库初始化归档（149 行 sql 脚本，含 4bis sla_warning 补齐 + 步骤 5 Flowable 表 mysqldump 命令）
+- 数据库对齐：onepl PT_RESOURCE 122→272→298 + docs/schema mysqldump 同步 + 新增 onepl_test_bootstrap 测试库
 
 **WorkflowCallbackListener 演进总结**（本期重点路径）：
 1. 原始：fallbackExecution=true（P0 链路 bug，cust_master 永不创建）
