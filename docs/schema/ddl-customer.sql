@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `cust_tag` (
   UNIQUE KEY `uk_tag_code` (`tag_code`),
   UNIQUE KEY `uk_tag_name` (`tag_name`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户标签表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户标签表';
 
 -- -------------------------------------------
 -- 2. 客户-标签关联表
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS `cust_tag_rel` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_cust_tag` (`cust_id`, `tag_id`),
   KEY `idx_tag_id` (`tag_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户-标签关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户-标签关联表';
 
 -- -------------------------------------------
 -- 3. 客户线索表
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS `cust_lead` (
   KEY `idx_source_cust` (`source_cust_id`),
   KEY `idx_lead_op_status` (`lead_op`, `lead_status`),
   KEY `idx_is_latest` (`is_latest`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户线索表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户线索表';
 
 -- -------------------------------------------
 -- 4. 线索导入批次表
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS `lead_import_batch` (
   KEY `idx_owner_org` (`owner_org_id`),
   KEY `idx_status` (`status`),
   KEY `idx_created_time` (`created_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='线索导入批次表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='线索导入批次表';
 
 -- -------------------------------------------
 -- 5. 客户主档表
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS `cust_master` (
   KEY `idx_lead_id` (`lead_id`),
   KEY `idx_unified_credit_code` (`unified_credit_code`),
   KEY `idx_deleted` (`deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户主档表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户主档表';
 
 -- -------------------------------------------
 -- 6. 客户认领关系表
@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS `cust_claim` (
   KEY `idx_claimed_by` (`claimed_by`),
   KEY `idx_maintainer` (`maintainer_emp_id`),
   KEY `idx_status` (`claim_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户认领关系表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户认领关系表';
 
 -- -------------------------------------------
 -- 7. 触达任务表
@@ -195,6 +195,7 @@ CREATE TABLE IF NOT EXISTS `touch_task` (
   `plan_finish_time` datetime DEFAULT NULL COMMENT '计划完成时间(SLA)',
   `warning_time` datetime DEFAULT NULL COMMENT '预警时间(SLA)',
   `sla_status` varchar(20) DEFAULT NULL COMMENT 'SLA状态：GREEN/YELLOW/RED',
+  `sla_warning` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'SLA预警标记：0-否, 1-是（sla_status 为 YELLOW/RED 时置 1）',
   `business_key` varchar(100) DEFAULT NULL COMMENT '流程业务键（TOUCH:{id}）',
   `success_time` datetime DEFAULT NULL COMMENT '成功时间',
   `cancel_time` datetime DEFAULT NULL COMMENT '取消时间',
@@ -208,7 +209,7 @@ CREATE TABLE IF NOT EXISTS `touch_task` (
   KEY `idx_status` (`task_status`),
   KEY `idx_business_key` (`business_key`),
   KEY `idx_assignee_status` (`assignee_emp_id`, `task_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='触达任务表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='触达任务表';
 
 -- -------------------------------------------
 -- 8. 触达日志表
@@ -228,4 +229,4 @@ CREATE TABLE IF NOT EXISTS `touch_log` (
   KEY `idx_task_id` (`touch_task_id`),
   KEY `idx_created_by` (`created_by`),
   KEY `idx_task_log_time` (`touch_task_id`, `log_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='触达日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='触达日志表';
