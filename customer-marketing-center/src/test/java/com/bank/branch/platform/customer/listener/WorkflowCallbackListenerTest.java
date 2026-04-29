@@ -1,6 +1,6 @@
 package com.bank.branch.platform.customer.listener;
 
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +32,7 @@ class WorkflowCallbackListenerTest {
     void onProcessCompleted_isAnnotatedWithTransactionalEventListener() throws NoSuchMethodException {
         Method m = WorkflowCallbackListener.class.getMethod(
                 "onProcessCompleted",
-                ProcessCompletedListener.ProcessCompletedEvent.class);
+                ProcessCompletedEvent.class);
 
         TransactionalEventListener ann = m.getAnnotation(TransactionalEventListener.class);
 
@@ -57,7 +57,7 @@ class WorkflowCallbackListenerTest {
     void onProcessCompleted_isAnnotatedWithTransactionalRequiresNew() throws NoSuchMethodException {
         Method m = WorkflowCallbackListener.class.getMethod(
                 "onProcessCompleted",
-                ProcessCompletedListener.ProcessCompletedEvent.class);
+                ProcessCompletedEvent.class);
 
         Transactional ann = m.getAnnotation(Transactional.class);
 

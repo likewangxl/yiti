@@ -10,7 +10,7 @@ import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.support.PerfTestApp;
 import com.bank.branch.platform.performance.support.PerfTestConfig;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -139,8 +139,8 @@ class AllocationAdjustmentApprovedEventIT {
             tt.execute(new TransactionCallbackWithoutResult() {
                 @Override
                 protected void doInTransactionWithoutResult(TransactionStatus status) {
-                    ProcessCompletedListener.ProcessCompletedEvent event =
-                            new ProcessCompletedListener.ProcessCompletedEvent(
+                    ProcessCompletedEvent event =
+                            new ProcessCompletedEvent(
                                     "PI_Q26_" + applyId, businessKey, "APPROVED", "审批通过");
                     springEventPublisher.publishEvent(event);
                 }
@@ -191,8 +191,8 @@ class AllocationAdjustmentApprovedEventIT {
             tt.execute(new TransactionCallbackWithoutResult() {
                 @Override
                 protected void doInTransactionWithoutResult(TransactionStatus status) {
-                    ProcessCompletedListener.ProcessCompletedEvent event =
-                            new ProcessCompletedListener.ProcessCompletedEvent(
+                    ProcessCompletedEvent event =
+                            new ProcessCompletedEvent(
                                     "PI_Q26_R_" + applyId, businessKey, "REJECTED", "不通过");
                     springEventPublisher.publishEvent(event);
                 }

@@ -5,7 +5,7 @@ import com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.support.PerfTestApp;
 import com.bank.branch.platform.performance.support.PerfTestConfig;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -113,8 +113,8 @@ class TargetAdjustmentApprovedEventIT {
             tt.execute(new TransactionCallbackWithoutResult() {
                 @Override
                 protected void doInTransactionWithoutResult(TransactionStatus status) {
-                    ProcessCompletedListener.ProcessCompletedEvent event =
-                            new ProcessCompletedListener.ProcessCompletedEvent(
+                    ProcessCompletedEvent event =
+                            new ProcessCompletedEvent(
                                     "PI_Q33_" + applyId, businessKey, "APPROVED", "审批通过");
                     springEventPublisher.publishEvent(event);
                 }
@@ -164,8 +164,8 @@ class TargetAdjustmentApprovedEventIT {
             tt.execute(new TransactionCallbackWithoutResult() {
                 @Override
                 protected void doInTransactionWithoutResult(TransactionStatus status) {
-                    ProcessCompletedListener.ProcessCompletedEvent event =
-                            new ProcessCompletedListener.ProcessCompletedEvent(
+                    ProcessCompletedEvent event =
+                            new ProcessCompletedEvent(
                                     "PI_Q33_R_" + applyId, businessKey, "REJECTED", "不通过");
                     springEventPublisher.publishEvent(event);
                 }

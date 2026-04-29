@@ -5,7 +5,7 @@ import com.bank.branch.platform.bizapp.enums.LoanStatus;
 import com.bank.branch.platform.bizapp.event.LoanApprovedEvent;
 import com.bank.branch.platform.bizapp.event.LoanRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -18,7 +18,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * 贷款审批工作流回调监听器。
  * <p>
- * 监听 workflow-center 发布的 {@link ProcessCompletedListener.ProcessCompletedEvent}，
+ * 监听 workflow-center 发布的 {@link ProcessCompletedEvent}，
  * 过滤业务键前缀为 {@code LOAN:} 的事件，按 outcome 分派审批结果：
  * <ul>
  *   <li>APPROVED → 状态更新为 COMPLETED，发布 {@link LoanApprovedEvent}</li>
@@ -66,7 +66,7 @@ public class LoanWorkflowListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
+    public void onProcessCompleted(ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         String processInstanceId = event.processInstanceId();
 

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.listener;
 
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.enums.ProcessStatus;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
@@ -112,7 +113,7 @@ class ProcessCompletedListenerTest {
         processCompletedListener.notify(execution);
 
         // Assert
-        verify(eventPublisher).publishEvent(any(ProcessCompletedListener.ProcessCompletedEvent.class));
+        verify(eventPublisher).publishEvent(any(ProcessCompletedEvent.class));
     }
 
     @Test
@@ -132,8 +133,8 @@ class ProcessCompletedListenerTest {
         processCompletedListener.notify(execution);
 
         // then: 捕获发布事件，断言 outcome=REJECTED + reason 正确
-        ArgumentCaptor<ProcessCompletedListener.ProcessCompletedEvent> captor =
-                ArgumentCaptor.forClass(ProcessCompletedListener.ProcessCompletedEvent.class);
+        ArgumentCaptor<ProcessCompletedEvent> captor =
+                ArgumentCaptor.forClass(ProcessCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().processInstanceId()).isEqualTo("pi-1");
         assertThat(captor.getValue().outcome()).isEqualTo("REJECTED");
@@ -153,8 +154,8 @@ class ProcessCompletedListenerTest {
 
         processCompletedListener.notify(execution);
 
-        ArgumentCaptor<ProcessCompletedListener.ProcessCompletedEvent> captor =
-                ArgumentCaptor.forClass(ProcessCompletedListener.ProcessCompletedEvent.class);
+        ArgumentCaptor<ProcessCompletedEvent> captor =
+                ArgumentCaptor.forClass(ProcessCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().outcome()).isEqualTo("APPROVED");
         assertThat(captor.getValue().reason()).isNull();

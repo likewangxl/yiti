@@ -5,7 +5,7 @@ import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.event.SupportCompletedEvent;
 import com.bank.branch.platform.bizapp.event.SupportRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,7 +58,7 @@ class SupportWorkflowListenerTest {
 
         // when
         listener.onProcessCompleted(
-                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null));
+                new ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null));
 
         // then: 使用条件更新，目标状态为 COMPLETED
         verify(supportMapper).conditionalUpdateStatus("SR001", SupportStatus.IN_APPROVAL.getCode(),
@@ -81,8 +81,8 @@ class SupportWorkflowListenerTest {
                 SupportStatus.REJECTED.getCode(), "SYSTEM")).thenReturn(1);
         when(supportMapper.selectById("SR002")).thenReturn(sr);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("pid-2", "SUPPORT:SR002", "REJECTED", "客户资质不足");
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent("pid-2", "SUPPORT:SR002", "REJECTED", "客户资质不足");
 
         // when
         listener.onProcessCompleted(event);
@@ -106,8 +106,8 @@ class SupportWorkflowListenerTest {
                 SupportStatus.REJECTED.getCode(), "SYSTEM")).thenReturn(1);
         when(supportMapper.selectById("SR003")).thenReturn(sr);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("pid-3", "SUPPORT:SR003", "REJECTED", null);
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent("pid-3", "SUPPORT:SR003", "REJECTED", null);
 
         // when / then
         assertThatCode(() -> listener.onProcessCompleted(event)).doesNotThrowAnyException();
@@ -127,7 +127,7 @@ class SupportWorkflowListenerTest {
 
         // when
         listener.onProcessCompleted(
-                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null));
+                new ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null));
 
         // then
         verify(eventPublisher, never()).publishEvent(any());
@@ -141,7 +141,7 @@ class SupportWorkflowListenerTest {
     void onProcessCompleted_nonSupportBusinessKey_shouldIgnore() {
         // given: LOAN: 前缀，不是 SUPPORT:
         listener.onProcessCompleted(
-                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "LOAN:LA001", "APPROVED", null));
+                new ProcessCompletedEvent("PID001", "LOAN:LA001", "APPROVED", null));
 
         // then
         verify(supportMapper, never()).conditionalUpdateStatus(any(), any(), any(), any());
@@ -154,7 +154,7 @@ class SupportWorkflowListenerTest {
     @DisplayName("onProcessCompleted 方法应标注 @TransactionalEventListener(AFTER_COMMIT) + @Transactional(REQUIRES_NEW)")
     void onProcessCompleted_shouldBeAnnotatedWithTransactionalEventListenerAfterCommit() throws NoSuchMethodException {
         Method method = SupportWorkflowListener.class.getMethod(
-                "onProcessCompleted", ProcessCompletedListener.ProcessCompletedEvent.class);
+                "onProcessCompleted", ProcessCompletedEvent.class);
 
         TransactionalEventListener annotation = method.getAnnotation(TransactionalEventListener.class);
         assertThat(annotation).as("方法应标注 @TransactionalEventListener").isNotNull();
@@ -189,7 +189,7 @@ class SupportWorkflowListenerTest {
 
         // when / then
         assertThatCode(() -> listener.onProcessCompleted(
-                new ProcessCompletedListener.ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null)))
+                new ProcessCompletedEvent("PID001", "SUPPORT:SR001", "APPROVED", null)))
                 .doesNotThrowAnyException();
     }
 

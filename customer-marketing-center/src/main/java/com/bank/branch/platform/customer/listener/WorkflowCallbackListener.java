@@ -6,7 +6,7 @@ import com.bank.branch.platform.customer.event.LeadDeletedEvent;
 import com.bank.branch.platform.customer.event.LeadRejectedEvent;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.service.LeadCallbackReconcileService;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,7 +18,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * 工作流回调监听器。
  * <p>
- * 监听工作流中心发布的 {@link ProcessCompletedListener.ProcessCompletedEvent} 事件，
+ * 监听工作流中心发布的 {@link ProcessCompletedEvent} 事件，
  * 根据 businessKey 前缀（LEAD:）识别线索相关流程，按 outcome 委托
  * {@link LeadCallbackReconcileService} 处理审批结果（与
  * {@code bizapp.LoanWorkflowListener} pattern 对齐）：
@@ -75,7 +75,7 @@ public class WorkflowCallbackListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
+    public void onProcessCompleted(ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         String processInstanceId = event.processInstanceId();
         log.info("[WorkflowCallbackListener.onProcessCompleted] processInstanceId={}, businessKey={}, outcome={}",
