@@ -22,6 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -41,7 +42,9 @@ public class LeadImportService {
     private final LeadImportBatchMapper batchMapper;
     private final CustLeadMapper leadMapper;
 
-    private static final int MAX_IMPORT_ROWS = 1000;
+    private static final int MAX_IMPORT_ROWS = 5000;
+    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("csv", "xlsx", "xls");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     /**
@@ -60,10 +63,19 @@ public class LeadImportService {
     public LeadImportPreviewResp preview(MultipartFile file, String operatorEmpId, String orgCode) {
         log.info("[LeadImportService.preview] fileName={}, operator={}", file.getOriginalFilename(), operatorEmpId);
 
-        // 空文件校验
+        // 文件格式校验（CUST-42203）：根据扩展名识别 csv/xlsx/xls
+        assertFileFormatAllowed(file.getOriginalFilename());
+
+        // 空文件校验（CUST-40005）
         if (file.isEmpty()) {
             throw new BizException(CustomerErrorCode.IMPORT_FILE_EMPTY.getCode(),
                     CustomerErrorCode.IMPORT_FILE_EMPTY.getMessage());
+        }
+
+        // 文件大小校验（CUST-42204）：限制 10MB 防止内存溢出
+        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            throw new BizException(CustomerErrorCode.IMPORT_FILE_TOO_LARGE.getCode(),
+                    CustomerErrorCode.IMPORT_FILE_TOO_LARGE.getMessage());
         }
 
         // 解析文件行数（简化：按换行符计算，减去表头行）
@@ -88,10 +100,10 @@ public class LeadImportService {
             // 解析失败时设置行数为 0，交由前端决策
         }
 
-        // 行数超限校验
+        // 行数超限校验（CUST-42205）
         if (totalRows > MAX_IMPORT_ROWS) {
-            throw new BizException(CustomerErrorCode.IMPORT_ROW_LIMIT_EXCEEDED.getCode(),
-                    CustomerErrorCode.IMPORT_ROW_LIMIT_EXCEEDED.getMessage());
+            throw new BizException(CustomerErrorCode.IMPORT_ROWS_TOO_MANY.getCode(),
+                    CustomerErrorCode.IMPORT_ROWS_TOO_MANY.getMessage());
         }
 
         // 创建批次记录
@@ -200,6 +212,29 @@ public class LeadImportService {
     }
 
     // ============================= 私有辅助方法 =============================
+
+    /**
+     * 校验上传文件扩展名是否在允许列表内（仅 csv/xlsx/xls）。
+     * 文件名缺失或扩展名不符均抛 {@link CustomerErrorCode#IMPORT_FILE_FORMAT_INVALID} (CUST-42203)。
+     *
+     * @param filename 上传文件原始名称
+     */
+    private void assertFileFormatAllowed(String filename) {
+        if (filename == null || filename.isBlank()) {
+            throw new BizException(CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getCode(),
+                    CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getMessage());
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            throw new BizException(CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getCode(),
+                    CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getMessage());
+        }
+        String ext = filename.substring(dot + 1).toLowerCase();
+        if (!ALLOWED_EXTENSIONS.contains(ext)) {
+            throw new BizException(CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getCode(),
+                    CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getMessage());
+        }
+    }
 
     /**
      * 生成唯一批次号，格式：BATCH_{yyyyMMdd}_{4位随机数}。

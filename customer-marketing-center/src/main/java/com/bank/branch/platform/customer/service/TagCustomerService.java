@@ -55,6 +55,11 @@ public class TagCustomerService {
                     CustomerErrorCode.TAG_NOT_FOUND.getMessage());
         }
 
+        // 客户ID 有效性校验（CUST-42202）：空列表跳过；非空必须全部存在于 cust_master，否则整批回滚
+        if (custIds != null && !custIds.isEmpty()) {
+            assertCustIdsValid(custIds);
+        }
+
         // 覆盖式：先删除该标签所有旧的客户关联
         int deleted = tagRelMapper.deleteByTagId(tagId);
         log.debug("[TagCustomerService.importCustomers] deleted {} old relations for tagId={}", deleted, tagId);
@@ -160,5 +165,24 @@ public class TagCustomerService {
         log.info("[TagCustomerService.removeTagFromCustomer] custId={}, tagId={}", custId, tagId);
         int rows = tagRelMapper.deleteByCustIdAndTagId(custId, tagId);
         return rows > 0;
+    }
+
+    /**
+     * 校验客户 ID 列表中每一个都存在于 cust_master，缺失任一抛 CUST-42202。
+     * 整批回滚而非逐行剔除，保证导入语义"全有或全无"。
+     * 输入先去重再比对，避免重复 ID（如 ["C001","C001","C002"]）触发 IN(...) 去重后 size 不等的假阳性。
+     *
+     * @param custIds 待校验的客户 ID 列表（非空、非 null）
+     */
+    private void assertCustIdsValid(List<String> custIds) {
+        java.util.Set<String> distinct = new java.util.LinkedHashSet<>(custIds);
+        List<CustMaster> existing = masterMapper.selectByIds(new java.util.ArrayList<>(distinct));
+        int found = existing == null ? 0 : existing.size();
+        if (found != distinct.size()) {
+            log.warn("[TagCustomerService.assertCustIdsValid] requested={}, distinct={}, found={}, 校验失败 CUST-42202",
+                    custIds.size(), distinct.size(), found);
+            throw new BizException(CustomerErrorCode.TAG_IMPORT_VALIDATION_FAILED.getCode(),
+                    CustomerErrorCode.TAG_IMPORT_VALIDATION_FAILED.getMessage());
+        }
     }
 }

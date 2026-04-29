@@ -41,6 +41,12 @@ public class TouchLogService {
             TouchTaskStatus.IN_PROGRESS.getCode()
     );
 
+    /** 触达照片单次上传上限（CUST-42207）。 */
+    private static final int MAX_PHOTO_COUNT = 9;
+
+    /** 触达照片允许的扩展名（CUST-42208，小写匹配）。 */
+    private static final Set<String> ALLOWED_PHOTO_EXTENSIONS = Set.of("jpg", "jpeg", "png", "heic");
+
     /**
      * 新增触达日志（幂等接口）。
      * <p>
@@ -62,6 +68,14 @@ public class TouchLogService {
                            String photoUrls, String operatorEmpId, String orgId) {
         log.info("[TouchLogService.addLog] touchTaskId={}, clientUuid={}, operatorEmpId={}",
                 touchTaskId, clientUuid, operatorEmpId);
+
+        // 必填校验（CUST-42206）：logContent 与 photoUrls 至少一个非空
+        assertContentOrPhotoPresent(logContent, photoUrls);
+
+        // 照片数量与格式校验（CUST-42207 / CUST-42208）：photoUrls 非空时解析 JSON 数组
+        List<String> photos = parsePhotoUrls(photoUrls);
+        assertPhotoCountWithinLimit(photos);
+        assertPhotoFormatsAllowed(photos);
 
         // 检查触达任务存在且处于可提交日志的状态（PENDING 或 IN_PROGRESS）
         TouchTask task = taskMapper.selectById(touchTaskId);
@@ -127,5 +141,83 @@ public class TouchLogService {
     public List<TouchLog> listByTaskId(String touchTaskId) {
         log.info("[TouchLogService.listByTaskId] touchTaskId={}", touchTaskId);
         return logMapper.selectByTaskId(touchTaskId);
+    }
+
+    // ============================= 私有校验方法 =============================
+
+    /**
+     * 校验 logContent 与 photoUrls 至少一个非空（CUST-42206）。
+     */
+    private void assertContentOrPhotoPresent(String logContent, String photoUrls) {
+        boolean contentBlank = logContent == null || logContent.isBlank();
+        boolean photosBlank = photoUrls == null || photoUrls.isBlank() || "[]".equals(photoUrls.trim());
+        if (contentBlank && photosBlank) {
+            throw new BizException(CustomerErrorCode.TOUCH_LOG_CONTENT_REQUIRED.getCode(),
+                    CustomerErrorCode.TOUCH_LOG_CONTENT_REQUIRED.getMessage());
+        }
+    }
+
+    /**
+     * 解析 photoUrls JSON 数组字符串为 URL 列表。
+     * 仅支持 JSON 数组形态（["url1","url2"]），其它形态视作单一 URL；空/null 返回空列表。
+     */
+    private List<String> parsePhotoUrls(String photoUrls) {
+        if (photoUrls == null || photoUrls.isBlank() || "[]".equals(photoUrls.trim())) {
+            return List.of();
+        }
+        String trimmed = photoUrls.trim();
+        // 只接受 JSON 数组形式，否则视为格式错误（防御性 — 调用方约定 JSON 数组）
+        if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+            throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getCode(),
+                    CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getMessage());
+        }
+        // 简化解析：去掉首尾 [ ] 后按逗号分割，剥离引号与空格。
+        // 不引入 Jackson 依赖（addLog 高频调用，避免 ObjectMapper 开销 + 反射风险）。
+        String inner = trimmed.substring(1, trimmed.length() - 1).trim();
+        if (inner.isEmpty()) {
+            return List.of();
+        }
+        String[] parts = inner.split(",");
+        List<String> urls = new java.util.ArrayList<>(parts.length);
+        for (String p : parts) {
+            String s = p.trim();
+            if (s.startsWith("\"") && s.endsWith("\"") && s.length() >= 2) {
+                s = s.substring(1, s.length() - 1);
+            }
+            if (!s.isEmpty()) {
+                urls.add(s);
+            }
+        }
+        return urls;
+    }
+
+    /**
+     * 校验照片数量不超过 9 张（CUST-42207）。
+     */
+    private void assertPhotoCountWithinLimit(List<String> photos) {
+        if (photos.size() > MAX_PHOTO_COUNT) {
+            throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_LIMIT_EXCEEDED.getCode(),
+                    CustomerErrorCode.TOUCH_LOG_PHOTO_LIMIT_EXCEEDED.getMessage());
+        }
+    }
+
+    /**
+     * 校验每个照片 URL 后缀属于允许格式 jpg/jpeg/png/heic（CUST-42208）。
+     */
+    private void assertPhotoFormatsAllowed(List<String> photos) {
+        for (String url : photos) {
+            int dot = url.lastIndexOf('.');
+            int qm = url.indexOf('?');
+            int end = qm > 0 ? qm : url.length();
+            if (dot < 0 || dot >= end - 1) {
+                throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getCode(),
+                        CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getMessage());
+            }
+            String ext = url.substring(dot + 1, end).toLowerCase();
+            if (!ALLOWED_PHOTO_EXTENSIONS.contains(ext)) {
+                throw new BizException(CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getCode(),
+                        CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getMessage());
+            }
+        }
     }
 }

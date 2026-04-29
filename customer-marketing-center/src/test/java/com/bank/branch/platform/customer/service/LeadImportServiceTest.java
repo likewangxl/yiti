@@ -83,6 +83,68 @@ class LeadImportServiceTest {
         verify(batchMapper, never()).insert(any());
     }
 
+    @Test
+    void preview_shouldThrowWhenFileFormatNotAllowed() {
+        // given: 非 csv/xlsx/xls 扩展名（CUST-42203）
+        MultipartFile pdfFile = new MockMultipartFile(
+                "file", "leads.pdf", "application/pdf", "fake".getBytes()
+        );
+
+        assertThatThrownBy(() -> leadImportService.preview(pdfFile, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getCode());
+
+        verify(batchMapper, never()).insert(any());
+    }
+
+    @Test
+    void preview_shouldThrowWhenFilenameMissingExtension() {
+        // given: 缺少扩展名（CUST-42203）
+        MultipartFile noExtFile = new MockMultipartFile(
+                "file", "leads_noext", "text/plain", "data".getBytes()
+        );
+
+        assertThatThrownBy(() -> leadImportService.preview(noExtFile, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getCode());
+    }
+
+    @Test
+    void preview_shouldThrowWhenFileTooLarge() {
+        // given: 文件 > 10MB（CUST-42204）。用 12MB 字节数组确保超阈值
+        byte[] big = new byte[12 * 1024 * 1024];
+        // 头一行写有效内容，避免空文件分支抢先抛 40005
+        byte[] header = "客户名称,统一社会信用代码,联系人,手机号\n".getBytes();
+        System.arraycopy(header, 0, big, 0, header.length);
+        MultipartFile bigFile = new MockMultipartFile(
+                "file", "leads.csv", "text/csv", big
+        );
+
+        assertThatThrownBy(() -> leadImportService.preview(bigFile, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_FILE_TOO_LARGE.getCode());
+
+        verify(batchMapper, never()).insert(any());
+    }
+
+    @Test
+    void preview_shouldThrowWhenRowsExceedLimit() {
+        // given: 数据行数 > 5000（CUST-42205）。生成头 + 5001 行数据
+        StringBuilder sb = new StringBuilder("客户名称,统一社会信用代码,联系人,手机号\n");
+        for (int i = 0; i < 5001; i++) {
+            sb.append("企业").append(i).append(",cred,zhang,13800000000\n");
+        }
+        MultipartFile manyRows = new MockMultipartFile(
+                "file", "leads.csv", "text/csv", sb.toString().getBytes()
+        );
+
+        assertThatThrownBy(() -> leadImportService.preview(manyRows, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_ROWS_TOO_MANY.getCode());
+
+        verify(batchMapper, never()).insert(any());
+    }
+
     // ==================== execute ====================
 
     @Test

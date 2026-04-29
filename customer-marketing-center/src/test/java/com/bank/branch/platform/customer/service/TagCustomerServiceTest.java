@@ -1,9 +1,11 @@
 package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.entity.CustTag;
 import com.bank.branch.platform.customer.entity.CustTagRel;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
+import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.CustTagMapper;
 import com.bank.branch.platform.customer.mapper.CustTagRelMapper;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,9 @@ class TagCustomerServiceTest {
     @Mock
     private CustTagRelMapper tagRelMapper;
 
+    @Mock
+    private CustMasterMapper masterMapper;
+
     @InjectMocks
     private TagCustomerService tagCustomerService;
 
@@ -55,6 +60,9 @@ class TagCustomerServiceTest {
         when(tagRelMapper.insertBatch(anyList())).thenReturn(3);
 
         List<String> custIds = Arrays.asList("C001", "C002", "C003");
+        // CUST-42202 校验：mock masterMapper 返回全部 3 个客户，校验通过
+        when(masterMapper.selectByIds(custIds))
+                .thenReturn(Arrays.asList(buildMaster("C001"), buildMaster("C002"), buildMaster("C003")));
 
         // when
         tagCustomerService.importCustomers("tag-001", custIds, "E001");
@@ -76,6 +84,50 @@ class TagCustomerServiceTest {
         // 验证三条关联的 custId 集合
         assertThat(inserted.stream().map(CustTagRel::getCustId).toList())
                 .containsExactlyInAnyOrder("C001", "C002", "C003");
+    }
+
+    @Test
+    void importCustomers_shouldDedupCustIdsBeforeValidation() {
+        // 重复 ID 不应被误判为"缺失"。input ["C001","C001","C002"] distinct 后 = 2，
+        // cust_master 返回 [C001,C002] size=2，应通过校验并继续插入。
+        CustTag tag = new CustTag();
+        tag.setId("tag-001");
+        when(tagMapper.selectById("tag-001")).thenReturn(tag);
+
+        List<String> custIdsWithDup = Arrays.asList("C001", "C001", "C002");
+        // selectByIds 接收的是去重后 [C001, C002]
+        when(masterMapper.selectByIds(Arrays.asList("C001", "C002")))
+                .thenReturn(Arrays.asList(buildMaster("C001"), buildMaster("C002")));
+        when(tagRelMapper.deleteByTagId("tag-001")).thenReturn(0);
+        when(tagRelMapper.insertBatch(anyList())).thenReturn(3);
+
+        // when: 不应抛异常
+        tagCustomerService.importCustomers("tag-001", custIdsWithDup, "E001");
+
+        // then: 删旧 + 插入都执行（输入原样传给 insertBatch，业务侧由 UK 兜底）
+        verify(tagRelMapper).deleteByTagId("tag-001");
+        verify(tagRelMapper).insertBatch(anyList());
+    }
+
+    @Test
+    void importCustomers_shouldThrowCust42202WhenAnyCustIdMissing() {
+        // given: 标签存在；3 个 custId 但 cust_master 只返回 2 个（C002 缺失）
+        CustTag tag = new CustTag();
+        tag.setId("tag-001");
+        when(tagMapper.selectById("tag-001")).thenReturn(tag);
+
+        List<String> custIds = Arrays.asList("C001", "C002", "C003");
+        when(masterMapper.selectByIds(custIds))
+                .thenReturn(Arrays.asList(buildMaster("C001"), buildMaster("C003")));
+
+        // when/then: 整批回滚，不应该删除/插入
+        assertThatThrownBy(() -> tagCustomerService.importCustomers("tag-001", custIds, "E001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code",
+                        CustomerErrorCode.TAG_IMPORT_VALIDATION_FAILED.getCode());
+
+        verify(tagRelMapper, never()).deleteByTagId(any());
+        verify(tagRelMapper, never()).insertBatch(anyList());
     }
 
     @Test
@@ -211,5 +263,11 @@ class TagCustomerServiceTest {
         // then
         assertThat(removed).isFalse();
         verify(tagRelMapper).deleteByCustIdAndTagId("C001", "tag-999");
+    }
+
+    private CustMaster buildMaster(String custId) {
+        CustMaster m = new CustMaster();
+        m.setId(custId);
+        return m;
     }
 }

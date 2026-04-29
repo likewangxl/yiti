@@ -247,8 +247,8 @@ LeadController.java:158         (DELETE)
 
 ### 10.6 错误码全量分类（取代原 §4 的概要）
 
-- **仅文档存在（待确认是否补实现）16 条**：`CUST-40301~40307`（403 系列 7 条）+ `CUST-42201~42208`（422 系列 8 条）+ `CUST-50003`（MinIO 上传失败）
-- **仅代码存在（待补回文档）17 条**：`CUST-40001/40002/40004~40009`（参数校验 8 条）+ `CUST-40401~40406`（404 资源不存在 6 条）+ `CUST-40902/40903/40906`（409 冲突 3 条）
+- **仅文档存在（待确认是否补实现）16 条**：`CUST-40301~40307`（403 系列 7 条）+ ~~`CUST-42201~42208`（422 系列 8 条）~~ **[done] P1B 2026-04-29**（8 条已落地，CUST-42201 仅占位待 V1.x 行级校验补齐）+ `CUST-50003`（MinIO 上传失败）
+- **仅代码存在（待补回文档）17 条**：`CUST-40001/40002/40004~40009`（参数校验 8 条）+ `CUST-40401~40406`（404 资源不存在 6 条）+ `CUST-40902/40903/40906`（409 冲突 3 条）。**P1B 2026-04-29 备注**：`CUST-40006` 已删除（语义迁至 CUST-42205）
 - **同号但语义/message 不同 2 条（最危险）**：`CUST-40904`（双义，必修）、`CUST-40901`（语义偏）
 - **双方编号+message 完全一致：0 条**
 - **实际 throw 但 `CustomerErrorCode` 未定义**：4 处硬编码 `COMMON-40000`（`CustomerQueryApiImpl` / `TagApiImpl`），2 处 `TouchTaskStateMachineService:53/58` 待复核是否内联字符串
@@ -268,5 +268,5 @@ LeadController.java:158         (DELETE)
 | **P0** | 改代码 | `CUST-40904` 编号双义拆分（生产风险） |
 | **P0** | 改文档 | 09 §1.2 `BizType`/`DataScopeType` 用真值整体重写；09 §5 删除 5 个虚构 API 名或更名 |
 | **P1** | 改文档 | `ddl-customer.sql` + 05 §5.8 `task_status` COMMENT 补 `IN_PROGRESS`；01 §3.6 `LeadStatus` 改 5 值；02 §3 `CustMasterStatus` 改 `ACTIVE/INACTIVE`、删 `CustomerApi/TouchTaskApi/util/` 等未落地条目 |
-| **P1** | 业务确认 | ~~3 个真缺失 REST 端点（re-touch / summary / batch detail）是否要补~~ **[done] P1a 2026-04-28**；`@BizAuth.highRisk` 字段是否落地 9 处；403/422 系列 16 条错误码补实现 vs 删文档（B/C 批待办） |
+| **P1** | 业务确认 | ~~3 个真缺失 REST 端点（re-touch / summary / batch detail）是否要补~~ **[done] P1a 2026-04-28**；`@BizAuth.highRisk` 字段是否落地 9 处；~~422 系列 8 条错误码补实现~~ **[done] P1B 2026-04-29**（CUST-42202~42208 7 条业务校验落地 + CUST-42201 占位待行级校验，CUST-40006 重命名迁出）；403 系列 7 条错误码 vs 删文档（C 批待办） |
 | **P2** | 长期 | 错误码编号体系整体重对齐（双方零一致条目，需统一规划而非逐条修） |

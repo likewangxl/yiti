@@ -152,6 +152,80 @@ class TouchLogServiceTest {
         verify(touchTaskService, never()).markInProgress(anyString());
     }
 
+    // ==================== 422 系列校验（批次 B） ====================
+
+    @Test
+    void addLog_shouldThrowCust42206WhenContentAndPhotosBothBlank() {
+        // CUST-42206：logContent 空 + photoUrls 空 → 拒绝
+        assertThatThrownBy(() -> touchLogService.addLog(
+                "task-001", "uuid-1", "", null, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code",
+                        CustomerErrorCode.TOUCH_LOG_CONTENT_REQUIRED.getCode());
+
+        // 不应触达 mapper 层
+        verify(taskMapper, never()).selectById(anyString());
+    }
+
+    @Test
+    void addLog_shouldThrowCust42206WhenContentAndEmptyPhotoArray() {
+        // 空 JSON 数组 "[]" 也算无照片
+        assertThatThrownBy(() -> touchLogService.addLog(
+                "task-001", "uuid-2", null, "[]", "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code",
+                        CustomerErrorCode.TOUCH_LOG_CONTENT_REQUIRED.getCode());
+    }
+
+    @Test
+    void addLog_shouldThrowCust42207WhenPhotoCountExceedsLimit() {
+        // CUST-42207：10 张照片超过 9 上限
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < 10; i++) {
+            if (i > 0) sb.append(",");
+            sb.append("\"http://minio/p").append(i).append(".jpg\"");
+        }
+        sb.append("]");
+
+        assertThatThrownBy(() -> touchLogService.addLog(
+                "task-001", "uuid-3", "内容", sb.toString(), "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code",
+                        CustomerErrorCode.TOUCH_LOG_PHOTO_LIMIT_EXCEEDED.getCode());
+
+        verify(taskMapper, never()).selectById(anyString());
+    }
+
+    @Test
+    void addLog_shouldThrowCust42208WhenPhotoFormatNotAllowed() {
+        // CUST-42208：bmp 不在允许格式（jpg/jpeg/png/heic）内
+        String photos = "[\"http://minio/photo.bmp\"]";
+
+        assertThatThrownBy(() -> touchLogService.addLog(
+                "task-001", "uuid-4", "内容", photos, "E001", "ORG001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code",
+                        CustomerErrorCode.TOUCH_LOG_PHOTO_FORMAT_INVALID.getCode());
+    }
+
+    @Test
+    void addLog_shouldAllowAllSupportedPhotoFormats() {
+        // jpg / jpeg / png / heic 全部应通过；混合带 query string 也支持
+        TouchTask task = buildPendingTask("task-mix");
+        when(taskMapper.selectById("task-mix")).thenReturn(task);
+        when(logMapper.selectByTaskIdAndClientUuid("task-mix", "uuid-mix")).thenReturn(null);
+        when(logMapper.insert(any(TouchLog.class))).thenReturn(1);
+        when(logMapper.countByTaskId("task-mix")).thenReturn(2L);
+
+        String photos = "[\"http://m/a.jpg\",\"http://m/b.JPEG\",\"http://m/c.png\",\"http://m/d.heic\",\"http://m/e.jpg?ts=1\"]";
+
+        TouchLog result = touchLogService.addLog(
+                "task-mix", "uuid-mix", "内容", photos, "E001", "ORG001");
+
+        assertThat(result).isNotNull();
+        verify(logMapper).insert(any(TouchLog.class));
+    }
+
     // ==================== listByTaskId ====================
 
     @Test
