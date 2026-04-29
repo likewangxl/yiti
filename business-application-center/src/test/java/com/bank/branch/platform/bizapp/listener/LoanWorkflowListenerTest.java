@@ -5,7 +5,7 @@ import com.bank.branch.platform.bizapp.enums.LoanStatus;
 import com.bank.branch.platform.bizapp.event.LoanApprovedEvent;
 import com.bank.branch.platform.bizapp.event.LoanRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.LoanApplyMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,8 +55,8 @@ class LoanWorkflowListenerTest {
                 LoanStatus.COMPLETED.getCode(), "SYSTEM")).thenReturn(1);
         when(loanMapper.selectById("LOAN001")).thenReturn(loan);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI001", "LOAN:LOAN001", "APPROVED", null);
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent("PI001", "LOAN:LOAN001", "APPROVED", null);
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
@@ -83,8 +83,8 @@ class LoanWorkflowListenerTest {
                 LoanStatus.REJECTED.getCode(), "SYSTEM")).thenReturn(1);
         when(loanMapper.selectById("la001")).thenReturn(loan);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("pi-1", "LOAN:la001", "REJECTED", "金额超限");
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent("pi-1", "LOAN:la001", "REJECTED", "金额超限");
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
@@ -108,8 +108,8 @@ class LoanWorkflowListenerTest {
                 LoanStatus.REJECTED.getCode(), "SYSTEM")).thenReturn(1);
         when(loanMapper.selectById("la002")).thenReturn(loan);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("pi-2", "LOAN:la002", "REJECTED", null);
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent("pi-2", "LOAN:la002", "REJECTED", null);
 
         // when / then
         assertThatCode(() -> loanWorkflowListener.onProcessCompleted(event)).doesNotThrowAnyException();
@@ -127,8 +127,8 @@ class LoanWorkflowListenerTest {
         when(loanMapper.conditionalUpdateStatus(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(0);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("pi-1", "LOAN:la001", "APPROVED", null);
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent("pi-1", "LOAN:la001", "APPROVED", null);
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
@@ -145,8 +145,8 @@ class LoanWorkflowListenerTest {
     @DisplayName("非 LOAN: 前缀的 businessKey：直接忽略，不做任何操作")
     void onProcessCompleted_nonLoanBusinessKey_shouldIgnore() {
         // given
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent("PI002", "LEAD:LEAD001", "APPROVED", null);
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent("PI002", "LEAD:LEAD001", "APPROVED", null);
 
         // when
         loanWorkflowListener.onProcessCompleted(event);
@@ -162,7 +162,7 @@ class LoanWorkflowListenerTest {
     @DisplayName("onProcessCompleted 方法应标注 @TransactionalEventListener(AFTER_COMMIT) + @Transactional(REQUIRES_NEW)")
     void onProcessCompleted_shouldBeAnnotatedWithTransactionalEventListenerAfterCommit() throws NoSuchMethodException {
         Method method = LoanWorkflowListener.class.getMethod(
-                "onProcessCompleted", ProcessCompletedListener.ProcessCompletedEvent.class);
+                "onProcessCompleted", ProcessCompletedEvent.class);
 
         TransactionalEventListener annotation = method.getAnnotation(TransactionalEventListener.class);
         assertThat(annotation).as("方法应标注 @TransactionalEventListener").isNotNull();
@@ -197,7 +197,7 @@ class LoanWorkflowListenerTest {
 
         // when / then
         assertThatCode(() -> loanWorkflowListener.onProcessCompleted(
-                new ProcessCompletedListener.ProcessCompletedEvent("PI003", "LOAN:LOAN001", "APPROVED", null)))
+                new ProcessCompletedEvent("PI003", "LOAN:LOAN001", "APPROVED", null)))
                 .doesNotThrowAnyException();
     }
 

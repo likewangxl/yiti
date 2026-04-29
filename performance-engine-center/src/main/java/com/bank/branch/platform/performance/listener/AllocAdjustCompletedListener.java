@@ -8,7 +8,7 @@ import com.bank.branch.platform.performance.event.PerfEventPublisher;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -26,7 +26,7 @@ import java.util.UUID;
  * 分配调整流程完成监听器 (V1.2 Q2.3 + Q2.6).
  *
  * <p>订阅 workflow-center 的
- * {@link ProcessCompletedListener.ProcessCompletedEvent}，
+ * {@link ProcessCompletedEvent}，
  * 按 businessKey 前缀 {@code ALLOC_ADJUST:} 筛选本模块关心的调整审批流程。
  *
  * <p>APPROVED 动作：
@@ -73,7 +73,7 @@ public class AllocAdjustCompletedListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
+    public void onProcessCompleted(ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         if (businessKey == null || !businessKey.startsWith(BIZ_KEY_PREFIX)) {
             // 非分配调整流程：交给其他监听器处理

@@ -21,6 +21,7 @@
 | 12 | **Phase 2.6 FU-14：孤儿 lead 数据补偿机制（@Scheduled 5min 巡检 + reconcile 抽取 + WorkflowApi.getProcessOutcome）** | ✅ 已完成（compact 后续接交付，reviewer ✅ 通过+5 follow-up） | `5602b52` `28b1bbc` |
 | 13 | **Phase 2.6 FU-15 B：用本地 onepl_test_bootstrap MySQL 替代 testcontainers**（本地无 Docker 调整方案） | ✅ 已完成（compact 后续接交付，5 commits，reviewer ✅ 通过+9 follow-up） | `2ec276e` `ccd0eb1` `3b379d9` `884fad2` `a71ef53` |
 | 14 | **第四次 master merge：Phase 2.6 FU-15 B 6 commits + V1.6 quartz 整合 21 commits 自动合并** | ✅ 已完成 | merge `cf7b64c` |
+| 15 | **FU-25/23/11 三连发清理（FU-15 B 后续整改）+ 第五次 master merge** | ✅ 已完成 | impl `9ced282` + merge `3da0e63` |
 
 ---
 
@@ -241,6 +242,41 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 
 **风险点**：无。V1.6 quartz 整合在 master 上已经独立测试通过（用 H2 schema.sql），与 FU-15 B 真 MySQL 切换在 application-test.yml 共存（quartz disabled + datasource MySQL），互不干扰。
 
+### 决策 14：FU-25/23/11 三连发清理（FU-15 B 后续整改，commit `9ced282` + merge `3da0e63`，2026-04-29）
+
+**起因**：FU-15 B 5 commits + 第四次 master merge 完成后，按 reviewer 9 项 follow-up 中挑 3 项 M/nitpick 优先级一并清理，让 FU-15 B 算"真正干净"。
+
+**3 处改动**：
+
+1. **FU-25：抽 it-cleanup.sql 独立前置 cleanup**（M 优先级 → ✅）
+   - 现状：flowable-e2e-data.sql 顶部 + lead-e2e-data.sql 顶部各自维护"双向 DELETE 矩阵"（PT_RESOURCE 100-105 互删 + WRR/LRR ID 互删），耦合性高
+   - 修复：新建 `bootstrap/src/test/resources/it-cleanup.sql` 统一前置 cleanup（DELETE PT_ROLE_RESOURCE WRR%/LRR% + DELETE PT_RESOURCE 100-105/LR001-LR105）
+   - `application-flowable-e2e.yml` + `application-lead-e2e.yml` 在 `spring.sql.init.data-locations` 中放在 `data.sql` 之前（第一个加载）
+   - 删除两 *-e2e-data.sql 顶部 DELETE 矩阵（共 14 行）
+
+2. **FU-23：取消 tinyInt1isBit=false 配置漂移**（M 优先级 → ✅）
+   - 现状：仅 lead-e2e profile url 加 `tinyInt1isBit=false`（因 `LeadWorkflowE2EIT:155` 用 `(Number) created.get("deleted")` cast 强转，MySQL 默认 tinyInt1isBit=true 把 TINYINT(1) 解析为 Boolean → ClassCastException）。default + flowable-e2e 没加，造成 3 profile url 配置漂移
+   - 方案 B 采用：改 IT 用 RowMapper 显式 `rs.getInt("deleted")` 替代 cast；`application-lead-e2e.yml` url 移除 `tinyInt1isBit=false`，与其他 profile 一致
+
+3. **FU-11：删 javadoc 已删除方法引用**（nitpick → ✅）
+   - 现状：`WorkflowCallbackEventChainBugIT.java:57` javadoc 引用 `handleWorkflowCallback`（FU-6 commit `4efde7e` 早已删除）
+   - 修复：改为补充说明"LeadApprovedCreatesCustomerMasterIT 已切到 TxPublisher 真事件路径（与本 IT 对齐）"，保留历史背景
+
+**测试覆盖**：
+- default profile：surefire 42（2 skip）+ failsafe 22（2 skip）= **64 case 全绿**
+- lead-e2e profile：LeadWorkflowE2EIT 2 case PASS（验证 FU-23 RowMapper 替代 cast 工作正常）
+- flowable-e2e profile：FlowableWorkflowCenterE2ETest 1 case PASS（验证 FU-25 it-cleanup.sql 工作正常）
+
+**第五次 master merge**：
+- 1 个 commit `9ced282` 合并到 master
+- 期间 origin/master 又领先 4 个 commits（customer-v1 偏离度 P0/P1/P1a），与本期 bootstrap test 资源改动**完全不重叠**，merge-tree 自动合并无冲突
+- merge commit `3da0e63` push origin/master 成功
+
+**副作用观察（V1.7+ follow-up）**：
+- default profile 启动日志含 V1.6 `JobService.syncJobsOnStartup` 异常：`jobKey=DAILY_REPORT/MONTHLY_PERF 同步失败，跳过继续`
+- 真因：onepl_test_bootstrap 的 sys_job_conf 历史测试数据 J001/J002 经 V1.6 ALTER 后 `quartz_job_class` 字段填默认空字符串（`NOT NULL DEFAULT ''`），而 V1.6 syncJobsOnStartup 期望非空类全限定名做 Class.forName
+- 影响：仅启动日志 ERROR，不阻塞 IT 通过；建议 V1.7+ 跟踪（清掉 J001/J002 或在 it-cleanup.sql 加 DELETE，或给 default profile 跳过 startup sync）
+
 ### 决策 11：Phase 2.6 FU-14 — 孤儿 lead 数据补偿机制（commits `5602b52` `28b1bbc`）
 
 （详见上文）
@@ -417,7 +453,7 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 | # | 项 | 优先级 | 来源 |
 |---|---|---|---|
-| FU-11 | `WorkflowCallbackEventChainBugIT.java:57` javadoc 仍引用已删除的 `handleWorkflowCallback` 方法 | nitpick | Phase 2.5 reviewer §B-2 |
+| ~~FU-11~~ | **`WorkflowCallbackEventChainBugIT.java:57` javadoc 仍引用已删除的 `handleWorkflowCallback` 方法** | ~~nitpick~~ | **✅ 2026-04-29 已修（commit `9ced282`）**：改为补充说明 LeadApprovedCreatesCustomerMasterIT 已切到 TxPublisher 真事件路径 |
 | FU-12 | `conditionalUpdateStatus` 的 `updatedBy` 硬编码 `"SYSTEM"`（与 LoanWorkflowListener 一致），未来可通过 ProcessCompletedEvent 携带 approverEmpId 提升审计精度 | 低 | Phase 2.5 reviewer §C.nit-1 |
 | FU-13 | `WorkflowCallbackListener.handleApproved/handleRejected` 状态机假设（fromStatus=IN_APPROVAL）应在 javadoc 中显式说明 | 低 | Phase 2.5 reviewer §H-1 |
 | ~~FU-14~~ | **listener 异常兜底后 lead.status 可能停留在 IN_APPROVAL 形成孤儿数据，需要补偿机制（定时巡检 + 重发 ProcessCompletedEvent）** | ~~中~~ | **✅ Phase 2.6 已完成（commits `5602b52` `28b1bbc`）** |
@@ -443,15 +479,16 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 | # | 项 | 优先级 | 来源 |
 |---|---|---|---|
 | FU-22 | CI 加"启动后断言关键种子行数"健康检查（防 INSERT IGNORE 静默吞错）| L | reviewer 维度 B |
-| FU-23 | tinyInt1isBit 配置漂移：3 profile 一致化或改 IT 用 `getObject(..)` 而非 `(Number)` cast | M | reviewer 维度 C |
+| ~~FU-23~~ | **tinyInt1isBit 配置漂移：3 profile 一致化或改 IT 用 `getObject(..)` 而非 `(Number)` cast** | ~~M~~ | **✅ 2026-04-29 已修（commit `9ced282`）**：LeadWorkflowE2EIT:155 改用 RowMapper Lambda 显式 rs.getInt + application-lead-e2e.yml 移除 url tinyInt1isBit=false 一致化 |
 | FU-24 | 核实生产 DDL 中 `support_request.other_demand` / `cust_lead.customer_desc` / `cust_master.customer_desc` 是否 TEXT/MEDIUMTEXT/LONGTEXT，对齐测试库容量上限（H2 CLOB 默认 1GB → MySQL TEXT 64KB）| M | reviewer 维度 D |
-| FU-25 | 抽 `it-cleanup.sql` 独立前置 cleanup，三 profile 引用，去除互删耦合（共享库 PT_RESOURCE 100-105 vs LR101-105 双向 DELETE 矩阵难维护）| M | reviewer 维度 E |
+| ~~FU-25~~ | **抽 `it-cleanup.sql` 独立前置 cleanup，三 profile 引用，去除互删耦合（共享库 PT_RESOURCE 100-105 vs LR101-105 双向 DELETE 矩阵难维护）** | ~~M~~ | **✅ 2026-04-29 已修（commit `9ced282`）**：新建 it-cleanup.sql + application-flowable-e2e.yml/application-lead-e2e.yml data-locations 第一个加载 + 删两 *-e2e-data.sql 顶部双向 DELETE 矩阵 |
 | FU-26 | 归档脚本 §5：(a) bash 加 PowerShell 等价命令 (b) 显式声明禁止 dump act_hi_*/act_ru_* 实例数据 | L | reviewer 维度 F |
 | FU-27 | ~~合并 master 前跑全量 mvn verify 确认 6 模块 1502 case 不受影响~~ ✅ 已执行（exit 0）| - | reviewer 维度 H |
 | FU-28 | ~~handover doc 更新：FU-15 ⏸️→✅，回写步骤 4bis/5 关键发现~~ ✅ 已执行 | - | reviewer 维度 J |
-| FU-29 | sla_warning 修源 DDL：`docs/schema/ddl-customer.sql` 补字段 + 提供 V1_x 迁移脚本（implementer 已登记） | M | implementer 报告 |
+| ~~FU-29~~ | **sla_warning 修源 DDL：`docs/schema/ddl-customer.sql` 补字段 + 提供 V1_x 迁移脚本** | ~~M~~ | **✅ 2026-04-28 master `6a8f186` commit 自动消解**（与本期并行，customer-v1 P0 偏离度修复带做）|
 | FU-30 | 排查 Flowable 7.0.1 schemaUpdate 死循环真因（已 exclude Druid 仍报，疑似非 Druid 问题） | L | reviewer 维度 F |
 | FU-31 | 补 1 条真 MySQL CANCELLED outcome IT（替代原 FU-18，因 default profile 已切真 MySQL 不再需要等 testcontainers）| L | FU-18 改写 |
+| FU-32 | bootstrap default profile 启动日志含 V1.6 `JobService.syncJobsOnStartup` ERROR：jobKey=DAILY_REPORT/MONTHLY_PERF 同步失败。真因：sys_job_conf 历史测试数据 J001/J002 的 quartz_job_class 字段经 V1.6 ALTER TABLE 后填默认空字符串。建议在 it-cleanup.sql 加 DELETE 或给 default profile 跳过 startup sync（不阻塞 IT，仅日志 ERROR）| L | 2026-04-29 FU-25/23/11 验证发现 |
 
 **Phase 2.6 FU-15 B reviewer 总评**：✅ 通过。5 commit 切片清晰（INSERT IGNORE 准备 → 3 profile 序列切换 → 清理），每个 commit 末附完整测试证据；归档脚本写得详细（含 4bis sla_warning 补齐 + 步骤 5 Flowable 81 表 mysqldump 复制），具备可重复执行性。CLOB→TEXT、CREATE UNIQUE INDEX 内联化、tinyInt1isBit=false 是必要的 MySQL 兼容修复。FU-15 B 完整达到 FU-15 根本目标"测试与生产 DDL 一致"，与 performance/report 模块统一架构。无阻塞，可合并 master。
 
@@ -546,10 +583,10 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14 + FU-15 B 完成续接 + 第四次 master merge 完成）
-**对应 git HEAD**：`cf7b64c`（master 第四次合并节点，含 V1.6 quartz 整合 21 commits + Phase 2.6 FU-15 B 6 commits）→ origin/master 已推送
-**会话累计 commit（本期分量）**：31 commits + handover 多次续接更新 + 第四次 merge commit（共约 34 commits）
-**平台累计 commit（含历史）**：241（上期累计） + 31（本期） = **272 commits**（不计 master merge commits 与 V1.6 quartz 21 个 master 自演进 commits）
+**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14/FU-15 B 完成 + 第四次 master merge + 2026-04-29 FU-25/23/11 三连发 + 第五次 master merge）
+**对应 git HEAD**：`3da0e63`（master 第五次合并节点，含 FU-25/23/11 三连发清理 commit `9ced282`）→ origin/master 已推送
+**会话累计 commit（本期分量）**：31 commits + handover 多次续接更新 + 4/5 次 master merge commits（共约 35 commits）
+**平台累计 commit（含历史）**：241（上期累计） + 32（本期，含 FU-25/23/11） = **273 commits**（不计 master merge commits 与 V1.6 quartz 21 个 master 自演进 commits）
 
 **本期最终交付清单**（已合并/即将合并 master）：
 - Option A 启动级 IT（5 case）

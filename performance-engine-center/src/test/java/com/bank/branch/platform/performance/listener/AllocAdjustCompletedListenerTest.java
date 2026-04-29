@@ -8,7 +8,7 @@ import com.bank.branch.platform.performance.event.PerfEventPublisher;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,8 +101,8 @@ class AllocAdjustCompletedListenerTest {
     @Test
     @DisplayName("非 ALLOC_ADJUST: 前缀 businessKey 直接跳过")
     void skip_whenBusinessKeyPrefixNotMatch() {
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_X", "LEAD:xxx", "APPROVED", null);
         listener.onProcessCompleted(event);
 
@@ -115,8 +115,8 @@ class AllocAdjustCompletedListenerTest {
     @Test
     @DisplayName("APPROVED 流程 → 插入新分配关系 + 更新 status + 发事件")
     void approved_insertsAllocation_updatesStatus_publishesEvent() {
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", "审批通过");
         listener.onProcessCompleted(event);
 
@@ -152,8 +152,8 @@ class AllocAdjustCompletedListenerTest {
     @Test
     @DisplayName("REJECTED 流程 → 仅更新 status=REJECTED，不改分配关系，不发事件")
     void rejected_onlyUpdatesStatus_noAllocationChange_noEvent() {
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_APP_001", "ALLOC_ADJUST:APP_001", "REJECTED", "不符合规则");
         listener.onProcessCompleted(event);
 
@@ -168,8 +168,8 @@ class AllocAdjustCompletedListenerTest {
         when(applyMapper.selectByBusinessKey("ALLOC_ADJUST:APP_001"))
                 .thenReturn(null);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null);
         listener.onProcessCompleted(event);
 
@@ -185,8 +185,8 @@ class AllocAdjustCompletedListenerTest {
         retail.setBizKind("RETAIL_CARD");
         when(applyMapper.selectByBusinessKey("ALLOC_ADJUST:APP_001")).thenReturn(retail);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_RET_001", "ALLOC_ADJUST:APP_001", "APPROVED", null);
         listener.onProcessCompleted(event);
 

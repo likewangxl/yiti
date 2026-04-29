@@ -7,7 +7,7 @@ import com.bank.branch.platform.customer.enums.LeadStatus;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.it.config.TestMockConfig;
 import com.bank.branch.platform.it.config.TestSecurityConfig;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -196,7 +196,7 @@ class WorkflowCallbackRejectedBranchBugIT {
          */
         @Transactional(rollbackFor = Exception.class)
         public void publishProcessCompletedInTransaction(String processInstanceId, String businessKey, String reason) {
-            eventPublisher.publishEvent(new ProcessCompletedListener.ProcessCompletedEvent(
+            eventPublisher.publishEvent(new ProcessCompletedEvent(
                     processInstanceId,
                     businessKey,
                     "REJECTED",

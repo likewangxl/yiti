@@ -5,7 +5,7 @@ import com.bank.branch.platform.bizapp.enums.SupportStatus;
 import com.bank.branch.platform.bizapp.event.SupportCompletedEvent;
 import com.bank.branch.platform.bizapp.event.SupportRejectedEvent;
 import com.bank.branch.platform.bizapp.mapper.SupportRequestMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -18,7 +18,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * 中场支持申请工作流回调监听器。
  * <p>
- * 监听工作流中心发布的 {@link ProcessCompletedListener.ProcessCompletedEvent} 事件，
+ * 监听工作流中心发布的 {@link ProcessCompletedEvent} 事件，
  * 根据 businessKey 前缀（SUPPORT:）识别支持申请相关流程，按 outcome 分派审批结果：
  * <ul>
  *   <li>APPROVED → 状态更新为 COMPLETED，发布 {@link SupportCompletedEvent}</li>
@@ -69,7 +69,7 @@ public class SupportWorkflowListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
+    public void onProcessCompleted(ProcessCompletedEvent event) {
         try {
             String businessKey = event.businessKey();
 

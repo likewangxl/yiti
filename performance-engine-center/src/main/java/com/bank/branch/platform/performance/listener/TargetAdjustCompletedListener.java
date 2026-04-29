@@ -6,7 +6,7 @@ import com.bank.branch.platform.performance.event.PerfEventPublisher;
 import com.bank.branch.platform.performance.event.TargetAdjustmentApprovedEvent;
 import com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,7 @@ import java.util.UUID;
  * 目标修正流程完成监听器 (V1.2 Q3.2b + Q3.3).
  *
  * <p>订阅 workflow-center 的
- * {@link ProcessCompletedListener.ProcessCompletedEvent}，
+ * {@link ProcessCompletedEvent}，
  * 按 businessKey 前缀 {@code TARGET_ADJUST:} 筛选本模块关心的目标修正流程。
  *
  * <p>APPROVED 动作：
@@ -87,7 +87,7 @@ public class TargetAdjustCompletedListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
-    public void onProcessCompleted(ProcessCompletedListener.ProcessCompletedEvent event) {
+    public void onProcessCompleted(ProcessCompletedEvent event) {
         String businessKey = event.businessKey();
         if (businessKey == null || !businessKey.startsWith(BIZ_KEY_PREFIX)) {
             // 非目标修正流程：交给其他监听器处理

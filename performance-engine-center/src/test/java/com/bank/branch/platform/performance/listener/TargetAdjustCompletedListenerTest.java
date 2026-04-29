@@ -6,7 +6,7 @@ import com.bank.branch.platform.performance.event.PerfEventPublisher;
 import com.bank.branch.platform.performance.event.TargetAdjustmentApprovedEvent;
 import com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
-import com.bank.branch.platform.workflow.listener.ProcessCompletedListener;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -91,8 +91,8 @@ class TargetAdjustCompletedListenerTest {
     @Test
     @DisplayName("非 TARGET_ADJUST: 前缀 businessKey 直接跳过")
     void skip_whenBusinessKeyPrefixNotMatch() {
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_X", "ALLOC_ADJUST:xxx", "APPROVED", null);
         listener.onProcessCompleted(event);
 
@@ -105,8 +105,8 @@ class TargetAdjustCompletedListenerTest {
     @Test
     @DisplayName("APPROVED 流程 → upsert target_value + 更新 status + 发事件")
     void approved_upsertsTargetValues_updatesStatus_publishesEvent() {
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_TAA_001", "TARGET_ADJUST:TAA_001", "APPROVED", "审批通过");
         listener.onProcessCompleted(event);
 
@@ -151,8 +151,8 @@ class TargetAdjustCompletedListenerTest {
     @Test
     @DisplayName("REJECTED 流程 → 仅更新 status=REJECTED，不改目标值，不发事件")
     void rejected_onlyUpdatesStatus_noTargetValueChange_noEvent() {
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_TAA_001", "TARGET_ADJUST:TAA_001", "REJECTED", "不符合规则");
         listener.onProcessCompleted(event);
 
@@ -166,8 +166,8 @@ class TargetAdjustCompletedListenerTest {
     void apply_notFound_skipsSilently() {
         when(applyMapper.selectByBusinessKey("TARGET_ADJUST:TAA_001")).thenReturn(null);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_TAA_001", "TARGET_ADJUST:TAA_001", "APPROVED", null);
         listener.onProcessCompleted(event);
 
@@ -184,8 +184,8 @@ class TargetAdjustCompletedListenerTest {
         orgApply.setSubjectId("ORG_101");
         when(applyMapper.selectByBusinessKey("TARGET_ADJUST:TAA_001")).thenReturn(orgApply);
 
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_ORG_001", "TARGET_ADJUST:TAA_001", "APPROVED", null);
         listener.onProcessCompleted(event);
 
@@ -207,8 +207,8 @@ class TargetAdjustCompletedListenerTest {
     @Test
     @DisplayName("未识别 outcome（如 CANCELLED）→ 保守不改数据，不发事件")
     void unknownOutcome_noChanges() {
-        ProcessCompletedListener.ProcessCompletedEvent event =
-                new ProcessCompletedListener.ProcessCompletedEvent(
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
                         "PI_TAA_001", "TARGET_ADJUST:TAA_001", "CANCELLED", null);
         listener.onProcessCompleted(event);
 
