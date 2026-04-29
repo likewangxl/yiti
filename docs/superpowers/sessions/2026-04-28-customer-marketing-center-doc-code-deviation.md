@@ -225,7 +225,7 @@ A 类「改文档」12 条（路径以代码为准）：
 | TouchReportController.java:58 / :83 / :107 | 报表 3 端点 | 文档未列 |
 | AdminTouchTaskController.java:62 / :140 | `GET /api/admin/touch-tasks` + `POST /batch-assign` | 文档仅 H.3 export |
 
-B 类「改代码」3 条：`POST /api/claims/{claimId}/re-touch`（F.3）、`GET /api/admin/touch-tasks/summary`（H.1）、`GET /api/leads/import/batches/{batchId}`（C.4）— 全模块 grep 0 命中。
+B 类「改代码」3 条：`POST /api/claims/{claimId}/re-touch`（F.3）、`GET /api/admin/touch-tasks/summary`（H.1）、`GET /api/leads/import/batches/{batchId}`（C.4）— 全模块 grep 0 命中。**✓ 已完成 P1a 2026-04-28**：3 端点全部落地，新增 `CUST-40908/40909` 错误码 + `ReTouchReqDTO` + `LeadImportBatchDetailRespDTO`，335 测试全绿（新增 14 测试），PT_RESOURCE 落 `docs/superpowers/sql/2026-04-28-customer-p1a-rest-pt-resource.sql`。
 
 ### 10.5 `@BizAuth.highRisk` 缺失全量清单（补 §1.4）
 
@@ -268,5 +268,5 @@ LeadController.java:158         (DELETE)
 | **P0** | 改代码 | `CUST-40904` 编号双义拆分（生产风险） |
 | **P0** | 改文档 | 09 §1.2 `BizType`/`DataScopeType` 用真值整体重写；09 §5 删除 5 个虚构 API 名或更名 |
 | **P1** | 改文档 | `ddl-customer.sql` + 05 §5.8 `task_status` COMMENT 补 `IN_PROGRESS`；01 §3.6 `LeadStatus` 改 5 值；02 §3 `CustMasterStatus` 改 `ACTIVE/INACTIVE`、删 `CustomerApi/TouchTaskApi/util/` 等未落地条目 |
-| **P1** | 业务确认 | 3 个真缺失 REST 端点（re-touch / summary / batch detail）是否要补；`@BizAuth.highRisk` 字段是否落地 9 处；403/422 系列 16 条错误码补实现 vs 删文档 |
+| **P1** | 业务确认 | ~~3 个真缺失 REST 端点（re-touch / summary / batch detail）是否要补~~ **[done] P1a 2026-04-28**；`@BizAuth.highRisk` 字段是否落地 9 处；403/422 系列 16 条错误码补实现 vs 删文档（B/C 批待办） |
 | **P2** | 长期 | 错误码编号体系整体重对齐（双方零一致条目，需统一规划而非逐条修） |

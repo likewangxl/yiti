@@ -10,6 +10,7 @@ import com.bank.branch.platform.customer.event.ClaimCancelledEvent;
 import com.bank.branch.platform.customer.event.ClaimCreatedEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -43,6 +44,12 @@ class ClaimServiceTest {
 
     @Mock
     private CustMasterMapper masterMapper;
+
+    @Mock
+    private TouchTaskMapper touchTaskMapper;
+
+    @Mock
+    private TouchTaskService touchTaskService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;

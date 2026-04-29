@@ -88,6 +88,69 @@ public class TouchTaskService {
     }
 
     /**
+     * 由 ClaimService.reTouch 调用，对已认领客户创建一个 FOLLOW_UP（非首次）触达任务。
+     * <p>
+     * 与 {@link #createFromClaim(String, String, String)} 的差异：task_type=FOLLOW_UP；
+     * reason 仅记录到日志（touch_task 表无 reason 列）；planFinishTime 为可选字符串，
+     * 缺省/解析失败时回退到默认 7 天。
+     * </p>
+     *
+     * @param custId         客户ID
+     * @param orgId          所属机构代码
+     * @param assigneeEmpId  执行人（维护人）员工工号
+     * @param reason         重新触达原因（仅记日志）
+     * @param planFinishTime 计划完成时间字符串（可选；格式 yyyy-MM-dd HH:mm:ss）
+     * @return 创建成功的触达任务实体
+     */
+    @Transactional
+    public TouchTask createFollowUpTask(String custId, String orgId, String assigneeEmpId,
+                                         String reason, String planFinishTime) {
+        log.info("[TouchTaskService.createFollowUpTask] custId={}, orgId={}, assigneeEmpId={}, reason={}, planFinishTime={}",
+                custId, orgId, assigneeEmpId, reason, planFinishTime);
+
+        LocalDateTime now = LocalDateTime.now();
+        String taskNo = "TOUCH_" + System.currentTimeMillis() + "_"
+                + String.format("%04d", new Random().nextInt(10000));
+        String taskId = UUID.randomUUID().toString().replace("-", "");
+
+        TouchTask entity = new TouchTask();
+        entity.setId(taskId);
+        entity.setTaskNo(taskNo);
+        entity.setCustId(custId);
+        entity.setOrgId(orgId);
+        entity.setAssigneeEmpId(assigneeEmpId);
+        entity.setTaskType(TouchTaskType.FOLLOW_UP.getCode());
+        entity.setTaskStatus(TouchTaskStatus.PENDING.getCode());
+        entity.setSlaStatus(SlaStatus.GREEN.getCode());
+
+        LocalDateTime planTime = parsePlanFinishTimeOrDefault(planFinishTime, now);
+        entity.setPlanFinishTime(planTime);
+        // 预警时间 = 计划完成前 2 天（与 createFromClaim 的 5d/7d 同 2 天偏移）
+        entity.setWarningTime(planTime.minusDays(2));
+        entity.setBusinessKey("TOUCH:" + taskId);
+        entity.setCreatedTime(now);
+        entity.setUpdatedTime(now);
+
+        taskMapper.insert(entity);
+
+        log.info("[TouchTaskService.createFollowUpTask] follow-up task created, taskId={}, taskNo={}", taskId, taskNo);
+        return entity;
+    }
+
+    private LocalDateTime parsePlanFinishTimeOrDefault(String planFinishTime, LocalDateTime base) {
+        if (planFinishTime == null || planFinishTime.isBlank()) {
+            return base.plusDays(7);
+        }
+        try {
+            return LocalDateTime.parse(planFinishTime,
+                    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception e) {
+            log.warn("[TouchTaskService.createFollowUpTask] invalid planFinishTime={}, fallback to default 7d", planFinishTime);
+            return base.plusDays(7);
+        }
+    }
+
+    /**
      * 标记触达任务为已完成。
      * <p>
      * 允许起始状态：PENDING、IN_PROGRESS。

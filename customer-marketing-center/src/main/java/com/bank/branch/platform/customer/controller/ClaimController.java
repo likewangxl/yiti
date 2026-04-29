@@ -9,7 +9,9 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.customer.dto.req.CancelClaimReqDTO;
 import com.bank.branch.platform.customer.dto.req.ClaimReqDTO;
+import com.bank.branch.platform.customer.dto.req.ReTouchReqDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.service.ClaimService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -83,6 +85,31 @@ public class ClaimController {
         String empId = currentUserApi.getCurrentEmpId();
         claimService.cancelClaim(id, req.getReason(), empId);
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 对已认领客户重新发起一次触达（FOLLOW_UP）。
+     * <p>
+     * 业务前置校验由 {@link ClaimService#reTouch} 负责：认领必须存在（CUST-40404）、
+     * 必须属于当前操作员所在机构（CUST-40305）、客户当前不存在 PENDING/IN_PROGRESS 触达任务（CUST-40908）。
+     * 执行人沿用 claim.maintainerEmpId（认领时设定的维护人）。
+     * </p>
+     *
+     * @param claimId 认领关系 ID
+     * @param req     请求 DTO（reason 必填）
+     * @return 新创建的 FOLLOW_UP 触达任务实体
+     */
+    @PostMapping("/{claimId}/re-touch")
+    @BizAuth(bizType = BizType.CLAIM, action = BizAction.WRITE)
+    @AuditLog(action = "RE_TOUCH_CLAIM", resourceType = "CLAIM", reasonRequired = true)
+    @Operation(summary = "对已认领客户重新发起触达")
+    public ResponseWrapper<TouchTask> reTouch(@PathVariable String claimId,
+                                              @Valid @RequestBody ReTouchReqDTO req) {
+        log.info("[ClaimController.reTouch] claimId={}", claimId);
+        String empId = currentUserApi.getCurrentEmpId();
+        String orgCode = currentUserApi.getCurrentOrgCode();
+        TouchTask result = claimService.reTouch(claimId, req, empId, orgCode);
+        return ResponseWrapper.success(result);
     }
 
     /**

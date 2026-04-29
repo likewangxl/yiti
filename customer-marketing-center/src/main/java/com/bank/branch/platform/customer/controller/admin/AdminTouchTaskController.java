@@ -6,6 +6,8 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
+import com.bank.branch.platform.customer.api.dto.TouchTaskSummaryDTO;
 import com.bank.branch.platform.customer.dto.req.AdminBatchAssignReqDTO;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.service.TouchTaskService;
@@ -43,6 +45,7 @@ import java.util.List;
 public class AdminTouchTaskController {
 
     private final TouchTaskService touchTaskService;
+    private final TouchTaskQueryApi touchTaskQueryApi;
 
     /**
      * 管理后台全局触达任务列表（不按机构过滤）。
@@ -74,6 +77,31 @@ public class AdminTouchTaskController {
                 keyword, status, assigneeEmpId, orgId, pageNo, pageSize);
         PageResult<TouchTask> result = touchTaskService.listPageAdmin(keyword, status, assigneeEmpId, orgId, pageNo, pageSize);
         return ResponseWrapper.page(result);
+    }
+
+    /**
+     * 管理后台机构触达汇总统计。
+     * <p>
+     * 按机构维度返回触达任务在指定时间范围内的状态计数（PENDING/IN_PROGRESS/SUCCESS/CANCELLED）、
+     * SLA 预警计数和平均完成时长。startDate/endDate 缺省时由 {@link TouchTaskQueryApi#getOrgTouchSummary}
+     * 自行决定默认范围（通常近 30 天）。
+     * </p>
+     *
+     * @param orgCode   机构代码（必填）
+     * @param startDate 开始日期 yyyy-MM-dd（可选）
+     * @param endDate   结束日期 yyyy-MM-dd（可选）
+     * @return 机构触达汇总 DTO
+     */
+    @GetMapping("/summary")
+    @BizAuth(bizType = BizType.TOUCH_TASK, action = BizAction.LIST)
+    @Operation(summary = "管理后台机构触达汇总")
+    public ResponseWrapper<TouchTaskSummaryDTO> summary(
+            @RequestParam String orgCode,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        log.info("[AdminTouchTaskController.summary] orgCode={}, startDate={}, endDate={}", orgCode, startDate, endDate);
+        TouchTaskSummaryDTO summary = touchTaskQueryApi.getOrgTouchSummary(orgCode, startDate, endDate);
+        return ResponseWrapper.success(summary);
     }
 
     /**

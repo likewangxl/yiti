@@ -2,14 +2,17 @@ package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.customer.dto.req.ReTouchReqDTO;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import com.bank.branch.platform.customer.entity.CustMaster;
+import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.event.ClaimCancelledEvent;
 import com.bank.branch.platform.customer.event.ClaimCreatedEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
+import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -39,6 +42,8 @@ public class ClaimService {
 
     private final CustClaimMapper claimMapper;
     private final CustMasterMapper masterMapper;
+    private final TouchTaskMapper touchTaskMapper;
+    private final TouchTaskService touchTaskService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -165,5 +170,58 @@ public class ClaimService {
 
         log.info("[ClaimService.listMyClaims] empId={}, total={}", empId, total);
         return PageResult.of(pageNo, pageSize, total, records);
+    }
+
+    /**
+     * 对已认领客户重新发起一次触达（FOLLOW_UP 类型）。
+     * <p>
+     * 业务规则：
+     * <ul>
+     *   <li>认领关系必须存在（CUST-40404）</li>
+     *   <li>认领归属机构必须等于当前操作员所在机构（CUST-40305）</li>
+     *   <li>客户当前不存在 PENDING/IN_PROGRESS 触达任务（CUST-40908）</li>
+     * </ul>
+     * 通过校验后委托 {@link TouchTaskService#createFollowUpTask} 创建新任务，
+     * 执行人取自 claim.maintainerEmpId（维护人继续触达，与认领时设定一致）。
+     * </p>
+     *
+     * @param claimId          认领关系 ID
+     * @param req              请求 DTO（包含 reason 必填，planFinishTime 可选）
+     * @param operatorEmpId    操作人员工工号（仅记录到日志）
+     * @param operatorOrgCode  操作人所在机构代码（用于校验跨机构）
+     * @return 新创建的 FOLLOW_UP 触达任务实体
+     */
+    @Transactional
+    public TouchTask reTouch(String claimId, ReTouchReqDTO req, String operatorEmpId, String operatorOrgCode) {
+        log.info("[ClaimService.reTouch] claimId={}, operator={}, orgCode={}", claimId, operatorEmpId, operatorOrgCode);
+
+        CustClaim claim = claimMapper.selectById(claimId);
+        if (claim == null) {
+            throw new BizException(CustomerErrorCode.CLAIM_NOT_FOUND.getCode(),
+                    CustomerErrorCode.CLAIM_NOT_FOUND.getMessage());
+        }
+
+        if (!claim.getOrgId().equals(operatorOrgCode)) {
+            log.warn("[ClaimService.reTouch] cross-org operation denied, claimOrg={}, operatorOrg={}",
+                    claim.getOrgId(), operatorOrgCode);
+            throw new BizException(CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode(),
+                    CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getMessage());
+        }
+
+        // 当前客户不允许有任何在途触达（PENDING/IN_PROGRESS），由 mapper 自身查询条件保证
+        List<TouchTask> active = touchTaskMapper.selectActiveByCust(claim.getCustId());
+        if (!active.isEmpty()) {
+            log.warn("[ClaimService.reTouch] running touch task exists, custId={}, count={}",
+                    claim.getCustId(), active.size());
+            throw new BizException(CustomerErrorCode.RE_TOUCH_HAS_RUNNING.getCode(),
+                    CustomerErrorCode.RE_TOUCH_HAS_RUNNING.getMessage());
+        }
+
+        TouchTask created = touchTaskService.createFollowUpTask(
+                claim.getCustId(), claim.getOrgId(), claim.getMaintainerEmpId(),
+                req.getReason(), req.getPlanFinishTime());
+
+        log.info("[ClaimService.reTouch] follow-up task created, claimId={}, newTaskId={}", claimId, created.getId());
+        return created;
     }
 }

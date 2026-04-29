@@ -152,6 +152,7 @@ src/main/java/com/bank/branch/platform/customer/
 | POST | `/api/leads/import/preview` | 导入预览 (校验) |
 | POST | `/api/leads/import/execute` | 执行导入 |
 | GET | `/api/leads/batches` | 导入批次列表 |
+| GET | `/api/leads/import/batches/{batchId}` | 导入批次详情 (P1a 2026-04-28) |
 
 ### CustomerController (`/api/customers`)
 
@@ -175,6 +176,7 @@ src/main/java/com/bank/branch/platform/customer/
 | POST | `/api/claims` | 认领客户 (UK 防并发) |
 | POST | `/api/claims/{id}/cancel` | 取消认领 |
 | GET | `/api/claims/mine` | 我的认领列表 |
+| POST | `/api/claims/{claimId}/re-touch` | 重新发起触达 (P1a 2026-04-28，FOLLOW_UP) |
 
 ### TouchTaskController (`/api/touch-tasks`)
 
@@ -231,6 +233,7 @@ src/main/java/com/bank/branch/platform/customer/
 | 方法 | 端点 | 说明 |
 |------|------|------|
 | GET | `/api/admin/touch-tasks` | 管理后台全局触达任务列表 |
+| GET | `/api/admin/touch-tasks/summary` | 管理后台机构触达汇总 (P1a 2026-04-28) |
 | GET | `/api/admin/touch-tasks/export` | 管理后台导出（高危）|
 | POST | `/api/admin/touch-tasks/batch-assign` | 批量分配触达任务（高危）|
 

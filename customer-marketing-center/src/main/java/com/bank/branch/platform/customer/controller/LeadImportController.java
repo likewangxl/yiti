@@ -6,10 +6,15 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.req.LeadImportExecuteReqDTO;
+import com.bank.branch.platform.customer.dto.resp.LeadImportBatchDetailRespDTO;
 import com.bank.branch.platform.customer.dto.resp.LeadImportPreviewResp;
 import com.bank.branch.platform.customer.entity.LeadImportBatch;
+import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.service.LeadImportService;
+import org.springframework.beans.BeanUtils;
+import org.springframework.web.bind.annotation.PathVariable;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -79,6 +84,32 @@ public class LeadImportController {
         String orgCode = currentUserApi.getCurrentOrgCode();
         leadImportService.execute(req.getBatchId(), empId, orgCode);
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 查询单个导入批次的详情。
+     * <p>
+     * 包含状态、行数、错误明细文件 MinIO objectId、流程实例 ID 等完整字段，
+     * 不存在时抛 {@link CustomerErrorCode#BATCH_NOT_FOUND}（CUST-40406）。
+     * </p>
+     *
+     * @param batchId 批次 ID
+     * @return 批次详情 DTO
+     */
+    @GetMapping("/import/batches/{batchId}")
+    @BizAuth(bizType = BizType.LEAD, action = BizAction.READ)
+    @Operation(summary = "导入批次详情")
+    public ResponseWrapper<LeadImportBatchDetailRespDTO> getBatch(@PathVariable String batchId) {
+        log.info("[LeadImportController.getBatch] batchId={}", batchId);
+        LeadImportBatch entity = leadImportService.getBatchById(batchId);
+        if (entity == null) {
+            throw new BizException(CustomerErrorCode.BATCH_NOT_FOUND.getCode(),
+                    CustomerErrorCode.BATCH_NOT_FOUND.getMessage());
+        }
+        LeadImportBatchDetailRespDTO dto = new LeadImportBatchDetailRespDTO();
+        BeanUtils.copyProperties(entity, dto);
+        // entity.status → dto.status（BeanUtils 同名复制即可）
+        return ResponseWrapper.success(dto);
     }
 
     /**
