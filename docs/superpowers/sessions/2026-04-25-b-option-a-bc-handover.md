@@ -22,6 +22,7 @@
 | 13 | **Phase 2.6 FU-15 B：用本地 onepl_test_bootstrap MySQL 替代 testcontainers**（本地无 Docker 调整方案） | ✅ 已完成（compact 后续接交付，5 commits，reviewer ✅ 通过+9 follow-up） | `2ec276e` `ccd0eb1` `3b379d9` `884fad2` `a71ef53` |
 | 14 | **第四次 master merge：Phase 2.6 FU-15 B 6 commits + V1.6 quartz 整合 21 commits 自动合并** | ✅ 已完成 | merge `cf7b64c` |
 | 15 | **FU-25/23/11 三连发清理（FU-15 B 后续整改）+ 第五次 master merge** | ✅ 已完成 | impl `9ced282` + merge `3da0e63` |
+| 16 | **FU-17 ProcessCompletedEvent 跨模块边界规范化（提到 workflow.api.event）+ FU-24 已确认无需改动 + 第六次 master merge** | ✅ 已完成 | impl `f752b6f` + merge `9913f6a` |
 
 ---
 
@@ -241,6 +242,29 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 - `LeadCallbackCompensationService.scanAndCompensate - 无 stuck IN_APPROVAL 线索，跳过` ← FU-14 @Scheduled 5min 巡检正常运行
 
 **风险点**：无。V1.6 quartz 整合在 master 上已经独立测试通过（用 H2 schema.sql），与 FU-15 B 真 MySQL 切换在 application-test.yml 共存（quartz disabled + datasource MySQL），互不干扰。
+
+### 决策 15：FU-17 ProcessCompletedEvent 跨模块边界规范化 + FU-24 已确认（commit `f752b6f` + merge `9913f6a`，2026-04-29）
+
+**起因**：FU-17 是 Phase 2.6 reviewer §D 提出的中等优先级 follow-up，跨模块依赖规则要求业务模块（customer / bizapp / performance）只依赖 workflow-center 的 `api/` 子包，不应依赖 `listener/` 内部实现。`ProcessCompletedEvent` 当前是 `ProcessCompletedListener.java` 内部嵌套 record（line 100-106），跨模块通过 `ProcessCompletedListener.ProcessCompletedEvent` 嵌套引用形式访问，破坏了 api 包契约边界。
+
+**FU-17 改动**（21 文件，+169/-121 行）：
+- 新建 `workflow-center/src/main/java/com/bank/branch/platform/workflow/api/event/ProcessCompletedEvent.java`：独立顶级 record，含完整 javadoc（语义说明 + 包位置变更原因）
+- `workflow-center/.../listener/ProcessCompletedListener.java`：删除 nested record + 加 import `workflow.api.event.ProcessCompletedEvent`
+- 5 个 main listener import 路径调整：customer-marketing-center `WorkflowCallbackListener` + business-application-center `LoanWorkflowListener` / `SupportWorkflowListener` + performance-engine-center `AllocAdjustCompletedListener` / `TargetAdjustCompletedListener`
+- 13 个测试文件 import 路径调整：bootstrap × 5（LeadApprovedCreatesCustomerMasterIT + WorkflowCallback{EventChain/Exception/Idempotency/Rejected}BugIT）+ business-application × 2 + customer-marketing × 1 + performance × 4 + workflow × 1（同包，新增 import 而不是替换）
+- 全文替换 `ProcessCompletedListener.ProcessCompletedEvent` → `ProcessCompletedEvent`（grep 验证 0 残留）
+
+**FU-17 测试覆盖**：
+- mvn clean install -DskipTests：16 模块 BUILD SUCCESS（50s）
+- mvn test 跨 8 模块（auth/customer/portal/bizapp/performance/workflow/governance/report）surefire 全绿
+- mvn verify -pl bootstrap：22 IT 全绿（2 skip 为 lead-e2e/flowable-e2e profile）
+
+**FU-24 已确认无需改动**：
+- 生产 DDL 调研：`docs/schema/ddl-customer.sql` `cust_lead.customer_desc TEXT` + `cust_master.customer_desc TEXT`（line 69 / 143）；`docs/schema/ddl-bizapp.sql` `support_request.other_demand TEXT`（line 77）—— 全部 64KB TEXT 类型
+- 测试 schema 调研：`bootstrap/src/test/resources/customer-marketing-schema.sql` × 2 处 TEXT + `business-application-schema.sql` × 1 处 TEXT —— FU-15 B C2 commit `ccd0eb1` 已 CLOB→TEXT 同步
+- 结论：生产与测试两边一致，**无需任何改动**，handover 标 ✅
+
+**风险点**：无。FU-17 仅做"代码移动"，事件运行时行为完全等价。跨模块依赖合规性强化（business 模块不再 import workflow.listener.*）。
 
 ### 决策 14：FU-25/23/11 三连发清理（FU-15 B 后续整改，commit `9ced282` + merge `3da0e63`，2026-04-29）
 
@@ -466,7 +490,7 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 | # | 项 | 优先级 | 来源 |
 |---|---|---|---|
-| FU-17 | `ProcessCompletedEvent` record 应从 `workflow.listener` 提到 `workflow.api.event` 子包，让 customer 模块只依赖 api 包。当前 `WorkflowCallbackListener.java:9` 引用 listener 内部 record，跨模块边界泄漏（历史遗留，非 Phase 2.6 引入） | M | Phase 2.6 reviewer §D |
+| ~~FU-17~~ | **`ProcessCompletedEvent` record 应从 `workflow.listener` 提到 `workflow.api.event` 子包，让 customer 模块只依赖 api 包** | ~~M~~ | **✅ 2026-04-29 已修（commit `f752b6f`）**：新建 workflow/api/event/ProcessCompletedEvent.java 独立 record + 删 ProcessCompletedListener 内部 nested record + 5 main listener × 13 test 跨模块 import 调整 |
 | ~~FU-18~~ | ~~testcontainers 接入后（FU-15），新增 1 条 IT 验证 H2/MySQL 下 CANCELLED outcome 语义一致性~~ | ~~M~~ | **改写为 FU-31**：FU-15 B 实际不用 testcontainers，但 default profile 已切真 MySQL，CANCELLED IT 仍可补 |
 | FU-19 | listener 主路径嵌套 REQUIRES_NEW（外层 tx + 内层 reconcile tx）压测下连接池水位监控，必要时把 listener 改成无 tx + reconcile 单层 tx | L | Phase 2.6 reviewer §E/§H |
 | FU-20 | `CompensationService.COMPENSATION_REJECT_REASON = "由补偿任务推进，原因不明"` 字面量考虑挪到 i18n 或 enum | L | Phase 2.6 reviewer §A |
@@ -480,7 +504,7 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 |---|---|---|---|
 | FU-22 | CI 加"启动后断言关键种子行数"健康检查（防 INSERT IGNORE 静默吞错）| L | reviewer 维度 B |
 | ~~FU-23~~ | **tinyInt1isBit 配置漂移：3 profile 一致化或改 IT 用 `getObject(..)` 而非 `(Number)` cast** | ~~M~~ | **✅ 2026-04-29 已修（commit `9ced282`）**：LeadWorkflowE2EIT:155 改用 RowMapper Lambda 显式 rs.getInt + application-lead-e2e.yml 移除 url tinyInt1isBit=false 一致化 |
-| FU-24 | 核实生产 DDL 中 `support_request.other_demand` / `cust_lead.customer_desc` / `cust_master.customer_desc` 是否 TEXT/MEDIUMTEXT/LONGTEXT，对齐测试库容量上限（H2 CLOB 默认 1GB → MySQL TEXT 64KB）| M | reviewer 维度 D |
+| ~~FU-24~~ | **核实生产 DDL 中 `support_request.other_demand` / `cust_lead.customer_desc` / `cust_master.customer_desc` 是否 TEXT/MEDIUMTEXT/LONGTEXT，对齐测试库容量上限** | ~~M~~ | **✅ 2026-04-29 已确认无需改动**：生产 DDL 三字段全部 TEXT 64KB，测试 schema 已 FU-15 B C2 commit `ccd0eb1` 同步为 TEXT，两边一致 |
 | ~~FU-25~~ | **抽 `it-cleanup.sql` 独立前置 cleanup，三 profile 引用，去除互删耦合（共享库 PT_RESOURCE 100-105 vs LR101-105 双向 DELETE 矩阵难维护）** | ~~M~~ | **✅ 2026-04-29 已修（commit `9ced282`）**：新建 it-cleanup.sql + application-flowable-e2e.yml/application-lead-e2e.yml data-locations 第一个加载 + 删两 *-e2e-data.sql 顶部双向 DELETE 矩阵 |
 | FU-26 | 归档脚本 §5：(a) bash 加 PowerShell 等价命令 (b) 显式声明禁止 dump act_hi_*/act_ru_* 实例数据 | L | reviewer 维度 F |
 | FU-27 | ~~合并 master 前跑全量 mvn verify 确认 6 模块 1502 case 不受影响~~ ✅ 已执行（exit 0）| - | reviewer 维度 H |
@@ -583,10 +607,10 @@ mvn verify -pl bootstrap
 
 ---
 
-**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14/FU-15 B 完成 + 第四次 master merge + 2026-04-29 FU-25/23/11 三连发 + 第五次 master merge）
-**对应 git HEAD**：`3da0e63`（master 第五次合并节点，含 FU-25/23/11 三连发清理 commit `9ced282`）→ origin/master 已推送
-**会话累计 commit（本期分量）**：31 commits + handover 多次续接更新 + 4/5 次 master merge commits（共约 35 commits）
-**平台累计 commit（含历史）**：241（上期累计） + 32（本期，含 FU-25/23/11） = **273 commits**（不计 master merge commits 与 V1.6 quartz 21 个 master 自演进 commits）
+**文档生成时间**：2026-04-25（compact 后续接更新 2026-04-27 多次 + 2026-04-28 Phase 2.6 FU-14/FU-15 B 完成 + 第四次 master merge + 2026-04-29 FU-25/23/11 + 第五次 master merge + FU-17/24 + 第六次 master merge）
+**对应 git HEAD**：`9913f6a`（master 第六次合并节点，含 FU-17 ProcessCompletedEvent 跨模块边界规范化 commit `f752b6f`）→ origin/master 已推送
+**会话累计 commit（本期分量）**：31 commits + handover 多次续接更新 + 4/5/6 次 master merge commits（共约 36 commits）
+**平台累计 commit（含历史）**：241（上期累计） + 33（本期，含 FU-17） = **274 commits**（不计 master merge commits 与 V1.6 quartz 21 个 master 自演进 commits）
 
 **本期最终交付清单**（已合并/即将合并 master）：
 - Option A 启动级 IT（5 case）
