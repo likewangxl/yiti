@@ -1,15 +1,15 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-26 | Updated: 2026-04-26 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-04-29 -->
 
 # performance-engine-center
 
 ## Purpose
-绩效计算中心（核心域），提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
+绩效计算中心（核心域），提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入、Quartz 集群调度等能力。
 
 **基础包名**: `com.bank.branch.platform.performance`
 **Maven 坐标**: `com.bank.branch.platform:performance-engine-center`
 **对外契约**: 7 个 `*Api` 接口 + 35 个 REST 端点。
-**当前版本**: V1.5（V1.4 遗留 6 项清零，技术债清零）
+**当前版本**: V1.6（quartz 整合，2026-04-25 交付）
 
 ## Key Files
 
@@ -23,6 +23,8 @@
 | `src/main/java/com/bank/branch/platform/performance/api/DataTaskApi.java` | 数据任务 API（1 方法） |
 | `src/main/java/com/bank/branch/platform/performance/api/AllocApi.java` | 分配关系 API（10 方法） |
 | `src/main/java/com/bank/branch/platform/performance/service/PerfScopeHelper.java` | 数据范围注入（7 种 DataScopeType） |
+| `src/main/java/com/bank/branch/platform/performance/config/PerfQuartzConfig.java` | V1.6 注册 3 个 Quartz JobDetail + Trigger |
+| `src/main/java/com/bank/branch/platform/performance/job/*QuartzJob.java` | V1.6 3 个 QuartzJobBean 包装类（DailyKpiCalc / SysControlCleanup / PerfRunTaskCleanup） |
 
 ## Subdirectories
 
@@ -56,7 +58,7 @@
 ### Common Patterns
 - 配置表 Redis 缓存 + afterCommit evict 防脏读
 - Redis 锁在 Facade 层申请/释放，Service 层 @Transactional
-- 3 个 @Scheduled 任务默认 OFF（`perf.engine.enabled-jobs` 控制）
+- 3 个业务 Job 由 Quartz 集群调度（V1.6 整合后），cron 配置走 `sys_job_conf` 表，启动期 `JobService.syncJobsOnStartup` 同步到 QRTZ_*；防重由 `QRTZ_LOCKS` 行锁接管（不再依赖 ShedLock）
 - 导出任务同步执行（对齐 PerfExport V1.2 模型），V1.1+ 切异步
 
 ## Dependencies
@@ -64,13 +66,14 @@
 ### Internal
 - `common-web`, `common-trace`, `common-security`, `common-aop`, `common-db`
 - `auth-permission-center`（CurrentUserApi / BizScopeApi / OrgApi）
-- `system-governance-center`（DictApi / FileApi / NotifyApi / AuditApi / CalendarApi / JobApi）
+- `system-governance-center`（DictApi / FileApi / NotifyApi / AuditApi / CalendarApi / JobApi — V1.6 后 JobApi 精简到 1 方法 getJobConf）
 - `workflow-center`（WorkflowApi + WorkflowQueryApi — V1.4 新增 WORKFLOW_PARTICIPANT 查询）
 
 ### External
 - MyBatis 3.0.3 — ORM
 - Flowable 7.0.1 — 工作流引擎（通过 workflow-center）
-- Redis 6.X — 缓存 + ShedLock 分布式锁
+- Quartz — 集群调度（V1.6 引入，governance 持有 SchedulerFactoryBean + JobExecutionLogger）
+- Redis 6.X — 缓存（ShedLock 已删除）
 - MinIO — 导出文件存储（通过 governance FileApi）
 
 ## Database Tables (13 张)
@@ -93,5 +96,6 @@
 | V1.3 | 技术债清偿：DDL 兜底 + Target 数据范围 + 5 处 UOE 实现 + 11 Controller entity 清零 + Testcontainers | 已交付 |
 | V1.4 | WORKFLOW_PARTICIPANT 真实查询 + Target owner DDL + mom/yoy 计算 | 已交付 |
 | V1.5 | @Deprecated 删除 + cycleType 空串 + 分组修复 + batch 宽表 + yoy WEEKLY + owner <if> | 已交付（2026-04-24） |
+| V1.6 | quartz 整合：governance Quartz 基础设施 + 3 Job 删 @Scheduled/@SchedulerLock + 3 个 QuartzJobBean 包装 + PerfQuartzConfig 注册 + ShedLock 全部痕迹删除 + JobApi 精简到 1 方法 | 已交付（2026-04-25） |
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

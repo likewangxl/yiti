@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-26 | Updated: 2026-04-26 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-04-29 -->
 
 # customer-marketing-center
 
@@ -8,8 +8,8 @@
 
 **基础包名**: `com.bank.branch.platform.customer`
 **Maven 坐标**: `com.bank.branch.platform:customer-marketing-center`
-**对外契约**: 5 个 `*Api` 接口 + 36 个 REST 端点。
-**当前版本**: V1.0（113 Java + 46 测试，0 UOE）
+**对外契约**: 5 个 `*Api` 接口 + 36 个 REST 端点（含 P1A 三个新增端点）。
+**当前版本**: V1.0 + P1 三批改动（2026-04-29 P1A/P1B/P1C 已交付）
 
 ## Key Files
 
@@ -86,11 +86,21 @@
 | `touch_task` | TouchTask | 触达任务 |
 | `touch_log` | TouchLog | 触达日志 |
 
-## V1.0 已知技术债（2026-04-25）
+## P1 三批改动进度（2026-04-29 已交付）
+
+| 批次 | commit | 范围 | 测试 |
+|---|---|---|---|
+| P1A | `9c98e46` | 3 REST 端点（re-touch / admin summary / batch detail）+ CUST-40305/40908/40909 | +14 |
+| P1B | `a0b3ea8` | 422 业务校验 8 条（CUST-42201~42208）+ CUST-40006 迁移 | +11 |
+| P1C | `d702b7f` | 403 权限校验 7 条（CUST-40301~40307）+ 跨模块 UserApi.getUserRoleCodes | +6 |
+
+**⚠ BREAKING CHANGE (P1C)**：CUST-40003 (LEAD_NOT_DRAFT) 重命名为 CUST-40301 (LEAD_EDIT_FORBIDDEN)。前端 i18n 需同步更新。完整记录见 `docs/superpowers/sessions/2026-04-29-customer-p1-three-batches-progress.md`。
+
+## V1.0 已知技术债（P1 三批后剩余）
 
 | # | Title | Priority |
 |---|-------|----------|
-| 1 | 错误码 26 vs 设计 35（缺 403 系列 7 条 + 422 系列 8 条） | 中 |
+| 1 | 错误码：~~403 系列 7 条~~（P1C 已补 4 条触发 + 3 占位）；~~422 系列 8 条~~（P1B 已补 7 + 1 占位）；500 仍缺 | 中 |
 | 2 | 零 ArchUnit 守护（无 arch/ 子目录） | 中 |
 | 3 | 线索导入行级校验简化未实现（4 处 TODO） | 低 |
 | 4 | CROSS_ORG 审计待 @AuditLog 升级（3 处 TODO） | 低 |

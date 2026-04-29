@@ -78,8 +78,10 @@ docs/
 
 | 层级 | 目录 | 命名 | 作用 | 是否允许手动重跑 |
 |------|------|------|------|---------|
-| 基线 DDL + 初始种子 | `docs/schema/` | `ddl-*.sql` / `seed-v1.sql` / `workflow-seed-v1.sql` | 从 0 搭库用，定义表结构和最小可用种子 | 仅首次建库 |
+| 基线 DDL + 初始种子 | `docs/schema/` | `ddl-*.sql` / `seed-v1.sql` / `workflow-seed-v1.sql` / `ddl-quartz.sql`（V1.6） | 从 0 搭库用，定义表结构和最小可用种子 | 仅首次建库 |
 | 运维/对齐/测试种子 | `docs/superpowers/sql/` | `YYYY-MM-DD-*-align*.sql` 等 | 在已有库上按日期做增量对齐、测试数据重建 | 每次跑前必须备份到 `sql/backup/` |
+
+> **V1.6 quartz 整合（2026-04-25）**：`docs/schema/ddl-quartz.sql` 新增，包含 11 张 `QRTZ_*` 表，由 `spring.quartz.jdbc.initialize-schema=never` 触发手动初始化，仅 `system-governance-center` 持有。
 
 ### 2026-04-10 PT_* 对齐脚本（当前最新版）
 

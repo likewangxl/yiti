@@ -95,14 +95,13 @@ src/main/java/com/bank/branch/platform/governance/
 | `listBizFiles(bizType, bizId)` | 获取业务对象关联的文件列表 |
 | `deleteFile(fileId)` | 删除文件及所有关联 |
 
-### JobApi
+### JobApi（V1.6 quartz 整合后精简到 1 方法）
 
 | 方法 | 用途 |
 |------|------|
-| `getJobConf(jobKey)` | 获取定时任务配置 |
-| `startJobRun(jobId, trigger, empId)` | 记录任务执行开始, 返回 runLogId |
-| `completeJobRun(runLogId)` | 标记执行为 SUCCESS |
-| `failJobRun(runLogId, errorMsg)` | 标记执行为 FAILED |
+| `getJobConf(jobKey)` | 获取定时任务配置（只读） |
+
+V1.6 整合 Quartz 集群调度后，写日志由全局 `JobExecutionLogger`（Quartz `JobListener`）在 `jobToBeExecuted` / `jobWasExecuted` 回调中统一处理，业务模块**不再**需要 `startJobRun/completeJobRun/failJobRun`。`JobService` 同名方法保持 public 供 `JobController` 内部使用。
 
 ## REST 端点
 
@@ -144,3 +143,12 @@ src/main/java/com/bank/branch/platform/governance/
 |--------|------|
 | `GovCacheConfig` | 定义 `RedisTemplate<String, Object>` (String key 序列化, JSON value 序列化), `@ConditionalOnMissingBean` 避免与其他模块冲突 |
 | `MinioConfig` | 创建 `MinioClient` bean (从 `minio.endpoint`, `minio.access-key`, `minio.secret-key`, `minio.bucket` 读取) |
+| `QuartzConfig` (V1.6) | 注册 `JobExecutionLogger` 为全局 Quartz `JobListener`；`JobService.syncJobsOnStartup` 在 `ApplicationReadyEvent` 后扫描 `sys_job_conf` 同步 JobDetail / Trigger 到 QRTZ_*（`overwrite-existing-jobs=true`）|
+
+## Quartz 集群调度（V1.6 引入）
+
+治理中心是平台唯一的 Quartz 集成点，业务模块只需提供裸 `run()` 方法 + `QuartzJobBean` 包装类。
+
+- **集群与防重**: `org.quartz.jobStore.isClustered=true`，`QRTZ_LOCKS` 行锁替代 ShedLock + Redis
+- **DDL**: `docs/schema/ddl-quartz.sql`（11 张 QRTZ_* 表，`spring.quartz.jdbc.initialize-schema=never` 手动初始化）
+- **JobExecutionLogger**: 全局 `JobListener`，`jobToBeExecuted` 写 RUNNING + `jobWasExecuted` 写 SUCCESS/FAILED 到 `sys_job_run_log`，异常隔离不影响调度
