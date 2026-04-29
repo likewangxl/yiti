@@ -15,3 +15,11 @@ DELETE FROM PT_ROLE_RESOURCE WHERE ID LIKE 'WRR%' OR ID LIKE 'LRR%'
     OR RESOURCE_ID IN ('LR001','LR002','LR003','LR101','LR102','LR103','LR104','LR105');
 DELETE FROM PT_RESOURCE WHERE RESOURCE_ID IN ('100','101','102','103','104','105')
     OR RESOURCE_ID IN ('LR001','LR002','LR003','LR101','LR102','LR103','LR104','LR105');
+
+-- ====== FU-32（2026-04-29 加）：清掉 sys_job_conf 历史 J001/J002 测试数据 ======
+-- 真因：onepl_test_bootstrap 历史保留的 J001(DAILY_REPORT) / J002(MONTHLY_PERF) 行经 V1.6
+-- ALTER TABLE 后 quartz_job_class 字段填默认空字符串（NOT NULL DEFAULT ''），
+-- V1.6 JobService.syncJobsOnStartup 期望非空类全限定名做 Class.forName，会报 ERROR：
+--   ERROR JobService - [JobService.syncJobsOnStartup] jobKey=DAILY_REPORT 同步失败，跳过继续
+-- 测试环境下这些是历史 stub 数据，不被任何 IT 引用，统一清掉避免日志噪音。
+DELETE FROM sys_job_conf WHERE id IN ('J001', 'J002');

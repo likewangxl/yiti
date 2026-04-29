@@ -47,7 +47,19 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class LeadCallbackCompensationService {
 
-    /** 补偿任务给 reconcileRejected 填的占位 reason —— 真实 reason 已丢失（listener 异常吞掉）。 */
+    /**
+     * 补偿任务给 reconcileRejected 填的占位 reason —— 真实 reason 已丢失（listener 异常吞掉）。
+     *
+     * <p><strong>FU-20（2026-04-29）评估保留</strong>：reviewer 建议挪到 i18n 或 enum。
+     * 决定保留为本类 private 常量，不挪到全局：
+     * <ul>
+     *   <li>项目当前无 i18n 基础设施（中文项目，无 .properties resource bundle）；</li>
+     *   <li>该字面量仅在补偿场景的 Spring 事件 reason 字段使用，作用域窄，不需要全局共享；</li>
+     *   <li>挪到 enum 不语义匹配（这不是状态码而是一段补偿场景的占位文案）；</li>
+     *   <li>未来若产品要求多语言或运维定制 reason 文案，再升级到 governance 字典 / i18n。</li>
+     * </ul>
+     * </p>
+     */
     private static final String COMPENSATION_REJECT_REASON = "由补偿任务推进，原因不明";
 
     /**

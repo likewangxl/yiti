@@ -71,7 +71,23 @@ public class WorkflowCallbackListener {
      * <strong>FU-14 通过定时补偿任务 {@code LeadCallbackCompensationService} 兜底</strong>。
      * </p>
      *
-     * @param event 流程完成事件（来自 workflow-center ProcessCompletedListener）
+     * <p>
+     * <strong>状态机假设（FU-13 显式说明，2026-04-29）</strong>：本方法委托
+     * {@link LeadCallbackReconcileService#reconcileApproved} / {@code reconcileRejected}，
+     * 二者通过 {@code conditionalUpdateStatus(IN_APPROVAL → 目标态)} 推进状态：
+     * <ul>
+     *   <li><strong>前置假设</strong>：lead 当前状态 = {@code IN_APPROVAL}（由
+     *       {@code LeadService.submitForApproval} 在提交审批时设定）；</li>
+     *   <li><strong>非 IN_APPROVAL 行为</strong>：conditionalUpdate 返 0 行受影响，
+     *       reconcile 早返回（log.warn 但不抛异常），<strong>不</strong>发布下游事件，
+     *       保证幂等（重复事件 / 补偿与 listener 主路径并发触发场景下不会双写 cust_master）；</li>
+     *   <li><strong>非 LEAD 前缀 businessKey</strong>：本 listener 仅处理 {@code LEAD:*} 前缀的流程，
+     *       其他模块（如 LOAN/SUPPORT）由各自 listener 监听同一 {@code ProcessCompletedEvent} 处理。</li>
+     * </ul>
+     * </p>
+     *
+     * @param event 流程完成事件（来自 workflow-center ProcessCompletedListener，载荷见
+     *              {@link com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent}）
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)

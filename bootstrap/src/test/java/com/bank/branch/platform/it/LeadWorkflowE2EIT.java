@@ -184,6 +184,14 @@ class LeadWorkflowE2EIT {
         submitLead(initiatorSession, leadId);
         assertLeadStatus(leadId, "IN_APPROVAL");
 
+        // FU-8（2026-04-29 补对称校验）：与 APPROVED case 对称，先确认 cust_master 在驳回前不应有该 leadId 关联记录
+        long preCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                Long.class,
+                leadId
+        );
+        assertThat(preCount).isZero();
+
         // 3. 审批人签收 + 驳回
         String taskId = queryFirstTodoTaskId(approverSession);
         claim(approverSession, taskId);

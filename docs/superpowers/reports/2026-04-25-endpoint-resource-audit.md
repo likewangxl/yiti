@@ -2,7 +2,7 @@
 
 > 由 `RestEndpointInventoryIT.auditEndpointVsResource_shouldGenerateReport` 自动生成，请勿手工编辑。
 
-**生成时间**：2026-04-25T21:21:17.4057649
+> 报告内容随项目 PT_RESOURCE 与 REST 端点同步演进，由 IT 触发刷新。
 
 ## 概览
 

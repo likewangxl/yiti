@@ -17,8 +17,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -286,9 +284,9 @@ class RestEndpointInventoryIT {
         sb.append("# REST 端点 vs PT_RESOURCE 对账报告\n\n");
         sb.append("> 由 `RestEndpointInventoryIT.auditEndpointVsResource_shouldGenerateReport` ")
                 .append("自动生成，请勿手工编辑。\n\n");
-        sb.append("**生成时间**：")
-                .append(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
-                .append("\n\n");
+        // FU-16（2026-04-29 移除时间戳）：之前每跑一次 IT 时间戳变化导致工作树脏 unstaged，
+        // 现在产物只随业务数据（端点数 / 资源数 / 类型 A/B 数量）变化，可干净 commit。
+        sb.append("> 报告内容随项目 PT_RESOURCE 与 REST 端点同步演进，由 IT 触发刷新。\n\n");
         sb.append("## 概览\n\n");
         sb.append("| 指标 | 数量 |\n");
         sb.append("|---|---|\n");
