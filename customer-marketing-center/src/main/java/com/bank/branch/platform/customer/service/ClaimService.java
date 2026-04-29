@@ -115,8 +115,9 @@ public class ClaimService {
      * @param operatorEmpId 操作人员工工号
      */
     @Transactional
-    public void cancelClaim(String claimId, String reason, String operatorEmpId) {
-        log.info("[ClaimService.cancelClaim] claimId={}, operator={}", claimId, operatorEmpId);
+    public void cancelClaim(String claimId, String reason, String operatorEmpId, String operatorOrgCode) {
+        log.info("[ClaimService.cancelClaim] claimId={}, operator={}, orgCode={}",
+                claimId, operatorEmpId, operatorOrgCode);
 
         // 取消原因必填 — 先做前置校验，避免无效查询
         if (!StringUtils.hasText(reason)) {
@@ -129,6 +130,14 @@ public class ClaimService {
         if (claim == null) {
             throw new BizException(CustomerErrorCode.CLAIM_NOT_FOUND.getCode(),
                     CustomerErrorCode.CLAIM_NOT_FOUND.getMessage());
+        }
+
+        // P1C 2026-04-29：跨机构越权校验（CUST-40305）— 操作员只能取消本机构的认领
+        if (!java.util.Objects.equals(claim.getOrgId(), operatorOrgCode)) {
+            log.warn("[ClaimService.cancelClaim] 越权拒绝 CUST-40305 claimId={}, claimOrg={}, operatorOrg={}",
+                    claimId, claim.getOrgId(), operatorOrgCode);
+            throw new BizException(CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode(),
+                    CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getMessage());
         }
 
         // 更新认领状态为已取消，同时设置取消时间和原因

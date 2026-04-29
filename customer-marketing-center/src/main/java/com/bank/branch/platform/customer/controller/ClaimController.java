@@ -83,7 +83,8 @@ public class ClaimController {
                                              @Valid @RequestBody CancelClaimReqDTO req) {
         log.info("[ClaimController.cancelClaim] claimId={}", id);
         String empId = currentUserApi.getCurrentEmpId();
-        claimService.cancelClaim(id, req.getReason(), empId);
+        String orgCode = currentUserApi.getCurrentOrgCode();
+        claimService.cancelClaim(id, req.getReason(), empId, orgCode);
         return ResponseWrapper.success();
     }
 

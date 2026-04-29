@@ -11,10 +11,9 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum CustomerErrorCode {
 
-    // 400 参数/业务错误（CUST-40006 已废弃，"导入数据超过行数限制" 语义迁移到 CUST-42205 IMPORT_ROWS_TOO_MANY）
+    // 400 参数/业务错误（CUST-40003 已废弃，"线索非草稿"语义升级到 CUST-40301 LEAD_EDIT_FORBIDDEN P1C；CUST-40006 已废弃 → CUST-42205）
     TAG_NAME_BLANK("CUST-40001", "标签名称不能为空"),
     TAG_CODE_BLANK("CUST-40002", "标签编码不能为空"),
-    LEAD_NOT_DRAFT("CUST-40003", "线索非草稿状态，不允许编辑"),
     LEAD_NOT_SUBMITTABLE("CUST-40004", "线索状态不允许提交审批"),
     IMPORT_FILE_EMPTY("CUST-40005", "导入文件为空"),
     TOUCH_TASK_NOT_PENDING("CUST-40007", "触达任务非待处理状态"),
@@ -22,8 +21,14 @@ public enum CustomerErrorCode {
     CANCEL_REASON_REQUIRED("CUST-40009", "取消原因不能为空"),
     TOUCH_TASK_ILLEGAL_TRANSITION("CUST-40010", "触达任务非法状态转移"),
 
-    // 403 权限/越权（V1.0 仅按需补齐 reTouch 必需，其余由批次 C 补全）
+    // 403 权限/越权（P1C 2026-04-29 落地：40301/40305/40306/40307 触发逻辑；40302/40303/40304 占位待 V1.x 补齐）
+    LEAD_EDIT_FORBIDDEN("CUST-40301", "无权编辑非草稿状态线索"),
+    TOUCH_TASK_ACCESS_FORBIDDEN("CUST-40302", "无权访问非本人触达任务"),
+    CUSTOMER_DELETE_NEED_APPROVAL("CUST-40303", "删除客户需先通过审批"),
+    HISTORY_ACCESS_FORBIDDEN("CUST-40304", "无权访问跨机构历史"),
     CLAIM_ORG_FORBIDDEN("CUST-40305", "无权操作非本机构认领关系"),
+    TRANSFER_ROLE_MISMATCH("CUST-40306", "转交接收人角色不符"),
+    TRANSFER_ORG_MISMATCH("CUST-40307", "转交接收人不在同一机构"),
 
     // 404 资源不存在
     TAG_NOT_FOUND("CUST-40401", "标签不存在"),

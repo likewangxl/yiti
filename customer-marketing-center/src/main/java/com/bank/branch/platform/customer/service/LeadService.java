@@ -339,8 +339,10 @@ public class LeadService {
                     CustomerErrorCode.LEAD_NOT_FOUND.getMessage());
         }
         if (!LeadStatus.DRAFT.getCode().equals(lead.getLeadStatus())) {
-            throw new BizException(CustomerErrorCode.LEAD_NOT_DRAFT.getCode(),
-                    CustomerErrorCode.LEAD_NOT_DRAFT.getMessage());
+            // P1C 2026-04-29 升级：原 CUST-40003 LEAD_NOT_DRAFT 重命名为 CUST-40301 LEAD_EDIT_FORBIDDEN
+            // （语义升级 409→403：操作者无权对非草稿线索执行编辑）
+            throw new BizException(CustomerErrorCode.LEAD_EDIT_FORBIDDEN.getCode(),
+                    CustomerErrorCode.LEAD_EDIT_FORBIDDEN.getMessage());
         }
         return lead;
     }

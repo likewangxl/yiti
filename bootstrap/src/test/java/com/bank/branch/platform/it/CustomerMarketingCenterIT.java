@@ -147,7 +147,7 @@ class CustomerMarketingCenterIT {
                 OPERATOR_ORG_ID
         );
 
-        touchTaskService.markSuccess(touchTaskId);
+        touchTaskService.markSuccess(touchTaskId, OPERATOR_EMP_ID, false);
 
         assertThat(tagApi.getTagByCode("PHASE1_TAG")).isPresent()
                 .get().extracting(com.bank.branch.platform.customer.api.dto.TagDTO::getTagCode)

@@ -108,7 +108,9 @@ public class TouchTaskController {
     @Operation(summary = "标记触达任务成功")
     public ResponseWrapper<Void> markSuccess(@PathVariable String id) {
         log.info("[TouchTaskController.markSuccess] id={}", id);
-        touchTaskService.markSuccess(id);
+        String operatorEmpId = currentUserApi.getCurrentEmpId();
+        boolean isAdmin = currentUserApi.isSystemAdmin();
+        touchTaskService.markSuccess(id, operatorEmpId, isAdmin);
         return ResponseWrapper.success();
     }
 
@@ -129,7 +131,9 @@ public class TouchTaskController {
     public ResponseWrapper<Void> cancel(@PathVariable String id,
                                         @Valid @RequestBody TouchCancelReqDTO req) {
         log.info("[TouchTaskController.cancel] id={}", id);
-        touchTaskService.cancel(id, req.getReason());
+        String operatorEmpId = currentUserApi.getCurrentEmpId();
+        boolean isAdmin = currentUserApi.isSystemAdmin();
+        touchTaskService.cancel(id, req.getReason(), operatorEmpId, isAdmin);
         return ResponseWrapper.success();
     }
 

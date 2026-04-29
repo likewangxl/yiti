@@ -115,7 +115,7 @@ class ClaimControllerTest extends AbstractControllerIntegrationTest {
     void cancelClaim_shouldReturn200() throws Exception {
         // given
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
-        doNothing().when(claimService).cancelClaim(eq("claim-001"), eq("客户不符合条件"), eq("E10001"));
+        doNothing().when(claimService).cancelClaim(eq("claim-001"), eq("客户不符合条件"), eq("E10001"), eq("ORG_SZ_001"));
 
         String body = "{\"reason\":\"客户不符合条件\"}";
 
@@ -148,7 +148,7 @@ class ClaimControllerTest extends AbstractControllerIntegrationTest {
         doThrow(new BizException(
                 CustomerErrorCode.CLAIM_NOT_FOUND.getCode(),
                 CustomerErrorCode.CLAIM_NOT_FOUND.getMessage()))
-                .when(claimService).cancelClaim(eq("not-exist"), anyString(), eq("E10001"));
+                .when(claimService).cancelClaim(eq("not-exist"), anyString(), eq("E10001"), eq("ORG_SZ_001"));
 
         String body = "{\"reason\":\"原因说明\"}";
 

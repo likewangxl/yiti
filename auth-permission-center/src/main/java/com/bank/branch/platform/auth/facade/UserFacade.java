@@ -4,16 +4,21 @@ import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
+import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.mapper.OrgMapper;
 import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserOrgMapper;
+import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 用户信息 Facade 实现
@@ -29,6 +34,7 @@ public class UserFacade implements UserApi {
     private final UserMapper userMapper;
     private final UserOrgMapper userOrgMapper;
     private final OrgMapper orgMapper;
+    private final UserRoleMapper userRoleMapper;
 
     @Override
     public UserDTO getUserByEmpId(String empId) {
@@ -77,5 +83,23 @@ public class UserFacade implements UserApi {
             }
         }
         return results;
+    }
+
+    @Override
+    public Set<String> getUserRoleCodes(String empId) {
+        if (empId == null || empId.isEmpty()) {
+            return Collections.emptySet();
+        }
+        List<PtRole> roles = userRoleMapper.selectRolesByUserId(empId);
+        if (roles == null || roles.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> codes = new HashSet<>(roles.size());
+        for (PtRole r : roles) {
+            if (r.getRoleCode() != null) {
+                codes.add(r.getRoleCode());
+            }
+        }
+        return codes;
     }
 }

@@ -112,7 +112,7 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void markSuccessTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(touchTaskService).markSuccess("task-001");
+        doNothing().when(touchTaskService).markSuccess(eq("task-001"), eq("E10001"), eq(false));
 
         // when/then
         mockMvc.perform(post("/api/touch-tasks/task-001/success"))
@@ -127,7 +127,7 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
         doThrow(new BizException(
                 CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode(),
                 CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getMessage()))
-                .when(touchTaskService).markSuccess("task-done");
+                .when(touchTaskService).markSuccess(eq("task-done"), eq("E10001"), eq(false));
 
         // when/then
         mockMvc.perform(post("/api/touch-tasks/task-done/success"))
@@ -141,7 +141,7 @@ class TouchTaskControllerTest extends AbstractControllerIntegrationTest {
     @WithMockEmpContext(empId = "E10001")
     void cancelTask_shouldReturn200() throws Exception {
         // given
-        doNothing().when(touchTaskService).cancel(eq("task-001"), anyString());
+        doNothing().when(touchTaskService).cancel(eq("task-001"), anyString(), eq("E10001"), eq(false));
 
         String body = "{\"reason\":\"客户拒绝拜访\"}";
 

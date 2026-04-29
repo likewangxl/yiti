@@ -137,7 +137,7 @@ class LeadServiceTest {
                 null, null, null, null, null, null, "E001"
         ))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_NOT_DRAFT.getCode());
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_EDIT_FORBIDDEN.getCode());
 
         verify(leadMapper, never()).updateById(any());
     }

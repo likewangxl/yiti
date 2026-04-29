@@ -125,7 +125,7 @@ class ClaimServiceTest {
         when(claimMapper.updateById(any(CustClaim.class))).thenReturn(1);
 
         // when
-        claimService.cancelClaim("claim-001", "客户不符合条件", "E10001");
+        claimService.cancelClaim("claim-001", "客户不符合条件", "E10001", "ORG_SZ_001");
 
         // then: 验证 updateById 被调用，且字段已更新
         ArgumentCaptor<CustClaim> captor = ArgumentCaptor.forClass(CustClaim.class);
@@ -151,7 +151,7 @@ class ClaimServiceTest {
         // given: 取消原因为空
 
         // when/then: cancelReason 必填，否则抛 CANCEL_REASON_REQUIRED
-        assertThatThrownBy(() -> claimService.cancelClaim("claim-001", "", "E10001"))
+        assertThatThrownBy(() -> claimService.cancelClaim("claim-001", "", "E10001", "ORG_SZ_001"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CANCEL_REASON_REQUIRED.getCode());
 
@@ -162,12 +162,28 @@ class ClaimServiceTest {
     }
 
     @Test
+    void cancelClaim_shouldThrowCust40305WhenCrossOrg() {
+        // P1C：claim 归属机构与 operator 机构不一致 → CUST-40305
+        CustClaim claim = new CustClaim();
+        claim.setId("claim-002");
+        claim.setOrgId("ORG_OTHER");
+        claim.setMaintainerEmpId("E10002");
+        when(claimMapper.selectById("claim-002")).thenReturn(claim);
+
+        assertThatThrownBy(() -> claimService.cancelClaim("claim-002", "原因说明", "E10001", "ORG_SZ_001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode());
+
+        verify(claimMapper, never()).updateById(any());
+    }
+
+    @Test
     void cancelClaim_shouldThrowWhenNotFound() {
         // given: 认领记录不存在
         when(claimMapper.selectById("not-exist")).thenReturn(null);
 
         // when/then
-        assertThatThrownBy(() -> claimService.cancelClaim("not-exist", "原因说明", "E10001"))
+        assertThatThrownBy(() -> claimService.cancelClaim("not-exist", "原因说明", "E10001", "ORG_SZ_001"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CLAIM_NOT_FOUND.getCode());
 

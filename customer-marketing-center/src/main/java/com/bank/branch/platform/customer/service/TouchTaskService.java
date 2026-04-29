@@ -163,14 +163,18 @@ public class TouchTaskService {
      * @throws BizException CUST-40010 非法状态转移（SUCCESS/CANCELLED 终态不允许再转移）
      */
     @Transactional
-    public void markSuccess(String taskId) {
-        log.info("[TouchTaskService.markSuccess] taskId={}", taskId);
+    public void markSuccess(String taskId, String operatorEmpId, boolean operatorIsAdmin) {
+        log.info("[TouchTaskService.markSuccess] taskId={}, operatorEmpId={}, isAdmin={}",
+                taskId, operatorEmpId, operatorIsAdmin);
 
         TouchTask task = taskMapper.selectById(taskId);
         if (task == null) {
             throw new BizException(CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode(),
                     CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getMessage());
         }
+
+        // 操作人校验（CUST-40302）：仅任务执行人本人或系统管理员可标成功
+        assertAssigneeOrAdmin(task, operatorEmpId, operatorIsAdmin);
 
         // 通过状态机校验转移合法性：PENDING/IN_PROGRESS → SUCCESS 合法，终态不可转
         TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
@@ -200,18 +204,26 @@ public class TouchTaskService {
      * SUCCESS/CANCELLED 终态不允许取消，抛 CUST-40010。
      * 取消后状态变更为 CANCELLED，记录 cancelTime。
      * reason 仅记录日志，TouchTask 表无 cancelReason 字段。
+     * P1C 2026-04-29：加 operator 校验，仅任务执行人本人或系统管理员可取消（CUST-40302）。
      * </p>
      *
-     * @param taskId 任务ID
-     * @param reason 取消原因（仅记日志，不持久化到 touch_task 表）
+     * @param taskId           任务ID
+     * @param reason           取消原因（仅记日志，不持久化到 touch_task 表）
+     * @param operatorEmpId    操作人员工工号（用于 assignee 校验）
+     * @param operatorIsAdmin  操作人是否为系统管理员（true 则跳过 assignee 校验）
      * @throws BizException CUST-40405 任务不存在
+     * @throws BizException CUST-40302 操作人非任务执行人且非管理员
      * @throws BizException CUST-40010 非法状态转移（SUCCESS/CANCELLED 终态不允许再转移）
      */
     @Transactional
-    public void cancel(String taskId, String reason) {
-        log.info("[TouchTaskService.cancel] taskId={}, reason={}", taskId, reason);
+    public void cancel(String taskId, String reason, String operatorEmpId, boolean operatorIsAdmin) {
+        log.info("[TouchTaskService.cancel] taskId={}, reason={}, operatorEmpId={}, isAdmin={}",
+                taskId, reason, operatorEmpId, operatorIsAdmin);
 
         TouchTask task = getById(taskId);
+
+        // 操作人校验（CUST-40302）：仅任务执行人本人或系统管理员可取消
+        assertAssigneeOrAdmin(task, operatorEmpId, operatorIsAdmin);
 
         // 通过状态机校验转移合法性：PENDING/IN_PROGRESS → CANCELLED 合法，终态不可转
         TouchTaskStatus from = TouchTaskStatus.valueOf(task.getTaskStatus());
@@ -452,5 +464,25 @@ public class TouchTaskService {
             return SlaStatus.YELLOW.getCode();
         }
         return null;
+    }
+
+    /**
+     * 校验操作人是任务执行人本人或系统管理员，否则抛 CUST-40302（P1C 2026-04-29 落地）。
+     * 系统管理员（isSystemAdmin=true）可绕过任意机构/任意执行人限制。
+     *
+     * @param task            触达任务实体
+     * @param operatorEmpId   操作人员工工号
+     * @param operatorIsAdmin 操作人是否为系统管理员
+     */
+    private void assertAssigneeOrAdmin(TouchTask task, String operatorEmpId, boolean operatorIsAdmin) {
+        if (operatorIsAdmin) {
+            return;
+        }
+        if (task.getAssigneeEmpId() == null || !task.getAssigneeEmpId().equals(operatorEmpId)) {
+            log.warn("[TouchTaskService.assertAssigneeOrAdmin] taskId={}, assignee={}, operator={}, 拒绝 CUST-40302",
+                    task.getId(), task.getAssigneeEmpId(), operatorEmpId);
+            throw new BizException(CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode(),
+                    CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getMessage());
+        }
     }
 }

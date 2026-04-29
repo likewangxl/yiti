@@ -1,5 +1,7 @@
 package com.bank.branch.platform.customer.service;
 
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.customer.dto.resp.CustomerCrossOrgHistoryVO;
@@ -29,6 +31,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -64,6 +67,9 @@ class CustomerServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private UserApi userApi;
 
     @InjectMocks
     private CustomerService customerService;
@@ -137,9 +143,16 @@ class CustomerServiceTest {
         claim.setId(claimId);
         claim.setCustId(custId);
         claim.setMaintainerEmpId(fromEmpId);
+        claim.setOrgId("ORG_SZ_001");
         claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
         when(claimMapper.selectById(claimId)).thenReturn(claim);
         when(claimMapper.updateById(any(CustClaim.class))).thenReturn(1);
+        // P1C 接收人校验：toEmpId 含 R_RM 角色 + mainOrgCode 匹配
+        when(userApi.getUserRoleCodes(toEmpId)).thenReturn(Set.of("R_RM"));
+        UserDTO receiver = new UserDTO();
+        receiver.setEmpId(toEmpId);
+        receiver.setMainOrgCode("ORG_SZ_001");
+        when(userApi.getUserByEmpId(toEmpId)).thenReturn(receiver);
 
         // when
         customerService.transfer(claimId, toEmpId, reason, operatorEmpId);
@@ -178,6 +191,46 @@ class CustomerServiceTest {
         assertThatThrownBy(() -> customerService.transfer(claimId, "E10002", "", "E10001"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TRANSFER_REASON_REQUIRED.getCode());
+
+        verify(claimMapper, never()).updateById(any());
+    }
+
+    @Test
+    void transfer_shouldThrowCust40306WhenReceiverLacksRole() {
+        // P1C：接收人无 R_RM 角色 → CUST-40306
+        CustClaim claim = new CustClaim();
+        claim.setId("claim-001");
+        claim.setOrgId("ORG_SZ_001");
+        claim.setMaintainerEmpId("E10001");
+        claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
+        when(claimMapper.selectById("claim-001")).thenReturn(claim);
+        when(userApi.getUserRoleCodes("E_NOPERM")).thenReturn(Set.of("R_OTHER"));
+
+        assertThatThrownBy(() -> customerService.transfer("claim-001", "E_NOPERM", "原因充足", "E10001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getCode());
+
+        verify(claimMapper, never()).updateById(any());
+    }
+
+    @Test
+    void transfer_shouldThrowCust40307WhenReceiverDifferentOrg() {
+        // P1C：接收人主机构与 claim.orgId 不一致 → CUST-40307
+        CustClaim claim = new CustClaim();
+        claim.setId("claim-001");
+        claim.setOrgId("ORG_SZ_001");
+        claim.setMaintainerEmpId("E10001");
+        claim.setClaimStatus(ClaimStatus.CLAIMED.getCode());
+        when(claimMapper.selectById("claim-001")).thenReturn(claim);
+        when(userApi.getUserRoleCodes("E_OTHERORG")).thenReturn(Set.of("R_RM"));
+        UserDTO recv = new UserDTO();
+        recv.setEmpId("E_OTHERORG");
+        recv.setMainOrgCode("ORG_BJ_001");
+        when(userApi.getUserByEmpId("E_OTHERORG")).thenReturn(recv);
+
+        assertThatThrownBy(() -> customerService.transfer("claim-001", "E_OTHERORG", "原因充足", "E10001"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TRANSFER_ORG_MISMATCH.getCode());
 
         verify(claimMapper, never()).updateById(any());
     }

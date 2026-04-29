@@ -3,6 +3,7 @@ package com.bank.branch.platform.customer.support;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
@@ -60,6 +61,7 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected CurrentUserApi currentUserApi;
     @MockBean protected BizScopeApi bizScopeApi;
     @MockBean protected OrgApi orgApi;
+    @MockBean protected UserApi userApi;
     @MockBean protected DictApi dictApi;
     @MockBean protected FileApi fileApi;
     @MockBean protected NotifyApi notifyApi;

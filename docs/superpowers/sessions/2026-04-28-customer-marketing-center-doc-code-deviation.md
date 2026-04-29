@@ -247,7 +247,7 @@ LeadController.java:158         (DELETE)
 
 ### 10.6 错误码全量分类（取代原 §4 的概要）
 
-- **仅文档存在（待确认是否补实现）16 条**：`CUST-40301~40307`（403 系列 7 条）+ ~~`CUST-42201~42208`（422 系列 8 条）~~ **[done] P1B 2026-04-29**（8 条已落地，CUST-42201 仅占位待 V1.x 行级校验补齐）+ `CUST-50003`（MinIO 上传失败）
+- **仅文档存在（待确认是否补实现）16 条**：~~`CUST-40301~40307`（403 系列 7 条）~~ **[done] P1C 2026-04-29**（40301 升级自 40003 / 40302 markSuccess+cancel 校验 / 40303-40304 占位 / 40305 P1a→cancelClaim 扩展 / 40306-40307 transfer 接收人校验，依赖新增 UserApi.getUserRoleCodes）+ ~~`CUST-42201~42208`（422 系列 8 条）~~ **[done] P1B 2026-04-29**（8 条已落地，CUST-42201 仅占位待 V1.x 行级校验补齐）+ `CUST-50003`（MinIO 上传失败）
 - **仅代码存在（待补回文档）17 条**：`CUST-40001/40002/40004~40009`（参数校验 8 条）+ `CUST-40401~40406`（404 资源不存在 6 条）+ `CUST-40902/40903/40906`（409 冲突 3 条）。**P1B 2026-04-29 备注**：`CUST-40006` 已删除（语义迁至 CUST-42205）
 - **同号但语义/message 不同 2 条（最危险）**：`CUST-40904`（双义，必修）、`CUST-40901`（语义偏）
 - **双方编号+message 完全一致：0 条**
@@ -268,5 +268,15 @@ LeadController.java:158         (DELETE)
 | **P0** | 改代码 | `CUST-40904` 编号双义拆分（生产风险） |
 | **P0** | 改文档 | 09 §1.2 `BizType`/`DataScopeType` 用真值整体重写；09 §5 删除 5 个虚构 API 名或更名 |
 | **P1** | 改文档 | `ddl-customer.sql` + 05 §5.8 `task_status` COMMENT 补 `IN_PROGRESS`；01 §3.6 `LeadStatus` 改 5 值；02 §3 `CustMasterStatus` 改 `ACTIVE/INACTIVE`、删 `CustomerApi/TouchTaskApi/util/` 等未落地条目 |
-| **P1** | 业务确认 | ~~3 个真缺失 REST 端点（re-touch / summary / batch detail）是否要补~~ **[done] P1a 2026-04-28**；`@BizAuth.highRisk` 字段是否落地 9 处；~~422 系列 8 条错误码补实现~~ **[done] P1B 2026-04-29**（CUST-42202~42208 7 条业务校验落地 + CUST-42201 占位待行级校验，CUST-40006 重命名迁出）；403 系列 7 条错误码 vs 删文档（C 批待办） |
+| **P1** | 业务确认 | ~~3 个真缺失 REST 端点（re-touch / summary / batch detail）是否要补~~ **[done] P1a 2026-04-28**；`@BizAuth.highRisk` 字段是否落地 9 处；~~422 系列 8 条错误码补实现~~ **[done] P1B 2026-04-29**；~~403 系列 7 条错误码补实现~~ **[done] P1C 2026-04-29**（40301 LeadService 升级自 40003 + 40302 TouchTaskService.markSuccess/cancel 加 assignee 校验 + 40305 ClaimService.cancelClaim 扩展跨机构校验 + 40306/40307 CustomerService.transfer 加接收人角色/机构校验；UserApi 新增 getUserRoleCodes API；40303/40304 占位）|
+
+### P1C follow-up（必须创建）
+
+1. **CUST-FU-40003-breaking-frontend**：CUST-40003 (LEAD_NOT_DRAFT) → CUST-40301 (LEAD_EDIT_FORBIDDEN) message 由 "线索非草稿状态，不允许编辑" 改 "无权编辑非草稿状态线索"。**Breaking 给前端**：i18n 字符串映射需更新；如有 curl-test-plan.md 引用同步修改。
+2. **CUST-FU-40303-admin-delete**：admin force-delete 端点本批占位未实施（依赖 CustMasterMapper 缺 deleteById 方法 + 跨范围）。需新增 mapper 方法 + AdminCustomerController 端点 + AuditLog；service 层加 isAdmin 守卫抛 CUST-40303。
+3. **CUST-FU-40304-history-doc**：跨机构历史已由 `@BizAuth(CUSTOMER, READ)` + DataScope 过滤覆盖，无 service 层二次校验。需要 03 文档 + CLAUDE.md 标注 "由 @BizAuth + 角色级 DataScope 拦截"，CUST-40304 仅占位。
+4. **CUST-FU-40306-rolecode-const**：CustomerService.REQUIRED_RECEIVER_ROLE = "R_RM" 字符串硬编码；建议 auth 模块暴露 `RoleCodeConstants` 公共常量类。
+5. **CUST-FU-40307-receiver-not-found**：assertReceiverEligible 把 receiver=null 误归类为机构不符（CUST-40307），语义模糊；建议新增 CUST-404xx RECEIVER_NOT_FOUND。
+6. **CUST-FU-userapi-cache**：UserApi.getUserRoleCodes 不走缓存（每次 PT_USER_ROLE JOIN PT_ROLE）。高频转交场景需加 cache key `auth:user-role-codes:{empId}` 5min TTL，并在 UserRoleService.bind/unbind 时 evict。
+7. **CUST-FU-claim-org-check-extract**：ClaimService.reTouch (用 `.equals` 有 NPE 风险) 与 cancelClaim (用 `Objects.equals`) 跨机构校验逻辑重复；抽 `assertSameOrg(claim, operatorOrgCode)` 共用方法。
 | **P2** | 长期 | 错误码编号体系整体重对齐（双方零一致条目，需统一规划而非逐条修） |

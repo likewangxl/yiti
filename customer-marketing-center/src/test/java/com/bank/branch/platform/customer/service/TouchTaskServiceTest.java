@@ -89,7 +89,7 @@ class TouchTaskServiceTest {
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when
-        touchTaskService.markSuccess("task-001");
+        touchTaskService.markSuccess("task-001", "E10001", false);
 
         // then: 验证 updateById 中的任务状态更新为 SUCCESS
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
@@ -116,7 +116,7 @@ class TouchTaskServiceTest {
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when
-        touchTaskService.markSuccess("task-002");
+        touchTaskService.markSuccess("task-002", "E10001", false);
 
         // then: 验证状态更新为 SUCCESS
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
@@ -136,7 +136,7 @@ class TouchTaskServiceTest {
         when(taskMapper.selectById("task-003")).thenReturn(task);
 
         // when/then: 状态机校验失败，抛 CUST-40010
-        assertThatThrownBy(() -> touchTaskService.markSuccess("task-003"))
+        assertThatThrownBy(() -> touchTaskService.markSuccess("task-003", "E10001", false))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode());
     }
@@ -149,7 +149,7 @@ class TouchTaskServiceTest {
         when(taskMapper.selectById("task-004")).thenReturn(task);
 
         // when/then: 状态机校验失败，抛 CUST-40010
-        assertThatThrownBy(() -> touchTaskService.markSuccess("task-004"))
+        assertThatThrownBy(() -> touchTaskService.markSuccess("task-004", "E10001", false))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ILLEGAL_TRANSITION.getCode());
     }
@@ -160,7 +160,7 @@ class TouchTaskServiceTest {
         when(taskMapper.selectById("not-exist")).thenReturn(null);
 
         // when/then: 抛 CUST-40405
-        assertThatThrownBy(() -> touchTaskService.markSuccess("not-exist"))
+        assertThatThrownBy(() -> touchTaskService.markSuccess("not-exist", "E10001", false))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_NOT_FOUND.getCode());
     }
@@ -175,7 +175,7 @@ class TouchTaskServiceTest {
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when: reason 仅记日志，TouchTask 表无 cancelReason 字段
-        touchTaskService.cancel("task-003", "客户拒绝拜访");
+        touchTaskService.cancel("task-003", "客户拒绝拜访", "E10001", false);
 
         // then: 验证 updateById 中的任务状态更新为 CANCELLED
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
@@ -294,7 +294,7 @@ class TouchTaskServiceTest {
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when: 应当正常完成，不抛异常
-        touchTaskService.cancel("T-P", "客户取消");
+        touchTaskService.cancel("T-P", "客户取消", "E10001", false);
 
         // then: 状态更新为 CANCELLED
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
@@ -312,7 +312,7 @@ class TouchTaskServiceTest {
         when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
 
         // when: 应当正常完成，不抛异常
-        touchTaskService.cancel("T-IP", "客户取消");
+        touchTaskService.cancel("T-IP", "客户取消", "E10001", false);
 
         // then: 状态更新为 CANCELLED
         ArgumentCaptor<TouchTask> captor = ArgumentCaptor.forClass(TouchTask.class);
@@ -321,15 +321,53 @@ class TouchTaskServiceTest {
     }
 
     @Test
+    void markSuccess_shouldThrowCust40302WhenOperatorNotAssignee() {
+        // P1C：操作人非任务执行人且非 admin → CUST-40302
+        TouchTask task = buildPendingTask("task-other");
+        task.setAssigneeEmpId("E_OTHER");
+        when(taskMapper.selectById("task-other")).thenReturn(task);
+
+        assertThatThrownBy(() -> touchTaskService.markSuccess("task-other", "E10001", false))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode());
+    }
+
+    @Test
+    void markSuccess_shouldAllowAdminBypass() {
+        // P1C：admin 可绕过 assignee 校验
+        TouchTask task = buildPendingTask("task-admin");
+        task.setAssigneeEmpId("E_OTHER");
+        when(taskMapper.selectById("task-admin")).thenReturn(task);
+        when(taskMapper.updateById(any(TouchTask.class))).thenReturn(1);
+
+        touchTaskService.markSuccess("task-admin", "ADMIN001", true);
+
+        verify(taskMapper).updateById(any(TouchTask.class));
+    }
+
+    @Test
+    void cancel_shouldThrowCust40302WhenOperatorNotAssignee() {
+        // P1C：操作人非任务执行人且非 admin → CUST-40302
+        TouchTask task = buildPendingTask("T-perm");
+        task.setAssigneeEmpId("E_OTHER");
+        when(taskMapper.selectById("T-perm")).thenReturn(task);
+
+        assertThatThrownBy(() -> touchTaskService.cancel("T-perm", "原因", "E10001", false))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TOUCH_TASK_ACCESS_FORBIDDEN.getCode());
+    }
+
+    @Test
     void cancel_rejectsAlreadySuccess() {
         // given: SUCCESS 终态不允许取消
         TouchTask t = new TouchTask();
         t.setId("T-S");
         t.setTaskStatus("SUCCESS");
+        t.setAssigneeEmpId("E10001");  // P1C 40302 校验需要 assignee 匹配 operator
         when(taskMapper.selectById("T-S")).thenReturn(t);
 
         // when/then: 状态机校验失败，抛 CUST-40010
-        assertThatThrownBy(() -> touchTaskService.cancel("T-S", "reason"))
+        assertThatThrownBy(() -> touchTaskService.cancel("T-S", "reason", "E10001", false))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "CUST-40010");
     }
@@ -340,10 +378,11 @@ class TouchTaskServiceTest {
         TouchTask t = new TouchTask();
         t.setId("T-C");
         t.setTaskStatus("CANCELLED");
+        t.setAssigneeEmpId("E10001");  // P1C 40302 校验需要 assignee 匹配 operator
         when(taskMapper.selectById("T-C")).thenReturn(t);
 
         // when/then: 状态机校验失败，抛 CUST-40010
-        assertThatThrownBy(() -> touchTaskService.cancel("T-C", "reason"))
+        assertThatThrownBy(() -> touchTaskService.cancel("T-C", "reason", "E10001", false))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "CUST-40010");
     }

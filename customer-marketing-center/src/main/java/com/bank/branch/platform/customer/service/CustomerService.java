@@ -1,6 +1,8 @@
 package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
@@ -54,6 +56,10 @@ public class CustomerService {
     private final TouchTaskMapper touchTaskMapper;
     private final WorkflowApi workflowApi;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserApi userApi;
+
+    /** 转交接收人必须具备的角色编码（客户经理）。 */
+    private static final String REQUIRED_RECEIVER_ROLE = "R_RM";
 
     /**
      * 按 ID 查询客户主档，不存在时抛出 BizException。
@@ -151,6 +157,11 @@ public class CustomerService {
             throw new BizException(CustomerErrorCode.TRANSFER_REASON_REQUIRED.getCode(),
                     CustomerErrorCode.TRANSFER_REASON_REQUIRED.getMessage());
         }
+
+        // P1C 2026-04-29：接收人校验
+        // CUST-40306：接收人必须具备客户经理角色 R_RM
+        // CUST-40307：接收人 mainOrgCode 必须等于 claim.orgId（同机构内转交）
+        assertReceiverEligible(toEmpId, claim.getOrgId());
 
         String fromEmpId = claim.getMaintainerEmpId();
 
@@ -316,5 +327,36 @@ public class CustomerService {
                     CustomerErrorCode.CUSTOMER_NOT_FOUND.getMessage());
         }
         return master;
+    }
+
+    /**
+     * 校验转交接收人是否合格（P1C 2026-04-29 落地）。
+     * <ul>
+     *   <li>CUST-40306：接收人必须具备客户经理角色 R_RM</li>
+     *   <li>CUST-40307：接收人 mainOrgCode 必须等于 claim.orgId（同机构内转交）</li>
+     * </ul>
+     * 接收人不存在视为机构不符（CUST-40307），保持错误码语义一致性。
+     *
+     * @param toEmpId    接收人员工工号
+     * @param claimOrgId 认领关系所在机构编码
+     */
+    private void assertReceiverEligible(String toEmpId, String claimOrgId) {
+        // 角色校验（CUST-40306）
+        java.util.Set<String> roles = userApi.getUserRoleCodes(toEmpId);
+        if (!roles.contains(REQUIRED_RECEIVER_ROLE)) {
+            log.warn("[CustomerService.assertReceiverEligible] 转交拒绝 CUST-40306 toEmpId={}, roles={}",
+                    toEmpId, roles);
+            throw new BizException(CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getCode(),
+                    CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getMessage());
+        }
+        // 机构校验（CUST-40307）：接收人主机构必须等于认领关系所在机构
+        UserDTO receiver = userApi.getUserByEmpId(toEmpId);
+        String receiverOrg = receiver == null ? null : receiver.getMainOrgCode();
+        if (!java.util.Objects.equals(receiverOrg, claimOrgId)) {
+            log.warn("[CustomerService.assertReceiverEligible] 转交拒绝 CUST-40307 toEmpId={}, receiverOrg={}, claimOrg={}",
+                    toEmpId, receiverOrg, claimOrgId);
+            throw new BizException(CustomerErrorCode.TRANSFER_ORG_MISMATCH.getCode(),
+                    CustomerErrorCode.TRANSFER_ORG_MISMATCH.getMessage());
+        }
     }
 }
