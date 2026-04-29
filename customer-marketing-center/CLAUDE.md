@@ -343,6 +343,21 @@ Cache-Aside 模式，所有 Key 前缀 `customer:`，默认 TTL 5 分钟 + 10% �
 - `docs/superpowers/sql/2026-04-14-customer-report-pt-resource.sql` (3 条)
 - `docs/superpowers/sql/2026-04-21-customer-contract-alignment-pt-resource.sql` (10 条，契约对齐新增端点)
 
+## P1 三批改动进度（2026-04-29 已交付）
+
+完整批次记录见 **[`docs/superpowers/sessions/2026-04-29-customer-p1-three-batches-progress.md`](../docs/superpowers/sessions/2026-04-29-customer-p1-three-batches-progress.md)**：
+
+| 批次 | commit | 范围 | 测试 |
+|---|---|---|---|
+| P1a | `9c98e46` | 3 REST 端点（re-touch / admin summary / batch detail）+ CUST-40305/40908/40909 | +14 |
+| P1B | `a0b3ea8` | 422 业务校验 8 条（CUST-42201~42208）+ CUST-40006 迁移 | +11 |
+| P1C | `d702b7f` | 403 权限校验 7 条（CUST-40301~40307）+ 跨模块 UserApi.getUserRoleCodes | +6 |
+
+**⚠ BREAKING CHANGE (P1C)**：CUST-40003 (LEAD_NOT_DRAFT) 重命名为 CUST-40301 (LEAD_EDIT_FORBIDDEN)，
+message 由 "线索非草稿状态，不允许编辑" 改为 "无权编辑非草稿状态线索"。前端 i18n 需同步更新。
+
+累计 surefire 测试 321 → 352；累计 P1A/P1B/P1C 三批 follow-up 共 15 条技术债（详见进度文档 §5）。
+
 ## V1.0 已知技术债（2026-04-25）
 
 | # | 标题 | 优先级 | 来源 |
