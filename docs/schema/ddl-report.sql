@@ -1,27 +1,25 @@
 -- ============================================================================
 -- 模块：报表分析中心 (report-analytics-center)
--- 描述：动态查询保存方案 + SQL 探查历史 + 快照任务配置（V1 预留）+ 异步导出任务
+-- 描述：动态查询保存方案 + SQL 探查历史 + 快照任务配置 + 异步导出任务
 -- 版本：V1
--- 更新日期：2026-04-25（从 V1.0 M5 实际交付对齐：新增 rpt_export_task）
+-- 更新日期：2026-04-26（P0 修复：补 rpt_export_task 表，注释与代码对齐）
 -- ============================================================================
 --
 -- 重要说明：
--- 1. 本模块是"纯只读支撑域"，4 张自有表：
+-- 1. 本模块有 4 张自有表：
 --    - rpt_saved_query     动态查询保存方案（每用户最多 10 条）
 --    - sql_probe_history   SQL 探查历史（审计 + 技术运维复盘，保留 3 个月）
 --    - rpt_snapshot_task   快照任务配置（V1 仅建表不启用，V2 扩展）
---    - rpt_export_task     报表异步导出任务（V1 M5 启用，与 perf_export_task 同构）
+--    - rpt_export_task     异步导出任务（与 perf_export_task 同构，模块独立）
 --
 -- 2. 本模块不维护任何业务汇总快照表，所有业务数据通过 *Api 实时查询：
 --    - 员工/机构/客户指标值  → performance.MetricApi
 --    - KPI 结果               → performance.KpiApi
 --    - 客户信息               → customer-marketing.CustomerQueryApi
 --    - 审计日志               → governance.AuditApi
+--    - 文件上传               → governance.FileApi（导出文件走 MinIO 上传）
 --
--- 3. 异步导出任务表 rpt_export_task 由 report 模块自有维护（V1.0 M5 落地，
---    与 perf_export_task 同构）；governance 的 sys_async_task 不再用于本模块。
---
--- 4. 所有表遵循 docs/common-dev-guide.md 的通用字段规范
+-- 3. 所有表遵循 docs/common-dev-guide.md 的通用字段规范
 -- ============================================================================
 
 SET NAMES utf8mb4;
@@ -35,8 +33,8 @@ SET NAMES utf8mb4;
 --   - subject_ids / metric_codes 为 JSON 数组字符串（不使用 MySQL JSON 类型，避免字符集差异）
 --   - version 字段用于乐观锁，防止多标签页并发编辑冲突
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `rpt_saved_query`;
-CREATE TABLE `rpt_saved_query` (
+DROP TABLE IF EXISTS `RPT_SAVED_QUERY`;
+CREATE TABLE `RPT_SAVED_QUERY` (
   `id`            VARCHAR(32)  NOT NULL COMMENT '方案ID（UUID）',
   `emp_id`        VARCHAR(32)  NOT NULL COMMENT '员工工号',
   `name`          VARCHAR(200) NOT NULL COMMENT '方案名称',
@@ -60,8 +58,8 @@ CREATE TABLE `rpt_saved_query` (
 --   - 保留 3 个月（约 90 天），由 sys_job_conf 调度 SqlProbeHistoryCleanJob 定期清理
 --   - 配合 audit_log 做安全审计追溯
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `sql_probe_history`;
-CREATE TABLE `sql_probe_history` (
+DROP TABLE IF EXISTS `SQL_PROBE_HISTORY`;
+CREATE TABLE `SQL_PROBE_HISTORY` (
   `id`                 VARCHAR(32)  NOT NULL COMMENT '历史ID（UUID）',
   `emp_id`             VARCHAR(32)  NOT NULL COMMENT '执行人工号',
   `sql_text`           TEXT         NOT NULL COMMENT 'SQL语句',
@@ -85,8 +83,8 @@ CREATE TABLE `sql_probe_history` (
 --   - 仅建表，不写入任何数据，不启动任何任务
 --   - V2 扩展：当日活跃 > 1000 或仪表盘并发 > 500 QPS 时引入本地快照加速
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `rpt_snapshot_task`;
-CREATE TABLE `rpt_snapshot_task` (
+DROP TABLE IF EXISTS `RPT_SNAPSHOT_TASK`;
+CREATE TABLE `RPT_SNAPSHOT_TASK` (
   `id`             VARCHAR(32)  NOT NULL COMMENT '任务ID',
   `task_name`      VARCHAR(200) NOT NULL COMMENT '任务名称',
   `snapshot_type`  VARCHAR(50)  NOT NULL COMMENT '快照类型（DAILY/MONTHLY，V2扩展）',
@@ -102,34 +100,28 @@ CREATE TABLE `rpt_snapshot_task` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='快照任务配置（V1预留）';
 
 -- ----------------------------------------------------------------------------
--- 4. rpt_export_task — 报表异步导出任务
+-- 4. rpt_export_task — 异步导出任务
 -- ----------------------------------------------------------------------------
--- 业务约束（与 performance-engine-center.perf_export_task 同构）：
---   - export_type: 报表导出策略（V1 M5 落地：DYNAMIC_QUERY / TOUCH_SUMMARY /
---                  PERF_SUMMARY / CUSTPOOL_SUMMARY；V1.1+ 扩展 SQL_PROBE 等）
---   - status 机：PENDING → RUNNING → SUCCESS / FAILED
---   - file_key 保存 governance.file_object 主键（FileObjectDTO.id），下载链路
---                委托 governance.FileApi.getDownloadUrl(fileKey) 拉 1 小时预签名 URL
---   - expire_at 文件过期时间（消费方判定文件是否可下载，默认 +7 天）
---   - params_json 保存导出参数 JSON（策略按需反序列化）
---   - operator_id 归属字段，下载时用于 EXPORT_TASK_OWNER_MISMATCH 校验
---
--- 来源：performance-engine-center V1_2_1__perf_export_task.sql 同构
+-- 说明：
+--   - 与 performance-engine-center perf_export_task 同构，模块独立
+--   - V1.0 同步执行模型（createTask 内串联 strategy.execute）
+--   - file_key 存储 governance.file_object.id（非 MinIO object key）
+--   - 下载链路：RptExportFacade.getDownloadUrl → governance.FileApi.getDownloadUrl → presigned URL
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `rpt_export_task`;
-CREATE TABLE `rpt_export_task` (
-  `id`             VARCHAR(32)  NOT NULL COMMENT '导出任务ID',
-  `export_type`    VARCHAR(32)  NOT NULL COMMENT '类型：DYNAMIC_QUERY/FIXED_REPORT/SQL_PROBE 等',
-  `params_json`    TEXT         DEFAULT NULL COMMENT '导出参数 JSON',
-  `status`         VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/RUNNING/SUCCESS/FAILED',
-  `file_key`       VARCHAR(200) DEFAULT NULL COMMENT 'governance.file_object 主键 (FileObjectDTO.id)',
-  `file_size`      BIGINT       DEFAULT NULL COMMENT '文件大小（字节）',
-  `row_count`      INT(11)      DEFAULT NULL COMMENT '导出行数',
-  `expire_at`      DATETIME     DEFAULT NULL COMMENT '文件过期时间',
-  `operator_id`    VARCHAR(32)  NOT NULL COMMENT '操作人员工号',
-  `error_msg`      TEXT         DEFAULT NULL COMMENT '失败原因',
-  `created_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_time`   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+DROP TABLE IF EXISTS `RPT_EXPORT_TASK`;
+CREATE TABLE `RPT_EXPORT_TASK` (
+  `id`             varchar(32) NOT NULL COMMENT '导出任务ID',
+  `export_type`    varchar(32) NOT NULL COMMENT '类型：DYNAMIC_QUERY/TOUCH_SUMMARY/PERF_SUMMARY/CUSTPOOL_SUMMARY',
+  `params_json`    text        DEFAULT NULL COMMENT '导出参数 JSON',
+  `status`         varchar(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/RUNNING/SUCCESS/FAILED/CANCELLED',
+  `file_key`       varchar(200) DEFAULT NULL COMMENT 'governance.file_object.id',
+  `file_size`      bigint      DEFAULT NULL COMMENT '文件大小（字节）',
+  `row_count`      int         DEFAULT NULL COMMENT '导出行数',
+  `expire_at`      datetime    DEFAULT NULL COMMENT '文件过期时间',
+  `operator_id`    varchar(32) NOT NULL COMMENT '操作人员工号',
+  `error_msg`      text        DEFAULT NULL COMMENT '失败原因',
+  `created_time`   datetime    DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_time`   datetime    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_operator` (`operator_id`),
   KEY `idx_status` (`status`),
@@ -138,10 +130,10 @@ CREATE TABLE `rpt_export_task` (
 
 -- ============================================================================
 -- 建表执行顺序：
--- 1) 先建 rpt_saved_query     无外部依赖
--- 2) 再建 sql_probe_history   无外部依赖
--- 3) 再建 rpt_snapshot_task   V1 预留，不启用
--- 4) 最后建 rpt_export_task   V1 M5 启用，与 perf_export_task 同构
+-- 1) 先建 rpt_saved_query（无外部依赖）
+-- 2) 再建 sql_probe_history（无外部依赖）
+-- 3) 再建 rpt_snapshot_task（V1 预留，不启用）
+-- 4) 最后建 rpt_export_task（无外部依赖）
 --
 -- V1 不需要种子数据，相关配置（SQL 探查白名单等）在 docs/schema/seed-v1.sql 第 10 节
 -- ============================================================================

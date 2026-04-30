@@ -31,7 +31,7 @@
         此处只赋业务字段 + sourceBatchId（导入批次追溯）。
     -->
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.CustAllocRelation">
-        INSERT INTO cust_alloc_relation (
+        INSERT INTO CUST_ALLOC_RELATION (
             id, cust_id, alloc_dim, biz_kind, account_no, emp_id, ratio,
             effective_date, end_date, source_batch_id, source_process_date,
             created_by, updated_by
@@ -51,7 +51,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -60,7 +60,7 @@
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         WHERE cust_id = #{custId}
           AND <include refid="EFFECTIVE_CONDITION"/>
           <if test="bizKind != null and bizKind != ''">
@@ -73,7 +73,7 @@
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         WHERE cust_id = #{custId}
           AND <include refid="EFFECTIVE_CONDITION"/>
         ORDER BY biz_kind ASC, emp_id ASC, id ASC
@@ -83,7 +83,7 @@
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             emp_id = #{empId}
             AND <include refid="EFFECTIVE_CONDITION"/>
@@ -114,7 +114,7 @@
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             emp_id = #{empId}
             AND <include refid="EFFECTIVE_CONDITION"/>
@@ -132,7 +132,7 @@
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             <include refid="EFFECTIVE_CONDITION"/>
             AND cust_id IN
@@ -158,7 +158,7 @@
         SELECT
             emp_id AS emp_id,
             COUNT(DISTINCT cust_id) AS cust_count
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             <include refid="EFFECTIVE_CONDITION"/>
             AND emp_id IN
@@ -174,7 +174,7 @@
 
     <select id="countDistinctCustomers" resultType="long">
         SELECT COUNT(DISTINCT cust_id)
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         WHERE emp_id = #{empId}
           AND <include refid="EFFECTIVE_CONDITION"/>
           <if test="bizKind != null and bizKind != ''">
@@ -186,7 +186,7 @@
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             <include refid="EFFECTIVE_CONDITION"/>
             <if test="bizKind != null and bizKind != ''">
@@ -203,7 +203,7 @@
 
     <select id="countCurrentByBiz" resultType="long">
         SELECT COUNT(*)
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             <include refid="EFFECTIVE_CONDITION"/>
             <if test="bizKind != null and bizKind != ''">
@@ -225,7 +225,7 @@
             emp_id AS emp_id,
             biz_kind AS biz_kind,
             SUM(ratio) AS ratio_sum
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         WHERE cust_id = #{custId}
           AND <include refid="EFFECTIVE_CONDITION"/>
         GROUP BY emp_id, biz_kind
@@ -239,7 +239,7 @@
     <select id="selectForExport" resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             effective_date &lt;= #{effectiveDate}
             AND (end_date IS NULL OR end_date &gt;= #{effectiveDate})
@@ -256,7 +256,7 @@
 
     <select id="countForExport" resultType="long">
         SELECT COUNT(*)
-        FROM cust_alloc_relation
+        FROM CUST_ALLOC_RELATION
         <where>
             effective_date &lt;= #{effectiveDate}
             AND (end_date IS NULL OR end_date &gt;= #{effectiveDate})

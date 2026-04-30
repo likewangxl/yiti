@@ -12,14 +12,14 @@
 
 | 序号 | 表名 | 说明 | 主键策略 | 预估数据量 | 写入频度 | 读取频度 |
 |----|-----|-----|--------|----------|--------|--------|
-| 1 | `loan_apply` | 资产投放申请表 | UUID(32) | 5万/年 | 中 | 高 |
-| 2 | `support_request` | 中场支持申请表 | UUID(32) | 20万/年 | 中 | 高 |
+| 1 | `LOAN_APPLY` | 资产投放申请表 | UUID(32) | 5万/年 | 中 | 高 |
+| 2 | `SUPPORT_REQUEST` | 中场支持申请表 | UUID(32) | 20万/年 | 中 | 高 |
 
 **重要说明：**
 
 1. V1 版本 DDL 中**未单独定义** `loan_apply_attachment` 和 `support_dispatch_log` 表：
-   - **附件关联**：统一通过 `system-governance-center` 模块的 `biz_file_rel` 表进行关联，通过 `biz_type='LOAN'/'SUPPORT'` + `biz_id` 匹配；
-   - **派单历史**：通过 `support_request` 表的 `dispatch_emp_id`、`dispatch_time`、`assigned_emp_id` 字段记录当前态，历史态通过 `audit_log`（governance 模块）保留；
+   - **附件关联**：统一通过 `system-governance-center` 模块的 `BIZ_FILE_REL` 表进行关联，通过 `biz_type='LOAN'/'SUPPORT'` + `biz_id` 匹配；
+   - **派单历史**：通过 `SUPPORT_REQUEST` 表的 `dispatch_emp_id`、`dispatch_time`、`assigned_emp_id` 字段记录当前态，历史态通过 `AUDIT_LOG`（governance 模块）保留；
    - **审批历史**：通过 Flowable 内置的 `ACT_HI_TASKINST` / `ACT_HI_VARINST` / `ACT_HI_ACTINST` 表记录，由 `workflow-center` 提供查询 API。
 2. 本模块作为业务申请的**门户层**，物理表只承载"申请主表"核心字段，流程态由 `workflow-center` 管理，附件态由 `system-governance-center` 管理。
 3. 所有表统一遵守 `docs/common-dev-guide.md` 的通用字段规范：`created_by`、`created_time`、`updated_by`、`updated_time`、`deleted`。
@@ -36,8 +36,8 @@
 -- 说明: 资产投放申请主表，承载授信/贷款/押品等投放类业务的申请信息
 -- 创建: 2026-04-10
 -- ==========================================================================
-DROP TABLE IF EXISTS `loan_apply`;
-CREATE TABLE `loan_apply` (
+DROP TABLE IF EXISTS `LOAN_APPLY`;
+CREATE TABLE `LOAN_APPLY` (
   `id`                        VARCHAR(32)    NOT NULL COMMENT '申请ID(UUID)',
   `apply_no`                  VARCHAR(100)   DEFAULT NULL COMMENT '申请编号(LA+yyyyMMdd+6位序号)',
   `cust_id`                   VARCHAR(32)    NOT NULL COMMENT '客户ID,逻辑外键→cust_master.id',
@@ -65,7 +65,7 @@ CREATE TABLE `loan_apply` (
   KEY `idx_business_key` (`business_key`),
   KEY `idx_created_time` (`created_time`),
   KEY `idx_process_inst` (`process_instance_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资产投放申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='资产投放申请表';
 ```
 
 ### 2.2 support_request — 中场支持申请表
@@ -78,8 +78,8 @@ CREATE TABLE `loan_apply` (
 --      支持双视图: SUPPORT(发起侧)与SUPPORT_DEPT(承接侧)
 -- 创建: 2026-04-10
 -- ==========================================================================
-DROP TABLE IF EXISTS `support_request`;
-CREATE TABLE `support_request` (
+DROP TABLE IF EXISTS `SUPPORT_REQUEST`;
+CREATE TABLE `SUPPORT_REQUEST` (
   `id`                        VARCHAR(32)    NOT NULL COMMENT '申请ID(UUID)',
   `request_no`                VARCHAR(100)   DEFAULT NULL COMMENT '申请编号(SR+yyyyMMdd+6位序号)',
   `submit_group_id`           VARCHAR(64)    DEFAULT NULL COMMENT '同批提交分组ID(多产品拆单时同组共享)',
@@ -112,7 +112,7 @@ CREATE TABLE `support_request` (
   KEY `idx_owner_org` (`owner_org_id`),
   KEY `idx_created_time` (`created_time`),
   KEY `idx_product` (`product_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='中场支持申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='中场支持申请表';
 ```
 
 ---
@@ -458,13 +458,13 @@ public BatchSubmitResp batchSubmit(BatchSubmitCmd cmd) {
 
 ## 8. 附件关联
 
-本模块不单独设计附件表，统一通过 `system-governance-center` 模块的 `biz_file_rel` 表进行关联。
+本模块不单独设计附件表，统一通过 `system-governance-center` 模块的 `BIZ_FILE_REL` 表进行关联。
 
 ### 8.1 biz_file_rel 表结构（governance 模块）
 
 ```sql
 -- 简化摘要,完整定义见 docs/modules/system-governance-center/05-表结构DDL.md
-CREATE TABLE `biz_file_rel` (
+CREATE TABLE `BIZ_FILE_REL` (
   `id`              VARCHAR(32)  NOT NULL,
   `biz_type`        VARCHAR(32)  NOT NULL COMMENT '业务类型:LOAN/SUPPORT/...',
   `biz_id`          VARCHAR(32)  NOT NULL COMMENT '业务ID:loan_apply.id / support_request.id',
@@ -513,7 +513,7 @@ fileApi.unbindFile("LOAN", loanApplyId, fileObjectId);
 
 ### 9.1 设计理念
 
-同一物理表 `support_request` 承载两种完全不同的业务视角：
+同一物理表 `SUPPORT_REQUEST` 承载两种完全不同的业务视角：
 
 | 视角 | BizType | 业务含义 | 对应用户角色 |
 |------|---------|--------|-----------|
@@ -581,8 +581,8 @@ PARTITION BY RANGE (TO_DAYS(created_time)) (
 
 | 数据 | 在线保留 | 归档存储 | 归档方式 |
 |-----|--------|---------|---------|
-| `loan_apply`（COMPLETED/REJECTED） | 12 个月 | 归档库/对象存储 | 定期 `INSERT INTO ... SELECT` 后 `DELETE` |
-| `support_request`（COMPLETED/REJECTED） | 12 个月 | 同上 | 同上 |
+| `LOAN_APPLY`（COMPLETED/REJECTED） | 12 个月 | 归档库/对象存储 | 定期 `INSERT INTO ... SELECT` 后 `DELETE` |
+| `SUPPORT_REQUEST`（COMPLETED/REJECTED） | 12 个月 | 同上 | 同上 |
 | `DRAFT`/`IN_APPROVAL`/`IN_PROGRESS` | 永不归档 | - | 终态前必须在线 |
 | 审计日志 | 3 年 | governance 模块负责 | 按月归档 |
 | Flowable 流程历史 | 同业务 | workflow-center 负责 | 由 `ACT_HI_*` 表独立归档 |
@@ -638,8 +638,8 @@ business-application-center (loan_apply / support_request)  ← 本模块
 | 字段 | 建议变更 | 原因 |
 |------|--------|------|
 | `loan_apply.credit_amount` | 拆分币种字段 `currency_code` | 支持多币种 |
-| `loan_apply` | 新增 `rate_type` / `rate` 字段 | 利率字段 |
-| `support_request` | 新增 `sla_hours` / `due_time` | SLA 管控 |
+| `LOAN_APPLY` | 新增 `rate_type` / `rate` 字段 | 利率字段 |
+| `SUPPORT_REQUEST` | 新增 `sla_hours` / `due_time` | SLA 管控 |
 | `support_request.submit_group_id` | 独立 `support_submit_group` 汇总表 | 优化聚合查询 |
 
 ### 12.2 字段长度规范

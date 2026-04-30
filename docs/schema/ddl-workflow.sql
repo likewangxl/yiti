@@ -11,7 +11,7 @@ SET NAMES utf8mb4;
 -- -------------------------------------------
 -- 1. 业务流程映射表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `biz_process_map` (
+CREATE TABLE IF NOT EXISTS `BIZ_PROCESS_MAP` (
   `id` varchar(32) NOT NULL COMMENT '映射ID',
   `business_key` varchar(100) NOT NULL COMMENT '业务键（格式：BIZ_TYPE:{id}）',
   `biz_type` varchar(50) NOT NULL COMMENT '业务类型',
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS `biz_process_map` (
 -- -------------------------------------------
 -- 2. 流程节点候选人配置表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `wf_node_candidate_conf` (
+CREATE TABLE IF NOT EXISTS `WF_NODE_CANDIDATE_CONF` (
   `id` varchar(32) NOT NULL COMMENT '配置ID',
   `process_definition_key` varchar(100) NOT NULL COMMENT '流程定义KEY',
   `node_key` varchar(100) NOT NULL COMMENT '节点KEY',
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS `wf_node_candidate_conf` (
 -- -------------------------------------------
 -- 3. 流程节点表单配置表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `wf_node_form_conf` (
+CREATE TABLE IF NOT EXISTS `WF_NODE_FORM_CONF` (
   `id` varchar(32) NOT NULL COMMENT '配置ID',
   `process_definition_key` varchar(100) NOT NULL COMMENT '流程定义KEY',
   `node_key` varchar(100) NOT NULL COMMENT '节点KEY',
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS `wf_node_form_conf` (
 -- -------------------------------------------
 -- 4. 流程超时规则表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `wf_timeout_rule` (
+CREATE TABLE IF NOT EXISTS `WF_TIMEOUT_RULE` (
   `id` varchar(32) NOT NULL COMMENT '规则ID',
   `process_definition_key` varchar(100) NOT NULL COMMENT '流程定义KEY',
   `node_key` varchar(100) NOT NULL COMMENT '节点KEY',

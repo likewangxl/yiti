@@ -9,10 +9,10 @@
 
 | 表名 | 说明 | 主键策略 | 所属 |
 |---|---|---|---|
-| `biz_process_map` | 业务流程映射表 — 业务实体与 Flowable 流程实例的桥接 | UUID(32位字符串) | 自有 |
-| `wf_node_candidate_conf` | 节点候选人配置 — 定义每个流程节点的候选处理角色/机构/用户 | UUID(32位字符串) | 自有 |
-| `wf_node_form_conf` | 节点表单配置 — 定义每个流程节点的审批表单字段权限 | UUID(32位字符串) | 自有 |
-| `wf_timeout_rule` | 超时规则 — 定义每个流程节点的黄灯/红灯超时阈值 | UUID(32位字符串) | 自有 |
+| `BIZ_PROCESS_MAP` | 业务流程映射表 — 业务实体与 Flowable 流程实例的桥接 | UUID(32位字符串) | 自有 |
+| `WF_NODE_CANDIDATE_CONF` | 节点候选人配置 — 定义每个流程节点的候选处理角色/机构/用户 | UUID(32位字符串) | 自有 |
+| `WF_NODE_FORM_CONF` | 节点表单配置 — 定义每个流程节点的审批表单字段权限 | UUID(32位字符串) | 自有 |
+| `WF_TIMEOUT_RULE` | 超时规则 — 定义每个流程节点的黄灯/红灯超时阈值 | UUID(32位字符串) | 自有 |
 | `ACT_GE_*` | Flowable 通用表（属性/字节数组） | 引擎管理 | Flowable |
 | `ACT_RE_*` | Flowable 仓库表（流程定义/部署） | 引擎管理 | Flowable |
 | `ACT_RU_*` | Flowable 运行时表（执行/任务/变量/事件订阅等） | 引擎管理 | Flowable |
@@ -27,7 +27,7 @@
 **用途**：桥接业务实体与 Flowable 流程实例，实现"一个业务实体最多对应一个运行中流程"的约束。所有业务模块通过 `WorkflowApi` 发起流程时自动写入此表。
 
 ```sql
-CREATE TABLE IF NOT EXISTS `biz_process_map` (
+CREATE TABLE IF NOT EXISTS `BIZ_PROCESS_MAP` (
   `id`                    varchar(32)   NOT NULL                          COMMENT '映射ID',
   `business_key`          varchar(100)  NOT NULL                          COMMENT '业务键（格式：BIZ_TYPE:{id}）',
   `biz_type`              varchar(50)   NOT NULL                          COMMENT '业务类型',
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS `biz_process_map` (
 **用途**：配置每个流程定义的每个用户任务节点的候选处理人规则。支持按角色(ROLE)、机构(ORG)、指定用户(USER)三种方式配置。Flowable `TaskListener` 在任务创建时读取此配置，动态设置 `candidateGroups` 或 `candidateUsers`。
 
 ```sql
-CREATE TABLE IF NOT EXISTS `wf_node_candidate_conf` (
+CREATE TABLE IF NOT EXISTS `WF_NODE_CANDIDATE_CONF` (
   `id`                      varchar(32)   NOT NULL                          COMMENT '配置ID',
   `process_definition_key`  varchar(100)  NOT NULL                          COMMENT '流程定义KEY',
   `node_key`                varchar(100)  NOT NULL                          COMMENT '节点KEY',
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS `wf_node_candidate_conf` (
 **用途**：配置每个流程节点的审批表单字段定义、可编辑字段和必填字段。前端根据此配置动态渲染审批表单，后端根据此配置校验提交数据。
 
 ```sql
-CREATE TABLE IF NOT EXISTS `wf_node_form_conf` (
+CREATE TABLE IF NOT EXISTS `WF_NODE_FORM_CONF` (
   `id`                      varchar(32)   NOT NULL                          COMMENT '配置ID',
   `process_definition_key`  varchar(100)  NOT NULL                          COMMENT '流程定义KEY',
   `node_key`                varchar(100)  NOT NULL                          COMMENT '节点KEY',
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS `wf_node_form_conf` (
 **用途**：配置每个流程节点的超时阈值。定时任务每30分钟扫描运行中的任务，根据此配置计算红绿灯状态（绿灯=正常、黄灯=预警、红灯=超时）。超时计算使用工作日小时（需调用 `CalendarApi`）。
 
 ```sql
-CREATE TABLE IF NOT EXISTS `wf_timeout_rule` (
+CREATE TABLE IF NOT EXISTS `WF_TIMEOUT_RULE` (
   `id`                      varchar(32)   NOT NULL                          COMMENT '规则ID',
   `process_definition_key`  varchar(100)  NOT NULL                          COMMENT '流程定义KEY',
   `node_key`                varchar(100)  NOT NULL                          COMMENT '节点KEY',
@@ -279,15 +279,15 @@ CREATE TABLE IF NOT EXISTS `wf_timeout_rule` (
 
 | 表 | 字段 | 关联表 | 关联字段 | 关联类型 | 说明 |
 |---|---|---|---|---|---|
-| `biz_process_map` | `start_user` | `PT_USER` | `USER_ID` | N:1 | 发起人，流程发起时写入 |
-| `biz_process_map` | `current_assignee` | `PT_USER` | `USER_ID` | N:1 | 当前处理人，签收(Claim)时写入 |
-| `biz_process_map` | `process_instance_id` | `ACT_RU_EXECUTION` / `ACT_HI_PROCINST` | `PROC_INST_ID_` | 1:1 | 流程实例关联，运行时查 `ACT_RU_*`，历史查 `ACT_HI_*` |
-| `biz_process_map` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
-| `biz_process_map` | `biz_type` + `biz_id` | 各业务主表 | 主键 | N:1 | 业务实体关联（如线索表、资产投放表等） |
-| `wf_node_candidate_conf` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
-| `wf_node_candidate_conf` | `candidate_value`(ROLE) | `PT_ROLE` | `ROLE_CODE` | N:M(JSON) | 角色编码关联 |
-| `wf_node_form_conf` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
-| `wf_timeout_rule` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
+| `BIZ_PROCESS_MAP` | `start_user` | `PT_USER` | `USER_ID` | N:1 | 发起人，流程发起时写入 |
+| `BIZ_PROCESS_MAP` | `current_assignee` | `PT_USER` | `USER_ID` | N:1 | 当前处理人，签收(Claim)时写入 |
+| `BIZ_PROCESS_MAP` | `process_instance_id` | `ACT_RU_EXECUTION` / `ACT_HI_PROCINST` | `PROC_INST_ID_` | 1:1 | 流程实例关联，运行时查 `ACT_RU_*`，历史查 `ACT_HI_*` |
+| `BIZ_PROCESS_MAP` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
+| `BIZ_PROCESS_MAP` | `biz_type` + `biz_id` | 各业务主表 | 主键 | N:1 | 业务实体关联（如线索表、资产投放表等） |
+| `WF_NODE_CANDIDATE_CONF` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
+| `WF_NODE_CANDIDATE_CONF` | `candidate_value`(ROLE) | `PT_ROLE` | `ROLE_CODE` | N:M(JSON) | 角色编码关联 |
+| `WF_NODE_FORM_CONF` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
+| `WF_TIMEOUT_RULE` | `process_definition_key` | `ACT_RE_PROCDEF` | `KEY_` | N:1 | 流程定义关联 |
 
 ---
 
@@ -374,8 +374,8 @@ Flowable 7.0.1 嵌入式部署时，由引擎自动创建和管理以下表。**
 
 **设计决策**：
 - V1 版本未加 `created_by` / `updated_by` 字段，原因是自有表的写入主要通过系统内部（流程引擎回调、定时任务），非直接的用户操作
-- 配置类表（`wf_node_candidate_conf`、`wf_node_form_conf`、`wf_timeout_rule`）的变更通过审计日志系统追踪操作人
-- `biz_process_map` 的 `start_user` 字段兼具审计作用
+- 配置类表（`WF_NODE_CANDIDATE_CONF`、`WF_NODE_FORM_CONF`、`WF_TIMEOUT_RULE`）的变更通过审计日志系统追踪操作人
+- `BIZ_PROCESS_MAP` 的 `start_user` 字段兼具审计作用
 
 ---
 

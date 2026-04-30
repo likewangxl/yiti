@@ -1,7 +1,7 @@
 # 客户营销中心 — 表结构 DDL
 
 > 本文档定义客户营销中心模块 (customer-marketing-center) 所有数据表的完整 DDL、索引、逻辑外键、取值枚举及关键设计。
-> 所有表使用 InnoDB 引擎 + utf8mb4_unicode_ci 字符集（与 docs/schema/ddl-customer.sql 一致）。
+> 所有表使用 InnoDB 引擎 + utf8mb4_general_ci 字符集（与 docs/schema/ddl-customer.sql 一致）。
 > 主键策略：所有表使用 `varchar(32)` 存储 UUID（去掉连字符），应用层生成。
 > 时间字段：所有时间字段统一使用 `datetime(0)`。
 > 逻辑删除：使用 `deleted tinyint(1)` 字段，0=未删除，1=已删除。
@@ -12,14 +12,14 @@
 
 | 序号 | 表名 | 说明 | 主键策略 | 所属域 |
 |---|---|---|---|---|
-| 1 | `cust_tag` | 客户标签表 | UUID(id) | 标签管理 |
-| 2 | `cust_tag_rel` | 客户-标签关联表 | UUID(id) | 标签管理 |
-| 3 | `cust_lead` | 客户线索表（含版本管理） | UUID(id) | 线索管理 |
-| 4 | `lead_import_batch` | 线索导入批次表 | UUID(id) | 线索管理 |
-| 5 | `cust_master` | 客户主档表 | UUID(id) | 客户主档 |
-| 6 | `cust_claim` | 客户认领关系表 | UUID(id) | 客户池/认领 |
-| 7 | `touch_task` | 触达任务表 | UUID(id) | 触达管理 |
-| 8 | `touch_log` | 触达日志表 | UUID(id) | 触达管理 |
+| 1 | `CUST_TAG` | 客户标签表 | UUID(id) | 标签管理 |
+| 2 | `CUST_TAG_REL` | 客户-标签关联表 | UUID(id) | 标签管理 |
+| 3 | `CUST_LEAD` | 客户线索表（含版本管理） | UUID(id) | 线索管理 |
+| 4 | `LEAD_IMPORT_BATCH` | 线索导入批次表 | UUID(id) | 线索管理 |
+| 5 | `CUST_MASTER` | 客户主档表 | UUID(id) | 客户主档 |
+| 6 | `CUST_CLAIM` | 客户认领关系表 | UUID(id) | 客户池/认领 |
+| 7 | `TOUCH_TASK` | 触达任务表 | UUID(id) | 触达管理 |
+| 8 | `TOUCH_LOG` | 触达日志表 | UUID(id) | 触达管理 |
 
 ---
 
@@ -28,7 +28,7 @@
 ### 2.1 cust_tag — 客户标签表
 
 ```sql
-CREATE TABLE `cust_tag` (
+CREATE TABLE `CUST_TAG` (
   `id`             VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `tag_name`       VARCHAR(100) NOT NULL COMMENT '标签名称（唯一）',
   `tag_code`       VARCHAR(100) NOT NULL COMMENT '标签编码（唯一，业务使用）',
@@ -45,13 +45,13 @@ CREATE TABLE `cust_tag` (
   UNIQUE KEY `uk_tag_code` (`tag_code`),
   UNIQUE KEY `uk_tag_name` (`tag_name`),
   KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户标签表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户标签表';
 ```
 
 ### 2.2 cust_tag_rel — 客户-标签关联表
 
 ```sql
-CREATE TABLE `cust_tag_rel` (
+CREATE TABLE `CUST_TAG_REL` (
   `id`             VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `cust_id`        VARCHAR(32)  NOT NULL COMMENT '客户ID（关联 cust_master.id）',
   `tag_id`         VARCHAR(32)  NOT NULL COMMENT '标签ID（关联 cust_tag.id）',
@@ -60,13 +60,13 @@ CREATE TABLE `cust_tag_rel` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_cust_tag` (`cust_id`, `tag_id`),
   KEY `idx_tag_id` (`tag_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户-标签关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户-标签关联表';
 ```
 
 ### 2.3 cust_lead — 客户线索表
 
 ```sql
-CREATE TABLE `cust_lead` (
+CREATE TABLE `CUST_LEAD` (
   `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `lead_no`                 VARCHAR(100) NOT NULL COMMENT '线索编号（对外展示，唯一）',
   `lead_op`                 VARCHAR(20)  NOT NULL DEFAULT 'CREATE' COMMENT '线索操作类型：CREATE-新建/UPDATE-修改/DELETE-删除',
@@ -114,13 +114,13 @@ CREATE TABLE `cust_lead` (
   KEY `idx_source_cust` (`source_cust_id`),
   KEY `idx_lead_op_status` (`lead_op`, `lead_status`),
   KEY `idx_is_latest` (`is_latest`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户线索表（含版本管理）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户线索表（含版本管理）';
 ```
 
 ### 2.4 lead_import_batch — 线索导入批次表
 
 ```sql
-CREATE TABLE `lead_import_batch` (
+CREATE TABLE `LEAD_IMPORT_BATCH` (
   `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `batch_no`                VARCHAR(64)  NOT NULL COMMENT '批次号（对外展示，唯一）',
   `source_file_name`        VARCHAR(255) DEFAULT NULL COMMENT '源文件名',
@@ -142,13 +142,13 @@ CREATE TABLE `lead_import_batch` (
   KEY `idx_owner_org` (`owner_org_id`),
   KEY `idx_status` (`status`),
   KEY `idx_created_time` (`created_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='线索导入批次表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='线索导入批次表';
 ```
 
 ### 2.5 cust_master — 客户主档表
 
 ```sql
-CREATE TABLE `cust_master` (
+CREATE TABLE `CUST_MASTER` (
   `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `cust_no`                 VARCHAR(100) NOT NULL COMMENT '客户编号（对外展示，唯一）',
   `cust_name`               VARCHAR(200) NOT NULL COMMENT '客户名称（唯一）',
@@ -177,13 +177,13 @@ CREATE TABLE `cust_master` (
   KEY `idx_lead_id` (`lead_id`),
   KEY `idx_unified_credit_code` (`unified_credit_code`),
   KEY `idx_deleted` (`deleted`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户主档表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户主档表';
 ```
 
 ### 2.6 cust_claim — 客户认领关系表
 
 ```sql
-CREATE TABLE `cust_claim` (
+CREATE TABLE `CUST_CLAIM` (
   `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `cust_id`                 VARCHAR(32)  NOT NULL COMMENT '客户ID（关联 cust_master.id）',
   `org_id`                  VARCHAR(50)  NOT NULL COMMENT '认领机构代码',
@@ -202,13 +202,13 @@ CREATE TABLE `cust_claim` (
   KEY `idx_claimed_by` (`claimed_by`),
   KEY `idx_maintainer` (`maintainer_emp_id`),
   KEY `idx_status` (`claim_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客户认领关系表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='客户认领关系表';
 ```
 
 ### 2.7 touch_task — 触达任务表
 
 ```sql
-CREATE TABLE `touch_task` (
+CREATE TABLE `TOUCH_TASK` (
   `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `task_no`                 VARCHAR(100) NOT NULL COMMENT '任务编号（对外展示，唯一）',
   `cust_id`                 VARCHAR(32)  NOT NULL COMMENT '客户ID（关联 cust_master.id）',
@@ -233,13 +233,13 @@ CREATE TABLE `touch_task` (
   KEY `idx_status` (`task_status`),
   KEY `idx_business_key` (`business_key`),
   KEY `idx_assignee_status` (`assignee_emp_id`, `task_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='触达任务表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='触达任务表';
 ```
 
 ### 2.8 touch_log — 触达日志表
 
 ```sql
-CREATE TABLE `touch_log` (
+CREATE TABLE `TOUCH_LOG` (
   `id`                      VARCHAR(32)  NOT NULL COMMENT '主键ID（UUID）',
   `touch_task_id`           VARCHAR(32)  NOT NULL COMMENT '触达任务ID（关联 touch_task.id）',
   `log_time`                DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '触达时间（业务时间）',
@@ -254,7 +254,7 @@ CREATE TABLE `touch_log` (
   KEY `idx_task_id` (`touch_task_id`),
   KEY `idx_created_by` (`created_by`),
   KEY `idx_task_log_time` (`touch_task_id`, `log_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='触达日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='触达日志表';
 ```
 
 ---
@@ -555,7 +555,7 @@ WHERE lead_op IN ('UPDATE','DELETE')
 
 ### 7.1 核心规则
 
-- **CUSTOMER 业务类型的数据范围一律按 `cust_claim` 有效认领关系判定**
+- **CUSTOMER 业务类型的数据范围一律按 `CUST_CLAIM` 有效认领关系判定**
 - `cust_master.owner_org_id` **仅作来源属性，不承载可见性**
 - 跨机构全量历史访问通过**独立只读接口**（GET /api/customers/{id}/history），单独授权与审计
 

@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.bizapp.mapper.SupportRequestMapper">
 
-    <!-- support_request 全列查询片段 -->
+    <!-- SUPPORT_REQUEST 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, request_no, submit_group_id, cust_id, source_touch_task_id, product_id,
         support_dept_id, other_demand, dispatch_emp_id, dispatch_time, assigned_emp_id,
@@ -14,7 +14,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE id = #{id}
           AND deleted = 0
     </select>
@@ -23,7 +23,7 @@
     <select id="selectForUpdate" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE id = #{id}
           AND deleted = 0
         FOR UPDATE
@@ -33,7 +33,7 @@
     <select id="selectByBusinessKey" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE business_key = #{businessKey}
           AND deleted = 0
         LIMIT 1
@@ -43,7 +43,7 @@
     <select id="selectPageForSupport" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND request_no LIKE CONCAT('%', #{keyword}, '%')
@@ -60,7 +60,7 @@
 
     <!-- 发起侧分页总数 -->
     <select id="countPageForSupport" resultType="long">
-        SELECT COUNT(*) FROM support_request
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND request_no LIKE CONCAT('%', #{keyword}, '%')
@@ -77,7 +77,7 @@
     <select id="selectPageForDept" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE deleted = 0
         <if test="supportDeptId != null and supportDeptId != ''">
             AND support_dept_id = #{supportDeptId}
@@ -94,7 +94,7 @@
 
     <!-- 承接侧分页总数 -->
     <select id="countPageForDept" resultType="long">
-        SELECT COUNT(*) FROM support_request
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
         WHERE deleted = 0
         <if test="supportDeptId != null and supportDeptId != ''">
             AND support_dept_id = #{supportDeptId}
@@ -109,7 +109,7 @@
 
     <!-- 插入新申请 -->
     <insert id="insert" parameterType="com.bank.branch.platform.bizapp.entity.SupportRequest">
-        INSERT INTO support_request (
+        INSERT INTO SUPPORT_REQUEST (
             id, request_no, submit_group_id, cust_id, source_touch_task_id, product_id,
             support_dept_id, other_demand, dispatch_emp_id, dispatch_time, assigned_emp_id,
             status, business_key, process_instance_id, owner_org_id, created_by,
@@ -124,7 +124,7 @@
 
     <!-- 按 id 更新申请（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.bizapp.entity.SupportRequest">
-        UPDATE support_request
+        UPDATE SUPPORT_REQUEST
         <set>
             <if test="requestNo != null">request_no = #{requestNo},</if>
             <if test="submitGroupId != null">submit_group_id = #{submitGroupId},</if>
@@ -149,7 +149,7 @@
 
     <!-- 更新申请状态（状态流转专用） -->
     <update id="updateStatusById">
-        UPDATE support_request
+        UPDATE SUPPORT_REQUEST
         SET status = #{status},
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -159,7 +159,7 @@
 
     <!-- 条件更新状态（Listener 幂等写入专用）：仅当 status = expectedStatus 时才更新，防止多实例重复处理 -->
     <update id="conditionalUpdateStatus">
-        UPDATE support_request
+        UPDATE SUPPORT_REQUEST
         SET status       = #{targetStatus},
             updated_by   = #{updatedBy},
             updated_time = NOW()
@@ -172,7 +172,7 @@
     <select id="selectByCustId" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE cust_id = #{custId}
           AND deleted = 0
         ORDER BY created_time DESC
@@ -182,7 +182,7 @@
     <select id="selectBySubmitGroupId" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE submit_group_id = #{submitGroupId}
           AND deleted = 0
         ORDER BY created_time ASC
@@ -192,7 +192,7 @@
     <select id="selectByIds" resultType="com.bank.branch.platform.bizapp.entity.SupportRequest">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM support_request
+        FROM SUPPORT_REQUEST
         WHERE id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">
             #{id}
@@ -202,7 +202,7 @@
 
     <!-- 统计同客户同产品正在进行的申请数（防重复申请校验） -->
     <select id="countActiveByCustomerAndProduct" resultType="long">
-        SELECT COUNT(*) FROM support_request
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
         WHERE cust_id = #{custId}
           AND product_id = #{productId}
           AND status IN ('IN_APPROVAL', 'IN_PROGRESS')
@@ -211,7 +211,7 @@
 
     <!-- 按创建人+时间范围统计已完成数量（用于绩效统计） -->
     <select id="countCompletedByCreator" resultType="long">
-        SELECT COUNT(*) FROM support_request
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
         WHERE created_by = #{empId}
           AND status = 'COMPLETED'
           AND deleted = 0
@@ -220,7 +220,7 @@
 
     <!-- 按承接人+时间范围统计已完成数量（用于绩效统计） -->
     <select id="countCompletedByAssignee" resultType="long">
-        SELECT COUNT(*) FROM support_request
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
         WHERE assigned_emp_id = #{empId}
           AND status = 'COMPLETED'
           AND deleted = 0
@@ -229,7 +229,7 @@
 
     <!-- 统计客户正在运行的支持申请数（并行申请限流校验） -->
     <select id="countRunningByCustomer" resultType="long">
-        SELECT COUNT(*) FROM support_request
+        SELECT COUNT(*) FROM SUPPORT_REQUEST
         WHERE cust_id = #{custId}
           AND status IN ('IN_APPROVAL', 'IN_PROGRESS')
           AND deleted = 0

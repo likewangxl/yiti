@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.performance.mapper.SysControlMapper">
 
-    <!-- sys_control 全列片段（V1.0.3：12 字段，含 Task B3 新增的 5 个字段） -->
+    <!-- SYS_CONTROL 全列片段（V1.0.3：12 字段，含 Task B3 新增的 5 个字段） -->
     <sql id="BASE_COLUMNS">
         id, scope_dim, latest_data_date, current_version, is_valid, created_time, updated_time,
         remark, updated_by, publish_source, publish_by, publish_time
@@ -10,7 +10,7 @@
 
     <!-- 插入（含 V1.0.3 新增字段） -->
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.SysControl">
-        INSERT INTO sys_control (
+        INSERT INTO SYS_CONTROL (
             id, scope_dim, latest_data_date, current_version, is_valid, created_time, updated_time,
             remark, updated_by, publish_source, publish_by, publish_time
         ) VALUES (
@@ -23,7 +23,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.SysControl">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_control
+        FROM SYS_CONTROL
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -32,7 +32,7 @@
     <select id="selectByScopeAndValid" resultType="com.bank.branch.platform.performance.entity.SysControl">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_control
+        FROM SYS_CONTROL
         WHERE scope_dim = #{scopeDim} AND is_valid = 1
         LIMIT 1
     </select>
@@ -41,7 +41,7 @@
     <select id="listByScope" resultType="com.bank.branch.platform.performance.entity.SysControl">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_control
+        FROM SYS_CONTROL
         WHERE scope_dim = #{scopeDim}
         ORDER BY latest_data_date DESC
         LIMIT #{limit}
@@ -49,14 +49,14 @@
 
     <!-- 更新 is_valid -->
     <update id="updateIsValid">
-        UPDATE sys_control
+        UPDATE SYS_CONTROL
         SET is_valid = #{isValid}, updated_time = NOW()
         WHERE id = #{id}
     </update>
 
     <!-- 选择性更新（V1.0.3：含发布元数据字段） -->
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.SysControl">
-        UPDATE sys_control
+        UPDATE SYS_CONTROL
         <set>
             <if test="isValid != null">is_valid = #{isValid},</if>
             <if test="remark != null">remark = #{remark},</if>
@@ -73,7 +73,7 @@
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.SysControl">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_control
+        FROM SYS_CONTROL
         <where>
             <if test="scopeDim != null and scopeDim != ''">
                 AND scope_dim = #{scopeDim}
@@ -89,7 +89,7 @@
     <!-- 条件计数 -->
     <select id="countByCondition" resultType="long">
         SELECT COUNT(*)
-        FROM sys_control
+        FROM SYS_CONTROL
         <where>
             <if test="scopeDim != null and scopeDim != ''">
                 AND scope_dim = #{scopeDim}
@@ -103,7 +103,7 @@
     <!-- V1.2 Task Q5.1：distinct scope_dim 列表（历史版本清理驱动） -->
     <select id="selectScopeDims" resultType="string">
         SELECT DISTINCT scope_dim
-        FROM sys_control
+        FROM SYS_CONTROL
     </select>
 
     <!--
@@ -113,7 +113,7 @@
     -->
     <select id="selectOldVersionIdsForCleanup" resultType="string">
         SELECT id
-        FROM sys_control
+        FROM SYS_CONTROL
         WHERE scope_dim = #{scopeDim}
           AND is_valid = 0
         ORDER BY publish_time DESC, id DESC
@@ -126,7 +126,7 @@
         ids 为空时 SQL 构造为 "WHERE id IN ()" 会报语法错，Service 层须前置判空.
     -->
     <delete id="deleteByIds">
-        DELETE FROM sys_control
+        DELETE FROM SYS_CONTROL
         WHERE id IN
         <foreach item="id" collection="ids" open="(" separator="," close=")">
             #{id}

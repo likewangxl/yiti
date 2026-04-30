@@ -7,7 +7,7 @@
   说明：
   - processDefinitionKey=perf_target_adjust_v1；V1.2 Q3 目标修正申请启动此流程.
   - 流程结束后 V1.2 Q3 的 TargetAdjustCompletedListener 订阅 ProcessCompletedEvent，
-    审批通过则更新 perf_target_value 表对应的 (planId, subject, metricCode) 目标值，
+    审批通过则更新 PERF_TARGET_VALUE 表对应的 (planId, subject, metricCode) 目标值，
     并发布 TargetAdjustmentApprovedEvent（可能触发历史回算）.
   - 初期最简两级审批；V1.2 Q3 实现时根据目标金额阈值可能拆分为单级/二级/三级审批.
 -->

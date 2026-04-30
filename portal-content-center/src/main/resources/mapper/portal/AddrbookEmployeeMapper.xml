@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper">
 
-    <!-- addrbook_employee 结果映射（responsible_product_ids 需要 TypeHandler） -->
+    <!-- ADDRBOOK_EMPLOYEE 结果映射（responsible_product_ids 需要 TypeHandler） -->
     <resultMap id="AddrbookEmployeeMap" type="com.bank.branch.platform.portal.entity.AddrbookEmployee">
         <id column="emp_id" property="empId"/>
         <result column="emp_name" property="empName"/>
@@ -21,7 +21,7 @@
         <result column="deleted" property="deleted"/>
     </resultMap>
 
-    <!-- addrbook_employee 全列查询片段 -->
+    <!-- ADDRBOOK_EMPLOYEE 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         emp_id, emp_name, mobile, email, org_code, org_name,
         position, self_desc, responsible_product_ids, status,
@@ -30,7 +30,7 @@
 
     <!-- 插入新员工 -->
     <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.AddrbookEmployee">
-        INSERT INTO addrbook_employee (
+        INSERT INTO ADDRBOOK_EMPLOYEE (
             emp_id, emp_name, mobile, email, org_code, org_name,
             position, self_desc, responsible_product_ids, status,
             maintainer_emp_id, created_time, updated_time, deleted
@@ -47,7 +47,7 @@
     <select id="selectByEmpId" resultMap="AddrbookEmployeeMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM addrbook_employee
+        FROM ADDRBOOK_EMPLOYEE
         WHERE emp_id = #{empId}
           AND deleted = 0
     </select>
@@ -56,7 +56,7 @@
     <select id="listByEmpIds" resultMap="AddrbookEmployeeMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM addrbook_employee
+        FROM ADDRBOOK_EMPLOYEE
         WHERE emp_id IN
         <foreach collection="empIds" item="empId" open="(" separator="," close=")">
             #{empId}
@@ -66,14 +66,14 @@
 
     <!-- D.6 前置引用检查：统计仍把 productId 列为负责产品的员工数 -->
     <select id="countEmployeesReferringProduct" resultType="int">
-        SELECT COUNT(*) FROM addrbook_employee
+        SELECT COUNT(*) FROM ADDRBOOK_EMPLOYEE
         WHERE deleted = 0
           AND responsible_product_ids LIKE CONCAT('%"', #{productId}, '"%')
     </select>
 
     <!-- D.4/D.5/D.6 双向同步：更新单个员工的 responsible_product_ids（乐观锁） -->
     <update id="updateResponsibleProductsWithOptimisticLock">
-        UPDATE addrbook_employee
+        UPDATE ADDRBOOK_EMPLOYEE
         SET responsible_product_ids = #{responsibleProductIds, typeHandler=com.bank.branch.platform.portal.typehandler.JsonStringListTypeHandler},
             updated_time = NOW()
         WHERE emp_id = #{empId}
@@ -83,7 +83,7 @@
 
     <!-- D.4/D.5 校验 empId 是否存在且 ACTIVE -->
     <select id="countActiveByEmpIds" resultType="int">
-        SELECT COUNT(*) FROM addrbook_employee
+        SELECT COUNT(*) FROM ADDRBOOK_EMPLOYEE
         WHERE emp_id IN
         <foreach collection="empIds" item="empId" open="(" separator="," close=")">
             #{empId}
@@ -96,7 +96,7 @@
     <select id="selectPage" resultMap="AddrbookEmployeeMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM addrbook_employee
+        FROM ADDRBOOK_EMPLOYEE
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
@@ -114,7 +114,7 @@
 
     <!-- 统计分页查询的总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM addrbook_employee
+        SELECT COUNT(*) FROM ADDRBOOK_EMPLOYEE
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
@@ -132,7 +132,7 @@
     <select id="searchByKeyword" resultMap="AddrbookEmployeeMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM addrbook_employee
+        FROM ADDRBOOK_EMPLOYEE
         WHERE deleted = 0
           AND status = 'ACTIVE'
           AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
@@ -143,7 +143,7 @@
 
     <!-- 动态更新可编辑字段 -->
     <update id="updateFields" parameterType="com.bank.branch.platform.portal.entity.AddrbookEmployee">
-        UPDATE addrbook_employee
+        UPDATE ADDRBOOK_EMPLOYEE
         <set>
             <if test="empName != null">emp_name = #{empName},</if>
             <if test="mobile != null">mobile = #{mobile},</if>
@@ -165,7 +165,7 @@
     <select id="selectByOrgCode" resultMap="AddrbookEmployeeMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM addrbook_employee
+        FROM ADDRBOOK_EMPLOYEE
         WHERE org_code = #{orgCode}
           AND deleted = 0
         ORDER BY emp_id ASC

@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.DocInfoMapper">
 
-    <!-- doc_info 全列查询片段 -->
+    <!-- DOC_INFO 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, doc_title, doc_category, file_object_id, status,
         created_by, created_time, updated_by, updated_time
@@ -10,7 +10,7 @@
 
     <!-- 插入新文档 -->
     <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.DocInfo">
-        INSERT INTO doc_info (
+        INSERT INTO DOC_INFO (
             id, doc_title, doc_category, file_object_id, status,
             created_by, created_time, updated_by, updated_time
         ) VALUES (
@@ -23,13 +23,13 @@
     <select id="selectById" resultType="com.bank.branch.platform.portal.entity.DocInfo">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM doc_info
+        FROM DOC_INFO
         WHERE id = #{id}
     </select>
 
     <!-- 按部分字段更新，动态 SET -->
     <update id="updateById" parameterType="com.bank.branch.platform.portal.entity.DocInfo">
-        UPDATE doc_info
+        UPDATE DOC_INFO
         <set>
             <if test="docTitle != null">doc_title = #{docTitle},</if>
             <if test="docCategory != null">doc_category = #{docCategory},</if>
@@ -43,7 +43,7 @@
 
     <!-- 逻辑停用（将 status 设为 DISABLED） -->
     <update id="softDeleteById">
-        UPDATE doc_info
+        UPDATE DOC_INFO
         SET status = 'DISABLED',
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -55,7 +55,7 @@
     <select id="selectPage" resultType="com.bank.branch.platform.portal.entity.DocInfo">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM doc_info
+        FROM DOC_INFO
         <where>
             <if test="keyword != null and keyword != ''">
                 AND doc_title LIKE CONCAT('%', #{keyword}, '%')
@@ -73,7 +73,7 @@
 
     <!-- 统计分页查询的总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM doc_info
+        SELECT COUNT(*) FROM DOC_INFO
         <where>
             <if test="keyword != null and keyword != ''">
                 AND doc_title LIKE CONCAT('%', #{keyword}, '%')
@@ -91,7 +91,7 @@
     <select id="listActiveByCategory" resultType="com.bank.branch.platform.portal.entity.DocInfo">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM doc_info
+        FROM DOC_INFO
         WHERE status = 'ACTIVE'
           AND doc_category = #{category}
         ORDER BY created_time DESC

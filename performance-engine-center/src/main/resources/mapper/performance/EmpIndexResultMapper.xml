@@ -16,7 +16,7 @@
       首次插入建立一行，后续对不同 slot 的调用会命中 UK 并 UPDATE 同一行的对应列。
     -->
     <insert id="insertSlotValue">
-        INSERT INTO emp_index_result
+        INSERT INTO EMP_INDEX_RESULT
             (emp_id, data_date, version, val_${slot})
         VALUES
             (#{empId}, #{dataDate}, #{version}, #{value})
@@ -26,7 +26,7 @@
 
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
         SELECT val_${slot}
-        FROM emp_index_result
+        FROM EMP_INDEX_RESULT
         WHERE emp_id = #{empId}
           AND data_date = #{dataDate}
           AND version = #{version}
@@ -37,7 +37,7 @@
             resultType="com.bank.branch.platform.performance.mapper.EmpMetricValueRow">
         SELECT emp_id AS empId,
                val_${slot} AS metricValue
-        FROM emp_index_result
+        FROM EMP_INDEX_RESULT
         WHERE data_date = #{dataDate}
           AND version = #{version}
           AND emp_id IN
@@ -47,7 +47,7 @@
     </select>
 
     <insert id="insertRow" parameterType="com.bank.branch.platform.performance.entity.EmpIndexResult">
-        INSERT INTO emp_index_result
+        INSERT INTO EMP_INDEX_RESULT
             (emp_id, data_date, version)
         VALUES
             (#{empId}, #{dataDate}, #{version})
@@ -56,7 +56,7 @@
     <!-- V1.1 P4.4：KPI 批量计算前置——获取某日/版本下的员工工号全集 -->
     <select id="selectDistinctEmpIds" resultType="java.lang.String">
         SELECT DISTINCT emp_id
-        FROM emp_index_result
+        FROM EMP_INDEX_RESULT
         WHERE data_date = #{dataDate}
           AND version = #{version}
         ORDER BY emp_id
@@ -73,7 +73,7 @@
             resultType="com.bank.branch.platform.performance.mapper.EmpDateValueRow">
         SELECT data_date AS dataDate,
                val_${slot} AS metricValue
-        FROM emp_index_result
+        FROM EMP_INDEX_RESULT
         WHERE emp_id = #{empId}
           AND version = #{version}
           AND data_date IN

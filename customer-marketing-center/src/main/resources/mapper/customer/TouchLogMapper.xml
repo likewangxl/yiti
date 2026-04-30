@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.TouchLogMapper">
 
-    <!-- touch_log 全列查询片段 -->
+    <!-- TOUCH_LOG 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, touch_task_id, log_time, client_uuid, log_content,
         photo_urls, owner_org_id, created_by, created_time
@@ -12,7 +12,7 @@
     <select id="selectByTaskId" resultType="com.bank.branch.platform.customer.entity.TouchLog">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_log
+        FROM TOUCH_LOG
         WHERE touch_task_id = #{touchTaskId}
         ORDER BY log_time DESC
     </select>
@@ -21,7 +21,7 @@
     <select id="selectByTaskIdAndClientUuid" resultType="com.bank.branch.platform.customer.entity.TouchLog">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_log
+        FROM TOUCH_LOG
         WHERE touch_task_id = #{touchTaskId}
           AND client_uuid = #{clientUuid}
         LIMIT 1
@@ -29,12 +29,12 @@
 
     <!-- 统计某个触达任务的日志总数（用于判断是否为首次日志，驱动 PENDING→IN_PROGRESS 状态转移） -->
     <select id="countByTaskId" resultType="long">
-        SELECT COUNT(*) FROM touch_log WHERE touch_task_id = #{taskId}
+        SELECT COUNT(*) FROM TOUCH_LOG WHERE touch_task_id = #{taskId}
     </select>
 
     <!-- 插入新触达日志 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchLog">
-        INSERT INTO touch_log (
+        INSERT INTO TOUCH_LOG (
             id, touch_task_id, log_time, client_uuid, log_content,
             photo_urls, owner_org_id, created_by, created_time
         ) VALUES (

@@ -15,7 +15,7 @@
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.KpiResult"
             useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO kpi_result (
+        INSERT INTO KPI_RESULT (
             emp_id, cycle_type, cycle_date, as_of_date, data_version,
             kpi_total_score, detail_json
         ) VALUES (
@@ -27,7 +27,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM kpi_result
+        FROM KPI_RESULT
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -35,7 +35,7 @@
     <select id="selectByEmpCycle" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM kpi_result
+        FROM KPI_RESULT
         WHERE emp_id = #{empId}
           AND cycle_type = #{cycleType}
         ORDER BY as_of_date DESC, id DESC
@@ -45,7 +45,7 @@
     <select id="selectLatestByEmpCycle" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM kpi_result
+        FROM KPI_RESULT
         WHERE emp_id = #{empId}
           AND cycle_type = #{cycleType}
         ORDER BY as_of_date DESC, id DESC
@@ -56,7 +56,7 @@
     <select id="selectByEmpCycleRange" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM kpi_result
+        FROM KPI_RESULT
         WHERE emp_id = #{empId}
           AND cycle_type = #{cycleType}
           AND as_of_date BETWEEN #{from} AND #{to}
@@ -71,7 +71,7 @@
     <select id="selectByEmpCycleRangeWithScope" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM kpi_result
+        FROM KPI_RESULT
         <where>
             emp_id = #{empId}
             AND cycle_type = #{cycleType}
@@ -87,7 +87,7 @@
     <select id="selectForExport" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM kpi_result
+        FROM KPI_RESULT
         WHERE cycle_type = #{cycleType}
           AND cycle_date = #{cycleDate}
           AND as_of_date = #{asOfDate}
@@ -101,7 +101,7 @@
     <!-- V1.2 Q6.2：计数，用于导出前行数预检 -->
     <select id="countForExport" resultType="long">
         SELECT COUNT(*)
-        FROM kpi_result
+        FROM KPI_RESULT
         WHERE cycle_type = #{cycleType}
           AND cycle_date = #{cycleDate}
           AND as_of_date = #{asOfDate}

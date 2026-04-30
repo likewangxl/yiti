@@ -9,7 +9,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
-        INSERT INTO perf_alloc_adjust_apply (
+        INSERT INTO PERF_ALLOC_ADJUST_APPLY (
             <include refid="BASE_COLUMNS"/>
         ) VALUES (
             #{id}, #{applyNo}, #{custId}, #{allocDim}, #{bizKind}, #{accountNo}, #{status},
@@ -21,7 +21,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_alloc_adjust_apply
+        FROM PERF_ALLOC_ADJUST_APPLY
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -29,7 +29,7 @@
     <select id="selectByApplyNo" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_alloc_adjust_apply
+        FROM PERF_ALLOC_ADJUST_APPLY
         WHERE apply_no = #{applyNo}
         LIMIT 1
     </select>
@@ -37,7 +37,7 @@
     <select id="selectByBusinessKey" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_alloc_adjust_apply
+        FROM PERF_ALLOC_ADJUST_APPLY
         WHERE business_key = #{businessKey}
         LIMIT 1
     </select>
@@ -48,7 +48,7 @@
       APPROVED 路径更新状态时清空流程 ID。
     -->
     <update id="updateStatus">
-        UPDATE perf_alloc_adjust_apply
+        UPDATE PERF_ALLOC_ADJUST_APPLY
         <set>
             status = #{status},
             <if test="processInstanceId != null">
@@ -82,7 +82,7 @@
     <select id="selectByConditions" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_alloc_adjust_apply
+        FROM PERF_ALLOC_ADJUST_APPLY
         <include refid="CONDITION_WHERE"/>
         ORDER BY created_time DESC, id DESC
         LIMIT #{limit} OFFSET #{offset}
@@ -90,7 +90,7 @@
 
     <select id="countByConditions" resultType="long">
         SELECT COUNT(*)
-        FROM perf_alloc_adjust_apply
+        FROM PERF_ALLOC_ADJUST_APPLY
         <include refid="CONDITION_WHERE"/>
     </select>
 
@@ -125,7 +125,7 @@
     <select id="selectByConditionsWithScope" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_alloc_adjust_apply
+        FROM PERF_ALLOC_ADJUST_APPLY
         <include refid="CONDITION_WHERE_WITH_SCOPE"/>
         ORDER BY created_time DESC, id DESC
         LIMIT #{limit} OFFSET #{offset}
@@ -133,7 +133,7 @@
 
     <select id="countByConditionsWithScope" resultType="long">
         SELECT COUNT(*)
-        FROM perf_alloc_adjust_apply
+        FROM PERF_ALLOC_ADJUST_APPLY
         <include refid="CONDITION_WHERE_WITH_SCOPE"/>
     </select>
 

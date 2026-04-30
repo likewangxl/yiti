@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.CustTagMapper">
 
-    <!-- cust_tag 全列查询片段 -->
+    <!-- CUST_TAG 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, tag_name, tag_code, tag_category, tag_priority, description,
         status, created_by, created_time, updated_by, updated_time, deleted
@@ -12,7 +12,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag
+        FROM CUST_TAG
         WHERE id = #{id}
           AND deleted = 0
     </select>
@@ -21,7 +21,7 @@
     <select id="selectByTagName" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag
+        FROM CUST_TAG
         WHERE tag_name = #{tagName}
           AND deleted = 0
         LIMIT 1
@@ -31,7 +31,7 @@
     <select id="selectByTagCode" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag
+        FROM CUST_TAG
         WHERE tag_code = #{tagCode}
           AND deleted = 0
         LIMIT 1
@@ -41,7 +41,7 @@
     <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag
+        FROM CUST_TAG
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (tag_name LIKE CONCAT('%', #{keyword}, '%')
@@ -56,7 +56,7 @@
 
     <!-- 统计分页查询总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM cust_tag
+        SELECT COUNT(*) FROM CUST_TAG
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (tag_name LIKE CONCAT('%', #{keyword}, '%')
@@ -71,7 +71,7 @@
     <select id="selectEnabled" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag
+        FROM CUST_TAG
         WHERE status = 'ACTIVE'
           AND deleted = 0
         ORDER BY tag_priority DESC, tag_name
@@ -81,7 +81,7 @@
     <select id="selectEnabledSorted" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag
+        FROM CUST_TAG
         WHERE status = 'ACTIVE'
           AND deleted = 0
         ORDER BY tag_priority ASC, tag_name ASC
@@ -91,7 +91,7 @@
     <select id="selectEnabledByIds" resultType="com.bank.branch.platform.customer.entity.CustTag">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag
+        FROM CUST_TAG
         WHERE deleted = 0
           AND status = 'ACTIVE'
           AND id IN
@@ -102,14 +102,14 @@
 
     <!-- 按标签名称统计数量（含逻辑删除过滤），用于唯一性校验 -->
     <select id="countByTagName" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM cust_tag
+        SELECT COUNT(*) FROM CUST_TAG
         WHERE tag_name = #{tagName}
           AND deleted = 0
     </select>
 
     <!-- 插入新标签 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustTag">
-        INSERT INTO cust_tag (
+        INSERT INTO CUST_TAG (
             id, tag_name, tag_code, tag_category, tag_priority, description,
             status, created_by, created_time, updated_by, updated_time, deleted
         ) VALUES (
@@ -120,7 +120,7 @@
 
     <!-- 按 id 更新标签（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustTag">
-        UPDATE cust_tag
+        UPDATE CUST_TAG
         <set>
             <if test="tagName != null">tag_name = #{tagName},</if>
             <if test="tagCode != null">tag_code = #{tagCode},</if>

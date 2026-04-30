@@ -9,7 +9,7 @@
 <mapper namespace="com.bank.branch.platform.performance.mapper.CustIndexResultMapper">
 
     <insert id="insertSlotValue">
-        INSERT INTO cust_index_result
+        INSERT INTO CUST_INDEX_RESULT
             (cust_id, data_date, version, val_${slot})
         VALUES
             (#{custId}, #{dataDate}, #{version}, #{value})
@@ -19,7 +19,7 @@
 
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
         SELECT val_${slot}
-        FROM cust_index_result
+        FROM CUST_INDEX_RESULT
         WHERE cust_id = #{custId}
           AND data_date = #{dataDate}
           AND version = #{version}
@@ -30,7 +30,7 @@
             resultType="com.bank.branch.platform.performance.mapper.CustMetricValueRow">
         SELECT cust_id AS custId,
                val_${slot} AS metricValue
-        FROM cust_index_result
+        FROM CUST_INDEX_RESULT
         WHERE data_date = #{dataDate}
           AND version = #{version}
           AND cust_id IN
@@ -40,7 +40,7 @@
     </select>
 
     <insert id="insertRow" parameterType="com.bank.branch.platform.performance.entity.CustIndexResult">
-        INSERT INTO cust_index_result
+        INSERT INTO CUST_INDEX_RESULT
             (cust_id, data_date, version)
         VALUES
             (#{custId}, #{dataDate}, #{version})

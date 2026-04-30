@@ -7,7 +7,7 @@
   说明：
   - processDefinitionKey=perf_alloc_adjust_corp_v1；performance-engine-center V1.2 Q2 启动此流程.
   - 任务候选人通过 ${taskAssignmentListener}（来自 workflow-center）解析，
-    候选人配置存储在 wf_node_candidate_conf 表（V1.2 Q2 阶段通过 workflow-seed-v1.sql 补入）.
+    候选人配置存储在 WF_NODE_CANDIDATE_CONF 表（V1.2 Q2 阶段通过 workflow-seed-v1.sql 补入）.
   - 流程结束时 ${processCompletedListener} 发布 ProcessCompletedEvent，
     V1.2 Q2 的 AllocAdjustCompletedListener 订阅后落地分配变更.
   - V1.2 Q2 实现分配关系调整审批时才会填充完整的条件分支 / 驳回路径 / 网关.

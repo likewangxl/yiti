@@ -9,7 +9,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
-        INSERT INTO perf_target_plan (
+        INSERT INTO PERF_TARGET_PLAN (
             <include refid="BASE_COLUMNS"/>
         ) VALUES (
             #{id}, #{planCode}, #{planName}, #{kpiSchemeId}, #{targetDim}, #{targetCycle},
@@ -19,7 +19,7 @@
     </insert>
 
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
-        UPDATE perf_target_plan
+        UPDATE PERF_TARGET_PLAN
         <set>
             <if test="planCode != null">plan_code = #{planCode},</if>
             <if test="planName != null">plan_name = #{planName},</if>
@@ -39,7 +39,7 @@
     </update>
 
     <update id="updateStatusById">
-        UPDATE perf_target_plan
+        UPDATE PERF_TARGET_PLAN
         SET status = #{status},
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -49,7 +49,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_plan
+        FROM PERF_TARGET_PLAN
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -57,7 +57,7 @@
     <select id="selectByPlanCode" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_plan
+        FROM PERF_TARGET_PLAN
         WHERE plan_code = #{planCode}
         LIMIT 1
     </select>
@@ -65,7 +65,7 @@
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_plan
+        FROM PERF_TARGET_PLAN
         <where>
             <if test="kpiSchemeId != null and kpiSchemeId != ''">
                 AND kpi_scheme_id = #{kpiSchemeId}
@@ -86,7 +86,7 @@
 
     <select id="countByCondition" resultType="long">
         SELECT COUNT(*)
-        FROM perf_target_plan
+        FROM PERF_TARGET_PLAN
         <where>
             <if test="kpiSchemeId != null and kpiSchemeId != ''">
                 AND kpi_scheme_id = #{kpiSchemeId}
@@ -104,7 +104,7 @@
     </select>
 
     <delete id="deleteById">
-        DELETE FROM perf_target_plan
+        DELETE FROM PERF_TARGET_PLAN
         WHERE id = #{id}
     </delete>
 
@@ -115,7 +115,7 @@
     <select id="selectByConditionWithScope" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_plan
+        FROM PERF_TARGET_PLAN
         <where>
             <if test="kpiSchemeId != null and kpiSchemeId != ''">
                 AND kpi_scheme_id = #{kpiSchemeId}
@@ -139,7 +139,7 @@
 
     <select id="countByConditionWithScope" resultType="long">
         SELECT COUNT(*)
-        FROM perf_target_plan
+        FROM PERF_TARGET_PLAN
         <where>
             <if test="kpiSchemeId != null and kpiSchemeId != ''">
                 AND kpi_scheme_id = #{kpiSchemeId}

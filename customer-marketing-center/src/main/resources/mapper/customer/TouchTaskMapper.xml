@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.TouchTaskMapper">
 
-    <!-- touch_task 全列查询片段 -->
+    <!-- TOUCH_TASK 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
         plan_finish_time, warning_time, sla_status, sla_warning, business_key,
@@ -13,7 +13,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE id = #{id}
     </select>
 
@@ -21,7 +21,7 @@
     <select id="selectByTaskNo" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE task_no = #{taskNo}
         LIMIT 1
     </select>
@@ -30,7 +30,7 @@
     <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         <where>
             <if test="keyword != null and keyword != ''">
                 AND task_no LIKE CONCAT('%', #{keyword}, '%')
@@ -48,7 +48,7 @@
 
     <!-- 统计分页查询总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM touch_task
+        SELECT COUNT(*) FROM TOUCH_TASK
         <where>
             <if test="keyword != null and keyword != ''">
                 AND task_no LIKE CONCAT('%', #{keyword}, '%')
@@ -66,7 +66,7 @@
     <select id="selectPendingForSlaRefresh" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE task_status = 'PENDING'
           AND plan_finish_time IS NOT NULL
         ORDER BY plan_finish_time
@@ -74,7 +74,7 @@
 
     <!-- 插入新触达任务 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
-        INSERT INTO touch_task (
+        INSERT INTO TOUCH_TASK (
             id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
             plan_finish_time, warning_time, sla_status, sla_warning, business_key,
             success_time, cancel_time, created_time, updated_time
@@ -87,7 +87,7 @@
 
     <!-- 按 id 更新触达任务（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
-        UPDATE touch_task
+        UPDATE TOUCH_TASK
         <set>
             <if test="taskNo != null">task_no = #{taskNo},</if>
             <if test="custId != null">cust_id = #{custId},</if>
@@ -109,7 +109,7 @@
 
     <!-- 统计指定客户的在途触达任务数量（PENDING 或 IN_PROGRESS 状态） -->
     <select id="countActiveByCust" resultType="long">
-        SELECT COUNT(*) FROM touch_task
+        SELECT COUNT(*) FROM TOUCH_TASK
         WHERE cust_id = #{custId}
           AND task_status IN ('PENDING', 'IN_PROGRESS')
     </select>
@@ -118,7 +118,7 @@
     <select id="selectActiveByCust" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE cust_id = #{custId}
           AND task_status IN ('PENDING', 'IN_PROGRESS')
         ORDER BY created_time DESC
@@ -130,7 +130,7 @@
     <select id="selectByBusinessKey" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE business_key = #{businessKey}
         LIMIT 1
     </select>
@@ -139,7 +139,7 @@
     <select id="selectByEmp" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE assignee_emp_id = #{empId}
         ORDER BY created_time DESC
     </select>
@@ -148,7 +148,7 @@
     <select id="selectByEmpAndStatus" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE assignee_emp_id = #{empId}
           AND task_status = #{status}
         ORDER BY created_time DESC
@@ -156,7 +156,7 @@
 
     <!-- 统计指定员工在状态列表内的任务数量 -->
     <select id="countByEmpAndStatuses" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM touch_task
+        SELECT COUNT(*) FROM TOUCH_TASK
         WHERE assignee_emp_id = #{empId}
           AND task_status IN
           <foreach collection="statuses" item="s" open="(" separator="," close=")">
@@ -168,7 +168,7 @@
     <select id="selectByCustOrderByCreatedDesc" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE cust_id = #{custId}
         ORDER BY created_time DESC
     </select>
@@ -177,7 +177,7 @@
     <select id="selectByCustAndOrg" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE cust_id = #{custId}
           AND org_id = #{orgCode}
         ORDER BY created_time DESC
@@ -185,7 +185,7 @@
 
     <!-- 统计客户在机构已完成首次触达的次数 -->
     <select id="countFirstTouchSuccess" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM touch_task
+        SELECT COUNT(*) FROM TOUCH_TASK
         WHERE task_type = 'FIRST_TOUCH'
           AND task_status = 'SUCCESS'
           AND cust_id = #{custId}
@@ -194,7 +194,7 @@
 
     <!-- 统计机构在时间范围内的触达任务数量（status 为 null 则统计全部） -->
     <select id="countByOrgBetween" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM touch_task
+        SELECT COUNT(*) FROM TOUCH_TASK
         <where>
             AND org_id = #{orgCode}
             AND DATE(created_time) &gt;= #{startDate}
@@ -207,7 +207,7 @@
 
     <!-- 统计机构在时间范围内 SLA 预警的触达任务数量 -->
     <select id="countSlaWarningByOrgBetween" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM touch_task
+        SELECT COUNT(*) FROM TOUCH_TASK
         WHERE org_id = #{orgCode}
           AND DATE(created_time) &gt;= #{startDate}
           AND DATE(created_time) &lt;= #{endDate}
@@ -227,7 +227,7 @@
                     ELSE NULL
                 END
             )
-        FROM touch_task
+        FROM TOUCH_TASK
         WHERE org_id = #{orgCode}
           AND DATE(created_time) &gt;= #{startDate}
           AND DATE(created_time) &lt;= #{endDate}
@@ -239,7 +239,7 @@
     <select id="selectAdminPage" resultType="com.bank.branch.platform.customer.entity.TouchTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM touch_task
+        FROM TOUCH_TASK
         <where>
             <if test="keyword != null and keyword != ''">
                 AND task_no LIKE CONCAT('%', #{keyword}, '%')
@@ -260,7 +260,7 @@
 
     <!-- 管理后台统计分页总记录数 -->
     <select id="countAdminPage" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM touch_task
+        SELECT COUNT(*) FROM TOUCH_TASK
         <where>
             <if test="keyword != null and keyword != ''">
                 AND task_no LIKE CONCAT('%', #{keyword}, '%')

@@ -12,7 +12,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfExportTask">
-        INSERT INTO perf_export_task (
+        INSERT INTO PERF_EXPORT_TASK (
             id, export_type, params_json, status, file_key, file_size, row_count,
             expire_at, operator_id, error_msg
         ) VALUES (
@@ -24,19 +24,19 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfExportTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_export_task
+        FROM PERF_EXPORT_TASK
         WHERE id = #{id}
         LIMIT 1
     </select>
 
     <update id="updateStatus">
-        UPDATE perf_export_task
+        UPDATE PERF_EXPORT_TASK
         SET status = #{newStatus}
         WHERE id = #{id}
     </update>
 
     <update id="updateSuccess">
-        UPDATE perf_export_task
+        UPDATE PERF_EXPORT_TASK
         <set>
             status = 'SUCCESS',
             <if test="fileKey != null">file_key = #{fileKey},</if>
@@ -48,7 +48,7 @@
     </update>
 
     <update id="updateFailed">
-        UPDATE perf_export_task
+        UPDATE PERF_EXPORT_TASK
         <set>
             status = 'FAILED',
             <if test="errorMsg != null">error_msg = #{errorMsg},</if>
@@ -59,7 +59,7 @@
     <select id="selectByOperator" resultType="com.bank.branch.platform.performance.entity.PerfExportTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_export_task
+        FROM PERF_EXPORT_TASK
         WHERE operator_id = #{operatorId}
         ORDER BY created_time DESC, id DESC
         LIMIT #{limit}

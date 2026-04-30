@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.CustTagRelMapper">
 
-    <!-- cust_tag_rel 全列查询片段 -->
+    <!-- CUST_TAG_REL 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, cust_id, tag_id, created_by, created_time
     </sql>
@@ -11,7 +11,7 @@
     <select id="selectByCustId" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag_rel
+        FROM CUST_TAG_REL
         WHERE cust_id = #{custId}
         ORDER BY created_time DESC
     </select>
@@ -20,7 +20,7 @@
     <select id="selectByTagId" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag_rel
+        FROM CUST_TAG_REL
         WHERE tag_id = #{tagId}
         ORDER BY created_time DESC
     </select>
@@ -29,7 +29,7 @@
     <select id="selectByCustIdAndTagId" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag_rel
+        FROM CUST_TAG_REL
         WHERE cust_id = #{custId}
           AND tag_id = #{tagId}
         LIMIT 1
@@ -37,20 +37,20 @@
 
     <!-- 物理删除指定客户与指定标签的关联记录 -->
     <delete id="deleteByCustIdAndTagId">
-        DELETE FROM cust_tag_rel
+        DELETE FROM CUST_TAG_REL
         WHERE cust_id = #{custId}
           AND tag_id = #{tagId}
     </delete>
 
     <!-- 物理删除某标签的所有客户关联 -->
     <delete id="deleteByTagId">
-        DELETE FROM cust_tag_rel
+        DELETE FROM CUST_TAG_REL
         WHERE tag_id = #{tagId}
     </delete>
 
     <!-- 插入单条关联记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustTagRel">
-        INSERT INTO cust_tag_rel (
+        INSERT INTO CUST_TAG_REL (
             id, cust_id, tag_id, created_by, created_time
         ) VALUES (
             #{id}, #{custId}, #{tagId}, #{createdBy}, #{createdTime}
@@ -60,7 +60,7 @@
     <!-- 查询某客户的所有标签 ID 列表 -->
     <select id="selectTagIdsByCustId" resultType="java.lang.String">
         SELECT tag_id
-        FROM cust_tag_rel
+        FROM CUST_TAG_REL
         WHERE cust_id = #{custId}
     </select>
 
@@ -68,7 +68,7 @@
     <select id="selectByCustIds" resultType="com.bank.branch.platform.customer.entity.CustTagRel">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_tag_rel
+        FROM CUST_TAG_REL
         WHERE cust_id IN
         <foreach collection="custIds" item="custId" open="(" separator="," close=")">
             #{custId}
@@ -78,13 +78,13 @@
     <!-- 查询打了某标签的所有客户 ID 列表 -->
     <select id="selectCustIdsByTagId" resultType="java.lang.String">
         SELECT cust_id
-        FROM cust_tag_rel
+        FROM CUST_TAG_REL
         WHERE tag_id = #{tagId}
     </select>
 
     <!-- 批量插入关联记录 -->
     <insert id="insertBatch">
-        INSERT INTO cust_tag_rel (
+        INSERT INTO CUST_TAG_REL (
             id, cust_id, tag_id, created_by, created_time
         ) VALUES
         <foreach collection="list" item="item" separator=",">

@@ -3,7 +3,7 @@
     线索审批流程定义（lead_approve_v1）
     Phase 2 (b) E2E IT 用，简化为 2 节点闭环：
         startEvent → branch_manager_approve userTask → exclusiveGateway → endEvent (approved/rejected)
-    候选人通过 wf_node_candidate_conf（process_definition_key=lead_approve_v1, node_key=branch_manager_approve）注入。
+    候选人通过 WF_NODE_CANDIDATE_CONF（process_definition_key=lead_approve_v1, node_key=branch_manager_approve）注入。
     审批通过条件：${approved}；驳回条件：${!approved}（与 loan_approve_v1 一致）。
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"

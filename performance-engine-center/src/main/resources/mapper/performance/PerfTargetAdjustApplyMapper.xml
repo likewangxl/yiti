@@ -9,7 +9,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
-        INSERT INTO perf_target_adjust_apply (
+        INSERT INTO PERF_TARGET_ADJUST_APPLY (
             <include refid="BASE_COLUMNS"/>
         ) VALUES (
             #{id}, #{planId}, #{subjectType}, #{subjectId}, #{cycleKey}, #{status},
@@ -21,7 +21,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_adjust_apply
+        FROM PERF_TARGET_ADJUST_APPLY
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -29,7 +29,7 @@
     <select id="selectByBusinessKey" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_adjust_apply
+        FROM PERF_TARGET_ADJUST_APPLY
         WHERE business_key = #{businessKey}
         LIMIT 1
     </select>
@@ -40,7 +40,7 @@
       APPROVED 路径更新状态时清空流程 ID。
     -->
     <update id="updateStatus">
-        UPDATE perf_target_adjust_apply
+        UPDATE PERF_TARGET_ADJUST_APPLY
         <set>
             status = #{status},
             <if test="processInstanceId != null">
@@ -77,7 +77,7 @@
     <select id="selectByConditions" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_adjust_apply
+        FROM PERF_TARGET_ADJUST_APPLY
         <include refid="CONDITION_WHERE"/>
         ORDER BY created_time DESC, id DESC
         LIMIT #{limit} OFFSET #{offset}
@@ -85,7 +85,7 @@
 
     <select id="countByConditions" resultType="long">
         SELECT COUNT(*)
-        FROM perf_target_adjust_apply
+        FROM PERF_TARGET_ADJUST_APPLY
         <include refid="CONDITION_WHERE"/>
     </select>
 
@@ -123,7 +123,7 @@
     <select id="selectByConditionsWithScope" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_adjust_apply
+        FROM PERF_TARGET_ADJUST_APPLY
         <include refid="CONDITION_WHERE_WITH_SCOPE"/>
         ORDER BY created_time DESC, id DESC
         LIMIT #{limit} OFFSET #{offset}
@@ -131,7 +131,7 @@
 
     <select id="countByConditionsWithScope" resultType="long">
         SELECT COUNT(*)
-        FROM perf_target_adjust_apply
+        FROM PERF_TARGET_ADJUST_APPLY
         <include refid="CONDITION_WHERE_WITH_SCOPE"/>
     </select>
 

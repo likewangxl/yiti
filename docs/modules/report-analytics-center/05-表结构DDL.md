@@ -19,9 +19,9 @@
 
 - 本模块只有 **3 张自有表**，除此之外**全部通过 Api 调用其他模块获取数据**；
 - 所有 `rpt_*` 前缀的表为报表模块专属，不允许其它模块直接读写；
-- `sql_probe_history` 没有 `rpt_` 前缀是因为它属于"系统级探查日志"而非"业务报表数据"，但在报表模块内部管理；
+- `SQL_PROBE_HISTORY` 没有 `rpt_` 前缀是因为它属于"系统级探查日志"而非"业务报表数据"，但在报表模块内部管理；
 - V1 不维护任何业务汇总快照表（如日/月汇总），所有数据通过 `MetricApi` 实时获取；
-- V1 不使用 `rpt_snapshot_task`，仅保留表结构以便 V2 扩展。
+- V1 不使用 `RPT_SNAPSHOT_TASK`，仅保留表结构以便 V2 扩展。
 
 ---
 
@@ -42,7 +42,7 @@
 | updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `rpt_saved_query` (
+CREATE TABLE IF NOT EXISTS `RPT_SAVED_QUERY` (
   `id` varchar(32) NOT NULL COMMENT '方案ID（UUID）',
   `emp_id` varchar(32) NOT NULL COMMENT '员工工号',
   `name` varchar(200) NOT NULL COMMENT '方案名称',
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS `rpt_saved_query` (
 | created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `sql_probe_history` (
+CREATE TABLE IF NOT EXISTS `SQL_PROBE_HISTORY` (
   `id` varchar(32) NOT NULL COMMENT '历史ID（UUID）',
   `emp_id` varchar(32) NOT NULL COMMENT '执行人工号',
   `sql_text` text NOT NULL COMMENT 'SQL语句',
@@ -106,13 +106,13 @@ CREATE TABLE IF NOT EXISTS `sql_probe_history` (
 
 - 表结构服务于两个目的：
   1. 技术运维人员复盘自己的 SQL 探查记录（"我昨天跑过的那条 SQL"）；
-  2. 配合 `audit_log` 做安全审计追溯（事故复盘时查询谁跑过什么 SQL）；
+  2. 配合 `AUDIT_LOG` 做安全审计追溯（事故复盘时查询谁跑过什么 SQL）；
 - `status` 有 3 种取值：SUCCESS（成功）/ FAILED（语法错误或白名单拒绝）/ TIMEOUT（超过 30 秒超时）；
 - `error_msg` 仅在 `status != SUCCESS` 时填充，成功记录保持 NULL；
 - 执行开始时 INSERT 一条 `status=RUNNING` 的占位记录（获取 id），完成时 UPDATE 最终状态，以便失联场景也能查到；
 - `remark` 字段对应接口层的 `reason`，V1 强制要求非空（由应用层保证）；
 - `idx_emp_time` 组合索引用于"我的探查记录"分页查询；
-- 数据保留 3 个月，到期由 `sys_job_conf` 调度清理任务删除。
+- 数据保留 3 个月，到期由 `SYS_JOB_CONF` 调度清理任务删除。
 
 ---
 
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS `sql_probe_history` (
 | updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `rpt_snapshot_task` (
+CREATE TABLE IF NOT EXISTS `RPT_SNAPSHOT_TASK` (
   `id` varchar(32) NOT NULL COMMENT '任务ID',
   `task_name` varchar(200) NOT NULL COMMENT '任务名称',
   `snapshot_type` varchar(50) NOT NULL COMMENT '快照类型',
@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS `rpt_snapshot_task` (
 
 **注意事项**：
 
-- `rpt_saved_query` 不依赖 `performance-engine-center` 的 `metric_def` 表，`metric_codes` 字段存储的是指标编码快照；
+- `RPT_SAVED_QUERY` 不依赖 `performance-engine-center` 的 `metric_def` 表，`metric_codes` 字段存储的是指标编码快照；
 - 若指标元数据发生变更（如 `metric_code` 重命名），查询时通过 `MetricApi.getMetricDef` 返回 `Optional.empty()`，应用层容错处理；
 - `emp_id` 在报表模块内不做跨表 JOIN，所有用户信息通过 `auth-permission-center` 的 `CurrentUserApi` 或 `UserQueryApi` 获取。
 
@@ -249,10 +249,10 @@ CREATE TABLE IF NOT EXISTS `rpt_snapshot_task` (
 | 保留时长 | **3 个月**（约 90 天） |
 | 归档方式 | 物理删除 |
 | 执行频率 | 每日 02:30（避开业务高峰） |
-| 执行机制 | `system-governance-center` 的 `sys_job_conf` 调度 `SqlProbeHistoryCleanJob` |
+| 执行机制 | `system-governance-center` 的 `SYS_JOB_CONF` 调度 `SqlProbeHistoryCleanJob` |
 | SQL 示例 | `DELETE FROM sql_probe_history WHERE created_time < DATE_SUB(NOW(), INTERVAL 3 MONTH) LIMIT 10000;` |
 | 分批控制 | 每次最多删除 10000 行，循环执行直到无待删数据，避免长事务 |
-| 备份要求 | 删除前**不需要**单独备份（已有 `audit_log` 保留原始审计，`sql_probe_history` 仅为便捷查询视图） |
+| 备份要求 | 删除前**不需要**单独备份（已有 `AUDIT_LOG` 保留原始审计，`SQL_PROBE_HISTORY` 仅为便捷查询视图） |
 
 **建议**：如数据量大（月增 > 500 万行），V2 可考虑按月分区：
 
@@ -320,7 +320,7 @@ V1 不写入数据，不存在归档需求。
 **V2 演进方向**：
 
 - 如果 V2 日活 > 1000 或仪表盘并发 > 500 QPS，再考虑引入本地快照表；
-- 引入时以 `rpt_snapshot_task` 为调度入口，`performance.kpi-calc.completed.v1` 事件为触发信号；
+- 引入时以 `RPT_SNAPSHOT_TASK` 为调度入口，`performance.kpi-calc.completed.v1` 事件为触发信号；
 - V2 快照表命名规范：`rpt_snapshot_<dim>_<freq>`，如 `rpt_snapshot_emp_daily`、`rpt_snapshot_org_monthly`。
 
 ---
@@ -331,8 +331,8 @@ V1 不写入数据，不存在归档需求。
 
 | 操作 | 允许的表 | 说明 |
 |:---|:---|:---|
-| 读（SELECT） | `rpt_*` + `sql_probe_history` | 仅自有表 |
-| 写（INSERT/UPDATE/DELETE） | `rpt_saved_query`、`sql_probe_history` | 仅自有表 |
+| 读（SELECT） | `rpt_*` + `SQL_PROBE_HISTORY` | 仅自有表 |
+| 写（INSERT/UPDATE/DELETE） | `RPT_SAVED_QUERY`、`SQL_PROBE_HISTORY` | 仅自有表 |
 | 读（通过 Api） | 任意其他模块 | 必须通过 `*Api` 接口 |
 | 写（任何方式） | 其他模块的表 | **严格禁止** |
 
@@ -360,11 +360,11 @@ List<MetricDefDTO> metrics = metricApi.listMetricsByCode(metricCodes);
 
 | 模块 | 禁止直连的表 | 必须使用的 Api |
 |:---|:---|:---|
-| customer-marketing-center | `cust_master`, `cust_lead`, `touch_record`, `cust_tag` | `CustomerQueryApi`, `LeadQueryApi` |
-| performance-engine-center | `metric_def`, `emp_index_result`, `org_index_result`, `cust_index_result`, `kpi_result`, `sys_control` | `MetricApi`, `KpiApi` |
+| customer-marketing-center | `CUST_MASTER`, `CUST_LEAD`, `touch_record`, `CUST_TAG` | `CustomerQueryApi`, `LeadQueryApi` |
+| performance-engine-center | `metric_def`, `EMP_INDEX_RESULT`, `ORG_INDEX_RESULT`, `CUST_INDEX_RESULT`, `KPI_RESULT`, `SYS_CONTROL` | `MetricApi`, `KpiApi` |
 | auth-permission-center | `PT_USER`, `PT_ROLE`, `PT_USER_ROLE`, `PT_RESOURCE` | `CurrentUserApi`, `UserQueryApi`, `OrgApi` |
-| system-governance-center | `audit_log`, `sys_dict`, `sys_config_kv`, `file_object` | `AuditApi`, `DictApi`, `ConfigApi`, `FileApi` |
-| business-application-center | `loan_apply`, `card_apply`, `account_apply`, `biz_process_map` | （V2 预留）`ApplicationQueryApi` |
+| system-governance-center | `AUDIT_LOG`, `SYS_DICT`, `SYS_CONFIG_KV`, `FILE_OBJECT` | `AuditApi`, `DictApi`, `ConfigApi`, `FileApi` |
+| business-application-center | `LOAN_APPLY`, `card_apply`, `account_apply`, `BIZ_PROCESS_MAP` | （V2 预留）`ApplicationQueryApi` |
 | workflow-center | `ACT_RU_*`, `ACT_HI_*`, `task_ext` | `WorkflowQueryApi`（V2 需要时） |
 
 ### 8.4 SQL 探查白名单的特殊例外
@@ -375,7 +375,7 @@ List<MetricDefDTO> metrics = metricApi.listMetricsByCode(metricCodes);
 - 仅允许 `SELECT` 语句（由 SQL 解析器白名单校验）；
 - 必须在 `sql.probe.schema.whitelist` 配置的表白名单内；
 - 不走 MyBatis，走独立的只读数据源（`dataSourceReadOnly`）；
-- 每次执行必须记录完整 SQL 和 `reason` 到 `sql_probe_history` 与 `audit_log`；
+- 每次执行必须记录完整 SQL 和 `reason` 到 `SQL_PROBE_HISTORY` 与 `AUDIT_LOG`；
 - 详见 `07-审计要求.md` 第 3 节。
 
 ---

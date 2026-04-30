@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.LeadImportBatchMapper">
 
-    <!-- lead_import_batch 全列查询片段 -->
+    <!-- LEAD_IMPORT_BATCH 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, batch_no, source_file_name, file_md5, status,
         total_row_count, error_row_count, error_summary, error_file_object_id,
@@ -14,7 +14,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.customer.entity.LeadImportBatch">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM lead_import_batch
+        FROM LEAD_IMPORT_BATCH
         WHERE id = #{id}
     </select>
 
@@ -22,7 +22,7 @@
     <select id="selectByBatchNo" resultType="com.bank.branch.platform.customer.entity.LeadImportBatch">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM lead_import_batch
+        FROM LEAD_IMPORT_BATCH
         WHERE batch_no = #{batchNo}
         LIMIT 1
     </select>
@@ -31,7 +31,7 @@
     <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.LeadImportBatch">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM lead_import_batch
+        FROM LEAD_IMPORT_BATCH
         <where>
             <if test="keyword != null and keyword != ''">
                 AND (batch_no LIKE CONCAT('%', #{keyword}, '%')
@@ -47,7 +47,7 @@
 
     <!-- 统计分页查询总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM lead_import_batch
+        SELECT COUNT(*) FROM LEAD_IMPORT_BATCH
         <where>
             <if test="keyword != null and keyword != ''">
                 AND (batch_no LIKE CONCAT('%', #{keyword}, '%')
@@ -61,7 +61,7 @@
 
     <!-- 插入新导入批次 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.LeadImportBatch">
-        INSERT INTO lead_import_batch (
+        INSERT INTO LEAD_IMPORT_BATCH (
             id, batch_no, source_file_name, file_md5, status,
             total_row_count, error_row_count, error_summary, error_file_object_id,
             business_key, process_instance_id, owner_org_id,
@@ -76,7 +76,7 @@
 
     <!-- 按 id 更新导入批次（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.LeadImportBatch">
-        UPDATE lead_import_batch
+        UPDATE LEAD_IMPORT_BATCH
         <set>
             <if test="sourceFileName != null">source_file_name = #{sourceFileName},</if>
             <if test="fileMd5 != null">file_md5 = #{fileMd5},</if>

@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.CustMasterMapper">
 
-    <!-- cust_master 全列查询片段 -->
+    <!-- CUST_MASTER 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, cust_no, cust_name, unified_credit_code, contact_person, contact_mobile,
         industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
@@ -14,7 +14,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_master
+        FROM CUST_MASTER
         WHERE id = #{id}
           AND deleted = 0
     </select>
@@ -23,7 +23,7 @@
     <select id="selectByCustNo" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_master
+        FROM CUST_MASTER
         WHERE cust_no = #{custNo}
           AND deleted = 0
         LIMIT 1
@@ -33,7 +33,7 @@
     <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_master
+        FROM CUST_MASTER
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
@@ -48,7 +48,7 @@
 
     <!-- 统计分页查询总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM cust_master
+        SELECT COUNT(*) FROM CUST_MASTER
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (cust_name LIKE CONCAT('%', #{keyword}, '%')
@@ -61,7 +61,7 @@
 
     <!-- 插入新客户主档 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustMaster">
-        INSERT INTO cust_master (
+        INSERT INTO CUST_MASTER (
             id, cust_no, cust_name, unified_credit_code, contact_person, contact_mobile,
             industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
             is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
@@ -76,7 +76,7 @@
 
     <!-- 按 id 更新客户主档（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustMaster">
-        UPDATE cust_master
+        UPDATE CUST_MASTER
         <set>
             <if test="custNo != null">cust_no = #{custNo},</if>
             <if test="custName != null">cust_name = #{custName},</if>
@@ -107,7 +107,7 @@
     <select id="selectByIds" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_master
+        FROM CUST_MASTER
         WHERE deleted = 0
           AND id IN
         <foreach collection="ids" item="id" open="(" close=")" separator=",">
@@ -119,7 +119,7 @@
     <select id="searchByKeyword" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_master
+        FROM CUST_MASTER
         WHERE deleted = 0
           AND (
               cust_name LIKE CONCAT('%', #{keyword}, '%')
@@ -132,7 +132,7 @@
 
     <!-- 按过滤条件统计客户数量 -->
     <select id="countByFilter" resultType="long">
-        SELECT COUNT(*) FROM cust_master
+        SELECT COUNT(*) FROM CUST_MASTER
         <where>
             deleted = 0
             <if test="filter.keyword != null and filter.keyword != ''">

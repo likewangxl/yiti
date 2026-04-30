@@ -20,19 +20,19 @@
     </sql>
 
     <insert id="insert">
-        INSERT INTO sql_probe_history (<include refid="BASE_COLUMNS"/>)
+        INSERT INTO SQL_PROBE_HISTORY (<include refid="BASE_COLUMNS"/>)
         VALUES (#{id}, #{empId}, #{sqlText}, #{remark}, #{rowCount}, #{executionTimeMs},
                 #{status}, #{errorMsg}, #{createdTime})
     </insert>
 
     <select id="selectById" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>
-          FROM sql_probe_history
+          FROM SQL_PROBE_HISTORY
          WHERE id = #{id}
     </select>
 
     <update id="updateTerminalStatus">
-        UPDATE sql_probe_history
+        UPDATE SQL_PROBE_HISTORY
         <set>
             <if test="status != null">status = #{status},</if>
             <if test="rowCount != null">row_count = #{rowCount},</if>
@@ -44,7 +44,7 @@
 
     <select id="selectByEmpIdPaged" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>
-          FROM sql_probe_history
+          FROM SQL_PROBE_HISTORY
          WHERE emp_id = #{empId}
          ORDER BY created_time DESC
          LIMIT #{limit} OFFSET #{offset}
@@ -52,7 +52,7 @@
 
     <select id="countByEmpId" resultType="long">
         SELECT COUNT(1)
-          FROM sql_probe_history
+          FROM SQL_PROBE_HISTORY
          WHERE emp_id = #{empId}
     </select>
 

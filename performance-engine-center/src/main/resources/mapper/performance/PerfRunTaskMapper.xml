@@ -21,7 +21,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfRunTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_run_task
+        FROM PERF_RUN_TASK
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -33,7 +33,7 @@
     <select id="selectByTaskNo" resultType="com.bank.branch.platform.performance.entity.PerfRunTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_run_task
+        FROM PERF_RUN_TASK
         WHERE task_key = #{taskNo}
         LIMIT 1
     </select>
@@ -41,7 +41,7 @@
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfRunTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_run_task
+        FROM PERF_RUN_TASK
         <where>
             <if test="taskType != null and taskType != ''">
                 AND task_type = #{taskType}
@@ -71,7 +71,7 @@
 
     <select id="countByCondition" resultType="long">
         SELECT COUNT(*)
-        FROM perf_run_task
+        FROM PERF_RUN_TASK
         <where>
             <if test="taskType != null and taskType != ''">
                 AND task_type = #{taskType}
@@ -94,7 +94,7 @@
 
     <select id="countByTypeAndDate" resultType="long">
         SELECT COUNT(*)
-        FROM perf_run_task
+        FROM PERF_RUN_TASK
         WHERE task_type = #{taskType}
           AND data_date = #{dataDate}
     </select>
@@ -104,7 +104,7 @@
         注意：created_time 由 DB 默认值 CURRENT_TIMESTAMP 填充；start_time 由代码显式传入。
     -->
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfRunTask">
-        INSERT INTO perf_run_task (
+        INSERT INTO PERF_RUN_TASK (
             id, task_type, task_key, data_date, data_version, params_json,
             status, started_by, start_time, end_time, error_msg, result_preview_json
         ) VALUES (
@@ -120,7 +120,7 @@
         errorMsg 为 null 时清空 error_msg 列（业务语义：重试成功时抹去上一次错误信息）。
     -->
     <update id="updateStatus">
-        UPDATE perf_run_task
+        UPDATE PERF_RUN_TASK
         SET status = #{status},
             error_msg = #{errorMsg},
             end_time = <choose>
@@ -139,7 +139,7 @@
         由 HistoryRecalcService 写入 childTaskIds JSON 数组。
     -->
     <update id="updateResultPreviewJson">
-        UPDATE perf_run_task
+        UPDATE PERF_RUN_TASK
         SET result_preview_json = #{resultPreviewJson}
         WHERE id = #{id}
     </update>
@@ -150,7 +150,7 @@
         RUNNING 任务 end_time 为 NULL 天然不会命中，SUCCESS 终态必然有 end_time.
     -->
     <delete id="deleteSuccessTasksBefore">
-        DELETE FROM perf_run_task
+        DELETE FROM PERF_RUN_TASK
         WHERE status = 'SUCCESS'
           AND end_time &lt; #{cutoffTime}
     </delete>

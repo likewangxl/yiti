@@ -3,7 +3,7 @@
 > 模块：portal-content-center
 > 版本：V1.0
 > 最后更新：2026-04-10
-> 数据库：MySQL 8.0（字符集 utf8mb4，排序规则 utf8mb4_unicode_ci，引擎 InnoDB）
+> 数据库：MySQL 8.0（字符集 utf8mb4，排序规则 utf8mb4_general_ci，引擎 InnoDB）
 
 ---
 
@@ -11,11 +11,11 @@
 
 | 序号 | 表名 | 说明 | 主键策略 | 预估数据量 | 读写特征 |
 |---|---|---|---|---|---|
-| 1 | `portal_nav` | 网址导航 | UUID(32) | 百条级 | 读多写少，高缓存命中 |
-| 2 | `portal_shortcut` | 工作台快捷入口 | UUID(32) | 万条级（系统级 + 个人级） | 读多写少 |
-| 3 | `addrbook_employee` | 通讯录员工 | 自然主键（emp_id 32） | 万条级 | 读多写少，模糊查询频繁 |
-| 4 | `product_info` | 产品信息 | UUID(64) | 千条级 | 读多写少，状态变更偶发 |
-| 5 | `doc_info` | 文档信息 | UUID(32) | 万条级 | 读多写少 |
+| 1 | `PORTAL_NAV` | 网址导航 | UUID(32) | 百条级 | 读多写少，高缓存命中 |
+| 2 | `PORTAL_SHORTCUT` | 工作台快捷入口 | UUID(32) | 万条级（系统级 + 个人级） | 读多写少 |
+| 3 | `ADDRBOOK_EMPLOYEE` | 通讯录员工 | 自然主键（emp_id 32） | 万条级 | 读多写少，模糊查询频繁 |
+| 4 | `PRODUCT_INFO` | 产品信息 | UUID(64) | 千条级 | 读多写少，状态变更偶发 |
+| 5 | `DOC_INFO` | 文档信息 | UUID(32) | 万条级 | 读多写少 |
 
 **主键策略说明：**
 - `UUID(32)`：使用 `com.bank.branch.platform.common.util.IdUtil#generateShortUuid()` 生成（32 位去连字符 UUID）
@@ -29,8 +29,8 @@
 ### 2.1 portal_nav — 网址导航表
 
 ```sql
-DROP TABLE IF EXISTS `portal_nav`;
-CREATE TABLE `portal_nav` (
+DROP TABLE IF EXISTS `PORTAL_NAV`;
+CREATE TABLE `PORTAL_NAV` (
     `id`            VARCHAR(32)   NOT NULL                COMMENT '主键，UUID(32)',
     `nav_name`      VARCHAR(100)  NOT NULL                COMMENT '导航名称，如"总行 CCRM"',
     `nav_url`       VARCHAR(500)  NOT NULL                COMMENT '导航链接 URL（http/https 完整路径或站内相对路径）',
@@ -45,14 +45,14 @@ CREATE TABLE `portal_nav` (
     PRIMARY KEY (`id`),
     KEY `idx_category_sort` (`nav_category`, `sort_order`),
     KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='门户网址导航表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='门户网址导航表';
 ```
 
 ### 2.2 portal_shortcut — 工作台快捷入口表
 
 ```sql
-DROP TABLE IF EXISTS `portal_shortcut`;
-CREATE TABLE `portal_shortcut` (
+DROP TABLE IF EXISTS `PORTAL_SHORTCUT`;
+CREATE TABLE `PORTAL_SHORTCUT` (
     `id`             VARCHAR(32)   NOT NULL               COMMENT '主键，UUID(32)',
     `shortcut_name`  VARCHAR(100)  NOT NULL               COMMENT '快捷入口名称',
     `shortcut_url`   VARCHAR(500)  NOT NULL               COMMENT '目标 URL（内部路由或外链）',
@@ -70,14 +70,14 @@ CREATE TABLE `portal_shortcut` (
     KEY `idx_emp_id`  (`emp_id`),
     KEY `idx_type`    (`shortcut_type`),
     KEY `idx_emp_type_sort` (`emp_id`, `shortcut_type`, `sort_order`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='门户工作台快捷入口表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='门户工作台快捷入口表';
 ```
 
 ### 2.3 addrbook_employee — 通讯录员工表
 
 ```sql
-DROP TABLE IF EXISTS `addrbook_employee`;
-CREATE TABLE `addrbook_employee` (
+DROP TABLE IF EXISTS `ADDRBOOK_EMPLOYEE`;
+CREATE TABLE `ADDRBOOK_EMPLOYEE` (
     `emp_id`                   VARCHAR(32)  NOT NULL       COMMENT '员工工号（自然主键，同 PT_USER.emp_id）',
     `emp_name`                 VARCHAR(100) NOT NULL       COMMENT '员工姓名',
     `mobile`                   VARCHAR(20)  DEFAULT NULL   COMMENT '手机号（日志输出需脱敏）',
@@ -98,14 +98,14 @@ CREATE TABLE `addrbook_employee` (
     KEY `idx_deleted`     (`deleted`),
     KEY `idx_emp_name`    (`emp_name`),
     KEY `idx_update_time` (`updated_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通讯录员工表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='通讯录员工表';
 ```
 
 ### 2.4 product_info — 产品信息表
 
 ```sql
-DROP TABLE IF EXISTS `product_info`;
-CREATE TABLE `product_info` (
+DROP TABLE IF EXISTS `PRODUCT_INFO`;
+CREATE TABLE `PRODUCT_INFO` (
     `id`                          VARCHAR(64)  NOT NULL     COMMENT '主键，格式：PROD_ + UUID',
     `product_code`                VARCHAR(64)  NOT NULL     COMMENT '产品编码（业务唯一，用户输入）',
     `product_name`                VARCHAR(255) NOT NULL     COMMENT '产品名称',
@@ -131,14 +131,14 @@ CREATE TABLE `product_info` (
     KEY `idx_dept_org`     (`product_dept_org_code`),
     KEY `idx_owner_org`    (`owner_org_id`),
     KEY `idx_update_time`  (`updated_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='产品信息表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='产品信息表';
 ```
 
 ### 2.5 doc_info — 文档信息表
 
 ```sql
-DROP TABLE IF EXISTS `doc_info`;
-CREATE TABLE `doc_info` (
+DROP TABLE IF EXISTS `DOC_INFO`;
+CREATE TABLE `DOC_INFO` (
     `id`             VARCHAR(32)  NOT NULL               COMMENT '主键，UUID(32)',
     `doc_title`      VARCHAR(200) NOT NULL               COMMENT '文档标题',
     `doc_category`   VARCHAR(50)  DEFAULT NULL           COMMENT '文档分类（关联 DICT_ITEM.DOC_CATEGORY.itemCode）',
@@ -152,7 +152,7 @@ CREATE TABLE `doc_info` (
     KEY `idx_category` (`doc_category`),
     KEY `idx_status`   (`status`),
     KEY `idx_title`    (`doc_title`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='门户文档信息表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='门户文档信息表';
 ```
 
 ---
@@ -222,29 +222,29 @@ CREATE TABLE `doc_info` (
 
 | 源表 | 源字段 | 目标表 | 目标字段 | 约束类型 | 维护策略 |
 |---|---|---|---|---|---|
-| `addrbook_employee` | `emp_id` | `PT_USER`（auth） | `emp_id` | 1:1 严格对应 | PT_USER 新增 → 事件驱动同步 addrbook_employee |
-| `addrbook_employee` | `org_code` | `EXT_ORG_INFO`（auth） | `org_code` | N:1 | 机构变更 → 事件驱动同步 `org_code` + `org_name` |
-| `addrbook_employee` | `maintainer_emp_id` | `PT_USER`（auth） | `emp_id` | N:1 | 离职时需重新指定维护人 |
-| `portal_shortcut` | `emp_id` | `PT_USER`（auth） | `emp_id` | N:1（仅 CUSTOM 类型） | 员工离职时级联软删个人快捷入口 |
-| `portal_shortcut` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
-| `portal_nav` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
-| `product_info` | `product_dept_org_code` | `EXT_ORG_INFO`（auth） | `org_code` | N:1 | 机构变更时不自动迁移，需管理台手动调整 |
-| `product_info` | `owner_org_id` | `EXT_ORG_INFO`（auth） | `org_id` | N:1 | 数据范围过滤依据 |
-| `product_info` | `file_object_id` | `file_object`（governance） | `id` | N:1 | 删除产品前需解除或级联删除附件 |
-| `product_info` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
-| `doc_info` | `file_object_id` | `file_object`（governance） | `id` | N:1 必须 | 删除文档时级联解除文件关联 |
-| `doc_info` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
+| `ADDRBOOK_EMPLOYEE` | `emp_id` | `PT_USER`（auth） | `emp_id` | 1:1 严格对应 | PT_USER 新增 → 事件驱动同步 addrbook_employee |
+| `ADDRBOOK_EMPLOYEE` | `org_code` | `EXT_ORG_INFO`（auth） | `org_code` | N:1 | 机构变更 → 事件驱动同步 `org_code` + `org_name` |
+| `ADDRBOOK_EMPLOYEE` | `maintainer_emp_id` | `PT_USER`（auth） | `emp_id` | N:1 | 离职时需重新指定维护人 |
+| `PORTAL_SHORTCUT` | `emp_id` | `PT_USER`（auth） | `emp_id` | N:1（仅 CUSTOM 类型） | 员工离职时级联软删个人快捷入口 |
+| `PORTAL_SHORTCUT` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
+| `PORTAL_NAV` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
+| `PRODUCT_INFO` | `product_dept_org_code` | `EXT_ORG_INFO`（auth） | `org_code` | N:1 | 机构变更时不自动迁移，需管理台手动调整 |
+| `PRODUCT_INFO` | `owner_org_id` | `EXT_ORG_INFO`（auth） | `org_id` | N:1 | 数据范围过滤依据 |
+| `PRODUCT_INFO` | `file_object_id` | `FILE_OBJECT`（governance） | `id` | N:1 | 删除产品前需解除或级联删除附件 |
+| `PRODUCT_INFO` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
+| `DOC_INFO` | `file_object_id` | `FILE_OBJECT`（governance） | `id` | N:1 必须 | 删除文档时级联解除文件关联 |
+| `DOC_INFO` | `created_by` / `updated_by` | `PT_USER`（auth） | `emp_id` | 审计字段 | 无级联 |
 
 **级联策略：**
-- **PT_USER 停用/离职**：触发 `addrbook_employee.status=RESIGNED`；`portal_shortcut` 中 `emp_id` 对应的个人快捷入口保留（供重新启用时恢复），但不出现在新查询中。
-- **file_object 删除**：禁止直接物理删，需通过 `FileApi.deleteFile(fileId)` 级联检查，若有 `product_info` 或 `doc_info` 引用则拒绝。
+- **PT_USER 停用/离职**：触发 `addrbook_employee.status=RESIGNED`；`PORTAL_SHORTCUT` 中 `emp_id` 对应的个人快捷入口保留（供重新启用时恢复），但不出现在新查询中。
+- **file_object 删除**：禁止直接物理删，需通过 `FileApi.deleteFile(fileId)` 级联检查，若有 `PRODUCT_INFO` 或 `DOC_INFO` 引用则拒绝。
 - **EXT_ORG_INFO 机构撤并**：`addrbook_employee.org_code` 需重新映射到存续机构，由 auth 模块发布机构变更事件后消费。
 
 ---
 
 ## 5. 审计字段规范
 
-除 `addrbook_employee` 外，其余业务表均包含以下 4 个审计字段：
+除 `ADDRBOOK_EMPLOYEE` 外，其余业务表均包含以下 4 个审计字段：
 
 | 字段 | 类型 | 默认值 | 是否必填 | 说明 |
 |---|---|---|---|---|
@@ -254,12 +254,12 @@ CREATE TABLE `doc_info` (
 | `updated_time` | DATETIME | `NULL ON UPDATE CURRENT_TIMESTAMP` | 否 | 最后更新时间，由 MySQL `ON UPDATE` 自动维护 |
 
 **portal 当前实现约定：**
-- `portal_nav` / `portal_shortcut` / `product_info` / `doc_info` 由 Service 层显式设置 `created_by` / `updated_by`
-- `addrbook_employee` 与当前 MySQL 基线一致，仅保留 `created_time` / `updated_time`，不持有 `created_by` / `updated_by`
+- `PORTAL_NAV` / `PORTAL_SHORTCUT` / `PRODUCT_INFO` / `DOC_INFO` 由 Service 层显式设置 `created_by` / `updated_by`
+- `ADDRBOOK_EMPLOYEE` 与当前 MySQL 基线一致，仅保留 `created_time` / `updated_time`，不持有 `created_by` / `updated_by`
 
 **逻辑删除字段：**
 - `addrbook_employee.deleted`、`product_info.deleted` 使用 `TINYINT` 类型（0/1）
-- `portal_nav`、`portal_shortcut`、`doc_info` 通过 `status=DISABLED` 表达软删，不保留 deleted 字段
+- `PORTAL_NAV`、`PORTAL_SHORTCUT`、`DOC_INFO` 通过 `status=DISABLED` 表达软删，不保留 deleted 字段
 - 所有查询 SQL 必须带 `deleted = 0` 条件或 `status = 'ACTIVE'` 条件
 
 ---

@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.CustLeadMapper">
 
-    <!-- cust_lead 全列查询片段 -->
+    <!-- CUST_LEAD 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, lead_no, lead_op, source_cust_id, prev_lead_id, version_no, is_latest,
         cust_name, unified_credit_code, tag_ids, contact_person, contact_mobile,
@@ -17,7 +17,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE id = #{id}
           AND deleted = 0
     </select>
@@ -26,7 +26,7 @@
     <select id="selectByLeadNo" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE lead_no = #{leadNo}
           AND deleted = 0
         LIMIT 1
@@ -36,7 +36,7 @@
     <select id="selectLatestBySourceCustId" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE source_cust_id = #{sourceCustId}
           AND is_latest = 1
           AND deleted = 0
@@ -47,7 +47,7 @@
     <select id="selectPage" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE is_latest = 1
           AND deleted = 0
         <if test="keyword != null and keyword != ''">
@@ -66,7 +66,7 @@
 
     <!-- 统计分页查询总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM cust_lead
+        SELECT COUNT(*) FROM CUST_LEAD
         WHERE is_latest = 1
           AND deleted = 0
         <if test="keyword != null and keyword != ''">
@@ -83,7 +83,7 @@
 
     <!-- 插入新线索 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustLead">
-        INSERT INTO cust_lead (
+        INSERT INTO CUST_LEAD (
             id, lead_no, lead_op, source_cust_id, prev_lead_id, version_no, is_latest,
             cust_name, unified_credit_code, tag_ids, contact_person, contact_mobile,
             industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
@@ -104,7 +104,7 @@
 
     <!-- 按 id 更新线索（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustLead">
-        UPDATE cust_lead
+        UPDATE CUST_LEAD
         <set>
             <if test="leadOp != null">lead_op = #{leadOp},</if>
             <if test="sourceCustId != null">source_cust_id = #{sourceCustId},</if>
@@ -143,7 +143,7 @@
 
     <!-- 按 id 更新线索状态（状态流转专用） -->
     <update id="updateStatusById">
-        UPDATE cust_lead
+        UPDATE CUST_LEAD
         SET lead_status = #{leadStatus},
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -153,7 +153,7 @@
 
     <!-- 条件更新线索状态（幂等专用，仅当 lead_status = expectedStatus 时才更新） -->
     <update id="conditionalUpdateStatus">
-        UPDATE cust_lead
+        UPDATE CUST_LEAD
         SET lead_status = #{targetStatus},
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -166,7 +166,7 @@
     <select id="selectForUpdate" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE id = #{id}
           AND deleted = 0
         FOR UPDATE
@@ -176,7 +176,7 @@
     <select id="selectByBusinessKey" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE deleted = 0
           AND business_key = #{businessKey}
         LIMIT 1
@@ -186,7 +186,7 @@
     <select id="selectByImportBatchId" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE deleted = 0
           AND import_batch_id = #{batchId}
         ORDER BY created_time ASC
@@ -196,7 +196,7 @@
     <select id="selectBySourceCustIdOrderByVersion" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE deleted = 0
           AND source_cust_id = #{sourceCustId}
         ORDER BY version_no ASC
@@ -204,7 +204,7 @@
 
     <!-- 统计客户名称重复数（仅统计 PENDING_APPROVAL / APPROVED 状态的有效线索） -->
     <select id="countActiveByCustName" resultType="long">
-        SELECT COUNT(*) FROM cust_lead
+        SELECT COUNT(*) FROM CUST_LEAD
         WHERE deleted = 0
           AND cust_name = #{custName}
           AND lead_status IN ('PENDING_APPROVAL', 'APPROVED')
@@ -217,7 +217,7 @@
     <select id="selectStuckInApproval" resultType="com.bank.branch.platform.customer.entity.CustLead">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_lead
+        FROM CUST_LEAD
         WHERE lead_status = 'IN_APPROVAL'
           AND updated_time &lt; #{cutoff}
           AND deleted = 0

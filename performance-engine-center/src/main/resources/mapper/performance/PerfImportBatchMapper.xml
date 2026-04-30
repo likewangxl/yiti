@@ -13,7 +13,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfImportBatch">
-        INSERT INTO perf_import_batch (
+        INSERT INTO PERF_IMPORT_BATCH (
             id, batch_no, import_type, dim, as_of_date, file_name, file_md5, status,
             total_rows, success_rows, error_rows, error_file_object_id, remark, created_by
         ) VALUES (
@@ -25,7 +25,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfImportBatch">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_import_batch
+        FROM PERF_IMPORT_BATCH
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -33,13 +33,13 @@
     <select id="selectByBatchNo" resultType="com.bank.branch.platform.performance.entity.PerfImportBatch">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_import_batch
+        FROM PERF_IMPORT_BATCH
         WHERE batch_no = #{batchNo}
         LIMIT 1
     </select>
 
     <update id="updateStatus">
-        UPDATE perf_import_batch
+        UPDATE PERF_IMPORT_BATCH
         <set>
             status = #{newStatus},
             <if test="remark != null">remark = #{remark},</if>
@@ -48,7 +48,7 @@
     </update>
 
     <update id="updateCounts">
-        UPDATE perf_import_batch
+        UPDATE PERF_IMPORT_BATCH
         SET total_rows   = #{totalRows},
             success_rows = #{successRows},
             error_rows   = #{errorRows}

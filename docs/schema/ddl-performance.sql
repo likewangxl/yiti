@@ -12,7 +12,7 @@ SET NAMES utf8mb4;
 -- -------------------------------------------
 -- 1. 数据版本控制表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `sys_control` (
+CREATE TABLE IF NOT EXISTS `SYS_CONTROL` (
   `id` varchar(32) NOT NULL COMMENT '控制ID',
   `scope_dim` varchar(20) NOT NULL COMMENT '维度：EMP/ORG/CUST',
   `latest_data_date` date NOT NULL COMMENT '最新数据日期',
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS `sys_control` (
 -- -------------------------------------------
 -- 2. 指标定义表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_metric_def` (
+CREATE TABLE IF NOT EXISTS `PERF_METRIC_DEF` (
   `id` varchar(32) NOT NULL COMMENT '指标ID',
   `metric_code` varchar(64) NOT NULL COMMENT '指标编码(唯一)',
   `metric_name` varchar(200) NOT NULL COMMENT '指标名称',
@@ -44,6 +44,10 @@ CREATE TABLE IF NOT EXISTS `perf_metric_def` (
   `summary_rule` varchar(20) DEFAULT NULL COMMENT '机构汇总规则：SUM/AVG等',
   `ref_metric_codes` text COMMENT '引用指标列表(JSON数组)',
   `val_slot` int(11) DEFAULT NULL COMMENT '宽表槽位(1..200)',
+  `unit` varchar(16) DEFAULT NULL COMMENT '单位：元/万元/%',
+  `decimal_places` tinyint DEFAULT '2' COMMENT '小数位数',
+  `deleted` tinyint DEFAULT '0' COMMENT '0=存在 1=删除',
+  `description` varchar(500) DEFAULT NULL COMMENT '指标详细描述（补充 metric_desc）',
   `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE/DISABLED',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -51,6 +55,7 @@ CREATE TABLE IF NOT EXISTS `perf_metric_def` (
   `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_metric_code` (`metric_code`),
+  UNIQUE KEY `uk_base_dim_slot_alive` ((IF(deleted=0, CONCAT(base_dim,'#',val_slot), NULL))),
   KEY `idx_dim_level` (`base_dim`, `metric_level`),
   KEY `idx_status` (`status`),
   KEY `idx_val_slot` (`val_slot`)
@@ -59,7 +64,7 @@ CREATE TABLE IF NOT EXISTS `perf_metric_def` (
 -- -------------------------------------------
 -- 3. 指标引用关系
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_metric_ref` (
+CREATE TABLE IF NOT EXISTS `PERF_METRIC_REF` (
   `id` varchar(32) NOT NULL COMMENT '引用ID',
   `metric_code` varchar(64) NOT NULL COMMENT '引用者(上层指标)',
   `ref_metric_code` varchar(64) NOT NULL COMMENT '被引用(下层指标)',
@@ -72,7 +77,7 @@ CREATE TABLE IF NOT EXISTS `perf_metric_ref` (
 -- -------------------------------------------
 -- 4. KPI方案
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_kpi_scheme` (
+CREATE TABLE IF NOT EXISTS `PERF_KPI_SCHEME` (
   `id` varchar(32) NOT NULL COMMENT '方案ID',
   `scheme_code` varchar(64) NOT NULL COMMENT '方案编码(唯一)',
   `scheme_name` varchar(200) NOT NULL COMMENT '方案名称',
@@ -91,7 +96,7 @@ CREATE TABLE IF NOT EXISTS `perf_kpi_scheme` (
 -- -------------------------------------------
 -- 5. KPI方案项
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_kpi_item` (
+CREATE TABLE IF NOT EXISTS `PERF_KPI_ITEM` (
   `id` varchar(32) NOT NULL COMMENT '项ID',
   `scheme_id` varchar(32) NOT NULL COMMENT '方案ID',
   `metric_code` varchar(64) NOT NULL COMMENT '指标编码(人员维度)',
@@ -108,7 +113,7 @@ CREATE TABLE IF NOT EXISTS `perf_kpi_item` (
 -- -------------------------------------------
 -- 6. 目标方案
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_target_plan` (
+CREATE TABLE IF NOT EXISTS `PERF_TARGET_PLAN` (
   `id` varchar(32) NOT NULL COMMENT '目标方案ID',
   `plan_code` varchar(64) NOT NULL COMMENT '方案编码(唯一)',
   `plan_name` varchar(200) NOT NULL COMMENT '方案名称',
@@ -117,19 +122,23 @@ CREATE TABLE IF NOT EXISTS `perf_target_plan` (
   `target_cycle` varchar(20) NOT NULL COMMENT '目标周期：YEAR/QUARTER',
   `effective_date` date NOT NULL COMMENT '生效日期',
   `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE/DISABLED',
+  `owner_emp_id` varchar(32) DEFAULT NULL COMMENT '归属员工（SELF/SELF_ASSIGNED scope 列）',
+  `owner_org_code` varchar(50) DEFAULT NULL COMMENT '归属机构（ORG/ORG_SUBTREE scope 列）',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
   `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_plan_code` (`plan_code`),
-  KEY `idx_status` (`status`)
+  KEY `idx_status` (`status`),
+  KEY `idx_owner_emp` (`owner_emp_id`),
+  KEY `idx_owner_org` (`owner_org_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='目标方案';
 
 -- -------------------------------------------
 -- 7. 目标值/基础值
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_target_value` (
+CREATE TABLE IF NOT EXISTS `PERF_TARGET_VALUE` (
   `id` varchar(32) NOT NULL COMMENT '目标值ID',
   `plan_id` varchar(32) NOT NULL COMMENT '目标方案ID',
   `subject_type` varchar(20) NOT NULL COMMENT '对象类型：EMP/ORG',
@@ -138,6 +147,8 @@ CREATE TABLE IF NOT EXISTS `perf_target_value` (
   `metric_code` varchar(64) NOT NULL COMMENT '指标编码',
   `target_value` decimal(20,4) NOT NULL COMMENT '目标值',
   `base_value` decimal(20,4) DEFAULT NULL COMMENT '基础值(可空，默认为0)',
+  `owner_emp_id` varchar(32) DEFAULT NULL COMMENT '归属员工（SELF/SELF_ASSIGNED scope 列）',
+  `owner_org_code` varchar(50) DEFAULT NULL COMMENT '归属机构（ORG/ORG_SUBTREE scope 列）',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
@@ -145,13 +156,15 @@ CREATE TABLE IF NOT EXISTS `perf_target_value` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_plan_subject_cycle_metric` (`plan_id`, `subject_type`, `subject_id`, `cycle_key`, `metric_code`),
   KEY `idx_metric_code` (`metric_code`),
-  KEY `idx_subject` (`subject_type`, `subject_id`, `cycle_key`)
+  KEY `idx_subject` (`subject_type`, `subject_id`, `cycle_key`),
+  KEY `idx_owner_emp` (`owner_emp_id`),
+  KEY `idx_owner_org` (`owner_org_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='目标值/基础值';
 
 -- -------------------------------------------
 -- 8. 绩效导入批次
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_import_batch` (
+CREATE TABLE IF NOT EXISTS `PERF_IMPORT_BATCH` (
   `id` varchar(32) NOT NULL COMMENT '批次ID',
   `batch_no` varchar(64) NOT NULL COMMENT '批次号',
   `import_type` varchar(20) NOT NULL COMMENT '导入类型：INDEX_RESULT/KPI_RESULT/TARGET',
@@ -178,7 +191,7 @@ CREATE TABLE IF NOT EXISTS `perf_import_batch` (
 -- -------------------------------------------
 -- 9. 绩效任务执行日志
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_run_task` (
+CREATE TABLE IF NOT EXISTS `PERF_RUN_TASK` (
   `id` varchar(32) NOT NULL COMMENT '任务ID',
   `task_type` varchar(30) NOT NULL COMMENT '类型：METRIC_TRIAL/METRIC_RUN/KPI_RUN/RECALC',
   `task_key` varchar(100) DEFAULT NULL COMMENT '关键键(如metric_code)',
@@ -202,7 +215,7 @@ CREATE TABLE IF NOT EXISTS `perf_run_task` (
 -- -------------------------------------------
 -- 10. 员工指标结果宽表 (val_1 ~ val_200)
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `emp_index_result` (
+CREATE TABLE IF NOT EXISTS `EMP_INDEX_RESULT` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本',
@@ -416,7 +429,7 @@ CREATE TABLE IF NOT EXISTS `emp_index_result` (
 -- -------------------------------------------
 -- 11. 机构指标结果宽表 (val_1 ~ val_200)
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `org_index_result` (
+CREATE TABLE IF NOT EXISTS `ORG_INDEX_RESULT` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本',
@@ -630,7 +643,7 @@ CREATE TABLE IF NOT EXISTS `org_index_result` (
 -- -------------------------------------------
 -- 12. 客户指标结果宽表 (val_1 ~ val_200)
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `cust_index_result` (
+CREATE TABLE IF NOT EXISTS `CUST_INDEX_RESULT` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本',
@@ -844,7 +857,7 @@ CREATE TABLE IF NOT EXISTS `cust_index_result` (
 -- -------------------------------------------
 -- 13. KPI结果表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `kpi_result` (
+CREATE TABLE IF NOT EXISTS `KPI_RESULT` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
   `emp_id` varchar(32) NOT NULL COMMENT '员工工号',
   `cycle_type` varchar(20) NOT NULL COMMENT '周期类型：MONTHLY/QUARTERLY',
@@ -862,7 +875,7 @@ CREATE TABLE IF NOT EXISTS `kpi_result` (
 -- -------------------------------------------
 -- 14. 客户业绩分配关系
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `cust_alloc_relation` (
+CREATE TABLE IF NOT EXISTS `CUST_ALLOC_RELATION` (
   `id` varchar(32) NOT NULL COMMENT '主键ID',
   `cust_id` varchar(32) NOT NULL COMMENT '客户ID',
   `alloc_dim` varchar(16) NOT NULL COMMENT '调整维度：RULE/ACCOUNT',
@@ -887,7 +900,7 @@ CREATE TABLE IF NOT EXISTS `cust_alloc_relation` (
 -- -------------------------------------------
 -- 15. 分配关系调整申请
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_alloc_adjust_apply` (
+CREATE TABLE IF NOT EXISTS `PERF_ALLOC_ADJUST_APPLY` (
   `id` varchar(32) NOT NULL COMMENT '申请ID',
   `apply_no` varchar(100) DEFAULT NULL COMMENT '申请编号',
   `cust_id` varchar(32) NOT NULL COMMENT '客户ID',
@@ -913,7 +926,7 @@ CREATE TABLE IF NOT EXISTS `perf_alloc_adjust_apply` (
 -- -------------------------------------------
 -- 16. 分配关系调整明细
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_alloc_adjust_item` (
+CREATE TABLE IF NOT EXISTS `PERF_ALLOC_ADJUST_ITEM` (
   `id` varchar(32) NOT NULL COMMENT '项ID',
   `apply_id` varchar(32) NOT NULL COMMENT '申请ID',
   `emp_id` varchar(32) NOT NULL COMMENT '员工工号',
@@ -927,7 +940,7 @@ CREATE TABLE IF NOT EXISTS `perf_alloc_adjust_item` (
 -- -------------------------------------------
 -- 17. 目标修正申请
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `perf_target_adjust_apply` (
+CREATE TABLE IF NOT EXISTS `PERF_TARGET_ADJUST_APPLY` (
   `id` varchar(32) NOT NULL COMMENT '申请ID',
   `plan_id` varchar(32) NOT NULL COMMENT '目标方案ID',
   `subject_type` varchar(20) NOT NULL COMMENT '对象类型：EMP/ORG',

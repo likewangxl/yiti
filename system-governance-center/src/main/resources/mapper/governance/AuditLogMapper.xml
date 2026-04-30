@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.AuditLogMapper">
 
-    <!-- audit_log 全列查询片段 -->
+    <!-- AUDIT_LOG 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, trace_id, emp_id, emp_name, biz_type, biz_action,
         resource_url, request_method, request_params, response_status,
@@ -37,7 +37,7 @@
 
     <!-- 插入审计日志 -->
     <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.AuditLog">
-        INSERT INTO audit_log (
+        INSERT INTO AUDIT_LOG (
             id, trace_id, emp_id, emp_name, biz_type, biz_action,
             resource_url, request_method, request_params, response_status,
             error_msg, ip_address, user_agent, execution_time, reason, created_time
@@ -53,7 +53,7 @@
             resultType="com.bank.branch.platform.governance.entity.AuditLog">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM audit_log
+        FROM AUDIT_LOG
         WHERE id = #{id}
     </select>
 
@@ -61,7 +61,7 @@
     <select id="selectByPage" resultType="com.bank.branch.platform.governance.entity.AuditLog">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM audit_log
+        FROM AUDIT_LOG
         <include refid="QUERY_WHERE"/>
         ORDER BY created_time DESC
         LIMIT #{limit} OFFSET #{offset}
@@ -70,7 +70,7 @@
     <!-- 统计分页查询总记录数 -->
     <select id="countByPage" resultType="long">
         SELECT COUNT(*)
-        FROM audit_log
+        FROM AUDIT_LOG
         <include refid="QUERY_WHERE"/>
     </select>
 

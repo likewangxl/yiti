@@ -21,14 +21,14 @@
     </sql>
 
     <insert id="insert">
-        INSERT INTO rpt_snapshot_task (<include refid="BASE_COLUMNS"/>)
+        INSERT INTO RPT_SNAPSHOT_TASK (<include refid="BASE_COLUMNS"/>)
         VALUES (#{id}, #{taskName}, #{snapshotType}, #{cronExpr}, #{status},
                 #{lastRunTime}, #{nextRunTime}, #{createdTime}, #{updatedTime})
     </insert>
 
     <select id="selectById" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>
-          FROM rpt_snapshot_task
+          FROM RPT_SNAPSHOT_TASK
          WHERE id = #{id}
     </select>
 

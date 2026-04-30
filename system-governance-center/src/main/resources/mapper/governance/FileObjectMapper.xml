@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.FileObjectMapper">
 
-    <!-- file_object 全列查询片段 -->
+    <!-- FILE_OBJECT 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, file_name, file_size, file_type, storage_path,
         bucket_name, md5_hash, uploaded_by, uploaded_time
@@ -10,7 +10,7 @@
 
     <!-- 新增文件对象记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.FileObject">
-        INSERT INTO file_object (id, file_name, file_size, file_type, storage_path,
+        INSERT INTO FILE_OBJECT (id, file_name, file_size, file_type, storage_path,
                                   bucket_name, md5_hash, uploaded_by, uploaded_time)
         VALUES (#{id}, #{fileName}, #{fileSize}, #{fileType}, #{storagePath},
                 #{bucketName}, #{md5Hash}, #{uploadedBy}, #{uploadedTime})
@@ -20,7 +20,7 @@
     <select id="selectById" parameterType="string"
             resultType="com.bank.branch.platform.governance.entity.FileObject">
         SELECT <include refid="BASE_COLUMNS"/>
-        FROM file_object
+        FROM FILE_OBJECT
         WHERE id = #{id}
     </select>
 
@@ -28,14 +28,14 @@
     <select id="selectByMd5Hash" parameterType="string"
             resultType="com.bank.branch.platform.governance.entity.FileObject">
         SELECT <include refid="BASE_COLUMNS"/>
-        FROM file_object
+        FROM FILE_OBJECT
         WHERE md5_hash = #{md5Hash}
         LIMIT 1
     </select>
 
     <!-- 根据主键删除文件对象记录 -->
     <delete id="deleteById" parameterType="string">
-        DELETE FROM file_object WHERE id = #{id}
+        DELETE FROM FILE_OBJECT WHERE id = #{id}
     </delete>
 
 </mapper>

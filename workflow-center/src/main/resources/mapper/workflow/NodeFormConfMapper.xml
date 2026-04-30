@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.workflow.mapper.NodeFormConfMapper">
 
-    <!-- wf_node_form_conf 全列查询片段 -->
+    <!-- WF_NODE_FORM_CONF 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, process_definition_key, node_key,
         form_fields, editable_fields, required_fields,
@@ -14,7 +14,7 @@
             resultType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM wf_node_form_conf
+        FROM WF_NODE_FORM_CONF
         WHERE process_definition_key = #{processDefinitionKey}
         ORDER BY created_time
     </select>
@@ -24,7 +24,7 @@
             resultType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM wf_node_form_conf
+        FROM WF_NODE_FORM_CONF
         WHERE process_definition_key = #{processDefinitionKey}
           AND node_key = #{nodeKey}
         LIMIT 1
@@ -35,14 +35,14 @@
             resultType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM wf_node_form_conf
+        FROM WF_NODE_FORM_CONF
         WHERE id = #{id}
         LIMIT 1
     </select>
 
     <!-- 新增表单配置记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
-        INSERT INTO wf_node_form_conf (
+        INSERT INTO WF_NODE_FORM_CONF (
             id, process_definition_key, node_key,
             form_fields, editable_fields, required_fields,
             created_time, updated_time
@@ -55,7 +55,7 @@
 
     <!-- 按主键动态更新表单配置 -->
     <update id="updateById" parameterType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
-        UPDATE wf_node_form_conf
+        UPDATE WF_NODE_FORM_CONF
         <set>
             <if test="processDefinitionKey != null">process_definition_key = #{processDefinitionKey},</if>
             <if test="nodeKey != null">node_key = #{nodeKey},</if>

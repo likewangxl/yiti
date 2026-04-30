@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.customer.mapper.CustClaimMapper">
 
-    <!-- cust_claim 全列查询片段 -->
+    <!-- CUST_CLAIM 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, cust_id, org_id, claimed_by, maintainer_emp_id, claim_status,
         claim_time, cancel_time, cancel_reason, created_time, updated_time
@@ -12,7 +12,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustClaim">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_claim
+        FROM CUST_CLAIM
         WHERE id = #{id}
     </select>
 
@@ -20,7 +20,7 @@
     <select id="selectByCustIdAndOrgId" resultType="com.bank.branch.platform.customer.entity.CustClaim">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_claim
+        FROM CUST_CLAIM
         WHERE cust_id = #{custId}
           AND org_id = #{orgId}
         LIMIT 1
@@ -30,7 +30,7 @@
     <select id="selectByCustId" resultType="com.bank.branch.platform.customer.entity.CustClaim">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_claim
+        FROM CUST_CLAIM
         WHERE cust_id = #{custId}
         ORDER BY created_time DESC
     </select>
@@ -39,14 +39,14 @@
     <select id="selectByClaimedBy" resultType="com.bank.branch.platform.customer.entity.CustClaim">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_claim
+        FROM CUST_CLAIM
         WHERE claimed_by = #{claimedBy}
           AND claim_status = 'CLAIMED'
         ORDER BY claim_time DESC
     </select>
 
     <!-- 分页查询客户池（尚未被任何机构有效认领的客户） -->
-    <!-- LEFT JOIN cust_claim 过滤已有 CLAIMED 状态认领记录的客户 -->
+    <!-- LEFT JOIN CUST_CLAIM 过滤已有 CLAIMED 状态认领记录的客户 -->
     <select id="selectPoolPage" resultType="com.bank.branch.platform.customer.entity.CustMaster">
         SELECT cm.id, cm.cust_no, cm.cust_name, cm.unified_credit_code,
                cm.contact_person, cm.contact_mobile, cm.industry, cm.group_type,
@@ -54,8 +54,8 @@
                cm.is_account_opened, cm.customer_desc, cm.credit_amount,
                cm.credit_exposure_amount, cm.owner_org_id, cm.lead_id,
                cm.status, cm.deleted, cm.created_time, cm.updated_time
-        FROM cust_master cm
-        LEFT JOIN cust_claim cc ON cc.cust_id = cm.id AND cc.claim_status = 'CLAIMED'
+        FROM CUST_MASTER cm
+        LEFT JOIN CUST_CLAIM cc ON cc.cust_id = cm.id AND cc.claim_status = 'CLAIMED'
         WHERE cm.deleted = 0
           AND cm.status = 'ACTIVE'
           AND cc.id IS NULL
@@ -69,8 +69,8 @@
     <!-- 统计客户池分页总记录数 -->
     <select id="countPoolPage" resultType="long">
         SELECT COUNT(cm.id)
-        FROM cust_master cm
-        LEFT JOIN cust_claim cc ON cc.cust_id = cm.id AND cc.claim_status = 'CLAIMED'
+        FROM CUST_MASTER cm
+        LEFT JOIN CUST_CLAIM cc ON cc.cust_id = cm.id AND cc.claim_status = 'CLAIMED'
         WHERE cm.deleted = 0
           AND cm.status = 'ACTIVE'
           AND cc.id IS NULL
@@ -83,7 +83,7 @@
     <select id="selectMyClaimsPage" resultType="com.bank.branch.platform.customer.entity.CustClaim">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_claim
+        FROM CUST_CLAIM
         WHERE claim_status = 'CLAIMED'
           AND (claimed_by = #{empId} OR maintainer_emp_id = #{empId})
         ORDER BY claim_time DESC
@@ -92,7 +92,7 @@
 
     <!-- 统计某员工认领客户总数 -->
     <select id="countMyClaimsPage" resultType="long">
-        SELECT COUNT(*) FROM cust_claim
+        SELECT COUNT(*) FROM CUST_CLAIM
         WHERE claim_status = 'CLAIMED'
           AND (claimed_by = #{empId} OR maintainer_emp_id = #{empId})
     </select>
@@ -101,7 +101,7 @@
     <select id="selectActiveByEmp" resultType="com.bank.branch.platform.customer.entity.CustClaim">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_claim
+        FROM CUST_CLAIM
         WHERE maintainer_emp_id = #{empId}
           AND claim_status = 'CLAIMED'
         ORDER BY claim_time DESC
@@ -111,7 +111,7 @@
     <select id="selectActiveByOrg" resultType="com.bank.branch.platform.customer.entity.CustClaim">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM cust_claim
+        FROM CUST_CLAIM
         WHERE org_id = #{orgCode}
           AND claim_status = 'CLAIMED'
         ORDER BY claim_time DESC
@@ -119,21 +119,21 @@
 
     <!-- 统计某员工维护的有效认领数量 -->
     <select id="countActiveByEmp" resultType="long">
-        SELECT COUNT(*) FROM cust_claim
+        SELECT COUNT(*) FROM CUST_CLAIM
         WHERE maintainer_emp_id = #{empId}
           AND claim_status = 'CLAIMED'
     </select>
 
     <!-- 统计某机构的有效认领数量 -->
     <select id="countActiveByOrg" resultType="long">
-        SELECT COUNT(*) FROM cust_claim
+        SELECT COUNT(*) FROM CUST_CLAIM
         WHERE org_id = #{orgCode}
           AND claim_status = 'CLAIMED'
     </select>
 
     <!-- 插入新认领记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustClaim">
-        INSERT INTO cust_claim (
+        INSERT INTO CUST_CLAIM (
             id, cust_id, org_id, claimed_by, maintainer_emp_id, claim_status,
             claim_time, cancel_time, cancel_reason, created_time, updated_time
         ) VALUES (
@@ -144,7 +144,7 @@
 
     <!-- 按 id 更新认领记录（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustClaim">
-        UPDATE cust_claim
+        UPDATE CUST_CLAIM
         <set>
             <if test="orgId != null">org_id = #{orgId},</if>
             <if test="claimedBy != null">claimed_by = #{claimedBy},</if>

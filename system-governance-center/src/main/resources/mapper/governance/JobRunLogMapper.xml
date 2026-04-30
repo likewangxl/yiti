@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.JobRunLogMapper">
 
-    <!-- sys_job_run_log 全列查询片段（V1.6 新增 scheduled_fire_time） -->
+    <!-- SYS_JOB_RUN_LOG 全列查询片段（V1.6 新增 scheduled_fire_time） -->
     <sql id="BASE_COLUMNS">
         id, job_id, trigger_type, reason,
         start_time, end_time, status, error_msg,
@@ -11,7 +11,7 @@
 
     <!-- 新增执行日志记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysJobRunLog">
-        INSERT INTO sys_job_run_log (
+        INSERT INTO SYS_JOB_RUN_LOG (
             id, job_id, trigger_type, reason,
             start_time, end_time, status, error_msg,
             created_by, created_time, scheduled_fire_time
@@ -27,13 +27,13 @@
             resultType="com.bank.branch.platform.governance.entity.SysJobRunLog">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_job_run_log
+        FROM SYS_JOB_RUN_LOG
         WHERE id = #{id}
     </select>
 
     <!-- 按主键动态更新执行日志 -->
     <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysJobRunLog">
-        UPDATE sys_job_run_log
+        UPDATE SYS_JOB_RUN_LOG
         <set>
             <if test="status != null">status = #{status},</if>
             <if test="endTime != null">end_time = #{endTime},</if>
@@ -45,7 +45,7 @@
     <!-- 判断指定任务是否存在 RUNNING 状态的执行日志（并发防控） -->
     <select id="existsRunningByJobId" parameterType="string" resultType="boolean">
         SELECT COUNT(*) > 0
-        FROM sys_job_run_log
+        FROM SYS_JOB_RUN_LOG
         WHERE job_id = #{jobId}
           AND status = 'RUNNING'
     </select>
@@ -54,7 +54,7 @@
     <select id="selectByJobId" resultType="com.bank.branch.platform.governance.entity.SysJobRunLog">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_job_run_log
+        FROM SYS_JOB_RUN_LOG
         WHERE job_id = #{jobId}
         ORDER BY created_time DESC
         LIMIT #{limit} OFFSET #{offset}
@@ -63,13 +63,13 @@
     <!-- 统计指定任务的执行日志总数 -->
     <select id="countByJobId" parameterType="string" resultType="long">
         SELECT COUNT(*)
-        FROM sys_job_run_log
+        FROM SYS_JOB_RUN_LOG
         WHERE job_id = #{jobId}
     </select>
 
     <!-- 标记 SUCCESS（V1.6 quartz 整合 P1.5 引入） -->
     <update id="updateSuccess">
-        UPDATE sys_job_run_log
+        UPDATE SYS_JOB_RUN_LOG
         SET status = 'SUCCESS',
             end_time = #{endTime}
         WHERE id = #{id}
@@ -77,7 +77,7 @@
 
     <!-- 标记 FAILED 并写入错误信息（V1.6 quartz 整合 P1.5 引入；errorMsg 调用前已截断 ≤ 4000） -->
     <update id="updateFailed">
-        UPDATE sys_job_run_log
+        UPDATE SYS_JOB_RUN_LOG
         SET status = 'FAILED',
             end_time = #{endTime},
             error_msg = #{errorMsg}

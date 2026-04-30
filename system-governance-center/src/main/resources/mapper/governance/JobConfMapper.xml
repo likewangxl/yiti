@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.JobConfMapper">
 
-    <!-- sys_job_conf 全列查询片段（V1.6 新增 quartz_job_class / misfire_policy） -->
+    <!-- SYS_JOB_CONF 全列查询片段（V1.6 新增 quartz_job_class / misfire_policy） -->
     <sql id="BASE_COLUMNS">
         id, job_key, job_name, cron_expr, quartz_job_class, misfire_policy, status,
         allow_manual_trigger, last_run_time, next_run_time, remark,
@@ -14,7 +14,7 @@
             resultType="com.bank.branch.platform.governance.entity.SysJobConf">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_job_conf
+        FROM SYS_JOB_CONF
         WHERE job_key = #{jobKey}
     </select>
 
@@ -23,7 +23,7 @@
             resultType="com.bank.branch.platform.governance.entity.SysJobConf">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_job_conf
+        FROM SYS_JOB_CONF
         WHERE id = #{id}
     </select>
 
@@ -31,7 +31,7 @@
     <select id="selectByPage" resultType="com.bank.branch.platform.governance.entity.SysJobConf">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_job_conf
+        FROM SYS_JOB_CONF
         <where>
             <if test="keyword != null and keyword != ''">
                 AND (job_key LIKE CONCAT('%', #{keyword}, '%')
@@ -45,7 +45,7 @@
     <!-- 统计分页查询总记录数 -->
     <select id="countByPage" resultType="long">
         SELECT COUNT(*)
-        FROM sys_job_conf
+        FROM SYS_JOB_CONF
         <where>
             <if test="keyword != null and keyword != ''">
                 AND (job_key LIKE CONCAT('%', #{keyword}, '%')
@@ -56,7 +56,7 @@
 
     <!-- 新增任务配置记录（V1.6 新增 quartz_job_class / misfire_policy） -->
     <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
-        INSERT INTO sys_job_conf (
+        INSERT INTO SYS_JOB_CONF (
             id, job_key, job_name, cron_expr, quartz_job_class, misfire_policy, status,
             allow_manual_trigger, last_run_time, next_run_time, remark,
             created_by, created_time, updated_by, updated_time
@@ -69,7 +69,7 @@
 
     <!-- 按主键动态更新任务配置（V1.6 新增 quartz_job_class / misfire_policy 分支） -->
     <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
-        UPDATE sys_job_conf
+        UPDATE SYS_JOB_CONF
         <set>
             <if test="jobName != null">job_name = #{jobName},</if>
             <if test="cronExpr != null">cron_expr = #{cronExpr},</if>
@@ -88,7 +88,7 @@
 
     <!-- 根据 jobKey 同步更新 last_run_time（V1.6 quartz 整合 P1.5 引入） -->
     <update id="updateLastRunTime">
-        UPDATE sys_job_conf
+        UPDATE SYS_JOB_CONF
         SET last_run_time = #{lastRunTime}
         WHERE job_key = #{jobKey}
     </update>
@@ -97,14 +97,14 @@
     <select id="selectByStatus" resultType="com.bank.branch.platform.governance.entity.SysJobConf">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_job_conf
+        FROM SYS_JOB_CONF
         WHERE status = #{status}
         ORDER BY id
     </select>
 
     <!-- 按主键单独更新状态（V1.6 quartz 整合 P3.3 引入：pauseJob / resumeJob 专用） -->
     <update id="updateStatus">
-        UPDATE sys_job_conf
+        UPDATE SYS_JOB_CONF
         SET status = #{status},
             updated_time = NOW()
         WHERE id = #{id}

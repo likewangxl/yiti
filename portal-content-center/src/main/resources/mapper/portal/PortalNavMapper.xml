@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.PortalNavMapper">
 
-    <!-- portal_nav 全列查询片段 -->
+    <!-- PORTAL_NAV 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, nav_name, nav_url, nav_icon, nav_category,
         sort_order, status,
@@ -11,7 +11,7 @@
 
     <!-- 插入新导航 -->
     <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.PortalNav">
-        INSERT INTO portal_nav (
+        INSERT INTO PORTAL_NAV (
             id, nav_name, nav_url, nav_icon, nav_category,
             sort_order, status,
             created_by, created_time, updated_by, updated_time
@@ -26,13 +26,13 @@
     <select id="selectById" resultType="com.bank.branch.platform.portal.entity.PortalNav">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM portal_nav
+        FROM PORTAL_NAV
         WHERE id = #{id}
     </select>
 
     <!-- 按部分字段更新，动态 SET -->
     <update id="updateById" parameterType="com.bank.branch.platform.portal.entity.PortalNav">
-        UPDATE portal_nav
+        UPDATE PORTAL_NAV
         <set>
             <if test="navName != null">nav_name = #{navName},</if>
             <if test="navUrl != null">nav_url = #{navUrl},</if>
@@ -48,7 +48,7 @@
 
     <!-- 逻辑停用（将 status 设为 DISABLED） -->
     <update id="softDeleteById">
-        UPDATE portal_nav
+        UPDATE PORTAL_NAV
         SET status = 'DISABLED',
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -60,7 +60,7 @@
     <select id="listActive" resultType="com.bank.branch.platform.portal.entity.PortalNav">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM portal_nav
+        FROM PORTAL_NAV
         WHERE status = 'ACTIVE'
         ORDER BY sort_order ASC
     </select>
@@ -69,7 +69,7 @@
     <select id="listByCategory" resultType="com.bank.branch.platform.portal.entity.PortalNav">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM portal_nav
+        FROM PORTAL_NAV
         WHERE status = 'ACTIVE'
           AND nav_category = #{category}
         ORDER BY sort_order ASC
@@ -78,7 +78,7 @@
     <!-- 批量更新排序号 -->
     <update id="updateSortOrderBatch">
         <foreach collection="items" item="item" separator=";">
-            UPDATE portal_nav
+            UPDATE PORTAL_NAV
             SET sort_order = #{item.sortOrder},
                 updated_by = #{item.updatedBy},
                 updated_time = NOW()
@@ -89,7 +89,7 @@
     <!-- 按名称和分类统计启用状态的导航数量 -->
     <select id="countByNameAndCategory" resultType="int">
         SELECT COUNT(1)
-        FROM portal_nav
+        FROM PORTAL_NAV
         WHERE nav_name = #{navName}
           AND nav_category = #{category}
           AND status = 'ACTIVE'
@@ -98,7 +98,7 @@
     <!-- 按名称和分类统计启用状态的导航数量（排除指定 id，用于 updateNav 唯一性校验） -->
     <select id="countByNameAndCategoryExcludeId" resultType="int">
         SELECT COUNT(1)
-        FROM portal_nav
+        FROM PORTAL_NAV
         WHERE nav_name = #{navName}
           AND nav_category = #{category}
           AND status = 'ACTIVE'
@@ -109,7 +109,7 @@
     <select id="listAll" resultType="com.bank.branch.platform.portal.entity.PortalNav">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM portal_nav
+        FROM PORTAL_NAV
         ORDER BY sort_order ASC
     </select>
 
@@ -117,7 +117,7 @@
     <select id="listByStatus" resultType="com.bank.branch.platform.portal.entity.PortalNav">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM portal_nav
+        FROM PORTAL_NAV
         WHERE status = #{status}
         ORDER BY sort_order ASC
     </select>

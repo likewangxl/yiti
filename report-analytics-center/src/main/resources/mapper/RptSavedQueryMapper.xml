@@ -20,25 +20,25 @@
     </sql>
 
     <insert id="insert">
-        INSERT INTO rpt_saved_query (<include refid="BASE_COLUMNS"/>)
+        INSERT INTO RPT_SAVED_QUERY (<include refid="BASE_COLUMNS"/>)
         VALUES (#{id}, #{empId}, #{name}, #{dim}, #{subjectIds}, #{metricCodes},
                 #{version}, #{createdTime}, #{updatedTime})
     </insert>
 
     <select id="selectById" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>
-          FROM rpt_saved_query
+          FROM RPT_SAVED_QUERY
          WHERE id = #{id}
     </select>
 
     <select id="countByEmpId" resultType="int">
         SELECT COUNT(*)
-          FROM rpt_saved_query
+          FROM RPT_SAVED_QUERY
          WHERE emp_id = #{empId}
     </select>
 
     <update id="updateByIdSelective">
-        UPDATE rpt_saved_query
+        UPDATE RPT_SAVED_QUERY
         <set>
             <if test="name != null">name = #{name},</if>
             <if test="dim != null">dim = #{dim},</if>
@@ -51,12 +51,12 @@
     </update>
 
     <delete id="deleteById">
-        DELETE FROM rpt_saved_query WHERE id = #{id}
+        DELETE FROM RPT_SAVED_QUERY WHERE id = #{id}
     </delete>
 
     <select id="listByEmpAndDim" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>
-          FROM rpt_saved_query
+          FROM RPT_SAVED_QUERY
          WHERE emp_id = #{empId}
         <if test="dim != null and dim != ''">
             AND dim = #{dim}
@@ -65,13 +65,13 @@
     </select>
 
     <select id="findOldestId" resultType="string">
-        SELECT id FROM rpt_saved_query
+        SELECT id FROM RPT_SAVED_QUERY
          WHERE emp_id = #{empId}
          ORDER BY created_time ASC LIMIT 1
     </select>
 
     <update id="updateWithOptimisticLock">
-        UPDATE rpt_saved_query
+        UPDATE RPT_SAVED_QUERY
         <set>
             <if test="param1.name != null">name = #{param1.name},</if>
             <if test="param1.dim != null">dim = #{param1.dim},</if>

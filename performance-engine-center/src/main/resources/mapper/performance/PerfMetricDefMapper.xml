@@ -11,7 +11,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfMetricDef">
-        INSERT INTO perf_metric_def (
+        INSERT INTO PERF_METRIC_DEF (
             id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
             calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
             ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time,
@@ -25,7 +25,7 @@
     </insert>
 
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfMetricDef">
-        UPDATE perf_metric_def
+        UPDATE PERF_METRIC_DEF
         <set>
             <if test="metricCode != null">metric_code = #{metricCode},</if>
             <if test="metricName != null">metric_name = #{metricName},</if>
@@ -51,7 +51,7 @@
     </update>
 
     <update id="updateStatusById">
-        UPDATE perf_metric_def
+        UPDATE PERF_METRIC_DEF
         SET status = #{status},
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -61,7 +61,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -69,7 +69,7 @@
     <select id="selectByMetricCode" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         WHERE metric_code = #{metricCode}
           AND deleted = 0
         LIMIT 1
@@ -78,7 +78,7 @@
     <select id="selectByMetricCodes" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         <where>
             AND deleted = 0
             <choose>
@@ -97,7 +97,7 @@
 
     <select id="selectOccupiedSlots" resultType="java.lang.Integer">
         SELECT val_slot
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         WHERE base_dim = #{baseDim}
           AND val_slot IS NOT NULL
           AND deleted = 0
@@ -106,7 +106,7 @@
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         <where>
             AND deleted = 0
             <if test="baseDim != null and baseDim != ''">
@@ -131,7 +131,7 @@
 
     <select id="countByCondition" resultType="long">
         SELECT COUNT(*)
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         <where>
             AND deleted = 0
             <if test="baseDim != null and baseDim != ''">
@@ -159,7 +159,7 @@
     <select id="selectByConditionWithScope" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         <where>
             AND deleted = 0
             <if test="baseDim != null and baseDim != ''">
@@ -187,7 +187,7 @@
 
     <select id="countByConditionWithScope" resultType="long">
         SELECT COUNT(*)
-        FROM perf_metric_def
+        FROM PERF_METRIC_DEF
         <where>
             AND deleted = 0
             <if test="baseDim != null and baseDim != ''">
@@ -212,7 +212,7 @@
     </select>
 
     <update id="releaseSlotById">
-        UPDATE perf_metric_def
+        UPDATE PERF_METRIC_DEF
         SET val_slot = NULL,
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -223,7 +223,7 @@
 
     <!-- Task B5：软删除（deleted=1）代替物理删除 -->
     <update id="softDelete">
-        UPDATE perf_metric_def
+        UPDATE PERF_METRIC_DEF
         SET deleted = 1,
             updated_time = NOW()
         WHERE id = #{id}

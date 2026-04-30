@@ -20,7 +20,7 @@
 
     <!--
         分页查询触达报告：
-        touch_task LEFT JOIN cust_master 获取客户名称，
+        TOUCH_TASK LEFT JOIN CUST_MASTER 获取客户名称，
         子查询统计每个任务关联的触达日志数量。
     -->
     <select id="selectReportPage" resultType="com.bank.branch.platform.customer.dto.resp.TouchReportVO">
@@ -34,9 +34,9 @@
             t.org_id           AS orgId,
             t.plan_finish_time AS planFinishTime,
             t.success_time     AS successTime,
-            (SELECT COUNT(*) FROM touch_log tl WHERE tl.touch_task_id = t.id) AS logCount
-        FROM touch_task t
-        LEFT JOIN cust_master m ON t.cust_id = m.id AND m.deleted = 0
+            (SELECT COUNT(*) FROM TOUCH_LOG tl WHERE tl.touch_task_id = t.id) AS logCount
+        FROM TOUCH_TASK t
+        LEFT JOIN CUST_MASTER m ON t.cust_id = m.id AND m.deleted = 0
         <include refid="REPORT_WHERE"/>
         ORDER BY t.created_time DESC
         LIMIT #{offset}, #{limit}
@@ -45,8 +45,8 @@
     <!-- 统计触达报告分页总记录数（与 selectReportPage 共享 WHERE 条件） -->
     <select id="countReportPage" resultType="long">
         SELECT COUNT(*)
-        FROM touch_task t
-        LEFT JOIN cust_master m ON t.cust_id = m.id AND m.deleted = 0
+        FROM TOUCH_TASK t
+        LEFT JOIN CUST_MASTER m ON t.cust_id = m.id AND m.deleted = 0
         <include refid="REPORT_WHERE"/>
     </select>
 
@@ -58,7 +58,7 @@
         SELECT
             task_status AS status,
             COUNT(*)    AS count
-        FROM touch_task
+        FROM TOUCH_TASK
         <where>
             <if test="orgId != null and orgId != ''">
                 AND org_id = #{orgId}

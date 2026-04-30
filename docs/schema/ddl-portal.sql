@@ -10,7 +10,7 @@ SET NAMES utf8mb4;
 -- -------------------------------------------
 -- 1. 网址导航表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `portal_nav` (
+CREATE TABLE IF NOT EXISTS `PORTAL_NAV` (
   `id` varchar(32) NOT NULL COMMENT '导航ID',
   `nav_name` varchar(100) NOT NULL COMMENT '导航名称',
   `nav_url` varchar(500) NOT NULL COMMENT '导航URL',
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS `portal_nav` (
 -- -------------------------------------------
 -- 2. 工作台快捷入口表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `portal_shortcut` (
+CREATE TABLE IF NOT EXISTS `PORTAL_SHORTCUT` (
   `id` varchar(32) NOT NULL COMMENT '快捷入口ID',
   `shortcut_name` varchar(100) NOT NULL COMMENT '快捷入口名称',
   `shortcut_url` varchar(500) NOT NULL COMMENT '跳转URL',
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS `portal_shortcut` (
 -- -------------------------------------------
 -- 3. 通讯录员工表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `addrbook_employee` (
+CREATE TABLE IF NOT EXISTS `ADDRBOOK_EMPLOYEE` (
   `emp_id` varchar(32) NOT NULL COMMENT '员工工号',
   `emp_name` varchar(100) NOT NULL COMMENT '员工姓名',
   `mobile` varchar(20) DEFAULT NULL COMMENT '手机号',
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS `addrbook_employee` (
 -- -------------------------------------------
 -- 4. 产品信息表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `product_info` (
+CREATE TABLE IF NOT EXISTS `PRODUCT_INFO` (
   `id` varchar(64) NOT NULL COMMENT '产品ID',
   `product_code` varchar(64) NOT NULL COMMENT '产品代码',
   `product_name` varchar(255) NOT NULL COMMENT '产品名称',
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS `product_info` (
 -- -------------------------------------------
 -- 5. 文档信息表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `doc_info` (
+CREATE TABLE IF NOT EXISTS `DOC_INFO` (
   `id` varchar(32) NOT NULL COMMENT '文档ID',
   `doc_title` varchar(200) NOT NULL COMMENT '文档标题',
   `doc_category` varchar(50) DEFAULT NULL COMMENT '文档分类',

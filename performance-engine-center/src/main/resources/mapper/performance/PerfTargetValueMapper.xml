@@ -17,7 +17,7 @@
         因为业务语义上调整目标值的同时可能调整归属）.
     -->
     <insert id="upsertBatch">
-        INSERT INTO perf_target_value (id, plan_id, subject_type, subject_id,
+        INSERT INTO PERF_TARGET_VALUE (id, plan_id, subject_type, subject_id,
             cycle_key, metric_code, target_value, base_value,
             owner_emp_id, owner_org_code,
             created_by, created_time)
@@ -40,7 +40,7 @@
     <select id="selectByUniqueKey" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_value
+        FROM PERF_TARGET_VALUE
         WHERE plan_id = #{planId}
           AND subject_type = #{subjectType}
           AND subject_id = #{subjectId}
@@ -52,7 +52,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_value
+        FROM PERF_TARGET_VALUE
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -60,7 +60,7 @@
     <select id="listByPlan" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_value
+        FROM PERF_TARGET_VALUE
         <where>
             AND plan_id = #{planId}
             <if test="subjectType != null and subjectType != ''">
@@ -79,7 +79,7 @@
 
     <select id="countByPlan" resultType="long">
         SELECT COUNT(*)
-        FROM perf_target_value
+        FROM PERF_TARGET_VALUE
         <where>
             AND plan_id = #{planId}
             <if test="subjectType != null and subjectType != ''">
@@ -95,7 +95,7 @@
     </select>
 
     <delete id="deleteByPlanId">
-        DELETE FROM perf_target_value
+        DELETE FROM PERF_TARGET_VALUE
         WHERE plan_id = #{planId}
     </delete>
 
@@ -107,7 +107,7 @@
     <select id="selectByConditionWithScope" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_target_value
+        FROM PERF_TARGET_VALUE
         <where>
             <if test="planId != null and planId != ''">
                 AND plan_id = #{planId}
@@ -131,7 +131,7 @@
 
     <select id="countByConditionWithScope" resultType="long">
         SELECT COUNT(*)
-        FROM perf_target_value
+        FROM PERF_TARGET_VALUE
         <where>
             <if test="planId != null and planId != ''">
                 AND plan_id = #{planId}

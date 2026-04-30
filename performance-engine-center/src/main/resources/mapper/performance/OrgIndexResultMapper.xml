@@ -9,7 +9,7 @@
 <mapper namespace="com.bank.branch.platform.performance.mapper.OrgIndexResultMapper">
 
     <insert id="insertSlotValue">
-        INSERT INTO org_index_result
+        INSERT INTO ORG_INDEX_RESULT
             (org_code, data_date, version, val_${slot})
         VALUES
             (#{orgCode}, #{dataDate}, #{version}, #{value})
@@ -19,7 +19,7 @@
 
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
         SELECT val_${slot}
-        FROM org_index_result
+        FROM ORG_INDEX_RESULT
         WHERE org_code = #{orgCode}
           AND data_date = #{dataDate}
           AND version = #{version}
@@ -30,7 +30,7 @@
             resultType="com.bank.branch.platform.performance.mapper.OrgMetricValueRow">
         SELECT org_code AS orgCode,
                val_${slot} AS metricValue
-        FROM org_index_result
+        FROM ORG_INDEX_RESULT
         WHERE data_date = #{dataDate}
           AND version = #{version}
           AND org_code IN
@@ -40,7 +40,7 @@
     </select>
 
     <insert id="insertRow" parameterType="com.bank.branch.platform.performance.entity.OrgIndexResult">
-        INSERT INTO org_index_result
+        INSERT INTO ORG_INDEX_RESULT
             (org_code, data_date, version)
         VALUES
             (#{orgCode}, #{dataDate}, #{version})

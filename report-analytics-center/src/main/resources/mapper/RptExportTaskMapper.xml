@@ -24,7 +24,7 @@
     </sql>
 
     <insert id="insert">
-        INSERT INTO rpt_export_task (<include refid="BASE_COLUMNS"/>)
+        INSERT INTO RPT_EXPORT_TASK (<include refid="BASE_COLUMNS"/>)
         VALUES (#{id}, #{exportType}, #{paramsJson}, #{status}, #{fileKey}, #{fileSize},
                 #{rowCount}, #{expireAt}, #{operatorId}, #{errorMsg},
                 #{createdTime}, #{updatedTime})
@@ -32,19 +32,19 @@
 
     <select id="selectById" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>
-          FROM rpt_export_task
+          FROM RPT_EXPORT_TASK
          WHERE id = #{id}
     </select>
 
     <update id="updateStatus">
-        UPDATE rpt_export_task
+        UPDATE RPT_EXPORT_TASK
            SET status = #{status},
                updated_time = NOW()
          WHERE id = #{id}
     </update>
 
     <update id="updateSuccess">
-        UPDATE rpt_export_task
+        UPDATE RPT_EXPORT_TASK
         <set>
             status = 'SUCCESS',
             <if test="fileKey != null">file_key = #{fileKey},</if>
@@ -57,7 +57,7 @@
     </update>
 
     <update id="updateFailed">
-        UPDATE rpt_export_task
+        UPDATE RPT_EXPORT_TASK
         <set>
             status = 'FAILED',
             <if test="errorMsg != null">error_msg = #{errorMsg},</if>
@@ -68,7 +68,7 @@
 
     <select id="selectByOperator" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>
-          FROM rpt_export_task
+          FROM RPT_EXPORT_TASK
          WHERE operator_id = #{operatorId}
         <if test="status != null and status != ''">
            AND status = #{status}

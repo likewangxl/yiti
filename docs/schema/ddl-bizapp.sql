@@ -25,8 +25,8 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 1. loan_apply — 资产投放申请表
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `loan_apply`;
-CREATE TABLE `loan_apply` (
+DROP TABLE IF EXISTS `LOAN_APPLY`;
+CREATE TABLE `LOAN_APPLY` (
   `id`                        VARCHAR(32)    NOT NULL COMMENT '申请ID(UUID)',
   `apply_no`                  VARCHAR(100)   DEFAULT NULL COMMENT '申请编号(LA+yyyyMMdd+6位序号)',
   `cust_id`                   VARCHAR(32)    NOT NULL COMMENT '客户ID,逻辑外键→cust_master.id',
@@ -54,7 +54,7 @@ CREATE TABLE `loan_apply` (
   KEY `idx_business_key` (`business_key`),
   KEY `idx_created_time` (`created_time`),
   KEY `idx_process_inst` (`process_instance_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资产投放申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='资产投放申请表';
 
 -- ----------------------------------------------------------------------------
 -- 2. support_request — 中场支持申请表
@@ -65,8 +65,8 @@ CREATE TABLE `loan_apply` (
 -- - 场景 A（产品直达）：assigned_emp_id 为产品负责人，dispatch_emp_id 为 NULL
 -- - 场景 B（部门承接）：先由秘书（dispatch_emp_id）派单给支持人员（assigned_emp_id）
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `support_request`;
-CREATE TABLE `support_request` (
+DROP TABLE IF EXISTS `SUPPORT_REQUEST`;
+CREATE TABLE `SUPPORT_REQUEST` (
   `id`                        VARCHAR(32)    NOT NULL COMMENT '申请ID(UUID)',
   `request_no`                VARCHAR(100)   DEFAULT NULL COMMENT '申请编号(SR+yyyyMMdd+6位序号)',
   `submit_group_id`           VARCHAR(64)    DEFAULT NULL COMMENT '同批提交分组ID(多产品拆单时同组共享)',
@@ -99,7 +99,7 @@ CREATE TABLE `support_request` (
   KEY `idx_owner_org` (`owner_org_id`),
   KEY `idx_created_time` (`created_time`),
   KEY `idx_product` (`product_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='中场支持申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='中场支持申请表';
 
 -- ============================================================================
 -- 建表执行顺序：

@@ -7,7 +7,7 @@
     </sql>
 
     <insert id="insertBatch">
-        INSERT INTO perf_metric_ref (
+        INSERT INTO PERF_METRIC_REF (
             <include refid="BASE_COLUMNS"/>
         ) VALUES
         <foreach collection="list" item="item" separator=",">
@@ -16,14 +16,14 @@
     </insert>
 
     <delete id="deleteByMetricCode">
-        DELETE FROM perf_metric_ref
+        DELETE FROM PERF_METRIC_REF
         WHERE metric_code = #{metricCode}
     </delete>
 
     <select id="selectByMetricCode" resultType="com.bank.branch.platform.performance.entity.PerfMetricRef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_ref
+        FROM PERF_METRIC_REF
         WHERE metric_code = #{metricCode}
         ORDER BY ref_metric_code ASC
     </select>
@@ -31,7 +31,7 @@
     <select id="selectByRefMetricCode" resultType="com.bank.branch.platform.performance.entity.PerfMetricRef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_ref
+        FROM PERF_METRIC_REF
         WHERE ref_metric_code = #{refMetricCode}
         ORDER BY metric_code ASC
     </select>
@@ -39,7 +39,7 @@
     <select id="selectAll" resultType="com.bank.branch.platform.performance.entity.PerfMetricRef">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_metric_ref
+        FROM PERF_METRIC_REF
         ORDER BY metric_code ASC, ref_metric_code ASC
     </select>
 

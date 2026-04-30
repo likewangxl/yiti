@@ -7,7 +7,7 @@
     </sql>
 
     <insert id="batchInsert">
-        INSERT INTO perf_alloc_adjust_item (id, apply_id, emp_id, ratio)
+        INSERT INTO PERF_ALLOC_ADJUST_ITEM (id, apply_id, emp_id, ratio)
         VALUES
         <foreach collection="items" item="it" separator=",">
             (#{it.id}, #{it.applyId}, #{it.empId}, #{it.ratio})
@@ -17,13 +17,13 @@
     <select id="selectByApplyId" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustItem">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_alloc_adjust_item
+        FROM PERF_ALLOC_ADJUST_ITEM
         WHERE apply_id = #{applyId}
         ORDER BY created_time ASC, id ASC
     </select>
 
     <delete id="deleteByApplyId">
-        DELETE FROM perf_alloc_adjust_item
+        DELETE FROM PERF_ALLOC_ADJUST_ITEM
         WHERE apply_id = #{applyId}
     </delete>
 

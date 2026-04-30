@@ -7,7 +7,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfKpiItem">
-        INSERT INTO perf_kpi_item (
+        INSERT INTO PERF_KPI_ITEM (
             <include refid="BASE_COLUMNS"/>
         ) VALUES (
             #{id}, #{schemeId}, #{metricCode}, #{weight}, #{multiplier},
@@ -16,7 +16,7 @@
     </insert>
 
     <insert id="insertBatch">
-        INSERT INTO perf_kpi_item (
+        INSERT INTO PERF_KPI_ITEM (
             <include refid="BASE_COLUMNS"/>
         ) VALUES
         <foreach collection="list" item="item" separator=",">
@@ -28,7 +28,7 @@
     </insert>
 
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfKpiItem">
-        UPDATE perf_kpi_item
+        UPDATE PERF_KPI_ITEM
         <set>
             <if test="schemeId != null">scheme_id = #{schemeId},</if>
             <if test="metricCode != null">metric_code = #{metricCode},</if>
@@ -41,19 +41,19 @@
     </update>
 
     <delete id="deleteById">
-        DELETE FROM perf_kpi_item
+        DELETE FROM PERF_KPI_ITEM
         WHERE id = #{id}
     </delete>
 
     <delete id="deleteBySchemeId">
-        DELETE FROM perf_kpi_item
+        DELETE FROM PERF_KPI_ITEM
         WHERE scheme_id = #{schemeId}
     </delete>
 
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_kpi_item
+        FROM PERF_KPI_ITEM
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -61,7 +61,7 @@
     <select id="selectBySchemeId" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_kpi_item
+        FROM PERF_KPI_ITEM
         WHERE scheme_id = #{schemeId}
         ORDER BY created_time ASC, id ASC
     </select>
@@ -69,7 +69,7 @@
     <select id="selectBySchemeAndMetric" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_kpi_item
+        FROM PERF_KPI_ITEM
         WHERE scheme_id = #{schemeId}
           AND metric_code = #{metricCode}
         LIMIT 1

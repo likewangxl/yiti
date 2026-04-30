@@ -13,23 +13,23 @@
 
 | # | 表名 | 中文名 | 类型 | 数据量预估 |
 |---|------|--------|------|-----------|
-| 1 | `sys_control` | 数据版本控制表 | 配置 | ≈日数 x 3 (年度 1000+) |
-| 2 | `perf_metric_def` | 指标定义表 | 配置 | 200 ~ 500 |
-| 3 | `perf_metric_ref` | 指标引用关系表 | 配置 | 500 ~ 2000 |
-| 4 | `perf_kpi_scheme` | KPI 方案主表 | 配置 | 50 ~ 200 |
-| 5 | `perf_kpi_item` | KPI 方案项表 | 配置 | 500 ~ 3000 |
-| 6 | `perf_target_plan` | 目标方案表 | 配置 | 20 ~ 100/年 |
-| 7 | `perf_target_value` | 目标值/基础值表 | 业务 | 20万+/方案 |
-| 8 | `perf_import_batch` | 导入批次表 | 日志 | 10+/天 |
-| 9 | `perf_run_task` | 任务执行日志表 | 日志 | 100+/天 |
-| 10 | `emp_index_result` | 员工指标结果宽表 | 结果 | 员工数 x 日数 |
-| 11 | `org_index_result` | 机构指标结果宽表 | 结果 | 机构数 x 日数 |
-| 12 | `cust_index_result` | 客户指标结果宽表 | 结果 | 客户数 x 日数 |
-| 13 | `kpi_result` | KPI 结果表 | 结果 | 员工数 x 周期数 |
-| 14 | `cust_alloc_relation` | 客户业绩分配关系表 | 业务 | 1000万+ |
-| 15 | `perf_alloc_adjust_apply` | 分配关系调整申请表 | 业务 | 100+/月 |
-| 16 | `perf_alloc_adjust_item` | 分配关系调整明细表 | 业务 | 500+/月 |
-| 17 | `perf_target_adjust_apply` | 目标修正申请表 | 业务 | 20+/月 |
+| 1 | `SYS_CONTROL` | 数据版本控制表 | 配置 | ≈日数 x 3 (年度 1000+) |
+| 2 | `PERF_METRIC_DEF` | 指标定义表 | 配置 | 200 ~ 500 |
+| 3 | `PERF_METRIC_REF` | 指标引用关系表 | 配置 | 500 ~ 2000 |
+| 4 | `PERF_KPI_SCHEME` | KPI 方案主表 | 配置 | 50 ~ 200 |
+| 5 | `PERF_KPI_ITEM` | KPI 方案项表 | 配置 | 500 ~ 3000 |
+| 6 | `PERF_TARGET_PLAN` | 目标方案表 | 配置 | 20 ~ 100/年 |
+| 7 | `PERF_TARGET_VALUE` | 目标值/基础值表 | 业务 | 20万+/方案 |
+| 8 | `PERF_IMPORT_BATCH` | 导入批次表 | 日志 | 10+/天 |
+| 9 | `PERF_RUN_TASK` | 任务执行日志表 | 日志 | 100+/天 |
+| 10 | `EMP_INDEX_RESULT` | 员工指标结果宽表 | 结果 | 员工数 x 日数 |
+| 11 | `ORG_INDEX_RESULT` | 机构指标结果宽表 | 结果 | 机构数 x 日数 |
+| 12 | `CUST_INDEX_RESULT` | 客户指标结果宽表 | 结果 | 客户数 x 日数 |
+| 13 | `KPI_RESULT` | KPI 结果表 | 结果 | 员工数 x 周期数 |
+| 14 | `CUST_ALLOC_RELATION` | 客户业绩分配关系表 | 业务 | 1000万+ |
+| 15 | `PERF_ALLOC_ADJUST_APPLY` | 分配关系调整申请表 | 业务 | 100+/月 |
+| 16 | `PERF_ALLOC_ADJUST_ITEM` | 分配关系调整明细表 | 业务 | 500+/月 |
+| 17 | `PERF_TARGET_ADJUST_APPLY` | 目标修正申请表 | 业务 | 20+/月 |
 
 **容量分级**:
 - **结果表** (10/11/12/13): 海量数据, 必须分区
@@ -46,7 +46,7 @@
 **业务含义**: 作为全系统的"数据日期指针", 维护 EMP/ORG/CUST 三个维度"当前最新有效数据"指向的业务日期与版本号。所有绩效相关查询、KPI 计算、看板取数, 都应通过此表确定数据口径, 以保证系统内数据日期与版本的一致性。
 
 ```sql
-CREATE TABLE `sys_control` (
+CREATE TABLE `SYS_CONTROL` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `scope_dim` varchar(20) NOT NULL COMMENT '范围维度: EMP/ORG/CUST',
   `latest_data_date` date NOT NULL COMMENT '最新业务数据日期 (T-1)',
@@ -83,7 +83,7 @@ LIMIT 1;
 ### 2.2 perf_metric_def — 指标定义表
 
 ```sql
-CREATE TABLE `perf_metric_def` (
+CREATE TABLE `PERF_METRIC_DEF` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `metric_code` varchar(64) NOT NULL COMMENT '指标编码 (全局唯一), 如 DEP_BAL_EMP',
   `metric_name` varchar(100) NOT NULL COMMENT '指标中文名',
@@ -127,7 +127,7 @@ CREATE TABLE `perf_metric_def` (
 ### 2.3 perf_metric_ref — 指标引用关系表
 
 ```sql
-CREATE TABLE `perf_metric_ref` (
+CREATE TABLE `PERF_METRIC_REF` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `metric_code` varchar(64) NOT NULL COMMENT '主指标编码 (复合指标)',
   `ref_metric_code` varchar(64) NOT NULL COMMENT '被引用的指标编码',
@@ -146,7 +146,7 @@ CREATE TABLE `perf_metric_ref` (
 ### 2.4 perf_kpi_scheme — KPI 方案主表
 
 ```sql
-CREATE TABLE `perf_kpi_scheme` (
+CREATE TABLE `PERF_KPI_SCHEME` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `scheme_code` varchar(64) NOT NULL COMMENT 'KPI 方案编码, 全局唯一',
   `scheme_name` varchar(100) NOT NULL COMMENT 'KPI 方案名称',
@@ -174,7 +174,7 @@ CREATE TABLE `perf_kpi_scheme` (
 ### 2.5 perf_kpi_item — KPI 方案项表
 
 ```sql
-CREATE TABLE `perf_kpi_item` (
+CREATE TABLE `PERF_KPI_ITEM` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `scheme_id` varchar(32) NOT NULL COMMENT '关联 perf_kpi_scheme.id',
   `metric_code` varchar(64) NOT NULL COMMENT '指标编码 (引用 perf_metric_def.metric_code)',
@@ -201,7 +201,7 @@ CREATE TABLE `perf_kpi_item` (
 ### 2.6 perf_target_plan — 目标方案表
 
 ```sql
-CREATE TABLE `perf_target_plan` (
+CREATE TABLE `PERF_TARGET_PLAN` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `plan_code` varchar(64) NOT NULL COMMENT '目标方案编码, 全局唯一',
   `plan_name` varchar(100) NOT NULL COMMENT '目标方案名称',
@@ -230,7 +230,7 @@ CREATE TABLE `perf_target_plan` (
 ### 2.7 perf_target_value — 目标值/基础值表
 
 ```sql
-CREATE TABLE `perf_target_value` (
+CREATE TABLE `PERF_TARGET_VALUE` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `plan_id` varchar(32) NOT NULL COMMENT '关联 perf_target_plan.id',
   `subject_type` varchar(20) NOT NULL COMMENT '对象类型: EMP/ORG',
@@ -257,7 +257,7 @@ CREATE TABLE `perf_target_value` (
 ### 2.8 perf_import_batch — 导入批次表
 
 ```sql
-CREATE TABLE `perf_import_batch` (
+CREATE TABLE `PERF_IMPORT_BATCH` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `batch_no` varchar(64) NOT NULL COMMENT '批次号, 格式: IMP-yyyyMMdd-HHmmss-xxxx',
   `import_type` varchar(32) NOT NULL COMMENT '导入类型: INDEX_RESULT/KPI_RESULT/TARGET_VALUE/ALLOC_RELATION',
@@ -290,7 +290,7 @@ CREATE TABLE `perf_import_batch` (
 ### 2.9 perf_run_task — 任务执行日志表
 
 ```sql
-CREATE TABLE `perf_run_task` (
+CREATE TABLE `PERF_RUN_TASK` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `task_id` varchar(64) NOT NULL COMMENT '任务 ID, 格式: TASK-yyyyMMdd-HHmmss-xxxx',
   `task_type` varchar(32) NOT NULL COMMENT '任务类型: METRIC_TRIAL/METRIC_RUN/KPI_RUN/RECALC/DATA_SYNC',
@@ -323,7 +323,7 @@ CREATE TABLE `perf_run_task` (
 **设计原则**: 采用 200 列槽位宽表, 避免每个指标一张表的表爆炸问题, 也避免长表 (metric_code, metric_value) 查询时的大量 JOIN。
 
 ```sql
-CREATE TABLE `emp_index_result` (
+CREATE TABLE `EMP_INDEX_RESULT` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本号',
@@ -370,7 +370,7 @@ PARTITION BY RANGE (TO_DAYS(data_date)) (
 ### 2.11 org_index_result — 机构指标结果宽表
 
 ```sql
-CREATE TABLE `org_index_result` (
+CREATE TABLE `ORG_INDEX_RESULT` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本号',
@@ -397,7 +397,7 @@ PARTITION BY RANGE (TO_DAYS(data_date)) (
 ### 2.12 cust_index_result — 客户指标结果宽表
 
 ```sql
-CREATE TABLE `cust_index_result` (
+CREATE TABLE `CUST_INDEX_RESULT` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `data_date` date NOT NULL COMMENT '数据日期',
   `version` varchar(32) NOT NULL COMMENT '数据版本号',
@@ -424,7 +424,7 @@ PARTITION BY RANGE (TO_DAYS(data_date)) (
 ### 2.13 kpi_result — KPI 结果表
 
 ```sql
-CREATE TABLE `kpi_result` (
+CREATE TABLE `KPI_RESULT` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `emp_id` varchar(32) NOT NULL COMMENT '员工 ID',
   `scheme_id` varchar(32) NOT NULL COMMENT '关联 KPI 方案 id',
@@ -465,7 +465,7 @@ PARTITION BY RANGE (TO_DAYS(cycle_date)) (
 **时间线设计**: 使用 `effective_date` + `end_date` 组成时间区间, 记录历史版本, 便于按业务日期回溯当时的分配关系。
 
 ```sql
-CREATE TABLE `cust_alloc_relation` (
+CREATE TABLE `CUST_ALLOC_RELATION` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `cust_id` varchar(64) NOT NULL COMMENT '客户 ID',
   `alloc_dim` varchar(20) NOT NULL COMMENT '分配维度: RULE-按规则 ACCOUNT-按账户 RATIO-按比例',
@@ -503,7 +503,7 @@ CREATE TABLE `cust_alloc_relation` (
 ### 2.15 perf_alloc_adjust_apply — 分配关系调整申请表
 
 ```sql
-CREATE TABLE `perf_alloc_adjust_apply` (
+CREATE TABLE `PERF_ALLOC_ADJUST_APPLY` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `apply_no` varchar(64) NOT NULL COMMENT '申请单号, 格式: ALLOC-yyyyMMdd-xxxx',
   `cust_id` varchar(64) NOT NULL COMMENT '客户 ID',
@@ -540,7 +540,7 @@ CREATE TABLE `perf_alloc_adjust_apply` (
 ### 2.16 perf_alloc_adjust_item — 分配关系调整明细表
 
 ```sql
-CREATE TABLE `perf_alloc_adjust_item` (
+CREATE TABLE `PERF_ALLOC_ADJUST_ITEM` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `apply_id` varchar(32) NOT NULL COMMENT '关联 perf_alloc_adjust_apply.id',
   `emp_id` varchar(32) NOT NULL COMMENT '分配到的员工 ID',
@@ -560,7 +560,7 @@ CREATE TABLE `perf_alloc_adjust_item` (
 ### 2.17 perf_target_adjust_apply — 目标修正申请表
 
 ```sql
-CREATE TABLE `perf_target_adjust_apply` (
+CREATE TABLE `PERF_TARGET_ADJUST_APPLY` (
   `id` varchar(32) NOT NULL COMMENT '业务编码主键，与生产 DDL ddl-performance.sql 对齐',
   `apply_no` varchar(64) NOT NULL COMMENT '申请单号, 格式: TGTADJ-yyyyMMdd-xxxx',
   `plan_id` varchar(32) NOT NULL COMMENT '关联 perf_target_plan.id',
@@ -601,42 +601,42 @@ CREATE TABLE `perf_target_adjust_apply` (
 
 | 表 | 索引 | 类型 | 用途 |
 |---|---|---|---|
-| `sys_control` | `uk_scope_date(scope_dim, latest_data_date, current_version)` | UK | 防重复写入, 保证每天每维度每版本唯一 |
-| `sys_control` | `idx_scope_valid(scope_dim, is_valid)` | KEY | 快速查找当前有效版本 (常用查询) |
-| `perf_metric_def` | `uk_metric_code(metric_code)` | UK | 指标编码全局唯一 |
-| `perf_metric_def` | `uk_base_dim_slot(base_dim, val_slot, deleted)` | UK | 同一维度下槽位号唯一 |
-| `perf_metric_def` | `idx_base_dim(base_dim)` | KEY | 按维度筛选指标 |
-| `perf_metric_ref` | `uk_metric_ref(metric_code, ref_metric_code)` | UK | 防重复引用 |
-| `perf_metric_ref` | `idx_ref_metric(ref_metric_code)` | KEY | 反向查询谁引用了我 (级联刷新用) |
-| `perf_kpi_scheme` | `uk_scheme_code(scheme_code, deleted)` | UK | 方案编码唯一 |
-| `perf_kpi_item` | `uk_scheme_metric(scheme_id, metric_code)` | UK | 同一方案下一个指标只能有一个 KPI 项 |
-| `perf_target_plan` | `uk_plan_code(plan_code, deleted)` | UK | 方案编码唯一 |
-| `perf_target_plan` | `idx_status_year(status, year)` | KEY | 查询某年的启用方案 |
-| `perf_target_value` | `uk_plan_subject_cycle_metric(plan_id, subject_type, subject_id, cycle_key, metric_code)` | UK | 目标值唯一 |
-| `perf_target_value` | `idx_subject(subject_type, subject_id)` | KEY | 查询某员工/机构的目标 |
-| `perf_import_batch` | `uk_batch_no(batch_no)` | UK | 批次号唯一 |
-| `perf_import_batch` | `idx_import_type_date(import_type, as_of_date)` | KEY | 按类型+日期查询 |
-| `perf_import_batch` | `idx_file_md5(file_md5)` | KEY | 文件重复检测 |
-| `perf_run_task` | `uk_task_id(task_id)` | UK | 任务号唯一 |
-| `perf_run_task` | `idx_task_type_date(task_type, data_date)` | KEY | 按类型+日期查询 |
-| `perf_run_task` | `idx_started_by_time(started_by, created_time)` | KEY | 用户查询自己的任务 |
-| `emp_index_result` | `uk_emp_date_version(emp_id, data_date, version)` | UK | 同一员工同日期同版本唯一 |
-| `emp_index_result` | `idx_date_version(data_date, version)` | KEY | 全量扫描某日某版本 |
-| `emp_index_result` | `idx_org_code_date(org_code, data_date)` | KEY | 按机构聚合 |
-| `org_index_result` | `uk_org_date_version(org_code, data_date, version)` | UK | 机构结果唯一 |
-| `cust_index_result` | `uk_cust_date_version(cust_id, data_date, version)` | UK | 客户结果唯一 |
-| `cust_index_result` | `idx_manager_date(cust_manager_emp_id, data_date)` | KEY | 客户经理聚合 |
-| `kpi_result` | `uk_emp_cycle_asof(emp_id, cycle_type, cycle_date, as_of_date)` | UK | KPI 快照唯一 |
-| `kpi_result` | `idx_cycle_date(cycle_date, cycle_type)` | KEY | 按周期查询 |
-| `cust_alloc_relation` | `idx_cust_id_date(cust_id, effective_date, end_date)` | KEY | 查询客户分配关系 (时间线) |
-| `cust_alloc_relation` | `idx_emp_id_date(emp_id, effective_date, end_date)` | KEY | 查询员工所管客户 |
-| `cust_alloc_relation` | `idx_source_batch_id` | KEY | 按同步批次溯源 |
-| `perf_alloc_adjust_apply` | `uk_apply_no(apply_no, deleted)` | UK | 申请号唯一 |
-| `perf_alloc_adjust_apply` | `idx_owner_org_status(owner_org_id, status)` | KEY | 机构维度权限过滤 |
-| `perf_alloc_adjust_apply` | `idx_business_key` | KEY | 按 business_key 查询 (工作流回调用) |
-| `perf_alloc_adjust_item` | `uk_apply_emp(apply_id, emp_id)` | UK | 同一申请内员工唯一 |
-| `perf_target_adjust_apply` | `uk_apply_no(apply_no, deleted)` | UK | 申请号唯一 |
-| `perf_target_adjust_apply` | `idx_plan_subject(plan_id, subject_type, subject_id)` | KEY | 按计划+对象查询 |
+| `SYS_CONTROL` | `uk_scope_date(scope_dim, latest_data_date, current_version)` | UK | 防重复写入, 保证每天每维度每版本唯一 |
+| `SYS_CONTROL` | `idx_scope_valid(scope_dim, is_valid)` | KEY | 快速查找当前有效版本 (常用查询) |
+| `PERF_METRIC_DEF` | `uk_metric_code(metric_code)` | UK | 指标编码全局唯一 |
+| `PERF_METRIC_DEF` | `uk_base_dim_slot(base_dim, val_slot, deleted)` | UK | 同一维度下槽位号唯一 |
+| `PERF_METRIC_DEF` | `idx_base_dim(base_dim)` | KEY | 按维度筛选指标 |
+| `PERF_METRIC_REF` | `uk_metric_ref(metric_code, ref_metric_code)` | UK | 防重复引用 |
+| `PERF_METRIC_REF` | `idx_ref_metric(ref_metric_code)` | KEY | 反向查询谁引用了我 (级联刷新用) |
+| `PERF_KPI_SCHEME` | `uk_scheme_code(scheme_code, deleted)` | UK | 方案编码唯一 |
+| `PERF_KPI_ITEM` | `uk_scheme_metric(scheme_id, metric_code)` | UK | 同一方案下一个指标只能有一个 KPI 项 |
+| `PERF_TARGET_PLAN` | `uk_plan_code(plan_code, deleted)` | UK | 方案编码唯一 |
+| `PERF_TARGET_PLAN` | `idx_status_year(status, year)` | KEY | 查询某年的启用方案 |
+| `PERF_TARGET_VALUE` | `uk_plan_subject_cycle_metric(plan_id, subject_type, subject_id, cycle_key, metric_code)` | UK | 目标值唯一 |
+| `PERF_TARGET_VALUE` | `idx_subject(subject_type, subject_id)` | KEY | 查询某员工/机构的目标 |
+| `PERF_IMPORT_BATCH` | `uk_batch_no(batch_no)` | UK | 批次号唯一 |
+| `PERF_IMPORT_BATCH` | `idx_import_type_date(import_type, as_of_date)` | KEY | 按类型+日期查询 |
+| `PERF_IMPORT_BATCH` | `idx_file_md5(file_md5)` | KEY | 文件重复检测 |
+| `PERF_RUN_TASK` | `uk_task_id(task_id)` | UK | 任务号唯一 |
+| `PERF_RUN_TASK` | `idx_task_type_date(task_type, data_date)` | KEY | 按类型+日期查询 |
+| `PERF_RUN_TASK` | `idx_started_by_time(started_by, created_time)` | KEY | 用户查询自己的任务 |
+| `EMP_INDEX_RESULT` | `uk_emp_date_version(emp_id, data_date, version)` | UK | 同一员工同日期同版本唯一 |
+| `EMP_INDEX_RESULT` | `idx_date_version(data_date, version)` | KEY | 全量扫描某日某版本 |
+| `EMP_INDEX_RESULT` | `idx_org_code_date(org_code, data_date)` | KEY | 按机构聚合 |
+| `ORG_INDEX_RESULT` | `uk_org_date_version(org_code, data_date, version)` | UK | 机构结果唯一 |
+| `CUST_INDEX_RESULT` | `uk_cust_date_version(cust_id, data_date, version)` | UK | 客户结果唯一 |
+| `CUST_INDEX_RESULT` | `idx_manager_date(cust_manager_emp_id, data_date)` | KEY | 客户经理聚合 |
+| `KPI_RESULT` | `uk_emp_cycle_asof(emp_id, cycle_type, cycle_date, as_of_date)` | UK | KPI 快照唯一 |
+| `KPI_RESULT` | `idx_cycle_date(cycle_date, cycle_type)` | KEY | 按周期查询 |
+| `CUST_ALLOC_RELATION` | `idx_cust_id_date(cust_id, effective_date, end_date)` | KEY | 查询客户分配关系 (时间线) |
+| `CUST_ALLOC_RELATION` | `idx_emp_id_date(emp_id, effective_date, end_date)` | KEY | 查询员工所管客户 |
+| `CUST_ALLOC_RELATION` | `idx_source_batch_id` | KEY | 按同步批次溯源 |
+| `PERF_ALLOC_ADJUST_APPLY` | `uk_apply_no(apply_no, deleted)` | UK | 申请号唯一 |
+| `PERF_ALLOC_ADJUST_APPLY` | `idx_owner_org_status(owner_org_id, status)` | KEY | 机构维度权限过滤 |
+| `PERF_ALLOC_ADJUST_APPLY` | `idx_business_key` | KEY | 按 business_key 查询 (工作流回调用) |
+| `PERF_ALLOC_ADJUST_ITEM` | `uk_apply_emp(apply_id, emp_id)` | UK | 同一申请内员工唯一 |
+| `PERF_TARGET_ADJUST_APPLY` | `uk_apply_no(apply_no, deleted)` | UK | 申请号唯一 |
+| `PERF_TARGET_ADJUST_APPLY` | `idx_plan_subject(plan_id, subject_type, subject_id)` | KEY | 按计划+对象查询 |
 
 ---
 
@@ -646,28 +646,28 @@ CREATE TABLE `perf_target_adjust_apply` (
 
 | 源表 | 源字段 | 目标表 | 目标字段 | 说明 |
 |---|---|---|---|---|
-| `perf_kpi_item` | `scheme_id` | `perf_kpi_scheme` | `id` | KPI 项属于 KPI 方案 |
-| `perf_target_plan` | `kpi_scheme_id` | `perf_kpi_scheme` | `id` | 目标方案绑定 KPI 方案 |
-| `perf_target_value` | `plan_id` | `perf_target_plan` | `id` | 目标值属于目标方案 |
-| `perf_target_value` | `metric_code` | `perf_metric_def` | `metric_code` | 目标值关联指标 |
-| `perf_metric_ref` | `metric_code` | `perf_metric_def` | `metric_code` | 指标引用关系 |
-| `perf_metric_ref` | `ref_metric_code` | `perf_metric_def` | `metric_code` | 被引用指标 |
-| `perf_kpi_item` | `metric_code` | `perf_metric_def` | `metric_code` | KPI 项关联指标 |
-| `perf_alloc_adjust_item` | `apply_id` | `perf_alloc_adjust_apply` | `id` | 明细属于申请单 |
-| `perf_alloc_adjust_apply` | `cust_id` | `cust_master` (customer-marketing) | `cust_id` | 跨模块, 调 CustomerQueryApi 校验 |
-| `perf_alloc_adjust_item` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块, 调 EmpQueryApi 校验 |
-| `perf_target_adjust_apply` | `plan_id` | `perf_target_plan` | `id` | 目标调整针对某个计划 |
-| `perf_target_adjust_apply` | `metric_code` | `perf_metric_def` | `metric_code` | 指定指标的调整 |
-| `cust_alloc_relation` | `cust_id` | `cust_master` (customer-marketing) | `cust_id` | 跨模块, 调 CustomerQueryApi 校验 |
-| `cust_alloc_relation` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块, 调 EmpQueryApi 校验 |
-| `emp_index_result` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块 |
-| `org_index_result` | `org_code` | `PT_ORG` (auth) | `org_code` | 跨模块 |
-| `kpi_result` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块 |
-| `kpi_result` | `scheme_id` | `perf_kpi_scheme` | `id` | 模块内 |
+| `PERF_KPI_ITEM` | `scheme_id` | `PERF_KPI_SCHEME` | `id` | KPI 项属于 KPI 方案 |
+| `PERF_TARGET_PLAN` | `kpi_scheme_id` | `PERF_KPI_SCHEME` | `id` | 目标方案绑定 KPI 方案 |
+| `PERF_TARGET_VALUE` | `plan_id` | `PERF_TARGET_PLAN` | `id` | 目标值属于目标方案 |
+| `PERF_TARGET_VALUE` | `metric_code` | `PERF_METRIC_DEF` | `metric_code` | 目标值关联指标 |
+| `PERF_METRIC_REF` | `metric_code` | `PERF_METRIC_DEF` | `metric_code` | 指标引用关系 |
+| `PERF_METRIC_REF` | `ref_metric_code` | `PERF_METRIC_DEF` | `metric_code` | 被引用指标 |
+| `PERF_KPI_ITEM` | `metric_code` | `PERF_METRIC_DEF` | `metric_code` | KPI 项关联指标 |
+| `PERF_ALLOC_ADJUST_ITEM` | `apply_id` | `PERF_ALLOC_ADJUST_APPLY` | `id` | 明细属于申请单 |
+| `PERF_ALLOC_ADJUST_APPLY` | `cust_id` | `CUST_MASTER` (customer-marketing) | `cust_id` | 跨模块, 调 CustomerQueryApi 校验 |
+| `PERF_ALLOC_ADJUST_ITEM` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块, 调 EmpQueryApi 校验 |
+| `PERF_TARGET_ADJUST_APPLY` | `plan_id` | `PERF_TARGET_PLAN` | `id` | 目标调整针对某个计划 |
+| `PERF_TARGET_ADJUST_APPLY` | `metric_code` | `PERF_METRIC_DEF` | `metric_code` | 指定指标的调整 |
+| `CUST_ALLOC_RELATION` | `cust_id` | `CUST_MASTER` (customer-marketing) | `cust_id` | 跨模块, 调 CustomerQueryApi 校验 |
+| `CUST_ALLOC_RELATION` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块, 调 EmpQueryApi 校验 |
+| `EMP_INDEX_RESULT` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块 |
+| `ORG_INDEX_RESULT` | `org_code` | `PT_ORG` (auth) | `org_code` | 跨模块 |
+| `KPI_RESULT` | `emp_id` | `PT_EMP` (auth) | `emp_id` | 跨模块 |
+| `KPI_RESULT` | `scheme_id` | `PERF_KPI_SCHEME` | `id` | 模块内 |
 
 **清理策略**:
-- 软删除 `perf_kpi_scheme` 时, Service 层校验是否存在 `perf_target_plan` 引用, 拒绝删除
-- 软删除 `perf_metric_def` 时, Service 层校验是否存在 `perf_kpi_item`、`perf_target_value` 引用
+- 软删除 `PERF_KPI_SCHEME` 时, Service 层校验是否存在 `PERF_TARGET_PLAN` 引用, 拒绝删除
+- 软删除 `PERF_METRIC_DEF` 时, Service 层校验是否存在 `PERF_KPI_ITEM`、`PERF_TARGET_VALUE` 引用
 
 ---
 
@@ -688,9 +688,9 @@ CREATE TABLE `perf_target_adjust_apply` (
 - UPDATE: 自动填充 `updated_by`、`updated_time`
 
 **例外** (结果类/日志类表):
-- `emp_index_result`、`org_index_result`、`cust_index_result`、`kpi_result`: 由批处理写入, 只保留 `created_time`、`updated_time`
-- `perf_run_task`: 只保留 `started_by`、`created_time`
-- `perf_import_batch`: 只保留 `imported_by`、`imported_time`
+- `EMP_INDEX_RESULT`、`ORG_INDEX_RESULT`、`CUST_INDEX_RESULT`、`KPI_RESULT`: 由批处理写入, 只保留 `created_time`、`updated_time`
+- `PERF_RUN_TASK`: 只保留 `started_by`、`created_time`
+- `PERF_IMPORT_BATCH`: 只保留 `imported_by`、`imported_time`
 
 ---
 
@@ -865,12 +865,12 @@ ORDER BY update_time DESC LIMIT 1;
 
 | 表 | 分区方式 | 粒度 | 说明 |
 |---|---|---|---|
-| `emp_index_result` | RANGE(TO_DAYS(data_date)) | 月 | 结果表海量数据, 按月分区便于归档 |
-| `org_index_result` | RANGE(TO_DAYS(data_date)) | 月 | 同上 |
-| `cust_index_result` | RANGE(TO_DAYS(data_date)) | 月 | 客户数据量最大, 必须分区 |
-| `kpi_result` | RANGE(TO_DAYS(cycle_date)) | 年 | 按考核周期分区, 便于年度归档 |
-| `perf_run_task` | RANGE(TO_DAYS(created_time)) | 季度 | 日志表 |
-| `perf_import_batch` | RANGE(TO_DAYS(imported_time)) | 季度 | 日志表 |
+| `EMP_INDEX_RESULT` | RANGE(TO_DAYS(data_date)) | 月 | 结果表海量数据, 按月分区便于归档 |
+| `ORG_INDEX_RESULT` | RANGE(TO_DAYS(data_date)) | 月 | 同上 |
+| `CUST_INDEX_RESULT` | RANGE(TO_DAYS(data_date)) | 月 | 客户数据量最大, 必须分区 |
+| `KPI_RESULT` | RANGE(TO_DAYS(cycle_date)) | 年 | 按考核周期分区, 便于年度归档 |
+| `PERF_RUN_TASK` | RANGE(TO_DAYS(created_time)) | 季度 | 日志表 |
+| `PERF_IMPORT_BATCH` | RANGE(TO_DAYS(imported_time)) | 季度 | 日志表 |
 
 ### 9.2 分区维护
 
@@ -888,11 +888,11 @@ DO
 
 | 表 | 在线保留 | 归档方式 |
 |---|---|---|
-| `emp_index_result` / `org_index_result` / `cust_index_result` | 近 24 个月 | 按月 EXCHANGE PARTITION 到归档表 |
-| `kpi_result` | 近 3 年 | 按年归档 |
-| `perf_run_task` | 近 3 个月 | 定期 DROP 旧分区 |
-| `perf_import_batch` | 近 12 个月 | 归档到备份库 |
-| `cust_alloc_relation` | 全量保留 | 不归档 (审计需求) |
+| `EMP_INDEX_RESULT` / `ORG_INDEX_RESULT` / `CUST_INDEX_RESULT` | 近 24 个月 | 按月 EXCHANGE PARTITION 到归档表 |
+| `KPI_RESULT` | 近 3 年 | 按年归档 |
+| `PERF_RUN_TASK` | 近 3 个月 | 定期 DROP 旧分区 |
+| `PERF_IMPORT_BATCH` | 近 12 个月 | 归档到备份库 |
+| `CUST_ALLOC_RELATION` | 全量保留 | 不归档 (审计需求) |
 
 ### 9.4 查询裁剪
 

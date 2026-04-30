@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.bizapp.mapper.LoanApplyMapper">
 
-    <!-- loan_apply 全列查询片段 -->
+    <!-- LOAN_APPLY 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, apply_no, cust_id, source_touch_task_id, project_type, biz_type, guarantee_type,
         credit_amount, credit_exposure_amount, status, business_key, process_instance_id,
@@ -13,7 +13,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM loan_apply
+        FROM LOAN_APPLY
         WHERE id = #{id}
           AND deleted = 0
     </select>
@@ -22,7 +22,7 @@
     <select id="selectForUpdate" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM loan_apply
+        FROM LOAN_APPLY
         WHERE id = #{id}
           AND deleted = 0
         FOR UPDATE
@@ -32,7 +32,7 @@
     <select id="selectByBusinessKey" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM loan_apply
+        FROM LOAN_APPLY
         WHERE business_key = #{businessKey}
           AND deleted = 0
         LIMIT 1
@@ -42,7 +42,7 @@
     <select id="selectPage" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM loan_apply
+        FROM LOAN_APPLY
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND apply_no LIKE CONCAT('%', #{keyword}, '%')
@@ -59,7 +59,7 @@
 
     <!-- 统计分页查询总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM loan_apply
+        SELECT COUNT(*) FROM LOAN_APPLY
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND apply_no LIKE CONCAT('%', #{keyword}, '%')
@@ -74,7 +74,7 @@
 
     <!-- 插入新申请 -->
     <insert id="insert" parameterType="com.bank.branch.platform.bizapp.entity.LoanApply">
-        INSERT INTO loan_apply (
+        INSERT INTO LOAN_APPLY (
             id, apply_no, cust_id, source_touch_task_id, project_type, biz_type, guarantee_type,
             credit_amount, credit_exposure_amount, status, business_key, process_instance_id,
             owner_org_id, created_by, created_time, updated_by, updated_time, deleted
@@ -87,7 +87,7 @@
 
     <!-- 按 id 更新申请（动态 SET，仅更新非 null 字段） -->
     <update id="updateById" parameterType="com.bank.branch.platform.bizapp.entity.LoanApply">
-        UPDATE loan_apply
+        UPDATE LOAN_APPLY
         <set>
             <if test="applyNo != null">apply_no = #{applyNo},</if>
             <if test="custId != null">cust_id = #{custId},</if>
@@ -110,7 +110,7 @@
 
     <!-- 更新申请状态（状态流转专用） -->
     <update id="updateStatusById">
-        UPDATE loan_apply
+        UPDATE LOAN_APPLY
         SET status = #{status},
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -120,7 +120,7 @@
 
     <!-- 条件更新状态（Listener 幂等写入专用）：仅当 status = expectedStatus 时才更新，防止多实例重复处理 -->
     <update id="conditionalUpdateStatus">
-        UPDATE loan_apply
+        UPDATE LOAN_APPLY
         SET status       = #{targetStatus},
             updated_by   = #{updatedBy},
             updated_time = NOW()
@@ -133,7 +133,7 @@
     <select id="selectByCustId" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM loan_apply
+        FROM LOAN_APPLY
         WHERE cust_id = #{custId}
           AND deleted = 0
         ORDER BY created_time DESC
@@ -143,7 +143,7 @@
     <select id="selectByIds" resultType="com.bank.branch.platform.bizapp.entity.LoanApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM loan_apply
+        FROM LOAN_APPLY
         WHERE id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">
             #{id}
@@ -153,7 +153,7 @@
 
     <!-- 按机构+时间范围统计已完成数量（用于绩效统计） -->
     <select id="countCompletedByOrg" resultType="long">
-        SELECT COUNT(*) FROM loan_apply
+        SELECT COUNT(*) FROM LOAN_APPLY
         WHERE status = 'COMPLETED'
           AND owner_org_id = #{orgId}
           AND deleted = 0
@@ -162,7 +162,7 @@
 
     <!-- 按创建人+时间范围汇总授信金额（用于绩效统计，只统计 COMPLETED 状态，避免草稿/审批中数据失真） -->
     <select id="sumCreditAmountByEmp" resultType="java.math.BigDecimal">
-        SELECT COALESCE(SUM(credit_amount), 0) FROM loan_apply
+        SELECT COALESCE(SUM(credit_amount), 0) FROM LOAN_APPLY
         WHERE created_by = #{empId}
           AND status = 'COMPLETED'
           AND deleted = 0

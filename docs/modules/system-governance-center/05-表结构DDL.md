@@ -42,7 +42,7 @@
 | updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `sys_dict` (
+CREATE TABLE IF NOT EXISTS `SYS_DICT` (
   `id` varchar(32) NOT NULL COMMENT '字典ID',
   `dict_type` varchar(100) NOT NULL COMMENT '字典类型',
   `dict_code` varchar(100) NOT NULL COMMENT '字典编码',
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS `sys_dict` (
 | updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `sys_dict_item` (
+CREATE TABLE IF NOT EXISTS `SYS_DICT_ITEM` (
   `id` varchar(32) NOT NULL COMMENT '字典项ID',
   `dict_type` varchar(100) NOT NULL COMMENT '字典类型（关联 sys_dict.dict_type）',
   `item_code` varchar(100) NOT NULL COMMENT '字典项编码',
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS `sys_dict_item` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='字典项表';
 ```
 
-> **说明**：V1 版本字典类型与字典项统一存储在 `sys_dict` 中。`sys_dict_item` 保留 DDL 备用，供未来拆分字典类型和字典项时使用。
+> **说明**：V1 版本字典类型与字典项统一存储在 `SYS_DICT` 中。`SYS_DICT_ITEM` 保留 DDL 备用，供未来拆分字典类型和字典项时使用。
 
 ### 2.3 sys_calendar_day -- 工作日历（按天）
 
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS `sys_dict_item` (
 | updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `sys_calendar_day` (
+CREATE TABLE IF NOT EXISTS `SYS_CALENDAR_DAY` (
   `day` date NOT NULL COMMENT '日期',
   `is_workday` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否工作日：1-工作日,0-休息日',
   `remark` varchar(500) DEFAULT NULL COMMENT '备注',
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS `sys_calendar_day` (
 | updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `sys_job_conf` (
+CREATE TABLE IF NOT EXISTS `SYS_JOB_CONF` (
   `id` varchar(32) NOT NULL COMMENT '任务ID',
   `job_key` varchar(100) NOT NULL COMMENT '任务KEY(唯一)',
   `job_name` varchar(200) NOT NULL COMMENT '任务名称',
@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS `sys_job_conf` (
 | created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `sys_job_run_log` (
+CREATE TABLE IF NOT EXISTS `SYS_JOB_RUN_LOG` (
   `id` varchar(32) NOT NULL COMMENT '执行日志ID',
   `job_id` varchar(32) NOT NULL COMMENT '任务ID',
   `trigger_type` varchar(20) NOT NULL COMMENT '触发类型：SCHEDULED/MANUAL',
@@ -213,7 +213,7 @@ CREATE TABLE IF NOT EXISTS `sys_job_run_log` (
 | updated_time | datetime | NULL | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `sys_config_kv` (
+CREATE TABLE IF NOT EXISTS `SYS_CONFIG_KV` (
   `id` varchar(32) NOT NULL COMMENT '配置ID',
   `config_key` varchar(200) NOT NULL COMMENT '配置键(唯一)',
   `config_value` longtext COMMENT '配置值',
@@ -247,7 +247,7 @@ CREATE TABLE IF NOT EXISTS `sys_config_kv` (
 | created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `user_notification` (
+CREATE TABLE IF NOT EXISTS `USER_NOTIFICATION` (
   `id` varchar(32) NOT NULL COMMENT '通知ID',
   `emp_id` varchar(32) NOT NULL COMMENT '接收人工号',
   `title` varchar(200) NOT NULL COMMENT '通知标题',
@@ -280,7 +280,7 @@ CREATE TABLE IF NOT EXISTS `user_notification` (
 | uploaded_time | datetime | NULL | CURRENT_TIMESTAMP | 上传时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `file_object` (
+CREATE TABLE IF NOT EXISTS `FILE_OBJECT` (
   `id` varchar(32) NOT NULL COMMENT '文件对象ID',
   `file_name` varchar(255) NOT NULL COMMENT '文件名',
   `file_size` bigint(20) DEFAULT NULL COMMENT '文件大小（字节）',
@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS `file_object` (
 | created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `biz_file_rel` (
+CREATE TABLE IF NOT EXISTS `BIZ_FILE_REL` (
   `id` varchar(32) NOT NULL COMMENT '关联ID',
   `biz_type` varchar(32) NOT NULL COMMENT '业务类型(BizType或业务域)',
   `biz_id` varchar(100) NOT NULL COMMENT '业务ID(字符串)',
@@ -345,7 +345,7 @@ CREATE TABLE IF NOT EXISTS `biz_file_rel` (
 | created_time | datetime | NULL | CURRENT_TIMESTAMP | 创建时间 |
 
 ```sql
-CREATE TABLE IF NOT EXISTS `audit_log` (
+CREATE TABLE IF NOT EXISTS `AUDIT_LOG` (
   `id` varchar(32) NOT NULL COMMENT '日志ID',
   `trace_id` varchar(64) DEFAULT NULL COMMENT '链路追踪ID',
   `emp_id` varchar(32) NOT NULL COMMENT '操作人工号',
@@ -668,5 +668,5 @@ ALTER TABLE audit_log PARTITION BY RANGE (TO_DAYS(created_time)) (
 ### 7.4 file_object / biz_file_rel -- 文件相关
 
 - **归档策略**：不主动清理
-- **孤立文件清理**：可定期检查 `file_object` 中无 `biz_file_rel` 关联且上传超过 30 天的文件，标记为待清理
+- **孤立文件清理**：可定期检查 `FILE_OBJECT` 中无 `BIZ_FILE_REL` 关联且上传超过 30 天的文件，标记为待清理
 - **MinIO 同步**：删除数据库记录时需同步删除 MinIO 中的对象

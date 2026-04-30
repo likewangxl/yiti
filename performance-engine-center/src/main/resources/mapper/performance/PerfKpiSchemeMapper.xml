@@ -8,7 +8,7 @@
     </sql>
 
     <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
-        INSERT INTO perf_kpi_scheme (
+        INSERT INTO PERF_KPI_SCHEME (
             <include refid="BASE_COLUMNS"/>
         ) VALUES (
             #{id}, #{schemeCode}, #{schemeName}, #{cycleType}, #{openDetail}, #{status},
@@ -17,7 +17,7 @@
     </insert>
 
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
-        UPDATE perf_kpi_scheme
+        UPDATE PERF_KPI_SCHEME
         <set>
             <if test="schemeCode != null">scheme_code = #{schemeCode},</if>
             <if test="schemeName != null">scheme_name = #{schemeName},</if>
@@ -32,7 +32,7 @@
     </update>
 
     <update id="updateStatusById">
-        UPDATE perf_kpi_scheme
+        UPDATE PERF_KPI_SCHEME
         SET status = #{status},
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -42,7 +42,7 @@
     <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_kpi_scheme
+        FROM PERF_KPI_SCHEME
         WHERE id = #{id}
         LIMIT 1
     </select>
@@ -50,7 +50,7 @@
     <select id="selectBySchemeCode" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_kpi_scheme
+        FROM PERF_KPI_SCHEME
         WHERE scheme_code = #{schemeCode}
         LIMIT 1
     </select>
@@ -58,7 +58,7 @@
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM perf_kpi_scheme
+        FROM PERF_KPI_SCHEME
         <where>
             <if test="cycleType != null and cycleType != ''">
                 AND cycle_type = #{cycleType}
@@ -79,7 +79,7 @@
 
     <select id="countByCondition" resultType="long">
         SELECT COUNT(*)
-        FROM perf_kpi_scheme
+        FROM PERF_KPI_SCHEME
         <where>
             <if test="cycleType != null and cycleType != ''">
                 AND cycle_type = #{cycleType}
@@ -97,7 +97,7 @@
     </select>
 
     <delete id="deleteById">
-        DELETE FROM perf_kpi_scheme
+        DELETE FROM PERF_KPI_SCHEME
         WHERE id = #{id}
     </delete>
 

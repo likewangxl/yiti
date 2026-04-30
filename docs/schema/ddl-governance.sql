@@ -10,7 +10,7 @@ SET NAMES utf8mb4;
 -- -------------------------------------------
 -- 1. 字典表（含字典类型与字典项，通过 dict_type 分组）
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `sys_dict` (
+CREATE TABLE IF NOT EXISTS `SYS_DICT` (
   `id` varchar(32) NOT NULL COMMENT '字典ID',
   `dict_type` varchar(100) NOT NULL COMMENT '字典类型',
   `dict_code` varchar(100) NOT NULL COMMENT '字典编码',
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS `sys_dict` (
 -- 说明：当前 V1 版本字典类型与字典项统一存储在 sys_dict 中，
 --       如需拆分可启用此表。暂保留 DDL 备用。
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `sys_dict_item` (
+CREATE TABLE IF NOT EXISTS `SYS_DICT_ITEM` (
   `id` varchar(32) NOT NULL COMMENT '字典项ID',
   `dict_type` varchar(100) NOT NULL COMMENT '字典类型（关联 sys_dict.dict_type）',
   `item_code` varchar(100) NOT NULL COMMENT '字典项编码',
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS `sys_dict_item` (
 -- -------------------------------------------
 -- 3. 工作日历（按天）
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `sys_calendar_day` (
+CREATE TABLE IF NOT EXISTS `SYS_CALENDAR_DAY` (
   `day` date NOT NULL COMMENT '日期',
   `is_workday` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否工作日：1-工作日,0-休息日',
   `remark` varchar(500) DEFAULT NULL COMMENT '备注',
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS `sys_calendar_day` (
 -- -------------------------------------------
 -- 4. 任务调度配置
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `sys_job_conf` (
+CREATE TABLE IF NOT EXISTS `SYS_JOB_CONF` (
   `id` varchar(32) NOT NULL COMMENT '任务ID',
   `job_key` varchar(100) NOT NULL COMMENT '任务KEY(唯一)',
   `job_name` varchar(200) NOT NULL COMMENT '任务名称',
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS `sys_job_conf` (
 -- -------------------------------------------
 -- 5. 任务执行日志
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `sys_job_run_log` (
+CREATE TABLE IF NOT EXISTS `SYS_JOB_RUN_LOG` (
   `id` varchar(32) NOT NULL COMMENT '执行日志ID',
   `job_id` varchar(32) NOT NULL COMMENT '任务ID',
   `trigger_type` varchar(20) NOT NULL COMMENT '触发类型：SCHEDULED/MANUAL',
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS `sys_job_run_log` (
 -- -------------------------------------------
 -- 6. 系统配置KV
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `sys_config_kv` (
+CREATE TABLE IF NOT EXISTS `SYS_CONFIG_KV` (
   `id` varchar(32) NOT NULL COMMENT '配置ID',
   `config_key` varchar(200) NOT NULL COMMENT '配置键(唯一)',
   `config_value` longtext COMMENT '配置值',
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS `sys_config_kv` (
 -- -------------------------------------------
 -- 7. 用户通知表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `user_notification` (
+CREATE TABLE IF NOT EXISTS `USER_NOTIFICATION` (
   `id` varchar(32) NOT NULL COMMENT '通知ID',
   `emp_id` varchar(32) NOT NULL COMMENT '接收人工号',
   `title` varchar(200) NOT NULL COMMENT '通知标题',
@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS `user_notification` (
 -- -------------------------------------------
 -- 8. 文件对象表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `file_object` (
+CREATE TABLE IF NOT EXISTS `FILE_OBJECT` (
   `id` varchar(32) NOT NULL COMMENT '文件对象ID',
   `file_name` varchar(255) NOT NULL COMMENT '文件名',
   `file_size` bigint(20) DEFAULT NULL COMMENT '文件大小（字节）',
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS `file_object` (
 -- -------------------------------------------
 -- 9. 业务-附件关联表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `biz_file_rel` (
+CREATE TABLE IF NOT EXISTS `BIZ_FILE_REL` (
   `id` varchar(32) NOT NULL COMMENT '关联ID',
   `biz_type` varchar(32) NOT NULL COMMENT '业务类型(BizType或业务域)',
   `biz_id` varchar(100) NOT NULL COMMENT '业务ID(字符串)',
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS `biz_file_rel` (
 -- -------------------------------------------
 -- 10. 审计日志表
 -- -------------------------------------------
-CREATE TABLE IF NOT EXISTS `audit_log` (
+CREATE TABLE IF NOT EXISTS `AUDIT_LOG` (
   `id` varchar(32) NOT NULL COMMENT '日志ID',
   `trace_id` varchar(64) DEFAULT NULL COMMENT '链路追踪ID',
   `emp_id` varchar(32) NOT NULL COMMENT '操作人工号',

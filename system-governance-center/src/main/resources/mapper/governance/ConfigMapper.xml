@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.ConfigMapper">
 
-    <!-- sys_config_kv 全列查询片段 -->
+    <!-- SYS_CONFIG_KV 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, config_key, config_value, value_type,
         status, remark,
@@ -14,7 +14,7 @@
             resultType="com.bank.branch.platform.governance.entity.SysConfigKv">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_config_kv
+        FROM SYS_CONFIG_KV
         WHERE config_key = #{configKey}
         LIMIT 1
     </select>
@@ -23,7 +23,7 @@
     <select id="selectAll" resultType="com.bank.branch.platform.governance.entity.SysConfigKv">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM sys_config_kv
+        FROM SYS_CONFIG_KV
         <where>
             <if test="status != null and status != ''">
                 AND status = #{status}
@@ -36,7 +36,7 @@
     <!-- 统计配置总记录数 -->
     <select id="countAll" resultType="long">
         SELECT COUNT(*)
-        FROM sys_config_kv
+        FROM SYS_CONFIG_KV
         <where>
             <if test="status != null and status != ''">
                 AND status = #{status}
@@ -46,7 +46,7 @@
 
     <!-- 按主键动态更新配置信息 -->
     <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysConfigKv">
-        UPDATE sys_config_kv
+        UPDATE SYS_CONFIG_KV
         <set>
             <if test="configValue != null">config_value = #{configValue},</if>
             <if test="valueType != null">value_type = #{valueType},</if>
@@ -60,7 +60,7 @@
 
     <!-- 新增配置记录 -->
     <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysConfigKv">
-        INSERT INTO sys_config_kv (
+        INSERT INTO SYS_CONFIG_KV (
             id, config_key, config_value, value_type,
             status, remark,
             created_by, created_time, updated_by, updated_time

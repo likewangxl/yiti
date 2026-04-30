@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.ProductInfoMapper">
 
-    <!-- product_info 结果映射（responsible_emp_ids 需要 TypeHandler） -->
+    <!-- PRODUCT_INFO 结果映射（responsible_emp_ids 需要 TypeHandler） -->
     <resultMap id="ProductInfoMap" type="com.bank.branch.platform.portal.entity.ProductInfo">
         <id column="id" property="id"/>
         <result column="product_code" property="productCode"/>
@@ -23,7 +23,7 @@
         <result column="deleted" property="deleted"/>
     </resultMap>
 
-    <!-- product_info 全列查询片段 -->
+    <!-- PRODUCT_INFO 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, product_code, product_name, product_category, description,
         support_for_support_request, owner_org_id, product_dept_org_code,
@@ -33,7 +33,7 @@
 
     <!-- 插入新产品 -->
     <insert id="insert" parameterType="com.bank.branch.platform.portal.entity.ProductInfo">
-        INSERT INTO product_info (
+        INSERT INTO PRODUCT_INFO (
             id, product_code, product_name, product_category, description,
             support_for_support_request, owner_org_id, product_dept_org_code,
             file_object_id, responsible_emp_ids, status,
@@ -52,7 +52,7 @@
     <select id="selectById" resultMap="ProductInfoMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM product_info
+        FROM PRODUCT_INFO
         WHERE id = #{id}
           AND deleted = 0
     </select>
@@ -61,7 +61,7 @@
     <select id="selectByIdForUpdate" resultMap="ProductInfoMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM product_info
+        FROM PRODUCT_INFO
         WHERE id = #{id}
           AND deleted = 0
         FOR UPDATE
@@ -71,7 +71,7 @@
     <select id="selectByProductCode" resultMap="ProductInfoMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM product_info
+        FROM PRODUCT_INFO
         WHERE product_code = #{productCode}
           AND deleted = 0
         LIMIT 1
@@ -79,7 +79,7 @@
 
     <!-- 按部分字段更新（D.5），动态 SET -->
     <update id="updateById" parameterType="com.bank.branch.platform.portal.entity.ProductInfo">
-        UPDATE product_info
+        UPDATE PRODUCT_INFO
         <set>
             <if test="productCode != null">product_code = #{productCode},</if>
             <if test="productName != null">product_name = #{productName},</if>
@@ -100,7 +100,7 @@
 
     <!-- 逻辑删除（D.6） -->
     <update id="softDeleteById">
-        UPDATE product_info
+        UPDATE PRODUCT_INFO
         SET deleted = 1,
             updated_by = #{updatedBy},
             updated_time = NOW()
@@ -112,7 +112,7 @@
     <select id="listSupportAvailable" resultMap="ProductInfoMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM product_info
+        FROM PRODUCT_INFO
         WHERE support_for_support_request = 1
           AND status = 'ACTIVE'
           AND deleted = 0
@@ -123,7 +123,7 @@
     <select id="listByIds" resultMap="ProductInfoMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM product_info
+        FROM PRODUCT_INFO
         WHERE deleted = 0
           AND id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">
@@ -135,7 +135,7 @@
     <select id="selectPage" resultMap="ProductInfoMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM product_info
+        FROM PRODUCT_INFO
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (product_code LIKE CONCAT('%', #{keyword}, '%')
@@ -153,7 +153,7 @@
 
     <!-- 统计分页查询的总记录数 -->
     <select id="countPage" resultType="long">
-        SELECT COUNT(*) FROM product_info
+        SELECT COUNT(*) FROM PRODUCT_INFO
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (product_code LIKE CONCAT('%', #{keyword}, '%')
@@ -171,7 +171,7 @@
     <select id="listByProductDeptOrgCode" resultMap="ProductInfoMap">
         SELECT
             <include refid="BASE_COLUMNS"/>
-        FROM product_info
+        FROM PRODUCT_INFO
         WHERE product_dept_org_code = #{productDeptOrgCode}
           AND deleted = 0
         ORDER BY product_name
@@ -220,7 +220,7 @@
 
     <!-- D.1 分页查询产品列表（含 DATA_SCOPE 过滤） -->
     <select id="listProducts" resultMap="ProductInfoMap">
-        SELECT <include refid="BASE_COLUMNS"/> FROM product_info
+        SELECT <include refid="BASE_COLUMNS"/> FROM PRODUCT_INFO
         <include refid="listProductsWhere"/>
         ORDER BY updated_time DESC
         LIMIT #{q.offset}, #{q.limit}
@@ -228,7 +228,7 @@
 
     <!-- D.1 统计产品总数 -->
     <select id="countProducts" resultType="long">
-        SELECT COUNT(*) FROM product_info
+        SELECT COUNT(*) FROM PRODUCT_INFO
         <include refid="listProductsWhere"/>
     </select>
 
