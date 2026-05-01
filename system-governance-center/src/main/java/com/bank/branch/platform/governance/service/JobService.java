@@ -120,21 +120,12 @@ public class JobService {
      * @throws SchedulerException     Scheduler 注册异常
      * @throws ClassNotFoundException quartz_job_class 反射加载失败
      */
-    @SuppressWarnings("unchecked")
+    /**
+     * V1.6：注册 JobDetail + CronTrigger（无 JobDataMap）.
+     * V1.7 改为委托 scheduleQuartzJobWithData(conf, null) 单一来源，消除重复代码.
+     */
     private void scheduleQuartzJob(SysJobConf job) throws SchedulerException, ClassNotFoundException {
-        Class<? extends Job> clazz = (Class<? extends Job>) Class.forName(job.getQuartzJobClass());
-        JobDetail detail = JobBuilder.newJob(clazz)
-                .withIdentity(job.getJobKey(), "DEFAULT")
-                .storeDurably()
-                .build();
-        CronScheduleBuilder cron = applyMisfirePolicy(
-                cronSchedule(job.getCronExpr()), job.getMisfirePolicy());
-        CronTrigger trigger = TriggerBuilder.newTrigger()
-                .withIdentity(job.getJobKey() + "_TRIGGER", "DEFAULT")
-                .withSchedule(cron)
-                .forJob(detail)
-                .build();
-        scheduler.scheduleJob(detail, trigger);
+        scheduleQuartzJobWithData(job, null);
     }
 
     /**
