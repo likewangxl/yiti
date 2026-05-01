@@ -47,23 +47,23 @@ public class JobFacade implements JobApi {
     }
 
     /**
-     * 注册（或覆盖）一个调度任务（V1.7 占位，Task 7 替换为真实实现）.
+     * 注册（或覆盖）一个调度任务（V1.7）.
      *
      * @param cmd 注册参数
      * @return sys_job_conf 主键 id
      */
     @Override
     public String registerJob(RegisterJobCmd cmd) {
-        throw new UnsupportedOperationException("V1.7 Task 7 实现");
+        return jobService.registerJob(cmd);
     }
 
     /**
-     * 注销一个调度任务（幂等）（V1.7 占位，Task 7 替换为真实实现）.
+     * 注销一个调度任务（幂等）（V1.7）.
      *
      * @param jobKey 任务唯一标识
      */
     @Override
     public void unregisterJob(String jobKey) {
-        throw new UnsupportedOperationException("V1.7 Task 7 实现");
+        jobService.unregisterJob(jobKey);
     }
 }

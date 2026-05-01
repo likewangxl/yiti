@@ -12,9 +12,11 @@ import com.bank.branch.platform.governance.enums.JobRunStatus;
 import com.bank.branch.platform.governance.enums.JobStatus;
 import com.bank.branch.platform.governance.mapper.JobConfMapper;
 import com.bank.branch.platform.governance.mapper.JobRunLogMapper;
+import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.quartz.CronExpression;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.CronTrigger;
 import org.quartz.Job;
@@ -32,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -455,6 +458,140 @@ public class JobService {
                 .jobKey(conf.getJobKey())
                 .triggerTime(LocalDateTime.now().format(ISO_FORMATTER))
                 .build();
+    }
+
+    // ── V1.7 新增：声明式注册 / 注销 ─────────────────────────────────
+
+    /**
+     * V1.7 新增：注册（或覆盖）调度任务.
+     *
+     * <p>原子写入 sys_job_conf 一行 + Quartz Scheduler 注入 JobDetail/CronTrigger。
+     * 若 jobKey 已存在则覆盖（cron 变更场景）。
+     * 若 Scheduler 不可用（测试上下文）则仅写 sys_job_conf，不抛异常。
+     *
+     * @param cmd 注册参数
+     * @return 写入后 sys_job_conf 主键 id
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-50010 cron 非法
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-50011 quartz_job_class 反射失败
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-50012 Scheduler 注册失败
+     */
+    @Transactional
+    public String registerJob(RegisterJobCmd cmd) {
+        log.info("[JobService.registerJob] jobKey={} cronExpr={}", cmd.getJobKey(), cmd.getCronExpr());
+
+        // 1. 校验 cron 表达式
+        if (!CronExpression.isValidExpression(cmd.getCronExpr())) {
+            throw new BizException(
+                GovErrorCode.JOB_CRON_INVALID.getCode(),
+                GovErrorCode.JOB_CRON_INVALID.getMessage());
+        }
+
+        // 2. 反射校验 quartzJobClass 存在且是 Job 子类
+        Class<?> jobClass;
+        try {
+            jobClass = Class.forName(cmd.getQuartzJobClass());
+            if (!Job.class.isAssignableFrom(jobClass)) {
+                throw new BizException(
+                    GovErrorCode.JOB_CLASS_NOT_FOUND.getCode(),
+                    GovErrorCode.JOB_CLASS_NOT_FOUND.getMessage() + ": 不是 Job 子类");
+            }
+        } catch (ClassNotFoundException e) {
+            throw new BizException(
+                GovErrorCode.JOB_CLASS_NOT_FOUND.getCode(),
+                GovErrorCode.JOB_CLASS_NOT_FOUND.getMessage() + ": " + e.getMessage());
+        }
+
+        // 3. upsert sys_job_conf
+        SysJobConf conf = jobConfMapper.selectByJobKey(cmd.getJobKey());
+        boolean isInsert = (conf == null);
+        if (isInsert) {
+            conf = new SysJobConf();
+            conf.setId(UUID.randomUUID().toString().replace("-", ""));
+            conf.setCreatedBy("SYSTEM");
+            conf.setCreatedTime(LocalDateTime.now());
+        }
+        conf.setJobKey(cmd.getJobKey());
+        conf.setJobName(cmd.getJobName());
+        conf.setCronExpr(cmd.getCronExpr());
+        conf.setQuartzJobClass(cmd.getQuartzJobClass());
+        conf.setMisfirePolicy(cmd.getMisfirePolicy());
+        conf.setStatus(JobStatus.ACTIVE.getCode());
+        conf.setAllowManualTrigger(cmd.isAllowManualTrigger() ? 1 : 0);
+        conf.setRemark(cmd.getRemark());
+        conf.setUpdatedBy("SYSTEM");
+        conf.setUpdatedTime(LocalDateTime.now());
+        if (isInsert) {
+            jobConfMapper.insert(conf);
+        } else {
+            jobConfMapper.updateById(conf);
+        }
+
+        // 4. 注册到 Quartz Scheduler（测试上下文 scheduler=null 时跳过）
+        if (scheduler != null) {
+            try {
+                scheduleQuartzJobWithData(conf, cmd.getJobData());
+            } catch (Exception e) {
+                throw new BizException(
+                    GovErrorCode.JOB_REGISTER_FAILED.getCode(),
+                    "Scheduler 注册失败: " + e.getMessage());
+            }
+        }
+        return conf.getId();
+    }
+
+    /**
+     * V1.7 新增：注销调度任务（幂等）.
+     *
+     * <p>先从 Quartz Scheduler 删除 JobDetail（DEFAULT 和 PERF_METRIC 两个 group），
+     * 再从 sys_job_conf 删除配置。scheduler 异常时记 warn 后继续删库，确保幂等。
+     *
+     * @param jobKey 任务唯一标识
+     */
+    @Transactional
+    public void unregisterJob(String jobKey) {
+        log.info("[JobService.unregisterJob] jobKey={}", jobKey);
+        if (scheduler != null) {
+            try {
+                scheduler.deleteJob(JobKey.jobKey(jobKey, "DEFAULT"));
+                scheduler.deleteJob(JobKey.jobKey(jobKey, "PERF_METRIC"));
+            } catch (SchedulerException e) {
+                log.warn("[JobService.unregisterJob] scheduler.deleteJob 失败 jobKey={}", jobKey, e);
+            }
+        }
+        jobConfMapper.deleteByJobKey(jobKey);
+    }
+
+    /**
+     * V1.7 新增：注册 JobDetail + CronTrigger（带 JobDataMap）.
+     *
+     * <p>与 V1.6 的 {@link #scheduleQuartzJob(SysJobConf)} 区别：支持传入 jobData，
+     * 且 group 按 jobKey 前缀自动判断（PERF_METRIC_ 前缀用 PERF_METRIC group，其余用 DEFAULT）。
+     *
+     * @param conf    任务配置实体
+     * @param jobData 透传到 JobDataMap 的额外参数（可为 null）
+     */
+    @SuppressWarnings("unchecked")
+    private void scheduleQuartzJobWithData(SysJobConf conf, Map<String, String> jobData)
+            throws SchedulerException, ClassNotFoundException {
+        Class<? extends Job> clazz = (Class<? extends Job>) Class.forName(conf.getQuartzJobClass());
+        String group = conf.getJobKey().startsWith("PERF_METRIC_") ? "PERF_METRIC" : "DEFAULT";
+        JobDataMap dataMap = new JobDataMap();
+        if (jobData != null) {
+            dataMap.putAll(jobData);
+        }
+        JobDetail detail = JobBuilder.newJob(clazz)
+            .withIdentity(conf.getJobKey(), group)
+            .usingJobData(dataMap)
+            .storeDurably()
+            .build();
+        CronScheduleBuilder cron = applyMisfirePolicy(
+            CronScheduleBuilder.cronSchedule(conf.getCronExpr()), conf.getMisfirePolicy());
+        CronTrigger trigger = TriggerBuilder.newTrigger()
+            .withIdentity(conf.getJobKey() + "_TRIGGER", group)
+            .withSchedule(cron)
+            .forJob(detail)
+            .build();
+        scheduler.scheduleJob(detail, trigger);
     }
 
     // ── 私有方法：实体 → DTO 转换 ──────────────────────────────────
