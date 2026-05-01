@@ -486,7 +486,7 @@ public class JobService {
                     GovErrorCode.JOB_CLASS_NOT_FOUND.getCode(),
                     GovErrorCode.JOB_CLASS_NOT_FOUND.getMessage() + ": 不是 Job 子类");
             }
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException | LinkageError e) {
             throw new BizException(
                 GovErrorCode.JOB_CLASS_NOT_FOUND.getCode(),
                 GovErrorCode.JOB_CLASS_NOT_FOUND.getMessage() + ": " + e.getMessage());
@@ -575,7 +575,12 @@ public class JobService {
     @SuppressWarnings("unchecked")
     private void scheduleQuartzJobWithData(SysJobConf conf, Map<String, String> jobData)
             throws SchedulerException, ClassNotFoundException {
-        Class<? extends Job> clazz = (Class<? extends Job>) Class.forName(conf.getQuartzJobClass());
+        Class<? extends Job> clazz;
+        try {
+            clazz = (Class<? extends Job>) Class.forName(conf.getQuartzJobClass());
+        } catch (LinkageError e) {
+            throw new ClassNotFoundException("LinkageError loading " + conf.getQuartzJobClass(), e);
+        }
         String group = resolveGroup(conf.getJobKey());
         JobDataMap dataMap = new JobDataMap();
         if (jobData != null) {
