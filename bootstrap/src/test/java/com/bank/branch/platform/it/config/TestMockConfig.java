@@ -85,6 +85,27 @@ public class TestMockConfig {
     }
 
     /**
+     * RedisTemplate&lt;String, String&gt; — V1.7 KpiCascadeListener (performance 模块)
+     * 构造器注入 RedisTemplate&lt;String, String&gt; 用于 SETNX 30s 防重。
+     * Spring DI 把泛型当作不同 bean 类型（&lt;String, Object&gt; ≠ &lt;String, String&gt;），
+     * 因此必须显式提供。
+     *
+     * 复用上面的 mock RedisConnectionFactory，行为与 Redis 不可用场景一致。
+     */
+    @Bean
+    public RedisTemplate<String, String> stringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, String> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        template.setKeySerializer(stringSerializer);
+        template.setValueSerializer(stringSerializer);
+        template.setHashKeySerializer(stringSerializer);
+        template.setHashValueSerializer(stringSerializer);
+        template.afterPropertiesSet();
+        return template;
+    }
+
+    /**
      * Mock MinioClient — governance 模块的 MinioConfig 需要此 Bean。
      * 注意: MinioConfig 自己会创建 MinioClient，使用 @Primary 覆盖。
      */
