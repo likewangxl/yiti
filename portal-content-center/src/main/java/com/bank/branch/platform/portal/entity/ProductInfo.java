@@ -1,5 +1,8 @@
 package com.bank.branch.platform.portal.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -15,9 +18,11 @@ import java.util.List;
  * </p>
  */
 @Data
+@TableName("product_info")
 public class ProductInfo {
 
     /** 产品ID（UUID主键），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 产品代码（全局唯一），对应 product_code */

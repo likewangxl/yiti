@@ -2,7 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.PortalNavMapper">
 
-    <!-- PORTAL_NAV 全列查询片段 -->
+    <!-- insert/selectById/updateById 含动态 SET 业务逻辑，保留 XML 实现覆盖 BaseMapper 默认行为 -->
+
+    <!-- portal_nav 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, nav_name, nav_url, nav_icon, nav_category,
         sort_order, status,

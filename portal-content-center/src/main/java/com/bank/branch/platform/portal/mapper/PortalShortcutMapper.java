@@ -1,5 +1,6 @@
 package com.bank.branch.platform.portal.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.portal.entity.PortalShortcut;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,9 +14,13 @@ import java.util.List;
  * 系统级快捷入口（shortcut_type='SYSTEM'）全员可见，
  * 自定义快捷入口（shortcut_type='CUSTOM'）仅所属员工可见。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} 由 BaseMapper 提供。
+ * 自定义 SQL（按员工/系统查询、批量插入、物理删除）继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface PortalShortcutMapper {
+public interface PortalShortcutMapper extends BaseMapper<PortalShortcut> {
 
     /**
      * 插入单条快捷入口。

@@ -2,7 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.DocInfoMapper">
 
-    <!-- DOC_INFO 全列查询片段 -->
+    <!-- insert/selectById/updateById 含动态 SET 业务逻辑，保留 XML 实现覆盖 BaseMapper 默认行为 -->
+
+    <!-- doc_info 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, doc_title, doc_category, file_object_id, status,
         created_by, created_time, updated_by, updated_time

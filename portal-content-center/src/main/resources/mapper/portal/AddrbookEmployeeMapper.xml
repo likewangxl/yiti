@@ -2,7 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper">
 
-    <!-- ADDRBOOK_EMPLOYEE 结果映射（responsible_product_ids 需要 TypeHandler） -->
+    <!-- insert/selectById/updateById 均含 TypeHandler 或业务逻辑（deleted=0 过滤），保留 XML 实现覆盖 BaseMapper 默认行为 -->
+
+    <!-- addrbook_employee 结果映射（responsible_product_ids 需要 TypeHandler） -->
     <resultMap id="AddrbookEmployeeMap" type="com.bank.branch.platform.portal.entity.AddrbookEmployee">
         <id column="emp_id" property="empId"/>
         <result column="emp_name" property="empName"/>

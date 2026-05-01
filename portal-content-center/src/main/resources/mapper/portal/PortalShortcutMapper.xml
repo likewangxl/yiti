@@ -2,7 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.portal.mapper.PortalShortcutMapper">
 
-    <!-- PORTAL_SHORTCUT 全列查询片段 -->
+    <!-- insert 含业务字段，保留 XML 实现覆盖 BaseMapper 默认行为；deleteById/selectById/updateById 由 BaseMapper 提供（本表无这类自定义 XML） -->
+
+    <!-- portal_shortcut 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type,
         target_type, emp_id, sort_order, status,

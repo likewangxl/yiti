@@ -247,9 +247,9 @@ class AddressBookServiceTest {
         addressBookService.updateEmployee(targetEmpId, req);
 
         verify(addrbookEmployeeMapper).updateFields(any(AddrbookEmployee.class));
-        verify(productInfoMapper).updateById(argThat(pi ->
+        verify(productInfoMapper).updateById(argThat((ProductInfo pi) ->
                 pi.getId().equals("P001") && !pi.getResponsibleEmpIds().contains("E001")));
-        verify(productInfoMapper).updateById(argThat(pi ->
+        verify(productInfoMapper).updateById(argThat((ProductInfo pi) ->
                 pi.getId().equals("P003") && pi.getResponsibleEmpIds().contains("E001")));
         verify(eventPublisher).publishEvent(any(AddrbookUpdatedEvent.class));
         verify(eventPublisher, atLeastOnce()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
@@ -269,7 +269,7 @@ class AddressBookServiceTest {
         addressBookService.updateEmployee(targetEmpId, req);
 
         verify(addrbookEmployeeMapper).updateFields(any());
-        verify(productInfoMapper, never()).updateById(any());
+        verify(productInfoMapper, never()).updateById(any(ProductInfo.class));
         verify(eventPublisher).publishEvent(any(AddrbookUpdatedEvent.class));
         verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
     }

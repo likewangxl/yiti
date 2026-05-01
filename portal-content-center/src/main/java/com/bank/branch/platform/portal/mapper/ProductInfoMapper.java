@@ -1,5 +1,6 @@
 package com.bank.branch.platform.portal.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.service.dto.ProductListQuery;
 import org.apache.ibatis.annotations.Mapper;
@@ -13,25 +14,14 @@ import java.util.List;
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
  * responsible_emp_ids 字段通过 JsonStringListTypeHandler 自动转换 List&lt;String&gt; ↔ JSON 字符串。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} 由 BaseMapper 提供。
+ * 自定义 SQL（含逻辑删除过滤、TypeHandler、DATA_SCOPE 过滤）继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface ProductInfoMapper {
-
-    /**
-     * 插入新产品。
-     *
-     * @param entity 产品实体
-     * @return 受影响行数
-     */
-    int insert(ProductInfo entity);
-
-    /**
-     * 按 id 查询（含逻辑删除过滤）。
-     *
-     * @param id 产品ID
-     * @return 产品实体，不存在或已删除时返回 null
-     */
-    ProductInfo selectById(@Param("id") String id);
+public interface ProductInfoMapper extends BaseMapper<ProductInfo> {
 
     /**
      * 按 id 查询并加 FOR UPDATE 行锁（D.5 编辑用）。

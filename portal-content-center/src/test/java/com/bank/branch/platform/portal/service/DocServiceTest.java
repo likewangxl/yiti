@@ -185,7 +185,7 @@ class DocServiceTest {
                     assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.DOC_NOT_FOUND.getCode());
                 });
 
-        verify(docInfoMapper, never()).updateById(any());
+        verify(docInfoMapper, never()).updateById(any(DocInfo.class));
     }
 
     // ========== deleteDocument ==========

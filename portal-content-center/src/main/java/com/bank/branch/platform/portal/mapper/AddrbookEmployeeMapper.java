@@ -1,5 +1,6 @@
 package com.bank.branch.platform.portal.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,9 +14,15 @@ import java.util.List;
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
  * responsible_product_ids 字段通过 JsonStringListTypeHandler 自动转换 List&lt;String&gt; <-> JSON 字符串。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} 由 BaseMapper 提供。
+ * 主键为 emp_id（非 id），已在实体通过 @TableId(value="emp_id") 声明。
+ * 自定义 SQL（含逻辑删除过滤、TypeHandler、乐观锁）继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface AddrbookEmployeeMapper {
+public interface AddrbookEmployeeMapper extends BaseMapper<AddrbookEmployee> {
 
     /**
      * 插入新员工。

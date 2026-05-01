@@ -145,7 +145,7 @@ class NavServiceTest {
                     assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.NAV_NAME_DUPLICATE.getCode());
                 });
 
-        verify(portalNavMapper, never()).insert(any());
+        verify(portalNavMapper, never()).insert(any(PortalNav.class));
     }
 
     // ========== updateNav ==========
@@ -185,7 +185,7 @@ class NavServiceTest {
                     assertThat(bizEx.getCode()).isEqualTo(PortalErrorCode.NAV_NOT_FOUND.getCode());
                 });
 
-        verify(portalNavMapper, never()).updateById(any());
+        verify(portalNavMapper, never()).updateById(any(PortalNav.class));
     }
 
     // ========== deleteNav ==========

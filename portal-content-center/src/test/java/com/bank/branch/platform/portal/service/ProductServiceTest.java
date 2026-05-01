@@ -87,7 +87,7 @@ class ProductServiceTest {
         when(productInfoMapper.selectByProductCode("EXISTING_CODE")).thenReturn(new ProductInfo());
         assertThatThrownBy(() -> productService.createProduct(req)).isInstanceOf(BizException.class)
                 .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_CODE_DUPLICATE.getCode()));
-        verify(productInfoMapper, never()).insert(any());
+        verify(productInfoMapper, never()).insert(any(ProductInfo.class));
     }
 
     @Test
@@ -101,7 +101,7 @@ class ProductServiceTest {
         when(addrbookEmployeeMapper.countActiveByEmpIds(Arrays.asList("E001", "E002", "E003"))).thenReturn(2);
         assertThatThrownBy(() -> productService.createProduct(req)).isInstanceOf(BizException.class)
                 .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.EMPLOYEE_RESIGNED.getCode()));
-        verify(productInfoMapper, never()).insert(any());
+        verify(productInfoMapper, never()).insert(any(ProductInfo.class));
     }
 
     @Test
@@ -123,7 +123,7 @@ class ProductServiceTest {
         ProductUpdateReqDTO req = new ProductUpdateReqDTO(); req.setProductName("x");
         assertThatThrownBy(() -> productService.updateProduct("nonexistent", req)).isInstanceOf(BizException.class)
                 .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
-        verify(productInfoMapper, never()).updateById(any());
+        verify(productInfoMapper, never()).updateById(any(ProductInfo.class));
     }
 
     @Test
@@ -216,7 +216,7 @@ class ProductServiceTest {
         ProductInfo result = productService.createProduct(req);
         assertThat(result).isNotNull();
         assertThat(result.getId()).isNotBlank();
-        verify(productInfoMapper).insert(any());
+        verify(productInfoMapper).insert(any(ProductInfo.class));
         ArgumentCaptor<ProductResponsibleUpdatedEvent> captor = ArgumentCaptor.forClass(ProductResponsibleUpdatedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().getAfterEmpIds()).containsExactly("E10001", "E10002");
@@ -254,7 +254,7 @@ class ProductServiceTest {
 
         ProductInfo result = productService.createProduct(req);
         assertThat(result).isNotNull();
-        verify(productInfoMapper).insert(any());
+        verify(productInfoMapper).insert(any(ProductInfo.class));
         verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
     }
 
@@ -274,7 +274,7 @@ class ProductServiceTest {
         assertThatThrownBy(() -> productService.createProduct(req))
                 .isInstanceOf(BizException.class)
                 .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40902"));
-        verify(productInfoMapper, never()).insert(any());
+        verify(productInfoMapper, never()).insert(any(ProductInfo.class));
     }
 
     @Test
@@ -310,7 +310,7 @@ class ProductServiceTest {
         assertThatThrownBy(() -> productService.createProduct(req))
                 .isInstanceOf(BizException.class)
                 .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo("PORTAL-40302"));
-        verify(productInfoMapper, never()).insert(any());
+        verify(productInfoMapper, never()).insert(any(ProductInfo.class));
     }
 
     // ========== D.5 updateProduct 补充测试 ==========
@@ -335,7 +335,7 @@ class ProductServiceTest {
 
         productService.updateProduct("P001", req);
         verify(productInfoMapper).selectByIdForUpdate("P001");
-        verify(productInfoMapper).updateById(any());
+        verify(productInfoMapper).updateById(any(ProductInfo.class));
     }
 
     @Test

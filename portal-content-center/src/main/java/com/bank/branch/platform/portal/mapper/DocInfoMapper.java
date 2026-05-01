@@ -1,5 +1,6 @@
 package com.bank.branch.platform.portal.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.portal.entity.DocInfo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,14 @@ import java.util.List;
  * 支持分页查询、按分类查询、启用/禁用状态管理等操作。
  * 本表无 deleted 列，softDelete 通过将 status 设为 DISABLED 实现。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} 由 BaseMapper 提供。
+ * 自定义 SQL（分页、分类、状态过滤）继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface DocInfoMapper {
+public interface DocInfoMapper extends BaseMapper<DocInfo> {
 
     /**
      * 插入新文档。

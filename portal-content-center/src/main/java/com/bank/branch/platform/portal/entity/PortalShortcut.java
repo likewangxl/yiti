@@ -1,5 +1,8 @@
 package com.bank.branch.platform.portal.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,9 +17,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("portal_shortcut")
 public class PortalShortcut {
 
     /** 快捷入口ID（UUID主键），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 快捷入口名称，对应 shortcut_name */

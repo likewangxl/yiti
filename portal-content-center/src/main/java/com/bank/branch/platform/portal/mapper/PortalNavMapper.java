@@ -1,5 +1,6 @@
 package com.bank.branch.platform.portal.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.portal.entity.PortalNav;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,9 +12,14 @@ import java.util.List;
  * <p>
  * 支持按分类查询、排序管理、启用/禁用状态过滤等操作。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} 由 BaseMapper 提供。
+ * 自定义 SQL（状态过滤、批量排序、分类查询）继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface PortalNavMapper {
+public interface PortalNavMapper extends BaseMapper<PortalNav> {
 
     /**
      * 插入新导航。
