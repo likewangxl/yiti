@@ -132,7 +132,19 @@ public enum PerfErrorCode {
     IDEMPOTENCY_WAIT_TIMEOUT("PERF-50003", "幂等等待超时（Redis 锁释放后仍无 DB 记录）"),
 
     /** 指标/KPI 计算 Job 执行失败（V1.1 占位） */
-    CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败");
+    CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败"),
+
+    /** V1.7：calc_freq 非法（不在 DAY/WEEK/MONTH/QUARTER/YEAR 内）. */
+    METRIC_CALC_FREQ_INVALID("PERF-40021", "calc_freq 非法"),
+
+    /** V1.7：EXPR/GROOVY 类型 subject_sql 必填. */
+    METRIC_SUBJECT_SQL_REQUIRED("PERF-40022", "EXPR/GROOVY 类型 subject_sql 必填"),
+
+    /** V1.7：subject_sql 执行失败. */
+    METRIC_SUBJECT_SQL_FAILED("PERF-50004", "subject_sql 执行失败"),
+
+    /** V1.7：KPI 方案 cycle_type 非法. */
+    KPI_CYCLE_TYPE_INVALID("PERF-40023", "KPI 方案 cycle_type 非法");
 
     private final String code;
     private final String message;
