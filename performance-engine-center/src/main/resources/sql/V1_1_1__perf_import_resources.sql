@@ -15,7 +15,7 @@
 -- =====================================================================
 
 -- 激活 P_PERF_IMPORT_UPLOAD（URL 已对齐，仅 STATUS 从 1 → 0）
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS = 0,
     MENU_NAME = '数据导入-上传',
     REMARK    = 'V1.1 P5.5 激活',
@@ -24,7 +24,7 @@ SET STATUS = 0,
 WHERE RESOURCE_ID = 'P_PERF_IMPORT_UPLOAD';
 
 -- 新增 4 条 V1.1 导入批次管理资源
-INSERT INTO pt_resource (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
 VALUES
 ('P_PERF_IMP_B_GET',  '/api/perf/import/batches/*',         'GET',    '数据导入-批次详情', NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'V1.1 P5.5'),
 ('P_PERF_IMP_B_ERR',  '/api/perf/import/batches/*/errors',  'GET',    '数据导入-错误明细', NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'V1.1 P5.5'),

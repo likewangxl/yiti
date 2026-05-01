@@ -22,7 +22,7 @@
 -- =====================================================================
 
 -- 1) 激活 V1_0_4 已登记的 2 条（URL 对齐 + STATUS 0）
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS = 0,
     RESOURCE_URL    = '/api/perf/export/kpi',
     RESOURCE_METHOD = 'POST',
@@ -32,7 +32,7 @@ SET STATUS = 0,
     UPDATE_USER     = 'seed'
 WHERE RESOURCE_ID = 'P_PERF_EXPORT_KPI';
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS = 0,
     RESOURCE_URL    = '/api/perf/export/alloc',
     RESOURCE_METHOD = 'POST',
@@ -44,7 +44,7 @@ WHERE RESOURCE_ID = 'P_PERF_EXPORT_ALLOC';
 
 -- 2) 新增 3 条资源（V1_0_4 未注册 METRIC / DETAIL / TASK）
 --    RESOURCE_ID 遵守 varchar(20) 约束
-INSERT INTO pt_resource (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
 VALUES
 ('P_PERF_EXPT_MTR',  '/api/perf/export/metric',   'POST', '指标宽表导出',     NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'V1.2 Q6.4'),
 ('P_PERF_EXPT_DTL',  '/api/perf/export/detail',   'POST', 'KPI 明细导出',    NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'V1.2 Q6.4 高危'),

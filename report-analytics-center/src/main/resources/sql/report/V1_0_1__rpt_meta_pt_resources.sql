@@ -19,7 +19,7 @@
 -- =====================================================================
 
 -- 1. 注册 8 个 REST endpoint（idempotent：已存在则覆盖 REMARK）
-INSERT INTO pt_resource (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
 VALUES
 ('R_RPT_META_QD',     '/api/reports/query-dimensions',           'GET',    '维度+指标树',         NULL, 0, 0, '0', NULL, 0, 'RPT', NOW(), 'seed', 'v1.0 M1.1'),
 ('R_RPT_DQ_EXEC',     '/api/reports/dynamic-query',              'POST',   '动态查询执行',         NULL, 0, 0, '0', NULL, 0, 'RPT', NOW(), 'seed', 'v1.0 M1.2'),
@@ -34,9 +34,9 @@ ON DUPLICATE KEY UPDATE REMARK = VALUES(REMARK), UPDATE_TIME = NOW();
 -- 2. 角色-资源绑定：R_ADMIN + R_BACK_TECH 默认获得全部 8 条
 -- pt_role_resource 真实列：ID(PK) / ROLE_ID / RESOURCE_ID / SYS_CODE / CREATE_TIME（无 CREATE_USER）
 -- pt_role_resource 没有 (ROLE_ID, RESOURCE_ID) 唯一键, 用 NOT EXISTS 兜底幂等
-INSERT INTO pt_role_resource (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
+INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
 SELECT REPLACE(UUID(), '-', ''), r.ROLE_ID, res.RESOURCE_ID, 'RPT', NOW()
-  FROM pt_role r
+  FROM PT_ROLE r
   CROSS JOIN (
         SELECT 'R_RPT_META_QD'    AS RESOURCE_ID UNION ALL
         SELECT 'R_RPT_DQ_EXEC'    UNION ALL
@@ -49,18 +49,18 @@ SELECT REPLACE(UUID(), '-', ''), r.ROLE_ID, res.RESOURCE_ID, 'RPT', NOW()
   ) res
  WHERE r.ROLE_CODE IN ('R_ADMIN', 'R_BACK_TECH')
    AND NOT EXISTS (
-       SELECT 1 FROM pt_role_resource prr
+       SELECT 1 FROM PT_ROLE_RESOURCE prr
         WHERE prr.ROLE_ID = r.ROLE_ID AND prr.RESOURCE_ID = res.RESOURCE_ID
    );
 
 -- 3. BizScope 兜底：R_ADMIN + R_BACK_TECH 拥有 REPORT 全部数据范围（DataScope ALL）
 -- pt_role_biz_scope 真实列：ID(PK) / ROLE_ID / BIZ_TYPE / DATA_SCOPE / RECORD_STATUS / CREATE_TIME / CREATE_USER
 -- 也没有唯一键，用 NOT EXISTS 兜底幂等
-INSERT INTO pt_role_biz_scope (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER)
+INSERT INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER)
 SELECT REPLACE(UUID(), '-', ''), r.ROLE_ID, 'REPORT', 'ALL', 0, NOW(), 'seed'
-  FROM pt_role r
+  FROM PT_ROLE r
  WHERE r.ROLE_CODE IN ('R_ADMIN', 'R_BACK_TECH')
    AND NOT EXISTS (
-       SELECT 1 FROM pt_role_biz_scope prbs
+       SELECT 1 FROM PT_ROLE_BIZ_SCOPE prbs
         WHERE prbs.ROLE_ID = r.ROLE_ID AND prbs.BIZ_TYPE = 'REPORT'
    );

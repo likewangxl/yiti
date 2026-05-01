@@ -22,7 +22,7 @@
 -- 幂等：ON DUPLICATE KEY UPDATE；STATUS 1→0 激活。
 -- =====================================================================
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS          = 0,
     RESOURCE_URL    = '/api/perf/metrics/*/execute',
     RESOURCE_METHOD = 'POST',
@@ -32,7 +32,7 @@ SET STATUS          = 0,
     UPDATE_USER     = 'seed'
 WHERE RESOURCE_ID = 'P_PERF_METRIC_EXEC';
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS          = 0,
     RESOURCE_URL    = '/api/perf/metrics/*/trial-run',
     RESOURCE_METHOD = 'POST',
@@ -42,7 +42,7 @@ SET STATUS          = 0,
     UPDATE_USER     = 'seed'
 WHERE RESOURCE_ID = 'P_PERF_METRIC_TRIAL';
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS          = 0,
     RESOURCE_URL    = '/api/perf/kpi-calc/trigger',
     RESOURCE_METHOD = 'POST',
@@ -52,7 +52,7 @@ SET STATUS          = 0,
     UPDATE_USER     = 'seed'
 WHERE RESOURCE_ID = 'P_PERF_KPI_TRIGGER';
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS          = 0,
     RESOURCE_URL    = '/api/data-task/status',
     RESOURCE_METHOD = 'POST',
@@ -62,7 +62,7 @@ SET STATUS          = 0,
     UPDATE_USER     = 'seed'
 WHERE RESOURCE_ID = 'P_PERF_DTASK_STATUS';
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS          = 0,
     RESOURCE_URL    = '/api/perf/alloc-adjust/create',
     RESOURCE_METHOD = 'POST',
@@ -72,7 +72,7 @@ SET STATUS          = 0,
     UPDATE_USER     = 'seed'
 WHERE RESOURCE_ID = 'P_PERF_ALLOC_ADJ_ADD';
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS          = 0,
     RESOURCE_URL    = '/api/perf/recalc',
     RESOURCE_METHOD = 'POST',
@@ -82,7 +82,7 @@ SET STATUS          = 0,
     UPDATE_USER     = 'seed'
 WHERE RESOURCE_ID = 'P_PERF_KPI_RECALC';
 
-UPDATE pt_resource
+UPDATE PT_RESOURCE
 SET STATUS          = 0,
     RESOURCE_URL    = '/api/perf/sys-control/rollback',
     RESOURCE_METHOD = 'POST',

@@ -23,7 +23,7 @@
 --   P_PERF_SC_ROLLBACK       ← 版本回滚（V1.2  /api/perf/sys-control/rollback）
 --   P_PERF_EXPORT_KPI        ← KPI 结果导出（V1.2 /api/perf/export/kpi）
 --   P_PERF_EXPORT_ALLOC      ← 分配结果导出（V1.2 /api/perf/export/alloc）
-INSERT INTO pt_resource (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
 VALUES
 -- V1.1 规划功能（STATUS=1 禁用）
 ('P_PERF_METRIC_EXEC',   '/api/perf/metrics/*/execute',       'POST',  '指标执行（V1.1）',    NULL, 0, 0, '0', NULL, 1, 'PERF', NOW(), 'seed', 'V1.1 规划，V1.0 禁用'),
@@ -49,7 +49,7 @@ ON DUPLICATE KEY UPDATE
 -- 将其标记为禁用（V1.0 代码使用 ACTIVE/DISABLED，文档已统一，字典项同步）
 -- 零行受影响不会报错，可安全执行
 -- =====================================================================
-UPDATE sys_dict_item
+UPDATE SYS_DICT_ITEM
 SET status = 'PENDING'
 WHERE dict_type = 'PERF_METRIC_STATUS'
   AND item_code IN ('DRAFT', 'PUBLISHED');

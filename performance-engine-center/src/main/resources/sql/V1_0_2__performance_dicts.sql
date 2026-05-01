@@ -8,7 +8,7 @@
 -- =====================================================================
 
 -- 1. Dict type metadata in sys_dict
-INSERT INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by, created_time)
+INSERT INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by, created_time)
 VALUES
 ('PERF_DICT_001', 'PERF_BASE_DIM',          'PERF_BASE_DIM',          '指标维度',       'EMP/ORG/CUST',             1,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
 ('PERF_DICT_002', 'PERF_METRIC_LEVEL',      'PERF_METRIC_LEVEL',      '指标级次',       '1/2/3',                    2,  'ACTIVE', 'perf v1.0', 'seed', NOW()),
@@ -28,7 +28,7 @@ ON DUPLICATE KEY UPDATE
 
 -- 2. Dict items in sys_dict_item (39 entries)
 -- Uses deterministic IDs so ON DUPLICATE KEY UPDATE works for idempotent reruns.
-INSERT INTO sys_dict_item (id, dict_type, item_code, item_label, item_value, sort_order, status, remark, created_by, created_time)
+INSERT INTO SYS_DICT_ITEM (id, dict_type, item_code, item_label, item_value, sort_order, status, remark, created_by, created_time)
 VALUES
 -- PERF_BASE_DIM (3)
 ('PI_BD_01', 'PERF_BASE_DIM',          'EMP',          '员工',        'EMP',          1,  'ACTIVE', NULL, 'seed', NOW()),

@@ -17,7 +17,7 @@
 -- =====================================================================
 
 -- 1. Register 35 REST endpoints in pt_resource
-INSERT INTO pt_resource (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, REMARK)
 VALUES
 -- MetricDef (10)
 ('P_PERF_METRIC_LIST', '/api/perf/metrics',                      'GET',    '指标列表',       NULL, 0, 0, '0', NULL, 0, 'PERF', NOW(), 'seed', 'v1.0'),
@@ -72,7 +72,7 @@ ON DUPLICATE KEY UPDATE
 
 -- 2. Grant all 35 PERF resources to R_ADMIN and R_BACK_TECH
 --    Use INSERT IGNORE to achieve idempotency (no need for ON DUPLICATE KEY UPDATE)
-INSERT IGNORE INTO pt_role_resource (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
+INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
 SELECT CONCAT(r.ROLE_ID, '_', res.RESOURCE_ID) AS ID, r.ROLE_ID, res.RESOURCE_ID, 'PERF', NOW()
 FROM (SELECT 'R_ADMIN' AS ROLE_ID UNION ALL SELECT 'R_BACK_TECH') r
 CROSS JOIN pt_resource res
@@ -81,7 +81,7 @@ WHERE res.SYS_CODE = 'PERF' AND res.RESOURCE_ID LIKE 'P_PERF_%';
 -- 3. BizType data scope configuration in pt_role_biz_scope
 --    v1.2: using common-security BizType.PERF_CONFIG (single coarse-grained type)
 --    2 entries: R_ADMIN and R_BACK_TECH both get DataScope=ALL for PERF_CONFIG
-INSERT INTO pt_role_biz_scope (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
+INSERT INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
 VALUES
 (REPLACE(UUID(), '-', ''), 'R_ADMIN',     'PERF_CONFIG', 'ALL', 0, NOW(), 'seed', 'perf v1.0 - full access'),
 (REPLACE(UUID(), '-', ''), 'R_BACK_TECH', 'PERF_CONFIG', 'ALL', 0, NOW(), 'seed', 'perf v1.0 - full access')
