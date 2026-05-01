@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -78,6 +79,12 @@ class MetricCalcServiceTest {
     @Mock
     private PerfRunTaskMapper perfRunTaskMapper;
 
+    @Mock
+    private SubjectFetcher subjectFetcher;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private MetricCalcService metricCalcService;
 
@@ -104,10 +111,10 @@ class MetricCalcServiceTest {
         verify(empIndexResultMapper).insertSlotValue(eq("E002"), eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(1), eq(new BigDecimal("20")));
 
         ArgumentCaptor<PerfRunTask> captor = ArgumentCaptor.forClass(PerfRunTask.class);
-        // 至少一次 insert（PENDING） + 两次 updateStatus（RUNNING / SUCCESS）
+        // 至少一次 insert（PENDING） + updateStatus(RUNNING) + updateStatusWithParams(SUCCESS)
         verify(perfRunTaskMapper).insert(captor.capture());
         verify(perfRunTaskMapper).updateStatus(eq(taskId), eq("RUNNING"), eq(null));
-        verify(perfRunTaskMapper).updateStatus(eq(taskId), eq("SUCCESS"), eq(null));
+        verify(perfRunTaskMapper).updateStatusWithParams(eq(taskId), eq("SUCCESS"), eq(null), anyString());
         verify(orgIndexResultMapper, never()).insertSlotValue(anyString(), any(LocalDate.class), anyString(), any(Integer.class), any(BigDecimal.class));
         verify(custIndexResultMapper, never()).insertSlotValue(anyString(), any(LocalDate.class), anyString(), any(Integer.class), any(BigDecimal.class));
 
@@ -120,21 +127,22 @@ class MetricCalcServiceTest {
     }
 
     @Test
-    @DisplayName("EXPR 指标 + baseDim=ORG：调 GroovyExecutor 并写 ORG 宽表")
+    @DisplayName("EXPR 指标 + baseDim=ORG：调 GroovyExecutor 并写 ORG 宽表（V1.7 多主体）")
     void calcMetric_exprOnOrg_writesOrgWideTable() {
         PerfMetricDef def = buildOrgExprMetric();
         when(metricDefService.getByCodeOrNull("TEST_CALC_ORG_01")).thenReturn(def);
-        // EXPR 场景由 Service 自行驱动一个 baseKey 入参（先 V1.1 用 exprText + 宿主变量 map），
-        // 简化下此处 Service 应至少调用 groovyExecutor.execute 一次并得到一个结果值
+        // V1.7 EXPR 多主体路径：subjectFetcher 返回一个主体
+        when(subjectFetcher.fetch(anyString(), anyMap())).thenReturn(List.of("O001"));
         when(groovyExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(new BigDecimal("42"));
 
         String taskId = metricCalcService.calcMetric("TEST_CALC_ORG_01", LocalDate.of(2026, 4, 22), "20260422");
 
         assertThat(taskId).isNotBlank();
         verify(groovyExecutor).execute(eq("a + b"), anyMap(), any(Duration.class));
-        verify(orgIndexResultMapper).insertSlotValue(anyString(), eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(2), eq(new BigDecimal("42")));
+        verify(orgIndexResultMapper).insertSlotValue(eq("O001"), eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(2), eq(new BigDecimal("42")));
         verify(empIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
-        verify(perfRunTaskMapper).updateStatus(eq(taskId), eq("SUCCESS"), eq(null));
+        // V1.7 改用 updateStatusWithParams，SUCCESS 状态
+        verify(perfRunTaskMapper).updateStatusWithParams(eq(taskId), eq("SUCCESS"), eq(null), anyString());
     }
 
     @Test
@@ -280,6 +288,8 @@ class MetricCalcServiceTest {
         def.setCalcLogicType("EXPR");
         def.setExprText("a + b");
         def.setRefMetricCodes("[\"REF_A\",\"REF_B\"]");
+        // V1.7 多主体路径需要 subjectSql
+        def.setSubjectSql("SELECT org_code FROM org_table");
         def.setValSlot(2);
         def.setStatus("ACTIVE");
         def.setDeleted(0);

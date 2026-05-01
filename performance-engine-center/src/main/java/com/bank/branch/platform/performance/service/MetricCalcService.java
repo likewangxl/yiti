@@ -4,28 +4,34 @@ import com.bank.branch.platform.performance.config.PerfEngineProperties;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.event.MetricCalcCompletedEvent;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.CustIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
+import com.bank.branch.platform.performance.service.dto.SubjectStats;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * 单指标计算服务（V1.1 Task P2.4）.
+ * 单指标计算服务（V1.7 多主体改造）.
  *
  * <p>职责：
  * <ul>
@@ -34,21 +40,24 @@ import java.util.UUID;
  *   <li>按 {@code calc_logic_type} 路由：
  *       <ul>
  *         <li>SQL → {@link SqlExecutor}（含 {@link com.bank.branch.platform.performance.service.engine.SqlValidator} 黑名单）</li>
- *         <li>EXPR / GROOVY → {@link GroovyExecutor}（沙盒 + 超时）</li>
- *         <li>PROC / SUMMARY → V1.1 P2 不支持，抛 {@link PerfErrorCode#CALC_JOB_FAILED}</li>
+ *         <li>EXPR / GROOVY → {@link SubjectFetcher} 取主体集合，逐主体调 {@link GroovyExecutor}（沙盒 + 超时）</li>
+ *         <li>PROC / SUMMARY → 暂不支持，抛 {@link PerfErrorCode#CALC_JOB_FAILED}</li>
  *       </ul>
  *   </li>
  *   <li>按 {@code base_dim} 将 {@code (baseKey -> value)} 写入三张宽表之一
  *       （EmpIndexResultMapper / OrgIndexResultMapper / CustIndexResultMapper）。</li>
  *   <li>全程通过 {@link PerfRunTaskMapper} 维护任务状态机：
  *       <pre>
- *       PENDING --(insert)-&gt; RUNNING --(updateStatus)-&gt; SUCCESS / FAILED
+ *       PENDING --(insert)-&gt; RUNNING --(updateStatusWithParams)-&gt; SUCCESS / PARTIAL_FAILED / FAILED
  *       </pre>
  *   </li>
+ *   <li>终态写入后通过 {@link ApplicationEventPublisher} 发布 {@link MetricCalcCompletedEvent}。</li>
  *   <li><strong>Service 层 slot 校验</strong>：调用宽表 UPSERT 前强制校验
- *       {@code valSlot ∈ [1, 200]}，P1 reviewer 要求 Service 层承担
- *       防止 {@code val_${slot}} 拼接列名漏放的最后一道防线。</li>
+ *       {@code valSlot ∈ [1, 200]}，防止 {@code val_${slot}} 拼接列名漏放。</li>
  * </ul>
+ *
+ * <p><strong>V1.7 多主体改造</strong>：EXPR/GROOVY 类型改为逐主体执行，
+ * 引入 {@link SubjectStats} 追踪每主体成功/失败，按结果写 SUCCESS / PARTIAL_FAILED / FAILED。
  *
  * <p><strong>设计决定 — 事务边界</strong>：本 Service <em>不开 {@link org.springframework.transaction.annotation.Transactional}</em>
  * 最外层事务。原因：若整个方法包一个事务，异常抛出时 FAILED 状态会被回滚，造成
@@ -60,6 +69,8 @@ import java.util.UUID;
 @Service
 public class MetricCalcService {
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final MetricDefService metricDefService;
     private final SqlExecutor sqlExecutor;
     private final GroovyExecutor groovyExecutor;
@@ -68,8 +79,12 @@ public class MetricCalcService {
     private final CustIndexResultMapper custIndexResultMapper;
     private final PerfRunTaskMapper perfRunTaskMapper;
     private final PerfEngineProperties perfEngineProperties;
+    private final SubjectFetcher subjectFetcher;
+    private final ApplicationEventPublisher eventPublisher;
 
-    /** 构造器注入 + Autowired required=false 兼容单元测试 @InjectMocks 省略 props 的场景. */
+    /**
+     * 构造器注入（V1.7 新增 SubjectFetcher + ApplicationEventPublisher 参数）.
+     */
     @Autowired
     public MetricCalcService(MetricDefService metricDefService,
                              SqlExecutor sqlExecutor,
@@ -78,7 +93,9 @@ public class MetricCalcService {
                              OrgIndexResultMapper orgIndexResultMapper,
                              CustIndexResultMapper custIndexResultMapper,
                              PerfRunTaskMapper perfRunTaskMapper,
-                             PerfEngineProperties perfEngineProperties) {
+                             PerfEngineProperties perfEngineProperties,
+                             SubjectFetcher subjectFetcher,
+                             ApplicationEventPublisher eventPublisher) {
         this.metricDefService = metricDefService;
         this.sqlExecutor = sqlExecutor;
         this.groovyExecutor = groovyExecutor;
@@ -87,15 +104,17 @@ public class MetricCalcService {
         this.custIndexResultMapper = custIndexResultMapper;
         this.perfRunTaskMapper = perfRunTaskMapper;
         this.perfEngineProperties = perfEngineProperties;
+        this.subjectFetcher = subjectFetcher;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
-     * 执行单个指标的计算.
+     * 执行单个指标的计算（V1.7 多主体版本）.
      *
      * @param metricCode 指标编码（必填）
      * @param dataDate   数据日期（必填）
      * @param version    数据版本（必填）
-     * @return run_task 主键 ID（已写入 PENDING → RUNNING → SUCCESS/FAILED）
+     * @return run_task 主键 ID
      * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC/SUMMARY 未支持 / slot 未分配
      */
     public String calcMetric(String metricCode, LocalDate dataDate, String version) {
@@ -110,48 +129,67 @@ public class MetricCalcService {
         insertPendingTask(taskId, metricCode, dataDate, version);
 
         try {
-            // 3. 切换 RUNNING —— 用 eq(null) 测试契约要求第三参数为 null（errorMsg 清空）
+            // 3. 切换 RUNNING
             perfRunTaskMapper.updateStatus(taskId, "RUNNING", null);
 
-            // 4. 按计算类型路由（在此之前先校验 slot，避免 SQL/Groovy 已执行但 slot 非法白费）
+            // 4. slot 校验（在路由前执行，避免 SQL/Groovy 已执行但 slot 非法白费）
             validateSlot(def);
+
+            // 5. 按计算类型路由
             String logicType = def.getCalcLogicType();
+            SubjectStats stats;
             if ("SQL".equalsIgnoreCase(logicType)) {
-                executeSqlAndPersist(def, dataDate, version);
+                stats = executeSqlAndPersist(def, dataDate, version);
             } else if ("EXPR".equalsIgnoreCase(logicType) || "GROOVY".equalsIgnoreCase(logicType)) {
-                executeGroovyAndPersist(def, dataDate, version);
+                stats = executeGroovyAndPersist(def, dataDate, version);
             } else if ("PROC".equalsIgnoreCase(logicType) || "SUMMARY".equalsIgnoreCase(logicType)) {
-                // V1.1 P2 未实现
                 throw new PerfException(PerfErrorCode.CALC_JOB_FAILED,
-                        "V1.1 P2 暂未支持 calcLogicType=" + logicType);
+                        "PROC/SUMMARY 暂不支持自动调度: " + logicType);
             } else {
                 throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                         "未知 calcLogicType=" + logicType);
             }
 
-            // 5. 成功态
-            perfRunTaskMapper.updateStatus(taskId, "SUCCESS", null);
+            // 6. 按主体统计决定终态
+            String finalStatus = stats.failed() == 0 ? "SUCCESS"
+                    : stats.success() == 0 ? "FAILED" : "PARTIAL_FAILED";
+            perfRunTaskMapper.updateStatusWithParams(taskId, finalStatus, null, stats.toJson());
+
+            // 7. 发布计算完成事件（终态写入后）
+            eventPublisher.publishEvent(new MetricCalcCompletedEvent(
+                    metricCode, def.getBaseDim(), dataDate, version,
+                    finalStatus, stats.total(), stats.success(), stats.failed(),
+                    taskId, "SCHEDULED", LocalDateTime.now()));
+
             return taskId;
         } catch (PerfException pe) {
             // 失败态 + 错误信息落库
             markFailed(taskId, pe);
+            // 发布 FAILED 事件（PerfException 路径）
+            eventPublisher.publishEvent(new MetricCalcCompletedEvent(
+                    metricCode, def.getBaseDim(), dataDate, version,
+                    "FAILED", 0, 0, 0, taskId, "SCHEDULED", LocalDateTime.now()));
             throw pe;
         } catch (Exception ex) {
             // 兜底其他非预期异常
             markFailed(taskId, ex);
+            eventPublisher.publishEvent(new MetricCalcCompletedEvent(
+                    metricCode, def.getBaseDim(), dataDate, version,
+                    "FAILED", 0, 0, 0, taskId, "SCHEDULED", LocalDateTime.now()));
             throw new PerfException(PerfErrorCode.CALC_JOB_FAILED, ex, "指标计算异常: " + ex.getMessage());
         }
     }
 
     /**
-     * SQL 类指标：调 SqlExecutor 得到 {@code Map<baseKey, value>}，按 baseDim 批量 UPSERT 到宽表.
+     * SQL 类指标：调 SqlExecutor 得到 Map&lt;baseKey, value&gt;，按 baseDim 批量 UPSERT 到宽表.
+     *
+     * @return SubjectStats（SQL 类型按结果行数计，全部视为成功）
      */
-    private void executeSqlAndPersist(PerfMetricDef def, LocalDate dataDate, String version) {
+    private SubjectStats executeSqlAndPersist(PerfMetricDef def, LocalDate dataDate, String version) {
         if (def.getSqlText() == null || def.getSqlText().isBlank()) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "SQL 类型指标 sqlText 为空: " + def.getMetricCode());
         }
-        // SQL 参数：预留给 V1.2 周期参数；当前传空 Map
         Map<String, Object> params = new HashMap<>();
         params.put("dataDate", dataDate);
         params.put("version", version);
@@ -159,27 +197,103 @@ public class MetricCalcService {
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
         Map<String, BigDecimal> values = sqlExecutor.execute(def.getSqlText(), params, timeout);
         persistValues(def, values, dataDate, version);
+        return SubjectStats.allSuccess(values.size());
     }
 
     /**
-     * EXPR/GROOVY 指标：调 GroovyExecutor 并把结果写到 baseDim 对应宽表.
+     * EXPR/GROOVY 类指标：通过 SubjectFetcher 取主体集合，逐主体调 GroovyExecutor（V1.7 多主体）.
      *
-     * <p>V1.1 P2 简化实现：整条指标输出单值（{@code baseKey} 未知时用 "AGG" 常量占位）；
-     * 后续 V1.2 引入批量维度驱动（foreach baseKey）再扩展。
+     * <p>单个主体失败时捕获异常继续处理下一个主体（per-subject 容错），
+     * 汇总成功/失败数写入 SubjectStats，failedSamples 最多保留前 10 个主体 ID。
+     *
+     * @return SubjectStats（包含 total/success/failed/failedSamples）
      */
-    private void executeGroovyAndPersist(PerfMetricDef def, LocalDate dataDate, String version) {
+    private SubjectStats executeGroovyAndPersist(PerfMetricDef def, LocalDate dataDate, String version) {
         if (def.getExprText() == null || def.getExprText().isBlank()) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "EXPR 类型指标 exprText 为空: " + def.getMetricCode());
         }
-        // V1.1 P2 简化：vars 传空 Map，后续由上级在调用前填充引用指标值
-        Map<String, Object> vars = Map.of("a", new BigDecimal("20"), "b", new BigDecimal("22"));
+        // 取主体集合
+        Map<String, Object> sqlParams = Map.of("dataDate", dataDate, "version", version);
+        List<String> subjects = subjectFetcher.fetch(def.getSubjectSql(), sqlParams);
+        if (subjects.isEmpty()) {
+            log.warn("[MetricCalc] metric={} 主体集合为空，跳过", def.getMetricCode());
+            return SubjectStats.empty();
+        }
+
+        List<String> refCodes = parseRefMetricCodes(def.getRefMetricCodes());
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
-        BigDecimal result = groovyExecutor.execute(def.getExprText(), vars, timeout);
-        // 单值 baseKey 以 AGG 占位（V1.2 改为按维度遍历）
-        Map<String, BigDecimal> values = Collections.singletonMap("AGG", result);
-        persistValues(def, values, dataDate, version);
+
+        int success = 0;
+        int failed = 0;
+        List<String> failedSamples = new ArrayList<>();
+        Map<String, BigDecimal> outputs = new HashMap<>();
+
+        for (String subject : subjects) {
+            try {
+                // 加载该主体的引用指标值作为 Groovy 变量
+                Map<String, Object> vars = loadRefValues(subject, refCodes, def.getBaseDim(), dataDate, version);
+                BigDecimal value = groovyExecutor.execute(def.getExprText(), vars, timeout);
+                outputs.put(subject, value);
+                success++;
+            } catch (Exception perSubjectEx) {
+                failed++;
+                // 最多保留 10 个失败样本，避免 params_json 过大
+                if (failedSamples.size() < 10) {
+                    failedSamples.add(subject);
+                }
+                log.warn("[MetricCalc] metric={} subject={} 失败: {}",
+                        def.getMetricCode(), subject, perSubjectEx.getMessage());
+            }
+        }
+
+        // 将成功主体的计算结果批量写入宽表
+        persistValues(def, outputs, dataDate, version);
+        return new SubjectStats(subjects.size(), success, failed, failedSamples);
+    }
+
+    /**
+     * 解析引用指标编码 JSON 数组.
+     *
+     * @param json refMetricCodes 字段值（可空）
+     * @return 指标编码列表，解析失败返回空列表
+     */
+    private List<String> parseRefMetricCodes(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            log.warn("[MetricCalc] refMetricCodes 解析失败: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 按 baseDim 从宽表加载引用指标值，作为 Groovy 变量绑定.
+     *
+     * @param subject  主体 ID（员工工号/机构编码/客户 ID）
+     * @param refCodes 引用指标编码列表
+     * @param baseDim  基础维度（EMP/ORG/CUST）
+     * @param dataDate 数据日期
+     * @param version  数据版本
+     * @return 指标编码 -&gt; 指标值 映射（作为 Groovy vars）
+     */
+    private Map<String, Object> loadRefValues(String subject, List<String> refCodes,
+                                               String baseDim, LocalDate dataDate, String version) {
+        if (refCodes.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, BigDecimal> values = switch (baseDim == null ? "" : baseDim.toUpperCase()) {
+            case "EMP"  -> empIndexResultMapper.selectSlotValuesByCodes(subject, refCodes, dataDate, version);
+            case "ORG"  -> orgIndexResultMapper.selectSlotValuesByCodes(subject, refCodes, dataDate, version);
+            case "CUST" -> custIndexResultMapper.selectSlotValuesByCodes(subject, refCodes, dataDate, version);
+            default -> throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                    "未知 baseDim=" + baseDim);
+        };
+        return new HashMap<>(values);
     }
 
     /**
@@ -214,7 +328,7 @@ public class MetricCalcService {
     }
 
     /**
-     * Service 层 slot 校验（P1 reviewer 强制要求：val_${slot} 列名拼接前必须校验范围）.
+     * Service 层 slot 校验（val_${slot} 列名拼接前必须校验范围）.
      *
      * @throws PerfException slot 为 null 或不在 [1, 200]
      */
