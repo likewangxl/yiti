@@ -145,7 +145,7 @@ class WorkflowCallbackIdempotencyBugIT {
         // 当前未修复代码下：handleApproved 无幂等保护，重复 publishEvent → cust_master 创建 2 次 → fail
         // 修复后：conditionalUpdateStatus(IN_APPROVAL → APPROVED) 第二次因状态已变返回 0 → 早返回 → 不再 publish
         long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );

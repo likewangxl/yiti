@@ -133,7 +133,7 @@ class CustomerMarketingCenterIT {
         CustClaim claim = claimService.claim(CUSTOMER_ID, OPERATOR_ORG_ID, OPERATOR_EMP_ID);
 
         String touchTaskId = jdbcTemplate.queryForObject(
-                "SELECT id FROM touch_task WHERE cust_id = ? ORDER BY created_time DESC LIMIT 1",
+                "SELECT id FROM TOUCH_TASK WHERE cust_id = ? ORDER BY created_time DESC LIMIT 1",
                 String.class,
                 CUSTOMER_ID
         );
@@ -153,7 +153,7 @@ class CustomerMarketingCenterIT {
                 .get().extracting(com.bank.branch.platform.customer.api.dto.TagDTO::getTagCode)
                 .isEqualTo("PHASE1_TAG");
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_tag_rel WHERE tag_id = ? AND cust_id = ?",
+                "SELECT COUNT(*) FROM CUST_TAG_REL WHERE tag_id = ? AND cust_id = ?",
                 Long.class,
                 tag.getId(),
                 CUSTOMER_ID
@@ -174,7 +174,7 @@ class CustomerMarketingCenterIT {
         // getSlaStatus 已从契约删除；slaWarning=false 表示 SLA 正常（GREEN）
         assertThat(taskDto.getSlaWarning()).isFalse();
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM touch_log WHERE touch_task_id = ?",
+                "SELECT COUNT(*) FROM TOUCH_LOG WHERE touch_task_id = ?",
                 Long.class,
                 touchTaskId
         )).isEqualTo(1L);

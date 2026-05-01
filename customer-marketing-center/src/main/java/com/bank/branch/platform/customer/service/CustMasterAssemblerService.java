@@ -26,7 +26,7 @@ import java.util.UUID;
  *   <li>UPDATE：通过 sourceCustId 查找已有客户主档，更新全部业务字段</li>
  *   <li>DELETE：通过 sourceCustId 查找已有客户主档，标记 status=INACTIVE、deleted=1，并发布 CustomerDeletedEvent</li>
  * </ul>
- * 所有操作都在同一个事务内完成，由调用方（LeadApprovedListener）在事务提交后通过 @TransactionalEventListener 触发。
+ * 所有操作都在同一个事务内完成，由调用方（LeadCallbackReconcileService.reconcileApproved）在 reconcile 事务内同步调用（V1.11#1 起）。
  * </p>
  */
 @Slf4j

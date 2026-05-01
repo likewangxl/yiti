@@ -1,8 +1,6 @@
 package com.bank.branch.platform.customer.listener;
 
 import com.bank.branch.platform.customer.entity.CustLead;
-import com.bank.branch.platform.customer.event.LeadApprovedEvent;
-import com.bank.branch.platform.customer.event.LeadDeletedEvent;
 import com.bank.branch.platform.customer.event.LeadRejectedEvent;
 import com.bank.branch.platform.customer.mapper.CustLeadMapper;
 import com.bank.branch.platform.customer.service.LeadCallbackReconcileService;
@@ -23,8 +21,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * {@link LeadCallbackReconcileService} 处理审批结果（与
  * {@code bizapp.LoanWorkflowListener} pattern 对齐）：
  * <ul>
- *   <li>APPROVED + leadOp=CREATE/UPDATE → 状态更新为 APPROVED，发布 {@link LeadApprovedEvent}</li>
- *   <li>APPROVED + leadOp=DELETE → 状态更新为 APPROVED，发布 {@link LeadDeletedEvent}</li>
+ *   <li>APPROVED + leadOp=CREATE/UPDATE/DELETE → 状态更新为 APPROVED，同步调用
+ *       {@link LeadCallbackReconcileService#reconcileApproved} 装配客户主档（V1.11#1 起）</li>
  *   <li>REJECTED → 状态更新为 REJECTED，发布 {@link LeadRejectedEvent}（不创建/失效 cust_master）</li>
  * </ul>
  * </p>
@@ -51,15 +49,13 @@ public class WorkflowCallbackListener {
      * </p>
      *
      * <p>
-     * <strong>事务策略（P0 bug 修复）</strong>：
+     * <strong>事务策略</strong>：
      * <ul>
      *   <li>{@code @Transactional(REQUIRES_NEW)}：在 AFTER_COMMIT 阶段开启新事务，
-     *       让本方法内 {@code publishEvent(LeadApprovedEvent / LeadDeletedEvent)} 在新事务内 publish；</li>
-     *   <li>下游 {@link LeadApprovedListener} / {@link LeadDeletedListener} 都是
-     *       {@code @TransactionalEventListener(AFTER_COMMIT)} 无 fallbackExecution，
-     *       必须在事务内 publish 它们才能正确触发；</li>
-     *   <li>移除 {@code fallbackExecution = true}：与 REQUIRES_NEW 配合时，
-     *       AFTER_COMMIT + 显式新事务 = 既保证流程完成事务已 commit，又能让下游 listener 正确链接。</li>
+     *       让 reconcileApproved / reconcileRejected 在独立事务内完成状态更新与客户主档装配；</li>
+     *   <li>V1.11#1 方向 C：已消除嵌套 @TransactionalEventListener，reconcileApproved 内
+     *       直接同步调用 assemblerService，REQUIRES_NEW 作为防御层保留；</li>
+     *   <li>移除 {@code fallbackExecution = true}：AFTER_COMMIT + 显式新事务已足够。</li>
      * </ul>
      * </p>
      *

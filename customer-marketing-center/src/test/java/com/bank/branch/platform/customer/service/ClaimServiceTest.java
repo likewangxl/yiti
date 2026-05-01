@@ -7,7 +7,6 @@ import com.bank.branch.platform.customer.entity.CustMaster;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.event.ClaimCancelledEvent;
-import com.bank.branch.platform.customer.event.ClaimCreatedEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
@@ -84,13 +83,8 @@ class ClaimServiceTest {
 
         verify(claimMapper).insert(any(CustClaim.class));
 
-        // 验证发布了 ClaimCreatedEvent
-        ArgumentCaptor<ClaimCreatedEvent> captor = ArgumentCaptor.forClass(ClaimCreatedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        ClaimCreatedEvent event = captor.getValue();
-        assertThat(event.getCustId()).isEqualTo("cust-001");
-        assertThat(event.getOrgId()).isEqualTo("ORG_SZ_001");
-        assertThat(event.getClaimedBy()).isEqualTo("E10001");
+        // 验证同步调用了 touchTaskService.createFromClaim（V1.11#1 方向 C）
+        verify(touchTaskService).createFromClaim("cust-001", "ORG_SZ_001", "E10001");
     }
 
     @Test

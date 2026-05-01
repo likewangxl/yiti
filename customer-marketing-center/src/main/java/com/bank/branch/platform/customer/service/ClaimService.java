@@ -9,7 +9,6 @@ import com.bank.branch.platform.customer.entity.TouchTask;
 import com.bank.branch.platform.customer.enums.ClaimStatus;
 import com.bank.branch.platform.customer.enums.CustomerErrorCode;
 import com.bank.branch.platform.customer.event.ClaimCancelledEvent;
-import com.bank.branch.platform.customer.event.ClaimCreatedEvent;
 import com.bank.branch.platform.customer.mapper.CustClaimMapper;
 import com.bank.branch.platform.customer.mapper.CustMasterMapper;
 import com.bank.branch.platform.customer.mapper.TouchTaskMapper;
@@ -31,8 +30,8 @@ import java.util.UUID;
  * 负责客户认领的创建（争抢式）、取消以及个人认领列表查询。
  * 认领依赖 uk(cust_id, org_id) 唯一索引做数据库级别的并发安全保障，
  * 并发抢认领时通过 catch {@link DuplicateKeyException} 转为 CUSTOMER_ALREADY_CLAIMED 业务异常。
- * 认领成功后发布 {@link ClaimCreatedEvent}，取消后发布 {@link ClaimCancelledEvent}，
- * 由下游服务（如触达任务）监听处理。
+ * 认领成功后同步调用 {@link TouchTaskService#createFromClaim} 创建首次触达任务
+ * （V1.11#1 起从事件驱动改为同步），取消后发布 {@link ClaimCancelledEvent}。
  * </p>
  */
 @Slf4j
@@ -93,9 +92,8 @@ public class ClaimService {
                     CustomerErrorCode.CUSTOMER_ALREADY_CLAIMED.getMessage());
         }
 
-        // 发布认领成功事件，通知下游（如触达任务）
-        eventPublisher.publishEvent(new ClaimCreatedEvent(
-                entity.getId(), custId, orgId, empId, empId));
+        // 同步创建首次触达任务（V1.11#1 方向 C：消除嵌套 @TransactionalEventListener 导致 INSERT 不持久化）
+        touchTaskService.createFromClaim(custId, orgId, empId);
 
         log.info("[ClaimService.claim] claim created, claimId={}", entity.getId());
         return entity;

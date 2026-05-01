@@ -143,7 +143,7 @@ class WorkflowCallbackEventChainBugIT {
 
         // 校验前置：cust_master 在事件触发前不应有这条 leadId 关联记录
         long preCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -170,7 +170,7 @@ class WorkflowCallbackEventChainBugIT {
         // → CustMasterAssemblerService 永不调用 → cust_master 永不写入
         // → 此断言 fail，正是 bug 复现
         List<CustMaster> matched = jdbcTemplate.query(
-                "SELECT * FROM cust_master WHERE lead_id = ?",
+                "SELECT * FROM CUST_MASTER WHERE lead_id = ?",
                 (rs, rowNum) -> {
                     CustMaster m = new CustMaster();
                     m.setId(rs.getString("id"));

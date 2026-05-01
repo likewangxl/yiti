@@ -206,7 +206,7 @@ class WorkflowCallbackExceptionSwallowBugIT {
 
         // ========== 断言 3：cust_lead.lead_status 保持 IN_APPROVAL（嵌事务回滚 / 早返回） ==========
         String actualStatus = jdbcTemplate.queryForObject(
-                "SELECT lead_status FROM cust_lead WHERE id = ?",
+                "SELECT lead_status FROM CUST_LEAD WHERE id = ?",
                 String.class,
                 leadId
         );
