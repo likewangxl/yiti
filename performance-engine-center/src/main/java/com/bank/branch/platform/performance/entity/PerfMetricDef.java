@@ -102,5 +102,5 @@ public class PerfMetricDef {
     private String subjectSql;
 
     /** 最近一次自动调度执行时间 (V1.7). */
-    private java.time.LocalDateTime lastRunTime;
+    private LocalDateTime lastRunTime;
 }
