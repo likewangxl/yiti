@@ -92,4 +92,15 @@ public class PerfMetricDef {
 
     /** 指标描述（较详细的口径说明，区别于 metric_desc）. */
     private String description;
+
+    // ===== V1.7 指标级调度改造 =====
+
+    /** 自定义 cron 表达式；留空按 calc_freq 推导默认 (V1.7). */
+    private String cronExpr;
+
+    /** EXPR/GROOVY 类型主体集合 SQL；SQL/PROC/SUMMARY 类型不需要 (V1.7). */
+    private String subjectSql;
+
+    /** 最近一次自动调度执行时间 (V1.7). */
+    private java.time.LocalDateTime lastRunTime;
 }
