@@ -7,7 +7,6 @@ import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -24,7 +23,9 @@ import java.util.Optional;
  * 但 Flowable 流程实际已 COMPLETED，形成孤儿数据。
  * </p>
  * <p>
- * <strong>本 Service 职责</strong>：以 5 分钟为粒度（{@code fixedDelay} 可配）
+ * <strong>本 Service 职责</strong>：由 Quartz job
+ * {@code LeadCallbackCompensateQuartzJob}（V1.8 起，
+ * job_key={@code LEAD_CALLBACK_COMPENSATE}，cron 默认 5 分钟）
  * 巡检 stuck IN_APPROVAL leads（超过 stuckThresholdMinutes 未推进），
  * 通过 {@link WorkflowApi} 反查流程真实状态：
  * <ul>
@@ -194,20 +195,4 @@ public class LeadCallbackCompensationService {
                 stuckLeads.size(), approvedCount, rejectedCount, skippedCount);
     }
 
-    /**
-     * Spring 调度入口 —— 默认每 5 分钟（{@code 300_000ms}）触发一次
-     * {@link #scanAndCompensate()}。
-     * <p>
-     * 整体 try-catch 防止补偿异常冒泡到调度器导致后续触发被禁用 —— Spring
-     * {@code @Scheduled} 默认会因连续异常停止调度该 bean 的方法。
-     * </p>
-     */
-    @Scheduled(fixedDelayString = "${customer.lead-compensation.interval-ms:300000}")
-    public void scheduledScan() {
-        try {
-            scanAndCompensate();
-        } catch (Exception e) {
-            log.error("[LeadCallbackCompensationService.scheduledScan] 补偿任务执行异常", e);
-        }
-    }
 }
