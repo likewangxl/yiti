@@ -87,9 +87,12 @@ INSERT IGNORE INTO sys_calendar_day (`day`, is_workday, remark) VALUES
     ('2026-04-06', 1, NULL),
     ('2026-04-07', 1, NULL);
 
-INSERT IGNORE INTO sys_job_conf (id, job_key, job_name, cron_expr, status, allow_manual_trigger) VALUES
-    ('J001', 'DAILY_REPORT', '日报生成', '0 0 8 * * ?', 'ACTIVE', 1),
-    ('J002', 'MONTHLY_PERF', '月度绩效计算', '0 0 1 1 * ?', 'ACTIVE', 1);
+INSERT IGNORE INTO sys_job_conf (id, job_key, job_name, cron_expr, status, allow_manual_trigger, quartz_job_class, misfire_policy) VALUES
+    ('J001', 'DAILY_REPORT', '日报生成', '0 0 8 * * ?', 'ACTIVE', 1, '', 'DO_NOTHING'),
+    ('J002', 'MONTHLY_PERF', '月度绩效计算', '0 0 1 1 * ?', 'ACTIVE', 1, '', 'DO_NOTHING'),
+    ('JOB_LEAD_CALLBACK_COMPENSATE', 'LEAD_CALLBACK_COMPENSATE', 'Lead 回调补偿巡检',
+     '0 */5 * * * ?', 'ACTIVE', 1,
+     'com.bank.branch.platform.customer.job.quartz.LeadCallbackCompensateQuartzJob', 'DO_NOTHING');
 
 INSERT IGNORE INTO user_notification (id, emp_id, title, content, notify_type, biz_type, biz_id, is_read) VALUES
     ('N001', 'user001', '审批通知', '您有新的审批待处理', 'WORKFLOW', 'LEAD', 'L100001', 0),
