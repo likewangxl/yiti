@@ -393,6 +393,23 @@ V1.8 后登记的 5 项 V1.9 候选事项经 brainstorming 二次收敛，处置
 
 **brainstorming 决策溯源**：见 `docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md` § 10
 
+## V1.10 候选事项（2026-05-01 新登记）
+
+V1.9 P4-validation 阶段意外发现：V1.8 P7 笔记标"bootstrap mvn verify 全绿"是局部状态，实际 5 个 IT 在 V1.8 P7 baseline 即失败（V1.9 经 `git checkout HEAD~5 -- bootstrap/src/test/resources/` 验证确认非 V1.9 引入）。
+
+| # | 事项 | 优先级 | 来源 | 处置 |
+|---|---|---|---|---|
+| 1 | `LeadApprovedCreatesCustomerMasterIT.leadApproved_shouldCreateCustomerMaster_andUpdateLeadStatus` 失败（Expected size: 1 but was: 0；listener 未触发或 cust_master 未创建） | 高 | V1.9 P4 baseline 验证（2026-05-01）| V1.10 候选 |
+| 2 | `WorkflowCallbackEventChainBugIT.processCompletedEvent_publishedInTransaction_shouldCreateCustomerMaster` 失败（事件链路未传到 LeadApprovedListener） | 高 | 同上 | V1.10 候选 |
+| 3 | `WorkflowCallbackIdempotencyBugIT.duplicateProcessCompletedEvent_shouldNotDuplicateCustomerMaster` 失败（FU-1 幂等保护期望 1 行实际 0 行） | 高 | 同上 | V1.10 候选 |
+| 4 | `CustomerMarketingCenterIT.customerMinimalClosure_worksInBootstrap` 错误（EmptyResultDataAccessException line 135：SELECT id FROM touch_task） | 中 | 同上 | V1.10 候选 |
+| 5 | `WorkflowCallbackExceptionSwallowBugIT.mapperException_shouldBeSwallowedByListenerNotSpring` 错误（同根因：listener 未触发或前置数据缺失） | 中 | 同上 | V1.10 候选 |
+| 6 | （V1.9 # 5 延期）测试库环境完整治理：onepl_test_v103 多模块 DDL 导入 / FlywayIT 等当前失败 | 中 | V1.8 P6 探查 | V1.10 候选 |
+
+**根因初步推测**（非诊断结论）：5 个 IT 共同失败模式 = "事件 listener 未触发 → 期望数据 0 行"，疑与 V1.7+V1.8 事件链路改造（@TransactionalEventListener AFTER_COMMIT 时序、Workflow ProcessCompletedEvent 路径）相关，需 V1.10 单独 brainstorming 定根因。
+
+**注**：5 个失败 IT 的对比验证产物保留在 `/tmp/v1.9-mvn-verify-2.log`（V1.9 状态）+ `/tmp/v1.9-baseline-test-2.log`（V1.8 P7 baseline）。
+
 ## V1.0 已知技术债（2026-04-25）
 
 | # | 标题 | 优先级 | 来源 |
