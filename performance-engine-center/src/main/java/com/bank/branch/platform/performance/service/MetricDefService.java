@@ -357,6 +357,16 @@ public class MetricDefService {
         return mapper.selectByCondition(baseDim, metricLevel, "ACTIVE", null, 0, 1000);
     }
 
+    /**
+     * V1.7：列出所有 ACTIVE+AUTO+未删除的指标，供启动同步使用.
+     *
+     * @return 可调度指标列表
+     */
+    @Transactional(readOnly = true)
+    public List<PerfMetricDef> listSchedulable() {
+        return mapper.selectSchedulable();
+    }
+
     private List<String> parseRefMetricCodes(String refMetricCodesJson) {
         if (refMetricCodesJson == null || refMetricCodesJson.isBlank()) {
             return Collections.emptyList();

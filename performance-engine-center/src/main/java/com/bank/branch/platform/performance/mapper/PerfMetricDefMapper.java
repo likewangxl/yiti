@@ -149,4 +149,11 @@ public interface PerfMetricDefMapper extends BaseMapper<PerfMetricDef> {
      * @return 受影响行数
      */
     int softDelete(@Param("id") String id);
+
+    /**
+     * V1.7：查询所有 ACTIVE+AUTO+未删除的指标，供启动期调度同步使用.
+     *
+     * @return 可调度指标列表
+     */
+    java.util.List<PerfMetricDef> selectSchedulable();
 }

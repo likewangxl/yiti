@@ -85,6 +85,17 @@
           AND deleted = 0
     </select>
 
+    <!-- V1.7：查询所有 ACTIVE+AUTO+未删除指标，供调度同步使用 -->
+    <select id="selectSchedulable" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_METRIC_DEF
+        WHERE status = 'ACTIVE'
+          AND calc_mode = 'AUTO'
+          AND (deleted IS NULL OR deleted = 0)
+        ORDER BY metric_code
+    </select>
+
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
