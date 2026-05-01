@@ -237,6 +237,8 @@ com.bank.branch.platform.<module>/
 - **docs 目录**: 各模块详细设计文档 + DDL + 共享开发规范 (见 `docs/CLAUDE.md`)
 - **运维 Runbook**: `docs/modules/system-governance-center/09-运维Runbook.md` — sys_job_conf / Quartz 集群调度运维权威指南（V1.9 整合）
 - **V1.10 测试库合一 spec**: `docs/superpowers/specs/2026-05-01-v1.10-test-db-unification-design.md` — 唯一 `onepl_test_bootstrap`，FlywayTestBase 真接管 perf/rpt schema
+- **V1.11 # 1 spec**: `docs/superpowers/specs/2026-05-01-v1.11-5it-diagnosis-design.md` — listener 嵌套 AFTER_COMMIT 链改同步调用（方向 C），5 IT 诊断 + 修复
+- **V1.11 # 1 plan**: `docs/superpowers/plans/2026-05-01-v1.11-1-5it-diagnosis-impl.md`
 
 ### 模块级 CLAUDE.md (开发时必须参考)
 - **公共基础设施**: [common/CLAUDE.md](common/CLAUDE.md)

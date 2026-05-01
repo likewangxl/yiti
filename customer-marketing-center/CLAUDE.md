@@ -408,17 +408,33 @@ V1.10 候选事项 6 项二次收敛后处置：
 
 **brainstorming 决策溯源**：见 `docs/superpowers/specs/2026-05-01-v1.10-test-db-unification-design.md` § 0 / § 10
 
-## V1.11 候选事项（2026-05-01 新登记）
+## V1.11 处置（2026-05-01）
 
-V1.10 P2 mvn verify 揭露的测试失败转 V1.11：
+V1.11 候选事项 5 项二次收敛后处置：
+
+| # | 事项 | V1.11 处置 | 备注 |
+|---|---|---|---|
+| 1 | 5 IT 失败（LeadApprovedCreatesCustomerMasterIT / WorkflowCallback*BugIT / CustomerMarketingCenterIT）| ✅ **本期交付（V1.11 / 2026-05-01）** | 方向 C 改造：删除 3 个 listener + 3 个 event，reconcileApproved/ClaimService.claim 改同步调用，与 bizapp.LoanWorkflowListener 单层 pattern 对齐 |
+| 2 | perf failsafe Spring Context threshold cascade | **延期 V1.12** | 与 V1.11 # 1 独立，需单独诊断 |
+| 3 | MetricScheduledE2EIT Duplicate entry | **延期 V1.12** | 测试间数据残留，需 cleanup 改造 |
+| 4 | V1.8 P6 已登记业务/数据状态问题 | **延期 V1.12** | KpiSchemeControllerIT / AllocRelationControllerIT / PerfRunTaskMapperIT / CustAllocRelationMapperIT |
+| 5 | 3 个 *SummaryControllerIT.submit*Export Status 500 | **延期 V1.12** | 数据库连接池或前置数据缺失 |
+
+**brainstorming 决策溯源**：见 `docs/superpowers/specs/2026-05-01-v1.11-5it-diagnosis-design.md` § 0 / § 9
+
+## V1.12 候选事项（2026-05-01 新登记）
+
+V1.10 P2 mvn verify 揭露的测试失败转 V1.11，V1.11 # 1 交付后未解决项延期至 V1.12：
 
 | # | 事项 | 优先级 | 来源 | 处置 |
 |---|---|---|---|---|
-| 1 | 5 IT 失败（LeadApprovedCreatesCustomerMasterIT / WorkflowCallback*Bug*IT / CustomerMarketingCenterIT / WorkflowCallbackExceptionSwallowBugIT）| 高 | V1.10 类 A 转入 | V1.11 候选 |
-| 2 | perf failsafe Spring Context threshold cascade（V1_2_0/V1_4_0/V1_3_0/V1_2_5/V1_0_4/V1_0_3 FlywayIT 等大量 ApplicationContext 加载失败级联） | 中 | V1.10 P2 retry-3 探查 | V1.11 候选 |
-| 3 | MetricScheduledE2EIT Duplicate entry 'E2E_M_V1_7' for PERF_METRIC_DEF.uk_metric_code（测试间数据残留 / cleanup 不彻底）| 中 | 同上 | V1.11 候选 |
-| 4 | V1.8 P6 已登记业务/数据状态问题：KpiSchemeControllerIT 4E + AllocRelationControllerIT 4F + PerfRunTaskMapperIT 7F+1E + CustAllocRelationMapperIT 10F | 中 | V1.8 P6 转入 | V1.11 候选 |
-| 5 | 3 个 *SummaryControllerIT.submit*Export Status 500（疑数据库连接池或前置数据缺失）| 低 | V1.10 P2 retry-3 探查 | V1.11 候选 |
+| 1 | perf failsafe Spring Context threshold cascade（V1_2_0/V1_4_0/V1_3_0/V1_2_5/V1_0_4/V1_0_3 FlywayIT 等大量 ApplicationContext 加载失败级联） | 中 | V1.10 P2 retry-3 探查 | V1.12 候选 |
+| 2 | MetricScheduledE2EIT Duplicate entry 'E2E_M_V1_7' for PERF_METRIC_DEF.uk_metric_code（测试间数据残留 / cleanup 不彻底）| 中 | V1.10 P2 retry-3 探查 | V1.12 候选 |
+| 3 | V1.8 P6 已登记业务/数据状态问题：KpiSchemeControllerIT 4E + AllocRelationControllerIT 4F + PerfRunTaskMapperIT 7F+1E + CustAllocRelationMapperIT 10F | 中 | V1.8 P6 转入 | V1.12 候选 |
+| 4 | 3 个 *SummaryControllerIT.submit*Export Status 500（疑数据库连接池或前置数据缺失）| 低 | V1.10 P2 retry-3 探查 | V1.12 候选 |
+| 5 | onepl_test_bootstrap.TOUCH_TASK 缺 sla_warning 列（schema.sql IF NOT EXISTS 不更新现有表 → column drift） | 中 | V1.11 # 1 P4 实施发现 | V1.12 候选 |
+| 6 | onepl_test_bootstrap 同时存在 8 个 customer 小写历史表（V1.10 治理后未 DROP，cust_master/cust_lead/touch_task/cust_tag/cust_tag_rel/touch_log/lead_import_batch/cust_claim） | 低 | V1.11 # 1 P4 实施发现 | V1.12 候选 |
+| 7 | BusinessApplicationCenterIT 数据残留（bizapp schema.sql 无 DELETE cleanup 段，每次 IT 跑累积 LOAN_APPLY/SUPPORT_REQUEST 行）| 中 | V1.11 # 1 P4 全量回归发现 | V1.12 候选 |
 
 ## V1.0 已知技术债（2026-04-25）
 
