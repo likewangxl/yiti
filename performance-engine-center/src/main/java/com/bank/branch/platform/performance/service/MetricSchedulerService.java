@@ -4,8 +4,9 @@ import com.bank.branch.platform.governance.api.JobApi;
 import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.job.quartz.MetricExecuteQuartzJob;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -19,15 +20,25 @@ import java.util.Map;
  *
  * <p>把 PerfMetricDef 的 CRUD 状态变更同步成 Quartz 调度状态.
  * 启动期 + CRUD afterCommit 两类入口.
+ *
+ * <p>MetricDefService 通过 {@code @Lazy} 注入打破与 MetricDefService 的循环依赖.
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MetricSchedulerService {
 
     private final JobApi jobApi;
     private final MetricDefService metricDefService;
     private final MetricCronResolver cronResolver;
+
+    @Autowired
+    public MetricSchedulerService(JobApi jobApi,
+                                  @Lazy MetricDefService metricDefService,
+                                  MetricCronResolver cronResolver) {
+        this.jobApi = jobApi;
+        this.metricDefService = metricDefService;
+        this.cronResolver = cronResolver;
+    }
 
     /**
      * 应用启动后同步所有可调度指标到 Quartz.
