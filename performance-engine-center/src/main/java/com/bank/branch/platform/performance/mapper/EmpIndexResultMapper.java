@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.EmpIndexResult;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -33,9 +34,10 @@ import java.util.Map;
  *       {@code @Range(min=1, max=200)} 或 {@code Assert.isTrue}），否则构成 SQL 注入漏洞；</li>
  *   <li>其余全部参数一律使用 {@code #{}} 预编译占位。</li>
  * </ul>
+ * <p>BaseMapper 标准方法由 MyBatis-Plus 提供; insertRow 保留行粒度插入入口（单测 UK 冲突场景）.
  */
 @Mapper
-public interface EmpIndexResultMapper {
+public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
 
     /**
      * 插入/更新员工在指定 slot 上的指标值（UPSERT 语义）.

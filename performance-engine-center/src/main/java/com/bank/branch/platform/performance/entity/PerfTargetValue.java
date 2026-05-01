@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -13,9 +16,11 @@ import java.time.LocalDateTime;
  * <p>索引：idx_metric_code(metric_code), idx_subject(subject_type, subject_id, cycle_key)
  */
 @Data
+@TableName("perf_target_value")
 public class PerfTargetValue {
 
     /** 目标值ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 目标方案ID（varchar(32)）. */

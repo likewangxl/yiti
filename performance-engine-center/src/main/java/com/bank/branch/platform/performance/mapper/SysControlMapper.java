@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.SysControl;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -12,25 +13,10 @@ import java.util.List;
  * <p>V1.0.3 对齐：表新增 5 字段（remark/updated_by/publish_source/publish_by/publish_time）。
  * <p>v1.2 版本控制表采用生产 DDL, 不走审计字段填充, 禁止使用 common-db 的 AuditFieldFiller.
  * <p>UK: (scope_dim, latest_data_date, current_version)（V1.0.3 扩展），索引: (scope_dim, is_valid).
+ * <p>insert / selectById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface SysControlMapper {
-
-    /**
-     * 新增一条版本控制记录.
-     *
-     * @param sysControl 实体
-     * @return 受影响行数
-     */
-    int insert(SysControl sysControl);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 实体, 不存在时返回 null
-     */
-    SysControl selectById(@Param("id") String id);
+public interface SysControlMapper extends BaseMapper<SysControl> {
 
     /**
      * 查询指定维度下当前生效 (is_valid=1) 的版本, 最多一条.

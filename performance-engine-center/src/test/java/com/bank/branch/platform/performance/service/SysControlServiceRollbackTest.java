@@ -59,7 +59,7 @@ class SysControlServiceRollbackTest extends PerformanceServiceTestBase {
                 "RB2", "EMP", LocalDate.of(2099, 2, 1), "V_RB_2", 1);
         when(sysControlMapper.listByScope(eq("EMP"), anyInt())).thenReturn(List.of(v2, v1));
         when(sysControlMapper.selectByScopeAndValid("EMP")).thenReturn(v2);
-        when(sysControlMapper.insert(any())).thenReturn(1);
+        when(sysControlMapper.insert(any(SysControl.class))).thenReturn(1);
 
         // When
         SysControl result = service.rollback("EMP", "V_RB_1", "紧急回滚", "admin");
@@ -100,7 +100,7 @@ class SysControlServiceRollbackTest extends PerformanceServiceTestBase {
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND));
 
-        verify(sysControlMapper, never()).insert(any());
+        verify(sysControlMapper, never()).insert(any(SysControl.class));
         verify(sysControlMapper, never()).updateIsValid(anyString(), anyInt());
     }
 
@@ -118,7 +118,7 @@ class SysControlServiceRollbackTest extends PerformanceServiceTestBase {
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND));
 
-        verify(sysControlMapper, never()).insert(any());
+        verify(sysControlMapper, never()).insert(any(SysControl.class));
         verify(sysControlMapper, never()).updateIsValid(anyString(), anyInt());
     }
 
@@ -131,7 +131,7 @@ class SysControlServiceRollbackTest extends PerformanceServiceTestBase {
                 "RB2", "EMP", LocalDate.of(2099, 2, 1), "V_RB_2", 1);
         when(sysControlMapper.listByScope(eq("EMP"), anyInt())).thenReturn(List.of(v2, v1));
         when(sysControlMapper.selectByScopeAndValid("EMP")).thenReturn(v2);
-        when(sysControlMapper.insert(any()))
+        when(sysControlMapper.insert(any(SysControl.class)))
                 .thenThrow(new DuplicateKeyException("UK conflict"));
 
         assertThatThrownBy(() -> service.rollback("EMP", "V_RB_1", "并发", "admin"))

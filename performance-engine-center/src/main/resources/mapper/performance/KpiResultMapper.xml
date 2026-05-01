@@ -13,24 +13,7 @@
         kpi_total_score, detail_json, calculated_time
     </sql>
 
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.KpiResult"
-            useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO KPI_RESULT (
-            emp_id, cycle_type, cycle_date, as_of_date, data_version,
-            kpi_total_score, detail_json
-        ) VALUES (
-            #{empId}, #{cycleType}, #{cycleDate}, #{asOfDate}, #{dataVersion},
-            #{kpiTotalScore}, #{detailJson}
-        )
-    </insert>
-
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.KpiResult">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM KPI_RESULT
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- insert / selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="selectByEmpCycle" resultType="com.bank.branch.platform.performance.entity.KpiResult">
         SELECT

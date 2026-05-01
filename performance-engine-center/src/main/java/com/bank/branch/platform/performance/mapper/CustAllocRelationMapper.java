@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.CustAllocRelation;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -28,29 +29,10 @@ import java.util.Set;
  *       接受任何用户输入直接拼入，否则将形成 SQL 注入漏洞。</li>
  *   <li>所有其他参数一律使用 {@code #{}} 预编译占位符。</li>
  * </ul>
+ * <p>insert / selectById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface CustAllocRelationMapper {
-
-    /**
-     * 新增分配关系（V1.1 Task P5.4 导入通道专用）.
-     *
-     * <p>仅插入必要的维度字段（id / custId / allocDim / bizKind / accountNo / empId / ratio /
-     * effectiveDate / endDate / sourceBatchId），其他字段由 DDL 默认值 / AuditFieldFiller 填充。
-     * 主键冲突（{@link org.springframework.dao.DuplicateKeyException}）由调用方捕获到 errorSummary。
-     *
-     * @param entity 分配关系实体（id 必填，由调用方生成 UUID）
-     * @return 受影响行数
-     */
-    int insert(CustAllocRelation entity);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 分配关系，不存在返回 null
-     */
-    CustAllocRelation selectById(@Param("id") String id);
+public interface CustAllocRelationMapper extends BaseMapper<CustAllocRelation> {
 
     /**
      * 查某客户某业务在 asOfDate 时点生效的分配关系.

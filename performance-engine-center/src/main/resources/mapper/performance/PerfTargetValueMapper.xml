@@ -49,13 +49,7 @@
         LIMIT 1
     </select>
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM PERF_TARGET_VALUE
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="listByPlan" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
         SELECT

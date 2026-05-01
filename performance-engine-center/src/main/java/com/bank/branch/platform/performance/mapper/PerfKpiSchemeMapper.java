@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -11,17 +12,10 @@ import java.util.List;
  *
  * <p>负责 perf_kpi_scheme 父表的 CRUD。方案项由 {@link PerfKpiItemMapper} 管理，
  * 父子同事务由 Service 层编排（见 Task 2.2 KpiSchemeService）。
+ * <p>insert / selectById / deleteById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface PerfKpiSchemeMapper {
-
-    /**
-     * 新增 KPI 方案.
-     *
-     * @param scheme KPI 方案
-     * @return 受影响行数
-     */
-    int insert(PerfKpiScheme scheme);
+public interface PerfKpiSchemeMapper extends BaseMapper<PerfKpiScheme> {
 
     /**
      * 按主键选择性更新（非空字段才更新，updated_time 固定写入 NOW()）.
@@ -44,14 +38,6 @@ public interface PerfKpiSchemeMapper {
     int updateStatusById(@Param("id") String id,
                          @Param("status") String status,
                          @Param("updatedBy") String updatedBy);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 方案，不存在返回 null
-     */
-    PerfKpiScheme selectById(@Param("id") String id);
 
     /**
      * 按方案编码查询（UK 支撑）.
@@ -89,11 +75,4 @@ public interface PerfKpiSchemeMapper {
                           @Param("status") String status,
                           @Param("keyword") String keyword);
 
-    /**
-     * 按主键删除（用于测试清理或受控下线；生产软删走 updateStatusById）.
-     *
-     * @param id 主键
-     * @return 受影响行数
-     */
-    int deleteById(@Param("id") String id);
 }

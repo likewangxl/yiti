@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -29,9 +32,11 @@ import java.time.LocalDateTime;
  * <p>索引：idx_task_type / idx_status / idx_started_by / idx_created_time（DDL 已建）.
  */
 @Data
+@TableName("perf_run_task")
 public class PerfRunTask {
 
     /** 任务ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 任务类型：METRIC_TRIAL / METRIC_RUN / KPI_RUN / RECALC. */

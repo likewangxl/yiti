@@ -174,7 +174,7 @@ class PerfImportServiceTest {
     @Test
     @DisplayName("getBatch：批次存在 → 返回；不存在 → 抛 IMPORT_BATCH_NOT_FOUND (PERF-40017)")
     void getBatch_notFound_throwsImportBatchNotFound() {
-        when(batchMapper.selectById("MISSING")).thenReturn(null);
+        when(batchMapper.selectByBatchId("MISSING")).thenReturn(null);
 
         assertThatThrownBy(() -> service.getBatch("MISSING"))
                 .isInstanceOf(PerfException.class)
@@ -188,7 +188,7 @@ class PerfImportServiceTest {
         PerfImportBatch b = new PerfImportBatch();
         b.setId("B100");
         b.setStatus("RUNNING");
-        when(batchMapper.selectById("B100")).thenReturn(b);
+        when(batchMapper.selectByBatchId("B100")).thenReturn(b);
 
         assertThatThrownBy(() -> service.delete("B100"))
                 .isInstanceOf(PerfException.class)
@@ -202,7 +202,7 @@ class PerfImportServiceTest {
         PerfImportBatch b = new PerfImportBatch();
         b.setId("B200");
         b.setStatus("SUCCESS");
-        when(batchMapper.selectById("B200")).thenReturn(b);
+        when(batchMapper.selectByBatchId("B200")).thenReturn(b);
 
         assertThatThrownBy(() -> service.retry("B200"))
                 .isInstanceOf(PerfException.class)

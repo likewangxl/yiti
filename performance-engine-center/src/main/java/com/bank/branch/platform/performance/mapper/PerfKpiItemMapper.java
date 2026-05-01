@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -11,10 +12,11 @@ import java.util.List;
  *
  * <p>父子表 CRUD 的子表操作，属于 perf_kpi_scheme 的附属表。
  * 批量插入 {@link #insertBatch(List)} 用于一次创建方案时一次性写入所有项，
- * 单条插入 {@link #insert(PerfKpiItem)} 用于增量追加（需与父方案同事务）。
+ * 单条新增走 BaseMapper.insert(PerfKpiItem) 增量追加（需与父方案同事务）。
+ * <p>insert / selectById / deleteById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface PerfKpiItemMapper {
+public interface PerfKpiItemMapper extends BaseMapper<PerfKpiItem> {
 
     /**
      * 批量新增方案项（创建方案时一次写入）.
@@ -23,14 +25,6 @@ public interface PerfKpiItemMapper {
      * @return 受影响行数
      */
     int insertBatch(@Param("list") List<PerfKpiItem> items);
-
-    /**
-     * 单条新增方案项（追加场景）.
-     *
-     * @param item 方案项
-     * @return 受影响行数
-     */
-    int insert(PerfKpiItem item);
 
     /**
      * 按主键选择性更新.
@@ -45,28 +39,12 @@ public interface PerfKpiItemMapper {
     int updateByIdSelective(PerfKpiItem item);
 
     /**
-     * 按主键删除.
-     *
-     * @param id 主键
-     * @return 受影响行数
-     */
-    int deleteById(@Param("id") String id);
-
-    /**
      * 按方案ID删除所有项（删除方案时级联清理）.
      *
      * @param schemeId 方案ID
      * @return 受影响行数
      */
     int deleteBySchemeId(@Param("schemeId") String schemeId);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 方案项，不存在返回 null
-     */
-    PerfKpiItem selectById(@Param("id") String id);
 
     /**
      * 按方案ID查询所有项.

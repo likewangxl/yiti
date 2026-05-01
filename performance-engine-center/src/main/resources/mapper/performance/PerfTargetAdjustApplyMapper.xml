@@ -8,17 +8,10 @@
         created_by, created_time, updated_by, updated_time
     </sql>
 
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
-        INSERT INTO PERF_TARGET_ADJUST_APPLY (
-            <include refid="BASE_COLUMNS"/>
-        ) VALUES (
-            #{id}, #{planId}, #{subjectType}, #{subjectId}, #{cycleKey}, #{status},
-            #{businessKey}, #{processInstanceId}, #{ownerOrgId}, #{remark},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
+    <!-- insert / selectById(Serializable) / updateById / deleteById 由 BaseMapper 提供，无需在此定义 -->
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
+    <!-- selectByTargetApplyId: 自定义按主键查询，避免与 BaseMapper.selectById(Serializable) 签名冲突 -->
+    <select id="selectByTargetApplyId" resultType="com.bank.branch.platform.performance.entity.PerfTargetAdjustApply">
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PERF_TARGET_ADJUST_APPLY

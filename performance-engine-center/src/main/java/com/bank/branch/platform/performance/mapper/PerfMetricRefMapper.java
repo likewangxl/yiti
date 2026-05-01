@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfMetricRef;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -8,9 +9,11 @@ import java.util.List;
 
 /**
  * 指标引用关系表 Mapper.
+ * <p>BaseMapper 标准方法（insert 单条 / selectById 等）由 MyBatis-Plus 提供.
+ * <p>本 Mapper 无单条 insert / selectById 自定义方法，全部走自定义批量/条件查询.
  */
 @Mapper
-public interface PerfMetricRefMapper {
+public interface PerfMetricRefMapper extends BaseMapper<PerfMetricRef> {
 
     /**
      * 批量新增引用关系.

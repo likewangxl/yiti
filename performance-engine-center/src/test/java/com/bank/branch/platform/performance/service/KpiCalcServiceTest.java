@@ -157,7 +157,7 @@ class KpiCalcServiceTest {
                 .isInstanceOf(PerfException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerfErrorCode.KPI_SCHEME_NOT_FOUND);
-        verify(kpiResultMapper, never()).insert(any());
+        verify(kpiResultMapper, never()).insert(any(KpiResult.class));
     }
 
     @Test

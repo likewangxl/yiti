@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfTargetValue;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -13,9 +14,10 @@ import java.util.Map;
  * <p>核心方法 {@link #upsertBatch(List)} 通过 MySQL {@code ON DUPLICATE KEY UPDATE}
  * 语义实现"以 UK (plan_id, subject_type, subject_id, cycle_key, metric_code) 为粒度"的
  * 批量落库；新 UK 插入、旧 UK 更新 target_value/base_value。
+ * <p>selectById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface PerfTargetValueMapper {
+public interface PerfTargetValueMapper extends BaseMapper<PerfTargetValue> {
 
     /**
      * 批量 upsert（基于 uk_plan_subject_cycle_metric 的 ON DUPLICATE KEY UPDATE）.
@@ -52,14 +54,6 @@ public interface PerfTargetValueMapper {
                                       @Param("subjectId") String subjectId,
                                       @Param("cycleKey") String cycleKey,
                                       @Param("metricCode") String metricCode);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 目标值，不存在返回 null
-     */
-    PerfTargetValue selectById(@Param("id") String id);
 
     /**
      * 按方案 + 可选过滤条件分页查询目标值.

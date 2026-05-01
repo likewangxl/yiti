@@ -84,7 +84,7 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
 
         // Then: 返回既有记录, 不应再 insert
         assertThat(got).isSameAs(existed);
-        verify(sysControlMapper, never()).insert(any());
+        verify(sysControlMapper, never()).insert(any(SysControl.class));
     }
 
     @Test
@@ -241,6 +241,6 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
 
         // Then: 不 insert 新记录, 返回历史最近一条
         assertThat(got).isSameAs(historical);
-        verify(sysControlMapper, never()).insert(any());
+        verify(sysControlMapper, never()).insert(any(SysControl.class));
     }
 }

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.performance.entity.PerfExportTask;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,33 +12,27 @@ import java.util.List;
  *
  * <p>V1.2 Task Q6.1 交付，支撑异步导出框架的最小集：
  * <ul>
- *   <li>创建任务（insert）</li>
- *   <li>按主键查询（selectById）</li>
- *   <li>状态机流转 + 结果回填（updateStatus / updateSuccess / updateFailed）</li>
- *   <li>按操作人查询任务列表（selectByOperator）</li>
+ *   <li>BaseMapper 提供：insert(T) / selectById(Serializable) / updateById(T) / deleteById</li>
+ *   <li>{@link #selectByTaskId} 按任务主键查询（自定义方法，避免与 BaseMapper.selectById 冲突）</li>
+ *   <li>{@link #updateStatus} 状态机流转（updateStatus）</li>
+ *   <li>{@link #updateSuccess} 结果回填成功（updateSuccess）</li>
+ *   <li>{@link #updateFailed} 结果回填失败（updateFailed）</li>
+ *   <li>{@link #selectByOperator} 按操作人查询任务列表（selectByOperator）</li>
  * </ul>
  *
  * <p>状态机由 Service 层保证（DDL 不加 CHECK），当前允许的转移：
  * {@code PENDING → RUNNING → SUCCESS | FAILED}。
  */
 @Mapper
-public interface PerfExportTaskMapper {
+public interface PerfExportTaskMapper extends BaseMapper<PerfExportTask> {
 
     /**
-     * 新增导出任务（初始 status 通常为 PENDING）.
-     *
-     * @param task 任务实体
-     * @return 受影响行数
-     */
-    int insert(PerfExportTask task);
-
-    /**
-     * 按主键查询.
+     * 按任务主键查询（自定义方法，BaseMapper.selectById(Serializable) 已由继承提供）.
      *
      * @param id 主键
      * @return 任务，不存在返回 null
      */
-    PerfExportTask selectById(@Param("id") String id);
+    PerfExportTask selectByTaskId(@Param("id") String id);
 
     /**
      * 更新状态（不涉及 file_key/row_count，通常用于 PENDING → RUNNING 过渡）.

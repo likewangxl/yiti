@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -42,9 +45,11 @@ import java.time.LocalDateTime;
  * @since V1.2 Q3.1
  */
 @Data
+@TableName("perf_target_adjust_apply")
 public class PerfTargetAdjustApply {
 
     /** 申请 ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 目标方案 ID（varchar(32)，对齐 V1.0 planId 使用 String 的技术债决策）. */

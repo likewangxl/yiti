@@ -172,7 +172,7 @@ public class TargetAdjustService {
         if (isBlank(id)) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
         }
-        PerfTargetAdjustApply apply = applyMapper.selectById(id);
+        PerfTargetAdjustApply apply = applyMapper.selectByTargetApplyId(id);
         if (apply == null) {
             throw new PerfException(PerfErrorCode.TARGET_ADJUST_APPLY_NOT_FOUND, id);
         }
@@ -309,7 +309,7 @@ public class TargetAdjustService {
         if (isBlank(id)) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
         }
-        PerfTargetAdjustApply apply = applyMapper.selectById(id);
+        PerfTargetAdjustApply apply = applyMapper.selectByTargetApplyId(id);
         if (apply == null) {
             throw new PerfException(PerfErrorCode.TARGET_ADJUST_APPLY_NOT_FOUND, id);
         }

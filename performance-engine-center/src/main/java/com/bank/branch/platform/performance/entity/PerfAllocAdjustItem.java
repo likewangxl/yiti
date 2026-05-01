@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -24,9 +27,11 @@ import java.time.LocalDateTime;
  * {@code end_date} 切分，新记录 {@code effective_date} 由审批时间确定）.
  */
 @Data
+@TableName("perf_alloc_adjust_item")
 public class PerfAllocAdjustItem {
 
     /** 明细 ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 父申请 ID（关联 perf_alloc_adjust_apply.id）. */

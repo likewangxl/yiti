@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -9,36 +10,26 @@ import org.apache.ibatis.annotations.Param;
  *
  * <p>V1.1 Task P1.3 交付。支持导入流程需要的最小集：
  * <ul>
- *   <li>创建批次（insert）</li>
- *   <li>按主键 / 批次号读取（selectById / selectByBatchNo）</li>
- *   <li>状态机流转更新（updateStatus）</li>
- *   <li>行数汇总更新（updateCounts）</li>
+ *   <li>BaseMapper 提供：insert(T) / selectById(Serializable) / updateById(T) / deleteById</li>
+ *   <li>{@link #selectByBatchId} 按批次主键查询（自定义方法，避免与 BaseMapper.selectById 冲突）</li>
+ *   <li>{@link #selectByBatchNo} 按批次号（业务唯一键）查询</li>
+ *   <li>{@link #updateStatus} 状态机流转更新（updateStatus）</li>
+ *   <li>{@link #updateCounts} 行数汇总更新（updateCounts）</li>
  * </ul>
  *
  * <p>状态机由 Service 层保证（DDL 不加 CHECK），当前允许的转移：
  * {@code CREATED → RUNNING → SUCCESS | FAILED}。
  */
 @Mapper
-public interface PerfImportBatchMapper {
+public interface PerfImportBatchMapper extends BaseMapper<PerfImportBatch> {
 
     /**
-     * 新增导入批次（初始 status 通常为 CREATED）.
-     *
-     * <p>同 {@code batch_no} 第二次插入将抛 {@link org.springframework.dao.DuplicateKeyException}，
-     * 调用方应先以 {@link #selectByBatchNo} 检测幂等。
-     *
-     * @param b 批次实体
-     * @return 受影响行数
-     */
-    int insert(PerfImportBatch b);
-
-    /**
-     * 按主键查询.
+     * 按批次主键查询（自定义方法，BaseMapper.selectById(Serializable) 已由继承提供）.
      *
      * @param id 主键
      * @return 批次，不存在返回 null
      */
-    PerfImportBatch selectById(@Param("id") String id);
+    PerfImportBatch selectByBatchId(@Param("id") String id);
 
     /**
      * 按批次号（业务唯一键）查询.

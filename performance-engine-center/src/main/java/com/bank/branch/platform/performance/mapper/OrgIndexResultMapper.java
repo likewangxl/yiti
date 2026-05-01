@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.OrgIndexResult;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -17,9 +18,10 @@ import java.util.List;
  * <p><strong>安全（SQL 注入）声明</strong>：同 {@link EmpIndexResultMapper}——
  * XML 使用 {@code val_${slot}} 动态拼接列名（合法例外），调用方必须在 Service
  * 层强制校验 {@code slot ∈ [1, 200]}。
+ * <p>BaseMapper 标准方法由 MyBatis-Plus 提供.
  */
 @Mapper
-public interface OrgIndexResultMapper {
+public interface OrgIndexResultMapper extends BaseMapper<OrgIndexResult> {
 
     /**
      * 插入/更新机构在指定 slot 上的指标值（UPSERT，依赖 uk_subject_date_ver）.

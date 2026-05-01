@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -17,9 +18,10 @@ import java.util.List;
  * </ul>
  *
  * <p>UK {@code (apply_id, emp_id)} 保证同一申请中每个员工只出现一次。
+ * <p>BaseMapper 标准方法由 MyBatis-Plus 提供.
  */
 @Mapper
-public interface PerfAllocAdjustItemMapper {
+public interface PerfAllocAdjustItemMapper extends BaseMapper<PerfAllocAdjustItem> {
 
     /**
      * 批量插入明细.

@@ -135,7 +135,7 @@ public class PerfImportServiceImpl implements PerfImportService {
         if (batchId == null || batchId.isBlank()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "batchId 必填");
         }
-        PerfImportBatch b = batchMapper.selectById(batchId);
+        PerfImportBatch b = batchMapper.selectByBatchId(batchId);
         if (b == null) {
             throw new PerfException(PerfErrorCode.IMPORT_BATCH_NOT_FOUND, batchId);
         }

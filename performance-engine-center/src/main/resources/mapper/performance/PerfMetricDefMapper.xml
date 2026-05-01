@@ -10,19 +10,7 @@
         unit, decimal_places, deleted, description
     </sql>
 
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfMetricDef">
-        INSERT INTO PERF_METRIC_DEF (
-            id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
-            calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
-            ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time,
-            unit, decimal_places, deleted, description
-        ) VALUES (
-            #{id}, #{metricCode}, #{metricName}, #{metricNameEn}, #{metricDesc}, #{baseDim}, #{metricLevel},
-            #{calcFreq}, #{calcMode}, #{calcLogicType}, #{sqlText}, #{exprText}, #{summaryRule},
-            #{refMetricCodes}, #{valSlot}, #{status}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime},
-            #{unit}, #{decimalPlaces}, #{deleted}, #{description}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         UPDATE PERF_METRIC_DEF
@@ -58,13 +46,7 @@
         WHERE id = #{id}
     </update>
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM PERF_METRIC_DEF
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="selectByMetricCode" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.event;
 
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
+import com.bank.branch.platform.performance.entity.CustAllocRelation;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
 import com.bank.branch.platform.performance.listener.AllocAdjustCompletedListener;
@@ -95,7 +96,7 @@ class AllocationAdjustmentApprovedEventIT {
     void setUp() {
         collector.received.clear();
         // Mapper mock：下游写入不抛，便于 listener 顺利完成
-        when(custAllocRelationMapper.insert(any())).thenReturn(1);
+        when(custAllocRelationMapper.insert(any(CustAllocRelation.class))).thenReturn(1);
     }
 
     @Test

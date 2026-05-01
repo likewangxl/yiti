@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,8 +13,8 @@ import java.util.Map;
  *
  * <p>负责 perf_target_adjust_apply 表的 CRUD：
  * <ul>
- *   <li>{@link #insert} 插入新申请</li>
- *   <li>{@link #selectById} 按主键查询</li>
+ *   <li>BaseMapper 提供：insert(T) / selectById(Serializable) / updateById(T) / deleteById</li>
+ *   <li>{@link #selectByTargetApplyId} 按申请主键查询（自定义方法，避免与 BaseMapper.selectById 冲突）</li>
  *   <li>{@link #selectByBusinessKey} 按流程业务键查询（工作流回调使用）</li>
  *   <li>{@link #updateStatus} 审批过程中状态推进 + 回写 processInstanceId</li>
  *   <li>{@link #selectByConditions} 条件分页查询
@@ -26,24 +27,15 @@ import java.util.Map;
  * remark / created_by / created_time / updated_by / updated_time}.
  */
 @Mapper
-public interface PerfTargetAdjustApplyMapper {
+public interface PerfTargetAdjustApplyMapper extends BaseMapper<PerfTargetAdjustApply> {
 
     /**
-     * 插入新的目标修正申请.
-     *
-     * @param apply 申请实体（id/planId/subjectType/subjectId/cycleKey/status/
-     *              ownerOrgId/createdBy 必填）
-     * @return 受影响行数
-     */
-    int insert(PerfTargetAdjustApply apply);
-
-    /**
-     * 按主键查询.
+     * 按申请主键查询（自定义方法，BaseMapper.selectById(Serializable) 已由继承提供）.
      *
      * @param id 申请 ID
      * @return 申请实体，不存在返回 null
      */
-    PerfTargetAdjustApply selectById(@Param("id") String id);
+    PerfTargetAdjustApply selectByTargetApplyId(@Param("id") String id);
 
     /**
      * 按流程业务键查询（供工作流回调落地使用）.

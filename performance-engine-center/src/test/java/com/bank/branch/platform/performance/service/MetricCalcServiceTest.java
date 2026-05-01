@@ -147,7 +147,7 @@ class MetricCalcServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(PerfErrorCode.METRIC_NOT_FOUND);
 
-        verify(perfRunTaskMapper, never()).insert(any());
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
     }
 
     @Test
@@ -175,7 +175,7 @@ class MetricCalcServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID);
 
-        verify(perfRunTaskMapper).insert(any());
+        verify(perfRunTaskMapper).insert(any(PerfRunTask.class));
         // FAILED 状态 + error_msg
         verify(perfRunTaskMapper).updateStatus(anyString(), eq("FAILED"), anyString());
     }

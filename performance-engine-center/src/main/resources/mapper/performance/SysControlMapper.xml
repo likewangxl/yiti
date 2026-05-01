@@ -8,25 +8,7 @@
         remark, updated_by, publish_source, publish_by, publish_time
     </sql>
 
-    <!-- 插入（含 V1.0.3 新增字段） -->
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.SysControl">
-        INSERT INTO SYS_CONTROL (
-            id, scope_dim, latest_data_date, current_version, is_valid, created_time, updated_time,
-            remark, updated_by, publish_source, publish_by, publish_time
-        ) VALUES (
-            #{id}, #{scopeDim}, #{latestDataDate}, #{currentVersion}, #{isValid}, #{createdTime}, #{updatedTime},
-            #{remark}, #{updatedBy}, #{publishSource}, #{publishBy}, #{publishTime}
-        )
-    </insert>
-
-    <!-- 按主键查询 -->
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.SysControl">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM SYS_CONTROL
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- insert / selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 查询维度下当前生效版本 -->
     <select id="selectByScopeAndValid" resultType="com.bank.branch.platform.performance.entity.SysControl">

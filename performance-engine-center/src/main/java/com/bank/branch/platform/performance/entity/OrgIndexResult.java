@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -18,9 +21,11 @@ import java.time.LocalDateTime;
  * {@code insertSlotValue} / {@code selectSlotValue} 按 slot 单列读写。
  */
 @Data
+@TableName("org_index_result")
 public class OrgIndexResult {
 
     /** 主键（bigint AUTO_INCREMENT）. */
+    @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
     /** 数据日期. */

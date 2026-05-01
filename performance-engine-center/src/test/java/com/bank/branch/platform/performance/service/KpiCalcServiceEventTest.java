@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.performance.entity.KpiResult;
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
@@ -141,7 +142,7 @@ class KpiCalcServiceEventTest extends PerformanceServiceTestBase {
         assertThat(success).isZero();
         verify(perfEventPublisher, never()).publish(any());
         // 并未走 Scheme / Mapper 的 insert 路径
-        verify(kpiResultMapper, never()).insert(any());
+        verify(kpiResultMapper, never()).insert(any(KpiResult.class));
         verify(kpiSchemeService, never()).getBySchemeCodeOrNull(anyString());
     }
 

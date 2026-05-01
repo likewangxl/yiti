@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.KpiResult;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -19,28 +20,10 @@ import java.util.Map;
  * </ul>
  *
  * <p>V1.1 仅暴露最小写入 + 基础读查询，后续 V1.2 计算 Job/查询 API 将按需扩展。
+ * <p>insert / selectById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface KpiResultMapper {
-
-    /**
-     * 新增 KPI 结果记录（id 由 AUTO_INCREMENT 回填到实体）.
-     *
-     * <p>相同 (emp_id, cycle_type, cycle_date, as_of_date) 第二次插入将抛
-     * {@link org.springframework.dao.DuplicateKeyException}，由 Service 层决策重算策略。
-     *
-     * @param r KPI 结果
-     * @return 受影响行数
-     */
-    int insert(KpiResult r);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return KPI 结果，不存在返回 null
-     */
-    KpiResult selectById(@Param("id") Long id);
+public interface KpiResultMapper extends BaseMapper<KpiResult> {
 
     /**
      * 查询指定员工在某周期类型下的所有 KPI 历史记录.

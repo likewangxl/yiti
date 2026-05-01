@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -13,9 +16,11 @@ import java.time.LocalDateTime;
  * <p>索引：idx_scheme_id(scheme_id)
  */
 @Data
+@TableName("perf_kpi_item")
 public class PerfKpiItem {
 
     /** 项ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 所属方案ID. */

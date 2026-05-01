@@ -124,7 +124,7 @@ public class PerfExportServiceImpl implements PerfExportService {
         if (taskId == null || taskId.isBlank()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "taskId 必填");
         }
-        PerfExportTask t = taskMapper.selectById(taskId);
+        PerfExportTask t = taskMapper.selectByTaskId(taskId);
         if (t == null) {
             throw new PerfException(PerfErrorCode.EXPORT_TASK_NOT_FOUND, taskId);
         }

@@ -6,14 +6,7 @@
         id, scheme_id, metric_code, weight, multiplier, min_score, max_score, created_time
     </sql>
 
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfKpiItem">
-        INSERT INTO PERF_KPI_ITEM (
-            <include refid="BASE_COLUMNS"/>
-        ) VALUES (
-            #{id}, #{schemeId}, #{metricCode}, #{weight}, #{multiplier},
-            #{minScore}, #{maxScore}, #{createdTime}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <insert id="insertBatch">
         INSERT INTO PERF_KPI_ITEM (
@@ -40,23 +33,14 @@
         WHERE id = #{id}
     </update>
 
-    <delete id="deleteById">
-        DELETE FROM PERF_KPI_ITEM
-        WHERE id = #{id}
-    </delete>
+    <!-- deleteById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <delete id="deleteBySchemeId">
         DELETE FROM PERF_KPI_ITEM
         WHERE scheme_id = #{schemeId}
     </delete>
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM PERF_KPI_ITEM
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="selectBySchemeId" resultType="com.bank.branch.platform.performance.entity.PerfKpiItem">
         SELECT

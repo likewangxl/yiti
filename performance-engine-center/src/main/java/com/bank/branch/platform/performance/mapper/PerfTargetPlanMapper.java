@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfTargetPlan;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -12,17 +13,10 @@ import java.util.Map;
  *
  * <p>负责 perf_target_plan 父表的 CRUD。目标值由 {@link PerfTargetValueMapper} 管理，
  * 父子同事务由 Service 层编排（见 Task 3.2 TargetPlanService）。
+ * <p>insert / selectById / deleteById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface PerfTargetPlanMapper {
-
-    /**
-     * 新增目标方案.
-     *
-     * @param plan 目标方案
-     * @return 受影响行数
-     */
-    int insert(PerfTargetPlan plan);
+public interface PerfTargetPlanMapper extends BaseMapper<PerfTargetPlan> {
 
     /**
      * 按主键选择性更新（非空字段才更新，updated_time 固定写入 NOW()）.
@@ -45,14 +39,6 @@ public interface PerfTargetPlanMapper {
     int updateStatusById(@Param("id") String id,
                          @Param("status") String status,
                          @Param("updatedBy") String updatedBy);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 方案，不存在返回 null
-     */
-    PerfTargetPlan selectById(@Param("id") String id);
 
     /**
      * 按方案编码查询（UK 支撑）.
@@ -89,14 +75,6 @@ public interface PerfTargetPlanMapper {
     long countByCondition(@Param("kpiSchemeId") String kpiSchemeId,
                           @Param("status") String status,
                           @Param("keyword") String keyword);
-
-    /**
-     * 按主键删除（用于测试清理或受控下线；生产软删走 updateStatusById）.
-     *
-     * @param id 主键
-     * @return 受影响行数
-     */
-    int deleteById(@Param("id") String id);
 
     /**
      * V1.3 R1.2 新增: 基于 {@link com.bank.branch.platform.performance.service.scope.PerfScopeHelper}

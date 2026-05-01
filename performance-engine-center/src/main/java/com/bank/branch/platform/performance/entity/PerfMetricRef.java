@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -11,9 +14,11 @@ import java.time.LocalDateTime;
  * <p>索引：idx_ref_metric(ref_metric_code)
  */
 @Data
+@TableName("perf_metric_ref")
 public class PerfMetricRef {
 
     /** 引用关系ID. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 上层指标编码. */

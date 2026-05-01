@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -32,9 +35,11 @@ import java.time.LocalDateTime;
  * {@code effective_date &lt;= asOfDate AND (end_date IS NULL OR end_date &gt;= asOfDate)}.
  */
 @Data
+@TableName("cust_alloc_relation")
 public class CustAllocRelation {
 
     /** 分配关系 ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 客户 ID. */

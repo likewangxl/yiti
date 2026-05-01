@@ -185,7 +185,7 @@ class PerfExportServiceTest {
         PerfExportTask t = new PerfExportTask();
         t.setId("T1");
         t.setOperatorId("ALICE");
-        when(mapper.selectById("T1")).thenReturn(t);
+        when(mapper.selectByTaskId("T1")).thenReturn(t);
 
         PerfExportTask ok = service.getTaskForOwner("T1", "ALICE");
         assertThat(ok.getId()).isEqualTo("T1");

@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -27,9 +30,11 @@ import java.time.LocalDateTime;
  * RETAIL_CARD → retail_v1），生产 DDL 不存在 {@code adjust_type} 字段.
  */
 @Data
+@TableName("perf_alloc_adjust_apply")
 public class PerfAllocAdjustApply {
 
     /** 申请 ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 申请编号（UK，格式 AA{yyyyMMdd}{序号}）. */

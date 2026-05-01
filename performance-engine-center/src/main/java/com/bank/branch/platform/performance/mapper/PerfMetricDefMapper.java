@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,17 +11,10 @@ import java.util.Set;
 
 /**
  * 指标定义表 Mapper.
+ * <p>insert / selectById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface PerfMetricDefMapper {
-
-    /**
-     * 新增指标定义.
-     *
-     * @param def 指标定义
-     * @return 受影响行数
-     */
-    int insert(PerfMetricDef def);
+public interface PerfMetricDefMapper extends BaseMapper<PerfMetricDef> {
 
     /**
      * 按主键选择性更新.
@@ -41,14 +35,6 @@ public interface PerfMetricDefMapper {
     int updateStatusById(@Param("id") String id,
                          @Param("status") String status,
                          @Param("updatedBy") String updatedBy);
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 指标定义，不存在时返回 null
-     */
-    PerfMetricDef selectById(@Param("id") String id);
 
     /**
      * 按指标编码查询.

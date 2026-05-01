@@ -112,7 +112,7 @@ class AllocRelationImportStrategyTest {
         assertThat(result.getSuccessRows()).isEqualTo(0);
         assertThat(result.getErrorRows()).isEqualTo(4);
         assertThat(result.getErrorSummary()).isNotBlank();
-        verify(allocMapper, never()).insert(any());
+        verify(allocMapper, never()).insert(any(CustAllocRelation.class));
     }
 
     @Test
@@ -134,7 +134,7 @@ class AllocRelationImportStrategyTest {
         assertThat(result.getSuccessRows()).isEqualTo(1);
         assertThat(result.getErrorRows()).isEqualTo(1);
         assertThat(result.getErrorSummary()).contains("第");
-        verify(allocMapper, atLeastOnce()).insert(any());
+        verify(allocMapper, atLeastOnce()).insert(any(CustAllocRelation.class));
     }
 
     @Test
@@ -161,7 +161,7 @@ class AllocRelationImportStrategyTest {
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_COLUMN_MAPPING_INVALID));
-        verify(allocMapper, never()).insert(any());
+        verify(allocMapper, never()).insert(any(CustAllocRelation.class));
     }
 
     // ================ helpers ================

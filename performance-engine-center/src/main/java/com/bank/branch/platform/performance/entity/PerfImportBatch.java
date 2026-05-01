@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -30,9 +33,11 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
+@TableName("perf_import_batch")
 public class PerfImportBatch {
 
     /** 批次 ID（varchar(32) 主键）. */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 批次号（唯一，供外部追踪；通常形如 IMP20260422001）. */

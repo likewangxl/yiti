@@ -174,7 +174,7 @@ class TargetAdjustServiceTest {
                 .isEqualTo(PerfErrorCode.TARGET_PLAN_NOT_FOUND);
 
         verify(workflowApi, never()).startProcess(any());
-        verify(applyMapper, never()).insert(any());
+        verify(applyMapper, never()).insert(any(PerfTargetAdjustApply.class));
     }
 
     @Test
@@ -277,7 +277,7 @@ class TargetAdjustServiceTest {
     @Test
     @DisplayName("getById 不存在 → 抛 TARGET_ADJUST_APPLY_NOT_FOUND")
     void getById_notFound_throws() {
-        when(applyMapper.selectById("NO_SUCH")).thenReturn(null);
+        when(applyMapper.selectByTargetApplyId("NO_SUCH")).thenReturn(null);
 
         assertThatThrownBy(() -> service.getById("NO_SUCH"))
                 .isInstanceOf(PerfException.class)
@@ -291,7 +291,7 @@ class TargetAdjustServiceTest {
         PerfTargetAdjustApply apply = new PerfTargetAdjustApply();
         apply.setId("TAA_001");
         apply.setStatus("IN_APPROVAL");
-        when(applyMapper.selectById("TAA_001")).thenReturn(apply);
+        when(applyMapper.selectByTargetApplyId("TAA_001")).thenReturn(apply);
 
         service.withdraw("TAA_001", "用户取消", "admin");
 
@@ -304,7 +304,7 @@ class TargetAdjustServiceTest {
         PerfTargetAdjustApply apply = new PerfTargetAdjustApply();
         apply.setId("TAA_002");
         apply.setStatus("APPROVED");
-        when(applyMapper.selectById("TAA_002")).thenReturn(apply);
+        when(applyMapper.selectByTargetApplyId("TAA_002")).thenReturn(apply);
 
         assertThatThrownBy(() -> service.withdraw("TAA_002", "试图撤回", "admin"))
                 .isInstanceOf(PerfException.class)

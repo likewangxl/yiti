@@ -8,15 +8,7 @@
         created_by, created_time, updated_by, updated_time
     </sql>
 
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
-        INSERT INTO PERF_TARGET_PLAN (
-            <include refid="BASE_COLUMNS"/>
-        ) VALUES (
-            #{id}, #{planCode}, #{planName}, #{kpiSchemeId}, #{targetDim}, #{targetCycle},
-            #{effectiveDate}, #{status}, #{ownerEmpId}, #{ownerOrgCode},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
         UPDATE PERF_TARGET_PLAN
@@ -46,13 +38,7 @@
         WHERE id = #{id}
     </update>
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM PERF_TARGET_PLAN
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="selectByPlanCode" resultType="com.bank.branch.platform.performance.entity.PerfTargetPlan">
         SELECT
@@ -103,10 +89,7 @@
         </where>
     </select>
 
-    <delete id="deleteById">
-        DELETE FROM PERF_TARGET_PLAN
-        WHERE id = #{id}
-    </delete>
+    <!-- deleteById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!--
       V1.3 R1.2 新增: 基于 PerfScopeHelper 的 scopeFragment + scopeParams 注入数据范围条件.

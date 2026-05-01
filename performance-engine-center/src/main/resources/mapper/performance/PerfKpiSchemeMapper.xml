@@ -7,14 +7,7 @@
         created_by, created_time, updated_by, updated_time
     </sql>
 
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
-        INSERT INTO PERF_KPI_SCHEME (
-            <include refid="BASE_COLUMNS"/>
-        ) VALUES (
-            #{id}, #{schemeCode}, #{schemeName}, #{cycleType}, #{openDetail}, #{status},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
         UPDATE PERF_KPI_SCHEME
@@ -39,13 +32,7 @@
         WHERE id = #{id}
     </update>
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM PERF_KPI_SCHEME
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="selectBySchemeCode" resultType="com.bank.branch.platform.performance.entity.PerfKpiScheme">
         SELECT

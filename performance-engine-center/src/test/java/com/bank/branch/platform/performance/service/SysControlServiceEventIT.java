@@ -55,7 +55,7 @@ class SysControlServiceEventIT extends PerformanceServiceTestBase {
         SysControl curr = SysControlTestDataBuilder.buildTest(
                 "E1", "EMP", LocalDate.of(2099, 1, 1), "V_OLD", 1);
         when(sysControlMapper.selectByScopeAndValid("EMP")).thenReturn(curr);
-        when(sysControlMapper.insert(any())).thenReturn(1);
+        when(sysControlMapper.insert(any(SysControl.class))).thenReturn(1);
 
         SwitchVersionCmd cmd = SwitchVersionCmd.builder()
                 .scopeDim("EMP")
@@ -92,7 +92,7 @@ class SysControlServiceEventIT extends PerformanceServiceTestBase {
                 "E3", "EMP", LocalDate.of(2099, 2, 1), "V_RB_2", 1);
         when(sysControlMapper.listByScope(eq("EMP"), anyInt())).thenReturn(List.of(v2, v1));
         when(sysControlMapper.selectByScopeAndValid("EMP")).thenReturn(v2);
-        when(sysControlMapper.insert(any())).thenReturn(1);
+        when(sysControlMapper.insert(any(SysControl.class))).thenReturn(1);
 
         // When
         service.rollback("EMP", "V_RB_1", "紧急回滚", "boss");

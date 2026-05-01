@@ -177,7 +177,7 @@ public class AllocAdjustService {
         if (isBlank(id)) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
         }
-        PerfAllocAdjustApply apply = applyMapper.selectById(id);
+        PerfAllocAdjustApply apply = applyMapper.selectByAllocApplyId(id);
         if (apply == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "申请不存在: " + id);
         }
@@ -223,7 +223,7 @@ public class AllocAdjustService {
         if (isBlank(id)) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
         }
-        PerfAllocAdjustApply apply = applyMapper.selectById(id);
+        PerfAllocAdjustApply apply = applyMapper.selectByAllocApplyId(id);
         if (apply == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "申请不存在: " + id);
         }

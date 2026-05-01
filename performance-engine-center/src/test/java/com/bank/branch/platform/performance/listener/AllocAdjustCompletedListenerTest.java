@@ -108,7 +108,7 @@ class AllocAdjustCompletedListenerTest {
 
         verify(applyMapper, never()).selectByBusinessKey(anyString());
         verify(applyMapper, never()).updateStatus(anyString(), anyString(), anyString());
-        verify(allocRelationMapper, never()).insert(any());
+        verify(allocRelationMapper, never()).insert(any(CustAllocRelation.class));
         verify(eventPublisher, never()).publish(any());
     }
 
@@ -158,7 +158,7 @@ class AllocAdjustCompletedListenerTest {
         listener.onProcessCompleted(event);
 
         verify(applyMapper).updateStatus("APP_001", "REJECTED", null);
-        verify(allocRelationMapper, never()).insert(any());
+        verify(allocRelationMapper, never()).insert(any(CustAllocRelation.class));
         verify(eventPublisher, never()).publish(any());
     }
 
@@ -174,7 +174,7 @@ class AllocAdjustCompletedListenerTest {
         listener.onProcessCompleted(event);
 
         verify(applyMapper, never()).updateStatus(anyString(), anyString(), anyString());
-        verify(allocRelationMapper, never()).insert(any());
+        verify(allocRelationMapper, never()).insert(any(CustAllocRelation.class));
         verify(eventPublisher, never()).publish(any());
     }
 

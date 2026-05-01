@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -24,9 +27,11 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
+@TableName("kpi_result")
 public class KpiResult {
 
     /** 主键（bigint AUTO_INCREMENT）. */
+    @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
     /** 员工工号. */

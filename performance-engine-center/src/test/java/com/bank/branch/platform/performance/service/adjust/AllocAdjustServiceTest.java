@@ -171,7 +171,7 @@ class AllocAdjustServiceTest {
                 .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
 
         verify(workflowApi, never()).startProcess(any());
-        verify(applyMapper, never()).insert(any());
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
     }
 
     @Test

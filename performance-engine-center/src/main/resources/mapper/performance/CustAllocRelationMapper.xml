@@ -30,17 +30,7 @@
         created_by / created_time / updated_time 走 AuditFieldFiller 或 DB 默认值填充，
         此处只赋业务字段 + sourceBatchId（导入批次追溯）。
     -->
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.CustAllocRelation">
-        INSERT INTO CUST_ALLOC_RELATION (
-            id, cust_id, alloc_dim, biz_kind, account_no, emp_id, ratio,
-            effective_date, end_date, source_batch_id, source_process_date,
-            created_by, updated_by
-        ) VALUES (
-            #{id}, #{custId}, #{allocDim}, #{bizKind}, #{accountNo}, #{empId}, #{ratio},
-            #{effectiveDate}, #{endDate}, #{sourceBatchId}, #{sourceProcessDate},
-            #{createdBy}, #{updatedBy}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 时间线有效条件: effective_date <= asOfDate AND (end_date IS NULL OR end_date >= asOfDate). -->
     <sql id="EFFECTIVE_CONDITION">
@@ -48,13 +38,7 @@
         AND (end_date IS NULL OR end_date &gt;= #{asOfDate})
     </sql>
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM CUST_ALLOC_RELATION
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="selectCurrentByCustAndBiz"
             resultType="com.bank.branch.platform.performance.entity.CustAllocRelation">

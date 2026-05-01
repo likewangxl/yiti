@@ -11,17 +11,10 @@
         expire_at, operator_id, error_msg, created_time, updated_time
     </sql>
 
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfExportTask">
-        INSERT INTO PERF_EXPORT_TASK (
-            id, export_type, params_json, status, file_key, file_size, row_count,
-            expire_at, operator_id, error_msg
-        ) VALUES (
-            #{id}, #{exportType}, #{paramsJson}, #{status}, #{fileKey}, #{fileSize}, #{rowCount},
-            #{expireAt}, #{operatorId}, #{errorMsg}
-        )
-    </insert>
+    <!-- insert / selectById(Serializable) / updateById / deleteById 由 BaseMapper 提供，无需在此定义 -->
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfExportTask">
+    <!-- selectByTaskId: 自定义按主键查询，避免与 BaseMapper.selectById(Serializable) 签名冲突 -->
+    <select id="selectByTaskId" resultType="com.bank.branch.platform.performance.entity.PerfExportTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PERF_EXPORT_TASK

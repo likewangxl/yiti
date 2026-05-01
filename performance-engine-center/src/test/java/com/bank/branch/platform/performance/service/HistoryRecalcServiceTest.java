@@ -154,7 +154,7 @@ class HistoryRecalcServiceTest {
                 .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
 
         verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString());
-        verify(perfRunTaskMapper, never()).insert(any());
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
     }
 
     @Test

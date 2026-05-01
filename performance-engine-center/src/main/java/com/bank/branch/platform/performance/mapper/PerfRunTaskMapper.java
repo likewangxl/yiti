@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfRunTask;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -23,17 +24,10 @@ import java.util.List;
  *       <strong>禁止</strong> 接受任何用户输入直接拼入，否则将形成 SQL 注入漏洞。</li>
  *   <li>所有其他参数一律使用 {@code #{}} 预编译占位符。</li>
  * </ul>
+ * <p>insert / selectById 由 MyBatis-Plus BaseMapper 提供.
  */
 @Mapper
-public interface PerfRunTaskMapper {
-
-    /**
-     * 按主键查询.
-     *
-     * @param id 主键
-     * @return 任务日志，不存在返回 null
-     */
-    PerfRunTask selectById(@Param("id") String id);
+public interface PerfRunTaskMapper extends BaseMapper<PerfRunTask> {
 
     /**
      * 按任务编号（task_key，作为 V1.0 的业务唯一标识）查询.
@@ -94,17 +88,6 @@ public interface PerfRunTaskMapper {
      */
     long countByTypeAndDate(@Param("taskType") String taskType,
                             @Param("dataDate") LocalDate dataDate);
-
-    /**
-     * 插入任务记录（V1.1 Task P2.4 起由计算引擎调用）.
-     *
-     * <p>写 id / task_type / task_key / data_date / data_version / status / started_by
-     * / start_time / params_json 等字段；created_time 由 DB 默认值填充。
-     *
-     * @param task 任务实体（必填：id, taskType, taskKey, status）
-     * @return 受影响行数
-     */
-    int insert(PerfRunTask task);
 
     /**
      * 更新任务状态（V1.1 Task P2.4 起由计算引擎调用）.

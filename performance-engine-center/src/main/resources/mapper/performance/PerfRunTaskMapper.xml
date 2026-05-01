@@ -18,13 +18,7 @@
         status, started_by, start_time, end_time, error_msg, result_preview_json, created_time
     </sql>
 
-    <select id="selectById" resultType="com.bank.branch.platform.performance.entity.PerfRunTask">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM PERF_RUN_TASK
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!--
         V1.0 语义：task_key 既承担 "关键键"（如 metric_code），也承担 "任务编号"。
@@ -103,15 +97,7 @@
         V1.1 Task P2.4 起扩展写方法：由计算引擎写入任务记录.
         注意：created_time 由 DB 默认值 CURRENT_TIMESTAMP 填充；start_time 由代码显式传入。
     -->
-    <insert id="insert" parameterType="com.bank.branch.platform.performance.entity.PerfRunTask">
-        INSERT INTO PERF_RUN_TASK (
-            id, task_type, task_key, data_date, data_version, params_json,
-            status, started_by, start_time, end_time, error_msg, result_preview_json
-        ) VALUES (
-            #{id}, #{taskType}, #{taskKey}, #{dataDate}, #{dataVersion}, #{paramsJson},
-            #{status}, #{startedBy}, #{startTime}, #{endTime}, #{errorMsg}, #{resultPreviewJson}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!--
         状态机：PENDING -> RUNNING -> SUCCESS/FAILED/PARTIAL/CANCELLED.

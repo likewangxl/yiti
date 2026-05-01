@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -13,9 +16,11 @@ import java.time.LocalDateTime;
  * <p>索引: (scope_dim, is_valid)
  */
 @Data
+@TableName("sys_control")
 public class SysControl {
 
     /** 控制ID (varchar(32) 主键). */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 维度: EMP / ORG / CUST, 对应 scope_dim. */
