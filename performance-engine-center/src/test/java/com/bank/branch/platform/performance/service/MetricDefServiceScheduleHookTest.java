@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
  * hook 方法在无事务时直接执行（非 afterCommit 延迟），因此可以用 verify 同步断言.
  */
 @ExtendWith(MockitoExtension.class)
-class MetricDefServiceScheduleHookIT {
+class MetricDefServiceScheduleHookTest {
 
     @Mock
     private PerfMetricDefMapper mapper;
