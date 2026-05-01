@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -166,11 +168,17 @@ class MetricCalcServiceMultiSubjectTest {
         verify(runTaskMapper).updateStatusWithParams(anyString(), eq("FAILED"), any(),
             paramsCaptor.capture());
         String json = paramsCaptor.getValue();
-        // 简单包含校验：json 应含 "failedSamples" 字段
+        // 包含校验：json 应含 "failedSamples" 字段
         assertThat(json).contains("failedSamples");
-        // 计数 "E" 出现次数（粗略检查样本数 <= 10）
-        long sampleCount = json.chars().filter(c -> c == 'E').count();
-        assertThat(sampleCount).isLessThanOrEqualTo(10);
+        // V1.7：用 Jackson 精确解析 failedSamples 数组长度，不依赖字母计数
+        // （新增 jobKey 字段 "PERF_METRIC_M_A" 含字母 E，字母计数法失效）
+        try {
+            JsonNode root = new ObjectMapper().readTree(json);
+            int samplesSize = root.path("failedSamples").size();
+            assertThat(samplesSize).isLessThanOrEqualTo(10);
+        } catch (Exception e) {
+            throw new AssertionError("params_json 解析失败: " + json, e);
+        }
     }
 
     private PerfMetricDef exprDef(String code) {
