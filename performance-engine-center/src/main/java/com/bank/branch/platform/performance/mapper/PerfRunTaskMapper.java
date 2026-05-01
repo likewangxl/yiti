@@ -121,6 +121,23 @@ public interface PerfRunTaskMapper extends BaseMapper<PerfRunTask> {
                                 @Param("resultPreviewJson") String resultPreviewJson);
 
     /**
+     * V1.7：updateStatus + 同步写 params_json（多主体计算终态专用）.
+     *
+     * <p>与 {@link #updateStatus} 的区别：额外将主体统计信息写入 params_json 列，
+     * 供运维和下游事件消费方（KpiCascadeListener）读取 subjectTotal/subjectFailed 等字段。
+     *
+     * @param id         任务 ID
+     * @param status     新状态（SUCCESS / PARTIAL_FAILED / FAILED）
+     * @param errorMsg   错误信息（可空）
+     * @param paramsJson 主体统计 JSON（由 SubjectStats.toJson() 生成）
+     * @return 受影响行数
+     */
+    int updateStatusWithParams(@Param("id") String id,
+                               @Param("status") String status,
+                               @Param("errorMsg") String errorMsg,
+                               @Param("paramsJson") String paramsJson);
+
+    /**
      * 删除 cutoff 之前全部 {@code status = 'SUCCESS'} 的 run_task（V1.2 Task Q5.2）.
      *
      * <p>FAILED / RUNNING / PENDING / PARTIAL / CANCELLED 状态不删，保留给失败诊断与

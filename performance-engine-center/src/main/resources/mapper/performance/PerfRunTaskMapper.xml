@@ -131,6 +131,19 @@
     </update>
 
     <!--
+        V1.7：updateStatus + 同步写 params_json（多主体计算终态专用）.
+        end_time 固定写 NOW()，因本方法只在终态（SUCCESS/PARTIAL_FAILED/FAILED）调用。
+    -->
+    <update id="updateStatusWithParams">
+        UPDATE PERF_RUN_TASK
+           SET status    = #{status},
+               error_msg = #{errorMsg},
+               params_json = #{paramsJson},
+               end_time  = NOW()
+         WHERE id = #{id}
+    </update>
+
+    <!--
         V1.2 Task Q5.2：清理 cutoff 之前全部 SUCCESS 状态任务.
         FAILED / RUNNING / PENDING / PARTIAL / CANCELLED 保留；
         RUNNING 任务 end_time 为 NULL 天然不会命中，SUCCESS 终态必然有 end_time.
