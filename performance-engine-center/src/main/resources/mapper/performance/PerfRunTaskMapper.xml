@@ -100,8 +100,8 @@
     <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!--
-        状态机：PENDING -> RUNNING -> SUCCESS/FAILED/PARTIAL/CANCELLED.
-        当 status 为终态（SUCCESS/FAILED/PARTIAL/CANCELLED）时，end_time 自动设为 NOW()；
+        状态机：PENDING -> RUNNING -> SUCCESS/FAILED/PARTIAL/PARTIAL_FAILED/CANCELLED.
+        当 status 为终态（SUCCESS/FAILED/PARTIAL/PARTIAL_FAILED/CANCELLED）时，end_time 自动设为 NOW()；
         RUNNING 状态时 end_time 清空。
         errorMsg 为 null 时清空 error_msg 列（业务语义：重试成功时抹去上一次错误信息）。
     -->
@@ -110,7 +110,7 @@
         SET status = #{status},
             error_msg = #{errorMsg},
             end_time = <choose>
-                <when test="status == 'SUCCESS' or status == 'FAILED' or status == 'PARTIAL' or status == 'CANCELLED'">
+                <when test="status == 'SUCCESS' or status == 'FAILED' or status == 'PARTIAL' or status == 'PARTIAL_FAILED' or status == 'CANCELLED'">
                     NOW()
                 </when>
                 <otherwise>
