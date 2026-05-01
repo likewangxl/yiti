@@ -117,7 +117,7 @@ class PerfErrorCodeTest {
      */
     @Test
     void enumSize_equalsSectionKTotal() {
-        // §K 共 33 条编码（K.1: 16 + K.2: 4 + K.3: 10 + K.4: 4，含 V1.7 新增 4 条）
+        // §K 共 33 条编码（K.1: 15 + K.2: 4 + K.3: 10 + K.4: 4，含 V1.7 新增 4 条）
         // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 34
         assertThat(PerfErrorCode.values()).hasSize(34);
     }
