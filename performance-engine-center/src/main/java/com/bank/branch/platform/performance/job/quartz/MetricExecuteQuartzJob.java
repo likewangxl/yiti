@@ -62,7 +62,8 @@ public class MetricExecuteQuartzJob implements Job {
         try {
             metricCalcService.calcMetric(metricCode, dataDate, version, "SCHEDULED");
         } catch (Exception e) {
-            log.error("[MetricExecuteQuartzJob] metricCode={} 执行异常", metricCode, e);
+            log.error("[MetricExecuteQuartzJob] metricCode={}, jobKey={} 执行异常",
+                    metricCode, context.getJobDetail().getKey(), e);
             throw new JobExecutionException(e, false);
         }
         log.info("[MetricExecuteQuartzJob] 完成 metricCode={}", metricCode);
