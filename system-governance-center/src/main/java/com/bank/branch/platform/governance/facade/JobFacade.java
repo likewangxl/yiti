@@ -2,6 +2,7 @@ package com.bank.branch.platform.governance.facade;
 
 import com.bank.branch.platform.governance.api.JobApi;
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
+import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import com.bank.branch.platform.governance.service.JobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,5 +44,26 @@ public class JobFacade implements JobApi {
             log.debug("[JobFacade.getJobConf] 任务配置不存在 jobKey={}", jobKey);
             return Optional.empty();
         }
+    }
+
+    /**
+     * 注册（或覆盖）一个调度任务（V1.7 占位，Task 7 替换为真实实现）.
+     *
+     * @param cmd 注册参数
+     * @return sys_job_conf 主键 id
+     */
+    @Override
+    public String registerJob(RegisterJobCmd cmd) {
+        throw new UnsupportedOperationException("V1.7 Task 7 实现");
+    }
+
+    /**
+     * 注销一个调度任务（幂等）（V1.7 占位，Task 7 替换为真实实现）.
+     *
+     * @param jobKey 任务唯一标识
+     */
+    @Override
+    public void unregisterJob(String jobKey) {
+        throw new UnsupportedOperationException("V1.7 Task 7 实现");
     }
 }

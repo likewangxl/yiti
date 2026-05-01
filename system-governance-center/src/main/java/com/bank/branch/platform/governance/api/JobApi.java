@@ -1,6 +1,7 @@
 package com.bank.branch.platform.governance.api;
 
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
+import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 
 import java.util.Optional;
 
@@ -25,4 +26,26 @@ public interface JobApi {
      * @return 任务配置，不存在时返回 {@link Optional#empty()}
      */
     Optional<JobConfDTO> getJobConf(String jobKey);
+
+    /**
+     * V1.7 新增：注册（或覆盖）一个调度任务.
+     *
+     * <p>原子写入 sys_job_conf 一行 + Quartz Scheduler 注入 JobDetail/CronTrigger.
+     * 若 jobKey 已存在则覆盖（cron 变更场景）.
+     * 若 Scheduler 不可用（测试上下文）则仅写 sys_job_conf 不抛异常.
+     *
+     * @param cmd 注册参数
+     * @return 写入后 sys_job_conf 主键 id
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-50010 cron 非法
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-50011 quartz_job_class 反射失败
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-50012 Scheduler 注册失败
+     */
+    String registerJob(RegisterJobCmd cmd);
+
+    /**
+     * V1.7 新增：注销一个调度任务（幂等）.
+     *
+     * @param jobKey 任务唯一标识
+     */
+    void unregisterJob(String jobKey);
 }
