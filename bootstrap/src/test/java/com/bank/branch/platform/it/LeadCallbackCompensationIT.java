@@ -128,7 +128,7 @@ class LeadCallbackCompensationIT {
 
         // 断言 2：cust_master 应有 1 行（来自 LeadApprovedListener → CustMasterAssemblerService）
         long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -162,7 +162,7 @@ class LeadCallbackCompensationIT {
 
         // 断言 2：cust_master 应为 0 行（驳回路径不创建）
         long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -196,7 +196,7 @@ class LeadCallbackCompensationIT {
 
         // cust_master 也应保持 0 行
         long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -247,6 +247,6 @@ class LeadCallbackCompensationIT {
 
         // 注意：mapper.insert 的 XML 写法 NOW() 会被覆盖，但 insert 走的是 #{updatedTime}
         // 应该已经写入 stuckTime；这里再做一次 jdbc 强制设置防御性兜底，确保 stuck 条件生效
-        jdbcTemplate.update("UPDATE cust_lead SET updated_time = ? WHERE id = ?", stuckTime, leadId);
+        jdbcTemplate.update("UPDATE CUST_LEAD SET updated_time = ? WHERE id = ?", stuckTime, leadId);
     }
 }
