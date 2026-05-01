@@ -71,4 +71,9 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 按 job_key 删除任务配置，幂等（V1.7 引入：unregisterJob 专用） -->
+    <delete id="deleteByJobKey" parameterType="string">
+        DELETE FROM SYS_JOB_CONF WHERE job_key = #{jobKey}
+    </delete>
+
 </mapper>

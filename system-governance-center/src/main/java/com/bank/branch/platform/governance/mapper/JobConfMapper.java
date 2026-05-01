@@ -82,4 +82,12 @@ public interface JobConfMapper extends BaseMapper<SysJobConf> {
      * @return 受影响行数
      */
     int updateStatus(@Param("id") String id, @Param("status") String status);
+
+    /**
+     * 按 job_key 删除任务配置（幂等：不存在时返回 0）(V1.7).
+     *
+     * @param jobKey 任务唯一标识
+     * @return 影响行数
+     */
+    int deleteByJobKey(@Param("jobKey") String jobKey);
 }
