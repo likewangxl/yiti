@@ -88,7 +88,7 @@ class SavedQueryServiceListTest {
 
     @Test
     void getDetail_notFound_throwsRpt40001() {
-        when(mapper.selectById(any())).thenReturn(null);
+        when(mapper.selectById(any(String.class))).thenReturn(null);
 
         assertThatThrownBy(() -> service.getDetail("UNKNOWN"))
                 .isInstanceOf(RptException.class)

@@ -19,17 +19,7 @@
         id, emp_id, name, dim, subject_ids, metric_codes, version, created_time, updated_time
     </sql>
 
-    <insert id="insert">
-        INSERT INTO RPT_SAVED_QUERY (<include refid="BASE_COLUMNS"/>)
-        VALUES (#{id}, #{empId}, #{name}, #{dim}, #{subjectIds}, #{metricCodes},
-                #{version}, #{createdTime}, #{updatedTime})
-    </insert>
-
-    <select id="selectById" resultMap="BaseMap">
-        SELECT <include refid="BASE_COLUMNS"/>
-          FROM RPT_SAVED_QUERY
-         WHERE id = #{id}
-    </select>
+    <!-- insert / selectById / deleteById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="countByEmpId" resultType="int">
         SELECT COUNT(*)
@@ -49,10 +39,6 @@
         </set>
         WHERE id = #{id}
     </update>
-
-    <delete id="deleteById">
-        DELETE FROM RPT_SAVED_QUERY WHERE id = #{id}
-    </delete>
 
     <select id="listByEmpAndDim" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>

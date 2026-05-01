@@ -20,11 +20,7 @@
         created_time, updated_time
     </sql>
 
-    <insert id="insert">
-        INSERT INTO RPT_SNAPSHOT_TASK (<include refid="BASE_COLUMNS"/>)
-        VALUES (#{id}, #{taskName}, #{snapshotType}, #{cronExpr}, #{status},
-                #{lastRunTime}, #{nextRunTime}, #{createdTime}, #{updatedTime})
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <select id="selectById" resultMap="BaseMap">
         SELECT <include refid="BASE_COLUMNS"/>

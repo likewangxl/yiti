@@ -23,18 +23,7 @@
         expire_at, operator_id, error_msg, created_time, updated_time
     </sql>
 
-    <insert id="insert">
-        INSERT INTO RPT_EXPORT_TASK (<include refid="BASE_COLUMNS"/>)
-        VALUES (#{id}, #{exportType}, #{paramsJson}, #{status}, #{fileKey}, #{fileSize},
-                #{rowCount}, #{expireAt}, #{operatorId}, #{errorMsg},
-                #{createdTime}, #{updatedTime})
-    </insert>
-
-    <select id="selectById" resultMap="BaseMap">
-        SELECT <include refid="BASE_COLUMNS"/>
-          FROM RPT_EXPORT_TASK
-         WHERE id = #{id}
-    </select>
+    <!-- insert / selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <update id="updateStatus">
         UPDATE RPT_EXPORT_TASK

@@ -135,7 +135,7 @@ class SqlProbeServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42002");
 
-        verify(historyMapper, atLeast(0)).insert(any());
+        verify(historyMapper, atLeast(0)).insert(any(SqlProbeHistory.class));
         // 校验失败 → 历史不应该写入（仅 RUNNING 占位前抛异常）
         // 实际行为：service 在 validator 抛异常时直接传递，不入库 / 不审计
         verify(auditApi, atLeast(0)).log(any());

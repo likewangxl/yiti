@@ -1,5 +1,8 @@
 package com.bank.branch.platform.report.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -20,9 +23,11 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
+@TableName("rpt_export_task")
 public class RptExportTask {
 
     /** 导出任务 ID */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 类型：DYNAMIC_QUERY / FIXED_REPORT / SQL_PROBE 等 */

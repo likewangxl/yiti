@@ -69,7 +69,7 @@ class RptExportServiceTest {
             RptExportTask t = inv.getArgument(0);
             statusOnInsert[0] = t.getStatus();
             return 1;
-        }).when(taskMapper).insert(any());
+        }).when(taskMapper).insert(any(RptExportTask.class));
 
         String taskId = service.createTask("DYNAMIC_QUERY", params, "E001");
         assertThat(taskId).isNotBlank();
@@ -96,7 +96,7 @@ class RptExportServiceTest {
         assertThatThrownBy(() -> service.createTask("UNKNOWN_TYPE", Map.of(), "E001"))
             .isInstanceOf(BizException.class)
             .hasFieldOrPropertyWithValue("code", "RPT-50003");
-        verify(taskMapper, never()).insert(any());
+        verify(taskMapper, never()).insert(any(RptExportTask.class));
     }
 
     @Test

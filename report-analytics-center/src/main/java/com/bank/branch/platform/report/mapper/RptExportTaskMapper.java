@@ -1,5 +1,6 @@
 package com.bank.branch.platform.report.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.report.entity.RptExportTask;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -17,15 +18,14 @@ import java.util.List;
  *   <li>updateFailed —— 终态 FAILED + 回填 error_msg</li>
  *   <li>selectByOperator —— 按 operator_id（+ 可选 status）按时间倒序查询</li>
  * </ul>
+ *
+ * <p>MyBatis-Plus 接入：{@code insert(T)} / {@code selectById(Serializable)} 由
+ * {@link BaseMapper} 提供，已从本接口删除。自定义状态机方法继续保留。
  */
 @Mapper
-public interface RptExportTaskMapper {
+public interface RptExportTaskMapper extends BaseMapper<RptExportTask> {
 
-    /** 新增一条导出任务（status=PENDING） */
-    int insert(RptExportTask e);
-
-    /** 按 id 精确查询 */
-    RptExportTask selectById(@Param("id") String id);
+    // insert / selectById 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 更新单字段 status（PENDING → RUNNING / CANCELLED 等过渡）.

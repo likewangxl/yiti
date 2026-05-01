@@ -1,5 +1,8 @@
 package com.bank.branch.platform.report.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -17,9 +20,11 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
+@TableName("sql_probe_history")
 public class SqlProbeHistory {
 
     /** 历史 ID（UUID） */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 执行人工号 */

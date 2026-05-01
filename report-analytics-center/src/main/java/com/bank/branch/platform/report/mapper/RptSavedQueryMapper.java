@@ -1,5 +1,6 @@
 package com.bank.branch.platform.report.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.report.entity.RptSavedQuery;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -10,24 +11,21 @@ import java.util.List;
  * rpt_saved_query Mapper —— 动态查询保存方案.
  *
  * <p>M0.5.1 雏形 4 方法 + M1.4/M1.5 增量 3 方法（list / oldest / 乐观锁删除）.
+ *
+ * <p>MyBatis-Plus 接入：{@code insert(T)} / {@code selectById(Serializable)} /
+ * {@code deleteById(Serializable)} 由 {@link BaseMapper} 提供，已从本接口删除。
+ * 自定义业务方法继续保留。
  */
 @Mapper
-public interface RptSavedQueryMapper {
+public interface RptSavedQueryMapper extends BaseMapper<RptSavedQuery> {
 
-    /** 新增一条方案 */
-    int insert(RptSavedQuery e);
-
-    /** 按 id 精确查询 */
-    RptSavedQuery selectById(@Param("id") String id);
+    // insert / selectById / deleteById 由 MyBatis-Plus BaseMapper 提供
 
     /** 按 empId 计数（用于 M1.5 最多 10 条方案上限判定） */
     int countByEmpId(@Param("empId") String empId);
 
     /** 选择更新（name / subjectIds / metricCodes / version / updatedTime 按需） */
     int updateByIdSelective(RptSavedQuery e);
-
-    /** 按 id 物理删除（M1.5 超限时删除最旧一条 / B.4 用户主动删除） */
-    int deleteById(@Param("id") String id);
 
     /**
      * 按 empId + 可选 dim 列表查询（M1.4 B.1 新增）.

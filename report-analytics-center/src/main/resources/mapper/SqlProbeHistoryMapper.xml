@@ -19,17 +19,7 @@
         id, emp_id, sql_text, remark, row_count, execution_time_ms, status, error_msg, created_time
     </sql>
 
-    <insert id="insert">
-        INSERT INTO SQL_PROBE_HISTORY (<include refid="BASE_COLUMNS"/>)
-        VALUES (#{id}, #{empId}, #{sqlText}, #{remark}, #{rowCount}, #{executionTimeMs},
-                #{status}, #{errorMsg}, #{createdTime})
-    </insert>
-
-    <select id="selectById" resultMap="BaseMap">
-        SELECT <include refid="BASE_COLUMNS"/>
-          FROM SQL_PROBE_HISTORY
-         WHERE id = #{id}
-    </select>
+    <!-- insert / selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <update id="updateTerminalStatus">
         UPDATE SQL_PROBE_HISTORY

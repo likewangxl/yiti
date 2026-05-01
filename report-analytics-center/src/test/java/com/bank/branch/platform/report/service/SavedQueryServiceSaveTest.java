@@ -80,7 +80,7 @@ class SavedQueryServiceSaveTest {
         service.saveQuery(buildReq("any"));
 
         verify(mapper).deleteById("Q-OLDEST");
-        verify(mapper).insert(any());
+        verify(mapper).insert(any(RptSavedQuery.class));
     }
 
     private SavedQuerySaveReqDTO buildReq(String name) {

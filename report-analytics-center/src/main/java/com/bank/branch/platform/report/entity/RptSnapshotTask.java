@@ -1,5 +1,8 @@
 package com.bank.branch.platform.report.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -12,9 +15,11 @@ import java.time.LocalDateTime;
  * <p>V1 状态：仅建表不启用；V2 扩展——当日活 &gt; 1000 或仪表盘并发 &gt; 500 QPS 时引入本地快照加速.
  */
 @Data
+@TableName("rpt_snapshot_task")
 public class RptSnapshotTask {
 
     /** 任务 ID */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 任务名称 */

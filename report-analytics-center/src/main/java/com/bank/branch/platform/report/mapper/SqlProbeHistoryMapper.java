@@ -1,5 +1,6 @@
 package com.bank.branch.platform.report.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.report.entity.SqlProbeHistory;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -8,15 +9,14 @@ import java.util.List;
 
 /**
  * sql_probe_history Mapper —— SQL 探查历史（M0.5.1 + M4.3 增量）.
+ *
+ * <p>MyBatis-Plus 接入：{@code insert(T)} / {@code selectById(Serializable)} 由
+ * {@link BaseMapper} 提供，已从本接口删除。自定义业务查询方法继续保留。
  */
 @Mapper
-public interface SqlProbeHistoryMapper {
+public interface SqlProbeHistoryMapper extends BaseMapper<SqlProbeHistory> {
 
-    /** 新增一条探查历史（探查开始时 INSERT status=RUNNING 占位） */
-    int insert(SqlProbeHistory e);
-
-    /** 按 id 精确查询 */
-    SqlProbeHistory selectById(@Param("id") String id);
+    // insert / selectById 由 MyBatis-Plus BaseMapper 提供
 
     /** 更新终态（status / rowCount / executionTimeMs / errorMsg） */
     int updateTerminalStatus(SqlProbeHistory e);
