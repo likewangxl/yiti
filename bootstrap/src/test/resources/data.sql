@@ -66,19 +66,19 @@ INSERT IGNORE INTO EXT_USER_ORG (USER_ID, ORG_CODE) VALUES
 
 -- ====== GOVERNANCE DATA ======
 
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status) VALUES
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status) VALUES
     ('D001', 'INDUSTRY', 'IT', '信息技术', 'IT', 1, 'ACTIVE'),
     ('D002', 'INDUSTRY', 'FIN', '金融', 'FIN', 2, 'ACTIVE'),
     ('D003', 'STATUS', 'ACT', '激活', 'ACTIVE', 1, 'ACTIVE'),
     ('D004', 'STATUS', 'INACT', '停用', 'DISABLED', 2, 'ACTIVE');
 
-INSERT IGNORE INTO sys_config_kv (id, config_key, config_value, value_type, status) VALUES
+INSERT IGNORE INTO SYS_CONFIG_KV (id, config_key, config_value, value_type, status) VALUES
     ('C001', 'app.name', '分行业务平台', 'STRING', 'ACTIVE'),
     ('C002', 'feature.loan.enabled', 'true', 'BOOL', 'ACTIVE'),
     ('C003', 'max.login.retry', '5', 'NUMBER', 'ACTIVE'),
     ('C004', 'notification.settings', '{"email":true,"sms":false}', 'JSON', 'ACTIVE');
 
-INSERT IGNORE INTO sys_calendar_day (`day`, is_workday, remark) VALUES
+INSERT IGNORE INTO SYS_CALENDAR_DAY (`day`, is_workday, remark) VALUES
     ('2026-04-01', 1, NULL),
     ('2026-04-02', 1, NULL),
     ('2026-04-03', 1, NULL),
@@ -87,41 +87,41 @@ INSERT IGNORE INTO sys_calendar_day (`day`, is_workday, remark) VALUES
     ('2026-04-06', 1, NULL),
     ('2026-04-07', 1, NULL);
 
-INSERT IGNORE INTO sys_job_conf (id, job_key, job_name, cron_expr, status, allow_manual_trigger, quartz_job_class, misfire_policy) VALUES
+INSERT IGNORE INTO SYS_JOB_CONF (id, job_key, job_name, cron_expr, status, allow_manual_trigger, quartz_job_class, misfire_policy) VALUES
     ('J001', 'DAILY_REPORT', '日报生成', '0 0 8 * * ?', 'ACTIVE', 1, '', 'DO_NOTHING'),
     ('J002', 'MONTHLY_PERF', '月度绩效计算', '0 0 1 1 * ?', 'ACTIVE', 1, '', 'DO_NOTHING'),
     ('JOB_LEAD_CALLBACK_COMPENSATE', 'LEAD_CALLBACK_COMPENSATE', 'Lead 回调补偿巡检',
      '0 */5 * * * ?', 'ACTIVE', 1,
      'com.bank.branch.platform.customer.job.quartz.LeadCallbackCompensateQuartzJob', 'DO_NOTHING');
 
-INSERT IGNORE INTO user_notification (id, emp_id, title, content, notify_type, biz_type, biz_id, is_read) VALUES
+INSERT IGNORE INTO USER_NOTIFICATION (id, emp_id, title, content, notify_type, biz_type, biz_id, is_read) VALUES
     ('N001', 'user001', '审批通知', '您有新的审批待处理', 'WORKFLOW', 'LEAD', 'L100001', 0),
     ('N002', 'user001', '系统公告', '系统将于今晚升级', 'SYSTEM', NULL, NULL, 1);
 
-INSERT IGNORE INTO audit_log (id, trace_id, emp_id, emp_name, biz_type, biz_action, resource_url, request_method, response_status, execution_time, ip_address) VALUES
+INSERT IGNORE INTO AUDIT_LOG (id, trace_id, emp_id, emp_name, biz_type, biz_action, resource_url, request_method, response_status, execution_time, ip_address) VALUES
     ('L001', 'trace-001', 'admin', '系统管理员', 'AUTH', 'LOGIN', '/api/auth/login', 'POST', 200, 45, '192.168.1.100'),
     ('L002', 'trace-002', 'user001', '张三', 'LEAD', 'CREATE', '/api/lead/create', 'POST', 200, 120, '192.168.1.101');
 
-INSERT IGNORE INTO file_object (id, file_name, file_size, file_type, storage_path, bucket_name, uploaded_by) VALUES
+INSERT IGNORE INTO FILE_OBJECT (id, file_name, file_size, file_type, storage_path, bucket_name, uploaded_by) VALUES
     ('F001', 'test_document.pdf', 102400, 'application/pdf', '/files/2026/03/test_document.pdf', 'branch-platform', 'user001');
 
-INSERT IGNORE INTO biz_file_rel (id, biz_type, biz_id, file_object_id, file_role) VALUES
+INSERT IGNORE INTO BIZ_FILE_REL (id, biz_type, biz_id, file_object_id, file_role) VALUES
     ('BFR001', 'LEAD', 'L100001', 'F001', 'ATTACHMENT');
 
 -- ====== WORKFLOW DATA ======
 
-INSERT IGNORE INTO biz_process_map (id, business_key, biz_type, biz_id, process_definition_key, process_instance_id, start_user, current_assignee, process_status) VALUES
+INSERT IGNORE INTO BIZ_PROCESS_MAP (id, business_key, biz_type, biz_id, process_definition_key, process_instance_id, start_user, current_assignee, process_status) VALUES
     ('MAP001', 'LEAD:L20260001', 'LEAD', 'L20260001', 'lead_approve_v1', 'PI_RUN_001', 'user001', 'user002', 'RUNNING'),
     ('MAP002', 'LEAD:L20260002', 'LEAD', 'L20260002', 'lead_approve_v1', 'PI_COMP_001', 'user002', NULL, 'COMPLETED'),
     ('MAP003', 'LEAD:L20260003', 'LEAD', 'L20260003', 'lead_approve_v1', 'PI_CAN_001', 'user001', NULL, 'CANCELLED');
 
-INSERT IGNORE INTO wf_node_candidate_conf (id, process_definition_key, node_key, candidate_type, candidate_value) VALUES
+INSERT IGNORE INTO WF_NODE_CANDIDATE_CONF (id, process_definition_key, node_key, candidate_type, candidate_value) VALUES
     ('NC001', 'lead_approve_v1', 'dept_review', 'ROLE', '["BRANCH_HEAD"]'),
     ('NC002', 'lead_approve_v1', 'final_review', 'ROLE', '["ADMIN"]');
 
-INSERT IGNORE INTO wf_node_form_conf (id, process_definition_key, node_key, form_fields, editable_fields, required_fields) VALUES
+INSERT IGNORE INTO WF_NODE_FORM_CONF (id, process_definition_key, node_key, form_fields, editable_fields, required_fields) VALUES
     ('FC001', 'lead_approve_v1', 'dept_review', '["leadName","custName","amount"]', '["amount"]', '["leadName","custName"]');
 
-INSERT IGNORE INTO wf_timeout_rule (id, process_definition_key, node_key, timeout_hours, warning_hours) VALUES
+INSERT IGNORE INTO WF_TIMEOUT_RULE (id, process_definition_key, node_key, timeout_hours, warning_hours) VALUES
     ('TR001', 'lead_approve_v1', 'dept_review', 48, 24),
     ('TR002', 'lead_approve_v1', 'final_review', 72, 36);
