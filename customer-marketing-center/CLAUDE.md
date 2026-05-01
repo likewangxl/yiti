@@ -88,6 +88,9 @@ src/main/java/com/bank/branch/platform/customer/
 │   ├── CustMasterMapper, CustClaimMapper
 │   ├── TouchTaskMapper, TouchLogMapper
 │   └── TouchReportMapper              # 报表专用 JOIN 查询
+├── job/              # V1.8 Quartz Job (1 个)
+│   └── quartz/
+│       └── LeadCallbackCompensateQuartzJob.java
 └── service/          # 业务逻辑 (12 个 Service)
     ├── TagService.java                 # 标签 CRUD + 状态切换
     ├── TagCustomerService.java         # 标签客户覆盖式导入
@@ -357,6 +360,32 @@ Cache-Aside 模式，所有 Key 前缀 `customer:`，默认 TTL 5 分钟 + 10% �
 message 由 "线索非草稿状态，不允许编辑" 改为 "无权编辑非草稿状态线索"。前端 i18n 需同步更新。
 
 累计 surefire 测试 321 → 352；累计 P1A/P1B/P1C 三批 follow-up 共 15 条技术债（详见进度文档 §5）。
+
+## V1.8 改动进度（2026-05-01 已交付）
+
+LeadCallbackCompensationService 由 Spring `@Scheduled` 迁移到 Quartz：
+
+- 新增 `customer/job/quartz/LeadCallbackCompensateQuartzJob`（实现 `org.quartz.Job`）
+- 删除 `service/LeadCallbackCompensationService.scheduledScan()` + `@Scheduled` 入口
+- 删除 `config/CustomerSchedulingConfig`（@EnableScheduling 归还 performance 模块）
+- 新增 ArchUnit `arch/NoCustomerScheduledArchTest`（防回退）
+- DDL: `sql/V1_8_0__register_lead_callback_compensate_job.sql` + `U1_8_0`
+- IT: `bootstrap/.../LeadCallbackJobRegisteredIT`（启动注册验证）+ `LeadCallbackCompensationIT` 顺手修表名大写化
+- bootstrap data.sql：sys_job_conf 加 LEAD_CALLBACK_COMPENSATE 行 + 12 处小写表名 → 大写治理
+
+cron='0 */5 * * * ?', misfire=DO_NOTHING；多实例由 QRTZ_LOCKS 行锁防重。
+
+测试增量：surefire +3（QuartzJobTest x2 + ArchUnit x1） / failsafe +3（LeadCallbackJobRegisteredIT 3 case）；customer 模块 355 全绿。
+
+## V1.9 候选事项（来自 V1.8 spec § 12 + P6 探查）
+
+| # | 事项 | 优先级 | 来源 |
+|---|---|---|---|
+| 1 | HealthCheck 也 Quartz 化（去掉最后一个 @Scheduled）| 低 | spec § 12 |
+| 2 | sys_job_conf 运维 Runbook | 中 | spec § 12 |
+| 3 | Quartz JobStore 反向清理（gcDanglingTriggers）| 低 | spec § 12 |
+| 4 | 仓库大小写一致性治理（test schema scripts 全大写化）| 中 | P3/P5 探查 |
+| 5 | 测试库环境完整治理：onepl_test_v103 多模块 DDL 导入 / FlywayIT 等当前失败 | 中 | P6 探查 |
 
 ## V1.0 已知技术债（2026-04-25）
 

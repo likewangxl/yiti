@@ -530,6 +530,24 @@ V1.7（指标级 Quartz 调度改造）交付后，code reviewer 在过程中识
 - 已知本地环境失败：AllocRelationScopeIntegrationTest 3 + PerfMetricDefMapperIT 2 + portal AddrbookEmployeeMapperIntegrationTest（V1.7 改造范围外）
 - ArchTest 守护：`NoOldDailyKpiCalcArchTest` 阻止 DailyKpiCalcJob 类回潮
 
+**V1.8 P6 探查扩展（V1.9 候选）**：
+- V1_*FlywayIT 全系列（V1_2_0/V1_4_0/V1_3_0/V1_2_5/V1_0_4/V1_0_3/UndoScriptSmokeIT）：onepl_test_v103
+  库缺 auth/governance/workflow/customer 等多模块 DDL，Flyway migrate V1_0_1__performance_resources.sql 失败
+- MetricScheduledE2EIT：同根因
+- KpiSchemeControllerIT 4E + AllocRelationControllerIT 4F：业务/数据状态问题
+- PerfRunTaskMapperIT 7F+1E + CustAllocRelationMapperIT 10F：业务断言失败（疑大小写表）
+
+## V1.8 微调（2026-05-01）
+
+由 customer-marketing-center 的 V1.8 @Scheduled→Quartz 迁移连带做的 perf 模块小调整：
+
+- 新增 `config/PerformanceSchedulingConfig`（@EnableScheduling）：
+  从 customer 模块迁移而来，接管 `MetricSchedulerHealthCheck` 的 Spring TaskScheduler 启用职责
+- V1.8 后整个仓库的 @EnableScheduling 仅服务于本模块的 HealthCheck
+  （V1.7 spec § 7 论证：纯本地兜底，不交给 Quartz 自调度）
+- `support/PerfTestConfig` 加 mock RedisTemplate<String, String>（V1.7 KpiCascadeListener 引入但
+  测试基础设施缺失的同根因 bug，P6 治理）
+
 ## 运维 Runbook（V1.2 + V1.3 + V1.4 交付）
 
 ### V1.4 启用前置检查（DDL 迁移安全门）

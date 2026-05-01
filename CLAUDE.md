@@ -80,7 +80,7 @@ pom.xml `surefire/failsafe` 的 argLine 已含 `-Dfile.encoding=UTF-8`，无需�
 | `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
 | `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
 | `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
-| `customer-marketing-center` | com.bank.branch.platform.customer | 已完成 | 客户营销中心 (113 Java + 46 测试，0 UOE) |
+| `customer-marketing-center` | com.bank.branch.platform.customer | V1.8 已交付（2026-05-01）| 客户营销中心 (114 Java + 49 测试，0 UOE)；V1.8 LeadCallbackCompensation @Scheduled→Quartz 迁移 |
 | `business-application-center` | com.bank.branch.platform.bizapp | 已完成 | 业务申请中心 (60 Java + 26 测试，0 UOE) |
 | `portal-content-center` | com.bank.branch.platform.portal | 已完成 | 门户与内容中心 (108 Java + 38 测试，0 UOE) |
 | `performance-engine-center` | com.bank.branch.platform.performance | V1.6 已交付（quartz 整合） | 绩效计算中心 (V1.0-V1.5 累积能力 + V1.6 Spring `@Scheduled`/ShedLock → Quartz 集群调度迁移) |
@@ -101,7 +101,7 @@ system-governance-center (依赖 auth)  ← 被 workflow 依赖
 workflow-center (依赖 auth + governance)
   ↑
 portal-content-center (依赖 auth + governance + workflow，通用域不持有核心域状态) ← 已交付
-customer-marketing-center (依赖 auth + governance + workflow) ← 已交付
+customer-marketing-center (依赖 auth + governance + workflow) ← V1.8 已交付（2026-05-01）；LeadCallbackCompensation @Scheduled → Quartz 集群调度（job_key=LEAD_CALLBACK_COMPENSATE）；CustomerSchedulingConfig 删除，@EnableScheduling 归属 PerformanceSchedulingConfig
 business-application-center (依赖 auth + governance + workflow + customer-marketing + portal) ← 已交付
 performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.6 已交付（Quartz 整合）
 
@@ -132,7 +132,7 @@ com.bank.branch.platform
 ├─ workflow-center               工作流中心 ✅ 已完成
 ├─ bootstrap                     启动入口 ✅ 已完成
 ├─ portal-content-center         门户与内容中心 ✅ 已完成（108 Java + 38 测试）
-├─ customer-marketing-center     客户营销中心 ✅ 已完成（113 Java + 46 测试）
+├─ customer-marketing-center     客户营销中心 ✅ V1.8 已交付（2026-05-01）（114 Java + 49 测试）；V1.8 LeadCallbackCompensation @Scheduled→Quartz 迁移
 ├─ business-application-center   业务申请中心 ✅ 已完成（60 Java + 26 测试）
 ├─ performance-engine-center     绩效计算中心 ✅ V1.6 已交付（Quartz 整合：Spring `@Scheduled`/ShedLock 全部迁移到 Quartz 集群调度，QRTZ_LOCKS 行锁接管防重；JobApi 精简到 1 方法 getJobConf；JobExecutionLogger 全局 Quartz JobListener 统一写日志）
 └─ report-analytics-center       报表分析中心 ✅ V1.0 已交付（25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步导出 + SQL 探查 / surefire 103 + failsafe 70 = 173 全绿）
