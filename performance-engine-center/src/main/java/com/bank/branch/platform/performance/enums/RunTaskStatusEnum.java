@@ -15,7 +15,9 @@ public enum RunTaskStatusEnum {
     /** 部分成功 (批量导入场景). */
     PARTIAL,
     /** 已取消. */
-    CANCELLED;
+    CANCELLED,
+    /** V1.7 部分成功：subjectFailed > 0 且 subjectSuccess > 0. */
+    PARTIAL_FAILED;
 
     public static boolean isValid(String v) {
         if (v == null) {
