@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Import;
  * 注册分页拦截器、审计字段填充器、慢SQL拦截器和 Druid 配置
  */
 @AutoConfiguration
-@Import(DruidConfig.class)
+@Import({DruidConfig.class, MybatisPlusConfig.class})
 public class DbAutoConfiguration {
 
     /**

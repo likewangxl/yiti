@@ -1,7 +1,6 @@
 package com.bank.branch.platform.performance.support;
 
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mybatis.spring.boot.test.autoconfigure.AutoConfigureMybatis;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Rollback;
@@ -17,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = {PerfTestApp.class, PerfTestConfig.class})
-@AutoConfigureMybatis
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional

@@ -2,10 +2,12 @@ package com.bank.branch.platform.auth.it;
 
 import com.bank.branch.platform.auth.entity.*;
 import com.bank.branch.platform.auth.mapper.*;
-import org.mybatis.spring.boot.test.autoconfigure.MybatisTest;
+import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,12 +18,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * L3 集成测试 - Auth 模块
- * 使用 @MybatisTest 仅加载 MyBatis 组件（跳过 Web、Redis、Security 等）
- * 注意: @MybatisTest 会自动运行 src/test/resources/schema.sql 和 data.sql
+ * 显式拼装 ApplicationContext：DataSource + SqlInit + MybatisPlus + AuthTestConfig
+ * （MP 替换 mybatis-spring-boot-starter 后，@MybatisTest 不再可用，改为最小切片）
+ * schema.sql / data.sql 由 application.yml 中 spring.sql.init.schema-locations 加载
  */
-@MybatisTest
+@SpringBootTest(classes = {
+    DataSourceAutoConfiguration.class,
+    SqlInitializationAutoConfiguration.class,
+    MybatisPlusAutoConfiguration.class,
+    AuthTestConfig.class
+})
 @AutoConfigureTestDatabase(replace = Replace.NONE)
-@ContextConfiguration(classes = AuthTestConfig.class)
 class AuthMapperIntTest {
 
     @Autowired

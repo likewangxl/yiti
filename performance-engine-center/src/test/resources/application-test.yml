@@ -2,9 +2,9 @@ spring:
   flyway:
     enabled: false   # Mapper/Service/Controller IT 不需要 Flyway，由 PerformanceFlywayTestBase 覆盖启用
   datasource:
-    url: jdbc:mysql://localhost:3306/onepl?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3306/yiti?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: 123456
+    password: djdev
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
@@ -50,7 +50,7 @@ flowable:
   form:
     enabled: false
 
-mybatis:
+mybatis-plus:
   mapper-locations: classpath*:mapper/**/*Mapper.xml
   configuration:
     map-underscore-to-camel-case: true

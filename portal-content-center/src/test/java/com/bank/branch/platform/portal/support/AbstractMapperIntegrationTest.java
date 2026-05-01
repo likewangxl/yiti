@@ -2,7 +2,7 @@ package com.bank.branch.platform.portal.support;
 
 import com.bank.branch.platform.portal.config.PortalMyBatisConfig;
 import org.junit.jupiter.api.Tag;
-import org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration;
+import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -28,7 +28,7 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(classes = {
     DataSourceAutoConfiguration.class,
     SqlInitializationAutoConfiguration.class,
-    MybatisAutoConfiguration.class,
+    MybatisPlusAutoConfiguration.class,
     PortalMyBatisConfig.class
 })
 @ActiveProfiles("test")

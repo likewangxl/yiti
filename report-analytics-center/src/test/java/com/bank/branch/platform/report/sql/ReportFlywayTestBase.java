@@ -28,7 +28,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 @TestPropertySource(properties = {
     "spring.datasource.url=jdbc:mysql://localhost:3306/onepl_test_v103?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true",
     "spring.datasource.username=root",
-    "spring.datasource.password=123456",
+    "spring.datasource.password=djdev",
     "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",
     "spring.flyway.enabled=true",
     // 使用模块命名空间子目录 sql/report/ 避免与 performance-engine-center 的 V1_0_0__performance_ddl.sql
@@ -43,8 +43,8 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
     "spring.flyway.clean-on-validation-error=false",
     "spring.flyway.validate-on-migrate=false",
     "spring.flyway.ignore-migration-patterns=*:missing,*:pending,*:ignored,*:future",
-    "mybatis.mapper-locations=classpath*:mapper/**/*Mapper.xml",
-    "mybatis.configuration.map-underscore-to-camel-case=true",
+    "mybatis-plus.mapper-locations=classpath*:mapper/**/*Mapper.xml",
+    "mybatis-plus.configuration.map-underscore-to-camel-case=true",
     "spring.data.redis.host=localhost",
     "spring.data.redis.port=6379",
     "spring.cache.type=none",

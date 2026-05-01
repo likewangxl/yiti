@@ -7,7 +7,7 @@ spring:
   session:
     store-type: none
 
-mybatis:
+mybatis-plus:
   mapper-locations: classpath*:mapper/**/*Mapper.xml
   configuration:
     map-underscore-to-camel-case: true

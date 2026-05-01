@@ -29,7 +29,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <spring-boot.version>3.2.3</spring-boot.version>
-        <mybatis-starter.version>3.0.3</mybatis-starter.version>
+        <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <druid-starter.version>1.2.21</druid-starter.version>
         <knife4j.version>4.4.0</knife4j.version>
         <flowable.version>7.0.1</flowable.version>
@@ -143,15 +143,9 @@
 
             <!-- 第三方 -->
             <dependency>
-                <groupId>org.mybatis.spring.boot</groupId>
-                <artifactId>mybatis-spring-boot-starter</artifactId>
-                <version>${mybatis-starter.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.mybatis.spring.boot</groupId>
-                <artifactId>mybatis-spring-boot-starter-test</artifactId>
-                <version>${mybatis-starter.version}</version>
-                <scope>test</scope>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.alibaba</groupId>

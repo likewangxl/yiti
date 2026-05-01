@@ -11,7 +11,7 @@ spring:
       mode: always
       schema-locations: classpath:schema.sql
 
-mybatis:
+mybatis-plus:
   mapper-locations: classpath*:mapper/**/*Mapper.xml
   configuration:
     map-underscore-to-camel-case: true

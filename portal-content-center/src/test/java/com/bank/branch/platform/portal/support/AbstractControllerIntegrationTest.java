@@ -57,7 +57,7 @@ public abstract class AbstractControllerIntegrationTest {
                     "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
                     "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration",
                     "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration",
-                    "org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration",
+                    "com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration",
                     "org.flowable.spring.boot.ProcessEngineAutoConfiguration",
                     "org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration",
                     "org.flowable.spring.boot.app.AppEngineAutoConfiguration",
