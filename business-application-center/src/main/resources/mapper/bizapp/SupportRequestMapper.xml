@@ -107,45 +107,7 @@
         </if>
     </select>
 
-    <!-- 插入新申请 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.bizapp.entity.SupportRequest">
-        INSERT INTO SUPPORT_REQUEST (
-            id, request_no, submit_group_id, cust_id, source_touch_task_id, product_id,
-            support_dept_id, other_demand, dispatch_emp_id, dispatch_time, assigned_emp_id,
-            status, business_key, process_instance_id, owner_org_id, created_by,
-            created_time, updated_by, updated_time, deleted
-        ) VALUES (
-            #{id}, #{requestNo}, #{submitGroupId}, #{custId}, #{sourceTouchTaskId}, #{productId},
-            #{supportDeptId}, #{otherDemand}, #{dispatchEmpId}, #{dispatchTime}, #{assignedEmpId},
-            #{status}, #{businessKey}, #{processInstanceId}, #{ownerOrgId}, #{createdBy},
-            #{createdTime}, #{updatedBy}, #{updatedTime}, #{deleted}
-        )
-    </insert>
-
-    <!-- 按 id 更新申请（动态 SET，仅更新非 null 字段） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.bizapp.entity.SupportRequest">
-        UPDATE SUPPORT_REQUEST
-        <set>
-            <if test="requestNo != null">request_no = #{requestNo},</if>
-            <if test="submitGroupId != null">submit_group_id = #{submitGroupId},</if>
-            <if test="custId != null">cust_id = #{custId},</if>
-            <if test="sourceTouchTaskId != null">source_touch_task_id = #{sourceTouchTaskId},</if>
-            <if test="productId != null">product_id = #{productId},</if>
-            <if test="supportDeptId != null">support_dept_id = #{supportDeptId},</if>
-            <if test="otherDemand != null">other_demand = #{otherDemand},</if>
-            <if test="dispatchEmpId != null">dispatch_emp_id = #{dispatchEmpId},</if>
-            <if test="dispatchTime != null">dispatch_time = #{dispatchTime},</if>
-            <if test="assignedEmpId != null">assigned_emp_id = #{assignedEmpId},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="businessKey != null">business_key = #{businessKey},</if>
-            <if test="processInstanceId != null">process_instance_id = #{processInstanceId},</if>
-            <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            updated_time = NOW(),
-        </set>
-        WHERE id = #{id}
-          AND deleted = 0
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 更新申请状态（状态流转专用） -->
     <update id="updateStatusById">

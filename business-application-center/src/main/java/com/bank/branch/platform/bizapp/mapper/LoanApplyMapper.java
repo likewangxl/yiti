@@ -1,5 +1,6 @@
 package com.bank.branch.platform.bizapp.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.bizapp.entity.LoanApply;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,11 +12,17 @@ import java.util.List;
 /**
  * 资产投放申请 Mapper 接口，操作 loan_apply 表。
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} / {@code deleteById(Serializable)} 由 BaseMapper 提供。
+ * 注意：{@code selectById} 因原签名带 {@code @Param("id")} 与 BaseMapper 不兼容，
+ * 保留自定义实现（含逻辑删除过滤）。
+ * </p>
  */
 @Mapper
-public interface LoanApplyMapper {
+public interface LoanApplyMapper extends BaseMapper<LoanApply> {
 
-    /** 按 id 查询（含逻辑删除过滤） */
+    /** 按 id 查询（含逻辑删除过滤，自定义实现覆盖 BaseMapper.selectById） */
     LoanApply selectById(@Param("id") String id);
 
     /** 按 id 查询并加 FOR UPDATE 行锁 */
@@ -36,11 +43,9 @@ public interface LoanApplyMapper {
                    @Param("status") String status,
                    @Param("ownerOrgId") String ownerOrgId);
 
-    /** 插入 */
-    int insert(LoanApply entity);
+    // insert(T) 由 BaseMapper 提供
 
-    /** 动态更新（仅更新非 null 字段） */
-    int updateById(LoanApply entity);
+    // updateById(T) 由 BaseMapper 提供（FieldStrategy.NOT_NULL，与原 XML 动态 SET 行为一致）
 
     /** 更新状态 */
     int updateStatusById(@Param("id") String id,

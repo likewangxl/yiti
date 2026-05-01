@@ -1,5 +1,6 @@
 package com.bank.branch.platform.bizapp.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.bizapp.entity.SupportRequest;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -10,11 +11,17 @@ import java.util.List;
 /**
  * 中场支持申请 Mapper 接口，操作 support_request 表。
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} / {@code deleteById(Serializable)} 由 BaseMapper 提供。
+ * 注意：{@code selectById} 因原签名带 {@code @Param("id")} 与 BaseMapper 不兼容，
+ * 保留自定义实现（含逻辑删除过滤）。
+ * </p>
  */
 @Mapper
-public interface SupportRequestMapper {
+public interface SupportRequestMapper extends BaseMapper<SupportRequest> {
 
-    /** 按 id 查询 */
+    /** 按 id 查询（含逻辑删除过滤，自定义实现覆盖 BaseMapper.selectById） */
     SupportRequest selectById(@Param("id") String id);
 
     /** 按 id 查询并加 FOR UPDATE 行锁 */
@@ -47,11 +54,9 @@ public interface SupportRequestMapper {
                           @Param("status") String status,
                           @Param("assignedEmpId") String assignedEmpId);
 
-    /** 插入 */
-    int insert(SupportRequest entity);
+    // insert(T) 由 BaseMapper 提供
 
-    /** 动态更新 */
-    int updateById(SupportRequest entity);
+    // updateById(T) 由 BaseMapper 提供（FieldStrategy.NOT_NULL，与原 XML 动态 SET 行为一致）
 
     /** 更新状态 */
     int updateStatusById(@Param("id") String id,

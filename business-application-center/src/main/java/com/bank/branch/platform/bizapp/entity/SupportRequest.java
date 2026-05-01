@@ -1,5 +1,8 @@
 package com.bank.branch.platform.bizapp.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -15,9 +18,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("support_request")
 public class SupportRequest {
 
     /** 申请ID（UUID，32位去连字符），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 申请编号（SR+yyyyMMdd+6位序号），对应 request_no */

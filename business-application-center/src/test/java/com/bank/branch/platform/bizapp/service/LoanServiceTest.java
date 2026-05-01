@@ -110,7 +110,7 @@ class LoanServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "BIZ-40301");
 
-        verify(loanMapper, never()).insert(any());
+        verify(loanMapper, never()).insert(any(LoanApply.class));
     }
 
     @Test
@@ -125,7 +125,7 @@ class LoanServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "BIZ-40303");
 
-        verify(loanMapper, never()).insert(any());
+        verify(loanMapper, never()).insert(any(LoanApply.class));
     }
 
     @Test
@@ -143,7 +143,7 @@ class LoanServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "BIZ-40302");
 
-        verify(loanMapper, never()).insert(any());
+        verify(loanMapper, never()).insert(any(LoanApply.class));
     }
 
     @Test
@@ -160,7 +160,7 @@ class LoanServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "BIZ-40905");
 
-        verify(loanMapper, never()).insert(any());
+        verify(loanMapper, never()).insert(any(LoanApply.class));
     }
 
     // ==================== updateDraft ====================

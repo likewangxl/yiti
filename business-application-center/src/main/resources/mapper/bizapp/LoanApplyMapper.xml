@@ -72,41 +72,7 @@
         </if>
     </select>
 
-    <!-- 插入新申请 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.bizapp.entity.LoanApply">
-        INSERT INTO LOAN_APPLY (
-            id, apply_no, cust_id, source_touch_task_id, project_type, biz_type, guarantee_type,
-            credit_amount, credit_exposure_amount, status, business_key, process_instance_id,
-            owner_org_id, created_by, created_time, updated_by, updated_time, deleted
-        ) VALUES (
-            #{id}, #{applyNo}, #{custId}, #{sourceTouchTaskId}, #{projectType}, #{bizType}, #{guaranteeType},
-            #{creditAmount}, #{creditExposureAmount}, #{status}, #{businessKey}, #{processInstanceId},
-            #{ownerOrgId}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}, #{deleted}
-        )
-    </insert>
-
-    <!-- 按 id 更新申请（动态 SET，仅更新非 null 字段） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.bizapp.entity.LoanApply">
-        UPDATE LOAN_APPLY
-        <set>
-            <if test="applyNo != null">apply_no = #{applyNo},</if>
-            <if test="custId != null">cust_id = #{custId},</if>
-            <if test="sourceTouchTaskId != null">source_touch_task_id = #{sourceTouchTaskId},</if>
-            <if test="projectType != null">project_type = #{projectType},</if>
-            <if test="bizType != null">biz_type = #{bizType},</if>
-            <if test="guaranteeType != null">guarantee_type = #{guaranteeType},</if>
-            <if test="creditAmount != null">credit_amount = #{creditAmount},</if>
-            <if test="creditExposureAmount != null">credit_exposure_amount = #{creditExposureAmount},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="businessKey != null">business_key = #{businessKey},</if>
-            <if test="processInstanceId != null">process_instance_id = #{processInstanceId},</if>
-            <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            updated_time = NOW(),
-        </set>
-        WHERE id = #{id}
-          AND deleted = 0
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 更新申请状态（状态流转专用） -->
     <update id="updateStatusById">
