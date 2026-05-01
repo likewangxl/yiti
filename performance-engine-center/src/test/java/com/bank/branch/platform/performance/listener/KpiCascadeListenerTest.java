@@ -1,7 +1,9 @@
 package com.bank.branch.platform.performance.listener;
 
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
+import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.event.MetricCalcCompletedEvent;
+import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
 import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
@@ -114,6 +116,79 @@ class KpiCascadeListenerTest {
 
         listener.onMetricCompleted(successEvent("M_A"));   // 不抛
         verify(kpiCalcService).calcScheme(eq("CODE_S2"), any(), any(), any(), any());
+    }
+
+    /** WEEKLY 方案将 dataDate 推导为当周周一（ISO 8601）作为 cycleDate. */
+    @Test
+    void weekly_scheme_resolves_cycleDate_to_monday() {
+        when(kpiItemMapper.selectActiveSchemeIdsByMetric("M_A")).thenReturn(List.of("S1"));
+        when(kpiSchemeService.getById("S1")).thenReturn(activeScheme("S1", "WEEKLY"));
+
+        MetricCalcCompletedEvent ev = new MetricCalcCompletedEvent(
+            "M_A", "EMP", LocalDate.of(2026, 4, 15) /*周三*/, "v1",
+            "SUCCESS", 100, 100, 0, "RT1", "SCHEDULED", LocalDateTime.now());
+        listener.onMetricCompleted(ev);
+
+        verify(kpiCalcService).calcScheme(
+            eq("CODE_S1"), eq("WEEKLY"),
+            eq(LocalDate.of(2026, 4, 13)),  // 当周周一
+            eq(LocalDate.of(2026, 4, 15)), eq("v1"));
+    }
+
+    /** YEARLY 方案将 dataDate 推导为当年第一天作为 cycleDate. */
+    @Test
+    void yearly_scheme_resolves_cycleDate_to_first_day_of_year() {
+        when(kpiItemMapper.selectActiveSchemeIdsByMetric("M_A")).thenReturn(List.of("S1"));
+        when(kpiSchemeService.getById("S1")).thenReturn(activeScheme("S1", "YEARLY"));
+
+        MetricCalcCompletedEvent ev = new MetricCalcCompletedEvent(
+            "M_A", "EMP", LocalDate.of(2026, 7, 4), "v1",
+            "SUCCESS", 100, 100, 0, "RT1", "SCHEDULED", LocalDateTime.now());
+        listener.onMetricCompleted(ev);
+
+        verify(kpiCalcService).calcScheme(
+            eq("CODE_S1"), eq("YEARLY"),
+            eq(LocalDate.of(2026, 1, 1)),
+            eq(LocalDate.of(2026, 7, 4)), eq("v1"));
+    }
+
+    /** 未知 cycleType 触发 PerfException 被外层 catch 隔离，其他方案仍正常计算. */
+    @Test
+    void unknown_cycleType_throws_then_isolated_by_outer_catch() {
+        when(kpiItemMapper.selectActiveSchemeIdsByMetric("M_A")).thenReturn(List.of("S1", "S2"));
+        when(kpiSchemeService.getById("S1")).thenReturn(activeScheme("S1", "HOURLY"));
+        when(kpiSchemeService.getById("S2")).thenReturn(activeScheme("S2", "MONTHLY"));
+
+        listener.onMetricCompleted(successEvent("M_A"));   // 不抛
+        // S1 因 HOURLY 抛 PerfException(KPI_CYCLE_TYPE_INVALID)，被外层 catch 隔离
+        verify(kpiCalcService, never()).calcScheme(eq("CODE_S1"), any(), any(), any(), any());
+        // S2 仍正常调用
+        verify(kpiCalcService).calcScheme(eq("CODE_S2"), any(), any(), any(), any());
+    }
+
+    /** getById 抛 KPI_SCHEME_NOT_FOUND 时静默跳过该方案，其他方案仍正常计算. */
+    @Test
+    void scheme_not_found_silently_skipped() {
+        when(kpiItemMapper.selectActiveSchemeIdsByMetric("M_A")).thenReturn(List.of("S1", "S2"));
+        when(kpiSchemeService.getById("S1"))
+            .thenThrow(new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, "S1"));
+        when(kpiSchemeService.getById("S2")).thenReturn(activeScheme("S2", "MONTHLY"));
+
+        listener.onMetricCompleted(successEvent("M_A"));   // 不抛
+        verify(kpiCalcService, never()).calcScheme(eq("CODE_S1"), any(), any(), any(), any());
+        verify(kpiCalcService).calcScheme(eq("CODE_S2"), any(), any(), any(), any());
+    }
+
+    /** Redis setIfAbsent 抛异常时退化为不防重，仍正常触发 calcScheme. */
+    @Test
+    void redis_throws_falls_back_to_no_lock() {
+        when(kpiItemMapper.selectActiveSchemeIdsByMetric("M_A")).thenReturn(List.of("S1"));
+        when(kpiSchemeService.getById("S1")).thenReturn(activeScheme("S1", "MONTHLY"));
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+            .thenThrow(new org.springframework.dao.QueryTimeoutException("redis down"));
+
+        listener.onMetricCompleted(successEvent("M_A"));
+        verify(kpiCalcService).calcScheme(eq("CODE_S1"), any(), any(), any(), any());
     }
 
     // ---- 辅助方法 ----
