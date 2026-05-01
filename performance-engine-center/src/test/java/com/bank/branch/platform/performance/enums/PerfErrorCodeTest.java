@@ -75,11 +75,13 @@ class PerfErrorCodeTest {
      * </ul>
      */
     @Test
-    void idempotencyWaitTimeout_exists_and_30codesTotal() {
+    void idempotencyWaitTimeout_exists_and_34codesTotal() {
         PerfErrorCode code = PerfErrorCode.IDEMPOTENCY_WAIT_TIMEOUT;
         assertThat(code.getCode()).isEqualTo("PERF-50003");
         assertThat(code.getMessage()).contains("幂等等待超时");
-        assertThat(PerfErrorCode.values()).hasSize(30);
+        // V1.7 P2 新增 4 条：METRIC_CALC_FREQ_INVALID(40021) / METRIC_SUBJECT_SQL_REQUIRED(40022)
+        // / KPI_CYCLE_TYPE_INVALID(40023) / METRIC_SUBJECT_SQL_FAILED(50004)，总数由 30 升至 34
+        assertThat(PerfErrorCode.values()).hasSize(34);
     }
 
     /**
@@ -99,7 +101,7 @@ class PerfErrorCodeTest {
     }
 
     /**
-     * Task C2 架构守护测试：枚举常量总数 = 30（§K 的 29 条编码 + METRIC_SLOT_CONFLICT 复用 40901 独立常量）.
+     * Task C2 架构守护测试：枚举常量总数 = 34（§K 的 33 条编码 + METRIC_SLOT_CONFLICT 复用 40901 独立常量）.
      *
      * <p>此测试作为"守护"（第一次运行即 PASS），防止未来在 §K 范围外随意新增枚举常量。
      * 若 §K 授权清单更新，同步修改此数字并更新对应 §K 文档。
@@ -109,12 +111,15 @@ class PerfErrorCodeTest {
      *
      * <p>V1.3 R3.1 新增 1 条：IDEMPOTENCY_WAIT_TIMEOUT（PERF-50003），拆分 DataTaskService
      * 幂等等待超时语义，消化 V1.1 Q6 遗留的"幂等超时复用 CALC_JOB_FAILED"语义不清问题。
+     *
+     * <p>V1.7 P2 新增 4 条：METRIC_CALC_FREQ_INVALID(40021) / METRIC_SUBJECT_SQL_REQUIRED(40022)
+     * / KPI_CYCLE_TYPE_INVALID(40023) / METRIC_SUBJECT_SQL_FAILED(50004)。
      */
     @Test
     void enumSize_equalsSectionKTotal() {
-        // §K 共 29 条编码（K.1: 12 + K.2: 4 + K.3: 10 + K.4: 3）
-        // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 30
-        assertThat(PerfErrorCode.values()).hasSize(30);
+        // §K 共 33 条编码（K.1: 16 + K.2: 4 + K.3: 10 + K.4: 4，含 V1.7 新增 4 条）
+        // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 34
+        assertThat(PerfErrorCode.values()).hasSize(34);
     }
 
     /**
@@ -128,10 +133,15 @@ class PerfErrorCodeTest {
             "PERF-40001", "PERF-40002", "PERF-40003", "PERF-40004",
             "PERF-40005", "PERF-40006", "PERF-40007",
             "PERF-40012", "PERF-40014", "PERF-40017", "PERF-40019", "PERF-40020",
+            // V1.7 P2 新增 K.1 段位 3 条
+            "PERF-40021", "PERF-40022", "PERF-40023",
             "PERF-40901", "PERF-40902", "PERF-40903", "PERF-40906",
             "PERF-42200", "PERF-42201", "PERF-42202", "PERF-42203",
             "PERF-42205", "PERF-42206", "PERF-42207", "PERF-42208", "PERF-42209", "PERF-42210",
-            "PERF-50002", "PERF-50003", "PERF-50007");
+            "PERF-50002", "PERF-50003",
+            // V1.7 P2 新增 K.4 段位 1 条
+            "PERF-50004",
+            "PERF-50007");
         for (PerfErrorCode c : PerfErrorCode.values()) {
             assertThat(allowedCodes)
                 .as("常量 " + c.name() + " 编号 " + c.getCode() + " 不在 §K 授权清单")
