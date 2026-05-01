@@ -243,4 +243,34 @@ class SysControlServiceTest extends PerformanceServiceTestBase {
         assertThat(got).isSameAs(historical);
         verify(sysControlMapper, never()).insert(any(SysControl.class));
     }
+
+    // ===== V1.7 P5 新增：getActiveVersionOrFallback =====
+
+    @Test
+    @DisplayName("getActiveVersionOrFallback: 存在生效版本且 currentVersion 非空时返回 currentVersion")
+    void getActiveVersionOrFallback_whenActiveExists_returnsCurrentVersion() {
+        // Given: EMP 维度有一条 is_valid=1 的版本，currentVersion="V20260430"
+        SysControl active = SysControlTestDataBuilder.buildTest(
+                "GAV_01", "EMP", LocalDate.of(2026, 4, 30), "V20260430", 1);
+        when(sysControlMapper.selectByScopeAndValid("EMP")).thenReturn(active);
+
+        // When
+        String result = sysControlService.getActiveVersionOrFallback(LocalDate.of(2026, 4, 30));
+
+        // Then: 直接返回 currentVersion，不退化
+        assertThat(result).isEqualTo("V20260430");
+    }
+
+    @Test
+    @DisplayName("getActiveVersionOrFallback: 无生效版本时退化为 yyyyMMdd 字符串")
+    void getActiveVersionOrFallback_whenNoActive_returnsFallbackYyyyMMdd() {
+        // Given: EMP 维度无生效版本（所有 scopeDim 均 is_valid=0 或无记录）
+        when(sysControlMapper.selectByScopeAndValid("EMP")).thenReturn(null);
+
+        // When
+        String result = sysControlService.getActiveVersionOrFallback(LocalDate.of(2026, 4, 29));
+
+        // Then: 退化为 yyyyMMdd
+        assertThat(result).isEqualTo("20260429");
+    }
 }

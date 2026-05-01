@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
@@ -251,6 +252,24 @@ public class SysControlService {
         log.info("[SysControlService.initIfAbsent] 新建版本记录 scopeDim={}, dataDate={}, version={}",
                 scopeDim, dataDate, version);
         return sc;
+    }
+
+    /**
+     * V1.7：取 EMP 维度当前 ACTIVE 基线版本；不存在或版本号为空时退化为 yyyyMMdd 字符串.
+     *
+     * <p>供 MetricExecuteQuartzJob 自动调度时确定 dataVersion 兜底：调度链路无操作人上下文，
+     * 不应抛异常阻断 Job；退化版本号对下游 calcMetric 依然合法（版本即数据日期串）。
+     *
+     * @param dataDate 数据日期（T-1）
+     * @return 版本字符串（currentVersion 或 yyyyMMdd）
+     */
+    public String getActiveVersionOrFallback(LocalDate dataDate) {
+        SysControl current = sysControlMapper.selectByScopeAndValid("EMP");
+        if (current != null && org.springframework.util.StringUtils.hasText(current.getCurrentVersion())) {
+            return current.getCurrentVersion();
+        }
+        log.warn("[SysControlService.getActiveVersionOrFallback] 无 EMP 生效版本，退化为 yyyyMMdd, dataDate={}", dataDate);
+        return dataDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     }
 
     /** 生成 varchar(32) 主键. */
