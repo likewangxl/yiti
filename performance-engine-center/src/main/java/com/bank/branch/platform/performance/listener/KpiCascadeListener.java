@@ -30,6 +30,17 @@ import java.util.List;
  *
  * <p>异步执行（{@code @Async("kpiCascadeExecutor")}），不阻塞指标计算主线程.
  * 单方案计算失败只打 warn 日志，不影响其他方案的触发（异常隔离）.
+ *
+ * <p><strong>事件传递语义（V1.7 best-effort）</strong>：
+ * MetricCalcService.calcMetric 设计为非事务最外层方法（每个 mapper 调用走自己的短事务），
+ * 事件发布发生在所有写库后。{@code AFTER_COMMIT + fallbackExecution=true} 组合下：
+ * <ul>
+ *   <li>有事务上下文：事务提交后异步触发本监听器</li>
+ *   <li>无事务上下文（生产 calcMetric 实际场景）：立即异步触发</li>
+ * </ul>
+ * <p>边界风险：calcMetric 写状态成功 → 事件 publish 之前 JVM 崩溃 → 事件丢失，
+ * KPI 永远不会重算。当前架构靠 MetricSchedulerHealthCheck 每 10 分钟扫描的间接补偿。
+ * V1.7+ 如需强一致，再引入"事件落库 + Quartz 补偿扫描"模式.
  */
 @Slf4j
 @Component
@@ -88,11 +99,13 @@ public class KpiCascadeListener {
             log.warn("[KpiCascade] schemeId={} 方案不存在，跳过: {}", schemeId, e.getMessage());
             return;
         }
-        if (scheme == null || !"ACTIVE".equalsIgnoreCase(scheme.getStatus())) {
+        if (!"ACTIVE".equalsIgnoreCase(scheme.getStatus())) {
             return;
         }
 
-        LocalDate cycleDate = resolveCycleDate(scheme.getCycleType(), event.dataDate());
+        // V1.7：cycleType 入境一次大写归一，下游统一大写传递
+        String cycleType = scheme.getCycleType() == null ? null : scheme.getCycleType().toUpperCase();
+        LocalDate cycleDate = resolveCycleDate(cycleType, event.dataDate());
         // Redis SETNX 30s 防重：同一方案+周期+版本在 30s 内只触发一次
         String lockKey = String.format("kpi:cascade:%s:%s:%s",
             scheme.getSchemeCode(), cycleDate, event.version());
@@ -110,10 +123,10 @@ public class KpiCascadeListener {
             return;
         }
 
-        int success = kpiCalcService.calcScheme(scheme.getSchemeCode(), scheme.getCycleType(),
+        int success = kpiCalcService.calcScheme(scheme.getSchemeCode(), cycleType,
             cycleDate, event.dataDate(), event.version());
         log.info("[KpiCascade] schemeCode={} cycleType={} cycleDate={} success={}",
-            scheme.getSchemeCode(), scheme.getCycleType(), cycleDate, success);
+            scheme.getSchemeCode(), cycleType, cycleDate, success);
     }
 
     /**
