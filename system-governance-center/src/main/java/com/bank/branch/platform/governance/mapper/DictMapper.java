@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.governance.entity.SysDict;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,12 @@ import java.util.List;
  * 字典查询默认只返回 ACTIVE 状态的记录，按 sort_order 升序排列。
  * 分页查询支持按 dictType 精确匹配和 keyword 模糊搜索。
  * </p>
+ * <p>
+ * selectById / insert / updateById 由 MyBatis-Plus BaseMapper 提供。
+ * </p>
  */
 @Mapper
-public interface DictMapper {
+public interface DictMapper extends BaseMapper<SysDict> {
 
     /**
      * 根据字典类型查询所有启用状态的字典项，按排序号升序排列。
@@ -33,30 +37,6 @@ public interface DictMapper {
      */
     SysDict selectByDictTypeAndDictCode(@Param("dictType") String dictType,
                                         @Param("dictCode") String dictCode);
-
-    /**
-     * 根据主键查询字典记录（不限状态）。
-     *
-     * @param id 字典ID
-     * @return 字典实体，不存在时返回 null
-     */
-    SysDict selectById(String id);
-
-    /**
-     * 新增字典记录。
-     *
-     * @param dict 字典实体
-     * @return 受影响行数
-     */
-    int insert(SysDict dict);
-
-    /**
-     * 按主键更新字典信息，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param dict 包含 id 及待更新字段的字典实体
-     * @return 受影响行数
-     */
-    int updateById(SysDict dict);
 
     /**
      * 判断指定字典类型和编码是否已存在（不限状态）。

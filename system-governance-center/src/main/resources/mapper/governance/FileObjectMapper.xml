@@ -8,21 +8,7 @@
         bucket_name, md5_hash, uploaded_by, uploaded_time
     </sql>
 
-    <!-- 新增文件对象记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.FileObject">
-        INSERT INTO FILE_OBJECT (id, file_name, file_size, file_type, storage_path,
-                                  bucket_name, md5_hash, uploaded_by, uploaded_time)
-        VALUES (#{id}, #{fileName}, #{fileSize}, #{fileType}, #{storagePath},
-                #{bucketName}, #{md5Hash}, #{uploadedBy}, #{uploadedTime})
-    </insert>
-
-    <!-- 根据主键查询文件对象 -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.governance.entity.FileObject">
-        SELECT <include refid="BASE_COLUMNS"/>
-        FROM FILE_OBJECT
-        WHERE id = #{id}
-    </select>
+    <!-- insert / selectById / deleteById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 根据 MD5 哈希值查询文件对象（用于去重） -->
     <select id="selectByMd5Hash" parameterType="string"
@@ -33,9 +19,5 @@
         LIMIT 1
     </select>
 
-    <!-- 根据主键删除文件对象记录 -->
-    <delete id="deleteById" parameterType="string">
-        DELETE FROM FILE_OBJECT WHERE id = #{id}
-    </delete>
 
 </mapper>

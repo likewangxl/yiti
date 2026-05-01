@@ -20,25 +20,7 @@
         </where>
     </sql>
 
-    <!-- 插入通知 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.UserNotification">
-        INSERT INTO USER_NOTIFICATION (
-            id, emp_id, title, content, notify_type, biz_type, biz_id,
-            link_url, is_read, created_time
-        ) VALUES (
-            #{id}, #{empId}, #{title}, #{content}, #{notifyType}, #{bizType}, #{bizId},
-            #{linkUrl}, #{isRead}, #{createdTime}
-        )
-    </insert>
-
-    <!-- 根据主键查询 -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.governance.entity.UserNotification">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM USER_NOTIFICATION
-        WHERE id = #{id}
-    </select>
+    <!-- insert / selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 分页查询指定用户的通知列表 -->
     <select id="selectByEmpId" resultType="com.bank.branch.platform.governance.entity.UserNotification">

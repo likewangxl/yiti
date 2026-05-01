@@ -1,5 +1,8 @@
 package com.bank.branch.platform.governance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -13,9 +16,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("sys_calendar_day")
 public class SysCalendarDay {
 
     /** 日期（自然主键），对应 day */
+    @TableId(value = "day", type = IdType.INPUT)
     private LocalDate day;
 
     /** 是否工作日：1-工作日, 0-休息日，对应 is_workday */

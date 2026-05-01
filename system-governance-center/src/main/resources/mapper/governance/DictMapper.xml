@@ -32,42 +32,7 @@
         LIMIT 1
     </select>
 
-    <!-- 根据主键查询（不限状态） -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.governance.entity.SysDict">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM SYS_DICT
-        WHERE id = #{id}
-    </select>
-
-    <!-- 新增字典记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysDict">
-        INSERT INTO SYS_DICT (
-            id, dict_type, dict_code, dict_label, dict_value,
-            sort_order, status, remark,
-            created_by, created_time, updated_by, updated_time
-        ) VALUES (
-            #{id}, #{dictType}, #{dictCode}, #{dictLabel}, #{dictValue},
-            #{sortOrder}, #{status}, #{remark},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按主键动态更新字典信息 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysDict">
-        UPDATE SYS_DICT
-        <set>
-            <if test="dictLabel != null">dict_label = #{dictLabel},</if>
-            <if test="dictValue != null">dict_value = #{dictValue},</if>
-            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="remark != null">remark = #{remark},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- selectById / insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 判断字典类型+编码是否已存在 -->
     <select id="existsByDictTypeAndDictCode" resultType="boolean">

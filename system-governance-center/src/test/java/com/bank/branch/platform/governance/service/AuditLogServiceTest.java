@@ -56,7 +56,7 @@ class AuditLogServiceTest {
                 .reason("修改系统配置")
                 .build();
 
-        when(auditLogMapper.insert(any(AuditLog.class))).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         auditLogService.log(cmd);
 
@@ -90,7 +90,7 @@ class AuditLogServiceTest {
                 .bizAction("EXPORT")
                 .build();
 
-        when(auditLogMapper.insert(any(AuditLog.class))).thenReturn(1);
+        when(auditLogMapper.insert((AuditLog) any())).thenReturn(1);
 
         auditLogService.log(cmd);
 

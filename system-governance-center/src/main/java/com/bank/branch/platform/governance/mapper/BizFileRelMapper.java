@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.governance.entity.BizFileRel;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,17 +13,12 @@ import java.util.List;
  * 提供业务对象与文件对象之间关联关系的增删查操作。
  * 支持通过业务类型+业务ID查询关联文件，以及判断关联是否已存在（用于幂等控制）。
  * </p>
+ * <p>
+ * insert 由 MyBatis-Plus BaseMapper 提供。
+ * </p>
  */
 @Mapper
-public interface BizFileRelMapper {
-
-    /**
-     * 新增业务-附件关联记录。
-     *
-     * @param rel 关联实体
-     * @return 受影响行数
-     */
-    int insert(BizFileRel rel);
+public interface BizFileRelMapper extends BaseMapper<BizFileRel> {
 
     /**
      * 根据业务类型和业务ID查询关联的文件列表，按创建时间升序排列。

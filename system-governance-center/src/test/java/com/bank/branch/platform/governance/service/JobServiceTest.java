@@ -85,20 +85,20 @@ class JobServiceTest {
         SysJobConf conf = makeJobConf("JOB_001", "PERF_DAILY_CALC", "绩效日计算");
         when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
         when(jobRunLogMapper.existsRunningByJobId("JOB_001")).thenReturn(false);
-        when(jobRunLogMapper.insert(any(SysJobRunLog.class))).thenReturn(1);
+        when(jobRunLogMapper.insert((SysJobRunLog) any())).thenReturn(1);
 
         String runLogId = jobService.startJobRun("JOB_001", "SCHEDULED", "SYSTEM");
 
         assertThat(runLogId).isNotBlank();
         // 验证插入了一条 RUNNING 状态的日志
-        verify(jobRunLogMapper).insert(argThat(log ->
+        verify(jobRunLogMapper).insert(argThat((SysJobRunLog log) ->
                 "RUNNING".equals(log.getStatus())
                         && "SCHEDULED".equals(log.getTriggerType())
                         && "SYSTEM".equals(log.getCreatedBy())
                         && log.getStartTime() != null
         ));
         // 验证更新了任务的最后执行时间
-        verify(jobConfMapper).updateById(argThat(c -> c.getLastRunTime() != null));
+        verify(jobConfMapper).updateById(argThat((SysJobConf c) -> c.getLastRunTime() != null));
     }
 
     /**
@@ -136,11 +136,11 @@ class JobServiceTest {
     void completeJobRun_updatesStatus() {
         SysJobRunLog log = makeRunLog("LOG_001", "JOB_001", "RUNNING");
         when(jobRunLogMapper.selectById("LOG_001")).thenReturn(log);
-        when(jobRunLogMapper.updateById(any())).thenReturn(1);
+        when(jobRunLogMapper.updateById((SysJobRunLog) any())).thenReturn(1);
 
         jobService.completeJobRun("LOG_001");
 
-        verify(jobRunLogMapper).updateById(argThat(l ->
+        verify(jobRunLogMapper).updateById(argThat((SysJobRunLog l) ->
                 "SUCCESS".equals(l.getStatus()) && l.getEndTime() != null
         ));
     }
@@ -166,11 +166,11 @@ class JobServiceTest {
     void failJobRun_recordsError() {
         SysJobRunLog log = makeRunLog("LOG_001", "JOB_001", "RUNNING");
         when(jobRunLogMapper.selectById("LOG_001")).thenReturn(log);
-        when(jobRunLogMapper.updateById(any())).thenReturn(1);
+        when(jobRunLogMapper.updateById((SysJobRunLog) any())).thenReturn(1);
 
         jobService.failJobRun("LOG_001", "NullPointerException at line 42");
 
-        verify(jobRunLogMapper).updateById(argThat(l ->
+        verify(jobRunLogMapper).updateById(argThat((SysJobRunLog l) ->
                 "FAILED".equals(l.getStatus())
                         && l.getEndTime() != null
                         && "NullPointerException at line 42".equals(l.getErrorMsg())

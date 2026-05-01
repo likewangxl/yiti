@@ -106,14 +106,14 @@ class DictServiceTest {
     @Test
     void createDict_success_insertsAndEvictsCache() {
         when(dictMapper.existsByDictTypeAndDictCode("INDUSTRY", "IT")).thenReturn(false);
-        when(dictMapper.insert(any())).thenReturn(1);
+        when(dictMapper.insert((SysDict) any())).thenReturn(1);
 
         SysDict result = dictService.createDict("INDUSTRY", "IT", "信息技术", "IT", 1, "行业类型");
 
         assertThat(result).isNotNull();
         assertThat(result.getDictType()).isEqualTo("INDUSTRY");
         assertThat(result.getDictCode()).isEqualTo("IT");
-        verify(dictMapper).insert(any(SysDict.class));
+        verify(dictMapper).insert((SysDict) any());
         verify(redisTemplate).delete("gov:dict:INDUSTRY");
     }
 
@@ -124,11 +124,11 @@ class DictServiceTest {
     void deleteDict_setsStatusToDisabled() {
         SysDict existing = makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT");
         when(dictMapper.selectById("D_001")).thenReturn(existing);
-        when(dictMapper.updateById(any())).thenReturn(1);
+        when(dictMapper.updateById((SysDict) any())).thenReturn(1);
 
         dictService.deleteDict("D_001");
 
-        verify(dictMapper).updateById(argThat(dict -> "DISABLED".equals(dict.getStatus())));
+        verify(dictMapper).updateById(argThat((SysDict dict) -> "DISABLED".equals(dict.getStatus())));
         verify(redisTemplate).delete("gov:dict:INDUSTRY");
     }
 
@@ -214,11 +214,11 @@ class DictServiceTest {
     void updateDict_success_updatesAndEvictsCache() {
         SysDict existing = makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT");
         when(dictMapper.selectById("D_001")).thenReturn(existing);
-        when(dictMapper.updateById(any())).thenReturn(1);
+        when(dictMapper.updateById((SysDict) any())).thenReturn(1);
 
         dictService.updateDict("D_001", "新标签", "新值", 5, "更新备注");
 
-        verify(dictMapper).updateById(argThat(dict ->
+        verify(dictMapper).updateById(argThat((SysDict dict) ->
                 "新标签".equals(dict.getDictLabel())
                         && "新值".equals(dict.getDictValue())
                         && dict.getSortOrder() == 5
@@ -246,11 +246,11 @@ class DictServiceTest {
         SysDict existing = makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT");
         existing.setStatus("ACTIVE");
         when(dictMapper.selectById("D_001")).thenReturn(existing);
-        when(dictMapper.updateById(any())).thenReturn(1);
+        when(dictMapper.updateById((SysDict) any())).thenReturn(1);
 
         SysDict result = dictService.toggleStatus("D_001");
 
-        verify(dictMapper).updateById(argThat(dict -> "DISABLED".equals(dict.getStatus())));
+        verify(dictMapper).updateById(argThat((SysDict dict) -> "DISABLED".equals(dict.getStatus())));
         verify(redisTemplate).delete("gov:dict:INDUSTRY");
     }
 
@@ -262,11 +262,11 @@ class DictServiceTest {
         SysDict existing = makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT");
         existing.setStatus("DISABLED");
         when(dictMapper.selectById("D_001")).thenReturn(existing);
-        when(dictMapper.updateById(any())).thenReturn(1);
+        when(dictMapper.updateById((SysDict) any())).thenReturn(1);
 
         SysDict result = dictService.toggleStatus("D_001");
 
-        verify(dictMapper).updateById(argThat(dict -> "ACTIVE".equals(dict.getStatus())));
+        verify(dictMapper).updateById(argThat((SysDict dict) -> "ACTIVE".equals(dict.getStatus())));
     }
 
     /**

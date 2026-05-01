@@ -48,7 +48,7 @@ class NotificationServiceTest {
                 .linkUrl("/workflow/task/LOAN-001")
                 .build();
 
-        when(notificationMapper.insert(any(UserNotification.class))).thenReturn(1);
+        when(notificationMapper.insert((UserNotification) any())).thenReturn(1);
 
         notificationService.sendNotification(cmd);
 

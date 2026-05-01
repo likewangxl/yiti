@@ -8,13 +8,7 @@
         created_by, created_time
     </sql>
 
-    <!-- 新增业务-附件关联记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.BizFileRel">
-        INSERT INTO BIZ_FILE_REL (id, biz_type, biz_id, file_object_id, file_role,
-                                   created_by, created_time)
-        VALUES (#{id}, #{bizType}, #{bizId}, #{fileObjectId}, #{fileRole},
-                #{createdBy}, #{createdTime})
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 根据业务类型和业务ID查询关联文件列表，按创建时间升序 -->
     <select id="selectByBizTypeAndBizId"

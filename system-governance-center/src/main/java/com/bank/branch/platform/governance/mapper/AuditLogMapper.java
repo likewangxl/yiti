@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.governance.entity.AuditLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,25 +14,12 @@ import java.util.List;
  * audit_log 表为只追加（append-only）设计，无更新和删除操作。
  * 分页查询支持按操作人、业务类型、业务动作、时间范围和关键词筛选。
  * </p>
+ * <p>
+ * insert / selectById 由 MyBatis-Plus BaseMapper 提供。
+ * </p>
  */
 @Mapper
-public interface AuditLogMapper {
-
-    /**
-     * 插入审计日志记录。
-     *
-     * @param log 审计日志实体
-     * @return 受影响行数
-     */
-    int insert(AuditLog log);
-
-    /**
-     * 根据主键查询审计日志。
-     *
-     * @param id 日志ID
-     * @return 审计日志实体，不存在时返回 null
-     */
-    AuditLog selectById(String id);
+public interface AuditLogMapper extends BaseMapper<AuditLog> {
 
     /**
      * 分页查询审计日志，支持多条件动态筛选。

@@ -35,27 +35,7 @@
         </where>
     </sql>
 
-    <!-- 插入审计日志 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.AuditLog">
-        INSERT INTO AUDIT_LOG (
-            id, trace_id, emp_id, emp_name, biz_type, biz_action,
-            resource_url, request_method, request_params, response_status,
-            error_msg, ip_address, user_agent, execution_time, reason, created_time
-        ) VALUES (
-            #{id}, #{traceId}, #{empId}, #{empName}, #{bizType}, #{bizAction},
-            #{resourceUrl}, #{requestMethod}, #{requestParams}, #{responseStatus},
-            #{errorMsg}, #{ipAddress}, #{userAgent}, #{executionTime}, #{reason}, #{createdTime}
-        )
-    </insert>
-
-    <!-- 根据主键查询 -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.governance.entity.AuditLog">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM AUDIT_LOG
-        WHERE id = #{id}
-    </select>
+    <!-- insert / selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 分页查询审计日志 -->
     <select id="selectByPage" resultType="com.bank.branch.platform.governance.entity.AuditLog">

@@ -1,5 +1,8 @@
 package com.bank.branch.platform.governance.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -12,9 +15,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("sys_job_conf")
 public class SysJobConf {
 
     /** 任务ID（UUID主键），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 任务KEY（唯一标识），对应 job_key */

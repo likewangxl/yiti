@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.governance.entity.SysJobRunLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -9,33 +10,12 @@ import java.util.List;
 
 /**
  * 任务执行日志 Mapper 接口，操作 sys_job_run_log 表。
+ * <p>
+ * insert / selectById / updateById 由 MyBatis-Plus BaseMapper 提供。
+ * </p>
  */
 @Mapper
-public interface JobRunLogMapper {
-
-    /**
-     * 新增执行日志记录。
-     *
-     * @param log 执行日志实体
-     * @return 受影响行数
-     */
-    int insert(SysJobRunLog log);
-
-    /**
-     * 根据主键查询执行日志。
-     *
-     * @param id 日志ID
-     * @return 执行日志实体，不存在时返回 null
-     */
-    SysJobRunLog selectById(String id);
-
-    /**
-     * 按主键动态更新执行日志。
-     *
-     * @param log 包含 id 及待更新字段的日志实体
-     * @return 受影响行数
-     */
-    int updateById(SysJobRunLog log);
+public interface JobRunLogMapper extends BaseMapper<SysJobRunLog> {
 
     /**
      * 判断指定任务是否存在 RUNNING 状态的执行日志（并发防控）。

@@ -47,28 +47,7 @@
           AND is_workday = 1
     </select>
 
-    <!-- 新增日历记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysCalendarDay">
-        INSERT INTO SYS_CALENDAR_DAY (
-            day, is_workday, remark,
-            created_by, created_time, updated_by, updated_time
-        ) VALUES (
-            #{day}, #{isWorkday}, #{remark},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按 day 主键更新日历记录 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysCalendarDay">
-        UPDATE SYS_CALENDAR_DAY
-        <set>
-            <if test="isWorkday != null">is_workday = #{isWorkday},</if>
-            <if test="remark != null">remark = #{remark},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE day = #{day}
-    </update>
+    <!-- insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 判断指定日期是否已存在 -->
     <select id="existsByDay" parameterType="java.time.LocalDate" resultType="boolean">

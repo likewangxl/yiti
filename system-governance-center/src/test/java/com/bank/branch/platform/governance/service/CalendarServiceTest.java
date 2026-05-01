@@ -146,11 +146,11 @@ class CalendarServiceTest {
         LocalDate futureDate = LocalDate.now().plusDays(30);
         SysCalendarDay existing = makeCalendarDay(futureDate, 1, null);
         when(calendarMapper.selectByDay(futureDate)).thenReturn(existing);
-        when(calendarMapper.updateById(any())).thenReturn(1);
+        when(calendarMapper.updateById((SysCalendarDay) any())).thenReturn(1);
 
         calendarService.toggleWorkday(futureDate);
 
-        verify(calendarMapper).updateById(argThat(day -> day.getIsWorkday() == 0));
+        verify(calendarMapper).updateById(argThat((SysCalendarDay day) -> day.getIsWorkday() == 0));
         // 验证缓存被清除
         verify(redisTemplate).delete("gov:calendar:" + futureDate.getYear());
     }
@@ -168,16 +168,16 @@ class CalendarServiceTest {
         when(calendarMapper.existsByDay(argThat(d ->
                 d != null && !d.equals(LocalDate.of(2026, 1, 1))
         ))).thenReturn(false);
-        when(calendarMapper.insert(any())).thenReturn(1);
+        when(calendarMapper.insert((SysCalendarDay) any())).thenReturn(1);
 
         calendarService.initYear(year);
 
         // 1月1日不应被插入（因为已存在）
-        verify(calendarMapper, never()).insert(argThat(day ->
+        verify(calendarMapper, never()).insert(argThat((SysCalendarDay day) ->
                 day.getDay().equals(LocalDate.of(2026, 1, 1))
         ));
         // 1月2日应被插入
-        verify(calendarMapper).insert(argThat(day ->
+        verify(calendarMapper).insert(argThat((SysCalendarDay day) ->
                 day.getDay().equals(LocalDate.of(2026, 1, 2))
         ));
         // 验证缓存被清除

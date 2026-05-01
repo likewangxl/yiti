@@ -44,31 +44,6 @@
         </where>
     </select>
 
-    <!-- 按主键动态更新配置信息 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysConfigKv">
-        UPDATE SYS_CONFIG_KV
-        <set>
-            <if test="configValue != null">config_value = #{configValue},</if>
-            <if test="valueType != null">value_type = #{valueType},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="remark != null">remark = #{remark},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
-
-    <!-- 新增配置记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysConfigKv">
-        INSERT INTO SYS_CONFIG_KV (
-            id, config_key, config_value, value_type,
-            status, remark,
-            created_by, created_time, updated_by, updated_time
-        ) VALUES (
-            #{id}, #{configKey}, #{configValue}, #{valueType},
-            #{status}, #{remark},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
+    <!-- insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>

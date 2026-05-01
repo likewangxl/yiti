@@ -2,6 +2,7 @@ package com.bank.branch.platform.governance.service;
 
 import com.bank.branch.platform.governance.config.QuartzConfig;
 import com.bank.branch.platform.governance.entity.SysJobConf;
+import com.bank.branch.platform.governance.entity.SysJobRunLog;
 import com.bank.branch.platform.governance.listener.JobExecutionLogger;
 import com.bank.branch.platform.governance.mapper.JobConfMapper;
 import com.bank.branch.platform.governance.mapper.JobRunLogMapper;
@@ -154,7 +155,7 @@ class JobServiceQuartzIntegrationIT {
         boolean inserted = false;
         while (System.currentTimeMillis() < deadline) {
             try {
-                verify(jobRunLogMapper, atLeastOnce()).insert(org.mockito.ArgumentMatchers.any());
+                verify(jobRunLogMapper, atLeastOnce()).insert((SysJobRunLog) org.mockito.ArgumentMatchers.any());
                 inserted = true;
                 break;
             } catch (AssertionError ignored) {

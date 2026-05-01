@@ -121,11 +121,11 @@ class ConfigServiceTest {
     void updateConfig_evictsCache() {
         SysConfigKv config = makeConfig("C_001", "app.name", "OldValue", "STRING");
         when(configMapper.selectByConfigKey("app.name")).thenReturn(config);
-        when(configMapper.updateById(any())).thenReturn(1);
+        when(configMapper.updateById((SysConfigKv) any())).thenReturn(1);
 
         configService.updateConfig("app.name", "NewValue", "test reason");
 
-        verify(configMapper).updateById(argThat(c -> "NewValue".equals(c.getConfigValue())));
+        verify(configMapper).updateById(argThat((SysConfigKv c) -> "NewValue".equals(c.getConfigValue())));
         verify(redisTemplate).delete("gov:config:app.name");
     }
 

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.governance.entity.SysCalendarDay;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,13 @@ import java.util.List;
  * <p>
  * 日历表以 day（DATE）为自然主键，存储每天的工作日/休息日状态。
  * </p>
+ * <p>
+ * insert / updateById 由 MyBatis-Plus BaseMapper 提供。
+ * selectByDay 与 BaseMapper.selectById(Serializable) 签名不同（参数类型 LocalDate），保留自定义实现。
+ * </p>
  */
 @Mapper
-public interface CalendarMapper {
+public interface CalendarMapper extends BaseMapper<SysCalendarDay> {
 
     /**
      * 根据日期查询单条日历记录。
@@ -49,22 +54,6 @@ public interface CalendarMapper {
      * @return 工作日天数
      */
     int countWorkingDays(@Param("from") LocalDate from, @Param("to") LocalDate to);
-
-    /**
-     * 新增日历记录。
-     *
-     * @param calendarDay 日历实体
-     * @return 受影响行数
-     */
-    int insert(SysCalendarDay calendarDay);
-
-    /**
-     * 按 day 主键更新日历记录。
-     *
-     * @param calendarDay 包含 day 及待更新字段的日历实体
-     * @return 受影响行数
-     */
-    int updateById(SysCalendarDay calendarDay);
 
     /**
      * 判断指定日期是否已存在日历记录。

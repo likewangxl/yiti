@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.governance.entity.UserNotification;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,25 +14,12 @@ import java.util.List;
  * 支持通知的插入、查询、已读状态更新等操作。
  * 分页查询支持按接收人工号和已读状态筛选。
  * </p>
+ * <p>
+ * insert / selectById 由 MyBatis-Plus BaseMapper 提供。
+ * </p>
  */
 @Mapper
-public interface NotificationMapper {
-
-    /**
-     * 插入通知记录。
-     *
-     * @param notification 通知实体
-     * @return 受影响行数
-     */
-    int insert(UserNotification notification);
-
-    /**
-     * 根据主键查询通知。
-     *
-     * @param id 通知ID
-     * @return 通知实体，不存在时返回 null
-     */
-    UserNotification selectById(String id);
+public interface NotificationMapper extends BaseMapper<UserNotification> {
 
     /**
      * 分页查询指定用户的通知列表。

@@ -18,14 +18,7 @@
         WHERE job_key = #{jobKey}
     </select>
 
-    <!-- 根据主键查询 -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.governance.entity.SysJobConf">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM SYS_JOB_CONF
-        WHERE id = #{id}
-    </select>
+    <!-- selectById / insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 分页查询任务配置列表 -->
     <select id="selectByPage" resultType="com.bank.branch.platform.governance.entity.SysJobConf">
@@ -53,38 +46,6 @@
             </if>
         </where>
     </select>
-
-    <!-- 新增任务配置记录（V1.6 新增 quartz_job_class / misfire_policy） -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
-        INSERT INTO SYS_JOB_CONF (
-            id, job_key, job_name, cron_expr, quartz_job_class, misfire_policy, status,
-            allow_manual_trigger, last_run_time, next_run_time, remark,
-            created_by, created_time, updated_by, updated_time
-        ) VALUES (
-            #{id}, #{jobKey}, #{jobName}, #{cronExpr}, #{quartzJobClass}, #{misfirePolicy}, #{status},
-            #{allowManualTrigger}, #{lastRunTime}, #{nextRunTime}, #{remark},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按主键动态更新任务配置（V1.6 新增 quartz_job_class / misfire_policy 分支） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysJobConf">
-        UPDATE SYS_JOB_CONF
-        <set>
-            <if test="jobName != null">job_name = #{jobName},</if>
-            <if test="cronExpr != null">cron_expr = #{cronExpr},</if>
-            <if test="quartzJobClass != null">quartz_job_class = #{quartzJobClass},</if>
-            <if test="misfirePolicy != null">misfire_policy = #{misfirePolicy},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="allowManualTrigger != null">allow_manual_trigger = #{allowManualTrigger},</if>
-            <if test="lastRunTime != null">last_run_time = #{lastRunTime},</if>
-            <if test="nextRunTime != null">next_run_time = #{nextRunTime},</if>
-            <if test="remark != null">remark = #{remark},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
 
     <!-- 根据 jobKey 同步更新 last_run_time（V1.6 quartz 整合 P1.5 引入） -->
     <update id="updateLastRunTime">

@@ -102,7 +102,7 @@ class FileServiceTest {
         // MinIO 不应被调用
         verify(minioClient, never()).putObject(any());
         // Mapper insert 不应被调用
-        verify(fileObjectMapper, never()).insert(any());
+        verify(fileObjectMapper, never()).insert((FileObject) any());
     }
 
     /**
@@ -124,7 +124,7 @@ class FileServiceTest {
         assertThat(result.getFileName()).isEqualTo("report.xlsx");
         assertThat(result.getUploadedBy()).isEqualTo("EMP002");
         verify(minioClient, times(1)).putObject(any());
-        verify(fileObjectMapper, times(1)).insert(any());
+        verify(fileObjectMapper, times(1)).insert((FileObject) any());
     }
 
     /**
@@ -153,7 +153,7 @@ class FileServiceTest {
 
         fileService.bindFile("LEAD", "L001", "F_001", "ATTACHMENT");
 
-        verify(bizFileRelMapper, never()).insert(any());
+        verify(bizFileRelMapper, never()).insert((BizFileRel) any());
     }
 
     /**
@@ -259,11 +259,11 @@ class FileServiceTest {
         when(fileObjectMapper.selectById("F_001")).thenReturn(fo);
         when(bizFileRelMapper.existsByBizTypeAndBizIdAndFileObjectId("LEAD", "L001", "F_001"))
                 .thenReturn(false);
-        when(bizFileRelMapper.insert(any(BizFileRel.class))).thenReturn(1);
+        when(bizFileRelMapper.insert((BizFileRel) any())).thenReturn(1);
 
         fileService.bindFile("LEAD", "L001", "F_001", "ATTACHMENT");
 
-        verify(bizFileRelMapper).insert(argThat(rel ->
+        verify(bizFileRelMapper).insert(argThat((BizFileRel rel) ->
                 "LEAD".equals(rel.getBizType())
                         && "L001".equals(rel.getBizId())
                         && "F_001".equals(rel.getFileObjectId())

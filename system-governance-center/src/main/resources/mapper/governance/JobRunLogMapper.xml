@@ -9,38 +9,7 @@
         created_by, created_time, scheduled_fire_time
     </sql>
 
-    <!-- 新增执行日志记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.governance.entity.SysJobRunLog">
-        INSERT INTO SYS_JOB_RUN_LOG (
-            id, job_id, trigger_type, reason,
-            start_time, end_time, status, error_msg,
-            created_by, created_time, scheduled_fire_time
-        ) VALUES (
-            #{id}, #{jobId}, #{triggerType}, #{reason},
-            #{startTime}, #{endTime}, #{status}, #{errorMsg},
-            #{createdBy}, #{createdTime}, #{scheduledFireTime}
-        )
-    </insert>
-
-    <!-- 根据主键查询执行日志 -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.governance.entity.SysJobRunLog">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM SYS_JOB_RUN_LOG
-        WHERE id = #{id}
-    </select>
-
-    <!-- 按主键动态更新执行日志 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.governance.entity.SysJobRunLog">
-        UPDATE SYS_JOB_RUN_LOG
-        <set>
-            <if test="status != null">status = #{status},</if>
-            <if test="endTime != null">end_time = #{endTime},</if>
-            <if test="errorMsg != null">error_msg = #{errorMsg},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- insert / selectById / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 判断指定任务是否存在 RUNNING 状态的执行日志（并发防控） -->
     <select id="existsRunningByJobId" parameterType="string" resultType="boolean">
