@@ -43,14 +43,7 @@
         LIMIT 1
     </select>
 
-    <!-- 根据主键ID查询 -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM PT_ROLE_BIZ_SCOPE
-        WHERE ID = #{id}
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 分页查询，按创建时间倒序 -->
     <select id="selectByPage"
@@ -82,38 +75,8 @@
         WHERE RECORD_STATUS = 0
     </select>
 
-    <!-- 新增业务范围配置 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
-        INSERT INTO PT_ROLE_BIZ_SCOPE (
-            ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS,
-            CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK
-        ) VALUES (
-            #{id}, #{roleId}, #{bizType}, #{dataScope}, #{recordStatus},
-            #{createTime}, #{createUser}, #{updateTime}, #{updateUser}, #{remark}
-        )
-    </insert>
-
-    <!-- 按主键动态更新业务范围配置，仅更新非 null 字段 -->
-    <update id="updateById"
-            parameterType="com.bank.branch.platform.auth.entity.PtRoleBizScope">
-        UPDATE PT_ROLE_BIZ_SCOPE
-        <set>
-            <if test="roleId != null">ROLE_ID = #{roleId},</if>
-            <if test="bizType != null">BIZ_TYPE = #{bizType},</if>
-            <if test="dataScope != null">DATA_SCOPE = #{dataScope},</if>
-            <if test="recordStatus != null">RECORD_STATUS = #{recordStatus},</if>
-            <if test="updateTime != null">UPDATE_TIME = #{updateTime},</if>
-            <if test="updateUser != null">UPDATE_USER = #{updateUser},</if>
-            <if test="remark != null">REMARK = #{remark},</if>
-        </set>
-        WHERE ID = #{id}
-    </update>
-
-    <!-- 按主键删除业务范围配置 -->
-    <delete id="deleteById" parameterType="string">
-        DELETE FROM PT_ROLE_BIZ_SCOPE
-        WHERE ID = #{id}
-    </delete>
+    <!-- insert / updateById / deleteById 由 MyBatis-Plus BaseMapper 提供
+         （updateById 默认 FieldStrategy.NOT_NULL，行为与原动态 SET 一致） -->
 
     <!-- 删除指定角色的全部业务范围配置，用于角色删除前的级联清理 -->
     <delete id="deleteByRoleId" parameterType="string">

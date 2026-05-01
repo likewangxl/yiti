@@ -37,39 +37,7 @@
         ORDER BY MENU_RANK_NO ASC
     </select>
 
-    <!-- 新增资源记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtResource">
-        INSERT INTO PT_RESOURCE (
-            RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL,
-            MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID,
-            STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK
-        ) VALUES (
-            #{resourceId}, #{resourceUrl}, #{resourceMethod}, #{menuName}, #{menuIconUrl},
-            #{menuRankNo}, #{isMenu}, #{menuEndflag}, #{parentResourceId},
-            #{status}, #{sysCode}, #{createTime}, #{createUser}, #{updateTime}, #{updateUser}, #{remark}
-        )
-    </insert>
-
-    <!-- 按主键动态更新资源信息 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.auth.entity.PtResource">
-        UPDATE PT_RESOURCE
-        <set>
-            <if test="resourceUrl != null">RESOURCE_URL = #{resourceUrl},</if>
-            <if test="resourceMethod != null">RESOURCE_METHOD = #{resourceMethod},</if>
-            <if test="menuName != null">MENU_NAME = #{menuName},</if>
-            <if test="menuIconUrl != null">MENU_ICON_URL = #{menuIconUrl},</if>
-            <if test="menuRankNo != null">MENU_RANK_NO = #{menuRankNo},</if>
-            <if test="isMenu != null">ISMENU = #{isMenu},</if>
-            <if test="menuEndflag != null">MENU_ENDFLAG = #{menuEndflag},</if>
-            <if test="parentResourceId != null">PARENT_RESOURCE_ID = #{parentResourceId},</if>
-            <if test="status != null">STATUS = #{status},</if>
-            <if test="sysCode != null">SYS_CODE = #{sysCode},</if>
-            <if test="updateTime != null">UPDATE_TIME = #{updateTime},</if>
-            <if test="updateUser != null">UPDATE_USER = #{updateUser},</if>
-            <if test="remark != null">REMARK = #{remark},</if>
-        </set>
-        WHERE RESOURCE_ID = #{resourceId}
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供，此处不再重复定义 -->
 
     <!--
         根据 URL + Method + SysCode 精确匹配资源，用于请求鉴权热路径。

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.service;
 
 import com.bank.branch.platform.auth.entity.PtRole;
+import com.bank.branch.platform.auth.entity.PtRoleResource;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
 import com.bank.branch.platform.auth.mapper.ResourceMapper;
@@ -44,7 +45,7 @@ class RoleResourceServiceTest {
 
         roleResourceService.bindResources("R_RM", List.of("RES_01"), "原因");
 
-        verify(roleResourceMapper, never()).insert(any());
+        verify(roleResourceMapper, never()).insert(any(PtRoleResource.class));
         verify(cacheService).evictRoleResourceCache("R_RM");
     }
 
@@ -52,11 +53,11 @@ class RoleResourceServiceTest {
     void bindResources_shouldInsertNewBindings() {
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
         when(roleResourceMapper.existsByRoleIdAndResourceId("R_RM", "RES_01")).thenReturn(false);
-        when(roleResourceMapper.insert(any())).thenReturn(1);
+        when(roleResourceMapper.insert(any(PtRoleResource.class))).thenReturn(1);
 
         roleResourceService.bindResources("R_RM", List.of("RES_01"), "原因");
 
-        verify(roleResourceMapper).insert(any());
+        verify(roleResourceMapper).insert(any(PtRoleResource.class));
         verify(cacheService).evictRoleResourceCache("R_RM");
         verify(eventPublisher).publishEvent(any());
     }
@@ -64,12 +65,12 @@ class RoleResourceServiceTest {
     @Test
     void replaceResources_shouldDeleteThenInsert() {
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(makeRole("R_RM"));
-        when(roleResourceMapper.insert(any())).thenReturn(1);
+        when(roleResourceMapper.insert(any(PtRoleResource.class))).thenReturn(1);
 
         roleResourceService.replaceResources("R_RM", List.of("RES_01", "RES_02"), "替换原因");
 
         verify(roleResourceMapper).deleteByRoleId("R_RM");
-        verify(roleResourceMapper, times(2)).insert(any());
+        verify(roleResourceMapper, times(2)).insert(any(PtRoleResource.class));
         verify(cacheService).evictRoleResourceCache("R_RM");
     }
 
@@ -80,7 +81,7 @@ class RoleResourceServiceTest {
         roleResourceService.replaceResources("R_RM", List.of(), "清空原因");
 
         verify(roleResourceMapper).deleteByRoleId("R_RM");
-        verify(roleResourceMapper, never()).insert(any());
+        verify(roleResourceMapper, never()).insert(any(PtRoleResource.class));
         verify(cacheService).evictRoleResourceCache("R_RM");
     }
 

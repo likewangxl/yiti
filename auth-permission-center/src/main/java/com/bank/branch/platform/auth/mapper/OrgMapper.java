@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,9 +14,13 @@ import java.util.List;
  * selectAll() 适合在系统启动时缓存完整机构树；
  * selectChildren() 用于按层级懒加载机构节点。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，标准 CRUD 由 BaseMapper 提供。
+ * 本 Mapper 所有方法均为自定义查询，不与 BaseMapper 冲突，全部保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface OrgMapper {
+public interface OrgMapper extends BaseMapper<ExtOrgInfo> {
 
     /**
      * 根据机构编码查询机构信息（利用唯一索引 uk_ext_org_info_org_code）。

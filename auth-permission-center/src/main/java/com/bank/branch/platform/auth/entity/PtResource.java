@@ -1,5 +1,8 @@
 package com.bank.branch.platform.auth.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -13,9 +16,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("PT_RESOURCE")
 public class PtResource {
 
-    /** 资源ID，对应 RESOURCE_ID */
+    /** 资源ID，对应 RESOURCE_ID；业务赋值，非自增 */
+    @TableId(value = "RESOURCE_ID", type = IdType.INPUT)
     private String resourceId;
 
     /** 资源URL（支持 Ant 通配符），对应 RESOURCE_URL */

@@ -52,7 +52,7 @@ class RoleServiceTest {
     @Test
     void createRole_shouldInsertAndReturnDto() {
         when(roleMapper.selectByRoleCode("NEW_ROLE")).thenReturn(null);
-        when(roleMapper.insert(any())).thenReturn(1);
+        when(roleMapper.insert(any(PtRole.class))).thenReturn(1);
         RoleRespDTO dto = roleService.createRole("NEW_ROLE", "新角色", "备注");
         assertThat(dto.getRoleCode()).isEqualTo("NEW_ROLE");
         assertThat(dto.getRoleChName()).isEqualTo("新角色");
@@ -71,7 +71,7 @@ class RoleServiceTest {
     void updateRole_shouldUpdateNameAndRemark() {
         PtRole existing = makeRole("R_RM", "CUST_MANAGER", "客户经理");
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(existing);
-        when(roleMapper.updateById(any())).thenReturn(1);
+        when(roleMapper.updateById(any(PtRole.class))).thenReturn(1);
         RoleRespDTO dto = roleService.updateRole("R_RM", "客户经理V2", "新备注");
         assertThat(dto.getRoleChName()).isEqualTo("客户经理V2");
     }
@@ -80,9 +80,9 @@ class RoleServiceTest {
     void deleteRole_shouldSetRecordStatusToOne() {
         PtRole existing = makeRole("R_RM", "CUST_MANAGER", "客户经理");
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(existing);
-        when(roleMapper.updateById(any())).thenReturn(1);
+        when(roleMapper.updateById(any(PtRole.class))).thenReturn(1);
         roleService.deleteRole("R_RM", "测试删除");
-        verify(roleMapper).updateById(argThat(r -> r.getRecordStatus() == 1));
+        verify(roleMapper).updateById(argThat((PtRole r) -> r.getRecordStatus() == 1));
     }
 
     @Test

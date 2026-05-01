@@ -9,11 +9,7 @@
         WHERE ROLE_ID = #{roleId}
     </select>
 
-    <!-- 新增角色资源授权记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtRoleResource">
-        INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
-        VALUES (#{id}, #{roleId}, #{resourceId}, #{sysCode}, #{createTime})
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供，此处不再重复定义 -->
 
     <!--
         删除指定角色的全部资源授权。

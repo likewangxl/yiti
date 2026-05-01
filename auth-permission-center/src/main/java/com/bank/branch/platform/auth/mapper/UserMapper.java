@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.auth.entity.PtUser;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,9 +12,14 @@ import java.util.List;
  * <p>
  * 仅暴露本模块内部所需的最小 SQL 操作集合，禁止在此接口中添加跨模块业务逻辑。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code updateById(T)} 由 BaseMapper 提供
+ * （动态 SET：仅更新非 null 字段，与原 XML updateById 行为一致）。
+ * 自定义业务查询继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface UserMapper {
+public interface UserMapper extends BaseMapper<PtUser> {
 
     /**
      * 根据用户ID查询用户信息。
@@ -82,11 +88,4 @@ public interface UserMapper {
      */
     int updateLockedStatus(@Param("userId") String userId, @Param("locked") int locked);
 
-    /**
-     * 按主键（userId）更新用户信息，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param user 包含 userId 及待更新字段的用户实体
-     * @return 受影响行数
-     */
-    int updateById(PtUser user);
 }

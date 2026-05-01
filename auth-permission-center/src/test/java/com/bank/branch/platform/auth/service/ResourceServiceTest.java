@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO;
 import com.bank.branch.platform.auth.entity.PtResource;
 import com.bank.branch.platform.auth.mapper.ResourceMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
+import org.mockito.ArgumentMatchers;
 import com.bank.branch.platform.common.web.exception.BizException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +46,7 @@ class ResourceServiceTest {
     @Test
     void createResource_shouldInsertAndEvictCache() {
         when(resourceMapper.selectByUrlAndMethod("/api/new", "POST", "PLATFORM")).thenReturn(null);
-        when(resourceMapper.insert(any())).thenReturn(1);
+        when(resourceMapper.insert(any(PtResource.class))).thenReturn(1);
         ResourceTreeNodeDTO dto = resourceService.createResource("/api/new", "POST", "新资源", 1, null, 0, null, "PLATFORM");
         assertThat(dto.getResourceUrl()).isEqualTo("/api/new");
         verify(cacheService).evictAllResourceCache();
@@ -66,9 +67,9 @@ class ResourceServiceTest {
         PtResource r = makeResource("RES_001", "/api/leaf", "GET");
         when(resourceMapper.selectByResourceId("RES_001")).thenReturn(r);
         when(resourceMapper.countChildren("RES_001")).thenReturn(0L);
-        when(resourceMapper.updateById(any())).thenReturn(1);
+        when(resourceMapper.updateById(any(PtResource.class))).thenReturn(1);
         resourceService.deleteResource("RES_001", "删除原因");
-        verify(resourceMapper).updateById(argThat(res -> res.getStatus() == 1));
+        verify(resourceMapper).updateById(org.mockito.ArgumentMatchers.<PtResource>argThat(res -> res.getStatus() == 1));
         verify(roleResourceMapper).deleteByResourceId("RES_001");
         verify(cacheService).evictAllResourceCache();
     }

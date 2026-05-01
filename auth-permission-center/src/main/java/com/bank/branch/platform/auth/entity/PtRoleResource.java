@@ -1,5 +1,8 @@
 package com.bank.branch.platform.auth.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -12,9 +15,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("PT_ROLE_RESOURCE")
 public class PtRoleResource {
 
-    /** 主键ID，对应 ID */
+    /** 主键ID，对应 ID；业务赋值（UUID），非自增 */
+    @TableId(value = "ID", type = IdType.INPUT)
     private String id;
 
     /** 角色ID，对应 ROLE_ID */

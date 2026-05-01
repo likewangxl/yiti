@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.auth.entity.PtRoleBizScope;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,9 +14,15 @@ import java.util.List;
  * selectAll() 用于启动时将全量配置加载到缓存，后续查询直接走缓存，
  * 避免每次鉴权都访问数据库。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} / {@code deleteById(Serializable)}
+ * 由 BaseMapper 提供（动态 SET 行为：FieldStrategy.NOT_NULL，与原 XML updateById 一致）。
+ * 自定义 SQL（按业务字段查询、自定义分页、级联删除）继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface RoleBizScopeMapper {
+public interface RoleBizScopeMapper extends BaseMapper<PtRoleBizScope> {
 
     /**
      * 查询指定角色的全部业务范围配置。
@@ -35,14 +42,6 @@ public interface RoleBizScopeMapper {
      */
     PtRoleBizScope selectByRoleIdAndBizType(@Param("roleId") String roleId,
                                             @Param("bizType") String bizType);
-
-    /**
-     * 根据主键ID查询业务范围配置。
-     *
-     * @param id 主键ID
-     * @return 业务范围实体，不存在时返回 null
-     */
-    PtRoleBizScope selectById(String id);
 
     /**
      * 分页查询业务范围配置，支持按角色ID和业务类型过滤。
@@ -70,34 +69,11 @@ public interface RoleBizScopeMapper {
 
     /**
      * 查询全量业务范围配置，用于系统启动时加载到 Redis 缓存。
+     * 仅返回 RECORD_STATUS = 0（可用）的记录。
      *
      * @return 全部有效的业务范围配置列表
      */
     List<PtRoleBizScope> selectAll();
-
-    /**
-     * 新增业务范围配置记录。
-     *
-     * @param scope 业务范围实体
-     * @return 受影响行数
-     */
-    int insert(PtRoleBizScope scope);
-
-    /**
-     * 按主键（id）更新业务范围配置，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param scope 包含 id 及待更新字段的业务范围实体
-     * @return 受影响行数
-     */
-    int updateById(PtRoleBizScope scope);
-
-    /**
-     * 按主键删除业务范围配置记录。
-     *
-     * @param id 主键ID
-     * @return 受影响行数
-     */
-    int deleteById(String id);
 
     /**
      * 删除指定角色的全部业务范围配置，通常在角色删除前的级联清理中调用。

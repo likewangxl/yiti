@@ -1,5 +1,8 @@
 package com.bank.branch.platform.auth.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,9 +17,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("PT_USER")
 public class PtUser {
 
-    /** 用户ID（工号），对应 USER_ID */
+    /** 用户ID（工号），对应 USER_ID；业务赋值（工号字符串），非自增 */
+    @TableId(value = "USER_ID", type = IdType.INPUT)
     private String userId;
 
     /** 用户姓名（登录名），对应 USERNAME */

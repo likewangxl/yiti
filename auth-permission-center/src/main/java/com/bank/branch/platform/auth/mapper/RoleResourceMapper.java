@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.auth.entity.PtRoleResource;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,13 @@ import java.util.List;
  * 维护角色与接口资源/菜单的授权关系。批量操作（如重新授权）建议先 deleteByRoleId 再批量 insert，
  * 不使用 merge/upsert 以保证行为可预期。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} 由 BaseMapper 提供。
+ * 自定义业务查询和删除操作继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface RoleResourceMapper {
+public interface RoleResourceMapper extends BaseMapper<PtRoleResource> {
 
     /**
      * 查询指定角色已授权的资源ID列表，用于权限缓存及授权页面回显。
@@ -23,14 +28,6 @@ public interface RoleResourceMapper {
      * @return 资源ID列表
      */
     List<String> selectResourceIdsByRoleId(String roleId);
-
-    /**
-     * 新增角色资源授权记录。
-     *
-     * @param roleResource 角色资源关联实体
-     * @return 受影响行数
-     */
-    int insert(PtRoleResource roleResource);
 
     /**
      * 删除指定角色的全部资源授权，通常在重新授权前调用。

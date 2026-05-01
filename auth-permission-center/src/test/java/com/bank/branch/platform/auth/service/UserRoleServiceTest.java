@@ -71,7 +71,7 @@ class UserRoleServiceTest {
         role.setRoleCode("SYS_ADMIN");
         when(roleMapper.selectByRoleId("R_ADMIN")).thenReturn(role);
         when(userRoleMapper.selectRoleIdsByUserId("E001")).thenReturn(List.of());
-        when(userRoleMapper.insert(any())).thenReturn(1);
+        when(userRoleMapper.insert(any(PtUserRole.class))).thenReturn(1);
 
         userRoleService.bindRoles("E001", List.of("R_ADMIN"), "原因");
 

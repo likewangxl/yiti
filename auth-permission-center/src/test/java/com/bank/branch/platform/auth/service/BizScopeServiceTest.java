@@ -116,7 +116,7 @@ class BizScopeServiceTest {
         role.setRoleCode("CUST_MANAGER");
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(role);
         when(roleBizScopeMapper.selectByRoleIdAndBizType("R_RM", "LEAD")).thenReturn(null);
-        when(roleBizScopeMapper.insert(any())).thenReturn(1);
+        when(roleBizScopeMapper.insert(any(PtRoleBizScope.class))).thenReturn(1);
 
         BizScopeRespDTO dto = bizScopeService.saveBizScope("R_RM", "LEAD", "SELF_CREATED", "原因");
 
@@ -190,8 +190,8 @@ class BizScopeServiceTest {
         BizScopeRespDTO dto = bizScopeService.saveBizScope("R_RM", "LEAD", "ALL", "升级权限");
 
         assertThat(dto.getDataScope()).isEqualTo("ALL");
-        verify(roleBizScopeMapper).updateById(argThat(s -> "ALL".equals(s.getDataScope())));
-        verify(roleBizScopeMapper, never()).insert(any());
+        verify(roleBizScopeMapper).updateById(argThat((PtRoleBizScope s) -> "ALL".equals(s.getDataScope())));
+        verify(roleBizScopeMapper, never()).insert(any(PtRoleBizScope.class));
     }
 
     @Test

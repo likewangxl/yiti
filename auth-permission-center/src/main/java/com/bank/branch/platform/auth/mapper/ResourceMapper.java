@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.auth.entity.PtResource;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,9 +14,14 @@ import java.util.List;
  * selectByUrlAndMethod 用于请求鉴权时的 URL 匹配查询，属于高频操作，
  * 建议结合 Redis 缓存使用。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * 自定义业务查询继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface ResourceMapper {
+public interface ResourceMapper extends BaseMapper<PtResource> {
 
     /**
      * 根据资源ID查询资源。
@@ -34,22 +40,6 @@ public interface ResourceMapper {
      */
     List<PtResource> selectAll(@Param("status") Integer status,
                                @Param("sysCode") String sysCode);
-
-    /**
-     * 新增资源记录。
-     *
-     * @param resource 资源实体
-     * @return 受影响行数
-     */
-    int insert(PtResource resource);
-
-    /**
-     * 按主键（resourceId）更新资源信息，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param resource 包含 resourceId 及待更新字段的资源实体
-     * @return 受影响行数
-     */
-    int updateById(PtResource resource);
 
     /**
      * 根据 URL、请求方法、系统编号精确匹配资源，用于请求鉴权。

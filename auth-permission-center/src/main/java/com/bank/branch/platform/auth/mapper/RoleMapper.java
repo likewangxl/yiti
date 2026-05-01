@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.auth.entity.PtRole;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,9 +12,14 @@ import java.util.List;
  * <p>
  * 提供角色的基础 CRUD 及关联查询能力，分页查询采用物理分页（LIMIT/OFFSET）。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * 自定义业务查询（selectByRoleId、selectByRoleCode、selectByPage 等）继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface RoleMapper {
+public interface RoleMapper extends BaseMapper<PtRole> {
 
     /**
      * 根据角色ID查询角色信息。
@@ -54,22 +60,6 @@ public interface RoleMapper {
      */
     long countByPage(@Param("keyword") String keyword,
                      @Param("recordStatus") Integer recordStatus);
-
-    /**
-     * 新增角色记录。
-     *
-     * @param role 角色实体
-     * @return 受影响行数
-     */
-    int insert(PtRole role);
-
-    /**
-     * 按主键（roleId）更新角色信息，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param role 包含 roleId 及待更新字段的角色实体
-     * @return 受影响行数
-     */
-    int updateById(PtRole role);
 
     /**
      * 查询指定用户已分配的角色列表，通过 PT_USER_ROLE 关联。

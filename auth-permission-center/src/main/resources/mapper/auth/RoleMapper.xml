@@ -56,31 +56,7 @@
         <include refid="PAGE_WHERE"/>
     </select>
 
-    <!-- 新增角色 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.PtRole">
-        INSERT INTO PT_ROLE (
-            ROLE_ID, ROLE_CODE, ROLE_CHNAME, RECORD_STATUS, SYS_CODE,
-            CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK
-        ) VALUES (
-            #{roleId}, #{roleCode}, #{roleChName}, #{recordStatus}, #{sysCode},
-            #{createTime}, #{createUser}, #{updateTime}, #{updateUser}, #{remark}
-        )
-    </insert>
-
-    <!-- 按主键动态更新角色信息 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.auth.entity.PtRole">
-        UPDATE PT_ROLE
-        <set>
-            <if test="roleCode != null">ROLE_CODE = #{roleCode},</if>
-            <if test="roleChName != null">ROLE_CHNAME = #{roleChName},</if>
-            <if test="recordStatus != null">RECORD_STATUS = #{recordStatus},</if>
-            <if test="sysCode != null">SYS_CODE = #{sysCode},</if>
-            <if test="updateTime != null">UPDATE_TIME = #{updateTime},</if>
-            <if test="updateUser != null">UPDATE_USER = #{updateUser},</if>
-            <if test="remark != null">REMARK = #{remark},</if>
-        </set>
-        WHERE ROLE_ID = #{roleId}
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供，此处不再重复定义 -->
 
     <!--
         查询指定用户已分配的角色，通过 PT_USER_ROLE 关联。
