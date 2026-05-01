@@ -56,6 +56,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><strong>设计选择</strong>：cust_master.lead_id 表设计中无 UNIQUE 约束，所以重复
  * 表现为 cust_master 出现 2 行而非 DuplicateKeyException 抛错。断言行数 = 1 是关键。</p>
+ *
+ * <p><strong>V1.11#1 注（2026-05-01）</strong>：方向 C 改造已删除 LeadApprovedEvent / LeadApprovedListener；
+ * 幂等保护现由 reconcileApproved 内 conditionalUpdateStatus(IN_APPROVAL → APPROVED) 提供：
+ * 第二次 publishProcessCompletedInTransaction 触发时状态已为 APPROVED，conditionalUpdate 返 0 早返回，
+ * 不再调 assembler，cust_master 保持 1 行。本 IT 已转绿。</p>
  */
 @SpringBootTest
 @ActiveProfiles("test")

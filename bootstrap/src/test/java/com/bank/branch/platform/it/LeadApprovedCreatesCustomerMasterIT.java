@@ -66,6 +66,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>不依赖 BPMN / Flowable，仅依赖 Spring 事件机制 + WorkflowCallbackListener.onProcessCompleted</li>
  *   <li>cust_claim 链路不在本范围（属 ClaimService.claim 主动认领，独立次链路）</li>
  * </ul>
+ *
+ * <p><strong>V1.11#1 注（2026-05-01）</strong>：方向 C 改造已删除 LeadApprovedListener
+ * 与 LeadApprovedEvent；reconcileApproved 改为同步调用 CustMasterAssemblerService。
+ * 上文链路描述保留作为 bug 由来历史，本 IT 通过新链路（reconcile 同步调 assembler）等价覆盖
+ * cust_master 创建语义。</p>
  */
 @SpringBootTest
 @ActiveProfiles("test")

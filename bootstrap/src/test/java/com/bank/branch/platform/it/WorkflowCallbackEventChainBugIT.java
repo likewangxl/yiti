@@ -65,6 +65,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><strong>预期</strong>：当前生产代码（{@code fallbackExecution=true}，无 {@code @Transactional}）下断言 fail，
  * cust_master 永不创建。修复后断言转绿。</p>
+ *
+ * <p><strong>V1.11#1 注（2026-05-01）</strong>：D-0 实证根因为 H1（Spring 6.x AFTER_COMMIT 嵌套
+ * @Transactional 子链路下 INSERT 不持久化）。方向 C 修复已删除 LeadApprovedListener / LeadApprovedEvent，
+ * reconcileApproved 改为同步调 assembler。本 IT 已转绿。上文链路描述保留作为 P0 bug 由来历史。</p>
  */
 @SpringBootTest
 @ActiveProfiles("test")
