@@ -252,3 +252,8 @@ com.bank.branch.platform.<module>/
 ### TDD (测试驱动开发) 绝对红线
 - **红-绿-重构 (Red-Green-Refactor) 闭环**：一切特性的开发或者 Bug 修复，必须先写测试（让他失败，Red），再写最简代码让他通过（Green），最后重构优化（Refactor）。
 - **禁止事后狂补测试**：严禁无视 TDD，先凭直觉写完一大堆业务逻辑再去凑测试的行为。
+
+### 子代理派遣规范（绝对红线）
+- **派遣任何 subagent（Agent 工具）时，model 参数必须 ≥ sonnet（即只能是 `sonnet` 或 `opus`），禁止使用 `haiku`**。
+- 即使 plan 文档建议"机械任务用 cheap model"，也要降级到 sonnet 而非 haiku。
+- 此规则适用于全部 subagent 类型（executor、explore、code-reviewer、debugger 等），无例外。
