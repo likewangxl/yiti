@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 激活（STATUS 1→0）。本 IT 在 Q8.6 后调整为"名单存在"+"V1_0_1 基线启用"
  * 两项不变语义，以避免与后续版本耦合。
  *
- * <p>测试环境：本地 MySQL onepl_test_v103（Docker 不可用，降级）。
+ * <p>测试环境：本地 MySQL onepl_test_bootstrap（Docker 不可用，降级）。
  */
 class V1_0_4FlywayIT extends PerformanceFlywayTestBase {
 

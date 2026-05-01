@@ -33,7 +33,7 @@ import java.sql.SQLException;
  * </ol>
  *
  * <p>测试环境（{@code application-test.yml} 未配置 {@code rpt.datasource.read-only.url}）时
- * 默认回填到主库 onepl_test_v103，仅用于守护 Bean 存在 + readOnly 开关；真实生产前必须替换为
+ * 默认回填到主库 onepl_test_bootstrap，仅用于守护 Bean 存在 + readOnly 开关；真实生产前必须替换为
  * {@code sql_probe_readonly} 等独立账号。
  */
 @Configuration

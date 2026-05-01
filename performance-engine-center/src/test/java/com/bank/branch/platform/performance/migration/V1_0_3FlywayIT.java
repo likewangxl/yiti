@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * V1_0_3 Flyway 迁移集成测试.
  *
- * <p>测试环境：本地 MySQL onepl_test_v103（Docker 不可用，降级）。
+ * <p>测试环境：本地 MySQL onepl_test_bootstrap（Docker 不可用，降级）。
  * <p>验证 V1_0_3 脚本在全量迁移后正确建立索引和新增字段。
  */
 class V1_0_3FlywayIT extends PerformanceFlywayTestBase {

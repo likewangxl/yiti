@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Green（S2.1 Step 3）：V1_4_0__perf_target_owner_cols.sql 创建后全部通过</li>
  * </ul>
  *
- * <p>测试环境：本地 MySQL onepl_test_v103（与 V1_3_0 / V1_2_5 IT 一致）。
+ * <p>测试环境：本地 MySQL onepl_test_bootstrap（与 V1_3_0 / V1_2_5 IT 一致）。
  */
 class V1_4_0FlywayIT extends PerformanceFlywayTestBase {
 

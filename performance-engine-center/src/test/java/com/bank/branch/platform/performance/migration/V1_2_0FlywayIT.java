@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * V1_2_0 Flyway 迁移集成测试.
  *
- * <p>测试环境：本地 MySQL onepl_test_v103（Docker 不可用，降级）。
+ * <p>测试环境：本地 MySQL onepl_test_bootstrap（Docker 不可用，降级）。
  *
  * <p>验证 V1_2_0__perf_v12_adjust_tables.sql 脚本在全量迁移后正确建立 V1.2 调整申请 3 张表：
  * <ul>

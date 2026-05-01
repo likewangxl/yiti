@@ -12,7 +12,7 @@
 --   BizType 单档使用 common-security BizType.REPORT。
 --
 -- 依赖前置：本脚本运行环境必须先有 pt_resource / pt_role / pt_role_resource / pt_role_biz_scope 4 张表
--- （由 auth-permission-center 的基线 DDL 创建）。生产环境通常已就绪；测试环境 onepl_test_v103
+-- （由 auth-permission-center 的基线 DDL 创建）。生产环境通常已就绪；测试环境 onepl_test_bootstrap
 -- 库已经从平台 DDL 整体导入。
 --
 -- 幂等设计：使用 INSERT ... ON DUPLICATE KEY UPDATE 让脚本可重复运行，避免 Flyway 失败留痕。

@@ -49,7 +49,7 @@ class V1_0_6FlywayIT extends ReportFlywayTestBase {
 
     @Test
     void rptExportResources_bindingScript_shouldBeIdempotent() {
-        // pt_role 在测试 schema（onepl_test_v103）通常为空，绑定语句应幂等不出错。
+        // pt_role 在测试 schema（onepl_test_bootstrap）通常为空，绑定语句应幂等不出错。
         // 仅验证 pt_role_resource 表中查询不抛异常即可（实际绑定取决于 PT_* 测试种子是否注入）。
         Integer cnt = jdbc.queryForObject(
             "SELECT COUNT(*) FROM pt_role_resource prr " +

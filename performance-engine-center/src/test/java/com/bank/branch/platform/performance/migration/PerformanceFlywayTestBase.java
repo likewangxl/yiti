@@ -11,7 +11,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 /**
  * Flyway 迁移集成测试共享基类（本地 MySQL 降级版本）.
  *
- * <p>注意：Docker 不可用，故降级为本地 MySQL onepl_test_v103 数据库。
+ * <p>注意：Docker 不可用，故降级为本地 MySQL onepl_test_bootstrap 数据库。
  * 每次测试前建议手动重建该库，或依赖 Flyway baseline-on-migrate=false 做全量迁移。
  *
  * <p>使用 PerformanceMigrationApp 作为 SpringBootTest 上下文，
@@ -21,7 +21,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 @SpringBootTest(classes = {com.bank.branch.platform.performance.support.PerfTestApp.class, com.bank.branch.platform.performance.support.PerfTestConfig.class})
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:mysql://localhost:3306/onepl_test_v103?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true",
+    "spring.datasource.url=jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true",
     "spring.datasource.username=root",
     "spring.datasource.password=djdev",
     "spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver",

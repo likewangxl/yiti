@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
  *   <li>RptExportFacade 后续 fileApi.getDownloadUrl(fileKey) 调用语义对齐</li>
  * </ul>
  *
- * <p>前置：本地 MySQL onepl_test_v103 + Redis 6379 + Flyway V1_0_0 ~ V1_0_6 已迁移.
+ * <p>前置：本地 MySQL onepl_test_bootstrap + Redis 6379 + Flyway V1_0_0 ~ V1_0_6 已迁移.
  * 不依赖真实 MinIO（FileApi 用 @MockBean 替换）.
  *
  * <p>差异 vs ExportStrategiesTest：后者纯 mock 单元，本 IT 覆盖 Service 调度状态机

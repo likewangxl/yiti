@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Green（R0.2 Step 3）：V1_3_0__perf_run_task_uk.sql 创建后全部通过</li>
  * </ul>
  *
- * <p>测试环境：本地 MySQL onepl_test_v103（Docker 不可用，降级）。
+ * <p>测试环境：本地 MySQL onepl_test_bootstrap（Docker 不可用，降级）。
  */
 class V1_3_0FlywayIT extends PerformanceFlywayTestBase {
 

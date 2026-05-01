@@ -8,7 +8,7 @@
 --   1) 登记 V1.2 基线版本号（flyway_schema_history 1.2.0），标识 V1.2 迁移链就位；
 --   2) 使用 CREATE TABLE IF NOT EXISTS 兼容既有环境：
 --      - 生产环境 onepl 通过 docs/schema/ddl-performance.sql 已建 3 张表；
---      - 测试库 onepl_test_v103 通过 V1_0_0 基线脚本已建 3 张表；
+--      - 测试库 onepl_test_bootstrap 通过 V1_0_0 基线脚本已建 3 张表；
 --      - 全新环境首次建库时本脚本负责创建 3 张表（与生产 DDL 完全一致）。
 --
 -- 涵盖表：
