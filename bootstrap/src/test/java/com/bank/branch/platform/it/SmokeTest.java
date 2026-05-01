@@ -43,12 +43,12 @@ class SmokeTest {
         Long userCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM PT_USER", Long.class);
         assertThat(userCount).isGreaterThanOrEqualTo(3);
 
-        // 4. governance 表: sys_dict 有数据
-        Long dictCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM sys_dict", Long.class);
+        // 4. governance 表: SYS_DICT 有数据
+        Long dictCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SYS_DICT", Long.class);
         assertThat(dictCount).isGreaterThanOrEqualTo(4);
 
-        // 5. workflow 表: biz_process_map 有数据
-        Long mapCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM biz_process_map", Long.class);
+        // 5. workflow 表: BIZ_PROCESS_MAP 有数据
+        Long mapCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM BIZ_PROCESS_MAP", Long.class);
         assertThat(mapCount).isGreaterThanOrEqualTo(3);
     }
 }

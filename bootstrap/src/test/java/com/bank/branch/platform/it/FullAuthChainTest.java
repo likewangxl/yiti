@@ -82,9 +82,9 @@ class FullAuthChainTest {
     // ========== 场景 3: 数据库验证所有模块表数据正常 ==========
 
     @Test
-    @DisplayName("数据库验证 - workflow 模块 biz_process_map 数据存在")
+    @DisplayName("数据库验证 - workflow 模块 BIZ_PROCESS_MAP 数据存在")
     void workflowData_exists() {
-        Long mapCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM biz_process_map", Long.class);
+        Long mapCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM BIZ_PROCESS_MAP", Long.class);
         assertThat(mapCount).isGreaterThanOrEqualTo(3);
     }
 
@@ -96,9 +96,9 @@ class FullAuthChainTest {
     }
 
     @Test
-    @DisplayName("数据库验证 - governance 模块 sys_dict 数据存在")
+    @DisplayName("数据库验证 - governance 模块 SYS_DICT 数据存在")
     void governanceData_exists() {
-        Long dictCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM sys_dict", Long.class);
+        Long dictCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM SYS_DICT", Long.class);
         assertThat(dictCount).isGreaterThanOrEqualTo(4);
     }
 }
