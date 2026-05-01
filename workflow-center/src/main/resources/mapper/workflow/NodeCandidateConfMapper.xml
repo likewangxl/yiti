@@ -28,46 +28,6 @@
         WHERE process_definition_key = #{processDefinitionKey}
     </select>
 
-    <!-- 根据主键ID查询候选人配置 -->
-    <select id="selectById"
-            resultType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM WF_NODE_CANDIDATE_CONF
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
-
-    <!-- 新增候选人配置记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
-        INSERT INTO WF_NODE_CANDIDATE_CONF (
-            id, process_definition_key, node_key,
-            candidate_type, candidate_value,
-            created_time, updated_time
-        ) VALUES (
-            #{id}, #{processDefinitionKey}, #{nodeKey},
-            #{candidateType}, #{candidateValue},
-            #{createdTime}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按主键动态更新候选人配置 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.workflow.entity.WfNodeCandidateConf">
-        UPDATE WF_NODE_CANDIDATE_CONF
-        <set>
-            <if test="processDefinitionKey != null">process_definition_key = #{processDefinitionKey},</if>
-            <if test="nodeKey != null">node_key = #{nodeKey},</if>
-            <if test="candidateType != null">candidate_type = #{candidateType},</if>
-            <if test="candidateValue != null">candidate_value = #{candidateValue},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
-
-    <!-- 按主键删除候选人配置 -->
-    <delete id="deleteById" parameterType="string">
-        DELETE FROM WF_NODE_CANDIDATE_CONF
-        WHERE id = #{id}
-    </delete>
+    <!-- selectById / insert / updateById / deleteById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>

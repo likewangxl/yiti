@@ -92,7 +92,7 @@ class ProcessCompletedListenerTest {
         processCompletedListener.notify(execution);
 
         // Assert
-        verify(bizProcessMapMapper, never()).updateById(any());
+        verify(bizProcessMapMapper, never()).updateById(any(BizProcessMap.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
 

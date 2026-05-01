@@ -151,7 +151,7 @@ class ProcessCommandServiceTest {
         processCommandService.cancelProcess("PID_001", req);
 
         verify(runtimeService).deleteProcessInstance("PID_001", "发起人撤回");
-        verify(bizProcessMapMapper).updateById(org.mockito.ArgumentMatchers.argThat(updated ->
+        verify(bizProcessMapMapper).updateById(org.mockito.ArgumentMatchers.<BizProcessMap>argThat(updated ->
                 ProcessStatus.CANCELLED.getCode().equals(updated.getProcessStatus())
                         && updated.getEndTime() != null
                         && updated.getCurrentAssignee() == null

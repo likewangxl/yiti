@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,16 @@ import java.util.List;
  * 提供按流程定义KEY和节点KEY查询表单配置的能力。
  * 前端根据此配置动态渲染审批表单，后端根据此配置校验提交数据。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} 由 BaseMapper 提供。
+ * 自定义 SQL 继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface NodeFormConfMapper {
+public interface NodeFormConfMapper extends BaseMapper<WfNodeFormConf> {
+
+    // insert / selectById / updateById 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 根据流程定义KEY查询所有节点表单配置。
@@ -34,28 +42,4 @@ public interface NodeFormConfMapper {
     WfNodeFormConf selectByProcessDefKeyAndNodeKey(
             @Param("processDefinitionKey") String processDefinitionKey,
             @Param("nodeKey") String nodeKey);
-
-    /**
-     * 根据主键ID查询表单配置。
-     *
-     * @param id 表单配置ID
-     * @return 表单配置实体，不存在时返回 null
-     */
-    WfNodeFormConf selectById(@Param("id") String id);
-
-    /**
-     * 新增表单配置记录。
-     *
-     * @param conf 表单配置实体
-     * @return 受影响行数
-     */
-    int insert(WfNodeFormConf conf);
-
-    /**
-     * 按主键更新表单配置，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param conf 包含 id 及待更新字段的表单配置实体
-     * @return 受影响行数
-     */
-    int updateById(WfNodeFormConf conf);
 }

@@ -19,6 +19,8 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Map;
 
+import org.mockito.ArgumentMatchers;
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -96,7 +98,7 @@ class TaskOperationServiceTest {
 
         // then
         verify(taskService).claim("TASK_001", "E001");
-        verify(bizProcessMapMapper).updateById(argThat(m ->
+        verify(bizProcessMapMapper).updateById(ArgumentMatchers.<BizProcessMap>argThat(m ->
                 "E001".equals(m.getCurrentAssignee())
         ));
     }
@@ -230,7 +232,7 @@ class TaskOperationServiceTest {
         // then
         verify(taskService).setAssignee("TASK_001", "E002");
         verify(taskService).addComment("TASK_001", "PID_001", "TRANSFER", "本人出差");
-        verify(bizProcessMapMapper).updateById(argThat(m ->
+        verify(bizProcessMapMapper).updateById(ArgumentMatchers.<BizProcessMap>argThat(m ->
                 "E002".equals(m.getCurrentAssignee())
         ));
         verify(eventPublisher).publishEvent(any(TaskOperationService.TaskTransferredEvent.class));
@@ -336,6 +338,6 @@ class TaskOperationServiceTest {
         taskOperationService.claimTask("TASK_001");
 
         verify(taskService).claim("TASK_001", "E001");
-        verify(bizProcessMapMapper, never()).updateById(any());
+        verify(bizProcessMapMapper, never()).updateById(any(BizProcessMap.class));
     }
 }

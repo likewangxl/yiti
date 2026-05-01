@@ -1,5 +1,8 @@
 package com.bank.branch.platform.workflow.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -13,9 +16,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("biz_process_map")
 public class BizProcessMap {
 
     /** 映射ID（UUID主键），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 业务键（格式：BIZ_TYPE:{id}），对应 business_key */

@@ -11,14 +11,7 @@
         created_time, updated_time
     </sql>
 
-    <!-- 根据主键查询 -->
-    <select id="selectById" parameterType="string"
-            resultType="com.bank.branch.platform.workflow.entity.BizProcessMap">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM BIZ_PROCESS_MAP
-        WHERE id = #{id}
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 根据业务键查询最新的非取消状态记录 -->
     <select id="selectByBusinessKey" parameterType="string"
@@ -53,43 +46,7 @@
         LIMIT 1
     </select>
 
-    <!-- 新增业务流程映射记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.BizProcessMap">
-        INSERT INTO BIZ_PROCESS_MAP (
-            id, business_key, biz_type, biz_id,
-            process_definition_key, process_instance_id,
-            start_user, current_assignee, candidate_groups,
-            process_status, title, start_time, end_time,
-            created_time, updated_time
-        ) VALUES (
-            #{id}, #{businessKey}, #{bizType}, #{bizId},
-            #{processDefinitionKey}, #{processInstanceId},
-            #{startUser}, #{currentAssignee}, #{candidateGroups},
-            #{processStatus}, #{title}, #{startTime}, #{endTime},
-            #{createdTime}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按主键动态更新映射信息 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.workflow.entity.BizProcessMap">
-        UPDATE BIZ_PROCESS_MAP
-        <set>
-            <if test="businessKey != null">business_key = #{businessKey},</if>
-            <if test="bizType != null">biz_type = #{bizType},</if>
-            <if test="bizId != null">biz_id = #{bizId},</if>
-            <if test="processDefinitionKey != null">process_definition_key = #{processDefinitionKey},</if>
-            <if test="processInstanceId != null">process_instance_id = #{processInstanceId},</if>
-            <if test="startUser != null">start_user = #{startUser},</if>
-            <if test="currentAssignee != null">current_assignee = #{currentAssignee},</if>
-            <if test="candidateGroups != null">candidate_groups = #{candidateGroups},</if>
-            <if test="processStatus != null">process_status = #{processStatus},</if>
-            <if test="title != null">title = #{title},</if>
-            <if test="startTime != null">start_time = #{startTime},</if>
-            <if test="endTime != null">end_time = #{endTime},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 判断指定业务键是否存在运行中的流程 -->
     <select id="existsRunningByBusinessKey" parameterType="string" resultType="boolean">

@@ -30,41 +30,6 @@
         LIMIT 1
     </select>
 
-    <!-- 根据主键ID查询表单配置 -->
-    <select id="selectById"
-            resultType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM WF_NODE_FORM_CONF
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
-
-    <!-- 新增表单配置记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
-        INSERT INTO WF_NODE_FORM_CONF (
-            id, process_definition_key, node_key,
-            form_fields, editable_fields, required_fields,
-            created_time, updated_time
-        ) VALUES (
-            #{id}, #{processDefinitionKey}, #{nodeKey},
-            #{formFields}, #{editableFields}, #{requiredFields},
-            #{createdTime}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按主键动态更新表单配置 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.workflow.entity.WfNodeFormConf">
-        UPDATE WF_NODE_FORM_CONF
-        <set>
-            <if test="processDefinitionKey != null">process_definition_key = #{processDefinitionKey},</if>
-            <if test="nodeKey != null">node_key = #{nodeKey},</if>
-            <if test="formFields != null">form_fields = #{formFields},</if>
-            <if test="editableFields != null">editable_fields = #{editableFields},</if>
-            <if test="requiredFields != null">required_fields = #{requiredFields},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- selectById / insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>

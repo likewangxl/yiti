@@ -29,40 +29,6 @@
         WHERE process_definition_key = #{processDefinitionKey}
     </select>
 
-    <!-- 根据主键ID查询超时规则 -->
-    <select id="selectById"
-            resultType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM WF_TIMEOUT_RULE
-        WHERE id = #{id}
-        LIMIT 1
-    </select>
-
-    <!-- 新增超时规则记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
-        INSERT INTO WF_TIMEOUT_RULE (
-            id, process_definition_key, node_key,
-            timeout_hours, warning_hours,
-            created_time, updated_time
-        ) VALUES (
-            #{id}, #{processDefinitionKey}, #{nodeKey},
-            #{timeoutHours}, #{warningHours},
-            #{createdTime}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按主键动态更新超时规则 -->
-    <update id="updateById" parameterType="com.bank.branch.platform.workflow.entity.WfTimeoutRule">
-        UPDATE WF_TIMEOUT_RULE
-        <set>
-            <if test="processDefinitionKey != null">process_definition_key = #{processDefinitionKey},</if>
-            <if test="nodeKey != null">node_key = #{nodeKey},</if>
-            <if test="timeoutHours != null">timeout_hours = #{timeoutHours},</if>
-            <if test="warningHours != null">warning_hours = #{warningHours},</if>
-            <if test="updatedTime != null">updated_time = #{updatedTime},</if>
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- selectById / insert / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>

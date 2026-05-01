@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.workflow.entity.WfNodeCandidateConf;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,16 @@ import java.util.List;
  * 提供按流程定义KEY和节点KEY查询候选人配置的能力。
  * TaskListener 在任务创建时通过此 Mapper 读取配置，动态设置候选人。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} / {@code deleteById(Serializable)}
+ * 由 BaseMapper 提供。自定义 SQL 继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface NodeCandidateConfMapper {
+public interface NodeCandidateConfMapper extends BaseMapper<WfNodeCandidateConf> {
+
+    // insert / selectById / updateById / deleteById 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 根据流程定义KEY和节点KEY查询所有候选人配置。
@@ -34,36 +42,4 @@ public interface NodeCandidateConfMapper {
      * @return 候选人配置列表
      */
     List<WfNodeCandidateConf> selectByProcessDefKey(String processDefinitionKey);
-
-    /**
-     * 根据主键ID查询候选人配置。
-     *
-     * @param id 候选人配置ID
-     * @return 候选人配置实体，不存在时返回 null
-     */
-    WfNodeCandidateConf selectById(@Param("id") String id);
-
-    /**
-     * 新增候选人配置记录。
-     *
-     * @param conf 候选人配置实体
-     * @return 受影响行数
-     */
-    int insert(WfNodeCandidateConf conf);
-
-    /**
-     * 按主键更新候选人配置，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param conf 包含 id 及待更新字段的候选人配置实体
-     * @return 受影响行数
-     */
-    int updateById(WfNodeCandidateConf conf);
-
-    /**
-     * 按主键删除候选人配置。
-     *
-     * @param id 配置ID
-     * @return 受影响行数
-     */
-    int deleteById(String id);
 }

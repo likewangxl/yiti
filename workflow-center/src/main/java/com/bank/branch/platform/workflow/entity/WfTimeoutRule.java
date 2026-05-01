@@ -1,5 +1,8 @@
 package com.bank.branch.platform.workflow.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,9 +17,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("wf_timeout_rule")
 public class WfTimeoutRule {
 
     /** 规则ID（UUID主键），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 流程定义KEY，对应 process_definition_key */

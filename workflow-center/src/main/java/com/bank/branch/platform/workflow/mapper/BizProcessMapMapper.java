@@ -1,5 +1,6 @@
 package com.bank.branch.platform.workflow.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -10,25 +11,16 @@ import org.apache.ibatis.annotations.Param;
  * 提供业务实体与流程实例之间的映射关系 CRUD 操作。
  * 支持按 businessKey、processInstanceId、bizType+bizId 多维度查询。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code selectById(Serializable)} / {@code updateById(T)} 由 BaseMapper 提供。
+ * 自定义 SQL 继续保留在本接口和 XML。
+ * </p>
  */
 @Mapper
-public interface BizProcessMapMapper {
+public interface BizProcessMapMapper extends BaseMapper<BizProcessMap> {
 
-    /**
-     * 新增业务流程映射记录。
-     *
-     * @param map 业务流程映射实体
-     * @return 受影响行数
-     */
-    int insert(BizProcessMap map);
-
-    /**
-     * 根据主键查询映射记录。
-     *
-     * @param id 映射ID
-     * @return 映射实体，不存在时返回 null
-     */
-    BizProcessMap selectById(String id);
+    // insert / selectById / updateById 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 根据业务键查询最新的非取消状态映射记录。
@@ -55,14 +47,6 @@ public interface BizProcessMapMapper {
      */
     BizProcessMap selectByBizTypeAndBizId(@Param("bizType") String bizType,
                                           @Param("bizId") String bizId);
-
-    /**
-     * 按主键更新映射信息，使用动态 SET 仅更新非 null 字段。
-     *
-     * @param map 包含 id 及待更新字段的映射实体
-     * @return 受影响行数
-     */
-    int updateById(BizProcessMap map);
 
     /**
      * 判断指定业务键是否存在运行中的流程。
