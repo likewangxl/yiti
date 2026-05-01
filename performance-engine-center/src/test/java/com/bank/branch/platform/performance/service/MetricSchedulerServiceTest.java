@@ -63,6 +63,27 @@ class MetricSchedulerServiceTest {
     }
 
     @Test
+    void isSchedulable_EXPR_subjectSql_blank_false() {
+        PerfMetricDef def = newDef("M_X", "ACTIVE", "AUTO", "EXPR", 0);
+        def.setSubjectSql(null);
+        assertThat(scheduler.isSchedulable(def)).isFalse();
+    }
+
+    @Test
+    void isSchedulable_GROOVY_subjectSql_blank_false() {
+        PerfMetricDef def = newDef("M_Y", "ACTIVE", "AUTO", "GROOVY", 0);
+        def.setSubjectSql("  ");
+        assertThat(scheduler.isSchedulable(def)).isFalse();
+    }
+
+    @Test
+    void isSchedulable_EXPR_with_subjectSql_true() {
+        PerfMetricDef def = newDef("M_Z", "ACTIVE", "AUTO", "EXPR", 0);
+        def.setSubjectSql("SELECT emp_id FROM t");
+        assertThat(scheduler.isSchedulable(def)).isTrue();
+    }
+
+    @Test
     void register_calls_jobApi_with_correct_jobKey_and_cron() {
         PerfMetricDef def = newDef("M_DEPOSIT", "ACTIVE", "AUTO", "SQL", 0);
         def.setCalcFreq("DAY");

@@ -63,21 +63,14 @@ public class MetricSchedulerService {
     /**
      * 注册（或覆盖）一个指标调度任务.
      *
-     * <p>不满足调度条件或 EXPR/GROOVY 主体 SQL 为空时跳过.
+     * <p>不满足调度条件时跳过（含 EXPR/GROOVY subjectSql 为空的情况，由 isSchedulable 统一判定）.
      *
      * @param def 指标定义
      */
     public void register(PerfMetricDef def) {
         if (!isSchedulable(def)) {
-            log.warn("[MetricScheduler] metric={} 不满足调度条件，跳过", def.getMetricCode());
-            return;
-        }
-        // EXPR / GROOVY 类型必须有主体集合 SQL，否则执行期无法确定主体范围
-        if (("EXPR".equalsIgnoreCase(def.getCalcLogicType())
-                || "GROOVY".equalsIgnoreCase(def.getCalcLogicType()))
-                && !StringUtils.hasText(def.getSubjectSql())) {
-            log.warn("[MetricScheduler] metric={} EXPR/GROOVY 类型 subject_sql 为空，跳过注册",
-                    def.getMetricCode());
+            log.warn("[MetricScheduler] metric={} 不满足调度条件，跳过",
+                    def == null ? "null" : def.getMetricCode());
             return;
         }
         RegisterJobCmd cmd = new RegisterJobCmd();
@@ -104,6 +97,7 @@ public class MetricSchedulerService {
      * 判断指标是否满足自动调度条件.
      *
      * <p>必须同时满足：ACTIVE + AUTO + 未软删除 + 非 PROC/SUMMARY 逻辑类型.
+     * V1.7：EXPR/GROOVY 类型 subject_sql 必填，空时视为不可调度（消除 register 双重判定）.
      *
      * @param def 指标定义
      * @return true 表示可调度
@@ -116,6 +110,12 @@ public class MetricSchedulerService {
         // PROC / SUMMARY 类型由外部存储过程或汇总链触发，不走通用调度
         if ("PROC".equalsIgnoreCase(def.getCalcLogicType())
                 || "SUMMARY".equalsIgnoreCase(def.getCalcLogicType())) {
+            return false;
+        }
+        // EXPR / GROOVY 类型必须有主体集合 SQL，否则执行期无法确定主体范围
+        if (("EXPR".equalsIgnoreCase(def.getCalcLogicType())
+                || "GROOVY".equalsIgnoreCase(def.getCalcLogicType()))
+                && !StringUtils.hasText(def.getSubjectSql())) {
             return false;
         }
         return true;

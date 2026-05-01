@@ -52,6 +52,6 @@ class MetricSchedulerHealthCheckTest {
 
         check.runCheck();
 
-        verify(schedulerService, never()).register(any());
+        verifyNoInteractions(schedulerService);
     }
 }
