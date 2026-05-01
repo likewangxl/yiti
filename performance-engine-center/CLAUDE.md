@@ -6,7 +6,21 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.6（quartz 整合）—— 在 V1.5 交付之上完成 Spring `@Scheduled` / ShedLock → Quartz 集群调度迁移：
+**当前版本**: V1.7（指标级 Quartz 调度改造）—— 在 V1.6 基础上实现按指标定义自动注册调度任务：
+
+**V1.7 (2026-04-30 交付)：指标级 Quartz 调度改造**
+
+- DDL V1_7_0：perf_metric_def 加 `cron_expr` / `subject_sql` / `last_run_time` + `idx_metric_def_schedulable` 索引
+- DDL V1_7_1：sys_job_conf 删 `job_key='DAILY_KPI_CALC'` 行（KPI 改为事件驱动）
+- governance：`JobApi` 新增 `registerJob(RegisterJobCmd)` / `unregisterJob(jobKey)` 让业务模块声明式注册 Quartz Job
+- 调度：每条 ACTIVE+AUTO 指标 1:1 注册一个 Quartz Job（jobKey="PERF_METRIC_${metricCode}", jobGroup="PERF_METRIC"）；通用 `MetricExecuteQuartzJob` 按 JobDataMap.metricCode 派发
+- 业务：`MetricCalcService.executeGroovyAndPersist` 改造为 foreach subject + per-subject try/catch 部分成功（PARTIAL_FAILED 终态）；新增 `SubjectFetcher` 处理 subject_sql 主体集合
+- 服务：`MetricSchedulerService`（启动同步 + register/unregister + isSchedulable）+ CRUD afterCommit Hook + `MetricSchedulerHealthCheck`（10 分钟补偿 + @ConditionalOnProperty 启停开关）
+- KPI：删除 `DailyKpiCalcJob`，改为 `KpiCascadeListener` 监听 `MetricCalcCompletedEvent` 事件驱动重算（@TransactionalEventListener AFTER_COMMIT + @Async + Redis SETNX 30s 防重）
+- 守护：`NoOldDailyKpiCalcArchTest` 防回潮
+- 测试：~640 case 全绿（surefire + failsafe）
+
+V1.6（quartz 整合）历史：
 - P1 governance 新增 Quartz 基础设施（QuartzConfig + JobExecutionLogger + JobService.syncJobsOnStartup + ddl-quartz.sql + bootstrap quartz 配置块）
 - P2 3 个业务 Job 删 `@Scheduled` / `@SchedulerLock` / `@ConditionalOnProperty` / `scheduled()` 包装方法 + 新增 3 个 Quartz 包装类（DailyKpiCalcQuartzJob / SysControlCleanupQuartzJob / PerfRunTaskCleanupQuartzJob）
 - P3 PerfQuartzConfig 注册 3 个 JobDetail + Trigger（cron 配置走 sys_job_conf 表，`overwrite-existing-jobs=true` 启动期可覆盖）
@@ -53,7 +67,8 @@ V1.3（技术债清偿）历史：
 | V1.3 | 技术债清偿：V1_2_5/V1_3_0 DDL 兜底、Target 数据范围注入、5 处 V1.2 UOE 实际实现、PERF-50003 新增、MetricTrialRespDTO 对齐 03 §A.5、execute 返回 RunTaskInfoDTO、11 Controller 局部 entity 清零、P7 recalc 真实 status、cycleType 写 params_json、Testcontainers-redis 接入、UndoScriptSmokeIT 重写、2 个新架构守护（NoEntityInControllerLocalsArchTest + NoUoeInFacadeTestsArchTest） | 已交付 |
 | V1.4 | 9 项 V1.3 遗留技术债消化：WORKFLOW_PARTICIPANT 真实查询（workflow-center `WorkflowQueryApi.queryParticipatedBusinessKeys` 新增 + PerfScopeHelper 透传）、Target owner 字段 DDL（V1_4_0 `owner_emp_id` / `owner_org_code` + Entity/Mapper/Cmd/Service ScopeColumns 精化）、MetricApi.getUserMetricCards mom/yoy/previousValue 字段计算（cycleType 按方案精确匹配 yyyyMM / yyyyQn / yyyy）、P7 recalc fallback 日志、cycleType null/空串语义澄清、Controller.list 返回类型澄清为 common-web 契约（非 bug） | 已交付 |
 | V1.5 | 6 项 V1.4 遗留清零：@Deprecated getSamples 删除 / cycleType 空串测试 / codeToCycleType 分组修复 / batch 宽表 / yoy WEEKLY 分支 / updateByIdSelective owner <if> | 已交付（2026-04-24） |
-| **V1.6** | quartz 整合：governance Quartz 基础设施（QuartzConfig + JobExecutionLogger + syncJobsOnStartup）、3 个 Job 删 @Scheduled/@SchedulerLock + 新增 3 个 Quartz 包装类、PerfQuartzConfig 注册 JobDetail/Trigger、删 ShedLock 全部痕迹、JobApi 精简到 1 方法 | **本期交付（2026-04-25）** |
+| V1.6 | quartz 整合：governance Quartz 基础设施（QuartzConfig + JobExecutionLogger + syncJobsOnStartup）、3 个 Job 删 @Scheduled/@SchedulerLock + 新增 3 个 Quartz 包装类、PerfQuartzConfig 注册 JobDetail/Trigger、删 ShedLock 全部痕迹、JobApi 精简到 1 方法 | 已交付（2026-04-25） |
+| **V1.7** | 指标级 Quartz 调度改造：perf_metric_def 新增 cron_expr/subject_sql/last_run_time 字段、governance JobApi 新增 registerJob/unregisterJob、指标 CRUD afterCommit Hook 自动注册、MetricSchedulerService 启动同步 + HealthCheck 补偿、KPI 改为事件驱动（MetricCalcCompletedEvent + KpiCascadeListener + Redis 防重）、删 DailyKpiCalcJob、新增 SubjectFetcher/MetricExecuteQuartzJob/MetricCronResolver、测试 ~640 case 全绿 | **本期交付（2026-04-30）** |
 
 ### V1.3 UOE 清单（Facade UOE 已清零）
 
@@ -588,6 +603,31 @@ V1.2 Q5 曾引入 3 个 `@Scheduled` 任务（`perf.engine.enabled-jobs` 属性�
 
 **写日志**：`JobExecutionLogger`（governance 模块的全局 Quartz `JobListener`）在 `jobToBeExecuted` /
 `jobWasExecuted` 回调中统一写 `sys_job_run_log`，业务模块**不需要**调用 `JobApi` 的写日志方法。
+
+### V1.7 启用前置检查（指标级调度）
+
+V1.7 引入 `V1_7_0__perf_metric_def_schedule_cols.sql`（加 cron_expr/subject_sql/last_run_time + 索引）+ `V1_7_1__remove_daily_kpi_calc_job.sql`（删 sys_job_conf DAILY_KPI_CALC 行），生产启用前预检：
+
+```sql
+-- 预检 1：EXPR/GROOVY 类型指标 subject_sql 是否填齐（缺则启动同步会跳过 register）
+SELECT COUNT(*) FROM perf_metric_def
+WHERE status='ACTIVE' AND calc_mode='AUTO'
+  AND calc_logic_type IN ('EXPR','GROOVY')
+  AND (subject_sql IS NULL OR subject_sql='');
+-- 期望: 0
+
+-- 预检 2：sys_job_conf 中 DAILY_KPI_CALC 行是否存在
+SELECT * FROM sys_job_conf WHERE job_key='DAILY_KPI_CALC';
+-- 期望: 1 行（V1_7_1 会删它）
+```
+
+启动后验证：
+```sql
+SELECT job_key, cron_expr, status FROM sys_job_conf WHERE job_key LIKE 'PERF_METRIC_%';
+-- 应有 N 条对应 ACTIVE+AUTO 指标
+```
+
+紧急关停 HealthCheck：`perf.scheduler.health-check.enabled=false`
 
 ### 导出任务生命周期
 

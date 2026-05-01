@@ -101,6 +101,9 @@ CREATE TABLE `PERF_METRIC_DEF` (
   `unit` varchar(20) DEFAULT NULL COMMENT '单位: 元/户/笔/%',
   `decimal_places` tinyint(1) DEFAULT '4' COMMENT '小数位数',
   `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态: ACTIVE/DISABLED（V1.0；V1.1 规划扩展 DRAFT）',
+  `cron_expr` varchar(120) DEFAULT NULL COMMENT 'V1.7 自定义 cron；留空按 calc_freq 推导默认',
+  `subject_sql` longtext DEFAULT NULL COMMENT 'V1.7 EXPR/GROOVY 类型主体集合 SQL（SQL/PROC/SUMMARY 不需要）',
+  `last_run_time` datetime DEFAULT NULL COMMENT 'V1.7 最近一次自动调度执行时间',
   `description` varchar(500) DEFAULT NULL COMMENT '指标描述',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人 emp_id',
   `created_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -111,7 +114,8 @@ CREATE TABLE `PERF_METRIC_DEF` (
   UNIQUE KEY `uk_metric_code` (`metric_code`),
   UNIQUE KEY `uk_base_dim_slot` (`base_dim`, `val_slot`, `deleted`),
   KEY `idx_base_dim` (`base_dim`),
-  KEY `idx_status` (`status`)
+  KEY `idx_status` (`status`),
+  KEY `idx_metric_def_schedulable` (`status`, `calc_mode`, `deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标定义表';
 ```
 
@@ -121,6 +125,11 @@ CREATE TABLE `PERF_METRIC_DEF` (
 - `calc_logic_type = EXPR`: 二级/三级指标, 使用 `expr_text` 中的表达式, 如 `(${DEP_BAL_EMP} + ${LOAN_BAL_EMP}) * 0.5`
 - `calc_logic_type = SUMMARY`: 对 `ref_metric_codes` 数组中的指标按 `summary_rule` 做聚合
 - `val_slot`: 每个维度下独立的槽位空间 (1-200), 映射到结果宽表的列
+- `cron_expr` (V1.7)：自定义 Cron 表达式；留空时 `MetricCronResolver` 按 `calc_freq` 推导默认值（DAY=02:00 等）
+- `subject_sql` (V1.7)：EXPR/GROOVY 类型指标的主体集合 SQL，由 `SubjectFetcher` 执行获取动态主体列表；SQL/PROC/SUMMARY 类型无需填写
+- `last_run_time` (V1.7)：最近一次通过 Quartz 自动调度执行的时间戳，用于 HealthCheck 兜底补偿和监控统计
+
+**V1.7 新增索引**：`idx_metric_def_schedulable (status, calc_mode, deleted)` 用于 `selectSchedulable` 查询（启动同步 + HealthCheck 扫描）
 
 ---
 

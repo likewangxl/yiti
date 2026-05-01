@@ -95,13 +95,21 @@ src/main/java/com/bank/branch/platform/governance/
 | `listBizFiles(bizType, bizId)` | 获取业务对象关联的文件列表 |
 | `deleteFile(fileId)` | 删除文件及所有关联 |
 
-### JobApi (V1.6 quartz 整合后精简到 1 方法)
+### JobApi (V1.7 扩展为 3 方法)
 
 | 方法 | 用途 |
 |------|------|
-| `getJobConf(jobKey)` | 获取定时任务配置（只读） |
+| `getJobConf(jobKey)` | 查询定时任务配置（只读） |
+| `registerJob(RegisterJobCmd cmd)` | V1.7 业务模块声明式注册（或覆盖）一个 Quartz 调度任务（原子 sys_job_conf upsert + Scheduler 注入） |
+| `unregisterJob(jobKey)` | V1.7 注销调度任务（幂等：不存在静默返回） |
 
-**V1.6 精简说明（2026-04-25）**：V1.0-V1.5 曾持有 `startJobRun(jobId, trigger, empId)` /
+**V1.7 扩展说明（2026-04-30）**：V1.6 只保留了 `getJobConf` 只读查询方法。V1.7 为支持"指标级调度"引入声明式注册机制，业务模块（如 performance-engine-center）可在 CRUD 时自动或显式注册/注销 Job。
+
+- `registerJob`：原子写 `sys_job_conf`（upsert）+ 动态注入 Quartz Scheduler，支持启动后动态改动（可覆盖现有配置）
+- `unregisterJob`：移除 `sys_job_conf` 行 + 删除 Quartz JobDetail/Trigger，幂等处理（不存在不报错）
+- 错误码扩展：GOV-50010 (JOB_CRON_INVALID) / GOV-50011 (JOB_CLASS_NOT_FOUND) / GOV-50012 (JOB_REGISTER_FAILED)
+
+**V1.6 精简背景（2026-04-25）**：V1.0-V1.5 曾持有 `startJobRun(jobId, trigger, empId)` /
 `completeJobRun(runLogId)` / `failJobRun(runLogId, errorMsg)` 三个写日志方法，由各业务模块的
 `@Scheduled` 任务在执行前后显式调用。V1.6 quartz 整合后：
 
