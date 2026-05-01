@@ -44,12 +44,18 @@ public class SubjectFetcher {
         }
         // 复用 SqlValidator 黑名单校验，禁止 DML/DDL 注入
         sqlValidator.validate(subjectSql);
+        // params 为 null 时 NamedParameterJdbcTemplate 内部可能 NPE，统一转为空 Map
+        Map<String, Object> safeParams = (params == null) ? Map.of() : params;
         try {
-            List<String> keys = jdbcTemplate.queryForList(subjectSql, params, String.class);
+            List<String> keys = jdbcTemplate.queryForList(subjectSql, safeParams, String.class);
             // 去重后返回，保证调用方遍历时不重复计算同一主体
             return keys.stream().distinct().toList();
         } catch (DataAccessException e) {
             log.warn("[SubjectFetcher] subject_sql 执行失败: {}", e.getMessage());
+            throw new PerfException(PerfErrorCode.METRIC_SUBJECT_SQL_FAILED, e, e.getMessage());
+        } catch (Exception e) {
+            // 兜底：非 DataAccessException 的其他 unchecked（如非法参数类型）也归为 PERF-50004
+            log.warn("[SubjectFetcher] subject_sql 未预期异常: {}", e.getMessage());
             throw new PerfException(PerfErrorCode.METRIC_SUBJECT_SQL_FAILED, e, e.getMessage());
         }
     }

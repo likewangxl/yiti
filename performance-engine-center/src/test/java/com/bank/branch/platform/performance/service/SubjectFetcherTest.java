@@ -72,6 +72,15 @@ class SubjectFetcherTest {
         assertThat(fetcher.fetch("SELECT 1", Map.of())).isEmpty();
     }
 
+    /** params 为 null 时不抛 NPE，等同于空 Map 传入 */
+    @Test
+    void null_params_does_not_throw_NPE() {
+        when(jdbc.queryForList(anyString(), anyMap(), eq(String.class)))
+                .thenReturn(List.of("E001"));
+        List<String> result = fetcher.fetch("SELECT 1", null);
+        assertThat(result).containsExactly("E001");
+    }
+
     /** DataAccessException 被包装为 PERF-50004 PerfException */
     @Test
     void data_access_exception_wraps_to_perf_exception() {
