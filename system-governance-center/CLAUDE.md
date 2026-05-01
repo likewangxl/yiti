@@ -186,3 +186,5 @@ V1.6 quartz 整合后，治理中心成为平台唯一的 Quartz 集成点，业
 2. 提供 `QuartzJobBean` 子类作为包装（如 `DailyKpiCalcQuartzJob`），在 `executeInternal` 中调用裸方法
 3. 在自己模块的 Quartz 配置类中（如 `PerfQuartzConfig`）声明 `JobDetail` + `Trigger` bean
 4. **不需要**再调用 `JobApi.startJobRun/completeJobRun/failJobRun`，写日志由 `JobExecutionLogger` 统一处理
+
+> **运维 Runbook**: V1.9 已整合 V1.6-V1.8 调度运维知识到独立文档：[`docs/modules/system-governance-center/09-运维Runbook.md`](../docs/modules/system-governance-center/09-运维Runbook.md)。本节为模块架构说明（保留）。

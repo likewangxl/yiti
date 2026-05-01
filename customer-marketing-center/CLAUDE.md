@@ -377,15 +377,21 @@ cron='0 */5 * * * ?', misfire=DO_NOTHING；多实例由 QRTZ_LOCKS 行锁防重�
 
 测试增量：surefire +3（QuartzJobTest x2 + ArchUnit x1） / failsafe +3（LeadCallbackJobRegisteredIT 3 case）；customer 模块 355 全绿。
 
-## V1.9 候选事项（来自 V1.8 spec § 12 + P6 探查）
+> **运维 Runbook**: V1.9 已整合，详见 [`docs/modules/system-governance-center/09-运维Runbook.md`](../docs/modules/system-governance-center/09-运维Runbook.md)。
 
-| # | 事项 | 优先级 | 来源 |
+## V1.9 处置（2026-05-01）
+
+V1.8 后登记的 5 项 V1.9 候选事项经 brainstorming 二次收敛，处置如下：
+
+| # | 事项 | V1.9 处置 | 备注 |
 |---|---|---|---|
-| 1 | HealthCheck 也 Quartz 化（去掉最后一个 @Scheduled）| 低 | spec § 12 |
-| 2 | sys_job_conf 运维 Runbook | 中 | spec § 12 |
-| 3 | Quartz JobStore 反向清理（gcDanglingTriggers）| 低 | spec § 12 |
-| 4 | 仓库大小写一致性治理（test schema scripts 全大写化）| 中 | P3/P5 探查 |
-| 5 | 测试库环境完整治理：onepl_test_v103 多模块 DDL 导入 / FlywayIT 等当前失败 | 中 | P6 探查 |
+| 1 | HealthCheck 也 Quartz 化 | **永久关闭** | brainstorming 评审：V1.7 spec § 7 设计意图（补偿器不依赖 Quartz）反转代价大于收益 |
+| 2 | sys_job_conf 运维 Runbook | **本期交付（V1.9 / 2026-05-01）** | `docs/modules/system-governance-center/09-运维Runbook.md`（600 行整合 V1.6-V1.8） |
+| 3 | Quartz JobStore 反向清理 | **永久关闭** | brainstorming 评审：实际产生路径 < 1 次/年，成本/收益严重失衡 |
+| 4 | 仓库大小写一致性治理 | **本期交付（V1.9 / 2026-05-01）** | bootstrap test data SQL 4 文件 29 处大写化 |
+| 5 | 测试库环境完整治理 | **延期 V1.10** | onepl_test_v103 多模块 DDL 协同，影响面大 |
+
+**brainstorming 决策溯源**：见 `docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md` § 10
 
 ## V1.0 已知技术债（2026-04-25）
 

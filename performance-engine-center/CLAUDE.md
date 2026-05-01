@@ -548,6 +548,8 @@ V1.7（指标级 Quartz 调度改造）交付后，code reviewer 在过程中识
 - `support/PerfTestConfig` 加 mock RedisTemplate<String, String>（V1.7 KpiCascadeListener 引入但
   测试基础设施缺失的同根因 bug，P6 治理）
 
+> **完整版**：[`docs/modules/system-governance-center/09-运维Runbook.md`](../docs/modules/system-governance-center/09-运维Runbook.md)（V1.9 整合）。本节保留 perf 模块速查摘要，运维操作请优先参考 Runbook。
+
 ## 运维 Runbook（V1.2 + V1.3 + V1.4 交付）
 
 ### V1.4 启用前置检查（DDL 迁移安全门）
