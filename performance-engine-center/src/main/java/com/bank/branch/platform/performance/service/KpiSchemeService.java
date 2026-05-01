@@ -284,7 +284,7 @@ public class KpiSchemeService {
     }
 
     /**
-     * 列出所有 ACTIVE 状态方案（供 V1.1 {@code DailyKpiCalcJob} 使用）.
+     * 列出所有 ACTIVE 状态方案（V1.7 已删除 DailyKpiCalcJob，本方法保留供事件驱动 KPI 重算使用）.
      *
      * <p>没有分页，基于方案通常 &lt; 100 的业务规模。若 V1.2 方案数量爆炸，
      * 可改为 {@link #page(String, String, String, int, int)} 分批驱动。
