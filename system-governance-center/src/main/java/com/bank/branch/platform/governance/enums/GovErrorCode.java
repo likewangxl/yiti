@@ -42,7 +42,16 @@ public enum GovErrorCode {
     SQL_EXECUTION_TIMEOUT("GOV-50003", "SQL执行超时"),
     JOB_TRIGGER_FAILED("GOV-50004", "任务触发失败"),
     JOB_PAUSE_FAILED("GOV-50005", "Job 暂停失败"),
-    JOB_RESUME_FAILED("GOV-50006", "Job 恢复失败");
+    JOB_RESUME_FAILED("GOV-50006", "Job 恢复失败"),
+
+    /** Cron 表达式非法 (V1.7). */
+    JOB_CRON_INVALID("GOV-50010", "cron 表达式非法"),
+
+    /** quartz_job_class 反射加载失败 (V1.7). */
+    JOB_CLASS_NOT_FOUND("GOV-50011", "quartz_job_class 反射失败"),
+
+    /** Quartz Scheduler 注册失败 (V1.7). */
+    JOB_REGISTER_FAILED("GOV-50012", "Quartz Scheduler 注册失败");
 
     private final String code;
     private final String message;
