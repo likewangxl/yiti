@@ -1,5 +1,8 @@
 package com.bank.branch.platform.customer.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,9 +17,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("lead_import_batch")
 public class LeadImportBatch {
 
     /** 主键ID（UUID，32位去连字符），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 批次号（对外展示，唯一），对应 batch_no */

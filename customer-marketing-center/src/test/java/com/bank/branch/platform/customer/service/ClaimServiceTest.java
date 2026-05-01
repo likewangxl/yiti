@@ -157,7 +157,7 @@ class ClaimServiceTest {
 
         // 不应查询数据库
         verify(claimMapper, never()).selectById(any());
-        verify(claimMapper, never()).updateById(any());
+        verify(claimMapper, never()).updateById(any(CustClaim.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
 
@@ -174,7 +174,7 @@ class ClaimServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CLAIM_ORG_FORBIDDEN.getCode());
 
-        verify(claimMapper, never()).updateById(any());
+        verify(claimMapper, never()).updateById(any(CustClaim.class));
     }
 
     @Test
@@ -187,7 +187,7 @@ class ClaimServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CLAIM_NOT_FOUND.getCode());
 
-        verify(claimMapper, never()).updateById(any());
+        verify(claimMapper, never()).updateById(any(CustClaim.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
 

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.CustTagRel;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,9 +12,12 @@ import java.util.List;
  * <p>
  * 该表无逻辑删除字段，所有删除操作均为物理删除。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} 由 BaseMapper 提供。
+ * </p>
  */
 @Mapper
-public interface CustTagRelMapper {
+public interface CustTagRelMapper extends BaseMapper<CustTagRel> {
 
     /**
      * 查询某客户的所有标签关联（用于客户详情展示标签）。
@@ -57,13 +61,7 @@ public interface CustTagRelMapper {
      */
     int deleteByTagId(@Param("tagId") String tagId);
 
-    /**
-     * 插入单条关联记录。
-     *
-     * @param entity 关联实体
-     * @return 受影响行数
-     */
-    int insert(CustTagRel entity);
+    // insert(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 批量插入关联记录（批量打标时使用）。

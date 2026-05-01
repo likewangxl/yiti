@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.LeadImportBatch;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,9 +12,14 @@ import java.util.List;
  * <p>
  * 该表无逻辑删除字段，通过 status 管理批次生命周期。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * selectById 因签名含 @Param 保留原 XML 实现。
+ * </p>
  */
 @Mapper
-public interface LeadImportBatchMapper {
+public interface LeadImportBatchMapper extends BaseMapper<LeadImportBatch> {
 
     /**
      * 按 id 查询导入批次。
@@ -58,19 +64,5 @@ public interface LeadImportBatchMapper {
     long countPage(@Param("keyword") String keyword,
                    @Param("status") String status);
 
-    /**
-     * 插入新导入批次。
-     *
-     * @param entity 批次实体
-     * @return 受影响行数
-     */
-    int insert(LeadImportBatch entity);
-
-    /**
-     * 按 id 更新导入批次（动态 SET，仅更新非 null 字段）。
-     *
-     * @param entity 包含 id 及待更新字段的批次实体
-     * @return 受影响行数
-     */
-    int updateById(LeadImportBatch entity);
+    // insert(T) 和 updateById(T) 由 MyBatis-Plus BaseMapper 提供
 }

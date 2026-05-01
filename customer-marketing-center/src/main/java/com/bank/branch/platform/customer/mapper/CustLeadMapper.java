@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.CustLead;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -13,9 +14,14 @@ import java.util.List;
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
  * 版本管理：通过 is_latest 区分最新版本，版本链通过 prev_lead_id 追溯。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * selectById / insert / updateById 因签名含 @Param 或与原自定义方法共存，保留原 XML 实现。
+ * </p>
  */
 @Mapper
-public interface CustLeadMapper {
+public interface CustLeadMapper extends BaseMapper<CustLead> {
 
     /**
      * 按 id 查询线索（含逻辑删除过滤）。
@@ -72,21 +78,7 @@ public interface CustLeadMapper {
                    @Param("status") String status,
                    @Param("ownerOrgId") String ownerOrgId);
 
-    /**
-     * 插入新线索。
-     *
-     * @param entity 线索实体
-     * @return 受影响行数
-     */
-    int insert(CustLead entity);
-
-    /**
-     * 按 id 更新线索（动态 SET，仅更新非 null 字段）。
-     *
-     * @param entity 包含 id 及待更新字段的线索实体
-     * @return 受影响行数
-     */
-    int updateById(CustLead entity);
+    // insert(T) 和 updateById(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 按 id 更新线索状态（状态流转专用，减少并发冲突范围）。

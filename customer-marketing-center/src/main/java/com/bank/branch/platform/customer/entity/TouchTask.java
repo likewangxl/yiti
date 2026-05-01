@@ -1,5 +1,8 @@
 package com.bank.branch.platform.customer.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,9 +17,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("touch_task")
 public class TouchTask {
 
     /** 主键ID（UUID，32位去连字符），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 任务编号（对外展示，唯一），对应 task_no */

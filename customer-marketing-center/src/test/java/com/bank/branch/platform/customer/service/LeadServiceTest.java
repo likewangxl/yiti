@@ -139,7 +139,7 @@ class LeadServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.LEAD_EDIT_FORBIDDEN.getCode());
 
-        verify(leadMapper, never()).updateById(any());
+        verify(leadMapper, never()).updateById(any(CustLead.class));
     }
 
     // ==================== deleteDraft ====================

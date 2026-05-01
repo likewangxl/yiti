@@ -80,7 +80,7 @@ class LeadImportServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_FILE_EMPTY.getCode());
 
-        verify(batchMapper, never()).insert(any());
+        verify(batchMapper, never()).insert(any(LeadImportBatch.class));
     }
 
     @Test
@@ -94,7 +94,7 @@ class LeadImportServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_FILE_FORMAT_INVALID.getCode());
 
-        verify(batchMapper, never()).insert(any());
+        verify(batchMapper, never()).insert(any(LeadImportBatch.class));
     }
 
     @Test
@@ -124,7 +124,7 @@ class LeadImportServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_FILE_TOO_LARGE.getCode());
 
-        verify(batchMapper, never()).insert(any());
+        verify(batchMapper, never()).insert(any(LeadImportBatch.class));
     }
 
     @Test
@@ -142,7 +142,7 @@ class LeadImportServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.IMPORT_ROWS_TOO_MANY.getCode());
 
-        verify(batchMapper, never()).insert(any());
+        verify(batchMapper, never()).insert(any(LeadImportBatch.class));
     }
 
     // ==================== execute ====================

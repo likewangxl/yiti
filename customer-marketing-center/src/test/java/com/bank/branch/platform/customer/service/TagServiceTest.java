@@ -78,7 +78,7 @@ class TagServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TAG_NAME_DUPLICATE.getCode());
 
-        verify(tagMapper, never()).insert(any());
+        verify(tagMapper, never()).insert(any(CustTag.class));
     }
 
     @Test
@@ -95,7 +95,7 @@ class TagServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TAG_CODE_DUPLICATE.getCode());
 
-        verify(tagMapper, never()).insert(any());
+        verify(tagMapper, never()).insert(any(CustTag.class));
     }
 
     // ==================== updateTag ====================
@@ -114,7 +114,7 @@ class TagServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TAG_CODE_IMMUTABLE.getCode());
 
-        verify(tagMapper, never()).updateById(any());
+        verify(tagMapper, never()).updateById(any(CustTag.class));
     }
 
     @Test
@@ -156,7 +156,7 @@ class TagServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TAG_NAME_DUPLICATE.getCode());
 
-        verify(tagMapper, never()).updateById(any());
+        verify(tagMapper, never()).updateById(any(CustTag.class));
     }
 
     // ==================== toggleStatus ====================
@@ -187,7 +187,7 @@ class TagServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TAG_NOT_FOUND.getCode());
 
-        verify(tagMapper, never()).updateById(any());
+        verify(tagMapper, never()).updateById(any(CustTag.class));
     }
 
     // ==================== getById ====================

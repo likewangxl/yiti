@@ -9,13 +9,7 @@
         success_time, cancel_time, created_time, updated_time
     </sql>
 
-    <!-- 按 id 查询触达任务 -->
-    <select id="selectById" resultType="com.bank.branch.platform.customer.entity.TouchTask">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM TOUCH_TASK
-        WHERE id = #{id}
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 按任务编号查询 -->
     <select id="selectByTaskNo" resultType="com.bank.branch.platform.customer.entity.TouchTask">
@@ -72,40 +66,7 @@
         ORDER BY plan_finish_time
     </select>
 
-    <!-- 插入新触达任务 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
-        INSERT INTO TOUCH_TASK (
-            id, task_no, cust_id, org_id, assignee_emp_id, task_type, task_status,
-            plan_finish_time, warning_time, sla_status, sla_warning, business_key,
-            success_time, cancel_time, created_time, updated_time
-        ) VALUES (
-            #{id}, #{taskNo}, #{custId}, #{orgId}, #{assigneeEmpId}, #{taskType}, #{taskStatus},
-            #{planFinishTime}, #{warningTime}, #{slaStatus}, #{slaWarning}, #{businessKey},
-            #{successTime}, #{cancelTime}, #{createdTime}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按 id 更新触达任务（动态 SET，仅更新非 null 字段） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.TouchTask">
-        UPDATE TOUCH_TASK
-        <set>
-            <if test="taskNo != null">task_no = #{taskNo},</if>
-            <if test="custId != null">cust_id = #{custId},</if>
-            <if test="orgId != null">org_id = #{orgId},</if>
-            <if test="assigneeEmpId != null">assignee_emp_id = #{assigneeEmpId},</if>
-            <if test="taskType != null">task_type = #{taskType},</if>
-            <if test="taskStatus != null">task_status = #{taskStatus},</if>
-            <if test="planFinishTime != null">plan_finish_time = #{planFinishTime},</if>
-            <if test="warningTime != null">warning_time = #{warningTime},</if>
-            <if test="slaStatus != null">sla_status = #{slaStatus},</if>
-            <if test="slaWarning != null">sla_warning = #{slaWarning},</if>
-            <if test="businessKey != null">business_key = #{businessKey},</if>
-            <if test="successTime != null">success_time = #{successTime},</if>
-            <if test="cancelTime != null">cancel_time = #{cancelTime},</if>
-            updated_time = NOW(),
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 统计指定客户的在途触达任务数量（PENDING 或 IN_PROGRESS 状态） -->
     <select id="countActiveByCust" resultType="long">

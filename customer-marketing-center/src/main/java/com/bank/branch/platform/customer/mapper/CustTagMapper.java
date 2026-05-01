@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.CustTag;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -11,9 +12,14 @@ import java.util.List;
  * <p>
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * selectById 因签名含 @Param 保留原 XML 实现。
+ * </p>
  */
 @Mapper
-public interface CustTagMapper {
+public interface CustTagMapper extends BaseMapper<CustTag> {
 
     /**
      * 按 id 查询标签（含逻辑删除过滤）。
@@ -73,21 +79,7 @@ public interface CustTagMapper {
      */
     List<CustTag> selectEnabled();
 
-    /**
-     * 插入新标签。
-     *
-     * @param entity 标签实体
-     * @return 受影响行数
-     */
-    int insert(CustTag entity);
-
-    /**
-     * 按 id 更新标签（动态 SET，仅更新非 null 字段）。
-     *
-     * @param entity 包含 id 及待更新字段的标签实体
-     * @return 受影响行数
-     */
-    int updateById(CustTag entity);
+    // insert(T) 和 updateById(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 查询所有启用状态的标签，按 tag_priority 升序、tag_name 升序排列。

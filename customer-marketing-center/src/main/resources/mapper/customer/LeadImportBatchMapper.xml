@@ -10,13 +10,7 @@
         created_by, created_time, updated_by, updated_time
     </sql>
 
-    <!-- 按 id 查询导入批次 -->
-    <select id="selectById" resultType="com.bank.branch.platform.customer.entity.LeadImportBatch">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM LEAD_IMPORT_BATCH
-        WHERE id = #{id}
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 按批次号查询 -->
     <select id="selectByBatchNo" resultType="com.bank.branch.platform.customer.entity.LeadImportBatch">
@@ -59,38 +53,6 @@
         </where>
     </select>
 
-    <!-- 插入新导入批次 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.LeadImportBatch">
-        INSERT INTO LEAD_IMPORT_BATCH (
-            id, batch_no, source_file_name, file_md5, status,
-            total_row_count, error_row_count, error_summary, error_file_object_id,
-            business_key, process_instance_id, owner_org_id,
-            created_by, created_time, updated_by, updated_time
-        ) VALUES (
-            #{id}, #{batchNo}, #{sourceFileName}, #{fileMd5}, #{status},
-            #{totalRowCount}, #{errorRowCount}, #{errorSummary}, #{errorFileObjectId},
-            #{businessKey}, #{processInstanceId}, #{ownerOrgId},
-            #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按 id 更新导入批次（动态 SET，仅更新非 null 字段） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.LeadImportBatch">
-        UPDATE LEAD_IMPORT_BATCH
-        <set>
-            <if test="sourceFileName != null">source_file_name = #{sourceFileName},</if>
-            <if test="fileMd5 != null">file_md5 = #{fileMd5},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="totalRowCount != null">total_row_count = #{totalRowCount},</if>
-            <if test="errorRowCount != null">error_row_count = #{errorRowCount},</if>
-            <if test="errorSummary != null">error_summary = #{errorSummary},</if>
-            <if test="errorFileObjectId != null">error_file_object_id = #{errorFileObjectId},</if>
-            <if test="businessKey != null">business_key = #{businessKey},</if>
-            <if test="processInstanceId != null">process_instance_id = #{processInstanceId},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            updated_time = NOW(),
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>

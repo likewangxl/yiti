@@ -13,14 +13,7 @@
         created_time, updated_by, updated_time, deleted
     </sql>
 
-    <!-- 按 id 查询线索（含逻辑删除过滤） -->
-    <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustLead">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM CUST_LEAD
-        WHERE id = #{id}
-          AND deleted = 0
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 按线索编号查询 -->
     <select id="selectByLeadNo" resultType="com.bank.branch.platform.customer.entity.CustLead">
@@ -81,65 +74,7 @@
         </if>
     </select>
 
-    <!-- 插入新线索 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustLead">
-        INSERT INTO CUST_LEAD (
-            id, lead_no, lead_op, source_cust_id, prev_lead_id, version_no, is_latest,
-            cust_name, unified_credit_code, tag_ids, contact_person, contact_mobile,
-            industry, group_type, customer_type, is_keystone, enterprise_type, group_name,
-            is_account_opened, customer_desc, credit_amount, credit_exposure_amount,
-            lead_source, lead_status, owner_org_id, assigned_to, created_by,
-            business_key, import_batch_id, process_instance_id, remark,
-            created_time, updated_by, updated_time, deleted
-        ) VALUES (
-            #{id}, #{leadNo}, #{leadOp}, #{sourceCustId}, #{prevLeadId}, #{versionNo}, #{isLatest},
-            #{custName}, #{unifiedCreditCode}, #{tagIds}, #{contactPerson}, #{contactMobile},
-            #{industry}, #{groupType}, #{customerType}, #{isKeystone}, #{enterpriseType}, #{groupName},
-            #{isAccountOpened}, #{customerDesc}, #{creditAmount}, #{creditExposureAmount},
-            #{leadSource}, #{leadStatus}, #{ownerOrgId}, #{assignedTo}, #{createdBy},
-            #{businessKey}, #{importBatchId}, #{processInstanceId}, #{remark},
-            #{createdTime}, #{updatedBy}, #{updatedTime}, #{deleted}
-        )
-    </insert>
-
-    <!-- 按 id 更新线索（动态 SET，仅更新非 null 字段） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustLead">
-        UPDATE CUST_LEAD
-        <set>
-            <if test="leadOp != null">lead_op = #{leadOp},</if>
-            <if test="sourceCustId != null">source_cust_id = #{sourceCustId},</if>
-            <if test="prevLeadId != null">prev_lead_id = #{prevLeadId},</if>
-            <if test="versionNo != null">version_no = #{versionNo},</if>
-            <if test="isLatest != null">is_latest = #{isLatest},</if>
-            <if test="custName != null">cust_name = #{custName},</if>
-            <if test="unifiedCreditCode != null">unified_credit_code = #{unifiedCreditCode},</if>
-            <if test="tagIds != null">tag_ids = #{tagIds},</if>
-            <if test="contactPerson != null">contact_person = #{contactPerson},</if>
-            <if test="contactMobile != null">contact_mobile = #{contactMobile},</if>
-            <if test="industry != null">industry = #{industry},</if>
-            <if test="groupType != null">group_type = #{groupType},</if>
-            <if test="customerType != null">customer_type = #{customerType},</if>
-            <if test="isKeystone != null">is_keystone = #{isKeystone},</if>
-            <if test="enterpriseType != null">enterprise_type = #{enterpriseType},</if>
-            <if test="groupName != null">group_name = #{groupName},</if>
-            <if test="isAccountOpened != null">is_account_opened = #{isAccountOpened},</if>
-            <if test="customerDesc != null">customer_desc = #{customerDesc},</if>
-            <if test="creditAmount != null">credit_amount = #{creditAmount},</if>
-            <if test="creditExposureAmount != null">credit_exposure_amount = #{creditExposureAmount},</if>
-            <if test="leadSource != null">lead_source = #{leadSource},</if>
-            <if test="leadStatus != null">lead_status = #{leadStatus},</if>
-            <if test="ownerOrgId != null">owner_org_id = #{ownerOrgId},</if>
-            <if test="assignedTo != null">assigned_to = #{assignedTo},</if>
-            <if test="businessKey != null">business_key = #{businessKey},</if>
-            <if test="importBatchId != null">import_batch_id = #{importBatchId},</if>
-            <if test="processInstanceId != null">process_instance_id = #{processInstanceId},</if>
-            <if test="remark != null">remark = #{remark},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            updated_time = NOW(),
-        </set>
-        WHERE id = #{id}
-          AND deleted = 0
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 按 id 更新线索状态（状态流转专用） -->
     <update id="updateStatusById">

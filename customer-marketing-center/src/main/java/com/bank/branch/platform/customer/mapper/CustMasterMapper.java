@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.api.dto.CustomerFilterDTO;
 import com.bank.branch.platform.customer.entity.CustMaster;
 import org.apache.ibatis.annotations.Mapper;
@@ -13,9 +14,14 @@ import java.util.List;
  * 所有查询默认过滤逻辑删除记录（deleted = 0）。
  * 客户可见性通过 cust_claim 认领关系判定，非 owner_org_id 字段。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * selectById 因签名含 @Param 保留原 XML 实现。
+ * </p>
  */
 @Mapper
-public interface CustMasterMapper {
+public interface CustMasterMapper extends BaseMapper<CustMaster> {
 
     /**
      * 按 id 查询客户主档（含逻辑删除过滤）。
@@ -60,21 +66,7 @@ public interface CustMasterMapper {
     long countPage(@Param("keyword") String keyword,
                    @Param("status") String status);
 
-    /**
-     * 插入新客户主档。
-     *
-     * @param entity 客户主档实体
-     * @return 受影响行数
-     */
-    int insert(CustMaster entity);
-
-    /**
-     * 按 id 更新客户主档（动态 SET，仅更新非 null 字段）。
-     *
-     * @param entity 包含 id 及待更新字段的客户主档实体
-     * @return 受影响行数
-     */
-    int updateById(CustMaster entity);
+    // insert(T) 和 updateById(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 按 ID 列表批量查询客户主档（含逻辑删除过滤）。

@@ -32,15 +32,6 @@
         SELECT COUNT(*) FROM TOUCH_LOG WHERE touch_task_id = #{taskId}
     </select>
 
-    <!-- 插入新触达日志 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.TouchLog">
-        INSERT INTO TOUCH_LOG (
-            id, touch_task_id, log_time, client_uuid, log_content,
-            photo_urls, owner_org_id, created_by, created_time
-        ) VALUES (
-            #{id}, #{touchTaskId}, #{logTime}, #{clientUuid}, #{logContent},
-            #{photoUrls}, #{ownerOrgId}, #{createdBy}, #{createdTime}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>

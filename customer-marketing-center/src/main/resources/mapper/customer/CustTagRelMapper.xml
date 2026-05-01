@@ -48,14 +48,7 @@
         WHERE tag_id = #{tagId}
     </delete>
 
-    <!-- 插入单条关联记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustTagRel">
-        INSERT INTO CUST_TAG_REL (
-            id, cust_id, tag_id, created_by, created_time
-        ) VALUES (
-            #{id}, #{custId}, #{tagId}, #{createdBy}, #{createdTime}
-        )
-    </insert>
+    <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 查询某客户的所有标签 ID 列表 -->
     <select id="selectTagIdsByCustId" resultType="java.lang.String">

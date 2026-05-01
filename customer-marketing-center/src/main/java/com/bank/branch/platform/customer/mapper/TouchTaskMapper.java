@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.TouchTask;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,14 @@ import java.util.List;
  * 该表无逻辑删除字段，通过 task_status 管理任务生命周期。
  * SLA 状态由定时任务周期性刷新，通过 selectPendingForSlaRefresh 查询待刷新任务。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * selectById 因签名含 @Param 保留原 XML 实现。
+ * </p>
  */
 @Mapper
-public interface TouchTaskMapper {
+public interface TouchTaskMapper extends BaseMapper<TouchTask> {
 
     /**
      * 按 id 查询触达任务。
@@ -74,21 +80,7 @@ public interface TouchTaskMapper {
      */
     List<TouchTask> selectPendingForSlaRefresh();
 
-    /**
-     * 插入新触达任务。
-     *
-     * @param entity 触达任务实体
-     * @return 受影响行数
-     */
-    int insert(TouchTask entity);
-
-    /**
-     * 按 id 更新触达任务（动态 SET，仅更新非 null 字段）。
-     *
-     * @param entity 包含 id 及待更新字段的触达任务实体
-     * @return 受影响行数
-     */
-    int updateById(TouchTask entity);
+    // insert(T) 和 updateById(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 统计指定客户的在途触达任务数量（PENDING 或 IN_PROGRESS 状态）。

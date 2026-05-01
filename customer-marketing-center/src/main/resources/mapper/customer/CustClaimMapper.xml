@@ -8,13 +8,7 @@
         claim_time, cancel_time, cancel_reason, created_time, updated_time
     </sql>
 
-    <!-- 按 id 查询认领记录 -->
-    <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustClaim">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM CUST_CLAIM
-        WHERE id = #{id}
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 按客户ID和机构代码查询（防重复认领用） -->
     <select id="selectByCustIdAndOrgId" resultType="com.bank.branch.platform.customer.entity.CustClaim">
@@ -131,31 +125,6 @@
           AND claim_status = 'CLAIMED'
     </select>
 
-    <!-- 插入新认领记录 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustClaim">
-        INSERT INTO CUST_CLAIM (
-            id, cust_id, org_id, claimed_by, maintainer_emp_id, claim_status,
-            claim_time, cancel_time, cancel_reason, created_time, updated_time
-        ) VALUES (
-            #{id}, #{custId}, #{orgId}, #{claimedBy}, #{maintainerEmpId}, #{claimStatus},
-            #{claimTime}, #{cancelTime}, #{cancelReason}, #{createdTime}, #{updatedTime}
-        )
-    </insert>
-
-    <!-- 按 id 更新认领记录（动态 SET，仅更新非 null 字段） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustClaim">
-        UPDATE CUST_CLAIM
-        <set>
-            <if test="orgId != null">org_id = #{orgId},</if>
-            <if test="claimedBy != null">claimed_by = #{claimedBy},</if>
-            <if test="maintainerEmpId != null">maintainer_emp_id = #{maintainerEmpId},</if>
-            <if test="claimStatus != null">claim_status = #{claimStatus},</if>
-            <if test="claimTime != null">claim_time = #{claimTime},</if>
-            <if test="cancelTime != null">cancel_time = #{cancelTime},</if>
-            <if test="cancelReason != null">cancel_reason = #{cancelReason},</if>
-            updated_time = NOW(),
-        </set>
-        WHERE id = #{id}
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>

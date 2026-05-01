@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.TouchLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,12 @@ import java.util.List;
  * 该表无逻辑删除字段，日志记录不可删除，保证审计可追溯。
  * 唯一索引 uk_task_uuid(touch_task_id, client_uuid) 保证移动端幂等性。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} 由 BaseMapper 提供。
+ * </p>
  */
 @Mapper
-public interface TouchLogMapper {
+public interface TouchLogMapper extends BaseMapper<TouchLog> {
 
     /**
      * 按触达任务ID查询该任务的所有日志（按 log_time 降序）。
@@ -34,13 +38,7 @@ public interface TouchLogMapper {
     TouchLog selectByTaskIdAndClientUuid(@Param("touchTaskId") String touchTaskId,
                                          @Param("clientUuid") String clientUuid);
 
-    /**
-     * 插入新触达日志。
-     *
-     * @param entity 触达日志实体
-     * @return 受影响行数
-     */
-    int insert(TouchLog entity);
+    // insert(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 统计某个触达任务的日志总数（用于判断是否为首次日志）。

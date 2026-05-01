@@ -194,7 +194,7 @@ class TagCustomerServiceTest {
         // then: 只有 tag-003 被新增，tag-002 已存在跳过
         assertThat(added).isEqualTo(1);
         verify(tagRelMapper, never()).insert(
-                argThat(rel -> rel.getTagId().equals("tag-002")));
+                argThat((CustTagRel rel) -> rel.getTagId().equals("tag-002")));
         ArgumentCaptor<CustTagRel> captor = ArgumentCaptor.forClass(CustTagRel.class);
         verify(tagRelMapper).insert(captor.capture());
         CustTagRel inserted = captor.getValue();

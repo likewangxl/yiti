@@ -192,7 +192,7 @@ class CustomerServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TRANSFER_REASON_REQUIRED.getCode());
 
-        verify(claimMapper, never()).updateById(any());
+        verify(claimMapper, never()).updateById(any(CustClaim.class));
     }
 
     @Test
@@ -210,7 +210,7 @@ class CustomerServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getCode());
 
-        verify(claimMapper, never()).updateById(any());
+        verify(claimMapper, never()).updateById(any(CustClaim.class));
     }
 
     @Test
@@ -232,7 +232,7 @@ class CustomerServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.TRANSFER_ORG_MISMATCH.getCode());
 
-        verify(claimMapper, never()).updateById(any());
+        verify(claimMapper, never()).updateById(any(CustClaim.class));
     }
 
     @Test
@@ -245,7 +245,7 @@ class CustomerServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CLAIM_NOT_FOUND.getCode());
 
-        verify(claimMapper, never()).updateById(any());
+        verify(claimMapper, never()).updateById(any(CustClaim.class));
     }
 
     // ==================== deleteApply ====================
@@ -302,7 +302,7 @@ class CustomerServiceTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", CustomerErrorCode.CUSTOMER_NOT_FOUND.getCode());
 
-        verify(leadMapper, never()).insert(any());
+        verify(leadMapper, never()).insert(any(CustLead.class));
         verify(workflowApi, never()).startProcess(any());
     }
 

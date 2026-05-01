@@ -1,5 +1,6 @@
 package com.bank.branch.platform.customer.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.bank.branch.platform.customer.entity.CustClaim;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -12,9 +13,14 @@ import java.util.List;
  * 该表无逻辑删除字段，有效认领通过 claim_status='CLAIMED' 过滤。
  * 客户池查询：cust_master 中尚未被本机构认领的客户。
  * </p>
+ * <p>
+ * MyBatis-Plus 接入：继承 {@link BaseMapper} 后，{@code insert(T)} /
+ * {@code updateById(T)} 由 BaseMapper 提供。
+ * selectById 因签名含 @Param 保留原 XML 实现。
+ * </p>
  */
 @Mapper
-public interface CustClaimMapper {
+public interface CustClaimMapper extends BaseMapper<CustClaim> {
 
     /**
      * 按 id 查询认领记录。
@@ -93,13 +99,7 @@ public interface CustClaimMapper {
      */
     long countMyClaimsPage(@Param("empId") String empId);
 
-    /**
-     * 插入新认领记录。
-     *
-     * @param entity 认领实体
-     * @return 受影响行数
-     */
-    int insert(CustClaim entity);
+    // insert(T) 由 MyBatis-Plus BaseMapper 提供
 
     /**
      * 查询某员工维护的所有有效认领记录（maintainer_emp_id 且 claim_status='CLAIMED'）。
@@ -133,11 +133,5 @@ public interface CustClaimMapper {
      */
     Long countActiveByOrg(@Param("orgCode") String orgCode);
 
-    /**
-     * 按 id 更新认领记录（动态 SET，仅更新非 null 字段）。
-     *
-     * @param entity 包含 id 及待更新字段的认领实体
-     * @return 受影响行数
-     */
-    int updateById(CustClaim entity);
+    // updateById(T) 由 MyBatis-Plus BaseMapper 提供
 }

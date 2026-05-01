@@ -1,5 +1,8 @@
 package com.bank.branch.platform.customer.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -13,9 +16,11 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
+@TableName("cust_tag")
 public class CustTag {
 
     /** 主键ID（UUID，32位去连字符），对应 id */
+    @TableId(value = "id", type = IdType.INPUT)
     private String id;
 
     /** 标签名称（唯一），对应 tag_name */

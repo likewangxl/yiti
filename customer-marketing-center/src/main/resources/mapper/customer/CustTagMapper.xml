@@ -8,14 +8,7 @@
         status, created_by, created_time, updated_by, updated_time, deleted
     </sql>
 
-    <!-- 按 id 查询标签（含逻辑删除过滤） -->
-    <select id="selectById" resultType="com.bank.branch.platform.customer.entity.CustTag">
-        SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM CUST_TAG
-        WHERE id = #{id}
-          AND deleted = 0
-    </select>
+    <!-- selectById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 按标签名称查询（唯一性预检） -->
     <select id="selectByTagName" resultType="com.bank.branch.platform.customer.entity.CustTag">
@@ -107,32 +100,6 @@
           AND deleted = 0
     </select>
 
-    <!-- 插入新标签 -->
-    <insert id="insert" parameterType="com.bank.branch.platform.customer.entity.CustTag">
-        INSERT INTO CUST_TAG (
-            id, tag_name, tag_code, tag_category, tag_priority, description,
-            status, created_by, created_time, updated_by, updated_time, deleted
-        ) VALUES (
-            #{id}, #{tagName}, #{tagCode}, #{tagCategory}, #{tagPriority}, #{description},
-            #{status}, #{createdBy}, #{createdTime}, #{updatedBy}, #{updatedTime}, #{deleted}
-        )
-    </insert>
-
-    <!-- 按 id 更新标签（动态 SET，仅更新非 null 字段） -->
-    <update id="updateById" parameterType="com.bank.branch.platform.customer.entity.CustTag">
-        UPDATE CUST_TAG
-        <set>
-            <if test="tagName != null">tag_name = #{tagName},</if>
-            <if test="tagCode != null">tag_code = #{tagCode},</if>
-            <if test="tagCategory != null">tag_category = #{tagCategory},</if>
-            <if test="tagPriority != null">tag_priority = #{tagPriority},</if>
-            <if test="description != null">description = #{description},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="updatedBy != null">updated_by = #{updatedBy},</if>
-            updated_time = NOW(),
-        </set>
-        WHERE id = #{id}
-          AND deleted = 0
-    </update>
+    <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>
