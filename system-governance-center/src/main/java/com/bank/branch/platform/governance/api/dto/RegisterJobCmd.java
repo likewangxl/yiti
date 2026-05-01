@@ -19,9 +19,6 @@ public class RegisterJobCmd {
     /** 必填：任务展示名. */
     private String jobName;
 
-    /** 选填：QRTZ_*.JOB_GROUP / TRIGGER_GROUP；默认 "DEFAULT". */
-    private String jobGroup = "DEFAULT";
-
     /** 必填：合法 cron 表达式. */
     private String cronExpr;
 

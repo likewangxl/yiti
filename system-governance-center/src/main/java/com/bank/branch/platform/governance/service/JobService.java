@@ -542,8 +542,8 @@ public class JobService {
     /**
      * V1.7 新增：注销调度任务（幂等）.
      *
-     * <p>先从 Quartz Scheduler 删除 JobDetail（DEFAULT 和 PERF_METRIC 两个 group），
-     * 再从 sys_job_conf 删除配置。scheduler 异常时记 warn 后继续删库，确保幂等。
+     * <p>group 通过 {@link #resolveGroup(String)} 推断，不存在时静默返回（Quartz deleteJob 行为）。
+     * scheduler 异常时记 warn 后继续删库，确保幂等。
      *
      * @param jobKey 任务唯一标识
      */
@@ -552,13 +552,24 @@ public class JobService {
         log.info("[JobService.unregisterJob] jobKey={}", jobKey);
         if (scheduler != null) {
             try {
-                scheduler.deleteJob(JobKey.jobKey(jobKey, "DEFAULT"));
-                scheduler.deleteJob(JobKey.jobKey(jobKey, "PERF_METRIC"));
+                scheduler.deleteJob(JobKey.jobKey(jobKey, resolveGroup(jobKey)));
             } catch (SchedulerException e) {
                 log.warn("[JobService.unregisterJob] scheduler.deleteJob 失败 jobKey={}", jobKey, e);
             }
         }
         jobConfMapper.deleteByJobKey(jobKey);
+    }
+
+    /**
+     * V1.7：根据 jobKey 前缀推断 Quartz JobGroup / TriggerGroup.
+     *
+     * <p>唯一来源，避免 register 与 unregister 双方对 group 的隐式假设不一致.
+     *
+     * @param jobKey 任务唯一标识
+     * @return Quartz group 名称
+     */
+    private String resolveGroup(String jobKey) {
+        return jobKey != null && jobKey.startsWith("PERF_METRIC_") ? "PERF_METRIC" : "DEFAULT";
     }
 
     /**
@@ -574,7 +585,7 @@ public class JobService {
     private void scheduleQuartzJobWithData(SysJobConf conf, Map<String, String> jobData)
             throws SchedulerException, ClassNotFoundException {
         Class<? extends Job> clazz = (Class<? extends Job>) Class.forName(conf.getQuartzJobClass());
-        String group = conf.getJobKey().startsWith("PERF_METRIC_") ? "PERF_METRIC" : "DEFAULT";
+        String group = resolveGroup(conf.getJobKey());
         JobDataMap dataMap = new JobDataMap();
         if (jobData != null) {
             dataMap.putAll(jobData);

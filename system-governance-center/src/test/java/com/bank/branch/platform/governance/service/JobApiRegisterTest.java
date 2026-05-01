@@ -103,7 +103,6 @@ class JobApiRegisterTest {
         RegisterJobCmd cmd = new RegisterJobCmd();
         cmd.setJobKey(jobKey);
         cmd.setJobName("test");
-        cmd.setJobGroup("PERF_METRIC");
         cmd.setCronExpr("0 0 2 * * ?");
         cmd.setQuartzJobClass(org.quartz.Job.class.getName());
         cmd.setMisfirePolicy("FIRE_ONCE_NOW");

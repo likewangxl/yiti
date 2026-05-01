@@ -33,11 +33,17 @@ class JobApiUnregisterTest {
     }
 
     @Test
-    void unregister_calls_scheduler_deleteJob_then_mapper_delete() throws Exception {
+    void unregister_calls_scheduler_deleteJob_with_resolved_group_perf_metric() throws Exception {
         service.unregisterJob("PERF_METRIC_X");
-        verify(scheduler).deleteJob(JobKey.jobKey("PERF_METRIC_X", "DEFAULT"));
         verify(scheduler).deleteJob(JobKey.jobKey("PERF_METRIC_X", "PERF_METRIC"));
         verify(jobConfMapper).deleteByJobKey("PERF_METRIC_X");
+    }
+
+    @Test
+    void unregister_calls_scheduler_deleteJob_with_resolved_group_default() throws Exception {
+        service.unregisterJob("OTHER_JOB");
+        verify(scheduler).deleteJob(JobKey.jobKey("OTHER_JOB", "DEFAULT"));
+        verify(jobConfMapper).deleteByJobKey("OTHER_JOB");
     }
 
     @Test
