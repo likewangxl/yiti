@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.service;
 import com.bank.branch.platform.governance.api.JobApi;
 import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,16 +20,16 @@ import static org.mockito.Mockito.*;
 class MetricSchedulerServiceTest {
 
     private JobApi jobApi;
-    private MetricDefService metricDefService;
+    private PerfMetricDefMapper perfMetricDefMapper;
     private MetricCronResolver cronResolver;
     private MetricSchedulerService scheduler;
 
     @BeforeEach
     void setup() {
         jobApi = mock(JobApi.class);
-        metricDefService = mock(MetricDefService.class);
+        perfMetricDefMapper = mock(PerfMetricDefMapper.class);
         cronResolver = new MetricCronResolver();
-        scheduler = new MetricSchedulerService(jobApi, metricDefService, cronResolver);
+        scheduler = new MetricSchedulerService(jobApi, perfMetricDefMapper, cronResolver);
     }
 
     @Test
@@ -94,7 +95,7 @@ class MetricSchedulerServiceTest {
         ok.setCalcFreq("DAY");
         PerfMetricDef bad = newDef("M_BAD", "ACTIVE", "AUTO", "SQL", 0);
         bad.setCalcFreq("HOURLY");   // 触发 cronResolver 抛异常
-        when(metricDefService.listSchedulable()).thenReturn(List.of(ok, bad));
+        when(perfMetricDefMapper.selectSchedulable()).thenReturn(List.of(ok, bad));
         scheduler.syncOnStartup();   // 不抛
         verify(jobApi, times(1)).registerJob(any());   // 仅 ok 被注册
     }

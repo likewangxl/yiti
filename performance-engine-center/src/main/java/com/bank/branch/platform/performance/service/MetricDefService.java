@@ -16,7 +16,6 @@ import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,12 +49,11 @@ public class MetricDefService {
     private final PerfScopeHelper perfScopeHelper;
 
     /**
-     * V1.7：调度同步服务（可选注入，避免循环依赖 + 测试上下文缺失时不影响启动）.
-     * <p>MetricSchedulerService 本身依赖 MetricDefService，通过字段注入打破循环.
-     * <p>包级可见（非 private）供同包测试直接注入 mock.
+     * V1.7：调度同步服务.
+     * <p>构造器注入（无循环依赖：MetricSchedulerService 现依赖 PerfMetricDefMapper 而非 MetricDefService）.
+     * <p>包级可见（非 private）供同包测试直接覆盖 mock.
      */
-    @Autowired(required = false)
-    MetricSchedulerService metricSchedulerService;
+    final MetricSchedulerService metricSchedulerService;
 
     /**
      * 新建指标定义.

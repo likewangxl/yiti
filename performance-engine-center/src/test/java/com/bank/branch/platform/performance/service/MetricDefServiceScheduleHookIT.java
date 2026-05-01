@@ -51,17 +51,11 @@ class MetricDefServiceScheduleHookIT {
     @Mock
     private PerfScopeHelper perfScopeHelper;
 
-    @InjectMocks
-    private MetricDefService metricDefService;
-
+    @Mock
     private MetricSchedulerService metricSchedulerService;
 
-    @BeforeEach
-    void setup() {
-        metricSchedulerService = mock(MetricSchedulerService.class);
-        // 通过字段直接注入 mock（@Autowired(required=false) 字段，包级可见）
-        metricDefService.metricSchedulerService = metricSchedulerService;
-    }
+    @InjectMocks
+    private MetricDefService metricDefService;
 
     @Test
     @DisplayName("create ACTIVE+AUTO 触发 register")

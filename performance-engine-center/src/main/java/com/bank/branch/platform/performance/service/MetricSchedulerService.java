@@ -4,9 +4,8 @@ import com.bank.branch.platform.governance.api.JobApi;
 import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.job.quartz.MetricExecuteQuartzJob;
+import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -21,22 +20,22 @@ import java.util.Map;
  * <p>把 PerfMetricDef 的 CRUD 状态变更同步成 Quartz 调度状态.
  * 启动期 + CRUD afterCommit 两类入口.
  *
- * <p>MetricDefService 通过 {@code @Lazy} 注入打破与 MetricDefService 的循环依赖.
+ * <p>启动同步直接使用 {@link PerfMetricDefMapper} 查询，
+ * 避免与 MetricDefService 的循环依赖（MetricDefService 持有 MetricSchedulerService 引用）.
  */
 @Slf4j
 @Service
 public class MetricSchedulerService {
 
     private final JobApi jobApi;
-    private final MetricDefService metricDefService;
+    private final PerfMetricDefMapper perfMetricDefMapper;
     private final MetricCronResolver cronResolver;
 
-    @Autowired
     public MetricSchedulerService(JobApi jobApi,
-                                  @Lazy MetricDefService metricDefService,
+                                  PerfMetricDefMapper perfMetricDefMapper,
                                   MetricCronResolver cronResolver) {
         this.jobApi = jobApi;
-        this.metricDefService = metricDefService;
+        this.perfMetricDefMapper = perfMetricDefMapper;
         this.cronResolver = cronResolver;
     }
 
@@ -47,7 +46,7 @@ public class MetricSchedulerService {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void syncOnStartup() {
-        List<PerfMetricDef> metrics = metricDefService.listSchedulable();
+        List<PerfMetricDef> metrics = perfMetricDefMapper.selectSchedulable();
         int success = 0, failed = 0;
         for (PerfMetricDef m : metrics) {
             try {

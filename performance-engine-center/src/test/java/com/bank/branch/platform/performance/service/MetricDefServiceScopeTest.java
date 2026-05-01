@@ -64,7 +64,8 @@ class MetricDefServiceScopeTest {
                 null,   // metricCycleDetectService
                 null,   // objectMapper
                 currentUserApi,
-                perfScopeHelper);
+                perfScopeHelper,
+                null);  // metricSchedulerService（本测试不涉及调度）
     }
 
     @Test
