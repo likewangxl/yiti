@@ -3,21 +3,24 @@
 > 由 `RestEndpointInventoryIT.auditEndpointVsResource_shouldGenerateReport` 自动生成，请勿手工编辑。
 
 > 报告内容随项目 PT_RESOURCE 与 REST 端点同步演进，由 IT 触发刷新。
-**生成时间**：2026-04-28T11:46:00.215483242
 
 ## 概览
 
 | 指标 | 数量 |
 |---|---|
-| 代码注册 /api/ 端点（去重后 url+method）| 257 |
+| 代码注册 /api/ 端点（去重后 url+method）| 260 |
 | seed-v1.sql PT_RESOURCE 总数（包含 STATUS=1 禁用）| 298 |
 | seed-v1.sql PT_RESOURCE 启用数（STATUS=0）| 286 |
-| 类型 A 端点未注册到 PT_RESOURCE | 0 |
+| 类型 A 端点未注册到 PT_RESOURCE | 3 |
 | 类型 B PT_RESOURCE 孤儿（启用但代码无端点）| 0 |
 
-## §1 类型 A：代码端点未注册到 PT_RESOURCE（共 0 项）
+## §1 类型 A：代码端点未注册到 PT_RESOURCE（共 3 项）
 
-- 无
+| URL（归一化）| METHOD | Controller |
+|---|---|---|
+| `/api/admin/touch-tasks/summary` | GET | `AdminTouchTaskController` |
+| `/api/claims/{X}/re-touch` | POST | `ClaimController` |
+| `/api/leads/import/batches/{X}` | GET | `LeadImportController` |
 
 ## §2 类型 B：PT_RESOURCE 孤儿（启用但代码无对应端点，共 0 项）
 
@@ -26,7 +29,7 @@
 ## §3 完整代码端点清单（折叠）
 
 <details>
-<summary>展开查看 257 条端点</summary>
+<summary>展开查看 260 条端点</summary>
 
 | URL | METHOD | URL（归一化）| Controller |
 |---|---|---|---|
@@ -76,6 +79,7 @@
 | `/api/admin/touch-tasks` | GET | `/api/admin/touch-tasks` | `AdminTouchTaskController` |
 | `/api/admin/touch-tasks/batch-assign` | POST | `/api/admin/touch-tasks/batch-assign` | `AdminTouchTaskController` |
 | `/api/admin/touch-tasks/export` | GET | `/api/admin/touch-tasks/export` | `AdminTouchTaskController` |
+| `/api/admin/touch-tasks/summary` | GET | `/api/admin/touch-tasks/summary` | `AdminTouchTaskController` |
 | `/api/admin/users/{userId}/roles` | GET | `/api/admin/users/{X}/roles` | `UserRoleController` |
 | `/api/admin/users/{userId}/roles` | POST | `/api/admin/users/{X}/roles` | `UserRoleController` |
 | `/api/admin/users/{userId}/roles/{roleId}` | DELETE | `/api/admin/users/{X}/roles/{X}` | `UserRoleController` |
@@ -99,6 +103,7 @@
 | `/api/auth/permissions` | GET | `/api/auth/permissions` | `AuthController` |
 | `/api/claims` | POST | `/api/claims` | `ClaimController` |
 | `/api/claims/mine` | GET | `/api/claims/mine` | `ClaimController` |
+| `/api/claims/{claimId}/re-touch` | POST | `/api/claims/{X}/re-touch` | `ClaimController` |
 | `/api/claims/{id}/cancel` | POST | `/api/claims/{X}/cancel` | `ClaimController` |
 | `/api/customer-pool` | GET | `/api/customer-pool` | `CustomerPoolController` |
 | `/api/customers` | GET | `/api/customers` | `CustomerController` |
@@ -125,6 +130,7 @@
 | `/api/leads/batches` | GET | `/api/leads/batches` | `LeadImportController` |
 | `/api/leads/delete-version` | POST | `/api/leads/delete-version` | `LeadController` |
 | `/api/leads/edit-version` | POST | `/api/leads/edit-version` | `LeadController` |
+| `/api/leads/import/batches/{batchId}` | GET | `/api/leads/import/batches/{X}` | `LeadImportController` |
 | `/api/leads/import/execute` | POST | `/api/leads/import/execute` | `LeadImportController` |
 | `/api/leads/import/preview` | POST | `/api/leads/import/preview` | `LeadImportController` |
 | `/api/leads/{id}` | DELETE | `/api/leads/{X}` | `LeadController` |
