@@ -598,3 +598,33 @@ WHERE s.job_key IS NULL
 来源：performance-engine-center/CLAUDE.md「V1.6/V1.7/V1.8」段 +
 customer-marketing-center/CLAUDE.md「V1.8 改动进度」段 +
 V1.9 spec docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-design.md
+
+---
+
+## § 7. 测试库合一（V1.10 / 2026-05-01）
+
+### 唯一测试库
+
+V1.10 合一后平台测试 mysql 库**唯一为 `onepl_test_bootstrap`**：
+- bootstrap @SpringBootTest 业务 IT 用
+- perf FlywayIT（PerformanceFlywayTestBase）用
+- report FlywayIT（ReportFlywayTestBase）用
+
+### v103 库废弃
+
+`onepl_test_v103` 库已废弃。V1.10 P5 阶段**不**物理 DROP（保留为 V1.10 回滚 fallback 1-2 周）。V1.10 稳定 1-2 周后由运维手工执行：
+```sql
+DROP DATABASE onepl_test_v103;
+```
+
+### Flyway 配置
+
+V1.10 后 perf/report FlywayTestBase 配置：
+- `spring.datasource.url = jdbc:mysql://localhost:3306/onepl_test_bootstrap?...`
+- `spring.flyway.enabled = true`
+- `spring.flyway.baseline-on-migrate = true`
+- `spring.flyway.baseline-version = 0`（让 V_*.sql 全套从空表真正 migrate）
+
+### 来源
+
+详细决策溯源 + 路径 Y 设计：`docs/superpowers/specs/2026-05-01-v1.10-test-db-unification-design.md`

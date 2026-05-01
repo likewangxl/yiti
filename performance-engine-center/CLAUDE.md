@@ -257,6 +257,7 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 ## 环境依赖
 
 - MySQL 8.0 本地实例：`jdbc:mysql://localhost:3306/onepl`（root/123456）
+- 测试 IT 数据库：`onepl_test_bootstrap`（V1.10 合一后唯一测试库；原 onepl_test_v103 废弃）
 - Redis 6.X 本地实例：`localhost:6379`
 - 13 张 perf_* 表已在 onepl 库部署（来自 `docs/schema/ddl-performance.sql`）
 - `pt_resource` 已注册 35 条 `P_PERF_*` 资源（V1_0_1 脚本）
@@ -536,6 +537,8 @@ V1.7（指标级 Quartz 调度改造）交付后，code reviewer 在过程中识
 - MetricScheduledE2EIT：同根因
 - KpiSchemeControllerIT 4E + AllocRelationControllerIT 4F：业务/数据状态问题
 - PerfRunTaskMapperIT 7F+1E + CustAllocRelationMapperIT 10F：业务断言失败（疑大小写表）
+
+**V1.10 处置（2026-05-01）**：测试库合一到 onepl_test_bootstrap 后，V_*FlywayIT 全系列 + MetricScheduledE2EIT 缺多模块 DDL 的根因消失，但 V1.10 P2 retry-3 探查显露**第二层问题**：Spring Context 加载 threshold cascade + 测试间数据残留（如 MetricScheduledE2EIT 的 E2E_M_V1_7 残留导致 PERF_METRIC_DEF.uk_metric_code Duplicate）。这些转 V1.11 候选事项处理。详见 `docs/superpowers/specs/2026-05-01-v1.10-test-db-unification-design.md`。
 
 ## V1.8 微调（2026-05-01）
 

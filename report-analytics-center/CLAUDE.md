@@ -195,7 +195,7 @@ DATA_SCOPE 类型在 3 处生效：
 
 ## 环境依赖
 
-- MySQL 8.0：`onepl`（生产）/ `onepl_test_v103`（测试 IT）
+- MySQL 8.0：`onepl`（生产）/ `onepl_test_bootstrap`（测试 IT，V1.10 合一后唯一测试库；原 onepl_test_v103 废弃）
 - Redis 6.X：localhost:6379（缓存 + 限流 + 锁）
 - MinIO（governance.FileApi.upload 实际依赖，文件 bucket 由 governance 管理）
 - 上游模块依赖（10 个 *Api，见上文）
