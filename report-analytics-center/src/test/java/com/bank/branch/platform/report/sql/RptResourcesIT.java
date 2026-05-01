@@ -32,7 +32,7 @@ class RptResourcesIT extends ReportFlywayTestBase {
     @Test
     void rptResources_shouldHaveAtLeast25Records() {
         Integer cnt = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM pt_resource WHERE RESOURCE_ID LIKE 'R_RPT_%' AND SYS_CODE='RPT'",
+            "SELECT COUNT(*) FROM PT_RESOURCE WHERE RESOURCE_ID LIKE 'R_RPT_%' AND SYS_CODE='RPT'",
             Integer.class);
         assertThat(cnt).isNotNull().isGreaterThanOrEqualTo(25);
     }
@@ -42,13 +42,13 @@ class RptResourcesIT extends ReportFlywayTestBase {
         // 前置：测试库 pt_role 中有 R_BACK_TECH 角色才校验（生产库 seed-v1.sql 会注入；
         // 测试库不一定）。无 R_BACK_TECH → 跳过断言，但仍守护"无业务角色 leak"
         Integer hasBackTech = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM pt_role WHERE ROLE_CODE = 'R_BACK_TECH'",
+            "SELECT COUNT(*) FROM PT_ROLE WHERE ROLE_CODE = 'R_BACK_TECH'",
             Integer.class);
 
         if (hasBackTech != null && hasBackTech > 0) {
             // R_BACK_TECH 存在 → 必有 R_RPT_SQL_EXEC 绑定
             Integer roleBoundCount = jdbc.queryForObject(
-                "SELECT COUNT(DISTINCT prr.ROLE_ID) FROM pt_role_resource prr "
+                "SELECT COUNT(DISTINCT prr.ROLE_ID) FROM PT_ROLE_RESOURCE prr "
                     + "JOIN pt_role r ON prr.ROLE_ID = r.ROLE_ID "
                     + "WHERE prr.RESOURCE_ID = 'R_RPT_SQL_EXEC' "
                     + "  AND r.ROLE_CODE = 'R_BACK_TECH'",
@@ -58,7 +58,7 @@ class RptResourcesIT extends ReportFlywayTestBase {
 
         // 业务角色（非 R_ADMIN/R_BACK_TECH）leak 到 R_RPT_SQL_EXEC：必须为 0
         Integer leakedToBusinessRoles = jdbc.queryForObject(
-            "SELECT COUNT(DISTINCT prr.ROLE_ID) FROM pt_role_resource prr "
+            "SELECT COUNT(DISTINCT prr.ROLE_ID) FROM PT_ROLE_RESOURCE prr "
                 + "JOIN pt_role r ON prr.ROLE_ID = r.ROLE_ID "
                 + "WHERE prr.RESOURCE_ID = 'R_RPT_SQL_EXEC' "
                 + "  AND r.ROLE_CODE NOT IN ('R_BACK_TECH', 'R_ADMIN')",

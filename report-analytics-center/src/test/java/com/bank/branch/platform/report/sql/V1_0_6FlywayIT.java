@@ -41,7 +41,7 @@ class V1_0_6FlywayIT extends ReportFlywayTestBase {
     @Test
     void rptExportTasks_3Resources_shouldExistInPtResource() {
         Integer cnt = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM pt_resource WHERE RESOURCE_ID IN " +
+            "SELECT COUNT(*) FROM PT_RESOURCE WHERE RESOURCE_ID IN " +
                 "('R_RPT_EXP_STATUS','R_RPT_EXP_CANCEL','R_RPT_EXP_DOWNLOAD')",
             Integer.class);
         assertThat(cnt).isEqualTo(3);
@@ -52,7 +52,7 @@ class V1_0_6FlywayIT extends ReportFlywayTestBase {
         // pt_role 在测试 schema（onepl_test_bootstrap）通常为空，绑定语句应幂等不出错。
         // 仅验证 pt_role_resource 表中查询不抛异常即可（实际绑定取决于 PT_* 测试种子是否注入）。
         Integer cnt = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM pt_role_resource prr " +
+            "SELECT COUNT(*) FROM PT_ROLE_RESOURCE prr " +
                 "WHERE prr.RESOURCE_ID IN ('R_RPT_EXP_STATUS','R_RPT_EXP_CANCEL','R_RPT_EXP_DOWNLOAD')",
             Integer.class);
         assertThat(cnt).isGreaterThanOrEqualTo(0);

@@ -29,7 +29,7 @@ class V1_0_4FlywayIT extends PerformanceFlywayTestBase {
     @Test
     void pendingResources_areRegistered() {
         List<String> ids = jdbc.queryForList(
-            "SELECT RESOURCE_ID FROM pt_resource " +
+            "SELECT RESOURCE_ID FROM PT_RESOURCE " +
             "WHERE RESOURCE_ID IN (" +
             "  'P_PERF_METRIC_EXEC','P_PERF_METRIC_TRIAL'," +
             "  'P_PERF_IMPORT_UPLOAD','P_PERF_ALLOC_ADJ_ADD'," +
@@ -63,7 +63,7 @@ class V1_0_4FlywayIT extends PerformanceFlywayTestBase {
     @Test
     void existingV10Resources_remainEnabled() {
         Long v10EnabledCount = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM pt_resource " +
+            "SELECT COUNT(*) FROM PT_RESOURCE " +
             "WHERE SYS_CODE='PERF' AND STATUS = 0 " +
             "AND RESOURCE_ID IN (" +
             // V1_0_1 权威 35 条清单，详见 performance-engine-center/CLAUDE.md §7.1.1 对照表
