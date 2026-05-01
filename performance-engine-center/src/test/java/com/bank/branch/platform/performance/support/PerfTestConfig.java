@@ -8,6 +8,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.governance.api.JobApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -115,5 +116,17 @@ public class PerfTestConfig {
                         Mockito.anyString(), Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Set.of());
         return m;
+    }
+
+    /**
+     * 测试用 JobApi (V1.7 P6 新增)：
+     * MetricSchedulerService 通过构造器注入 JobApi，测试上下文无真实 governance Bean，
+     * 此处提供空 mock 避免 Spring 上下文启动失败；
+     * 需覆盖具体行为的测试可用 {@code @MockBean} 替换。
+     */
+    @Bean
+    @Primary
+    public JobApi jobApi() {
+        return Mockito.mock(JobApi.class);
     }
 }

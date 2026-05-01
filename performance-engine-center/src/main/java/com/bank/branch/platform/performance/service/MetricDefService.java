@@ -16,9 +16,12 @@ import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -45,6 +48,14 @@ public class MetricDefService {
     private final CurrentUserApi currentUserApi;
     /** Q7.3 新增: 数据范围 SQL 片段生成器. */
     private final PerfScopeHelper perfScopeHelper;
+
+    /**
+     * V1.7：调度同步服务（可选注入，避免循环依赖 + 测试上下文缺失时不影响启动）.
+     * <p>MetricSchedulerService 本身依赖 MetricDefService，通过字段注入打破循环.
+     * <p>包级可见（非 private）供同包测试直接注入 mock.
+     */
+    @Autowired(required = false)
+    MetricSchedulerService metricSchedulerService;
 
     /**
      * 新建指标定义.
@@ -95,6 +106,8 @@ public class MetricDefService {
             throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, ex, cmd.getMetricCode());
         }
         metricRefService.setRefs(cmd.getMetricCode(), refMetricCodes);
+        // V1.7：指标创建后同步注册调度任务
+        registerSchedulerHookIfNeeded(def, true);
         return def;
     }
 
@@ -169,6 +182,8 @@ public class MetricDefService {
         }
         existing.setUpdatedBy(cmd.getOperator());
         existing.setUpdatedTime(LocalDateTime.now());
+        // V1.7：指标更新后同步调度状态（状态变更可能触发 unregister）
+        registerSchedulerHookIfNeeded(existing, false);
         return existing;
     }
 
@@ -198,7 +213,12 @@ public class MetricDefService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteMetric(String id) {
+        // V1.7：删除前先查出 metricCode，供 afterCommit hook 注销调度任务
+        PerfMetricDef existing = mapper.selectById(id);
         mapper.softDelete(id);
+        if (existing != null) {
+            unregisterSchedulerHook(existing.getMetricCode());
+        }
     }
 
     /**
@@ -412,5 +432,60 @@ public class MetricDefService {
 
     private String generateId() {
         return UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * V1.7：create/update 后注册或注销调度任务.
+     *
+     * <p>若有活跃事务则在 afterCommit 回调中执行，避免事务回滚后仍注册任务；
+     * 无事务（测试/直接调用）场景直接执行.
+     *
+     * @param def      指标定义（含最新状态）
+     * @param isCreate true=新建，false=更新
+     */
+    void registerSchedulerHookIfNeeded(PerfMetricDef def, boolean isCreate) {
+        if (metricSchedulerService == null) return;
+        boolean schedulable = metricSchedulerService.isSchedulable(def);
+        Runnable action = () -> {
+            if (schedulable) {
+                metricSchedulerService.register(def);
+            } else if (!isCreate) {
+                // 更新后不可调度：注销已有任务（如 ACTIVE→DISABLED）
+                metricSchedulerService.unregister(def.getMetricCode());
+            }
+        };
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            action.run();
+                        }
+                    });
+        } else {
+            action.run();
+        }
+    }
+
+    /**
+     * V1.7：deleteMetric 后注销调度任务.
+     *
+     * <p>若有活跃事务则在 afterCommit 回调中执行.
+     *
+     * @param metricCode 指标编码
+     */
+    void unregisterSchedulerHook(String metricCode) {
+        if (metricSchedulerService == null) return;
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            metricSchedulerService.unregister(metricCode);
+                        }
+                    });
+        } else {
+            metricSchedulerService.unregister(metricCode);
+        }
     }
 }
