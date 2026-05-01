@@ -7,13 +7,14 @@ package com.bank.branch.platform.performance.enums;
  * <p>权威来源: docs/modules/performance-engine-center/03-接口设计与报文.md §K「错误码完整汇总」
  * <p>使用: throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
  *
- * <p>§K 共 29 条编码，METRIC_SLOT_CONFLICT 复用 PERF-40901，枚举常量总数 = 30。
+ * <p>§K 共 33 条编码，METRIC_SLOT_CONFLICT 复用 PERF-40901，枚举常量总数 = 34。
  * <p>2026-04-22 对齐 §K 权威清单，废弃旧编号体系（40401/40402/40403/40406/40407/
  *    40903/40904/40905/40911/40912/40913/40914）。
  * <p>2026-04-23（V1.1 P8.1）新增 3 条语义细化编号：40005/40006/40007，
  *    替代 V1.0 整改期临时复用的 METRIC_CODE_DUP/METRIC_NOT_FOUND（KPI/Target/RunTask 场景）。
  * <p>2026-04-24（V1.3 R3.1）新增 1 条：50003 IDEMPOTENCY_WAIT_TIMEOUT，拆分
  *    DataTaskService 幂等等待超时语义（原复用 CALC_JOB_FAILED 语义不清）。
+ * <p>2026-04-30（V1.7 P2）新增 4 条：METRIC_CALC_FREQ_INVALID/METRIC_SUBJECT_SQL_REQUIRED/METRIC_SUBJECT_SQL_FAILED/KPI_CYCLE_TYPE_INVALID
  */
 public enum PerfErrorCode {
 
@@ -56,6 +57,15 @@ public enum PerfErrorCode {
 
     /** 目标修正申请不存在（V1.2 占位） */
     TARGET_ADJUST_APPLY_NOT_FOUND("PERF-40020", "目标修正申请不存在"),
+
+    /** V1.7：calc_freq 非法（不在 DAY/WEEK/MONTH/QUARTER/YEAR 内）. */
+    METRIC_CALC_FREQ_INVALID("PERF-40021", "calc_freq 非法"),
+
+    /** V1.7：EXPR/GROOVY 类型 subject_sql 必填. */
+    METRIC_SUBJECT_SQL_REQUIRED("PERF-40022", "EXPR/GROOVY 类型 subject_sql 必填"),
+
+    /** V1.7：KPI 方案 cycle_type 非法. */
+    KPI_CYCLE_TYPE_INVALID("PERF-40023", "KPI 方案 cycle_type 非法"),
 
     // =============================================
     // K.2 409xx 业务冲突 / 幂等
@@ -131,20 +141,11 @@ public enum PerfErrorCode {
      */
     IDEMPOTENCY_WAIT_TIMEOUT("PERF-50003", "幂等等待超时（Redis 锁释放后仍无 DB 记录）"),
 
-    /** 指标/KPI 计算 Job 执行失败（V1.1 占位） */
-    CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败"),
-
-    /** V1.7：calc_freq 非法（不在 DAY/WEEK/MONTH/QUARTER/YEAR 内）. */
-    METRIC_CALC_FREQ_INVALID("PERF-40021", "calc_freq 非法"),
-
-    /** V1.7：EXPR/GROOVY 类型 subject_sql 必填. */
-    METRIC_SUBJECT_SQL_REQUIRED("PERF-40022", "EXPR/GROOVY 类型 subject_sql 必填"),
-
     /** V1.7：subject_sql 执行失败. */
     METRIC_SUBJECT_SQL_FAILED("PERF-50004", "subject_sql 执行失败"),
 
-    /** V1.7：KPI 方案 cycle_type 非法. */
-    KPI_CYCLE_TYPE_INVALID("PERF-40023", "KPI 方案 cycle_type 非法");
+    /** 指标/KPI 计算 Job 执行失败（V1.1 占位） */
+    CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败");
 
     private final String code;
     private final String message;
