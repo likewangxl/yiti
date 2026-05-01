@@ -168,7 +168,7 @@ ON DUPLICATE KEY UPDATE
     P_ID = VALUES(P_ID),
     ORGAN_STATE = VALUES(ORGAN_STATE);
 
-INSERT INTO wf_node_candidate_conf (
+INSERT INTO WF_NODE_CANDIDATE_CONF (
     id, process_definition_key, node_key, candidate_type, candidate_value
 ) VALUES
     ('REALENV_LOAN_BRANCH', 'loan_approve_v1', 'branch_approve', 'ROLE', '["BRANCH_HEA"]'),

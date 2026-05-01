@@ -1,7 +1,7 @@
-DELETE FROM loan_apply;
-DELETE FROM support_request;
+DELETE FROM LOAN_APPLY;
+DELETE FROM SUPPORT_REQUEST;
 
-INSERT INTO loan_apply (
+INSERT INTO LOAN_APPLY (
   id, apply_no, cust_id, source_touch_task_id, project_type, biz_type, guarantee_type,
   credit_amount, credit_exposure_amount, status, business_key, process_instance_id,
   owner_org_id, created_by, created_time, updated_by, updated_time, deleted
@@ -11,7 +11,7 @@ INSERT INTO loan_apply (
   'BJ_CY', 'user001', CURRENT_TIMESTAMP, 'user001', CURRENT_TIMESTAMP, 0
 );
 
-INSERT INTO support_request (
+INSERT INTO SUPPORT_REQUEST (
   id, request_no, submit_group_id, cust_id, source_touch_task_id, product_id, support_dept_id,
   other_demand, dispatch_emp_id, dispatch_time, assigned_emp_id, status, business_key,
   process_instance_id, owner_org_id, created_by, created_time, updated_by, updated_time, deleted
