@@ -22,4 +22,4 @@ DELETE FROM PT_RESOURCE WHERE RESOURCE_ID IN ('100','101','102','103','104','105
 -- V1.6 JobService.syncJobsOnStartup 期望非空类全限定名做 Class.forName，会报 ERROR：
 --   ERROR JobService - [JobService.syncJobsOnStartup] jobKey=DAILY_REPORT 同步失败，跳过继续
 -- 测试环境下这些是历史 stub 数据，不被任何 IT 引用，统一清掉避免日志噪音。
-DELETE FROM sys_job_conf WHERE id IN ('J001', 'J002');
+DELETE FROM SYS_JOB_CONF WHERE id IN ('J001', 'J002');

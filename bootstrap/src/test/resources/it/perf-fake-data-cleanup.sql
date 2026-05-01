@@ -4,10 +4,10 @@
 -- 4 员工：E10001/E10002/E10003/E10004（覆盖 trend UP/FLAT/DOWN/null 4 边界）
 -- ============================================================
 
-DELETE FROM emp_index_result WHERE emp_id IN ('E10001', 'E10002', 'E10003', 'E10004');
-DELETE FROM perf_target_value WHERE subject_id IN ('E10001', 'E10002', 'E10003', 'E10004');
-DELETE FROM perf_kpi_item WHERE scheme_id = 'KPI01';
-DELETE FROM perf_kpi_scheme WHERE id = 'KPI01';
-DELETE FROM perf_metric_def WHERE metric_code = 'DEPOSIT';
-DELETE FROM sys_control WHERE id = 'SC_EMP';
-DELETE FROM portal_shortcut WHERE id IN ('SC_SYS_01', 'SC_CUST_E10001');
+DELETE FROM EMP_INDEX_RESULT WHERE emp_id IN ('E10001', 'E10002', 'E10003', 'E10004');
+DELETE FROM PERF_TARGET_VALUE WHERE subject_id IN ('E10001', 'E10002', 'E10003', 'E10004');
+DELETE FROM PERF_KPI_ITEM WHERE scheme_id = 'KPI01';
+DELETE FROM PERF_KPI_SCHEME WHERE id = 'KPI01';
+DELETE FROM PERF_METRIC_DEF WHERE metric_code = 'DEPOSIT';
+DELETE FROM SYS_CONTROL WHERE id = 'SC_EMP';
+DELETE FROM PORTAL_SHORTCUT WHERE id IN ('SC_SYS_01', 'SC_CUST_E10001');
