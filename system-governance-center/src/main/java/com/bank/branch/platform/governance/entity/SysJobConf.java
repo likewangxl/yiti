@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("sys_job_conf")
+@TableName("SYS_JOB_CONF")
 public class SysJobConf {
 
     /** 任务ID（UUID主键），对应 id */

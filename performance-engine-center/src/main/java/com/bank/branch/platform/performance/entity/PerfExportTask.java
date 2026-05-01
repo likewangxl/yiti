@@ -31,7 +31,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
-@TableName("perf_export_task")
+@TableName("PERF_EXPORT_TASK")
 public class PerfExportTask {
 
     /** 任务 ID（varchar(32) 主键）. */

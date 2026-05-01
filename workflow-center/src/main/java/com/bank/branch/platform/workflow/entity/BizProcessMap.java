@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("biz_process_map")
+@TableName("BIZ_PROCESS_MAP")
 public class BizProcessMap {
 
     /** 映射ID（UUID主键），对应 id */

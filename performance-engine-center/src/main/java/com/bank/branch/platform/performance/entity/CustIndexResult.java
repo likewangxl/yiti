@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
  * {@code insertSlotValue} / {@code selectSlotValue} 按 slot 单列读写。
  */
 @Data
-@TableName("cust_index_result")
+@TableName("CUST_INDEX_RESULT")
 public class CustIndexResult {
 
     /** 主键（bigint AUTO_INCREMENT）. */

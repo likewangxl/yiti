@@ -27,7 +27,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
-@TableName("kpi_result")
+@TableName("KPI_RESULT")
 public class KpiResult {
 
     /** 主键（bigint AUTO_INCREMENT）. */

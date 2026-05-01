@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * <p>索引：idx_status(status)
  */
 @Data
-@TableName("perf_target_plan")
+@TableName("PERF_TARGET_PLAN")
 public class PerfTargetPlan {
 
     /** 目标方案ID（varchar(32) 主键）. */

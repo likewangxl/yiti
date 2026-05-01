@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * <p>索引：idx_dim_level / idx_status / idx_val_slot
  */
 @Data
-@TableName("perf_metric_def")
+@TableName("PERF_METRIC_DEF")
 public class PerfMetricDef {
 
     /** 指标ID（varchar(32) 主键）. */

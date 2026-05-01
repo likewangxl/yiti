@@ -45,7 +45,7 @@ import java.time.LocalDateTime;
  * @since V1.2 Q3.1
  */
 @Data
-@TableName("perf_target_adjust_apply")
+@TableName("PERF_TARGET_ADJUST_APPLY")
 public class PerfTargetAdjustApply {
 
     /** 申请 ID（varchar(32) 主键）. */

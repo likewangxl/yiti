@@ -30,7 +30,7 @@ import java.time.LocalDateTime;
  * RETAIL_CARD → retail_v1），生产 DDL 不存在 {@code adjust_type} 字段.
  */
 @Data
-@TableName("perf_alloc_adjust_apply")
+@TableName("PERF_ALLOC_ADJUST_APPLY")
 public class PerfAllocAdjustApply {
 
     /** 申请 ID（varchar(32) 主键）. */

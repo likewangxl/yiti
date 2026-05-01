@@ -18,7 +18,7 @@ import java.util.List;
  * </p>
  */
 @Data
-@TableName("product_info")
+@TableName("PRODUCT_INFO")
 public class ProductInfo {
 
     /** 产品ID（UUID主键），对应 id */

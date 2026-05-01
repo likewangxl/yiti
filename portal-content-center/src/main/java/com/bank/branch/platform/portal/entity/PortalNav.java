@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("portal_nav")
+@TableName("PORTAL_NAV")
 public class PortalNav {
 
     /** 导航ID（UUID主键），对应 id */

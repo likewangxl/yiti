@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("cust_master")
+@TableName("CUST_MASTER")
 public class CustMaster {
 
     /** 主键ID（UUID，32位去连字符），对应 id */

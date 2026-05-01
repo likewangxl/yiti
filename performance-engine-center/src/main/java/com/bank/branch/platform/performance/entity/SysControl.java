@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * <p>索引: (scope_dim, is_valid)
  */
 @Data
-@TableName("sys_control")
+@TableName("SYS_CONTROL")
 public class SysControl {
 
     /** 控制ID (varchar(32) 主键). */

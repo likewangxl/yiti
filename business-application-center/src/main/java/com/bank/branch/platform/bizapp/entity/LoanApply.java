@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("loan_apply")
+@TableName("LOAN_APPLY")
 public class LoanApply {
 
     /** 申请ID（UUID，32位去连字符），对应 id */

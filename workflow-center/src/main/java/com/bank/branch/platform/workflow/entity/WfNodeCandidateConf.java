@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("wf_node_candidate_conf")
+@TableName("WF_NODE_CANDIDATE_CONF")
 public class WfNodeCandidateConf {
 
     /** 配置ID（UUID主键），对应 id */

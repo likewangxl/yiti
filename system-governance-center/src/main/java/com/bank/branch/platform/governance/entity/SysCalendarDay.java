@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("sys_calendar_day")
+@TableName("SYS_CALENDAR_DAY")
 public class SysCalendarDay {
 
     /** 日期（自然主键），对应 day */

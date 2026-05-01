@@ -27,7 +27,7 @@ import java.time.LocalDateTime;
  * {@code end_date} 切分，新记录 {@code effective_date} 由审批时间确定）.
  */
 @Data
-@TableName("perf_alloc_adjust_item")
+@TableName("PERF_ALLOC_ADJUST_ITEM")
 public class PerfAllocAdjustItem {
 
     /** 明细 ID（varchar(32) 主键）. */

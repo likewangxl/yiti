@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("file_object")
+@TableName("FILE_OBJECT")
 public class FileObject {
 
     /** 文件对象ID（UUID主键），对应 id */

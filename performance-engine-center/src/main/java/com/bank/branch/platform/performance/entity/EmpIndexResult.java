@@ -27,7 +27,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
-@TableName("emp_index_result")
+@TableName("EMP_INDEX_RESULT")
 public class EmpIndexResult {
 
     /** 主键（bigint AUTO_INCREMENT）. */

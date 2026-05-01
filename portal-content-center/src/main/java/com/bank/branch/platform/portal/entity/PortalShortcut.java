@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("portal_shortcut")
+@TableName("PORTAL_SHORTCUT")
 public class PortalShortcut {
 
     /** 快捷入口ID（UUID主键），对应 id */

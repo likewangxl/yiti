@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("user_notification")
+@TableName("USER_NOTIFICATION")
 public class UserNotification {
 
     /** 通知ID（UUID主键），对应 id */

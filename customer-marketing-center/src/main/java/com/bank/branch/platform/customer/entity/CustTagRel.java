@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("cust_tag_rel")
+@TableName("CUST_TAG_REL")
 public class CustTagRel {
 
     /** 主键ID（UUID，32位去连字符），对应 id */

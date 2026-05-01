@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("sys_job_run_log")
+@TableName("SYS_JOB_RUN_LOG")
 public class SysJobRunLog {
 
     /** 执行日志ID（UUID主键），对应 id */

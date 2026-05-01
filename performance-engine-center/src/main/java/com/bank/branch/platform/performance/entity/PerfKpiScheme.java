@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * <p>索引：idx_status(status)
  */
 @Data
-@TableName("perf_kpi_scheme")
+@TableName("PERF_KPI_SCHEME")
 public class PerfKpiScheme {
 
     /** 方案ID（varchar(32) 主键）. */

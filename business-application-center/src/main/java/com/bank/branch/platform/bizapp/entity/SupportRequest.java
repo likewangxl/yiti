@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("support_request")
+@TableName("SUPPORT_REQUEST")
 public class SupportRequest {
 
     /** 申请ID（UUID，32位去连字符），对应 id */

@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("audit_log")
+@TableName("AUDIT_LOG")
 public class AuditLog {
 
     /** 日志ID（UUID主键），对应 id */

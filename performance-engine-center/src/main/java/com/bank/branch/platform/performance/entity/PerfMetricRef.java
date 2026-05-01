@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
  * <p>索引：idx_ref_metric(ref_metric_code)
  */
 @Data
-@TableName("perf_metric_ref")
+@TableName("PERF_METRIC_REF")
 public class PerfMetricRef {
 
     /** 引用关系ID. */

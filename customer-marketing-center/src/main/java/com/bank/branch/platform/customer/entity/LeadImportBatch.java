@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("lead_import_batch")
+@TableName("LEAD_IMPORT_BATCH")
 public class LeadImportBatch {
 
     /** 主键ID（UUID，32位去连字符），对应 id */

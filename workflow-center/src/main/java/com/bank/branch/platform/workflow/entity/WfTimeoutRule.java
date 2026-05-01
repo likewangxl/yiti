@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("wf_timeout_rule")
+@TableName("WF_TIMEOUT_RULE")
 public class WfTimeoutRule {
 
     /** 规则ID（UUID主键），对应 id */

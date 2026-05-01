@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("doc_info")
+@TableName("DOC_INFO")
 public class DocInfo {
 
     /** 文档ID（UUID主键），对应 id */

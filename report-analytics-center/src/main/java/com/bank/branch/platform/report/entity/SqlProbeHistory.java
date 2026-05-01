@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
-@TableName("sql_probe_history")
+@TableName("SQL_PROBE_HISTORY")
 public class SqlProbeHistory {
 
     /** 历史 ID（UUID） */

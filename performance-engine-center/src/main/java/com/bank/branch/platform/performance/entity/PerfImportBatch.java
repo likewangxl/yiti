@@ -33,7 +33,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
-@TableName("perf_import_batch")
+@TableName("PERF_IMPORT_BATCH")
 public class PerfImportBatch {
 
     /** 批次 ID（varchar(32) 主键）. */

@@ -32,7 +32,7 @@ import java.time.LocalDateTime;
  * <p>索引：idx_task_type / idx_status / idx_started_by / idx_created_time（DDL 已建）.
  */
 @Data
-@TableName("perf_run_task")
+@TableName("PERF_RUN_TASK")
 public class PerfRunTask {
 
     /** 任务ID（varchar(32) 主键）. */

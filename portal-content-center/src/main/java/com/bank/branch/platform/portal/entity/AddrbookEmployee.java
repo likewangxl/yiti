@@ -18,7 +18,7 @@ import java.util.List;
  * </p>
  */
 @Data
-@TableName("addrbook_employee")
+@TableName("ADDRBOOK_EMPLOYEE")
 public class AddrbookEmployee {
 
     /** 员工工号（主键），对应 emp_id */

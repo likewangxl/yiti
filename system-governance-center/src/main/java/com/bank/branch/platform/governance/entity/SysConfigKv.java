@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("sys_config_kv")
+@TableName("SYS_CONFIG_KV")
 public class SysConfigKv {
 
     /** 配置ID（UUID主键），对应 id */

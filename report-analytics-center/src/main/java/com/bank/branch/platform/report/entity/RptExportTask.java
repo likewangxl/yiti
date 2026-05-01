@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
-@TableName("rpt_export_task")
+@TableName("RPT_EXPORT_TASK")
 public class RptExportTask {
 
     /** 导出任务 ID */

@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * <p>V1 状态：仅建表不启用；V2 扩展——当日活 &gt; 1000 或仪表盘并发 &gt; 500 QPS 时引入本地快照加速.
  */
 @Data
-@TableName("rpt_snapshot_task")
+@TableName("RPT_SNAPSHOT_TASK")
 public class RptSnapshotTask {
 
     /** 任务 ID */

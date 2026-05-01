@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * <p>索引：idx_metric_code(metric_code), idx_subject(subject_type, subject_id, cycle_key)
  */
 @Data
-@TableName("perf_target_value")
+@TableName("PERF_TARGET_VALUE")
 public class PerfTargetValue {
 
     /** 目标值ID（varchar(32) 主键）. */

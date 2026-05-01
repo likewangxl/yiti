@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("sys_dict")
+@TableName("SYS_DICT")
 public class SysDict {
 
     /** 字典ID（UUID主键），对应 id */

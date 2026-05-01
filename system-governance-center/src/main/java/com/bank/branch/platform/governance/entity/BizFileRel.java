@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("biz_file_rel")
+@TableName("BIZ_FILE_REL")
 public class BizFileRel {
 
     /** 关联ID（UUID主键），对应 id */

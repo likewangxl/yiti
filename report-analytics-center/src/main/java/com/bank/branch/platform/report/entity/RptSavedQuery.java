@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
  * </ul>
  */
 @Data
-@TableName("rpt_saved_query")
+@TableName("RPT_SAVED_QUERY")
 public class RptSavedQuery {
 
     /** 方案 ID（UUID） */

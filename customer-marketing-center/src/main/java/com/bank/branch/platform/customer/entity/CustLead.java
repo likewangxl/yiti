@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  * </p>
  */
 @Data
-@TableName("cust_lead")
+@TableName("CUST_LEAD")
 public class CustLead {
 
     /** 主键ID（UUID，32位去连字符），对应 id */

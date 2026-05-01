@@ -35,7 +35,7 @@ import java.time.LocalDateTime;
  * {@code effective_date &lt;= asOfDate AND (end_date IS NULL OR end_date &gt;= asOfDate)}.
  */
 @Data
-@TableName("cust_alloc_relation")
+@TableName("CUST_ALLOC_RELATION")
 public class CustAllocRelation {
 
     /** 分配关系 ID（varchar(32) 主键）. */
