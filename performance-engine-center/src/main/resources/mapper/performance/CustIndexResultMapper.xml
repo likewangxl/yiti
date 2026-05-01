@@ -46,4 +46,26 @@
             (#{custId}, #{dataDate}, #{version})
     </insert>
 
+    <!-- V1.7：取多 metricCode 对应的 val_slot 映射，查 perf_metric_def 表. -->
+    <select id="selectValSlotsByCodes" resultType="java.util.HashMap">
+        SELECT metric_code AS `key`, val_slot AS `value`
+        FROM PERF_METRIC_DEF
+        WHERE val_slot IS NOT NULL
+          AND metric_code IN
+            <foreach collection="metricCodes" item="c" open="(" close=")" separator=",">#{c}</foreach>
+    </select>
+
+    <!--
+      V1.7：按 slot 列号查客户单值，val_${slot} 属合法动态列名例外（common-dev-guide §5），
+      调用方必须在 Service 层保证 slot ∈ [1, 200]。
+    -->
+    <select id="selectValBySlot" resultType="java.math.BigDecimal">
+        SELECT val_${slot}
+        FROM CUST_INDEX_RESULT
+        WHERE cust_id = #{subject}
+          AND data_date = #{dataDate}
+          AND version = #{version}
+        LIMIT 1
+    </select>
+
 </mapper>

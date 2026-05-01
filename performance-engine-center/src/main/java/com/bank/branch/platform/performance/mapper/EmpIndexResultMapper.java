@@ -164,4 +164,59 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                                      @Param("dates") List<LocalDate> dates,
                                                      @Param("version") String version,
                                                      @Param("slot") Integer slot);
+
+    /**
+     * V1.7：取多个 metricCode 对应的 val_slot 映射（一次查询，查 perf_metric_def）.
+     *
+     * @param metricCodes 指标编码列表
+     * @return metricCode -&gt; val_slot 映射
+     */
+    Map<String, Integer> selectValSlotsByCodes(@Param("metricCodes") List<String> metricCodes);
+
+    /**
+     * V1.7：按 slot 列号查单主体单值（val_${slot} 动态列名）.
+     *
+     * <p><strong>安全说明</strong>：val_${slot} 属 common-dev-guide §5 合法例外，
+     * 调用方必须保证 slot ∈ [1, 200]（MetricCalcService.validateSlot 负责校验）。
+     *
+     * @param subject  员工工号
+     * @param slot     值槽（1..200）
+     * @param dataDate 数据日期
+     * @param version  数据版本
+     * @return 指标值，行不存在返回 null
+     */
+    java.math.BigDecimal selectValBySlot(@Param("subject") String subject,
+                                         @Param("slot") Integer slot,
+                                         @Param("dataDate") java.time.LocalDate dataDate,
+                                         @Param("version") String version);
+
+    /**
+     * V1.7：按 subject + 多 metricCode 在单一 dataDate+version 下取宽表 slot 值.
+     *
+     * <p>实现：先查 perf_metric_def 拿 metricCode → val_slot 映射，
+     * 再为每个 slot 查 val_${slot}，返回 Map&lt;metricCode, value&gt;。
+     * 未命中的 metricCode 不入结果 Map。
+     *
+     * @param subject     员工工号
+     * @param metricCodes 指标编码列表（空列表直接返回空 Map）
+     * @param dataDate    数据日期
+     * @param version     数据版本
+     * @return metricCode -&gt; 指标值 映射
+     */
+    default java.util.Map<String, java.math.BigDecimal> selectSlotValuesByCodes(
+            String subject, List<String> metricCodes,
+            java.time.LocalDate dataDate, String version) {
+        if (metricCodes == null || metricCodes.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Map<String, Integer> slotMap = selectValSlotsByCodes(metricCodes);
+        java.util.Map<String, java.math.BigDecimal> result = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, Integer> e : slotMap.entrySet()) {
+            java.math.BigDecimal value = selectValBySlot(subject, e.getValue(), dataDate, version);
+            if (value != null) {
+                result.put(e.getKey(), value);
+            }
+        }
+        return result;
+    }
 }
