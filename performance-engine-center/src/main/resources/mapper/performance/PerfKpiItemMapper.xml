@@ -59,4 +59,13 @@
         LIMIT 1
     </select>
 
+    <!-- V1.7：反查依赖某指标的 ACTIVE KPI 方案 ID 列表（供 KpiCascadeListener 使用） -->
+    <select id="selectActiveSchemeIdsByMetric" parameterType="string" resultType="string">
+        SELECT DISTINCT i.scheme_id
+        FROM PERF_KPI_ITEM i
+        INNER JOIN PERF_KPI_SCHEME s ON i.scheme_id = s.id
+        WHERE i.metric_code = #{metricCode}
+          AND s.status = 'ACTIVE'
+    </select>
+
 </mapper>

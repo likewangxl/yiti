@@ -14,5 +14,6 @@ import org.springframework.context.annotation.Configuration;
 @ComponentScan(basePackages = "com.bank.branch.platform.performance")
 @EnableConfigurationProperties
 @org.springframework.scheduling.annotation.EnableScheduling
+@org.springframework.scheduling.annotation.EnableAsync
 public class PerformanceAutoConfiguration {
 }

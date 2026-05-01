@@ -63,4 +63,15 @@ public interface PerfKpiItemMapper extends BaseMapper<PerfKpiItem> {
      */
     PerfKpiItem selectBySchemeAndMetric(@Param("schemeId") String schemeId,
                                         @Param("metricCode") String metricCode);
+
+    /**
+     * V1.7：反查依赖某指标的 ACTIVE KPI 方案 ID 列表.
+     *
+     * <p>用于 KpiCascadeListener 在指标计算完成后，找出所有引用该指标且状态为 ACTIVE 的 KPI 方案，
+     * 触发相应的 KPI 方案重算.
+     *
+     * @param metricCode 指标编码
+     * @return ACTIVE KPI 方案 ID 列表（可能为空）
+     */
+    List<String> selectActiveSchemeIdsByMetric(@Param("metricCode") String metricCode);
 }
