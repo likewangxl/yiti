@@ -53,12 +53,17 @@ CREATE TABLE IF NOT EXISTS `PERF_METRIC_DEF` (
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_by` varchar(32) DEFAULT NULL COMMENT '更新人',
   `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  -- V1.7 新增（指标级 Quartz 调度改造，2026-04-30）
+  `cron_expr` varchar(120) DEFAULT NULL COMMENT 'V1.7 自定义 cron；留空按 calc_freq 推导默认',
+  `subject_sql` longtext COMMENT 'V1.7 EXPR/GROOVY 类型主体集合 SQL（SQL/PROC/SUMMARY 不需要）',
+  `last_run_time` datetime DEFAULT NULL COMMENT 'V1.7 最近一次自动调度执行时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_metric_code` (`metric_code`),
   UNIQUE KEY `uk_base_dim_slot_alive` ((IF(deleted=0, CONCAT(base_dim,'#',val_slot), NULL))),
   KEY `idx_dim_level` (`base_dim`, `metric_level`),
   KEY `idx_status` (`status`),
-  KEY `idx_val_slot` (`val_slot`)
+  KEY `idx_val_slot` (`val_slot`),
+  KEY `idx_metric_def_schedulable` (`status`, `calc_mode`, `deleted`) -- V1.7 启动同步 + HealthCheck 扫描
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='指标定义表';
 
 -- -------------------------------------------
