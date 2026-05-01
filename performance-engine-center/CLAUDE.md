@@ -501,6 +501,35 @@ V1.5 交付后无明确已登记的观察项。若未来 reviewer 或生产运�
 
 注：04 对外 API 契约文档登记的"员工-KPI 方案个人绑定"属业务规划范畴（非技术债），不在此清单。
 
+### V1.7 交付后登记的观察项（V1.8 候选）
+
+V1.7（指标级 Quartz 调度改造）交付后，code reviewer 在过程中识别出以下 8 项观察项，本期未消化，登记为 V1.8+ 候选：
+
+| 序号 | 标题 | 优先级 | 来源 | 状态 |
+|---|---|---|---|---|
+| 1 | `last_run_time` 字段加了 DDL 但生产代码未写入（运维看调度活性靠 sys_job_conf 同名字段兜底） | 中 | reviewer Major | V1.8 候选 |
+| 2 | `KpiCascadeAsyncIT` 缺失（异步 + Redis Testcontainers 集成 IT），仅 surefire UT + E2E IT 覆盖核心逻辑 | 中 | reviewer Major / spec § 9 测试矩阵 | V1.8 候选 |
+| 3 | `KpiSchemeService.publish` 未主动触发一次 calcScheme，新发布方案首日依赖现有 cron 触发 | 中 | reviewer Major / spec § 11 风险点 5 | V1.8 候选 |
+| 4 | spec § 5.4 错误码编号文档勘误：实际 GOV-50010/50011/50012（spec 写错为 50001-50003） | 低 | reviewer Minor | doc-only |
+| 5 | `sys_job_conf.job_key` 列宽未在 V1_7_0 验证/拓宽，PERF_METRIC_${code} 长指标名风险 | 低 | reviewer Minor / spec § 4.4 | V1.8 候选 |
+| 6 | `failedSamples` 截断逻辑分散在调用方 `if (failedSamples.size() < 10)`，可下沉到 SubjectStats 工厂方法 | 低 | reviewer Minor | V1.8 候选 |
+| 7 | 引用指标依赖 cron 时序拓扑排序 | 中 | spec § 13 后续增强 #1 | V1.9+ |
+| 8 | PROC/SUMMARY 类型支持 | 低 | spec § 13 后续增强 #2 | V1.9+ |
+
+### V1.7 best-effort 事件传递语义已明文化
+
+- `KpiCascadeListener.java` 类 javadoc + `docs/modules/performance-engine-center/02-后端架构.md` 行 740-746
+- 边界：calcMetric 写状态成功 → 事件 publish 之前 JVM 崩溃 → 事件丢失，KPI 永远不会重算
+- 兜底：MetricSchedulerHealthCheck 每 10 分钟扫描间接补偿
+- 强一致演进：V1.7+ 引入"事件落库 + Quartz 补偿扫描"模式
+
+### V1.7 累积测试
+
+- surefire ~640 case 全绿（V1.7 新增约 60 case）
+- failsafe IT 全绿（含 V1_7_0FlywayIT / KpiCascadeAsyncIT 缺失例外，见上表 #2 / MetricScheduledE2EIT / JobApiRegisterQuartzIT / MetricDefServiceScheduleHookTest）
+- 已知本地环境失败：AllocRelationScopeIntegrationTest 3 + PerfMetricDefMapperIT 2 + portal AddrbookEmployeeMapperIntegrationTest（V1.7 改造范围外）
+- ArchTest 守护：`NoOldDailyKpiCalcArchTest` 阻止 DailyKpiCalcJob 类回潮
+
 ## 运维 Runbook（V1.2 + V1.3 + V1.4 交付）
 
 ### V1.4 启用前置检查（DDL 迁移安全门）
