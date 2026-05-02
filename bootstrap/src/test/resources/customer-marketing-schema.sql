@@ -1,5 +1,12 @@
 -- 注：UNIQUE KEY 内联在 CREATE TABLE 中（兼容 MySQL 真库 + H2 IF NOT EXISTS 语义）
 -- MySQL 不支持独立的 CREATE UNIQUE INDEX IF NOT EXISTS，改成内联 UNIQUE KEY 子句
+--
+-- ⚠️ V1.12 # 5 注（2026-05-01）：CREATE TABLE IF NOT EXISTS 不更新现有表列。
+-- 当本文件后续加新列时（如 V1.6 加 TOUCH_TASK.sla_warning），已存在的旧表（V1.6 之前
+-- 创建的实例如 onepl_test_bootstrap）会缺这些列。修复办法：
+-- 1. 在 docs/superpowers/sql/ 新建日期前缀脚本含 ALTER TABLE ADD COLUMN（INFORMATION_SCHEMA 兜底）
+-- 2. 现役脚本：docs/superpowers/sql/2026-05-01-v1.12-schema-column-drift-fix.sql（修 sla_warning）
+-- 3. 测试库实例手工跑该脚本对齐
 
 CREATE TABLE IF NOT EXISTS cust_tag (
     id VARCHAR(32) PRIMARY KEY,

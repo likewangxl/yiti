@@ -11,6 +11,7 @@ import org.quartz.Scheduler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,6 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(classes = PerfTestApp.class)
 @ActiveProfiles("test")
+@Sql(statements = "DELETE FROM PERF_METRIC_DEF WHERE metric_code='E2E_M_V1_7'",
+     executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class MetricScheduledE2EIT {
 
     @Autowired

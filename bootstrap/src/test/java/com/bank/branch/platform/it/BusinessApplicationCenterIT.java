@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import(TestMockConfig.class)
-@Sql(scripts = "/business-application-schema.sql")
+@Sql(scripts = {"/business-application-schema.sql", "/business-application-data.sql"})
 class BusinessApplicationCenterIT {
 
     private static final String OPERATOR_EMP_ID = "user001";
