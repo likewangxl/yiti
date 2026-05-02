@@ -453,4 +453,4 @@ public class SysControlUpdatedListener {
 
 **Plan 来源**：`docs/superpowers/plans/2026-04-25-report-analytics-center-v1.0-plan.md`（Milestone M0-M6）
 
-**测试基线（M6 末）**：surefire 103 + failsafe 70 = 173 全绿，6 架构守护全绿，Flyway V1_0_0 → V1_0_7 共 8 脚本.
+**测试基线（M6 末）**：surefire 103 + failsafe 70 = 173 全绿，6 架构守护全绿（Flyway 已废弃，原 V1_0_0~V1_0_7 共 8 脚本已删除，详见根 CLAUDE.md "Flyway 禁令"红线）.

@@ -3,6 +3,12 @@
 **版本**: V1.9（整合 V1.6→V1.8 调度知识，2026-05-01）｜**归属模块**: system-governance-center
 **权威源**: 本文件是 sys_job_conf / Quartz 集群调度运维的**唯一入口**，各模块 CLAUDE.md 保留摘要+指针。
 
+> ⚠️ **Flyway 已彻底废弃**（详见根 [CLAUDE.md](../../../CLAUDE.md) "Flyway 禁令"红线）。
+> 本文件下方 § 2 历史"启用前置检查"段中提到的 `mvn flyway:migrate` / `flyway_schema_history` /
+> `V1_7_0FlywayIT` 等内容仅作**历史档案**保留，对应迁移脚本与 IT 测试基类已从源码中删除。
+> 当前 schema 变更操作流程：DBA/开发者直接将 SQL 在目标库执行（`mysql -u... < ddl.sql`
+> 或 source 命令），不再使用任何"按版本号自动 migrate"框架。
+
 ---
 
 ## § 1. 表结构概览
@@ -27,7 +33,7 @@ SYS_JOB_CONF               SYS_JOB_RUN_LOG      QRTZ_JOB_DETAILS
 - **SYS_JOB_RUN_LOG**：执行记录层，由 JobExecutionLogger（全局 Quartz JobListener）
   在每次调度开始/结束时自动写入，业务模块无需调用任何写日志 API。
 - **QRTZ_\* 表**（11 张）：Quartz JDBC JobStore 持久层，由 ddl-quartz.sql 手动初始化，
-  spring.quartz.jdbc.initialize-schema=never，**不由 Flyway 管理**。
+  spring.quartz.jdbc.initialize-schema=never。
 
 ### 1.2 SYS_JOB_CONF 主键与关键字段语义
 
@@ -135,8 +141,8 @@ WHERE job_key LIKE 'PERF_METRIC_%';
 -- 应有 N 条，N = ACTIVE+AUTO 且 subject_sql 已填的指标数
 ```
 
-**失败处理**：若 V1_7_0 或 V1_7_1 迁移失败，删除 flyway_schema_history 中 FAILED 记录后重跑；
-严禁跳过直接执行后续版本脚本。
+**失败处理**：若 V1.7 schema 变更 SQL 执行失败，按 MySQL 报错定位后修复（如冲突列、索引、数据），
+再 source 一次。严禁跳过当前版本直接执行后续 SQL，否则 schema 状态不一致。
 
 来源：performance-engine-center/CLAUDE.md「V1.7 启用前置检查」段
 
@@ -205,17 +211,16 @@ FROM perf_run_task
 WHERE task_key IS NOT NULL
 GROUP BY task_key
 HAVING COUNT(*) > 1;
--- 有结果 → 手工清理重复行后再跑 flyway:migrate
--- 无结果 → 直接跑 flyway:migrate
+-- 有结果 → 手工清理重复行后再 source ALTER 脚本
+-- 无结果 → 直接 source ALTER 脚本
 ```
 
-**期望结果**：预检 2 无结果，可直接迁移；预检 1 行数多少均安全。
+**期望结果**：预检 2 无结果，可直接执行；预检 1 行数多少均安全。
 
-**失败处理**：若 V1_3_0 因存量重复失败：
+**失败处理**：若 V1.3 ALTER 因存量重复失败：
 1. 按业务规则手工清理重复行
-2. 在 flyway_schema_history 删除 FAILED 对应行
-3. 重跑 `mvn flyway:migrate`
-4. **严禁**直接跳到下个 V1_3_x 脚本，否则 schema 状态不一致
+2. 重新 source 当期 ALTER 脚本
+3. **严禁**直接跳到下个版本的 SQL，否则 schema 状态不一致
 
 来源：performance-engine-center/CLAUDE.md「V1.3 启用前置检查」段
 
@@ -223,7 +228,7 @@ HAVING COUNT(*) > 1;
 
 ### 2.5 V1.6（2026-04-25）— Quartz 基础设施初始化
 
-**迁移脚本**：`docs/schema/ddl-quartz.sql`（手动执行，不由 Flyway 管理）
+**迁移脚本**：`docs/schema/ddl-quartz.sql`（手动执行）
 
 **迁移目的**：初始化 11 张 QRTZ_* 表，为 Quartz JDBC JobStore 集群模式提供持久层。
 
@@ -453,8 +458,8 @@ FROM SYS_JOB_CONF
 WHERE status = 'ACTIVE';
 ```
 
-**修复**：若类已删除（如 DailyKpiCalcQuartzJob），DELETE 对应 sys_job_conf 行
-（配套 Flyway 脚本如 V1_7_1）；或更新 quartz_job_class 为新类名。
+**修复**：若类已删除（如 DailyKpiCalcQuartzJob），手工 DELETE 对应 sys_job_conf 行；
+或更新 quartz_job_class 为新类名。
 
 ---
 
@@ -607,8 +612,11 @@ V1.9 spec docs/superpowers/specs/2026-05-01-v1.9-runbook-and-case-consistency-de
 
 V1.10 合一后平台测试 mysql 库**唯一为 `onepl_test_bootstrap`**：
 - bootstrap @SpringBootTest 业务 IT 用
-- perf FlywayIT（PerformanceFlywayTestBase）用
-- report FlywayIT（ReportFlywayTestBase）用
+- perf 模块 IT 用
+- report 模块 IT 用
+
+> Flyway 已彻底废弃（详见根 CLAUDE.md "Flyway 禁令"红线），原 perf/report 的 `*FlywayTestBase` /
+> `*FlywayIT` 测试基类已从源码中删除。
 
 ### v103 库废弃
 
@@ -616,14 +624,6 @@ V1.10 合一后平台测试 mysql 库**唯一为 `onepl_test_bootstrap`**：
 ```sql
 DROP DATABASE onepl_test_v103;
 ```
-
-### Flyway 配置
-
-V1.10 后 perf/report FlywayTestBase 配置：
-- `spring.datasource.url = jdbc:mysql://localhost:3306/onepl_test_bootstrap?...`
-- `spring.flyway.enabled = true`
-- `spring.flyway.baseline-on-migrate = true`
-- `spring.flyway.baseline-version = 0`（让 V_*.sql 全套从空表真正 migrate）
 
 ### 来源
 

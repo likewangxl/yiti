@@ -242,7 +242,7 @@ com.bank.branch.platform.<module>/
 - **V1.12 schema 治理 spec**: `docs/superpowers/specs/2026-05-01-v1.12-schema-and-data-cleanup-design.md` — onepl_test_bootstrap schema column drift 修复 + 8 customer 小写历史表 DROP + bizapp/MetricScheduledE2EIT 数据 cleanup
 - **V1.13 # 1 测试库一统 spec**: `docs/superpowers/specs/2026-05-02-v1.13-test-db-unification-design.md` — onepl_test_bootstrap 23 张其他模块小写双胞胎 DROP（V1.13 自己脚本 `docs/superpowers/sql/2026-05-02-v1.13-drop-other-lowercase-tables.sql`）+ perf/portal application-test.yml 解绑 yiti 改 onepl_test_bootstrap + perf 启用 Quartz JDBC + 38 测试文件 80+ 处 SQL 上下文 lowercase→uppercase 一致性治理（perl word-boundary sed）+ Flyway history 17 V_*.sql mark success=1 绕开生产 V_*.sql 大小写不一致 + 幂等 init v2 脚本 `docs/superpowers/sql/2026-05-02-v1.13-onepl-test-bootstrap-init-v2.sql`；customer/bizapp/portal/bootstrap surefire 全绿 + report surefire 全绿（fix SqlSafeValidatorTest 期望大写后），perf failsafe errors 27→2、残 6 fail 全部归因（V1.13 # 1b spike 2 + V1.13 # 1d 副作用 4 + V1.7 已知 baseline 3）。
 - **V1.13 # 1d 生产 V_*.sql 大写化 + yiti 库清理**: 2026-05-02 增量交付；perf V_*.sql 9 文件（V1_0_1/V1_0_3/V1_2_3/V1_2_5/V1_3_0/V1_4_0 + undo U1_0_3/U1_0_4/U1_4_0）37 处 SQL 上下文 lowercase→uppercase（perl word-boundary sed），生产 fresh deploy 修复（onepl 库 lower_case_table_names=0 大小写一致）；yiti 开发库 32 张小写双胞胎 DROP（mysqldump 备份 80KB 归档；脚本 `docs/superpowers/sql/2026-05-02-v1.13-drop-yiti-lowercase-tables.sql`）；onepl_test_bootstrap V_*.sql 真跑 V1.0.0~V1.2.5 全 success（V1.3.0+ 因不幂等保留 mark skip → V1.13 # 1e）；perf failsafe errors 27→0、failures 6 全归因
-- **V1.13 候选清单**：# 1 + # 1d 已交付；# 1b MetricScheduledE2EIT 业务层 Quartz JobKey 注入失败 spike（2 fail）；# 1e V_*.sql + undo 幂等化（INFORMATION_SCHEMA 检查 + INSERT IGNORE / IF NOT EXISTS）让 V1.3.0~V1.8.0 在已有 schema 上重复执行不冲突，移除 mark skip 让 V1_0_4FlywayIT/V1_7_0FlywayIT/UndoScriptSmokeIT 4 IT 真跑通过（4 fail）；# 2 V1.8 P6 业务/数据状态；# 3 SummaryControllerIT 500 (V1.12 # 4 老登记)；# 5 WorkflowCallbackListener REQUIRES_NEW 嵌套简化；# 6 LeadRejectedEvent dead code 定调
+- **V1.13 候选清单**：# 1 + # 1d 已交付；# 1b MetricScheduledE2EIT 业务层 Quartz JobKey 注入失败 spike（2 fail）；~~# 1e V_*.sql 幂等化~~（**已作废**：项目废弃 Flyway 后整个 V_*FlywayIT 体系已移除）；# 2 V1.8 P6 业务/数据状态；# 3 SummaryControllerIT 500 (V1.12 # 4 老登记)；# 5 WorkflowCallbackListener REQUIRES_NEW 嵌套简化；# 6 LeadRejectedEvent dead code 定调
 
 ### 模块级 CLAUDE.md (开发时必须参考)
 - **公共基础设施**: [common/CLAUDE.md](common/CLAUDE.md)
@@ -260,6 +260,11 @@ com.bank.branch.platform.<module>/
 ### TDD (测试驱动开发) 绝对红线
 - **红-绿-重构 (Red-Green-Refactor) 闭环**：一切特性的开发或者 Bug 修复，必须先写测试（让他失败，Red），再写最简代码让他通过（Green），最后重构优化（Refactor）。
 - **禁止事后狂补测试**：严禁无视 TDD，先凭直觉写完一大堆业务逻辑再去凑测试的行为。
+
+### Flyway 禁令（绝对红线）
+- **本项目已彻底废弃 Flyway**：禁止引入 `flyway-core` / `flyway-mysql` 任何版本依赖；禁止在 `application*.yml` 出现 `spring.flyway.*` 配置；禁止新增 `V*__*.sql` / `U*__*.sql` 命名风格的迁移脚本；禁止编写 `*FlywayIT` / `*FlywayTestBase` 类。
+- **schema 变更走 SQL 直接执行**：所有 DDL/DML 由开发或 DBA 直接在目标库执行（手工或 CI 脚本），不再依赖任何"按版本号自动 migrate"框架。
+- **历史 V1.0~V1.8 迁移脚本已全部删除**：`onepl` 与 `yiti` 当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
 
 ### 子代理派遣规范（绝对红线）
 - **派遣任何 subagent（Agent 工具）时，model 参数必须 ≥ sonnet（即只能是 `sonnet` 或 `opus`），禁止使用 `haiku`**。

@@ -2,6 +2,11 @@
 
 本文件为 `performance-engine-center` 模块提供上下文说明。
 
+> ⚠️ **Flyway 已彻底废弃**（详见根 [CLAUDE.md](../CLAUDE.md) "Flyway 禁令"红线）。
+> 本文件下方 V1.0~V1.7 历史变更日志中提到的所有 `V*__*.sql` / `U*__*.sql` / `flyway:migrate` / `*FlywayIT`
+> 等内容仅作为**历史档案**保留，不再代表当前可执行/可启用的能力；相关脚本与测试基类均已从源码中删除。
+> 新增 schema 变更请直接以 SQL 在目标库执行，**禁止**重新引入 Flyway。
+
 ## 模块概述
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
@@ -587,40 +592,34 @@ SELECT COUNT(*), COUNT(DISTINCT created_by)
 - `ALTER TABLE perf_target_value DROP COLUMN owner_emp_id, DROP COLUMN owner_org_code` + DROP 索引
 - 注意：undo 前确认 Service 已退回到 V1.3 ScopeColumns `created_by` 配置，否则查询会报"未知列"。
 
-### V1.3 启用前置检查（DDL 迁移安全门）
+### V1.3 启用前置检查（DDL 历史档案）
 
-V1.3 引入两个关键 Flyway 脚本，生产启用前**必须**先做预检，防止 ALTER 失败阻塞后续迁移：
+> ⚠️ **本节已作为历史档案保留**：项目废弃 Flyway 后，原 V1_2_5 / V1_3_0 等 SQL 文件已删除，
+> 当期 schema 已在 onepl 生产库稳定运行。新环境部署直接 `mysqldump` onepl 库即可，无需任何
+> 版本化预检流程。下面留存的预检 SQL 仍可作为"已有库做幂等修复"时的参考。
 
-**1. V1_2_5__perf_cleanup_null_deleted.sql（V1.0 NULL deleted 历史数据清理）**
+**1. perf_metric_def NULL deleted 历史数据清理（已应用）**
 
-> **范围勘误（V1.4 S0.1）**：本脚本仅处理 `perf_metric_def` 一张表，
-> `perf_target_plan` / `perf_target_value` / `perf_kpi_item` **无 deleted 字段**，
-> 不需要（也不能）在这三表上做 `WHERE deleted IS NULL` 预检。
+> 范围：本清理仅适用于 `perf_metric_def`；`perf_target_plan` / `perf_target_value` / `perf_kpi_item` 无 deleted 字段。
 
 ```sql
--- 预检：查看 perf_metric_def 有多少历史行 deleted 为 NULL
+-- 检查：是否还有历史行 deleted 为 NULL（应等于 0）
 SELECT COUNT(*) FROM perf_metric_def WHERE deleted IS NULL;
--- V1_2_5 会将这些 NULL 置为 0（未删除），等价于"兜底"而非"误删"
+-- 兜底（如有遗漏）：UPDATE perf_metric_def SET deleted = 0 WHERE deleted IS NULL;
 ```
 
-**2. V1_3_0__perf_run_task_uk.sql（uk_task_key 唯一键补齐）**
+**2. perf_run_task uk_task_key 唯一键（已应用）**
 
 ```sql
--- 预检：是否有重复 task_key 导致 ALTER 失败？
+-- 检查：是否仍有重复 task_key（应等于 0 行）
 SELECT task_key, COUNT(*)
 FROM perf_run_task
 WHERE task_key IS NOT NULL
 GROUP BY task_key
 HAVING COUNT(*) > 1;
--- 有结果 → 手工清理重复后再跑 flyway:migrate
--- 无结果 → 直接跑 flyway:migrate
 ```
 
-若 `V1_3_0` 迁移失败（存量重复）：
-- (a) 按业务规则手工清理重复行；
-- (b) 在 `flyway_schema_history` 删除 FAILED 对应行；
-- (c) 重跑 `mvn flyway:migrate`。
-- **严禁**直接跳到下个 V1_3_x 脚本，否则 schema 状态不一致。
+若新环境出现 `uk_task_key` 冲突（存量重复）：业务规则手工清理重复行后，再 source 添加 UNIQUE KEY 的 ALTER。
 
 配套 `DataTaskService.report` 已在 V1.3 R0.2 增加 `DuplicateKeyException` 降级路径（Redis 宕机时 DB 唯一键兜底）。
 

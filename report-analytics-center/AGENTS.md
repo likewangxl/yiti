@@ -46,7 +46,7 @@
 - 所有 Controller 方法必标 `@BizAuth(bizType = BizType.REPORT, action = ...)`
 - 架构守护: `RptModuleStructureArchTest`（api/ 目录禁出现 `*Api.java`）+ 5 个其他守护
 - 错误码前缀 `RPT-{HTTP_STATUS}{SEQ}`
-- PT_RESOURCE 通过 Flyway 脚本注册（`V1_0_X__rpt_*.sql`）
+- PT_RESOURCE 通过手工 SQL 注册（**Flyway 已彻底废弃**，详见根 CLAUDE.md "Flyway 禁令"红线）
 
 ### Testing Requirements
 - surefire 103 + failsafe 70 = 173 全绿

@@ -2,6 +2,11 @@
 
 本文件为 `customer-marketing-center` 模块提供上下文说明。
 
+> ⚠️ **Flyway 已彻底废弃**（详见根 [CLAUDE.md](../CLAUDE.md) "Flyway 禁令"红线）。
+> 本文件下方 V1.x 历史变更日志中提到的 `V1_8_0__register_lead_callback_compensate_job.sql` /
+> `U1_8_0__remove_lead_callback_compensate_job.sql` / `FlywayTestBase` / `FlywayIT` 等内容仅作为
+> **历史档案**保留，对应文件已从源码中删除。新增 schema 变更请直接以 SQL 在目标库执行，**禁止**重新引入 Flyway。
+
 ## 模块概述
 
 **customer-marketing-center** 是客户营销中心，覆盖客户全生命周期管理：标签体系、线索管理（含审批流）、客户主档、客户池与认领、触达任务、触达报表。是平台核心业务模块之一。

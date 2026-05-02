@@ -2,6 +2,11 @@
 
 本文件为 `report-analytics-center` 模块提供上下文说明。
 
+> ⚠️ **Flyway 已彻底废弃**（详见根 [CLAUDE.md](../CLAUDE.md) "Flyway 禁令"红线）。
+> 本文件下方提到的 `V1_0_X__rpt_*.sql` 系列迁移脚本、`ReportFlywayTestBase` 测试基类、
+> `V1_0_*FlywayIT` 等内容仅作为**历史档案**保留，对应文件已从源码中删除。
+> 新增 schema 变更请直接以 SQL 在目标库执行，**禁止**重新引入 Flyway。
+
 ## 模块概述
 
 **report-analytics-center** 是报表分析中心（支撑域，**只读**模块），为整个平台提供动态查询 / 仪表盘 / 汇总报表 / SQL 探查 / 异步导出能力。
@@ -92,18 +97,11 @@ src/main/java/com/bank/branch/platform/report/
 
 ```
 src/main/resources/
-├── mapper/                 # MyBatis XML
-└── sql/
-    └── report/             # Flyway 迁移脚本（独立命名空间避免与 perf V1_0_0 冲突）
-        ├── V1_0_0__rpt_init.sql                     # 4 张自有表 DDL
-        ├── V1_0_1__rpt_meta_pt_resources.sql        # M1：8 条 PT_RESOURCE
-        ├── V1_0_2__rpt_dashboard_pt_resources.sql   # M2：3 条
-        ├── V1_0_3__rpt_summary_pt_resources.sql     # M3：6 条
-        ├── V1_0_4__rpt_sql_probe_pt_resources.sql   # M4：4 条
-        ├── V1_0_5__rpt_export_task.sql              # M5：rpt_export_task DDL
-        ├── V1_0_6__rpt_export_pt_resources.sql      # M5：3 条
-        └── V1_0_7__rpt_resources_align.sql          # M6：1 条占位（V1.1+ SQL 探查导出）
+└── mapper/                 # MyBatis XML
 ```
+
+> 历史 V1_0_0~V1_0_7 共 8 个 Flyway 迁移脚本已随 Flyway 框架退役一并删除，
+> 当前 schema/PT_RESOURCE 真相以生产库（`onepl`）为准。
 
 ## V1.0 交付的 24 REST 端点（25 PT_RESOURCE = 24 真实 + 1 占位）
 
@@ -210,7 +208,7 @@ DATA_SCOPE 类型在 3 处生效：
 6. ✅ 跨模块调用走对方 `*Api` 接口；report 自身**不暴露** `*Api`
 7. ✅ 中文注释 + UTF-8 编码
 8. ✅ 测试数据使用约定前缀（`TEST_RPT_*` / `CONCUR_RPT_*`）
-9. ✅ 新增 PT_RESOURCE 通过 Flyway 脚本（V1_0_X__rpt_*.sql 命名）
+9. ✅ 新增 PT_RESOURCE 通过手工 SQL 在目标库执行（**禁止**重新引入 Flyway，详见根 CLAUDE.md "Flyway 禁令"红线）
 10. ✅ 新增错误码 RPT-* 唯一不重复 + 中文消息 + RptErrorCodeTest 同步守护
 
 ## V1.0 已知技术债（待 V1.1+ 处理）
