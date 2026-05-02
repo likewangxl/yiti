@@ -34,7 +34,6 @@ import static org.assertj.core.api.Assertions.assertThat;
     "perf.engine.sql-timeout-seconds=45",
     "perf.engine.cascade-max-depth=7",
     "perf.engine.import-batch-size=1000",
-    "spring.flyway.enabled=false",
     "spring.main.allow-bean-definition-overriding=true"
 })
 class PerfEnginePropertiesTest {

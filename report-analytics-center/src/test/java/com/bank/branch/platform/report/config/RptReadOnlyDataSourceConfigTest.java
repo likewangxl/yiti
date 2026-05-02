@@ -26,7 +26,7 @@ import com.bank.branch.platform.report.ReportTestApplication;
  * </ol>
  *
  * <p>不覆盖：getConnection().setReadOnly(true) 双层防御 + 真实写 SQL 拒绝
- * （需 MySQL 实例 + sql_probe_readonly 账号；放在 ReportFlywayTestBase 子类的 IT 中）.
+ * （需 MySQL 实例 + sql_probe_readonly 账号；放在子类的真实库 IT 中）.
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = ReportTestApplication.class)

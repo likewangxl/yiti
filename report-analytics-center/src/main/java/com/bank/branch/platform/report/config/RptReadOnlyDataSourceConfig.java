@@ -19,12 +19,12 @@ import java.sql.SQLException;
  *
  * <p><strong>背景（关键）</strong>：自定义 {@code @Bean public DataSource rptReadOnlyDataSource()}
  * 会触发 Spring Boot {@code DataSourceAutoConfiguration} 的 {@code @ConditionalOnMissingBean(DataSource.class)}
- * 短路，导致默认 {@code dataSource} 不再创建。FlywayAutoConfiguration 只能选到 readOnly 的 bean，
- * 然后 setReadOnly(true) 让 Flyway 写迁移历史时炸成 {@code Cannot execute statement in a READ ONLY transaction}.
+ * 短路，导致默认 {@code dataSource} 不再创建，进而让所有 AutoConfiguration 选到 readOnly 的 bean，
+ * 触发 setReadOnly(true) 炸出 {@code Cannot execute statement in a READ ONLY transaction}.
  *
  * <p><strong>解决</strong>：本 Configuration 同时显式声明 {@code @Primary} 主 DataSource，
  * 复用 spring-boot 的 {@link DataSourceProperties}（绑定 {@code spring.datasource.*}），
- * 让 Flyway / MyBatis / 业务 Service 全部走主 DataSource，仅 SQL 探查 service 显式 {@code @Qualifier} 切到 readOnly.
+ * 让 MyBatis / 业务 Service 全部走主 DataSource，仅 SQL 探查 service 显式 {@code @Qualifier} 切到 readOnly.
  *
  * <p><strong>readOnly 双层防御</strong>：
  * <ol>
@@ -52,7 +52,7 @@ public class RptReadOnlyDataSourceConfig {
     }
 
     /**
-     * 主 DataSource（@Primary）—— FlywayAutoConfiguration / MyBatis / Service 默认走它.
+     * 主 DataSource（@Primary）—— MyBatis / Service 默认走它.
      */
     @Bean
     @Primary

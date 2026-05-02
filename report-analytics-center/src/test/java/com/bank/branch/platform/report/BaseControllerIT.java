@@ -35,9 +35,6 @@ import static org.mockito.Mockito.when;
  * <p>备选约定 B：使用 {@code @Sql(scripts = "/sql/test-pt-resources-rpt.sql")} 提前
  * INSERT 测试用 PT_RESOURCE 行（M0.6 创建空骨架，每个 Controller IT 阶段按需追加）.
  *
- * <p>生产 Flyway {@code V1_0_X__rpt_*_pt_resources.sql}（M1.6 / M2.4 / M3.4 / M4.4 / M5.4
- * 集中注册）继续保留作为生产数据，IT 仅走本 mock 旁路.
- *
  * <p><b>注意</b>：plan 文档里把拦截器类名写成 {@code BizAuthInterceptor}，实际 auth-permission-center
  * 导出的类名是 {@link AuthorizationInterceptor}（{@code com.bank.branch.platform.auth.security.interceptor}
  * 包下），本基类使用正确的类名.

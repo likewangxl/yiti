@@ -124,17 +124,6 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Flyway（迁移脚本集成测试使用，test scope 仅覆盖 migration IT） -->
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-mysql</artifactId>
-            <scope>test</scope>
-        </dependency>
         <!-- ArchUnit：架构守护测试（禁止 Controller 返回 entity 等架构规则） -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>

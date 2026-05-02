@@ -1,6 +1,4 @@
 spring:
-  flyway:
-    enabled: false   # Mapper/Service/Controller IT 不需要 Flyway，由 PerformanceFlywayTestBase 覆盖启用
   datasource:
     # V1.13 # 1（2026-05-02）：从 yiti 开发库解绑，迁移到 onepl_test_bootstrap 测试库
     # 历史背景：V1.10 测试库合一只覆盖了 bootstrap + report，perf/portal 仍指 yiti，导致开发库被测试污染

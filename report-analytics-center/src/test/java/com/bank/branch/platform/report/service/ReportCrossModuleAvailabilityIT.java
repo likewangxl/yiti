@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
  * 重点是验证 mock 装配/类型签名、字段访问、方法名拼写均与真实模块定义一致——
  * 一旦 customer / performance 端 API 签名变化，本 IT 第一时间编译失败.
  *
- * <p>不像 SpringBootTest 启动真实 Bean（M3 阶段尚未与 Flyway/真实数据库联调），
+ * <p>不像 SpringBootTest 启动真实 Bean（M3 阶段尚未与真实数据库联调），
  * 本 IT 主要意图：M3 实施代码引用的所有跨模块 Api 入口签名"可装配 + 可调用"端到端守护.
  */
 class ReportCrossModuleAvailabilityIT extends BaseControllerIT {

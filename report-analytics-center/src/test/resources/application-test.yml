@@ -1,7 +1,4 @@
 spring:
-  flyway:
-    # 默认禁用：Mapper/Service/Controller IT 不需要 Flyway，由 ReportFlywayTestBase 覆盖启用
-    enabled: false
   datasource:
     # 复用 perf 模块的同款本地 MySQL 测试库 onepl_test_bootstrap，跨模块一致
     url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true

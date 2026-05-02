@@ -135,7 +135,7 @@ public class PerfTestConfig {
      * 测试用 RedisTemplate&lt;String, String&gt; (V1.8 P6 新增)：
      * V1.7 引入的 KpiCascadeListener 构造器注入 RedisTemplate&lt;String, String&gt;
      * 用于 SETNX 30s 防重，但 perf 测试上下文无真实 Redis Bean 装配。
-     * 此处提供空 mock 避免 Flyway/E2E IT 加载 Spring 上下文时失败。
+     * 此处提供空 mock 避免 E2E IT 加载 Spring 上下文时失败。
      * Spring DI 把泛型当作不同 bean 类型，必须显式提供（与 bootstrap TestMockConfig 同 pattern）。
      */
     @Bean
