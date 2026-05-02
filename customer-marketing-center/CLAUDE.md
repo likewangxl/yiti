@@ -422,19 +422,34 @@ V1.11 候选事项 5 项二次收敛后处置：
 
 **brainstorming 决策溯源**：见 `docs/superpowers/specs/2026-05-01-v1.11-5it-diagnosis-design.md` § 0 / § 9
 
-## V1.12 候选事项（2026-05-01 新登记）
+## V1.12 处置（2026-05-01）
 
-V1.10 P2 mvn verify 揭露的测试失败转 V1.11，V1.11 # 1 交付后未解决项延期至 V1.12：
+V1.12 范围 = schema 治理三件套（# 5 + # 6 + # 7）+ MetricScheduledE2EIT 数据 cleanup（# 2）：
+
+| # | 事项 | V1.12 处置 | 备注 |
+|---|---|---|---|
+| 1 | perf failsafe Spring Context threshold cascade | **延期 V1.13** | 不在本期 schema 治理 scope |
+| 2 | MetricScheduledE2EIT 数据残留 cleanup | ✅ **本期交付（V1.12 / 2026-05-01）** | IT 加 @Sql executionPhase=BEFORE_TEST_METHOD DELETE PERF_METRIC_DEF；PERF_METRIC_DEF 缺 V1.7 三列（cron_expr/subject_sql/last_run_time）顺手修复（合并到 # 5 cleanup SQL）。**业务层 Quartz JobKey 注入失败转 V1.13** |
+| 3 | V1.8 P6 业务/数据状态问题（25 fail/error）| **延期 V1.13** | 历史欠债，需独立子项 |
+| 4 | 3 个 *SummaryControllerIT.submit*Export Status 500 | **延期 V1.13** | 低优先级 |
+| 5 | onepl_test_bootstrap schema column drift | ✅ **本期交付（V1.12 / 2026-05-01）** | 一次性 cleanup SQL `docs/superpowers/sql/2026-05-01-v1.12-schema-column-drift-fix.sql`（修 TOUCH_TASK.sla_warning + PERF_METRIC_DEF V1.7 三列）+ schema.sql 加 V1.12 # 5 注释 |
+| 6 | 8 customer 小写历史表 | ✅ **本期交付（V1.12 / 2026-05-01）** | mysqldump backup（cust_master 1 行 cust-seed-001 = 重复 seed）+ DROP 8 表（保留 8 张大写业务表）|
+| 7 | BusinessApplicationCenterIT 数据残留 | ✅ **本期交付（V1.12 / 2026-05-01）** | IT @Sql 加引用 business-application-data.sql（已含完整 DELETE cleanup 段） |
+
+**brainstorming 决策溯源**：见 `docs/superpowers/specs/2026-05-01-v1.12-schema-and-data-cleanup-design.md` § 0 / § 5
+
+## V1.13 候选事项（2026-05-01 新登记）
+
+V1.12 交付后未解决项 + 实施过程发现的副产品延期至 V1.13：
 
 | # | 事项 | 优先级 | 来源 | 处置 |
 |---|---|---|---|---|
-| 1 | perf failsafe Spring Context threshold cascade（V1_2_0/V1_4_0/V1_3_0/V1_2_5/V1_0_4/V1_0_3 FlywayIT 等大量 ApplicationContext 加载失败级联） | 中 | V1.10 P2 retry-3 探查 | V1.12 候选 |
-| 2 | MetricScheduledE2EIT Duplicate entry 'E2E_M_V1_7' for PERF_METRIC_DEF.uk_metric_code（测试间数据残留 / cleanup 不彻底）| 中 | V1.10 P2 retry-3 探查 | V1.12 候选 |
-| 3 | V1.8 P6 已登记业务/数据状态问题：KpiSchemeControllerIT 4E + AllocRelationControllerIT 4F + PerfRunTaskMapperIT 7F+1E + CustAllocRelationMapperIT 10F | 中 | V1.8 P6 转入 | V1.12 候选 |
-| 4 | 3 个 *SummaryControllerIT.submit*Export Status 500（疑数据库连接池或前置数据缺失）| 低 | V1.10 P2 retry-3 探查 | V1.12 候选 |
-| 5 | onepl_test_bootstrap.TOUCH_TASK 缺 sla_warning 列（schema.sql IF NOT EXISTS 不更新现有表 → column drift） | 中 | V1.11 # 1 P4 实施发现 | V1.12 候选 |
-| 6 | onepl_test_bootstrap 同时存在 8 个 customer 小写历史表（V1.10 治理后未 DROP，cust_master/cust_lead/touch_task/cust_tag/cust_tag_rel/touch_log/lead_import_batch/cust_claim） | 低 | V1.11 # 1 P4 实施发现 | V1.12 候选 |
-| 7 | BusinessApplicationCenterIT 数据残留（bizapp schema.sql 无 DELETE cleanup 段，每次 IT 跑累积 LOAN_APPLY/SUPPORT_REQUEST 行）| 中 | V1.11 # 1 P4 全量回归发现 | V1.12 候选 |
+| 1 | perf failsafe Spring Context threshold cascade（V1_2_0/V1_4_0/V1_3_0/V1_2_5/V1_0_4/V1_0_3 FlywayIT 等大量 ApplicationContext 加载失败级联） | 中 | V1.10 P2 retry-3 探查（延期 V1.11→V1.12→V1.13）| V1.13 候选 |
+| 2 | V1.8 P6 已登记业务/数据状态问题：KpiSchemeControllerIT 4E + AllocRelationControllerIT 4F + PerfRunTaskMapperIT 7F+1E + CustAllocRelationMapperIT 10F | 中 | V1.8 P6 转入（延期 V1.11→V1.12→V1.13）| V1.13 候选 |
+| 3 | 3 个 *SummaryControllerIT.submit*Export Status 500（疑数据库连接池或前置数据缺失）| 低 | V1.10 P2 retry-3 探查（延期 V1.11→V1.12→V1.13）| V1.13 候选 |
+| 4 | MetricScheduledE2EIT 业务层 Quartz JobKey 注入失败（V1.7 e2e 测试在 V1.10 测试库合一后暴露；schema column drift 修复后仍 fail）| 中 | V1.12 # 2 实施暴露 | V1.13 候选 |
+| 5 | WorkflowCallbackListener REQUIRES_NEW + reconcileApproved REQUIRES_NEW 嵌套冗余简化（外层防御层是否必要） | 低 | V1.11 # 1 architect Opus 建议 | V1.13 候选 |
+| 6 | LeadRejectedEvent dead code 定调（删除 / 加 V2 listener / 加 TODO） | 低 | V1.11 # 1 architect Opus 建议 | V1.13 候选 |
 
 ## V1.0 已知技术债（2026-04-25）
 

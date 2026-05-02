@@ -239,6 +239,7 @@ com.bank.branch.platform.<module>/
 - **V1.10 测试库合一 spec**: `docs/superpowers/specs/2026-05-01-v1.10-test-db-unification-design.md` — 唯一 `onepl_test_bootstrap`，FlywayTestBase 真接管 perf/rpt schema
 - **V1.11 # 1 spec**: `docs/superpowers/specs/2026-05-01-v1.11-5it-diagnosis-design.md` — listener 嵌套 AFTER_COMMIT 链改同步调用（方向 C），5 IT 诊断 + 修复
 - **V1.11 # 1 plan**: `docs/superpowers/plans/2026-05-01-v1.11-1-5it-diagnosis-impl.md`
+- **V1.12 schema 治理 spec**: `docs/superpowers/specs/2026-05-01-v1.12-schema-and-data-cleanup-design.md` — onepl_test_bootstrap schema column drift 修复 + 8 customer 小写历史表 DROP + bizapp/MetricScheduledE2EIT 数据 cleanup
 
 ### 模块级 CLAUDE.md (开发时必须参考)
 - **公共基础设施**: [common/CLAUDE.md](common/CLAUDE.md)
