@@ -9,17 +9,17 @@
 -- =====================================================================
 
 -- Task B2 undo: 删除 perf_metric_def 槽位唯一键（先删依赖字段的索引）
-ALTER TABLE perf_metric_def DROP INDEX uk_base_dim_slot_alive;
+ALTER TABLE PERF_METRIC_DEF DROP INDEX uk_base_dim_slot_alive;
 
 -- Task B4 undo: 删除 perf_metric_def 新增字段
-ALTER TABLE perf_metric_def
+ALTER TABLE PERF_METRIC_DEF
   DROP COLUMN unit,
   DROP COLUMN decimal_places,
   DROP COLUMN deleted,
   DROP COLUMN description;
 
 -- Task B3 undo: 删除 sys_control 新增字段
-ALTER TABLE sys_control
+ALTER TABLE SYS_CONTROL
   DROP COLUMN remark,
   DROP COLUMN updated_by,
   DROP COLUMN publish_source,
@@ -27,5 +27,5 @@ ALTER TABLE sys_control
   DROP COLUMN publish_time;
 
 -- Task B1 undo: 还原 sys_control 唯一键（回到原始的二列 UK）
-ALTER TABLE sys_control DROP INDEX uk_scope_dim_date_version;
-ALTER TABLE sys_control ADD UNIQUE KEY uk_scope_dim_date (scope_dim, latest_data_date);
+ALTER TABLE SYS_CONTROL DROP INDEX uk_scope_dim_date_version;
+ALTER TABLE SYS_CONTROL ADD UNIQUE KEY uk_scope_dim_date (scope_dim, latest_data_date);

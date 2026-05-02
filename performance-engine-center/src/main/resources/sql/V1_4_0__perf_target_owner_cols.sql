@@ -24,9 +24,9 @@
 -- 【生产前置检查 runbook（必须运维在应用前人工执行）】
 -- ---------------------------------------------------------------------
 -- 1) 检查本期两表行数, 决定迁移策略：
---    SELECT 'perf_target_plan' AS tbl, COUNT(*) FROM perf_target_plan
+--    SELECT 'perf_target_plan' AS tbl, COUNT(*) FROM PERF_TARGET_PLAN
 --    UNION ALL
---    SELECT 'perf_target_value' AS tbl, COUNT(*) FROM perf_target_value;
+--    SELECT 'perf_target_value' AS tbl, COUNT(*) FROM PERF_TARGET_VALUE;
 --
 --    - 单表 < 10 万：直接 Flyway 跑本脚本即可（ADD COLUMN + ADD INDEX + UPDATE 一把过）
 --    - 单表 > 100 万：建议走【分批回填 runbook】或【pt-online-schema-change】
@@ -42,7 +42,7 @@
 -- BEGIN
 --   DECLARE done INT DEFAULT 0;
 --   WHILE done = 0 DO
---     UPDATE perf_target_value
+--     UPDATE PERF_TARGET_VALUE
 --     SET owner_emp_id = created_by
 --     WHERE owner_emp_id IS NULL
 --     LIMIT 10000;
@@ -83,7 +83,7 @@
 -- ---------------------------------------------------------------------
 -- perf_target_plan：加 owner_emp_id + owner_org_code 字段 + 对应索引
 -- ---------------------------------------------------------------------
-ALTER TABLE perf_target_plan
+ALTER TABLE PERF_TARGET_PLAN
     ADD COLUMN owner_emp_id   VARCHAR(32) NULL COMMENT '归属员工（SELF / SELF_ASSIGNED scope 列）' AFTER status,
     ADD COLUMN owner_org_code VARCHAR(50) NULL COMMENT '归属机构（ORG / ORG_SUBTREE scope 列）' AFTER owner_emp_id,
     ADD INDEX idx_owner_emp (owner_emp_id),
@@ -92,7 +92,7 @@ ALTER TABLE perf_target_plan
 -- ---------------------------------------------------------------------
 -- perf_target_value：加 owner_emp_id + owner_org_code 字段 + 对应索引
 -- ---------------------------------------------------------------------
-ALTER TABLE perf_target_value
+ALTER TABLE PERF_TARGET_VALUE
     ADD COLUMN owner_emp_id   VARCHAR(32) NULL COMMENT '归属员工（SELF / SELF_ASSIGNED scope 列）' AFTER base_value,
     ADD COLUMN owner_org_code VARCHAR(50) NULL COMMENT '归属机构（ORG / ORG_SUBTREE scope 列）' AFTER owner_emp_id,
     ADD INDEX idx_owner_emp (owner_emp_id),
@@ -103,5 +103,5 @@ ALTER TABLE perf_target_value
 -- owner_emp_id 先用 created_by 兜底；owner_org_code 保留 NULL 等运维按业务后续纠正
 -- 大表走分批回填 runbook（见脚本头部）
 -- ---------------------------------------------------------------------
-UPDATE perf_target_plan  SET owner_emp_id = created_by WHERE owner_emp_id IS NULL;
-UPDATE perf_target_value SET owner_emp_id = created_by WHERE owner_emp_id IS NULL;
+UPDATE PERF_TARGET_PLAN  SET owner_emp_id = created_by WHERE owner_emp_id IS NULL;
+UPDATE PERF_TARGET_VALUE SET owner_emp_id = created_by WHERE owner_emp_id IS NULL;

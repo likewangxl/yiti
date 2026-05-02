@@ -22,7 +22,7 @@
 -- -------------------------------------------------------------
 -- 1. 示例指标（perf_metric_def）
 -- -------------------------------------------------------------
-INSERT INTO perf_metric_def
+INSERT INTO PERF_METRIC_DEF
   (id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
    calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
    ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time,
@@ -74,7 +74,7 @@ ON DUPLICATE KEY UPDATE
 -- -------------------------------------------------------------
 -- 2. 指标引用关系（二级 EMP 指标依赖两条一级指标）
 -- -------------------------------------------------------------
-INSERT INTO perf_metric_ref (id, metric_code, ref_metric_code, created_time)
+INSERT INTO PERF_METRIC_REF (id, metric_code, ref_metric_code, created_time)
 VALUES
   ('SEED_REF_EMP_DEP',  'M_EMP_COMPREHENSIVE', 'M_EMP_DEP_AVG_BAL',  NOW()),
   ('SEED_REF_EMP_FEE',  'M_EMP_COMPREHENSIVE', 'M_EMP_FEE_INCOME',   NOW())
@@ -84,7 +84,7 @@ ON DUPLICATE KEY UPDATE
 -- -------------------------------------------------------------
 -- 3. 示例 KPI 方案（perf_kpi_scheme）
 -- -------------------------------------------------------------
-INSERT INTO perf_kpi_scheme
+INSERT INTO PERF_KPI_SCHEME
   (id, scheme_code, scheme_name, cycle_type, open_detail, status,
    created_by, created_time, updated_by, updated_time)
 VALUES
@@ -101,7 +101,7 @@ ON DUPLICATE KEY UPDATE
 -- -------------------------------------------------------------
 -- 4. KPI 方案项（perf_kpi_item）—— 权重之和 100
 -- -------------------------------------------------------------
-INSERT INTO perf_kpi_item
+INSERT INTO PERF_KPI_ITEM
   (id, scheme_id, metric_code, weight, multiplier, min_score, max_score, created_time)
 VALUES
   ('SEED_KI_DEP',  'SEED_KS_EMP_2026', 'M_EMP_DEP_AVG_BAL', 60.0000, 1.0000, 0, 100, NOW()),
@@ -113,7 +113,7 @@ ON DUPLICATE KEY UPDATE
 -- -------------------------------------------------------------
 -- 5. 示例目标方案（perf_target_plan）
 -- -------------------------------------------------------------
-INSERT INTO perf_target_plan
+INSERT INTO PERF_TARGET_PLAN
   (id, plan_code, plan_name, kpi_scheme_id, target_dim, target_cycle, effective_date,
    status, created_by, created_time, updated_by, updated_time)
 VALUES

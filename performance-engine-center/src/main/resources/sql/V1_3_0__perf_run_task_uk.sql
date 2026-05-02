@@ -21,7 +21,7 @@
 -- 【生产前置检查 runbook（必须运维在应用前人工执行）】
 -- ---------------------------------------------------------------------
 -- 1) 查重复 task_key：
---    SELECT task_key, COUNT(*) AS cnt FROM perf_run_task
+--    SELECT task_key, COUNT(*) AS cnt FROM PERF_RUN_TASK
 --    WHERE task_key IS NOT NULL
 --    GROUP BY task_key HAVING COUNT(*) > 1;
 --
@@ -31,7 +31,7 @@
 --    - 多条均 FAILED/RUNNING 时保留 start_time 最早
 --
 -- 2) 查空 task_key（MySQL UNIQUE 允许多 NULL，生产不阻塞 ALTER，但建议审计）：
---    SELECT COUNT(*) AS null_task_key_rows FROM perf_run_task
+--    SELECT COUNT(*) AS null_task_key_rows FROM PERF_RUN_TASK
 --    WHERE task_key IS NULL;
 --
 -- 3) 若步骤 1 有重复且清理完毕，再应用本脚本
@@ -50,5 +50,5 @@
 --     catch 分支降级处理，是设计预期
 -- =====================================================================
 
-ALTER TABLE perf_run_task
+ALTER TABLE PERF_RUN_TASK
     ADD UNIQUE KEY uk_task_key (task_key);

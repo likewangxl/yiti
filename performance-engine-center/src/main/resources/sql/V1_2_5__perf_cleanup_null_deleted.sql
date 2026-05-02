@@ -21,13 +21,13 @@
 --
 -- 【生产运维核对清单】
 --   1) 预检查受影响行数：
---      SELECT COUNT(*) FROM perf_metric_def WHERE deleted IS NULL;
+--      SELECT COUNT(*) FROM PERF_METRIC_DEF WHERE deleted IS NULL;
 --   2) 若结果过大（> 1 万），建议分批 UPDATE 以避免长事务锁表
 --      （本脚本未分批，默认数据量 < 1 万场景）
 --   3) 本脚本生效后，任何再次出现 NULL 行均表明 Service 层或直接 SQL
 --      绕过 Q8.5b 修复；运维需排查应用调用点
 -- =====================================================================
 
-UPDATE perf_metric_def
+UPDATE PERF_METRIC_DEF
    SET deleted = 0
  WHERE deleted IS NULL;

@@ -15,16 +15,16 @@
 -- =====================================================================
 
 -- perf_target_plan：先删索引，再删列（避免索引依赖残留）
-ALTER TABLE perf_target_plan DROP INDEX idx_owner_emp;
-ALTER TABLE perf_target_plan DROP INDEX idx_owner_org;
-ALTER TABLE perf_target_plan
+ALTER TABLE PERF_TARGET_PLAN DROP INDEX idx_owner_emp;
+ALTER TABLE PERF_TARGET_PLAN DROP INDEX idx_owner_org;
+ALTER TABLE PERF_TARGET_PLAN
     DROP COLUMN owner_org_code,
     DROP COLUMN owner_emp_id;
 
 -- perf_target_value：先删索引，再删列
-ALTER TABLE perf_target_value DROP INDEX idx_owner_emp;
-ALTER TABLE perf_target_value DROP INDEX idx_owner_org;
-ALTER TABLE perf_target_value
+ALTER TABLE PERF_TARGET_VALUE DROP INDEX idx_owner_emp;
+ALTER TABLE PERF_TARGET_VALUE DROP INDEX idx_owner_org;
+ALTER TABLE PERF_TARGET_VALUE
     DROP COLUMN owner_org_code,
     DROP COLUMN owner_emp_id;
 
