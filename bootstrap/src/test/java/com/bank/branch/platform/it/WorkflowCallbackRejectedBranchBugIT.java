@@ -134,7 +134,7 @@ class WorkflowCallbackRejectedBranchBugIT {
 
         // 校验前置：cust_master 在事件触发前应无该 leadId 关联记录
         long preCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -161,7 +161,7 @@ class WorkflowCallbackRejectedBranchBugIT {
         // → 此断言 fail（实际为 1，期望为 0），正是 bug 复现
         // 修复后：REJECTED 路径不发布 LeadApprovedEvent → cust_master 永不创建
         long postCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );

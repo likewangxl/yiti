@@ -41,7 +41,7 @@ class SqlSafeValidatorTest {
 
     @Test
     void validate_simpleSelect_passes() {
-        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master WHERE id=1");
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM CUST_MASTER WHERE id=1");
         assertThat(r.isAllowed()).isTrue();
         assertThat(r.getNormalizedSql()).contains("LIMIT 1000");
     }
@@ -49,15 +49,15 @@ class SqlSafeValidatorTest {
     @Test
     void validate_selectWithWhitelistJoin_passes() {
         SqlSafeResult r = v.validateAndNormalize(
-                "SELECT k.score FROM kpi_result k JOIN cust_master c ON k.emp_id = c.id LIMIT 100");
+                "SELECT k.score FROM KPI_RESULT k JOIN CUST_MASTER c ON k.emp_id = c.id LIMIT 100");
         assertThat(r.isAllowed()).isTrue();
-        assertThat(r.getReferencedTables()).contains("kpi_result", "cust_master");
+        assertThat(r.getReferencedTables()).contains("KPI_RESULT", "CUST_MASTER");
     }
 
     @Test
     void validate_selectWithSubquery_passesIfDepthLE3() {
         SqlSafeResult r = v.validateAndNormalize(
-                "SELECT * FROM cust_master WHERE id IN (SELECT emp_id FROM kpi_result) LIMIT 100");
+                "SELECT * FROM CUST_MASTER WHERE id IN (SELECT emp_id FROM KPI_RESULT) LIMIT 100");
         assertThat(r.isAllowed()).isTrue();
     }
 
@@ -78,35 +78,35 @@ class SqlSafeValidatorTest {
 
     @Test
     void validate_dropKeyword_rejects42003() {
-        assertThatThrownBy(() -> v.validateAndNormalize("DROP TABLE cust_master"))
+        assertThatThrownBy(() -> v.validateAndNormalize("DROP TABLE CUST_MASTER"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_deleteKeyword_rejects42003() {
-        assertThatThrownBy(() -> v.validateAndNormalize("DELETE FROM cust_master"))
+        assertThatThrownBy(() -> v.validateAndNormalize("DELETE FROM CUST_MASTER"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_updateKeyword_rejects42003() {
-        assertThatThrownBy(() -> v.validateAndNormalize("UPDATE cust_master SET name='x'"))
+        assertThatThrownBy(() -> v.validateAndNormalize("UPDATE CUST_MASTER SET name='x'"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_insertKeyword_rejects42003() {
-        assertThatThrownBy(() -> v.validateAndNormalize("INSERT INTO cust_master VALUES (1)"))
+        assertThatThrownBy(() -> v.validateAndNormalize("INSERT INTO CUST_MASTER VALUES (1)"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
 
     @Test
     void validate_lowercaseKeyword_rejects42003() {
-        assertThatThrownBy(() -> v.validateAndNormalize("drop table cust_master"))
+        assertThatThrownBy(() -> v.validateAndNormalize("drop table CUST_MASTER"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42003");
     }
@@ -131,7 +131,7 @@ class SqlSafeValidatorTest {
     @Test
     void validate_unionAll_rejects42001() {
         assertThatThrownBy(() -> v.validateAndNormalize(
-                "SELECT * FROM cust_master UNION ALL SELECT * FROM kpi_result"))
+                "SELECT * FROM CUST_MASTER UNION ALL SELECT * FROM KPI_RESULT"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42001");
     }
@@ -143,11 +143,11 @@ class SqlSafeValidatorTest {
     @Test
     void validate_subqueryDepth4_rejects42001() {
         // 5 层 SELECT 嵌套 = 子查询深度 5 > 3，应当拒绝
-        String sql = "SELECT * FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master))))";
+        String sql = "SELECT * FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER))))";
         assertThatThrownBy(() -> v.validateAndNormalize(sql))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42001");
@@ -157,9 +157,9 @@ class SqlSafeValidatorTest {
     @Test
     void validate_subqueryDepthExactly3_passes() {
         // computeDepth 起始 depth=1，3 层 SELECT 嵌套（主 + 2 子查询）= depth 3 = 上限，应通过
-        String sql = "SELECT * FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master))";
+        String sql = "SELECT * FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER))";
         SqlSafeResult r = v.validateAndNormalize(sql);
         assertThat(r.isAllowed()).isTrue();
     }
@@ -168,10 +168,10 @@ class SqlSafeValidatorTest {
     @Test
     void validate_subqueryDepthExactly4_rejects42001() {
         // 4 层 SELECT 嵌套（主 + 3 子查询）= depth 4 > 3，恰好越过上限
-        String sql = "SELECT * FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master WHERE id IN "
-                + "(SELECT id FROM cust_master)))";
+        String sql = "SELECT * FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER WHERE id IN "
+                + "(SELECT id FROM CUST_MASTER)))";
         assertThatThrownBy(() -> v.validateAndNormalize(sql))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42001");
@@ -183,19 +183,19 @@ class SqlSafeValidatorTest {
 
     @Test
     void validate_noLimit_autoAppends1000() {
-        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master");
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM CUST_MASTER");
         assertThat(r.getNormalizedSql()).endsWith("LIMIT 1000");
     }
 
     @Test
     void validate_limitOver1000_clampsTo1000() {
-        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master LIMIT 5000");
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM CUST_MASTER LIMIT 5000");
         assertThat(r.getNormalizedSql()).endsWith("LIMIT 1000");
     }
 
     @Test
     void validate_limitUnder1000_keeps() {
-        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM cust_master LIMIT 50");
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM CUST_MASTER LIMIT 50");
         assertThat(r.getNormalizedSql()).endsWith("LIMIT 50");
     }
 
@@ -206,7 +206,7 @@ class SqlSafeValidatorTest {
     @Test
     void validate_sqlLengthOver5000_rejects42008() {
         // 5100 个 '1' 字符，远超 5000 上限
-        String longSql = "SELECT * FROM cust_master WHERE id=" + "1".repeat(5100);
+        String longSql = "SELECT * FROM CUST_MASTER WHERE id=" + "1".repeat(5100);
         assertThatThrownBy(() -> v.validateAndNormalize(longSql))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-42008");

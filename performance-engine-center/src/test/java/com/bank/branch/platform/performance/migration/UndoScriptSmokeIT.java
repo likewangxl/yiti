@@ -42,7 +42,7 @@ class UndoScriptSmokeIT extends PerformanceFlywayTestBase {
         // Flyway 迁移由 Spring Boot 在上下文启动时已完成（PerformanceFlywayTestBase @TestPropertySource 配置）
         Integer ukCnt = jdbc.queryForObject(
             "SELECT COUNT(*) FROM information_schema.STATISTICS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sys_control' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='SYS_CONTROL' " +
             "AND INDEX_NAME='uk_scope_dim_date_version'", Integer.class);
         // 若前置不满足（V1_0_3 未应用），直接让测试方法内部断言失败，避免 @BeforeEach 阶段抛异常
         assertThat(ukCnt)
@@ -122,32 +122,32 @@ class UndoScriptSmokeIT extends PerformanceFlywayTestBase {
     @AfterEach
     void restoreV13Baseline() {
         // sys_control UK 恢复（V1_0_3 的三列 UK）
-        tryExecute("ALTER TABLE sys_control DROP INDEX uk_scope_dim_date");
-        tryExecute("ALTER TABLE sys_control DROP INDEX uk_scope_dim_date_version");
-        tryExecute("ALTER TABLE sys_control ADD UNIQUE KEY uk_scope_dim_date_version "
+        tryExecute("ALTER TABLE SYS_CONTROL DROP INDEX uk_scope_dim_date");
+        tryExecute("ALTER TABLE SYS_CONTROL DROP INDEX uk_scope_dim_date_version");
+        tryExecute("ALTER TABLE SYS_CONTROL ADD UNIQUE KEY uk_scope_dim_date_version "
             + "(scope_dim, latest_data_date, current_version)");
 
         // sys_control 5 个新字段恢复
-        tryExecute("ALTER TABLE sys_control ADD COLUMN remark VARCHAR(255) NULL "
+        tryExecute("ALTER TABLE SYS_CONTROL ADD COLUMN remark VARCHAR(255) NULL "
             + "COMMENT '切版备注' AFTER current_version");
-        tryExecute("ALTER TABLE sys_control ADD COLUMN updated_by VARCHAR(32) NULL COMMENT '最后更新人'");
-        tryExecute("ALTER TABLE sys_control ADD COLUMN publish_source VARCHAR(32) NULL COMMENT '发布来源'");
-        tryExecute("ALTER TABLE sys_control ADD COLUMN publish_by VARCHAR(32) NULL COMMENT '发布人'");
-        tryExecute("ALTER TABLE sys_control ADD COLUMN publish_time DATETIME NULL COMMENT '发布时间'");
+        tryExecute("ALTER TABLE SYS_CONTROL ADD COLUMN updated_by VARCHAR(32) NULL COMMENT '最后更新人'");
+        tryExecute("ALTER TABLE SYS_CONTROL ADD COLUMN publish_source VARCHAR(32) NULL COMMENT '发布来源'");
+        tryExecute("ALTER TABLE SYS_CONTROL ADD COLUMN publish_by VARCHAR(32) NULL COMMENT '发布人'");
+        tryExecute("ALTER TABLE SYS_CONTROL ADD COLUMN publish_time DATETIME NULL COMMENT '发布时间'");
 
         // perf_metric_def 4 个新字段恢复
-        tryExecute("ALTER TABLE perf_metric_def ADD COLUMN unit VARCHAR(16) NULL COMMENT '单位'");
-        tryExecute("ALTER TABLE perf_metric_def ADD COLUMN decimal_places TINYINT DEFAULT 2 "
+        tryExecute("ALTER TABLE PERF_METRIC_DEF ADD COLUMN unit VARCHAR(16) NULL COMMENT '单位'");
+        tryExecute("ALTER TABLE PERF_METRIC_DEF ADD COLUMN decimal_places TINYINT DEFAULT 2 "
             + "COMMENT '小数位数'");
-        tryExecute("ALTER TABLE perf_metric_def ADD COLUMN deleted TINYINT DEFAULT 0 "
+        tryExecute("ALTER TABLE PERF_METRIC_DEF ADD COLUMN deleted TINYINT DEFAULT 0 "
             + "COMMENT '0=存在 1=删除'");
-        tryExecute("ALTER TABLE perf_metric_def ADD COLUMN description VARCHAR(500) NULL "
+        tryExecute("ALTER TABLE PERF_METRIC_DEF ADD COLUMN description VARCHAR(500) NULL "
             + "COMMENT '指标描述'");
-        jdbc.execute("UPDATE perf_metric_def SET deleted = 0 WHERE deleted IS NULL");
+        jdbc.execute("UPDATE PERF_METRIC_DEF SET deleted = 0 WHERE deleted IS NULL");
 
         // perf_metric_def 槽位 UK 恢复
-        tryExecute("ALTER TABLE perf_metric_def DROP INDEX uk_base_dim_slot_alive");
-        jdbc.execute("ALTER TABLE perf_metric_def ADD UNIQUE KEY uk_base_dim_slot_alive "
+        tryExecute("ALTER TABLE PERF_METRIC_DEF DROP INDEX uk_base_dim_slot_alive");
+        jdbc.execute("ALTER TABLE PERF_METRIC_DEF ADD UNIQUE KEY uk_base_dim_slot_alive "
             + "((IF(deleted=0, CONCAT(base_dim,'#',val_slot), NULL)))");
 
         // pt_resource 记录恢复：重新执行 V1_0_4 正向脚本补回被 V1_0_4__undo.sql DELETE 的 10 条
@@ -161,13 +161,13 @@ class UndoScriptSmokeIT extends PerformanceFlywayTestBase {
 
         // pt_resource 激活态恢复：V1_2_4 把 10 条中的 7 条激活为 STATUS=0；另 3 条在
         // V1_1_1/V1_2_2 激活。为简单起见，全部 STATUS=0（V1_3_0 终态全 45 条启用）.
-        jdbc.execute("UPDATE pt_resource SET STATUS = 0 WHERE RESOURCE_ID IN ("
+        jdbc.execute("UPDATE PT_RESOURCE SET STATUS = 0 WHERE RESOURCE_ID IN ("
             + "'P_PERF_METRIC_EXEC','P_PERF_METRIC_TRIAL','P_PERF_IMPORT_UPLOAD',"
             + "'P_PERF_ALLOC_ADJ_ADD','P_PERF_KPI_TRIGGER','P_PERF_KPI_RECALC',"
             + "'P_PERF_DTASK_STATUS','P_PERF_SC_ROLLBACK','P_PERF_EXPORT_KPI','P_PERF_EXPORT_ALLOC')");
 
         // sys_dict_item PERF_METRIC_STATUS 字典项激活态恢复（V1_0_4 正向改为 PENDING）
-        jdbc.execute("UPDATE sys_dict_item SET status = 'PENDING' "
+        jdbc.execute("UPDATE SYS_DICT_ITEM SET status = 'PENDING' "
             + "WHERE dict_type = 'PERF_METRIC_STATUS' AND item_code IN ('DRAFT', 'PUBLISHED')");
     }
 

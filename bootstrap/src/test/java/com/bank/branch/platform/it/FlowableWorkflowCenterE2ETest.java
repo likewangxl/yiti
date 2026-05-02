@@ -217,12 +217,12 @@ class FlowableWorkflowCenterE2ETest {
     }
 
     private void assertProcessStatus(String processInstanceId, String expectedStatus) {
-        String sql = "SELECT process_status FROM biz_process_map WHERE process_instance_id = ?";
+        String sql = "SELECT process_status FROM BIZ_PROCESS_MAP WHERE process_instance_id = ?";
         assertThat(jdbcTemplate.queryForObject(sql, String.class, processInstanceId)).isEqualTo(expectedStatus);
     }
 
     private void assertCurrentAssignee(String processInstanceId, String expectedAssignee) {
-        String sql = "SELECT current_assignee FROM biz_process_map WHERE process_instance_id = ?";
+        String sql = "SELECT current_assignee FROM BIZ_PROCESS_MAP WHERE process_instance_id = ?";
         assertThat(jdbcTemplate.queryForObject(sql, String.class, processInstanceId)).isEqualTo(expectedAssignee);
     }
 

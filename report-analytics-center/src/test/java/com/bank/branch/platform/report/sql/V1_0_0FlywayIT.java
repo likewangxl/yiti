@@ -48,7 +48,7 @@ class V1_0_0FlywayIT extends ReportFlywayTestBase {
         Integer count = jdbc.queryForObject(
             "SELECT COUNT(*) FROM information_schema.columns " +
             "WHERE table_schema=DATABASE() " +
-            "AND table_name='rpt_saved_query' " +
+            "AND table_name='RPT_SAVED_QUERY' " +
             "AND column_name IN ('id','emp_id','name','dim','subject_ids','metric_codes','version','created_time','updated_time')",
             Integer.class);
         assertThat(count).isEqualTo(9);
@@ -59,7 +59,7 @@ class V1_0_0FlywayIT extends ReportFlywayTestBase {
         Integer count = jdbc.queryForObject(
             "SELECT COUNT(*) FROM information_schema.columns " +
             "WHERE table_schema=DATABASE() " +
-            "AND table_name='sql_probe_history' " +
+            "AND table_name='SQL_PROBE_HISTORY' " +
             "AND column_name IN ('id','emp_id','sql_text','remark','row_count','execution_time_ms','status','error_msg','created_time')",
             Integer.class);
         assertThat(count).isEqualTo(9);
@@ -69,7 +69,7 @@ class V1_0_0FlywayIT extends ReportFlywayTestBase {
     void rptSnapshotTaskShouldExist() {
         Integer count = jdbc.queryForObject(
             "SELECT COUNT(*) FROM information_schema.tables " +
-            "WHERE table_schema=DATABASE() AND table_name='rpt_snapshot_task'",
+            "WHERE table_schema=DATABASE() AND table_name='RPT_SNAPSHOT_TASK'",
             Integer.class);
         assertThat(count).isEqualTo(1);
     }

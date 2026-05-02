@@ -67,7 +67,7 @@ class AllocRelationScopeIntegrationTest extends PerformanceMapperTestBase {
 
     private void insertRaw(CustAllocRelation r) {
         jdbcTemplate.update(
-                "INSERT INTO cust_alloc_relation (id, cust_id, alloc_dim, biz_kind, account_no, "
+                "INSERT INTO CUST_ALLOC_RELATION (id, cust_id, alloc_dim, biz_kind, account_no, "
                         + "emp_id, ratio, effective_date, end_date, source_batch_id, source_process_date, created_by) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 r.getId(), r.getCustId(), r.getAllocDim(), r.getBizKind(), r.getAccountNo(),

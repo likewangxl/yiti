@@ -2,7 +2,9 @@ spring:
   flyway:
     enabled: false   # Mapper/Service/Controller IT 不需要 Flyway，由 PerformanceFlywayTestBase 覆盖启用
   datasource:
-    url: jdbc:mysql://localhost:3306/yiti?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    # V1.13 # 1（2026-05-02）：从 yiti 开发库解绑，迁移到 onepl_test_bootstrap 测试库
+    # 历史背景：V1.10 测试库合一只覆盖了 bootstrap + report，perf/portal 仍指 yiti，导致开发库被测试污染
+    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: djdev
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -22,6 +24,28 @@ spring:
     # 测试环境默认禁用缓存, 单元/集成测试不依赖 Redis 缓存行为;
     # 需要测缓存的用例可在类上 @ImportAutoConfiguration(RedisCacheAutoConfiguration.class) 覆盖
     type: none
+  # V1.13 # 1：启用 Quartz JDBC JobStore（提炼自 bootstrap/application.yml）
+  # 为什么：MetricScheduledE2EIT 等业务层 IT 需要真实 QRTZ_* 表 + clustered 配置才能验证 JobApi.registerJob 链路
+  # initialize-schema=never：QRTZ_* 表由 docs/schema/ddl-quartz.sql 手动初始化（init-v2 脚本步骤 2 已 source）
+  quartz:
+    enabled: true
+    job-store-type: jdbc
+    auto-startup: true
+    startup-delay: 10s
+    overwrite-existing-jobs: true
+    wait-for-jobs-to-complete-on-shutdown: true
+    jdbc:
+      initialize-schema: never
+    properties:
+      org.quartz.scheduler.instanceName: BranchPlatformScheduler
+      org.quartz.scheduler.instanceId: AUTO
+      org.quartz.threadPool.threadCount: 5
+      org.quartz.threadPool.threadPriority: 5
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+      org.quartz.jobStore.tablePrefix: QRTZ_
+      org.quartz.jobStore.isClustered: true
+      org.quartz.jobStore.clusterCheckinInterval: 20000
+      org.quartz.jobStore.misfireThreshold: 60000
 
 # ====================================================================
 # Flowable 引擎测试配置（V1.2 Phase Q0.1 引入 workflow-center 依赖后新增）

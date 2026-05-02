@@ -65,13 +65,13 @@ class DataTaskServiceIdempotentIT extends PerformanceConcurrentRedisTestBase {
     void cleanupBefore() {
         // 清理可能遗留的锁 / DB 记录
         redisTemplate.delete(REDIS_KEY_PREFIX + TASK_ID);
-        jdbcTemplate.update("DELETE FROM perf_run_task WHERE task_key LIKE ?", "CONCUR_EXT_%");
+        jdbcTemplate.update("DELETE FROM PERF_RUN_TASK WHERE task_key LIKE ?", "CONCUR_EXT_%");
     }
 
     @AfterEach
     void cleanupAfter() {
         redisTemplate.delete(REDIS_KEY_PREFIX + TASK_ID);
-        jdbcTemplate.update("DELETE FROM perf_run_task WHERE task_key LIKE ?", "CONCUR_EXT_%");
+        jdbcTemplate.update("DELETE FROM PERF_RUN_TASK WHERE task_key LIKE ?", "CONCUR_EXT_%");
     }
 
     @Test
@@ -111,7 +111,7 @@ class DataTaskServiceIdempotentIT extends PerformanceConcurrentRedisTestBase {
 
         // 3. DB 仅存在一条记录（同 task_key）
         Long rowCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM perf_run_task WHERE task_key = ?", Long.class, TASK_ID);
+                "SELECT COUNT(*) FROM PERF_RUN_TASK WHERE task_key = ?", Long.class, TASK_ID);
         assertThat(rowCount).as("同 taskId 并发上报只应落一条 run_task").isEqualTo(1L);
 
         // 4. 所有返回的 perfRunTaskId 完全一致
@@ -139,7 +139,7 @@ class DataTaskServiceIdempotentIT extends PerformanceConcurrentRedisTestBase {
         assertThat(second.getPerfRunTaskId()).isEqualTo(first.getPerfRunTaskId());
 
         Long rowCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM perf_run_task WHERE task_key = ?", Long.class, TASK_ID);
+                "SELECT COUNT(*) FROM PERF_RUN_TASK WHERE task_key = ?", Long.class, TASK_ID);
         assertThat(rowCount).isEqualTo(1L);
     }
 
@@ -179,7 +179,7 @@ class DataTaskServiceIdempotentIT extends PerformanceConcurrentRedisTestBase {
 
         // 每个 taskId 只落 1 条，共 5 条
         Long totalRows = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM perf_run_task WHERE task_key LIKE 'CONCUR_EXT_BATCH_%'",
+                "SELECT COUNT(*) FROM PERF_RUN_TASK WHERE task_key LIKE 'CONCUR_EXT_BATCH_%'",
                 Long.class);
         assertThat(totalRows).isEqualTo((long) taskIdCount);
     }

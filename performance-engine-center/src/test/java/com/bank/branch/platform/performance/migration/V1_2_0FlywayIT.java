@@ -53,21 +53,21 @@ class V1_2_0FlywayIT extends PerformanceFlywayTestBase {
     void allocAdjustApply_primaryKey_isIdVarchar32() {
         String pkColumn = jdbc.queryForObject(
             "SELECT COLUMN_NAME FROM information_schema.COLUMNS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_alloc_adjust_apply' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_ALLOC_ADJUST_APPLY' " +
             "AND COLUMN_KEY='PRI'",
             String.class);
         assertThat(pkColumn).isEqualTo("id");
 
         String dataType = jdbc.queryForObject(
             "SELECT DATA_TYPE FROM information_schema.COLUMNS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_alloc_adjust_apply' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_ALLOC_ADJUST_APPLY' " +
             "AND COLUMN_NAME='id'",
             String.class);
         assertThat(dataType).isEqualTo("varchar");
 
         Long charMaxLen = jdbc.queryForObject(
             "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_alloc_adjust_apply' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_ALLOC_ADJUST_APPLY' " +
             "AND COLUMN_NAME='id'",
             Long.class);
         assertThat(charMaxLen).isEqualTo(32L);
@@ -80,14 +80,14 @@ class V1_2_0FlywayIT extends PerformanceFlywayTestBase {
     void allocAdjustApply_uniqueKey_applyNo_exists() {
         List<String> cols = jdbc.queryForList(
             "SELECT COLUMN_NAME FROM information_schema.STATISTICS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_alloc_adjust_apply' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_ALLOC_ADJUST_APPLY' " +
             "AND INDEX_NAME='uk_apply_no' ORDER BY SEQ_IN_INDEX",
             String.class);
         assertThat(cols).contains("apply_no");
 
         Integer nonUnique = jdbc.queryForObject(
             "SELECT DISTINCT NON_UNIQUE FROM information_schema.STATISTICS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_alloc_adjust_apply' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_ALLOC_ADJUST_APPLY' " +
             "AND INDEX_NAME='uk_apply_no'",
             Integer.class);
         assertThat(nonUnique).isZero(); // 0 表示唯一索引
@@ -100,7 +100,7 @@ class V1_2_0FlywayIT extends PerformanceFlywayTestBase {
     void allocAdjustItem_uniqueKey_applyEmp_exists() {
         List<String> cols = jdbc.queryForList(
             "SELECT COLUMN_NAME FROM information_schema.STATISTICS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_alloc_adjust_item' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_ALLOC_ADJUST_ITEM' " +
             "AND INDEX_NAME='uk_apply_emp' ORDER BY SEQ_IN_INDEX",
             String.class);
         assertThat(cols).containsExactly("apply_id", "emp_id");
@@ -113,7 +113,7 @@ class V1_2_0FlywayIT extends PerformanceFlywayTestBase {
     void targetAdjustApply_hasPlanIdIndex() {
         List<String> cols = jdbc.queryForList(
             "SELECT COLUMN_NAME FROM information_schema.STATISTICS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_target_adjust_apply' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_TARGET_ADJUST_APPLY' " +
             "AND INDEX_NAME='idx_plan_id'",
             String.class);
         assertThat(cols).contains("plan_id");

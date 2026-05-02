@@ -45,12 +45,12 @@ class V1_2_5FlywayIT extends PerformanceFlywayTestBase {
      */
     @BeforeEach
     void setUpHistoricalNullRow() {
-        jdbc.update("DELETE FROM perf_metric_def WHERE metric_code = ?", TEST_METRIC_CODE);
+        jdbc.update("DELETE FROM PERF_METRIC_DEF WHERE metric_code = ?", TEST_METRIC_CODE);
         try {
             // 必填字段：id / metric_code / metric_name / base_dim / metric_level / calc_freq / calc_mode / status；
             // val_slot=151 固定避开 V1_2_3 seed 的 1~5 槽位（本地库未应用 V1_2_3 时也不冲突）。
             jdbc.update(
-                "INSERT INTO perf_metric_def " +
+                "INSERT INTO PERF_METRIC_DEF " +
                 "(id, metric_code, metric_name, base_dim, metric_level, calc_freq, calc_mode, val_slot, status, deleted) " +
                 "VALUES (?, ?, ?, 'EMP', 1, 'DAILY', 'AUTO', 151, 'ACTIVE', NULL)",
                 TEST_METRIC_CODE, TEST_METRIC_CODE, "历史 NULL deleted 测试");
@@ -61,7 +61,7 @@ class V1_2_5FlywayIT extends PerformanceFlywayTestBase {
 
     @AfterEach
     void cleanup() {
-        jdbc.update("DELETE FROM perf_metric_def WHERE metric_code = ?", TEST_METRIC_CODE);
+        jdbc.update("DELETE FROM PERF_METRIC_DEF WHERE metric_code = ?", TEST_METRIC_CODE);
     }
 
     /**
@@ -119,10 +119,10 @@ class V1_2_5FlywayIT extends PerformanceFlywayTestBase {
     @Test
     void updateSemantics_fixesNullDeletedRow() {
         // 执行 V1_2_5 脚本等价的 UPDATE，模拟生产部署 V1_2_5 时的实际 migrate 行为
-        jdbc.update("UPDATE perf_metric_def SET deleted = 0 WHERE deleted IS NULL");
+        jdbc.update("UPDATE PERF_METRIC_DEF SET deleted = 0 WHERE deleted IS NULL");
 
         Integer deleted = jdbc.queryForObject(
-            "SELECT deleted FROM perf_metric_def WHERE metric_code = ?",
+            "SELECT deleted FROM PERF_METRIC_DEF WHERE metric_code = ?",
             Integer.class, TEST_METRIC_CODE);
         assertThat(deleted).as("脚本 UPDATE 语义应把 NULL deleted 修正为 0").isZero();
     }

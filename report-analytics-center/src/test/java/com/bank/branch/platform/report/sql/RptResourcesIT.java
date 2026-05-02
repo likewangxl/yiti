@@ -49,7 +49,7 @@ class RptResourcesIT extends ReportFlywayTestBase {
             // R_BACK_TECH 存在 → 必有 R_RPT_SQL_EXEC 绑定
             Integer roleBoundCount = jdbc.queryForObject(
                 "SELECT COUNT(DISTINCT prr.ROLE_ID) FROM PT_ROLE_RESOURCE prr "
-                    + "JOIN pt_role r ON prr.ROLE_ID = r.ROLE_ID "
+                    + "JOIN PT_ROLE r ON prr.ROLE_ID = r.ROLE_ID "
                     + "WHERE prr.RESOURCE_ID = 'R_RPT_SQL_EXEC' "
                     + "  AND r.ROLE_CODE = 'R_BACK_TECH'",
                 Integer.class);
@@ -59,7 +59,7 @@ class RptResourcesIT extends ReportFlywayTestBase {
         // 业务角色（非 R_ADMIN/R_BACK_TECH）leak 到 R_RPT_SQL_EXEC：必须为 0
         Integer leakedToBusinessRoles = jdbc.queryForObject(
             "SELECT COUNT(DISTINCT prr.ROLE_ID) FROM PT_ROLE_RESOURCE prr "
-                + "JOIN pt_role r ON prr.ROLE_ID = r.ROLE_ID "
+                + "JOIN PT_ROLE r ON prr.ROLE_ID = r.ROLE_ID "
                 + "WHERE prr.RESOURCE_ID = 'R_RPT_SQL_EXEC' "
                 + "  AND r.ROLE_CODE NOT IN ('R_BACK_TECH', 'R_ADMIN')",
             Integer.class);

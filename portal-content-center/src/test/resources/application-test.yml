@@ -12,7 +12,9 @@ spring:
         - classpath:sql/test-ddl-portal-clean.sql
         - classpath:sql/test-ddl-flowable-idm-clean.sql
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/yiti?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&allowMultiQueries=true
+    # V1.13 # 1（2026-05-02）：从 yiti 开发库解绑，迁移到 onepl_test_bootstrap 测试库
+    # schema-locations 已用 CREATE TABLE IF NOT EXISTS，与已清理库幂等兼容
+    url: jdbc:mysql://127.0.0.1:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&allowMultiQueries=true
     username: root
     password: djdev
     driver-class-name: com.mysql.cj.jdbc.Driver

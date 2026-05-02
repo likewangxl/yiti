@@ -36,7 +36,7 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
     /** 直接走 JDBC 插入（Mapper 只读，V1.0 无 insert 方法）. */
     private void insertRaw(PerfRunTask t) {
         jdbcTemplate.update(
-                "INSERT INTO perf_run_task (id, task_type, task_key, data_date, data_version, "
+                "INSERT INTO PERF_RUN_TASK (id, task_type, task_key, data_date, data_version, "
                         + "params_json, status, started_by, start_time, end_time, error_msg, result_preview_json) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 t.getId(), t.getTaskType(), t.getTaskKey(), t.getDataDate(), t.getDataVersion(),

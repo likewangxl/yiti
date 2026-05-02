@@ -1,1 +1,1 @@
-DELETE FROM addrbook_employee WHERE emp_id LIKE 'TEST_%';
+DELETE FROM ADDRBOOK_EMPLOYEE WHERE emp_id LIKE 'TEST_%';

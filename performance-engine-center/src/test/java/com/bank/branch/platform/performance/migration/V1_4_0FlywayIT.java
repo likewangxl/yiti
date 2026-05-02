@@ -55,8 +55,8 @@ class V1_4_0FlywayIT extends PerformanceFlywayTestBase {
      */
     @AfterEach
     void cleanupPreseed() {
-        jdbc.update("DELETE FROM perf_target_plan WHERE id = ?", TEST_PLAN_ID);
-        jdbc.update("DELETE FROM perf_target_value WHERE id = ?", TEST_VALUE_ID);
+        jdbc.update("DELETE FROM PERF_TARGET_PLAN WHERE id = ?", TEST_PLAN_ID);
+        jdbc.update("DELETE FROM PERF_TARGET_VALUE WHERE id = ?", TEST_VALUE_ID);
     }
 
     /**
@@ -98,8 +98,8 @@ class V1_4_0FlywayIT extends PerformanceFlywayTestBase {
         Integer count = jdbc.queryForObject(
             "SELECT COUNT(*) FROM information_schema.COLUMNS " +
             "WHERE TABLE_SCHEMA=DATABASE() " +
-            "AND ((TABLE_NAME='perf_target_plan' AND COLUMN_NAME IN ('owner_emp_id','owner_org_code')) " +
-            "  OR (TABLE_NAME='perf_target_value' AND COLUMN_NAME IN ('owner_emp_id','owner_org_code')))",
+            "AND ((TABLE_NAME='PERF_TARGET_PLAN' AND COLUMN_NAME IN ('owner_emp_id','owner_org_code')) " +
+            "  OR (TABLE_NAME='PERF_TARGET_VALUE' AND COLUMN_NAME IN ('owner_emp_id','owner_org_code')))",
             Integer.class);
         assertThat(count)
             .as("V1_4_0 后两表各自应有 owner_emp_id / owner_org_code 两列, 合计 4")
@@ -117,8 +117,8 @@ class V1_4_0FlywayIT extends PerformanceFlywayTestBase {
             "SELECT COUNT(DISTINCT CONCAT(TABLE_NAME, '.', INDEX_NAME)) " +
             "FROM information_schema.STATISTICS " +
             "WHERE TABLE_SCHEMA=DATABASE() " +
-            "AND ((TABLE_NAME='perf_target_plan' AND INDEX_NAME IN ('idx_owner_emp','idx_owner_org')) " +
-            "  OR (TABLE_NAME='perf_target_value' AND INDEX_NAME IN ('idx_owner_emp','idx_owner_org')))",
+            "AND ((TABLE_NAME='PERF_TARGET_PLAN' AND INDEX_NAME IN ('idx_owner_emp','idx_owner_org')) " +
+            "  OR (TABLE_NAME='PERF_TARGET_VALUE' AND INDEX_NAME IN ('idx_owner_emp','idx_owner_org')))",
             Integer.class);
         assertThat(count)
             .as("V1_4_0 后两表各自应有 idx_owner_emp / idx_owner_org 两索引, 合计 4")
@@ -141,7 +141,7 @@ class V1_4_0FlywayIT extends PerformanceFlywayTestBase {
         // 必填字段：id, plan_id, subject_type, subject_id, cycle_key, metric_code, target_value
         try {
             jdbc.update(
-                "INSERT INTO perf_target_value " +
+                "INSERT INTO PERF_TARGET_VALUE " +
                 "(id, plan_id, subject_type, subject_id, cycle_key, metric_code, target_value, created_by) " +
                 "VALUES (?, ?, 'EMP', 'V140_SBJ', '2026', 'V140_M', 100.0, ?)",
                 TEST_VALUE_ID, TEST_PLAN_ID, BACKFILL_USER);
@@ -151,12 +151,12 @@ class V1_4_0FlywayIT extends PerformanceFlywayTestBase {
         }
 
         // When：执行与 V1_4_0 等价的回填 UPDATE
-        jdbc.update("UPDATE perf_target_value SET owner_emp_id = created_by " +
+        jdbc.update("UPDATE PERF_TARGET_VALUE SET owner_emp_id = created_by " +
                     "WHERE id = ? AND owner_emp_id IS NULL", TEST_VALUE_ID);
 
         // Then：owner_emp_id 应该被回填为 created_by 值
         String ownerEmpId = jdbc.queryForObject(
-            "SELECT owner_emp_id FROM perf_target_value WHERE id = ?",
+            "SELECT owner_emp_id FROM PERF_TARGET_VALUE WHERE id = ?",
             String.class, TEST_VALUE_ID);
         assertThat(ownerEmpId)
             .as("回填 UPDATE 应把 owner_emp_id 填为 created_by=" + BACKFILL_USER)

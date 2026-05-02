@@ -4,11 +4,11 @@ SET @biz_process_map_title_ddl = (
             SELECT 1
             FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'biz_process_map'
+              AND TABLE_NAME = 'BIZ_PROCESS_MAP'
               AND COLUMN_NAME = 'title'
         ),
         'SELECT 1',
-        'ALTER TABLE biz_process_map ADD COLUMN title VARCHAR(200) NULL COMMENT ''流程标题'' AFTER process_status'
+        'ALTER TABLE BIZ_PROCESS_MAP ADD COLUMN title VARCHAR(200) NULL COMMENT ''流程标题'' AFTER process_status'
     )
 );
 PREPARE biz_process_map_title_stmt FROM @biz_process_map_title_ddl;

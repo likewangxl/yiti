@@ -4,7 +4,7 @@
 -- ============================================================
 
 -- 业务流程映射表
-CREATE TABLE IF NOT EXISTS biz_process_map (
+CREATE TABLE IF NOT EXISTS BIZ_PROCESS_MAP (
     id VARCHAR(32) PRIMARY KEY,
     business_key VARCHAR(100) NOT NULL UNIQUE,
     biz_type VARCHAR(50) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS biz_process_map (
 );
 
 -- 流程节点候选人配置表
-CREATE TABLE IF NOT EXISTS wf_node_candidate_conf (
+CREATE TABLE IF NOT EXISTS WF_NODE_CANDIDATE_CONF (
     id VARCHAR(32) PRIMARY KEY,
     process_definition_key VARCHAR(100) NOT NULL,
     node_key VARCHAR(100) NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS wf_node_candidate_conf (
 );
 
 -- 流程节点表单配置表
-CREATE TABLE IF NOT EXISTS wf_node_form_conf (
+CREATE TABLE IF NOT EXISTS WF_NODE_FORM_CONF (
     id VARCHAR(32) PRIMARY KEY,
     process_definition_key VARCHAR(100) NOT NULL,
     node_key VARCHAR(100) NOT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS wf_node_form_conf (
 );
 
 -- 流程超时规则表
-CREATE TABLE IF NOT EXISTS wf_timeout_rule (
+CREATE TABLE IF NOT EXISTS WF_TIMEOUT_RULE (
     id VARCHAR(32) PRIMARY KEY,
     process_definition_key VARCHAR(100) NOT NULL,
     node_key VARCHAR(100) NOT NULL,

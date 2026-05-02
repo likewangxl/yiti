@@ -166,6 +166,6 @@ class SysControlConcurrentIT extends PerformanceConcurrentRedisTestBase {
 
     private void cleanByScope() {
         // 保险: 按 scope_dim 清 CONCUR_DIM_EMP_X 下所有记录
-        jdbcTemplate.update("DELETE FROM sys_control WHERE scope_dim = ?", SCOPE_DIM);
+        jdbcTemplate.update("DELETE FROM SYS_CONTROL WHERE scope_dim = ?", SCOPE_DIM);
     }
 }

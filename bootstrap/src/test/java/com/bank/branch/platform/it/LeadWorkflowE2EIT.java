@@ -113,7 +113,7 @@ class LeadWorkflowE2EIT {
 
         // 校验前置：cust_master 在审批前不应该有该 leadId 关联记录
         long preCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -137,7 +137,7 @@ class LeadWorkflowE2EIT {
 
         // ========== 6. 断言 2：cust_master 表新增 1 条记录 ==========
         long postCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -150,7 +150,7 @@ class LeadWorkflowE2EIT {
         // 避免 MySQL 驱动默认 tinyInt1isBit=true 把 TINYINT(1) 当 Boolean 导致 ClassCastException，
         // 让 application-lead-e2e.yml 不再需要 url 加 tinyInt1isBit=false（与 default/flowable-e2e profile 一致）。
         Map<String, Object> created = jdbcTemplate.queryForObject(
-                "SELECT cust_name, status, deleted FROM cust_master WHERE lead_id = ?",
+                "SELECT cust_name, status, deleted FROM CUST_MASTER WHERE lead_id = ?",
                 (rs, rowNum) -> Map.of(
                         "cust_name", rs.getString("cust_name"),
                         "status", rs.getString("status"),
@@ -186,7 +186,7 @@ class LeadWorkflowE2EIT {
 
         // FU-8（2026-04-29 补对称校验）：与 APPROVED case 对称，先确认 cust_master 在驳回前不应有该 leadId 关联记录
         long preCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -202,7 +202,7 @@ class LeadWorkflowE2EIT {
 
         // 5. 断言 2：cust_master 表对应该 leadId 不应有任何记录
         long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM cust_master WHERE lead_id = ?",
+                "SELECT COUNT(*) FROM CUST_MASTER WHERE lead_id = ?",
                 Long.class,
                 leadId
         );
@@ -314,7 +314,7 @@ class LeadWorkflowE2EIT {
     /** 直接查 cust_lead.lead_status 校验。 */
     private void assertLeadStatus(String leadId, String expectedStatus) {
         String actual = jdbcTemplate.queryForObject(
-                "SELECT lead_status FROM cust_lead WHERE id = ?",
+                "SELECT lead_status FROM CUST_LEAD WHERE id = ?",
                 String.class,
                 leadId
         );

@@ -51,7 +51,7 @@ class V1_0_5FlywayIT extends ReportFlywayTestBase {
         Integer cnt = jdbc.queryForObject(
             "SELECT COUNT(*) FROM information_schema.columns " +
                 "WHERE table_schema=DATABASE() " +
-                "AND table_name='rpt_export_task' " +
+                "AND table_name='RPT_EXPORT_TASK' " +
                 "AND column_name IN ('id','export_type','params_json','status'," +
                 "'file_key','file_size','row_count','expire_at','operator_id'," +
                 "'error_msg','created_time','updated_time')",

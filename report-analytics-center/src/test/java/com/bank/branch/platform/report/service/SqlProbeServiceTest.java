@@ -117,7 +117,7 @@ class SqlProbeServiceTest {
     @Test
     void execute_withoutBackTechRole_rejects40302() {
         when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RM"));
-        SqlProbeExecuteReqDTO req = buildReq("SELECT * FROM cust_master", "诊断");
+        SqlProbeExecuteReqDTO req = buildReq("SELECT * FROM CUST_MASTER", "诊断");
 
         assertThatThrownBy(() -> service.execute(req))
                 .isInstanceOf(BizException.class)
@@ -151,7 +151,7 @@ class SqlProbeServiceTest {
         when(resultSet.next()).thenReturn(true, true, false);
         when(resultSet.getObject(1)).thenReturn(1, 2);
 
-        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM cust_master", "查询客户");
+        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM CUST_MASTER", "查询客户");
 
         var resp = service.execute(req);
 
@@ -185,7 +185,7 @@ class SqlProbeServiceTest {
     void execute_sqlTimeout_writesTimeoutStatus_andThrows42005() throws SQLException {
         when(statement.executeQuery()).thenThrow(new SQLTimeoutException("statement timeout"));
 
-        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM cust_master", "压测");
+        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM CUST_MASTER", "压测");
 
         assertThatThrownBy(() -> service.execute(req))
                 .isInstanceOf(BizException.class)
@@ -203,7 +203,7 @@ class SqlProbeServiceTest {
     void execute_sqlExecutionFailed_writesFailedStatus_andThrows42009() throws SQLException {
         when(statement.executeQuery()).thenThrow(new SQLException("table missing"));
 
-        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM cust_master", "排查");
+        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM CUST_MASTER", "排查");
 
         assertThatThrownBy(() -> service.execute(req))
                 .isInstanceOf(BizException.class)

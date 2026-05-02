@@ -82,8 +82,8 @@ pom.xml `surefire/failsafe` 的 argLine 已含 `-Dfile.encoding=UTF-8`，无需�
 | `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
 | `customer-marketing-center` | com.bank.branch.platform.customer | V1.8 已交付（2026-05-01）| 客户营销中心 (114 Java + 49 测试，0 UOE)；V1.8 LeadCallbackCompensation @Scheduled→Quartz 迁移 |
 | `business-application-center` | com.bank.branch.platform.bizapp | 已完成 | 业务申请中心 (60 Java + 26 测试，0 UOE) |
-| `portal-content-center` | com.bank.branch.platform.portal | 已完成 | 门户与内容中心 (108 Java + 38 测试，0 UOE) |
-| `performance-engine-center` | com.bank.branch.platform.performance | V1.6 已交付（quartz 整合） | 绩效计算中心 (V1.0-V1.5 累积能力 + V1.6 Spring `@Scheduled`/ShedLock → Quartz 集群调度迁移) |
+| `portal-content-center` | com.bank.branch.platform.portal | 已完成（V1.13 # 1 解绑 yiti） | 门户与内容中心 (108 Java + 38 测试，0 UOE)；V1.13 # 1 application-test.yml 解绑 yiti → onepl_test_bootstrap |
+| `performance-engine-center` | com.bank.branch.platform.performance | V1.7 + V1.13 # 1 测试库一统 | 绩效计算中心 (V1.0-V1.5 累积 + V1.6 Quartz 整合 + V1.7 指标级调度)；V1.13 # 1 application-test.yml 解绑 yiti + 启用 Quartz JDBC + 38 测试 fixture 大小写治理 |
 | `report-analytics-center` | com.bank.branch.platform.report | V1.0 已交付（2026-04-25） | 报表分析中心 (25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步 + SQL 探查) |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
@@ -134,7 +134,7 @@ com.bank.branch.platform
 ├─ portal-content-center         门户与内容中心 ✅ 已完成（108 Java + 38 测试）
 ├─ customer-marketing-center     客户营销中心 ✅ V1.8 已交付（2026-05-01）（114 Java + 49 测试）；V1.8 LeadCallbackCompensation @Scheduled→Quartz 迁移
 ├─ business-application-center   业务申请中心 ✅ 已完成（60 Java + 26 测试）
-├─ performance-engine-center     绩效计算中心 ✅ V1.6 已交付（Quartz 整合：Spring `@Scheduled`/ShedLock 全部迁移到 Quartz 集群调度，QRTZ_LOCKS 行锁接管防重；JobApi 精简到 1 方法 getJobConf；JobExecutionLogger 全局 Quartz JobListener 统一写日志）
+├─ performance-engine-center     绩效计算中心 ✅ V1.7 + V1.13 # 1（V1.6 Quartz 整合：Spring `@Scheduled`/ShedLock 全部迁移到 Quartz 集群调度，QRTZ_LOCKS 行锁接管防重；JobApi 精简到 1 方法 getJobConf；JobExecutionLogger 全局 Quartz JobListener 统一写日志；V1.13 # 1 application-test.yml 解绑 yiti 开发库迁到 onepl_test_bootstrap + 显式启用 Quartz JDBC clustered）
 └─ report-analytics-center       报表分析中心 ✅ V1.0 已交付（25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步导出 + SQL 探查 / surefire 103 + failsafe 70 = 173 全绿）
 ```
 
@@ -240,6 +240,8 @@ com.bank.branch.platform.<module>/
 - **V1.11 # 1 spec**: `docs/superpowers/specs/2026-05-01-v1.11-5it-diagnosis-design.md` — listener 嵌套 AFTER_COMMIT 链改同步调用（方向 C），5 IT 诊断 + 修复
 - **V1.11 # 1 plan**: `docs/superpowers/plans/2026-05-01-v1.11-1-5it-diagnosis-impl.md`
 - **V1.12 schema 治理 spec**: `docs/superpowers/specs/2026-05-01-v1.12-schema-and-data-cleanup-design.md` — onepl_test_bootstrap schema column drift 修复 + 8 customer 小写历史表 DROP + bizapp/MetricScheduledE2EIT 数据 cleanup
+- **V1.13 # 1 测试库一统 spec**: `docs/superpowers/specs/2026-05-02-v1.13-test-db-unification-design.md` — onepl_test_bootstrap 23 张其他模块小写双胞胎 DROP（V1.13 自己脚本 `docs/superpowers/sql/2026-05-02-v1.13-drop-other-lowercase-tables.sql`）+ perf/portal application-test.yml 解绑 yiti 改 onepl_test_bootstrap + perf 启用 Quartz JDBC + 38 测试文件 80+ 处 SQL 上下文 lowercase→uppercase 一致性治理（perl word-boundary sed）+ Flyway history 17 V_*.sql mark success=1 绕开生产 V_*.sql 大小写不一致 + 幂等 init v2 脚本 `docs/superpowers/sql/2026-05-02-v1.13-onepl-test-bootstrap-init-v2.sql`；customer/bizapp/portal/bootstrap surefire 全绿 + report surefire 全绿（fix SqlSafeValidatorTest 期望大写后），perf failsafe errors 27→2、残 6 fail 全部归因（V1.13 # 1b spike 2 + V1.13 # 1d 副作用 4 + V1.7 已知 baseline 3）。
+- **V1.13 候选清单**：# 1 已交付（本期）；# 1b MetricScheduledE2EIT 业务层 Quartz JobKey 注入失败 spike；# 1d 生产 perf V_*.sql + undo-scripts 大小写不一致（小写表名）治理；# 2 V1.8 P6 业务/数据状态；# 3 SummaryControllerIT 500 (V1.12 # 4 老登记)；# 5 WorkflowCallbackListener REQUIRES_NEW 嵌套简化；# 6 LeadRejectedEvent dead code 定调
 
 ### 模块级 CLAUDE.md (开发时必须参考)
 - **公共基础设施**: [common/CLAUDE.md](common/CLAUDE.md)

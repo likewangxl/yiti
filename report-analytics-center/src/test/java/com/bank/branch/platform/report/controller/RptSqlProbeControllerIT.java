@@ -52,7 +52,7 @@ class RptSqlProbeControllerIT extends BaseControllerIT {
                 .build());
 
         String body = """
-                { "sql": "SELECT id FROM cust_master", "remark": "诊断" }
+                { "sql": "SELECT id FROM CUST_MASTER", "remark": "诊断" }
                 """;
         mvc.perform(post("/api/reports/sql-probe/execute")
                         .contentType("application/json")
@@ -67,7 +67,7 @@ class RptSqlProbeControllerIT extends BaseControllerIT {
     void execute_missingRemark_returns400() throws Exception {
         // remark 字段缺失：@NotBlank 触发 400
         String body = """
-                { "sql": "SELECT id FROM cust_master" }
+                { "sql": "SELECT id FROM CUST_MASTER" }
                 """;
         mvc.perform(post("/api/reports/sql-probe/execute")
                         .contentType("application/json")
@@ -99,7 +99,7 @@ class RptSqlProbeControllerIT extends BaseControllerIT {
     void getHistoryDetail_returns200() throws Exception {
         SqlProbeHistoryRespDTO d = SqlProbeHistoryRespDTO.builder()
                 .id("H001").empId("E_TECH001").status("SUCCESS")
-                .sqlText("SELECT 1 FROM cust_master").remark("test")
+                .sqlText("SELECT 1 FROM CUST_MASTER").remark("test")
                 .rowCount(1).executionTimeMs(50).build();
         when(sqlProbeService.getHistoryDetail(anyString())).thenReturn(d);
 

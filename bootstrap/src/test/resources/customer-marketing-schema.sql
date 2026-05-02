@@ -8,7 +8,7 @@
 -- 2. 现役脚本：docs/superpowers/sql/2026-05-01-v1.12-schema-column-drift-fix.sql（修 sla_warning）
 -- 3. 测试库实例手工跑该脚本对齐
 
-CREATE TABLE IF NOT EXISTS cust_tag (
+CREATE TABLE IF NOT EXISTS CUST_TAG (
     id VARCHAR(32) PRIMARY KEY,
     tag_name VARCHAR(100) NOT NULL,
     tag_code VARCHAR(100) NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS cust_tag (
     UNIQUE KEY uk_cust_tag_code (tag_code)
 );
 
-CREATE TABLE IF NOT EXISTS cust_tag_rel (
+CREATE TABLE IF NOT EXISTS CUST_TAG_REL (
     id VARCHAR(32) PRIMARY KEY,
     cust_id VARCHAR(32) NOT NULL,
     tag_id VARCHAR(32) NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS cust_tag_rel (
     UNIQUE KEY uk_cust_tag_rel (cust_id, tag_id)
 );
 
-CREATE TABLE IF NOT EXISTS cust_lead (
+CREATE TABLE IF NOT EXISTS CUST_LEAD (
     id VARCHAR(32) PRIMARY KEY,
     lead_no VARCHAR(64) NOT NULL,
     lead_op VARCHAR(20) NOT NULL,
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS cust_lead (
     UNIQUE KEY uk_cust_lead_no (lead_no)
 );
 
-CREATE TABLE IF NOT EXISTS lead_import_batch (
+CREATE TABLE IF NOT EXISTS LEAD_IMPORT_BATCH (
     id VARCHAR(32) PRIMARY KEY,
     source_file_name VARCHAR(255),
     total_count INT,
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS lead_import_batch (
     deleted TINYINT DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS cust_master (
+CREATE TABLE IF NOT EXISTS CUST_MASTER (
     id VARCHAR(32) PRIMARY KEY,
     cust_no VARCHAR(64) NOT NULL,
     cust_name VARCHAR(200) NOT NULL,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS cust_master (
     UNIQUE KEY uk_cust_master_no (cust_no)
 );
 
-CREATE TABLE IF NOT EXISTS cust_claim (
+CREATE TABLE IF NOT EXISTS CUST_CLAIM (
     id VARCHAR(32) PRIMARY KEY,
     cust_id VARCHAR(32) NOT NULL,
     org_id VARCHAR(32) NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS cust_claim (
     UNIQUE KEY uk_cust_claim_org (cust_id, org_id)
 );
 
-CREATE TABLE IF NOT EXISTS touch_task (
+CREATE TABLE IF NOT EXISTS TOUCH_TASK (
     id VARCHAR(32) PRIMARY KEY,
     task_no VARCHAR(64) NOT NULL,
     cust_id VARCHAR(32) NOT NULL,
@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS touch_task (
     UNIQUE KEY uk_touch_task_no (task_no)
 );
 
-CREATE TABLE IF NOT EXISTS touch_log (
+CREATE TABLE IF NOT EXISTS TOUCH_LOG (
     id VARCHAR(32) PRIMARY KEY,
     touch_task_id VARCHAR(32) NOT NULL,
     log_time DATETIME,

@@ -4,7 +4,7 @@
 -- ============================================================
 
 -- 字典表
-CREATE TABLE IF NOT EXISTS sys_dict (
+CREATE TABLE IF NOT EXISTS SYS_DICT (
     id VARCHAR(32) PRIMARY KEY,
     dict_type VARCHAR(100) NOT NULL,
     dict_code VARCHAR(100) NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS sys_dict (
 );
 
 -- 系统配置KV表
-CREATE TABLE IF NOT EXISTS sys_config_kv (
+CREATE TABLE IF NOT EXISTS SYS_CONFIG_KV (
     id VARCHAR(32) PRIMARY KEY,
     config_key VARCHAR(255) NOT NULL UNIQUE,
     config_value TEXT NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS sys_config_kv (
 );
 
 -- 工作日历表
-CREATE TABLE IF NOT EXISTS sys_calendar_day (
+CREATE TABLE IF NOT EXISTS SYS_CALENDAR_DAY (
     day DATE PRIMARY KEY,
     is_workday INT DEFAULT 1,
     remark VARCHAR(200) DEFAULT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS sys_calendar_day (
 );
 
 -- 审计日志表
-CREATE TABLE IF NOT EXISTS audit_log (
+CREATE TABLE IF NOT EXISTS AUDIT_LOG (
     id VARCHAR(32) PRIMARY KEY,
     trace_id VARCHAR(64) DEFAULT NULL,
     emp_id VARCHAR(32) NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 -- 用户通知表
-CREATE TABLE IF NOT EXISTS user_notification (
+CREATE TABLE IF NOT EXISTS USER_NOTIFICATION (
     id VARCHAR(32) PRIMARY KEY,
     emp_id VARCHAR(32) NOT NULL,
     title VARCHAR(200) NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS user_notification (
 );
 
 -- 文件对象表
-CREATE TABLE IF NOT EXISTS file_object (
+CREATE TABLE IF NOT EXISTS FILE_OBJECT (
     id VARCHAR(32) PRIMARY KEY,
     file_name VARCHAR(255) NOT NULL,
     file_size BIGINT DEFAULT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS file_object (
 );
 
 -- 业务-附件关联表
-CREATE TABLE IF NOT EXISTS biz_file_rel (
+CREATE TABLE IF NOT EXISTS BIZ_FILE_REL (
     id VARCHAR(32) PRIMARY KEY,
     biz_type VARCHAR(32),
     biz_id VARCHAR(100),
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS biz_file_rel (
 );
 
 -- 任务配置表
-CREATE TABLE IF NOT EXISTS sys_job_conf (
+CREATE TABLE IF NOT EXISTS SYS_JOB_CONF (
     id VARCHAR(32) PRIMARY KEY,
     job_key VARCHAR(100) NOT NULL UNIQUE,
     job_name VARCHAR(100),
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS sys_job_conf (
 );
 
 -- 任务执行日志表
-CREATE TABLE IF NOT EXISTS sys_job_run_log (
+CREATE TABLE IF NOT EXISTS SYS_JOB_RUN_LOG (
     id VARCHAR(32) PRIMARY KEY,
     job_id VARCHAR(32),
     trigger_type VARCHAR(20) DEFAULT 'SCHEDULED',

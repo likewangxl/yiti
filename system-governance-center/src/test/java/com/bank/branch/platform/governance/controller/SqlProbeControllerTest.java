@@ -73,7 +73,7 @@ class SqlProbeControllerTest {
         // when & then
         mockMvc.perform(post("/api/admin/sql-probe/execute")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"sql\": \"SELECT * FROM sys_dict\", \"remark\": \"测试查询\"}"))
+                .content("{\"sql\": \"SELECT * FROM SYS_DICT\", \"remark\": \"测试查询\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.columns").isArray());
@@ -106,7 +106,7 @@ class SqlProbeControllerTest {
 
         mockMvc.perform(post("/api/admin/sql-probe/execute")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"sql\": \"DELETE FROM sys_dict\", \"remark\": \"测试\"}"))
+                .content("{\"sql\": \"DELETE FROM SYS_DICT\", \"remark\": \"测试\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("GOV-42201"));
     }

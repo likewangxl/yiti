@@ -1,1 +1,1 @@
-DELETE FROM doc_info WHERE doc_title LIKE 'TEST_%';
+DELETE FROM DOC_INFO WHERE doc_title LIKE 'TEST_%';

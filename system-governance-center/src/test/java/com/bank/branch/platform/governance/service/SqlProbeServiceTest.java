@@ -98,14 +98,14 @@ class SqlProbeServiceTest {
      */
     @Test
     void executeSql_selectWithoutLimit_appendsLimit() throws Exception {
-        String sql = "SELECT * FROM sys_dict";
+        String sql = "SELECT * FROM SYS_DICT";
 
         sqlProbeService.executeSql(sql, "E001", "测试");
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(statement).executeQuery(sqlCaptor.capture());
 
-        assertThat(sqlCaptor.getValue()).isEqualTo("SELECT * FROM sys_dict LIMIT 1000");
+        assertThat(sqlCaptor.getValue()).isEqualTo("SELECT * FROM SYS_DICT LIMIT 1000");
     }
 
     /**
@@ -113,14 +113,14 @@ class SqlProbeServiceTest {
      */
     @Test
     void executeSql_selectWithExistingLimit_doesNotModify() throws Exception {
-        String sql = "SELECT * FROM sys_dict LIMIT 10";
+        String sql = "SELECT * FROM SYS_DICT LIMIT 10";
 
         sqlProbeService.executeSql(sql, "E001", "测试");
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(statement).executeQuery(sqlCaptor.capture());
 
-        assertThat(sqlCaptor.getValue()).isEqualTo("SELECT * FROM sys_dict LIMIT 10");
+        assertThat(sqlCaptor.getValue()).isEqualTo("SELECT * FROM SYS_DICT LIMIT 10");
     }
 
     /**
@@ -128,7 +128,7 @@ class SqlProbeServiceTest {
      */
     @Test
     void executeSql_success_writesAuditLog() throws Exception {
-        String sql = "SELECT * FROM sys_dict LIMIT 5";
+        String sql = "SELECT * FROM SYS_DICT LIMIT 5";
 
         sqlProbeService.executeSql(sql, "E001", "查询测试");
 
@@ -171,7 +171,7 @@ class SqlProbeServiceTest {
         when(resultSet.getObject(2)).thenReturn("测试字典");
 
         List<Map<String, Object>> result = sqlProbeService.executeSql(
-                "SELECT id, name FROM sys_dict LIMIT 1", "E001", "测试");
+                "SELECT id, name FROM SYS_DICT LIMIT 1", "E001", "测试");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).get("id")).isEqualTo(1L);
@@ -251,7 +251,7 @@ class SqlProbeServiceTest {
      */
     @Test
     void executeSql_lowercaseSelect_succeeds() throws Exception {
-        sqlProbeService.executeSql("select * from sys_dict LIMIT 10", "E001", "测试");
+        sqlProbeService.executeSql("select * from SYS_DICT LIMIT 10", "E001", "测试");
 
         verify(statement).executeQuery(anyString());
     }
@@ -261,7 +261,7 @@ class SqlProbeServiceTest {
      */
     @Test
     void executeSql_lowercaseLimit_doesNotAppend() throws Exception {
-        sqlProbeService.executeSql("SELECT * FROM sys_dict limit 10", "E001", "测试");
+        sqlProbeService.executeSql("SELECT * FROM SYS_DICT limit 10", "E001", "测试");
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(statement).executeQuery(sqlCaptor.capture());

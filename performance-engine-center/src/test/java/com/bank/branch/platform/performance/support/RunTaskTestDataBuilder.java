@@ -13,7 +13,7 @@ import java.util.UUID;
  * 单线程 IT 的事务会回滚，这里的前缀主要保证并发 / 手工排查时可识别。
  *
  * <p>由于 PerfRunTaskMapper 只读（V1.0 无 insert 方法），测试数据通过 JdbcTemplate
- * 在 IT 中直接 {@code INSERT INTO perf_run_task ...} 准备。本 Builder 只负责
+ * 在 IT 中直接 {@code INSERT INTO PERF_RUN_TASK ...} 准备。本 Builder 只负责
  * 构造 Entity 对象以便 IT 组织测试数据。
  */
 public final class RunTaskTestDataBuilder implements TestDataBuilder {

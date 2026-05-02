@@ -1,1 +1,1 @@
-DELETE FROM portal_nav WHERE nav_name LIKE 'TEST_%';
+DELETE FROM PORTAL_NAV WHERE nav_name LIKE 'TEST_%';

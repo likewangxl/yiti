@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS loan_apply (
+CREATE TABLE IF NOT EXISTS LOAN_APPLY (
   id                     VARCHAR(32)    NOT NULL,
   apply_no               VARCHAR(100)   DEFAULT NULL,
   cust_id                VARCHAR(32)    NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS loan_apply (
   PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS support_request (
+CREATE TABLE IF NOT EXISTS SUPPORT_REQUEST (
   id                     VARCHAR(32)    NOT NULL,
   request_no             VARCHAR(100)   DEFAULT NULL,
   submit_group_id        VARCHAR(64)    DEFAULT NULL,

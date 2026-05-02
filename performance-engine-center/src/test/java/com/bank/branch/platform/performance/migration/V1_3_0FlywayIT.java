@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><strong>生产部署前置运维清单（脚本头部完整保留）</strong>：
  * <ol>
- *   <li>必须先检查 {@code SELECT task_key, COUNT(*) FROM perf_run_task WHERE task_key IS NOT NULL GROUP BY task_key HAVING COUNT(*) > 1;}</li>
+ *   <li>必须先检查 {@code SELECT task_key, COUNT(*) FROM PERF_RUN_TASK WHERE task_key IS NOT NULL GROUP BY task_key HAVING COUNT(*) > 1;}</li>
  *   <li>若有重复 → 先按业务规则清理（保留最早/最晚一条，DELETE 其余）</li>
  *   <li>然后再执行 Flyway migrate</li>
  * </ol>
@@ -69,7 +69,7 @@ class V1_3_0FlywayIT extends PerformanceFlywayTestBase {
         String ukColumns = jdbc.queryForObject(
             "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) " +
             "FROM information_schema.STATISTICS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_run_task' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_RUN_TASK' " +
             "AND INDEX_NAME='uk_task_key'",
             String.class);
         assertThat(ukColumns).as("uk_task_key 必须存在且单列为 task_key").isEqualTo("task_key");
@@ -82,7 +82,7 @@ class V1_3_0FlywayIT extends PerformanceFlywayTestBase {
     void ukTaskKey_isUniqueIndex() {
         Integer nonUnique = jdbc.queryForObject(
             "SELECT DISTINCT NON_UNIQUE FROM information_schema.STATISTICS " +
-            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='perf_run_task' " +
+            "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PERF_RUN_TASK' " +
             "AND INDEX_NAME='uk_task_key'",
             Integer.class);
         assertThat(nonUnique).as("uk_task_key 应为唯一索引 (NON_UNIQUE=0)").isZero();
