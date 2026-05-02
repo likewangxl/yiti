@@ -598,6 +598,12 @@ public class JobService {
             .withSchedule(cron)
             .forJob(detail)
             .build();
+        // V1.13 # 1i（2026-05-02）：scheduler.scheduleJob 不带覆盖语义，
+        // 已存在 JobKey 会抛 ObjectAlreadyExistsException → GOV-50012。
+        // V1.7 spec 要求"jobKey 已存在则覆盖（cron 变更场景）"，业务模块（如 perf 指标 update）
+        // 也是同 jobKey 重复 register 的场景。这里先 deleteJob 做 idempotent 前置，
+        // 让 register 真正满足"覆盖"语义（同等价于先 unregister 再 register）。
+        scheduler.deleteJob(JobKey.jobKey(conf.getJobKey(), group));
         scheduler.scheduleJob(detail, trigger);
     }
 
