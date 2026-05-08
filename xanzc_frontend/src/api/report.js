@@ -149,17 +149,52 @@ function mapDashboardParams(params = {}) {
   const finalDate = dataDate ?? date;
   return finalDate != null ? { ...rest, dataDate: finalDate } : rest;
 }
+
+// 后端 PresidentDashboardRespDTO 的字段名与前端 mock / Dashboard.vue 模板的字段名不一致，
+// 这里把后端响应翻译成前端期望的同形格式：
+//   后端 dataDate                    → 前端 date
+//   后端 depositTrend / loanTrend   → 前端 trend.{months, deposit, loan}
+//   后端 orgRanking[]                → 前端 ranking[]{org, val, color}
+//   后端无 org 字段                  → 前端 org 给占位文案
+// stats 数组（V1.14 # 2 已对齐）原样透传。
+// 命中条件：响应是后端真接口（不含 mock 标志 trend.months）才适配。
+function adaptDashboardResp(r) {
+  if (!r || typeof r !== 'object') return r;
+  // mock 数据本身已是前端格式（trend.months 数组），直接返回不适配
+  if (r.trend && Array.isArray(r.trend.months)) return r;
+  // 后端真实响应：把 DTO 字段映射成前端约定字段
+  return {
+    org: r.org || '总行',
+    date: r.dataDate || r.date || '',
+    stats: Array.isArray(r.stats) ? r.stats : [],
+    trend: {
+      months: r.depositTrend?.xaxis || r.depositTrend?.xAxis || [],
+      deposit: r.depositTrend?.series?.[0]?.data || [],
+      loan: r.loanTrend?.series?.[0]?.data || []
+    },
+    ranking: (r.orgRanking || []).map((o, i) => ({
+      org: o.orgName || o.orgId || o.orgCode || '',
+      val: Number(o.actual ?? o.val ?? 0),
+      color: i < 2 ? 'g' : i < 4 ? 'y' : 'r'
+    })),
+    // 透传后端原字段，方便其他组件按需消费（含 V1.14 # 2 stats 元数据）
+    summaryMetrics: r.summaryMetrics,
+    topCustomers: r.topCustomers,
+    dataVersion: r.dataVersion
+  };
+}
+
 export function getDashboardPresident(params = {}) {
   return call('get', '/reports/dashboard/president',
-    { params: mapDashboardParams(params) }, reportDashboard);
+    { params: mapDashboardParams(params) }, reportDashboard).then(adaptDashboardResp);
 }
 export function getDashboardByOrg(orgCode, params = {}) {
   return call('get', `/reports/dashboard/org/${orgCode}`,
-    { params: mapDashboardParams(params) }, reportDashboard);
+    { params: mapDashboardParams(params) }, reportDashboard).then(adaptDashboardResp);
 }
 export function getDashboardByEmp(empId, params = {}) {
   return call('get', `/reports/dashboard/emp/${empId}`,
-    { params: mapDashboardParams(params) }, reportDashboard);
+    { params: mapDashboardParams(params) }, reportDashboard).then(adaptDashboardResp);
 }
 // 兼容老调用（Dashboard.vue 旧版本）
 export function getDashboard(orgCode = '0001', date) {
