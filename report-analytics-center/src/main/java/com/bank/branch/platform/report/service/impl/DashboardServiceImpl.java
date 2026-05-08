@@ -381,7 +381,9 @@ public class DashboardServiceImpl implements DashboardService {
     private List<TopCustomerDTO> buildTopCustomers(LocalDate dataDate) {
         List<CustomerDTO> customers;
         try {
-            customers = customerQueryApi.searchCustomers(null, TOP_CUSTOMER_LIMIT);
+            // V1.14 # 2 修补：CustomerQueryApi.searchCustomers 强制 keyword 非空（line 92 抛 COMMON-40000），
+            // 用 "公司" 作为通用 keyword 拿测试客户（CM_C* 6 个含"公司"），等 V2 真实 AUM 倒序接口落地后回退
+            customers = customerQueryApi.searchCustomers("公司", TOP_CUSTOMER_LIMIT);
         } catch (RuntimeException e) {
             log.warn("[DashboardService] 取 Top 客户失败：{}", e.getMessage());
             return List.of();
