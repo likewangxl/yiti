@@ -76,7 +76,8 @@ class DashboardServiceTest {
     @Test
     void getPresidentDashboard_withRoleR_PRESIDENT_returnsAll5Sections() {
         // 1) Arrange: R_PRESIDENT 角色 + ORG001 + 子机构集合
-        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_PRESIDENT"));
+        // 生产代码用 ROLE_ID 校验（"R_PRESIDENT"），早期 mock 误用 getCurrentRoleCodes
+        when(currentUserApi.getCurrentRoleIds()).thenReturn(Set.of("R_PRESIDENT"));
         when(currentUserApi.getCurrentEmpId()).thenReturn("E_PRES_001");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
         when(orgApi.getOrgSubtreeCodes("ORG001")).thenReturn(Set.of("ORG001", "ORG002", "ORG003"));
@@ -155,7 +156,7 @@ class DashboardServiceTest {
 
     @Test
     void getPresidentDashboard_withoutRolePresident_throwsRpt40301() {
-        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RM", "R_TELLER"));
+        when(currentUserApi.getCurrentRoleIds()).thenReturn(Set.of("R_RM", "R_TELLER"));
 
         // RptException.message 仅含 msg（不含 code），用 errorCode 字段断言更精确
         assertThatThrownBy(() -> service.getPresidentDashboard(LocalDate.parse("2026-04-09")))
@@ -167,7 +168,7 @@ class DashboardServiceTest {
     @Test
     void getPresidentDashboard_withNullDataDate_fallsBackToToday() {
         // dataDate 默认值兜底（V1 简化为当天）
-        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_PRESIDENT"));
+        when(currentUserApi.getCurrentRoleIds()).thenReturn(Set.of("R_PRESIDENT"));
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
         when(orgApi.getOrgSubtreeCodes("ORG001")).thenReturn(Set.of("ORG001"));
         when(metricApi.getOrgMetricValues(anyString(), any(LocalDate.class), anyList()))

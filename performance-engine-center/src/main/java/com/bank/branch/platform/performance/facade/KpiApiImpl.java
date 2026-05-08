@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * KPI 查询对外 API 实现.
@@ -148,6 +149,33 @@ public class KpiApiImpl implements KpiApi {
     public Optional<KpiSchemeDTO> getKpiSchemeById(String schemeId) {
         return kpiSchemeService.getByIdOrNull(schemeId)
                 .map(this::assembleWithItems);
+    }
+
+    /**
+     * V1.14 任务 A：列举近期被考核员工工号集合.
+     *
+     * <p>语义见 {@link KpiApi#listEvalEmpIds(LocalDate, Set)}：
+     * <ul>
+     *   <li>{@code sinceDate=null} → 直接返回空（fail-close，不查 Mapper）</li>
+     *   <li>{@code orgCodes=null} → 不限机构，透传到 Mapper（管理员场景）</li>
+     *   <li>{@code orgCodes=空集合} → fail-close 直接返回空，不查 Mapper（数据范围裁剪后无可见机构）</li>
+     *   <li>Mapper 返回 null → 适配为空列表（非空契约）</li>
+     * </ul>
+     *
+     * <p>缓存策略：本期不加 {@code @Cacheable}，避免对短暂入参集合做 toString 当 key 引发误命中；
+     * 调用方 ({@code report-analytics-center}) 在 ServiceImpl 层加 Caffeine/Redis 5min 缓存即可。
+     */
+    @Override
+    public List<String> listEvalEmpIds(LocalDate sinceDate, Set<String> orgCodes) {
+        if (sinceDate == null) {
+            return Collections.emptyList();
+        }
+        if (orgCodes != null && orgCodes.isEmpty()) {
+            // fail-close: 数据范围裁剪后无可见机构 → 没有可见考核员工
+            return Collections.emptyList();
+        }
+        List<String> ids = kpiResultMapper.selectEvalEmpIds(sinceDate, orgCodes);
+        return ids == null ? Collections.emptyList() : ids;
     }
 
     /**

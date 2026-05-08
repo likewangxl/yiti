@@ -93,4 +93,29 @@
           </if>
     </select>
 
+    <!--
+      V1.14 任务 A：列举近期被考核员工工号集合.
+      - sinceDate 必填；as_of_date >= #{sinceDate} 限近期窗口
+      - orgCodes 非空时 LEFT JOIN EXT_USER_ORG 做机构子树裁剪；
+        orgCodes 为 null 时（管理员场景）不 JOIN，全表 distinct
+      - 返回 distinct emp_id 升序，前端可直接用作员工工号集合
+    -->
+    <select id="selectEvalEmpIds" resultType="java.lang.String">
+        SELECT DISTINCT k.emp_id
+        FROM KPI_RESULT k
+        <if test="orgCodes != null and !orgCodes.isEmpty()">
+            LEFT JOIN EXT_USER_ORG u ON k.emp_id = u.user_id
+        </if>
+        <where>
+            k.as_of_date &gt;= #{sinceDate}
+            <if test="orgCodes != null and !orgCodes.isEmpty()">
+                AND u.org_code IN
+                <foreach collection="orgCodes" item="o" open="(" separator="," close=")">
+                    #{o}
+                </foreach>
+            </if>
+        </where>
+        ORDER BY k.emp_id ASC
+    </select>
+
 </mapper>

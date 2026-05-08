@@ -94,10 +94,11 @@ public class DashboardServiceImpl implements DashboardService {
             key = "T(java.lang.String).format('%s:%s', #dataDate, @currentUserApi.getCurrentOrgCode())",
             unless = "#result == null")
     public PresidentDashboardRespDTO getPresidentDashboard(LocalDate dataDate) {
-        // 1) 角色校验
-        Set<String> roles = currentUserApi.getCurrentRoleCodes();
+        // 1) 角色校验 —— 常量 R_PRESIDENT 是 PT_ROLE.ROLE_ID（生产 ROLE_CODE 为 "BRANCH_PRE"），
+        //    所以必须查 ROLE_IDS。早期版本误用 getCurrentRoleCodes() 导致行长账号也被拒。
+        Set<String> roles = currentUserApi.getCurrentRoleIds();
         if (roles == null || !roles.contains(ROLE_PRESIDENT)) {
-            log.warn("[DashboardService] 非 R_PRESIDENT 角色访问行长仪表盘：roles={}", roles);
+            log.warn("[DashboardService] 非 R_PRESIDENT 角色访问行长仪表盘：roleIds={}", roles);
             throw new RptException(RptErrorCode.DASHBOARD_NO_ACCESS);
         }
 

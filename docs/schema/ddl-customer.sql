@@ -192,7 +192,6 @@ CREATE TABLE IF NOT EXISTS `TOUCH_TASK` (
   `assignee_emp_id` varchar(32) NOT NULL COMMENT '执行人工号',
   `task_type` varchar(50) DEFAULT NULL COMMENT '任务类型：FIRST_TOUCH-首次触达, FOLLOW_UP-跟进',
   `task_status` varchar(50) DEFAULT 'PENDING' COMMENT '任务状态：PENDING-待办, IN_PROGRESS-进行中, SUCCESS-成功, CANCELLED-取消',
-  `task_status` varchar(50) DEFAULT 'PENDING' COMMENT '任务状态：PENDING-待办, IN_PROGRESS-进行中, SUCCESS-成功, CANCELLED-取消',
   `plan_finish_time` datetime DEFAULT NULL COMMENT '计划完成时间(SLA)',
   `warning_time` datetime DEFAULT NULL COMMENT '预警时间(SLA)',
   `sla_status` varchar(20) DEFAULT NULL COMMENT 'SLA状态：GREEN/YELLOW/RED',

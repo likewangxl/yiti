@@ -31,7 +31,8 @@ class DashboardControllerIT extends BaseControllerIT {
 
     @Test
     void getPresidentDashboard_returns200_withFiveSections() throws Exception {
-        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_PRESIDENT"));
+        // 生产代码用 ROLE_ID 校验（"R_PRESIDENT"），早期 mock 误用 getCurrentRoleCodes
+        when(currentUserApi.getCurrentRoleIds()).thenReturn(Set.of("R_PRESIDENT"));
         when(currentUserApi.getCurrentEmpId()).thenReturn("E_PRES");
         when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG001");
         when(orgApi.getOrgSubtreeCodes("ORG001")).thenReturn(Set.of("ORG001"));
