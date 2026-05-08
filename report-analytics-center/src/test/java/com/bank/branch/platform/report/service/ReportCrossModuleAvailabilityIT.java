@@ -48,10 +48,10 @@ class ReportCrossModuleAvailabilityIT extends BaseControllerIT {
     void metricApi_getOrgMetricValues_signatureCompatible() {
         // 真实签名：(String orgCode, LocalDate dataDate, List<String> metricCodes) → Map<String, BigDecimal>
         when(metricApi.getOrgMetricValues(anyString(), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("DEP_BAL_ORG_DAILY", new BigDecimal("100")));
+                .thenReturn(Map.of("DEP_BAL_ORG", new BigDecimal("100")));
         Map<String, BigDecimal> result = metricApi.getOrgMetricValues(
-                "BR001", LocalDate.of(2026, 4, 1), List.of("DEP_BAL_ORG_DAILY"));
-        assertThat(result).containsKey("DEP_BAL_ORG_DAILY");
+                "BR001", LocalDate.of(2026, 4, 1), List.of("DEP_BAL_ORG"));
+        assertThat(result).containsKey("DEP_BAL_ORG");
     }
 
     @Test

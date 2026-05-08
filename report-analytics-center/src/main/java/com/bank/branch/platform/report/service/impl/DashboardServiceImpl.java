@@ -13,6 +13,7 @@ import com.bank.branch.platform.report.config.DashboardPresidentMetrics;
 import com.bank.branch.platform.report.dto.resp.ChartDataDTO;
 import com.bank.branch.platform.report.dto.resp.ChartSeriesDTO;
 import com.bank.branch.platform.report.dto.resp.EmpDashboardRespDTO;
+import com.bank.branch.platform.report.dto.resp.KpiCardItem;
 import com.bank.branch.platform.report.dto.resp.OrgDashboardRespDTO;
 import com.bank.branch.platform.report.dto.resp.OrgRankingItemDTO;
 import com.bank.branch.platform.report.dto.resp.PresidentDashboardRespDTO;
@@ -20,6 +21,7 @@ import com.bank.branch.platform.report.dto.resp.TopCustomerDTO;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.exception.RptException;
 import com.bank.branch.platform.report.service.DashboardService;
+import com.bank.branch.platform.report.support.TrendFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -91,9 +93,11 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     @Cacheable(value = "rpt:dashboard:president",
-            key = "T(java.lang.String).format('%s:%s', #dataDate, @currentUserApi.getCurrentOrgCode())",
+            key = "T(java.lang.String).format('%s:%s', #dataDate, "
+                    + "(#orgCode != null and !#orgCode.isBlank()) "
+                    + "? #orgCode : @currentUserApi.getCurrentOrgCode())",
             unless = "#result == null")
-    public PresidentDashboardRespDTO getPresidentDashboard(LocalDate dataDate) {
+    public PresidentDashboardRespDTO getPresidentDashboard(String orgCode, LocalDate dataDate) {
         // 1) 角色校验 —— 常量 R_PRESIDENT 是 PT_ROLE.ROLE_ID（生产 ROLE_CODE 为 "BRANCH_PRE"），
         //    所以必须查 ROLE_IDS。早期版本误用 getCurrentRoleCodes() 导致行长账号也被拒。
         Set<String> roles = currentUserApi.getCurrentRoleIds();
@@ -102,18 +106,22 @@ public class DashboardServiceImpl implements DashboardService {
             throw new RptException(RptErrorCode.DASHBOARD_NO_ACCESS);
         }
 
-        // 2) dataDate 默认值兜底
+        // 2) dataDate / orgCode 默认值兜底（V1.14 # 2：orgCode 为空回退到 currentUser）
         LocalDate resolvedDate = dataDate != null ? dataDate : LocalDate.now();
-        String orgCode = currentUserApi.getCurrentOrgCode();
+        String resolvedOrgCode = (orgCode != null && !orgCode.isBlank())
+                ? orgCode
+                : currentUserApi.getCurrentOrgCode();
+        // 后续逻辑沿用旧变量名 orgCode 表示已解析后的最终机构
+        orgCode = resolvedOrgCode;
 
         // 3) summaryMetrics：CORE_METRICS 单次查询
         Map<String, BigDecimal> summary = safeGetOrgMetrics(orgCode, resolvedDate,
                 DashboardPresidentMetrics.CORE_METRICS);
 
         // 4) 趋势图（12 月单条循环）
-        ChartDataDTO depositTrend = buildTrend("DEP_BAL_ORG_DAILY",
+        ChartDataDTO depositTrend = buildTrend("DEP_BAL_ORG",
                 "全行存款趋势", "存款余额", "亿元", orgCode, resolvedDate);
-        ChartDataDTO loanTrend = buildTrend("LOAN_BAL_ORG_DAILY",
+        ChartDataDTO loanTrend = buildTrend("LOAN_BAL_ORG",
                 "全行贷款趋势", "贷款余额", "亿元", orgCode, resolvedDate);
 
         // 5) 机构排名
@@ -130,14 +138,56 @@ public class DashboardServiceImpl implements DashboardService {
                     orgCode, resolvedDate, e.getMessage());
         }
 
+        // 8) V1.14 # 2 stats 数组：与前端 5 项 KPI 卡契约对齐
+        List<KpiCardItem> stats = buildStats(orgCode, resolvedDate, summary);
+
         return PresidentDashboardRespDTO.builder()
                 .dataDate(resolvedDate)
+                .stats(stats)
                 .summaryMetrics(summary)
                 .depositTrend(depositTrend)
                 .loanTrend(loanTrend)
                 .orgRanking(ranking)
                 .topCustomers(topCusts)
                 .build();
+    }
+
+    /**
+     * 组装 5 项 KPI 卡有序数组（V1.14 # 2 新增）.
+     *
+     * <p>装配步骤：
+     * <ol>
+     *   <li>月初日二次查询：{@code metricApi.getOrgMetricValues(orgCode, dataDate.withDayOfMonth(1), CORE_METRICS)}
+     *       拿环比基准（V1.1+ 走 Redis 缓存避免 RPC 重复消耗）</li>
+     *   <li>遍历 {@link DashboardPresidentMetrics#KPI_CARD_METRICS}，按 metric_code 索引 currMap / prevMap</li>
+     *   <li>调 {@link TrendFormatter#format} 计算 trend / trendType（任一缺值降级 "--" / flat）</li>
+     * </ol>
+     *
+     * @param orgCode  机构编码
+     * @param dataDate 数据日期
+     * @param currMap  当日 metric 查询结果（{@link DashboardPresidentMetrics#CORE_METRICS} 一次查询所得）
+     */
+    private List<KpiCardItem> buildStats(String orgCode, LocalDate dataDate,
+                                         Map<String, BigDecimal> currMap) {
+        // 月初日值：环比基准；走 safeGetOrgMetrics 缺值时返回空 Map 不阻塞
+        LocalDate monthStart = dataDate.withDayOfMonth(1);
+        Map<String, BigDecimal> prevMap = safeGetOrgMetrics(orgCode, monthStart,
+                DashboardPresidentMetrics.CORE_METRICS);
+        return DashboardPresidentMetrics.KPI_CARD_METRICS.stream()
+                .map(meta -> {
+                    BigDecimal curr = currMap != null ? currMap.get(meta.getMetricCode()) : null;
+                    BigDecimal prev = prevMap != null ? prevMap.get(meta.getMetricCode()) : null;
+                    TrendFormatter.Result tr = TrendFormatter.format(curr, prev);
+                    return KpiCardItem.builder()
+                            .metricCode(meta.getMetricCode())
+                            .label(meta.getLabel())
+                            .value(curr)
+                            .unit(meta.getUnit())
+                            .trend(tr.text())
+                            .trendType(tr.type())
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -301,7 +351,7 @@ public class DashboardServiceImpl implements DashboardService {
             Map<String, BigDecimal> values = safeGetOrgMetrics(orgCode, dataDate,
                     DashboardPresidentMetrics.RANKING_METRICS);
             BigDecimal score = values != null ? values.get("KPI_TOTAL_SCORE_ORG") : null;
-            BigDecimal actual = values != null ? values.get("DEP_BAL_ORG_DAILY") : null;
+            BigDecimal actual = values != null ? values.get("DEP_BAL_ORG") : null;
             String orgName = resolveOrgName(orgCode);
             items.add(OrgRankingItemDTO.builder()
                     .orgId(orgCode)
