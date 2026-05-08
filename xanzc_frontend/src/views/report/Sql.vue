@@ -1,0 +1,282 @@
+<!--
+  SQL 探查 —— 对应 HTML RptSql
+  高危页面：仅 SELECT · 表白名单 · 自动行限 · 超时 · 全程审计
+  前端基础校验（关键字黑名单 / 表白名单 / SELECT 开头 / 必填原因），
+  最终校验由后端 POST /api/reports/sql-probe/execute 完成。
+  接入 yiti API：
+    GET  /api/reports/sql-probe/schema-whitelist —— getSqlWhitelist
+    GET  /api/reports/sql-probe/history          —— getSqlHistory
+    POST /api/reports/sql-probe/execute          —— executeSqlProbe
+-->
+<template>
+  <div class="rpt-sql">
+    <div class="page-h">
+      <h1>SQL 探查</h1>
+      <span class="desc">高危：仅 SELECT · 表白名单 · 自动行限 1000 · 30s 超时 · 全程审计</span>
+    </div>
+
+    <el-alert type="error" :closable="false" class="warn">
+      <template #title>
+        ⚠ 高危操作：所有 SQL 将记录在审计日志（操作人 / SQL / 原因 / 影响行数 / TraceId）。
+        仅允许 <b>SELECT</b>，仅允许查询 <b>{{ whitelist.length }}</b> 张白名单表，自动追加 <b>LIMIT 1000</b>，超过 30s 自动终止。
+      </template>
+    </el-alert>
+
+    <div class="card-section input">
+      <div class="row">
+        <div class="col grow">
+          <div class="lab"><span class="req">*</span> 执行原因</div>
+          <el-input v-model="reason" placeholder="必填，进入审计" maxlength="100" />
+        </div>
+        <div class="col">
+          <div class="lab">行数限制</div>
+          <el-input-number v-model="rowLimit" :min="1" :max="1000" :step="100" controls-position="right" style="width:160px" />
+        </div>
+        <div class="col">
+          <div class="lab">超时(秒)</div>
+          <el-input-number v-model="timeoutSec" :min="1" :max="30" :step="5" controls-position="right" style="width:160px" />
+        </div>
+      </div>
+
+      <div class="lab" style="margin-top:12px">SQL</div>
+      <el-input v-model="sql" type="textarea" :rows="10" class="sql-area" />
+
+      <el-alert v-if="errors.length" type="error" :closable="false" class="vresult">
+        <template #title>
+          ✗ 校验失败：
+          <div v-for="(e, i) in errors" :key="i">· {{ e }}</div>
+        </template>
+      </el-alert>
+      <el-alert v-else-if="reason.trim()" type="success" :closable="false" class="vresult">
+        <template #title>
+          ✓ 校验通过 · 引用表：<span class="mono">{{ usedTables.join(', ') || '-' }}</span>
+        </template>
+      </el-alert>
+
+      <div class="ops">
+        <el-button @click="formatSql">格式化</el-button>
+        <el-button :icon="List"   @click="historyVisible = true">查看历史</el-button>
+        <el-button :icon="Search" @click="whitelistVisible = true">表白名单</el-button>
+        <el-button type="primary" :loading="running" :disabled="!valid" @click="run" class="run">
+          ▶ 执行
+        </el-button>
+      </div>
+    </div>
+
+    <div v-if="result && !running" class="card-section result">
+      <div class="card-h">
+        <div class="title">
+          查询结果（{{ result.rows }} 行 · 用时 {{ result.time }}
+          <span class="audit">· ✓ 已写入审计 TraceId {{ result.traceId }}</span>）
+        </div>
+      </div>
+      <el-table :data="result.data" size="default" stripe>
+        <el-table-column
+          v-for="c in result.columns" :key="c"
+          :prop="c" :label="c"
+          :align="isNumeric(c) ? 'right' : 'left'"
+        >
+          <template #default="{ row }">
+            <span :class="{ mono: isNumeric(c) }">{{ formatCell(row[c]) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- 历史记录 Dialog —— 点击行回填到 SQL 编辑器 -->
+    <el-dialog v-model="historyVisible" title="SQL 探查历史" width="900px">
+      <el-alert type="info" :closable="false" style="margin-bottom:8px">
+        点击任一行可载入到上方编辑器（仅回填 SQL 与原因，不会自动执行）。
+      </el-alert>
+      <el-table
+        :data="history" size="default" stripe v-loading="historyLoading"
+        highlight-current-row
+        @row-click="onPickHistory"
+      >
+        <el-table-column prop="time"    label="时间"     width="160" />
+        <el-table-column prop="who"     label="操作人"   width="120" />
+        <el-table-column prop="reason"  label="原因"     width="160" />
+        <el-table-column prop="sql"     label="SQL（节选）" show-overflow-tooltip />
+        <el-table-column prop="rows"    label="行数" width="72" align="right" />
+        <el-table-column prop="dur"     label="耗时" width="80" align="right" />
+        <el-table-column prop="traceId" label="TraceId" width="120">
+          <template #default="{ row }"><span class="mono">{{ row.traceId }}</span></template>
+        </el-table-column>
+        <el-table-column label="" width="64">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click.stop="onPickHistory(row)">载入</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 表白名单 Dialog -->
+    <el-dialog v-model="whitelistVisible" title="表白名单" width="520px">
+      <el-alert type="info" :closable="false" style="margin-bottom:12px">
+        以下为 SQL 探查可访问的全部表，仅允许 SELECT。
+      </el-alert>
+      <ul class="wl">
+        <li v-for="t in whitelist" :key="t" class="mono">{{ t }}</li>
+      </ul>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, watch } from 'vue';
+import { ElMessage } from 'element-plus';
+import { List, Search } from '@element-plus/icons-vue';
+import { executeSqlProbe, getSqlWhitelist, getSqlHistory, getSqlHistoryItem } from '@/api/report';
+
+const reason = ref('');
+const rowLimit = ref(1000);
+const timeoutSec = ref(30);
+const sql = ref(`SELECT cust_name, industry, SUM(amount) AS deposit_inc
+FROM mart_cust_deposit_daily d
+JOIN dim_customer c ON d.cust_id = c.id
+WHERE d.org_id = '0001' AND d.biz_date >= '2026-04-16'
+GROUP BY cust_name, industry
+ORDER BY deposit_inc DESC LIMIT 10`);
+
+const whitelist = ref([]);
+const history = ref([]);
+const result = ref(null);
+const running = ref(false);
+
+const historyVisible = ref(false);
+const historyLoading = ref(false);
+const whitelistVisible = ref(false);
+
+const BLOCKED_KEYWORDS = ['DELETE', 'UPDATE', 'INSERT', 'DROP', 'TRUNCATE', 'ALTER', 'CREATE', 'GRANT', 'REVOKE', 'EXEC', 'CALL'];
+
+// 抓取被引用的表名（FROM/JOIN 后第一个标识符）
+const usedTables = computed(() => {
+  const m = sql.value.match(/\b(?:FROM|JOIN)\s+([\w.]+)/gi) || [];
+  return [...new Set(m.map(x => x.replace(/^(FROM|JOIN)\s+/i, '').toLowerCase()))];
+});
+const blockedKeywords = computed(() => {
+  const upper = sql.value.toUpperCase();
+  return BLOCKED_KEYWORDS.filter(k => new RegExp('\\b' + k + '\\b').test(upper));
+});
+const blockedTables = computed(() => {
+  if (!whitelist.value.length) return [];
+  return usedTables.value.filter(t => !whitelist.value.includes(t));
+});
+const noSelect = computed(() => !sql.value.trim().toUpperCase().startsWith('SELECT'));
+
+const errors = computed(() => {
+  const out = [];
+  if (noSelect.value) out.push('仅允许 SELECT 语句开头');
+  if (blockedKeywords.value.length) out.push(`检测到禁用关键字：${blockedKeywords.value.join(', ')}`);
+  if (blockedTables.value.length) out.push(`表 ${blockedTables.value.join(', ')} 不在白名单内`);
+  return out;
+});
+const valid = computed(() => errors.value.length === 0 && reason.value.trim().length > 0);
+
+watch(() => historyVisible.value, async (v) => {
+  if (v && !history.value.length) {
+    historyLoading.value = true;
+    try { history.value = await getSqlHistory() || []; }
+    finally { historyLoading.value = false; }
+  }
+});
+
+onMounted(async () => {
+  try {
+    const wl = await getSqlWhitelist();
+    if (Array.isArray(wl) && wl.length) whitelist.value = wl;
+  } catch (e) {}
+});
+
+async function run() {
+  if (!valid.value) { ElMessage.warning('请先通过校验'); return; }
+  running.value = true;
+  result.value = null;
+  try {
+    const r = await executeSqlProbe({
+      sql: sql.value,
+      reason: reason.value,
+      rowLimit: rowLimit.value,
+      timeoutSec: timeoutSec.value
+    });
+    result.value = r;
+    ElMessage.success(`执行成功：${r?.rows ?? 0} 行 · ${r?.time ?? '-'}`);
+  } catch (e) {
+    ElMessage.error('执行失败：' + (e?.message || '后端校验未通过'));
+  } finally {
+    running.value = false;
+  }
+}
+
+// 关键字大写 + 主子句换行 —— 不是真正的 SQL parser，覆盖常见 SELECT/JOIN/WHERE/GROUP BY 等
+const FORMAT_KEYWORDS = [
+  'SELECT','FROM','WHERE','GROUP BY','HAVING','ORDER BY','LIMIT','OFFSET',
+  'INNER JOIN','LEFT JOIN','RIGHT JOIN','FULL JOIN','JOIN','ON',
+  'AND','OR','UNION ALL','UNION','AS','DISTINCT','CASE','WHEN','THEN','ELSE','END'
+];
+const BREAK_BEFORE = new Set([
+  'FROM','WHERE','GROUP BY','HAVING','ORDER BY','LIMIT','OFFSET',
+  'INNER JOIN','LEFT JOIN','RIGHT JOIN','FULL JOIN','JOIN','UNION ALL','UNION'
+]);
+function formatSql() {
+  let s = sql.value.replace(/\s+/g, ' ').trim();
+  // 长关键字优先匹配（GROUP BY 在 GROUP/BY 之前）
+  const sorted = [...FORMAT_KEYWORDS].sort((a, b) => b.length - a.length);
+  for (const kw of sorted) {
+    const re = new RegExp(`\\b${kw.replace(/ /g, '\\s+')}\\b`, 'gi');
+    s = s.replace(re, BREAK_BEFORE.has(kw) ? `\n${kw}` : kw);
+  }
+  // 头部 SELECT 不换行；首行去掉前置换行
+  sql.value = s.replace(/^\n+/, '').trim();
+}
+
+async function onPickHistory(row) {
+  if (!row?.id) return;
+  try {
+    const full = await getSqlHistoryItem(row.id);
+    sql.value = full?.sql || row.sql || sql.value;
+    if (full?.reason || row.reason) reason.value = full?.reason || row.reason;
+    historyVisible.value = false;
+    ElMessage.success(`已载入历史：${full?.id || row.id}`);
+  } catch (e) {
+    ElMessage.error('载入失败：' + (e?.message || '未知错误'));
+  }
+}
+
+function isNumeric(col) { return /(_inc|_amt|_cnt|_num|_rate|amount|value)$/i.test(col); }
+function formatCell(v) {
+  if (typeof v === 'number') return v.toLocaleString();
+  return v ?? '-';
+}
+</script>
+
+<style lang="scss" scoped>
+.rpt-sql {
+  .page-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px;
+    h1 { font-size: 18px; font-weight: 600; color: $text-1; }
+    .desc { color: $text-3; font-size: 12px; }
+  }
+  .warn { margin-bottom: 12px; }
+  .input { padding: 16px 20px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; gap: 6px; min-width: 160px;
+    &.grow { flex: 1; min-width: 240px; }
+  }
+  .lab { font-size: 12px; color: $text-3;
+    .req { color: $danger; margin-right: 4px; }
+  }
+  .sql-area :deep(textarea) { font-family: Menlo, Consolas, monospace; font-size: 12px; background: #fafafa; }
+  .vresult { margin-top: 8px; }
+  .ops { display: flex; gap: 8px; margin-top: 12px;
+    .run { margin-left: auto; }
+  }
+  .result { padding: 16px 20px;
+    .audit { color: $success; font-weight: 400; font-size: 12px; }
+  }
+  .card-h { display: flex; align-items: center; padding: 0 0 12px; border-bottom: 1px solid $border-1; margin-bottom: 12px;
+    .title { font-size: 14px; font-weight: 600; }
+  }
+  .mono { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+  .wl { padding: 0 0 0 18px; line-height: 1.9; color: $text-2; }
+}
+</style>
