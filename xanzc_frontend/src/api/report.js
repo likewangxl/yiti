@@ -141,14 +141,25 @@ export function deleteSavedQuery(id) {
 }
 
 // ===== 行长仪表盘 =====
+// 后端 DashboardController 入参约定为 ?dataDate=YYYY-MM-DD（V1.14 # 2 后），
+// 前端历史调用方仍传 { date }（看 Dashboard.vue / getDashboard 兼容入口），
+// 这里做一次性映射 date → dataDate，避免每个调用点重复改造。
+function mapDashboardParams(params = {}) {
+  const { date, dataDate, ...rest } = params || {};
+  const finalDate = dataDate ?? date;
+  return finalDate != null ? { ...rest, dataDate: finalDate } : rest;
+}
 export function getDashboardPresident(params = {}) {
-  return call('get', '/reports/dashboard/president', { params }, reportDashboard);
+  return call('get', '/reports/dashboard/president',
+    { params: mapDashboardParams(params) }, reportDashboard);
 }
 export function getDashboardByOrg(orgCode, params = {}) {
-  return call('get', `/reports/dashboard/org/${orgCode}`, { params }, reportDashboard);
+  return call('get', `/reports/dashboard/org/${orgCode}`,
+    { params: mapDashboardParams(params) }, reportDashboard);
 }
 export function getDashboardByEmp(empId, params = {}) {
-  return call('get', `/reports/dashboard/emp/${empId}`, { params }, reportDashboard);
+  return call('get', `/reports/dashboard/emp/${empId}`,
+    { params: mapDashboardParams(params) }, reportDashboard);
 }
 // 兼容老调用（Dashboard.vue 旧版本）
 export function getDashboard(orgCode = '0001', date) {
