@@ -5,7 +5,8 @@
       <AppHeader />
       <AppBreadcrumb />
       <div class="content">
-        <router-view />
+        <!-- :key 强制每次切换 fullPath 都重新 mount，避免某些 view 状态残留挡住下次渲染 -->
+        <router-view :key="$route.fullPath" />
       </div>
     </div>
   </div>

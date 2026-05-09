@@ -1,17 +1,18 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>工作日历 · 2026年4月</h1>
+      <h1>工作日历 · {{ year }}年{{ month }}月</h1>
       <div class="actions">
-        <el-button>‹ 上月</el-button>
-        <el-button>下月 ›</el-button>
+        <el-button @click="shiftMonth(-1)">‹ 上月</el-button>
+        <el-button @click="goToday">今天</el-button>
+        <el-button @click="shiftMonth(1)">下月 ›</el-button>
         <el-button>📥 导入</el-button>
         <el-button type="primary">年初初始化</el-button>
       </div>
     </div>
 
     <el-alert type="info" :closable="false" style="margin-bottom:12px"
-      title="点击格子切换：工作日 → 休息日 → 调休工作 → 工作日。仅允许修改未来日期（今日 4/23 之后）。">
+      :title="`点击格子切换：工作日 → 休息日 → 调休工作 → 工作日。仅允许修改未来日期（今日 ${todayStr} 之后）。`">
       <template #default>
         <span style="margin-right:12px"><i class="dot work"></i> 工作日</span>
         <span style="margin-right:12px"><i class="dot rest"></i> 休息日</span>
@@ -35,28 +36,123 @@
 </template>
 
 <script setup>
-function build() {
-  // 只是演示——4 月 1 是周三，整月按截图布局
-  const arr = [];
-  // 上月尾
-  for (let n of [29,30]) arr.push({ n, muted: true });
-  for (let n = 1; n <= 30; n++) {
-    const dow = (n + 1) % 7; // 1=周三起算
-    let kind = 'work';
-    let tag = '';
-    let label = '';
-    if (n === 4) { kind = 'rest'; tag = '假'; label = '清明'; }
-    if (n === 5) { kind = 'rest'; tag = '假'; }
-    if (n === 6) { kind = 'rest'; tag = '假'; }
-    if (n === 7) { kind = 'adj'; label = '调休'; }
-    if (n === 11 || n === 12 || n === 18 || n === 19 || n === 25 || n === 26) { kind = 'rest'; tag = '假'; }
-    arr.push({ n, kind, tag, label, today: n === 23 });
-  }
-  // 下月头
-  for (let n of [1,2,3]) arr.push({ n, muted: true });
-  return arr;
+import { ref, computed, onMounted } from 'vue';
+import { getCalendar } from '@/api/system';
+
+// === 当前显示的年月（默认今天所在月） ===
+const now = new Date();
+const year = ref(now.getFullYear());
+const month = ref(now.getMonth() + 1);
+
+const todayStr = computed(() => {
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${m}-${d}`;
+});
+
+function shiftMonth(delta) {
+  let m = month.value + delta;
+  let y = year.value;
+  if (m < 1) { m = 12; y -= 1; }
+  if (m > 12) { m = 1; y += 1; }
+  year.value = y; month.value = m;
+  reload();
 }
-const days = build();
+function goToday() {
+  year.value = now.getFullYear();
+  month.value = now.getMonth() + 1;
+  reload();
+}
+
+// === 静态法定假日表（可被后端 getCalendar 覆盖）===
+function staticHolidays(y, m) {
+  // 月-日 → { kind, tag, label }
+  const HOLIDAYS = {
+    '01-01': { kind: 'rest', tag: '假', label: '元旦' },
+    '04-04': { kind: 'rest', tag: '假', label: '清明' },
+    '04-05': { kind: 'rest', tag: '假' },
+    '04-06': { kind: 'rest', tag: '假' },
+    '05-01': { kind: 'rest', tag: '假', label: '劳动' },
+    '05-02': { kind: 'rest', tag: '假' },
+    '05-03': { kind: 'rest', tag: '假' },
+    '06-22': { kind: 'rest', tag: '假', label: '端午' },
+    '10-01': { kind: 'rest', tag: '假', label: '国庆' },
+    '10-02': { kind: 'rest', tag: '假' },
+    '10-03': { kind: 'rest', tag: '假' }
+  };
+  const out = {};
+  for (const [k, v] of Object.entries(HOLIDAYS)) {
+    const [hm, hd] = k.split('-').map(Number);
+    if (hm === m) out[hd] = v;
+  }
+  return out;
+}
+
+// === 构建月历格子数组 ===
+const days = ref([]);
+function build(rawDays = {}) {
+  const y = year.value, m = month.value;
+  const first = new Date(y, m - 1, 1);
+  const lastDayOfPrev = new Date(y, m - 1, 0).getDate();
+  const lastDayOfCur = new Date(y, m, 0).getDate();
+  // 周一 = 1, 周日 = 0；将周日映射成 7 让周一为首列
+  const firstDow = first.getDay() === 0 ? 7 : first.getDay();
+
+  const todayY = now.getFullYear(), todayM = now.getMonth() + 1, todayD = now.getDate();
+  const isCurMonth = (y === todayY && m === todayM);
+
+  const holidays = staticHolidays(y, m);
+  const arr = [];
+
+  // 上月尾
+  for (let i = firstDow - 1; i > 0; i--) {
+    arr.push({ n: lastDayOfPrev - i + 1, muted: true });
+  }
+  // 当月
+  for (let n = 1; n <= lastDayOfCur; n++) {
+    const dt = new Date(y, m - 1, n);
+    const dow = dt.getDay(); // 0 周日 / 6 周六
+    let kind = 'work', tag = '', label = '';
+    // 周末默认 rest
+    if (dow === 0 || dow === 6) { kind = 'rest'; }
+    // 法定节假日覆盖
+    const hol = holidays[n];
+    if (hol) Object.assign({ kind, tag, label }, hol), ({ kind, tag, label } = { ...{ kind, tag, label }, ...hol });
+    // 后端覆盖（如有数据）
+    const back = rawDays[n];
+    if (back) {
+      if (back.workday === 0 || back.isWorkday === 0) kind = 'rest';
+      else if (back.workday === 1 && (dow === 0 || dow === 6)) kind = 'adj';
+      if (back.label) label = back.label;
+    }
+    arr.push({ n, kind, tag, label, today: isCurMonth && n === todayD });
+  }
+  // 下月头：补齐到 6 行 × 7 列 = 42 格（确保布局稳定）
+  while (arr.length < 42) {
+    arr.push({ n: arr.length - lastDayOfCur - firstDow + 2, muted: true });
+  }
+  days.value = arr;
+}
+
+async function reload() {
+  // 先按静态规则渲染（即时）
+  build();
+  // 异步拉后端，覆盖
+  try {
+    const r = await getCalendar(year.value, month.value);
+    if (Array.isArray(r) && r.length) {
+      const map = {};
+      for (const d of r) {
+        // 后端字段约定：{ day: 'YYYY-MM-DD', isWorkday: 0|1, label?: string }
+        const day = (d.day || d.date || '').slice(8, 10);
+        if (day) map[parseInt(day, 10)] = d;
+      }
+      build(map);
+    }
+  } catch {}
+}
+
+onMounted(reload);
 </script>
 
 <style lang="scss" scoped>

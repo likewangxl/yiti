@@ -52,7 +52,10 @@ http.interceptors.response.use(
   },
   err => {
     if (err.response) {
-      const { status } = err.response;
+      const { status, data } = err.response;
+      // 后端 yiti 业务错也走 200 + ResponseWrapper.error；这里 4xx/5xx 通常是 Spring 框架级
+      // 错误（参数校验失败、JSON 反序列化错），data 里仍可能有 { code, message }
+      const bizMsg = data?.message || data?.msg;
       if (status === 401) {
         // 登录接口本身返回的 401 不要再跳登录页（避免登录失败时 ElMessage 被覆盖）
         if (!err.config?.url?.endsWith('/auth/login')) {
@@ -62,10 +65,13 @@ http.interceptors.response.use(
       } else if (status === 403) {
         ElMessage.error('没有权限');
       } else if (status >= 500) {
-        ElMessage.error('服务器异常，请稍后重试');
+        ElMessage.error(bizMsg || '服务器异常，请稍后重试');
       } else {
-        ElMessage.error(`请求失败 (${status})`);
+        // 400 Bad Request 等：把后端真实 message 抛出，方便用户看到"metricCode 不能为空"等
+        ElMessage.error(bizMsg || `请求失败 (${status})`);
       }
+      // 把 message 挂到 err 对象上，业务侧 catch 能直接读 err.message
+      if (bizMsg) err.message = bizMsg;
     } else {
       ElMessage.error('网络异常或后端未启动');
     }
@@ -103,7 +109,11 @@ export async function call(method, url, config = {}, fallback = null) {
   try {
     return await http.request({ method, url: API_BASE + url, ...config });
   } catch (err) {
-    if (fallback != null) {
+    // V1.6 修复 Bug5：写操作（POST/PUT/DELETE/PATCH）真错时必须 throw，
+    // 不再被 fallback 静默吞掉，否则前端拿到 mock { id:'mock' } 会误判成功并关掉弹窗。
+    // 仅 GET 类查询走 fallback 兜底（用于后端崩溃时也能展示骨架）。
+    const isWrite = method && method.toLowerCase() !== 'get';
+    if (fallback != null && !isWrite) {
       console.warn(`[api fallback] ${method.toUpperCase()} ${url} 失败，使用 mock 兜底`, err.message);
       return typeof fallback === 'function' ? fallback() : fallback;
     }

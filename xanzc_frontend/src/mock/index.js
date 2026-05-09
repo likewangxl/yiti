@@ -78,10 +78,10 @@ GROUP BY cust_id, org_id`,
 };
 
 export const perfKpiRules = [
-  { code: 'KPI001', name: '客户经理-公司类',  scope: '南山/福田/罗湖/宝安', items: 6, status: '启用',   version: 'v4' },
-  { code: 'KPI002', name: '客户经理-零售类',  scope: '全部支行',           items: 6, status: '启用',   version: 'v3' },
-  { code: 'KPI003', name: '机构负责人',        scope: '全部支行',           items: 5, status: '启用',   version: 'v2' },
-  { code: 'KPI004', name: '中场支持人员',      scope: '中场支持部',         items: 4, status: '试运行', version: 'v1' }
+  { id: 'KS001', schemeCode: 'KPI001', schemeName: '客户经理-公司类', cycleType: 'YEARLY',    openDetail: true,  status: 'ACTIVE',    version: 'v4', items: [], updatedTime: '2026-04-15 10:00:00' },
+  { id: 'KS002', schemeCode: 'KPI002', schemeName: '客户经理-零售类', cycleType: 'YEARLY',    openDetail: true,  status: 'ACTIVE',    version: 'v3', items: [], updatedTime: '2026-04-12 14:30:00' },
+  { id: 'KS003', schemeCode: 'KPI003', schemeName: '机构负责人',      cycleType: 'YEARLY',    openDetail: false, status: 'ACTIVE',    version: 'v2', items: [], updatedTime: '2026-03-20 09:00:00' },
+  { id: 'KS004', schemeCode: 'KPI004', schemeName: '中场支持人员',    cycleType: 'QUARTERLY', openDetail: true,  status: 'TRIAL_RUN', version: 'v1', items: [], updatedTime: '2026-05-01 18:20:00' }
 ];
 
 export const perfTargets = [

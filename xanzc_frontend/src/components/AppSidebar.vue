@@ -54,8 +54,10 @@ const groups = computed(() => {
   const root = [];
   const grouped = {};
   for (const r of all) {
+    // 跳过没 title 的子路由（redirect / 空 path / 占位项），否则会渲染成"空白菜单"
+    if (!r.meta?.title || !r.path) continue;
     const path = '/' + r.path;
-    const item = { path, title: r.meta?.title, icon: r.meta?.icon };
+    const item = { path, title: r.meta.title, icon: r.meta?.icon };
     if (!r.meta?.group) {
       root.push(item);
     } else {

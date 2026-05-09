@@ -44,6 +44,9 @@ export function triggerJob(id) { return call('post', `/admin/sys/jobs/${id}/trig
 export async function listAuditLogs(params = {}) {
   return unwrapPage(await call('get', '/admin/sys/audit-logs', { params }, sysAuditLogs));
 }
+export function getAuditLog(id) {
+  return call('get', `/admin/sys/audit-logs/${id}`, {}, () => sysAuditLogs.find(x => x.id === id) || {});
+}
 
 // === 通知 ===
 // yiti: PageResult<NotificationDTO>
