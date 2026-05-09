@@ -13,7 +13,7 @@
 #
 # 日志位置: logs/bootstrap-YYYY-MM-DD.log
 # PID 位置: logs/bootstrap.pid
-# 端口:     8080 (固定，与 application.yml 一致)
+# 端口:     18080 (固定，与 application.yml 一致)
 # Profile:  dev (可由 BOOTSTRAP_PROFILE 环境变量覆盖)
 # ============================================================
 set -uo pipefail
@@ -25,7 +25,7 @@ LOG_DIR="${ROOT_DIR}/logs"
 PID_FILE="${LOG_DIR}/bootstrap.pid"
 LOG_FILE="${LOG_DIR}/bootstrap-$(date +%Y-%m-%d).log"
 
-PORT="${BOOTSTRAP_PORT:-8080}"
+PORT="${BOOTSTRAP_PORT:-18080}"
 PROFILE="${BOOTSTRAP_PROFILE:-dev}"
 MVN_CMD=(mvn -f "${ROOT_DIR}/bootstrap/pom.xml" -Dspring-boot.run.profiles="${PROFILE}" -DskipTests spring-boot:run)
 
