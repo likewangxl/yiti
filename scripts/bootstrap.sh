@@ -13,7 +13,7 @@
 #
 # 日志位置: logs/bootstrap-YYYY-MM-DD.log
 # PID 位置: logs/bootstrap.pid
-# 端口:     18080 (固定，与 application.yml 一致)
+# 端口:     8080 (固定，与 application.yml 一致)
 # Profile:  dev (可由 BOOTSTRAP_PROFILE 环境变量覆盖)
 # ============================================================
 set -uo pipefail
@@ -25,7 +25,7 @@ LOG_DIR="${ROOT_DIR}/logs"
 PID_FILE="${LOG_DIR}/bootstrap.pid"
 LOG_FILE="${LOG_DIR}/bootstrap-$(date +%Y-%m-%d).log"
 
-PORT="${BOOTSTRAP_PORT:-18080}"
+PORT="${BOOTSTRAP_PORT:-8080}"
 PROFILE="${BOOTSTRAP_PROFILE:-dev}"
 MVN_CMD=(mvn -f "${ROOT_DIR}/bootstrap/pom.xml" -Dspring-boot.run.profiles="${PROFILE}" -DskipTests spring-boot:run)
 
@@ -42,7 +42,7 @@ log_warn()  { echo "${C_YELLOW}[bootstrap]${C_RESET} $*"; }
 log_error() { echo "${C_RED}[bootstrap]${C_RESET} $*" >&2; }
 
 is_port_listening() {
-  # 第 4 列形如 "*:18080" 或 "[::]:18080"，匹配冒号 + 端口 + 行尾/空白
+  # 第 4 列形如 "*:8080" 或 "[::]:8080"，匹配冒号 + 端口 + 行尾/空白
   ss -ltn 2>/dev/null | awk -v port=":${PORT}" '$4 ~ port"$" {f=1} END{exit !f}'
 }
 
@@ -85,7 +85,7 @@ cmd_start() {
   nohup setsid "${MVN_CMD[@]}" >>"${LOG_FILE}" 2>&1 &
   local mvn_pid=$!
   echo "${mvn_pid}" > "${PID_FILE}"
-  log_info "已派发 mvn (PID ${mvn_pid})，等待 18080 监听 (上限 120s)..."
+  log_info "已派发 mvn (PID ${mvn_pid})，等待 ${PORT} 监听 (上限 120s)..."
 
   # 等待端口监听
   local i
@@ -174,10 +174,10 @@ cmd_status() {
     echo "  PID      : ${pid:-<none>} ${C_RED}(dead)${C_RESET}"
   fi
   if is_port_listening; then
-    echo "  PORT 18080 ${C_GREEN}listening${C_RESET}:"
+    echo "  PORT ${PORT} ${C_GREEN}listening${C_RESET}:"
     ss -ltn 2>/dev/null | awk -v port=":${PORT}" '$4 ~ port"$" {print "    "$0}'
   else
-    echo "  PORT 18080 ${C_RED}not listening${C_RESET}"
+    echo "  PORT ${PORT} ${C_RED}not listening${C_RESET}"
   fi
   echo
   echo "  最近 5 行日志:"
