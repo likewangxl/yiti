@@ -34,7 +34,7 @@ import java.util.Set;
  *
  * <p>V1.1 Task P4.3 交付：
  * <ul>
- *   <li>{@link #getCurrentKpiTotal} → 最新一条 {@code kpi_result.kpi_total_score}</li>
+ *   <li>{@link #getCurrentKpiTotal} → 最新一条 {@code KPI_RESULT.kpi_total_score}</li>
  *   <li>{@link #getCurrentKpiResult} → 最新一条完整 DTO</li>
  *   <li>{@link #getKpiHistory} → {@code as_of_date} 落在 {@code [from, to]} 区间的 DTO 列表</li>
  * </ul>
@@ -107,7 +107,7 @@ public class KpiApiImpl implements KpiApi {
      *   <li>ctx=null → fail-close "1=0", 查无结果</li>
      * </ul>
      *
-     * <p>ScopeColumns 映射: ownerEmpCol="emp_id" (kpi_result 表的业务主体列).
+     * <p>ScopeColumns 映射: ownerEmpCol="emp_id" (KPI_RESULT 表的业务主体列).
      *
      * <p>消费方建议: 从 V1.3 起，所有员工 KPI 历史查询统一切换到本方法；
      * V1.2 阶段 getKpiHistory 保留不变以保持 KpiApi 契约稳定。
@@ -120,13 +120,13 @@ public class KpiApiImpl implements KpiApi {
      */
     public List<KpiResultDTO> getKpiHistoryWithScope(String empId, String cycleType, LocalDate from, LocalDate to) {
         String currentEmpId = currentUserApi.getCurrentEmpId();
-        // kpi_result 表仅 emp_id 一个业务主体列, 其他 scope 列降级语义
+        // KPI_RESULT 表仅 emp_id 一个业务主体列, 其他 scope 列降级语义
         PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
                 "emp_id",       // ownerEmpCol (SELF)
-                "emp_id",       // assigneeCol (kpi_result 无 assignee 概念)
-                "emp_id",       // createdByCol (kpi_result 由 Job 计算生成, 降级为 emp_id)
-                "emp_id",       // ownerOrgCol (kpi_result 表无 org_code, 降级为 emp_id)
-                null            // bizKeyCol (kpi_result 无 business_key, V1.4 WORKFLOW_PARTICIPANT 退化 fail-close)
+                "emp_id",       // assigneeCol (KPI_RESULT 无 assignee 概念)
+                "emp_id",       // createdByCol (KPI_RESULT 由 Job 计算生成, 降级为 emp_id)
+                "emp_id",       // ownerOrgCol (KPI_RESULT 表无 org_code, 降级为 emp_id)
+                null            // bizKeyCol (KPI_RESULT 无 business_key, V1.4 WORKFLOW_PARTICIPANT 退化 fail-close)
         );
         PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
                 currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);

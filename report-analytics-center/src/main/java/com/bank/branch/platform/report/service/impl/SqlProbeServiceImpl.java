@@ -46,7 +46,7 @@ import java.util.concurrent.Semaphore;
  * <ol>
  *   <li>角色 R_BACK_TECH 校验（缺失 → RPT-40302）</li>
  *   <li>SqlSafeValidator 校验 + LIMIT 标准化</li>
- *   <li>INSERT sql_probe_history(status=RUNNING) 占位（出失联场景能查到 RUNNING 行）</li>
+ *   <li>INSERT SQL_PROBE_HISTORY(status=RUNNING) 占位（出失联场景能查到 RUNNING 行）</li>
  *   <li>Semaphore.tryAcquire (并发上限 10)</li>
  *   <li>readOnlyDataSource 取连接 + setReadOnly + setQueryTimeout 30s + setMaxRows 1000</li>
  *   <li>executeQuery + 行 Map 装配（最多 1000 行）</li>
@@ -96,7 +96,7 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             CurrentUserApi currentUserApi,
             AuditApi auditApi,
             @Qualifier("rptReadOnlyDataSource") DataSource readOnlyDataSource,
-            @Value("#{'${rpt.sql.probe.whitelist-tables:cust_master,cust_lead,cust_tag,touch_record,emp_index_result,org_index_result,cust_index_result,kpi_result,metric_def,sys_dict,sys_dict_item,EXT_ORG_INFO,EXT_USER_ORG}'.split(',')}") List<String> whitelistTablesView,
+            @Value("#{'${rpt.sql.probe.whitelist-tables:CUST_MASTER,CUST_LEAD,CUST_TAG,touch_record,EMP_INDEX_RESULT,ORG_INDEX_RESULT,CUST_INDEX_RESULT,KPI_RESULT,metric_def,SYS_DICT,sys_dict_item,EXT_ORG_INFO,EXT_USER_ORG}'.split(',')}") List<String> whitelistTablesView,
             @Value("#{'${rpt.sql.probe.forbidden-keywords:DROP,DELETE,UPDATE,INSERT,TRUNCATE,ALTER,CREATE,RENAME,REPLACE,GRANT,REVOKE,LOCK,UNLOCK,SET,CALL,EXEC,EXECUTE,LOAD,SHUTDOWN,USE,DESCRIBE,EXPLAIN,SHOW,COMMIT,ROLLBACK,SAVEPOINT,DECLARE,HANDLER,SIGNAL,RESIGNAL}'.split(',')}") List<String> forbiddenKeywordsView,
             @Value("${rpt.sql.probe.max-rows:1000}") int maxRowsView,
             @Value("${rpt.sql.probe.max-sql-length:5000}") int maxSqlLengthView,

@@ -20,7 +20,7 @@ public class CreateMetricReqDTO {
     @Schema(description = "指标编码", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "metricCode 不能为空")
     @Size(max = 64, message = "metricCode 长度不能超过 64")
-    @Pattern(regexp = "^[A-Z0-9_]+$", message = "metricCode 只允许大写字母、数字和下划线")
+    // V1.6 放开格式限制：业务侧反馈"大写+数字+下划线"约束太死，允许任意字符（仅留长度上限）
     private String metricCode;
 
     /** 指标名称。 */

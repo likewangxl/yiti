@@ -22,7 +22,7 @@ import java.util.Map;
  * 任务操作服务
  * <p>
  * 提供任务签收、审批通过、驳回、转交等核心操作。
- * 所有操作会校验任务存在性和办理人权限，并同步更新 biz_process_map 映射表。
+ * 所有操作会校验任务存在性和办理人权限，并同步更新 BIZ_PROCESS_MAP 映射表。
  * </p>
  */
 @Slf4j
@@ -59,7 +59,7 @@ public class TaskOperationService {
         // 执行签收
         taskService.claim(taskId, empId);
 
-        // 更新 biz_process_map 当前办理人
+        // 更新 BIZ_PROCESS_MAP 当前办理人
         updateCurrentAssignee(task.getProcessInstanceId(), empId);
 
         log.info("任务签收成功: taskId={}, empId={}", taskId, empId);
@@ -152,7 +152,7 @@ public class TaskOperationService {
         // 添加转交备注
         taskService.addComment(taskId, task.getProcessInstanceId(), "TRANSFER", req.getReason());
 
-        // 更新 biz_process_map 当前办理人
+        // 更新 BIZ_PROCESS_MAP 当前办理人
         updateCurrentAssignee(task.getProcessInstanceId(), toEmpId);
 
         // 发布事件
@@ -190,13 +190,13 @@ public class TaskOperationService {
     }
 
     /**
-     * 更新 biz_process_map 表的当前办理人字段。
+     * 更新 BIZ_PROCESS_MAP 表的当前办理人字段。
      * 如果找不到映射记录，仅记录警告日志，不抛异常。
      */
     private void updateCurrentAssignee(String processInstanceId, String empId) {
         BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
         if (map == null) {
-            log.warn("未找到流程实例 {} 对应的 biz_process_map 记录，跳过更新当前办理人", processInstanceId);
+            log.warn("未找到流程实例 {} 对应的 BIZ_PROCESS_MAP 记录，跳过更新当前办理人", processInstanceId);
             return;
         }
         map.setCurrentAssignee(empId);

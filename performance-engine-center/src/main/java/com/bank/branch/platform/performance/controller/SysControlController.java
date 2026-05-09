@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * sys_control 版本控制 REST 控制器.
+ * SYS_CONTROL 版本控制 REST 控制器.
  *
  * <p>对应 PT_RESOURCE:
  * <ul>
@@ -45,7 +45,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequestMapping("/api/perf/sys-control")
-@Tag(name = "绩效-版本控制", description = "sys_control 表版本管理")
+@Tag(name = "绩效-版本控制", description = "SYS_CONTROL 表版本管理")
 @RequiredArgsConstructor
 public class SysControlController {
 

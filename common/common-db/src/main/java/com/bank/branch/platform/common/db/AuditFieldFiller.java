@@ -9,6 +9,7 @@ import org.apache.ibatis.plugin.*;
 
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Properties;
 
 /**
@@ -23,6 +24,9 @@ import java.util.Properties;
 })
 public class AuditFieldFiller implements Interceptor {
 
+    /** V1.6 强制业务时区，防 JVM 默认时区（如 UTC/PDT）导致全表 created_time/updated_time 偏移 8/15 小时。 */
+    private static final ZoneId BIZ_ZONE = ZoneId.of("Asia/Shanghai");
+
     @Override
     public Object intercept(Invocation invocation) throws Throwable {
         Object[] args = invocation.getArgs();
@@ -34,7 +38,7 @@ public class AuditFieldFiller implements Interceptor {
         }
 
         String empId = getCurrentEmpId();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(BIZ_ZONE);
 
         if (ms.getSqlCommandType() == SqlCommandType.INSERT) {
             setFieldIfExists(parameter, "createdBy", empId);

@@ -118,6 +118,11 @@ public class MetricDefService {
     @Transactional(rollbackFor = Exception.class)
     public PerfMetricDef update(UpdateMetricDefCmd cmd) {
         PerfMetricDef existing = getByCode(cmd.getMetricCode());
+        // V1.6 修复 Bug3：停用态禁止编辑（前端也已 disable 按钮，此处后端兜底）
+        if ("DISABLED".equals(existing.getStatus()) || "INACTIVE".equals(existing.getStatus())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "指标已停用，禁止编辑：" + cmd.getMetricCode() + "（请先启用后再修改）");
+        }
         boolean refMetricCodesProvided = cmd.getRefMetricCodes() != null && !cmd.getRefMetricCodes().isBlank();
         List<String> refMetricCodes = refMetricCodesProvided
                 ? parseRefMetricCodes(cmd.getRefMetricCodes())
@@ -199,6 +204,22 @@ public class MetricDefService {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "当前状态不可停用: " + existing.getStatus());
         }
         mapper.updateStatusById(existing.getId(), "DISABLED", operator);
+    }
+
+    /**
+     * V1.6 通用状态切换：支持 ACTIVE / DRAFT / DISABLED 三向迁移。
+     * Controller 收到 ChangeStatusReqDTO 后走这里，避免只有 disable 单向操作。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void changeStatus(String metricCode, String targetStatus, String reason, String operator) {
+        if (!"ACTIVE".equals(targetStatus) && !"DRAFT".equals(targetStatus) && !"DISABLED".equals(targetStatus)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "无效目标状态: " + targetStatus);
+        }
+        PerfMetricDef existing = getByCode(metricCode);
+        if (targetStatus.equals(existing.getStatus())) {
+            return; // 幂等：状态相同直接返回，不抛错
+        }
+        mapper.updateStatusById(existing.getId(), targetStatus, operator);
     }
 
     /**

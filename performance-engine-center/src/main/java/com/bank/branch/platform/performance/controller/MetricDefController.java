@@ -217,7 +217,8 @@ public class MetricDefController {
                                               @Valid @RequestBody ChangeStatusReqDTO req) {
         log.info("[MetricDefController.changeStatus] metricCode={}, status={}, reason={}",
                 metricCode, req.getStatus(), req.getReason());
-        metricLifecycleFacade.disableMetric(metricCode, req.getReason(), currentUserApi.getCurrentEmpId());
+        // V1.6：放开 ACTIVE/DRAFT/DISABLED 三向切换
+        metricLifecycleFacade.changeMetricStatus(metricCode, req.getStatus(), req.getReason(), currentUserApi.getCurrentEmpId());
         return ResponseWrapper.success();
     }
 

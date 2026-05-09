@@ -84,6 +84,11 @@ public class MetricTrialService {
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
             throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
         }
+        // V1.6 修复 Bug3：停用态禁止试运行（前端也已 disable 按钮，此处后端兜底）
+        if ("DISABLED".equals(def.getStatus()) || "INACTIVE".equals(def.getStatus())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "指标已停用，禁止试运行：" + metricCode + "（请先启用后再试运行）");
+        }
 
         // 2. 解析 sampleSize（null/0 → 默认；> 100 → 收敛 100）
         int effectiveSample = resolveSampleSize(sampleSize);

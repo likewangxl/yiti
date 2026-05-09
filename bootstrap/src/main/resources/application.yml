@@ -11,7 +11,9 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/yiti?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+    # V1.6 时区修复：sessionVariables=time_zone=+08:00 强制每个 JDBC 连接 SET session time_zone=+08:00
+    # 让 mapper xml 里的 NOW() 落库为北京时间（之前 DB 服务器在 PDT 时区）
+    url: jdbc:mysql://localhost:3306/yiti?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
     username: root
     password: djdev
   data:
