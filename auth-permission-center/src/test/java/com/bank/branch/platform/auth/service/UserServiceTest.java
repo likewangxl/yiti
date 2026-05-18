@@ -234,4 +234,53 @@ class UserServiceTest {
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40002"));
     }
+
+    // ---------- changeMyPassword ----------
+    @Test
+    void changeMyPassword_shouldUpdateWhenOldPasswordMatches() {
+        PtUser u = new PtUser();
+        u.setUserId("E001");
+        u.setPwd("$2a$old");
+        when(userMapper.selectByUserId("E001")).thenReturn(u);
+        when(passwordEncoder.matches("oldPwd123", "$2a$old")).thenReturn(true);
+        when(passwordEncoder.encode("newPwd456")).thenReturn("$2a$new");
+
+        com.bank.branch.platform.auth.api.dto.ChangeMyPasswordReqDTO req =
+                new com.bank.branch.platform.auth.api.dto.ChangeMyPasswordReqDTO();
+        req.setOldPassword("oldPwd123");
+        req.setNewPassword("newPwd456");
+
+        userService.changeMyPassword("E001", req);
+        verify(userMapper).updatePassword("E001", "$2a$new", "E001");
+    }
+
+    @Test
+    void changeMyPassword_shouldThrowWhenOldPasswordMismatch() {
+        PtUser u = new PtUser();
+        u.setUserId("E001");
+        u.setPwd("$2a$old");
+        when(userMapper.selectByUserId("E001")).thenReturn(u);
+        when(passwordEncoder.matches("wrong", "$2a$old")).thenReturn(false);
+
+        com.bank.branch.platform.auth.api.dto.ChangeMyPasswordReqDTO req =
+                new com.bank.branch.platform.auth.api.dto.ChangeMyPasswordReqDTO();
+        req.setOldPassword("wrong");
+        req.setNewPassword("newPwd456");
+
+        assertThatThrownBy(() -> userService.changeMyPassword("E001", req))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40001"));
+    }
+
+    @Test
+    void changeMyPassword_shouldThrowWhenUserNotFound() {
+        when(userMapper.selectByUserId("NONE")).thenReturn(null);
+        com.bank.branch.platform.auth.api.dto.ChangeMyPasswordReqDTO req =
+                new com.bank.branch.platform.auth.api.dto.ChangeMyPasswordReqDTO();
+        req.setOldPassword("o"); req.setNewPassword("n");
+        assertThatThrownBy(() -> userService.changeMyPassword("NONE", req))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40403"));
+    }
+
 }

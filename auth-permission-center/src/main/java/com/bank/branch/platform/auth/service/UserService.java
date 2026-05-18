@@ -175,6 +175,23 @@ public class UserService {
         return affected;
     }
 
+    /** 当前用户修改密码：校验旧密码 → BCrypt 加密新密码 → 更新 */
+    public void changeMyPassword(String currentUserId,
+                                 com.bank.branch.platform.auth.api.dto.ChangeMyPasswordReqDTO req) {
+        PtUser u = userMapper.selectByUserId(currentUserId);
+        if (u == null) {
+            throw new BizException(AuthErrorCode.USER_NOT_FOUND.getCode(),
+                    AuthErrorCode.USER_NOT_FOUND.getMessage());
+        }
+        if (!passwordEncoder.matches(req.getOldPassword(), u.getPwd())) {
+            throw new BizException(AuthErrorCode.OLD_PASSWORD_MISMATCH.getCode(),
+                    AuthErrorCode.OLD_PASSWORD_MISMATCH.getMessage());
+        }
+        String bcrypt = passwordEncoder.encode(req.getNewPassword());
+        userMapper.updatePassword(currentUserId, bcrypt, currentUserId);
+        log.info("[UserService.changeMyPassword] userId={} 修改自己的密码", currentUserId);
+    }
+
     /** PtUser → UserDetailRespDTO（密码字段一律不映射） */
     private UserDetailRespDTO toDetailDto(PtUser u) {
         UserDetailRespDTO dto = new UserDetailRespDTO();
