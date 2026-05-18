@@ -85,3 +85,8 @@ platform:
   slow-sql-threshold-ms: 5000
   method-timing-warn-ms: 500
   method-timing-error-ms: 5000
+
+auth:
+  user:
+    default-password: Branch@2026
+    max-batch-ids: 50
