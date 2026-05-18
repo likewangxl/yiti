@@ -191,4 +191,28 @@ class UserServiceTest {
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40403"));
     }
+
+    @Test
+    void deleteByIds_shouldCallMapperWithList() {
+        when(userMapper.deleteByUserIds(java.util.List.of("E001","E002"))).thenReturn(2);
+        int n = userService.deleteByIds(java.util.List.of("E001","E002"));
+        assertThat(n).isEqualTo(2);
+        verify(userMapper).deleteByUserIds(java.util.List.of("E001","E002"));
+    }
+
+    @Test
+    void deleteByIds_shouldThrowWhenIdsEmpty() {
+        assertThatThrownBy(() -> userService.deleteByIds(java.util.List.of()))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40002"));
+    }
+
+    @Test
+    void deleteByIds_shouldThrowWhenIdsExceedMaxBatch() {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        for (int i = 0; i < 51; i++) ids.add("E" + i);
+        assertThatThrownBy(() -> userService.deleteByIds(ids))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40002"));
+    }
 }

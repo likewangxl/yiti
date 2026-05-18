@@ -137,6 +137,32 @@ public class UserService {
         log.info("[UserService.update] userId={} operator={}", userId, operator);
     }
 
+    /** 批量物理删除 */
+    public int deleteByIds(java.util.List<String> userIds) {
+        validateIds(userIds);
+        int n = userMapper.deleteByUserIds(userIds);
+        log.info("[UserService.deleteByIds] affected={} ids={}", n, userIds);
+        return n;
+    }
+
+    /** ids 列表合法性校验（空/超限/含空串） */
+    private void validateIds(java.util.List<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            throw new BizException(AuthErrorCode.INVALID_USER_IDS.getCode(),
+                    AuthErrorCode.INVALID_USER_IDS.getMessage());
+        }
+        if (userIds.size() > props.getMaxBatchIds()) {
+            throw new BizException(AuthErrorCode.INVALID_USER_IDS.getCode(),
+                    AuthErrorCode.INVALID_USER_IDS.getMessage());
+        }
+        for (String id : userIds) {
+            if (id == null || id.isBlank()) {
+                throw new BizException(AuthErrorCode.INVALID_USER_IDS.getCode(),
+                        AuthErrorCode.INVALID_USER_IDS.getMessage());
+            }
+        }
+    }
+
     /** PtUser → UserDetailRespDTO（密码字段一律不映射） */
     private UserDetailRespDTO toDetailDto(PtUser u) {
         UserDetailRespDTO dto = new UserDetailRespDTO();
