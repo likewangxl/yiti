@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -120,5 +121,39 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.getById("NONE"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40403"));
+    }
+
+    @Test
+    void pageUsers_shouldReturnPageResult() {
+        com.bank.branch.platform.auth.api.dto.UserQueryReqDTO q =
+                new com.bank.branch.platform.auth.api.dto.UserQueryReqDTO();
+        q.setUsername("ali");
+        q.setPageNo(1);
+        q.setPageSize(10);
+
+        PtUser u = new PtUser();
+        u.setUserId("E001");
+        u.setUsername("alice");
+        when(userMapper.selectByQuery(eq(q), eq(0), eq(10))).thenReturn(java.util.List.of(u));
+        when(userMapper.countByQuery(eq(q))).thenReturn(1L);
+
+        com.bank.branch.platform.common.web.PageResult<com.bank.branch.platform.auth.api.dto.UserListItemRespDTO> page =
+                userService.pageUsers(q);
+
+        assertThat(page.getTotal()).isEqualTo(1);
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).getUserId()).isEqualTo("E001");
+    }
+
+    @Test
+    void pageUsers_shouldClampPageSize() {
+        com.bank.branch.platform.auth.api.dto.UserQueryReqDTO q =
+                new com.bank.branch.platform.auth.api.dto.UserQueryReqDTO();
+        q.setPageNo(1);
+        q.setPageSize(500);
+        when(userMapper.selectByQuery(eq(q), eq(0), eq(100))).thenReturn(java.util.List.of());
+        when(userMapper.countByQuery(eq(q))).thenReturn(0L);
+        userService.pageUsers(q);
+        verify(userMapper).selectByQuery(eq(q), eq(0), eq(100));
     }
 }

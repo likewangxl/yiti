@@ -82,6 +82,42 @@ public class UserService {
         return toDetailDto(u);
     }
 
+    /**
+     * 分页查询用户列表。pageSize 上限 100、下限 1；pageNo 下限 1。
+     */
+    public com.bank.branch.platform.common.web.PageResult<
+            com.bank.branch.platform.auth.api.dto.UserListItemRespDTO> pageUsers(
+                    com.bank.branch.platform.auth.api.dto.UserQueryReqDTO q) {
+        int pageNo = (q.getPageNo() == null || q.getPageNo() < 1) ? 1 : q.getPageNo();
+        int pageSize = (q.getPageSize() == null || q.getPageSize() < 1) ? 20 : q.getPageSize();
+        if (pageSize > 100) pageSize = 100;
+        q.setPageNo(pageNo);
+        q.setPageSize(pageSize);
+        int offset = (pageNo - 1) * pageSize;
+        java.util.List<PtUser> records = userMapper.selectByQuery(q, offset, pageSize);
+        long total = userMapper.countByQuery(q);
+        java.util.List<com.bank.branch.platform.auth.api.dto.UserListItemRespDTO> items =
+                new java.util.ArrayList<>(records.size());
+        for (PtUser u : records) items.add(toListItemDto(u));
+        return com.bank.branch.platform.common.web.PageResult.of(pageNo, pageSize, total, items);
+    }
+
+    private com.bank.branch.platform.auth.api.dto.UserListItemRespDTO toListItemDto(PtUser u) {
+        com.bank.branch.platform.auth.api.dto.UserListItemRespDTO dto =
+                new com.bank.branch.platform.auth.api.dto.UserListItemRespDTO();
+        dto.setUserId(u.getUserId());
+        dto.setUsername(u.getUsername());
+        dto.setUserchnname(u.getUserchnname());
+        dto.setEmail(u.getEmail());
+        dto.setRemark(u.getRemark());
+        dto.setIsExpired(u.getIsExpired());
+        dto.setIsLocked(u.getIsLocked());
+        dto.setIsEnabled(u.getIsEnabled());
+        dto.setCreateTime(u.getCreateTime());
+        dto.setUpdateTime(u.getUpdateTime());
+        return dto;
+    }
+
     /** PtUser → UserDetailRespDTO（密码字段一律不映射） */
     private UserDetailRespDTO toDetailDto(PtUser u) {
         UserDetailRespDTO dto = new UserDetailRespDTO();
