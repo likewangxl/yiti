@@ -142,6 +142,11 @@ public class MetricCalcService {
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
             throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
         }
+        // V1.9：维度无关型指标（baseDim=null）无 slot、无宽表归属，不允许进入计算路径
+        if (def.getBaseDim() == null || def.getBaseDim().isBlank()) {
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                    "维度无关型指标不支持自动/手动计算: " + metricCode + "（base_dim 为空）");
+        }
 
         // 2. jobKey 推导规则：PERF_METRIC_{metricCode}（与 P1 resolveGroup 规则一致）
         String jobKey = "PERF_METRIC_" + metricCode;

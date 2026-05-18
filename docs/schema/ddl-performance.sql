@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS `PERF_METRIC_DEF` (
   `metric_name` varchar(200) NOT NULL COMMENT '指标名称',
   `metric_name_en` varchar(200) DEFAULT NULL COMMENT '英文名',
   `metric_desc` text COMMENT '指标说明',
-  `base_dim` varchar(20) NOT NULL COMMENT '基础维度：EMP/ORG/CUST',
+  `base_dim` varchar(20) DEFAULT NULL COMMENT '基础维度：EMP/ORG/CUST；NULL=维度无关型指标（V1.9 改造，2026-05-17）',
   `metric_level` int(11) NOT NULL COMMENT '指标层级：1/2/3',
   `calc_freq` varchar(20) NOT NULL COMMENT '计算频率：DAY/MONTH/QUARTER/YEAR',
   `calc_mode` varchar(20) NOT NULL COMMENT '计算方式：AUTO/MANUAL',
@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `PERF_METRIC_DEF` (
   `decimal_places` tinyint DEFAULT '2' COMMENT '小数位数',
   `deleted` tinyint DEFAULT '0' COMMENT '0=存在 1=删除',
   `description` varchar(500) DEFAULT NULL COMMENT '指标详细描述（补充 metric_desc）',
+  `metric_category` varchar(50) DEFAULT NULL COMMENT 'V1.9 指标分类（规模类/效益类/质量类/合规类等）',
   `status` varchar(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE/DISABLED',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -63,7 +64,8 @@ CREATE TABLE IF NOT EXISTS `PERF_METRIC_DEF` (
   KEY `idx_dim_level` (`base_dim`, `metric_level`),
   KEY `idx_status` (`status`),
   KEY `idx_val_slot` (`val_slot`),
-  KEY `idx_metric_def_schedulable` (`status`, `calc_mode`, `deleted`) -- V1.7 启动同步 + HealthCheck 扫描
+  KEY `idx_metric_def_schedulable` (`status`, `calc_mode`, `deleted`), -- V1.7 启动同步 + HealthCheck 扫描
+  KEY `idx_metric_category` (`metric_category`) -- V1.9 指标分类筛选
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='指标定义表';
 
 -- -------------------------------------------
@@ -173,7 +175,7 @@ CREATE TABLE IF NOT EXISTS `PERF_IMPORT_BATCH` (
   `id` varchar(32) NOT NULL COMMENT '批次ID',
   `batch_no` varchar(64) NOT NULL COMMENT '批次号',
   `import_type` varchar(20) NOT NULL COMMENT '导入类型：INDEX_RESULT/KPI_RESULT/TARGET',
-  `dim` varchar(20) NOT NULL COMMENT '维度：EMP/ORG/CUST',
+  `dim` varchar(20) DEFAULT NULL COMMENT '维度：EMP/ORG/CUST；NULL=维度无关导入（METRIC_DEF 等元数据导入，V1.9 改造，2026-05-17）',
   `as_of_date` date DEFAULT NULL COMMENT 'KPI导入基准日(可空)',
   `file_name` varchar(255) DEFAULT NULL COMMENT '文件名',
   `file_md5` varchar(64) DEFAULT NULL COMMENT '文件MD5',

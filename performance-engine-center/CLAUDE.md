@@ -11,6 +11,19 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
+**当前版本**: V1.9（指标定义 Excel 导入）—— 在 V1.7/V1.8 基础上新增 METRIC_DEF 导入策略：
+
+**V1.9 (2026-05-17 交付)：指标定义 Excel 导入**
+
+- DDL：PERF_METRIC_DEF 新增 `metric_category varchar(50)` + `idx_metric_category`（脚本 `docs/superpowers/sql/2026-05-17-perf-metric-def-add-category.sql`）
+- 新增导入策略 `MetricDefImportStrategy implements ImportStrategy`，importType=`METRIC_DEF`，复用现有 `POST /api/perf/import/upload`
+- **整批 all-or-none 语义**（与 TARGET/BASE_DATA/ALLOC 的行级最大努力不同）：任一行错误整批回滚，错误明细写 remark
+- 列翻译：Excel 9 列 → PerfMetricDef；指标编号空 → `M_{indexNo:04d}` 自动生成；来源 1→MANUAL/EXPR，2/3→AUTO/SQL；定时任务 1/2/3/4→DAY/MONTH/QUARTER/YEAR；状态 1/0→ACTIVE/DISABLED
+- 新增 `MetricDefService.batchCreateMetricDefs(List<Cmd>, operator)` `@Transactional`，逐条复用 `create()` 业务规则（slot 分配、循环检测）
+- 新增错误码 `PERF-42211 IMPORT_BATCH_ALL_OR_NONE_FAILED`
+- 模板：`docs/指标表上传模板.xlsx`（业务方提供，88 行示例）
+- Spec: `docs/superpowers/specs/2026-05-17-metric-def-import-design.md`
+
 **当前版本**: V1.7（指标级 Quartz 调度改造）—— 在 V1.6 基础上实现按指标定义自动注册调度任务：
 
 **V1.7 (2026-04-30 交付)：指标级 Quartz 调度改造**

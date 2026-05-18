@@ -56,6 +56,39 @@ public class MetricDefService {
     final MetricSchedulerService metricSchedulerService;
 
     /**
+     * V1.9：批量创建指标定义（整批 all-or-none 语义）.
+     *
+     * <p>用于 {@code MetricDefImportStrategy} 的 Excel 导入路径。本方法包裹外层事务，
+     * 内部逐条调用 {@link #create(CreateMetricDefCmd)}。由于 {@code create} 默认
+     * PROPAGATION_REQUIRED 会复用当前事务，任一行抛异常都会让整个批次回滚，DB 不留脏数据。
+     *
+     * <p>调用方契约：
+     * <ul>
+     *   <li>校验失败应在调用本方法前由 {@code MetricDefImportStrategy} 预扫描完成；
+     *       本方法仅做"落库 + 复用 create 业务规则（slot 分配 / 循环依赖检测 等）"</li>
+     *   <li>{@code cmds} 列表非 null 且 size &gt; 0，否则直接返回空列表</li>
+     *   <li>任一 {@link PerfException}（含 {@code METRIC_CODE_DUP}）会让整批回滚并向上抛</li>
+     * </ul>
+     *
+     * @param cmds     批量新建命令列表
+     * @param operator 操作人（覆盖 cmd.operator 字段，确保审计一致）
+     * @return 新建后的指标定义列表（与 cmds 同序）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<PerfMetricDef> batchCreateMetricDefs(List<CreateMetricDefCmd> cmds, String operator) {
+        if (cmds == null || cmds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<PerfMetricDef> created = new ArrayList<>(cmds.size());
+        for (CreateMetricDefCmd cmd : cmds) {
+            // 强制覆盖 operator，保持审计字段统一
+            cmd.setOperator(operator);
+            created.add(create(cmd));
+        }
+        return created;
+    }
+
+    /**
      * 新建指标定义.
      *
      * @param cmd 新建命令
@@ -86,8 +119,15 @@ public class MetricDefService {
         def.setExprText(cmd.getExprText());
         def.setSummaryRule(cmd.getSummaryRule());
         def.setRefMetricCodes(toJson(refMetricCodes));
-        def.setValSlot(metricSlotService.allocSlot(cmd.getBaseDim(), cmd.getMetricLevel(), cmd.getPreferredSlot()));
-        def.setStatus("ACTIVE");
+        // V1.9：维度无关型指标（baseDim=null）不占 slot、不入三大宽表
+        if (cmd.getBaseDim() != null && !cmd.getBaseDim().isBlank()) {
+            def.setValSlot(metricSlotService.allocSlot(cmd.getBaseDim(), cmd.getMetricLevel(), cmd.getPreferredSlot()));
+        } else {
+            def.setValSlot(null);
+        }
+        def.setMetricCategory(cmd.getMetricCategory());
+        // V1.9：状态字段优先取 cmd.status（导入路径透传 Excel statusFlag），未指定回落 ACTIVE
+        def.setStatus(cmd.getStatus() != null && !cmd.getStatus().isBlank() ? cmd.getStatus() : "ACTIVE");
         // Q8.5b: 显式初始化 deleted=0（未删除）。entity 字段为 Integer（非基本类型），
         // 默认 null 会导致 selectByMetricCode（WHERE deleted=0）读不到刚插入的行。
         // DB 层虽然有 default 0，但 Mapper XML 使用 #{deleted} 会把 null 显式写入列，

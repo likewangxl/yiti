@@ -56,6 +56,17 @@ public class CreateMetricDefCmd {
     /** 指定槽位. */
     private Integer preferredSlot;
 
+    /** V1.9 指标分类（规模类/效益类/质量类/合规类等）. */
+    private String metricCategory;
+
+    /**
+     * V1.9 初始状态：ACTIVE / DISABLED.
+     * <p>导入路径透传 Excel statusFlag（1→ACTIVE/0→DISABLED）；
+     * 普通 CRUD 创建不传，{@link com.bank.branch.platform.performance.service.MetricDefService#create}
+     * 内部按 null 兜底为 ACTIVE。
+     */
+    private String status;
+
     /** 操作人. */
     private String operator;
 }

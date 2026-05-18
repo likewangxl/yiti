@@ -160,6 +160,7 @@ public class MetricDefController {
                 .summaryRule(req.getSummaryRule())
                 .refMetricCodes(req.getRefMetricCodes())
                 .preferredSlot(req.getPreferredSlot())
+                .metricCategory(req.getMetricCategory())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(metricLifecycleFacade.createMetricDto(cmd));

@@ -89,4 +89,7 @@ public class MetricDefRespDTO {
 
     /** 指标详细描述（区别于 metricDesc）. */
     private String description;
+
+    /** V1.9 指标分类（规模类/效益类/质量类/合规类等）. */
+    private String metricCategory;
 }

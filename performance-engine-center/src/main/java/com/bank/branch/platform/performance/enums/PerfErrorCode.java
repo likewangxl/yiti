@@ -126,6 +126,13 @@ public enum PerfErrorCode {
     /** 导出过滤条件未通过 DATA_SCOPE 校验（V1.2 占位） */
     EXPORT_FILTER_SCOPE_VIOLATION("PERF-42210", "导出过滤条件未通过 DATA_SCOPE 校验"),
 
+    /**
+     * V1.9：指标定义批量导入预校验失败（整批 all-or-none）.
+     * <p>场景：MetricDefImportStrategy 预扫描发现任一行错误（必填缺失、文件内 metric_code
+     * 重复、calc_freq 越界等），整批回滚为 FAILED，错误明细写入 PerfImportBatch.remark。
+     */
+    IMPORT_BATCH_ALL_OR_NONE_FAILED("PERF-42211", "指标定义批量导入校验失败"),
+
     // =============================================
     // K.4 500xx 系统错误
     // =============================================

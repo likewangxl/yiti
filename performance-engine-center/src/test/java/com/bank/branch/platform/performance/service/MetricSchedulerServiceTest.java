@@ -129,6 +129,23 @@ class MetricSchedulerServiceTest {
         def.setCalcLogicType(logic);
         def.setDeleted(deleted);
         def.setSubjectSql("SELECT emp_id FROM t");
+        // V1.9：isSchedulable 需要 baseDim 非空，默认 EMP 让既有调度类用例保持可调度语义
+        def.setBaseDim("EMP");
         return def;
+    }
+
+    @Test
+    void isSchedulable_baseDim_null_false() {
+        // V1.9：维度无关型指标（baseDim=null）不进入自动调度
+        PerfMetricDef def = newDef("M_META", "ACTIVE", "AUTO", "SQL", 0);
+        def.setBaseDim(null);
+        assertThat(scheduler.isSchedulable(def)).isFalse();
+    }
+
+    @Test
+    void isSchedulable_baseDim_blank_false() {
+        PerfMetricDef def = newDef("M_META", "ACTIVE", "AUTO", "SQL", 0);
+        def.setBaseDim("  ");
+        assertThat(scheduler.isSchedulable(def)).isFalse();
     }
 }

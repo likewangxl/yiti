@@ -38,9 +38,8 @@ public class CreateMetricReqDTO {
     @Schema(description = "指标说明")
     private String metricDesc;
 
-    /** 基础维度。 */
-    @Schema(description = "基础维度: EMP/ORG/CUST", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "baseDim 不能为空")
+    /** 基础维度。V1.9 改造：允许为空，null 表示维度无关型指标（不入三大宽表、不进入自动调度）。 */
+    @Schema(description = "基础维度: EMP/ORG/CUST；留空表示维度无关型指标")
     @Pattern(regexp = "^(EMP|ORG|CUST)$", message = "baseDim 必须是 EMP、ORG 或 CUST")
     private String baseDim;
 
@@ -90,4 +89,9 @@ public class CreateMetricReqDTO {
     @Min(value = 1, message = "preferredSlot 不能小于 1")
     @Max(value = 200, message = "preferredSlot 不能大于 200")
     private Integer preferredSlot;
+
+    /** V1.9 指标分类（规模类/效益类/质量类/合规类等）。 */
+    @Schema(description = "指标分类（规模类/效益类/质量类/合规类等）")
+    @Size(max = 50, message = "metricCategory 长度不能超过 50")
+    private String metricCategory;
 }

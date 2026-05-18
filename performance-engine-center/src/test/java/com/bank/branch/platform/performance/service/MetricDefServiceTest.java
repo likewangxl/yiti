@@ -84,6 +84,80 @@ class MetricDefServiceTest {
     }
 
     @Test
+    @DisplayName("V1.9：cmd.status=DISABLED 时落库尊重，不再无脑 ACTIVE")
+    void create_withStatusDisabled_respectsCmdStatus() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_OFF")
+                .metricName("停用指标")
+                .baseDim(null)
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("MANUAL")
+                .calcLogicType("EXPR")
+                .status("DISABLED")
+                .operator("admin")
+                .build();
+
+        when(mapper.selectByMetricCode("TEST_METRIC_OFF")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+
+        PerfMetricDef created = service.create(cmd);
+
+        assertThat(created.getStatus()).isEqualTo("DISABLED");
+    }
+
+    @Test
+    @DisplayName("V1.9：cmd.status=null 时回落 ACTIVE（普通 CRUD 创建路径）")
+    void create_withNullStatus_defaultsActive() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_DEF_ACT")
+                .metricName("默认启用指标")
+                .baseDim("EMP")
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("SQL")
+                .sqlText("SELECT 1")
+                .operator("admin")
+                .build();
+
+        when(mapper.selectByMetricCode("TEST_METRIC_DEF_ACT")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+        when(metricSlotService.allocSlot("EMP", 1, null)).thenReturn(2);
+
+        PerfMetricDef created = service.create(cmd);
+
+        assertThat(created.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("V1.9：baseDim=null 创建指标跳过 slot 分配，val_slot=null")
+    void create_baseDimNull_skipsSlotAllocation() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_META")
+                .metricName("维度无关型指标")
+                .baseDim(null)        // V1.9：维度无关型
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("MANUAL")
+                .calcLogicType("EXPR")
+                .exprText("外部填值")
+                .operator("admin")
+                .build();
+
+        when(mapper.selectByMetricCode("TEST_METRIC_META")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+
+        PerfMetricDef created = service.create(cmd);
+
+        assertThat(created.getMetricCode()).isEqualTo("TEST_METRIC_META");
+        assertThat(created.getValSlot()).isNull();
+        assertThat(created.getBaseDim()).isNull();
+        // slot 服务一次都不能被调
+        verify(metricSlotService, never()).allocSlot(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("L2 指标创建时会写主表并重建引用")
     void create_L2WithRefs_insertsDefAndRefRows() {
         CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()

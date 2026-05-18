@@ -127,4 +127,18 @@ class PerfImportBatchMapperIT extends PerformanceMapperTestBase {
     void selectById_whenNotFound_returnsNull() {
         assertThat(mapper.selectById("NOT_EXIST_ID")).isNull();
     }
+
+    @Test
+    @DisplayName("V1.9：dim=null 插入成功（METRIC_DEF 等维度无关导入）")
+    void insert_dimNull_succeeds() {
+        PerfImportBatch b = newBatch("B020");
+        b.setImportType("METRIC_DEF");
+        b.setDim(null);                // V1.9：dim 列可空
+        mapper.insert(b);
+
+        PerfImportBatch got = mapper.selectById(b.getId());
+        assertThat(got).isNotNull();
+        assertThat(got.getImportType()).isEqualTo("METRIC_DEF");
+        assertThat(got.getDim()).isNull();
+    }
 }
