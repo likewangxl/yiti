@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.bank.branch.platform.auth.api.dto.UserQueryReqDTO;
 import com.bank.branch.platform.auth.entity.PtUser;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -87,5 +88,29 @@ public interface UserMapper extends BaseMapper<PtUser> {
      * @return 受影响行数
      */
     int updateLockedStatus(@Param("userId") String userId, @Param("locked") int locked);
+
+    /** 条件分页列表（V1.14 新增） */
+    List<PtUser> selectByQuery(@Param("q") UserQueryReqDTO q,
+                               @Param("offset") int offset,
+                               @Param("limit") int limit);
+
+    /** 条件总数（V1.14 新增） */
+    long countByQuery(@Param("q") UserQueryReqDTO q);
+
+    /** 用户名是否已存在（V1.14 新增） */
+    int countByUsername(@Param("username") String username);
+
+    /** 修改启用状态（V1.14 新增） */
+    int updateActiveStatus(@Param("userId") String userId,
+                           @Param("isEnabled") int isEnabled,
+                           @Param("updateAuthor") String updateAuthor);
+
+    /** 修改密码并刷新 PWD_UPDATE_TIME / 清零 PASS_WRONG_COUNT（V1.14 新增） */
+    int updatePassword(@Param("userId") String userId,
+                       @Param("pwd") String bcryptHash,
+                       @Param("updateAuthor") String updateAuthor);
+
+    /** 物理批量删除（V1.14 新增） */
+    int deleteByUserIds(@Param("userIds") java.util.List<String> userIds);
 
 }

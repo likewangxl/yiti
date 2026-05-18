@@ -11,6 +11,10 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum AuthErrorCode {
 
+    // 400 参数错误
+    OLD_PASSWORD_MISMATCH("AUTH-40001", "旧密码不正确"),
+    INVALID_USER_IDS("AUTH-40002", "用户ID列表为空或超出上限"),
+
     // 401 认证失败
     LOGIN_FAILED("AUTH-40101", "用户名或密码错误"),
     ACCOUNT_LOCKED("AUTH-40102", "用户账号已锁定"),
@@ -40,6 +44,8 @@ public enum AuthErrorCode {
     ROLE_CODE_DUPLICATE("AUTH-40901", "角色编码已存在"),
     RESOURCE_URL_METHOD_DUPLICATE("AUTH-40902", "资源URL+Method已存在"),
     BIZ_SCOPE_DUPLICATE("AUTH-40903", "BizScope配置已存在"),
+    USER_ID_DUPLICATE("AUTH-40904", "用户ID已存在"),
+    USERNAME_DUPLICATE("AUTH-40905", "用户名已存在"),
 
     // 500 内部错误
     INTERNAL_ERROR("AUTH-50001", "权限服务内部错误"),
