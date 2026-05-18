@@ -31,8 +31,10 @@ is_running() {
 
 port_holder() {
   # 返回占用指定端口的 PID（没占用时空字符串）；POSIX awk 兼容（不用 GNU 3-arg match）
+  # 末尾的 `|| true` 是兜底：端口空闲时 grep 返回 1，配合 set -euo pipefail 会
+  # 让上层的 `HOLDER=$(port_holder ...)` 直接终止整个脚本，连日志都没机会写。
   local p="${1:-$DEFAULT_PORT}"
-  ss -lntp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | grep -oE '[0-9]+' | head -1
+  ss -lntp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | grep -oE '[0-9]+' | head -1 || true
 }
 
 actual_port() {
