@@ -1,0 +1,120 @@
+@startuml yiti_er_customer-marketing-center
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title 05-客户营销 — 内部表与跨模块引用 (虚线=逻辑/实线=物理)
+
+package "05-客户营销" #FFEBEE {
+  entity "CUST_CLAIM" as CUST_CLAIM {
+    .. 客户认领关系表 ..
+    PK: id
+    + cust_id
+    + org_id
+  }
+  entity "CUST_LEAD" as CUST_LEAD {
+    .. 客户线索表 ..
+    PK: id
+    + owner_org_id
+    + created_by
+    + business_key
+    + import_batch_id
+    + process_instance_id
+    + updated_by
+  }
+  entity "CUST_MASTER" as CUST_MASTER {
+    .. 客户主档表 ..
+    PK: id
+    + owner_org_id
+    + lead_id
+  }
+  entity "CUST_TAG" as CUST_TAG {
+    .. 客户标签表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "CUST_TAG_REL" as CUST_TAG_REL {
+    .. 客户-标签关联表 ..
+    PK: id
+    + cust_id
+    + tag_id
+    + created_by
+  }
+  entity "LEAD_IMPORT_BATCH" as LEAD_IMPORT_BATCH {
+    .. 线索导入批次表 ..
+    PK: id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "TOUCH_LOG" as TOUCH_LOG {
+    .. 触达日志表 ..
+    PK: id
+    + touch_task_id
+    + owner_org_id
+    + created_by
+  }
+  entity "TOUCH_TASK" as TOUCH_TASK {
+    .. 触达任务表 ..
+    PK: id
+    + cust_id
+    + org_id
+    + business_key
+  }
+}
+
+package "外部模块（引用占位）" #FAFAFA {
+  entity "ACT_RU_EXECUTION" as ACT_RU_EXECUTION <<09-Flowable引擎(只读)>> {
+    ..  ..
+  }
+  entity "BIZ_PROCESS_MAP" as BIZ_PROCESS_MAP <<03-工作流中心>> {
+    .. 业务流程映射表 ..
+  }
+  entity "CUST_ALLOC_RELATION" as CUST_ALLOC_RELATION <<07-绩效计算>> {
+    .. 客户业绩分配关系 ..
+  }
+  entity "CUST_INDEX_RESULT" as CUST_INDEX_RESULT <<07-绩效计算>> {
+    .. 客户指标结果宽表 ..
+  }
+  entity "EXT_ORG_INFO" as EXT_ORG_INFO <<01-认证授权中心>> {
+    .. 机构表 ..
+  }
+  entity "LOAN_APPLY" as LOAN_APPLY <<06-业务申请>> {
+    .. 资产投放申请表 ..
+  }
+  entity "PERF_ALLOC_ADJUST_APPLY" as PERF_ALLOC_ADJUST_APPLY <<07-绩效计算>> {
+    .. 分配关系调整申请 ..
+  }
+  entity "SUPPORT_REQUEST" as SUPPORT_REQUEST <<06-业务申请>> {
+    .. 中场支持申请表 ..
+  }
+}
+
+CUST_ALLOC_RELATION }.. CUST_MASTER : cust_id
+CUST_CLAIM }.. CUST_MASTER : cust_id
+CUST_CLAIM }.. EXT_ORG_INFO : org_id
+CUST_INDEX_RESULT }.. CUST_MASTER : cust_id
+CUST_LEAD }.. EXT_ORG_INFO : owner_org_id
+CUST_LEAD }.. BIZ_PROCESS_MAP : business_key
+CUST_LEAD }.. LEAD_IMPORT_BATCH : import_batch_id
+CUST_LEAD }.. ACT_RU_EXECUTION : process_instance_id
+CUST_MASTER }.. EXT_ORG_INFO : owner_org_id
+CUST_MASTER }.. CUST_LEAD : lead_id
+CUST_TAG_REL }.. CUST_MASTER : cust_id
+CUST_TAG_REL }.. CUST_TAG : tag_id
+LEAD_IMPORT_BATCH }.. BIZ_PROCESS_MAP : business_key
+LEAD_IMPORT_BATCH }.. ACT_RU_EXECUTION : process_instance_id
+LEAD_IMPORT_BATCH }.. EXT_ORG_INFO : owner_org_id
+LOAN_APPLY }.. CUST_MASTER : cust_id
+PERF_ALLOC_ADJUST_APPLY }.. CUST_MASTER : cust_id
+SUPPORT_REQUEST }.. CUST_MASTER : cust_id
+TOUCH_LOG }.. TOUCH_TASK : touch_task_id
+TOUCH_LOG }.. EXT_ORG_INFO : owner_org_id
+TOUCH_TASK }.. CUST_MASTER : cust_id
+TOUCH_TASK }.. EXT_ORG_INFO : org_id
+TOUCH_TASK }.. BIZ_PROCESS_MAP : business_key
+@enduml

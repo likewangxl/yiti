@@ -1,0 +1,84 @@
+@startuml yiti_er_system-governance-center
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title 02-系统治理中心 — 内部表与跨模块引用 (虚线=逻辑/实线=物理)
+
+package "02-系统治理中心" #FFF3E0 {
+  entity "AUDIT_LOG" as AUDIT_LOG {
+    .. 审计日志表 ..
+    PK: id
+    + emp_id
+  }
+  entity "BIZ_FILE_REL" as BIZ_FILE_REL {
+    .. 业务-附件关联表 ..
+    PK: id
+    + biz_id
+    + created_by
+  }
+  entity "FILE_OBJECT" as FILE_OBJECT {
+    .. 文件对象表 ..
+    PK: id
+  }
+  entity "SYS_CALENDAR_DAY" as SYS_CALENDAR_DAY {
+    .. 工作日历(按天) ..
+    PK: day
+    + created_by
+    + updated_by
+  }
+  entity "SYS_CONFIG_KV" as SYS_CONFIG_KV {
+    .. 系统配置KV ..
+    PK: id
+    + config_key
+    + created_by
+    + updated_by
+  }
+  entity "SYS_DICT" as SYS_DICT {
+    .. 字典表 ..
+    PK: id
+    + dict_code
+    + created_by
+    + updated_by
+  }
+  entity "SYS_DICT_ITEM" as SYS_DICT_ITEM {
+    .. 字典项表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "SYS_JOB_CONF" as SYS_JOB_CONF {
+    .. 任务调度配置 ..
+    PK: id
+    + job_key
+    + created_by
+    + updated_by
+  }
+  entity "SYS_JOB_RUN_LOG" as SYS_JOB_RUN_LOG {
+    .. 任务执行日志 ..
+    PK: id
+    + created_by
+  }
+  entity "USER_NOTIFICATION" as USER_NOTIFICATION {
+    .. 用户通知表 ..
+    PK: id
+    + emp_id
+    + biz_id
+  }
+}
+
+package "外部模块（引用占位）" #FAFAFA {
+  entity "BIZ_PROCESS_MAP" as BIZ_PROCESS_MAP <<03-工作流中心>> {
+    .. 业务流程映射表 ..
+  }
+  entity "PT_USER" as PT_USER <<01-认证授权中心>> {
+    .. 人员表 ..
+  }
+}
+
+AUDIT_LOG }.. PT_USER : emp_id
+BIZ_PROCESS_MAP }.. BIZ_FILE_REL : biz_id
+USER_NOTIFICATION }.. PT_USER : emp_id
+USER_NOTIFICATION }.. BIZ_FILE_REL : biz_id
+@enduml

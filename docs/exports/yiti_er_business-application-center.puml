@@ -1,0 +1,60 @@
+@startuml yiti_er_business-application-center
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title 06-业务申请 — 内部表与跨模块引用 (虚线=逻辑/实线=物理)
+
+package "06-业务申请" #FBE9E7 {
+  entity "LOAN_APPLY" as LOAN_APPLY {
+    .. 资产投放申请表 ..
+    PK: id
+    + cust_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "SUPPORT_REQUEST" as SUPPORT_REQUEST {
+    .. 中场支持申请表 ..
+    PK: id
+    + cust_id
+    + product_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+}
+
+package "外部模块（引用占位）" #FAFAFA {
+  entity "ACT_RU_EXECUTION" as ACT_RU_EXECUTION <<09-Flowable引擎(只读)>> {
+    ..  ..
+  }
+  entity "BIZ_PROCESS_MAP" as BIZ_PROCESS_MAP <<03-工作流中心>> {
+    .. 业务流程映射表 ..
+  }
+  entity "CUST_MASTER" as CUST_MASTER <<05-客户营销>> {
+    .. 客户主档表 ..
+  }
+  entity "EXT_ORG_INFO" as EXT_ORG_INFO <<01-认证授权中心>> {
+    .. 机构表 ..
+  }
+  entity "PRODUCT_INFO" as PRODUCT_INFO <<04-门户与内容>> {
+    .. 产品信息表 ..
+  }
+}
+
+LOAN_APPLY }.. CUST_MASTER : cust_id
+LOAN_APPLY }.. BIZ_PROCESS_MAP : business_key
+LOAN_APPLY }.. ACT_RU_EXECUTION : process_instance_id
+LOAN_APPLY }.. EXT_ORG_INFO : owner_org_id
+SUPPORT_REQUEST }.. CUST_MASTER : cust_id
+SUPPORT_REQUEST }.. PRODUCT_INFO : product_id
+SUPPORT_REQUEST }.. BIZ_PROCESS_MAP : business_key
+SUPPORT_REQUEST }.. ACT_RU_EXECUTION : process_instance_id
+SUPPORT_REQUEST }.. EXT_ORG_INFO : owner_org_id
+@enduml

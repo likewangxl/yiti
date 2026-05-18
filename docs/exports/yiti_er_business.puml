@@ -1,0 +1,528 @@
+@startuml yiti_er_business
+!define TABLE(x) class x << (T,#FFAAAA) >>
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #1F4E78
+skinparam packageStyle rectangle
+skinparam ranksep 60
+skinparam nodesep 30
+left to right direction
+title yiti 业务核心数据模型 — 9 模块 + 跨模块逻辑关系\n(物理外键 + 命名约定推断)
+
+package "01-认证授权中心" as auth_permission_center #E3F2FD {
+  entity "EXT_ORG_INFO" as EXT_ORG_INFO {
+    .. 机构表 ..
+    PK: ID
+    + ORG_CODE
+    + CREATE_USER
+  }
+  entity "EXT_USER_ORG" as EXT_USER_ORG {
+    .. 用户机构关联表 ..
+    PK: USER_ID, ORG_CODE
+    + USER_ID
+    + ORG_CODE
+  }
+  entity "PT_RESOURCE" as PT_RESOURCE {
+    .. 资源表 ..
+    PK: RESOURCE_ID
+    + RESOURCE_ID
+    + CREATE_USER
+    + UPDATE_USER
+  }
+  entity "PT_ROLE" as PT_ROLE {
+    .. 角色表 ..
+    PK: ROLE_ID
+    + ROLE_ID
+    + CREATE_USER
+    + UPDATE_USER
+  }
+  entity "PT_ROLE_BIZ_SCOPE" as PT_ROLE_BIZ_SCOPE {
+    .. 角色业务范围表 ..
+    PK: ID
+    + ROLE_ID
+    + CREATE_USER
+    + UPDATE_USER
+  }
+  entity "PT_ROLE_RESOURCE" as PT_ROLE_RESOURCE {
+    .. 角色资源关联表 ..
+    PK: ID
+    + ROLE_ID
+    + RESOURCE_ID
+  }
+  entity "PT_USER" as PT_USER {
+    .. 人员表 ..
+    PK: USER_ID
+    + USER_ID
+  }
+  entity "PT_USER_ROLE" as PT_USER_ROLE {
+    .. 用户角色关联表 ..
+    PK: USER_ID, ROLE_ID
+    + USER_ID
+    + ROLE_ID
+  }
+}
+
+package "02-系统治理中心" as system_governance_center #FFF3E0 {
+  entity "AUDIT_LOG" as AUDIT_LOG {
+    .. 审计日志表 ..
+    PK: id
+    + emp_id
+  }
+  entity "BIZ_FILE_REL" as BIZ_FILE_REL {
+    .. 业务-附件关联表 ..
+    PK: id
+    + biz_id
+    + created_by
+  }
+  entity "FILE_OBJECT" as FILE_OBJECT {
+    .. 文件对象表 ..
+    PK: id
+  }
+  entity "SYS_CALENDAR_DAY" as SYS_CALENDAR_DAY {
+    .. 工作日历(按天) ..
+    PK: day
+    + created_by
+    + updated_by
+  }
+  entity "SYS_CONFIG_KV" as SYS_CONFIG_KV {
+    .. 系统配置KV ..
+    PK: id
+    + config_key
+    + created_by
+    + updated_by
+  }
+  entity "SYS_DICT" as SYS_DICT {
+    .. 字典表 ..
+    PK: id
+    + dict_code
+    + created_by
+    + updated_by
+  }
+  entity "SYS_DICT_ITEM" as SYS_DICT_ITEM {
+    .. 字典项表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "SYS_JOB_CONF" as SYS_JOB_CONF {
+    .. 任务调度配置 ..
+    PK: id
+    + job_key
+    + created_by
+    + updated_by
+  }
+  entity "SYS_JOB_RUN_LOG" as SYS_JOB_RUN_LOG {
+    .. 任务执行日志 ..
+    PK: id
+    + created_by
+  }
+  entity "USER_NOTIFICATION" as USER_NOTIFICATION {
+    .. 用户通知表 ..
+    PK: id
+    + emp_id
+    + biz_id
+  }
+}
+
+package "03-工作流中心" as workflow_center #F3E5F5 {
+  entity "BIZ_PROCESS_MAP" as BIZ_PROCESS_MAP {
+    .. 业务流程映射表 ..
+    PK: id
+    + business_key
+    + biz_id
+    + process_definition_key
+    + process_instance_id
+  }
+  entity "WF_NODE_CANDIDATE_CONF" as WF_NODE_CANDIDATE_CONF {
+    .. 流程节点候选人配置表 ..
+    PK: id
+    + process_definition_key
+    + node_key
+  }
+  entity "WF_NODE_FORM_CONF" as WF_NODE_FORM_CONF {
+    .. 流程节点表单配置表 ..
+    PK: id
+    + process_definition_key
+    + node_key
+  }
+  entity "WF_TIMEOUT_RULE" as WF_TIMEOUT_RULE {
+    .. 流程超时规则表 ..
+    PK: id
+    + process_definition_key
+    + node_key
+  }
+}
+
+package "04-门户与内容" as portal_content_center #E8F5E9 {
+  entity "ADDRBOOK_EMPLOYEE" as ADDRBOOK_EMPLOYEE {
+    .. 通讯录员工表 ..
+    PK: emp_id
+    + emp_id
+    + org_code
+  }
+  entity "DOC_INFO" as DOC_INFO {
+    .. 文档信息表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "PORTAL_NAV" as PORTAL_NAV {
+    .. 网址导航表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "PORTAL_SHORTCUT" as PORTAL_SHORTCUT {
+    .. 工作台快捷入口表 ..
+    PK: id
+    + emp_id
+    + created_by
+    + updated_by
+  }
+  entity "PRODUCT_INFO" as PRODUCT_INFO {
+    .. 产品信息表 ..
+    PK: id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+}
+
+package "05-客户营销" as customer_marketing_center #FFEBEE {
+  entity "CUST_CLAIM" as CUST_CLAIM {
+    .. 客户认领关系表 ..
+    PK: id
+    + cust_id
+    + org_id
+  }
+  entity "CUST_LEAD" as CUST_LEAD {
+    .. 客户线索表 ..
+    PK: id
+    + owner_org_id
+    + created_by
+    + business_key
+    + import_batch_id
+    + process_instance_id
+    + updated_by
+  }
+  entity "CUST_MASTER" as CUST_MASTER {
+    .. 客户主档表 ..
+    PK: id
+    + owner_org_id
+    + lead_id
+  }
+  entity "CUST_TAG" as CUST_TAG {
+    .. 客户标签表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "CUST_TAG_REL" as CUST_TAG_REL {
+    .. 客户-标签关联表 ..
+    PK: id
+    + cust_id
+    + tag_id
+    + created_by
+  }
+  entity "LEAD_IMPORT_BATCH" as LEAD_IMPORT_BATCH {
+    .. 线索导入批次表 ..
+    PK: id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "TOUCH_LOG" as TOUCH_LOG {
+    .. 触达日志表 ..
+    PK: id
+    + touch_task_id
+    + owner_org_id
+    + created_by
+  }
+  entity "TOUCH_TASK" as TOUCH_TASK {
+    .. 触达任务表 ..
+    PK: id
+    + cust_id
+    + org_id
+    + business_key
+  }
+}
+
+package "06-业务申请" as business_application_center #FBE9E7 {
+  entity "LOAN_APPLY" as LOAN_APPLY {
+    .. 资产投放申请表 ..
+    PK: id
+    + cust_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "SUPPORT_REQUEST" as SUPPORT_REQUEST {
+    .. 中场支持申请表 ..
+    PK: id
+    + cust_id
+    + product_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + ... (+1)
+  }
+}
+
+package "07-绩效计算" as performance_engine_center #E0F7FA {
+  entity "CUST_ALLOC_RELATION" as CUST_ALLOC_RELATION {
+    .. 客户业绩分配关系 ..
+    PK: id
+    + cust_id
+    + emp_id
+    + created_by
+    + updated_by
+  }
+  entity "CUST_INDEX_RESULT" as CUST_INDEX_RESULT {
+    .. 客户指标结果宽表 ..
+    PK: id
+    + cust_id
+  }
+  entity "EMP_INDEX_RESULT" as EMP_INDEX_RESULT {
+    .. 员工指标结果宽表 ..
+    PK: id
+    + emp_id
+  }
+  entity "KPI_RESULT" as KPI_RESULT {
+    .. KPI结果表 ..
+    PK: id
+    + emp_id
+  }
+  entity "ORG_INDEX_RESULT" as ORG_INDEX_RESULT {
+    .. 机构指标结果宽表 ..
+    PK: id
+    + org_code
+  }
+  entity "PERF_ALLOC_ADJUST_APPLY" as PERF_ALLOC_ADJUST_APPLY {
+    .. 分配关系调整申请 ..
+    PK: id
+    + cust_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_ALLOC_ADJUST_ITEM" as PERF_ALLOC_ADJUST_ITEM {
+    .. 分配关系调整明细 ..
+    PK: id
+    + apply_id
+    + emp_id
+  }
+  entity "PERF_IMPORT_BATCH" as PERF_IMPORT_BATCH {
+    .. 绩效导入批次 ..
+    PK: id
+    + created_by
+  }
+  entity "PERF_KPI_ITEM" as PERF_KPI_ITEM {
+    .. KPI方案项 ..
+    PK: id
+    + scheme_id
+    + metric_code
+  }
+  entity "PERF_KPI_SCHEME" as PERF_KPI_SCHEME {
+    .. KPI方案 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_METRIC_DEF" as PERF_METRIC_DEF {
+    .. 指标定义表 ..
+    PK: id
+    + metric_code
+    + created_by
+    + updated_by
+  }
+  entity "PERF_METRIC_REF" as PERF_METRIC_REF {
+    .. 指标引用关系 ..
+    PK: id
+    + metric_code
+  }
+  entity "PERF_RUN_TASK" as PERF_RUN_TASK {
+    .. 绩效任务执行日志 ..
+    PK: id
+  }
+  entity "PERF_TARGET_ADJUST_APPLY" as PERF_TARGET_ADJUST_APPLY {
+    .. 目标修正申请 ..
+    PK: id
+    + plan_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_TARGET_PLAN" as PERF_TARGET_PLAN {
+    .. 目标方案 ..
+    PK: id
+    + kpi_scheme_id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_TARGET_VALUE" as PERF_TARGET_VALUE {
+    .. 目标值/基础值 ..
+    PK: id
+    + plan_id
+    + metric_code
+    + created_by
+    + updated_by
+  }
+  entity "SYS_CONTROL" as SYS_CONTROL {
+    .. 数据版本控制表 ..
+    PK: id
+    + updated_by
+  }
+}
+
+package "08-报表分析" as report_analytics_center #F1F8E9 {
+  entity "RPT_EXPORT_TASK" as RPT_EXPORT_TASK {
+    .. 报表异步导出任务 ..
+    PK: id
+    + operator_id
+  }
+  entity "RPT_SAVED_QUERY" as RPT_SAVED_QUERY {
+    .. 动态查询保存方案 ..
+    PK: id
+    + emp_id
+  }
+  entity "RPT_SNAPSHOT_TASK" as RPT_SNAPSHOT_TASK {
+    .. 快照任务配置（V1预留） ..
+    PK: id
+  }
+  entity "SQL_PROBE_HISTORY" as SQL_PROBE_HISTORY {
+    .. SQL探查历史 ..
+    PK: id
+    + emp_id
+  }
+}
+
+ADDRBOOK_EMPLOYEE }.. PT_USER : emp_id
+ADDRBOOK_EMPLOYEE }.. EXT_ORG_INFO : org_code
+AUDIT_LOG }.. PT_USER : emp_id
+BIZ_FILE_REL }.. PT_USER : created_by
+BIZ_PROCESS_MAP }.. BIZ_FILE_REL : biz_id
+CUST_ALLOC_RELATION }.. CUST_MASTER : cust_id
+CUST_ALLOC_RELATION }.. PT_USER : emp_id
+CUST_ALLOC_RELATION }.. PT_USER : created_by
+CUST_ALLOC_RELATION }.. PT_USER : updated_by
+CUST_CLAIM }.. CUST_MASTER : cust_id
+CUST_CLAIM }.. EXT_ORG_INFO : org_id
+CUST_INDEX_RESULT }.. CUST_MASTER : cust_id
+CUST_LEAD }.. EXT_ORG_INFO : owner_org_id
+CUST_LEAD }.. PT_USER : created_by
+CUST_LEAD }.. BIZ_PROCESS_MAP : business_key
+CUST_LEAD }.. LEAD_IMPORT_BATCH : import_batch_id
+CUST_LEAD }.. PT_USER : updated_by
+CUST_MASTER }.. EXT_ORG_INFO : owner_org_id
+CUST_MASTER }.. CUST_LEAD : lead_id
+CUST_TAG }.. PT_USER : created_by
+CUST_TAG }.. PT_USER : updated_by
+CUST_TAG_REL }.. CUST_MASTER : cust_id
+CUST_TAG_REL }.. CUST_TAG : tag_id
+CUST_TAG_REL }.. PT_USER : created_by
+DOC_INFO }.. PT_USER : created_by
+DOC_INFO }.. PT_USER : updated_by
+EMP_INDEX_RESULT }.. PT_USER : emp_id
+EXT_ORG_INFO }.. PT_USER : CREATE_USER
+EXT_USER_ORG }.. PT_USER : USER_ID
+EXT_USER_ORG }.. EXT_ORG_INFO : ORG_CODE
+KPI_RESULT }.. PT_USER : emp_id
+LEAD_IMPORT_BATCH }.. BIZ_PROCESS_MAP : business_key
+LEAD_IMPORT_BATCH }.. EXT_ORG_INFO : owner_org_id
+LEAD_IMPORT_BATCH }.. PT_USER : created_by
+LEAD_IMPORT_BATCH }.. PT_USER : updated_by
+LOAN_APPLY }.. CUST_MASTER : cust_id
+LOAN_APPLY }.. BIZ_PROCESS_MAP : business_key
+LOAN_APPLY }.. EXT_ORG_INFO : owner_org_id
+LOAN_APPLY }.. PT_USER : created_by
+LOAN_APPLY }.. PT_USER : updated_by
+ORG_INDEX_RESULT }.. EXT_ORG_INFO : org_code
+PERF_ALLOC_ADJUST_APPLY }.. CUST_MASTER : cust_id
+PERF_ALLOC_ADJUST_APPLY }.. BIZ_PROCESS_MAP : business_key
+PERF_ALLOC_ADJUST_APPLY }.. EXT_ORG_INFO : owner_org_id
+PERF_ALLOC_ADJUST_APPLY }.. PT_USER : created_by
+PERF_ALLOC_ADJUST_APPLY }.. PT_USER : updated_by
+PERF_ALLOC_ADJUST_ITEM }.. PERF_ALLOC_ADJUST_APPLY : apply_id
+PERF_ALLOC_ADJUST_ITEM }.. PT_USER : emp_id
+PERF_IMPORT_BATCH }.. PT_USER : created_by
+PERF_KPI_ITEM }.. PERF_KPI_SCHEME : scheme_id
+PERF_KPI_ITEM }.. PERF_METRIC_DEF : metric_code
+PERF_KPI_SCHEME }.. PT_USER : created_by
+PERF_KPI_SCHEME }.. PT_USER : updated_by
+PERF_METRIC_DEF }.. PT_USER : created_by
+PERF_METRIC_DEF }.. PT_USER : updated_by
+PERF_METRIC_REF }.. PERF_METRIC_DEF : metric_code
+PERF_TARGET_ADJUST_APPLY }.. PERF_TARGET_PLAN : plan_id
+PERF_TARGET_ADJUST_APPLY }.. BIZ_PROCESS_MAP : business_key
+PERF_TARGET_ADJUST_APPLY }.. EXT_ORG_INFO : owner_org_id
+PERF_TARGET_ADJUST_APPLY }.. PT_USER : created_by
+PERF_TARGET_ADJUST_APPLY }.. PT_USER : updated_by
+PERF_TARGET_PLAN }.. PERF_KPI_SCHEME : kpi_scheme_id
+PERF_TARGET_PLAN }.. PT_USER : created_by
+PERF_TARGET_PLAN }.. PT_USER : updated_by
+PERF_TARGET_VALUE }.. PERF_TARGET_PLAN : plan_id
+PERF_TARGET_VALUE }.. PERF_METRIC_DEF : metric_code
+PERF_TARGET_VALUE }.. PT_USER : created_by
+PERF_TARGET_VALUE }.. PT_USER : updated_by
+PORTAL_NAV }.. PT_USER : created_by
+PORTAL_NAV }.. PT_USER : updated_by
+PORTAL_SHORTCUT }.. PT_USER : emp_id
+PORTAL_SHORTCUT }.. PT_USER : created_by
+PORTAL_SHORTCUT }.. PT_USER : updated_by
+PRODUCT_INFO }.. EXT_ORG_INFO : owner_org_id
+PRODUCT_INFO }.. PT_USER : created_by
+PRODUCT_INFO }.. PT_USER : updated_by
+PT_RESOURCE }.. PT_USER : CREATE_USER
+PT_RESOURCE }.. PT_USER : UPDATE_USER
+PT_ROLE }.. PT_USER : CREATE_USER
+PT_ROLE }.. PT_USER : UPDATE_USER
+PT_ROLE_BIZ_SCOPE }.. PT_ROLE : ROLE_ID
+PT_ROLE_BIZ_SCOPE }.. PT_USER : CREATE_USER
+PT_ROLE_BIZ_SCOPE }.. PT_USER : UPDATE_USER
+PT_ROLE_RESOURCE }.. PT_ROLE : ROLE_ID
+PT_ROLE_RESOURCE }.. PT_RESOURCE : RESOURCE_ID
+PT_USER_ROLE }.. PT_USER : USER_ID
+PT_USER_ROLE }.. PT_ROLE : ROLE_ID
+RPT_EXPORT_TASK }.. PT_USER : operator_id
+RPT_SAVED_QUERY }.. PT_USER : emp_id
+SQL_PROBE_HISTORY }.. PT_USER : emp_id
+SUPPORT_REQUEST }.. CUST_MASTER : cust_id
+SUPPORT_REQUEST }.. PRODUCT_INFO : product_id
+SUPPORT_REQUEST }.. BIZ_PROCESS_MAP : business_key
+SUPPORT_REQUEST }.. EXT_ORG_INFO : owner_org_id
+SUPPORT_REQUEST }.. PT_USER : created_by
+SUPPORT_REQUEST }.. PT_USER : updated_by
+SYS_CALENDAR_DAY }.. PT_USER : created_by
+SYS_CALENDAR_DAY }.. PT_USER : updated_by
+SYS_CONFIG_KV }.. PT_USER : created_by
+SYS_CONFIG_KV }.. PT_USER : updated_by
+SYS_CONTROL }.. PT_USER : updated_by
+SYS_DICT }.. PT_USER : created_by
+SYS_DICT }.. PT_USER : updated_by
+SYS_DICT_ITEM }.. PT_USER : created_by
+SYS_DICT_ITEM }.. PT_USER : updated_by
+SYS_JOB_CONF }.. PT_USER : created_by
+SYS_JOB_CONF }.. PT_USER : updated_by
+SYS_JOB_RUN_LOG }.. PT_USER : created_by
+TOUCH_LOG }.. TOUCH_TASK : touch_task_id
+TOUCH_LOG }.. EXT_ORG_INFO : owner_org_id
+TOUCH_LOG }.. PT_USER : created_by
+TOUCH_TASK }.. CUST_MASTER : cust_id
+TOUCH_TASK }.. EXT_ORG_INFO : org_id
+TOUCH_TASK }.. BIZ_PROCESS_MAP : business_key
+USER_NOTIFICATION }.. PT_USER : emp_id
+USER_NOTIFICATION }.. BIZ_FILE_REL : biz_id
+WF_NODE_CANDIDATE_CONF }.. WF_NODE_FORM_CONF : node_key
+WF_TIMEOUT_RULE }.. WF_NODE_FORM_CONF : node_key
+@enduml
