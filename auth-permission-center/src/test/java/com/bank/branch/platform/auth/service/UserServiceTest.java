@@ -156,4 +156,39 @@ class UserServiceTest {
         userService.pageUsers(q);
         verify(userMapper).selectByQuery(eq(q), eq(0), eq(100));
     }
+
+    @Test
+    void update_shouldSetUpdateFieldsAndCallMapper() {
+        com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO req =
+                new com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO();
+        req.setUsername("alice2");
+        req.setUserchnname("李四");
+
+        PtUser existing = new PtUser();
+        existing.setUserId("E001");
+        existing.setPwd("$2a$old");
+        when(userMapper.selectByUserId("E001")).thenReturn(existing);
+
+        userService.update("E001", req, "OPERATOR1");
+
+        org.mockito.ArgumentCaptor<PtUser> captor = org.mockito.ArgumentCaptor.forClass(PtUser.class);
+        verify(userMapper).updateById(captor.capture());
+        PtUser u = captor.getValue();
+        assertThat(u.getUserId()).isEqualTo("E001");
+        assertThat(u.getUsername()).isEqualTo("alice2");
+        assertThat(u.getUserchnname()).isEqualTo("李四");
+        assertThat(u.getUpdateAuthor()).isEqualTo("OPERATOR1");
+        assertThat(u.getUpdateTime()).isNotNull();
+        assertThat(u.getPwd()).isEqualTo("$2a$old");
+    }
+
+    @Test
+    void update_shouldThrowWhenUserNotFound() {
+        when(userMapper.selectByUserId("NONE")).thenReturn(null);
+        com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO req =
+                new com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO();
+        assertThatThrownBy(() -> userService.update("NONE", req, "OPERATOR1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40403"));
+    }
 }

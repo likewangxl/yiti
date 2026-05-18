@@ -118,6 +118,25 @@ public class UserService {
         return dto;
     }
 
+    /** 修改用户基本信息（不改密码） */
+    public void update(String userId,
+                       com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO req,
+                       String operator) {
+        PtUser u = userMapper.selectByUserId(userId);
+        if (u == null) {
+            throw new BizException(AuthErrorCode.USER_NOT_FOUND.getCode(),
+                    AuthErrorCode.USER_NOT_FOUND.getMessage());
+        }
+        if (req.getUsername() != null && !req.getUsername().isBlank()) u.setUsername(req.getUsername());
+        if (req.getUserchnname() != null && !req.getUserchnname().isBlank()) u.setUserchnname(req.getUserchnname());
+        if (req.getEmail() != null) u.setEmail(req.getEmail());
+        if (req.getRemark() != null) u.setRemark(req.getRemark());
+        u.setUpdateTime(LocalDateTime.now());
+        u.setUpdateAuthor(operator);
+        userMapper.updateById(u);
+        log.info("[UserService.update] userId={} operator={}", userId, operator);
+    }
+
     /** PtUser → UserDetailRespDTO（密码字段一律不映射） */
     private UserDetailRespDTO toDetailDto(PtUser u) {
         UserDetailRespDTO dto = new UserDetailRespDTO();
