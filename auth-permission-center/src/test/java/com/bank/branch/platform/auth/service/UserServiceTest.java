@@ -215,4 +215,23 @@ class UserServiceTest {
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40002"));
     }
+
+    @Test
+    void resetPassword_shouldEncryptDefaultAndUpdateEach() {
+        when(passwordEncoder.encode(props.getDefaultPassword())).thenReturn("$2a$bcrypt$default");
+        when(userMapper.updatePassword(anyString(), anyString(), anyString())).thenReturn(1);
+
+        int n = userService.resetPassword(java.util.List.of("E001", "E002"), "OPERATOR1");
+
+        assertThat(n).isEqualTo(2);
+        verify(userMapper).updatePassword("E001", "$2a$bcrypt$default", "OPERATOR1");
+        verify(userMapper).updatePassword("E002", "$2a$bcrypt$default", "OPERATOR1");
+    }
+
+    @Test
+    void resetPassword_shouldThrowWhenIdsInvalid() {
+        assertThatThrownBy(() -> userService.resetPassword(java.util.List.of(), "OPERATOR1"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40002"));
+    }
 }

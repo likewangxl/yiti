@@ -163,6 +163,18 @@ public class UserService {
         }
     }
 
+    /** 批量重置密码为系统默认值（BCrypt 加密） */
+    public int resetPassword(java.util.List<String> userIds, String operator) {
+        validateIds(userIds);
+        String bcrypt = passwordEncoder.encode(props.getDefaultPassword());
+        int affected = 0;
+        for (String id : userIds) {
+            affected += userMapper.updatePassword(id, bcrypt, operator);
+        }
+        log.info("[UserService.resetPassword] affected={} ids={} operator={}", affected, userIds, operator);
+        return affected;
+    }
+
     /** PtUser → UserDetailRespDTO（密码字段一律不映射） */
     private UserDetailRespDTO toDetailDto(PtUser u) {
         UserDetailRespDTO dto = new UserDetailRespDTO();
