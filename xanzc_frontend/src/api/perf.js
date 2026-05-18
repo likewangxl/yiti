@@ -1,4 +1,4 @@
-import { call, unwrapPage } from './http';
+import { call } from './http';
 import {
   perfMetricsTree, perfMetricDetail, perfKpiRules,
   perfTargets, perfImports, perfComputeBatches
@@ -20,13 +20,18 @@ import {
 // ============================================================
 // 指标库 Metrics
 // ============================================================
+// V1.10：后端 GET /api/perf/metrics 改为一次性返回 List<MetricDefRespDTO>，
+// 不再分页（ResponseWrapper.success(list)）。前端不再 unwrapPage。
 export function listMetrics(params = {}) {
-  // params: baseDim, metricLevel, status, keyword, pageNo, pageSize
-  // 后端走 ResponseWrapper.page，http.js 拦截器返回 PageResult 对象 → 这里抽 records 给前端
-  return call('get', '/perf/metrics', { params: { pageSize: 100, ...params } }, perfMetricsTree).then(unwrapPage);
+  // params: baseDim, metricLevel, status, keyword
+  return call('get', '/perf/metrics', { params }, perfMetricsTree);
 }
 export function getMetricsTree() {
   return listMetrics();  // 兼容老调用
+}
+// V1.10：GET /api/perf/metrics/categories → List<{value, label}>
+export function listMetricCategories() {
+  return call('get', '/perf/metrics/categories', {}, []);
 }
 export function getMetricDetail(code) {
   return call('get', `/perf/metrics/${code}`, {}, () => perfMetricDetail[code] || perfMetricDetail.M0002);

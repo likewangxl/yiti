@@ -156,4 +156,30 @@ public interface PerfMetricDefMapper extends BaseMapper<PerfMetricDef> {
      * @return 可调度指标列表
      */
     java.util.List<PerfMetricDef> selectSchedulable();
+
+    /**
+     * V1.10：按条件一次性查询全部指标（不分页，按 metric_code 升序）.
+     *
+     * <p>语义同 {@link #selectByCondition} 但去掉 offset/limit，配合前端工作台树形
+     * 渲染（指标库页面一次拉全集 + 客户端按 metric_category 分组）。
+     *
+     * @param baseDim     基础维度（可空）
+     * @param metricLevel 指标层级（可空）
+     * @param status      状态（可空）
+     * @param keyword     编码或名称模糊（可空）
+     * @return 指标定义列表
+     */
+    List<PerfMetricDef> selectAllByCondition(@Param("baseDim") String baseDim,
+                                             @Param("metricLevel") Integer metricLevel,
+                                             @Param("status") String status,
+                                             @Param("keyword") String keyword);
+
+    /**
+     * V1.10：列出当前所有非空 metric_category 的去重集合（按字母升序）.
+     *
+     * <p>用于 GET /api/perf/metrics/categories 下拉值供前端筛选/分组使用.
+     *
+     * @return 去重后的指标分类字符串列表
+     */
+    List<String> selectDistinctCategories();
 }

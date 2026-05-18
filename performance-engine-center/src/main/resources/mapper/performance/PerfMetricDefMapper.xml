@@ -224,4 +224,40 @@
           AND deleted = 0
     </update>
 
+    <!-- V1.10：不分页条件查询，配合 GET /api/perf/metrics 一次性返回全部指标 -->
+    <select id="selectAllByCondition" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_METRIC_DEF
+        <where>
+            AND deleted = 0
+            <if test="baseDim != null and baseDim != ''">
+                AND base_dim = #{baseDim}
+            </if>
+            <if test="metricLevel != null">
+                AND metric_level = #{metricLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    metric_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR metric_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY metric_code ASC
+    </select>
+
+    <!-- V1.10：DISTINCT 指标分类（非空、未软删除）-->
+    <select id="selectDistinctCategories" resultType="java.lang.String">
+        SELECT DISTINCT metric_category
+        FROM PERF_METRIC_DEF
+        WHERE deleted = 0
+          AND metric_category IS NOT NULL
+          AND metric_category != ''
+        ORDER BY metric_category ASC
+    </select>
+
 </mapper>

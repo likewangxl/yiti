@@ -11,7 +11,18 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.9（指标定义 Excel 导入）—— 在 V1.7/V1.8 基础上新增 METRIC_DEF 导入策略：
+**当前版本**: V1.10（指标列表去分页 + 新增 categories 端点）—— 在 V1.9 基础上对前端指标库工作模式做对齐：
+
+**V1.10 (2026-05-18 交付)：指标库接口对齐**
+
+- 破坏性变更：`GET /api/perf/metrics` 去分页，签名改为 `ResponseWrapper<List<MetricDefRespDTO>>`，移除 `pageNo` / `pageSize`；`pageDto` 同步删除
+- 新增 `GET /api/perf/metrics/categories` → `List<MetricCategoryDTO{value,label}>`，DISTINCT 聚合非空 `metric_category`（V1.9 列直接存中文，value==label，后续接 sys_dict 翻译时仅扩展 label）
+- Mapper 新增 `selectAllByCondition`（无 LIMIT/OFFSET）+ `selectDistinctCategories`
+- 前端 `xanzc_frontend/src/api/perf.js`：移除 `unwrapPage`，新增 `listMetricCategories()`；`api/metrics.js` 因有双形态兼容（Array.isArray 优先）零修改
+- 容量保护：当前 PERF_METRIC_DEF 数千行内可控，超 1 万行需评估恢复分页或分批 lazy load
+- 测试：`MetricDefServiceTest` 新增 3 case（listAllDto / listCategories distinct / listCategories empty），16 cases 全绿
+
+V1.9 (2026-05-17 交付)：指标定义 Excel 导入
 
 **V1.9 (2026-05-17 交付)：指标定义 Excel 导入**
 

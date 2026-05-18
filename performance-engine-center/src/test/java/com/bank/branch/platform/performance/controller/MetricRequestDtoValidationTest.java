@@ -1,7 +1,6 @@
 package com.bank.branch.platform.performance.controller;
 
 import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
-import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -34,18 +33,9 @@ class MetricRequestDtoValidationTest {
         validatorFactory.close();
     }
 
-    @Test
-    void createMetricReq_whenMetricCodeLowercase_shouldViolation() {
-        CreateMetricReqDTO req = new CreateMetricReqDTO();
-        req.setMetricCode("metric_code");
-
-        Set<ConstraintViolation<CreateMetricReqDTO>> violations = validator.validateProperty(req, "metricCode");
-
-        assertThat(violations)
-                .extracting(ConstraintViolation::getPropertyPath)
-                .map(Object::toString)
-                .contains("metricCode");
-    }
+    // V1.6 已显式去除 metricCode 的 @Pattern 约束（"放开格式限制：业务侧反馈大写+数字+下划线
+    // 约束太死"，见 CreateMetricReqDTO#metricCode 注释），lowercase 现为合法值。
+    // 原 createMetricReq_whenMetricCodeLowercase_shouldViolation 反契约测试 V1.10 删除。
 
     @Test
     void changeStatusReq_whenReasonBlank_shouldViolation() {

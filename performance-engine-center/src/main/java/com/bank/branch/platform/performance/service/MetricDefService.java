@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.controller.dto.MetricCategoryDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -389,17 +390,51 @@ public class MetricDefService {
     }
 
     /**
-     * V1.3 R4.1：Controller 专用 DTO 版本分页查询.
+     * V1.10：Controller 专用 DTO 版本一次性全量查询（去分页）.
+     *
+     * <p>取代 V1.3 的 {@code pageDto}：前端指标库页面工作模式是一次拉全集 + 客户端
+     * 按 metric_category / metric_level 分组渲染树，分页反而需要前端额外合并多页，
+     * 增加复杂度。V1.10 数据量在数千行内可控，DB 直接 ORDER BY metric_code 返回。
+     *
+     * @param baseDim     基础维度（可空）
+     * @param metricLevel 指标层级（可空）
+     * @param status      状态（可空）
+     * @param keyword     编码或名称模糊（可空）
+     * @return 指标定义 DTO 列表（升序）
      */
     @Transactional(readOnly = true)
-    public PageResult<MetricDefRespDTO> pageDto(String baseDim, Integer metricLevel, String status,
-                                                String keyword, int pageNo, int pageSize) {
-        PageResult<PerfMetricDef> raw = page(baseDim, metricLevel, status, keyword, pageNo, pageSize);
-        List<MetricDefRespDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfMetricDef def : raw.getRecords()) {
+    public List<MetricDefRespDTO> listAllDto(String baseDim, Integer metricLevel, String status,
+                                             String keyword) {
+        List<PerfMetricDef> raw = mapper.selectAllByCondition(baseDim, metricLevel, status, keyword);
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MetricDefRespDTO> dtos = new ArrayList<>(raw.size());
+        for (PerfMetricDef def : raw) {
             dtos.add(MetricAssembler.toRespDTO(def));
         }
-        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+        return dtos;
+    }
+
+    /**
+     * V1.10：列出所有非空 metric_category 的去重项，每项返回 {value, label}.
+     *
+     * <p>V1.9 列 metric_category 直接存中文（规模类/效益类/质量类等），未引入 sys_dict
+     * 翻译，因此 {@code value == label}；保留双字段是为后续扩展字典翻译时不破坏前端契约.
+     *
+     * @return 指标分类下拉项列表（按 value 升序，空集合表示无分类数据）
+     */
+    @Transactional(readOnly = true)
+    public List<MetricCategoryDTO> listCategories() {
+        List<String> raw = mapper.selectDistinctCategories();
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MetricCategoryDTO> dtos = new ArrayList<>(raw.size());
+        for (String value : raw) {
+            dtos.add(new MetricCategoryDTO(value, value));
+        }
+        return dtos;
     }
 
     /**
