@@ -283,4 +283,45 @@ class UserServiceTest {
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40403"));
     }
 
+    // ---------- batchActivate / batchInactivate / batchLock / batchUnlock ----------
+    @Test
+    void batchActivate_shouldSetIsEnabledZero() {
+        when(userMapper.updateActiveStatus(anyString(), eq(0), anyString())).thenReturn(1);
+        int n = userService.batchActivate(java.util.List.of("E001","E002"), "OPERATOR1");
+        assertThat(n).isEqualTo(2);
+        verify(userMapper).updateActiveStatus("E001", 0, "OPERATOR1");
+        verify(userMapper).updateActiveStatus("E002", 0, "OPERATOR1");
+    }
+
+    @Test
+    void batchInactivate_shouldSetIsEnabledOne() {
+        when(userMapper.updateActiveStatus(anyString(), eq(1), anyString())).thenReturn(1);
+        int n = userService.batchInactivate(java.util.List.of("E001"), "OPERATOR1");
+        assertThat(n).isEqualTo(1);
+        verify(userMapper).updateActiveStatus("E001", 1, "OPERATOR1");
+    }
+
+    @Test
+    void batchLock_shouldCallUpdateLockedStatusWithOne() {
+        when(userMapper.updateLockedStatus(anyString(), eq(1))).thenReturn(1);
+        int n = userService.batchLock(java.util.List.of("E001","E002"), "OPERATOR1");
+        assertThat(n).isEqualTo(2);
+        verify(userMapper).updateLockedStatus("E001", 1);
+        verify(userMapper).updateLockedStatus("E002", 1);
+    }
+
+    @Test
+    void batchUnlock_shouldCallUpdateLockedStatusWithZero() {
+        when(userMapper.updateLockedStatus(anyString(), eq(0))).thenReturn(1);
+        int n = userService.batchUnlock(java.util.List.of("E001"), "OPERATOR1");
+        assertThat(n).isEqualTo(1);
+        verify(userMapper).updateLockedStatus("E001", 0);
+    }
+
+    @Test
+    void batchActivate_shouldThrowWhenIdsInvalid() {
+        assertThatThrownBy(() -> userService.batchActivate(java.util.List.of(), "OP"))
+                .isInstanceOf(BizException.class)
+                .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40002"));
+    }
 }

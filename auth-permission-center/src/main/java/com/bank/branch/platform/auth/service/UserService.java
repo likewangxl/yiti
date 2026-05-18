@@ -192,6 +192,42 @@ public class UserService {
         log.info("[UserService.changeMyPassword] userId={} 修改自己的密码", currentUserId);
     }
 
+    /** 批量启用：ISENABLED=0 */
+    public int batchActivate(java.util.List<String> userIds, String operator) {
+        validateIds(userIds);
+        int affected = 0;
+        for (String id : userIds) affected += userMapper.updateActiveStatus(id, 0, operator);
+        log.info("[UserService.batchActivate] affected={} ids={}", affected, userIds);
+        return affected;
+    }
+
+    /** 批量禁用：ISENABLED=1 */
+    public int batchInactivate(java.util.List<String> userIds, String operator) {
+        validateIds(userIds);
+        int affected = 0;
+        for (String id : userIds) affected += userMapper.updateActiveStatus(id, 1, operator);
+        log.info("[UserService.batchInactivate] affected={} ids={}", affected, userIds);
+        return affected;
+    }
+
+    /** 批量锁定：ISLOCKED=1（复用已有 updateLockedStatus） */
+    public int batchLock(java.util.List<String> userIds, String operator) {
+        validateIds(userIds);
+        int affected = 0;
+        for (String id : userIds) affected += userMapper.updateLockedStatus(id, 1);
+        log.info("[UserService.batchLock] affected={} ids={} operator={}", affected, userIds, operator);
+        return affected;
+    }
+
+    /** 批量解锁：ISLOCKED=0 */
+    public int batchUnlock(java.util.List<String> userIds, String operator) {
+        validateIds(userIds);
+        int affected = 0;
+        for (String id : userIds) affected += userMapper.updateLockedStatus(id, 0);
+        log.info("[UserService.batchUnlock] affected={} ids={} operator={}", affected, userIds, operator);
+        return affected;
+    }
+
     /** PtUser → UserDetailRespDTO（密码字段一律不映射） */
     private UserDetailRespDTO toDetailDto(PtUser u) {
         UserDetailRespDTO dto = new UserDetailRespDTO();
