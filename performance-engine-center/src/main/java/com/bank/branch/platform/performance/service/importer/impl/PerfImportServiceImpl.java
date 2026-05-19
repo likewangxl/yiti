@@ -110,7 +110,8 @@ public class PerfImportServiceImpl implements PerfImportService {
                 result = new ImportResult(0, 0, 0, null);
             }
             batchMapper.updateCounts(batch.getId(),
-                    result.getTotalRows(), result.getSuccessRows(), result.getErrorRows());
+                    result.getTotalRows(), result.getSuccessRows(), result.getErrorRows(),
+                    result.getUpdatedRows());
             String remark = result.getErrorSummary();
             batchMapper.updateStatus(batch.getId(), "SUCCESS", truncate(remark));
             log.info("[PerfImportService] 导入成功 batchId={}, type={}, rows={}/{}/{}",
@@ -181,6 +182,9 @@ public class PerfImportServiceImpl implements PerfImportService {
     public PerfImportBatchRespDTO getBatchDto(String batchId) {
         // V1.3 R4.1：DTO 装配下沉到 Service，Controller 不再持有 PerfImportBatch
         PerfImportBatch b = getBatch(batchId);
+        int updated = b.getUpdatedRows() == null ? 0 : b.getUpdatedRows();
+        int success = b.getSuccessRows() == null ? 0 : b.getSuccessRows();
+        int inserted = Math.max(0, success - updated);
         return PerfImportBatchRespDTO.builder()
                 .id(b.getId())
                 .batchNo(b.getBatchNo())
@@ -190,6 +194,8 @@ public class PerfImportServiceImpl implements PerfImportService {
                 .totalRows(b.getTotalRows())
                 .successRows(b.getSuccessRows())
                 .errorRows(b.getErrorRows())
+                .updatedRows(updated)
+                .insertedRows(inserted)
                 .remark(b.getRemark())
                 .createdBy(b.getCreatedBy())
                 .createdTime(b.getCreatedTime())

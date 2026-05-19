@@ -7,6 +7,7 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
+import com.bank.branch.platform.performance.controller.dto.PerfImportUploadRespDTO;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.importer.PerfImportService;
@@ -68,8 +69,10 @@ public class PerfImportController {
     @Operation(summary = "上传 Excel 并启动导入")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.IMPORT)
     @AuditLog(action = "PERF_IMPORT_UPLOAD", resourceType = "PERF_IMPORT_BATCH")
-    public ResponseWrapper<String> upload(@RequestParam("importType") @NotBlank String importType,
-                                          @RequestParam("file") MultipartFile file) {
+    public ResponseWrapper<PerfImportUploadRespDTO> upload(@RequestParam("importType") @NotBlank String importType,
+                                                           @RequestParam("file") MultipartFile file) {
+        // V1.11：响应破坏性变更为 PerfImportUploadRespDTO（含 insertedRows / updatedRows），
+        // 前端从 data: string 改为 data: { batchId, totalRows, insertedRows, updatedRows, errorRows }
         log.info("[PerfImportController.upload] importType={}, fileName={}, size={}",
                 importType, file == null ? null : file.getOriginalFilename(),
                 file == null ? 0 : file.getSize());
@@ -78,7 +81,15 @@ public class PerfImportController {
         }
         String operatorId = currentUserApi.getCurrentEmpId();
         String batchId = perfImportService.startImport(importType, file, operatorId);
-        return ResponseWrapper.success(batchId);
+        PerfImportBatchRespDTO batchDto = perfImportService.getBatchDto(batchId);
+        PerfImportUploadRespDTO resp = PerfImportUploadRespDTO.builder()
+                .batchId(batchId)
+                .totalRows(batchDto.getTotalRows())
+                .insertedRows(batchDto.getInsertedRows())
+                .updatedRows(batchDto.getUpdatedRows())
+                .errorRows(batchDto.getErrorRows())
+                .build();
+        return ResponseWrapper.success(resp);
     }
 
     /**

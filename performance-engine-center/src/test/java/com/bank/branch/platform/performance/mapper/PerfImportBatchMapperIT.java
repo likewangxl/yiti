@@ -103,7 +103,7 @@ class PerfImportBatchMapperIT extends PerformanceMapperTestBase {
         PerfImportBatch b = newBatch("B004");
         mapper.insert(b);
 
-        mapper.updateCounts(b.getId(), 100, 95, 5);
+        mapper.updateCounts(b.getId(), 100, 95, 5, 0);
 
         PerfImportBatch after = mapper.selectById(b.getId());
         assertThat(after.getTotalRows()).isEqualTo(100);
@@ -140,5 +140,20 @@ class PerfImportBatchMapperIT extends PerformanceMapperTestBase {
         assertThat(got).isNotNull();
         assertThat(got.getImportType()).isEqualTo("METRIC_DEF");
         assertThat(got.getDim()).isNull();
+    }
+
+    @Test
+    @DisplayName("V1.11 updateCounts 同步写入 updated_rows 列")
+    void updateCounts_writesUpdatedRows() {
+        PerfImportBatch b = newBatch("B030");
+        mapper.insert(b);
+
+        mapper.updateCounts(b.getId(), 10, 10, 0, 3);
+
+        PerfImportBatch after = mapper.selectById(b.getId());
+        assertThat(after.getTotalRows()).isEqualTo(10);
+        assertThat(after.getSuccessRows()).isEqualTo(10);
+        assertThat(after.getErrorRows()).isZero();
+        assertThat(after.getUpdatedRows()).isEqualTo(3);
     }
 }

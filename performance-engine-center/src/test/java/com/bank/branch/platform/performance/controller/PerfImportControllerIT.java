@@ -61,9 +61,19 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     // =================== upload ===================
 
     @Test
-    void upload_validFile_returnsBatchId() throws Exception {
+    void upload_validFile_returnsRespDTO() throws Exception {
+        // V1.11：startImport 返回 batchId，controller 通过 getBatchDto 装配为 DTO
         Mockito.when(perfImportService.startImport(eq("TARGET"), any(), anyString()))
                 .thenReturn("BATCH_123");
+        PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
+                .id("BATCH_123")
+                .totalRows(8)
+                .successRows(8)
+                .errorRows(0)
+                .updatedRows(0)
+                .insertedRows(8)
+                .build();
+        Mockito.when(perfImportService.getBatchDto("BATCH_123")).thenReturn(batchDto);
 
         MockMultipartFile file = new MockMultipartFile("file", "targets.xlsx",
                 "application/vnd.ms-excel", new byte[]{1, 2, 3});
@@ -73,7 +83,40 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
                         .param("importType", "TARGET"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.data").value("BATCH_123"));
+                .andExpect(jsonPath("$.data.batchId").value("BATCH_123"))
+                .andExpect(jsonPath("$.data.totalRows").value(8))
+                .andExpect(jsonPath("$.data.insertedRows").value(8))
+                .andExpect(jsonPath("$.data.updatedRows").value(0))
+                .andExpect(jsonPath("$.data.errorRows").value(0));
+    }
+
+    @Test
+    void upload_metricDef_returnsRespDTOWithInsertAndUpdateCounts() throws Exception {
+        // V1.11：METRIC_DEF 导入返回新增 + 更新计数
+        Mockito.when(perfImportService.startImport(eq("METRIC_DEF"), any(), anyString()))
+                .thenReturn("BATCH_M11");
+        PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
+                .id("BATCH_M11")
+                .totalRows(5)
+                .successRows(5)
+                .errorRows(0)
+                .updatedRows(2)
+                .insertedRows(3)
+                .build();
+        Mockito.when(perfImportService.getBatchDto("BATCH_M11")).thenReturn(batchDto);
+
+        MockMultipartFile file = new MockMultipartFile("file", "metric-def.xlsx",
+                "application/vnd.ms-excel", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/perf/import/upload")
+                        .file(file)
+                        .param("importType", "METRIC_DEF"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.batchId").value("BATCH_M11"))
+                .andExpect(jsonPath("$.data.totalRows").value(5))
+                .andExpect(jsonPath("$.data.insertedRows").value(3))
+                .andExpect(jsonPath("$.data.updatedRows").value(2));
     }
 
     @Test

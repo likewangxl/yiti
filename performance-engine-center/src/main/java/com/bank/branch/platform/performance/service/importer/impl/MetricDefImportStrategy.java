@@ -11,6 +11,7 @@ import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricDefImportRow;
+import com.bank.branch.platform.performance.service.result.BatchUpsertMetricDefResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,12 +20,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * 指标定义 Excel 导入策略（V1.9 Task M2）.
@@ -101,19 +100,28 @@ public class MetricDefImportStrategy implements ImportStrategy {
                 batch.getId(), rows == null ? 0 : rows.size());
 
         if (rows == null || rows.isEmpty()) {
-            return new ImportResult(0, 0, 0, null);
+            return new ImportResult(0, 0, 0, 0, null);
         }
 
         // 第一遍：列值翻译 + 收集每行错误
         List<String> errors = new ArrayList<>();
         List<CreateMetricDefCmd> cmds = new ArrayList<>(rows.size());
         Map<String, Integer> codeFirstSeenLine = new LinkedHashMap<>();
+        Map<String, Integer> nameFirstSeenLine = new LinkedHashMap<>();   // V1.11
 
         for (int i = 0; i < rows.size(); i++) {
             MetricDefImportRow row = rows.get(i);
             int excelRow = i + DATA_ROW_EXCEL_OFFSET;
             try {
                 CreateMetricDefCmd cmd = translateRow(row, excelRow, batch.getCreatedBy());
+
+                // V1.11：文件内 metric_name 重复检测（重名行作为 upsert 命中键会触发"末位覆盖"，必须显式拒绝）
+                Integer nameSeen = nameFirstSeenLine.putIfAbsent(cmd.getMetricName(), excelRow);
+                if (nameSeen != null) {
+                    errors.add("第" + excelRow + "行: metric_name 与第" + nameSeen
+                            + "行重复(文件内): " + cmd.getMetricName());
+                    continue;
+                }
 
                 // 文件内 metric_code 重复检测（保留首次出现行号，后续行号都报）
                 Integer firstSeen = codeFirstSeenLine.putIfAbsent(cmd.getMetricCode(), excelRow);
@@ -128,30 +136,18 @@ public class MetricDefImportStrategy implements ImportStrategy {
             }
         }
 
-        // 第二遍：检测与 DB 已有 metric_code 冲突
-        if (errors.isEmpty()) {
-            Set<String> codes = new HashSet<>();
-            for (CreateMetricDefCmd c : cmds) {
-                codes.add(c.getMetricCode());
-            }
-            List<String> dbExisting = metricDefService.getByCodes(new ArrayList<>(codes))
-                    .stream().map(d -> d.getMetricCode()).toList();
-            for (String dup : dbExisting) {
-                // 找回对应行号
-                Integer line = codeFirstSeenLine.get(dup);
-                errors.add("第" + (line == null ? 0 : line) + "行: metric_code 已存在: " + dup);
-            }
-        }
-
-        // 任一错误 → 抛异常，整批回滚（PerfImportServiceImpl 外层 catch 写 FAILED + remark）
+        // V1.11：基础格式校验失败仍走整批 all-or-none（数据质量问题，而非冲突问题）
         if (!errors.isEmpty()) {
             String detail = "共" + errors.size() + "行失败; " + String.join(ERROR_DELIMITER, errors);
             throw new PerfException(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED, detail);
         }
 
-        // 校验全通过 → 整批事务落库
-        metricDefService.batchCreateMetricDefs(cmds, batch.getCreatedBy());
-        return new ImportResult(rows.size(), rows.size(), 0, null);
+        // V1.11：校验全通过 → 整批 upsert（命中 metric_name → update，否则 → insert）
+        BatchUpsertMetricDefResult r =
+                metricDefService.batchUpsertByName(cmds, batch.getCreatedBy());
+        int total = rows.size();
+        int success = r.getInsertedRows() + r.getUpdatedRows();
+        return new ImportResult(total, success, 0, r.getUpdatedRows(), null);
     }
 
     /**

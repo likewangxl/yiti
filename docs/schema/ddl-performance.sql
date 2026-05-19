@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS `PERF_METRIC_DEF` (
   `last_run_time` datetime DEFAULT NULL COMMENT 'V1.7 最近一次自动调度执行时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_metric_code` (`metric_code`),
+  UNIQUE KEY `uk_metric_name_alive` ((IF(deleted=0, metric_name, NULL))), -- V1.11 指标中文名按未软删除唯一
   UNIQUE KEY `uk_base_dim_slot_alive` ((IF(deleted=0, CONCAT(base_dim,'#',val_slot), NULL))),
   KEY `idx_dim_level` (`base_dim`, `metric_level`),
   KEY `idx_status` (`status`),
@@ -183,6 +184,7 @@ CREATE TABLE IF NOT EXISTS `PERF_IMPORT_BATCH` (
   `total_rows` int(11) NOT NULL DEFAULT 0 COMMENT '总行数',
   `success_rows` int(11) NOT NULL DEFAULT 0 COMMENT '成功行数',
   `error_rows` int(11) NOT NULL DEFAULT 0 COMMENT '失败行数',
+  `updated_rows` int(11) NOT NULL DEFAULT 0 COMMENT '更新行数（V1.11：仅 METRIC_DEF 导入使用，其他类型恒 0）',
   `error_file_object_id` varchar(32) DEFAULT NULL COMMENT '错误明细文件ID',
   `remark` varchar(500) DEFAULT NULL COMMENT '备注',
   `created_by` varchar(32) NOT NULL COMMENT '创建人',

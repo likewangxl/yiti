@@ -9,6 +9,7 @@ import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.importer.impl.MetricDefImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricDefImportRow;
+import com.bank.branch.platform.performance.service.result.BatchUpsertMetricDefResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ import static org.mockito.Mockito.when;
  * <p>覆盖：
  * <ul>
  *   <li>importType = METRIC_DEF</li>
- *   <li>10 行全合法 → batchCreateMetricDefs 调 1 次，cmd 列表 size=10，且不调度</li>
+ *   <li>10 行全合法 → batchUpsertByName 调 1 次，cmd 列表 size=10，且不调度</li>
  *   <li>metric_code 为空 → 自动按 indexNo 生成 M_{:04d}</li>
  *   <li>文件内 metric_code 重复 → 抛 IMPORT_BATCH_ALL_OR_NONE_FAILED + 不调用 service</li>
  *   <li>来源=1 → calc_mode=MANUAL / calc_logic_type=EXPR / exprText=calcRule</li>
@@ -59,11 +60,13 @@ class MetricDefImportStrategyTest {
         metricDefService = mock(MetricDefService.class);
         strategy = new MetricDefImportStrategy(metricDefService);
 
-        // 默认 DB 不存在任何 metric_code
-        when(metricDefService.getByCodes(anyList())).thenReturn(Collections.emptyList());
-        // batchCreateMetricDefs 默认返回空列表（被 ArgumentCaptor 校验，不读返回值）
-        when(metricDefService.batchCreateMetricDefs(anyList(), anyString()))
-                .thenReturn(Collections.emptyList());
+        // V1.11：默认 batchUpsertByName 返回全新增（按入参 size 推导）
+        when(metricDefService.batchUpsertByName(anyList(), anyString()))
+                .thenAnswer(inv -> {
+                    java.util.List<?> cmds = inv.getArgument(0);
+                    int size = cmds == null ? 0 : cmds.size();
+                    return new BatchUpsertMetricDefResult(size, 0, Collections.emptyList());
+                });
 
         batch = new PerfImportBatch();
         batch.setId("BATCH_M");
@@ -79,7 +82,7 @@ class MetricDefImportStrategyTest {
     }
 
     @Test
-    @DisplayName("10 行全合法 → batchCreateMetricDefs 调用 1 次，cmds.size=10")
+    @DisplayName("10 行全合法 → batchUpsertByName 调用 1 次，cmds.size=10")
     void execute_allValid_callBatchOnce() {
         List<MetricDefImportRow> rows = new ArrayList<>();
         for (int i = 1; i <= 10; i++) {
@@ -91,7 +94,7 @@ class MetricDefImportStrategyTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
-        verify(metricDefService, times(1)).batchCreateMetricDefs(captor.capture(), anyString());
+        verify(metricDefService, times(1)).batchUpsertByName(captor.capture(), anyString());
         assertThat(captor.getValue()).hasSize(10);
         assertThat(result.getTotalRows()).isEqualTo(10);
         assertThat(result.getSuccessRows()).isEqualTo(10);
@@ -110,7 +113,7 @@ class MetricDefImportStrategyTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
-        verify(metricDefService).batchCreateMetricDefs(captor.capture(), anyString());
+        verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         List<CreateMetricDefCmd> cmds = captor.getValue();
         assertThat(cmds.get(0).getMetricCode()).isEqualTo("M_0001");
         assertThat(cmds.get(1).getMetricCode()).isEqualTo("M_0042");
@@ -132,7 +135,7 @@ class MetricDefImportStrategyTest {
                 .hasMessageContaining("第3行")  // Excel 物理行号（第 2 行 fixture = Excel 第 3 行）
                 .hasMessageContaining("第2行"); // 首次出现的行号
 
-        verify(metricDefService, never()).batchCreateMetricDefs(anyList(), anyString());
+        verify(metricDefService, never()).batchUpsertByName(anyList(), anyString());
     }
 
     @Test
@@ -146,7 +149,7 @@ class MetricDefImportStrategyTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
-        verify(metricDefService).batchCreateMetricDefs(captor.capture(), anyString());
+        verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         CreateMetricDefCmd cmd = captor.getValue().get(0);
         assertThat(cmd.getCalcMode()).isEqualTo("MANUAL");
         assertThat(cmd.getCalcLogicType()).isEqualTo("EXPR");
@@ -165,7 +168,7 @@ class MetricDefImportStrategyTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
-        verify(metricDefService).batchCreateMetricDefs(captor.capture(), anyString());
+        verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         CreateMetricDefCmd cmd = captor.getValue().get(0);
         assertThat(cmd.getCalcMode()).isEqualTo("AUTO");
         assertThat(cmd.getCalcLogicType()).isEqualTo("SQL");
@@ -185,7 +188,7 @@ class MetricDefImportStrategyTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
-        verify(metricDefService).batchCreateMetricDefs(captor.capture(), anyString());
+        verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         assertThat(captor.getValue().get(0).getStatus()).isEqualTo("ACTIVE");
     }
 
@@ -200,7 +203,7 @@ class MetricDefImportStrategyTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
-        verify(metricDefService).batchCreateMetricDefs(captor.capture(), anyString());
+        verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         assertThat(captor.getValue().get(0).getStatus()).isEqualTo("DISABLED");
     }
 
@@ -215,7 +218,7 @@ class MetricDefImportStrategyTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
-        verify(metricDefService).batchCreateMetricDefs(captor.capture(), anyString());
+        verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         CreateMetricDefCmd cmd = captor.getValue().get(0);
         // V1.9：Excel 模板无 base_dim 列，所有导入指标 baseDim=null，不占 slot
         assertThat(cmd.getBaseDim()).isNull();
@@ -233,7 +236,7 @@ class MetricDefImportStrategyTest {
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED))
                 .hasMessageContaining("第2行");
-        verify(metricDefService, never()).batchCreateMetricDefs(anyList(), anyString());
+        verify(metricDefService, never()).batchUpsertByName(anyList(), anyString());
     }
 
     @Test
@@ -247,7 +250,7 @@ class MetricDefImportStrategyTest {
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED));
-        verify(metricDefService, never()).batchCreateMetricDefs(anyList(), anyString());
+        verify(metricDefService, never()).batchUpsertByName(anyList(), anyString());
     }
 
     @Test
@@ -264,23 +267,65 @@ class MetricDefImportStrategyTest {
     }
 
     @Test
-    @DisplayName("DB 已存在 metric_code → 整批失败 + 错误消息含编号")
-    void execute_dbCodeExists_throws() {
-        // 模拟 DB 返回已存在
-        PerfMetricDef existing = new PerfMetricDef();
-        existing.setMetricCode("M_OLD");
-        when(metricDefService.getByCodes(anyList())).thenReturn(List.of(existing));
+    @DisplayName("V1.11：DB 已存在 metric_name → 走 update 路径（不再抛失败），调 batchUpsertByName")
+    void execute_dbNameExists_goesUpdatePath() {
+        // 默认 mock 已返回 BatchUpsertMetricDefResult(size, 0, ...)，本测试覆盖单条命中 update 路径
+        when(metricDefService.batchUpsertByName(anyList(), anyString()))
+                .thenReturn(new BatchUpsertMetricDefResult(0, 1, Collections.emptyList()));
 
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "已有", "M_OLD", "规模类", 2, "select 1", 1, 1));
+                row(1, 1, "已有指标名", "M_NEW_CODE", "规模类", 2, "select 1", 1, 1));
+        MultipartFile file = writeExcel(rows);
+
+        ImportResult result = strategy.execute(batch, file);
+
+        // 不抛异常，走 update 路径
+        verify(metricDefService, times(1)).batchUpsertByName(anyList(), anyString());
+        assertThat(result.getTotalRows()).isEqualTo(1);
+        assertThat(result.getSuccessRows()).isEqualTo(1);
+        assertThat(result.getUpdatedRows()).isEqualTo(1);
+        assertThat(result.getErrorRows()).isZero();
+    }
+
+    @Test
+    @DisplayName("V1.11：混合 3 新增 + 2 更新 → ImportResult 计数正确")
+    void execute_mixed_correctCounts() {
+        when(metricDefService.batchUpsertByName(anyList(), anyString()))
+                .thenReturn(new BatchUpsertMetricDefResult(3, 2, Collections.emptyList()));
+
+        List<MetricDefImportRow> rows = List.of(
+                row(1, 1, "新A", "M_A", "规模类", 2, "select 1", 1, 1),
+                row(2, 1, "新B", "M_B", "规模类", 2, "select 1", 1, 1),
+                row(3, 1, "更C", "M_C", "规模类", 2, "select 1", 1, 1),
+                row(4, 1, "新D", "M_D", "规模类", 2, "select 1", 1, 1),
+                row(5, 1, "更E", "M_E", "规模类", 2, "select 1", 1, 1));
+        MultipartFile file = writeExcel(rows);
+
+        ImportResult result = strategy.execute(batch, file);
+
+        assertThat(result.getTotalRows()).isEqualTo(5);
+        assertThat(result.getSuccessRows()).isEqualTo(5);
+        assertThat(result.getUpdatedRows()).isEqualTo(2);
+        assertThat(result.getErrorRows()).isZero();
+    }
+
+    @Test
+    @DisplayName("V1.11：文件内 metric_name 重复 → 整批失败 + 不调用 service")
+    void execute_duplicateMetricNameInFile_throws() {
+        List<MetricDefImportRow> rows = List.of(
+                row(1, 1, "重名指标", "M_NAME_DUP_A", "规模类", 2, "select 1", 1, 1),
+                row(2, 1, "重名指标", "M_NAME_DUP_B", "规模类", 2, "select 2", 1, 1));
         MultipartFile file = writeExcel(rows);
 
         assertThatThrownBy(() -> strategy.execute(batch, file))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED))
-                .hasMessageContaining("M_OLD");
-        verify(metricDefService, never()).batchCreateMetricDefs(anyList(), anyString());
+                .hasMessageContaining("重名指标")
+                .hasMessageContaining("第3行")  // 第 2 行 fixture = Excel 第 3 行
+                .hasMessageContaining("第2行"); // 首次出现的行号
+
+        verify(metricDefService, never()).batchUpsertByName(anyList(), anyString());
     }
 
     // ===== fixture helpers =====

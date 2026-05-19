@@ -131,4 +131,35 @@ class PerfMetricDefMapperIT extends PerformanceMapperTestBase {
         assertThat(rows).isEqualTo(1);
         assertThat(mapper.selectById(def.getId()).getValSlot()).isNull();
     }
+
+    // ===== V1.11: selectByMetricName =====
+
+    @Test
+    @DisplayName("V1.11 selectByMetricName 命中存在行")
+    void selectByMetricName_whenExists_returnsRow() {
+        PerfMetricDef def = MetricTestDataBuilder.l1Emp("BY_NAME_1", 70);
+        mapper.insert(def);
+
+        PerfMetricDef loaded = mapper.selectByMetricName(def.getMetricName());
+
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.getMetricCode()).isEqualTo(def.getMetricCode());
+        assertThat(loaded.getMetricName()).isEqualTo(def.getMetricName());
+    }
+
+    @Test
+    @DisplayName("V1.11 selectByMetricName 未命中返回 null")
+    void selectByMetricName_whenNotExists_returnsNull() {
+        assertThat(mapper.selectByMetricName("不存在指标名_V1.11")).isNull();
+    }
+
+    @Test
+    @DisplayName("V1.11 selectByMetricName 软删除行返回 null")
+    void selectByMetricName_whenSoftDeleted_returnsNull() {
+        PerfMetricDef def = MetricTestDataBuilder.l1Emp("BY_NAME_DEL", 71);
+        mapper.insert(def);
+        mapper.softDelete(def.getId());
+
+        assertThat(mapper.selectByMetricName(def.getMetricName())).isNull();
+    }
 }

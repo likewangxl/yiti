@@ -11,7 +11,21 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.10（指标列表去分页 + 新增 categories 端点）—— 在 V1.9 基础上对前端指标库工作模式做对齐：
+**当前版本**: V1.11（指标定义导入按 metric_name upsert）—— 在 V1.10 基础上把 METRIC_DEF Excel 导入从「整批 all-or-none」改为「按指标名称命中则更新、未命中则新增」：
+
+**V1.11 (2026-05-18 交付)：指标定义按名称 upsert 改造**
+
+- DDL：`PERF_METRIC_DEF` 加 `uk_metric_name_alive` 函数索引（`(IF(deleted=0, metric_name, NULL))`），`PERF_IMPORT_BATCH` 加 `updated_rows int NOT NULL DEFAULT 0` 列；脚本 `docs/superpowers/sql/2026-05-18-perf-metric-def-name-unique-and-upsert-cols.sql`（含现网重名行清理，保留 `created_time` 最早 + `id` 字典序最小者，其余软删除）
+- Mapper：新增 `PerfMetricDefMapper.selectByMetricName`；`PerfImportBatchMapper.updateCounts` 签名扩展第 5 参数 `updatedRows`
+- Service：新增 `MetricDefService.upsertByName(cmd, operator) → UpsertMetricDefResult` 与 `batchUpsertByName(cmds, operator) → BatchUpsertMetricDefResult`；更新路径**保留** DB 原 `id` / `metric_code` / `val_slot`，不重新分配 slot；旧 `batchCreateMetricDefs` 标 `@Deprecated`
+- Strategy：`MetricDefImportStrategy.execute` 去掉「DB metric_code 已存在 → 整批失败」分支，加上「文件内 metric_name 重复 → 整批失败」检测；调用 `batchUpsertByName` 替换 `batchCreateMetricDefs`
+- DTO：`ImportResult` / `PerfImportBatch` / `PerfImportBatchRespDTO` 全部加 `updatedRows` 字段；`PerfImportBatchRespDTO` 派生 `insertedRows = successRows - updatedRows`
+- Controller：`POST /api/perf/import/upload` **破坏性变更**响应 `ResponseWrapper<String>` → `ResponseWrapper<PerfImportUploadRespDTO{batchId, totalRows, insertedRows, updatedRows, errorRows}>`；前端需联动
+- 测试：surefire 668 case 全绿（V1.10 baseline 665 + V1.11 新增 ~3 service unit + 改造 11+ strategy）；failsafe 5 case 新增（mapper IT 3 + controller IT 2）；既有 6 个 V1.10/V1.13 # 1 baseline 失败保持不变（非 V1.11 引入）
+- Spec: `docs/superpowers/specs/2026-05-18-metric-def-import-upsert-design.md`
+- Plan: `docs/superpowers/plans/2026-05-18-metric-def-import-upsert-impl.md`
+
+V1.10 (2026-05-18 交付)：指标列表去分页 + 新增 categories 端点 —— 在 V1.9 基础上对前端指标库工作模式做对齐：
 
 **V1.10 (2026-05-18 交付)：指标库接口对齐**
 

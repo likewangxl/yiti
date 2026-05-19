@@ -56,14 +56,19 @@ public interface PerfImportBatchMapper extends BaseMapper<PerfImportBatch> {
     /**
      * 更新导入行数汇总（导入结束时一次性设置）.
      *
+     * <p>V1.11：新增 {@code updatedRows} 参数，专供 METRIC_DEF 导入 upsert 路径统计，
+     * 其他导入策略恒传 0.
+     *
      * @param id          主键
      * @param totalRows   总行数
-     * @param successRows 成功行数
+     * @param successRows 成功行数（= insertedRows + updatedRows）
      * @param errorRows   失败行数
+     * @param updatedRows 更新行数（V1.11 新增；非 METRIC_DEF 策略传 0）
      * @return 受影响行数
      */
     int updateCounts(@Param("id") String id,
                      @Param("totalRows") int totalRows,
                      @Param("successRows") int successRows,
-                     @Param("errorRows") int errorRows);
+                     @Param("errorRows") int errorRows,
+                     @Param("updatedRows") int updatedRows);
 }

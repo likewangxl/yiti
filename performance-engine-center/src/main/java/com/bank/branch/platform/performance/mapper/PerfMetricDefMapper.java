@@ -45,6 +45,14 @@ public interface PerfMetricDefMapper extends BaseMapper<PerfMetricDef> {
     PerfMetricDef selectByMetricCode(@Param("metricCode") String metricCode);
 
     /**
+     * V1.11：按指标中文名称查询，{@code deleted=0} 过滤，对齐 {@link #selectByMetricCode} 语义.
+     *
+     * @param metricName 指标中文名称
+     * @return 指标定义，不存在时返回 null
+     */
+    PerfMetricDef selectByMetricName(@Param("metricName") String metricName);
+
+    /**
      * 批量按指标编码查询.
      *
      * @param codes 指标编码列表

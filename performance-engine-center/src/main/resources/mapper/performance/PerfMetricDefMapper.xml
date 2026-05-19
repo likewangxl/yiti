@@ -58,6 +58,16 @@
         LIMIT 1
     </select>
 
+    <!-- V1.11：按 metric_name 查询（deleted=0 过滤，对齐 selectByMetricCode） -->
+    <select id="selectByMetricName" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_METRIC_DEF
+        WHERE metric_name = #{metricName}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
     <select id="selectByMetricCodes" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>

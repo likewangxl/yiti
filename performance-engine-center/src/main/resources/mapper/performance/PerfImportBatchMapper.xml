@@ -8,7 +8,7 @@
 
     <sql id="BASE_COLUMNS">
         id, batch_no, import_type, dim, as_of_date, file_name, file_md5, status,
-        total_rows, success_rows, error_rows, error_file_object_id, remark,
+        total_rows, success_rows, error_rows, updated_rows, error_file_object_id, remark,
         created_by, created_time, updated_time
     </sql>
 
@@ -44,7 +44,8 @@
         UPDATE PERF_IMPORT_BATCH
         SET total_rows   = #{totalRows},
             success_rows = #{successRows},
-            error_rows   = #{errorRows}
+            error_rows   = #{errorRows},
+            updated_rows = #{updatedRows}
         WHERE id = #{id}
     </update>
 

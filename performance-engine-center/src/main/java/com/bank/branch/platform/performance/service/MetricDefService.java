@@ -13,6 +13,8 @@ import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
+import com.bank.branch.platform.performance.service.result.BatchUpsertMetricDefResult;
+import com.bank.branch.platform.performance.service.result.UpsertMetricDefResult;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -75,6 +77,7 @@ public class MetricDefService {
      * @param operator 操作人（覆盖 cmd.operator 字段，确保审计一致）
      * @return 新建后的指标定义列表（与 cmds 同序）
      */
+    @Deprecated
     @Transactional(rollbackFor = Exception.class)
     public List<PerfMetricDef> batchCreateMetricDefs(List<CreateMetricDefCmd> cmds, String operator) {
         if (cmds == null || cmds.isEmpty()) {
@@ -87,6 +90,128 @@ public class MetricDefService {
             created.add(create(cmd));
         }
         return created;
+    }
+
+    /**
+     * V1.11：按 {@code metric_name} 命中执行 upsert.
+     *
+     * <p>命中已存在指标（{@code deleted=0}） → 走 update 路径：
+     * 仅更新业务字段（metric_desc / metricLevel / calcFreq / calcMode / calcLogicType /
+     * sqlText / exprText / summaryRule / metricCategory / status），
+     * <b>保留</b> DB 原 {@code id} / {@code metric_code} / {@code val_slot}.
+     *
+     * <p>未命中 → 走现有 {@link #create(CreateMetricDefCmd)} 路径.
+     *
+     * <p>注意：本方法 PROPAGATION_REQUIRED 复用调用方事务，
+     * 由 {@link #batchUpsertByName} 包裹外层事务实现整批 all-or-none.
+     *
+     * @param cmd      命令
+     * @param operator 操作人（覆盖 cmd.operator）
+     * @return upsert 结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UpsertMetricDefResult upsertByName(CreateMetricDefCmd cmd, String operator) {
+        cmd.setOperator(operator);
+        PerfMetricDef existing = mapper.selectByMetricName(cmd.getMetricName());
+        if (existing == null) {
+            // 新增路径
+            PerfMetricDef def = create(cmd);
+            return new UpsertMetricDefResult(true, def);
+        }
+        // 更新路径：保留 id / metric_code / val_slot
+        PerfMetricDef patch = new PerfMetricDef();
+        patch.setId(existing.getId());
+        patch.setMetricNameEn(cmd.getMetricNameEn());
+        patch.setMetricDesc(cmd.getMetricDesc());
+        patch.setMetricLevel(cmd.getMetricLevel());
+        patch.setCalcFreq(cmd.getCalcFreq());
+        patch.setCalcMode(cmd.getCalcMode());
+        patch.setCalcLogicType(cmd.getCalcLogicType());
+        patch.setSqlText(cmd.getSqlText());
+        patch.setExprText(cmd.getExprText());
+        patch.setSummaryRule(cmd.getSummaryRule());
+        patch.setMetricCategory(cmd.getMetricCategory());
+        // V1.11：状态字段透传，导入路径尊重 Excel 意图（cmd.status 可能为 null，不写）
+        if (cmd.getStatus() != null && !cmd.getStatus().isBlank()) {
+            patch.setStatus(cmd.getStatus());
+        }
+        patch.setUpdatedBy(operator);
+        mapper.updateByIdSelective(patch);
+
+        // 回填 existing 字段以便调用方读取最新视图
+        if (cmd.getMetricNameEn() != null) {
+            existing.setMetricNameEn(cmd.getMetricNameEn());
+        }
+        if (cmd.getMetricDesc() != null) {
+            existing.setMetricDesc(cmd.getMetricDesc());
+        }
+        if (cmd.getMetricLevel() != null) {
+            existing.setMetricLevel(cmd.getMetricLevel());
+        }
+        if (cmd.getCalcFreq() != null) {
+            existing.setCalcFreq(cmd.getCalcFreq());
+        }
+        if (cmd.getCalcMode() != null) {
+            existing.setCalcMode(cmd.getCalcMode());
+        }
+        if (cmd.getCalcLogicType() != null) {
+            existing.setCalcLogicType(cmd.getCalcLogicType());
+        }
+        if (cmd.getSqlText() != null) {
+            existing.setSqlText(cmd.getSqlText());
+        }
+        if (cmd.getExprText() != null) {
+            existing.setExprText(cmd.getExprText());
+        }
+        if (cmd.getSummaryRule() != null) {
+            existing.setSummaryRule(cmd.getSummaryRule());
+        }
+        if (cmd.getMetricCategory() != null) {
+            existing.setMetricCategory(cmd.getMetricCategory());
+        }
+        if (cmd.getStatus() != null && !cmd.getStatus().isBlank()) {
+            existing.setStatus(cmd.getStatus());
+        }
+        existing.setUpdatedBy(operator);
+        existing.setUpdatedTime(LocalDateTime.now());
+
+        // V1.7：状态变更可能触发调度注销/注册
+        registerSchedulerHookIfNeeded(existing, false);
+        return new UpsertMetricDefResult(false, existing);
+    }
+
+    /**
+     * V1.11：批量按 {@code metric_name} upsert（整批事务）.
+     *
+     * <p>调用方契约：
+     * <ul>
+     *   <li>{@code cmds} 非 null 且 size &gt; 0，否则返回空结果</li>
+     *   <li>任一行抛异常（含 {@link PerfException}）整批回滚</li>
+     *   <li>结果与入参同序</li>
+     * </ul>
+     *
+     * @param cmds     命令列表
+     * @param operator 操作人
+     * @return 批量结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchUpsertMetricDefResult batchUpsertByName(List<CreateMetricDefCmd> cmds, String operator) {
+        if (cmds == null || cmds.isEmpty()) {
+            return new BatchUpsertMetricDefResult(0, 0, Collections.emptyList());
+        }
+        int inserted = 0;
+        int updated = 0;
+        List<PerfMetricDef> defs = new ArrayList<>(cmds.size());
+        for (CreateMetricDefCmd cmd : cmds) {
+            UpsertMetricDefResult r = upsertByName(cmd, operator);
+            if (r.isInserted()) {
+                inserted++;
+            } else {
+                updated++;
+            }
+            defs.add(r.getDef());
+        }
+        return new BatchUpsertMetricDefResult(inserted, updated, defs);
     }
 
     /**

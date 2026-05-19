@@ -155,7 +155,7 @@ class PerfImportServiceTest {
         // updateStatus 至少调 1 次迁移到 RUNNING，最终 SUCCESS
         verify(batchMapper).updateStatus(eq(batchId), eq("RUNNING"), any());
         verify(batchMapper).updateStatus(eq(batchId), eq("SUCCESS"), any());
-        verify(batchMapper).updateCounts(eq(batchId), eq(10), eq(10), eq(0));
+        verify(batchMapper).updateCounts(eq(batchId), eq(10), eq(10), eq(0), eq(0));
     }
 
     @Test
