@@ -498,6 +498,8 @@ async function onSave(targetStatus) {
     metricCode: dlg.form.metricCode,
     metricName: dlg.form.metricName,
     metricDesc: JSON.stringify(meta),
+    // V1.9 metric_category 独立列（前端分类下拉/树聚合靠它，不能只塞 metricDesc JSON）
+    metricCategory: dlg.form._category || null,
     calcFreq: dlg.form.calcFreq,
     calcMode: dlg.form.calcMode,
     calcLogicType: dlg.form.calcLogicType,
@@ -507,24 +509,22 @@ async function onSave(targetStatus) {
   };
   try {
     if (dlg.editing) {
-      // Update DTO 不含 baseDim/metricLevel/preferredSlot
+      // Update DTO 不含 baseDim/metricLevel/preferredSlot/status
       await updateMetric(dlg.editing, basePayload);
       if (targetStatus !== detail.value.status) {
-        try { await changeMetricStatus(dlg.editing, targetStatus, '编辑保存'); } catch {}
+        await changeMetricStatus(dlg.editing, targetStatus, '编辑保存');
       }
       ElMessage.success(targetStatus === 'ACTIVE' ? '已发布' : '已保存为草稿');
     } else {
-      // Create DTO 额外接 baseDim、metricLevel、preferredSlot
+      // Create DTO 额外接 baseDim / metricLevel / status；
+      // preferredSlot 故意不传——已有指标占满 slot=1 必触发 METRIC_SLOT_CONFLICT，
+      // 后端 MetricSlotService.allocSlot 在 preferredSlot=null 时自动找下一个空闲槽位。
       await createMetric({
         ...basePayload,
         baseDim: dlg.form.baseDim,
         metricLevel: dlg.form.metricLevel,
-        preferredSlot: dlg.form.valSlot
+        status: targetStatus   // 一步直接落 ACTIVE / DRAFT，避免两步切换状态机抖动
       });
-      // 后端创建默认 ACTIVE；如果选了草稿就再切一下
-      if (targetStatus === 'DRAFT') {
-        try { await changeMetricStatus(dlg.form.metricCode, 'DRAFT', '保存为草稿'); } catch {}
-      }
       ElMessage.success(targetStatus === 'ACTIVE' ? '已新增并发布' : '已保存为草稿');
     }
     dlg.show = false;

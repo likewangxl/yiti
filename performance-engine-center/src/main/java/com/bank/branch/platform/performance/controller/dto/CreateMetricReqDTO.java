@@ -94,4 +94,13 @@ public class CreateMetricReqDTO {
     @Schema(description = "指标分类（规模类/效益类/质量类/合规类等）")
     @Size(max = 50, message = "metricCategory 长度不能超过 50")
     private String metricCategory;
+
+    /**
+     * 初始状态：ACTIVE / DRAFT / DISABLED；为空时后端兜底为 ACTIVE.
+     * <p>前端"保存为草稿"直传 DRAFT，避免"先建 ACTIVE 再 PUT status=DRAFT"两步导致
+     * V1.7 scheduler hook 抖动 + 失败时状态不一致.
+     */
+    @Schema(description = "初始状态: ACTIVE/DRAFT/DISABLED，为空兜底 ACTIVE")
+    @Pattern(regexp = "^(ACTIVE|DRAFT|DISABLED)$", message = "status 必须是 ACTIVE、DRAFT 或 DISABLED")
+    private String status;
 }

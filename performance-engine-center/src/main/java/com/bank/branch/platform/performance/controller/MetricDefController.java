@@ -176,6 +176,7 @@ public class MetricDefController {
                 .refMetricCodes(req.getRefMetricCodes())
                 .preferredSlot(req.getPreferredSlot())
                 .metricCategory(req.getMetricCategory())
+                .status(req.getStatus())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(metricLifecycleFacade.createMetricDto(cmd));
