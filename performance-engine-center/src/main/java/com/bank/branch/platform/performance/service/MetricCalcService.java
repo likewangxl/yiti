@@ -53,7 +53,7 @@ import java.util.UUID;
  *   </li>
  *   <li>终态写入后通过 {@link ApplicationEventPublisher} 发布 {@link MetricCalcCompletedEvent}。</li>
  *   <li><strong>Service 层 slot 校验</strong>：调用宽表 UPSERT 前强制校验
- *       {@code valSlot ∈ [1, 200]}，防止 {@code val_${slot}} 拼接列名漏放。</li>
+ *       {@code valSlot ∈ [1, 400]}，防止 {@code val_${slot}} 拼接列名漏放。</li>
  * </ul>
  *
  * <p><strong>V1.7 多主体改造</strong>：EXPR/GROOVY 类型改为逐主体执行，
@@ -390,7 +390,7 @@ public class MetricCalcService {
     /**
      * Service 层 slot 校验（val_${slot} 列名拼接前必须校验范围）.
      *
-     * @throws PerfException slot 为 null 或不在 [1, 200]
+     * @throws PerfException slot 为 null 或不在 [1, 400]（V1.12: 200 → 400）
      */
     private void validateSlot(PerfMetricDef def) {
         Integer slot = def.getValSlot();
@@ -398,9 +398,9 @@ public class MetricCalcService {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "指标 " + def.getMetricCode() + " 未分配 val_slot");
         }
-        if (slot < 1 || slot > 200) {
+        if (slot < 1 || slot > 400) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
-                    "val_slot 超出 [1,200]: " + slot);
+                    "val_slot 超出 [1,400]: " + slot);
         }
     }
 

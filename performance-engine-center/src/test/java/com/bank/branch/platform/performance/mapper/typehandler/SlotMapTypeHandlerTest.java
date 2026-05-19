@@ -45,45 +45,50 @@ class SlotMapTypeHandlerTest {
     private final SlotMapTypeHandler handler = new SlotMapTypeHandler();
 
     @Test
-    @DisplayName("getNullableResult(rs, columnName) 读取 200 列，仅非 null 槽进入 Map")
+    @DisplayName("getNullableResult(rs, columnName) 读取 400 列，仅非 null 槽进入 Map")
     void getNullableResult_byColumnName_packsSparseMap() throws Exception {
         ResultSet rs = mock(ResultSet.class);
         // 所有列默认返回 null
         when(rs.getBigDecimal(anyString())).thenReturn(null);
-        // 仅 val_1 / val_50 / val_200 三列有值
+        // 仅 val_1 / val_50 / val_200 / val_400 四列有值（V1.12 上界扩到 400）
         when(rs.getBigDecimal("val_1")).thenReturn(new BigDecimal("1.00"));
         when(rs.getBigDecimal("val_50")).thenReturn(new BigDecimal("50"));
         when(rs.getBigDecimal("val_200")).thenReturn(new BigDecimal("200"));
+        when(rs.getBigDecimal("val_400")).thenReturn(new BigDecimal("400"));
 
         Map<Integer, BigDecimal> slots = handler.getNullableResult(rs, "slots");
 
-        assertThat(slots).hasSize(3);
+        assertThat(slots).hasSize(4);
         assertThat(slots.get(1)).isEqualByComparingTo("1.00");
         assertThat(slots.get(50)).isEqualByComparingTo("50");
         assertThat(slots.get(200)).isEqualByComparingTo("200");
+        assertThat(slots.get(400)).isEqualByComparingTo("400");
         assertThat(slots.get(2)).isNull();
     }
 
     @Test
-    @DisplayName("getNullableResult(rs, columnIndex) 读取基于 ResultSetMetaData 发现 val_ 列")
+    @DisplayName("getNullableResult(rs, columnIndex) 读取基于 ResultSetMetaData 发现 val_ 列（含 val_400）")
     void getNullableResult_byColumnIndex_discoversValColumns() throws Exception {
-        // columnIndex 路径要求通过 metadata 遍历列名，选出所有 val_N 列聚合
+        // columnIndex 路径要求通过 metadata 遍历列名，选出所有 val_N 列聚合（V1.12: 含 val_400）
         ResultSet rs = mock(ResultSet.class);
         ResultSetMetaData md = mock(ResultSetMetaData.class);
         when(rs.getMetaData()).thenReturn(md);
-        when(md.getColumnCount()).thenReturn(4);
+        when(md.getColumnCount()).thenReturn(5);
         when(md.getColumnLabel(1)).thenReturn("id");
         when(md.getColumnLabel(2)).thenReturn("emp_id");
         when(md.getColumnLabel(3)).thenReturn("val_7");
         when(md.getColumnLabel(4)).thenReturn("val_200");
+        when(md.getColumnLabel(5)).thenReturn("val_400");
         when(rs.getBigDecimal("val_7")).thenReturn(new BigDecimal("7.7"));
         when(rs.getBigDecimal("val_200")).thenReturn(new BigDecimal("200"));
+        when(rs.getBigDecimal("val_400")).thenReturn(new BigDecimal("400"));
 
         Map<Integer, BigDecimal> slots = handler.getNullableResult(rs, 1);
 
-        assertThat(slots).hasSize(2);
+        assertThat(slots).hasSize(3);
         assertThat(slots.get(7)).isEqualByComparingTo("7.7");
         assertThat(slots.get(200)).isEqualByComparingTo("200");
+        assertThat(slots.get(400)).isEqualByComparingTo("400");
     }
 
     @Test

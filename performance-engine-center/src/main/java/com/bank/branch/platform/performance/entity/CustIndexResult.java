@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  * 客户指标结果宽表 cust_index_result 贫血实体.
  *
  * <p>对齐 V1_0_0__performance_ddl.sql §12：主键 {@code id bigint AUTO_INCREMENT}，
- * 维度键 {@code cust_id varchar(50)}，200 个 {@code val_1 .. val_200 decimal(20,4)} 值槽。
+ * 维度键 {@code cust_id varchar(50)}，400 个 {@code val_1 .. val_400 decimal(20,4)} 值槽。
  *
  * <p>唯一键：{@code uk_subject_date_ver (cust_id, data_date, version)}
  * <p>索引：{@code idx_date_ver (data_date, version)}

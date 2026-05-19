@@ -49,7 +49,7 @@ import java.util.Map;
  *   <li>组装为 MetricExportRow 扁平行 → easyexcel 写 → MinIO 上传</li>
  * </ol>
  *
- * <p>因 200 slot 宽表每行维度固定（emp_id / data_date / version），多指标需分别查询再 join；
+ * <p>因 400 slot 宽表每行维度固定（emp_id / data_date / version），多指标需分别查询再 join；
  * 本策略简化实现：一个 metricCode 查一批行，按 (subjectId, metricCode) 扁平化输出。
  */
 @Slf4j

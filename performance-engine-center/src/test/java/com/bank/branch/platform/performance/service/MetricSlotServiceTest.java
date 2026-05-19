@@ -54,23 +54,23 @@ class MetricSlotServiceTest {
     }
 
     @Test
-    @DisplayName("L2 从 101 开始分配")
-    void allocSlot_L2_returnsFrom101Range() {
+    @DisplayName("L2 从 201 开始分配（V1.12 分段扩容：[201, 300]）")
+    void allocSlot_L2_returnsFrom201Range() {
         when(mapper.selectOccupiedSlots("EMP")).thenReturn(Set.of());
 
         int slot = service.allocSlot("EMP", 2, null);
 
-        assertThat(slot).isEqualTo(101);
+        assertThat(slot).isEqualTo(201);
     }
 
     @Test
-    @DisplayName("L3 从 151 开始分配")
-    void allocSlot_L3_returnsFrom151Range() {
+    @DisplayName("L3 从 301 开始分配（V1.12 分段扩容：[301, 400]）")
+    void allocSlot_L3_returnsFrom301Range() {
         when(mapper.selectOccupiedSlots("ORG")).thenReturn(Set.of());
 
         int slot = service.allocSlot("ORG", 3, null);
 
-        assertThat(slot).isEqualTo(151);
+        assertThat(slot).isEqualTo(301);
     }
 
     @Test
@@ -94,18 +94,48 @@ class MetricSlotServiceTest {
     }
 
     @Test
-    @DisplayName("指定槽位超出层级区间时抛参数非法")
+    @DisplayName("指定槽位超出层级区间时抛参数非法（V1.12：L1 上界 200，越界 201 应失败）")
     void allocSlot_preferredSlotOutOfLevelRange_throws40001() {
-        assertThatThrownBy(() -> service.allocSlot("EMP", 1, 200))
+        assertThatThrownBy(() -> service.allocSlot("EMP", 1, 201))
                 .isInstanceOfSatisfying(PerfException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
     }
 
     @Test
-    @DisplayName("层级区间耗尽时抛业务异常")
+    @DisplayName("V1.12：L1 上界 200 在区间内（preferred=200 应被接受）")
+    void allocSlot_L1Boundary200_isAccepted() {
+        when(mapper.selectOccupiedSlots("EMP")).thenReturn(Set.of());
+
+        int slot = service.allocSlot("EMP", 1, 200);
+
+        assertThat(slot).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("V1.12：L2 上界 300 在区间内（preferred=300 应被接受）")
+    void allocSlot_L2Boundary300_isAccepted() {
+        when(mapper.selectOccupiedSlots("EMP")).thenReturn(Set.of());
+
+        int slot = service.allocSlot("EMP", 2, 300);
+
+        assertThat(slot).isEqualTo(300);
+    }
+
+    @Test
+    @DisplayName("V1.12：L3 上界 400 在区间内（preferred=400 应被接受）")
+    void allocSlot_L3Boundary400_isAccepted() {
+        when(mapper.selectOccupiedSlots("ORG")).thenReturn(Set.of());
+
+        int slot = service.allocSlot("ORG", 3, 400);
+
+        assertThat(slot).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("层级区间耗尽时抛业务异常（V1.12：L1 占 1..200 才耗尽）")
     void allocSlot_levelRangeExhausted_throwsPerfException() {
         Set<Integer> full = new HashSet<>();
-        for (int i = 1; i <= 100; i++) {
+        for (int i = 1; i <= 200; i++) {
             full.add(i);
         }
         when(mapper.selectOccupiedSlots("EMP")).thenReturn(full);

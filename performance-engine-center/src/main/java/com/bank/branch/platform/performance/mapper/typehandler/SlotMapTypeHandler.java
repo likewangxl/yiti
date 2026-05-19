@@ -14,9 +14,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 宽表 200 slot 统一 TypeHandler（V1.1 Task P1.4）.
+ * 宽表 400 slot 统一 TypeHandler（V1.1 Task P1.4）.
  *
- * <p>职责：将 {@link ResultSet} 中的 {@code val_1 .. val_200} 列一次性 pack 成
+ * <p>职责：将 {@link ResultSet} 中的 {@code val_1 .. val_400} 列一次性 pack 成
  * {@code Map<Integer, BigDecimal>}（稀疏存储：null 的槽不入 Map）。
  *
  * <h3>使用场景</h3>
@@ -25,7 +25,7 @@ import java.util.Map;
  *   <li>{@code insertSlotValue}：单列 UPSERT，性能友好</li>
  *   <li>{@code selectSlotValue}：按 slot 精确读取</li>
  * </ul>
- * <p>本 TypeHandler 仅服务于"一次读取整行 200 slot"的边缘场景，例如：
+ * <p>本 TypeHandler 仅服务于"一次读取整行 400 slot"的边缘场景，例如：
  * <ul>
  *   <li>调试 / 运维接口的"导出一行快照"</li>
  *   <li>V1.2 可能新增的 debug 查询</li>
@@ -34,7 +34,7 @@ import java.util.Map;
  * <h3>写路径说明</h3>
  * <p>因为宽表写入走 {@code insertSlotValue} 单列 UPSERT 路径，本 handler 的
  * {@link #setNonNullParameter} 刻意为 noop：不对 {@link PreparedStatement} 产生
- * 任何 setXxx 副作用，避免误入写路径导致覆盖整行 200 列。
+ * 任何 setXxx 副作用，避免误入写路径导致覆盖整行 400 列。
  *
  * <h3>注册方式</h3>
  * <p>本 handler 不在全局 {@code mybatis.type-handlers-package} 自动注册（避免影响
@@ -48,11 +48,11 @@ import java.util.Map;
 @MappedTypes(Map.class)
 public class SlotMapTypeHandler extends BaseTypeHandler<Map<Integer, BigDecimal>> {
 
-    /** val_ 列名前缀，与 DDL 保持一致（val_1 .. val_200）. */
+    /** val_ 列名前缀，与 DDL 保持一致（val_1 .. val_400）. */
     private static final String SLOT_COLUMN_PREFIX = "val_";
 
-    /** 最大槽位（含），与宽表 DDL 列数一致. */
-    static final int MAX_SLOT = 200;
+    /** 最大槽位（含），与宽表 DDL 列数一致（V1.12: 200 → 400）. */
+    static final int MAX_SLOT = 400;
 
     /**
      * 写路径 noop：宽表写入通过 Mapper 的 insertSlotValue 单列 UPSERT 完成，
@@ -66,9 +66,9 @@ public class SlotMapTypeHandler extends BaseTypeHandler<Map<Integer, BigDecimal>
     }
 
     /**
-     * 按列名读取：假定列名形如 "slots" 但实际 ResultSet 含 val_1 .. val_200 列。
+     * 按列名读取：假定列名形如 "slots" 但实际 ResultSet 含 val_1 .. val_400 列。
      * <p>columnName 参数在此实现中仅用作来源标识，不作为实际查询列；实际 pack 依据
-     * 固定的 val_1 .. val_200 列名遍历 ResultSet。
+     * 固定的 val_1 .. val_400 列名遍历 ResultSet。
      */
     @Override
     public Map<Integer, BigDecimal> getNullableResult(ResultSet rs, String columnName) throws SQLException {
@@ -109,7 +109,7 @@ public class SlotMapTypeHandler extends BaseTypeHandler<Map<Integer, BigDecimal>
     }
 
     /**
-     * 遍历 val_1 .. val_200 固定列名，pack 成稀疏 Map.
+     * 遍历 val_1 .. val_400 固定列名，pack 成稀疏 Map.
      *
      * <p>注意：ResultSet 未包含某些 val_N 列时，部分驱动会抛 SQLException，
      * 此处统一吞掉异常并跳过（保证 handler 对"局部投影"场景也能工作），
@@ -143,7 +143,7 @@ public class SlotMapTypeHandler extends BaseTypeHandler<Map<Integer, BigDecimal>
     }
 
     /**
-     * 解析 val_N 列名中的槽位号，N ∈ [1, 200]；其他列名返回 null.
+     * 解析 val_N 列名中的槽位号，N ∈ [1, 400]；其他列名返回 null.
      */
     private Integer parseSlot(String columnLabel) {
         if (columnLabel == null || !columnLabel.startsWith(SLOT_COLUMN_PREFIX)) {

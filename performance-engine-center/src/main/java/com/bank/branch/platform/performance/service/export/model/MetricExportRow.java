@@ -12,7 +12,7 @@ import java.time.LocalDate;
 /**
  * 指标结果导出 Excel 行模型（V1.2 Task Q6.3）.
  *
- * <p>宽表 200 slot 按 "每行 = 一个 (subjectId, metricCode, value)" 扁平化，
+ * <p>宽表 400 slot 按 "每行 = 一个 (subjectId, metricCode, value)" 扁平化，
  * 供 Excel 导出使用。subjectId 可以是员工工号或机构编码，由 baseDim 指明.
  */
 @Data
