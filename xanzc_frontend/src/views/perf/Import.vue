@@ -11,7 +11,7 @@
       <el-form label-width="100px" size="default">
         <el-form-item label="导入类型">
           <el-radio-group v-model="kind">
-            <el-radio value="BASE_DATA">指标结果</el-radio>
+            <el-radio value="METRIC_RESULT">指标结果</el-radio>
             <el-radio value="ALLOC">KPI 结果</el-radio>
             <el-radio value="TARGET">目标值</el-radio>
           </el-radio-group>
@@ -107,13 +107,13 @@ import {
   refreshImportStatus, retryImport, deleteImportBatch, downloadImportErrors
 } from '@/api/perf';
 
-const kind = ref('BASE_DATA');
+const kind = ref('METRIC_RESULT');
 const date = ref(new Date().toISOString().slice(0, 10));
 const plan = ref('2026Q2');
 const rows = ref([]);
 const loading = ref(false);
 
-const TYPE_LABEL = { BASE_DATA: '指标结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
+const TYPE_LABEL = { METRIC_RESULT: '指标结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
 const typeLabel = (t) => TYPE_LABEL[t] || t || '-';
 const STATUS_LABEL = { PROCESSING: '导入中', SUCCESS: '已完成', FAILED: '失败', PENDING: '排队中' };
 const statusLabel = (s) => STATUS_LABEL[s] || s || '-';
@@ -191,9 +191,10 @@ async function onDelete(row) {
 async function downloadTpl() {
   // 后端暂无"模板下载"端点；前端用 SheetJS 生成真 .xlsx（带表头 + 1 行示例数据）
   const TPL = {
-    BASE_DATA: {
-      headers: ['对象编号', '指标编码', '数值', '周期键', '备注'],
-      sheet:   '指标结果',
+    METRIC_RESULT: {
+      headers: ['序号', '基础维度（EMP/ORG/CUST/空）', '维度对象', '指标名称', '指标数值'],
+      // V1.12：Sheet 名必须是数据日期，整 Sheet 共用；前端用当前 date 选择器值
+      sheet:   date.value || new Date().toISOString().slice(0, 10),
       file:    '指标结果导入模板'
     },
     ALLOC: {
