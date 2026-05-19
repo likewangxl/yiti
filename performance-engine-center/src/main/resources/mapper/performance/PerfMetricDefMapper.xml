@@ -88,6 +88,27 @@
         </where>
     </select>
 
+    <!-- V1.12：批量按 metric_name 查询，deleted=0 过滤，对齐 selectByMetricCodes 语义 -->
+    <select id="selectByMetricNames" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_METRIC_DEF
+        <where>
+            AND deleted = 0
+            <choose>
+                <when test="names != null and names.size() > 0">
+                    AND metric_name IN
+                    <foreach collection="names" item="name" open="(" separator="," close=")">
+                        #{name}
+                    </foreach>
+                </when>
+                <otherwise>
+                    AND 1 = 0
+                </otherwise>
+            </choose>
+        </where>
+    </select>
+
     <select id="selectOccupiedSlots" resultType="java.lang.Integer">
         SELECT val_slot
         FROM PERF_METRIC_DEF

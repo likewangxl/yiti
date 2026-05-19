@@ -39,4 +39,7 @@ public class OrgIndexResult {
 
     /** 创建时间（DB CURRENT_TIMESTAMP 默认值填充）. */
     private LocalDateTime createdTime;
+
+    /** 最近更新时间（V1.12 指标结果导入新增；DB ON UPDATE CURRENT_TIMESTAMP）. */
+    private LocalDateTime updatedTime;
 }

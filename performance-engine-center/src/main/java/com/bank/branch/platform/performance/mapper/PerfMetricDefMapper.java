@@ -61,6 +61,17 @@ public interface PerfMetricDefMapper extends BaseMapper<PerfMetricDef> {
     List<PerfMetricDef> selectByMetricCodes(@Param("codes") List<String> codes);
 
     /**
+     * V1.12：批量按指标中文名称查询，{@code deleted=0} 过滤.
+     *
+     * <p>用于 METRIC_RESULT 导入策略一次性把所有出现的 metric_name 解析为
+     * (metricCode, valSlot, baseDim)，避免逐行 DB 往返。
+     *
+     * @param names 指标中文名称列表（去重后传入）
+     * @return 指标定义列表（数量可能少于 names.size()，未命中的 name 由调用方处理"指标不存在"）
+     */
+    List<PerfMetricDef> selectByMetricNames(@Param("names") List<String> names);
+
+    /**
      * 查询某维度已占用的全部槽位。
      *
      * @param baseDim 基础维度

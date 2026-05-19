@@ -14,7 +14,8 @@
         VALUES
             (#{orgCode}, #{dataDate}, #{version}, #{value})
         ON DUPLICATE KEY UPDATE
-            val_${slot} = VALUES(val_${slot})
+            val_${slot} = VALUES(val_${slot}),
+            updated_time = NOW()
     </insert>
 
     <select id="selectSlotValue" resultType="java.math.BigDecimal">

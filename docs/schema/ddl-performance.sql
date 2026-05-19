@@ -630,6 +630,7 @@ CREATE TABLE IF NOT EXISTS `EMP_INDEX_RESULT` (
   `val_399` decimal(20,4) DEFAULT NULL COMMENT 'val_399',
   `val_400` decimal(20,4) DEFAULT NULL COMMENT 'val_400',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近更新时间（V1.12 指标结果导入）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_subject_date_ver` (`emp_id`, `data_date`, `version`),
   KEY `idx_date_ver` (`data_date`, `version`)
@@ -1044,6 +1045,7 @@ CREATE TABLE IF NOT EXISTS `ORG_INDEX_RESULT` (
   `val_399` decimal(20,4) DEFAULT NULL COMMENT 'val_399',
   `val_400` decimal(20,4) DEFAULT NULL COMMENT 'val_400',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近更新时间（V1.12 指标结果导入）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_subject_date_ver` (`org_code`, `data_date`, `version`),
   KEY `idx_date_ver` (`data_date`, `version`)
@@ -1458,6 +1460,7 @@ CREATE TABLE IF NOT EXISTS `CUST_INDEX_RESULT` (
   `val_399` decimal(20,4) DEFAULT NULL COMMENT 'val_399',
   `val_400` decimal(20,4) DEFAULT NULL COMMENT 'val_400',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近更新时间（V1.12 指标结果导入）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_subject_date_ver` (`cust_id`, `data_date`, `version`),
   KEY `idx_date_ver` (`data_date`, `version`)

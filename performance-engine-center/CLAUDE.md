@@ -11,7 +11,29 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
-**当前版本**: V1.11（指标定义导入按 metric_name upsert）—— 在 V1.10 基础上把 METRIC_DEF Excel 导入从「整批 all-or-none」改为「按指标名称命中则更新、未命中则新增」：
+**当前版本**: V1.12（指标结果导入通道）—— 在 V1.11 基础上新增 `importType=METRIC_RESULT`，按"指标结果模板"长格式（Sheet 名=数据日期）将员工/机构/客户的指标值导入到对应宽表。
+
+**V1.12 (2026-05-19 交付)：指标结果导入通道**
+
+- DDL：`EMP_INDEX_RESULT` / `ORG_INDEX_RESULT` / `CUST_INDEX_RESULT` 各加 `updated_time datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近更新时间'`；脚本 `docs/superpowers/sql/2026-05-19-emp-org-cust-index-result-add-updated-time.sql`（INFORMATION_SCHEMA 预检幂等）；同步更新 `docs/schema/ddl-performance.sql` 基线
+- Mapper XML：三张宽表 `insertSlotValue` 的 `ON DUPLICATE KEY UPDATE` 分支追加 `updated_time = NOW()`（防止 val 值相同时 MySQL 不自动刷 timestamp 的边界场景）
+- 新增 `PerfMetricDefMapper.selectByMetricNames(List<String> names)`：批量按 metric_name 查 def，{@code deleted=0} 过滤，规避导入逐行 DB 往返
+- 新增导入策略 `MetricResultImportStrategy implements ImportStrategy`，importType=`METRIC_RESULT`，复用现有 `POST /api/perf/import/upload` 端点
+- 模板对齐 `docs/指标结果模板.xlsx`（长格式 5 列固定）：Sheet 名=数据日期（支持 yyyy-MM-dd / yyyy/M/d / yyyyMMdd），列 = 序号 / 基础维度 / 维度对象 / 指标名称 / 指标数值
+- 用 POI 而非 EasyExcel 解析的原因：需要拿 Sheet 名作 dataDate，整文件可能多 Sheet
+- 校验项（行级最大努力，单行失败累计到 errorSummary 不抛异常）：
+  - a) 基础维度 ∈ {EMP, ORG, CUST, null}
+  - b) 指标名称必须在 PERF_METRIC_DEF 中存在
+  - c) baseDim=EMP → 维度对象必须在 PT_USER 中存在（`UserApi.getUserByEmpId`）
+  - d) baseDim=ORG → 维度对象必须在 EXT_ORG_INFO 中存在（`OrgApi.getOrg`）
+  - baseDim=CUST/null 跳过主体存在性校验
+- 入库路由：EMP/ORG/CUST 分别走 `EmpIndexResultMapper.insertSlotValue` / `OrgIndexResultMapper.insertSlotValue` / `CustIndexResultMapper.insertSlotValue`；baseDim=null 校验通过但**不入宽表**（维度无关型）
+- version 取值：调 `SysControlService.getCurrentVersion(baseDim)`；维度无 sys_control 记录时降级为 `"V1"`（捕获 `SYS_CONTROL_VERSION_NOT_FOUND`）
+- 实体 `EmpIndexResult` / `OrgIndexResult` / `CustIndexResult` 新增 `updatedTime` 字段
+- 测试基础设施 `PerfTestConfig` 补 `UserApi` / `OrgApi` mock bean（默认放行）；新增 11 case 单元测试 `MetricResultImportStrategyTest` 全绿
+- 跨模块依赖：本期模块新依赖 `auth-permission-center` 的 `UserApi` + `OrgApi`（V1.11 之前只用 `CurrentUserApi`）
+
+V1.11 (2026-05-18 交付)：指标定义导入按 metric_name upsert —— 在 V1.10 基础上把 METRIC_DEF Excel 导入从「整批 all-or-none」改为「按指标名称命中则更新、未命中则新增」：
 
 **V1.11 (2026-05-18 交付)：指标定义按名称 upsert 改造**
 
