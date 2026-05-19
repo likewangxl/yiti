@@ -80,6 +80,12 @@ public enum PerfErrorCode {
      */
     METRIC_SLOT_CONFLICT("PERF-40901", "指标槽位已占用"),
 
+    /**
+     * 指标名称已存在（V1.13：对齐 V1.11 新增的 uk_metric_name_alive 唯一约束）.
+     * <p>复用 PERF-40901 编号（HTTP 409），通过 message 区分"编码重复"与"中文名重复".
+     */
+    METRIC_NAME_DUP("PERF-40901", "指标名称已存在"),
+
     /** 指标存在下游引用，不可删除（V1.1 占位） */
     METRIC_HAS_DOWNSTREAM_REF("PERF-40902", "指标存在下游引用，不可删除"),
 

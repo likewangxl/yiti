@@ -225,6 +225,11 @@ public class MetricDefService {
         if (mapper.selectByMetricCode(cmd.getMetricCode()) != null) {
             throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getMetricCode());
         }
+        // V1.13：metric_name 预检对齐 V1.11 新增的 uk_metric_name_alive 唯一约束，
+        // 避免 insert 阶段 DuplicateKeyException 被旧 catch 兜底为 METRIC_CODE_DUP 误导用户。
+        if (mapper.selectByMetricName(cmd.getMetricName()) != null) {
+            throw new PerfException(PerfErrorCode.METRIC_NAME_DUP, cmd.getMetricName());
+        }
         List<String> refMetricCodes = parseRefMetricCodes(cmd.getRefMetricCodes());
         Map<String, Integer> refMetricLevels = loadRefMetricLevels(refMetricCodes);
         metricCycleDetectService.checkLevelConstraint(cmd.getMetricLevel(), refMetricLevels);
@@ -245,15 +250,19 @@ public class MetricDefService {
         def.setExprText(cmd.getExprText());
         def.setSummaryRule(cmd.getSummaryRule());
         def.setRefMetricCodes(toJson(refMetricCodes));
+        // V1.9：状态字段优先取 cmd.status（导入路径透传 Excel statusFlag），未指定回落 ACTIVE
+        String finalStatus = cmd.getStatus() != null && !cmd.getStatus().isBlank() ? cmd.getStatus() : "ACTIVE";
         // V1.9：维度无关型指标（baseDim=null）不占 slot、不入三大宽表
-        if (cmd.getBaseDim() != null && !cmd.getBaseDim().isBlank()) {
+        // V1.13：DRAFT 草稿态不占 slot（不进宽表、不调度），DRAFT→ACTIVE 切换由 changeStatus 补分配；
+        //        与 V1.9 维度无关型指标同思路：未到真正可执行态前不占用 slot 配额。
+        if (cmd.getBaseDim() != null && !cmd.getBaseDim().isBlank()
+                && "ACTIVE".equals(finalStatus)) {
             def.setValSlot(metricSlotService.allocSlot(cmd.getBaseDim(), cmd.getMetricLevel(), cmd.getPreferredSlot()));
         } else {
             def.setValSlot(null);
         }
         def.setMetricCategory(cmd.getMetricCategory());
-        // V1.9：状态字段优先取 cmd.status（导入路径透传 Excel statusFlag），未指定回落 ACTIVE
-        def.setStatus(cmd.getStatus() != null && !cmd.getStatus().isBlank() ? cmd.getStatus() : "ACTIVE");
+        def.setStatus(finalStatus);
         // Q8.5b: 显式初始化 deleted=0（未删除）。entity 字段为 Integer（非基本类型），
         // 默认 null 会导致 selectByMetricCode（WHERE deleted=0）读不到刚插入的行。
         // DB 层虽然有 default 0，但 Mapper XML 使用 #{deleted} 会把 null 显式写入列，
@@ -267,6 +276,12 @@ public class MetricDefService {
         try {
             mapper.insert(def);
         } catch (DuplicateKeyException ex) {
+            // V1.13：区分 uk_metric_name_alive（metric_name 重复）与 uk_metric_code（编码重复），
+            // 避免并发场景下漏掉预检窗口、错误码错位为"编码已存在"。
+            String exMsg = ex.getMessage() == null ? "" : ex.getMessage();
+            if (exMsg.contains("uk_metric_name_alive")) {
+                throw new PerfException(PerfErrorCode.METRIC_NAME_DUP, ex, cmd.getMetricName());
+            }
             throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, ex, cmd.getMetricCode());
         }
         metricRefService.setRefs(cmd.getMetricCode(), refMetricCodes);
@@ -375,6 +390,9 @@ public class MetricDefService {
     /**
      * V1.6 通用状态切换：支持 ACTIVE / DRAFT / DISABLED 三向迁移。
      * Controller 收到 ChangeStatusReqDTO 后走这里，避免只有 disable 单向操作。
+     *
+     * <p>V1.13：DRAFT→ACTIVE 时若指标当前无 slot（V1.13 起 DRAFT 创建不再占 slot），
+     * 在切状态前先补分配 slot；slot 区间耗尽时抛 PERF-42200，状态不切换。
      */
     @Transactional(rollbackFor = Exception.class)
     public void changeStatus(String metricCode, String targetStatus, String reason, String operator) {
@@ -384,6 +402,18 @@ public class MetricDefService {
         PerfMetricDef existing = getByCode(metricCode);
         if (targetStatus.equals(existing.getStatus())) {
             return; // 幂等：状态相同直接返回，不抛错
+        }
+        // V1.13：DRAFT→ACTIVE 补分配 slot（DRAFT 阶段不占配额；维度无关型指标 baseDim=null 不分配）
+        if ("ACTIVE".equals(targetStatus)
+                && existing.getValSlot() == null
+                && existing.getBaseDim() != null && !existing.getBaseDim().isBlank()) {
+            int slot = metricSlotService.allocSlot(existing.getBaseDim(), existing.getMetricLevel(), null);
+            PerfMetricDef slotPatch = new PerfMetricDef();
+            slotPatch.setId(existing.getId());
+            slotPatch.setValSlot(slot);
+            slotPatch.setUpdatedBy(operator);
+            mapper.updateByIdSelective(slotPatch);
+            existing.setValSlot(slot);
         }
         mapper.updateStatusById(existing.getId(), targetStatus, operator);
     }
