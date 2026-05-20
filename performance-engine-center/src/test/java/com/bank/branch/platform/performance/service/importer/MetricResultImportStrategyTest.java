@@ -1,9 +1,7 @@
 package com.bank.branch.platform.performance.service.importer;
 
 import com.bank.branch.platform.auth.api.OrgApi;
-import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.SysControl;
@@ -15,6 +13,8 @@ import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.importer.impl.MetricResultImportStrategy;
+import com.bank.branch.platform.portal.api.AddressBookApi;
+import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -31,6 +31,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,7 +54,7 @@ import static org.mockito.Mockito.when;
  *   <li>Sheet 名作 dataDate（yyyy-MM-dd / yyyyMMdd）</li>
  *   <li>EMP/ORG/CUST/null 4 种 baseDim 路由</li>
  *   <li>baseDim 非法（4.a 违反）/ 指标名称不存在（4.b 违反）
- *       / EMP 不存在 PT_USER（4.c）/ ORG 不存在 EXT_ORG_INFO（4.d）→ errorSummary 记录</li>
+ *       / EMP 不存在 ADDRBOOK_EMPLOYEE（4.c）/ ORG 不存在 EXT_ORG_INFO（4.d）→ errorSummary 记录</li>
  *   <li>baseDim=null 通过校验但不入宽表</li>
  *   <li>UPSERT 携带 val_slot</li>
  * </ul>
@@ -66,7 +67,7 @@ class MetricResultImportStrategyTest {
     private EmpIndexResultMapper empMapper;
     private OrgIndexResultMapper orgMapper;
     private CustIndexResultMapper custMapper;
-    private UserApi userApi;
+    private AddressBookApi addressBookApi;
     private OrgApi orgApi;
     private SysControlService sysControlService;
     private MetricResultImportStrategy strategy;
@@ -78,12 +79,12 @@ class MetricResultImportStrategyTest {
         empMapper = mock(EmpIndexResultMapper.class);
         orgMapper = mock(OrgIndexResultMapper.class);
         custMapper = mock(CustIndexResultMapper.class);
-        userApi = mock(UserApi.class);
+        addressBookApi = mock(AddressBookApi.class);
         orgApi = mock(OrgApi.class);
         sysControlService = mock(SysControlService.class);
         strategy = new MetricResultImportStrategy(
                 metricDefMapper, empMapper, orgMapper, custMapper,
-                userApi, orgApi, sysControlService);
+                addressBookApi, orgApi, sysControlService);
 
         // PerfMetricDef 模拟：基础性存款月均余额 → slot 1，年日均余额 → slot 2，CUST 余额 → slot 3
         lenient().when(metricDefMapper.selectByMetricNames(anyList()))
@@ -103,7 +104,8 @@ class MetricResultImportStrategyTest {
                 });
 
         // 员工 / 机构存在性默认放行（具体 case 再覆盖）
-        lenient().when(userApi.getUserByEmpId(anyString())).thenReturn(new UserDTO());
+        lenient().when(addressBookApi.getEmployee(anyString()))
+                .thenReturn(Optional.of(EmployeeDTO.builder().empId("ANY").build()));
         lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
         lenient().when(sysControlService.getCurrentVersion(anyString()))
                 .thenReturn(sysControl("V1"));
@@ -192,9 +194,9 @@ class MetricResultImportStrategyTest {
     }
 
     @Test
-    @DisplayName("4.c 违反：EMP baseDim 员工号不在 PT_USER → errorSummary 记录，不入库")
+    @DisplayName("4.c 违反：EMP baseDim 员工号不在 ADDRBOOK_EMPLOYEE → errorSummary 记录，不入库")
     void execute_empNotFound_recordedInErrorSummary() {
-        when(userApi.getUserByEmpId("E_GHOST")).thenReturn(null);
+        when(addressBookApi.getEmployee("E_GHOST")).thenReturn(Optional.empty());
 
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "EMP", "E_GHOST", "基础性存款月均余额", new BigDecimal("10")});

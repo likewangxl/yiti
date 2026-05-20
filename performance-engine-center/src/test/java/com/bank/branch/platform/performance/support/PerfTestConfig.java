@@ -3,16 +3,16 @@ package com.bank.branch.platform.performance.support;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
-import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.governance.api.JobApi;
+import com.bank.branch.platform.portal.api.AddressBookApi;
+import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -136,17 +136,19 @@ public class PerfTestConfig {
     }
 
     /**
-     * 测试用 UserApi (V1.12 新增)：
-     * MetricResultImportStrategy 通过构造器注入 UserApi 校验员工存在性，
-     * 测试上下文无 auth-permission-center 真实 Bean，
-     * 此处提供默认放行 mock（返回非空 UserDTO 视作"员工存在"），
+     * 测试用 AddressBookApi (V1.12 微调引入)：
+     * MetricResultImportStrategy 通过构造器注入 AddressBookApi 校验员工存在性，
+     * 落到 portal 通讯录员工表 ADDRBOOK_EMPLOYEE（替换 V1.12 初版误用的 auth UserApi/PT_USER）。
+     * 测试上下文无 portal-content-center 真实 Bean，
+     * 此处提供默认放行 mock（返回非空 Optional&lt;EmployeeDTO&gt; 视作"员工存在"），
      * 单测可 {@code @MockBean} 覆盖具体行为。
      */
     @Bean
     @Primary
-    public UserApi userApi() {
-        UserApi m = Mockito.mock(UserApi.class);
-        Mockito.when(m.getUserByEmpId(Mockito.anyString())).thenReturn(new UserDTO());
+    public AddressBookApi addressBookApi() {
+        AddressBookApi m = Mockito.mock(AddressBookApi.class);
+        Mockito.when(m.getEmployee(Mockito.anyString()))
+                .thenReturn(Optional.of(EmployeeDTO.builder().empId("ANY").build()));
         return m;
     }
 

@@ -1,7 +1,6 @@
 package com.bank.branch.platform.performance.service.importer.impl;
 
 import com.bank.branch.platform.auth.api.OrgApi;
-import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.SysControl;
@@ -15,6 +14,7 @@ import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricResultImportRow;
+import com.bank.branch.platform.portal.api.AddressBookApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -62,7 +62,7 @@ import java.util.Set;
  * <ol type="a">
  *   <li>基础维度 ∈ {EMP, ORG, CUST, null}</li>
  *   <li>指标名称必须在 PERF_METRIC_DEF（{@code deleted=0}）中存在</li>
- *   <li>基础维度=EMP → 维度对象必须在 PT_USER 中存在（{@link UserApi#getUserByEmpId}）</li>
+ *   <li>基础维度=EMP → 维度对象必须在 ADDRBOOK_EMPLOYEE 中存在（{@link AddressBookApi#getEmployee}）</li>
  *   <li>基础维度=ORG → 维度对象必须在 EXT_ORG_INFO 中存在（{@link OrgApi#getOrg}）</li>
  *   <li>基础维度=CUST/null 时跳过维度对象存在性校验</li>
  * </ol>
@@ -111,7 +111,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
     private final CustIndexResultMapper custIndexResultMapper;
-    private final UserApi userApi;
+    private final AddressBookApi addressBookApi;
     private final OrgApi orgApi;
     private final SysControlService sysControlService;
 
@@ -334,9 +334,9 @@ public class MetricResultImportStrategy implements ImportStrategy {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "维度对象必填");
         }
         if ("EMP".equals(dim)) {
-            if (userApi.getUserByEmpId(subject) == null) {
+            if (addressBookApi.getEmployee(subject).isEmpty()) {
                 throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                        "员工不存在（PT_USER）: " + subject);
+                        "员工不存在（ADDRBOOK_EMPLOYEE）: " + subject);
             }
         } else if ("ORG".equals(dim)) {
             if (orgApi.getOrg(subject) == null) {

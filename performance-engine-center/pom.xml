@@ -78,6 +78,17 @@
             <artifactId>customer-marketing-center</artifactId>
         </dependency>
 
+        <!--
+            portal-content-center (V1.12+ 微调引入)
+            METRIC_RESULT 导入策略校验员工存在性应查通讯录员工表 ADDRBOOK_EMPLOYEE，
+            走 portal AddressBookApi.getEmployee（V1.12 初版误用 auth UserApi/PT_USER 已修正）。
+            portal 仅依赖 auth + governance + workflow，不依赖 performance，无循环依赖风险.
+        -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>portal-content-center</artifactId>
+        </dependency>
+
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
