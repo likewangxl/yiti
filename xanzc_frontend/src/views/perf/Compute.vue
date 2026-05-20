@@ -49,10 +49,7 @@
       <el-form ref="trgFormRef" :model="trgDlg.form" :rules="trgRules" label-position="top" size="default">
         <el-form-item label="方案" prop="scheme">
           <el-select v-model="trgDlg.form.scheme" style="width:100%">
-            <el-option label="2026Q2 KPI" value="2026Q2" />
-            <el-option label="2026Q1 KPI" value="2026Q1" />
-            <el-option label="2026 全年 KPI" value="2026" />
-            <el-option label="2025Y KPI" value="2025" />
+            <el-option v-for="o in schemeOptions" :key="o.value" :label="o.label" :value="o.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="范围" prop="scope">
@@ -188,9 +185,20 @@ async function reload() {
 // === 触发计算（UI 仅 3 字段：方案 / 范围 / 数据日期）===
 // 后端 RecalcReqDTO 必填 cycleType/cycleDateFrom/cycleDateTo/version/reason → 在 onConfirmTrigger 自动派生
 const trgFormRef = ref(null);
+// 方案选项基于当前年动态生成，默认值跟随当前季度滚动；避免写死 '2026Q2' 在跨季度后默认值脱离选项列表
+const NOW_YEAR = new Date().getFullYear();
+const NOW_QUARTER = `${NOW_YEAR}Q${Math.floor(new Date().getMonth() / 3) + 1}`;
+const schemeOptions = [
+  { label: `${NOW_YEAR}Q1 KPI`, value: `${NOW_YEAR}Q1` },
+  { label: `${NOW_YEAR}Q2 KPI`, value: `${NOW_YEAR}Q2` },
+  { label: `${NOW_YEAR}Q3 KPI`, value: `${NOW_YEAR}Q3` },
+  { label: `${NOW_YEAR}Q4 KPI`, value: `${NOW_YEAR}Q4` },
+  { label: `${NOW_YEAR} 全年 KPI`, value: `${NOW_YEAR}` },
+  { label: `${NOW_YEAR - 1}Y KPI`, value: `${NOW_YEAR - 1}` },
+];
 const trgDlg = reactive({
   show: false, saving: false,
-  form: { scheme: '2026Q2', scope: 'ALL', dataDate: new Date().toISOString().slice(0, 10) }
+  form: { scheme: NOW_QUARTER, scope: 'ALL', dataDate: new Date().toISOString().slice(0, 10) }
 });
 const trgRules = {
   scheme:   [{ required: true, message: '请选择方案' }],

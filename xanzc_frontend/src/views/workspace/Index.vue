@@ -2,8 +2,8 @@
   <div class="workspace">
     <!-- 顶部欢迎条 -->
     <div class="hero">
-      <div class="greet">{{ data.greet }}</div>
-      <div class="desc">{{ data.desc }}</div>
+      <div class="greet">{{ greeting }}</div>
+      <div class="desc">{{ desc }}</div>
     </div>
 
     <!-- 4 stat 卡 -->
@@ -16,30 +16,46 @@
     </div>
 
     <div class="cols">
-      <!-- 待办任务表 -->
+      <!-- 待办 / 已办 -->
       <div class="card-section">
         <div class="card-h">
-          <div class="title">待办任务</div>
-          <div class="hint">红黄绿状态显式展示</div>
-          <a class="more">更多</a>
+          <div class="title">我的任务</div>
+          <el-radio-group v-model="taskTab" size="small" @change="loadTasks">
+            <el-radio-button label="PENDING">待办</el-radio-button>
+            <el-radio-button label="DONE">已办</el-radio-button>
+          </el-radio-group>
+          <a class="more" @click="$router.push('/workspace')">刷新</a>
         </div>
-        <el-table :data="data.todos" stripe size="small">
-          <el-table-column prop="name" label="流程名称" min-width="200" />
-          <el-table-column prop="node" label="当前节点" width="140" />
+        <el-table :data="tasks" stripe size="small" v-loading="tasksLoading" empty-text="暂无任务">
+          <el-table-column label="流程 / 标题" min-width="220">
+            <template #default="{ row }">
+              <div>{{ row.processName || row.taskName || '-' }}</div>
+              <div class="task-sub">{{ row.title || row.bizSummary || '' }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="当前节点" width="120">
+            <template #default="{ row }">{{ row.nodeName || row.taskName || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="发起人" width="100">
+            <template #default="{ row }">{{ row.startUserName || row.startUserId || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="发起时间" width="140">
+            <template #default="{ row }">{{ row.startTime || row.createTime || '-' }}</template>
+          </el-table-column>
           <el-table-column label="SLA" width="90">
             <template #default="{ row }">
-              <span class="sla-dot" :class="row.sla"></span>
-              {{ slaText(row.sla) }}
+              <span class="sla-dot" :class="slaKey(row.slaStatus)"></span>
+              {{ slaText(row.slaStatus) }}
             </template>
           </el-table-column>
-          <el-table-column label="剩余时长" width="110">
+          <el-table-column label="剩余时长" width="100">
             <template #default="{ row }">
-              <span :class="['remain', row.sla]">{{ row.remain }}</span>
+              <span :class="['remain', slaKey(row.slaStatus)]">{{ row.remain || '-' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="80">
-            <template #default>
-              <el-button type="primary" link size="small">办理</el-button>
+          <el-table-column label="操作" width="80" v-if="taskTab === 'PENDING'">
+            <template #default="{ row }">
+              <el-button type="primary" link size="small" @click="goHandle(row)">办理</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -75,13 +91,65 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
 import { getWorkspace } from '@/api/workspace';
+import { listTodoTasks, listDoneTasks } from '@/api/workflow';
+
+const router = useRouter();
+const store = useUserStore();
 const data = ref(initial);
-const slaText = (s) => ({ normal: '正常', warn: '预警', overdue: '超时' }[s] || s);
+const slaText = (s) => ({ normal: '正常', warn: '预警', overdue: '超时', GREEN: '正常', YELLOW: '预警', RED: '超时' }[s] || '正常');
+// 把后端 slaStatus(GREEN/YELLOW/RED) 映射到模板 CSS 类（normal/warn/overdue），兼容旧值
+const slaKey = (s) => ({ GREEN: 'normal', YELLOW: 'warn', RED: 'overdue' }[s] || s || 'normal');
+
+// 欢迎语 + 描述：用 userStore 真实信息 + 时段问候，不再用 mock 张三
+const greeting = computed(() => {
+  const h = new Date().getHours();
+  let t = '上午好';
+  if (h >= 18) t = '晚上好';
+  else if (h >= 13) t = '下午好';
+  else if (h >= 11) t = '中午好';
+  return `${t}，${store.displayName || '当前用户'}`;
+});
+const desc = computed(() => {
+  const role = store.roleName || '—';
+  const org  = store.orgName  || '—';
+  return `当前角色：${role} · 机构：${org}`;
+});
+
+// 我的任务（待办 / 已办）—— 直连 workflow-center，不再依赖 portal/workspace.todos
+// 之所以另开数据源：portal/workspace 当前未聚合 workflow/tasks，会落回 mock 张三
+const taskTab = ref('PENDING');
+const tasks = ref([]);
+const tasksLoading = ref(false);
+async function loadTasks() {
+  tasksLoading.value = true;
+  try {
+    const fn = taskTab.value === 'PENDING' ? listTodoTasks : listDoneTasks;
+    const r = await fn({ pageNo: 1, pageSize: 20 });
+    tasks.value = Array.isArray(r) ? r : (r?.records || []);
+  } catch { tasks.value = []; } finally { tasksLoading.value = false; }
+}
+function goHandle(row) {
+  const id = row.id || row.taskId;
+  if (!id) return;
+  // 业绩调整审批：跳到 /perf/adjust 页内打开审批抽屉，不开独立菜单
+  // 其他 bizType 暂时也走该路径（接入时再分流），保持"审批办理在业务页内"的设计
+  if (['ALLOC_ADJUST', 'PERF_ALLOC_ADJUST'].includes(row.bizType)) {
+    router.push({ path: '/perf/adjust', query: { taskId: id, action: 'open' } });
+  } else {
+    router.push({ path: '/perf/adjust', query: { taskId: id, action: 'open' } });
+  }
+}
+
 onMounted(async () => {
+  // 顶部欢迎条 / stat 卡 / 通知 / 快捷入口 仍走 portal/workspace 聚合
   try { const r = await getWorkspace(); if (r) data.value = r; } catch (e) { /* noop */ }
+  // 待办列表独立从 workflow/tasks 拉
+  loadTasks();
 });
 </script>
 
@@ -125,6 +193,10 @@ onMounted(async () => {
   .more  { margin-left: auto; color: $primary; cursor: pointer; font-size: 12px; }
 }
 
+.task-sub {
+  font-size: 11px; color: $text-3; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .sla-dot {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   margin-right: 6px; vertical-align: middle;
