@@ -6,7 +6,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 
 /**
  * 指标结果导入行模型（V1.12，importType=METRIC_RESULT）.
@@ -20,9 +19,11 @@ import java.time.LocalDate;
  *   <li>指标数值</li>
  * </ol>
  *
- * <p>{@code dataDate} 来源于所在 Sheet 名（约定 yyyy-MM-dd 或 yyyyMMdd），整 Sheet 共用。
+ * <p>{@code dataDate} 不在行模型中：整文件 dataDate 由 HTTP 参数注入
+ * {@link com.bank.branch.platform.performance.service.importer.ImportContext}，
+ * Strategy 取 ctx.dataDate() 与所有行共用（V1.12 微调，2026-05-19）。
  *
- * <p>用 POI 而非 EasyExcel 解析的原因：需要拿 Sheet 名作为 dataDate，整文件可能多 Sheet。
+ * <p>用 POI 而非 EasyExcel 解析的原因：模板为多 Sheet 长格式，Sheet 名作错误定位用。
  */
 @Data
 @NoArgsConstructor
@@ -30,11 +31,8 @@ import java.time.LocalDate;
 @Builder
 public class MetricResultImportRow {
 
-    /** 所在 Sheet 名（同时承载数据日期）. */
+    /** 所在 Sheet 名（仅用于错误定位）. */
     private String sheetName;
-
-    /** 解析后的数据日期（按 Sheet 名 yyyy-MM-dd / yyyyMMdd / yyyy/M/d 尝试解析）. */
-    private LocalDate dataDate;
 
     /** Excel 物理行号（仅用于错误消息，1-based，第一行表头）. */
     private int excelRowNum;

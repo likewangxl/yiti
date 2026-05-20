@@ -159,15 +159,21 @@ function removeLocalImport(batchId) {
   const arr = loadLocalImports().filter(x => x.batchId !== batchId && x.id !== batchId);
   try { localStorage.setItem(LS_RECENT_IMPORTS, JSON.stringify(arr)); } catch {}
 }
-// 上传：importType ∈ TARGET / BASE_DATA / ALLOC；后端要求 multipart `file` + 查询参 `importType`
-// 返回 batchId（后端 ResponseWrapper.success(String)）
-export async function uploadImportFile(importType, file, meta = {}) {
+// 上传：importType ∈ TARGET / BASE_DATA / ALLOC / METRIC_DEF / METRIC_RESULT
+// 后端要求 multipart `file` + 查询参 `importType`；
+// V1.12 微调（2026-05-19）：METRIC_RESULT 必带 dataDate (yyyy-MM-dd)；其他类型忽略 dataDate。
+// 返回 batchId（后端 ResponseWrapper.success(PerfImportUploadRespDTO).batchId）
+export async function uploadImportFile(importType, file, dataDate, meta = {}) {
   const fd = new FormData();
   fd.append('file', file);
-  // 走 axios 的 params 传 importType，避免被 multipart body 吃掉
+  // 走 axios 的 params 传 importType + dataDate，避免被 multipart body 吃掉
+  const params = { importType };
+  if (dataDate) {
+    params.dataDate = dataDate;
+  }
   const batchId = await call('post', '/perf/import/upload', {
     data: fd,
-    params: { importType },
+    params,
     headers: { 'Content-Type': 'multipart/form-data' }
   }, () => 'IMP-MOCK-' + Date.now());
   // 写入 localStorage 历史

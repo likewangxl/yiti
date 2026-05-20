@@ -19,14 +19,18 @@
 - Mapper XML：三张宽表 `insertSlotValue` 的 `ON DUPLICATE KEY UPDATE` 分支追加 `updated_time = NOW()`（防止 val 值相同时 MySQL 不自动刷 timestamp 的边界场景）
 - 新增 `PerfMetricDefMapper.selectByMetricNames(List<String> names)`：批量按 metric_name 查 def，{@code deleted=0} 过滤，规避导入逐行 DB 往返
 - 新增导入策略 `MetricResultImportStrategy implements ImportStrategy`，importType=`METRIC_RESULT`，复用现有 `POST /api/perf/import/upload` 端点
-- 模板对齐 `docs/指标结果模板.xlsx`（长格式 5 列固定）：Sheet 名=数据日期（支持 yyyy-MM-dd / yyyy/M/d / yyyyMMdd），列 = 序号 / 基础维度 / 维度对象 / 指标名称 / 指标数值
-- 用 POI 而非 EasyExcel 解析的原因：需要拿 Sheet 名作 dataDate，整文件可能多 Sheet
-- 校验项（行级最大努力，单行失败累计到 errorSummary 不抛异常）：
-  - a) 基础维度 ∈ {EMP, ORG, CUST, null}
-  - b) 指标名称必须在 PERF_METRIC_DEF 中存在
-  - c) baseDim=EMP → 维度对象必须在 ADDRBOOK_EMPLOYEE 中存在（`AddressBookApi.getEmployee`，portal 通讯录员工表；V1.12 初版误用 auth `UserApi`/PT_USER 已 2026-05-19 修正）
-  - d) baseDim=ORG → 维度对象必须在 EXT_ORG_INFO 中存在（`OrgApi.getOrg`）
-  - baseDim=CUST/null 跳过主体存在性校验
+- 模板对齐 `docs/指标结果模板.xlsx`（长格式 5 列固定）：列 = 序号 / 基础维度 / 维度对象 / 指标名称 / 指标数值
+- **数据日期入参**（2026-05-19 微调）：由前端 `el-date-picker` 经 HTTP 表单/query 参数 `dataDate` (yyyy-MM-dd) 传入，整文件（含多 Sheet）共用同一日期。缺失/格式错由 Controller 层 fail-fast (422)，不进入行级最大努力分支。Sheet 标签名变为纯展示用（业务方任意命名）。
+- 跨 strategy 上下文：新增 `ImportContext` record（仅持 `dataDate`），`ImportStrategy.execute` 签名扩展为 `execute(batch, file, ctx)`，4 个非 METRIC_RESULT 策略接收但忽略 ctx
+- 用 POI 而非 EasyExcel 解析的原因：模板为多 Sheet 长格式，Sheet 名作错误定位用
+- 校验项：
+  - 整文件级 fail-fast（Controller/Service）：`dataDate` 必填且 yyyy-MM-dd 可解析（缺失/格式错抛 VALIDATION_FAILED）
+  - 行级最大努力（单行失败累计到 errorSummary 不抛异常）：
+    - a) 基础维度 ∈ {EMP, ORG, CUST, null}
+    - b) 指标名称必须在 PERF_METRIC_DEF 中存在
+    - c) baseDim=EMP → 维度对象必须在 ADDRBOOK_EMPLOYEE 中存在（`AddressBookApi.getEmployee`，portal 通讯录员工表；V1.12 初版误用 auth `UserApi`/PT_USER 已 2026-05-19 修正）
+    - d) baseDim=ORG → 维度对象必须在 EXT_ORG_INFO 中存在（`OrgApi.getOrg`）
+    - baseDim=CUST/null 跳过主体存在性校验
 - 入库路由：EMP/ORG/CUST 分别走 `EmpIndexResultMapper.insertSlotValue` / `OrgIndexResultMapper.insertSlotValue` / `CustIndexResultMapper.insertSlotValue`；baseDim=null 校验通过但**不入宽表**（维度无关型）
 - version 取值：调 `SysControlService.getCurrentVersion(baseDim)`；维度无 sys_control 记录时降级为 `"V1"`（捕获 `SYS_CONTROL_VERSION_NOT_FOUND`）
 - 实体 `EmpIndexResult` / `OrgIndexResult` / `CustIndexResult` 新增 `updatedTime` 字段

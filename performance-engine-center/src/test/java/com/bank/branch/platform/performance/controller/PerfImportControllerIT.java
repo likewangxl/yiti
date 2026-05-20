@@ -63,7 +63,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     @Test
     void upload_validFile_returnsRespDTO() throws Exception {
         // V1.11：startImport 返回 batchId，controller 通过 getBatchDto 装配为 DTO
-        Mockito.when(perfImportService.startImport(eq("TARGET"), any(), anyString()))
+        Mockito.when(perfImportService.startImport(eq("TARGET"), any(), anyString(), any()))
                 .thenReturn("BATCH_123");
         PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
                 .id("BATCH_123")
@@ -93,7 +93,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     @Test
     void upload_metricDef_returnsRespDTOWithInsertAndUpdateCounts() throws Exception {
         // V1.11：METRIC_DEF 导入返回新增 + 更新计数
-        Mockito.when(perfImportService.startImport(eq("METRIC_DEF"), any(), anyString()))
+        Mockito.when(perfImportService.startImport(eq("METRIC_DEF"), any(), anyString(), any()))
                 .thenReturn("BATCH_M11");
         PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
                 .id("BATCH_M11")
@@ -130,7 +130,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void upload_unknownImportType_returnsBizKindInvalid() throws Exception {
-        Mockito.when(perfImportService.startImport(eq("UNKNOWN"), any(), anyString()))
+        Mockito.when(perfImportService.startImport(eq("UNKNOWN"), any(), anyString(), any()))
                 .thenThrow(new PerfException(PerfErrorCode.BIZ_KIND_INVALID, "UNKNOWN"));
 
         MockMultipartFile file = new MockMultipartFile("file", "x.xlsx",

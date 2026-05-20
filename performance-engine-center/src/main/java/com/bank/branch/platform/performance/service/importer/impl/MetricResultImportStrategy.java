@@ -11,6 +11,7 @@ import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.service.SysControlService;
+import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricResultImportRow;
@@ -32,8 +33,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,13 +49,19 @@ import java.util.Set;
  *
  * <p>对齐 {@code docs/指标结果模板.xlsx}（长格式 5 列固定）：
  * <pre>
- *   Sheet 名 = 数据日期（yyyy-MM-dd / yyyyMMdd / yyyy/M/d）；整 Sheet 共用该日期
- *   列 1：序号（透传，不入业务）
+ *   数据日期：由前端日期选择器经 HTTP 参数 dataDate (yyyy-MM-dd) 传入，
+ *            整文件（含多 Sheet）共用同一 dataDate；
+ *            缺失/格式错由 Controller/Service 层 fail-fast，不进入本策略。
+ *   Sheet 名：纯展示用（业务方任意命名）
+ *   列 1：序号（透传，不参与业务）
  *   列 2：基础维度（EMP / ORG / CUST / 空）
  *   列 3：维度对象（员工号 / 机构号 / 客户编号）
  *   列 4：指标名称（中文，必须存在于 PERF_METRIC_DEF）
  *   列 5：指标数值
  * </pre>
+ *
+ * <p>历史：V1.12 初版用 Sheet 名携带 dataDate（每 Sheet 一个日期），2026-05-19 改为
+ * 前端日期选择器经 HTTP 参数传入，行为简化为整文件统一 dataDate。
  *
  * <p>校验项（行级最大努力，单行失败累计到 errorSummary 不抛异常）：
  * <ol type="a">
@@ -99,14 +104,6 @@ public class MetricResultImportStrategy implements ImportStrategy {
     /** 允许的基础维度值. */
     private static final Set<String> ALLOWED_BASE_DIMS = new HashSet<>(Arrays.asList("EMP", "ORG", "CUST"));
 
-    /** Sheet 名 → dataDate 解析候选格式（按优先级尝试）. */
-    private static final List<DateTimeFormatter> SHEET_DATE_FORMATS = Arrays.asList(
-            DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT),
-            DateTimeFormatter.ofPattern("yyyy/M/d", Locale.ROOT),
-            DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.ROOT),
-            DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT)
-    );
-
     private final PerfMetricDefMapper metricDefMapper;
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
@@ -121,10 +118,16 @@ public class MetricResultImportStrategy implements ImportStrategy {
     }
 
     @Override
-    public ImportResult execute(PerfImportBatch batch, MultipartFile file) {
+    public ImportResult execute(PerfImportBatch batch, MultipartFile file, ImportContext ctx) {
+        // dataDate 由 Controller/Service 层 fail-fast 校验，进入策略时必非空
+        LocalDate dataDate = ctx == null ? null : ctx.dataDate();
+        if (dataDate == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "dataDate 必填（METRIC_RESULT）");
+        }
+
         List<MetricResultImportRow> rows = parseAllSheets(file);
-        log.info("[MetricResultImportStrategy] 解析完成 batchId={}, rows={}",
-                batch.getId(), rows.size());
+        log.info("[MetricResultImportStrategy] 解析完成 batchId={}, rows={}, dataDate={}",
+                batch.getId(), rows.size(), dataDate);
 
         if (rows.isEmpty()) {
             return new ImportResult(0, 0, 0, null);
@@ -158,10 +161,6 @@ public class MetricResultImportStrategy implements ImportStrategy {
                 if (row.getValue() == null) {
                     throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "指标数值必填");
                 }
-                if (row.getDataDate() == null) {
-                    throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                            "Sheet 名无法解析为数据日期: " + row.getSheetName());
-                }
 
                 PerfMetricDef def = defByName.get(row.getMetricName());
                 if (def == null) {
@@ -180,7 +179,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
                 }
 
                 String version = versionByDim.computeIfAbsent(row.getBaseDim(), this::resolveVersion);
-                dispatchUpsert(row.getBaseDim(), row.getSubjectKey(), row.getDataDate(),
+                dispatchUpsert(row.getBaseDim(), row.getSubjectKey(), dataDate,
                         version, def.getValSlot(), row.getValue());
                 successRows++;
             } catch (RuntimeException ex) {
@@ -192,7 +191,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
         return new ImportResult(rows.size(), successRows, rows.size() - successRows, summary);
     }
 
-    /** 用 POI 解析多 Sheet，每个 Sheet 名作 dataDate. */
+    /** 用 POI 解析多 Sheet，所有 Sheet 行汇总（Sheet 名仅用于错误定位）. */
     List<MetricResultImportRow> parseAllSheets(MultipartFile file) {
         List<MetricResultImportRow> rows = new ArrayList<>();
         DataFormatter formatter = new DataFormatter(Locale.ROOT);
@@ -201,14 +200,13 @@ public class MetricResultImportStrategy implements ImportStrategy {
             for (int s = 0; s < wb.getNumberOfSheets(); s++) {
                 Sheet sheet = wb.getSheetAt(s);
                 String sheetName = sheet.getSheetName();
-                LocalDate dataDate = parseSheetDate(sheetName);
                 int lastRow = sheet.getLastRowNum();
                 for (int r = HEADER_ROW_INDEX + 1; r <= lastRow; r++) {
                     Row row = sheet.getRow(r);
                     if (row == null || isRowBlank(row)) {
                         continue;
                     }
-                    MetricResultImportRow ir = readRow(row, formatter, sheetName, dataDate);
+                    MetricResultImportRow ir = readRow(row, formatter, sheetName);
                     rows.add(ir);
                 }
             }
@@ -221,10 +219,9 @@ public class MetricResultImportStrategy implements ImportStrategy {
 
     /** 读一行 5 列：序号 / baseDim / subject / metricName / value. */
     private static MetricResultImportRow readRow(Row row, DataFormatter formatter,
-                                                 String sheetName, LocalDate dataDate) {
+                                                 String sheetName) {
         return MetricResultImportRow.builder()
                 .sheetName(sheetName)
-                .dataDate(dataDate)
                 .excelRowNum(row.getRowNum() + 1)
                 .indexNo(getString(row.getCell(0), formatter))
                 .baseDim(normalizeBaseDim(getString(row.getCell(1), formatter)))
@@ -302,22 +299,6 @@ public class MetricResultImportStrategy implements ImportStrategy {
         return true;
     }
 
-    /** Sheet 名按候选格式解析 LocalDate，全部失败返回 null（行级校验时报错）. */
-    private static LocalDate parseSheetDate(String sheetName) {
-        if (sheetName == null) {
-            return null;
-        }
-        String s = sheetName.trim();
-        for (DateTimeFormatter fmt : SHEET_DATE_FORMATS) {
-            try {
-                return LocalDate.parse(s, fmt);
-            } catch (DateTimeParseException ignore) {
-                // 继续下一个格式
-            }
-        }
-        return null;
-    }
-
     /** 1) baseDim ∈ {EMP, ORG, CUST, null}. */
     private static void validateBaseDim(MetricResultImportRow row) {
         if (row.getBaseDim() != null && !ALLOWED_BASE_DIMS.contains(row.getBaseDim())) {
@@ -326,7 +307,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
         }
     }
 
-    /** 3/4) 主体存在性校验（EMP→PT_USER；ORG→EXT_ORG_INFO；CUST/null 跳过）. */
+    /** 3/4) 主体存在性校验（EMP→ADDRBOOK_EMPLOYEE；ORG→EXT_ORG_INFO；CUST/null 跳过）. */
     private void validateSubjectExists(MetricResultImportRow row) {
         String dim = row.getBaseDim();
         String subject = row.getSubjectKey();

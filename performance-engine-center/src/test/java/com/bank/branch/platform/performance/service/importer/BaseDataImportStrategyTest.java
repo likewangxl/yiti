@@ -110,7 +110,7 @@ class BaseDataImportStrategyTest {
         rows.add(row("C002", "BASE_CUST_1", "2026-04-01", "20260401", new BigDecimal("2")));
 
         MultipartFile file = writeExcel(rows);
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(7);
         assertThat(result.getSuccessRows()).isEqualTo(7);
@@ -132,7 +132,7 @@ class BaseDataImportStrategyTest {
         rows.add(row("E001", "UNKNOWN_METRIC", "2026-04-01", "20260401", new BigDecimal("10")));
 
         MultipartFile file = writeExcel(rows);
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(1);
         assertThat(result.getSuccessRows()).isEqualTo(0);
@@ -148,7 +148,7 @@ class BaseDataImportStrategyTest {
         rows.add(row("E001", "BASE_EMP_1", "2026-04-xx", "20260401", new BigDecimal("10")));
 
         MultipartFile file = writeExcel(rows);
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getErrorRows()).isEqualTo(1);
         assertThat(result.getErrorSummary()).contains("第");
@@ -163,7 +163,7 @@ class BaseDataImportStrategyTest {
         rows.add(row("E001", "BASE_EMP_1", "2026-04-01", "20260401", null));              // value 空
 
         MultipartFile file = writeExcel(rows);
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(2);
         assertThat(result.getSuccessRows()).isEqualTo(0);
@@ -176,7 +176,7 @@ class BaseDataImportStrategyTest {
     void execute_columnMismatch_throwsImportColumnMappingInvalid() {
         MultipartFile file = writeExcelWithWrongHead();
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_COLUMN_MAPPING_INVALID));

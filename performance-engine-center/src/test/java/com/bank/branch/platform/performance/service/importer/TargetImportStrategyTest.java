@@ -91,7 +91,7 @@ class TargetImportStrategyTest {
         }
         MultipartFile file = writeExcel(rows);
 
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result).isNotNull();
         assertThat(result.getTotalRows()).isEqualTo(10);
@@ -123,7 +123,7 @@ class TargetImportStrategyTest {
 
         MultipartFile file = writeExcel(rows);
 
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(8);
         assertThat(result.getSuccessRows()).isEqualTo(5);
@@ -143,7 +143,7 @@ class TargetImportStrategyTest {
         // 手工拼一个只有 3 列、列头名全不匹配 TargetImportRow 的 Excel
         MultipartFile file = writeExcelWithWrongHead();
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_COLUMN_MAPPING_INVALID));
@@ -158,7 +158,7 @@ class TargetImportStrategyTest {
         rows.add(row("UNKNOWN_PLAN", "E001", "TEST_METRIC_TGT", new BigDecimal("10")));
         MultipartFile file = writeExcel(rows);
 
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(1);
         assertThat(result.getSuccessRows()).isEqualTo(0);

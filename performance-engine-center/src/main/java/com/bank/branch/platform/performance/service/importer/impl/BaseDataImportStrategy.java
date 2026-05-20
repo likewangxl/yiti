@@ -11,6 +11,7 @@ import com.bank.branch.platform.performance.mapper.CustIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
+import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.BaseDataImportRow;
@@ -70,7 +71,7 @@ public class BaseDataImportStrategy implements ImportStrategy {
     }
 
     @Override
-    public ImportResult execute(PerfImportBatch batch, MultipartFile file) {
+    public ImportResult execute(PerfImportBatch batch, MultipartFile file, ImportContext ctx) {
         List<BaseDataImportRow> rows = parseRows(file);
         log.info("[BaseDataImportStrategy] 解析完成 batchId={}, rows={}",
                 batch.getId(), rows == null ? 0 : rows.size());

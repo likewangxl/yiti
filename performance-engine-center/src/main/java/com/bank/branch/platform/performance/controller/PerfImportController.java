@@ -26,7 +26,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 绩效数据导入 REST 控制器（V1.1 Task P5.5，5 个端点）.
@@ -59,28 +63,36 @@ public class PerfImportController {
     private final PerfImportService perfImportService;
     private final CurrentUserApi currentUserApi;
 
+    /** dataDate 唯一可解析格式（与前端 el-date-picker value-format="YYYY-MM-DD" 对齐）. */
+    private static final DateTimeFormatter DATA_DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT);
+
     /**
      * 上传 Excel 并启动导入. 返回新建批次 ID.
      *
-     * <p>importType 取值：TARGET / BASE_DATA / ALLOC；其他值由 Service 抛 BIZ_KIND_INVALID (PERF-40002).
+     * <p>importType 取值：TARGET / BASE_DATA / ALLOC / METRIC_DEF / METRIC_RESULT；
+     * 其他值由 Service 抛 BIZ_KIND_INVALID (PERF-40002).
      * <p>空文件 → VALIDATION_FAILED (PERF-42200).
+     * <p>V1.12 微调（2026-05-19）：METRIC_RESULT 必带 {@code dataDate} 表单参数（yyyy-MM-dd），
+     * 整文件统一使用；其他 importType 忽略 dataDate.
      */
     @PostMapping("/upload")
     @Operation(summary = "上传 Excel 并启动导入")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.IMPORT)
     @AuditLog(action = "PERF_IMPORT_UPLOAD", resourceType = "PERF_IMPORT_BATCH")
     public ResponseWrapper<PerfImportUploadRespDTO> upload(@RequestParam("importType") @NotBlank String importType,
-                                                           @RequestParam("file") MultipartFile file) {
+                                                           @RequestParam("file") MultipartFile file,
+                                                           @RequestParam(value = "dataDate", required = false) String dataDate) {
         // V1.11：响应破坏性变更为 PerfImportUploadRespDTO（含 insertedRows / updatedRows），
         // 前端从 data: string 改为 data: { batchId, totalRows, insertedRows, updatedRows, errorRows }
-        log.info("[PerfImportController.upload] importType={}, fileName={}, size={}",
+        log.info("[PerfImportController.upload] importType={}, fileName={}, size={}, dataDate={}",
                 importType, file == null ? null : file.getOriginalFilename(),
-                file == null ? 0 : file.getSize());
+                file == null ? 0 : file.getSize(), dataDate);
         if (file == null || file.isEmpty()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "file 不能为空");
         }
+        LocalDate parsedDataDate = parseDataDate(dataDate);
         String operatorId = currentUserApi.getCurrentEmpId();
-        String batchId = perfImportService.startImport(importType, file, operatorId);
+        String batchId = perfImportService.startImport(importType, file, operatorId, parsedDataDate);
         PerfImportBatchRespDTO batchDto = perfImportService.getBatchDto(batchId);
         PerfImportUploadRespDTO resp = PerfImportUploadRespDTO.builder()
                 .batchId(batchId)
@@ -90,6 +102,22 @@ public class PerfImportController {
                 .errorRows(batchDto.getErrorRows())
                 .build();
         return ResponseWrapper.success(resp);
+    }
+
+    /**
+     * 解析前端 dataDate 字符串为 LocalDate；空串返回 null（由 Service 层做"METRIC_RESULT 必填"校验）；
+     * 格式错抛 VALIDATION_FAILED.
+     */
+    private static LocalDate parseDataDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(raw.trim(), DATA_DATE_FMT);
+        } catch (DateTimeParseException ex) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "dataDate 格式非法（期望 yyyy-MM-dd）: " + raw);
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
+import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.AllocRelationImportRow;
@@ -66,7 +67,7 @@ public class AllocRelationImportStrategy implements ImportStrategy {
     }
 
     @Override
-    public ImportResult execute(PerfImportBatch batch, MultipartFile file) {
+    public ImportResult execute(PerfImportBatch batch, MultipartFile file, ImportContext ctx) {
         List<AllocRelationImportRow> rows = parseRows(file);
         log.info("[AllocRelationImportStrategy] 解析完成 batchId={}, rows={}",
                 batch.getId(), rows == null ? 0 : rows.size());

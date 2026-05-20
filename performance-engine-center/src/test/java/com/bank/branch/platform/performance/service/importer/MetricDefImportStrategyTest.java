@@ -90,7 +90,7 @@ class MetricDefImportStrategyTest {
         }
         MultipartFile file = writeExcel(rows);
 
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
@@ -109,7 +109,7 @@ class MetricDefImportStrategyTest {
                 row(42, 2, "存款日均", "", "规模类", 2, "select 2", 2, 1));
         MultipartFile file = writeExcel(rows);
 
-        strategy.execute(batch, file);
+        strategy.execute(batch, file, ImportContext.EMPTY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
@@ -127,7 +127,7 @@ class MetricDefImportStrategyTest {
                 row(2, 1, "B", "M_DUP", "规模类", 2, "select 2", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED))
@@ -145,7 +145,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "外部导入指标", "M_EXT", "规模类", 1, "外部填值即可", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        strategy.execute(batch, file);
+        strategy.execute(batch, file, ImportContext.EMPTY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
@@ -164,7 +164,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "系统提取", "M_SYS", "效益类", 2, "select sum(x) from t", 2, 1));
         MultipartFile file = writeExcel(rows);
 
-        strategy.execute(batch, file);
+        strategy.execute(batch, file, ImportContext.EMPTY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
@@ -184,7 +184,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "启用指标", "M_S_ON", "规模类", 2, "select 1", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        strategy.execute(batch, file);
+        strategy.execute(batch, file, ImportContext.EMPTY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
@@ -199,7 +199,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "停用指标", "M_S_OFF", "规模类", 2, "select 1", 1, 0));
         MultipartFile file = writeExcel(rows);
 
-        strategy.execute(batch, file);
+        strategy.execute(batch, file, ImportContext.EMPTY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
@@ -214,7 +214,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "通用指标", "M_META", "规模类", 2, "select 1", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        strategy.execute(batch, file);
+        strategy.execute(batch, file, ImportContext.EMPTY);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
@@ -231,7 +231,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "缺SQL", "M_NOSQL", "规模类", 2, "", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED))
@@ -246,7 +246,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "X", "M_X", "规模类", 2, "select 1", 5, 1));
         MultipartFile file = writeExcel(rows);
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED));
@@ -260,7 +260,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "X", "M_X", "规模类", 2, "select 1", 1, 2));
         MultipartFile file = writeExcel(rows);
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED));
@@ -277,7 +277,7 @@ class MetricDefImportStrategyTest {
                 row(1, 1, "已有指标名", "M_NEW_CODE", "规模类", 2, "select 1", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         // 不抛异常，走 update 路径
         verify(metricDefService, times(1)).batchUpsertByName(anyList(), anyString());
@@ -301,7 +301,7 @@ class MetricDefImportStrategyTest {
                 row(5, 1, "更E", "M_E", "规模类", 2, "select 1", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(5);
         assertThat(result.getSuccessRows()).isEqualTo(5);
@@ -317,7 +317,7 @@ class MetricDefImportStrategyTest {
                 row(2, 1, "重名指标", "M_NAME_DUP_B", "规模类", 2, "select 2", 1, 1));
         MultipartFile file = writeExcel(rows);
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED))

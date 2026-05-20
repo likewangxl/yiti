@@ -149,9 +149,13 @@ function onFilePick(file) {
 }
 async function onUpload() {
   if (!picked.value) return ElMessage.warning('请先选择文件');
+  // V1.12 微调：METRIC_RESULT 必填 dataDate（前端 picker 默认今天），缺失提前拦截避免后端 422
+  if (kind.value === 'METRIC_RESULT' && !date.value) {
+    return ElMessage.warning('请选择数据日期');
+  }
   uploading.value = true;
   try {
-    const batchId = await uploadImportFile(kind.value, picked.value, { uploader: '当前用户' });
+    const batchId = await uploadImportFile(kind.value, picked.value, date.value, { uploader: '当前用户' });
     ElMessage.success(`已提交，批次号 ${batchId}`);
     picked.value = null;
     uploaderRef.value?.clearFiles();
@@ -193,8 +197,8 @@ async function downloadTpl() {
   const TPL = {
     METRIC_RESULT: {
       headers: ['序号', '基础维度（EMP/ORG/CUST/空）', '维度对象', '指标名称', '指标数值'],
-      // V1.12：Sheet 名必须是数据日期，整 Sheet 共用；前端用当前 date 选择器值
-      sheet:   date.value || new Date().toISOString().slice(0, 10),
+      // V1.12 微调（2026-05-19）：dataDate 改走 HTTP 参数，Sheet 名变为纯展示用
+      sheet:   '指标结果',
       file:    '指标结果导入模板'
     },
     ALLOC: {

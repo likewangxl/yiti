@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
+import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricDefImportRow;
@@ -94,7 +95,7 @@ public class MetricDefImportStrategy implements ImportStrategy {
     }
 
     @Override
-    public ImportResult execute(PerfImportBatch batch, MultipartFile file) {
+    public ImportResult execute(PerfImportBatch batch, MultipartFile file, ImportContext ctx) {
         List<MetricDefImportRow> rows = parseRows(file);
         log.info("[MetricDefImportStrategy] 解析完成 batchId={}, rows={}",
                 batch.getId(), rows == null ? 0 : rows.size());
