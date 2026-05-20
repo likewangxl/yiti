@@ -42,6 +42,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -172,8 +173,17 @@ public class MetricResultImportStrategy implements ImportStrategy {
                             "指标未分配 val_slot: " + row.getMetricName());
                 }
 
+                // 基础维度一致性校验（2026-05-19 修复：Excel 行 baseDim 与指标定义 base_dim 必须严格相等，
+                // 否则会按错误维度的 slot 写到错误宽表，且静默通过）。null==null 视为相等，仍走维度无关型分支。
+                if (!Objects.equals(row.getBaseDim(), def.getBaseDim())) {
+                    throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                            "基础维度不匹配（指标 " + def.getMetricName()
+                                    + " 期望 " + def.getBaseDim()
+                                    + "，Excel 行=" + row.getBaseDim() + "）");
+                }
+
                 if (row.getBaseDim() == null) {
-                    // 维度无关型：业务允许通过校验，但不入三大宽表
+                    // 维度无关型：def.baseDim 也为 null 才会到此分支，仍不入三大宽表
                     successRows++;
                     continue;
                 }

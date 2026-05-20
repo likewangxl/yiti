@@ -90,18 +90,22 @@ class MetricResultImportStrategyTest {
                 metricDefMapper, empMapper, orgMapper, custMapper,
                 addressBookApi, orgApi, sysControlService);
 
-        // PerfMetricDef 模拟：基础性存款月均余额 → slot 1，年日均余额 → slot 2，CUST 余额 → slot 3
+        // PerfMetricDef 模拟：基础性存款月均余额 → EMP/slot 1，年日均余额 → ORG/slot 2，客户余额 → CUST/slot 3
+        // baseDim 字段是 2026-05-19 base_dim 一致性校验的关键 fixture，不允许省略
         lenient().when(metricDefMapper.selectByMetricNames(anyList()))
                 .thenAnswer(inv -> {
                     List<String> names = inv.getArgument(0);
                     List<PerfMetricDef> defs = new ArrayList<>();
                     for (String n : names) {
                         if ("基础性存款月均余额".equals(n)) {
-                            defs.add(metricDef("M_0001", n, 1));
+                            defs.add(metricDef("M_0001", n, 1, "EMP"));
                         } else if ("基础性存款年日均余额".equals(n)) {
-                            defs.add(metricDef("M_0002", n, 2));
+                            defs.add(metricDef("M_0002", n, 2, "ORG"));
                         } else if ("客户余额".equals(n)) {
-                            defs.add(metricDef("M_0003", n, 3));
+                            defs.add(metricDef("M_0003", n, 3, "CUST"));
+                        } else if ("通用统计指标".equals(n)) {
+                            // 维度无关型：def.baseDim 也为 null，Excel 行 baseDim 留空时不入宽表
+                            defs.add(metricDef("M_NODIM", n, 9, null));
                         }
                     }
                     return defs;
@@ -167,10 +171,12 @@ class MetricResultImportStrategyTest {
     }
 
     @Test
-    @DisplayName("execute：baseDim=null（不区分维度）→ 校验通过但不入任何宽表")
+    @DisplayName("execute：真正维度无关型（def.baseDim=null + Excel baseDim 留空）→ 校验通过但不入任何宽表")
     void execute_nullBaseDim_passesValidationButNotInserted() {
+        // 2026-05-19 收紧：只有 def.baseDim 与 row.baseDim 都为 null 才算真正的"维度无关型"
+        // （指标定义本身没有维度），Excel 行 baseDim 留空但指标有 base_dim 的场景见 4.e 失败用例
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "", "", "基础性存款月均余额", new BigDecimal("88")});
+        rows.add(new Object[]{1, "", "", "通用统计指标", new BigDecimal("88")});
 
         MultipartFile file = writeExcel("任意Sheet名", rows);
         ImportResult result = strategy.execute(batch, file, CTX);
@@ -244,6 +250,48 @@ class MetricResultImportStrategyTest {
     }
 
     @Test
+    @DisplayName("4.e 违反：Excel 行 baseDim 与指标定义 base_dim 不一致 → errorSummary 记录，不入库")
+    void execute_baseDimMismatch_recordedInErrorSummary() {
+        // "基础性存款月均余额" 是 EMP 维度指标（mock 配置 slot=1, baseDim=EMP）
+        // 但 Excel 把基础维度写成 ORG → 必须报"基础维度不匹配"，不能静默写到 ORG_INDEX_RESULT.val_1
+        List<Object[]> rows = new ArrayList<>();
+        rows.add(new Object[]{1, "ORG", "O001", "基础性存款月均余额", new BigDecimal("100")});
+
+        MultipartFile file = writeExcel("任意Sheet名", rows);
+        ImportResult result = strategy.execute(batch, file, CTX);
+
+        assertThat(result.getErrorRows()).isEqualTo(1);
+        assertThat(result.getSuccessRows()).isZero();
+        assertThat(result.getErrorSummary())
+                .contains("基础维度不匹配")
+                .contains("基础性存款月均余额")
+                .contains("EMP")
+                .contains("ORG");
+        verify(empMapper, never()).insertSlotValue(any(), any(), any(), any(Integer.class), any());
+        verify(orgMapper, never()).insertSlotValue(any(), any(), any(), any(Integer.class), any());
+        verify(custMapper, never()).insertSlotValue(any(), any(), any(), any(Integer.class), any());
+    }
+
+    @Test
+    @DisplayName("4.e 边界：Excel 行 baseDim 留空但指标定义 base_dim=EMP → 报错（基础维度不匹配），不静默跳过")
+    void execute_blankBaseDimAgainstEmpMetric_recordedInErrorSummary() {
+        // 老逻辑里 baseDim=null 走"维度无关型"分支静默 successRows++ 不入库，
+        // 但指标本身有明确 base_dim 时这是隐藏 bug。本期收紧为必须报错。
+        List<Object[]> rows = new ArrayList<>();
+        rows.add(new Object[]{1, "", "ANY", "基础性存款月均余额", new BigDecimal("10")});
+
+        MultipartFile file = writeExcel("任意Sheet名", rows);
+        ImportResult result = strategy.execute(batch, file, CTX);
+
+        assertThat(result.getErrorRows()).isEqualTo(1);
+        assertThat(result.getSuccessRows()).isZero();
+        assertThat(result.getErrorSummary())
+                .contains("基础维度不匹配")
+                .contains("EMP");
+        verify(empMapper, never()).insertSlotValue(any(), any(), any(), any(Integer.class), any());
+    }
+
+    @Test
     @DisplayName("execute：sys_control 抛 VERSION_NOT_FOUND → 降级 V1，导入仍成功")
     void execute_sysControlMissing_fallbackToV1() {
         when(sysControlService.getCurrentVersion("EMP"))
@@ -290,11 +338,12 @@ class MetricResultImportStrategyTest {
 
     // ================ helpers ================
 
-    private static PerfMetricDef metricDef(String code, String name, int slot) {
+    private static PerfMetricDef metricDef(String code, String name, int slot, String baseDim) {
         PerfMetricDef d = new PerfMetricDef();
         d.setMetricCode(code);
         d.setMetricName(name);
         d.setValSlot(slot);
+        d.setBaseDim(baseDim);
         d.setStatus("ACTIVE");
         return d;
     }

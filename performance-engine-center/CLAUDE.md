@@ -31,10 +31,11 @@
     - c) baseDim=EMP → 维度对象必须在 ADDRBOOK_EMPLOYEE 中存在（`AddressBookApi.getEmployee`，portal 通讯录员工表；V1.12 初版误用 auth `UserApi`/PT_USER 已 2026-05-19 修正）
     - d) baseDim=ORG → 维度对象必须在 EXT_ORG_INFO 中存在（`OrgApi.getOrg`）
     - baseDim=CUST/null 跳过主体存在性校验
+    - e) 基础维度一致性（2026-05-19 微调）：Excel 行 `基础维度` 必须与指标定义 `PerfMetricDef.base_dim` 严格相等（`Objects.equals`，null==null 即真维度无关型）。否则会按错误维度的 slot 静默写到错误宽表（例：EMP 指标 `M_0011 / slot=16` 被写到 `ORG_INDEX_RESULT.val_16`）。V1.12 初版漏校验，2026-05-19 收紧后写错维度 → 行级 errorSummary `基础维度不匹配（指标 X 期望 EMP，Excel 行=ORG）`，不入库。
 - 入库路由：EMP/ORG/CUST 分别走 `EmpIndexResultMapper.insertSlotValue` / `OrgIndexResultMapper.insertSlotValue` / `CustIndexResultMapper.insertSlotValue`；baseDim=null 校验通过但**不入宽表**（维度无关型）
 - version 取值：调 `SysControlService.getCurrentVersion(baseDim)`；维度无 sys_control 记录时降级为 `"V1"`（捕获 `SYS_CONTROL_VERSION_NOT_FOUND`）
 - 实体 `EmpIndexResult` / `OrgIndexResult` / `CustIndexResult` 新增 `updatedTime` 字段
-- 测试基础设施 `PerfTestConfig` 补 `UserApi` / `OrgApi` mock bean（默认放行）；新增 11 case 单元测试 `MetricResultImportStrategyTest` 全绿
+- 测试基础设施 `PerfTestConfig` 补 `UserApi` / `OrgApi` mock bean（默认放行）；`MetricResultImportStrategyTest` 12 case 全绿（V1.12 初版 11 + 2026-05-19 base_dim 一致性微调新增 `execute_baseDimMismatch_recordedInErrorSummary` / `execute_blankBaseDimAgainstEmpMetric_recordedInErrorSummary` 2 case；同期改造 `execute_nullBaseDim_passesValidationButNotInserted` 为 def.baseDim=null 真维度无关型场景 → 净增 1 case）
 - 跨模块依赖：本期模块新依赖 `auth-permission-center` 的 `OrgApi`（机构存在性校验，V1.11 之前只用 `CurrentUserApi`）+ `portal-content-center` 的 `AddressBookApi`（员工存在性校验改走 ADDRBOOK_EMPLOYEE 通讯录员工表，2026-05-19 修正）
 
 V1.11 (2026-05-18 交付)：指标定义导入按 metric_name upsert —— 在 V1.10 基础上把 METRIC_DEF Excel 导入从「整批 all-or-none」改为「按指标名称命中则更新、未命中则新增」：
