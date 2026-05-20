@@ -21,6 +21,23 @@ export async function login(username, password) {
 }
 
 /**
+ * 统一认证登录（开发期 mock）：仅传工号，不传密码。
+ * 后端 POST /api/auth/uniauth/login，通过边车 11003 调 S120030044 查 UIAS 授权 + 建 session。
+ * 生产应改为 UIAS 单点重定向流程（参考 xanpd 的 /login/redirect）。
+ */
+export async function uniAuthLogin(userDomainName) {
+  if (USE_MOCK) {
+    return {
+      empId: userDomainName, username: userDomainName, displayName: 'UIAS 用户（mock）',
+      mainOrgCode: 'HQ', mainOrgName: '总行',
+      roles: [{ roleId: 'R_ADMIN', roleCode: 'SYS_ADMIN', roleChName: '系统管理员' }],
+      token: 'mock-token'
+    };
+  }
+  return http.post(API_BASE + '/auth/uniauth/login', { userDomainName });
+}
+
+/**
  * 登出：销毁 yiti session
  */
 export function logout() {

@@ -17,12 +17,15 @@ import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserOrgMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
+import com.bank.branch.platform.auth.uniauth.UniAuthSidecarClient;
+import com.bank.branch.platform.auth.uniauth.dto.UniAuthRespDTO;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.exception.AuthException;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,6 +59,10 @@ public class AuthService {
     private final BizScopeService bizScopeService;
     private final ResourceMapper resourceMapper;
     private final CurrentUserProvider currentUserProvider;
+
+    /** 统一认证（边车 11003）客户端。required=false → 边车未就绪时不阻断登录主流程。 */
+    @Autowired(required = false)
+    private UniAuthSidecarClient uniAuthSidecarClient;
 
     /**
      * 用户登录
@@ -141,7 +148,124 @@ public class AuthService {
             return dto;
         }).collect(Collectors.toList()));
 
+        // 登录成功后追加一步：通过边车调统一认证 S120030044 查授权信息（fail-open，异常不挡主流程）
+        // 对应 xanpd 的 LoginController.loginAfter → IAuthorityHandler.handleAuthorities → UserInfoFromUIAS
+        if (uniAuthSidecarClient != null) {
+            try {
+                UniAuthRespDTO uia = uniAuthSidecarClient.queryUserInfo(user.getUsername());
+                if (uia.isSuccess() && uia.getSvcBody() != null && uia.getSvcBody().getUserInfoQryRslt() != null) {
+                    session.setAttribute("UIAS_USER_BSC_INFO",
+                            uia.getSvcBody().getUserInfoQryRslt().getUserBscInfo());
+                    session.setAttribute("UIAS_INST_INFO_LIST",
+                            uia.getSvcBody().getUserInfoQryRslt().getInstInfoList());
+                    log.info("[AuthService.login] UIAS 授权同步成功 empId={}", user.getUserId());
+                } else {
+                    log.warn("[AuthService.login] UIAS 查询失败 empId={} returnCode={}",
+                            user.getUserId(),
+                            uia.getRspSvcHeader() == null ? null : uia.getRspSvcHeader().getReturnCode());
+                }
+            } catch (Exception e) {
+                log.warn("[AuthService.login] UIAS 查询异常（不阻断登录） empId={} err={}",
+                        user.getUserId(), e.getMessage());
+            }
+        }
+
         log.info("[AuthService.login] 登录成功 empId={}, roles={}", user.getUserId(), roleCodes);
+        return resp;
+    }
+
+    /**
+     * 统一认证登录（开发期 mock）。
+     * <p>对应 xanpd LoginController.redirectSuccess 的"UIAS 跳转后建 session"流程 —
+     * 不校验密码，仅按工号查 PT_USER + 调统一认证 S120030044 + 建 session。
+     * <p>生产环境应改为完整 UIAS 重定向链路（行内 Spring Security UIAS filter）。
+     *
+     * @param userDomainName AD 域账号（工号，例 "12050965"）
+     * @param session HttpSession
+     * @return LoginRespDTO
+     * @throws AuthException 用户不存在 / 账号被锁 / UIAS 调用失败时抛出
+     */
+    @Transactional
+    public LoginRespDTO loginByUniAuth(String userDomainName, HttpSession session) {
+        // 1) 按工号查 PT_USER（不校验密码）
+        PtUser user = userMapper.selectByUsername(userDomainName);
+        if (user == null) {
+            throw new AuthException(AuthErrorCode.LOGIN_FAILED.getCode(),
+                    "统一认证：用户不存在 userDomainName=" + userDomainName);
+        }
+
+        // 2) 账号状态（被锁定/停用/过期仍然不能登）
+        checkAccountStatus(user);
+
+        // 3) 调统一认证 S120030044 查授权信息（fail-close：必须成功）
+        if (uniAuthSidecarClient == null) {
+            throw new AuthException(AuthErrorCode.LOGIN_FAILED.getCode(),
+                    "统一认证客户端未就绪，请检查边车是否启动");
+        }
+        UniAuthRespDTO uia;
+        try {
+            uia = uniAuthSidecarClient.queryUserInfo(userDomainName);
+        } catch (Exception e) {
+            log.error("[AuthService.loginByUniAuth] UIAS 调用异常 userDomainName={} err={}",
+                    userDomainName, e.getMessage(), e);
+            throw new AuthException(AuthErrorCode.LOGIN_FAILED.getCode(),
+                    "统一认证调用异常: " + e.getMessage());
+        }
+        if (!uia.isSuccess()) {
+            String rc = uia.getRspSvcHeader() == null ? null : uia.getRspSvcHeader().getReturnCode();
+            String rm = uia.getRspSvcHeader() == null ? null : uia.getRspSvcHeader().getReturnMsg();
+            throw new AuthException(AuthErrorCode.LOGIN_FAILED.getCode(),
+                    "统一认证失败 returnCode=" + rc + " returnMsg=" + rm);
+        }
+
+        // 4) 复用 login() 的"查机构/角色 + 建 session + 构建响应"逻辑
+        ExtUserOrg userOrg = userOrgMapper.selectByUserId(user.getUserId());
+        String mainOrgCode = userOrg != null ? userOrg.getOrgCode() : null;
+        String mainOrgName = null;
+        Integer orgLevel = null;
+        if (mainOrgCode != null) {
+            ExtOrgInfo org = orgMapper.selectByOrgCode(mainOrgCode);
+            mainOrgName = org != null ? org.getOrgName() : null;
+            orgLevel = org != null ? org.getOrgLevel() : null;
+        }
+
+        List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
+        Set<String> roleIds = roles.stream().map(PtRole::getRoleId).collect(Collectors.toSet());
+        Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
+        Set<String> candidateGroupKeys = roleCodes.stream()
+                .map(c -> "ROLE:" + c).collect(Collectors.toSet());
+        boolean isAdmin = roleCodes.contains("SYS_ADMIN");
+
+        CurrentUserContext userCtx = new CurrentUserContext(
+                user.getUserId(), user.getUsername(), user.getUserchnname(),
+                mainOrgCode, mainOrgName, orgLevel,
+                roleIds, roleCodes, candidateGroupKeys, isAdmin);
+        session.setAttribute(SESSION_USER_KEY, userCtx);
+
+        // UIAS 授权信息塞 session 供后续业务消费
+        if (uia.getSvcBody() != null && uia.getSvcBody().getUserInfoQryRslt() != null) {
+            session.setAttribute("UIAS_USER_BSC_INFO",
+                    uia.getSvcBody().getUserInfoQryRslt().getUserBscInfo());
+            session.setAttribute("UIAS_INST_INFO_LIST",
+                    uia.getSvcBody().getUserInfoQryRslt().getInstInfoList());
+        }
+
+        LoginRespDTO resp = new LoginRespDTO();
+        resp.setEmpId(user.getUserId());
+        resp.setUsername(user.getUsername());
+        resp.setDisplayName(user.getUserchnname());
+        resp.setMainOrgCode(mainOrgCode);
+        resp.setMainOrgName(mainOrgName);
+        resp.setToken(session.getId());
+        resp.setRoles(roles.stream().map(r -> {
+            RoleSimpleDTO dto = new RoleSimpleDTO();
+            dto.setRoleId(r.getRoleId());
+            dto.setRoleCode(r.getRoleCode());
+            dto.setRoleChName(r.getRoleChName());
+            return dto;
+        }).collect(Collectors.toList()));
+
+        log.info("[AuthService.loginByUniAuth] 统一认证登录成功 empId={}, roles={}", user.getUserId(), roleCodes);
         return resp;
     }
 

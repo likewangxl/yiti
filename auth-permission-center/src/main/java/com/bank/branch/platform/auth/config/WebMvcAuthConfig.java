@@ -60,6 +60,9 @@ public class WebMvcAuthConfig implements WebMvcConfigurer {
             // 排除不需要授权校验的路径（认证由过滤器处理，白名单路径无需 RBAC）
             .excludePathPatterns(
                 "/api/auth/login",
+                "/api/auth/uniauth/login",
+                "/api/auth/uniauth/redirect",
+                "/api/auth/uniauth/callback",
                 "/api/auth/logout",
                 "/doc.html",
                 "/webjars/**",

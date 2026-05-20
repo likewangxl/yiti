@@ -24,7 +24,44 @@ spring:
 
 # CORS 由 CorsConfig (@Profile("dev")) 自动生效
 
+# Tomcat sendRedirect 保留相对 Location（不补全成绝对 URL）
+# Why: vite proxy changeOrigin:true 会把 Host 头改成 target host（30522），
+# Tomcat 默认会用 Host 拼 sendRedirect("/foo") 成 http://localhost:30522/foo，
+# 导致 callback 后浏览器跳错 host。开启此项让 Location 保持 /foo，
+# 浏览器按真实 origin（8090 vite）解析。
+server:
+  tomcat:
+    use-relative-redirects: true
+
 logging:
   level:
     com.bank.branch.platform: DEBUG
     org.mybatis: DEBUG
+
+# 边车（Sidecar）配置 —— 走 11003 端口的 HTTP+SOAP 通道，用于统一认证 S120030044
+platform:
+  sidecar:
+    base-url: http://127.0.0.1:11003
+    health-base-url: http://127.0.0.1:8089
+    connect-timeout-ms: 3000
+    read-timeout-ms: 10000
+    log-request: true                       # 开发期 true：打印完整 SOAP 报文；生产建议关或脱敏
+    uniauth:
+      path: /services/S120030044
+      # 走网关模式：不传 serviceName / functionId 两个 header，
+      # 边车 11003 看到 serviceName 缺失会自动转 7603 行内 ESB 网关。
+      # 点对点调用门槛高（要求前 4 位系统 ID 相同 + 安全中心权限 ID 申请），yiti 用不上。
+      source-sys-id: '37150001'
+      consumer-id: '37150001'
+      service-adr: http://esb.spdbbiz.com:7701/services/S120030044
+      service-action: urn:/NewAuthrQuery
+      svc-consumer-id: '37150001'
+      branch-id: '9901'
+      tran-teller-no: ''
+      app-id: XAFA                                           # UIAS 系统简称（SYS_ID 风格，行内分配，不是 ESB 数字编号）
+      # === UIAS 单点重定向链路（正式生产用）===
+      redirect-url: http://uias.uat.spdb.com/NIDP/           # UIAS UAT 登录页
+      callback-url: http://localhost:8090/api/auth/uniauth/callback   # 前端 host（vite proxy 转 yiti 后端）
+      sso-target-param-name: ssotarget                       # UIAS 重定向时传"回调地址"用的参数名
+      user-param-name: userDomainName                        # UIAS 回调时用什么参数名传用户身份
+      front-home-url: /#/workspace                           # 登录成功跳前端首页
