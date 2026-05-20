@@ -39,9 +39,21 @@
         <div class="res-list">
           <div v-for="g in groupedRes" :key="g.key" class="res-group-block">
             <div class="res-group">
+              <span class="caret" @click="toggleCollapse(g.key)" :title="collapsedKeys.has(g.key) ? '展开' : '折叠'">{{ collapsedKeys.has(g.key) ? '▶' : '▼' }}</span>
               <span class="ico">{{ g.icon }}</span>
-              <span class="g-name">{{ g.name }}</span>
+              <span class="g-name" @click="toggleCollapse(g.key)" style="cursor:pointer">{{ g.name }}</span>
               <span class="cnt">R {{ g.r.checked }}/{{ g.r.items.length }} · W {{ g.w.checked }}/{{ g.w.items.length }}</span>
+              <span class="rw-all">
+                <el-checkbox
+                  :model-value="g.all.allChecked"
+                  :indeterminate="g.all.indeterminate"
+                  :disabled="g.all.total === 0"
+                  @change="(v) => toggleGroupSide(g, 'all', v)"
+                  size="small"
+                  title="整组 R+W 一键勾选 / 取消"
+                />
+                <span class="g-all-label">整组</span>
+              </span>
               <span class="rw-h">
                 <el-checkbox
                   :model-value="g.r.allChecked"
@@ -63,7 +75,7 @@
                 <span style="color:#D97706">W</span>
               </span>
             </div>
-            <div v-for="r in g.allItems" :key="r.resourceId" class="res-item">
+            <div v-for="r in g.allItems" :key="r.resourceId" v-show="!collapsedKeys.has(g.key)" class="res-item">
               <div class="res-meta">
                 <span class="res-name">{{ r.menuName || r.resourceId }}</span>
                 <code class="res-url"><el-tag size="small" :class="methodCls(r.resourceMethod)" effect="plain" disable-transitions>{{ r.resourceMethod }}</el-tag> {{ r.resourceUrl }}</code>
@@ -293,6 +305,15 @@ const groupedRes = computed(() => {
     g.r.indeterminate = g.r.checked > 0 && g.r.checked < g.r.items.length;
     g.w.allChecked = g.w.items.length > 0 && g.w.checked === g.w.items.length;
     g.w.indeterminate = g.w.checked > 0 && g.w.checked < g.w.items.length;
+    // 整组 R+W 合计，给「一键勾选整组菜单」主复选框用
+    const allTotal = g.r.items.length + g.w.items.length;
+    const allChecked = g.r.checked + g.w.checked;
+    g.all = {
+      total: allTotal,
+      checked: allChecked,
+      allChecked: allTotal > 0 && allChecked === allTotal,
+      indeterminate: allChecked > 0 && allChecked < allTotal,
+    };
     groups.push(g);
   }
   // 按 MODULE_RULES 顺序排
@@ -308,10 +329,19 @@ function toggleOne(id, v) {
 }
 function toggleGroupSide(g, side, v) {
   const next = new Set(checkedIds.value);
-  for (const r of g[side].items) {
+  // side='all' 时整组 R+W 一起切；保留 'r'/'w' 单侧切作为细粒度
+  const items = side === 'all' ? g.allItems : g[side].items;
+  for (const r of items) {
     if (v) next.add(r.resourceId); else next.delete(r.resourceId);
   }
   checkedIds.value = next;
+}
+// 折叠/展开整个业务模块分组，让长资源列表的浏览体验更接近"按菜单整体浏览"
+const collapsedKeys = ref(new Set());
+function toggleCollapse(key) {
+  const next = new Set(collapsedKeys.value);
+  if (next.has(key)) next.delete(key); else next.add(key);
+  collapsedKeys.value = next;
 }
 function resetChecked() {
   checkedIds.value = new Set(initialChecked.value);
@@ -502,10 +532,19 @@ onMounted(reload);
   padding: 8px 14px; font-size: 12.5px; font-weight: 500;
   background: $bg-soft; position: sticky; top: 0; z-index: 1;
   display: flex; align-items: center; gap: 8px;
+  .caret { cursor: pointer; user-select: none; font-size: 10px; color: $text-3;
+    width: 14px; text-align: center; transition: color .12s;
+    &:hover { color: $primary; }
+  }
   .ico { font-size: 14px; }
   .g-name { flex: 1; }
   .cnt { color: $text-3; font-size: 11px; font-weight: normal; }
   .rw-h { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+    .el-checkbox { margin-right: 0; }
+  }
+  .rw-all { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+    padding-right: 8px; margin-right: 4px; border-right: 1px solid $border-3;
+    .g-all-label { color: $primary; }
     .el-checkbox { margin-right: 0; }
   }
 }

@@ -11,7 +11,7 @@
       <el-form label-width="100px" size="default">
         <el-form-item label="导入类型">
           <el-radio-group v-model="kind">
-            <el-radio value="BASE_DATA">指标结果</el-radio>
+            <el-radio value="METRIC_RESULT">指标结果</el-radio>
             <el-radio value="ALLOC">KPI 结果</el-radio>
             <el-radio value="TARGET">目标值</el-radio>
           </el-radio-group>
@@ -107,13 +107,13 @@ import {
   refreshImportStatus, retryImport, deleteImportBatch, downloadImportErrors
 } from '@/api/perf';
 
-const kind = ref('BASE_DATA');
+const kind = ref('METRIC_RESULT');
 const date = ref(new Date().toISOString().slice(0, 10));
 const plan = ref('2026Q2');
 const rows = ref([]);
 const loading = ref(false);
 
-const TYPE_LABEL = { BASE_DATA: '指标结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
+const TYPE_LABEL = { METRIC_RESULT: '指标结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
 const typeLabel = (t) => TYPE_LABEL[t] || t || '-';
 const STATUS_LABEL = { PROCESSING: '导入中', SUCCESS: '已完成', FAILED: '失败', PENDING: '排队中' };
 const statusLabel = (s) => STATUS_LABEL[s] || s || '-';
@@ -149,10 +149,27 @@ function onFilePick(file) {
 }
 async function onUpload() {
   if (!picked.value) return ElMessage.warning('请先选择文件');
+  // V1.12 微调：METRIC_RESULT 必填 dataDate（前端 picker 默认今天），缺失提前拦截避免后端 422
+  if (kind.value === 'METRIC_RESULT' && !date.value) {
+    return ElMessage.warning('请选择数据日期');
+  }
   uploading.value = true;
   try {
-    const batchId = await uploadImportFile(kind.value, picked.value, { uploader: '当前用户' });
-    ElMessage.success(`已提交，批次号 ${batchId}`);
+    const result = await uploadImportFile(kind.value, picked.value, date.value, { uploader: '当前用户' });
+    const { batchId, errorRows = 0, errorSummary } = result || {};
+    if (errorRows > 0) {
+      // 2026-05-19 微调：行级校验失败的批次（例如机构号不在 EXT_ORG_INFO）必须明显告警，
+      // 不能再让用户以为"已提交"=数据都进库了。errorSummary 由后端直接拼好供前端展示
+      ElMessage({
+        type: 'warning',
+        dangerouslyUseHTMLString: false,
+        showClose: true,
+        duration: 0,
+        message: `批次号 ${batchId} 已提交，但有 ${errorRows} 行未入库：\n${errorSummary || '详见错误明细'}`,
+      });
+    } else {
+      ElMessage.success(`已提交，批次号 ${batchId}`);
+    }
     picked.value = null;
     uploaderRef.value?.clearFiles();
     await reload();
@@ -191,8 +208,9 @@ async function onDelete(row) {
 async function downloadTpl() {
   // 后端暂无"模板下载"端点；前端用 SheetJS 生成真 .xlsx（带表头 + 1 行示例数据）
   const TPL = {
-    BASE_DATA: {
-      headers: ['对象编号', '指标编码', '数值', '周期键', '备注'],
+    METRIC_RESULT: {
+      headers: ['序号', '基础维度（EMP/ORG/CUST/空）', '维度对象', '指标名称', '指标数值'],
+      // V1.12 微调（2026-05-19）：dataDate 改走 HTTP 参数，Sheet 名变为纯展示用
       sheet:   '指标结果',
       file:    '指标结果导入模板'
     },

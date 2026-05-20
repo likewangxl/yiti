@@ -207,8 +207,10 @@ export function exportDashboardPdf(payload) {
 }
 
 // ===== 预置报表 =====
+// 注意：lf 后端目前没有 /api/reports/presets 端点（PT_RESOURCE 无登记，调用返回 AUTH-40302）。
+// fallback 改空数组，避免 UI 显示 6 条 reportPresets mock 假数据；待后端补接口后即可联通。
 export function listPresets() {
-  return call('get', '/reports/presets', {}, reportPresets);
+  return call('get', '/reports/presets', {}, []);
 }
 
 // ===== SQL 探查 =====

@@ -36,11 +36,10 @@ function adaptWorkspace(dto) {
     label: s.shortcutName || ''
   }));
   return {
-    // 这些字段后端没有，先沿用 mock 让 UI 有内容
+    // greet/desc 已被 workspace/Index.vue 的 computed 接管，这里仅保留兜底字段
     greet: mock.greet,
     desc: mock.desc,
     stats: mock.stats,
-    // 后端有数据用后端，没数据用 mock 兜底（数据库里多半还没造数）
     todos: todos.length ? todos : mock.todos,
     notifications: notifications.length ? notifications : mock.notifications,
     shortcuts: shortcuts.length ? shortcuts : mock.shortcuts
@@ -61,7 +60,8 @@ export async function getWorkspace() {
  * 后端直接返回 number
  */
 export function getUnreadCount() {
-  return call('get', '/notifications/unread-count', {}, 3);
+  // 后端不通时角标显示 0，避免造成"有 3 条未读"的假象
+  return call('get', '/notifications/unread-count', {}, 0);
 }
 
 /**

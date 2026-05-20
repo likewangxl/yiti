@@ -5,15 +5,30 @@
       <span class="desc">三级层级树 · SQL/Groovy 计算配置 · 试运行 · 版本</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
-        <el-button @click="onImport">📥 导入指标</el-button>
+        <el-button @click="downloadMetricTpl">📑 下载模板</el-button>
+        <el-button @click="onImport" :loading="importing">📥 导入指标</el-button>
         <el-button type="primary" @click="openCreate">+ 新增指标</el-button>
       </div>
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept=".xlsx,.xls"
+        style="display:none"
+        @change="onFileChosen" />
     </div>
 
     <div class="layout">
       <!-- 左：分类树 -->
       <div class="card-section tree-col">
         <div class="card-h-mini">指标层级</div>
+        <el-input
+          v-model="treeKeyword"
+          placeholder="搜索：指标名称 / 编号 / 分类"
+          size="small"
+          clearable
+          :prefix-icon="Search"
+          class="tree-search"
+        />
         <el-tree
           ref="treeRef"
           :data="treeData"
@@ -22,6 +37,7 @@
           :expand-on-click-node="false"
           :highlight-current="true"
           :current-node-key="picked"
+          :filter-node-method="filterTreeNode"
           @node-click="onTreeClick"
           empty-text="暂无指标"
         >
@@ -257,13 +273,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { Search } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   listMetrics, getMetricDetail,
   createMetric, updateMetric, deleteMetric,
-  changeMetricStatus, trialRunMetric, executeMetric
+  changeMetricStatus, trialRunMetric, executeMetric,
+  uploadImportFile, listMetricCategories
 } from '@/api/perf';
 import { listAuditLogs } from '@/api/system';
 
@@ -311,59 +329,71 @@ const bizActionLabel = (a) => BIZ_ACTION_LABEL[a] || a || '—';
 
 // === 数据加载 ===
 const allMetrics = ref([]);
+// 后端 /perf/metrics/categories 返回 [{value, label}]；树分组的"骨架"
+const categories = ref([]);
+const UNCATEGORIZED_LABEL = '未分类';
 async function reload() {
   try {
-    const r = await listMetrics({ pageSize: 100 });
+    const [r, cs] = await Promise.all([
+      listMetrics({ pageSize: 100 }),
+      listMetricCategories().catch(() => [])
+    ]);
     // 停用项保留在树里（按用户反馈），通过按钮 disable 限制操作即可
     if (Array.isArray(r)) allMetrics.value = r;
+    categories.value = Array.isArray(cs) ? cs : [];
     // 默认选中第一个指标
     if (allMetrics.value.length && !picked.value) onPick(allMetrics.value[0].metricCode);
   } catch {}
 }
 
-// === 分类规则：优先 metricDesc(JSON)._category，其次按名称关键词推断 ===
+// === 单条指标的分类归属（右侧"同分类"列表 / 详情页用）===
+// 优先取后端字段 metric.metricCategory；为空再回落到 metricDesc 内嵌的 _category；
+// 再不行用关键词推断兜底（老数据兼容）。
 function categoryOf(m) {
+  if (m?.metricCategory) return [m.metricCategory, null];
   const meta = parseMeta(m);
   if (meta && meta._category) {
     const [g, sub] = meta._category.split('/');
     return [g, sub || null];
   }
-  const n = (m.metricName || '') + ' ' + (m.metricDesc || '');
+  const n = (m?.metricName || '') + ' ' + (m?.metricDesc || '');
   if (/不良|风险/.test(n)) return ['风险指标', '风险类'];
-  if (/中收|手续费|fee/i.test(n) || m.metricCode === 'M_FEE') return ['业务指标', '中收类'];
+  if (/中收|手续费|fee/i.test(n) || m?.metricCode === 'M_FEE') return ['业务指标', '中收类'];
   if (/存款/.test(n)) return ['业务指标', '存款类'];
   if (/贷款/.test(n)) return ['业务指标', '贷款类'];
-  if (/客户|cust/i.test(n) || m.baseDim === 'CUST') return ['客户指标', null];
-  return ['综合指标', null];
+  if (/客户|cust/i.test(n) || m?.baseDim === 'CUST') return ['客户指标', null];
+  return [UNCATEGORIZED_LABEL, null];
 }
 function resolveCategory(m) {
   const [g, sub] = categoryOf(m);
   return sub ? `${g}/${sub}` : g;
 }
 
-// === 树结构（前端按分类聚合） ===
+// === 树结构：以后端 categories 接口为骨架；metric.metricCategory 决定归属 ===
 const treeData = computed(() => {
-  const root = new Map();
+  // 1. 用后端返回的分类建立"骨架"（保证空分类也显示）
+  const groups = new Map();
+  for (const c of categories.value) {
+    const label = c?.label || c?.value;
+    if (!label) continue;
+    groups.set(label, { id: 'g-' + label, label, children: [] });
+  }
+  // 2. 把每条指标挂到对应分类节点；后端无该分类时按需新建；无 metricCategory 入"未分类"
   for (const m of allMetrics.value) {
-    const [g, sub] = categoryOf(m);
-    const groupNode = root.get(g) || { id: 'g-' + g, label: g, children: [] };
-    root.set(g, groupNode);
-    const leaf = {
+    const cat = m?.metricCategory || UNCATEGORIZED_LABEL;
+    let node = groups.get(cat);
+    if (!node) {
+      node = { id: 'g-' + cat, label: cat, children: [] };
+      groups.set(cat, node);
+    }
+    node.children.push({
       id: m.metricCode, label: m.metricName,
       isMetric: true, status: m.status, raw: m
-    };
-    if (sub) {
-      let subNode = groupNode.children.find(c => c.id === 'sub-' + g + sub);
-      if (!subNode) {
-        subNode = { id: 'sub-' + g + sub, label: sub, children: [] };
-        groupNode.children.push(subNode);
-      }
-      subNode.children.push(leaf);
-    } else {
-      groupNode.children.push(leaf);
-    }
+    });
   }
-  return Array.from(root.values());
+  // 3. 空分类节点放最后；非空按后端顺序
+  const all = Array.from(groups.values());
+  return all.filter(g => g.children.length).concat(all.filter(g => !g.children.length));
 });
 
 // === 详情 ===
@@ -387,6 +417,19 @@ async function onPick(code) {
 }
 function onTreeClick(node) {
   if (node.isMetric) onPick(node.id);
+}
+
+// === 树模糊搜索（仅前端过滤，不调后端）===
+const treeRef = ref(null);
+const treeKeyword = ref('');
+watch(treeKeyword, v => treeRef.value?.filter(v ?? ''));
+function filterTreeNode(value, data) {
+  if (!value) return true;
+  const v = String(value).trim().toLowerCase();
+  if (!v) return true;
+  const label = String(data.label || '').toLowerCase();
+  const code = String(data.raw?.metricCode || '').toLowerCase();
+  return label.includes(v) || code.includes(v);
 }
 
 // === 槽位声明 / 分类元数据：从 metricDesc(JSON) 解析，否则按 SQL 文本兜底 ===
@@ -514,12 +557,12 @@ async function onSave(targetStatus) {
       }
       ElMessage.success(targetStatus === 'ACTIVE' ? '已发布' : '已保存为草稿');
     } else {
-      // Create DTO 额外接 baseDim、metricLevel、preferredSlot
+      // Create DTO 额外接 baseDim、metricLevel；preferredSlot 不传，让后端自动从空槽位里选第一个，
+      // 否则 valSlot 默认 1 会和已有指标冲突，抛 PERF-40901 指标槽位已占用
       await createMetric({
         ...basePayload,
         baseDim: dlg.form.baseDim,
-        metricLevel: dlg.form.metricLevel,
-        preferredSlot: dlg.form.valSlot
+        metricLevel: dlg.form.metricLevel
       });
       // 后端创建默认 ACTIVE；如果选了草稿就再切一下
       if (targetStatus === 'DRAFT') {
@@ -650,9 +693,66 @@ async function onShowVersions() {
   } catch {} finally { versionDlg.loading = false; }
 }
 
-// === 导入指标（占位提示） ===
+// === 导入指标（METRIC_DEF 模板，后端 lf 侧需配套实现 importType=METRIC_DEF 解析）===
+// 模板表头与后端 MetricDefImportRow @ExcelProperty 完全一致（9 列；
+// 原 xlsx 第 10 列"维度"已删，因后端 V1.9 改造无 base_dim 列，DEFAULT_BASE_DIM=null）
+const METRIC_TPL_HEADERS = [
+  '指标序号',
+  '指标层级(2级支行由1级支行计算而来、后面还可以细化到3级指标)',
+  '指标名称',
+  '指标编号',
+  '指标分类',
+  '指标来源(可以是外部导入、可以是系统从总行数据库中提取、可以是通过提取数据进行的计算)',
+  '计算规则(SQL或自定义规则)',
+  '定时任务(每日、每月、每季、每年)',
+  '指标状态(勾选后可以在报表中查询、未勾选时不进行显示)'
+];
+
+async function downloadMetricTpl() {
+  try {
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.aoa_to_sheet([METRIC_TPL_HEADERS]);
+    // 列宽按表头中文字符数估算
+    ws['!cols'] = METRIC_TPL_HEADERS.map(h => ({ wch: Math.max(12, Math.min(60, h.length * 2 + 2)) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '指标表');
+    XLSX.writeFile(wb, '指标表上传模板.xlsx');
+    ElMessage.success('已下载指标表上传模板');
+  } catch (e) {
+    ElMessage.error('生成模板失败：' + (e?.message || e));
+  }
+}
+
+const fileInputRef = ref(null);
+const importing = ref(false);
 function onImport() {
-  ElMessageBox.alert('指标批量导入请使用左侧菜单【数据导入】模块，选择"指标定义导入"模板。', '导入指标', { type: 'info' });
+  fileInputRef.value?.click();
+}
+async function onFileChosen(ev) {
+  const file = ev.target.files?.[0];
+  // 清空 input.value，让连续选同一个文件也能再次触发 change
+  ev.target.value = '';
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) {
+    ElMessage.warning('文件超过 20MB 限制');
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认上传指标定义文件 ${file.name}（${(file.size / 1024).toFixed(0)} KB）？`,
+      '导入指标', { type: 'info', confirmButtonText: '上传', cancelButtonText: '取消' }
+    );
+  } catch { return; }
+  importing.value = true;
+  try {
+    const batchId = await uploadImportFile('METRIC_DEF', file, { uploader: '当前用户' });
+    ElMessage.success(`已提交，批次号 ${batchId}；进度可在【数据导入】查看`);
+    reload();
+  } catch (e) {
+    ElMessage.error('上传失败：' + (e?.message || e));
+  } finally {
+    importing.value = false;
+  }
 }
 
 onMounted(reload);
@@ -669,6 +769,7 @@ onMounted(reload);
   max-height: calc(100vh - 200px);
   overflow: auto;
 }
+.tree-search { margin-bottom: 10px; }
 .card-h-mini {
   font-size: 14px; font-weight: 600;
   padding: 0 0 12px;

@@ -20,13 +20,18 @@ import {
 // ============================================================
 // 指标库 Metrics
 // ============================================================
+// V1.10：后端 GET /api/perf/metrics 改为一次性返回 List<MetricDefRespDTO>，
+// 不再分页（ResponseWrapper.success(list)）。前端不再 unwrapPage。
 export function listMetrics(params = {}) {
-  // params: baseDim, metricLevel, status, keyword, pageNo, pageSize
-  // 后端走 ResponseWrapper.page，http.js 拦截器返回 PageResult 对象 → 这里抽 records 给前端
-  return call('get', '/perf/metrics', { params: { pageSize: 100, ...params } }, perfMetricsTree).then(unwrapPage);
+  // params: baseDim, metricLevel, status, keyword
+  return call('get', '/perf/metrics', { params }, perfMetricsTree);
 }
 export function getMetricsTree() {
   return listMetrics();  // 兼容老调用
+}
+// V1.10：GET /api/perf/metrics/categories → List<{value, label}>
+export function listMetricCategories() {
+  return call('get', '/perf/metrics/categories', {}, []);
 }
 export function getMetricDetail(code) {
   return call('get', `/perf/metrics/${code}`, {}, () => perfMetricDetail[code] || perfMetricDetail.M0002);
@@ -154,21 +159,34 @@ function removeLocalImport(batchId) {
   const arr = loadLocalImports().filter(x => x.batchId !== batchId && x.id !== batchId);
   try { localStorage.setItem(LS_RECENT_IMPORTS, JSON.stringify(arr)); } catch {}
 }
-// 上传：importType ∈ TARGET / BASE_DATA / ALLOC；后端要求 multipart `file` + 查询参 `importType`
-// 返回 batchId（后端 ResponseWrapper.success(String)）
-export async function uploadImportFile(importType, file, meta = {}) {
+// 上传：importType ∈ TARGET / BASE_DATA / ALLOC / METRIC_DEF / METRIC_RESULT
+// 后端要求 multipart `file` + 查询参 `importType`；
+// V1.12 微调（2026-05-19）：METRIC_RESULT 必带 dataDate (yyyy-MM-dd)；其他类型忽略 dataDate。
+// 返回 batchId（后端 ResponseWrapper.success(PerfImportUploadRespDTO).batchId）
+export async function uploadImportFile(importType, file, dataDate, meta = {}) {
   const fd = new FormData();
   fd.append('file', file);
-  // 走 axios 的 params 传 importType，避免被 multipart body 吃掉
-  const batchId = await call('post', '/perf/import/upload', {
+  // 走 axios 的 params 传 importType + dataDate，避免被 multipart body 吃掉
+  const params = { importType };
+  if (dataDate) {
+    params.dataDate = dataDate;
+  }
+  // V1.11 后端响应破坏性变更：data 从 string 变为 PerfImportUploadRespDTO 对象，
+  // 需要从对象里取 batchId 字段；mock 路径仍返回字符串，二者兼容
+  // 2026-05-19 微调：返回完整对象（含 errorRows / errorSummary），让调用方区分"已提交但有错"与"完全成功"
+  const resp = await call('post', '/perf/import/upload', {
     data: fd,
-    params: { importType },
+    params,
     headers: { 'Content-Type': 'multipart/form-data' }
   }, () => 'IMP-MOCK-' + Date.now());
+  // 归一化为对象：mock 返回 string 时包成 { batchId } 兼容
+  const normalized = (resp && typeof resp === 'object')
+    ? { batchId: resp.batchId || resp.id, ...resp }
+    : { batchId: resp };
   // 写入 localStorage 历史
   pushLocalImport({
-    batchId,
-    id: batchId,
+    batchId: normalized.batchId,
+    id: normalized.batchId,
     type: importType,
     file: file?.name || '-',
     fileSize: file?.size || 0,
@@ -177,7 +195,7 @@ export async function uploadImportFile(importType, file, meta = {}) {
     status: 'PROCESSING',
     time: new Date().toISOString().slice(0, 19).replace('T', ' ')
   });
-  return batchId;
+  return normalized;
 }
 export function getImportBatch(batchId) {
   return call('get', `/perf/import/batches/${batchId}`, {}, {});
