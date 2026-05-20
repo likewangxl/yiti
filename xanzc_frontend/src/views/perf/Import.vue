@@ -155,8 +155,21 @@ async function onUpload() {
   }
   uploading.value = true;
   try {
-    const batchId = await uploadImportFile(kind.value, picked.value, date.value, { uploader: '当前用户' });
-    ElMessage.success(`已提交，批次号 ${batchId}`);
+    const result = await uploadImportFile(kind.value, picked.value, date.value, { uploader: '当前用户' });
+    const { batchId, errorRows = 0, errorSummary } = result || {};
+    if (errorRows > 0) {
+      // 2026-05-19 微调：行级校验失败的批次（例如机构号不在 EXT_ORG_INFO）必须明显告警，
+      // 不能再让用户以为"已提交"=数据都进库了。errorSummary 由后端直接拼好供前端展示
+      ElMessage({
+        type: 'warning',
+        dangerouslyUseHTMLString: false,
+        showClose: true,
+        duration: 0,
+        message: `批次号 ${batchId} 已提交，但有 ${errorRows} 行未入库：\n${errorSummary || '详见错误明细'}`,
+      });
+    } else {
+      ElMessage.success(`已提交，批次号 ${batchId}`);
+    }
     picked.value = null;
     uploaderRef.value?.clearFiles();
     await reload();

@@ -37,4 +37,15 @@ public class PerfImportUploadRespDTO {
 
     @Schema(description = "失败行数")
     private Integer errorRows;
+
+    /**
+     * 错误明细摘要（与 {@link PerfImportBatchRespDTO#getRemark()} 同源）.
+     *
+     * <p>2026-05-19 微调：把行级 errorSummary 同步透传到 upload 响应，
+     * 前端拿到 {@code errorRows > 0} 时可直接弹出此字段而不需要二次请求
+     * {@code GET /api/perf/import/batches/{id}}。多行错误用 "; " 分隔，
+     * 超长 (>3900 字符) 由 Service 端 truncate。
+     */
+    @Schema(description = "错误明细摘要（多行用分号分隔，前端可直接展示给用户）")
+    private String errorSummary;
 }

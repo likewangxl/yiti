@@ -100,6 +100,7 @@ public class PerfImportController {
                 .insertedRows(batchDto.getInsertedRows())
                 .updatedRows(batchDto.getUpdatedRows())
                 .errorRows(batchDto.getErrorRows())
+                .errorSummary(batchDto.getRemark())
                 .build();
         return ResponseWrapper.success(resp);
     }

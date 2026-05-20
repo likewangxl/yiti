@@ -120,6 +120,38 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     }
 
     @Test
+    void upload_partialErrors_returnsErrorSummaryInResponse() throws Exception {
+        // 2026-05-19 微调：行级最大努力分支下产生的 errorSummary（写到 batch.remark）
+        // 必须透传到 upload 同步响应，让前端无需二次查 batch detail 即可弹错误提示
+        Mockito.when(perfImportService.startImport(eq("METRIC_RESULT"), any(), anyString(), any()))
+                .thenReturn("BATCH_MR_E");
+        PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
+                .id("BATCH_MR_E")
+                .totalRows(2)
+                .successRows(1)
+                .errorRows(1)
+                .updatedRows(0)
+                .insertedRows(1)
+                .remark("Sheet[sheet1] 第3行: 参数校验失败: 机构不存在（EXT_ORG_INFO）: SZ_BA")
+                .build();
+        Mockito.when(perfImportService.getBatchDto("BATCH_MR_E")).thenReturn(batchDto);
+
+        MockMultipartFile file = new MockMultipartFile("file", "metric-result.xlsx",
+                "application/vnd.ms-excel", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/perf/import/upload")
+                        .file(file)
+                        .param("importType", "METRIC_RESULT")
+                        .param("dataDate", "2026-05-19"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.batchId").value("BATCH_MR_E"))
+                .andExpect(jsonPath("$.data.errorRows").value(1))
+                .andExpect(jsonPath("$.data.errorSummary",
+                        org.hamcrest.Matchers.containsString("机构不存在（EXT_ORG_INFO）: SZ_BA")));
+    }
+
+    @Test
     void upload_missingImportType_returns400() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "targets.xlsx",
                 "application/vnd.ms-excel", new byte[]{1, 2, 3});
@@ -245,9 +277,11 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void uploadMethod_shouldDeclareBizAuthAndAuditLog() throws Exception {
+        // V1.12 微调：upload 签名扩展为 (importType, file, dataDate) 三参，反射查找需对齐
         Method m = Class.forName(CONTROLLER_FQCN)
                 .getDeclaredMethod("upload", String.class,
-                        org.springframework.web.multipart.MultipartFile.class);
+                        org.springframework.web.multipart.MultipartFile.class,
+                        String.class);
         BizAuth ba = m.getAnnotation(BizAuth.class);
         assertThat(ba).isNotNull();
         assertThat(ba.bizType()).isEqualTo(BizType.PERF_CONFIG);

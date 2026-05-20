@@ -36,6 +36,7 @@
 - version 取值：调 `SysControlService.getCurrentVersion(baseDim)`；维度无 sys_control 记录时降级为 `"V1"`（捕获 `SYS_CONTROL_VERSION_NOT_FOUND`）
 - 实体 `EmpIndexResult` / `OrgIndexResult` / `CustIndexResult` 新增 `updatedTime` 字段
 - 测试基础设施 `PerfTestConfig` 补 `UserApi` / `OrgApi` mock bean（默认放行）；`MetricResultImportStrategyTest` 12 case 全绿（V1.12 初版 11 + 2026-05-19 base_dim 一致性微调新增 `execute_baseDimMismatch_recordedInErrorSummary` / `execute_blankBaseDimAgainstEmpMetric_recordedInErrorSummary` 2 case；同期改造 `execute_nullBaseDim_passesValidationButNotInserted` 为 def.baseDim=null 真维度无关型场景 → 净增 1 case）
+- **errorSummary 透传**（2026-05-19 微调）：`PerfImportUploadRespDTO` 新增 `errorSummary` 字段，`PerfImportController.upload` 把 `batchDto.remark` 同步写入响应。前端 `xanzc_frontend Import.vue.onUpload` 拿到 `errorRows > 0` 时直接弹 `ElMessage.warning(errorSummary)` 不消失，让"已提交但有行失败（如机构号不在 EXT_ORG_INFO）"明显告警，避免误以为绿色 toast = 数据都进库。`PerfImportControllerIT` 新增 `upload_partialErrors_returnsErrorSummaryInResponse`；顺手修复 V1.12 遗留 `uploadMethod_shouldDeclareBizAuthAndAuditLog` 反射 2→3 参 baseline 失败，IT 18 case 全绿
 - 跨模块依赖：本期模块新依赖 `auth-permission-center` 的 `OrgApi`（机构存在性校验，V1.11 之前只用 `CurrentUserApi`）+ `portal-content-center` 的 `AddressBookApi`（员工存在性校验改走 ADDRBOOK_EMPLOYEE 通讯录员工表，2026-05-19 修正）
 
 V1.11 (2026-05-18 交付)：指标定义导入按 metric_name upsert —— 在 V1.10 基础上把 METRIC_DEF Excel 导入从「整批 all-or-none」改为「按指标名称命中则更新、未命中则新增」：

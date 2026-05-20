@@ -173,16 +173,20 @@ export async function uploadImportFile(importType, file, dataDate, meta = {}) {
   }
   // V1.11 后端响应破坏性变更：data 从 string 变为 PerfImportUploadRespDTO 对象，
   // 需要从对象里取 batchId 字段；mock 路径仍返回字符串，二者兼容
+  // 2026-05-19 微调：返回完整对象（含 errorRows / errorSummary），让调用方区分"已提交但有错"与"完全成功"
   const resp = await call('post', '/perf/import/upload', {
     data: fd,
     params,
     headers: { 'Content-Type': 'multipart/form-data' }
   }, () => 'IMP-MOCK-' + Date.now());
-  const batchId = (resp && typeof resp === 'object') ? (resp.batchId || resp.id) : resp;
+  // 归一化为对象：mock 返回 string 时包成 { batchId } 兼容
+  const normalized = (resp && typeof resp === 'object')
+    ? { batchId: resp.batchId || resp.id, ...resp }
+    : { batchId: resp };
   // 写入 localStorage 历史
   pushLocalImport({
-    batchId,
-    id: batchId,
+    batchId: normalized.batchId,
+    id: normalized.batchId,
     type: importType,
     file: file?.name || '-',
     fileSize: file?.size || 0,
@@ -191,7 +195,7 @@ export async function uploadImportFile(importType, file, dataDate, meta = {}) {
     status: 'PROCESSING',
     time: new Date().toISOString().slice(0, 19).replace('T', ' ')
   });
-  return batchId;
+  return normalized;
 }
 export function getImportBatch(batchId) {
   return call('get', `/perf/import/batches/${batchId}`, {}, {});
