@@ -54,4 +54,22 @@ public interface RoleResourceMapper extends BaseMapper<PtRoleResource> {
      */
     boolean existsByRoleIdAndResourceId(@Param("roleId") String roleId,
                                         @Param("resourceId") String resourceId);
+
+    /**
+     * 查询指定角色已授权的"菜单"资源ID列表（即 PT_RESOURCE.IS_MENU=1 的部分）。
+     * <p>用于角色管理页面"分配菜单"对话框的回显，与接口资源（IS_MENU=0）分开取。</p>
+     *
+     * @param roleId 角色ID
+     * @return 菜单资源ID列表
+     */
+    List<String> selectMenuIdsByRoleId(String roleId);
+
+    /**
+     * 删除指定角色的"菜单"绑定（仅 PT_RESOURCE.IS_MENU=1 的部分），
+     * 接口资源绑定（IS_MENU=0）不动。配合 replaceMenus 全量替换菜单分配。
+     *
+     * @param roleId 角色ID
+     * @return 受影响行数
+     */
+    int deleteMenuBindingsByRoleId(String roleId);
 }

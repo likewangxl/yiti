@@ -3,6 +3,7 @@ package com.bank.branch.platform.auth.controller;
 import com.bank.branch.platform.auth.api.dto.ResourceCreateReqDTO;
 import com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO;
 import com.bank.branch.platform.auth.api.dto.ResourceUpdateReqDTO;
+import com.bank.branch.platform.auth.api.dto.RoleMenuReplaceReqDTO;
 import com.bank.branch.platform.auth.api.dto.RoleResourceBindReqDTO;
 import com.bank.branch.platform.auth.api.dto.RoleResourceReplaceReqDTO;
 import com.bank.branch.platform.auth.service.ResourceService;
@@ -168,6 +169,44 @@ public class ResourceController {
             @Valid @RequestBody RoleResourceReplaceReqDTO req) {
         log.info("[ResourceController.replaceResources] roleId={}, resourceIds={}", roleId, req.getResourceIds());
         roleResourceService.replaceResources(roleId, req.getResourceIds(), req.getReason());
+        return ResponseWrapper.success();
+    }
+
+    // ─── 菜单分配（参考 xanpd role.vue 分配菜单流程） ──────────────────────
+
+    /**
+     * 获取菜单树（PT_RESOURCE.IS_MENU=1 的全量菜单层级），供"分配菜单"对话框使用。
+     */
+    @GetMapping("/resources/menu-tree")
+    @Operation(summary = "获取菜单树")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<ResourceTreeNodeDTO>> getMenuTree() {
+        log.debug("[ResourceController.getMenuTree]");
+        return ResponseWrapper.success(resourceService.getMenuTree());
+    }
+
+    /**
+     * 查询角色已绑定的菜单ID列表（仅 IS_MENU=1 部分），用于"分配菜单"对话框回显勾选。
+     */
+    @GetMapping("/roles/{roleId}/menus")
+    @Operation(summary = "查询角色已绑菜单ID列表")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<String>> getRoleMenuIds(@PathVariable("roleId") String roleId) {
+        log.debug("[ResourceController.getRoleMenuIds] roleId={}", roleId);
+        return ResponseWrapper.success(roleResourceService.getMenuIdsByRoleId(roleId));
+    }
+
+    /**
+     * 全量替换角色的菜单绑定（仅 IS_MENU=1 部分），接口绑定不动。
+     */
+    @PutMapping("/roles/{roleId}/menus")
+    @Operation(summary = "全量替换角色菜单绑定")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)
+    public ResponseWrapper<Void> replaceMenus(
+            @PathVariable("roleId") String roleId,
+            @Valid @RequestBody RoleMenuReplaceReqDTO req) {
+        log.info("[ResourceController.replaceMenus] roleId={}, menuIds={}", roleId, req.getMenuIds());
+        roleResourceService.replaceMenus(roleId, req.getMenuIds(), req.getReason());
         return ResponseWrapper.success();
     }
 }

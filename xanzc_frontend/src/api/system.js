@@ -10,6 +10,26 @@ import {
 export async function listRoles(params = {}) {
   return unwrapPage(await call('get', '/admin/roles/', { params }, sysRoles));
 }
+// 角色 CRUD（RoleController）
+// data: { roleCode(大写下划线 max 10), roleChName(max 100), remark? }
+export function createRole(data) {
+  return call('post', '/admin/roles/', { data }, { ok: true });
+}
+// data: { roleChName, remark? }（roleCode 创建后不可改）
+export function updateRole(roleId, data) {
+  return call('put', `/admin/roles/${roleId}`, { data }, { ok: true });
+}
+// 逻辑删除；reason 必填（query）
+export function deleteRole(roleId, reason = '前端删除') {
+  return call('delete', `/admin/roles/${roleId}`, { params: { reason } }, { ok: true });
+}
+// 查询角色下的用户列表（分页）
+export async function listRoleUsers(roleId, params = {}) {
+  return unwrapPage(await call('get', `/admin/roles/${roleId}/users`, {
+    params: { pageNo: 1, pageSize: 20, ...params }
+  }, []));
+}
+
 export function listResources() {
   return call('get', '/admin/resources/tree', {}, sysResources);
 }
@@ -89,5 +109,21 @@ export function replaceRoleResources(roleId, resourceIds, reason) {
 export function saveBizScope(roleId, bizType, dataScope, reason) {
   return call('post', '/admin/biz-scopes', {
     data: { roleId, bizType, dataScope, reason }
+  }, { ok: true });
+}
+
+// === 菜单分配（参考 xanpd role.vue 分配菜单流程） ===
+// 取菜单树（PT_RESOURCE.IS_MENU=1 全量层级）
+export function getMenuTree() {
+  return call('get', '/admin/resources/menu-tree', {}, []);
+}
+// 取某角色已勾的菜单 ID 列表
+export function getRoleMenuIds(roleId) {
+  return call('get', `/admin/roles/${roleId}/menus`, {}, []);
+}
+// 全量替换该角色菜单绑定（PUT），接口绑定不动
+export function replaceRoleMenus(roleId, menuIds, reason) {
+  return call('put', `/admin/roles/${roleId}/menus`, {
+    data: { menuIds, reason }
   }, { ok: true });
 }
