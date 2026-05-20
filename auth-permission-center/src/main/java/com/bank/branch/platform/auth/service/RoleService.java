@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.dto.RoleRespDTO;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
+import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class RoleService {
 
     private final RoleMapper roleMapper;
+    private final UserRoleMapper userRoleMapper;
     private final PermissionCacheService cacheService;
 
     /**
@@ -59,6 +61,10 @@ public class RoleService {
         List<PtRole> roles = roleMapper.selectByPage(keyword, recordStatus, offset, pageSize);
         long total = roleMapper.countByPage(keyword, recordStatus);
         List<RoleRespDTO> records = roles.stream().map(this::toDto).collect(Collectors.toList());
+        // 按角色 ID 填 userCount（每个角色单独 COUNT，分页本身已限 size，N 次查询可控）
+        for (RoleRespDTO dto : records) {
+            dto.setUserCount((int) userRoleMapper.countByRoleId(dto.getRoleId()));
+        }
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
