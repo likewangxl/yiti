@@ -171,11 +171,14 @@ export async function uploadImportFile(importType, file, dataDate, meta = {}) {
   if (dataDate) {
     params.dataDate = dataDate;
   }
-  const batchId = await call('post', '/perf/import/upload', {
+  // V1.11 后端响应破坏性变更：data 从 string 变为 PerfImportUploadRespDTO 对象，
+  // 需要从对象里取 batchId 字段；mock 路径仍返回字符串，二者兼容
+  const resp = await call('post', '/perf/import/upload', {
     data: fd,
     params,
     headers: { 'Content-Type': 'multipart/form-data' }
   }, () => 'IMP-MOCK-' + Date.now());
+  const batchId = (resp && typeof resp === 'object') ? (resp.batchId || resp.id) : resp;
   // 写入 localStorage 历史
   pushLocalImport({
     batchId,
