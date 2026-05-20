@@ -36,10 +36,13 @@ public class TaskRespDTO {
     /** 发起人工号 */
     private String startUser;
 
-    /** 发起人姓名 */
+    /** 发起人姓名（按 startUser 反查 PT_USER.userchnname） */
     private String startUserName;
 
-    /** 发起人机构名称 */
+    /** 发起人机构编码（按 startUser 反查 EXT_USER_ORG → ORG_CODE） */
+    private String startOrgId;
+
+    /** 发起人机构名称（按 startOrgId 反查 EXT_ORG_INFO.ORG_NAME） */
     private String startOrgName;
 
     /** 流程发起时间 */

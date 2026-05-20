@@ -113,9 +113,15 @@ public class AuthService {
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
         Set<String> roleIds = roles.stream().map(PtRole::getRoleId).collect(Collectors.toSet());
         Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
-        // 候选组 Key 格式：ROLE:{ROLE_CODE}
-        Set<String> candidateGroupKeys = roleCodes.stream()
-            .map(c -> "ROLE:" + c).collect(Collectors.toSet());
+        // 候选组 Key 格式：ROLE:{ROLE_CODE} / USER:{empId} / ORG:{mainOrgCode}
+        // 三种前缀对齐 CandidateResolverService.resolveCandidates 的输出，
+        // 否则 BPMN 配 USER/ORG 类型候选时该用户匹配不到 Flowable 候选组（2026-05-20 修复）
+        Set<String> candidateGroupKeys = new java.util.HashSet<>();
+        roleCodes.forEach(c -> candidateGroupKeys.add("ROLE:" + c));
+        candidateGroupKeys.add("USER:" + user.getUserId());
+        if (mainOrgCode != null) {
+            candidateGroupKeys.add("ORG:" + mainOrgCode);
+        }
         boolean isAdmin = roleCodes.contains("SYS_ADMIN");
 
         // 构建 CurrentUserContext 并存入 Session

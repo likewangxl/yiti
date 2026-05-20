@@ -16,9 +16,9 @@ import java.util.List;
 @Data
 public class AllocAdjustCreateReqDTO {
 
-    /** 客户 ID（必填）. */
-    @NotBlank(message = "custId 必填")
-    private String custId;
+    /** 客户编号（必填，对应 cust_master.cust_no；后端按编号查找客户主键后保存）. */
+    @NotBlank(message = "custNo 必填")
+    private String custNo;
 
     /** 分配维度：RULE / ACCOUNT（必填）. */
     @NotBlank(message = "allocDim 必填")

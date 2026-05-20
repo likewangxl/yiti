@@ -102,7 +102,8 @@ public class AllocAdjustService {
     public String submit(SubmitAllocAdjustCmd cmd) {
         validateBasic(cmd);
         validateItems(cmd);
-        validateCustomer(cmd.getCustId());
+        // 按客户编号(cust_no)查找客户主档；apply.cust_id 列保存客户内部主键 id，与现有跨模块 join 保持兼容
+        String internalCustId = resolveInternalCustIdByCustNo(cmd.getCustNo());
 
         String applyId = genApplyId();
         String applyNo = genApplyNo();
@@ -113,7 +114,7 @@ public class AllocAdjustService {
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId(applyId);
         apply.setApplyNo(applyNo);
-        apply.setCustId(cmd.getCustId());
+        apply.setCustId(internalCustId);
         apply.setAllocDim(cmd.getAllocDim());
         apply.setBizKind(cmd.getBizKind());
         apply.setAccountNo(cmd.getAccountNo());
@@ -150,10 +151,12 @@ public class AllocAdjustService {
         startCmd.setProcessDefinitionKey(processKey);
         startCmd.setStartUser(cmd.getApplicant());
         startCmd.setStartOrgId(cmd.getOwnerOrgId());
-        startCmd.setTitle("分配关系调整-" + cmd.getCustId() + "-" + applyNo);
+        // 标题用业务编号(custNo)便于人工识别；流程变量 custId 写内部主键，下游 BPMN/Listener 已按此使用
+        startCmd.setTitle("分配关系调整-" + cmd.getCustNo() + "-" + applyNo);
         Map<String, Object> vars = new HashMap<>();
         vars.put("applyId", applyId);
-        vars.put("custId", cmd.getCustId());
+        vars.put("custId", internalCustId);
+        vars.put("custNo", cmd.getCustNo());
         vars.put("bizKind", cmd.getBizKind());
         vars.put("allocDim", cmd.getAllocDim());
         startCmd.setVariables(vars);
@@ -250,10 +253,24 @@ public class AllocAdjustService {
 
     /**
      * V1.3 R4.1：Controller 专用 DTO 版本详情查询（含 items）.
+     * <p>响应回填 custNo：按 apply.custId(内部主键) 反查 cust_master.cust_no；客户已删除时 custNo=null.
      */
     public AllocAdjustRespDTO getByIdDto(String id) {
         ApplyWithItems bundle = getById(id);
-        return toRespDto(bundle.getApply(), bundle.getItems());
+        String custNo = lookupCustNo(bundle.getApply().getCustId());
+        return toRespDto(bundle.getApply(), bundle.getItems(), custNo);
+    }
+
+    /**
+     * 单条 custId(内部主键) → custNo 反查，客户不存在返回 null.
+     */
+    private String lookupCustNo(String internalCustId) {
+        if (isBlank(internalCustId)) {
+            return null;
+        }
+        return customerQueryApi.getCustomer(internalCustId)
+                .map(CustomerDTO::getCustNo)
+                .orElse(null);
     }
 
     /**
@@ -294,21 +311,52 @@ public class AllocAdjustService {
                 status, bizKind, custId, ownerOrgId, createdBy, offset, pageSize,
                 frag.getSql(), frag.getParams());
 
+        // 批量反查 cust_master 拿 custNo，避免循环单查；空 rows 跳过避免无谓 mapper 调用
+        Map<String, String> custIdToNo = batchLookupCustNos(rows);
         List<AllocAdjustRespDTO> dtos = new ArrayList<>(rows.size());
         for (PerfAllocAdjustApply apply : rows) {
-            dtos.add(toRespDto(apply, java.util.Collections.emptyList()));
+            dtos.add(toRespDto(apply, java.util.Collections.emptyList(),
+                    custIdToNo.get(apply.getCustId())));
         }
         return PageResult.of(pageNo, pageSize, total, dtos);
     }
 
     /**
-     * V1.3 R4.1：entity → DTO 装配下沉到 Service.
+     * 收集 rows 中所有非空 custId 一次性 listCustomers，返回内部主键 → custNo 映射；
+     * rows 为空或全部 custId 为空时返回空 Map，不触发跨模块调用.
      */
-    private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items) {
+    private Map<String, String> batchLookupCustNos(List<PerfAllocAdjustApply> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Set<String> ids = new HashSet<>();
+        for (PerfAllocAdjustApply r : rows) {
+            if (!isBlank(r.getCustId())) {
+                ids.add(r.getCustId());
+            }
+        }
+        if (ids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        List<CustomerDTO> customers = customerQueryApi.listCustomers(new ArrayList<>(ids));
+        Map<String, String> map = new HashMap<>(customers.size());
+        for (CustomerDTO c : customers) {
+            map.put(c.getId(), c.getCustNo());
+        }
+        return map;
+    }
+
+    /**
+     * V1.3 R4.1：entity → DTO 装配下沉到 Service.
+     * <p>{@code custNo} 由调用方按内部主键反查后传入（单条 lookupCustNo / 批量 batchLookupCustNos），
+     * 查不到时传 null，DTO 字段保持 null（不抛错以兼容历史已删客户的 apply 行）.
+     */
+    private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items, String custNo) {
         AllocAdjustRespDTO dto = new AllocAdjustRespDTO();
         dto.setId(apply.getId());
         dto.setApplyNo(apply.getApplyNo());
         dto.setCustId(apply.getCustId());
+        dto.setCustNo(custNo);
         dto.setAllocDim(apply.getAllocDim());
         dto.setBizKind(apply.getBizKind());
         dto.setAccountNo(apply.getAccountNo());
@@ -364,8 +412,8 @@ public class AllocAdjustService {
         if (cmd == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "cmd is null");
         }
-        if (isBlank(cmd.getCustId())) {
-            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "custId 为空");
+        if (isBlank(cmd.getCustNo())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "custNo 为空");
         }
         if (isBlank(cmd.getAllocDim()) || !ALLOWED_ALLOC_DIMS.contains(cmd.getAllocDim())) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "allocDim 非法: " + cmd.getAllocDim());
@@ -411,13 +459,14 @@ public class AllocAdjustService {
     }
 
     /**
-     * 客户存在性校验：调 {@code CustomerQueryApi.getCustomer}.
+     * 按客户编号(cust_no)校验存在性并返回内部主键 id；不存在抛 VALIDATION_FAILED。
      */
-    private void validateCustomer(String custId) {
-        Optional<CustomerDTO> opt = customerQueryApi.getCustomer(custId);
+    private String resolveInternalCustIdByCustNo(String custNo) {
+        Optional<CustomerDTO> opt = customerQueryApi.getCustomerByCustNo(custNo);
         if (opt.isEmpty()) {
-            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "客户不存在: " + custId);
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "客户编号不存在: " + custNo);
         }
+        return opt.get().getId();
     }
 
     /**

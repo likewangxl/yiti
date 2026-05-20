@@ -13,9 +13,9 @@ import java.util.List;
  *
  * <p>Service 层 {@code AllocAdjustService.submit(cmd)} 消费：
  * <ol>
- *   <li>校验字段：custId / allocDim / bizKind / ownerOrgId / items 必填；
+ *   <li>校验字段：custNo / allocDim / bizKind / ownerOrgId / items 必填；
  *       items 的 empId 去重、ratio 之和 ≤ 100（RULE 维度）</li>
- *   <li>调用 {@code CustomerQueryApi.getCustomer} 校验客户存在</li>
+ *   <li>调用 {@code CustomerQueryApi.getCustomerByCustNo} 按客户编号校验，并将客户主键 id 写入 apply.cust_id</li>
  *   <li>生成 applyNo（AA + yyyyMMdd + UUID 片段）+ 插入主从表</li>
  *   <li>按 {@code bizKind} 前缀路由 corp_v1 / retail_v1 BPMN，启动流程</li>
  *   <li>回写 processInstanceId 到 apply</li>
@@ -27,8 +27,8 @@ import java.util.List;
 @AllArgsConstructor
 public class SubmitAllocAdjustCmd {
 
-    /** 客户 ID（必填）. */
-    private String custId;
+    /** 客户编号（必填，对应 cust_master.cust_no 业务编号；Service 内部按编号查找客户主键后入库）. */
+    private String custNo;
 
     /** 分配维度：RULE / ACCOUNT（必填）. */
     private String allocDim;

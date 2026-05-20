@@ -58,6 +58,16 @@ public class CustomerQueryApiImpl implements CustomerQueryApi {
         return Optional.ofNullable(CustomerDTOConverter.toDTO(entity));
     }
 
+    @Override
+    public Optional<CustomerDTO> getCustomerByCustNo(String custNo) {
+        log.debug("[CustomerQueryApiImpl.getCustomerByCustNo] custNo={}", custNo);
+        if (custNo == null || custNo.isBlank()) {
+            return Optional.empty();
+        }
+        CustMaster entity = custMasterMapper.selectByCustNo(custNo);
+        return Optional.ofNullable(CustomerDTOConverter.toDTO(entity));
+    }
+
     /**
      * 批量获取客户信息，custIds 最大 500，超限抛 COMMON-40000。
      *

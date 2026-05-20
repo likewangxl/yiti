@@ -63,7 +63,7 @@ class AllocAdjustRetailRoutingTest {
 
     private SubmitAllocAdjustCmd cmd(String bizKind, String allocDim, String accountNo) {
         return SubmitAllocAdjustCmd.builder()
-                .custId("CUST_RET_001")
+                .custNo("CN-RET-001")
                 .allocDim(allocDim)
                 .bizKind(bizKind)
                 .accountNo(accountNo)
@@ -81,7 +81,8 @@ class AllocAdjustRetailRoutingTest {
     private void stubValidCustomer() {
         CustomerDTO c = new CustomerDTO();
         c.setId("CUST_RET_001");
-        when(customerQueryApi.getCustomer(anyString())).thenReturn(Optional.of(c));
+        c.setCustNo("CN-RET-001");
+        when(customerQueryApi.getCustomerByCustNo(anyString())).thenReturn(Optional.of(c));
         when(workflowApi.startProcess(any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_RET_AUTO", null, null));
     }
@@ -135,7 +136,7 @@ class AllocAdjustRetailRoutingTest {
     }
 
     @Test
-    @DisplayName("StartProcessCmd 流程变量包含 applyId/custId/bizKind/allocDim")
+    @DisplayName("StartProcessCmd 流程变量包含 applyId/custId(内部主键)/custNo/bizKind/allocDim")
     void startProcessCmd_carriesAllRequiredVariables() {
         stubValidCustomer();
         String applyId = service.submit(cmd("RETAIL_CARD", "RULE", null));
@@ -146,14 +147,16 @@ class AllocAdjustRetailRoutingTest {
         Map<String, Object> vars = started.getVariables();
         assertThat(vars).isNotNull();
         assertThat(vars).containsEntry("applyId", applyId);
+        // custId 流程变量写内部主键，保持下游 BPMN/Listener 兼容；custNo 业务编号同时透传
         assertThat(vars).containsEntry("custId", "CUST_RET_001");
+        assertThat(vars).containsEntry("custNo", "CN-RET-001");
         assertThat(vars).containsEntry("bizKind", "RETAIL_CARD");
         assertThat(vars).containsEntry("allocDim", "RULE");
 
-        // bizType / startUser / startOrgId / title 均应被填充
+        // bizType / startUser / startOrgId / title 均应被填充；标题用 custNo 便于人工识别
         assertThat(started.getBizType()).isEqualTo(AllocAdjustService.BIZ_TYPE);
         assertThat(started.getStartUser()).isEqualTo("ret_user");
         assertThat(started.getStartOrgId()).isEqualTo("ORG_RET");
-        assertThat(started.getTitle()).contains("CUST_RET_001");
+        assertThat(started.getTitle()).contains("CN-RET-001");
     }
 }

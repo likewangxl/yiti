@@ -20,8 +20,11 @@ public class AllocAdjustRespDTO {
     /** 申请编号. */
     private String applyNo;
 
-    /** 客户 ID. */
+    /** 客户 ID（cust_master 内部主键）. */
     private String custId;
+
+    /** 客户编号（cust_master.cust_no，按 custId 反查回填；客户已删/查不到时为 null）. */
+    private String custNo;
 
     /** 分配维度. */
     private String allocDim;

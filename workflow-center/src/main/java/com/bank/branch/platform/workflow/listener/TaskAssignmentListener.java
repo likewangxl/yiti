@@ -5,6 +5,8 @@ import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.RepositoryService;
+import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.task.service.delegate.DelegateTask;
 import org.flowable.task.service.delegate.TaskListener;
 import org.springframework.stereotype.Component;
@@ -27,6 +29,7 @@ public class TaskAssignmentListener implements TaskListener {
 
     private final CandidateResolverService candidateResolverService;
     private final NotifyApi notifyApi;
+    private final RepositoryService repositoryService;
 
     /**
      * 任务创建事件回调。
@@ -41,9 +44,11 @@ public class TaskAssignmentListener implements TaskListener {
      */
     @Override
     public void notify(DelegateTask delegateTask) {
-        // 从 processDefinitionId（格式 "key:version:id"）中提取流程定义KEY
+        // Flowable 7 默认使用 UUID 作 processDefinitionId（无 ":" 分隔），不能 split(":")[0]。
+        // 走 RepositoryService 反查 ProcessDefinition.getKey() 拿真实 BPMN KEY。
         String processDefinitionId = delegateTask.getProcessDefinitionId();
-        String processDefinitionKey = processDefinitionId.split(":")[0];
+        ProcessDefinition pd = repositoryService.getProcessDefinition(processDefinitionId);
+        String processDefinitionKey = pd != null ? pd.getKey() : processDefinitionId;
         String nodeKey = delegateTask.getTaskDefinitionKey();
         String taskId = delegateTask.getId();
 

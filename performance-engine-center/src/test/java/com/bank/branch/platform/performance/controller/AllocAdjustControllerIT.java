@@ -88,7 +88,8 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
 
         CustomerDTO cust = new CustomerDTO();
         cust.setId("TEST_AA_CUST_C1");
-        Mockito.when(customerQueryApi.getCustomer(Mockito.anyString()))
+        cust.setCustNo("CN-IT-C1");
+        Mockito.when(customerQueryApi.getCustomerByCustNo(Mockito.anyString()))
                 .thenReturn(Optional.of(cust));
 
         Mockito.when(workflowApi.startProcess(Mockito.any(StartProcessCmd.class)))
@@ -119,7 +120,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
     @Test
     void create_happyPath_returns200_andPersists() throws Exception {
         AllocAdjustCreateReqDTO req = new AllocAdjustCreateReqDTO();
-        req.setCustId("TEST_AA_CUST_C1");
+        req.setCustNo("CN-IT-C1");
         req.setAllocDim("RULE");
         req.setBizKind("CORP_LOAN");
         req.setOwnerOrgId("ORG_IT");
@@ -144,7 +145,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
     @Test
     void create_emptyItems_returnsValidationFailed() throws Exception {
         AllocAdjustCreateReqDTO req = new AllocAdjustCreateReqDTO();
-        req.setCustId("TEST_AA_CUST_C1");
+        req.setCustNo("CN-IT-C1");
         req.setAllocDim("RULE");
         req.setBizKind("CORP_LOAN");
         req.setOwnerOrgId("ORG_IT");

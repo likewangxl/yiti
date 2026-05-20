@@ -1,6 +1,9 @@
 package com.bank.branch.platform.workflow.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
@@ -63,6 +66,8 @@ public class TodoQueryService {
     private final NodeFormConfMapper nodeFormConfMapper;
     private final ObjectMapper objectMapper;
     private final CurrentUserApi currentUserApi;
+    private final UserApi userApi;
+    private final OrgApi orgApi;
 
     /**
      * 解析 JSON 字符串为 List。
@@ -320,6 +325,7 @@ public class TodoQueryService {
         dto.setSlaStatus(slaStatus.getCode());
         // SLA 时间通过 SLA 计算服务获取
         dto.setClaimable(task.getAssignee() == null);
+        enrichStartUserOrg(dto);
 
         return dto;
     }
@@ -361,6 +367,7 @@ public class TodoQueryService {
         dto.setCandidateGroups(parseJsonToList(map.getCandidateGroups(), STRING_LIST_TYPE));
         dto.setSlaStatus(slaStatus.getCode());
         dto.setClaimable(false); // 已办任务不可签收
+        enrichStartUserOrg(dto);
 
         // 已办任务：设置完成信息
         if (hti.getEndTime() != null) {
@@ -368,6 +375,31 @@ public class TodoQueryService {
         }
 
         return dto;
+    }
+
+    /**
+     * 按 dto.startUser 反查 PT_USER.userchnname + 主机构信息，回填发起人姓名与机构。
+     * 任一反查失败/未命中保持 null，不阻断主流程。
+     */
+    private void enrichStartUserOrg(TaskRespDTO dto) {
+        String startUser = dto.getStartUser();
+        if (startUser == null || startUser.isEmpty()) {
+            return;
+        }
+        try {
+            dto.setStartUserName(userApi.getUserName(startUser));
+        } catch (Exception e) {
+            log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人姓名失败 startUser={}", startUser, e);
+        }
+        try {
+            OrgDTO mainOrg = orgApi.getUserMainOrg(startUser);
+            if (mainOrg != null) {
+                dto.setStartOrgId(mainOrg.getOrgCode());
+                dto.setStartOrgName(mainOrg.getOrgName());
+            }
+        } catch (Exception e) {
+            log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人主机构失败 startUser={}", startUser, e);
+        }
     }
 
     /**
