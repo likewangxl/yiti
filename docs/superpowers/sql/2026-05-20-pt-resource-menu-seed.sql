@@ -25,6 +25,14 @@ UPDATE PT_RESOURCE
    AND RESOURCE_METHOD <> 'MENU';
 
 -- ──────────────────────────────────────────────────────────────────
+-- Step 0.5：清掉历史菜单种子让脚本幂等（重跑安全）
+-- 仅删 M_ 前缀的菜单记录，不影响其他 303 条接口资源。
+-- 同时清掉 PT_ROLE_RESOURCE 里跟菜单的绑定（避免外键约束 + 脏数据）。
+-- ──────────────────────────────────────────────────────────────────
+DELETE FROM PT_ROLE_RESOURCE WHERE RESOURCE_ID LIKE 'M_%';
+DELETE FROM PT_RESOURCE      WHERE RESOURCE_ID LIKE 'M_%';
+
+-- ──────────────────────────────────────────────────────────────────
 -- Step 1：根级菜单（1 条）
 -- ──────────────────────────────────────────────────────────────────
 INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK) VALUES
@@ -34,9 +42,10 @@ INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, 
 -- Step 2：分组节点（3 条，parent=NULL，endflag=0 表示非叶）
 -- ──────────────────────────────────────────────────────────────────
 INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_ICON_URL, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, CREATE_USER, UPDATE_TIME, UPDATE_USER, REMARK) VALUES
-('M_GROUP_PERF',   NULL, 'MENU', '绩效与考核', '📈',  1, 1, '0', NULL, 0, 'YITI', NOW(), 'seed', NOW(), NULL, '菜单分配 v1 - 分组'),
-('M_GROUP_REPORT', NULL, 'MENU', '报表分析',   '📊',  2, 1, '0', NULL, 0, 'YITI', NOW(), 'seed', NOW(), NULL, '菜单分配 v1 - 分组'),
-('M_GROUP_SYSTEM', NULL, 'MENU', '系统设置',   '⚙️', 3, 1, '0', NULL, 0, 'YITI', NOW(), 'seed', NOW(), NULL, '菜单分配 v1 - 分组');
+-- 分组节点 URL 必须唯一（uk_pt_resource_url_method_sys 约束），且不是真路由（# 前缀避免被前端 sidebar 误匹配）
+('M_GROUP_PERF',   '#group/perf',   'MENU', '绩效与考核', '📈',  1, 1, '0', NULL, 0, 'YITI', NOW(), 'seed', NOW(), NULL, '菜单分配 v1 - 分组'),
+('M_GROUP_REPORT', '#group/report', 'MENU', '报表分析',   '📊',  2, 1, '0', NULL, 0, 'YITI', NOW(), 'seed', NOW(), NULL, '菜单分配 v1 - 分组'),
+('M_GROUP_SYSTEM', '#group/system', 'MENU', '系统设置',   '⚙️', 3, 1, '0', NULL, 0, 'YITI', NOW(), 'seed', NOW(), NULL, '菜单分配 v1 - 分组');
 
 -- ──────────────────────────────────────────────────────────────────
 -- Step 3：绩效与考核（6 个叶子菜单）
