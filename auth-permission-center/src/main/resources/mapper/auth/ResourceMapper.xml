@@ -78,4 +78,16 @@
         WHERE PARENT_RESOURCE_ID = #{parentResourceId}
     </select>
 
+    <!--
+        查询全部菜单资源（IS_MENU=1），按 MENU_RANK_NO 升序排列。
+        用于"分配菜单"对话框组装菜单树。状态不过滤（管理员可见全部菜单含禁用项）。
+    -->
+    <select id="selectMenus" resultType="com.bank.branch.platform.auth.entity.PtResource">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_RESOURCE
+        WHERE ISMENU = 1
+        ORDER BY MENU_RANK_NO ASC
+    </select>
+
 </mapper>

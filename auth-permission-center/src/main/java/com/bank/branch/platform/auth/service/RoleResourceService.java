@@ -103,6 +103,47 @@ public class RoleResourceService {
         return cacheService.getResourceIdsByRoleId(roleId);
     }
 
+    /**
+     * 查询角色已绑定的"菜单"资源ID列表（仅 PT_RESOURCE.IS_MENU=1 部分）。
+     * <p>用于角色管理页面"分配菜单"对话框回显，与接口资源（IS_MENU=0）分开取。</p>
+     *
+     * @param roleId 角色ID
+     * @return 菜单资源ID列表
+     */
+    public List<String> getMenuIdsByRoleId(String roleId) {
+        return roleResourceMapper.selectMenuIdsByRoleId(roleId);
+    }
+
+    /**
+     * 全量替换角色的"菜单"绑定（先删后插，事务保证原子性）。
+     * <p>只动 PT_RESOURCE.IS_MENU=1 部分的绑定，接口资源绑定（IS_MENU=0）保持不动。
+     * 与 replaceResources 区分：后者会清空 role 所有绑定（含菜单+接口）。</p>
+     *
+     * @param roleId  角色ID
+     * @param menuIds 替换后的菜单ID列表（空列表表示清空该角色所有菜单绑定）
+     * @param reason  操作原因（审计用）
+     */
+    @Transactional
+    public void replaceMenus(String roleId, List<String> menuIds, String reason) {
+        if (roleMapper.selectByRoleId(roleId) == null) {
+            throw new BizException(AuthErrorCode.ROLE_NOT_FOUND.getCode(),
+                AuthErrorCode.ROLE_NOT_FOUND.getMessage());
+        }
+        // 先删该角色所有菜单绑定（接口绑定不动）
+        roleResourceMapper.deleteMenuBindingsByRoleId(roleId);
+        // 后插新菜单绑定
+        for (String menuId : menuIds) {
+            PtRoleResource rr = new PtRoleResource();
+            rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
+            rr.setRoleId(roleId);
+            rr.setResourceId(menuId);
+            roleResourceMapper.insert(rr);
+        }
+        cacheService.evictRoleResourceCache(roleId);
+        publishCacheInvalidatedEvent(roleId, reason);
+        log.info("[RoleResourceService.replaceMenus] 菜单分配完成 roleId={}, count={}", roleId, menuIds.size());
+    }
+
     // ── 私有方法 ──────────────────────────────────────────────────
 
     private void publishCacheInvalidatedEvent(String roleId, String reason) {

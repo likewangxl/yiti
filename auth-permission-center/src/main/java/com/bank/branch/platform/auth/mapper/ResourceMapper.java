@@ -69,4 +69,12 @@ public interface ResourceMapper extends BaseMapper<PtResource> {
      * @return 子资源数量
      */
     long countChildren(String parentResourceId);
+
+    /**
+     * 查询所有菜单资源（IS_MENU=1），按 MENU_RANK_NO 升序排列。
+     * <p>用于"分配菜单"对话框组装菜单树（无 status / sysCode 过滤，避免被禁用菜单藏起来）。</p>
+     *
+     * @return 菜单资源列表（含分组节点和叶子菜单）
+     */
+    List<PtResource> selectMenus();
 }

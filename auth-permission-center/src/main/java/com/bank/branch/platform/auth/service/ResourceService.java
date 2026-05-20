@@ -75,9 +75,30 @@ public class ResourceService {
      * @param sysCode 系统编号过滤，null 时不过滤
      * @return 资源树根节点列表
      */
+    /**
+     * 获取菜单树（仅 PT_RESOURCE.IS_MENU=1 部分，按 MENU_RANK_NO 升序）。
+     * <p>用于"分配菜单"对话框：返回完整菜单层级（含分组节点 + 叶子菜单），
+     * 前端 el-tree show-checkbox 渲染。状态不过滤（管理员可见禁用菜单）。</p>
+     *
+     * @return 菜单树根节点列表
+     */
+    public List<ResourceTreeNodeDTO> getMenuTree() {
+        log.debug("[ResourceService.getMenuTree]");
+        List<PtResource> all = resourceMapper.selectMenus();
+        return buildTree(all);
+    }
+
     public List<ResourceTreeNodeDTO> getResourceTree(Integer status, String sysCode) {
         log.debug("[ResourceService.getResourceTree] status={}, sysCode={}", status, sysCode);
-        List<PtResource> all = resourceMapper.selectAll(status, sysCode);
+        return buildTree(resourceMapper.selectAll(status, sysCode));
+    }
+
+    /**
+     * 把扁平资源列表组装成树形结构。
+     * <p>抽出共用方法供 {@link #getResourceTree} 与 {@link #getMenuTree} 复用。
+     * 按 parentResourceId 父子关联；父节点不在当前结果集中时降级为根节点。</p>
+     */
+    private List<ResourceTreeNodeDTO> buildTree(List<PtResource> all) {
         // 将实体列表转换为 DTO，并按 resourceId 建立索引，方便父子关联
         Map<String, ResourceTreeNodeDTO> dtoMap = all.stream()
                 .collect(Collectors.toMap(PtResource::getResourceId, this::toDto));
@@ -87,18 +108,16 @@ public class ResourceService {
             ResourceTreeNodeDTO dto = dtoMap.get(res.getResourceId());
             String parentId = res.getParentResourceId();
             if (parentId == null || parentId.isEmpty()) {
-                // 无父节点 — 作为根节点
                 roots.add(dto);
             } else {
                 ResourceTreeNodeDTO parentDto = dtoMap.get(parentId);
                 if (parentDto != null) {
-                    // 将子节点挂到父节点的 children 列表
                     if (parentDto.getChildren() == null) {
                         parentDto.setChildren(new ArrayList<>());
                     }
                     parentDto.getChildren().add(dto);
                 } else {
-                    // 父节点不在当前过滤结果集中（例如父节点已被过滤掉），降级为根节点
+                    // 父节点不在当前过滤结果集中（例如父节点被过滤掉），降级为根节点
                     roots.add(dto);
                 }
             }
