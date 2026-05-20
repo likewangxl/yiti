@@ -98,6 +98,7 @@
             u.USERCHNNAME   AS displayName,
             uo.ORG_CODE     AS orgCode,
             o.ORG_NAME      AS orgName,
+            u.ISENABLED     AS isEnabled,
             ur.CREATE_TIME  AS bindTime
         FROM PT_USER u
         INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID AND ur.ROLE_ID = #{roleId}
