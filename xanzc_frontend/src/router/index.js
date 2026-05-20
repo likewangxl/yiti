@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useUserStore } from '@/stores/user';
+import http from '@/api/http';
 
 const routes = [
   // 登录页：顶层路由，不进 DefaultLayout（无 sidebar / header）
@@ -34,6 +35,9 @@ const routes = [
       { path: 'report/sql',       name: 'ReportSql',     component: () => import('@/views/report/Sql.vue'),       meta: { title: 'SQL 探查',     group: '报表分析' } },
 
       // 系统设置
+      { path: 'system/users',      name: 'SysUsers',      component: () => import('@/views/system/Users.vue'),      meta: { title: '用户管理', group: '系统设置' } },
+      { path: 'system/roles',      name: 'SysRoles',      component: () => import('@/views/system/Roles.vue'),      meta: { title: '角色管理', group: '系统设置' } },
+      { path: 'system/resources',  name: 'SysResources',  component: () => import('@/views/system/Resources.vue'),  meta: { title: '资源/菜单', group: '系统设置' } },
       { path: 'system/permission', name: 'SysPermission', component: () => import('@/views/system/Permission.vue'), meta: { title: '权限配置', group: '系统设置' } },
       { path: 'system/dict',       name: 'SysDict',       component: () => import('@/views/system/Dict.vue'),       meta: { title: '字典管理', group: '系统设置' } },
       { path: 'system/calendar',   name: 'SysCalendar',   component: () => import('@/views/system/Calendar.vue'),   meta: { title: '工作日历', group: '系统设置' } },
@@ -49,14 +53,24 @@ const routes = [
 const router = createRouter({ history: createWebHashHistory(), routes });
 
 // 全局守卫：未登录访问业务路由 → 跳 /login？redirect=...
-router.beforeEach((to) => {
-  // 只在 router 真正进入路由时拿 store（pinia 必须已 install 到 app 才能 use）
+// store 没 user 时先试一次 /api/auth/current-user：
+//   - 200 → 后端 session 还在（UIAS 回调 / F5 刷新 sessionStorage 清空场景）→ setUser 后放行
+//   - 401 → 真未登录 → 跳 login
+router.beforeEach(async (to) => {
   const store = useUserStore();
   if (to.meta?.public) return true;
-  if (!store.isLoggedIn) {
-    return { path: '/login', query: { redirect: to.fullPath } };
+  if (store.isLoggedIn) return true;
+
+  try {
+    const user = await http.get('/api/auth/current-user');
+    if (user && user.empId) {
+      store.setUser(user);
+      return true;
+    }
+  } catch (_) {
+    // http.js 401 拦截器自己会清 sessionStorage；这里不重复
   }
-  return true;
+  return { path: '/login', query: { redirect: to.fullPath } };
 });
 
 export default router;

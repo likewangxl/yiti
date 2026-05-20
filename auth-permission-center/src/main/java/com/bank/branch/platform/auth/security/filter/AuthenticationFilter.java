@@ -35,6 +35,9 @@ public class AuthenticationFilter extends OncePerRequestFilter {
     /** 不需要认证即可访问的 URL 白名单（支持 Ant 通配符） */
     static final List<String> WHITELIST = List.of(
         "/api/auth/login",
+        "/api/auth/uniauth/login",
+        "/api/auth/uniauth/redirect",
+        "/api/auth/uniauth/callback",
         "/api/auth/logout",
         "/doc.html",
         "/webjars/**",

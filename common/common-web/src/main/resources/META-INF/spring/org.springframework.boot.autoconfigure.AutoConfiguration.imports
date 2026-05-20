@@ -1,1 +1,2 @@
 com.bank.branch.platform.common.web.config.WebAutoConfiguration
+com.bank.branch.platform.common.web.sidecar.SidecarAutoConfig

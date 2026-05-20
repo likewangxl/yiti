@@ -73,6 +73,14 @@
             {{ loading ? '登录中...' : '登 录' }}
           </el-button>
 
+          <!-- 统一认证登录入口：直接 302 到后端 /api/auth/uniauth/redirect → UIAS 单点登录页 -->
+          <div class="alt-login">
+            <span class="divider">或</span>
+            <el-button class="btn-uniauth" @click="onUniAuthClick">
+              🛡️ 统一认证登录
+            </el-button>
+          </div>
+
           <div class="tip" v-if="USE_MOCK">
             mock 模式：任意账号可登录（VITE_USE_MOCK=true）
           </div>
@@ -80,6 +88,7 @@
             提示：开发环境默认账号 <code>admin</code> / <code>123456</code>
           </div>
         </el-form>
+
       </div>
     </main>
   </div>
@@ -89,7 +98,7 @@
 import { ref, reactive } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { login } from '@/api/auth';
+import { login, uniAuthLogin } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { USE_MOCK } from '@/api/http';
 
@@ -133,6 +142,22 @@ async function onSubmit() {
   } finally {
     loading.value = false;
   }
+}
+
+// === 统一认证登录：直接 302 跳后端 → UIAS 单点登录页 ===
+function onUniAuthClick() {
+  // 后端 /api/auth/uniauth/redirect 会拼出 UIAS URL 并 302 跳走
+  window.location.href = '/api/auth/uniauth/redirect';
+}
+
+// 回调失败时（callback 端点 302 回 /#/login?error=...），登录页 mount 后弹错误提示
+if (route.query.error) {
+  const msg = route.query.error === 'uniauth-missing-user'
+    ? '统一认证回调缺失用户身份参数（检查 user-param-name 配置）'
+    : route.query.error === 'uniauth-failed'
+      ? `统一认证失败：${route.query.msg || '未知错误'}`
+      : `登录错误：${route.query.error}`;
+  ElMessage.error(msg);
 }
 </script>
 
@@ -265,6 +290,47 @@ async function onSubmit() {
   &:hover, &:focus {
     background: linear-gradient(135deg, $primary-400 0%, $primary 100%);
   }
+}
+.alt-login {
+  margin-top: 14px;
+  text-align: center;
+  .divider {
+    display: block;
+    color: $text-3;
+    font-size: 12px;
+    margin: 12px 0;
+    position: relative;
+    &::before, &::after {
+      content: '';
+      position: absolute; top: 50%;
+      width: 38%; height: 1px;
+      background: $border-2;
+    }
+    &::before { left: 0; }
+    &::after  { right: 0; }
+  }
+  .btn-uniauth {
+    width: 100%; height: 40px;
+    font-size: 13px;
+    border: 1px solid $border-2;
+    background: #fff;
+    color: $text-1;
+    border-radius: 4px;
+    &:hover {
+      border-color: $primary;
+      color: $primary;
+    }
+  }
+}
+.uni-tip {
+  background: $bg-soft;
+  border-left: 3px solid $primary-400;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: $text-3;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  border-radius: 2px;
 }
 .tip {
   margin-top: 20px;
