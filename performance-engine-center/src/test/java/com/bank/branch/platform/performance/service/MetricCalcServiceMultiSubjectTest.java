@@ -69,7 +69,7 @@ class MetricCalcServiceMultiSubjectTest {
         subjectFetcher = mock(SubjectFetcher.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new MetricCalcService(metricDefService, sqlExecutor, groovyExecutor,
-            empMapper, orgMapper, custMapper, runTaskMapper, null, subjectFetcher, eventPublisher);
+            empMapper, orgMapper, custMapper, runTaskMapper, null, subjectFetcher, eventPublisher, null);
     }
 
     @Test

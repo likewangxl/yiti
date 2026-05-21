@@ -246,6 +246,17 @@ public class AllocAdjustService {
         }
         // processInstanceId 传 null 避免覆写历史值
         applyMapper.updateStatus(id, "REJECTED", null);
+        // 同步取消 Flowable 流程实例，否则该流程的 active task 会一直留在「待我审批」
+        // DRAFT 状态可能未启动流程（process_instance_id=null），需判空
+        String pid = apply.getProcessInstanceId();
+        if (pid != null && !pid.isBlank()) {
+            try {
+                workflowApi.cancelProcess(pid, reason);
+            } catch (Exception ex) {
+                log.warn("[AllocAdjustService.withdraw] cancelProcess 失败 pid={}, 业务侧已置 REJECTED；err={}",
+                        pid, ex.getMessage());
+            }
+        }
         log.info("[AllocAdjustService.withdraw] id={}, reason={}, operator={}", id, reason, operator);
     }
 
