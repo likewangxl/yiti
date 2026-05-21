@@ -20,12 +20,12 @@
         </el-form-item>
         <el-form-item label="动作">
           <el-select v-model="f.bizAction" clearable placeholder="全部" style="width:170px" @change="reload">
-            <el-option v-for="o in BIZ_ACTIONS" :key="o.v" :value="o.v" :label="`${o.v} · ${o.l}`" />
+            <el-option v-for="o in BIZ_ACTIONS" :key="o.value" :value="o.value" :label="`${o.value} · ${o.label}`" />
           </el-select>
         </el-form-item>
         <el-form-item label="BizType">
           <el-select v-model="f.bizType" clearable placeholder="全部" style="width:170px" @change="reload">
-            <el-option v-for="o in BIZ_TYPES" :key="o.v" :value="o.v" :label="`${o.v} · ${o.l}`" />
+            <el-option v-for="o in BIZ_TYPES" :key="o.value" :value="o.value" :label="`${o.value} · ${o.label}`" />
           </el-select>
         </el-form-item>
         <el-form-item label="时间范围">
@@ -150,38 +150,10 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { listAuditLogs, getAuditLog } from '@/api/system';
 
-// === 字典（与后端 BizAction / BizType 枚举对齐） ===
-const BIZ_ACTIONS = [
-  { v: 'READ',              l: '查看详情' },
-  { v: 'LIST',              l: '查询列表' },
-  { v: 'WRITE',             l: '新增或修改' },
-  { v: 'DELETE',            l: '删除' },
-  { v: 'TRANSFER',          l: '转交他人' },
-  { v: 'APPROVE',           l: '审批通过' },
-  { v: 'REJECT',            l: '审批驳回' },
-  { v: 'IMPORT',            l: '数据导入' },
-  { v: 'EXPORT',            l: '数据导出' },
-  { v: 'EXECUTE',           l: '执行' },
-  { v: 'CONFIG',            l: '修改配置' },
-  { v: 'RECALC',            l: '重新计算' },
-  { v: 'JOB_TRIGGER',       l: '手动触发任务' },
-  { v: 'PERMISSION_CHANGE', l: '权限变更' },
-  { v: 'EXECUTE_SQL',       l: '执行 SQL 查询' }
-];
-const BIZ_TYPES = [
-  { v: 'PERF_CONFIG', l: '绩效配置' },
-  { v: 'SYS_CONFIG',  l: '系统配置' },
-  { v: 'CUSTOMER',    l: '客户管理' },
-  { v: 'LEAD',        l: '线索管理' },
-  { v: 'CLAIM',       l: '认领管理' },
-  { v: 'TOUCH_TASK',  l: '触达任务' },
-  { v: 'LOAN',        l: '贷款业务' },
-  { v: 'SUPPORT',     l: '支撑业务' },
-  { v: 'REPORT',      l: '报表分析' },
-  { v: 'PRODUCT',     l: '产品管理' },
-  { v: 'DOC',         l: '文档管理' },
-  { v: 'ORG',         l: '组织机构' }
-];
+// === 字典（与后端 BizAction / BizType 枚举对齐）走字典管理动态化 ===
+import { useDict } from '@/composables/useDict';
+const { options: BIZ_ACTIONS } = useDict('AUDIT_BIZ_ACTION');
+const { options: BIZ_TYPES }   = useDict('AUDIT_BIZ_TYPE');
 // 高危动作集合（按 4.6.1.5：必审计）
 const HIGH_RISK = new Set([
   'DELETE', 'EXECUTE', 'IMPORT', 'EXPORT', 'CONFIG', 'RECALC',

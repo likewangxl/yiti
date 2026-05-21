@@ -43,7 +43,6 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="sysCode" label="所属系统" width="120" />
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
         <el-table-column prop="createTime" label="创建时间" width="160" />
         <el-table-column label="操作" width="320" fixed="right">
@@ -96,8 +95,11 @@
         <el-form-item label="备注" prop="remark">
           <el-input v-model="dlg.form.remark" type="textarea" :rows="2" placeholder="选填" maxlength="100" />
         </el-form-item>
-        <el-form-item v-if="!dlg.editing" label="所属系统" prop="sysCode">
-          <el-input v-model="dlg.form.sysCode" placeholder="如 XANZC，留空走后端默认" maxlength="10" />
+        <el-form-item v-if="dlg.editing" label="状态" prop="recordStatus">
+          <el-radio-group v-model="dlg.form.recordStatus">
+            <el-radio :label="0">启用</el-radio>
+            <el-radio :label="1">停用</el-radio>
+          </el-radio-group>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -112,12 +114,13 @@
         <el-form-item label="角色">
           <el-input :value="menuDlg.role.roleChName" disabled />
         </el-form-item>
-        <el-form-item label="变更原因" required>
-          <el-input v-model="menuDlg.reason" placeholder="必填，写入审计日志（PERMISSION_CHANGE）" maxlength="100" />
-        </el-form-item>
         <el-form-item label="菜单树">
           <div v-loading="menuDlg.loading" class="menu-tree-wrap">
+            <!-- :key 每次打开递增强制重建 el-tree，default-checked-keys 才作为初始勾选生效；
+                 否则二次打开时 el-tree 复用旧实例，内部勾选状态不刷新 → 取消后保存会把旧勾选送回去 -->
             <el-tree
+              v-if="!menuDlg.loading"
+              :key="menuDlg.openSeq"
               ref="menuTreeRef"
               :data="menuDlg.tree"
               show-checkbox
@@ -143,12 +146,23 @@
     <!-- 已绑用户弹窗 -->
     <el-dialog v-model="userDlg.show" :title="`已绑用户 · ${userDlg.role?.roleChName || ''}`" width="760px">
       <el-table :data="userDlg.rows" size="default" v-loading="userDlg.loading" max-height="420" empty-text="暂无用户">
-        <el-table-column prop="userId" label="工号" width="120">
-          <template #default="{row}"><code class="mono">{{ row.userId }}</code></template>
+        <!-- 后端 RoleUserRespDTO 字段：empId/username/displayName/orgCode/orgName/isEnabled/bindTime -->
+        <el-table-column label="工号" width="120">
+          <template #default="{row}"><code class="mono">{{ row.empId || row.userId || '-' }}</code></template>
         </el-table-column>
         <el-table-column prop="username" label="用户名" width="140" />
-        <el-table-column prop="userchnname" label="姓名" width="120" />
-        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
+        <el-table-column label="姓名" width="120">
+          <template #default="{row}">{{ row.displayName || row.userchnname || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="机构" min-width="180" show-overflow-tooltip>
+          <template #default="{row}">
+            {{ row.orgName || '-' }}
+            <span v-if="row.orgCode" class="sub-id">({{ row.orgCode }})</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="绑定时间" width="160">
+          <template #default="{row}">{{ fmtBindTime(row.bindTime) }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{row}">
             <el-tag :class="row.isEnabled === 0 ? 'tag-success' : 'tag-warning'" effect="plain" size="small">
@@ -189,6 +203,12 @@ import {
 const router = useRouter();
 function goPermission() { router.push('/system/permission'); }
 
+// 后端 LocalDateTime 返回 ISO 字符串（2026-04-07T19:20:37），截到分钟方便阅读
+function fmtBindTime(t) {
+  if (!t) return '-';
+  return String(t).replace('T', ' ').slice(0, 16);
+}
+
 // === 列表 ===
 const rows = ref([]);
 const loading = ref(false);
@@ -220,7 +240,7 @@ async function reload() {
 const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, editing: null, saving: false,
-  form: { roleCode: '', roleChName: '', remark: '', sysCode: '' },
+  form: { roleCode: '', roleChName: '', remark: '', sysCode: '', recordStatus: 0 },
   rules: {
     roleCode:   [
       { required: true, message: '角色编码必填', trigger: 'blur' },
@@ -238,7 +258,7 @@ function onRoleCodeInput(v) {
 }
 function openCreate() {
   dlg.editing = null;
-  dlg.form = { roleCode: '', roleChName: '', remark: '', sysCode: '' };
+  dlg.form = { roleCode: '', roleChName: '', remark: '', sysCode: '', recordStatus: 0 };
   dlg.show = true;
 }
 function openEdit(row) {
@@ -247,7 +267,8 @@ function openEdit(row) {
     roleCode: row.roleCode,
     roleChName: row.roleChName,
     remark: row.remark || '',
-    sysCode: row.sysCode || ''
+    sysCode: row.sysCode || '',
+    recordStatus: typeof row.recordStatus === 'number' ? row.recordStatus : 0
   };
   dlg.show = true;
 }
@@ -256,7 +277,11 @@ async function saveDlg() {
   dlg.saving = true;
   try {
     if (dlg.editing) {
-      await updateRole(dlg.editing, { roleChName: dlg.form.roleChName, remark: dlg.form.remark });
+      await updateRole(dlg.editing, {
+        roleChName: dlg.form.roleChName,
+        remark: dlg.form.remark,
+        recordStatus: dlg.form.recordStatus
+      });
       ElMessage.success('已更新');
     } else {
       await createRole({
@@ -288,13 +313,15 @@ async function doDelete(row) {
 const menuTreeRef = ref(null);
 const menuDlg = reactive({
   show: false, role: null, loading: false, saving: false,
-  tree: [], checkedIds: [], reason: ''
+  tree: [], checkedIds: [], reason: '',
+  openSeq: 0  // 每次 open 递增，给 el-tree 当 :key 触发重建
 });
 async function openMenuDlg(row) {
   menuDlg.role = row;
   menuDlg.reason = '';
   menuDlg.show = true;
   menuDlg.loading = true;
+  menuDlg.openSeq++;
   try {
     const [tree, checked] = await Promise.all([
       getMenuTree(),
@@ -308,15 +335,12 @@ async function openMenuDlg(row) {
   } finally { menuDlg.loading = false; }
 }
 async function saveMenuDlg() {
-  if (!menuDlg.reason.trim()) {
-    ElMessage.warning('请填写变更原因（PERMISSION_CHANGE 审计要求）');
-    return;
-  }
-  // 收集叶子节点 + 半选父节点（el-tree 默认 getCheckedKeys 仅含全选父）
-  // 我们只关心"用户最终选了哪些 resourceId"，所以全选 + 半选都要
-  const checkedKeys = menuTreeRef.value?.getCheckedKeys() || [];
-  const halfCheckedKeys = menuTreeRef.value?.getHalfCheckedKeys() || [];
-  const menuIds = [...new Set([...checkedKeys, ...halfCheckedKeys])];
+  // 只送叶子节点 ID（leafOnly=true）。原因：
+  //  el-tree 在 check-strictly=false（默认）下，default-checked-keys 含父节点 ID 会自动联动勾选全部子。
+  //  之前同时送 checkedKeys + halfCheckedKeys 把半选父也存进 PT_ROLE_RESOURCE，
+  //  下次打开时 default-checked-keys 含父 → 用户原本取消的子被自动重新勾上 → "取消没生效"。
+  //  父分组节点的"是否勾选"由叶子子节点的勾选状态自动派生，不需要单独存。
+  const menuIds = menuTreeRef.value?.getCheckedKeys(true) || [];
   menuDlg.saving = true;
   try {
     await replaceRoleMenus(menuDlg.role.roleId, menuIds, menuDlg.reason.trim());
