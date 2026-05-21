@@ -154,19 +154,19 @@ import { listAuditLogs, getAuditLog } from '@/api/system';
 const BIZ_ACTIONS = [
   { v: 'READ',              l: '查看详情' },
   { v: 'LIST',              l: '查询列表' },
-  { v: 'WRITE',             l: '新增/编辑' },
+  { v: 'WRITE',             l: '新增或修改' },
   { v: 'DELETE',            l: '删除' },
-  { v: 'TRANSFER',          l: '转移' },
+  { v: 'TRANSFER',          l: '转交他人' },
   { v: 'APPROVE',           l: '审批通过' },
   { v: 'REJECT',            l: '审批驳回' },
   { v: 'IMPORT',            l: '数据导入' },
   { v: 'EXPORT',            l: '数据导出' },
-  { v: 'EXECUTE',           l: '执行操作' },
-  { v: 'CONFIG',            l: '配置管理' },
+  { v: 'EXECUTE',           l: '执行' },
+  { v: 'CONFIG',            l: '修改配置' },
   { v: 'RECALC',            l: '重新计算' },
-  { v: 'JOB_TRIGGER',       l: '触发定时任务' },
+  { v: 'JOB_TRIGGER',       l: '手动触发任务' },
   { v: 'PERMISSION_CHANGE', l: '权限变更' },
-  { v: 'EXECUTE_SQL',       l: '执行 SQL' }
+  { v: 'EXECUTE_SQL',       l: '执行 SQL 查询' }
 ];
 const BIZ_TYPES = [
   { v: 'PERF_CONFIG', l: '绩效配置' },
@@ -195,12 +195,12 @@ const actCls = (a) => {
 };
 // 动作中文化（与 Metrics.vue 版本历史保持一致）
 const ACTION_LABEL = {
-  READ: '查看', LIST: '查询', WRITE: '新增/编辑', CREATE: '新增', UPDATE: '编辑',
-  DELETE: '删除', TRANSFER: '转移', APPROVE: '审批通过', REJECT: '审批驳回',
-  IMPORT: '数据导入', EXPORT: '数据导出', EXECUTE: '执行操作', CONFIG: '配置管理',
-  RECALC: '重新计算', JOB_TRIGGER: '触发定时任务', PERMISSION_CHANGE: '权限变更',
-  EXECUTE_SQL: '执行 SQL', STATUS_CHANGE: '状态变更',
-  METRIC_TRIAL_RUN: '试运行', METRIC_EXECUTE: '立即执行', SLOT_RELEASE: '释放槽位', PUBLISH: '发布'
+  READ: '查看', LIST: '查询', WRITE: '新增或修改', CREATE: '新增', UPDATE: '编辑',
+  DELETE: '删除', TRANSFER: '转交他人', APPROVE: '审批通过', REJECT: '审批驳回',
+  IMPORT: '数据导入', EXPORT: '数据导出', EXECUTE: '执行', CONFIG: '修改配置',
+  RECALC: '重新计算', JOB_TRIGGER: '手动触发任务', PERMISSION_CHANGE: '权限变更',
+  EXECUTE_SQL: '执行 SQL 查询', STATUS_CHANGE: '变更状态',
+  METRIC_TRIAL_RUN: '指标试运行', METRIC_EXECUTE: '指标立即计算', SLOT_RELEASE: '释放指标槽位', PUBLISH: '发布上线'
 };
 const actLabel = (a) => ACTION_LABEL[a] || a || '—';
 
