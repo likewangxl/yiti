@@ -17,11 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -73,12 +69,6 @@ class AllocRelationServiceTest {
 
     @Mock
     private BizScopeApi bizScopeApi;
-
-    @Mock
-    private RedisTemplate<String, Object> redisTemplate;
-
-    @Mock
-    private ValueOperations<String, Object> valueOperations;
 
     @InjectMocks
     private AllocRelationService service;
@@ -153,13 +143,12 @@ class AllocRelationServiceTest {
         assertThat(filterCaptor.getValue()).isEqualTo(expectedFilter);
     }
 
-    // ------------------------------- batchGetCurrentAllocations (核心缓存合并) -------------------------------
+    // ------------------------------- batchGetCurrentAllocations (V1.8 去 Redis 后直接读 DB) -------------------------------
 
     @Test
-    @DisplayName("batchGetCurrentAllocations: 2 缓存命中 + 1 未命中走 DB, 结果合并 + 缺失者回写空列表防穿透")
+    @DisplayName("batchGetCurrentAllocations: 一次查 DB 拿全部，按 custId 分组")
     @SuppressWarnings("unchecked")
     void batchGetCurrentAllocations_hitsCacheForSomeMissesDb_fillsBoth() {
-        // Given: 3 客户 C1/C2/C3, C1/C2 命中缓存, C3 未命中 → 走 DB
         Set<String> custIds = new HashSet<>(List.of("C1", "C2", "C3"));
         String bizKind = "LOAN";
 
@@ -170,47 +159,30 @@ class AllocRelationServiceTest {
         CustAllocRelation c3Rel = AllocTestDataBuilder.relation("dummy3", "EMP_C", bizKind);
         c3Rel.setCustId("C3");
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get("perf:alloc:cust:C1:LOAN")).thenReturn(List.of(c1Rel));
-        when(valueOperations.get("perf:alloc:cust:C2:LOAN")).thenReturn(List.of(c2Rel));
-        when(valueOperations.get("perf:alloc:cust:C3:LOAN")).thenReturn(null);
-
-        // C3 走 DB: selectCurrentByCustIds 仅传 {C3}
+        // 一次查全部 3 个 custId
         when(allocMapper.selectCurrentByCustIds(any(Set.class), eq(bizKind), any(LocalDate.class), isNull()))
-                .thenReturn(List.of(c3Rel));
+                .thenReturn(List.of(c1Rel, c2Rel, c3Rel));
 
-        // When
         Map<String, List<CustAllocRelation>> result = service.batchGetCurrentAllocations(custIds, bizKind);
 
-        // Then: 3 客户全部有结果
         assertThat(result).hasSize(3);
         assertThat(result.get("C1")).extracting(CustAllocRelation::getEmpId).containsExactly("EMP_A");
         assertThat(result.get("C2")).extracting(CustAllocRelation::getEmpId).containsExactly("EMP_B");
         assertThat(result.get("C3")).extracting(CustAllocRelation::getEmpId).containsExactly("EMP_C");
 
-        // 验证 DB 只被调用一次，且查询集合恰好只包含 C3
-        ArgumentCaptor<Set<String>> missingCaptor = ArgumentCaptor.forClass(Set.class);
+        ArgumentCaptor<Set<String>> idsCaptor = ArgumentCaptor.forClass(Set.class);
         verify(allocMapper).selectCurrentByCustIds(
-                missingCaptor.capture(), eq(bizKind), any(LocalDate.class), isNull());
-        assertThat(missingCaptor.getValue()).containsExactly("C3");
-
-        // 验证 C3 的结果被回写到缓存 (TTL 5 分钟)
-        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.forClass(Duration.class);
-        verify(valueOperations).set(keyCaptor.capture(), any(), ttlCaptor.capture());
-        assertThat(keyCaptor.getValue()).isEqualTo("perf:alloc:cust:C3:LOAN");
-        assertThat(ttlCaptor.getValue()).isEqualTo(Duration.ofMinutes(5));
+                idsCaptor.capture(), eq(bizKind), any(LocalDate.class), isNull());
+        assertThat(idsCaptor.getValue()).containsExactlyInAnyOrder("C1", "C2", "C3");
     }
 
     @Test
-    @DisplayName("batchGetCurrentAllocations: 空列表也回写缓存防穿透")
+    @DisplayName("batchGetCurrentAllocations: DB 无数据时每个 custId 仍返空列表（防穿透语义保留）")
     @SuppressWarnings("unchecked")
     void batchGetCurrentAllocations_emptyResultStillCached() {
         Set<String> custIds = new HashSet<>(List.of("CMISS"));
         String bizKind = "LOAN";
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get("perf:alloc:cust:CMISS:LOAN")).thenReturn(null);
         when(allocMapper.selectCurrentByCustIds(any(Set.class), eq(bizKind), any(LocalDate.class), isNull()))
                 .thenReturn(Collections.emptyList());
 
@@ -218,43 +190,34 @@ class AllocRelationServiceTest {
 
         assertThat(result).containsKey("CMISS");
         assertThat(result.get("CMISS")).isEmpty();
-        verify(valueOperations).set(
-                eq("perf:alloc:cust:CMISS:LOAN"),
-                eq(Collections.emptyList()),
-                eq(Duration.ofMinutes(5)));
     }
 
     @Test
-    @DisplayName("batchGetCurrentAllocations: bizKind=null 时 key 以 ALL 占位")
+    @DisplayName("batchGetCurrentAllocations: bizKind=null 时透传到 mapper")
     @SuppressWarnings("unchecked")
     void batchGetCurrentAllocations_whenBizKindNull_usesAllPlaceholder() {
         Set<String> custIds = new HashSet<>(List.of("CNULL"));
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get("perf:alloc:cust:CNULL:ALL")).thenReturn(null);
         when(allocMapper.selectCurrentByCustIds(any(Set.class), isNull(), any(LocalDate.class), isNull()))
                 .thenReturn(Collections.emptyList());
 
         Map<String, List<CustAllocRelation>> result = service.batchGetCurrentAllocations(custIds, null);
 
         assertThat(result).containsOnlyKeys("CNULL");
-        verify(valueOperations).get("perf:alloc:cust:CNULL:ALL");
-        verify(valueOperations).set(
-                eq("perf:alloc:cust:CNULL:ALL"), any(), eq(Duration.ofMinutes(5)));
+        verify(allocMapper).selectCurrentByCustIds(any(Set.class), isNull(), any(LocalDate.class), isNull());
     }
 
     @Test
-    @DisplayName("batchGetCurrentAllocations: 入参 custIds 为空 → 直接返回空 Map, 不查 Redis/DB")
+    @DisplayName("batchGetCurrentAllocations: 入参 custIds 为空 → 直接返回空 Map, 不查 DB")
     void batchGetCurrentAllocations_whenEmptyCustIds_returnsEmptyMap() {
         Map<String, List<CustAllocRelation>> result = service.batchGetCurrentAllocations(
                 Collections.emptySet(), "LOAN");
 
         assertThat(result).isEmpty();
-        verifyNoInteractions(redisTemplate);
         verifyNoInteractions(allocMapper);
     }
 
     @Test
-    @DisplayName("batchGetCurrentAllocations: 3 客户全部缓存命中 → 不走 DB")
+    @DisplayName("batchGetCurrentAllocations: 直接读 DB，无缓存层")
     @SuppressWarnings("unchecked")
     void batchGetCurrentAllocations_allCacheHits_skipsDb() {
         Set<String> custIds = new HashSet<>(List.of("H1", "H2"));
@@ -263,15 +226,14 @@ class AllocRelationServiceTest {
         CustAllocRelation r2 = AllocTestDataBuilder.relation("x2", "EMP_2", "LOAN");
         r2.setCustId("H2");
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get("perf:alloc:cust:H1:LOAN")).thenReturn(List.of(r1));
-        when(valueOperations.get("perf:alloc:cust:H2:LOAN")).thenReturn(List.of(r2));
+        when(allocMapper.selectCurrentByCustIds(any(Set.class), eq("LOAN"), any(LocalDate.class), isNull()))
+                .thenReturn(List.of(r1, r2));
 
         Map<String, List<CustAllocRelation>> result = service.batchGetCurrentAllocations(custIds, "LOAN");
 
         assertThat(result).hasSize(2);
-        // DB mapper 无任何调用
-        verify(allocMapper, never()).selectCurrentByCustIds(any(), anyString(), any(), any());
+        // DB 必被调用一次
+        verify(allocMapper).selectCurrentByCustIds(any(Set.class), eq("LOAN"), any(LocalDate.class), isNull());
     }
 
     // ------------------------------- countCustomersByEmps -------------------------------

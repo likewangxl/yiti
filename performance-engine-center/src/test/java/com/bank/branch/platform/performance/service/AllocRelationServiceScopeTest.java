@@ -17,7 +17,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
 
 import java.time.LocalDate;
 import java.util.Collections;
@@ -59,9 +58,6 @@ class AllocRelationServiceScopeTest {
     @Mock
     private BizScopeApi bizScopeApi;
 
-    @Mock
-    private RedisTemplate<String, Object> redisTemplate;
-
     // Q7.2: 真正的 helper 实例（用 bizScopeApi mock 驱动）
     private PerfScopeHelper perfScopeHelper;
 
@@ -70,10 +66,9 @@ class AllocRelationServiceScopeTest {
 
     private void wireScopeHelper() {
         this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
-        // 使用反射或手动 setter 注入 helper（Service 新增字段后 @InjectMocks 会识别）
-        // 这里直接重新组装 service
+        // V1.8 去 Redis：构造函数移除 RedisTemplate 参数
         this.service = new AllocRelationService(
-                allocMapper, sysControlService, currentUserApi, bizScopeApi, redisTemplate, perfScopeHelper);
+                allocMapper, sysControlService, currentUserApi, bizScopeApi, perfScopeHelper);
     }
 
     @Test
