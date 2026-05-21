@@ -302,16 +302,16 @@ class MetricCalcServiceTest {
         when(metricDefService.getByCodeOrNull("M_TEST_MACRO")).thenReturn(def);
 
         when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class)))
-                .thenReturn(java.util.Map.of());
+                .thenReturn(Map.of());
 
         LocalDate dataDate = LocalDate.of(2026, 5, 20);
         metricCalcService.calcMetric("M_TEST_MACRO", dataDate, "V1", "MANUAL");
 
-        ArgumentCaptor<java.util.Map<String, Object>> paramsCap =
-                ArgumentCaptor.forClass(java.util.Map.class);
+        ArgumentCaptor<Map<String, Object>> paramsCap = ArgumentCaptor.captor();
         verify(sqlExecutor).execute(eq(def.getSqlText()), paramsCap.capture(), any(Duration.class));
-        java.util.Map<String, Object> captured = paramsCap.getValue();
+        Map<String, Object> captured = paramsCap.getValue();
         assertThat(captured)
+                .hasSize(10)
                 .containsEntry("dataDate", dataDate)
                 .containsEntry("version", "V1")
                 .containsEntry("dateToday", dataDate)
