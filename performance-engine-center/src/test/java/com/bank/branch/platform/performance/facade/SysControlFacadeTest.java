@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.common.web.lock.LockManager;
 import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -11,17 +12,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.data.redis.core.script.RedisScript;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -30,15 +28,12 @@ import static org.mockito.Mockito.when;
 
 /**
  * SysControlFacade 纯单元测试.
- * <p>Facade 层负责 Redis 分布式锁的申请/释放 (Lua 脚本 compare-and-del), 事务外.
+ * <p>Facade 层负责分布式锁的申请/释放 (去 Redis 后改 PT_LOCK + LockManager CAS).
  */
 class SysControlFacadeTest extends PerformanceServiceTestBase {
 
     @Mock
-    private RedisTemplate<String, Object> redisTemplate;
-
-    @Mock
-    private ValueOperations<String, Object> valueOperations;
+    private LockManager lockManager;
 
     @Mock
     private SysControlService sysControlService;
@@ -49,10 +44,8 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
     @Test
     @DisplayName("switchVersion 获取锁失败时抛 PERF-40904")
     void switchVersion_whenLockAcquireFailed_shouldThrow40904() {
-        // Given: setIfAbsent 返回 false (锁已被占)
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.setIfAbsent(anyString(), any(), any(Duration.class)))
-                .thenReturn(Boolean.FALSE);
+        // Given: tryLock 返回 false (锁已被占)
+        when(lockManager.tryLock(anyString(), anyString(), anyLong())).thenReturn(false);
 
         SwitchVersionCmd cmd = SwitchVersionCmd.builder()
                 .scopeDim("EMP")
@@ -70,15 +63,14 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
 
         // 验证: 未调 service, 未释放锁 (因为根本未获锁)
         verify(sysControlService, never()).doSwitchVersion(any());
+        verify(lockManager, never()).unlock(anyString(), anyString());
     }
 
     @Test
-    @DisplayName("switchVersion 成功时应 Lua 脚本释放锁")
+    @DisplayName("switchVersion 成功时应 CAS 释放锁")
     void switchVersion_whenSuccess_shouldReleaseLock() {
         // Given
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.setIfAbsent(anyString(), any(), any(Duration.class)))
-                .thenReturn(Boolean.TRUE);
+        when(lockManager.tryLock(anyString(), anyString(), anyLong())).thenReturn(true);
         SysControl ok = SysControlTestDataBuilder.buildTest(
                 "F01", "EMP", LocalDate.of(2099, 8, 1), "V_NEW", 1);
         when(sysControlService.doSwitchVersion(any())).thenReturn(ok);
@@ -97,20 +89,15 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
         // Then
         assertThat(res.getCurrentVersion()).isEqualTo("V_NEW");
         verify(sysControlService).doSwitchVersion(cmd);
-        // Lua compare-and-del 脚本被调用
-        verify(redisTemplate).execute(
-                any(RedisScript.class),
-                eq(List.of("perf:sys_control:switch:EMP")),
-                any());
+        // 锁被 unlock（按 key 匹配）
+        verify(lockManager).unlock(eq("perf:sys_control:switch:EMP"), anyString());
     }
 
     @Test
     @DisplayName("switchVersion service 抛异常时依然释放锁")
     void switchVersion_whenServiceThrows_shouldStillReleaseLock() {
         // Given
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.setIfAbsent(anyString(), any(), any(Duration.class)))
-                .thenReturn(Boolean.TRUE);
+        when(lockManager.tryLock(anyString(), anyString(), anyLong())).thenReturn(true);
         when(sysControlService.doSwitchVersion(any()))
                 .thenThrow(new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND, "EMP"));
 
@@ -128,7 +115,7 @@ class SysControlFacadeTest extends PerformanceServiceTestBase {
                 .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
                         .isEqualTo(PerfErrorCode.SYS_CONTROL_VERSION_NOT_FOUND));
         // 锁依然被释放
-        verify(redisTemplate).execute(any(RedisScript.class), any(List.class), any());
+        verify(lockManager).unlock(anyString(), anyString());
     }
 
     @Test

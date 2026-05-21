@@ -22,9 +22,7 @@ import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
+import com.bank.branch.platform.common.web.lock.LockManager;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -48,11 +46,8 @@ public class MetricLifecycleFacade {
 
     private static final String LOCK_KEY_PREFIX = "perf:slot-alloc:";
     private static final Duration LOCK_TTL = Duration.ofSeconds(30);
-    private static final RedisScript<Long> COMPARE_AND_DEL = new DefaultRedisScript<>(
-            "if redis.call('get', KEYS[1])==ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-            Long.class);
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final LockManager lockManager;
     private final MetricDefService metricDefService;
     /** V1.3 R4.1：execute / trialRun 需要的协作组件. */
     private final MetricTrialService metricTrialService;
@@ -74,14 +69,14 @@ public class MetricLifecycleFacade {
     public PerfMetricDef createMetric(CreateMetricDefCmd cmd) {
         String lockKey = LOCK_KEY_PREFIX + cmd.getBaseDim();
         String token = UUID.randomUUID().toString();
-        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
-        if (!Boolean.TRUE.equals(locked)) {
+        boolean locked = lockManager.tryLock(lockKey, token, LOCK_TTL.toMillis());
+        if (!locked) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, cmd.getBaseDim());
         }
         try {
             return metricDefService.create(cmd);
         } finally {
-            redisTemplate.execute(COMPARE_AND_DEL, Collections.singletonList(lockKey), token);
+            lockManager.unlock(lockKey, token);
         }
     }
 
