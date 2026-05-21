@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.performance.config.PerfEngineProperties;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
@@ -86,9 +87,11 @@ public class MetricCalcService {
     private final PerfEngineProperties perfEngineProperties;
     private final SubjectFetcher subjectFetcher;
     private final ApplicationEventPublisher eventPublisher;
+    private final CurrentUserApi currentUserApi;
 
     /**
-     * 构造器注入（V1.7 新增 SubjectFetcher + ApplicationEventPublisher 参数）.
+     * 构造器注入（V1.7 新增 SubjectFetcher + ApplicationEventPublisher 参数；
+     * 新增 CurrentUserApi 用于 run_task.started_by 兜底）.
      */
     @Autowired
     public MetricCalcService(MetricDefService metricDefService,
@@ -100,7 +103,8 @@ public class MetricCalcService {
                              PerfRunTaskMapper perfRunTaskMapper,
                              PerfEngineProperties perfEngineProperties,
                              SubjectFetcher subjectFetcher,
-                             ApplicationEventPublisher eventPublisher) {
+                             ApplicationEventPublisher eventPublisher,
+                             CurrentUserApi currentUserApi) {
         this.metricDefService = metricDefService;
         this.sqlExecutor = sqlExecutor;
         this.groovyExecutor = groovyExecutor;
@@ -111,6 +115,7 @@ public class MetricCalcService {
         this.perfEngineProperties = perfEngineProperties;
         this.subjectFetcher = subjectFetcher;
         this.eventPublisher = eventPublisher;
+        this.currentUserApi = currentUserApi;
     }
 
     /**
@@ -416,6 +421,14 @@ public class MetricCalcService {
         task.setDataVersion(version);
         task.setStatus("PENDING");
         task.setStartTime(LocalDateTime.now());
+        // started_by NOT NULL：HTTP 请求触发拿当前用户；Quartz 调度无 ThreadLocal 上下文 → 兜底 SYSTEM
+        String startedBy;
+        try {
+            startedBy = currentUserApi.getCurrentEmpId();
+        } catch (Exception e) {
+            startedBy = "SYSTEM";
+        }
+        task.setStartedBy(startedBy);
         perfRunTaskMapper.insert(task);
     }
 
