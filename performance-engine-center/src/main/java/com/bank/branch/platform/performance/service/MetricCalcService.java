@@ -11,6 +11,7 @@ import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.dto.SubjectStats;
+import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -219,6 +220,7 @@ public class MetricCalcService {
         Map<String, Object> params = new HashMap<>();
         params.put("dataDate", dataDate);
         params.put("version", version);
+        params.putAll(DateMacroResolver.resolve(dataDate));
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
         Map<String, BigDecimal> values = sqlExecutor.execute(def.getSqlText(), params, timeout);

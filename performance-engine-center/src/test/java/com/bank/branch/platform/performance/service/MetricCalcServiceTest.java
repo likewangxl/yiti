@@ -291,6 +291,39 @@ class MetricCalcServiceTest {
         verify(empIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
     }
 
+    @Test
+    void executeSqlAndPersist_injectsDateMacrosIntoParams() {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_TEST_MACRO");
+        def.setBaseDim("EMP");
+        def.setCalcLogicType("SQL");
+        def.setSqlText("SELECT emp_id AS base_key, 1 AS metric_value FROM t WHERE dt = :dateMonthEnd");
+        def.setValSlot(1);
+        when(metricDefService.getByCodeOrNull("M_TEST_MACRO")).thenReturn(def);
+
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class)))
+                .thenReturn(java.util.Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 5, 20);
+        metricCalcService.calcMetric("M_TEST_MACRO", dataDate, "V1", "MANUAL");
+
+        ArgumentCaptor<java.util.Map<String, Object>> paramsCap =
+                ArgumentCaptor.forClass(java.util.Map.class);
+        verify(sqlExecutor).execute(eq(def.getSqlText()), paramsCap.capture(), any(Duration.class));
+        java.util.Map<String, Object> captured = paramsCap.getValue();
+        assertThat(captured)
+                .containsEntry("dataDate", dataDate)
+                .containsEntry("version", "V1")
+                .containsEntry("dateToday", dataDate)
+                .containsEntry("dateYesterday", dataDate.minusDays(1))
+                .containsEntry("dateMonthEnd", LocalDate.of(2026, 5, 31))
+                .containsEntry("datePrevMonthEnd", LocalDate.of(2026, 4, 30))
+                .containsEntry("dateQuarterEnd", LocalDate.of(2026, 6, 30))
+                .containsEntry("datePrevQuarterEnd", LocalDate.of(2026, 3, 31))
+                .containsEntry("dateYearEnd", LocalDate.of(2026, 12, 31))
+                .containsEntry("datePrevYearEnd", LocalDate.of(2025, 12, 31));
+    }
+
     // ========== 测试构造器 ==========
 
     private PerfMetricDef buildEmpSqlMetric() {
