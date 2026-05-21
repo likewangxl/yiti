@@ -18,7 +18,7 @@ public class ResourceCreateReqDTO {
     private String resourceUrl;
 
     @NotBlank
-    @Pattern(regexp = "^(GET|POST|PUT|DELETE|\\*)$")
+    @Pattern(regexp = "^(GET|POST|PUT|DELETE|\\*|MENU)$")
     private String resourceMethod;
 
     @NotBlank

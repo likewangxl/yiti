@@ -38,7 +38,8 @@ public class PtResource {
     /** 菜单排序号，对应 MENU_RANK_NO */
     private Integer menuRankNo;
 
-    /** 是否为菜单：0-是，1-否，对应 ISMENU */
+    /** 是否为菜单：0-是，1-否，对应 ISMENU（无下划线，MyBatis-Plus 约定式 SQL 会自动转 is_menu 撞墙，显式标注） */
+    @com.baomidou.mybatisplus.annotation.TableField("ISMENU")
     private Integer isMenu;
 
     /** 是否为叶子节点菜单：1-是，0-否，对应 MENU_ENDFLAG */

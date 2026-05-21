@@ -95,7 +95,7 @@ class RoleControllerTest {
         RoleRespDTO dto = new RoleRespDTO();
         dto.setRoleId("R_001");
         dto.setRoleChName("新名称");
-        when(roleService.updateRole(anyString(), anyString(), any())).thenReturn(dto);
+        when(roleService.updateRole(anyString(), anyString(), any(), any())).thenReturn(dto);
 
         RoleUpdateReqDTO req = new RoleUpdateReqDTO();
         req.setRoleChName("新名称");
@@ -155,7 +155,7 @@ class RoleControllerTest {
 
     @Test
     void updateRole_notFound_shouldReturnBizError() throws Exception {
-        when(roleService.updateRole(anyString(), anyString(), any()))
+        when(roleService.updateRole(anyString(), anyString(), any(), any()))
             .thenThrow(new BizException("AUTH-40401", "角色不存在"));
 
         RoleUpdateReqDTO req = new RoleUpdateReqDTO();

@@ -107,7 +107,7 @@ public class TargetAdjustService {
     public String submit(SubmitTargetAdjustCmd cmd) {
         validateBasic(cmd);
         validateAdjustments(cmd);
-        validateTargetPlan(cmd.getPlanId());
+        PerfTargetPlan plan = validateAndGetTargetPlan(cmd.getPlanId());
 
         String applyId = genApplyId();
         String applyNo = genApplyNo();
@@ -149,6 +149,11 @@ public class TargetAdjustService {
         vars.put("subjectType", cmd.getSubjectType());
         vars.put("subjectId", cmd.getSubjectId());
         vars.put("cycleKey", cmd.getCycleKey());
+        // 原业绩所属人：取目标方案的 ownerEmpId 作为 BPMN original_owner_approve
+        // 节点的 flowable:assignee 单人指派候选；plan.ownerEmpId 为空则不写此键.
+        if (!isBlank(plan.getOwnerEmpId())) {
+            vars.put("originalOwnerEmpId", plan.getOwnerEmpId());
+        }
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
 
@@ -380,13 +385,14 @@ public class TargetAdjustService {
     }
 
     /**
-     * 目标方案存在性校验.
+     * 目标方案存在性校验，并返回 plan 实体（供 submit 复用 ownerEmpId 等字段，避免重复查询）.
      */
-    private void validateTargetPlan(String planId) {
+    private PerfTargetPlan validateAndGetTargetPlan(String planId) {
         PerfTargetPlan plan = targetPlanMapper.selectById(planId);
         if (plan == null) {
             throw new PerfException(PerfErrorCode.TARGET_PLAN_NOT_FOUND, planId);
         }
+        return plan;
     }
 
     /**

@@ -11,6 +11,8 @@ import com.bank.branch.platform.performance.controller.dto.TargetAdjustCreateReq
 import com.bank.branch.platform.performance.controller.dto.TargetAdjustRespDTO;
 import com.bank.branch.platform.performance.service.adjust.TargetAdjustService;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitTargetAdjustCmd;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -65,6 +68,7 @@ public class TargetAdjustController {
 
     private final CurrentUserApi currentUserApi;
     private final TargetAdjustService targetAdjustService;
+    private final WorkflowQueryApi workflowQueryApi;
 
     /**
      * 提交目标修正申请.
@@ -128,6 +132,40 @@ public class TargetAdjustController {
         PageResult<TargetAdjustRespDTO> dtoPage = targetAdjustService.pageDto(
                 status, planId, subjectType, subjectId, ownerOrgId, createdBy, pageNo, pageSize);
         return ResponseWrapper.page(dtoPage);
+    }
+
+    /**
+     * 查询审批流记录（时间倒序，最新在上）.
+     *
+     * <p>聚合 workflow-center {@link WorkflowQueryApi#getProcessHistory}，避免前端跨模块绕路、
+     * 并统一走 perf 模块 {@code @BizAuth} 权限链路。
+     *
+     * <p>边界：
+     * <ul>
+     *   <li>{@code id} 不存在 → service 抛 PERF-404xx（保持既有语义）</li>
+     *   <li>{@code processInstanceId} 为空（DRAFT 尚未启动流程）→ 返回空数组</li>
+     *   <li>{@code operateTime} 为 null 的条目排在最末，避免 NPE</li>
+     * </ul>
+     */
+    @GetMapping("/{id}/approval-history")
+    @Operation(summary = "查询目标修正申请审批流记录（时间倒序）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<ApprovalLogDTO>> getApprovalHistory(
+            @PathVariable("id") @NotBlank String id) {
+        log.debug("[TargetAdjustController.getApprovalHistory] id={}", id);
+        TargetAdjustRespDTO detail = targetAdjustService.getByIdDto(id);
+        String processInstanceId = detail.getProcessInstanceId();
+        if (processInstanceId == null || processInstanceId.isEmpty()) {
+            return ResponseWrapper.success(Collections.emptyList());
+        }
+        List<ApprovalLogDTO> logs = workflowQueryApi.getProcessHistory(processInstanceId);
+        if (logs == null || logs.isEmpty()) {
+            return ResponseWrapper.success(Collections.emptyList());
+        }
+        List<ApprovalLogDTO> sorted = new ArrayList<>(logs);
+        sorted.sort(Comparator.comparing(ApprovalLogDTO::getOperateTime,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        return ResponseWrapper.success(sorted);
     }
 
     /**

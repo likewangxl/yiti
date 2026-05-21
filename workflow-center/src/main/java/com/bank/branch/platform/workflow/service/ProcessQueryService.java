@@ -315,11 +315,19 @@ public class ProcessQueryService {
             }
         }
 
-        // 获取审批意见（从历史任务变量）
-        if (activity.getAssignee() != null) {
+        // 获取审批结果与审批意见（2026-05-20 修复）
+        //  - 审批结果：从历史任务的 task local variable `approved` 取（true→APPROVE / false→REJECT）
+        //  - 审批意见：从 ACT_HI_COMMENT 取 type=APPROVE/REJECT 的 fullMessage
+        //  注意：原代码用 activity.getActivityId()（节点 key，如 branch_mgr_review）当作 taskId
+        //  查 HistoricTaskInstance 永远查不到；taskId 必须用 activity.getTaskId()。
+        //  另外原代码从 task local var 取 opinion，但 TaskOperationService 是通过
+        //  addComment 存的，task vars 里不会有 opinion 字段。
+        String taskId = activity.getTaskId();
+        if (taskId != null) {
             try {
                 HistoricTaskInstance hti = historyService.createHistoricTaskInstanceQuery()
-                        .taskId(activity.getActivityId())
+                        .taskId(taskId)
+                        .includeTaskLocalVariables()
                         .singleResult();
                 if (hti != null) {
                     Map<String, Object> vars = hti.getTaskLocalVariables();
@@ -327,12 +335,22 @@ public class ProcessQueryService {
                         Boolean approved = (Boolean) vars.get("approved");
                         dto.setAction(approved != null && approved ? "APPROVE" : "REJECT");
                     }
-                    if (vars != null && vars.containsKey("opinion")) {
-                        dto.setOpinion((String) vars.get("opinion"));
+                }
+                List<org.flowable.engine.task.Comment> taskComments = taskService.getTaskComments(taskId);
+                if (taskComments != null) {
+                    for (org.flowable.engine.task.Comment c : taskComments) {
+                        String type = c.getType();
+                        if ("APPROVE".equals(type) || "REJECT".equals(type)) {
+                            if (dto.getAction() == null) {
+                                dto.setAction(type);
+                            }
+                            dto.setOpinion(c.getFullMessage());
+                            break;
+                        }
                     }
                 }
             } catch (Exception e) {
-                log.warn("获取审批意见失败: activityId={}", activity.getActivityId(), e);
+                log.warn("获取审批结果/意见失败: activityId={}, taskId={}", activity.getActivityId(), taskId, e);
             }
         }
 

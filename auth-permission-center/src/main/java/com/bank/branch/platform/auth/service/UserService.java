@@ -163,6 +163,19 @@ public class UserService {
         }
     }
 
+    /** 管理员为指定用户设置新密码：不需校验旧密码，直接 BCrypt 加密后覆盖 */
+    public void setPasswordByAdmin(String userId, String newPassword, String operator) {
+        validateIds(java.util.Collections.singletonList(userId));
+        com.bank.branch.platform.auth.entity.PtUser u = userMapper.selectByUserId(userId);
+        if (u == null) {
+            throw new BizException(AuthErrorCode.USER_NOT_FOUND.getCode(),
+                    AuthErrorCode.USER_NOT_FOUND.getMessage());
+        }
+        String bcrypt = passwordEncoder.encode(newPassword);
+        int affected = userMapper.updatePassword(userId, bcrypt, operator);
+        log.info("[UserService.setPasswordByAdmin] affected={} userId={} operator={}", affected, userId, operator);
+    }
+
     /** 批量重置密码为系统默认值（BCrypt 加密） */
     public int resetPassword(java.util.List<String> userIds, String operator) {
         validateIds(userIds);

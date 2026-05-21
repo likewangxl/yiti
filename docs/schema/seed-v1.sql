@@ -302,21 +302,30 @@ VALUES
 ('D_DC_TEMPLATE','DOC_CATEGORY', 'TEMPLATE',  '模板表单',   'TEMPLATE',  3, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_DC_TRAIN',   'DOC_CATEGORY', 'TRAINING',  '培训材料',   'TRAINING',  4, 'ACTIVE', 'V1 seed', 'seed');
 -- =========================================================
--- 2) PT_ROLE 角色种子数据（当前 onepl 实际 13 行）
--- 注：12 设计期角色 + 1 测试残留角色 R_77EBD269（R_TESTZ）
+-- 2) PT_ROLE 角色种子数据（当前 onepl 实际 16 行）
+-- 注：15 设计期角色（原 12 + 2026-05-20 新增 3 业务部门负责人）+ 1 测试残留角色 R_77EBD269（R_TESTZ）
 -- 顺序：按 ROLE_ID 字典序（mysqldump 输出）
+-- 2026-05-20 新增 3 个业务部门负责人角色：
+--   - R_CORP_LEAD   / CORP_DEPT_LEADER   公司部负责人
+--   - R_FIN_LEAD    / FINANCE_LEADER     资财部负责人
+--   - R_RETAIL_LEAD / RETAIL_DEPT_LEADER 零售部负责人
+-- 用途：拆分 alloc_adjust_approve_v1 流程中 biz_dept_leader_approve 与
+--       finance_leader_approve 两个"负责人"节点的候选组，避免与"经办人"节点共用同一角色
 -- =========================================================
 
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_77EBD269','R_TESTZ','retest-v2',1,'PLATFORM','2026-04-10 12:20:00',NULL,'2026-04-10 12:20:01',NULL,'upd');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_ADMIN','SYS_ADMIN','系统管理员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 超级管理员，运维与权限管理');
-INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_FINANCE','BACK_FINAN','中后台员工(资财)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 财务会计部等后台支持');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_FINANCE','BACK_FINANCE','中后台员工(资财)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-05-20 00:00:00','seed','V1 seed - 财务会计部等后台支持（2026-05-20 ROLE_CODE BACK_FINAN→BACK_FINANCE 对齐 candidateValue）');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_TECH','BACK_TECH','中后台员工(科技)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 信息技术部');
-INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BRANCH_MGR','BRANCH_HEA','经营机构负责人',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BRANCH_MGR','BRANCH_HEAD','经营机构负责人',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-05-20 00:00:00','seed','flowable real env role（2026-05-20 ROLE_CODE BRANCH_HEA→BRANCH_HEAD 对齐 candidateValue）');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CORP_DEPT','CORP_DEPT','公司部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CORP_LEAD','CORP_DEPT_LEADER','公司部负责人',0,'PLATFORM','2026-05-20 00:00:00','seed','2026-05-20 00:00:00','seed','V1 seed - 公司部负责人，用于 alloc_adjust_approve_v1 biz_dept_leader_approve 节点');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CREDIT_APPROVER','CREDIT_APP','授信批复人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CREDIT_REVIEWER','CREDIT_REV','授信审查人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_FIN_LEAD','FINANCE_LEADER','资财部负责人',0,'PLATFORM','2026-05-20 00:00:00','seed','2026-05-20 00:00:00','seed','V1 seed - 资财部负责人，用于 alloc_adjust_approve_v1 finance_leader_approve 节点');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_PRESIDENT','BRANCH_PRE','分行行长',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 分行最高管理者');
-INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RETAIL_DEPT','RETAIL_DEP','零售部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 分行零售业务管理部门');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RETAIL_DEPT','RETAIL_DEPT','零售部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-05-20 00:00:00','seed','V1 seed - 分行零售业务管理部门（2026-05-20 ROLE_CODE RETAIL_DEP→RETAIL_DEPT 对齐 candidateValue）');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RETAIL_LEAD','RETAIL_DEPT_LEADER','零售部负责人',0,'PLATFORM','2026-05-20 00:00:00','seed','2026-05-20 00:00:00','seed','V1 seed - 零售部负责人，用于 alloc_adjust_approve_v1 biz_dept_leader_approve 节点');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RM','R_RM','客户经理',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_SUPPORT_SEC','SUPPORT_SE','中场支持部门秘书',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 中场支持部门秘书岗');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_SUPPORT_STAFF','SUPPORT_ST','中场支持部门人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 中台部门员工');
@@ -1480,6 +1489,35 @@ DELETE FROM PT_ROLE_BIZ_SCOPE WHERE ROLE_ID NOT IN (
     'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
     'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_PRESIDENT'
 );
+
+-- ============================================================================
+-- 2026-05-20 审批流记录端点资源 + 全角色绑定（perf 模块聚合 workflow-center 流程历史）
+-- ============================================================================
+INSERT IGNORE INTO PT_RESOURCE
+  (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`,
+   `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`,
+   `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`)
+VALUES
+  ('P_PERF_ALLOC_AD_HIS', '/api/perf/alloc-adjust/*/approval-history', 'GET',
+   '分配调整申请审批流记录', NULL, 0, 0, '0', NULL, 0,
+   'PERF', '2026-05-20 00:00:00', 'approval-hist-2026-05-20',
+   '2026-05-20 00:00:00', 'approval-hist-2026-05-20', '2026-05-20 审批流记录端点'),
+  ('P_PERF_TGT_AD_HIS', '/api/perf/target-adjust/*/approval-history', 'GET',
+   '目标调整申请审批流记录', NULL, 0, 0, '0', NULL, 0,
+   'PERF', '2026-05-20 00:00:00', 'approval-hist-2026-05-20',
+   '2026-05-20 00:00:00', 'approval-hist-2026-05-20', '2026-05-20 审批流记录端点');
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`)
+SELECT MD5(CONCAT(r.ROLE_ID, '|', 'P_PERF_ALLOC_AD_HIS')),
+       r.ROLE_ID, 'P_PERF_ALLOC_AD_HIS', 'PERF'
+  FROM PT_ROLE r
+ WHERE COALESCE(r.RECORD_STATUS, 0) = 0;
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`)
+SELECT MD5(CONCAT(r.ROLE_ID, '|', 'P_PERF_TGT_AD_HIS')),
+       r.ROLE_ID, 'P_PERF_TGT_AD_HIS', 'PERF'
+  FROM PT_ROLE r
+ WHERE COALESCE(r.RECORD_STATUS, 0) = 0;
 
 -- ============================================================================
 -- END OF seed-v1.sql

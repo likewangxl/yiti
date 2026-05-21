@@ -92,7 +92,7 @@ public class RoleController {
             @PathVariable("roleId") String roleId,
             @RequestBody RoleUpdateReqDTO req) {
         log.info("[RoleController.updateRole] roleId={}", roleId);
-        RoleRespDTO dto = roleService.updateRole(roleId, req.getRoleChName(), req.getRemark());
+        RoleRespDTO dto = roleService.updateRole(roleId, req.getRoleChName(), req.getRemark(), req.getRecordStatus());
         return ResponseWrapper.success(dto);
     }
 

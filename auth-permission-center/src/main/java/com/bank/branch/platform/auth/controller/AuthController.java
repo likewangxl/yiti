@@ -313,6 +313,19 @@ public class AuthController {
     }
 
     /**
+     * 当前用户可见菜单树（前端 sidebar 渲染左侧导航用）。
+     * <p>过滤逻辑参见 {@link AuthService#getMyMenuTree(String)}：当前用户所有角色绑定菜单的并集 + 祖先链。</p>
+     */
+    @GetMapping("/my-menus")
+    @Operation(summary = "当前用户可见菜单树",
+            description = "用 PT_USER_ROLE → PT_ROLE_RESOURCE → PT_RESOURCE(IS_MENU=1) 过滤后返回")
+    public ResponseWrapper<java.util.List<com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO>> getMyMenus(HttpSession session) {
+        CurrentUserContext ctx = authService.getCurrentUser(session);
+        log.debug("[AuthController.getMyMenus] empId={}", ctx.empId());
+        return ResponseWrapper.success(authService.getMyMenuTree(ctx.empId()));
+    }
+
+    /**
      * 校验当前用户是否有指定资源/BizType的权限（H.2）
      *
      * @param req 权限检查请求（resourceUrl、resourceMethod必填，bizType/action可选）

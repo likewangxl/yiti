@@ -7,10 +7,12 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
+import com.bank.branch.platform.performance.entity.CustAllocRelation;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
@@ -83,6 +85,7 @@ public class AllocAdjustService {
 
     private final PerfAllocAdjustApplyMapper applyMapper;
     private final PerfAllocAdjustItemMapper itemMapper;
+    private final CustAllocRelationMapper allocRelationMapper;
     private final CustomerQueryApi customerQueryApi;
     private final WorkflowApi workflowApi;
     private final CurrentUserApi currentUserApi;
@@ -159,6 +162,13 @@ public class AllocAdjustService {
         vars.put("custNo", cmd.getCustNo());
         vars.put("bizKind", cmd.getBizKind());
         vars.put("allocDim", cmd.getAllocDim());
+        // 原业绩所属人：按 (custId, bizKind) 查当前有效分配，取首条 empId 作为
+        // BPMN original_owner_approve 节点的 flowable:assignee 单人指派候选；
+        // 查不到（新客户或历史分配空）时不写此键，需要勾选"原业绩所属人审批"前请前端做防呆.
+        String originalOwnerEmpId = resolveOriginalOwnerEmpId(internalCustId, cmd.getBizKind());
+        if (originalOwnerEmpId != null) {
+            vars.put("originalOwnerEmpId", originalOwnerEmpId);
+        }
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
 
@@ -456,6 +466,32 @@ public class AllocAdjustService {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
                     "items ratio 合计超过 100: " + sum);
         }
+    }
+
+    /**
+     * 查询当前活跃分配关系中首条记录的 empId 作为"原业绩所属人".
+     * <p>
+     * 用于 BPMN 中 {@code original_owner_approve} 节点的单人指派：
+     * 当公司部/零售部经办在 biz_dept_review 节点勾选 needsOriginalOwnerApprove
+     * 时，流程会路由到该节点，由 flowable:assignee="${originalOwnerEmpId}" 直接指派.
+     *
+     * <p>多 owner 共担一个客户的场景：取首条（按 mapper 默认排序），后续如需多人会签
+     * 可改 candidateUsers 写法.
+     *
+     * @return 当前活跃分配的首个 empId；无活跃分配时返回 null
+     */
+    private String resolveOriginalOwnerEmpId(String custId, String bizKind) {
+        List<CustAllocRelation> current = allocRelationMapper.selectCurrentByCustAndBiz(
+                custId, bizKind, java.time.LocalDate.now());
+        if (current == null || current.isEmpty()) {
+            return null;
+        }
+        for (CustAllocRelation rel : current) {
+            if (!isBlank(rel.getEmpId())) {
+                return rel.getEmpId();
+            }
+        }
+        return null;
     }
 
     /**

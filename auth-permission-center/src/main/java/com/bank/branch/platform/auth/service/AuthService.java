@@ -58,6 +58,8 @@ public class AuthService {
     private final PermissionCacheService cacheService;
     private final BizScopeService bizScopeService;
     private final ResourceMapper resourceMapper;
+    private final com.bank.branch.platform.auth.mapper.RoleResourceMapper roleResourceMapper;
+    private final ResourceService resourceService;
     private final CurrentUserProvider currentUserProvider;
 
     /** 统一认证（边车 11003）客户端。required=false → 边车未就绪时不阻断登录主流程。 */
@@ -436,5 +438,47 @@ public class AuthService {
             throw new AuthException(AuthErrorCode.ACCOUNT_DISABLED.getCode(),
                 AuthErrorCode.ACCOUNT_DISABLED.getMessage());
         }
+    }
+
+    /**
+     * 当前用户能访问的菜单树（按 PT_USER_ROLE → PT_ROLE_RESOURCE → PT_RESOURCE IS_MENU=1 过滤）。
+     * <p>调用方：AuthController.getMyMenus，给前端 AppSidebar 渲染左侧导航。</p>
+     * <p>过滤规则：当前用户多角色绑定菜单 ID 的并集 = allowedMenuIds；
+     * 拿全量菜单树后做剪枝——节点本身在集合中、或它有后代在集合中的，保留；否则丢弃。
+     * 这样确保父分组节点（M_GROUP_PERF 等）只要有子菜单被绑定就可见，菜单层级不至于断链。</p>
+     */
+    public List<com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO> getMyMenuTree(String empId) {
+        log.debug("[AuthService.getMyMenuTree] empId={}", empId);
+        if (empId == null || empId.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.List<String> roleIds = userRoleMapper.selectRoleIdsByUserId(empId);
+        java.util.Set<String> allowed = new java.util.HashSet<>();
+        if (roleIds != null) {
+            for (String rid : roleIds) {
+                java.util.List<String> ids = roleResourceMapper.selectMenuIdsByRoleId(rid);
+                if (ids != null) allowed.addAll(ids);
+            }
+        }
+        if (allowed.isEmpty()) return java.util.Collections.emptyList();
+        java.util.List<com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO> full = resourceService.getMenuTree();
+        return pruneMenuTree(full, allowed);
+    }
+
+    private java.util.List<com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO> pruneMenuTree(
+            java.util.List<com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO> nodes,
+            java.util.Set<String> allowed) {
+        java.util.List<com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO> kept = new java.util.ArrayList<>();
+        if (nodes == null) return kept;
+        for (com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO n : nodes) {
+            java.util.List<com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO> prunedKids =
+                    pruneMenuTree(n.getChildren(), allowed);
+            boolean selfAllowed = allowed.contains(n.getResourceId());
+            if (selfAllowed || !prunedKids.isEmpty()) {
+                n.setChildren(prunedKids);
+                kept.add(n);
+            }
+        }
+        return kept;
     }
 }

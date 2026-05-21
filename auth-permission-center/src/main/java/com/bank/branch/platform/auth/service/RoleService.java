@@ -115,11 +115,15 @@ public class RoleService {
      * @throws BizException AUTH-40401 当角色不存在时
      */
     @Transactional
-    public RoleRespDTO updateRole(String roleId, String roleChName, String remark) {
-        log.info("[RoleService.updateRole] roleId={}, roleChName={}", roleId, roleChName);
+    public RoleRespDTO updateRole(String roleId, String roleChName, String remark, Integer recordStatus) {
+        log.info("[RoleService.updateRole] roleId={}, roleChName={}, recordStatus={}", roleId, roleChName, recordStatus);
         PtRole existing = getEntityById(roleId);
         existing.setRoleChName(roleChName);
         existing.setRemark(remark);
+        // null 表示不修改状态（向后兼容），非 null 时才覆盖
+        if (recordStatus != null) {
+            existing.setRecordStatus(recordStatus);
+        }
         existing.setUpdateTime(LocalDateTime.now());
         roleMapper.updateById(existing);
         return toDto(existing);

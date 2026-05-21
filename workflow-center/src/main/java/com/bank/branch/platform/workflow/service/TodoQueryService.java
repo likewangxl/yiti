@@ -319,6 +319,7 @@ public class TodoQueryService {
         dto.setStartUser(map.getStartUser());
         dto.setStartTime(map.getStartTime());
         dto.setTaskName(task.getName());
+        dto.setNodeKey(task.getTaskDefinitionKey());
         dto.setTaskCreateTime(taskCreateTime);
         dto.setAssignee(task.getAssignee());
         dto.setCandidateGroups(parseJsonToList(map.getCandidateGroups(), STRING_LIST_TYPE));
@@ -362,6 +363,7 @@ public class TodoQueryService {
         dto.setStartUser(map.getStartUser());
         dto.setStartTime(map.getStartTime());
         dto.setTaskName(hti.getName());
+        dto.setNodeKey(hti.getTaskDefinitionKey());
         dto.setTaskCreateTime(taskCreateTime);
         dto.setAssignee(hti.getAssignee());
         dto.setCandidateGroups(parseJsonToList(map.getCandidateGroups(), STRING_LIST_TYPE));
@@ -369,12 +371,46 @@ public class TodoQueryService {
         dto.setClaimable(false); // 已办任务不可签收
         enrichStartUserOrg(dto);
 
-        // 已办任务：设置完成信息
+        // 已办任务：设置完成信息（含审批结果与审批意见，2026-05-20）
         if (hti.getEndTime() != null) {
             dto.setCompleteTime(convertToLocalDateTime(hti.getEndTime()));
+            enrichApprovalResult(dto, hti.getId());
         }
 
         return dto;
+    }
+
+    /**
+     * 已办任务回填审批结果与审批意见。
+     *
+     * <p>TaskOperationService.approve/reject 在完成任务前会调
+     * {@code taskService.addComment(taskId, pid, "APPROVE"|"REJECT", opinion)}，
+     * 这里反查 Flowable Comment 表（ACT_HI_COMMENT）取首条类型为 APPROVE/REJECT
+     * 的评论，填充 {@code approvalResult} + {@code opinion} 两字段。
+     *
+     * <p>边界：
+     * <ul>
+     *   <li>无评论 / 仅 TRANSFER 类型评论 → 两字段保持 null（前端展示 "-"）</li>
+     *   <li>反查异常（DB 短暂故障）→ debug 日志 + 跳过，不阻断主流程</li>
+     * </ul>
+     */
+    private void enrichApprovalResult(TaskRespDTO dto, String taskId) {
+        try {
+            List<org.flowable.engine.task.Comment> taskComments = taskService.getTaskComments(taskId);
+            if (taskComments == null || taskComments.isEmpty()) {
+                return;
+            }
+            for (org.flowable.engine.task.Comment c : taskComments) {
+                String type = c.getType();
+                if ("APPROVE".equals(type) || "REJECT".equals(type)) {
+                    dto.setApprovalResult(type);
+                    dto.setOpinion(c.getFullMessage());
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[TodoQueryService.enrichApprovalResult] 反查任务评论失败 taskId={}", taskId, e);
+        }
     }
 
     /**

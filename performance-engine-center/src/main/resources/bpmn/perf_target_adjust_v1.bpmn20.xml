@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  V1.2 Phase Q0.3 目标修正审批流程占位 BPMN.
+  2026-05-20 目标修正审批流程（完整 6 节点 + 1 可选分支，单 BPMN 不拆 corp/retail）.
 
-  流程：Start → 支行主管审批(branch_mgr_review) → 分行主管审批(hq_mgr_review) → End
+  结构与 perf_alloc_adjust_corp_v1 / retail 一致，差异：
+    - process id / name = target_adjust
+    - biz_dept_review 节点候选 = [CORP_DEPT, RETAIL_DEPT] 双候选
+      （目标修正不按 corp/retail 拆 BPMN，公司部和零售部经办都可受理）
+    - biz_dept_leader_approve 节点候选 = [CORP_DEPT_LEADER, RETAIL_DEPT_LEADER] 双候选
+    - 节点 id 复用 alloc 系列保持一致：branch_approve / biz_dept_review /
+      original_owner_approve / biz_dept_leader_approve / finance_review /
+      finance_leader_approve
 
-  说明：
-  - processDefinitionKey=perf_target_adjust_v1；V1.2 Q3 目标修正申请启动此流程.
-  - 流程结束后 V1.2 Q3 的 TargetAdjustCompletedListener 订阅 ProcessCompletedEvent，
-    审批通过则更新 PERF_TARGET_VALUE 表对应的 (planId, subject, metricCode) 目标值，
-    并发布 TargetAdjustmentApprovedEvent（可能触发历史回算）.
-  - 初期最简两级审批；V1.2 Q3 实现时根据目标金额阈值可能拆分为单级/二级/三级审批.
+  原 V1.2 Q0.3 占位的 branch_mgr_review / hq_mgr_review 两节点已被新 6 节点流程取代.
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -23,13 +25,42 @@
 
         <startEvent id="start" name="开始"/>
 
-        <userTask id="branch_mgr_review" name="支行主管审批">
+        <userTask id="branch_approve" name="机构负责人审批">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
         </userTask>
 
-        <userTask id="hq_mgr_review" name="分行主管审批">
+        <userTask id="biz_dept_review" name="业务部门经办审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="gw1_check_owner" name="是否需要原业绩所属人审批"/>
+
+        <userTask id="original_owner_approve" name="原业绩所属人审批"
+                  flowable:assignee="${originalOwnerEmpId}">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="gw2_join" name="汇合"/>
+
+        <userTask id="biz_dept_leader_approve" name="业务部门负责人审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="finance_review" name="资财部经办审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="finance_leader_approve" name="资财部负责人审批">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
@@ -37,8 +68,21 @@
 
         <endEvent id="end" name="结束"/>
 
-        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_mgr_review"/>
-        <sequenceFlow id="flow_branch_hq" sourceRef="branch_mgr_review" targetRef="hq_mgr_review"/>
-        <sequenceFlow id="flow_hq_end" sourceRef="hq_mgr_review" targetRef="end"/>
+        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_approve"/>
+        <sequenceFlow id="flow_branch_biz" sourceRef="branch_approve" targetRef="biz_dept_review"/>
+        <sequenceFlow id="flow_biz_gw1" sourceRef="biz_dept_review" targetRef="gw1_check_owner"/>
+
+        <sequenceFlow id="flow_gw1_to_owner" sourceRef="gw1_check_owner" targetRef="original_owner_approve">
+            <conditionExpression xsi:type="tFormalExpression">${needsOriginalOwnerApprove == true}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow_gw1_to_gw2" sourceRef="gw1_check_owner" targetRef="gw2_join">
+            <conditionExpression xsi:type="tFormalExpression">${needsOriginalOwnerApprove != true}</conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="flow_owner_to_gw2" sourceRef="original_owner_approve" targetRef="gw2_join"/>
+        <sequenceFlow id="flow_gw2_to_leader" sourceRef="gw2_join" targetRef="biz_dept_leader_approve"/>
+        <sequenceFlow id="flow_leader_finrev" sourceRef="biz_dept_leader_approve" targetRef="finance_review"/>
+        <sequenceFlow id="flow_finrev_finldr" sourceRef="finance_review" targetRef="finance_leader_approve"/>
+        <sequenceFlow id="flow_finldr_end" sourceRef="finance_leader_approve" targetRef="end"/>
     </process>
 </definitions>

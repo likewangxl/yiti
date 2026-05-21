@@ -47,6 +47,9 @@ public class UpdateMetricDefCmd {
     /** 引用指标 JSON 字符串. */
     private String refMetricCodes;
 
+    /** V1.9 指标分类（规模类/效益类/质量类/合规类等）—— 补齐 CreateMetricDefCmd 同字段. */
+    private String metricCategory;
+
     /** 更新人. */
     private String operator;
 }

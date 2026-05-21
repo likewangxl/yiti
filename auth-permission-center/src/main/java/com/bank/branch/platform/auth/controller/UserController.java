@@ -113,6 +113,18 @@ public class UserController {
         return ResponseWrapper.success();
     }
 
+    @PutMapping("/{userId}/password")
+    @Operation(summary = "管理员为指定用户设置新密码")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)
+    public ResponseWrapper<Void> setPasswordByAdmin(
+            @PathVariable("userId") String userId,
+            @Valid @RequestBody com.bank.branch.platform.auth.api.dto.AdminSetPasswordReqDTO req) {
+        String operator = currentUserApi.getCurrentEmpId();
+        log.info("[UserController.setPasswordByAdmin] userId={} operator={}", userId, operator);
+        userService.setPasswordByAdmin(userId, req.getNewPassword(), operator);
+        return ResponseWrapper.success();
+    }
+
     @PutMapping("/{ids}/reset")
     @Operation(summary = "批量重置密码（默认值）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)

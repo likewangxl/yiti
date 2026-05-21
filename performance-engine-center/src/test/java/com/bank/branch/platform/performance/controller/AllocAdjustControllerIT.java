@@ -14,6 +14,8 @@ import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,6 +70,9 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
 
     @MockBean
     private WorkflowApi workflowApi;
+
+    @MockBean
+    private WorkflowQueryApi workflowQueryApi;
 
     @Autowired
     private PerfAllocAdjustApplyMapper applyMapper;
@@ -185,6 +190,78 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
         mockMvc.perform(get("/api/perf/alloc-adjust/{id}", "NO_SUCH_APPLY_AA"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("PERF-42200"));
+    }
+
+    // ============= approval-history =============
+
+    @Test
+    void getApprovalHistory_processInstanceIdEmpty_returnsEmpty() throws Exception {
+        // DRAFT 状态的申请 processInstanceId 为空 → 不应调用 WorkflowQueryApi
+        PerfAllocAdjustApply apply = buildExisting("AH_DRAFT", "DRAFT", "CORP_LOAN");
+        apply.setProcessInstanceId(null);
+        applyMapper.insert(apply);
+
+        mockMvc.perform(get("/api/perf/alloc-adjust/{id}/approval-history", apply.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(0));
+
+        Mockito.verify(workflowQueryApi, Mockito.never()).getProcessHistory(Mockito.anyString());
+    }
+
+    @Test
+    void getApprovalHistory_sortedDesc_byOperateTime() throws Exception {
+        PerfAllocAdjustApply apply = buildExisting("AH_OK", "IN_APPROVAL", "CORP_LOAN");
+        applyMapper.insert(apply);
+
+        // 构造 3 条乱序记录：early(SUBMIT) -> mid(CLAIM) -> late(APPROVE)
+        ApprovalLogDTO early = new ApprovalLogDTO();
+        early.setNodeKey("start"); early.setNodeName("发起");
+        early.setOperator("emp001"); early.setOperatorName("张三");
+        early.setOperatorOrgName("总行营业部");
+        early.setAction("SUBMIT"); early.setOpinion("发起申请");
+        early.setOperateTime(LocalDateTime.of(2026, 5, 18, 10, 0));
+
+        ApprovalLogDTO mid = new ApprovalLogDTO();
+        mid.setNodeKey("review"); mid.setNodeName("审核");
+        mid.setOperator("emp002"); mid.setOperatorName("李四");
+        mid.setOperatorOrgName("分行运营部");
+        mid.setAction("CLAIM"); mid.setOpinion(null);
+        mid.setOperateTime(LocalDateTime.of(2026, 5, 19, 9, 30));
+
+        ApprovalLogDTO late = new ApprovalLogDTO();
+        late.setNodeKey("review"); late.setNodeName("审核");
+        late.setOperator("emp002"); late.setOperatorName("李四");
+        late.setOperatorOrgName("分行运营部");
+        late.setAction("APPROVE"); late.setOpinion("同意");
+        late.setOperateTime(LocalDateTime.of(2026, 5, 20, 14, 0));
+
+        Mockito.when(workflowQueryApi.getProcessHistory(apply.getProcessInstanceId()))
+                .thenReturn(Arrays.asList(early, late, mid));
+
+        mockMvc.perform(get("/api/perf/alloc-adjust/{id}/approval-history", apply.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[0].action").value("APPROVE"))
+                .andExpect(jsonPath("$.data[0].operatorName").value("李四"))
+                .andExpect(jsonPath("$.data[0].operatorOrgName").value("分行运营部"))
+                .andExpect(jsonPath("$.data[1].action").value("CLAIM"))
+                .andExpect(jsonPath("$.data[2].action").value("SUBMIT"));
+    }
+
+    @Test
+    void getApprovalHistory_hasBizAuthRead() throws Exception {
+        Class<?> clazz = Class.forName(CONTROLLER_FQCN);
+        Method m = java.util.Arrays.stream(clazz.getDeclaredMethods())
+                .filter(x -> x.getName().equals("getApprovalHistory"))
+                .findFirst()
+                .orElseThrow();
+        BizAuth ba = m.getAnnotation(BizAuth.class);
+        assertThat(ba).isNotNull();
+        assertThat(ba.bizType()).isEqualTo(BizType.PERF_CONFIG);
+        assertThat(ba.action()).isEqualTo(BizAction.READ);
     }
 
     // ============= list =============

@@ -15,7 +15,7 @@ public class ResourceUpdateReqDTO {
     @Size(max = 256)
     private String resourceUrl;
 
-    @Pattern(regexp = "^(GET|POST|PUT|DELETE|\\*)$")
+    @Pattern(regexp = "^(GET|POST|PUT|DELETE|\\*|MENU)$")
     private String resourceMethod;
 
     @Size(max = 256)

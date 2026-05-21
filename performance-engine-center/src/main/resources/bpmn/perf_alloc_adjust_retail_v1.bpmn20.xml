@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  V1.2 Phase Q0.3 零售分配调整审批流程占位 BPMN.
+  2026-05-20 零售分配关系调整审批流程（完整 6 节点 + 1 可选分支）.
 
-  流程：Start → 支行主管审批(branch_mgr_review) → 分行主管审批(hq_mgr_review) → End
+  结构与 perf_alloc_adjust_corp_v1 一致，差异：
+    - process id / name = retail
+    - biz_dept_review 节点候选解析为零售部经办 (R_RETAIL_DEPT / ROLE_CODE RETAIL_DEPT)
+    - biz_dept_leader_approve 节点候选解析为零售部负责人 (R_RETAIL_LEAD / ROLE_CODE RETAIL_DEPT_LEADER)
+    - 其余节点候选 (branch_approve / finance_review / finance_leader_approve) 与对公相同
 
-  说明：
-  - processDefinitionKey=perf_alloc_adjust_retail_v1；V1.2 Q2 零售分配调整走此流程.
-  - 对公（corp）与零售（retail）分拆独立 BPMN 是因为：
-      1. 两类候选组不同（对公：CORP_MGR / 零售：RETAIL_MGR）；
-      2. 审批时效 SLA 阈值可能不同；
-      3. 未来扩展（如零售增加客户经理确认环节）时彼此独立演进.
-  - 初期流程结构与对公相同，V1.2 Q2 实现时按需差异化.
+  候选差异通过 WF_NODE_CANDIDATE_CONF 表配置 (process_definition_key 不同)，
+  BPMN 文件本身无候选硬编码，故两份 BPMN 结构上完全一致.
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -24,13 +23,42 @@
 
         <startEvent id="start" name="开始"/>
 
-        <userTask id="branch_mgr_review" name="支行主管审批">
+        <userTask id="branch_approve" name="机构负责人审批">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
         </userTask>
 
-        <userTask id="hq_mgr_review" name="分行主管审批">
+        <userTask id="biz_dept_review" name="零售部经办审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="gw1_check_owner" name="是否需要原业绩所属人审批"/>
+
+        <userTask id="original_owner_approve" name="原业绩所属人审批"
+                  flowable:assignee="${originalOwnerEmpId}">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="gw2_join" name="汇合"/>
+
+        <userTask id="biz_dept_leader_approve" name="零售部负责人审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="finance_review" name="资财部经办审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="finance_leader_approve" name="资财部负责人审批">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
@@ -38,8 +66,21 @@
 
         <endEvent id="end" name="结束"/>
 
-        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_mgr_review"/>
-        <sequenceFlow id="flow_branch_hq" sourceRef="branch_mgr_review" targetRef="hq_mgr_review"/>
-        <sequenceFlow id="flow_hq_end" sourceRef="hq_mgr_review" targetRef="end"/>
+        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_approve"/>
+        <sequenceFlow id="flow_branch_biz" sourceRef="branch_approve" targetRef="biz_dept_review"/>
+        <sequenceFlow id="flow_biz_gw1" sourceRef="biz_dept_review" targetRef="gw1_check_owner"/>
+
+        <sequenceFlow id="flow_gw1_to_owner" sourceRef="gw1_check_owner" targetRef="original_owner_approve">
+            <conditionExpression xsi:type="tFormalExpression">${needsOriginalOwnerApprove == true}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="flow_gw1_to_gw2" sourceRef="gw1_check_owner" targetRef="gw2_join">
+            <conditionExpression xsi:type="tFormalExpression">${needsOriginalOwnerApprove != true}</conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="flow_owner_to_gw2" sourceRef="original_owner_approve" targetRef="gw2_join"/>
+        <sequenceFlow id="flow_gw2_to_leader" sourceRef="gw2_join" targetRef="biz_dept_leader_approve"/>
+        <sequenceFlow id="flow_leader_finrev" sourceRef="biz_dept_leader_approve" targetRef="finance_review"/>
+        <sequenceFlow id="flow_finrev_finldr" sourceRef="finance_review" targetRef="finance_leader_approve"/>
+        <sequenceFlow id="flow_finldr_end" sourceRef="finance_leader_approve" targetRef="end"/>
     </process>
 </definitions>

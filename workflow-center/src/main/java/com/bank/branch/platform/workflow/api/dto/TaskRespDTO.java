@@ -51,6 +51,9 @@ public class TaskRespDTO {
     /** 节点名称（如"公司部审核"） */
     private String taskName;
 
+    /** 节点 KEY（taskDefinitionKey，如 biz_dept_review），前端按 nodeKey 决定审批面板表单 */
+    private String nodeKey;
+
     /** 到达节点时间 */
     private LocalDateTime taskCreateTime;
 

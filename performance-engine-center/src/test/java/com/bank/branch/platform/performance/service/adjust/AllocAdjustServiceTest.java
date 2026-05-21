@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
@@ -63,6 +64,9 @@ class AllocAdjustServiceTest {
 
     @Mock
     private PerfAllocAdjustItemMapper itemMapper;
+
+    @Mock
+    private CustAllocRelationMapper allocRelationMapper;
 
     @Mock
     private CustomerQueryApi customerQueryApi;
