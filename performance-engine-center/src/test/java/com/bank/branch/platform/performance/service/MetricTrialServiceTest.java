@@ -5,6 +5,7 @@ import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
+import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import org.junit.jupiter.api.DisplayName;
@@ -191,8 +192,8 @@ class MetricTrialServiceTest {
         ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.captor();
         verify(sqlExecutor).execute(anyString(), cap.capture(), any(Duration.class));
         Map<String, Object> sent = cap.getValue();
-        assertThat(sent).containsEntry("dateToday", dataDate);
-        assertThat(sent).containsEntry("dateMonthEnd", LocalDate.of(2026, 5, 31));
+        DateMacroResolver.resolve(dataDate)
+                .forEach((k, v) -> assertThat(sent).containsEntry(k, v));
         assertThat(sent).containsEntry("customParam", "kept");
     }
 
@@ -213,7 +214,11 @@ class MetricTrialServiceTest {
         ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.captor();
         verify(sqlExecutor).execute(anyString(), cap.capture(), any(Duration.class));
         Map<String, Object> sent = cap.getValue();
-        assertThat(sent).doesNotContainKeys("dateToday", "dateMonthEnd", "datePrevYearEnd");
+        assertThat(sent).doesNotContainKeys(
+                "dateToday", "dateYesterday",
+                "dateMonthEnd", "datePrevMonthEnd",
+                "dateQuarterEnd", "datePrevQuarterEnd",
+                "dateYearEnd", "datePrevYearEnd");
     }
 
     // ========== 测试构造器 ==========
