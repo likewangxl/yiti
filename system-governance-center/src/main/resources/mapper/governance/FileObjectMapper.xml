@@ -19,5 +19,39 @@
         LIMIT 1
     </select>
 
+    <!-- 文件管理列表分页查询；调用方：FileService.listAllFiles -->
+    <sql id="LIST_WHERE">
+        <where>
+            <if test="fileName != null and fileName != ''">
+                AND file_name LIKE CONCAT('%', #{fileName}, '%')
+            </if>
+            <if test="fileType != null and fileType != ''">
+                AND file_type = #{fileType}
+            </if>
+            <if test="uploadedBy != null and uploadedBy != ''">
+                AND uploaded_by = #{uploadedBy}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND uploaded_time &gt;= #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND uploaded_time &lt;= #{endTime}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectByCondition"
+            resultType="com.bank.branch.platform.governance.entity.FileObject">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM FILE_OBJECT
+        <include refid="LIST_WHERE"/>
+        ORDER BY uploaded_time DESC, id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countByCondition" resultType="long">
+        SELECT COUNT(*) FROM FILE_OBJECT
+        <include refid="LIST_WHERE"/>
+    </select>
 
 </mapper>

@@ -24,7 +24,10 @@
 --      E60002 -> R_RETAIL_LEAD (零售部负责人)
 --      E60003 -> R_FIN_LEAD    (资财部负责人)
 --
---   D) EXT_USER_ORG 绑定到总行 HQ（沿用 corp_zhao / retail_sun / finance_zhou 的机构）
+--   D) EXT_USER_ORG 绑定：
+--      E60001 / E60002 → HQ（沿用 corp_zhao / retail_sun 的机构）
+--      E60003 → 02974000（西安分行-资金财务部，2026-05-20 yiti 实际部署调整：
+--               业务上资财部负责人应跟资财部经办同机构而不是总行）
 --
 -- 部署范围：onepl + yiti 双库
 -- 备份：mysqldump 备份 PT_ROLE_RESOURCE / PT_USER / PT_USER_ROLE / EXT_USER_ORG
@@ -98,13 +101,15 @@ VALUES
 ('E60003', 'R_FIN_LEAD');
 
 -- ---------------------------------------------------------
--- D) 用户-机构绑定（均在总行 HQ，与 corp_zhao/retail_sun/finance_zhou 同级）
+-- D) 用户-机构绑定
+--    E60001 / E60002 → HQ（沿用 corp_zhao / retail_sun 的机构）
+--    E60003 → 02974000（西安分行-资金财务部，2026-05-20 yiti 实际部署调整）
 -- ---------------------------------------------------------
 INSERT IGNORE INTO EXT_USER_ORG (USER_ID, ORG_CODE)
 VALUES
 ('E60001', 'HQ'),
 ('E60002', 'HQ'),
-('E60003', 'HQ');
+('E60003', '02974000');
 
 -- =========================================================
 -- 验证 SQL（执行后核对）

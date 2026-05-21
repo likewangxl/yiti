@@ -58,7 +58,7 @@
       </el-tab-pane>
 
       <!-- ============ 待我审批 ============ -->
-      <el-tab-pane label="待我审批" name="todo">
+      <el-tab-pane v-if="canApprove" label="待我审批" name="todo">
         <div class="card-section table">
           <el-table :data="todos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading">
             <el-table-column label="标题" min-width="220">
@@ -102,7 +102,7 @@
       </el-tab-pane>
 
       <!-- ============ 已审批 ============ -->
-      <el-tab-pane label="已审批" name="done">
+      <el-tab-pane v-if="canApprove" label="已审批" name="done">
         <div class="card-section table">
           <el-table :data="dones" size="default" empty-text="暂无已审批记录" v-loading="doneLoading">
             <el-table-column label="标题" min-width="220">
@@ -298,6 +298,7 @@ import {
   getAdjustApprovalHistory
 } from '@/api/perf';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
+import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 
 const STATUS_LABEL = {
@@ -339,6 +340,24 @@ const userStore = useUserStore();
 
 // ============ tab 状态 ============
 const activeTab = ref('mine');
+
+// 是否有"工作流任务/审批"相关 API 权限。没有则隐藏"待我审批"+"已审批"两个 tab。
+// 判断口径：用户 resourceUrls 含任一 /api/workflow/tasks(*) URL，即视为有审批资格。
+// SYS_ADMIN（isSystemAdmin=true）一律放行。
+const canApprove = ref(false);
+
+async function loadCanApprove() {
+  try {
+    const p = await getMyPermissions();
+    if (p?.isSystemAdmin) { canApprove.value = true; return; }
+    const urls = p?.resourceUrls || p?.resources || [];
+    canApprove.value = Array.isArray(urls) && urls.some(
+      u => typeof u === 'string' && u.startsWith('/api/workflow/tasks')
+    );
+  } catch {
+    canApprove.value = false;
+  }
+}
 
 // ============ 我的申请 ============
 const rows = ref([]);
@@ -626,7 +645,12 @@ async function onWithdraw(row) {
   }
 }
 
-onMounted(reload);
+onMounted(async () => {
+  await loadCanApprove();
+  // 没审批资格强制回到"我的申请"，避免 URL/路由复用残留 activeTab='todo' 的边角
+  if (!canApprove.value && activeTab.value !== 'mine') activeTab.value = 'mine';
+  reload();
+});
 </script>
 
 <style lang="scss" scoped>
