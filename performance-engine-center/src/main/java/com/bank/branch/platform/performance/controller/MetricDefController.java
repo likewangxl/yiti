@@ -204,6 +204,7 @@ public class MetricDefController {
                 .exprText(req.getExprText())
                 .summaryRule(req.getSummaryRule())
                 .refMetricCodes(req.getRefMetricCodes())
+                .metricCategory(req.getMetricCategory())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(metricLifecycleFacade.updateMetricDto(cmd));

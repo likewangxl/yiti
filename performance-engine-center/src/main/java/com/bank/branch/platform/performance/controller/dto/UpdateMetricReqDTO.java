@@ -63,4 +63,9 @@ public class UpdateMetricReqDTO {
     /** 引用指标编码 JSON 字符串。 */
     @Schema(description = "引用指标编码 JSON 字符串")
     private String refMetricCodes;
+
+    /** V1.9 指标分类（规模类/效益类/质量类/合规类等）。 */
+    @Schema(description = "指标分类")
+    @Size(max = 50, message = "metricCategory 长度不能超过 50")
+    private String metricCategory;
 }
