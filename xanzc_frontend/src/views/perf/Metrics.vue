@@ -96,7 +96,7 @@
 
           <div class="acts">
             <el-button type="primary" :disabled="isDisabled" @click="openEdit(detail)">编辑</el-button>
-            <el-button :disabled="isDisabled" @click="onTrialRun">▶ 试运行</el-button>
+            <el-button :disabled="isDisabled" :loading="detailTrial.loading" @click="onTrialRun">▶ 试运行</el-button>
             <el-button :disabled="isDisabled" @click="onExecute">⚡立即执行</el-button>
             <el-button @click="onShowVersions">查看版本历史</el-button>
             <el-button @click="onViewAudit">📋 查看审计</el-button>
@@ -106,6 +106,33 @@
           </div>
           <div class="audit-hint">
             ⚠ 试运行 / 立即执行 / 编辑 / 删除 / 状态变更 均属高危动作，会自动写入「系统设置 → 审计日志」
+          </div>
+
+          <!-- 详情侧"试运行"结果区（仅在按过试运行后才出现） -->
+          <div v-if="detailTrial.status" class="trial-detail">
+            <div class="trial-row">
+              <span class="trial-title">试运行结果</span>
+              <el-tag v-if="detailTrial.status === 'SUCCESS'" class="tag-success" effect="plain">
+                成功 · {{ detailTrial.totalRows ?? detailTrial.rows.length }} 行 · {{ ((detailTrial.cost || 0) / 1000).toFixed(1) }}s
+              </el-tag>
+              <el-tag v-else-if="detailTrial.status === 'FAILED'" class="tag-warning" effect="plain">
+                失败 · {{ ((detailTrial.cost || 0) / 1000).toFixed(1) }}s
+              </el-tag>
+            </div>
+            <!-- SQL 类指标：样本行表格；EXPR 类指标：单值（exprResult） -->
+            <el-table v-if="detailTrial.rows.length" :data="detailTrial.rows" size="small" border style="margin-top: 8px">
+              <el-table-column v-for="col in detailTrial.cols" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
+            </el-table>
+            <div v-else-if="detailTrial.status === 'SUCCESS' && detailTrial.exprResult != null"
+                 class="trial-expr" style="margin-top:8px">
+              EXPR 单值结果：<code class="mono">{{ detailTrial.exprResult }}</code>
+            </div>
+            <div v-else-if="detailTrial.status === 'FAILED'" class="trial-error" style="margin-top:8px">
+              ✗ {{ detailTrial.errorMsg || '试运行失败，请检查 SQL/EXPR 是否合法' }}
+            </div>
+            <div v-else class="trial-empty" style="margin-top:8px; color:#999">
+              （无样本数据）
+            </div>
           </div>
 
           <div class="block-h">同分类指标</div>
@@ -172,6 +199,26 @@
             v-model="dlg.form.sqlText" type="textarea" :rows="6"
             placeholder="SELECT cust_id, AVG(bal) FROM t_xxx WHERE dt=#{datadate}"
           />
+        </el-form-item>
+
+        <el-form-item v-if="dlg.form.calcLogicType === 'SQL'" label="">
+          <div class="sql-date-macros">
+            <div class="hint-title">可用日期变量（后端按 dataDate 自动计算注入）</div>
+            <table class="hint-table">
+              <tr><th style="width:180px">SQL 占位符</th><th>含义</th></tr>
+              <tr><td><code>:dataDate</code></td><td>数据日期（=dateToday，由调度/试运行传入）</td></tr>
+              <tr><td><code>:version</code></td><td>sys_control 当前版本</td></tr>
+              <tr><td><code>:dateToday</code></td><td>当前日期 T</td></tr>
+              <tr><td><code>:dateYesterday</code></td><td>T-1 上一日期</td></tr>
+              <tr><td><code>:dateMonthEnd</code></td><td>本月最后一天</td></tr>
+              <tr><td><code>:datePrevMonthEnd</code></td><td>上月最后一天</td></tr>
+              <tr><td><code>:dateQuarterEnd</code></td><td>本季度最后一天</td></tr>
+              <tr><td><code>:datePrevQuarterEnd</code></td><td>上季度最后一天</td></tr>
+              <tr><td><code>:dateYearEnd</code></td><td>本年最后一天</td></tr>
+              <tr><td><code>:datePrevYearEnd</code></td><td>上年最后一天（去年 12-31）</td></tr>
+            </table>
+            <div class="hint-foot">用法：<code>WHERE stat_date = :datePrevMonthEnd</code>。结果列必须含 <code>base_key</code> + <code>metric_value</code>。</div>
+          </div>
         </el-form-item>
 
         <el-form-item label="槽位声明">
@@ -369,6 +416,11 @@ const treeData = computed(() => {
 // === 详情 ===
 const picked = ref('');
 const detail = ref({});
+// 详情侧"试运行"按钮的结果展示（与编辑对话框里的 dlg.trial 独立，避免互相覆盖）
+const detailTrial = reactive({ status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], loading: false });
+function resetDetailTrial() {
+  Object.assign(detailTrial, { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], loading: false });
+}
 // V1.6 修复 Bug3：停用态下"编辑/试运行/立即执行"按钮 disabled，前端先拦截，后端兜底校验
 const isDisabled = computed(() => detail.value.status === 'DISABLED' || detail.value.status === 'INACTIVE');
 const sameCategory = computed(() => {
@@ -380,6 +432,8 @@ const sameCategory = computed(() => {
 async function onPick(code) {
   if (!code) return;
   picked.value = code;
+  // 切换指标时清空上一条指标残留的试运行结果，避免误以为是当前指标的结果
+  resetDetailTrial();
   try {
     const r = await getMetricDetail(code);
     if (r) detail.value = r;
@@ -567,10 +621,29 @@ async function onTrialFromDialog() {
 async function onTrialRun() {
   // dataDate 默认昨天（T-1 是 perf 模块习惯）
   const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  resetDetailTrial();
+  detailTrial.loading = true;
+  const t0 = Date.now();
   try {
-    await trialRunMetric(detail.value.metricCode, { dataDate: yesterday, sampleSize: 10 });
-    ElMessage.success('试运行已提交，已写入审计日志');
-  } catch {}
+    const r = await trialRunMetric(detail.value.metricCode, { dataDate: yesterday, sampleSize: 10 });
+    // 后端 MetricTrialRespDTO: { status, totalRows, executionMillis, errorMsg, sampleRows, exprResult }
+    const rows = r?.sampleRows || [];
+    const cols = rows.length ? Object.keys(rows[0]) : ['baseKey', 'metricValue'];
+    Object.assign(detailTrial, {
+      status: r?.status || (rows.length ? 'SUCCESS' : (r?.exprResult != null ? 'SUCCESS' : 'FAILED')),
+      cost: r?.executionMillis ?? (Date.now() - t0),
+      totalRows: r?.totalRows ?? rows.length,
+      errorMsg: r?.errorMsg || '',
+      exprResult: r?.exprResult,
+      rows, cols
+    });
+  } catch (err) {
+    Object.assign(detailTrial, {
+      status: 'FAILED', cost: Date.now() - t0, totalRows: 0,
+      errorMsg: err?.message || '试运行失败（SQL/EXPR 执行异常）',
+      rows: [], cols: []
+    });
+  } finally { detailTrial.loading = false; }
 }
 
 // 立即执行：写宽表 + 写 run_task，必须填原因（高危）
@@ -735,5 +808,50 @@ onMounted(reload);
   margin-top: 12px; padding: 10px 14px;
   background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px;
   color: $danger; font-size: 13px; line-height: 1.6;
+}
+.trial-detail {
+  margin-top: 14px; padding: 12px 14px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;
+}
+.trial-title { font-size: 13px; font-weight: 600; color: $text-1; }
+.trial-expr  { font-size: 13px; color: $text-1; }
+.sql-date-macros {
+  background: #f7f9fc;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.sql-date-macros .hint-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+.sql-date-macros .hint-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.sql-date-macros .hint-table th,
+.sql-date-macros .hint-table td {
+  border: 1px solid #ebeef5;
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.sql-date-macros .hint-table th {
+  background: #fafafa;
+  color: #606266;
+  font-weight: 500;
+}
+.sql-date-macros code {
+  background: #fff5e6;
+  color: #b87600;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.sql-date-macros .hint-foot {
+  margin-top: 8px;
+  color: #909399;
 }
 </style>
