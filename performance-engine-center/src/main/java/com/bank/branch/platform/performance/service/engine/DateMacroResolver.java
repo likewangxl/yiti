@@ -11,12 +11,11 @@ import java.util.Map;
  * <p>以 {@code dataDate} 为锚点，产出 8 个强类型 {@link LocalDate} 命名参数，
  * 供 SQL 类指标 sql_text 通过 {@code :dateXxx} 引用。
  *
- * <p>详见 spec docs/superpowers/specs/2026-05-20-perf-sql-date-macros-design.md.
+ * <p>详见 spec {@code docs/superpowers/specs/2026-05-20-perf-sql-date-macros-design.md}.
  */
 public final class DateMacroResolver {
 
     private DateMacroResolver() {
-        // 工具类，禁止实例化
     }
 
     /**

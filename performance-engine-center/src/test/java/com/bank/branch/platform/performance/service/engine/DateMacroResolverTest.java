@@ -66,6 +66,15 @@ class DateMacroResolverTest {
     }
 
     @Test
+    void resolve_q4Dec_correctQuarterBoundary() {
+        Map<String, LocalDate> m = DateMacroResolver.resolve(LocalDate.of(2026, 12, 15));
+        assertThat(m).containsEntry("dateQuarterEnd", LocalDate.of(2026, 12, 31));
+        assertThat(m).containsEntry("datePrevQuarterEnd", LocalDate.of(2026, 9, 30));
+        assertThat(m).containsEntry("dateYearEnd", LocalDate.of(2026, 12, 31));
+        assertThat(m).containsEntry("datePrevYearEnd", LocalDate.of(2025, 12, 31));
+    }
+
+    @Test
     void resolve_null_throwsIllegalArgumentException() {
         assertThatThrownBy(() -> DateMacroResolver.resolve(null))
                 .isInstanceOf(IllegalArgumentException.class)
