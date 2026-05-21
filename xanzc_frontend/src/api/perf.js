@@ -259,6 +259,14 @@ export function submitAdjust(data) {
 export function withdrawAdjust(id, reason) {
   return call('post', `/perf/alloc-adjust/${id}/withdraw`, { data: { reason } }, { ok: true });
 }
+/**
+ * 查询分配调整申请审批流记录（时间倒序，最新在上）
+ * 后端: GET /api/perf/alloc-adjust/{id}/approval-history → List<ApprovalLogDTO>
+ * 字段: nodeKey / nodeName / operator / operatorName / operatorOrgName / action / opinion / operateTime
+ */
+export function getAdjustApprovalHistory(id) {
+  return call('get', `/perf/alloc-adjust/${id}/approval-history`, {}, []);
+}
 
 export function listTargetAdjusts(params = {}) {
   return call('get', '/perf/target-adjust/list', { params }, []).then(unwrapPage);
@@ -301,6 +309,13 @@ export function withdrawTargetAdjust(id, reason) {
   return call('post', `/perf/target-adjust/${id}/withdraw`,
     { data: { reason }, headers: { 'X-Audit-Reason': encodeURIComponent(reason || '') } },
     { ok: true });
+}
+/**
+ * 查询目标修正申请审批流记录（时间倒序，最新在上）
+ * 后端: GET /api/perf/target-adjust/{id}/approval-history → List<ApprovalLogDTO>
+ */
+export function getTargetAdjustApprovalHistory(id) {
+  return call('get', `/perf/target-adjust/${id}/approval-history`, {}, []);
 }
 
 // ============================================================

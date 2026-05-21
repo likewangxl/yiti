@@ -1,10 +1,10 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>资源/菜单管理 <span class="sub">PT_RESOURCE 统一表 · 通过 isMenu 区分菜单与接口</span></h1>
+      <h1>菜单管理 <span class="sub">仅显示 PT_RESOURCE.IS_MENU=1 的菜单节点；接口资源在「资源管理」单独维护</span></h1>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openCreate(null)">+ 新增根节点</el-button>
+        <el-button type="primary" @click="openCreate(null)">+ 新增一级菜单</el-button>
       </div>
     </div>
 
@@ -18,12 +18,6 @@
             :prefix-icon="Search"
             style="width:240px"
           />
-        </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="kindFilter" clearable placeholder="全部" style="width:140px">
-            <el-option :value="0" label="菜单" />
-            <el-option :value="1" label="接口资源" />
-          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="statusFilter" clearable placeholder="全部" style="width:140px">
@@ -51,21 +45,18 @@
       >
         <template #default="{ node, data }">
           <div class="res-row">
-            <span class="ico">{{ data.isMenu === 0 ? '📁' : '🔌' }}</span>
+            <span class="ico">{{ data.menuIconUrl || '📂' }}</span>
             <span class="name">{{ data.menuName }}</span>
             <code class="mono url">{{ data.resourceUrl }}</code>
-            <el-tag :class="methodCls(data.resourceMethod)" effect="plain" size="small" class="meth">
-              {{ data.resourceMethod || '-' }}
-            </el-tag>
             <el-tag :class="data.status === 0 ? 'tag-success' : 'tag-warning'" effect="plain" size="small">
               {{ data.status === 0 ? '启用' : '停用' }}
             </el-tag>
-            <span class="rank">#{{ data.menuRankNo ?? 0 }}</span>
+            <span class="rank">排序 #{{ data.menuRankNo ?? 0 }}</span>
             <span class="row-actions">
-              <el-button link type="primary" size="small" @click.stop="openCreate(data)">+ 子节点</el-button>
+              <el-button link type="primary" size="small" @click.stop="openCreate(data)">+ 子菜单</el-button>
               <el-button link type="primary" size="small" @click.stop="openEdit(data)">编辑</el-button>
               <el-popconfirm
-                :title="`确认删除「${data.menuName}」？子节点会一并失效，操作不可逆。`"
+                :title="`确认删除「${data.menuName}」？子菜单会一并失效，操作不可逆。`"
                 @confirm="doDelete(data)"
               >
                 <template #reference>
@@ -89,17 +80,25 @@
           <el-input v-model="dlg.form.menuName" placeholder="菜单显示名 / 资源说明" maxlength="256" />
         </el-form-item>
         <el-form-item label="URL" prop="resourceUrl">
-          <el-input v-model="dlg.form.resourceUrl" placeholder="Ant 风格，如 /system/users 或 /api/perf/**" maxlength="256" />
+          <!-- URL 输入 + 前端路由建议（菜单类资源参考 xanpd 的"resource_url 下拉路由列表"）。
+               用 el-autocomplete 替代纯文本：菜单可从已注册路由选，接口仍可手填 Ant 风格 path -->
+          <el-autocomplete
+            v-model="dlg.form.resourceUrl"
+            :fetch-suggestions="fetchUrlSuggest"
+            placeholder="Ant 风格，如 /system/users 或 /api/perf/**"
+            maxlength="256"
+            clearable
+            style="width:100%"
+          />
         </el-form-item>
-        <el-form-item label="HTTP Method" prop="resourceMethod">
-          <el-select v-model="dlg.form.resourceMethod" placeholder="选择 method">
-            <el-option v-for="m in HTTP_METHODS" :key="m" :value="m" :label="m" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="类型" prop="isMenu">
-          <el-radio-group v-model="dlg.form.isMenu">
-            <el-radio v-for="o in IS_MENU_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
-          </el-radio-group>
+        <el-form-item label="图标" prop="menuIconUrl">
+          <div class="icon-pick">
+            <span class="icon-preview clickable" @click="iconPicker.show = true" title="点击选择图标">
+              {{ dlg.form.menuIconUrl || '📂' }}
+            </span>
+            <el-button @click="iconPicker.show = true">选择图标</el-button>
+            <el-button v-if="dlg.form.menuIconUrl" link @click="dlg.form.menuIconUrl = ''">清除</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="节点形态" prop="menuEndFlag">
           <el-radio-group v-model="dlg.form.menuEndFlag">
@@ -109,9 +108,6 @@
         <el-form-item label="排序号" prop="menuRankNo">
           <el-input-number v-model="dlg.form.menuRankNo" :min="0" :step="1" />
           <span class="hint">数字越小越靠前</span>
-        </el-form-item>
-        <el-form-item label="所属系统" prop="sysCode">
-          <el-input v-model="dlg.form.sysCode" placeholder="选填，如 XANZC" maxlength="10" />
         </el-form-item>
         <el-form-item label="父节点">
           <span v-if="dlg.editing" class="hint">编辑模式不可改父节点</span>
@@ -126,11 +122,31 @@
         <el-button type="primary" :loading="dlg.saving" @click="saveDlg">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 图标选择器：常用 emoji 网格（按类别分组） -->
+    <el-dialog v-model="iconPicker.show" title="选择菜单图标" width="560px" append-to-body>
+      <div v-for="g in ICON_GROUPS" :key="g.name" class="icon-group">
+        <div class="icon-group-name">{{ g.name }}</div>
+        <div class="icon-grid">
+          <span
+            v-for="emo in g.icons"
+            :key="emo"
+            class="icon-cell"
+            :class="{ active: dlg.form.menuIconUrl === emo }"
+            :title="emo"
+            @click="pickIcon(emo)">{{ emo }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="iconPicker.show = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
 import {
@@ -138,30 +154,51 @@ import {
   HTTP_METHODS, IS_MENU_OPTIONS, END_FLAG_OPTIONS
 } from '@/api/resources';
 
+const router = useRouter();
+// URL 建议：把当前前端注册路由扁平化作为 autocomplete 数据源（菜单类资源选 path 更准）
+function flatRouterPaths() {
+  const result = [];
+  const layout = router.options.routes.find(r => r.path === '/' && r.children?.length);
+  for (const r of layout?.children || []) {
+    if (!r.path || !r.meta?.title) continue;
+    result.push({ value: '/' + r.path, label: r.meta.title });
+  }
+  return result;
+}
+function fetchUrlSuggest(queryString, cb) {
+  const all = flatRouterPaths();
+  const q = (queryString || '').toLowerCase();
+  cb(all.filter(s => s.value.toLowerCase().includes(q) || (s.label || '').toLowerCase().includes(q)));
+}
+
+// Emoji 图标库（按类别分组，跟 sidebar 当前用的 emoji 风格一致）。
+// 未来想升级到 element-plus SVG icon 时，把这里改成图标名 + 模板用 <component :is> 即可。
+const ICON_GROUPS = [
+  { name: '导航 / 主页',  icons: ['🏠','🏡','📂','📁','📋','📌','📍','🗂','🗃','🧭'] },
+  { name: '业绩 / 数据',  icons: ['📊','📈','📉','💹','💰','💵','💴','💷','💶','💳','🧮','📐'] },
+  { name: '客户 / 营销',  icons: ['👥','👤','🧑','👨‍💼','👩‍💼','📞','📧','💬','🤝','🎯','🎁','📢'] },
+  { name: '业务 / 流程',  icons: ['✅','❌','📝','📃','📄','📅','📆','🗓','⏰','⏳','✍','📥','📤','🚀'] },
+  { name: '系统 / 设置',  icons: ['⚙','🔧','🔨','🛠','🔑','🔒','🔓','🛡','📡','💻','🖥','🖨'] },
+  { name: '通知 / 警告',  icons: ['🔔','🔕','⚠','❗','❓','💡','🌟','⭐','🎉','🚨'] }
+];
+const iconPicker = reactive({ show: false });
+function pickIcon(emo) {
+  dlg.form.menuIconUrl = emo;
+  iconPicker.show = false;
+}
+
 // === 数据 ===
 const rawTree = ref([]);
 const loading = ref(false);
 const treeRef = ref(null);
 const keyword = ref('');
-const kindFilter = ref(null);
 const statusFilter = ref(null);
 
 watch(keyword, v => treeRef.value?.filter(v ?? ''));
-watch([kindFilter, statusFilter], reload);
-
-function methodCls(m) {
-  return ({
-    GET: 'tag-info',
-    POST: 'tag-success',
-    PUT: 'tag-warning',
-    DELETE: 'tag-danger',
-    PATCH: 'tag-warning'
-  })[m] || 'tag-info';
-}
+watch([statusFilter], reload);
 
 function resetFilters() {
   keyword.value = '';
-  kindFilter.value = null;
   statusFilter.value = null;
   reload();
 }
@@ -176,20 +213,17 @@ async function reload() {
   finally { loading.value = false; }
 }
 
-// 类型过滤：剪掉不匹配的叶子节点，保留有匹配后代的父节点
-function pruneByKind(nodes, kind) {
-  if (kind == null) return nodes;
+// 菜单管理只展示 IS_MENU=1 节点；接口资源（IS_MENU=0）保留在树里但不显示，
+// 父节点 IS_MENU=1 但子节点全是接口的，子节点会被剪掉，父节点保留
+function pruneMenusOnly(nodes) {
   const walk = (n) => {
     const children = (n.children || []).map(walk).filter(Boolean);
-    const selfMatch = n.isMenu === kind;
-    if (selfMatch || children.length) {
-      return { ...n, children };
-    }
+    if (n.isMenu === 1) return { ...n, children };
     return null;
   };
   return nodes.map(walk).filter(Boolean);
 }
-const treeData = computed(() => pruneByKind(rawTree.value, kindFilter.value));
+const treeData = computed(() => pruneMenusOnly(rawTree.value));
 
 function filterNode(value, data) {
   if (!value) return true;
@@ -205,16 +239,15 @@ function filterNode(value, data) {
 const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, editing: null, parent: null, saving: false,
+  // 菜单管理强制 isMenu=1 + resourceMethod='MENU'，前端不暴露这两个字段
   form: {
-    menuName: '', resourceUrl: '', resourceMethod: 'GET',
-    isMenu: 0, menuEndFlag: '1', menuRankNo: 0, sysCode: ''
+    menuName: '', resourceUrl: '', resourceMethod: 'MENU',
+    isMenu: 1, menuEndFlag: '1', menuRankNo: 0, sysCode: '', menuIconUrl: ''
   },
   rules: {
-    menuName:       [{ required: true, message: '名称必填', trigger: 'blur' }, { max: 256, message: '不超过 256 位', trigger: 'blur' }],
-    resourceUrl:    [{ required: true, message: 'URL 必填', trigger: 'blur' }, { max: 256, message: '不超过 256 位', trigger: 'blur' }],
-    resourceMethod: [{ required: true, message: '请选择 HTTP method', trigger: 'change' }],
-    isMenu:         [{ required: true, message: '请选择类型', trigger: 'change' }],
-    menuEndFlag:    [{ required: true, message: '请选择节点形态', trigger: 'change' }]
+    menuName:    [{ required: true, message: '菜单名必填', trigger: 'blur' }, { max: 256, message: '不超过 256 位', trigger: 'blur' }],
+    resourceUrl: [{ required: true, message: '路由 path 必填', trigger: 'blur' }, { max: 256, message: '不超过 256 位', trigger: 'blur' }],
+    menuEndFlag: [{ required: true, message: '请选择节点形态', trigger: 'change' }]
   }
 });
 function openCreate(parent) {
@@ -222,11 +255,12 @@ function openCreate(parent) {
   dlg.parent = parent || null;
   dlg.form = {
     menuName: '', resourceUrl: '',
-    resourceMethod: 'GET',
-    isMenu: parent ? parent.isMenu : 0,
-    menuEndFlag: '1',
+    resourceMethod: 'MENU',  // 菜单节点统一 MENU，不暴露给用户
+    isMenu: 1,               // 菜单管理只建菜单
+    menuEndFlag: parent ? '1' : '0',  // 新增子默认叶子，新增根默认非叶子
     menuRankNo: 0,
-    sysCode: parent?.sysCode || ''
+    sysCode: parent?.sysCode || '',
+    menuIconUrl: ''
   };
   dlg.show = true;
 }
@@ -236,11 +270,12 @@ function openEdit(row) {
   dlg.form = {
     menuName: row.menuName,
     resourceUrl: row.resourceUrl,
-    resourceMethod: row.resourceMethod || 'GET',
-    isMenu: row.isMenu ?? 0,
+    resourceMethod: row.resourceMethod || 'MENU',
+    isMenu: 1,
     menuEndFlag: row.menuEndFlag || '1',
     menuRankNo: row.menuRankNo ?? 0,
-    sysCode: row.sysCode || ''
+    sysCode: row.sysCode || '',
+    menuIconUrl: row.menuIconUrl || ''
   };
   dlg.show = true;
 }
@@ -248,11 +283,16 @@ async function saveDlg() {
   try { await dlgFormRef.value?.validate(); } catch { return; }
   dlg.saving = true;
   try {
+    // 后端 ResourceUpdateReqDTO 严格反序列化，只认 8 个字段：
+    //   resourceUrl/status/parentResourceId/menuEndFlag/isMenu/menuName/menuRankNo/resourceMethod
+    // 提交前剥离前端额外字段：sysCode（DB 有但 DTO 无）、menuIconUrl（DB 有但 DTO 无，图标暂无法持久化）
+    // eslint-disable-next-line no-unused-vars
+    const { sysCode, menuIconUrl, ...rest } = dlg.form;
     if (dlg.editing) {
-      await updateResource(dlg.editing, { ...dlg.form });
+      await updateResource(dlg.editing, rest);
       ElMessage.success('已更新');
     } else {
-      const payload = { ...dlg.form };
+      const payload = { ...rest };
       if (dlg.parent) payload.parentResourceId = dlg.parent.resourceId;
       await createResource(payload);
       ElMessage.success('已创建');
@@ -291,10 +331,29 @@ onMounted(reload);
   .row-actions {
     margin-left: auto;
     display: flex; gap: 4px;
-    visibility: hidden;
   }
 }
-:deep(.el-tree-node__content):hover .res-row .row-actions { visibility: visible; }
 .hint { color: $text-3; font-size: 12px; margin-left: 8px; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+
+// 图标选择器输入行 + emoji 网格
+.icon-pick { display: flex; align-items: center; gap: 8px; width: 100%;
+  .icon-preview { display: inline-block; width: 32px; height: 32px; line-height: 32px;
+    text-align: center; font-size: 18px;
+    border: 1px solid $border-1; border-radius: 4px; background: $bg-soft; flex-shrink: 0;
+    &.clickable { cursor: pointer; transition: .12s;
+      &:hover { border-color: $primary-400; background: #fff; }
+    }
+  }
+}
+.icon-group { margin-bottom: 12px;
+  .icon-group-name { font-size: 12px; color: $text-3; margin-bottom: 6px; }
+  .icon-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+  .icon-cell { display: inline-block; width: 32px; height: 32px; line-height: 32px;
+    text-align: center; font-size: 18px; cursor: pointer; border-radius: 4px;
+    border: 1px solid transparent; transition: .12s;
+    &:hover { background: $bg-soft; border-color: $primary-400; }
+    &.active { background: rgba(30,91,186,.08); border-color: $primary; box-shadow: 0 0 0 2px rgba(30,91,186,.15); }
+  }
+}
 </style>

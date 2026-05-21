@@ -70,6 +70,11 @@ export function changeMyPassword(oldPassword, newPassword) {
   return call('put', '/admin/users/me/password', { data: { oldPassword, newPassword } }, { ok: true });
 }
 
+// 管理员为指定用户设置新密码（不要求旧密码；区别于 /reset 设默认值）
+export function setUserPassword(userId, newPassword, reason) {
+  return call('put', `/admin/users/${userId}/password`, { data: { newPassword, reason } }, { ok: true });
+}
+
 // === 批量操作（ids 用逗号串拼路径参数）===
 
 function joinIds(ids) {

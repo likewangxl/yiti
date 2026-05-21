@@ -94,7 +94,7 @@
           <el-table-column prop="username" label="用户名" width="140" />
           <el-table-column prop="userchnname" label="姓名" width="120" />
           <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="remark" label="手机号" width="140" />
+          <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip />
           <el-table-column label="状态" width="80">
             <template #default="{row}">
               <el-tag :class="row.isEnabled === 0 ? 'tag-success' : 'tag-warning'" effect="plain" size="small">
@@ -156,8 +156,8 @@
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="dlg.form.email" placeholder="选填" maxlength="128" />
         </el-form-item>
-        <el-form-item label="手机号" prop="remark">
-          <el-input v-model="dlg.form.remark" placeholder="选填" maxlength="20" />
+        <el-form-item label="备注" prop="remark">
+          <el-input v-model="dlg.form.remark" placeholder="选填，最多 100 字" maxlength="100" />
         </el-form-item>
         <el-form-item v-if="!dlg.editing" label="初始密码" prop="initialPassword">
           <el-input v-model="dlg.form.initialPassword" type="password" show-password placeholder="6~64 位，明文提交后端" maxlength="64" />
@@ -191,6 +191,7 @@
         <el-button type="primary" :loading="roleDlg.saving" @click="saveRoles">保存</el-button>
       </template>
     </el-dialog>
+
   </div>
 </template>
 
@@ -295,7 +296,7 @@ const dlg = reactive({
     username:        [{ required: true, message: '用户名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
     userchnname:     [{ required: true, message: '姓名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
     email:           [{ pattern: /^[^@\s]+@[^@\s]+\.[^@\s]+$/, message: '邮箱格式不正确', trigger: 'blur' }],
-    remark:          [{ pattern: /^$|^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
+    remark:          [{ max: 100, message: '备注不超过 100 字', trigger: 'blur' }],
     initialPassword: [{ required: true, message: '初始密码必填', trigger: 'blur' }, { min: 6, max: 64, message: '6~64 位', trigger: 'blur' }]
   }
 });

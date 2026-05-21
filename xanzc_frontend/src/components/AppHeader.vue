@@ -22,7 +22,8 @@
           <el-dropdown-item disabled>
             <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.roleName }}</span>
           </el-dropdown-item>
-          <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+          <el-dropdown-item divided command="changePassword">修改密码</el-dropdown-item>
+          <el-dropdown-item command="logout">退出登录</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -32,16 +33,36 @@
     </div>
     <div class="icon-btn">❓</div>
     <div class="icon-btn">👤</div>
+
+    <!-- 修改密码弹窗（用户改自己的密码，要求旧密码） -->
+    <el-dialog v-model="pwdDlg.show" title="修改密码" width="440px" :close-on-click-modal="false">
+      <el-form :model="pwdDlg" label-position="top">
+        <el-form-item label="旧密码" required>
+          <el-input v-model="pwdDlg.oldPassword" type="password" show-password placeholder="当前密码" maxlength="64" />
+        </el-form-item>
+        <el-form-item label="新密码" required>
+          <el-input v-model="pwdDlg.newPassword" type="password" show-password placeholder="6-64 位" minlength="6" maxlength="64" />
+        </el-form-item>
+        <el-form-item label="确认新密码" required>
+          <el-input v-model="pwdDlg.confirmPassword" type="password" show-password placeholder="再输一遍" minlength="6" maxlength="64" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="pwdDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="pwdDlg.saving" @click="onChangePassword">确认</el-button>
+      </template>
+    </el-dialog>
   </header>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
 import { logout } from '@/api/auth';
 import { getUnreadCount } from '@/api/workspace';
+import { changeMyPassword } from '@/api/users';
 
 const kw = ref('');
 const unread = ref(0);
@@ -66,7 +87,37 @@ async function onCommand(cmd) {
     store.clear();
     ElMessage.success('已退出登录');
     router.replace('/login');
+  } else if (cmd === 'changePassword') {
+    pwdDlg.oldPassword = '';
+    pwdDlg.newPassword = '';
+    pwdDlg.confirmPassword = '';
+    pwdDlg.show = true;
   }
+}
+
+// 修改密码弹窗
+const pwdDlg = reactive({ show: false, saving: false, oldPassword: '', newPassword: '', confirmPassword: '' });
+async function onChangePassword() {
+  const o = pwdDlg.oldPassword.trim();
+  const p = pwdDlg.newPassword.trim();
+  const c = pwdDlg.confirmPassword.trim();
+  if (!o) return ElMessage.warning('请输入旧密码');
+  if (!p || p.length < 6 || p.length > 64) return ElMessage.warning('新密码须 6-64 位');
+  if (p !== c) return ElMessage.warning('两次输入的新密码不一致');
+  pwdDlg.saving = true;
+  try {
+    await changeMyPassword(o, p);
+    ElMessage.success('密码已修改，请重新登录');
+    pwdDlg.show = false;
+    // 安全起见，改密成功后强制重新登录
+    setTimeout(async () => {
+      try { await logout(); } catch {}
+      store.clear();
+      router.replace('/login');
+    }, 600);
+  } catch (e) {
+    ElMessage.error('修改失败：' + (e?.message || e));
+  } finally { pwdDlg.saving = false; }
 }
 </script>
 

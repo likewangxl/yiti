@@ -40,11 +40,34 @@
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue';
+import { ref, computed, reactive, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { getMyMenus } from '@/api/auth';
 
 const router = useRouter();
 const route = useRoute();
+
+// 当前用户可见菜单 path 集合：null = 还没拉到 → 全显（避免登录瞬间空白）；Set → 按权限过滤
+const allowedPaths = ref(null);
+
+async function loadMyMenus() {
+  try {
+    const tree = await getMyMenus();
+    const paths = new Set();
+    (function walk(nodes) {
+      if (!nodes) return;
+      for (const n of nodes) {
+        if (n.resourceUrl) paths.add(n.resourceUrl);
+        if (n.children) walk(n.children);
+      }
+    })(tree);
+    allowedPaths.value = paths;
+  } catch {
+    // 拉失败保持 null（全显），不阻塞 sidebar
+    allowedPaths.value = null;
+  }
+}
+onMounted(loadMyMenus);
 
 // 把 router 表按 group 分组
 // 注意：顶层 routes 现在第 0 项是 /login，业务路由在 path:'/' 那一项的 children
@@ -56,7 +79,11 @@ const groups = computed(() => {
   for (const r of all) {
     // 跳过没 title 的子路由（redirect / 空 path / 占位项），否则会渲染成"空白菜单"
     if (!r.meta?.title || !r.path) continue;
+    // 隐藏路由（meta.hidden）不进 sidebar：如审批办理详情页 /workflow/task/:taskId
+    if (r.meta?.hidden) continue;
     const path = '/' + r.path;
+    // 按权限过滤：拉到了菜单清单且当前 path 不在集合中 → 跳过
+    if (allowedPaths.value !== null && !allowedPaths.value.has(path)) continue;
     const item = { path, title: r.meta.title, icon: r.meta?.icon };
     if (!r.meta?.group) {
       root.push(item);

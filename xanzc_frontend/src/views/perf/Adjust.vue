@@ -100,6 +100,48 @@
           </el-table>
         </div>
       </el-tab-pane>
+
+      <!-- ============ 已审批 ============ -->
+      <el-tab-pane label="已审批" name="done">
+        <div class="card-section table">
+          <el-table :data="dones" size="default" empty-text="暂无已审批记录" v-loading="doneLoading">
+            <el-table-column label="标题" min-width="220">
+              <template #default="{row}"><code class="mono">{{ row.title || row.businessKey }}</code></template>
+            </el-table-column>
+            <el-table-column label="当前节点" width="140" prop="taskName" />
+            <el-table-column label="发起人" width="160">
+              <template #default="{row}">
+                {{ row.startUserName || '-' }}
+                <span v-if="row.startUser" class="sub-id">({{ row.startUser }})</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="发起机构" width="220">
+              <template #default="{row}">
+                <template v-if="row.startOrgName || row.startOrgId">
+                  {{ row.startOrgId || '-' }}<span v-if="row.startOrgName"> · {{ row.startOrgName }}</span>
+                </template>
+                <template v-else>-</template>
+              </template>
+            </el-table-column>
+            <el-table-column label="发起时间" width="160">
+              <template #default="{row}">{{ fmt(row.startTime) }}</template>
+            </el-table-column>
+            <el-table-column label="任务到达" width="160">
+              <template #default="{row}">{{ fmt(row.taskCreateTime) }}</template>
+            </el-table-column>
+            <el-table-column label="SLA" width="90">
+              <template #default="{row}">
+                <el-tag :class="slaCls(row.slaStatus)" effect="plain">{{ slaLabel(row.slaStatus) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{row}">
+                <el-button link type="primary" size="small" @click="openTodoDetail(row)">查看申请</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 新建/查看 弹框 -->
@@ -181,9 +223,68 @@
         </el-form-item>
       </el-form>
 
+      <!-- 审批流记录（仅查看模式展示）-->
+      <template v-if="dlg.readOnly">
+        <div class="card-h">
+          <div class="title">审批流记录</div>
+          <span class="sub-tip">按时间倒序 · 最新在上</span>
+        </div>
+        <div v-loading="dlg.approvalLoading" class="approval-wrap">
+          <el-empty v-if="!dlg.approvalLoading && (!dlg.approvalLogs || dlg.approvalLogs.length === 0)"
+            description="暂无审批记录" :image-size="60" />
+          <el-timeline v-else>
+            <el-timeline-item
+              v-for="(log, idx) in dlg.approvalLogs"
+              :key="idx"
+              :timestamp="fmt(log.operateTime)"
+              placement="top"
+              :type="actionTimelineType(log.action)"
+              :hollow="idx !== 0">
+              <div class="approval-line">
+                <el-tag :class="actionCls(log.action)" effect="plain" size="small">
+                  {{ actionLabel(log.action) }}
+                </el-tag>
+                <span class="node">{{ log.nodeName || log.nodeKey || '-' }}</span>
+              </div>
+              <div class="approval-meta">
+                <span class="meta-key">审核人：</span>
+                <span>{{ log.operatorName || log.operator || '-' }}</span>
+                <span v-if="log.operator && log.operatorName" class="sub-id">({{ log.operator }})</span>
+                <span class="meta-sep">·</span>
+                <span class="meta-key">机构：</span>
+                <span>{{ log.operatorOrgName || '-' }}</span>
+              </div>
+              <div v-if="log.opinion" class="approval-opinion">意见：{{ log.opinion }}</div>
+            </el-timeline-item>
+          </el-timeline>
+        </div>
+      </template>
+
       <template #footer>
         <el-button @click="dlg.show = false">{{ dlg.readOnly ? '关闭' : '取消' }}</el-button>
         <el-button v-if="!dlg.readOnly" type="primary" :loading="dlg.saving" @click="onSubmit">提交审批</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 业务部门经办审批专用对话框（biz_dept_review 节点，含原业绩所属人复选框） -->
+    <el-dialog v-model="approveDlg.show" :title="approveDlgTitle" width="520px" :close-on-click-modal="false">
+      <el-form label-position="top" size="default">
+        <el-form-item label="审批意见">
+          <el-input v-model="approveDlg.opinion" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请填写审批意见（可空）" />
+        </el-form-item>
+        <el-form-item>
+          <el-checkbox v-model="approveDlg.needsOriginalOwnerApprove">
+            是否需要原业绩所属人审批
+          </el-checkbox>
+          <div class="approve-checkbox-tip">
+            勾选后流程进入"原业绩所属人审批"节点；不勾选则直接到部门负责人审批环节
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="approveDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="approveDlg.saving" @click="onApproveSubmit">提交</el-button>
       </template>
     </el-dialog>
   </div>
@@ -193,9 +294,10 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  listAdjusts, submitAdjust, withdrawAdjust, getAdjustDetail
+  listAdjusts, submitAdjust, withdrawAdjust, getAdjustDetail,
+  getAdjustApprovalHistory
 } from '@/api/perf';
-import { listTodoTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
+import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { useUserStore } from '@/stores/user';
 
 const STATUS_LABEL = {
@@ -212,6 +314,19 @@ const canWithdraw = (s) => s === 'IN_APPROVAL' || s === 'DRAFT';
 const SLA_LABEL = { GREEN: '正常', YELLOW: '预警', RED: '超时' };
 const slaLabel = (s) => SLA_LABEL[s] || s || '-';
 const slaCls = (s) => ({ GREEN: 'tag-success', YELLOW: 'tag-warning', RED: 'tag-danger' }[s] || 'tag-info');
+
+const ACTION_LABEL = {
+  SUBMIT: '提交', APPROVE: '通过', REJECT: '驳回', CLAIM: '签收', TRANSFER: '转办'
+};
+const actionLabel = (a) => ACTION_LABEL[a] || a || '-';
+const actionCls = (a) => ({
+  APPROVE: 'tag-success', REJECT: 'tag-danger',
+  SUBMIT: 'tag-info', CLAIM: 'tag-warning', TRANSFER: 'tag-warning'
+}[a] || 'tag-info');
+const actionTimelineType = (a) => ({
+  APPROVE: 'success', REJECT: 'danger',
+  SUBMIT: 'primary', CLAIM: 'warning', TRANSFER: 'warning'
+}[a] || 'info');
 
 const fmt = (s) => {
   if (!s) return '-';
@@ -249,9 +364,23 @@ async function reloadTodo() {
   } catch {} finally { todoLoading.value = false; }
 }
 
+// ============ 已审批（已办） ============
+const dones = ref([]);
+const doneLoading = ref(false);
+async function reloadDone() {
+  doneLoading.value = true;
+  try {
+    // 后端 queryDoneList 已按 taskAssignee=当前用户 + finished 过滤
+    // bizType 限定到 ALLOC_ADJUST 与"待我审批" tab 对齐
+    const r = await listDoneTasks({ pageSize: 50, bizType: 'ALLOC_ADJUST' });
+    if (Array.isArray(r)) dones.value = r;
+  } catch {} finally { doneLoading.value = false; }
+}
+
 // ============ 统一刷新（按 tab 路由） ============
 function reload() {
   if (activeTab.value === 'todo') reloadTodo();
+  else if (activeTab.value === 'done') reloadDone();
   else reloadMine();
 }
 
@@ -264,6 +393,7 @@ async function openTodoDetail(row) {
     // 复用查看弹框
     dlg.readOnly = true;
     dlg.viewingId = applyId;
+    dlg.approvalLogs = [];
     Object.assign(dlg.form, {
       custNo: d.custNo || d.custId || '',
       allocDim: d.allocDim, bizKind: d.bizKind, accountNo: d.accountNo,
@@ -271,6 +401,7 @@ async function openTodoDetail(row) {
       items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark }))
     });
     dlg.show = true;
+    loadApprovalHistory(applyId);
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '查看失败');
   }
@@ -283,7 +414,27 @@ async function ensureClaimed(row) {
   }
 }
 
+// 业务部门经办（biz_dept_review）节点专用审批对话框 state
+// 该节点表单含 needsOriginalOwnerApprove CHECKBOX，由经办勾选决定是否走原业绩所属人审批分支
+const approveDlg = reactive({
+  show: false, saving: false, row: null,
+  opinion: '同意', needsOriginalOwnerApprove: false
+});
+const approveDlgTitle = computed(
+  () => `审批通过：${approveDlg.row?.title || approveDlg.row?.businessKey || ''}`
+);
+
 async function openApprove(row) {
+  // 公司部/零售部/业务部门经办审批节点：弹自定义对话框含 needsOriginalOwnerApprove 复选框
+  if (row.nodeKey === 'biz_dept_review') {
+    approveDlg.row = row;
+    approveDlg.opinion = '同意';
+    approveDlg.needsOriginalOwnerApprove = false;
+    approveDlg.saving = false;
+    approveDlg.show = true;
+    return;
+  }
+  // 其他节点：沿用简单意见输入
   let opinion;
   try {
     const r = await ElMessageBox.prompt('请填写审批意见（可空）', `审批通过：${row.title || row.businessKey}`, {
@@ -298,6 +449,24 @@ async function openApprove(row) {
     reloadTodo();
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '审批失败');
+  }
+}
+
+async function onApproveSubmit() {
+  if (!approveDlg.row) return;
+  approveDlg.saving = true;
+  try {
+    await ensureClaimed(approveDlg.row);
+    await approveTask(approveDlg.row.taskId, approveDlg.opinion, {
+      needsOriginalOwnerApprove: !!approveDlg.needsOriginalOwnerApprove
+    });
+    ElMessage.success('已通过');
+    approveDlg.show = false;
+    reloadTodo();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '审批失败');
+  } finally {
+    approveDlg.saving = false;
   }
 }
 
@@ -323,6 +492,7 @@ async function openReject(row) {
 const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, readOnly: false, saving: false, viewingId: null,
+  approvalLogs: [], approvalLoading: false,
   form: {
     custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
@@ -344,7 +514,31 @@ const dlgRules = {
 
 function defaultItem() { return { empId: '', pct: 0, remark: '' }; }
 function addItemRow() { dlg.form.items.push(defaultItem()); }
-function onDlgClosed() { dlg.viewingId = null; dlg.readOnly = false; }
+function onDlgClosed() {
+  dlg.viewingId = null;
+  dlg.readOnly = false;
+  dlg.approvalLogs = [];
+  dlg.approvalLoading = false;
+}
+
+// 拉审批流记录（后端已按时间倒序，前端直接渲染）
+async function loadApprovalHistory(applyId) {
+  if (!applyId) {
+    dlg.approvalLogs = [];
+    return;
+  }
+  dlg.approvalLoading = true;
+  try {
+    const list = await getAdjustApprovalHistory(applyId);
+    dlg.approvalLogs = Array.isArray(list) ? list : [];
+  } catch (err) {
+    // 审批流拉取失败不阻塞主流程，仅清空 + 控制台告警
+    console.warn('[Adjust] 审批流记录加载失败', err);
+    dlg.approvalLogs = [];
+  } finally {
+    dlg.approvalLoading = false;
+  }
+}
 
 function openCreate() {
   dlg.readOnly = false;
@@ -359,6 +553,7 @@ function openCreate() {
 async function openView(row) {
   dlg.readOnly = true;
   dlg.viewingId = row.id || row.applyNo;
+  dlg.approvalLogs = [];
   Object.assign(dlg.form, {
     custNo: row.custNo || row.custId || '',
     allocDim: row.allocDim || 'RULE',
@@ -377,6 +572,7 @@ async function openView(row) {
       items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.shareRatio, remark: it.remark }))
     });
   } catch {}
+  loadApprovalHistory(dlg.viewingId);
 }
 
 async function onSubmit() {
@@ -449,6 +645,38 @@ onMounted(reload);
   .weight-sum {
     font-size: 13px; color: $text-3; font-weight: 500;
     &.ok { color: $success; font-weight: 700; }
+  }
+  .sub-tip { font-size: 12px; color: $text-3; }
+}
+
+.approve-checkbox-tip {
+  margin-left: 24px;
+  font-size: 12px;
+  color: $text-3;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.approval-wrap {
+  padding: 4px 0 4px 6px;
+  min-height: 80px;
+  .approval-line {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px;
+    .node { font-weight: 600; color: $text-1; }
+  }
+  .approval-meta {
+    margin-top: 4px;
+    font-size: 12px; color: $text-2;
+    .meta-key { color: $text-3; }
+    .meta-sep { margin: 0 8px; color: $text-3; }
+  }
+  .approval-opinion {
+    margin-top: 4px;
+    font-size: 12px; color: $text-2;
+    background: $bg-soft;
+    padding: 6px 8px; border-radius: 4px;
+    word-break: break-all;
   }
 }
 </style>

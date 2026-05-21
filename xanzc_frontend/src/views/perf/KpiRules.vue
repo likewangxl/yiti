@@ -16,7 +16,7 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="f.status" clearable placeholder="全部" style="width:160px" @change="reload">
-            <el-option v-for="o in STATUS_OPTIONS" :key="o.v" :value="o.v" :label="o.l" />
+            <el-option v-for="o in STATUS_OPTIONS" :key="o.value" :value="o.value" :label="o.label" />
           </el-select>
         </el-form-item>
         <el-form-item label="适用周期">
@@ -181,12 +181,10 @@ import {
 } from '@/api/perf';
 
 // === 字典 ===
-const STATUS_OPTIONS = [
-  { v: 'ACTIVE',    l: '启用' },
-  { v: 'TRIAL_RUN', l: '试运行' },
-  { v: 'DRAFT',     l: '草稿' },
-  { v: 'INACTIVE',  l: '停用' }
-];
+// 状态从 SYS_DICT.dict_type='KPI_SCHEME_STATUS' 拉，不再写死中英文映射
+import { useDict } from '@/composables/useDict';
+// labelOf 名称冲突：保留下面行业版的 statusLabel（含 DISABLED → 已删除映射），useDict 只取 options
+const { options: STATUS_OPTIONS } = useDict('KPI_SCHEME_STATUS');
 const CYCLE_OPTIONS = [
   { v: 'YEARLY',    l: '年度' },
   { v: 'QUARTERLY', l: '季度' },

@@ -29,9 +29,16 @@ export function claimTask(taskId) {
   return call('post', `/workflow/tasks/${taskId}/claim`, { data: {} }, { ok: true });
 }
 
-/** 审批通过 */
-export function approveTask(taskId, opinion) {
-  return call('post', `/workflow/tasks/${taskId}/approve`, { data: { opinion } }, { ok: true });
+/**
+ * 审批通过.
+ *
+ * @param {string} taskId   任务 ID
+ * @param {string} opinion  审批意见
+ * @param {object} [formData] 节点表单字段（如 biz_dept_review 的 needsOriginalOwnerApprove），
+ *                            后端透传到 Flowable 变量，供下游网关条件分支使用
+ */
+export function approveTask(taskId, opinion, formData) {
+  return call('post', `/workflow/tasks/${taskId}/approve`, { data: { opinion, formData } }, { ok: true });
 }
 
 /** 驳回 */

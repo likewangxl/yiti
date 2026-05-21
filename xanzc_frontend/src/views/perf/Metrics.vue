@@ -5,16 +5,9 @@
       <span class="desc">三级层级树 · SQL/Groovy 计算配置 · 试运行 · 版本</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
-        <el-button @click="downloadMetricTpl">📑 下载模板</el-button>
-        <el-button @click="onImport" :loading="importing">📥 导入指标</el-button>
+        <el-button @click="onImport">📥 导入指标</el-button>
         <el-button type="primary" @click="openCreate">+ 新增指标</el-button>
       </div>
-      <input
-        ref="fileInputRef"
-        type="file"
-        accept=".xlsx,.xls"
-        style="display:none"
-        @change="onFileChosen" />
     </div>
 
     <div class="layout">
@@ -112,7 +105,7 @@
 
           <div class="acts">
             <el-button type="primary" :disabled="isDisabled" @click="openEdit(detail)">编辑</el-button>
-            <el-button :disabled="isDisabled" @click="onTrialRun">▶ 试运行</el-button>
+            <el-button :disabled="isDisabled" :loading="detailTrial.loading" @click="onTrialRun">▶ 试运行</el-button>
             <el-button :disabled="isDisabled" @click="onExecute">⚡立即执行</el-button>
             <el-button @click="onShowVersions">查看版本历史</el-button>
             <el-button @click="onViewAudit">📋 查看审计</el-button>
@@ -122,6 +115,33 @@
           </div>
           <div class="audit-hint">
             ⚠ 试运行 / 立即执行 / 编辑 / 删除 / 状态变更 均属高危动作，会自动写入「系统设置 → 审计日志」
+          </div>
+
+          <!-- 详情侧"试运行"结果区（仅在按过试运行后才出现） -->
+          <div v-if="detailTrial.status" class="trial-detail">
+            <div class="trial-row">
+              <span class="trial-title">试运行结果</span>
+              <el-tag v-if="detailTrial.status === 'SUCCESS'" class="tag-success" effect="plain">
+                成功 · {{ detailTrial.totalRows ?? detailTrial.rows.length }} 行 · {{ ((detailTrial.cost || 0) / 1000).toFixed(1) }}s
+              </el-tag>
+              <el-tag v-else-if="detailTrial.status === 'FAILED'" class="tag-warning" effect="plain">
+                失败 · {{ ((detailTrial.cost || 0) / 1000).toFixed(1) }}s
+              </el-tag>
+            </div>
+            <!-- SQL 类指标：样本行表格；EXPR 类指标：单值（exprResult） -->
+            <el-table v-if="detailTrial.rows.length" :data="detailTrial.rows" size="small" border style="margin-top: 8px">
+              <el-table-column v-for="col in detailTrial.cols" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
+            </el-table>
+            <div v-else-if="detailTrial.status === 'SUCCESS' && detailTrial.exprResult != null"
+                 class="trial-expr" style="margin-top:8px">
+              EXPR 单值结果：<code class="mono">{{ detailTrial.exprResult }}</code>
+            </div>
+            <div v-else-if="detailTrial.status === 'FAILED'" class="trial-error" style="margin-top:8px">
+              ✗ {{ detailTrial.errorMsg || '试运行失败，请检查 SQL/EXPR 是否合法' }}
+            </div>
+            <div v-else class="trial-empty" style="margin-top:8px; color:#999">
+              （无样本数据）
+            </div>
           </div>
 
           <div class="block-h">同分类指标</div>
@@ -185,9 +205,26 @@
           />
           <el-input
             v-else
+            ref="sqlInputRef"
             v-model="dlg.form.sqlText" type="textarea" :rows="6"
-            placeholder="SELECT cust_id, AVG(bal) FROM t_xxx WHERE dt=#{datadate}"
+            placeholder="SELECT cust_id, AVG(bal) FROM t_xxx WHERE dt=:dataDate"
           />
+        </el-form-item>
+
+        <el-form-item v-if="dlg.form.calcLogicType === 'SQL'" label="">
+          <div class="sql-date-macros">
+            <div class="hint-title">可用日期变量（点击插入到 SQL 光标处；后端按 dataDate 自动计算注入）</div>
+            <table class="hint-table">
+              <tr><th style="width:180px">SQL 占位符</th><th>含义</th></tr>
+              <tr v-for="m in DATE_MACROS" :key="m.token">
+                <td>
+                  <code class="macro-btn" @click="insertMacro(m.token)" :title="`点击插入 ${m.token}`">{{ m.token }}</code>
+                </td>
+                <td>{{ m.desc }}</td>
+              </tr>
+            </table>
+            <div class="hint-foot">用法：<code>WHERE stat_date = :datePrevMonthEnd</code>。结果列必须含 <code>base_key</code> + <code>metric_value</code>。</div>
+          </div>
         </el-form-item>
 
         <el-form-item label="槽位声明">
@@ -273,15 +310,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
 import { Search } from '@element-plus/icons-vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  listMetrics, getMetricDetail,
+  listMetrics, listMetricCategories, getMetricDetail,
   createMetric, updateMetric, deleteMetric,
-  changeMetricStatus, trialRunMetric, executeMetric,
-  uploadImportFile, listMetricCategories
+  changeMetricStatus, trialRunMetric, executeMetric
 } from '@/api/perf';
 import { listAuditLogs } from '@/api/system';
 
@@ -328,15 +364,14 @@ const BIZ_ACTION_LABEL = {
 const bizActionLabel = (a) => BIZ_ACTION_LABEL[a] || a || '—';
 
 // === 数据加载 ===
-const allMetrics = ref([]);
-// 后端 /perf/metrics/categories 返回 [{value, label}]；树分组的"骨架"
-const categories = ref([]);
 const UNCATEGORIZED_LABEL = '未分类';
+const allMetrics = ref([]);
+const categories = ref([]);  // [{value, label}] 来自 GET /api/perf/metrics/categories
 async function reload() {
   try {
     const [r, cs] = await Promise.all([
       listMetrics({ pageSize: 100 }),
-      listMetricCategories().catch(() => [])
+      listMetricCategories()
     ]);
     // 停用项保留在树里（按用户反馈），通过按钮 disable 限制操作即可
     if (Array.isArray(r)) allMetrics.value = r;
@@ -346,41 +381,38 @@ async function reload() {
   } catch {}
 }
 
-// === 单条指标的分类归属（右侧"同分类"列表 / 详情页用）===
-// 优先取后端字段 metric.metricCategory；为空再回落到 metricDesc 内嵌的 _category；
-// 再不行用关键词推断兜底（老数据兼容）。
+// === 分类规则：优先 metricDesc(JSON)._category，其次按名称关键词推断 ===
 function categoryOf(m) {
-  if (m?.metricCategory) return [m.metricCategory, null];
   const meta = parseMeta(m);
   if (meta && meta._category) {
     const [g, sub] = meta._category.split('/');
     return [g, sub || null];
   }
-  const n = (m?.metricName || '') + ' ' + (m?.metricDesc || '');
+  const n = (m.metricName || '') + ' ' + (m.metricDesc || '');
   if (/不良|风险/.test(n)) return ['风险指标', '风险类'];
-  if (/中收|手续费|fee/i.test(n) || m?.metricCode === 'M_FEE') return ['业务指标', '中收类'];
+  if (/中收|手续费|fee/i.test(n) || m.metricCode === 'M_FEE') return ['业务指标', '中收类'];
   if (/存款/.test(n)) return ['业务指标', '存款类'];
   if (/贷款/.test(n)) return ['业务指标', '贷款类'];
-  if (/客户|cust/i.test(n) || m?.baseDim === 'CUST') return ['客户指标', null];
-  return [UNCATEGORIZED_LABEL, null];
+  if (/客户|cust/i.test(n) || m.baseDim === 'CUST') return ['客户指标', null];
+  return ['综合指标', null];
 }
 function resolveCategory(m) {
   const [g, sub] = categoryOf(m);
   return sub ? `${g}/${sub}` : g;
 }
 
-// === 树结构：以后端 categories 接口为骨架；metric.metricCategory 决定归属 ===
+// === 树结构：严格按 metric.metricCategory 一级分组（V1.10 后端 categories 接口提供骨架） ===
 const treeData = computed(() => {
-  // 1. 用后端返回的分类建立"骨架"（保证空分类也显示）
+  // 1. 用后端 categories 接口建立骨架（保证空分类也显示）
   const groups = new Map();
   for (const c of categories.value) {
     const label = c?.label || c?.value;
     if (!label) continue;
     groups.set(label, { id: 'g-' + label, label, children: [] });
   }
-  // 2. 把每条指标挂到对应分类节点；后端无该分类时按需新建；无 metricCategory 入"未分类"
+  // 2. 把每条指标挂到 metricCategory 对应节点；空 metricCategory 入"未分类"
   for (const m of allMetrics.value) {
-    const cat = m?.metricCategory || UNCATEGORIZED_LABEL;
+    const cat = (m?.metricCategory && String(m.metricCategory).trim()) || UNCATEGORIZED_LABEL;
     let node = groups.get(cat);
     if (!node) {
       node = { id: 'g-' + cat, label: cat, children: [] };
@@ -399,6 +431,11 @@ const treeData = computed(() => {
 // === 详情 ===
 const picked = ref('');
 const detail = ref({});
+// 详情侧"试运行"按钮的结果展示（与编辑对话框里的 dlg.trial 独立，避免互相覆盖）
+const detailTrial = reactive({ status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], loading: false });
+function resetDetailTrial() {
+  Object.assign(detailTrial, { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], loading: false });
+}
 // V1.6 修复 Bug3：停用态下"编辑/试运行/立即执行"按钮 disabled，前端先拦截，后端兜底校验
 const isDisabled = computed(() => detail.value.status === 'DISABLED' || detail.value.status === 'INACTIVE');
 const sameCategory = computed(() => {
@@ -410,6 +447,8 @@ const sameCategory = computed(() => {
 async function onPick(code) {
   if (!code) return;
   picked.value = code;
+  // 切换指标时清空上一条指标残留的试运行结果，避免误以为是当前指标的结果
+  resetDetailTrial();
   try {
     const r = await getMetricDetail(code);
     if (r) detail.value = r;
@@ -417,19 +456,6 @@ async function onPick(code) {
 }
 function onTreeClick(node) {
   if (node.isMetric) onPick(node.id);
-}
-
-// === 树模糊搜索（仅前端过滤，不调后端）===
-const treeRef = ref(null);
-const treeKeyword = ref('');
-watch(treeKeyword, v => treeRef.value?.filter(v ?? ''));
-function filterTreeNode(value, data) {
-  if (!value) return true;
-  const v = String(value).trim().toLowerCase();
-  if (!v) return true;
-  const label = String(data.label || '').toLowerCase();
-  const code = String(data.raw?.metricCode || '').toLowerCase();
-  return label.includes(v) || code.includes(v);
 }
 
 // === 槽位声明 / 分类元数据：从 metricDesc(JSON) 解析，否则按 SQL 文本兜底 ===
@@ -464,8 +490,55 @@ function guessDataSource(m) {
   return 'EDW · 业务表';
 }
 
+// === 左树模糊搜索 ===
+const treeRef = ref(null);
+const treeKeyword = ref('');
+watch(treeKeyword, v => treeRef.value?.filter(v ?? ''));
+function filterTreeNode(value, data) {
+  if (!value) return true;
+  const v = String(value).trim().toLowerCase();
+  if (!v) return true;
+  const label = String(data.label || '').toLowerCase();
+  const code = String(data.raw?.metricCode || data.id || '').toLowerCase();
+  return label.includes(v) || code.includes(v);
+}
+
 // === 编辑/新增 弹框 ===
 const formRef = ref(null);
+const sqlInputRef = ref(null);
+
+// 后端 MetricTrialService.runSql 自动注入的 10 个 SQL 命名参数；点击下方变量符插入到光标位置
+const DATE_MACROS = [
+  { token: ':dataDate',           desc: '数据日期（=dateToday，由调度/试运行传入）' },
+  { token: ':version',            desc: 'sys_control 当前版本' },
+  { token: ':dateToday',          desc: '当前日期 T' },
+  { token: ':dateYesterday',      desc: 'T-1 上一日期' },
+  { token: ':dateMonthEnd',       desc: '本月最后一天' },
+  { token: ':datePrevMonthEnd',   desc: '上月最后一天' },
+  { token: ':dateQuarterEnd',     desc: '本季度最后一天' },
+  { token: ':datePrevQuarterEnd', desc: '上季度最后一天' },
+  { token: ':dateYearEnd',        desc: '本年最后一天' },
+  { token: ':datePrevYearEnd',    desc: '上年最后一天（去年 12-31）' }
+];
+
+// 把变量符插到 SQL textarea 当前光标位置；未聚焦时附加到末尾
+function insertMacro(token) {
+  const elInput = sqlInputRef.value;
+  const ta = elInput?.textarea || elInput?.input || elInput?.$el?.querySelector?.('textarea');
+  const cur = dlg.form.sqlText || '';
+  if (!ta) {
+    dlg.form.sqlText = cur + token;
+    return;
+  }
+  const start = ta.selectionStart ?? cur.length;
+  const end = ta.selectionEnd ?? start;
+  dlg.form.sqlText = cur.slice(0, start) + token + cur.slice(end);
+  nextTick(() => {
+    ta.focus();
+    const pos = start + token.length;
+    ta.setSelectionRange(pos, pos);
+  });
+}
 const dlg = reactive({
   show: false, editing: null, saving: false,
   trialRange: null, trialing: false,
@@ -541,6 +614,8 @@ async function onSave(targetStatus) {
     metricCode: dlg.form.metricCode,
     metricName: dlg.form.metricName,
     metricDesc: JSON.stringify(meta),
+    // V1.9 metric_category 独立列（前端分类下拉/树聚合靠它，不能只塞 metricDesc JSON）
+    metricCategory: dlg.form._category || null,
     calcFreq: dlg.form.calcFreq,
     calcMode: dlg.form.calcMode,
     calcLogicType: dlg.form.calcLogicType,
@@ -550,24 +625,23 @@ async function onSave(targetStatus) {
   };
   try {
     if (dlg.editing) {
-      // Update DTO 不含 baseDim/metricLevel/preferredSlot
-      await updateMetric(dlg.editing, basePayload);
+      // Update DTO 不含 baseDim/metricLevel/preferredSlot/status，也不含 metricCategory（仅 create 时落到独立列）
+      const { metricCategory, ...updatePayload } = basePayload;
+      await updateMetric(dlg.editing, updatePayload);
       if (targetStatus !== detail.value.status) {
-        try { await changeMetricStatus(dlg.editing, targetStatus, '编辑保存'); } catch {}
+        await changeMetricStatus(dlg.editing, targetStatus, '编辑保存');
       }
       ElMessage.success(targetStatus === 'ACTIVE' ? '已发布' : '已保存为草稿');
     } else {
-      // Create DTO 额外接 baseDim、metricLevel；preferredSlot 不传，让后端自动从空槽位里选第一个，
-      // 否则 valSlot 默认 1 会和已有指标冲突，抛 PERF-40901 指标槽位已占用
+      // Create DTO 额外接 baseDim / metricLevel / status；
+      // preferredSlot 故意不传——已有指标占满 slot=1 必触发 METRIC_SLOT_CONFLICT，
+      // 后端 MetricSlotService.allocSlot 在 preferredSlot=null 时自动找下一个空闲槽位。
       await createMetric({
         ...basePayload,
         baseDim: dlg.form.baseDim,
-        metricLevel: dlg.form.metricLevel
+        metricLevel: dlg.form.metricLevel,
+        status: targetStatus   // 一步直接落 ACTIVE / DRAFT，避免两步切换状态机抖动
       });
-      // 后端创建默认 ACTIVE；如果选了草稿就再切一下
-      if (targetStatus === 'DRAFT') {
-        try { await changeMetricStatus(dlg.form.metricCode, 'DRAFT', '保存为草稿'); } catch {}
-      }
       ElMessage.success(targetStatus === 'ACTIVE' ? '已新增并发布' : '已保存为草稿');
     }
     dlg.show = false;
@@ -610,10 +684,29 @@ async function onTrialFromDialog() {
 async function onTrialRun() {
   // dataDate 默认昨天（T-1 是 perf 模块习惯）
   const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  resetDetailTrial();
+  detailTrial.loading = true;
+  const t0 = Date.now();
   try {
-    await trialRunMetric(detail.value.metricCode, { dataDate: yesterday, sampleSize: 10 });
-    ElMessage.success('试运行已提交，已写入审计日志');
-  } catch {}
+    const r = await trialRunMetric(detail.value.metricCode, { dataDate: yesterday, sampleSize: 10 });
+    // 后端 MetricTrialRespDTO: { status, totalRows, executionMillis, errorMsg, sampleRows, exprResult }
+    const rows = r?.sampleRows || [];
+    const cols = rows.length ? Object.keys(rows[0]) : ['baseKey', 'metricValue'];
+    Object.assign(detailTrial, {
+      status: r?.status || (rows.length ? 'SUCCESS' : (r?.exprResult != null ? 'SUCCESS' : 'FAILED')),
+      cost: r?.executionMillis ?? (Date.now() - t0),
+      totalRows: r?.totalRows ?? rows.length,
+      errorMsg: r?.errorMsg || '',
+      exprResult: r?.exprResult,
+      rows, cols
+    });
+  } catch (err) {
+    Object.assign(detailTrial, {
+      status: 'FAILED', cost: Date.now() - t0, totalRows: 0,
+      errorMsg: err?.message || '试运行失败（SQL/EXPR 执行异常）',
+      rows: [], cols: []
+    });
+  } finally { detailTrial.loading = false; }
 }
 
 // 立即执行：写宽表 + 写 run_task，必须填原因（高危）
@@ -693,66 +786,9 @@ async function onShowVersions() {
   } catch {} finally { versionDlg.loading = false; }
 }
 
-// === 导入指标（METRIC_DEF 模板，后端 lf 侧需配套实现 importType=METRIC_DEF 解析）===
-// 模板表头与后端 MetricDefImportRow @ExcelProperty 完全一致（9 列；
-// 原 xlsx 第 10 列"维度"已删，因后端 V1.9 改造无 base_dim 列，DEFAULT_BASE_DIM=null）
-const METRIC_TPL_HEADERS = [
-  '指标序号',
-  '指标层级(2级支行由1级支行计算而来、后面还可以细化到3级指标)',
-  '指标名称',
-  '指标编号',
-  '指标分类',
-  '指标来源(可以是外部导入、可以是系统从总行数据库中提取、可以是通过提取数据进行的计算)',
-  '计算规则(SQL或自定义规则)',
-  '定时任务(每日、每月、每季、每年)',
-  '指标状态(勾选后可以在报表中查询、未勾选时不进行显示)'
-];
-
-async function downloadMetricTpl() {
-  try {
-    const XLSX = await import('xlsx');
-    const ws = XLSX.utils.aoa_to_sheet([METRIC_TPL_HEADERS]);
-    // 列宽按表头中文字符数估算
-    ws['!cols'] = METRIC_TPL_HEADERS.map(h => ({ wch: Math.max(12, Math.min(60, h.length * 2 + 2)) }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '指标表');
-    XLSX.writeFile(wb, '指标表上传模板.xlsx');
-    ElMessage.success('已下载指标表上传模板');
-  } catch (e) {
-    ElMessage.error('生成模板失败：' + (e?.message || e));
-  }
-}
-
-const fileInputRef = ref(null);
-const importing = ref(false);
+// === 导入指标（占位提示） ===
 function onImport() {
-  fileInputRef.value?.click();
-}
-async function onFileChosen(ev) {
-  const file = ev.target.files?.[0];
-  // 清空 input.value，让连续选同一个文件也能再次触发 change
-  ev.target.value = '';
-  if (!file) return;
-  if (file.size > 20 * 1024 * 1024) {
-    ElMessage.warning('文件超过 20MB 限制');
-    return;
-  }
-  try {
-    await ElMessageBox.confirm(
-      `确认上传指标定义文件 ${file.name}（${(file.size / 1024).toFixed(0)} KB）？`,
-      '导入指标', { type: 'info', confirmButtonText: '上传', cancelButtonText: '取消' }
-    );
-  } catch { return; }
-  importing.value = true;
-  try {
-    const batchId = await uploadImportFile('METRIC_DEF', file, { uploader: '当前用户' });
-    ElMessage.success(`已提交，批次号 ${batchId}；进度可在【数据导入】查看`);
-    reload();
-  } catch (e) {
-    ElMessage.error('上传失败：' + (e?.message || e));
-  } finally {
-    importing.value = false;
-  }
+  ElMessageBox.alert('指标批量导入请使用左侧菜单【数据导入】模块，选择"指标定义导入"模板。', '导入指标', { type: 'info' });
 }
 
 onMounted(reload);
@@ -769,7 +805,6 @@ onMounted(reload);
   max-height: calc(100vh - 200px);
   overflow: auto;
 }
-.tree-search { margin-bottom: 10px; }
 .card-h-mini {
   font-size: 14px; font-weight: 600;
   padding: 0 0 12px;
@@ -777,6 +812,7 @@ onMounted(reload);
   margin-bottom: 10px;
   color: $text-1;
 }
+.tree-search { margin-bottom: 10px; }
 .tree-node {
   display: flex; align-items: center; gap: 6px;
   flex: 1; min-width: 0;
@@ -836,5 +872,64 @@ onMounted(reload);
   margin-top: 12px; padding: 10px 14px;
   background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px;
   color: $danger; font-size: 13px; line-height: 1.6;
+}
+.trial-detail {
+  margin-top: 14px; padding: 12px 14px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;
+}
+.trial-title { font-size: 13px; font-weight: 600; color: $text-1; }
+.trial-expr  { font-size: 13px; color: $text-1; }
+.sql-date-macros {
+  background: #f7f9fc;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.sql-date-macros .hint-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+.sql-date-macros .hint-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.sql-date-macros .hint-table th,
+.sql-date-macros .hint-table td {
+  border: 1px solid #ebeef5;
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.sql-date-macros .hint-table th {
+  background: #fafafa;
+  color: #606266;
+  font-weight: 500;
+}
+.sql-date-macros code {
+  background: #fff5e6;
+  color: #b87600;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.sql-date-macros code.macro-btn {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.sql-date-macros code.macro-btn:hover {
+  background: #ffd591;
+  color: #874d00;
+  box-shadow: 0 0 0 1px #fa8c16;
+}
+.sql-date-macros code.macro-btn:active {
+  background: #fa8c16;
+  color: #fff;
+}
+.sql-date-macros .hint-foot {
+  margin-top: 8px;
+  color: #909399;
 }
 </style>
