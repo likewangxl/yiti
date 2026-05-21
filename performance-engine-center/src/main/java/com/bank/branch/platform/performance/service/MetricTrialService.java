@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.config.PerfEngineProperties;
+import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -131,6 +132,9 @@ public class MetricTrialService {
             mergedParams.putAll(params);
         }
         mergedParams.putIfAbsent("dataDate", dataDate);
+        if (dataDate != null) {
+            mergedParams.putAll(DateMacroResolver.resolve(dataDate));
+        }
 
         Map<String, BigDecimal> all = sqlExecutor.execute(def.getSqlText(), mergedParams, timeout);
         int total = all == null ? 0 : all.size();
