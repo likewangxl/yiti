@@ -16,13 +16,14 @@ spring:
     url: jdbc:mysql://localhost:3306/yiti?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
     username: root
     password: djdev
-  data:
-    redis:
-      host: localhost
-      port: 6379
   session:
-    store-type: redis
+    # 去 Redis 后改 Spring Session JDBC：session 落 MySQL SPRING_SESSION 表
+    # 多实例 docker 部署下天然共享，性能比 redis 慢 1-3ms 无感
+    store-type: jdbc
     timeout: 7200s
+    jdbc:
+      initialize-schema: never    # 表手工建（docs/superpowers/sql/2026-05-20-remove-redis-init.sql）
+      table-name: SPRING_SESSION
   quartz:
     enabled: true
     job-store-type: jdbc

@@ -1,13 +1,6 @@
 # 开发环境专属配置
 spring:
-  data:
-    redis:
-      # 与 lf/yiti（用 db 0）隔离，避免缓存反序列化冲突（ClassCastException）
-      database: 1
-  session:
-    redis:
-      # session key 前缀也隔离，免得跟 lf cookie 串
-      namespace: spring:session:wangyq
+  # 去 Redis 后 dev profile 不再需要 redis database/session namespace 隔离
   datasource:
     druid:
       stat-view-servlet:
