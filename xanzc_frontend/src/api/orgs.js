@@ -36,3 +36,16 @@ export async function getOrgSubtree(orgCode) {
 export function listOrgUsers(orgCode, params = {}) {
   return call('get', `/orgs/${orgCode}/users`, { params }, []);
 }
+
+/** 新增机构。pId 为父机构编码，根节点传 '' */
+export function createOrg(payload) {
+  return call('post', '/orgs', { data: payload }, () => ({ ...payload }));
+}
+/** 更新机构（只支持改 orgName） */
+export function updateOrg(orgCode, payload) {
+  return call('put', `/orgs/${orgCode}`, { data: payload }, () => ({ orgCode, ...payload }));
+}
+/** 删除机构（后端 will 拒绝：有下级 / 有用户） */
+export function deleteOrg(orgCode) {
+  return call('delete', `/orgs/${orgCode}`, {}, () => ({ ok: true }));
+}

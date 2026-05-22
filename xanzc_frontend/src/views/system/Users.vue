@@ -11,7 +11,10 @@
     <div class="layout">
       <!-- 左：机构树 -->
       <div class="card-section tree-col">
-        <div class="card-h-mini">机构</div>
+        <div class="card-h-mini" style="display:flex;align-items:center;justify-content:space-between">
+          <span>机构</span>
+          <el-button size="small" type="primary" plain @click="openOrgDlg">维护</el-button>
+        </div>
         <el-input
           v-model="orgKeyword"
           placeholder="搜索机构"
@@ -162,6 +165,19 @@
         <el-form-item v-if="!dlg.editing" label="初始密码" prop="initialPassword">
           <el-input v-model="dlg.form.initialPassword" type="password" show-password placeholder="6~64 位，明文提交后端" maxlength="64" />
         </el-form-item>
+        <!-- 机构字段只在编辑时显示；新增模式按左侧选中机构自动归属（form.orgCode 在 openCreate 里已塞值） -->
+        <el-form-item v-if="dlg.editing" label="机构" prop="orgCode">
+          <el-tree-select
+            v-model="dlg.form.orgCode"
+            :data="orgTree"
+            :props="{ label: 'name', value: 'code', children: 'children' }"
+            node-key="code"
+            check-strictly
+            placeholder="选择机构"
+            filterable
+            style="width:100%"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dlg.show = false">取消</el-button>
@@ -192,6 +208,54 @@
       </template>
     </el-dialog>
 
+    <!-- 机构维护弹窗 -->
+    <el-dialog v-model="orgDlg.show" title="机构维护" width="780px">
+      <div class="org-dlg-body">
+        <div class="tree-pane">
+          <el-button size="small" @click="orgDlgNewRoot">+ 新建根机构</el-button>
+          <el-tree
+            :data="orgTree"
+            node-key="code"
+            :props="{ label: 'name', children: 'children' }"
+            default-expand-all
+            :highlight-current="true"
+            :expand-on-click-node="false"
+            @node-click="orgDlgPick"
+            empty-text="暂无机构"
+            class="org-dlg-tree"
+          />
+        </div>
+        <div class="form-pane">
+          <div v-if="!orgDlg.mode" class="hint">点击左侧节点编辑，或上方「+ 新建根机构」</div>
+          <el-form v-else label-width="80px" size="default">
+            <el-form-item label="编码">
+              <el-input v-model="orgDlg.form.orgCode" :disabled="orgDlg.mode !== 'create'" placeholder="字母数字下划线，<=20" maxlength="20" />
+            </el-form-item>
+            <el-form-item label="名称">
+              <el-input v-model="orgDlg.form.orgName" placeholder="中文名称" maxlength="100" />
+            </el-form-item>
+            <el-form-item label="上级">
+              <span class="hint">{{ orgDlg.parentLabel || '（根节点）' }}</span>
+            </el-form-item>
+            <el-form-item v-if="orgDlg.mode === 'edit'">
+              <el-button size="small" @click="orgDlgNewChild">+ 在此下新建子机构</el-button>
+              <el-popconfirm
+                :title="`确认删除「${orgDlg.form.orgName}」？有下级或用户会被后端拒绝。`"
+                @confirm="orgDlgDelete">
+                <template #reference>
+                  <el-button size="small" type="danger" plain style="margin-left:8px">删除</el-button>
+                </template>
+              </el-popconfirm>
+            </el-form-item>
+          </el-form>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="orgDlg.show = false">关闭</el-button>
+        <el-button v-if="orgDlg.mode" type="primary" :loading="orgDlg.saving" @click="orgDlgSave">保存</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -200,13 +264,13 @@ import { ref, reactive, watch, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
 import {
-  listUsers, createUser, updateUser,
+  listUsers, getUser, createUser, updateUser,
   deleteUsers, resetUsersPassword, activeUsers, inactiveUsers, lockUsers, unlockUsers,
   getUserRoles, replaceUserRoles,
   USER_STATUS_LABEL, USER_LOCK_LABEL
 } from '@/api/users';
 import { listRoles } from '@/api/system';
-import { getOrgTree, listOrgUsers } from '@/api/orgs';
+import { getOrgTree, listOrgUsers, createOrg, updateOrg, deleteOrg } from '@/api/orgs';
 
 // === 机构树 ===
 const orgTreeRef = ref(null);
@@ -301,19 +365,34 @@ const dlg = reactive({
   }
 });
 function openCreate() {
+  // 新增必须先在左侧机构树选中一个机构，否则没法确定归属
+  if (!pickedOrg.value) {
+    ElMessage.warning('请先在左侧机构树选中一个机构，再新增用户');
+    return;
+  }
   dlg.editing = null;
-  dlg.form = { userId: '', username: '', userchnname: '', email: '', remark: '', initialPassword: '' };
+  dlg.form = {
+    userId: '', username: '', userchnname: '', email: '', remark: '',
+    initialPassword: '', orgCode: pickedOrg.value
+  };
   dlg.show = true;
 }
-function openEdit(row) {
+async function openEdit(row) {
   dlg.editing = row.userId;
+  // 列表 row 不含 orgCode，调单查接口反显当前机构
+  let orgCode = row.orgCode || pickedOrg.value || '';
+  try {
+    const detail = await getUser(row.userId);
+    if (detail?.orgCode) orgCode = detail.orgCode;
+  } catch { /* 单查失败 fallback 现有值 */ }
   dlg.form = {
     userId: row.userId,
     username: row.username,
     userchnname: row.userchnname,
     email: row.email || '',
     remark: row.remark || '',
-    initialPassword: ''
+    initialPassword: '',
+    orgCode
   };
   dlg.show = true;
 }
@@ -324,7 +403,10 @@ async function saveDlg() {
     if (dlg.editing) {
       const { userId, ...rest } = dlg.form;
       // 编辑时只提交可改字段，避免 partial update 把 initialPassword 等带过去
-      const payload = { username: rest.username, userchnname: rest.userchnname, email: rest.email, remark: rest.remark };
+      const payload = {
+        username: rest.username, userchnname: rest.userchnname,
+        email: rest.email, remark: rest.remark, orgCode: rest.orgCode
+      };
       await updateUser(userId, payload);
       ElMessage.success('已更新');
     } else {
@@ -416,6 +498,74 @@ async function loadOrg() {
     orgTree.value = Array.isArray(t) ? t : [];
   } catch { orgTree.value = []; }
 }
+// === 机构维护弹窗 ===
+const orgDlg = reactive({
+  show: false, saving: false,
+  mode: null,       // 'create' | 'edit' | null
+  picked: null,     // 当前选中的树节点 { code, name }
+  form: { orgCode: '', orgName: '', pId: '' },
+  parentLabel: ''
+});
+function openOrgDlg() {
+  orgDlg.show = true;
+  orgDlg.mode = null;
+  orgDlg.picked = null;
+}
+function orgDlgPick(node) {
+  orgDlg.mode = 'edit';
+  orgDlg.picked = node;
+  orgDlg.form = { orgCode: node.code, orgName: node.name, pId: '' };
+  orgDlg.parentLabel = '当前节点';
+}
+function orgDlgNewRoot() {
+  orgDlg.mode = 'create';
+  orgDlg.picked = null;
+  orgDlg.form = { orgCode: '', orgName: '', pId: '' };
+  orgDlg.parentLabel = '（根节点）';
+}
+function orgDlgNewChild() {
+  if (!orgDlg.picked) { ElMessage.warning('请先选中一个父节点'); return; }
+  const parent = orgDlg.picked;
+  orgDlg.mode = 'create';
+  orgDlg.form = { orgCode: '', orgName: '', pId: parent.code };
+  orgDlg.parentLabel = `${parent.name}（${parent.code}）`;
+}
+async function orgDlgSave() {
+  if (!orgDlg.form.orgName?.trim()) { ElMessage.warning('请填机构名称'); return; }
+  orgDlg.saving = true;
+  try {
+    if (orgDlg.mode === 'create') {
+      if (!orgDlg.form.orgCode?.trim()) { ElMessage.warning('请填机构编码'); return; }
+      await createOrg({
+        orgCode: orgDlg.form.orgCode.trim(),
+        orgName: orgDlg.form.orgName.trim(),
+        pId: orgDlg.form.pId || ''
+      });
+      ElMessage.success('已新增');
+    } else {
+      await updateOrg(orgDlg.picked.code, { orgName: orgDlg.form.orgName.trim() });
+      ElMessage.success('已更新');
+    }
+    await loadOrg();
+    orgDlg.mode = null;
+    orgDlg.picked = null;
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || '保存失败');
+  } finally { orgDlg.saving = false; }
+}
+async function orgDlgDelete() {
+  if (!orgDlg.picked) return;
+  try {
+    await deleteOrg(orgDlg.picked.code);
+    ElMessage.success('已删除');
+    await loadOrg();
+    orgDlg.mode = null;
+    orgDlg.picked = null;
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || '删除失败');
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadOrg(), reload()]);
 });
@@ -434,6 +584,10 @@ onMounted(async () => {
   overflow: auto;
 }
 .tree-search { margin-bottom: 10px; }
+.org-dlg-body { display: flex; gap: 16px; height: 460px; }
+.org-dlg-body .tree-pane { width: 320px; border-right: 1px solid $border-1; padding-right: 12px; overflow: auto; }
+.org-dlg-body .form-pane { flex: 1; overflow: auto; }
+.org-dlg-tree { margin-top: 10px; }
 .card-h-mini {
   font-size: 14px; font-weight: 600;
   padding: 0 0 12px;

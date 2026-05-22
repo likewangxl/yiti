@@ -79,15 +79,10 @@
     <!-- 新增 / 编辑弹窗 -->
     <el-dialog v-model="dlg.show" :title="dlg.editing ? '编辑角色' : '新增角色'" width="520px">
       <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlg.rules" label-width="100px">
-        <el-form-item label="角色编码" prop="roleCode">
-          <el-input
-            v-model="dlg.form.roleCode"
-            :disabled="!!dlg.editing"
-            placeholder="大写字母+下划线，最长10位，如 BRANCH_PRE"
-            maxlength="10"
-            @input="onRoleCodeInput"
-          />
-          <div class="hint">仅大写字母与下划线；保存后不可修改。</div>
+        <!-- 角色编码：新增时不显示（后端自动生成 R_XXXXXXXX），编辑时只读展示 -->
+        <el-form-item v-if="dlg.editing" label="角色编码">
+          <el-input v-model="dlg.form.roleCode" disabled />
+          <div class="hint">角色编码保存后不可修改</div>
         </el-form-item>
         <el-form-item label="角色名称" prop="roleChName">
           <el-input v-model="dlg.form.roleChName" placeholder="中文名称" maxlength="100" />
@@ -242,20 +237,12 @@ const dlg = reactive({
   show: false, editing: null, saving: false,
   form: { roleCode: '', roleChName: '', remark: '', sysCode: '', recordStatus: 0 },
   rules: {
-    roleCode:   [
-      { required: true, message: '角色编码必填', trigger: 'blur' },
-      { pattern: /^[A-Z_]+$/, message: '仅大写字母与下划线', trigger: 'blur' },
-      { max: 10, message: '不超过 10 位', trigger: 'blur' }
-    ],
+    // 角色编码：编辑时只读不校验，新增时后端自动生成，前端不再校验
     roleChName: [{ required: true, message: '角色名称必填', trigger: 'blur' }, { max: 100, message: '不超过 100 位', trigger: 'blur' }],
     remark:     [{ max: 100, message: '不超过 100 位', trigger: 'blur' }],
     sysCode:    [{ max: 10, message: '不超过 10 位', trigger: 'blur' }]
   }
 });
-function onRoleCodeInput(v) {
-  // 自动规整到大写 + 仅大写字母/下划线
-  dlg.form.roleCode = String(v || '').toUpperCase().replace(/[^A-Z_]/g, '').slice(0, 10);
-}
 function openCreate() {
   dlg.editing = null;
   dlg.form = { roleCode: '', roleChName: '', remark: '', sysCode: '', recordStatus: 0 };
@@ -284,8 +271,8 @@ async function saveDlg() {
       });
       ElMessage.success('已更新');
     } else {
+      // 新增不传 roleCode，由后端自动生成（R_XXXXXXXX UUID 8 位大写）
       await createRole({
-        roleCode: dlg.form.roleCode,
         roleChName: dlg.form.roleChName,
         remark: dlg.form.remark || undefined,
         sysCode: dlg.form.sysCode || undefined

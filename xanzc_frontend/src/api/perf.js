@@ -259,6 +259,19 @@ export function submitAdjust(data) {
 export function withdrawAdjust(id, reason) {
   return call('post', `/perf/alloc-adjust/${id}/withdraw`, { data: { reason } }, { ok: true });
 }
+
+/**
+ * 业绩调整 - 我的待审批 列表（后端分页 + 4 字段过滤）.
+ * @param {object} params - { keyword?, allocDim?, bizKind?, dateFrom?, dateTo?, pageNo?, pageSize? }
+ * @returns PageResult 对象 { pageNo, pageSize, total, records }
+ *          （不 unwrap 因为 unwrapPage 只剥 records 数组会丢 total）
+ */
+export function listMyAdjustTodos(params = {}) {
+  return call('get', '/perf/alloc-adjust/my-todos',
+    { params: { pageNo: 1, pageSize: 20, ...params } },
+    { total: 0, records: [], pageNo: 1, pageSize: 20 }
+  );
+}
 /**
  * 查询分配调整申请审批流记录（时间倒序，最新在上）
  * 后端: GET /api/perf/alloc-adjust/{id}/approval-history → List<ApprovalLogDTO>

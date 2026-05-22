@@ -152,7 +152,7 @@ import { listAuditLogs, getAuditLog } from '@/api/system';
 
 // === 字典（与后端 BizAction / BizType 枚举对齐）走字典管理动态化 ===
 import { useDict } from '@/composables/useDict';
-const { options: BIZ_ACTIONS } = useDict('AUDIT_BIZ_ACTION');
+const { options: BIZ_ACTIONS, labelOf: dictActLabel } = useDict('AUDIT_BIZ_ACTION');
 const { options: BIZ_TYPES }   = useDict('AUDIT_BIZ_TYPE');
 // 高危动作集合（按 4.6.1.5：必审计）
 const HIGH_RISK = new Set([
@@ -165,16 +165,28 @@ const actCls = (a) => {
   if (HIGH_RISK.has(a)) return 'tag-warning';
   return 'tag-info';
 };
-// 动作中文化（与 Metrics.vue 版本历史保持一致）
-const ACTION_LABEL = {
+// 动作中文化：字典 AUDIT_BIZ_ACTION 优先（动态可维护），缺失再 fallback 本地映射，最后回退原值
+// 本地映射是兜底：覆盖那些字典没来得及补齐 / 字典加载延迟的动作
+const ACTION_LABEL_FALLBACK = {
   READ: '查看', LIST: '查询', WRITE: '新增或修改', CREATE: '新增', UPDATE: '编辑',
   DELETE: '删除', TRANSFER: '转交他人', APPROVE: '审批通过', REJECT: '审批驳回',
   IMPORT: '数据导入', EXPORT: '数据导出', EXECUTE: '执行', CONFIG: '修改配置',
   RECALC: '重新计算', JOB_TRIGGER: '手动触发任务', PERMISSION_CHANGE: '权限变更',
   EXECUTE_SQL: '执行 SQL 查询', STATUS_CHANGE: '变更状态',
-  METRIC_TRIAL_RUN: '指标试运行', METRIC_EXECUTE: '指标立即计算', SLOT_RELEASE: '释放指标槽位', PUBLISH: '发布上线'
+  METRIC_TRIAL_RUN: '指标试运行', METRIC_EXECUTE: '指标立即计算',
+  SLOT_RELEASE: '释放指标槽位', PUBLISH: '发布上线',
+  ALLOC_ADJUST_CREATE: '发起业绩调整', ALLOC_ADJUST_WITHDRAW: '撤回业绩调整',
+  TARGET_ADJUST_CREATE: '发起目标调整',
+  DASHBOARD_PRESIDENT_VIEW: '查看行长仪表盘', DASHBOARD_ORG_VIEW: '查看机构仪表盘',
+  DASHBOARD_EMP_VIEW: '查看员工仪表盘',
+  PERF_IMPORT_UPLOAD: '上传绩效数据', PERF_RECALC: '绩效重新计算'
 };
-const actLabel = (a) => ACTION_LABEL[a] || a || '—';
+const actLabel = (a) => {
+  if (!a) return '—';
+  const fromDict = dictActLabel(a);
+  if (fromDict && fromDict !== a) return fromDict;
+  return ACTION_LABEL_FALLBACK[a] || a;
+};
 
 // === 列表 ===
 const rows = ref([]);

@@ -14,14 +14,12 @@
           class="item root-item"
           :class="{ active: route.path === m.resourceUrl }"
         >
-          <span class="ico">{{ m.menuIconUrl || '·' }}</span>
           <span>{{ m.menuName }}</span>
         </router-link>
 
         <!-- 分组节点（有 children）—— 可展开/折叠 -->
         <template v-else>
           <div class="parent" :class="{ open: openMap[m.resourceId] }" @click="toggle(m.resourceId)">
-            <span class="ico">{{ m.menuIconUrl || '📁' }}</span>
             <span>{{ m.menuName }}</span>
             <span class="chev">▸</span>
           </div>
@@ -33,7 +31,6 @@
               :class="{ active: route.path === c.resourceUrl }"
             >
               <span class="dot"></span>
-              <span class="ico" v-if="c.menuIconUrl">{{ c.menuIconUrl }}</span>
               <span>{{ c.menuName }}</span>
             </router-link>
           </div>

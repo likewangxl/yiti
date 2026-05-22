@@ -1,87 +1,94 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>菜单管理 <span class="sub">仅显示 PT_RESOURCE.IS_MENU=1 的菜单节点；接口资源在「资源管理」单独维护</span></h1>
+      <h1>菜单管理 <span class="sub">PT_RESOURCE.IS_MENU=1 的菜单节点；接口资源在「资源管理」单独维护</span></h1>
       <div class="actions">
-        <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openCreate(null)">+ 新增一级菜单</el-button>
+        <el-input
+          v-model="keyword"
+          placeholder="按菜单名 / 路径 模糊搜索"
+          :prefix-icon="Search"
+          clearable
+          size="default"
+          class="search-box"
+        />
+        <el-button @click="reload" :icon="Refresh">刷新</el-button>
+        <el-button type="primary" @click="openCreate(null)" :icon="Plus">新增一级菜单</el-button>
       </div>
     </div>
 
-    <div class="card-section">
-      <el-form inline size="default">
-        <el-form-item label="搜索">
-          <el-input
-            v-model="keyword"
-            placeholder="菜单名 / URL / ID"
-            clearable
-            :prefix-icon="Search"
-            style="width:240px"
-          />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="statusFilter" clearable placeholder="全部" style="width:140px">
-            <el-option :value="0" label="启用" />
-            <el-option :value="1" label="停用" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button @click="resetFilters">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </div>
-
-    <div class="card-section">
-      <el-tree
-        ref="treeRef"
-        :data="treeData"
-        node-key="resourceId"
-        :props="{ label: 'menuName', children: 'children' }"
-        :default-expand-all="true"
-        :expand-on-click-node="false"
-        :filter-node-method="filterNode"
-        empty-text="暂无资源"
+    <div class="card-section menu-card">
+      <el-table
+        :data="filteredTreeData"
+        row-key="resourceId"
+        :tree-props="{ children: 'children' }"
+        default-expand-all
         v-loading="loading"
+        empty-text="暂无菜单"
+        class="menu-table"
+        size="default"
+        :indent="22"
       >
-        <template #default="{ node, data }">
-          <div class="res-row">
-            <span class="ico">{{ data.menuIconUrl || '📂' }}</span>
-            <span class="name">{{ data.menuName }}</span>
-            <code class="mono url">{{ data.resourceUrl }}</code>
-            <el-tag :class="data.status === 0 ? 'tag-success' : 'tag-warning'" effect="plain" size="small">
-              {{ data.status === 0 ? '启用' : '停用' }}
-            </el-tag>
-            <span class="rank">排序 #{{ data.menuRankNo ?? 0 }}</span>
-            <span class="row-actions">
-              <el-button link type="primary" size="small" @click.stop="openCreate(data)">+ 子菜单</el-button>
-              <el-button link type="primary" size="small" @click.stop="openEdit(data)">编辑</el-button>
-              <el-popconfirm
-                :title="`确认删除「${data.menuName}」？子菜单会一并失效，操作不可逆。`"
-                @confirm="doDelete(data)"
-              >
-                <template #reference>
-                  <el-button link type="danger" size="small" @click.stop>删除</el-button>
-                </template>
-              </el-popconfirm>
+        <el-table-column label="菜单名称" min-width="240">
+          <template #default="{ row }">
+            <span class="menu-name" :class="{ 'is-group': row.menuEndFlag !== '1' }">
+              {{ row.menuName }}
             </span>
-          </div>
-        </template>
-      </el-tree>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="路由路径" min-width="220">
+          <template #default="{ row }">
+            <code class="path-chip">{{ row.resourceUrl }}</code>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="形态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              effect="plain"
+              :class="row.menuEndFlag === '1' ? 'tag-info' : 'tag-success'"
+            >
+              {{ row.menuEndFlag === '1' ? '叶子' : '分组' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="排序" width="80" align="center">
+          <template #default="{ row }">
+            <span class="rank-num">{{ row.menuRankNo ?? 0 }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="220" align="right" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click.stop="openCreate(row)">+ 子菜单</el-button>
+            <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
+            <el-popconfirm
+              :title="`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`"
+              @confirm="doDelete(row)"
+            >
+              <template #reference>
+                <el-button link type="danger" size="small" @click.stop>删除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
+      </el-table>
     </div>
 
     <!-- 新增 / 编辑弹窗 -->
     <el-dialog
       v-model="dlg.show"
-      :title="dlg.editing ? '编辑资源' : (dlg.parent ? `在「${dlg.parent.menuName}」下新增子节点` : '新增根节点')"
-      width="640px"
+      :title="dlg.editing ? '编辑菜单' : (dlg.parent ? `在「${dlg.parent.menuName}」下新增子菜单` : '新增一级菜单')"
+      width="600px"
     >
-      <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlg.rules" label-width="110px">
+      <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlg.rules" label-width="90px" label-position="right">
         <el-form-item label="名称" prop="menuName">
-          <el-input v-model="dlg.form.menuName" placeholder="菜单显示名 / 资源说明" maxlength="256" />
+          <el-input v-model="dlg.form.menuName" placeholder="如：客户管理" maxlength="64" />
         </el-form-item>
-        <el-form-item label="URL" prop="resourceUrl">
-          <!-- URL 强制下拉选择前端已注册路由，避免选了没对应 .vue 的 path 进去空白。
-               分组节点（M_GROUP_*）走 #group/xxx 锚点不在选项内，由开发者直接 SQL 维护 -->
+
+        <el-form-item label="路由路径" prop="resourceUrl">
           <el-select
             v-model="dlg.form.resourceUrl"
             placeholder="从已注册前端路由中选择"
@@ -95,34 +102,28 @@
               :label="r.label"
             >
               <span>{{ r.label }}</span>
-              <span style="margin-left:8px;color:#9CA3AF;font-size:11px;font-family:ui-monospace,monospace">{{ r.value }}</span>
+              <span class="route-mono">{{ r.value }}</span>
             </el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="图标" prop="menuIconUrl">
-          <div class="icon-pick">
-            <span class="icon-preview clickable" @click="iconPicker.show = true" title="点击选择图标">
-              {{ dlg.form.menuIconUrl || '📂' }}
-            </span>
-            <el-button @click="iconPicker.show = true">选择图标</el-button>
-            <el-button v-if="dlg.form.menuIconUrl" link @click="dlg.form.menuIconUrl = ''">清除</el-button>
-          </div>
-        </el-form-item>
+
         <el-form-item label="节点形态" prop="menuEndFlag">
           <el-radio-group v-model="dlg.form.menuEndFlag">
             <el-radio v-for="o in END_FLAG_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
           </el-radio-group>
         </el-form-item>
+
         <el-form-item label="排序号" prop="menuRankNo">
           <el-input-number v-model="dlg.form.menuRankNo" :min="0" :step="1" />
           <span class="hint">数字越小越靠前</span>
         </el-form-item>
+
         <el-form-item label="父节点">
           <span v-if="dlg.editing" class="hint">编辑模式不可改父节点</span>
           <span v-else-if="dlg.parent" class="hint">
             {{ dlg.parent.menuName }} <code class="mono">({{ dlg.parent.resourceId }})</code>
           </span>
-          <span v-else class="hint">无（作为根节点）</span>
+          <span v-else class="hint">无（作为一级菜单）</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -130,36 +131,17 @@
         <el-button type="primary" :loading="dlg.saving" @click="saveDlg">保存</el-button>
       </template>
     </el-dialog>
-
-    <!-- 图标选择器：常用 emoji 网格（按类别分组） -->
-    <el-dialog v-model="iconPicker.show" title="选择菜单图标" width="560px" append-to-body>
-      <div v-for="g in ICON_GROUPS" :key="g.name" class="icon-group">
-        <div class="icon-group-name">{{ g.name }}</div>
-        <div class="icon-grid">
-          <span
-            v-for="emo in g.icons"
-            :key="emo"
-            class="icon-cell"
-            :class="{ active: dlg.form.menuIconUrl === emo }"
-            :title="emo"
-            @click="pickIcon(emo)">{{ emo }}</span>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="iconPicker.show = false">关闭</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { Search } from '@element-plus/icons-vue';
+import { Search, Refresh, Plus } from '@element-plus/icons-vue';
 import {
   listResourceTree, createResource, updateResource, deleteResource,
-  HTTP_METHODS, IS_MENU_OPTIONS, END_FLAG_OPTIONS
+  END_FLAG_OPTIONS
 } from '@/api/resources';
 
 const router = useRouter();
@@ -176,50 +158,20 @@ const routeOptions = computed(() => {
   return result.sort((a, b) => a.value.localeCompare(b.value));
 });
 
-// Emoji 图标库（按类别分组，跟 sidebar 当前用的 emoji 风格一致）。
-// 未来想升级到 element-plus SVG icon 时，把这里改成图标名 + 模板用 <component :is> 即可。
-const ICON_GROUPS = [
-  { name: '导航 / 主页',  icons: ['🏠','🏡','📂','📁','📋','📌','📍','🗂','🗃','🧭'] },
-  { name: '业绩 / 数据',  icons: ['📊','📈','📉','💹','💰','💵','💴','💷','💶','💳','🧮','📐'] },
-  { name: '客户 / 营销',  icons: ['👥','👤','🧑','👨‍💼','👩‍💼','📞','📧','💬','🤝','🎯','🎁','📢'] },
-  { name: '业务 / 流程',  icons: ['✅','❌','📝','📃','📄','📅','📆','🗓','⏰','⏳','✍','📥','📤','🚀'] },
-  { name: '系统 / 设置',  icons: ['⚙','🔧','🔨','🛠','🔑','🔒','🔓','🛡','📡','💻','🖥','🖨'] },
-  { name: '通知 / 警告',  icons: ['🔔','🔕','⚠','❗','❓','💡','🌟','⭐','🎉','🚨'] }
-];
-const iconPicker = reactive({ show: false });
-function pickIcon(emo) {
-  dlg.form.menuIconUrl = emo;
-  iconPicker.show = false;
-}
-
 // === 数据 ===
 const rawTree = ref([]);
 const loading = ref(false);
-const treeRef = ref(null);
 const keyword = ref('');
-const statusFilter = ref(null);
-
-watch(keyword, v => treeRef.value?.filter(v ?? ''));
-watch([statusFilter], reload);
-
-function resetFilters() {
-  keyword.value = '';
-  statusFilter.value = null;
-  reload();
-}
 
 async function reload() {
   loading.value = true;
   try {
-    const params = {};
-    if (statusFilter.value != null) params.status = statusFilter.value;
-    rawTree.value = await listResourceTree(params);
+    rawTree.value = await listResourceTree({});
   } catch { rawTree.value = []; }
   finally { loading.value = false; }
 }
 
-// 菜单管理只展示 IS_MENU=1 节点；接口资源（IS_MENU=0）保留在树里但不显示，
-// 父节点 IS_MENU=1 但子节点全是接口的，子节点会被剪掉，父节点保留
+// 菜单管理只展示 IS_MENU=1 节点；接口资源（IS_MENU=0）剪掉
 function pruneMenusOnly(nodes) {
   const walk = (n) => {
     const children = (n.children || []).map(walk).filter(Boolean);
@@ -230,28 +182,32 @@ function pruneMenusOnly(nodes) {
 }
 const treeData = computed(() => pruneMenusOnly(rawTree.value));
 
-function filterNode(value, data) {
-  if (!value) return true;
-  const v = String(value).toLowerCase();
-  return (
-    String(data.menuName || '').toLowerCase().includes(v) ||
-    String(data.resourceUrl || '').toLowerCase().includes(v) ||
-    String(data.resourceId || '').toLowerCase().includes(v)
-  );
-}
+// 关键字过滤：递归剪枝，命中节点 + 命中节点的祖先链保留
+const filteredTreeData = computed(() => {
+  const q = String(keyword.value || '').toLowerCase().trim();
+  if (!q) return treeData.value;
+  const walk = (n) => {
+    const childMatches = (n.children || []).map(walk).filter(Boolean);
+    const selfMatch =
+      String(n.menuName || '').toLowerCase().includes(q) ||
+      String(n.resourceUrl || '').toLowerCase().includes(q);
+    if (selfMatch || childMatches.length) return { ...n, children: childMatches };
+    return null;
+  };
+  return treeData.value.map(walk).filter(Boolean);
+});
 
 // === 新增 / 编辑 ===
 const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, editing: null, parent: null, saving: false,
-  // 菜单管理强制 isMenu=1 + resourceMethod='MENU'，前端不暴露这两个字段
   form: {
     menuName: '', resourceUrl: '', resourceMethod: 'MENU',
-    isMenu: 1, menuEndFlag: '1', menuRankNo: 0, sysCode: '', menuIconUrl: ''
+    isMenu: 1, menuEndFlag: '1', menuRankNo: 0, sysCode: ''
   },
   rules: {
-    menuName:    [{ required: true, message: '菜单名必填', trigger: 'blur' }, { max: 256, message: '不超过 256 位', trigger: 'blur' }],
-    resourceUrl: [{ required: true, message: '路由 path 必填', trigger: 'blur' }, { max: 256, message: '不超过 256 位', trigger: 'blur' }],
+    menuName:    [{ required: true, message: '菜单名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
+    resourceUrl: [{ required: true, message: '路由路径必填', trigger: 'change' }],
     menuEndFlag: [{ required: true, message: '请选择节点形态', trigger: 'change' }]
   }
 });
@@ -260,12 +216,11 @@ function openCreate(parent) {
   dlg.parent = parent || null;
   dlg.form = {
     menuName: '', resourceUrl: '',
-    resourceMethod: 'MENU',  // 菜单节点统一 MENU，不暴露给用户
-    isMenu: 1,               // 菜单管理只建菜单
-    menuEndFlag: parent ? '1' : '0',  // 新增子默认叶子，新增根默认非叶子
+    resourceMethod: 'MENU',
+    isMenu: 1,
+    menuEndFlag: parent ? '1' : '0',
     menuRankNo: 0,
-    sysCode: parent?.sysCode || '',
-    menuIconUrl: ''
+    sysCode: parent?.sysCode || ''
   };
   dlg.show = true;
 }
@@ -279,8 +234,7 @@ function openEdit(row) {
     isMenu: 1,
     menuEndFlag: row.menuEndFlag || '1',
     menuRankNo: row.menuRankNo ?? 0,
-    sysCode: row.sysCode || '',
-    menuIconUrl: row.menuIconUrl || ''
+    sysCode: row.sysCode || ''
   };
   dlg.show = true;
 }
@@ -288,11 +242,9 @@ async function saveDlg() {
   try { await dlgFormRef.value?.validate(); } catch { return; }
   dlg.saving = true;
   try {
-    // 后端 ResourceUpdateReqDTO 严格反序列化，只认 8 个字段：
-    //   resourceUrl/status/parentResourceId/menuEndFlag/isMenu/menuName/menuRankNo/resourceMethod
-    // 提交前剥离前端额外字段：sysCode（DB 有但 DTO 无）、menuIconUrl（DB 有但 DTO 无，图标暂无法持久化）
+    // 后端 ResourceUpdateReqDTO 严格反序列化，剥离 sysCode（DB 有但 DTO 无）
     // eslint-disable-next-line no-unused-vars
-    const { sysCode, menuIconUrl, ...rest } = dlg.form;
+    const { sysCode, ...rest } = dlg.form;
     if (dlg.editing) {
       await updateResource(dlg.editing, rest);
       ElMessage.success('已更新');
@@ -324,41 +276,53 @@ onMounted(reload);
 
 <style lang="scss" scoped>
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
-.res-row {
-  display: flex; align-items: center; gap: 10px;
-  flex: 1; min-width: 0;
-  padding: 4px 0;
-  .ico { font-size: 14px; }
-  .name { color: $text-1; font-weight: 500; }
-  .url { color: $text-3; font-size: 12px; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meth { margin-left: 4px; }
-  .rank { color: $text-3; font-size: 12px; margin-left: 4px; }
-  .row-actions {
-    margin-left: auto;
-    display: flex; gap: 4px;
-  }
+.page-h .actions { display: flex; align-items: center; gap: 10px; }
+.search-box { width: 260px; }
+
+.menu-card { padding: 4px 8px 8px; }
+
+// 表格层级缩进留出更宽，菜单名带组样式，路径走 mono chip
+.menu-table {
+  :deep(.el-table__row) td { padding: 10px 0; }
+  :deep(.el-table__row:hover > td) { background: $bg-soft; }
+  :deep(.el-table__placeholder) { width: 16px; }
 }
+
+.menu-name {
+  color: $text-1;
+  font-size: 13px;
+  &.is-group { font-weight: 600; color: $text-1; }
+}
+
+.path-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: $text-2;
+  background: $bg-soft;
+  border-radius: 3px;
+  border: 1px solid $border-1;
+}
+
+.rank-num {
+  display: inline-block;
+  min-width: 28px;
+  padding: 0 6px;
+  height: 20px; line-height: 20px;
+  font-size: 12px;
+  color: $text-3;
+  background: $bg-soft;
+  border-radius: 10px;
+}
+
+.route-mono {
+  margin-left: 8px;
+  color: #9CA3AF;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+
 .hint { color: $text-3; font-size: 12px; margin-left: 8px; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
-
-// 图标选择器输入行 + emoji 网格
-.icon-pick { display: flex; align-items: center; gap: 8px; width: 100%;
-  .icon-preview { display: inline-block; width: 32px; height: 32px; line-height: 32px;
-    text-align: center; font-size: 18px;
-    border: 1px solid $border-1; border-radius: 4px; background: $bg-soft; flex-shrink: 0;
-    &.clickable { cursor: pointer; transition: .12s;
-      &:hover { border-color: $primary-400; background: #fff; }
-    }
-  }
-}
-.icon-group { margin-bottom: 12px;
-  .icon-group-name { font-size: 12px; color: $text-3; margin-bottom: 6px; }
-  .icon-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
-  .icon-cell { display: inline-block; width: 32px; height: 32px; line-height: 32px;
-    text-align: center; font-size: 18px; cursor: pointer; border-radius: 4px;
-    border: 1px solid transparent; transition: .12s;
-    &:hover { background: $bg-soft; border-color: $primary-400; }
-    &.active { background: rgba(30,91,186,.08); border-color: $primary; box-shadow: 0 0 0 2px rgba(30,91,186,.15); }
-  }
-}
 </style>
