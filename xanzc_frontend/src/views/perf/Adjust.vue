@@ -134,6 +134,13 @@
                 <el-tag :class="slaCls(row.slaStatus)" effect="plain">{{ slaLabel(row.slaStatus) }}</el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="{row}">
+                <el-tag :class="processStatusCls(row.processStatus)" effect="plain">
+                  {{ processStatusLabel(row.processStatus) }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openTodoDetail(row)">查看申请</el-button>
@@ -147,6 +154,29 @@
     <!-- 新建/查看 弹框 -->
     <el-dialog v-model="dlg.show" :title="dlgTitle" width="900px" :close-on-click-modal="false" @closed="onDlgClosed">
       <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlgRules" label-position="top" size="default">
+        <!-- 申请信息条（仅查看模式显示）-->
+        <el-descriptions
+          v-if="dlg.readOnly"
+          class="apply-info-bar"
+          :column="3"
+          size="small"
+          border
+        >
+          <el-descriptions-item label="申请单号">
+            <code class="mono">{{ dlg.applyNo || '-' }}</code>
+          </el-descriptions-item>
+          <el-descriptions-item label="申请人">
+            <span>{{ dlg.createdByName || '-' }}</span>
+            <span v-if="dlg.createdBy" class="sub-id">（{{ dlg.createdBy }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="申请机构">
+            {{ dlg.createdByOrgName || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="申请时间" :span="3">
+            {{ fmt(dlg.createdTime) }}
+          </el-descriptions-item>
+        </el-descriptions>
+
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="客户编号" prop="custNo" required>
@@ -254,7 +284,7 @@
                 <span class="meta-key">机构：</span>
                 <span>{{ log.operatorOrgName || '-' }}</span>
               </div>
-              <div v-if="log.opinion" class="approval-opinion">意见：{{ log.opinion }}</div>
+              <div v-if="log.action !== 'SUBMIT'" class="approval-opinion">意见：{{ log.opinion || '（未填写）' }}</div>
             </el-timeline-item>
           </el-timeline>
         </div>
@@ -315,6 +345,12 @@ const canWithdraw = (s) => s === 'IN_APPROVAL' || s === 'DRAFT';
 const SLA_LABEL = { GREEN: '正常', YELLOW: '预警', RED: '超时' };
 const slaLabel = (s) => SLA_LABEL[s] || s || '-';
 const slaCls = (s) => ({ GREEN: 'tag-success', YELLOW: 'tag-warning', RED: 'tag-danger' }[s] || 'tag-info');
+
+// 流程实例状态映射（来自 biz_process_map.process_status）
+// RUNNING=审批中（绿）/ COMPLETED=完结(业务通过)（蓝）/ CANCELLED=驳回(业务拒绝)（橙）
+const PROC_STATUS_LABEL = { RUNNING: '审批中', COMPLETED: '完结', CANCELLED: '驳回' };
+const processStatusLabel = (s) => PROC_STATUS_LABEL[s] || s || '-';
+const processStatusCls = (s) => ({ RUNNING: 'tag-success', COMPLETED: 'tag-info', CANCELLED: 'tag-warning' }[s] || 'tag-info');
 
 const ACTION_LABEL = {
   SUBMIT: '提交', APPROVE: '通过', REJECT: '驳回', CLAIM: '签收', TRANSFER: '转办'
@@ -419,6 +455,12 @@ async function openTodoDetail(row) {
       ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark,
       items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark }))
     });
+    // 申请信息条所需的 dlg 顶层字段（之前漏赋值导致 todo/done tab 查看时申请单号/申请人/机构/时间 全空）
+    dlg.applyNo = d.applyNo || '';
+    dlg.createdBy = d.createdBy || '';
+    dlg.createdByName = d.createdByName || '';
+    dlg.createdByOrgName = d.createdByOrgName || '';
+    dlg.createdTime = d.createdTime || null;
     dlg.show = true;
     loadApprovalHistory(applyId);
   } catch (err) {
@@ -512,6 +554,8 @@ const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, readOnly: false, saving: false, viewingId: null,
   approvalLogs: [], approvalLoading: false,
+  // 申请人信息（仅查看模式从 getAdjustDetail 回填，新建模式忽略）
+  applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
     custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
@@ -538,9 +582,15 @@ function onDlgClosed() {
   dlg.readOnly = false;
   dlg.approvalLogs = [];
   dlg.approvalLoading = false;
+  dlg.applyNo = '';
+  dlg.createdBy = '';
+  dlg.createdByName = '';
+  dlg.createdByOrgName = '';
+  dlg.createdTime = null;
 }
 
-// 拉审批流记录（后端已按时间倒序，前端直接渲染）
+// 拉审批流记录
+// 弹窗顶部已独立展示"申请单号 / 申请人 / 机构 / 时间"，时间线里不再重复 SUBMIT 节点。
 async function loadApprovalHistory(applyId) {
   if (!applyId) {
     dlg.approvalLogs = [];
@@ -549,7 +599,8 @@ async function loadApprovalHistory(applyId) {
   dlg.approvalLoading = true;
   try {
     const list = await getAdjustApprovalHistory(applyId);
-    dlg.approvalLogs = Array.isArray(list) ? list : [];
+    const logs = Array.isArray(list) ? list : [];
+    dlg.approvalLogs = logs.filter(log => log.action !== 'SUBMIT');
   } catch (err) {
     // 审批流拉取失败不阻塞主流程，仅清空 + 控制台告警
     console.warn('[Adjust] 审批流记录加载失败', err);
@@ -579,17 +630,30 @@ async function openView(row) {
     bizKind: row.bizKind || 'CORP_DEPOSIT',
     accountNo: row.accountNo || '',
     ownerOrgId: row.ownerOrgId || '',
-    reason: row.reason || '',
+    reason: row.reason || row.remark || '',
     items: row.items?.length ? [...row.items] : [{ empId: '', pct: 100, remark: '' }]
   });
+  // list 接口已有的申请人字段先塞进去，detail 接口再覆盖一次以拿到 createdByName/OrgName
+  dlg.applyNo = row.applyNo || '';
+  dlg.createdBy = row.createdBy || '';
+  dlg.createdByName = row.createdByName || '';
+  dlg.createdByOrgName = row.createdByOrgName || '';
+  dlg.createdTime = row.createdTime || null;
   dlg.show = true;
   try {
     const d = await getAdjustDetail(dlg.viewingId);
-    if (d?.id) Object.assign(dlg.form, {
-      custNo: d.custNo || d.custId, allocDim: d.allocDim, bizKind: d.bizKind,
-      accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason,
-      items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.shareRatio, remark: it.remark }))
-    });
+    if (d?.id) {
+      Object.assign(dlg.form, {
+        custNo: d.custNo || d.custId, allocDim: d.allocDim, bizKind: d.bizKind,
+        accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
+        items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.shareRatio, remark: it.remark }))
+      });
+      dlg.applyNo = d.applyNo || dlg.applyNo;
+      dlg.createdBy = d.createdBy || dlg.createdBy;
+      dlg.createdByName = d.createdByName || dlg.createdByName;
+      dlg.createdByOrgName = d.createdByOrgName || dlg.createdByOrgName;
+      dlg.createdTime = d.createdTime || dlg.createdTime;
+    }
   } catch {}
   loadApprovalHistory(dlg.viewingId);
 }
@@ -681,6 +745,11 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
+.apply-info-bar {
+  margin: 4px 0 16px;
+  :deep(.el-descriptions__label) { width: 90px; }
+  code.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+}
 .approval-wrap {
   padding: 4px 0 4px 6px;
   min-height: 80px;
