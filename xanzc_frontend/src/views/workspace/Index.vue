@@ -137,10 +137,11 @@ async function loadTasks() {
   } catch { tasks.value = []; } finally { tasksLoading.value = false; }
 }
 function goHandle(row) {
-  const id = row.id || row.taskId;
+  // 必须取 row.taskId（workflow 任务 ID），不是 row.id（AdjustTodoRespDTO.id 是业务 applyId）
+  // 之前 row.id || row.taskId 在 listTodoTasks 时代 OK（TaskRespDTO 无 id 字段），
+  // 但切到 my-todos 后 row.id 命中 applyId → Adjust.vue find taskId 失败提示「任务已处理」
+  const id = row.taskId || row.id;
   if (!id) return;
-  // 跳 /perf/adjust 的「待我审批」tab 并自动弹审批 dialog（tab=todo + action=open）
-  // 落地后由 Adjust.vue mounted 读 query 切 tab + 在 todos 数组里找对应 taskId 弹审批
   router.push({ path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } });
 }
 
