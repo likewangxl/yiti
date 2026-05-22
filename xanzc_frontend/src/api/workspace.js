@@ -79,11 +79,13 @@ export function markAllRead() {
 }
 
 /**
- * 工作台「待办」stat 卡用：当前用户 ALLOC_ADJUST 待办真实 count（拿 .total 即可，不取 records）.
+ * 工作台「待办」stat 卡用：当前用户 ALLOC_ADJUST 待办真实 count.
+ * 用 perf my-todos 接口（mapper IN+过滤后 count 准确），
+ * 不用 /workflow/tasks 因后者的 query.count() 不带 bizType 过滤（lf 历史 code，bizType 是后置过滤，total 不准）.
  */
 export function getMyTodoCount() {
-  return call('get', '/workflow/tasks',
-    { params: { bizType: 'ALLOC_ADJUST', pageSize: 1 } },
+  return call('get', '/perf/alloc-adjust/my-todos',
+    { params: { pageSize: 1, pageNo: 1 } },
     { total: 0, records: [] }
   ).then(r => Number(r?.total) || 0);
 }
