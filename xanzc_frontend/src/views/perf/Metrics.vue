@@ -14,14 +14,6 @@
       <!-- 左：分类树 -->
       <div class="card-section tree-col">
         <div class="card-h-mini">指标层级</div>
-        <el-input
-          v-model="treeKeyword"
-          placeholder="搜索：指标名称 / 编号 / 分类"
-          size="small"
-          clearable
-          :prefix-icon="Search"
-          class="tree-search"
-        />
         <el-tree
           ref="treeRef"
           :data="treeData"
@@ -30,7 +22,6 @@
           :expand-on-click-node="false"
           :highlight-current="true"
           :current-node-key="picked"
-          :filter-node-method="filterTreeNode"
           @node-click="onTreeClick"
           empty-text="暂无指标"
         >
@@ -205,23 +196,26 @@
           />
           <el-input
             v-else
-            ref="sqlInputRef"
             v-model="dlg.form.sqlText" type="textarea" :rows="6"
-            placeholder="SELECT cust_id, AVG(bal) FROM t_xxx WHERE dt=:dataDate"
+            placeholder="SELECT cust_id, AVG(bal) FROM t_xxx WHERE dt=#{datadate}"
           />
         </el-form-item>
 
         <el-form-item v-if="dlg.form.calcLogicType === 'SQL'" label="">
           <div class="sql-date-macros">
-            <div class="hint-title">可用日期变量（点击插入到 SQL 光标处；后端按 dataDate 自动计算注入）</div>
+            <div class="hint-title">可用日期变量（后端按 dataDate 自动计算注入）</div>
             <table class="hint-table">
               <tr><th style="width:180px">SQL 占位符</th><th>含义</th></tr>
-              <tr v-for="m in DATE_MACROS" :key="m.token">
-                <td>
-                  <code class="macro-btn" @click="insertMacro(m.token)" :title="`点击插入 ${m.token}`">{{ m.token }}</code>
-                </td>
-                <td>{{ m.desc }}</td>
-              </tr>
+              <tr><td><code>:dataDate</code></td><td>数据日期（=dateToday，由调度/试运行传入）</td></tr>
+              <tr><td><code>:version</code></td><td>sys_control 当前版本</td></tr>
+              <tr><td><code>:dateToday</code></td><td>当前日期 T</td></tr>
+              <tr><td><code>:dateYesterday</code></td><td>T-1 上一日期</td></tr>
+              <tr><td><code>:dateMonthEnd</code></td><td>本月最后一天</td></tr>
+              <tr><td><code>:datePrevMonthEnd</code></td><td>上月最后一天</td></tr>
+              <tr><td><code>:dateQuarterEnd</code></td><td>本季度最后一天</td></tr>
+              <tr><td><code>:datePrevQuarterEnd</code></td><td>上季度最后一天</td></tr>
+              <tr><td><code>:dateYearEnd</code></td><td>本年最后一天</td></tr>
+              <tr><td><code>:datePrevYearEnd</code></td><td>上年最后一天（去年 12-31）</td></tr>
             </table>
             <div class="hint-foot">用法：<code>WHERE stat_date = :datePrevMonthEnd</code>。结果列必须含 <code>base_key</code> + <code>metric_value</code>。</div>
           </div>
@@ -310,12 +304,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
-import { Search } from '@element-plus/icons-vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  listMetrics, listMetricCategories, getMetricDetail,
+  listMetrics, getMetricDetail,
   createMetric, updateMetric, deleteMetric,
   changeMetricStatus, trialRunMetric, executeMetric
 } from '@/api/perf';
@@ -364,18 +357,12 @@ const BIZ_ACTION_LABEL = {
 const bizActionLabel = (a) => BIZ_ACTION_LABEL[a] || a || '—';
 
 // === 数据加载 ===
-const UNCATEGORIZED_LABEL = '未分类';
 const allMetrics = ref([]);
-const categories = ref([]);  // [{value, label}] 来自 GET /api/perf/metrics/categories
 async function reload() {
   try {
-    const [r, cs] = await Promise.all([
-      listMetrics({ pageSize: 100 }),
-      listMetricCategories()
-    ]);
+    const r = await listMetrics({ pageSize: 100 });
     // 停用项保留在树里（按用户反馈），通过按钮 disable 限制操作即可
     if (Array.isArray(r)) allMetrics.value = r;
-    categories.value = Array.isArray(cs) ? cs : [];
     // 默认选中第一个指标
     if (allMetrics.value.length && !picked.value) onPick(allMetrics.value[0].metricCode);
   } catch {}
@@ -401,31 +388,29 @@ function resolveCategory(m) {
   return sub ? `${g}/${sub}` : g;
 }
 
-// === 树结构：严格按 metric.metricCategory 一级分组（V1.10 后端 categories 接口提供骨架） ===
+// === 树结构（前端按分类聚合） ===
 const treeData = computed(() => {
-  // 1. 用后端 categories 接口建立骨架（保证空分类也显示）
-  const groups = new Map();
-  for (const c of categories.value) {
-    const label = c?.label || c?.value;
-    if (!label) continue;
-    groups.set(label, { id: 'g-' + label, label, children: [] });
-  }
-  // 2. 把每条指标挂到 metricCategory 对应节点；空 metricCategory 入"未分类"
+  const root = new Map();
   for (const m of allMetrics.value) {
-    const cat = (m?.metricCategory && String(m.metricCategory).trim()) || UNCATEGORIZED_LABEL;
-    let node = groups.get(cat);
-    if (!node) {
-      node = { id: 'g-' + cat, label: cat, children: [] };
-      groups.set(cat, node);
-    }
-    node.children.push({
+    const [g, sub] = categoryOf(m);
+    const groupNode = root.get(g) || { id: 'g-' + g, label: g, children: [] };
+    root.set(g, groupNode);
+    const leaf = {
       id: m.metricCode, label: m.metricName,
       isMetric: true, status: m.status, raw: m
-    });
+    };
+    if (sub) {
+      let subNode = groupNode.children.find(c => c.id === 'sub-' + g + sub);
+      if (!subNode) {
+        subNode = { id: 'sub-' + g + sub, label: sub, children: [] };
+        groupNode.children.push(subNode);
+      }
+      subNode.children.push(leaf);
+    } else {
+      groupNode.children.push(leaf);
+    }
   }
-  // 3. 空分类节点放最后；非空按后端顺序
-  const all = Array.from(groups.values());
-  return all.filter(g => g.children.length).concat(all.filter(g => !g.children.length));
+  return Array.from(root.values());
 });
 
 // === 详情 ===
@@ -490,55 +475,8 @@ function guessDataSource(m) {
   return 'EDW · 业务表';
 }
 
-// === 左树模糊搜索 ===
-const treeRef = ref(null);
-const treeKeyword = ref('');
-watch(treeKeyword, v => treeRef.value?.filter(v ?? ''));
-function filterTreeNode(value, data) {
-  if (!value) return true;
-  const v = String(value).trim().toLowerCase();
-  if (!v) return true;
-  const label = String(data.label || '').toLowerCase();
-  const code = String(data.raw?.metricCode || data.id || '').toLowerCase();
-  return label.includes(v) || code.includes(v);
-}
-
 // === 编辑/新增 弹框 ===
 const formRef = ref(null);
-const sqlInputRef = ref(null);
-
-// 后端 MetricTrialService.runSql 自动注入的 10 个 SQL 命名参数；点击下方变量符插入到光标位置
-const DATE_MACROS = [
-  { token: ':dataDate',           desc: '数据日期（=dateToday，由调度/试运行传入）' },
-  { token: ':version',            desc: 'sys_control 当前版本' },
-  { token: ':dateToday',          desc: '当前日期 T' },
-  { token: ':dateYesterday',      desc: 'T-1 上一日期' },
-  { token: ':dateMonthEnd',       desc: '本月最后一天' },
-  { token: ':datePrevMonthEnd',   desc: '上月最后一天' },
-  { token: ':dateQuarterEnd',     desc: '本季度最后一天' },
-  { token: ':datePrevQuarterEnd', desc: '上季度最后一天' },
-  { token: ':dateYearEnd',        desc: '本年最后一天' },
-  { token: ':datePrevYearEnd',    desc: '上年最后一天（去年 12-31）' }
-];
-
-// 把变量符插到 SQL textarea 当前光标位置；未聚焦时附加到末尾
-function insertMacro(token) {
-  const elInput = sqlInputRef.value;
-  const ta = elInput?.textarea || elInput?.input || elInput?.$el?.querySelector?.('textarea');
-  const cur = dlg.form.sqlText || '';
-  if (!ta) {
-    dlg.form.sqlText = cur + token;
-    return;
-  }
-  const start = ta.selectionStart ?? cur.length;
-  const end = ta.selectionEnd ?? start;
-  dlg.form.sqlText = cur.slice(0, start) + token + cur.slice(end);
-  nextTick(() => {
-    ta.focus();
-    const pos = start + token.length;
-    ta.setSelectionRange(pos, pos);
-  });
-}
 const dlg = reactive({
   show: false, editing: null, saving: false,
   trialRange: null, trialing: false,
@@ -625,9 +563,8 @@ async function onSave(targetStatus) {
   };
   try {
     if (dlg.editing) {
-      // Update DTO 不含 baseDim/metricLevel/preferredSlot/status，也不含 metricCategory（仅 create 时落到独立列）
-      const { metricCategory, ...updatePayload } = basePayload;
-      await updateMetric(dlg.editing, updatePayload);
+      // Update DTO 不含 baseDim/metricLevel/preferredSlot/status
+      await updateMetric(dlg.editing, basePayload);
       if (targetStatus !== detail.value.status) {
         await changeMetricStatus(dlg.editing, targetStatus, '编辑保存');
       }
@@ -812,7 +749,6 @@ onMounted(reload);
   margin-bottom: 10px;
   color: $text-1;
 }
-.tree-search { margin-bottom: 10px; }
 .tree-node {
   display: flex; align-items: center; gap: 6px;
   flex: 1; min-width: 0;
@@ -913,20 +849,6 @@ onMounted(reload);
   color: #b87600;
   padding: 0 4px;
   border-radius: 2px;
-}
-.sql-date-macros code.macro-btn {
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
-}
-.sql-date-macros code.macro-btn:hover {
-  background: #ffd591;
-  color: #874d00;
-  box-shadow: 0 0 0 1px #fa8c16;
-}
-.sql-date-macros code.macro-btn:active {
-  background: #fa8c16;
-  color: #fff;
 }
 .sql-date-macros .hint-foot {
   margin-top: 8px;
