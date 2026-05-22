@@ -60,3 +60,9 @@ export function getCurrentUser() {
 export function getMyPermissions() {
   return call('get', '/auth/permissions', {}, { resources: [], scopes: [] });
 }
+
+// 当前用户可访问的菜单树（前端 sidebar 渲染左侧导航用）
+// 后端：GET /api/auth/my-menus → List<ResourceTreeNodeDTO>{ resourceId, resourceUrl, menuName, children }
+export function getMyMenus() {
+  return call('get', '/auth/my-menus', {}, []);
+}

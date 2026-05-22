@@ -42,21 +42,7 @@
           <el-table-column label="发起时间" width="140">
             <template #default="{ row }">{{ row.startTime || row.createTime || '-' }}</template>
           </el-table-column>
-          <el-table-column label="审批结果" width="100" v-if="taskTab === 'DONE'">
-            <template #default="{ row }">
-              <el-tag v-if="row.bizStatus" size="small" :type="bizStatusTag(row.bizStatus)" effect="plain">
-                {{ bizStatusText(row.bizStatus) }}
-              </el-tag>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column width="110">
-            <template #header>
-              审批时效
-              <el-tooltip placement="top" content="审批是否按时（基于 wf_timeout_rule.warning_hours / timeout_hours）；🟢 正常 / 🟡 临近超时 / 🔴 已超时">
-                <span class="hdr-help">?</span>
-              </el-tooltip>
-            </template>
+          <el-table-column label="SLA" width="90">
             <template #default="{ row }">
               <span class="sla-dot" :class="slaKey(row.slaStatus)"></span>
               {{ slaText(row.slaStatus) }}
@@ -111,7 +97,6 @@ import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
 import { getWorkspace } from '@/api/workspace';
 import { listTodoTasks, listDoneTasks } from '@/api/workflow';
-import { getAdjustDetail, getTargetAdjust } from '@/api/perf';
 
 const router = useRouter();
 const store = useUserStore();
@@ -119,10 +104,6 @@ const data = ref(initial);
 const slaText = (s) => ({ normal: '正常', warn: '预警', overdue: '超时', GREEN: '正常', YELLOW: '预警', RED: '超时' }[s] || '正常');
 // 把后端 slaStatus(GREEN/YELLOW/RED) 映射到模板 CSS 类（normal/warn/overdue），兼容旧值
 const slaKey = (s) => ({ GREEN: 'normal', YELLOW: 'warn', RED: 'overdue' }[s] || s || 'normal');
-
-// 业务申请状态展示（lazy load 自业务详情接口；和 SLA 是不同维度）
-const bizStatusText = (s) => ({ DRAFT: '草稿', IN_APPROVAL: '审批中', APPROVED: '已通过', REJECTED: '已驳回/撤回', WITHDRAWN: '已撤回' }[s] || s || '-');
-const bizStatusTag = (s) => ({ DRAFT: 'info', IN_APPROVAL: 'warning', APPROVED: 'success', REJECTED: 'danger', WITHDRAWN: 'info' }[s] || 'info');
 
 // 欢迎语 + 描述：用 userStore 真实信息 + 时段问候，不再用 mock 张三
 const greeting = computed(() => {
@@ -150,26 +131,7 @@ async function loadTasks() {
     const fn = taskTab.value === 'PENDING' ? listTodoTasks : listDoneTasks;
     const r = await fn({ pageNo: 1, pageSize: 20 });
     tasks.value = Array.isArray(r) ? r : (r?.records || []);
-    // lazy-load 每行业务申请状态（已办 tab 需要展示；后端 TaskRespDTO 不含 bizStatus）
-    fetchBizStatuses();
   } catch { tasks.value = []; } finally { tasksLoading.value = false; }
-}
-async function fetchBizStatuses() {
-  const detailFn = (t) => {
-    if (['ALLOC_ADJUST', 'PERF_ALLOC_ADJUST'].includes(t)) return getAdjustDetail;
-    if (['TARGET_ADJUST', 'PERF_TARGET_ADJUST'].includes(t)) return getTargetAdjust;
-    return null;
-  };
-  await Promise.all(tasks.value.map(async (row) => {
-    const fn = detailFn(row.bizType);
-    const id = row.bizId;
-    if (!fn || !id) return;
-    try {
-      const d = await fn(id);
-      // 后端响应可能直接是 apply 对象（含 .status）或包一层 { apply: {...} }
-      row.bizStatus = d?.status || d?.apply?.status || null;
-    } catch { /* 单条失败不影响整体 */ }
-  }));
 }
 function goHandle(row) {
   const id = row.id || row.taskId;
@@ -234,12 +196,6 @@ onMounted(async () => {
 .task-sub {
   font-size: 11px; color: $text-3; margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.hdr-help {
-  display: inline-block; width: 14px; height: 14px; line-height: 14px;
-  text-align: center; border-radius: 50%;
-  background: $border-2; color: #fff; font-size: 11px;
-  margin-left: 4px; cursor: help;
 }
 .sla-dot {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;

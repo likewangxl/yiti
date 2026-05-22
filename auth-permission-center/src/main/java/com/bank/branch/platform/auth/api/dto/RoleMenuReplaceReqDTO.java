@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.api.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -17,7 +18,7 @@ public class RoleMenuReplaceReqDTO {
     @NotNull
     private List<String> menuIds;
 
-    // 改为可选：分配菜单不再强制变更原因（产品决定，前端去掉了输入框）
+    @NotBlank
     @Size(max = 200)
     private String reason;
 }
