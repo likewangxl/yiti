@@ -23,6 +23,7 @@ import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.TaskInfo;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.flowable.engine.TaskService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -56,6 +57,7 @@ public class ProcessQueryService {
     private final OrgApi orgApi;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     // ========== 流程实例详情 ==========
 
@@ -336,17 +338,30 @@ public class ProcessQueryService {
                         dto.setAction(approved != null && approved ? "APPROVE" : "REJECT");
                     }
                 }
-                List<org.flowable.engine.task.Comment> taskComments = taskService.getTaskComments(taskId);
-                if (taskComments != null) {
-                    for (org.flowable.engine.task.Comment c : taskComments) {
-                        String type = c.getType();
-                        if ("APPROVE".equals(type) || "REJECT".equals(type)) {
-                            if (dto.getAction() == null) {
-                                dto.setAction(type);
-                            }
-                            dto.setOpinion(c.getFullMessage());
-                            break;
+                // Flowable 7 的 taskService.getTaskComments(taskId) 在 read 路径上对已完成任务
+                // 返回空 list（数据库 ACT_HI_COMMENT 里 INSERT 是有的，但 API 读不出来）。
+                // 实测：5 个已完成 userTask 的 ACT_HI_COMMENT type=APPROVE/REJECT 行均存在
+                // 但 taskService.getTaskComments 返回空。这里直接走 native SQL 查 ACT_HI_COMMENT。
+                List<Map<String, Object>> commentRows = jdbcTemplate.queryForList(
+                        "SELECT TYPE_, FULL_MSG_ FROM ACT_HI_COMMENT "
+                        + "WHERE TASK_ID_ = ? AND TYPE_ IN ('APPROVE', 'REJECT') "
+                        + "ORDER BY TIME_ ASC",
+                        taskId);
+                for (Map<String, Object> row : commentRows) {
+                    String type = (String) row.get("TYPE_");
+                    if ("APPROVE".equals(type) || "REJECT".equals(type)) {
+                        if (dto.getAction() == null) {
+                            dto.setAction(type);
                         }
+                        // FULL_MSG_ 列类型是 LONGBLOB，JdbcTemplate 取到的是 byte[]，
+                        // 直接 toString() 会拿到 "[B@xxx" 哈希形式，必须按 UTF-8 解码。
+                        Object fullMsg = row.get("FULL_MSG_");
+                        if (fullMsg instanceof byte[]) {
+                            dto.setOpinion(new String((byte[]) fullMsg, java.nio.charset.StandardCharsets.UTF_8));
+                        } else if (fullMsg != null) {
+                            dto.setOpinion(fullMsg.toString());
+                        }
+                        break;
                     }
                 }
             } catch (Exception e) {
