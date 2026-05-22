@@ -5,16 +5,19 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,6 +34,7 @@ import java.util.Map;
 public class TaskOperationService {
 
     private final TaskService taskService;
+    private final RuntimeService runtimeService;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final CurrentUserApi currentUserApi;
@@ -110,23 +114,43 @@ public class TaskOperationService {
      */
     public void rejectTask(String taskId, RejectReqDTO req) {
         String empId = currentUserApi.getCurrentEmpId();
-        // 查询任务并校验办理人
         Task task = queryTaskOrThrow(taskId);
         verifyAssignee(task, empId);
+        String pid = task.getProcessInstanceId();
+        String opinion = req.getOpinion();
 
-        // 设置驳回变量
-        Map<String, Object> vars = Map.of("approved", false);
+        // 1. 写驳回意见到 ACT_HI_COMMENT（必须在 deleteProcessInstance 之前；
+        //    否则 task 已被 cascade 删除时 addComment 会失败）
+        taskService.addComment(taskId, pid, "REJECT", opinion);
 
-        // 添加驳回意见
-        taskService.addComment(taskId, task.getProcessInstanceId(), "REJECT", req.getOpinion());
+        // 2. 强制终止流程实例（直接返回申请人处，不再走后续节点）
+        //    BPMN 当前未在每个 userTask 后做 ${approved == false} 分流，仅靠 complete 设
+        //    approved=false 仍会被默认 sequenceFlow 带到下一节点。这里用 deleteProcessInstance
+        //    显式中断，避免业务流程被误判为"通过"继续流转。
+        runtimeService.deleteProcessInstance(pid, "驳回: " + opinion);
 
-        // 完成任务（带驳回变量）
-        taskService.complete(taskId, vars);
+        // 3. 更新 biz_process_map 状态（ProcessCompletedListener 仅在 BPMN 自然结束时触发，
+        //    deleteProcessInstance 路径不进，这里手动接管）
+        BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(pid);
+        String businessKey = null;
+        if (map != null) {
+            businessKey = map.getBusinessKey();
+            map.setProcessStatus("CANCELLED");
+            LocalDateTime now = LocalDateTime.now();
+            map.setEndTime(now);
+            map.setUpdatedTime(now);
+            bizProcessMapMapper.updateById(map);
+        }
 
-        // 发布事件
-        eventPublisher.publishEvent(new TaskRejectedEvent(taskId, task.getProcessInstanceId(), empId));
+        // 4. 手动 publish ProcessCompletedEvent outcome=REJECTED
+        //    → 触发 AllocAdjustCompletedListener / TargetAdjustCompletedListener 把
+        //      apply.status 改 REJECTED
+        eventPublisher.publishEvent(new ProcessCompletedEvent(pid, businessKey, "REJECTED", opinion));
 
-        log.info("任务驳回: taskId={}, empId={}, opinion={}", taskId, empId, req.getOpinion());
+        // 5. 原有 TaskRejectedEvent（task 维度事件，跟流程完成事件互补）
+        eventPublisher.publishEvent(new TaskRejectedEvent(taskId, pid, empId));
+
+        log.info("任务驳回 + 流程终止: taskId={}, empId={}, pid={}, opinion={}", taskId, empId, pid, opinion);
     }
 
     /**
