@@ -28,7 +28,7 @@ public class WorkflowApprovalNotificationListener {
     private final UserApi userApi;
     private final NotificationService notificationService;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTaskApproved(TaskOperationService.TaskApprovedEvent event) {
         BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(event.processInstanceId());
         if (map == null || map.getStartUser() == null) {
@@ -46,7 +46,7 @@ public class WorkflowApprovalNotificationListener {
                 .build());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onTaskRejected(TaskOperationService.TaskRejectedEvent event) {
         BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(event.processInstanceId());
         if (map == null || map.getStartUser() == null) {
@@ -64,7 +64,7 @@ public class WorkflowApprovalNotificationListener {
                 .build());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onProcessWithdrawn(ProcessWithdrawnEvent event) {
         if (event.currentAssigneeEmpId() == null) {
             // 候选组未签收：assignee 为 null，不发通知（spec §9 边界，本次不覆盖）
