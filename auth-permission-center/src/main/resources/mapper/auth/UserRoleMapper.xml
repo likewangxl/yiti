@@ -74,6 +74,17 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 按 roleCode 查所有启用员工 ID（用于审批通知展开候选组） -->
+    <select id="selectEmpIdsByRoleCode" resultType="string">
+        SELECT u.USER_ID
+        FROM PT_USER u
+        INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID
+        INNER JOIN PT_ROLE r ON ur.ROLE_ID = r.ROLE_ID
+        WHERE r.ROLE_CODE = #{roleCode}
+          AND r.RECORD_STATUS = 0
+          AND u.ISENABLED = 0
+    </select>
+
     <!-- 统计角色下满足关键字条件的用户总数 -->
     <select id="countUsersByRoleId" resultType="long">
         SELECT COUNT(*)

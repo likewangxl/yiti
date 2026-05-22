@@ -55,4 +55,14 @@ public interface UserApi {
      * @return 角色编码集合（roleCode），从 PT_USER_ROLE 联 PT_ROLE 查得；员工无角色或不存在时为空集
      */
     Set<String> getUserRoleCodes(String empId);
+
+    /**
+     * 按 roleCode 查所有启用员工 ID。
+     * <p>用于 workflow / portal 等模块把候选组 roleCode 展开成员工列表（如发审批通知）。
+     * 仅返启用 (PT_USER.ISENABLED=0) + 未被逻辑删除的角色 (PT_ROLE.RECORD_STATUS=0)。</p>
+     *
+     * @param roleCode 角色编码（如 BRANCH_HEAD）
+     * @return 员工 ID 列表，roleCode 为空或无人时返空 List
+     */
+    List<String> getEmpIdsByRoleCode(String roleCode);
 }

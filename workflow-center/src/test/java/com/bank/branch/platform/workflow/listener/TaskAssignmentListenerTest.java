@@ -1,6 +1,8 @@
 package com.bank.branch.platform.workflow.listener;
 
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.repository.ProcessDefinition;
@@ -30,6 +32,9 @@ class TaskAssignmentListenerTest {
 
     @Mock
     private RepositoryService repositoryService;
+
+    @Mock
+    private UserApi userApi;
 
     @InjectMocks
     private TaskAssignmentListener taskAssignmentListener;
@@ -112,6 +117,8 @@ class TaskAssignmentListenerTest {
 
         when(candidateResolverService.resolveCandidates("loan_approve", "userTask1"))
                 .thenReturn(List.of("ROLE:CUST_MANAGER"));
+        // 让 ROLE 展开有员工，否则不调 notifyApi 触发不了 doThrow
+        when(userApi.getEmpIdsByRoleCode("CUST_MANAGER")).thenReturn(List.of("E001"));
 
         doThrow(new RuntimeException("notify failed"))
                 .when(notifyApi).batchSendNotifications(anyList());
@@ -121,6 +128,51 @@ class TaskAssignmentListenerTest {
 
         // Assert - candidate group should still have been set
         verify(delegateTask).addCandidateGroup("ROLE:CUST_MANAGER");
+    }
+
+    @Test
+    void notify_roleCandidate_expandsToEmpIdsAndNotifiesEach() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("alloc_approve_v1:1:abc");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve");
+        when(delegateTask.getId()).thenReturn("TASK_ROLE_001");
+        stubProcDefKey("alloc_approve_v1:1:abc", "alloc_adjust_approve_v1");
+
+        when(candidateResolverService.resolveCandidates("alloc_adjust_approve_v1", "branch_approve"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(userApi.getEmpIdsByRoleCode("BRANCH_HEAD")).thenReturn(List.of("E10001", "E10002"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        org.mockito.ArgumentCaptor<List<NotificationCmd>> captor =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(notifyApi).batchSendNotifications(captor.capture());
+        List<NotificationCmd> cmds = captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(cmds).hasSize(2);
+        org.assertj.core.api.Assertions.assertThat(cmds)
+                .extracting(NotificationCmd::getTargetEmpId)
+                .containsExactlyInAnyOrder("E10001", "E10002");
+    }
+
+    @Test
+    void notify_userCandidate_passesEmpIdDirectly() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("alloc_approve_v1:1:abc");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve");
+        when(delegateTask.getId()).thenReturn("TASK_USER_001");
+        stubProcDefKey("alloc_approve_v1:1:abc", "alloc_adjust_approve_v1");
+
+        when(candidateResolverService.resolveCandidates("alloc_adjust_approve_v1", "branch_approve"))
+                .thenReturn(List.of("USER:E20001"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        org.mockito.ArgumentCaptor<List<NotificationCmd>> captor =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(notifyApi).batchSendNotifications(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue())
+                .extracting(NotificationCmd::getTargetEmpId)
+                .containsExactly("E20001");
     }
 
     /**

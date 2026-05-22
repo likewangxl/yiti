@@ -102,4 +102,13 @@ public class UserFacade implements UserApi {
         }
         return codes;
     }
+
+    @Override
+    public List<String> getEmpIdsByRoleCode(String roleCode) {
+        if (roleCode == null || roleCode.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> empIds = userRoleMapper.selectEmpIdsByRoleCode(roleCode);
+        return empIds != null ? empIds : new ArrayList<>();
+    }
 }
