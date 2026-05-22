@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.service.adjust;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.controller.dto.TargetAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
@@ -69,6 +71,12 @@ class TargetAdjustServiceTest {
     private CurrentUserApi currentUserApi;
 
     @Mock
+    private UserApi userApi;
+
+    @Mock
+    private OrgApi orgApi;
+
+    @Mock
     private PerfScopeHelper perfScopeHelper;
 
     private TargetAdjustService service;
@@ -98,9 +106,9 @@ class TargetAdjustServiceTest {
 
     @BeforeEach
     void setUp() {
-        // V1.4 S1.3：显式构造器，注入 5 依赖以支持 pageDto WORKFLOW_PARTICIPANT scope 路径
+        // 2026-05-21：注入 7 依赖（V1.4 S1.3 起 5 个 + 2026-05-21 加 UserApi/OrgApi 用于 getByIdDto 申请人姓名/机构展开）
         service = new TargetAdjustService(applyMapper, targetPlanMapper, workflowApi,
-                currentUserApi, perfScopeHelper);
+                currentUserApi, userApi, orgApi, perfScopeHelper);
 
         // 默认目标方案存在
         PerfTargetPlan plan = new PerfTargetPlan();

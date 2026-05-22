@@ -1,6 +1,9 @@
 package com.bank.branch.platform.performance.service.adjust;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
@@ -89,6 +92,8 @@ public class AllocAdjustService {
     private final CustomerQueryApi customerQueryApi;
     private final WorkflowApi workflowApi;
     private final CurrentUserApi currentUserApi;
+    private final UserApi userApi;
+    private final OrgApi orgApi;
     private final PerfScopeHelper perfScopeHelper;
 
     /**
@@ -279,7 +284,28 @@ public class AllocAdjustService {
     public AllocAdjustRespDTO getByIdDto(String id) {
         ApplyWithItems bundle = getById(id);
         String custNo = lookupCustNo(bundle.getApply().getCustId());
-        return toRespDto(bundle.getApply(), bundle.getItems(), custNo);
+        AllocAdjustRespDTO dto = toRespDto(bundle.getApply(), bundle.getItems(), custNo);
+        // 展开申请人姓名 + 主机构名（仅详情，列表不展开避免 N+1）
+        // 任何一项查询失败不阻塞主流程，对应字段留 null
+        String createdBy = bundle.getApply().getCreatedBy();
+        if (!isBlank(createdBy)) {
+            try {
+                dto.setCreatedByName(userApi.getUserName(createdBy));
+            } catch (Exception e) {
+                log.warn("[AllocAdjustService.getByIdDto] 申请人姓名查询失败 createdBy={}, err={}",
+                        createdBy, e.toString());
+            }
+            try {
+                OrgDTO org = orgApi.getUserMainOrg(createdBy);
+                if (org != null) {
+                    dto.setCreatedByOrgName(org.getOrgName());
+                }
+            } catch (Exception e) {
+                log.warn("[AllocAdjustService.getByIdDto] 申请人主机构查询失败 createdBy={}, err={}",
+                        createdBy, e.toString());
+            }
+        }
+        return dto;
     }
 
     /**

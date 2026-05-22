@@ -147,6 +147,29 @@
     <!-- 新建/查看 弹框 -->
     <el-dialog v-model="dlg.show" :title="dlgTitle" width="900px" :close-on-click-modal="false" @closed="onDlgClosed">
       <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlgRules" label-position="top" size="default">
+        <!-- 申请信息条（仅查看模式显示）-->
+        <el-descriptions
+          v-if="dlg.readOnly"
+          class="apply-info-bar"
+          :column="3"
+          size="small"
+          border
+        >
+          <el-descriptions-item label="申请单号">
+            <code class="mono">{{ dlg.applyNo || '-' }}</code>
+          </el-descriptions-item>
+          <el-descriptions-item label="申请人">
+            <span>{{ dlg.createdByName || '-' }}</span>
+            <span v-if="dlg.createdBy" class="sub-id">（{{ dlg.createdBy }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="申请机构">
+            {{ dlg.createdByOrgName || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="申请时间" :span="3">
+            {{ fmt(dlg.createdTime) }}
+          </el-descriptions-item>
+        </el-descriptions>
+
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="客户编号" prop="custNo" required>
@@ -493,6 +516,8 @@ const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, readOnly: false, saving: false, viewingId: null,
   approvalLogs: [], approvalLoading: false,
+  // 申请人信息（仅查看模式从 getAdjustDetail 回填，新建模式忽略）
+  applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
     custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
@@ -519,9 +544,17 @@ function onDlgClosed() {
   dlg.readOnly = false;
   dlg.approvalLogs = [];
   dlg.approvalLoading = false;
+  dlg.applyNo = '';
+  dlg.createdBy = '';
+  dlg.createdByName = '';
+  dlg.createdByOrgName = '';
+  dlg.createdTime = null;
 }
 
 // 拉审批流记录（后端已按时间倒序，前端直接渲染）
+// 后端 getProcessHistory 只返回 userTask 节点，不含 startEvent。
+// 前端追加一条 action=SUBMIT 的"申请提交"行到数组末尾（时间倒序最早在末），
+// 让时间线第一/最下方就是"谁、什么时候、为什么提交"。
 async function loadApprovalHistory(applyId) {
   if (!applyId) {
     dlg.approvalLogs = [];
@@ -530,7 +563,20 @@ async function loadApprovalHistory(applyId) {
   dlg.approvalLoading = true;
   try {
     const list = await getAdjustApprovalHistory(applyId);
-    dlg.approvalLogs = Array.isArray(list) ? list : [];
+    const logs = Array.isArray(list) ? [...list] : [];
+    if (dlg.createdTime || dlg.createdBy) {
+      logs.push({
+        nodeKey: 'submit',
+        nodeName: '申请提交',
+        action: 'SUBMIT',
+        operator: dlg.createdBy || '',
+        operatorName: dlg.createdByName || '',
+        operatorOrgName: dlg.createdByOrgName || '',
+        opinion: dlg.form.reason || '',
+        operateTime: dlg.createdTime || null
+      });
+    }
+    dlg.approvalLogs = logs;
   } catch (err) {
     // 审批流拉取失败不阻塞主流程，仅清空 + 控制台告警
     console.warn('[Adjust] 审批流记录加载失败', err);
@@ -560,17 +606,30 @@ async function openView(row) {
     bizKind: row.bizKind || 'CORP_DEPOSIT',
     accountNo: row.accountNo || '',
     ownerOrgId: row.ownerOrgId || '',
-    reason: row.reason || '',
+    reason: row.reason || row.remark || '',
     items: row.items?.length ? [...row.items] : [{ empId: '', pct: 100, remark: '' }]
   });
+  // list 接口已有的申请人字段先塞进去，detail 接口再覆盖一次以拿到 createdByName/OrgName
+  dlg.applyNo = row.applyNo || '';
+  dlg.createdBy = row.createdBy || '';
+  dlg.createdByName = row.createdByName || '';
+  dlg.createdByOrgName = row.createdByOrgName || '';
+  dlg.createdTime = row.createdTime || null;
   dlg.show = true;
   try {
     const d = await getAdjustDetail(dlg.viewingId);
-    if (d?.id) Object.assign(dlg.form, {
-      custNo: d.custNo || d.custId, allocDim: d.allocDim, bizKind: d.bizKind,
-      accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason,
-      items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.shareRatio, remark: it.remark }))
-    });
+    if (d?.id) {
+      Object.assign(dlg.form, {
+        custNo: d.custNo || d.custId, allocDim: d.allocDim, bizKind: d.bizKind,
+        accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
+        items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.shareRatio, remark: it.remark }))
+      });
+      dlg.applyNo = d.applyNo || dlg.applyNo;
+      dlg.createdBy = d.createdBy || dlg.createdBy;
+      dlg.createdByName = d.createdByName || dlg.createdByName;
+      dlg.createdByOrgName = d.createdByOrgName || dlg.createdByOrgName;
+      dlg.createdTime = d.createdTime || dlg.createdTime;
+    }
   } catch {}
   loadApprovalHistory(dlg.viewingId);
 }
@@ -657,6 +716,11 @@ onMounted(reload);
   line-height: 1.4;
 }
 
+.apply-info-bar {
+  margin: 4px 0 16px;
+  :deep(.el-descriptions__label) { width: 90px; }
+  code.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+}
 .approval-wrap {
   padding: 4px 0 4px 6px;
   min-height: 80px;
