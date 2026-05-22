@@ -548,8 +548,10 @@ public class AllocAdjustService {
      * <ul>
      *   <li>{@code CORP} / {@code CORP_*}（对公）→ {@link #PROCESS_KEY_CORP}
      *       覆盖场景：CORP_LOAN / CORP_DEPOSIT / CORP_FOREX 等</li>
-     *   <li>{@code RETAIL} / {@code RETAIL_*}（零售）→ {@link #PROCESS_KEY_RETAIL}
-     *       覆盖场景：RETAIL_CARD / RETAIL_LOAN / RETAIL_MORTGAGE 等</li>
+     *   <li>{@code RETAIL} / {@code RETAIL_*} / {@code PER} / {@code PER_*}
+     *       / {@code FEE_BIZ} / {@code FEE_*}（零售 + 个人 + 中间业务）→ {@link #PROCESS_KEY_RETAIL}
+     *       覆盖场景：RETAIL_CARD / RETAIL_LOAN / PER_DEP / PER_LOAN / FEE_BIZ 等。
+     *       业务上个人业务（PER_*）与中间业务（FEE_*）均由零售部门管，同条审批线。</li>
      *   <li>其他 → 抛 BIZ_KIND_INVALID（未知业务前缀应在字典层预防，
      *       此处作为最后防线）</li>
      * </ul>
@@ -558,14 +560,16 @@ public class AllocAdjustService {
      *
      * @param bizKind 业务种类（非空）
      * @return BPMN 流程定义 key
-     * @throws PerfException BIZ_KIND_INVALID 当 bizKind 不以 CORP_ / RETAIL_ 开头
+     * @throws PerfException BIZ_KIND_INVALID 当 bizKind 不属于 CORP / RETAIL / PER / FEE 任一族
      */
     private String resolveProcessKey(String bizKind) {
         String upper = bizKind.toUpperCase();
         if (upper.startsWith("CORP_") || upper.equals("CORP")) {
             return PROCESS_KEY_CORP;
         }
-        if (upper.startsWith("RETAIL_") || upper.equals("RETAIL")) {
+        if (upper.startsWith("RETAIL_") || upper.equals("RETAIL")
+                || upper.startsWith("PER_") || upper.equals("PER")
+                || upper.startsWith("FEE_") || upper.equals("FEE_BIZ")) {
             return PROCESS_KEY_RETAIL;
         }
         throw new PerfException(PerfErrorCode.BIZ_KIND_INVALID, bizKind);
