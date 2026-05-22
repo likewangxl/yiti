@@ -28,7 +28,7 @@ import java.time.LocalDate;
 @Slf4j
 @Tag(name = "业绩调整-我的待审批")
 @RestController
-@RequestMapping("/api/perf/adjusts")
+@RequestMapping("/api/perf/alloc-adjust")
 @RequiredArgsConstructor
 public class AllocAdjustTodoController {
 
