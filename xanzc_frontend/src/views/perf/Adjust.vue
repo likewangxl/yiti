@@ -15,6 +15,49 @@
     <el-tabs v-model="activeTab" @tab-change="reload" class="adjust-tabs">
       <!-- ============ 我的申请 ============ -->
       <el-tab-pane label="我的申请" name="mine">
+        <div class="card-section">
+          <el-form inline size="default">
+            <el-form-item label="关键字">
+              <el-input v-model="mineFilters.keyword" placeholder="申请编号 / 客户 ID" clearable
+                        style="width:200px" @keyup.enter="onMineFilterChange" />
+            </el-form-item>
+            <el-form-item label="维度">
+              <el-select v-model="mineFilters.allocDim" clearable placeholder="全部" style="width:140px"
+                         @change="onMineFilterChange">
+                <el-option value="CUST" label="客户" />
+                <el-option value="ORG" label="机构" />
+                <el-option value="EMP" label="员工" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="业务类型">
+              <el-select v-model="mineFilters.bizKind" clearable placeholder="全部" style="width:160px"
+                         @change="onMineFilterChange">
+                <el-option value="LOAN" label="贷款" />
+                <el-option value="DEPOSIT" label="存款" />
+                <el-option value="SUPPORT" label="支援" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select v-model="mineFilters.status" clearable placeholder="全部" style="width:140px"
+                         @change="onMineFilterChange">
+                <el-option value="DRAFT" label="草稿" />
+                <el-option value="IN_APPROVAL" label="审批中" />
+                <el-option value="APPROVED" label="已通过" />
+                <el-option value="REJECTED" label="已驳回" />
+                <el-option value="WITHDRAWN" label="已撤回" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="申请时间">
+              <el-date-picker v-model="mineFilters.dateRange" type="daterange" value-format="YYYY-MM-DD"
+                              range-separator="~" start-placeholder="开始" end-placeholder="结束"
+                              style="width:240px" @change="onMineFilterChange" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="onMineFilterChange">查询</el-button>
+              <el-button @click="resetMineFilters">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
         <div class="card-section table">
           <el-table :data="rows" size="default" empty-text="暂无调整申请" v-loading="loading">
             <el-table-column label="申请编号" width="170">
@@ -38,7 +81,7 @@
               </template>
             </el-table-column>
             <el-table-column label="申请时间" width="160">
-              <template #default="{row}">{{ row.createdTime || row.time || '-' }}</template>
+              <template #default="{row}">{{ fmtDateTime(row.createdTime || row.time) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="180" fixed="right">
               <template #default="{row}">
@@ -54,6 +97,18 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="pager">
+            <el-pagination
+              v-model:current-page="minePager.pageNo"
+              v-model:page-size="minePager.pageSize"
+              :page-sizes="[10, 20, 50]"
+              :total="minePager.total"
+              background
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="reloadMine"
+              @current-change="reloadMine"
+            />
+          </div>
         </div>
       </el-tab-pane>
 
@@ -148,8 +203,41 @@
 
       <!-- ============ 已审批 ============ -->
       <el-tab-pane v-if="canApprove" label="已审批" name="done">
+        <div class="card-section">
+          <el-form inline size="default">
+            <el-form-item label="关键字">
+              <el-input v-model="doneFilters.keyword" placeholder="申请编号 / 客户 ID" clearable
+                        style="width:200px" @keyup.enter="onDoneFilterChange" />
+            </el-form-item>
+            <el-form-item label="维度">
+              <el-select v-model="doneFilters.allocDim" clearable placeholder="全部" style="width:140px"
+                         @change="onDoneFilterChange">
+                <el-option value="CUST" label="客户" />
+                <el-option value="ORG" label="机构" />
+                <el-option value="EMP" label="员工" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="业务类型">
+              <el-select v-model="doneFilters.bizKind" clearable placeholder="全部" style="width:160px"
+                         @change="onDoneFilterChange">
+                <el-option value="LOAN" label="贷款" />
+                <el-option value="DEPOSIT" label="存款" />
+                <el-option value="SUPPORT" label="支援" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="申请时间">
+              <el-date-picker v-model="doneFilters.dateRange" type="daterange" value-format="YYYY-MM-DD"
+                              range-separator="~" start-placeholder="开始" end-placeholder="结束"
+                              style="width:240px" @change="onDoneFilterChange" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="onDoneFilterChange">查询</el-button>
+              <el-button @click="resetDoneFilters">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
         <div class="card-section table">
-          <el-table :data="dones" size="default" empty-text="暂无已审批记录" v-loading="doneLoading">
+          <el-table :data="dones" size="default" empty-text="无符合条件的已审批" v-loading="doneLoading">
             <el-table-column label="标题" min-width="220">
               <template #default="{row}"><code class="mono">{{ row.title || row.businessKey }}</code></template>
             </el-table-column>
@@ -192,6 +280,18 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="pager">
+            <el-pagination
+              v-model:current-page="donePager.pageNo"
+              v-model:page-size="donePager.pageSize"
+              :page-sizes="[10, 20, 50]"
+              :total="donePager.total"
+              background
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="reloadDone"
+              @current-change="reloadDone"
+            />
+          </div>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -368,12 +468,13 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { fmtDateTime } from '@/utils/datetime';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  listAdjusts, submitAdjust, withdrawAdjust, getAdjustDetail,
-  getAdjustApprovalHistory, listMyAdjustTodos
+  submitAdjust, withdrawAdjust, getAdjustDetail,
+  getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones
 } from '@/api/perf';
-import { listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
+import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 
@@ -446,14 +547,54 @@ async function loadCanApprove() {
 // ============ 我的申请 ============
 const rows = ref([]);
 const loading = ref(false);
+const mineFilters = reactive({
+  keyword: '',
+  allocDim: '',
+  bizKind: '',
+  status: '',
+  dateRange: null,
+});
+const minePager = reactive({
+  pageNo: 1,
+  pageSize: 20,
+  total: 0,
+});
 async function reloadMine() {
   loading.value = true;
   try {
-    const empId = userStore.user?.empId;
-    if (!empId) { rows.value = []; return; }
-    const r = await listAdjusts({ pageSize: 50, createdBy: empId });
-    if (Array.isArray(r)) rows.value = r;
-  } catch {} finally { loading.value = false; }
+    const params = {
+      keyword: mineFilters.keyword || undefined,
+      allocDim: mineFilters.allocDim || undefined,
+      bizKind: mineFilters.bizKind || undefined,
+      status: mineFilters.status || undefined,
+      dateFrom: mineFilters.dateRange?.[0] || undefined,
+      dateTo: mineFilters.dateRange?.[1] || undefined,
+      pageNo: minePager.pageNo,
+      pageSize: minePager.pageSize,
+    };
+    const r = await listMyAdjustApplies(params);
+    rows.value = r.records || [];
+    minePager.total = r.total || 0;
+  } catch (err) {
+    console.error('[reloadMine] failed', err);
+    rows.value = [];
+    minePager.total = 0;
+  } finally {
+    loading.value = false;
+  }
+}
+function resetMineFilters() {
+  mineFilters.keyword = '';
+  mineFilters.allocDim = '';
+  mineFilters.bizKind = '';
+  mineFilters.status = '';
+  mineFilters.dateRange = null;
+  minePager.pageNo = 1;
+  reloadMine();
+}
+function onMineFilterChange() {
+  minePager.pageNo = 1;
+  reloadMine();
 }
 
 // ============ 待我审批 ============
@@ -510,14 +651,51 @@ function onTodoFilterChange() {
 // ============ 已审批（已办） ============
 const dones = ref([]);
 const doneLoading = ref(false);
+const doneFilters = reactive({
+  keyword: '',
+  allocDim: '',
+  bizKind: '',
+  dateRange: null,
+});
+const donePager = reactive({
+  pageNo: 1,
+  pageSize: 20,
+  total: 0,
+});
 async function reloadDone() {
   doneLoading.value = true;
   try {
-    // 后端 queryDoneList 已按 taskAssignee=当前用户 + finished 过滤
-    // bizType 限定到 ALLOC_ADJUST 与"待我审批" tab 对齐
-    const r = await listDoneTasks({ pageSize: 50, bizType: 'ALLOC_ADJUST' });
-    if (Array.isArray(r)) dones.value = r;
-  } catch {} finally { doneLoading.value = false; }
+    const params = {
+      keyword: doneFilters.keyword || undefined,
+      allocDim: doneFilters.allocDim || undefined,
+      bizKind: doneFilters.bizKind || undefined,
+      dateFrom: doneFilters.dateRange?.[0] || undefined,
+      dateTo: doneFilters.dateRange?.[1] || undefined,
+      pageNo: donePager.pageNo,
+      pageSize: donePager.pageSize,
+    };
+    const r = await listMyAdjustDones(params);
+    dones.value = r.records || [];
+    donePager.total = r.total || 0;
+  } catch (err) {
+    console.error('[reloadDone] failed', err);
+    dones.value = [];
+    donePager.total = 0;
+  } finally {
+    doneLoading.value = false;
+  }
+}
+function resetDoneFilters() {
+  doneFilters.keyword = '';
+  doneFilters.allocDim = '';
+  doneFilters.bizKind = '';
+  doneFilters.dateRange = null;
+  donePager.pageNo = 1;
+  reloadDone();
+}
+function onDoneFilterChange() {
+  donePager.pageNo = 1;
+  reloadDone();
 }
 
 // ============ 统一刷新（按 tab 路由） ============

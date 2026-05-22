@@ -272,6 +272,28 @@ export function listMyAdjustTodos(params = {}) {
     { total: 0, records: [], pageNo: 1, pageSize: 20 }
   );
 }
+
+/**
+ * 业绩调整 - 我的申请（后端分页 + 5 字段过滤；createdBy 后端硬约束当前用户）.
+ * @param {object} params - { keyword?, allocDim?, bizKind?, status?, dateFrom?, dateTo?, pageNo?, pageSize? }
+ */
+export function listMyAdjustApplies(params = {}) {
+  return call('get', '/perf/alloc-adjust/my-applies',
+    { params: { pageNo: 1, pageSize: 20, ...params } },
+    { total: 0, records: [], pageNo: 1, pageSize: 20 }
+  );
+}
+
+/**
+ * 业绩调整 - 已审批（后端分页 + 4 字段过滤）.
+ * @param {object} params - { keyword?, allocDim?, bizKind?, dateFrom?, dateTo?, pageNo?, pageSize? }
+ */
+export function listMyAdjustDones(params = {}) {
+  return call('get', '/perf/alloc-adjust/my-done',
+    { params: { pageNo: 1, pageSize: 20, ...params } },
+    { total: 0, records: [], pageNo: 1, pageSize: 20 }
+  );
+}
 /**
  * 查询分配调整申请审批流记录（时间倒序，最新在上）
  * 后端: GET /api/perf/alloc-adjust/{id}/approval-history → List<ApprovalLogDTO>
