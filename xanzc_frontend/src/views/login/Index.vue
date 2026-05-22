@@ -135,10 +135,14 @@ async function onSubmit() {
     const redirect = route.query.redirect && String(route.query.redirect);
     router.replace(redirect || '/workspace');
   } catch (e) {
-    // 业务错误的 ElMessage.error 已经在 http.js 拦截器里弹出，这里不重复
-    if (!e?.response) {
+    // 登录 401：http.js 拦截器对 /auth/login 故意不弹（避免覆盖其他提示），由本页处理
+    // 后端 AUTH-40101 message="用户名或密码错误" 已被 http.js 挂到 e.message
+    if (e?.response?.status === 401) {
+      ElMessage.error(e?.message || '用户名或密码错误');
+    } else if (!e?.response) {
       ElMessage.error(e?.message || '登录失败');
     }
+    // 其他 4xx/5xx：http.js 拦截器已弹过 ElMessage.error
   } finally {
     loading.value = false;
   }
