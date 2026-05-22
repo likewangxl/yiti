@@ -80,16 +80,24 @@
           <el-input v-model="dlg.form.menuName" placeholder="菜单显示名 / 资源说明" maxlength="256" />
         </el-form-item>
         <el-form-item label="URL" prop="resourceUrl">
-          <!-- URL 输入 + 前端路由建议（菜单类资源参考 xanpd 的"resource_url 下拉路由列表"）。
-               用 el-autocomplete 替代纯文本：菜单可从已注册路由选，接口仍可手填 Ant 风格 path -->
-          <el-autocomplete
+          <!-- URL 强制下拉选择前端已注册路由，避免选了没对应 .vue 的 path 进去空白。
+               分组节点（M_GROUP_*）走 #group/xxx 锚点不在选项内，由开发者直接 SQL 维护 -->
+          <el-select
             v-model="dlg.form.resourceUrl"
-            :fetch-suggestions="fetchUrlSuggest"
-            placeholder="Ant 风格，如 /system/users 或 /api/perf/**"
-            maxlength="256"
-            clearable
+            placeholder="从已注册前端路由中选择"
+            filterable
             style="width:100%"
-          />
+          >
+            <el-option
+              v-for="r in routeOptions"
+              :key="r.value"
+              :value="r.value"
+              :label="r.label"
+            >
+              <span>{{ r.label }}</span>
+              <span style="margin-left:8px;color:#9CA3AF;font-size:11px;font-family:ui-monospace,monospace">{{ r.value }}</span>
+            </el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="图标" prop="menuIconUrl">
           <div class="icon-pick">
@@ -155,21 +163,18 @@ import {
 } from '@/api/resources';
 
 const router = useRouter();
-// URL 建议：把当前前端注册路由扁平化作为 autocomplete 数据源（菜单类资源选 path 更准）
-function flatRouterPaths() {
+// 菜单 URL 强制下拉选 — 选项来自 router 已注册路由扁平化
+// 业务约束：新建菜单只能指向真存在的前端页面，避免点进去空白
+const routeOptions = computed(() => {
   const result = [];
   const layout = router.options.routes.find(r => r.path === '/' && r.children?.length);
   for (const r of layout?.children || []) {
     if (!r.path || !r.meta?.title) continue;
+    if (r.meta?.hidden) continue;
     result.push({ value: '/' + r.path, label: r.meta.title });
   }
-  return result;
-}
-function fetchUrlSuggest(queryString, cb) {
-  const all = flatRouterPaths();
-  const q = (queryString || '').toLowerCase();
-  cb(all.filter(s => s.value.toLowerCase().includes(q) || (s.label || '').toLowerCase().includes(q)));
-}
+  return result.sort((a, b) => a.value.localeCompare(b.value));
+});
 
 // Emoji 图标库（按类别分组，跟 sidebar 当前用的 emoji 风格一致）。
 // 未来想升级到 element-plus SVG icon 时，把这里改成图标名 + 模板用 <component :is> 即可。

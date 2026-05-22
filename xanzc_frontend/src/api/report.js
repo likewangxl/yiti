@@ -207,10 +207,31 @@ export function exportDashboardPdf(payload) {
 }
 
 // ===== 预置报表 =====
-// 注意：lf 后端目前没有 /api/reports/presets 端点（PT_RESOURCE 无登记，调用返回 AUTH-40302）。
-// fallback 改空数组，避免 UI 显示 6 条 reportPresets mock 假数据；待后端补接口后即可联通。
-export function listPresets() {
-  return call('get', '/reports/presets', {}, []);
+// 后端没有 /api/reports/presets 这个 endpoint，"预置报表"语义改为聚合下面 3 个真实汇总接口（C.2/C.3/C.4）
+// 前端 Presets.vue 渲染成 3 张卡片，点击卡片调对应汇总接口
+
+// C.3 绩效汇总 PerfSummary（必填 dim/cycleType，可选 subjectIds[]/pageNo/pageSize）
+export function getPerfSummary(params = {}) {
+  return call('get', '/reports/perf-summary', { params }, { records: [], total: 0 });
+}
+export function exportPerfSummary(payload) {
+  return call('post', '/reports/perf-summary/export', { data: payload }, { taskId: 'EXP-MOCK-' + Date.now() });
+}
+
+// C.4 客户池汇总 CustPoolSummary（全可选：orgId/pageNo/pageSize）
+export function getCustPoolSummary(params = {}) {
+  return call('get', '/reports/customer-pool-summary', { params }, { records: [], total: 0 });
+}
+export function exportCustPoolSummary(payload) {
+  return call('post', '/reports/customer-pool-summary/export', { data: payload }, { taskId: 'EXP-MOCK-' + Date.now() });
+}
+
+// C.2 机构触达汇总 TouchSummary（必填 startDate/endDate，可选 orgId/pageNo/pageSize）
+export function getTouchSummary(params = {}) {
+  return call('get', '/reports/touch-task-summary', { params }, { records: [], total: 0 });
+}
+export function exportTouchSummary(payload) {
+  return call('post', '/reports/touch-task-summary/export', { data: payload }, { taskId: 'EXP-MOCK-' + Date.now() });
 }
 
 // ===== SQL 探查 =====
