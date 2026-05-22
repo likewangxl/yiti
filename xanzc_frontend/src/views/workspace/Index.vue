@@ -97,7 +97,7 @@ import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
 import { getWorkspace, getMyTodoCount, getUnreadNotificationCount } from '@/api/workspace';
-import { listTodoTasks, listDoneTasks } from '@/api/workflow';
+import { listMyAdjustTodos, listMyAdjustDones } from '@/api/perf';
 
 const router = useRouter();
 const store = useUserStore();
@@ -129,9 +129,11 @@ const tasksLoading = ref(false);
 async function loadTasks() {
   tasksLoading.value = true;
   try {
-    const fn = taskTab.value === 'PENDING' ? listTodoTasks : listDoneTasks;
+    // 切到 perf my-todos / my-done（跟 Adjust.vue 同数据源），避免列表里有非 ALLOC_ADJUST task
+    // 点办理跳 /perf/adjust 找不到的 bug
+    const fn = taskTab.value === 'PENDING' ? listMyAdjustTodos : listMyAdjustDones;
     const r = await fn({ pageNo: 1, pageSize: 20 });
-    tasks.value = Array.isArray(r) ? r : (r?.records || []);
+    tasks.value = r?.records || [];
   } catch { tasks.value = []; } finally { tasksLoading.value = false; }
 }
 function goHandle(row) {
