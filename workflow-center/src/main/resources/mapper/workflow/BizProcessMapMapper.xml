@@ -56,4 +56,17 @@
           AND process_status = 'RUNNING'
     </select>
 
+    <!-- 按 processInstanceId 列表 + bizType 批量查询（避免 N+1） -->
+    <select id="selectByProcessInstanceIdsAndBizType"
+            resultType="com.bank.branch.platform.workflow.entity.BizProcessMap">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM BIZ_PROCESS_MAP
+        WHERE biz_type = #{bizType}
+          AND process_instance_id IN
+        <foreach collection="processInstanceIds" item="piid" open="(" separator="," close=")">
+            #{piid}
+        </foreach>
+    </select>
+
 </mapper>

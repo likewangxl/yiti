@@ -38,9 +38,11 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -368,6 +370,7 @@ public class TodoQueryService {
         dto.setAssignee(hti.getAssignee());
         dto.setCandidateGroups(parseJsonToList(map.getCandidateGroups(), STRING_LIST_TYPE));
         dto.setSlaStatus(slaStatus.getCode());
+        dto.setProcessStatus(map.getProcessStatus());
         dto.setClaimable(false); // 已办任务不可签收
         enrichStartUserOrg(dto);
 
@@ -484,5 +487,91 @@ public class TodoQueryService {
             return null;
         }
         return LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
+    }
+
+    // ============== TodoQueryApi 支持方法 ==============
+    // 供 perf 等业务模块按 businessKey 反查 task 元信息（业务字段过滤留在业务模块，不让 workflow 认业务表）
+    // 注意：Flowable Task 不直接持 businessKey，需 join BIZ_PROCESS_MAP 表反查
+
+    /**
+     * 查询当前员工在某 bizType 下所有待办 task 的 businessKey（去重）。
+     * <p>口径与 queryTodoList 对齐：候选 group 模式走 mergeVisibleTasks，否则走 taskCandidateOrAssigned；
+     * 然后用 task.processInstanceId 批量 IN 查 BIZ_PROCESS_MAP 取 businessKey。</p>
+     *
+     * @param empId   员工 ID
+     * @param bizType 业务类型（BIZ_PROCESS_MAP.biz_type，如 "ALLOC_ADJUST"）
+     * @return businessKey 列表（去重，可能为空）
+     */
+    public List<String> listMyTodoBusinessKeys(String empId, String bizType) {
+        if (empId == null || bizType == null) {
+            return new ArrayList<>();
+        }
+        Set<String> candidateGroupKeys = currentUserApi.getCurrentCandidateGroupKeys();
+        List<Task> tasks;
+        if (candidateGroupKeys == null || candidateGroupKeys.isEmpty()) {
+            tasks = taskService.createTaskQuery()
+                    .taskCandidateOrAssigned(empId)
+                    .list();
+        } else {
+            tasks = mergeVisibleTasks(empId, candidateGroupKeys);
+        }
+        if (tasks.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> piids = tasks.stream()
+                .map(Task::getProcessInstanceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (piids.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<BizProcessMap> maps = bizProcessMapMapper.selectByProcessInstanceIdsAndBizType(piids, bizType);
+        return maps.stream()
+                .map(BizProcessMap::getBusinessKey)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 按 businessKey 列表批量反查 TaskRespDTO（候选 OR 受理口径，复用 convertTaskToDTO 装配）。
+     * <p>实现：businessKey 单条 selectByBusinessKey（N+1 但 N≤pageSize≤100 可控）→ 拿 processInstanceId →
+     * 与当前用户全部待办 task 内存交集 → convertTaskToDTO 装配。</p>
+     *
+     * @param empId        员工 ID（鉴权用，只返该员工候选或受理的 task）
+     * @param businessKeys 待查的 businessKey 列表
+     * @return TaskRespDTO 列表（不命中的 key 不返回）
+     */
+    public List<TaskRespDTO> findMyTaskRespByBusinessKeys(String empId, List<String> businessKeys) {
+        if (empId == null || businessKeys == null || businessKeys.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 1. businessKey → processInstanceId（N+1 在 pageSize≤100 可控）
+        Set<String> targetPiids = new HashSet<>();
+        for (String bk : businessKeys) {
+            BizProcessMap map = bizProcessMapMapper.selectByBusinessKey(bk);
+            if (map != null && map.getProcessInstanceId() != null) {
+                targetPiids.add(map.getProcessInstanceId());
+            }
+        }
+        if (targetPiids.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 2. 拿当前用户的全部待办 task，再按 processInstanceId 内存交集（保鉴权口径）
+        Set<String> candidateGroupKeys = currentUserApi.getCurrentCandidateGroupKeys();
+        List<Task> allTasks;
+        if (candidateGroupKeys == null || candidateGroupKeys.isEmpty()) {
+            allTasks = taskService.createTaskQuery()
+                    .taskCandidateOrAssigned(empId)
+                    .list();
+        } else {
+            allTasks = mergeVisibleTasks(empId, candidateGroupKeys);
+        }
+        return allTasks.stream()
+                .filter(t -> targetPiids.contains(t.getProcessInstanceId()))
+                .map(this::convertTaskToDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 }
