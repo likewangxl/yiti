@@ -5,6 +5,8 @@ import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 业务流程映射 Mapper 接口，操作 biz_process_map 表。
  * <p>
@@ -55,4 +57,16 @@ public interface BizProcessMapMapper extends BaseMapper<BizProcessMap> {
      * @return 存在运行中流程返回 true，否则返回 false
      */
     boolean existsRunningByBusinessKey(String businessKey);
+
+    /**
+     * 按 processInstanceId 列表 + bizType 批量查询映射记录。
+     * 用于 TodoQueryApi 把 Flowable Task 反查到 businessKey，避免 N+1。
+     *
+     * @param processInstanceIds 流程实例 ID 列表（非空）
+     * @param bizType            业务类型
+     * @return 映射列表（不存在的 piid 不返回）
+     */
+    List<BizProcessMap> selectByProcessInstanceIdsAndBizType(
+            @Param("processInstanceIds") List<String> processInstanceIds,
+            @Param("bizType") String bizType);
 }

@@ -39,4 +39,7 @@ public class ResourceCreateReqDTO {
 
     @Size(max = 10)
     private String sysCode;
+
+    @Size(max = 256)
+    private String menuIconUrl;
 }

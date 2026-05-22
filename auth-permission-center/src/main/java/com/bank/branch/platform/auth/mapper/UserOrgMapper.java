@@ -59,4 +59,13 @@ public interface UserOrgMapper {
      */
     long countUsersByOrgCode(@Param("orgCode") String orgCode,
                              @Param("keyword") String keyword);
+
+    /** 新增用户机构关联（V1 单主机构）。 */
+    int insert(ExtUserOrg userOrg);
+
+    /** 按 userId 更新主机构（V1 单主机构语义，行存在时改 ORG_CODE）。 */
+    int updateOrgCodeByUserId(@Param("userId") String userId, @Param("orgCode") String orgCode);
+
+    /** 按 userId 清空机构关联（用户删除时调用，或 update 改机构前先清旧）。 */
+    int deleteByUserId(String userId);
 }

@@ -17,7 +17,7 @@ public class RoleMenuReplaceReqDTO {
     @NotNull
     private List<String> menuIds;
 
-    // 改为可选：分配菜单不再强制变更原因（产品决定，前端去掉了输入框）
+    // 分配菜单不再强制变更原因（产品决定，前端去掉了输入框）；保留字段允许审计层 fallback 写默认值
     @Size(max = 200)
     private String reason;
 }

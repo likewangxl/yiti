@@ -36,4 +36,8 @@ public class UserCreateReqDTO {
     /** 备注 */
     @Size(max = 256)
     private String remark;
+
+    /** 主机构编码（V1 单主机构语义），可选；前端按当前选中机构带入 */
+    @Size(max = 20)
+    private String orgCode;
 }

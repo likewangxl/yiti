@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -36,16 +37,19 @@ public class PtUser {
     /** 邮箱，对应 EMAIL */
     private String email;
 
-    /** 账号是否过期：0-未过期，1-已过期，对应 ISEXPIRED */
+    /** 账号是否过期：0-未过期，1-已过期，对应 ISEXPIRED（DB 列名无下划线） */
+    @TableField("ISEXPIRED")
     private Integer isExpired;
 
-    /** 账号是否锁定：0-未锁定，1-已锁定，对应 ISLOCKED */
+    /** 账号是否锁定：0-未锁定，1-已锁定，对应 ISLOCKED（DB 列名无下划线） */
+    @TableField("ISLOCKED")
     private Integer isLocked;
 
     /** 密码错误次数，对应 PASS_WRONG_COUNT */
     private Integer passWrongCount;
 
-    /** 账号是否启用：0-启用，1-未启用，对应 ISENABLED */
+    /** 账号是否启用：0-启用，1-未启用，对应 ISENABLED（DB 列名无下划线） */
+    @TableField("ISENABLED")
     private Integer isEnabled;
 
     /** 创建时间，对应 CREATE_TIME */

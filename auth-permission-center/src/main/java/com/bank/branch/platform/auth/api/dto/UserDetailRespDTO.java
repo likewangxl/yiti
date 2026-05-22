@@ -20,4 +20,6 @@ public class UserDetailRespDTO {
     private LocalDateTime updateTime;
     private String updateAuthor;
     private LocalDateTime pwdUpdateTime;
+    /** 主机构编码（V1 单主机构），编辑用户时反显 */
+    private String orgCode;
 }

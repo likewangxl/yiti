@@ -81,7 +81,8 @@ public class ResourceController {
                 req.getMenuEndFlag(),
                 req.getMenuRankNo(),
                 req.getParentResourceId(),
-                req.getSysCode());
+                req.getSysCode(),
+                req.getMenuIconUrl());
         return ResponseWrapper.success(dto);
     }
 

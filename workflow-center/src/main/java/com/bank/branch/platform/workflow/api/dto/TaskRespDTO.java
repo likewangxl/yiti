@@ -66,6 +66,13 @@ public class TaskRespDTO {
     /** SLA红绿灯状态：GREEN / YELLOW / RED */
     private String slaStatus;
 
+    /**
+     * 流程实例状态：RUNNING（审批中）/ COMPLETED（完结，业务 APPROVED）/
+     * CANCELLED（驳回，业务 REJECTED）。取自 biz_process_map.process_status，
+     * 前端按此映射"审批中 / 完结 / 驳回"显示。已办列表必填，待办列表通常为 RUNNING。
+     */
+    private String processStatus;
+
     /** 黄灯预警时间点 */
     private LocalDateTime warningTime;
 

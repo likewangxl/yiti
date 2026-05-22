@@ -1,7 +1,6 @@
 package com.bank.branch.platform.auth.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -11,9 +10,8 @@ import lombok.Data;
 @Data
 public class RoleCreateReqDTO {
 
-    @NotBlank
+    // roleCode 可选：不传时后端自动生成 R_XXXXXXXX；老调用方仍可继续传自定义编码
     @Size(max = 10)
-    @Pattern(regexp = "^[A-Z_]+$")
     private String roleCode;
 
     @NotBlank

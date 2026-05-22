@@ -68,7 +68,7 @@ class ResourceControllerTest {
         ResourceTreeNodeDTO dto = new ResourceTreeNodeDTO();
         dto.setResourceId("RES_NEW");
         dto.setMenuName("新菜单");
-        when(resourceService.createResource(anyString(), anyString(), anyString(), any(), any(), any(), any(), any()))
+        when(resourceService.createResource(anyString(), anyString(), anyString(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(dto);
 
         ResourceCreateReqDTO req = new ResourceCreateReqDTO();
