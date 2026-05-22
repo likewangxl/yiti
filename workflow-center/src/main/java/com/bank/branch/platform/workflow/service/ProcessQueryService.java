@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
+import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
@@ -292,11 +293,60 @@ public class ProcessQueryService {
                 .asc()
                 .list();
 
-        // 仅返回用户任务类型的历史节点
-        return activities.stream()
+        // 用户任务类型的历史节点 + 末尾追加一条 SUBMIT "申请提交" 节点
+        // （Flowable HistoricActivityInstance startEvent 不归 userTask，且没有 assignee/taskId/comment，
+        //  无法直接转 ApprovalLogDTO；从 HistoricProcessInstance 取 startUserId/startTime 拼出来）
+        List<ApprovalLogDTO> logs = activities.stream()
                 .filter(a -> a.getActivityType() != null && a.getActivityType().startsWith("userTask"))
                 .map(this::toApprovalLogDTO)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
+        logs.add(buildSubmitLog(instance));
+        return logs;
+    }
+
+    /**
+     * 构造"申请提交" SUBMIT 节点，operator 取 HistoricProcessInstance.startUserId，
+     * operateTime 取 startTime，opinion 留 null（业务层若有 reason 字段由前端兜底填）。
+     */
+    private ApprovalLogDTO buildSubmitLog(HistoricProcessInstance instance) {
+        ApprovalLogDTO dto = new ApprovalLogDTO();
+        dto.setNodeKey("start_event");
+        dto.setNodeName("申请提交");
+        dto.setAction("SUBMIT");
+        String startUserId = instance.getStartUserId();
+        // ProcessStartService 启动流程时没调 identityService.setAuthenticatedUserId，
+        // 所以 ACT_HI_PROCINST.START_USER_ID_ 历史值都是 NULL，从 BIZ_PROCESS_MAP.start_user
+        // 兜底取（业务侧 startProcess 时已写入该列）
+        if (startUserId == null || startUserId.isBlank()) {
+            try {
+                BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(instance.getId());
+                if (map != null) {
+                    startUserId = map.getStartUser();
+                }
+            } catch (Exception e) {
+                log.warn("BIZ_PROCESS_MAP 查询失败 pid={}", instance.getId(), e);
+            }
+        }
+        if (startUserId != null && !startUserId.isBlank()) {
+            dto.setOperator(startUserId);
+            try {
+                dto.setOperatorName(userApi.getUserName(startUserId));
+            } catch (Exception e) {
+                log.warn("申请人姓名查询失败: startUserId={}", startUserId, e);
+            }
+            try {
+                OrgDTO org = orgApi.getUserMainOrg(startUserId);
+                if (org != null) {
+                    dto.setOperatorOrgName(org.getOrgName());
+                }
+            } catch (Exception e) {
+                log.warn("申请人主机构查询失败: startUserId={}", startUserId, e);
+            }
+        }
+        if (instance.getStartTime() != null) {
+            dto.setOperateTime(instance.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
+        }
+        return dto;
     }
 
     private ApprovalLogDTO toApprovalLogDTO(HistoricActivityInstance activity) {
