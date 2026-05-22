@@ -32,16 +32,19 @@ V1+V2 已完成 todo/mine/done tab 改造。但工作台 `/workspace` 顶部 4 �
 
 ### 3.1 后端：3 个改动
 
-**A. perf 新建 `AllocAdjustWithdrawnEvent`**（撤回事件）
-- 字段：`processInstanceId, withdrawnByEmpId, opinion`
-- 在 `AllocAdjustService.withdrawAdjust` 内 publishEvent
-- 现有 `withdrawAdjust` 已经在调 Flowable deleteProcessInstance 终止流程，event 在 delete 前 publish
+**A. workflow 新建 `ProcessWithdrawnEvent`**（通用撤回事件，放 workflow 因 portal 不依赖 perf）
+- 字段：`processInstanceId, businessKey, withdrawnByEmpId, currentAssigneeEmpId, opinion`
+- `currentAssigneeEmpId` 由发布方（perf）查 active task 拿到后填入，避免 listener 再查（active task 在 publish 之后被 delete）
 
-**B. portal 新建 `WorkflowApprovalNotificationListener`**（监听 3 个 event 发通知）
+**B. perf 在 `AllocAdjustService.withdrawAdjust` 内 publish 上述 event**
+- 在调 Flowable `deleteProcessInstance` 之前：先 query active task 拿 assignee → publishEvent → 再 delete
+- 顺序关键：先 publish 后 delete，否则 listener 收不到 assignee 信息
+
+**C. portal 新建 `WorkflowApprovalNotificationListener`**（监听 3 个 workflow event 发通知）
 - 监听：
   - `workflow.api.event.TaskApprovedEvent` → 查 BizProcessMap 拿 startUser → NotificationService.send 给 startUser
   - `workflow.api.event.TaskRejectedEvent` → 同上
-  - `perf.api.event.AllocAdjustWithdrawnEvent` → TaskService 查当前 active task 的 assignee → NotificationService.send 给 assignee
+  - `workflow.api.event.ProcessWithdrawnEvent` → 直接用 event 携带的 currentAssigneeEmpId 发通知
 - 用 `@TransactionalEventListener(phase=AFTER_COMMIT)` 防部分提交场景下重复发通知
 
 **C. 通知文案**：
@@ -73,8 +76,8 @@ V1+V2 已完成 todo/mine/done tab 改造。但工作台 `/workspace` 顶部 4 �
 ### 新建（lf）
 
 ```
-performance-engine-center/src/main/java/com/bank/branch/platform/performance/api/event/
-└── AllocAdjustWithdrawnEvent.java     (record，3 字段)
+workflow-center/src/main/java/com/bank/branch/platform/workflow/api/event/
+└── ProcessWithdrawnEvent.java     (record，5 字段，放 workflow 避免反向依赖)
 
 portal-content-center/src/main/java/com/bank/branch/platform/portal/listener/
 └── WorkflowApprovalNotificationListener.java   (@Component, 3 @EventListener)

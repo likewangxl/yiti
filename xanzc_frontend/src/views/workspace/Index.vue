@@ -40,7 +40,7 @@
             <template #default="{ row }">{{ row.startUserName || row.startUserId || '-' }}</template>
           </el-table-column>
           <el-table-column label="发起时间" width="140">
-            <template #default="{ row }">{{ row.startTime || row.createTime || '-' }}</template>
+            <template #default="{ row }">{{ fmtDateTime(row.startTime || row.createTime) }}</template>
           </el-table-column>
           <el-table-column label="SLA" width="90">
             <template #default="{ row }">
@@ -93,9 +93,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
-import { getWorkspace } from '@/api/workspace';
+import { getWorkspace, getMyTodoCount, getUnreadNotificationCount } from '@/api/workspace';
 import { listTodoTasks, listDoneTasks } from '@/api/workflow';
 
 const router = useRouter();
@@ -146,6 +147,20 @@ onMounted(async () => {
   try { const r = await getWorkspace(); if (r) data.value = r; } catch (e) { /* noop */ }
   // 待办列表独立从 workflow/tasks 拉
   loadTasks();
+  // stats[0]「待办任务」+ stats[1]「未读通知」覆盖为真实 count（其他 2 卡保持 mock）
+  Promise.all([getMyTodoCount(), getUnreadNotificationCount()])
+    .then(([todo, unread]) => {
+      const stats = data.value?.stats;
+      if (Array.isArray(stats) && stats.length >= 2) {
+        stats[0].value = todo;
+        stats[0].trend = '';        // mock 的 "较昨日 -2" 无意义，清空
+        stats[0].trendType = '';
+        stats[1].value = unread;
+        stats[1].trend = '';
+        stats[1].trendType = '';
+      }
+    })
+    .catch((err) => { console.warn('[workspace stats] load failed, keep mock', err); });
 });
 </script>
 

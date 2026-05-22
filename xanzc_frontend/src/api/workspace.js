@@ -77,3 +77,20 @@ export function markRead(id) {
 export function markAllRead() {
   return call('put', '/notifications/read-all', {}, { ok: true });
 }
+
+/**
+ * 工作台「待办」stat 卡用：当前用户 ALLOC_ADJUST 待办真实 count（拿 .total 即可，不取 records）.
+ */
+export function getMyTodoCount() {
+  return call('get', '/workflow/tasks',
+    { params: { bizType: 'ALLOC_ADJUST', pageSize: 1 } },
+    { total: 0, records: [] }
+  ).then(r => Number(r?.total) || 0);
+}
+
+/**
+ * 工作台「未读通知」stat 卡用：未读通知数.
+ */
+export function getUnreadNotificationCount() {
+  return call('get', '/notifications/unread-count', {}, 0).then(r => Number(r) || 0);
+}
