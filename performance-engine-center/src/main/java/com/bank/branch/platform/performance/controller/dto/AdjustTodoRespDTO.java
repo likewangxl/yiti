@@ -22,6 +22,7 @@ public class AdjustTodoRespDTO {
     private String createdBy;
     private LocalDateTime createdTime;
     private String businessKey;
+    private String status;
 
     // ===== workflow 字段（来自 TaskRespDTO） =====
     private String taskId;

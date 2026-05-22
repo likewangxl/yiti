@@ -104,6 +104,7 @@ public class AllocAdjustTodoService {
         d.setCreatedBy(a.getCreatedBy());
         d.setCreatedTime(a.getCreatedTime());
         d.setBusinessKey(a.getBusinessKey());
+        d.setStatus(a.getStatus());
         if (t != null) {
             d.setTaskId(t.getTaskId());
             d.setNodeKey(t.getNodeKey());

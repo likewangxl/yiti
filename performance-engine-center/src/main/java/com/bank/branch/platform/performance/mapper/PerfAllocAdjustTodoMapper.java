@@ -35,4 +35,42 @@ public interface PerfAllocAdjustTodoMapper {
                                              @Param("dateToExclusive") LocalDateTime dateToExclusive,
                                              @Param("offset") int offset,
                                              @Param("pageSize") int pageSize);
+
+    /** 我的申请：count（createdBy 必填硬约束 + status 可选 + 4 字段同 todo）。 */
+    long countMyApplies(@Param("createdBy") String createdBy,
+                        @Param("keyword") String keyword,
+                        @Param("allocDim") String allocDim,
+                        @Param("bizKind") String bizKind,
+                        @Param("status") String status,
+                        @Param("dateFrom") LocalDateTime dateFrom,
+                        @Param("dateToExclusive") LocalDateTime dateToExclusive);
+
+    /** 我的申请：select（同上）+ 分页，按 created_time DESC, id DESC。 */
+    List<PerfAllocAdjustApply> selectMyApplies(@Param("createdBy") String createdBy,
+                                               @Param("keyword") String keyword,
+                                               @Param("allocDim") String allocDim,
+                                               @Param("bizKind") String bizKind,
+                                               @Param("status") String status,
+                                               @Param("dateFrom") LocalDateTime dateFrom,
+                                               @Param("dateToExclusive") LocalDateTime dateToExclusive,
+                                               @Param("offset") int offset,
+                                               @Param("pageSize") int pageSize);
+
+    /** 已审批：count（同 todoWhere 复用 + IN applyIds + 4 字段过滤）。 */
+    long countMyDones(@Param("applyIds") List<String> applyIds,
+                      @Param("keyword") String keyword,
+                      @Param("allocDim") String allocDim,
+                      @Param("bizKind") String bizKind,
+                      @Param("dateFrom") LocalDateTime dateFrom,
+                      @Param("dateToExclusive") LocalDateTime dateToExclusive);
+
+    /** 已审批：select（同上）+ 分页。 */
+    List<PerfAllocAdjustApply> selectMyDones(@Param("applyIds") List<String> applyIds,
+                                             @Param("keyword") String keyword,
+                                             @Param("allocDim") String allocDim,
+                                             @Param("bizKind") String bizKind,
+                                             @Param("dateFrom") LocalDateTime dateFrom,
+                                             @Param("dateToExclusive") LocalDateTime dateToExclusive,
+                                             @Param("offset") int offset,
+                                             @Param("pageSize") int pageSize);
 }
