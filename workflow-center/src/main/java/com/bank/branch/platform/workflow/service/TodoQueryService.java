@@ -574,4 +574,64 @@ public class TodoQueryService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
+
+    /**
+     * 已办：查询当前员工已办 (finished) task 的 businessKey（去重）。
+     * <p>走 HistoryService.createHistoricTaskInstanceQuery + finished + taskAssignee=empId
+     * + processInstanceId 批量 IN 查 BIZ_PROCESS_MAP 过滤 bizType。</p>
+     */
+    public List<String> listMyDoneBusinessKeys(String empId, String bizType) {
+        if (empId == null || bizType == null) {
+            return new ArrayList<>();
+        }
+        List<HistoricTaskInstance> tasks = historyService.createHistoricTaskInstanceQuery()
+                .taskAssignee(empId)
+                .finished()
+                .list();
+        if (tasks.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> piids = tasks.stream()
+                .map(HistoricTaskInstance::getProcessInstanceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (piids.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<BizProcessMap> maps = bizProcessMapMapper.selectByProcessInstanceIdsAndBizType(piids, bizType);
+        return maps.stream()
+                .map(BizProcessMap::getBusinessKey)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 已办：按 businessKey 列表反查 TaskRespDTO（鉴权：仅返该员工 assignee 的 HistoricTask）。
+     */
+    public List<TaskRespDTO> findDoneTaskRespByBusinessKeys(String empId, List<String> businessKeys) {
+        if (empId == null || businessKeys == null || businessKeys.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Set<String> targetPiids = new HashSet<>();
+        for (String bk : businessKeys) {
+            BizProcessMap map = bizProcessMapMapper.selectByBusinessKey(bk);
+            if (map != null && map.getProcessInstanceId() != null) {
+                targetPiids.add(map.getProcessInstanceId());
+            }
+        }
+        if (targetPiids.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<HistoricTaskInstance> tasks = historyService.createHistoricTaskInstanceQuery()
+                .taskAssignee(empId)
+                .finished()
+                .list();
+        return tasks.stream()
+                .filter(t -> targetPiids.contains(t.getProcessInstanceId()))
+                .map(this::convertHistoricTaskToDTO)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
 }

@@ -39,4 +39,22 @@ public class TodoQueryFacade implements TodoQueryApi {
                 .filter(d -> d.getBusinessKey() != null)
                 .collect(Collectors.toMap(TaskRespDTO::getBusinessKey, d -> d, (a, b) -> a));
     }
+
+    @Override
+    public List<String> listMyDoneBusinessKeys(String empId, String bizType) {
+        log.debug("[TodoQueryFacade.listMyDoneBusinessKeys] empId={}, bizType={}", empId, bizType);
+        return todoQueryService.listMyDoneBusinessKeys(empId, bizType);
+    }
+
+    @Override
+    public Map<String, TaskRespDTO> findDoneTaskRespByBusinessKeys(String empId, List<String> businessKeys) {
+        log.debug("[TodoQueryFacade.findDoneTaskRespByBusinessKeys] empId={}, keys={}",
+                empId, businessKeys == null ? 0 : businessKeys.size());
+        if (empId == null || businessKeys == null || businessKeys.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return todoQueryService.findDoneTaskRespByBusinessKeys(empId, businessKeys).stream()
+                .filter(d -> d.getBusinessKey() != null)
+                .collect(Collectors.toMap(TaskRespDTO::getBusinessKey, d -> d, (a, b) -> a));
+    }
 }

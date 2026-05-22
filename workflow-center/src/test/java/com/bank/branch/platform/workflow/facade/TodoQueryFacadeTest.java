@@ -64,4 +64,31 @@ class TodoQueryFacadeTest {
         assertThat(facade.findTaskRespByBusinessKeys("E001", null)).isEmpty();
         assertThat(facade.findTaskRespByBusinessKeys("E001", Collections.emptyList())).isEmpty();
     }
+
+    @Test
+    void w4_listMyDoneBusinessKeys_delegatesToService() {
+        when(todoQueryService.listMyDoneBusinessKeys("E001", "ALLOC_ADJUST"))
+                .thenReturn(Arrays.asList("ALLOC_ADJUST:A1", "ALLOC_ADJUST:A2"));
+
+        List<String> keys = facade.listMyDoneBusinessKeys("E001", "ALLOC_ADJUST");
+
+        assertThat(keys).containsExactly("ALLOC_ADJUST:A1", "ALLOC_ADJUST:A2");
+    }
+
+    @Test
+    void w5_findDoneTaskRespByBusinessKeys_buildsMap() {
+        TaskRespDTO dto1 = new TaskRespDTO();
+        dto1.setTaskId("T1");
+        dto1.setBusinessKey("ALLOC_ADJUST:A1");
+        when(todoQueryService.findDoneTaskRespByBusinessKeys("E001",
+                Arrays.asList("ALLOC_ADJUST:A1", "ALLOC_ADJUST:A2")))
+                .thenReturn(Arrays.asList(dto1));
+
+        Map<String, TaskRespDTO> map = facade.findDoneTaskRespByBusinessKeys("E001",
+                Arrays.asList("ALLOC_ADJUST:A1", "ALLOC_ADJUST:A2"));
+
+        assertThat(map).hasSize(1);
+        assertThat(map.get("ALLOC_ADJUST:A1").getTaskId()).isEqualTo("T1");
+        assertThat(map).doesNotContainKey("ALLOC_ADJUST:A2");
+    }
 }

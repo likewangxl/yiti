@@ -31,4 +31,22 @@ public interface TodoQueryApi {
      * @return 以 businessKey 为 key 的 Map（不命中的 key 在 Map 中缺失）
      */
     Map<String, TaskRespDTO> findTaskRespByBusinessKeys(String empId, List<String> businessKeys);
+
+    /**
+     * 已办：查询某员工某 bizType 下所有历史已办 task 的 processInstanceBusinessKey（去重）。
+     *
+     * @param empId   员工 ID
+     * @param bizType 业务类型（如 "ALLOC_ADJUST"）
+     * @return businessKey 列表（去重，可能为空）
+     */
+    List<String> listMyDoneBusinessKeys(String empId, String bizType);
+
+    /**
+     * 已办：按 businessKey 反查 TaskRespDTO（走 HistoryService，仅返该员工 assignee 的）。
+     *
+     * @param empId        员工 ID（鉴权用）
+     * @param businessKeys 待查的 businessKey 列表
+     * @return 以 businessKey 为 key 的 Map（不命中的 key 在 Map 中缺失）
+     */
+    Map<String, TaskRespDTO> findDoneTaskRespByBusinessKeys(String empId, List<String> businessKeys);
 }
