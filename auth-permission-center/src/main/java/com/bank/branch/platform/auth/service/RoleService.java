@@ -84,6 +84,10 @@ public class RoleService {
     @Transactional
     public RoleRespDTO createRole(String roleCode, String roleChName, String remark) {
         log.info("[RoleService.createRole] roleCode={}, roleChName={}", roleCode, roleChName);
+        // 前端新增时不输入 roleCode，由后端按 R_ + UUID 8 位大写自动生成
+        if (roleCode == null || roleCode.isBlank()) {
+            roleCode = "R_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        }
         // 校验角色编码唯一性 — 防止同名角色导致权限混乱
         if (roleMapper.selectByRoleCode(roleCode) != null) {
             throw new BizException(AuthErrorCode.ROLE_CODE_DUPLICATE.getCode(),

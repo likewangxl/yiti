@@ -1,6 +1,9 @@
 package com.bank.branch.platform.auth.controller;
 
+import com.bank.branch.platform.auth.api.dto.OrgCreateReqDTO;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
+import com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO;
 import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
 import com.bank.branch.platform.auth.service.OrgService;
@@ -12,10 +15,15 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -86,5 +94,34 @@ public class OrgController {
         log.debug("[OrgController.getOrgUsers] orgCode={}, keyword={}, pageNo={}, pageSize={}", orgCode, keyword, pageNo, pageSize);
         PageResult<OrgUserDTO> result = orgService.getOrgUsers(orgCode, keyword, pageNo, pageSize);
         return ResponseWrapper.page(result);
+    }
+
+    /** 新增机构 */
+    @PostMapping("")
+    @Operation(summary = "新增机构")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    public ResponseWrapper<OrgDTO> createOrg(@Valid @RequestBody OrgCreateReqDTO req) {
+        log.info("[OrgController.createOrg] orgCode={}", req.getOrgCode());
+        return ResponseWrapper.success(orgService.createOrg(req));
+    }
+
+    /** 更新机构（只支持改 orgName） */
+    @PutMapping("/{orgCode}")
+    @Operation(summary = "更新机构信息")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    public ResponseWrapper<OrgDTO> updateOrg(@PathVariable String orgCode,
+                                              @Valid @RequestBody OrgUpdateReqDTO req) {
+        log.info("[OrgController.updateOrg] orgCode={}", orgCode);
+        return ResponseWrapper.success(orgService.updateOrg(orgCode, req));
+    }
+
+    /** 删除机构（前置校验：无下级机构 + 无用户） */
+    @DeleteMapping("/{orgCode}")
+    @Operation(summary = "删除机构")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    public ResponseWrapper<Void> deleteOrg(@PathVariable String orgCode) {
+        log.info("[OrgController.deleteOrg] orgCode={}", orgCode);
+        orgService.deleteOrg(orgCode);
+        return ResponseWrapper.success(null);
     }
 }

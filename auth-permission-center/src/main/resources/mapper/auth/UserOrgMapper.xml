@@ -84,4 +84,21 @@
           </if>
     </select>
 
+    <!-- 新增用户机构关联（V1 单主机构语义，CREATE_TIME 由 DB 默认值 CURRENT_TIMESTAMP 填充） -->
+    <insert id="insert" parameterType="com.bank.branch.platform.auth.entity.ExtUserOrg">
+        INSERT INTO EXT_USER_ORG (USER_ID, ORG_CODE)
+        VALUES (#{userId}, #{orgCode})
+    </insert>
+
+    <!-- 按 userId 改主机构（V1 单主机构语义） -->
+    <update id="updateOrgCodeByUserId">
+        UPDATE EXT_USER_ORG SET ORG_CODE = #{orgCode}
+        WHERE USER_ID = #{userId}
+    </update>
+
+    <!-- 按 userId 清空机构关联 -->
+    <delete id="deleteByUserId" parameterType="string">
+        DELETE FROM EXT_USER_ORG WHERE USER_ID = #{userId}
+    </delete>
+
 </mapper>

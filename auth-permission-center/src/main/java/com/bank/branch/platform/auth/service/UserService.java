@@ -3,9 +3,11 @@ package com.bank.branch.platform.auth.service;
 import com.bank.branch.platform.auth.api.dto.UserCreateReqDTO;
 import com.bank.branch.platform.auth.api.dto.UserDetailRespDTO;
 import com.bank.branch.platform.auth.config.AuthUserProperties;
+import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
 import com.bank.branch.platform.auth.mapper.UserMapper;
+import com.bank.branch.platform.auth.mapper.UserOrgMapper;
 import com.bank.branch.platform.common.web.exception.BizException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,7 @@ import java.time.LocalDateTime;
 public class UserService {
 
     private final UserMapper userMapper;
+    private final UserOrgMapper userOrgMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final AuthUserProperties props;
 
@@ -63,8 +66,15 @@ public class UserService {
         entity.setCreateAuthor(operator);
         entity.setPwdUpdateTime(now);
         userMapper.insert(entity);
-        log.info("[UserService.create] 新增用户 userId={} username={} operator={}",
-                entity.getUserId(), entity.getUsername(), operator);
+        // 如果带了 orgCode，同步写 EXT_USER_ORG 单主机构关联
+        if (req.getOrgCode() != null && !req.getOrgCode().isBlank()) {
+            ExtUserOrg uo = new ExtUserOrg();
+            uo.setUserId(req.getUserId());
+            uo.setOrgCode(req.getOrgCode());
+            userOrgMapper.insert(uo);
+        }
+        log.info("[UserService.create] 新增用户 userId={} username={} orgCode={} operator={}",
+                entity.getUserId(), entity.getUsername(), req.getOrgCode(), operator);
     }
 
     /** 检查 username 是否已存在 */
@@ -79,7 +89,11 @@ public class UserService {
             throw new BizException(AuthErrorCode.USER_NOT_FOUND.getCode(),
                     AuthErrorCode.USER_NOT_FOUND.getMessage());
         }
-        return toDetailDto(u);
+        UserDetailRespDTO dto = toDetailDto(u);
+        // 反显主机构（V1 单主机构），编辑用户弹窗依赖此字段
+        ExtUserOrg uo = userOrgMapper.selectByUserId(userId);
+        if (uo != null) dto.setOrgCode(uo.getOrgCode());
+        return dto;
     }
 
     /**
@@ -134,7 +148,17 @@ public class UserService {
         u.setUpdateTime(LocalDateTime.now());
         u.setUpdateAuthor(operator);
         userMapper.updateById(u);
-        log.info("[UserService.update] userId={} operator={}", userId, operator);
+        // 如果带了 orgCode，upsert EXT_USER_ORG：行在 → UPDATE，行不在 → INSERT
+        if (req.getOrgCode() != null && !req.getOrgCode().isBlank()) {
+            int affected = userOrgMapper.updateOrgCodeByUserId(userId, req.getOrgCode());
+            if (affected == 0) {
+                ExtUserOrg uo = new ExtUserOrg();
+                uo.setUserId(userId);
+                uo.setOrgCode(req.getOrgCode());
+                userOrgMapper.insert(uo);
+            }
+        }
+        log.info("[UserService.update] userId={} orgCode={} operator={}", userId, req.getOrgCode(), operator);
     }
 
     /** 批量物理删除 */

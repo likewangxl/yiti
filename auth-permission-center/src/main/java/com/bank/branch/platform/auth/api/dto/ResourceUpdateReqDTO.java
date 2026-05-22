@@ -33,4 +33,7 @@ public class ResourceUpdateReqDTO {
     private String parentResourceId;
 
     private Integer status;
+
+    @Size(max = 256)
+    private String menuIconUrl;
 }

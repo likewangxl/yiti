@@ -1,7 +1,9 @@
 package com.bank.branch.platform.auth.service;
 
+import com.bank.branch.platform.auth.api.dto.OrgCreateReqDTO;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.OrgTreeNodeDTO;
+import com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO;
 import com.bank.branch.platform.auth.api.dto.OrgUserDTO;
 import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.api.dto.UserRoleItemDTO;
@@ -39,6 +41,64 @@ public class OrgService {
     private final UserOrgMapper userOrgMapper;
     private final UserMapper userMapper;
     private final UserRoleMapper userRoleMapper;
+
+    /** 新增机构。orgCode 不能与已有重复；orgLevel 不传时按父级 + 1 自动计算。 */
+    @org.springframework.transaction.annotation.Transactional
+    public OrgDTO createOrg(OrgCreateReqDTO req) {
+        if (orgMapper.selectByOrgCode(req.getOrgCode()) != null) {
+            throw new BizException("AUTH-40902", "机构编码已存在");
+        }
+        Integer level = req.getOrgLevel();
+        // 未传 orgLevel 时按父级 + 1 计算；无父级则 level=1
+        if (level == null) {
+            if (req.getPId() != null && !req.getPId().isBlank()) {
+                ExtOrgInfo parent = orgMapper.selectByOrgCode(req.getPId());
+                level = parent != null && parent.getOrgLevel() != null ? parent.getOrgLevel() + 1 : 2;
+            } else {
+                level = 1;
+            }
+        }
+        ExtOrgInfo e = new ExtOrgInfo();
+        e.setOrgCode(req.getOrgCode());
+        e.setOrgName(req.getOrgName());
+        e.setOrgLevel(level);
+        e.setPId(req.getPId() == null ? "" : req.getPId());
+        e.setOrganState(0);
+        e.setCreateTime(java.time.LocalDateTime.now());
+        orgMapper.insert(e);
+        log.info("[OrgService.createOrg] orgCode={} pId={} level={}", e.getOrgCode(), e.getPId(), level);
+        return getOrg(e.getOrgCode());
+    }
+
+    /** 更新机构名称（不支持改 orgCode / pId / level，避免破坏树结构） */
+    @org.springframework.transaction.annotation.Transactional
+    public OrgDTO updateOrg(String orgCode, OrgUpdateReqDTO req) {
+        ExtOrgInfo e = orgMapper.selectByOrgCode(orgCode);
+        if (e == null) throw new BizException("AUTH-40404", "机构不存在");
+        if (req.getOrgName() != null && !req.getOrgName().isBlank()) e.setOrgName(req.getOrgName());
+        orgMapper.updateById(e);
+        log.info("[OrgService.updateOrg] orgCode={} newName={}", orgCode, e.getOrgName());
+        return getOrg(orgCode);
+    }
+
+    /** 删除机构。前置校验：无下级机构 + 无用户绑定。否则抛业务错。 */
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteOrg(String orgCode) {
+        ExtOrgInfo e = orgMapper.selectByOrgCode(orgCode);
+        if (e == null) throw new BizException("AUTH-40404", "机构不存在");
+        // 1) 下级机构存在 → 拒绝
+        List<ExtOrgInfo> children = orgMapper.selectChildren(orgCode);
+        if (children != null && !children.isEmpty()) {
+            throw new BizException("AUTH-40303", "该机构下还有 " + children.size() + " 个子机构，请先删除子机构");
+        }
+        // 2) 有用户归属 → 拒绝
+        long userCnt = userOrgMapper.countUsersByOrgCode(orgCode, null);
+        if (userCnt > 0) {
+            throw new BizException("AUTH-40303", "该机构下还有 " + userCnt + " 个用户，请先迁移用户");
+        }
+        orgMapper.deleteById(orgCode);
+        log.info("[OrgService.deleteOrg] orgCode={} 已删除", orgCode);
+    }
 
     /**
      * 根据机构编码查询机构信息

@@ -146,7 +146,8 @@ public class ResourceService {
      */
     @Transactional
     public ResourceTreeNodeDTO createResource(String resourceUrl, String resourceMethod, String menuName,
-            Integer isMenu, String menuEndFlag, Integer menuRankNo, String parentResourceId, String sysCode) {
+            Integer isMenu, String menuEndFlag, Integer menuRankNo, String parentResourceId, String sysCode,
+            String menuIconUrl) {
         log.info("[ResourceService.createResource] url={}, method={}, sysCode={}", resourceUrl, resourceMethod, sysCode);
         // 校验 URL + Method + SysCode 唯一性，防止重复注册导致鉴权歧义
         if (resourceMapper.selectByUrlAndMethod(resourceUrl, resourceMethod, sysCode) != null) {
@@ -164,6 +165,7 @@ public class ResourceService {
         resource.setMenuRankNo(menuRankNo);
         resource.setParentResourceId(parentResourceId);
         resource.setSysCode(sysCode);
+        resource.setMenuIconUrl(menuIconUrl);
         resource.setStatus(0);
         resource.setCreateTime(LocalDateTime.now());
         resource.setUpdateTime(LocalDateTime.now());
@@ -213,6 +215,7 @@ public class ResourceService {
         if (req.getMenuRankNo() != null) existing.setMenuRankNo(req.getMenuRankNo());
         if (req.getParentResourceId() != null) existing.setParentResourceId(req.getParentResourceId());
         if (req.getStatus() != null) existing.setStatus(req.getStatus());
+        if (req.getMenuIconUrl() != null) existing.setMenuIconUrl(req.getMenuIconUrl());
         existing.setUpdateTime(LocalDateTime.now());
 
         resourceMapper.updateById(existing);
@@ -222,10 +225,10 @@ public class ResourceService {
     }
 
     /**
-     * 逻辑删除资源。
+     * 物理删除资源。
      * <p>
      * 删除前校验是否存在子资源，有子资源时拒绝删除（防止孤立子节点）。
-     * 逻辑删除：将 STATUS 设为 1，并级联清理 PT_ROLE_RESOURCE 授权记录，清除资源缓存。
+     * 物理删除：DELETE FROM PT_RESOURCE，并级联清理 PT_ROLE_RESOURCE 授权记录，清除资源缓存。
      * </p>
      *
      * @param resourceId 资源ID
@@ -235,19 +238,17 @@ public class ResourceService {
     @Transactional
     public void deleteResource(String resourceId, String reason) {
         log.info("[ResourceService.deleteResource] resourceId={}, reason={}", resourceId, reason);
-        PtResource existing = getEntityById(resourceId);
+        getEntityById(resourceId);
         // 存在子资源时拒绝删除，避免前端菜单树出现悬挂节点
         long childCount = resourceMapper.countChildren(resourceId);
         if (childCount > 0) {
             throw new BizException("AUTH-40302", "请先删除子资源");
         }
-        existing.setStatus(1);
-        existing.setUpdateTime(LocalDateTime.now());
-        resourceMapper.updateById(existing);
-        // 级联清理所有角色对该资源的授权记录，防止已删除资源仍被鉴权放行
+        // 先清角色绑定再删资源本体，避免遗留 PT_ROLE_RESOURCE 脏数据
         roleResourceMapper.deleteByResourceId(resourceId);
+        resourceMapper.deleteById(resourceId);
         cacheService.evictAllResourceCache();
-        log.info("[ResourceService.deleteResource] 资源已逻辑删除 resourceId={}", resourceId);
+        log.info("[ResourceService.deleteResource] 资源已物理删除 resourceId={}", resourceId);
     }
 
     /**

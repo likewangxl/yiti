@@ -38,7 +38,7 @@ class ResourceServiceTest {
     void createResource_shouldThrowOnDuplicate() {
         when(resourceMapper.selectByUrlAndMethod("/api/test", "GET", "PLATFORM"))
             .thenReturn(new PtResource());
-        assertThatThrownBy(() -> resourceService.createResource("/api/test", "GET", "测试资源", 1, null, 0, null, "PLATFORM"))
+        assertThatThrownBy(() -> resourceService.createResource("/api/test", "GET", "测试资源", 1, null, 0, null, "PLATFORM", null))
             .isInstanceOf(BizException.class)
             .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40902"));
     }
@@ -47,7 +47,7 @@ class ResourceServiceTest {
     void createResource_shouldInsertAndEvictCache() {
         when(resourceMapper.selectByUrlAndMethod("/api/new", "POST", "PLATFORM")).thenReturn(null);
         when(resourceMapper.insert(any(PtResource.class))).thenReturn(1);
-        ResourceTreeNodeDTO dto = resourceService.createResource("/api/new", "POST", "新资源", 1, null, 0, null, "PLATFORM");
+        ResourceTreeNodeDTO dto = resourceService.createResource("/api/new", "POST", "新资源", 1, null, 0, null, "PLATFORM", null);
         assertThat(dto.getResourceUrl()).isEqualTo("/api/new");
         verify(cacheService).evictAllResourceCache();
     }
@@ -63,14 +63,14 @@ class ResourceServiceTest {
     }
 
     @Test
-    void deleteResource_shouldSetStatusOneAndCleanBindings() {
+    void deleteResource_shouldHardDeleteAndCleanBindings() {
         PtResource r = makeResource("RES_001", "/api/leaf", "GET");
         when(resourceMapper.selectByResourceId("RES_001")).thenReturn(r);
         when(resourceMapper.countChildren("RES_001")).thenReturn(0L);
-        when(resourceMapper.updateById(any(PtResource.class))).thenReturn(1);
+        when(resourceMapper.deleteById("RES_001")).thenReturn(1);
         resourceService.deleteResource("RES_001", "删除原因");
-        verify(resourceMapper).updateById(org.mockito.ArgumentMatchers.<PtResource>argThat(res -> res.getStatus() == 1));
         verify(roleResourceMapper).deleteByResourceId("RES_001");
+        verify(resourceMapper).deleteById("RES_001");
         verify(cacheService).evictAllResourceCache();
     }
 

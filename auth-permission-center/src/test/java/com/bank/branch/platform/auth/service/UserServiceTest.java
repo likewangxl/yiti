@@ -25,13 +25,14 @@ import static org.mockito.Mockito.when;
 class UserServiceTest {
 
     @Mock UserMapper userMapper;
+    @Mock com.bank.branch.platform.auth.mapper.UserOrgMapper userOrgMapper;
     @Mock BCryptPasswordEncoder passwordEncoder;
     AuthUserProperties props = new AuthUserProperties();
     UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userMapper, passwordEncoder, props);
+        userService = new UserService(userMapper, userOrgMapper, passwordEncoder, props);
     }
 
     // ---------- create ----------

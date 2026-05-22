@@ -19,4 +19,8 @@ public class UserUpdateReqDTO {
 
     @Size(max = 256)
     private String remark;
+
+    /** 主机构编码（V1 单主机构语义），可选；不传表示不改 */
+    @Size(max = 20)
+    private String orgCode;
 }
