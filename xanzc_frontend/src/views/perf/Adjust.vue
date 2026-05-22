@@ -59,8 +59,41 @@
 
       <!-- ============ 待我审批 ============ -->
       <el-tab-pane v-if="canApprove" label="待我审批" name="todo">
+        <div class="card-section">
+          <el-form inline size="default">
+            <el-form-item label="关键字">
+              <el-input v-model="todoFilters.keyword" placeholder="申请编号 / 客户 ID" clearable
+                        style="width:200px" @keyup.enter="onTodoFilterChange" />
+            </el-form-item>
+            <el-form-item label="维度">
+              <el-select v-model="todoFilters.allocDim" clearable placeholder="全部"
+                         style="width:140px" @change="onTodoFilterChange">
+                <el-option value="CUST" label="客户" />
+                <el-option value="ORG" label="机构" />
+                <el-option value="EMP" label="员工" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="业务类型">
+              <el-select v-model="todoFilters.bizKind" clearable placeholder="全部"
+                         style="width:160px" @change="onTodoFilterChange">
+                <el-option value="LOAN" label="贷款" />
+                <el-option value="DEPOSIT" label="存款" />
+                <el-option value="SUPPORT" label="支援" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="申请时间">
+              <el-date-picker v-model="todoFilters.dateRange" type="daterange" value-format="YYYY-MM-DD"
+                              range-separator="~" start-placeholder="开始" end-placeholder="结束"
+                              style="width:240px" @change="onTodoFilterChange" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="onTodoFilterChange">查询</el-button>
+              <el-button @click="resetTodoFilters">重置</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
         <div class="card-section table">
-          <el-table :data="todos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading">
+          <el-table :data="todos" size="default" empty-text="无符合条件的待审批" v-loading="todoLoading">
             <el-table-column label="标题" min-width="220">
               <template #default="{row}"><code class="mono">{{ row.title || row.businessKey }}</code></template>
             </el-table-column>
@@ -98,6 +131,18 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="pager">
+            <el-pagination
+              v-model:current-page="todoPager.pageNo"
+              v-model:page-size="todoPager.pageSize"
+              :page-sizes="[10, 20, 50]"
+              :total="todoPager.total"
+              background
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="reloadTodo"
+              @current-change="reloadTodo"
+            />
+          </div>
         </div>
       </el-tab-pane>
 
@@ -322,14 +367,17 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   listAdjusts, submitAdjust, withdrawAdjust, getAdjustDetail,
-  getAdjustApprovalHistory
+  getAdjustApprovalHistory, listMyAdjustTodos
 } from '@/api/perf';
-import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
+import { listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
+
+const route = useRoute();
 
 const STATUS_LABEL = {
   DRAFT: '草稿', IN_APPROVAL: '审批中', APPROVED: '已通过',
@@ -411,12 +459,52 @@ async function reloadMine() {
 // ============ 待我审批 ============
 const todos = ref([]);
 const todoLoading = ref(false);
+const todoFilters = reactive({
+  keyword: '',
+  allocDim: '',
+  bizKind: '',
+  dateRange: null,  // [startDate, endDate] from el-date-picker daterange
+});
+const todoPager = reactive({
+  pageNo: 1,
+  pageSize: 20,
+  total: 0,
+});
 async function reloadTodo() {
   todoLoading.value = true;
   try {
-    const r = await listTodoTasks({ pageSize: 50, bizType: 'ALLOC_ADJUST' });
-    if (Array.isArray(r)) todos.value = r;
-  } catch {} finally { todoLoading.value = false; }
+    const params = {
+      keyword: todoFilters.keyword || undefined,
+      allocDim: todoFilters.allocDim || undefined,
+      bizKind: todoFilters.bizKind || undefined,
+      dateFrom: todoFilters.dateRange?.[0] || undefined,
+      dateTo: todoFilters.dateRange?.[1] || undefined,
+      pageNo: todoPager.pageNo,
+      pageSize: todoPager.pageSize,
+    };
+    const r = await listMyAdjustTodos(params);
+    // r 是 PageResult 对象 { records, total, pageNo, pageSize }
+    todos.value = r.records || [];
+    todoPager.total = r.total || 0;
+  } catch (err) {
+    console.error('[reloadTodo] failed', err);
+    todos.value = [];
+    todoPager.total = 0;
+  } finally {
+    todoLoading.value = false;
+  }
+}
+function resetTodoFilters() {
+  todoFilters.keyword = '';
+  todoFilters.allocDim = '';
+  todoFilters.bizKind = '';
+  todoFilters.dateRange = null;
+  todoPager.pageNo = 1;
+  reloadTodo();
+}
+function onTodoFilterChange() {
+  todoPager.pageNo = 1;
+  reloadTodo();
 }
 
 // ============ 已审批（已办） ============
@@ -713,7 +801,28 @@ onMounted(async () => {
   await loadCanApprove();
   // 没审批资格强制回到"我的申请"，避免 URL/路由复用残留 activeTab='todo' 的边角
   if (!canApprove.value && activeTab.value !== 'mine') activeTab.value = 'mine';
-  reload();
+
+  // 读 query.tab 切 activeTab（仅当有该 tab 权限）
+  const queryTab = route.query.tab;
+  if (queryTab && ['mine', 'todo', 'done'].includes(queryTab)
+      && (canApprove.value || queryTab === 'mine')) {
+    activeTab.value = queryTab;
+  }
+
+  // 自动弹审批：query 含 tab=todo + action=open + taskId 三者齐 + 有审批权限
+  const isAutoOpen = queryTab === 'todo' && route.query.action === 'open'
+                     && route.query.taskId && canApprove.value;
+  if (isAutoOpen) {
+    await reloadTodo();
+    const row = todos.value.find(t => t.taskId === route.query.taskId);
+    if (row) {
+      openApprove(row);
+    } else {
+      ElMessage.warning('任务已处理或不在当前页');
+    }
+  } else {
+    reload();
+  }
 });
 </script>
 

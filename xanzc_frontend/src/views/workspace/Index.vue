@@ -174,13 +174,9 @@ async function fetchBizStatuses() {
 function goHandle(row) {
   const id = row.id || row.taskId;
   if (!id) return;
-  // 业绩调整审批：跳到 /perf/adjust 页内打开审批抽屉，不开独立菜单
-  // 其他 bizType 暂时也走该路径（接入时再分流），保持"审批办理在业务页内"的设计
-  if (['ALLOC_ADJUST', 'PERF_ALLOC_ADJUST'].includes(row.bizType)) {
-    router.push({ path: '/perf/adjust', query: { taskId: id, action: 'open' } });
-  } else {
-    router.push({ path: '/perf/adjust', query: { taskId: id, action: 'open' } });
-  }
+  // 跳 /perf/adjust 的「待我审批」tab 并自动弹审批 dialog（tab=todo + action=open）
+  // 落地后由 Adjust.vue mounted 读 query 切 tab + 在 todos 数组里找对应 taskId 弹审批
+  router.push({ path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } });
 }
 
 onMounted(async () => {
