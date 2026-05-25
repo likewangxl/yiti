@@ -141,6 +141,8 @@ public class TargetPlanController {
                 id, req.getPlanName(), req.getTargetDim(), req.getTargetCycle());
         UpdateTargetPlanCmd cmd = UpdateTargetPlanCmd.builder()
                 .planName(req.getPlanName())
+                .kpiSchemeId(req.getKpiSchemeId())
+                .status(req.getStatus())
                 .targetDim(req.getTargetDim())
                 .targetCycle(req.getTargetCycle())
                 .effectiveDate(req.getEffectiveDate())

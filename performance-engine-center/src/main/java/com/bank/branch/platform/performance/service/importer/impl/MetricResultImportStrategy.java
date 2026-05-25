@@ -15,7 +15,7 @@ import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricResultImportRow;
-import com.bank.branch.platform.portal.api.AddressBookApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -109,7 +109,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
     private final CustIndexResultMapper custIndexResultMapper;
-    private final AddressBookApi addressBookApi;
+    private final UserApi userApi;
     private final OrgApi orgApi;
     private final SysControlService sysControlService;
 
@@ -325,7 +325,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "维度对象必填");
         }
         if ("EMP".equals(dim)) {
-            if (addressBookApi.getEmployee(subject).isEmpty()) {
+            if (userApi.getUserName(subject) == null) {
                 throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
                         "员工不存在（ADDRBOOK_EMPLOYEE）: " + subject);
             }

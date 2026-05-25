@@ -118,9 +118,19 @@ public class MetricDefService {
             PerfMetricDef def = create(cmd);
             return new UpsertMetricDefResult(true, def);
         }
-        // 更新路径：保留 id / metric_code / val_slot
+        // 更新路径：保留 id / metric_code；val_slot 在维度变化或缺失时重新分配
         PerfMetricDef patch = new PerfMetricDef();
         patch.setId(existing.getId());
+        patch.setBaseDim(cmd.getBaseDim());
+        // val_slot 一旦存入不允许修改；仅当原 slot 为空时才分配
+        boolean slotMissing = existing.getValSlot() == null || existing.getValSlot() == 0;
+        if (slotMissing) {
+            String dim = cmd.getBaseDim() != null ? cmd.getBaseDim() : existing.getBaseDim();
+            Integer level = cmd.getMetricLevel() != null ? cmd.getMetricLevel() : existing.getMetricLevel();
+            if (dim != null && !dim.isBlank()) {
+                patch.setValSlot(metricSlotService.allocSlot(dim, level, null));
+            }
+        }
         patch.setMetricNameEn(cmd.getMetricNameEn());
         patch.setMetricDesc(cmd.getMetricDesc());
         patch.setMetricLevel(cmd.getMetricLevel());
@@ -139,6 +149,12 @@ public class MetricDefService {
         mapper.updateByIdSelective(patch);
 
         // 回填 existing 字段以便调用方读取最新视图
+        if (cmd.getBaseDim() != null) {
+            existing.setBaseDim(cmd.getBaseDim());
+        }
+        if (patch.getValSlot() != null) {
+            existing.setValSlot(patch.getValSlot());
+        }
         if (cmd.getMetricNameEn() != null) {
             existing.setMetricNameEn(cmd.getMetricNameEn());
         }
@@ -252,11 +268,8 @@ public class MetricDefService {
         def.setRefMetricCodes(toJson(refMetricCodes));
         // V1.9：状态字段优先取 cmd.status（导入路径透传 Excel statusFlag），未指定回落 ACTIVE
         String finalStatus = cmd.getStatus() != null && !cmd.getStatus().isBlank() ? cmd.getStatus() : "ACTIVE";
-        // V1.9：维度无关型指标（baseDim=null）不占 slot、不入三大宽表
-        // V1.13：DRAFT 草稿态不占 slot（不进宽表、不调度），DRAFT→ACTIVE 切换由 changeStatus 补分配；
-        //        与 V1.9 维度无关型指标同思路：未到真正可执行态前不占用 slot 配额。
-        if (cmd.getBaseDim() != null && !cmd.getBaseDim().isBlank()
-                && "ACTIVE".equals(finalStatus)) {
+        // 只要维度不为空就分配 slot（各维度下唯一），不再限制 ACTIVE 状态
+        if (cmd.getBaseDim() != null && !cmd.getBaseDim().isBlank()) {
             def.setValSlot(metricSlotService.allocSlot(cmd.getBaseDim(), cmd.getMetricLevel(), cmd.getPreferredSlot()));
         } else {
             def.setValSlot(null);

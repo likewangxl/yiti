@@ -45,6 +45,10 @@ public class MetricDefImportRow {
     @ExcelProperty("指标编号")
     private String metricCode;
 
+    /** 基础维度（EMP/ORG/CUST，必填）. */
+    @ExcelProperty("基础维度（EMP/ORG/CUST）")
+    private String baseDim;
+
     /** 指标分类. */
     @ExcelProperty("指标分类")
     private String metricCategory;

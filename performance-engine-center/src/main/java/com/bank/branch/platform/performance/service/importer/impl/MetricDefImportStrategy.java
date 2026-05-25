@@ -77,12 +77,8 @@ public class MetricDefImportStrategy implements ImportStrategy {
         SCHEDULE_TO_FREQ = m;
     }
 
-    /**
-     * 缺省 base_dim. V1.9 改造：导入模板无 base_dim 列，默认 null 表示
-     * "维度无关型指标"（不占 slot、不入三大宽表、不进入自动调度）。
-     * 业务方如需指定维度，需在指标管理 UI 编辑后启用。
-     */
-    static final String DEFAULT_BASE_DIM = null;
+    /** 允许的 baseDim 值集合. */
+    private static final java.util.Set<String> VALID_BASE_DIMS = java.util.Set.of("EMP", "ORG", "CUST");
 
     /** 缺省 summary_rule. */
     static final String DEFAULT_SUMMARY_RULE = "SUM";
@@ -104,6 +100,9 @@ public class MetricDefImportStrategy implements ImportStrategy {
             return new ImportResult(0, 0, 0, 0, null);
         }
 
+        // 查 DB 现有 M_ 前缀编码的最大编号，自动生成编码时从 max+1 开始递增
+        int autoCodeSeq = resolveMaxAutoCodeSeq() + 1;
+
         // 第一遍：列值翻译 + 收集每行错误
         List<String> errors = new ArrayList<>();
         List<CreateMetricDefCmd> cmds = new ArrayList<>(rows.size());
@@ -114,7 +113,10 @@ public class MetricDefImportStrategy implements ImportStrategy {
             MetricDefImportRow row = rows.get(i);
             int excelRow = i + DATA_ROW_EXCEL_OFFSET;
             try {
-                CreateMetricDefCmd cmd = translateRow(row, excelRow, batch.getCreatedBy());
+                // 编码为空时自动分配递增编号（跳过已存在的）
+                int seq = (row.getMetricCode() == null || row.getMetricCode().isBlank())
+                        ? autoCodeSeq++ : -1;
+                CreateMetricDefCmd cmd = translateRow(row, excelRow, batch.getCreatedBy(), seq);
 
                 // V1.11：文件内 metric_name 重复检测（重名行作为 upsert 命中键会触发"末位覆盖"，必须显式拒绝）
                 Integer nameSeen = nameFirstSeenLine.putIfAbsent(cmd.getMetricName(), excelRow);
@@ -160,7 +162,7 @@ public class MetricDefImportStrategy implements ImportStrategy {
      * @return 翻译后的命令
      * @throws PerfException 必填缺失或枚举值非法
      */
-    CreateMetricDefCmd translateRow(MetricDefImportRow row, int excelRow, String operator) {
+    CreateMetricDefCmd translateRow(MetricDefImportRow row, int excelRow, String operator, int autoSeq) {
         if (row.getMetricName() == null || row.getMetricName().isBlank()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "metricName 必填");
         }
@@ -171,6 +173,11 @@ public class MetricDefImportStrategy implements ImportStrategy {
         }
         if (row.getIndexNo() == null || row.getIndexNo() <= 0) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "indexNo 必填且大于 0");
+        }
+        String baseDim = row.getBaseDim() == null ? null : row.getBaseDim().trim().toUpperCase();
+        if (baseDim == null || baseDim.isEmpty() || !VALID_BASE_DIMS.contains(baseDim)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "基础维度必填且必须为 EMP/ORG/CUST，当前值: " + row.getBaseDim());
         }
 
         String calcFreq = SCHEDULE_TO_FREQ.get(row.getScheduleType());
@@ -215,14 +222,14 @@ public class MetricDefImportStrategy implements ImportStrategy {
         }
 
         String metricCode = row.getMetricCode() == null || row.getMetricCode().isBlank()
-                ? String.format("M_%04d", row.getIndexNo())
+                ? String.format("M_%04d", autoSeq > 0 ? autoSeq : row.getIndexNo())
                 : row.getMetricCode().trim();
 
         CreateMetricDefCmd.CreateMetricDefCmdBuilder b = CreateMetricDefCmd.builder()
                 .metricCode(metricCode)
                 .metricName(row.getMetricName().trim())
                 .metricCategory(row.getMetricCategory())
-                .baseDim(DEFAULT_BASE_DIM)
+                .baseDim(baseDim)
                 .metricLevel(row.getMetricLevel())
                 .calcFreq(calcFreq)
                 .calcMode(calcMode)
@@ -230,10 +237,29 @@ public class MetricDefImportStrategy implements ImportStrategy {
                 .sqlText(sqlText)
                 .exprText(exprText)
                 .summaryRule(DEFAULT_SUMMARY_RULE)
-                .preferredSlot(row.getIndexNo())
+                .preferredSlot(null)
                 .status(status)         // V1.9：statusFlag 翻译后的 ACTIVE/DISABLED 透传，落库尊重 Excel 意图
                 .operator(operator);
         return b.build();
+    }
+
+    /**
+     * 查 DB 现有 M_XXXX 格式编码的最大编号（用于自动生成编码时避免冲突）.
+     * 例如 DB 有 M_0001 / M_0003 / M_0088 → 返回 88；无 M_ 前缀编码 → 返回 0.
+     */
+    private int resolveMaxAutoCodeSeq() {
+        var all = metricDefService.listAllDto(null, null, null, null);
+        int max = 0;
+        for (var m : all) {
+            String code = m.getMetricCode();
+            if (code != null && code.startsWith("M_")) {
+                try {
+                    int n = Integer.parseInt(code.substring(2));
+                    if (n > max) max = n;
+                } catch (NumberFormatException ignored) { }
+            }
+        }
+        return max;
     }
 
     /** EasyExcel 解析，异常统一转 IMPORT_COLUMN_MAPPING_INVALID. */

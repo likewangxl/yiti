@@ -153,6 +153,8 @@ public class TargetPlanService {
         PerfTargetPlan patch = new PerfTargetPlan();
         patch.setId(id);
         patch.setPlanName(cmd.getPlanName());
+        patch.setKpiSchemeId(cmd.getKpiSchemeId());
+        patch.setStatus(cmd.getStatus());
         patch.setTargetDim(cmd.getTargetDim());
         patch.setTargetCycle(cmd.getTargetCycle());
         patch.setEffectiveDate(cmd.getEffectiveDate());
@@ -163,6 +165,12 @@ public class TargetPlanService {
 
         if (cmd.getPlanName() != null) {
             existing.setPlanName(cmd.getPlanName());
+        }
+        if (cmd.getKpiSchemeId() != null) {
+            existing.setKpiSchemeId(cmd.getKpiSchemeId());
+        }
+        if (cmd.getStatus() != null) {
+            existing.setStatus(cmd.getStatus());
         }
         if (cmd.getTargetDim() != null) {
             existing.setTargetDim(cmd.getTargetDim());

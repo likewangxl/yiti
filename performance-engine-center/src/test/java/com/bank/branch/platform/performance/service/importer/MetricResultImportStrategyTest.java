@@ -13,8 +13,7 @@ import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.importer.impl.MetricResultImportStrategy;
-import com.bank.branch.platform.portal.api.AddressBookApi;
-import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
+import com.bank.branch.platform.auth.api.UserApi;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -71,7 +70,7 @@ class MetricResultImportStrategyTest {
     private EmpIndexResultMapper empMapper;
     private OrgIndexResultMapper orgMapper;
     private CustIndexResultMapper custMapper;
-    private AddressBookApi addressBookApi;
+    private UserApi userApi;
     private OrgApi orgApi;
     private SysControlService sysControlService;
     private MetricResultImportStrategy strategy;
@@ -83,12 +82,12 @@ class MetricResultImportStrategyTest {
         empMapper = mock(EmpIndexResultMapper.class);
         orgMapper = mock(OrgIndexResultMapper.class);
         custMapper = mock(CustIndexResultMapper.class);
-        addressBookApi = mock(AddressBookApi.class);
+        userApi = mock(UserApi.class);
         orgApi = mock(OrgApi.class);
         sysControlService = mock(SysControlService.class);
         strategy = new MetricResultImportStrategy(
                 metricDefMapper, empMapper, orgMapper, custMapper,
-                addressBookApi, orgApi, sysControlService);
+                userApi, orgApi, sysControlService);
 
         // PerfMetricDef 模拟：基础性存款月均余额 → EMP/slot 1，年日均余额 → ORG/slot 2，客户余额 → CUST/slot 3
         // baseDim 字段是 2026-05-19 base_dim 一致性校验的关键 fixture，不允许省略
@@ -112,8 +111,7 @@ class MetricResultImportStrategyTest {
                 });
 
         // 员工 / 机构存在性默认放行（具体 case 再覆盖）
-        lenient().when(addressBookApi.getEmployee(anyString()))
-                .thenReturn(Optional.of(EmployeeDTO.builder().empId("ANY").build()));
+        lenient().when(userApi.getUserName(anyString())).thenReturn("mock-user");
         lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
         lenient().when(sysControlService.getCurrentVersion(anyString()))
                 .thenReturn(sysControl("V1"));
@@ -220,7 +218,7 @@ class MetricResultImportStrategyTest {
     @Test
     @DisplayName("4.c 违反：EMP baseDim 员工号不在 ADDRBOOK_EMPLOYEE → errorSummary 记录，不入库")
     void execute_empNotFound_recordedInErrorSummary() {
-        when(addressBookApi.getEmployee("E_GHOST")).thenReturn(Optional.empty());
+        when(userApi.getUserName("E_GHOST")).thenReturn(null);
 
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "EMP", "E_GHOST", "基础性存款月均余额", new BigDecimal("10")});
