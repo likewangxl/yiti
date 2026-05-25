@@ -52,7 +52,7 @@
       <div v-if="picked" class="picked">
         已选择：<strong>{{ picked.name }}</strong>（{{ fmtSize(picked.size) }}）
         <el-button type="primary" :loading="uploading" @click="onUpload" style="margin-left:12px">立即上传</el-button>
-        <el-button @click="picked = null">取消</el-button>
+        <el-button @click="picked = null; uploaderRef?.clearFiles()">取消</el-button>
       </div>
     </div>
 
