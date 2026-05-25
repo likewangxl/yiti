@@ -37,8 +37,15 @@ function adaptWorkspace(dto) {
     title: n.summary || n.content || n.title || '',
     tag: BIZ_TYPE_LABEL[n.bizType] || n.bizType || '',
     time: fmtTime(n.sentTime),
+    rawTime: n.sentTime || '',
     read: n.readStatus === 'READ'
-  }));
+  }))
+    // 未读优先 + 时间倒序
+    .sort((a, b) => {
+      if (a.read !== b.read) return a.read ? 1 : -1;
+      return (b.rawTime || '').localeCompare(a.rawTime || '');
+    })
+    .slice(0, 10);
   const shortcuts = (dto.shortcuts || []).map(s => ({
     icon: s.shortcutIcon || '🔗',
     label: s.shortcutName || ''
