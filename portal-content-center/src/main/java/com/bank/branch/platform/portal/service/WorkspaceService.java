@@ -104,8 +104,8 @@ public class WorkspaceService {
                 ? supplyAsync(() -> {
                     PageRequest page = new PageRequest();
                     page.setPageNo(1);
-                    page.setPageSize(5);
-                    PageResult<NotificationDTO> result = notifyApi.queryNotifications(empId, false, page);
+                    page.setPageSize(10);
+                    PageResult<NotificationDTO> result = notifyApi.queryNotifications(empId, null, page);
                     return result.getRecords().stream()
                             .map(this::toNotificationItemDTO).collect(Collectors.toList());
                 }, "recentNotifications", errors)
