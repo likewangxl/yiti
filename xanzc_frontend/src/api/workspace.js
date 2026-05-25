@@ -51,13 +51,17 @@ function adaptWorkspace(dto) {
     label: s.shortcutName || ''
   }));
   return {
-    // greet/desc 已被 workspace/Index.vue 的 computed 接管，这里仅保留兜底字段
-    greet: mock.greet,
-    desc: mock.desc,
-    stats: mock.stats,
-    todos: todos.length ? todos : mock.todos,
-    notifications: notifications.length ? notifications : mock.notifications,
-    shortcuts: shortcuts.length ? shortcuts : mock.shortcuts
+    greet: '',
+    desc: '',
+    stats: [
+      { label: '待办任务',   value: 0, trend: '', trendType: '' },
+      { label: '未读通知',   value: 0, trend: '', trendType: '' },
+      { label: '本月 KPI 总分',  value: '-', trend: '', trendType: '' },
+      { label: '进行中触达任务', value: '-', trend: '', trendType: '' }
+    ],
+    todos: todos,
+    notifications: notifications,
+    shortcuts: shortcuts
   };
 }
 
