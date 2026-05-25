@@ -273,7 +273,7 @@ onMounted(async () => {
     display: flex; gap: 12px; padding: 12px 20px;
     border-bottom: 1px solid $border-3;
     &:last-child { border-bottom: none; }
-    .dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 8px; background: $success; flex-shrink: 0; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 8px; background: $border-2; flex-shrink: 0; }
     .dot.unread { background: $danger; }
     .body { flex: 1; min-width: 0; }
     .t { font-size: 13px; color: $text-1; }
