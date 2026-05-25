@@ -1,5 +1,7 @@
 package com.bank.branch.platform.performance.listener;
 
+import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfTargetValue;
 import com.bank.branch.platform.performance.event.PerfEventPublisher;
@@ -69,14 +71,17 @@ public class TargetAdjustCompletedListener {
     private final PerfTargetAdjustApplyMapper applyMapper;
     private final PerfTargetValueMapper targetValueMapper;
     private final PerfEventPublisher eventPublisher;
+    private final NotifyApi notifyApi;
     private final ObjectMapper objectMapper;
 
     public TargetAdjustCompletedListener(PerfTargetAdjustApplyMapper applyMapper,
                                          PerfTargetValueMapper targetValueMapper,
-                                         PerfEventPublisher eventPublisher) {
+                                         PerfEventPublisher eventPublisher,
+                                         NotifyApi notifyApi) {
         this.applyMapper = applyMapper;
         this.targetValueMapper = targetValueMapper;
         this.eventPublisher = eventPublisher;
+        this.notifyApi = notifyApi;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -168,6 +173,9 @@ public class TargetAdjustCompletedListener {
 
         log.info("[TargetAdjustCompletedListener] APPROVED applyId={}, adjustmentCount={}",
                 apply.getId(), adjustments.size());
+
+        notifyApplicant(apply, "通过",
+                "您的目标修正申请已通过，修正值已生效。");
     }
 
     /**
@@ -176,6 +184,28 @@ public class TargetAdjustCompletedListener {
     private void handleRejected(PerfTargetAdjustApply apply) {
         applyMapper.updateStatus(apply.getId(), "REJECTED", null);
         log.info("[TargetAdjustCompletedListener] REJECTED applyId={}", apply.getId());
+
+        notifyApplicant(apply, "驳回",
+                "您的目标修正申请已被驳回，目标值保持不变。");
+    }
+
+    /**
+     * 审批完成后向申请人发送通知（失败不阻断主流程）.
+     */
+    private void notifyApplicant(PerfTargetAdjustApply apply, String result, String content) {
+        try {
+            notifyApi.sendNotification(NotificationCmd.builder()
+                    .targetEmpId(apply.getCreatedBy())
+                    .title("目标修正审批" + result)
+                    .content(content + "（申请编号：" + apply.getBusinessKey() + "）")
+                    .notifyType("WORKFLOW")
+                    .bizType("TARGET_ADJUST")
+                    .bizId(apply.getId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("[TargetAdjustCompletedListener] 发送通知失败 applyId={}, err={}",
+                    apply.getId(), e.getMessage());
+        }
     }
 
     /**

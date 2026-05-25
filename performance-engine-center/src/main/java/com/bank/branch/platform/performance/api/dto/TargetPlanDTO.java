@@ -28,6 +28,10 @@ public class TargetPlanDTO {
     /** 目标周期: YEAR/QUARTER. */
     private String targetCycle;
     private LocalDate effectiveDate;
+    /** 方案覆盖起始日期（2026-05-22 新增）. */
+    private LocalDate startDate;
+    /** 方案覆盖截止日期（2026-05-22 新增）. */
+    private LocalDate endDate;
     /** 状态: ACTIVE/DISABLED. */
     private String status;
 }

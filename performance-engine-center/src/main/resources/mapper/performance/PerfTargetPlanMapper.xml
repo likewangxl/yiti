@@ -4,7 +4,7 @@
 
     <sql id="BASE_COLUMNS">
         id, plan_code, plan_name, kpi_scheme_id, target_dim, target_cycle,
-        effective_date, status, owner_emp_id, owner_org_code,
+        effective_date, start_date, end_date, status, owner_emp_id, owner_org_code,
         created_by, created_time, updated_by, updated_time
     </sql>
 
@@ -19,6 +19,8 @@
             <if test="targetDim != null">target_dim = #{targetDim},</if>
             <if test="targetCycle != null">target_cycle = #{targetCycle},</if>
             <if test="effectiveDate != null">effective_date = #{effectiveDate},</if>
+            <if test="startDate != null">start_date = #{startDate},</if>
+            <if test="endDate != null">end_date = #{endDate},</if>
             <if test="status != null">status = #{status},</if>
             <!-- V1.5 P6.1 新增：owner 字段动态分支，支持"目标方案转交"业务 -->
             <if test="ownerEmpId != null">owner_emp_id = #{ownerEmpId},</if>

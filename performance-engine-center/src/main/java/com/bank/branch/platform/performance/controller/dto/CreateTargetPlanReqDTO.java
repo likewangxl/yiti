@@ -62,4 +62,14 @@ public class CreateTargetPlanReqDTO {
     @NotNull(message = "effectiveDate 不能为空")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate effectiveDate;
+
+    /** 方案覆盖起始日期（2026-05-22 新增；可空向后兼容，未来可改为必填）. */
+    @Schema(description = "方案覆盖起始日期 yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate startDate;
+
+    /** 方案覆盖截止日期（2026-05-22 新增；可空向后兼容）. */
+    @Schema(description = "方案覆盖截止日期 yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate endDate;
 }

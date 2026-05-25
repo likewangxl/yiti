@@ -40,4 +40,14 @@ public class UpdateTargetPlanReqDTO {
     @Schema(description = "生效日期 yyyy-MM-dd")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate effectiveDate;
+
+    /** 方案覆盖起始日期 (可空，null 表示不修改). */
+    @Schema(description = "方案覆盖起始日期 yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate startDate;
+
+    /** 方案覆盖截止日期 (可空，null 表示不修改). */
+    @Schema(description = "方案覆盖截止日期 yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate endDate;
 }

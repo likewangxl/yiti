@@ -113,6 +113,8 @@ public class TargetPlanService {
         plan.setTargetDim(cmd.getTargetDim());
         plan.setTargetCycle(cmd.getTargetCycle());
         plan.setEffectiveDate(cmd.getEffectiveDate());
+        plan.setStartDate(cmd.getStartDate());
+        plan.setEndDate(cmd.getEndDate());
         plan.setStatus(STATUS_ACTIVE);
         LocalDateTime now = LocalDateTime.now();
         plan.setCreatedBy(cmd.getOperator());
@@ -154,6 +156,8 @@ public class TargetPlanService {
         patch.setTargetDim(cmd.getTargetDim());
         patch.setTargetCycle(cmd.getTargetCycle());
         patch.setEffectiveDate(cmd.getEffectiveDate());
+        patch.setStartDate(cmd.getStartDate());
+        patch.setEndDate(cmd.getEndDate());
         patch.setUpdatedBy(cmd.getOperator());
         targetPlanMapper.updateByIdSelective(patch);
 
@@ -168,6 +172,12 @@ public class TargetPlanService {
         }
         if (cmd.getEffectiveDate() != null) {
             existing.setEffectiveDate(cmd.getEffectiveDate());
+        }
+        if (cmd.getStartDate() != null) {
+            existing.setStartDate(cmd.getStartDate());
+        }
+        if (cmd.getEndDate() != null) {
+            existing.setEndDate(cmd.getEndDate());
         }
         existing.setUpdatedBy(cmd.getOperator());
         existing.setUpdatedTime(LocalDateTime.now());

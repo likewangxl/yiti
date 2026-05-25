@@ -39,6 +39,8 @@ public final class TargetAssembler {
                 .targetDim(plan.getTargetDim())
                 .targetCycle(plan.getTargetCycle())
                 .effectiveDate(plan.getEffectiveDate())
+                .startDate(plan.getStartDate())
+                .endDate(plan.getEndDate())
                 .status(plan.getStatus())
                 .build();
     }

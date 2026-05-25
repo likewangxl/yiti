@@ -38,8 +38,14 @@ public class PerfTargetPlan {
     /** 目标周期：YEAR/QUARTER. */
     private String targetCycle;
 
-    /** 生效日期. */
+    /** 生效日期（方案启用的时点）. */
     private LocalDate effectiveDate;
+
+    /** 方案覆盖业务周期起始日期（2026-05-22 新增）. */
+    private LocalDate startDate;
+
+    /** 方案覆盖业务周期截止日期（2026-05-22 新增）. */
+    private LocalDate endDate;
 
     /** 状态：ACTIVE/DISABLED. */
     private String status;

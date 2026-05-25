@@ -118,6 +118,8 @@ public class TargetPlanController {
                 .targetDim(req.getTargetDim())
                 .targetCycle(req.getTargetCycle())
                 .effectiveDate(req.getEffectiveDate())
+                .startDate(req.getStartDate())
+                .endDate(req.getEndDate())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(targetPlanService.createDto(cmd));
@@ -142,6 +144,8 @@ public class TargetPlanController {
                 .targetDim(req.getTargetDim())
                 .targetCycle(req.getTargetCycle())
                 .effectiveDate(req.getEffectiveDate())
+                .startDate(req.getStartDate())
+                .endDate(req.getEndDate())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(targetPlanService.updateByIdDto(id, cmd));

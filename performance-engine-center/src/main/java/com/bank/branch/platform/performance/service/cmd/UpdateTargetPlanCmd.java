@@ -32,6 +32,12 @@ public class UpdateTargetPlanCmd {
     /** 生效日期 (可空). */
     private LocalDate effectiveDate;
 
+    /** 方案覆盖起始日期 (可空，2026-05-22 新增). */
+    private LocalDate startDate;
+
+    /** 方案覆盖截止日期 (可空，2026-05-22 新增). */
+    private LocalDate endDate;
+
     /** 操作人. */
     private String operator;
 }
