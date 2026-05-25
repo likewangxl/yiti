@@ -119,8 +119,8 @@ export function listTargetValues(params = {}) {
 export function upsertTargetValue(data) {
   return call('post', '/perf/target-values', { data }, { ok: true });
 }
-export function batchUpsertTargetValues(items) {
-  return call('post', '/perf/target-values/batch', { data: { items } }, { ok: true });
+export function batchUpsertTargetValues(values) {
+  return call('post', '/perf/target-values/batch', { data: { values } }, { ok: true });
 }
 
 // ============================================================

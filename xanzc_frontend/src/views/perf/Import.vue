@@ -75,7 +75,7 @@
             <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="time" label="时间" width="170" />
+        <el-table-column prop="time" label="时间" width="170" :formatter="fmtDateTimeCol" />
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="onRefreshOne(row)">刷新</el-button>
@@ -101,6 +101,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { fmtDateTimeCol } from '@/utils/datetime';
 import { UploadFilled } from '@element-plus/icons-vue';
 import {
   listImports, uploadImportFile,
@@ -206,14 +207,19 @@ async function onDelete(row) {
 }
 
 async function downloadTpl() {
-  // 后端暂无"模板下载"端点；前端用 SheetJS 生成真 .xlsx（带表头 + 1 行示例数据）
+  // 指标定义 / 指标结果：直接下载 public/templates 下的真实模板文件
+  const STATIC_TPL = {
+    METRIC_DEF:    { url: '/templates/指标表上传模板.xlsx',  name: '指标表上传模板.xlsx' },
+    METRIC_RESULT: { url: '/templates/指标结果模板.xlsx', name: '指标结果模板.xlsx' }
+  };
+  const staticTpl = STATIC_TPL[kind.value];
+  if (staticTpl) {
+    window.open(staticTpl.url, '_blank');
+    return;
+  }
+
+  // 其他类型：前端用 SheetJS 动态生成
   const TPL = {
-    METRIC_RESULT: {
-      headers: ['序号', '基础维度（EMP/ORG/CUST/空）', '维度对象', '指标名称', '指标数值'],
-      // V1.12 微调（2026-05-19）：dataDate 改走 HTTP 参数，Sheet 名变为纯展示用
-      sheet:   '指标结果',
-      file:    '指标结果导入模板'
-    },
     ALLOC: {
       headers: ['方案编码', '对象编号', '得分', '周期键'],
       sheet:   'KPI结果',
@@ -229,9 +235,7 @@ async function downloadTpl() {
 
   try {
     const XLSX = await import('xlsx');
-    // aoa_to_sheet：仅表头行，无示例数据
     const ws = XLSX.utils.aoa_to_sheet([TPL.headers]);
-    // 自适应列宽（按表头中文字符数估算 + 留白）
     ws['!cols'] = TPL.headers.map(h => ({ wch: Math.max(12, h.length * 2 + 2) }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, TPL.sheet);

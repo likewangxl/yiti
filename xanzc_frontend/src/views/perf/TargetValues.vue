@@ -13,24 +13,19 @@
       </h1>
       <div class="actions">
         <el-button link type="primary" @click="backToTargets">← 返回目标管理</el-button>
-        <el-button @click="openImport">📥 导入目标矩阵</el-button>
-        <el-button @click="downloadTpl">下载模板</el-button>
+        <el-button @click="triggerImportFile">📥 导入目标值</el-button>
+        <el-button @click="downloadTpl">📄 下载模板</el-button>
+        <input ref="importFileRef" type="file" accept=".xlsx,.xls" style="display:none" @change="onImportFileSelected" />
         <el-button type="primary" :disabled="!plans.length" @click="openCreateRow">+ 新增目标值</el-button>
       </div>
     </div>
 
-    <!-- 筛选栏（3 列）。方案不再可在此切换：planId 由 URL ?planId= 传入并锁定，H1 副标题显示 -->
+    <!-- 筛选栏（2 列）。方案/维度由 URL 传入锁定 -->
     <div class="card-section filter-grid">
-      <div>
-        <div class="lab">对象类型</div>
-        <el-select v-model="f.subjectType" clearable @change="loadValues" placeholder="全部" style="width:100%">
-          <el-option v-for="o in BASE_DIMS" :key="o.v" :value="o.v" :label="o.l" />
-        </el-select>
-      </div>
       <div>
         <div class="lab">指标</div>
         <el-select v-model="f.metricCode" clearable filterable @change="loadValues" placeholder="全部" style="width:100%">
-          <el-option v-for="m in metricOptions" :key="m.metricCode"
+          <el-option v-for="m in filteredMetricOptions" :key="m.metricCode"
             :value="m.metricCode" :label="m.metricName" />
         </el-select>
       </div>
@@ -48,19 +43,13 @@
     <!-- 主表 -->
     <div class="card-section table">
       <el-table :data="pagedRows" size="default" empty-text="暂无目标值" v-loading="loadingValues">
-        <el-table-column label="维度" width="80">
-          <template #default="{row}">
-            <el-tag class="tag-info" effect="plain">{{ subjectTypeLabel(row.subjectType) || '-' }}</el-tag>
-          </template>
-        </el-table-column>
         <el-table-column label="对象" min-width="200">
           <template #default="{row}">
             <span class="subject">
-              <span class="ava" :style="{ background: avaColor(row.subjectName) }">{{ avaChar(row.subjectName) }}</span>
+              <span class="ava" :style="{ background: avaColor(row.subjectName || row.subjectId) }">{{ avaChar(row.subjectName || row.subjectId) }}</span>
               <span class="subject-text">
-                <div>{{ row.subjectName || '-' }}</div>
-                <!-- EMP 维度：副行显示员工所属机构；ORG 维度时机构本身就是 subjectName，无需重复 -->
-                <div v-if="row.subjectType === 'EMP' && row.orgName" class="subject-sub">{{ row.orgName }}</div>
+                <!-- EMP: 员工号-姓名；ORG: 机构号-机构名 -->
+                <div>{{ row.subjectId || '-' }} - {{ row.subjectName || '-' }}</div>
               </span>
             </span>
           </template>
@@ -176,11 +165,6 @@
       </template>
     </el-dialog>
 
-    <!-- 导入提示 -->
-    <el-dialog v-model="importTip" title="导入目标矩阵" width="440px">
-      <p style="line-height:1.7">请使用左侧菜单「数据导入 → 目标值导入」上传 Excel；上传后该方案会刷新此表。</p>
-      <template #footer><el-button type="primary" @click="importTip = false">知道了</el-button></template>
-    </el-dialog>
   </div>
 </template>
 
@@ -189,7 +173,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
-  listTargets, listTargetValues, upsertTargetValue,
+  listTargets, listTargetValues, upsertTargetValue, batchUpsertTargetValues,
   submitTargetAdjust, listMetrics,
   listKpiRules, listTargetAdjusts
 } from '@/api/perf';
@@ -238,10 +222,10 @@ const metricMap = ref(new Map()); // metricCode → metricName
 
 async function loadEmpMap() {
   try {
-    const list = await listEmployees({ pageSize: 500 });
+    const list = await listEmployees({ pageSize: 100 });
     if (Array.isArray(list)) {
       const m = new Map();
-      for (const e of list) m.set(e.id, { name: e.name, orgName: e.org, orgCode: e.orgCode });
+      for (const e of list) m.set(e.empId || e.id, { name: e.empName || e.name, orgName: e.orgName || e.org || '', orgCode: e.orgCode || '' });
       empMap.value = m;
     }
   } catch {}
@@ -324,6 +308,17 @@ async function loadMetricOptions() {
     }
   } catch {}
 }
+
+// 筛选下拉：从当前方案已有的目标值中提取唯一指标选项
+const filteredMetricOptions = computed(() => {
+  const seen = new Map();
+  for (const v of values.value) {
+    if (v.metricCode && !seen.has(v.metricCode)) {
+      seen.set(v.metricCode, { metricCode: v.metricCode, metricName: v.metricName || v.metricCode });
+    }
+  }
+  return [...seen.values()];
+});
 
 // === 目标值 ===
 const f = reactive({ planId: '', subjectType: '', metricCode: '', approvalStatus: '' });
@@ -559,10 +554,12 @@ const valRules = {
   targetValue: [{ required: true, message: '请填写目标值' }]
 };
 
-// 指标随对象维度过滤：MetricDefDTO.baseDim ∈ {EMP, ORG, CUST}；
-// 维度由目标方案传入（valDlg.form.subjectType），按 baseDim === subjectType 匹配
+// 新增弹框指标：仅 ACTIVE 状态 + 维度匹配
 const metricsForDim = computed(() =>
-  metricOptions.value.filter(m => !m.baseDim || m.baseDim === valDlg.form.subjectType)
+  metricOptions.value.filter(m =>
+    m.status === 'ACTIVE'
+    && (!m.baseDim || m.baseDim === valDlg.form.subjectType)
+  )
 );
 
 function openCreateRow() {
@@ -582,9 +579,22 @@ async function onSaveValue() {
   if (!f.planId) {
     return ElMessage.warning('当前没有选中目标方案，无法保存目标值');
   }
+  const dim = valDlg.form.subjectType;
+  const sid = valDlg.form.subjectId;
+  // 员工/机构存在性校验
+  if (dim === 'EMP' && !empMap.value.has(sid)) {
+    return ElMessage.error(`员工「${sid}」在系统中不存在`);
+  }
+  if (dim === 'ORG' && !orgMap.value.has(sid)) {
+    return ElMessage.error(`机构「${sid}」在系统中不存在`);
+  }
+  // 同一方案下 对象+指标 不能重复（检查已有数据）
+  const dup = values.value.find(v => v.subjectId === sid && v.metricCode === valDlg.form.metricCode);
+  if (dup) {
+    return ElMessage.error(`对象「${sid}」+指标「${valDlg.form.metricCode}」在当前方案中已存在`);
+  }
   valDlg.saving = true;
   try {
-    // 严格按后端字段提交；planId 用当前选中方案，cycleKey 按方案周期类型自动派生
     const payload = {
       planId:      f.planId,
       subjectType: valDlg.form.subjectType,
@@ -605,11 +615,87 @@ async function onSaveValue() {
   } finally { valDlg.saving = false; }
 }
 
-// === 导入 / 模板 ===
-const importTip = ref(false);
-function openImport() { importTip.value = true; }
+// === 导入目标值 / 下载模板 ===
+const importFileRef = ref(null);
+function triggerImportFile() {
+  if (!f.planId) return ElMessage.warning('请先选择目标方案');
+  importFileRef.value?.click();
+}
+async function onImportFileSelected(e) {
+  const file = e.target?.files?.[0];
+  if (!file) return;
+  const plan = currentPlan.value;
+  if (!plan) { ElMessage.warning('当前方案信息缺失'); return; }
+  try {
+    const XLSX = await import('xlsx');
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    if (rows.length < 2) { ElMessage.warning('文件无数据行'); return; }
+    // 跳过表头，解析数据行：序号 / 工号·机构对象 / 指标名称 / 目标值 / 基础值
+    const dim = plan.targetDim || 'EMP';
+    const cycleKey = inferCycleKey();
+    const items = [];
+    const errors = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || !r[1]) continue;
+      const subjectId = String(r[1]).trim();
+      const metricNameRaw = String(r[2] || '').trim();
+      const targetValue = Number(r[3]);
+      const baseValue = r[4] != null && r[4] !== '' ? Number(r[4]) : null;
+      if (!subjectId || !metricNameRaw || isNaN(targetValue)) {
+        errors.push(`第${i + 1}行: 数据不完整`);
+        continue;
+      }
+      // 按维度校验员工/机构对象是否存在
+      if (dim === 'EMP' && !empMap.value.has(subjectId)) {
+        errors.push(`第${i + 1}行: 员工「${subjectId}」在系统中不存在`); continue;
+      }
+      if (dim === 'ORG' && !orgMap.value.has(subjectId)) {
+        errors.push(`第${i + 1}行: 机构「${subjectId}」在系统中不存在`); continue;
+      }
+      // 按指标名称反查 metricCode（仅匹配 ACTIVE 状态 + 维度匹配）
+      const m = metricOptions.value.find(x => x.metricName === metricNameRaw && x.status === 'ACTIVE' && (!x.baseDim || x.baseDim === dim));
+      if (!m) { errors.push(`第${i + 1}行: 指标「${metricNameRaw}」未找到`); continue; }
+      if (!/^[A-Z][A-Z0-9_]*$/.test(m.metricCode)) {
+        errors.push(`第${i + 1}行: 指标编码「${m.metricCode}」格式不合规，跳过`); continue;
+      }
+      const item = {
+        planId: f.planId, subjectType: dim, subjectId,
+        cycleKey, metricCode: m.metricCode, targetValue
+      };
+      if (baseValue != null) item.baseValue = baseValue;
+      items.push(item);
+    }
+    // 文件内去重校验：同一方案下 对象+指标 只能有一条
+    const seen = new Map();
+    for (let j = 0; j < items.length; j++) {
+      const it = items[j];
+      const key = `${it.subjectId}:${it.metricCode}`;
+      if (seen.has(key)) {
+        errors.push(`对象「${it.subjectId}」+指标「${it.metricCode}」在文件中重复（行${seen.get(key)} 与 行${j + 2}）`);
+      } else {
+        seen.set(key, j + 2);
+      }
+    }
+    if (errors.length) {
+      ElMessage.error(`校验不通过，${errors.length} 行有错误，全部取消入库：\n${errors.slice(0, 5).join('；')}`);
+      return;
+    }
+    if (!items.length) { ElMessage.warning('无有效数据可导入'); return; }
+    await batchUpsertTargetValues(items);
+    ElMessage.success(`成功导入 ${items.length} 条目标值`);
+    loadValues();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '导入失败');
+  } finally {
+    importFileRef.value.value = '';
+  }
+}
 function downloadTpl() {
-  ElMessage.info('模板下载（占位）：请联系运维提供 target_template.xlsx');
+  window.open('/templates/目标值上传模板.xlsx', '_blank');
 }
 
 onMounted(async () => {
@@ -630,7 +716,7 @@ onMounted(async () => {
   .dot { margin: 0 6px; color: $text-4; }
 }
 .filter-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
   .lab { font-size: 13px; color: $text-2; margin-bottom: 6px; }
 }
 .table { padding: 14px 16px 12px; }

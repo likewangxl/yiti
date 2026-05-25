@@ -5,7 +5,9 @@
       <span class="desc">三级层级树 · SQL/Groovy 计算配置 · 试运行 · 版本</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
-        <el-button @click="onImport">📥 导入指标</el-button>
+        <el-button @click="triggerImport">📥 导入指标</el-button>
+        <el-button @click="downloadTemplate">📄 下载模板</el-button>
+        <input ref="fileInputRef" type="file" accept=".xlsx,.xls" style="display:none" @change="onFileSelected" />
         <el-button type="primary" @click="openCreate">+ 新增指标</el-button>
       </div>
     </div>
@@ -62,11 +64,29 @@
               <td class="lab">分类</td><td class="val">{{ resolveCategory(detail) }}</td>
             </tr>
             <tr>
-              <td class="lab">计算方式</td>
+              <td class="lab">维度</td><td class="val">{{ { EMP:'员工', ORG:'机构', CUST:'客户' }[detail.baseDim] || detail.baseDim || '-' }}</td>
+              <td class="lab">层级</td><td class="val">{{ detail.metricLevel != null ? detail.metricLevel + ' 级' : '-' }}</td>
+            </tr>
+            <tr>
+              <td class="lab">计算频率</td><td class="val">{{ { DAY:'日', MONTH:'月', QUARTER:'季', YEAR:'年' }[detail.calcFreq] || detail.calcFreq || '-' }}</td>
+              <td class="lab">计算方式</td><td class="val">{{ { AUTO:'自动', MANUAL:'手动' }[detail.calcMode] || detail.calcMode || '-' }}</td>
+            </tr>
+            <tr>
+              <td class="lab">计算逻辑</td>
               <td class="val">
                 <el-tag :class="logicCls(detail.calcLogicType)" effect="plain">{{ detail.calcLogicType || '-' }}</el-tag>
               </td>
               <td class="lab">数据源</td><td class="val">{{ detail.dataSource || guessDataSource(detail) }}</td>
+            </tr>
+            <tr>
+              <td class="lab">创建人</td><td class="val">{{ detail.createdBy || '-' }}</td>
+              <td class="lab">更新人</td><td class="val">{{ detail.updatedBy || '-' }}</td>
+            </tr>
+            <tr>
+              <td class="lab">最近更新</td><td class="val" colspan="3">{{ detail.updatedTime || detail.createdTime || '-' }}</td>
+            </tr>
+            <tr v-if="detail.description">
+              <td class="lab">详细描述</td><td class="val" colspan="3">{{ detail.description }}</td>
             </tr>
           </table>
 
@@ -87,21 +107,6 @@
             <div class="block-h">计算逻辑</div>
             <pre class="code">{{ '/* 计算方式未指定 */' }}</pre>
           </template>
-
-          <div class="block-h">槽位 (Slot) 声明</div>
-          <el-table :data="resolveSlots(detail)" size="default" border empty-text="该指标未声明槽位">
-            <el-table-column label="槽位名" prop="name" width="180">
-              <template #default="{row}"><code class="mono">{{ row.name }}</code></template>
-            </el-table-column>
-            <el-table-column label="类型" prop="type" width="120" />
-            <el-table-column label="是否必填" width="100" align="center">
-              <template #default="{row}">
-                <span v-if="row.required" class="req">是</span>
-                <span v-else class="opt">否</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="说明" prop="desc" min-width="200" show-overflow-tooltip />
-          </el-table>
 
           <div class="acts">
             <el-button type="primary" :disabled="isDisabled" @click="openEdit(detail)">编辑</el-button>
@@ -189,13 +194,46 @@
               <el-option v-for="c in CATEGORY_OPTIONS" :key="c" :value="c" :label="c" />
             </el-select>
           </el-form-item>
-          <el-form-item label="计算方式" prop="calcLogicType">
+          <el-form-item label="基础维度" prop="baseDim" required>
+            <el-select v-model="dlg.form.baseDim" style="width:100%">
+              <el-option value="EMP" label="员工" />
+              <el-option value="ORG" label="机构" />
+              <el-option value="CUST" label="客户" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="指标层级" prop="metricLevel" required>
+            <el-select v-model="dlg.form.metricLevel" style="width:100%">
+              <el-option :value="1" label="1 级" />
+              <el-option :value="2" label="2 级" />
+              <el-option :value="3" label="3 级" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="计算频率" prop="calcFreq" required>
+            <el-select v-model="dlg.form.calcFreq" style="width:100%">
+              <el-option value="DAY" label="日" />
+              <el-option value="MONTH" label="月" />
+              <el-option value="QUARTER" label="季" />
+              <el-option value="YEAR" label="年" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="计算方式" prop="calcMode" required>
+            <el-select v-model="dlg.form.calcMode" style="width:100%">
+              <el-option value="AUTO" label="自动" />
+              <el-option value="MANUAL" label="手动" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="计算逻辑" prop="calcLogicType">
             <el-radio-group v-model="dlg.form.calcLogicType">
               <el-radio value="SQL">SQL</el-radio>
               <el-radio value="EXPR">Groovy</el-radio>
             </el-radio-group>
           </el-form-item>
         </div>
+
+        <el-form-item label="指标详细描述">
+          <el-input v-model="dlg.form.description" type="textarea" :rows="2"
+                    placeholder="指标的业务含义、计算口径、数据来源等详细描述" maxlength="500" show-word-limit />
+        </el-form-item>
 
         <el-form-item :label="dlg.form.calcLogicType === 'EXPR' ? 'Groovy 表达式' : 'SQL 表达式 (支持 #{slot} 占位符)'">
           <el-input
@@ -227,35 +265,6 @@
           </div>
         </el-form-item>
 
-        <el-form-item label="槽位声明">
-          <el-table :data="dlg.slots" size="small" border empty-text="尚未声明槽位">
-            <el-table-column label="槽位名" min-width="140">
-              <template #default="{row}"><el-input v-model="row.name" size="small" placeholder="period_start" /></template>
-            </el-table-column>
-            <el-table-column label="类型" width="120">
-              <template #default="{row}">
-                <el-select v-model="row.type" size="small">
-                  <el-option v-for="t in SLOT_TYPES" :key="t" :value="t" :label="t" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="必填" width="70" align="center">
-              <template #default="{row}">
-                <el-checkbox v-model="row.required" />
-              </template>
-            </el-table-column>
-            <el-table-column label="说明" min-width="180">
-              <template #default="{row}"><el-input v-model="row.desc" size="small" /></template>
-            </el-table-column>
-            <el-table-column label="" width="60" align="center" fixed="right">
-              <template #default="{$index}">
-                <el-button link type="danger" size="small" @click="dlg.slots.splice($index,1)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-button size="small" plain @click="addSlot" style="margin-top:8px">+ 添加槽位</el-button>
-        </el-form-item>
-
         <el-form-item label="试运行">
           <div class="trial-row">
             <el-date-picker v-model="dlg.trialRange" type="daterange" value-format="YYYY-MM-DD"
@@ -279,7 +288,6 @@
         </el-form-item>
 
         <!-- 隐含字段（不让用户暴露太多复杂度） -->
-        <input type="hidden" :value="dlg.form.baseDim" />
       </el-form>
       <template #footer>
         <el-button @click="dlg.show = false">取消</el-button>
@@ -303,7 +311,7 @@
         <el-table-column label="原因" min-width="180" show-overflow-tooltip>
           <template #default="{row}">{{ row.reason || '—' }}</template>
         </el-table-column>
-        <el-table-column label="变更时间" prop="createdTime" width="170" />
+        <el-table-column label="变更时间" prop="createdTime" width="170" :formatter="fmtDateTimeCol" />
       </el-table>
     </el-dialog>
   </div>
@@ -312,19 +320,21 @@
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
 import { Search } from '@element-plus/icons-vue';
+import { fmtDateTimeCol } from '@/utils/datetime';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   listMetrics, listMetricCategories, getMetricDetail,
   createMetric, updateMetric, deleteMetric,
-  changeMetricStatus, trialRunMetric, executeMetric
+  changeMetricStatus, trialRunMetric, executeMetric,
+  uploadImportFile
 } from '@/api/perf';
 import { listAuditLogs } from '@/api/system';
 
 const router = useRouter();
 
 // === 常量 ===
-const CATEGORY_OPTIONS = ['业务/存款类', '业务/贷款类', '业务/中收类', '客户指标', '风险指标', '综合指标'];
+const CATEGORY_OPTIONS = ['规模类', '效益类', '质量类', '合规类'];
 const SLOT_TYPES = ['DATE', 'STRING', 'STRING[]', 'INTEGER', 'DECIMAL'];
 const today = new Date().toISOString().slice(0, 10);
 
@@ -549,7 +559,7 @@ const dlg = reactive({
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
     sqlText: '', exprText: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    _category: '业务/存款类'
+    _category: '规模类'
   }
 });
 function resetTrial() {
@@ -558,7 +568,11 @@ function resetTrial() {
 const formRules = {
   metricCode: [{ required: true, message: '编码必填' }],
   metricName: [{ required: true, message: '名称必填' }],
-  calcLogicType: [{ required: true, message: '计算方式必选' }]
+  baseDim: [{ required: true, message: '基础维度必选' }],
+  metricLevel: [{ required: true, message: '指标层级必选' }],
+  calcFreq: [{ required: true, message: '计算频率必选' }],
+  calcMode: [{ required: true, message: '计算方式必选' }],
+  calcLogicType: [{ required: true, message: '计算逻辑必选' }]
 };
 
 function defaultForm() {
@@ -567,7 +581,7 @@ function defaultForm() {
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
     sqlText: '', exprText: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    _category: '业务/存款类'
+    _category: '规模类'
   };
 }
 function openCreate() {
@@ -786,9 +800,31 @@ async function onShowVersions() {
   } catch {} finally { versionDlg.loading = false; }
 }
 
-// === 导入指标（占位提示） ===
-function onImport() {
-  ElMessageBox.alert('指标批量导入请使用左侧菜单【数据导入】模块，选择"指标定义导入"模板。', '导入指标', { type: 'info' });
+// === 导入指标（直接上传 METRIC_DEF 文件） ===
+const fileInputRef = ref(null);
+function triggerImport() {
+  fileInputRef.value?.click();
+}
+async function onFileSelected(e) {
+  const file = e.target?.files?.[0];
+  if (!file) return;
+  try {
+    const resp = await uploadImportFile('METRIC_DEF', file);
+    const errRows = resp?.errorRows || 0;
+    if (errRows > 0) {
+      ElMessage.warning(`导入完成，${errRows} 行有错误：${resp.errorSummary || '请检查数据'}`);
+    } else {
+      ElMessage.success(`导入成功，新增 ${resp?.insertedRows ?? '-'} 条，更新 ${resp?.updatedRows ?? '-'} 条`);
+    }
+    reload();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '导入失败');
+  } finally {
+    fileInputRef.value.value = '';
+  }
+}
+function downloadTemplate() {
+  window.open('/templates/指标表上传模板.xlsx', '_blank');
 }
 
 onMounted(reload);

@@ -61,9 +61,10 @@
                 <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" width="160" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openValues(row)">管理目标值</el-button>
+                <el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button>
+                <el-button link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -242,10 +243,10 @@
     </el-dialog>
 
     <!-- 新增方案对话框（资财部限定，由 canCreatePlan 控制可见） -->
-    <el-dialog v-model="planDlg.show" title="新增目标方案" width="560px" :close-on-click-modal="false">
+    <el-dialog v-model="planDlg.show" :title="planDlg.editing ? '编辑目标方案' : '新增目标方案'" width="560px" :close-on-click-modal="false">
       <el-form ref="planFormRef" :model="planDlg.form" :rules="planRules" label-width="120px" size="default">
         <el-form-item label="方案编码" prop="planCode">
-          <el-input v-model="planDlg.form.planCode" placeholder="大写字母开头，如 TP_2026_Q2" />
+          <el-input v-model="planDlg.form.planCode" :disabled="!!planDlg.editing" placeholder="大写字母开头，如 TP_2026_Q2" />
         </el-form-item>
         <el-form-item label="方案名称" prop="planName">
           <el-input v-model="planDlg.form.planName" placeholder="如 2026 年度目标方案" />
@@ -273,6 +274,10 @@
       </el-form>
       <template #footer>
         <el-button @click="planDlg.show = false">取消</el-button>
+        <template v-if="planDlg.editing">
+          <el-button v-if="planDlg.form._status==='ACTIVE'" type="warning" @click="togglePlanStatus(planDlg.editing,'DISABLED')">禁用</el-button>
+          <el-button v-else type="success" @click="togglePlanStatus(planDlg.editing,'ACTIVE')">启用</el-button>
+        </template>
         <el-button type="primary" :loading="planDlg.saving" @click="onSavePlan">保存</el-button>
       </template>
     </el-dialog>
@@ -284,7 +289,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { listTargets, createTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory } from '@/api/perf';
+import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory } from '@/api/perf';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
@@ -584,7 +589,7 @@ function openValues(row) {
 // === 新增方案对话框 ===
 const planFormRef = ref(null);
 const planDlg = reactive({
-  show: false, saving: false,
+  show: false, saving: false, editing: null,
   form: { planCode: '', planName: '', kpiSchemeId: '', targetDim: 'EMP',
           effectiveDate: '', startDate: '', endDate: '' }
 });
@@ -598,10 +603,22 @@ const planRules = {
   startDate:     [{ required: true, message: '请选择起始日期（同时作为生效日期）' }],
 };
 function openCreatePlan() {
+  planDlg.editing = null;
   Object.assign(planDlg.form, {
     planCode: '', planName: '', kpiSchemeId: '', targetDim: 'EMP',
     effectiveDate: '', startDate: '', endDate: ''
   });
+  planDlg.show = true;
+}
+function openEditPlan(row) {
+  planDlg.editing = row.id || row.planCode;
+  Object.assign(planDlg.form, {
+    planCode: row.planCode || '', planName: row.planName || '',
+    kpiSchemeId: row.kpiSchemeId || '', targetDim: row.targetDim || 'EMP',
+    effectiveDate: row.effectiveDate || '', startDate: row.startDate || '', endDate: row.endDate || '',
+    _status: row.status || 'ACTIVE'
+  });
+  if (!kpiSchemeOptions.value.length) loadKpiSchemeOptions();
   planDlg.show = true;
 }
 async function onSavePlan() {
@@ -612,22 +629,37 @@ async function onSavePlan() {
   }
   planDlg.saving = true;
   try {
-    // targetCycle 后端 DDL NOT NULL；按起止日期跨度自动派生（跨度 > 92 天 → YEAR，否则 QUARTER）
     let targetCycle = 'QUARTER';
     if (planDlg.form.startDate && planDlg.form.endDate) {
       const days = (new Date(planDlg.form.endDate) - new Date(planDlg.form.startDate)) / 86400000;
       if (days > 92) targetCycle = 'YEAR';
     }
-    // 生效日期 UI 已隐藏：始终用起始日期作为生效日期提交
     planDlg.form.effectiveDate = planDlg.form.startDate;
-    await createTargetPlan({ ...planDlg.form, targetCycle });
-    ElMessage.success('方案创建成功');
+    if (planDlg.editing) {
+      const { planCode, _status, ...updatePayload } = planDlg.form;
+      await updateTargetPlan(planDlg.editing, { ...updatePayload, targetCycle });
+      ElMessage.success('方案更新成功');
+    } else {
+      await createTargetPlan({ ...planDlg.form, targetCycle });
+      ElMessage.success('方案创建成功');
+    }
     planDlg.show = false;
     loadPlans();
   } catch (err) {
-    ElMessage.error(err?.bizMsg || err?.message || '创建失败');
+    ElMessage.error(err?.bizMsg || err?.message || '保存失败');
   } finally {
     planDlg.saving = false;
+  }
+}
+async function togglePlanStatus(idOrRow, newStatus) {
+  const id = typeof idOrRow === 'string' ? idOrRow : (idOrRow.id || idOrRow.planCode);
+  try {
+    await updateTargetPlan(id, { status: newStatus });
+    ElMessage.success(newStatus === 'ACTIVE' ? '已启用' : '已禁用');
+    planDlg.show = false;
+    loadPlans();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '操作失败');
   }
 }
 
