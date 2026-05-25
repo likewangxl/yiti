@@ -47,23 +47,11 @@
 
         <div class="col grow">
           <div class="lab">③ 对象 (已选 {{ subjects.length }})</div>
-          <div class="tags">
-            <el-tag v-for="s in subjects" :key="s.id" closable effect="plain" @close="subjects = subjects.filter(x => x !== s)">
+          <div class="tags click" @click="subjectDlg.show = true">
+            <el-tag v-for="s in subjects" :key="s.id" closable effect="plain" @close.stop="subjects = subjects.filter(x => x !== s)">
               {{ subjectLabel(s) }}
             </el-tag>
-            <el-popover :width="280" trigger="click">
-              <template #reference>
-                <el-tag class="add" effect="plain">+ 添加</el-tag>
-              </template>
-              <el-input v-model="objKw" :placeholder="objSearchPlaceholder" size="small" clearable />
-              <div class="obj-pool">
-                <div v-if="!objectOptions.length" class="obj-empty">暂无可选项</div>
-                <div v-for="o in objectOptions" :key="o.id" class="obj-row" @click="addSubject(o)">
-                  <span>{{ o.name }}</span>
-                  <span class="muted">{{ o.org }}</span>
-                </div>
-              </div>
-            </el-popover>
+            <el-tag class="add" effect="plain">+ 选择</el-tag>
           </div>
         </div>
 
@@ -103,6 +91,55 @@
       <v-chart v-else class="chart" :option="chartOption" autoresize />
     </div>
 
+    <!-- 对象选择弹框：机构树 + 员工搜索 -->
+    <el-dialog v-model="subjectDlg.show" :title="dim === 'EMP' ? '选择员工' : '选择机构'" width="720px" :close-on-click-modal="false">
+      <div class="subject-picker">
+        <div class="picker-left">
+          <div class="picker-title">机构树（勾选{{ dim === 'EMP' ? '机构可选该机构下全部员工' : '机构' }}）</div>
+          <el-input v-model="subjectDlg.treeKw" placeholder="搜索机构名称" size="small" clearable style="margin-bottom:8px" />
+          <el-tree
+            ref="subjectTreeRef"
+            :data="subjectDlg.orgTree"
+            show-checkbox
+            node-key="code"
+            default-expand-all
+            :filter-node-method="filterOrgNode"
+            :props="{ label: 'name', children: 'children' }"
+            @check-change="onOrgCheckChange"
+            style="max-height:360px;overflow:auto"
+          />
+        </div>
+        <div class="picker-right">
+          <template v-if="dim === 'EMP'">
+            <div class="picker-title">精确搜索员工</div>
+            <el-input v-model="subjectDlg.empKw" placeholder="输入姓名或工号搜索" size="small" clearable
+                      @keyup.enter="onEmpSearch" style="margin-bottom:8px">
+              <template #append><el-button @click="onEmpSearch">搜索</el-button></template>
+            </el-input>
+            <div class="emp-results">
+              <div v-for="e in subjectDlg.empSearchResults" :key="e.id" class="emp-row" @click="addSubjectFromSearch(e)">
+                <span>{{ e.name }}</span>
+                <span class="muted">{{ e.org }}</span>
+              </div>
+            </div>
+          </template>
+          <div class="picker-title" style="margin-top:12px">已选 ({{ subjectDlg.selected.length }})</div>
+          <div class="selected-list">
+            <el-tag v-for="s in subjectDlg.selected" :key="s.id" closable effect="plain" size="small"
+                    @close="subjectDlg.selected = subjectDlg.selected.filter(x => x.id !== s.id)"
+                    style="margin:2px">
+              {{ s.name }}
+            </el-tag>
+            <div v-if="!subjectDlg.selected.length" class="obj-empty">暂未选择</div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="subjectDlg.show = false">取消</el-button>
+        <el-button type="primary" @click="confirmSubjects">确定</el-button>
+      </template>
+    </el-dialog>
+
     <MetricPicker
       v-model:visible="pickerVisible"
       v-model="pickedMetrics"
@@ -120,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Grid, Histogram, TrendCharts, PieChart, Folder, Plus, Download } from '@element-plus/icons-vue';
 import { use } from 'echarts/core';
@@ -129,9 +166,8 @@ import { BarChart, LineChart, PieChart as EPie } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { queryDynamic, exportDynamic, getQueryDimensions, getSavedQuery } from '@/api/report';
-import { listEmployees } from '@/api/employees';
-import { getOrgTree } from '@/api/orgs';
-import { listCustomers } from '@/api/customers';
+import { searchEmployees } from '@/api/employees';
+import { getOrgTree, listOrgUsers } from '@/api/orgs';
 import { listMetrics } from '@/api/metrics';
 import MetricPicker from './components/MetricPicker.vue';
 import SchemeSaveDialog from './components/SchemeSaveDialog.vue';
@@ -140,19 +176,11 @@ import SchemeListDialog from './components/SchemeListDialog.vue';
 use([CanvasRenderer, BarChart, LineChart, EPie, GridComponent, TooltipComponent, LegendComponent]);
 
 const dim = ref('EMP');
-const dimensions = ref([{ code: 'EMP', label: '员工' }, { code: 'ORG', label: '机构' }, { code: 'CUST', label: '客户' }]);
-// metricsList：动态从 yiti `/api/perf/metrics?status=ACTIVE` 拉取的有效指标列表（含 mock 兜底）
-//   元素形如：{ metricCode, metricName, baseDim, metricLevel, unit, ... } —— 见 MetricDefRespDTO
+const dimensions = ref([{ code: 'EMP', label: '员工' }, { code: 'ORG', label: '机构' }]);
 const metricsList = ref([]);
-const pickedMetrics = ref([]);   // 真实指标加载完才会填默认 4 个，避免脏 code
-const subjects = ref([
-  { id: 'E001', name: '张三', org: '南山支行' },
-  { id: 'E002', name: '李四', org: '福田支行' },
-  { id: 'E003', name: '孙七', org: '罗湖支行' },
-  { id: 'E004', name: '郑九', org: '宝安支行' },
-  { id: 'E005', name: '赵六', org: '龙岗支行' }
-]);
-const date = ref('2026-04-22');
+const pickedMetrics = ref([]);
+const subjects = ref([]);
+const date = ref(new Date().toISOString().slice(0, 10));
 const view = ref('table');
 const querying = ref(false);
 const exporting = ref(false);
@@ -197,36 +225,75 @@ function pickFirstMetricsForDim(d, n) {
   return list;
 }
 
-// 添加对象 popover —— 候选源随 dim 切换：员工 / 机构 / 客户
-const objKw = ref('');
-const employees = ref([]);
-const orgs = ref([]);              // 扁平：机构（去掉根节点）
-const customers = ref([]);              // CUST 维度懒加载,与 EMP/ORG 一致
+// ============ 对象选择 dialog ============
+const subjectTreeRef = ref(null);
+const orgTreeData = ref([]);
+const subjectDlg = reactive({
+  show: false,
+  orgTree: [],
+  treeKw: '',
+  empKw: '',
+  empSearchResults: [],
+  selected: [],
+});
 
-const objSearchPlaceholder = computed(() => ({
-  EMP:  '搜索员工 / 所在机构',
-  ORG:  '搜索机构',
-  CUST: '搜索客户 / 行业'
-}[dim.value] || '搜索对象'));
+function filterOrgNode(value, data) {
+  if (!value) return true;
+  return (data.name || '').includes(value);
+}
 
-// 把 mock 的员工/机构/客户结构归一为 { id, name, org }
-const objectPool = computed(() => {
+watch(() => subjectDlg.treeKw, (val) => {
+  subjectTreeRef.value?.filter(val);
+});
+
+watch(() => subjectDlg.show, (visible) => {
+  if (visible) {
+    subjectDlg.selected = [...subjects.value];
+    subjectDlg.orgTree = orgTreeData.value;
+    subjectDlg.treeKw = '';
+    subjectDlg.empKw = '';
+    subjectDlg.empSearchResults = [];
+  }
+});
+
+async function onOrgCheckChange() {
+  const checkedNodes = subjectTreeRef.value?.getCheckedNodes(true) || [];
   if (dim.value === 'ORG') {
-    return orgs.value.map(o => ({ id: o.code, name: o.name, org: '' }));
+    subjectDlg.selected = checkedNodes.map(n => ({ id: n.code, name: n.name, org: '' }));
+  } else {
+    // EMP 模式：勾机构 → 加载该机构下全部员工
+    const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
+    for (const node of checkedNodes) {
+      try {
+        const users = await listOrgUsers(node.code, { pageSize: 200 });
+        const list = Array.isArray(users) ? users : (users?.records || []);
+        for (const u of list) {
+          const emp = { id: u.empId || u.userId, name: u.empName || u.userchnname || u.username, org: node.name };
+          if (!newSelected.some(s => s.id === emp.id)) newSelected.push(emp);
+        }
+      } catch {}
+    }
+    subjectDlg.selected = newSelected;
   }
-  if (dim.value === 'CUST') {
-    return customers.value.map(c => ({ id: c.id, name: c.name, org: c.org || c.industry || '' }));
-  }
-  return employees.value.map(e => ({ id: e.id, name: e.name, org: e.org }));
-});
+}
 
-const objectOptions = computed(() => {
-  const kw = objKw.value.trim();
-  return objectPool.value
-    .filter(o => !subjects.value.some(s => s.id === o.id))
-    .filter(o => !kw || o.name.includes(kw) || (o.org || '').includes(kw))
-    .slice(0, 20);
-});
+async function onEmpSearch() {
+  const kw = subjectDlg.empKw?.trim();
+  if (!kw) return;
+  try {
+    subjectDlg.empSearchResults = await searchEmployees(kw, 20);
+  } catch { subjectDlg.empSearchResults = []; }
+}
+
+function addSubjectFromSearch(emp) {
+  if (subjectDlg.selected.some(s => s.id === emp.id)) return;
+  subjectDlg.selected.push({ ...emp, _fromSearch: true });
+}
+
+function confirmSubjects() {
+  subjects.value = subjectDlg.selected.map(s => ({ id: s.id, name: s.name, org: s.org || '' }));
+  subjectDlg.show = false;
+}
 
 function subjectLabel(s) {
   if (dim.value === 'EMP') return '员工' + s.name;
@@ -239,36 +306,12 @@ function addSubject(o) {
   objKw.value = '';
 }
 
-// 维度切换：清空已选对象，避免跨维度脏数据；按需懒加载对应维度的候选数据
-watch(dim, async (cur, prev) => {
+// 维度切换：清空已选对象，避免跨维度脏数据
+watch(dim, (cur, prev) => {
   if (cur === prev) return;
   subjects.value = [];
-  objKw.value = '';
   hasResult.value = false;
-  if (cur === 'ORG' && !orgs.value.length) {
-    try {
-      const tree = await getOrgTree();
-      orgs.value = flattenOrgTree(tree);
-    } catch (e) {}
-  }
-  if (cur === 'CUST' && !customers.value.length) {
-    try {
-      const list = await listCustomers({ pageNo: 1, pageSize: 100 });
-      if (Array.isArray(list)) customers.value = list;
-    } catch (e) {}
-  }
 });
-
-function flattenOrgTree(nodes) {
-  const out = [];
-  const walk = (arr) => arr.forEach(n => {
-    // 跳过最顶层「分行」根，仅保留可选支行 / 末梢机构
-    if (n.children?.length) walk(n.children);
-    else out.push({ code: n.code, name: n.name });
-  });
-  walk(nodes || []);
-  return out;
-}
 
 async function doQuery() {
   if (!pickedMetrics.value.length) { ElMessage.warning('请至少选择 1 个指标'); return; }
@@ -397,24 +440,16 @@ const chartOption = computed(() => {
 });
 
 onMounted(async () => {
-  // 元数据并行：维度 / 员工 / 指标库（指标用于编号→名称映射 + 默认选中）
-  // 注：getQueryDimensions(dim) 后端必传 dim，否则 400 VALID_002；
-  //     真接口返回 {dim, dimName, metrics:[...]} 单维度树（不是 dim 列表），
-  //     这里 Array.isArray 兜底主要给 mock 模式 [{code,label}] 用，真接口下静默 no-op，
-  //     dim 列表保持本地硬编码 EMP/ORG/CUST 即可。
   await Promise.all([
-    getQueryDimensions(dim.value).then(d => Array.isArray(d) && d.length && (dimensions.value = d)).catch(() => {}),
-    listEmployees().then(e => Array.isArray(e) && (employees.value = e)).catch(() => {}),
-    listMetrics({ status: 'ACTIVE', pageNo: 1, pageSize: 100 })
+    getOrgTree().then(tree => { orgTreeData.value = tree; }).catch(() => {}),
+    listMetrics({ status: 'ACTIVE', pageNo: 1, pageSize: 200 })
       .then(list => { if (Array.isArray(list)) metricsList.value = list; })
       .catch(() => { metricsList.value = []; })
   ]);
 
-  // 指标库到位后挑前 4 个 EMP 维度的指标作为默认选中（真实数据驱动，避免脏 code）
   if (!pickedMetrics.value.length) {
     pickedMetrics.value = pickFirstMetricsForDim('EMP', 4);
   }
-  rows.value = defaultRows();
 });
 </script>
 
@@ -446,6 +481,25 @@ onMounted(async () => {
       &:hover { background: $bg-soft; }
       .muted { margin-left: auto; color: $text-4; font-size: 12px; }
     }
+  }
+
+  .subject-picker {
+    display: flex; gap: 16px; min-height: 400px;
+    .picker-left { flex: 1; border-right: 1px solid $border-2; padding-right: 16px; overflow: auto; }
+    .picker-right { flex: 1; overflow: auto; }
+    .picker-title { font-size: 13px; font-weight: 600; color: $text-2; margin-bottom: 8px; }
+    .emp-results {
+      max-height: 180px; overflow: auto; border: 1px solid $border-3; border-radius: 4px;
+      .emp-row {
+        display: flex; justify-content: space-between; padding: 6px 10px; cursor: pointer; font-size: 13px;
+        &:hover { background: $primary-50; }
+        .muted { color: $text-4; font-size: 12px; }
+      }
+    }
+    .selected-list {
+      max-height: 200px; overflow: auto; padding: 6px; border: 1px solid $border-3; border-radius: 4px;
+    }
+    .obj-empty { color: $text-4; font-size: 12px; padding: 12px; text-align: center; }
   }
 }
 </style>
