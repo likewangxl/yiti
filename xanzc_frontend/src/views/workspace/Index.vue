@@ -65,7 +65,7 @@
       <div class="card-section notify">
         <div class="card-h">
           <div class="title">通知</div>
-          <a class="more">全部</a>
+          <a class="more" @click="openNotifyDlg">全部</a>
         </div>
         <div v-for="(n, i) in data.notifications" :key="i" class="ntf">
           <span class="dot" :class="{ unread: !n.read }"></span>
@@ -76,6 +76,28 @@
         </div>
       </div>
     </div>
+
+    <!-- 通知弹框 -->
+    <el-dialog v-model="notifyDlg.show" title="全部通知" width="600px" @opened="onNotifyDlgOpen">
+      <el-table :data="notifyDlg.list" size="small" v-loading="notifyDlg.loading" max-height="400" empty-text="暂无通知">
+        <el-table-column label="内容" min-width="260">
+          <template #default="{row}">
+            <div>{{ row.content || row.title || '-' }}</div>
+            <div class="ntf-meta">{{ row.bizType }} · {{ row.createdTime || '-' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="70" align="center">
+          <template #default="{row}">
+            <el-tag v-if="row.isRead" size="small" effect="plain">已读</el-tag>
+            <el-tag v-else size="small" type="danger" effect="plain">未读</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="notifyDlg.show = false">关闭</el-button>
+        <el-button type="primary" @click="doMarkAllRead">全部标记已读</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 快捷入口 -->
     <div class="card-section">
@@ -96,7 +118,7 @@ import { useRouter } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
-import { getWorkspace, getMyTodoCount, getUnreadNotificationCount } from '@/api/workspace';
+import { getWorkspace, getMyTodoCount, getUnreadNotificationCount, listNotifications, markAllRead } from '@/api/workspace';
 import { listTodoTasks, listDoneTasks } from '@/api/workflow';
 
 const router = useRouter();
@@ -135,6 +157,30 @@ async function loadTasks() {
     tasks.value = Array.isArray(r) ? r : [];
   } catch { tasks.value = []; } finally { tasksLoading.value = false; }
 }
+// ============ 通知弹框 ============
+const notifyDlg = reactive({ show: false, loading: false, list: [] });
+function openNotifyDlg() {
+  notifyDlg.show = true;
+}
+async function onNotifyDlgOpen() {
+  notifyDlg.loading = true;
+  try {
+    const r = await listNotifications({ pageSize: 50 });
+    notifyDlg.list = r?.records || (Array.isArray(r) ? r : []);
+  } catch { notifyDlg.list = []; }
+  finally { notifyDlg.loading = false; }
+}
+async function doMarkAllRead() {
+  try {
+    await markAllRead();
+    notifyDlg.list.forEach(n => { n.isRead = true; });
+    // 刷新未读数
+    getUnreadNotificationCount().then(c => {
+      if (data.value?.stats?.[1]) data.value.stats[1].value = c;
+    });
+  } catch {}
+}
+
 function goHandle(row) {
   const id = row.taskId || row.id;
   if (!id) return;

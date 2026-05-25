@@ -75,6 +75,14 @@ export function getUnreadCount() {
 /**
  * 标记单条已读
  */
+/**
+ * 通知列表（分页）
+ */
+export function listNotifications(params = {}) {
+  return call('get', '/notifications', { params: { pageNo: 1, pageSize: 50, ...params } },
+    { total: 0, records: [] });
+}
+
 export function markRead(id) {
   return call('put', `/notifications/${id}/read`, {}, { ok: true });
 }
