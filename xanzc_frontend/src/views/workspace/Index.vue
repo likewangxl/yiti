@@ -97,7 +97,7 @@ import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
 import { getWorkspace, getMyTodoCount, getUnreadNotificationCount } from '@/api/workspace';
-import { listMyAdjustTodos, listMyAdjustDones } from '@/api/perf';
+import { listTodoTasks, listDoneTasks } from '@/api/workflow';
 
 const router = useRouter();
 const store = useUserStore();
@@ -129,20 +129,21 @@ const tasksLoading = ref(false);
 async function loadTasks() {
   tasksLoading.value = true;
   try {
-    // 切到 perf my-todos / my-done（跟 Adjust.vue 同数据源），避免列表里有非 ALLOC_ADJUST task
-    // 点办理跳 /perf/adjust 找不到的 bug
-    const fn = taskTab.value === 'PENDING' ? listMyAdjustTodos : listMyAdjustDones;
-    const r = await fn({ pageNo: 1, pageSize: 20 });
-    tasks.value = r?.records || [];
+    // 通用 workflow 待办/已办（不限 bizType），同时覆盖 ALLOC_ADJUST + TARGET_ADJUST
+    const fn = taskTab.value === 'PENDING' ? listTodoTasks : listDoneTasks;
+    const r = await fn({ pageSize: 20 });
+    tasks.value = Array.isArray(r) ? r : [];
   } catch { tasks.value = []; } finally { tasksLoading.value = false; }
 }
 function goHandle(row) {
-  // 必须取 row.taskId（workflow 任务 ID），不是 row.id（AdjustTodoRespDTO.id 是业务 applyId）
-  // 之前 row.id || row.taskId 在 listTodoTasks 时代 OK（TaskRespDTO 无 id 字段），
-  // 但切到 my-todos 后 row.id 命中 applyId → Adjust.vue find taskId 失败提示「任务已处理」
   const id = row.taskId || row.id;
   if (!id) return;
-  router.push({ path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } });
+  // 按 bizType 路由到对应业务页面
+  if (row.bizType === 'TARGET_ADJUST') {
+    router.push({ path: '/perf/targets', query: { tab: 'todo', taskId: id } });
+  } else {
+    router.push({ path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } });
+  }
 }
 
 onMounted(async () => {
