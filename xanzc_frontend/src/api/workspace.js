@@ -34,7 +34,7 @@ function adaptWorkspace(dto) {
     remain: t.overdueInfo || ''
   }));
   const notifications = (dto.recentNotifications || []).map(n => ({
-    title: n.content || n.title || '',
+    title: n.summary || n.content || n.title || '',
     tag: BIZ_TYPE_LABEL[n.bizType] || n.bizType || '',
     time: fmtTime(n.sentTime),
     read: n.readStatus === 'READ'
