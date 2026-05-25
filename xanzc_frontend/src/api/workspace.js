@@ -17,6 +17,14 @@ function fmtTime(t) {
   return String(t).slice(0, 16).replace('T', ' ');
 }
 
+const BIZ_TYPE_LABEL = {
+  ALLOC_ADJUST: '业绩调整',
+  TARGET_ADJUST: '目标修正',
+  LOAN: '贷款业务',
+  LEAD: '线索管理',
+  SUPPORT: '支撑业务',
+};
+
 function adaptWorkspace(dto) {
   if (!dto) return mock;
   const todos = (dto.recentTodos || []).map(t => ({
@@ -26,8 +34,8 @@ function adaptWorkspace(dto) {
     remain: t.overdueInfo || ''
   }));
   const notifications = (dto.recentNotifications || []).map(n => ({
-    title: n.title || '',
-    tag: n.bizType || '',
+    title: n.content || n.title || '',
+    tag: BIZ_TYPE_LABEL[n.bizType] || n.bizType || '',
     time: fmtTime(n.sentTime),
     read: n.readStatus === 'READ'
   }));
@@ -79,12 +87,11 @@ export function markAllRead() {
 }
 
 /**
- * 工作台「待办」stat 卡用：当前用户 ALLOC_ADJUST 待办真实 count.
- * 用 perf my-todos 接口（mapper IN+过滤后 count 准确），
- * 不用 /workflow/tasks 因后者的 query.count() 不带 bizType 过滤（lf 历史 code，bizType 是后置过滤，total 不准）.
+ * 工作台「待办」stat 卡用：当前用户全部待办 count（业绩调整 + 目标修正 + 其他 bizType）。
+ * 不带 bizType 时 /workflow/tasks 的 query.count() 就是全部待办的准确 total。
  */
 export function getMyTodoCount() {
-  return call('get', '/perf/alloc-adjust/my-todos',
+  return call('get', '/workflow/tasks',
     { params: { pageSize: 1, pageNo: 1 } },
     { total: 0, records: [] }
   ).then(r => Number(r?.total) || 0);
