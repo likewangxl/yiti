@@ -93,7 +93,7 @@
         highlight-current-row
         @row-click="onPickHistory"
       >
-        <el-table-column prop="time"    label="时间"     width="160" />
+        <el-table-column prop="time"    label="时间"     width="160" :formatter="fmtDateTimeCol" />
         <el-table-column prop="who"     label="操作人"   width="120" />
         <el-table-column prop="reason"  label="原因"     width="160" />
         <el-table-column prop="sql"     label="SQL（节选）" show-overflow-tooltip />
@@ -125,8 +125,10 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
+import { fmtDateTimeCol } from '@/utils/datetime';
 import { List, Search } from '@element-plus/icons-vue';
 import { executeSqlProbe, getSqlWhitelist, getSqlHistory, getSqlHistoryItem } from '@/api/report';
+import { encryptSql } from '@/utils/sqlCrypto';
 
 const reason = ref('');
 const rowLimit = ref(1000);
@@ -193,11 +195,10 @@ async function run() {
   running.value = true;
   result.value = null;
   try {
+    // 后端 SqlProbeExecuteReqDTO 只认 sql + remark 两字段，前端 ref 仍叫 reason 但提交时映射为 remark
     const r = await executeSqlProbe({
-      sql: sql.value,
-      reason: reason.value,
-      rowLimit: rowLimit.value,
-      timeoutSec: timeoutSec.value
+      sql: encryptSql(sql.value),
+      remark: reason.value
     });
     result.value = r;
     ElMessage.success(`执行成功：${r?.rows ?? 0} 行 · ${r?.time ?? '-'}`);
