@@ -82,14 +82,6 @@
             <el-tag :class="apprCls(row.approvalStatus)" effect="plain">{{ apprLabel(row.approvalStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
-          <template #default="{row}">
-            <!-- 仅资财部经办 (BACK_FINANCE) / 系统管理员可发起目标修正；
-                 资财部负责人 (FINANCE_LEADER) 是审批人，不发起 -->
-            <el-button v-if="canTargetAdjust" link type="primary" size="small" @click="openAdjust(row)">修正</el-button>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
       </el-table>
 
       <div class="pager">
@@ -177,7 +169,7 @@ import {
   submitTargetAdjust, listMetrics,
   listKpiRules, listTargetAdjusts
 } from '@/api/perf';
-import { listEmployees } from '@/api/employees';
+import { listUsers } from '@/api/users';
 import { getOrgTree } from '@/api/orgs';
 import { useUserStore } from '@/stores/user';
 
@@ -222,10 +214,14 @@ const metricMap = ref(new Map()); // metricCode → metricName
 
 async function loadEmpMap() {
   try {
-    const list = await listEmployees({ pageSize: 100 });
+    const list = await listUsers({ pageSize: 100 });
     if (Array.isArray(list)) {
       const m = new Map();
-      for (const e of list) m.set(e.empId || e.id, { name: e.empName || e.name, orgName: e.orgName || e.org || '', orgCode: e.orgCode || '' });
+      for (const e of list) {
+        if (e.isEnabled === 0) {
+          m.set(e.username, { name: e.userchnname || e.username, orgName: '', orgCode: '' });
+        }
+      }
       empMap.value = m;
     }
   } catch {}

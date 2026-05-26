@@ -64,7 +64,7 @@
             <el-table-column label="操作" width="160" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button>
-                <el-button link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
+                <el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
               </template>
             </el-table-column>
           </el-table>

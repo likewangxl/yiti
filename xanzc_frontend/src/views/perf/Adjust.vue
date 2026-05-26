@@ -24,17 +24,17 @@
             <el-form-item label="维度">
               <el-select v-model="mineFilters.allocDim" clearable placeholder="全部" style="width:140px"
                          @change="onMineFilterChange">
-                <el-option value="CUST" label="客户" />
-                <el-option value="ORG" label="机构" />
-                <el-option value="EMP" label="员工" />
+                <el-option value="RULE" label="按规则" />
+                <el-option value="ACCOUNT" label="按账户" />
               </el-select>
             </el-form-item>
             <el-form-item label="业务类型">
               <el-select v-model="mineFilters.bizKind" clearable placeholder="全部" style="width:160px"
                          @change="onMineFilterChange">
-                <el-option value="LOAN" label="贷款" />
-                <el-option value="DEPOSIT" label="存款" />
-                <el-option value="SUPPORT" label="支援" />
+                <el-option value="CORP_DEPOSIT" label="存款" />
+                <el-option value="CORP_LOAN" label="贷款" />
+                <el-option value="FEE_BIZ" label="中收" />
+                <el-option value="CORP_LARGE_CD" label="大额存单" />
               </el-select>
             </el-form-item>
             <el-form-item label="状态">
@@ -63,17 +63,14 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户" min-width="160">
-              <template #default="{row}">{{ row.custName || row.custNo || row.custId || '-' }}</template>
+            <el-table-column label="客户编号" min-width="160">
+              <template #default="{row}">{{ row.custNo || row.custId || '-' }}</template>
             </el-table-column>
             <el-table-column label="维度" width="100">
-              <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ row.allocDim || '-' }}</el-tag></template>
+              <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
             </el-table-column>
-            <el-table-column label="业务类型" width="120">
-              <template #default="{row}">{{ row.bizKind || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="归属机构" width="120">
-              <template #default="{row}">{{ row.ownerOrgId || '-' }}</template>
+            <el-table-column label="业务类型" width="160">
+              <template #default="{row}">{{ (row.bizKind || '').split(',').map(k => ({ CORP_DEPOSIT:'存款', CORP_LOAN:'贷款', FEE_BIZ:'中收', CORP_LARGE_CD:'大额存单', CORP_FOREX:'外汇', PER_DEP:'个人存款', PER_LOAN:'个人贷款' }[k] || k)).join('、') || '-' }}</template>
             </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{row}">
@@ -123,17 +120,17 @@
             <el-form-item label="维度">
               <el-select v-model="todoFilters.allocDim" clearable placeholder="全部"
                          style="width:140px" @change="onTodoFilterChange">
-                <el-option value="CUST" label="客户" />
-                <el-option value="ORG" label="机构" />
-                <el-option value="EMP" label="员工" />
+                <el-option value="RULE" label="按规则" />
+                <el-option value="ACCOUNT" label="按账户" />
               </el-select>
             </el-form-item>
             <el-form-item label="业务类型">
               <el-select v-model="todoFilters.bizKind" clearable placeholder="全部"
                          style="width:160px" @change="onTodoFilterChange">
-                <el-option value="LOAN" label="贷款" />
-                <el-option value="DEPOSIT" label="存款" />
-                <el-option value="SUPPORT" label="支援" />
+                <el-option value="CORP_DEPOSIT" label="存款" />
+                <el-option value="CORP_LOAN" label="贷款" />
+                <el-option value="FEE_BIZ" label="中收" />
+                <el-option value="CORP_LARGE_CD" label="大额存单" />
               </el-select>
             </el-form-item>
             <el-form-item label="申请时间">
@@ -178,11 +175,9 @@
                 <el-tag :class="slaCls(row.slaStatus)" effect="plain">{{ slaLabel(row.slaStatus) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" width="100" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openTodoDetail(row)">查看申请</el-button>
-                <el-button link type="success" size="small" @click="openApprove(row)">通过</el-button>
-                <el-button link type="danger"  size="small" @click="openReject(row)">驳回</el-button>
+                <el-button link type="primary" size="small" @click="openTodoReview(row)">审批</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -212,17 +207,17 @@
             <el-form-item label="维度">
               <el-select v-model="doneFilters.allocDim" clearable placeholder="全部" style="width:140px"
                          @change="onDoneFilterChange">
-                <el-option value="CUST" label="客户" />
-                <el-option value="ORG" label="机构" />
-                <el-option value="EMP" label="员工" />
+                <el-option value="RULE" label="按规则" />
+                <el-option value="ACCOUNT" label="按账户" />
               </el-select>
             </el-form-item>
             <el-form-item label="业务类型">
               <el-select v-model="doneFilters.bizKind" clearable placeholder="全部" style="width:160px"
                          @change="onDoneFilterChange">
-                <el-option value="LOAN" label="贷款" />
-                <el-option value="DEPOSIT" label="存款" />
-                <el-option value="SUPPORT" label="支援" />
+                <el-option value="CORP_DEPOSIT" label="存款" />
+                <el-option value="CORP_LOAN" label="贷款" />
+                <el-option value="FEE_BIZ" label="中收" />
+                <el-option value="CORP_LARGE_CD" label="大额存单" />
               </el-select>
             </el-form-item>
             <el-form-item label="申请时间">
@@ -238,41 +233,31 @@
         </div>
         <div class="card-section table">
           <el-table :data="dones" size="default" empty-text="无符合条件的已审批" v-loading="doneLoading">
-            <el-table-column label="标题" min-width="220">
-              <template #default="{row}"><code class="mono">{{ row.title || row.businessKey }}</code></template>
+            <el-table-column label="申请编号" width="170">
+              <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="当前节点" width="140" prop="taskName" />
-            <el-table-column label="发起人" width="160">
-              <template #default="{row}">
-                {{ row.startUserName || '-' }}
-                <span v-if="row.startUser" class="sub-id">({{ row.startUser }})</span>
-              </template>
+            <el-table-column label="客户编号" min-width="160">
+              <template #default="{row}">{{ row.custId || '-' }}</template>
             </el-table-column>
-            <el-table-column label="发起机构" width="220">
-              <template #default="{row}">
-                <template v-if="row.startOrgName || row.startOrgId">
-                  {{ row.startOrgId || '-' }}<span v-if="row.startOrgName"> · {{ row.startOrgName }}</span>
-                </template>
-                <template v-else>-</template>
-              </template>
+            <el-table-column label="维度" width="100">
+              <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
             </el-table-column>
-            <el-table-column label="发起时间" width="160">
-              <template #default="{row}">{{ fmt(row.startTime) }}</template>
-            </el-table-column>
-            <el-table-column label="任务到达" width="160">
-              <template #default="{row}">{{ fmt(row.taskCreateTime) }}</template>
-            </el-table-column>
-            <el-table-column label="SLA" width="90">
-              <template #default="{row}">
-                <el-tag :class="slaCls(row.slaStatus)" effect="plain">{{ slaLabel(row.slaStatus) }}</el-tag>
-              </template>
+            <el-table-column label="业务类型" width="160">
+              <template #default="{row}">{{ (row.bizKind || '').split(',').map(k => ({ CORP_DEPOSIT:'存款', CORP_LOAN:'贷款', FEE_BIZ:'中收', CORP_LARGE_CD:'大额存单' }[k] || k)).join('、') || '-' }}</template>
             </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{row}">
-                <el-tag :class="processStatusCls(row.processStatus)" effect="plain">
-                  {{ processStatusLabel(row.processStatus) }}
-                </el-tag>
+                <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
               </template>
+            </el-table-column>
+            <el-table-column label="申请人" width="160">
+              <template #default="{row}">
+                {{ row.createdByName || row.startUserName || row.createdBy || '-' }}
+                <span v-if="row.createdBy" class="sub-id">({{ row.createdBy }})</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="申请时间" width="160">
+              <template #default="{row}">{{ fmt(row.createdTime) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{row}">
@@ -324,40 +309,42 @@
 
         <el-row :gutter="16">
           <el-col :span="8">
+            <el-form-item label="客户类型" prop="custType" required>
+              <el-select v-model="dlg.form.custType" :disabled="dlg.readOnly" style="width:100%">
+                <el-option label="对公客户" value="CORP" />
+                <el-option label="零售客户" value="RETAIL" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="客户编号" prop="custNo" required>
               <el-input v-model="dlg.form.custNo" :disabled="dlg.readOnly" placeholder="如 C20260001" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="分配维度" prop="allocDim" required>
-              <el-select v-model="dlg.form.allocDim" :disabled="dlg.readOnly" style="width:100%">
-                <el-option label="按规则分配（RULE）"  value="RULE" />
-                <el-option label="按账户分配（ACCOUNT）" value="ACCOUNT" />
+              <el-select v-model="dlg.form.allocDim" :disabled="dlg.readOnly" style="width:100%"
+                         @change="onAllocDimChange">
+                <el-option label="按规则分配" value="RULE" />
+                <el-option label="按账户分配" value="ACCOUNT" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="业务类型" prop="bizKind" required>
-              <el-select v-model="dlg.form.bizKind" :disabled="dlg.readOnly" style="width:100%">
-                <el-option label="对公存款（CORP_DEPOSIT）" value="CORP_DEPOSIT" />
-                <el-option label="对公贷款（CORP_LOAN）"    value="CORP_LOAN" />
-                <el-option label="对公外汇（CORP_FOREX）"   value="CORP_FOREX" />
-                <el-option label="个人存款（PER_DEP）"      value="PER_DEP" />
-                <el-option label="个人贷款（PER_LOAN）"     value="PER_LOAN" />
-                <el-option label="中间业务（FEE_BIZ）"      value="FEE_BIZ" />
+              <el-select v-model="dlg.form.bizKind" :disabled="dlg.readOnly" multiple style="width:100%">
+                <el-option label="存款" value="CORP_DEPOSIT" />
+                <el-option label="贷款" value="CORP_LOAN" />
+                <el-option label="中收" value="FEE_BIZ" />
+                <el-option label="大额存单" value="CORP_LARGE_CD" />
               </el-select>
             </el-form-item>
           </el-col>
-        </el-row>
-        <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="账号">
-              <el-input v-model="dlg.form.accountNo" :disabled="dlg.readOnly" placeholder="可空" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="归属机构" prop="ownerOrgId" required>
-              <el-input v-model="dlg.form.ownerOrgId" :disabled="dlg.readOnly" placeholder="如 NS001" />
+              <el-input v-model="dlg.form.accountNo"
+                        :disabled="dlg.readOnly || dlg.form.allocDim !== 'ACCOUNT'"
+                        :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '请输入账号' : '仅按账户分配时可输入'" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -435,9 +422,23 @@
         </div>
       </template>
 
+      <!-- 审批模式：评审意见 + 通过/驳回 -->
+      <template v-if="dlg.reviewMode">
+        <el-form label-position="top" size="default" style="margin-top:12px">
+          <el-form-item label="评审意见" required>
+            <el-input v-model="dlg.reviewOpinion" type="textarea" :rows="3" maxlength="500" show-word-limit
+              placeholder="请填写评审意见（必填）" />
+          </el-form-item>
+        </el-form>
+      </template>
+
       <template #footer>
-        <el-button @click="dlg.show = false">{{ dlg.readOnly ? '关闭' : '取消' }}</el-button>
-        <el-button v-if="!dlg.readOnly" type="primary" :loading="dlg.saving" @click="onSubmit">提交审批</el-button>
+        <el-button @click="dlg.show = false">{{ dlg.reviewMode ? '关闭' : dlg.readOnly ? '关闭' : '取消' }}</el-button>
+        <template v-if="dlg.reviewMode">
+          <el-button type="danger" :loading="dlg.reviewSaving" @click="onDlgReviewAction('REJECT')">驳回</el-button>
+          <el-button type="primary" :loading="dlg.reviewSaving" @click="onDlgReviewAction('APPROVE')">通过</el-button>
+        </template>
+        <el-button v-if="!dlg.readOnly && !dlg.reviewMode" type="primary" :loading="dlg.saving" @click="onSubmit">提交审批</el-button>
       </template>
     </el-dialog>
 
@@ -462,6 +463,7 @@
         <el-button type="primary" :loading="approveDlg.saving" @click="onApproveSubmit">提交</el-button>
       </template>
     </el-dialog>
+
   </div>
 </template>
 
@@ -490,6 +492,19 @@ const statusCls = (s) => ({
   DRAFT: 'tag-info', REJECTED: 'tag-danger', WITHDRAWN: 'tag-info'
 }[s] || 'tag-info');
 const canWithdraw = (s) => s === 'IN_APPROVAL' || s === 'DRAFT';
+const inferCustType = (custType, bizKind) => {
+  if (custType) return custType;
+  const bk = typeof bizKind === 'string' ? bizKind : (Array.isArray(bizKind) ? bizKind[0] || '' : '');
+  if (bk.startsWith('CORP')) return 'CORP';
+  if (bk.startsWith('RETAIL') || bk.startsWith('PER') || bk.startsWith('FEE')) return 'RETAIL';
+  return '';
+};
+const doneRowStatus = (row) => {
+  if (row.approvalResult === 'APPROVE' || row.processStatus === 'COMPLETED') return 'APPROVED';
+  if (row.approvalResult === 'REJECT' || row.processStatus === 'CANCELLED') return 'REJECTED';
+  if (row.status) return row.status;
+  return 'IN_APPROVAL';
+};
 
 const SLA_LABEL = { GREEN: '正常', YELLOW: '预警', RED: '超时' };
 const slaLabel = (s) => SLA_LABEL[s] || s || '-';
@@ -716,8 +731,10 @@ async function openTodoDetail(row) {
     dlg.viewingId = applyId;
     dlg.approvalLogs = [];
     Object.assign(dlg.form, {
-      custNo: d.custNo || d.custId || '',
-      allocDim: d.allocDim, bizKind: d.bizKind, accountNo: d.accountNo,
+      custType: inferCustType(d.custType, d.bizKind), custNo: d.custNo || d.custId || '',
+      allocDim: d.allocDim,
+      bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
+      accountNo: d.accountNo,
       ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark,
       items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark }))
     });
@@ -815,26 +832,65 @@ async function openReject(row) {
   }
 }
 
+// ============ 待我审批 - 审批弹窗（复用查看弹窗 dlg + reviewMode） ============
+async function openTodoReview(row) {
+  // 复用 openTodoDetail 加载申请详情 + 审批流记录
+  await openTodoDetail(row);
+  // 切换为审批模式
+  dlg.reviewMode = true;
+  dlg.reviewRow = row;
+  dlg.reviewOpinion = '';
+  dlg.reviewSaving = false;
+}
+async function onDlgReviewAction(action) {
+  if (!dlg.reviewOpinion || !dlg.reviewOpinion.trim()) {
+    return ElMessage.warning('请填写评审意见');
+  }
+  if (!dlg.reviewRow?.taskId) {
+    return ElMessage.error('任务 ID 缺失');
+  }
+  dlg.reviewSaving = true;
+  try {
+    await ensureClaimed(dlg.reviewRow);
+    if (action === 'APPROVE') {
+      const formData = dlg.reviewRow.nodeKey === 'biz_dept_review'
+        ? { needsOriginalOwnerApprove: false } : undefined;
+      await approveTask(dlg.reviewRow.taskId, dlg.reviewOpinion, formData);
+      ElMessage.success('已通过');
+    } else {
+      await rejectTask(dlg.reviewRow.taskId, dlg.reviewOpinion);
+      ElMessage.success('已驳回');
+    }
+    dlg.show = false;
+    reloadTodo();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '审批失败');
+  } finally {
+    dlg.reviewSaving = false;
+  }
+}
+
 // ============ 新建/查看 弹框 ============
 const dlgFormRef = ref(null);
 const dlg = reactive({
   show: false, readOnly: false, saving: false, viewingId: null,
+  reviewMode: false, reviewRow: null, reviewOpinion: '', reviewSaving: false,
   approvalLogs: [], approvalLoading: false,
-  // 申请人信息（仅查看模式从 getAdjustDetail 回填，新建模式忽略）
   applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
-    custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
+    custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
     items: [{ empId: '', pct: 100, remark: '' }]
   }
 });
-const dlgTitle = computed(() => dlg.readOnly ? '查看调整申请' : '新建调整申请');
+const dlgTitle = computed(() => dlg.reviewMode ? '审批调整申请' : dlg.readOnly ? '查看调整申请' : '新建调整申请');
 const totalPct = computed(() => dlg.form.items.reduce((s, x) => s + (Number(x.pct) || 0), 0));
 const dlgRules = {
+  custType:   [{ required: true, message: '请选择客户类型' }],
   custNo:     [{ required: true, message: '请填写客户编号' }],
   allocDim:   [{ required: true, message: '请选择分配维度' }],
   bizKind:    [{ required: true, message: '请选择业务类型' }],
-  ownerOrgId: [{ required: true, message: '请填写归属机构编码' }],
+  // ownerOrgId 已隐藏，不再必填
   reason:     [
     { required: true, message: '请填写申请原因（必填，将记入审批日志）' },
     { max: 500, message: '申请原因不超过 500 字' }
@@ -846,6 +902,10 @@ function addItemRow() { dlg.form.items.push(defaultItem()); }
 function onDlgClosed() {
   dlg.viewingId = null;
   dlg.readOnly = false;
+  dlg.reviewMode = false;
+  dlg.reviewRow = null;
+  dlg.reviewOpinion = '';
+  dlg.reviewSaving = false;
   dlg.approvalLogs = [];
   dlg.approvalLoading = false;
   dlg.applyNo = '';
@@ -876,11 +936,16 @@ async function loadApprovalHistory(applyId) {
   }
 }
 
+function onAllocDimChange(val) {
+  if (val !== 'ACCOUNT') {
+    dlg.form.accountNo = '';
+  }
+}
 function openCreate() {
   dlg.readOnly = false;
   dlg.viewingId = null;
   Object.assign(dlg.form, {
-    custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
+    custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: [],
     accountNo: '', ownerOrgId: '', reason: '',
     items: [{ empId: '', pct: 100, remark: '' }]
   });
@@ -891,13 +956,13 @@ async function openView(row) {
   dlg.viewingId = row.id || row.applyNo;
   dlg.approvalLogs = [];
   Object.assign(dlg.form, {
-    custNo: row.custNo || row.custId || '',
+    custType: inferCustType(row.custType, row.bizKind), custNo: row.custNo || row.custId || '',
     allocDim: row.allocDim || 'RULE',
-    bizKind: row.bizKind || 'CORP_DEPOSIT',
+    bizKind: row.bizKind ? (typeof row.bizKind === 'string' ? row.bizKind.split(',') : row.bizKind) : [],
     accountNo: row.accountNo || '',
     ownerOrgId: row.ownerOrgId || '',
     reason: row.reason || row.remark || '',
-    items: row.items?.length ? [...row.items] : [{ empId: '', pct: 100, remark: '' }]
+    items: row.items?.length ? row.items.map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '' })) : [{ empId: '', pct: 100, remark: '' }]
   });
   // list 接口已有的申请人字段先塞进去，detail 接口再覆盖一次以拿到 createdByName/OrgName
   dlg.applyNo = row.applyNo || '';
@@ -910,9 +975,10 @@ async function openView(row) {
     const d = await getAdjustDetail(dlg.viewingId);
     if (d?.id) {
       Object.assign(dlg.form, {
-        custNo: d.custNo || d.custId, allocDim: d.allocDim, bizKind: d.bizKind,
+        custType: d.custType || '', custNo: d.custNo || d.custId, allocDim: d.allocDim,
+        bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
         accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
-        items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.shareRatio, remark: it.remark }))
+        items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '' }))
       });
       dlg.applyNo = d.applyNo || dlg.applyNo;
       dlg.createdBy = d.createdBy || dlg.createdBy;
@@ -942,13 +1008,14 @@ async function onSubmit() {
   dlg.saving = true;
   try {
     await submitAdjust({
+      custType:   dlg.form.custType,
       custNo:     dlg.form.custNo,
       allocDim:   dlg.form.allocDim,
-      bizKind:    dlg.form.bizKind,
+      bizKind:    Array.isArray(dlg.form.bizKind) ? dlg.form.bizKind.join(',') : dlg.form.bizKind,
       accountNo:  dlg.form.accountNo || undefined,
-      ownerOrgId: dlg.form.ownerOrgId,
+      ownerOrgId: dlg.form.ownerOrgId || userStore.user?.mainOrgCode || userStore.user?.orgCode || '',
       reason:     dlg.form.reason,
-      items: dlg.form.items.map(it => ({ empId: it.empId, ratio: Number(it.pct) }))
+      items: dlg.form.items.map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' }))
     });
     ElMessage.success('已提交审批');
     dlg.show = false;
@@ -994,7 +1061,7 @@ onMounted(async () => {
     await reloadTodo();
     const row = todos.value.find(t => t.taskId === route.query.taskId);
     if (row) {
-      openApprove(row);
+      openTodoReview(row);
     } else {
       ElMessage.warning('任务已处理或不在当前页');
     }
