@@ -176,10 +176,10 @@ public class FreeReportServiceImpl implements FreeReportService {
     }
 
     @Override
-    public List<RptFreeReportBatch> listBatches(java.time.LocalDate dateFrom, java.time.LocalDate dateTo) {
+    public List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo) {
         java.time.LocalDateTime fromDt = dateFrom != null ? dateFrom.atStartOfDay() : null;
         java.time.LocalDateTime toDt = dateTo != null ? dateTo.plusDays(1).atStartOfDay() : null;
-        return batchMapper.selectAllOrderByImportTimeDesc(fromDt, toDt);
+        return batchMapper.selectAllOrderByImportTimeDesc(keyword, fromDt, toDt);
     }
 
     @Override

@@ -13,6 +13,7 @@ public interface FreeReportBatchMapper extends BaseMapper<RptFreeReportBatch> {
     List<RptFreeReportBatch> selectByReportName(@Param("reportName") String reportName);
 
     List<RptFreeReportBatch> selectAllOrderByImportTimeDesc(
+            @Param("keyword") String keyword,
             @Param("dateFrom") java.time.LocalDateTime dateFrom,
             @Param("dateTo") java.time.LocalDateTime dateTo);
 }

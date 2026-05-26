@@ -47,7 +47,7 @@ public interface FreeReportService {
     /**
      * 查询导入批次列表（支持时间筛选）。
      */
-    List<RptFreeReportBatch> listBatches(java.time.LocalDate dateFrom, java.time.LocalDate dateTo);
+    List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo);
 
     /**
      * 获取原始文件下载 URL（MinIO 预签名）。

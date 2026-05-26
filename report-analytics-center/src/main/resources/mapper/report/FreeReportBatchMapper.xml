@@ -9,6 +9,10 @@
     <select id="selectAllOrderByImportTimeDesc" resultType="com.bank.branch.platform.report.entity.RptFreeReportBatch">
         SELECT * FROM RPT_FREE_REPORT_BATCH
         <where>
+            <if test="keyword != null and keyword != ''">
+                AND (REPORT_NAME LIKE CONCAT('%', #{keyword}, '%')
+                     OR FILE_NAME LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
             <if test="dateFrom != null">AND IMPORT_TIME &gt;= #{dateFrom}</if>
             <if test="dateTo != null">AND IMPORT_TIME &lt; #{dateTo}</if>
         </where>
