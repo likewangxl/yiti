@@ -1,0 +1,69 @@
+-- KPI/积分自由报表 — 3 张新表
+-- 执行时机：部署前手工 mysql 跑
+
+-- 导入批次日志（同 report_name 覆盖：先删旧 batch+rows 再插新）
+CREATE TABLE IF NOT EXISTS RPT_FREE_REPORT_BATCH (
+  ID            VARCHAR(64)  PRIMARY KEY,
+  REPORT_NAME   VARCHAR(200) NOT NULL COMMENT '报表名称（同名导入覆盖旧数据）',
+  FILE_NAME     VARCHAR(200) NOT NULL COMMENT '上传原始文件名',
+  FILE_OBJECT_KEY VARCHAR(500) COMMENT 'MinIO 对象 key（用于下载原文件）',
+  UPLOADER_EMP_ID VARCHAR(50) NOT NULL COMMENT '导入人工号',
+  UPLOADER_NAME VARCHAR(100) COMMENT '导入人姓名',
+  IMPORT_TIME   DATETIME     NOT NULL COMMENT '导入时间',
+  ROW_COUNT     INT          DEFAULT 0 COMMENT '导入行数',
+  COL_DEFS      TEXT         COMMENT '列定义 JSON: [{"key":"col_1","label":"姓名"},{"key":"col_2","label":"工号"},...]',
+  STATUS        VARCHAR(20)  DEFAULT 'SUCCESS' COMMENT 'SUCCESS/FAILED/PROCESSING',
+  CREATED_TIME  DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  UPDATED_TIME  DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX IDX_REPORT_NAME (REPORT_NAME),
+  INDEX IDX_UPLOADER (UPLOADER_EMP_ID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自由报表导入批次';
+
+-- 动态行数据
+CREATE TABLE IF NOT EXISTS RPT_FREE_REPORT_ROW (
+  ID            BIGINT       AUTO_INCREMENT PRIMARY KEY,
+  BATCH_ID      VARCHAR(64)  NOT NULL COMMENT '关联批次',
+  EMP_ID        VARCHAR(50)  COMMENT '员工ID（用于 SELF 数据权限过滤）',
+  ORG_CODE      VARCHAR(20)  COMMENT '机构编码（用于 ORG_SUBTREE 数据权限过滤）',
+  COL_1         VARCHAR(200) COMMENT '第一列值（冻结列，如姓名）',
+  COL_2         VARCHAR(200) COMMENT '第二列值（冻结列，如工号）',
+  DATA_JSON     TEXT         COMMENT '其余动态列 JSON: {"col_3":"100","col_4":"200",...}',
+  CREATED_TIME  DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  INDEX IDX_BATCH (BATCH_ID),
+  INDEX IDX_EMP (EMP_ID),
+  INDEX IDX_ORG (ORG_CODE),
+  INDEX IDX_COL1 (COL_1(50))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自由报表动态行数据';
+
+-- PT_RESOURCE 登记
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, RESOURCE_NAME,
+                         BIZ_TYPE, BIZ_ACTION, IS_MENU, RECORD_STATUS, SYS_CODE,
+                         CREATE_TIME, UPDATE_TIME)
+VALUES
+  ('R_RPT_FREE_IMPORT', '/api/reports/free/import', 'POST', '自由报表-导入',
+   'REPORT', 'WRITE', 0, 0, 'PLATFORM', NOW(), NOW()),
+  ('R_RPT_FREE_DATA', '/api/reports/free/data', 'GET', '自由报表-查询',
+   'REPORT', 'LIST', 0, 0, 'PLATFORM', NOW(), NOW()),
+  ('R_RPT_FREE_COLS', '/api/reports/free/columns', 'GET', '自由报表-列定义',
+   'REPORT', 'READ', 0, 0, 'PLATFORM', NOW(), NOW()),
+  ('R_RPT_FREE_BATCHES', '/api/reports/free/batches', 'GET', '自由报表-批次列表',
+   'REPORT', 'LIST', 0, 0, 'PLATFORM', NOW(), NOW()),
+  ('R_RPT_FREE_DOWNLOAD', '/api/reports/free/batches/*/download', 'GET', '自由报表-下载原文件',
+   'REPORT', 'READ', 0, 0, 'PLATFORM', NOW(), NOW()),
+  ('R_RPT_FREE_DELETE', '/api/reports/free/batches/*', 'DELETE', '自由报表-删除批次',
+   'REPORT', 'DELETE', 0, 0, 'PLATFORM', NOW(), NOW())
+ON DUPLICATE KEY UPDATE UPDATE_TIME = NOW();
+
+-- 绑给所有启用角色
+INSERT IGNORE INTO PT_ROLE_RESOURCE (ROLE_ID, RESOURCE_ID)
+SELECT r.ROLE_ID, res.RESOURCE_ID
+  FROM PT_ROLE r
+  CROSS JOIN (
+    SELECT 'R_RPT_FREE_IMPORT' AS RESOURCE_ID UNION ALL
+    SELECT 'R_RPT_FREE_DATA' UNION ALL
+    SELECT 'R_RPT_FREE_COLS' UNION ALL
+    SELECT 'R_RPT_FREE_BATCHES' UNION ALL
+    SELECT 'R_RPT_FREE_DOWNLOAD' UNION ALL
+    SELECT 'R_RPT_FREE_DELETE'
+  ) res
+ WHERE r.RECORD_STATUS = 0;
