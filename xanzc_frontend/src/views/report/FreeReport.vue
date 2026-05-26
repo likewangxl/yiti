@@ -9,6 +9,10 @@
 
     <div class="card-section">
       <el-form inline size="default">
+        <el-form-item label="报表名称">
+          <el-input v-model="keyword" placeholder="搜索报表名称/文件名" clearable style="width:200px"
+                    @keyup.enter="reload" />
+        </el-form-item>
         <el-form-item label="导入时间">
           <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD"
                           range-separator="~" start-placeholder="开始" end-placeholder="结束"
@@ -16,7 +20,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="reload">查询</el-button>
-          <el-button @click="dateRange = null; reload()">重置</el-button>
+          <el-button @click="keyword = ''; dateRange = null; reload()">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -86,6 +90,7 @@ import {
 
 const batches = ref([]);
 const loading = ref(false);
+const keyword = ref('');
 const dateRange = ref(null);
 
 function fmtTime(t) {
@@ -97,6 +102,7 @@ async function reload() {
   loading.value = true;
   try {
     const params = {};
+    if (keyword.value) params.keyword = keyword.value;
     if (dateRange.value?.[0]) params.dateFrom = dateRange.value[0];
     if (dateRange.value?.[1]) params.dateTo = dateRange.value[1];
     const r = await listFreeReportBatches(params);
