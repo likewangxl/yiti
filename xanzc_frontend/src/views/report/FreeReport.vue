@@ -10,8 +10,10 @@
     <div class="card-section">
       <el-form inline size="default">
         <el-form-item label="报表名称">
-          <el-input v-model="keyword" placeholder="搜索报表名称/文件名" clearable style="width:200px"
-                    @keyup.enter="reload" />
+          <el-select v-model="keyword" clearable filterable placeholder="全部" style="width:220px"
+                     @change="reload">
+            <el-option v-for="n in reportNames" :key="n" :value="n" :label="n" />
+          </el-select>
         </el-form-item>
         <el-form-item label="导入时间">
           <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD"
@@ -64,12 +66,9 @@
           <el-input v-model="importDlg.reportName" placeholder="如：2026年5月KPI积分" />
         </el-form-item>
         <el-form-item label="选择文件">
-          <el-upload ref="importUploaderRef" drag action="#" :auto-upload="false" :show-file-list="false"
-                     :limit="1" :on-change="onFilePick" accept=".xlsx,.xls">
-            <div style="padding:20px 0">
-              <div v-if="importDlg.file">已选：{{ importDlg.file.name }}</div>
-              <div v-else>点击或拖拽 .xlsx 到此处</div>
-            </div>
+          <el-upload ref="importUploaderRef" drag action="#" :auto-upload="false" :show-file-list="true"
+                     multiple :on-change="onFilePick" accept=".xlsx,.xls">
+            <div style="padding:20px 0">点击或拖拽 .xlsx 到此处（支持多文件）</div>
           </el-upload>
         </el-form-item>
       </el-form>
@@ -82,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   importFreeReport, listFreeReportBatches, downloadFreeReportFile, deleteFreeReportBatch
@@ -92,6 +91,8 @@ const batches = ref([]);
 const loading = ref(false);
 const keyword = ref('');
 const dateRange = ref(null);
+const allBatches = ref([]);
+const reportNames = computed(() => [...new Set(allBatches.value.map(b => b.reportName).filter(Boolean))]);
 
 function fmtTime(t) {
   if (!t) return '-';
@@ -107,28 +108,31 @@ async function reload() {
     if (dateRange.value?.[1]) params.dateTo = dateRange.value[1];
     const r = await listFreeReportBatches(params);
     batches.value = Array.isArray(r) ? r : [];
+    if (!params.keyword && !params.dateFrom) allBatches.value = batches.value;
   } catch { batches.value = []; }
   finally { loading.value = false; }
 }
 
 // 导入
-const importDlg = ref({ show: false, reportName: '', file: null, uploading: false });
+const importDlg = ref({ show: false, reportName: '', files: [], uploading: false });
 const importUploaderRef = ref(null);
 
-function onFilePick(file) {
-  if (file?.raw) importDlg.value.file = file.raw;
+function onFilePick(file, fileList) {
+  importDlg.value.files = fileList.filter(f => f.raw).map(f => f.raw);
 }
 
 async function doImport() {
   if (!importDlg.value.reportName?.trim()) return ElMessage.warning('请输入报表名称');
-  if (!importDlg.value.file) return ElMessage.warning('请选择文件');
+  if (!importDlg.value.files.length) return ElMessage.warning('请选择文件');
   importDlg.value.uploading = true;
   try {
-    await importFreeReport(importDlg.value.reportName.trim(), importDlg.value.file);
-    ElMessage.success('导入成功');
+    for (const file of importDlg.value.files) {
+      await importFreeReport(importDlg.value.reportName.trim(), file);
+    }
+    ElMessage.success(`${importDlg.value.files.length} 个文件导入成功`);
     importDlg.value.show = false;
     importDlg.value.reportName = '';
-    importDlg.value.file = null;
+    importDlg.value.files = [];
     importUploaderRef.value?.clearFiles();
     reload();
   } catch (e) {
