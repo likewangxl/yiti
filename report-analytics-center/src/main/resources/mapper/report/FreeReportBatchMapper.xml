@@ -6,6 +6,10 @@
         SELECT * FROM RPT_FREE_REPORT_BATCH WHERE REPORT_NAME = #{reportName} ORDER BY IMPORT_TIME DESC
     </select>
 
+    <select id="selectByFileName" resultType="com.bank.branch.platform.report.entity.RptFreeReportBatch">
+        SELECT * FROM RPT_FREE_REPORT_BATCH WHERE FILE_NAME = #{fileName} ORDER BY IMPORT_TIME DESC
+    </select>
+
     <select id="selectAllOrderByImportTimeDesc" resultType="com.bank.branch.platform.report.entity.RptFreeReportBatch">
         SELECT * FROM RPT_FREE_REPORT_BATCH
         <where>

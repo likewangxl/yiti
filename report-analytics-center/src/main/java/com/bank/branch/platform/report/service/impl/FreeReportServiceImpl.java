@@ -39,7 +39,19 @@ public class FreeReportServiceImpl implements FreeReportService {
     public String importExcel(String reportName, MultipartFile file, String empId, String empName) {
         log.info("[FreeReport.import] reportName={}, file={}, empId={}", reportName, file.getOriginalFilename(), empId);
 
-        // 多文件共存，不再同名覆盖
+        // 相同文件名覆盖：删旧批次+行数据+MinIO文件
+        String fileName = file.getOriginalFilename();
+        if (fileName != null) {
+            List<RptFreeReportBatch> existing = batchMapper.selectByFileName(fileName);
+            for (RptFreeReportBatch old : existing) {
+                rowMapper.deleteByBatchId(old.getId());
+                if (old.getFileObjectKey() != null) {
+                    try { fileApi.deleteFile(old.getFileObjectKey()); } catch (Exception e) { log.warn("删旧文件失败 key={}", old.getFileObjectKey()); }
+                }
+                batchMapper.deleteById(old.getId());
+                log.info("[FreeReport.import] 覆盖旧批次 id={}, fileName={}", old.getId(), old.getFileName());
+            }
+        }
 
         // 上传文件到 MinIO
         FileObjectDTO uploaded = fileApi.upload(file, empId);
