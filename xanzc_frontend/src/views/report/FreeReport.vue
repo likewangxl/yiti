@@ -1,57 +1,56 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>KPI/积分自由报表</h1>
+      <h1>自由报表</h1>
       <div class="actions">
-        <el-button @click="batchDlg.show = true">查看最近导入文件信息</el-button>
         <el-button type="primary" @click="importDlg.show = true">导入 Excel</el-button>
       </div>
     </div>
 
-    <!-- 查询条件 -->
     <div class="card-section">
       <el-form inline size="default">
-        <el-form-item label="报表">
-          <el-select v-model="currentBatchId" placeholder="选择报表批次" style="width:260px"
-                     @change="onBatchChange" filterable>
-            <el-option v-for="b in batches" :key="b.id" :value="b.id"
-                       :label="`${b.reportName} (${fmtTime(b.importTime)})`" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="姓名搜索">
-          <el-input v-model="keyword" placeholder="姓名/工号" clearable style="width:180px"
-                    @keyup.enter="reload" />
+        <el-form-item label="导入时间">
+          <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD"
+                          range-separator="~" start-placeholder="开始" end-placeholder="结束"
+                          style="width:260px" @change="reload" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="reload">查询</el-button>
-          <el-button @click="keyword = ''; reload()">重置</el-button>
+          <el-button @click="dateRange = null; reload()">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
 
-    <!-- 动态表格 -->
     <div class="card-section table">
-      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无数据" stripe border
-                max-height="520" style="width:100%">
-        <el-table-column v-if="columns.length > 0" :prop="columns[0].key" :label="columns[0].label"
-                         width="140" fixed />
-        <el-table-column v-if="columns.length > 1" :prop="columns[1].key" :label="columns[1].label"
-                         width="140" fixed />
-        <el-table-column v-for="col in dynamicCols" :key="col.key" :prop="col.key" :label="col.label"
-                         min-width="120" show-overflow-tooltip />
+      <el-table :data="batches" size="default" v-loading="loading" empty-text="暂无导入记录" stripe>
+        <el-table-column prop="reportName" label="报表名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="fileName" label="文件名" min-width="200" show-overflow-tooltip />
+        <el-table-column label="导入人" width="120">
+          <template #default="{row}">{{ row.uploaderName || row.uploaderEmpId || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="导入时间" width="160">
+          <template #default="{row}">{{ fmtTime(row.importTime) }}</template>
+        </el-table-column>
+        <el-table-column prop="rowCount" label="行数" width="80" align="right" />
+        <el-table-column prop="status" label="状态" width="80">
+          <template #default="{row}">
+            <el-tag :type="row.status === 'SUCCESS' ? 'success' : 'danger'" size="small" effect="plain">
+              {{ row.status === 'SUCCESS' ? '成功' : row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{row}">
+            <el-button link type="primary" size="small" @click="$router.push(`/report/free/${row.id}`)">查看</el-button>
+            <el-button link type="primary" size="small" @click="doDownload(row)">下载</el-button>
+            <el-popconfirm :title="`确认删除「${row.reportName}」？数据将不可恢复。`" @confirm="doDelete(row)">
+              <template #reference>
+                <el-button link type="danger" size="small">删除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
       </el-table>
-      <div class="pager">
-        <el-pagination
-          v-model:current-page="pageNo"
-          v-model:page-size="pageSize"
-          :page-sizes="[20, 50, 100]"
-          :total="total"
-          background
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="reload"
-          @current-change="reload"
-        />
-      </div>
     </div>
 
     <!-- 导入弹框 -->
@@ -61,10 +60,8 @@
           <el-input v-model="importDlg.reportName" placeholder="如：2026年5月KPI积分" />
         </el-form-item>
         <el-form-item label="选择文件">
-          <el-upload
-            ref="importUploaderRef"
-            drag action="#" :auto-upload="false" :show-file-list="false" :limit="1"
-            :on-change="onImportFilePick" accept=".xlsx,.xls">
+          <el-upload ref="importUploaderRef" drag action="#" :auto-upload="false" :show-file-list="false"
+                     :limit="1" :on-change="onFilePick" accept=".xlsx,.xls">
             <div style="padding:20px 0">
               <div v-if="importDlg.file">已选：{{ importDlg.file.name }}</div>
               <div v-else>点击或拖拽 .xlsx 到此处</div>
@@ -77,101 +74,42 @@
         <el-button type="primary" :loading="importDlg.uploading" @click="doImport">确认导入</el-button>
       </template>
     </el-dialog>
-
-    <!-- 导入批次列表弹框 -->
-    <el-dialog v-model="batchDlg.show" title="最近导入文件信息" width="700px" @opened="loadBatches">
-      <el-table :data="batches" size="small" v-loading="batchDlg.loading" max-height="400" empty-text="暂无导入记录">
-        <el-table-column prop="reportName" label="报表名称" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="fileName" label="文件名" min-width="160" show-overflow-tooltip />
-        <el-table-column label="导入人" width="100">
-          <template #default="{row}">{{ row.uploaderName || row.uploaderEmpId || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="导入时间" width="150">
-          <template #default="{row}">{{ fmtTime(row.importTime) }}</template>
-        </el-table-column>
-        <el-table-column prop="rowCount" label="行数" width="60" align="right" />
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{row}">
-            <el-button link type="primary" size="small" @click="doDownload(row)">下载</el-button>
-            <el-popconfirm :title="`确认删除批次 ${row.reportName}？`" @confirm="doDeleteBatch(row)">
-              <template #reference>
-                <el-button link type="danger" size="small">删除</el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
-  importFreeReport, queryFreeReportData, getFreeReportColumns,
-  listFreeReportBatches, downloadFreeReportFile, deleteFreeReportBatch
+  importFreeReport, listFreeReportBatches, downloadFreeReportFile, deleteFreeReportBatch
 } from '@/api/report';
 
 const batches = ref([]);
-const currentBatchId = ref('');
-const columns = ref([]);
-const rows = ref([]);
-const total = ref(0);
-const pageNo = ref(1);
-const pageSize = ref(20);
-const keyword = ref('');
 const loading = ref(false);
-
-const dynamicCols = computed(() => columns.value.slice(2));
+const dateRange = ref(null);
 
 function fmtTime(t) {
   if (!t) return '-';
   return String(t).replace('T', ' ').slice(0, 16);
 }
 
-async function loadBatches() {
-  batchDlg.loading = true;
-  try {
-    const r = await listFreeReportBatches();
-    batches.value = Array.isArray(r) ? r : [];
-  } catch { batches.value = []; }
-  finally { batchDlg.loading = false; }
-}
-
-async function onBatchChange(batchId) {
-  if (!batchId) return;
-  try {
-    const cols = await getFreeReportColumns(batchId);
-    columns.value = Array.isArray(cols) ? cols : [];
-  } catch { columns.value = []; }
-  pageNo.value = 1;
-  reload();
-}
-
 async function reload() {
-  if (!currentBatchId.value) return;
   loading.value = true;
   try {
-    const r = await queryFreeReportData({
-      batchId: currentBatchId.value,
-      keyword: keyword.value || undefined,
-      pageNo: pageNo.value,
-      pageSize: pageSize.value
-    });
-    rows.value = r?.records || [];
-    total.value = r?.total || 0;
-  } catch {
-    rows.value = [];
-    total.value = 0;
-  } finally { loading.value = false; }
+    const params = {};
+    if (dateRange.value?.[0]) params.dateFrom = dateRange.value[0];
+    if (dateRange.value?.[1]) params.dateTo = dateRange.value[1];
+    const r = await listFreeReportBatches(params);
+    batches.value = Array.isArray(r) ? r : [];
+  } catch { batches.value = []; }
+  finally { loading.value = false; }
 }
 
 // 导入
 const importDlg = ref({ show: false, reportName: '', file: null, uploading: false });
 const importUploaderRef = ref(null);
 
-function onImportFilePick(file) {
+function onFilePick(file) {
   if (file?.raw) importDlg.value.file = file.raw;
 }
 
@@ -186,18 +124,11 @@ async function doImport() {
     importDlg.value.reportName = '';
     importDlg.value.file = null;
     importUploaderRef.value?.clearFiles();
-    await loadBatches();
-    if (batches.value.length) {
-      currentBatchId.value = batches.value[0].id;
-      onBatchChange(currentBatchId.value);
-    }
+    reload();
   } catch (e) {
     ElMessage.error(e?.message || '导入失败');
   } finally { importDlg.value.uploading = false; }
 }
-
-// 批次列表弹框
-const batchDlg = ref({ show: false, loading: false });
 
 async function doDownload(row) {
   try {
@@ -207,26 +138,15 @@ async function doDownload(row) {
   } catch { ElMessage.error('下载失败'); }
 }
 
-async function doDeleteBatch(row) {
+async function doDelete(row) {
   try {
     await deleteFreeReportBatch(row.id);
     ElMessage.success('已删除');
-    await loadBatches();
-    if (currentBatchId.value === row.id) {
-      currentBatchId.value = batches.value[0]?.id || '';
-      if (currentBatchId.value) onBatchChange(currentBatchId.value);
-      else { rows.value = []; columns.value = []; total.value = 0; }
-    }
+    reload();
   } catch { ElMessage.error('删除失败'); }
 }
 
-onMounted(async () => {
-  await loadBatches();
-  if (batches.value.length) {
-    currentBatchId.value = batches.value[0].id;
-    onBatchChange(currentBatchId.value);
-  }
-});
+onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
@@ -236,5 +156,4 @@ onMounted(async () => {
   .actions { margin-left: auto; display: flex; gap: 8px; }
 }
 .table { padding: 0; padding-bottom: 12px; }
-.pager { padding: 12px 20px; display: flex; justify-content: flex-end; }
 </style>
