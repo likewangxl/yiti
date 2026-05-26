@@ -268,8 +268,8 @@ export function queryFreeReportData(params = {}) {
 export function getFreeReportColumns(batchId) {
   return call('get', '/reports/free/columns', { params: { batchId } }, []);
 }
-export function listFreeReportBatches() {
-  return call('get', '/reports/free/batches', {}, []);
+export function listFreeReportBatches(params = {}) {
+  return call('get', '/reports/free/batches', { params }, []);
 }
 export function downloadFreeReportFile(batchId) {
   return call('get', `/reports/free/batches/${batchId}/download`, {}, { url: '#' });

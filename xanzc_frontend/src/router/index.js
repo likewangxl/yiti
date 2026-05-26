@@ -35,7 +35,8 @@ const routes = [
       { path: 'report/dynamic',   name: 'ReportDynamic', component: () => import('@/views/report/Dynamic.vue'),   meta: { title: '动态指标查询', group: '报表分析' } },
       { path: 'report/dashboard', name: 'ReportDash',    component: () => import('@/views/report/Dashboard.vue'), meta: { title: '行长仪表盘',   group: '报表分析' } },
       { path: 'report/presets',   name: 'ReportPresets', component: () => import('@/views/report/Presets.vue'),   meta: { title: '预置报表',     group: '报表分析' } },
-      { path: 'report/free',      name: 'ReportFree',    component: () => import('@/views/report/FreeReport.vue'), meta: { title: 'KPI/积分自由报表', group: '报表分析' } },
+      { path: 'report/free',      name: 'ReportFree',    component: () => import('@/views/report/FreeReport.vue'), meta: { title: '自由报表', group: '报表分析' } },
+      { path: 'report/free/:batchId', name: 'ReportFreeDetail', component: () => import('@/views/report/FreeReportDetail.vue'), meta: { title: '报表详情', group: '报表分析' } },
       { path: 'report/sql',       name: 'ReportSql',     component: () => import('@/views/report/Sql.vue'),       meta: { title: 'SQL 探查',     group: '报表分析' } },
 
       // 系统设置
@@ -58,11 +59,28 @@ const routes = [
 
 const router = createRouter({ history: createWebHashHistory(), routes });
 
+// ── 顶部进度条（纯 DOM，不装 nprogress） ──
+const bar = (() => {
+  const el = document.createElement('div');
+  el.id = 'route-progress';
+  Object.assign(el.style, {
+    position: 'fixed', top: '0', left: '0', height: '2px', zIndex: '99999',
+    background: 'linear-gradient(90deg, #409eff 0%, #1e5bba 100%)',
+    transition: 'width .3s ease, opacity .2s', width: '0', opacity: '0'
+  });
+  document.body.appendChild(el);
+  return {
+    start() { el.style.opacity = '1'; el.style.width = '70%'; },
+    done()  { el.style.width = '100%'; setTimeout(() => { el.style.opacity = '0'; el.style.width = '0'; }, 300); }
+  };
+})();
+
 // 全局守卫：未登录访问业务路由 → 跳 /login？redirect=...
 // store 没 user 时先试一次 /api/auth/current-user：
 //   - 200 → 后端 session 还在（UIAS 回调 / F5 刷新 sessionStorage 清空场景）→ setUser 后放行
 //   - 401 → 真未登录 → 跳 login
 router.beforeEach(async (to) => {
+  bar.start();
   const store = useUserStore();
   if (to.meta?.public) return true;
   if (store.isLoggedIn) return true;
@@ -78,5 +96,7 @@ router.beforeEach(async (to) => {
   }
   return { path: '/login', query: { redirect: to.fullPath } };
 });
+
+router.afterEach(() => { bar.done(); });
 
 export default router;
