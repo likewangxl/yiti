@@ -37,11 +37,14 @@ public class FreeReportController {
     @PostMapping("/import")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.WRITE)
     public ResponseWrapper<Map<String, String>> importExcel(
-            @RequestParam("reportName") String reportName,
+            @RequestParam(value = "reportName", required = false) String reportName,
             @RequestParam("file") MultipartFile file) {
         String empId = currentUserApi.getCurrentEmpId();
         String empName = currentUserApi.getCurrentUserContext().displayName();
-        String batchId = service.importExcel(reportName, file, empId, empName != null ? empName : empId);
+        if (reportName == null || reportName.trim().isEmpty()) {
+            reportName = file.getOriginalFilename();
+        }
+        String batchId = service.importExcel(reportName.trim(), file, empId, empName != null ? empName : empId);
         return ResponseWrapper.success(Map.of("batchId", batchId));
     }
 
