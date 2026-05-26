@@ -139,13 +139,21 @@ public class SqlSafeValidator {
             throw new RptException(RptErrorCode.SQL_PARSE_FAILED);
         }
 
-        // 7) 表名提取（不再做白名单校验，仅记录用于审计）
+        // 7) 表名提取 + 自动转大写（兼容 lower_case_table_names=0 的 MySQL）
         TablesNamesFinder finder = new TablesNamesFinder();
         List<String> tables = finder.getTableList(stmt);
+        String upperSql = sql;
+        for (String t : tables) {
+            String upper = t.toUpperCase(Locale.ROOT);
+            if (!t.equals(upper)) {
+                upperSql = upperSql.replaceAll("(?i)\\b" + Pattern.quote(t) + "\\b", upper);
+            }
+        }
 
         // 8) LIMIT 标准化
-        String normalized = normalizeLimit(sql);
-        return SqlSafeResult.allowed(normalized, tables);
+        String normalized = normalizeLimit(upperSql);
+        return SqlSafeResult.allowed(normalized, tables.stream()
+                .map(t -> t.toUpperCase(Locale.ROOT)).toList());
     }
 
     /**
