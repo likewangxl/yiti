@@ -258,8 +258,8 @@ export function importFreeReport(reportName, file) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('reportName', reportName);
-  return call('post', '/reports/free/import', { data: formData, headers: { 'Content-Type': 'multipart/form-data' } },
-    { batchId: 'mock' });
+  // 不手动设 Content-Type，axios 检测到 FormData 自动加 multipart/form-data + boundary
+  return call('post', '/reports/free/import', { data: formData }, { batchId: 'mock' });
 }
 export function queryFreeReportData(params = {}) {
   return call('get', '/reports/free/data', { params: { pageNo: 1, pageSize: 20, ...params } },
