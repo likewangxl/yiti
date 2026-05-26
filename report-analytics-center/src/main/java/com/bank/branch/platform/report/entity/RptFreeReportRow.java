@@ -15,7 +15,9 @@ public class RptFreeReportRow {
     private String batchId;
     private String empId;
     private String orgCode;
+    @com.baomidou.mybatisplus.annotation.TableField("COL_1")
     private String col1;
+    @com.baomidou.mybatisplus.annotation.TableField("COL_2")
     private String col2;
     private String dataJson;
     private LocalDateTime createdTime;
