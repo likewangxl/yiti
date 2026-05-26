@@ -18,6 +18,8 @@ const routes = [
     children: [
       // 工作台
       { path: 'workspace', name: 'Workspace', component: () => import('@/views/workspace/Index.vue'), meta: { title: '工作台', icon: '🏠' } },
+      { path: 'workspace/announcements', name: 'AnnouncementList', component: () => import('@/views/workspace/AnnouncementList.vue'), meta: { title: '公告列表', group: '工作台' } },
+      { path: 'announcement/:id', name: 'AnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情' } },
 
       // 绩效与考核
       { path: 'perf/metrics',     name: 'PerfMetrics',   component: () => import('@/views/perf/Metrics.vue'),   meta: { title: '指标库', group: '绩效与考核' } },
@@ -33,6 +35,7 @@ const routes = [
       { path: 'report/dynamic',   name: 'ReportDynamic', component: () => import('@/views/report/Dynamic.vue'),   meta: { title: '动态指标查询', group: '报表分析' } },
       { path: 'report/dashboard', name: 'ReportDash',    component: () => import('@/views/report/Dashboard.vue'), meta: { title: '行长仪表盘',   group: '报表分析' } },
       { path: 'report/presets',   name: 'ReportPresets', component: () => import('@/views/report/Presets.vue'),   meta: { title: '预置报表',     group: '报表分析' } },
+      { path: 'report/free',      name: 'ReportFree',    component: () => import('@/views/report/FreeReport.vue'), meta: { title: 'KPI/积分自由报表', group: '报表分析' } },
       { path: 'report/sql',       name: 'ReportSql',     component: () => import('@/views/report/Sql.vue'),       meta: { title: 'SQL 探查',     group: '报表分析' } },
 
       // 系统设置
@@ -46,7 +49,9 @@ const routes = [
       { path: 'system/audit',      name: 'SysAudit',      component: () => import('@/views/system/Audit.vue'),      meta: { title: '审计日志', group: '系统设置' } },
       { path: 'system/notifications', name: 'SysNotifications', component: () => import('@/views/system/Notifications.vue'), meta: { title: '通知消息', group: '系统设置' } },
       { path: 'system/config',     name: 'SysConfig',     component: () => import('@/views/system/Config.vue'),     meta: { title: '系统配置', group: '系统设置' } },
-      { path: 'system/files',      name: 'SysFiles',      component: () => import('@/views/system/Files.vue'),      meta: { title: '文件管理', group: '系统设置' } }
+      { path: 'system/files',      name: 'SysFiles',      component: () => import('@/views/system/Files.vue'),      meta: { title: '文件管理', group: '系统设置' } },
+      { path: 'system/announcements', name: 'SysAnnouncements', component: () => import('@/views/system/Announcements.vue'), meta: { title: '公告管理', group: '系统设置' } },
+      { path: 'system/announcements/:id', name: 'SysAnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情', group: '系统设置' } }
     ]
   }
 ];

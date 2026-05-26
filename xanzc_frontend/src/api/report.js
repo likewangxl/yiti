@@ -252,3 +252,28 @@ export function getSqlHistoryItem(id) {
 export function getExportTask(taskId) {
   return call('get', `/reports/export-tasks/${taskId}`, {}, () => ({ taskId, status: 'DONE', url: '#' }));
 }
+
+// ===== KPI/积分自由报表 =====
+export function importFreeReport(reportName, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('reportName', reportName);
+  return call('post', '/reports/free/import', { data: formData, headers: { 'Content-Type': 'multipart/form-data' } },
+    { batchId: 'mock' });
+}
+export function queryFreeReportData(params = {}) {
+  return call('get', '/reports/free/data', { params: { pageNo: 1, pageSize: 20, ...params } },
+    { total: 0, records: [] });
+}
+export function getFreeReportColumns(batchId) {
+  return call('get', '/reports/free/columns', { params: { batchId } }, []);
+}
+export function listFreeReportBatches() {
+  return call('get', '/reports/free/batches', {}, []);
+}
+export function downloadFreeReportFile(batchId) {
+  return call('get', `/reports/free/batches/${batchId}/download`, {}, { url: '#' });
+}
+export function deleteFreeReportBatch(batchId) {
+  return call('delete', `/reports/free/batches/${batchId}`, {}, { ok: true });
+}
