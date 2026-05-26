@@ -7,6 +7,11 @@
     </select>
 
     <select id="selectAllOrderByImportTimeDesc" resultType="com.bank.branch.platform.report.entity.RptFreeReportBatch">
-        SELECT * FROM RPT_FREE_REPORT_BATCH ORDER BY IMPORT_TIME DESC LIMIT 100
+        SELECT * FROM RPT_FREE_REPORT_BATCH
+        <where>
+            <if test="dateFrom != null">AND IMPORT_TIME &gt;= #{dateFrom}</if>
+            <if test="dateTo != null">AND IMPORT_TIME &lt; #{dateTo}</if>
+        </where>
+        ORDER BY IMPORT_TIME DESC LIMIT 200
     </select>
 </mapper>

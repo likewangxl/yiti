@@ -59,7 +59,8 @@ import java.util.concurrent.Semaphore;
 @Service
 public class SqlProbeServiceImpl implements SqlProbeService {
 
-    private static final String ROLE_BACK_TECH = "R_BACK_TECH";
+    // getCurrentRoleCodes() 返回 roleCode（如 BACK_TECH / SYS_ADMIN），不是 roleId（R_BACK_TECH）
+    private static final String ROLE_BACK_TECH = "BACK_TECH";
 
     private static final int CONCURRENT_LIMIT = 10;
 

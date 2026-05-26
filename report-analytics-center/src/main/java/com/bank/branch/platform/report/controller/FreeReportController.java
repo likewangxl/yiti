@@ -92,8 +92,10 @@ public class FreeReportController {
     @Operation(summary = "导入批次列表")
     @GetMapping("/batches")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.LIST)
-    public ResponseWrapper<List<RptFreeReportBatch>> listBatches() {
-        return ResponseWrapper.success(service.listBatches());
+    public ResponseWrapper<List<RptFreeReportBatch>> listBatches(
+            @RequestParam(value = "dateFrom", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateFrom,
+            @RequestParam(value = "dateTo", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateTo) {
+        return ResponseWrapper.success(service.listBatches(dateFrom, dateTo));
     }
 
     @Operation(summary = "下载原始文件")

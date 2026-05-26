@@ -39,13 +39,7 @@ public class FreeReportServiceImpl implements FreeReportService {
     public String importExcel(String reportName, MultipartFile file, String empId, String empName) {
         log.info("[FreeReport.import] reportName={}, file={}, empId={}", reportName, file.getOriginalFilename(), empId);
 
-        // 同名覆盖：删旧批次
-        List<RptFreeReportBatch> existing = batchMapper.selectByReportName(reportName);
-        for (RptFreeReportBatch old : existing) {
-            rowMapper.deleteByBatchId(old.getId());
-            try { fileApi.deleteFile(old.getFileObjectKey()); } catch (Exception e) { log.warn("删旧文件失败 key={}", old.getFileObjectKey(), e); }
-            batchMapper.deleteById(old.getId());
-        }
+        // 多文件共存，不再同名覆盖
 
         // 上传文件到 MinIO
         FileObjectDTO uploaded = fileApi.upload(file, empId);
@@ -182,8 +176,10 @@ public class FreeReportServiceImpl implements FreeReportService {
     }
 
     @Override
-    public List<RptFreeReportBatch> listBatches() {
-        return batchMapper.selectAllOrderByImportTimeDesc();
+    public List<RptFreeReportBatch> listBatches(java.time.LocalDate dateFrom, java.time.LocalDate dateTo) {
+        java.time.LocalDateTime fromDt = dateFrom != null ? dateFrom.atStartOfDay() : null;
+        java.time.LocalDateTime toDt = dateTo != null ? dateTo.plusDays(1).atStartOfDay() : null;
+        return batchMapper.selectAllOrderByImportTimeDesc(fromDt, toDt);
     }
 
     @Override
