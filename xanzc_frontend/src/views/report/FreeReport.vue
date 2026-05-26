@@ -63,7 +63,7 @@
     <el-dialog v-model="importDlg.show" title="导入 Excel" width="500px">
       <el-form label-width="80px">
         <el-form-item label="报表名称">
-          <el-input v-model="importDlg.reportName" placeholder="如：2026年5月KPI积分" />
+          <el-input v-model="importDlg.reportName" placeholder="不填则默认为文件名" />
         </el-form-item>
         <el-form-item label="选择文件">
           <el-upload ref="importUploaderRef" drag action="#" :auto-upload="false" :show-file-list="true"
@@ -122,7 +122,6 @@ function onFilePick(file, fileList) {
 }
 
 async function doImport() {
-  if (!importDlg.value.reportName?.trim()) return ElMessage.warning('请输入报表名称');
   if (!importDlg.value.files.length) return ElMessage.warning('请选择文件');
   importDlg.value.uploading = true;
   try {
