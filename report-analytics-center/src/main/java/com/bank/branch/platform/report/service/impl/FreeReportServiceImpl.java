@@ -35,7 +35,6 @@ public class FreeReportServiceImpl implements FreeReportService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public String importExcel(String reportName, MultipartFile file, String empId, String empName) {
         log.info("[FreeReport.import] reportName={}, file={}, empId={}", reportName, file.getOriginalFilename(), empId);
 
