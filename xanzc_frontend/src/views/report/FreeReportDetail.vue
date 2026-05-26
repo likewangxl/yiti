@@ -28,10 +28,11 @@
     <div class="card-section table">
       <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无数据" stripe border
                 max-height="560" style="width:100%">
+        <el-table-column type="index" label="序号" width="60" fixed />
         <el-table-column v-if="columns.length > 0" :prop="columns[0].key" :label="columns[0].label"
-                         width="140" fixed />
+                         width="150" fixed />
         <el-table-column v-if="columns.length > 1" :prop="columns[1].key" :label="columns[1].label"
-                         width="140" fixed />
+                         width="150" fixed />
         <el-table-column v-for="col in dynamicCols" :key="col.key" :prop="col.key" :label="col.label"
                          min-width="120" show-overflow-tooltip />
       </el-table>
