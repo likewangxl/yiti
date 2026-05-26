@@ -53,8 +53,13 @@ public class RptSqlProbeController {
     @BizAuth(bizType = BizType.REPORT, action = BizAction.EXECUTE_SQL)
     @Operation(summary = "D.1 执行 SQL 探查")
     public ResponseWrapper<SqlProbeExecuteRespDTO> execute(@Valid @RequestBody SqlProbeExecuteReqDTO req) {
-        // bizType 走 REPORT 是 report 模块单档策略（架构守护 RptBizAuthConsistencyArchTest）；
-        // 实际"高危 SQL 执行"语义通过 BizAction.EXECUTE_SQL + R_BACK_TECH 角色双层约束保证.
+        // 前端传的 sql 是 AES 加密后的 Base64 字符串，先解密
+        try {
+            String decrypted = com.bank.branch.platform.report.support.SqlCryptoUtil.decrypt(req.getSql());
+            req.setSql(decrypted);
+        } catch (Exception e) {
+            log.warn("[SqlProbe] SQL 解密失败，尝试按明文执行（兼容旧版前端）");
+        }
         return ResponseWrapper.success(sqlProbeService.execute(req));
     }
 

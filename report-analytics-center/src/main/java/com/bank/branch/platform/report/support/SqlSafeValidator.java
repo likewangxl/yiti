@@ -139,15 +139,9 @@ public class SqlSafeValidator {
             throw new RptException(RptErrorCode.SQL_PARSE_FAILED);
         }
 
-        // 7) 白名单表校验
+        // 7) 表名提取（不再做白名单校验，仅记录用于审计）
         TablesNamesFinder finder = new TablesNamesFinder();
         List<String> tables = finder.getTableList(stmt);
-        for (String t : tables) {
-            if (!whitelistTables.contains(t.toLowerCase(Locale.ROOT))) {
-                log.debug("[SqlSafeValidator] table {} not in whitelist", t);
-                throw new RptException(RptErrorCode.SQL_TABLE_NOT_WHITELISTED);
-            }
-        }
 
         // 8) LIMIT 标准化
         String normalized = normalizeLimit(sql);
