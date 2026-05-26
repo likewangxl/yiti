@@ -39,15 +39,14 @@ public class FreeReportServiceImpl implements FreeReportService {
     public String importExcel(String reportName, MultipartFile file, String empId, String empName) {
         log.info("[FreeReport.import] reportName={}, file={}, empId={}", reportName, file.getOriginalFilename(), empId);
 
-        // 相同文件名覆盖：删旧批次+行数据+MinIO文件
+        // 相同文件名覆盖：先删旧批次DB数据（MinIO文件延后删，避免事务内调外部服务导致rollback-only）
         String fileName = file.getOriginalFilename();
+        List<String> oldFileKeys = new ArrayList<>();
         if (fileName != null) {
             List<RptFreeReportBatch> existing = batchMapper.selectByFileName(fileName);
             for (RptFreeReportBatch old : existing) {
                 rowMapper.deleteByBatchId(old.getId());
-                if (old.getFileObjectKey() != null) {
-                    try { fileApi.deleteFile(old.getFileObjectKey()); } catch (Exception e) { log.warn("删旧文件失败 key={}", old.getFileObjectKey()); }
-                }
+                if (old.getFileObjectKey() != null) oldFileKeys.add(old.getFileObjectKey());
                 batchMapper.deleteById(old.getId());
                 log.info("[FreeReport.import] 覆盖旧批次 id={}, fileName={}", old.getId(), old.getFileName());
             }
@@ -145,6 +144,12 @@ public class FreeReportServiceImpl implements FreeReportService {
         }
 
         log.info("[FreeReport.import] 完成 batchId={}, rows={}", batchId, dataRows.size());
+
+        // 事务内 DB 操作全部完成后，清理 MinIO 旧文件（不影响事务）
+        for (String key : oldFileKeys) {
+            try { fileApi.deleteFile(key); } catch (Exception e) { log.warn("清理旧 MinIO 文件失败 key={}", key); }
+        }
+
         return batchId;
     }
 
