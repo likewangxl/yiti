@@ -10,13 +10,17 @@
 
     <div class="card-section">
       <el-form inline size="default">
-        <el-form-item label="姓名搜索">
-          <el-input v-model="keyword" placeholder="姓名/工号" clearable style="width:200px"
+        <el-form-item :label="col1Label">
+          <el-input v-model="searchCol1" :placeholder="`搜索${col1Label}`" clearable style="width:180px"
+                    @keyup.enter="reload" />
+        </el-form-item>
+        <el-form-item :label="col2Label" v-if="columns.length > 1">
+          <el-input v-model="searchCol2" :placeholder="`搜索${col2Label}`" clearable style="width:180px"
                     @keyup.enter="reload" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="reload">查询</el-button>
-          <el-button @click="keyword = ''; reload()">重置</el-button>
+          <el-button @click="searchCol1 = ''; searchCol2 = ''; reload()">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -61,7 +65,10 @@ const rows = ref([]);
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = ref(20);
-const keyword = ref('');
+const searchCol1 = ref('');
+const searchCol2 = ref('');
+const col1Label = computed(() => columns.value[0]?.label || '第一列');
+const col2Label = computed(() => columns.value[1]?.label || '第二列');
 const loading = ref(false);
 
 const dynamicCols = computed(() => columns.value.slice(2));
@@ -91,7 +98,7 @@ async function reload() {
   try {
     const r = await queryFreeReportData({
       batchId,
-      keyword: keyword.value || undefined,
+      keyword: [searchCol1.value, searchCol2.value].filter(Boolean).join(' ') || undefined,
       pageNo: pageNo.value,
       pageSize: pageSize.value
     });
