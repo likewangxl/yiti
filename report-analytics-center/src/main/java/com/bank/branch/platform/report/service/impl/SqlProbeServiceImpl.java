@@ -185,7 +185,9 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             updateTerminal(historyId, "FAILED", null,
                     (int) (System.currentTimeMillis() - startMs), ex.getMessage());
             safelyAudit(empId, historyId, "FAILED", req.getRemark(), normalizedSql, ex.getMessage());
-            throw new RptException(RptErrorCode.SQL_EXECUTION_FAILED);
+            throw new com.bank.branch.platform.common.web.exception.BizException(
+                    RptErrorCode.SQL_EXECUTION_FAILED.getCode(),
+                    "SQL 执行失败：" + ex.getMessage());
         } finally {
             semaphore.release();
         }
