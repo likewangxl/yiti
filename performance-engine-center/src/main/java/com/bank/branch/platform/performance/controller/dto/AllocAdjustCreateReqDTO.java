@@ -16,6 +16,10 @@ import java.util.List;
 @Data
 public class AllocAdjustCreateReqDTO {
 
+    /** 客户类型：CORP（对公）/ RETAIL（零售），决定审批流路由. */
+    @NotBlank(message = "custType 必填")
+    private String custType;
+
     /** 客户编号（必填，对应 cust_master.cust_no；后端按编号查找客户主键后保存）. */
     @NotBlank(message = "custNo 必填")
     private String custNo;
@@ -56,5 +60,8 @@ public class AllocAdjustCreateReqDTO {
         /** 调整后分配比例（0-100）. */
         @NotNull(message = "item.ratio 必填")
         private BigDecimal ratio;
+
+        /** 说明（可空）. */
+        private String remark;
     }
 }

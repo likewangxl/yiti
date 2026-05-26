@@ -34,4 +34,6 @@ public class TargetPlanDTO {
     private LocalDate endDate;
     /** 状态: ACTIVE/DISABLED. */
     private String status;
+    /** 创建人工号. */
+    private String createdBy;
 }

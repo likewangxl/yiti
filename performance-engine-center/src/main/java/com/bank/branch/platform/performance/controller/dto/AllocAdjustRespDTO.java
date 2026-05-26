@@ -26,6 +26,9 @@ public class AllocAdjustRespDTO {
     /** 客户编号（cust_master.cust_no，按 custId 反查回填；客户已删/查不到时为 null）. */
     private String custNo;
 
+    /** 客户类型：CORP / RETAIL. */
+    private String custType;
+
     /** 分配维度. */
     private String allocDim;
 
@@ -85,6 +88,9 @@ public class AllocAdjustRespDTO {
 
         /** 分配比例. */
         private BigDecimal ratio;
+
+        /** 说明. */
+        private String remark;
 
         /** 创建时间. */
         private LocalDateTime createdTime;

@@ -116,13 +116,14 @@ public class AllocAdjustService {
         String applyId = genApplyId();
         String applyNo = genApplyNo();
         String businessKey = "ALLOC_ADJUST:" + applyId;
-        String processKey = resolveProcessKey(cmd.getBizKind());
+        String processKey = resolveProcessKey(cmd.getCustType(), cmd.getBizKind());
 
         // 1. 落地主表（status=IN_APPROVAL，尚无 processInstanceId）
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId(applyId);
         apply.setApplyNo(applyNo);
         apply.setCustId(internalCustId);
+        apply.setCustType(cmd.getCustType());
         apply.setAllocDim(cmd.getAllocDim());
         apply.setBizKind(cmd.getBizKind());
         apply.setAccountNo(cmd.getAccountNo());
@@ -146,6 +147,7 @@ public class AllocAdjustService {
             entity.setApplyId(applyId);
             entity.setEmpId(it.getEmpId());
             entity.setRatio(it.getRatio());
+            entity.setRemark(it.getRemark());
             items.add(entity);
         }
         itemMapper.batchInsert(items);
@@ -403,7 +405,8 @@ public class AllocAdjustService {
         dto.setId(apply.getId());
         dto.setApplyNo(apply.getApplyNo());
         dto.setCustId(apply.getCustId());
-        dto.setCustNo(custNo);
+        dto.setCustNo(custNo != null ? custNo : apply.getCustId());
+        dto.setCustType(apply.getCustType());
         dto.setAllocDim(apply.getAllocDim());
         dto.setBizKind(apply.getBizKind());
         dto.setAccountNo(apply.getAccountNo());
@@ -562,7 +565,14 @@ public class AllocAdjustService {
      * @return BPMN 流程定义 key
      * @throws PerfException BIZ_KIND_INVALID 当 bizKind 不属于 CORP / RETAIL / PER / FEE 任一族
      */
-    private String resolveProcessKey(String bizKind) {
+    private String resolveProcessKey(String custType, String bizKind) {
+        // 优先按客户类型路由（对公→corp_v1，零售→retail_v1）
+        if (custType != null && !custType.isBlank()) {
+            String ct = custType.toUpperCase();
+            if ("CORP".equals(ct)) return PROCESS_KEY_CORP;
+            if ("RETAIL".equals(ct)) return PROCESS_KEY_RETAIL;
+        }
+        // 兼容旧数据：按 bizKind 前缀回退
         String upper = bizKind.toUpperCase();
         if (upper.startsWith("CORP_") || upper.equals("CORP")) {
             return PROCESS_KEY_CORP;

@@ -43,6 +43,9 @@ public class PerfAllocAdjustItem {
     /** 调整后分配比例（0-100, decimal(5,2)）. */
     private BigDecimal ratio;
 
+    /** 说明（可空）. */
+    private String remark;
+
     /** 创建时间（DB 默认 CURRENT_TIMESTAMP）. */
     private LocalDateTime createdTime;
 }

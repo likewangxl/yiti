@@ -16,6 +16,7 @@ public class AdjustTodoRespDTO {
     private String id;
     private String applyNo;
     private String custId;
+    private String custType;
     private String allocDim;
     private String bizKind;
     private String ownerOrgId;

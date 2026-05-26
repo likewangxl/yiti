@@ -42,6 +42,7 @@ public final class TargetAssembler {
                 .startDate(plan.getStartDate())
                 .endDate(plan.getEndDate())
                 .status(plan.getStatus())
+                .createdBy(plan.getCreatedBy())
                 .build();
     }
 

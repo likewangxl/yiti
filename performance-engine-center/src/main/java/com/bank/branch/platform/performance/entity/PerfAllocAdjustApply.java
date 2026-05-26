@@ -43,6 +43,9 @@ public class PerfAllocAdjustApply {
     /** 客户 ID（单客户维度调整）. */
     private String custId;
 
+    /** 客户类型：CORP / RETAIL. */
+    private String custType;
+
     /** 分配维度：RULE / ACCOUNT. */
     private String allocDim;
 

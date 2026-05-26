@@ -56,6 +56,9 @@ public interface PerfAllocAdjustTodoMapper {
                                                @Param("offset") int offset,
                                                @Param("pageSize") int pageSize);
 
+    /** 业务表已完结申请 ID（APPROVED / REJECTED）。 */
+    List<String> selectFinishedApplyIds();
+
     /** 已审批：count（同 todoWhere 复用 + IN applyIds + 4 字段过滤）。 */
     long countMyDones(@Param("applyIds") List<String> applyIds,
                       @Param("keyword") String keyword,

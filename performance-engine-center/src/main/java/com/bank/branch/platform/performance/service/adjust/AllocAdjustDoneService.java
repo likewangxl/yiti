@@ -43,14 +43,21 @@ public class AllocAdjustDoneService {
         log.debug("[AllocAdjustDoneService.listMyDones] empId={}, kw={}, dim={}, kind={}, from={}, to={}, page={}/{}",
                 empId, keyword, allocDim, bizKind, dateFrom, dateTo, pageNo, pageSize);
 
-        List<String> allKeys = workflowTodoApi.listMyDoneBusinessKeys(empId, BIZ_TYPE);
-        if (allKeys.isEmpty()) {
-            return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
-        }
-
-        List<String> applyIds = allKeys.stream()
+        // 双路合并：workflow done keys + 业务表 APPROVED/REJECTED 申请 ID
+        List<String> wfKeys = workflowTodoApi.listMyDoneBusinessKeys(empId, BIZ_TYPE);
+        List<String> wfIds = wfKeys.stream()
                 .map(k -> k.startsWith(BUSINESS_KEY_PREFIX) ? k.substring(BUSINESS_KEY_PREFIX.length()) : k)
                 .collect(Collectors.toList());
+
+        // 从业务表补充 APPROVED/REJECTED 的申请（包含驳回后 workflow 查不到的记录）
+        List<String> bizIds = mapper.selectFinishedApplyIds();
+        java.util.Set<String> allIdSet = new java.util.LinkedHashSet<>(wfIds);
+        allIdSet.addAll(bizIds);
+        List<String> applyIds = new java.util.ArrayList<>(allIdSet);
+
+        if (applyIds.isEmpty()) {
+            return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
+        }
 
         LocalDateTime fromDt = dateFrom == null ? null : dateFrom.atStartOfDay();
         LocalDateTime toExclusive = dateTo == null ? null : dateTo.plusDays(1).atStartOfDay();
@@ -80,6 +87,7 @@ public class AllocAdjustDoneService {
         d.setId(a.getId());
         d.setApplyNo(a.getApplyNo());
         d.setCustId(a.getCustId());
+        d.setCustType(a.getCustType());
         d.setAllocDim(a.getAllocDim());
         d.setBizKind(a.getBizKind());
         d.setOwnerOrgId(a.getOwnerOrgId());

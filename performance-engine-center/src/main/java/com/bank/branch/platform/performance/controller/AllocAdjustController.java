@@ -82,6 +82,7 @@ public class AllocAdjustController {
                 req.getItems() == null ? 0 : req.getItems().size());
 
         SubmitAllocAdjustCmd cmd = SubmitAllocAdjustCmd.builder()
+                .custType(req.getCustType())
                 .custNo(req.getCustNo())
                 .allocDim(req.getAllocDim())
                 .bizKind(req.getBizKind())
@@ -194,6 +195,7 @@ public class AllocAdjustController {
             cmds.add(SubmitAllocAdjustCmd.Item.builder()
                     .empId(it.getEmpId())
                     .ratio(it.getRatio())
+                    .remark(it.getRemark())
                     .build());
         }
         return cmds;

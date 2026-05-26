@@ -27,6 +27,9 @@ import java.util.List;
 @AllArgsConstructor
 public class SubmitAllocAdjustCmd {
 
+    /** 客户类型：CORP / RETAIL（决定审批流路由）. */
+    private String custType;
+
     /** 客户编号（必填，对应 cust_master.cust_no 业务编号；Service 内部按编号查找客户主键后入库）. */
     private String custNo;
 
@@ -65,5 +68,8 @@ public class SubmitAllocAdjustCmd {
 
         /** 调整后分配比例（0-100）. */
         private BigDecimal ratio;
+
+        /** 说明（可空）. */
+        private String remark;
     }
 }
