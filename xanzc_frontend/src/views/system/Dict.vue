@@ -154,9 +154,26 @@ async function onSave() {
   const payload = { ...dlg.form, dictType: picked.value };
   try {
     if (dlg.editing) {
-      await call('put', `/admin/sys/dicts/${dlg.editing.id}`, { data: payload }, { ok: true });
+      // 后端 DictUpdateReqDTO 只接受 dictLabel/dictValue/sortOrder/remark
+      const { dictLabel, dictValue, sortOrder, remark } = {
+        dictLabel: payload.label, dictValue: payload.value,
+        sortOrder: payload.sort, remark: payload.remark || ''
+      };
+      await call('put', `/admin/sys/dicts/${dlg.editing.id}`, {
+        data: { dictLabel, dictValue, sortOrder, remark }
+      }, { ok: true });
     } else {
-      await call('post', '/admin/sys/dicts', { data: payload }, { ok: true });
+      // 后端 DictCreateReqDTO 需要 dictType/dictCode/dictLabel/dictValue/sortOrder
+      await call('post', '/admin/sys/dicts', {
+        data: {
+          dictType: picked.value,
+          dictCode: payload.code,
+          dictLabel: payload.label,
+          dictValue: payload.value || payload.code,
+          sortOrder: payload.sort || 0,
+          remark: payload.remark || ''
+        }
+      }, { ok: true });
     }
     ElMessage.success(dlg.editing ? '已更新' : '已新增');
     dlg.show = false;
