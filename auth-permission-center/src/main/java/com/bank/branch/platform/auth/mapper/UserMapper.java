@@ -69,6 +69,8 @@ public interface UserMapper extends BaseMapper<PtUser> {
      */
     PtUser selectByUsername(String username);
 
+    List<PtUser> selectByUsernames(@Param("usernames") List<String> usernames);
+
     /**
      * 更新指定用户的密码错误计数。
      * 登录失败时递增，登录成功后重置为 0。

@@ -112,7 +112,7 @@ public class MetricDefService {
     @Transactional(rollbackFor = Exception.class)
     public UpsertMetricDefResult upsertByName(CreateMetricDefCmd cmd, String operator) {
         cmd.setOperator(operator);
-        PerfMetricDef existing = mapper.selectByMetricName(cmd.getMetricName());
+        PerfMetricDef existing = mapper.selectByMetricName(cmd.getMetricName(), cmd.getBaseDim());
         if (existing == null) {
             // 新增路径
             PerfMetricDef def = create(cmd);
@@ -243,7 +243,7 @@ public class MetricDefService {
         }
         // V1.13：metric_name 预检对齐 V1.11 新增的 uk_metric_name_alive 唯一约束，
         // 避免 insert 阶段 DuplicateKeyException 被旧 catch 兜底为 METRIC_CODE_DUP 误导用户。
-        if (mapper.selectByMetricName(cmd.getMetricName()) != null) {
+        if (mapper.selectByMetricName(cmd.getMetricName(), cmd.getBaseDim()) != null) {
             throw new PerfException(PerfErrorCode.METRIC_NAME_DUP, cmd.getMetricName());
         }
         List<String> refMetricCodes = parseRefMetricCodes(cmd.getRefMetricCodes());

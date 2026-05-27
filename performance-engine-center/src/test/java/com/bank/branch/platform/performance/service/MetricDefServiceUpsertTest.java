@@ -71,7 +71,7 @@ class MetricDefServiceUpsertTest {
     void upsertByName_whenNoMatch_insertsNew() {
         CreateMetricDefCmd cmd = baseCmd("M_NEW", "新增指标");
 
-        when(mapper.selectByMetricName("新增指标")).thenReturn(null);
+        when(mapper.selectByMetricName(eq("新增指标"), any())).thenReturn(null);
         when(mapper.selectByMetricCode("M_NEW")).thenReturn(null);
         when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
         when(metricSlotService.allocSlot("EMP", 1, null)).thenReturn(5);
@@ -93,7 +93,7 @@ class MetricDefServiceUpsertTest {
         cmd.setMetricDesc("Excel 里新的口径说明");
 
         PerfMetricDef existing = existingDef("ID_OLD", "M_OLD", "已存在指标", 7);
-        when(mapper.selectByMetricName("已存在指标")).thenReturn(existing);
+        when(mapper.selectByMetricName(eq("已存在指标"), any())).thenReturn(existing);
 
         UpsertMetricDefResult r = service.upsertByName(cmd, "admin");
 
@@ -122,7 +122,7 @@ class MetricDefServiceUpsertTest {
         cmd.setPreferredSlot(99);  // 即使 cmd 带 preferredSlot 也应忽略
 
         PerfMetricDef existing = existingDef("ID_X", "M_X_OLD", "已存在2", 42);
-        when(mapper.selectByMetricName("已存在2")).thenReturn(existing);
+        when(mapper.selectByMetricName(eq("已存在2"), any())).thenReturn(existing);
 
         UpsertMetricDefResult r = service.upsertByName(cmd, "admin");
 
@@ -143,7 +143,7 @@ class MetricDefServiceUpsertTest {
                 baseCmd("M_NEW4", "新4"),
                 baseCmd("M_NEW5", "新5"));
 
-        when(mapper.selectByMetricName(any())).thenReturn(null);
+        when(mapper.selectByMetricName(any(), any())).thenReturn(null);
         when(mapper.selectByMetricCode(any())).thenReturn(null);
         when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
         when(metricSlotService.allocSlot(any(), any(), any())).thenReturn(1);
@@ -165,9 +165,9 @@ class MetricDefServiceUpsertTest {
                 baseCmd("M_C2", "U2"),
                 baseCmd("M_C3", "U3"));
 
-        when(mapper.selectByMetricName("U1")).thenReturn(existingDef("ID1", "M_OLD1", "U1", 1));
-        when(mapper.selectByMetricName("U2")).thenReturn(existingDef("ID2", "M_OLD2", "U2", 2));
-        when(mapper.selectByMetricName("U3")).thenReturn(existingDef("ID3", "M_OLD3", "U3", 3));
+        when(mapper.selectByMetricName(eq("U1"), any())).thenReturn(existingDef("ID1", "M_OLD1", "U1", 1));
+        when(mapper.selectByMetricName(eq("U2"), any())).thenReturn(existingDef("ID2", "M_OLD2", "U2", 2));
+        when(mapper.selectByMetricName(eq("U3"), any())).thenReturn(existingDef("ID3", "M_OLD3", "U3", 3));
 
         BatchUpsertMetricDefResult r = service.batchUpsertByName(cmds, "admin");
 
@@ -188,11 +188,11 @@ class MetricDefServiceUpsertTest {
                 baseCmd("M_C_D", "更D"),
                 baseCmd("M_NEW_E", "新E"));
 
-        when(mapper.selectByMetricName("新A")).thenReturn(null);
-        when(mapper.selectByMetricName("更B")).thenReturn(existingDef("IB", "M_OB", "更B", 2));
-        when(mapper.selectByMetricName("新C")).thenReturn(null);
-        when(mapper.selectByMetricName("更D")).thenReturn(existingDef("ID", "M_OD", "更D", 4));
-        when(mapper.selectByMetricName("新E")).thenReturn(null);
+        when(mapper.selectByMetricName(eq("新A"), any())).thenReturn(null);
+        when(mapper.selectByMetricName(eq("更B"), any())).thenReturn(existingDef("IB", "M_OB", "更B", 2));
+        when(mapper.selectByMetricName(eq("新C"), any())).thenReturn(null);
+        when(mapper.selectByMetricName(eq("更D"), any())).thenReturn(existingDef("ID", "M_OD", "更D", 4));
+        when(mapper.selectByMetricName(eq("新E"), any())).thenReturn(null);
         when(mapper.selectByMetricCode(any())).thenReturn(null);
         when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
         when(metricSlotService.allocSlot(any(), any(), any())).thenReturn(1);
@@ -212,11 +212,11 @@ class MetricDefServiceUpsertTest {
                 baseCmd("M_BAD", "BAD"),
                 baseCmd("M_OK2", "OK2"));
 
-        when(mapper.selectByMetricName("OK1")).thenReturn(null);
+        when(mapper.selectByMetricName(eq("OK1"), any())).thenReturn(null);
         when(mapper.selectByMetricCode("M_OK1")).thenReturn(null);
         when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
         when(metricSlotService.allocSlot(any(), any(), any())).thenReturn(1);
-        when(mapper.selectByMetricName("BAD"))
+        when(mapper.selectByMetricName(eq("BAD"), any()))
                 .thenThrow(new RuntimeException("DB conn lost"));
 
         assertThatThrownBy(() -> service.batchUpsertByName(cmds, "admin"))

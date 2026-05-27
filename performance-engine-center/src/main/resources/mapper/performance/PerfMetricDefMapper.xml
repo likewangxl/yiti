@@ -58,13 +58,14 @@
         LIMIT 1
     </select>
 
-    <!-- V1.11：按 metric_name 查询（deleted=0 过滤，对齐 selectByMetricCode） -->
+    <!-- 按 metric_name + base_dim 联合查询（deleted=0 过滤） -->
     <select id="selectByMetricName" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PERF_METRIC_DEF
         WHERE metric_name = #{metricName}
           AND deleted = 0
+          <if test="baseDim != null and baseDim != ''">AND base_dim = #{baseDim}</if>
         LIMIT 1
     </select>
 
