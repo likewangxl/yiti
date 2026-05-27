@@ -200,8 +200,14 @@ async function run() {
       sql: encryptSql(sql.value),
       remark: reason.value
     });
-    result.value = r;
-    ElMessage.success(`执行成功：${r?.rows ?? 0} 行 · ${r?.time ?? '-'}`);
+    result.value = {
+      columns: r?.columns || [],
+      data: r?.rows || [],
+      rows: r?.rowCount ?? r?.rows?.length ?? 0,
+      time: r?.executionTimeMs != null ? r.executionTimeMs + 'ms' : '-',
+      traceId: r?.historyId || '-'
+    };
+    ElMessage.success(`执行成功：${result.value.rows} 行 · 用时 ${result.value.time}`);
   } catch (e) {
     ElMessage.error('执行失败：' + (e?.message || '后端校验未通过'));
   } finally {
