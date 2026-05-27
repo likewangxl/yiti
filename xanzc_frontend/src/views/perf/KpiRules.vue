@@ -100,9 +100,6 @@
           <el-form-item label="方案名称" prop="schemeName">
             <el-input v-model="dlg.scheme.schemeName" :disabled="dlg.readOnly" />
           </el-form-item>
-          <el-form-item label="适用范围">
-            <el-input v-model="dlg.scheme.applyScope" :disabled="dlg.readOnly" placeholder="如 南山/福田/罗湖/宝安" />
-          </el-form-item>
         </div>
       </el-form>
       <!-- 指标配置表 -->
@@ -183,6 +180,7 @@ import {
 // === 字典 ===
 // 状态从 SYS_DICT.dict_type='KPI_SCHEME_STATUS' 拉，不再写死中英文映射
 import { useDict } from '@/composables/useDict';
+import { getOrgTree } from '@/api/orgs';
 // labelOf 名称冲突：保留下面行业版的 statusLabel（含 DISABLED → 已删除映射），useDict 只取 options
 const { options: STATUS_OPTIONS } = useDict('KPI_SCHEME_STATUS');
 const CYCLE_OPTIONS = [
@@ -325,6 +323,22 @@ const dlgTitle = computed(() => {
   return '新增方案';
 });
 const weightSum = computed(() => dlg.items.reduce((s, x) => s + (Number(x.weight) || 0), 0));
+
+// === 机构树（适用范围下拉，只显示正常状态，label=机构名(机构号)） ===
+const orgTreeData = ref([]);
+async function loadOrgTree() {
+  try {
+    const tree = await getOrgTree();
+    const convert = (nodes) => (Array.isArray(nodes) ? nodes : [])
+      .filter(n => n.organState === 0 || n.organState == null)
+      .map(n => ({
+        code: n.code || n.orgCode,
+        label: `${n.name || n.orgName || ''}(${n.code || n.orgCode || ''})`,
+        children: convert(n.children)
+      }));
+    orgTreeData.value = convert(tree);
+  } catch { orgTreeData.value = []; }
+}
 
 const metricOptions = ref([]);
 async function ensureMetrics() {
@@ -534,7 +548,7 @@ async function onDelete(row) {
   }
 }
 
-onMounted(reload);
+onMounted(() => { reload(); loadOrgTree(); });
 </script>
 
 <style lang="scss" scoped>

@@ -20,6 +20,7 @@ const routes = [
       { path: 'workspace', name: 'Workspace', component: () => import('@/views/workspace/Index.vue'), meta: { title: '工作台', icon: '🏠' } },
       { path: 'workspace/announcements', name: 'AnnouncementList', component: () => import('@/views/workspace/AnnouncementList.vue'), meta: { title: '公告列表', group: '工作台' } },
       { path: 'announcement/:id', name: 'AnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情' } },
+      { path: 'workspace/notifications', name: 'NotificationList', component: () => import('@/views/workspace/NotificationList.vue'), meta: { title: '通知列表', group: '工作台' } },
 
       // 绩效与考核
       { path: 'perf/metrics',     name: 'PerfMetrics',   component: () => import('@/views/perf/Metrics.vue'),   meta: { title: '指标库', group: '绩效与考核' } },
@@ -51,6 +52,7 @@ const routes = [
       { path: 'system/notifications', name: 'SysNotifications', component: () => import('@/views/system/Notifications.vue'), meta: { title: '通知消息', group: '系统设置' } },
       { path: 'system/config',     name: 'SysConfig',     component: () => import('@/views/system/Config.vue'),     meta: { title: '系统配置', group: '系统设置' } },
       { path: 'system/files',      name: 'SysFiles',      component: () => import('@/views/system/Files.vue'),      meta: { title: '文件管理', group: '系统设置' } },
+      { path: 'system/timeout-rules', name: 'SysTimeoutRules', component: () => import('@/views/system/TimeoutRules.vue'), meta: { title: '超时规则', group: '系统设置' } },
       { path: 'system/announcements', name: 'SysAnnouncements', component: () => import('@/views/system/Announcements.vue'), meta: { title: '公告管理', group: '系统设置' } },
       { path: 'system/announcements/:id', name: 'SysAnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情', group: '系统设置' } }
     ]

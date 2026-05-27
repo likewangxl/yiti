@@ -31,10 +31,7 @@
             <el-form-item label="业务类型">
               <el-select v-model="mineFilters.bizKind" clearable placeholder="全部" style="width:160px"
                          @change="onMineFilterChange">
-                <el-option value="CORP_DEPOSIT" label="存款" />
-                <el-option value="CORP_LOAN" label="贷款" />
-                <el-option value="FEE_BIZ" label="中收" />
-                <el-option value="CORP_LARGE_CD" label="大额存单" />
+                <el-option v-for="o in bizKindOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="状态">
@@ -70,7 +67,7 @@
               <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
             </el-table-column>
             <el-table-column label="业务类型" width="160">
-              <template #default="{row}">{{ (row.bizKind || '').split(',').map(k => ({ CORP_DEPOSIT:'存款', CORP_LOAN:'贷款', FEE_BIZ:'中收', CORP_LARGE_CD:'大额存单', CORP_FOREX:'外汇', PER_DEP:'个人存款', PER_LOAN:'个人贷款' }[k] || k)).join('、') || '-' }}</template>
+              <template #default="{row}">{{ fmtBizKind(row.bizKind) }}</template>
             </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{row}">
@@ -127,10 +124,7 @@
             <el-form-item label="业务类型">
               <el-select v-model="todoFilters.bizKind" clearable placeholder="全部"
                          style="width:160px" @change="onTodoFilterChange">
-                <el-option value="CORP_DEPOSIT" label="存款" />
-                <el-option value="CORP_LOAN" label="贷款" />
-                <el-option value="FEE_BIZ" label="中收" />
-                <el-option value="CORP_LARGE_CD" label="大额存单" />
+                <el-option v-for="o in bizKindOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="申请时间">
@@ -214,10 +208,7 @@
             <el-form-item label="业务类型">
               <el-select v-model="doneFilters.bizKind" clearable placeholder="全部" style="width:160px"
                          @change="onDoneFilterChange">
-                <el-option value="CORP_DEPOSIT" label="存款" />
-                <el-option value="CORP_LOAN" label="贷款" />
-                <el-option value="FEE_BIZ" label="中收" />
-                <el-option value="CORP_LARGE_CD" label="大额存单" />
+                <el-option v-for="o in bizKindOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="申请时间">
@@ -243,7 +234,7 @@
               <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
             </el-table-column>
             <el-table-column label="业务类型" width="160">
-              <template #default="{row}">{{ (row.bizKind || '').split(',').map(k => ({ CORP_DEPOSIT:'存款', CORP_LOAN:'贷款', FEE_BIZ:'中收', CORP_LARGE_CD:'大额存单' }[k] || k)).join('、') || '-' }}</template>
+              <template #default="{row}">{{ fmtBizKind(row.bizKind) }}</template>
             </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{row}">
@@ -322,6 +313,11 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
+            <el-form-item label="客户名称">
+              <el-input :model-value="custNameDisplay" disabled placeholder="输入客户编号后自动显示" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
             <el-form-item label="分配维度" prop="allocDim" required>
               <el-select v-model="dlg.form.allocDim" :disabled="dlg.readOnly" style="width:100%"
                          @change="onAllocDimChange">
@@ -333,10 +329,7 @@
           <el-col :span="8">
             <el-form-item label="业务类型" prop="bizKind" required>
               <el-select v-model="dlg.form.bizKind" :disabled="dlg.readOnly" multiple style="width:100%">
-                <el-option label="存款" value="CORP_DEPOSIT" />
-                <el-option label="贷款" value="CORP_LOAN" />
-                <el-option label="中收" value="FEE_BIZ" />
-                <el-option label="大额存单" value="CORP_LARGE_CD" />
+                <el-option v-for="o in bizKindOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -429,6 +422,18 @@
             <el-input v-model="dlg.reviewOpinion" type="textarea" :rows="3" maxlength="500" show-word-limit
               placeholder="请填写评审意见（必填）" />
           </el-form-item>
+          <el-form-item v-if="dlg.reviewRow?.nodeKey === 'biz_dept_review' || dlg.reviewRow?.nodeKey === 'finance_review'" label="下一步审批">
+            <el-radio-group v-model="dlg.reviewRouteTo">
+              <template v-if="dlg.reviewRow?.nodeKey === 'biz_dept_review'">
+                <el-radio value="LEADER">{{ dlg.reviewFlowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
+                <el-radio value="OWNER">交原业绩所属人审批</el-radio>
+              </template>
+              <template v-else-if="dlg.reviewRow?.nodeKey === 'finance_review'">
+                <el-radio value="LEADER">交资财部负责人审批</el-radio>
+                <el-radio value="END">审批结束</el-radio>
+              </template>
+            </el-radio-group>
+          </el-form-item>
         </el-form>
       </template>
 
@@ -442,20 +447,24 @@
       </template>
     </el-dialog>
 
-    <!-- 业务部门经办审批专用对话框（biz_dept_review 节点，含原业绩所属人复选框） -->
+    <!-- 经办审批专用对话框（biz_dept_review / finance_review 节点，含路由选择） -->
     <el-dialog v-model="approveDlg.show" :title="approveDlgTitle" width="520px" :close-on-click-modal="false">
       <el-form label-position="top" size="default">
         <el-form-item label="审批意见">
           <el-input v-model="approveDlg.opinion" type="textarea" :rows="3" maxlength="500" show-word-limit
             placeholder="请填写审批意见（可空）" />
         </el-form-item>
-        <el-form-item>
-          <el-checkbox v-model="approveDlg.needsOriginalOwnerApprove">
-            是否需要原业绩所属人审批
-          </el-checkbox>
-          <div class="approve-checkbox-tip">
-            勾选后流程进入"原业绩所属人审批"节点；不勾选则直接到部门负责人审批环节
-          </div>
+        <el-form-item label="下一步审批">
+          <el-radio-group v-model="approveDlg.routeTo">
+            <template v-if="approveDlg.nodeKey === 'biz_dept_review'">
+              <el-radio value="LEADER">{{ approveDlg.flowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
+              <el-radio value="OWNER">交原业绩所属人审批</el-radio>
+            </template>
+            <template v-else-if="approveDlg.nodeKey === 'finance_review'">
+              <el-radio value="LEADER">交资财部负责人审批</el-radio>
+              <el-radio value="END">审批结束</el-radio>
+            </template>
+          </el-radio-group>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -468,7 +477,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -479,6 +488,8 @@ import {
 import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
+import { listDictItems } from '@/api/system';
+import { getCustomer } from '@/api/customers';
 
 const route = useRoute();
 
@@ -762,18 +773,19 @@ async function ensureClaimed(row) {
 // 该节点表单含 needsOriginalOwnerApprove CHECKBOX，由经办勾选决定是否走原业绩所属人审批分支
 const approveDlg = reactive({
   show: false, saving: false, row: null,
-  opinion: '同意', needsOriginalOwnerApprove: false
+  opinion: '同意', routeTo: 'LEADER', nodeKey: '', flowType: 'CORP'
 });
 const approveDlgTitle = computed(
   () => `审批通过：${approveDlg.row?.title || approveDlg.row?.businessKey || ''}`
 );
 
 async function openApprove(row) {
-  // 公司部/零售部/业务部门经办审批节点：弹自定义对话框含 needsOriginalOwnerApprove 复选框
-  if (row.nodeKey === 'biz_dept_review') {
+  if (row.nodeKey === 'biz_dept_review' || row.nodeKey === 'finance_review') {
     approveDlg.row = row;
     approveDlg.opinion = '同意';
-    approveDlg.needsOriginalOwnerApprove = false;
+    approveDlg.routeTo = 'LEADER';
+    approveDlg.nodeKey = row.nodeKey;
+    approveDlg.flowType = (row.processDefinitionKey || '').includes('retail') ? 'RETAIL' : 'CORP';
     approveDlg.saving = false;
     approveDlg.show = true;
     return;
@@ -801,8 +813,9 @@ async function onApproveSubmit() {
   approveDlg.saving = true;
   try {
     await ensureClaimed(approveDlg.row);
+    const varName = approveDlg.nodeKey === 'finance_review' ? 'finRouteTo' : 'corpRouteTo';
     await approveTask(approveDlg.row.taskId, approveDlg.opinion, {
-      needsOriginalOwnerApprove: !!approveDlg.needsOriginalOwnerApprove
+      [varName]: approveDlg.routeTo
     });
     ElMessage.success('已通过');
     approveDlg.show = false;
@@ -834,13 +847,13 @@ async function openReject(row) {
 
 // ============ 待我审批 - 审批弹窗（复用查看弹窗 dlg + reviewMode） ============
 async function openTodoReview(row) {
-  // 复用 openTodoDetail 加载申请详情 + 审批流记录
   await openTodoDetail(row);
-  // 切换为审批模式
   dlg.reviewMode = true;
   dlg.reviewRow = row;
   dlg.reviewOpinion = '';
   dlg.reviewSaving = false;
+  dlg.reviewRouteTo = 'LEADER';
+  dlg.reviewFlowType = (row.processDefinitionKey || '').includes('retail') ? 'RETAIL' : 'CORP';
 }
 async function onDlgReviewAction(action) {
   if (!dlg.reviewOpinion || !dlg.reviewOpinion.trim()) {
@@ -853,8 +866,12 @@ async function onDlgReviewAction(action) {
   try {
     await ensureClaimed(dlg.reviewRow);
     if (action === 'APPROVE') {
-      const formData = dlg.reviewRow.nodeKey === 'biz_dept_review'
-        ? { needsOriginalOwnerApprove: false } : undefined;
+      let formData;
+      if (dlg.reviewRow.nodeKey === 'biz_dept_review') {
+        formData = { corpRouteTo: dlg.reviewRouteTo };
+      } else if (dlg.reviewRow.nodeKey === 'finance_review') {
+        formData = { finRouteTo: dlg.reviewRouteTo };
+      }
       await approveTask(dlg.reviewRow.taskId, dlg.reviewOpinion, formData);
       ElMessage.success('已通过');
     } else {
@@ -870,11 +887,30 @@ async function onDlgReviewAction(action) {
   }
 }
 
+// ============ 业务类型字典 ============
+const bizKindOptions = ref([]);
+const bizKindMap = computed(() => {
+  const m = {};
+  for (const o of bizKindOptions.value) m[o.value] = o.label;
+  return m;
+});
+function fmtBizKind(val) {
+  if (!val) return '-';
+  return val.split(',').map(k => bizKindMap.value[k] || k).join('、');
+}
+async function loadBizKindDict() {
+  try {
+    const items = await listDictItems('PERF_BIZ_KIND');
+    bizKindOptions.value = (Array.isArray(items) ? items : []).map(d => ({ label: d.dictLabel, value: d.dictCode }));
+  } catch { bizKindOptions.value = []; }
+}
+
 // ============ 新建/查看 弹框 ============
 const dlgFormRef = ref(null);
+const custNameDisplay = ref('');
 const dlg = reactive({
   show: false, readOnly: false, saving: false, viewingId: null,
-  reviewMode: false, reviewRow: null, reviewOpinion: '', reviewSaving: false,
+  reviewMode: false, reviewRow: null, reviewOpinion: '', reviewSaving: false, reviewRouteTo: 'LEADER', reviewFlowType: 'CORP',
   approvalLogs: [], approvalLoading: false,
   applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
@@ -944,6 +980,7 @@ function onAllocDimChange(val) {
 function openCreate() {
   dlg.readOnly = false;
   dlg.viewingId = null;
+  custNameDisplay.value = '';
   Object.assign(dlg.form, {
     custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: [],
     accountNo: '', ownerOrgId: '', reason: '',
@@ -1042,7 +1079,21 @@ async function onWithdraw(row) {
   }
 }
 
+// 客户编号失焦时查询客户名称
+let custNoTimer = null;
+watch(() => dlg.form.custNo, (val) => {
+  clearTimeout(custNoTimer);
+  if (!val || val.length < 2) { custNameDisplay.value = ''; return; }
+  custNoTimer = setTimeout(async () => {
+    try {
+      const c = await getCustomer(val);
+      custNameDisplay.value = c?.name || '';
+    } catch { custNameDisplay.value = ''; }
+  }, 500);
+});
+
 onMounted(async () => {
+  loadBizKindDict();
   await loadCanApprove();
   // 没审批资格强制回到"我的申请"，避免 URL/路由复用残留 activeTab='todo' 的边角
   if (!canApprove.value && activeTab.value !== 'mine') activeTab.value = 'mine';

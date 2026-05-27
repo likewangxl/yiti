@@ -71,7 +71,7 @@
         <el-form-item label="状态">
           <el-select v-model="dlg.form.status" style="width:100%">
             <el-option label="启用" value="ACTIVE" />
-            <el-option label="禁用" value="INACTIVE" />
+            <el-option label="禁用" value="DISABLED" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -92,7 +92,7 @@ import { call } from '@/api/http';
 
 const dictKey   = (t) => t.dictType ?? t.code;
 const dictLabel = (t) => t.dictTypeLabel ?? t.label ?? t.dictType ?? t.code;
-const isActive  = (r) => r.status === 'ACTIVE' || r.status === '启用';
+const isActive  = (r) => r.status === 'ACTIVE' || r.status === 0 || r.status === '启用';
 
 const types = ref(sysDictTypes);
 const picked = ref(dictKey(sysDictTypes[0] || {}));
@@ -142,7 +142,7 @@ function openEdit(row) {
     label: row.dictLabel ?? row.label,
     value: row.dictValue ?? row.value ?? '',
     sort:  Number(row.sortOrder ?? row.sort ?? 0),
-    status: isActive(row) ? 'ACTIVE' : 'INACTIVE'
+    status: isActive(row) ? 'ACTIVE' : 'DISABLED'
   });
   dlg.show = true;
 }
@@ -195,9 +195,9 @@ async function onToggle(row) {
     );
   } catch { return; }
   const code = row.dictCode || row.code;
-  const next = willDisable ? 'INACTIVE' : 'ACTIVE';
+  const next = willDisable ? 'DISABLED' : 'ACTIVE';
   try {
-    await call('put', `/sys/dicts/${picked.value}/items/${code}/status`, { data: { status: next } }, { ok: true });
+    await call('put', `/admin/sys/dicts/${row.id}/status`, { data: { status: next } }, { ok: true });
     row.status = next;
     ElMessage.success(willDisable ? '已禁用' : '已启用');
   } catch { ElMessage.error('操作失败'); }

@@ -49,6 +49,24 @@ export function listDictItems(dictType) {
 export function getCalendar(year, month) {
   return call('get', '/sys/calendar', { params: { year, month } }, []);
 }
+// 切换某天工作/休息状态：PUT /admin/sys/calendar/{date}
+// date 格式 'YYYY-MM-DD'，data: { isWorkday: 0|1, remark: '' }
+export function setCalendarDay(date, data) {
+  return call('put', `/admin/sys/calendar/${date}`, { data }, { ok: true });
+}
+// 年初初始化：POST /admin/sys/calendar/init，body: { year }
+export function initCalendarYear(year) {
+  return call('post', '/admin/sys/calendar/init', { data: { year } }, { ok: true });
+}
+// 批量导入 xlsx：POST /admin/sys/calendar/import，multipart/form-data
+export function importCalendar(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return call('post', '/admin/sys/calendar/import', {
+    data: fd,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }, { ok: true });
+}
 
 // === 任务调度 ===
 // yiti: PageResult<JobConfDTO>
@@ -57,7 +75,12 @@ export async function listJobs(params = {}) {
 }
 export function pauseJob(id) { return call('put', `/admin/sys/jobs/${id}/pause`, {}, { ok: true }); }
 export function resumeJob(id) { return call('put', `/admin/sys/jobs/${id}/resume`, {}, { ok: true }); }
-export function triggerJob(id) { return call('post', `/admin/sys/jobs/${id}/trigger`, {}, { ok: true }); }
+export function triggerJob(id, reason = '手动触发') {
+  return call('post', `/admin/sys/jobs/${id}/trigger`, { data: { reason } }, { ok: true });
+}
+export async function listJobLogs(jobId, params = {}) {
+  return unwrapPage(await call('get', `/admin/sys/jobs/${jobId}/logs`, { params }, []));
+}
 
 // === 审计日志 ===
 // yiti: PageResult<AuditLogDTO>
@@ -110,6 +133,18 @@ export function saveBizScope(roleId, bizType, dataScope, reason) {
   return call('post', '/admin/biz-scopes', {
     data: { roleId, bizType, dataScope, reason }
   }, { ok: true });
+}
+
+// === 流程超时规则 ===
+export function listTimeoutRules(processDefinitionKey) {
+  const params = processDefinitionKey ? { processDefinitionKey } : {};
+  return call('get', '/admin/workflow/timeout-rules', { params }, []);
+}
+export function updateTimeoutRule(id, data) {
+  return call('put', `/admin/workflow/timeout-rules/${id}`, { data }, { ok: true });
+}
+export function createTimeoutRule(data) {
+  return call('post', '/admin/workflow/timeout-rules', { data }, { ok: true });
 }
 
 // === 菜单分配（参考 xanpd role.vue 分配菜单流程） ===

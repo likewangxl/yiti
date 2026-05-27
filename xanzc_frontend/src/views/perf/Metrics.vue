@@ -208,14 +208,6 @@
               <el-option :value="3" label="3 级" />
             </el-select>
           </el-form-item>
-          <el-form-item label="计算频率" prop="calcFreq" required>
-            <el-select v-model="dlg.form.calcFreq" style="width:100%">
-              <el-option value="DAY" label="日" />
-              <el-option value="MONTH" label="月" />
-              <el-option value="QUARTER" label="季" />
-              <el-option value="YEAR" label="年" />
-            </el-select>
-          </el-form-item>
           <el-form-item label="计算方式" prop="calcMode" required>
             <el-select v-model="dlg.form.calcMode" style="width:100%">
               <el-option value="AUTO" label="自动" />
@@ -223,10 +215,11 @@
             </el-select>
           </el-form-item>
           <el-form-item label="计算逻辑" prop="calcLogicType">
-            <el-radio-group v-model="dlg.form.calcLogicType">
+            <el-radio-group v-model="dlg.form.calcLogicType" disabled>
               <el-radio value="SQL">SQL</el-radio>
               <el-radio value="EXPR">Groovy</el-radio>
             </el-radio-group>
+            <div v-if="dlg.form.metricLevel === 1" style="font-size:12px;color:#999;margin-top:2px">1级指标仅支持SQL</div>
           </el-form-item>
         </div>
 
@@ -235,11 +228,21 @@
                     placeholder="指标的业务含义、计算口径、数据来源等详细描述" maxlength="500" show-word-limit />
         </el-form-item>
 
+        <el-form-item v-if="dlg.form.calcLogicType === 'EXPR'" label="上级指标">
+          <el-select v-model="dlg.form.parentMetrics" multiple filterable style="width:100%"
+                     placeholder="选择上级已发布指标（可多选）">
+            <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
+                       :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
+          </el-select>
+          <div style="font-size:12px;color:#999;margin-top:4px">
+            Groovy 表达式中可引用所选指标编码，如 {{ dlg.form.parentMetrics?.length ? dlg.form.parentMetrics.join(' + ') : 'M0001 + M0002' }}
+          </div>
+        </el-form-item>
         <el-form-item :label="dlg.form.calcLogicType === 'EXPR' ? 'Groovy 表达式' : 'SQL 表达式 (支持 #{slot} 占位符)'">
           <el-input
             v-if="dlg.form.calcLogicType === 'EXPR'"
-            v-model="dlg.form.exprText" type="textarea" :rows="6"
-            placeholder="如 M0001 + M0002"
+            v-model="dlg.form.exprText" type="textarea" :rows="4"
+            :placeholder="dlg.form.parentMetrics?.length ? dlg.form.parentMetrics.join(' + ') : '如 M0001 + M0002'"
           />
           <el-input
             v-else
@@ -428,8 +431,9 @@ const treeData = computed(() => {
       node = { id: 'g-' + cat, label: cat, children: [] };
       groups.set(cat, node);
     }
+    const lvl = m.metricLevel ? `（${m.metricLevel}级）` : '';
     node.children.push({
-      id: m.metricCode, label: m.metricName,
+      id: m.metricCode, label: `${m.metricName} ${lvl}`.trim(),
       isMetric: true, status: m.status, raw: m
     });
   }
@@ -559,8 +563,19 @@ const dlg = reactive({
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
     sqlText: '', exprText: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
+    parentMetrics: [],
     _category: '规模类'
   }
+});
+watch(() => dlg.form.metricLevel, (lvl) => {
+  if (lvl === 1) dlg.form.calcLogicType = 'SQL';
+  else if (lvl >= 2) dlg.form.calcLogicType = 'EXPR';
+  dlg.form.parentMetrics = [];
+});
+const parentMetricOptions = computed(() => {
+  const lvl = dlg.form.metricLevel;
+  if (!lvl || lvl <= 1) return [];
+  return allMetrics.value.filter(m => m.metricLevel === lvl - 1 && m.status === 'ACTIVE');
 });
 function resetTrial() {
   dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] };
@@ -581,6 +596,7 @@ function defaultForm() {
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
     sqlText: '', exprText: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
+    parentMetrics: [],
     _category: '规模类'
   };
 }

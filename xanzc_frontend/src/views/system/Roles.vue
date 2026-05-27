@@ -44,7 +44,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="createTime" label="创建时间" width="160" />
+        <el-table-column prop="createTime" label="创建时间" width="160" :formatter="fmtDateTime" />
         <el-table-column label="操作" width="320" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
@@ -82,7 +82,6 @@
         <!-- 角色编码：新增时不显示（后端自动生成 R_XXXXXXXX），编辑时只读展示 -->
         <el-form-item v-if="dlg.editing" label="角色编码">
           <el-input v-model="dlg.form.roleCode" disabled />
-          <div class="hint">角色编码保存后不可修改</div>
         </el-form-item>
         <el-form-item label="角色名称" prop="roleChName">
           <el-input v-model="dlg.form.roleChName" placeholder="中文名称" maxlength="100" />
@@ -92,8 +91,8 @@
         </el-form-item>
         <el-form-item v-if="dlg.editing" label="状态" prop="recordStatus">
           <el-radio-group v-model="dlg.form.recordStatus">
-            <el-radio :label="0">启用</el-radio>
-            <el-radio :label="1">停用</el-radio>
+            <el-radio :value="0">启用</el-radio>
+            <el-radio :value="1">停用</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
@@ -203,6 +202,8 @@ function fmtBindTime(t) {
   if (!t) return '-';
   return String(t).replace('T', ' ').slice(0, 16);
 }
+// el-table column formatter: (row, column, cellValue, index) → 格式化显示
+const fmtDateTime = (_row, _col, v) => v ? String(v).replace('T', ' ').slice(0, 19) : '-';
 
 // === 列表 ===
 const rows = ref([]);

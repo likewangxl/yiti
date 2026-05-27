@@ -78,8 +78,9 @@ onMounted(load);
   color: $side-text;
   overflow-y: auto;
   border-right: 1px solid $side-bg-2;
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,.13); border-radius: 3px; }
+  &::-webkit-scrollbar { width: 8px; }
+  &::-webkit-scrollbar-track { background: rgba(255,255,255,.05); }
+  &::-webkit-scrollbar-thumb { background: rgba(255,255,255,.3); border-radius: 4px; &:hover { background: rgba(255,255,255,.5); } }
 }
 .logo {
   height: $header-h;
