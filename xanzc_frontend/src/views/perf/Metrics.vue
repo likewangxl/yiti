@@ -49,7 +49,7 @@
       </div>
 
       <!-- 右：详情 + 同分类 -->
-      <div class="card-section detail-col">
+      <div class="card-section detail-col" v-loading="detailLoading">
         <div v-if="!detail.metricCode" class="empty-pane">← 在左侧选择任一指标查看详情</div>
         <template v-else>
           <div class="card-h">
@@ -68,15 +68,11 @@
               <td class="lab">层级</td><td class="val">{{ detail.metricLevel != null ? detail.metricLevel + ' 级' : '-' }}</td>
             </tr>
             <tr>
-              <td class="lab">计算频率</td><td class="val">{{ { DAY:'日', MONTH:'月', QUARTER:'季', YEAR:'年' }[detail.calcFreq] || detail.calcFreq || '-' }}</td>
               <td class="lab">计算方式</td><td class="val">{{ { AUTO:'自动', MANUAL:'手动' }[detail.calcMode] || detail.calcMode || '-' }}</td>
-            </tr>
-            <tr>
               <td class="lab">计算逻辑</td>
               <td class="val">
-                <el-tag :class="logicCls(detail.calcLogicType)" effect="plain">{{ detail.calcLogicType || '-' }}</el-tag>
+                <el-tag :class="logicCls(detail.calcLogicType)" effect="plain">{{ { SQL:'SQL', EXPR:'Groovy' }[detail.calcLogicType] || detail.calcLogicType || '-' }}</el-tag>
               </td>
-              <td class="lab">数据源</td><td class="val">{{ detail.dataSource || guessDataSource(detail) }}</td>
             </tr>
             <tr>
               <td class="lab">创建人</td><td class="val">{{ detail.createdBy || '-' }}</td>
@@ -96,7 +92,7 @@
             <pre class="code">{{ detail.sqlText || '-- 暂未配置 SQL，可点【编辑】补充' }}</pre>
           </template>
           <template v-else-if="detail.calcLogicType === 'EXPR'">
-            <div class="block-h">EXPR / Groovy 表达式</div>
+            <div class="block-h">Groovy 表达式</div>
             <pre class="code">{{ detail.exprText || '// 暂未配置表达式，可点【编辑】补充' }}</pre>
           </template>
           <template v-else-if="detail.calcLogicType === 'SUMMARY'">
@@ -156,7 +152,7 @@
             </el-table-column>
             <el-table-column label="名称" prop="metricName" min-width="160" show-overflow-tooltip />
             <el-table-column label="计算" width="90">
-              <template #default="{row}"><el-tag :class="logicCls(row.calcLogicType)" effect="plain" size="small">{{ row.calcLogicType }}</el-tag></template>
+              <template #default="{row}"><el-tag :class="logicCls(row.calcLogicType)" effect="plain" size="small">{{ { SQL:'SQL', EXPR:'Groovy' }[row.calcLogicType] || row.calcLogicType }}</el-tag></template>
             </el-table-column>
             <el-table-column label="状态" width="90">
               <template #default="{row}"><el-tag :class="statusCls(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag></template>
@@ -214,13 +210,6 @@
               <el-option value="MANUAL" label="手动" />
             </el-select>
           </el-form-item>
-          <el-form-item label="计算逻辑" prop="calcLogicType">
-            <el-radio-group v-model="dlg.form.calcLogicType" disabled>
-              <el-radio value="SQL">SQL</el-radio>
-              <el-radio value="EXPR">Groovy</el-radio>
-            </el-radio-group>
-            <div v-if="dlg.form.metricLevel === 1" style="font-size:12px;color:#999;margin-top:2px">1级指标仅支持SQL</div>
-          </el-form-item>
         </div>
 
         <el-form-item label="指标详细描述">
@@ -228,24 +217,40 @@
                     placeholder="指标的业务含义、计算口径、数据来源等详细描述" maxlength="500" show-word-limit />
         </el-form-item>
 
-        <el-form-item v-if="dlg.form.calcLogicType === 'EXPR'" label="上级指标">
-          <el-select v-model="dlg.form.parentMetrics" multiple filterable style="width:100%"
-                     placeholder="选择上级已发布指标（可多选）">
-            <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
-                       :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
-          </el-select>
-          <div style="font-size:12px;color:#999;margin-top:4px">
-            Groovy 表达式中可引用所选指标编码，如 {{ dlg.form.parentMetrics?.length ? dlg.form.parentMetrics.join(' + ') : 'M0001 + M0002' }}
-          </div>
+        <el-form-item label="计算逻辑" prop="calcLogicType">
+          <el-radio-group v-model="dlg.form.calcLogicType" disabled>
+            <el-radio value="SQL">SQL</el-radio>
+            <el-radio value="EXPR">Groovy</el-radio>
+          </el-radio-group>
+          <div v-if="dlg.form.metricLevel === 1" style="font-size:12px;color:#999;margin-top:2px">1级指标仅支持SQL</div>
         </el-form-item>
-        <el-form-item :label="dlg.form.calcLogicType === 'EXPR' ? 'Groovy 表达式' : 'SQL 表达式 (支持 #{slot} 占位符)'">
+
+        <template v-if="dlg.form.calcLogicType === 'EXPR'">
+          <el-form-item label="表达式构建">
+            <div class="expr-builder">
+              <div v-for="(row, idx) in dlg.form.exprRows" :key="idx" class="expr-row">
+                <el-select v-if="idx > 0" v-model="row.op" style="width:80px" placeholder="运算符" @change="buildExprText">
+                  <el-option value="+" label="+" />
+                  <el-option value="-" label="-" />
+                  <el-option value="*" label="*" />
+                  <el-option value="/" label="/" />
+                </el-select>
+                <span v-else style="width:80px;display:inline-block;text-align:center;color:#999">—</span>
+                <el-select v-model="row.metricCode" filterable style="flex:1" placeholder="选择上级指标" @change="buildExprText">
+                  <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
+                             :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
+                </el-select>
+                <el-button link type="danger" @click="removeExprRow(idx)" :disabled="dlg.form.exprRows.length <= 1">删除</el-button>
+              </div>
+              <el-button type="primary" link @click="addExprRow" style="margin-top:6px">+ 添加指标</el-button>
+            </div>
+          </el-form-item>
+          <el-form-item label="Groovy 表达式（自动生成）">
+            <el-input v-model="dlg.form.exprText" type="textarea" :rows="2" readonly />
+          </el-form-item>
+        </template>
+        <el-form-item v-else :label="'SQL 表达式 (支持 #{slot} 占位符)'">
           <el-input
-            v-if="dlg.form.calcLogicType === 'EXPR'"
-            v-model="dlg.form.exprText" type="textarea" :rows="4"
-            :placeholder="dlg.form.parentMetrics?.length ? dlg.form.parentMetrics.join(' + ') : '如 M0001 + M0002'"
-          />
-          <el-input
-            v-else
             ref="sqlInputRef"
             v-model="dlg.form.sqlText" type="textarea" :rows="6"
             placeholder="SELECT cust_id, AVG(bal) FROM t_xxx WHERE dt=:dataDate"
@@ -458,15 +463,17 @@ const sameCategory = computed(() => {
   return allMetrics.value.filter(m => categoryOf(m)[0] === g && m.metricCode !== detail.value.metricCode).slice(0, 10);
 });
 
+const detailLoading = ref(false);
 async function onPick(code) {
   if (!code) return;
   picked.value = code;
-  // 切换指标时清空上一条指标残留的试运行结果，避免误以为是当前指标的结果
   resetDetailTrial();
+  detailLoading.value = true;
   try {
     const r = await getMetricDetail(code);
     if (r) detail.value = r;
   } catch {}
+  finally { detailLoading.value = false; }
 }
 function onTreeClick(node) {
   if (node.isMetric) onPick(node.id);
@@ -563,20 +570,38 @@ const dlg = reactive({
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
     sqlText: '', exprText: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    parentMetrics: [],
+    exprRows: [{ op: '', metricCode: '' }],
     _category: '规模类'
   }
 });
 watch(() => dlg.form.metricLevel, (lvl) => {
   if (lvl === 1) dlg.form.calcLogicType = 'SQL';
   else if (lvl >= 2) dlg.form.calcLogicType = 'EXPR';
-  dlg.form.parentMetrics = [];
+  dlg.form.exprRows = [{ op: '', metricCode: '' }];
+  dlg.form.exprText = '';
 });
 const parentMetricOptions = computed(() => {
   const lvl = dlg.form.metricLevel;
   if (!lvl || lvl <= 1) return [];
   return allMetrics.value.filter(m => m.metricLevel === lvl - 1 && m.status === 'ACTIVE');
 });
+function addExprRow() {
+  dlg.form.exprRows.push({ op: '+', metricCode: '' });
+}
+function removeExprRow(idx) {
+  dlg.form.exprRows.splice(idx, 1);
+  if (idx === 0 && dlg.form.exprRows.length) dlg.form.exprRows[0].op = '';
+  buildExprText();
+}
+function buildExprText() {
+  const parts = [];
+  for (const row of dlg.form.exprRows) {
+    if (!row.metricCode) continue;
+    if (parts.length > 0 && row.op) parts.push(row.op);
+    parts.push(row.metricCode);
+  }
+  dlg.form.exprText = parts.join(' ');
+}
 function resetTrial() {
   dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] };
 }
@@ -596,7 +621,7 @@ function defaultForm() {
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
     sqlText: '', exprText: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    parentMetrics: [],
+    exprRows: [{ op: '', metricCode: '' }],
     _category: '规模类'
   };
 }
@@ -631,6 +656,21 @@ function addSlot() {
 
 async function onSave(targetStatus) {
   try { await formRef.value.validate(); } catch { return; }
+  if (targetStatus === 'ACTIVE' && dlg.form.calcLogicType === 'EXPR' && dlg.form.exprText) {
+    const codes = dlg.form.exprRows.filter(r => r.metricCode).map(r => r.metricCode);
+    const ops = dlg.form.exprRows.filter((r, i) => i > 0 && r.op).map(r => r.op);
+    if (codes.length < 2) {
+      return ElMessage.warning('Groovy 表达式至少需要两个指标');
+    }
+    if (ops.length !== codes.length - 1) {
+      return ElMessage.warning('Groovy 表达式运算符不完整，请检查每行的运算符');
+    }
+    for (const row of dlg.form.exprRows) {
+      if (row.metricCode && !parentMetricOptions.value.some(m => m.metricCode === row.metricCode)) {
+        return ElMessage.warning(`指标 ${row.metricCode} 不在上级已发布指标列表中`);
+      }
+    }
+  }
   dlg.saving = true;
   // V1.6 修复 Bug5：保存失败（如后端返回 400 / 业务错）时**绝不**关闭弹框，
   // 让用户能继续修正字段。错误消息由 http.js 拦截器统一 ElMessage 抛出。
@@ -847,6 +887,12 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
+.expr-builder {
+  width: 100%;
+  .expr-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+}
 .layout {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -855,7 +901,13 @@ onMounted(reload);
 .tree-col {
   padding: 16px;
   max-height: calc(100vh - 200px);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: auto;
+  &::-webkit-scrollbar { width: 6px; height: 6px; }
+  &::-webkit-scrollbar-thumb { background: #c0c4cc; border-radius: 3px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  :deep(.el-tree) { min-width: max-content; }
+  :deep(.el-tree-node__content) { white-space: nowrap; }
 }
 .card-h-mini {
   font-size: 14px; font-weight: 600;

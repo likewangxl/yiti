@@ -484,8 +484,12 @@ async function onSave(targetStatus) {
     persistMeta(dlg.scheme.schemeCode, dlg.scheme.applyScope, dlg.items);
     ElMessage.success(targetStatus === 'ACTIVE' ? '已发布' : '已保存为草稿');
     dlg.show = false;
+  } catch (e) {
+    ElMessage.error('保存失败：' + (e?.message || '未知错误'));
+  } finally {
+    dlg.saving = false;
     reload();
-  } catch {} finally { dlg.saving = false; }
+  }
 }
 
 // === 复制版本：基于现方案 items 创建一个 _vN 副本 ===
