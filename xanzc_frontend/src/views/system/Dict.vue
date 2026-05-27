@@ -91,7 +91,7 @@ import { listDictTypes, listDictItems } from '@/api/system';
 import { call } from '@/api/http';
 
 const dictKey   = (t) => t.dictType ?? t.code;
-const dictLabel = (t) => t.dictTypeLabel ?? t.label ?? t.dictType ?? t.code;
+const dictLabel = (t) => t.dictTypeLabel ?? t.remark ?? t.label ?? t.dictType ?? t.code;
 const isActive  = (r) => r.status === 'ACTIVE' || r.status === 0 || r.status === '启用';
 
 const types = ref(sysDictTypes);
