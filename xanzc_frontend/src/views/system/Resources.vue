@@ -118,6 +118,11 @@
           <span class="hint">数字越小越靠前</span>
         </el-form-item>
 
+        <el-form-item label="隐藏菜单">
+          <el-switch v-model="dlg.form.status" :active-value="1" :inactive-value="0" />
+          <span class="hint" style="margin-left:8px">开启后所有用户不可见</span>
+        </el-form-item>
+
         <el-form-item label="父节点">
           <span v-if="dlg.editing" class="hint">编辑模式不可改父节点</span>
           <span v-else-if="dlg.parent" class="hint">
@@ -234,6 +239,7 @@ function openEdit(row) {
     isMenu: 1,
     menuEndFlag: row.menuEndFlag || '1',
     menuRankNo: row.menuRankNo ?? 0,
+    status: row.status ?? 0,
     sysCode: row.sysCode || ''
   };
   dlg.show = true;
