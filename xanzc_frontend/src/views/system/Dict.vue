@@ -154,10 +154,9 @@ async function onSave() {
   const payload = { ...dlg.form, dictType: picked.value };
   try {
     if (dlg.editing) {
-      // 后端无明确 PUT 路由时回退到 POST upsert
-      await call('put', `/admin/sys/dicts/${picked.value}/items/${payload.code}`, { data: payload }, { ok: true });
+      await call('put', `/admin/sys/dicts/${dlg.editing.id}`, { data: payload }, { ok: true });
     } else {
-      await call('post', `/admin/sys/dicts/${picked.value}/items`, { data: payload }, { ok: true });
+      await call('post', '/admin/sys/dicts', { data: payload }, { ok: true });
     }
     ElMessage.success(dlg.editing ? '已更新' : '已新增');
     dlg.show = false;
