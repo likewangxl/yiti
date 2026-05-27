@@ -120,4 +120,22 @@ public class UserFacade implements UserApi {
         List<String> empIds = userRoleMapper.selectEmpIdsByRoleCodeAndOrg(roleCode, orgCode);
         return empIds != null ? empIds : new ArrayList<>();
     }
+
+    @Override
+    public List<UserDTO> getUsersByUsernames(List<String> usernames) {
+        if (usernames == null || usernames.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<PtUser> users = userMapper.selectByUsernames(usernames);
+        if (users == null) return new ArrayList<>();
+        List<UserDTO> results = new ArrayList<>();
+        for (PtUser user : users) {
+            UserDTO dto = getUserByEmpId(user.getUserId());
+            if (dto != null) {
+                dto.setUsername(user.getUsername());
+                results.add(dto);
+            }
+        }
+        return results;
+    }
 }

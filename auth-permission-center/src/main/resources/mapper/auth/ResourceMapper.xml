@@ -89,7 +89,7 @@
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PT_RESOURCE
-        WHERE ISMENU = 1
+        WHERE ISMENU = 1 AND STATUS = 0
         ORDER BY MENU_RANK_NO ASC
     </select>
 

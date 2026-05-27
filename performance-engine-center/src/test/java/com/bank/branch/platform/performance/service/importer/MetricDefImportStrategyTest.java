@@ -86,7 +86,7 @@ class MetricDefImportStrategyTest {
     void execute_allValid_callBatchOnce() {
         List<MetricDefImportRow> rows = new ArrayList<>();
         for (int i = 1; i <= 10; i++) {
-            rows.add(row(i, 1, "指标" + i, "M_C" + i, "规模类", 2, "select 1", 1, 1));
+            rows.add(row(i, 1, "指标" + i, "M_C" + i, "规模类", "AUTO", "select 1", "ACTIVE"));
         }
         MultipartFile file = writeExcel(rows);
 
@@ -105,8 +105,8 @@ class MetricDefImportStrategyTest {
     @DisplayName("metric_code 空 → 按 M_{indexNo:04d} 自动生成")
     void execute_emptyMetricCode_generates() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "存款余额", null, "规模类", 2, "select 1", 1, 1),
-                row(42, 2, "存款日均", "", "规模类", 2, "select 2", 2, 1));
+                row(1, 1, "存款余额", null, "规模类", "AUTO", "select 1", "ACTIVE"),
+                row(42, 2, "存款日均", "", "规模类", "AUTO", "select 2", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         strategy.execute(batch, file, ImportContext.EMPTY);
@@ -123,8 +123,8 @@ class MetricDefImportStrategyTest {
     @DisplayName("文件内 metric_code 重复 → 整批失败 + 不调用 service")
     void execute_duplicateMetricCodeInFile_throwsAllOrNone() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "A", "M_DUP", "规模类", 2, "select 1", 1, 1),
-                row(2, 1, "B", "M_DUP", "规模类", 2, "select 2", 1, 1));
+                row(1, 1, "A", "M_DUP", "规模类", "AUTO", "select 1", "ACTIVE"),
+                row(2, 1, "B", "M_DUP", "规模类", "AUTO", "select 2", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
@@ -139,10 +139,10 @@ class MetricDefImportStrategyTest {
     }
 
     @Test
-    @DisplayName("来源=1 → calc_mode=MANUAL / calc_logic_type=EXPR / exprText=calcRule，无需 sql")
-    void execute_source1_manualExpr() {
+    @DisplayName("2级指标 MANUAL → calc_logic_type=EXPR / exprText=calcRule")
+    void execute_level2_manual_expr() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "外部导入指标", "M_EXT", "规模类", 1, "外部填值即可", 1, 1));
+                row(1, 2, "派生指标", "M_EXT", "规模类", "MANUAL", "M0001 + M0002", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         strategy.execute(batch, file, ImportContext.EMPTY);
@@ -153,15 +153,15 @@ class MetricDefImportStrategyTest {
         CreateMetricDefCmd cmd = captor.getValue().get(0);
         assertThat(cmd.getCalcMode()).isEqualTo("MANUAL");
         assertThat(cmd.getCalcLogicType()).isEqualTo("EXPR");
-        assertThat(cmd.getExprText()).isEqualTo("外部填值即可");
+        assertThat(cmd.getExprText()).isEqualTo("M0001 + M0002");
         assertThat(cmd.getSqlText()).isNull();
     }
 
     @Test
-    @DisplayName("来源=2 → calc_mode=AUTO / calc_logic_type=SQL / sqlText=calcRule")
-    void execute_source2_autoSql() {
+    @DisplayName("1级指标 AUTO → calc_logic_type=SQL / sqlText=calcRule / calcFreq=DAY")
+    void execute_level1_autoSql() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "系统提取", "M_SYS", "效益类", 2, "select sum(x) from t", 2, 1));
+                row(1, 1, "系统提取", "M_SYS", "效益类", "AUTO", "select sum(x) from t", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         strategy.execute(batch, file, ImportContext.EMPTY);
@@ -173,7 +173,7 @@ class MetricDefImportStrategyTest {
         assertThat(cmd.getCalcMode()).isEqualTo("AUTO");
         assertThat(cmd.getCalcLogicType()).isEqualTo("SQL");
         assertThat(cmd.getSqlText()).isEqualTo("select sum(x) from t");
-        assertThat(cmd.getCalcFreq()).isEqualTo("MONTH");
+        assertThat(cmd.getCalcFreq()).isEqualTo("DAY");
         assertThat(cmd.getMetricCategory()).isEqualTo("效益类");
     }
 
@@ -181,7 +181,7 @@ class MetricDefImportStrategyTest {
     @DisplayName("V1.9：statusFlag=1 → cmd.status=ACTIVE，落库尊重 Excel 意图")
     void execute_statusFlag1_setsActive() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "启用指标", "M_S_ON", "规模类", 2, "select 1", 1, 1));
+                row(1, 1, "启用指标", "M_S_ON", "规模类", "AUTO", "select 1", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         strategy.execute(batch, file, ImportContext.EMPTY);
@@ -196,7 +196,7 @@ class MetricDefImportStrategyTest {
     @DisplayName("V1.9：statusFlag=0 → cmd.status=DISABLED，导入即停用")
     void execute_statusFlag0_setsDisabled() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "停用指标", "M_S_OFF", "规模类", 2, "select 1", 1, 0));
+                row(1, 1, "停用指标", "M_S_OFF", "规模类", "AUTO", "select 1", "DISABLED"));
         MultipartFile file = writeExcel(rows);
 
         strategy.execute(batch, file, ImportContext.EMPTY);
@@ -211,7 +211,7 @@ class MetricDefImportStrategyTest {
     @DisplayName("V1.9：导入指标 baseDim 默认 null（维度无关型指标）")
     void execute_baseDim_defaultsToNull() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "通用指标", "M_META", "规模类", 2, "select 1", 1, 1));
+                row(1, 1, "通用指标", "M_META", "规模类", "AUTO", "select 1", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         strategy.execute(batch, file, ImportContext.EMPTY);
@@ -228,7 +228,7 @@ class MetricDefImportStrategyTest {
     @DisplayName("来源=2 但 calcRule 空 → 整批失败")
     void execute_source2_emptyCalcRule_throws() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "缺SQL", "M_NOSQL", "规模类", 2, "", 1, 1));
+                row(1, 1, "缺SQL", "M_NOSQL", "规模类", "AUTO", "", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
@@ -240,10 +240,10 @@ class MetricDefImportStrategyTest {
     }
 
     @Test
-    @DisplayName("scheduleType=5 越界 → 整批失败")
-    void execute_invalidSchedule_throws() {
+    @DisplayName("calcMode 非法 → 整批失败")
+    void execute_invalidCalcMode_throws() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "X", "M_X", "规模类", 2, "select 1", 5, 1));
+                row(1, 1, "X", "M_X", "规模类", "INVALID", "select 1", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
@@ -257,7 +257,7 @@ class MetricDefImportStrategyTest {
     @DisplayName("statusFlag=2 越界 → 整批失败")
     void execute_invalidStatus_throws() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "X", "M_X", "规模类", 2, "select 1", 1, 2));
+                row(1, 1, "X", "M_X", "规模类", "AUTO", "select 1", "INVALID"));
         MultipartFile file = writeExcel(rows);
 
         assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
@@ -274,7 +274,7 @@ class MetricDefImportStrategyTest {
                 .thenReturn(new BatchUpsertMetricDefResult(0, 1, Collections.emptyList()));
 
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "已有指标名", "M_NEW_CODE", "规模类", 2, "select 1", 1, 1));
+                row(1, 1, "已有指标名", "M_NEW_CODE", "规模类", "AUTO", "select 1", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
@@ -294,11 +294,11 @@ class MetricDefImportStrategyTest {
                 .thenReturn(new BatchUpsertMetricDefResult(3, 2, Collections.emptyList()));
 
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "新A", "M_A", "规模类", 2, "select 1", 1, 1),
-                row(2, 1, "新B", "M_B", "规模类", 2, "select 1", 1, 1),
-                row(3, 1, "更C", "M_C", "规模类", 2, "select 1", 1, 1),
-                row(4, 1, "新D", "M_D", "规模类", 2, "select 1", 1, 1),
-                row(5, 1, "更E", "M_E", "规模类", 2, "select 1", 1, 1));
+                row(1, 1, "新A", "M_A", "规模类", "AUTO", "select 1", "ACTIVE"),
+                row(2, 1, "新B", "M_B", "规模类", "AUTO", "select 1", "ACTIVE"),
+                row(3, 1, "更C", "M_C", "规模类", "AUTO", "select 1", "ACTIVE"),
+                row(4, 1, "新D", "M_D", "规模类", "AUTO", "select 1", "ACTIVE"),
+                row(5, 1, "更E", "M_E", "规模类", "AUTO", "select 1", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
@@ -313,8 +313,8 @@ class MetricDefImportStrategyTest {
     @DisplayName("V1.11：文件内 metric_name 重复 → 整批失败 + 不调用 service")
     void execute_duplicateMetricNameInFile_throws() {
         List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "重名指标", "M_NAME_DUP_A", "规模类", 2, "select 1", 1, 1),
-                row(2, 1, "重名指标", "M_NAME_DUP_B", "规模类", 2, "select 2", 1, 1));
+                row(1, 1, "重名指标", "M_NAME_DUP_A", "规模类", "AUTO", "select 1", "ACTIVE"),
+                row(2, 1, "重名指标", "M_NAME_DUP_B", "规模类", "AUTO", "select 2", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
         assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
@@ -331,18 +331,17 @@ class MetricDefImportStrategyTest {
     // ===== fixture helpers =====
 
     private static MetricDefImportRow row(Integer indexNo, Integer level, String name, String code,
-                                          String category, Integer source, String rule,
-                                          Integer schedule, Integer status) {
+                                          String category, String calcMode, String rule,
+                                          String status) {
         MetricDefImportRow r = new MetricDefImportRow();
         r.setIndexNo(indexNo);
         r.setMetricLevel(level);
         r.setMetricName(name);
         r.setMetricCode(code);
         r.setMetricCategory(category);
-        r.setSourceType(source);
+        r.setCalcMode(calcMode);
         r.setCalcRule(rule);
-        r.setScheduleType(schedule);
-        r.setStatusFlag(status);
+        r.setStatus(status);
         return r;
     }
 
