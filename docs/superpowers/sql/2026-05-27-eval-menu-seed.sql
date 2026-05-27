@@ -1,0 +1,31 @@
+-- ============================================================
+-- 评价模块侧边栏菜单注册
+-- 日期: 2026-05-27
+-- 结构: 1 个父节点 M_GROUP_EVAL + 5 个子菜单
+-- ============================================================
+
+-- 1. 父节点：内部评价（排在绩效与考核后面，报表分析前面）
+-- 先把报表分析和系统设置的 RANK 往后挪
+UPDATE PT_RESOURCE SET MENU_RANK_NO = 3 WHERE RESOURCE_ID = 'M_GROUP_REPORT';
+UPDATE PT_RESOURCE SET MENU_RANK_NO = 4 WHERE RESOURCE_ID = 'M_GROUP_SYSTEM';
+
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, MENU_RANK_NO, STATUS)
+VALUES ('M_GROUP_EVAL', '#group/eval', 'GET', '内部评价', 1, '0', NULL, 2, 0);
+
+-- 2. 子菜单：5 个评价页面
+INSERT INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, MENU_RANK_NO, STATUS)
+VALUES
+('M_EVAL_TAGS',      '/eval/tags',      'GET', '标签管理', 1, '1', 'M_GROUP_EVAL', 1, 0),
+('M_EVAL_USER_TAGS', '/eval/user-tags', 'GET', '人员标签', 1, '1', 'M_GROUP_EVAL', 2, 0),
+('M_EVAL_RULES',     '/eval/rules',     'GET', '评价规则', 1, '1', 'M_GROUP_EVAL', 3, 0),
+('M_EVAL_TASKS',     '/eval/tasks',     'GET', '评价任务', 1, '1', 'M_GROUP_EVAL', 4, 0),
+('M_EVAL_MY_TASKS',  '/eval/my-tasks',  'GET', '我的评价', 1, '1', 'M_GROUP_EVAL', 5, 0);
+
+-- 3. 角色授权：R_ADMIN + R_BACK_TECH 授权全部 6 条菜单
+INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID)
+SELECT REPLACE(UUID(), '-', ''), 'R_ADMIN', RESOURCE_ID
+FROM PT_RESOURCE WHERE RESOURCE_ID IN ('M_GROUP_EVAL', 'M_EVAL_TAGS', 'M_EVAL_USER_TAGS', 'M_EVAL_RULES', 'M_EVAL_TASKS', 'M_EVAL_MY_TASKS');
+
+INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID)
+SELECT REPLACE(UUID(), '-', ''), 'R_BACK_TECH', RESOURCE_ID
+FROM PT_RESOURCE WHERE RESOURCE_ID IN ('M_GROUP_EVAL', 'M_EVAL_TAGS', 'M_EVAL_USER_TAGS', 'M_EVAL_RULES', 'M_EVAL_TASKS', 'M_EVAL_MY_TASKS');
