@@ -1,5 +1,7 @@
 package com.bank.branch.platform.performance.eval.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.eval.entity.EvalRuleGroup;
@@ -33,18 +35,21 @@ public class EvalScoreService {
     private final EvalTaskTargetMapper evalTaskTargetMapper;
     private final EvalRuleGroupMapper evalRuleGroupMapper;
     private final EvalUserTagMapper evalUserTagMapper;
+    private final OrgApi orgApi;
 
     @Autowired
     public EvalScoreService(EvalScoreMapper evalScoreMapper,
                             EvalTaskMapper evalTaskMapper,
                             EvalTaskTargetMapper evalTaskTargetMapper,
                             EvalRuleGroupMapper evalRuleGroupMapper,
-                            EvalUserTagMapper evalUserTagMapper) {
+                            EvalUserTagMapper evalUserTagMapper,
+                            OrgApi orgApi) {
         this.evalScoreMapper = evalScoreMapper;
         this.evalTaskMapper = evalTaskMapper;
         this.evalTaskTargetMapper = evalTaskTargetMapper;
         this.evalRuleGroupMapper = evalRuleGroupMapper;
         this.evalUserTagMapper = evalUserTagMapper;
+        this.orgApi = orgApi;
     }
 
     /**
@@ -85,9 +90,9 @@ public class EvalScoreService {
             throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, targetId);
         }
 
-        // 4. 解析评价人所属 group：查 target.ruleId 对应 groups，匹配评价人标签
+        // 4. 解析评价人所属 group：查 target.ruleId 对应 groups，匹配评价人标签或同部门
         List<EvalRuleGroup> groups = evalRuleGroupMapper.selectByRuleId(target.getRuleId());
-        Long matchedGroupId = resolveGroupId(groups, evalUserId);
+        Long matchedGroupId = resolveGroupId(groups, evalUserId, target.getBeEvalUserId());
         if (matchedGroupId == null) {
             throw new PerfException(PerfErrorCode.EVAL_NO_PERMISSION, evalUserId);
         }
@@ -131,28 +136,48 @@ public class EvalScoreService {
      * 根据规则组列表匹配评价人所属 groupId.
      *
      * <p>groupType=1：按标签匹配，查询评价人持有的评价人标签（tagType=2），与 group.evalTagId 比对。
-     * <p>groupType=2：部门员工组，暂跳过（返回 null 视为不匹配）。
+     * <p>groupType=2：部门员工组，通过 OrgApi 判断评价人与被评价人是否同部门。
      *
-     * @param groups     规则下所有评价人组
-     * @param evalUserId 评价人 USER_ID
+     * @param groups       规则下所有评价人组
+     * @param evalUserId   评价人 USER_ID
+     * @param beEvalUserId 被评价人 USER_ID
      * @return 匹配的 groupId，未匹配返回 null
      */
-    private Long resolveGroupId(List<EvalRuleGroup> groups, Long evalUserId) {
+    private Long resolveGroupId(List<EvalRuleGroup> groups, Long evalUserId, Long beEvalUserId) {
         if (groups == null || groups.isEmpty()) {
             return null;
         }
-        // 提前批量查询评价人的所有评价人标签（tagType=2），避免每组单独查一次
         List<Long> evalUserTagIds = evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2);
 
         for (EvalRuleGroup group : groups) {
             if (group.getGroupType() == 1) {
-                // 标签匹配：评价人需持有 group.evalTagId
                 if (group.getEvalTagId() != null && evalUserTagIds.contains(group.getEvalTagId())) {
                     return group.getGroupId();
                 }
+            } else if (group.getGroupType() == 2) {
+                // 部门员工组：评价人与被评价人同部门即匹配
+                if (isSameOrg(evalUserId, beEvalUserId)) {
+                    return group.getGroupId();
+                }
             }
-            // groupType=2 暂跳过
         }
         return null;
+    }
+
+    /**
+     * 判断两个用户是否属于同一部门.
+     */
+    private boolean isSameOrg(Long userIdA, Long userIdB) {
+        try {
+            OrgDTO orgA = orgApi.getUserMainOrg(String.valueOf(userIdA));
+            OrgDTO orgB = orgApi.getUserMainOrg(String.valueOf(userIdB));
+            if (orgA == null || orgB == null) {
+                return false;
+            }
+            return orgA.getOrgCode() != null && orgA.getOrgCode().equals(orgB.getOrgCode());
+        } catch (Exception e) {
+            log.warn("[EvalScoreService.isSameOrg] OrgApi 查询异常，降级为不匹配 userA={} userB={}", userIdA, userIdB, e);
+            return false;
+        }
     }
 }

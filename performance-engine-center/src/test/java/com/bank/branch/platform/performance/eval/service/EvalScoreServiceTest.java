@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.eval.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.eval.entity.EvalScore;
 import com.bank.branch.platform.performance.eval.entity.EvalTask;
@@ -45,6 +46,8 @@ class EvalScoreServiceTest {
     EvalRuleGroupMapper evalRuleGroupMapper;
     @Mock
     EvalUserTagMapper evalUserTagMapper;
+    @Mock
+    OrgApi orgApi;
 
     @InjectMocks
     EvalScoreService evalScoreService;
