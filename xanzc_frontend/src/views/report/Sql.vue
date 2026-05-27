@@ -70,17 +70,30 @@
           <span class="audit">· ✓ 已写入审计 TraceId {{ result.traceId }}</span>）
         </div>
       </div>
-      <el-table :data="result.data" size="default" stripe>
+      <el-table :data="pagedData" size="default" stripe border max-height="480">
+        <el-table-column type="index" label="#" width="50" fixed />
         <el-table-column
           v-for="c in result.columns" :key="c"
           :prop="c" :label="c"
+          :min-width="calcColWidth(c)"
           :align="isNumeric(c) ? 'right' : 'left'"
+          show-overflow-tooltip
         >
           <template #default="{ row }">
             <span :class="{ mono: isNumeric(c) }">{{ formatCell(row[c]) }}</span>
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager">
+        <el-pagination
+          v-model:current-page="resultPage"
+          v-model:page-size="resultPageSize"
+          :page-sizes="[20, 50, 100, 200]"
+          :total="result.data.length"
+          background
+          layout="total, sizes, prev, pager, next"
+        />
+      </div>
     </div>
 
     <!-- 历史记录 Dialog —— 点击行回填到 SQL 编辑器 -->
@@ -143,6 +156,24 @@ ORDER BY deposit_inc DESC LIMIT 10`);
 const whitelist = ref([]);
 const history = ref([]);
 const result = ref(null);
+const resultPage = ref(1);
+const resultPageSize = ref(20);
+const pagedData = computed(() => {
+  if (!result.value?.data) return [];
+  const start = (resultPage.value - 1) * resultPageSize.value;
+  return result.value.data.slice(start, start + resultPageSize.value);
+});
+function calcColWidth(col) {
+  const label = col || '';
+  const samples = (result.value?.data || []).slice(0, 20);
+  let maxLen = label.length;
+  for (const row of samples) {
+    const v = row[col];
+    const len = v != null ? String(v).length : 0;
+    if (len > maxLen) maxLen = len;
+  }
+  return Math.max(80, Math.min(maxLen * 12 + 24, 400));
+}
 const running = ref(false);
 
 const historyVisible = ref(false);
