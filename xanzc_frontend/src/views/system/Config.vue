@@ -169,7 +169,13 @@ const timeoutRules = ref([]);
 async function loadProcessDefs() {
   try {
     const r = await listProcessDefinitions();
-    processDefs.value = Array.isArray(r) ? r : [];
+    const all = Array.isArray(r) ? r : [];
+    const map = new Map();
+    for (const p of all) {
+      const k = p.processDefinitionKey;
+      if (!map.has(k) || (p.version || 0) > (map.get(k).version || 0)) map.set(k, p);
+    }
+    processDefs.value = [...map.values()];
     if (processDefs.value.length && !selectedPd.value) {
       selectedPd.value = processDefs.value[0].processDefinitionKey;
     }
