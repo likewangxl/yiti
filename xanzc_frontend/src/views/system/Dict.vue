@@ -222,8 +222,8 @@ async function onToggle(row) {
 
 <style lang="scss" scoped>
 .layout { display: grid; grid-template-columns: 220px 1fr; gap: 12px; }
-.types { padding: 0;
-  .hh { padding: 12px 14px; border-bottom: 1px solid $border-1; font-weight: 500; font-size: 13px; }
+.types { padding: 0; max-height: calc(100vh - 140px); overflow-y: auto;
+  .hh { padding: 12px 14px; border-bottom: 1px solid $border-1; font-weight: 500; font-size: 13px; position: sticky; top: 0; background: #fff; z-index: 1; }
   .ti { padding: 10px 14px; cursor: pointer; font-size: 12.5px;
     &:hover { background: $bg-soft; }
     &.active { background: $primary-100; color: $primary; }
