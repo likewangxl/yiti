@@ -73,9 +73,10 @@
       <el-table :data="pagedData" size="default" stripe border max-height="480">
         <el-table-column type="index" label="#" width="50" fixed />
         <el-table-column
-          v-for="c in result.columns" :key="c"
+          v-for="(c, idx) in result.columns" :key="c"
           :prop="c" :label="c"
           :min-width="calcColWidth(c)"
+          :fixed="idx < 2 ? true : false"
           :align="isNumeric(c) ? 'right' : 'left'"
           show-overflow-tooltip
         >
