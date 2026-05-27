@@ -9,8 +9,8 @@
       <el-form inline size="default">
         <el-form-item label="流程定义">
           <el-select v-model="selectedPd" filterable placeholder="选择流程" style="width:300px" @change="reload">
-            <el-option v-for="p in processDefs" :key="p.key" :value="p.key"
-                       :label="`${p.name || p.key} (${p.key})`" />
+            <el-option v-for="p in processDefs" :key="p.processDefinitionKey" :value="p.processDefinitionKey"
+                       :label="`${p.processDefinitionName || p.processDefinitionKey} (${p.processDefinitionKey})`" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -171,7 +171,7 @@ async function loadProcessDefs() {
     const r = await listProcessDefinitions();
     processDefs.value = Array.isArray(r) ? r : [];
     if (processDefs.value.length && !selectedPd.value) {
-      selectedPd.value = processDefs.value[0].key;
+      selectedPd.value = processDefs.value[0].processDefinitionKey;
     }
   } catch { processDefs.value = []; }
 }
