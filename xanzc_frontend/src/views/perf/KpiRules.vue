@@ -221,29 +221,29 @@ const f = reactive({ keyword: '', status: '', cycleType: '', dateRange: null });
 async function reload() {
   loading.value = true;
   try {
-    const r = await listKpiRules({
+    const raw = await listKpiRules({
       pageNo: pageNo.value, pageSize: pageSize.value,
       keyword: f.keyword || undefined,
       status: f.status || undefined,
       cycleType: f.cycleType || undefined
     });
-    if (Array.isArray(r)) {
-      // 三级排序：刚创建的（recentlyCreated 集合）置顶 → 已删除（INACTIVE/DISABLED）沉底 → 中间按时间倒序
-      // recentlyCreated 是 onSave create 成功后写入的本地 hint，避免后端 list 不返回 createdTime 时回归到 id 字典序
+    // raw 可能是 PageResult{records,total} 或数组（mock/unwrapPage 兼容）
+    const r = Array.isArray(raw) ? raw : (raw?.records || []);
+    const serverTotal = raw?.total ?? raw?.totalCount ?? r.length;
+    if (r.length || serverTotal === 0) {
       const isDel = (x) => x.status === 'INACTIVE' || x.status === 'DISABLED';
       const isNew = (x) => recentlyCreated.has(x.id) || recentlyCreated.has(x.schemeCode);
       rows.value = r.slice().sort((a, b) => {
         const na = isNew(a), nb = isNew(b);
-        if (na !== nb) return na ? -1 : 1;   // 新建 > 普通
+        if (na !== nb) return na ? -1 : 1;
         const da = isDel(a), db = isDel(b);
-        if (da !== db) return da ? 1 : -1;   // 普通 > 已删
+        if (da !== db) return da ? 1 : -1;
         const ta = a.createdTime || a.createTime || a.updatedTime || '';
         const tb = b.createdTime || b.createTime || b.updatedTime || '';
         if (ta || tb) return tb > ta ? 1 : (tb < ta ? -1 : 0);
-        // 最后兜底：保持后端原顺序（不再按 UUID 排，避免随机）
         return 0;
       });
-      total.value = Math.max(total.value, (pageNo.value - 1) * pageSize.value + r.length);
+      total.value = serverTotal;
       // list 不返回 items；并发拉详情补 itemCount + 缓存到 row 上避免编辑时再拉
       Promise.all(rows.value.map(row =>
         getKpiSchemeDetail(row.id || row.schemeCode)
