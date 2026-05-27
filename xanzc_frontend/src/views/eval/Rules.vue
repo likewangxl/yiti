@@ -156,6 +156,14 @@
                   </div>
                 </template>
               </el-table-column>
+              <el-table-column label="评分方式" width="130">
+                <template #default="{ row }">
+                  <el-select v-model="row.scoreMode" size="small" style="width: 100%">
+                    <el-option :value="1" label="数值打分" />
+                    <el-option :value="2" label="等级打分" />
+                  </el-select>
+                </template>
+              </el-table-column>
               <el-table-column label="排序" width="100">
                 <template #default="{ row }">
                   <el-input-number
@@ -234,6 +242,11 @@
           </el-table-column>
           <el-table-column prop="weight" label="权重(%)" width="100">
             <template #default="{ row }">{{ row.weight }}%</template>
+          </el-table-column>
+          <el-table-column label="评分方式" width="110">
+            <template #default="{ row }">
+              {{ row.scoreMode === 2 ? '等级打分' : '数值打分' }}
+            </template>
           </el-table-column>
           <el-table-column prop="sortOrder" label="排序" width="80" />
         </el-table>
@@ -393,6 +406,7 @@ const openEditDialog = async (ruleId) => {
       groupType: g.groupType ?? 1,
       evalTagId: g.evalTagId ?? null,
       weight: g.weight ?? 0,
+      scoreMode: g.scoreMode ?? 1,
       sortOrder: g.sortOrder ?? 0,
     }))
   } catch (e) {
@@ -415,6 +429,7 @@ const addGroup = () => {
     groupType: 1,
     evalTagId: null,
     weight: 0,
+    scoreMode: 1,
     sortOrder: formData.groups.length + 1,
   })
 }
@@ -450,6 +465,7 @@ const handleSave = async () => {
         groupType: g.groupType,
         evalTagId: g.groupType === 1 ? g.evalTagId : null,
         weight: g.weight,
+        scoreMode: g.scoreMode ?? 1,
         sortOrder: g.sortOrder,
       })),
     }

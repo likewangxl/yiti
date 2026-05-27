@@ -76,13 +76,14 @@ class EvalScoreServiceTest {
         target.setRuleId(200L);
         when(evalTaskTargetMapper.selectById(targetId)).thenReturn(target);
 
-        // groupType=1，evalTagId=50，评价人持有该标签
+        // groupType=1，evalTagId=50，评价人持有该标签，数值打分
         com.bank.branch.platform.performance.eval.entity.EvalRuleGroup group =
                 new com.bank.branch.platform.performance.eval.entity.EvalRuleGroup();
         group.setGroupId(300L);
         group.setRuleId(200L);
         group.setGroupType(1);
         group.setEvalTagId(50L);
+        group.setScoreMode(1);
         when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
 
         // 评价人持有 tagId=50（评价人标签 tagType=2）
@@ -197,6 +198,7 @@ class EvalScoreServiceTest {
         group.setRuleId(200L);
         group.setGroupType(1);
         group.setEvalTagId(50L);
+        group.setScoreMode(1);
         when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
 
         when(evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2))
@@ -209,5 +211,90 @@ class EvalScoreServiceTest {
                 .isInstanceOf(PerfException.class)
                 .extracting(e -> ((PerfException) e).getErrorCode())
                 .isEqualTo(PerfErrorCode.EVAL_SCORE_DUPLICATE);
+    }
+
+    // ─────────────────────────────────────────────
+    // 7. 等级打分模式：合法等级分（95）→ 成功
+    // ─────────────────────────────────────────────
+
+    @Test
+    void submitScore_gradeMode_validGradeScore_success() {
+        Long taskId = 1L;
+        Long targetId = 10L;
+        Long evalUserId = 100L;
+
+        EvalTask task = new EvalTask();
+        task.setTaskId(taskId);
+        task.setStatus(0);
+        task.setEndTime(LocalDateTime.now().plusDays(1));
+        when(evalTaskMapper.selectById(taskId)).thenReturn(task);
+
+        EvalTaskTarget target = new EvalTaskTarget();
+        target.setTargetId(targetId);
+        target.setTaskId(taskId);
+        target.setRuleId(200L);
+        when(evalTaskTargetMapper.selectById(targetId)).thenReturn(target);
+
+        com.bank.branch.platform.performance.eval.entity.EvalRuleGroup group =
+                new com.bank.branch.platform.performance.eval.entity.EvalRuleGroup();
+        group.setGroupId(300L);
+        group.setRuleId(200L);
+        group.setGroupType(1);
+        group.setEvalTagId(50L);
+        group.setScoreMode(2); // 等级打分
+        when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
+
+        when(evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2))
+                .thenReturn(List.of(50L));
+        when(evalScoreMapper.countByTargetIdAndEvalUserId(targetId, evalUserId)).thenReturn(0);
+        when(evalScoreMapper.insert(any(EvalScore.class))).thenReturn(1);
+
+        // 95 = "比较满意"，是合法等级分
+        evalScoreService.submitScore(taskId, targetId, evalUserId, 95);
+
+        ArgumentCaptor<EvalScore> captor = ArgumentCaptor.forClass(EvalScore.class);
+        verify(evalScoreMapper).insert(captor.capture());
+        assertThat(captor.getValue().getScore()).isEqualTo(95);
+    }
+
+    // ─────────────────────────────────────────────
+    // 8. 等级打分模式：非法分值（80）→ EVAL_SCORE_OUT_OF_RANGE
+    // ─────────────────────────────────────────────
+
+    @Test
+    void submitScore_gradeMode_invalidGradeScore_throwsOutOfRange() {
+        Long taskId = 1L;
+        Long targetId = 10L;
+        Long evalUserId = 100L;
+
+        EvalTask task = new EvalTask();
+        task.setTaskId(taskId);
+        task.setStatus(0);
+        task.setEndTime(LocalDateTime.now().plusDays(1));
+        when(evalTaskMapper.selectById(taskId)).thenReturn(task);
+
+        EvalTaskTarget target = new EvalTaskTarget();
+        target.setTargetId(targetId);
+        target.setTaskId(taskId);
+        target.setRuleId(200L);
+        when(evalTaskTargetMapper.selectById(targetId)).thenReturn(target);
+
+        com.bank.branch.platform.performance.eval.entity.EvalRuleGroup group =
+                new com.bank.branch.platform.performance.eval.entity.EvalRuleGroup();
+        group.setGroupId(300L);
+        group.setRuleId(200L);
+        group.setGroupType(1);
+        group.setEvalTagId(50L);
+        group.setScoreMode(2); // 等级打分
+        when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
+
+        when(evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2))
+                .thenReturn(List.of(50L));
+
+        // 80 不在 {100, 95, 85, 75, 59} 中
+        assertThatThrownBy(() -> evalScoreService.submitScore(taskId, targetId, evalUserId, 80))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.EVAL_SCORE_OUT_OF_RANGE);
     }
 }

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 评价打分服务.
@@ -29,6 +30,9 @@ import java.util.List;
 @Slf4j
 @Service
 public class EvalScoreService {
+
+    /** 等级打分模式下允许的固定分值：非常满意100/比较满意95/满意85/一般75/不满意59. */
+    private static final Set<Integer> GRADE_SCORES = Set.of(100, 95, 85, 75, 59);
 
     private final EvalScoreMapper evalScoreMapper;
     private final EvalTaskMapper evalTaskMapper;
@@ -92,9 +96,15 @@ public class EvalScoreService {
 
         // 4. 解析评价人所属 group：查 target.ruleId 对应 groups，匹配评价人标签或同部门
         List<EvalRuleGroup> groups = evalRuleGroupMapper.selectByRuleId(target.getRuleId());
-        Long matchedGroupId = resolveGroupId(groups, evalUserId, target.getBeEvalUserId());
-        if (matchedGroupId == null) {
+        EvalRuleGroup matchedGroup = resolveGroup(groups, evalUserId, target.getBeEvalUserId());
+        if (matchedGroup == null) {
             throw new PerfException(PerfErrorCode.EVAL_NO_PERMISSION, evalUserId);
+        }
+
+        // 4.1 等级打分模式：分数必须为预设等级值之一
+        if (matchedGroup.getScoreMode() != null && matchedGroup.getScoreMode() == 2
+                && !GRADE_SCORES.contains(score)) {
+            throw new PerfException(PerfErrorCode.EVAL_SCORE_OUT_OF_RANGE, score);
         }
 
         // 5. 唯一性校验：同一 target + evalUser 不可重复打分
@@ -108,13 +118,13 @@ public class EvalScoreService {
         evalScore.setTaskId(taskId);
         evalScore.setTargetId(targetId);
         evalScore.setEvalUserId(evalUserId);
-        evalScore.setGroupId(matchedGroupId);
+        evalScore.setGroupId(matchedGroup.getGroupId());
         evalScore.setScore(score);
         evalScore.setSubmitTime(LocalDateTime.now());
         evalScoreMapper.insert(evalScore);
 
-        log.info("[EvalScoreService.submitScore] 打分成功 taskId={} targetId={} evalUserId={} score={} groupId={}",
-                taskId, targetId, evalUserId, score, matchedGroupId);
+        log.info("[EvalScoreService.submitScore] 打分成功 taskId={} targetId={} evalUserId={} score={} groupId={} scoreMode={}",
+                taskId, targetId, evalUserId, score, matchedGroup.getGroupId(), matchedGroup.getScoreMode());
     }
 
     /**
@@ -133,7 +143,21 @@ public class EvalScoreService {
     // ──────────────────────────────────────────────────────────
 
     /**
-     * 根据规则组列表匹配评价人所属 groupId.
+     * 解析当前评价人对某被评价人适用的评分方式.
+     *
+     * @param ruleId       规则ID
+     * @param evalUserId   评价人 USER_ID
+     * @param beEvalUserId 被评价人 USER_ID
+     * @return 评分方式（1=数值, 2=等级），无匹配时返回 1（默认数值）
+     */
+    public Integer resolveScoreModeForUser(Long ruleId, Long evalUserId, Long beEvalUserId) {
+        List<EvalRuleGroup> groups = evalRuleGroupMapper.selectByRuleId(ruleId);
+        EvalRuleGroup matched = resolveGroup(groups, evalUserId, beEvalUserId);
+        return (matched != null && matched.getScoreMode() != null) ? matched.getScoreMode() : 1;
+    }
+
+    /**
+     * 根据规则组列表匹配评价人所属组.
      *
      * <p>groupType=1：按标签匹配，查询评价人持有的评价人标签（tagType=2），与 group.evalTagId 比对。
      * <p>groupType=2：部门员工组，通过 OrgApi 判断评价人与被评价人是否同部门。
@@ -141,9 +165,9 @@ public class EvalScoreService {
      * @param groups       规则下所有评价人组
      * @param evalUserId   评价人 USER_ID
      * @param beEvalUserId 被评价人 USER_ID
-     * @return 匹配的 groupId，未匹配返回 null
+     * @return 匹配的评价人组实体，未匹配返回 null
      */
-    private Long resolveGroupId(List<EvalRuleGroup> groups, Long evalUserId, Long beEvalUserId) {
+    private EvalRuleGroup resolveGroup(List<EvalRuleGroup> groups, Long evalUserId, Long beEvalUserId) {
         if (groups == null || groups.isEmpty()) {
             return null;
         }
@@ -152,12 +176,11 @@ public class EvalScoreService {
         for (EvalRuleGroup group : groups) {
             if (group.getGroupType() == 1) {
                 if (group.getEvalTagId() != null && evalUserTagIds.contains(group.getEvalTagId())) {
-                    return group.getGroupId();
+                    return group;
                 }
             } else if (group.getGroupType() == 2) {
-                // 部门员工组：评价人与被评价人同部门即匹配
                 if (isSameOrg(evalUserId, beEvalUserId)) {
-                    return group.getGroupId();
+                    return group;
                 }
             }
         }

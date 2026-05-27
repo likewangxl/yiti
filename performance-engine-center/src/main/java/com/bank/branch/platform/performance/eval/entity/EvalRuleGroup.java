@@ -25,4 +25,6 @@ public class EvalRuleGroup {
     private BigDecimal weight;
     /** 排序. */
     private Integer sortOrder;
+    /** 评分方式：1=数值打分, 2=等级打分. */
+    private Integer scoreMode;
 }

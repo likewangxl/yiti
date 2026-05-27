@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.eval.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -23,4 +24,7 @@ public class EvalTaskTarget {
     private Long ruleId;
     /** 最终得分（计算后填入）. */
     private BigDecimal finalScore;
+    /** 当前评价人适用的评分方式（非DB列，由接口动态填充）. */
+    @TableField(exist = false)
+    private Integer scoreMode;
 }

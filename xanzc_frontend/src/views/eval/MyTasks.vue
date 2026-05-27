@@ -136,20 +136,41 @@
         label-width="80px"
       >
         <el-form-item label="评分" prop="score">
-          <div class="score-slider-wrap">
-            <el-slider
-              v-model="scoreForm.score"
-              :min="10"
-              :max="100"
-              :step="1"
-              show-input
-              :show-input-controls="true"
-              style="flex: 1"
-            />
-          </div>
-          <div class="score-hint">
-            <span :class="scoreHintClass">{{ scoreHintText }}</span>
-          </div>
+          <!-- 数值打分模式 -->
+          <template v-if="scoreDialog.currentScoreMode === 1">
+            <div class="score-slider-wrap">
+              <el-slider
+                v-model="scoreForm.score"
+                :min="10"
+                :max="100"
+                :step="1"
+                show-input
+                :show-input-controls="true"
+                style="flex: 1"
+              />
+            </div>
+            <div class="score-hint">
+              <span :class="scoreHintClass">{{ scoreHintText }}</span>
+            </div>
+          </template>
+
+          <!-- 等级打分模式 -->
+          <template v-else>
+            <div class="level-options">
+              <div
+                v-for="option in LEVEL_OPTIONS"
+                :key="option.label"
+                :class="['level-btn', `level-btn--${option.type}`, { 'level-btn--selected': scoreForm.selectedLevel === option.label }]"
+                @click="selectLevel(option)"
+              >
+                <span class="level-name">{{ option.label }}</span>
+                <span class="level-score">{{ option.score }} 分</span>
+              </div>
+            </div>
+            <div v-if="scoreForm.selectedLevel" class="score-hint">
+              <span class="hint-primary">已选：{{ scoreForm.selectedLevel }}（{{ scoreForm.score }} 分）</span>
+            </div>
+          </template>
         </el-form-item>
       </el-form>
 
@@ -325,21 +346,43 @@ const scoreDialog = reactive({
   submitting: false,
   targetId: null,
   targetName: '',
-  taskId: null
+  taskId: null,
+  currentScoreMode: 1   // 1=数值打分 2=等级打分
 })
 
 const scoreFormRef = ref(null)
 
+/** 等级打分选项：等级名 -> 对应分值 */
+const LEVEL_OPTIONS = [
+  { label: '非常满意', score: 100, type: 'success' },
+  { label: '比较满意', score: 95,  type: 'primary' },
+  { label: '满意',     score: 85,  type: 'primary' },
+  { label: '一般',     score: 75,  type: 'warning' },
+  { label: '不满意',   score: 59,  type: 'danger'  },
+]
+
 const scoreForm = reactive({
-  score: 80
+  score: 80,
+  selectedLevel: null   // 等级打分模式下选中的等级 label
 })
 
 const scoreRules = {
   score: [
-    { required: true, message: '请设置评分', trigger: 'change' },
     {
       validator: (rule, value, callback) => {
-        if (value < 10 || value > 100) {
+        // 等级打分模式：检查是否已选等级
+        if (scoreDialog.currentScoreMode === 2) {
+          if (!scoreForm.selectedLevel) {
+            callback(new Error('请选择评价等级'))
+          } else {
+            callback()
+          }
+          return
+        }
+        // 数值打分模式
+        if (value === null || value === undefined) {
+          callback(new Error('请设置评分'))
+        } else if (value < 10 || value > 100) {
           callback(new Error('评分范围 10～100'))
         } else {
           callback()
@@ -373,7 +416,9 @@ function openScoreDialog(row) {
   scoreDialog.targetId = row.targetId
   scoreDialog.targetName = row.beEvalUserName || `用户 ${row.beEvalUserId}`
   scoreDialog.taskId = scoringView.task.taskId
-  scoreForm.score = 80
+  scoreDialog.currentScoreMode = row.scoreMode ?? 1
+  scoreForm.score = scoreDialog.currentScoreMode === 2 ? null : 80
+  scoreForm.selectedLevel = null
   scoreDialog.visible = true
 }
 
@@ -381,6 +426,13 @@ function openScoreDialog(row) {
 function resetScoreDialog() {
   scoreFormRef.value?.clearValidate()
   scoreForm.score = 80
+  scoreForm.selectedLevel = null
+}
+
+/** 等级打分：点击某等级，自动映射分数 */
+function selectLevel(option) {
+  scoreForm.selectedLevel = option.label
+  scoreForm.score = option.score
 }
 
 /** 提交评分 */
@@ -557,6 +609,69 @@ $danger: #e53e3e;
     .hint-primary { color: $primary; }
     .hint-warning { color: #d46b08; }
     .hint-danger  { color: $danger; }
+  }
+
+  /* 等级打分按钮组 */
+  .level-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .level-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+
+    .level-name {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .level-score {
+      font-size: 13px;
+      opacity: 0.75;
+    }
+
+    // 各等级默认态（浅色背景）
+    &--success {
+      background: #f0fdf4;
+      color: #15803d;
+      border-color: #bbf7d0;
+      &:hover { background: #dcfce7; border-color: #86efac; }
+      &.level-btn--selected { background: #16a34a; color: #fff; border-color: #16a34a; .level-score { opacity: 0.9; } }
+    }
+
+    &--primary {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-color: #bfdbfe;
+      &:hover { background: #dbeafe; border-color: #93c5fd; }
+      &.level-btn--selected { background: $primary; color: #fff; border-color: $primary; .level-score { opacity: 0.9; } }
+    }
+
+    &--warning {
+      background: #fffbeb;
+      color: #b45309;
+      border-color: #fde68a;
+      &:hover { background: #fef3c7; border-color: #fcd34d; }
+      &.level-btn--selected { background: #d97706; color: #fff; border-color: #d97706; .level-score { opacity: 0.9; } }
+    }
+
+    &--danger {
+      background: #fff1f2;
+      color: #be123c;
+      border-color: #fecdd3;
+      &:hover { background: #ffe4e6; border-color: #fda4af; }
+      &.level-btn--selected { background: $danger; color: #fff; border-color: $danger; .level-score { opacity: 0.9; } }
+    }
   }
 }
 </style>

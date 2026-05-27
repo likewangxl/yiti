@@ -89,15 +89,25 @@ public class EvalScoreController {
     /**
      * 按任务查询待评价人员列表.
      *
+     * <p>每条记录动态填充 scoreMode 字段，表示当前登录用户对该被评价人适用的评分方式
+     * （1=数值打分, 2=等级打分），前端据此切换打分 UI。</p>
+     *
      * @param taskId 任务ID（路径参数）
-     * @return 该任务下的被评价人明细列表
+     * @return 该任务下的被评价人明细列表（含 scoreMode）
      */
     @GetMapping("/my-tasks/{taskId}/targets")
     @Operation(summary = "按任务查询待评价人员列表")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.READ)
     public ResponseWrapper<List<EvalTaskTarget>> targets(@PathVariable("taskId") Long taskId) {
-        log.debug("[EvalScoreController.targets] taskId={}", taskId);
-        return ResponseWrapper.success(evalTaskService.getTargetsByTaskId(taskId));
+        String empIdStr = currentUserApi.getCurrentEmpId();
+        Long evalUserId = Long.parseLong(empIdStr);
+        log.debug("[EvalScoreController.targets] taskId={} evalUserId={}", taskId, evalUserId);
+        List<EvalTaskTarget> targets = evalTaskService.getTargetsByTaskId(taskId);
+        for (EvalTaskTarget t : targets) {
+            t.setScoreMode(evalScoreService.resolveScoreModeForUser(
+                    t.getRuleId(), evalUserId, t.getBeEvalUserId()));
+        }
+        return ResponseWrapper.success(targets);
     }
 
     /**

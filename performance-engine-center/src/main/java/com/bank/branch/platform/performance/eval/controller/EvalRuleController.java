@@ -61,6 +61,8 @@ public class EvalRuleController {
         private BigDecimal weight;
         /** 排序序号. */
         private Integer sortOrder;
+        /** 评分方式：1=数值打分（默认）, 2=等级打分. */
+        private Integer scoreMode;
     }
 
     /**
@@ -203,7 +205,8 @@ public class EvalRuleController {
                         r.getGroupType(),
                         r.getEvalTagId(),
                         r.getWeight(),
-                        r.getSortOrder()))
+                        r.getSortOrder(),
+                        r.getScoreMode()))
                 .collect(Collectors.toList());
     }
 }

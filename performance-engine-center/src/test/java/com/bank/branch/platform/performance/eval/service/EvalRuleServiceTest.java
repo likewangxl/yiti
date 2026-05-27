@@ -35,8 +35,8 @@ class EvalRuleServiceTest {
     /** 构造权重之和恰好为 100 的两组参数 */
     private List<EvalRuleService.GroupParam> validGroups() {
         return List.of(
-                new EvalRuleService.GroupParam(1, 10L, new BigDecimal("60.00"), 1),
-                new EvalRuleService.GroupParam(2, null, new BigDecimal("40.00"), 2)
+                new EvalRuleService.GroupParam(1, 10L, new BigDecimal("60.00"), 1, 1),
+                new EvalRuleService.GroupParam(2, null, new BigDecimal("40.00"), 2, 2)
         );
     }
 
@@ -64,8 +64,8 @@ class EvalRuleServiceTest {
     void create_whenWeightSumInvalid_throws40052() {
         // given：两组权重之和 = 90，不等于 100
         List<EvalRuleService.GroupParam> badGroups = List.of(
-                new EvalRuleService.GroupParam(1, 10L, new BigDecimal("50.00"), 1),
-                new EvalRuleService.GroupParam(2, null, new BigDecimal("40.00"), 2)
+                new EvalRuleService.GroupParam(1, 10L, new BigDecimal("50.00"), 1, 1),
+                new EvalRuleService.GroupParam(2, null, new BigDecimal("40.00"), 2, 1)
         );
 
         // when/then

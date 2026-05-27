@@ -54,6 +54,8 @@ public class EvalRuleService {
         private BigDecimal weight;
         /** 排序序号. */
         private Integer sortOrder;
+        /** 评分方式：1=数值打分（默认）, 2=等级打分. */
+        private Integer scoreMode;
     }
 
     // =============================================
@@ -238,6 +240,7 @@ public class EvalRuleService {
             g.setEvalTagId(p.getEvalTagId());
             g.setWeight(p.getWeight());
             g.setSortOrder(p.getSortOrder());
+            g.setScoreMode(p.getScoreMode() != null ? p.getScoreMode() : 1);
             return g;
         }).collect(Collectors.toList());
     }
