@@ -480,6 +480,12 @@ async function onSave(targetStatus) {
         } catch {}
       }
     }
+    // 发布时调 publishKpiScheme
+    if (targetStatus === 'ACTIVE' && schemeId) {
+      try { await publishKpiScheme(schemeId, '前端发布'); } catch (e) {
+        ElMessage.warning('方案已保存但发布失败：' + (e?.message || ''));
+      }
+    }
     // 持久化 applyScope + 各 item formula 到 localStorage（后端字段联调前的临时方案）
     persistMeta(dlg.scheme.schemeCode, dlg.scheme.applyScope, dlg.items);
     ElMessage.success(targetStatus === 'ACTIVE' ? '已发布' : '已保存为草稿');
