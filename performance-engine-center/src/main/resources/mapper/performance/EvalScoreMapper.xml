@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalScoreMapper">
+    <select id="selectByTargetId" resultType="com.bank.branch.platform.performance.eval.entity.EvalScore">
+        SELECT score_id, task_id, target_id, eval_user_id, group_id, score, submit_time FROM EVAL_SCORE WHERE target_id = #{targetId}
+    </select>
+
+    <select id="selectByTaskIdAndEvalUserId" resultType="com.bank.branch.platform.performance.eval.entity.EvalScore">
+        SELECT score_id, task_id, target_id, eval_user_id, group_id, score, submit_time FROM EVAL_SCORE WHERE task_id = #{taskId} AND eval_user_id = #{evalUserId}
+    </select>
+
+    <select id="countByTargetIdAndEvalUserId" resultType="int">
+        SELECT COUNT(*) FROM EVAL_SCORE WHERE target_id = #{targetId} AND eval_user_id = #{evalUserId}
+    </select>
+</mapper>

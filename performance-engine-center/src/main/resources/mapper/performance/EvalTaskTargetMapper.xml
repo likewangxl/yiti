@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalTaskTargetMapper">
+    <select id="selectByTaskId" resultType="com.bank.branch.platform.performance.eval.entity.EvalTaskTarget">
+        SELECT target_id, task_id, be_eval_user_id, rule_id, final_score FROM EVAL_TASK_TARGET WHERE task_id = #{taskId}
+    </select>
+
+    <insert id="batchInsert">
+        INSERT INTO EVAL_TASK_TARGET (task_id, be_eval_user_id, rule_id) VALUES
+        <foreach collection="list" item="item" separator=",">(#{item.taskId}, #{item.beEvalUserId}, #{item.ruleId})</foreach>
+    </insert>
+
+    <update id="updateFinalScore">
+        UPDATE EVAL_TASK_TARGET SET final_score = #{finalScore} WHERE target_id = #{targetId}
+    </update>
+</mapper>

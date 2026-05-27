@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalRuleMapper">
+    <sql id="BASE_COLUMNS">rule_id, rule_name, be_eval_tag_id, status, create_time, update_time</sql>
+
+    <select id="selectByBeEvalTagId" resultType="com.bank.branch.platform.performance.eval.entity.EvalRule">
+        SELECT <include refid="BASE_COLUMNS"/> FROM EVAL_RULE WHERE be_eval_tag_id = #{beEvalTagId} LIMIT 1
+    </select>
+
+    <select id="selectByCondition" resultType="com.bank.branch.platform.performance.eval.entity.EvalRule">
+        SELECT <include refid="BASE_COLUMNS"/> FROM EVAL_RULE
+        <where>
+            <if test="keyword != null and keyword != ''">AND rule_name LIKE CONCAT('%', #{keyword}, '%')</if>
+        </where>
+        ORDER BY rule_id ASC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByCondition" resultType="long">
+        SELECT COUNT(*) FROM EVAL_RULE
+        <where>
+            <if test="keyword != null and keyword != ''">AND rule_name LIKE CONCAT('%', #{keyword}, '%')</if>
+        </where>
+    </select>
+</mapper>

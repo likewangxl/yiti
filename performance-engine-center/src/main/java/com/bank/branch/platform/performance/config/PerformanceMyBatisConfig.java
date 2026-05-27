@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
  * <p>扫描本模块 com.bank.branch.platform.performance.mapper 下全部 Mapper 接口.
  */
 @Configuration
-@MapperScan("com.bank.branch.platform.performance.mapper")
+@MapperScan({"com.bank.branch.platform.performance.mapper",
+             "com.bank.branch.platform.performance.eval.mapper"})
 public class PerformanceMyBatisConfig {
 }
