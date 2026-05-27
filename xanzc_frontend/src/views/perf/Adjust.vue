@@ -342,6 +342,48 @@
           </el-col>
         </el-row>
 
+        <!-- 余额预览 -->
+        <div v-if="preview.loaded" class="preview-section" v-loading="preview.loading">
+          <el-alert v-if="!preview.loading && preview.data && !preview.data.hasData"
+                    type="warning" :closable="false" style="margin-bottom:12px"
+                    title="未查询到该客户/账号的余额数据，不允许提交审批" />
+          <div class="card-h"><div class="title">余额概览</div></div>
+          <el-row :gutter="16" style="padding:12px 0">
+            <el-col :span="12" v-if="preview.data?.depositSummary">
+              <div class="bal-card">
+                <div class="bal-title">存款</div>
+                <table class="bal-table">
+                  <tr><td>当前余额(人民币)</td><td class="num">{{ fmtAmt(preview.data.depositSummary.currBalRmb) }}</td></tr>
+                  <tr><td>当月日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.depositSummary.currMAvgBalRmb) }}</td></tr>
+                  <tr><td>当年日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.depositSummary.currYAvgBalRmb) }}</td></tr>
+                </table>
+              </div>
+            </el-col>
+            <el-col :span="12" v-if="preview.data?.loanSummary">
+              <div class="bal-card">
+                <div class="bal-title">贷款</div>
+                <table class="bal-table">
+                  <tr><td>当前余额(人民币)</td><td class="num">{{ fmtAmt(preview.data.loanSummary.currBalRmb) }}</td></tr>
+                  <tr><td>当月日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.loanSummary.currMAvgBalRmb) }}</td></tr>
+                  <tr><td>当年日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.loanSummary.currYAvgBalRmb) }}</td></tr>
+                </table>
+              </div>
+            </el-col>
+          </el-row>
+          <template v-if="preview.data?.allotRelaList?.length">
+            <div class="card-h"><div class="title">原业绩分配</div></div>
+            <el-table :data="preview.data.allotRelaList" size="small" border style="margin-bottom:12px">
+              <el-table-column prop="crmAllocaterId" label="分配人" width="120" />
+              <el-table-column prop="allotId" label="分配标的" min-width="140" show-overflow-tooltip />
+              <el-table-column prop="allotBizTypeCd" label="业务类型" width="100" />
+              <el-table-column prop="allotModeCd" label="分配方式" width="90" />
+              <el-table-column prop="dvpRatio" label="分配比例" width="100" />
+              <el-table-column prop="effDt" label="生效日期" width="110" />
+              <el-table-column prop="expireDt" label="失效日期" width="110" />
+            </el-table>
+          </template>
+        </div>
+
         <div class="card-h">
           <div class="title">分配明细</div>
           <span class="weight-sum" :class="{ ok: totalPct === 100 }">
@@ -443,7 +485,9 @@
           <el-button type="danger" :loading="dlg.reviewSaving" @click="onDlgReviewAction('REJECT')">驳回</el-button>
           <el-button type="primary" :loading="dlg.reviewSaving" @click="onDlgReviewAction('APPROVE')">通过</el-button>
         </template>
-        <el-button v-if="!dlg.readOnly && !dlg.reviewMode" type="primary" :loading="dlg.saving" @click="onSubmit">提交审批</el-button>
+        <el-button v-if="!dlg.readOnly && !dlg.reviewMode" type="primary" :loading="dlg.saving"
+                   :disabled="preview.loaded && preview.data && !preview.data.hasData"
+                   @click="onSubmit">提交审批</el-button>
       </template>
     </el-dialog>
 
@@ -483,7 +527,8 @@ import { fmtDateTime } from '@/utils/datetime';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   submitAdjust, withdrawAdjust, getAdjustDetail,
-  getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones
+  getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
+  getAllocPreview
 } from '@/api/perf';
 import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -757,6 +802,12 @@ async function openTodoDetail(row) {
     dlg.createdTime = d.createdTime || null;
     dlg.show = true;
     loadApprovalHistory(applyId);
+    // 查看/审批页面：Statis_Dt = 申请日期 - 1
+    if (d.createdTime) {
+      const applyDate = new Date(d.createdTime);
+      applyDate.setDate(applyDate.getDate() - 1);
+      loadPreview(applyDate.toISOString().slice(0, 10));
+    }
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '查看失败');
   }
@@ -894,9 +945,14 @@ const bizKindMap = computed(() => {
   for (const o of bizKindOptions.value) m[o.value] = o.label;
   return m;
 });
+const BIZ_KIND_FALLBACK = {
+  CORP_DEPOSIT: '对公存款', CORP_LOAN: '对公贷款', CORP_FOREX: '对公外汇',
+  CORP_LARGE_CD: '大额存单', FEE_BIZ: '中间业务',
+  PER_DEP: '个人存款', PER_LOAN: '个人贷款',
+};
 function fmtBizKind(val) {
   if (!val) return '-';
-  return val.split(',').map(k => bizKindMap.value[k] || k).join('、');
+  return val.split(',').map(k => bizKindMap.value[k] || BIZ_KIND_FALLBACK[k] || k).join('、');
 }
 async function loadBizKindDict() {
   try {
@@ -908,6 +964,27 @@ async function loadBizKindDict() {
 // ============ 新建/查看 弹框 ============
 const dlgFormRef = ref(null);
 const custNameDisplay = ref('');
+const preview = reactive({ loaded: false, loading: false, data: null });
+function fmtAmt(v) {
+  if (v == null) return '-';
+  return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+async function loadPreview(statisDt) {
+  const f = dlg.form;
+  if (!f.custNo && f.allocDim === 'RULE') return;
+  if (!f.accountNo && f.allocDim === 'ACCOUNT') return;
+  preview.loaded = true;
+  preview.loading = true;
+  // 新建时传昨日，查看/审批时由调用方传入申请日期-1
+  const dt = statisDt || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  try {
+    preview.data = await getAllocPreview({
+      custType: f.custType, custNo: f.custNo, allocDim: f.allocDim, accountNo: f.accountNo || undefined,
+      statisDt: dt
+    });
+  } catch { preview.data = null; }
+  finally { preview.loading = false; }
+}
 const dlg = reactive({
   show: false, readOnly: false, saving: false, viewingId: null,
   reviewMode: false, reviewRow: null, reviewOpinion: '', reviewSaving: false, reviewRouteTo: 'LEADER', reviewFlowType: 'CORP',
@@ -981,6 +1058,8 @@ function openCreate() {
   dlg.readOnly = false;
   dlg.viewingId = null;
   custNameDisplay.value = '';
+  preview.loaded = false;
+  preview.data = null;
   Object.assign(dlg.form, {
     custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: [],
     accountNo: '', ownerOrgId: '', reason: '',
@@ -1022,6 +1101,13 @@ async function openView(row) {
       dlg.createdByName = d.createdByName || dlg.createdByName;
       dlg.createdByOrgName = d.createdByOrgName || dlg.createdByOrgName;
       dlg.createdTime = d.createdTime || dlg.createdTime;
+      // 查看页面：Statis_Dt = 申请日期 - 1
+      const ct = d.createdTime || dlg.createdTime;
+      if (ct) {
+        const applyDate = new Date(ct);
+        applyDate.setDate(applyDate.getDate() - 1);
+        loadPreview(applyDate.toISOString().slice(0, 10));
+      }
     }
   } catch {}
   loadApprovalHistory(dlg.viewingId);
@@ -1079,11 +1165,11 @@ async function onWithdraw(row) {
   }
 }
 
-// 客户编号失焦时查询客户名称
+// 客户编号变化时查询客户名称
 let custNoTimer = null;
 watch(() => dlg.form.custNo, (val) => {
   clearTimeout(custNoTimer);
-  if (!val || val.length < 2) { custNameDisplay.value = ''; return; }
+  if (!val || val.length < 2) { custNameDisplay.value = ''; preview.loaded = false; return; }
   custNoTimer = setTimeout(async () => {
     try {
       const c = await getCustomer(val);
@@ -1091,6 +1177,24 @@ watch(() => dlg.form.custNo, (val) => {
     } catch { custNameDisplay.value = ''; }
   }, 500);
 });
+// 客户类型 / 客户编号 / 分配维度 / 账号 任一变化时触发预览
+let previewTimer = null;
+watch(
+  () => [dlg.form.custType, dlg.form.custNo, dlg.form.allocDim, dlg.form.accountNo],
+  () => {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      const f = dlg.form;
+      if (f.allocDim === 'RULE' && f.custNo && f.custNo.length >= 2) {
+        loadPreview();
+      } else if (f.allocDim === 'ACCOUNT' && f.accountNo && f.accountNo.length >= 2) {
+        loadPreview();
+      } else {
+        preview.loaded = false;
+      }
+    }, 600);
+  }
+);
 
 onMounted(async () => {
   loadBizKindDict();
@@ -1123,6 +1227,17 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
+.preview-section {
+  margin-bottom: 12px;
+  .bal-card {
+    border: 1px solid $border-2; border-radius: 4px; padding: 12px;
+    .bal-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    .bal-table { width: 100%; font-size: 13px;
+      td { padding: 4px 0; }
+      .num { text-align: right; font-weight: 500; font-family: ui-monospace, monospace; }
+    }
+  }
+}
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
 .adjust-tabs { :deep(.el-tabs__nav-wrap)::after { background: $border-1; } }
 .table { padding: 0; padding-bottom: 12px; }
