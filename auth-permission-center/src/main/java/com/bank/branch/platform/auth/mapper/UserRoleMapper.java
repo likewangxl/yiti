@@ -115,4 +115,6 @@ public interface UserRoleMapper {
      * @return 员工 ID 列表（启用用户），不存在或角色无员工时返空
      */
     List<String> selectEmpIdsByRoleCode(@Param("roleCode") String roleCode);
+
+    List<String> selectEmpIdsByRoleCodeAndOrg(@Param("roleCode") String roleCode, @Param("orgCode") String orgCode);
 }

@@ -65,4 +65,16 @@ public interface UserApi {
      * @return 员工 ID 列表，roleCode 为空或无人时返空 List
      */
     List<String> getEmpIdsByRoleCode(String roleCode);
+
+    /**
+     * 按 roleCode + orgCode 查同机构启用员工 ID。
+     * <p>用于审批候选人按发起人机构过滤（如机构负责人必须与发起人同机构）。
+     * 查询逻辑：PT_USER_ROLE JOIN PT_ROLE JOIN EXT_USER_ORG，
+     * 仅返启用 (ISENABLED=0) + 角色有效 (RECORD_STATUS=0) + 机构匹配。</p>
+     *
+     * @param roleCode 角色编码
+     * @param orgCode  机构编码
+     * @return 员工 ID 列表，无人时返空 List
+     */
+    List<String> getEmpIdsByRoleCodeAndOrg(String roleCode, String orgCode);
 }

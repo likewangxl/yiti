@@ -35,6 +35,7 @@ public class TaskAssignmentListener implements TaskListener {
     private final NotifyApi notifyApi;
     private final RepositoryService repositoryService;
     private final UserApi userApi;
+    private final com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
 
     /**
      * 任务创建事件回调。
@@ -60,7 +61,18 @@ public class TaskAssignmentListener implements TaskListener {
         // 解析候选组
         List<String> candidates = candidateResolverService.resolveCandidates(processDefinitionKey, nodeKey);
 
-        // 设置候选组到任务
+        // branch_approve 节点：按发起人机构过滤，只让同机构的负责人审批
+        if ("branch_approve".equals(nodeKey)) {
+            Object startOrgId = delegateTask.getVariable("startOrgId");
+            if (startOrgId != null && !startOrgId.toString().isEmpty()) {
+                filterCandidatesByOrg(delegateTask, candidates, startOrgId.toString());
+                log.info("[TaskAssignmentListener] 任务 {} branch_approve 按机构 {} 过滤候选", taskId, startOrgId);
+                notifyCandidates(delegateTask, candidates);
+                return;
+            }
+        }
+
+        // 其他节点：正常设置候选组
         for (String group : candidates) {
             delegateTask.addCandidateGroup(group);
         }
@@ -76,12 +88,29 @@ public class TaskAssignmentListener implements TaskListener {
                     log.info("[TaskAssignmentListener] 任务 {} 候选展开后无员工，不发通知 candidates={}", taskId, candidates);
                     return;
                 }
+                // 从 BizProcessMap 拿具体业务信息，让通知标题和类型更明确
+                String processInstanceId = delegateTask.getProcessInstanceId();
+                com.bank.branch.platform.workflow.entity.BizProcessMap bizMap =
+                        bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
+                String bizType = bizMap != null ? bizMap.getBizType() : null;
+                String bizId = bizMap != null ? bizMap.getBizId() : null;
+                String taskName = delegateTask.getName();
+                String bizLabel = resolveBizLabel(bizType);
+                String title = bizLabel != null
+                        ? "待办：" + bizLabel + (taskName != null ? " · " + taskName : "")
+                        : "您有新的待办任务";
+                String content = bizLabel != null
+                        ? "您有一条【" + bizLabel + "】待办" + (taskName != null ? "（" + taskName + "）" : "") + "，请及时处理"
+                        : "您有新待办任务，请及时处理";
+
                 List<NotificationCmd> cmds = empIds.stream()
                         .map(empId -> NotificationCmd.builder()
                                 .targetEmpId(empId)
-                                .title("您有新的待办任务")
-                                .content("您有新待办任务，请及时处理")
+                                .title(title)
+                                .content(content)
                                 .notifyType("WORKFLOW")
+                                .bizType(bizType)
+                                .bizId(bizId)
                                 .build())
                         .collect(Collectors.toList());
                 notifyApi.batchSendNotifications(cmds);
@@ -89,6 +118,69 @@ public class TaskAssignmentListener implements TaskListener {
             } catch (Exception e) {
                 log.warn("[TaskAssignmentListener] 发送通知失败，任务 {}，原因: {}", taskId, e.getMessage());
             }
+        }
+    }
+
+    /**
+     * branch_approve 节点专用：按机构过滤候选人，直接指派同机构员工为候选用户。
+     * 将 ROLE:XXX 候选展开后按 orgCode 过滤，设为任务的候选用户（非候选组）。
+     */
+    private void filterCandidatesByOrg(DelegateTask delegateTask, List<String> candidates, String orgCode) {
+        Set<String> filteredEmpIds = new LinkedHashSet<>();
+        for (String candidate : candidates) {
+            if (candidate == null || candidate.isEmpty()) continue;
+            int colon = candidate.indexOf(':');
+            String type = colon > 0 ? candidate.substring(0, colon) : "";
+            String value = colon > 0 ? candidate.substring(colon + 1) : candidate;
+            if ("ROLE".equals(type)) {
+                List<String> orgEmps = userApi.getEmpIdsByRoleCodeAndOrg(value, orgCode);
+                if (orgEmps != null) filteredEmpIds.addAll(orgEmps);
+            } else if ("USER".equals(type)) {
+                filteredEmpIds.add(value);
+            }
+        }
+        for (String empId : filteredEmpIds) {
+            delegateTask.addCandidateUser(empId);
+        }
+        log.info("[TaskAssignmentListener] branch_approve 机构过滤后候选用户: {}", filteredEmpIds);
+    }
+
+    /**
+     * 发送通知给候选人（抽取公共方法，branch_approve 路径和普通路径共用）。
+     */
+    private void notifyCandidates(DelegateTask delegateTask, List<String> candidates) {
+        String taskId = delegateTask.getId();
+        if (candidates.isEmpty()) return;
+        try {
+            Set<String> empIds = expandCandidatesToEmpIds(candidates);
+            if (empIds.isEmpty()) return;
+            String processInstanceId = delegateTask.getProcessInstanceId();
+            com.bank.branch.platform.workflow.entity.BizProcessMap bizMap =
+                    bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
+            String bizType = bizMap != null ? bizMap.getBizType() : null;
+            String bizId = bizMap != null ? bizMap.getBizId() : null;
+            String taskName = delegateTask.getName();
+            String bizLabel = resolveBizLabel(bizType);
+            String title = bizLabel != null
+                    ? "待办：" + bizLabel + (taskName != null ? " · " + taskName : "")
+                    : "您有新的待办任务";
+            String content = bizLabel != null
+                    ? "您有一条【" + bizLabel + "】待办" + (taskName != null ? "（" + taskName + "）" : "") + "，请及时处理"
+                    : "您有新待办任务，请及时处理";
+            List<NotificationCmd> cmds = empIds.stream()
+                    .map(empId -> NotificationCmd.builder()
+                            .targetEmpId(empId)
+                            .title(title)
+                            .content(content)
+                            .notifyType("WORKFLOW")
+                            .bizType(bizType)
+                            .bizId(bizId)
+                            .build())
+                    .collect(Collectors.toList());
+            notifyApi.batchSendNotifications(cmds);
+            log.info("[TaskAssignmentListener] 任务 {} 已通知 {} 个员工", taskId, empIds.size());
+        } catch (Exception e) {
+            log.warn("[TaskAssignmentListener] 发送通知失败，任务 {}，原因: {}", taskId, e.getMessage());
         }
     }
 
@@ -121,5 +213,16 @@ public class TaskAssignmentListener implements TaskListener {
             }
         }
         return empIds;
+    }
+
+    /** BIZ_TYPE → 中文标签，让通知标题更可读 */
+    private String resolveBizLabel(String bizType) {
+        if (bizType == null) return null;
+        return switch (bizType) {
+            case "ALLOC_ADJUST" -> "业绩调整审批";
+            case "TARGET_ADJUST" -> "目标修正审批";
+            case "LOAN_APPLY" -> "贷款申请审批";
+            default -> bizType;
+        };
     }
 }
