@@ -106,4 +106,15 @@ public interface UserRoleMapper {
      * @return 用户角色关联列表（含 userId，调用方按 userId 分组）
      */
     List<UserRoleItemDTO> selectRolesByUserIds(@Param("userIds") List<String> userIds);
+
+    /**
+     * 按 roleCode 查所有启用员工 ID（USER_ID）。
+     * <p>用于 workflow TaskAssignmentListener 把候选组 roleCode 展开成员工列表发通知。</p>
+     *
+     * @param roleCode 角色编码（如 BRANCH_HEAD）
+     * @return 员工 ID 列表（启用用户），不存在或角色无员工时返空
+     */
+    List<String> selectEmpIdsByRoleCode(@Param("roleCode") String roleCode);
+
+    List<String> selectEmpIdsByRoleCodeAndOrg(@Param("roleCode") String roleCode, @Param("orgCode") String orgCode);
 }

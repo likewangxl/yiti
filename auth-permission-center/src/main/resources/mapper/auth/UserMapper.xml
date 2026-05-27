@@ -94,4 +94,94 @@
 
     <!-- updateById 由 MyBatis-Plus BaseMapper 提供，此处不再重复定义 -->
 
+    <!-- ============= 用户管理 V1.14 新增 ============= -->
+
+    <!-- 条件分页查询：用 BASE_COLUMNS 全列回填 entity -->
+    <select id="selectByQuery" resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_USER
+        <where>
+            <if test="q.username != null and q.username != ''">
+                AND USERNAME LIKE CONCAT('%', #{q.username}, '%')
+            </if>
+            <if test="q.userchnname != null and q.userchnname != ''">
+                AND USERCHNNAME LIKE CONCAT('%', #{q.userchnname}, '%')
+            </if>
+            <if test="q.email != null and q.email != ''">
+                AND EMAIL LIKE CONCAT('%', #{q.email}, '%')
+            </if>
+            <if test="q.remark != null and q.remark != ''">
+                AND REMARK LIKE CONCAT('%', #{q.remark}, '%')
+            </if>
+            <if test="q.isEnabled != null">
+                AND ISENABLED = #{q.isEnabled}
+            </if>
+            <if test="q.isLocked != null">
+                AND ISLOCKED = #{q.isLocked}
+            </if>
+        </where>
+        ORDER BY CREATE_TIME DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 条件总数 -->
+    <select id="countByQuery" resultType="long">
+        SELECT COUNT(*) FROM PT_USER
+        <where>
+            <if test="q.username != null and q.username != ''">
+                AND USERNAME LIKE CONCAT('%', #{q.username}, '%')
+            </if>
+            <if test="q.userchnname != null and q.userchnname != ''">
+                AND USERCHNNAME LIKE CONCAT('%', #{q.userchnname}, '%')
+            </if>
+            <if test="q.email != null and q.email != ''">
+                AND EMAIL LIKE CONCAT('%', #{q.email}, '%')
+            </if>
+            <if test="q.remark != null and q.remark != ''">
+                AND REMARK LIKE CONCAT('%', #{q.remark}, '%')
+            </if>
+            <if test="q.isEnabled != null">
+                AND ISENABLED = #{q.isEnabled}
+            </if>
+            <if test="q.isLocked != null">
+                AND ISLOCKED = #{q.isLocked}
+            </if>
+        </where>
+    </select>
+
+    <!-- 用户名唯一性校验 -->
+    <select id="countByUsername" resultType="int">
+        SELECT COUNT(*) FROM PT_USER WHERE USERNAME = #{username}
+    </select>
+
+    <!-- 启用/禁用：单字段更新避免覆盖其他并发修改 -->
+    <update id="updateActiveStatus">
+        UPDATE PT_USER
+        SET ISENABLED = #{isEnabled},
+            UPDATE_TIME = NOW(),
+            UPDATE_AUTHOR = #{updateAuthor}
+        WHERE USER_ID = #{userId}
+    </update>
+
+    <!-- 密码更新：同时刷新 PWD_UPDATE_TIME、清零 PASS_WRONG_COUNT -->
+    <update id="updatePassword">
+        UPDATE PT_USER
+        SET PWD = #{pwd},
+            PWD_UPDATE_TIME = NOW(),
+            PASS_WRONG_COUNT = 0,
+            UPDATE_TIME = NOW(),
+            UPDATE_AUTHOR = #{updateAuthor}
+        WHERE USER_ID = #{userId}
+    </update>
+
+    <!-- 批量物理删除 -->
+    <delete id="deleteByUserIds">
+        DELETE FROM PT_USER
+        WHERE USER_ID IN
+        <foreach collection="userIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
 </mapper>

@@ -8,6 +8,7 @@ import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.auth.service.AuthService;
 import com.bank.branch.platform.auth.service.BizScopeService;
+import com.bank.branch.platform.auth.uniauth.UniAuthProperties;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.exception.AuthException;
@@ -51,13 +52,16 @@ class AuthControllerTest {
     @Mock
     private BizScopeService bizScopeService;
 
+    @Mock
+    private UniAuthProperties uniAuthProperties;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new AuthController(authService, userRoleMapper, bizScopeService))
+                new AuthController(authService, userRoleMapper, bizScopeService, uniAuthProperties))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
     }

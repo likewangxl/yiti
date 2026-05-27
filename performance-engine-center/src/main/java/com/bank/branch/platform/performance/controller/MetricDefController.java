@@ -5,10 +5,10 @@ import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
-import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
 import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricCategoryDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricExecuteReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricTrialReqDTO;
@@ -25,8 +25,6 @@ import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,24 +65,41 @@ public class MetricDefController {
     private final MetricSlotService metricSlotService;
 
     /**
-     * List metric definitions with page result.
-     * 返回 MetricDefRespDTO，不暴露 entity 内部字段。
+     * V1.10：一次性返回所有指标定义（去分页）.
+     *
+     * <p>前端指标库页面工作模式：拉全集 → 客户端按 metric_category / metric_level 分组
+     * 渲染树。原 V1.3 分页接口（pageNo/pageSize/PageResult）已废弃，前端 listMetrics
+     * 不再走 unwrapPage。
+     *
+     * <p>数据范围：当前未走 PerfScopeHelper，沿用 V1.3 既有行为；如需收敛见
+     * {@link MetricDefService#pageWithScope}，后续 controller 可切换.
      */
     @GetMapping
-    @Operation(summary = "List metric definitions")
+    @Operation(summary = "List all metric definitions (V1.10 no pagination)")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
-    public ResponseWrapper<MetricDefRespDTO> list(
+    public ResponseWrapper<List<MetricDefRespDTO>> list(
             @RequestParam(value = "baseDim", required = false) String baseDim,
             @RequestParam(value = "metricLevel", required = false) Integer metricLevel,
             @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "keyword", required = false) String keyword,
-            @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) int pageNo,
-            @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        log.debug("[MetricDefController.list] baseDim={}, metricLevel={}, status={}, keyword={}, pageNo={}, pageSize={}",
-                baseDim, metricLevel, status, keyword, pageNo, pageSize);
-        PageResult<MetricDefRespDTO> dtoPage = metricDefService.pageDto(
-                baseDim, metricLevel, status, keyword, pageNo, pageSize);
-        return ResponseWrapper.page(dtoPage);
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        log.debug("[MetricDefController.list] baseDim={}, metricLevel={}, status={}, keyword={}",
+                baseDim, metricLevel, status, keyword);
+        return ResponseWrapper.success(
+                metricDefService.listAllDto(baseDim, metricLevel, status, keyword));
+    }
+
+    /**
+     * V1.10：返回所有非空 metric_category 的去重项（{value, label} 对）.
+     *
+     * <p>对接前端指标库分类下拉 / 树形分组。V1.9 metric_category 直接存中文，
+     * value == label；后续接入 sys_dict 翻译时仅扩展 label.
+     */
+    @GetMapping("/categories")
+    @Operation(summary = "List distinct metric categories for filter/group (V1.10)")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
+    public ResponseWrapper<List<MetricCategoryDTO>> listCategories() {
+        log.debug("[MetricDefController.listCategories]");
+        return ResponseWrapper.success(metricDefService.listCategories());
     }
 
     /**
@@ -160,6 +175,8 @@ public class MetricDefController {
                 .summaryRule(req.getSummaryRule())
                 .refMetricCodes(req.getRefMetricCodes())
                 .preferredSlot(req.getPreferredSlot())
+                .metricCategory(req.getMetricCategory())
+                .status(req.getStatus())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(metricLifecycleFacade.createMetricDto(cmd));
@@ -187,6 +204,7 @@ public class MetricDefController {
                 .exprText(req.getExprText())
                 .summaryRule(req.getSummaryRule())
                 .refMetricCodes(req.getRefMetricCodes())
+                .metricCategory(req.getMetricCategory())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(metricLifecycleFacade.updateMetricDto(cmd));
@@ -217,7 +235,8 @@ public class MetricDefController {
                                               @Valid @RequestBody ChangeStatusReqDTO req) {
         log.info("[MetricDefController.changeStatus] metricCode={}, status={}, reason={}",
                 metricCode, req.getStatus(), req.getReason());
-        metricLifecycleFacade.disableMetric(metricCode, req.getReason(), currentUserApi.getCurrentEmpId());
+        // V1.6：放开 ACTIVE/DRAFT/DISABLED 三向切换
+        metricLifecycleFacade.changeMetricStatus(metricCode, req.getStatus(), req.getReason(), currentUserApi.getCurrentEmpId());
         return ResponseWrapper.success();
     }
 

@@ -107,6 +107,8 @@ public class MetricSchedulerService {
         if (!"ACTIVE".equalsIgnoreCase(def.getStatus())) return false;
         if (!"AUTO".equalsIgnoreCase(def.getCalcMode())) return false;
         if (def.getDeleted() != null && def.getDeleted() == 1) return false;
+        // V1.9：维度无关型指标（baseDim=null）无 slot、无宽表归属，不进入自动调度
+        if (def.getBaseDim() == null || def.getBaseDim().isBlank()) return false;
         // PROC / SUMMARY 类型由外部存储过程或汇总链触发，不走通用调度
         if ("PROC".equalsIgnoreCase(def.getCalcLogicType())
                 || "SUMMARY".equalsIgnoreCase(def.getCalcLogicType())) {

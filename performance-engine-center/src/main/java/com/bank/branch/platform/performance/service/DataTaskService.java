@@ -12,9 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
+import com.bank.branch.platform.common.web.lock.LockManager;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -82,19 +80,14 @@ public class DataTaskService {
     private static final java.util.Set<String> VALID_STATUSES = java.util.Set.of(
             RunTaskStatusEnum.SUCCESS.name(), RunTaskStatusEnum.FAILED.name());
 
-    /** Lua 脚本：仅当 token 匹配时删锁（防止误删）. */
-    private static final RedisScript<Long> COMPARE_AND_DEL = new DefaultRedisScript<>(
-            "if redis.call('get', KEYS[1])==ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-            Long.class);
-
     private final PerfRunTaskMapper perfRunTaskMapper;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final LockManager lockManager;
     private final ObjectMapper objectMapper;
 
     public DataTaskService(PerfRunTaskMapper perfRunTaskMapper,
-                           RedisTemplate<String, Object> redisTemplate) {
+                           LockManager lockManager) {
         this.perfRunTaskMapper = perfRunTaskMapper;
-        this.redisTemplate = redisTemplate;
+        this.lockManager = lockManager;
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     }
 
@@ -115,11 +108,11 @@ public class DataTaskService {
             return idempotentResult(cmd.getTaskId(), existing.getId());
         }
 
-        // 2. 加 Redis 锁（原子互斥）。获锁失败 → 等待 + 重新 DB 查
+        // 2. 加分布式锁（PT_LOCK 表 + CAS）。获锁失败 → 等待 + 重新 DB 查
         String lockKey = IDEMPOTENT_LOCK_KEY_PREFIX + cmd.getTaskId();
         String token = UUID.randomUUID().toString();
-        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
-        if (!Boolean.TRUE.equals(locked)) {
+        boolean locked = lockManager.tryLock(lockKey, token, LOCK_TTL.toMillis());
+        if (!locked) {
             log.info("[DataTaskService.report] 获锁失败 taskId={}，等待既有写入完成", cmd.getTaskId());
             return waitAndReturnExisting(cmd.getTaskId());
         }
@@ -161,11 +154,11 @@ public class DataTaskService {
                     .perfRunTaskId(task.getId())
                     .build();
         } finally {
-            // 5. 释放锁（Lua compare-and-del 避免误删）
+            // 5. 释放锁（LockManager CAS 释放，holder 不匹配则跳过）
             try {
-                redisTemplate.execute(COMPARE_AND_DEL, Collections.singletonList(lockKey), token);
+                lockManager.unlock(lockKey, token);
             } catch (Exception e) {
-                // 释放失败只记日志，TTL 30s 后自动过期
+                // 释放失败只记日志，TTL 30s 后自动过期 + LockCleanupJob 兜底清理
                 log.warn("[DataTaskService.report] 释放锁失败, 依赖 TTL 自动释放. lockKey={}, err={}",
                         lockKey, e.getMessage());
             }

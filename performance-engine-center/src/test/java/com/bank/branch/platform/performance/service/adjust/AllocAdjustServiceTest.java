@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
@@ -65,6 +66,9 @@ class AllocAdjustServiceTest {
     private PerfAllocAdjustItemMapper itemMapper;
 
     @Mock
+    private CustAllocRelationMapper allocRelationMapper;
+
+    @Mock
     private CustomerQueryApi customerQueryApi;
 
     @Mock
@@ -81,7 +85,7 @@ class AllocAdjustServiceTest {
 
     private SubmitAllocAdjustCmd baseCmd(String bizKind) {
         return SubmitAllocAdjustCmd.builder()
-                .custId("CUST_001")
+                .custNo("CN-001")
                 .allocDim("RULE")
                 .bizKind(bizKind)
                 .ownerOrgId("ORG_001")
@@ -97,10 +101,11 @@ class AllocAdjustServiceTest {
 
     @BeforeEach
     void setUp() {
-        // 默认客户存在
+        // 默认按客户编号 CN-001 命中，内部主键 = CUST_001
         CustomerDTO cust = new CustomerDTO();
         cust.setId("CUST_001");
-        when(customerQueryApi.getCustomer("CUST_001")).thenReturn(Optional.of(cust));
+        cust.setCustNo("CN-001");
+        when(customerQueryApi.getCustomerByCustNo("CN-001")).thenReturn(Optional.of(cust));
     }
 
     @Test
@@ -150,6 +155,7 @@ class AllocAdjustServiceTest {
         PerfAllocAdjustApply apply = applyCap.getValue();
         assertThat(apply.getStatus()).isEqualTo("IN_APPROVAL");
         assertThat(apply.getApplyNo()).isNotBlank();
+        // apply.cust_id 列保存的是按 custNo 查找到的内部主键 id
         assertThat(apply.getCustId()).isEqualTo("CUST_001");
         assertThat(apply.getAllocDim()).isEqualTo("RULE");
         assertThat(apply.getBizKind()).isEqualTo("CORP_LOAN");
@@ -161,9 +167,9 @@ class AllocAdjustServiceTest {
     }
 
     @Test
-    @DisplayName("客户不存在 → 抛 VALIDATION_FAILED，不发起流程")
+    @DisplayName("客户编号不存在 → 抛 VALIDATION_FAILED，不发起流程")
     void submit_customerNotFound_throws() {
-        when(customerQueryApi.getCustomer("CUST_001")).thenReturn(Optional.empty());
+        when(customerQueryApi.getCustomerByCustNo("CN-001")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
                 .isInstanceOf(PerfException.class)
@@ -215,10 +221,10 @@ class AllocAdjustServiceTest {
     }
 
     @Test
-    @DisplayName("必填字段缺失（custId 为空）→ 抛 VALIDATION_FAILED")
-    void submit_blankCustId_throws() {
+    @DisplayName("必填字段缺失（custNo 为空）→ 抛 VALIDATION_FAILED")
+    void submit_blankCustNo_throws() {
         SubmitAllocAdjustCmd cmd = baseCmd("CORP_LOAN");
-        cmd.setCustId(null);
+        cmd.setCustNo(null);
 
         assertThatThrownBy(() -> service.submit(cmd))
                 .isInstanceOf(PerfException.class)
@@ -245,6 +251,90 @@ class AllocAdjustServiceTest {
 
         assertThatThrownBy(() -> service.submit(cmd))
                 .isInstanceOf(PerfException.class);
+    }
+
+    // ========== 响应 DTO 回填 custNo（基于 cust_master 反查） ==========
+
+    @Test
+    @DisplayName("getByIdDto → 用 apply.custId(内部主键) 反查客户，回填 custNo 到响应")
+    void getByIdDto_populatesCustNoFromCustomerLookup() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("APPLY_X");
+        apply.setApplyNo("AA-X");
+        apply.setCustId("CUST_X");
+        apply.setStatus("IN_APPROVAL");
+        when(applyMapper.selectByAllocApplyId("APPLY_X")).thenReturn(apply);
+        when(itemMapper.selectByApplyId("APPLY_X")).thenReturn(Collections.emptyList());
+        CustomerDTO cust = new CustomerDTO();
+        cust.setId("CUST_X");
+        cust.setCustNo("CN-X");
+        when(customerQueryApi.getCustomer("CUST_X")).thenReturn(Optional.of(cust));
+
+        AllocAdjustRespDTO dto = service.getByIdDto("APPLY_X");
+
+        assertThat(dto.getCustId()).isEqualTo("CUST_X");
+        assertThat(dto.getCustNo()).isEqualTo("CN-X");
+    }
+
+    @Test
+    @DisplayName("getByIdDto → 客户已删除时 custNo 留 null，custId 仍回显")
+    void getByIdDto_customerMissing_leavesCustNoNull() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("APPLY_Y");
+        apply.setApplyNo("AA-Y");
+        apply.setCustId("CUST_GONE");
+        when(applyMapper.selectByAllocApplyId("APPLY_Y")).thenReturn(apply);
+        when(itemMapper.selectByApplyId("APPLY_Y")).thenReturn(Collections.emptyList());
+        when(customerQueryApi.getCustomer("CUST_GONE")).thenReturn(Optional.empty());
+
+        AllocAdjustRespDTO dto = service.getByIdDto("APPLY_Y");
+
+        assertThat(dto.getCustId()).isEqualTo("CUST_GONE");
+        assertThat(dto.getCustNo()).isNull();
+    }
+
+    @Test
+    @DisplayName("pageDto → 批量反查 cust_master，按内部主键 → custNo 映射回填到每行")
+    void pageDto_populatesCustNoFromCustomerBatchLookup() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("USER_PAGE");
+        when(perfScopeHelper.getFragment(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(PerfScopeHelper.ScopeColumns.class),
+                org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(new PerfScopeHelper.Fragment("1=1", java.util.Map.of()));
+
+        PerfAllocAdjustApply r1 = new PerfAllocAdjustApply();
+        r1.setId("A1"); r1.setCustId("C1");
+        PerfAllocAdjustApply r2 = new PerfAllocAdjustApply();
+        r2.setId("A2"); r2.setCustId("C2");
+        when(applyMapper.selectByConditionsWithScope(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Arrays.asList(r1, r2));
+        when(applyMapper.countByConditionsWithScope(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(2L);
+
+        CustomerDTO c1 = new CustomerDTO(); c1.setId("C1"); c1.setCustNo("CN-1");
+        CustomerDTO c2 = new CustomerDTO(); c2.setId("C2"); c2.setCustNo("CN-2");
+        when(customerQueryApi.listCustomers(org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(Arrays.asList(c1, c2));
+
+        PageResult<AllocAdjustRespDTO> page = service.pageDto(null, null, null, null, null, 1, 20);
+
+        assertThat(page.getRecords()).hasSize(2);
+        assertThat(page.getRecords().get(0).getCustId()).isEqualTo("C1");
+        assertThat(page.getRecords().get(0).getCustNo()).isEqualTo("CN-1");
+        assertThat(page.getRecords().get(1).getCustId()).isEqualTo("C2");
+        assertThat(page.getRecords().get(1).getCustNo()).isEqualTo("CN-2");
     }
 
     // ========== V1.4 S1.3: WORKFLOW_PARTICIPANT scope 路径 ==========

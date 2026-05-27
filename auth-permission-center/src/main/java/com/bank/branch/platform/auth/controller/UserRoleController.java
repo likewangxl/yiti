@@ -61,6 +61,7 @@ public class UserRoleController {
     @PostMapping("")
     @Operation(summary = "批量绑定角色到用户")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)
+    @com.bank.branch.platform.common.aop.annotation.AuditLog(action = "USER_ROLE_BIND", resourceType = "USER_ROLE", reasonRequired = true)
     public ResponseWrapper<Void> bindRoles(
             @PathVariable("userId") String userId,
             @Valid @RequestBody UserRoleBindReqDTO req) {

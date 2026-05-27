@@ -1,6 +1,9 @@
 package com.bank.branch.platform.workflow.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
@@ -71,6 +74,12 @@ class TodoQueryServiceTest {
 
     @Mock
     private CurrentUserApi currentUserApi;
+
+    @Mock
+    private UserApi userApi;
+
+    @Mock
+    private OrgApi orgApi;
 
     @InjectMocks
     private TodoQueryService todoQueryService;
@@ -184,6 +193,13 @@ class TodoQueryServiceTest {
         when(slaCalculationService.calculateSlaStatus(eq("loan_approve"), eq("userTask1"), any(LocalDateTime.class)))
                 .thenReturn(SlaStatus.GREEN);
 
+        // 发起人姓名 + 机构反查（startUser=E10001 → 张客户经理 / 02901000 西安西稍门支行）
+        when(userApi.getUserName("E10001")).thenReturn("张客户经理");
+        OrgDTO org = new OrgDTO();
+        org.setOrgCode("02901000");
+        org.setOrgName("西安分行-西安西稍门支行");
+        when(orgApi.getUserMainOrg("E10001")).thenReturn(org);
+
         // when
         PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E10001", null, null, 1, 20);
 
@@ -198,6 +214,10 @@ class TodoQueryServiceTest {
         assertThat(dto.getBusinessKey()).isEqualTo("LOAN:LA001");
         assertThat(dto.getSlaStatus()).isEqualTo("GREEN");
         assertThat(dto.getTaskName()).isEqualTo("经理审批");
+        // 发起人 + 机构反查回填
+        assertThat(dto.getStartUserName()).isEqualTo("张客户经理");
+        assertThat(dto.getStartOrgId()).isEqualTo("02901000");
+        assertThat(dto.getStartOrgName()).isEqualTo("西安分行-西安西稍门支行");
 
         verify(slaCalculationService).calculateSlaStatus(eq("loan_approve"), eq("userTask1"), any(LocalDateTime.class));
     }

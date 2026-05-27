@@ -1,0 +1,40 @@
+@startuml yiti_er_report-analytics-center
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title 08-报表分析 — 内部表与跨模块引用 (虚线=逻辑/实线=物理)
+
+package "08-报表分析" #F1F8E9 {
+  entity "RPT_EXPORT_TASK" as RPT_EXPORT_TASK {
+    .. 报表异步导出任务 ..
+    PK: id
+    + operator_id
+  }
+  entity "RPT_SAVED_QUERY" as RPT_SAVED_QUERY {
+    .. 动态查询保存方案 ..
+    PK: id
+    + emp_id
+  }
+  entity "RPT_SNAPSHOT_TASK" as RPT_SNAPSHOT_TASK {
+    .. 快照任务配置（V1预留） ..
+    PK: id
+  }
+  entity "SQL_PROBE_HISTORY" as SQL_PROBE_HISTORY {
+    .. SQL探查历史 ..
+    PK: id
+    + emp_id
+  }
+}
+
+package "外部模块（引用占位）" #FAFAFA {
+  entity "PT_USER" as PT_USER <<01-认证授权中心>> {
+    .. 人员表 ..
+  }
+}
+
+RPT_EXPORT_TASK }.. PT_USER : operator_id
+RPT_SAVED_QUERY }.. PT_USER : emp_id
+SQL_PROBE_HISTORY }.. PT_USER : emp_id
+@enduml

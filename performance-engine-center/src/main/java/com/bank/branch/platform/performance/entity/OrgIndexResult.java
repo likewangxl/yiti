@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  * 机构指标结果宽表 org_index_result 贫血实体.
  *
  * <p>对齐 V1_0_0__performance_ddl.sql §11：主键 {@code id bigint AUTO_INCREMENT}，
- * 维度键 {@code org_code varchar(50)}，200 个 {@code val_1 .. val_200 decimal(20,4)} 值槽。
+ * 维度键 {@code org_code varchar(50)}，400 个 {@code val_1 .. val_400 decimal(20,4)} 值槽。
  *
  * <p>唯一键：{@code uk_subject_date_ver (org_code, data_date, version)}
  * <p>索引：{@code idx_date_ver (data_date, version)}
@@ -39,4 +39,7 @@ public class OrgIndexResult {
 
     /** 创建时间（DB CURRENT_TIMESTAMP 默认值填充）. */
     private LocalDateTime createdTime;
+
+    /** 最近更新时间（V1.12 指标结果导入新增；DB ON UPDATE CURRENT_TIMESTAMP）. */
+    private LocalDateTime updatedTime;
 }

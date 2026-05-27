@@ -21,6 +21,9 @@
     <!--
         查询资源列表，status 和 sysCode 均可选过滤。
         按 MENU_RANK_NO 升序排列以保证菜单树顺序正确。
+        追加 RESOURCE_ID ASC 作 tie-breaker：MENU_RANK_NO 同值时（例如绝大多数 API 资源 = 0）
+        ResourceMatcher.findFirst() 不能依赖 MySQL 默认聚簇序，否则同 URL/METHOD 重复登记
+        的多条资源谁先命中是 UB，会导致 RBAC 拦截器把请求误绑到未授权那条上 → AUTH-40301。
     -->
     <select id="selectAll" resultType="com.bank.branch.platform.auth.entity.PtResource">
         SELECT
@@ -34,7 +37,7 @@
                 AND SYS_CODE = #{sysCode}
             </if>
         </where>
-        ORDER BY MENU_RANK_NO ASC
+        ORDER BY MENU_RANK_NO ASC, RESOURCE_ID ASC
     </select>
 
     <!-- insert/updateById 由 MyBatis-Plus BaseMapper 提供，此处不再重复定义 -->
@@ -76,6 +79,18 @@
         SELECT COUNT(*)
         FROM PT_RESOURCE
         WHERE PARENT_RESOURCE_ID = #{parentResourceId}
+    </select>
+
+    <!--
+        查询全部菜单资源（IS_MENU=1），按 MENU_RANK_NO 升序排列。
+        用于"分配菜单"对话框组装菜单树。状态不过滤（管理员可见全部菜单含禁用项）。
+    -->
+    <select id="selectMenus" resultType="com.bank.branch.platform.auth.entity.PtResource">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_RESOURCE
+        WHERE ISMENU = 1
+        ORDER BY MENU_RANK_NO ASC
     </select>
 
 </mapper>

@@ -53,6 +53,14 @@ public class PerfImportBatchRespDTO {
     @Schema(description = "失败行数")
     private Integer errorRows;
 
+    /** V1.11：更新行数（仅 METRIC_DEF 导入使用，其他类型恒 0）. */
+    @Schema(description = "更新行数（V1.11；非 METRIC_DEF 类型恒 0）")
+    private Integer updatedRows;
+
+    /** V1.11：新增行数（派生 = successRows - updatedRows）. */
+    @Schema(description = "新增行数（派生 = successRows - updatedRows）")
+    private Integer insertedRows;
+
     /** 备注 / 错误摘要. */
     @Schema(description = "备注（错误摘要或 JSON）")
     private String remark;

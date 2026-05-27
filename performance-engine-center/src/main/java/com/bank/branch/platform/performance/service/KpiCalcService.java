@@ -112,7 +112,7 @@ public class KpiCalcService {
                 throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
             }
             Integer slot = def.getValSlot();
-            if (slot == null || slot < 1 || slot > 200) {
+            if (slot == null || slot < 1 || slot > 400) {
                 throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                         "metric=" + metricCode + " 未分配合法 val_slot");
             }

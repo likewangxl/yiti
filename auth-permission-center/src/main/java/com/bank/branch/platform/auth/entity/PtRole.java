@@ -1,6 +1,7 @@
 package com.bank.branch.platform.auth.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -24,7 +25,8 @@ public class PtRole {
     /** 角色编码，对应 ROLE_CODE */
     private String roleCode;
 
-    /** 角色中文名，对应 ROLE_CHNAME */
+    /** 角色中文名，对应 ROLE_CHNAME（DB 列名是 ROLE_CHNAME 单段，不是 ROLE_CH_NAME，需显式映射） */
+    @TableField("ROLE_CHNAME")
     private String roleChName;
 
     /** 记录状态：0-可用，1-不可用，对应 RECORD_STATUS */

@@ -5,6 +5,7 @@ import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfImportBatchMapper;
+import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.PerfImportService;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -72,7 +74,7 @@ public class PerfImportServiceImpl implements PerfImportService {
     }
 
     @Override
-    public String startImport(String importType, MultipartFile file, String operatorId) {
+    public String startImport(String importType, MultipartFile file, String operatorId, LocalDate dataDate) {
         if (importType == null || importType.isBlank()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "importType 必填");
         }
@@ -82,6 +84,11 @@ public class PerfImportServiceImpl implements PerfImportService {
         ImportStrategy strategy = strategyMap.get(importType);
         if (strategy == null) {
             throw new PerfException(PerfErrorCode.BIZ_KIND_INVALID, importType);
+        }
+        // METRIC_RESULT dataDate 整文件必填（V1.12 微调）；其他类型忽略 dataDate
+        if ("METRIC_RESULT".equals(importType) && dataDate == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "dataDate 必填（METRIC_RESULT 必传 yyyy-MM-dd）");
         }
 
         // 1) 创建批次，初始 CREATED
@@ -105,12 +112,14 @@ public class PerfImportServiceImpl implements PerfImportService {
 
         // 3) 调用策略执行，包装状态机
         try {
-            ImportResult result = strategy.execute(batch, file);
+            ImportContext ctx = new ImportContext(dataDate);
+            ImportResult result = strategy.execute(batch, file, ctx);
             if (result == null) {
                 result = new ImportResult(0, 0, 0, null);
             }
             batchMapper.updateCounts(batch.getId(),
-                    result.getTotalRows(), result.getSuccessRows(), result.getErrorRows());
+                    result.getTotalRows(), result.getSuccessRows(), result.getErrorRows(),
+                    result.getUpdatedRows());
             String remark = result.getErrorSummary();
             batchMapper.updateStatus(batch.getId(), "SUCCESS", truncate(remark));
             log.info("[PerfImportService] 导入成功 batchId={}, type={}, rows={}/{}/{}",
@@ -181,6 +190,9 @@ public class PerfImportServiceImpl implements PerfImportService {
     public PerfImportBatchRespDTO getBatchDto(String batchId) {
         // V1.3 R4.1：DTO 装配下沉到 Service，Controller 不再持有 PerfImportBatch
         PerfImportBatch b = getBatch(batchId);
+        int updated = b.getUpdatedRows() == null ? 0 : b.getUpdatedRows();
+        int success = b.getSuccessRows() == null ? 0 : b.getSuccessRows();
+        int inserted = Math.max(0, success - updated);
         return PerfImportBatchRespDTO.builder()
                 .id(b.getId())
                 .batchNo(b.getBatchNo())
@@ -190,6 +202,8 @@ public class PerfImportServiceImpl implements PerfImportService {
                 .totalRows(b.getTotalRows())
                 .successRows(b.getSuccessRows())
                 .errorRows(b.getErrorRows())
+                .updatedRows(updated)
+                .insertedRows(inserted)
                 .remark(b.getRemark())
                 .createdBy(b.getCreatedBy())
                 .createdTime(b.getCreatedTime())

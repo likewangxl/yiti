@@ -26,6 +26,15 @@ public class UpdateTargetPlanReqDTO {
     @Size(max = 100, message = "planName 长度不能超过 100")
     private String planName;
 
+    /** 关联 KPI 方案 ID (可空, null 表示不修改). */
+    @Schema(description = "关联 KPI 方案 ID")
+    private String kpiSchemeId;
+
+    /** 方案状态 (可空, ACTIVE/DISABLED). */
+    @Schema(description = "方案状态: ACTIVE/DISABLED")
+    @Pattern(regexp = "^(ACTIVE|DISABLED)$", message = "status 必须是 ACTIVE 或 DISABLED")
+    private String status;
+
     /** 目标维度 (可空, EMP/ORG). */
     @Schema(description = "目标维度: EMP/ORG")
     @Pattern(regexp = "^(EMP|ORG)$", message = "targetDim 必须是 EMP 或 ORG")
@@ -40,4 +49,14 @@ public class UpdateTargetPlanReqDTO {
     @Schema(description = "生效日期 yyyy-MM-dd")
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate effectiveDate;
+
+    /** 方案覆盖起始日期 (可空，null 表示不修改). */
+    @Schema(description = "方案覆盖起始日期 yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate startDate;
+
+    /** 方案覆盖截止日期 (可空，null 表示不修改). */
+    @Schema(description = "方案覆盖截止日期 yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate endDate;
 }

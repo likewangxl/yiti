@@ -178,6 +178,37 @@ class KpiCalcServiceTest {
     }
 
     @Test
+    @DisplayName("V1.12：calcSingleEmp metric.valSlot=401 越新上界 → 抛 METRIC_CALC_LOGIC_INVALID")
+    void calcSingleEmp_metricSlotOver400_throws() {
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S_BAD_SLOT");
+        scheme.setSchemeCode("TEST_BAD_SLOT");
+        scheme.setStatus("ACTIVE");
+        when(kpiSchemeService.getBySchemeCodeOrNull("TEST_BAD_SLOT")).thenReturn(Optional.of(scheme));
+        PerfKpiItem it = new PerfKpiItem();
+        it.setSchemeId("S_BAD_SLOT");
+        it.setMetricCode("M_SLOT_401");
+        it.setWeight(new BigDecimal("100"));
+        it.setMultiplier(new BigDecimal("1"));
+        it.setMinScore(BigDecimal.ZERO);
+        it.setMaxScore(new BigDecimal("100"));
+        when(kpiItemService.listBySchemeId("S_BAD_SLOT")).thenReturn(List.of(it));
+
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_SLOT_401");
+        def.setValSlot(401);
+        def.setBaseDim("EMP");
+        when(metricDefService.getByCodeOrNull("M_SLOT_401")).thenReturn(def);
+
+        assertThatThrownBy(() -> kpiCalcService.calcSingleEmp("E001", "TEST_BAD_SLOT",
+                "MONTHLY", LocalDate.now(), LocalDate.now(), "v1"))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID);
+        verify(kpiResultMapper, never()).insert(any(KpiResult.class));
+    }
+
+    @Test
     @DisplayName("calcSingleEmp：metric 未分配 slot 抛 METRIC_CALC_LOGIC_INVALID")
     void calcSingleEmp_metricSlotMissing_throws() {
         PerfKpiScheme scheme = new PerfKpiScheme();

@@ -4,7 +4,7 @@
   OrgIndexResultMapper XML（V1.1 Task P1.2）.
 
   安全（SQL 注入）声明：同 EmpIndexResultMapper.xml，val_${slot} 为合法列名例外，
-  调用方必须在 Service 层强制校验 slot ∈ [1, 200]。
+  调用方必须在 Service 层强制校验 slot ∈ [1, 400]。
 -->
 <mapper namespace="com.bank.branch.platform.performance.mapper.OrgIndexResultMapper">
 
@@ -14,7 +14,8 @@
         VALUES
             (#{orgCode}, #{dataDate}, #{version}, #{value})
         ON DUPLICATE KEY UPDATE
-            val_${slot} = VALUES(val_${slot})
+            val_${slot} = VALUES(val_${slot}),
+            updated_time = NOW()
     </insert>
 
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
@@ -57,7 +58,7 @@
 
     <!--
       V1.7：按 slot 列号查机构单值，val_${slot} 属合法动态列名例外（common-dev-guide §5），
-      调用方必须在 Service 层保证 slot ∈ [1, 200]。
+      调用方必须在 Service 层保证 slot ∈ [1, 400]。
     -->
     <select id="selectValBySlot" resultType="java.math.BigDecimal">
         SELECT val_${slot}

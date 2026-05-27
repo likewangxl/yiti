@@ -88,10 +88,11 @@ public class MetricSlotService {
         if (metricLevel == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "metricLevel 不能为空");
         }
+        // V1.12（2026-05-19）: 槽位上界由 200 扩到 400，L1/L2/L3 各按 2 倍扩
         return switch (metricLevel) {
-            case 1 -> new int[]{1, 100};
-            case 2 -> new int[]{101, 150};
-            case 3 -> new int[]{151, 200};
+            case 1 -> new int[]{1, 200};
+            case 2 -> new int[]{201, 300};
+            case 3 -> new int[]{301, 400};
             default -> throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "不支持的 metricLevel=" + metricLevel);
         };
     }

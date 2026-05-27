@@ -43,4 +43,29 @@
           AND RESOURCE_ID = #{resourceId}
     </select>
 
+    <!--
+        查询指定角色已绑定的菜单资源 ID（仅 PT_RESOURCE.IS_MENU=1 部分）。
+        JOIN PT_RESOURCE 过滤 ISMENU=1。用于"分配菜单"对话框回显勾选状态。
+    -->
+    <select id="selectMenuIdsByRoleId" parameterType="string" resultType="string">
+        SELECT rr.RESOURCE_ID
+        FROM PT_ROLE_RESOURCE rr
+        INNER JOIN PT_RESOURCE r ON rr.RESOURCE_ID = r.RESOURCE_ID
+        WHERE rr.ROLE_ID = #{roleId}
+          AND r.ISMENU   = 1
+    </select>
+
+    <!--
+        删除指定角色的"菜单"绑定（仅 IS_MENU=1 部分），保留接口绑定不动。
+        与 deleteByRoleId 区分：deleteByRoleId 是全量清空（含接口和菜单）。
+        用 IN 子查询定位需删除的 RESOURCE_ID，依赖 PT_RESOURCE.ISMENU 标识。
+    -->
+    <delete id="deleteMenuBindingsByRoleId" parameterType="string">
+        DELETE FROM PT_ROLE_RESOURCE
+        WHERE ROLE_ID = #{roleId}
+          AND RESOURCE_ID IN (
+              SELECT RESOURCE_ID FROM PT_RESOURCE WHERE ISMENU = 1
+          )
+    </delete>
+
 </mapper>

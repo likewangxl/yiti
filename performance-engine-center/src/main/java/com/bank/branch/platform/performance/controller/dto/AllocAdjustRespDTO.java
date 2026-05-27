@@ -20,8 +20,14 @@ public class AllocAdjustRespDTO {
     /** 申请编号. */
     private String applyNo;
 
-    /** 客户 ID. */
+    /** 客户 ID（cust_master 内部主键）. */
     private String custId;
+
+    /** 客户编号（cust_master.cust_no，按 custId 反查回填；客户已删/查不到时为 null）. */
+    private String custNo;
+
+    /** 客户类型：CORP / RETAIL. */
+    private String custType;
 
     /** 分配维度. */
     private String allocDim;
@@ -50,6 +56,12 @@ public class AllocAdjustRespDTO {
     /** 申请人 empId. */
     private String createdBy;
 
+    /** 申请人姓名（按 createdBy 反查 PT_USER）；用户已删时为 null. */
+    private String createdByName;
+
+    /** 申请人主机构名称（按 createdBy 反查 EXT_USER_ORG + EXT_ORG_INFO）；查不到为 null. */
+    private String createdByOrgName;
+
     /** 申请时间. */
     private LocalDateTime createdTime;
 
@@ -76,6 +88,9 @@ public class AllocAdjustRespDTO {
 
         /** 分配比例. */
         private BigDecimal ratio;
+
+        /** 说明. */
+        private String remark;
 
         /** 创建时间. */
         private LocalDateTime createdTime;

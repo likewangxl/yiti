@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.controller.dto.MetricCategoryDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -12,6 +13,8 @@ import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.service.cmd.UpdateMetricDefCmd;
+import com.bank.branch.platform.performance.service.result.BatchUpsertMetricDefResult;
+import com.bank.branch.platform.performance.service.result.UpsertMetricDefResult;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +59,178 @@ public class MetricDefService {
     final MetricSchedulerService metricSchedulerService;
 
     /**
+     * V1.9：批量创建指标定义（整批 all-or-none 语义）.
+     *
+     * <p>用于 {@code MetricDefImportStrategy} 的 Excel 导入路径。本方法包裹外层事务，
+     * 内部逐条调用 {@link #create(CreateMetricDefCmd)}。由于 {@code create} 默认
+     * PROPAGATION_REQUIRED 会复用当前事务，任一行抛异常都会让整个批次回滚，DB 不留脏数据。
+     *
+     * <p>调用方契约：
+     * <ul>
+     *   <li>校验失败应在调用本方法前由 {@code MetricDefImportStrategy} 预扫描完成；
+     *       本方法仅做"落库 + 复用 create 业务规则（slot 分配 / 循环依赖检测 等）"</li>
+     *   <li>{@code cmds} 列表非 null 且 size &gt; 0，否则直接返回空列表</li>
+     *   <li>任一 {@link PerfException}（含 {@code METRIC_CODE_DUP}）会让整批回滚并向上抛</li>
+     * </ul>
+     *
+     * @param cmds     批量新建命令列表
+     * @param operator 操作人（覆盖 cmd.operator 字段，确保审计一致）
+     * @return 新建后的指标定义列表（与 cmds 同序）
+     */
+    @Deprecated
+    @Transactional(rollbackFor = Exception.class)
+    public List<PerfMetricDef> batchCreateMetricDefs(List<CreateMetricDefCmd> cmds, String operator) {
+        if (cmds == null || cmds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<PerfMetricDef> created = new ArrayList<>(cmds.size());
+        for (CreateMetricDefCmd cmd : cmds) {
+            // 强制覆盖 operator，保持审计字段统一
+            cmd.setOperator(operator);
+            created.add(create(cmd));
+        }
+        return created;
+    }
+
+    /**
+     * V1.11：按 {@code metric_name} 命中执行 upsert.
+     *
+     * <p>命中已存在指标（{@code deleted=0}） → 走 update 路径：
+     * 仅更新业务字段（metric_desc / metricLevel / calcFreq / calcMode / calcLogicType /
+     * sqlText / exprText / summaryRule / metricCategory / status），
+     * <b>保留</b> DB 原 {@code id} / {@code metric_code} / {@code val_slot}.
+     *
+     * <p>未命中 → 走现有 {@link #create(CreateMetricDefCmd)} 路径.
+     *
+     * <p>注意：本方法 PROPAGATION_REQUIRED 复用调用方事务，
+     * 由 {@link #batchUpsertByName} 包裹外层事务实现整批 all-or-none.
+     *
+     * @param cmd      命令
+     * @param operator 操作人（覆盖 cmd.operator）
+     * @return upsert 结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UpsertMetricDefResult upsertByName(CreateMetricDefCmd cmd, String operator) {
+        cmd.setOperator(operator);
+        PerfMetricDef existing = mapper.selectByMetricName(cmd.getMetricName());
+        if (existing == null) {
+            // 新增路径
+            PerfMetricDef def = create(cmd);
+            return new UpsertMetricDefResult(true, def);
+        }
+        // 更新路径：保留 id / metric_code；val_slot 在维度变化或缺失时重新分配
+        PerfMetricDef patch = new PerfMetricDef();
+        patch.setId(existing.getId());
+        patch.setBaseDim(cmd.getBaseDim());
+        // val_slot 一旦存入不允许修改；仅当原 slot 为空时才分配
+        boolean slotMissing = existing.getValSlot() == null || existing.getValSlot() == 0;
+        if (slotMissing) {
+            String dim = cmd.getBaseDim() != null ? cmd.getBaseDim() : existing.getBaseDim();
+            Integer level = cmd.getMetricLevel() != null ? cmd.getMetricLevel() : existing.getMetricLevel();
+            if (dim != null && !dim.isBlank()) {
+                patch.setValSlot(metricSlotService.allocSlot(dim, level, null));
+            }
+        }
+        patch.setMetricNameEn(cmd.getMetricNameEn());
+        patch.setMetricDesc(cmd.getMetricDesc());
+        patch.setMetricLevel(cmd.getMetricLevel());
+        patch.setCalcFreq(cmd.getCalcFreq());
+        patch.setCalcMode(cmd.getCalcMode());
+        patch.setCalcLogicType(cmd.getCalcLogicType());
+        patch.setSqlText(cmd.getSqlText());
+        patch.setExprText(cmd.getExprText());
+        patch.setSummaryRule(cmd.getSummaryRule());
+        patch.setMetricCategory(cmd.getMetricCategory());
+        // V1.11：状态字段透传，导入路径尊重 Excel 意图（cmd.status 可能为 null，不写）
+        if (cmd.getStatus() != null && !cmd.getStatus().isBlank()) {
+            patch.setStatus(cmd.getStatus());
+        }
+        patch.setUpdatedBy(operator);
+        mapper.updateByIdSelective(patch);
+
+        // 回填 existing 字段以便调用方读取最新视图
+        if (cmd.getBaseDim() != null) {
+            existing.setBaseDim(cmd.getBaseDim());
+        }
+        if (patch.getValSlot() != null) {
+            existing.setValSlot(patch.getValSlot());
+        }
+        if (cmd.getMetricNameEn() != null) {
+            existing.setMetricNameEn(cmd.getMetricNameEn());
+        }
+        if (cmd.getMetricDesc() != null) {
+            existing.setMetricDesc(cmd.getMetricDesc());
+        }
+        if (cmd.getMetricLevel() != null) {
+            existing.setMetricLevel(cmd.getMetricLevel());
+        }
+        if (cmd.getCalcFreq() != null) {
+            existing.setCalcFreq(cmd.getCalcFreq());
+        }
+        if (cmd.getCalcMode() != null) {
+            existing.setCalcMode(cmd.getCalcMode());
+        }
+        if (cmd.getCalcLogicType() != null) {
+            existing.setCalcLogicType(cmd.getCalcLogicType());
+        }
+        if (cmd.getSqlText() != null) {
+            existing.setSqlText(cmd.getSqlText());
+        }
+        if (cmd.getExprText() != null) {
+            existing.setExprText(cmd.getExprText());
+        }
+        if (cmd.getSummaryRule() != null) {
+            existing.setSummaryRule(cmd.getSummaryRule());
+        }
+        if (cmd.getMetricCategory() != null) {
+            existing.setMetricCategory(cmd.getMetricCategory());
+        }
+        if (cmd.getStatus() != null && !cmd.getStatus().isBlank()) {
+            existing.setStatus(cmd.getStatus());
+        }
+        existing.setUpdatedBy(operator);
+        existing.setUpdatedTime(LocalDateTime.now());
+
+        // V1.7：状态变更可能触发调度注销/注册
+        registerSchedulerHookIfNeeded(existing, false);
+        return new UpsertMetricDefResult(false, existing);
+    }
+
+    /**
+     * V1.11：批量按 {@code metric_name} upsert（整批事务）.
+     *
+     * <p>调用方契约：
+     * <ul>
+     *   <li>{@code cmds} 非 null 且 size &gt; 0，否则返回空结果</li>
+     *   <li>任一行抛异常（含 {@link PerfException}）整批回滚</li>
+     *   <li>结果与入参同序</li>
+     * </ul>
+     *
+     * @param cmds     命令列表
+     * @param operator 操作人
+     * @return 批量结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchUpsertMetricDefResult batchUpsertByName(List<CreateMetricDefCmd> cmds, String operator) {
+        if (cmds == null || cmds.isEmpty()) {
+            return new BatchUpsertMetricDefResult(0, 0, Collections.emptyList());
+        }
+        int inserted = 0;
+        int updated = 0;
+        List<PerfMetricDef> defs = new ArrayList<>(cmds.size());
+        for (CreateMetricDefCmd cmd : cmds) {
+            UpsertMetricDefResult r = upsertByName(cmd, operator);
+            if (r.isInserted()) {
+                inserted++;
+            } else {
+                updated++;
+            }
+            defs.add(r.getDef());
+        }
+        return new BatchUpsertMetricDefResult(inserted, updated, defs);
+    }
+
+    /**
      * 新建指标定义.
      *
      * @param cmd 新建命令
@@ -65,6 +240,11 @@ public class MetricDefService {
     public PerfMetricDef create(CreateMetricDefCmd cmd) {
         if (mapper.selectByMetricCode(cmd.getMetricCode()) != null) {
             throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getMetricCode());
+        }
+        // V1.13：metric_name 预检对齐 V1.11 新增的 uk_metric_name_alive 唯一约束，
+        // 避免 insert 阶段 DuplicateKeyException 被旧 catch 兜底为 METRIC_CODE_DUP 误导用户。
+        if (mapper.selectByMetricName(cmd.getMetricName()) != null) {
+            throw new PerfException(PerfErrorCode.METRIC_NAME_DUP, cmd.getMetricName());
         }
         List<String> refMetricCodes = parseRefMetricCodes(cmd.getRefMetricCodes());
         Map<String, Integer> refMetricLevels = loadRefMetricLevels(refMetricCodes);
@@ -86,8 +266,16 @@ public class MetricDefService {
         def.setExprText(cmd.getExprText());
         def.setSummaryRule(cmd.getSummaryRule());
         def.setRefMetricCodes(toJson(refMetricCodes));
-        def.setValSlot(metricSlotService.allocSlot(cmd.getBaseDim(), cmd.getMetricLevel(), cmd.getPreferredSlot()));
-        def.setStatus("ACTIVE");
+        // V1.9：状态字段优先取 cmd.status（导入路径透传 Excel statusFlag），未指定回落 ACTIVE
+        String finalStatus = cmd.getStatus() != null && !cmd.getStatus().isBlank() ? cmd.getStatus() : "ACTIVE";
+        // 只要维度不为空就分配 slot（各维度下唯一），不再限制 ACTIVE 状态
+        if (cmd.getBaseDim() != null && !cmd.getBaseDim().isBlank()) {
+            def.setValSlot(metricSlotService.allocSlot(cmd.getBaseDim(), cmd.getMetricLevel(), cmd.getPreferredSlot()));
+        } else {
+            def.setValSlot(null);
+        }
+        def.setMetricCategory(cmd.getMetricCategory());
+        def.setStatus(finalStatus);
         // Q8.5b: 显式初始化 deleted=0（未删除）。entity 字段为 Integer（非基本类型），
         // 默认 null 会导致 selectByMetricCode（WHERE deleted=0）读不到刚插入的行。
         // DB 层虽然有 default 0，但 Mapper XML 使用 #{deleted} 会把 null 显式写入列，
@@ -101,6 +289,12 @@ public class MetricDefService {
         try {
             mapper.insert(def);
         } catch (DuplicateKeyException ex) {
+            // V1.13：区分 uk_metric_name_alive（metric_name 重复）与 uk_metric_code（编码重复），
+            // 避免并发场景下漏掉预检窗口、错误码错位为"编码已存在"。
+            String exMsg = ex.getMessage() == null ? "" : ex.getMessage();
+            if (exMsg.contains("uk_metric_name_alive")) {
+                throw new PerfException(PerfErrorCode.METRIC_NAME_DUP, ex, cmd.getMetricName());
+            }
             throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, ex, cmd.getMetricCode());
         }
         metricRefService.setRefs(cmd.getMetricCode(), refMetricCodes);
@@ -118,6 +312,11 @@ public class MetricDefService {
     @Transactional(rollbackFor = Exception.class)
     public PerfMetricDef update(UpdateMetricDefCmd cmd) {
         PerfMetricDef existing = getByCode(cmd.getMetricCode());
+        // V1.6 修复 Bug3：停用态禁止编辑（前端也已 disable 按钮，此处后端兜底）
+        if ("DISABLED".equals(existing.getStatus()) || "INACTIVE".equals(existing.getStatus())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "指标已停用，禁止编辑：" + cmd.getMetricCode() + "（请先启用后再修改）");
+        }
         boolean refMetricCodesProvided = cmd.getRefMetricCodes() != null && !cmd.getRefMetricCodes().isBlank();
         List<String> refMetricCodes = refMetricCodesProvided
                 ? parseRefMetricCodes(cmd.getRefMetricCodes())
@@ -199,6 +398,37 @@ public class MetricDefService {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "当前状态不可停用: " + existing.getStatus());
         }
         mapper.updateStatusById(existing.getId(), "DISABLED", operator);
+    }
+
+    /**
+     * V1.6 通用状态切换：支持 ACTIVE / DRAFT / DISABLED 三向迁移。
+     * Controller 收到 ChangeStatusReqDTO 后走这里，避免只有 disable 单向操作。
+     *
+     * <p>V1.13：DRAFT→ACTIVE 时若指标当前无 slot（V1.13 起 DRAFT 创建不再占 slot），
+     * 在切状态前先补分配 slot；slot 区间耗尽时抛 PERF-42200，状态不切换。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void changeStatus(String metricCode, String targetStatus, String reason, String operator) {
+        if (!"ACTIVE".equals(targetStatus) && !"DRAFT".equals(targetStatus) && !"DISABLED".equals(targetStatus)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "无效目标状态: " + targetStatus);
+        }
+        PerfMetricDef existing = getByCode(metricCode);
+        if (targetStatus.equals(existing.getStatus())) {
+            return; // 幂等：状态相同直接返回，不抛错
+        }
+        // V1.13：DRAFT→ACTIVE 补分配 slot（DRAFT 阶段不占配额；维度无关型指标 baseDim=null 不分配）
+        if ("ACTIVE".equals(targetStatus)
+                && existing.getValSlot() == null
+                && existing.getBaseDim() != null && !existing.getBaseDim().isBlank()) {
+            int slot = metricSlotService.allocSlot(existing.getBaseDim(), existing.getMetricLevel(), null);
+            PerfMetricDef slotPatch = new PerfMetricDef();
+            slotPatch.setId(existing.getId());
+            slotPatch.setValSlot(slot);
+            slotPatch.setUpdatedBy(operator);
+            mapper.updateByIdSelective(slotPatch);
+            existing.setValSlot(slot);
+        }
+        mapper.updateStatusById(existing.getId(), targetStatus, operator);
     }
 
     /**
@@ -328,17 +558,51 @@ public class MetricDefService {
     }
 
     /**
-     * V1.3 R4.1：Controller 专用 DTO 版本分页查询.
+     * V1.10：Controller 专用 DTO 版本一次性全量查询（去分页）.
+     *
+     * <p>取代 V1.3 的 {@code pageDto}：前端指标库页面工作模式是一次拉全集 + 客户端
+     * 按 metric_category / metric_level 分组渲染树，分页反而需要前端额外合并多页，
+     * 增加复杂度。V1.10 数据量在数千行内可控，DB 直接 ORDER BY metric_code 返回。
+     *
+     * @param baseDim     基础维度（可空）
+     * @param metricLevel 指标层级（可空）
+     * @param status      状态（可空）
+     * @param keyword     编码或名称模糊（可空）
+     * @return 指标定义 DTO 列表（升序）
      */
     @Transactional(readOnly = true)
-    public PageResult<MetricDefRespDTO> pageDto(String baseDim, Integer metricLevel, String status,
-                                                String keyword, int pageNo, int pageSize) {
-        PageResult<PerfMetricDef> raw = page(baseDim, metricLevel, status, keyword, pageNo, pageSize);
-        List<MetricDefRespDTO> dtos = new ArrayList<>(raw.getRecords().size());
-        for (PerfMetricDef def : raw.getRecords()) {
+    public List<MetricDefRespDTO> listAllDto(String baseDim, Integer metricLevel, String status,
+                                             String keyword) {
+        List<PerfMetricDef> raw = mapper.selectAllByCondition(baseDim, metricLevel, status, keyword);
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MetricDefRespDTO> dtos = new ArrayList<>(raw.size());
+        for (PerfMetricDef def : raw) {
             dtos.add(MetricAssembler.toRespDTO(def));
         }
-        return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+        return dtos;
+    }
+
+    /**
+     * V1.10：列出所有非空 metric_category 的去重项，每项返回 {value, label}.
+     *
+     * <p>V1.9 列 metric_category 直接存中文（规模类/效益类/质量类等），未引入 sys_dict
+     * 翻译，因此 {@code value == label}；保留双字段是为后续扩展字典翻译时不破坏前端契约.
+     *
+     * @return 指标分类下拉项列表（按 value 升序，空集合表示无分类数据）
+     */
+    @Transactional(readOnly = true)
+    public List<MetricCategoryDTO> listCategories() {
+        List<String> raw = mapper.selectDistinctCategories();
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<MetricCategoryDTO> dtos = new ArrayList<>(raw.size());
+        for (String value : raw) {
+            dtos.add(new MetricCategoryDTO(value, value));
+        }
+        return dtos;
     }
 
     /**

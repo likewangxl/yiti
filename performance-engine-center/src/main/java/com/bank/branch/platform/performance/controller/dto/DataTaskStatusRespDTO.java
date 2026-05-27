@@ -36,7 +36,7 @@ public class DataTaskStatusRespDTO {
     @Schema(description = "是否本次新接受；false=幂等命中")
     private Boolean accepted;
 
-    /** 内部 perf_run_task 主键（EXT_DATA 任务 ID）. */
-    @Schema(description = "内部 perf_run_task 主键")
+    /** 内部 PERF_RUN_TASK 主键（EXT_DATA 任务 ID）. */
+    @Schema(description = "内部 PERF_RUN_TASK 主键")
     private String perfRunTaskId;
 }

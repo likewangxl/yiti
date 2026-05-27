@@ -10,9 +10,7 @@ import com.bank.branch.platform.performance.service.SysControlService;
 import com.bank.branch.platform.performance.service.cmd.SwitchVersionCmd;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
+import com.bank.branch.platform.common.web.lock.LockManager;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -32,7 +30,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SysControlFacade {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final LockManager lockManager;
     private final SysControlService sysControlService;
 
     /** 分布式锁 key 前缀. */
@@ -40,14 +38,6 @@ public class SysControlFacade {
 
     /** 锁 TTL (30 秒, 覆盖 doSwitchVersion 最坏耗时). */
     private static final Duration LOCK_TTL = Duration.ofSeconds(30);
-
-    /**
-     * Lua 脚本: 仅当 token 匹配时删除锁 (防止误删别的节点的锁).
-     * <p>返回 1 成功, 0 失败.
-     */
-    private static final RedisScript<Long> COMPARE_AND_DEL = new DefaultRedisScript<>(
-            "if redis.call('get', KEYS[1])==ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-            Long.class);
 
     /**
      * 切换版本 (分布式锁保护).
@@ -63,8 +53,8 @@ public class SysControlFacade {
         String lockKey = LOCK_KEY_PREFIX + cmd.getScopeDim();
         String token = UUID.randomUUID().toString();
 
-        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
-        if (!Boolean.TRUE.equals(locked)) {
+        boolean locked = lockManager.tryLock(lockKey, token, LOCK_TTL.toMillis());
+        if (!locked) {
             log.warn("[SysControlFacade.switchVersion] 获锁失败, scopeDim={}", cmd.getScopeDim());
             throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT);
         }
@@ -73,9 +63,9 @@ public class SysControlFacade {
             return sysControlService.doSwitchVersion(cmd);
         } finally {
             try {
-                redisTemplate.execute(COMPARE_AND_DEL, Collections.singletonList(lockKey), token);
+                lockManager.unlock(lockKey, token);
             } catch (Exception e) {
-                // 释放失败只记日志, 不扩散异常 (锁 30s 后自动过期)
+                // 释放失败只记日志, 不扩散异常 (锁 30s 后自动过期 + LockCleanupJob 兜底)
                 log.warn("[SysControlFacade.switchVersion] 释放锁失败, 依赖 TTL 自动释放. lockKey={}, err={}",
                         lockKey, e.getMessage());
             }
@@ -97,8 +87,8 @@ public class SysControlFacade {
         String lockKey = LOCK_KEY_PREFIX + scopeDim;
         String token = UUID.randomUUID().toString();
 
-        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, token, LOCK_TTL);
-        if (!Boolean.TRUE.equals(locked)) {
+        boolean locked = lockManager.tryLock(lockKey, token, LOCK_TTL.toMillis());
+        if (!locked) {
             log.warn("[SysControlFacade.rollback] 获锁失败, scopeDim={}", scopeDim);
             throw new PerfException(PerfErrorCode.SYS_CONTROL_VERSION_CONFLICT);
         }
@@ -107,7 +97,7 @@ public class SysControlFacade {
             return sysControlService.rollback(scopeDim, rollbackTo, reason, operatorId);
         } finally {
             try {
-                redisTemplate.execute(COMPARE_AND_DEL, Collections.singletonList(lockKey), token);
+                lockManager.unlock(lockKey, token);
             } catch (Exception e) {
                 log.warn("[SysControlFacade.rollback] 释放锁失败, 依赖 TTL 自动释放. lockKey={}, err={}",
                         lockKey, e.getMessage());

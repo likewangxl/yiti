@@ -78,7 +78,7 @@ class AllocRelationImportStrategyTest {
         }
         MultipartFile file = writeExcel(rows);
 
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(5);
         assertThat(result.getSuccessRows()).isEqualTo(5);
@@ -106,7 +106,7 @@ class AllocRelationImportStrategyTest {
                 new BigDecimal("100"))); // ACCOUNT 缺 accountNo
 
         MultipartFile file = writeExcel(rows);
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(4);
         assertThat(result.getSuccessRows()).isEqualTo(0);
@@ -128,7 +128,7 @@ class AllocRelationImportStrategyTest {
                 .thenThrow(new DuplicateKeyException("Duplicate entry"));
 
         MultipartFile file = writeExcel(rows);
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getTotalRows()).isEqualTo(2);
         assertThat(result.getSuccessRows()).isEqualTo(1);
@@ -144,7 +144,7 @@ class AllocRelationImportStrategyTest {
         rows.add(row("C001", "E001", null, "2026-04-01", "RULE", null, null, null));
 
         MultipartFile file = writeExcel(rows);
-        ImportResult result = strategy.execute(batch, file);
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
 
         assertThat(result.getSuccessRows()).isEqualTo(1);
         ArgumentCaptor<CustAllocRelation> cap = ArgumentCaptor.forClass(CustAllocRelation.class);
@@ -157,7 +157,7 @@ class AllocRelationImportStrategyTest {
     void execute_columnMismatch_throwsImportColumnMappingInvalid() {
         MultipartFile file = writeExcelWithWrongHead();
 
-        assertThatThrownBy(() -> strategy.execute(batch, file))
+        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.IMPORT_COLUMN_MAPPING_INVALID));

@@ -1,0 +1,36 @@
+@startuml yiti_er_overview
+skinparam dpi 110
+skinparam packageStyle rectangle
+skinparam classFontName Microsoft YaHei
+left to right direction
+title yiti 模块依赖总览 — 跨模块关系强度（条数=逻辑+物理）
+
+package "01-认证授权中心\n(8 张表)" as auth_permission_center #E3F2FD {}
+package "02-系统治理中心\n(10 张表)" as system_governance_center #FFF3E0 {}
+package "03-工作流中心\n(4 张表)" as workflow_center #F3E5F5 {}
+package "04-门户与内容\n(5 张表)" as portal_content_center #E8F5E9 {}
+package "05-客户营销\n(8 张表)" as customer_marketing_center #FFEBEE {}
+package "06-业务申请\n(2 张表)" as business_application_center #FBE9E7 {}
+package "07-绩效计算\n(17 张表)" as performance_engine_center #E0F7FA {}
+package "08-报表分析\n(4 张表)" as report_analytics_center #F1F8E9 {}
+package "09-Flowable引擎(只读)\n(36 张表)" as flowable_engine #ECEFF1 {}
+package "10-Quartz调度(只读)\n(11 张表)" as quartz_scheduler #ECEFF1 {}
+
+performance_engine_center --> auth_permission_center : 23
+system_governance_center --> auth_permission_center : 14
+customer_marketing_center --> auth_permission_center : 14
+portal_content_center --> auth_permission_center : 12
+business_application_center --> auth_permission_center : 6
+workflow_center --> flowable_engine : 5
+performance_engine_center --> customer_marketing_center : 3
+customer_marketing_center --> workflow_center : 3
+report_analytics_center --> auth_permission_center : 3
+customer_marketing_center --> flowable_engine : 2
+business_application_center --> customer_marketing_center : 2
+business_application_center --> workflow_center : 2
+business_application_center --> flowable_engine : 2
+performance_engine_center --> workflow_center : 2
+performance_engine_center --> flowable_engine : 2
+workflow_center --> system_governance_center : 1
+business_application_center --> portal_content_center : 1
+@enduml

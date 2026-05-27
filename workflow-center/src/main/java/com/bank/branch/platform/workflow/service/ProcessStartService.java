@@ -76,11 +76,19 @@ public class ProcessStartService {
                     WfErrorCode.BUSINESS_KEY_ALREADY_RUNNING.getMessage());
         }
 
-        // 3. 启动流程实例
+        // 3. 启动流程实例（注入 startOrgId 到流程变量，供候选人机构过滤）
+        java.util.Map<String, Object> vars = cmd.getVariables() != null
+                ? new java.util.HashMap<>(cmd.getVariables()) : new java.util.HashMap<>();
+        if (cmd.getStartOrgId() != null) {
+            vars.put("startOrgId", cmd.getStartOrgId());
+        }
+        if (cmd.getStartUser() != null) {
+            vars.put("startUser", cmd.getStartUser());
+        }
         ProcessInstance pi = runtimeService.startProcessInstanceByKey(
                 cmd.getProcessDefinitionKey(),
                 cmd.getBusinessKey(),
-                cmd.getVariables());
+                vars);
         log.info("流程启动成功: processInstanceId={}, businessKey={}", pi.getId(), cmd.getBusinessKey());
 
         // 4. 写入 biz_process_map 映射记录

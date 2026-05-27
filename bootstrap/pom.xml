@@ -44,14 +44,10 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Redis + Session -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-        </dependency>
+        <!-- Spring Session JDBC（去 Redis 后改 MySQL 持久化 session，多实例共享）-->
         <dependency>
             <groupId>org.springframework.session</groupId>
-            <artifactId>spring-session-data-redis</artifactId>
+            <artifactId>spring-session-jdbc</artifactId>
         </dependency>
 
         <!-- API 文档 -->
@@ -125,6 +121,20 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <!--
+                        本项目父 pom 不是 spring-boot-starter-parent，pluginManagement
+                        里只声明了 plugin 版本未绑定 goal，所以必须在 bootstrap 模块显式
+                        声明 repackage execution，否则 mvn package 只产出 thin jar，
+                        无依赖也不可执行（java -jar 报 "no main manifest attribute"）。
+                    -->
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

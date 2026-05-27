@@ -1,3 +1,2 @@
 com.bank.branch.platform.auth.config.AuthConfig
-com.bank.branch.platform.auth.config.CacheConfig
 com.bank.branch.platform.auth.config.WebMvcAuthConfig

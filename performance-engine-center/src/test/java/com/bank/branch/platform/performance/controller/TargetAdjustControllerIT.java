@@ -11,6 +11,8 @@ import com.bank.branch.platform.performance.entity.PerfTargetPlan;
 import com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper;
 import com.bank.branch.platform.performance.support.PerformanceControllerTestBase;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,6 +64,9 @@ class TargetAdjustControllerIT extends PerformanceControllerTestBase {
 
     @MockBean
     private WorkflowApi workflowApi;
+
+    @MockBean
+    private WorkflowQueryApi workflowQueryApi;
 
     @MockBean
     private com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper targetPlanMapper;
@@ -205,6 +210,67 @@ class TargetAdjustControllerIT extends PerformanceControllerTestBase {
         mockMvc.perform(get("/api/perf/target-adjust/{id}", "NO_SUCH_APPLY_TAA"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("PERF-40020"));
+    }
+
+    // ============= approval-history =============
+
+    @Test
+    void getApprovalHistory_processInstanceIdEmpty_returnsEmpty() throws Exception {
+        PerfTargetAdjustApply apply = buildExisting("AH_DRAFT", "DRAFT", "EMP", "EMP_AH_D");
+        apply.setProcessInstanceId(null);
+        applyMapper.insert(apply);
+
+        mockMvc.perform(get("/api/perf/target-adjust/{id}/approval-history", apply.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(0));
+
+        Mockito.verify(workflowQueryApi, Mockito.never()).getProcessHistory(Mockito.anyString());
+    }
+
+    @Test
+    void getApprovalHistory_sortedDesc_byOperateTime() throws Exception {
+        PerfTargetAdjustApply apply = buildExisting("AH_OK", "IN_APPROVAL", "EMP", "EMP_AH");
+        applyMapper.insert(apply);
+
+        ApprovalLogDTO early = new ApprovalLogDTO();
+        early.setNodeKey("start"); early.setNodeName("发起");
+        early.setOperator("emp001"); early.setOperatorName("张三");
+        early.setOperatorOrgName("总行营业部");
+        early.setAction("SUBMIT"); early.setOpinion("发起目标修正");
+        early.setOperateTime(LocalDateTime.of(2026, 5, 18, 10, 0));
+
+        ApprovalLogDTO late = new ApprovalLogDTO();
+        late.setNodeKey("review"); late.setNodeName("审核");
+        late.setOperator("emp002"); late.setOperatorName("李四");
+        late.setOperatorOrgName("分行运营部");
+        late.setAction("REJECT"); late.setOpinion("数据存疑");
+        late.setOperateTime(LocalDateTime.of(2026, 5, 20, 14, 0));
+
+        Mockito.when(workflowQueryApi.getProcessHistory(apply.getProcessInstanceId()))
+                .thenReturn(Arrays.asList(early, late));
+
+        mockMvc.perform(get("/api/perf/target-adjust/{id}/approval-history", apply.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].action").value("REJECT"))
+                .andExpect(jsonPath("$.data[0].operatorOrgName").value("分行运营部"))
+                .andExpect(jsonPath("$.data[1].action").value("SUBMIT"));
+    }
+
+    @Test
+    void getApprovalHistory_hasBizAuthRead() throws Exception {
+        Class<?> clazz = Class.forName(CONTROLLER_FQCN);
+        Method m = Arrays.stream(clazz.getDeclaredMethods())
+                .filter(x -> x.getName().equals("getApprovalHistory"))
+                .findFirst()
+                .orElseThrow();
+        BizAuth ba = m.getAnnotation(BizAuth.class);
+        assertThat(ba).isNotNull();
+        assertThat(ba.bizType()).isEqualTo(BizType.PERF_CONFIG);
+        assertThat(ba.action()).isEqualTo(BizAction.READ);
     }
 
     // ============= list =============

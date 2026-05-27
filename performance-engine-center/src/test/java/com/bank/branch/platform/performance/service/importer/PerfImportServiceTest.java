@@ -57,9 +57,9 @@ class PerfImportServiceTest {
 
         // 默认每个策略返回空结果（子测试按需覆盖）
         ImportResult empty = new ImportResult(0, 0, 0, null);
-        when(targetStrategy.execute(any(), any())).thenReturn(empty);
-        when(baseDataStrategy.execute(any(), any())).thenReturn(empty);
-        when(allocStrategy.execute(any(), any())).thenReturn(empty);
+        when(targetStrategy.execute(any(), any(), any())).thenReturn(empty);
+        when(baseDataStrategy.execute(any(), any(), any())).thenReturn(empty);
+        when(allocStrategy.execute(any(), any(), any())).thenReturn(empty);
 
         List<ImportStrategy> strategies = List.of(targetStrategy, baseDataStrategy, allocStrategy);
         service = new PerfImportServiceImpl(batchMapper, strategies);
@@ -75,12 +75,12 @@ class PerfImportServiceTest {
     void startImport_routesByImportType_target() {
         MultipartFile f = fakeFile("targets.xlsx");
 
-        String batchId = service.startImport("TARGET", f, "admin");
+        String batchId = service.startImport("TARGET", f, "admin", null);
 
         assertThat(batchId).isNotBlank();
-        verify(targetStrategy).execute(any(PerfImportBatch.class), eq(f));
-        verify(baseDataStrategy, never()).execute(any(), any());
-        verify(allocStrategy, never()).execute(any(), any());
+        verify(targetStrategy).execute(any(PerfImportBatch.class), eq(f), any());
+        verify(baseDataStrategy, never()).execute(any(), any(), any());
+        verify(allocStrategy, never()).execute(any(), any(), any());
     }
 
     @Test
@@ -88,10 +88,10 @@ class PerfImportServiceTest {
     void startImport_routesByImportType_baseData() {
         MultipartFile f = fakeFile("base.xlsx");
 
-        service.startImport("BASE_DATA", f, "admin");
+        service.startImport("BASE_DATA", f, "admin", null);
 
-        verify(baseDataStrategy).execute(any(PerfImportBatch.class), eq(f));
-        verify(targetStrategy, never()).execute(any(), any());
+        verify(baseDataStrategy).execute(any(PerfImportBatch.class), eq(f), any());
+        verify(targetStrategy, never()).execute(any(), any(), any());
     }
 
     @Test
@@ -99,10 +99,10 @@ class PerfImportServiceTest {
     void startImport_routesByImportType_alloc() {
         MultipartFile f = fakeFile("alloc.xlsx");
 
-        service.startImport("ALLOC", f, "admin");
+        service.startImport("ALLOC", f, "admin", null);
 
-        verify(allocStrategy).execute(any(PerfImportBatch.class), eq(f));
-        verify(targetStrategy, never()).execute(any(), any());
+        verify(allocStrategy).execute(any(PerfImportBatch.class), eq(f), any());
+        verify(targetStrategy, never()).execute(any(), any(), any());
     }
 
     @Test
@@ -110,7 +110,7 @@ class PerfImportServiceTest {
     void startImport_unknownImportType_throwsBizKindInvalid() {
         MultipartFile f = fakeFile("foo.xlsx");
 
-        assertThatThrownBy(() -> service.startImport("UNKNOWN_TYPE", f, "admin"))
+        assertThatThrownBy(() -> service.startImport("UNKNOWN_TYPE", f, "admin", null))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.BIZ_KIND_INVALID));
@@ -119,7 +119,7 @@ class PerfImportServiceTest {
     @Test
     @DisplayName("startImport：importType 为空白 → 抛 VALIDATION_FAILED (PERF-42200)")
     void startImport_blankImportType_throwsValidationFailed() {
-        assertThatThrownBy(() -> service.startImport("", fakeFile("f.xlsx"), "admin"))
+        assertThatThrownBy(() -> service.startImport("", fakeFile("f.xlsx"), "admin", null))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.VALIDATION_FAILED));
@@ -128,7 +128,7 @@ class PerfImportServiceTest {
     @Test
     @DisplayName("startImport：file 为空 → 抛 VALIDATION_FAILED (PERF-42200)")
     void startImport_nullFile_throwsValidationFailed() {
-        assertThatThrownBy(() -> service.startImport("TARGET", null, "admin"))
+        assertThatThrownBy(() -> service.startImport("TARGET", null, "admin", null))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.VALIDATION_FAILED));
@@ -137,10 +137,10 @@ class PerfImportServiceTest {
     @Test
     @DisplayName("startImport：成功路径 → 批次 insert 后状态迁移为 SUCCESS + 行数写入")
     void startImport_happyPath_insertsAndUpdatesToSuccess() {
-        when(targetStrategy.execute(any(), any()))
+        when(targetStrategy.execute(any(), any(), any()))
                 .thenReturn(new ImportResult(10, 10, 0, null));
 
-        String batchId = service.startImport("TARGET", fakeFile("t.xlsx"), "admin");
+        String batchId = service.startImport("TARGET", fakeFile("t.xlsx"), "admin", null);
 
         assertThat(batchId).isNotBlank();
 
@@ -155,7 +155,7 @@ class PerfImportServiceTest {
         // updateStatus 至少调 1 次迁移到 RUNNING，最终 SUCCESS
         verify(batchMapper).updateStatus(eq(batchId), eq("RUNNING"), any());
         verify(batchMapper).updateStatus(eq(batchId), eq("SUCCESS"), any());
-        verify(batchMapper).updateCounts(eq(batchId), eq(10), eq(10), eq(0));
+        verify(batchMapper).updateCounts(eq(batchId), eq(10), eq(10), eq(0), eq(0));
     }
 
     @Test
@@ -163,9 +163,9 @@ class PerfImportServiceTest {
     void startImport_strategyThrows_marksFailed_andRethrows() {
         doAnswer(inv -> {
             throw new RuntimeException("parse fail");
-        }).when(targetStrategy).execute(any(), any());
+        }).when(targetStrategy).execute(any(), any(), any());
 
-        assertThatThrownBy(() -> service.startImport("TARGET", fakeFile("t.xlsx"), "admin"))
+        assertThatThrownBy(() -> service.startImport("TARGET", fakeFile("t.xlsx"), "admin", null))
                 .isInstanceOf(RuntimeException.class);
 
         verify(batchMapper).updateStatus(anyString(), eq("FAILED"), any());

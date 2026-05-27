@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.dto.RoleRespDTO;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
+import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class RoleService {
 
     private final RoleMapper roleMapper;
+    private final UserRoleMapper userRoleMapper;
     private final PermissionCacheService cacheService;
 
     /**
@@ -59,6 +61,10 @@ public class RoleService {
         List<PtRole> roles = roleMapper.selectByPage(keyword, recordStatus, offset, pageSize);
         long total = roleMapper.countByPage(keyword, recordStatus);
         List<RoleRespDTO> records = roles.stream().map(this::toDto).collect(Collectors.toList());
+        // 按角色 ID 填 userCount（每个角色单独 COUNT，分页本身已限 size，N 次查询可控）
+        for (RoleRespDTO dto : records) {
+            dto.setUserCount((int) userRoleMapper.countByRoleId(dto.getRoleId()));
+        }
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
@@ -78,6 +84,10 @@ public class RoleService {
     @Transactional
     public RoleRespDTO createRole(String roleCode, String roleChName, String remark) {
         log.info("[RoleService.createRole] roleCode={}, roleChName={}", roleCode, roleChName);
+        // 前端新增时不输入 roleCode，由后端按 R_ + UUID 8 位大写自动生成
+        if (roleCode == null || roleCode.isBlank()) {
+            roleCode = "R_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        }
         // 校验角色编码唯一性 — 防止同名角色导致权限混乱
         if (roleMapper.selectByRoleCode(roleCode) != null) {
             throw new BizException(AuthErrorCode.ROLE_CODE_DUPLICATE.getCode(),
@@ -109,11 +119,15 @@ public class RoleService {
      * @throws BizException AUTH-40401 当角色不存在时
      */
     @Transactional
-    public RoleRespDTO updateRole(String roleId, String roleChName, String remark) {
-        log.info("[RoleService.updateRole] roleId={}, roleChName={}", roleId, roleChName);
+    public RoleRespDTO updateRole(String roleId, String roleChName, String remark, Integer recordStatus) {
+        log.info("[RoleService.updateRole] roleId={}, roleChName={}, recordStatus={}", roleId, roleChName, recordStatus);
         PtRole existing = getEntityById(roleId);
         existing.setRoleChName(roleChName);
         existing.setRemark(remark);
+        // null 表示不修改状态（向后兼容），非 null 时才覆盖
+        if (recordStatus != null) {
+            existing.setRecordStatus(recordStatus);
+        }
         existing.setUpdateTime(LocalDateTime.now());
         roleMapper.updateById(existing);
         return toDto(existing);

@@ -6,7 +6,7 @@
   安全（SQL 注入）声明：
     本 Mapper 的 insertSlotValue / selectSlotValue / selectSlotValuesByEmps 使用
     val_${slot} 动态拼接列名（列名不能参数化，属 common-dev-guide §5 允许的合法例外）。
-    调用方必须在 Service 层强制校验 slot ∈ [1, 200]，禁止接受任何用户输入直接拼入。
+    调用方必须在 Service 层强制校验 slot ∈ [1, 400]，禁止接受任何用户输入直接拼入。
     其他参数一律使用 #{} 预编译占位符。
 -->
 <mapper namespace="com.bank.branch.platform.performance.mapper.EmpIndexResultMapper">
@@ -21,7 +21,8 @@
         VALUES
             (#{empId}, #{dataDate}, #{version}, #{value})
         ON DUPLICATE KEY UPDATE
-            val_${slot} = VALUES(val_${slot})
+            val_${slot} = VALUES(val_${slot}),
+            updated_time = NOW()
     </insert>
 
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
@@ -67,7 +68,7 @@
       一次 IN 查询返回 (data_date, val_{slot}) 行投影列表，
       Java default 方法在 Mapper 接口内做 null-skip + List→Map 聚合。
       列名 val_${slot} 属于 common-dev-guide §5 允许的动态列名例外，
-      调用方必须在 Service 层强制校验 slot ∈ [1, 200]。
+      调用方必须在 Service 层强制校验 slot ∈ [1, 400]。
     -->
     <select id="selectSlotValuesByDatesRaw"
             resultType="com.bank.branch.platform.performance.mapper.EmpDateValueRow">
@@ -96,7 +97,7 @@
 
     <!--
       V1.7：按 slot 列号查员工单值，val_${slot} 属合法动态列名例外（common-dev-guide §5），
-      调用方必须在 Service 层保证 slot ∈ [1, 200]。
+      调用方必须在 Service 层保证 slot ∈ [1, 400]。
     -->
     <select id="selectValBySlot" resultType="java.math.BigDecimal">
         SELECT val_${slot}

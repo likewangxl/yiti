@@ -85,6 +85,34 @@ class CustomerQueryApiImplTest {
         verify(custMasterMapper).selectById("C1");
     }
 
+    // ==================== getCustomerByCustNo ====================
+
+    @Test
+    void getCustomerByCustNo_returnsOptionalEmptyWhenNotFound() {
+        when(custMasterMapper.selectByCustNo("NA-NO")).thenReturn(null);
+
+        Optional<CustomerDTO> result = customerQueryApiImpl.getCustomerByCustNo("NA-NO");
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getCustomerByCustNo_returnsMappedDTOWithInternalId() {
+        CustMaster e = new CustMaster();
+        e.setId("C1");
+        e.setCustNo("CN-001");
+        e.setCustName("测试公司");
+        when(custMasterMapper.selectByCustNo("CN-001")).thenReturn(e);
+
+        Optional<CustomerDTO> result = customerQueryApiImpl.getCustomerByCustNo("CN-001");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getId()).isEqualTo("C1");
+        assertThat(result.get().getCustNo()).isEqualTo("CN-001");
+        assertThat(result.get().getCustName()).isEqualTo("测试公司");
+        verify(custMasterMapper).selectByCustNo("CN-001");
+    }
+
     // ==================== listCustomers ====================
 
     @Test

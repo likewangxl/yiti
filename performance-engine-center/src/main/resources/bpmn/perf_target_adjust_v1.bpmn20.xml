@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  V1.2 Phase Q0.3 目标修正审批流程占位 BPMN.
+  2026-05-22 目标修正审批流程 v20：精简为 1 节点.
 
-  流程：Start → 支行主管审批(branch_mgr_review) → 分行主管审批(hq_mgr_review) → End
+  业务规则（新需求）：
+    - 仅资财部经办（角色 BACK_FINANCE）可发起目标修正
+    - 流程仅需资财部负责人（FINANCE_LEADER）单点审批
+    - 通过则后端事件触发写入 PERF_TARGET_VALUE 主表
+    - 不通过则申请表 status=REJECTED，主表数值不变
 
-  说明：
-  - processDefinitionKey=perf_target_adjust_v1；V1.2 Q3 目标修正申请启动此流程.
-  - 流程结束后 V1.2 Q3 的 TargetAdjustCompletedListener 订阅 ProcessCompletedEvent，
-    审批通过则更新 PERF_TARGET_VALUE 表对应的 (planId, subject, metricCode) 目标值，
-    并发布 TargetAdjustmentApprovedEvent（可能触发历史回算）.
-  - 初期最简两级审批；V1.2 Q3 实现时根据目标金额阈值可能拆分为单级/二级/三级审批.
+  与上版（6 节点：branch_approve / biz_dept_review / original_owner_approve /
+    biz_dept_leader_approve / finance_review / finance_leader_approve）相比，
+  本版仅保留 finance_leader_approve 节点（即"资财部负责人审批"）.
+  perf_alloc_adjust_corp_v1 / retail_v1 不在本次改动范围.
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -23,13 +25,7 @@
 
         <startEvent id="start" name="开始"/>
 
-        <userTask id="branch_mgr_review" name="支行主管审批">
-            <extensionElements>
-                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
-            </extensionElements>
-        </userTask>
-
-        <userTask id="hq_mgr_review" name="分行主管审批">
+        <userTask id="finance_leader_approve" name="资财部负责人审批">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
@@ -37,8 +33,7 @@
 
         <endEvent id="end" name="结束"/>
 
-        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_mgr_review"/>
-        <sequenceFlow id="flow_branch_hq" sourceRef="branch_mgr_review" targetRef="hq_mgr_review"/>
-        <sequenceFlow id="flow_hq_end" sourceRef="hq_mgr_review" targetRef="end"/>
+        <sequenceFlow id="flow_start_finldr"  sourceRef="start"                  targetRef="finance_leader_approve"/>
+        <sequenceFlow id="flow_finldr_end"    sourceRef="finance_leader_approve" targetRef="end"/>
     </process>
 </definitions>

@@ -33,6 +33,17 @@ public interface CustomerQueryApi {
     Optional<CustomerDTO> getCustomer(String custId);
 
     /**
+     * 按客户编号 (cust_no) 获取客户详情。
+     * <p>
+     * 用于上游模块前端按业务编号查询客户时使用，区别于 {@link #getCustomer(String)} 的内部 ID 主键查询。
+     * </p>
+     *
+     * @param custNo 客户编号（cust_master.cust_no 列）
+     * @return 客户DTO，不存在时返回 Optional.empty()
+     */
+    Optional<CustomerDTO> getCustomerByCustNo(String custNo);
+
+    /**
      * 批量获取客户信息。
      * <p>
      * custIds 最大 500，超限抛 COMMON-40000 异常。

@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * KPI 查询对外 API.
@@ -59,4 +60,24 @@ public interface KpiApi {
      * <p>v1.2: schemeId 为 String.
      */
     Optional<KpiSchemeDTO> getKpiSchemeById(String schemeId);
+
+    /**
+     * V1.14：列举近期被考核过的员工工号（来自 {@code kpi_result distinct emp_id}）.
+     *
+     * <p>用途：报表「动态指标查询」页面 → 考核员工选择器数据源。
+     * <p>本方法是为避免 {@code report-analytics-center} 跨库直连 perf 物理表而暴露的对外只读 Api，
+     * 调用方必须先通过 {@code auth.OrgApi.getOrgSubtreeCodes(currentOrg)} 完成数据范围裁剪后再传 orgCodes。
+     *
+     * <p>语义：
+     * <ul>
+     *   <li>{@code sinceDate} 必填；为 null 时返回空列表（fail-close）</li>
+     *   <li>{@code orgCodes} 为 null 表示不限机构（管理员场景）</li>
+     *   <li>{@code orgCodes} 为 empty set 表示数据范围裁剪后无可见机构 → 返回空列表（fail-close）</li>
+     * </ul>
+     *
+     * @param sinceDate 仅返回 {@code as_of_date >= sinceDate} 的员工（建议 {@code today.minusDays(90)}）
+     * @param orgCodes  机构子树过滤；null 表示不限
+     * @return 去重后的 empId 列表（按 empId 升序），永不返回 null
+     */
+    List<String> listEvalEmpIds(LocalDate sinceDate, Set<String> orgCodes);
 }

@@ -7,12 +7,10 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
 import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
+import com.bank.branch.platform.common.web.lock.LockManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,21 +26,17 @@ class KpiCascadeListenerTest {
     private PerfKpiItemMapper kpiItemMapper;
     private KpiSchemeService kpiSchemeService;
     private KpiCalcService kpiCalcService;
-    private RedisTemplate<String, String> redisTemplate;
-    private ValueOperations<String, String> valueOps;
+    private LockManager lockManager;
     private KpiCascadeListener listener;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setup() {
         kpiItemMapper = mock(PerfKpiItemMapper.class);
         kpiSchemeService = mock(KpiSchemeService.class);
         kpiCalcService = mock(KpiCalcService.class);
-        redisTemplate = mock(RedisTemplate.class);
-        valueOps = mock(ValueOperations.class);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
-        listener = new KpiCascadeListener(kpiItemMapper, kpiSchemeService, kpiCalcService, redisTemplate);
+        lockManager = mock(LockManager.class);
+        when(lockManager.tryLock(anyString(), anyString(), anyLong())).thenReturn(true);
+        listener = new KpiCascadeListener(kpiItemMapper, kpiSchemeService, kpiCalcService, lockManager);
     }
 
     /** FAILED 状态事件不触发 KPI 查询. */
@@ -94,12 +88,12 @@ class KpiCascadeListenerTest {
             eq(LocalDate.of(2026, 5, 15)), eq("v1"));
     }
 
-    /** Redis SETNX 失败时（返回 false）跳过本次计算，不重复触发. */
+    /** 锁拿不到时（tryLock 返回 false）跳过本次计算，不重复触发. */
     @Test
-    void redis_lock_failure_skips_calc() {
+    void lock_failure_skips_calc() {
         when(kpiItemMapper.selectActiveSchemeIdsByMetric("M_A")).thenReturn(List.of("S1"));
         when(kpiSchemeService.getById("S1")).thenReturn(activeScheme("S1", "MONTHLY"));
-        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(false);
+        when(lockManager.tryLock(anyString(), anyString(), anyLong())).thenReturn(false);
 
         listener.onMetricCompleted(successEvent("M_A"));
         verify(kpiCalcService, never()).calcScheme(any(), any(), any(), any(), any());
@@ -179,13 +173,13 @@ class KpiCascadeListenerTest {
         verify(kpiCalcService).calcScheme(eq("CODE_S2"), any(), any(), any(), any());
     }
 
-    /** Redis setIfAbsent 抛异常时退化为不防重，仍正常触发 calcScheme. */
+    /** tryLock 抛异常时退化为不防重，仍正常触发 calcScheme. */
     @Test
-    void redis_throws_falls_back_to_no_lock() {
+    void lock_throws_falls_back_to_no_lock() {
         when(kpiItemMapper.selectActiveSchemeIdsByMetric("M_A")).thenReturn(List.of("S1"));
         when(kpiSchemeService.getById("S1")).thenReturn(activeScheme("S1", "MONTHLY"));
-        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class)))
-            .thenThrow(new org.springframework.dao.QueryTimeoutException("redis down"));
+        when(lockManager.tryLock(anyString(), anyString(), anyLong()))
+            .thenThrow(new org.springframework.dao.QueryTimeoutException("db down"));
 
         listener.onMetricCompleted(successEvent("M_A"));
         verify(kpiCalcService).calcScheme(eq("CODE_S1"), any(), any(), any(), any());

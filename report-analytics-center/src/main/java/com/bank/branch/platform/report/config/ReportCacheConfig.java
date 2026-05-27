@@ -36,19 +36,20 @@ import java.time.Duration;
 public class ReportCacheConfig {
 
     /**
-     * Caffeine 仪表盘/汇总缓存管理器.
+     * Caffeine 缓存管理器（@Primary，由本模块统一持有，整个 Branch Platform 共享）.
+     *
+     * <p><strong>Dynamic 模式</strong>：未传 cacheNames 列表 → 任意 {@code @Cacheable("xxx")} 用到的
+     * cache 名都会按本 Caffeine spec 自动创建。这样 perf-engine（perf:metric_def / perf:target_plan / perf:kpi_scheme）、
+     * report-analytics（rpt:dashboard:* 等 7 个）、未来其他模块的 cache 都能复用一份配置。
+     *
+     * <p>统一策略：TTL 5 分钟 + maxSize 500（仪表盘/元数据查询场景秒级一致性 + 单 cache 500 entries 估算够用）。
+     * 如某模块需要更细粒度（不同 TTL / size），届时另起独立 CacheManager（带显式 bean name）+
+     * 在 {@code @Cacheable} 上显式 {@code cacheManager="xxx"} 路由即可。
      */
     @Bean("rptCacheManager")
     @Primary
     public CacheManager rptCacheManager() {
-        CaffeineCacheManager cm = new CaffeineCacheManager(
-                "rpt:dashboard:president",
-                "rpt:dashboard:org",
-                "rpt:dashboard:emp",
-                "rpt:metric:tree",
-                "rpt:summary:touch",
-                "rpt:summary:perf",
-                "rpt:summary:cust");
+        CaffeineCacheManager cm = new CaffeineCacheManager();   // 无 cacheNames → dynamic, 任意 name 自动创建
         cm.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(Duration.ofMinutes(5))
                 .maximumSize(500));

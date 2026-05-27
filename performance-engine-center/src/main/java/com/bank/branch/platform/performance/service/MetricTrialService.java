@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.config.PerfEngineProperties;
+import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -84,6 +85,11 @@ public class MetricTrialService {
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
             throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
         }
+        // V1.6 修复 Bug3：停用态禁止试运行（前端也已 disable 按钮，此处后端兜底）
+        if ("DISABLED".equals(def.getStatus()) || "INACTIVE".equals(def.getStatus())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "指标已停用，禁止试运行：" + metricCode + "（请先启用后再试运行）");
+        }
 
         // 2. 解析 sampleSize（null/0 → 默认；> 100 → 收敛 100）
         int effectiveSample = resolveSampleSize(sampleSize);
@@ -126,6 +132,9 @@ public class MetricTrialService {
             mergedParams.putAll(params);
         }
         mergedParams.putIfAbsent("dataDate", dataDate);
+        if (dataDate != null) {
+            mergedParams.putAll(DateMacroResolver.resolve(dataDate));
+        }
 
         Map<String, BigDecimal> all = sqlExecutor.execute(def.getSqlText(), mergedParams, timeout);
         int total = all == null ? 0 : all.size();

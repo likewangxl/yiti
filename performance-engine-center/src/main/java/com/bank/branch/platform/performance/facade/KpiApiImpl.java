@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * KPI 查询对外 API 实现.
@@ -33,7 +34,7 @@ import java.util.Optional;
  *
  * <p>V1.1 Task P4.3 交付：
  * <ul>
- *   <li>{@link #getCurrentKpiTotal} → 最新一条 {@code kpi_result.kpi_total_score}</li>
+ *   <li>{@link #getCurrentKpiTotal} → 最新一条 {@code KPI_RESULT.kpi_total_score}</li>
  *   <li>{@link #getCurrentKpiResult} → 最新一条完整 DTO</li>
  *   <li>{@link #getKpiHistory} → {@code as_of_date} 落在 {@code [from, to]} 区间的 DTO 列表</li>
  * </ul>
@@ -106,7 +107,7 @@ public class KpiApiImpl implements KpiApi {
      *   <li>ctx=null → fail-close "1=0", 查无结果</li>
      * </ul>
      *
-     * <p>ScopeColumns 映射: ownerEmpCol="emp_id" (kpi_result 表的业务主体列).
+     * <p>ScopeColumns 映射: ownerEmpCol="emp_id" (KPI_RESULT 表的业务主体列).
      *
      * <p>消费方建议: 从 V1.3 起，所有员工 KPI 历史查询统一切换到本方法；
      * V1.2 阶段 getKpiHistory 保留不变以保持 KpiApi 契约稳定。
@@ -119,13 +120,13 @@ public class KpiApiImpl implements KpiApi {
      */
     public List<KpiResultDTO> getKpiHistoryWithScope(String empId, String cycleType, LocalDate from, LocalDate to) {
         String currentEmpId = currentUserApi.getCurrentEmpId();
-        // kpi_result 表仅 emp_id 一个业务主体列, 其他 scope 列降级语义
+        // KPI_RESULT 表仅 emp_id 一个业务主体列, 其他 scope 列降级语义
         PerfScopeHelper.ScopeColumns columns = new PerfScopeHelper.ScopeColumns(
                 "emp_id",       // ownerEmpCol (SELF)
-                "emp_id",       // assigneeCol (kpi_result 无 assignee 概念)
-                "emp_id",       // createdByCol (kpi_result 由 Job 计算生成, 降级为 emp_id)
-                "emp_id",       // ownerOrgCol (kpi_result 表无 org_code, 降级为 emp_id)
-                null            // bizKeyCol (kpi_result 无 business_key, V1.4 WORKFLOW_PARTICIPANT 退化 fail-close)
+                "emp_id",       // assigneeCol (KPI_RESULT 无 assignee 概念)
+                "emp_id",       // createdByCol (KPI_RESULT 由 Job 计算生成, 降级为 emp_id)
+                "emp_id",       // ownerOrgCol (KPI_RESULT 表无 org_code, 降级为 emp_id)
+                null            // bizKeyCol (KPI_RESULT 无 business_key, V1.4 WORKFLOW_PARTICIPANT 退化 fail-close)
         );
         PerfScopeHelper.Fragment frag = perfScopeHelper.getFragment(
                 currentEmpId, BizType.PERF_CONFIG, BizAction.LIST, columns);
@@ -148,6 +149,33 @@ public class KpiApiImpl implements KpiApi {
     public Optional<KpiSchemeDTO> getKpiSchemeById(String schemeId) {
         return kpiSchemeService.getByIdOrNull(schemeId)
                 .map(this::assembleWithItems);
+    }
+
+    /**
+     * V1.14 任务 A：列举近期被考核员工工号集合.
+     *
+     * <p>语义见 {@link KpiApi#listEvalEmpIds(LocalDate, Set)}：
+     * <ul>
+     *   <li>{@code sinceDate=null} → 直接返回空（fail-close，不查 Mapper）</li>
+     *   <li>{@code orgCodes=null} → 不限机构，透传到 Mapper（管理员场景）</li>
+     *   <li>{@code orgCodes=空集合} → fail-close 直接返回空，不查 Mapper（数据范围裁剪后无可见机构）</li>
+     *   <li>Mapper 返回 null → 适配为空列表（非空契约）</li>
+     * </ul>
+     *
+     * <p>缓存策略：本期不加 {@code @Cacheable}，避免对短暂入参集合做 toString 当 key 引发误命中；
+     * 调用方 ({@code report-analytics-center}) 在 ServiceImpl 层加 Caffeine/Redis 5min 缓存即可。
+     */
+    @Override
+    public List<String> listEvalEmpIds(LocalDate sinceDate, Set<String> orgCodes) {
+        if (sinceDate == null) {
+            return Collections.emptyList();
+        }
+        if (orgCodes != null && orgCodes.isEmpty()) {
+            // fail-close: 数据范围裁剪后无可见机构 → 没有可见考核员工
+            return Collections.emptyList();
+        }
+        List<String> ids = kpiResultMapper.selectEvalEmpIds(sinceDate, orgCodes);
+        return ids == null ? Collections.emptyList() : ids;
     }
 
     /**

@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  V1.2 Phase Q0.3 对公分配调整审批流程占位 BPMN.
+  对公分配关系调整审批流程（2026-05-26 v2）.
 
-  流程：Start → 支行主管审批(branch_mgr_review) → 分行主管审批(hq_mgr_review) → End
-
-  说明：
-  - processDefinitionKey=perf_alloc_adjust_corp_v1；performance-engine-center V1.2 Q2 启动此流程.
-  - 任务候选人通过 ${taskAssignmentListener}（来自 workflow-center）解析，
-    候选人配置存储在 WF_NODE_CANDIDATE_CONF 表（V1.2 Q2 阶段通过 workflow-seed-v1.sql 补入）.
-  - 流程结束时 ${processCompletedListener} 发布 ProcessCompletedEvent，
-    V1.2 Q2 的 AllocAdjustCompletedListener 订阅后落地分配变更.
-  - V1.2 Q2 实现分配关系调整审批时才会填充完整的条件分支 / 驳回路径 / 网关.
+  流程：
+    start
+      → branch_approve              (机构负责人审批)
+      → biz_dept_review             (公司部经办审批，formData.corpRouteTo: LEADER / OWNER)
+      → gw1_corp_route              (排他网关)
+          ├─ LEADER → biz_dept_leader_approve (公司部负责人审批) → gw1_join
+          └─ OWNER  → original_owner_approve  (原业绩所属人审批) → gw1_join
+      → gw1_join
+      → finance_review              (资财部经办审批，formData.finRouteTo: LEADER / END)
+      → gw2_fin_route               (排他网关)
+          ├─ LEADER → finance_leader_approve (资财部负责人审批) → end
+          └─ END    → end
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -24,13 +27,44 @@
 
         <startEvent id="start" name="开始"/>
 
-        <userTask id="branch_mgr_review" name="支行主管审批">
+        <userTask id="branch_approve" name="机构负责人审批">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
         </userTask>
 
-        <userTask id="hq_mgr_review" name="分行主管审批">
+        <userTask id="biz_dept_review" name="公司部经办审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="gw1_corp_route" name="公司部路由"/>
+
+        <userTask id="biz_dept_leader_approve" name="公司部负责人审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <userTask id="original_owner_approve" name="原业绩所属人审批"
+                  flowable:assignee="${originalOwnerEmpId}">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="gw1_join" name="公司部汇合"/>
+
+        <userTask id="finance_review" name="资财部经办审批">
+            <extensionElements>
+                <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
+            </extensionElements>
+        </userTask>
+
+        <exclusiveGateway id="gw2_fin_route" name="资财部路由"/>
+
+        <userTask id="finance_leader_approve" name="资财部负责人审批">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
@@ -38,8 +72,34 @@
 
         <endEvent id="end" name="结束"/>
 
-        <sequenceFlow id="flow_start_branch" sourceRef="start" targetRef="branch_mgr_review"/>
-        <sequenceFlow id="flow_branch_hq" sourceRef="branch_mgr_review" targetRef="hq_mgr_review"/>
-        <sequenceFlow id="flow_hq_end" sourceRef="hq_mgr_review" targetRef="end"/>
+        <!-- 主线 -->
+        <sequenceFlow id="f_start" sourceRef="start" targetRef="branch_approve"/>
+        <sequenceFlow id="f_branch_biz" sourceRef="branch_approve" targetRef="biz_dept_review"/>
+        <sequenceFlow id="f_biz_gw1" sourceRef="biz_dept_review" targetRef="gw1_corp_route"/>
+
+        <!-- 公司部网关 -->
+        <sequenceFlow id="f_gw1_leader" sourceRef="gw1_corp_route" targetRef="biz_dept_leader_approve">
+            <conditionExpression xsi:type="tFormalExpression">${corpRouteTo == 'LEADER'}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="f_gw1_owner" sourceRef="gw1_corp_route" targetRef="original_owner_approve">
+            <conditionExpression xsi:type="tFormalExpression">${corpRouteTo == 'OWNER'}</conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="f_leader_join" sourceRef="biz_dept_leader_approve" targetRef="gw1_join"/>
+        <sequenceFlow id="f_owner_join" sourceRef="original_owner_approve" targetRef="gw1_join"/>
+
+        <!-- 汇合后进资财部 -->
+        <sequenceFlow id="f_join_fin" sourceRef="gw1_join" targetRef="finance_review"/>
+        <sequenceFlow id="f_fin_gw2" sourceRef="finance_review" targetRef="gw2_fin_route"/>
+
+        <!-- 资财部网关 -->
+        <sequenceFlow id="f_gw2_leader" sourceRef="gw2_fin_route" targetRef="finance_leader_approve">
+            <conditionExpression xsi:type="tFormalExpression">${finRouteTo == 'LEADER'}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="f_gw2_end" sourceRef="gw2_fin_route" targetRef="end">
+            <conditionExpression xsi:type="tFormalExpression">${finRouteTo == 'END'}</conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="f_finldr_end" sourceRef="finance_leader_approve" targetRef="end"/>
     </process>
 </definitions>

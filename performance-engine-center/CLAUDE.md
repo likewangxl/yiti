@@ -11,6 +11,72 @@
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
+**当前版本**: V1.12（指标结果导入通道）—— 在 V1.11 基础上新增 `importType=METRIC_RESULT`，按"指标结果模板"长格式（Sheet 名=数据日期）将员工/机构/客户的指标值导入到对应宽表。
+
+**V1.12 (2026-05-19 交付)：指标结果导入通道**
+
+- DDL：`EMP_INDEX_RESULT` / `ORG_INDEX_RESULT` / `CUST_INDEX_RESULT` 各加 `updated_time datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近更新时间'`；脚本 `docs/superpowers/sql/2026-05-19-emp-org-cust-index-result-add-updated-time.sql`（INFORMATION_SCHEMA 预检幂等）；同步更新 `docs/schema/ddl-performance.sql` 基线
+- Mapper XML：三张宽表 `insertSlotValue` 的 `ON DUPLICATE KEY UPDATE` 分支追加 `updated_time = NOW()`（防止 val 值相同时 MySQL 不自动刷 timestamp 的边界场景）
+- 新增 `PerfMetricDefMapper.selectByMetricNames(List<String> names)`：批量按 metric_name 查 def，{@code deleted=0} 过滤，规避导入逐行 DB 往返
+- 新增导入策略 `MetricResultImportStrategy implements ImportStrategy`，importType=`METRIC_RESULT`，复用现有 `POST /api/perf/import/upload` 端点
+- 模板对齐 `docs/指标结果模板.xlsx`（长格式 5 列固定）：列 = 序号 / 基础维度 / 维度对象 / 指标名称 / 指标数值
+- **数据日期入参**（2026-05-19 微调）：由前端 `el-date-picker` 经 HTTP 表单/query 参数 `dataDate` (yyyy-MM-dd) 传入，整文件（含多 Sheet）共用同一日期。缺失/格式错由 Controller 层 fail-fast (422)，不进入行级最大努力分支。Sheet 标签名变为纯展示用（业务方任意命名）。
+- 跨 strategy 上下文：新增 `ImportContext` record（仅持 `dataDate`），`ImportStrategy.execute` 签名扩展为 `execute(batch, file, ctx)`，4 个非 METRIC_RESULT 策略接收但忽略 ctx
+- 用 POI 而非 EasyExcel 解析的原因：模板为多 Sheet 长格式，Sheet 名作错误定位用
+- 校验项：
+  - 整文件级 fail-fast（Controller/Service）：`dataDate` 必填且 yyyy-MM-dd 可解析（缺失/格式错抛 VALIDATION_FAILED）
+  - 行级最大努力（单行失败累计到 errorSummary 不抛异常）：
+    - a) 基础维度 ∈ {EMP, ORG, CUST, null}
+    - b) 指标名称必须在 PERF_METRIC_DEF 中存在
+    - c) baseDim=EMP → 维度对象必须在 ADDRBOOK_EMPLOYEE 中存在（`AddressBookApi.getEmployee`，portal 通讯录员工表；V1.12 初版误用 auth `UserApi`/PT_USER 已 2026-05-19 修正）
+    - d) baseDim=ORG → 维度对象必须在 EXT_ORG_INFO 中存在（`OrgApi.getOrg`）
+    - baseDim=CUST/null 跳过主体存在性校验
+    - e) 基础维度一致性（2026-05-19 微调）：Excel 行 `基础维度` 必须与指标定义 `PerfMetricDef.base_dim` 严格相等（`Objects.equals`，null==null 即真维度无关型）。否则会按错误维度的 slot 静默写到错误宽表（例：EMP 指标 `M_0011 / slot=16` 被写到 `ORG_INDEX_RESULT.val_16`）。V1.12 初版漏校验，2026-05-19 收紧后写错维度 → 行级 errorSummary `基础维度不匹配（指标 X 期望 EMP，Excel 行=ORG）`，不入库。
+- 入库路由：EMP/ORG/CUST 分别走 `EmpIndexResultMapper.insertSlotValue` / `OrgIndexResultMapper.insertSlotValue` / `CustIndexResultMapper.insertSlotValue`；baseDim=null 校验通过但**不入宽表**（维度无关型）
+- version 取值：调 `SysControlService.getCurrentVersion(baseDim)`；维度无 sys_control 记录时降级为 `"V1"`（捕获 `SYS_CONTROL_VERSION_NOT_FOUND`）
+- 实体 `EmpIndexResult` / `OrgIndexResult` / `CustIndexResult` 新增 `updatedTime` 字段
+- 测试基础设施 `PerfTestConfig` 补 `UserApi` / `OrgApi` mock bean（默认放行）；`MetricResultImportStrategyTest` 12 case 全绿（V1.12 初版 11 + 2026-05-19 base_dim 一致性微调新增 `execute_baseDimMismatch_recordedInErrorSummary` / `execute_blankBaseDimAgainstEmpMetric_recordedInErrorSummary` 2 case；同期改造 `execute_nullBaseDim_passesValidationButNotInserted` 为 def.baseDim=null 真维度无关型场景 → 净增 1 case）
+- **errorSummary 透传**（2026-05-19 微调）：`PerfImportUploadRespDTO` 新增 `errorSummary` 字段，`PerfImportController.upload` 把 `batchDto.remark` 同步写入响应。前端 `xanzc_frontend Import.vue.onUpload` 拿到 `errorRows > 0` 时直接弹 `ElMessage.warning(errorSummary)` 不消失，让"已提交但有行失败（如机构号不在 EXT_ORG_INFO）"明显告警，避免误以为绿色 toast = 数据都进库。`PerfImportControllerIT` 新增 `upload_partialErrors_returnsErrorSummaryInResponse`；顺手修复 V1.12 遗留 `uploadMethod_shouldDeclareBizAuthAndAuditLog` 反射 2→3 参 baseline 失败，IT 18 case 全绿
+- 跨模块依赖：本期模块新依赖 `auth-permission-center` 的 `OrgApi`（机构存在性校验，V1.11 之前只用 `CurrentUserApi`）+ `portal-content-center` 的 `AddressBookApi`（员工存在性校验改走 ADDRBOOK_EMPLOYEE 通讯录员工表，2026-05-19 修正）
+
+V1.11 (2026-05-18 交付)：指标定义导入按 metric_name upsert —— 在 V1.10 基础上把 METRIC_DEF Excel 导入从「整批 all-or-none」改为「按指标名称命中则更新、未命中则新增」：
+
+**V1.11 (2026-05-18 交付)：指标定义按名称 upsert 改造**
+
+- DDL：`PERF_METRIC_DEF` 加 `uk_metric_name_alive` 函数索引（`(IF(deleted=0, metric_name, NULL))`），`PERF_IMPORT_BATCH` 加 `updated_rows int NOT NULL DEFAULT 0` 列；脚本 `docs/superpowers/sql/2026-05-18-perf-metric-def-name-unique-and-upsert-cols.sql`（含现网重名行清理，保留 `created_time` 最早 + `id` 字典序最小者，其余软删除）
+- Mapper：新增 `PerfMetricDefMapper.selectByMetricName`；`PerfImportBatchMapper.updateCounts` 签名扩展第 5 参数 `updatedRows`
+- Service：新增 `MetricDefService.upsertByName(cmd, operator) → UpsertMetricDefResult` 与 `batchUpsertByName(cmds, operator) → BatchUpsertMetricDefResult`；更新路径**保留** DB 原 `id` / `metric_code` / `val_slot`，不重新分配 slot；旧 `batchCreateMetricDefs` 标 `@Deprecated`
+- Strategy：`MetricDefImportStrategy.execute` 去掉「DB metric_code 已存在 → 整批失败」分支，加上「文件内 metric_name 重复 → 整批失败」检测；调用 `batchUpsertByName` 替换 `batchCreateMetricDefs`
+- DTO：`ImportResult` / `PerfImportBatch` / `PerfImportBatchRespDTO` 全部加 `updatedRows` 字段；`PerfImportBatchRespDTO` 派生 `insertedRows = successRows - updatedRows`
+- Controller：`POST /api/perf/import/upload` **破坏性变更**响应 `ResponseWrapper<String>` → `ResponseWrapper<PerfImportUploadRespDTO{batchId, totalRows, insertedRows, updatedRows, errorRows}>`；前端需联动
+- 测试：surefire 668 case 全绿（V1.10 baseline 665 + V1.11 新增 ~3 service unit + 改造 11+ strategy）；failsafe 5 case 新增（mapper IT 3 + controller IT 2）；既有 6 个 V1.10/V1.13 # 1 baseline 失败保持不变（非 V1.11 引入）
+- Spec: `docs/superpowers/specs/2026-05-18-metric-def-import-upsert-design.md`
+- Plan: `docs/superpowers/plans/2026-05-18-metric-def-import-upsert-impl.md`
+
+V1.10 (2026-05-18 交付)：指标列表去分页 + 新增 categories 端点 —— 在 V1.9 基础上对前端指标库工作模式做对齐：
+
+**V1.10 (2026-05-18 交付)：指标库接口对齐**
+
+- 破坏性变更：`GET /api/perf/metrics` 去分页，签名改为 `ResponseWrapper<List<MetricDefRespDTO>>`，移除 `pageNo` / `pageSize`；`pageDto` 同步删除
+- 新增 `GET /api/perf/metrics/categories` → `List<MetricCategoryDTO{value,label}>`，DISTINCT 聚合非空 `metric_category`（V1.9 列直接存中文，value==label，后续接 sys_dict 翻译时仅扩展 label）
+- Mapper 新增 `selectAllByCondition`（无 LIMIT/OFFSET）+ `selectDistinctCategories`
+- 前端 `xanzc_frontend/src/api/perf.js`：移除 `unwrapPage`，新增 `listMetricCategories()`；`api/metrics.js` 因有双形态兼容（Array.isArray 优先）零修改
+- 容量保护：当前 PERF_METRIC_DEF 数千行内可控，超 1 万行需评估恢复分页或分批 lazy load
+- 测试：`MetricDefServiceTest` 新增 3 case（listAllDto / listCategories distinct / listCategories empty），16 cases 全绿
+
+V1.9 (2026-05-17 交付)：指标定义 Excel 导入
+
+**V1.9 (2026-05-17 交付)：指标定义 Excel 导入**
+
+- DDL：PERF_METRIC_DEF 新增 `metric_category varchar(50)` + `idx_metric_category`（脚本 `docs/superpowers/sql/2026-05-17-perf-metric-def-add-category.sql`）
+- 新增导入策略 `MetricDefImportStrategy implements ImportStrategy`，importType=`METRIC_DEF`，复用现有 `POST /api/perf/import/upload`
+- **整批 all-or-none 语义**（与 TARGET/BASE_DATA/ALLOC 的行级最大努力不同）：任一行错误整批回滚，错误明细写 remark
+- 列翻译：Excel 9 列 → PerfMetricDef；指标编号空 → `M_{indexNo:04d}` 自动生成；来源 1→MANUAL/EXPR，2/3→AUTO/SQL；定时任务 1/2/3/4→DAY/MONTH/QUARTER/YEAR；状态 1/0→ACTIVE/DISABLED
+- 新增 `MetricDefService.batchCreateMetricDefs(List<Cmd>, operator)` `@Transactional`，逐条复用 `create()` 业务规则（slot 分配、循环检测）
+- 新增错误码 `PERF-42211 IMPORT_BATCH_ALL_OR_NONE_FAILED`
+- 模板：`docs/指标表上传模板.xlsx`（业务方提供，88 行示例）
+- Spec: `docs/superpowers/specs/2026-05-17-metric-def-import-design.md`
+
 **当前版本**: V1.7（指标级 Quartz 调度改造）—— 在 V1.6 基础上实现按指标定义自动注册调度任务：
 
 **V1.7 (2026-04-30 交付)：指标级 Quartz 调度改造**

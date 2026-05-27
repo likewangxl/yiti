@@ -7,6 +7,7 @@ import com.bank.branch.platform.workflow.api.dto.CancelProcessReqDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessSubmitReqDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
+import com.bank.branch.platform.workflow.api.event.ProcessWithdrawnEvent;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.enums.ProcessStatus;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
@@ -14,7 +15,10 @@ import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
 import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.task.api.Task;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -34,8 +38,10 @@ public class ProcessCommandService {
 
     private final ProcessStartService processStartService;
     private final RuntimeService runtimeService;
+    private final TaskService taskService;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final CurrentUserApi currentUserApi;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 提交流程。
@@ -87,6 +93,16 @@ public class ProcessCommandService {
                     WfErrorCode.PROCESS_NOT_RUNNING.getMessage());
         }
 
+        // 在删流程前先查当前 active task 拿 assignee，供 ProcessWithdrawnEvent 通知给下一节点审批人
+        String currentAssigneeEmpId = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .active()
+                .list().stream()
+                .map(Task::getAssignee)
+                .filter(s -> s != null && !s.isBlank())
+                .findFirst()
+                .orElse(null);
+
         runtimeService.deleteProcessInstance(processInstanceId, req.getReason());
 
         map.setProcessStatus(ProcessStatus.CANCELLED.getCode());
@@ -95,6 +111,14 @@ public class ProcessCommandService {
         map.setEndTime(LocalDateTime.now());
         bizProcessMapMapper.updateById(map);
         log.info("流程撤回成功: processInstanceId={}, operator={}", processInstanceId, currentEmpId);
+
+        // 发 ProcessWithdrawnEvent，listener 负责给 assignee 发通知（候选组未签收时 assignee=null 跳过）
+        eventPublisher.publishEvent(new ProcessWithdrawnEvent(
+                processInstanceId,
+                map.getBusinessKey(),
+                currentEmpId,
+                currentAssigneeEmpId,
+                req.getReason()));
     }
 
     private Map<String, Object> buildVariables(ProcessSubmitReqDTO req, String currentEmpId, String currentOrgCode) {

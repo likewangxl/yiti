@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * 员工指标结果宽表 Mapper（emp_index_result）.
  *
- * <p>V1.1 Task P1.1 交付。宽表共 200 个值槽（{@code val_1 .. val_200}），
+ * <p>V1.1 Task P1.1 交付。宽表共 400 个值槽（{@code val_1 .. val_400}），
  * 本 Mapper 以"单 slot 读写"为核心抽象，屏蔽 200 列带来的代码爆炸：
  * <ul>
  *   <li>{@link #insertSlotValue} 采用 "INSERT ... ON DUPLICATE KEY UPDATE" 语义，
@@ -30,7 +30,7 @@ import java.util.Map;
  *   <li>为实现 "按 slot 动态切换列名"，{@code insertSlotValue} / {@code selectSlotValue}
  *       / {@code selectSlotValuesByEmps} 在 XML 中使用 {@code val_${slot}} 拼接列名
  *       （列名不能用 #{} 参数化，属 common-dev-guide §5 允许的合法例外）；</li>
- *   <li>调用方 <strong>必须</strong> 在 Service 层强制校验 {@code slot ∈ [1, 200]}（例如
+ *   <li>调用方 <strong>必须</strong> 在 Service 层强制校验 {@code slot ∈ [1, 400]}（例如
  *       {@code @Range(min=1, max=200)} 或 {@code Assert.isTrue}），否则构成 SQL 注入漏洞；</li>
  *   <li>其余全部参数一律使用 {@code #{}} 预编译占位。</li>
  * </ul>
@@ -177,7 +177,7 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
      * V1.7：按 slot 列号查单主体单值（val_${slot} 动态列名）.
      *
      * <p><strong>安全说明</strong>：val_${slot} 属 common-dev-guide §5 合法例外，
-     * 调用方必须保证 slot ∈ [1, 200]（MetricCalcService.validateSlot 负责校验）。
+     * 调用方必须保证 slot ∈ [1, 400]（MetricCalcService.validateSlot 负责校验）。
      *
      * @param subject  员工工号
      * @param slot     值槽（1..200）

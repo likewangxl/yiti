@@ -61,9 +61,19 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     // =================== upload ===================
 
     @Test
-    void upload_validFile_returnsBatchId() throws Exception {
-        Mockito.when(perfImportService.startImport(eq("TARGET"), any(), anyString()))
+    void upload_validFile_returnsRespDTO() throws Exception {
+        // V1.11：startImport 返回 batchId，controller 通过 getBatchDto 装配为 DTO
+        Mockito.when(perfImportService.startImport(eq("TARGET"), any(), anyString(), any()))
                 .thenReturn("BATCH_123");
+        PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
+                .id("BATCH_123")
+                .totalRows(8)
+                .successRows(8)
+                .errorRows(0)
+                .updatedRows(0)
+                .insertedRows(8)
+                .build();
+        Mockito.when(perfImportService.getBatchDto("BATCH_123")).thenReturn(batchDto);
 
         MockMultipartFile file = new MockMultipartFile("file", "targets.xlsx",
                 "application/vnd.ms-excel", new byte[]{1, 2, 3});
@@ -73,7 +83,72 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
                         .param("importType", "TARGET"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
-                .andExpect(jsonPath("$.data").value("BATCH_123"));
+                .andExpect(jsonPath("$.data.batchId").value("BATCH_123"))
+                .andExpect(jsonPath("$.data.totalRows").value(8))
+                .andExpect(jsonPath("$.data.insertedRows").value(8))
+                .andExpect(jsonPath("$.data.updatedRows").value(0))
+                .andExpect(jsonPath("$.data.errorRows").value(0));
+    }
+
+    @Test
+    void upload_metricDef_returnsRespDTOWithInsertAndUpdateCounts() throws Exception {
+        // V1.11：METRIC_DEF 导入返回新增 + 更新计数
+        Mockito.when(perfImportService.startImport(eq("METRIC_DEF"), any(), anyString(), any()))
+                .thenReturn("BATCH_M11");
+        PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
+                .id("BATCH_M11")
+                .totalRows(5)
+                .successRows(5)
+                .errorRows(0)
+                .updatedRows(2)
+                .insertedRows(3)
+                .build();
+        Mockito.when(perfImportService.getBatchDto("BATCH_M11")).thenReturn(batchDto);
+
+        MockMultipartFile file = new MockMultipartFile("file", "metric-def.xlsx",
+                "application/vnd.ms-excel", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/perf/import/upload")
+                        .file(file)
+                        .param("importType", "METRIC_DEF"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.batchId").value("BATCH_M11"))
+                .andExpect(jsonPath("$.data.totalRows").value(5))
+                .andExpect(jsonPath("$.data.insertedRows").value(3))
+                .andExpect(jsonPath("$.data.updatedRows").value(2));
+    }
+
+    @Test
+    void upload_partialErrors_returnsErrorSummaryInResponse() throws Exception {
+        // 2026-05-19 微调：行级最大努力分支下产生的 errorSummary（写到 batch.remark）
+        // 必须透传到 upload 同步响应，让前端无需二次查 batch detail 即可弹错误提示
+        Mockito.when(perfImportService.startImport(eq("METRIC_RESULT"), any(), anyString(), any()))
+                .thenReturn("BATCH_MR_E");
+        PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
+                .id("BATCH_MR_E")
+                .totalRows(2)
+                .successRows(1)
+                .errorRows(1)
+                .updatedRows(0)
+                .insertedRows(1)
+                .remark("Sheet[sheet1] 第3行: 参数校验失败: 机构不存在（EXT_ORG_INFO）: SZ_BA")
+                .build();
+        Mockito.when(perfImportService.getBatchDto("BATCH_MR_E")).thenReturn(batchDto);
+
+        MockMultipartFile file = new MockMultipartFile("file", "metric-result.xlsx",
+                "application/vnd.ms-excel", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/perf/import/upload")
+                        .file(file)
+                        .param("importType", "METRIC_RESULT")
+                        .param("dataDate", "2026-05-19"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data.batchId").value("BATCH_MR_E"))
+                .andExpect(jsonPath("$.data.errorRows").value(1))
+                .andExpect(jsonPath("$.data.errorSummary",
+                        org.hamcrest.Matchers.containsString("机构不存在（EXT_ORG_INFO）: SZ_BA")));
     }
 
     @Test
@@ -87,7 +162,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void upload_unknownImportType_returnsBizKindInvalid() throws Exception {
-        Mockito.when(perfImportService.startImport(eq("UNKNOWN"), any(), anyString()))
+        Mockito.when(perfImportService.startImport(eq("UNKNOWN"), any(), anyString(), any()))
                 .thenThrow(new PerfException(PerfErrorCode.BIZ_KIND_INVALID, "UNKNOWN"));
 
         MockMultipartFile file = new MockMultipartFile("file", "x.xlsx",
@@ -202,9 +277,11 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void uploadMethod_shouldDeclareBizAuthAndAuditLog() throws Exception {
+        // V1.12 微调：upload 签名扩展为 (importType, file, dataDate) 三参，反射查找需对齐
         Method m = Class.forName(CONTROLLER_FQCN)
                 .getDeclaredMethod("upload", String.class,
-                        org.springframework.web.multipart.MultipartFile.class);
+                        org.springframework.web.multipart.MultipartFile.class,
+                        String.class);
         BizAuth ba = m.getAnnotation(BizAuth.class);
         assertThat(ba).isNotNull();
         assertThat(ba.bizType()).isEqualTo(BizType.PERF_CONFIG);

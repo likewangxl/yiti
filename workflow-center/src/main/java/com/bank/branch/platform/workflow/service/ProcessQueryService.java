@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
+import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
 import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
@@ -23,6 +24,7 @@ import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.TaskInfo;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.flowable.engine.TaskService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -56,6 +58,7 @@ public class ProcessQueryService {
     private final OrgApi orgApi;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     // ========== 流程实例详情 ==========
 
@@ -290,11 +293,60 @@ public class ProcessQueryService {
                 .asc()
                 .list();
 
-        // 仅返回用户任务类型的历史节点
-        return activities.stream()
+        // 用户任务类型的历史节点 + 末尾追加一条 SUBMIT "申请提交" 节点
+        // （Flowable HistoricActivityInstance startEvent 不归 userTask，且没有 assignee/taskId/comment，
+        //  无法直接转 ApprovalLogDTO；从 HistoricProcessInstance 取 startUserId/startTime 拼出来）
+        List<ApprovalLogDTO> logs = activities.stream()
                 .filter(a -> a.getActivityType() != null && a.getActivityType().startsWith("userTask"))
                 .map(this::toApprovalLogDTO)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
+        logs.add(buildSubmitLog(instance));
+        return logs;
+    }
+
+    /**
+     * 构造"申请提交" SUBMIT 节点，operator 取 HistoricProcessInstance.startUserId，
+     * operateTime 取 startTime，opinion 留 null（业务层若有 reason 字段由前端兜底填）。
+     */
+    private ApprovalLogDTO buildSubmitLog(HistoricProcessInstance instance) {
+        ApprovalLogDTO dto = new ApprovalLogDTO();
+        dto.setNodeKey("start_event");
+        dto.setNodeName("申请提交");
+        dto.setAction("SUBMIT");
+        String startUserId = instance.getStartUserId();
+        // ProcessStartService 启动流程时没调 identityService.setAuthenticatedUserId，
+        // 所以 ACT_HI_PROCINST.START_USER_ID_ 历史值都是 NULL，从 BIZ_PROCESS_MAP.start_user
+        // 兜底取（业务侧 startProcess 时已写入该列）
+        if (startUserId == null || startUserId.isBlank()) {
+            try {
+                BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(instance.getId());
+                if (map != null) {
+                    startUserId = map.getStartUser();
+                }
+            } catch (Exception e) {
+                log.warn("BIZ_PROCESS_MAP 查询失败 pid={}", instance.getId(), e);
+            }
+        }
+        if (startUserId != null && !startUserId.isBlank()) {
+            dto.setOperator(startUserId);
+            try {
+                dto.setOperatorName(userApi.getUserName(startUserId));
+            } catch (Exception e) {
+                log.warn("申请人姓名查询失败: startUserId={}", startUserId, e);
+            }
+            try {
+                OrgDTO org = orgApi.getUserMainOrg(startUserId);
+                if (org != null) {
+                    dto.setOperatorOrgName(org.getOrgName());
+                }
+            } catch (Exception e) {
+                log.warn("申请人主机构查询失败: startUserId={}", startUserId, e);
+            }
+        }
+        if (instance.getStartTime() != null) {
+            dto.setOperateTime(instance.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
+        }
+        return dto;
     }
 
     private ApprovalLogDTO toApprovalLogDTO(HistoricActivityInstance activity) {
@@ -315,11 +367,19 @@ public class ProcessQueryService {
             }
         }
 
-        // 获取审批意见（从历史任务变量）
-        if (activity.getAssignee() != null) {
+        // 获取审批结果与审批意见（2026-05-20 修复）
+        //  - 审批结果：从历史任务的 task local variable `approved` 取（true→APPROVE / false→REJECT）
+        //  - 审批意见：从 ACT_HI_COMMENT 取 type=APPROVE/REJECT 的 fullMessage
+        //  注意：原代码用 activity.getActivityId()（节点 key，如 branch_mgr_review）当作 taskId
+        //  查 HistoricTaskInstance 永远查不到；taskId 必须用 activity.getTaskId()。
+        //  另外原代码从 task local var 取 opinion，但 TaskOperationService 是通过
+        //  addComment 存的，task vars 里不会有 opinion 字段。
+        String taskId = activity.getTaskId();
+        if (taskId != null) {
             try {
                 HistoricTaskInstance hti = historyService.createHistoricTaskInstanceQuery()
-                        .taskId(activity.getActivityId())
+                        .taskId(taskId)
+                        .includeTaskLocalVariables()
                         .singleResult();
                 if (hti != null) {
                     Map<String, Object> vars = hti.getTaskLocalVariables();
@@ -327,12 +387,35 @@ public class ProcessQueryService {
                         Boolean approved = (Boolean) vars.get("approved");
                         dto.setAction(approved != null && approved ? "APPROVE" : "REJECT");
                     }
-                    if (vars != null && vars.containsKey("opinion")) {
-                        dto.setOpinion((String) vars.get("opinion"));
+                }
+                // Flowable 7 的 taskService.getTaskComments(taskId) 在 read 路径上对已完成任务
+                // 返回空 list（数据库 ACT_HI_COMMENT 里 INSERT 是有的，但 API 读不出来）。
+                // 实测：5 个已完成 userTask 的 ACT_HI_COMMENT type=APPROVE/REJECT 行均存在
+                // 但 taskService.getTaskComments 返回空。这里直接走 native SQL 查 ACT_HI_COMMENT。
+                List<Map<String, Object>> commentRows = jdbcTemplate.queryForList(
+                        "SELECT TYPE_, FULL_MSG_ FROM ACT_HI_COMMENT "
+                        + "WHERE TASK_ID_ = ? AND TYPE_ IN ('APPROVE', 'REJECT') "
+                        + "ORDER BY TIME_ ASC",
+                        taskId);
+                for (Map<String, Object> row : commentRows) {
+                    String type = (String) row.get("TYPE_");
+                    if ("APPROVE".equals(type) || "REJECT".equals(type)) {
+                        if (dto.getAction() == null) {
+                            dto.setAction(type);
+                        }
+                        // FULL_MSG_ 列类型是 LONGBLOB，JdbcTemplate 取到的是 byte[]，
+                        // 直接 toString() 会拿到 "[B@xxx" 哈希形式，必须按 UTF-8 解码。
+                        Object fullMsg = row.get("FULL_MSG_");
+                        if (fullMsg instanceof byte[]) {
+                            dto.setOpinion(new String((byte[]) fullMsg, java.nio.charset.StandardCharsets.UTF_8));
+                        } else if (fullMsg != null) {
+                            dto.setOpinion(fullMsg.toString());
+                        }
+                        break;
                     }
                 }
             } catch (Exception e) {
-                log.warn("获取审批意见失败: activityId={}", activity.getActivityId(), e);
+                log.warn("获取审批结果/意见失败: activityId={}, taskId={}", activity.getActivityId(), taskId, e);
             }
         }
 

@@ -139,19 +139,21 @@ public class SqlSafeValidator {
             throw new RptException(RptErrorCode.SQL_PARSE_FAILED);
         }
 
-        // 7) 白名单表校验
+        // 7) 表名提取 + 自动转大写（兼容 lower_case_table_names=0 的 MySQL）
         TablesNamesFinder finder = new TablesNamesFinder();
         List<String> tables = finder.getTableList(stmt);
+        String upperSql = sql;
         for (String t : tables) {
-            if (!whitelistTables.contains(t.toLowerCase(Locale.ROOT))) {
-                log.debug("[SqlSafeValidator] table {} not in whitelist", t);
-                throw new RptException(RptErrorCode.SQL_TABLE_NOT_WHITELISTED);
+            String upper = t.toUpperCase(Locale.ROOT);
+            if (!t.equals(upper)) {
+                upperSql = upperSql.replaceAll("(?i)\\b" + Pattern.quote(t) + "\\b", upper);
             }
         }
 
         // 8) LIMIT 标准化
-        String normalized = normalizeLimit(sql);
-        return SqlSafeResult.allowed(normalized, tables);
+        String normalized = normalizeLimit(upperSql);
+        return SqlSafeResult.allowed(normalized, tables.stream()
+                .map(t -> t.toUpperCase(Locale.ROOT)).toList());
     }
 
     /**

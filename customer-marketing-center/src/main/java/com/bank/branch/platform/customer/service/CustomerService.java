@@ -1,8 +1,8 @@
 package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
-import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
@@ -35,7 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -56,10 +58,8 @@ public class CustomerService {
     private final TouchTaskMapper touchTaskMapper;
     private final WorkflowApi workflowApi;
     private final ApplicationEventPublisher eventPublisher;
-    private final UserApi userApi;
-
-    /** 转交接收人必须具备的角色编码（客户经理）。 */
-    private static final String REQUIRED_RECEIVER_ROLE = "R_RM";
+    /** 用于 listPageAsDTO 回填 ownerOrgName（OrgApi 自带缓存）。 */
+    private final OrgApi orgApi;
 
     /**
      * 按 ID 查询客户主档，不存在时抛出 BizException。
@@ -118,12 +118,46 @@ public class CustomerService {
     public PageResult<CustomerDTO> listPageAsDTO(String keyword, String status, int pageNo, int pageSize) {
         log.debug("[CustomerService.listPageAsDTO] keyword={}, status={}, pageNo={}, pageSize={}", keyword, status, pageNo, pageSize);
         PageResult<CustMaster> raw = listPage(keyword, status, pageNo, pageSize);
+        List<CustomerDTO> dtos = CustomerDTOConverter.toDTOList(raw.getRecords());
+        fillOwnerOrgNames(dtos);
         PageResult<CustomerDTO> out = new PageResult<>();
         out.setPageNo(raw.getPageNo());
         out.setPageSize(raw.getPageSize());
         out.setTotal(raw.getTotal());
-        out.setRecords(CustomerDTOConverter.toDTOList(raw.getRecords()));
+        out.setRecords(dtos);
         return out;
+    }
+
+    /**
+     * 批量回填 CustomerDTO.ownerOrgName。
+     * <p>
+     * CustomerDTOConverter 显式将 ownerOrgName 置 null，由本方法在 Service 层补充。
+     * 通过本地 cache 对相同 ownerOrgId 仅查一次（同页客户挂同机构很常见）；
+     * OrgApi.getOrg 自身也带缓存，再叠一层本地短路只为了少调 API、保持 N=O(机构数)。
+     * </p>
+     *
+     * @param dtos 待补的 DTO 列表（原地修改，可能为空）
+     */
+    private void fillOwnerOrgNames(List<CustomerDTO> dtos) {
+        if (dtos == null || dtos.isEmpty()) {
+            return;
+        }
+        Map<String, String> orgNameCache = new HashMap<>();
+        for (CustomerDTO dto : dtos) {
+            String code = dto.getOwnerOrgId();
+            if (code == null || dto.getOwnerOrgName() != null) {
+                continue;
+            }
+            String name;
+            if (orgNameCache.containsKey(code)) {
+                name = orgNameCache.get(code);
+            } else {
+                OrgDTO org = orgApi.getOrg(code);
+                name = (org != null) ? org.getOrgName() : null;
+                orgNameCache.put(code, name);
+            }
+            dto.setOwnerOrgName(name);
+        }
     }
 
     /**
@@ -157,11 +191,6 @@ public class CustomerService {
             throw new BizException(CustomerErrorCode.TRANSFER_REASON_REQUIRED.getCode(),
                     CustomerErrorCode.TRANSFER_REASON_REQUIRED.getMessage());
         }
-
-        // P1C 2026-04-29：接收人校验
-        // CUST-40306：接收人必须具备客户经理角色 R_RM
-        // CUST-40307：接收人 mainOrgCode 必须等于 claim.orgId（同机构内转交）
-        assertReceiverEligible(toEmpId, claim.getOrgId());
 
         String fromEmpId = claim.getMaintainerEmpId();
 
@@ -327,36 +356,5 @@ public class CustomerService {
                     CustomerErrorCode.CUSTOMER_NOT_FOUND.getMessage());
         }
         return master;
-    }
-
-    /**
-     * 校验转交接收人是否合格（P1C 2026-04-29 落地）。
-     * <ul>
-     *   <li>CUST-40306：接收人必须具备客户经理角色 R_RM</li>
-     *   <li>CUST-40307：接收人 mainOrgCode 必须等于 claim.orgId（同机构内转交）</li>
-     * </ul>
-     * 接收人不存在视为机构不符（CUST-40307），保持错误码语义一致性。
-     *
-     * @param toEmpId    接收人员工工号
-     * @param claimOrgId 认领关系所在机构编码
-     */
-    private void assertReceiverEligible(String toEmpId, String claimOrgId) {
-        // 角色校验（CUST-40306）
-        java.util.Set<String> roles = userApi.getUserRoleCodes(toEmpId);
-        if (!roles.contains(REQUIRED_RECEIVER_ROLE)) {
-            log.warn("[CustomerService.assertReceiverEligible] 转交拒绝 CUST-40306 toEmpId={}, roles={}",
-                    toEmpId, roles);
-            throw new BizException(CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getCode(),
-                    CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getMessage());
-        }
-        // 机构校验（CUST-40307）：接收人主机构必须等于认领关系所在机构
-        UserDTO receiver = userApi.getUserByEmpId(toEmpId);
-        String receiverOrg = receiver == null ? null : receiver.getMainOrgCode();
-        if (!java.util.Objects.equals(receiverOrg, claimOrgId)) {
-            log.warn("[CustomerService.assertReceiverEligible] 转交拒绝 CUST-40307 toEmpId={}, receiverOrg={}, claimOrg={}",
-                    toEmpId, receiverOrg, claimOrgId);
-            throw new BizException(CustomerErrorCode.TRANSFER_ORG_MISMATCH.getCode(),
-                    CustomerErrorCode.TRANSFER_ORG_MISMATCH.getMessage());
-        }
     }
 }

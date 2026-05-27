@@ -80,6 +80,12 @@ public enum PerfErrorCode {
      */
     METRIC_SLOT_CONFLICT("PERF-40901", "指标槽位已占用"),
 
+    /**
+     * 指标名称已存在（V1.13：对齐 V1.11 新增的 uk_metric_name_alive 唯一约束）.
+     * <p>复用 PERF-40901 编号（HTTP 409），通过 message 区分"编码重复"与"中文名重复".
+     */
+    METRIC_NAME_DUP("PERF-40901", "指标名称已存在"),
+
     /** 指标存在下游引用，不可删除（V1.1 占位） */
     METRIC_HAS_DOWNSTREAM_REF("PERF-40902", "指标存在下游引用，不可删除"),
 
@@ -125,6 +131,13 @@ public enum PerfErrorCode {
 
     /** 导出过滤条件未通过 DATA_SCOPE 校验（V1.2 占位） */
     EXPORT_FILTER_SCOPE_VIOLATION("PERF-42210", "导出过滤条件未通过 DATA_SCOPE 校验"),
+
+    /**
+     * V1.9：指标定义批量导入预校验失败（整批 all-or-none）.
+     * <p>场景：MetricDefImportStrategy 预扫描发现任一行错误（必填缺失、文件内 metric_code
+     * 重复、calc_freq 越界等），整批回滚为 FAILED，错误明细写入 PerfImportBatch.remark。
+     */
+    IMPORT_BATCH_ALL_OR_NONE_FAILED("PERF-42211", "指标定义批量导入校验失败"),
 
     // =============================================
     // K.4 500xx 系统错误

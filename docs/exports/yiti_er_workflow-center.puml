@@ -1,0 +1,86 @@
+@startuml yiti_er_workflow-center
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title 03-工作流中心 — 内部表与跨模块引用 (虚线=逻辑/实线=物理)
+
+package "03-工作流中心" #F3E5F5 {
+  entity "BIZ_PROCESS_MAP" as BIZ_PROCESS_MAP {
+    .. 业务流程映射表 ..
+    PK: id
+    + business_key
+    + biz_id
+    + process_definition_key
+    + process_instance_id
+  }
+  entity "WF_NODE_CANDIDATE_CONF" as WF_NODE_CANDIDATE_CONF {
+    .. 流程节点候选人配置表 ..
+    PK: id
+    + process_definition_key
+    + node_key
+  }
+  entity "WF_NODE_FORM_CONF" as WF_NODE_FORM_CONF {
+    .. 流程节点表单配置表 ..
+    PK: id
+    + process_definition_key
+    + node_key
+  }
+  entity "WF_TIMEOUT_RULE" as WF_TIMEOUT_RULE {
+    .. 流程超时规则表 ..
+    PK: id
+    + process_definition_key
+    + node_key
+  }
+}
+
+package "外部模块（引用占位）" #FAFAFA {
+  entity "ACT_RE_PROCDEF" as ACT_RE_PROCDEF <<09-Flowable引擎(只读)>> {
+    ..  ..
+  }
+  entity "ACT_RU_EXECUTION" as ACT_RU_EXECUTION <<09-Flowable引擎(只读)>> {
+    ..  ..
+  }
+  entity "BIZ_FILE_REL" as BIZ_FILE_REL <<02-系统治理中心>> {
+    .. 业务-附件关联表 ..
+  }
+  entity "CUST_LEAD" as CUST_LEAD <<05-客户营销>> {
+    .. 客户线索表 ..
+  }
+  entity "LEAD_IMPORT_BATCH" as LEAD_IMPORT_BATCH <<05-客户营销>> {
+    .. 线索导入批次表 ..
+  }
+  entity "LOAN_APPLY" as LOAN_APPLY <<06-业务申请>> {
+    .. 资产投放申请表 ..
+  }
+  entity "PERF_ALLOC_ADJUST_APPLY" as PERF_ALLOC_ADJUST_APPLY <<07-绩效计算>> {
+    .. 分配关系调整申请 ..
+  }
+  entity "PERF_TARGET_ADJUST_APPLY" as PERF_TARGET_ADJUST_APPLY <<07-绩效计算>> {
+    .. 目标修正申请 ..
+  }
+  entity "SUPPORT_REQUEST" as SUPPORT_REQUEST <<06-业务申请>> {
+    .. 中场支持申请表 ..
+  }
+  entity "TOUCH_TASK" as TOUCH_TASK <<05-客户营销>> {
+    .. 触达任务表 ..
+  }
+}
+
+BIZ_PROCESS_MAP }.. BIZ_FILE_REL : biz_id
+BIZ_PROCESS_MAP }.. ACT_RE_PROCDEF : process_definition_key
+BIZ_PROCESS_MAP }.. ACT_RU_EXECUTION : process_instance_id
+CUST_LEAD }.. BIZ_PROCESS_MAP : business_key
+LEAD_IMPORT_BATCH }.. BIZ_PROCESS_MAP : business_key
+LOAN_APPLY }.. BIZ_PROCESS_MAP : business_key
+PERF_ALLOC_ADJUST_APPLY }.. BIZ_PROCESS_MAP : business_key
+PERF_TARGET_ADJUST_APPLY }.. BIZ_PROCESS_MAP : business_key
+SUPPORT_REQUEST }.. BIZ_PROCESS_MAP : business_key
+TOUCH_TASK }.. BIZ_PROCESS_MAP : business_key
+WF_NODE_CANDIDATE_CONF }.. ACT_RE_PROCDEF : process_definition_key
+WF_NODE_CANDIDATE_CONF }.. WF_NODE_FORM_CONF : node_key
+WF_NODE_FORM_CONF }.. ACT_RE_PROCDEF : process_definition_key
+WF_TIMEOUT_RULE }.. ACT_RE_PROCDEF : process_definition_key
+WF_TIMEOUT_RULE }.. WF_NODE_FORM_CONF : node_key
+@enduml

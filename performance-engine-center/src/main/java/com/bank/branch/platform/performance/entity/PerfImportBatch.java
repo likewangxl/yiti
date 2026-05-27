@@ -70,6 +70,9 @@ public class PerfImportBatch {
     /** 失败行数. */
     private Integer errorRows;
 
+    /** V1.11：更新行数（仅 METRIC_DEF 导入使用，其他类型恒 0）. */
+    private Integer updatedRows;
+
     /** 错误明细文件 ID. */
     private String errorFileObjectId;
 

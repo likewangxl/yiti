@@ -245,6 +245,36 @@ class MetricCalcServiceTest {
     }
 
     @Test
+    @DisplayName("V1.12：valSlot=400 在新上界内（应通过 validateSlot，进入 SQL 执行路径）")
+    void calcMetric_whenSlotIs400_passesValidation() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setValSlot(400);
+        when(metricDefService.getByCodeOrNull("TEST_CALC_SLOT_400")).thenReturn(def);
+        Map<String, BigDecimal> execResult = new LinkedHashMap<>();
+        execResult.put("E001", new BigDecimal("9.9"));
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(execResult);
+
+        String taskId = metricCalcService.calcMetric("TEST_CALC_SLOT_400", LocalDate.of(2026, 5, 19), "v");
+
+        assertThat(taskId).isNotBlank();
+        verify(empIndexResultMapper).insertSlotValue(eq("E001"), eq(LocalDate.of(2026, 5, 19)), eq("v"), eq(400), eq(new BigDecimal("9.9")));
+    }
+
+    @Test
+    @DisplayName("V1.12：valSlot=401 越上界 → 抛 METRIC_CALC_LOGIC_INVALID + FAILED 状态")
+    void calcMetric_whenSlotIs401_fails() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setValSlot(401);
+        when(metricDefService.getByCodeOrNull("TEST_CALC_SLOT_401")).thenReturn(def);
+
+        assertThatThrownBy(() -> metricCalcService.calcMetric("TEST_CALC_SLOT_401", LocalDate.now(), "v"))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID);
+        verify(perfRunTaskMapper).updateStatus(anyString(), eq("FAILED"), anyString());
+    }
+
+    @Test
     @DisplayName("SQL 指标 + baseDim=CUST：路由 CustIndexResultMapper")
     void calcMetric_sqlOnCust_writesCustWideTable() {
         PerfMetricDef def = buildEmpSqlMetric();
@@ -259,6 +289,39 @@ class MetricCalcServiceTest {
         assertThat(taskId).isNotBlank();
         verify(custIndexResultMapper).insertSlotValue(eq("C001"), eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(1), eq(new BigDecimal("5")));
         verify(empIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void executeSqlAndPersist_injectsDateMacrosIntoParams() {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_TEST_MACRO");
+        def.setBaseDim("EMP");
+        def.setCalcLogicType("SQL");
+        def.setSqlText("SELECT emp_id AS base_key, 1 AS metric_value FROM t WHERE dt = :dateMonthEnd");
+        def.setValSlot(1);
+        when(metricDefService.getByCodeOrNull("M_TEST_MACRO")).thenReturn(def);
+
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class)))
+                .thenReturn(Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 5, 20);
+        metricCalcService.calcMetric("M_TEST_MACRO", dataDate, "V1", "MANUAL");
+
+        ArgumentCaptor<Map<String, Object>> paramsCap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(eq(def.getSqlText()), paramsCap.capture(), any(Duration.class));
+        Map<String, Object> captured = paramsCap.getValue();
+        assertThat(captured)
+                .hasSize(10)
+                .containsEntry("dataDate", dataDate)
+                .containsEntry("version", "V1")
+                .containsEntry("dateToday", dataDate)
+                .containsEntry("dateYesterday", dataDate.minusDays(1))
+                .containsEntry("dateMonthEnd", LocalDate.of(2026, 5, 31))
+                .containsEntry("datePrevMonthEnd", LocalDate.of(2026, 4, 30))
+                .containsEntry("dateQuarterEnd", LocalDate.of(2026, 6, 30))
+                .containsEntry("datePrevQuarterEnd", LocalDate.of(2026, 3, 31))
+                .containsEntry("dateYearEnd", LocalDate.of(2026, 12, 31))
+                .containsEntry("datePrevYearEnd", LocalDate.of(2025, 12, 31));
     }
 
     // ========== 测试构造器 ==========

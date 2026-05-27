@@ -16,6 +16,8 @@ public class RoleUserRespDTO {
     private String displayName;
     private String orgCode;
     private String orgName;
+    /** 账号是否启用：0-启用，1-未启用（对应 PT_USER.ISENABLED） */
+    private Integer isEnabled;
     /** 用户绑定到该角色的时间 */
     private LocalDateTime bindTime;
 }

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.performance.config.PerfEngineProperties;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
@@ -11,6 +12,7 @@ import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.dto.SubjectStats;
+import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -53,7 +55,7 @@ import java.util.UUID;
  *   </li>
  *   <li>终态写入后通过 {@link ApplicationEventPublisher} 发布 {@link MetricCalcCompletedEvent}。</li>
  *   <li><strong>Service 层 slot 校验</strong>：调用宽表 UPSERT 前强制校验
- *       {@code valSlot ∈ [1, 200]}，防止 {@code val_${slot}} 拼接列名漏放。</li>
+ *       {@code valSlot ∈ [1, 400]}，防止 {@code val_${slot}} 拼接列名漏放。</li>
  * </ul>
  *
  * <p><strong>V1.7 多主体改造</strong>：EXPR/GROOVY 类型改为逐主体执行，
@@ -85,9 +87,11 @@ public class MetricCalcService {
     private final PerfEngineProperties perfEngineProperties;
     private final SubjectFetcher subjectFetcher;
     private final ApplicationEventPublisher eventPublisher;
+    private final CurrentUserApi currentUserApi;
 
     /**
-     * 构造器注入（V1.7 新增 SubjectFetcher + ApplicationEventPublisher 参数）.
+     * 构造器注入（V1.7 新增 SubjectFetcher + ApplicationEventPublisher 参数；
+     * 新增 CurrentUserApi 用于 run_task.started_by 兜底）.
      */
     @Autowired
     public MetricCalcService(MetricDefService metricDefService,
@@ -99,7 +103,8 @@ public class MetricCalcService {
                              PerfRunTaskMapper perfRunTaskMapper,
                              PerfEngineProperties perfEngineProperties,
                              SubjectFetcher subjectFetcher,
-                             ApplicationEventPublisher eventPublisher) {
+                             ApplicationEventPublisher eventPublisher,
+                             CurrentUserApi currentUserApi) {
         this.metricDefService = metricDefService;
         this.sqlExecutor = sqlExecutor;
         this.groovyExecutor = groovyExecutor;
@@ -110,6 +115,7 @@ public class MetricCalcService {
         this.perfEngineProperties = perfEngineProperties;
         this.subjectFetcher = subjectFetcher;
         this.eventPublisher = eventPublisher;
+        this.currentUserApi = currentUserApi;
     }
 
     /**
@@ -141,6 +147,11 @@ public class MetricCalcService {
         PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
             throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
+        }
+        // V1.9：维度无关型指标（baseDim=null）无 slot、无宽表归属，不允许进入计算路径
+        if (def.getBaseDim() == null || def.getBaseDim().isBlank()) {
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                    "维度无关型指标不支持自动/手动计算: " + metricCode + "（base_dim 为空）");
         }
 
         // 2. jobKey 推导规则：PERF_METRIC_{metricCode}（与 P1 resolveGroup 规则一致）
@@ -214,6 +225,7 @@ public class MetricCalcService {
         Map<String, Object> params = new HashMap<>();
         params.put("dataDate", dataDate);
         params.put("version", version);
+        params.putAll(DateMacroResolver.resolve(dataDate));
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
         Map<String, BigDecimal> values = sqlExecutor.execute(def.getSqlText(), params, timeout);
@@ -385,7 +397,7 @@ public class MetricCalcService {
     /**
      * Service 层 slot 校验（val_${slot} 列名拼接前必须校验范围）.
      *
-     * @throws PerfException slot 为 null 或不在 [1, 200]
+     * @throws PerfException slot 为 null 或不在 [1, 400]（V1.12: 200 → 400）
      */
     private void validateSlot(PerfMetricDef def) {
         Integer slot = def.getValSlot();
@@ -393,9 +405,9 @@ public class MetricCalcService {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "指标 " + def.getMetricCode() + " 未分配 val_slot");
         }
-        if (slot < 1 || slot > 200) {
+        if (slot < 1 || slot > 400) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
-                    "val_slot 超出 [1,200]: " + slot);
+                    "val_slot 超出 [1,400]: " + slot);
         }
     }
 
@@ -409,6 +421,14 @@ public class MetricCalcService {
         task.setDataVersion(version);
         task.setStatus("PENDING");
         task.setStartTime(LocalDateTime.now());
+        // started_by NOT NULL：HTTP 请求触发拿当前用户；Quartz 调度无 ThreadLocal 上下文 → 兜底 SYSTEM
+        String startedBy;
+        try {
+            startedBy = currentUserApi.getCurrentEmpId();
+        } catch (Exception e) {
+            startedBy = "SYSTEM";
+        }
+        task.setStartedBy(startedBy);
         perfRunTaskMapper.insert(task);
     }
 

@@ -18,7 +18,7 @@ public class ResourceCreateReqDTO {
     private String resourceUrl;
 
     @NotBlank
-    @Pattern(regexp = "^(GET|POST|PUT|DELETE|\\*)$")
+    @Pattern(regexp = "^(GET|POST|PUT|DELETE|\\*|MENU)$")
     private String resourceMethod;
 
     @NotBlank
@@ -39,4 +39,7 @@ public class ResourceCreateReqDTO {
 
     @Size(max = 10)
     private String sysCode;
+
+    @Size(max = 256)
+    private String menuIconUrl;
 }

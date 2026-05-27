@@ -9,7 +9,8 @@ import com.bank.branch.platform.performance.service.KpiCalcService;
 import com.bank.branch.platform.performance.service.KpiSchemeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+import com.bank.branch.platform.common.web.lock.HolderUtil;
+import com.bank.branch.platform.common.web.lock.LockManager;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -50,7 +51,7 @@ public class KpiCascadeListener {
     private final PerfKpiItemMapper kpiItemMapper;
     private final KpiSchemeService kpiSchemeService;
     private final KpiCalcService kpiCalcService;
-    private final RedisTemplate<String, String> redisTemplate;
+    private final LockManager lockManager;
 
     /**
      * 处理指标计算完成事件.
@@ -106,19 +107,19 @@ public class KpiCascadeListener {
         // V1.7：cycleType 入境一次大写归一，下游统一大写传递
         String cycleType = scheme.getCycleType() == null ? null : scheme.getCycleType().toUpperCase();
         LocalDate cycleDate = resolveCycleDate(cycleType, event.dataDate());
-        // Redis SETNX 30s 防重：同一方案+周期+版本在 30s 内只触发一次
+        // PT_LOCK 30s 防重：同一方案+周期+版本在 30s 内只触发一次
+        // 不主动 unlock：靠 TTL 自然过期，30s 内重复触发被防住
         String lockKey = String.format("kpi:cascade:%s:%s:%s",
             scheme.getSchemeCode(), cycleDate, event.version());
-        Boolean acquired;
+        boolean acquired;
         try {
-            acquired = redisTemplate.opsForValue()
-                .setIfAbsent(lockKey, "1", Duration.ofSeconds(30));
-        } catch (Exception redisEx) {
-            // Redis 不可用时退化为不防重（宁可重算也不丢计算，保证最终一致）
-            log.warn("[KpiCascade] Redis 不可用，退化为不防重: {}", redisEx.getMessage());
+            acquired = lockManager.tryLock(lockKey, HolderUtil.current(), Duration.ofSeconds(30).toMillis());
+        } catch (Exception lockEx) {
+            // 锁服务不可用时退化为不防重（宁可重算也不丢计算，保证最终一致）
+            log.warn("[KpiCascade] 锁不可用，退化为不防重: {}", lockEx.getMessage());
             acquired = true;
         }
-        if (!Boolean.TRUE.equals(acquired)) {
+        if (!acquired) {
             log.debug("[KpiCascade] 30s 内已触发 lockKey={}，跳过", lockKey);
             return;
         }

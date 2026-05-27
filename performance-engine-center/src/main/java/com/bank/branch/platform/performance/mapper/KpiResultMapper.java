@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -123,4 +124,24 @@ public interface KpiResultMapper extends BaseMapper<KpiResult> {
                         @Param("cycleDate") LocalDate cycleDate,
                         @Param("asOfDate") LocalDate asOfDate,
                         @Param("dataVersion") String dataVersion);
+
+    /**
+     * V1.14：列举近期被考核员工工号集合（distinct emp_id）.
+     *
+     * <p>用途：报表「考核员工选择器」数据源；为避免 report-analytics-center 跨库直连
+     * perf 物理表，由 {@code KpiApi.listEvalEmpIds} 暴露对外。
+     *
+     * <p>SQL 语义：
+     * <ul>
+     *   <li>{@code as_of_date >= #{sinceDate}} 限近期考核</li>
+     *   <li>{@code orgCodes} 非空时 LEFT JOIN {@code EXT_USER_ORG} + {@code u.org_code IN (...)} 做机构子树裁剪</li>
+     *   <li>{@code orgCodes} 为 null 时不 JOIN（管理员/全行场景）</li>
+     * </ul>
+     *
+     * @param sinceDate 起始日期（含），必填
+     * @param orgCodes  机构子树过滤；null 表示不限
+     * @return 员工工号去重列表（升序），可能为空
+     */
+    List<String> selectEvalEmpIds(@Param("sinceDate") LocalDate sinceDate,
+                                  @Param("orgCodes") Collection<String> orgCodes);
 }

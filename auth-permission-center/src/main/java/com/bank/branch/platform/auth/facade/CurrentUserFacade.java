@@ -14,9 +14,14 @@ import java.util.Set;
  * 当前用户上下文 Facade 实现
  * 实现 CurrentUserApi，所有方法均从 ThreadLocal 读取，无数据库 IO。
  * 可在任意业务模块中安全调用，调用前须确保请求已通过认证过滤器。
+ *
+ * <p>Bean 名显式指定为 {@code currentUserApi}：DashboardServiceImpl 等
+ * 模块的 {@code @Cacheable} SpEL key 通过 {@code @currentUserApi.getCurrentOrgCode()}
+ * 走 BeanFactoryResolver 取 bean，必须使用接口名注册，否则会触发
+ * SpelEvaluationException EL1058E（参见 rpt:dashboard:president 缓存 key）。
  */
 @Slf4j
-@Service
+@Service("currentUserApi")
 @RequiredArgsConstructor
 public class CurrentUserFacade implements CurrentUserApi {
 

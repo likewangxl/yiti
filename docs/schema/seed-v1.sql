@@ -16,7 +16,7 @@ SET NAMES utf8mb4;
 -- ---------------------------------------------------------
 -- 1.1 YES_NO（通用是否）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_YN_1', 'YES_NO', 'YES', '是', '1', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_YN_0', 'YES_NO', 'NO',  '否', '0', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -24,7 +24,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.2 INDUSTRY（行业类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_IND_IT',    'INDUSTRY', 'IT',    '信息技术',       'IT',    1,  'ACTIVE', 'V1 seed', 'seed'),
 ('D_IND_MFG',   'INDUSTRY', 'MFG',   '制造业',         'MFG',   2,  'ACTIVE', 'V1 seed', 'seed'),
@@ -41,7 +41,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.3 GROUP_TYPE（集团类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_GRP_1', 'GROUP_TYPE', 'GROUP',  '集团客户',   'GROUP',  1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_GRP_2', 'GROUP_TYPE', 'SINGLE', '非集团客户', 'SINGLE', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -49,7 +49,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.4 CUSTOMER_TYPE（客户类型，影响线索审批流程路由）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_CT_1', 'CUSTOMER_TYPE', 'CORP',   '对公客户', 'CORP',   1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_CT_2', 'CUSTOMER_TYPE', 'RETAIL', '零售客户', 'RETAIL', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -57,7 +57,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.5 ENTERPRISE_TYPE（企业类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_ET_1', 'ENTERPRISE_TYPE', 'SOE',     '国企',     'SOE',     1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_ET_2', 'ENTERPRISE_TYPE', 'PRIVATE', '民营',     'PRIVATE', 2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -68,7 +68,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.6 BIZ_KIND（业务种类）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_BK_DEP',  'BIZ_KIND', 'DEPOSIT',       '存款',       'DEPOSIT',       1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_BK_LOAN', 'BIZ_KIND', 'LOAN',          '贷款',       'LOAN',          2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -78,7 +78,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.7 METRIC_DIM / PERF_BASE_DIM（指标维度）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_MD_EMP',  'PERF_BASE_DIM', 'EMP',  '人员', 'EMP',  1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_MD_ORG',  'PERF_BASE_DIM', 'ORG',  '机构', 'ORG',  2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -87,7 +87,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.8 PERF_CALC_FREQ（计算频率）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_CF_DAY',     'PERF_CALC_FREQ', 'DAY',     '日',   'DAY',     1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_CF_MONTH',   'PERF_CALC_FREQ', 'MONTH',   '月',   'MONTH',   2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -97,7 +97,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.9 PERF_CALC_MODE（计算模式）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_CM_AUTO',   'PERF_CALC_MODE', 'AUTO',   '自动计算', 'AUTO',   1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_CM_MANUAL', 'PERF_CALC_MODE', 'MANUAL', '手工导入', 'MANUAL', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -105,7 +105,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.10 PERF_CALC_LOGIC_TYPE（计算逻辑类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_CLT_SQL',     'PERF_CALC_LOGIC_TYPE', 'SQL',     'SQL查询',   'SQL',     1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_CLT_PROC',    'PERF_CALC_LOGIC_TYPE', 'PROC',    '存储过程',  'PROC',    2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -115,7 +115,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.11 PERF_METRIC_LEVEL（指标级别）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_ML_1', 'PERF_METRIC_LEVEL', '1', '一级基础', '1', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_ML_2', 'PERF_METRIC_LEVEL', '2', '二级派生', '2', 2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -124,7 +124,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.12 PERF_KPI_CYCLE（KPI周期）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_KC_M', 'PERF_KPI_CYCLE', 'MONTHLY',   '月度', 'MONTHLY',   1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_KC_Q', 'PERF_KPI_CYCLE', 'QUARTERLY', '季度', 'QUARTERLY', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -132,7 +132,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.13 PERF_TARGET_DIM（目标维度）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_TD_EMP', 'PERF_TARGET_DIM', 'EMP', '人员', 'EMP', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_TD_ORG', 'PERF_TARGET_DIM', 'ORG', '机构', 'ORG', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -140,7 +140,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.14 PERF_TARGET_CYCLE（目标周期）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_TC_Y', 'PERF_TARGET_CYCLE', 'YEAR',    '年度', 'YEAR',    1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_TC_Q', 'PERF_TARGET_CYCLE', 'QUARTER', '季度', 'QUARTER', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -148,7 +148,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.15 PERF_IMPORT_TYPE（导入类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_PIT_IDX', 'PERF_IMPORT_TYPE', 'INDEX_RESULT', '指标结果', 'INDEX_RESULT', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_PIT_KPI', 'PERF_IMPORT_TYPE', 'KPI_RESULT',   'KPI结果',  'KPI_RESULT',   2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -157,7 +157,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.16 PERF_TASK_TYPE（任务类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_PTT_TRIAL',  'PERF_TASK_TYPE', 'METRIC_TRIAL', '指标试运行', 'METRIC_TRIAL', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_PTT_RUN',    'PERF_TASK_TYPE', 'METRIC_RUN',   '指标执行',   'METRIC_RUN',   2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -167,7 +167,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.17 PERF_ALLOC_DIM（分配维度）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_PAD_RULE',    'PERF_ALLOC_DIM', 'RULE',    '按规则分配', 'RULE',    1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_PAD_ACCOUNT', 'PERF_ALLOC_DIM', 'ACCOUNT', '按台账分配', 'ACCOUNT', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -175,7 +175,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.18 PERF_SUMMARY_RULE（汇总规则）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_PSR_SUM', 'PERF_SUMMARY_RULE', 'SUM', '求和', 'SUM', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_PSR_AVG', 'PERF_SUMMARY_RULE', 'AVG', '平均', 'AVG', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -183,7 +183,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.19 PROJECT_TYPE（项目类型，业务申请中心）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_PJT_NEW',    'PROJECT_TYPE', 'NEW',       '新增项目', 'NEW',       1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_PJT_RENEW',  'PROJECT_TYPE', 'RENEWAL',   '续贷项目', 'RENEWAL',   2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -192,7 +192,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.20 BIZ_TYPE（业务类型，业务申请中心）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_BT_WORKING_CAP', 'BIZ_TYPE', 'WORKING_CAPITAL', '流动资金贷款',   'WORKING_CAPITAL', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_BT_FIXED',       'BIZ_TYPE', 'FIXED_ASSET',     '固定资产贷款',   'FIXED_ASSET',     2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -203,7 +203,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.21 GUARANTEE_TYPE（担保方式）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_GT_CREDIT',   'GUARANTEE_TYPE', 'CREDIT',      '信用',     'CREDIT',      1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_GT_MORTGAGE',  'GUARANTEE_TYPE', 'MORTGAGE',    '抵押',     'MORTGAGE',    2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -214,7 +214,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.22 POSITION（岗位）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_POS_CM',   'POSITION', 'CUST_MGR',      '客户经理',     'CUST_MGR',      1,  'ACTIVE', 'V1 seed', 'seed'),
 ('D_POS_BH',   'POSITION', 'BRANCH_HEAD',   '支行负责人',   'BRANCH_HEAD',   2,  'ACTIVE', 'V1 seed', 'seed'),
@@ -230,7 +230,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.23 NOTIFY_TYPE（通知类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_NT_SYS', 'NOTIFY_TYPE', 'SYSTEM',   '系统通知', 'SYSTEM',   1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_NT_WF',  'NOTIFY_TYPE', 'WORKFLOW', '流程通知', 'WORKFLOW', 2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -239,7 +239,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.24 JOB_STATUS（任务状态）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_JS_ACT', 'JOB_STATUS', 'ACTIVE', '活跃', 'ACTIVE', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_JS_PAU', 'JOB_STATUS', 'PAUSED', '暂停', 'PAUSED', 2, 'ACTIVE', 'V1 seed', 'seed');
@@ -247,7 +247,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.25 JOB_RUN_STATUS（执行状态）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_JRS_RUN',  'JOB_RUN_STATUS', 'RUNNING', '运行中', 'RUNNING', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_JRS_OK',   'JOB_RUN_STATUS', 'SUCCESS', '成功',   'SUCCESS', 2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -256,7 +256,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.26 CONFIG_VALUE_TYPE（配置值类型）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_CVT_STR',  'CONFIG_VALUE_TYPE', 'STRING', '字符串', 'STRING', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_CVT_JSON', 'CONFIG_VALUE_TYPE', 'JSON',   'JSON',   'JSON',   2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -266,7 +266,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.27 LEAD_SOURCE（线索来源）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_LS_SELF',   'LEAD_SOURCE', 'SELF_FOUND', '自行挖掘', 'SELF_FOUND', 1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_LS_ASSIGN', 'LEAD_SOURCE', 'ASSIGNED',   '上级分配', 'ASSIGNED',   2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -276,7 +276,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.28 RISK_LEVEL（风险等级，审批表单用）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_RL_LOW',  'RISK_LEVEL', 'LOW',    '低风险', 'LOW',    1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_RL_MID',  'RISK_LEVEL', 'MEDIUM', '中风险', 'MEDIUM', 2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -285,7 +285,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.29 PRODUCT_CATEGORY（产品分类）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_PC_TRADE', 'PRODUCT_CATEGORY', 'TRADE_BANK',  '交易银行',   'TRADE_BANK',  1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_PC_FM',    'PRODUCT_CATEGORY', 'FIN_MARKET',  '金融市场',   'FIN_MARKET',  2, 'ACTIVE', 'V1 seed', 'seed'),
@@ -295,28 +295,37 @@ VALUES
 -- ---------------------------------------------------------
 -- 1.30 DOC_CATEGORY（文档分类）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_dict (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by)
 VALUES
 ('D_DC_POLICY',  'DOC_CATEGORY', 'POLICY',    '制度文件',   'POLICY',    1, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_DC_GUIDE',   'DOC_CATEGORY', 'GUIDE',     '操作指引',   'GUIDE',     2, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_DC_TEMPLATE','DOC_CATEGORY', 'TEMPLATE',  '模板表单',   'TEMPLATE',  3, 'ACTIVE', 'V1 seed', 'seed'),
 ('D_DC_TRAIN',   'DOC_CATEGORY', 'TRAINING',  '培训材料',   'TRAINING',  4, 'ACTIVE', 'V1 seed', 'seed');
 -- =========================================================
--- 2) PT_ROLE 角色种子数据（当前 onepl 实际 13 行）
--- 注：12 设计期角色 + 1 测试残留角色 R_77EBD269（R_TESTZ）
+-- 2) PT_ROLE 角色种子数据（当前 onepl 实际 16 行）
+-- 注：15 设计期角色（原 12 + 2026-05-20 新增 3 业务部门负责人）+ 1 测试残留角色 R_77EBD269（R_TESTZ）
 -- 顺序：按 ROLE_ID 字典序（mysqldump 输出）
+-- 2026-05-20 新增 3 个业务部门负责人角色：
+--   - R_CORP_LEAD   / CORP_DEPT_LEADER   公司部负责人
+--   - R_FIN_LEAD    / FINANCE_LEADER     资财部负责人
+--   - R_RETAIL_LEAD / RETAIL_DEPT_LEADER 零售部负责人
+-- 用途：拆分 alloc_adjust_approve_v1 流程中 biz_dept_leader_approve 与
+--       finance_leader_approve 两个"负责人"节点的候选组，避免与"经办人"节点共用同一角色
 -- =========================================================
 
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_77EBD269','R_TESTZ','retest-v2',1,'PLATFORM','2026-04-10 12:20:00',NULL,'2026-04-10 12:20:01',NULL,'upd');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_ADMIN','SYS_ADMIN','系统管理员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 超级管理员，运维与权限管理');
-INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_FINANCE','BACK_FINAN','中后台员工(资财)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 财务会计部等后台支持');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_FINANCE','BACK_FINANCE','中后台员工(资财)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-05-20 00:00:00','seed','V1 seed - 财务会计部等后台支持（2026-05-20 ROLE_CODE BACK_FINAN→BACK_FINANCE 对齐 candidateValue）');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BACK_TECH','BACK_TECH','中后台员工(科技)',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 信息技术部');
-INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BRANCH_MGR','BRANCH_HEA','经营机构负责人',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_BRANCH_MGR','BRANCH_HEAD','经营机构负责人',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-05-20 00:00:00','seed','flowable real env role（2026-05-20 ROLE_CODE BRANCH_HEA→BRANCH_HEAD 对齐 candidateValue）');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CORP_DEPT','CORP_DEPT','公司部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CORP_LEAD','CORP_DEPT_LEADER','公司部负责人',0,'PLATFORM','2026-05-20 00:00:00','seed','2026-05-20 00:00:00','seed','V1 seed - 公司部负责人，用于 alloc_adjust_approve_v1 biz_dept_leader_approve 节点');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CREDIT_APPROVER','CREDIT_APP','授信批复人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_CREDIT_REVIEWER','CREDIT_REV','授信审查人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_FIN_LEAD','FINANCE_LEADER','资财部负责人',0,'PLATFORM','2026-05-20 00:00:00','seed','2026-05-20 00:00:00','seed','V1 seed - 资财部负责人，用于 alloc_adjust_approve_v1 finance_leader_approve 节点');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_PRESIDENT','BRANCH_PRE','分行行长',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 分行最高管理者');
-INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RETAIL_DEPT','RETAIL_DEP','零售部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 分行零售业务管理部门');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RETAIL_DEPT','RETAIL_DEPT','零售部人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-05-20 00:00:00','seed','V1 seed - 分行零售业务管理部门（2026-05-20 ROLE_CODE RETAIL_DEP→RETAIL_DEPT 对齐 candidateValue）');
+INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RETAIL_LEAD','RETAIL_DEPT_LEADER','零售部负责人',0,'PLATFORM','2026-05-20 00:00:00','seed','2026-05-20 00:00:00','seed','V1 seed - 零售部负责人，用于 alloc_adjust_approve_v1 biz_dept_leader_approve 节点');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_RM','R_RM','客户经理',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-25 16:01:33','flowable-real-env','flowable real env role');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_SUPPORT_SEC','SUPPORT_SE','中场支持部门秘书',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 中场支持部门秘书岗');
 INSERT IGNORE INTO PT_ROLE (`ROLE_ID`, `ROLE_CODE`, `ROLE_CHNAME`, `RECORD_STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES ('R_SUPPORT_STAFF','SUPPORT_ST','中场支持部门人员',0,'PLATFORM','2026-04-03 22:43:46','seed','2026-04-03 22:43:46','seed','V1 seed - 中台部门员工');
@@ -1384,7 +1393,7 @@ INSERT IGNORE INTO EXT_ORG_INFO (`ID`, `ORG_CODE`, `ORG_NAME`, `ORG_LEVEL`, `P_I
 -- ---------------------------------------------------------
 -- 10.1 sys_control 初始维度（绩效引擎）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_control (id, scope_dim, latest_data_date, current_version, is_valid)
+INSERT IGNORE INTO SYS_CONTROL (id, scope_dim, latest_data_date, current_version, is_valid)
 VALUES
 ('SC_INIT_EMP',  'EMP',  '1970-01-01', NULL, 0),
 ('SC_INIT_ORG',  'ORG',  '1970-01-01', NULL, 0),
@@ -1393,7 +1402,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 10.2 sys_config_kv 推荐配置（系统治理中心）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_config_kv (id, config_key, config_value, value_type, status, remark, created_by)
+INSERT IGNORE INTO SYS_CONFIG_KV (id, config_key, config_value, value_type, status, remark, created_by)
 VALUES
 ('CFG_SQL_PROBE_MAX_LIMIT',       'SQL_PROBE_MAX_LIMIT',       '2000',                        'NUMBER', 'ACTIVE', 'SQL探查LIMIT上限',    'seed'),
 ('CFG_SQL_PROBE_MAX_CONCURRENCY', 'SQL_PROBE_MAX_CONCURRENCY', '5',                           'NUMBER', 'ACTIVE', 'SQL探查并发上限',     'seed'),
@@ -1404,7 +1413,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 10.3 网址导航初始数据
 -- ---------------------------------------------------------
-INSERT IGNORE INTO portal_nav (id, nav_name, nav_url, nav_icon, nav_category, sort_order, status, created_by)
+INSERT IGNORE INTO PORTAL_NAV (id, nav_name, nav_url, nav_icon, nav_category, sort_order, status, created_by)
 VALUES
 ('NAV001', 'CCRM系统',      'https://ccrm.bank.com',   'icon-ccrm',   '总行系统', 1, 'ACTIVE', 'SYSTEM'),
 ('NAV002', 'PCRM系统',      'https://pcrm.bank.com',   'icon-pcrm',   '总行系统', 2, 'ACTIVE', 'SYSTEM'),
@@ -1415,7 +1424,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 10.4 产品资料初始数据（联调最小集）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO product_info (id, product_code, product_name, product_category, description, status, created_by, deleted)
+INSERT IGNORE INTO PRODUCT_INFO (id, product_code, product_name, product_category, description, status, created_by, deleted)
 VALUES
 ('PROD001', 'TBK_DEPOSIT',     '交易银行-结构性存款', '交易银行', '结构性存款产品介绍',   'ACTIVE', 'SYSTEM', 0),
 ('PROD002', 'TBK_SUPPLY_CHAIN','交易银行-供应链金融', '交易银行', '供应链金融产品介绍',   'ACTIVE', 'SYSTEM', 0),
@@ -1425,7 +1434,7 @@ VALUES
 -- ---------------------------------------------------------
 -- 10.5 工作日历样例数据（2026年节假日示例）
 -- ---------------------------------------------------------
-INSERT IGNORE INTO sys_calendar_day (day, is_workday, remark, created_by)
+INSERT IGNORE INTO SYS_CALENDAR_DAY (day, is_workday, remark, created_by)
 VALUES
 ('2026-01-01', 0, '元旦',     'seed'),
 ('2026-01-02', 0, '元旦假期', 'seed'),
@@ -1480,6 +1489,35 @@ DELETE FROM PT_ROLE_BIZ_SCOPE WHERE ROLE_ID NOT IN (
     'R_RETAIL_DEPT', 'R_BACK_FINANCE', 'R_BACK_TECH', 'R_SUPPORT_SEC',
     'R_SUPPORT_STAFF', 'R_CREDIT_REVIEWER', 'R_CREDIT_APPROVER', 'R_PRESIDENT'
 );
+
+-- ============================================================================
+-- 2026-05-20 审批流记录端点资源 + 全角色绑定（perf 模块聚合 workflow-center 流程历史）
+-- ============================================================================
+INSERT IGNORE INTO PT_RESOURCE
+  (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`,
+   `MENU_RANK_NO`, `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`,
+   `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`)
+VALUES
+  ('P_PERF_ALLOC_AD_HIS', '/api/perf/alloc-adjust/*/approval-history', 'GET',
+   '分配调整申请审批流记录', NULL, 0, 0, '0', NULL, 0,
+   'PERF', '2026-05-20 00:00:00', 'approval-hist-2026-05-20',
+   '2026-05-20 00:00:00', 'approval-hist-2026-05-20', '2026-05-20 审批流记录端点'),
+  ('P_PERF_TGT_AD_HIS', '/api/perf/target-adjust/*/approval-history', 'GET',
+   '目标调整申请审批流记录', NULL, 0, 0, '0', NULL, 0,
+   'PERF', '2026-05-20 00:00:00', 'approval-hist-2026-05-20',
+   '2026-05-20 00:00:00', 'approval-hist-2026-05-20', '2026-05-20 审批流记录端点');
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`)
+SELECT MD5(CONCAT(r.ROLE_ID, '|', 'P_PERF_ALLOC_AD_HIS')),
+       r.ROLE_ID, 'P_PERF_ALLOC_AD_HIS', 'PERF'
+  FROM PT_ROLE r
+ WHERE COALESCE(r.RECORD_STATUS, 0) = 0;
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`)
+SELECT MD5(CONCAT(r.ROLE_ID, '|', 'P_PERF_TGT_AD_HIS')),
+       r.ROLE_ID, 'P_PERF_TGT_AD_HIS', 'PERF'
+  FROM PT_ROLE r
+ WHERE COALESCE(r.RECORD_STATUS, 0) = 0;
 
 -- ============================================================================
 -- END OF seed-v1.sql

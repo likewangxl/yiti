@@ -113,6 +113,8 @@ public class TargetPlanService {
         plan.setTargetDim(cmd.getTargetDim());
         plan.setTargetCycle(cmd.getTargetCycle());
         plan.setEffectiveDate(cmd.getEffectiveDate());
+        plan.setStartDate(cmd.getStartDate());
+        plan.setEndDate(cmd.getEndDate());
         plan.setStatus(STATUS_ACTIVE);
         LocalDateTime now = LocalDateTime.now();
         plan.setCreatedBy(cmd.getOperator());
@@ -151,14 +153,24 @@ public class TargetPlanService {
         PerfTargetPlan patch = new PerfTargetPlan();
         patch.setId(id);
         patch.setPlanName(cmd.getPlanName());
+        patch.setKpiSchemeId(cmd.getKpiSchemeId());
+        patch.setStatus(cmd.getStatus());
         patch.setTargetDim(cmd.getTargetDim());
         patch.setTargetCycle(cmd.getTargetCycle());
         patch.setEffectiveDate(cmd.getEffectiveDate());
+        patch.setStartDate(cmd.getStartDate());
+        patch.setEndDate(cmd.getEndDate());
         patch.setUpdatedBy(cmd.getOperator());
         targetPlanMapper.updateByIdSelective(patch);
 
         if (cmd.getPlanName() != null) {
             existing.setPlanName(cmd.getPlanName());
+        }
+        if (cmd.getKpiSchemeId() != null) {
+            existing.setKpiSchemeId(cmd.getKpiSchemeId());
+        }
+        if (cmd.getStatus() != null) {
+            existing.setStatus(cmd.getStatus());
         }
         if (cmd.getTargetDim() != null) {
             existing.setTargetDim(cmd.getTargetDim());
@@ -168,6 +180,12 @@ public class TargetPlanService {
         }
         if (cmd.getEffectiveDate() != null) {
             existing.setEffectiveDate(cmd.getEffectiveDate());
+        }
+        if (cmd.getStartDate() != null) {
+            existing.setStartDate(cmd.getStartDate());
+        }
+        if (cmd.getEndDate() != null) {
+            existing.setEndDate(cmd.getEndDate());
         }
         existing.setUpdatedBy(cmd.getOperator());
         existing.setUpdatedTime(LocalDateTime.now());

@@ -13,10 +13,10 @@ import lombok.Data;
 @Schema(description = "指标状态变更请求")
 public class ChangeStatusReqDTO {
 
-    /** 当前实现仅支持停用。 */
-    @Schema(description = "目标状态，当前仅支持 DISABLED", requiredMode = Schema.RequiredMode.REQUIRED)
+    /** V1.6 放开：支持启用/停用/草稿三向切换。 */
+    @Schema(description = "目标状态：ACTIVE / DRAFT / DISABLED", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "status 不能为空")
-    @Pattern(regexp = "^DISABLED$", message = "status 当前仅支持 DISABLED")
+    @Pattern(regexp = "^(ACTIVE|DRAFT|DISABLED)$", message = "status 必须是 ACTIVE / DRAFT / DISABLED")
     private String status;
 
     /** 审计原因。 */

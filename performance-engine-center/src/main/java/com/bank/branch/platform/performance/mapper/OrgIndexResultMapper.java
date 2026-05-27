@@ -17,7 +17,7 @@ import java.util.List;
  *
  * <p><strong>安全（SQL 注入）声明</strong>：同 {@link EmpIndexResultMapper}——
  * XML 使用 {@code val_${slot}} 动态拼接列名（合法例外），调用方必须在 Service
- * 层强制校验 {@code slot ∈ [1, 200]}。
+ * 层强制校验 {@code slot ∈ [1, 400]}。
  * <p>BaseMapper 标准方法由 MyBatis-Plus 提供.
  */
 @Mapper
@@ -71,7 +71,7 @@ public interface OrgIndexResultMapper extends BaseMapper<OrgIndexResult> {
      * V1.7：按 slot 列号查单主体单值（val_${slot} 动态列名）.
      *
      * <p><strong>安全说明</strong>：val_${slot} 属 common-dev-guide §5 合法例外，
-     * 调用方必须保证 slot ∈ [1, 200]。
+     * 调用方必须保证 slot ∈ [1, 400]。
      *
      * @param subject  机构编码
      * @param slot     值槽（1..200）

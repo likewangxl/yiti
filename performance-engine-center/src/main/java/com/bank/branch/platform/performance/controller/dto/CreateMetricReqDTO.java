@@ -20,7 +20,7 @@ public class CreateMetricReqDTO {
     @Schema(description = "指标编码", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "metricCode 不能为空")
     @Size(max = 64, message = "metricCode 长度不能超过 64")
-    @Pattern(regexp = "^[A-Z0-9_]+$", message = "metricCode 只允许大写字母、数字和下划线")
+    // V1.6 放开格式限制：业务侧反馈"大写+数字+下划线"约束太死，允许任意字符（仅留长度上限）
     private String metricCode;
 
     /** 指标名称。 */
@@ -38,9 +38,8 @@ public class CreateMetricReqDTO {
     @Schema(description = "指标说明")
     private String metricDesc;
 
-    /** 基础维度。 */
-    @Schema(description = "基础维度: EMP/ORG/CUST", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "baseDim 不能为空")
+    /** 基础维度。V1.9 改造：允许为空，null 表示维度无关型指标（不入三大宽表、不进入自动调度）。 */
+    @Schema(description = "基础维度: EMP/ORG/CUST；留空表示维度无关型指标")
     @Pattern(regexp = "^(EMP|ORG|CUST)$", message = "baseDim 必须是 EMP、ORG 或 CUST")
     private String baseDim;
 
@@ -90,4 +89,18 @@ public class CreateMetricReqDTO {
     @Min(value = 1, message = "preferredSlot 不能小于 1")
     @Max(value = 200, message = "preferredSlot 不能大于 200")
     private Integer preferredSlot;
+
+    /** V1.9 指标分类（规模类/效益类/质量类/合规类等）。 */
+    @Schema(description = "指标分类（规模类/效益类/质量类/合规类等）")
+    @Size(max = 50, message = "metricCategory 长度不能超过 50")
+    private String metricCategory;
+
+    /**
+     * 初始状态：ACTIVE / DRAFT / DISABLED；为空时后端兜底为 ACTIVE.
+     * <p>前端"保存为草稿"直传 DRAFT，避免"先建 ACTIVE 再 PUT status=DRAFT"两步导致
+     * V1.7 scheduler hook 抖动 + 失败时状态不一致.
+     */
+    @Schema(description = "初始状态: ACTIVE/DRAFT/DISABLED，为空兜底 ACTIVE")
+    @Pattern(regexp = "^(ACTIVE|DRAFT|DISABLED)$", message = "status 必须是 ACTIVE、DRAFT 或 DISABLED")
+    private String status;
 }

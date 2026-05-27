@@ -11,6 +11,8 @@ import com.bank.branch.platform.performance.controller.dto.AllocAdjustCreateReqD
 import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustService;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -62,6 +65,7 @@ public class AllocAdjustController {
 
     private final CurrentUserApi currentUserApi;
     private final AllocAdjustService allocAdjustService;
+    private final WorkflowQueryApi workflowQueryApi;
 
     /**
      * 提交分配关系调整申请.
@@ -73,12 +77,13 @@ public class AllocAdjustController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
     @AuditLog(action = "ALLOC_ADJUST_CREATE", resourceType = "PERF_ALLOC_ADJUST", reasonRequired = true)
     public ResponseWrapper<Map<String, String>> create(@Valid @RequestBody AllocAdjustCreateReqDTO req) {
-        log.info("[AllocAdjustController.create] custId={}, bizKind={}, itemCount={}",
-                req.getCustId(), req.getBizKind(),
+        log.info("[AllocAdjustController.create] custNo={}, bizKind={}, itemCount={}",
+                req.getCustNo(), req.getBizKind(),
                 req.getItems() == null ? 0 : req.getItems().size());
 
         SubmitAllocAdjustCmd cmd = SubmitAllocAdjustCmd.builder()
-                .custId(req.getCustId())
+                .custType(req.getCustType())
+                .custNo(req.getCustNo())
                 .allocDim(req.getAllocDim())
                 .bizKind(req.getBizKind())
                 .accountNo(req.getAccountNo())
@@ -127,6 +132,40 @@ public class AllocAdjustController {
     }
 
     /**
+     * 查询审批流记录（时间倒序，最新在上）.
+     *
+     * <p>聚合 workflow-center {@link WorkflowQueryApi#getProcessHistory}，避免前端跨模块绕路、
+     * 并统一走 perf 模块 {@code @BizAuth} 权限链路。
+     *
+     * <p>边界：
+     * <ul>
+     *   <li>{@code id} 不存在 → service 抛 PERF-404xx（保持既有语义）</li>
+     *   <li>{@code processInstanceId} 为空（DRAFT 尚未启动流程）→ 返回空数组</li>
+     *   <li>{@code operateTime} 为 null 的条目排在最末，避免 NPE</li>
+     * </ul>
+     */
+    @GetMapping("/{id}/approval-history")
+    @Operation(summary = "查询调整申请审批流记录（时间倒序）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<ApprovalLogDTO>> getApprovalHistory(
+            @PathVariable("id") @NotBlank String id) {
+        log.debug("[AllocAdjustController.getApprovalHistory] id={}", id);
+        AllocAdjustRespDTO detail = allocAdjustService.getByIdDto(id);
+        String processInstanceId = detail.getProcessInstanceId();
+        if (processInstanceId == null || processInstanceId.isEmpty()) {
+            return ResponseWrapper.success(Collections.emptyList());
+        }
+        List<ApprovalLogDTO> logs = workflowQueryApi.getProcessHistory(processInstanceId);
+        if (logs == null || logs.isEmpty()) {
+            return ResponseWrapper.success(Collections.emptyList());
+        }
+        List<ApprovalLogDTO> sorted = new ArrayList<>(logs);
+        sorted.sort(Comparator.comparing(ApprovalLogDTO::getOperateTime,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        return ResponseWrapper.success(sorted);
+    }
+
+    /**
      * 撤回申请（IN_APPROVAL / DRAFT → REJECTED）.
      *
      * <p>V1.2 简化：仅置本地状态为 REJECTED，不同步 Flowable 取消流程，
@@ -156,6 +195,7 @@ public class AllocAdjustController {
             cmds.add(SubmitAllocAdjustCmd.Item.builder()
                     .empId(it.getEmpId())
                     .ratio(it.getRatio())
+                    .remark(it.getRemark())
                     .build());
         }
         return cmds;

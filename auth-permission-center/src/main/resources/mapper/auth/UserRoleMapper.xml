@@ -74,6 +74,30 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 按 roleCode 查所有启用员工 ID（用于审批通知展开候选组） -->
+    <select id="selectEmpIdsByRoleCode" resultType="string">
+        SELECT u.USER_ID
+        FROM PT_USER u
+        INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID
+        INNER JOIN PT_ROLE r ON ur.ROLE_ID = r.ROLE_ID
+        WHERE r.ROLE_CODE = #{roleCode}
+          AND r.RECORD_STATUS = 0
+          AND u.ISENABLED = 0
+    </select>
+
+    <!-- 按 roleCode + orgCode 查同机构启用员工 ID -->
+    <select id="selectEmpIdsByRoleCodeAndOrg" resultType="string">
+        SELECT u.USER_ID
+        FROM PT_USER u
+        INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID
+        INNER JOIN PT_ROLE r ON ur.ROLE_ID = r.ROLE_ID
+        INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        WHERE r.ROLE_CODE = #{roleCode}
+          AND r.RECORD_STATUS = 0
+          AND u.ISENABLED = 0
+          AND uo.ORG_CODE = #{orgCode}
+    </select>
+
     <!-- 统计角色下满足关键字条件的用户总数 -->
     <select id="countUsersByRoleId" resultType="long">
         SELECT COUNT(*)
@@ -98,6 +122,7 @@
             u.USERCHNNAME   AS displayName,
             uo.ORG_CODE     AS orgCode,
             o.ORG_NAME      AS orgName,
+            u.ISENABLED     AS isEnabled,
             ur.CREATE_TIME  AS bindTime
         FROM PT_USER u
         INNER JOIN PT_USER_ROLE ur ON u.USER_ID = ur.USER_ID AND ur.ROLE_ID = #{roleId}

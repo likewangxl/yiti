@@ -2,12 +2,12 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.performance.mapper.PerfMetricDefMapper">
 
-    <!-- V1.0.3：24 字段（含 Task B4 新增的 unit/decimal_places/deleted/description） -->
+    <!-- V1.0.3：24 字段 + V1.9 新增 metric_category = 25 字段 -->
     <sql id="BASE_COLUMNS">
         id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
         calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
         ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time,
-        unit, decimal_places, deleted, description
+        unit, decimal_places, deleted, description, metric_category
     </sql>
 
     <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
@@ -33,6 +33,7 @@
             <if test="createdBy != null">created_by = #{createdBy},</if>
             <if test="createdTime != null">created_time = #{createdTime},</if>
             <if test="updatedBy != null">updated_by = #{updatedBy},</if>
+            <if test="metricCategory != null">metric_category = #{metricCategory},</if>
             updated_time = NOW()
         </set>
         WHERE id = #{id}
@@ -57,6 +58,16 @@
         LIMIT 1
     </select>
 
+    <!-- V1.11：按 metric_name 查询（deleted=0 过滤，对齐 selectByMetricCode） -->
+    <select id="selectByMetricName" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_METRIC_DEF
+        WHERE metric_name = #{metricName}
+          AND deleted = 0
+        LIMIT 1
+    </select>
+
     <select id="selectByMetricCodes" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
         SELECT
             <include refid="BASE_COLUMNS"/>
@@ -68,6 +79,27 @@
                     AND metric_code IN
                     <foreach collection="codes" item="code" open="(" separator="," close=")">
                         #{code}
+                    </foreach>
+                </when>
+                <otherwise>
+                    AND 1 = 0
+                </otherwise>
+            </choose>
+        </where>
+    </select>
+
+    <!-- V1.12：批量按 metric_name 查询，deleted=0 过滤，对齐 selectByMetricCodes 语义 -->
+    <select id="selectByMetricNames" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_METRIC_DEF
+        <where>
+            AND deleted = 0
+            <choose>
+                <when test="names != null and names.size() > 0">
+                    AND metric_name IN
+                    <foreach collection="names" item="name" open="(" separator="," close=")">
+                        #{name}
                     </foreach>
                 </when>
                 <otherwise>
@@ -222,5 +254,41 @@
         WHERE id = #{id}
           AND deleted = 0
     </update>
+
+    <!-- V1.10：不分页条件查询，配合 GET /api/perf/metrics 一次性返回全部指标 -->
+    <select id="selectAllByCondition" resultType="com.bank.branch.platform.performance.entity.PerfMetricDef">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_METRIC_DEF
+        <where>
+            AND deleted = 0
+            <if test="baseDim != null and baseDim != ''">
+                AND base_dim = #{baseDim}
+            </if>
+            <if test="metricLevel != null">
+                AND metric_level = #{metricLevel}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    metric_code LIKE CONCAT('%', #{keyword}, '%')
+                    OR metric_name LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY metric_code ASC
+    </select>
+
+    <!-- V1.10：DISTINCT 指标分类（非空、未软删除）-->
+    <select id="selectDistinctCategories" resultType="java.lang.String">
+        SELECT DISTINCT metric_category
+        FROM PERF_METRIC_DEF
+        WHERE deleted = 0
+          AND metric_category IS NOT NULL
+          AND metric_category != ''
+        ORDER BY metric_category ASC
+    </select>
 
 </mapper>

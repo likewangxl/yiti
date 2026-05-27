@@ -44,15 +44,18 @@ public class DashboardController {
     /**
      * C.1 分行行长仪表盘.
      *
+     * @param orgCode  机构编码，可选；为空时回退到 {@code CurrentUserApi.getCurrentOrgCode()}
+     *                 （V1.14 # 2 新增，与前端 {@code getDashboardPresident({orgCode,date})} 调用契约对齐）
      * @param dataDate 数据日期，可选；为空时回填 today
      */
     @GetMapping("/president")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
     @Operation(summary = "C.1 分行行长仪表盘")
     public ResponseWrapper<PresidentDashboardRespDTO> getPresidentDashboard(
+            @RequestParam(required = false) String orgCode,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataDate) {
-        return ResponseWrapper.success(dashboardService.getPresidentDashboard(dataDate));
+        return ResponseWrapper.success(dashboardService.getPresidentDashboard(orgCode, dataDate));
     }
 
     /**

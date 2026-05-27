@@ -1,0 +1,159 @@
+@startuml yiti_er_performance-engine-center
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title 07-绩效计算 — 内部表与跨模块引用 (虚线=逻辑/实线=物理)
+
+package "07-绩效计算" #E0F7FA {
+  entity "CUST_ALLOC_RELATION" as CUST_ALLOC_RELATION {
+    .. 客户业绩分配关系 ..
+    PK: id
+    + cust_id
+    + emp_id
+    + created_by
+    + updated_by
+  }
+  entity "CUST_INDEX_RESULT" as CUST_INDEX_RESULT {
+    .. 客户指标结果宽表 ..
+    PK: id
+    + cust_id
+  }
+  entity "EMP_INDEX_RESULT" as EMP_INDEX_RESULT {
+    .. 员工指标结果宽表 ..
+    PK: id
+    + emp_id
+  }
+  entity "KPI_RESULT" as KPI_RESULT {
+    .. KPI结果表 ..
+    PK: id
+    + emp_id
+  }
+  entity "ORG_INDEX_RESULT" as ORG_INDEX_RESULT {
+    .. 机构指标结果宽表 ..
+    PK: id
+    + org_code
+  }
+  entity "PERF_ALLOC_ADJUST_APPLY" as PERF_ALLOC_ADJUST_APPLY {
+    .. 分配关系调整申请 ..
+    PK: id
+    + cust_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_ALLOC_ADJUST_ITEM" as PERF_ALLOC_ADJUST_ITEM {
+    .. 分配关系调整明细 ..
+    PK: id
+    + apply_id
+    + emp_id
+  }
+  entity "PERF_IMPORT_BATCH" as PERF_IMPORT_BATCH {
+    .. 绩效导入批次 ..
+    PK: id
+    + created_by
+  }
+  entity "PERF_KPI_ITEM" as PERF_KPI_ITEM {
+    .. KPI方案项 ..
+    PK: id
+    + scheme_id
+    + metric_code
+  }
+  entity "PERF_KPI_SCHEME" as PERF_KPI_SCHEME {
+    .. KPI方案 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_METRIC_DEF" as PERF_METRIC_DEF {
+    .. 指标定义表 ..
+    PK: id
+    + metric_code
+    + created_by
+    + updated_by
+  }
+  entity "PERF_METRIC_REF" as PERF_METRIC_REF {
+    .. 指标引用关系 ..
+    PK: id
+    + metric_code
+  }
+  entity "PERF_RUN_TASK" as PERF_RUN_TASK {
+    .. 绩效任务执行日志 ..
+    PK: id
+  }
+  entity "PERF_TARGET_ADJUST_APPLY" as PERF_TARGET_ADJUST_APPLY {
+    .. 目标修正申请 ..
+    PK: id
+    + plan_id
+    + business_key
+    + process_instance_id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_TARGET_PLAN" as PERF_TARGET_PLAN {
+    .. 目标方案 ..
+    PK: id
+    + kpi_scheme_id
+    + created_by
+    + updated_by
+  }
+  entity "PERF_TARGET_VALUE" as PERF_TARGET_VALUE {
+    .. 目标值/基础值 ..
+    PK: id
+    + plan_id
+    + metric_code
+    + created_by
+    + updated_by
+  }
+  entity "SYS_CONTROL" as SYS_CONTROL {
+    .. 数据版本控制表 ..
+    PK: id
+    + updated_by
+  }
+}
+
+package "外部模块（引用占位）" #FAFAFA {
+  entity "ACT_RU_EXECUTION" as ACT_RU_EXECUTION <<09-Flowable引擎(只读)>> {
+    ..  ..
+  }
+  entity "BIZ_PROCESS_MAP" as BIZ_PROCESS_MAP <<03-工作流中心>> {
+    .. 业务流程映射表 ..
+  }
+  entity "CUST_MASTER" as CUST_MASTER <<05-客户营销>> {
+    .. 客户主档表 ..
+  }
+  entity "EXT_ORG_INFO" as EXT_ORG_INFO <<01-认证授权中心>> {
+    .. 机构表 ..
+  }
+  entity "PT_USER" as PT_USER <<01-认证授权中心>> {
+    .. 人员表 ..
+  }
+}
+
+CUST_ALLOC_RELATION }.. CUST_MASTER : cust_id
+CUST_ALLOC_RELATION }.. PT_USER : emp_id
+CUST_INDEX_RESULT }.. CUST_MASTER : cust_id
+EMP_INDEX_RESULT }.. PT_USER : emp_id
+KPI_RESULT }.. PT_USER : emp_id
+ORG_INDEX_RESULT }.. EXT_ORG_INFO : org_code
+PERF_ALLOC_ADJUST_APPLY }.. CUST_MASTER : cust_id
+PERF_ALLOC_ADJUST_APPLY }.. BIZ_PROCESS_MAP : business_key
+PERF_ALLOC_ADJUST_APPLY }.. ACT_RU_EXECUTION : process_instance_id
+PERF_ALLOC_ADJUST_APPLY }.. EXT_ORG_INFO : owner_org_id
+PERF_ALLOC_ADJUST_ITEM }.. PERF_ALLOC_ADJUST_APPLY : apply_id
+PERF_ALLOC_ADJUST_ITEM }.. PT_USER : emp_id
+PERF_KPI_ITEM }.. PERF_KPI_SCHEME : scheme_id
+PERF_KPI_ITEM }.. PERF_METRIC_DEF : metric_code
+PERF_METRIC_REF }.. PERF_METRIC_DEF : metric_code
+PERF_TARGET_ADJUST_APPLY }.. PERF_TARGET_PLAN : plan_id
+PERF_TARGET_ADJUST_APPLY }.. BIZ_PROCESS_MAP : business_key
+PERF_TARGET_ADJUST_APPLY }.. ACT_RU_EXECUTION : process_instance_id
+PERF_TARGET_ADJUST_APPLY }.. EXT_ORG_INFO : owner_org_id
+PERF_TARGET_PLAN }.. PERF_KPI_SCHEME : kpi_scheme_id
+PERF_TARGET_VALUE }.. PERF_TARGET_PLAN : plan_id
+PERF_TARGET_VALUE }.. PERF_METRIC_DEF : metric_code
+@enduml

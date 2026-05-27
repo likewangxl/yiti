@@ -93,6 +93,9 @@ public class PerfMetricDef {
     /** 指标描述（较详细的口径说明，区别于 metric_desc）. */
     private String description;
 
+    /** V1.9 指标分类（规模类/效益类/质量类/合规类等）. */
+    private String metricCategory;
+
     // ===== V1.7 指标级调度改造 =====
 
     /** 自定义 cron 表达式；留空按 calc_freq 推导默认 (V1.7). */

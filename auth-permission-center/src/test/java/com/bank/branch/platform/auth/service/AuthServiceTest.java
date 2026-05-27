@@ -9,6 +9,7 @@ import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserOrgMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
+import org.mockito.ArgumentCaptor;
 import com.bank.branch.platform.common.web.exception.AuthException;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.Test;
@@ -109,7 +110,13 @@ class AuthServiceTest {
         assertThat(resp.getMainOrgCode()).isEqualTo("ORG001");
         assertThat(resp.getRoles()).hasSize(1);
         verify(userMapper).updatePassWrongCount("E001", 0); // reset on success
-        verify(session).setAttribute(eq("currentUser"), any(CurrentUserContext.class));
+
+        // candidateGroupKeys 应覆盖 USER/ROLE/ORG 三种 Flowable 候选类型，
+        // 否则 USER:E001 / ORG:ORG001 类型的任务候选无法匹配（V1.x bug fix 2026-05-20）
+        ArgumentCaptor<CurrentUserContext> ctxCap = ArgumentCaptor.forClass(CurrentUserContext.class);
+        verify(session).setAttribute(eq("currentUser"), ctxCap.capture());
+        assertThat(ctxCap.getValue().candidateGroupKeys())
+                .contains("ROLE:CUST_MANAGER", "USER:E001", "ORG:ORG001");
     }
 
     @Test

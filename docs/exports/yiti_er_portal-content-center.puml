@@ -1,0 +1,61 @@
+@startuml yiti_er_portal-content-center
+skinparam dpi 110
+skinparam classFontName Microsoft YaHei
+skinparam classFontSize 12
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title 04-门户与内容 — 内部表与跨模块引用 (虚线=逻辑/实线=物理)
+
+package "04-门户与内容" #E8F5E9 {
+  entity "ADDRBOOK_EMPLOYEE" as ADDRBOOK_EMPLOYEE {
+    .. 通讯录员工表 ..
+    PK: emp_id
+    + emp_id
+    + org_code
+  }
+  entity "DOC_INFO" as DOC_INFO {
+    .. 文档信息表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "PORTAL_NAV" as PORTAL_NAV {
+    .. 网址导航表 ..
+    PK: id
+    + created_by
+    + updated_by
+  }
+  entity "PORTAL_SHORTCUT" as PORTAL_SHORTCUT {
+    .. 工作台快捷入口表 ..
+    PK: id
+    + emp_id
+    + created_by
+    + updated_by
+  }
+  entity "PRODUCT_INFO" as PRODUCT_INFO {
+    .. 产品信息表 ..
+    PK: id
+    + owner_org_id
+    + created_by
+    + updated_by
+  }
+}
+
+package "外部模块（引用占位）" #FAFAFA {
+  entity "EXT_ORG_INFO" as EXT_ORG_INFO <<01-认证授权中心>> {
+    .. 机构表 ..
+  }
+  entity "PT_USER" as PT_USER <<01-认证授权中心>> {
+    .. 人员表 ..
+  }
+  entity "SUPPORT_REQUEST" as SUPPORT_REQUEST <<06-业务申请>> {
+    .. 中场支持申请表 ..
+  }
+}
+
+ADDRBOOK_EMPLOYEE }.. PT_USER : emp_id
+ADDRBOOK_EMPLOYEE }.. EXT_ORG_INFO : org_code
+PORTAL_SHORTCUT }.. PT_USER : emp_id
+PRODUCT_INFO }.. EXT_ORG_INFO : owner_org_id
+SUPPORT_REQUEST }.. PRODUCT_INFO : product_id
+@enduml

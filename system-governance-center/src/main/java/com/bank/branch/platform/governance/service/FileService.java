@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.service;
 
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.governance.entity.BizFileRel;
@@ -269,6 +270,35 @@ public class FileService {
             }
         }
         return result;
+    }
+
+    /**
+     * 全局文件列表分页查询（管理后台用）。
+     * 直接查 file_object 表，不 join biz_file_rel；上传时间倒序。
+     *
+     * @param fileName   文件名关键字（LIKE 模糊），可空
+     * @param fileType   文件类型，可空
+     * @param uploadedBy 上传人工号，可空
+     * @param startTime  上传时间下界，可空（"yyyy-MM-dd HH:mm:ss"）
+     * @param endTime    上传时间上界，可空
+     * @param pageNo     页码，1 起
+     * @param pageSize   每页条数
+     * @return 分页结果
+     */
+    public PageResult<FileObjectDTO> listAllFiles(String fileName, String fileType, String uploadedBy,
+                                                   String startTime, String endTime,
+                                                   int pageNo, int pageSize) {
+        log.debug("[FileService.listAllFiles] fileName={}, fileType={}, uploadedBy={}, page={}/{}",
+                fileName, fileType, uploadedBy, pageNo, pageSize);
+        int offset = (pageNo - 1) * pageSize;
+        long total = fileObjectMapper.countByCondition(fileName, fileType, uploadedBy, startTime, endTime);
+        List<FileObject> records = fileObjectMapper.selectByCondition(
+                fileName, fileType, uploadedBy, startTime, endTime, offset, pageSize);
+        List<FileObjectDTO> dtoList = new ArrayList<>(records.size());
+        for (FileObject fo : records) {
+            dtoList.add(toDTO(fo));
+        }
+        return PageResult.of(pageNo, pageSize, total, dtoList);
     }
 
     /**

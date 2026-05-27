@@ -2,6 +2,7 @@ package com.bank.branch.platform.governance.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +49,8 @@ public class AuditLogService {
 
     /** 日期时间格式化器，用于 DTO 输出 */
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    /** 强制使用业务时区（北京时间），避免 JVM 默认 UTC/PDT 导致审计时间偏移。 */
+    private static final ZoneId BIZ_ZONE = ZoneId.of("Asia/Shanghai");
 
     /**
      * 记录审计日志（独立事务）。
@@ -78,8 +81,11 @@ public class AuditLogService {
         entity.setIpAddress(cmd.getIpAddress());
         entity.setUserAgent(cmd.getUserAgent());
         entity.setExecutionTime(cmd.getExecutionTime());
-        entity.setReason(cmd.getReason());
-        entity.setCreatedTime(LocalDateTime.now());
+        // V1.6 修复：reason 为空时按动作类型自动生成默认描述，避免审计列表大量"—"。
+        // 真高危动作（DELETE/EXECUTE 等）reason 由前端 prompt 必填，到这一步通常已带值。
+        entity.setReason(defaultReason(cmd.getReason(), cmd.getBizAction()));
+        // V1.6 修复：明确使用业务时区（Asia/Shanghai）写入，避免 JVM 默认时区为 UTC/PDT 导致差 8 小时。
+        entity.setCreatedTime(LocalDateTime.now(BIZ_ZONE));
 
         auditLogMapper.insert(entity);
         log.info("[AuditLogService.log] 审计日志写入成功 id={}", entity.getId());
@@ -271,4 +277,19 @@ public class AuditLogService {
         }
     }
 
+    /**
+     * V1.6 默认 reason 生成：用户未填且属于试运行 / 列表 / 查看类动作时，
+     * 给一段系统级描述，避免审计列表大量"—"。
+     */
+    private static String defaultReason(String userReason, String bizAction) {
+        if (userReason != null && !userReason.isBlank()) return userReason;
+        if (bizAction == null) return null;
+        return switch (bizAction) {
+            case "METRIC_TRIAL_RUN" -> "试运行（系统自动记录）";
+            case "READ", "LIST"     -> null;
+            case "CREATE"           -> "创建（系统自动记录）";
+            case "UPDATE"           -> "编辑（系统自动记录）";
+            default                  -> null;
+        };
+    }
 }

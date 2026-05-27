@@ -36,10 +36,13 @@ public class TaskRespDTO {
     /** 发起人工号 */
     private String startUser;
 
-    /** 发起人姓名 */
+    /** 发起人姓名（按 startUser 反查 PT_USER.userchnname） */
     private String startUserName;
 
-    /** 发起人机构名称 */
+    /** 发起人机构编码（按 startUser 反查 EXT_USER_ORG → ORG_CODE） */
+    private String startOrgId;
+
+    /** 发起人机构名称（按 startOrgId 反查 EXT_ORG_INFO.ORG_NAME） */
     private String startOrgName;
 
     /** 流程发起时间 */
@@ -47,6 +50,9 @@ public class TaskRespDTO {
 
     /** 节点名称（如"公司部审核"） */
     private String taskName;
+
+    /** 节点 KEY（taskDefinitionKey，如 biz_dept_review），前端按 nodeKey 决定审批面板表单 */
+    private String nodeKey;
 
     /** 到达节点时间 */
     private LocalDateTime taskCreateTime;
@@ -59,6 +65,13 @@ public class TaskRespDTO {
 
     /** SLA红绿灯状态：GREEN / YELLOW / RED */
     private String slaStatus;
+
+    /**
+     * 流程实例状态：RUNNING（审批中）/ COMPLETED（完结，业务 APPROVED）/
+     * CANCELLED（驳回，业务 REJECTED）。取自 biz_process_map.process_status，
+     * 前端按此映射"审批中 / 完结 / 驳回"显示。已办列表必填，待办列表通常为 RUNNING。
+     */
+    private String processStatus;
 
     /** 黄灯预警时间点 */
     private LocalDateTime warningTime;

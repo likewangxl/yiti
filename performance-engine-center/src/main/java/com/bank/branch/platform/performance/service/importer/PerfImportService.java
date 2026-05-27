@@ -4,6 +4,7 @@ import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDT
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -29,12 +30,14 @@ public interface PerfImportService {
     /**
      * 启动导入：创建批次、分发到策略、更新终态.
      *
-     * @param importType 导入类型（TARGET / BASE_DATA / ALLOC，与策略 {@link ImportStrategy#importType} 对应）
+     * @param importType 导入类型（TARGET / BASE_DATA / ALLOC / METRIC_DEF / METRIC_RESULT）
      * @param file       Excel 文件（不得为 null/空）
      * @param operatorId 操作人员工号（写入 createdBy）
+     * @param dataDate   数据日期：仅 METRIC_RESULT 需要且必填，其他类型忽略；
+     *                   缺失/格式错由 Controller 层 fail-fast
      * @return 新建批次的主键 id
      */
-    String startImport(String importType, MultipartFile file, String operatorId);
+    String startImport(String importType, MultipartFile file, String operatorId, LocalDate dataDate);
 
     /**
      * 按主键查询批次，不存在时抛 {@code IMPORT_BATCH_NOT_FOUND}.

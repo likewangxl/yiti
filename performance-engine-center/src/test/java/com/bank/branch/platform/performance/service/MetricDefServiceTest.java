@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.controller.dto.MetricCategoryDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -81,6 +83,80 @@ class MetricDefServiceTest {
         verify(mapper).insert(captor.capture());
         assertThat(captor.getValue().getRefMetricCodes()).isEqualTo("[]");
         verify(metricRefService).setRefs("TEST_METRIC_L1", List.of());
+    }
+
+    @Test
+    @DisplayName("V1.9：cmd.status=DISABLED 时落库尊重，不再无脑 ACTIVE")
+    void create_withStatusDisabled_respectsCmdStatus() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_OFF")
+                .metricName("停用指标")
+                .baseDim(null)
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("MANUAL")
+                .calcLogicType("EXPR")
+                .status("DISABLED")
+                .operator("admin")
+                .build();
+
+        when(mapper.selectByMetricCode("TEST_METRIC_OFF")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+
+        PerfMetricDef created = service.create(cmd);
+
+        assertThat(created.getStatus()).isEqualTo("DISABLED");
+    }
+
+    @Test
+    @DisplayName("V1.9：cmd.status=null 时回落 ACTIVE（普通 CRUD 创建路径）")
+    void create_withNullStatus_defaultsActive() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_DEF_ACT")
+                .metricName("默认启用指标")
+                .baseDim("EMP")
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("SQL")
+                .sqlText("SELECT 1")
+                .operator("admin")
+                .build();
+
+        when(mapper.selectByMetricCode("TEST_METRIC_DEF_ACT")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+        when(metricSlotService.allocSlot("EMP", 1, null)).thenReturn(2);
+
+        PerfMetricDef created = service.create(cmd);
+
+        assertThat(created.getStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("V1.9：baseDim=null 创建指标跳过 slot 分配，val_slot=null")
+    void create_baseDimNull_skipsSlotAllocation() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_META")
+                .metricName("维度无关型指标")
+                .baseDim(null)        // V1.9：维度无关型
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("MANUAL")
+                .calcLogicType("EXPR")
+                .exprText("外部填值")
+                .operator("admin")
+                .build();
+
+        when(mapper.selectByMetricCode("TEST_METRIC_META")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+
+        PerfMetricDef created = service.create(cmd);
+
+        assertThat(created.getMetricCode()).isEqualTo("TEST_METRIC_META");
+        assertThat(created.getValSlot()).isNull();
+        assertThat(created.getBaseDim()).isNull();
+        // slot 服务一次都不能被调
+        verify(metricSlotService, never()).allocSlot(any(), any(), any());
     }
 
     @Test
@@ -252,6 +328,50 @@ class MetricDefServiceTest {
 
         assertThat(result.getTotal()).isEqualTo(2);
         assertThat(result.getRecords()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("V1.10：listAllDto 一次性返回全部指标，按 metric_code 顺序，不分页")
+    void listAllDto_returnsAllRecordsAsRespDTOs() {
+        when(mapper.selectAllByCondition(null, null, null, null))
+                .thenReturn(List.of(
+                        metric("M_A_ALL", 1),
+                        metric("M_B_ALL", 2),
+                        metric("M_C_ALL", 1)
+                ));
+
+        List<MetricDefRespDTO> result = service.listAllDto(null, null, null, null);
+
+        assertThat(result).hasSize(3);
+        assertThat(result.get(0).getMetricCode()).isEqualTo("M_A_ALL");
+        assertThat(result.get(1).getMetricCode()).isEqualTo("M_B_ALL");
+        assertThat(result.get(2).getMetricCode()).isEqualTo("M_C_ALL");
+        // 数据库空集合 → 返回空 List（非 null）
+        when(mapper.selectAllByCondition("ORG", null, null, null)).thenReturn(Collections.emptyList());
+        assertThat(service.listAllDto("ORG", null, null, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("V1.10：listCategories 把 distinct metric_category 包装成 {value,label} 对（value==label）")
+    void listCategories_returnsDistinctCategoriesAsValueLabelPairs() {
+        when(mapper.selectDistinctCategories())
+                .thenReturn(List.of("合规类", "效益类", "规模类", "质量类"));
+
+        List<MetricCategoryDTO> result = service.listCategories();
+
+        assertThat(result).hasSize(4);
+        // V1.9 metric_category 直接存中文，未引入 sys_dict 翻译，value == label
+        assertThat(result).extracting(MetricCategoryDTO::getValue)
+                .containsExactly("合规类", "效益类", "规模类", "质量类");
+        assertThat(result).allSatisfy(dto ->
+                assertThat(dto.getLabel()).isEqualTo(dto.getValue()));
+    }
+
+    @Test
+    @DisplayName("V1.10：listCategories 当无分类数据时返回空 List 而非 null")
+    void listCategories_returnsEmptyListWhenNoCategoryRows() {
+        when(mapper.selectDistinctCategories()).thenReturn(Collections.emptyList());
+        assertThat(service.listCategories()).isEmpty();
     }
 
     @Test

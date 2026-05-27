@@ -1,0 +1,51 @@
+@use "./tokens.scss" as *;
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+  background: $bg-page;
+  color: $text-1;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+a { color: inherit; text-decoration: none; }
+
+/* element-plus 微调，对齐设计稿色板 */
+.el-button--primary {
+  --el-button-bg-color: #{$primary};
+  --el-button-border-color: #{$primary};
+  --el-button-hover-bg-color: #{$primary-400};
+  --el-button-hover-border-color: #{$primary-400};
+}
+.el-tag.tag-success { color: $success; background: #ecfdf5; border-color: #a7f3d0; }
+.el-tag.tag-warning { color: $warning; background: #fffbeb; border-color: #fde68a; }
+.el-tag.tag-danger  { color: $danger;  background: #fef2f2; border-color: #fecaca; }
+.el-tag.tag-info    { color: $primary; background: $primary-100; border-color: #bfdbfe; }
+
+/* 通用 page wrapper */
+.page-h {
+  display: flex; align-items: center; margin-bottom: 16px;
+  h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  .desc { color: $text-3; margin-left: 12px; font-size: 12px; }
+  .actions { margin-left: auto; display: flex; gap: 8px; }
+}
+.card-section {
+  background: $bg-card;
+  border: 1px solid $border-1;
+  border-radius: 4px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-size: 14px; font-weight: 600; margin: 0 0 12px;
+}
+.stat {
+  background: $bg-card;
+  border: 1px solid $border-1;
+  border-radius: 4px;
+  padding: 16px 18px;
+  .label { color: $text-3; font-size: 12px; }
+  .value { font-size: 24px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .trend { font-size: 12px; color: $text-3; margin-top: 4px; }
+  .trend.up { color: $success; }
+  .trend.down { color: $danger; }
+}

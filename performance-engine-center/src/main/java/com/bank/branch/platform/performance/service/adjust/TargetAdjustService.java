@@ -1,6 +1,9 @@
 package com.bank.branch.platform.performance.service.adjust;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
@@ -77,6 +80,8 @@ public class TargetAdjustService {
     private final PerfTargetPlanMapper targetPlanMapper;
     private final WorkflowApi workflowApi;
     private final CurrentUserApi currentUserApi;
+    private final UserApi userApi;
+    private final OrgApi orgApi;
     private final PerfScopeHelper perfScopeHelper;
     private final ObjectMapper objectMapper;
 
@@ -84,11 +89,15 @@ public class TargetAdjustService {
                                PerfTargetPlanMapper targetPlanMapper,
                                WorkflowApi workflowApi,
                                CurrentUserApi currentUserApi,
+                               UserApi userApi,
+                               OrgApi orgApi,
                                PerfScopeHelper perfScopeHelper) {
         this.applyMapper = applyMapper;
         this.targetPlanMapper = targetPlanMapper;
         this.workflowApi = workflowApi;
         this.currentUserApi = currentUserApi;
+        this.userApi = userApi;
+        this.orgApi = orgApi;
         this.perfScopeHelper = perfScopeHelper;
         this.objectMapper = new ObjectMapper();
     }
@@ -107,7 +116,7 @@ public class TargetAdjustService {
     public String submit(SubmitTargetAdjustCmd cmd) {
         validateBasic(cmd);
         validateAdjustments(cmd);
-        validateTargetPlan(cmd.getPlanId());
+        PerfTargetPlan plan = validateAndGetTargetPlan(cmd.getPlanId());
 
         String applyId = genApplyId();
         String applyNo = genApplyNo();
@@ -149,6 +158,11 @@ public class TargetAdjustService {
         vars.put("subjectType", cmd.getSubjectType());
         vars.put("subjectId", cmd.getSubjectId());
         vars.put("cycleKey", cmd.getCycleKey());
+        // 原业绩所属人：取目标方案的 ownerEmpId 作为 BPMN original_owner_approve
+        // 节点的 flowable:assignee 单人指派候选；plan.ownerEmpId 为空则不写此键.
+        if (!isBlank(plan.getOwnerEmpId())) {
+            vars.put("originalOwnerEmpId", plan.getOwnerEmpId());
+        }
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
 
@@ -222,7 +236,29 @@ public class TargetAdjustService {
      * V1.3 R4.1：Controller 专用 DTO 版本 getById.
      */
     public TargetAdjustRespDTO getByIdDto(String id) {
-        return toRespDto(getById(id));
+        PerfTargetAdjustApply apply = getById(id);
+        TargetAdjustRespDTO dto = toRespDto(apply);
+        // 展开申请人姓名 + 主机构名（仅详情，列表不展开避免 N+1）
+        // 任何一项查询失败不阻塞主流程，对应字段留 null
+        String createdBy = apply.getCreatedBy();
+        if (createdBy != null && !createdBy.isBlank()) {
+            try {
+                dto.setCreatedByName(userApi.getUserName(createdBy));
+            } catch (Exception e) {
+                log.warn("[TargetAdjustService.getByIdDto] 申请人姓名查询失败 createdBy={}, err={}",
+                        createdBy, e.toString());
+            }
+            try {
+                OrgDTO org = orgApi.getUserMainOrg(createdBy);
+                if (org != null) {
+                    dto.setCreatedByOrgName(org.getOrgName());
+                }
+            } catch (Exception e) {
+                log.warn("[TargetAdjustService.getByIdDto] 申请人主机构查询失败 createdBy={}, err={}",
+                        createdBy, e.toString());
+            }
+        }
+        return dto;
     }
 
     /**
@@ -318,6 +354,17 @@ public class TargetAdjustService {
                     "申请状态不可撤回: " + apply.getStatus());
         }
         applyMapper.updateStatus(id, "REJECTED", null);
+        // 同步取消 Flowable 流程实例，否则该流程的 active task 会一直留在「待我审批」
+        // DRAFT 状态可能未启动流程（process_instance_id=null），需判空
+        String pid = apply.getProcessInstanceId();
+        if (pid != null && !pid.isBlank()) {
+            try {
+                workflowApi.cancelProcess(pid, reason);
+            } catch (Exception ex) {
+                log.warn("[TargetAdjustService.withdraw] cancelProcess 失败 pid={}, 业务侧已置 REJECTED；err={}",
+                        pid, ex.getMessage());
+            }
+        }
         log.info("[TargetAdjustService.withdraw] id={}, reason={}, operator={}",
                 id, reason, operator);
     }
@@ -380,13 +427,14 @@ public class TargetAdjustService {
     }
 
     /**
-     * 目标方案存在性校验.
+     * 目标方案存在性校验，并返回 plan 实体（供 submit 复用 ownerEmpId 等字段，避免重复查询）.
      */
-    private void validateTargetPlan(String planId) {
+    private PerfTargetPlan validateAndGetTargetPlan(String planId) {
         PerfTargetPlan plan = targetPlanMapper.selectById(planId);
         if (plan == null) {
             throw new PerfException(PerfErrorCode.TARGET_PLAN_NOT_FOUND, planId);
         }
+        return plan;
     }
 
     /**

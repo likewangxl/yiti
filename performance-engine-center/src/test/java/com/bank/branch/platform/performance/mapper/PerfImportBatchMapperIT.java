@@ -103,7 +103,7 @@ class PerfImportBatchMapperIT extends PerformanceMapperTestBase {
         PerfImportBatch b = newBatch("B004");
         mapper.insert(b);
 
-        mapper.updateCounts(b.getId(), 100, 95, 5);
+        mapper.updateCounts(b.getId(), 100, 95, 5, 0);
 
         PerfImportBatch after = mapper.selectById(b.getId());
         assertThat(after.getTotalRows()).isEqualTo(100);
@@ -126,5 +126,34 @@ class PerfImportBatchMapperIT extends PerformanceMapperTestBase {
     @DisplayName("selectById 不存在时返回 null")
     void selectById_whenNotFound_returnsNull() {
         assertThat(mapper.selectById("NOT_EXIST_ID")).isNull();
+    }
+
+    @Test
+    @DisplayName("V1.9：dim=null 插入成功（METRIC_DEF 等维度无关导入）")
+    void insert_dimNull_succeeds() {
+        PerfImportBatch b = newBatch("B020");
+        b.setImportType("METRIC_DEF");
+        b.setDim(null);                // V1.9：dim 列可空
+        mapper.insert(b);
+
+        PerfImportBatch got = mapper.selectById(b.getId());
+        assertThat(got).isNotNull();
+        assertThat(got.getImportType()).isEqualTo("METRIC_DEF");
+        assertThat(got.getDim()).isNull();
+    }
+
+    @Test
+    @DisplayName("V1.11 updateCounts 同步写入 updated_rows 列")
+    void updateCounts_writesUpdatedRows() {
+        PerfImportBatch b = newBatch("B030");
+        mapper.insert(b);
+
+        mapper.updateCounts(b.getId(), 10, 10, 0, 3);
+
+        PerfImportBatch after = mapper.selectById(b.getId());
+        assertThat(after.getTotalRows()).isEqualTo(10);
+        assertThat(after.getSuccessRows()).isEqualTo(10);
+        assertThat(after.getErrorRows()).isZero();
+        assertThat(after.getUpdatedRows()).isEqualTo(3);
     }
 }

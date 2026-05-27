@@ -71,6 +71,7 @@ public final class MetricAssembler {
         dto.setUnit(entity.getUnit());
         dto.setDecimalPlaces(entity.getDecimalPlaces());
         dto.setDescription(entity.getDescription());
+        dto.setMetricCategory(entity.getMetricCategory());
         return dto;
     }
 }

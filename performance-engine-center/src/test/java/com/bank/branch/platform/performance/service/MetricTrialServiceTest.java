@@ -5,6 +5,7 @@ import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
+import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import org.junit.jupiter.api.DisplayName;
@@ -14,9 +15,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.mockito.ArgumentCaptor;
+
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -163,6 +167,58 @@ class MetricTrialServiceTest {
         MetricTrialResult defaulted = metricTrialService.trial(
                 "TEST_TRIAL_CAP", LocalDate.of(2026, 4, 20), null, null);
         assertThat(defaulted.getSampleSize()).isEqualTo(20);
+    }
+
+    @Test
+    void runSql_userParamsCannotOverrideSystemMacros() {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_TRIAL_MACRO");
+        def.setBaseDim("EMP");
+        def.setStatus("ACTIVE");
+        def.setCalcLogicType("SQL");
+        def.setSqlText("SELECT 1 AS base_key, 2 AS metric_value WHERE :dateToday IS NOT NULL");
+        when(metricDefService.getByCodeOrNull("M_TRIAL_MACRO")).thenReturn(def);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class)))
+                .thenReturn(Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 5, 20);
+        Map<String, Object> userParams = new HashMap<>();
+        userParams.put("dateToday", LocalDate.of(2099, 1, 1));
+        userParams.put("dateMonthEnd", LocalDate.of(2099, 12, 31));
+        userParams.put("customParam", "kept");
+
+        metricTrialService.trial("M_TRIAL_MACRO", dataDate, 10, userParams);
+
+        ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), cap.capture(), any(Duration.class));
+        Map<String, Object> sent = cap.getValue();
+        DateMacroResolver.resolve(dataDate)
+                .forEach((k, v) -> assertThat(sent).containsEntry(k, v));
+        assertThat(sent).containsEntry("customParam", "kept");
+    }
+
+    @Test
+    void runSql_nullDataDate_doesNotInjectMacros() {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_TRIAL_NULL_DATE");
+        def.setBaseDim("EMP");
+        def.setStatus("ACTIVE");
+        def.setCalcLogicType("SQL");
+        def.setSqlText("SELECT 1 AS base_key, 2 AS metric_value");
+        when(metricDefService.getByCodeOrNull("M_TRIAL_NULL_DATE")).thenReturn(def);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class)))
+                .thenReturn(Map.of());
+
+        metricTrialService.trial("M_TRIAL_NULL_DATE", null, 10, null);
+
+        ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), cap.capture(), any(Duration.class));
+        Map<String, Object> sent = cap.getValue();
+        assertThat(sent).doesNotContainKeys(
+                "dateToday", "dateYesterday",
+                "dateMonthEnd", "datePrevMonthEnd",
+                "dateQuarterEnd", "datePrevQuarterEnd",
+                "dateYearEnd", "datePrevYearEnd");
     }
 
     // ========== 测试构造器 ==========

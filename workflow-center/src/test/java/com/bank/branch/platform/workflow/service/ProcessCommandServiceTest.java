@@ -42,10 +42,16 @@ class ProcessCommandServiceTest {
     private RuntimeService runtimeService;
 
     @Mock
+    private org.flowable.engine.TaskService taskService;
+
+    @Mock
     private BizProcessMapMapper bizProcessMapMapper;
 
     @Mock
     private CurrentUserApi currentUserApi;
+
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ProcessCommandService processCommandService;
@@ -134,6 +140,7 @@ class ProcessCommandServiceTest {
         BizProcessMap map = new BizProcessMap();
         map.setId("MAP_001");
         map.setProcessInstanceId("PID_001");
+        map.setBusinessKey("ALLOC_ADJUST:A1");
         map.setStartUser("E10001");
         map.setProcessStatus(ProcessStatus.RUNNING.getCode());
         map.setCurrentAssignee("E20001");
@@ -145,6 +152,15 @@ class ProcessCommandServiceTest {
         when(query.processInstanceId("PID_001")).thenReturn(query);
         when(query.singleResult()).thenReturn(runtimeInstance);
 
+        // active task 拿 assignee
+        org.flowable.task.api.TaskQuery taskQuery = mock(org.flowable.task.api.TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.processInstanceId("PID_001")).thenReturn(taskQuery);
+        when(taskQuery.active()).thenReturn(taskQuery);
+        org.flowable.task.api.Task activeTask = mock(org.flowable.task.api.Task.class);
+        when(activeTask.getAssignee()).thenReturn("E20001");
+        when(taskQuery.list()).thenReturn(java.util.List.of(activeTask));
+
         CancelProcessReqDTO req = new CancelProcessReqDTO();
         req.setReason("发起人撤回");
 
@@ -155,6 +171,15 @@ class ProcessCommandServiceTest {
                 ProcessStatus.CANCELLED.getCode().equals(updated.getProcessStatus())
                         && updated.getEndTime() != null
                         && updated.getCurrentAssignee() == null
+        ));
+        // 验证 publish ProcessWithdrawnEvent 含 assignee
+        verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers
+                .<com.bank.branch.platform.workflow.api.event.ProcessWithdrawnEvent>argThat(event ->
+                        "PID_001".equals(event.processInstanceId())
+                                && "ALLOC_ADJUST:A1".equals(event.businessKey())
+                                && "E10001".equals(event.withdrawnByEmpId())
+                                && "E20001".equals(event.currentAssigneeEmpId())
+                                && "发起人撤回".equals(event.opinion())
         ));
     }
 }

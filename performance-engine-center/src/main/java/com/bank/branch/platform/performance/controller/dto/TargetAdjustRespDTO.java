@@ -47,6 +47,12 @@ public class TargetAdjustRespDTO {
     /** 申请人 empId. */
     private String createdBy;
 
+    /** 申请人姓名（按 createdBy 反查 PT_USER）；用户已删时为 null. */
+    private String createdByName;
+
+    /** 申请人主机构名称（按 createdBy 反查 EXT_USER_ORG + EXT_ORG_INFO）；查不到为 null. */
+    private String createdByOrgName;
+
     /** 申请时间. */
     private LocalDateTime createdTime;
 

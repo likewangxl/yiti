@@ -23,6 +23,12 @@ public class UpdateTargetPlanCmd {
     /** 方案名称 (可空). */
     private String planName;
 
+    /** 关联 KPI 方案 ID (可空, null 表示不修改). */
+    private String kpiSchemeId;
+
+    /** 方案状态 (可空, ACTIVE/DISABLED). */
+    private String status;
+
     /** 目标维度 (可空). */
     private String targetDim;
 
@@ -31,6 +37,12 @@ public class UpdateTargetPlanCmd {
 
     /** 生效日期 (可空). */
     private LocalDate effectiveDate;
+
+    /** 方案覆盖起始日期 (可空，2026-05-22 新增). */
+    private LocalDate startDate;
+
+    /** 方案覆盖截止日期 (可空，2026-05-22 新增). */
+    private LocalDate endDate;
 
     /** 操作人. */
     private String operator;

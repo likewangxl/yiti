@@ -10,6 +10,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.TargetPlanService;
 import com.bank.branch.platform.performance.service.TargetValueService;
 import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
+import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.TargetImportRow;
@@ -65,7 +66,7 @@ public class TargetImportStrategy implements ImportStrategy {
     }
 
     @Override
-    public ImportResult execute(PerfImportBatch batch, MultipartFile file) {
+    public ImportResult execute(PerfImportBatch batch, MultipartFile file, ImportContext ctx) {
         List<TargetImportRow> rows = parseRows(file);
         log.info("[TargetImportStrategy] 解析完成 batchId={}, rows={}",
                 batch.getId(), rows == null ? 0 : rows.size());

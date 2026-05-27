@@ -14,14 +14,12 @@ import com.bank.branch.platform.performance.facade.assembler.AllocAssembler;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -64,7 +62,6 @@ public class AllocRelationService {
     private final SysControlService sysControlService;
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
-    private final RedisTemplate<String, Object> redisTemplate;
     /**
      * Q7.2 新增：统一数据范围 SQL 片段生成器.
      * 将 7 种 {@link DataScopeType} 转换为 (scopeFragment, scopeParams) 对给 Mapper,
@@ -74,29 +71,19 @@ public class AllocRelationService {
 
     /**
      * 构造器注入（手写, 因 Q7.2 新增 helper 字段与其他字段非等价语义）.
+     * V1.8 去 Redis：删除 RedisTemplate 注入，批量查询直接走 DB。
      */
     public AllocRelationService(CustAllocRelationMapper allocMapper,
                                 SysControlService sysControlService,
                                 CurrentUserApi currentUserApi,
                                 BizScopeApi bizScopeApi,
-                                RedisTemplate<String, Object> redisTemplate,
                                 PerfScopeHelper perfScopeHelper) {
         this.allocMapper = allocMapper;
         this.sysControlService = sysControlService;
         this.currentUserApi = currentUserApi;
         this.bizScopeApi = bizScopeApi;
-        this.redisTemplate = redisTemplate;
         this.perfScopeHelper = perfScopeHelper;
     }
-
-    /** 缓存 key 前缀. */
-    private static final String CACHE_KEY_PREFIX = "perf:alloc:cust:";
-
-    /** bizKind 为 null 时 key 占位. */
-    private static final String BIZ_KIND_ALL = "ALL";
-
-    /** 缓存 TTL (V1.0 无 evict, 靠 5 min 自然过期). */
-    private static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
     /** 派生版本 DTO 时 listVersionHistory 的最大拉取量 (保持充足但有限). */
     private static final int VERSION_HISTORY_LIMIT = 100;
@@ -208,58 +195,37 @@ public class AllocRelationService {
     // ==================== 批量查询（含缓存合并）====================
 
     /**
-     * 批量查询多个客户的当前分配关系.
+     * 批量查询多个客户的当前分配关系（V1.8 去 Redis 后直接查 DB）.
      *
-     * <p>缓存合并流程:
+     * <p>简化流程:
      * <ol>
-     *   <li>遍历 custIds 先查 Redis: 命中直接填入 result</li>
-     *   <li>未命中的集中调一次 {@code selectCurrentByCustIds(missingIds, ...)}</li>
-     *   <li>按 custId 分组结果, 即便某 custId 无任何分配也写入空列表防穿透</li>
-     *   <li>回写 Redis, TTL 5 min</li>
+     *   <li>一次性把所有 custIds 提交给 {@code selectCurrentByCustIds(custIds, ...)}</li>
+     *   <li>按 custId 分组结果, 即便某 custId 无任何分配也写入空列表（防穿透语义保留）</li>
      * </ol>
      *
+     * <p>性能影响: PT_CUST_ALLOC_RELATION 上的 IN 索引点查，100 个 cust 约 5-10ms，可接受。
+     * 后期发现热点可改 caffeine 本地缓存。</p>
+     *
      * @param custIds 客户 ID 集合; null / 空 → 直接返回空 Map
-     * @param bizKind 业务种类, null 表示全部 (此时 key 以 "ALL" 占位)
+     * @param bizKind 业务种类, null 表示全部
      * @return Map&lt;custId, List&lt;CustAllocRelation&gt;&gt;; 每个 custId 都有对应 entry (可能空列表)
      */
     @Transactional(readOnly = true)
-    @SuppressWarnings("unchecked")
     public Map<String, List<CustAllocRelation>> batchGetCurrentAllocations(Set<String> custIds, String bizKind) {
         if (custIds == null || custIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        String bizKindKey = bizKind == null ? BIZ_KIND_ALL : bizKind;
         Map<String, List<CustAllocRelation>> result = new HashMap<>(custIds.size());
-        Set<String> missingIds = new HashSet<>();
 
-        // 1) 遍历 custIds 查缓存
+        List<CustAllocRelation> dbList = allocMapper.selectCurrentByCustIds(
+                custIds, bizKind, LocalDate.now(), null);
+        // 按 custId 分组
+        Map<String, List<CustAllocRelation>> grouped = dbList.stream()
+                .collect(Collectors.groupingBy(CustAllocRelation::getCustId));
+        // 对每个 custId 保证一个 entry (即便 DB 返回空也写入空列表，保留原防穿透语义)
         for (String custId : custIds) {
-            String cacheKey = buildCacheKey(custId, bizKindKey);
-            Object cached = redisTemplate.opsForValue().get(cacheKey);
-            if (cached instanceof List) {
-                // 缓存命中 (包括空列表的穿透防护)
-                result.put(custId, (List<CustAllocRelation>) cached);
-            } else {
-                missingIds.add(custId);
-            }
+            result.put(custId, grouped.getOrDefault(custId, Collections.emptyList()));
         }
-
-        // 2) 缺失的集中查 DB
-        if (!missingIds.isEmpty()) {
-            List<CustAllocRelation> dbList = allocMapper.selectCurrentByCustIds(
-                    missingIds, bizKind, LocalDate.now(), null);
-            // 按 custId 分组
-            Map<String, List<CustAllocRelation>> grouped = dbList.stream()
-                    .collect(Collectors.groupingBy(CustAllocRelation::getCustId));
-            // 对每个 missingId 保证一个 entry (即便 DB 返回空, 也写入空列表防穿透)
-            for (String custId : missingIds) {
-                List<CustAllocRelation> list = grouped.getOrDefault(custId, Collections.emptyList());
-                result.put(custId, list);
-                // 3) 回写缓存
-                redisTemplate.opsForValue().set(buildCacheKey(custId, bizKindKey), list, CACHE_TTL);
-            }
-        }
-
         return result;
     }
 
@@ -401,13 +367,6 @@ public class AllocRelationService {
     }
 
     // ==================== 私有工具 ====================
-
-    /**
-     * 生成缓存 key: {@code perf:alloc:cust:{custId}:{bizKindKey}}.
-     */
-    private String buildCacheKey(String custId, String bizKindKey) {
-        return CACHE_KEY_PREFIX + custId + ":" + bizKindKey;
-    }
 
     /**
      * 组装 AllocVersionDTO. publishedAt 取 createdTime (sys_control 无 published_at 字段),

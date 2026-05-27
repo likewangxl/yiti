@@ -5,16 +5,19 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
+import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,7 +25,7 @@ import java.util.Map;
  * 任务操作服务
  * <p>
  * 提供任务签收、审批通过、驳回、转交等核心操作。
- * 所有操作会校验任务存在性和办理人权限，并同步更新 biz_process_map 映射表。
+ * 所有操作会校验任务存在性和办理人权限，并同步更新 BIZ_PROCESS_MAP 映射表。
  * </p>
  */
 @Slf4j
@@ -31,6 +34,7 @@ import java.util.Map;
 public class TaskOperationService {
 
     private final TaskService taskService;
+    private final RuntimeService runtimeService;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final CurrentUserApi currentUserApi;
@@ -59,7 +63,7 @@ public class TaskOperationService {
         // 执行签收
         taskService.claim(taskId, empId);
 
-        // 更新 biz_process_map 当前办理人
+        // 更新 BIZ_PROCESS_MAP 当前办理人
         updateCurrentAssignee(task.getProcessInstanceId(), empId);
 
         log.info("任务签收成功: taskId={}, empId={}", taskId, empId);
@@ -110,23 +114,43 @@ public class TaskOperationService {
      */
     public void rejectTask(String taskId, RejectReqDTO req) {
         String empId = currentUserApi.getCurrentEmpId();
-        // 查询任务并校验办理人
         Task task = queryTaskOrThrow(taskId);
         verifyAssignee(task, empId);
+        String pid = task.getProcessInstanceId();
+        String opinion = req.getOpinion();
 
-        // 设置驳回变量
-        Map<String, Object> vars = Map.of("approved", false);
+        // 1. 写驳回意见到 ACT_HI_COMMENT（必须在 deleteProcessInstance 之前；
+        //    否则 task 已被 cascade 删除时 addComment 会失败）
+        taskService.addComment(taskId, pid, "REJECT", opinion);
 
-        // 添加驳回意见
-        taskService.addComment(taskId, task.getProcessInstanceId(), "REJECT", req.getOpinion());
+        // 2. 强制终止流程实例（直接返回申请人处，不再走后续节点）
+        //    BPMN 当前未在每个 userTask 后做 ${approved == false} 分流，仅靠 complete 设
+        //    approved=false 仍会被默认 sequenceFlow 带到下一节点。这里用 deleteProcessInstance
+        //    显式中断，避免业务流程被误判为"通过"继续流转。
+        runtimeService.deleteProcessInstance(pid, "驳回: " + opinion);
 
-        // 完成任务（带驳回变量）
-        taskService.complete(taskId, vars);
+        // 3. 更新 biz_process_map 状态（ProcessCompletedListener 仅在 BPMN 自然结束时触发，
+        //    deleteProcessInstance 路径不进，这里手动接管）
+        BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(pid);
+        String businessKey = null;
+        if (map != null) {
+            businessKey = map.getBusinessKey();
+            map.setProcessStatus("CANCELLED");
+            LocalDateTime now = LocalDateTime.now();
+            map.setEndTime(now);
+            map.setUpdatedTime(now);
+            bizProcessMapMapper.updateById(map);
+        }
 
-        // 发布事件
-        eventPublisher.publishEvent(new TaskRejectedEvent(taskId, task.getProcessInstanceId(), empId));
+        // 4. 手动 publish ProcessCompletedEvent outcome=REJECTED
+        //    → 触发 AllocAdjustCompletedListener / TargetAdjustCompletedListener 把
+        //      apply.status 改 REJECTED
+        eventPublisher.publishEvent(new ProcessCompletedEvent(pid, businessKey, "REJECTED", opinion));
 
-        log.info("任务驳回: taskId={}, empId={}, opinion={}", taskId, empId, req.getOpinion());
+        // 5. 原有 TaskRejectedEvent（task 维度事件，跟流程完成事件互补）
+        eventPublisher.publishEvent(new TaskRejectedEvent(taskId, pid, empId));
+
+        log.info("任务驳回 + 流程终止: taskId={}, empId={}, pid={}, opinion={}", taskId, empId, pid, opinion);
     }
 
     /**
@@ -152,7 +176,7 @@ public class TaskOperationService {
         // 添加转交备注
         taskService.addComment(taskId, task.getProcessInstanceId(), "TRANSFER", req.getReason());
 
-        // 更新 biz_process_map 当前办理人
+        // 更新 BIZ_PROCESS_MAP 当前办理人
         updateCurrentAssignee(task.getProcessInstanceId(), toEmpId);
 
         // 发布事件
@@ -190,13 +214,13 @@ public class TaskOperationService {
     }
 
     /**
-     * 更新 biz_process_map 表的当前办理人字段。
+     * 更新 BIZ_PROCESS_MAP 表的当前办理人字段。
      * 如果找不到映射记录，仅记录警告日志，不抛异常。
      */
     private void updateCurrentAssignee(String processInstanceId, String empId) {
         BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
         if (map == null) {
-            log.warn("未找到流程实例 {} 对应的 biz_process_map 记录，跳过更新当前办理人", processInstanceId);
+            log.warn("未找到流程实例 {} 对应的 BIZ_PROCESS_MAP 记录，跳过更新当前办理人", processInstanceId);
             return;
         }
         map.setCurrentAssignee(empId);

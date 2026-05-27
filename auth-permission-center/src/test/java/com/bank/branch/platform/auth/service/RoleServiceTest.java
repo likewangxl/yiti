@@ -62,7 +62,7 @@ class RoleServiceTest {
     @Test
     void updateRole_shouldThrowWhenNotFound() {
         when(roleMapper.selectByRoleId("NONE")).thenReturn(null);
-        assertThatThrownBy(() -> roleService.updateRole("NONE", "新名字", null))
+        assertThatThrownBy(() -> roleService.updateRole("NONE", "新名字", null, null))
             .isInstanceOf(BizException.class)
             .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40401"));
     }
@@ -72,7 +72,7 @@ class RoleServiceTest {
         PtRole existing = makeRole("R_RM", "CUST_MANAGER", "客户经理");
         when(roleMapper.selectByRoleId("R_RM")).thenReturn(existing);
         when(roleMapper.updateById(any(PtRole.class))).thenReturn(1);
-        RoleRespDTO dto = roleService.updateRole("R_RM", "客户经理V2", "新备注");
+        RoleRespDTO dto = roleService.updateRole("R_RM", "客户经理V2", "新备注", null);
         assertThat(dto.getRoleChName()).isEqualTo("客户经理V2");
     }
 
