@@ -14,8 +14,8 @@
         <div v-for="t in types" :key="dictKey(t)"
              :class="['ti', { active: dictKey(t) === picked }]"
              @click="picked = dictKey(t)">
-          <div class="t1">{{ dictKey(t) }}</div>
-          <div class="t2">{{ dictLabel(t) }} · {{ t.itemCount ?? 0 }} 项</div>
+          <div class="t1">{{ dictLabel(t) }}</div>
+          <div class="t2">{{ dictKey(t) }} · {{ t.itemCount ?? 0 }} 项</div>
         </div>
       </div>
 
