@@ -12,7 +12,7 @@
   <div class="rpt-sql">
     <div class="page-h">
       <h1>SQL 探查</h1>
-      <span class="desc">高危：仅 SELECT · 表白名单 · 自动行限 1000 · 30s 超时 · 全程审计</span>
+      <span class="desc">高危：仅 SELECT · 自动行限 1000 · 30s 超时 · 全程审计 · 传输加密</span>
     </div>
 
     <el-alert type="error" :closable="false" class="warn">
@@ -56,7 +56,6 @@
       <div class="ops">
         <el-button @click="formatSql">格式化</el-button>
         <el-button :icon="List"   @click="historyVisible = true">查看历史</el-button>
-        <el-button :icon="Search" @click="whitelistVisible = true">表白名单</el-button>
         <el-button type="primary" :loading="running" :disabled="!valid" @click="run" class="run">
           ▶ 执行
         </el-button>
@@ -208,9 +207,12 @@ const errors = computed(() => {
 const valid = computed(() => errors.value.length === 0 && reason.value.trim().length > 0);
 
 watch(() => historyVisible.value, async (v) => {
-  if (v && !history.value.length) {
+  if (v) {
     historyLoading.value = true;
-    try { history.value = await getSqlHistory() || []; }
+    try {
+      const r = await getSqlHistory();
+      history.value = Array.isArray(r) ? r : (r?.records || []);
+    } catch { history.value = []; }
     finally { historyLoading.value = false; }
   }
 });
