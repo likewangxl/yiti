@@ -32,6 +32,7 @@ public class RoleService {
     private final RoleMapper roleMapper;
     private final UserRoleMapper userRoleMapper;
     private final PermissionCacheService cacheService;
+    private final com.bank.branch.platform.auth.mapper.RoleBizScopeMapper roleBizScopeMapper;
 
     /**
      * 根据角色ID查询角色DTO，角色不存在时抛出 AUTH-40401。
@@ -104,7 +105,20 @@ public class RoleService {
         role.setCreateTime(LocalDateTime.now());
         role.setUpdateTime(LocalDateTime.now());
         roleMapper.insert(role);
-        log.info("[RoleService.createRole] 角色创建成功 roleId={}", roleId);
+        // 自动初始化全量 BizScope（默认 SELF），管理员可在权限配置页面按需调大
+        for (com.bank.branch.platform.common.security.enums.BizType bt : com.bank.branch.platform.common.security.enums.BizType.values()) {
+            com.bank.branch.platform.auth.entity.PtRoleBizScope bs = new com.bank.branch.platform.auth.entity.PtRoleBizScope();
+            bs.setId("RBS_" + roleId + "_" + bt.name());
+            bs.setRoleId(roleId);
+            bs.setBizType(bt.name());
+            bs.setDataScope("SELF");
+            bs.setRecordStatus(0);
+            bs.setCreateTime(LocalDateTime.now());
+            bs.setUpdateTime(LocalDateTime.now());
+            roleBizScopeMapper.insert(bs);
+        }
+        log.info("[RoleService.createRole] 角色创建成功 roleId={}, 已初始化 {} 个 BizScope",
+                roleId, com.bank.branch.platform.common.security.enums.BizType.values().length);
         return toDto(role);
     }
 

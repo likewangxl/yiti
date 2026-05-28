@@ -36,6 +36,7 @@ public interface FreeReportService {
      * @return 行数据（含 col_1/col_2 + dataJson 解析后的 Map）
      */
     PageResult<Map<String, Object>> queryData(String batchId, String keyword,
+                                               String empNo, String empName,
                                                String scopeEmpId, List<String> scopeOrgCodes,
                                                int pageNo, int pageSize);
 
@@ -47,12 +48,16 @@ public interface FreeReportService {
     /**
      * 查询导入批次列表（支持时间筛选）。
      */
-    List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo);
+    List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo,
+                                        String scopeEmpId, java.util.List<String> scopeOrgCodes);
 
     /**
      * 获取原始文件下载 URL（MinIO 预签名）。
      */
     String getDownloadUrl(String batchId);
+
+    /** 获取批次原始文件名 */
+    String getBatchFileName(String batchId);
 
     /**
      * 删除批次 + 关联行数据 + MinIO 文件。

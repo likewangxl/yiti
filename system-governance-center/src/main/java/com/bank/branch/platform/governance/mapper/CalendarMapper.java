@@ -62,4 +62,8 @@ public interface CalendarMapper extends BaseMapper<SysCalendarDay> {
      * @return 存在返回 true，否则返回 false
      */
     boolean existsByDay(LocalDate day);
+
+    /** 按日期范围删除（年初初始化重置用） */
+    int deleteByRange(@org.apache.ibatis.annotations.Param("start") LocalDate start,
+                      @org.apache.ibatis.annotations.Param("end") LocalDate end);
 }

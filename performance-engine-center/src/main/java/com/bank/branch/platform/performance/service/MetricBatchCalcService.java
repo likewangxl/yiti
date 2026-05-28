@@ -33,6 +33,7 @@ public class MetricBatchCalcService {
     private final PerfMetricCalcLogMapper logMapper;
     private final PerfMetricDefMapper metricDefMapper;
     private final MetricCalcService metricCalcService;
+    private final com.bank.branch.platform.performance.mapper.PerfRunTaskMapper perfRunTaskMapper;
 
     /**
      * 执行指定级别的指标批量计算
@@ -51,6 +52,7 @@ public class MetricBatchCalcService {
         PerfMetricCalcTask task = new PerfMetricCalcTask();
         task.setId(taskId);
         task.setTaskName(taskName);
+        task.setTaskType("METRIC_CALC_L" + metricLevel);
         task.setMetricLevel(metricLevel);
         task.setDataDate(dataDate);
         task.setStatus("RUNNING");
@@ -157,6 +159,7 @@ public class MetricBatchCalcService {
         calcLog.setTaskId(taskId);
         calcLog.setMetricCode(def.getMetricCode());
         calcLog.setMetricName(def.getMetricName());
+        calcLog.setDataDate(dataDate);
         calcLog.setStartTime(LocalDateTime.now());
 
         try {
@@ -181,13 +184,29 @@ public class MetricBatchCalcService {
             log.info("【{}级指标计算】开始计算指标 {}（{}），计算逻辑={}, 数据日期={}",
                     metricLevel, def.getMetricCode(), def.getMetricName(), def.getCalcLogicType(), dataDate);
 
-            metricCalcService.calcMetric(def.getMetricCode(), dataDate, "V1", "BATCH");
+            String runTaskId = metricCalcService.calcMetric(def.getMetricCode(), dataDate, "V1", "BATCH");
+
+            // 从 PerfRunTask 获取实际处理行数
+            int rowCount = 0;
+            try {
+                var runTask = perfRunTaskMapper.selectById(runTaskId);
+                if (runTask != null && runTask.getResultPreviewJson() != null) {
+                    String json = runTask.getResultPreviewJson();
+                    if (json.contains("\"total\":")) {
+                        int idx = json.indexOf("\"total\":") + 8;
+                        int end = json.indexOf(',', idx);
+                        if (end < 0) end = json.indexOf('}', idx);
+                        if (end > idx) rowCount = Integer.parseInt(json.substring(idx, end).trim());
+                    }
+                }
+            } catch (Exception ignore) {}
 
             calcLog.setStatus("SUCCESS");
             calcLog.setEndTime(LocalDateTime.now());
+            calcLog.setRowCount(rowCount);
             logMapper.insert(calcLog);
             successCount.incrementAndGet();
-            log.info("【{}级指标计算】指标 {}（{}）计算成功", metricLevel, def.getMetricCode(), def.getMetricName());
+            log.info("【{}级指标计算】指标 {}（{}）计算成功，结果行数={}", metricLevel, def.getMetricCode(), def.getMetricName(), rowCount);
 
         } catch (Exception e) {
             calcLog.setStatus("FAILED");

@@ -32,6 +32,7 @@ public class WebMvcAuthConfig implements WebMvcConfigurer {
     private final BizMetaResolver bizMetaResolver;
     private final BizScopeApi bizScopeApi;
     private final ObjectMapper objectMapper;
+    private final com.bank.branch.platform.auth.mapper.UserMapper userMapper;
 
     /**
      * 将 AuthenticationFilter 注册为 Servlet Filter
@@ -39,9 +40,10 @@ public class WebMvcAuthConfig implements WebMvcConfigurer {
      */
     @Bean
     public FilterRegistrationBean<AuthenticationFilter> authenticationFilterBean() {
-        AuthenticationFilter filter = new AuthenticationFilter(currentUserProvider, objectMapper);
+        AuthenticationFilter filter = new AuthenticationFilter(currentUserProvider, objectMapper, userMapper);
         FilterRegistrationBean<AuthenticationFilter> bean = new FilterRegistrationBean<>(filter);
-        bean.addUrlPatterns("/*");
+        // 只拦截 API 路径，静态资源（/index.html, /assets/*）不过认证
+        bean.addUrlPatterns("/api/*");
         bean.setOrder(1);
         bean.setName("authenticationFilter");
         return bean;

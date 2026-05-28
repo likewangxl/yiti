@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -18,6 +19,7 @@ public class PerfMetricCalcLog {
     private String taskId;
     private String metricCode;
     private String metricName;
+    private LocalDate dataDate;
     private String status;
     private LocalDateTime startTime;
     private LocalDateTime endTime;

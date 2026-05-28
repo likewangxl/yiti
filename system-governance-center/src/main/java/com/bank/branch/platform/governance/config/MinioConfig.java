@@ -2,15 +2,14 @@ package com.bank.branch.platform.governance.config;
 
 import io.minio.MinioClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * MinIO 对象存储配置
- * <p>
- * 基于 application.yml 中的 minio.* 配置项初始化 MinioClient Bean。
- * 提供 minioBucketName Bean 供注入使用。
- * </p>
+ * MinIO 配置 — 仅为兼容历史 ExportStrategy 保留 bean 注册。
+ * 自由报表/文件管理已切换到本地磁盘存储（见 FileService）。
+ * MinioClient 是惰性的，启动时不会真连 endpoint，只在调用 putObject 时才会建立连接。
  */
 @Configuration
 public class MinioConfig {
@@ -27,12 +26,8 @@ public class MinioConfig {
     @Value("${minio.bucket:branch-platform}")
     String bucket;
 
-    /**
-     * 创建 MinioClient 实例
-     *
-     * @return MinioClient
-     */
     @Bean
+    @ConditionalOnMissingBean
     public MinioClient minioClient() {
         return MinioClient.builder()
                 .endpoint(endpoint)
@@ -40,12 +35,8 @@ public class MinioConfig {
                 .build();
     }
 
-    /**
-     * 提供存储桶名称 Bean
-     *
-     * @return 存储桶名称
-     */
-    @Bean
+    @Bean(name = "minioBucketName")
+    @ConditionalOnMissingBean(name = "minioBucketName")
     public String minioBucketName() {
         return bucket;
     }

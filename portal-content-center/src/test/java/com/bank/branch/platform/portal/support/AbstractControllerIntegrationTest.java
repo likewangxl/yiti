@@ -21,7 +21,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -91,6 +90,4 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected ProductExportService productExportService;
     @MockBean protected ShortcutService shortcutService;
     @MockBean protected WorkspaceService workspaceService;
-    @MockBean(name = "redisTemplate")
-    protected RedisTemplate<String, Object> redisTemplate;
 }

@@ -22,4 +22,26 @@
         </where>
         ORDER BY IMPORT_TIME DESC LIMIT 200
     </select>
+    <!-- 带数据范围的批次查询 -->
+    <select id="selectBatchesWithScope" resultType="com.bank.branch.platform.report.entity.RptFreeReportBatch">
+        SELECT b.* FROM RPT_FREE_REPORT_BATCH b
+        <if test="scopeOrgCodes != null and scopeOrgCodes.size() > 0">
+            INNER JOIN EXT_USER_ORG uo ON b.UPLOADER_EMP_ID = uo.USER_ID
+        </if>
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (b.REPORT_NAME LIKE CONCAT('%', #{keyword}, '%')
+                     OR b.FILE_NAME LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="dateFrom != null">AND b.IMPORT_TIME &gt;= #{dateFrom}</if>
+            <if test="dateTo != null">AND b.IMPORT_TIME &lt; #{dateTo}</if>
+            <if test="scopeEmpId != null">AND b.UPLOADER_EMP_ID = #{scopeEmpId}</if>
+            <if test="scopeOrgCodes != null and scopeOrgCodes.size() > 0">
+                AND uo.ORG_CODE IN
+                <foreach collection="scopeOrgCodes" item="code" open="(" separator="," close=")">#{code}</foreach>
+            </if>
+        </where>
+        ORDER BY b.IMPORT_TIME DESC LIMIT 200
+    </select>
+
 </mapper>

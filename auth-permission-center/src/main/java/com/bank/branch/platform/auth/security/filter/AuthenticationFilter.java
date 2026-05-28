@@ -1,6 +1,8 @@
 package com.bank.branch.platform.auth.security.filter;
 
+import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
+import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
 import com.bank.branch.platform.auth.service.AuthService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
@@ -48,6 +50,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
 
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
+    private final UserMapper userMapper;
 
     private final AntPathMatcher antPathMatcher = new AntPathMatcher();
 
@@ -68,6 +71,15 @@ public class AuthenticationFilter extends OncePerRequestFilter {
 
         if (!(attr instanceof CurrentUserContext ctx)) {
             // 未登录或 Session 已过期：Fail Close，返回 401
+            writeUnauthorized(response);
+            return;
+        }
+
+        // 实时重查用户状态：管理员禁用/锁定用户后，下一次请求立即失效（按主键查走索引 <1ms）
+        PtUser freshUser = userMapper.selectByUserId(ctx.empId());
+        if (freshUser == null || freshUser.getIsEnabled() == 1 || freshUser.getIsLocked() == 1) {
+            log.warn("[AuthFilter] 用户已被禁用/锁定/删除，踢出 session empId={}", ctx.empId());
+            session.invalidate();
             writeUnauthorized(response);
             return;
         }

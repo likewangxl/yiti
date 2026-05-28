@@ -56,4 +56,8 @@
         WHERE day = #{day}
     </select>
 
+    <delete id="deleteByRange">
+        DELETE FROM SYS_CALENDAR_DAY WHERE day BETWEEN #{start} AND #{end}
+    </delete>
+
 </mapper>

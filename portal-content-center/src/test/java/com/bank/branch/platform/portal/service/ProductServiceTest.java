@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
 import com.bank.branch.platform.portal.entity.AddrbookEmployee;
@@ -19,8 +20,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -37,9 +36,6 @@ import static org.mockito.Mockito.*;
 
 /**
  * ProductService 单元测试 -- 纯 JUnit 5 + Mockito，无需 Spring 上下文
- *
- * <p>TDD RED-GREEN 闭环：先写测试（Red），再实现 Service（Green）。
- * 涵盖 CRUD、双向同步、缓存、事件发布等核心场景。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class ProductServiceTest {
@@ -49,7 +45,7 @@ class ProductServiceTest {
     @Mock CurrentUserApi currentUserApi;
     @Mock BizScopeApi bizScopeApi;
     @Mock AuditApi auditApi;
-    @Mock RedisTemplate<String, Object> redisTemplate;
+    @Mock MemoryCacheService memoryCacheService;
     @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks ProductService productService;
 
@@ -171,20 +167,31 @@ class ProductServiceTest {
         verify(productInfoMapper, never()).softDeleteById(anyString(), anyString());
     }
 
-    @Test @SuppressWarnings("unchecked")
-    void listSupportAvailable_cached() {
-        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        List<ProductInfo> dbResult = Arrays.asList(buildProduct("p1", "PRD001", Collections.emptyList()), buildProduct("p2", "PRD002", Collections.emptyList()));
-        when(valueOps.get("portal:product:support-available")).thenReturn(null, (Object) dbResult);
+    @Test
+    void listSupportAvailable_cacheMiss_queriesDbAndCaches() {
+        when(memoryCacheService.get("portal:product:support-available")).thenReturn(null);
+        List<ProductInfo> dbResult = Arrays.asList(
+                buildProduct("p1", "PRD001", Collections.emptyList()),
+                buildProduct("p2", "PRD002", Collections.emptyList()));
         when(productInfoMapper.listSupportAvailable()).thenReturn(dbResult);
+
         List<ProductInfo> r1 = productService.listSupportAvailable();
         assertThat(r1).hasSize(2);
         verify(productInfoMapper, times(1)).listSupportAvailable();
-        verify(valueOps).set(eq("portal:product:support-available"), eq(dbResult), any());
-        List<ProductInfo> r2 = productService.listSupportAvailable();
-        assertThat(r2).hasSize(2);
-        verify(productInfoMapper, times(1)).listSupportAvailable();
+        verify(memoryCacheService).put(eq("portal:product:support-available"), eq(dbResult), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listSupportAvailable_cacheHit_skipsDb() {
+        List<ProductInfo> cachedResult = Collections.singletonList(
+                buildProduct("p1", "PRD001", Collections.emptyList()));
+        when(memoryCacheService.get("portal:product:support-available")).thenReturn(cachedResult);
+
+        List<ProductInfo> result = productService.listSupportAvailable();
+
+        assertThat(result).hasSize(1);
+        verify(productInfoMapper, never()).listSupportAvailable();
     }
 
     @Test
@@ -247,7 +254,6 @@ class ProductServiceTest {
         req.setProductCategory("CAT_DEPOSIT");
         req.setSupportForSupportRequest(false);
         req.setProductDeptOrgCode("ORG_SZ_001");
-        // 不设置 responsibleEmpIds
         when(currentUserApi.getCurrentEmpId()).thenReturn("E10001");
         when(currentUserApi.isSystemAdmin()).thenReturn(true);
         when(productInfoMapper.selectByProductCode("DEPOSIT_003")).thenReturn(null);
@@ -366,7 +372,6 @@ class ProductServiceTest {
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         ProductUpdateReqDTO req = new ProductUpdateReqDTO();
         req.setProductName("新名称");
-        // 不设置 responsibleEmpIds，不触发变更事件
 
         productService.updateProduct("P001", req);
         verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
@@ -379,7 +384,6 @@ class ProductServiceTest {
         when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
         ProductUpdateReqDTO req = new ProductUpdateReqDTO();
         req.setProductName("更新名称");
-        // 其他字段为 null，不应被更新
 
         ProductInfo result = productService.updateProduct("P001", req);
         assertThat(result.getProductName()).isEqualTo("更新名称");
@@ -440,7 +444,6 @@ class ProductServiceTest {
         productService.deleteProduct("P001");
 
         verify(productInfoMapper).softDeleteById("P001", "OPERATOR01");
-        // 无负责人时仍发布事件（beforeEmpIds 为空，afterEmpIds 为空）
         verify(eventPublisher).publishEvent(any(ProductResponsibleUpdatedEvent.class));
     }
 
@@ -461,40 +464,6 @@ class ProductServiceTest {
     // ========== Cache-Aside 补充测试 ==========
 
     @Test
-    @SuppressWarnings("unchecked")
-    void listSupportAvailable_cacheMiss_queriesDbAndCaches() {
-        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.get("portal:product:support-available")).thenReturn(null);
-        List<ProductInfo> dbResult = Arrays.asList(
-                buildProduct("p1", "PRD001", Collections.emptyList()),
-                buildProduct("p2", "PRD002", Collections.emptyList()));
-        when(productInfoMapper.listSupportAvailable()).thenReturn(dbResult);
-
-        List<ProductInfo> result = productService.listSupportAvailable();
-
-        assertThat(result).hasSize(2);
-        verify(productInfoMapper, times(1)).listSupportAvailable();
-        verify(valueOps).set(eq("portal:product:support-available"), eq(dbResult), any());
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void listSupportAvailable_cacheHit_skipsDb() {
-        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        List<ProductInfo> cachedResult = Collections.singletonList(
-                buildProduct("p1", "PRD001", Collections.emptyList()));
-        when(valueOps.get("portal:product:support-available")).thenReturn(cachedResult);
-
-        List<ProductInfo> result = productService.listSupportAvailable();
-
-        assertThat(result).hasSize(1);
-        // 缓存命中时不应查询数据库
-        verify(productInfoMapper, never()).listSupportAvailable();
-    }
-
-    @Test
     void createProduct_clearsCache() {
         ProductCreateReqDTO req = new ProductCreateReqDTO();
         req.setProductCode("PRD_CACHE_TEST");
@@ -508,8 +477,7 @@ class ProductServiceTest {
 
         productService.createProduct(req);
 
-        // 写操作完成后应清除产品支持缓存
-        verify(redisTemplate).delete("portal:product:support-available");
+        verify(memoryCacheService).evict("portal:product:support-available");
     }
 
     private ProductInfo buildProduct(String id, String productCode, List<String> responsibleEmpIds) {

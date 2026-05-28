@@ -6,6 +6,7 @@ import com.bank.branch.platform.governance.api.dto.CalendarImportRespDTO;
 import com.bank.branch.platform.governance.entity.SysCalendarDay;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
 import com.bank.branch.platform.governance.mapper.CalendarMapper;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -13,7 +14,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CalendarService {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final MemoryCacheService memoryCacheService;
     private final CalendarMapper calendarMapper;
 
     /** 缓存 key 前缀 */
@@ -91,7 +91,7 @@ public class CalendarService {
     @SuppressWarnings("unchecked")
     public List<CalendarDayDTO> getWorkingDays(int year) {
         String cacheKey = CACHE_PREFIX + year;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
+        Object cached = memoryCacheService.get(cacheKey);
         if (cached != null) {
             log.debug("[CalendarService.getWorkingDays] 缓存命中 year={}", year);
             return (List<CalendarDayDTO>) cached;
@@ -102,7 +102,7 @@ public class CalendarService {
         List<CalendarDayDTO> dtoList = days.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
-        redisTemplate.opsForValue().set(cacheKey, dtoList, CACHE_TTL);
+        memoryCacheService.put(cacheKey, dtoList, CACHE_TTL);
         return dtoList;
     }
 
@@ -198,7 +198,7 @@ public class CalendarService {
             calendarMapper.updateById(existing);
         }
         // 清除该年份缓存
-        redisTemplate.delete(CACHE_PREFIX + date.getYear());
+        memoryCacheService.evict(CACHE_PREFIX + date.getYear());
         log.info("[CalendarService.toggleWorkday] 已切换 date={}, newIsWorkday={}", date, existing.getIsWorkday());
     }
 
@@ -239,7 +239,7 @@ public class CalendarService {
             calendarMapper.updateById(existing);
         }
         // 清除该年份缓存
-        redisTemplate.delete(CACHE_PREFIX + date.getYear());
+        memoryCacheService.evict(CACHE_PREFIX + date.getYear());
         log.info("[CalendarService.setWorkday] 已设置 date={}, isWorkday={}", date, isWorkday);
     }
 
@@ -257,23 +257,23 @@ public class CalendarService {
         log.info("[CalendarService.initYear] year={}", year);
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
+        // 先清空该年度全部数据再重建（重置模式），确保可重复执行
+        calendarMapper.deleteByRange(start, end);
         LocalDate current = start;
         int inserted = 0;
         while (!current.isAfter(end)) {
-            if (!calendarMapper.existsByDay(current)) {
-                SysCalendarDay day = new SysCalendarDay();
-                day.setDay(current);
-                DayOfWeek dow = current.getDayOfWeek();
-                day.setIsWorkday((dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) ? 1 : 0);
-                day.setCreatedTime(LocalDateTime.now());
-                day.setUpdatedTime(LocalDateTime.now());
-                calendarMapper.insert(day);
-                inserted++;
-            }
+            SysCalendarDay day = new SysCalendarDay();
+            day.setDay(current);
+            DayOfWeek dow = current.getDayOfWeek();
+            day.setIsWorkday((dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) ? 1 : 0);
+            day.setCreatedTime(LocalDateTime.now());
+            day.setUpdatedTime(LocalDateTime.now());
+            calendarMapper.insert(day);
+            inserted++;
             current = current.plusDays(1);
         }
         // 清除缓存
-        redisTemplate.delete(CACHE_PREFIX + year);
+        memoryCacheService.evict(CACHE_PREFIX + year);
         log.info("[CalendarService.initYear] 初始化完成 year={}, inserted={}", year, inserted);
     }
 
@@ -321,7 +321,7 @@ public class CalendarService {
         }
         // 清除受影响年份的缓存
         for (Integer year : affectedYears) {
-            redisTemplate.delete(CACHE_PREFIX + year);
+            memoryCacheService.evict(CACHE_PREFIX + year);
         }
         log.info("[CalendarService.batchImport] 导入完成，受影响年份={}", affectedYears);
     }

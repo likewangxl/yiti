@@ -7,9 +7,9 @@ import com.bank.branch.platform.governance.entity.SysConfigKv;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
 import com.bank.branch.platform.governance.mapper.ConfigMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ConfigService {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final MemoryCacheService memoryCacheService;
     private final ConfigMapper configMapper;
     private final ObjectMapper objectMapper;
 
@@ -54,7 +54,7 @@ public class ConfigService {
      */
     public String getConfigValue(String key) {
         String cacheKey = CACHE_PREFIX + key;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
+        Object cached = memoryCacheService.get(cacheKey);
         if (cached != null) {
             log.debug("[ConfigService.getConfigValue] 缓存命中 configKey={}", key);
             return cached.toString();
@@ -66,7 +66,7 @@ public class ConfigService {
             return null;
         }
         // 缓存中存储原始 configValue 字符串
-        redisTemplate.opsForValue().set(cacheKey, config.getConfigValue(), CACHE_TTL);
+        memoryCacheService.put(cacheKey, config.getConfigValue(), CACHE_TTL);
         return config.getConfigValue();
     }
 
@@ -174,7 +174,7 @@ public class ConfigService {
         existing.setUpdatedTime(LocalDateTime.now());
         configMapper.updateById(existing);
         // 更新后清除缓存，保证下次读取到最新数据
-        redisTemplate.delete(CACHE_PREFIX + key);
+        memoryCacheService.evict(CACHE_PREFIX + key);
         log.info("[ConfigService.updateConfig] 配置更新成功 configKey={}", key);
     }
 

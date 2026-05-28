@@ -257,6 +257,10 @@ public class OrgService {
             dto.setUsername(u.getUsername());
             dto.setDisplayName(u.getUserchnname());
             dto.setEmail(u.getEmail());
+            dto.setRemark(u.getRemark());
+            dto.setIsEnabled(u.getIsEnabled());
+            dto.setIsLocked(u.getIsLocked());
+            dto.setCreateTime(u.getCreateTime());
             dto.setRoles(rolesMap.getOrDefault(u.getUserId(), List.of()));
             return dto;
         }).collect(Collectors.toList());

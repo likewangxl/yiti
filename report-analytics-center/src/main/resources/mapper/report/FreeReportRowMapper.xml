@@ -8,6 +8,12 @@
             AND (r.COL_1 LIKE CONCAT('%', #{keyword}, '%')
                  OR r.COL_2 LIKE CONCAT('%', #{keyword}, '%'))
         </if>
+        <if test="empNo != null and empNo != ''">
+            AND r.COL_1 LIKE CONCAT('%', #{empNo}, '%')
+        </if>
+        <if test="empName != null and empName != ''">
+            AND r.COL_2 LIKE CONCAT('%', #{empName}, '%')
+        </if>
         <if test="empId != null and empId != ''">
             AND r.EMP_ID = #{empId}
         </if>

@@ -114,6 +114,12 @@
             <artifactId>commons-compress</artifactId>
             <version>1.25.0</version>
         </dependency>
+        <!-- 测试类（LeadE2E / FlowableE2E）仍引用 RedisTemplate，主代码已去 Redis -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -121,6 +127,14 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!--
+                        宿主机时区可能不是 Asia/Shanghai（开发机常见 PDT/UTC），
+                        显式注入 user.timezone 让 LocalDateTime.now() / NOW() 写入北京时间。
+                        生产容器若已配 TZ env 则此处冗余但无害。
+                    -->
+                    <jvmArguments>-Duser.timezone=Asia/Shanghai</jvmArguments>
+                </configuration>
                 <executions>
                     <!--
                         本项目父 pom 不是 spring-boot-starter-parent，pluginManagement

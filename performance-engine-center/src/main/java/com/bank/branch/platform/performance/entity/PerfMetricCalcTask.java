@@ -17,6 +17,7 @@ public class PerfMetricCalcTask {
     @TableId(value = "id", type = IdType.INPUT)
     private String id;
     private String taskName;
+    private String taskType;
     private Integer metricLevel;
     private LocalDate dataDate;
     private String status;

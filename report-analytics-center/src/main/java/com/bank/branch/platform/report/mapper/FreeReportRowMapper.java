@@ -12,11 +12,15 @@ public interface FreeReportRowMapper extends BaseMapper<RptFreeReportRow> {
 
     long countByBatch(@Param("batchId") String batchId,
                       @Param("keyword") String keyword,
+                      @Param("empNo") String empNo,
+                      @Param("empName") String empName,
                       @Param("empId") String empId,
                       @Param("orgCodes") List<String> orgCodes);
 
     List<RptFreeReportRow> selectByBatch(@Param("batchId") String batchId,
                                          @Param("keyword") String keyword,
+                                         @Param("empNo") String empNo,
+                                         @Param("empName") String empName,
                                          @Param("empId") String empId,
                                          @Param("orgCodes") List<String> orgCodes,
                                          @Param("offset") int offset,
