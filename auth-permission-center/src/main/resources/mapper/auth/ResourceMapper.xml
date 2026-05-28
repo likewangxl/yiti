@@ -93,4 +93,29 @@
         ORDER BY MENU_RANK_NO ASC
     </select>
 
+    <!--
+        查询挂在指定菜单 ID 集合下的接口资源 ID 列表。
+        配合 RoleResourceService.replaceMenus 联动绑接口；调用方需先判 menuIds 非空。
+    -->
+    <select id="selectInterfaceIdsByMenuIds" resultType="string">
+        SELECT RESOURCE_ID
+        FROM PT_RESOURCE
+        WHERE ISMENU = 0
+          AND PARENT_RESOURCE_ID IN
+          <foreach collection="menuIds" item="mid" open="(" separator="," close=")">
+              #{mid}
+          </foreach>
+    </select>
+
+    <!--
+        查询所有"公共基础接口"（PARENT_RESOURCE_ID 未挂菜单的）。
+        语义：分配任何菜单时这些公共接口都跟着绑。
+    -->
+    <select id="selectPublicInterfaceIds" resultType="string">
+        SELECT RESOURCE_ID
+        FROM PT_RESOURCE
+        WHERE ISMENU = 0
+          AND (PARENT_RESOURCE_ID IS NULL OR PARENT_RESOURCE_ID = '')
+    </select>
+
 </mapper>

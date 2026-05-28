@@ -68,4 +68,17 @@
           )
     </delete>
 
+    <!--
+        删除指定角色的"接口"绑定（仅 ISMENU=0 部分）。
+        配合 replaceMenus 联动：分菜单时先清接口绑定，再按新菜单+公共接口重建。
+        MySQL 不支持在子查询里引用要删除的表，但 PT_ROLE_RESOURCE 和子查询的 PT_RESOURCE 是不同表，OK。
+    -->
+    <delete id="deleteInterfaceBindingsByRoleId" parameterType="string">
+        DELETE FROM PT_ROLE_RESOURCE
+        WHERE ROLE_ID = #{roleId}
+          AND RESOURCE_ID IN (
+              SELECT RESOURCE_ID FROM PT_RESOURCE WHERE ISMENU = 0
+          )
+    </delete>
+
 </mapper>

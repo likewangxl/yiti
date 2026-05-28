@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.entity.PtRoleResource;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
 import com.bank.branch.platform.auth.entity.PtResource;
 import com.bank.branch.platform.auth.mapper.ResourceMapper;
+import com.bank.branch.platform.auth.mapper.RoleBizScopeMapper;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
 import com.bank.branch.platform.common.web.exception.BizException;
@@ -31,6 +32,7 @@ public class RoleResourceService {
     private final RoleResourceMapper roleResourceMapper;
     private final RoleMapper roleMapper;
     private final ResourceMapper resourceMapper;
+    private final RoleBizScopeMapper roleBizScopeMapper;
     private final PermissionCacheService cacheService;
     private final BizScopeService bizScopeService;
     private final ApplicationEventPublisher eventPublisher;
@@ -117,12 +119,21 @@ public class RoleResourceService {
     }
 
     /**
-     * 全量替换角色的"菜单"绑定（先删后插，事务保证原子性）。
-     * <p>只动 PT_RESOURCE.IS_MENU=1 部分的绑定，接口资源绑定（IS_MENU=0）保持不动。
-     * 与 replaceResources 区分：后者会清空 role 所有绑定（含菜单+接口）。</p>
+     * 全量替换角色的"菜单"绑定 + 联动重建接口绑定（先删后插，事务保证原子性）。
+     * <p>语义：</p>
+     * <ul>
+     *   <li>删除该角色所有菜单绑定（ISMENU=1）+ 所有接口绑定（ISMENU=0）；</li>
+     *   <li>按 menuIds 插入新菜单绑定；</li>
+     *   <li>menuIds 非空时：联动绑「所选菜单下挂的接口」+「所有公共接口（PARENT_RESOURCE_ID 为空）」；</li>
+     *   <li>menuIds 空时：所有接口/菜单都已清，角色退回"无任何资源"。</li>
+     * </ul>
+     * <p>关系定义在 PT_RESOURCE.PARENT_RESOURCE_ID 字段：接口资源指向所属菜单。
+     * 没填 PARENT_RESOURCE_ID 的接口视为"公共基础接口"，只要分配 ≥1 菜单就附带。</p>
+     * <p>管理员仍可在「权限配置」页面用 replaceResources 单独调整接口绑定；
+     * 但下一次 replaceMenus 时这些手工调整会被覆盖。</p>
      *
      * @param roleId  角色ID
-     * @param menuIds 替换后的菜单ID列表（空列表表示清空该角色所有菜单绑定）
+     * @param menuIds 替换后的菜单ID列表（空列表表示清空该角色所有菜单+接口绑定）
      * @param reason  操作原因（审计用）
      */
     @Transactional
@@ -131,44 +142,58 @@ public class RoleResourceService {
             throw new BizException(AuthErrorCode.ROLE_NOT_FOUND.getCode(),
                 AuthErrorCode.ROLE_NOT_FOUND.getMessage());
         }
-        // 先删该角色所有菜单绑定（接口绑定不动）
+        // 1. 清菜单 + 清接口绑定（接口要按新菜单重建，旧绑定全清）
         roleResourceMapper.deleteMenuBindingsByRoleId(roleId);
-        // 后插新菜单绑定
+        roleResourceMapper.deleteInterfaceBindingsByRoleId(roleId);
+
+        // 2. 插新菜单绑定
         for (String menuId : menuIds) {
-            PtRoleResource rr = new PtRoleResource();
-            rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
-            rr.setRoleId(roleId);
-            rr.setResourceId(menuId);
-            roleResourceMapper.insert(rr);
+            insertBinding(roleId, menuId);
         }
 
-        // 自动绑定所有接口资源（ISMENU=0），让角色分配菜单后即可访问对应接口
-        java.util.Set<String> existingResIds = new java.util.HashSet<>(roleResourceMapper.selectResourceIdsByRoleId(roleId));
-        List<PtResource> allResources = resourceMapper.selectAll(null, null);
-        for (PtResource res : allResources) {
-            // ISMENU: 0=接口资源, 1=菜单
-            if (res.getIsMenu() != null && res.getIsMenu() == 0 && !existingResIds.contains(res.getResourceId())) {
-                PtRoleResource rr = new PtRoleResource();
-                rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
-                rr.setRoleId(roleId);
-                rr.setResourceId(res.getResourceId());
-                roleResourceMapper.insert(rr);
+        // 3. 联动绑接口（menuIds 非空才绑；空菜单等于"无任何资源"）
+        int interfaceCount = 0;
+        if (!menuIds.isEmpty()) {
+            // 3a. 所选菜单下挂的接口
+            List<String> menuInterfaceIds = resourceMapper.selectInterfaceIdsByMenuIds(menuIds);
+            for (String resId : menuInterfaceIds) {
+                insertBinding(roleId, resId);
             }
+            // 3b. 公共基础接口（PARENT_RESOURCE_ID 为空的接口，所有有菜单的角色都附带）
+            List<String> publicInterfaceIds = resourceMapper.selectPublicInterfaceIds();
+            for (String resId : publicInterfaceIds) {
+                insertBinding(roleId, resId);
+            }
+            interfaceCount = menuInterfaceIds.size() + publicInterfaceIds.size();
         }
 
-        // 自动配默认数据范围（SELF），让角色有基础数据权限
+        // 4. 自动配默认数据范围（SELF）—— 仅在该 bizType 还没配置时新增，已配置的绝不覆盖。
+        //    历史 bug：原代码直接调 saveBizScope，但它是 upsert（已存在时 updateById 强制覆盖）。
+        //    导致管理员在权限配置页手工把 REPORT 调成 ORG_SUBTREE 后，下次分配菜单会被改回 SELF。
         String[] defaultBizTypes = {"REPORT", "PERF_CONFIG", "SYS_CONFIG", "NAV", "LEAD", "CUSTOMER", "LOAN", "SUPPORT"};
         for (String bizType : defaultBizTypes) {
+            if (roleBizScopeMapper.selectByRoleIdAndBizType(roleId, bizType) != null) {
+                continue;  // 已存在不动
+            }
             try {
                 bizScopeService.saveBizScope(roleId, bizType, "SELF", "菜单分配自动配置");
             } catch (Exception e) {
-                log.debug("[replaceMenus] 默认 BizScope 已存在或跳过 roleId={}, bizType={}", roleId, bizType);
+                log.debug("[replaceMenus] 默认 BizScope 写入失败跳过 roleId={}, bizType={}", roleId, bizType);
             }
         }
 
         cacheService.evictRoleResourceCache(roleId);
         publishCacheInvalidatedEvent(roleId, reason);
-        log.info("[RoleResourceService.replaceMenus] 菜单分配完成 roleId={}, menus={}, 接口资源+默认数据范围已自动绑定", roleId, menuIds.size());
+        log.info("[RoleResourceService.replaceMenus] 完成 roleId={}, menus={}, 联动接口={}",
+                roleId, menuIds.size(), interfaceCount);
+    }
+
+    private void insertBinding(String roleId, String resourceId) {
+        PtRoleResource rr = new PtRoleResource();
+        rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
+        rr.setRoleId(roleId);
+        rr.setResourceId(resourceId);
+        roleResourceMapper.insert(rr);
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────

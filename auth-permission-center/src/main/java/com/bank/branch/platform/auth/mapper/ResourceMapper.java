@@ -77,4 +77,21 @@ public interface ResourceMapper extends BaseMapper<PtResource> {
      * @return 菜单资源列表（含分组节点和叶子菜单）
      */
     List<PtResource> selectMenus();
+
+    /**
+     * 查询挂在指定菜单 ID 集合下的接口资源 ID 列表（ISMENU=0 且 PARENT_RESOURCE_ID 命中）。
+     * <p>用于 replaceMenus 联动：分配菜单时把对应接口一起绑给角色。</p>
+     *
+     * @param menuIds 菜单 ID 列表（空列表会触发 SQL 报错，调用方需先判空）
+     * @return 接口资源 ID 列表
+     */
+    List<String> selectInterfaceIdsByMenuIds(@Param("menuIds") List<String> menuIds);
+
+    /**
+     * 查询所有"公共基础接口" ID 列表（ISMENU=0 且 PARENT_RESOURCE_ID 为 NULL/空）。
+     * <p>用于 replaceMenus 联动：分配任何菜单时把公共接口（认证/通知/文件等）一并绑给角色。</p>
+     *
+     * @return 公共接口资源 ID 列表
+     */
+    List<String> selectPublicInterfaceIds();
 }

@@ -72,4 +72,13 @@ public interface RoleResourceMapper extends BaseMapper<PtRoleResource> {
      * @return 受影响行数
      */
     int deleteMenuBindingsByRoleId(String roleId);
+
+    /**
+     * 删除指定角色的"接口"绑定（仅 PT_RESOURCE.ISMENU=0 的部分），菜单绑定不动。
+     * <p>配合 replaceMenus 联动：分菜单时先清接口绑定，再按新菜单+公共接口重建。</p>
+     *
+     * @param roleId 角色ID
+     * @return 受影响行数
+     */
+    int deleteInterfaceBindingsByRoleId(String roleId);
 }
