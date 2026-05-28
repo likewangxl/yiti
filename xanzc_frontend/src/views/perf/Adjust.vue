@@ -370,16 +370,14 @@
               </div>
             </el-col>
           </el-row>
-          <template v-if="preview.data?.allotRelaList?.length">
+          <template v-if="preview.data">
             <div class="card-h"><div class="title">原业绩分配</div></div>
-            <el-table :data="preview.data.allotRelaList" size="small" border style="margin-bottom:12px">
-              <el-table-column prop="crmAllocaterId" label="分配人" width="120" />
-              <el-table-column prop="allotId" label="分配标的" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="allotBizTypeCd" label="业务类型" width="100" />
-              <el-table-column prop="allotModeCd" label="分配方式" width="90" />
-              <el-table-column prop="dvpRatio" label="分配比例" width="100" />
-              <el-table-column prop="effDt" label="生效日期" width="110" />
-              <el-table-column prop="expireDt" label="失效日期" width="110" />
+            <el-table :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无分配记录">
+              <el-table-column prop="acctNo" label="账号" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="allocaterId" label="员工号" width="110" />
+              <el-table-column prop="empName" label="员工姓名" width="120" />
+              <el-table-column prop="orgName" label="所属机构" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="dynScale" label="分配比例" width="100" />
             </el-table>
           </template>
         </div>

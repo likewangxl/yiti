@@ -47,7 +47,7 @@
             </el-tag>
             <span v-else class="hint">未选择 · 显示全部</span>
           </el-form-item>
-          <el-form-item label="用户名">
+          <el-form-item label="工号">
             <el-input v-model="filters.username" placeholder="模糊匹配" clearable style="width:180px" />
           </el-form-item>
           <el-form-item label="姓名">
@@ -91,13 +91,11 @@
           @selection-change="onSelectionChange"
         >
           <el-table-column type="selection" width="42" />
-          <el-table-column prop="userId" label="工号" width="120">
+          <el-table-column prop="userId" label="用户ID" width="120">
             <template #default="{row}"><code class="mono">{{ row.userId }}</code></template>
           </el-table-column>
-          <el-table-column prop="username" label="用户名" width="140" />
+          <el-table-column prop="username" label="工号" width="140" />
           <el-table-column prop="userchnname" label="姓名" width="120" />
-          <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip />
           <el-table-column label="状态" width="80">
             <template #default="{row}">
               <el-tag :class="row.isEnabled === 0 ? 'tag-success' : 'tag-warning'" effect="plain" size="small">
@@ -112,7 +110,9 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="createTime" label="创建时间" width="160" />
+          <el-table-column prop="createTime" label="创建时间" width="160" :formatter="fmtDateTime" />
+          <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip />
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{row}">
               <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
@@ -147,11 +147,12 @@
     <!-- 新增 / 编辑弹窗 -->
     <el-dialog v-model="dlg.show" :title="dlg.editing ? '编辑用户' : '新增用户'" width="640px">
       <el-form ref="dlgFormRef" :model="dlg.form" :rules="dlg.rules" label-width="100px">
-        <el-form-item label="工号" prop="userId">
-          <el-input v-model="dlg.form.userId" :disabled="!!dlg.editing" placeholder="如 U10001" maxlength="32" />
+        <!-- 用户ID：编辑时只读展示，新增时不显示（后端自动生成） -->
+        <el-form-item v-if="dlg.editing" label="用户ID">
+          <el-input v-model="dlg.form.userId" disabled />
         </el-form-item>
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="dlg.form.username" placeholder="登录名" maxlength="64" />
+        <el-form-item label="工号" prop="username">
+          <el-input v-model="dlg.form.username" placeholder="如 E10001" maxlength="64" />
         </el-form-item>
         <el-form-item label="姓名" prop="userchnname">
           <el-input v-model="dlg.form.userchnname" placeholder="中文姓名" maxlength="64" />
@@ -273,6 +274,9 @@ import { listRoles } from '@/api/system';
 import { getOrgTree, listOrgUsers, createOrg, updateOrg, deleteOrg } from '@/api/orgs';
 
 // === 机构树 ===
+// el-table column formatter: (row, column, cellValue, index) → ISO 字符串去掉 T 截到秒
+const fmtDateTime = (_row, _col, v) => v ? String(v).replace('T', ' ').slice(0, 19) : '-';
+
 const orgTreeRef = ref(null);
 const orgTree = ref([]);
 const orgKeyword = ref('');
@@ -342,6 +346,12 @@ async function reload() {
       ...u,
       userId: u.userId ?? u.empId,
       userchnname: u.userchnname ?? u.displayName,
+      // listOrgUsers 与 listUsers 字段不归一会导致按机构筛选时状态/锁定/创建时间空白，
+      // 老接口现已同步补齐这几个字段，这里 fallback 仅作 null 防御
+      isEnabled: u.isEnabled ?? null,
+      isLocked: u.isLocked ?? null,
+      createTime: u.createTime ?? null,
+      remark: u.remark ?? '',
     }));
     // 后端 PageResult 总数（拦截器抽走后只剩 records，需要单独 total 时改用原 wrapper）
     pager.total = r?.total ?? rows.value.length;
@@ -356,8 +366,7 @@ const dlg = reactive({
   show: false, editing: null, saving: false,
   form: { userId: '', username: '', userchnname: '', email: '', remark: '', initialPassword: '' },
   rules: {
-    userId:          [{ required: true, message: '工号必填', trigger: 'blur' }, { max: 32, message: '不超过 32 位', trigger: 'blur' }],
-    username:        [{ required: true, message: '用户名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
+    username:        [{ required: true, message: '工号必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
     userchnname:     [{ required: true, message: '姓名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
     email:           [{ pattern: /^[^@\s]+@[^@\s]+\.[^@\s]+$/, message: '邮箱格式不正确', trigger: 'blur' }],
     remark:          [{ max: 100, message: '备注不超过 100 字', trigger: 'blur' }],
@@ -410,7 +419,9 @@ async function saveDlg() {
       await updateUser(userId, payload);
       ElMessage.success('已更新');
     } else {
-      await createUser({ ...dlg.form });
+      // 新增不传 userId，由后端自动生成
+      const { userId, ...newForm } = dlg.form;
+      await createUser(newForm);
       ElMessage.success('已创建');
     }
     dlg.show = false;
@@ -438,8 +449,8 @@ async function openAssignRoles(user) {
       listRoles({ pageNo: 1, pageSize: 999 }),
       getUserRoles(user.userId)
     ]);
-    // listRoles 已经 unwrapPage —— 实际上是 RoleRespDTO 数组
-    const opts = (Array.isArray(allRoles) ? allRoles : []).map(r => ({
+    const roleArr = allRoles?.records || (Array.isArray(allRoles) ? allRoles : []);
+    const opts = roleArr.map(r => ({
       roleId: r.roleId || r.id,
       roleChName: r.roleChName || r.name || r.roleId || r.id
     }));

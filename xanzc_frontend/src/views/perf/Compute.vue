@@ -16,7 +16,7 @@
     </div>
 
     <div class="card-section">
-      <el-table :data="rows" size="default" v-loading="loading">
+      <el-table :data="pagedRows" size="default" v-loading="loading">
         <el-table-column prop="batch" label="计算批次" width="190" />
         <el-table-column prop="plan" label="方案" width="140" />
         <el-table-column prop="scope" label="触发范围" width="140" />
@@ -40,6 +40,9 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager">
+        <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]" :total="rows.length" background layout="total, sizes, prev, pager, next" />
+      </div>
     </div>
 
     <!-- 触发计算 弹框（截图 181）—— UI 仅 3 字段，后端需要的 cycleType/cycleDateFrom/cycleDateTo/version/reason 在提交时自动派生 -->
@@ -118,6 +121,9 @@ import {
 
 // 后端 PerfRunTaskController 没有 /stats 端点；统计在前端从 rows 派生
 const rows = ref([]);
+const pgNo = ref(1);
+const pgSize = ref(20);
+const pagedRows = computed(() => rows.value.slice((pgNo.value - 1) * pgSize.value, pgNo.value * pgSize.value));
 const loading = ref(false);
 const triggerCls = (t) => ({ 手动: 'tag-info', 定时: 'tag-success', 回算: 'tag-warning' }[t] || '');
 const rangeLabel = (s) => ({ ALL: '全行', ORG: '按机构', EMP: '按员工' }[s] || s || '');
@@ -346,4 +352,5 @@ onMounted(reload);
   border-radius: 4px; font-family: ui-monospace, monospace; font-size: 12px;
   white-space: pre-wrap; color: #991b1b; margin: 10px 0 0;
 }
+.pager { display: flex; justify-content: flex-end; padding: 12px 0; }
 </style>

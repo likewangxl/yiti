@@ -40,7 +40,7 @@
     <div class="card-section table">
       <el-table :data="rows" size="default" empty-text="暂无审计日志" v-loading="loading">
         <el-table-column label="时间" width="170">
-          <template #default="{row}">{{ row.createdTime || row.time || '—' }}</template>
+          <template #default="{row}">{{ fmtDateTime(row.createdTime || row.time) }}</template>
         </el-table-column>
         <el-table-column label="操作人" width="120">
           <template #default="{row}">{{ row.empName || row.empId || row.who || '—' }}</template>
@@ -104,7 +104,7 @@
     <!-- 详情弹框 -->
     <el-dialog v-model="dt.show" title="审计日志详情" width="780px" top="6vh">
       <el-descriptions :column="2" border size="default" v-if="dt.row.id">
-        <el-descriptions-item label="时间">{{ dt.row.createdTime || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="时间">{{ fmtDateTime(dt.row.createdTime) }}</el-descriptions-item>
         <el-descriptions-item label="耗时">{{ dt.row.executionTime != null ? dt.row.executionTime + ' ms' : '—' }}</el-descriptions-item>
         <el-descriptions-item label="操作人">
           {{ dt.row.empName || '—' }} <code class="mono">{{ dt.row.empId }}</code>
@@ -148,6 +148,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { fmtDateTime } from '@/utils/datetime';
 import { listAuditLogs, getAuditLog } from '@/api/system';
 
 // === 字典（与后端 BizAction / BizType 枚举对齐）走字典管理动态化 ===
@@ -209,10 +210,9 @@ async function reload() {
       endTime:   f.dateRange?.[1]
     };
     const r = await listAuditLogs(params);
-    if (Array.isArray(r)) {
-      rows.value = r;
-      total.value = Math.max(total.value, (pageNo.value - 1) * pageSize.value + r.length);
-    }
+    const arr = r?.records || (Array.isArray(r) ? r : []);
+    rows.value = arr;
+    total.value = r?.total ?? arr.length;
   } catch {} finally { loading.value = false; }
 }
 

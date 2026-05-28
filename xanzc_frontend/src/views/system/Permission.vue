@@ -415,10 +415,11 @@ async function onSaveResources() {
 // ============= 数据加载 =============
 async function loadRoles() {
   try {
-    const r = await listRoles();
-    if (Array.isArray(r) && r.length) {
-      roles.value = r;
-      if (!pickedRoleId.value) pickedRoleId.value = r[0].roleId;
+    const r = await listRoles({ pageNo: 1, pageSize: 999 });
+    const arr = r?.records || (Array.isArray(r) ? r : []);
+    if (arr.length) {
+      roles.value = arr;
+      if (!pickedRoleId.value) pickedRoleId.value = arr[0].roleId;
     } else {
       roles.value = sysRoles.map(x => ({
         roleId: x.id || x.roleId, roleChName: x.name || x.roleChName,

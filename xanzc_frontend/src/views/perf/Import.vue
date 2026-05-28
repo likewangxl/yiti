@@ -58,7 +58,7 @@
 
     <div class="card-section">
       <div class="section-title">最近导入</div>
-      <el-table :data="rows" size="default" empty-text="暂无导入记录" v-loading="loading">
+      <el-table :data="pagedRows" size="default" empty-text="暂无导入记录" v-loading="loading">
         <el-table-column prop="batchId" label="批次号" width="220">
           <template #default="{row}"><code class="mono">{{ row.batchId || row.id }}</code></template>
         </el-table-column>
@@ -91,6 +91,9 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager">
+        <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]" :total="rows.length" background layout="total, sizes, prev, pager, next" />
+      </div>
       <div class="empty-tip">
         ⓘ 后端暂未提供"全局批次列表"接口；本表仅展示当前浏览器最近 50 次本地上传记录（点"刷新"可拉取每条最新状态）。
       </div>
@@ -99,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { UploadFilled } from '@element-plus/icons-vue';
@@ -113,6 +116,9 @@ const date = ref(new Date().toISOString().slice(0, 10));
 const plan = ref('2026Q2');
 const rows = ref([]);
 const loading = ref(false);
+const pgNo = ref(1);
+const pgSize = ref(20);
+const pagedRows = computed(() => rows.value.slice((pgNo.value - 1) * pgSize.value, pgNo.value * pgSize.value));
 
 const TYPE_LABEL = { METRIC_RESULT: '指标结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
 const typeLabel = (t) => TYPE_LABEL[t] || t || '-';
@@ -256,4 +262,5 @@ onMounted(reload);
 .empty-tip { color: $text-3; font-size: 12px; padding: 10px 16px; }
 .section-title { font-size: 14px; font-weight: 600; color: $text-1; padding: 14px 16px 10px; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+.pager { display: flex; justify-content: flex-end; padding: 12px 0; }
 </style>

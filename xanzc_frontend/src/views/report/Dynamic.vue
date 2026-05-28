@@ -79,7 +79,7 @@
         </div>
       </div>
 
-      <el-table v-if="view === 'table'" :data="rows" size="default" stripe>
+      <el-table v-if="view === 'table'" :data="pagedRows" size="default" stripe>
         <el-table-column prop="subject" :label="dimLabel" width="160" />
         <el-table-column
           v-for="c in pickedMetrics" :key="c" :prop="c"
@@ -87,6 +87,16 @@
           <template #default="{ row }">{{ formatNum(row[c]) }}</template>
         </el-table-column>
       </el-table>
+      <div v-if="view === 'table'" class="pager">
+        <el-pagination
+          v-model:current-page="resultPageNo"
+          v-model:page-size="resultPageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="rows.length"
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+        />
+      </div>
 
       <v-chart v-else class="chart" :option="chartOption" autoresize />
     </div>
@@ -188,6 +198,12 @@ const hasResult = ref(true);
 
 // 结果数据 —— 默认填几行 demo 数字，后端返回会替换
 const rows = ref([]);
+const resultPageNo = ref(1);
+const resultPageSize = ref(20);
+const pagedRows = computed(() => {
+  const start = (resultPageNo.value - 1) * resultPageSize.value;
+  return rows.value.slice(start, start + resultPageSize.value);
+});
 function defaultRows() {
   const seed = [6420, 9100, 22, 182, 5520, 7800, 18, 156, 4280, 11200, 15, 220, 3800, 5400, 12, 98, 7100, 8300, 25, 203];
   return subjects.value.map((s, i) => {
@@ -502,4 +518,5 @@ onMounted(async () => {
     .obj-empty { color: $text-4; font-size: 12px; padding: 12px; text-align: center; }
   }
 }
+.pager { display: flex; justify-content: flex-end; padding: 12px 0; }
 </style>

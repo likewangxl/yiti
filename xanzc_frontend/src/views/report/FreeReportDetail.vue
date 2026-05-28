@@ -10,12 +10,12 @@
 
     <div class="card-section">
       <el-form inline size="default">
-        <el-form-item :label="col1Label">
-          <el-input v-model="searchCol1" :placeholder="`搜索${col1Label}`" clearable style="width:180px"
+        <el-form-item label="工号">
+          <el-input v-model="searchCol1" placeholder="按工号搜索" clearable style="width:180px"
                     @keyup.enter="reload" />
         </el-form-item>
-        <el-form-item :label="col2Label" v-if="columns.length > 1">
-          <el-input v-model="searchCol2" :placeholder="`搜索${col2Label}`" clearable style="width:180px"
+        <el-form-item label="姓名">
+          <el-input v-model="searchCol2" placeholder="按姓名搜索" clearable style="width:180px"
                     @keyup.enter="reload" />
         </el-form-item>
         <el-form-item>
@@ -99,7 +99,8 @@ async function reload() {
   try {
     const r = await queryFreeReportData({
       batchId,
-      keyword: [searchCol1.value, searchCol2.value].filter(Boolean).join(' ') || undefined,
+      empNo: searchCol1.value || undefined,
+      empName: searchCol2.value || undefined,
       pageNo: pageNo.value,
       pageSize: pageSize.value
     });
