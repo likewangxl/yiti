@@ -46,7 +46,8 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         "/swagger-resources/**",
         "/v3/api-docs/**",
         "/actuator/health",
-        "/**/receiveCallPuRequest/**"
+        "/**/receiveCallPuRequest/**",
+        "/api/perf/metric-calc/trigger"
     );
 
     private final CurrentUserProvider currentUserProvider;
