@@ -45,7 +45,8 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         "/webjars/**",
         "/swagger-resources/**",
         "/v3/api-docs/**",
-        "/actuator/health"
+        "/actuator/health",
+        "/**/receiveCallPuRequest/**"
     );
 
     private final CurrentUserProvider currentUserProvider;

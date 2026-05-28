@@ -6,6 +6,7 @@ import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.job.quartz.MetricExecuteQuartzJob;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,10 @@ public class MetricSchedulerService {
     private final PerfMetricDefMapper perfMetricDefMapper;
     private final MetricCronResolver cronResolver;
 
+    /** 启动期全量同步开关，false 时跳过 selectSchedulable + registerJob 循环（运维侧关停补回风暴）. */
+    @Value("${perf.scheduler.startup-sync.enabled:true}")
+    private boolean startupSyncEnabled;
+
     public MetricSchedulerService(JobApi jobApi,
                                   PerfMetricDefMapper perfMetricDefMapper,
                                   MetricCronResolver cronResolver) {
@@ -43,9 +48,14 @@ public class MetricSchedulerService {
      * 应用启动后同步所有可调度指标到 Quartz.
      *
      * <p>逐个 register，单条异常不阻断整体同步.
+     * <p>{@code perf.scheduler.startup-sync.enabled=false} 时整个同步过程跳过.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void syncOnStartup() {
+        if (!startupSyncEnabled) {
+            log.warn("[MetricScheduler] 启动同步已通过 perf.scheduler.startup-sync.enabled=false 关停，跳过");
+            return;
+        }
         List<PerfMetricDef> metrics = perfMetricDefMapper.selectSchedulable();
         int success = 0, failed = 0;
         for (PerfMetricDef m : metrics) {

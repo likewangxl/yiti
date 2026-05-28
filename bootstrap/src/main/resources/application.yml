@@ -91,6 +91,8 @@ perf:
   scheduler:
     health-check:
       enabled: false
+    startup-sync:
+      enabled: false
 
 auth:
   user:
