@@ -47,6 +47,20 @@ public class RoleService {
     }
 
     /**
+     * 查询全部角色（不分页，供下拉选项用）.
+     * <p>不填充 userCount，避免 N 次数据库查询，前端下拉场景不需要该字段。</p>
+     *
+     * @param recordStatus 记录状态筛选（可选，null 表示不过滤）
+     * @return 角色 DTO 列表
+     */
+    public List<RoleRespDTO> listAll(Integer recordStatus) {
+        log.debug("[RoleService.listAll] recordStatus={}", recordStatus);
+        return roleMapper.selectAllFiltered(recordStatus).stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * 分页查询角色列表，支持按关键字（角色名/编码模糊匹配）和状态过滤。
      *
      * @param keyword      搜索关键字，null 时不过滤

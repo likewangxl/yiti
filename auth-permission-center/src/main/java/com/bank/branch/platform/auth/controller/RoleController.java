@@ -26,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * 角色管理控制器
  * 提供角色的增删改查及角色用户列表查询接口
@@ -134,5 +136,20 @@ public class RoleController {
         log.debug("[RoleController.listRoleUsers] roleId={}, keyword={}", roleId, keyword);
         PageResult<RoleUserRespDTO> result = userRoleService.listRoleUsers(roleId, keyword, pageNo, pageSize);
         return ResponseWrapper.page(result);
+    }
+
+    /**
+     * 查询全部角色（不分页，供下拉选项）
+     *
+     * @param recordStatus 记录状态（可选，0=正常, 1=禁用），不传则返回所有状态
+     * @return 角色列表
+     */
+    @GetMapping("/all")
+    @Operation(summary = "查询全部角色（不分页，供下拉选项）")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<RoleRespDTO>> listAllRoles(
+            @RequestParam(value = "recordStatus", required = false) Integer recordStatus) {
+        log.debug("[RoleController.listAllRoles] recordStatus={}", recordStatus);
+        return ResponseWrapper.success(roleService.listAll(recordStatus));
     }
 }
