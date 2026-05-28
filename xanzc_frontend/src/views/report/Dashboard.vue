@@ -73,7 +73,9 @@ import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { reportDashboard } from '@/mock';
-import { getDashboardPresident, exportDashboardPdf } from '@/api/report';
+import { getDashboardPresident } from '@/api/report';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent]);
 
@@ -147,8 +149,16 @@ function onSwitchDate(d) {
 async function onExportPdf() {
   exporting.value = true;
   try {
-    const r = await exportDashboardPdf({ orgCode: '0000', date: queryDate.value });
-    ElMessage.success(`PDF 导出任务已提交（taskId=${r?.taskId || '-'}）`);
+    const el = document.querySelector('.rpt-dash');
+    if (!el) { ElMessage.warning('页面未渲染'); return; }
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = (canvas.height * pdfW) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+    pdf.save(`行长仪表盘_${queryDate.value || 'export'}.pdf`);
+    ElMessage.success('PDF 已导出');
   } catch (e) {
     ElMessage.error('导出失败：' + (e?.message || '未知错误'));
   } finally {

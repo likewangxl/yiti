@@ -28,7 +28,7 @@
     </div>
 
     <div class="card-section table">
-      <el-table :data="batches" size="default" v-loading="loading" empty-text="暂无导入记录" stripe>
+      <el-table :data="pagedBatches" size="default" v-loading="loading" empty-text="暂无导入记录" stripe>
         <el-table-column prop="reportName" label="报表名称" min-width="180" show-overflow-tooltip />
         <el-table-column prop="fileName" label="文件名" min-width="200" show-overflow-tooltip />
         <el-table-column label="导入人" width="120">
@@ -57,6 +57,9 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager">
+        <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]" :total="batches.length" background layout="total, sizes, prev, pager, next" />
+      </div>
     </div>
 
     <!-- 导入弹框 -->
@@ -88,6 +91,9 @@ import {
 } from '@/api/report';
 
 const batches = ref([]);
+const pgNo = ref(1);
+const pgSize = ref(20);
+const pagedBatches = computed(() => batches.value.slice((pgNo.value - 1) * pgSize.value, pgNo.value * pgSize.value));
 const loading = ref(false);
 const keyword = ref('');
 const dateRange = ref(null);
@@ -141,10 +147,24 @@ async function doImport() {
 
 async function doDownload(row) {
   try {
-    const r = await downloadFreeReportFile(row.id);
-    if (r?.url) window.open(r.url, '_blank');
-    else ElMessage.warning('无下载链接');
-  } catch { ElMessage.error('下载失败'); }
+    // 用原生 axios 绕过 interceptor，直接拿 blob
+    const { default: axios } = await import('axios');
+    const resp = await axios.get(`/api/reports/free/batches/${row.id}/download-file`, {
+      responseType: 'blob',
+      withCredentials: true
+    });
+    const blob = new Blob([resp.data]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = row.fileName || row.reportName || '报表.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    ElMessage.error('下载失败');
+  }
 }
 
 async function doDelete(row) {
@@ -165,4 +185,5 @@ onMounted(reload);
   .actions { margin-left: auto; display: flex; gap: 8px; }
 }
 .table { padding: 0; padding-bottom: 12px; }
+.pager { display: flex; justify-content: flex-end; padding: 12px 0; }
 </style>

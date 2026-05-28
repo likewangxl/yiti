@@ -6,13 +6,25 @@
         <el-button @click="shiftMonth(-1)">‹ 上月</el-button>
         <el-button @click="goToday">今天</el-button>
         <el-button @click="shiftMonth(1)">下月 ›</el-button>
-        <el-button>📥 导入</el-button>
-        <el-button type="primary">年初初始化</el-button>
+
+        <el-button @click="downloadTemplate">📄 下载模板</el-button>
+
+        <!-- 导入按钮：el-upload 隐藏触发 -->
+        <el-upload
+          :show-file-list="false"
+          accept=".xlsx,.xls"
+          :before-upload="onImport"
+          style="display:inline-block"
+        >
+          <el-button :loading="importing">📥 导入</el-button>
+        </el-upload>
+
+        <el-button type="primary" :loading="initing" @click="onInit">年初初始化</el-button>
       </div>
     </div>
 
     <el-alert type="info" :closable="false" style="margin-bottom:12px"
-      :title="`点击格子切换：工作日 → 休息日 → 调休工作 → 工作日。仅允许修改未来日期（今日 ${todayStr} 之后）。`">
+      :title="`点击格子切换：工作日 ↔ 休息日。仅允许修改今日（${todayStr}）之后的日期。`">
       <template #default>
         <span style="margin-right:12px"><i class="dot work"></i> 工作日</span>
         <span style="margin-right:12px"><i class="dot rest"></i> 休息日</span>
@@ -25,7 +37,12 @@
         <div v-for="d in ['一','二','三','四','五','六','日']" :key="d" class="hcell">{{ d }}</div>
       </div>
       <div class="grid">
-        <div v-for="(d, i) in days" :key="i" :class="['cell', d.kind, { today: d.today, muted: d.muted }]">
+        <div
+          v-for="(d, i) in days"
+          :key="i"
+          :class="['cell', d.kind, { today: d.today, muted: d.muted, past: d.past }]"
+          @click="onCellClick(d)"
+        >
           <div class="num">{{ d.n }}</div>
           <div v-if="d.label" class="lbl">{{ d.label }}</div>
           <div v-if="d.tag" class="tag">{{ d.tag }}</div>
@@ -37,18 +54,24 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { getCalendar } from '@/api/system';
+import { ElMessageBox, ElMessage } from 'element-plus';
+import { getCalendar, setCalendarDay, initCalendarYear, importCalendar } from '@/api/system';
 
 // === 当前显示的年月（默认今天所在月） ===
 const now = new Date();
 const year = ref(now.getFullYear());
 const month = ref(now.getMonth() + 1);
 
+// 今天的字符串 YYYY-MM-DD，用于比较和提示
 const todayStr = computed(() => {
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${m}-${d}`;
 });
+
+// 加载状态
+const initing = ref(false);
+const importing = ref(false);
 
 function shiftMonth(delta) {
   let m = month.value + delta;
@@ -66,7 +89,6 @@ function goToday() {
 
 // === 静态法定假日表（可被后端 getCalendar 覆盖）===
 function staticHolidays(y, m) {
-  // 月-日 → { kind, tag, label }
   const HOLIDAYS = {
     '01-01': { kind: 'rest', tag: '假', label: '元旦' },
     '04-04': { kind: 'rest', tag: '假', label: '清明' },
@@ -117,15 +139,26 @@ function build(rawDays = {}) {
     if (dow === 0 || dow === 6) { kind = 'rest'; }
     // 法定节假日覆盖
     const hol = holidays[n];
-    if (hol) Object.assign({ kind, tag, label }, hol), ({ kind, tag, label } = { ...{ kind, tag, label }, ...hol });
+    if (hol) ({ kind, tag, label } = { kind, tag, label, ...hol });
     // 后端覆盖（如有数据）
     const back = rawDays[n];
     if (back) {
       if (back.workday === 0 || back.isWorkday === 0) kind = 'rest';
-      else if (back.workday === 1 && (dow === 0 || dow === 6)) kind = 'adj';
-      if (back.label) label = back.label;
+      else if ((back.workday === 1 || back.isWorkday === 1) && (dow === 0 || dow === 6)) kind = 'adj';
+      else if (back.workday === 1 || back.isWorkday === 1) kind = 'work';
+      if (back.label || back.remark) label = back.label || back.remark;
     }
-    arr.push({ n, kind, tag, label, today: isCurMonth && n === todayD });
+
+    // 判断是否是今天或过去日期（不可点击）
+    const isToday = isCurMonth && n === todayD;
+    const isPast = (y < todayY) ||
+      (y === todayY && m < todayM) ||
+      (y === todayY && m === todayM && n <= todayD);
+
+    // 日期字符串 YYYY-MM-DD
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(n).padStart(2, '0')}`;
+
+    arr.push({ n, kind, tag, label, today: isToday, past: isPast, dateStr, dow });
   }
   // 下月头：补齐到 6 行 × 7 列 = 42 格（确保布局稳定）
   while (arr.length < 42) {
@@ -143,13 +176,100 @@ async function reload() {
     if (Array.isArray(r) && r.length) {
       const map = {};
       for (const d of r) {
-        // 后端字段约定：{ day: 'YYYY-MM-DD', isWorkday: 0|1, label?: string }
+        // 后端字段约定：{ day: 'YYYY-MM-DD', isWorkday: 0|1, remark?: string }
         const day = (d.day || d.date || '').slice(8, 10);
         if (day) map[parseInt(day, 10)] = d;
       }
       build(map);
     }
   } catch {}
+}
+
+// === 点击格子切换状态 ===
+async function onCellClick(d) {
+  // 上月/下月溢出格、已过日期（含今天）不可操作
+  if (d.muted || d.past) return;
+
+  const nextKind = d.kind === 'rest' ? '工作日' : '休息日';
+  const curKind = d.kind === 'rest' ? '休息日' : (d.kind === 'adj' ? '调休工作' : '工作日');
+
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${d.dateStr} 从「${curKind}」切换为「${nextKind}」？`,
+      '切换工作日状态',
+      { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' }
+    );
+  } catch {
+    return; // 取消
+  }
+
+  try {
+    const isWorkday = d.kind === 'rest' ? 1 : 0;
+    await setCalendarDay(d.dateStr, { isWorkday, remark: '' });
+    ElMessage.success('切换成功');
+    await reload();
+  } catch (e) {
+    ElMessage.error('切换失败，请重试');
+  }
+}
+
+// === 年初初始化 ===
+async function onInit() {
+  try {
+    await ElMessageBox.confirm(
+      `确认初始化 ${year.value} 年日历？将按法定节假日重置全年数据。`,
+      '年初初始化',
+      { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' }
+    );
+  } catch {
+    return;
+  }
+
+  initing.value = true;
+  try {
+    await initCalendarYear(year.value);
+    ElMessage.success(`${year.value} 年日历初始化成功`);
+    await reload();
+  } catch (e) {
+    ElMessage.error('初始化失败，请重试');
+  } finally {
+    initing.value = false;
+  }
+}
+
+// === 下载导入模板（xlsx 格式，与导入接口对齐）===
+function downloadTemplate() {
+  import('xlsx').then(XLSX => {
+    const y = year.value;
+    const rows = [
+      ['日期', '是否工作日', '备注'],
+      [`${y}-01-01`, 0, '元旦'],
+      [`${y}-01-02`, 1, ''],
+      [`${y}-02-01`, 1, '调休上班'],
+      [`${y}-05-01`, 0, '劳动节'],
+      [`${y}-10-01`, 0, '国庆节'],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '工作日历');
+    XLSX.writeFile(wb, `工作日历导入模板_${y}年.xlsx`);
+  });
+}
+
+// === 导入 xlsx（el-upload before-upload 钩子，返回 false 阻止自动上传）===
+async function onImport(file) {
+  importing.value = true;
+  try {
+    await importCalendar(file);
+    ElMessage.success('导入成功');
+    await reload();
+  } catch (e) {
+    ElMessage.error('导入失败，请检查文件格式');
+  } finally {
+    importing.value = false;
+  }
+  return false; // 阻止 el-upload 自动上传
 }
 
 onMounted(reload);
@@ -169,7 +289,9 @@ onMounted(reload);
 .cell { aspect-ratio: 1.4; background: #fff; border: 1px solid $border-1; border-radius: 4px; padding: 6px 8px; font-size: 12px;
   cursor: pointer; position: relative; transition: .15s;
   &:hover { border-color: $primary-400; }
-  &.muted { color: $text-4; background: $bg-soft; }
+  &.muted { color: $text-4; background: $bg-soft; cursor: default; }
+  &.past  { cursor: not-allowed; opacity: .75; }
+  &.past:hover { border-color: $border-1; }
   &.rest  { background: #fef2f2; border-color: #fca5a5; }
   &.adj   { background: #ecfdf5; border-color: #a7f3d0; }
   &.today { border-color: $primary; border-width: 2px; }

@@ -12,7 +12,7 @@
   <div class="rpt-sql">
     <div class="page-h">
       <h1>SQL 探查</h1>
-      <span class="desc">高危：仅 SELECT · 表白名单 · 自动行限 1000 · 30s 超时 · 全程审计</span>
+      <span class="desc">高危：仅 SELECT · 自动行限 1000 · 30s 超时 · 全程审计 · 传输加密</span>
     </div>
 
     <el-alert type="error" :closable="false" class="warn">
@@ -56,7 +56,6 @@
       <div class="ops">
         <el-button @click="formatSql">格式化</el-button>
         <el-button :icon="List"   @click="historyVisible = true">查看历史</el-button>
-        <el-button :icon="Search" @click="whitelistVisible = true">表白名单</el-button>
         <el-button type="primary" :loading="running" :disabled="!valid" @click="run" class="run">
           ▶ 执行
         </el-button>
@@ -70,17 +69,31 @@
           <span class="audit">· ✓ 已写入审计 TraceId {{ result.traceId }}</span>）
         </div>
       </div>
-      <el-table :data="result.data" size="default" stripe>
+      <el-table :data="pagedData" size="default" stripe border max-height="480">
+        <el-table-column type="index" label="#" width="50" fixed />
         <el-table-column
-          v-for="c in result.columns" :key="c"
+          v-for="(c, idx) in result.columns" :key="c"
           :prop="c" :label="c"
+          :min-width="calcColWidth(c)"
+          :fixed="idx < 2 ? true : false"
           :align="isNumeric(c) ? 'right' : 'left'"
+          show-overflow-tooltip
         >
           <template #default="{ row }">
             <span :class="{ mono: isNumeric(c) }">{{ formatCell(row[c]) }}</span>
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager">
+        <el-pagination
+          v-model:current-page="resultPage"
+          v-model:page-size="resultPageSize"
+          :page-sizes="[20, 50, 100, 200]"
+          :total="result.data.length"
+          background
+          layout="total, sizes, prev, pager, next"
+        />
+      </div>
     </div>
 
     <!-- 历史记录 Dialog —— 点击行回填到 SQL 编辑器 -->
@@ -93,14 +106,20 @@
         highlight-current-row
         @row-click="onPickHistory"
       >
-        <el-table-column prop="time"    label="时间"     width="160" :formatter="fmtDateTimeCol" />
-        <el-table-column prop="who"     label="操作人"   width="120" />
-        <el-table-column prop="reason"  label="原因"     width="160" />
-        <el-table-column prop="sql"     label="SQL（节选）" show-overflow-tooltip />
-        <el-table-column prop="rows"    label="行数" width="72" align="right" />
-        <el-table-column prop="dur"     label="耗时" width="80" align="right" />
-        <el-table-column prop="traceId" label="TraceId" width="120">
-          <template #default="{ row }"><span class="mono">{{ row.traceId }}</span></template>
+        <el-table-column prop="createdTime" label="时间" width="160" :formatter="fmtDateTimeCol" />
+        <el-table-column prop="empId"      label="操作人" width="120" />
+        <el-table-column prop="remark"     label="原因" width="160" show-overflow-tooltip />
+        <el-table-column label="SQL（节选）" show-overflow-tooltip>
+          <template #default="{ row }">{{ (row.sqlText || '').slice(0, 80) }}</template>
+        </el-table-column>
+        <el-table-column prop="rowCount"   label="行数" width="72" align="right" />
+        <el-table-column label="耗时" width="80" align="right">
+          <template #default="{ row }">{{ row.executionTimeMs != null ? row.executionTimeMs + 'ms' : '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="80">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'SUCCESS' ? 'success' : 'danger'" size="small" effect="plain">{{ row.status }}</el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="" width="64">
           <template #default="{ row }">
@@ -108,6 +127,18 @@
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager" style="margin-top:12px">
+        <el-pagination
+          v-model:current-page="historyPageNo"
+          v-model:page-size="historyPageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="historyTotal"
+          background
+          layout="total, sizes, prev, pager, next"
+          @size-change="loadHistory"
+          @current-change="loadHistory"
+        />
+      </div>
     </el-dialog>
 
     <!-- 表白名单 Dialog -->
@@ -143,6 +174,24 @@ ORDER BY deposit_inc DESC LIMIT 10`);
 const whitelist = ref([]);
 const history = ref([]);
 const result = ref(null);
+const resultPage = ref(1);
+const resultPageSize = ref(20);
+const pagedData = computed(() => {
+  if (!result.value?.data) return [];
+  const start = (resultPage.value - 1) * resultPageSize.value;
+  return result.value.data.slice(start, start + resultPageSize.value);
+});
+function calcColWidth(col) {
+  const label = col || '';
+  const samples = (result.value?.data || []).slice(0, 20);
+  let maxLen = label.length;
+  for (const row of samples) {
+    const v = row[col];
+    const len = v != null ? String(v).length : 0;
+    if (len > maxLen) maxLen = len;
+  }
+  return Math.max(80, Math.min(maxLen * 12 + 24, 400));
+}
 const running = ref(false);
 
 const historyVisible = ref(false);
@@ -175,12 +224,20 @@ const errors = computed(() => {
 });
 const valid = computed(() => errors.value.length === 0 && reason.value.trim().length > 0);
 
-watch(() => historyVisible.value, async (v) => {
-  if (v && !history.value.length) {
-    historyLoading.value = true;
-    try { history.value = await getSqlHistory() || []; }
-    finally { historyLoading.value = false; }
-  }
+const historyPageNo = ref(1);
+const historyPageSize = ref(10);
+const historyTotal = ref(0);
+async function loadHistory() {
+  historyLoading.value = true;
+  try {
+    const r = await getSqlHistory({ pageNo: historyPageNo.value, pageSize: historyPageSize.value });
+    history.value = Array.isArray(r) ? r : (r?.records || []);
+    historyTotal.value = r?.total ?? history.value.length;
+  } catch { history.value = []; }
+  finally { historyLoading.value = false; }
+}
+watch(() => historyVisible.value, (v) => {
+  if (v) { historyPageNo.value = 1; loadHistory(); }
 });
 
 onMounted(async () => {
@@ -241,8 +298,8 @@ async function onPickHistory(row) {
   if (!row?.id) return;
   try {
     const full = await getSqlHistoryItem(row.id);
-    sql.value = full?.sql || row.sql || sql.value;
-    if (full?.reason || row.reason) reason.value = full?.reason || row.reason;
+    sql.value = full?.sqlText || row.sqlText || sql.value;
+    if (full?.remark || row.remark) reason.value = full?.remark || row.remark;
     historyVisible.value = false;
     ElMessage.success(`已载入历史：${full?.id || row.id}`);
   } catch (e) {

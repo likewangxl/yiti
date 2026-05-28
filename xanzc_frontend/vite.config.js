@@ -7,6 +7,7 @@ import { fileURLToPath, URL } from 'node:url';
 // 因为按需会让 vite 在导航时"懒发现"新依赖触发 full reload，
 // 表现是「点新菜单 URL 闪一下却回到原页面，再点一次才进去」。
 export default defineConfig({
+  base: '/',
   plugins: [vue()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }

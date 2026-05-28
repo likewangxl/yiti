@@ -69,7 +69,7 @@ export function listValSlots(baseDim) {
 // KPI 规则 (KpiScheme + KpiItem)
 // ============================================================
 export function listKpiRules(params = {}) {
-  return call('get', '/perf/kpi-schemes', { params: { pageSize: 100, ...params } }, perfKpiRules).then(unwrapPage);
+  return call('get', '/perf/kpi-schemes', { params: { pageSize: 100, ...params } }, perfKpiRules);
 }
 export function getKpiSchemeDetail(id) {
   return call('get', `/perf/kpi-schemes/${id}`, {}, { items: [] });
@@ -258,6 +258,11 @@ export function submitAdjust(data) {
 }
 export function withdrawAdjust(id, reason) {
   return call('post', `/perf/alloc-adjust/${id}/withdraw`, { data: { reason } }, { ok: true });
+}
+
+/** 分配预览：余额汇总 + 原业绩分配关系 */
+export function getAllocPreview(params) {
+  return call('get', '/report/alloc-preview', { params }, null);
 }
 
 /**

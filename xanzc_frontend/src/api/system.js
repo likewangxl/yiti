@@ -47,7 +47,7 @@ export function listDictItems(dictType) {
 
 // === 工作日历（仅读，写在管理端）===
 export function getCalendar(year, month) {
-  return call('get', '/sys/calendar', { params: { year, month } }, []);
+  return call('get', '/admin/sys/calendar', { params: { year, month } }, []);
 }
 // 切换某天工作/休息状态：PUT /admin/sys/calendar/{date}
 // date 格式 'YYYY-MM-DD'，data: { isWorkday: 0|1, remark: '' }
@@ -145,6 +145,35 @@ export function updateTimeoutRule(id, data) {
 }
 export function createTimeoutRule(data) {
   return call('post', '/admin/workflow/timeout-rules', { data }, { ok: true });
+}
+
+// === 流程节点候选人配置 ===
+export function listNodeCandidates(processDefinitionKey) {
+  const params = processDefinitionKey ? { processDefinitionKey } : {};
+  return call('get', '/admin/workflow/node-candidates', { params }, []);
+}
+export function updateNodeCandidate(id, data) {
+  return call('put', `/admin/workflow/node-candidates/${id}`, { data }, { ok: true });
+}
+export function createNodeCandidate(data) {
+  return call('post', '/admin/workflow/node-candidates', { data }, { ok: true });
+}
+
+// === 流程节点表单配置 ===
+export function listNodeForms(processDefinitionKey) {
+  const params = processDefinitionKey ? { processDefinitionKey } : {};
+  return call('get', '/admin/workflow/node-forms', { params }, []);
+}
+export function updateNodeForm(id, data) {
+  return call('put', `/admin/workflow/node-forms/${id}`, { data }, { ok: true });
+}
+export function createNodeForm(data) {
+  return call('post', '/admin/workflow/node-forms', { data }, { ok: true });
+}
+
+// === 流程定义列表 ===
+export function listProcessDefinitions() {
+  return call('get', '/admin/workflow/process-definitions', {}, []);
 }
 
 // === 菜单分配（参考 xanpd role.vue 分配菜单流程） ===

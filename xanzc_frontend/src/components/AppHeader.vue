@@ -28,7 +28,7 @@
       </template>
     </el-dropdown>
 
-    <div class="icon-btn">
+    <div class="icon-btn" @click="$router.push('/system/notifications')" title="通知中心" style="cursor:pointer">
       <el-badge :value="unread" :max="99" :hidden="!unread">🔔</el-badge>
     </div>
     <div class="icon-btn">❓</div>
@@ -56,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
@@ -69,8 +69,15 @@ const unread = ref(0);
 const store = useUserStore();
 const router = useRouter();
 
-onMounted(async () => {
+async function refreshUnread() {
   try { const n = await getUnreadCount(); if (typeof n === 'number') unread.value = n; } catch {}
+}
+onMounted(() => {
+  refreshUnread();
+  window.addEventListener('notification-changed', refreshUnread);
+});
+onUnmounted(() => {
+  window.removeEventListener('notification-changed', refreshUnread);
 });
 
 const avatarLetter = computed(() => {

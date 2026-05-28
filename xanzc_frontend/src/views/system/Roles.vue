@@ -226,8 +226,14 @@ async function reload() {
       keyword: filters.keyword || undefined,
       recordStatus: filters.recordStatus ?? undefined
     });
-    rows.value = Array.isArray(r) ? r : (r?.records || []);
-    pager.total = r?.total ?? rows.value.length;
+    // r 可能是 {total, records} 或纯数组（mock fallback）
+    if (r && !Array.isArray(r) && Array.isArray(r.records)) {
+      rows.value = r.records;
+      pager.total = r.total ?? 0;
+    } else {
+      rows.value = Array.isArray(r) ? r : [];
+      pager.total = rows.value.length;
+    }
   } catch { rows.value = []; }
   finally { loading.value = false; }
 }

@@ -14,8 +14,8 @@
         <div v-for="t in types" :key="dictKey(t)"
              :class="['ti', { active: dictKey(t) === picked }]"
              @click="picked = dictKey(t)">
-          <div class="t1">{{ dictKey(t) }}</div>
-          <div class="t2">{{ dictLabel(t) }} · {{ t.itemCount ?? 0 }} 项</div>
+          <div class="t1">{{ dictLabel(t) }}</div>
+          <div class="t2">{{ dictKey(t) }} · {{ t.itemCount ?? 0 }} 项</div>
         </div>
       </div>
 
@@ -91,7 +91,7 @@ import { listDictTypes, listDictItems } from '@/api/system';
 import { call } from '@/api/http';
 
 const dictKey   = (t) => t.dictType ?? t.code;
-const dictLabel = (t) => t.dictTypeLabel ?? t.label ?? t.dictType ?? t.code;
+const dictLabel = (t) => t.dictTypeLabel ?? t.remark ?? t.label ?? t.dictType ?? t.code;
 const isActive  = (r) => r.status === 'ACTIVE' || r.status === 0 || r.status === '启用';
 
 const types = ref(sysDictTypes);
@@ -154,10 +154,26 @@ async function onSave() {
   const payload = { ...dlg.form, dictType: picked.value };
   try {
     if (dlg.editing) {
-      // 后端无明确 PUT 路由时回退到 POST upsert
-      await call('put', `/sys/dicts/${picked.value}/items/${payload.code}`, { data: payload }, { ok: true });
+      // 后端 DictUpdateReqDTO 只接受 dictLabel/dictValue/sortOrder/remark
+      const { dictLabel, dictValue, sortOrder, remark } = {
+        dictLabel: payload.label, dictValue: payload.value,
+        sortOrder: payload.sort, remark: payload.remark || ''
+      };
+      await call('put', `/admin/sys/dicts/${dlg.editing.id}`, {
+        data: { dictLabel, dictValue, sortOrder, remark }
+      }, { ok: true });
     } else {
-      await call('post', `/sys/dicts/${picked.value}/items`, { data: payload }, { ok: true });
+      // 后端 DictCreateReqDTO 需要 dictType/dictCode/dictLabel/dictValue/sortOrder
+      await call('post', '/admin/sys/dicts', {
+        data: {
+          dictType: picked.value,
+          dictCode: payload.code,
+          dictLabel: payload.label,
+          dictValue: payload.value || payload.code,
+          sortOrder: payload.sort || 0,
+          remark: payload.remark || ''
+        }
+      }, { ok: true });
     }
     ElMessage.success(dlg.editing ? '已更新' : '已新增');
     dlg.show = false;
@@ -206,8 +222,8 @@ async function onToggle(row) {
 
 <style lang="scss" scoped>
 .layout { display: grid; grid-template-columns: 220px 1fr; gap: 12px; }
-.types { padding: 0;
-  .hh { padding: 12px 14px; border-bottom: 1px solid $border-1; font-weight: 500; font-size: 13px; }
+.types { padding: 0; max-height: calc(100vh - 140px); overflow-y: auto;
+  .hh { padding: 12px 14px; border-bottom: 1px solid $border-1; font-weight: 500; font-size: 13px; position: sticky; top: 0; background: #fff; z-index: 1; }
   .ti { padding: 10px 14px; cursor: pointer; font-size: 12.5px;
     &:hover { background: $bg-soft; }
     &.active { background: $primary-100; color: $primary; }

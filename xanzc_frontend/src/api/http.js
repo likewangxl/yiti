@@ -87,11 +87,9 @@ http.interceptors.response.use(
 export function unwrapPage(r) {
   if (r == null) return r;
   if (Array.isArray(r)) return r;
-  if (Array.isArray(r.records)) return r.records;
-  if (Array.isArray(r.list)) return r.list;
-  if (Array.isArray(r.content)) return r.content;
-  if (Array.isArray(r.rows)) return r.rows;
-  if (Array.isArray(r.data)) return r.data;
+  // 保留 {records, total} 结构供分页组件用
+  const arr = r.records || r.list || r.content || r.rows || r.data;
+  if (Array.isArray(arr)) return { records: arr, total: r.total ?? r.totalCount ?? arr.length };
   return r;
 }
 
