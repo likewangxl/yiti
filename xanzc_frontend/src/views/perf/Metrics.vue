@@ -2,7 +2,7 @@
   <div>
     <div class="page-h">
       <h1>指标库</h1>
-      <span class="desc">三级层级树 · SQL/Groovy 计算配置 · 试运行 · 版本</span>
+      <span class="desc"></span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button @click="triggerImport">📥 导入指标</el-button>
@@ -106,16 +106,14 @@
 
           <div class="acts">
             <el-button type="primary" :disabled="isDisabled" @click="openEdit(detail)">编辑</el-button>
-            <el-button :disabled="isDisabled" :loading="detailTrial.loading" @click="onTrialRun">▶ 试运行</el-button>
             <el-button :disabled="isDisabled" @click="onExecute">⚡立即执行</el-button>
             <el-button @click="onShowVersions">查看版本历史</el-button>
             <el-button @click="onViewAudit">📋 查看审计</el-button>
             <el-button v-if="!isDisabled" type="warning" plain @click="onChangeStatus('DISABLED')">停用</el-button>
             <el-button v-else type="success" plain @click="onChangeStatus('ACTIVE')">启用</el-button>
-            <el-button type="danger" plain @click="onDelete(detail)">删除</el-button>
           </div>
           <div class="audit-hint">
-            ⚠ 试运行 / 立即执行 / 编辑 / 删除 / 状态变更 均属高危动作，会自动写入「系统设置 → 审计日志」
+            ⚠ 立即执行 / 编辑 / 状态变更 均属高危动作，会自动写入「系统设置 → 审计日志」
           </div>
 
           <!-- 详情侧"试运行"结果区（仅在按过试运行后才出现） -->
@@ -275,8 +273,8 @@
 
         <el-form-item label="试运行">
           <div class="trial-row">
-            <el-date-picker v-model="dlg.trialRange" type="daterange" value-format="YYYY-MM-DD"
-              range-separator="~" start-placeholder="开始日期" end-placeholder="结束日期" style="flex:1; min-width:300px" />
+            <el-date-picker v-model="dlg.trialDate" type="date" value-format="YYYY-MM-DD"
+              placeholder="数据日期（传给 SQL :dataDate）" style="flex:1; min-width:300px" />
             <el-button type="primary" @click="onTrialFromDialog" :loading="dlg.trialing">▶ 试运行</el-button>
             <el-tag v-if="dlg.trial.status === 'SUCCESS'" class="tag-success" effect="plain">
               成功 · {{ dlg.trial.totalRows ?? dlg.trial.rows.length }} 行 · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
@@ -321,6 +319,35 @@
         </el-table-column>
         <el-table-column label="变更时间" prop="createdTime" width="170" :formatter="fmtDateTimeCol" />
       </el-table>
+    </el-dialog>
+
+    <!-- 立即执行对话框：日期 + 原因合并到一页 -->
+    <el-dialog v-model="execDlg.show" title="立即执行" width="520px" :close-on-click-modal="false">
+      <el-form label-width="100px">
+        <el-form-item label="指标编码">
+          <el-input v-model="execDlg.metricCode" readonly />
+        </el-form-item>
+        <el-form-item label="数据日期" required>
+          <el-date-picker
+            v-model="execDlg.dataDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择数据日期（不能大于今天）"
+            :disabled-date="execDlg.disabledDate"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="执行原因" required>
+          <el-input v-model="execDlg.reason" type="textarea" :rows="3" placeholder="高危操作，必填执行原因" />
+        </el-form-item>
+        <div class="audit-hint" style="font-size:12px; color:#999; margin-left:100px">
+          ⚠ 将写入宽表 + run_task，自动记入审计日志
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="execDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="execDlg.submitting" @click="confirmExecute">确认执行</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -562,7 +589,7 @@ function insertMacro(token) {
 }
 const dlg = reactive({
   show: false, editing: null, saving: false,
-  trialRange: null, trialing: false,
+  trialDate: null, trialing: false,
   trial: { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] },
   slots: [],
   form: {
@@ -583,7 +610,12 @@ watch(() => dlg.form.metricLevel, (lvl) => {
 const parentMetricOptions = computed(() => {
   const lvl = dlg.form.metricLevel;
   if (!lvl || lvl <= 1) return [];
-  return allMetrics.value.filter(m => m.metricLevel === lvl - 1 && m.status === 'ACTIVE');
+  const dim = dlg.form.baseDim;
+  return allMetrics.value.filter(m =>
+    m.metricLevel === lvl - 1
+    && m.status === 'ACTIVE'
+    && (!dim || m.baseDim === dim)
+  );
 });
 function addExprRow() {
   dlg.form.exprRows.push({ op: '+', metricCode: '' });
@@ -632,7 +664,7 @@ function openCreate() {
     { name: 'period_start', type: 'DATE', required: true, desc: '起始日期' },
     { name: 'period_end',   type: 'DATE', required: true, desc: '截止日期' }
   ];
-  dlg.trialRange = null; resetTrial();
+  dlg.trialDate = null; resetTrial();
   dlg.show = true;
 }
 function openEdit(row) {
@@ -647,7 +679,7 @@ function openEdit(row) {
     _category: resolveCategory(row)
   });
   dlg.slots = resolveSlots(row);
-  dlg.trialRange = null; resetTrial();
+  dlg.trialDate = null; resetTrial();
   dlg.show = true;
 }
 function addSlot() {
@@ -723,13 +755,13 @@ async function onSave(targetStatus) {
 async function onTrialFromDialog() {
   if (!dlg.editing) return ElMessage.warning('请先保存指标后再试运行');
   const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
-  const dataDate = dlg.trialRange?.[1] || yesterday;
-  const params = dlg.trialRange ? { period_start: dlg.trialRange[0], period_end: dlg.trialRange[1] } : {};
+  // 单日期模式：dlg.trialDate 是 'YYYY-MM-DD' 字符串，作为后端 :dataDate 占位符的值
+  const dataDate = dlg.trialDate || yesterday;
   resetTrial();
   dlg.trialing = true;
   const t0 = Date.now();
   try {
-    const r = await trialRunMetric(dlg.editing, { dataDate, sampleSize: 10, params });
+    const r = await trialRunMetric(dlg.editing, { dataDate, sampleSize: 10 });
     // 后端 MetricTrialRespDTO: { status, totalRows, executionMillis, errorMsg, sampleRows }
     const rows = r?.sampleRows || [];
     const cols = rows.length ? Object.keys(rows[0]) : ['cust_id', 'org_id', 'metric_value'];
@@ -779,22 +811,37 @@ async function onTrialRun() {
   } finally { detailTrial.loading = false; }
 }
 
-// 立即执行：写宽表 + 写 run_task，必须填原因（高危）
-async function onExecute() {
-  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
-  let reason;
+// 立即执行：打开 execDlg 让用户在同一页选日期 (el-date-picker) + 填原因
+function onExecute() {
+  execDlg.metricCode = detail.value.metricCode;
+  execDlg.dataDate = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);  // 默认昨日
+  execDlg.reason = '';
+  execDlg.submitting = false;
+  execDlg.show = true;
+}
+
+// execDlg "确认执行" 按钮：校验 dataDate / reason 后真正调用后端
+async function confirmExecute() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!execDlg.dataDate)                              return ElMessage.warning('数据日期必填');
+  if (execDlg.dataDate > today)                       return ElMessage.warning(`数据日期不能大于今天（${today}）`);
+  if (!execDlg.reason || !execDlg.reason.trim())      return ElMessage.warning('执行原因必填');
+
+  execDlg.submitting = true;
   try {
-    const r = await ElMessageBox.prompt(
-      `立即执行 ${detail.value.metricCode}（数据日期 ${yesterday}）？将写入宽表 + run_task，请填写执行原因`,
-      '高危：立即执行',
-      { type: 'warning', inputPattern: /\S+/, inputErrorMessage: '原因必填' }
-    );
-    reason = r.value;
-  } catch { return; }
-  try {
-    await executeMetric(detail.value.metricCode, { dataDate: yesterday, cascade: true, async: true, reason });
+    await executeMetric(execDlg.metricCode, {
+      dataDate: execDlg.dataDate,
+      cascade: true,
+      async: true,
+      reason: execDlg.reason.trim()
+    });
     ElMessage.success('已触发执行（异步任务），已写入审计日志');
-  } catch {}
+    execDlg.show = false;
+  } catch {
+    // executeMetric 内部已 ElMessage.error，这里不重复
+  } finally {
+    execDlg.submitting = false;
+  }
 }
 
 // 跳到审计日志页面，预填筛选 = 本指标的操作流水
@@ -837,6 +884,20 @@ async function onDelete(row) {
 
 // === 版本历史：复用审计日志，按 metricCode 拉本指标的所有变更（CREATE/UPDATE/STATUS_CHANGE/DELETE） ===
 const versionDlg = reactive({ show: false, loading: false, list: [] });
+
+// 立即执行对话框：日期（el-date-picker）+ 执行原因 合并一页
+const execDlg = reactive({
+  show: false,
+  metricCode: '',
+  dataDate: '',
+  reason: '',
+  submitting: false,
+  // el-date-picker disabled-date：禁选今天之后的日期（含 0 点比较）
+  disabledDate: (d) => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    return d.getTime() > t.getTime();
+  }
+});
 async function onShowVersions() {
   versionDlg.show = true;
   versionDlg.loading = true;

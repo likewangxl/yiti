@@ -56,6 +56,9 @@
                 <span v-else>-</span>
               </template>
             </el-table-column>
+            <el-table-column label="创建人" min-width="180">
+              <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdBy || '-' }}</template>
+            </el-table-column>
             <el-table-column label="状态" width="80">
               <template #default="{row}">
                 <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
@@ -64,6 +67,7 @@
             <el-table-column label="操作" width="160" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button>
+                <!-- 仅创建人可编辑：业务规则 - 资财人员可看全行方案（ALL scope），但只能改自己的 -->
                 <el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
               </template>
             </el-table-column>
@@ -290,6 +294,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory } from '@/api/perf';
+import { listUsers } from '@/api/users';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
@@ -322,8 +327,11 @@ async function loadKpiSchemeOptions() {
   try {
     const r = await listKpiRules({ pageSize: 100 });
     const arr = Array.isArray(r) ? r : (r?.records || []);
-    kpiSchemeOptions.value = arr;
+    // 后端 TargetPlanService.create 要求关联 KPI 方案必须 status='ACTIVE'，
+    // 选 DISABLED/DRAFT/TRIAL_RUN/INACTIVE 都会被 PERF-42200 拒绝；前端过滤掉非 ACTIVE。
+    kpiSchemeOptions.value = arr.filter(s => s.status === 'ACTIVE');
     const m = new Map();
+    // kpiMap 保留全部（含非 ACTIVE）用于列表展示历史方案的名称翻译，不影响下拉过滤
     for (const s of arr) {
       const code = s.schemeCode || s.code || '';
       const name = s.schemeName || s.name || '';
@@ -342,26 +350,37 @@ const applied = reactive({ keyword: '', targetDim: '', status: '' });
 const plans = ref([]);
 const loadingPlans = ref(false);
 
-// 后端无数据时的 MOCK，便于 UI 验证（沿用 TargetValues.vue 的 fallback 模式）
-const MOCK_PLANS = [
-  { id:'mp1', planCode:'TP_2026_Q1', planName:'2026 一季度目标方案', kpiSchemeId:null,
-    targetDim:'EMP', targetCycle:'QUARTER', effectiveDate:'2026-01-01',
-    startDate:'2026-01-01', endDate:'2026-03-31', status:'ACTIVE' },
-  { id:'mp2', planCode:'TP_2026_Q2', planName:'2026 二季度目标方案', kpiSchemeId:null,
-    targetDim:'EMP', targetCycle:'QUARTER', effectiveDate:'2026-04-01',
-    startDate:'2026-04-01', endDate:'2026-06-30', status:'ACTIVE' },
-  { id:'mp3', planCode:'TP_2026_Y', planName:'2026 年度目标方案', kpiSchemeId:null,
-    targetDim:'ORG', targetCycle:'YEAR', effectiveDate:'2026-01-01',
-    startDate:'2026-01-01', endDate:'2026-12-31', status:'ACTIVE' }
-];
+// user_id → "username (中文名)" 映射，用于列表"创建人"列展示
+const userMap = ref(new Map());
+async function loadUserMap() {
+  try {
+    const r = await listUsers({ pageSize: 200 });
+    const list = Array.isArray(r) ? r : (r?.records || []);
+    const m = new Map();
+    for (const u of list) {
+      const id = u.userId || u.empId;
+      if (!id) continue;
+      const uname = u.username || '';
+      const cn    = u.userchnname || '';
+      // 形如 "finance_zhou (周八(资财))"；若任一为空则只显示有的部分
+      const label = uname && cn ? `${uname} (${cn})` : (uname || cn || id);
+      m.set(id, label);
+    }
+    userMap.value = m;
+  } catch {
+    // listUsers 403 等异常时静默——列表降级显示原始 user_id 不阻塞页面
+  }
+}
 
 async function loadPlans() {
   loadingPlans.value = true;
   try {
     const r = await listTargets({ pageSize: 100 });
-    plans.value = Array.isArray(r) && r.length ? r : MOCK_PLANS;
+    // listTargets 走 unwrapPage：分页响应返回 { records: [...], total } 形态；
+    // 非分页直接 Array。两种都要兼容，否则前端永远显示空白。
+    plans.value = Array.isArray(r) ? r : (r?.records || []);
   } catch {
-    plans.value = MOCK_PLANS;
+    plans.value = [];
   } finally {
     loadingPlans.value = false;
   }
@@ -610,15 +629,18 @@ function openCreatePlan() {
   });
   planDlg.show = true;
 }
-function openEditPlan(row) {
+async function openEditPlan(row) {
   planDlg.editing = row.id || row.planCode;
+  // 先确保 KPI 方案下拉的 options 已加载，否则 el-select 拿到 kpiSchemeId 也无 option 匹配显示空白
+  if (!kpiSchemeOptions.value.length) {
+    try { await loadKpiSchemeOptions(); } catch {}
+  }
   Object.assign(planDlg.form, {
     planCode: row.planCode || '', planName: row.planName || '',
     kpiSchemeId: row.kpiSchemeId || '', targetDim: row.targetDim || 'EMP',
     effectiveDate: row.effectiveDate || '', startDate: row.startDate || '', endDate: row.endDate || '',
     _status: row.status || 'ACTIVE'
   });
-  if (!kpiSchemeOptions.value.length) loadKpiSchemeOptions();
   planDlg.show = true;
 }
 async function onSavePlan() {
@@ -635,12 +657,14 @@ async function onSavePlan() {
       if (days > 92) targetCycle = 'YEAR';
     }
     planDlg.form.effectiveDate = planDlg.form.startDate;
+    // _status 是前端内部状态（用于"启用/禁用"按钮显示），后端 DTO 无此字段，提交前必须剔除
+    const { _status, ...basePayload } = planDlg.form;
     if (planDlg.editing) {
-      const { planCode, _status, ...updatePayload } = planDlg.form;
+      const { planCode, ...updatePayload } = basePayload;
       await updateTargetPlan(planDlg.editing, { ...updatePayload, targetCycle });
       ElMessage.success('方案更新成功');
     } else {
-      await createTargetPlan({ ...planDlg.form, targetCycle });
+      await createTargetPlan({ ...basePayload, targetCycle });
       ElMessage.success('方案创建成功');
     }
     planDlg.show = false;
@@ -664,7 +688,7 @@ async function togglePlanStatus(idOrRow, newStatus) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove()]);
+  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove(), loadUserMap()]);
 
   // 从工作台跳转：?tab=todo&taskId=xxx → 切到待我审批 tab + 自动弹审批窗
   const queryTab = route.query.tab;
