@@ -429,11 +429,23 @@ async function loadRoles() {
     }
   } catch {}
 }
+// 把后端 /api/admin/resources/tree 的树形结构拍扁
+// 后端 buildTree 按 PARENT_RESOURCE_ID 把接口资源挂在菜单下，本页只读"哪些资源（接口+菜单）可勾选"，
+// 树关系无关，全部扁平后由 groupedRes 按 URL 前缀重新归组。
+function flattenTree(nodes, out = []) {
+  for (const n of nodes || []) {
+    out.push(n);
+    if (Array.isArray(n.children) && n.children.length) {
+      flattenTree(n.children, out);
+    }
+  }
+  return out;
+}
 async function loadResources() {
   try {
     const r = await listResources();
     if (Array.isArray(r) && r.length) {
-      resources.value = r;
+      resources.value = flattenTree(r);
     } else {
       const flat = [];
       for (const g of sysResources) {

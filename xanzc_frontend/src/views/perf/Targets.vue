@@ -3,19 +3,15 @@
     <div class="page-h">
       <h1>目标管理 <span class="sub">方案级管理：新增方案 / 进入子页维护目标值</span></h1>
       <div class="actions">
-        <el-button @click="reload" :loading="loadingPlans || todoLoading || doneLoading">🔄 刷新</el-button>
+        <el-button @click="reload" :loading="loadingPlans || todoLoading || doneLoading">刷新</el-button>
+        <el-button v-if="activeTab==='plans' && canCreatePlan" type="primary" @click="openCreatePlan">+ 新增方案</el-button>
       </div>
     </div>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange" class="targets-tabs">
       <!-- ============ 目标方案 ============ -->
       <el-tab-pane label="目标方案" name="plans">
-        <!-- 「+ 新增方案」按钮：仅"目标方案" tab 内显示（资财部限定，canCreatePlan 控制） -->
-        <div v-if="canCreatePlan" class="tab-actions">
-          <el-button type="primary" @click="openCreatePlan">+ 新增方案</el-button>
-        </div>
-
-        <!-- 筛选栏（3 列：方案搜索 / 维度 / 状态）。输入条件靠右上「🔄 刷新」按钮触发应用 -->
+        <!-- 筛选栏（3 列：方案搜索 / 维度 / 状态）。表格基于 f 即时过滤 -->
         <div class="card-section filter-grid">
           <div>
             <div class="lab">方案搜索</div>
@@ -343,10 +339,8 @@ async function loadKpiSchemeOptions() {
 const kpiLabelOf = (id) => kpiMap.value.get(id) || id || '-';
 
 // === 方案列表 ===
-// f       = 表单当前输入值（双向绑定到筛选控件）
-// applied = "已应用"的查询条件，表格只看 applied —— 输入不即时过滤，点「查询」才生效
-const f       = reactive({ keyword: '', targetDim: '', status: '' });
-const applied = reactive({ keyword: '', targetDim: '', status: '' });
+// f = 筛选条件（双向绑定到控件）。filteredPlans 直接读 f，输入即时过滤。
+const f = reactive({ keyword: '', targetDim: '', status: '' });
 const plans = ref([]);
 const loadingPlans = ref(false);
 
@@ -386,16 +380,16 @@ async function loadPlans() {
   }
 }
 
-// 表格数据基于 applied（不直接读 f），实现"输入完点查询才显示对应数据"
+// 即时过滤：f 任一字段变化都会触发 computed 重算，无需点"查询"
 const filteredPlans = computed(() => {
   let arr = plans.value;
-  if (applied.keyword) {
-    const kw = String(applied.keyword).toLowerCase();
+  if (f.keyword) {
+    const kw = String(f.keyword).toLowerCase();
     arr = arr.filter(p => (p.planCode || '').toLowerCase().includes(kw)
                        || (p.planName || '').toLowerCase().includes(kw));
   }
-  if (applied.targetDim) arr = arr.filter(p => p.targetDim === applied.targetDim);
-  if (applied.status)    arr = arr.filter(p => p.status === applied.status);
+  if (f.targetDim) arr = arr.filter(p => p.targetDim === f.targetDim);
+  if (f.status)    arr = arr.filter(p => p.status === f.status);
   return arr;
 });
 
@@ -406,9 +400,8 @@ const pagedPlans = computed(() => {
   return filteredPlans.value.slice(start, start + pager.pageSize);
 });
 
-// 「🔄 刷新」按钮的处理：应用筛选条件 + 重新拉一次方案数据 + 回到第 1 页
+// 「🔄 刷新」按钮的处理：重拉一次方案数据 + 回第 1 页（筛选条件由 filteredPlans 即时生效，不需再 apply）
 async function onSearch() {
-  Object.assign(applied, f);
   pager.pageNo = 1;
   await loadPlans();
 }
