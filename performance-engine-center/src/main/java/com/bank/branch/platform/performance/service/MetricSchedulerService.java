@@ -78,20 +78,11 @@ public class MetricSchedulerService {
      * @param def 指标定义
      */
     public void register(PerfMetricDef def) {
-        if (!isSchedulable(def)) {
-            log.warn("[MetricScheduler] metric={} 不满足调度条件，跳过",
-                    def == null ? "null" : def.getMetricCode());
-            return;
-        }
-        RegisterJobCmd cmd = new RegisterJobCmd();
-        cmd.setJobKey("PERF_METRIC_" + def.getMetricCode());
-        cmd.setJobName("指标 " + def.getMetricCode() + " 自动调度");
-        cmd.setCronExpr(cronResolver.resolve(def));
-        cmd.setQuartzJobClass(MetricExecuteQuartzJob.class.getName());
-        cmd.setJobData(Map.of("metricCode", def.getMetricCode()));
-        cmd.setMisfirePolicy("FIRE_ONCE_NOW");
-        cmd.setAllowManualTrigger(true);
-        jobApi.registerJob(cmd);
+        // V1.13+：按运维要求关停自动写入 SYS_JOB_CONF / QRTZ_* —— 入口直接短路，
+        // 拦截 CRUD afterCommit Hook（创建/导入指标时）+ HealthCheck（已关停但留兜底）+
+        // syncOnStartup（已关停但留兜底）等所有"注册"路径。
+        log.debug("[MetricScheduler.register] 已被关停，跳过 metric={}",
+                def == null ? "null" : def.getMetricCode());
     }
 
     /**

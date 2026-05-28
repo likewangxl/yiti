@@ -646,7 +646,11 @@ public class MetricDefService {
      */
     @Transactional(readOnly = true)
     public List<PerfMetricDef> listSchedulable() {
-        return mapper.selectSchedulable();
+        // V1.13+：按运维要求关停自动调度回填——返回空列表，
+        // HealthCheck / syncOnStartup 等"获取可调度指标"路径拿不到任何指标，
+        // SYS_JOB_CONF + QRTZ_* 不会被自动写入。
+        log.debug("[MetricDefService.listSchedulable] 已被关停，返回空列表");
+        return Collections.emptyList();
     }
 
     private List<String> parseRefMetricCodes(String refMetricCodesJson) {
