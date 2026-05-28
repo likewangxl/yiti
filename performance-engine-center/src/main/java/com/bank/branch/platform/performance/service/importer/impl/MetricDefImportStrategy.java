@@ -48,8 +48,9 @@ import java.util.Objects;
  * <p>列值翻译规则（参考 {@code docs/superpowers/specs/2026-05-17-metric-def-import-design.md} §3）：
  * <ul>
  *   <li>metric_code 空 → {@code M_{indexNo:04d}}</li>
- *   <li>sourceType=1 → calc_mode=MANUAL, calc_logic_type=EXPR；2/3 → AUTO/SQL</li>
- *   <li>scheduleType 1/2/3/4 → calc_freq DAY/MONTH/QUARTER/YEAR</li>
+ *   <li>calcModeFlag=1 → AUTO；2 → MANUAL</li>
+ *   <li>metricLevel=1 → calc_logic_type=SQL；2/3 → EXPR(Groovy)</li>
+ *   <li>calc_freq 默认 DAY</li>
  *   <li>statusFlag 1/0 → ACTIVE/DISABLED；其他视为非法</li>
  *   <li>base_dim 默认 EMP；summary_rule 默认 SUM</li>
  * </ul>
@@ -64,18 +65,6 @@ public class MetricDefImportStrategy implements ImportStrategy {
 
     /** errorSummary 行之间的分隔符. */
     private static final String ERROR_DELIMITER = "; ";
-
-    /** scheduleType → calc_freq 映射. */
-    private static final Map<Integer, String> SCHEDULE_TO_FREQ;
-
-    static {
-        Map<Integer, String> m = new HashMap<>();
-        m.put(1, "DAY");
-        m.put(2, "MONTH");
-        m.put(3, "QUARTER");
-        m.put(4, "YEAR");
-        SCHEDULE_TO_FREQ = m;
-    }
 
     /** 允许的 baseDim 值集合. */
     private static final java.util.Set<String> VALID_BASE_DIMS = java.util.Set.of("EMP", "ORG", "CUST");
@@ -118,11 +107,12 @@ public class MetricDefImportStrategy implements ImportStrategy {
                         ? autoCodeSeq++ : -1;
                 CreateMetricDefCmd cmd = translateRow(row, excelRow, batch.getCreatedBy(), seq);
 
-                // V1.11：文件内 metric_name 重复检测（重名行作为 upsert 命中键会触发"末位覆盖"，必须显式拒绝）
-                Integer nameSeen = nameFirstSeenLine.putIfAbsent(cmd.getMetricName(), excelRow);
+                // 文件内 metric_name + base_dim 联合重复检测
+                String nameKey = cmd.getMetricName() + "|" + (cmd.getBaseDim() != null ? cmd.getBaseDim() : "");
+                Integer nameSeen = nameFirstSeenLine.putIfAbsent(nameKey, excelRow);
                 if (nameSeen != null) {
-                    errors.add("第" + excelRow + "行: metric_name 与第" + nameSeen
-                            + "行重复(文件内): " + cmd.getMetricName());
+                    errors.add("第" + excelRow + "行: metric_name+维度 与第" + nameSeen
+                            + "行重复(文件内): " + cmd.getMetricName() + "[" + cmd.getBaseDim() + "]");
                     continue;
                 }
 
@@ -180,45 +170,32 @@ public class MetricDefImportStrategy implements ImportStrategy {
                     "基础维度必填且必须为 EMP/ORG/CUST，当前值: " + row.getBaseDim());
         }
 
-        String calcFreq = SCHEDULE_TO_FREQ.get(row.getScheduleType());
-        if (calcFreq == null) {
-            throw new PerfException(PerfErrorCode.METRIC_CALC_FREQ_INVALID,
-                    "scheduleType 非法（期望 1=每日/2=每月/3=每季/4=每年）: " + row.getScheduleType());
-        }
+        String calcFreq = "DAY";
 
-        // 状态：1=ACTIVE 0=DISABLED
-        String status;
-        if (Objects.equals(row.getStatusFlag(), 1)) {
-            status = "ACTIVE";
-        } else if (Objects.equals(row.getStatusFlag(), 0)) {
-            status = "DISABLED";
-        } else {
+        // 状态：直接使用 ACTIVE / DISABLED
+        String status = row.getStatus() != null ? row.getStatus().trim().toUpperCase() : null;
+        if (!"ACTIVE".equals(status) && !"DISABLED".equals(status)) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                    "statusFlag 非法（期望 0 或 1）: " + row.getStatusFlag());
+                    "指标状态非法（期望 ACTIVE / DISABLED）: " + row.getStatus());
         }
 
-        // 来源 → calc_mode + calc_logic_type
-        String calcMode;
+        // 计算方式：直接使用 AUTO / MANUAL
+        String calcMode = row.getCalcMode() != null ? row.getCalcMode().trim().toUpperCase() : null;
+        if (!"AUTO".equals(calcMode) && !"MANUAL".equals(calcMode)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "计算方式非法（期望 AUTO / MANUAL）: " + row.getCalcMode());
+        }
+
+        // 计算逻辑由层级决定：1级=SQL，2/3级=EXPR(Groovy)
         String calcLogicType;
         String sqlText = null;
         String exprText = null;
-        switch (row.getSourceType() == null ? -1 : row.getSourceType()) {
-            case 1 -> {
-                calcMode = "MANUAL";
-                calcLogicType = "EXPR";
-                exprText = row.getCalcRule();
-            }
-            case 2, 3 -> {
-                calcMode = "AUTO";
-                calcLogicType = "SQL";
-                sqlText = row.getCalcRule();
-                if (sqlText == null || sqlText.isBlank()) {
-                    throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
-                            "sourceType=" + row.getSourceType() + " 时计算规则必填");
-                }
-            }
-            default -> throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                    "sourceType 非法（期望 1/2/3）: " + row.getSourceType());
+        if (row.getMetricLevel() == 1) {
+            calcLogicType = "SQL";
+            sqlText = row.getCalcRule();
+        } else {
+            calcLogicType = "EXPR";
+            exprText = row.getCalcRule();
         }
 
         String metricCode = row.getMetricCode() == null || row.getMetricCode().isBlank()
@@ -290,9 +267,9 @@ public class MetricDefImportStrategy implements ImportStrategy {
         for (MetricDefImportRow r : rows) {
             if (r.getIndexNo() != null || r.getMetricLevel() != null
                     || r.getMetricName() != null || r.getMetricCode() != null
-                    || r.getMetricCategory() != null || r.getSourceType() != null
-                    || r.getCalcRule() != null || r.getScheduleType() != null
-                    || r.getStatusFlag() != null) {
+                    || r.getMetricCategory() != null || r.getCalcMode() != null
+                    || r.getCalcRule() != null
+                    || r.getStatus() != null) {
                 return false;
             }
         }

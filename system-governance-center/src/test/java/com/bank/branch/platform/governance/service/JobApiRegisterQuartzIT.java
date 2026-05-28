@@ -129,6 +129,14 @@ class JobApiRegisterQuartzIT {
 
     /**
      * 验证 registerJob overwrite（update）路径：jobKey 已存在时走 updateById 分支并覆盖 Scheduler.
+     *
+     * <p>V1.13 # 1i（2026-05-02）：spec 要求"jobKey 已存在则覆盖（cron 变更场景）"，
+     * 但 V1.7 实现的 {@code scheduleQuartzJobWithData} 直接调 {@code scheduler.scheduleJob}，
+     * 对已存在 JobKey 抛 ObjectAlreadyExistsException → GOV-50012。
+     * fix：scheduleQuartzJobWithData 入口先 {@code scheduler.deleteJob} 做 idempotent 前置.
+     *
+     * <p>原测试在两次 register 之间手工 {@code scheduler.deleteJob} 绕过 production bug，
+     * 是假绿。本次治理彻底删掉手工清理，让 registerJob 自身负责覆盖语义.
      */
     @Test
     void registerJob_overwrite_updates_scheduler_cron() throws Exception {
@@ -145,9 +153,6 @@ class JobApiRegisterQuartzIT {
         // Scheduler 中已存在
         assertThat(scheduler.checkExists(JobKey.jobKey(IT_JOB_KEY, "DEFAULT"))).isTrue();
 
-        // 先删除旧 job 模拟覆盖场景（RAMJobStore 不自动覆盖，参考 rescheduleJob_updatesCron）
-        scheduler.deleteJob(JobKey.jobKey(IT_JOB_KEY, "DEFAULT"));
-
         // given：overwrite，mock 返回已有 conf
         SysJobConf existing = new SysJobConf();
         existing.setId("IT_ID_V1");
@@ -162,13 +167,17 @@ class JobApiRegisterQuartzIT {
         cmdV2.setQuartzJobClass(NoOpJob.class.getName());
         cmdV2.setMisfirePolicy("FIRE_ONCE_NOW");
 
-        // when
+        // when：第二次 register 同 jobKey，应自动覆盖（不抛 ObjectAlreadyExistsException）
         String returnedId = jobService.registerJob(cmdV2);
 
         // then - 返回旧 id（update 路径）
         assertThat(returnedId).isEqualTo("IT_ID_V1");
-        // Scheduler 中重新注入
+        // Scheduler 中重新注入，且 trigger 已替换为新 cron
         assertThat(scheduler.checkExists(JobKey.jobKey(IT_JOB_KEY, "DEFAULT"))).isTrue();
+        org.quartz.Trigger trig = scheduler.getTrigger(
+                org.quartz.TriggerKey.triggerKey(IT_JOB_KEY + "_TRIGGER", "DEFAULT"));
+        assertThat(trig).isNotNull();
+        assertThat(((org.quartz.CronTrigger) trig).getCronExpression()).isEqualTo("0 30 4 * * ?");
     }
 
     // ── 测试专用 SpringBoot 启动类 ─────────────────────────────────────────────

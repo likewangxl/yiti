@@ -50,7 +50,7 @@ public interface PerfMetricDefMapper extends BaseMapper<PerfMetricDef> {
      * @param metricName 指标中文名称
      * @return 指标定义，不存在时返回 null
      */
-    PerfMetricDef selectByMetricName(@Param("metricName") String metricName);
+    PerfMetricDef selectByMetricName(@Param("metricName") String metricName, @Param("baseDim") String baseDim);
 
     /**
      * 批量按指标编码查询.

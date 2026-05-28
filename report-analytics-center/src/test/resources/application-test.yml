@@ -3,7 +3,9 @@ spring:
     # 复用 perf 模块的同款本地 MySQL 测试库 onepl_test_bootstrap，跨模块一致
     url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: 123456
+    # V1.13 # 1h（2026-05-02）：本地 MySQL 实际密码 djdev，原 123456 导致 Druid Access denied → DataSource 关闭
+    # → 3 个 SummaryControllerIT.submit*Export 端点（@Transactional 写 RPT_EXPORT_TASK）500
+    password: djdev
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:

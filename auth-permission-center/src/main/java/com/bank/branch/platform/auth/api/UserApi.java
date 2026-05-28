@@ -77,4 +77,13 @@ public interface UserApi {
      * @return 员工 ID 列表，无人时返空 List
      */
     List<String> getEmpIdsByRoleCodeAndOrg(String roleCode, String orgCode);
+
+    /**
+     * 按 username 批量查用户信息。
+     * <p>用于数据湖 Allocater_Id（对应 PT_USER.USERNAME）关联查员工姓名和机构。</p>
+     *
+     * @param usernames 用户名列表
+     * @return 用户DTO列表
+     */
+    List<UserDTO> getUsersByUsernames(List<String> usernames);
 }

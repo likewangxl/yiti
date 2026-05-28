@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper">
+    <select id="selectByUserId" resultType="com.bank.branch.platform.performance.eval.entity.EvalUserTag">
+        SELECT id, user_id, tag_id FROM EVAL_USER_TAG WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectUserIdsByTagId" resultType="java.lang.Long">
+        SELECT user_id FROM EVAL_USER_TAG WHERE tag_id = #{tagId}
+    </select>
+
+    <select id="selectTagIdsByUserIdAndType" resultType="java.lang.Long">
+        SELECT ut.tag_id FROM EVAL_USER_TAG ut INNER JOIN EVAL_TAG t ON t.tag_id = ut.tag_id WHERE ut.user_id = #{userId} AND t.tag_type = #{tagType}
+    </select>
+
+    <insert id="batchInsert">
+        INSERT INTO EVAL_USER_TAG (user_id, tag_id) VALUES
+        <foreach collection="list" item="item" separator=",">(#{item.userId}, #{item.tagId})</foreach>
+    </insert>
+
+    <delete id="batchDelete">
+        DELETE FROM EVAL_USER_TAG WHERE user_id = #{userId} AND tag_id IN
+        <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">#{tagId}</foreach>
+    </delete>
+</mapper>

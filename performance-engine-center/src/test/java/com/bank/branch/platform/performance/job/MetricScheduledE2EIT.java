@@ -1,19 +1,36 @@
 package com.bank.branch.platform.performance.job;
 
+import com.bank.branch.platform.governance.api.JobApi;
+import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.MetricSchedulerService;
 import com.bank.branch.platform.performance.service.cmd.CreateMetricDefCmd;
 import com.bank.branch.platform.performance.support.PerfTestApp;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.quartz.CronScheduleBuilder;
+import org.quartz.CronTrigger;
+import org.quartz.Job;
+import org.quartz.JobBuilder;
+import org.quartz.JobDataMap;
+import org.quartz.JobDetail;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
+import org.quartz.TriggerBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 
+import java.util.Collections;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.when;
 
 /**
  * V1.7 端到端 IT：CRUD 指标 → Quartz 自动注册/注销.
@@ -41,8 +58,62 @@ class MetricScheduledE2EIT {
     @Autowired(required = false)
     private Scheduler scheduler;
 
+    /**
+     * V1.13 # 1h（2026-05-02）：覆盖 PerfTestConfig 提供的 @Primary 全空 mock JobApi，
+     * 用 doAnswer 把 register/unregister 真实地接到本类注入的 Quartz Scheduler，
+     * 让 E2E 链路（指标 CRUD afterCommit Hook → MetricSchedulerService.register
+     * → JobApi.registerJob → Quartz scheduleJob）在 perf 测试上下文也能跑通.
+     *
+     * <p>不让 PerfTestApp 扫到 governance 包，避免引入 130+ Bean + 跨 auth 依赖；
+     * 仅在本 E2E 类局部覆写 JobApi 行为，其余 perf 测试照旧用空 mock 不受影响.
+     */
+    @MockBean
+    private JobApi jobApi;
+
     private static final String E2E_METRIC_CODE = "E2E_M_V1_7";
     private static final String E2E_JOB_KEY = "PERF_METRIC_" + E2E_METRIC_CODE;
+    private static final String E2E_JOB_GROUP = "PERF_METRIC";
+
+    /**
+     * 把 jobApi mock 的 register/unregister 接到真实 Scheduler.
+     *
+     * <p>参照 governance JobService.scheduleQuartzJobWithData 的真实路径：
+     * <ul>
+     *   <li>register：删除可能残留的 JobKey（idempotent）→ JobBuilder + CronTrigger → scheduler.scheduleJob</li>
+     *   <li>unregister：scheduler.deleteJob(JobKey)</li>
+     * </ul>
+     */
+    @BeforeEach
+    void wireSchedulerToMockJobApi() {
+        if (scheduler == null) return;
+        when(jobApi.registerJob(any(RegisterJobCmd.class))).thenAnswer(inv -> {
+            RegisterJobCmd cmd = inv.getArgument(0);
+            JobKey jk = JobKey.jobKey(cmd.getJobKey(), E2E_JOB_GROUP);
+            scheduler.deleteJob(jk);
+            @SuppressWarnings("unchecked")
+            Class<? extends Job> clazz =
+                    (Class<? extends Job>) Class.forName(cmd.getQuartzJobClass());
+            JobDataMap dataMap = new JobDataMap(
+                    cmd.getJobData() != null ? cmd.getJobData() : Collections.emptyMap());
+            JobDetail detail = JobBuilder.newJob(clazz)
+                    .withIdentity(jk)
+                    .usingJobData(dataMap)
+                    .storeDurably()
+                    .build();
+            CronTrigger trigger = TriggerBuilder.newTrigger()
+                    .withIdentity(cmd.getJobKey() + "_TRIGGER", E2E_JOB_GROUP)
+                    .withSchedule(CronScheduleBuilder.cronSchedule(cmd.getCronExpr()))
+                    .forJob(detail)
+                    .build();
+            scheduler.scheduleJob(detail, trigger);
+            return cmd.getJobKey();
+        });
+        doAnswer(inv -> {
+            String jobKey = inv.getArgument(0);
+            scheduler.deleteJob(JobKey.jobKey(jobKey, E2E_JOB_GROUP));
+            return null;
+        }).when(jobApi).unregisterJob(anyString());
+    }
 
     @AfterEach
     void cleanup() {

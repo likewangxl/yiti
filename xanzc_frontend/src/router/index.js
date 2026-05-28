@@ -31,6 +31,13 @@ const routes = [
       { path: 'perf/adjust',      name: 'PerfAdjust',    component: () => import('@/views/perf/Adjust.vue'),    meta: { title: '业绩调整', group: '绩效与考核' } },
       { path: 'perf/compute',     name: 'PerfCompute',   component: () => import('@/views/perf/Compute.vue'),   meta: { title: '考核计算', group: '绩效与考核' } },
 
+      // 内部评价
+      { path: 'eval/tags',      name: 'EvalTags',     component: () => import('@/views/eval/Tags.vue'),     meta: { title: '标签管理', group: '内部评价' } },
+      { path: 'eval/user-tags', name: 'EvalUserTags', component: () => import('@/views/eval/UserTags.vue'), meta: { title: '人员标签', group: '内部评价' } },
+      { path: 'eval/rules',     name: 'EvalRules',    component: () => import('@/views/eval/Rules.vue'),    meta: { title: '评价规则', group: '内部评价' } },
+      { path: 'eval/tasks',     name: 'EvalTasks',    component: () => import('@/views/eval/Tasks.vue'),    meta: { title: '评价任务', group: '内部评价' } },
+      { path: 'eval/my-tasks',  name: 'EvalMyTasks',  component: () => import('@/views/eval/MyTasks.vue'),  meta: { title: '我的评价', group: '内部评价' } },
+
       // 报表分析
       { path: 'report',           redirect: '/report/dynamic' },
       { path: 'report/dynamic',   name: 'ReportDynamic', component: () => import('@/views/report/Dynamic.vue'),   meta: { title: '动态指标查询', group: '报表分析' } },

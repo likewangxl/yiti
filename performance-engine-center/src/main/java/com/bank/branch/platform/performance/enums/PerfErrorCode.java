@@ -158,7 +158,18 @@ public enum PerfErrorCode {
     METRIC_SUBJECT_SQL_FAILED("PERF-50004", "subject_sql 执行失败"),
 
     /** 指标/KPI 计算 Job 执行失败（V1.1 占位） */
-    CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败");
+    CALC_JOB_FAILED("PERF-50007", "指标/KPI 计算 Job 执行失败"),
+
+    // ===== 评价模块 =====
+    EVAL_TAG_NAME_DUP("PERF-40050", "标签名称重复"),
+    EVAL_RULE_TAG_EXISTS("PERF-40051", "该被评价人标签已存在规则"),
+    EVAL_RULE_WEIGHT_INVALID("PERF-40052", "评价人组权重之和必须等于100%"),
+    EVAL_SCORE_OUT_OF_RANGE("PERF-40053", "分数必须在10~100范围内"),
+    EVAL_SCORE_DUPLICATE("PERF-40054", "已评价不可重复提交"),
+    EVAL_TASK_CLOSED("PERF-40055", "任务已结束不可打分"),
+    EVAL_NO_PERMISSION("PERF-40056", "当前用户无权评价该人员"),
+    EVAL_TASK_END_TIME_INVALID("PERF-40057", "截止时间必须晚于当前时间"),
+    EVAL_RULE_NOT_FOUND("PERF-40058", "被评价人无匹配的评价规则");
 
     private final String code;
     private final String message;
