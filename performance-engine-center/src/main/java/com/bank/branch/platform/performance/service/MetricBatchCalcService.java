@@ -184,29 +184,18 @@ public class MetricBatchCalcService {
             log.info("【{}级指标计算】开始计算指标 {}（{}），计算逻辑={}, 数据日期={}",
                     metricLevel, def.getMetricCode(), def.getMetricName(), def.getCalcLogicType(), dataDate);
 
-            String runTaskId = metricCalcService.calcMetric(def.getMetricCode(), dataDate, "V1", "BATCH");
-
-            // 从 PerfRunTask 获取实际处理行数
-            int rowCount = 0;
-            try {
-                var runTask = perfRunTaskMapper.selectById(runTaskId);
-                if (runTask != null && runTask.getResultPreviewJson() != null) {
-                    String json = runTask.getResultPreviewJson();
-                    if (json.contains("\"total\":")) {
-                        int idx = json.indexOf("\"total\":") + 8;
-                        int end = json.indexOf(',', idx);
-                        if (end < 0) end = json.indexOf('}', idx);
-                        if (end > idx) rowCount = Integer.parseInt(json.substring(idx, end).trim());
-                    }
-                }
-            } catch (Exception ignore) {}
+            // V1.13+：calcMetricWithStats 直接返回 SubjectStats，success 即实际写入宽表的主体数
+            MetricCalcResult result = metricCalcService.calcMetricWithStats(
+                    def.getMetricCode(), dataDate, "V1", "BATCH");
+            int rowCount = result.success();
 
             calcLog.setStatus("SUCCESS");
             calcLog.setEndTime(LocalDateTime.now());
             calcLog.setRowCount(rowCount);
             logMapper.insert(calcLog);
             successCount.incrementAndGet();
-            log.info("【{}级指标计算】指标 {}（{}）计算成功，结果行数={}", metricLevel, def.getMetricCode(), def.getMetricName(), rowCount);
+            log.info("【{}级指标计算】指标 {}（{}）计算成功，结果行数={}（total={}, failed={}）",
+                    metricLevel, def.getMetricCode(), def.getMetricName(), rowCount, result.total(), result.failed());
 
         } catch (Exception e) {
             calcLog.setStatus("FAILED");

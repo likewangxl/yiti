@@ -69,4 +69,13 @@
         LIMIT 1
     </select>
 
+    <!-- V1.13+：替代 subject_sql 取主体集合：直接拿该日该版本下宽表所有 org_code -->
+    <select id="selectDistinctOrgCodes" resultType="java.lang.String">
+        SELECT DISTINCT org_code
+        FROM ORG_INDEX_RESULT
+        WHERE data_date = #{dataDate}
+          AND version = #{version}
+        ORDER BY org_code
+    </select>
+
 </mapper>

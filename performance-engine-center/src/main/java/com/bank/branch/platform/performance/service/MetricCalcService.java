@@ -143,6 +143,17 @@ public class MetricCalcService {
      * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC/SUMMARY 未支持 / slot 未分配
      */
     public String calcMetric(String metricCode, LocalDate dataDate, String version, String triggerType) {
+        return calcMetricWithStats(metricCode, dataDate, version, triggerType).runTaskId();
+    }
+
+    /**
+     * V1.13+ 新增：在 calcMetric 行为基础上额外返回主体统计（total/success/failed），
+     * 供批量入口（{@link MetricBatchCalcService}）拿到真实写入行数填 PERF_METRIC_CALC_LOG.row_count。
+     *
+     * <p>语义与 {@link #calcMetric(String, LocalDate, String, String)} 完全等价，
+     * 仅返回类型从 String runTaskId 扩展为 {@link MetricCalcResult}。
+     */
+    public MetricCalcResult calcMetricWithStats(String metricCode, LocalDate dataDate, String version, String triggerType) {
         // 1. 定义加载与基本校验——指标不存在直接抛，不插 run_task（计划要求）
         PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
@@ -194,7 +205,7 @@ public class MetricCalcService {
                     finalStatus, stats.total(), stats.success(), stats.failed(),
                     taskId, triggerType, LocalDateTime.now()));
 
-            return taskId;
+            return new MetricCalcResult(taskId, stats.total(), stats.success(), stats.failed());
         } catch (PerfException pe) {
             // 失败态 + 错误信息落库
             markFailed(taskId, pe);
@@ -252,15 +263,28 @@ public class MetricCalcService {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "EXPR 类型指标 exprText 为空: " + def.getMetricCode());
         }
-        // 取主体集合
-        Map<String, Object> sqlParams = Map.of("dataDate", dataDate, "version", version);
-        List<String> subjects = subjectFetcher.fetch(def.getSubjectSql(), sqlParams);
+        // V1.13+：直接从对应宽表按 (data_date, version) 取主体集合，废弃 subject_sql。
+        // 业务方不再需要为每个 EXPR 指标维护一段主体查询 SQL；主体即"该日宽表中已存在该维度的所有行键"。
+        String baseDim = def.getBaseDim() == null ? "" : def.getBaseDim().toUpperCase();
+        List<String> subjects = switch (baseDim) {
+            case "EMP"  -> empIndexResultMapper.selectDistinctEmpIds(dataDate, version);
+            case "ORG"  -> orgIndexResultMapper.selectDistinctOrgCodes(dataDate, version);
+            case "CUST" -> custIndexResultMapper.selectDistinctCustIds(dataDate, version);
+            default -> throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                    "未知 baseDim=" + def.getBaseDim());
+        };
         if (subjects.isEmpty()) {
-            log.warn("[MetricCalc] metric={} 主体集合为空，跳过", def.getMetricCode());
+            log.warn("[MetricCalc] metric={} baseDim={} 该日宽表无任何主体，跳过",
+                    def.getMetricCode(), baseDim);
             return SubjectStats.empty(jobKey, triggerType);
         }
 
-        List<String> refCodes = parseRefMetricCodes(def.getRefMetricCodes());
+        // V1.13+：refCodes 来自两路并集——def.ref_metric_codes（业务/前端登记的）+ 正则从 expr_text
+        // 扫描出的 M_xxx 字面量。前端"表达式构建器"暂未把公式里的指标自动写回 ref_metric_codes，
+        // 后端兜底解析保证 Groovy vars 完整覆盖公式里出现的所有 metric_code。
+        List<String> refCodes = mergeRefCodes(
+                parseRefMetricCodes(def.getRefMetricCodes()),
+                extractMetricCodesFromExpr(def.getExprText()));
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
 
@@ -276,7 +300,7 @@ public class MetricCalcService {
         for (String subject : subjects) {
             try {
                 // 使用预查的 slotMap 加载引用指标值（避免每主体重查 slotMap）
-                Map<String, Object> vars = loadRefValuesBySlotMap(subject, slotMap,
+                Map<String, Object> vars = loadRefValuesBySlotMap(subject, slotMap, refCodes,
                         def.getBaseDim(), dataDate, version);
                 BigDecimal value = groovyExecutor.execute(def.getExprText(), vars, timeout);
                 outputs.put(subject, value);
@@ -325,22 +349,29 @@ public class MetricCalcService {
      * @return 指标编码 -&gt; 指标值 映射（作为 Groovy vars）
      */
     private Map<String, Object> loadRefValuesBySlotMap(String subject, Map<String, Integer> slotMap,
+                                                        List<String> refCodes,
                                                         String baseDim, LocalDate dataDate, String version) {
-        if (slotMap.isEmpty()) {
+        if (refCodes == null || refCodes.isEmpty()) {
             return Map.of();
         }
         Map<String, Object> result = new HashMap<>();
-        for (Map.Entry<String, Integer> e : slotMap.entrySet()) {
-            BigDecimal value = switch (baseDim == null ? "" : baseDim.toUpperCase()) {
-                case "EMP"  -> empIndexResultMapper.selectValBySlot(subject, e.getValue(), dataDate, version);
-                case "ORG"  -> orgIndexResultMapper.selectValBySlot(subject, e.getValue(), dataDate, version);
-                case "CUST" -> custIndexResultMapper.selectValBySlot(subject, e.getValue(), dataDate, version);
-                default -> throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
-                        "未知 baseDim=" + baseDim);
-            };
-            if (value != null) {
-                result.put(e.getKey(), value);
+        // V1.13+：遍历原始 refCodes 而非 slotMap.keys，保证所有引用指标都进 vars。
+        // - slotMap 缺失（def.val_slot=NULL，根本没分配槽位）→ 直接 BigDecimal.ZERO
+        // - slotMap 命中但宽表查无该 (subject, slot) 行/列值→ 也兜底 BigDecimal.ZERO
+        // 目的：避免 Groovy "No such property" 或 null + number NPE，让 EXPR 公式总能跑通。
+        for (String refCode : refCodes) {
+            Integer slot = slotMap.get(refCode);
+            BigDecimal value = null;
+            if (slot != null) {
+                value = switch (baseDim == null ? "" : baseDim.toUpperCase()) {
+                    case "EMP"  -> empIndexResultMapper.selectValBySlot(subject, slot, dataDate, version);
+                    case "ORG"  -> orgIndexResultMapper.selectValBySlot(subject, slot, dataDate, version);
+                    case "CUST" -> custIndexResultMapper.selectValBySlot(subject, slot, dataDate, version);
+                    default -> throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                            "未知 baseDim=" + baseDim);
+                };
             }
+            result.put(refCode, value != null ? value : BigDecimal.ZERO);
         }
         return result;
     }
@@ -361,6 +392,39 @@ public class MetricCalcService {
             log.warn("[MetricCalc] refMetricCodes 解析失败: {}", e.getMessage());
             return List.of();
         }
+    }
+
+    /** V1.13+：正则匹配 Groovy/EXPR 公式里出现的 metric_code 字面量（形如 M_0269、M_00X、M_AUM_TOTAL）. */
+    private static final java.util.regex.Pattern METRIC_CODE_PATTERN =
+            java.util.regex.Pattern.compile("\\bM_[A-Za-z0-9_]+\\b");
+
+    /**
+     * V1.13+：从 expr_text 正则提取所有 M_xxx 形式的 metric_code 字面量，去重保序.
+     *
+     * <p>用于 ref_metric_codes 字段为空时的兜底——前端"表达式构建器"暂未把公式里的指标
+     * 自动写回 def.ref_metric_codes，由后端在 calc 时主动解析。
+     */
+    private List<String> extractMetricCodesFromExpr(String exprText) {
+        if (exprText == null || exprText.isBlank()) {
+            return List.of();
+        }
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher m = METRIC_CODE_PATTERN.matcher(exprText);
+        while (m.find()) {
+            set.add(m.group());
+        }
+        return new ArrayList<>(set);
+    }
+
+    /** V1.13+：把 def.ref_metric_codes 与正则提取结果合并，保留顺序去重. */
+    private List<String> mergeRefCodes(List<String> declared, List<String> extracted) {
+        if ((declared == null || declared.isEmpty()) && (extracted == null || extracted.isEmpty())) {
+            return List.of();
+        }
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        if (declared != null) set.addAll(declared);
+        if (extracted != null) set.addAll(extracted);
+        return new ArrayList<>(set);
     }
 
     /**

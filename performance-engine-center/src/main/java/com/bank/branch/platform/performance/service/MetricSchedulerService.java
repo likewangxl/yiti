@@ -107,7 +107,9 @@ public class MetricSchedulerService {
      * 判断指标是否满足自动调度条件.
      *
      * <p>必须同时满足：ACTIVE + AUTO + 未软删除 + 非 PROC/SUMMARY 逻辑类型.
-     * V1.7：EXPR/GROOVY 类型 subject_sql 必填，空时视为不可调度（消除 register 双重判定）.
+     *
+     * <p>V1.13+：废弃 V1.7 引入的"EXPR/GROOVY 类型 subject_sql 必填"约束。
+     * 主体集合改为运行期直接从 EMP/ORG/CUST 宽表按 (dataDate, version) 现取，业务方无需维护 subject_sql。
      *
      * @param def 指标定义
      * @return true 表示可调度
@@ -122,12 +124,6 @@ public class MetricSchedulerService {
         // PROC / SUMMARY 类型由外部存储过程或汇总链触发，不走通用调度
         if ("PROC".equalsIgnoreCase(def.getCalcLogicType())
                 || "SUMMARY".equalsIgnoreCase(def.getCalcLogicType())) {
-            return false;
-        }
-        // EXPR / GROOVY 类型必须有主体集合 SQL，否则执行期无法确定主体范围
-        if (("EXPR".equalsIgnoreCase(def.getCalcLogicType())
-                || "GROOVY".equalsIgnoreCase(def.getCalcLogicType()))
-                && !StringUtils.hasText(def.getSubjectSql())) {
             return false;
         }
         return true;

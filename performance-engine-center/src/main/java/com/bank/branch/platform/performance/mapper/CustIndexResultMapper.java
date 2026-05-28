@@ -79,6 +79,16 @@ public interface CustIndexResultMapper extends BaseMapper<CustIndexResult> {
                                          @Param("version") String version);
 
     /**
+     * V1.13+：取某日某版本下宽表所有出现的客户 cust_id（替代 subject_sql 取主体集合）.
+     *
+     * @param dataDate 数据日期
+     * @param version  数据版本
+     * @return 该日该版本下宽表已有的客户 ID 列表
+     */
+    List<String> selectDistinctCustIds(@Param("dataDate") LocalDate dataDate,
+                                       @Param("version") String version);
+
+    /**
      * V1.7：按 subject + 多 metricCode 在单一 dataDate+version 下取宽表 slot 值.
      *
      * @param subject     客户 ID
