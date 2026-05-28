@@ -165,7 +165,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { sysRoles, sysResources, sysScopeMatrix } from '@/mock';
 import {
-  listRoles, listResources, getScopeMatrix,
+  listAllRoles, listResources, getScopeMatrix,
   getRoleResourceIds, replaceRoleResources, saveBizScope
 } from '@/api/system';
 
@@ -415,7 +415,7 @@ async function onSaveResources() {
 // ============= 数据加载 =============
 async function loadRoles() {
   try {
-    const r = await listRoles({ pageNo: 1, pageSize: 999 });
+    const r = await listAllRoles();
     const arr = r?.records || (Array.isArray(r) ? r : []);
     if (arr.length) {
       roles.value = arr;

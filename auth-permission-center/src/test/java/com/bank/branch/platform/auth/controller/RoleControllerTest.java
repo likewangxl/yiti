@@ -167,4 +167,31 @@ class RoleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("AUTH-40401"));
     }
+
+    @Test
+    void listAllRoles_shouldReturn200WithList() throws Exception {
+        // given
+        RoleRespDTO dto = new RoleRespDTO();
+        dto.setRoleId("R_001");
+        dto.setRoleCode("ADMIN");
+        when(roleService.listAll(any())).thenReturn(List.of(dto));
+
+        // when & then
+        mockMvc.perform(get("/api/admin/roles/all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data[0].roleCode").value("ADMIN"));
+    }
+
+    @Test
+    void listAllRoles_withStatusParam_shouldPassToService() throws Exception {
+        // given
+        when(roleService.listAll(0)).thenReturn(List.of());
+
+        // when & then
+        mockMvc.perform(get("/api/admin/roles/all")
+                .param("recordStatus", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+    }
 }

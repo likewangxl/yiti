@@ -26,6 +26,11 @@ export function deleteTag(tagId) {
   return call('delete', `/admin/eval/tags/${tagId}`, {}, { ok: true });
 }
 
+// V1.x：查询全部启用标签（不分页），供下拉选项使用
+export function listAllTags(params = {}) {
+  return call('get', '/admin/eval/tags/all', { params }, []);
+}
+
 // ============================================================
 // 人员标签关联 (EvalUserTagController: /api/admin/eval/user-tags)
 // ============================================================

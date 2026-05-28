@@ -21,7 +21,7 @@ cd "$SCRIPT_DIR"
 LOG_DIR="$SCRIPT_DIR/logs"
 PID_FILE="$LOG_DIR/vite.pid"
 PORT_FILE="$LOG_DIR/vite.port"   # 实际监听端口（vite 滚动后可能 != 8090）
-DEFAULT_PORT=8090                # vite.config.js 默认配置端口（被占用时 vite 会自动滚动）
+DEFAULT_PORT=8091                # vite.config.js 默认配置端口（被占用时 vite 会自动滚动）
 mkdir -p "$LOG_DIR"
 
 # ---------- 内部工具 ----------
