@@ -23,4 +23,14 @@
             <if test="keyword != null and keyword != ''">AND tag_name LIKE CONCAT('%', #{keyword}, '%')</if>
         </where>
     </select>
+
+    <!-- 查询全部标签（不分页），供下拉选项用 -->
+    <select id="selectAll" resultType="com.bank.branch.platform.performance.eval.entity.EvalTag">
+        SELECT <include refid="BASE_COLUMNS"/> FROM EVAL_TAG
+        <where>
+            <if test="tagType != null">AND tag_type = #{tagType}</if>
+            <if test="status != null">AND status = #{status}</if>
+        </where>
+        ORDER BY tag_type ASC, tag_id ASC
+    </select>
 </mapper>

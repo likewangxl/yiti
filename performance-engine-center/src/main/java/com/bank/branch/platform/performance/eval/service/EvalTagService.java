@@ -97,6 +97,17 @@ public class EvalTagService {
     }
 
     /**
+     * 查询全部标签（不分页，供下拉选项用）.
+     *
+     * @param tagType 标签类型筛选（可选，null 表示不过滤）
+     * @param status  状态筛选（可选，null 表示不过滤）
+     * @return 标签列表
+     */
+    public List<EvalTag> listAll(Integer tagType, Integer status) {
+        return evalTagMapper.selectAll(tagType, status);
+    }
+
+    /**
      * 分页查询标签列表.
      *
      * @param tagType  标签类型筛选（可选，null 表示不过滤）
