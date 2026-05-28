@@ -43,7 +43,7 @@ class FileServiceTest {
 
     @BeforeEach
     void setUp() {
-        fileService = new FileService(minioClient, "branch-platform", fileObjectMapper, bizFileRelMapper);
+        fileService = new FileService("/tmp/test-file-storage", fileObjectMapper, bizFileRelMapper);
     }
 
     /**

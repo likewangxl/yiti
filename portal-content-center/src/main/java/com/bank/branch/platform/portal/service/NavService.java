@@ -16,9 +16,9 @@ import com.bank.branch.platform.portal.convert.NavConverter;
 import com.bank.branch.platform.portal.entity.PortalNav;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
 import com.bank.branch.platform.portal.mapper.PortalNavMapper;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +44,7 @@ public class NavService {
     private final PortalNavMapper portalNavMapper;
     private final CurrentUserApi currentUserApi;
     private final AuditApi auditApi;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final MemoryCacheService memoryCacheService;
 
     /**
      * 按分类分组查询导航列表。
@@ -238,14 +238,14 @@ public class NavService {
      */
     @SuppressWarnings("unchecked")
     public List<PortalNav> listActiveNavs() {
-        Object cached = redisTemplate.opsForValue().get(PortalCacheConfig.NAV_ACTIVE_KEY);
+        Object cached = memoryCacheService.get(PortalCacheConfig.NAV_ACTIVE_KEY);
         if (cached != null) {
             log.debug("[NavService.listActiveNavs] cache hit");
             return (List<PortalNav>) cached;
         }
         log.debug("[NavService.listActiveNavs] cache miss, querying DB");
         List<PortalNav> items = portalNavMapper.listActive();
-        redisTemplate.opsForValue().set(
+        memoryCacheService.put(
                 PortalCacheConfig.NAV_ACTIVE_KEY,
                 items,
                 PortalCacheConfig.jitteredTtl(PortalCacheConfig.DEFAULT_TTL)
@@ -258,7 +258,7 @@ public class NavService {
      */
     private void clearNavCache() {
         try {
-            redisTemplate.delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+            memoryCacheService.evict(PortalCacheConfig.NAV_ACTIVE_KEY);
         } catch (Exception e) {
             log.warn("[NavService] clearNavCache failed", e);
         }

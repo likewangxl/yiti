@@ -79,9 +79,10 @@ public class BizScopeService {
         }
 
         if (result == null) {
-            throw new PermissionDeniedException(
-                AuthErrorCode.BIZ_TYPE_NOT_CONFIGURED.getCode(),
-                "用户角色未配置 " + bizType.name() + " 的数据范围");
+            // 未配置时默认 SELF（最小权限），不再抛异常拒绝访问
+            // 管理员可在权限配置页面按需调大
+            log.debug("[BizScopeService] 角色未配置 {} DataScope，默认 SELF empId={}", bizType, empId);
+            return DataScopeType.SELF;
         }
         return result;
     }

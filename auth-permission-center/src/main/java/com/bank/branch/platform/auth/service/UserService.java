@@ -41,8 +41,15 @@ public class UserService {
      * @param operator 操作人工号
      * @throws BizException AUTH-40904 / AUTH-40905
      */
+    @org.springframework.transaction.annotation.Transactional
     public void create(UserCreateReqDTO req, String operator) {
-        if (userMapper.selectByUserId(req.getUserId()) != null) {
+        // userId 可选：前端不传时自动生成 U_ + UUID 8 位大写
+        String userId = req.getUserId();
+        if (userId == null || userId.isBlank()) {
+            userId = "U_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+            req.setUserId(userId);
+        }
+        if (userMapper.selectByUserId(userId) != null) {
             throw new BizException(AuthErrorCode.USER_ID_DUPLICATE.getCode(),
                     AuthErrorCode.USER_ID_DUPLICATE.getMessage());
         }
@@ -51,7 +58,7 @@ public class UserService {
                     AuthErrorCode.USERNAME_DUPLICATE.getMessage());
         }
         PtUser entity = new PtUser();
-        entity.setUserId(req.getUserId());
+        entity.setUserId(userId);
         entity.setUsername(req.getUsername());
         entity.setUserchnname(req.getUserchnname());
         entity.setEmail(req.getEmail());
@@ -133,6 +140,7 @@ public class UserService {
     }
 
     /** 修改用户基本信息（不改密码） */
+    @org.springframework.transaction.annotation.Transactional
     public void update(String userId,
                        com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO req,
                        String operator) {

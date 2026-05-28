@@ -6,17 +6,20 @@ import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import lombok.Data;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
  * SOAP Body 根元素：{@code <s:RspNewAuthrQuery>...</s:RspNewAuthrQuery>}。
  * <p>子结构按 S120030044 文档骨架；UserAdv/UserCpc/Role/Task/FrontFunc 当前请求 Flag=false 不取，
  * 后续需要时按文档补强类型字段即可。
+ * <p>所有嵌套类实现 Serializable：Spring Session JDBC 用 Java 序列化持久化 session attribute，
+ * loginByUniAuth 把 UserBscInfo / InstInfoList 存 session 供后续业务消费。
  */
 @Data
 @XmlRootElement(name = "RspNewAuthrQuery")
 @XmlAccessorType(XmlAccessType.FIELD)
-public class UniAuthRespDTO {
+public class UniAuthRespDTO implements Serializable {
 
     @XmlElement(name = "RspSvcHeader") private RspSvcHeader rspSvcHeader;
     @XmlElement(name = "SvcBody")      private SvcBody svcBody;
@@ -28,7 +31,7 @@ public class UniAuthRespDTO {
 
     @Data
     @XmlAccessorType(XmlAccessType.FIELD)
-    public static class RspSvcHeader {
+    public static class RspSvcHeader implements Serializable {
         @XmlElement(name = "ReturnCode")  private String returnCode;
         @XmlElement(name = "ReturnMsg")   private String returnMsg;
         @XmlElement(name = "GlobalSeqNo") private String globalSeqNo;
@@ -37,13 +40,13 @@ public class UniAuthRespDTO {
 
     @Data
     @XmlAccessorType(XmlAccessType.FIELD)
-    public static class SvcBody {
+    public static class SvcBody implements Serializable {
         @XmlElement(name = "UserInfoQryRslt") private UserInfoQryRslt userInfoQryRslt;
     }
 
     @Data
     @XmlAccessorType(XmlAccessType.FIELD)
-    public static class UserInfoQryRslt {
+    public static class UserInfoQryRslt implements Serializable {
         @XmlElement(name = "UserBscInfo")  private UserBscInfo userBscInfo;
         @XmlElement(name = "InstInfoList") private InstInfoList instInfoList;
         // UserAdvInfo / UserCpcInfo / GrpInfoList / RoleInfoList / TaskInfoList / FrontFuncInfoList
@@ -52,7 +55,7 @@ public class UniAuthRespDTO {
 
     @Data
     @XmlAccessorType(XmlAccessType.FIELD)
-    public static class UserBscInfo {
+    public static class UserBscInfo implements Serializable {
         @XmlElement(name = "UserDomainName") private String userDomainName;
         @XmlElement(name = "UserChnName")    private String userChnName;
         @XmlElement(name = "UserEnName")     private String userEnName;
@@ -61,13 +64,13 @@ public class UniAuthRespDTO {
 
     @Data
     @XmlAccessorType(XmlAccessType.FIELD)
-    public static class InstInfoList {
+    public static class InstInfoList implements Serializable {
         @XmlElement(name = "InstInfo") private List<InstInfo> instInfo;
     }
 
     @Data
     @XmlAccessorType(XmlAccessType.FIELD)
-    public static class InstInfo {
+    public static class InstInfo implements Serializable {
         @XmlElement(name = "InstId")   private String instId;
         @XmlElement(name = "InstName") private String instName;
         // TODO 按文档补

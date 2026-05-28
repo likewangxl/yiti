@@ -8,17 +8,19 @@ import com.bank.branch.platform.governance.entity.FileObject;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
 import com.bank.branch.platform.governance.mapper.BizFileRelMapper;
 import com.bank.branch.platform.governance.mapper.FileObjectMapper;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -26,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 文件管理服务
@@ -40,8 +41,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class FileService {
 
-    private final MinioClient minioClient;
-    private final String bucketName;
+    private final String storageRoot;
     private final FileObjectMapper fileObjectMapper;
     private final BizFileRelMapper bizFileRelMapper;
 
@@ -59,19 +59,21 @@ public class FileService {
     private static final DateTimeFormatter PATH_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
     /**
-     * 构造函数
+     * 构造函数 — 文件存本地磁盘，不依赖 MinIO。
      *
-     * @param minioClient      MinIO 客户端
-     * @param bucketName       存储桶名称
+     * @param storageRoot      本地存储根目录（yml 配置 file.storage.root，默认 ./file-storage）
      * @param fileObjectMapper 文件对象 Mapper
      * @param bizFileRelMapper 业务关联 Mapper
      */
-    public FileService(MinioClient minioClient, String bucketName,
+    public FileService(@Value("${file.storage.root:./file-storage}") String storageRoot,
                        FileObjectMapper fileObjectMapper, BizFileRelMapper bizFileRelMapper) {
-        this.minioClient = minioClient;
-        this.bucketName = bucketName;
+        this.storageRoot = storageRoot;
         this.fileObjectMapper = fileObjectMapper;
         this.bizFileRelMapper = bizFileRelMapper;
+        // 启动时确保根目录存在
+        try { Files.createDirectories(Paths.get(storageRoot)); } catch (IOException e) {
+            log.warn("[FileService] 创建存储目录失败 root={}", storageRoot, e);
+        }
     }
 
     /**
@@ -132,17 +134,16 @@ public class FileService {
         String storagePath = "/" + now.format(PATH_DATE_FORMAT) + "/"
                 + UUID.randomUUID().toString().replace("-", "") + "." + extension;
 
-        // 6. 上传到 MinIO
-        try (InputStream inputStream = file.getInputStream()) {
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(bucketName)
-                    .object(storagePath)
-                    .stream(inputStream, file.getSize(), -1)
-                    .contentType(file.getContentType())
-                    .build());
+        // 6. 写入本地磁盘
+        Path targetPath = Paths.get(storageRoot, storagePath);
+        try {
+            Files.createDirectories(targetPath.getParent());
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (Exception e) {
             throw new BizException(GovErrorCode.MINIO_ERROR.getCode(),
-                    GovErrorCode.MINIO_ERROR.getMessage() + ": " + e.getMessage(), e);
+                    "文件写入磁盘失败: " + e.getMessage(), e);
         }
 
         // 7. 插入文件对象记录
@@ -153,7 +154,7 @@ public class FileService {
         fileObject.setFileSize(file.getSize());
         fileObject.setFileType(file.getContentType());
         fileObject.setStoragePath(storagePath);
-        fileObject.setBucketName(bucketName);
+        fileObject.setBucketName("local");
         fileObject.setMd5Hash(md5Hash);
         fileObject.setUploadedBy(uploadedBy);
         fileObject.setUploadedTime(now);
@@ -189,18 +190,8 @@ public class FileService {
                     GovErrorCode.FILE_NOT_FOUND.getMessage());
         }
 
-        try {
-            return minioClient.getPresignedObjectUrl(
-                    GetPresignedObjectUrlArgs.builder()
-                            .bucket(fileObject.getBucketName())
-                            .object(fileObject.getStoragePath())
-                            .method(Method.GET)
-                            .expiry(1, TimeUnit.HOURS)
-                            .build());
-        } catch (Exception e) {
-            throw new BizException(GovErrorCode.MINIO_ERROR.getCode(),
-                    GovErrorCode.MINIO_ERROR.getMessage() + ": " + e.getMessage(), e);
-        }
+        // 本地磁盘模式：返回后端下载 API 路径（由 FileController 代理读磁盘流式返回）
+        return "/api/files/" + fileId + "/download";
     }
 
     /**
@@ -312,6 +303,22 @@ public class FileService {
      * @throws BizException GOV-40005 文件不存在
      */
     @Transactional
+    /** 获取文件的本地磁盘路径（供 Controller 流式下载） */
+    public Path getFilePath(String fileId) {
+        FileObject fileObject = fileObjectMapper.selectById(fileId);
+        if (fileObject == null) {
+            throw new BizException(GovErrorCode.FILE_NOT_FOUND.getCode(),
+                    GovErrorCode.FILE_NOT_FOUND.getMessage());
+        }
+        return Paths.get(storageRoot, fileObject.getStoragePath());
+    }
+
+    /** 获取文件名（供 Content-Disposition） */
+    public String getFileName(String fileId) {
+        FileObject fileObject = fileObjectMapper.selectById(fileId);
+        return fileObject != null ? fileObject.getFileName() : "file";
+    }
+
     public void deleteFile(String fileId) {
         log.info("[FileService.deleteFile] fileId={}", fileId);
         FileObject fileObject = fileObjectMapper.selectById(fileId);

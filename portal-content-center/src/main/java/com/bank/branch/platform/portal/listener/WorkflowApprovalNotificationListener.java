@@ -28,7 +28,7 @@ public class WorkflowApprovalNotificationListener {
     private final UserApi userApi;
     private final NotificationService notificationService;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @EventListener
     public void onTaskApproved(TaskOperationService.TaskApprovedEvent event) {
         BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(event.processInstanceId());
         if (map == null || map.getStartUser() == null) {
@@ -36,17 +36,18 @@ public class WorkflowApprovalNotificationListener {
             return;
         }
         String approverName = safeUserName(event.empId());
+        String lbl = resolveBizLabel(map.getBizType());
         notificationService.sendNotification(NotificationCmd.builder()
                 .targetEmpId(map.getStartUser())
-                .title("审批通过")
-                .content("您的申请已通过审批 by " + approverName)
+                .title(lbl + " · 审批通过")
+                .content("您的【" + lbl + "】申请已通过审批（审批人：" + approverName + "）")
                 .notifyType("WORKFLOW")
                 .bizType(map.getBizType())
                 .bizId(map.getBizId())
                 .build());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @EventListener
     public void onTaskRejected(TaskOperationService.TaskRejectedEvent event) {
         BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(event.processInstanceId());
         if (map == null || map.getStartUser() == null) {
@@ -54,33 +55,44 @@ public class WorkflowApprovalNotificationListener {
             return;
         }
         String approverName = safeUserName(event.empId());
+        String lbl = resolveBizLabel(map.getBizType());
         notificationService.sendNotification(NotificationCmd.builder()
                 .targetEmpId(map.getStartUser())
-                .title("审批驳回")
-                .content("您的申请被驳回 by " + approverName)
+                .title(lbl + " · 审批驳回")
+                .content("您的【" + lbl + "】申请被驳回（审批人：" + approverName + "）")
                 .notifyType("WORKFLOW")
                 .bizType(map.getBizType())
                 .bizId(map.getBizId())
                 .build());
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @EventListener
     public void onProcessWithdrawn(ProcessWithdrawnEvent event) {
         if (event.currentAssigneeEmpId() == null) {
-            // 候选组未签收：assignee 为 null，不发通知（spec §9 边界，本次不覆盖）
             log.debug("[Notification.onWithdrawn] skip: no active assignee pid={}", event.processInstanceId());
             return;
         }
         BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(event.processInstanceId());
         String withdrawerName = safeUserName(event.withdrawnByEmpId());
+        String lbl = resolveBizLabel(map != null ? map.getBizType() : null);
         notificationService.sendNotification(NotificationCmd.builder()
                 .targetEmpId(event.currentAssigneeEmpId())
-                .title("申请撤回")
-                .content("申请人 " + withdrawerName + " 已撤回申请")
+                .title(lbl + " · 申请撤回")
+                .content("【" + lbl + "】申请人 " + withdrawerName + " 已撤回申请")
                 .notifyType("WORKFLOW")
                 .bizType(map != null ? map.getBizType() : null)
                 .bizId(map != null ? map.getBizId() : null)
                 .build());
+    }
+
+    private String resolveBizLabel(String bizType) {
+        if (bizType == null) return "流程";
+        return switch (bizType) {
+            case "ALLOC_ADJUST" -> "业绩调整审批";
+            case "TARGET_ADJUST" -> "目标修正审批";
+            case "LOAN_APPLY" -> "贷款申请审批";
+            default -> bizType;
+        };
     }
 
     private String safeUserName(String empId) {

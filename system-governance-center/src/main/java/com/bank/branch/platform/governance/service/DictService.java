@@ -8,9 +8,9 @@ import com.bank.branch.platform.governance.entity.SysDict;
 import com.bank.branch.platform.governance.enums.GovErrorCode;
 import com.bank.branch.platform.governance.mapper.DictMapper;
 import com.bank.branch.platform.governance.mapper.DictTypeVO;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DictService {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final MemoryCacheService memoryCacheService;
     private final DictMapper dictMapper;
 
     /** 缓存 key 前缀 */
@@ -57,7 +57,7 @@ public class DictService {
     @SuppressWarnings("unchecked")
     public List<SysDict> getDictItems(String dictType) {
         String cacheKey = CACHE_PREFIX + dictType;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
+        Object cached = memoryCacheService.get(cacheKey);
         if (cached != null) {
             log.debug("[DictService.getDictItems] 缓存命中 dictType={}", dictType);
             return (List<SysDict>) cached;
@@ -65,7 +65,7 @@ public class DictService {
         // 缓存未命中，从数据库加载
         log.debug("[DictService.getDictItems] 缓存未命中，查询数据库 dictType={}", dictType);
         List<SysDict> items = dictMapper.selectByDictType(dictType);
-        redisTemplate.opsForValue().set(cacheKey, items, CACHE_TTL);
+        memoryCacheService.put(cacheKey, items, CACHE_TTL);
         return items;
     }
 
@@ -150,7 +150,7 @@ public class DictService {
         dict.setUpdatedTime(LocalDateTime.now());
         dictMapper.insert(dict);
         // 新增后清除缓存，保证下次读取到最新数据
-        redisTemplate.delete(CACHE_PREFIX + dictType);
+        memoryCacheService.evict(CACHE_PREFIX + dictType);
         log.info("[DictService.createDict] 字典创建成功 id={}", id);
         return dict;
     }
@@ -182,7 +182,7 @@ public class DictService {
         existing.setUpdatedTime(LocalDateTime.now());
         dictMapper.updateById(existing);
         // 更新后清除缓存
-        redisTemplate.delete(CACHE_PREFIX + existing.getDictType());
+        memoryCacheService.evict(CACHE_PREFIX + existing.getDictType());
         return existing;
     }
 
@@ -204,7 +204,7 @@ public class DictService {
         existing.setUpdatedTime(LocalDateTime.now());
         dictMapper.updateById(existing);
         // 逻辑删除后清除缓存
-        redisTemplate.delete(CACHE_PREFIX + existing.getDictType());
+        memoryCacheService.evict(CACHE_PREFIX + existing.getDictType());
         log.info("[DictService.deleteDict] 字典已逻辑删除 id={}", id);
     }
 
@@ -228,7 +228,7 @@ public class DictService {
         existing.setStatus(newStatus);
         existing.setUpdatedTime(LocalDateTime.now());
         dictMapper.updateById(existing);
-        redisTemplate.delete(CACHE_PREFIX + existing.getDictType());
+        memoryCacheService.evict(CACHE_PREFIX + existing.getDictType());
         log.info("[DictService.toggleStatus] 状态已切换 id={}, newStatus={}", id, newStatus);
         return existing;
     }
@@ -255,7 +255,7 @@ public class DictService {
         existing.setStatus(status);
         existing.setUpdatedTime(LocalDateTime.now());
         dictMapper.updateById(existing);
-        redisTemplate.delete(CACHE_PREFIX + existing.getDictType());
+        memoryCacheService.evict(CACHE_PREFIX + existing.getDictType());
         log.info("[DictService.updateStatus] 状态已更新 id={}, newStatus={}", id, status);
         return existing;
     }

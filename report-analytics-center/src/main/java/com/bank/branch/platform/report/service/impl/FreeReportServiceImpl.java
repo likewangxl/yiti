@@ -68,6 +68,18 @@ public class FreeReportServiceImpl implements FreeReportService {
                 Cell cell = headerRow.getCell(c);
                 headers.add(cell != null ? getCellString(cell) : "col_" + (c + 1));
             }
+            // 校验前两列必须是工号和姓名
+            if (headers.size() < 2) {
+                throw new BizException("RPT-40012", "Excel 至少需要 2 列（第1列=工号，第2列=姓名）");
+            }
+            String h1 = headers.get(0).trim();
+            String h2 = headers.get(1).trim();
+            if (!h1.contains("工号") && !h1.equalsIgnoreCase("empId") && !h1.equalsIgnoreCase("emp_id")) {
+                throw new BizException("RPT-40012", "第1列表头必须包含\"工号\"（当前：" + h1 + "）");
+            }
+            if (!h2.contains("姓名") && !h2.equalsIgnoreCase("name") && !h2.equalsIgnoreCase("emp_name")) {
+                throw new BizException("RPT-40012", "第2列表头必须包含\"姓名\"（当前：" + h2 + "）");
+            }
 
             dataRows = new ArrayList<>();
             for (int r = 1; r <= sheet.getLastRowNum(); r++) {
@@ -121,10 +133,9 @@ public class FreeReportServiceImpl implements FreeReportService {
         for (Map<String, String> rowData : dataRows) {
             RptFreeReportRow row = new RptFreeReportRow();
             row.setBatchId(batchId);
-            row.setCol1(rowData.getOrDefault("col_1", ""));
-            row.setCol2(rowData.getOrDefault("col_2", ""));
-            // emp_id / org_code 尝试从前两列推断（工号通常是 col_2）
-            row.setEmpId(rowData.getOrDefault("col_2", ""));
+            row.setCol1(rowData.getOrDefault("col_1", ""));  // 工号
+            row.setCol2(rowData.getOrDefault("col_2", ""));  // 姓名
+            row.setEmpId(rowData.getOrDefault("col_1", "")); // 工号存 EMP_ID
             row.setOrgCode(null);
             // 除前两列外的数据放 JSON
             Map<String, String> extra = new LinkedHashMap<>();
@@ -154,13 +165,14 @@ public class FreeReportServiceImpl implements FreeReportService {
 
     @Override
     public PageResult<Map<String, Object>> queryData(String batchId, String keyword,
+                                                      String empNo, String empName,
                                                       String scopeEmpId, List<String> scopeOrgCodes,
                                                       int pageNo, int pageSize) {
-        long total = rowMapper.countByBatch(batchId, keyword, scopeEmpId, scopeOrgCodes);
+        long total = rowMapper.countByBatch(batchId, keyword, empNo, empName, scopeEmpId, scopeOrgCodes);
         if (total == 0) return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
 
         int offset = (pageNo - 1) * pageSize;
-        List<RptFreeReportRow> rows = rowMapper.selectByBatch(batchId, keyword, scopeEmpId, scopeOrgCodes, offset, pageSize);
+        List<RptFreeReportRow> rows = rowMapper.selectByBatch(batchId, keyword, empNo, empName, scopeEmpId, scopeOrgCodes, offset, pageSize);
 
         List<Map<String, Object>> records = rows.stream().map(r -> {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -192,10 +204,11 @@ public class FreeReportServiceImpl implements FreeReportService {
     }
 
     @Override
-    public List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo) {
+    public List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo,
+                                                String scopeEmpId, java.util.List<String> scopeOrgCodes) {
         java.time.LocalDateTime fromDt = dateFrom != null ? dateFrom.atStartOfDay() : null;
         java.time.LocalDateTime toDt = dateTo != null ? dateTo.plusDays(1).atStartOfDay() : null;
-        return batchMapper.selectAllOrderByImportTimeDesc(keyword, fromDt, toDt);
+        return batchMapper.selectBatchesWithScope(keyword, fromDt, toDt, scopeEmpId, scopeOrgCodes);
     }
 
     @Override
@@ -208,16 +221,25 @@ public class FreeReportServiceImpl implements FreeReportService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    public String getBatchFileName(String batchId) {
+        RptFreeReportBatch batch = batchMapper.selectById(batchId);
+        if (batch == null) return "report.xlsx";
+        return batch.getFileName() != null ? batch.getFileName() : batch.getReportName() + ".xlsx";
+    }
+
+    @Override
     public void deleteBatch(String batchId) {
         RptFreeReportBatch batch = batchMapper.selectById(batchId);
         if (batch == null) throw new BizException("RPT-40401", "批次不存在");
+        String fileKey = batch.getFileObjectKey();
+        // DB 删除（无事务注解，每条 DELETE 自动提交，避免 fileApi 嵌套事务污染）
         rowMapper.deleteByBatchId(batchId);
-        if (batch.getFileObjectKey() != null) {
-            try { fileApi.deleteFile(batch.getFileObjectKey()); } catch (Exception e) { log.warn("删文件失败", e); }
-        }
         batchMapper.deleteById(batchId);
         log.info("[FreeReport.delete] batchId={}", batchId);
+        // MinIO 文件删除：失败不影响 DB 删除结果
+        if (fileKey != null) {
+            try { fileApi.deleteFile(fileKey); } catch (Exception e) { log.warn("[FreeReport.delete] 删 MinIO 文件失败 key={}", fileKey, e); }
+        }
     }
 
     private String getCellString(Cell cell) {

@@ -18,4 +18,12 @@ public interface FreeReportBatchMapper extends BaseMapper<RptFreeReportBatch> {
             @Param("keyword") String keyword,
             @Param("dateFrom") java.time.LocalDateTime dateFrom,
             @Param("dateTo") java.time.LocalDateTime dateTo);
+
+    /** 带数据范围的批次查询：scopeEmpId 非空=只看该人；scopeOrgCodes 非空=只看这些机构下的人；都空=全量 */
+    List<RptFreeReportBatch> selectBatchesWithScope(
+            @Param("keyword") String keyword,
+            @Param("dateFrom") java.time.LocalDateTime dateFrom,
+            @Param("dateTo") java.time.LocalDateTime dateTo,
+            @Param("scopeEmpId") String scopeEmpId,
+            @Param("scopeOrgCodes") java.util.List<String> scopeOrgCodes);
 }

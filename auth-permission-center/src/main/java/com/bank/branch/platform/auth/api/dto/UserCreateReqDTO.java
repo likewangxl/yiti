@@ -8,8 +8,7 @@ import lombok.Data;
 /** 新增用户请求 DTO */
 @Data
 public class UserCreateReqDTO {
-    /** 用户ID（工号，业务赋值） */
-    @NotBlank(message = "用户ID不能为空")
+    /** 用户ID，可选；不传时后端自动生成 U_XXXXXXXX */
     @Size(max = 32)
     private String userId;
 

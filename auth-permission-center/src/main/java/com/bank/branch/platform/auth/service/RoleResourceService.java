@@ -3,6 +3,7 @@ package com.bank.branch.platform.auth.service;
 import com.bank.branch.platform.auth.api.event.PermissionCacheInvalidatedEvent;
 import com.bank.branch.platform.auth.entity.PtRoleResource;
 import com.bank.branch.platform.auth.enums.AuthErrorCode;
+import com.bank.branch.platform.auth.entity.PtResource;
 import com.bank.branch.platform.auth.mapper.ResourceMapper;
 import com.bank.branch.platform.auth.mapper.RoleMapper;
 import com.bank.branch.platform.auth.mapper.RoleResourceMapper;
@@ -31,6 +32,7 @@ public class RoleResourceService {
     private final RoleMapper roleMapper;
     private final ResourceMapper resourceMapper;
     private final PermissionCacheService cacheService;
+    private final BizScopeService bizScopeService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -139,9 +141,34 @@ public class RoleResourceService {
             rr.setResourceId(menuId);
             roleResourceMapper.insert(rr);
         }
+
+        // 自动绑定所有接口资源（ISMENU=0），让角色分配菜单后即可访问对应接口
+        java.util.Set<String> existingResIds = new java.util.HashSet<>(roleResourceMapper.selectResourceIdsByRoleId(roleId));
+        List<PtResource> allResources = resourceMapper.selectAll(null, null);
+        for (PtResource res : allResources) {
+            // ISMENU: 0=接口资源, 1=菜单
+            if (res.getIsMenu() != null && res.getIsMenu() == 0 && !existingResIds.contains(res.getResourceId())) {
+                PtRoleResource rr = new PtRoleResource();
+                rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
+                rr.setRoleId(roleId);
+                rr.setResourceId(res.getResourceId());
+                roleResourceMapper.insert(rr);
+            }
+        }
+
+        // 自动配默认数据范围（SELF），让角色有基础数据权限
+        String[] defaultBizTypes = {"REPORT", "PERF_CONFIG", "SYS_CONFIG", "NAV", "LEAD", "CUSTOMER", "LOAN", "SUPPORT"};
+        for (String bizType : defaultBizTypes) {
+            try {
+                bizScopeService.saveBizScope(roleId, bizType, "SELF", "菜单分配自动配置");
+            } catch (Exception e) {
+                log.debug("[replaceMenus] 默认 BizScope 已存在或跳过 roleId={}, bizType={}", roleId, bizType);
+            }
+        }
+
         cacheService.evictRoleResourceCache(roleId);
         publishCacheInvalidatedEvent(roleId, reason);
-        log.info("[RoleResourceService.replaceMenus] 菜单分配完成 roleId={}, count={}", roleId, menuIds.size());
+        log.info("[RoleResourceService.replaceMenus] 菜单分配完成 roleId={}, menus={}, 接口资源+默认数据范围已自动绑定", roleId, menuIds.size());
     }
 
     // ── 私有方法 ──────────────────────────────────────────────────

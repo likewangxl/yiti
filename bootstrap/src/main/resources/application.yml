@@ -87,6 +87,13 @@ platform:
   method-timing-warn-ms: 500
   method-timing-error-ms: 5000
 
+perf:
+  scheduler:
+    health-check:
+      enabled: false
+    startup-sync:
+      enabled: false
+
 auth:
   user:
     default-password: Branch@2026

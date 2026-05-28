@@ -69,9 +69,13 @@ public class FileController {
             @PathVariable(value = "fileId") String fileId,
             HttpServletResponse response) throws IOException {
         log.info("[FileController.downloadFile] fileId={}", fileId);
-        String presignedUrl = fileService.getDownloadUrl(fileId);
-        // 302重定向到预签名URL
-        response.sendRedirect(presignedUrl);
+        java.nio.file.Path filePath = fileService.getFilePath(fileId);
+        String fileName = fileService.getFileName(fileId);
+        response.setContentType("application/octet-stream");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + java.net.URLEncoder.encode(fileName, "UTF-8") + "\"");
+        java.nio.file.Files.copy(filePath, response.getOutputStream());
+        response.flushBuffer();
     }
 
     /**

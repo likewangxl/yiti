@@ -3,6 +3,7 @@ package com.bank.branch.platform.portal.service;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import com.bank.branch.platform.portal.api.dto.NavDTO;
 import com.bank.branch.platform.portal.config.PortalCacheConfig;
 import com.bank.branch.platform.portal.controller.dto.nav.NavCreateReqDTO;
@@ -19,8 +20,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,7 +30,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -39,9 +37,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * NavService 单元测试 -- 纯 JUnit 5 + Mockito，无需 Spring 上下文
- *
- * <p>TDD RED-GREEN 闭环：先写测试（Red），再实现 Service（Green）。
- * 涵盖分组查询、新增、更新、删除、批量排序等核心场景。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class NavServiceTest {
@@ -49,14 +44,13 @@ class NavServiceTest {
     @Mock PortalNavMapper portalNavMapper;
     @Mock CurrentUserApi currentUserApi;
     @Mock AuditApi auditApi;
-    @Mock RedisTemplate<String, Object> redisTemplate;
+    @Mock MemoryCacheService memoryCacheService;
     @InjectMocks NavService navService;
 
     // ========== listGrouped ==========
 
     @Test
     void listGrouped_groupsByCategory() {
-        // 模拟两个分类、各含一条导航
         PortalNav nav1 = buildNav("id1", "核心系统", "https://core.bank.com", "业务系统", 1);
         PortalNav nav2 = buildNav("id2", "信贷系统", "https://loan.bank.com", "业务系统", 2);
         PortalNav nav3 = buildNav("id3", "百度", "https://baidu.com", "常用工具", 1);
@@ -66,7 +60,6 @@ class NavServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getGroups()).hasSize(2);
-        // 验证分组内容
         NavGroupItem bizGroup = result.getGroups().stream()
                 .filter(g -> "业务系统".equals(g.getCategory()))
                 .findFirst().orElse(null);
@@ -245,10 +238,7 @@ class NavServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void listActiveNavs_cacheMiss_queriesDbAndCaches() {
-        // 模拟 Redis 缓存未命中
-        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.get(PortalCacheConfig.NAV_ACTIVE_KEY)).thenReturn(null);
+        when(memoryCacheService.get(PortalCacheConfig.NAV_ACTIVE_KEY)).thenReturn(null);
 
         PortalNav nav1 = buildNav("id1", "核心系统", "https://core.bank.com", "业务系统", 1);
         PortalNav nav2 = buildNav("id2", "百度", "https://baidu.com", "常用工具", 1);
@@ -257,27 +247,20 @@ class NavServiceTest {
         List<PortalNav> result = navService.listActiveNavs();
 
         assertThat(result).hasSize(2);
-        // 缓存未命中时应查询数据库
         verify(portalNavMapper, times(1)).listActive();
-        // 并将结果写入缓存（TTL 带抖动）
-        verify(valueOps).set(eq(PortalCacheConfig.NAV_ACTIVE_KEY), eq(Arrays.asList(nav1, nav2)), any());
+        verify(memoryCacheService).put(eq(PortalCacheConfig.NAV_ACTIVE_KEY), eq(Arrays.asList(nav1, nav2)), any());
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void listActiveNavs_cacheHit_skipsDb() {
-        // 模拟 Redis 缓存命中
-        ValueOperations<String, Object> valueOps = mock(ValueOperations.class);
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-
         PortalNav nav1 = buildNav("id1", "核心系统", "https://core.bank.com", "业务系统", 1);
         List<PortalNav> cachedData = Collections.singletonList(nav1);
-        when(valueOps.get(PortalCacheConfig.NAV_ACTIVE_KEY)).thenReturn(cachedData);
+        when(memoryCacheService.get(PortalCacheConfig.NAV_ACTIVE_KEY)).thenReturn(cachedData);
 
         List<PortalNav> result = navService.listActiveNavs();
 
         assertThat(result).hasSize(1);
-        // 缓存命中时不应查询数据库
         verify(portalNavMapper, never()).listActive();
     }
 
@@ -295,8 +278,7 @@ class NavServiceTest {
 
         navService.createNav(req);
 
-        // 写操作完成后应清除导航缓存
-        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+        verify(memoryCacheService).evict(PortalCacheConfig.NAV_ACTIVE_KEY);
     }
 
     @Test
@@ -310,8 +292,7 @@ class NavServiceTest {
 
         navService.updateNav("nav-001", req);
 
-        // 更新操作完成后应清除导航缓存
-        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+        verify(memoryCacheService).evict(PortalCacheConfig.NAV_ACTIVE_KEY);
     }
 
     @Test
@@ -322,8 +303,7 @@ class NavServiceTest {
 
         navService.deleteNav("nav-001");
 
-        // 删除操作完成后应清除导航缓存
-        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+        verify(memoryCacheService).evict(PortalCacheConfig.NAV_ACTIVE_KEY);
     }
 
     @Test
@@ -334,8 +314,7 @@ class NavServiceTest {
 
         navService.batchSort(Collections.singletonList(item1));
 
-        // 排序操作完成后应清除导航缓存
-        verify(redisTemplate).delete(PortalCacheConfig.NAV_ACTIVE_KEY);
+        verify(memoryCacheService).evict(PortalCacheConfig.NAV_ACTIVE_KEY);
     }
 
     // ========== 辅助方法 ==========

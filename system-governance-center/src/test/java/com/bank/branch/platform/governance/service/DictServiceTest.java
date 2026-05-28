@@ -2,16 +2,14 @@ package com.bank.branch.platform.governance.service;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import com.bank.branch.platform.governance.entity.SysDict;
 import com.bank.branch.platform.governance.mapper.DictMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,18 +27,11 @@ import static org.mockito.Mockito.*;
 class DictServiceTest {
 
     @Mock
-    RedisTemplate<String, Object> redisTemplate;
-    @Mock
-    ValueOperations<String, Object> valueOperations;
+    MemoryCacheService memoryCacheService;
     @Mock
     DictMapper dictMapper;
     @InjectMocks
     DictService dictService;
-
-    @BeforeEach
-    void setUp() {
-        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    }
 
     /**
      * 测试缓存命中时直接返回缓存数据，不查询数据库
@@ -48,7 +39,7 @@ class DictServiceTest {
     @Test
     void getDictItems_cacheHit_returnsCachedItems() {
         List<SysDict> cached = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
-        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+        when(memoryCacheService.get("gov:dict:INDUSTRY")).thenReturn(cached);
 
         List<SysDict> result = dictService.getDictItems("INDUSTRY");
 
@@ -62,14 +53,14 @@ class DictServiceTest {
      */
     @Test
     void getDictItems_cacheMiss_loadsFromDb() {
-        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(null);
+        when(memoryCacheService.get("gov:dict:INDUSTRY")).thenReturn(null);
         List<SysDict> dbItems = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
         when(dictMapper.selectByDictType("INDUSTRY")).thenReturn(dbItems);
 
         List<SysDict> result = dictService.getDictItems("INDUSTRY");
 
         assertThat(result).hasSize(1);
-        verify(valueOperations).set(eq("gov:dict:INDUSTRY"), eq(dbItems), any());
+        verify(memoryCacheService).put(eq("gov:dict:INDUSTRY"), eq(dbItems), any());
     }
 
     /**
@@ -81,7 +72,7 @@ class DictServiceTest {
                 makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"),
                 makeDict("D_002", "INDUSTRY", "FIN", "金融", "FIN")
         );
-        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+        when(memoryCacheService.get("gov:dict:INDUSTRY")).thenReturn(cached);
 
         String label = dictService.getDictLabel("INDUSTRY", "FIN");
 
@@ -114,7 +105,7 @@ class DictServiceTest {
         assertThat(result.getDictType()).isEqualTo("INDUSTRY");
         assertThat(result.getDictCode()).isEqualTo("IT");
         verify(dictMapper).insert((SysDict) any());
-        verify(redisTemplate).delete("gov:dict:INDUSTRY");
+        verify(memoryCacheService).evict("gov:dict:INDUSTRY");
     }
 
     /**
@@ -129,7 +120,7 @@ class DictServiceTest {
         dictService.deleteDict("D_001");
 
         verify(dictMapper).updateById(argThat((SysDict dict) -> "DISABLED".equals(dict.getStatus())));
-        verify(redisTemplate).delete("gov:dict:INDUSTRY");
+        verify(memoryCacheService).evict("gov:dict:INDUSTRY");
     }
 
     /**
@@ -157,7 +148,7 @@ class DictServiceTest {
     @Test
     void getDictLabel_unknownCode_returnsNull() {
         List<SysDict> cached = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
-        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+        when(memoryCacheService.get("gov:dict:INDUSTRY")).thenReturn(cached);
 
         String label = dictService.getDictLabel("INDUSTRY", "NON_EXIST");
 
@@ -170,7 +161,7 @@ class DictServiceTest {
     @Test
     void isValidDictValue_existingCode_returnsTrue() {
         List<SysDict> cached = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
-        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+        when(memoryCacheService.get("gov:dict:INDUSTRY")).thenReturn(cached);
 
         boolean valid = dictService.isValidDictValue("INDUSTRY", "IT");
 
@@ -183,7 +174,7 @@ class DictServiceTest {
     @Test
     void isValidDictValue_nonExistingCode_returnsFalse() {
         List<SysDict> cached = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
-        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(cached);
+        when(memoryCacheService.get("gov:dict:INDUSTRY")).thenReturn(cached);
 
         boolean valid = dictService.isValidDictValue("INDUSTRY", "UNKNOWN");
 
@@ -197,8 +188,8 @@ class DictServiceTest {
     void batchGetDictItems_mergesMultipleTypes() {
         List<SysDict> industryItems = List.of(makeDict("D_001", "INDUSTRY", "IT", "信息技术", "IT"));
         List<SysDict> statusItems = List.of(makeDict("D_002", "STATUS", "ACT", "激活", "ACTIVE"));
-        when(valueOperations.get("gov:dict:INDUSTRY")).thenReturn(industryItems);
-        when(valueOperations.get("gov:dict:STATUS")).thenReturn(statusItems);
+        when(memoryCacheService.get("gov:dict:INDUSTRY")).thenReturn(industryItems);
+        when(memoryCacheService.get("gov:dict:STATUS")).thenReturn(statusItems);
 
         var result = dictService.batchGetDictItems(Set.of("INDUSTRY", "STATUS"));
 
@@ -223,7 +214,7 @@ class DictServiceTest {
                         && "新值".equals(dict.getDictValue())
                         && dict.getSortOrder() == 5
         ));
-        verify(redisTemplate).delete("gov:dict:INDUSTRY");
+        verify(memoryCacheService).evict("gov:dict:INDUSTRY");
     }
 
     /**
@@ -251,7 +242,7 @@ class DictServiceTest {
         SysDict result = dictService.toggleStatus("D_001");
 
         verify(dictMapper).updateById(argThat((SysDict dict) -> "DISABLED".equals(dict.getStatus())));
-        verify(redisTemplate).delete("gov:dict:INDUSTRY");
+        verify(memoryCacheService).evict("gov:dict:INDUSTRY");
     }
 
     /**
@@ -298,7 +289,7 @@ class DictServiceTest {
      */
     @Test
     void getDictItems_emptyDb_returnsEmptyList() {
-        when(valueOperations.get("gov:dict:EMPTY_TYPE")).thenReturn(null);
+        when(memoryCacheService.get("gov:dict:EMPTY_TYPE")).thenReturn(null);
         when(dictMapper.selectByDictType("EMPTY_TYPE")).thenReturn(List.of());
 
         List<SysDict> result = dictService.getDictItems("EMPTY_TYPE");

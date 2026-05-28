@@ -22,10 +22,10 @@ import com.bank.branch.platform.portal.enums.PortalErrorCode;
 import com.bank.branch.platform.portal.event.ProductResponsibleUpdatedEvent;
 import com.bank.branch.platform.portal.mapper.AddrbookEmployeeMapper;
 import com.bank.branch.platform.portal.mapper.ProductInfoMapper;
+import com.bank.branch.platform.governance.config.MemoryCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,7 +47,7 @@ public class ProductService {
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
     private final AuditApi auditApi;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final MemoryCacheService memoryCacheService;
     private final ApplicationEventPublisher eventPublisher;
 
     /** D.1 分页查询产品列表（含 DATA_SCOPE 数据权限过滤） */
@@ -85,11 +85,11 @@ public class ProductService {
     /** D.3 查询所有支持中场支持的产品（Cache-Aside 模式） */
     @SuppressWarnings("unchecked")
     public List<ProductInfo> listSupportAvailable() {
-        Object cached = redisTemplate.opsForValue().get(PortalCacheConfig.PRODUCT_SUPPORT_KEY);
+        Object cached = memoryCacheService.get(PortalCacheConfig.PRODUCT_SUPPORT_KEY);
         if (cached != null) { log.debug("[ProductService.listSupportAvailable] cache hit"); return (List<ProductInfo>) cached; }
         log.debug("[ProductService.listSupportAvailable] cache miss");
         List<ProductInfo> items = productInfoMapper.listSupportAvailable();
-        redisTemplate.opsForValue().set(
+        memoryCacheService.put(
                 PortalCacheConfig.PRODUCT_SUPPORT_KEY,
                 items,
                 PortalCacheConfig.jitteredTtl(PortalCacheConfig.DEFAULT_TTL)
@@ -233,7 +233,7 @@ public class ProductService {
 
     /** 清除产品支持缓存（吞没异常，缓存删除失败不影响主流程） */
     private void clearSupportCache() {
-        try { redisTemplate.delete(PortalCacheConfig.PRODUCT_SUPPORT_KEY); } catch (Exception e) { log.warn("clearSupportCache failed", e); }
+        try { memoryCacheService.evict(PortalCacheConfig.PRODUCT_SUPPORT_KEY); } catch (Exception e) { log.warn("clearSupportCache failed", e); }
     }
 
     private void auditCreate(ProductInfo entity, String operatorEmpId) {
