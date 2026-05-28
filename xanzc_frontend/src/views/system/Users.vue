@@ -594,6 +594,14 @@ onMounted(async () => {
   max-height: calc(100vh - 200px);
   overflow: auto;
 }
+// 让 el-tree 节点不折行，机构名/编码超长时容器出横向滚动条
+.tree-col :deep(.el-tree) {
+  display: inline-block;
+  min-width: 100%;
+}
+.tree-col :deep(.el-tree-node__content) {
+  white-space: nowrap;
+}
 .tree-search { margin-bottom: 10px; }
 .org-dlg-body { display: flex; gap: 16px; height: 460px; }
 .org-dlg-body .tree-pane { width: 320px; border-right: 1px solid $border-1; padding-right: 12px; overflow: auto; }
