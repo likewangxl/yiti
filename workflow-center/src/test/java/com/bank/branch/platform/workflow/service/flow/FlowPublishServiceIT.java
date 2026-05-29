@@ -11,15 +11,25 @@ import com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowGraphDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowNodeDTO;
 import com.bank.branch.platform.workflow.entity.WfFlowDef;
+import com.bank.branch.platform.workflow.entity.WfFlowNode;
+import com.bank.branch.platform.workflow.mapper.NodeCandidateConfMapper;
 import com.bank.branch.platform.workflow.mapper.WfFlowDefMapper;
+import com.bank.branch.platform.workflow.mapper.WfFlowEdgeMapper;
+import com.bank.branch.platform.workflow.mapper.WfFlowNodeApproverMapper;
+import com.bank.branch.platform.workflow.mapper.WfFlowNodeMapper;
 import com.bank.branch.platform.workflow.support.WfFlowableTestApp;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.repository.Deployment;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -46,11 +56,14 @@ import static org.mockito.Mockito.lenient;
  * {@code UserApi.getEmpIdsByRoleCode}，本测试 mock 它返回固定 empId。</p>
  *
  * <p>隔离策略：每个用例用唯一 flowKey（带随机后缀），影子 KEY 因此唯一，
- * 不与历史 / 并发部署冲突；结束后不强制清理。</p>
+ * 不与历史 / 并发部署冲突；{@code @AfterEach} 自清理本用例写入的所有数据（WF_FLOW_*、
+ * WF_NODE_CANDIDATE_CONF、Flowable 部署），避免污染 yiti 库「审批流程」列表。</p>
  */
 @SpringBootTest(classes = WfFlowableTestApp.class)
 @ActiveProfiles("test")
 class FlowPublishServiceIT {
+
+    private static final Logger log = LoggerFactory.getLogger(FlowPublishServiceIT.class);
 
     @Autowired
     private FlowDefService flowDefService;
@@ -58,6 +71,14 @@ class FlowPublishServiceIT {
     private FlowPublishService flowPublishService;
     @Autowired
     private WfFlowDefMapper flowDefMapper;
+    @Autowired
+    private WfFlowNodeMapper flowNodeMapper;
+    @Autowired
+    private WfFlowEdgeMapper flowEdgeMapper;
+    @Autowired
+    private WfFlowNodeApproverMapper flowNodeApproverMapper;
+    @Autowired
+    private NodeCandidateConfMapper nodeCandidateConfMapper;
 
     @Autowired
     private RuntimeService runtimeService;
@@ -65,6 +86,8 @@ class FlowPublishServiceIT {
     private TaskService taskService;
     @Autowired
     private HistoryService historyService;
+    @Autowired
+    private RepositoryService repositoryService;
 
     // ---- 跨模块协作者 mock（auth / governance，扫描不到真实现） ----
     @MockBean
@@ -78,6 +101,92 @@ class FlowPublishServiceIT {
     @MockBean
     private CalendarApi calendarApi;
 
+    /**
+     * 本用例创建的 flowDefId，@AfterEach 据此清理。
+     * 每个 @Test 开始时为 null，createDefWithKey 赋值后由 @AfterEach 消费。
+     */
+    private String currentFlowDefId;
+    /** 本用例使用的 flowKey，@AfterEach 据此清 WF_NODE_CANDIDATE_CONF 和 Flowable 部署。 */
+    private String currentFlowKey;
+
+    /**
+     * 每个用例结束后清理本用例写入的数据：
+     * WF_FLOW_NODE_APPROVER → WF_FLOW_NODE → WF_FLOW_EDGE → WF_FLOW_DEF
+     * → WF_NODE_CANDIDATE_CONF（按影子 KEY）→ Flowable 部署（ACT_*）。
+     * <p>用 try/catch 逐步清理，清理失败仅记 WARN，不掩盖测试本身的结果。</p>
+     */
+    @AfterEach
+    void cleanupItData() {
+        String flowDefId = currentFlowDefId;
+        String flowKey   = currentFlowKey;
+        // 重置实例字段，防止上一条用例的值在下一条用例中误用
+        currentFlowDefId = null;
+        currentFlowKey   = null;
+
+        if (flowDefId == null) {
+            return;
+        }
+
+        // 1. 查出本流程定义下所有节点 ID，用于级联删除审批人规则
+        try {
+            List<WfFlowNode> nodes = flowNodeMapper.selectByFlowDefId(flowDefId);
+            if (!nodes.isEmpty()) {
+                List<String> nodeIds = nodes.stream()
+                        .map(WfFlowNode::getId)
+                        .toList();
+                flowNodeApproverMapper.deleteByNodeIds(nodeIds);
+            }
+        } catch (Exception e) {
+            log.warn("[IT cleanup] 删除 WF_FLOW_NODE_APPROVER 失败，flowDefId={}", flowDefId, e);
+        }
+
+        // 2. 删除节点
+        try {
+            flowNodeMapper.deleteByFlowDefId(flowDefId);
+        } catch (Exception e) {
+            log.warn("[IT cleanup] 删除 WF_FLOW_NODE 失败，flowDefId={}", flowDefId, e);
+        }
+
+        // 3. 删除连线
+        try {
+            flowEdgeMapper.deleteByFlowDefId(flowDefId);
+        } catch (Exception e) {
+            log.warn("[IT cleanup] 删除 WF_FLOW_EDGE 失败，flowDefId={}", flowDefId, e);
+        }
+
+        // 4. 删除流程定义草稿
+        try {
+            flowDefMapper.deleteById(flowDefId);
+        } catch (Exception e) {
+            log.warn("[IT cleanup] 删除 WF_FLOW_DEF 失败，flowDefId={}", flowDefId, e);
+        }
+
+        if (flowKey == null) {
+            return;
+        }
+
+        // 5. 删除影子 KEY 下的候选人配置
+        String shadowKey = "DSN_" + flowKey;
+        try {
+            nodeCandidateConfMapper.deleteByProcessDefinitionKey(shadowKey);
+        } catch (Exception e) {
+            log.warn("[IT cleanup] 删除 WF_NODE_CANDIDATE_CONF 失败，shadowKey={}", shadowKey, e);
+        }
+
+        // 6. 删除 Flowable 部署（ACT_* 表），避免影子流程定义残留
+        try {
+            List<Deployment> deployments = repositoryService.createDeploymentQuery()
+                    .processDefinitionKey(shadowKey)
+                    .list();
+            for (Deployment dep : deployments) {
+                // cascade=true 同时删除流程定义和历史数据
+                repositoryService.deleteDeployment(dep.getId(), true);
+            }
+        } catch (Exception e) {
+            log.warn("[IT cleanup] 删除 Flowable 部署失败，shadowKey={}", shadowKey, e);
+        }
+    }
+
     /** 生成唯一 flowKey 前缀，避免影子 KEY 冲突 */
     private String uniqueKey(String prefix) {
         return prefix + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
@@ -86,12 +195,16 @@ class FlowPublishServiceIT {
     /**
      * 落库一份草稿并把它的 flowKey 改成指定唯一值（FlowDefService.create 内部随机生成
      * flowKey，这里覆盖成可预期的唯一 key，便于推断影子 KEY = DSN_ + flowKey）。
+     * <p>同时记录 {@code currentFlowDefId} 与 {@code currentFlowKey}，供 {@code @AfterEach} 清理。</p>
      */
     private WfFlowDef createDefWithKey(FlowGraphDTO graph, String flowKey) {
         String flowDefId = flowDefService.create(graph, "IT_OP");
         WfFlowDef def = flowDefMapper.selectById(flowDefId);
         def.setFlowKey(flowKey);
         flowDefMapper.updateById(def);
+        // 记录本用例的清理坐标
+        currentFlowDefId = flowDefId;
+        currentFlowKey   = flowKey;
         return flowDefMapper.selectById(flowDefId);
     }
 
