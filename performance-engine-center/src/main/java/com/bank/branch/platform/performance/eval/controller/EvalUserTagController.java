@@ -3,7 +3,9 @@ package com.bank.branch.platform.performance.eval.controller;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.performance.eval.dto.EvalUserRoleRowDTO;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.service.EvalUserTagService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,10 +57,40 @@ public class EvalUserTagController {
         return ResponseWrapper.success();
     }
 
+    @GetMapping("/page")
+    @Operation(summary = "分页查询人员标签列表（含部门/岗位/角色）")
+    @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
+    public ResponseWrapper<PageResult<EvalUserRoleRowDTO>> page(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
+        log.debug("[EvalUserTagController.page] keyword={}, page={}, pageSize={}", keyword, page, pageSize);
+        return ResponseWrapper.success(evalUserTagService.pageUserRoles(keyword, page, pageSize));
+    }
+
+    @PutMapping("/{userId}/roles")
+    @Operation(summary = "覆盖式保存人员评价角色（被评价单选/评价人多选）")
+    @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
+    public ResponseWrapper<Void> saveRoles(@PathVariable("userId") Long userId,
+                                           @Validated @RequestBody SaveRolesReq req) {
+        log.info("[EvalUserTagController.saveRoles] userId={}, beEvalTagId={}, evalTagIds={}",
+                userId, req.getBeEvalTagId(), req.getEvalTagIds());
+        evalUserTagService.saveUserRoles(userId, req.getBeEvalTagId(), req.getEvalTagIds());
+        return ResponseWrapper.success();
+    }
+
     @Data
     public static class BindReq {
         @NotNull
         private Long userId;
         private List<Long> tagIds;
+    }
+
+    @Data
+    public static class SaveRolesReq {
+        /** 被评价人标签ID（null 表示清空被评价人角色）. */
+        private Long beEvalTagId;
+        /** 评价人标签ID列表（null/空 表示清空评价人角色）. */
+        private List<Long> evalTagIds;
     }
 }
