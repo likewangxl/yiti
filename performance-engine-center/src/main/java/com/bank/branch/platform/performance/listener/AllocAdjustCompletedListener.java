@@ -65,6 +65,7 @@ public class AllocAdjustCompletedListener {
     private final PerfAllocAdjustItemMapper itemMapper;
     private final CustAllocRelationMapper allocRelationMapper;
     private final PerfEventPublisher eventPublisher;
+    private final com.bank.branch.platform.governance.api.NotifyApi notifyApi;
 
     /**
      * 监听流程完成事件入口.
@@ -143,6 +144,8 @@ public class AllocAdjustCompletedListener {
 
         log.info("[AllocAdjustCompletedListener] APPROVED applyId={}, itemCount={}",
                 apply.getId(), items.size());
+
+        notifyApplicant(apply, "通过", "您的业绩分配调整申请已通过，调整已生效。");
     }
 
     /**
@@ -151,5 +154,26 @@ public class AllocAdjustCompletedListener {
     private void handleRejected(PerfAllocAdjustApply apply) {
         applyMapper.updateStatus(apply.getId(), "REJECTED", null);
         log.info("[AllocAdjustCompletedListener] REJECTED applyId={}", apply.getId());
+
+        notifyApplicant(apply, "驳回", "您的业绩分配调整申请已被驳回，分配关系保持不变。");
+    }
+
+    /**
+     * 审批结束后给申请人发通知（失败不阻断主流程）.
+     */
+    private void notifyApplicant(PerfAllocAdjustApply apply, String result, String content) {
+        try {
+            notifyApi.sendNotification(com.bank.branch.platform.governance.api.dto.NotificationCmd.builder()
+                    .targetEmpId(apply.getCreatedBy())
+                    .title("业绩分配调整审批" + result)
+                    .content(content + "（申请编号：" + apply.getBusinessKey() + "）")
+                    .notifyType("WORKFLOW")
+                    .bizType("ALLOC_ADJUST")
+                    .bizId(apply.getId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("[AllocAdjustCompletedListener] 发送通知失败 applyId={}, err={}",
+                    apply.getId(), e.getMessage());
+        }
     }
 }

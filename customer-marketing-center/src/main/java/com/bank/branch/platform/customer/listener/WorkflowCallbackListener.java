@@ -40,6 +40,7 @@ public class WorkflowCallbackListener {
 
     private final CustLeadMapper leadMapper;
     private final LeadCallbackReconcileService reconcileService;
+    private final com.bank.branch.platform.governance.api.NotifyApi notifyApi;
 
     /**
      * 监听工作流流程完成事件，处理线索状态流转。
@@ -111,13 +112,37 @@ public class WorkflowCallbackListener {
             // 按 event.outcome() 分发委托 LeadCallbackReconcileService（FU-14 抽出公共逻辑）
             if ("REJECTED".equals(event.outcome())) {
                 reconcileService.reconcileRejected(lead, processInstanceId, event.reason());
+                notifyApplicant(lead, "驳回",
+                        "您的线索审批已被驳回" + (event.reason() != null ? "：" + event.reason() : "") + "。");
             } else {
                 reconcileService.reconcileApproved(lead, processInstanceId);
+                notifyApplicant(lead, "通过", "您的线索审批已通过，客户主档已生效。");
             }
         } catch (Exception e) {
             // 业务自定义 ERROR 日志：统一告警面，不影响 Spring 事件循环 / 后续 listener 链
             log.error("[WorkflowCallbackListener] 处理流程完成事件异常 businessKey={} processInstanceId={}",
                     businessKey, processInstanceId, e);
+        }
+    }
+
+    /**
+     * 审批结束后给申请人（lead.createdBy）发通知，失败不阻断主流程.
+     */
+    private void notifyApplicant(CustLead lead, String result, String content) {
+        if (lead.getCreatedBy() == null || lead.getCreatedBy().isBlank()) {
+            return;
+        }
+        try {
+            notifyApi.sendNotification(com.bank.branch.platform.governance.api.dto.NotificationCmd.builder()
+                    .targetEmpId(lead.getCreatedBy())
+                    .title("线索审批" + result)
+                    .content(content + "（线索编号：" + lead.getLeadNo() + "）")
+                    .notifyType("WORKFLOW")
+                    .bizType("LEAD")
+                    .bizId(lead.getId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("[WorkflowCallbackListener] 发送通知失败 leadId={}, err={}", lead.getId(), e.getMessage());
         }
     }
 }

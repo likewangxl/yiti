@@ -51,6 +51,7 @@ public class LoanWorkflowListener {
 
     private final LoanApplyMapper loanMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.bank.branch.platform.governance.api.NotifyApi notifyApi;
 
     /**
      * 处理流程完成事件（AFTER_COMMIT 阶段触发）。
@@ -103,7 +104,7 @@ public class LoanWorkflowListener {
                 return;
             }
 
-            // 6. 按 outcome 发布对应领域事件
+            // 6. 按 outcome 发布对应领域事件 + 通知申请人
             if ("REJECTED".equals(event.outcome())) {
                 // 驳回：携带驳回原因（reason 允许为 null）
                 eventPublisher.publishEvent(new LoanRejectedEvent(
@@ -113,6 +114,8 @@ public class LoanWorkflowListener {
                         loan.getOwnerOrgId(),
                         event.reason()
                 ));
+                notifyApplicant(loan, "驳回",
+                        "您的资产投放申请已被驳回" + (event.reason() != null ? "：" + event.reason() : "") + "。");
             } else {
                 // 审批通过
                 eventPublisher.publishEvent(new LoanApprovedEvent(
@@ -122,12 +125,34 @@ public class LoanWorkflowListener {
                         loan.getOwnerOrgId(),
                         loan.getCreditAmount()
                 ));
+                notifyApplicant(loan, "通过", "您的资产投放申请已审批通过。");
             }
 
         } catch (Exception e) {
             // 捕获所有异常，防止影响工作流线程或 Spring 事务机制
             log.error("[LoanWorkflowListener] 处理流程完成事件异常，businessKey={}, processInstanceId={}",
                     businessKey, processInstanceId, e);
+        }
+    }
+
+    /**
+     * 审批结束后给申请人（loan.createdBy）发通知，失败不阻断主流程.
+     */
+    private void notifyApplicant(LoanApply loan, String result, String content) {
+        if (loan.getCreatedBy() == null || loan.getCreatedBy().isBlank()) {
+            return;
+        }
+        try {
+            notifyApi.sendNotification(com.bank.branch.platform.governance.api.dto.NotificationCmd.builder()
+                    .targetEmpId(loan.getCreatedBy())
+                    .title("资产投放审批" + result)
+                    .content(content + "（申请编号：" + loan.getApplyNo() + "）")
+                    .notifyType("WORKFLOW")
+                    .bizType("LOAN")
+                    .bizId(loan.getId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("[LoanWorkflowListener] 发送通知失败 loanId={}, err={}", loan.getId(), e.getMessage());
         }
     }
 }

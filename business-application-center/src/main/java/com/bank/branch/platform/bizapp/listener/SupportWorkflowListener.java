@@ -53,6 +53,7 @@ public class SupportWorkflowListener {
 
     private final SupportRequestMapper supportMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.bank.branch.platform.governance.api.NotifyApi notifyApi;
 
     /**
      * 监听工作流流程完成事件，处理中场支持申请状态流转（AFTER_COMMIT 阶段触发）。
@@ -116,6 +117,8 @@ public class SupportWorkflowListener {
                         request.getCreatedBy(),
                         event.reason()
                 ));
+                notifyApplicant(request, "驳回",
+                        "您的中场支持申请已被驳回" + (event.reason() != null ? "：" + event.reason() : "") + "。");
             } else {
                 // 审批通过：发布 SupportCompletedEvent
                 eventPublisher.publishEvent(new SupportCompletedEvent(
@@ -126,12 +129,35 @@ public class SupportWorkflowListener {
                         request.getAssignedEmpId(),
                         true
                 ));
+                notifyApplicant(request, "通过", "您的中场支持申请已审批通过。");
             }
 
         } catch (Exception e) {
             // 必须捕获所有异常，防止异常传播到 Flowable 引擎影响流程状态
             log.error("[SupportWorkflowListener] 处理流程完成事件时发生异常，businessKey={}，异常将被忽略",
                     event.businessKey(), e);
+        }
+    }
+
+    /**
+     * 审批结束后给申请人（request.createdBy）发通知，失败不阻断主流程.
+     */
+    private void notifyApplicant(SupportRequest request, String result, String content) {
+        if (request.getCreatedBy() == null || request.getCreatedBy().isBlank()) {
+            return;
+        }
+        try {
+            notifyApi.sendNotification(com.bank.branch.platform.governance.api.dto.NotificationCmd.builder()
+                    .targetEmpId(request.getCreatedBy())
+                    .title("中场支持审批" + result)
+                    .content(content + "（申请编号：" + request.getRequestNo() + "）")
+                    .notifyType("WORKFLOW")
+                    .bizType("SUPPORT")
+                    .bizId(request.getId())
+                    .build());
+        } catch (Exception e) {
+            log.warn("[SupportWorkflowListener] 发送通知失败 requestId={}, err={}",
+                    request.getId(), e.getMessage());
         }
     }
 }
