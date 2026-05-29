@@ -275,6 +275,14 @@ export function getAllocPreview(params) {
 }
 
 /**
+ * 员工自动补齐：按关键字模糊匹配 PT_USER 工号/登录名/中文名，返回 [{empId, username, empChnName}]。
+ * 供分配明细员工号输入框联想（el-autocomplete）。
+ */
+export function suggestEmployees(keyword) {
+  return call('get', '/perf/alloc-adjust/emp-suggest', { params: { keyword, limit: 20 } }, []);
+}
+
+/**
  * 业绩调整 - 我的待审批 列表（后端分页 + 4 字段过滤）.
  * @param {object} params - { keyword?, allocDim?, bizKind?, dateFrom?, dateTo?, pageNo?, pageSize? }
  * @returns PageResult 对象 { pageNo, pageSize, total, records }
