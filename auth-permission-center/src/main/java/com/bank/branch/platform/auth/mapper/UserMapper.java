@@ -115,4 +115,24 @@ public interface UserMapper extends BaseMapper<PtUser> {
     /** 物理批量删除（V1.14 新增） */
     int deleteByUserIds(@Param("userIds") java.util.List<String> userIds);
 
+    /**
+     * 按关键词 OR 模糊分页查询用户（工号/登录名/中文名），供人员标签列表用。
+     *
+     * @param keyword 关键词（null/空 表示不过滤，返回全部）
+     * @param offset  偏移量（从 0 开始）
+     * @param limit   每页条数
+     * @return 用户列表，按 USER_ID 升序
+     */
+    List<PtUser> selectByKeywordPaged(@Param("keyword") String keyword,
+                                      @Param("offset") int offset,
+                                      @Param("limit") int limit);
+
+    /**
+     * 与 selectByKeywordPaged 配套的总数统计。
+     *
+     * @param keyword 关键词（null/空 表示不过滤）
+     * @return 总条数
+     */
+    long countByKeyword(@Param("keyword") String keyword);
+
 }

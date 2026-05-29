@@ -192,4 +192,31 @@
         </foreach>
     </delete>
 
+    <!-- 人员标签列表：按工号/登录名/中文名 OR 模糊分页查询 -->
+    <select id="selectByKeywordPaged" resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_USER
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY USER_ID
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByKeyword" resultType="long">
+        SELECT COUNT(*) FROM PT_USER
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR USERNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
+
 </mapper>
