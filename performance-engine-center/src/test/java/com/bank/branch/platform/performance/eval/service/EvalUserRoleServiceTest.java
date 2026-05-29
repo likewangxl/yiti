@@ -10,6 +10,7 @@ import com.bank.branch.platform.performance.eval.entity.EvalTag;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.mapper.EvalTagMapper;
 import com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper;
+import com.bank.branch.platform.performance.eval.mapper.EvalUserSettingMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.portal.api.AddressBookApi;
@@ -37,6 +38,7 @@ class EvalUserRoleServiceTest {
     @Mock private EvalTagMapper evalTagMapper;
     @Mock private UserApi userApi;
     @Mock private AddressBookApi addressBookApi;
+    @Mock private EvalUserSettingMapper evalUserSettingMapper;
 
     @InjectMocks private EvalUserTagService service;
 
@@ -197,13 +199,37 @@ class EvalUserRoleServiceTest {
         when(addressBookApi.getEmployees(List.of("U_ABC123"))).thenReturn(List.of());
         when(userApi.getRolesByUserIds(List.of("U_ABC123"))).thenReturn(Map.of());
         when(evalUserTagMapper.selectUserTagsByUserIds(List.of("U_ABC123"))).thenReturn(List.of());
+        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of());
 
-        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, 1, 20);
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "all", 1, 20);
 
         EvalUserRoleRowDTO row = r.getRecords().get(0);
         assertThat(row.getBeEvalTag()).isNull();
         assertThat(row.getEvalTags()).isEmpty();
         assertThat(row.getRoleNames()).isEmpty();
         verify(evalUserTagMapper).selectUserTagsByUserIds(List.of("U_ABC123"));
+    }
+
+    @Test
+    @DisplayName("saveUserRolesWithSetting：覆盖角色 + upsert 启用位(1) 同次调用")
+    void saveUserRolesWithSetting_savesRolesAndEnabled() {
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
+        when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
+
+        service.saveUserRolesWithSetting("1001", null, List.of(2L), 1);
+
+        verify(evalUserTagMapper).batchInsert(insertCaptor.capture());
+        assertThat(insertCaptor.getValue()).extracting(EvalUserTag::getTagId).containsExactly(2L);
+        verify(evalUserSettingMapper).upsert("1001", 1);
+    }
+
+    @Test
+    @DisplayName("saveUserRolesWithSetting：evalEnabled=null 兜底为 0")
+    void saveUserRolesWithSetting_nullEnabled_defaultsZero() {
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
+
+        service.saveUserRolesWithSetting("1001", null, List.of(), null);
+
+        verify(evalUserSettingMapper).upsert("1001", 0);
     }
 }

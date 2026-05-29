@@ -11,6 +11,7 @@ import com.bank.branch.platform.performance.eval.dto.EvalUserTagRow;
 import com.bank.branch.platform.performance.eval.entity.EvalTag;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.mapper.EvalTagMapper;
+import com.bank.branch.platform.performance.eval.mapper.EvalUserSettingMapper;
 import com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.portal.api.AddressBookApi;
@@ -37,16 +38,19 @@ public class EvalUserTagService {
     private final EvalTagMapper evalTagMapper;
     private final UserApi userApi;
     private final AddressBookApi addressBookApi;
+    private final EvalUserSettingMapper evalUserSettingMapper;
 
     @Autowired
     public EvalUserTagService(EvalUserTagMapper evalUserTagMapper,
                               EvalTagMapper evalTagMapper,
                               UserApi userApi,
-                              AddressBookApi addressBookApi) {
+                              AddressBookApi addressBookApi,
+                              EvalUserSettingMapper evalUserSettingMapper) {
         this.evalUserTagMapper = evalUserTagMapper;
         this.evalTagMapper = evalTagMapper;
         this.userApi = userApi;
         this.addressBookApi = addressBookApi;
+        this.evalUserSettingMapper = evalUserSettingMapper;
     }
 
     /** 查询人员的标签关联. */
@@ -132,6 +136,22 @@ public class EvalUserTagService {
             evalUserTagMapper.batchInsert(toInsert);
         }
         log.info("[EvalUserTagService.saveUserRoles] userId={} beEvalTagId={} evalTagIds={}", userId, beEvalTagId, evalIds);
+    }
+
+    /**
+     * 覆盖式保存人员评价角色 + 写"是否启用评价"位（同一事务，原子）。
+     *
+     * @param userId      人员工号
+     * @param beEvalTagId 被评价人标签ID（null 表示清空）
+     * @param evalTagIds  评价人标签ID列表（null/空 表示清空）
+     * @param evalEnabled 是否启用评价：1=是 0=否；null 兜底为 0
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void saveUserRolesWithSetting(String userId, Long beEvalTagId, List<Long> evalTagIds, Integer evalEnabled) {
+        saveUserRoles(userId, beEvalTagId, evalTagIds);
+        int enabled = (evalEnabled != null && evalEnabled == 1) ? 1 : 0;
+        evalUserSettingMapper.upsert(userId, enabled);
+        log.info("[EvalUserTagService.saveUserRolesWithSetting] userId={} evalEnabled={}", userId, enabled);
     }
 
     /**
