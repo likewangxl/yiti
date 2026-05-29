@@ -38,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -183,6 +185,22 @@ class AllocAdjustServiceTest {
         assertThat(applyCap.getValue().getCustId()).isEqualTo("CN-001");
         // 流程照常发起
         verify(workflowApi).startProcess(any(StartProcessCmd.class));
+    }
+
+    @Test
+    @DisplayName("同客户已有审批中申请 → 抛 ALLOC_ADJUST_APPLY_RUNNING，不发起流程/不落库")
+    void submit_inApprovalExistsForSameCustomer_throws() {
+        // 同一客户编号(CN-001 → 内部主键 CUST_001)已存在 IN_APPROVAL 状态的调整申请
+        when(applyMapper.countByConditions(eq("IN_APPROVAL"), isNull(), eq("CUST_001"), isNull(), isNull()))
+                .thenReturn(1L);
+
+        assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING);
+
+        verify(workflowApi, never()).startProcess(any());
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
     }
 
     @Test

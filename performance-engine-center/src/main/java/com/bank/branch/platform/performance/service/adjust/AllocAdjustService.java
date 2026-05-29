@@ -113,6 +113,13 @@ public class AllocAdjustService {
         // 按客户编号(cust_no)查找客户主档；apply.cust_id 列保存客户内部主键 id，与现有跨模块 join 保持兼容
         String internalCustId = resolveInternalCustIdByCustNo(cmd.getCustNo());
 
+        // 同客户去重：同一客户(cust_id)已存在审批中(IN_APPROVAL)的调整申请时，不允许重复提交，
+        // 避免并行多笔调整审批落地后相互覆盖分配关系。custNo 解析为同一 internalCustId，按 cust_id 计数即可。
+        if (applyMapper.countByConditions("IN_APPROVAL", null, internalCustId, null, null) > 0) {
+            throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING,
+                    "该客户已有审批中的分配调整申请，不可重复提交: " + cmd.getCustNo());
+        }
+
         String applyId = genApplyId();
         String applyNo = genApplyNo();
         String businessKey = "ALLOC_ADJUST:" + applyId;
