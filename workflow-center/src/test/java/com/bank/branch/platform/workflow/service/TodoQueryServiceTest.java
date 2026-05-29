@@ -127,22 +127,39 @@ class TodoQueryServiceTest {
     }
 
     private void mockAssignedAndCandidateTaskQueries(String empId, Set<String> candidateGroupKeys,
-                                                     List<Task> assignedTasks, List<Task> candidateTasks) {
-        TaskQuery assignedQuery = mock(TaskQuery.class);
-        TaskQuery candidateQuery = mock(TaskQuery.class);
+                                                     List<Task> assignedTasks, List<Task> candidateGroupTasks) {
+        mockAssignedAndCandidateTaskQueries(empId, candidateGroupKeys, assignedTasks, candidateGroupTasks, List.of());
+    }
 
-        when(taskService.createTaskQuery()).thenReturn(assignedQuery, candidateQuery);
+    /**
+     * mock mergeVisibleTasks 的三路查询：assignee / 候选组 / 候选用户。
+     * 候选用户路对应 branch_approve 按机构过滤后 addCandidateUser 的任务。
+     */
+    private void mockAssignedAndCandidateTaskQueries(String empId, Set<String> candidateGroupKeys,
+                                                     List<Task> assignedTasks, List<Task> candidateGroupTasks,
+                                                     List<Task> candidateUserTasks) {
+        TaskQuery assignedQuery = mock(TaskQuery.class);
+        TaskQuery candidateGroupQuery = mock(TaskQuery.class);
+        TaskQuery candidateUserQuery = mock(TaskQuery.class);
+
+        when(taskService.createTaskQuery()).thenReturn(assignedQuery, candidateGroupQuery, candidateUserQuery);
 
         when(assignedQuery.taskAssignee(empId)).thenReturn(assignedQuery);
         when(assignedQuery.orderByTaskCreateTime()).thenReturn(assignedQuery);
         when(assignedQuery.desc()).thenReturn(assignedQuery);
         when(assignedQuery.list()).thenReturn(assignedTasks);
 
-        when(candidateQuery.taskCandidateGroupIn(candidateGroupKeys)).thenReturn(candidateQuery);
-        when(candidateQuery.taskUnassigned()).thenReturn(candidateQuery);
-        when(candidateQuery.orderByTaskCreateTime()).thenReturn(candidateQuery);
-        when(candidateQuery.desc()).thenReturn(candidateQuery);
-        when(candidateQuery.list()).thenReturn(candidateTasks);
+        when(candidateGroupQuery.taskCandidateGroupIn(candidateGroupKeys)).thenReturn(candidateGroupQuery);
+        when(candidateGroupQuery.taskUnassigned()).thenReturn(candidateGroupQuery);
+        when(candidateGroupQuery.orderByTaskCreateTime()).thenReturn(candidateGroupQuery);
+        when(candidateGroupQuery.desc()).thenReturn(candidateGroupQuery);
+        when(candidateGroupQuery.list()).thenReturn(candidateGroupTasks);
+
+        lenient().when(candidateUserQuery.taskCandidateUser(empId)).thenReturn(candidateUserQuery);
+        lenient().when(candidateUserQuery.taskUnassigned()).thenReturn(candidateUserQuery);
+        lenient().when(candidateUserQuery.orderByTaskCreateTime()).thenReturn(candidateUserQuery);
+        lenient().when(candidateUserQuery.desc()).thenReturn(candidateUserQuery);
+        lenient().when(candidateUserQuery.list()).thenReturn(candidateUserTasks);
     }
 
     /**
@@ -609,5 +626,40 @@ class TodoQueryServiceTest {
                 .containsExactly("TASK_071", "TASK_070");
         assertThat(result.getRecords().get(0).getClaimable()).isTrue();
         assertThat(result.getRecords().get(1).getClaimable()).isFalse();
+    }
+
+    /**
+     * branch_approve 按机构过滤后用 addCandidateUser 指派为候选用户（GROUP 为空），
+     * 待办查询必须把"候选用户型"任务也纳入，否则机构负责人看不到该待办。
+     */
+    @Test
+    void queryTodoList_includesCandidateUserTasks() {
+        // 用户有角色 → candidateGroupKeys 非空 → 走 mergeVisibleTasks 分支
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Set.of("ROLE:BRANCH_HEAD"));
+
+        // 候选组路、assignee 路都查不到该任务（它只挂候选用户 E20001）
+        Task candidateUserTask = buildMockTask("TASK_080", "机构负责人审批", "PID_080",
+                null, "branch_approve", "perf_alloc_adjust_corp_v1:1:123");
+        lenient().when(candidateUserTask.getCreateTime()).thenReturn(new Date(4_000L));
+
+        mockAssignedAndCandidateTaskQueries(
+                "E20001",
+                Set.of("ROLE:BRANCH_HEAD"),
+                List.of(),            // assignee 路：空
+                List.of(),            // 候选组路：空（branch_approve 机构过滤后无候选组）
+                List.of(candidateUserTask)  // 候选用户路：命中
+        );
+
+        BizProcessMap map = buildBizProcessMap("PID_080", "ALLOC_ADJUST", "AA080");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_080")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+
+        PageResult<TaskRespDTO> result = todoQueryService.queryTodoList("E20001", null, null, 1, 20);
+
+        assertThat(result.getTotal()).isEqualTo(1L);
+        assertThat(result.getRecords()).extracting(TaskRespDTO::getTaskId)
+                .containsExactly("TASK_080");
+        assertThat(result.getRecords().get(0).getClaimable()).isTrue();
     }
 }

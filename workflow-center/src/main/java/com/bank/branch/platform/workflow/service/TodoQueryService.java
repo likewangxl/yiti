@@ -157,11 +157,24 @@ public class TodoQueryService {
                 .desc()
                 .list();
 
+        // 候选用户型任务：branch_approve 节点按发起人机构过滤后用 addCandidateUser 直接指派候选用户
+        // （identity link 为 candidate USER 而非 candidate GROUP），不会被上面的 taskCandidateGroupIn
+        // 命中。必须单独按 taskCandidateUser 查询并入，否则机构负责人等候选用户看不到该待办。
+        List<Task> candidateUserTasks = taskService.createTaskQuery()
+                .taskCandidateUser(empId)
+                .taskUnassigned()
+                .orderByTaskCreateTime()
+                .desc()
+                .list();
+
         Map<String, Task> visibleTasks = new LinkedHashMap<>();
         for (Task task : assignedTasks) {
             visibleTasks.put(task.getId(), task);
         }
         for (Task task : candidateTasks) {
+            visibleTasks.putIfAbsent(task.getId(), task);
+        }
+        for (Task task : candidateUserTasks) {
             visibleTasks.putIfAbsent(task.getId(), task);
         }
 
