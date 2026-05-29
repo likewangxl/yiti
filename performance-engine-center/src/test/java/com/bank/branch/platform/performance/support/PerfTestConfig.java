@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.support;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
@@ -165,6 +166,17 @@ public class PerfTestConfig {
         OrgApi m = Mockito.mock(OrgApi.class);
         Mockito.when(m.getOrg(Mockito.anyString())).thenReturn(new OrgDTO());
         return m;
+    }
+
+    /**
+     * 测试用 UserApi（2026-05-29 人员标签列表引入）：
+     * EvalUserTagService 注入 UserApi 做用户分页/批量角色查询，测试上下文无真实 auth Bean，
+     * 提供默认 mock 避免 Spring 上下文启动失败；单测可 @MockBean 覆盖。
+     */
+    @Bean
+    @Primary
+    public UserApi userApi() {
+        return Mockito.mock(UserApi.class);
     }
 
     /**
