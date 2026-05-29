@@ -94,6 +94,12 @@ public class TaskAssignmentListener implements TaskListener {
                         bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
                 String bizType = bizMap != null ? bizMap.getBizType() : null;
                 String bizId = bizMap != null ? bizMap.getBizId() : null;
+                // 目标修正：按业务要求，待审批任务只进「待办」列表，不发通知消息；
+                // 仅审批通过/驳回时由 TargetAdjustCompletedListener 通知申请人。
+                if (isNotifySuppressed(bizType)) {
+                    log.info("[TaskAssignmentListener] 任务 {} bizType={} 跳过待审批通知（仅进待办）", taskId, bizType);
+                    return;
+                }
                 String taskName = delegateTask.getName();
                 String bizLabel = resolveBizLabel(bizType);
                 String title = bizLabel != null
@@ -159,6 +165,10 @@ public class TaskAssignmentListener implements TaskListener {
                     bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
             String bizType = bizMap != null ? bizMap.getBizType() : null;
             String bizId = bizMap != null ? bizMap.getBizId() : null;
+            if (isNotifySuppressed(bizType)) {
+                log.info("[TaskAssignmentListener] 任务 {} bizType={} 跳过待审批通知（仅进待办）", taskId, bizType);
+                return;
+            }
             String taskName = delegateTask.getName();
             String bizLabel = resolveBizLabel(bizType);
             String title = bizLabel != null
@@ -213,6 +223,15 @@ public class TaskAssignmentListener implements TaskListener {
             }
         }
         return empIds;
+    }
+
+    /**
+     * 是否抑制该 bizType 的待审批任务通知（仅进待办列表，不发通知消息）。
+     * <p>目前仅 TARGET_ADJUST（目标修正）：业务要求待审批不打扰，
+     * 仅审批通过/驳回时由 TargetAdjustCompletedListener 通知申请人。
+     */
+    private boolean isNotifySuppressed(String bizType) {
+        return "TARGET_ADJUST".equals(bizType);
     }
 
     /** BIZ_TYPE → 中文标签，让通知标题更可读 */
