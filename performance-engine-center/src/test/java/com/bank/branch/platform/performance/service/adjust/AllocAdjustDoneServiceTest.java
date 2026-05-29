@@ -104,6 +104,22 @@ class AllocAdjustDoneServiceTest {
         assertThat(r.getPageNo()).isEqualTo(2);
     }
 
+    @Test
+    void d6_onlyPersonalWorkflowKeys_noGlobalFinishedUnion() {
+        // 仅本人在 workflow 完成的两条业务键，查询用的 applyIds 必须恰好等于这两条（不混入他人完结申请）
+        when(workflowTodoApi.listMyDoneBusinessKeys(EMP, BIZ_TYPE))
+                .thenReturn(Arrays.asList("ALLOC_ADJUST:A1", "ALLOC_ADJUST:A2"));
+        when(mapper.countMyDones(eq(Arrays.asList("A1", "A2")), any(), any(), any(), any(), any())).thenReturn(1L);
+        when(mapper.selectMyDones(eq(Arrays.asList("A1", "A2")), any(), any(), any(), any(), any(), eq(0), eq(20)))
+                .thenReturn(Arrays.asList(buildApply("A1", "ADJ001")));
+        when(workflowTodoApi.findDoneTaskRespByBusinessKeys(any(), any())).thenReturn(Collections.emptyMap());
+
+        PageResult<AdjustTodoRespDTO> r = service.listMyDones(EMP, null, null, null, null, null, 1, 20);
+
+        // countMyDones/selectMyDones 以精确的本人键集合([A1,A2]) 调用 → stub 命中即证明无全局补充
+        assertThat(r.getTotal()).isEqualTo(1);
+    }
+
     private PerfAllocAdjustApply buildApply(String id, String applyNo) {
         PerfAllocAdjustApply a = new PerfAllocAdjustApply();
         a.setId(id);

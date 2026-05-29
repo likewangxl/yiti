@@ -90,14 +90,6 @@
         LIMIT #{offset}, #{pageSize}
     </select>
 
-    <!-- 业务表已完结申请 ID（APPROVED / REJECTED） -->
-    <select id="selectFinishedApplyIds" resultType="string">
-        SELECT id FROM PERF_ALLOC_ADJUST_APPLY
-        WHERE status IN ('APPROVED', 'REJECTED')
-        ORDER BY updated_time DESC
-        LIMIT 500
-    </select>
-
     <!-- 已审批：复用 todoWhere（同 todo SQL） -->
     <select id="countMyDones" resultType="long">
         SELECT COUNT(1)
