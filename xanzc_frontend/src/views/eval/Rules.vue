@@ -264,7 +264,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import {
-  listTags,
+  listAllTags,
   listRules,
   getRuleDetail,
   createRule,
@@ -292,12 +292,11 @@ const getTagName = (tagId) => {
   return found ? found.tagName : `ID:${tagId}`
 }
 
-/** 加载全部标签（用于下拉和名称映射，一次性拉取 200 条） */
+/** 加载全部标签（用于下拉和名称映射，走不分页 /all 端点） */
 const loadAllTags = async () => {
   try {
-    const res = await listTags({ pageSize: 200 })
-    // listTags 返回 PageResult，取 .records
-    allTags.value = res?.records ?? []
+    const res = await listAllTags()
+    allTags.value = Array.isArray(res) ? res : (res?.records ?? [])
   } catch (e) {
     ElMessage.error('加载标签列表失败：' + (e?.message ?? '未知错误'))
   }

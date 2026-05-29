@@ -93,6 +93,32 @@ class RoleServiceTest {
         assertThat(result.getTotal()).isEqualTo(0);
     }
 
+    @Test
+    void listAll_withNullStatus_returnsAllRoles() {
+        PtRole r1 = makeRole("R_01", "ADMIN", "管理员");
+        PtRole r2 = makeRole("R_02", "VIEWER", "查看员");
+        when(roleMapper.selectAllFiltered(null)).thenReturn(List.of(r1, r2));
+
+        List<RoleRespDTO> result = roleService.listAll(null);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getRoleCode()).isEqualTo("ADMIN");
+        verify(roleMapper).selectAllFiltered(null);
+    }
+
+    @Test
+    void listAll_withStatusFilter_returnsFiltered() {
+        PtRole r1 = makeRole("R_01", "ADMIN", "管理员");
+        r1.setRecordStatus(0);
+        when(roleMapper.selectAllFiltered(0)).thenReturn(List.of(r1));
+
+        List<RoleRespDTO> result = roleService.listAll(0);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getRecordStatus()).isEqualTo(0);
+        verify(roleMapper).selectAllFiltered(0);
+    }
+
     private PtRole makeRole(String id, String code, String name) {
         PtRole r = new PtRole();
         r.setRoleId(id);

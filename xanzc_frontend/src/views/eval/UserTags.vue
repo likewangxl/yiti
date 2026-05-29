@@ -144,7 +144,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { listTags, listUserTags, bindUserTags, unbindUserTags } from '@/api/eval';
+import { listTags, listAllTags, listUserTags, bindUserTags, unbindUserTags } from '@/api/eval';
 import { listUsers } from '@/api/users';
 
 // === 常量 ===
@@ -163,8 +163,8 @@ function allTagsOfType(type) {
 async function loadAllTags() {
   allTagsLoading.value = true;
   try {
-    const r = await listTags({ pageNo: 1, pageSize: 999, status: 1 });
-    allTags.value = r?.records || [];
+    const r = await listAllTags({ status: 1 });
+    allTags.value = Array.isArray(r) ? r : (r?.records || []);
   } catch {
     allTags.value = [];
   } finally {

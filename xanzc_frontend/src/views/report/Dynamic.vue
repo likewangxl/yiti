@@ -281,7 +281,7 @@ async function onOrgCheckChange() {
     const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
     for (const node of checkedNodes) {
       try {
-        const users = await listOrgUsers(node.code, { pageSize: 200 });
+        const users = await listOrgUsers(node.code, { pageSize: 100 });
         const list = Array.isArray(users) ? users : (users?.records || []);
         for (const u of list) {
           const emp = { id: u.empId || u.userId, name: u.empName || u.userchnname || u.username, org: node.name };
@@ -458,7 +458,7 @@ const chartOption = computed(() => {
 onMounted(async () => {
   await Promise.all([
     getOrgTree().then(tree => { orgTreeData.value = tree; }).catch(() => {}),
-    listMetrics({ status: 'ACTIVE', pageNo: 1, pageSize: 200 })
+    listMetrics({ status: 'ACTIVE' })
       .then(list => { if (Array.isArray(list)) metricsList.value = list; })
       .catch(() => { metricsList.value = []; })
   ]);

@@ -81,4 +81,15 @@
         ORDER BY ROLE_CODE ASC
     </select>
 
+    <!-- 查询全部角色（不分页，供下拉选项用），recordStatus 可选过滤 -->
+    <select id="selectAllFiltered" resultType="com.bank.branch.platform.auth.entity.PtRole">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PT_ROLE
+        <where>
+            <if test="recordStatus != null">AND RECORD_STATUS = #{recordStatus}</if>
+        </where>
+        ORDER BY ROLE_CODE ASC
+    </select>
+
 </mapper>

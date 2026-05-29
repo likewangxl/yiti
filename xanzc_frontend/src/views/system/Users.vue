@@ -270,7 +270,7 @@ import {
   getUserRoles, replaceUserRoles,
   USER_STATUS_LABEL, USER_LOCK_LABEL
 } from '@/api/users';
-import { listRoles } from '@/api/system';
+import { listAllRoles } from '@/api/system';
 import { getOrgTree, listOrgUsers, createOrg, updateOrg, deleteOrg } from '@/api/orgs';
 
 // === 机构树 ===
@@ -446,7 +446,7 @@ async function openAssignRoles(user) {
   // 并行拉全量角色 + 用户已绑
   try {
     const [allRoles, bound] = await Promise.all([
-      listRoles({ pageNo: 1, pageSize: 999 }),
+      listAllRoles(),
       getUserRoles(user.userId)
     ]);
     const roleArr = allRoles?.records || (Array.isArray(allRoles) ? allRoles : []);

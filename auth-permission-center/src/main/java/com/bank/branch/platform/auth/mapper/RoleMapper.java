@@ -75,4 +75,13 @@ public interface RoleMapper extends BaseMapper<PtRole> {
      * @return 全部 RECORD_STATUS = 0 的角色列表
      */
     List<PtRole> selectAll();
+
+    /**
+     * 查询全部角色（不分页，供下拉选项用）.
+     * <p>recordStatus 为 null 时不过滤状态，返回所有角色；非 null 时按状态过滤。</p>
+     *
+     * @param recordStatus 记录状态筛选（可选，null 表示不过滤）
+     * @return 角色列表，按 ROLE_CODE ASC 排序
+     */
+    List<PtRole> selectAllFiltered(@Param("recordStatus") Integer recordStatus);
 }

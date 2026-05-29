@@ -18,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * 评价标签管理控制器.
  * <p>提供评价标签字典的增删改查接口，供内部评价模块使用。</p>
@@ -103,5 +105,22 @@ public class EvalTagController {
         log.info("[EvalTagController.delete] tagId={}", tagId);
         evalTagService.delete(tagId);
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 查询全部标签（不分页，供下拉选项）.
+     *
+     * @param tagType 标签类型（可选，1=被评价人, 2=评价人）
+     * @param status  状态（可选，1=启用, 0=停用）
+     * @return 标签列表
+     */
+    @GetMapping("/all")
+    @Operation(summary = "查询全部标签（不分页，供下拉选项）")
+    @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
+    public ResponseWrapper<List<EvalTag>> listAll(
+            @RequestParam(value = "tagType", required = false) Integer tagType,
+            @RequestParam(value = "status", required = false) Integer status) {
+        log.debug("[EvalTagController.listAll] tagType={}, status={}", tagType, status);
+        return ResponseWrapper.success(evalTagService.listAll(tagType, status));
     }
 }

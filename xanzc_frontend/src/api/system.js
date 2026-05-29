@@ -10,6 +10,10 @@ import {
 export async function listRoles(params = {}) {
   return unwrapPage(await call('get', '/admin/roles/', { params }, sysRoles));
 }
+// V1.x：查询全部角色（不分页），供下拉选项使用
+export function listAllRoles(params = {}) {
+  return call('get', '/admin/roles/all', { params }, sysRoles);
+}
 // 角色 CRUD（RoleController）
 // data: { roleCode(大写下划线 max 10), roleChName(max 100), remark? }
 export function createRole(data) {

@@ -11,6 +11,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,5 +78,39 @@ class EvalTagServiceTest {
         evalTagService.delete(1L);
 
         verify(evalTagMapper).deleteById(1L);
+    }
+
+    @Test
+    @DisplayName("listAll_按类型和状态过滤返回列表")
+    void listAll_withTagTypeAndStatus_returnsFiltered() {
+        EvalTag t1 = new EvalTag();
+        t1.setTagId(10L);
+        t1.setTagName("被评人A");
+        t1.setTagType(1);
+        t1.setStatus(1);
+        when(evalTagMapper.selectAll(1, 1)).thenReturn(List.of(t1));
+
+        List<EvalTag> result = evalTagService.listAll(1, 1);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getTagName()).isEqualTo("被评人A");
+        verify(evalTagMapper).selectAll(1, 1);
+    }
+
+    @Test
+    @DisplayName("listAll_不传参数时返回全部标签")
+    void listAll_withNullParams_returnsAll() {
+        EvalTag t1 = new EvalTag();
+        t1.setTagId(10L);
+        t1.setTagType(1);
+        EvalTag t2 = new EvalTag();
+        t2.setTagId(11L);
+        t2.setTagType(2);
+        when(evalTagMapper.selectAll(null, null)).thenReturn(List.of(t1, t2));
+
+        List<EvalTag> result = evalTagService.listAll(null, null);
+
+        assertThat(result).hasSize(2);
+        verify(evalTagMapper).selectAll(null, null);
     }
 }
