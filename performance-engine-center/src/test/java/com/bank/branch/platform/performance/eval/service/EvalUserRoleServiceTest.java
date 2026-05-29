@@ -178,6 +178,18 @@ class EvalUserRoleServiceTest {
     }
 
     @Test
+    @DisplayName("saveUserRoles evalTagIds 含重复 id 时去重后只插入一次")
+    void saveUserRoles_dedupEvalTagIds() {
+        when(evalUserTagMapper.selectByUserId(1001L)).thenReturn(List.of());
+        when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
+
+        service.saveUserRoles(1001L, null, List.of(2L, 2L, 2L));
+
+        verify(evalUserTagMapper).batchInsert(insertCaptor.capture());
+        assertThat(insertCaptor.getValue()).extracting(EvalUserTag::getTagId).containsExactly(2L);
+    }
+
+    @Test
     @DisplayName("pageUserRoles 非数值工号：跳过 EVAL_USER_TAG 匹配，标签列为空但不报错")
     void pageUserRoles_nonNumericEmpId() {
         when(userApi.pageUsers(null, 1, 20))

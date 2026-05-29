@@ -100,7 +100,8 @@ public class EvalUserTagService {
             }
         }
         // 2. 校验评价人标签必须都是 tagType=2
-        List<Long> evalIds = (evalTagIds == null) ? List.of() : evalTagIds;
+        List<Long> evalIds = (evalTagIds == null) ? List.of()
+                : evalTagIds.stream().distinct().collect(Collectors.toList());
         for (Long tid : evalIds) {
             EvalTag t = evalTagMapper.selectById(tid);
             if (t == null) throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, tid);
