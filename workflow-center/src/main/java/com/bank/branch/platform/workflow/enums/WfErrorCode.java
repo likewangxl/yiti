@@ -25,6 +25,7 @@ public enum WfErrorCode {
     NOT_TASK_ASSIGNEE("WF-40903", "非任务办理人"),
     TASK_ALREADY_CLAIMED("WF-40904", "任务已被签收"),
     PROCESS_NOT_RUNNING("WF-40905", "流程实例不存在或已结束"),
+    FLOW_PUBLISH_VALIDATION_FAILED("WF-40906", "流程图发布校验未通过"),
 
     // 500 内部错误
     ENGINE_ERROR("WF-50001", "流程引擎异常");

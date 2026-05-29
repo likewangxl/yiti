@@ -28,6 +28,12 @@
         WHERE process_definition_key = #{processDefinitionKey}
     </select>
 
+    <!-- 根据流程定义KEY删除该流程的全部候选人配置（发布时先删后插） -->
+    <delete id="deleteByProcessDefinitionKey" parameterType="string">
+        DELETE FROM WF_NODE_CANDIDATE_CONF
+        WHERE process_definition_key = #{processDefinitionKey}
+    </delete>
+
     <!-- selectById / insert / updateById / deleteById 由 MyBatis-Plus BaseMapper 提供 -->
 
 </mapper>
