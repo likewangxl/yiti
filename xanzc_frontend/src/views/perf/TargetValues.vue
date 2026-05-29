@@ -16,7 +16,20 @@
         <el-button @click="triggerImportFile">📥 导入目标值</el-button>
         <el-button @click="downloadTpl">📄 下载模板</el-button>
         <input ref="importFileRef" type="file" accept=".xlsx,.xls" style="display:none" @change="onImportFileSelected" />
-        <el-button type="primary" :disabled="!plans.length" @click="openCreateRow">+ 新增目标值</el-button>
+        <!-- 仅方案创建人可新增目标值；非创建人时按钮置灰并通过 tooltip 解释原因 -->
+        <el-tooltip
+          :disabled="!plans.length || currentPlan?.createdBy === userStore.user?.empId"
+          content="只有该目标方案的创建人可以新增目标值"
+          placement="top"
+        >
+          <span>
+            <el-button
+              type="primary"
+              :disabled="!plans.length || currentPlan?.createdBy !== userStore.user?.empId"
+              @click="openCreateRow"
+            >+ 新增目标值</el-button>
+          </span>
+        </el-tooltip>
       </div>
     </div>
 
@@ -57,29 +70,36 @@
         <el-table-column label="指标" min-width="180">
           <template #default="{row}">{{ row.metricName || row.metricCode }}</template>
         </el-table-column>
-        <el-table-column label="当前目标" width="100" align="right">
+        <el-table-column label="当前目标" width="110" align="right">
           <template #default="{row}">{{ fmtNum(row.targetValue) }}</template>
+        </el-table-column>
+        <el-table-column label="基础值" width="110" align="right">
+          <template #default="{row}">{{ row.baseValue != null ? fmtNum(row.baseValue) : '-' }}</template>
         </el-table-column>
         <el-table-column label="修正目标" width="140" align="right">
           <template #default="{row}">
-            <template v-if="row.approvalStatus === 'ADJUSTING' || row.approvalStatus === 'IN_APPROVAL' || row.approvalStatus === 'APPROVED' || row.approvalStatus === 'REJECTED'">
-              <strong>{{ fmtNum(row.currentTarget) }}</strong>
-              <span v-if="hasAdjust(row)" class="adj-tag">↑修正</span>
-            </template>
-            <span v-else>-</span>
+            <strong>{{ fmtNum(row.currentTarget ?? row.targetValue) }}</strong>
+            <span v-if="hasAdjust(row)" class="adj-tag">↑修正</span>
           </template>
         </el-table-column>
-        <el-table-column label="累计完成" width="110" align="right">
-          <template #default="{row}">{{ fmtNum(row.cumulativeActual ?? row.actual) }}</template>
-        </el-table-column>
-        <el-table-column label="完成率" width="100" align="right">
+        <el-table-column label="修正基础值" width="140" align="right">
           <template #default="{row}">
-            <span :class="rateCls(row.completeRate)">{{ fmtRate(row.completeRate) }}</span>
+            <strong>{{ row.currentBaseValue != null ? fmtNum(row.currentBaseValue) : (row.baseValue != null ? fmtNum(row.baseValue) : '-') }}</strong>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{row}">
             <el-tag :class="apprCls(row.approvalStatus)" effect="plain">{{ apprLabel(row.approvalStatus) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" fixed="right">
+          <template #default="{row}">
+            <!-- 修正中(ADJUSTING/IN_APPROVAL) 时禁止重复发起，避免并发审批 -->
+            <el-button
+              link type="primary" size="small"
+              :disabled="row.approvalStatus === 'ADJUSTING' || row.approvalStatus === 'IN_APPROVAL'"
+              @click="openAdjust(row)"
+            >修改</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -109,6 +129,13 @@
         <el-form-item label="修正后目标" prop="newValue" required>
           <el-input-number v-model="adjDlg.form.newValue" :precision="2" :controls="false" style="width:100%" />
         </el-form-item>
+        <el-form-item label="当前基础值">
+          <el-input :model-value="adjDlg.row?.baseValue != null ? fmtNum(adjDlg.row?.baseValue) : '-'" disabled />
+        </el-form-item>
+        <el-form-item label="修正后基础值">
+          <el-input-number v-model="adjDlg.form.newBaseValue" :precision="2" :controls="false" style="width:100%"
+            placeholder="可空：不改基础值则留空" />
+        </el-form-item>
         <el-form-item label="修正原因" prop="reason" required>
           <el-input v-model="adjDlg.form.reason" type="textarea" :rows="3"
             placeholder="请说明修正原因，将记入审批日志" />
@@ -134,7 +161,25 @@
         <span class="dim-hint">（由目标方案确定，下方指标按此维度过滤）</span>
       </div>
       <el-form ref="valFormRef" :model="valDlg.form" :rules="valRules" label-width="100px" size="default">
-        <el-form-item label="对象主键" prop="subjectId"><el-input v-model="valDlg.form.subjectId" /></el-form-item>
+        <el-form-item label="对象" prop="subjectId">
+          <el-autocomplete
+            v-model="valDlg.form.subjectId"
+            :fetch-suggestions="querySubjectSuggestions"
+            :placeholder="valDlg.form.subjectType === 'ORG'
+              ? '输入机构号或机构名搜索（如 02974000 / 资金财务部）'
+              : '输入用户名或中文名搜索（如 finance_zhou / 周八）'"
+            clearable
+            highlight-first-item
+            style="width:100%"
+          >
+            <template #default="{ item }">
+              <div style="display:flex; justify-content:space-between; gap:12px;">
+                <span style="font-family: ui-monospace, monospace;">{{ item.value }}</span>
+                <span style="color:#999;">{{ item.label }}</span>
+              </div>
+            </template>
+          </el-autocomplete>
+        </el-form-item>
         <el-form-item label="指标" prop="metricCode">
           <el-select v-model="valDlg.form.metricCode" filterable
                      :placeholder="metricsForDim.length ? '请选择指标' : '所选维度暂无指标'"
@@ -214,17 +259,21 @@ const metricMap = ref(new Map()); // metricCode → metricName
 
 async function loadEmpMap() {
   try {
-    const list = await listUsers({ pageSize: 100 });
-    if (Array.isArray(list)) {
-      const m = new Map();
-      for (const e of list) {
-        if (e.isEnabled === 0) {
-          m.set(e.username, { name: e.userchnname || e.username, orgName: '', orgCode: '' });
-        }
+    const list = await listUsers({ pageSize: 200 });
+    // listUsers 走 unwrapPage：分页响应 { records, total }，不拍平导致 empMap 永远空，
+    // 任何 subjectId 都会被前端校验为"员工不存在"，且后端日志无任何错误记录。
+    const arr = Array.isArray(list) ? list : (list?.records || []);
+    const m = new Map();
+    for (const e of arr) {
+      // 0 = ENABLED；isEnabled 缺失（不同后端返回字段差异）时也保留，避免漏录
+      if (e.isEnabled === 0 || e.isEnabled == null) {
+        m.set(e.username, { name: e.userchnname || e.username, orgName: '', orgCode: '' });
       }
-      empMap.value = m;
     }
-  } catch {}
+    empMap.value = m;
+  } catch (e) {
+    console.warn('[loadEmpMap] 用户列表加载失败，empMap 为空，前端校验将拦截所有目标值新增', e);
+  }
 }
 async function loadOrgMap() {
   try {
@@ -234,6 +283,33 @@ async function loadOrgMap() {
     (Array.isArray(tree) ? tree : []).forEach(walk);
     orgMap.value = m;
   } catch {}
+}
+
+// el-autocomplete 数据源：根据当前对象维度从 empMap / orgMap 取候选，模糊匹配 key 或 name。
+// EMP：value=username（PT_USER.username），label=中文名（PT_USER.userchnname）；
+// ORG：value=机构号（EXT_ORG_INFO.org_code），label=机构名。
+function querySubjectSuggestions(query, cb) {
+  const dim = valDlg.form.subjectType;
+  const q = (query || '').toLowerCase().trim();
+  const out = [];
+  if (dim === 'EMP') {
+    for (const [username, info] of empMap.value) {
+      const cn = info?.name || '';
+      if (!q || username.toLowerCase().includes(q) || cn.toLowerCase().includes(q)) {
+        out.push({ value: username, label: cn });
+        if (out.length >= 50) break;
+      }
+    }
+  } else if (dim === 'ORG') {
+    for (const [code, name] of orgMap.value) {
+      const nm = name || '';
+      if (!q || code.toLowerCase().includes(q) || nm.toLowerCase().includes(q)) {
+        out.push({ value: code, label: nm });
+        if (out.length >= 50) break;
+      }
+    }
+  }
+  cb(out);
 }
 function rebuildMetricMap() {
   const m = new Map();
@@ -251,21 +327,25 @@ const fmtNum = (v) => (v == null || v === '') ? '-' : Number(v).toLocaleString()
 const fmtRate = (v) => (v == null) ? '-' : `${Number(v).toFixed(1)}%`;
 
 const apprCls = (s) => ({
+  NORMAL:    'tag-success',
   APPROVED:  'tag-success',
   ADJUSTING: 'tag-warning',
   IN_APPROVAL: 'tag-warning',
   PENDING:   'tag-warning',
   DRAFT:     'tag-info',
   REJECTED:  'tag-danger'
-}[s] || 'tag-info');
+}[s] || 'tag-success');
+// 没走审批流的目标值 status 为空/NORMAL，业务上即"已生效"；fallback 同样显示"已生效"，
+// 而非误导性的占位符 "-"
 const apprLabel = (s) => ({
+  NORMAL:    '已生效',
   APPROVED:  '已审批',
   ADJUSTING: '修正中',
   IN_APPROVAL: '修正中',
   PENDING:   '待审批',
   DRAFT:     '草稿',
   REJECTED:  '已驳回'
-}[s] || '-');
+}[s] || '已生效');
 const rateCls = (r) => {
   const n = Number(r);
   if (n >= 90) return 'rate-ok';
@@ -286,7 +366,9 @@ async function loadPlans() {
   // 只用后端真实方案；后端无方案时不再注入 mock TGT-2026Q2（曾导致 upsert 报"方案不存在"）
   try {
     const r = await listTargets({ pageSize: 100 });
-    plans.value = Array.isArray(r) ? r : [];
+    // listTargets 走 unwrapPage：分页响应返回 { records, total } 形态；
+    // 不兼容会导致 plans.value=[] → currentPlan 永远 null → 新增按钮永远 disabled
+    plans.value = Array.isArray(r) ? r : (r?.records || []);
     if (!f.planId && plans.value.length) {
       f.planId = plans.value[0].id || plans.value[0].planCode;
     }
@@ -337,18 +419,8 @@ const currentKpiLabel  = computed(() => {
 });
 const currentDimLabel  = computed(() => subjectTypeLabel(currentPlan.value?.targetDim) || '-');
 
-// 截图 179 风格的 mock 行（后端无数据时兜底，便于 UI 验证）
-const MOCK_ROWS = [
-  { id:'r1', subjectType:'EMP', subjectName:'张三', orgName:'南山支行', metricCode:'M0001', metricName:'存款日均增量（万）', originalTarget:8000, currentTarget:8000, cumulativeActual:6420, completeRate:80.3, approvalStatus:'APPROVED' },
-  { id:'r2', subjectType:'EMP', subjectName:'张三', orgName:'南山支行', metricCode:'M0003', metricName:'贷款余额增量（万）', originalTarget:12000, currentTarget:13500, cumulativeActual:9100, completeRate:67.4, approvalStatus:'ADJUSTING' },
-  { id:'r3', subjectType:'EMP', subjectName:'张三', orgName:'南山支行', metricCode:'M1001', metricName:'新增有效客户数', originalTarget:30, currentTarget:30, cumulativeActual:22, completeRate:73.3, approvalStatus:'APPROVED' },
-  { id:'r4', subjectType:'EMP', subjectName:'李四', orgName:'福田支行', metricCode:'M0001', metricName:'存款日均增量（万）', originalTarget:6000, currentTarget:6000, cumulativeActual:5520, completeRate:92.0, approvalStatus:'APPROVED' },
-  { id:'r5', subjectType:'EMP', subjectName:'李四', orgName:'福田支行', metricCode:'M0003', metricName:'贷款余额增量（万）', originalTarget:9000, currentTarget:9000, cumulativeActual:7800, completeRate:86.7, approvalStatus:'APPROVED' },
-  { id:'r6', subjectType:'EMP', subjectName:'孙七', orgName:'罗湖支行', metricCode:'M0001', metricName:'存款日均增量（万）', originalTarget:7000, currentTarget:7000, cumulativeActual:4280, completeRate:61.1, approvalStatus:'APPROVED' }
-];
-
 async function loadValues() {
-  if (!f.planId) { values.value = MOCK_ROWS; pager.pageNo = 1; return; }
+  if (!f.planId) { values.value = []; pager.pageNo = 1; return; }
   pager.pageNo = 1;
   loadingValues.value = true;
   try {
@@ -366,7 +438,8 @@ async function loadValues() {
     // 2. 构建修正 lookup：key = "subjectType:subjectId:metricCode" → 最新一条申请的 { newValue, oldValue, status }
     //    同一 key 可能有多条申请（如先驳回再重新提交），取 createdTime 最新的那条
     const adjustMap = new Map();
-    for (const adj of (Array.isArray(adjusts) ? adjusts : [])) {
+    // listTargetAdjusts 同样走 unwrapPage 返回 { records, total }
+    for (const adj of (Array.isArray(adjusts) ? adjusts : (adjusts?.records || []))) {
       try {
         const remark = typeof adj.remark === 'string' ? JSON.parse(adj.remark) : adj.remark;
         const items = remark?.adjustments || [];
@@ -377,6 +450,7 @@ async function loadValues() {
           if (!existing || adjTime > existing._time) {
             adjustMap.set(key, {
               newValue: item.newValue, oldValue: item.oldValue,
+              newBaseValue: item.newBaseValue, oldBaseValue: item.oldBaseValue,
               status: adj.status, reason: remark.reason || '', _time: adjTime
             });
           }
@@ -384,8 +458,11 @@ async function loadValues() {
       } catch { /* remark 解析失败跳过 */ }
     }
 
-    if (Array.isArray(r) && r.length) {
-      values.value = r.map(x => {
+    // listTargetValues 走 unwrapPage：分页响应 r = { records, total }，不兼容直接走
+    // mock 兜底导致页面只显示假数据。先拍平再判断。
+    const rows = Array.isArray(r) ? r : (r?.records || []);
+    if (rows.length) {
+      values.value = rows.map(x => {
         let subjectName = x.subjectName || '';
         let orgName     = x.orgName     || '';
         let orgCode     = x.orgCode     || '';
@@ -408,16 +485,22 @@ async function loadValues() {
         const adj = adjustMap.get(adjKey);
         let approvalStatus = x.approvalStatus || '';
         let currentTarget  = x.currentTarget ?? x.targetValue;
+        // 修正基础值：审批中/已通过 → 申请的 newBaseValue；驳回/无申请 → 主表 base_value
+        let currentBaseValue = x.baseValue;
         if (adj) {
           if (adj.status === 'IN_APPROVAL') {
             approvalStatus = 'ADJUSTING';
             currentTarget  = adj.newValue ?? currentTarget;
+            if (adj.newBaseValue != null) currentBaseValue = adj.newBaseValue;
           } else if (adj.status === 'APPROVED') {
             approvalStatus = 'APPROVED';
             currentTarget  = adj.newValue ?? currentTarget;
+            // 审批通过后主表 base_value 已落库（listener 保留/更新），优先用主表值
+            if (adj.newBaseValue != null) currentBaseValue = adj.newBaseValue;
           } else if (adj.status === 'REJECTED') {
             approvalStatus = 'REJECTED';
             currentTarget  = x.targetValue;
+            currentBaseValue = x.baseValue;
           }
         }
 
@@ -425,6 +508,7 @@ async function loadValues() {
           ...x,
           subjectName, orgName, orgCode, metricName,
           currentTarget,
+          currentBaseValue,
           adjustReason: adj?.reason || '',
           originalTarget: x.originalTarget ?? x.targetValue,
           completeRate:   x.completeRate ?? (x.cumulativeActual && x.targetValue ? (x.cumulativeActual / x.targetValue * 100) : null),
@@ -432,9 +516,9 @@ async function loadValues() {
         };
       });
     } else {
-      values.value = MOCK_ROWS;
+      values.value = [];
     }
-  } catch { values.value = MOCK_ROWS; } finally { loadingValues.value = false; }
+  } catch { values.value = []; } finally { loadingValues.value = false; }
 }
 
 const filteredRows = computed(() => {
@@ -456,7 +540,7 @@ const pagedRows = computed(() => {
 const adjFormRef = ref(null);
 const adjDlg = reactive({
   show: false, saving: false, row: null,
-  form: { newValue: 0, cycleKey: '', ownerOrgId: '', reason: '' }
+  form: { newValue: 0, newBaseValue: null, cycleKey: '', ownerOrgId: '', reason: '' }
 });
 const adjTitle = computed(() => {
   if (!adjDlg.row) return '目标修正';
@@ -474,6 +558,8 @@ function openAdjust(row) {
   }
   adjDlg.row = row;
   adjDlg.form.newValue = Number(row.currentTarget ?? row.targetValue ?? 0);
+  // 修正后基础值预填当前基础值（null 时留空，提交时不改 base_value）
+  adjDlg.form.newBaseValue = row.baseValue != null ? Number(row.baseValue) : null;
   adjDlg.form.reason   = row.adjustReason || '';
   adjDlg.show = true;
 }
@@ -483,8 +569,13 @@ async function onSubmitAdjust() {
   const curVal = adjDlg.row?.approvalStatus === 'APPROVED'
     ? Number(adjDlg.row?.currentTarget ?? adjDlg.row?.targetValue ?? 0)
     : Number(adjDlg.row?.targetValue ?? adjDlg.row?.originalTarget ?? 0);
-  if (Number(adjDlg.form.newValue) === curVal) {
-    return ElMessage.warning('修正后目标值与当前目标值相同，无需修正');
+  const curBase = adjDlg.row?.baseValue != null ? Number(adjDlg.row.baseValue) : null;
+  const newBase = adjDlg.form.newBaseValue != null ? Number(adjDlg.form.newBaseValue) : null;
+  const targetChanged = Number(adjDlg.form.newValue) !== curVal;
+  const baseChanged   = newBase !== curBase;
+  // 目标值和基础值都没变 → 无需修正
+  if (!targetChanged && !baseChanged) {
+    return ElMessage.warning('修正后目标值/基础值均与当前值相同，无需修正');
   }
   // 后端必填的 cycleKey / ownerOrgId 在这里自动兜底（UI 不再暴露）
   const plan = plans.value.find(p => (p.id || p.planCode) === f.planId);
@@ -511,12 +602,16 @@ async function onSubmitAdjust() {
       reason:      adjDlg.form.reason,
       metricCode:  adjDlg.row.metricCode,
       oldValue:    Number(adjDlg.row.currentTarget ?? adjDlg.row.targetValue ?? 0),
-      newValue:    Number(adjDlg.form.newValue)
+      newValue:    Number(adjDlg.form.newValue),
+      oldBaseValue: curBase,
+      newBaseValue: newBase
     });
     ElMessage.success('已提交审批');
     adjDlg.show = false;
     adjDlg.row.approvalStatus = 'ADJUSTING';
     adjDlg.row.currentTarget  = adjDlg.form.newValue;
+    // 乐观更新：审批中先在"修正基础值"列显示新基础值
+    adjDlg.row.currentBaseValue = newBase != null ? newBase : adjDlg.row.baseValue;
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '提交失败');
   } finally { adjDlg.saving = false; }
@@ -577,11 +672,14 @@ async function onSaveValue() {
   }
   const dim = valDlg.form.subjectType;
   const sid = valDlg.form.subjectId;
-  // 员工/机构存在性校验
+  // 员工/机构存在性校验（同时打到浏览器 console，便于 F12 留痕排查；
+  // 前端校验失败 HTTP 请求不会发出，所以后端 boot.log 看不到这条错误）
   if (dim === 'EMP' && !empMap.value.has(sid)) {
+    console.warn('[onSaveValue] EMP 不存在', { sid, empMapSize: empMap.value.size, planId: f.planId });
     return ElMessage.error(`员工「${sid}」在系统中不存在`);
   }
   if (dim === 'ORG' && !orgMap.value.has(sid)) {
+    console.warn('[onSaveValue] ORG 不存在', { sid, orgMapSize: orgMap.value.size, planId: f.planId });
     return ElMessage.error(`机构「${sid}」在系统中不存在`);
   }
   // 同一方案下 对象+指标 不能重复（检查已有数据）

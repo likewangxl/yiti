@@ -340,7 +340,10 @@ export function submitTargetAdjust(data) {
     adjustments: [{
       metricCode: data.metricCode,
       oldValue:   Number(data.oldValue ?? 0),
-      newValue:   Number(data.newValue ?? 0)
+      newValue:   Number(data.newValue ?? 0),
+      // 基础值修正（可空：未填则后端保留原 base_value 不抹除）
+      oldBaseValue: data.oldBaseValue != null ? Number(data.oldBaseValue) : null,
+      newBaseValue: data.newBaseValue != null ? Number(data.newBaseValue) : null
     }]
   };
   return call('post', '/perf/target-adjust/create', { data: payload }, { id: 'ADJ-MOCK-' + Date.now() });
