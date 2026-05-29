@@ -3,23 +3,24 @@ package com.bank.branch.platform.performance.job;
 import com.bank.branch.platform.performance.service.MetricBatchCalcService;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobExecutionContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.quartz.QuartzJobBean;
-import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 
 /**
- * 1级指标批量计算定时任务
+ * 1级指标批量计算定时任务.
+ *
+ * <p>不加 {@code @Component}、用 {@code @Autowired} 字段注入：Quartz 经
+ * AutowiringSpringBeanJobFactory 反射 newInstance()（需无参构造）后再 autowireBean 注入字段。
+ * 历史上误用构造器注入（无无参构造），导致每次触发抛 NoSuchMethodException: &lt;init&gt;()、
+ * 触发器进 ERROR、从未成功调起。对齐 MetricExecuteQuartzJob 写法。
  */
 @Slf4j
-@Component
 public class Level1MetricCalcJob extends QuartzJobBean {
 
-    private final MetricBatchCalcService metricBatchCalcService;
-
-    public Level1MetricCalcJob(MetricBatchCalcService metricBatchCalcService) {
-        this.metricBatchCalcService = metricBatchCalcService;
-    }
+    @Autowired
+    private MetricBatchCalcService metricBatchCalcService;
 
     @Override
     protected void executeInternal(JobExecutionContext context) {
