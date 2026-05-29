@@ -316,12 +316,13 @@ const route  = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 
-// 新增方案按钮可见性：仅资财部相关角色（与 TargetValues.vue canCreatePlan 同口径）
+// 新增方案按钮可见性：仅资材部用户（资财部经办 BACK_FINANCE / 资财部负责人 FINANCE_LEADER）。
+// 按业务要求"只有资材部用户可以使用"，不再放行系统管理员(R_ADMIN/SYS_ADMIN)等其它角色。
 const canCreatePlan = computed(() => {
   const roles = userStore.user?.roles || [];
   const codes = roles.map(r => (typeof r === 'string' ? r : (r.roleId || r.roleCode)));
-  return codes.some(c => c === 'R_BACK_FINANCE' || c === 'R_FIN_LEAD' || c === 'R_ADMIN'
-                          || c === 'BACK_FINANCE' || c === 'FINANCE_LEADER' || c === 'SYS_ADMIN');
+  return codes.some(c => c === 'R_BACK_FINANCE' || c === 'R_FIN_LEAD'
+                          || c === 'BACK_FINANCE' || c === 'FINANCE_LEADER');
 });
 
 // === 维度 / 周期 / 状态 字典 ===
