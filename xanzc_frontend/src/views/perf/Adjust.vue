@@ -971,6 +971,13 @@ function resetCustStat() {
   custStat.queried = false;
   custStat.found = false;
 }
+// XAN_M98_CUST_STAT_SHOW3 统计日期 STATIS_DT：
+// 查看/审批模式（dlg.createdTime 有值）取 申请日期-1；新建模式取 昨日。均 yyyy-MM-dd。
+function custStatStatisDt() {
+  const base = dlg.createdTime ? new Date(dlg.createdTime) : new Date(Date.now() - 86400000);
+  if (dlg.createdTime) base.setDate(base.getDate() - 1);
+  return base.toISOString().slice(0, 10);
+}
 const preview = reactive({ loaded: false, loading: false, data: null });
 function fmtAmt(v) {
   if (v == null) return '-';
@@ -1181,7 +1188,8 @@ watch(() => dlg.form.custNo, (val) => {
   custNoTimer = setTimeout(async () => {
     try {
       // 客户名称 + 余额均从 XAN_M98_CUST_STAT_SHOW3 按客户编号反显（列名为 DB 大写）
-      const s = await getCustStat(val);
+      // 统计日期 STATIS_DT：新建=昨日 / 查看·审批=申请日期-1
+      const s = await getCustStat(val, custStatStatisDt());
       if (s) {
         custNameDisplay.value = s.CUST_NAME || s.cust_name || '';
         custStat.currBal = s.CURR_BAL ?? null;
