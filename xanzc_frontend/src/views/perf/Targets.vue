@@ -444,7 +444,8 @@ async function loadTodos() {
   todoLoading.value = true;
   try {
     const r = await listTodoTasks({ pageSize: 50, bizType: 'TARGET_ADJUST' });
-    todos.value = Array.isArray(r) ? r : [];
+    // listTodoTasks 经 unwrapPage 返回 {records,total}（非数组），必须取 records
+    todos.value = Array.isArray(r) ? r : (r?.records || []);
     todoPager.pageNo = 1;
   } catch { todos.value = []; }
   finally { todoLoading.value = false; }
@@ -464,7 +465,8 @@ async function loadDones() {
     // 从业务表拉已完结的修正申请（APPROVED / REJECTED），不从 workflow done-tasks 拉
     // 避免未审批完的中间节点 task 混入"已审批"列表
     const r = await listTargetAdjusts({ pageSize: 100 });
-    const all = Array.isArray(r) ? r : [];
+    // listTargetAdjusts 经 unwrapPage 返回 {records,total}（非数组），必须取 records
+    const all = Array.isArray(r) ? r : (r?.records || []);
     dones.value = all.filter(d => d.status === 'APPROVED' || d.status === 'REJECTED');
     donePager.pageNo = 1;
   } catch { dones.value = []; }

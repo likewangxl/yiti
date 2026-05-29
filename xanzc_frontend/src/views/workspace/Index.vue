@@ -161,7 +161,8 @@ async function loadTasks() {
   try {
     const fn = taskTab.value === 'PENDING' ? listTodoTasks : listDoneTasks;
     const r = await fn({ pageSize: 20 });
-    tasks.value = Array.isArray(r) ? r : [];
+    // listTodoTasks/listDoneTasks 经 unwrapPage 返回 {records,total}（非数组），必须取 records
+    tasks.value = Array.isArray(r) ? r : (r?.records || []);
   } catch { tasks.value = []; } finally { tasksLoading.value = false; }
 }
 
