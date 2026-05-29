@@ -23,8 +23,8 @@ public class EvalTask {
     private LocalDateTime endTime;
     /** 状态：0=进行中, 1=已结束. */
     private Integer status;
-    /** 创建人 USER_ID. */
-    private Long createBy;
+    /** 创建人 USER_ID（工号，String）. */
+    private String createBy;
     /** 创建时间. */
     private LocalDateTime createTime;
     /** 更新时间. */

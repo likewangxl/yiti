@@ -59,7 +59,7 @@ class EvalTaskServiceTest {
         LocalDateTime pastTime = LocalDateTime.now().minusMinutes(1);
 
         assertThatThrownBy(() ->
-                evalTaskService.createTask("任务A", pastTime, List.of(101L), 1L))
+                evalTaskService.createTask("任务A", pastTime, List.of("101"), "1"))
                 .isInstanceOf(PerfException.class)
                 .extracting(e -> ((PerfException) e).getErrorCode())
                 .isEqualTo(PerfErrorCode.EVAL_TASK_END_TIME_INVALID);

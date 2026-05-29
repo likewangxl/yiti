@@ -18,8 +18,8 @@ public class EvalTaskTarget {
     private Long targetId;
     /** 所属任务ID. */
     private Long taskId;
-    /** 被评价人 USER_ID. */
-    private Long beEvalUserId;
+    /** 被评价人 USER_ID（工号，String）. */
+    private String beEvalUserId;
     /** 快照的规则ID. */
     private Long ruleId;
     /** 最终得分（计算后填入）. */

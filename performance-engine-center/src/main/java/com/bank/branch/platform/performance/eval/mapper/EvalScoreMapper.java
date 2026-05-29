@@ -12,6 +12,6 @@ import java.util.List;
 @Mapper
 public interface EvalScoreMapper extends BaseMapper<EvalScore> {
     List<EvalScore> selectByTargetId(@Param("targetId") Long targetId);
-    List<EvalScore> selectByTaskIdAndEvalUserId(@Param("taskId") Long taskId, @Param("evalUserId") Long evalUserId);
-    int countByTargetIdAndEvalUserId(@Param("targetId") Long targetId, @Param("evalUserId") Long evalUserId);
+    List<EvalScore> selectByTaskIdAndEvalUserId(@Param("taskId") Long taskId, @Param("evalUserId") String evalUserId);
+    int countByTargetIdAndEvalUserId(@Param("targetId") Long targetId, @Param("evalUserId") String evalUserId);
 }

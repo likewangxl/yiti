@@ -52,16 +52,16 @@ class EvalUserRoleServiceTest {
     @Test
     @DisplayName("saveUserRoles 覆盖：先删该用户全部旧标签，再插入新被评价+评价人组合")
     void saveUserRoles_overwrite() {
-        EvalUserTag old1 = new EvalUserTag(); old1.setUserId(1001L); old1.setTagId(7L);
-        EvalUserTag old2 = new EvalUserTag(); old2.setUserId(1001L); old2.setTagId(8L);
-        when(evalUserTagMapper.selectByUserId(1001L)).thenReturn(List.of(old1, old2));
+        EvalUserTag old1 = new EvalUserTag(); old1.setUserId("1001"); old1.setTagId(7L);
+        EvalUserTag old2 = new EvalUserTag(); old2.setUserId("1001"); old2.setTagId(8L);
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of(old1, old2));
         when(evalTagMapper.selectById(1L)).thenReturn(tag(1L, 1));
         when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
         when(evalTagMapper.selectById(3L)).thenReturn(tag(3L, 2));
 
-        service.saveUserRoles(1001L, 1L, List.of(2L, 3L));
+        service.saveUserRoles("1001", 1L, List.of(2L, 3L));
 
-        verify(evalUserTagMapper).batchDelete(eq(1001L), eq(List.of(7L, 8L)));
+        verify(evalUserTagMapper).batchDelete(eq("1001"), eq(List.of(7L, 8L)));
         verify(evalUserTagMapper).batchInsert(insertCaptor.capture());
         assertThat(insertCaptor.getValue()).extracting(EvalUserTag::getTagId)
                 .containsExactly(1L, 2L, 3L);
@@ -70,12 +70,12 @@ class EvalUserRoleServiceTest {
     @Test
     @DisplayName("saveUserRoles beEvalTagId=null 表示清空被评价角色，仅插入评价人标签")
     void saveUserRoles_nullBeEval_onlyEvalTags() {
-        when(evalUserTagMapper.selectByUserId(1001L)).thenReturn(List.of());
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
         when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
 
-        service.saveUserRoles(1001L, null, List.of(2L));
+        service.saveUserRoles("1001", null, List.of(2L));
 
-        verify(evalUserTagMapper, never()).batchDelete(anyLong(), anyList());
+        verify(evalUserTagMapper, never()).batchDelete(anyString(), anyList());
         verify(evalUserTagMapper).batchInsert(insertCaptor.capture());
         assertThat(insertCaptor.getValue()).extracting(EvalUserTag::getTagId).containsExactly(2L);
     }
@@ -83,12 +83,12 @@ class EvalUserRoleServiceTest {
     @Test
     @DisplayName("saveUserRoles 全部清空：beEvalTagId=null + evalTagIds 空，仅删除不插入")
     void saveUserRoles_clearAll() {
-        EvalUserTag old1 = new EvalUserTag(); old1.setUserId(1001L); old1.setTagId(7L);
-        when(evalUserTagMapper.selectByUserId(1001L)).thenReturn(List.of(old1));
+        EvalUserTag old1 = new EvalUserTag(); old1.setUserId("1001"); old1.setTagId(7L);
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of(old1));
 
-        service.saveUserRoles(1001L, null, List.of());
+        service.saveUserRoles("1001", null, List.of());
 
-        verify(evalUserTagMapper).batchDelete(eq(1001L), eq(List.of(7L)));
+        verify(evalUserTagMapper).batchDelete(eq("1001"), eq(List.of(7L)));
         verify(evalUserTagMapper, never()).batchInsert(anyList());
     }
 
@@ -97,7 +97,7 @@ class EvalUserRoleServiceTest {
     void saveUserRoles_beEvalWrongType_throws() {
         when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
 
-        assertThatThrownBy(() -> service.saveUserRoles(1001L, 2L, List.of()))
+        assertThatThrownBy(() -> service.saveUserRoles("1001", 2L, List.of()))
                 .isInstanceOfSatisfying(PerfException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.EVAL_TAG_TYPE_MISMATCH));
         verify(evalUserTagMapper, never()).batchInsert(anyList());
@@ -108,7 +108,7 @@ class EvalUserRoleServiceTest {
     void saveUserRoles_evalWrongType_throws() {
         when(evalTagMapper.selectById(1L)).thenReturn(tag(1L, 1));
 
-        assertThatThrownBy(() -> service.saveUserRoles(1001L, null, List.of(1L)))
+        assertThatThrownBy(() -> service.saveUserRoles("1001", null, List.of(1L)))
                 .isInstanceOfSatisfying(PerfException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.EVAL_TAG_TYPE_MISMATCH));
     }
@@ -118,7 +118,7 @@ class EvalUserRoleServiceTest {
     void saveUserRoles_beEvalNotFound_throws() {
         when(evalTagMapper.selectById(99L)).thenReturn(null);
 
-        assertThatThrownBy(() -> service.saveUserRoles(1001L, 99L, List.of()))
+        assertThatThrownBy(() -> service.saveUserRoles("1001", 99L, List.of()))
                 .isInstanceOfSatisfying(PerfException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.EVAL_RULE_NOT_FOUND));
     }
@@ -130,7 +130,7 @@ class EvalUserRoleServiceTest {
         return u;
     }
 
-    private EvalUserTagRow tagRow(long uid, long tid, String name, int type) {
+    private EvalUserTagRow tagRow(String uid, long tid, String name, int type) {
         EvalUserTagRow r = new EvalUserTagRow();
         r.setUserId(uid); r.setTagId(tid); r.setTagName(name); r.setTagType(type);
         return r;
@@ -146,11 +146,11 @@ class EvalUserRoleServiceTest {
         RoleSimpleDTO role = new RoleSimpleDTO();
         role.setRoleChName("管理员");
         when(userApi.getRolesByUserIds(List.of("1001"))).thenReturn(Map.of("1001", List.of(role)));
-        when(evalUserTagMapper.selectUserTagsByUserIds(List.of(1001L)))
+        when(evalUserTagMapper.selectUserTagsByUserIds(List.of("1001")))
                 .thenReturn(List.of(
-                        tagRow(1001L, 1L, "支行行长", 1),
-                        tagRow(1001L, 2L, "副行长评委", 2),
-                        tagRow(1001L, 3L, "同级评委", 2)));
+                        tagRow("1001", 1L, "支行行长", 1),
+                        tagRow("1001", 2L, "副行长评委", 2),
+                        tagRow("1001", 3L, "同级评委", 2)));
 
         PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", 1, 20);
 
@@ -180,22 +180,23 @@ class EvalUserRoleServiceTest {
     @Test
     @DisplayName("saveUserRoles evalTagIds 含重复 id 时去重后只插入一次")
     void saveUserRoles_dedupEvalTagIds() {
-        when(evalUserTagMapper.selectByUserId(1001L)).thenReturn(List.of());
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
         when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
 
-        service.saveUserRoles(1001L, null, List.of(2L, 2L, 2L));
+        service.saveUserRoles("1001", null, List.of(2L, 2L, 2L));
 
         verify(evalUserTagMapper).batchInsert(insertCaptor.capture());
         assertThat(insertCaptor.getValue()).extracting(EvalUserTag::getTagId).containsExactly(2L);
     }
 
     @Test
-    @DisplayName("pageUserRoles 非数值工号：跳过 EVAL_USER_TAG 匹配，标签列为空但不报错")
+    @DisplayName("pageUserRoles 非数值工号：直接以 String 查 EVAL_USER_TAG，无匹配则标签列为空但不报错")
     void pageUserRoles_nonNumericEmpId() {
         when(userApi.pageUsers(null, 1, 20))
                 .thenReturn(PageResult.of(1, 20, 1L, List.of(user("U_ABC123", "李四"))));
         when(addressBookApi.getEmployees(List.of("U_ABC123"))).thenReturn(List.of());
         when(userApi.getRolesByUserIds(List.of("U_ABC123"))).thenReturn(Map.of());
+        when(evalUserTagMapper.selectUserTagsByUserIds(List.of("U_ABC123"))).thenReturn(List.of());
 
         PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, 1, 20);
 
@@ -203,6 +204,6 @@ class EvalUserRoleServiceTest {
         assertThat(row.getBeEvalTag()).isNull();
         assertThat(row.getEvalTags()).isEmpty();
         assertThat(row.getRoleNames()).isEmpty();
-        verify(evalUserTagMapper, never()).selectUserTagsByUserIds(anyList());
+        verify(evalUserTagMapper).selectUserTagsByUserIds(List.of("U_ABC123"));
     }
 }

@@ -58,9 +58,9 @@ public class EvalTaskController {
         @NotNull
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime endTime;
-        /** 被评价人 USER_ID 列表（必填）. */
+        /** 被评价人工号列表（必填）. */
         @NotNull
-        private List<Long> beEvalUserIds;
+        private List<String> beEvalUserIds;
     }
 
     // =============================================
@@ -119,7 +119,7 @@ public class EvalTaskController {
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
     public ResponseWrapper<EvalTask> create(@RequestBody @Valid CreateTaskReq req) {
         String empIdStr = currentUserApi.getCurrentEmpId();
-        Long createBy = Long.parseLong(empIdStr);
+        String createBy = empIdStr;
         log.info("[EvalTaskController.create] taskName={}, endTime={}, beEvalUserIds={}, createBy={}",
                 req.getTaskName(), req.getEndTime(), req.getBeEvalUserIds(), createBy);
         EvalTask task = evalTaskService.createTask(

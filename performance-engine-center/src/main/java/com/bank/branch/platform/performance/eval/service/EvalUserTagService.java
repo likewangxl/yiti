@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -51,18 +50,18 @@ public class EvalUserTagService {
     }
 
     /** 查询人员的标签关联. */
-    public List<EvalUserTag> getByUserId(Long userId) {
+    public List<EvalUserTag> getByUserId(String userId) {
         return evalUserTagMapper.selectByUserId(userId);
     }
 
-    /** 查询标签关联的所有用户ID. */
-    public List<Long> getUserIdsByTagId(Long tagId) {
+    /** 查询标签关联的所有用户ID（返回工号 String 列表）. */
+    public List<String> getUserIdsByTagId(Long tagId) {
         return evalUserTagMapper.selectUserIdsByTagId(tagId);
     }
 
     /** 批量绑定人员标签. */
     @Transactional(rollbackFor = Exception.class)
-    public void batchBind(Long userId, List<Long> tagIds) {
+    public void batchBind(String userId, List<Long> tagIds) {
         if (tagIds == null || tagIds.isEmpty()) return;
         List<EvalUserTag> list = tagIds.stream().map(tagId -> {
             EvalUserTag ut = new EvalUserTag();
@@ -75,7 +74,7 @@ public class EvalUserTagService {
 
     /** 批量解绑人员标签. */
     @Transactional(rollbackFor = Exception.class)
-    public void batchUnbind(Long userId, List<Long> tagIds) {
+    public void batchUnbind(String userId, List<Long> tagIds) {
         if (tagIds == null || tagIds.isEmpty()) return;
         evalUserTagMapper.batchDelete(userId, tagIds);
     }
@@ -90,7 +89,7 @@ public class EvalUserTagService {
      * @throws PerfException EVAL_RULE_NOT_FOUND（标签不存在）/ EVAL_TAG_TYPE_MISMATCH（类型不符）
      */
     @Transactional(rollbackFor = Exception.class)
-    public void saveUserRoles(Long userId, Long beEvalTagId, List<Long> evalTagIds) {
+    public void saveUserRoles(String userId, Long beEvalTagId, List<Long> evalTagIds) {
         // 1. 校验被评价人标签必须 tagType=1
         if (beEvalTagId != null) {
             EvalTag t = evalTagMapper.selectById(beEvalTagId);
@@ -157,11 +156,10 @@ public class EvalUserTagService {
         // RBAC 角色：批量
         Map<String, List<RoleSimpleDTO>> roleMap = userApi.getRolesByUserIds(empIds);
 
-        // EVAL 标签：仅数值型工号能匹配 BIGINT user_id
-        List<Long> numericIds = empIds.stream().map(this::toLongOrNull).filter(Objects::nonNull).collect(Collectors.toList());
-        Map<Long, List<EvalUserTagRow>> tagMap = new HashMap<>();
-        if (!numericIds.isEmpty()) {
-            for (EvalUserTagRow r : evalUserTagMapper.selectUserTagsByUserIds(numericIds)) {
+        // EVAL 标签：按工号（String）批量匹配
+        Map<String, List<EvalUserTagRow>> tagMap = new HashMap<>();
+        if (!empIds.isEmpty()) {
+            for (EvalUserTagRow r : evalUserTagMapper.selectUserTagsByUserIds(empIds)) {
                 tagMap.computeIfAbsent(r.getUserId(), k -> new ArrayList<>()).add(r);
             }
         }
@@ -179,8 +177,7 @@ public class EvalUserTagService {
             List<RoleSimpleDTO> roles = roleMap.getOrDefault(u.getEmpId(), List.of());
             row.setRoleNames(roles.stream().map(RoleSimpleDTO::getRoleChName).collect(Collectors.toList()));
 
-            Long numId = toLongOrNull(u.getEmpId());
-            List<EvalUserTagRow> tagRows = (numId == null) ? List.of() : tagMap.getOrDefault(numId, List.of());
+            List<EvalUserTagRow> tagRows = tagMap.getOrDefault(u.getEmpId(), List.of());
             EvalUserTagBriefDTO beEval = tagRows.stream()
                     .filter(t -> Integer.valueOf(1).equals(t.getTagType()))
                     .findFirst()
@@ -197,12 +194,4 @@ public class EvalUserTagService {
         return PageResult.of(page, pageSize, users.getTotal(), rows);
     }
 
-    /** 工号转 Long，非数值返回 null（用于匹配 EVAL_USER_TAG.user_id BIGINT）. */
-    private Long toLongOrNull(String s) {
-        try {
-            return Long.valueOf(s);
-        } catch (Exception e) {
-            return null;
-        }
-    }
 }

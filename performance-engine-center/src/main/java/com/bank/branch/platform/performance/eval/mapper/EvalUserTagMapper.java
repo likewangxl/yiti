@@ -12,18 +12,18 @@ import java.util.List;
  */
 @Mapper
 public interface EvalUserTagMapper extends BaseMapper<EvalUserTag> {
-    List<EvalUserTag> selectByUserId(@Param("userId") Long userId);
-    List<Long> selectUserIdsByTagId(@Param("tagId") Long tagId);
-    List<Long> selectTagIdsByUserIdAndType(@Param("userId") Long userId, @Param("tagType") Integer tagType);
+    List<EvalUserTag> selectByUserId(@Param("userId") String userId);
+    List<String> selectUserIdsByTagId(@Param("tagId") Long tagId);
+    List<Long> selectTagIdsByUserIdAndType(@Param("userId") String userId, @Param("tagType") Integer tagType);
     int batchInsert(@Param("list") List<EvalUserTag> list);
-    int batchDelete(@Param("userId") Long userId, @Param("tagIds") List<Long> tagIds);
+    int batchDelete(@Param("userId") String userId, @Param("tagIds") List<Long> tagIds);
 
     /**
      * 批量查询多个用户的标签（JOIN EVAL_TAG 带出 tagName/tagType），供列表聚合用。
      * 调用方须保证 userIds 非空。
      *
-     * @param userIds 人员ID列表（BIGINT）
+     * @param userIds 人员工号列表（String）
      * @return 投影行列表
      */
-    List<EvalUserTagRow> selectUserTagsByUserIds(@Param("userIds") List<Long> userIds);
+    List<EvalUserTagRow> selectUserTagsByUserIds(@Param("userIds") List<String> userIds);
 }

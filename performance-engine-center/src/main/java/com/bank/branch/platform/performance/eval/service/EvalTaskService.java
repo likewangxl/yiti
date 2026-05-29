@@ -82,7 +82,7 @@ public class EvalTaskService {
      */
     @Transactional(rollbackFor = Exception.class)
     public EvalTask createTask(String taskName, LocalDateTime endTime,
-                               List<Long> beEvalUserIds, Long createBy) {
+                               List<String> beEvalUserIds, String createBy) {
         // 1. 截止时间校验
         if (endTime == null || !endTime.isAfter(LocalDateTime.now())) {
             throw new PerfException(PerfErrorCode.EVAL_TASK_END_TIME_INVALID, endTime);
@@ -101,7 +101,7 @@ public class EvalTaskService {
 
         // 3. 为每个被评价人生成 target（匹配规则）
         List<EvalTaskTarget> targets = new ArrayList<>();
-        for (Long userId : beEvalUserIds) {
+        for (String userId : beEvalUserIds) {
             // 查询被评价人的被评价人标签（tagType=1）
             List<Long> beEvalTagIds = evalUserTagMapper.selectTagIdsByUserIdAndType(userId, 1);
             Long ruleId = null;

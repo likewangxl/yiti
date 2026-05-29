@@ -61,7 +61,7 @@ class EvalScoreServiceTest {
         // Arrange
         Long taskId = 1L;
         Long targetId = 10L;
-        Long evalUserId = 100L;
+        String evalUserId = "100";
         int score = 80;
 
         EvalTask task = new EvalTask();
@@ -114,7 +114,7 @@ class EvalScoreServiceTest {
 
     @Test
     void submitScore_scoreBelowMin_throwsOutOfRange() {
-        assertThatThrownBy(() -> evalScoreService.submitScore(1L, 10L, 100L, 9))
+        assertThatThrownBy(() -> evalScoreService.submitScore(1L, 10L, "100", 9))
                 .isInstanceOf(PerfException.class)
                 .extracting(e -> ((PerfException) e).getErrorCode())
                 .isEqualTo(PerfErrorCode.EVAL_SCORE_OUT_OF_RANGE);
@@ -126,7 +126,7 @@ class EvalScoreServiceTest {
 
     @Test
     void submitScore_scoreAboveMax_throwsOutOfRange() {
-        assertThatThrownBy(() -> evalScoreService.submitScore(1L, 10L, 100L, 101))
+        assertThatThrownBy(() -> evalScoreService.submitScore(1L, 10L, "100", 101))
                 .isInstanceOf(PerfException.class)
                 .extracting(e -> ((PerfException) e).getErrorCode())
                 .isEqualTo(PerfErrorCode.EVAL_SCORE_OUT_OF_RANGE);
@@ -145,7 +145,7 @@ class EvalScoreServiceTest {
         task.setEndTime(LocalDateTime.now().plusDays(1));
         when(evalTaskMapper.selectById(taskId)).thenReturn(task);
 
-        assertThatThrownBy(() -> evalScoreService.submitScore(taskId, 10L, 100L, 80))
+        assertThatThrownBy(() -> evalScoreService.submitScore(taskId, 10L, "100", 80))
                 .isInstanceOf(PerfException.class)
                 .extracting(e -> ((PerfException) e).getErrorCode())
                 .isEqualTo(PerfErrorCode.EVAL_TASK_CLOSED);
@@ -164,7 +164,7 @@ class EvalScoreServiceTest {
         task.setEndTime(LocalDateTime.now().minusSeconds(1)); // 已过期
         when(evalTaskMapper.selectById(taskId)).thenReturn(task);
 
-        assertThatThrownBy(() -> evalScoreService.submitScore(taskId, 10L, 100L, 80))
+        assertThatThrownBy(() -> evalScoreService.submitScore(taskId, 10L, "100", 80))
                 .isInstanceOf(PerfException.class)
                 .extracting(e -> ((PerfException) e).getErrorCode())
                 .isEqualTo(PerfErrorCode.EVAL_TASK_CLOSED);
@@ -178,7 +178,7 @@ class EvalScoreServiceTest {
     void submitScore_duplicate_throwsScoreDuplicate() {
         Long taskId = 1L;
         Long targetId = 10L;
-        Long evalUserId = 100L;
+        String evalUserId = "100";
 
         EvalTask task = new EvalTask();
         task.setTaskId(taskId);
@@ -221,7 +221,7 @@ class EvalScoreServiceTest {
     void submitScore_gradeMode_validGradeScore_success() {
         Long taskId = 1L;
         Long targetId = 10L;
-        Long evalUserId = 100L;
+        String evalUserId = "100";
 
         EvalTask task = new EvalTask();
         task.setTaskId(taskId);
@@ -265,7 +265,7 @@ class EvalScoreServiceTest {
     void submitScore_gradeMode_invalidGradeScore_throwsOutOfRange() {
         Long taskId = 1L;
         Long targetId = 10L;
-        Long evalUserId = 100L;
+        String evalUserId = "100";
 
         EvalTask task = new EvalTask();
         task.setTaskId(taskId);

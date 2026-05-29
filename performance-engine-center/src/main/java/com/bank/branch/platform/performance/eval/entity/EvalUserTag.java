@@ -14,8 +14,8 @@ public class EvalUserTag {
     /** 主键. */
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
-    /** 人员ID，关联 PT_USER.USER_ID. */
-    private Long userId;
+    /** 人员ID，关联 PT_USER.USER_ID（工号，String）. */
+    private String userId;
     /** 标签ID，关联 EVAL_TAG.TAG_ID. */
     private Long tagId;
 }

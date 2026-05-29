@@ -19,8 +19,8 @@ public class EvalScore {
     private Long taskId;
     /** 关联 EVAL_TASK_TARGET.TARGET_ID. */
     private Long targetId;
-    /** 评价人 USER_ID. */
-    private Long evalUserId;
+    /** 评价人 USER_ID（工号，String）. */
+    private String evalUserId;
     /** 所属评价人组ID. */
     private Long groupId;
     /** 打分 10~100. */

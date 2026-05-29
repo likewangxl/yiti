@@ -100,7 +100,7 @@ public class EvalScoreController {
     @BizAuth(bizType = BizType.EVAL, action = BizAction.READ)
     public ResponseWrapper<List<EvalTaskTarget>> targets(@PathVariable("taskId") Long taskId) {
         String empIdStr = currentUserApi.getCurrentEmpId();
-        Long evalUserId = Long.parseLong(empIdStr);
+        String evalUserId = empIdStr;
         log.debug("[EvalScoreController.targets] taskId={} evalUserId={}", taskId, evalUserId);
         List<EvalTaskTarget> targets = evalTaskService.getTargetsByTaskId(taskId);
         for (EvalTaskTarget t : targets) {
@@ -124,7 +124,7 @@ public class EvalScoreController {
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
     public ResponseWrapper<Void> submitScore(@RequestBody @Valid SubmitScoreReq req) {
         String empIdStr = currentUserApi.getCurrentEmpId();
-        Long evalUserId = Long.parseLong(empIdStr);
+        String evalUserId = empIdStr;
         log.info("[EvalScoreController.submitScore] taskId={}, targetId={}, evalUserId={}, score={}",
                 req.getTaskId(), req.getTargetId(), evalUserId, req.getScore());
         evalScoreService.submitScore(req.getTaskId(), req.getTargetId(), evalUserId, req.getScore());

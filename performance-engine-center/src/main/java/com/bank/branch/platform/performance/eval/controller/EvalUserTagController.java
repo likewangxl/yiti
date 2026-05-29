@@ -34,7 +34,7 @@ public class EvalUserTagController {
     @GetMapping
     @Operation(summary = "查询人员标签")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
-    public ResponseWrapper<List<EvalUserTag>> list(@RequestParam("userId") Long userId) {
+    public ResponseWrapper<List<EvalUserTag>> list(@RequestParam("userId") String userId) {
         log.debug("[EvalUserTagController.list] userId={}", userId);
         return ResponseWrapper.success(evalUserTagService.getByUserId(userId));
     }
@@ -71,7 +71,7 @@ public class EvalUserTagController {
     @PutMapping("/{userId}/roles")
     @Operation(summary = "覆盖式保存人员评价角色（被评价单选/评价人多选）")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
-    public ResponseWrapper<Void> saveRoles(@PathVariable("userId") Long userId,
+    public ResponseWrapper<Void> saveRoles(@PathVariable("userId") String userId,
                                            @Validated @RequestBody SaveRolesReq req) {
         log.info("[EvalUserTagController.saveRoles] userId={}, beEvalTagId={}, evalTagIds={}",
                 userId, req.getBeEvalTagId(), req.getEvalTagIds());
@@ -82,7 +82,7 @@ public class EvalUserTagController {
     @Data
     public static class BindReq {
         @NotNull
-        private Long userId;
+        private String userId;
         private List<Long> tagIds;
     }
 

@@ -5,7 +5,7 @@
         SELECT id, user_id, tag_id FROM EVAL_USER_TAG WHERE user_id = #{userId}
     </select>
 
-    <select id="selectUserIdsByTagId" resultType="java.lang.Long">
+    <select id="selectUserIdsByTagId" resultType="java.lang.String">
         SELECT user_id FROM EVAL_USER_TAG WHERE tag_id = #{tagId}
     </select>
 

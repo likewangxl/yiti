@@ -76,7 +76,7 @@ public class EvalScoreService {
      * @throws PerfException 各类业务异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void submitScore(Long taskId, Long targetId, Long evalUserId, int score) {
+    public void submitScore(Long taskId, Long targetId, String evalUserId, int score) {
         // 1. 校验分数范围
         if (score < 10 || score > 100) {
             throw new PerfException(PerfErrorCode.EVAL_SCORE_OUT_OF_RANGE, score);
@@ -134,7 +134,7 @@ public class EvalScoreService {
      * @param evalUserId 评价人 USER_ID
      * @return 打分记录列表
      */
-    public List<EvalScore> getScoresByTaskAndUser(Long taskId, Long evalUserId) {
+    public List<EvalScore> getScoresByTaskAndUser(Long taskId, String evalUserId) {
         return evalScoreMapper.selectByTaskIdAndEvalUserId(taskId, evalUserId);
     }
 
@@ -150,7 +150,7 @@ public class EvalScoreService {
      * @param beEvalUserId 被评价人 USER_ID
      * @return 评分方式（1=数值, 2=等级），无匹配时返回 1（默认数值）
      */
-    public Integer resolveScoreModeForUser(Long ruleId, Long evalUserId, Long beEvalUserId) {
+    public Integer resolveScoreModeForUser(Long ruleId, String evalUserId, String beEvalUserId) {
         List<EvalRuleGroup> groups = evalRuleGroupMapper.selectByRuleId(ruleId);
         EvalRuleGroup matched = resolveGroup(groups, evalUserId, beEvalUserId);
         return (matched != null && matched.getScoreMode() != null) ? matched.getScoreMode() : 1;
@@ -167,7 +167,7 @@ public class EvalScoreService {
      * @param beEvalUserId 被评价人 USER_ID
      * @return 匹配的评价人组实体，未匹配返回 null
      */
-    private EvalRuleGroup resolveGroup(List<EvalRuleGroup> groups, Long evalUserId, Long beEvalUserId) {
+    private EvalRuleGroup resolveGroup(List<EvalRuleGroup> groups, String evalUserId, String beEvalUserId) {
         if (groups == null || groups.isEmpty()) {
             return null;
         }
@@ -190,10 +190,10 @@ public class EvalScoreService {
     /**
      * 判断两个用户是否属于同一部门.
      */
-    private boolean isSameOrg(Long userIdA, Long userIdB) {
+    private boolean isSameOrg(String userIdA, String userIdB) {
         try {
-            OrgDTO orgA = orgApi.getUserMainOrg(String.valueOf(userIdA));
-            OrgDTO orgB = orgApi.getUserMainOrg(String.valueOf(userIdB));
+            OrgDTO orgA = orgApi.getUserMainOrg(userIdA);
+            OrgDTO orgB = orgApi.getUserMainOrg(userIdB);
             if (orgA == null || orgB == null) {
                 return false;
             }
