@@ -16,24 +16,26 @@ import org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfigura
 import org.flowable.spring.boot.idm.IdmEngineAutoConfiguration;
 import org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration;
 import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 
 /**
- * workflow-center Mapper IT 专用启动配置。
+ * workflow-center Mapper IT 专用启动配置（纯 MyBatis 切片）。
  *
- * <p><b>scanBasePackages 指向 support 包</b>（仅含测试辅助类），因此<b>不</b>扫描
- * controller / service / listener —— 这些 Bean 不创建，就无需 Flowable ProcessEngine、
- * 也无需 mock 跨模块 API。</p>
+ * <p><b>故意不使用 {@code @ComponentScan}</b>（即不用 {@code @SpringBootApplication}）：
+ * 一旦组件扫描 support 包，会把同包的 {@code WfFlowableTestApp}（它 {@code @ComponentScan}
+ * 整个 workflow 包）当嵌套配置导入，从而拉起 controller/service 并要求 Flowable
+ * RepositoryService，导致 Mapper IT 上下文加载失败。改用
+ * {@code @SpringBootConfiguration + @EnableAutoConfiguration + @MapperScan} 组合：
+ * 完整 auto-config 可靠装配数据源 + MyBatis-Plus SqlSessionFactory，
+ * {@code @MapperScan} 显式只扫 mapper 接口包，全程不做组件扫描。</p>
  *
- * <p>用完整 {@code @EnableAutoConfiguration}（经 {@code @SpringBootApplication}）可靠装配
- * 数据源 + MyBatis-Plus SqlSessionFactory；{@code @MapperScan} 显式扫描 workflow 的 Mapper
- * 接口包（而非本类所在的 support 包）。排除全部 Flowable AutoConfig，避免 ProcessEngine 初始化。</p>
- *
- * <p>数据源走 application-test.yml（本地 yiti 库），WF_FLOW_* 等表均已存在。
+ * <p>排除全部 Flowable AutoConfig，避免 ProcessEngine 初始化。
+ * 数据源走 application-test.yml（本地 yiti 库），WF_FLOW_* 等表均已存在。
  * Mapper XML 由 mapper-locations（classpath*:mapper/**&#47;*Mapper.xml）加载。</p>
  */
-@SpringBootApplication(
-        scanBasePackages = "com.bank.branch.platform.workflow.support",
+@SpringBootConfiguration
+@EnableAutoConfiguration(
         exclude = {
                 ProcessEngineAutoConfiguration.class,
                 ProcessEngineServicesAutoConfiguration.class,
