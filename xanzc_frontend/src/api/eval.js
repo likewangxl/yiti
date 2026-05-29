@@ -58,6 +58,24 @@ export function saveUserRoles(userId, beEvalTagId, evalTagIds) {
   return call('put', `/admin/eval/user-tags/${userId}/roles`, { data: { beEvalTagId, evalTagIds } }, { ok: true });
 }
 
+// 2026-05-29：人员标签 导入 / 模板下载 / 导出
+export async function importUserRoles(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return call('post', '/admin/eval/user-tags/import', {
+    data: fd,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }, null);
+}
+
+export function downloadImportTemplate() {
+  return call('get', '/admin/eval/user-tags/import-template', { responseType: 'blob' }, null);
+}
+
+export function exportUserRoles(keyword) {
+  return call('get', '/admin/eval/user-tags/export', { params: { keyword }, responseType: 'blob' }, null);
+}
+
 // ============================================================
 // 评价规则 (EvalRuleController: /api/admin/eval/rules)
 // ============================================================

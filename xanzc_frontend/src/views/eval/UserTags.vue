@@ -13,9 +13,13 @@
           clearable
           size="small"
           class="kw-input"
-          @input="onSearch"
-          @clear="reload"
+          @keyup.enter="doSearch"
+          @clear="doSearch"
         />
+        <el-button type="primary" size="small" @click="doSearch">查询</el-button>
+        <el-button size="small" @click="resetSearch">重置</el-button>
+        <el-button size="small" @click="openImport">导入</el-button>
+        <el-button size="small" :loading="exporting" @click="doExport">下载</el-button>
       </div>
 
       <el-table :data="rows" v-loading="loading" border size="small" style="width: 100%">
@@ -59,6 +63,39 @@
           @current-change="onPageChange"
         />
       </div>
+
+      <el-dialog v-model="importVisible" title="导入人员评价角色" width="640px">
+        <div class="imp-tip">
+          <el-button size="small" @click="doDownloadTpl">📥 下载导入模板</el-button>
+          <span class="muted">模板列：工号 / 被评价角色 / 评价角色；评价角色用逗号分隔。全部校验通过才会导入。</span>
+        </div>
+        <el-upload
+          ref="impUploaderRef"
+          drag
+          action="#"
+          :auto-upload="false"
+          :show-file-list="true"
+          :limit="1"
+          :on-change="onImpFilePick"
+          accept=".xlsx"
+          style="margin-top:12px">
+          <div class="el-upload__text">点击或拖拽 <em>.xlsx</em> 到此处</div>
+        </el-upload>
+
+        <div v-if="importErrors.length" class="imp-errors">
+          <div class="err-title">导入失败，请修正后重传（共 {{ importErrors.length }} 条问题）：</div>
+          <el-table :data="importErrors" size="small" border max-height="240">
+            <el-table-column prop="row" label="行号" width="80" />
+            <el-table-column prop="empId" label="工号" width="140" />
+            <el-table-column prop="message" label="原因" min-width="240" />
+          </el-table>
+        </div>
+
+        <template #footer>
+          <el-button @click="importVisible = false">取消</el-button>
+          <el-button type="primary" :loading="importing" :disabled="!impFile" @click="doImport">开始导入</el-button>
+        </template>
+      </el-dialog>
     </div>
 
     <!-- 编辑弹窗 -->
@@ -95,7 +132,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { listAllTags, pageUserRoles, saveUserRoles } from '@/api/eval';
+import { listAllTags, pageUserRoles, saveUserRoles, importUserRoles, downloadImportTemplate, exportUserRoles } from '@/api/eval';
 
 // === 全量启用标签（编辑弹窗下拉用） ===
 const allTags = ref([]);
@@ -119,6 +156,12 @@ const pageSize = ref(20);
 const keyword = ref('');
 const loading = ref(false);
 let searchTimer = null;
+const exporting = ref(false);
+const importVisible = ref(false);
+const importing = ref(false);
+const impFile = ref(null);
+const impUploaderRef = ref(null);
+const importErrors = ref([]);
 
 async function reload() {
   loading.value = true;
@@ -134,9 +177,70 @@ async function reload() {
   }
 }
 
-function onSearch() {
-  if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => { page.value = 1; reload(); }, 300);
+function doSearch() {
+  page.value = 1;
+  reload();
+}
+function resetSearch() {
+  keyword.value = '';
+  page.value = 1;
+  reload();
+}
+
+function openImport() {
+  importErrors.value = [];
+  impFile.value = null;
+  impUploaderRef.value?.clearFiles();
+  importVisible.value = true;
+}
+function onImpFilePick(uploadFile) {
+  impFile.value = uploadFile.raw || null;
+}
+async function doImport() {
+  if (!impFile.value) return;
+  importing.value = true;
+  importErrors.value = [];
+  try {
+    const res = await importUserRoles(impFile.value);
+    if (res && res.success) {
+      ElMessage.success(`导入成功 ${res.importedCount} 条`);
+      importVisible.value = false;
+      reload();
+    } else {
+      importErrors.value = (res && res.errors) || [];
+      ElMessage.error('导入未通过校验，请查看错误明细');
+    }
+  } catch (e) {
+    // http.js 已弹错误消息
+  } finally {
+    importing.value = false;
+  }
+}
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+async function doDownloadTpl() {
+  try {
+    const blob = await downloadImportTemplate();
+    saveBlob(blob, '人员评价角色导入模板.xlsx');
+  } catch (e) { /* 已提示 */ }
+}
+async function doExport() {
+  exporting.value = true;
+  try {
+    const blob = await exportUserRoles(keyword.value);
+    saveBlob(blob, '人员标签列表.xlsx');
+  } catch (e) { /* 已提示 */ } finally {
+    exporting.value = false;
+  }
 }
 
 function onPageChange(p) {
