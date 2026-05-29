@@ -167,17 +167,22 @@ class AllocAdjustServiceTest {
     }
 
     @Test
-    @DisplayName("客户编号不存在 → 抛 VALIDATION_FAILED，不发起流程")
-    void submit_customerNotFound_throws() {
+    @DisplayName("cust_master 查不到客户 → 不做提交校验，回退用 custNo 落库并正常发起流程")
+    void submit_customerNotFoundInMaster_fallsBackToCustNoAndStarts() {
+        // 客户编号在前端填写时已基于 XAN_M98 统计表校验过，提交期不再卡 cust_master 存在性
         when(customerQueryApi.getCustomerByCustNo("CN-001")).thenReturn(Optional.empty());
+        when(workflowApi.startProcess(any(StartProcessCmd.class)))
+                .thenReturn(new WorkflowLaunchResp("PI_NF", null, null));
 
-        assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
-                .isInstanceOf(PerfException.class)
-                .extracting(e -> ((PerfException) e).getErrorCode())
-                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+        String id = service.submit(baseCmd("CORP_LOAN"));
 
-        verify(workflowApi, never()).startProcess(any());
-        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        assertThat(id).isNotBlank();
+        // 主档查不到时 cust_id 回退用 custNo 本身落库
+        ArgumentCaptor<PerfAllocAdjustApply> applyCap = ArgumentCaptor.forClass(PerfAllocAdjustApply.class);
+        verify(applyMapper).insert(applyCap.capture());
+        assertThat(applyCap.getValue().getCustId()).isEqualTo("CN-001");
+        // 流程照常发起
+        verify(workflowApi).startProcess(any(StartProcessCmd.class));
     }
 
     @Test
@@ -277,8 +282,8 @@ class AllocAdjustServiceTest {
     }
 
     @Test
-    @DisplayName("getByIdDto → 客户已删除时 custNo 留 null，custId 仍回显")
-    void getByIdDto_customerMissing_leavesCustNoNull() {
+    @DisplayName("getByIdDto → cust_master 查不到时 custNo 兜底回显 custId（84f227e0 custNo兜底）")
+    void getByIdDto_customerMissing_fallsBackToCustId() {
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId("APPLY_Y");
         apply.setApplyNo("AA-Y");
@@ -290,7 +295,8 @@ class AllocAdjustServiceTest {
         AllocAdjustRespDTO dto = service.getByIdDto("APPLY_Y");
 
         assertThat(dto.getCustId()).isEqualTo("CUST_GONE");
-        assertThat(dto.getCustNo()).isNull();
+        // 查不到主档时 custNo 兜底回退用 custId 展示，不再留 null
+        assertThat(dto.getCustNo()).isEqualTo("CUST_GONE");
     }
 
     @Test

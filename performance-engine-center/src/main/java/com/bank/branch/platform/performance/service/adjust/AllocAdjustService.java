@@ -398,7 +398,8 @@ public class AllocAdjustService {
     /**
      * V1.3 R4.1：entity → DTO 装配下沉到 Service.
      * <p>{@code custNo} 由调用方按内部主键反查后传入（单条 lookupCustNo / 批量 batchLookupCustNos），
-     * 查不到时传 null，DTO 字段保持 null（不抛错以兼容历史已删客户的 apply 行）.
+     * 查不到时传 null；此时 DTO 的 custNo 兜底回退用 apply.custId 展示（84f227e0 custNo兜底，
+     * 不抛错以兼容历史已删客户的 apply 行）.
      */
     private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items, String custNo) {
         AllocAdjustRespDTO dto = new AllocAdjustRespDTO();
@@ -535,14 +536,15 @@ public class AllocAdjustService {
     }
 
     /**
-     * 按客户编号(cust_no)校验存在性并返回内部主键 id；不存在抛 VALIDATION_FAILED。
+     * 按客户编号(cust_no)查 cust_master 主档，命中则返回内部主键 id；
+     * <p>不做提交期存在性校验——客户编号在前端填写时已基于 XAN_M98 统计表反显校验过，
+     * 这里查不到主档（如客户主档与统计表口径不一致、或尚未建档）时不再抛错，
+     * 直接回退用 custNo 本身作为 cust_id 落库，保证申请可正常提交。
+     * 下游 resolveOriginalOwnerEmpId 查不到有效分配会返回 null（"新客户或历史分配空"分支已优雅处理）。
      */
     private String resolveInternalCustIdByCustNo(String custNo) {
         Optional<CustomerDTO> opt = customerQueryApi.getCustomerByCustNo(custNo);
-        if (opt.isEmpty()) {
-            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "客户编号不存在: " + custNo);
-        }
-        return opt.get().getId();
+        return opt.map(CustomerDTO::getId).orElse(custNo);
     }
 
     /**
