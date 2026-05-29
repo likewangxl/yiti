@@ -67,6 +67,7 @@ public class EvalUserTagService {
 
     /**
      * 批量绑定人员标签（增量，指定角色）.
+     * <p>局部排斥：若 batch 中任一标签已被该用户绑在对侧角色，抛 EVAL_ROLE_CONFLICT。</p>
      *
      * @param userId   人员工号
      * @param tagIds   标签ID列表
@@ -75,6 +76,14 @@ public class EvalUserTagService {
     @Transactional(rollbackFor = Exception.class)
     public void batchBind(String userId, List<Long> tagIds, Integer roleType) {
         if (tagIds == null || tagIds.isEmpty()) return;
+        // 局部排斥：对侧角色已持有的标签不能再绑到本角色
+        int oppositeRole = (roleType != null && roleType == 1) ? 2 : 1;
+        List<Long> oppositeTagIds = evalUserTagMapper.selectTagIdsByUserIdAndType(userId, oppositeRole);
+        for (Long tid : tagIds) {
+            if (oppositeTagIds.contains(tid)) {
+                throw new PerfException(PerfErrorCode.EVAL_ROLE_CONFLICT, tid);
+            }
+        }
         List<EvalUserTag> list = tagIds.stream().map(tagId -> {
             EvalUserTag ut = new EvalUserTag();
             ut.setUserId(userId);
@@ -122,7 +131,7 @@ public class EvalUserTagService {
         // 4. 覆盖：删除该用户全部旧关联
         List<EvalUserTag> existing = evalUserTagMapper.selectByUserId(userId);
         if (!existing.isEmpty()) {
-            List<Long> oldTagIds = existing.stream().map(EvalUserTag::getTagId).collect(Collectors.toList());
+            List<Long> oldTagIds = existing.stream().map(EvalUserTag::getTagId).distinct().collect(Collectors.toList());
             evalUserTagMapper.batchDelete(userId, oldTagIds);
         }
         // 5. 写入新组合：被评价 role_type=1，评价人 role_type=2

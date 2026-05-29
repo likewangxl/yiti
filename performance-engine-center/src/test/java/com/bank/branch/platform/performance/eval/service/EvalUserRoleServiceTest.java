@@ -308,4 +308,27 @@ class EvalUserRoleServiceTest {
         verify(evalUserSettingMapper).clearExcluded("1001");
         verify(evalUserSettingMapper, never()).markExcluded(anyString());
     }
+
+    @Test
+    @DisplayName("batchBind 绑定的标签已在对侧角色 → EVAL_ROLE_CONFLICT")
+    void batchBind_tagAlreadyInOppositeRole_throwsConflict() {
+        // 用户 1001 已持有 tag 100 作为被评价角色(role=1)；现欲把 100 绑为评价角色(role=2)
+        when(evalUserTagMapper.selectTagIdsByUserIdAndType("1001", 1)).thenReturn(java.util.List.of(100L));
+        assertThatThrownBy(() -> service.batchBind("1001", java.util.List.of(100L, 200L), 2))
+                .isInstanceOf(PerfException.class)
+                .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
+                        .isEqualTo(PerfErrorCode.EVAL_ROLE_CONFLICT));
+        verify(evalUserTagMapper, never()).batchInsert(anyList());
+    }
+
+    @Test
+    @DisplayName("batchBind 对侧角色无冲突 → 正常插入带 roleType")
+    void batchBind_noConflict_inserts() {
+        when(evalUserTagMapper.selectTagIdsByUserIdAndType("1001", 1)).thenReturn(java.util.List.of(999L));
+        service.batchBind("1001", java.util.List.of(100L, 200L), 2);
+        org.mockito.ArgumentCaptor<java.util.List<com.bank.branch.platform.performance.eval.entity.EvalUserTag>> cap =
+                org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(evalUserTagMapper).batchInsert(cap.capture());
+        assertThat(cap.getValue()).allSatisfy(u -> assertThat(u.getRoleType()).isEqualTo(2));
+    }
 }

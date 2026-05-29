@@ -2,6 +2,9 @@
 -- 执行前务必先 mysqldump 备份 EVAL_TAG / EVAL_USER_TAG。
 -- 次序关键：先回填 EVAL_USER_TAG.ROLE_TYPE，再 DROP EVAL_TAG.TAG_TYPE。
 
+-- ⚠ 执行前必跑：同名跨类型冲突预检（应返回 0 行；非空须先人工合并 tag_id）
+--   SELECT TAG_NAME, COUNT(DISTINCT TAG_TYPE) c FROM EVAL_TAG GROUP BY TAG_NAME HAVING c>1;
+
 -- 1. EVAL_USER_TAG 加角色列（临时默认 1 便于回填）
 ALTER TABLE EVAL_USER_TAG
   ADD COLUMN ROLE_TYPE TINYINT NOT NULL DEFAULT 1 COMMENT '1=被评价角色,2=评价角色';
