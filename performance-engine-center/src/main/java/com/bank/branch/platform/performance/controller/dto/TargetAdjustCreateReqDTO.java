@@ -67,5 +67,11 @@ public class TargetAdjustCreateReqDTO {
         /** 新目标值（必填，审批通过后落地）. */
         @NotNull(message = "adjustment.newValue 必填")
         private BigDecimal newValue;
+
+        /** 原基础值（可空，审计快照）. */
+        private BigDecimal oldBaseValue;
+
+        /** 新基础值（可空，审批通过后落地到 base_value；为空则保留原值不抹除）. */
+        private BigDecimal newBaseValue;
     }
 }

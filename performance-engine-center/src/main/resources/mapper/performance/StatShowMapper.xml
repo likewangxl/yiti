@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  财务统计展示表只读查询（XAN_M9B_EMP_STAT_SHOW3 / XAN_M98_CUST_STAT_SHOW3）.
+  SELECT * → LinkedHashMap 行投影；表名固定字面量，过滤值一律 #{} 占位，无注入风险。
+-->
+<mapper namespace="com.bank.branch.platform.performance.mapper.StatShowMapper">
+
+    <!-- ============ 员工维度 XAN_M9B_EMP_STAT_SHOW3 ============ -->
+    <sql id="empWhere">
+        <where>
+            <if test="statisDt != null and statisDt != ''">AND STATIS_DT = #{statisDt}</if>
+            <if test="branchNo != null and branchNo != ''">AND BRANCH_NO = #{branchNo}</if>
+            <if test="empId != null and empId != ''">AND EMP_ID = #{empId}</if>
+            <if test="indType != null and indType != ''">AND IND_TYPE = #{indType}</if>
+            <if test="keyword != null and keyword != ''">AND EMP_NAME LIKE CONCAT('%', #{keyword}, '%')</if>
+        </where>
+    </sql>
+
+    <select id="pageEmpStat" resultType="java.util.LinkedHashMap">
+        SELECT * FROM XAN_M9B_EMP_STAT_SHOW3
+        <include refid="empWhere"/>
+        ORDER BY STATIS_DT DESC, EMP_ID ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countEmpStat" resultType="long">
+        SELECT COUNT(*) FROM XAN_M9B_EMP_STAT_SHOW3
+        <include refid="empWhere"/>
+    </select>
+
+    <!-- ============ 客户维度 XAN_M98_CUST_STAT_SHOW3 ============ -->
+    <sql id="custWhere">
+        <where>
+            <if test="statisDt != null and statisDt != ''">AND STATIS_DT = #{statisDt}</if>
+            <if test="branchNo != null and branchNo != ''">AND BRANCH_NO = #{branchNo}</if>
+            <if test="custId != null and custId != ''">AND CUST_ID = #{custId}</if>
+            <if test="custType != null and custType != ''">AND CUST_TYPE_CD = #{custType}</if>
+            <if test="keyword != null and keyword != ''">AND CUST_NAME LIKE CONCAT('%', #{keyword}, '%')</if>
+        </where>
+    </sql>
+
+    <select id="pageCustStat" resultType="java.util.LinkedHashMap">
+        SELECT * FROM XAN_M98_CUST_STAT_SHOW3
+        <include refid="custWhere"/>
+        ORDER BY STATIS_DT DESC, CUST_ID ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countCustStat" resultType="long">
+        SELECT COUNT(*) FROM XAN_M98_CUST_STAT_SHOW3
+        <include refid="custWhere"/>
+    </select>
+
+</mapper>

@@ -132,16 +132,31 @@ public class TargetAdjustCompletedListener {
             LocalDateTime now = LocalDateTime.now();
             String operator = apply.getCreatedBy();
             for (Adjustment a : adjustments) {
+                // upsertBatch 的 ON DUPLICATE KEY UPDATE 会用 VALUES(...) 覆盖
+                // base_value / owner_emp_id / owner_org_code。若不先取现值，未改动的列会被写成 null。
+                // 故先按 UK 取现行，作为 base_value / owner 列的兜底，避免审批通过抹除既有数据。
+                PerfTargetValue existing = targetValueMapper.selectByUniqueKey(
+                        apply.getPlanId(), apply.getSubjectType(), apply.getSubjectId(),
+                        apply.getCycleKey(), a.metricCode);
+
                 PerfTargetValue tv = new PerfTargetValue();
-                tv.setId(UUID.randomUUID().toString().replace("-", ""));
+                tv.setId(existing != null ? existing.getId()
+                        : UUID.randomUUID().toString().replace("-", ""));
                 tv.setPlanId(apply.getPlanId());
                 tv.setSubjectType(apply.getSubjectType());
                 tv.setSubjectId(apply.getSubjectId());
                 tv.setCycleKey(apply.getCycleKey());
                 tv.setMetricCode(a.metricCode);
                 tv.setTargetValue(a.newValue);
-                // V1.2 简化：base_value 不改动（adjustment 只含 newValue 语义）
-                tv.setBaseValue(null);
+                // 修正基础值：申请显式带了 newBaseValue 则落地，否则保留现值（不抹除）
+                tv.setBaseValue(a.newBaseValue != null
+                        ? a.newBaseValue
+                        : (existing != null ? existing.getBaseValue() : null));
+                // owner 列同样从现行保留，避免被 upsertBatch 的 VALUES 覆盖为 null
+                if (existing != null) {
+                    tv.setOwnerEmpId(existing.getOwnerEmpId());
+                    tv.setOwnerOrgCode(existing.getOwnerOrgCode());
+                }
                 tv.setCreatedBy(operator);
                 tv.setCreatedTime(now);
                 tv.setUpdatedBy(operator);
@@ -244,6 +259,8 @@ public class TargetAdjustCompletedListener {
                 a.metricCode = String.valueOf(mc);
                 a.newValue = toBigDecimal(nv);
                 a.oldValue = toBigDecimal(ov);
+                a.newBaseValue = toBigDecimal(it.get("newBaseValue"));
+                a.oldBaseValue = toBigDecimal(it.get("oldBaseValue"));
                 if (a.newValue != null) {
                     result.add(a);
                 }
@@ -279,5 +296,7 @@ public class TargetAdjustCompletedListener {
         String metricCode;
         BigDecimal newValue;
         BigDecimal oldValue;
+        BigDecimal newBaseValue;
+        BigDecimal oldBaseValue;
     }
 }

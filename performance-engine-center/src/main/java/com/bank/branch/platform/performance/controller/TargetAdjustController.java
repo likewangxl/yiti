@@ -198,6 +198,8 @@ public class TargetAdjustController {
                     .metricCode(it.getMetricCode())
                     .oldValue(it.getOldValue())
                     .newValue(it.getNewValue())
+                    .oldBaseValue(it.getOldBaseValue())
+                    .newBaseValue(it.getNewBaseValue())
                     .build());
         }
         return cmds;
