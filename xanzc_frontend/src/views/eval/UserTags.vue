@@ -121,13 +121,13 @@
 
       <el-form label-width="110px" class="edit-form">
         <el-form-item label="被评价人角色">
-          <el-select v-model="form.beEvalTagId" clearable filterable placeholder="单选，可清空" style="width: 100%">
-            <el-option v-for="t in tagsOfType(1)" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
+          <el-select v-model="form.beEvalTagId" clearable filterable placeholder="单选，可清空" style="width: 100%" @change="onBeEvalChange">
+            <el-option v-for="t in beEvalOptions" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
           </el-select>
         </el-form-item>
         <el-form-item label="评价人角色">
           <el-select v-model="form.evalTagIds" multiple filterable placeholder="可多选" style="width: 100%">
-            <el-option v-for="t in tagsOfType(2)" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
+            <el-option v-for="t in evalOptions" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
           </el-select>
         </el-form-item>
         <el-form-item label="是否参与评价">
@@ -147,15 +147,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import { listAllTags, pageUserRoles, saveUserRoles, importUserRoles, downloadImportTemplate, exportUserRoles } from '@/api/eval';
 
 // === 全量启用标签（编辑弹窗下拉用） ===
 const allTags = ref([]);
-function tagsOfType(type) {
-  return allTags.value.filter(t => t.tagType === type && t.status === 1);
-}
 async function loadAllTags() {
   try {
     const r = await listAllTags({ status: 1 });
@@ -272,6 +269,18 @@ const editVisible = ref(false);
 const editing = ref(null);
 const saving = ref(false);
 const form = reactive({ beEvalTagId: null, evalTagIds: [], evalEnabled: 0 });
+
+// 全量启用标签（拍平，无类型）
+const activeTags = computed(() => allTags.value.filter(t => t.status === 1));
+// 被评价角色选项 = 全量启用标签
+const beEvalOptions = computed(() => activeTags.value);
+// 评价角色选项 = 全量启用标签，排除已选被评价角色（局部排斥）
+const evalOptions = computed(() => activeTags.value.filter(t => t.tagId !== form.beEvalTagId));
+
+function onBeEvalChange() {
+  // 若评价角色里包含了新选的被评价角色，移除以满足互斥
+  form.evalTagIds = (form.evalTagIds || []).filter(id => id !== form.beEvalTagId);
+}
 
 function openEdit(row) {
   editing.value = row;
