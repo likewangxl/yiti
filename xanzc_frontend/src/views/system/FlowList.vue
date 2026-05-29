@@ -4,6 +4,7 @@
       <h1>审批流程 <span class="sub">查看/编辑审批流程；发布生成影子流程，切换生效另行处理，不影响现有线上审批</span></h1>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
+        <el-button :loading="importing" @click="doImportExisting">导入现有流程</el-button>
         <el-button type="primary" @click="openCreate">+ 新建流程</el-button>
       </div>
     </div>
@@ -80,7 +81,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
-import { listFlows, getFlow, createFlow, publishFlow, deleteFlow } from '@/api/flowDesign';
+import { listFlows, getFlow, createFlow, publishFlow, deleteFlow, importExistingFlows } from '@/api/flowDesign';
 
 const router = useRouter();
 
@@ -101,6 +102,31 @@ function goEdit(row) {
 // === 列表 ===
 const rows = ref([]);
 const loading = ref(false);
+const importing = ref(false);
+
+// === 导入现有流程 ===
+async function doImportExisting() {
+  try {
+    await ElMessageBox.confirm(
+      '将把现有线上审批流程（业绩调整/目标方案）导入为只读模型供查看，幂等可重复，确认？',
+      '导入现有流程',
+      { confirmButtonText: '确认导入', cancelButtonText: '取消', type: 'info' }
+    );
+  } catch {
+    return; // 用户取消
+  }
+  importing.value = true;
+  try {
+    const result = await importExistingFlows();
+    const count = Array.isArray(result) ? result.length : 0;
+    ElMessage.success(`导入成功，共导入 ${count} 条流程`);
+    await reload();
+  } catch (e) {
+    ElMessage.error(e?.message || '导入失败');
+  } finally {
+    importing.value = false;
+  }
+}
 
 async function reload() {
   loading.value = true;

@@ -37,3 +37,8 @@ export function deleteFlow(id) {
 export function listFlowVariables(bizType) {
   return call('get', '/admin/workflow/flows/meta/variables', { params: { bizType } }, []);
 }
+
+/** 导入现有已部署流程为只读模型（幂等） */
+export function importExistingFlows() {
+  return call('post', '/admin/workflow/flows/import-existing', { data: {} }, []);
+}
