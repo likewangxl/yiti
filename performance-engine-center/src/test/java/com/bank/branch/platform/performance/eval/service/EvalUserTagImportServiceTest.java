@@ -8,6 +8,7 @@ import com.bank.branch.platform.performance.eval.dto.EvalUserTagImportRow;
 import com.bank.branch.platform.performance.eval.entity.EvalTag;
 import com.bank.branch.platform.performance.eval.mapper.EvalTagMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -120,11 +121,13 @@ class EvalUserTagImportServiceTest {
     }
 
     @Test
-    void importRows_beEvalRoleWrongType_rowError() {
+    @DisplayName("导入：被评价角色名在扁平池中不存在 → 该行报不存在错误")
+    void importRows_beEvalRoleNotInFlatPool_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "副行长", "客户经理", "是")));
+        // 扁平池只有支行行长/副行长/客户经理，"不在池里的角色"查不到
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "不在池里的角色", "副行长", "是")));
         assertThat(res.isSuccess()).isFalse();
-        assertThat(res.getErrors().get(0).getMessage()).contains("被评价角色");
+        assertThat(res.getErrors().get(0).getMessage()).contains("被评价角色不存在");
     }
 
     @Test
@@ -136,11 +139,29 @@ class EvalUserTagImportServiceTest {
     }
 
     @Test
-    void importRows_evalRoleWrongType_rowError() {
+    @DisplayName("导入：评价角色名在扁平池中不存在 → 该行报不存在错误")
+    void importRows_evalRoleNotInFlatPool_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长", "支行行长", "是")));
+        // 扁平池只有支行行长/副行长/客户经理，"不在池里的评价角色"查不到
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长", "不在池里的评价角色", "是")));
         assertThat(res.isSuccess()).isFalse();
-        assertThat(res.getErrors().get(0).getMessage()).contains("评价角色");
+        assertThat(res.getErrors().get(0).getMessage()).contains("评价角色不存在");
+    }
+
+    @Test
+    @DisplayName("导入：评价角色含被评价角色 → 该行报冲突，整体不入库")
+    void importRows_roleConflict_failsRow() {
+        com.bank.branch.platform.performance.eval.entity.EvalTag t = new com.bank.branch.platform.performance.eval.entity.EvalTag();
+        t.setTagId(10L); t.setTagName("店长"); t.setStatus(1);
+        when(evalTagMapper.selectAll(null, 1)).thenReturn(java.util.List.of(t));
+        com.bank.branch.platform.auth.api.dto.UserDTO u = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        u.setEmpId("1001");
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(java.util.List.of(u));
+        EvalUserTagImportRow row = new EvalUserTagImportRow();
+        row.setEmpId("1001"); row.setBeEvalRoleName("店长"); row.setEvalRoleNames("店长"); row.setEvalEnabledText("是");
+        EvalUserTagImportResultDTO res = service.importRows(java.util.List.of(row));
+        assertThat(res.isSuccess()).isFalse();
+        assertThat(res.getErrors()).anySatisfy(e -> assertThat(e.getMessage()).contains("评价角色不能与被评价角色相同"));
     }
 
     @Test

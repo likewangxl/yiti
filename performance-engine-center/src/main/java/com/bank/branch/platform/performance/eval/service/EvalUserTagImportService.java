@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 /**
  * 人员评价角色 Excel 导入服务。
  * <p>同步、原子：全部行校验通过才逐行覆盖式入库；任一行错误则一条都不写，返回行级错误明细。</p>
+ * <p>标签采用扁平池语义（不再按 tag_type 分类型）：被评价角色与评价角色均从同一名称→tagId 映射解析，
+ * 角色身份由"填在哪一列"决定。局部排斥：同一行的评价角色不得包含被评价角色。</p>
  */
 @Slf4j
 @Service
@@ -84,15 +86,11 @@ public class EvalUserTagImportService {
             throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_EMPTY);
         }
 
-        // 1. 标签名称 → tagId（仅启用），按类型拆分
-        Map<String, Long> beEvalNameToId = new HashMap<>();
-        Map<String, Long> evalNameToId = new HashMap<>();
+        // 1. 标签名称 → tagId（仅启用，扁平池，不再按 tag_type 分类型）
+        // 被评价角色与评价角色均从同一 map 解析，角色身份由"填在哪一列"决定
+        Map<String, Long> nameToId = new HashMap<>();
         for (EvalTag t : evalTagMapper.selectAll(null, 1)) {
-            if (Integer.valueOf(1).equals(t.getTagType())) {
-                beEvalNameToId.put(t.getTagName(), t.getTagId());
-            } else if (Integer.valueOf(2).equals(t.getTagType())) {
-                evalNameToId.put(t.getTagName(), t.getTagId());
-            }
+            nameToId.put(t.getTagName(), t.getTagId());
         }
 
         // 2. 工号有效性：批量查存在的工号
@@ -126,7 +124,7 @@ public class EvalUserTagImportService {
                 continue;
             }
 
-            // 被评价角色：可空；填了则只能一个且类型=1
+            // 被评价角色：可空；填了则只能一个，从扁平池解析
             Long beEvalTagId = null;
             String beEvalRaw = r.getBeEvalRoleName() == null ? "" : r.getBeEvalRoleName().trim();
             boolean rowFailed = false;
@@ -136,10 +134,10 @@ public class EvalUserTagImportService {
                     errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "被评价角色只能填一个"));
                     rowFailed = true;
                 } else {
-                    Long id = beEvalNameToId.get(beNames.get(0));
+                    Long id = nameToId.get(beNames.get(0));
                     if (id == null) {
                         errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId,
-                                "被评价角色无效或非被评价人类型：" + beNames.get(0)));
+                                "被评价角色不存在：" + beNames.get(0)));
                         rowFailed = true;
                     } else {
                         beEvalTagId = id;
@@ -150,15 +148,15 @@ public class EvalUserTagImportService {
                 continue;
             }
 
-            // 评价角色：可空；逗号分隔去重；每个类型=2
+            // 评价角色：可空；逗号分隔去重；从扁平池解析
             List<Long> evalTagIds = new ArrayList<>();
             String evalRaw = r.getEvalRoleNames() == null ? "" : r.getEvalRoleNames().trim();
             if (!evalRaw.isEmpty()) {
                 for (String name : splitNames(evalRaw)) {
-                    Long id = evalNameToId.get(name);
+                    Long id = nameToId.get(name);
                     if (id == null) {
                         errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId,
-                                "评价角色无效或非评价人类型：" + name));
+                                "评价角色不存在：" + name));
                         rowFailed = true;
                         break;
                     }
@@ -168,6 +166,12 @@ public class EvalUserTagImportService {
                 }
             }
             if (rowFailed) {
+                continue;
+            }
+
+            // 局部排斥：评价角色不能包含被评价角色
+            if (beEvalTagId != null && evalTagIds.contains(beEvalTagId)) {
+                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "评价角色不能与被评价角色相同"));
                 continue;
             }
 
