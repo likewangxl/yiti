@@ -17,8 +17,6 @@ public class EvalTag {
     private Long tagId;
     /** 标签名称. */
     private String tagName;
-    /** 标签类型：1=被评价人标签, 2=评价人标签. */
-    private Integer tagType;
     /** 状态：1=启用, 0=停用. */
     private Integer status;
     /** 创建时间. */

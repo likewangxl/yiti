@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -37,7 +36,6 @@ public class EvalTagController {
     /**
      * 分页查询标签列表.
      *
-     * @param tagType  标签类型（1=被评价人, 2=评价人，不传则全部）
      * @param keyword  名称关键词（可选）
      * @param page     页码，默认 1
      * @param pageSize 每页条数，默认 20，最大 100
@@ -47,29 +45,26 @@ public class EvalTagController {
     @Operation(summary = "分页查询标签列表")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
     public ResponseWrapper<PageResult<EvalTag>> list(
-            @RequestParam(value = "tagType", required = false) Integer tagType,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", defaultValue = "1") @Min(1) int page,
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
-        log.debug("[EvalTagController.list] tagType={}, keyword={}, page={}, pageSize={}", tagType, keyword, page, pageSize);
-        return ResponseWrapper.success(evalTagService.list(tagType, keyword, page, pageSize));
+        log.debug("[EvalTagController.list] keyword={}, page={}, pageSize={}", keyword, page, pageSize);
+        return ResponseWrapper.success(evalTagService.list(keyword, page, pageSize));
     }
 
     /**
      * 新建评价标签.
      *
      * @param tagName 标签名称（必填，不能为空白）
-     * @param tagType 标签类型（必填，1=被评价人, 2=评价人）
      * @return 创建后的标签实体
      */
     @PostMapping
     @Operation(summary = "新建标签")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
     public ResponseWrapper<EvalTag> create(
-            @RequestParam("tagName") @NotBlank String tagName,
-            @RequestParam("tagType") @NotNull Integer tagType) {
-        log.info("[EvalTagController.create] tagName={}, tagType={}", tagName, tagType);
-        return ResponseWrapper.success(evalTagService.create(tagName, tagType));
+            @RequestParam("tagName") @NotBlank String tagName) {
+        log.info("[EvalTagController.create] tagName={}", tagName);
+        return ResponseWrapper.success(evalTagService.create(tagName));
     }
 
     /**
@@ -110,17 +105,15 @@ public class EvalTagController {
     /**
      * 查询全部标签（不分页，供下拉选项）.
      *
-     * @param tagType 标签类型（可选，1=被评价人, 2=评价人）
-     * @param status  状态（可选，1=启用, 0=停用）
+     * @param status 状态（可选，1=启用, 0=停用）
      * @return 标签列表
      */
     @GetMapping("/all")
     @Operation(summary = "查询全部标签（不分页，供下拉选项）")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
     public ResponseWrapper<List<EvalTag>> listAll(
-            @RequestParam(value = "tagType", required = false) Integer tagType,
             @RequestParam(value = "status", required = false) Integer status) {
-        log.debug("[EvalTagController.listAll] tagType={}, status={}", tagType, status);
-        return ResponseWrapper.success(evalTagService.listAll(tagType, status));
+        log.debug("[EvalTagController.listAll] status={}", status);
+        return ResponseWrapper.success(evalTagService.listAll(status));
     }
 }

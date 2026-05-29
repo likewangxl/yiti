@@ -89,7 +89,7 @@ public class EvalUserTagImportService {
         // 1. 标签名称 → tagId（仅启用，扁平池，不再按 tag_type 分类型）
         // 被评价角色与评价角色均从同一 map 解析，角色身份由"填在哪一列"决定
         Map<String, Long> nameToId = new HashMap<>();
-        for (EvalTag t : evalTagMapper.selectAll(null, 1)) {
+        for (EvalTag t : evalTagMapper.selectAll(1)) {
             nameToId.put(t.getTagName(), t.getTagId());
         }
 

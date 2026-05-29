@@ -35,7 +35,7 @@ class EvalUserTagImportServiceTest {
         EvalTag t = new EvalTag();
         t.setTagId(id);
         t.setTagName(name);
-        t.setTagType(type);
+        // type 参数保留签名兼容性，tagType 字段已从 EvalTag 去除
         t.setStatus(1);
         return t;
     }
@@ -59,7 +59,7 @@ class EvalUserTagImportServiceTest {
     @BeforeEach
     void setUp() {
         service = new EvalUserTagImportService(evalTagMapper, userApi, evalUserTagService);
-        lenient().when(evalTagMapper.selectAll(isNull(), eq(1))).thenReturn(List.of(
+        lenient().when(evalTagMapper.selectAll(eq(1))).thenReturn(List.of(
                 tag(1, "支行行长", 1), tag(2, "副行长", 2), tag(3, "客户经理", 2)));
     }
 
@@ -153,7 +153,7 @@ class EvalUserTagImportServiceTest {
     void importRows_roleConflict_failsRow() {
         com.bank.branch.platform.performance.eval.entity.EvalTag t = new com.bank.branch.platform.performance.eval.entity.EvalTag();
         t.setTagId(10L); t.setTagName("店长"); t.setStatus(1);
-        when(evalTagMapper.selectAll(null, 1)).thenReturn(java.util.List.of(t));
+        when(evalTagMapper.selectAll(1)).thenReturn(java.util.List.of(t));
         com.bank.branch.platform.auth.api.dto.UserDTO u = new com.bank.branch.platform.auth.api.dto.UserDTO();
         u.setEmpId("1001");
         when(userApi.getUserByEmpIds(anyList())).thenReturn(java.util.List.of(u));

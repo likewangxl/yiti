@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * 评价标签维护服务.
- * <p>提供评价标签的增删改查（带分页）能力，标签按"名称+类型"唯一约束。</p>
+ * <p>提供评价标签的增删改查（带分页）能力，标签按名称唯一约束（已去类型化）。</p>
  */
 @Slf4j
 @Service
@@ -28,26 +28,23 @@ public class EvalTagService {
     }
 
     /**
-     * 创建标签.
+     * 创建标签（无类型，按名称唯一）.
      *
      * @param tagName 标签名称
-     * @param tagType 标签类型（1=被评价人, 2=评价人）
      * @return 创建后的标签实体
-     * @throws PerfException 名称+类型重复时抛 EVAL_TAG_NAME_DUP（PERF-40050）
+     * @throws PerfException 名称重复时抛 EVAL_TAG_NAME_DUP（PERF-40050）
      */
     @Transactional(rollbackFor = Exception.class)
-    public EvalTag create(String tagName, Integer tagType) {
-        // 同名+同类型视为重复，禁止创建
-        EvalTag existing = evalTagMapper.selectByNameAndType(tagName, tagType);
+    public EvalTag create(String tagName) {
+        EvalTag existing = evalTagMapper.selectByName(tagName);
         if (existing != null) {
             throw new PerfException(PerfErrorCode.EVAL_TAG_NAME_DUP, tagName);
         }
         EvalTag tag = new EvalTag();
         tag.setTagName(tagName);
-        tag.setTagType(tagType);
         tag.setStatus(1); // 默认启用
         evalTagMapper.insert(tag);
-        log.info("[EvalTagService.create] 创建评价标签成功 tagName={} tagType={} tagId={}", tagName, tagType, tag.getTagId());
+        log.info("[EvalTagService.create] 创建评价标签成功 tagName={} tagId={}", tagName, tag.getTagId());
         return tag;
     }
 
@@ -57,7 +54,7 @@ public class EvalTagService {
      * @param tagId   标签ID
      * @param tagName 新名称（null 表示不更新）
      * @param status  新状态（null 表示不更新）
-     * @throws PerfException 标签不存在时抛 EVAL_RULE_NOT_FOUND；改名后与同类型已有标签重名时抛 EVAL_TAG_NAME_DUP
+     * @throws PerfException 标签不存在时抛 EVAL_RULE_NOT_FOUND；改名后名称已存在时抛 EVAL_TAG_NAME_DUP
      */
     @Transactional(rollbackFor = Exception.class)
     public void update(Long tagId, String tagName, Integer status) {
@@ -65,9 +62,9 @@ public class EvalTagService {
         if (tag == null) {
             throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, tagId);
         }
-        // 改名时做同类型唯一性校验，排除自身
+        // 改名时做唯一性校验，排除自身
         if (tagName != null && !tagName.equals(tag.getTagName())) {
-            EvalTag dup = evalTagMapper.selectByNameAndType(tagName, tag.getTagType());
+            EvalTag dup = evalTagMapper.selectByName(tagName);
             if (dup != null && !dup.getTagId().equals(tagId)) {
                 throw new PerfException(PerfErrorCode.EVAL_TAG_NAME_DUP, tagName);
             }
@@ -99,27 +96,25 @@ public class EvalTagService {
     /**
      * 查询全部标签（不分页，供下拉选项用）.
      *
-     * @param tagType 标签类型筛选（可选，null 表示不过滤）
-     * @param status  状态筛选（可选，null 表示不过滤）
+     * @param status 状态筛选（可选，null 表示不过滤）
      * @return 标签列表
      */
-    public List<EvalTag> listAll(Integer tagType, Integer status) {
-        return evalTagMapper.selectAll(tagType, status);
+    public List<EvalTag> listAll(Integer status) {
+        return evalTagMapper.selectAll(status);
     }
 
     /**
      * 分页查询标签列表.
      *
-     * @param tagType  标签类型筛选（可选，null 表示不过滤）
      * @param keyword  标签名称关键词（可选，null 表示不过滤）
      * @param page     页码（从 1 开始）
      * @param pageSize 每页数量
      * @return 分页结果
      */
-    public PageResult<EvalTag> list(Integer tagType, String keyword, int page, int pageSize) {
+    public PageResult<EvalTag> list(String keyword, int page, int pageSize) {
         int offset = (page - 1) * pageSize;
-        List<EvalTag> rows = evalTagMapper.selectByCondition(tagType, keyword, offset, pageSize);
-        long total = evalTagMapper.countByCondition(tagType, keyword);
+        List<EvalTag> rows = evalTagMapper.selectByCondition(keyword, offset, pageSize);
+        long total = evalTagMapper.countByCondition(keyword);
         return PageResult.of(page, pageSize, total, rows);
     }
 }

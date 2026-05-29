@@ -30,25 +30,24 @@ class EvalTagServiceTest {
     @Test
     @DisplayName("创建标签成功")
     void create_success() {
-        when(evalTagMapper.selectByNameAndType("省分行正行长", 2)).thenReturn(null);
+        when(evalTagMapper.selectByName("省分行正行长")).thenReturn(null);
         when(evalTagMapper.insert(any(EvalTag.class))).thenReturn(1);
 
-        EvalTag result = evalTagService.create("省分行正行长", 2);
+        EvalTag result = evalTagService.create("省分行正行长");
 
         assertThat(result.getTagName()).isEqualTo("省分行正行长");
-        assertThat(result.getTagType()).isEqualTo(2);
         assertThat(result.getStatus()).isEqualTo(1);
         verify(evalTagMapper).insert(any(EvalTag.class));
     }
 
     @Test
-    @DisplayName("标签名称+类型重复时抛 PERF-40050")
+    @DisplayName("标签名称重复时抛 PERF-40050")
     void create_whenDuplicate_throws40050() {
         EvalTag existing = new EvalTag();
         existing.setTagId(1L);
-        when(evalTagMapper.selectByNameAndType("省分行正行长", 2)).thenReturn(existing);
+        when(evalTagMapper.selectByName("省分行正行长")).thenReturn(existing);
 
-        assertThatThrownBy(() -> evalTagService.create("省分行正行长", 2))
+        assertThatThrownBy(() -> evalTagService.create("省分行正行长"))
                 .isInstanceOfSatisfying(PerfException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.EVAL_TAG_NAME_DUP));
     }
@@ -59,9 +58,8 @@ class EvalTagServiceTest {
         EvalTag existing = new EvalTag();
         existing.setTagId(1L);
         existing.setTagName("旧名称");
-        existing.setTagType(1);
         when(evalTagMapper.selectById(1L)).thenReturn(existing);
-        when(evalTagMapper.selectByNameAndType("新名称", 1)).thenReturn(null);
+        when(evalTagMapper.selectByName("新名称")).thenReturn(null);
 
         evalTagService.update(1L, "新名称", 1);
 
@@ -81,20 +79,19 @@ class EvalTagServiceTest {
     }
 
     @Test
-    @DisplayName("listAll_按类型和状态过滤返回列表")
-    void listAll_withTagTypeAndStatus_returnsFiltered() {
+    @DisplayName("listAll_按状态过滤返回列表")
+    void listAll_withStatus_returnsFiltered() {
         EvalTag t1 = new EvalTag();
         t1.setTagId(10L);
         t1.setTagName("被评人A");
-        t1.setTagType(1);
         t1.setStatus(1);
-        when(evalTagMapper.selectAll(1, 1)).thenReturn(List.of(t1));
+        when(evalTagMapper.selectAll(1)).thenReturn(List.of(t1));
 
-        List<EvalTag> result = evalTagService.listAll(1, 1);
+        List<EvalTag> result = evalTagService.listAll(1);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getTagName()).isEqualTo("被评人A");
-        verify(evalTagMapper).selectAll(1, 1);
+        verify(evalTagMapper).selectAll(1);
     }
 
     @Test
@@ -102,15 +99,13 @@ class EvalTagServiceTest {
     void listAll_withNullParams_returnsAll() {
         EvalTag t1 = new EvalTag();
         t1.setTagId(10L);
-        t1.setTagType(1);
         EvalTag t2 = new EvalTag();
         t2.setTagId(11L);
-        t2.setTagType(2);
-        when(evalTagMapper.selectAll(null, null)).thenReturn(List.of(t1, t2));
+        when(evalTagMapper.selectAll(null)).thenReturn(List.of(t1, t2));
 
-        List<EvalTag> result = evalTagService.listAll(null, null);
+        List<EvalTag> result = evalTagService.listAll(null);
 
         assertThat(result).hasSize(2);
-        verify(evalTagMapper).selectAll(null, null);
+        verify(evalTagMapper).selectAll(null);
     }
 }

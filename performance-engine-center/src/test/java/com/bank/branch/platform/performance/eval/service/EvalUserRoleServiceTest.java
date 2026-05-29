@@ -48,7 +48,7 @@ class EvalUserRoleServiceTest {
     private EvalTag tag(long id, int type) {
         EvalTag t = new EvalTag();
         t.setTagId(id);
-        t.setTagType(type);
+        // type 参数保留签名兼容性，tagType 字段已从 EvalTag 去除
         return t;
     }
 

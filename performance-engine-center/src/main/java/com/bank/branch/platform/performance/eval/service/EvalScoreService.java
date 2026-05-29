@@ -159,7 +159,7 @@ public class EvalScoreService {
     /**
      * 根据规则组列表匹配评价人所属组.
      *
-     * <p>groupType=1：按标签匹配，查询评价人持有的评价人标签（tagType=2），与 group.evalTagId 比对。
+     * <p>groupType=1：按标签匹配，查询评价人持有的评价人标签（role_type=2），与 group.evalTagId 比对。
      * <p>groupType=2：部门员工组，通过 OrgApi 判断评价人与被评价人是否同部门。
      *
      * @param groups       规则下所有评价人组
