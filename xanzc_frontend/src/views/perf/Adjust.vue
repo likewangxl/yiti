@@ -375,12 +375,23 @@
         <!-- 原业绩分配（来自 getAllocPreview，仅展示当前分配，存贷款余额预览模块已删除）-->
         <div v-if="preview.loaded && preview.data" class="preview-section" v-loading="preview.loading">
           <div class="card-h"><div class="title">原业绩分配</div></div>
-          <el-table :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无分配记录">
-            <el-table-column prop="acctNo" label="账号" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="allocaterId" label="员工号" width="110" />
-            <el-table-column prop="empName" label="员工姓名" width="120" />
-            <el-table-column prop="orgName" label="所属机构" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="dynScale" label="分配比例" width="100" />
+          <el-table :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
+            <el-table-column prop="acctNo" label="账号" min-width="150" show-overflow-tooltip>
+              <template #default="{row}">{{ row.acctNo || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="员工名称" min-width="150" show-overflow-tooltip>
+              <template #default="{row}">
+                {{ row.username || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="所属机构" min-width="180" show-overflow-tooltip>
+              <template #default="{row}">
+                {{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="ratio" label="分配比例" width="100">
+              <template #default="{row}">{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</template>
+            </el-table-column>
           </el-table>
         </div>
 
@@ -985,8 +996,8 @@ function fmtAmt(v) {
 }
 async function loadPreview(statisDt) {
   const f = dlg.form;
-  if (!f.custNo && f.allocDim === 'RULE') return;
-  if (!f.accountNo && f.allocDim === 'ACCOUNT') return;
+  // 原业绩分配按客户编号取 RULE/ACCOUNT 审批通过的最后一条，故只要有客户编号即可加载
+  if (!f.custNo) return;
   preview.loaded = true;
   preview.loading = true;
   // 新建时传昨日，查看/审批时由调用方传入申请日期-1
@@ -1205,17 +1216,15 @@ watch(() => dlg.form.custNo, (val) => {
     } catch { custNameDisplay.value = ''; resetCustStat(); custStat.queried = true; }
   }, 500);
 });
-// 客户类型 / 客户编号 / 分配维度 / 账号 任一变化时触发预览
+// 客户编号变化时触发原业绩分配预览（新口径仅按客户编号取审批通过的最后一条，与维度/账号无关）
 let previewTimer = null;
 watch(
-  () => [dlg.form.custType, dlg.form.custNo, dlg.form.allocDim, dlg.form.accountNo],
+  () => dlg.form.custNo,
   () => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
       const f = dlg.form;
-      if (f.allocDim === 'RULE' && f.custNo && f.custNo.length >= 2) {
-        loadPreview();
-      } else if (f.allocDim === 'ACCOUNT' && f.accountNo && f.accountNo.length >= 2) {
+      if (f.custNo && f.custNo.length >= 2) {
         loadPreview();
       } else {
         preview.loaded = false;
