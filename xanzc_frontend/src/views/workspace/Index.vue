@@ -81,9 +81,10 @@
             <span :class="['remain', slaKey(row.slaStatus)]">{{ row.remain || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80" v-if="taskTab === 'PENDING'">
+        <el-table-column label="操作" width="80">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="goHandle(row)">办理</el-button>
+            <el-button v-if="taskTab === 'PENDING'" type="primary" link size="small" @click="goHandle(row)">办理</el-button>
+            <el-button v-else type="primary" link size="small" @click="goDetail(row)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -95,6 +96,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
+import { ElMessage } from 'element-plus';
 import { useRouter } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
@@ -164,14 +166,36 @@ async function loadTasks() {
 }
 
 
-function goHandle(row) {
+// bizType → 本台（绩效/管理台）对应审批页。LOAN/SUPPORT/LEAD/TOUCH 属业务台(xanpd)，
+// 本台无对应页面，给出提示而非误跳 /perf/adjust。
+function resolveTaskRoute(row, mode) {
   const id = row.taskId || row.id;
-  if (!id) return;
+  if (!id) return null;
   if (row.bizType === 'TARGET_ADJUST') {
-    router.push({ path: '/perf/targets', query: { tab: 'todo', taskId: id } });
-  } else {
-    router.push({ path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } });
+    return { path: '/perf/targets', query: { tab: 'todo', taskId: id } };
   }
+  if (row.bizType === 'ALLOC_ADJUST') {
+    return { path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: mode === 'detail' ? 'view' : 'open' } };
+  }
+  return null;
+}
+
+// 待办「办理」：跳转对应审批页
+function goHandle(row) {
+  const route = resolveTaskRoute(row, 'handle');
+  if (!route) {
+    return ElMessage.info('该审批请到对应业务系统处理');
+  }
+  router.push(route);
+}
+
+// 已办「详情」：跳转对应页面查看（审批通过/驳回的记录在审批页只读展示）
+function goDetail(row) {
+  const route = resolveTaskRoute(row, 'detail');
+  if (!route) {
+    return ElMessage.info('该审批详情请到对应业务系统查看');
+  }
+  router.push(route);
 }
 
 onMounted(async () => {
