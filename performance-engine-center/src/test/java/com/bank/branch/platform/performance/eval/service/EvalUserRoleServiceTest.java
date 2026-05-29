@@ -102,6 +102,7 @@ class EvalUserRoleServiceTest {
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.EVAL_ROLE_CONFLICT));
+        verify(evalUserTagMapper, never()).batchInsert(anyList());
     }
 
     @Test

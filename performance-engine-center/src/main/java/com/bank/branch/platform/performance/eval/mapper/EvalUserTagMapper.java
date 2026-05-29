@@ -19,7 +19,7 @@ public interface EvalUserTagMapper extends BaseMapper<EvalUserTag> {
     int batchDelete(@Param("userId") String userId, @Param("tagIds") List<Long> tagIds);
 
     /**
-     * 批量查询多个用户的标签（JOIN EVAL_TAG 带出 tagName/roleType），供列表聚合用。
+     * 批量查询多个用户的标签（JOIN EVAL_TAG 带出 tagName；roleType 取自 EVAL_USER_TAG.role_type），供列表聚合用。
      * 调用方须保证 userIds 非空。
      *
      * @param userIds 人员工号列表（String）

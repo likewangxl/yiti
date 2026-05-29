@@ -65,14 +65,21 @@ public class EvalUserTagService {
         return evalUserTagMapper.selectUserIdsByTagId(tagId);
     }
 
-    /** 批量绑定人员标签. */
+    /**
+     * 批量绑定人员标签（增量，指定角色）.
+     *
+     * @param userId   人员工号
+     * @param tagIds   标签ID列表
+     * @param roleType 角色类型：1=被评价角色, 2=评价角色
+     */
     @Transactional(rollbackFor = Exception.class)
-    public void batchBind(String userId, List<Long> tagIds) {
+    public void batchBind(String userId, List<Long> tagIds, Integer roleType) {
         if (tagIds == null || tagIds.isEmpty()) return;
         List<EvalUserTag> list = tagIds.stream().map(tagId -> {
             EvalUserTag ut = new EvalUserTag();
             ut.setUserId(userId);
             ut.setTagId(tagId);
+            ut.setRoleType(roleType);
             return ut;
         }).collect(Collectors.toList());
         evalUserTagMapper.batchInsert(list);
@@ -103,7 +110,7 @@ public class EvalUserTagService {
         if (beEvalTagId != null && evalIds.contains(beEvalTagId)) {
             throw new PerfException(PerfErrorCode.EVAL_ROLE_CONFLICT, beEvalTagId);
         }
-        // 3. 标签存在性校验（标签已无类型，仅校验存在）
+        // 3. 标签存在性校验（角色由 role_type 控制，此处仅校验标签存在）
         if (beEvalTagId != null && evalTagMapper.selectById(beEvalTagId) == null) {
             throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, beEvalTagId);
         }

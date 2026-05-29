@@ -39,8 +39,8 @@ export function listUserTags(userId) {
   return call('get', '/admin/eval/user-tags', { params: { userId } }, []);
 }
 
-export function bindUserTags(userId, tagIds) {
-  return call('post', '/admin/eval/user-tags', { data: { userId, tagIds } }, { ok: true });
+export function bindUserTags(userId, tagIds, roleType) {
+  return call('post', '/admin/eval/user-tags', { data: { userId, tagIds, roleType } }, { ok: true });
 }
 
 export function unbindUserTags(userId, tagIds) {

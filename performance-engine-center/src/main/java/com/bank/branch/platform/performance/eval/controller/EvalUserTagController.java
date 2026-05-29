@@ -59,8 +59,8 @@ public class EvalUserTagController {
     @Operation(summary = "批量绑定人员标签")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
     public ResponseWrapper<Void> bind(@Validated @RequestBody BindReq req) {
-        log.info("[EvalUserTagController.bind] userId={}, tagIds={}", req.getUserId(), req.getTagIds());
-        evalUserTagService.batchBind(req.getUserId(), req.getTagIds());
+        log.info("[EvalUserTagController.bind] userId={}, tagIds={}, roleType={}", req.getUserId(), req.getTagIds(), req.getRoleType());
+        evalUserTagService.batchBind(req.getUserId(), req.getTagIds(), req.getRoleType());
         return ResponseWrapper.success();
     }
 
@@ -159,6 +159,9 @@ public class EvalUserTagController {
         @NotNull
         private String userId;
         private List<Long> tagIds;
+        /** 角色类型：1=被评价角色, 2=评价角色. */
+        @jakarta.validation.constraints.NotNull
+        private Integer roleType;
     }
 
     @Data

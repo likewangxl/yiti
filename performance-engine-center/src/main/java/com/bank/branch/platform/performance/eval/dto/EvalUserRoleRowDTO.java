@@ -16,9 +16,9 @@ public class EvalUserRoleRowDTO {
     private String position;
     /** RBAC 角色中文名列表（只读展示）. */
     private List<String> roleNames;
-    /** 被评价人角色（tagType=1，至多一个；无则 null）. */
+    /** 被评价人角色（role_type=1，至多一个；无则 null）. */
     private EvalUserTagBriefDTO beEvalTag;
-    /** 评价人角色（tagType=2，可多个）. */
+    /** 评价人角色（role_type=2，可多个）. */
     private List<EvalUserTagBriefDTO> evalTags;
     /** 是否参与评价：1=是 0=否. */
     private Integer evalEnabled;
