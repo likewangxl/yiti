@@ -34,9 +34,29 @@
 
 ## 3. 方案
 
+### 3.0 工号字符型治理（前置基础，2026-05-29 追加）
+
+**事实**：`PT_USER.USER_ID`（工号）是 `varchar(50)`，但 eval 模块把工号存成 `BIGINT`，共 4 处：
+`EVAL_USER_TAG.USER_ID`、`EVAL_TASK_TARGET.BE_EVAL_USER_ID`、`EVAL_SCORE.EVAL_USER_ID`、`EVAL_TASK.CREATE_BY`。
+现网样例工号恰为数字字符串（如 `2280`/`3431`），所以"数字假设"未暴露问题；但工号**本质是字符型**，且不能假设永远是数字。已交付的列表化/编辑用 `toLongOrNull` 兜底（非数字工号丢标签），是治标。
+
+**决策（用户确认）**：把 eval 模块全部 4 处 USER_ID 列改为 `VARCHAR(50)`，代码贯通 `Long → String`，删除 `toLongOrNull`/`Long.parseLong` 等转换。范围覆盖人员标签 + 评价任务/打分子系统。
+
+**改动清单（17 文件）**：
+- DB：`ALTER TABLE` 4 列 `BIGINT → VARCHAR(50)`（现网 EVAL_USER_TAG 仅 3 行 USER_ID=3431，数字字符串平滑转换）；同步更新 `docs/schema/ddl-eval.sql`。
+- 实体（4）：`EvalUserTag.userId` / `EvalTaskTarget.beEvalUserId` / `EvalScore.evalUserId` / `EvalTask.createBy` → `String`。
+- DTO（1）：`EvalUserTagRow.userId` → `String`（`EvalUserRoleRowDTO.userId` 本就是 String）。
+- Mapper（2）：`EvalUserTagMapper`（5 方法 userId 参数 + `selectUserIdsByTagId` 返回 `List<String>` + `selectUserTagsByUserIds` 参数 `List<String>`；xml `selectUserIdsByTagId` resultType 改 `java.lang.String`）、`EvalScoreMapper`（2 方法 evalUserId 参数）。
+- Service（3）：`EvalUserTagService`（5 公开方法签名 + `tagMap` 改 `Map<String,...>` + 删 `toLongOrNull`/numericIds 链）、`EvalTaskService`（`createTask` 参数 + 循环变量）、`EvalScoreService`（5 方法 + 删 `String.valueOf` 包装）。
+- Controller（3）：`EvalUserTagController`（`list`/`saveRoles`/`BindReq.userId`）、`EvalTaskController`（`CreateTaskReq.beEvalUserIds` + 删 `Long.parseLong`）、`EvalScoreController`（两处删 `Long.parseLong`）。
+- 测试 fixture（3）：`EvalUserRoleServiceTest` / `EvalScoreServiceTest` / `EvalTaskServiceTest` 里 Long 字面量改 String。
+- 不动：TAG_ID/TASK_ID/RULE_ID/GROUP_ID/SCORE_ID/TARGET_ID 等主键/外键仍 BIGINT；report 等其它模块无引用。
+
+> 此治理必须先做（导入/导出建立在 `saveUserRoles(String userId, …)` 之上）。
+
 ### 3.1 数据层
 
-**无需改表**。复用 `EVAL_TAG` / `EVAL_USER_TAG`。
+人员标签关联表 `EVAL_USER_TAG` / 字典表 `EVAL_TAG` 结构不新增字段；仅按 §3.0 把 `USER_ID` 改为 `VARCHAR(50)`。
 
 ### 3.2 Excel 模板（3 列，填角色名称）
 
@@ -59,7 +79,9 @@
 5. **文件内工号不可重复**（同一工号出现多行 → 行错，语义二义）。
 6. 名称匹配不到 / 类型不符 / 工号不存在 → 该行记录错误（行号 + 工号 + 原因）。
 
-校验全部通过后，在一个 `@Transactional` 内逐行调用既有 `saveUserRoles(userId, beEvalTagId, evalTagIds)`，**整体覆盖**该工号的现有角色（与页面"编辑"覆盖语义一致）。
+校验全部通过后，在一个 `@Transactional` 内逐行调用既有 `saveUserRoles(String empId, beEvalTagId, evalTagIds)`，**整体覆盖**该工号的现有角色（与页面"编辑"覆盖语义一致）。
+
+> §3.0 治理后工号为字符型，导入**不再要求工号为数字**；工号有效性由"是否存在于 `PT_USER`"判定（见规则 1）。
 
 > 名称→tagId 解析：一次性查 `EvalTagMapper` 取全部启用标签，按 `TAG_TYPE` 建两个 `name→tagId` Map（performance 模块内直连本模块 mapper，合规）。
 
@@ -90,16 +112,9 @@ GET  /api/admin/eval/user-tags/export?keyword=
 
 > 校验失败的判定：`success=false` 时 `importedCount=0` 且 `errors` 非空，HTTP 仍为 200（业务层结果），前端据 `success` 展示错误明细表。
 
-### 3.5 auth-permission-center：UserApi 补 1 个方法
+### 3.5 auth-permission-center：无需改动
 
-跨模块只能走 `*Api`，新增批量工号查询（校验有效性）：
-
-```java
-/** 批量按工号查用户，返回 empId→UserDTO，缺失键即不存在。委托批量 mapper。 */
-Map<String, UserDTO> getUsersByIds(List<String> empIds);
-```
-
-实现委托 `UserMapper`（新增/复用按工号 IN 批量查询），`UserFacade` 分组成 Map。空入参返回空 Map。
+工号有效性校验**直接复用既有** `UserApi.getUserByEmpIds(List<String> empIds)`（返回 `List<UserDTO>`），导入服务据返回的 `empId` 集合判定存在性。**不新增 auth 方法、不改 auth 模块。**
 
 ### 3.6 前端（xanzc_frontend）
 
@@ -141,8 +156,9 @@ exportUserRoles(keyword)       // GET (blob) /admin/eval/user-tags/export
   - 被评价、评价两列皆空 → 行错。
   - 文件内工号重复 → 行错。
   - 评价角色单元格内去重。
+  - 非数字工号（如 `E001`）只要存在于 PT_USER 即可正常导入（§3.0 治理后不再要求数字）。
 - `EvalUserTagService.listForExport`：拼装正确、上限截断。
-- `UserFacade.getUsersByIds`：分组正确、空入参空 Map。
+- §3.0 治理回归：`EvalUserRoleServiceTest` / `EvalScoreServiceTest` / `EvalTaskServiceTest` 改 String fixture 后全绿。
 
 前端：沿用现有 eval 页面实践，手动验证为主。
 
@@ -156,7 +172,8 @@ exportUserRoles(keyword)       // GET (blob) /admin/eval/user-tags/export
 
 ## 6. 影响面与风险
 
-- **跨模块调用**：performance → auth(`UserApi.getUsersByIds`) / portal(`AddressBookApi`)，依赖已存在，无循环依赖。
+- **工号字符型治理（§3.0）**：触及评价任务/打分子系统（已交付），需跑 eval 全量单测回归确保零行为变化。DB ALTER 在现网仅 3 行 EVAL_USER_TAG（数字字符串），转换无损；上线需对 onepl/yiti 各环境执行迁移 SQL。
+- **跨模块调用**：performance → auth(`UserApi.getUserByEmpIds`) / portal(`AddressBookApi`)，依赖已存在，无循环依赖，**无需改 auth**。
 - **性能**：导入同步原子，行数上限 5000；导出上限 10000，分批聚合（通讯录批量 200 上限需分片调用）。均满足离线操作预期。
 - **权限**：3 个新端点必须先登记 `PT_RESOURCE` 并授权，否则 403（按"鉴权失败优先排查 PT_* 表数据"SOP）。
 - **历史脏数据**：导入覆盖式写入会顺带纠正该工号历史多 tagType=1 脏数据。
