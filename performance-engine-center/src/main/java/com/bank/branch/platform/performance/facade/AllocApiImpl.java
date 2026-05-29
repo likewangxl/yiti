@@ -47,6 +47,7 @@ import java.util.Set;
 public class AllocApiImpl implements AllocApi {
 
     private final AllocRelationService allocRelationService;
+    private final com.bank.branch.platform.performance.service.adjust.AllocAdjustPreviewService allocAdjustPreviewService;
 
     // ==================== 基础查询 ====================
 
@@ -160,5 +161,15 @@ public class AllocApiImpl implements AllocApi {
     @Override
     public AllocVersionDTO getAllocVersionAt(String bizKind, LocalDate asOfDate) {
         return allocRelationService.getAllocVersionAt(bizKind, asOfDate);
+    }
+
+    // ==================== 原业绩分配预览（调整申请页面） ====================
+
+    /**
+     * 查询客户「原业绩分配」预览（RULE + ACCOUNT 各取审批通过的最后一条申请明细）.
+     */
+    @Override
+    public List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo) {
+        return allocAdjustPreviewService.getLastApprovedAllocPreview(custNo);
     }
 }

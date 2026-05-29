@@ -61,6 +61,9 @@ class AllocApiImplTest extends PerformanceServiceTestBase {
     @Mock
     private AllocRelationService allocRelationService;
 
+    @Mock
+    private com.bank.branch.platform.performance.service.adjust.AllocAdjustPreviewService allocAdjustPreviewService;
+
     @InjectMocks
     private AllocApiImpl allocApi;
 
@@ -353,5 +356,18 @@ class AllocApiImplTest extends PerformanceServiceTestBase {
                 .thenReturn(null);
 
         assertThat(allocApi.getAllocVersionAt("LOAN", LocalDate.of(2024, 1, 1))).isNull();
+    }
+
+    @Test
+    @DisplayName("getLastApprovedAllocPreview: 委托 AllocAdjustPreviewService 并透传结果")
+    void getLastApprovedAllocPreview_delegates() {
+        var dto = new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        dto.setAllocDim("RULE");
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("C001")).thenReturn(List.of(dto));
+
+        var result = allocApi.getLastApprovedAllocPreview("C001");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAllocDim()).isEqualTo("RULE");
     }
 }
