@@ -2,452 +2,223 @@
   <div>
     <div class="page-h">
       <h1>人员标签</h1>
-      <span class="desc">为员工绑定评价人/被评价人标签</span>
+      <span class="desc">维护人员的被评价人角色（单选）与评价人角色（多选）</span>
     </div>
 
-    <div class="layout">
-      <!-- 左侧：用户搜索 -->
-      <div class="card-section user-col">
-        <div class="card-h-mini">选择员工</div>
+    <div class="card-section">
+      <div class="toolbar">
         <el-input
-          v-model="userKeyword"
-          placeholder="搜索姓名或用户名"
+          v-model="keyword"
+          placeholder="搜索姓名或工号"
           clearable
           size="small"
-          class="user-search"
-          @input="onUserSearch"
+          class="kw-input"
+          @input="onSearch"
+          @clear="reload"
         />
-        <div v-if="userLoading" class="loading-hint">搜索中…</div>
-        <div v-else-if="!userList.length" class="empty-hint">
-          {{ userKeyword ? '未找到匹配员工' : '请输入关键词搜索' }}
-        </div>
-        <div v-else class="user-list">
-          <div
-            v-for="u in userList"
-            :key="u.userId"
-            class="user-item"
-            :class="{ active: pickedUser?.userId === u.userId }"
-            @click="pickUser(u)"
-          >
-            <div class="user-name">{{ u.userchnname || u.username }}</div>
-            <div class="user-id">{{ u.userId }}</div>
-          </div>
-        </div>
       </div>
 
-      <!-- 右侧：标签绑定管理 -->
-      <div class="card-section bind-col">
-        <!-- 未选中用户时的占位提示 -->
-        <div v-if="!pickedUser" class="empty-pane">← 请在左侧搜索并选择员工</div>
+      <el-table :data="rows" v-loading="loading" border size="small" style="width: 100%">
+        <el-table-column prop="userName" label="姓名" min-width="100" />
+        <el-table-column prop="userId" label="工号" min-width="110" />
+        <el-table-column prop="orgName" label="部门" min-width="140">
+          <template #default="{ row }">{{ row.orgName || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="position" label="岗位" min-width="120">
+          <template #default="{ row }">{{ row.position || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="角色" min-width="140">
+          <template #default="{ row }">{{ (row.roleNames && row.roleNames.length) ? row.roleNames.join('，') : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="被评价人角色" min-width="130">
+          <template #default="{ row }">
+            <el-tag v-if="row.beEvalTag" type="success" effect="plain" size="small">{{ row.beEvalTag.tagName }}</el-tag>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="评价人角色" min-width="180">
+          <template #default="{ row }">
+            <span v-if="row.evalTags && row.evalTags.length">{{ row.evalTags.map(t => t.tagName).join('，') }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
-        <template v-else>
-          <div class="bind-header">
-            <div class="bind-title">
-              <span class="user-full-name">{{ pickedUser.userchnname || pickedUser.username }}</span>
-              <span class="user-full-id">（{{ pickedUser.userId }}）</span>
-            </div>
-          </div>
-
-          <!-- 绑定新标签区域 -->
-          <div class="section-block">
-            <div class="section-title">绑定新标签</div>
-            <div class="bind-form">
-              <el-select
-                v-model="toBindTagIds"
-                multiple
-                filterable
-                placeholder="选择要绑定的标签（可多选）"
-                style="flex: 1; min-width: 0"
-                :loading="allTagsLoading"
-              >
-                <!-- 按类型分组展示，提升可读性 -->
-                <el-option-group label="被评价人标签">
-                  <el-option
-                    v-for="t in allTagsOfType(1)"
-                    :key="t.tagId"
-                    :value="t.tagId"
-                    :label="t.tagName"
-                    :disabled="isBound(t.tagId)"
-                  >
-                    <span>{{ t.tagName }}</span>
-                    <el-tag
-                      v-if="isBound(t.tagId)"
-                      class="tag-info"
-                      effect="plain"
-                      size="small"
-                      style="margin-left: 8px"
-                    >已绑定</el-tag>
-                  </el-option>
-                </el-option-group>
-                <el-option-group label="评价人标签">
-                  <el-option
-                    v-for="t in allTagsOfType(2)"
-                    :key="t.tagId"
-                    :value="t.tagId"
-                    :label="t.tagName"
-                    :disabled="isBound(t.tagId)"
-                  />
-                </el-option-group>
-              </el-select>
-              <el-button
-                type="primary"
-                :disabled="!toBindTagIds.length"
-                :loading="binding"
-                @click="handleBind"
-              >
-                确认绑定
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 已绑标签列表 -->
-          <div class="section-block">
-            <div class="section-title">
-              已绑标签
-              <span class="tag-count">共 {{ boundTags.length }} 个</span>
-            </div>
-            <div v-if="boundLoading" class="loading-hint">加载中…</div>
-            <div v-else-if="!boundTags.length" class="empty-hint">该员工暂未绑定任何标签</div>
-            <div v-else class="bound-tags">
-              <div
-                v-for="item in boundTags"
-                :key="item.id"
-                class="bound-tag-item"
-              >
-                <el-tag
-                  :class="item.tagType === 1 ? 'tag-success' : 'tag-info'"
-                  effect="plain"
-                  size="default"
-                  class="bound-tag-label"
-                >
-                  {{ item.tagName }}
-                </el-tag>
-                <span class="bound-tag-type">{{ TAG_TYPE_LABEL[item.tagType] || '-' }}</span>
-                <el-button
-                  link
-                  type="danger"
-                  size="small"
-                  :loading="unbindingIds.has(item.tagId)"
-                  @click="handleUnbind(item)"
-                >
-                  解绑
-                </el-button>
-              </div>
-            </div>
-          </div>
-        </template>
+      <div class="pager">
+        <el-pagination
+          background
+          layout="total, prev, pager, next"
+          :total="total"
+          :page-size="pageSize"
+          :current-page="page"
+          @current-change="onPageChange"
+        />
       </div>
     </div>
+
+    <!-- 编辑弹窗 -->
+    <el-dialog v-model="editVisible" title="编辑人员评价角色" width="520px" @closed="onDialogClosed">
+      <div v-if="editing" class="edit-info">
+        <div class="info-row"><span class="info-k">姓名</span><span>{{ editing.userName }}</span></div>
+        <div class="info-row"><span class="info-k">工号</span><span>{{ editing.userId }}</span></div>
+        <div class="info-row"><span class="info-k">部门</span><span>{{ editing.orgName || '—' }}</span></div>
+        <div class="info-row"><span class="info-k">岗位</span><span>{{ editing.position || '—' }}</span></div>
+        <div class="info-row"><span class="info-k">角色</span><span>{{ (editing.roleNames && editing.roleNames.length) ? editing.roleNames.join('，') : '—' }}</span></div>
+      </div>
+
+      <el-form label-width="110px" class="edit-form">
+        <el-form-item label="被评价人角色">
+          <el-select v-model="form.beEvalTagId" clearable filterable placeholder="单选，可清空" style="width: 100%">
+            <el-option v-for="t in tagsOfType(1)" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="评价人角色">
+          <el-select v-model="form.evalTagIds" multiple filterable placeholder="可多选" style="width: 100%">
+            <el-option v-for="t in tagsOfType(2)" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
-import { listTags, listAllTags, listUserTags, bindUserTags, unbindUserTags } from '@/api/eval';
-import { listUsers } from '@/api/users';
+import { ref, reactive, onMounted } from 'vue';
+import { ElMessage } from 'element-plus';
+import { listAllTags, pageUserRoles, saveUserRoles } from '@/api/eval';
 
-// === 常量 ===
-const TAG_TYPE_LABEL = { 1: '被评价人', 2: '评价人' };
-
-// === 全量标签（供下拉选择，只加载一次） ===
+// === 全量启用标签（编辑弹窗下拉用） ===
 const allTags = ref([]);
-const allTagsLoading = ref(false);
-
-/** 按类型过滤全量标签 */
-function allTagsOfType(type) {
+function tagsOfType(type) {
   return allTags.value.filter(t => t.tagType === type && t.status === 1);
 }
-
-/** 加载所有启用标签 */
 async function loadAllTags() {
-  allTagsLoading.value = true;
   try {
     const r = await listAllTags({ status: 1 });
     allTags.value = Array.isArray(r) ? r : (r?.records || []);
   } catch {
     allTags.value = [];
-  } finally {
-    allTagsLoading.value = false;
   }
 }
 
-// === 用户搜索 ===
-const userKeyword = ref('');
-const userList = ref([]);
-const userLoading = ref(false);
+// === 列表 ===
+const rows = ref([]);
+const total = ref(0);
+const page = ref(1);
+const pageSize = ref(20);
+const keyword = ref('');
+const loading = ref(false);
 let searchTimer = null;
 
-/** 防抖搜索用户 */
-function onUserSearch() {
+async function reload() {
+  loading.value = true;
+  try {
+    const r = await pageUserRoles({ keyword: keyword.value.trim() || undefined, page: page.value, pageSize: pageSize.value });
+    rows.value = Array.isArray(r) ? r : (r?.records || []);
+    total.value = r?.total ?? rows.value.length;
+  } catch {
+    rows.value = [];
+    total.value = 0;
+  } finally {
+    loading.value = false;
+  }
+}
+
+function onSearch() {
   if (searchTimer) clearTimeout(searchTimer);
-  if (!userKeyword.value.trim()) {
-    userList.value = [];
-    return;
-  }
-  searchTimer = setTimeout(doSearchUsers, 300);
+  searchTimer = setTimeout(() => { page.value = 1; reload(); }, 300);
 }
 
-async function doSearchUsers() {
-  userLoading.value = true;
+function onPageChange(p) {
+  page.value = p;
+  reload();
+}
+
+// === 编辑 ===
+const editVisible = ref(false);
+const editing = ref(null);
+const saving = ref(false);
+const form = reactive({ beEvalTagId: null, evalTagIds: [] });
+
+function openEdit(row) {
+  editing.value = row;
+  form.beEvalTagId = row.beEvalTag ? row.beEvalTag.tagId : null;
+  form.evalTagIds = (row.evalTags || []).map(t => t.tagId);
+  editVisible.value = true;
+}
+
+function onDialogClosed() {
+  editing.value = null;
+  form.beEvalTagId = null;
+  form.evalTagIds = [];
+}
+
+async function handleSave() {
+  if (!editing.value) return;
+  saving.value = true;
   try {
-    const r = await listUsers({ keyword: userKeyword.value.trim(), pageSize: 30 });
-    // listUsers 可能返回数组或 PageResult
-    userList.value = Array.isArray(r) ? r : (r?.records || []);
+    await saveUserRoles(editing.value.userId, form.beEvalTagId ?? null, form.evalTagIds || []);
+    ElMessage.success('保存成功');
+    editVisible.value = false;
+    await reload();
   } catch {
-    userList.value = [];
+    ElMessage.error('保存失败，请重试');
   } finally {
-    userLoading.value = false;
+    saving.value = false;
   }
 }
 
-// === 选中用户 ===
-const pickedUser = ref(null);
-
-/** 点击用户 → 加载其已绑标签 */
-async function pickUser(user) {
-  pickedUser.value = user;
-  toBindTagIds.value = [];
-  await loadBoundTags(user.userId);
-}
-
-// === 已绑标签 ===
-const boundUserTags = ref([]);  // 原始绑定记录 [{ id, userId, tagId }]
-const boundLoading = ref(false);
-
-/**
- * 将绑定记录与全量标签合并，得到带 tagName/tagType 的展示列表
- * 若全量标签还未加载完成，等待后再计算
- */
-const boundTags = computed(() => {
-  return boundUserTags.value.map(ut => {
-    const tag = allTags.value.find(t => t.tagId === ut.tagId) || {};
-    return {
-      id: ut.id,
-      tagId: ut.tagId,
-      tagName: tag.tagName || `TAG_${ut.tagId}`,
-      tagType: tag.tagType
-    };
-  });
+onMounted(async () => {
+  await loadAllTags();
+  await reload();
 });
-
-/** 判断某个 tagId 是否已绑定 */
-function isBound(tagId) {
-  return boundUserTags.value.some(ut => ut.tagId === tagId);
-}
-
-/** 加载指定用户的已绑标签记录 */
-async function loadBoundTags(userId) {
-  boundLoading.value = true;
-  try {
-    const r = await listUserTags(userId);
-    boundUserTags.value = Array.isArray(r) ? r : [];
-  } catch {
-    boundUserTags.value = [];
-  } finally {
-    boundLoading.value = false;
-  }
-}
-
-// === 绑定操作 ===
-const toBindTagIds = ref([]);  // 待绑定的 tagId 列表
-const binding = ref(false);
-
-/** 批量绑定标签 */
-async function handleBind() {
-  if (!toBindTagIds.value.length) return;
-  binding.value = true;
-  try {
-    await bindUserTags(pickedUser.value.userId, toBindTagIds.value);
-    ElMessage.success(`已成功绑定 ${toBindTagIds.value.length} 个标签`);
-    toBindTagIds.value = [];
-    await loadBoundTags(pickedUser.value.userId);
-  } catch {
-    ElMessage.error('绑定失败，请重试');
-  } finally {
-    binding.value = false;
-  }
-}
-
-// === 解绑操作 ===
-// 用 Set 跟踪正在解绑中的 tagId，支持多个并发解绑
-const unbindingIds = reactive(new Set());
-
-/** 确认后解绑单个标签 */
-async function handleUnbind(item) {
-  try {
-    await ElMessageBox.confirm(
-      `确认为「${pickedUser.value.userchnname || pickedUser.value.username}」解绑标签「${item.tagName}」？`,
-      '解绑确认',
-      { type: 'warning', confirmButtonText: '确认解绑', cancelButtonText: '取消' }
-    );
-  } catch {
-    return;
-  }
-  unbindingIds.add(item.tagId);
-  try {
-    await unbindUserTags(pickedUser.value.userId, [item.tagId]);
-    ElMessage.success('标签已解绑');
-    await loadBoundTags(pickedUser.value.userId);
-  } catch {
-    ElMessage.error('解绑失败，请重试');
-  } finally {
-    unbindingIds.delete(item.tagId);
-  }
-}
-
-onMounted(loadAllTags);
 </script>
 
 <style lang="scss" scoped>
-.layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 12px;
-}
-
-/* 左侧用户列 */
-.user-col {
-  padding: 16px;
-  max-height: calc(100vh - 200px);
-  overflow: auto;
-}
-.card-h-mini {
-  font-size: 14px;
-  font-weight: 600;
-  padding: 0 0 12px;
-  border-bottom: 1px solid $border-1;
-  margin-bottom: 10px;
-  color: $text-1;
-}
-.user-search {
-  margin-bottom: 10px;
-}
-.user-list {
+.toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.user-item {
-  padding: 8px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s;
-  border: 1px solid transparent;
-
-  &:hover {
-    background: $bg-soft;
-  }
-
-  &.active {
-    background: mix($primary, #fff, 10%);
-    border-color: mix($primary, #fff, 30%);
-  }
-}
-.user-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: $text-1;
-}
-.user-id {
-  font-size: 12px;
-  color: $text-3;
-  margin-top: 2px;
-  font-family: ui-monospace, monospace;
-}
-
-/* 右侧绑定列 */
-.bind-col {
-  padding: 20px 24px;
-  max-height: calc(100vh - 200px);
-  overflow: auto;
-}
-.empty-pane {
-  padding: 80px 20px;
-  text-align: center;
-  color: $text-3;
-  font-size: 13px;
-}
-.bind-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 14px;
-  border-bottom: 1px solid $border-1;
-  margin-bottom: 20px;
-}
-.bind-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: $text-1;
-}
-.user-full-id {
-  font-size: 13px;
-  color: $text-3;
-  font-weight: 400;
-}
-
-/* 区块标题 */
-.section-block {
-  margin-bottom: 28px;
-}
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-1;
+  gap: 10px;
   margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
-.tag-count {
-  font-size: 12px;
-  font-weight: 400;
+.kw-input {
+  width: 240px;
+}
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.muted {
   color: $text-3;
 }
-
-/* 绑定新标签行 */
-.bind-form {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-/* 已绑标签列表 */
-.bound-tags {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.bound-tag-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+.edit-info {
   background: $bg-soft;
-  border-radius: 4px;
   border: 1px solid $border-1;
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
 }
-.bound-tag-label {
-  min-width: 80px;
-}
-.bound-tag-type {
-  font-size: 12px;
-  color: $text-3;
-  flex: 1;
-}
-
-/* 通用 */
-.loading-hint {
-  color: $text-3;
+.info-row {
+  display: flex;
+  gap: 8px;
   font-size: 13px;
-  padding: 12px 0;
-  text-align: center;
+  line-height: 1.9;
 }
-.empty-hint {
+.info-k {
+  width: 40px;
   color: $text-3;
-  font-size: 13px;
-  padding: 20px 0;
-  text-align: center;
+}
+.edit-form {
+  padding-right: 8px;
 }
 </style>
