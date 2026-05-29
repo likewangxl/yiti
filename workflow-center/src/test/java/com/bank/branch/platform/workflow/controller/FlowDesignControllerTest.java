@@ -7,6 +7,7 @@ import com.bank.branch.platform.workflow.api.dto.flow.FlowGraphDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowNodeDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowVariableDTO;
 import com.bank.branch.platform.workflow.service.flow.FlowDefService;
+import com.bank.branch.platform.workflow.service.flow.FlowImportService;
 import com.bank.branch.platform.workflow.service.flow.FlowPublishService;
 import com.bank.branch.platform.workflow.service.flow.FlowVariableCatalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +45,9 @@ class FlowDesignControllerTest {
     @Mock
     private CurrentUserApi currentUserApi;
 
+    @Mock
+    private FlowImportService flowImportService;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -52,7 +56,8 @@ class FlowDesignControllerTest {
         // standalone 模式：@BizAuth 拦截器不生效，CurrentUserApi mock 返回固定工号
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new FlowDesignController(flowDefService, flowPublishService, flowVariableCatalog, currentUserApi))
+                new FlowDesignController(flowDefService, flowPublishService, flowVariableCatalog,
+                        currentUserApi, flowImportService))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
     }
@@ -180,5 +185,25 @@ class FlowDesignControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data[0].field").value("bizKind"));
+    }
+
+    // ── 8. POST /api/admin/workflow/flows/import-existing ────────────────
+
+    @Test
+    void importExisting_invokesServiceFor3Keys() throws Exception {
+        // given：mock importFromDeployed 对任意 procKey 返回 "FD_x"
+        when(flowImportService.importFromDeployed(anyString())).thenReturn("FD_x");
+
+        // when & then
+        mockMvc.perform(post("/api/admin/workflow/flows/import-existing"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"))
+                .andExpect(jsonPath("$.data").isArray());
+
+        // 验证 3 个内置 procKey 各被调用一次
+        verify(flowImportService).importFromDeployed("perf_target_adjust_v1");
+        verify(flowImportService).importFromDeployed("perf_alloc_adjust_corp_v1");
+        verify(flowImportService).importFromDeployed("perf_alloc_adjust_retail_v1");
+        verify(flowImportService, times(3)).importFromDeployed(anyString());
     }
 }

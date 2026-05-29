@@ -78,3 +78,40 @@ SELECT COUNT(*) AS bound_rows
 FROM PT_ROLE_RESOURCE
 WHERE RESOURCE_ID IN ('W_FLOW_LIST','W_FLOW_GET','W_FLOW_ADD',
                       'W_FLOW_UPD','W_FLOW_PUB','W_FLOW_DEL','W_FLOW_VARS');
+
+-- ============================================================
+-- P3 Task 2：导入现有流程端点资源登记
+-- 端点：POST /api/admin/workflow/flows/import-existing
+-- 执行库：yiti（开发库）+ onepl（生产库）
+-- 幂等：PT_RESOURCE 用 INSERT IGNORE；角色绑定用 NOT EXISTS
+-- 角色：与 W_FLOW_LIST 完全对齐（同一批 20 个角色）
+-- ============================================================
+
+-- ── 3. 资源登记（1 条）───────────────────────────────────────
+
+INSERT IGNORE INTO PT_RESOURCE
+    (RESOURCE_ID, MENU_NAME, RESOURCE_URL, RESOURCE_METHOD, SYS_CODE, STATUS)
+VALUES
+    ('W_FLOW_IMP', '审批流程-导入现有', '/api/admin/workflow/flows/import-existing', 'POST', 'WF', 0);
+
+-- ── 4. 角色绑定：复制 W_FLOW_LIST 的全部角色绑定到 W_FLOW_IMP（幂等）───
+
+INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE)
+SELECT REPLACE(UUID(), '-', ''), rr.ROLE_ID, 'W_FLOW_IMP', 'WF'
+FROM PT_ROLE_RESOURCE rr
+WHERE rr.RESOURCE_ID = 'W_FLOW_LIST'
+  AND NOT EXISTS (
+    SELECT 1 FROM PT_ROLE_RESOURCE x
+    WHERE x.ROLE_ID = rr.ROLE_ID AND x.RESOURCE_ID = 'W_FLOW_IMP'
+  );
+
+-- ── 验证 P3 Task 2 ───────────────────────────────────────────
+-- 预期：W_FLOW_IMP 资源 1 条
+SELECT RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, SYS_CODE
+FROM PT_RESOURCE
+WHERE RESOURCE_ID = 'W_FLOW_IMP';
+
+-- 预期：绑定角色数 = W_FLOW_LIST 的绑定数
+SELECT
+    (SELECT COUNT(*) FROM PT_ROLE_RESOURCE WHERE RESOURCE_ID = 'W_FLOW_IMP')  AS imp_bindings,
+    (SELECT COUNT(*) FROM PT_ROLE_RESOURCE WHERE RESOURCE_ID = 'W_FLOW_LIST') AS list_bindings;

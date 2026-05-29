@@ -9,6 +9,7 @@ import com.bank.branch.platform.workflow.api.dto.flow.FlowDefDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowGraphDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowVariableDTO;
 import com.bank.branch.platform.workflow.service.flow.FlowDefService;
+import com.bank.branch.platform.workflow.service.flow.FlowImportService;
 import com.bank.branch.platform.workflow.service.flow.FlowPublishService;
 import com.bank.branch.platform.workflow.service.flow.FlowVariableCatalog;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,13 +37,14 @@ import java.util.List;
  *
  * <pre>
  * 端点汇总：
- *   GET    /api/admin/workflow/flows              - 查询所有流程定义列表
- *   GET    /api/admin/workflow/flows/{id}         - 获取指定流程图（节点+连线）
- *   POST   /api/admin/workflow/flows              - 新建流程定义草稿
- *   PUT    /api/admin/workflow/flows/{id}         - 整图替换保存
- *   POST   /api/admin/workflow/flows/{id}/publish - 发布流程定义到 Flowable
- *   DELETE /api/admin/workflow/flows/{id}         - 删除草稿
- *   GET    /api/admin/workflow/flows/meta/variables - 查询可用流程变量目录
+ *   GET    /api/admin/workflow/flows                    - 查询所有流程定义列表
+ *   GET    /api/admin/workflow/flows/{id}               - 获取指定流程图（节点+连线）
+ *   POST   /api/admin/workflow/flows                    - 新建流程定义草稿
+ *   PUT    /api/admin/workflow/flows/{id}               - 整图替换保存
+ *   POST   /api/admin/workflow/flows/{id}/publish       - 发布流程定义到 Flowable
+ *   DELETE /api/admin/workflow/flows/{id}               - 删除草稿
+ *   GET    /api/admin/workflow/flows/meta/variables     - 查询可用流程变量目录
+ *   POST   /api/admin/workflow/flows/import-existing    - 导入内置已部署流程（幂等）
  * </pre>
  */
 @Slf4j
@@ -54,23 +57,27 @@ public class FlowDesignController {
     private final FlowPublishService flowPublishService;
     private final FlowVariableCatalog flowVariableCatalog;
     private final CurrentUserApi currentUserApi;
+    private final FlowImportService flowImportService;
 
     /**
      * 构造注入（便于单元测试 mock）。
      *
-     * @param flowDefService     流程定义 CRUD 服务
-     * @param flowPublishService 流程发布服务
+     * @param flowDefService      流程定义 CRUD 服务
+     * @param flowPublishService  流程发布服务
      * @param flowVariableCatalog 流程变量白名单目录
-     * @param currentUserApi     当前用户工号获取
+     * @param currentUserApi      当前用户工号获取
+     * @param flowImportService   现有已部署流程反向导入服务
      */
     public FlowDesignController(FlowDefService flowDefService,
                                 FlowPublishService flowPublishService,
                                 FlowVariableCatalog flowVariableCatalog,
-                                CurrentUserApi currentUserApi) {
+                                CurrentUserApi currentUserApi,
+                                FlowImportService flowImportService) {
         this.flowDefService = flowDefService;
         this.flowPublishService = flowPublishService;
         this.flowVariableCatalog = flowVariableCatalog;
         this.currentUserApi = currentUserApi;
+        this.flowImportService = flowImportService;
     }
 
     // ── 注意：/meta/variables 必须在 /{id} 之前声明，
@@ -199,5 +206,53 @@ public class FlowDesignController {
         log.info("[FlowDesignController.delete] id={}", id);
         flowDefService.deleteDraft(id);
         return ResponseWrapper.success();
+    }
+
+    // ── 导入 ────────────────────────────────────────────────────────────────
+
+    /**
+     * 导入内置已部署流程为只读流程定义（幂等）。
+     * <p>
+     * 内置 3 个 Flowable procKey：
+     * <ul>
+     *   <li>{@code perf_target_adjust_v1}        — 绩效目标调整</li>
+     *   <li>{@code perf_alloc_adjust_corp_v1}     — 公司条线调配调整</li>
+     *   <li>{@code perf_alloc_adjust_retail_v1}   — 零售条线调配调整</li>
+     * </ul>
+     * 逐个调用 {@link FlowImportService#importFromDeployed(String)}；
+     * 单个 key 失败时不中断其它 key，将错误信息收入结果列表。
+     * </p>
+     *
+     * @return 各 key 的导入结果（flowDefId 或简要错误串）
+     */
+    @PostMapping("/import-existing")
+    @Operation(summary = "导入内置已部署流程（幂等）")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    public ResponseWrapper<List<String>> importExisting() {
+        // 内置 3 个需反向导入的 Flowable 流程定义 KEY
+        List<String> procKeys = List.of(
+                "perf_target_adjust_v1",
+                "perf_alloc_adjust_corp_v1",
+                "perf_alloc_adjust_retail_v1"
+        );
+        log.info("[FlowDesignController.importExisting] 开始导入内置流程，共 {} 个 key", procKeys.size());
+
+        List<String> results = new ArrayList<>();
+        for (String procKey : procKeys) {
+            try {
+                // 幂等：已存在时 importFromDeployed 直接返回已有 flowDefId
+                String flowDefId = flowImportService.importFromDeployed(procKey);
+                log.info("[FlowDesignController.importExisting] 导入成功: procKey={}, flowDefId={}", procKey, flowDefId);
+                results.add(flowDefId);
+            } catch (Exception e) {
+                // 单个 key 失败不阻断其它，记入结果并继续
+                String errMsg = "FAILED:" + procKey + "(" + e.getMessage() + ")";
+                log.warn("[FlowDesignController.importExisting] 导入失败，已跳过: procKey={}, err={}", procKey, e.getMessage());
+                results.add(errMsg);
+            }
+        }
+
+        log.info("[FlowDesignController.importExisting] 完成，results={}", results);
+        return ResponseWrapper.success(results);
     }
 }
