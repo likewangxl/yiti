@@ -178,11 +178,18 @@
       <!-- 修正详情（从 PERF_TARGET_ADJUST_APPLY.remark JSON 解析） -->
       <div class="review-detail" v-if="reviewDlg.detail" v-loading="reviewDlg.detailLoading">
         <div v-for="(adj, i) in reviewDlg.detail.adjustments" :key="i" class="adj-item">
-          <span class="lab">指标：</span>{{ adj.metricCode }}
-          <span class="sep">|</span>
-          <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
-          <span class="sep">→</span>
-          <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
+          <div>
+            <span class="lab">指标：</span>{{ adj.metricCode }}
+            <span class="sep">|</span>
+            <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
+            <span class="sep">→</span>
+            <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
+          </div>
+          <div v-if="adj.oldBaseValue != null || adj.newBaseValue != null">
+            <span class="lab">原基础值：</span><strong>{{ adj.oldBaseValue != null ? fmtNum(adj.oldBaseValue) : '-' }}</strong>
+            <span class="sep">→</span>
+            <span class="lab">新基础值：</span><strong class="new-val">{{ adj.newBaseValue != null ? fmtNum(adj.newBaseValue) : '-' }}</strong>
+          </div>
         </div>
         <div><span class="lab">修正原因：</span>{{ reviewDlg.detail.reason || '-' }}</div>
       </div>
@@ -217,11 +224,18 @@
       <!-- 修正详情 -->
       <div class="review-detail" v-if="detailDlg.detail" v-loading="detailDlg.loading">
         <div v-for="(adj, i) in detailDlg.detail.adjustments" :key="i" class="adj-item">
-          <span class="lab">指标：</span>{{ adj.metricCode }}
-          <span class="sep">|</span>
-          <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
-          <span class="sep">→</span>
-          <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
+          <div>
+            <span class="lab">指标：</span>{{ adj.metricCode }}
+            <span class="sep">|</span>
+            <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
+            <span class="sep">→</span>
+            <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
+          </div>
+          <div v-if="adj.oldBaseValue != null || adj.newBaseValue != null">
+            <span class="lab">原基础值：</span><strong>{{ adj.oldBaseValue != null ? fmtNum(adj.oldBaseValue) : '-' }}</strong>
+            <span class="sep">→</span>
+            <span class="lab">新基础值：</span><strong class="new-val">{{ adj.newBaseValue != null ? fmtNum(adj.newBaseValue) : '-' }}</strong>
+          </div>
         </div>
         <div><span class="lab">修正原因：</span>{{ detailDlg.detail.reason || '-' }}</div>
       </div>
