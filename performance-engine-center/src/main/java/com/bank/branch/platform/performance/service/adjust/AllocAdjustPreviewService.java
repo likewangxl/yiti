@@ -44,12 +44,19 @@ public class AllocAdjustPreviewService {
     private final UserApi userApi;
 
     /**
-     * 查询客户「原业绩分配」预览（RULE + ACCOUNT 各取审批通过的最后一条申请明细）.
+     * 查询客户「原业绩分配」预览（取审批通过的最后一条申请明细）.
      *
-     * @param custNo 客户编号（业务编号；内部按编号解析为客户主键后匹配 apply.cust_id）
+     * <p>维度过滤：
+     * <ul>
+     *   <li>{@code allocDim=ACCOUNT}（按账号分配）→ 只取 ACCOUNT 维度的最后一条审批通过申请；</li>
+     *   <li>{@code allocDim=RULE} 或为空 → 取 RULE + ACCOUNT 两个维度（按规则分配场景沿用并列展示）。</li>
+     * </ul>
+     *
+     * @param custNo   客户编号（业务编号；内部按编号解析为客户主键后匹配 apply.cust_id）
+     * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null）
      * @return 预览项列表（可能为空，不会返回 null）
      */
-    public List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo) {
+    public List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo, String allocDim) {
         if (!StringUtils.hasText(custNo)) {
             return new ArrayList<>();
         }
@@ -58,9 +65,12 @@ public class AllocAdjustPreviewService {
                 .map(CustomerDTO::getId)
                 .orElse(custNo);
 
-        // 收集两个维度「最后一条审批通过申请」的明细行（保留维度 + 账号上下文）
+        // 按账号分配只查 ACCOUNT 维度；规则分配/未指定则取 RULE + ACCOUNT 两者
+        List<String> dims = "ACCOUNT".equals(allocDim) ? List.of("ACCOUNT") : DIMS;
+
+        // 收集各维度「最后一条审批通过申请」的明细行（保留维度 + 账号上下文）
         List<RowCtx> rows = new ArrayList<>();
-        for (String dim : DIMS) {
+        for (String dim : dims) {
             PerfAllocAdjustApply apply = applyMapper.selectLastApprovedByCustAndDim(internalCustId, dim);
             if (apply == null) {
                 continue;

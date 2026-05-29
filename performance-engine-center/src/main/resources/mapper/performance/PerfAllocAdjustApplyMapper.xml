@@ -35,6 +35,15 @@
         LIMIT 1
     </select>
 
+    <!-- 同客户同分配维度下审批中(IN_APPROVAL)申请计数（去重粒度 cust_id + alloc_dim） -->
+    <select id="countInApprovalByCustAndDim" resultType="long">
+        SELECT COUNT(*)
+        FROM PERF_ALLOC_ADJUST_APPLY
+        WHERE status = 'IN_APPROVAL'
+          AND cust_id = #{custId}
+          AND alloc_dim = #{allocDim}
+    </select>
+
     <!-- 某客户某分配维度下「审批通过的最后一条」申请（原业绩分配预览） -->
     <select id="selectLastApprovedByCustAndDim" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
         SELECT

@@ -50,6 +50,19 @@ public interface PerfAllocAdjustApplyMapper extends BaseMapper<PerfAllocAdjustAp
     PerfAllocAdjustApply selectByBusinessKey(@Param("businessKey") String businessKey);
 
     /**
+     * 统计某客户在指定分配维度下处于审批中(IN_APPROVAL)的申请数（同客户同维度去重用）.
+     *
+     * <p>区别于 {@link #countByConditions}：去重粒度精确到 (cust_id + alloc_dim)，
+     * 使「按规则分配」审批中的申请不阻塞「按账号分配」的新提交，反之亦然。
+     *
+     * @param custId   内部客户 ID
+     * @param allocDim 分配维度：RULE / ACCOUNT
+     * @return 审批中的申请数
+     */
+    long countInApprovalByCustAndDim(@Param("custId") String custId,
+                                     @Param("allocDim") String allocDim);
+
+    /**
      * 查询某客户在指定分配维度下「审批通过的最后一条」申请.
      *
      * <p>用于「原业绩分配」预览：按 cust_id + alloc_dim 过滤 status=APPROVED，

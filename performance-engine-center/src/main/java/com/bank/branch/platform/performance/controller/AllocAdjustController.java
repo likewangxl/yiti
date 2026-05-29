@@ -97,6 +97,22 @@ public class AllocAdjustController {
     }
 
     /**
+     * 分配明细员工号输入框自动补齐：按关键字模糊匹配 PT_USER 工号/登录名/中文名.
+     *
+     * <p>放在 alloc-adjust 下、与新建/查看申请同 PERF_CONFIG 域 READ 权限，
+     * 保证调整申请页用户可调用（不复用 SYS_CONFIG 的 /admin/users，避免业务角色 403）.
+     */
+    @GetMapping("/emp-suggest")
+    @Operation(summary = "员工自动补齐（工号/登录名/中文名模糊匹配）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<com.bank.branch.platform.performance.controller.dto.EmpSuggestRespDTO>> empSuggest(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        log.debug("[AllocAdjustController.empSuggest] keyword={}, limit={}", keyword, limit);
+        return ResponseWrapper.success(allocAdjustService.suggestEmployees(keyword, limit));
+    }
+
+    /**
      * 查询分配调整申请详情（含 items）.
      */
     @GetMapping("/{id}")

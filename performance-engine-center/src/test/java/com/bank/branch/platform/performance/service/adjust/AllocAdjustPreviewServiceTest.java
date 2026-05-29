@@ -74,8 +74,8 @@ class AllocAdjustPreviewServiceTest {
     @Test
     @DisplayName("custNo 空 → 返回空列表，不查任何表")
     void blankCustNo_returnsEmpty() {
-        assertThat(service.getLastApprovedAllocPreview("  ")).isEmpty();
-        assertThat(service.getLastApprovedAllocPreview(null)).isEmpty();
+        assertThat(service.getLastApprovedAllocPreview("  ", null)).isEmpty();
+        assertThat(service.getLastApprovedAllocPreview(null, null)).isEmpty();
     }
 
     @Test
@@ -87,7 +87,7 @@ class AllocAdjustPreviewServiceTest {
         when(applyMapper.selectLastApprovedByCustAndDim("INTERNAL_001", "RULE")).thenReturn(null);
         when(applyMapper.selectLastApprovedByCustAndDim("INTERNAL_001", "ACCOUNT")).thenReturn(null);
 
-        assertThat(service.getLastApprovedAllocPreview("C001")).isEmpty();
+        assertThat(service.getLastApprovedAllocPreview("C001", null)).isEmpty();
 
         verify(applyMapper).selectLastApprovedByCustAndDim("INTERNAL_001", "RULE");
         verify(applyMapper).selectLastApprovedByCustAndDim("INTERNAL_001", "ACCOUNT");
@@ -100,7 +100,7 @@ class AllocAdjustPreviewServiceTest {
         when(applyMapper.selectLastApprovedByCustAndDim("RAW", "RULE")).thenReturn(null);
         when(applyMapper.selectLastApprovedByCustAndDim("RAW", "ACCOUNT")).thenReturn(null);
 
-        assertThat(service.getLastApprovedAllocPreview("RAW")).isEmpty();
+        assertThat(service.getLastApprovedAllocPreview("RAW", null)).isEmpty();
         verify(applyMapper).selectLastApprovedByCustAndDim("RAW", "RULE");
     }
 
@@ -121,7 +121,7 @@ class AllocAdjustPreviewServiceTest {
                 user("E10001", "rm_zhang", "张客户经理", "BJ_CY", "北京分行朝阳支行"),
                 user("E30001", "corp_zhao", "赵公司部审核", "BJ_HQ", "北京分行总部")));
 
-        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001");
+        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
 
         assertThat(result).hasSize(2);
 
@@ -153,7 +153,7 @@ class AllocAdjustPreviewServiceTest {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
         when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of());
 
-        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001");
+        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getUsername()).isEqualTo("GHOST");
@@ -177,7 +177,7 @@ class AllocAdjustPreviewServiceTest {
         when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(
                 user("E10001", "rm_zhang", "张客户经理", "107", "对公一部")));
 
-        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001");
+        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
 
         assertThat(result).hasSize(1);
         AllocAdjustPreviewItemDTO dto = result.get(0);
@@ -196,6 +196,27 @@ class AllocAdjustPreviewServiceTest {
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
         when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of());
 
-        assertThat(service.getLastApprovedAllocPreview("C001")).isEmpty();
+        assertThat(service.getLastApprovedAllocPreview("C001", null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("allocDim=ACCOUNT → 只查 ACCOUNT 维度，不查 RULE")
+    void accountDim_onlyQueriesAccount() {
+        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
+        when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT"))
+                .thenReturn(apply("APPLY_ACCT", "ACCOUNT", "62200000001"));
+        when(itemMapper.selectByApplyId("APPLY_ACCT")).thenReturn(List.of(item("E10001", "100")));
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(
+                user("E10001", "rm_zhang", "张客户经理", "107", "营业部")));
+
+        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", "ACCOUNT");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAllocDim()).isEqualTo("ACCOUNT");
+        assertThat(result.get(0).getAccountNo()).isEqualTo("62200000001");
+        // 关键：不应查询 RULE 维度
+        org.mockito.Mockito.verify(applyMapper, org.mockito.Mockito.never())
+                .selectLastApprovedByCustAndDim(org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.eq("RULE"));
     }
 }

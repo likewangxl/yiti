@@ -86,6 +86,12 @@ public class AllocAdjustRespDTO {
         /** 员工工号. */
         private String empId;
 
+        /** 员工登录名（PT_USER.USERNAME；解析不到时回退为工号）. */
+        private String username;
+
+        /** 员工中文姓名（PT_USER.USERCHNNAME）. */
+        private String empChnName;
+
         /** 分配比例. */
         private BigDecimal ratio;
 

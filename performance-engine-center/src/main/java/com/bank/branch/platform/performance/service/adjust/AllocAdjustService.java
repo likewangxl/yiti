@@ -10,6 +10,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
+import com.bank.branch.platform.performance.controller.dto.EmpSuggestRespDTO;
 import com.bank.branch.platform.performance.entity.CustAllocRelation;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
@@ -95,6 +96,43 @@ public class AllocAdjustService {
     private final UserApi userApi;
     private final OrgApi orgApi;
     private final PerfScopeHelper perfScopeHelper;
+    private final AllocAdjustPreviewService allocAdjustPreviewService;
+
+    /** 员工联想默认返回上限. */
+    private static final int EMP_SUGGEST_DEFAULT_LIMIT = 20;
+    /** 员工联想返回上限硬顶. */
+    private static final int EMP_SUGGEST_MAX_LIMIT = 50;
+
+    /**
+     * 分配明细员工号输入框自动补齐：按关键字模糊匹配 PT_USER 工号/登录名/中文名.
+     *
+     * <p>委托 {@link UserApi#pageUsers(String, int, int)}（OR 模糊匹配 USER_ID / USERNAME /
+     * USERCHNNAME），转换为 {@link EmpSuggestRespDTO}（登录名 + 中文名）供前端展示。
+     * 关键字为空时不返回（避免全表联想）。
+     *
+     * @param keyword 关键字（工号/登录名/中文名片段）
+     * @param limit   返回上限（默认 20，最大 50）
+     * @return 建议项列表，不会返回 null
+     */
+    public List<EmpSuggestRespDTO> suggestEmployees(String keyword, Integer limit) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        int size = (limit == null || limit < 1) ? EMP_SUGGEST_DEFAULT_LIMIT
+                : Math.min(limit, EMP_SUGGEST_MAX_LIMIT);
+        PageResult<com.bank.branch.platform.auth.api.dto.UserDTO> page =
+                userApi.pageUsers(keyword.trim(), 1, size);
+        List<EmpSuggestRespDTO> result = new java.util.ArrayList<>();
+        if (page != null && page.getRecords() != null) {
+            for (com.bank.branch.platform.auth.api.dto.UserDTO u : page.getRecords()) {
+                if (u == null) {
+                    continue;
+                }
+                result.add(new EmpSuggestRespDTO(u.getEmpId(), u.getUsername(), u.getDisplayName()));
+            }
+        }
+        return result;
+    }
 
     /**
      * 提交分配关系调整申请.
@@ -113,11 +151,12 @@ public class AllocAdjustService {
         // 按客户编号(cust_no)查找客户主档；apply.cust_id 列保存客户内部主键 id，与现有跨模块 join 保持兼容
         String internalCustId = resolveInternalCustIdByCustNo(cmd.getCustNo());
 
-        // 同客户去重：同一客户(cust_id)已存在审批中(IN_APPROVAL)的调整申请时，不允许重复提交，
-        // 避免并行多笔调整审批落地后相互覆盖分配关系。custNo 解析为同一 internalCustId，按 cust_id 计数即可。
-        if (applyMapper.countByConditions("IN_APPROVAL", null, internalCustId, null, null) > 0) {
-            throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING,
-                    "该客户已有审批中的分配调整申请，不可重复提交: " + cmd.getCustNo());
+        // 同客户同维度去重：同一客户(cust_id) + 同一分配维度(alloc_dim)已存在审批中(IN_APPROVAL)的调整申请时，
+        // 不允许重复提交，避免并行多笔调整审批落地后相互覆盖分配关系。
+        // 去重粒度精确到维度：RULE 审批中不阻塞 ACCOUNT 的新提交，反之亦然。
+        // 注意：PerfException 的 errorCode.format 已自动拼「基础消息 + ": " + arg」，此处只传 custNo，避免消息重复。
+        if (applyMapper.countInApprovalByCustAndDim(internalCustId, cmd.getAllocDim()) > 0) {
+            throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING, cmd.getCustNo());
         }
 
         String applyId = genApplyId();
@@ -182,6 +221,13 @@ public class AllocAdjustService {
         String originalOwnerEmpId = resolveOriginalOwnerEmpId(internalCustId, cmd.getBizKind());
         if (originalOwnerEmpId != null) {
             vars.put("originalOwnerEmpId", originalOwnerEmpId);
+        }
+        // 原业绩分配会签名单（corp_v1 多实例）：取「原业绩分配模块」该客户当前维度上次审批通过明细的员工，
+        // 归一到工号(USER_ID) 去重，作为 original_owner_approve 并行多实例 collection（每人一个子任务）。
+        // 为空时不写此键（前端已禁止"交原业绩所属人审批"，此处兜底）。
+        List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(cmd.getCustNo(), cmd.getAllocDim());
+        if (!originalOwnerEmpIds.isEmpty()) {
+            vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
         }
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
@@ -314,7 +360,121 @@ public class AllocAdjustService {
                         createdBy, e.toString());
             }
         }
+        // 明细员工号补全 username + 中文姓名（审批/查看页分配明细展示用）
+        enrichItemEmployees(dto.getItems());
         return dto;
+    }
+
+    /**
+     * 为明细项补全员工 username + 中文姓名.
+     *
+     * <p>{@code emp_id} 取值不统一（工号或登录名），先按工号(USER_ID)解析，未命中再按登录名(USERNAME)兜底；
+     * 任何查询失败不阻塞主流程，对应字段留回退值（username=工号、中文名=null）。
+     */
+    private void enrichItemEmployees(List<AllocAdjustRespDTO.Item> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        // 去重保序 empId
+        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
+        for (AllocAdjustRespDTO.Item it : items) {
+            if (!isBlank(it.getEmpId())) {
+                empIds.add(it.getEmpId());
+            }
+        }
+        if (empIds.isEmpty()) {
+            return;
+        }
+        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = resolveUsersByTokens(empIds);
+        for (AllocAdjustRespDTO.Item it : items) {
+            com.bank.branch.platform.auth.api.dto.UserDTO u = it.getEmpId() != null ? userMap.get(it.getEmpId()) : null;
+            it.setUsername((u != null && !isBlank(u.getUsername())) ? u.getUsername() : it.getEmpId());
+            it.setEmpChnName(u != null ? u.getDisplayName() : null);
+        }
+    }
+
+    /**
+     * 按 token（工号或登录名）双解析员工，Key=原始 token.
+     *
+     * <p>先按工号(USER_ID)解析，未命中的 token 再按登录名(USERNAME)兜底；查询失败返回已解析部分。
+     */
+    private java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> resolveUsersByTokens(
+            java.util.Collection<String> tokens) {
+        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = new java.util.HashMap<>();
+        if (tokens == null || tokens.isEmpty()) {
+            return userMap;
+        }
+        java.util.LinkedHashSet<String> distinct = new java.util.LinkedHashSet<>();
+        for (String t : tokens) {
+            if (!isBlank(t)) {
+                distinct.add(t);
+            }
+        }
+        if (distinct.isEmpty()) {
+            return userMap;
+        }
+        try {
+            List<com.bank.branch.platform.auth.api.dto.UserDTO> byId =
+                    userApi.getUserByEmpIds(new java.util.ArrayList<>(distinct));
+            if (byId != null) {
+                for (com.bank.branch.platform.auth.api.dto.UserDTO u : byId) {
+                    if (u != null && u.getEmpId() != null) {
+                        userMap.put(u.getEmpId(), u);
+                    }
+                }
+            }
+            List<String> remaining = new java.util.ArrayList<>();
+            for (String token : distinct) {
+                if (!userMap.containsKey(token)) {
+                    remaining.add(token);
+                }
+            }
+            if (!remaining.isEmpty()) {
+                List<com.bank.branch.platform.auth.api.dto.UserDTO> byName = userApi.getUsersByUsernames(remaining);
+                if (byName != null) {
+                    for (com.bank.branch.platform.auth.api.dto.UserDTO u : byName) {
+                        if (u != null && u.getUsername() != null) {
+                            userMap.putIfAbsent(u.getUsername(), u);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[AllocAdjustService.resolveUsersByTokens] 员工信息查询失败，err={}", e.toString());
+        }
+        return userMap;
+    }
+
+    /**
+     * 计算「原业绩分配模块」会签名单：取该客户当前维度上次审批通过的分配明细员工，
+     * 归一到工号(USER_ID) 去重，作为 corp_v1 {@code original_owner_approve} 并行多实例 collection.
+     *
+     * <p>emp_id 历史可能存登录名，归一到工号才能与待办（按当前用户工号匹配）对齐；解析不到则保留原值。
+     *
+     * @return 工号列表（可能为空）
+     */
+    private List<String> resolveOriginalOwnerEmpIds(String custNo, String allocDim) {
+        List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> owners =
+                allocAdjustPreviewService.getLastApprovedAllocPreview(custNo, allocDim);
+        if (owners == null || owners.isEmpty()) {
+            return new ArrayList<>();
+        }
+        java.util.LinkedHashSet<String> rawEmpIds = new java.util.LinkedHashSet<>();
+        for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO o : owners) {
+            if (o != null && !isBlank(o.getEmpId())) {
+                rawEmpIds.add(o.getEmpId());
+            }
+        }
+        if (rawEmpIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = resolveUsersByTokens(rawEmpIds);
+        java.util.LinkedHashSet<String> userIds = new java.util.LinkedHashSet<>();
+        for (String token : rawEmpIds) {
+            com.bank.branch.platform.auth.api.dto.UserDTO u = userMap.get(token);
+            userIds.add(u != null && u.getEmpId() != null ? u.getEmpId() : token);
+        }
+        return new ArrayList<>(userIds);
     }
 
     /**
@@ -475,6 +635,10 @@ public class AllocAdjustService {
         }
         if (isBlank(cmd.getAllocDim()) || !ALLOWED_ALLOC_DIMS.contains(cmd.getAllocDim())) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "allocDim 非法: " + cmd.getAllocDim());
+        }
+        // 按账号分配(ACCOUNT)时账号必填
+        if ("ACCOUNT".equals(cmd.getAllocDim()) && isBlank(cmd.getAccountNo())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "按账号分配时账号必填");
         }
         if (isBlank(cmd.getBizKind())) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "bizKind 为空");
