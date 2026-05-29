@@ -14,10 +14,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.api.dto.UserRoleItemDTO;
+import com.bank.branch.platform.common.web.PageResult;
+
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -137,5 +143,45 @@ public class UserFacade implements UserApi {
             }
         }
         return results;
+    }
+
+    @Override
+    public PageResult<UserDTO> pageUsers(String keyword, int pageNo, int pageSize) {
+        // 入参归一：页码最小 1，页大小区间 [1, 100]，默认 20
+        int p = pageNo < 1 ? 1 : pageNo;
+        int s = pageSize < 1 ? 20 : Math.min(pageSize, 100);
+        int offset = (p - 1) * s;
+        // 空关键词不过滤
+        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        List<PtUser> rows = userMapper.selectByKeywordPaged(kw, offset, s);
+        long total = userMapper.countByKeyword(kw);
+        List<UserDTO> items = new ArrayList<>(rows.size());
+        for (PtUser u : rows) {
+            UserDTO dto = new UserDTO();
+            dto.setEmpId(u.getUserId());
+            dto.setUsername(u.getUsername());
+            dto.setDisplayName(u.getUserchnname());
+            items.add(dto);
+        }
+        return PageResult.of(p, s, total, items);
+    }
+
+    @Override
+    public Map<String, List<RoleSimpleDTO>> getRolesByUserIds(List<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        List<UserRoleItemDTO> rows = userRoleMapper.selectRolesByUserIds(userIds);
+        Map<String, List<RoleSimpleDTO>> map = new HashMap<>();
+        if (rows == null) return map;
+        for (UserRoleItemDTO r : rows) {
+            RoleSimpleDTO dto = new RoleSimpleDTO();
+            dto.setRoleId(r.getRoleId());
+            dto.setRoleCode(r.getRoleCode());
+            dto.setRoleChName(r.getRoleChName());
+            // 按 userId 分组，computeIfAbsent 保证列表存在
+            map.computeIfAbsent(r.getUserId(), k -> new ArrayList<>()).add(dto);
+        }
+        return map;
     }
 }

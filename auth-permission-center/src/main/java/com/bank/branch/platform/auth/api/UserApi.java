@@ -1,8 +1,11 @@
 package com.bank.branch.platform.auth.api;
 
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
+import com.bank.branch.platform.common.web.PageResult;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -86,4 +89,22 @@ public interface UserApi {
      * @return 用户DTO列表
      */
     List<UserDTO> getUsersByUsernames(List<String> usernames);
+
+    /**
+     * 按关键词分页查询用户（工号/登录名/中文名 OR 模糊），供 performance 人员标签列表用。
+     *
+     * @param keyword  关键词（null/空 不过滤）
+     * @param pageNo   页码（从 1 开始，&lt;1 归一为 1）
+     * @param pageSize 每页条数（&lt;1 归一为 20，&gt;100 截断为 100）
+     * @return 分页用户（empId/username/displayName 已装配，mainOrg 不填充）
+     */
+    PageResult<UserDTO> pageUsers(String keyword, int pageNo, int pageSize);
+
+    /**
+     * 批量查询多个用户的角色简要列表，避免逐用户 N+1。
+     *
+     * @param userIds 用户ID（工号）列表
+     * @return Map&lt;userId, 角色列表&gt;；入参为空时返回空 Map，无角色的 userId 不在 Map 中
+     */
+    Map<String, List<RoleSimpleDTO>> getRolesByUserIds(List<String> userIds);
 }
