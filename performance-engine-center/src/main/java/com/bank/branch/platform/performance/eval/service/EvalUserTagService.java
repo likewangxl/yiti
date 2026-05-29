@@ -144,9 +144,46 @@ public class EvalUserTagService {
      */
     public PageResult<EvalUserRoleRowDTO> pageUserRoles(String keyword, int page, int pageSize) {
         PageResult<UserDTO> users = userApi.pageUsers(keyword, page, pageSize);
-        List<UserDTO> records = users.getRecords();
+        List<EvalUserRoleRowDTO> rows = assembleRows(users.getRecords());
+        return PageResult.of(page, pageSize, users.getTotal(), rows);
+    }
+
+    /**
+     * 导出用：取关键词匹配的全部人员（翻页累积，每页 100），上限 cap 行。
+     *
+     * @param keyword 关键词（工号/姓名，可空）
+     * @param cap     最大导出行数（保护，超出截断）
+     * @return 装配好的列表行
+     */
+    public List<EvalUserRoleRowDTO> listForExport(String keyword, int cap) {
+        List<EvalUserRoleRowDTO> all = new ArrayList<>();
+        int pageSize = 100;
+        int pageNo = 1;
+        while (all.size() < cap) {
+            PageResult<UserDTO> users = userApi.pageUsers(keyword, pageNo, pageSize);
+            List<UserDTO> records = users.getRecords();
+            if (records == null || records.isEmpty()) {
+                break;
+            }
+            all.addAll(assembleRows(records));
+            if (all.size() >= users.getTotal()) {
+                break;
+            }
+            pageNo++;
+        }
+        if (all.size() > cap) {
+            return new ArrayList<>(all.subList(0, cap));
+        }
+        return all;
+    }
+
+    /**
+     * 将 UserDTO 列表装配成 EvalUserRoleRowDTO 列表（批量查通讯录、角色、标签）。
+     * records 为空时返回空列表。
+     */
+    private List<EvalUserRoleRowDTO> assembleRows(List<UserDTO> records) {
         if (records == null || records.isEmpty()) {
-            return PageResult.of(page, pageSize, users.getTotal(), List.of());
+            return new ArrayList<>();
         }
         List<String> empIds = records.stream().map(UserDTO::getEmpId).collect(Collectors.toList());
 
@@ -191,7 +228,7 @@ public class EvalUserTagService {
             row.setEvalTags(evalTags);
             rows.add(row);
         }
-        return PageResult.of(page, pageSize, users.getTotal(), rows);
+        return rows;
     }
 
 }
