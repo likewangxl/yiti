@@ -273,14 +273,11 @@ import {
 } from '@/api/eval'
 
 // ===== 全部标签缓存（用于下拉和名称映射） =====
-/** 所有标签列表（tagType=1 被评价人标签；tagType=2 评价人标签） */
+/** 所有标签列表（无类型扁平标签池） */
 const allTags = ref([])
 
-/** 被评价人标签选项（tagType=1） */
-const beEvalTagOptions = computed(() => allTags.value.filter((t) => t.tagType === 1))
-
-/** 评价人标签选项（tagType=2） */
-const evalTagOptions = computed(() => allTags.value.filter((t) => t.tagType === 2))
+/** 被评价人标签选项（全量池） */
+const beEvalTagOptions = computed(() => allTags.value)
 
 /**
  * 根据 tagId 获取标签名称
@@ -363,6 +360,9 @@ const formData = reactive({
   beEvalTagId: null,
   groups: [],
 })
+
+/** 评价人标签选项（全量池，排除当前规则的被评价人标签——局部排斥） */
+const evalTagOptions = computed(() => allTags.value.filter((t) => t.tagId !== formData.beEvalTagId))
 
 /** 表单校验规则 */
 const formRules = {
