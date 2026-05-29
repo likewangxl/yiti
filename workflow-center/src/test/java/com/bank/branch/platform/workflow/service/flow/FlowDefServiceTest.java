@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -217,6 +218,36 @@ class FlowDefServiceTest {
         assertThat(dto.getVersion()).isEqualTo(2);
         assertThat(dto.getDeployedProcDefKey()).isEqualTo("key-123");
         assertThat(dto.getIsReadonlyImport()).isEqualTo(0);
+    }
+
+    // ------------------------------------------------------------------ //
+    //  6. createImported_buildsReadonlyPublishedDef                       //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    @DisplayName("createImported：新建只读已发布流程定义并落库图形数据")
+    void createImported_buildsReadonlyPublishedDef() {
+        FlowGraphDTO graph = buildSimpleGraph();
+
+        String flowDefId = service.createImported(graph, "perf_alloc_adjust_corp_v1");
+
+        assertThat(flowDefId).isNotBlank();
+
+        // 捕获 insert 的 def，断言只读/已发布/flowKey/sourceProcDefKey
+        ArgumentCaptor<WfFlowDef> defCaptor = ArgumentCaptor.forClass(WfFlowDef.class);
+        verify(flowDefMapper).insert(defCaptor.capture());
+        WfFlowDef def = defCaptor.getValue();
+        assertThat(def.getIsReadonlyImport()).isEqualTo(1);
+        assertThat(def.getStatus()).isEqualTo("PUBLISHED");
+        assertThat(def.getVersion()).isEqualTo(0);
+        assertThat(def.getFlowKey()).isEqualTo("imported_perf_alloc_adjust_corp_v1");
+        assertThat(def.getSourceProcDefKey()).isEqualTo("perf_alloc_adjust_corp_v1");
+        assertThat(def.getBizType()).isEqualTo("TARGET_ADJUST");
+
+        // 落库图形数据：节点/边/审批人均被插入
+        verify(nodeMapper, atLeast(2)).insert(ArgumentMatchers.<WfFlowNode>any(WfFlowNode.class));
+        verify(edgeMapper, atLeast(1)).insert(ArgumentMatchers.<WfFlowEdge>any(WfFlowEdge.class));
+        verify(approverMapper, atLeast(1)).insert(ArgumentMatchers.<WfFlowNodeApprover>any(WfFlowNodeApprover.class));
     }
 
     // ------------------------------------------------------------------ //

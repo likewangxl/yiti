@@ -190,10 +190,57 @@ public class FlowDefService {
 
         flowDefMapper.insert(def);
 
-        // 保存图形数据（新建时无旧数据，内部 saveGraphInternal 跳过删除步骤）
-        saveGraphInternal(flowDefId, graph, operator);
+        // 保存图形数据（新建时无旧数据，内部 insertGraphElements 仅插入不删除）
+        insertGraphElements(flowDefId, graph);
 
         log.info("[FlowDefService.create] 出参: flowDefId={}", flowDefId);
+        return flowDefId;
+    }
+
+    /**
+     * 反向导入：把已部署的现有流程图保存为只读流程定义。
+     * <p>
+     * 与 {@link #create(FlowGraphDTO, String)} 复用同一套落库逻辑
+     * （{@link #insertGraphElements(String, FlowGraphDTO)}），区别在于 def 元数据：
+     * status=PUBLISHED、version=0、isReadonlyImport=1、flowKey="imported_"+sourceProcKey、
+     * sourceProcDefKey=sourceProcKey，操作人固定为 system。
+     * </p>
+     * <p>
+     * 注意：本方法只负责落库，不做幂等判断（由调用方 FlowImportService 负责），
+     * 也不校验图结构合法性（导入数据来自已部署流程，视为可信）。
+     * </p>
+     *
+     * @param graph         反向解析得到的流程图 DTO
+     * @param sourceProcKey 来源 Flowable 流程定义 KEY
+     * @return 新建流程定义的 ID（UUID，无横线）
+     */
+    @Transactional
+    public String createImported(FlowGraphDTO graph, String sourceProcKey) {
+        log.info("[FlowDefService.createImported] 入参: sourceProcKey={}, bizType={}",
+                sourceProcKey, graph.getBizType());
+
+        String flowDefId = newUuid();
+
+        WfFlowDef def = new WfFlowDef();
+        def.setId(flowDefId);
+        def.setFlowKey("imported_" + sourceProcKey);
+        def.setBizType(graph.getBizType());
+        def.setName(graph.getName());
+        def.setStatus("PUBLISHED");
+        def.setVersion(0);
+        def.setIsReadonlyImport(1);
+        def.setSourceProcDefKey(sourceProcKey);
+        def.setCreatedBy("system");
+        def.setCreatedTime(LocalDateTime.now());
+        def.setUpdatedBy("system");
+        def.setUpdatedTime(LocalDateTime.now());
+
+        flowDefMapper.insert(def);
+
+        // 复用与 create 一致的图形落库逻辑
+        insertGraphElements(flowDefId, graph);
+
+        log.info("[FlowDefService.createImported] 出参: flowDefId={}", flowDefId);
         return flowDefId;
     }
 
@@ -236,7 +283,7 @@ public class FlowDefService {
         nodeMapper.deleteByFlowDefId(flowDefId);
 
         // 插入新图形数据
-        saveGraphInternal(flowDefId, graph, operator);
+        insertGraphElements(flowDefId, graph);
 
         // 更新 def 的 name / updatedBy / updatedTime
         def.setName(graph.getName());
@@ -293,14 +340,13 @@ public class FlowDefService {
     // ------------------------------------------------------------------ //
 
     /**
-     * 内部方法：插入图形数据（节点、审批人、连线）。
+     * 内部方法：插入图形数据（节点、审批人、连线），供 create / saveGraph / createImported 共用。
      * 先插入所有节点并建立 nodeKey→nodeId 映射，再插入 approvers 和 edges。
      *
      * @param flowDefId 流程定义ID
      * @param graph     流程图 DTO
-     * @param operator  操作人工号
      */
-    private void saveGraphInternal(String flowDefId, FlowGraphDTO graph, String operator) {
+    private void insertGraphElements(String flowDefId, FlowGraphDTO graph) {
         List<FlowNodeDTO> nodeDTOs = graph.getNodes() != null ? graph.getNodes() : Collections.emptyList();
         List<FlowEdgeDTO> edgeDTOs = graph.getEdges() != null ? graph.getEdges() : Collections.emptyList();
 
