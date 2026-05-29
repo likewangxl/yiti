@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.workflow.mapper.WfFlowNodeApproverMapper">
+
+    <!-- WF_FLOW_NODE_APPROVER 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, node_id, approver_type, approver_value, sort_no, created_time
+    </sql>
+
+    <!-- 根据节点ID列表批量查询审批人规则，按 sort_no 升序排列 -->
+    <select id="selectByNodeIds" resultType="com.bank.branch.platform.workflow.entity.WfFlowNodeApprover">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM WF_FLOW_NODE_APPROVER
+        WHERE node_id IN
+        <foreach collection="nodeIds" item="nodeId" open="(" separator="," close=")">
+            #{nodeId}
+        </foreach>
+        ORDER BY sort_no ASC
+    </select>
+
+    <!-- 根据节点ID列表批量删除审批人规则 -->
+    <delete id="deleteByNodeIds">
+        DELETE FROM WF_FLOW_NODE_APPROVER
+        WHERE node_id IN
+        <foreach collection="nodeIds" item="nodeId" open="(" separator="," close=")">
+            #{nodeId}
+        </foreach>
+    </delete>
+
+    <!-- selectById / insert / updateById / deleteById 由 MyBatis-Plus BaseMapper 提供 -->
+
+</mapper>

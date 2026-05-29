@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.workflow.mapper.WfFlowNodeMapper">
+
+    <!-- WF_FLOW_NODE 全列查询片段 -->
+    <sql id="BASE_COLUMNS">
+        id, flow_def_id, node_key, node_type, name, approve_mode,
+        sort_no, pos_x, pos_y, created_time, updated_time
+    </sql>
+
+    <!-- 根据流程定义ID查询所有节点，按 sort_no 升序排列 -->
+    <select id="selectByFlowDefId" resultType="com.bank.branch.platform.workflow.entity.WfFlowNode">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM WF_FLOW_NODE
+        WHERE flow_def_id = #{flowDefId}
+        ORDER BY sort_no ASC
+    </select>
+
+    <!-- 根据流程定义ID删除所有节点 -->
+    <delete id="deleteByFlowDefId">
+        DELETE FROM WF_FLOW_NODE
+        WHERE flow_def_id = #{flowDefId}
+    </delete>
+
+    <!-- selectById / insert / updateById / deleteById 由 MyBatis-Plus BaseMapper 提供 -->
+
+</mapper>
