@@ -151,6 +151,7 @@ class AllocAdjustPreviewServiceTest {
         lenient().when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
         when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(item("GHOST", "100")));
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
+        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of());
 
         List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001");
 
@@ -159,6 +160,31 @@ class AllocAdjustPreviewServiceTest {
         assertThat(result.get(0).getEmpChnName()).isNull();
         assertThat(result.get(0).getOrgCode()).isNull();
         assertThat(result.get(0).getOrgName()).isNull();
+    }
+
+    @Test
+    @DisplayName("emp_id 存的是登录名(非工号) → 工号解析落空后按登录名兜底，中文名/机构正确补全")
+    void resolvesByUsernameWhenEmpIdIsLoginName() {
+        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
+        when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
+                .thenReturn(apply("APPLY_RULE", "RULE", null));
+        when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
+        // emp_id = "rm_zhang"（登录名，非工号 E10001）
+        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(item("rm_zhang", "100")));
+        // 按工号解析 rm_zhang 落空
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
+        // 按登录名兜底命中（内部已按 USER_ID 补全中文名 + 机构）
+        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(
+                user("E10001", "rm_zhang", "张客户经理", "107", "对公一部")));
+
+        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001");
+
+        assertThat(result).hasSize(1);
+        AllocAdjustPreviewItemDTO dto = result.get(0);
+        assertThat(dto.getUsername()).isEqualTo("rm_zhang");
+        assertThat(dto.getEmpChnName()).isEqualTo("张客户经理");
+        assertThat(dto.getOrgCode()).isEqualTo("107");
+        assertThat(dto.getOrgName()).isEqualTo("对公一部");
     }
 
     @Test

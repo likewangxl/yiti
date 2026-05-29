@@ -102,9 +102,15 @@ public class AllocAdjustPreviewService {
         return result;
     }
 
-    /** 批量解析员工信息，按工号去重后一次性查询，Key=empId. */
+    /**
+     * 批量解析员工信息，Key=原始 emp_id 取值（可能是工号，也可能是登录名）.
+     *
+     * <p>{@code item.emp_id} 的历史取值并不统一：既有工号（PT_USER.USER_ID，如 E10001），
+     * 也有登录名（PT_USER.USERNAME，如 rm_zhang）。因此先按工号解析，未命中的 token 再按登录名兜底，
+     * 保证两种存法都能拿到 username / 中文姓名 / 机构号 / 机构名称。
+     */
     private Map<String, UserDTO> resolveUsers(List<RowCtx> rows) {
-        // 去重保序的工号集合
+        // 去重保序的 emp_id 集合
         Map<String, Boolean> distinct = new LinkedHashMap<>();
         for (RowCtx r : rows) {
             if (StringUtils.hasText(r.item.getEmpId())) {
@@ -115,11 +121,32 @@ public class AllocAdjustPreviewService {
         if (distinct.isEmpty()) {
             return userMap;
         }
-        List<UserDTO> users = userApi.getUserByEmpIds(new ArrayList<>(distinct.keySet()));
-        if (users != null) {
-            for (UserDTO u : users) {
+
+        // 1) 按工号(USER_ID)解析
+        List<UserDTO> byEmpId = userApi.getUserByEmpIds(new ArrayList<>(distinct.keySet()));
+        if (byEmpId != null) {
+            for (UserDTO u : byEmpId) {
                 if (u != null && u.getEmpId() != null) {
                     userMap.put(u.getEmpId(), u);
+                }
+            }
+        }
+
+        // 2) 工号未命中的 token，再按登录名(USERNAME)兜底解析
+        List<String> remaining = new ArrayList<>();
+        for (String token : distinct.keySet()) {
+            if (!userMap.containsKey(token)) {
+                remaining.add(token);
+            }
+        }
+        if (!remaining.isEmpty()) {
+            List<UserDTO> byUsername = userApi.getUsersByUsernames(remaining);
+            if (byUsername != null) {
+                for (UserDTO u : byUsername) {
+                    if (u != null && u.getUsername() != null) {
+                        // 按登录名回填（emp_id 存的就是登录名时命中）
+                        userMap.putIfAbsent(u.getUsername(), u);
+                    }
                 }
             }
         }
