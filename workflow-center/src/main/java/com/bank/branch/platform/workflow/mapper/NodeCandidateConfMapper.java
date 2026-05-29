@@ -42,4 +42,16 @@ public interface NodeCandidateConfMapper extends BaseMapper<WfNodeCandidateConf>
      * @return 候选人配置列表
      */
     List<WfNodeCandidateConf> selectByProcessDefKey(String processDefinitionKey);
+
+    /**
+     * 根据流程定义KEY删除该流程的全部候选人配置。
+     * <p>
+     * 发布流程图时先清理同一影子 KEY 下的旧候选配置，再按最新审批人规则重新插入，
+     * 保证候选配置与已发布流程图一致（先删后插的整图替换语义）。
+     * </p>
+     *
+     * @param processDefinitionKey 流程定义KEY（影子 KEY）
+     * @return 受影响行数
+     */
+    int deleteByProcessDefinitionKey(@Param("processDefinitionKey") String processDefinitionKey);
 }
