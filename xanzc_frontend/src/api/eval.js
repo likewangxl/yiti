@@ -47,6 +47,17 @@ export function unbindUserTags(userId, tagIds) {
   return call('delete', '/admin/eval/user-tags', { data: { userId, tagIds } }, { ok: true });
 }
 
+// 2026-05-29：人员标签列表化改造
+// 分页查询人员标签列表（含部门/岗位/角色 + 被评价人/评价人标签）
+export function pageUserRoles(params = {}) {
+  return call('get', '/admin/eval/user-tags/page', { params: { page: 1, pageSize: 20, ...params } }, { records: [], total: 0 });
+}
+
+// 覆盖式保存人员评价角色（被评价单选 beEvalTagId / 评价人多选 evalTagIds）
+export function saveUserRoles(userId, beEvalTagId, evalTagIds) {
+  return call('put', `/admin/eval/user-tags/${userId}/roles`, { data: { beEvalTagId, evalTagIds } }, { ok: true });
+}
+
 // ============================================================
 // 评价规则 (EvalRuleController: /api/admin/eval/rules)
 // ============================================================
