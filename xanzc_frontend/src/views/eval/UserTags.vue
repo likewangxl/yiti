@@ -16,6 +16,11 @@
           @keyup.enter="doSearch"
           @clear="doSearch"
         />
+        <el-select v-model="evalEnabledFilter" size="small" style="width:140px" @change="doSearch">
+          <el-option label="启用：是" value="1" />
+          <el-option label="启用：否" value="0" />
+          <el-option label="全部" value="all" />
+        </el-select>
         <el-button type="primary" size="small" @click="doSearch">查询</el-button>
         <el-button size="small" @click="resetSearch">重置</el-button>
         <el-button size="small" @click="openImport">导入</el-button>
@@ -44,6 +49,12 @@
           <template #default="{ row }">
             <span v-if="row.evalTags && row.evalTags.length">{{ row.evalTags.map(t => t.tagName).join('，') }}</span>
             <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="是否启用评价" min-width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.evalEnabled === 1" type="success" effect="plain" size="small">是</el-tag>
+            <el-tag v-else type="info" effect="plain" size="small">否</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right">
@@ -119,6 +130,12 @@
             <el-option v-for="t in tagsOfType(2)" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
           </el-select>
         </el-form-item>
+        <el-form-item label="是否启用评价">
+          <el-select v-model="form.evalEnabled" style="width: 100%">
+            <el-option :value="1" label="是" />
+            <el-option :value="0" label="否" />
+          </el-select>
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -154,6 +171,7 @@ const total = ref(0);
 const page = ref(1);
 const pageSize = ref(20);
 const keyword = ref('');
+const evalEnabledFilter = ref('1'); // 默认只看启用=是
 const loading = ref(false);
 let searchTimer = null;
 const exporting = ref(false);
@@ -166,7 +184,7 @@ const importErrors = ref([]);
 async function reload() {
   loading.value = true;
   try {
-    const r = await pageUserRoles({ keyword: keyword.value.trim() || undefined, page: page.value, pageSize: pageSize.value });
+    const r = await pageUserRoles({ keyword: keyword.value.trim() || undefined, evalEnabled: evalEnabledFilter.value, page: page.value, pageSize: pageSize.value });
     rows.value = Array.isArray(r) ? r : (r?.records || []);
     total.value = r?.total ?? rows.value.length;
   } catch {
@@ -183,6 +201,7 @@ function doSearch() {
 }
 function resetSearch() {
   keyword.value = '';
+  evalEnabledFilter.value = '1';
   page.value = 1;
   reload();
 }
@@ -236,7 +255,7 @@ async function doDownloadTpl() {
 async function doExport() {
   exporting.value = true;
   try {
-    const blob = await exportUserRoles(keyword.value);
+    const blob = await exportUserRoles(keyword.value, evalEnabledFilter.value);
     saveBlob(blob, '人员标签列表.xlsx');
   } catch (e) { /* 已提示 */ } finally {
     exporting.value = false;
@@ -252,12 +271,13 @@ function onPageChange(p) {
 const editVisible = ref(false);
 const editing = ref(null);
 const saving = ref(false);
-const form = reactive({ beEvalTagId: null, evalTagIds: [] });
+const form = reactive({ beEvalTagId: null, evalTagIds: [], evalEnabled: 0 });
 
 function openEdit(row) {
   editing.value = row;
   form.beEvalTagId = row.beEvalTag ? row.beEvalTag.tagId : null;
   form.evalTagIds = (row.evalTags || []).map(t => t.tagId);
+  form.evalEnabled = (row.evalEnabled === 1) ? 1 : 0;
   editVisible.value = true;
 }
 
@@ -265,13 +285,14 @@ function onDialogClosed() {
   editing.value = null;
   form.beEvalTagId = null;
   form.evalTagIds = [];
+  form.evalEnabled = 0;
 }
 
 async function handleSave() {
   if (!editing.value) return;
   saving.value = true;
   try {
-    await saveUserRoles(editing.value.userId, form.beEvalTagId ?? null, form.evalTagIds || []);
+    await saveUserRoles(editing.value.userId, form.beEvalTagId ?? null, form.evalTagIds || [], form.evalEnabled);
     ElMessage.success('保存成功');
     editVisible.value = false;
     await reload();
