@@ -80,6 +80,9 @@ public class EvalRuleService {
         // 权重校验优先，避免到 DB 操作才发现错误
         validateWeightSum(groups);
 
+        // 评价人组标签不得等于被评价人标签（局部排斥）
+        validateRoleConflict(beEvalTagId, groups);
+
         // 被评价人标签唯一性校验
         EvalRule existing = evalRuleMapper.selectByBeEvalTagId(beEvalTagId);
         if (existing != null) {
@@ -122,6 +125,9 @@ public class EvalRuleService {
 
         // 权重校验
         validateWeightSum(groups);
+
+        // 评价人组标签不得等于被评价人标签（局部排斥，用库中现值）
+        validateRoleConflict(rule.getBeEvalTagId(), groups);
 
         // 更新主记录
         rule.setRuleName(ruleName);
@@ -207,6 +213,23 @@ public class EvalRuleService {
     // =============================================
     // 私有工具方法
     // =============================================
+
+    /**
+     * 校验：任一"按标签选人"组(groupType=1)的评价人标签不得等于被评价人标签（局部排斥）.
+     *
+     * @param beEvalTagId 被评价人标签ID
+     * @param groups      评价人组参数
+     * @throws PerfException 冲突时抛 EVAL_ROLE_CONFLICT
+     */
+    private void validateRoleConflict(Long beEvalTagId, List<GroupParam> groups) {
+        if (beEvalTagId == null) return;
+        boolean conflict = groups.stream()
+                .filter(g -> Integer.valueOf(1).equals(g.getGroupType()))
+                .anyMatch(g -> beEvalTagId.equals(g.getEvalTagId()));
+        if (conflict) {
+            throw new PerfException(PerfErrorCode.EVAL_ROLE_CONFLICT, beEvalTagId);
+        }
+    }
 
     /**
      * 校验评价人组权重之和是否等于 100.00.

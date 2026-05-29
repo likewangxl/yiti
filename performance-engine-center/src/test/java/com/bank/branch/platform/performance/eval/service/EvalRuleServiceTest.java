@@ -79,6 +79,17 @@ class EvalRuleServiceTest {
     }
 
     @Test
+    @DisplayName("create 评价人组标签 == 被评价标签 → EVAL_ROLE_CONFLICT")
+    void create_groupTagEqualsBeEval_throwsConflict() {
+        var groups = java.util.List.of(
+                new EvalRuleService.GroupParam(1, 100L, new java.math.BigDecimal("100.00"), 1, 1));
+        assertThatThrownBy(() -> evalRuleService.create("规则A", 100L, groups))
+                .isInstanceOf(PerfException.class)
+                .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
+                        .isEqualTo(PerfErrorCode.EVAL_ROLE_CONFLICT));
+    }
+
+    @Test
     @DisplayName("被评价人标签已存在规则时抛 PERF-40051")
     void create_whenBeEvalTagIdDuplicate_throws40051() {
         // given：beEvalTagId=20 已存在规则
