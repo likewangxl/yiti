@@ -53,9 +53,9 @@ export function pageUserRoles(params = {}) {
   return call('get', '/admin/eval/user-tags/page', { params: { page: 1, pageSize: 20, ...params } }, { records: [], total: 0 });
 }
 
-// 覆盖式保存人员评价角色（被评价单选 beEvalTagId / 评价人多选 evalTagIds）
-export function saveUserRoles(userId, beEvalTagId, evalTagIds) {
-  return call('put', `/admin/eval/user-tags/${userId}/roles`, { data: { beEvalTagId, evalTagIds } }, { ok: true });
+// 覆盖式保存人员评价角色（被评价单选 / 评价人多选）+ 是否启用评价(1/0)
+export function saveUserRoles(userId, beEvalTagId, evalTagIds, evalEnabled) {
+  return call('put', `/admin/eval/user-tags/${userId}/roles`, { data: { beEvalTagId, evalTagIds, evalEnabled } }, { ok: true });
 }
 
 // 2026-05-29：人员标签 导入 / 模板下载 / 导出
@@ -72,8 +72,8 @@ export function downloadImportTemplate() {
   return call('get', '/admin/eval/user-tags/import-template', { responseType: 'blob' }, null);
 }
 
-export function exportUserRoles(keyword) {
-  return call('get', '/admin/eval/user-tags/export', { params: { keyword }, responseType: 'blob' }, null);
+export function exportUserRoles(keyword, evalEnabled) {
+  return call('get', '/admin/eval/user-tags/export', { params: { keyword, evalEnabled }, responseType: 'blob' }, null);
 }
 
 // ============================================================
