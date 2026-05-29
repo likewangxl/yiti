@@ -172,7 +172,8 @@ public enum PerfErrorCode {
     EVAL_TASK_CLOSED("PERF-40055", "任务已结束不可打分"),
     EVAL_NO_PERMISSION("PERF-40056", "当前用户无权评价该人员"),
     EVAL_TASK_END_TIME_INVALID("PERF-40057", "截止时间必须晚于当前时间"),
-    EVAL_RULE_NOT_FOUND("PERF-40058", "被评价人无匹配的评价规则");
+    EVAL_RULE_NOT_FOUND("PERF-40058", "被评价人无匹配的评价规则"),
+    EVAL_TAG_TYPE_MISMATCH("PERF-40059", "标签类型不匹配");
 
     private final String code;
     private final String message;

@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.eval.mapper;
 
+import com.bank.branch.platform.performance.eval.dto.EvalUserTagRow;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
@@ -16,4 +17,13 @@ public interface EvalUserTagMapper extends BaseMapper<EvalUserTag> {
     List<Long> selectTagIdsByUserIdAndType(@Param("userId") Long userId, @Param("tagType") Integer tagType);
     int batchInsert(@Param("list") List<EvalUserTag> list);
     int batchDelete(@Param("userId") Long userId, @Param("tagIds") List<Long> tagIds);
+
+    /**
+     * 批量查询多个用户的标签（JOIN EVAL_TAG 带出 tagName/tagType），供列表聚合用。
+     * 调用方须保证 userIds 非空。
+     *
+     * @param userIds 人员ID列表（BIGINT）
+     * @return 投影行列表
+     */
+    List<EvalUserTagRow> selectUserTagsByUserIds(@Param("userIds") List<Long> userIds);
 }

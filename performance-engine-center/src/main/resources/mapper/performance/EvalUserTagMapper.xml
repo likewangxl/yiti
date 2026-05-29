@@ -22,4 +22,12 @@
         DELETE FROM EVAL_USER_TAG WHERE user_id = #{userId} AND tag_id IN
         <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">#{tagId}</foreach>
     </delete>
+
+    <select id="selectUserTagsByUserIds" resultType="com.bank.branch.platform.performance.eval.dto.EvalUserTagRow">
+        SELECT ut.user_id AS userId, ut.tag_id AS tagId, t.tag_name AS tagName, t.tag_type AS tagType
+        FROM EVAL_USER_TAG ut
+        INNER JOIN EVAL_TAG t ON t.tag_id = ut.tag_id
+        WHERE ut.user_id IN
+        <foreach collection="userIds" item="uid" open="(" separator="," close=")">#{uid}</foreach>
+    </select>
 </mapper>
