@@ -2,20 +2,21 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper">
     <select id="selectByUserId" resultType="com.bank.branch.platform.performance.eval.entity.EvalUserTag">
-        SELECT id, user_id, tag_id FROM EVAL_USER_TAG WHERE user_id = #{userId}
+        SELECT id, user_id, tag_id, role_type FROM EVAL_USER_TAG WHERE user_id = #{userId}
     </select>
 
     <select id="selectUserIdsByTagId" resultType="java.lang.String">
         SELECT user_id FROM EVAL_USER_TAG WHERE tag_id = #{tagId}
     </select>
 
+    <!-- 按角色取人员标签ID：直接读 EVAL_USER_TAG.role_type，不再 JOIN tag_type -->
     <select id="selectTagIdsByUserIdAndType" resultType="java.lang.Long">
-        SELECT ut.tag_id FROM EVAL_USER_TAG ut INNER JOIN EVAL_TAG t ON t.tag_id = ut.tag_id WHERE ut.user_id = #{userId} AND t.tag_type = #{tagType}
+        SELECT tag_id FROM EVAL_USER_TAG WHERE user_id = #{userId} AND role_type = #{roleType}
     </select>
 
     <insert id="batchInsert">
-        INSERT INTO EVAL_USER_TAG (user_id, tag_id) VALUES
-        <foreach collection="list" item="item" separator=",">(#{item.userId}, #{item.tagId})</foreach>
+        INSERT INTO EVAL_USER_TAG (user_id, tag_id, role_type) VALUES
+        <foreach collection="list" item="item" separator=",">(#{item.userId}, #{item.tagId}, #{item.roleType})</foreach>
     </insert>
 
     <delete id="batchDelete">
@@ -23,8 +24,9 @@
         <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">#{tagId}</foreach>
     </delete>
 
+    <!-- 批量查多人标签：role_type 取自 EVAL_USER_TAG，tag_name 仍 JOIN EVAL_TAG -->
     <select id="selectUserTagsByUserIds" resultType="com.bank.branch.platform.performance.eval.dto.EvalUserTagRow">
-        SELECT ut.user_id AS userId, ut.tag_id AS tagId, t.tag_name AS tagName, t.tag_type AS tagType
+        SELECT ut.user_id AS userId, ut.tag_id AS tagId, t.tag_name AS tagName, ut.role_type AS roleType
         FROM EVAL_USER_TAG ut
         INNER JOIN EVAL_TAG t ON t.tag_id = ut.tag_id
         WHERE ut.user_id IN

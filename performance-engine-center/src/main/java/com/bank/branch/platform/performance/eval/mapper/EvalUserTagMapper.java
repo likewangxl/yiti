@@ -14,12 +14,12 @@ import java.util.List;
 public interface EvalUserTagMapper extends BaseMapper<EvalUserTag> {
     List<EvalUserTag> selectByUserId(@Param("userId") String userId);
     List<String> selectUserIdsByTagId(@Param("tagId") Long tagId);
-    List<Long> selectTagIdsByUserIdAndType(@Param("userId") String userId, @Param("tagType") Integer tagType);
+    List<Long> selectTagIdsByUserIdAndType(@Param("userId") String userId, @Param("roleType") Integer roleType);
     int batchInsert(@Param("list") List<EvalUserTag> list);
     int batchDelete(@Param("userId") String userId, @Param("tagIds") List<Long> tagIds);
 
     /**
-     * 批量查询多个用户的标签（JOIN EVAL_TAG 带出 tagName/tagType），供列表聚合用。
+     * 批量查询多个用户的标签（JOIN EVAL_TAG 带出 tagName/roleType），供列表聚合用。
      * 调用方须保证 userIds 非空。
      *
      * @param userIds 人员工号列表（String）

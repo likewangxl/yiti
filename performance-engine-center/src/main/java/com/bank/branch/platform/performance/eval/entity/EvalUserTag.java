@@ -18,4 +18,6 @@ public class EvalUserTag {
     private String userId;
     /** 标签ID，关联 EVAL_TAG.TAG_ID. */
     private Long tagId;
+    /** 角色类型：1=被评价角色, 2=评价角色. */
+    private Integer roleType;
 }

@@ -96,24 +96,27 @@ class EvalUserRoleServiceTest {
     }
 
     @Test
-    @DisplayName("saveUserRoles beEvalTagId 指向评价人标签(tagType=2) → PERF-40059")
-    void saveUserRoles_beEvalWrongType_throws() {
-        when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
-
-        assertThatThrownBy(() -> service.saveUserRoles("1001", 2L, List.of()))
-                .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.EVAL_TAG_TYPE_MISMATCH));
-        verify(evalUserTagMapper, never()).batchInsert(anyList());
+    @DisplayName("saveUserRoles 评价角色含被评价标签 → EVAL_ROLE_CONFLICT(PERF-40063)")
+    void saveUserRoles_evalContainsBeEval_throwsConflict() {
+        assertThatThrownBy(() -> service.saveUserRoles("1001", 100L, List.of(100L, 200L)))
+                .isInstanceOf(PerfException.class)
+                .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
+                        .isEqualTo(PerfErrorCode.EVAL_ROLE_CONFLICT));
     }
 
     @Test
-    @DisplayName("saveUserRoles evalTagIds 含被评价标签(tagType=1) → PERF-40059")
-    void saveUserRoles_evalWrongType_throws() {
-        when(evalTagMapper.selectById(1L)).thenReturn(tag(1L, 1));
-
-        assertThatThrownBy(() -> service.saveUserRoles("1001", null, List.of(1L)))
-                .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.EVAL_TAG_TYPE_MISMATCH));
+    @DisplayName("saveUserRoles 角色不冲突 → 按 role_type 覆盖写入")
+    void saveUserRoles_noConflict_insertsWithRoleType() {
+        when(evalTagMapper.selectById(anyLong())).thenReturn(new com.bank.branch.platform.performance.eval.entity.EvalTag());
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(java.util.List.of());
+        service.saveUserRoles("1001", 100L, java.util.List.of(200L, 300L));
+        org.mockito.ArgumentCaptor<java.util.List<com.bank.branch.platform.performance.eval.entity.EvalUserTag>> cap =
+                org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        verify(evalUserTagMapper).batchInsert(cap.capture());
+        java.util.List<com.bank.branch.platform.performance.eval.entity.EvalUserTag> inserted = cap.getValue();
+        assertThat(inserted).hasSize(3);
+        assertThat(inserted.stream().filter(u -> Integer.valueOf(1).equals(u.getRoleType())).count()).isEqualTo(1);
+        assertThat(inserted.stream().filter(u -> Integer.valueOf(2).equals(u.getRoleType())).count()).isEqualTo(2);
     }
 
     @Test
@@ -135,7 +138,7 @@ class EvalUserRoleServiceTest {
 
     private EvalUserTagRow tagRow(String uid, long tid, String name, int type) {
         EvalUserTagRow r = new EvalUserTagRow();
-        r.setUserId(uid); r.setTagId(tid); r.setTagName(name); r.setTagType(type);
+        r.setUserId(uid); r.setTagId(tid); r.setTagName(name); r.setRoleType(type);
         return r;
     }
 

@@ -11,6 +11,6 @@ public class EvalUserTagRow {
     private Long tagId;
     /** 标签名称. */
     private String tagName;
-    /** 标签类型：1=被评价人, 2=评价人. */
-    private Integer tagType;
+    /** 角色类型：1=被评价角色, 2=评价角色. */
+    private Integer roleType;
 }

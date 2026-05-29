@@ -86,52 +86,52 @@ public class EvalUserTagService {
     }
 
     /**
-     * 覆盖式保存人员的评价角色：删除该用户全部旧关联，再写入新的被评价人标签（至多一个）+ 评价人标签（多个）。
-     * <p>被评价人单选由参数结构（单个 beEvalTagId）天然保证；类型校验防止前端传错类型。</p>
+     * 覆盖式保存人员的评价角色：删除该用户全部旧关联，再写入新的被评价人标签（至多一个，role=1）+ 评价人标签（多个，role=2）。
+     * <p>被评价单选由参数结构（单个 beEvalTagId）天然保证；局部排斥：评价角色与被评价角色不得包含同一标签。</p>
      *
      * @param userId      人员ID
-     * @param beEvalTagId 被评价人标签ID（必须 tagType=1；null 表示清空被评价人角色）
-     * @param evalTagIds  评价人标签ID列表（必须都是 tagType=2；null/空 表示清空评价人角色）
-     * @throws PerfException EVAL_RULE_NOT_FOUND（标签不存在）/ EVAL_TAG_TYPE_MISMATCH（类型不符）
+     * @param beEvalTagId 被评价人标签ID（role_type=1；null 表示清空被评价人角色）
+     * @param evalTagIds  评价人标签ID列表（role_type=2；null/空 表示清空评价人角色）
+     * @throws PerfException EVAL_RULE_NOT_FOUND（标签不存在）/ EVAL_ROLE_CONFLICT（评价角色与被评价角色冲突）
      */
     @Transactional(rollbackFor = Exception.class)
     public void saveUserRoles(String userId, Long beEvalTagId, List<Long> evalTagIds) {
-        // 1. 校验被评价人标签必须 tagType=1
-        if (beEvalTagId != null) {
-            EvalTag t = evalTagMapper.selectById(beEvalTagId);
-            if (t == null) throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, beEvalTagId);
-            if (!Integer.valueOf(1).equals(t.getTagType())) {
-                throw new PerfException(PerfErrorCode.EVAL_TAG_TYPE_MISMATCH, beEvalTagId);
-            }
-        }
-        // 2. 校验评价人标签必须都是 tagType=2
+        // 1. 评价人标签去重
         List<Long> evalIds = (evalTagIds == null) ? List.of()
                 : evalTagIds.stream().distinct().collect(Collectors.toList());
+        // 2. 局部排斥：评价角色不能包含被评价角色（同一人）
+        if (beEvalTagId != null && evalIds.contains(beEvalTagId)) {
+            throw new PerfException(PerfErrorCode.EVAL_ROLE_CONFLICT, beEvalTagId);
+        }
+        // 3. 标签存在性校验（标签已无类型，仅校验存在）
+        if (beEvalTagId != null && evalTagMapper.selectById(beEvalTagId) == null) {
+            throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, beEvalTagId);
+        }
         for (Long tid : evalIds) {
-            EvalTag t = evalTagMapper.selectById(tid);
-            if (t == null) throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, tid);
-            if (!Integer.valueOf(2).equals(t.getTagType())) {
-                throw new PerfException(PerfErrorCode.EVAL_TAG_TYPE_MISMATCH, tid);
+            if (evalTagMapper.selectById(tid) == null) {
+                throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, tid);
             }
         }
-        // 3. 覆盖：删除该用户全部旧标签关联
+        // 4. 覆盖：删除该用户全部旧关联
         List<EvalUserTag> existing = evalUserTagMapper.selectByUserId(userId);
         if (!existing.isEmpty()) {
             List<Long> oldTagIds = existing.stream().map(EvalUserTag::getTagId).collect(Collectors.toList());
             evalUserTagMapper.batchDelete(userId, oldTagIds);
         }
-        // 4. 写入新组合（被评价 1 个 + 评价人 N 个）
+        // 5. 写入新组合：被评价 role_type=1，评价人 role_type=2
         List<EvalUserTag> toInsert = new ArrayList<>();
         if (beEvalTagId != null) {
             EvalUserTag u = new EvalUserTag();
             u.setUserId(userId);
             u.setTagId(beEvalTagId);
+            u.setRoleType(1);
             toInsert.add(u);
         }
         for (Long tid : evalIds) {
             EvalUserTag u = new EvalUserTag();
             u.setUserId(userId);
             u.setTagId(tid);
+            u.setRoleType(2);
             toInsert.add(u);
         }
         if (!toInsert.isEmpty()) {
@@ -332,12 +332,12 @@ public class EvalUserTagService {
 
             List<EvalUserTagRow> tagRows = tagMap.getOrDefault(u.getEmpId(), List.of());
             EvalUserTagBriefDTO beEval = tagRows.stream()
-                    .filter(t -> Integer.valueOf(1).equals(t.getTagType()))
+                    .filter(t -> Integer.valueOf(1).equals(t.getRoleType()))
                     .findFirst()
                     .map(t -> new EvalUserTagBriefDTO(t.getTagId(), t.getTagName()))
                     .orElse(null);
             List<EvalUserTagBriefDTO> evalTags = tagRows.stream()
-                    .filter(t -> Integer.valueOf(2).equals(t.getTagType()))
+                    .filter(t -> Integer.valueOf(2).equals(t.getRoleType()))
                     .map(t -> new EvalUserTagBriefDTO(t.getTagId(), t.getTagName()))
                     .collect(Collectors.toList());
             row.setBeEvalTag(beEval);
