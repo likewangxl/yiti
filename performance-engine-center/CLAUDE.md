@@ -12,6 +12,8 @@
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
 
 > 2026-05-29 eval 子域：人员标签新增"是否启用评价"（新表 `EVAL_USER_SETTING`，无记录=否；列表三态过滤[是默认/否近似/全部]，启用态由 setting 侧驱动分页；保存/导入/导出/模板贯通该列）。建表脚本 `docs/superpowers/sql/2026-05-29-eval-user-setting.sql` 须在目标库手工执行。
+>
+> 2026-05-30 eval 子域：标签去类型化——`EVAL_TAG` 删 `tag_type`（扁平池，唯一键改 `tag_name`），`EVAL_USER_TAG` 加 `role_type`（1=被评价/2=评价）。被评价/评价区分从「标签定义」搬到「使用处」（人员角色槽 / 规则挂载槽）；`saveUserRoles`/导入/`EvalRuleService` 三处加"评价角色≠被评价角色"局部排斥（新增 `PERF-40063 EVAL_ROLE_CONFLICT`，删 `EVAL_TAG_TYPE_MISMATCH`）。引擎查询从 JOIN `tag_type` 切到 `EVAL_USER_TAG.role_type`（方法名 `selectTagIdsByUserIdAndType` 不变）。迁移脚本 `docs/superpowers/sql/2026-05-30-eval-tag-detype.sql` 须在目标库手工执行（次序：先回填 role_type 再删 tag_type）。前端 Tags/UserTags/Rules 三页去类型 + 互斥下拉。spec/plan：`docs/superpowers/specs/2026-05-30-eval-tag-detype-design.md` / `docs/superpowers/plans/2026-05-30-eval-tag-detype-impl.md`。
 
 **当前版本**: V1.12（指标结果导入通道）—— 在 V1.11 基础上新增 `importType=METRIC_RESULT`，按"指标结果模板"长格式（Sheet 名=数据日期）将员工/机构/客户的指标值导入到对应宽表。
 
