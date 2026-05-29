@@ -74,24 +74,26 @@ public class EvalUserTagController {
     }
 
     @GetMapping("/page")
-    @Operation(summary = "分页查询人员标签列表（含部门/岗位/角色）")
+    @Operation(summary = "分页查询人员标签列表（含部门/岗位/角色/是否启用评价）")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
     public ResponseWrapper<PageResult<EvalUserRoleRowDTO>> page(
             @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "evalEnabled", required = false) String evalEnabled,
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        log.debug("[EvalUserTagController.page] keyword={}, page={}, pageSize={}", keyword, page, pageSize);
-        return ResponseWrapper.success(evalUserTagService.pageUserRoles(keyword, page, pageSize));
+        log.debug("[EvalUserTagController.page] keyword={}, evalEnabled={}, page={}, pageSize={}",
+                keyword, evalEnabled, page, pageSize);
+        return ResponseWrapper.success(evalUserTagService.pageUserRoles(keyword, evalEnabled, page, pageSize));
     }
 
     @PutMapping("/{userId}/roles")
-    @Operation(summary = "覆盖式保存人员评价角色（被评价单选/评价人多选）")
+    @Operation(summary = "覆盖式保存人员评价角色（被评价单选/评价人多选）及启用评价开关")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
     public ResponseWrapper<Void> saveRoles(@PathVariable("userId") String userId,
                                            @Validated @RequestBody SaveRolesReq req) {
-        log.info("[EvalUserTagController.saveRoles] userId={}, beEvalTagId={}, evalTagIds={}",
-                userId, req.getBeEvalTagId(), req.getEvalTagIds());
-        evalUserTagService.saveUserRoles(userId, req.getBeEvalTagId(), req.getEvalTagIds());
+        log.info("[EvalUserTagController.saveRoles] userId={}, beEvalTagId={}, evalTagIds={}, evalEnabled={}",
+                userId, req.getBeEvalTagId(), req.getEvalTagIds(), req.getEvalEnabled());
+        evalUserTagService.saveUserRolesWithSetting(userId, req.getBeEvalTagId(), req.getEvalTagIds(), req.getEvalEnabled());
         return ResponseWrapper.success();
     }
 
@@ -116,21 +118,23 @@ public class EvalUserTagController {
         sample.setEmpId("100001");
         sample.setBeEvalRoleName("支行行长");
         sample.setEvalRoleNames("副行长,客户经理");
+        sample.setEvalEnabledText("是");
         EasyExcel.write(response.getOutputStream(), EvalUserTagImportRow.class)
                 .sheet("人员评价角色")
                 .doWrite(List.of(sample));
     }
 
     @GetMapping("/export")
-    @Operation(summary = "导出人员标签列表（Excel，按关键词）")
+    @Operation(summary = "导出人员标签列表（Excel，按关键词及启用状态）")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.EXPORT)
     public void export(@RequestParam(value = "keyword", required = false) String keyword,
+                       @RequestParam(value = "evalEnabled", required = false) String evalEnabled,
                        HttpServletResponse response) throws IOException {
-        log.info("[EvalUserTagController.export] keyword={}", keyword);
+        log.info("[EvalUserTagController.export] keyword={}, evalEnabled={}", keyword, evalEnabled);
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         String fileName = URLEncoder.encode("人员标签列表.xlsx", StandardCharsets.UTF_8);
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
-        List<EvalUserRoleRowDTO> rows = evalUserTagService.listForExport(keyword, EXPORT_ROWS_CAP);
+        List<EvalUserRoleRowDTO> rows = evalUserTagService.listForExport(keyword, evalEnabled, EXPORT_ROWS_CAP);
         List<EvalUserRoleExportRow> out = new ArrayList<>(rows.size());
         for (EvalUserRoleRowDTO r : rows) {
             EvalUserRoleExportRow e = new EvalUserRoleExportRow();
@@ -142,6 +146,7 @@ public class EvalUserTagController {
             e.setBeEvalRole(r.getBeEvalTag() == null ? "" : r.getBeEvalTag().getTagName());
             e.setEvalRoles(r.getEvalTags() == null ? "" : r.getEvalTags().stream()
                     .map(t -> t.getTagName()).collect(Collectors.joining("，")));
+            e.setEvalEnabled(Integer.valueOf(1).equals(r.getEvalEnabled()) ? "是" : "否");
             out.add(e);
         }
         EasyExcel.write(response.getOutputStream(), EvalUserRoleExportRow.class)
@@ -162,5 +167,7 @@ public class EvalUserTagController {
         private Long beEvalTagId;
         /** 评价人标签ID列表（null/空 表示清空评价人角色）. */
         private List<Long> evalTagIds;
+        /** 是否启用评价：1=是 0=否；null 兜底为 0. */
+        private Integer evalEnabled;
     }
 }

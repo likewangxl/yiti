@@ -171,12 +171,24 @@ public class EvalUserTagImportService {
                 continue;
             }
 
+            // 是否启用评价：必填，仅"是"/"否"
+            String enabledRaw = r.getEvalEnabledText() == null ? "" : r.getEvalEnabledText().trim();
+            int evalEnabled;
+            if ("是".equals(enabledRaw)) {
+                evalEnabled = 1;
+            } else if ("否".equals(enabledRaw)) {
+                evalEnabled = 0;
+            } else {
+                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "是否启用评价只能填\"是\"或\"否\""));
+                continue;
+            }
+
             if (beEvalTagId == null && evalTagIds.isEmpty()) {
                 errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "被评价角色与评价角色不能同时为空"));
                 continue;
             }
 
-            parsed.add(new ParsedRow(empId, beEvalTagId, evalTagIds));
+            parsed.add(new ParsedRow(empId, beEvalTagId, evalTagIds, evalEnabled));
         }
 
         // 4. 任一行错误 → 整体不入库
@@ -189,7 +201,7 @@ public class EvalUserTagImportService {
 
         // 5. 全部通过 → 逐行覆盖式入库
         for (ParsedRow p : parsed) {
-            evalUserTagService.saveUserRoles(p.empId, p.beEvalTagId, p.evalTagIds);
+            evalUserTagService.saveUserRolesWithSetting(p.empId, p.beEvalTagId, p.evalTagIds, p.evalEnabled);
         }
         result.setSuccess(true);
         result.setImportedCount(parsed.size());
@@ -214,11 +226,13 @@ public class EvalUserTagImportService {
         final String empId;
         final Long beEvalTagId;
         final List<Long> evalTagIds;
+        final int evalEnabled;
 
-        ParsedRow(String empId, Long beEvalTagId, List<Long> evalTagIds) {
+        ParsedRow(String empId, Long beEvalTagId, List<Long> evalTagIds, int evalEnabled) {
             this.empId = empId;
             this.beEvalTagId = beEvalTagId;
             this.evalTagIds = evalTagIds;
+            this.evalEnabled = evalEnabled;
         }
     }
 }

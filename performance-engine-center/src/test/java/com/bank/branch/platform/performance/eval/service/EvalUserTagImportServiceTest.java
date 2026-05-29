@@ -45,11 +45,13 @@ class EvalUserTagImportServiceTest {
         return u;
     }
 
-    private EvalUserTagImportRow row(String empId, String beEval, String eval) {
+    /** 4 参 helper：empId / beEval / eval / enabledText（"是"或"否"）。 */
+    private EvalUserTagImportRow row(String empId, String beEval, String eval, String enabledText) {
         EvalUserTagImportRow r = new EvalUserTagImportRow();
         r.setEmpId(empId);
         r.setBeEvalRoleName(beEval);
         r.setEvalRoleNames(eval);
+        r.setEvalEnabledText(enabledText);
         return r;
     }
 
@@ -64,24 +66,24 @@ class EvalUserTagImportServiceTest {
     void importRows_allValid_savesEachAndReturnsSuccess() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280"), user("E001")));
         List<EvalUserTagImportRow> rows = List.of(
-                row("2280", "支行行长", "副行长,客户经理"),
-                row("E001", "", "副行长"));
+                row("2280", "支行行长", "副行长,客户经理", "是"),
+                row("E001", "", "副行长", "否"));
 
         EvalUserTagImportResultDTO res = service.importRows(rows);
 
         assertThat(res.isSuccess()).isTrue();
         assertThat(res.getImportedCount()).isEqualTo(2);
         assertThat(res.getErrors()).isEmpty();
-        verify(evalUserTagService).saveUserRoles("2280", 1L, List.of(2L, 3L));
-        verify(evalUserTagService).saveUserRoles("E001", null, List.of(2L));
+        verify(evalUserTagService).saveUserRolesWithSetting("2280", 1L, List.of(2L, 3L), 1);
+        verify(evalUserTagService).saveUserRolesWithSetting("E001", null, List.of(2L), 0);
     }
 
     @Test
     void importRows_anyError_savesNothing() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
         List<EvalUserTagImportRow> rows = List.of(
-                row("2280", "支行行长", "副行长"),
-                row("9999", "支行行长", "副行长"));
+                row("2280", "支行行长", "副行长", "是"),
+                row("9999", "支行行长", "副行长", "是"));
 
         EvalUserTagImportResultDTO res = service.importRows(rows);
 
@@ -90,13 +92,13 @@ class EvalUserTagImportServiceTest {
         assertThat(res.getErrors()).hasSize(1);
         assertThat(res.getErrors().get(0).getRow()).isEqualTo(2);
         assertThat(res.getErrors().get(0).getEmpId()).isEqualTo("9999");
-        verify(evalUserTagService, never()).saveUserRoles(anyString(), any(), anyList());
+        verify(evalUserTagService, never()).saveUserRolesWithSetting(anyString(), any(), anyList(), any());
     }
 
     @Test
     void importRows_empIdNotExist_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长", "副行长")));
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长", "副行长", "是")));
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("工号不存在");
     }
@@ -104,15 +106,15 @@ class EvalUserTagImportServiceTest {
     @Test
     void importRows_nonNumericEmpId_importsOk() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("E001")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("E001", "支行行长", "副行长")));
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("E001", "支行行长", "副行长", "是")));
         assertThat(res.isSuccess()).isTrue();
-        verify(evalUserTagService).saveUserRoles("E001", 1L, List.of(2L));
+        verify(evalUserTagService).saveUserRolesWithSetting("E001", 1L, List.of(2L), 1);
     }
 
     @Test
     void importRows_beEvalRoleNotFound_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "不存在角色", "副行长")));
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "不存在角色", "副行长", "是")));
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("被评价角色");
     }
@@ -120,7 +122,7 @@ class EvalUserTagImportServiceTest {
     @Test
     void importRows_beEvalRoleWrongType_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "副行长", "客户经理")));
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "副行长", "客户经理", "是")));
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("被评价角色");
     }
@@ -128,7 +130,7 @@ class EvalUserTagImportServiceTest {
     @Test
     void importRows_beEvalMultiple_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长,副行长", "客户经理")));
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长,副行长", "客户经理", "是")));
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("只能");
     }
@@ -136,7 +138,7 @@ class EvalUserTagImportServiceTest {
     @Test
     void importRows_evalRoleWrongType_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长", "支行行长")));
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "支行行长", "支行行长", "是")));
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("评价角色");
     }
@@ -144,7 +146,7 @@ class EvalUserTagImportServiceTest {
     @Test
     void importRows_bothEmpty_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "", "")));
+        EvalUserTagImportResultDTO res = service.importRows(List.of(row("2280", "", "", "是")));
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("不能同时为空");
     }
@@ -153,8 +155,8 @@ class EvalUserTagImportServiceTest {
     void importRows_duplicateEmpIdInFile_rowError() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
         EvalUserTagImportResultDTO res = service.importRows(List.of(
-                row("2280", "支行行长", "副行长"),
-                row("2280", "支行行长", "客户经理")));
+                row("2280", "支行行长", "副行长", "是"),
+                row("2280", "支行行长", "客户经理", "是")));
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().stream().anyMatch(e -> e.getMessage().contains("重复"))).isTrue();
     }
@@ -162,15 +164,41 @@ class EvalUserTagImportServiceTest {
     @Test
     void importRows_evalRoleDedup() {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
-        service.importRows(List.of(row("2280", "", "副行长,副行长")));
-        verify(evalUserTagService).saveUserRoles("2280", null, List.of(2L));
+        service.importRows(List.of(row("2280", "", "副行长,副行长", "是")));
+        verify(evalUserTagService).saveUserRolesWithSetting("2280", null, List.of(2L), 1);
+    }
+
+    @Test
+    void importRows_invalidEnabledText_savesNothing() {
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
+        List<EvalUserTagImportRow> rows = List.of(row("2280", "支行行长", "副行长", "Y"));
+        EvalUserTagImportResultDTO res = service.importRows(rows);
+        assertThat(res.isSuccess()).isFalse();
+        assertThat(res.getImportedCount()).isZero();
+        assertThat(res.getErrors()).hasSize(1);
+        assertThat(res.getErrors().get(0).getMessage()).contains("是否启用评价");
+        verify(evalUserTagService, never()).saveUserRolesWithSetting(any(), any(), anyList(), any());
+    }
+
+    @Test
+    void importRows_emptyEnabledText_savesNothing() {
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
+        List<EvalUserTagImportRow> rows = List.of(row("2280", "支行行长", "副行长", ""));
+        EvalUserTagImportResultDTO res = service.importRows(rows);
+        assertThat(res.isSuccess()).isFalse();
+        assertThat(res.getErrors().get(0).getMessage()).contains("是否启用评价");
     }
 
     @Test
     void importExcel_parsesXlsxAndImports() throws Exception {
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(user("2280")));
         List<EvalUserTagImportRow> data = new ArrayList<>();
-        data.add(row("2280", "支行行长", "副行长,客户经理"));
+        EvalUserTagImportRow r = new EvalUserTagImportRow();
+        r.setEmpId("2280");
+        r.setBeEvalRoleName("支行行长");
+        r.setEvalRoleNames("副行长,客户经理");
+        r.setEvalEnabledText("是");
+        data.add(r);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         EasyExcel.write(bos, EvalUserTagImportRow.class).sheet("人员角色").doWrite(data);
         MockMultipartFile file = new MockMultipartFile(
@@ -182,6 +210,6 @@ class EvalUserTagImportServiceTest {
 
         assertThat(res.isSuccess()).isTrue();
         assertThat(res.getImportedCount()).isEqualTo(1);
-        verify(evalUserTagService).saveUserRoles("2280", 1L, List.of(2L, 3L));
+        verify(evalUserTagService).saveUserRolesWithSetting("2280", 1L, List.of(2L, 3L), 1);
     }
 }

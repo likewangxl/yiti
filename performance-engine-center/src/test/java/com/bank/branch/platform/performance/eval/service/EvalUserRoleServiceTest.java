@@ -10,6 +10,7 @@ import com.bank.branch.platform.performance.eval.entity.EvalTag;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.mapper.EvalTagMapper;
 import com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper;
+import com.bank.branch.platform.performance.eval.mapper.EvalUserSettingMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.portal.api.AddressBookApi;
@@ -28,6 +29,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +39,7 @@ class EvalUserRoleServiceTest {
     @Mock private EvalTagMapper evalTagMapper;
     @Mock private UserApi userApi;
     @Mock private AddressBookApi addressBookApi;
+    @Mock private EvalUserSettingMapper evalUserSettingMapper;
 
     @InjectMocks private EvalUserTagService service;
 
@@ -151,8 +154,9 @@ class EvalUserRoleServiceTest {
                         tagRow("1001", 1L, "支行行长", 1),
                         tagRow("1001", 2L, "副行长评委", 2),
                         tagRow("1001", 3L, "同级评委", 2)));
+        when(evalUserSettingMapper.selectEnabledUserIdsIn(List.of("1001"))).thenReturn(List.of("1001"));
 
-        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", 1, 20);
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", "all", 1, 20);
 
         assertThat(r.getTotal()).isEqualTo(1L);
         EvalUserRoleRowDTO row = r.getRecords().get(0);
@@ -164,6 +168,7 @@ class EvalUserRoleServiceTest {
         assertThat(row.getBeEvalTag().getTagName()).isEqualTo("支行行长");
         assertThat(row.getEvalTags()).extracting(t -> t.getTagName())
                 .containsExactlyInAnyOrder("副行长评委", "同级评委");
+        assertThat(row.getEvalEnabled()).isEqualTo(1);
     }
 
     @Test
@@ -171,7 +176,7 @@ class EvalUserRoleServiceTest {
     void pageUserRoles_emptyPage() {
         when(userApi.pageUsers(null, 1, 20)).thenReturn(PageResult.of(1, 20, 0L, List.of()));
 
-        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, 1, 20);
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "all", 1, 20);
 
         assertThat(r.getRecords()).isEmpty();
         verify(addressBookApi, never()).getEmployees(anyList());
@@ -197,13 +202,90 @@ class EvalUserRoleServiceTest {
         when(addressBookApi.getEmployees(List.of("U_ABC123"))).thenReturn(List.of());
         when(userApi.getRolesByUserIds(List.of("U_ABC123"))).thenReturn(Map.of());
         when(evalUserTagMapper.selectUserTagsByUserIds(List.of("U_ABC123"))).thenReturn(List.of());
+        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of());
 
-        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, 1, 20);
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "all", 1, 20);
 
         EvalUserRoleRowDTO row = r.getRecords().get(0);
         assertThat(row.getBeEvalTag()).isNull();
         assertThat(row.getEvalTags()).isEmpty();
         assertThat(row.getRoleNames()).isEmpty();
         verify(evalUserTagMapper).selectUserTagsByUserIds(List.of("U_ABC123"));
+    }
+
+    @Test
+    @DisplayName("pageUserRoles 默认(是)：从 setting 取启用工号，仅返回启用者，total 准确")
+    void pageUserRoles_enabledDriven_default() {
+        when(evalUserSettingMapper.selectEnabledUserIds()).thenReturn(List.of("1001", "1002"));
+        when(userApi.getUserByEmpIds(List.of("1001", "1002")))
+                .thenReturn(List.of(user("1001", "张三"), user("1002", "李四")));
+        when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
+        when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.of());
+        when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
+        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of("1001", "1002"));
+
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "1", 1, 20);
+
+        assertThat(r.getTotal()).isEqualTo(2L);
+        assertThat(r.getRecords()).extracting(EvalUserRoleRowDTO::getUserId)
+                .containsExactlyInAnyOrder("1001", "1002");
+        assertThat(r.getRecords()).allSatisfy(row -> assertThat(row.getEvalEnabled()).isEqualTo(1));
+        verify(userApi, never()).pageUsers(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("pageUserRoles 默认(是)：关键词内存过滤姓名/工号")
+    void pageUserRoles_enabledDriven_keywordFilter() {
+        when(evalUserSettingMapper.selectEnabledUserIds()).thenReturn(List.of("1001", "1002"));
+        when(userApi.getUserByEmpIds(List.of("1001", "1002")))
+                .thenReturn(List.of(user("1001", "张三"), user("1002", "李四")));
+        when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
+        when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.of());
+        when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
+        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of("1001"));
+
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", "1", 1, 20);
+
+        assertThat(r.getTotal()).isEqualTo(1L);
+        assertThat(r.getRecords().get(0).getUserId()).isEqualTo("1001");
+    }
+
+    @Test
+    @DisplayName("pageUserRoles 否：PT_USER 驱动 + 本页剔除已启用者")
+    void pageUserRoles_disabled_excludesEnabled() {
+        when(userApi.pageUsers(null, 1, 20))
+                .thenReturn(PageResult.of(1, 20, 2L, List.of(user("1001", "张三"), user("1002", "李四"))));
+        when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
+        when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.of());
+        when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
+        when(evalUserSettingMapper.selectEnabledUserIdsIn(List.of("1001", "1002"))).thenReturn(List.of("1001"));
+
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "0", 1, 20);
+
+        assertThat(r.getRecords()).extracting(EvalUserRoleRowDTO::getUserId).containsExactly("1002");
+        assertThat(r.getRecords().get(0).getEvalEnabled()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("saveUserRolesWithSetting：覆盖角色 + upsert 启用位(1) 同次调用")
+    void saveUserRolesWithSetting_savesRolesAndEnabled() {
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
+        when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
+
+        service.saveUserRolesWithSetting("1001", null, List.of(2L), 1);
+
+        verify(evalUserTagMapper).batchInsert(insertCaptor.capture());
+        assertThat(insertCaptor.getValue()).extracting(EvalUserTag::getTagId).containsExactly(2L);
+        verify(evalUserSettingMapper).upsert("1001", 1);
+    }
+
+    @Test
+    @DisplayName("saveUserRolesWithSetting：evalEnabled=null 兜底为 0")
+    void saveUserRolesWithSetting_nullEnabled_defaultsZero() {
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
+
+        service.saveUserRolesWithSetting("1001", null, List.of(), null);
+
+        verify(evalUserSettingMapper).upsert("1001", 0);
     }
 }

@@ -20,4 +20,6 @@ public class EvalUserRoleExportRow {
     private String beEvalRole;
     @ExcelProperty("评价人角色")
     private String evalRoles;
+    @ExcelProperty("是否启用评价")
+    private String evalEnabled;
 }

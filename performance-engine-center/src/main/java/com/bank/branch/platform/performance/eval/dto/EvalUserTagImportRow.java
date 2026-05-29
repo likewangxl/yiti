@@ -12,4 +12,6 @@ public class EvalUserTagImportRow {
     private String beEvalRoleName;
     @ExcelProperty("评价角色")
     private String evalRoleNames;
+    @ExcelProperty("是否启用评价")
+    private String evalEnabledText;
 }

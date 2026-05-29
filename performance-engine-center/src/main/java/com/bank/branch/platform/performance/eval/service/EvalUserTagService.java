@@ -11,6 +11,7 @@ import com.bank.branch.platform.performance.eval.dto.EvalUserTagRow;
 import com.bank.branch.platform.performance.eval.entity.EvalTag;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.mapper.EvalTagMapper;
+import com.bank.branch.platform.performance.eval.mapper.EvalUserSettingMapper;
 import com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.portal.api.AddressBookApi;
@@ -21,8 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -37,16 +40,19 @@ public class EvalUserTagService {
     private final EvalTagMapper evalTagMapper;
     private final UserApi userApi;
     private final AddressBookApi addressBookApi;
+    private final EvalUserSettingMapper evalUserSettingMapper;
 
     @Autowired
     public EvalUserTagService(EvalUserTagMapper evalUserTagMapper,
                               EvalTagMapper evalTagMapper,
                               UserApi userApi,
-                              AddressBookApi addressBookApi) {
+                              AddressBookApi addressBookApi,
+                              EvalUserSettingMapper evalUserSettingMapper) {
         this.evalUserTagMapper = evalUserTagMapper;
         this.evalTagMapper = evalTagMapper;
         this.userApi = userApi;
         this.addressBookApi = addressBookApi;
+        this.evalUserSettingMapper = evalUserSettingMapper;
     }
 
     /** 查询人员的标签关联. */
@@ -135,27 +141,115 @@ public class EvalUserTagService {
     }
 
     /**
-     * 分页聚合查询人员标签列表：每行含 人员基本信息 + 部门/岗位（通讯录）+ RBAC 角色 + 被评价人/评价人标签。
+     * 覆盖式保存人员评价角色 + 写"是否启用评价"位（同一事务，原子）。
      *
-     * @param keyword  关键词（工号/姓名，可空）
-     * @param page     页码（从 1 开始）
-     * @param pageSize 每页条数
-     * @return 分页结果
+     * @param userId      人员工号
+     * @param beEvalTagId 被评价人标签ID（null 表示清空）
+     * @param evalTagIds  评价人标签ID列表（null/空 表示清空）
+     * @param evalEnabled 是否启用评价：1=是 0=否；null 兜底为 0
      */
-    public PageResult<EvalUserRoleRowDTO> pageUserRoles(String keyword, int page, int pageSize) {
+    @Transactional(rollbackFor = Exception.class)
+    public void saveUserRolesWithSetting(String userId, Long beEvalTagId, List<Long> evalTagIds, Integer evalEnabled) {
+        saveUserRoles(userId, beEvalTagId, evalTagIds);
+        // 避免拆箱（Integer.valueOf(1).equals 语义等价且不触发 NPE）
+        int enabled = Integer.valueOf(1).equals(evalEnabled) ? 1 : 0;
+        evalUserSettingMapper.upsert(userId, enabled);
+        log.info("[EvalUserTagService.saveUserRolesWithSetting] userId={} evalEnabled={}", userId, enabled);
+    }
+
+    /** "是"过滤驱动模式下最大全量启用工号上限（防止超大结果集撑爆内存）。 */
+    private static final int ENABLED_DRIVEN_CAP = 5000;
+
+    /**
+     * 分页聚合查询人员标签列表，按"是否启用评价"三态分派。
+     *
+     * @param keyword     关键词（工号/姓名，可空）
+     * @param evalEnabled 过滤态：null/"1"=只看启用(默认)，"0"=否，其它("all"/"")=全部
+     * @param page        页码（从 1 开始）
+     * @param pageSize    每页条数
+     */
+    public PageResult<EvalUserRoleRowDTO> pageUserRoles(String keyword, String evalEnabled, int page, int pageSize) {
+        String mode = normalizeEnabledMode(evalEnabled);
+        if ("1".equals(mode)) {
+            return pageEnabledDriven(keyword, page, pageSize);
+        }
         PageResult<UserDTO> users = userApi.pageUsers(keyword, page, pageSize);
         List<EvalUserRoleRowDTO> rows = assembleRows(users.getRecords());
+        if ("0".equals(mode)) {
+            rows = rows.stream()
+                    .filter(r -> r.getEvalEnabled() == null || r.getEvalEnabled() == 0)
+                    .collect(Collectors.toList());
+        }
         return PageResult.of(page, pageSize, users.getTotal(), rows);
     }
 
+    /** 归一过滤态：null/"1"->"1"；"0"->"0"；其它->"all"。 */
+    private String normalizeEnabledMode(String evalEnabled) {
+        if (evalEnabled == null || "1".equals(evalEnabled.trim())) {
+            return "1";
+        }
+        if ("0".equals(evalEnabled.trim())) {
+            return "0";
+        }
+        return "all";
+    }
+
+    /** "是"过滤：eval 侧驱动——取全部启用工号，批量解析，内存关键词过滤+内存分页。 */
+    private PageResult<EvalUserRoleRowDTO> pageEnabledDriven(String keyword, int page, int pageSize) {
+        List<String> enabledIds = evalUserSettingMapper.selectEnabledUserIds();
+        if (enabledIds.size() > ENABLED_DRIVEN_CAP) {
+            log.warn("[EvalUserTagService.pageEnabledDriven] 启用工号数 {} 超上限 {}，截断", enabledIds.size(), ENABLED_DRIVEN_CAP);
+            enabledIds = new ArrayList<>(enabledIds.subList(0, ENABLED_DRIVEN_CAP));
+        }
+        if (enabledIds.isEmpty()) {
+            return PageResult.of(page, pageSize, 0L, new ArrayList<>());
+        }
+        List<UserDTO> users = userApi.getUserByEmpIds(enabledIds);
+        String kw = keyword == null ? "" : keyword.trim();
+        if (!kw.isEmpty()) {
+            users = users.stream().filter(u -> matchesKeyword(u, kw)).collect(Collectors.toList());
+        }
+        long total = users.size();
+        int from = Math.max(0, (page - 1) * pageSize);
+        int to = Math.min(users.size(), from + pageSize);
+        List<UserDTO> pageUsers = from >= users.size() ? new ArrayList<>() : users.subList(from, to);
+        List<EvalUserRoleRowDTO> rows = assembleRows(pageUsers);
+        return PageResult.of(page, pageSize, total, rows);
+    }
+
+    /** 关键词匹配：工号 / 中文名 / 登录名 任一 contains。 */
+    private boolean matchesKeyword(UserDTO u, String kw) {
+        return (u.getEmpId() != null && u.getEmpId().contains(kw))
+                || (u.getDisplayName() != null && u.getDisplayName().contains(kw))
+                || (u.getUsername() != null && u.getUsername().contains(kw));
+    }
+
     /**
-     * 导出用：取关键词匹配的全部人员（翻页累积，每页 100），上限 cap 行。
+     * 导出用：取关键词匹配的全部人员，按"是否启用评价"过滤态分派。
      *
-     * @param keyword 关键词（工号/姓名，可空）
-     * @param cap     最大导出行数（保护，超出截断）
-     * @return 装配好的列表行
+     * @param keyword     关键词（工号/姓名，可空）
+     * @param evalEnabled 过滤态：null/"1"=只看启用，"0"=否，其它=全部
+     * @param cap         最大导出行数
+     * @implNote "否"/"全部"模式下 cap 为上游扫描行数上限（过滤前），"否"模式过滤已启用者后实际返回可能略少于 cap。
      */
-    public List<EvalUserRoleRowDTO> listForExport(String keyword, int cap) {
+    public List<EvalUserRoleRowDTO> listForExport(String keyword, String evalEnabled, int cap) {
+        String mode = normalizeEnabledMode(evalEnabled);
+        if ("1".equals(mode)) {
+            List<String> enabledIds = evalUserSettingMapper.selectEnabledUserIds();
+            if (enabledIds.size() > cap) {
+                log.warn("[EvalUserTagService.listForExport] 启用工号数 {} 超 cap {}，截断", enabledIds.size(), cap);
+                enabledIds = new ArrayList<>(enabledIds.subList(0, cap));
+            }
+            if (enabledIds.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<UserDTO> users = userApi.getUserByEmpIds(enabledIds);
+            String kw = keyword == null ? "" : keyword.trim();
+            if (!kw.isEmpty()) {
+                users = users.stream().filter(u -> matchesKeyword(u, kw)).collect(Collectors.toList());
+            }
+            return assembleRows(users);
+        }
         List<EvalUserRoleRowDTO> all = new ArrayList<>();
         int pageSize = 100;
         int pageNo = 1;
@@ -170,6 +264,11 @@ public class EvalUserTagService {
                 break;
             }
             pageNo++;
+        }
+        if ("0".equals(mode)) {
+            all = all.stream()
+                    .filter(r -> r.getEvalEnabled() == null || r.getEvalEnabled() == 0)
+                    .collect(Collectors.toList());
         }
         if (all.size() > cap) {
             return new ArrayList<>(all.subList(0, cap));
@@ -201,6 +300,11 @@ public class EvalUserTagService {
             }
         }
 
+        // 批量查询启用位，生成 enabledSet 用于 overlay
+        Set<String> enabledSet = empIds.isEmpty()
+                ? Set.of()
+                : new HashSet<>(evalUserSettingMapper.selectEnabledUserIdsIn(empIds));
+
         List<EvalUserRoleRowDTO> rows = new ArrayList<>(records.size());
         for (UserDTO u : records) {
             EvalUserRoleRowDTO row = new EvalUserRoleRowDTO();
@@ -226,6 +330,8 @@ public class EvalUserTagService {
                     .collect(Collectors.toList());
             row.setBeEvalTag(beEval);
             row.setEvalTags(evalTags);
+            // overlay：从 EVAL_USER_SETTING 读取启用位
+            row.setEvalEnabled(enabledSet.contains(u.getEmpId()) ? 1 : 0);
             rows.add(row);
         }
         return rows;
