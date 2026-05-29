@@ -1,0 +1,54 @@
+spring:
+  datasource:
+    # workflow-center Mapper IT 使用 yiti 开发库（与 dev 开发库一致）
+    url: jdbc:mysql://localhost:3306/yiti?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: djdev
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 本模块用 Druid（无 HikariCP 依赖）；显式指定 Druid 池类，
+    # 避免 Flowable standalone ProcessEngine 走 DataSourceConfiguration$Generic
+    # 绑定 spring.datasource.type 时找不到 HikariDataSource 而启动失败。
+    type: com.alibaba.druid.pool.DruidDataSource
+  main:
+    allow-bean-definition-overriding: true
+  cache:
+    type: none
+  quartz:
+    enabled: false
+  autoconfigure:
+    exclude:
+      # workflow IT 无 Redis / Quartz / Druid，排除避免 bean 创建失败；
+      # 但保留 Flowable 全部自动配置（FlowPublishServiceIT 需真 ProcessEngine）
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
+      - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+# Flowable 引擎配置（仅 FlowPublishServiceIT 等全量 Flowable IT 使用；
+# WfTestApp 排除了 Flowable AutoConfig，下列配置对其无影响）。
+flowable:
+  history-level: audit
+  database-schema-update: true
+  idm:
+    enabled: false
+  app:
+    enabled: false
+  eventregistry:
+    enabled: false
+  dmn:
+    enabled: false
+  cmmn:
+    enabled: false
+
+logging:
+  level:
+    com.bank.branch.platform.workflow: DEBUG
+    org.mybatis: INFO
+    org.springframework.jdbc: INFO
+    org.springframework.transaction: INFO
