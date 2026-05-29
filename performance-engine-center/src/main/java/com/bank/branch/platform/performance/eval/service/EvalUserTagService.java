@@ -224,13 +224,30 @@ public class EvalUserTagService {
     }
 
     /**
-     * 导出用：取关键词匹配的全部人员（翻页累积，每页 100），上限 cap 行。
+     * 导出用：取关键词匹配的全部人员，按"是否启用评价"过滤态分派。
      *
-     * @param keyword 关键词（工号/姓名，可空）
-     * @param cap     最大导出行数（保护，超出截断）
-     * @return 装配好的列表行
+     * @param keyword     关键词（工号/姓名，可空）
+     * @param evalEnabled 过滤态：null/"1"=只看启用，"0"=否，其它=全部
+     * @param cap         最大导出行数
      */
-    public List<EvalUserRoleRowDTO> listForExport(String keyword, int cap) {
+    public List<EvalUserRoleRowDTO> listForExport(String keyword, String evalEnabled, int cap) {
+        String mode = normalizeEnabledMode(evalEnabled);
+        if ("1".equals(mode)) {
+            List<String> enabledIds = evalUserSettingMapper.selectEnabledUserIds();
+            if (enabledIds.size() > cap) {
+                log.warn("[EvalUserTagService.listForExport] 启用工号数 {} 超 cap {}，截断", enabledIds.size(), cap);
+                enabledIds = new ArrayList<>(enabledIds.subList(0, cap));
+            }
+            if (enabledIds.isEmpty()) {
+                return new ArrayList<>();
+            }
+            List<UserDTO> users = userApi.getUserByEmpIds(enabledIds);
+            String kw = keyword == null ? "" : keyword.trim();
+            if (!kw.isEmpty()) {
+                users = users.stream().filter(u -> matchesKeyword(u, kw)).collect(Collectors.toList());
+            }
+            return assembleRows(users);
+        }
         List<EvalUserRoleRowDTO> all = new ArrayList<>();
         int pageSize = 100;
         int pageNo = 1;
@@ -245,6 +262,11 @@ public class EvalUserTagService {
                 break;
             }
             pageNo++;
+        }
+        if ("0".equals(mode)) {
+            all = all.stream()
+                    .filter(r -> r.getEvalEnabled() == null || r.getEvalEnabled() == 0)
+                    .collect(Collectors.toList());
         }
         if (all.size() > cap) {
             return new ArrayList<>(all.subList(0, cap));
