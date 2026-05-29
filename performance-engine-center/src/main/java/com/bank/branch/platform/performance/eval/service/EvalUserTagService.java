@@ -151,7 +151,8 @@ public class EvalUserTagService {
     @Transactional(rollbackFor = Exception.class)
     public void saveUserRolesWithSetting(String userId, Long beEvalTagId, List<Long> evalTagIds, Integer evalEnabled) {
         saveUserRoles(userId, beEvalTagId, evalTagIds);
-        int enabled = (evalEnabled != null && evalEnabled == 1) ? 1 : 0;
+        // 避免拆箱（Integer.valueOf(1).equals 语义等价且不触发 NPE）
+        int enabled = Integer.valueOf(1).equals(evalEnabled) ? 1 : 0;
         evalUserSettingMapper.upsert(userId, enabled);
         log.info("[EvalUserTagService.saveUserRolesWithSetting] userId={} evalEnabled={}", userId, enabled);
     }
@@ -229,6 +230,7 @@ public class EvalUserTagService {
      * @param keyword     关键词（工号/姓名，可空）
      * @param evalEnabled 过滤态：null/"1"=只看启用，"0"=否，其它=全部
      * @param cap         最大导出行数
+     * @implNote "否"/"全部"模式下 cap 为上游扫描行数上限（过滤前），"否"模式过滤已启用者后实际返回可能略少于 cap。
      */
     public List<EvalUserRoleRowDTO> listForExport(String keyword, String evalEnabled, int cap) {
         String mode = normalizeEnabledMode(evalEnabled);
