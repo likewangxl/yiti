@@ -141,6 +141,9 @@
             <el-table-column label="申请时间" width="170">
               <template #default="{row}">{{ fmtDateTime(row.createdTime) }}</template>
             </el-table-column>
+            <el-table-column label="审批时间" width="170">
+              <template #default="{row}">{{ fmtDateTime(row.updatedTime) }}</template>
+            </el-table-column>
             <el-table-column label="结果" width="80">
               <template #default="{row}">
                 <el-tag v-if="row.status==='APPROVED'" class="tag-success" effect="plain">通过</el-tag>

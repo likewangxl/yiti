@@ -107,6 +107,12 @@ export function listTargets(params = {}) {
 export function getTargetPlanDetail(id) {
   return call('get', `/perf/target-plans/${id}`, {}, {});
 }
+// 客户财务统计展示（XAN_M98_CUST_STAT_SHOW3）：按客户编号取一行用于反显名称/余额
+export function getCustStat(custId) {
+  return call('get', '/perf/stat-show/cust', { params: { custId, pageNo: 1, pageSize: 1 } }, { records: [] })
+    .then(unwrapPage)
+    .then(r => (Array.isArray(r) ? r[0] : (r?.records || [])[0]) || null);
+}
 export function createTargetPlan(data) {
   return call('post', '/perf/target-plans', { data }, { id: 'mock' });
 }

@@ -314,7 +314,7 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="客户名称">
-              <el-input :model-value="custNameDisplay" disabled placeholder="输入客户编号后自动显示" />
+              <span class="cust-name-label">{{ custNameDisplay || '-' }}</span>
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -342,44 +342,46 @@
           </el-col>
         </el-row>
 
-        <!-- 余额预览 -->
-        <div v-if="preview.loaded" class="preview-section" v-loading="preview.loading">
-          <el-alert v-if="!preview.loading && preview.data && !preview.data.hasData"
-                    type="warning" :closable="false" style="margin-bottom:12px"
-                    title="未查询到该客户/账号的余额数据，不允许提交审批" />
-          <div class="card-h"><div class="title">余额概览</div></div>
-          <el-row :gutter="16" style="padding:12px 0">
-            <el-col :span="12" v-if="preview.data?.depositSummary">
-              <div class="bal-card">
-                <div class="bal-title">存款</div>
-                <table class="bal-table">
-                  <tr><td>当前余额(人民币)</td><td class="num">{{ fmtAmt(preview.data.depositSummary.currBalRmb) }}</td></tr>
-                  <tr><td>当月日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.depositSummary.currMAvgBalRmb) }}</td></tr>
-                  <tr><td>当年日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.depositSummary.currYAvgBalRmb) }}</td></tr>
-                </table>
-              </div>
-            </el-col>
-            <el-col :span="12" v-if="preview.data?.loanSummary">
-              <div class="bal-card">
-                <div class="bal-title">贷款</div>
-                <table class="bal-table">
-                  <tr><td>当前余额(人民币)</td><td class="num">{{ fmtAmt(preview.data.loanSummary.currBalRmb) }}</td></tr>
-                  <tr><td>当月日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.loanSummary.currMAvgBalRmb) }}</td></tr>
-                  <tr><td>当年日均(人民币)</td><td class="num">{{ fmtAmt(preview.data.loanSummary.currYAvgBalRmb) }}</td></tr>
-                </table>
-              </div>
-            </el-col>
-          </el-row>
-          <template v-if="preview.data">
-            <div class="card-h"><div class="title">原业绩分配</div></div>
-            <el-table :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无分配记录">
-              <el-table-column prop="acctNo" label="账号" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="allocaterId" label="员工号" width="110" />
-              <el-table-column prop="empName" label="员工姓名" width="120" />
-              <el-table-column prop="orgName" label="所属机构" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="dynScale" label="分配比例" width="100" />
-            </el-table>
-          </template>
+        <!-- 查不到该客户的余额统计时告警（查到则不显示）-->
+        <el-alert v-if="dlg.form.custNo && custStat.queried && !custStat.found"
+                  type="warning" :closable="false" style="margin-bottom:12px"
+                  title="未查询到该客户/账号的余额数据，不允许提交审批" />
+
+        <!-- 余额概览（默认显示，数据来自 XAN_M98_CUST_STAT_SHOW3，按客户编号反显）-->
+        <div class="card-h"><div class="title">余额概览</div></div>
+        <el-row :gutter="16" style="margin-bottom:4px">
+          <el-col :span="6">
+            <el-form-item label="当前余额">
+              <el-input :model-value="custStat.currBal != null ? custStat.currBal : '-'" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="月日均余额">
+              <el-input :model-value="custStat.mAvgBal != null ? custStat.mAvgBal : '-'" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="季日均余额">
+              <el-input :model-value="custStat.qAvgBal != null ? custStat.qAvgBal : '-'" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="年日均余额">
+              <el-input :model-value="custStat.yAvgBal != null ? custStat.yAvgBal : '-'" disabled />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 原业绩分配（来自 getAllocPreview，仅展示当前分配，存贷款余额预览模块已删除）-->
+        <div v-if="preview.loaded && preview.data" class="preview-section" v-loading="preview.loading">
+          <div class="card-h"><div class="title">原业绩分配</div></div>
+          <el-table :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无分配记录">
+            <el-table-column prop="acctNo" label="账号" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="allocaterId" label="员工号" width="110" />
+            <el-table-column prop="empName" label="员工姓名" width="120" />
+            <el-table-column prop="orgName" label="所属机构" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="dynScale" label="分配比例" width="100" />
+          </el-table>
         </div>
 
         <div class="card-h">
@@ -484,7 +486,7 @@
           <el-button type="primary" :loading="dlg.reviewSaving" @click="onDlgReviewAction('APPROVE')">通过</el-button>
         </template>
         <el-button v-if="!dlg.readOnly && !dlg.reviewMode" type="primary" :loading="dlg.saving"
-                   :disabled="preview.loaded && preview.data && !preview.data.hasData"
+                   :disabled="custStat.queried && !custStat.found"
                    @click="onSubmit">提交审批</el-button>
       </template>
     </el-dialog>
@@ -526,13 +528,12 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   submitAdjust, withdrawAdjust, getAdjustDetail,
   getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
-  getAllocPreview
+  getAllocPreview, getCustStat
 } from '@/api/perf';
 import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { listDictItems } from '@/api/system';
-import { getCustomer } from '@/api/customers';
 
 const route = useRoute();
 
@@ -962,6 +963,14 @@ async function loadBizKindDict() {
 // ============ 新建/查看 弹框 ============
 const dlgFormRef = ref(null);
 const custNameDisplay = ref('');
+// XAN_M98_CUST_STAT_SHOW3 反显：客户余额（当前/月日均/季日均/年日均）
+// queried=是否已完成一次按编号查询；found=是否查到该客户的统计行
+const custStat = reactive({ currBal: null, mAvgBal: null, qAvgBal: null, yAvgBal: null, queried: false, found: false });
+function resetCustStat() {
+  custStat.currBal = custStat.mAvgBal = custStat.qAvgBal = custStat.yAvgBal = null;
+  custStat.queried = false;
+  custStat.found = false;
+}
 const preview = reactive({ loaded: false, loading: false, data: null });
 function fmtAmt(v) {
   if (v == null) return '-';
@@ -1056,6 +1065,7 @@ function openCreate() {
   dlg.readOnly = false;
   dlg.viewingId = null;
   custNameDisplay.value = '';
+  resetCustStat();
   preview.loaded = false;
   preview.data = null;
   Object.assign(dlg.form, {
@@ -1167,12 +1177,24 @@ async function onWithdraw(row) {
 let custNoTimer = null;
 watch(() => dlg.form.custNo, (val) => {
   clearTimeout(custNoTimer);
-  if (!val || val.length < 2) { custNameDisplay.value = ''; preview.loaded = false; return; }
+  if (!val || val.length < 2) { custNameDisplay.value = ''; resetCustStat(); preview.loaded = false; return; }
   custNoTimer = setTimeout(async () => {
     try {
-      const c = await getCustomer(val);
-      custNameDisplay.value = c?.name || '';
-    } catch { custNameDisplay.value = ''; }
+      // 客户名称 + 余额均从 XAN_M98_CUST_STAT_SHOW3 按客户编号反显（列名为 DB 大写）
+      const s = await getCustStat(val);
+      if (s) {
+        custNameDisplay.value = s.CUST_NAME || s.cust_name || '';
+        custStat.currBal = s.CURR_BAL ?? null;
+        custStat.mAvgBal = s.M_AVG_BAL ?? null;
+        custStat.qAvgBal = s.Q_AVG_BAL ?? null;
+        custStat.yAvgBal = s.Y_AVG_BAL ?? null;
+        custStat.found = true;
+      } else {
+        custNameDisplay.value = '';
+        resetCustStat();
+      }
+      custStat.queried = true;
+    } catch { custNameDisplay.value = ''; resetCustStat(); custStat.queried = true; }
   }, 500);
 });
 // 客户类型 / 客户编号 / 分配维度 / 账号 任一变化时触发预览
@@ -1225,6 +1247,12 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
+.cust-name-label {
+  display: inline-block;
+  line-height: 32px;
+  color: $text-1;
+  font-weight: 500;
+}
 .preview-section {
   margin-bottom: 12px;
   .bal-card {
