@@ -11,8 +11,8 @@ export function listTags(params = {}) {
   return call('get', '/admin/eval/tags', { params: { page: 1, pageSize: 50, ...params } }, { records: [], total: 0 });
 }
 
-export function createTag(tagName, tagType) {
-  return call('post', '/admin/eval/tags', { params: { tagName, tagType } }, { tagId: Date.now() });
+export function createTag(tagName) {
+  return call('post', '/admin/eval/tags', { params: { tagName } }, { tagId: Date.now() });
 }
 
 export function updateTag(tagId, tagName, status) {

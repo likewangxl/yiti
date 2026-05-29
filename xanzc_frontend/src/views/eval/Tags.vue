@@ -2,7 +2,7 @@
   <div>
     <div class="page-h">
       <h1>标签管理</h1>
-      <span class="desc">被评价人标签 · 评价人标签</span>
+      <span class="desc">评价标签</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button type="primary" @click="openCreate">+ 新建标签</el-button>
@@ -12,12 +12,6 @@
     <!-- 筛选栏 -->
     <div class="card-section filter-section">
       <el-form inline size="default" class="filter-form">
-        <el-form-item label="标签类型">
-          <el-select v-model="filters.tagType" clearable placeholder="全部" style="width:160px" @change="reload">
-            <el-option :value="1" label="被评价人标签" />
-            <el-option :value="2" label="评价人标签" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="关键词">
           <el-input
             v-model="filters.keyword"
@@ -43,17 +37,6 @@
           </template>
         </el-table-column>
         <el-table-column prop="tagName" label="标签名称" min-width="180" show-overflow-tooltip />
-        <el-table-column label="标签类型" width="140">
-          <template #default="{ row }">
-            <el-tag
-              :class="row.tagType === 1 ? 'tag-success' : 'tag-info'"
-              effect="plain"
-              size="small"
-            >
-              {{ TAG_TYPE_LABEL[row.tagType] || '-' }}
-            </el-tag>
-          </template>
-        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag
@@ -106,12 +89,6 @@
             show-word-limit
           />
         </el-form-item>
-        <el-form-item label="标签类型" prop="tagType">
-          <el-radio-group v-model="createDlg.form.tagType">
-            <el-radio :value="1">被评价人标签</el-radio>
-            <el-radio :value="2">评价人标签</el-radio>
-          </el-radio-group>
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createDlg.show = false">取消</el-button>
@@ -157,18 +134,14 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { listTags, createTag, updateTag, deleteTag } from '@/api/eval';
 
-// === 常量 ===
-const TAG_TYPE_LABEL = { 1: '被评价人', 2: '评价人' };
-
 // === 列表状态 ===
 const rows = ref([]);
 const loading = ref(false);
-const filters = reactive({ tagType: null, keyword: '' });
+const filters = reactive({ keyword: '' });
 const pager = reactive({ pageNo: 1, pageSize: 20, total: 0 });
 
 /** 重置筛选条件并刷新 */
 function resetFilters() {
-  filters.tagType = null;
   filters.keyword = '';
   pager.pageNo = 1;
   reload();
@@ -181,7 +154,6 @@ async function reload() {
     const params = {
       pageNo: pager.pageNo,
       pageSize: pager.pageSize,
-      tagType: filters.tagType ?? undefined,
       keyword: filters.keyword || undefined
     };
     const r = await listTags(params);
@@ -200,10 +172,9 @@ const createFormRef = ref(null);
 const createDlg = reactive({
   show: false,
   saving: false,
-  form: { tagName: '', tagType: 1 },
+  form: { tagName: '' },
   rules: {
-    tagName: [{ required: true, message: '标签名称必填', trigger: 'blur' }],
-    tagType: [{ required: true, message: '请选择标签类型', trigger: 'change' }]
+    tagName: [{ required: true, message: '标签名称必填', trigger: 'blur' }]
   }
 });
 
@@ -214,7 +185,7 @@ function openCreate() {
 
 /** 重置新建表单 */
 function resetCreateForm() {
-  createDlg.form = { tagName: '', tagType: 1 };
+  createDlg.form = { tagName: '' };
   createFormRef.value?.clearValidate();
 }
 
@@ -227,7 +198,7 @@ async function saveCreate() {
   }
   createDlg.saving = true;
   try {
-    await createTag(createDlg.form.tagName, createDlg.form.tagType);
+    await createTag(createDlg.form.tagName);
     ElMessage.success('标签已创建');
     createDlg.show = false;
     await reload();
