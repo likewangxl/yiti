@@ -1,6 +1,11 @@
 package com.bank.branch.platform.performance.eval.service;
 
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.eval.dto.EvalUserRoleRowDTO;
+import com.bank.branch.platform.performance.eval.dto.EvalUserTagRow;
 import com.bank.branch.platform.performance.eval.entity.EvalTag;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.mapper.EvalTagMapper;
@@ -8,6 +13,7 @@ import com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.portal.api.AddressBookApi;
+import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -114,5 +121,76 @@ class EvalUserRoleServiceTest {
         assertThatThrownBy(() -> service.saveUserRoles(1001L, 99L, List.of()))
                 .isInstanceOfSatisfying(PerfException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.EVAL_RULE_NOT_FOUND));
+    }
+
+    private UserDTO user(String empId, String name) {
+        UserDTO u = new UserDTO();
+        u.setEmpId(empId);
+        u.setDisplayName(name);
+        return u;
+    }
+
+    private EvalUserTagRow tagRow(long uid, long tid, String name, int type) {
+        EvalUserTagRow r = new EvalUserTagRow();
+        r.setUserId(uid); r.setTagId(tid); r.setTagName(name); r.setTagType(type);
+        return r;
+    }
+
+    @Test
+    @DisplayName("pageUserRoles 拼装：被评价取单个、评价人取列表、部门/岗位/角色到位")
+    void pageUserRoles_assembles() {
+        when(userApi.pageUsers("张", 1, 20))
+                .thenReturn(PageResult.of(1, 20, 1L, List.of(user("1001", "张三"))));
+        when(addressBookApi.getEmployees(List.of("1001")))
+                .thenReturn(List.of(EmployeeDTO.builder().empId("1001").orgName("某支行").position("行长").build()));
+        RoleSimpleDTO role = new RoleSimpleDTO();
+        role.setRoleChName("管理员");
+        when(userApi.getRolesByUserIds(List.of("1001"))).thenReturn(Map.of("1001", List.of(role)));
+        when(evalUserTagMapper.selectUserTagsByUserIds(List.of(1001L)))
+                .thenReturn(List.of(
+                        tagRow(1001L, 1L, "支行行长", 1),
+                        tagRow(1001L, 2L, "副行长评委", 2),
+                        tagRow(1001L, 3L, "同级评委", 2)));
+
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", 1, 20);
+
+        assertThat(r.getTotal()).isEqualTo(1L);
+        EvalUserRoleRowDTO row = r.getRecords().get(0);
+        assertThat(row.getUserId()).isEqualTo("1001");
+        assertThat(row.getUserName()).isEqualTo("张三");
+        assertThat(row.getOrgName()).isEqualTo("某支行");
+        assertThat(row.getPosition()).isEqualTo("行长");
+        assertThat(row.getRoleNames()).containsExactly("管理员");
+        assertThat(row.getBeEvalTag().getTagName()).isEqualTo("支行行长");
+        assertThat(row.getEvalTags()).extracting(t -> t.getTagName())
+                .containsExactlyInAnyOrder("副行长评委", "同级评委");
+    }
+
+    @Test
+    @DisplayName("pageUserRoles 空页：用户列表为空时直接返回空 records，不查下游")
+    void pageUserRoles_emptyPage() {
+        when(userApi.pageUsers(null, 1, 20)).thenReturn(PageResult.of(1, 20, 0L, List.of()));
+
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, 1, 20);
+
+        assertThat(r.getRecords()).isEmpty();
+        verify(addressBookApi, never()).getEmployees(anyList());
+    }
+
+    @Test
+    @DisplayName("pageUserRoles 非数值工号：跳过 EVAL_USER_TAG 匹配，标签列为空但不报错")
+    void pageUserRoles_nonNumericEmpId() {
+        when(userApi.pageUsers(null, 1, 20))
+                .thenReturn(PageResult.of(1, 20, 1L, List.of(user("U_ABC123", "李四"))));
+        when(addressBookApi.getEmployees(List.of("U_ABC123"))).thenReturn(List.of());
+        when(userApi.getRolesByUserIds(List.of("U_ABC123"))).thenReturn(Map.of());
+
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, 1, 20);
+
+        EvalUserRoleRowDTO row = r.getRecords().get(0);
+        assertThat(row.getBeEvalTag()).isNull();
+        assertThat(row.getEvalTags()).isEmpty();
+        assertThat(row.getRoleNames()).isEmpty();
+        verify(evalUserTagMapper, never()).selectUserTagsByUserIds(anyList());
     }
 }

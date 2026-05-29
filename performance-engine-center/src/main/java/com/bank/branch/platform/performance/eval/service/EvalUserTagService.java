@@ -1,19 +1,30 @@
 package com.bank.branch.platform.performance.eval.service;
 
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.RoleSimpleDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.eval.dto.EvalUserRoleRowDTO;
+import com.bank.branch.platform.performance.eval.dto.EvalUserTagBriefDTO;
+import com.bank.branch.platform.performance.eval.dto.EvalUserTagRow;
 import com.bank.branch.platform.performance.eval.entity.EvalTag;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.mapper.EvalTagMapper;
 import com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.portal.api.AddressBookApi;
+import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -121,5 +132,76 @@ public class EvalUserTagService {
             evalUserTagMapper.batchInsert(toInsert);
         }
         log.info("[EvalUserTagService.saveUserRoles] userId={} beEvalTagId={} evalTagIds={}", userId, beEvalTagId, evalIds);
+    }
+
+    /**
+     * 分页聚合查询人员标签列表：每行含 人员基本信息 + 部门/岗位（通讯录）+ RBAC 角色 + 被评价人/评价人标签。
+     *
+     * @param keyword  关键词（工号/姓名，可空）
+     * @param page     页码（从 1 开始）
+     * @param pageSize 每页条数
+     * @return 分页结果
+     */
+    public PageResult<EvalUserRoleRowDTO> pageUserRoles(String keyword, int page, int pageSize) {
+        PageResult<UserDTO> users = userApi.pageUsers(keyword, page, pageSize);
+        List<UserDTO> records = users.getRecords();
+        if (records == null || records.isEmpty()) {
+            return PageResult.of(page, pageSize, users.getTotal(), List.of());
+        }
+        List<String> empIds = records.stream().map(UserDTO::getEmpId).collect(Collectors.toList());
+
+        // 部门/岗位：通讯录批量
+        Map<String, EmployeeDTO> empMap = addressBookApi.getEmployees(empIds).stream()
+                .collect(Collectors.toMap(EmployeeDTO::getEmpId, Function.identity(), (a, b) -> a));
+        // RBAC 角色：批量
+        Map<String, List<RoleSimpleDTO>> roleMap = userApi.getRolesByUserIds(empIds);
+
+        // EVAL 标签：仅数值型工号能匹配 BIGINT user_id
+        List<Long> numericIds = empIds.stream().map(this::toLongOrNull).filter(Objects::nonNull).collect(Collectors.toList());
+        Map<Long, List<EvalUserTagRow>> tagMap = new HashMap<>();
+        if (!numericIds.isEmpty()) {
+            for (EvalUserTagRow r : evalUserTagMapper.selectUserTagsByUserIds(numericIds)) {
+                tagMap.computeIfAbsent(r.getUserId(), k -> new ArrayList<>()).add(r);
+            }
+        }
+
+        List<EvalUserRoleRowDTO> rows = new ArrayList<>(records.size());
+        for (UserDTO u : records) {
+            EvalUserRoleRowDTO row = new EvalUserRoleRowDTO();
+            row.setUserId(u.getEmpId());
+            row.setUserName(u.getDisplayName() != null ? u.getDisplayName() : u.getUsername());
+            EmployeeDTO emp = empMap.get(u.getEmpId());
+            if (emp != null) {
+                row.setOrgName(emp.getOrgName());
+                row.setPosition(emp.getPosition());
+            }
+            List<RoleSimpleDTO> roles = roleMap.getOrDefault(u.getEmpId(), List.of());
+            row.setRoleNames(roles.stream().map(RoleSimpleDTO::getRoleChName).collect(Collectors.toList()));
+
+            Long numId = toLongOrNull(u.getEmpId());
+            List<EvalUserTagRow> tagRows = (numId == null) ? List.of() : tagMap.getOrDefault(numId, List.of());
+            EvalUserTagBriefDTO beEval = tagRows.stream()
+                    .filter(t -> Integer.valueOf(1).equals(t.getTagType()))
+                    .findFirst()
+                    .map(t -> new EvalUserTagBriefDTO(t.getTagId(), t.getTagName()))
+                    .orElse(null);
+            List<EvalUserTagBriefDTO> evalTags = tagRows.stream()
+                    .filter(t -> Integer.valueOf(2).equals(t.getTagType()))
+                    .map(t -> new EvalUserTagBriefDTO(t.getTagId(), t.getTagName()))
+                    .collect(Collectors.toList());
+            row.setBeEvalTag(beEval);
+            row.setEvalTags(evalTags);
+            rows.add(row);
+        }
+        return PageResult.of(page, pageSize, users.getTotal(), rows);
+    }
+
+    /** 工号转 Long，非数值返回 null（用于匹配 EVAL_USER_TAG.user_id BIGINT）. */
+    private Long toLongOrNull(String s) {
+        try {
+            return Long.valueOf(s);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
