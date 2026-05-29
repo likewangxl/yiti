@@ -53,7 +53,7 @@ class EvalUserTagExportTest {
         when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
         when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.<String, List<RoleSimpleDTO>>of());
         when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of());
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(anyList())).thenReturn(List.of());
 
         List<EvalUserRoleRowDTO> rows = service.listForExport("k", "all", 10000);
 
@@ -70,7 +70,7 @@ class EvalUserTagExportTest {
         when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
         when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.<String, List<RoleSimpleDTO>>of());
         when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of());
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(anyList())).thenReturn(List.of());
 
         List<EvalUserRoleRowDTO> rows = service.listForExport(null, "all", 100);
 
@@ -88,19 +88,36 @@ class EvalUserTagExportTest {
     }
 
     @Test
-    void listForExport_enabledMode_usesSettingDriven() {
-        when(evalUserSettingMapper.selectEnabledUserIds()).thenReturn(List.of("1001", "1002"));
+    void listForExport_excludedMode_usesNamelistDriven() {
+        when(evalUserSettingMapper.selectExcludedUserIds()).thenReturn(List.of("1001", "1002"));
         when(userApi.getUserByEmpIds(List.of("1001", "1002")))
                 .thenReturn(List.of(user("1001", "张三"), user("1002", "李四")));
         when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
         when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.<String, List<RoleSimpleDTO>>of());
         when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of("1001", "1002"));
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(anyList())).thenReturn(List.of("1001", "1002"));
+
+        List<EvalUserRoleRowDTO> rows = service.listForExport(null, "0", 10000);
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows).allSatisfy(r -> assertThat(r.getEvalEnabled()).isEqualTo(0));
+        verify(userApi, never()).pageUsers(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    void listForExport_participateMode_excludesNamelist() {
+        List<UserDTO> page1 = List.of(user("1001", "张三"), user("1002", "李四"));
+        when(userApi.pageUsers(eq(null), eq(1), eq(100))).thenReturn(PageResult.of(1, 100, 2, page1));
+        when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
+        when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.<String, List<RoleSimpleDTO>>of());
+        when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
+        // 1002 在排除名单（不参与）→ 参与导出剔除
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(anyList())).thenReturn(List.of("1002"));
 
         List<EvalUserRoleRowDTO> rows = service.listForExport(null, "1", 10000);
 
-        assertThat(rows).hasSize(2);
-        assertThat(rows).allSatisfy(r -> assertThat(r.getEvalEnabled()).isEqualTo(1));
-        verify(userApi, never()).pageUsers(any(), anyInt(), anyInt());
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getUserId()).isEqualTo("1001");
+        assertThat(rows.get(0).getEvalEnabled()).isEqualTo(1);
     }
 }

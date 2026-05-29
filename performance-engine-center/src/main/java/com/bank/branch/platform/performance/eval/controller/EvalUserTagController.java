@@ -74,7 +74,7 @@ public class EvalUserTagController {
     }
 
     @GetMapping("/page")
-    @Operation(summary = "分页查询人员标签列表（含部门/岗位/角色/是否启用评价）")
+    @Operation(summary = "分页查询人员标签列表（含部门/岗位/角色/是否参与评价）")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
     public ResponseWrapper<PageResult<EvalUserRoleRowDTO>> page(
             @RequestParam(value = "keyword", required = false) String keyword,
@@ -87,7 +87,7 @@ public class EvalUserTagController {
     }
 
     @PutMapping("/{userId}/roles")
-    @Operation(summary = "覆盖式保存人员评价角色（被评价单选/评价人多选）及启用评价开关")
+    @Operation(summary = "覆盖式保存人员评价角色（被评价单选/评价人多选）及参与评价开关")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
     public ResponseWrapper<Void> saveRoles(@PathVariable("userId") String userId,
                                            @Validated @RequestBody SaveRolesReq req) {
@@ -167,7 +167,7 @@ public class EvalUserTagController {
         private Long beEvalTagId;
         /** 评价人标签ID列表（null/空 表示清空评价人角色）. */
         private List<Long> evalTagIds;
-        /** 是否启用评价：1=是 0=否；null 兜底为 0. */
+        /** 是否参与评价：1=是 0=否；null 兜底为 0. */
         private Integer evalEnabled;
     }
 }

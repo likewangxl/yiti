@@ -176,7 +176,7 @@ class EvalUserTagImportServiceTest {
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getImportedCount()).isZero();
         assertThat(res.getErrors()).hasSize(1);
-        assertThat(res.getErrors().get(0).getMessage()).contains("是否启用评价");
+        assertThat(res.getErrors().get(0).getMessage()).contains("是否参与评价");
         verify(evalUserTagService, never()).saveUserRolesWithSetting(any(), any(), anyList(), any());
     }
 
@@ -186,7 +186,7 @@ class EvalUserTagImportServiceTest {
         List<EvalUserTagImportRow> rows = List.of(row("2280", "支行行长", "副行长", ""));
         EvalUserTagImportResultDTO res = service.importRows(rows);
         assertThat(res.isSuccess()).isFalse();
-        assertThat(res.getErrors().get(0).getMessage()).contains("是否启用评价");
+        assertThat(res.getErrors().get(0).getMessage()).contains("是否参与评价");
     }
 
     @Test

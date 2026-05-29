@@ -2,19 +2,24 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalUserSettingMapper">
 
-    <select id="selectEnabledUserIds" resultType="java.lang.String">
-        SELECT user_id FROM EVAL_USER_SETTING WHERE eval_enabled = 1
+    <!-- 出现在 EVAL_USER_SETTING 即视为"不参与评价"（排除名单），按存在性判定，不看 eval_enabled 列 -->
+    <select id="selectExcludedUserIds" resultType="java.lang.String">
+        SELECT user_id FROM EVAL_USER_SETTING
     </select>
 
-    <select id="selectEnabledUserIdsIn" resultType="java.lang.String">
-        SELECT user_id FROM EVAL_USER_SETTING WHERE eval_enabled = 1 AND user_id IN
+    <select id="selectExcludedUserIdsIn" resultType="java.lang.String">
+        SELECT user_id FROM EVAL_USER_SETTING WHERE user_id IN
         <foreach collection="userIds" item="uid" open="(" separator="," close=")">#{uid}</foreach>
     </select>
 
-    <insert id="upsert">
-        INSERT INTO EVAL_USER_SETTING (user_id, eval_enabled)
-        VALUES (#{userId}, #{evalEnabled})
-        ON DUPLICATE KEY UPDATE eval_enabled = #{evalEnabled}, updated_time = NOW()
+    <insert id="markExcluded">
+        INSERT INTO EVAL_USER_SETTING (user_id)
+        VALUES (#{userId})
+        ON DUPLICATE KEY UPDATE updated_time = NOW()
     </insert>
+
+    <delete id="clearExcluded">
+        DELETE FROM EVAL_USER_SETTING WHERE user_id = #{userId}
+    </delete>
 
 </mapper>

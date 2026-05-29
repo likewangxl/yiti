@@ -53,7 +53,7 @@ export function pageUserRoles(params = {}) {
   return call('get', '/admin/eval/user-tags/page', { params: { page: 1, pageSize: 20, ...params } }, { records: [], total: 0 });
 }
 
-// 覆盖式保存人员评价角色（被评价单选 / 评价人多选）+ 是否启用评价(1/0)
+// 覆盖式保存人员评价角色（被评价单选 / 评价人多选）+ 是否参与评价(1/0)
 export function saveUserRoles(userId, beEvalTagId, evalTagIds, evalEnabled) {
   return call('put', `/admin/eval/user-tags/${userId}/roles`, { data: { beEvalTagId, evalTagIds, evalEnabled } }, { ok: true });
 }

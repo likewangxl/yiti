@@ -17,8 +17,8 @@
           @clear="doSearch"
         />
         <el-select v-model="evalEnabledFilter" size="small" style="width:140px" @change="doSearch">
-          <el-option label="启用：是" value="1" />
-          <el-option label="启用：否" value="0" />
+          <el-option label="参与：是" value="1" />
+          <el-option label="参与：否" value="0" />
           <el-option label="全部" value="all" />
         </el-select>
         <el-button type="primary" size="small" @click="doSearch">查询</el-button>
@@ -51,7 +51,7 @@
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="是否启用评价" min-width="120">
+        <el-table-column label="是否参与评价" min-width="120">
           <template #default="{ row }">
             <el-tag v-if="row.evalEnabled === 1" type="success" effect="plain" size="small">是</el-tag>
             <el-tag v-else type="info" effect="plain" size="small">否</el-tag>
@@ -130,7 +130,7 @@
             <el-option v-for="t in tagsOfType(2)" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
           </el-select>
         </el-form-item>
-        <el-form-item label="是否启用评价">
+        <el-form-item label="是否参与评价">
           <el-select v-model="form.evalEnabled" style="width: 100%">
             <el-option :value="1" label="是" />
             <el-option :value="0" label="否" />

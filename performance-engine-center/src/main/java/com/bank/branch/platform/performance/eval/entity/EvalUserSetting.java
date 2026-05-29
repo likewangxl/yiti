@@ -16,7 +16,7 @@ public class EvalUserSetting {
     /** 工号，主键，关联 PT_USER.USER_ID（String）. */
     @TableId(value = "user_id", type = IdType.INPUT)
     private String userId;
-    /** 是否启用评价：1=是 0=否. */
+    /** 是否参与评价：1=是 0=否. */
     private Integer evalEnabled;
     /** 创建时间. */
     private LocalDateTime createdTime;

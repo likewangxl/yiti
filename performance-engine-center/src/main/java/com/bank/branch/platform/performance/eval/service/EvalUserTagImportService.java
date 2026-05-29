@@ -171,7 +171,7 @@ public class EvalUserTagImportService {
                 continue;
             }
 
-            // 是否启用评价：必填，仅"是"/"否"
+            // 是否参与评价：必填，仅"是"/"否"
             String enabledRaw = r.getEvalEnabledText() == null ? "" : r.getEvalEnabledText().trim();
             int evalEnabled;
             if ("是".equals(enabledRaw)) {
@@ -179,7 +179,7 @@ public class EvalUserTagImportService {
             } else if ("否".equals(enabledRaw)) {
                 evalEnabled = 0;
             } else {
-                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "是否启用评价只能填\"是\"或\"否\""));
+                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "是否参与评价只能填\"是\"或\"否\""));
                 continue;
             }
 

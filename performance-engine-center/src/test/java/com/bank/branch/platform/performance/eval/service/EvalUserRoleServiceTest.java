@@ -154,7 +154,8 @@ class EvalUserRoleServiceTest {
                         tagRow("1001", 1L, "支行行长", 1),
                         tagRow("1001", 2L, "副行长评委", 2),
                         tagRow("1001", 3L, "同级评委", 2)));
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(List.of("1001"))).thenReturn(List.of("1001"));
+        // 1001 不在排除名单 → 参与(是)
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(List.of("1001"))).thenReturn(List.of());
 
         PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", "all", 1, 20);
 
@@ -202,7 +203,7 @@ class EvalUserRoleServiceTest {
         when(addressBookApi.getEmployees(List.of("U_ABC123"))).thenReturn(List.of());
         when(userApi.getRolesByUserIds(List.of("U_ABC123"))).thenReturn(Map.of());
         when(evalUserTagMapper.selectUserTagsByUserIds(List.of("U_ABC123"))).thenReturn(List.of());
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of());
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(anyList())).thenReturn(List.of());
 
         PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "all", 1, 20);
 
@@ -214,61 +215,62 @@ class EvalUserRoleServiceTest {
     }
 
     @Test
-    @DisplayName("pageUserRoles 默认(是)：从 setting 取启用工号，仅返回启用者，total 准确")
-    void pageUserRoles_enabledDriven_default() {
-        when(evalUserSettingMapper.selectEnabledUserIds()).thenReturn(List.of("1001", "1002"));
+    @DisplayName("pageUserRoles 默认(是/参与)：PT_USER 驱动，剔除排除名单内的人")
+    void pageUserRoles_participateDefault_excludesNamelist() {
+        when(userApi.pageUsers(null, 1, 20))
+                .thenReturn(PageResult.of(1, 20, 2L, List.of(user("1001", "张三"), user("1002", "李四"))));
+        when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
+        when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.of());
+        when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
+        // 1002 在排除名单（不参与）→ 默认(是)视图剔除，仅留 1001
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(List.of("1001", "1002"))).thenReturn(List.of("1002"));
+
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "1", 1, 20);
+
+        assertThat(r.getRecords()).extracting(EvalUserRoleRowDTO::getUserId).containsExactly("1001");
+        assertThat(r.getRecords().get(0).getEvalEnabled()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("pageUserRoles 否(不参与)：名单驱动，仅返回名单内的人，total 准确")
+    void pageUserRoles_excludedDriven() {
+        when(evalUserSettingMapper.selectExcludedUserIds()).thenReturn(List.of("1001", "1002"));
         when(userApi.getUserByEmpIds(List.of("1001", "1002")))
                 .thenReturn(List.of(user("1001", "张三"), user("1002", "李四")));
         when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
         when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.of());
         when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of("1001", "1002"));
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(anyList())).thenReturn(List.of("1001", "1002"));
 
-        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "1", 1, 20);
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "0", 1, 20);
 
         assertThat(r.getTotal()).isEqualTo(2L);
         assertThat(r.getRecords()).extracting(EvalUserRoleRowDTO::getUserId)
                 .containsExactlyInAnyOrder("1001", "1002");
-        assertThat(r.getRecords()).allSatisfy(row -> assertThat(row.getEvalEnabled()).isEqualTo(1));
+        assertThat(r.getRecords()).allSatisfy(row -> assertThat(row.getEvalEnabled()).isEqualTo(0));
         verify(userApi, never()).pageUsers(any(), anyInt(), anyInt());
     }
 
     @Test
-    @DisplayName("pageUserRoles 默认(是)：关键词内存过滤姓名/工号")
-    void pageUserRoles_enabledDriven_keywordFilter() {
-        when(evalUserSettingMapper.selectEnabledUserIds()).thenReturn(List.of("1001", "1002"));
+    @DisplayName("pageUserRoles 否(不参与)：名单驱动 + 关键词内存过滤姓名/工号")
+    void pageUserRoles_excludedDriven_keywordFilter() {
+        when(evalUserSettingMapper.selectExcludedUserIds()).thenReturn(List.of("1001", "1002"));
         when(userApi.getUserByEmpIds(List.of("1001", "1002")))
                 .thenReturn(List.of(user("1001", "张三"), user("1002", "李四")));
         when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
         when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.of());
         when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(anyList())).thenReturn(List.of("1001"));
+        when(evalUserSettingMapper.selectExcludedUserIdsIn(anyList())).thenReturn(List.of("1001"));
 
-        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", "1", 1, 20);
+        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles("张", "0", 1, 20);
 
         assertThat(r.getTotal()).isEqualTo(1L);
         assertThat(r.getRecords().get(0).getUserId()).isEqualTo("1001");
     }
 
     @Test
-    @DisplayName("pageUserRoles 否：PT_USER 驱动 + 本页剔除已启用者")
-    void pageUserRoles_disabled_excludesEnabled() {
-        when(userApi.pageUsers(null, 1, 20))
-                .thenReturn(PageResult.of(1, 20, 2L, List.of(user("1001", "张三"), user("1002", "李四"))));
-        when(addressBookApi.getEmployees(anyList())).thenReturn(List.of());
-        when(userApi.getRolesByUserIds(anyList())).thenReturn(Map.of());
-        when(evalUserTagMapper.selectUserTagsByUserIds(anyList())).thenReturn(List.of());
-        when(evalUserSettingMapper.selectEnabledUserIdsIn(List.of("1001", "1002"))).thenReturn(List.of("1001"));
-
-        PageResult<EvalUserRoleRowDTO> r = service.pageUserRoles(null, "0", 1, 20);
-
-        assertThat(r.getRecords()).extracting(EvalUserRoleRowDTO::getUserId).containsExactly("1002");
-        assertThat(r.getRecords().get(0).getEvalEnabled()).isEqualTo(0);
-    }
-
-    @Test
-    @DisplayName("saveUserRolesWithSetting：覆盖角色 + upsert 启用位(1) 同次调用")
-    void saveUserRolesWithSetting_savesRolesAndEnabled() {
+    @DisplayName("saveUserRolesWithSetting：evalEnabled=1(参与) → 覆盖角色 + 移出排除名单")
+    void saveUserRolesWithSetting_participate_clearsExcluded() {
         when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
         when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
 
@@ -276,16 +278,30 @@ class EvalUserRoleServiceTest {
 
         verify(evalUserTagMapper).batchInsert(insertCaptor.capture());
         assertThat(insertCaptor.getValue()).extracting(EvalUserTag::getTagId).containsExactly(2L);
-        verify(evalUserSettingMapper).upsert("1001", 1);
+        verify(evalUserSettingMapper).clearExcluded("1001");
+        verify(evalUserSettingMapper, never()).markExcluded(anyString());
     }
 
     @Test
-    @DisplayName("saveUserRolesWithSetting：evalEnabled=null 兜底为 0")
-    void saveUserRolesWithSetting_nullEnabled_defaultsZero() {
+    @DisplayName("saveUserRolesWithSetting：evalEnabled=0(不参与) → 写入排除名单")
+    void saveUserRolesWithSetting_notParticipate_marksExcluded() {
+        when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
+        when(evalTagMapper.selectById(2L)).thenReturn(tag(2L, 2));
+
+        service.saveUserRolesWithSetting("1001", null, List.of(2L), 0);
+
+        verify(evalUserSettingMapper).markExcluded("1001");
+        verify(evalUserSettingMapper, never()).clearExcluded(anyString());
+    }
+
+    @Test
+    @DisplayName("saveUserRolesWithSetting：evalEnabled=null 兜底为参与(是) → 移出排除名单")
+    void saveUserRolesWithSetting_nullEnabled_defaultsParticipate() {
         when(evalUserTagMapper.selectByUserId("1001")).thenReturn(List.of());
 
         service.saveUserRolesWithSetting("1001", null, List.of(), null);
 
-        verify(evalUserSettingMapper).upsert("1001", 0);
+        verify(evalUserSettingMapper).clearExcluded("1001");
+        verify(evalUserSettingMapper, never()).markExcluded(anyString());
     }
 }

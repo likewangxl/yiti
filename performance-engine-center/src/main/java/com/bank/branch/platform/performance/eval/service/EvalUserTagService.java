@@ -141,49 +141,58 @@ public class EvalUserTagService {
     }
 
     /**
-     * 覆盖式保存人员评价角色 + 写"是否启用评价"位（同一事务，原子）。
+     * 覆盖式保存人员评价角色 + 写"是否参与评价"标记（同一事务，原子）。
+     * <p>语义：参与评价(是)=不在 EVAL_USER_SETTING 排除名单（默认）；不参与(否)=写入名单。
+     * 仅显式 evalEnabled=0 视为"不参与"→入名单；null/1 一律视为"参与"→移出名单。</p>
      *
      * @param userId      人员工号
      * @param beEvalTagId 被评价人标签ID（null 表示清空）
      * @param evalTagIds  评价人标签ID列表（null/空 表示清空）
-     * @param evalEnabled 是否启用评价：1=是 0=否；null 兜底为 0
+     * @param evalEnabled 是否参与评价：1=是 0=否；null 兜底为"参与"(是)
      */
     @Transactional(rollbackFor = Exception.class)
     public void saveUserRolesWithSetting(String userId, Long beEvalTagId, List<Long> evalTagIds, Integer evalEnabled) {
         saveUserRoles(userId, beEvalTagId, evalTagIds);
-        // 避免拆箱（Integer.valueOf(1).equals 语义等价且不触发 NPE）
-        int enabled = Integer.valueOf(1).equals(evalEnabled) ? 1 : 0;
-        evalUserSettingMapper.upsert(userId, enabled);
-        log.info("[EvalUserTagService.saveUserRolesWithSetting] userId={} evalEnabled={}", userId, enabled);
+        // 仅显式 0 才"不参与"；null/1 视为参与（默认）。避免拆箱用 Integer.equals。
+        boolean excluded = Integer.valueOf(0).equals(evalEnabled);
+        if (excluded) {
+            evalUserSettingMapper.markExcluded(userId);
+        } else {
+            evalUserSettingMapper.clearExcluded(userId);
+        }
+        log.info("[EvalUserTagService.saveUserRolesWithSetting] userId={} excluded={}", userId, excluded);
     }
 
-    /** "是"过滤驱动模式下最大全量启用工号上限（防止超大结果集撑爆内存）。 */
-    private static final int ENABLED_DRIVEN_CAP = 5000;
+    /** "否"（不参与）名单驱动模式下最大全量名单工号上限（防止超大结果集撑爆内存）。 */
+    private static final int EXCLUDED_DRIVEN_CAP = 5000;
 
     /**
-     * 分页聚合查询人员标签列表，按"是否启用评价"三态分派。
+     * 分页聚合查询人员标签列表，按"是否参与评价"三态分派。
      *
      * @param keyword     关键词（工号/姓名，可空）
-     * @param evalEnabled 过滤态：null/"1"=只看启用(默认)，"0"=否，其它("all"/"")=全部
+     * @param evalEnabled 过滤态：null/"1"=只看参与(默认)，"0"=不参与，其它("all"/"")=全部
      * @param page        页码（从 1 开始）
      * @param pageSize    每页条数
      */
     public PageResult<EvalUserRoleRowDTO> pageUserRoles(String keyword, String evalEnabled, int page, int pageSize) {
         String mode = normalizeEnabledMode(evalEnabled);
-        if ("1".equals(mode)) {
-            return pageEnabledDriven(keyword, page, pageSize);
+        if ("0".equals(mode)) {
+            // 不参与：排除名单驱动（小集合，total 精确）
+            return pageExcludedDriven(keyword, page, pageSize);
         }
+        // 参与(默认)/全部：PT_USER 驱动 + overlay
         PageResult<UserDTO> users = userApi.pageUsers(keyword, page, pageSize);
         List<EvalUserRoleRowDTO> rows = assembleRows(users.getRecords());
-        if ("0".equals(mode)) {
+        if ("1".equals(mode)) {
+            // 参与：剔除名单内（不参与）的人；total 沿用 PT_USER 总数（近似，略高估，名单为极小子集）
             rows = rows.stream()
-                    .filter(r -> r.getEvalEnabled() == null || r.getEvalEnabled() == 0)
+                    .filter(r -> Integer.valueOf(1).equals(r.getEvalEnabled()))
                     .collect(Collectors.toList());
         }
         return PageResult.of(page, pageSize, users.getTotal(), rows);
     }
 
-    /** 归一过滤态：null/"1"->"1"；"0"->"0"；其它->"all"。 */
+    /** 归一过滤态：null/"1"->"1"（参与）；"0"->"0"（不参与）；其它->"all"。 */
     private String normalizeEnabledMode(String evalEnabled) {
         if (evalEnabled == null || "1".equals(evalEnabled.trim())) {
             return "1";
@@ -194,17 +203,17 @@ public class EvalUserTagService {
         return "all";
     }
 
-    /** "是"过滤：eval 侧驱动——取全部启用工号，批量解析，内存关键词过滤+内存分页。 */
-    private PageResult<EvalUserRoleRowDTO> pageEnabledDriven(String keyword, int page, int pageSize) {
-        List<String> enabledIds = evalUserSettingMapper.selectEnabledUserIds();
-        if (enabledIds.size() > ENABLED_DRIVEN_CAP) {
-            log.warn("[EvalUserTagService.pageEnabledDriven] 启用工号数 {} 超上限 {}，截断", enabledIds.size(), ENABLED_DRIVEN_CAP);
-            enabledIds = new ArrayList<>(enabledIds.subList(0, ENABLED_DRIVEN_CAP));
+    /** "否"过滤：名单驱动——取全部"不参与"工号，批量解析，内存关键词过滤+内存分页。 */
+    private PageResult<EvalUserRoleRowDTO> pageExcludedDriven(String keyword, int page, int pageSize) {
+        List<String> excludedIds = evalUserSettingMapper.selectExcludedUserIds();
+        if (excludedIds.size() > EXCLUDED_DRIVEN_CAP) {
+            log.warn("[EvalUserTagService.pageExcludedDriven] 不参与工号数 {} 超上限 {}，截断", excludedIds.size(), EXCLUDED_DRIVEN_CAP);
+            excludedIds = new ArrayList<>(excludedIds.subList(0, EXCLUDED_DRIVEN_CAP));
         }
-        if (enabledIds.isEmpty()) {
+        if (excludedIds.isEmpty()) {
             return PageResult.of(page, pageSize, 0L, new ArrayList<>());
         }
-        List<UserDTO> users = userApi.getUserByEmpIds(enabledIds);
+        List<UserDTO> users = userApi.getUserByEmpIds(excludedIds);
         String kw = keyword == null ? "" : keyword.trim();
         if (!kw.isEmpty()) {
             users = users.stream().filter(u -> matchesKeyword(u, kw)).collect(Collectors.toList());
@@ -225,31 +234,33 @@ public class EvalUserTagService {
     }
 
     /**
-     * 导出用：取关键词匹配的全部人员，按"是否启用评价"过滤态分派。
+     * 导出用：取关键词匹配的全部人员，按"是否参与评价"过滤态分派。
      *
      * @param keyword     关键词（工号/姓名，可空）
-     * @param evalEnabled 过滤态：null/"1"=只看启用，"0"=否，其它=全部
+     * @param evalEnabled 过滤态：null/"1"=只看参与，"0"=不参与，其它=全部
      * @param cap         最大导出行数
-     * @implNote "否"/"全部"模式下 cap 为上游扫描行数上限（过滤前），"否"模式过滤已启用者后实际返回可能略少于 cap。
+     * @implNote "1"/"全部"模式下 cap 为上游扫描行数上限（过滤前），"1"模式剔除不参与者后实际返回可能略少于 cap。
      */
     public List<EvalUserRoleRowDTO> listForExport(String keyword, String evalEnabled, int cap) {
         String mode = normalizeEnabledMode(evalEnabled);
-        if ("1".equals(mode)) {
-            List<String> enabledIds = evalUserSettingMapper.selectEnabledUserIds();
-            if (enabledIds.size() > cap) {
-                log.warn("[EvalUserTagService.listForExport] 启用工号数 {} 超 cap {}，截断", enabledIds.size(), cap);
-                enabledIds = new ArrayList<>(enabledIds.subList(0, cap));
+        if ("0".equals(mode)) {
+            // 不参与：排除名单驱动
+            List<String> excludedIds = evalUserSettingMapper.selectExcludedUserIds();
+            if (excludedIds.size() > cap) {
+                log.warn("[EvalUserTagService.listForExport] 不参与工号数 {} 超 cap {}，截断", excludedIds.size(), cap);
+                excludedIds = new ArrayList<>(excludedIds.subList(0, cap));
             }
-            if (enabledIds.isEmpty()) {
+            if (excludedIds.isEmpty()) {
                 return new ArrayList<>();
             }
-            List<UserDTO> users = userApi.getUserByEmpIds(enabledIds);
+            List<UserDTO> users = userApi.getUserByEmpIds(excludedIds);
             String kw = keyword == null ? "" : keyword.trim();
             if (!kw.isEmpty()) {
                 users = users.stream().filter(u -> matchesKeyword(u, kw)).collect(Collectors.toList());
             }
             return assembleRows(users);
         }
+        // 参与/全部：PT_USER 翻页累积
         List<EvalUserRoleRowDTO> all = new ArrayList<>();
         int pageSize = 100;
         int pageNo = 1;
@@ -265,9 +276,10 @@ public class EvalUserTagService {
             }
             pageNo++;
         }
-        if ("0".equals(mode)) {
+        if ("1".equals(mode)) {
+            // 参与：剔除名单内（不参与）的人
             all = all.stream()
-                    .filter(r -> r.getEvalEnabled() == null || r.getEvalEnabled() == 0)
+                    .filter(r -> Integer.valueOf(1).equals(r.getEvalEnabled()))
                     .collect(Collectors.toList());
         }
         if (all.size() > cap) {
@@ -300,10 +312,10 @@ public class EvalUserTagService {
             }
         }
 
-        // 批量查询启用位，生成 enabledSet 用于 overlay
-        Set<String> enabledSet = empIds.isEmpty()
+        // 批量查询排除名单，生成 excludedSet 用于 overlay（在名单内=不参与）
+        Set<String> excludedSet = empIds.isEmpty()
                 ? Set.of()
-                : new HashSet<>(evalUserSettingMapper.selectEnabledUserIdsIn(empIds));
+                : new HashSet<>(evalUserSettingMapper.selectExcludedUserIdsIn(empIds));
 
         List<EvalUserRoleRowDTO> rows = new ArrayList<>(records.size());
         for (UserDTO u : records) {
@@ -330,8 +342,8 @@ public class EvalUserTagService {
                     .collect(Collectors.toList());
             row.setBeEvalTag(beEval);
             row.setEvalTags(evalTags);
-            // overlay：从 EVAL_USER_SETTING 读取启用位
-            row.setEvalEnabled(enabledSet.contains(u.getEmpId()) ? 1 : 0);
+            // overlay：在排除名单内=不参与(0)，否则=参与(1)（默认参与）
+            row.setEvalEnabled(excludedSet.contains(u.getEmpId()) ? 0 : 1);
             rows.add(row);
         }
         return rows;
