@@ -21,17 +21,15 @@ public class AllocPreviewController {
     private final AllocPreviewService allocPreviewService;
 
     @GetMapping("/api/report/alloc-preview")
-    @Operation(summary = "分配预览（余额汇总 + 原业绩分配关系）")
+    @Operation(summary = "原业绩分配预览（取分配调整申请审批通过的最后一条）")
     public ResponseWrapper<AllocPreviewRespDTO> preview(
-            @RequestParam String custType,
+            @RequestParam(required = false) String custType,
             @RequestParam String custNo,
-            @RequestParam String allocDim,
+            @RequestParam(required = false) String allocDim,
             @RequestParam(required = false) String accountNo,
             @RequestParam(required = false) String statisDt) {
-        java.time.LocalDate dt = null;
-        if (statisDt != null && !statisDt.isEmpty()) {
-            dt = java.time.LocalDate.parse(statisDt);
-        }
-        return ResponseWrapper.success(allocPreviewService.preview(custType, custNo, allocDim, accountNo, dt));
+        // 新口径仅按客户编号取 RULE/ACCOUNT 审批通过的最后一条分配，custType/allocDim/accountNo/statisDt
+        // 为兼容旧前端查询串保留入参但不再使用。
+        return ResponseWrapper.success(allocPreviewService.preview(custNo));
     }
 }

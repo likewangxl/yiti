@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.api;
 
+import com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocSummaryDTO;
 import com.bank.branch.platform.performance.api.dto.AllocVersionDTO;
 import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
@@ -100,4 +101,19 @@ public interface AllocApi {
      * 查询某时间点生效的分配关系版本号.
      */
     AllocVersionDTO getAllocVersionAt(String bizKind, LocalDate asOfDate);
+
+    /* ==================== 原业绩分配预览（调整申请页面） ==================== */
+
+    /**
+     * 查询客户「原业绩分配」预览：分别取「按规则分配(RULE)」与「按账号分配(ACCOUNT)」两个维度下
+     * <b>审批通过(APPROVED)的最后一条</b>分配关系调整申请，关联其调整明细返回。
+     *
+     * <p>数据源为 {@code PERF_ALLOC_ADJUST_APPLY} + {@code PERF_ALLOC_ADJUST_ITEM}（非
+     * {@code cust_alloc_relation}），供审批/新增调整申请页面的「原业绩分配」模块展示。
+     * 每项已按员工工号补全 username / 中文姓名 / 机构号 / 机构名称。
+     *
+     * @param custNo 客户编号（业务编号，内部解析为客户主键后匹配 apply.cust_id）
+     * @return 预览项列表，可能为空列表，不会返回 null
+     */
+    List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo);
 }

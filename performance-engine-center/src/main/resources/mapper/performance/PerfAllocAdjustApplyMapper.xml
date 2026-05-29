@@ -35,6 +35,18 @@
         LIMIT 1
     </select>
 
+    <!-- 某客户某分配维度下「审批通过的最后一条」申请（原业绩分配预览） -->
+    <select id="selectLastApprovedByCustAndDim" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_ALLOC_ADJUST_APPLY
+        WHERE cust_id = #{custId}
+          AND alloc_dim = #{allocDim}
+          AND status = 'APPROVED'
+        ORDER BY created_time DESC, id DESC
+        LIMIT 1
+    </select>
+
     <!--
       更新状态 + processInstanceId。
       processInstanceId 为 null 时不覆写（保留历史值），避免 AllocAdjustCompletedListener

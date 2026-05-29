@@ -50,6 +50,19 @@ public interface PerfAllocAdjustApplyMapper extends BaseMapper<PerfAllocAdjustAp
     PerfAllocAdjustApply selectByBusinessKey(@Param("businessKey") String businessKey);
 
     /**
+     * 查询某客户在指定分配维度下「审批通过的最后一条」申请.
+     *
+     * <p>用于「原业绩分配」预览：按 cust_id + alloc_dim 过滤 status=APPROVED，
+     * 按 created_time（申请提交时间）倒序取第一条（同时间以 id 倒序兜底）.
+     *
+     * @param custId   内部客户 ID（apply.cust_id；调用方先把 custNo 解析为内部 ID）
+     * @param allocDim 分配维度：RULE / ACCOUNT
+     * @return 最后一条审批通过的申请；无则返回 null
+     */
+    PerfAllocAdjustApply selectLastApprovedByCustAndDim(@Param("custId") String custId,
+                                                        @Param("allocDim") String allocDim);
+
+    /**
      * 更新状态与流程实例 ID（审批流程推进时使用）.
      *
      * <p>processInstanceId 为 null 时不更新该字段（避免清空历史值）.
