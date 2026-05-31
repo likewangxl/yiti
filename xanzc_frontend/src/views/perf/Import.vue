@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>数据导入 <span class="sub">指标结果 / KPI 结果 / 目标值</span></h1>
+      <h1>数据导入 <span class="sub">指标结果 / KPI 结果</span></h1>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
       </div>
@@ -13,13 +13,12 @@
           <el-radio-group v-model="kind">
             <el-radio value="METRIC_RESULT">指标结果</el-radio>
             <el-radio value="ALLOC">KPI 结果</el-radio>
-            <el-radio value="TARGET">目标值</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="数据日期">
           <el-date-picker v-model="date" type="date" value-format="YYYY-MM-DD" style="width:260px" />
         </el-form-item>
-        <el-form-item label="方案">
+        <el-form-item label="方案" v-if="kind !== 'METRIC_RESULT'">
           <el-select v-model="plan" style="width:260px">
             <el-option value="2026Q2" label="2026Q2 KPI" />
             <el-option value="2026Q1" label="2026Q1 KPI" />
@@ -102,7 +101,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { UploadFilled } from '@element-plus/icons-vue';
@@ -113,8 +112,12 @@ import {
 
 const kind = ref('METRIC_RESULT');
 const date = ref(new Date().toISOString().slice(0, 10));
-const plan = ref('2026Q2');
+const plan = ref('');
 const rows = ref([]);
+// 指标结果导入不需要方案：选中「指标结果」时方案项隐藏且值清空（默认空）
+watch(kind, (k) => {
+  if (k === 'METRIC_RESULT') plan.value = '';
+}, { immediate: true });
 const loading = ref(false);
 const pgNo = ref(1);
 const pgSize = ref(20);
