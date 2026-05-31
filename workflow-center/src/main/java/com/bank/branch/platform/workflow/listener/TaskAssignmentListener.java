@@ -227,11 +227,13 @@ public class TaskAssignmentListener implements TaskListener {
 
     /**
      * 是否抑制该 bizType 的待审批任务通知（仅进待办列表，不发通知消息）。
-     * <p>目前仅 TARGET_ADJUST（目标修正）：业务要求待审批不打扰，
-     * 仅审批通过/驳回时由 TargetAdjustCompletedListener 通知申请人。
+     * <p>业务要求：所有待审批任务只进「待办」列表，不再发"待办"通知消息，
+     * 避免工作台「通知」模块混入待办信息。审批结果（通过/驳回）仍由各
+     * *CompletedListener 单独通知申请人，不受此影响。
+     * <p>历史上仅 TARGET_ADJUST 被抑制，现统一对所有 bizType 抑制。
      */
     private boolean isNotifySuppressed(String bizType) {
-        return "TARGET_ADJUST".equals(bizType);
+        return true;
     }
 
     /** BIZ_TYPE → 中文标签，让通知标题更可读 */

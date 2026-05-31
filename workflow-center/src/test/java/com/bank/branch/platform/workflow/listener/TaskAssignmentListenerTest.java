@@ -2,7 +2,6 @@ package com.bank.branch.platform.workflow.listener;
 
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
-import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.repository.ProcessDefinition;
@@ -107,7 +106,7 @@ class TaskAssignmentListenerTest {
     }
 
     @Test
-    void notify_notifyApiThrows_doesNotCrash() {
+    void notify_todoNotificationAlwaysSuppressed() {
         // Arrange
         DelegateTask delegateTask = mock(DelegateTask.class);
         when(delegateTask.getProcessDefinitionId()).thenReturn("loan_approve:1:123");
@@ -117,17 +116,13 @@ class TaskAssignmentListenerTest {
 
         when(candidateResolverService.resolveCandidates("loan_approve", "userTask1"))
                 .thenReturn(List.of("ROLE:CUST_MANAGER"));
-        // 让 ROLE 展开有员工，否则不调 notifyApi 触发不了 doThrow
-        when(userApi.getEmpIdsByRoleCode("CUST_MANAGER")).thenReturn(List.of("E001"));
 
-        doThrow(new RuntimeException("notify failed"))
-                .when(notifyApi).batchSendNotifications(anyList());
-
-        // Act - should not throw
+        // Act - 候选组照常设置，待审批"待办"通知统一抑制，不调用通知 API
         taskAssignmentListener.notify(delegateTask);
 
-        // Assert - candidate group should still have been set
+        // Assert
         verify(delegateTask).addCandidateGroup("ROLE:CUST_MANAGER");
+        verify(notifyApi, never()).batchSendNotifications(anyList());
     }
 
     @Test
@@ -144,14 +139,9 @@ class TaskAssignmentListenerTest {
 
         taskAssignmentListener.notify(delegateTask);
 
-        org.mockito.ArgumentCaptor<List<NotificationCmd>> captor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(notifyApi).batchSendNotifications(captor.capture());
-        List<NotificationCmd> cmds = captor.getValue();
-        org.assertj.core.api.Assertions.assertThat(cmds).hasSize(2);
-        org.assertj.core.api.Assertions.assertThat(cmds)
-                .extracting(NotificationCmd::getTargetEmpId)
-                .containsExactlyInAnyOrder("E10001", "E10002");
+        // 候选组照常设置，待审批通知统一抑制
+        verify(delegateTask).addCandidateGroup("ROLE:BRANCH_HEAD");
+        verify(notifyApi, never()).batchSendNotifications(anyList());
     }
 
     @Test
@@ -167,12 +157,8 @@ class TaskAssignmentListenerTest {
 
         taskAssignmentListener.notify(delegateTask);
 
-        org.mockito.ArgumentCaptor<List<NotificationCmd>> captor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(notifyApi).batchSendNotifications(captor.capture());
-        org.assertj.core.api.Assertions.assertThat(captor.getValue())
-                .extracting(NotificationCmd::getTargetEmpId)
-                .containsExactly("E20001");
+        verify(delegateTask).addCandidateGroup("USER:E20001");
+        verify(notifyApi, never()).batchSendNotifications(anyList());
     }
 
     /**
