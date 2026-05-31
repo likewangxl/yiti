@@ -4,9 +4,11 @@ import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.exception.ExcelAnalysisException;
 import com.alibaba.excel.exception.ExcelCommonException;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
+import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfTargetPlan;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
 import com.bank.branch.platform.performance.service.TargetPlanService;
 import com.bank.branch.platform.performance.service.TargetValueService;
 import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
@@ -59,6 +61,7 @@ public class TargetImportStrategy implements ImportStrategy {
 
     private final TargetValueService targetValueService;
     private final TargetPlanService targetPlanService;
+    private final PerfKpiItemMapper kpiItemMapper;
 
     @Override
     public String importType() {
@@ -79,6 +82,8 @@ public class TargetImportStrategy implements ImportStrategy {
         int successRows = 0;
         // planCode 查询缓存：一次导入内多次复用减少 DB 压力
         Map<String, Optional<PerfTargetPlan>> planCache = new HashMap<>();
+        // kpiSchemeId → 该 KPI 方案定义的 metricCode 集合（一次导入内复用，减少 DB 往返）
+        Map<String, java.util.Set<String>> kpiMetricCache = new HashMap<>();
 
         for (int i = 0; i < rows.size(); i++) {
             TargetImportRow row = rows.get(i);
@@ -86,6 +91,8 @@ public class TargetImportStrategy implements ImportStrategy {
             try {
                 validateRequired(row);
                 PerfTargetPlan plan = resolvePlan(planCache, row.getTargetPlanCode());
+                // 指标必须在目标方案关联的 KPI 方案定义的指标项中，否则本行报错不导入
+                validateMetricInKpi(plan, row.getMetricCode(), kpiMetricCache);
                 UpsertTargetValueCmd cmd = UpsertTargetValueCmd.builder()
                         .planId(plan.getId())
                         .subjectType("EMP")
@@ -171,6 +178,35 @@ public class TargetImportStrategy implements ImportStrategy {
             throw new PerfException(PerfErrorCode.TARGET_PLAN_NOT_FOUND, code);
         }
         return opt.get();
+    }
+
+    /**
+     * 校验：导入指标必须在目标方案关联的 KPI 方案定义的指标项中.
+     *
+     * <p>不在则抛 {@link PerfErrorCode#IMPORT_METRIC_NOT_IN_KPI}（行级，被调用方 catch 到 errorSummary，本行不导入）。
+     * 方案未关联 KPI 方案（kpiSchemeId 为空）时不做此校验。KPI 指标集合按 kpiSchemeId 缓存，一次导入只查一次。
+     */
+    private void validateMetricInKpi(PerfTargetPlan plan, String metricCode,
+                                     Map<String, java.util.Set<String>> cache) {
+        String schemeId = plan.getKpiSchemeId();
+        if (schemeId == null || schemeId.isBlank()) {
+            return;
+        }
+        java.util.Set<String> codes = cache.computeIfAbsent(schemeId, sid -> {
+            java.util.Set<String> set = new java.util.HashSet<>();
+            List<PerfKpiItem> items = kpiItemMapper.selectBySchemeId(sid);
+            if (items != null) {
+                for (PerfKpiItem it : items) {
+                    if (it != null && it.getMetricCode() != null) {
+                        set.add(it.getMetricCode());
+                    }
+                }
+            }
+            return set;
+        });
+        if (!codes.contains(metricCode)) {
+            throw new PerfException(PerfErrorCode.IMPORT_METRIC_NOT_IN_KPI, metricCode);
+        }
     }
 
     /** 防御：异常 message 为 null 时使用简单类名. */

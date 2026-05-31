@@ -49,6 +49,7 @@ class TargetImportStrategyTest {
 
     private TargetValueService targetValueService;
     private TargetPlanService targetPlanService;
+    private com.bank.branch.platform.performance.mapper.PerfKpiItemMapper kpiItemMapper;
     private TargetImportStrategy strategy;
     private PerfImportBatch batch;
 
@@ -56,7 +57,8 @@ class TargetImportStrategyTest {
     void setUp() {
         targetValueService = mock(TargetValueService.class);
         targetPlanService = mock(TargetPlanService.class);
-        strategy = new TargetImportStrategy(targetValueService, targetPlanService);
+        kpiItemMapper = mock(com.bank.branch.platform.performance.mapper.PerfKpiItemMapper.class);
+        strategy = new TargetImportStrategy(targetValueService, targetPlanService, kpiItemMapper);
 
         // 默认：targetPlanCode "PLAN_OK" → planId "P_OK"（测试可按需覆盖）
         PerfTargetPlan plan = new PerfTargetPlan();
@@ -165,6 +167,34 @@ class TargetImportStrategyTest {
         assertThat(result.getErrorRows()).isEqualTo(1);
         assertThat(result.getErrorSummary()).contains("UNKNOWN_PLAN");
         verify(targetValueService, never()).upsertOne(any());
+    }
+
+    @Test
+    @DisplayName("execute：指标不在方案关联 KPI 方案中 → 该行 PERF-42204 进 errorSummary，不导入")
+    void execute_metricNotInKpi_recordedInErrorSummary() {
+        // 方案 PLAN_KPI 关联 KPI 方案 KS_X，KS_X 仅定义指标 IN_KPI
+        PerfTargetPlan plan = new PerfTargetPlan();
+        plan.setId("P_KPI");
+        plan.setPlanCode("PLAN_KPI");
+        plan.setKpiSchemeId("KS_X");
+        when(targetPlanService.getByCodeOrNull("PLAN_KPI")).thenReturn(Optional.of(plan));
+        com.bank.branch.platform.performance.entity.PerfKpiItem item =
+                new com.bank.branch.platform.performance.entity.PerfKpiItem();
+        item.setSchemeId("KS_X");
+        item.setMetricCode("IN_KPI");
+        when(kpiItemMapper.selectBySchemeId("KS_X")).thenReturn(java.util.List.of(item));
+
+        List<TargetImportRow> rows = new ArrayList<>();
+        rows.add(row("PLAN_KPI", "E001", "IN_KPI", new BigDecimal("100.0000")));      // 在 KPI → 成功
+        rows.add(row("PLAN_KPI", "E002", "NOT_IN_KPI", new BigDecimal("100.0000")));  // 不在 KPI → 报错
+        MultipartFile file = writeExcel(rows);
+
+        ImportResult result = strategy.execute(batch, file, ImportContext.EMPTY);
+
+        assertThat(result.getTotalRows()).isEqualTo(2);
+        assertThat(result.getSuccessRows()).isEqualTo(1);
+        assertThat(result.getErrorRows()).isEqualTo(1);
+        assertThat(result.getErrorSummary()).contains("NOT_IN_KPI");
     }
 
     // =================== helpers ===================

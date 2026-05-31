@@ -117,6 +117,9 @@ public enum PerfErrorCode {
     /** 目标值导入 Excel 列映射错误（V1.1 占位） */
     IMPORT_COLUMN_MAPPING_INVALID("PERF-42203", "目标值导入 Excel 列映射错误"),
 
+    /** 导入指标不在目标方案关联的 KPI 方案中 */
+    IMPORT_METRIC_NOT_IN_KPI("PERF-42204", "导入指标不在目标方案关联的 KPI 方案中"),
+
     /** 试运行超时（30 秒）（V1.1 占位） */
     TRIAL_RUN_TIMEOUT("PERF-42205", "试运行超时（30 秒）"),
 
