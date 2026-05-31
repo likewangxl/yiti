@@ -182,7 +182,7 @@
         </el-form-item>
         <el-form-item label="指标" prop="metricCode">
           <el-select v-model="valDlg.form.metricCode" filterable
-                     :placeholder="metricsForDim.length ? '请选择指标' : '所选维度暂无指标'"
+                     :placeholder="metricsForDim.length ? '请选择指标' : '所选 KPI 方案暂无可选指标'"
                      style="width:100%">
             <el-option v-for="m in metricsForDim" :key="m.metricCode"
                        :value="m.metricCode"
@@ -206,13 +206,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
   listTargets, listTargetValues, upsertTargetValue, batchUpsertTargetValues,
   submitTargetAdjust, listMetrics,
-  listKpiRules, listTargetAdjusts
+  listKpiRules, listTargetAdjusts, getKpiSchemeDetail
 } from '@/api/perf';
 import { listUsers } from '@/api/users';
 import { getOrgTree } from '@/api/orgs';
@@ -418,6 +418,19 @@ const currentKpiLabel  = computed(() => {
   return kpiMap.value.get(p.kpiSchemeId) || '-';
 });
 const currentDimLabel  = computed(() => subjectTypeLabel(currentPlan.value?.targetDim) || '-');
+
+// 当前目标方案关联 KPI 方案里定义的指标 code 集合（新增目标值的指标下拉按此过滤：
+// 只显示目标方案所选 KPI 中定义的指标项）。
+const kpiMetricCodes = ref(new Set());
+async function loadKpiMetricCodes() {
+  const id = currentPlan.value?.kpiSchemeId;
+  if (!id) { kpiMetricCodes.value = new Set(); return; }
+  try {
+    const d = await getKpiSchemeDetail(id);
+    kpiMetricCodes.value = new Set((d?.items || []).map(it => it.metricCode).filter(Boolean));
+  } catch { kpiMetricCodes.value = new Set(); }
+}
+watch(() => currentPlan.value?.kpiSchemeId, () => { loadKpiMetricCodes(); }, { immediate: true });
 
 async function loadValues() {
   if (!f.planId) { values.value = []; pager.pageNo = 1; return; }
@@ -645,15 +658,18 @@ const valRules = {
   targetValue: [{ required: true, message: '请填写目标值' }]
 };
 
-// 新增弹框指标：仅 ACTIVE 状态 + 维度匹配
-const metricsForDim = computed(() =>
-  metricOptions.value.filter(m =>
+// 新增弹框指标：仅 ACTIVE + 维度匹配 + 只在「目标方案所选 KPI 方案定义的指标」范围内。
+// 方案关联了 KPI(kpiSchemeId) 时按该 KPI 的指标项过滤；无关联 KPI 时退回仅维度过滤。
+const metricsForDim = computed(() => {
+  const kpiId = currentPlan.value?.kpiSchemeId;
+  return metricOptions.value.filter(m =>
     m.status === 'ACTIVE'
     && (!m.baseDim || m.baseDim === valDlg.form.subjectType)
-  )
-);
+    && (!kpiId || kpiMetricCodes.value.has(m.metricCode))
+  );
+});
 
-function openCreateRow() {
+async function openCreateRow() {
   if (!f.planId) {
     return ElMessage.warning('请先选择目标方案再新增目标值');
   }
@@ -663,6 +679,8 @@ function openCreateRow() {
     subjectType: dim, subjectId: '',
     metricCode: '', targetValue: 0, baseValue: null
   });
+  // 确保指标下拉已按当前方案的 KPI 指标项过滤就绪
+  await loadKpiMetricCodes();
   valDlg.show = true;
 }
 async function onSaveValue() {

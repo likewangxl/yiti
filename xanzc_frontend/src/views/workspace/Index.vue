@@ -30,7 +30,7 @@
         </div>
         <div v-if="!ntfRows.length" class="ntf-empty">暂无通知</div>
         <div v-for="n in ntfRows" :key="n.id || n.title" class="ntf" :class="{ unread: !n.isRead }"
-             @click="$router.push('/system/notifications')">
+             @click="onNtfClick(n)">
           <span class="dot" :class="{ active: !n.isRead }"></span>
           <div class="body">
             <div class="t">{{ n.title || '—' }}</div>
@@ -101,7 +101,7 @@ import { useRouter } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
-import { getWorkspace, listNotifications, getUnreadNotificationCount } from '@/api/workspace';
+import { getWorkspace, listNotifications, getUnreadNotificationCount, markRead } from '@/api/workspace';
 import { listTodoTasks, listDoneTasks } from '@/api/workflow';
 import { listRecentAnnouncements } from '@/api/announcement';
 
@@ -150,6 +150,18 @@ async function loadNotifications() {
     ntfRows.value = r?.records || (Array.isArray(r) ? r : []);
   } catch { ntfRows.value = []; }
   try { ntfUnread.value = await getUnreadNotificationCount(); } catch {}
+}
+
+// 点击通知：标记已读（未读角标 -1）后进入通知中心（详情）页
+async function onNtfClick(n) {
+  if (n && n.id && !n.isRead) {
+    try {
+      await markRead(n.id);
+      n.isRead = true;
+      ntfUnread.value = Math.max(0, (ntfUnread.value || 0) - 1);
+    } catch { /* 标记失败不阻塞跳转 */ }
+  }
+  router.push('/system/notifications');
 }
 
 // 我的任务

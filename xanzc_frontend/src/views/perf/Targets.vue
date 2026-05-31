@@ -11,11 +11,16 @@
     <el-tabs v-model="activeTab" @tab-change="onTabChange" class="targets-tabs">
       <!-- ============ 目标方案 ============ -->
       <el-tab-pane label="目标方案" name="plans">
-        <!-- 筛选栏（3 列：方案搜索 / 维度 / 状态）。表格基于 f 即时过滤 -->
+        <!-- 筛选栏（4 列：方案搜索 / 关联KPI方案 / 维度 / 状态）。表格基于 f 即时过滤 -->
         <div class="card-section filter-grid">
           <div>
             <div class="lab">方案搜索</div>
             <el-input v-model="f.keyword" clearable placeholder="方案编码 / 名称"
+              style="width:100%" @keyup.enter="reload" />
+          </div>
+          <div>
+            <div class="lab">关联KPI方案</div>
+            <el-input v-model="f.kpiKeyword" clearable placeholder="KPI 方案编码 / 名称"
               style="width:100%" @keyup.enter="reload" />
           </div>
           <div>
@@ -358,7 +363,7 @@ const kpiLabelOf = (id) => kpiMap.value.get(id) || id || '-';
 
 // === 方案列表 ===
 // f = 筛选条件（双向绑定到控件）。filteredPlans 直接读 f，输入即时过滤。
-const f = reactive({ keyword: '', targetDim: '', status: '' });
+const f = reactive({ keyword: '', kpiKeyword: '', targetDim: '', status: '' });
 const plans = ref([]);
 const loadingPlans = ref(false);
 
@@ -405,6 +410,11 @@ const filteredPlans = computed(() => {
     const kw = String(f.keyword).toLowerCase();
     arr = arr.filter(p => (p.planCode || '').toLowerCase().includes(kw)
                        || (p.planName || '').toLowerCase().includes(kw));
+  }
+  if (f.kpiKeyword) {
+    const kw = String(f.kpiKeyword).toLowerCase();
+    // 按列表显示的「关联 KPI 方案」文案（编码 · 名称）模糊匹配
+    arr = arr.filter(p => String(kpiLabelOf(p.kpiSchemeId) || '').toLowerCase().includes(kw));
   }
   if (f.targetDim) arr = arr.filter(p => p.targetDim === f.targetDim);
   if (f.status)    arr = arr.filter(p => p.status === f.status);
@@ -723,7 +733,7 @@ onMounted(async () => {
   em { color: $text-4; font-style: normal; }
 }
 .filter-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
   .lab { font-size: 13px; color: $text-2; margin-bottom: 6px; }
 }
 .table { padding: 14px 16px 12px; }
