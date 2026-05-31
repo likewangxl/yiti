@@ -140,8 +140,8 @@
                 {{ (row.subjectType === 'EMP' ? '员工' : '机构') }} {{ row.subjectId || '' }} · {{ parseDoneAdj(row.remark).map(a => a.metricCode).join(', ') || '-' }}
               </template>
             </el-table-column>
-            <el-table-column label="发起人" width="140">
-              <template #default="{row}">{{ row.createdByName || row.createdBy || '-' }}</template>
+            <el-table-column label="发起人" width="160">
+              <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdByName || row.createdBy || '-' }}</template>
             </el-table-column>
             <el-table-column label="申请时间" width="170">
               <template #default="{row}">{{ fmtDateTime(row.createdTime) }}</template>
@@ -221,7 +221,7 @@
     <el-dialog v-model="detailDlg.show" :title="detailTitle" width="580px" :close-on-click-modal="true">
       <div class="review-meta">
         <div><span class="lab">申请编号：</span><code>{{ detailDlg.row?.businessKey || detailDlg.row?.id || '-' }}</code></div>
-        <div><span class="lab">发起人：</span>{{ detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div>
+        <div><span class="lab">发起人：</span>{{ userMap.get(detailDlg.row?.createdBy) || detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div>
         <div><span class="lab">申请时间：</span>{{ fmtDateTime(detailDlg.row?.createdTime) }}</div>
         <div><span class="lab">审批结果：</span>
           <el-tag v-if="detailDlg.row?.status==='APPROVED'" class="tag-success" effect="plain">通过</el-tag>
@@ -274,17 +274,20 @@
           <el-input v-model="planDlg.form.planName" placeholder="如 2026 年度目标方案" />
         </el-form-item>
         <el-form-item label="关联 KPI 方案" prop="kpiSchemeId">
-          <el-select v-model="planDlg.form.kpiSchemeId" filterable placeholder="选择 KPI 方案" style="width:100%">
+          <el-select v-model="planDlg.form.kpiSchemeId" filterable placeholder="选择 KPI 方案" style="width:100%"
+                     :disabled="planDlg.editing && planDlg.hasValues">
             <el-option v-for="s in kpiSchemeOptions" :key="s.id"
                        :label="`${s.schemeCode || s.code || '-'} · ${s.schemeName || s.name || '-'}`"
                        :value="s.id" />
           </el-select>
+          <div v-if="planDlg.editing && planDlg.hasValues" class="lock-hint">该方案已存在目标值，关联 KPI 方案不可修改</div>
         </el-form-item>
         <el-form-item label="目标维度" prop="targetDim">
-          <el-radio-group v-model="planDlg.form.targetDim">
+          <el-radio-group v-model="planDlg.form.targetDim" :disabled="planDlg.editing && planDlg.hasValues">
             <el-radio value="EMP">人员（EMP）</el-radio>
             <el-radio value="ORG">机构（ORG）</el-radio>
           </el-radio-group>
+          <div v-if="planDlg.editing && planDlg.hasValues" class="lock-hint">该方案已存在目标值，目标维度不可修改</div>
         </el-form-item>
         <!-- 生效日期已隐藏：保存时由起始日期自动填充（onSavePlan 里 effectiveDate = startDate） -->
         <el-form-item label="起始日期" prop="startDate" required>
@@ -311,7 +314,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory } from '@/api/perf';
+import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues } from '@/api/perf';
 import { listUsers } from '@/api/users';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -631,7 +634,7 @@ function openValues(row) {
 // === 新增方案对话框 ===
 const planFormRef = ref(null);
 const planDlg = reactive({
-  show: false, saving: false, editing: null,
+  show: false, saving: false, editing: null, hasValues: false,
   form: { planCode: '', planName: '', kpiSchemeId: '', targetDim: 'EMP',
           effectiveDate: '', startDate: '', endDate: '' }
 });
@@ -646,6 +649,7 @@ const planRules = {
 };
 function openCreatePlan() {
   planDlg.editing = null;
+  planDlg.hasValues = false;
   Object.assign(planDlg.form, {
     planCode: '', planName: '', kpiSchemeId: '', targetDim: 'EMP',
     effectiveDate: '', startDate: '', endDate: ''
@@ -654,6 +658,7 @@ function openCreatePlan() {
 }
 async function openEditPlan(row) {
   planDlg.editing = row.id || row.planCode;
+  planDlg.hasValues = false;
   // 先确保 KPI 方案下拉的 options 已加载，否则 el-select 拿到 kpiSchemeId 也无 option 匹配显示空白
   if (!kpiSchemeOptions.value.length) {
     try { await loadKpiSchemeOptions(); } catch {}
@@ -665,6 +670,11 @@ async function openEditPlan(row) {
     _status: row.status || 'ACTIVE'
   });
   planDlg.show = true;
+  // 该方案是否已存在目标值：有则禁止修改关联 KPI 方案 / 目标维度（避免与已录目标值口径冲突）
+  try {
+    const tv = await listTargetValues({ planId: row.id, planCode: row.planCode, pageSize: 1 });
+    planDlg.hasValues = ((tv?.total ?? tv?.records?.length ?? 0) > 0);
+  } catch { planDlg.hasValues = false; }
 }
 async function onSavePlan() {
   try { await planFormRef.value.validate(); } catch { return; }
@@ -728,6 +738,7 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
+.lock-hint { font-size: 12px; color: $text-4; margin-top: 4px; line-height: 1.4; }
 .page-h h1 .sub {
   font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400;
   em { color: $text-4; font-style: normal; }
