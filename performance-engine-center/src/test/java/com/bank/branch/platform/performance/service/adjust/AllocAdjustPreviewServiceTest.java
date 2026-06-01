@@ -1,7 +1,5 @@
 package com.bank.branch.platform.performance.service.adjust;
 
-import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO;
@@ -21,14 +19,15 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * {@link AllocAdjustPreviewService} 单元测试：原业绩分配预览（取审批通过的最后一条申请明细）.
+ * {@link AllocAdjustPreviewService} 单元测试：原业绩分配预览。
+ *
+ * <p>员工 username/中文名/部门已在提交时快照存入 PERF_ALLOC_ADJUST_ITEM，预览直接读这些字段，
+ * 不再关联 PT_USER/机构表。
  */
 @ExtendWith(MockitoExtension.class)
 class AllocAdjustPreviewServiceTest {
@@ -39,8 +38,6 @@ class AllocAdjustPreviewServiceTest {
     private PerfAllocAdjustItemMapper itemMapper;
     @Mock
     private CustomerQueryApi customerQueryApi;
-    @Mock
-    private UserApi userApi;
 
     @InjectMocks
     private AllocAdjustPreviewService service;
@@ -54,21 +51,17 @@ class AllocAdjustPreviewServiceTest {
         return a;
     }
 
-    private static PerfAllocAdjustItem item(String empId, String ratio) {
+    /** 带快照字段的明细项. */
+    private static PerfAllocAdjustItem item(String empId, String username, String chnName,
+                                            String orgCode, String orgName, String ratio) {
         PerfAllocAdjustItem it = new PerfAllocAdjustItem();
         it.setEmpId(empId);
+        it.setUsername(username);
+        it.setEmpChnName(chnName);
+        it.setOrgCode(orgCode);
+        it.setOrgName(orgName);
         it.setRatio(new BigDecimal(ratio));
         return it;
-    }
-
-    private static UserDTO user(String empId, String username, String chnName, String orgCode, String orgName) {
-        UserDTO u = new UserDTO();
-        u.setEmpId(empId);
-        u.setUsername(username);
-        u.setDisplayName(chnName);
-        u.setMainOrgCode(orgCode);
-        u.setMainOrgName(orgName);
-        return u;
     }
 
     @Test
@@ -105,21 +98,19 @@ class AllocAdjustPreviewServiceTest {
     }
 
     @Test
-    @DisplayName("RULE + ACCOUNT 各一条审批通过申请 → 合并明细，RULE 账号空、ACCOUNT 账号取申请，员工/机构补全")
-    void mergesRuleAndAccountWithEnrichment() {
+    @DisplayName("RULE + ACCOUNT 各一条审批通过申请 → 合并明细，直接读快照的员工/部门字段")
+    void mergesRuleAndAccountReadsSnapshot() {
         when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
 
-        PerfAllocAdjustApply ruleApply = apply("APPLY_RULE", "RULE", null);
-        PerfAllocAdjustApply acctApply = apply("APPLY_ACCT", "ACCOUNT", "62200000001");
-        when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE")).thenReturn(ruleApply);
-        when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(acctApply);
+        when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
+                .thenReturn(apply("APPLY_RULE", "RULE", null));
+        when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT"))
+                .thenReturn(apply("APPLY_ACCT", "ACCOUNT", "62200000001"));
 
-        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(item("E10001", "60")));
-        when(itemMapper.selectByApplyId("APPLY_ACCT")).thenReturn(List.of(item("E30001", "40")));
-
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(
-                user("E10001", "rm_zhang", "张客户经理", "BJ_CY", "北京分行朝阳支行"),
-                user("E30001", "corp_zhao", "赵公司部审核", "BJ_HQ", "北京分行总部")));
+        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(
+                item("E10001", "rm_zhang", "张客户经理", "BJ_CY", "北京分行朝阳支行", "60")));
+        when(itemMapper.selectByApplyId("APPLY_ACCT")).thenReturn(List.of(
+                item("E30001", "corp_zhao", "赵公司部审核", "BJ_HQ", "北京分行总部", "40")));
 
         List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
 
@@ -139,19 +130,19 @@ class AllocAdjustPreviewServiceTest {
         assertThat(acct.getAllocDim()).isEqualTo("ACCOUNT");
         assertThat(acct.getAccountNo()).isEqualTo("62200000001");
         assertThat(acct.getUsername()).isEqualTo("corp_zhao");
+        assertThat(acct.getEmpChnName()).isEqualTo("赵公司部审核");
         assertThat(acct.getRatio()).isEqualByComparingTo("40");
     }
 
     @Test
-    @DisplayName("员工工号解析不到 → username 回退展示工号、机构留空")
-    void unresolvedEmployeeFallsBackToEmpId() {
+    @DisplayName("快照 username 为空（历史旧数据）→ 回退展示工号，部门留空")
+    void blankSnapshotFallsBackToEmpId() {
         when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
                 .thenReturn(apply("APPLY_RULE", "RULE", null));
         lenient().when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
-        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(item("GHOST", "100")));
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
-        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of());
+        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(
+                item("GHOST", null, null, null, null, "100")));
 
         List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
 
@@ -160,31 +151,6 @@ class AllocAdjustPreviewServiceTest {
         assertThat(result.get(0).getEmpChnName()).isNull();
         assertThat(result.get(0).getOrgCode()).isNull();
         assertThat(result.get(0).getOrgName()).isNull();
-    }
-
-    @Test
-    @DisplayName("emp_id 存的是登录名(非工号) → 工号解析落空后按登录名兜底，中文名/机构正确补全")
-    void resolvesByUsernameWhenEmpIdIsLoginName() {
-        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
-        when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
-                .thenReturn(apply("APPLY_RULE", "RULE", null));
-        when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
-        // emp_id = "rm_zhang"（登录名，非工号 E10001）
-        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(item("rm_zhang", "100")));
-        // 按工号解析 rm_zhang 落空
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
-        // 按登录名兜底命中（内部已按 USER_ID 补全中文名 + 机构）
-        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(
-                user("E10001", "rm_zhang", "张客户经理", "107", "对公一部")));
-
-        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
-
-        assertThat(result).hasSize(1);
-        AllocAdjustPreviewItemDTO dto = result.get(0);
-        assertThat(dto.getUsername()).isEqualTo("rm_zhang");
-        assertThat(dto.getEmpChnName()).isEqualTo("张客户经理");
-        assertThat(dto.getOrgCode()).isEqualTo("107");
-        assertThat(dto.getOrgName()).isEqualTo("对公一部");
     }
 
     @Test
@@ -205,15 +171,15 @@ class AllocAdjustPreviewServiceTest {
         when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT"))
                 .thenReturn(apply("APPLY_ACCT", "ACCOUNT", "62200000001"));
-        when(itemMapper.selectByApplyId("APPLY_ACCT")).thenReturn(List.of(item("E10001", "100")));
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(
-                user("E10001", "rm_zhang", "张客户经理", "107", "营业部")));
+        when(itemMapper.selectByApplyId("APPLY_ACCT")).thenReturn(List.of(
+                item("E10001", "rm_zhang", "张客户经理", "107", "营业部", "100")));
 
         List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", "ACCOUNT");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getAllocDim()).isEqualTo("ACCOUNT");
         assertThat(result.get(0).getAccountNo()).isEqualTo("62200000001");
+        assertThat(result.get(0).getOrgName()).isEqualTo("营业部");
         // 关键：不应查询 RULE 维度
         org.mockito.Mockito.verify(applyMapper, org.mockito.Mockito.never())
                 .selectLastApprovedByCustAndDim(org.mockito.ArgumentMatchers.anyString(),

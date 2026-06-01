@@ -185,13 +185,27 @@ public class AllocAdjustService {
         apply.setUpdatedTime(now);
         applyMapper.insert(apply);
 
-        // 2. 批量插入明细
+        // 2. 批量插入明细。提交时快照员工 username/中文姓名/所属部门号/部门名称存入明细，
+        //    后续预览/详情查询直接读这些列，不再实时关联 PT_USER / 机构表（口径冻结在提交时点）。
+        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
+        for (SubmitAllocAdjustCmd.Item it : cmd.getItems()) {
+            if (!isBlank(it.getEmpId())) {
+                empIds.add(it.getEmpId());
+            }
+        }
+        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = resolveUsersByTokens(empIds);
         List<PerfAllocAdjustItem> items = new ArrayList<>(cmd.getItems().size());
         for (SubmitAllocAdjustCmd.Item it : cmd.getItems()) {
             PerfAllocAdjustItem entity = new PerfAllocAdjustItem();
             entity.setId(UUID.randomUUID().toString().replace("-", ""));
             entity.setApplyId(applyId);
             entity.setEmpId(it.getEmpId());
+            com.bank.branch.platform.auth.api.dto.UserDTO u = it.getEmpId() != null ? userMap.get(it.getEmpId()) : null;
+            // username 解析不到时回退工号，避免空白；中文名/部门解析不到留空
+            entity.setUsername((u != null && !isBlank(u.getUsername())) ? u.getUsername() : it.getEmpId());
+            entity.setEmpChnName(u != null ? u.getDisplayName() : null);
+            entity.setOrgCode(u != null ? u.getMainOrgCode() : null);
+            entity.setOrgName(u != null ? u.getMainOrgName() : null);
             entity.setRatio(it.getRatio());
             entity.setRemark(it.getRemark());
             items.add(entity);
@@ -388,37 +402,8 @@ public class AllocAdjustService {
                         createdBy, e.toString());
             }
         }
-        // 明细员工号补全 username + 中文姓名（审批/查看页分配明细展示用）
-        enrichItemEmployees(dto.getItems());
+        // 明细员工 username/中文名/部门 已在 toRespDto 直接读 item 快照字段，无需再关联 PT_USER/机构表
         return dto;
-    }
-
-    /**
-     * 为明细项补全员工 username + 中文姓名.
-     *
-     * <p>{@code emp_id} 取值不统一（工号或登录名），先按工号(USER_ID)解析，未命中再按登录名(USERNAME)兜底；
-     * 任何查询失败不阻塞主流程，对应字段留回退值（username=工号、中文名=null）。
-     */
-    private void enrichItemEmployees(List<AllocAdjustRespDTO.Item> items) {
-        if (items == null || items.isEmpty()) {
-            return;
-        }
-        // 去重保序 empId
-        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
-        for (AllocAdjustRespDTO.Item it : items) {
-            if (!isBlank(it.getEmpId())) {
-                empIds.add(it.getEmpId());
-            }
-        }
-        if (empIds.isEmpty()) {
-            return;
-        }
-        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = resolveUsersByTokens(empIds);
-        for (AllocAdjustRespDTO.Item it : items) {
-            com.bank.branch.platform.auth.api.dto.UserDTO u = it.getEmpId() != null ? userMap.get(it.getEmpId()) : null;
-            it.setUsername((u != null && !isBlank(u.getUsername())) ? u.getUsername() : it.getEmpId());
-            it.setEmpChnName(u != null ? u.getDisplayName() : null);
-        }
     }
 
     /**
@@ -621,7 +606,14 @@ public class AllocAdjustService {
                 AllocAdjustRespDTO.Item iDto = new AllocAdjustRespDTO.Item();
                 iDto.setId(it.getId());
                 iDto.setEmpId(it.getEmpId());
+                // 直接读提交时快照的员工/部门字段，不再关联 PT_USER/机构表；
+                // 历史无快照(旧数据)时 username 回退工号，避免空白
+                iDto.setUsername(!isBlank(it.getUsername()) ? it.getUsername() : it.getEmpId());
+                iDto.setEmpChnName(it.getEmpChnName());
+                iDto.setOrgCode(it.getOrgCode());
+                iDto.setOrgName(it.getOrgName());
                 iDto.setRatio(it.getRatio());
+                iDto.setRemark(it.getRemark());
                 iDto.setCreatedTime(it.getCreatedTime());
                 itemDtos.add(iDto);
             }

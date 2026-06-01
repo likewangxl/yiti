@@ -40,6 +40,18 @@ public class PerfAllocAdjustItem {
     /** 调整后归属员工工号. */
     private String empId;
 
+    /** 员工登录名（提交时快照，PT_USER.USERNAME；解析不到回退为 emp_id）. */
+    private String username;
+
+    /** 员工中文姓名（提交时快照，PT_USER.USERCHNNAME）. */
+    private String empChnName;
+
+    /** 所属部门号（提交时快照，员工主机构 ORG_CODE）. */
+    private String orgCode;
+
+    /** 所属部门名称（提交时快照，员工主机构 ORG_NAME）. */
+    private String orgName;
+
     /** 调整后分配比例（0-100, decimal(5,2)）. */
     private BigDecimal ratio;
 

@@ -92,6 +92,12 @@ public class AllocAdjustRespDTO {
         /** 员工中文姓名（PT_USER.USERCHNNAME）. */
         private String empChnName;
 
+        /** 所属部门号（快照）. */
+        private String orgCode;
+
+        /** 所属部门名称（快照）. */
+        private String orgName;
+
         /** 分配比例. */
         private BigDecimal ratio;
 

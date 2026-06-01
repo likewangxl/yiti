@@ -393,8 +393,35 @@ class AllocAdjustServiceTest {
     }
 
     @Test
-    @DisplayName("getByIdDto → 明细补全 username+中文名（工号 + 登录名双解析）")
-    void getByIdDto_enrichesItemEmployeeNames() {
+    @DisplayName("submit → 明细写入员工 username/中文名/部门快照字段（解析不到回退工号）")
+    void submit_persistsItemEmployeeSnapshot() {
+        when(workflowApi.startProcess(any(StartProcessCmd.class)))
+                .thenReturn(new WorkflowLaunchResp("PI_SNAP", null, null));
+        UserDTO ua = userDto("EMP_A", "u_a", "员工甲");
+        ua.setMainOrgCode("D01");
+        ua.setMainOrgName("一部");
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(ua));   // 仅 EMP_A 命中，EMP_B 未解析
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PerfAllocAdjustItem>> cap = ArgumentCaptor.forClass(List.class);
+        service.submit(baseCmd("CORP_LOAN"));
+        verify(itemMapper).batchInsert(cap.capture());
+
+        List<PerfAllocAdjustItem> items = cap.getValue();
+        assertThat(items).hasSize(2);
+        PerfAllocAdjustItem a = items.stream().filter(i -> "EMP_A".equals(i.getEmpId())).findFirst().orElseThrow();
+        assertThat(a.getUsername()).isEqualTo("u_a");
+        assertThat(a.getEmpChnName()).isEqualTo("员工甲");
+        assertThat(a.getOrgCode()).isEqualTo("D01");
+        assertThat(a.getOrgName()).isEqualTo("一部");
+        PerfAllocAdjustItem b = items.stream().filter(i -> "EMP_B".equals(i.getEmpId())).findFirst().orElseThrow();
+        assertThat(b.getUsername()).isEqualTo("EMP_B");   // 解析不到 → 回退工号
+        assertThat(b.getEmpChnName()).isNull();
+    }
+
+    @Test
+    @DisplayName("getByIdDto → 明细直接读快照的 username/中文名/部门，不再关联 PT_USER")
+    void getByIdDto_readsItemSnapshotFields() {
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId("APPLY_Z");
         apply.setApplyNo("AA-Z");
@@ -403,28 +430,28 @@ class AllocAdjustServiceTest {
         when(applyMapper.selectByAllocApplyId("APPLY_Z")).thenReturn(apply);
         when(customerQueryApi.getCustomer("CUST_Z")).thenReturn(Optional.empty());
 
-        PerfAllocAdjustItem it1 = new PerfAllocAdjustItem();   // 工号存法
+        PerfAllocAdjustItem it1 = new PerfAllocAdjustItem();
         it1.setEmpId("E30001");
+        it1.setUsername("corp_zhao");
+        it1.setEmpChnName("赵公司部审核");
+        it1.setOrgCode("BJ_HQ");
+        it1.setOrgName("北京分行总部");
         it1.setRatio(new BigDecimal("60.00"));
-        PerfAllocAdjustItem it2 = new PerfAllocAdjustItem();   // 登录名存法
-        it2.setEmpId("rm_li");
+        PerfAllocAdjustItem it2 = new PerfAllocAdjustItem();   // 快照 username 为空 → 回退工号
+        it2.setEmpId("E10002");
         it2.setRatio(new BigDecimal("40.00"));
         when(itemMapper.selectByApplyId("APPLY_Z")).thenReturn(Arrays.asList(it1, it2));
-
-        UserDTO u1 = new UserDTO();
-        u1.setEmpId("E30001"); u1.setUsername("corp_zhao"); u1.setDisplayName("赵公司部审核");
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u1));   // 仅工号命中 E30001
-        UserDTO u2 = new UserDTO();
-        u2.setEmpId("E10002"); u2.setUsername("rm_li"); u2.setDisplayName("李客户经理");
-        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(u2));   // 登录名兜底 rm_li
 
         AllocAdjustRespDTO dto = service.getByIdDto("APPLY_Z");
 
         assertThat(dto.getItems()).hasSize(2);
         assertThat(dto.getItems().get(0).getUsername()).isEqualTo("corp_zhao");
         assertThat(dto.getItems().get(0).getEmpChnName()).isEqualTo("赵公司部审核");
-        assertThat(dto.getItems().get(1).getUsername()).isEqualTo("rm_li");
-        assertThat(dto.getItems().get(1).getEmpChnName()).isEqualTo("李客户经理");
+        assertThat(dto.getItems().get(0).getOrgCode()).isEqualTo("BJ_HQ");
+        assertThat(dto.getItems().get(0).getOrgName()).isEqualTo("北京分行总部");
+        // 快照为空 → username 回退工号
+        assertThat(dto.getItems().get(1).getUsername()).isEqualTo("E10002");
+        assertThat(dto.getItems().get(1).getEmpChnName()).isNull();
     }
 
     @Test
