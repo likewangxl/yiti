@@ -274,6 +274,14 @@ public class MetricDefController {
                                                         @Valid @RequestBody MetricTrialReqDTO req) {
         log.info("[MetricDefController.trialRun] metricCode={}, dataDate={}, sampleSize={}",
                 metricCode, req.getDataDate(), req.getSampleSize());
+        // 直接试运行：前端传了 sqlText / exprText 时，不读已存指标，直接执行该表达式（新增指标页面无需先保存）
+        boolean adhoc = (req.getSqlText() != null && !req.getSqlText().isBlank())
+                || (req.getExprText() != null && !req.getExprText().isBlank());
+        if (adhoc) {
+            return ResponseWrapper.success(metricLifecycleFacade.trialRunAdhocDto(
+                    req.getCalcLogicType(), req.getBaseDim(), req.getSqlText(), req.getExprText(),
+                    req.getDataDate(), req.getSampleSize(), req.getParams()));
+        }
         // V1.3 R4.1：装配下沉到 Facade
         return ResponseWrapper.success(metricLifecycleFacade.trialRunDto(
                 metricCode, req.getDataDate(), req.getSampleSize(), req.getParams()));

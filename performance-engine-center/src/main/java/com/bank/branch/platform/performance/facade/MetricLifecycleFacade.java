@@ -159,6 +159,35 @@ public class MetricLifecycleFacade {
                 .exprResult(serviceResult.getExprResult())
                 .executionMillis(serviceResult.getExecutionMillis())
                 .sampleRows(serviceResult.getSamples())
+                .exprVars(serviceResult.getExprVars())
+                .dataVersion(serviceResult.getDataVersion())
+                .build();
+    }
+
+    /**
+     * 直接试运行 SQL / Groovy 文本（无需先保存指标），返回 DTO.
+     */
+    public MetricTrialRespDTO trialRunAdhocDto(String calcLogicType, String baseDim, String sqlText, String exprText,
+                                               LocalDate dataDate, Integer sampleSize, Map<String, Object> params) {
+        LocalDateTime startedAt = LocalDateTime.now();
+        String trialTaskId = UUID.randomUUID().toString().replace("-", "");
+        MetricTrialResult serviceResult = metricTrialService.trialAdhoc(
+                calcLogicType, baseDim, sqlText, exprText, dataDate, sampleSize, params);
+        LocalDateTime endedAt = LocalDateTime.now();
+        return MetricTrialRespDTO.builder()
+                .taskId(trialTaskId)
+                .metricCode("(未保存)")
+                .sampleSize(serviceResult.getSampleSize())
+                .totalRows(serviceResult.getTotalRows())
+                .status("SUCCESS")
+                .startedAt(startedAt)
+                .endedAt(endedAt)
+                .errorMsg(null)
+                .exprResult(serviceResult.getExprResult())
+                .executionMillis(serviceResult.getExecutionMillis())
+                .sampleRows(serviceResult.getSamples())
+                .exprVars(serviceResult.getExprVars())
+                .dataVersion(serviceResult.getDataVersion())
                 .build();
     }
 

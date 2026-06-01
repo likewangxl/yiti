@@ -47,9 +47,10 @@
             (#{custId}, #{dataDate}, #{version})
     </insert>
 
-    <!-- V1.7：取多 metricCode 对应的 val_slot 映射，查 perf_metric_def 表. -->
-    <select id="selectValSlotsByCodes" resultType="java.util.HashMap">
-        SELECT metric_code AS `key`, val_slot AS `value`
+    <!-- V1.7（V2 修复）：取多 metricCode 对应的 val_slot 行，Java 端聚合成 Map<code, slot>，
+         规避无 @MapKey 的 selectOne 错映射（详见 EmpIndexResultMapper.xml 同名注释）. -->
+    <select id="selectValSlotRows" resultType="java.util.HashMap">
+        SELECT metric_code AS metricCode, val_slot AS valSlot
         FROM PERF_METRIC_DEF
         WHERE val_slot IS NOT NULL
           AND metric_code IN
@@ -66,6 +67,16 @@
         WHERE cust_id = #{subject}
           AND data_date = #{dataDate}
           AND version = #{version}
+        LIMIT 1
+    </select>
+
+    <!-- 试运行：取某主体某日期"最近导入"的数据版本（按 updated_time 优先），供按数据反查值用. -->
+    <select id="selectLatestVersionForSubject" resultType="java.lang.String">
+        SELECT version
+        FROM CUST_INDEX_RESULT
+        WHERE cust_id = #{subject}
+          AND data_date = #{dataDate}
+        ORDER BY updated_time DESC, version DESC
         LIMIT 1
     </select>
 

@@ -54,4 +54,10 @@ public class MetricTrialRespDTO {
 
     /** 样本行（SQL 场景填充，EXPR 为空列表）. */
     private List<Map<String, Object>> sampleRows;
+
+    /** EXPR 场景：Groovy 计算用到的各引用指标取值（metricCode -&gt; 值），供前端列出用户指标数据. */
+    private Map<String, Object> exprVars;
+
+    /** EXPR 场景：本次取数命中的数据版本（按对象+日期反查的最近导入版本）. */
+    private String dataVersion;
 }

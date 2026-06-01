@@ -65,7 +65,29 @@ public interface OrgIndexResultMapper extends BaseMapper<OrgIndexResult> {
      * @param metricCodes 指标编码列表
      * @return metricCode -&gt; val_slot 映射
      */
-    java.util.Map<String, Integer> selectValSlotsByCodes(@Param("metricCodes") java.util.List<String> metricCodes);
+    java.util.List<java.util.Map<String, Object>> selectValSlotRows(@Param("metricCodes") java.util.List<String> metricCodes);
+
+    /**
+     * V1.7（V2 修复）：metricCode -&gt; val_slot 映射。
+     *
+     * <p>原返回 {@code Map} 无 {@code @MapKey} 时 MyBatis 走 {@code selectOne}，单行错映射成
+     * {@code {key,value}}、多行抛 {@code TooManyResultsException}，导致引用指标恒为 0。
+     * 改为 List 行查询 + Java 端聚合修复。
+     */
+    default java.util.Map<String, Integer> selectValSlotsByCodes(java.util.List<String> metricCodes) {
+        if (metricCodes == null || metricCodes.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Map<String, Integer> slotMap = new java.util.LinkedHashMap<>();
+        for (java.util.Map<String, Object> row : selectValSlotRows(metricCodes)) {
+            Object code = row.get("metricCode");
+            Object slot = row.get("valSlot");
+            if (code != null && slot instanceof Number) {
+                slotMap.put(code.toString(), ((Number) slot).intValue());
+            }
+        }
+        return slotMap;
+    }
 
     /**
      * V1.7：按 slot 列号查单主体单值（val_${slot} 动态列名）.
@@ -83,6 +105,10 @@ public interface OrgIndexResultMapper extends BaseMapper<OrgIndexResult> {
                                          @Param("slot") Integer slot,
                                          @Param("dataDate") java.time.LocalDate dataDate,
                                          @Param("version") String version);
+
+    /** 试运行：取某主体某日期"最近导入"的数据版本（按 updated_time 优先），无数据返回 null. */
+    String selectLatestVersionForSubject(@Param("subject") String subject,
+                                         @Param("dataDate") java.time.LocalDate dataDate);
 
     /**
      * V1.13+：取某日某版本下宽表所有出现的机构 org_code（替代 subject_sql 取主体集合）.

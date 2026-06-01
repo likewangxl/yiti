@@ -237,6 +237,9 @@ public class MetricCalcService {
         params.put("dataDate", dataDate);
         params.put("version", version);
         params.putAll(DateMacroResolver.resolve(dataDate));
+        // 对象id占位符 :objectId —— 真实调度执行无单主体上下文，绑定 null；
+        // 生产 SQL 应写成 (:objectId IS NULL OR emp_id = :objectId)，使试运行(传值)与真实执行(null=全量)都成立
+        params.putIfAbsent("objectId", null);
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
         Map<String, BigDecimal> values = sqlExecutor.execute(def.getSqlText(), params, timeout);
@@ -374,6 +377,57 @@ public class MetricCalcService {
             result.put(refCode, value != null ? value : BigDecimal.ZERO);
         }
         return result;
+    }
+
+    /**
+     * 供试运行复用：按 (baseDim, dataDate, subjectId, version) 从对应维度宽表加载 exprText 中引用的
+     * 所有指标值，作为 Groovy 变量。缺失槽位/查无值/维度无关均兜底 ZERO，避免 Groovy "No such property"。
+     *
+     * @param baseDim   基础维度 EMP/ORG/CUST
+     * @param exprText  Groovy 表达式（含 M_xxx 引用）
+     * @param dataDate  数据日期
+     * @param subjectId 对象值（员工工号/机构编码/客户ID）
+     * @param version   数据版本
+     * @return 指标编码 -&gt; 值 的变量映射
+     */
+    /**
+     * 供试运行复用：解析某主体某日期"最近导入"的数据版本（宽表按 updated_time 优先）。
+     *
+     * <p>宽表行按 (subject, data_date, version) 隔离，而导入数据散落在多个时间戳版本，
+     * SYS_CONTROL 当前版本未必是该主体该日有数据的版本。试运行据此按数据反查真实值，避免恒为 0。
+     *
+     * @return 命中的数据版本；主体为空、维度无关或查无数据时返回 null（调用方再降级到 SYS_CONTROL/V1）
+     */
+    public String resolveDataVersionForSubject(String baseDim, String subjectId, LocalDate dataDate) {
+        if (subjectId == null || subjectId.isBlank()) {
+            return null;
+        }
+        return switch (baseDim == null ? "" : baseDim.toUpperCase()) {
+            case "EMP"  -> empIndexResultMapper.selectLatestVersionForSubject(subjectId, dataDate);
+            case "ORG"  -> orgIndexResultMapper.selectLatestVersionForSubject(subjectId, dataDate);
+            case "CUST" -> custIndexResultMapper.selectLatestVersionForSubject(subjectId, dataDate);
+            default -> null;
+        };
+    }
+
+    public Map<String, Object> loadGroovyVarsForSubject(String baseDim, String exprText,
+                                                        LocalDate dataDate, String subjectId, String version) {
+        List<String> refCodes = extractMetricCodesFromExpr(exprText);
+        Map<String, Object> vars = new HashMap<>();
+        if (refCodes.isEmpty()) {
+            return vars;
+        }
+        String dim = baseDim == null ? "" : baseDim.toUpperCase();
+        if (!dim.equals("EMP") && !dim.equals("ORG") && !dim.equals("CUST")) {
+            // 维度无关/未知维度：无法定位宽表，引用指标兜底 ZERO（保证 Groovy 可跑）
+            for (String code : refCodes) {
+                vars.put(code, BigDecimal.ZERO);
+            }
+            return vars;
+        }
+        Map<String, Integer> slotMap = resolveSlotMap(dim, refCodes);
+        vars.putAll(loadRefValuesBySlotMap(subjectId, slotMap, refCodes, dim, dataDate, version));
+        return vars;
     }
 
     /**

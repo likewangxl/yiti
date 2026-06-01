@@ -37,6 +37,12 @@ public class MetricTrialResult {
     /** EXPR 场景单值结果；SQL 场景为 null. */
     private BigDecimal exprResult;
 
+    /** EXPR 场景：Groovy 计算用到的各引用指标取值（metricCode -&gt; 值），供前端列出用户指标数据. */
+    private Map<String, Object> exprVars;
+
+    /** EXPR 场景：本次取数命中的数据版本（按对象+日期反查的最近导入版本）. */
+    private String dataVersion;
+
     /** 执行耗时（毫秒）. */
     private long executionMillis;
 }

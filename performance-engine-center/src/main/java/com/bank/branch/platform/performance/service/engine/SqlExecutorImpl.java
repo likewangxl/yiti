@@ -56,8 +56,13 @@ public class SqlExecutorImpl implements SqlExecutor {
         // 每次调用独立设置 queryTimeout：由于 namedJdbc 是私有字段，不会污染容器内其他 Bean
         namedJdbc.getJdbcTemplate().setQueryTimeout(timeoutSeconds);
 
-        MapSqlParameterSource paramSource = new MapSqlParameterSource(
-                params == null ? Collections.emptyMap() : params);
+        // 为每个命名参数显式声明 SQL 类型：否则参数仅出现在 SELECT 投影位（如 select :objectId as base_key）
+        // 时 MySQL 无法从字符串推断类型，报 "Cannot determine value type from string"。
+        MapSqlParameterSource paramSource = new MapSqlParameterSource();
+        Map<String, Object> safeParams = params == null ? Collections.emptyMap() : params;
+        for (Map.Entry<String, Object> e : safeParams.entrySet()) {
+            paramSource.addValue(e.getKey(), e.getValue(), inferSqlType(e.getValue()));
+        }
 
         try {
             return namedJdbc.query(sql, paramSource, rs -> {
@@ -83,6 +88,34 @@ public class SqlExecutorImpl implements SqlExecutor {
             log.warn("[SqlExecutor] 未预期异常: {}", ex.getMessage());
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, ex, ex.getMessage());
         }
+    }
+
+    /**
+     * 按 Java 值类型推断 JDBC SQL 类型，供 MySQL 在 SELECT 投影等无法自动推断的位置正确绑定.
+     *
+     * @param v 参数值（可空）
+     * @return java.sql.Types 常量
+     */
+    private static int inferSqlType(Object v) {
+        if (v == null) {
+            return java.sql.Types.VARCHAR;
+        }
+        if (v instanceof java.time.LocalDate || v instanceof java.sql.Date || v instanceof java.util.Date) {
+            return java.sql.Types.DATE;
+        }
+        if (v instanceof java.time.LocalDateTime || v instanceof java.sql.Timestamp) {
+            return java.sql.Types.TIMESTAMP;
+        }
+        if (v instanceof Integer || v instanceof Long || v instanceof Short) {
+            return java.sql.Types.BIGINT;
+        }
+        if (v instanceof java.math.BigDecimal || v instanceof Double || v instanceof Float) {
+            return java.sql.Types.DECIMAL;
+        }
+        if (v instanceof Boolean) {
+            return java.sql.Types.BOOLEAN;
+        }
+        return java.sql.Types.VARCHAR;
     }
 
     /**
