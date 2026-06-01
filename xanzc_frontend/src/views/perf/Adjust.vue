@@ -60,8 +60,11 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户编号" min-width="160">
-              <template #default="{row}">{{ row.custNo || row.custId || '-' }}</template>
+            <el-table-column label="客户" min-width="190">
+              <template #default="{row}">
+                <div>{{ row.custNo || row.custId || '-' }}</div>
+                <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
+              </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
               <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
@@ -227,8 +230,11 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户编号" min-width="160">
-              <template #default="{row}">{{ row.custId || '-' }}</template>
+            <el-table-column label="客户" min-width="190">
+              <template #default="{row}">
+                <div>{{ row.custNo || row.custId || '-' }}</div>
+                <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
+              </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
               <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
@@ -1221,6 +1227,12 @@ async function onSubmit() {
     await submitAdjust({
       custType:   dlg.form.custType,
       custNo:     dlg.form.custNo,
+      // 反显的客户名称 + 余额概览随提交快照入库，列表/详情直接读
+      custName:   custNameDisplay.value || null,
+      currBal:    custStat.currBal,
+      mAvgBal:    custStat.mAvgBal,
+      qAvgBal:    custStat.qAvgBal,
+      yAvgBal:    custStat.yAvgBal,
       allocDim:   dlg.form.allocDim,
       bizKind:    Array.isArray(dlg.form.bizKind) ? dlg.form.bizKind.join(',') : dlg.form.bizKind,
       accountNo:  dlg.form.accountNo || undefined,
@@ -1331,6 +1343,11 @@ onMounted(async () => {
   line-height: 32px;
   color: $text-1;
   font-weight: 500;
+}
+.cust-name-sub {
+  font-size: 12px;
+  color: #909399;
+  line-height: 18px;
 }
 .preview-section {
   margin-bottom: 12px;

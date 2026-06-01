@@ -5,7 +5,7 @@
       <span class="desc">方案 · 权重 · 公式预览 · 计分上下限</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openCreate">+ 新增KPI方案</el-button>
+        <el-button v-if="isCaizai" type="primary" @click="openCreate">+ 新增KPI方案</el-button>
       </div>
     </div>
 
@@ -59,14 +59,17 @@
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button>
-            <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
-            <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
-            <el-popconfirm v-if="!isDisabled(row)" :title="`确认删除方案 ${row.schemeName}？`" @confirm="onDelete(row)">
-              <template #reference>
-                <el-button link type="danger" size="small">删除</el-button>
-              </template>
-            </el-popconfirm>
-            <el-button v-else link size="small" disabled>已删除</el-button>
+            <!-- 复制版本/编辑/删除 仅资财部人员可见可操作 -->
+            <template v-if="isCaizai">
+              <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
+              <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
+              <el-popconfirm v-if="!isDisabled(row)" :title="`确认删除方案 ${row.schemeName}？`" @confirm="onDelete(row)">
+                <template #reference>
+                  <el-button link type="danger" size="small">删除</el-button>
+                </template>
+              </el-popconfirm>
+              <el-button v-else link size="small" disabled>已删除</el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -197,6 +200,14 @@ import {
 // 状态从 SYS_DICT.dict_type='KPI_SCHEME_STATUS' 拉，不再写死中英文映射
 import { useDict } from '@/composables/useDict';
 import { getOrgTree } from '@/api/orgs';
+import { useUserStore } from '@/stores/user';
+
+// 资财部人员（角色 资财部经办人 R_BACK_FINANCE / 资财部负责人 R_FIN_LEAD）才可见新增/复制/编辑/删除
+const userStore = useUserStore();
+const isCaizai = computed(() => {
+  const roles = userStore.user?.roles || [];
+  return roles.some(r => r.roleId === 'R_BACK_FINANCE' || r.roleId === 'R_FIN_LEAD');
+});
 // labelOf 名称冲突：保留下面行业版的 statusLabel（含 DISABLED → 已删除映射），useDict 只取 options
 const { options: STATUS_OPTIONS } = useDict('KPI_SCHEME_STATUS');
 const CYCLE_OPTIONS = [
