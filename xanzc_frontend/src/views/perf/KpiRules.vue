@@ -5,7 +5,7 @@
       <span class="desc">方案 · 权重 · 公式预览 · 计分上下限</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openCreate">+ 新增方案</el-button>
+        <el-button type="primary" @click="openCreate">+ 新增KPI方案</el-button>
       </div>
     </div>
 
@@ -100,6 +100,17 @@
           <el-form-item label="方案名称" prop="schemeName">
             <el-input v-model="dlg.scheme.schemeName" :disabled="dlg.readOnly" />
           </el-form-item>
+          <el-form-item label="适用周期" prop="cycleType">
+            <el-select v-model="dlg.scheme.cycleType" :disabled="dlg.readOnly" style="width:100%">
+              <el-option v-for="o in CYCLE_OPTIONS" :key="o.v" :value="o.v" :label="o.l" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="是否向员工开放明细" prop="openDetail">
+            <el-select v-model="dlg.scheme.openDetail" :disabled="dlg.readOnly" style="width:100%">
+              <el-option :value="true" label="是" />
+              <el-option :value="false" label="否" />
+            </el-select>
+          </el-form-item>
         </div>
       </el-form>
       <!-- 指标配置表 -->
@@ -121,6 +132,11 @@
         <el-table-column label="权重 %" width="120">
           <template #default="{row}">
             <el-input-number v-model="row.weight" :disabled="dlg.readOnly" :min="0" :max="100" :precision="0" :controls="false" style="width:100%" />
+          </template>
+        </el-table-column>
+        <el-table-column label="加倍系数" width="120">
+          <template #default="{row}">
+            <el-input-number v-model="row.multiplier" :disabled="dlg.readOnly" :min="0" :precision="2" :step="0.1" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
         <el-table-column label="计分上限" width="120">
@@ -318,9 +334,9 @@ const dlg = reactive({
   origItemMap: new Map()
 });
 const dlgTitle = computed(() => {
-  if (dlg.readOnly) return `查看方案 · ${dlg.scheme.schemeName || ''}`;
-  if (dlg.editingId) return `编辑方案 · ${dlg.scheme.schemeName || ''}`;
-  return '新增方案';
+  if (dlg.readOnly) return `查看KPI方案 · ${dlg.scheme.schemeName || ''}`;
+  if (dlg.editingId) return `编辑KPI方案 · ${dlg.scheme.schemeName || ''}`;
+  return '新增KPI方案';
 });
 const weightSum = computed(() => dlg.items.reduce((s, x) => s + (Number(x.weight) || 0), 0));
 
@@ -411,15 +427,9 @@ async function onSave(targetStatus) {
   // 走一次 el-form 的中文必填校验（schemeFormRef）
   try { await schemeFormRef.value?.validate(); } catch { return; }
 
-  // 后端 schemeCode @Pattern(^[A-Z][A-Z0-9_]*$) 是强约束 —— 前端无法砍。
-  // 折中：提交前自动转大写 + 替换非法字符为 _，并保证首字符是字母。
-  // 这样用户随便输小写/横线/中文都能落库，不再被后端拒。
+  // 后端已砍 schemeCode 格式校验，仅做 trim 兜底
   if (!dlg.editingId) {
-    let code = String(dlg.scheme.schemeCode || '').toUpperCase()
-      .replace(/[^A-Z0-9_]/g, '_')
-      .replace(/^[^A-Z]+/, '');
-    if (!code) code = 'KPI' + Date.now().toString().slice(-6);
-    dlg.scheme.schemeCode = code;
+    dlg.scheme.schemeCode = String(dlg.scheme.schemeCode || '').trim();
   }
 
   dlg.saving = true;
