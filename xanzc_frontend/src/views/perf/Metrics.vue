@@ -75,11 +75,11 @@
               </td>
             </tr>
             <tr>
-              <td class="lab">创建人</td><td class="val">{{ detail.createdBy || '-' }}</td>
-              <td class="lab">更新人</td><td class="val">{{ detail.updatedBy || '-' }}</td>
+              <td class="lab">创建人</td><td class="val">{{ personLabel(detail.createdByUsername, detail.createdByName, detail.createdBy) }}</td>
+              <td class="lab">更新人</td><td class="val">{{ personLabel(detail.updatedByUsername, detail.updatedByName, detail.updatedBy) }}</td>
             </tr>
             <tr>
-              <td class="lab">最近更新</td><td class="val" colspan="3">{{ detail.updatedTime || detail.createdTime || '-' }}</td>
+              <td class="lab">更新时间</td><td class="val" colspan="3">{{ fmtTime(detail.updatedTime || detail.createdTime) }}</td>
             </tr>
             <tr v-if="detail.description">
               <td class="lab">详细描述</td><td class="val" colspan="3">{{ detail.description }}</td>
@@ -93,7 +93,7 @@
           </template>
           <template v-else-if="detail.calcLogicType === 'EXPR'">
             <div class="block-h">Groovy 表达式</div>
-            <pre class="code">{{ detail.exprText || '// 暂未配置表达式，可点【编辑】补充' }}</pre>
+            <pre class="code">{{ detail.exprDisplay || detail.exprText || '// 暂未配置表达式，可点【编辑】补充' }}</pre>
           </template>
           <template v-else-if="detail.calcLogicType === 'SUMMARY'">
             <div class="block-h">SUMMARY 汇总规则</div>
@@ -220,31 +220,28 @@
             <el-radio value="SQL">SQL</el-radio>
             <el-radio value="EXPR">Groovy</el-radio>
           </el-radio-group>
+          <!-- EXPR 模式下，指标下拉 + 添加按钮与计算逻辑同行：选中指标点【添加】插入到表达式光标处 -->
+          <template v-if="dlg.form.calcLogicType === 'EXPR'">
+            <el-select v-model="exprPickCode" filterable clearable placeholder="选择指标插入表达式"
+                       style="width:260px;margin-left:16px">
+              <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
+                         :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
+            </el-select>
+            <el-button type="primary" style="margin-left:8px" :disabled="!exprPickCode"
+                       @click="insertMetricChip">添加</el-button>
+          </template>
           <div v-if="dlg.form.metricLevel === 1" style="font-size:12px;color:#999;margin-top:2px">1级指标仅支持SQL</div>
         </el-form-item>
 
         <template v-if="dlg.form.calcLogicType === 'EXPR'">
-          <el-form-item label="表达式构建">
-            <div class="expr-builder">
-              <div v-for="(row, idx) in dlg.form.exprRows" :key="idx" class="expr-row">
-                <el-select v-if="idx > 0" v-model="row.op" style="width:80px" placeholder="运算符" @change="buildExprText">
-                  <el-option value="+" label="+" />
-                  <el-option value="-" label="-" />
-                  <el-option value="*" label="*" />
-                  <el-option value="/" label="/" />
-                </el-select>
-                <span v-else style="width:80px;display:inline-block;text-align:center;color:#999">—</span>
-                <el-select v-model="row.metricCode" filterable style="flex:1" placeholder="选择上级指标" @change="buildExprText">
-                  <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
-                             :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
-                </el-select>
-                <el-button link type="danger" @click="removeExprRow(idx)" :disabled="dlg.form.exprRows.length <= 1">删除</el-button>
-              </div>
-              <el-button type="primary" link @click="addExprRow" style="margin-top:6px">+ 添加指标</el-button>
+          <el-form-item label="Groovy 表达式">
+            <div class="expr-edit-wrap">
+              <!-- 可编辑表达式区：指标以标签插入（可删除），运算符/数字/括号可直接键入 -->
+              <div ref="exprEditorRef" class="expr-editor" contenteditable="true"
+                   @input="syncExprText" @click="onExprEditorClick"
+                   data-placeholder="从上方选择指标点【添加】插入指标标签；运算符（+ - * / ( )）与数字可直接键入，例如：指标A + 指标B * 2"></div>
+              <div class="expr-hint">指标以标签形式嵌入，点标签上的 × 可删除；其余位置可自由编辑运算符与数字。</div>
             </div>
-          </el-form-item>
-          <el-form-item label="Groovy 表达式（自动生成）">
-            <el-input v-model="dlg.form.exprText" type="textarea" :rows="2" readonly />
           </el-form-item>
         </template>
         <el-form-item v-else :label="'SQL 表达式 (支持 #{slot} 占位符)'">
@@ -353,7 +350,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { Search } from '@element-plus/icons-vue';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { useRouter } from 'vue-router';
@@ -477,6 +474,16 @@ const treeData = computed(() => {
 // === 详情 ===
 const picked = ref('');
 const detail = ref({});
+// 创建人/更新人展示：优先 "username（中文名）"，缺中文名退化为 username，再缺退回原始 empId
+function personLabel(username, chnName, raw) {
+  if (username) return chnName ? `${username}（${chnName}）` : username;
+  return raw || '-';
+}
+// LocalDateTime ISO 串（2026-05-31T18:30:00）转友好展示
+function fmtTime(t) {
+  if (!t) return '-';
+  return String(t).replace('T', ' ').slice(0, 19);
+}
 // 详情侧"试运行"按钮的结果展示（与编辑对话框里的 dlg.trial 独立，避免互相覆盖）
 const detailTrial = reactive({ status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], loading: false });
 function resetDetailTrial() {
@@ -595,17 +602,18 @@ const dlg = reactive({
   form: {
     metricCode: '', metricName: '', baseDim: 'EMP', metricLevel: 1,
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
-    sqlText: '', exprText: '', summaryRule: '',
+    sqlText: '', exprText: '', exprDisplay: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    exprRows: [{ op: '', metricCode: '' }],
     _category: '规模类'
   }
 });
 watch(() => dlg.form.metricLevel, (lvl) => {
   if (lvl === 1) dlg.form.calcLogicType = 'SQL';
   else if (lvl >= 2) dlg.form.calcLogicType = 'EXPR';
-  dlg.form.exprRows = [{ op: '', metricCode: '' }];
   dlg.form.exprText = '';
+  exprPickCode.value = '';
+  // 切换层级后清空表达式编辑器（DOM 渲染后执行）
+  nextTick(renderExprEditor);
 });
 const parentMetricOptions = computed(() => {
   const lvl = dlg.form.metricLevel;
@@ -617,22 +625,145 @@ const parentMetricOptions = computed(() => {
     && (!dim || m.baseDim === dim)
   );
 });
-function addExprRow() {
-  dlg.form.exprRows.push({ op: '+', metricCode: '' });
-}
-function removeExprRow(idx) {
-  dlg.form.exprRows.splice(idx, 1);
-  if (idx === 0 && dlg.form.exprRows.length) dlg.form.exprRows[0].op = '';
-  buildExprText();
-}
-function buildExprText() {
-  const parts = [];
-  for (const row of dlg.form.exprRows) {
-    if (!row.metricCode) continue;
-    if (parts.length > 0 && row.op) parts.push(row.op);
-    parts.push(row.metricCode);
+
+// ====== Groovy 表达式标签编辑器（contenteditable，指标=可删除标签，运算符/数字可自由编辑）======
+const exprEditorRef = ref(null);
+const exprPickCode = ref('');
+// 保存编辑器内最近一次光标 Range：点 el-select / 添加按钮会让编辑器失焦，需用它定位插入点
+let savedRange = null;
+
+// 监听全局 selectionchange，把落在编辑器内的光标 Range 暂存
+function onSelectionChange() {
+  const editor = exprEditorRef.value;
+  if (!editor) return;
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    if (editor.contains(r.startContainer)) savedRange = r.cloneRange();
   }
-  dlg.form.exprText = parts.join(' ');
+}
+onMounted(() => document.addEventListener('selectionchange', onSelectionChange));
+onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange));
+
+// 构造一个指标标签节点（显示 指标编号·指标名称 + 删除按钮）
+function makeChip(code) {
+  const m = allMetrics.value.find(x => x.metricCode === code);
+  const name = m ? (m.metricName || '') : '';
+  const span = document.createElement('span');
+  span.className = 'metric-chip';
+  span.setAttribute('contenteditable', 'false');
+  span.setAttribute('data-code', code);
+  const label = name ? `${code}·${name}` : code;
+  span.innerHTML = `<span class="chip-text">${label}</span><span class="chip-del" title="删除">×</span>`;
+  return span;
+}
+
+// 把选中指标作为标签插入到表达式光标处
+function insertMetricChip() {
+  const code = exprPickCode.value;
+  const editor = exprEditorRef.value;
+  if (!code || !editor) return;
+  editor.focus();
+  const sel = window.getSelection();
+  let range;
+  if (savedRange && editor.contains(savedRange.startContainer)) {
+    range = savedRange.cloneRange();
+  } else {
+    range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false); // 末尾
+  }
+  sel.removeAllRanges();
+  sel.addRange(range);
+  range.deleteContents();
+  const chip = makeChip(code);
+  const after = document.createTextNode(' '); // 标签后补一个空格，便于继续键入运算符
+  range.insertNode(after);
+  range.insertNode(chip);
+  // 光标移到空格之后
+  range.setStartAfter(after);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  savedRange = range.cloneRange();
+  exprPickCode.value = '';
+  syncExprText();
+}
+
+// 点击编辑器：处理标签上的 × 删除（事件委托）
+function onExprEditorClick(e) {
+  const del = e.target.closest && e.target.closest('.chip-del');
+  if (del) {
+    const chip = del.closest('.metric-chip');
+    if (chip) { chip.remove(); syncExprText(); }
+    e.preventDefault();
+  }
+}
+
+// 把编辑器内容序列化为后端 Groovy 表达式字符串：标签→指标编号，文本→原样
+function syncExprText() {
+  const editor = exprEditorRef.value;
+  if (!editor) return;
+  let out = '';
+  let displayOut = '';
+  editor.childNodes.forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent;
+      displayOut += node.textContent;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.classList && node.classList.contains('metric-chip')) {
+        const c = node.getAttribute('data-code');
+        const txt = node.querySelector('.chip-text');
+        out += ' ' + c + ' ';
+        displayOut += ' ' + (txt ? txt.textContent : c) + ' ';
+      } else {
+        out += node.textContent;
+        displayOut += node.textContent;
+      }
+    }
+  });
+  dlg.form.exprText = out.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  dlg.form.exprDisplay = displayOut.replace(/\s+/g, ' ').trim();
+}
+
+// 把已存在的 exprText 反序列化渲染回编辑器（编辑场景）：命中已知指标编号→标签，其余→文本
+function renderExprEditor() {
+  const editor = exprEditorRef.value;
+  if (!editor) return;
+  editor.innerHTML = '';
+  const text = dlg.form.exprText || '';
+  if (!text) return;
+  const codes = allMetrics.value.map(m => m.metricCode).filter(Boolean)
+    .sort((a, b) => b.length - a.length); // 长编号优先，避免前缀误匹配
+  const isWord = (ch) => !!ch && /[A-Za-z0-9_]/.test(ch);
+  let i = 0;
+  while (i < text.length) {
+    let matched = null;
+    for (const c of codes) {
+      if (text.startsWith(c, i) && !isWord(text[i - 1]) && !isWord(text[i + c.length])) {
+        matched = c;
+        break;
+      }
+    }
+    if (matched) {
+      editor.appendChild(makeChip(matched));
+      editor.appendChild(document.createTextNode(' '));
+      i += matched.length;
+    } else {
+      const last = editor.lastChild;
+      if (last && last.nodeType === Node.TEXT_NODE) last.textContent += text[i];
+      else editor.appendChild(document.createTextNode(text[i]));
+      i++;
+    }
+  }
+  syncExprText();
+}
+
+// 读取编辑器内当前使用到的指标编号（用于保存前校验）
+function usedMetricCodes() {
+  const editor = exprEditorRef.value;
+  if (!editor) return [];
+  return Array.from(editor.querySelectorAll('.metric-chip')).map(n => n.getAttribute('data-code'));
 }
 function resetTrial() {
   dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] };
@@ -651,9 +782,8 @@ function defaultForm() {
   return {
     metricCode: '', metricName: '', baseDim: 'EMP', metricLevel: 1,
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
-    sqlText: '', exprText: '', summaryRule: '',
+    sqlText: '', exprText: '', exprDisplay: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    exprRows: [{ op: '', metricCode: '' }],
     _category: '规模类'
   };
 }
@@ -665,7 +795,9 @@ function openCreate() {
     { name: 'period_end',   type: 'DATE', required: true, desc: '截止日期' }
   ];
   dlg.trialDate = null; resetTrial();
+  exprPickCode.value = '';
   dlg.show = true;
+  nextTick(renderExprEditor);
 }
 function openEdit(row) {
   dlg.editing = row.metricCode;
@@ -673,14 +805,17 @@ function openEdit(row) {
     metricCode: row.metricCode, metricName: row.metricName,
     baseDim: row.baseDim, metricLevel: row.metricLevel,
     calcFreq: row.calcFreq, calcLogicType: row.calcLogicType, calcMode: row.calcMode,
-    sqlText: row.sqlText || '', exprText: row.exprText || '', summaryRule: row.summaryRule || '',
+    sqlText: row.sqlText || '', exprText: row.exprText || '', exprDisplay: row.exprDisplay || '', summaryRule: row.summaryRule || '',
     unit: row.unit || '', decimalPlaces: row.decimalPlaces ?? 2, valSlot: row.valSlot ?? 1,
-    description: row.description || row.metricDesc || '',
+    description: row.description || '',
     _category: resolveCategory(row)
   });
   dlg.slots = resolveSlots(row);
   dlg.trialDate = null; resetTrial();
+  exprPickCode.value = '';
   dlg.show = true;
+  // 弹框渲染后，把已存的 exprText 还原成标签 + 文本
+  nextTick(renderExprEditor);
 }
 function addSlot() {
   dlg.slots.push({ name: '', type: 'DATE', required: false, desc: '' });
@@ -688,18 +823,16 @@ function addSlot() {
 
 async function onSave(targetStatus) {
   try { await formRef.value.validate(); } catch { return; }
-  if (targetStatus === 'ACTIVE' && dlg.form.calcLogicType === 'EXPR' && dlg.form.exprText) {
-    const codes = dlg.form.exprRows.filter(r => r.metricCode).map(r => r.metricCode);
-    const ops = dlg.form.exprRows.filter((r, i) => i > 0 && r.op).map(r => r.op);
-    if (codes.length < 2) {
-      return ElMessage.warning('Groovy 表达式至少需要两个指标');
+  // 提交前把编辑器内容同步到 exprText（防止最后一次键入未触发 input）
+  if (dlg.form.calcLogicType === 'EXPR') syncExprText();
+  if (targetStatus === 'ACTIVE' && dlg.form.calcLogicType === 'EXPR') {
+    const codes = usedMetricCodes();
+    if (codes.length < 1) {
+      return ElMessage.warning('Groovy 表达式至少需要一个指标');
     }
-    if (ops.length !== codes.length - 1) {
-      return ElMessage.warning('Groovy 表达式运算符不完整，请检查每行的运算符');
-    }
-    for (const row of dlg.form.exprRows) {
-      if (row.metricCode && !parentMetricOptions.value.some(m => m.metricCode === row.metricCode)) {
-        return ElMessage.warning(`指标 ${row.metricCode} 不在上级已发布指标列表中`);
+    for (const c of codes) {
+      if (!parentMetricOptions.value.some(m => m.metricCode === c)) {
+        return ElMessage.warning(`指标 ${c} 不在上级已发布指标列表中`);
       }
     }
   }
@@ -716,6 +849,8 @@ async function onSave(targetStatus) {
     metricCode: dlg.form.metricCode,
     metricName: dlg.form.metricName,
     metricDesc: JSON.stringify(meta),
+    // 指标详细描述：完全按输入框内容提交，后端存 description 列，不再塞 metricDesc JSON
+    description: dlg.form.description || null,
     // V1.9 metric_category 独立列（前端分类下拉/树聚合靠它，不能只塞 metricDesc JSON）
     metricCategory: dlg.form._category || null,
     calcFreq: dlg.form.calcFreq,
@@ -723,6 +858,8 @@ async function onSave(targetStatus) {
     calcLogicType: dlg.form.calcLogicType,
     sqlText: dlg.form.calcLogicType === 'SQL' ? (dlg.form.sqlText || null) : null,
     exprText: dlg.form.calcLogicType === 'EXPR' ? (dlg.form.exprText || null) : null,
+    // 含标签展示串：与 exprText 同步提交，后端存 expr_display 供查看显示
+    exprDisplay: dlg.form.calcLogicType === 'EXPR' ? (dlg.form.exprDisplay || null) : null,
     summaryRule: dlg.form.calcLogicType === 'SUMMARY' ? (dlg.form.summaryRule || null) : null
   };
   try {
@@ -948,10 +1085,48 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.expr-builder {
+.expr-edit-wrap {
   width: 100%;
-  .expr-row {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  .expr-editor {
+    min-height: 64px;
+    width: 100%;
+    border: 1px solid var(--el-border-color, #dcdfe6);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 28px;
+    background: #fff;
+    outline: none;
+    word-break: break-all;
+    &:focus { border-color: var(--el-color-primary, #409eff); }
+    &:empty::before {
+      content: attr(data-placeholder);
+      color: #b6bcc4;
+    }
+  }
+  .expr-hint { font-size: 12px; color: #999; margin-top: 4px; }
+  // 指标标签：编号·名称 + 删除按钮
+  :deep(.metric-chip) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 2px;
+    padding: 1px 4px 1px 8px;
+    border-radius: 4px;
+    background: var(--el-color-primary-light-9, #ecf5ff);
+    border: 1px solid var(--el-color-primary-light-5, #a0cfff);
+    color: var(--el-color-primary, #409eff);
+    font-size: 13px;
+    line-height: 20px;
+    user-select: none;
+    white-space: nowrap;
+    .chip-del {
+      cursor: pointer;
+      color: #909399;
+      font-weight: bold;
+      padding: 0 2px;
+      &:hover { color: var(--el-color-danger, #f56c6c); }
+    }
   }
 }
 .layout {
