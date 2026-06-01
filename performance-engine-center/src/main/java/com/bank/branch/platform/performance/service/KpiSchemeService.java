@@ -293,7 +293,7 @@ public class KpiSchemeService {
      */
     @Transactional(readOnly = true)
     public List<PerfKpiScheme> listActiveSchemes() {
-        return schemeMapper.selectByCondition(null, STATUS_ACTIVE, null, 0, 1000);
+        return schemeMapper.selectByCondition(null, STATUS_ACTIVE, null, null, 0, 1000);
     }
 
     /**
@@ -307,13 +307,14 @@ public class KpiSchemeService {
      * @return 分页结果
      */
     @Transactional(readOnly = true)
-    public PageResult<PerfKpiScheme> page(String cycleType, String status, String keyword, int pageNo, int pageSize) {
+    public PageResult<PerfKpiScheme> page(String cycleType, String status, String keyword,
+                                          Integer openDetail, int pageNo, int pageSize) {
         int offset = Math.max(pageNo - 1, 0) * pageSize;
-        long total = schemeMapper.countByCondition(cycleType, status, keyword);
+        long total = schemeMapper.countByCondition(cycleType, status, keyword, openDetail);
         if (total == 0) {
             return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
         }
-        List<PerfKpiScheme> records = schemeMapper.selectByCondition(cycleType, status, keyword, offset, pageSize);
+        List<PerfKpiScheme> records = schemeMapper.selectByCondition(cycleType, status, keyword, openDetail, offset, pageSize);
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
@@ -323,8 +324,8 @@ public class KpiSchemeService {
      */
     @Transactional(readOnly = true)
     public PageResult<KpiSchemeDTO> pageDto(String cycleType, String status, String keyword,
-                                            int pageNo, int pageSize) {
-        PageResult<PerfKpiScheme> raw = page(cycleType, status, keyword, pageNo, pageSize);
+                                            Integer openDetail, int pageNo, int pageSize) {
+        PageResult<PerfKpiScheme> raw = page(cycleType, status, keyword, openDetail, pageNo, pageSize);
         List<KpiSchemeDTO> dtos = new java.util.ArrayList<>(raw.getRecords().size());
         for (PerfKpiScheme scheme : raw.getRecords()) {
             dtos.add(KpiAssembler.toDto(scheme, List.of()));

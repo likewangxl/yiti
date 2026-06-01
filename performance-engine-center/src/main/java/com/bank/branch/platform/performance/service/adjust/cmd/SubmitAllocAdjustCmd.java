@@ -33,6 +33,21 @@ public class SubmitAllocAdjustCmd {
     /** 客户编号（必填，对应 cust_master.cust_no 业务编号；Service 内部按编号查找客户主键后入库）. */
     private String custNo;
 
+    /** 客户名称（前端反显，提交时快照入库）. */
+    private String custName;
+
+    /** 当前余额（前端反显，提交时快照入库）. */
+    private BigDecimal currBal;
+
+    /** 月均余额（前端反显，提交时快照入库）. */
+    private BigDecimal mAvgBal;
+
+    /** 季日均余额（前端反显，提交时快照入库）. */
+    private BigDecimal qAvgBal;
+
+    /** 年日均余额（前端反显，提交时快照入库）. */
+    private BigDecimal yAvgBal;
+
     /** 分配维度：RULE / ACCOUNT（必填）. */
     private String allocDim;
 

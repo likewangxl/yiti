@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.controller.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -23,6 +24,24 @@ public class AllocAdjustCreateReqDTO {
     /** 客户编号（必填，对应 cust_master.cust_no；后端按编号查找客户主键后保存）. */
     @NotBlank(message = "custNo 必填")
     private String custNo;
+
+    /** 客户名称（前端反显，提交时快照入库）. */
+    private String custName;
+
+    /** 当前余额（前端反显，提交时快照入库）. */
+    private BigDecimal currBal;
+
+    /** 月均余额（前端反显，提交时快照入库）. */
+    @JsonProperty("mAvgBal")
+    private BigDecimal mAvgBal;
+
+    /** 季日均余额（前端反显，提交时快照入库）. */
+    @JsonProperty("qAvgBal")
+    private BigDecimal qAvgBal;
+
+    /** 年日均余额（前端反显，提交时快照入库）. */
+    @JsonProperty("yAvgBal")
+    private BigDecimal yAvgBal;
 
     /** 分配维度：RULE / ACCOUNT（必填）. */
     @NotBlank(message = "allocDim 必填")

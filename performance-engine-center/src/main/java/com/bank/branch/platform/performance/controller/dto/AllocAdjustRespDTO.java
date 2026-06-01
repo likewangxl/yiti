@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.controller.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -25,6 +26,24 @@ public class AllocAdjustRespDTO {
 
     /** 客户编号（cust_master.cust_no，按 custId 反查回填；客户已删/查不到时为 null）. */
     private String custNo;
+
+    /** 客户名称（提交时快照；历史行回退反查，查不到为 null）. */
+    private String custName;
+
+    /** 当前余额（提交时快照）. */
+    private BigDecimal currBal;
+
+    /** 月均余额（提交时快照）. */
+    @JsonProperty("mAvgBal")
+    private BigDecimal mAvgBal;
+
+    /** 季日均余额（提交时快照）. */
+    @JsonProperty("qAvgBal")
+    private BigDecimal qAvgBal;
+
+    /** 年日均余额（提交时快照）. */
+    @JsonProperty("yAvgBal")
+    private BigDecimal yAvgBal;
 
     /** 客户类型：CORP / RETAIL. */
     private String custType;

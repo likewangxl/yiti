@@ -59,6 +59,9 @@
                     OR scheme_name LIKE CONCAT('%', #{keyword}, '%')
                 )
             </if>
+            <if test="openDetail != null">
+                AND open_detail = #{openDetail}
+            </if>
         </where>
         ORDER BY created_time DESC, scheme_name ASC
         LIMIT #{limit} OFFSET #{offset}
@@ -79,6 +82,9 @@
                     scheme_code LIKE CONCAT('%', #{keyword}, '%')
                     OR scheme_name LIKE CONCAT('%', #{keyword}, '%')
                 )
+            </if>
+            <if test="openDetail != null">
+                AND open_detail = #{openDetail}
             </if>
         </where>
     </select>

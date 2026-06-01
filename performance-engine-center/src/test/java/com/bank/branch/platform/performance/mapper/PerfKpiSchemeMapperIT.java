@@ -80,7 +80,7 @@ class PerfKpiSchemeMapperIT extends PerformanceMapperTestBase {
         mapper.insert(KpiTestDataBuilder.scheme("KW_A"));
         mapper.insert(KpiTestDataBuilder.scheme("KW_B"));
 
-        List<PerfKpiScheme> list = mapper.selectByCondition("MONTHLY", "ACTIVE", "KW_", 0, 10);
+        List<PerfKpiScheme> list = mapper.selectByCondition("MONTHLY", "ACTIVE", "KW_", null, 0, 10);
 
         assertThat(list).extracting(PerfKpiScheme::getSchemeCode)
                 .contains("TEST_KPI_KW_A", "TEST_KPI_KW_B");
@@ -95,7 +95,7 @@ class PerfKpiSchemeMapperIT extends PerformanceMapperTestBase {
         disabled.setStatus("DISABLED");
         mapper.insert(disabled);
 
-        long count = mapper.countByCondition("MONTHLY", "ACTIVE", "CNT_");
+        long count = mapper.countByCondition("MONTHLY", "ACTIVE", "CNT_", null);
 
         assertThat(count).isEqualTo(2);
     }

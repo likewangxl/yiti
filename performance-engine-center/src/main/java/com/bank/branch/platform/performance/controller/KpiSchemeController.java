@@ -99,8 +99,16 @@ public class KpiSchemeController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[KpiSchemeController.list] cycleType={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 cycleType, status, keyword, pageNo, pageSize);
-        PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, status, keyword, pageNo, pageSize);
+        // 非资财部人员（无 R_BACK_FINANCE / R_FIN_LEAD 角色）只能看到"向员工开放明细=是"的方案
+        Integer openDetailFilter = isCaiZaiDept() ? null : 1;
+        PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, status, keyword, openDetailFilter, pageNo, pageSize);
         return ResponseWrapper.page(dtoPage);
+    }
+
+    /** 当前用户是否为资财部人员（资财部经办人 R_BACK_FINANCE / 资财部负责人 R_FIN_LEAD）. */
+    private boolean isCaiZaiDept() {
+        java.util.Set<String> roleIds = currentUserApi.getCurrentRoleIds();
+        return roleIds != null && (roleIds.contains("R_BACK_FINANCE") || roleIds.contains("R_FIN_LEAD"));
     }
 
     /**

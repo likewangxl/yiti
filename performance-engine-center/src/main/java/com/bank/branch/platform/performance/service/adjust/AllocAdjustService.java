@@ -169,6 +169,13 @@ public class AllocAdjustService {
         apply.setId(applyId);
         apply.setApplyNo(applyNo);
         apply.setCustId(internalCustId);
+        // 提交时把前端反显的客户编号/名称 + 余额概览快照入库，列表/详情直接读，不再实时反查
+        apply.setCustNo(cmd.getCustNo());
+        apply.setCustName(cmd.getCustName());
+        apply.setCurrBal(cmd.getCurrBal());
+        apply.setMAvgBal(cmd.getMAvgBal());
+        apply.setQAvgBal(cmd.getQAvgBal());
+        apply.setYAvgBal(cmd.getYAvgBal());
         apply.setCustType(cmd.getCustType());
         apply.setAllocDim(cmd.getAllocDim());
         apply.setBizKind(cmd.getBizKind());
@@ -380,8 +387,12 @@ public class AllocAdjustService {
      */
     public AllocAdjustRespDTO getByIdDto(String id) {
         ApplyWithItems bundle = getById(id);
-        String custNo = lookupCustNo(bundle.getApply().getCustId());
-        AllocAdjustRespDTO dto = toRespDto(bundle.getApply(), bundle.getItems(), custNo);
+        // 一次反查 cust_master 同时拿 custNo + custName（客户已删/查不到时均为 null）
+        String custId = bundle.getApply().getCustId();
+        CustomerDTO cust = isBlank(custId) ? null : customerQueryApi.getCustomer(custId).orElse(null);
+        String custNo = cust != null ? cust.getCustNo() : null;
+        String custName = cust != null ? cust.getCustName() : null;
+        AllocAdjustRespDTO dto = toRespDto(bundle.getApply(), bundle.getItems(), custNo, custName);
         // 展开申请人姓名 + 主机构名（仅详情，列表不展开避免 N+1）
         // 任何一项查询失败不阻塞主流程，对应字段留 null
         String createdBy = bundle.getApply().getCreatedBy();
@@ -540,12 +551,13 @@ public class AllocAdjustService {
                 status, bizKind, custId, ownerOrgId, createdBy, offset, pageSize,
                 frag.getSql(), frag.getParams());
 
-        // 批量反查 cust_master 拿 custNo，避免循环单查；空 rows 跳过避免无谓 mapper 调用
-        Map<String, String> custIdToNo = batchLookupCustNos(rows);
+        // 批量反查 cust_master 拿 custNo + custName，避免循环单查；空 rows 跳过避免无谓 mapper 调用
+        Map<String, CustomerDTO> custMap = batchLookupCustomers(rows);
         List<AllocAdjustRespDTO> dtos = new ArrayList<>(rows.size());
         for (PerfAllocAdjustApply apply : rows) {
+            CustomerDTO c = custMap.get(apply.getCustId());
             dtos.add(toRespDto(apply, java.util.Collections.emptyList(),
-                    custIdToNo.get(apply.getCustId())));
+                    c != null ? c.getCustNo() : null, c != null ? c.getCustName() : null));
         }
         return PageResult.of(pageNo, pageSize, total, dtos);
     }
@@ -554,7 +566,7 @@ public class AllocAdjustService {
      * 收集 rows 中所有非空 custId 一次性 listCustomers，返回内部主键 → custNo 映射；
      * rows 为空或全部 custId 为空时返回空 Map，不触发跨模块调用.
      */
-    private Map<String, String> batchLookupCustNos(List<PerfAllocAdjustApply> rows) {
+    private Map<String, CustomerDTO> batchLookupCustomers(List<PerfAllocAdjustApply> rows) {
         if (rows == null || rows.isEmpty()) {
             return java.util.Collections.emptyMap();
         }
@@ -568,9 +580,9 @@ public class AllocAdjustService {
             return java.util.Collections.emptyMap();
         }
         List<CustomerDTO> customers = customerQueryApi.listCustomers(new ArrayList<>(ids));
-        Map<String, String> map = new HashMap<>(customers.size());
+        Map<String, CustomerDTO> map = new HashMap<>(customers.size());
         for (CustomerDTO c : customers) {
-            map.put(c.getId(), c.getCustNo());
+            map.put(c.getId(), c);
         }
         return map;
     }
@@ -581,12 +593,21 @@ public class AllocAdjustService {
      * 查不到时传 null；此时 DTO 的 custNo 兜底回退用 apply.custId 展示（84f227e0 custNo兜底，
      * 不抛错以兼容历史已删客户的 apply 行）.
      */
-    private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items, String custNo) {
+    private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items,
+                                        String custNo, String custName) {
         AllocAdjustRespDTO dto = new AllocAdjustRespDTO();
         dto.setId(apply.getId());
         dto.setApplyNo(apply.getApplyNo());
         dto.setCustId(apply.getCustId());
-        dto.setCustNo(custNo != null ? custNo : apply.getCustId());
+        // 优先读提交时快照的客户编号/名称；快照为空（历史行）回退到反查值，再兜底 custId
+        dto.setCustNo(!isBlank(apply.getCustNo()) ? apply.getCustNo()
+                : (custNo != null ? custNo : apply.getCustId()));
+        dto.setCustName(!isBlank(apply.getCustName()) ? apply.getCustName() : custName);
+        // 余额概览快照直接透传
+        dto.setCurrBal(apply.getCurrBal());
+        dto.setMAvgBal(apply.getMAvgBal());
+        dto.setQAvgBal(apply.getQAvgBal());
+        dto.setYAvgBal(apply.getYAvgBal());
         dto.setCustType(apply.getCustType());
         dto.setAllocDim(apply.getAllocDim());
         dto.setBizKind(apply.getBizKind());
