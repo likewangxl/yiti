@@ -62,8 +62,10 @@ class MetricDefServiceScopeTest {
                 null,   // metricRefService
                 null,   // metricSlotService
                 null,   // metricCycleDetectService
+                null,   // kpiItemMapper（禁用前置校验用，本测试不涉及）
                 null,   // objectMapper
                 currentUserApi,
+                null,   // userApi（详情解析用，本测试不涉及）
                 perfScopeHelper,
                 null);  // metricSchedulerService（本测试不涉及调度）
     }

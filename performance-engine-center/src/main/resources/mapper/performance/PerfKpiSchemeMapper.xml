@@ -60,7 +60,7 @@
                 )
             </if>
         </where>
-        ORDER BY scheme_code ASC
+        ORDER BY created_time DESC, scheme_name ASC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 

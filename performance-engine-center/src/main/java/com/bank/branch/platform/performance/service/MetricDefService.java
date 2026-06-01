@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -47,9 +50,12 @@ public class MetricDefService {
     private final MetricRefService metricRefService;
     private final MetricSlotService metricSlotService;
     private final MetricCycleDetectService metricCycleDetectService;
+    private final com.bank.branch.platform.performance.mapper.PerfKpiItemMapper kpiItemMapper;
     private final ObjectMapper objectMapper;
     /** Q7.3 新增: 当前用户读取. */
     private final CurrentUserApi currentUserApi;
+    /** 详情模块：创建人/更新人 empId → username + 中文名解析. */
+    private final UserApi userApi;
     /** Q7.3 新增: 数据范围 SQL 片段生成器. */
     private final PerfScopeHelper perfScopeHelper;
 
@@ -240,6 +246,8 @@ public class MetricDefService {
      */
     @Transactional(rollbackFor = Exception.class)
     public PerfMetricDef create(CreateMetricDefCmd cmd) {
+        // Groovy 计算逻辑：保存前先校验 expr_text 表达式语法合法（不合法直接拒绝，避免脏表达式入库）
+        validateExprIfNeeded(cmd.getCalcLogicType(), cmd.getCalcMode(), cmd.getExprText());
         if (mapper.selectByMetricCode(cmd.getMetricCode()) != null) {
             throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getMetricCode());
         }
@@ -259,6 +267,8 @@ public class MetricDefService {
         def.setMetricName(cmd.getMetricName());
         def.setMetricNameEn(cmd.getMetricNameEn());
         def.setMetricDesc(cmd.getMetricDesc());
+        // 指标详细描述：完全按前端输入原样保存，不做任何加工
+        def.setDescription(cmd.getDescription());
         def.setBaseDim(cmd.getBaseDim());
         def.setMetricLevel(cmd.getMetricLevel());
         def.setCalcFreq(cmd.getCalcFreq());
@@ -266,6 +276,8 @@ public class MetricDefService {
         def.setCalcLogicType(cmd.getCalcLogicType());
         def.setSqlText(cmd.getSqlText());
         def.setExprText(cmd.getExprText());
+        // 含标签展示串与 expr_text 同步落库（仅用于查看显示，不参与计算）
+        def.setExprDisplay(cmd.getExprDisplay());
         def.setSummaryRule(cmd.getSummaryRule());
         def.setRefMetricCodes(toJson(refMetricCodes));
         // V1.9：状态字段优先取 cmd.status（导入路径透传 Excel statusFlag），未指定回落 ACTIVE
@@ -319,6 +331,12 @@ public class MetricDefService {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
                     "指标已停用，禁止编辑：" + cmd.getMetricCode() + "（请先启用后再修改）");
         }
+        // Groovy 计算逻辑：保存前先校验 expr_text 表达式语法（按本次/原有 calc_logic_type 判定）
+        if (cmd.getExprText() != null) {
+            String effLogic = cmd.getCalcLogicType() != null ? cmd.getCalcLogicType() : existing.getCalcLogicType();
+            String effMode = cmd.getCalcMode() != null ? cmd.getCalcMode() : existing.getCalcMode();
+            validateExprIfNeeded(effLogic, effMode, cmd.getExprText());
+        }
         boolean refMetricCodesProvided = cmd.getRefMetricCodes() != null && !cmd.getRefMetricCodes().isBlank();
         List<String> refMetricCodes = refMetricCodesProvided
                 ? parseRefMetricCodes(cmd.getRefMetricCodes())
@@ -334,11 +352,14 @@ public class MetricDefService {
         patch.setMetricName(cmd.getMetricName());
         patch.setMetricNameEn(cmd.getMetricNameEn());
         patch.setMetricDesc(cmd.getMetricDesc());
+        patch.setDescription(cmd.getDescription());
         patch.setCalcFreq(cmd.getCalcFreq());
         patch.setCalcMode(cmd.getCalcMode());
         patch.setCalcLogicType(cmd.getCalcLogicType());
         patch.setSqlText(cmd.getSqlText());
         patch.setExprText(cmd.getExprText());
+        // 含标签展示串与 expr_text 同步更新（selective：null 不覆盖）
+        patch.setExprDisplay(cmd.getExprDisplay());
         patch.setSummaryRule(cmd.getSummaryRule());
         if (refMetricCodesProvided) {
             patch.setRefMetricCodes(toJson(refMetricCodes));
@@ -373,6 +394,12 @@ public class MetricDefService {
         if (cmd.getExprText() != null) {
             existing.setExprText(cmd.getExprText());
         }
+        if (cmd.getExprDisplay() != null) {
+            existing.setExprDisplay(cmd.getExprDisplay());
+        }
+        if (cmd.getDescription() != null) {
+            existing.setDescription(cmd.getDescription());
+        }
         if (cmd.getSummaryRule() != null) {
             existing.setSummaryRule(cmd.getSummaryRule());
         }
@@ -399,7 +426,22 @@ public class MetricDefService {
         if (!"ACTIVE".equals(existing.getStatus())) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "当前状态不可停用: " + existing.getStatus());
         }
+        assertNotReferencedByActiveScheme(metricCode);
         mapper.updateStatusById(existing.getId(), "DISABLED", operator);
+    }
+
+    /**
+     * 禁用前置校验：若指标被任一 ACTIVE KPI 方案引用，拒绝禁用并列出受影响方案，
+     * 让运维先去清理方案或换指标。和发布时"item 引用的 metric 必须 ACTIVE"对称。
+     */
+    private void assertNotReferencedByActiveScheme(String metricCode) {
+        List<java.util.Map<String, Object>> refs = kpiItemMapper.selectActiveSchemeRefsByMetric(metricCode);
+        if (refs == null || refs.isEmpty()) return;
+        String detail = refs.stream()
+                .map(r -> String.valueOf(r.get("schemeCode")) + "(" + r.get("schemeName") + ")")
+                .collect(java.util.stream.Collectors.joining(", "));
+        throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                "指标 " + metricCode + " 被以下已发布 KPI 方案引用，无法禁用: " + detail);
     }
 
     /**
@@ -417,6 +459,10 @@ public class MetricDefService {
         PerfMetricDef existing = getByCode(metricCode);
         if (targetStatus.equals(existing.getStatus())) {
             return; // 幂等：状态相同直接返回，不抛错
+        }
+        // 禁用前校验：被 ACTIVE 方案引用时拒绝（仅 ACTIVE→DISABLED 才检查，DRAFT→DISABLED 不会有方案引用）
+        if ("DISABLED".equals(targetStatus) && "ACTIVE".equals(existing.getStatus())) {
+            assertNotReferencedByActiveScheme(metricCode);
         }
         // V1.13：DRAFT→ACTIVE 补分配 slot（DRAFT 阶段不占配额；维度无关型指标 baseDim=null 不分配）
         if ("ACTIVE".equals(targetStatus)
@@ -609,10 +655,100 @@ public class MetricDefService {
 
     /**
      * V1.3 R4.1：Controller 专用 DTO 版本 getByCode.
+     *
+     * <p>详情模块额外把创建人/更新人的 empId 解析为 username + 中文名（displayName）一并返回，
+     * 供前端"指标详情"展示。列表接口 {@link #listAllDto} 不做此解析（避免逐行查询 PT_USER）。
      */
     @Transactional(readOnly = true)
     public MetricDefRespDTO getByCodeDto(String metricCode) {
-        return MetricAssembler.toRespDTO(getByCode(metricCode));
+        PerfMetricDef def = getByCode(metricCode);
+        MetricDefRespDTO dto = MetricAssembler.toRespDTO(def);
+        fillOperatorNames(dto, def);
+        return dto;
+    }
+
+    /**
+     * 把详情 DTO 的创建人/更新人 empId 解析为 username + 中文名（displayName）.
+     *
+     * <p>解析失败（用户不存在 / 跨模块查询异常）时静默降级：username/中文名留空，
+     * 前端回退展示原始 empId，绝不因解析问题影响详情主流程返回。
+     *
+     * @param dto 待补全的响应 DTO
+     * @param def 指标定义实体（提供 createdBy/updatedBy）
+     */
+    private void fillOperatorNames(MetricDefRespDTO dto, PerfMetricDef def) {
+        java.util.LinkedHashSet<String> tokens = new java.util.LinkedHashSet<>();
+        if (StringUtils.hasText(def.getCreatedBy())) {
+            tokens.add(def.getCreatedBy());
+        }
+        if (StringUtils.hasText(def.getUpdatedBy())) {
+            tokens.add(def.getUpdatedBy());
+        }
+        if (tokens.isEmpty()) {
+            return;
+        }
+        Map<String, UserDTO> userMap = resolveUsersByTokens(tokens);
+        UserDTO creator = def.getCreatedBy() == null ? null : userMap.get(def.getCreatedBy());
+        if (creator != null) {
+            dto.setCreatedByUsername(creator.getUsername());
+            dto.setCreatedByName(creator.getDisplayName());
+        }
+        UserDTO updater = def.getUpdatedBy() == null ? null : userMap.get(def.getUpdatedBy());
+        if (updater != null) {
+            dto.setUpdatedByUsername(updater.getUsername());
+            dto.setUpdatedByName(updater.getDisplayName());
+        }
+    }
+
+    /**
+     * 按 token（既可能是 empId 也可能是 username）批量解析用户.
+     *
+     * <p>created_by/updated_by 当前写入的是 {@code getCurrentEmpId()}（empId），但历史数据可能存登录名，
+     * 故先按 empId 命中，剩余未命中的再按 username 兜底，最大化覆盖。
+     *
+     * @param tokens empId 或 username 集合
+     * @return key=原始 token（empId 或 username）→ UserDTO
+     */
+    private Map<String, UserDTO> resolveUsersByTokens(java.util.Collection<String> tokens) {
+        Map<String, UserDTO> userMap = new java.util.HashMap<>();
+        java.util.LinkedHashSet<String> distinct = new java.util.LinkedHashSet<>();
+        for (String t : tokens) {
+            if (StringUtils.hasText(t)) {
+                distinct.add(t);
+            }
+        }
+        if (distinct.isEmpty()) {
+            return userMap;
+        }
+        try {
+            List<UserDTO> byId = userApi.getUserByEmpIds(new ArrayList<>(distinct));
+            if (byId != null) {
+                for (UserDTO u : byId) {
+                    if (u != null && u.getEmpId() != null) {
+                        userMap.put(u.getEmpId(), u);
+                    }
+                }
+            }
+            List<String> remaining = new ArrayList<>();
+            for (String token : distinct) {
+                if (!userMap.containsKey(token)) {
+                    remaining.add(token);
+                }
+            }
+            if (!remaining.isEmpty()) {
+                List<UserDTO> byName = userApi.getUsersByUsernames(remaining);
+                if (byName != null) {
+                    for (UserDTO u : byName) {
+                        if (u != null && u.getUsername() != null) {
+                            userMap.putIfAbsent(u.getUsername(), u);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[MetricDefService.resolveUsersByTokens] 用户信息解析失败，降级留空，err={}", e.toString());
+        }
+        return userMap;
     }
 
     /**
@@ -651,8 +787,90 @@ public class MetricDefService {
         // V1.13+：按运维要求关停自动调度回填——返回空列表，
         // HealthCheck / syncOnStartup 等"获取可调度指标"路径拿不到任何指标，
         // SYS_JOB_CONF + QRTZ_* 不会被自动写入。
-        log.debug("[MetricDefService.listSchedulable] 已被关停，返回空列表");
         return Collections.emptyList();
+    }
+
+    /**
+     * EXPR/Groovy 计算逻辑的 expr_text 合法性校验入口.
+     *
+     * <p>仅当 calc_logic_type=EXPR、calc_mode=AUTO（即真正交给 Groovy 自动计算）且 expr_text 非空时校验；
+     * MANUAL（外部填值/人工录入）即便 calc_logic_type=EXPR，expr_text 也可能是说明性文本，不做语法校验。
+     * 草稿允许空表达式。不合法抛 {@link PerfErrorCode#METRIC_CALC_LOGIC_INVALID}.
+     *
+     * @param calcLogicType 计算逻辑类型
+     * @param calcMode      计算方式（AUTO / MANUAL）
+     * @param exprText      表达式文本（指标编号 Groovy）
+     */
+    private void validateExprIfNeeded(String calcLogicType, String calcMode, String exprText) {
+        if (!"EXPR".equals(calcLogicType) || !"AUTO".equals(calcMode)) {
+            return;
+        }
+        if (!StringUtils.hasText(exprText)) {
+            return;
+        }
+        if (!isValidExprSyntax(exprText)) {
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                    "Groovy 表达式不合法：" + exprText);
+        }
+    }
+
+    /** expr_text 允许的 token：指标编号（标识符，不限 M_ 前缀）/ 数字 / 四则运算符 / 圆括号. */
+    private static final java.util.regex.Pattern EXPR_TOKEN_PATTERN =
+            java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*|\\d+(?:\\.\\d+)?|[-+*/()]");
+
+    /**
+     * 校验 expr_text 是否为合法的四则运算表达式（指标编号/数字为操作数，+ - * / 为二元运算符，括号需配对）.
+     *
+     * <p>纯静态语法校验，不执行 Groovy，避免"全 1 代入导致除零"等运行期误判；
+     * 捕获的非法形态包括：括号不配对、运算符悬空、操作数相邻、夹杂非法字符、空表达式。
+     *
+     * @param expr 表达式文本
+     * @return true=合法
+     */
+    static boolean isValidExprSyntax(String expr) {
+        if (expr == null || expr.isBlank()) {
+            return false;
+        }
+        java.util.regex.Matcher m = EXPR_TOKEN_PATTERN.matcher(expr);
+        int len = expr.length();
+        int pos = 0;
+        boolean expectOperand = true;   // 下一个 token 期望操作数（含左括号），false 时期望运算符或右括号
+        int depth = 0;
+        while (pos < len) {
+            if (Character.isWhitespace(expr.charAt(pos))) {
+                pos++;
+                continue;
+            }
+            m.region(pos, len);
+            if (!m.lookingAt()) {
+                return false;           // 出现非法字符 / token
+            }
+            String tok = m.group();
+            pos = m.end();
+            if ("(".equals(tok)) {
+                if (!expectOperand) {
+                    return false;
+                }
+                depth++;
+            } else if (")".equals(tok)) {
+                if (expectOperand || depth == 0) {
+                    return false;
+                }
+                depth--;
+            } else if ("+".equals(tok) || "-".equals(tok) || "*".equals(tok) || "/".equals(tok)) {
+                if (expectOperand) {
+                    return false;       // 运算符前必须有操作数
+                }
+                expectOperand = true;
+            } else {
+                // 操作数：指标编号或数字
+                if (!expectOperand) {
+                    return false;       // 两个操作数相邻
+                }
+                expectOperand = false;
+            }
+        }
+        return !expectOperand && depth == 0;
     }
 
     private List<String> parseRefMetricCodes(String refMetricCodesJson) {

@@ -38,6 +38,9 @@ public class CreateMetricReqDTO {
     @Schema(description = "指标说明")
     private String metricDesc;
 
+    @Schema(description = "指标详细描述（前端输入框内容，原样保存）")
+    private String description;
+
     /** 基础维度。V1.9 改造：允许为空，null 表示维度无关型指标（不入三大宽表、不进入自动调度）。 */
     @Schema(description = "基础维度: EMP/ORG/CUST；留空表示维度无关型指标")
     @Pattern(regexp = "^(EMP|ORG|CUST)$", message = "baseDim 必须是 EMP、ORG 或 CUST")
@@ -72,8 +75,12 @@ public class CreateMetricReqDTO {
     private String sqlText;
 
     /** 表达式文本。 */
-    @Schema(description = "表达式文本")
+    @Schema(description = "表达式文本（指标编号 Groovy，用于计算）")
     private String exprText;
+
+    /** 表达式含标签展示串。 */
+    @Schema(description = "表达式含标签展示串（指标编号·名称，用于查看显示），与 exprText 同步保存")
+    private String exprDisplay;
 
     /** 汇总规则。 */
     @Schema(description = "汇总规则: SUM/AVG/MAX/MIN/COUNT")

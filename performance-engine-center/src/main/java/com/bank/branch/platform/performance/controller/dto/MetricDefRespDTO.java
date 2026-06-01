@@ -2,6 +2,8 @@ package com.bank.branch.platform.performance.controller.dto;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * 指标定义 Controller 层响应 DTO.
  *
@@ -66,8 +68,11 @@ public class MetricDefRespDTO {
     /** 一级指标 SQL / 存储过程文本. */
     private String sqlText;
 
-    /** 二/三级指标表达式. */
+    /** 二/三级指标表达式（指标编号 Groovy，用于计算）. */
     private String exprText;
+
+    /** 二/三级指标表达式的"含标签"展示串（指标编号·名称，用于查看显示）. */
+    private String exprDisplay;
 
     /** 机构汇总规则：SUM / AVG / MAX / MIN / COUNT. */
     private String summaryRule;
@@ -92,4 +97,28 @@ public class MetricDefRespDTO {
 
     /** V1.9 指标分类（规模类/效益类/质量类/合规类等）. */
     private String metricCategory;
+
+    /** 创建人（原始 empId，详情模块用）. */
+    private String createdBy;
+
+    /** 创建人用户名（username，详情模块解析填充；列表场景为 null）. */
+    private String createdByUsername;
+
+    /** 创建人中文名（UserDTO.displayName，详情模块解析填充；列表场景为 null）. */
+    private String createdByName;
+
+    /** 更新人（原始 empId，详情模块用）. */
+    private String updatedBy;
+
+    /** 更新人用户名（username，详情模块解析填充；列表场景为 null）. */
+    private String updatedByUsername;
+
+    /** 更新人中文名（UserDTO.displayName，详情模块解析填充；列表场景为 null）. */
+    private String updatedByName;
+
+    /** 创建时间. */
+    private LocalDateTime createdTime;
+
+    /** 最近更新时间. */
+    private LocalDateTime updatedTime;
 }

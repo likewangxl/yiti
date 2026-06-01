@@ -68,4 +68,13 @@
           AND s.status = 'ACTIVE'
     </select>
 
+    <select id="selectActiveSchemeRefsByMetric" parameterType="string" resultType="java.util.LinkedHashMap">
+        SELECT DISTINCT s.scheme_code AS schemeCode, s.scheme_name AS schemeName
+        FROM PERF_KPI_ITEM i
+        INNER JOIN PERF_KPI_SCHEME s ON i.scheme_id = s.id
+        WHERE i.metric_code = #{metricCode}
+          AND s.status = 'ACTIVE'
+        ORDER BY s.scheme_code
+    </select>
+
 </mapper>

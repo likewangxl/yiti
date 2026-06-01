@@ -26,6 +26,9 @@ public class UpdateMetricDefCmd {
     /** 指标说明. */
     private String metricDesc;
 
+    /** 指标详细描述（前端"指标详细描述"输入框，原样保存）. */
+    private String description;
+
     /** 计算频率. */
     private String calcFreq;
 
@@ -38,8 +41,11 @@ public class UpdateMetricDefCmd {
     /** SQL 文本. */
     private String sqlText;
 
-    /** 表达式文本. */
+    /** 表达式文本（指标编号 Groovy）. */
     private String exprText;
+
+    /** 表达式"含标签"展示串（指标编号·名称），与 exprText 同步保存. */
+    private String exprDisplay;
 
     /** 汇总规则. */
     private String summaryRule;

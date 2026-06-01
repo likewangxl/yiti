@@ -74,4 +74,10 @@ public interface PerfKpiItemMapper extends BaseMapper<PerfKpiItem> {
      * @return ACTIVE KPI 方案 ID 列表（可能为空）
      */
     List<String> selectActiveSchemeIdsByMetric(@Param("metricCode") String metricCode);
+
+    /**
+     * 反查依赖某指标的 ACTIVE KPI 方案 (scheme_code, scheme_name)，
+     * 用于禁用指标时给前端列出受影响方案的友好提示。
+     */
+    List<java.util.Map<String, Object>> selectActiveSchemeRefsByMetric(@Param("metricCode") String metricCode);
 }
