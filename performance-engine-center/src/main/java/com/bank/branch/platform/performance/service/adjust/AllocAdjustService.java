@@ -321,6 +321,34 @@ public class AllocAdjustService {
     }
 
     /**
+     * 渠道撤回申请（带越权校验）：仅申请创建人本人可撤回.
+     *
+     * <p>面向 callpu 等外部渠道（无平台登录态，operator 由报文 EmployeeNo 传入）。
+     * 与 {@link #withdraw} 的差异：撤回前先校验 {@code operator == apply.createdBy}，
+     * 防止他人越权撤回；状态/流程取消逻辑完全复用 {@link #withdraw}。</p>
+     *
+     * @param id       申请 ID（手机端 perfAdjustNo）
+     * @param reason   撤回原因
+     * @param operator 操作人 empId（必须等于申请创建人）
+     * @throws PerfException VALIDATION_FAILED（申请不存在 / 非本人 / 状态不可撤回）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void withdrawByApplicant(String id, String reason, String operator) {
+        if (isBlank(id)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
+        }
+        PerfAllocAdjustApply apply = applyMapper.selectByAllocApplyId(id);
+        if (apply == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "申请不存在: " + id);
+        }
+        // 越权校验：高危操作，仅申请创建人本人可撤回
+        if (operator == null || !operator.equals(apply.getCreatedBy())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "无权撤回他人申请: " + id);
+        }
+        withdraw(id, reason, operator);
+    }
+
+    /**
      * V1.3 R4.1：Controller 专用 DTO 版本 submit + 回显.
      */
     public Map<String, String> submitDto(SubmitAllocAdjustCmd cmd) {

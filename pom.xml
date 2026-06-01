@@ -21,6 +21,7 @@
         <module>business-application-center</module>
         <module>performance-engine-center</module>
         <module>report-analytics-center</module>
+        <module>soap-gateway-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -138,6 +139,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>report-analytics-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- soap-gateway-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>soap-gateway-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

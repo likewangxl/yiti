@@ -608,4 +608,49 @@ class AllocAdjustServiceTest {
         service.suggestEmployees("a", 0);
         verify(userApi).pageUsers("a", 1, 20);
     }
+
+    // ===================== withdrawByApplicant（渠道撤回 + 越权校验）=====================
+
+    @Test
+    @DisplayName("withdrawByApplicant: 操作人即申请人 → 委托 withdraw 置 REJECTED + 取消流程")
+    void withdrawByApplicant_operatorIsApplicant_withdraws() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("AA1");
+        apply.setStatus("IN_APPROVAL");
+        apply.setCreatedBy("E001");
+        apply.setProcessInstanceId("PID1");
+        when(applyMapper.selectByAllocApplyId("AA1")).thenReturn(apply);
+
+        service.withdrawByApplicant("AA1", "手机端撤回", "E001");
+
+        verify(applyMapper).updateStatus("AA1", "REJECTED", null);
+        verify(workflowApi).cancelProcess("PID1", "手机端撤回");
+    }
+
+    @Test
+    @DisplayName("withdrawByApplicant: 操作人非申请人 → 越权拒绝，不改状态")
+    void withdrawByApplicant_operatorNotApplicant_rejected() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("AA2");
+        apply.setStatus("IN_APPROVAL");
+        apply.setCreatedBy("E001");
+        when(applyMapper.selectByAllocApplyId("AA2")).thenReturn(apply);
+
+        assertThatThrownBy(() -> service.withdrawByApplicant("AA2", "x", "E999"))
+                .isInstanceOf(PerfException.class);
+
+        verify(applyMapper, never()).updateStatus(anyString(), anyString(), any());
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("withdrawByApplicant: 申请不存在 → 校验失败")
+    void withdrawByApplicant_notFound_throws() {
+        when(applyMapper.selectByAllocApplyId("NOPE")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.withdrawByApplicant("NOPE", "x", "E001"))
+                .isInstanceOf(PerfException.class);
+
+        verify(workflowApi, never()).cancelProcess(anyString(), anyString());
+    }
 }
