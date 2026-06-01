@@ -271,31 +271,62 @@
         <el-form-item label="试运行">
           <div class="trial-row">
             <el-date-picker v-model="dlg.trialDate" type="date" value-format="YYYY-MM-DD"
-              placeholder="数据日期（传给 SQL :dataDate）" style="flex:1; min-width:300px" />
-            <el-button type="primary" @click="onTrialFromDialog" :loading="dlg.trialing">▶ 试运行</el-button>
+              placeholder="数据日期（传给 SQL :dataDate）" style="flex:1; min-width:220px" />
+            <!-- 对象值：按基础维度联想（EMP=员工 / ORG=机构），映射 SQL :objectId -->
+            <el-autocomplete
+              v-model="dlg.trialSubject"
+              :fetch-suggestions="dlg.form.baseDim === 'ORG' ? queryOrgSuggest : (dlg.form.baseDim === 'EMP' ? queryEmpSuggest : queryNoSuggest)"
+              value-key="label"
+              clearable
+              :placeholder="dlg.form.baseDim === 'EMP' ? '对象值：员工(工号/姓名联想)→:objectId' : (dlg.form.baseDim === 'ORG' ? '对象值：机构(编号/名称联想)→:objectId' : '对象值 → :objectId')"
+              style="flex:1; min-width:240px"
+              @select="onTrialSubjectSelect"
+              @clear="dlg.trialSubjectId = ''"
+              @input="dlg.trialSubjectId = ''" />
+            <el-button type="primary" @click="onTrialFromDialog" :loading="dlg.trialing"
+                       :disabled="metricEditBlocked" :title="metricEditBlocked ? '指标数据加载完成后可用' : ''">▶ 试运行</el-button>
+            <span v-if="metricEditBlocked" style="margin-left:8px; color:#e6a23c; font-size:12px">指标数据加载中…</span>
             <el-tag v-if="dlg.trial.status === 'SUCCESS'" class="tag-success" effect="plain">
-              成功 · {{ dlg.trial.totalRows ?? dlg.trial.rows.length }} 行 · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
+              成功 · {{ dlg.trial.exprResult != null ? ('结果 ' + dlg.trial.exprResult) : ((dlg.trial.totalRows ?? dlg.trial.rows.length) + ' 行') }} · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
             </el-tag>
             <el-tag v-else-if="dlg.trial.status === 'FAILED'" class="tag-warning" effect="plain">
               失败 · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
             </el-tag>
           </div>
 
-          <!-- 试运行结果表 -->
+          <!-- 试运行结果：SQL 类→样本行表格；EXPR(Groovy) 类→单值（exprResult） -->
           <el-table v-if="dlg.trial.rows.length" :data="dlg.trial.rows" size="small" border style="margin-top: 12px">
             <el-table-column v-for="col in dlg.trial.cols" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
           </el-table>
+          <div v-else-if="dlg.trial.status === 'SUCCESS' && dlg.trial.exprResult != null"
+               class="trial-expr" style="margin-top: 12px">
+            <div>计算结果：<code class="mono">{{ dlg.trial.exprResult }}</code></div>
+            <!-- 列出 Groovy 计算用到的用户指标数据（含命中数据版本），方便核对结果为何是该值 -->
+            <div v-if="exprVarList(dlg.trial.exprVars).length" class="trial-vars" style="margin-top: 8px">
+              <div style="color:#909399; margin-bottom:4px">
+                Groovy 用到的指标取值<span v-if="dlg.trial.dataVersion">（数据版本 {{ dlg.trial.dataVersion }}）</span>：
+              </div>
+              <div v-for="v in exprVarList(dlg.trial.exprVars)" :key="v.code" style="line-height:1.9">
+                <code class="mono">{{ v.code }}</code><span v-if="v.name" style="color:#909399"> · {{ v.name }}</span>
+                ＝ <code class="mono">{{ v.value }}</code>
+                <span v-if="Number(v.value) === 0" style="color:#e6a23c">（该对象/日期宽表中无此指标数据，取 0）</span>
+              </div>
+            </div>
+          </div>
           <div v-else-if="dlg.trial.status === 'FAILED'" class="trial-error">
-            ✗ {{ dlg.trial.errorMsg || '试运行失败，请检查 SQL 是否合法' }}
+            ✗ {{ dlg.trial.errorMsg || '试运行失败，请检查 SQL/Groovy 表达式是否合法' }}
           </div>
         </el-form-item>
 
         <!-- 隐含字段（不让用户暴露太多复杂度） -->
       </el-form>
       <template #footer>
+        <span v-if="metricEditBlocked" style="margin-right:12px; color:#e6a23c; font-size:12px">指标数据加载中，请稍候…</span>
         <el-button @click="dlg.show = false">取消</el-button>
-        <el-button :loading="dlg.saving" @click="onSave('DRAFT')">保存为草稿</el-button>
-        <el-button type="primary" :loading="dlg.saving" @click="onSave('ACTIVE')">发布</el-button>
+        <el-button :loading="dlg.saving" :disabled="metricEditBlocked"
+                   :title="metricEditBlocked ? '指标数据加载完成后可用' : ''" @click="onSave('DRAFT')">保存为草稿</el-button>
+        <el-button type="primary" :loading="dlg.saving" :disabled="metricEditBlocked"
+                   :title="metricEditBlocked ? '指标数据加载完成后可用' : ''" @click="onSave('ACTIVE')">发布</el-button>
       </template>
     </el-dialog>
 
@@ -359,11 +390,49 @@ import {
   listMetrics, listMetricCategories, getMetricDetail,
   createMetric, updateMetric, deleteMetric,
   changeMetricStatus, trialRunMetric, executeMetric,
-  uploadImportFile
+  uploadImportFile, suggestEmployees
 } from '@/api/perf';
 import { listAuditLogs } from '@/api/system';
+import { getOrgTree } from '@/api/orgs';
 
 const router = useRouter();
+
+// 试运行"对象值"联想：员工走 emp-suggest；机构走机构树客户端过滤
+async function queryEmpSuggest(queryString, cb) {
+  const kw = (queryString || '').trim();
+  if (!kw) { cb([]); return; }
+  try {
+    const list = await suggestEmployees(kw);
+    const arr = Array.isArray(list) ? list : [];
+    cb(arr.map(u => ({ ...u, code: u.empId || u.username, label: u.empChnName ? `${u.username}（${u.empChnName}）` : u.username })));
+  } catch { cb([]); }
+}
+let _orgFlat = null;
+async function loadOrgFlat() {
+  if (_orgFlat) return _orgFlat;
+  const flat = [];
+  const walk = (nodes) => (nodes || []).forEach(n => {
+    const code = n.orgCode || n.value || n.id;
+    const name = n.orgName || n.label || n.name;
+    if (code) flat.push({ code: String(code), name: name || '', label: name ? `${code}（${name}）` : String(code) });
+    walk(n.children);
+  });
+  try { walk(await getOrgTree()); } catch { /* ignore */ }
+  _orgFlat = flat;
+  return flat;
+}
+async function queryOrgSuggest(queryString, cb) {
+  const kw = (queryString || '').trim().toLowerCase();
+  const flat = await loadOrgFlat();
+  if (!kw) { cb(flat.slice(0, 20)); return; }
+  cb(flat.filter(o => o.code.toLowerCase().includes(kw) || o.name.toLowerCase().includes(kw)).slice(0, 20));
+}
+function queryNoSuggest(_q, cb) { cb([]); }
+// 选中联想项：display 显示 label，objectId 存干净 code（工号/机构号）
+function onTrialSubjectSelect(item) {
+  dlg.trialSubjectId = item.code || '';
+  dlg.trialSubject = item.label || item.code || '';
+}
 
 // === 常量 ===
 const CATEGORY_OPTIONS = ['规模类', '效益类', '质量类', '合规类'];
@@ -409,7 +478,12 @@ const bizActionLabel = (a) => BIZ_ACTION_LABEL[a] || a || '—';
 const UNCATEGORIZED_LABEL = '未分类';
 const allMetrics = ref([]);
 const categories = ref([]);  // [{value, label}] 来自 GET /api/perf/metrics/categories
+// 指标列表加载态：加载中 / 是否已成功加载过。编辑指标的保存/发布/试运行都依赖 allMetrics
+// 解析引用指标标签与校验上级指标，未加载完成时禁止这些操作，避免按"空列表"误判引用非法。
+const metricsLoading = ref(false);
+const metricsLoaded = ref(false);
 async function reload() {
+  metricsLoading.value = true;
   try {
     const [r, cs] = await Promise.all([
       listMetrics({ pageSize: 100 }),
@@ -418,10 +492,21 @@ async function reload() {
     // 停用项保留在树里（按用户反馈），通过按钮 disable 限制操作即可
     if (Array.isArray(r)) allMetrics.value = r;
     categories.value = Array.isArray(cs) ? cs : [];
+    metricsLoaded.value = true;
     // 默认选中第一个指标
     if (allMetrics.value.length && !picked.value) onPick(allMetrics.value[0].metricCode);
-  } catch {}
+  } catch {
+    // 加载失败保持 metricsLoaded 原值（首次失败则仍为 false，继续禁止编辑保存）
+  } finally {
+    metricsLoading.value = false;
+  }
 }
+// 编辑指标弹框里"保存/发布/试运行"是否应禁用：列表加载中或尚未成功加载
+const metricEditBlocked = computed(() => metricsLoading.value || !metricsLoaded.value);
+// 列表晚于弹框加载完成时，重渲染表达式编辑器，把已存 exprText 里的指标编号还原成标签
+watch(metricsLoaded, (v) => {
+  if (v && dlg.show && dlg.form.calcLogicType === 'EXPR') nextTick(renderExprEditor);
+});
 
 // === 分类规则：优先 metricDesc(JSON)._category，其次按名称关键词推断 ===
 function categoryOf(m) {
@@ -565,6 +650,7 @@ const sqlInputRef = ref(null);
 // 后端 MetricTrialService.runSql 自动注入的 10 个 SQL 命名参数；点击下方变量符插入到光标位置
 const DATE_MACROS = [
   { token: ':dataDate',           desc: '数据日期（=dateToday，由调度/试运行传入）' },
+  { token: ':objectId',           desc: '对象id（试运行的"对象值"输入框映射；员工=工号/机构=机构号；真实执行为 null，建议写 (:objectId IS NULL OR x=:objectId)）' },
   { token: ':version',            desc: 'sys_control 当前版本' },
   { token: ':dateToday',          desc: '当前日期 T' },
   { token: ':dateYesterday',      desc: 'T-1 上一日期' },
@@ -597,6 +683,7 @@ function insertMacro(token) {
 const dlg = reactive({
   show: false, editing: null, saving: false,
   trialDate: null, trialing: false,
+  trialSubject: '', trialSubjectId: '',
   trial: { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] },
   slots: [],
   form: {
@@ -726,6 +813,30 @@ function syncExprText() {
   dlg.form.exprDisplay = displayOut.replace(/\s+/g, ' ').trim();
 }
 
+// 校验 Groovy 表达式里"相邻两个操作数之间缺运算符"——两个指标标签/数字仅用空格相连时，
+// Groovy 会把前者当类名报 "unable to resolve class M_xxxx"。这里提前给出可读提示，命中返回错误文案，否则 null。
+function checkExprOperator(expr) {
+  const e = expr || '';
+  // M_xxx 紧跟 M_xxx / 数字，或 数字 紧跟 M_xxx，中间只有空白（无 + - * / 等运算符）
+  const m = e.match(/(\bM_[A-Za-z0-9_]+\b)\s+(\bM_[A-Za-z0-9_]+\b|\d+(?:\.\d+)?)/)
+        || e.match(/(\b\d+(?:\.\d+)?)\s+(\bM_[A-Za-z0-9_]+\b)/);
+  if (m) {
+    const disp = (c) => (allMetrics.value.find(x => x.metricCode === c)?.metricName)
+      ? `${c}·${allMetrics.value.find(x => x.metricCode === c).metricName}` : c;
+    return `表达式里「${disp(m[1])}」与「${disp(m[2])}」之间缺少运算符（如 + - * / 等），请补全后再试`;
+  }
+  return null;
+}
+
+// 把后端返回的 exprVars(对象: 指标编号→值) 转为带指标名的列表，供试运行结果展示"Groovy 用到的用户指标数据"
+function exprVarList(vars) {
+  if (!vars || typeof vars !== 'object') return [];
+  return Object.keys(vars).map((code) => {
+    const m = allMetrics.value.find((x) => x.metricCode === code);
+    return { code, name: m ? (m.metricName || '') : '', value: vars[code] };
+  });
+}
+
 // 把已存在的 exprText 反序列化渲染回编辑器（编辑场景）：命中已知指标编号→标签，其余→文本
 function renderExprEditor() {
   const editor = exprEditorRef.value;
@@ -766,10 +877,13 @@ function usedMetricCodes() {
   return Array.from(editor.querySelectorAll('.metric-chip')).map(n => n.getAttribute('data-code'));
 }
 function resetTrial() {
-  dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] };
+  dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], exprResult: null, exprVars: null, dataVersion: '' };
 }
 const formRules = {
-  metricCode: [{ required: true, message: '编码必填' }],
+  metricCode: [
+    { required: true, message: '编码必填' },
+    { pattern: /^[A-Z0-9_]+$/, message: '指标编号只允许大写字母、数字和下划线（与编辑规则一致）' }
+  ],
   metricName: [{ required: true, message: '名称必填' }],
   baseDim: [{ required: true, message: '基础维度必选' }],
   metricLevel: [{ required: true, message: '指标层级必选' }],
@@ -794,9 +908,11 @@ function openCreate() {
     { name: 'period_start', type: 'DATE', required: true, desc: '起始日期' },
     { name: 'period_end',   type: 'DATE', required: true, desc: '截止日期' }
   ];
-  dlg.trialDate = null; resetTrial();
+  dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
   exprPickCode.value = '';
   dlg.show = true;
+  // 指标列表若未加载成功（首屏失败/仍在途），开窗时补一次拉取，避免弹框永久禁用保存
+  if (!metricsLoaded.value && !metricsLoading.value) reload();
   nextTick(renderExprEditor);
 }
 function openEdit(row) {
@@ -811,9 +927,11 @@ function openEdit(row) {
     _category: resolveCategory(row)
   });
   dlg.slots = resolveSlots(row);
-  dlg.trialDate = null; resetTrial();
+  dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
   exprPickCode.value = '';
   dlg.show = true;
+  // 指标列表若未加载成功，开窗时补一次拉取（编辑场景还需靠它把已存 exprText 还原成指标标签）
+  if (!metricsLoaded.value && !metricsLoading.value) reload();
   // 弹框渲染后，把已存的 exprText 还原成标签 + 文本
   nextTick(renderExprEditor);
 }
@@ -822,9 +940,17 @@ function addSlot() {
 }
 
 async function onSave(targetStatus) {
+  // 指标数据未加载完成时禁止保存/发布：否则引用指标标签解析、上级指标校验都基于空列表，会误判
+  if (metricEditBlocked.value) {
+    return ElMessage.warning('指标数据尚未加载完成，请稍候再保存/发布');
+  }
   try { await formRef.value.validate(); } catch { return; }
   // 提交前把编辑器内容同步到 exprText（防止最后一次键入未触发 input）
   if (dlg.form.calcLogicType === 'EXPR') syncExprText();
+  if (dlg.form.calcLogicType === 'EXPR') {
+    const opErr = checkExprOperator(dlg.form.exprText || '');
+    if (opErr) { ElMessage.warning(opErr); return; }
+  }
   if (targetStatus === 'ACTIVE' && dlg.form.calcLogicType === 'EXPR') {
     const codes = usedMetricCodes();
     if (codes.length < 1) {
@@ -890,23 +1016,57 @@ async function onSave(targetStatus) {
 }
 
 async function onTrialFromDialog() {
-  if (!dlg.editing) return ElMessage.warning('请先保存指标后再试运行');
+  // 指标数据未加载完成时禁止试运行：EXPR 引用指标需靠 allMetrics 解析编号，空列表会取不到引用值
+  if (metricEditBlocked.value) {
+    return ElMessage.warning('指标数据尚未加载完成，请稍候再试运行');
+  }
+  // 直接取当前 SQL/Groovy 表达式执行，无需先保存指标
+  const logic = dlg.form.calcLogicType;
+  if (logic === 'EXPR') syncExprText();
+  const sqlText = logic === 'SQL' ? (dlg.form.sqlText || '').trim() : '';
+  const exprText = logic === 'EXPR' ? (dlg.form.exprText || '').trim() : '';
+  if (logic === 'SQL' && !sqlText) return ElMessage.warning('请先填写 SQL 表达式');
+  if (logic === 'EXPR' && !exprText) return ElMessage.warning('请先填写 Groovy 表达式');
+  if (logic !== 'SQL' && logic !== 'EXPR') return ElMessage.warning('该计算逻辑暂不支持试运行');
+  if (logic === 'EXPR') {
+    const opErr = checkExprOperator(exprText);
+    if (opErr) return ElMessage.warning(opErr);
+  }
   const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
   // 单日期模式：dlg.trialDate 是 'YYYY-MM-DD' 字符串，作为后端 :dataDate 占位符的值
   const dataDate = dlg.trialDate || yesterday;
+  // 对象值：优先取联想选中的干净 code，否则用手输原值；映射后端 SQL :objectId（始终下发，未填则 null）
+  const objectId = (dlg.trialSubjectId || dlg.trialSubject || '').trim() || null;
+  // Groovy 引用了其它指标(M_xxxx)时必须有对象值，才能按维度+日期+对象值从宽表取数；否则引用指标全为 0
+  if (logic === 'EXPR' && /\bM_[A-Za-z0-9_]+\b/.test(exprText) && !objectId) {
+    return ElMessage.warning('Groovy 引用了指标，请先填写【对象值】（按维度+数据日期定位宽表中该对象的指标值）');
+  }
   resetTrial();
   dlg.trialing = true;
   const t0 = Date.now();
   try {
-    const r = await trialRunMetric(dlg.editing, { dataDate, sampleSize: 10 });
-    // 后端 MetricTrialRespDTO: { status, totalRows, executionMillis, errorMsg, sampleRows }
+    // metricCode 仅作路由占位（命中已注册的 /{metricCode}/trial-run 资源）；实际执行用传入的表达式文本
+    const codeForPath = dlg.editing || dlg.form.metricCode || '_PREVIEW_';
+    const r = await trialRunMetric(codeForPath, {
+      dataDate, sampleSize: 10, params: { objectId },
+      calcLogicType: logic,
+      baseDim: dlg.form.baseDim,
+      sqlText: sqlText || undefined,
+      exprText: exprText || undefined
+    });
+    // 后端 MetricTrialRespDTO: { status, totalRows, executionMillis, errorMsg, sampleRows, exprResult }
     const rows = r?.sampleRows || [];
     const cols = rows.length ? Object.keys(rows[0]) : ['cust_id', 'org_id', 'metric_value'];
     dlg.trial = {
-      status: r?.status || (rows.length ? 'SUCCESS' : 'FAILED'),
+      status: r?.status || (rows.length || r?.exprResult != null ? 'SUCCESS' : 'FAILED'),
       cost: r?.executionMillis ?? (Date.now() - t0),
       totalRows: r?.totalRows ?? rows.length,
       errorMsg: r?.errorMsg || '',
+      // EXPR(Groovy) 单值结果：用于成功后反显「计算结果：xxx」
+      exprResult: r?.exprResult,
+      // EXPR 引用指标取值 + 命中数据版本：列出 Groovy 计算用到的用户指标数据
+      exprVars: r?.exprVars || null,
+      dataVersion: r?.dataVersion || '',
       rows, cols
     };
   } catch (err) {
