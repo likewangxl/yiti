@@ -119,7 +119,8 @@
       <el-table :data="dlg.items" size="default" border>
         <el-table-column label="指标" min-width="190">
           <template #default="{row}">
-            <el-select v-model="row.metricCode" :disabled="dlg.readOnly" filterable placeholder="选择指标" style="width:100%">
+            <!-- 编辑方案时，已配置指标项的"指标"不允许修改（仅新增项可选；权重/计分等仍可改）-->
+            <el-select v-model="row.metricCode" :disabled="dlg.readOnly || (!!dlg.editingId && !!row.id)" filterable placeholder="选择指标" style="width:100%">
               <el-option v-for="m in metricOptions" :key="m.metricCode"
                 :value="m.metricCode" :label="`${m.metricName}`" />
             </el-select>
@@ -581,6 +582,7 @@ onMounted(() => { reload(); loadOrgTree(); });
 .table { padding: 0; padding-bottom: 12px; }
 .link { color: $primary; cursor: pointer; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 14px; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 
 .form-grid {
