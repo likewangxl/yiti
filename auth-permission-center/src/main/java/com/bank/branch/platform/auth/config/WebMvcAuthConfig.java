@@ -66,7 +66,6 @@ public class WebMvcAuthConfig implements WebMvcConfigurer {
                 "/api/auth/uniauth/redirect",
                 "/api/auth/uniauth/callback",
                 "/api/auth/logout",
-                "/api/auth/switch-role",
                 "/doc.html",
                 "/webjars/**",
                 "/swagger-resources/**",
