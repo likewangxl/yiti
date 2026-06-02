@@ -20,7 +20,7 @@
       <template #dropdown>
         <el-dropdown-menu>
           <el-dropdown-item disabled>
-            <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · 当前：{{ store.roleName }}</span>
+            <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.user?.mainOrgCode || '—' }}</span>
           </el-dropdown-item>
           <el-dropdown-item divided disabled>
             <span style="color:#9CA3AF;font-size:12px">切换角色</span>
