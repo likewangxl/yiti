@@ -60,7 +60,8 @@ public class BizScopeService {
      * @throws PermissionDeniedException 用户角色未配置该 BizType 的数据范围时
      */
     public DataScopeType resolveScope(String empId, BizType bizType) {
-        Set<String> roleIds = cacheService.getRoleIdsByEmpId(empId);
+        // 按「本次请求生效角色」解析数据范围：会话切换角色后只取当前角色的范围
+        Set<String> roleIds = cacheService.getEffectiveRoleIds(empId);
         DataScopeType result = null;
         int maxPriority = -1;
 

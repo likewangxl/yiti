@@ -20,6 +20,7 @@ import java.util.Set;
  * @param roleCodes          角色编码集合（ROLE_CODE）
  * @param candidateGroupKeys 候选组标识集合（用于工作流）
  * @param systemAdmin        是否系统管理员
+ * @param activeRoleId       当前激活角色ID（角色切换用）；为 null 表示不限定单一角色，按全部角色解析权限
  */
 public record CurrentUserContext(
     String empId,
@@ -31,10 +32,22 @@ public record CurrentUserContext(
     Set<String> roleIds,
     Set<String> roleCodes,
     Set<String> candidateGroupKeys,
-    Boolean systemAdmin
+    Boolean systemAdmin,
+    String activeRoleId
 ) implements Serializable {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * 兼容旧 10 参构造：不指定当前激活角色（activeRoleId=null，按全部角色解析权限）。
+     */
+    public CurrentUserContext(String empId, String username, String displayName,
+                              String mainOrgCode, String mainOrgName, Integer orgLevel,
+                              Set<String> roleIds, Set<String> roleCodes,
+                              Set<String> candidateGroupKeys, Boolean systemAdmin) {
+        this(empId, username, displayName, mainOrgCode, mainOrgName, orgLevel,
+                roleIds, roleCodes, candidateGroupKeys, systemAdmin, null);
+    }
     /**
      * 判断当前用户是否拥有指定角色
      *

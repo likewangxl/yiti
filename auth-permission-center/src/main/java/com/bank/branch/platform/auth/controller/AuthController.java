@@ -237,6 +237,23 @@ public class AuthController {
     }
 
     /**
+     * 切换当前角色（仅本次会话生效）
+     *
+     * @param req     含目标角色ID（必须是当前用户已分配角色）
+     * @param session HttpSession
+     * @return 切换后的当前角色
+     */
+    @PostMapping("/switch-role")
+    @Operation(summary = "切换当前角色",
+            description = "切换本次会话的当前角色（仅会话内生效，重新登录回到主角色）；切换后菜单、接口权限、数据范围、工作流待办均按新角色")
+    public ResponseWrapper<RoleSimpleDTO> switchRole(
+            @Valid @RequestBody com.bank.branch.platform.auth.api.dto.SwitchRoleReqDTO req,
+            HttpSession session) {
+        log.info("[AuthController.switchRole] roleId={}", req.getRoleId());
+        return ResponseWrapper.success(authService.switchRole(req.getRoleId(), session));
+    }
+
+    /**
      * 用户登出
      *
      * @param session HttpSession，登出时销毁
@@ -270,13 +287,15 @@ public class AuthController {
         dto.setMainOrgName(ctx.mainOrgName());
         dto.setOrgLevel(ctx.orgLevel());
         dto.setIsSystemAdmin(ctx.systemAdmin());
-        // 填充 roles: 从 UserRoleMapper 查询并映射为 RoleSimpleDTO
+        dto.setActiveRoleId(ctx.activeRoleId());
+        // 填充 roles: 当前用户全部已分配角色（前端角色下拉用），并标记当前激活角色
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(ctx.empId());
         dto.setRoles(roles.stream().map(r -> {
             RoleSimpleDTO rd = new RoleSimpleDTO();
             rd.setRoleId(r.getRoleId());
             rd.setRoleCode(r.getRoleCode());
             rd.setRoleChName(r.getRoleChName());
+            rd.setPrimary(r.getRoleId().equals(ctx.activeRoleId()));
             return rd;
         }).collect(Collectors.toList()));
 

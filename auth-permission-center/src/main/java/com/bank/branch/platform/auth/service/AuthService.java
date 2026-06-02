@@ -122,24 +122,13 @@ public class AuthService {
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
         // 无角色用户禁止登录；并把主角色排到首位作为当前登录角色（前端取 roles[0]）
         PtRole primaryRole = resolvePrimaryRoleAndOrder(user.getUserId(), roles);
-        Set<String> roleIds = roles.stream().map(PtRole::getRoleId).collect(Collectors.toSet());
-        Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
-        // 候选组 Key 格式：ROLE:{ROLE_CODE} / USER:{empId} / ORG:{mainOrgCode}
-        // 三种前缀对齐 CandidateResolverService.resolveCandidates 的输出，
-        // 否则 BPMN 配 USER/ORG 类型候选时该用户匹配不到 Flowable 候选组（2026-05-20 修复）
-        Set<String> candidateGroupKeys = new java.util.HashSet<>();
-        roleCodes.forEach(c -> candidateGroupKeys.add("ROLE:" + c));
-        candidateGroupKeys.add("USER:" + user.getUserId());
-        if (mainOrgCode != null) {
-            candidateGroupKeys.add("ORG:" + mainOrgCode);
-        }
-        boolean isAdmin = roleCodes.contains("SYS_ADMIN");
+        Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet()); // 仅日志用
 
-        // 构建 CurrentUserContext 并存入 Session
-        CurrentUserContext userCtx = new CurrentUserContext(
+        // 当前登录角色 = 主角色：会话上下文按「单一当前角色」构建
+        // 菜单/接口权限/数据范围/工作流候选均以当前角色为准，可经 /api/auth/switch-role 切换
+        CurrentUserContext userCtx = buildContextForActiveRole(
             user.getUserId(), user.getUsername(), user.getUserchnname(),
-            mainOrgCode, mainOrgName, orgLevel,
-            roleIds, roleCodes, candidateGroupKeys, isAdmin);
+            mainOrgCode, mainOrgName, orgLevel, primaryRole);
         session.setAttribute(SESSION_USER_KEY, userCtx);
 
         // 构建响应
@@ -246,16 +235,12 @@ public class AuthService {
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
         // 无角色用户禁止登录；并把主角色排到首位作为当前登录角色（前端取 roles[0]）
         PtRole primaryRole = resolvePrimaryRoleAndOrder(user.getUserId(), roles);
-        Set<String> roleIds = roles.stream().map(PtRole::getRoleId).collect(Collectors.toSet());
-        Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
-        Set<String> candidateGroupKeys = roleCodes.stream()
-                .map(c -> "ROLE:" + c).collect(Collectors.toSet());
-        boolean isAdmin = roleCodes.contains("SYS_ADMIN");
+        Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet()); // 仅日志用
 
-        CurrentUserContext userCtx = new CurrentUserContext(
+        // 当前登录角色 = 主角色：会话上下文按「单一当前角色」构建（同 login 链路）
+        CurrentUserContext userCtx = buildContextForActiveRole(
                 user.getUserId(), user.getUsername(), user.getUserchnname(),
-                mainOrgCode, mainOrgName, orgLevel,
-                roleIds, roleCodes, candidateGroupKeys, isAdmin);
+                mainOrgCode, mainOrgName, orgLevel, primaryRole);
         session.setAttribute(SESSION_USER_KEY, userCtx);
 
         // UIAS 授权信息塞 session 供后续业务消费
@@ -328,6 +313,58 @@ public class AuthService {
         // 主角色置顶：稳定排序保证主角色在首位，其余角色相对顺序不变
         roles.sort((a, b) -> Boolean.compare(pid.equals(b.getRoleId()), pid.equals(a.getRoleId())));
         return roles.get(0);
+    }
+
+    /**
+     * 按「单一当前角色」构建会话上下文：roleIds/roleCodes/候选组仅含该角色，
+     * activeRoleId 指向该角色，使后续菜单/接口权限/数据范围/工作流候选都按当前角色解析。
+     */
+    private CurrentUserContext buildContextForActiveRole(
+            String empId, String username, String displayName,
+            String mainOrgCode, String mainOrgName, Integer orgLevel, PtRole activeRole) {
+        Set<String> roleIds = java.util.Set.of(activeRole.getRoleId());
+        Set<String> roleCodes = java.util.Set.of(activeRole.getRoleCode());
+        // 候选组 Key：ROLE:{当前角色CODE} / USER:{empId} / ORG:{mainOrgCode}
+        Set<String> candidateGroupKeys = new java.util.HashSet<>();
+        candidateGroupKeys.add("ROLE:" + activeRole.getRoleCode());
+        candidateGroupKeys.add("USER:" + empId);
+        if (mainOrgCode != null) {
+            candidateGroupKeys.add("ORG:" + mainOrgCode);
+        }
+        boolean isAdmin = "SYS_ADMIN".equals(activeRole.getRoleCode());
+        return new CurrentUserContext(empId, username, displayName,
+                mainOrgCode, mainOrgName, orgLevel,
+                roleIds, roleCodes, candidateGroupKeys, isAdmin, activeRole.getRoleId());
+    }
+
+    /**
+     * 切换当前会话的激活角色（仅本次会话生效，重新登录回到主角色）。
+     * <p>校验目标角色确为该用户已分配角色后，按单角色重建会话上下文，
+     * 切换后菜单、接口权限、数据范围、工作流待办均按新角色处理。</p>
+     *
+     * @param roleId  目标角色ID
+     * @param session 当前会话
+     * @return 切换后的当前角色信息
+     */
+    public RoleSimpleDTO switchRole(String roleId, HttpSession session) {
+        CurrentUserContext ctx = getCurrentUser(session); // 未登录抛 AUTH-40105
+        List<PtRole> roles = userRoleMapper.selectRolesByUserId(ctx.empId());
+        PtRole target = roles.stream()
+                .filter(r -> r.getRoleId().equals(roleId)).findFirst()
+                .orElseThrow(() -> new AuthException(AuthErrorCode.RBAC_DENIED.getCode(),
+                        "无法切换到未分配给当前用户的角色"));
+        CurrentUserContext newCtx = buildContextForActiveRole(
+                ctx.empId(), ctx.username(), ctx.displayName(),
+                ctx.mainOrgCode(), ctx.mainOrgName(), ctx.orgLevel(), target);
+        session.setAttribute(SESSION_USER_KEY, newCtx);
+        log.info("[AuthService.switchRole] empId={} 切换当前角色 -> {}({})",
+                ctx.empId(), target.getRoleCode(), roleId);
+        RoleSimpleDTO dto = new RoleSimpleDTO();
+        dto.setRoleId(target.getRoleId());
+        dto.setRoleCode(target.getRoleCode());
+        dto.setRoleChName(target.getRoleChName());
+        dto.setPrimary(true); // 标记为当前激活角色
+        return dto;
     }
 
     public CurrentUserContext getCurrentUser(HttpSession session) {
@@ -488,7 +525,8 @@ public class AuthService {
         if (empId == null || empId.isEmpty()) {
             return java.util.Collections.emptyList();
         }
-        java.util.List<String> roleIds = userRoleMapper.selectRoleIdsByUserId(empId);
+        // 按「本次请求生效角色」过滤菜单：会话切换角色后侧边栏只显示当前角色的菜单
+        java.util.Set<String> roleIds = cacheService.getEffectiveRoleIds(empId);
         java.util.Set<String> allowed = new java.util.HashSet<>();
         if (roleIds != null) {
             for (String rid : roleIds) {

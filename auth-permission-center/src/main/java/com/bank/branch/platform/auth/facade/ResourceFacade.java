@@ -62,7 +62,7 @@ public class ResourceFacade implements ResourceApi {
      */
     @Override
     public boolean hasResourcePermission(String empId, String resourceId) {
-        Set<String> roleIds = permissionCacheService.getRoleIdsByEmpId(empId);
+        Set<String> roleIds = permissionCacheService.getEffectiveRoleIds(empId);
         for (String roleId : roleIds) {
             Set<String> resourceIds = permissionCacheService.getResourceIdsByRoleId(roleId);
             if (resourceIds.contains(resourceId)) {
@@ -82,7 +82,7 @@ public class ResourceFacade implements ResourceApi {
      */
     @Override
     public List<ResourceDTO> listUserResources(String empId) {
-        Set<String> roleIds = permissionCacheService.getRoleIdsByEmpId(empId);
+        Set<String> roleIds = permissionCacheService.getEffectiveRoleIds(empId);
         // 合并所有角色的资源ID，取并集
         Set<String> authorizedResourceIds = new HashSet<>();
         for (String roleId : roleIds) {
