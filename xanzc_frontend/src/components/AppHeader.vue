@@ -111,8 +111,9 @@ async function onCommand(cmd) {
     try {
       await switchRole(roleId);
       store.setActiveRole(roleId);
-      ElMessage.success(`已切换到「${r?.roleChName || roleId}」`);
-      // 刷新页面，确保菜单/权限/数据范围全部按新角色重新拉取
+      ElMessage.success(`已切换到「${r?.roleChName || roleId}」，正在进入工作台`);
+      // 跳转工作台并整页刷新，确保菜单/权限/数据范围全部按新角色重新拉取
+      await router.push('/workspace').catch(() => {});
       setTimeout(() => window.location.reload(), 300);
     } catch (e) {
       ElMessage.error('切换角色失败：' + (e?.message || e));
