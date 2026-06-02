@@ -3,12 +3,14 @@ package com.bank.branch.platform.workflow.listener;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.RepositoryService;
+import org.flowable.engine.TaskService;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.task.service.delegate.DelegateTask;
 import org.flowable.task.service.delegate.TaskListener;
@@ -38,6 +40,7 @@ public class TaskAssignmentListener implements TaskListener {
     private final RepositoryService repositoryService;
     private final UserApi userApi;
     private final OrgApi orgApi;
+    private final TaskService taskService;
     private final com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
 
     /**
@@ -60,6 +63,12 @@ public class TaskAssignmentListener implements TaskListener {
         String processDefinitionKey = pd != null ? pd.getKey() : processDefinitionId;
         String nodeKey = delegateTask.getTaskDefinitionKey();
         String taskId = delegateTask.getId();
+
+        // original_owner_approve 节点：原业绩所属人若为「虚拟员工」(字典 USER_TYPE=2)，
+        // 无需人工审批，自动默认审批通过，审批意见记「默认同意」，流程继续到后续节点。
+        if ("original_owner_approve".equals(nodeKey) && autoApproveIfVirtualOwner(delegateTask, taskId)) {
+            return;
+        }
 
         // 解析候选组
         List<String> candidates = candidateResolverService.resolveCandidates(processDefinitionKey, nodeKey);
@@ -131,6 +140,39 @@ public class TaskAssignmentListener implements TaskListener {
                 log.warn("[TaskAssignmentListener] 发送通知失败，任务 {}，原因: {}", taskId, e.getMessage());
             }
         }
+    }
+
+    /**
+     * 原业绩所属人审批：若原业绩所属人为虚拟员工(USER_TYPE=2)，自动以「默认同意」完成任务。
+     *
+     * <p>原业绩所属人取任务受理人（BPMN assignee=${ownerEmpId}），兜底取流程变量 ownerEmpId。
+     * 完成失败（如引擎并发）则吞异常返回 false，退回人工审批，保证流程不中断。
+     *
+     * @return true 表示已自动审批通过并完成任务（调用方应直接 return）；false 表示需走人工审批
+     */
+    private boolean autoApproveIfVirtualOwner(DelegateTask delegateTask, String taskId) {
+        String ownerEmpId = delegateTask.getAssignee();
+        if (ownerEmpId == null || ownerEmpId.isEmpty()) {
+            Object v = delegateTask.getVariable("ownerEmpId");
+            ownerEmpId = v != null ? v.toString() : null;
+        }
+        if (ownerEmpId == null || ownerEmpId.isEmpty()) {
+            return false;
+        }
+        try {
+            UserDTO owner = userApi.getUserByEmpId(ownerEmpId);
+            if (owner != null && "2".equals(owner.getUserType())) {
+                taskService.addComment(taskId, delegateTask.getProcessInstanceId(), "APPROVE", "默认同意");
+                taskService.complete(taskId, java.util.Map.of("approved", true));
+                log.info("[TaskAssignmentListener] original_owner_approve 原业绩所属人 {} 为虚拟员工，自动默认同意并完成任务 {}",
+                        ownerEmpId, taskId);
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("[TaskAssignmentListener] original_owner_approve 虚拟员工自动审批失败 owner={}，转人工审批，原因 {}",
+                    ownerEmpId, e.getMessage());
+        }
+        return false;
     }
 
     /**

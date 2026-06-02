@@ -8,7 +8,7 @@
               全局 underscore-to-camel 会将其映射为 createAuthor / updateAuthor。
     -->
     <sql id="BASE_COLUMNS">
-        USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL,
+        USER_ID, USERNAME, USERCHNNAME, PWD, EMAIL, USER_TYPE,
         ISEXPIRED, ISLOCKED, PASS_WRONG_COUNT, ISENABLED,
         CREATE_TIME, CREATE_AUTHOR, UPDATE_TIME, UPDATE_AUTHOR,
         REMARK, PWD_UPDATE_TIME
@@ -16,7 +16,7 @@
 
     <!-- JOIN 场景下的限定列，避免与 EXT_USER_ORG 的同名列（如 USER_ID）冲突 -->
     <sql id="BASE_COLUMNS_QUALIFIED">
-        u.USER_ID, u.USERNAME, u.USERCHNNAME, u.PWD, u.EMAIL,
+        u.USER_ID, u.USERNAME, u.USERCHNNAME, u.PWD, u.EMAIL, u.USER_TYPE,
         u.ISEXPIRED, u.ISLOCKED, u.PASS_WRONG_COUNT, u.ISENABLED,
         u.CREATE_TIME, u.CREATE_AUTHOR, u.UPDATE_TIME, u.UPDATE_AUTHOR,
         u.REMARK, u.PWD_UPDATE_TIME

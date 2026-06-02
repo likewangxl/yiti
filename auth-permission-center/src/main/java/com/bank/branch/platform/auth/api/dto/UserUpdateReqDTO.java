@@ -20,6 +20,10 @@ public class UserUpdateReqDTO {
     @Size(max = 256)
     private String remark;
 
+    /** 用户类型（字典 USER_TYPE：1-员工 / 2-虚拟员工）；不传表示不改. */
+    @Size(max = 8)
+    private String userType;
+
     /** 主机构编码（V1 单主机构语义），可选；不传表示不改 */
     @Size(max = 20)
     private String orgCode;

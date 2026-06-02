@@ -38,6 +38,9 @@ class TaskAssignmentListenerTest {
     @Mock
     private com.bank.branch.platform.auth.api.OrgApi orgApi;
 
+    @Mock
+    private org.flowable.engine.TaskService taskService;
+
     @InjectMocks
     private TaskAssignmentListener taskAssignmentListener;
 
@@ -106,6 +109,50 @@ class TaskAssignmentListenerTest {
 
         // Assert
         verify(delegateTask, never()).addCandidateGroup(anyString());
+    }
+
+    @Test
+    void notify_originalOwnerVirtual_autoApprovesWithDefaultAgree() {
+        // Arrange：original_owner_approve 节点，原业绩所属人为虚拟员工(userType=2)
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("perf_alloc_adjust_corp_v1:1:1");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("original_owner_approve");
+        when(delegateTask.getId()).thenReturn("TASK_OWNER_V");
+        when(delegateTask.getAssignee()).thenReturn("U_VT");
+        when(delegateTask.getProcessInstanceId()).thenReturn("PROC_1");
+        com.bank.branch.platform.auth.api.dto.UserDTO owner = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        owner.setUserType("2");
+        when(userApi.getUserByEmpId("U_VT")).thenReturn(owner);
+
+        // Act
+        taskAssignmentListener.notify(delegateTask);
+
+        // Assert：自动「默认同意」并完成任务，不再走候选组解析
+        verify(taskService).addComment("TASK_OWNER_V", "PROC_1", "APPROVE", "默认同意");
+        verify(taskService).complete("TASK_OWNER_V", java.util.Map.of("approved", true));
+        verify(candidateResolverService, never()).resolveCandidates(anyString(), anyString());
+    }
+
+    @Test
+    void notify_originalOwnerNotVirtual_goesManual() {
+        // Arrange：original_owner_approve 节点，原业绩所属人为普通员工(userType=1)
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("perf_alloc_adjust_corp_v1:1:2");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("original_owner_approve");
+        when(delegateTask.getId()).thenReturn("TASK_OWNER_R");
+        when(delegateTask.getAssignee()).thenReturn("U_REAL");
+        stubProcDefKey("perf_alloc_adjust_corp_v1:1:2", "perf_alloc_adjust_corp_v1");
+        com.bank.branch.platform.auth.api.dto.UserDTO owner = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        owner.setUserType("1");
+        when(userApi.getUserByEmpId("U_REAL")).thenReturn(owner);
+        when(candidateResolverService.resolveCandidates("perf_alloc_adjust_corp_v1", "original_owner_approve"))
+                .thenReturn(Collections.emptyList());
+
+        // Act
+        taskAssignmentListener.notify(delegateTask);
+
+        // Assert：普通员工不自动完成任务
+        verify(taskService, never()).complete(anyString(), anyMap());
     }
 
     @Test

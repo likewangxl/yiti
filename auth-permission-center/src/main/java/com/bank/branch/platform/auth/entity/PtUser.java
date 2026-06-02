@@ -37,6 +37,10 @@ public class PtUser {
     /** 邮箱，对应 EMAIL */
     private String email;
 
+    /** 用户类型（字典 USER_TYPE：1-员工 / 2-虚拟员工），对应 USER_TYPE */
+    @TableField("USER_TYPE")
+    private String userType;
+
     /** 账号是否过期：0-未过期，1-已过期，对应 ISEXPIRED（DB 列名无下划线） */
     @TableField("ISEXPIRED")
     private Integer isExpired;

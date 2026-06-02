@@ -36,6 +36,10 @@ public class UserCreateReqDTO {
     @Size(max = 256)
     private String remark;
 
+    /** 用户类型（字典 USER_TYPE：1-员工 / 2-虚拟员工）. */
+    @Size(max = 8)
+    private String userType;
+
     /** 主机构编码（V1 单主机构语义），可选；前端按当前选中机构带入 */
     @Size(max = 20)
     private String orgCode;

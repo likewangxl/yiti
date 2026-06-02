@@ -56,6 +56,7 @@ public class UserFacade implements UserApi {
         dto.setEmpId(user.getUserId());
         dto.setUsername(user.getUsername());
         dto.setDisplayName(user.getUserchnname());
+        dto.setUserType(user.getUserType());
 
         // 获取主机构信息
         var userOrg = userOrgMapper.selectByUserId(empId);
