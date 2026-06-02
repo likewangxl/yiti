@@ -138,7 +138,8 @@ public class BizScopeService {
      * @return BizType -> DataScopeType 映射
      */
     public Map<BizType, DataScopeType> getUserBizScopes(String empId) {
-        Set<String> roleIds = cacheService.getRoleIdsByEmpId(empId);
+        // 按「本次请求生效角色」合并数据范围：会话切换角色后只反映当前角色
+        Set<String> roleIds = cacheService.getEffectiveRoleIds(empId);
         // 按优先级合并：key=BizType, value=最高优先级的DataScopeType
         Map<BizType, Integer> priorityMap = new HashMap<>();
         Map<BizType, DataScopeType> result = new HashMap<>();
