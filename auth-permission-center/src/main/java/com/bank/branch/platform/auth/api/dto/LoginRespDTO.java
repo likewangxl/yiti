@@ -16,6 +16,8 @@ public class LoginRespDTO {
     private String displayName;
     private String mainOrgCode;
     private String mainOrgName;
+    /** 主机构编号（EXT_ORG_INFO.DEPT_NO），前端头部展示用 */
+    private String deptNo;
     private List<RoleSimpleDTO> roles;
     private String token;
     /** 主角色（当前登录角色）信息，roles 列表中亦以主角色置于首位 */

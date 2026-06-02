@@ -39,6 +39,9 @@ public class ExtOrgInfo {
     /** 上级机构编码，对应 P_ID */
     private String pId;
 
+    /** 机构编号（来自 xanpd sys_dept.DEPT_NO），对应 DEPT_NO */
+    private String deptNo;
+
     /** 机构状态：0-启用，1-删除，对应 ORGAN_STATE */
     private Integer organState;
 

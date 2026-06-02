@@ -17,6 +17,7 @@
         ORG_NAME   AS org_name,
         ORG_LEVEL  AS org_level,
         P_ID       AS p_id,
+        DEPT_NO    AS dept_no,
         ORGAN_STATE       AS organ_state,
         ADM_DIVISION_CODE AS adm_division_code,
         ADM_DIVISION_NAME AS adm_division_name,
@@ -76,6 +77,16 @@
                OR ORG_NAME LIKE CONCAT('%', #{keyword}, '%'))
         ORDER BY ORG_LEVEL ASC, ORG_CODE ASC
         LIMIT #{limit}
+    </select>
+
+    <!--
+        取当前最大的纯数字机构编码，用于新增机构自增 ORG_CODE。
+        REGEXP '^[0-9]+$' 过滤掉非数字历史编码（如 ORGxxx），CAST 为无符号整型取 MAX。
+    -->
+    <select id="selectMaxNumericOrgCode" resultType="java.lang.Long">
+        SELECT MAX(CAST(ORG_CODE AS UNSIGNED))
+        FROM EXT_ORG_INFO
+        WHERE ORG_CODE REGEXP '^[0-9]+$'
     </select>
 
 </mapper>

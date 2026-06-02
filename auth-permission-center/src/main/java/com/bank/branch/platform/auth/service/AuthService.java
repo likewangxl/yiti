@@ -112,10 +112,12 @@ public class AuthService {
         String mainOrgCode = userOrg != null ? userOrg.getOrgCode() : null;
         String mainOrgName = null;
         Integer orgLevel = null;
+        String deptNo = null;
         if (mainOrgCode != null) {
             ExtOrgInfo org = orgMapper.selectByOrgCode(mainOrgCode);
             mainOrgName = org != null ? org.getOrgName() : null;
             orgLevel = org != null ? org.getOrgLevel() : null;
+            deptNo = org != null ? org.getDeptNo() : null;
         }
 
         // 查询角色列表
@@ -138,6 +140,7 @@ public class AuthService {
         resp.setDisplayName(user.getUserchnname());
         resp.setMainOrgCode(mainOrgCode);
         resp.setMainOrgName(mainOrgName);
+        resp.setDeptNo(deptNo);
         resp.setToken(session.getId());
         resp.setRoles(roles.stream().map(r -> {
             RoleSimpleDTO dto = new RoleSimpleDTO();
@@ -226,10 +229,12 @@ public class AuthService {
         String mainOrgCode = userOrg != null ? userOrg.getOrgCode() : null;
         String mainOrgName = null;
         Integer orgLevel = null;
+        String deptNo = null;
         if (mainOrgCode != null) {
             ExtOrgInfo org = orgMapper.selectByOrgCode(mainOrgCode);
             mainOrgName = org != null ? org.getOrgName() : null;
             orgLevel = org != null ? org.getOrgLevel() : null;
+            deptNo = org != null ? org.getDeptNo() : null;
         }
 
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
@@ -257,6 +262,7 @@ public class AuthService {
         resp.setDisplayName(user.getUserchnname());
         resp.setMainOrgCode(mainOrgCode);
         resp.setMainOrgName(mainOrgName);
+        resp.setDeptNo(deptNo);
         resp.setToken(session.getId());
         resp.setRoles(roles.stream().map(r -> {
             RoleSimpleDTO dto = new RoleSimpleDTO();

@@ -22,6 +22,7 @@ import java.io.StringReader;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import com.bank.branch.platform.auth.entity.ExtOrgInfo;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
 import com.bank.branch.platform.auth.service.AuthService;
@@ -63,6 +64,7 @@ public class AuthController {
     private final UserRoleMapper userRoleMapper;
     private final BizScopeService bizScopeService;
     private final UniAuthProperties uniauthProps;
+    private final com.bank.branch.platform.auth.mapper.OrgMapper orgMapper;
 
     /**
      * 用户登录
@@ -285,6 +287,13 @@ public class AuthController {
         dto.setDisplayName(ctx.displayName());
         dto.setMainOrgCode(ctx.mainOrgCode());
         dto.setMainOrgName(ctx.mainOrgName());
+        // 机构编号：按主机构编码查 EXT_ORG_INFO.DEPT_NO，前端头部用它替代 orgCode 展示
+        if (ctx.mainOrgCode() != null) {
+            ExtOrgInfo org = orgMapper.selectByOrgCode(ctx.mainOrgCode());
+            if (org != null) {
+                dto.setDeptNo(org.getDeptNo());
+            }
+        }
         dto.setOrgLevel(ctx.orgLevel());
         dto.setIsSystemAdmin(ctx.systemAdmin());
         dto.setActiveRoleId(ctx.activeRoleId());

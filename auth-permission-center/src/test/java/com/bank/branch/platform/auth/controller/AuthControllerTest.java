@@ -55,13 +55,16 @@ class AuthControllerTest {
     @Mock
     private UniAuthProperties uniAuthProperties;
 
+    @Mock
+    private com.bank.branch.platform.auth.mapper.OrgMapper orgMapper;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new AuthController(authService, userRoleMapper, bizScopeService, uniAuthProperties))
+                new AuthController(authService, userRoleMapper, bizScopeService, uniAuthProperties, orgMapper))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
     }
