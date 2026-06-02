@@ -97,7 +97,14 @@
       <!-- ============ 待我审批（TARGET_ADJUST 流程任务） ============ -->
       <el-tab-pane v-if="canApprove" label="待我审批" name="todo">
         <div class="card-section table">
-          <el-table :data="pagedTodos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading">
+          <div class="tab-actions">
+            <el-button type="primary" @click="openBatchReview">
+              批量审批{{ todoSelection.length ? `（已选 ${todoSelection.length}）` : '' }}
+            </el-button>
+          </div>
+          <el-table :data="pagedTodos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading"
+                    @selection-change="onTodoSelectionChange">
+            <el-table-column type="selection" width="45" />
             <el-table-column label="方案编号" min-width="150">
               <template #default="{row}"><code class="mono">{{ planOfTodo(row)?.planCode || '-' }}</code></template>
             </el-table-column>
@@ -230,6 +237,23 @@
       </template>
     </el-dialog>
 
+    <!-- 批量审批弹窗：对所选的多条待审批记录统一通过 / 驳回 -->
+    <el-dialog v-model="batchDlg.show" title="批量审批" width="520px" :close-on-click-modal="false">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px"
+                :title="`已选 ${todoSelection.length} 条记录，将对全部所选记录统一处理。`" />
+      <el-form :model="batchDlg" label-position="top" size="default">
+        <el-form-item label="审批意见" required>
+          <el-input v-model="batchDlg.opinion" type="textarea" :rows="3"
+                    placeholder="请填写审批意见（必填，将记入每条审批日志）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchDlg.show = false">取消</el-button>
+        <el-button type="danger" :loading="batchDlg.saving" @click="submitBatchReview('REJECT')">驳回</el-button>
+        <el-button type="primary" :loading="batchDlg.saving" @click="submitBatchReview('APPROVE')">通过</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 已审批详情弹窗（只读） -->
     <el-dialog v-model="detailDlg.show" :title="detailTitle" width="580px" :close-on-click-modal="true">
       <div class="review-meta">
@@ -345,6 +369,13 @@ const canCreatePlan = computed(() => {
                           || c === 'BACK_FINANCE' || c === 'FINANCE_LEADER');
 });
 
+// 资财部负责人(FINANCE_LEADER)：可查看全部目标方案，不受"仅本人创建"限制
+const isFinanceLeader = computed(() => {
+  const roles = userStore.user?.roles || [];
+  const codes = roles.map(r => (typeof r === 'string' ? r : (r.roleId || r.roleCode)));
+  return codes.some(c => c === 'FINANCE_LEADER' || c === 'R_FIN_LEAD');
+});
+
 // === 维度 / 周期 / 状态 字典 ===
 const BASE_DIMS = [
   { v: 'EMP', l: '员工' },
@@ -407,7 +438,7 @@ const planById = computed(() => {
 const applyByKey = ref(new Map());
 async function loadApplyIndex() {
   try {
-    const r = await listTargetAdjusts({ pageSize: 500 });
+    const r = await listTargetAdjusts({ pageSize: 100 });
     const arr = Array.isArray(r) ? r : (r?.records || []);
     const m = new Map();
     for (const a of arr) {
@@ -478,6 +509,9 @@ async function loadPlans() {
 // 即时过滤：f 任一字段变化都会触发 computed 重算，无需点"查询"
 const filteredPlans = computed(() => {
   let arr = plans.value;
+  // 目标方案：仅展示创建人=本人的记录；资财部负责人不受限制，可看全部
+  const myEmpId = userStore.user?.empId;
+  if (myEmpId && !isFinanceLeader.value) arr = arr.filter(p => p.createdBy === myEmpId);
   if (f.keyword) {
     const kw = String(f.keyword).toLowerCase();
     arr = arr.filter(p => (p.planCode || '').toLowerCase().includes(kw)
@@ -679,6 +713,58 @@ async function submitReview(action) {
   } finally {
     reviewDlg.saving = false;
   }
+}
+
+// === 批量审批：多选 + 统一通过/驳回 ===
+const todoSelection = ref([]);
+function onTodoSelectionChange(rows) {
+  todoSelection.value = rows || [];
+}
+const batchDlg = reactive({ show: false, saving: false, opinion: '' });
+// 点击「批量审批」：必须已选 ≥1 条，否则报错；通过后弹出批量审批弹窗
+function openBatchReview() {
+  if (!todoSelection.value.length) {
+    return ElMessage.error('请至少选择一条待审批记录');
+  }
+  batchDlg.opinion = '';
+  batchDlg.show = true;
+}
+// 对所选全部记录统一通过/驳回；审批意见必填；逐条提交，统计成功/失败
+async function submitBatchReview(action) {
+  if (!batchDlg.opinion || !batchDlg.opinion.trim()) {
+    return ElMessage.warning('请填写审批意见');
+  }
+  const rows = todoSelection.value.filter(r => r && r.taskId);
+  if (!rows.length) {
+    return ElMessage.error('请至少选择一条待审批记录');
+  }
+  batchDlg.saving = true;
+  let ok = 0;
+  let fail = 0;
+  for (const row of rows) {
+    try {
+      await ensureClaimed(row);
+      if (action === 'APPROVE') {
+        await approveTask(row.taskId, batchDlg.opinion);
+      } else {
+        await rejectTask(row.taskId, batchDlg.opinion);
+      }
+      ok++;
+    } catch (e) {
+      fail++;
+    }
+  }
+  batchDlg.saving = false;
+  batchDlg.show = false;
+  const verb = action === 'APPROVE' ? '通过' : '驳回';
+  if (fail === 0) {
+    ElMessage.success(`批量${verb}成功：${ok} 条`);
+  } else {
+    ElMessage.warning(`批量${verb}完成：成功 ${ok} 条，失败 ${fail} 条`);
+  }
+  todoSelection.value = [];
+  await loadTodos();
+  dones.value = [];
 }
 
 // === 跳子页（带 planId 给 TargetValues.vue 预选方案） ===

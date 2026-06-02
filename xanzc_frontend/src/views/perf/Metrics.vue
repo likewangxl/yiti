@@ -63,7 +63,7 @@
           <table class="meta-table">
             <tr>
               <td class="lab">编码</td><td class="val"><code class="mono">{{ detail.metricCode }}</code></td>
-              <td class="lab">分类</td><td class="val">{{ resolveCategory(detail) }}</td>
+              <td class="lab">分类</td><td class="val">{{ (detail.metricCategory && String(detail.metricCategory).trim()) || resolveCategory(detail) }}</td>
             </tr>
             <tr>
               <td class="lab">维度</td><td class="val">{{ { EMP:'员工', ORG:'机构', CUST:'客户' }[detail.baseDim] || detail.baseDim || '-' }}</td>
