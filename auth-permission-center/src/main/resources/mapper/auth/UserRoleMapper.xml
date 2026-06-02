@@ -153,4 +153,28 @@
         AND r.RECORD_STATUS = 0
     </select>
 
+    <!-- 主角色相关：DEFAULT_ASSIGN=1 表示主角色，每个用户最多一行为 1 -->
+    <update id="clearPrimaryByUserId" parameterType="string">
+        UPDATE PT_USER_ROLE SET DEFAULT_ASSIGN = 0 WHERE USER_ID = #{userId}
+    </update>
+
+    <update id="markPrimary">
+        UPDATE PT_USER_ROLE SET DEFAULT_ASSIGN = 1
+        WHERE USER_ID = #{userId} AND ROLE_ID = #{roleId}
+    </update>
+
+    <select id="selectPrimaryRoleId" parameterType="string" resultType="string">
+        SELECT ROLE_ID FROM PT_USER_ROLE
+        WHERE USER_ID = #{userId} AND DEFAULT_ASSIGN = 1
+        ORDER BY CREATE_TIME ASC, ROLE_ID ASC
+        LIMIT 1
+    </select>
+
+    <select id="selectFirstRoleId" parameterType="string" resultType="string">
+        SELECT ROLE_ID FROM PT_USER_ROLE
+        WHERE USER_ID = #{userId}
+        ORDER BY CREATE_TIME ASC, ROLE_ID ASC
+        LIMIT 1
+    </select>
+
 </mapper>

@@ -54,6 +54,39 @@ public interface UserRoleMapper {
                                 @Param("roleId") String roleId);
 
     /**
+     * 清除用户全部角色的主角色标记（DEFAULT_ASSIGN 置 0）。
+     *
+     * @param userId 用户ID
+     * @return 受影响行数
+     */
+    int clearPrimaryByUserId(@Param("userId") String userId);
+
+    /**
+     * 将用户指定角色标记为主角色（DEFAULT_ASSIGN 置 1）。
+     *
+     * @param userId 用户ID
+     * @param roleId 角色ID
+     * @return 受影响行数
+     */
+    int markPrimary(@Param("userId") String userId, @Param("roleId") String roleId);
+
+    /**
+     * 查询用户当前主角色ID（DEFAULT_ASSIGN=1），无主角色返回 null。
+     *
+     * @param userId 用户ID
+     * @return 主角色ID 或 null
+     */
+    String selectPrimaryRoleId(@Param("userId") String userId);
+
+    /**
+     * 查询用户第一个已分配角色ID（按绑定时间、角色ID 升序），无角色返回 null。
+     *
+     * @param userId 用户ID
+     * @return 第一个角色ID 或 null
+     */
+    String selectFirstRoleId(@Param("userId") String userId);
+
+    /**
      * 统计指定角色下关联的用户数量，用于角色删除前校验（有用户关联则不允许删除）。
      *
      * @param roleId 角色ID

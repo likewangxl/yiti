@@ -120,6 +120,8 @@ public class AuthService {
 
         // 查询角色列表
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
+        // 无角色用户禁止登录；并把主角色排到首位作为当前登录角色（前端取 roles[0]）
+        PtRole primaryRole = resolvePrimaryRoleAndOrder(user.getUserId(), roles);
         Set<String> roleIds = roles.stream().map(PtRole::getRoleId).collect(Collectors.toSet());
         Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
         // 候选组 Key 格式：ROLE:{ROLE_CODE} / USER:{empId} / ORG:{mainOrgCode}
@@ -153,8 +155,12 @@ public class AuthService {
             dto.setRoleId(r.getRoleId());
             dto.setRoleCode(r.getRoleCode());
             dto.setRoleChName(r.getRoleChName());
+            dto.setPrimary(r.getRoleId().equals(primaryRole.getRoleId()));
             return dto;
         }).collect(Collectors.toList()));
+        resp.setPrimaryRoleId(primaryRole.getRoleId());
+        resp.setPrimaryRoleCode(primaryRole.getRoleCode());
+        resp.setPrimaryRoleName(primaryRole.getRoleChName());
 
         // 登录成功后追加一步：通过边车调统一认证 S120030044 查授权信息（fail-open，异常不挡主流程）
         // 对应 xanpd 的 LoginController.loginAfter → IAuthorityHandler.handleAuthorities → UserInfoFromUIAS
@@ -238,6 +244,8 @@ public class AuthService {
         }
 
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(user.getUserId());
+        // 无角色用户禁止登录；并把主角色排到首位作为当前登录角色（前端取 roles[0]）
+        PtRole primaryRole = resolvePrimaryRoleAndOrder(user.getUserId(), roles);
         Set<String> roleIds = roles.stream().map(PtRole::getRoleId).collect(Collectors.toSet());
         Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
         Set<String> candidateGroupKeys = roleCodes.stream()
@@ -270,8 +278,12 @@ public class AuthService {
             dto.setRoleId(r.getRoleId());
             dto.setRoleCode(r.getRoleCode());
             dto.setRoleChName(r.getRoleChName());
+            dto.setPrimary(r.getRoleId().equals(primaryRole.getRoleId()));
             return dto;
         }).collect(Collectors.toList()));
+        resp.setPrimaryRoleId(primaryRole.getRoleId());
+        resp.setPrimaryRoleCode(primaryRole.getRoleCode());
+        resp.setPrimaryRoleName(primaryRole.getRoleChName());
 
         log.info("[AuthService.loginByUniAuth] 统一认证登录成功 empId={}, roles={}", user.getUserId(), roleCodes);
         return resp;
@@ -294,6 +306,30 @@ public class AuthService {
      * @return CurrentUserContext
      * @throws AuthException 未登录时抛出 AUTH-40105
      */
+    /**
+     * 登录时校验角色并解析主角色：
+     * <ol>
+     *   <li>无任何角色的用户禁止登录（抛 AUTH-40107）；</li>
+     *   <li>取用户主角色（DEFAULT_ASSIGN=1），缺失时回退第一个角色；</li>
+     *   <li>将主角色排到 roles 列表首位，使前端以 roles[0] 作为当前登录角色。</li>
+     * </ol>
+     *
+     * @param userId 用户ID
+     * @param roles  用户角色列表（原地排序，主角色置顶）
+     * @return 主角色实体
+     */
+    private PtRole resolvePrimaryRoleAndOrder(String userId, List<PtRole> roles) {
+        if (roles == null || roles.isEmpty()) {
+            throw new AuthException(AuthErrorCode.USER_NO_ROLE.getCode(),
+                    AuthErrorCode.USER_NO_ROLE.getMessage());
+        }
+        String primaryRoleId = userRoleMapper.selectPrimaryRoleId(userId);
+        final String pid = (primaryRoleId != null) ? primaryRoleId : roles.get(0).getRoleId();
+        // 主角色置顶：稳定排序保证主角色在首位，其余角色相对顺序不变
+        roles.sort((a, b) -> Boolean.compare(pid.equals(b.getRoleId()), pid.equals(a.getRoleId())));
+        return roles.get(0);
+    }
+
     public CurrentUserContext getCurrentUser(HttpSession session) {
         Object attr = session.getAttribute(SESSION_USER_KEY);
         if (!(attr instanceof CurrentUserContext)) {

@@ -18,4 +18,8 @@ public class LoginRespDTO {
     private String mainOrgName;
     private List<RoleSimpleDTO> roles;
     private String token;
+    /** 主角色（当前登录角色）信息，roles 列表中亦以主角色置于首位 */
+    private String primaryRoleId;
+    private String primaryRoleCode;
+    private String primaryRoleName;
 }

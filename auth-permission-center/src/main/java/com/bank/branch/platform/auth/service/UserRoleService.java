@@ -56,7 +56,25 @@ public class UserRoleService {
      */
     @Transactional
     public void bindRoles(String userId, List<String> roleIds, String reason) {
-        log.info("[UserRoleService.bindRoles] userId={}, roleIds={}, reason={}", userId, roleIds, reason);
+        bindRoles(userId, roleIds, null, reason);
+    }
+
+    /**
+     * 批量绑定角色到用户，并维护"主角色"不变量。
+     * <p>
+     * 绑定后保证用户至少有一个主角色：若用户当前无主角色，则取第一个已分配角色为主角色；
+     * 若显式传入 primaryRoleId 且该角色已绑定，则将其设为主角色。
+     * </p>
+     *
+     * @param userId        用户ID（工号）
+     * @param roleIds       角色ID列表
+     * @param primaryRoleId 主角色ID（可选，null 表示不显式指定）
+     * @param reason        操作原因（审计用）
+     */
+    @Transactional
+    public void bindRoles(String userId, List<String> roleIds, String primaryRoleId, String reason) {
+        log.info("[UserRoleService.bindRoles] userId={}, roleIds={}, primaryRoleId={}, reason={}",
+                userId, roleIds, primaryRoleId, reason);
         // 校验用户存在性，防止为幽灵用户分配权限
         PtUser user = userMapper.selectByUserId(userId);
         if (user == null) {
@@ -92,8 +110,21 @@ public class UserRoleService {
             hasNewBinding = true;
         }
 
-        if (hasNewBinding) {
-            // 有新绑定时才失效缓存，减少不必要的 Redis 操作
+        // 维护主角色不变量：绑定后若用户尚无主角色，取第一个已分配角色为主角色
+        boolean primaryChanged = ensurePrimary(userId);
+        // 显式指定主角色时，校验其确实已绑定该用户后再切换，避免设置幽灵主角色
+        if (primaryRoleId != null && !primaryRoleId.isEmpty()) {
+            List<String> bound = userRoleMapper.selectRoleIdsByUserId(userId);
+            if (bound != null && bound.contains(primaryRoleId)
+                    && !primaryRoleId.equals(userRoleMapper.selectPrimaryRoleId(userId))) {
+                userRoleMapper.clearPrimaryByUserId(userId);
+                userRoleMapper.markPrimary(userId, primaryRoleId);
+                primaryChanged = true;
+            }
+        }
+
+        if (hasNewBinding || primaryChanged) {
+            // 有新绑定或主角色变更时才失效缓存，减少不必要的 Redis 操作
             cacheService.evictUserRolesCache(userId);
             publishCacheInvalidatedEvent(userId, reason);
             log.info("[UserRoleService.bindRoles] 角色绑定完成，缓存已清除 userId={}", userId);
@@ -111,10 +142,54 @@ public class UserRoleService {
     public void unbindRole(String userId, String roleId, String reason) {
         log.info("[UserRoleService.unbindRole] userId={}, roleId={}, reason={}", userId, roleId, reason);
         userRoleMapper.deleteByUserIdAndRoleId(userId, roleId);
+        // 维护主角色不变量：若解绑的正是主角色，则把剩余的第一个已分配角色提升为主角色
+        ensurePrimary(userId);
         // 解绑后立即清除缓存，保证权限 Fail Close
         cacheService.evictUserRolesCache(userId);
         publishCacheInvalidatedEvent(userId, reason);
         log.info("[UserRoleService.unbindRole] 角色解绑完成 userId={}, roleId={}", userId, roleId);
+    }
+
+    /**
+     * 设置用户主角色：校验该角色已绑定后，清除其余主角色标记并将其设为主角色。
+     *
+     * @param userId 用户ID（工号）
+     * @param roleId 目标主角色ID
+     * @param reason 操作原因（审计用）
+     * @throws BizException 当角色未绑定该用户时抛 ROLE_NOT_FOUND
+     */
+    @Transactional
+    public void setPrimaryRole(String userId, String roleId, String reason) {
+        log.info("[UserRoleService.setPrimaryRole] userId={}, roleId={}, reason={}", userId, roleId, reason);
+        List<String> bound = userRoleMapper.selectRoleIdsByUserId(userId);
+        if (bound == null || !bound.contains(roleId)) {
+            throw new BizException(AuthErrorCode.ROLE_NOT_FOUND.getCode(),
+                    AuthErrorCode.ROLE_NOT_FOUND.getMessage());
+        }
+        userRoleMapper.clearPrimaryByUserId(userId);
+        userRoleMapper.markPrimary(userId, roleId);
+        cacheService.evictUserRolesCache(userId);
+        publishCacheInvalidatedEvent(userId, reason);
+    }
+
+    /**
+     * 保证用户至少有一个主角色。若当前无主角色且仍有已分配角色，
+     * 则取第一个已分配角色（按绑定时间、角色ID升序）设为主角色。
+     *
+     * @param userId 用户ID
+     * @return 是否发生了主角色变更
+     */
+    private boolean ensurePrimary(String userId) {
+        String primary = userRoleMapper.selectPrimaryRoleId(userId);
+        if (primary != null) {
+            return false;
+        }
+        String first = userRoleMapper.selectFirstRoleId(userId);
+        if (first == null) {
+            return false; // 用户已无任何角色
+        }
+        userRoleMapper.markPrimary(userId, first);
+        return true;
     }
 
     /**
@@ -142,7 +217,13 @@ public class UserRoleService {
     public List<RoleSimpleDTO> getRolesByUserId(String userId) {
         log.debug("[UserRoleService.getRolesByUserId] userId={}", userId);
         List<PtRole> roles = userRoleMapper.selectRolesByUserId(userId);
-        return roles.stream().map(this::toSimpleDto).collect(Collectors.toList());
+        // 标记主角色，供前端"分配角色"页面回显单选项
+        String primaryRoleId = userRoleMapper.selectPrimaryRoleId(userId);
+        return roles.stream().map(r -> {
+            RoleSimpleDTO dto = toSimpleDto(r);
+            dto.setPrimary(r.getRoleId().equals(primaryRoleId));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     /**
