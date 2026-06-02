@@ -157,6 +157,11 @@
         <el-form-item label="姓名" prop="userchnname">
           <el-input v-model="dlg.form.userchnname" placeholder="中文姓名" maxlength="64" />
         </el-form-item>
+        <el-form-item label="用户类型" prop="userType">
+          <el-radio-group v-model="dlg.form.userType">
+            <el-radio v-for="o in userTypeOptions" :key="o.value" :value="o.value">{{ o.label }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="dlg.form.email" placeholder="选填" maxlength="128" />
         </el-form-item>
@@ -192,12 +197,26 @@
       <el-transfer
         v-model="roleDlg.value"
         :data="roleDlg.options"
-        :titles="['可选角色', '已分配']"
+        :titles="['可选角色', '已分配（选中单选框即为主角色）']"
         :props="{ key: 'roleId', label: 'roleChName' }"
         filterable
         filter-placeholder="按角色名搜索"
         style="margin-top:8px"
-      />
+      >
+        <template #default="{ option }">
+          <span class="role-xfer-item">
+            <span class="role-xfer-name">{{ option.roleChName }}</span>
+            <el-radio
+              v-if="roleDlg.value.includes(option.roleId)"
+              :model-value="roleDlg.primaryRoleId"
+              :value="option.roleId"
+              class="role-xfer-primary"
+              @click.stop
+              @change="roleDlg.primaryRoleId = option.roleId"
+            >主角色</el-radio>
+          </span>
+        </template>
+      </el-transfer>
       <el-form label-width="100px" style="margin-top:12px">
         <el-form-item label="备注理由" required>
           <el-input v-model="roleDlg.reason" placeholder="审计必填，简短说明本次调整原因" maxlength="200" />
@@ -267,10 +286,10 @@ import { Search } from '@element-plus/icons-vue';
 import {
   listUsers, getUser, createUser, updateUser,
   deleteUsers, resetUsersPassword, activeUsers, inactiveUsers, lockUsers, unlockUsers,
-  getUserRoles, replaceUserRoles,
+  getUserRoles, replaceUserRoles, bindUserRoles,
   USER_STATUS_LABEL, USER_LOCK_LABEL
 } from '@/api/users';
-import { listAllRoles } from '@/api/system';
+import { listAllRoles, listDictItems } from '@/api/system';
 import { getOrgTree, listOrgUsers, createOrg, updateOrg, deleteOrg } from '@/api/orgs';
 
 // === 机构树 ===
@@ -310,6 +329,15 @@ const loading = ref(false);
 const filters = reactive({ username: '', userchnname: '', isEnabled: null, isLocked: null });
 const pager = reactive({ pageNo: 1, pageSize: 20, total: 0 });
 const selection = ref([]);
+// 用户类型字典（USER_TYPE：1-员工 / 2-虚拟员工），编辑/新增用户用单选
+const userTypeOptions = ref([]);
+async function loadUserTypeDict() {
+  try {
+    const items = await listDictItems('USER_TYPE');
+    userTypeOptions.value = (Array.isArray(items) ? items : [])
+      .map(d => ({ value: d.dictCode ?? d.itemCode ?? d.value, label: d.dictLabel ?? d.itemLabel ?? d.label }));
+  } catch { userTypeOptions.value = []; }
+}
 
 function resetFilters() {
   filters.username = '';
@@ -370,6 +398,7 @@ const dlg = reactive({
     userchnname:     [{ required: true, message: '姓名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
     email:           [{ pattern: /^[^@\s]+@[^@\s]+\.[^@\s]+$/, message: '邮箱格式不正确', trigger: 'blur' }],
     remark:          [{ max: 100, message: '备注不超过 100 字', trigger: 'blur' }],
+    userType:        [{ required: true, message: '请选择用户类型', trigger: 'change' }],
     initialPassword: [{ required: true, message: '初始密码必填', trigger: 'blur' }, { min: 6, max: 64, message: '6~64 位', trigger: 'blur' }]
   }
 });
@@ -382,7 +411,7 @@ function openCreate() {
   dlg.editing = null;
   dlg.form = {
     userId: '', username: '', userchnname: '', email: '', remark: '',
-    initialPassword: '', orgCode: pickedOrg.value
+    initialPassword: '', orgCode: pickedOrg.value, userType: '1'
   };
   dlg.show = true;
 }
@@ -390,9 +419,11 @@ async function openEdit(row) {
   dlg.editing = row.userId;
   // 列表 row 不含 orgCode，调单查接口反显当前机构
   let orgCode = row.orgCode || pickedOrg.value || '';
+  let userType = row.userType || '';
   try {
     const detail = await getUser(row.userId);
     if (detail?.orgCode) orgCode = detail.orgCode;
+    if (detail?.userType != null) userType = detail.userType;
   } catch { /* 单查失败 fallback 现有值 */ }
   dlg.form = {
     userId: row.userId,
@@ -401,7 +432,8 @@ async function openEdit(row) {
     email: row.email || '',
     remark: row.remark || '',
     initialPassword: '',
-    orgCode
+    orgCode,
+    userType
   };
   dlg.show = true;
 }
@@ -414,7 +446,8 @@ async function saveDlg() {
       // 编辑时只提交可改字段，避免 partial update 把 initialPassword 等带过去
       const payload = {
         username: rest.username, userchnname: rest.userchnname,
-        email: rest.email, remark: rest.remark, orgCode: rest.orgCode
+        email: rest.email, remark: rest.remark, orgCode: rest.orgCode,
+        userType: rest.userType
       };
       await updateUser(userId, payload);
       ElMessage.success('已更新');
@@ -434,9 +467,15 @@ async function saveDlg() {
 // === 分配角色弹窗 ===
 const roleDlg = reactive({
   show: false, user: null, saving: false,
-  options: [],     // [{roleId, roleChName, ...}]
-  value: [],       // 已选 roleId[]
-  reason: ''
+  options: [],          // [{roleId, roleChName, ...}]
+  value: [],            // 已选 roleId[]
+  reason: '',
+  primaryRoleId: ''     // 主角色（必为 value 中之一）
+});
+// 已分配集合变化时维持主角色有效：被解绑则默认取第一个已分配角色
+watch(() => roleDlg.value.slice(), (val) => {
+  if (!val.length) { roleDlg.primaryRoleId = ''; return; }
+  if (!val.includes(roleDlg.primaryRoleId)) roleDlg.primaryRoleId = val[0];
 });
 async function openAssignRoles(user) {
   roleDlg.user = user;
@@ -455,10 +494,15 @@ async function openAssignRoles(user) {
       roleChName: r.roleChName || r.name || r.roleId || r.id
     }));
     roleDlg.options = opts;
-    roleDlg.value = (Array.isArray(bound) ? bound : []).map(r => r.roleId || r.id);
+    const boundArr = Array.isArray(bound) ? bound : [];
+    roleDlg.value = boundArr.map(r => r.roleId || r.id);
+    // 回显主角色：后端 primary=true 的角色，缺失则取第一个
+    const primary = boundArr.find(r => r.primary);
+    roleDlg.primaryRoleId = (primary && (primary.roleId || primary.id)) || roleDlg.value[0] || '';
   } catch {
     roleDlg.options = [];
     roleDlg.value = [];
+    roleDlg.primaryRoleId = '';
   }
 }
 async function saveRoles() {
@@ -466,9 +510,18 @@ async function saveRoles() {
     ElMessage.warning('请填写备注理由（审计必填）');
     return;
   }
+  if (roleDlg.value.length && !roleDlg.value.includes(roleDlg.primaryRoleId)) {
+    ElMessage.warning('请选择主角色');
+    return;
+  }
   roleDlg.saving = true;
   try {
-    const r = await replaceUserRoles(roleDlg.user.userId, roleDlg.value, roleDlg.reason.trim());
+    const reason = roleDlg.reason.trim();
+    const r = await replaceUserRoles(roleDlg.user.userId, roleDlg.value, reason);
+    // 同步主角色：幂等重绑全量角色并携带 primaryRoleId（后端据此切换 DEFAULT_ASSIGN）
+    if (roleDlg.value.length && roleDlg.primaryRoleId) {
+      await bindUserRoles(roleDlg.user.userId, roleDlg.value, reason, roleDlg.primaryRoleId);
+    }
     ElMessage.success(`已保存（新增 ${r.added}，解绑 ${r.removed}）`);
     roleDlg.show = false;
   } catch (e) {
@@ -578,7 +631,7 @@ async function orgDlgDelete() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadOrg(), reload()]);
+  await Promise.all([loadOrg(), reload(), loadUserTypeDict()]);
 });
 </script>
 
@@ -629,4 +682,7 @@ onMounted(async () => {
 .pager { margin-top: 14px; display: flex; justify-content: flex-end; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .role-dlg-tip { color: $text-3; font-size: 12px; }
+.role-xfer-item { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.role-xfer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-xfer-primary { margin-left: 8px; flex-shrink: 0; }
 </style>

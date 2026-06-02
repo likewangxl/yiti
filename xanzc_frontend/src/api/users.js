@@ -112,10 +112,10 @@ export function getUserRoles(userId) {
 // 把"右侧全集"提交给后端，后端按"已存在则跳过、新增则添加"处理）
 //   roleIds: ["R_CM","R_OG"]
 //   reason:  必填（审计）
-export function bindUserRoles(userId, roleIds, reason) {
-  return call('post', `/admin/users/${userId}/roles`, {
-    data: { roleIds, reason }
-  }, { ok: true });
+export function bindUserRoles(userId, roleIds, reason, primaryRoleId) {
+  const data = { roleIds, reason };
+  if (primaryRoleId) data.primaryRoleId = primaryRoleId;
+  return call('post', `/admin/users/${userId}/roles`, { data }, { ok: true });
 }
 
 // 解绑用户的单个角色（reason 走 query）
