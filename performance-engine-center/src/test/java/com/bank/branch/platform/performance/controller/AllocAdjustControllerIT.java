@@ -284,7 +284,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
     // ============= withdraw =============
 
     @Test
-    void withdraw_inApproval_transitionsToRejected() throws Exception {
+    void withdraw_inApproval_transitionsToWithdrawn() throws Exception {
         PerfAllocAdjustApply apply = buildExisting("WITHDRAW", "IN_APPROVAL", "CORP_LOAN");
         applyMapper.insert(apply);
 
@@ -296,7 +296,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
                 .andExpect(jsonPath("$.code").value("0"));
 
         PerfAllocAdjustApply after = applyMapper.selectById(apply.getId());
-        assertThat(after.getStatus()).isEqualTo("REJECTED");
+        assertThat(after.getStatus()).isEqualTo("WITHDRAWN");
     }
 
     @Test

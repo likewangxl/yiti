@@ -58,6 +58,12 @@ class AllocAdjustRetailRoutingTest {
     @Mock
     private WorkflowApi workflowApi;
 
+    @Mock
+    private com.bank.branch.platform.performance.mapper.CustAllocRelationMapper allocRelationMapper;
+
+    @Mock
+    private AllocAdjustPreviewService allocAdjustPreviewService;
+
     @InjectMocks
     private AllocAdjustService service;
 
@@ -85,6 +91,11 @@ class AllocAdjustRetailRoutingTest {
         when(customerQueryApi.getCustomerByCustNo(anyString())).thenReturn(Optional.of(c));
         when(workflowApi.startProcess(any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_RET_AUTO", null, null));
+        // 原业绩分配（历史审批通过）非空，使提交校验「至少 1 条原业绩分配」通过
+        var owner = new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        owner.setEmpId("EMP_RET_A");
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview(anyString(), anyString()))
+                .thenReturn(java.util.List.of(owner));
     }
 
     @Test

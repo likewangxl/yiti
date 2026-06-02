@@ -160,6 +160,14 @@ public class AllocAdjustService {
             throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING, cmd.getCustNo());
         }
 
+        // 原业绩分配会签名单：历史审批通过分配优先，查不到则回退本次手工录入的原业绩分配。
+        // 「提交审批至少要有一条原业绩分配记录」——历史与手工皆为空时拒绝提交。
+        List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(
+                cmd.getCustNo(), cmd.getAllocDim(), cmd.getOriginalAllocList());
+        if (originalOwnerEmpIds.isEmpty()) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "至少需要一条原业绩分配记录");
+        }
+
         String applyId = genApplyId();
         String applyNo = genApplyNo();
         String businessKey = "ALLOC_ADJUST:" + applyId;
@@ -214,11 +222,19 @@ public class AllocAdjustService {
             entity.setEmpChnName(u != null ? u.getDisplayName() : null);
             entity.setOrgCode(u != null ? u.getMainOrgCode() : null);
             entity.setOrgName(u != null ? u.getMainOrgName() : null);
+            entity.setItemKind("NEW");
             entity.setRatio(it.getRatio());
             entity.setRemark(it.getRemark());
             items.add(entity);
         }
         itemMapper.batchInsert(items);
+
+        // 2.1 原业绩分配（手工录入）落地：item_kind=ORIGIN；机构号/名称用手工录入值
+        //     （可能异于员工主机构），员工登录名/中文名缺失时按工号解析快照兜底。
+        List<PerfAllocAdjustItem> originItems = buildOriginalItems(applyId, cmd.getOriginalAllocList());
+        if (!originItems.isEmpty()) {
+            itemMapper.batchInsert(originItems);
+        }
 
         // 3. 启动 Flowable 流程 —— 在 apply 持久化之后、status 回写之前
         //    异常冒泡回滚事务，避免 apply 残留无 processInstanceId
@@ -237,20 +253,14 @@ public class AllocAdjustService {
         vars.put("custNo", cmd.getCustNo());
         vars.put("bizKind", cmd.getBizKind());
         vars.put("allocDim", cmd.getAllocDim());
-        // 原业绩所属人：按 (custId, bizKind) 查当前有效分配，取首条 empId 作为
-        // BPMN original_owner_approve 节点的 flowable:assignee 单人指派候选；
-        // 查不到（新客户或历史分配空）时不写此键，需要勾选"原业绩所属人审批"前请前端做防呆.
+        // 单人指派候选（original_owner_approve 的 assignee 兜底）：历史当前分配优先，否则取会签名单首位。
         String originalOwnerEmpId = resolveOriginalOwnerEmpId(internalCustId, cmd.getBizKind());
-        if (originalOwnerEmpId != null) {
-            vars.put("originalOwnerEmpId", originalOwnerEmpId);
+        if (isBlank(originalOwnerEmpId)) {
+            originalOwnerEmpId = originalOwnerEmpIds.get(0);
         }
-        // 原业绩分配会签名单（corp_v1 多实例）：取「原业绩分配模块」该客户当前维度上次审批通过明细的员工，
-        // 归一到工号(USER_ID) 去重，作为 original_owner_approve 并行多实例 collection（每人一个子任务）。
-        // 为空时不写此键（前端已禁止"交原业绩所属人审批"，此处兜底）。
-        List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(cmd.getCustNo(), cmd.getAllocDim());
-        if (!originalOwnerEmpIds.isEmpty()) {
-            vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
-        }
+        vars.put("originalOwnerEmpId", originalOwnerEmpId);
+        // 原业绩分配会签名单（corp_v1 并行多实例 collection），前面已校验非空（历史或手工录入）。
+        vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
 
@@ -303,9 +313,9 @@ public class AllocAdjustService {
     }
 
     /**
-     * 撤回申请：IN_APPROVAL → REJECTED.
+     * 撤回申请：IN_APPROVAL/DRAFT → WITHDRAWN.
      *
-     * <p>V1.2 简化实现：仅将本地 apply 状态置为 REJECTED，保留流程实例不做取消。
+     * <p>撤回与驳回区分：撤回是申请人主动收回（状态 WITHDRAWN），驳回是审批人否决（状态 REJECTED）。
      * 生产完整方案需调 WorkflowApi.cancelProcess 同步取消 Flowable 流程（留待后续迭代）.
      *
      * @param id       申请 ID
@@ -326,8 +336,8 @@ public class AllocAdjustService {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
                     "申请状态不可撤回: " + apply.getStatus());
         }
-        // processInstanceId 传 null 避免覆写历史值
-        applyMapper.updateStatus(id, "REJECTED", null);
+        // 撤回置 WITHDRAWN（区别于审批驳回 REJECTED）；processInstanceId 传 null 避免覆写历史值
+        applyMapper.updateStatus(id, "WITHDRAWN", null);
         // 同步取消 Flowable 流程实例，否则该流程的 active task 会一直留在「待我审批」
         // DRAFT 状态可能未启动流程（process_instance_id=null），需判空
         String pid = apply.getProcessInstanceId();
@@ -335,7 +345,7 @@ public class AllocAdjustService {
             try {
                 workflowApi.cancelProcess(pid, reason);
             } catch (Exception ex) {
-                log.warn("[AllocAdjustService.withdraw] cancelProcess 失败 pid={}, 业务侧已置 REJECTED；err={}",
+                log.warn("[AllocAdjustService.withdraw] cancelProcess 失败 pid={}, 业务侧已置 WITHDRAWN；err={}",
                         pid, ex.getMessage());
             }
         }
@@ -478,16 +488,24 @@ public class AllocAdjustService {
      *
      * @return 工号列表（可能为空）
      */
-    private List<String> resolveOriginalOwnerEmpIds(String custNo, String allocDim) {
+    private List<String> resolveOriginalOwnerEmpIds(String custNo, String allocDim,
+            List<SubmitAllocAdjustCmd.OriginalItem> manual) {
         List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> owners =
                 allocAdjustPreviewService.getLastApprovedAllocPreview(custNo, allocDim);
-        if (owners == null || owners.isEmpty()) {
-            return new ArrayList<>();
-        }
         java.util.LinkedHashSet<String> rawEmpIds = new java.util.LinkedHashSet<>();
-        for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO o : owners) {
-            if (o != null && !isBlank(o.getEmpId())) {
-                rawEmpIds.add(o.getEmpId());
+        if (owners != null) {
+            for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO o : owners) {
+                if (o != null && !isBlank(o.getEmpId())) {
+                    rawEmpIds.add(o.getEmpId());
+                }
+            }
+        }
+        // 历史审批通过分配查不到 → 回退本次手工录入的原业绩分配工号
+        if (rawEmpIds.isEmpty() && manual != null) {
+            for (SubmitAllocAdjustCmd.OriginalItem m : manual) {
+                if (m != null && !isBlank(m.getEmpId())) {
+                    rawEmpIds.add(m.getEmpId());
+                }
             }
         }
         if (rawEmpIds.isEmpty()) {
@@ -500,6 +518,48 @@ public class AllocAdjustService {
             userIds.add(u != null && u.getEmpId() != null ? u.getEmpId() : token);
         }
         return new ArrayList<>(userIds);
+    }
+
+    /**
+     * 构建「原业绩分配」明细实体（item_kind=ORIGIN）.
+     *
+     * <p>机构号/名称用手工录入值（可能异于员工主机构）；员工登录名/中文名优先用前端下拉快照，
+     * 缺失时按工号解析 PT_USER 兜底。
+     */
+    private List<PerfAllocAdjustItem> buildOriginalItems(String applyId,
+            List<SubmitAllocAdjustCmd.OriginalItem> originals) {
+        if (originals == null || originals.isEmpty()) {
+            return new ArrayList<>();
+        }
+        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
+        for (SubmitAllocAdjustCmd.OriginalItem o : originals) {
+            if (o != null && !isBlank(o.getEmpId())) {
+                empIds.add(o.getEmpId());
+            }
+        }
+        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = resolveUsersByTokens(empIds);
+        List<PerfAllocAdjustItem> list = new ArrayList<>(originals.size());
+        for (SubmitAllocAdjustCmd.OriginalItem o : originals) {
+            if (o == null || isBlank(o.getEmpId())) {
+                continue;
+            }
+            com.bank.branch.platform.auth.api.dto.UserDTO u = userMap.get(o.getEmpId());
+            PerfAllocAdjustItem e = new PerfAllocAdjustItem();
+            e.setId(UUID.randomUUID().toString().replace("-", ""));
+            e.setApplyId(applyId);
+            e.setItemKind("ORIGIN");
+            e.setAcctNo(o.getAcctNo());
+            e.setEmpId(o.getEmpId());
+            e.setUsername(!isBlank(o.getUsername()) ? o.getUsername()
+                    : (u != null && !isBlank(u.getUsername()) ? u.getUsername() : o.getEmpId()));
+            e.setEmpChnName(!isBlank(o.getEmpChnName()) ? o.getEmpChnName()
+                    : (u != null ? u.getDisplayName() : null));
+            e.setOrgCode(o.getOrgCode());
+            e.setOrgName(o.getOrgName());
+            e.setRatio(o.getRatio());
+            list.add(e);
+        }
+        return list;
     }
 
     /**
@@ -627,6 +687,9 @@ public class AllocAdjustService {
             for (PerfAllocAdjustItem it : items) {
                 AllocAdjustRespDTO.Item iDto = new AllocAdjustRespDTO.Item();
                 iDto.setId(it.getId());
+                // 明细类型缺失（旧数据）默认 NEW；ORIGIN 为手工录入的原业绩分配
+                iDto.setItemKind(isBlank(it.getItemKind()) ? "NEW" : it.getItemKind());
+                iDto.setAcctNo(it.getAcctNo());
                 iDto.setEmpId(it.getEmpId());
                 // 直接读提交时快照的员工/部门字段，不再关联 PT_USER/机构表；
                 // 历史无快照(旧数据)时 username 回退工号，避免空白

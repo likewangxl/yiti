@@ -117,6 +117,12 @@ class AllocAdjustServiceTest {
         cust.setId("CUST_001");
         cust.setCustNo("CN-001");
         when(customerQueryApi.getCustomerByCustNo("CN-001")).thenReturn(Optional.of(cust));
+        // 默认「原业绩分配」历史审批通过非空，使提交校验「至少 1 条原业绩分配」通过；
+        // 需要测手工录入/无原业绩场景的用例可覆盖此 stub。
+        var defaultOwner = new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        defaultOwner.setEmpId("rm_zhang");
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview(anyString(), anyString()))
+                .thenReturn(java.util.List.of(defaultOwner));
     }
 
     @Test
@@ -191,7 +197,9 @@ class AllocAdjustServiceTest {
         // 主档查不到时 cust_id 回退用 custNo 本身落库
         ArgumentCaptor<PerfAllocAdjustApply> applyCap = ArgumentCaptor.forClass(PerfAllocAdjustApply.class);
         verify(applyMapper).insert(applyCap.capture());
-        assertThat(applyCap.getValue().getCustId()).isEqualTo("CN-001");
+        // 主档查不到时 cust_id 置 null（resolveInternalCustIdByCustNo 不再回退 custNo），custNo 仍单独落库
+        assertThat(applyCap.getValue().getCustId()).isNull();
+        assertThat(applyCap.getValue().getCustNo()).isEqualTo("CN-001");
         // 流程照常发起
         verify(workflowApi).startProcess(any(StartProcessCmd.class));
     }
@@ -199,8 +207,8 @@ class AllocAdjustServiceTest {
     @Test
     @DisplayName("同客户同维度已有审批中申请 → 抛 ALLOC_ADJUST_APPLY_RUNNING，不发起流程/不落库，消息不重复")
     void submit_inApprovalExistsForSameCustomerAndDim_throws() {
-        // 同一客户编号(CN-001 → 内部主键 CUST_001) + 同维度(RULE)已存在 IN_APPROVAL 状态的调整申请
-        when(applyMapper.countInApprovalByCustAndDim("CUST_001", "RULE")).thenReturn(1L);
+        // 同一客户编号(CN-001) + 同维度(RULE)已存在 IN_APPROVAL 状态的调整申请（去重按 cust_no）
+        when(applyMapper.countInApprovalByCustAndDim("CN-001", "RULE")).thenReturn(1L);
 
         assertThatThrownBy(() -> service.submit(baseCmd("CORP_LOAN")))
                 .isInstanceOf(PerfException.class)
@@ -639,7 +647,7 @@ class AllocAdjustServiceTest {
     // ===================== withdrawByApplicant（渠道撤回 + 越权校验）=====================
 
     @Test
-    @DisplayName("withdrawByApplicant: 操作人即申请人 → 委托 withdraw 置 REJECTED + 取消流程")
+    @DisplayName("withdrawByApplicant: 操作人即申请人 → 委托 withdraw 置 WITHDRAWN + 取消流程")
     void withdrawByApplicant_operatorIsApplicant_withdraws() {
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId("AA1");
@@ -650,7 +658,7 @@ class AllocAdjustServiceTest {
 
         service.withdrawByApplicant("AA1", "手机端撤回", "E001");
 
-        verify(applyMapper).updateStatus("AA1", "REJECTED", null);
+        verify(applyMapper).updateStatus("AA1", "WITHDRAWN", null);
         verify(workflowApi).cancelProcess("PID1", "手机端撤回");
     }
 

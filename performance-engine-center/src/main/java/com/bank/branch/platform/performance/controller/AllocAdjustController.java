@@ -66,6 +66,7 @@ public class AllocAdjustController {
     private final CurrentUserApi currentUserApi;
     private final AllocAdjustService allocAdjustService;
     private final WorkflowQueryApi workflowQueryApi;
+    private final com.bank.branch.platform.auth.api.OrgApi orgApi;
 
     /**
      * 提交分配关系调整申请.
@@ -96,6 +97,7 @@ public class AllocAdjustController {
                 .reason(req.getReason())
                 .applicant(currentUserApi.getCurrentEmpId())
                 .items(toCmdItems(req.getItems()))
+                .originalAllocList(toCmdOriginalItems(req.getOriginalAllocList()))
                 .build();
 
         return ResponseWrapper.success(allocAdjustService.submitDto(cmd));
@@ -115,6 +117,22 @@ public class AllocAdjustController {
             @RequestParam(value = "limit", required = false) Integer limit) {
         log.debug("[AllocAdjustController.empSuggest] keyword={}, limit={}", keyword, limit);
         return ResponseWrapper.success(allocAdjustService.suggestEmployees(keyword, limit));
+    }
+
+    /**
+     * 所属机构自动补齐：按机构号/名称模糊匹配 EXT_ORG_INFO，返回 [{orgCode, orgName, ...}].
+     * <p>供原业绩分配「所属机构」下拉联想（el-autocomplete）。复用 /api/perf/alloc-adjust/* GET
+     * 通配资源 + PERF_CONFIG READ，保证调整申请页用户可调用（不复用 SYS_CONFIG 的 /api/orgs，避免业务角色 403）.
+     */
+    @GetMapping("/org-suggest")
+    @Operation(summary = "机构自动补齐（机构号/名称模糊匹配）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<com.bank.branch.platform.auth.api.dto.OrgDTO>> orgSuggest(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        log.debug("[AllocAdjustController.orgSuggest] keyword={}, limit={}", keyword, limit);
+        int lim = (limit == null || limit <= 0) ? 20 : Math.min(limit, 50);
+        return ResponseWrapper.success(orgApi.searchOrgs(keyword, lim));
     }
 
     /**
@@ -217,6 +235,29 @@ public class AllocAdjustController {
                     .empId(it.getEmpId())
                     .ratio(it.getRatio())
                     .remark(it.getRemark())
+                    .build());
+        }
+        return cmds;
+    }
+
+    /**
+     * 请求 DTO → Service Cmd 的原业绩分配列表转换（空安全）.
+     */
+    private List<SubmitAllocAdjustCmd.OriginalItem> toCmdOriginalItems(
+            List<AllocAdjustCreateReqDTO.OriginalItem> reqItems) {
+        if (reqItems == null || reqItems.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<SubmitAllocAdjustCmd.OriginalItem> cmds = new ArrayList<>(reqItems.size());
+        for (AllocAdjustCreateReqDTO.OriginalItem it : reqItems) {
+            cmds.add(SubmitAllocAdjustCmd.OriginalItem.builder()
+                    .acctNo(it.getAcctNo())
+                    .empId(it.getEmpId())
+                    .username(it.getUsername())
+                    .empChnName(it.getEmpChnName())
+                    .orgCode(it.getOrgCode())
+                    .orgName(it.getOrgName())
+                    .ratio(it.getRatio())
                     .build());
         }
         return cmds;

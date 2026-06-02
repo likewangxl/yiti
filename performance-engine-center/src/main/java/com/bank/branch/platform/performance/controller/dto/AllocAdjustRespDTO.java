@@ -102,6 +102,12 @@ public class AllocAdjustRespDTO {
         /** 明细 ID. */
         private String id;
 
+        /** 明细类型：NEW=新分配 / ORIGIN=原业绩分配. */
+        private String itemKind;
+
+        /** 账号（原业绩分配选填）. */
+        private String acctNo;
+
         /** 员工工号. */
         private String empId;
 

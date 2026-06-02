@@ -69,6 +69,9 @@ public class SubmitAllocAdjustCmd {
     /** 调整后的员工 + 比例明细列表（非空，empId 去重）. */
     private List<Item> items;
 
+    /** 原业绩分配（手工录入；历史可查到时可空，否则提交校验要求至少 1 条）. */
+    private List<OriginalItem> originalAllocList;
+
     /**
      * 调整明细项.
      */
@@ -86,5 +89,36 @@ public class SubmitAllocAdjustCmd {
 
         /** 说明（可空）. */
         private String remark;
+    }
+
+    /**
+     * 原业绩分配项（手工录入）. 除账号外均必填.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OriginalItem {
+
+        /** 账号（选填）. */
+        private String acctNo;
+
+        /** 员工工号（必填）. */
+        private String empId;
+
+        /** 员工登录名快照（可空）. */
+        private String username;
+
+        /** 员工中文姓名快照（可空）. */
+        private String empChnName;
+
+        /** 所属机构号（必填）. */
+        private String orgCode;
+
+        /** 所属机构名称快照（可空）. */
+        private String orgName;
+
+        /** 分配比例（必填）. */
+        private BigDecimal ratio;
     }
 }

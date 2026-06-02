@@ -3,15 +3,17 @@
 <mapper namespace="com.bank.branch.platform.performance.mapper.PerfAllocAdjustItemMapper">
 
     <sql id="BASE_COLUMNS">
-        id, apply_id, emp_id, username, emp_chn_name, org_code, org_name, ratio, remark, created_time
+        id, apply_id, item_kind, acct_no, emp_id, username, emp_chn_name, org_code, org_name, ratio, remark, created_time
     </sql>
 
     <insert id="batchInsert">
         INSERT INTO PERF_ALLOC_ADJUST_ITEM
-            (id, apply_id, emp_id, username, emp_chn_name, org_code, org_name, ratio, remark)
+            (id, apply_id, item_kind, acct_no, emp_id, username, emp_chn_name, org_code, org_name, ratio, remark)
         VALUES
         <foreach collection="items" item="it" separator=",">
-            (#{it.id}, #{it.applyId}, #{it.empId}, #{it.username}, #{it.empChnName},
+            (#{it.id}, #{it.applyId},
+             <choose><when test="it.itemKind != null and it.itemKind != ''">#{it.itemKind}</when><otherwise>'NEW'</otherwise></choose>,
+             #{it.acctNo}, #{it.empId}, #{it.username}, #{it.empChnName},
              #{it.orgCode}, #{it.orgName}, #{it.ratio}, #{it.remark})
         </foreach>
     </insert>

@@ -67,6 +67,12 @@ public class AllocAdjustCreateReqDTO {
     private List<Item> items;
 
     /**
+     * 原业绩分配（手工录入）. 系统自动查到历史分配时可空；
+     * 查不到时由前端手工录入，提交校验要求「原业绩分配（历史或手工）至少 1 条」.
+     */
+    private List<OriginalItem> originalAllocList;
+
+    /**
      * 调整明细项.
      */
     @Data
@@ -82,5 +88,36 @@ public class AllocAdjustCreateReqDTO {
 
         /** 说明（可空）. */
         private String remark;
+    }
+
+    /**
+     * 原业绩分配项（手工录入）. 除账号外均必填.
+     */
+    @Data
+    public static class OriginalItem {
+
+        /** 账号（选填）. */
+        private String acctNo;
+
+        /** 员工工号（必填）. */
+        @NotBlank(message = "originalItem.empId 必填")
+        private String empId;
+
+        /** 员工登录名（前端下拉快照，可空）. */
+        private String username;
+
+        /** 员工中文姓名（前端下拉快照，可空）. */
+        private String empChnName;
+
+        /** 所属机构号（必填）. */
+        @NotBlank(message = "originalItem.orgCode 必填")
+        private String orgCode;
+
+        /** 所属机构名称（前端下拉快照，可空）. */
+        private String orgName;
+
+        /** 分配比例（必填）. */
+        @NotNull(message = "originalItem.ratio 必填")
+        private BigDecimal ratio;
     }
 }
