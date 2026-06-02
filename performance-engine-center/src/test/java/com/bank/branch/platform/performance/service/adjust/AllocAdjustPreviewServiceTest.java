@@ -107,9 +107,9 @@ class AllocAdjustPreviewServiceTest {
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT"))
                 .thenReturn(apply("APPLY_ACCT", "ACCOUNT", "62200000001"));
 
-        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(
+        when(itemMapper.selectByApplyIdAndKind("APPLY_RULE", "NEW")).thenReturn(List.of(
                 item("E10001", "rm_zhang", "张客户经理", "BJ_CY", "北京分行朝阳支行", "60")));
-        when(itemMapper.selectByApplyId("APPLY_ACCT")).thenReturn(List.of(
+        when(itemMapper.selectByApplyIdAndKind("APPLY_ACCT", "NEW")).thenReturn(List.of(
                 item("E30001", "corp_zhao", "赵公司部审核", "BJ_HQ", "北京分行总部", "40")));
 
         List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
@@ -141,7 +141,7 @@ class AllocAdjustPreviewServiceTest {
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
                 .thenReturn(apply("APPLY_RULE", "RULE", null));
         lenient().when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
-        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of(
+        when(itemMapper.selectByApplyIdAndKind("APPLY_RULE", "NEW")).thenReturn(List.of(
                 item("GHOST", null, null, null, null, "100")));
 
         List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", null);
@@ -160,7 +160,7 @@ class AllocAdjustPreviewServiceTest {
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
                 .thenReturn(apply("APPLY_RULE", "RULE", null));
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
-        when(itemMapper.selectByApplyId("APPLY_RULE")).thenReturn(List.of());
+        when(itemMapper.selectByApplyIdAndKind("APPLY_RULE", "NEW")).thenReturn(List.of());
 
         assertThat(service.getLastApprovedAllocPreview("C001", null)).isEmpty();
     }
@@ -171,7 +171,7 @@ class AllocAdjustPreviewServiceTest {
         when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT"))
                 .thenReturn(apply("APPLY_ACCT", "ACCOUNT", "62200000001"));
-        when(itemMapper.selectByApplyId("APPLY_ACCT")).thenReturn(List.of(
+        when(itemMapper.selectByApplyIdAndKind("APPLY_ACCT", "NEW")).thenReturn(List.of(
                 item("E10001", "rm_zhang", "张客户经理", "107", "营业部", "100")));
 
         List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("C001", "ACCOUNT");

@@ -26,6 +26,15 @@
         ORDER BY created_time ASC, id ASC
     </select>
 
+    <select id="selectByApplyIdAndKind" resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustItem">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_ALLOC_ADJUST_ITEM
+        WHERE apply_id = #{applyId}
+          AND item_kind = #{itemKind}
+        ORDER BY created_time ASC, id ASC
+    </select>
+
     <delete id="deleteByApplyId">
         DELETE FROM PERF_ALLOC_ADJUST_ITEM
         WHERE apply_id = #{applyId}

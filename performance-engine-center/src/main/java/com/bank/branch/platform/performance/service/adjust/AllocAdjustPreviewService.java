@@ -69,7 +69,9 @@ public class AllocAdjustPreviewService {
             if (apply == null) {
                 continue;
             }
-            List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(apply.getId());
+            // 只取新分配明细(NEW)：上次审批通过的「分配」是 NEW 行；
+            // 排除该申请当时手工录入的原业绩分配(ORIGIN)，避免混入预览/会签名单。
+            List<PerfAllocAdjustItem> items = itemMapper.selectByApplyIdAndKind(apply.getId(), "NEW");
             if (items == null || items.isEmpty()) {
                 continue;
             }
