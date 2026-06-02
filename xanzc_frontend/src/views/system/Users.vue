@@ -680,6 +680,9 @@ onMounted(async () => {
 }
 .hint { color: $text-3; font-size: 12px; }
 .pager { margin-top: 14px; display: flex; justify-content: flex-end; }
+/* 用户多→页码按钮多时，分页整行会超出容器宽度，右对齐导致最左"共X条"被挤出视区。
+   让 el-pagination 内部允许换行，保证 total/sizes 始终可见 */
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .role-dlg-tip { color: $text-3; font-size: 12px; }
 .role-xfer-item { display: flex; align-items: center; justify-content: space-between; width: 100%; }
