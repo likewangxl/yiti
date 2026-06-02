@@ -36,6 +36,10 @@
               <el-option label="停用" value="DISABLED" />
             </el-select>
           </div>
+          <div class="filter-actions">
+            <el-button type="primary" @click="reload">查询</el-button>
+            <el-button @click="resetFilters">重置</el-button>
+          </div>
         </div>
 
         <!-- 主表（方案级，每行 1 个方案） -->
@@ -94,11 +98,17 @@
       <el-tab-pane v-if="canApprove" label="待我审批" name="todo">
         <div class="card-section table">
           <el-table :data="pagedTodos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading">
-            <el-table-column label="申请编号" min-width="200">
-              <template #default="{row}"><code>{{ row.businessKey || row.bizId || '-' }}</code></template>
+            <el-table-column label="方案编号" min-width="150">
+              <template #default="{row}"><code class="mono">{{ planOfTodo(row)?.planCode || '-' }}</code></template>
             </el-table-column>
-            <el-table-column label="标题" min-width="220">
-              <template #default="{row}">{{ row.title || '-' }}</template>
+            <el-table-column label="方案名称" min-width="180">
+              <template #default="{row}">{{ planOfTodo(row)?.planName || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="关联KPI方案" min-width="180">
+              <template #default="{row}">{{ planOfTodo(row) ? kpiLabelOf(planOfTodo(row).kpiSchemeId) : '-' }}</template>
+            </el-table-column>
+            <el-table-column label="维度" width="80">
+              <template #default="{row}">{{ dimLabel(planOfTodo(row)?.targetDim) }}</template>
             </el-table-column>
             <el-table-column label="当前节点" width="160">
               <template #default="{row}">{{ row.taskName || row.nodeKey || '-' }}</template>
@@ -132,13 +142,17 @@
       <el-tab-pane v-if="canApprove" label="已审批" name="done">
         <div class="card-section table">
           <el-table :data="pagedDones" size="default" empty-text="暂无已审批记录" v-loading="doneLoading">
-            <el-table-column label="申请编号" min-width="200">
-              <template #default="{row}"><code>{{ row.businessKey || row.id || '-' }}</code></template>
+            <el-table-column label="方案编号" min-width="150">
+              <template #default="{row}"><code class="mono">{{ planOfDone(row)?.planCode || '-' }}</code></template>
             </el-table-column>
-            <el-table-column label="标题" min-width="220">
-              <template #default="{row}">
-                {{ (row.subjectType === 'EMP' ? '员工' : '机构') }} {{ row.subjectId || '' }} · {{ parseDoneAdj(row.remark).map(a => a.metricCode).join(', ') || '-' }}
-              </template>
+            <el-table-column label="方案名称" min-width="180">
+              <template #default="{row}">{{ planOfDone(row)?.planName || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="关联KPI方案" min-width="180">
+              <template #default="{row}">{{ planOfDone(row) ? kpiLabelOf(planOfDone(row).kpiSchemeId) : '-' }}</template>
+            </el-table-column>
+            <el-table-column label="维度" width="80">
+              <template #default="{row}">{{ dimLabel(planOfDone(row)?.targetDim || row.subjectType) }}</template>
             </el-table-column>
             <el-table-column label="发起人" width="160">
               <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdByName || row.createdBy || '-' }}</template>
@@ -186,9 +200,8 @@
       <!-- 修正详情（从 PERF_TARGET_ADJUST_APPLY.remark JSON 解析） -->
       <div class="review-detail" v-if="reviewDlg.detail" v-loading="reviewDlg.detailLoading">
         <div v-for="(adj, i) in reviewDlg.detail.adjustments" :key="i" class="adj-item">
+          <div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div>
           <div>
-            <span class="lab">指标：</span>{{ adj.metricCode }}
-            <span class="sep">|</span>
             <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
             <span class="sep">→</span>
             <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
@@ -232,9 +245,8 @@
       <!-- 修正详情 -->
       <div class="review-detail" v-if="detailDlg.detail" v-loading="detailDlg.loading">
         <div v-for="(adj, i) in detailDlg.detail.adjustments" :key="i" class="adj-item">
+          <div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div>
           <div>
-            <span class="lab">指标：</span>{{ adj.metricCode }}
-            <span class="sep">|</span>
             <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
             <span class="sep">→</span>
             <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
@@ -314,7 +326,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues } from '@/api/perf';
+import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics } from '@/api/perf';
 import { listUsers } from '@/api/users';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -364,9 +376,66 @@ async function loadKpiSchemeOptions() {
 }
 const kpiLabelOf = (id) => kpiMap.value.get(id) || id || '-';
 
+// 指标编号 → 指标名称映射（审批详情里把"指标：M_0268"显示成"M_0268 · 名称"）
+const metricNameMap = ref(new Map());
+async function loadMetricMap() {
+  try {
+    const r = await listMetrics({ pageSize: 1000 });
+    const arr = Array.isArray(r) ? r : (r?.records || []);
+    const m = new Map();
+    for (const x of arr) {
+      if (x.metricCode) m.set(x.metricCode, x.metricName || '');
+    }
+    metricNameMap.value = m;
+  } catch { /* 取不到名称时回退仅显示编号 */ }
+}
+// 展示成 "M_0268 · 指标名称"；无名称或未命中时仅显示编号
+const metricLabel = (code) => {
+  if (!code) return '-';
+  const name = metricNameMap.value.get(code);
+  return name ? `${code} · ${name}` : code;
+};
+
+// ===== 审批列表展示方案信息（方案编号/名称/关联KPI方案/维度）=====
+// planId → 方案对象（来自已加载的目标方案列表 plans）
+const planById = computed(() => {
+  const m = new Map();
+  for (const p of plans.value) if (p.id != null) m.set(String(p.id), p);
+  return m;
+});
+// 目标修正申请索引：businessKey / id → apply，供"待我审批"(workflow task) 反查 planId
+const applyByKey = ref(new Map());
+async function loadApplyIndex() {
+  try {
+    const r = await listTargetAdjusts({ pageSize: 500 });
+    const arr = Array.isArray(r) ? r : (r?.records || []);
+    const m = new Map();
+    for (const a of arr) {
+      if (a.businessKey) m.set(a.businessKey, a);
+      if (a.id) m.set(String(a.id), a);
+    }
+    applyByKey.value = m;
+  } catch { /* 索引取不到则方案列回退显示 '-' */ }
+}
+// 待我审批行(workflow task) → 方案；先用 businessKey 反查 apply 再取 planId
+const planOfTodo = (row) => {
+  const a = applyByKey.value.get(row.businessKey) || applyByKey.value.get(row.bizId);
+  return a ? planById.value.get(String(a.planId)) : null;
+};
+// 已审批行(apply) → 方案（apply 自带 planId）
+const planOfDone = (row) => planById.value.get(String(row.planId));
+
 // === 方案列表 ===
 // f = 筛选条件（双向绑定到控件）。filteredPlans 直接读 f，输入即时过滤。
 const f = reactive({ keyword: '', kpiKeyword: '', targetDim: '', status: '' });
+
+// 重置查询条件：清空筛选项（表格基于 f 即时过滤，清空后自动恢复全量）
+function resetFilters() {
+  f.keyword = '';
+  f.kpiKeyword = '';
+  f.targetDim = '';
+  f.status = '';
+}
 const plans = ref([]);
 const loadingPlans = ref(false);
 
@@ -478,6 +547,8 @@ async function loadTodos() {
     // listTodoTasks 经 unwrapPage 返回 {records,total}（非数组），必须取 records
     todos.value = Array.isArray(r) ? r : (r?.records || []);
     todoPager.pageNo = 1;
+    // 刷新申请索引，保证待审批行能按 businessKey 反查到方案信息
+    loadApplyIndex();
   } catch { todos.value = []; }
   finally { todoLoading.value = false; }
 }
@@ -538,19 +609,6 @@ async function openDetail(row) {
   detailDlg.loading = false;
 }
 
-// 已审批 tab remark JSON 解析 helper
-function parseDoneAdj(remark) {
-  try {
-    const obj = typeof remark === 'string' ? JSON.parse(remark) : (remark || {});
-    return obj.adjustments || [];
-  } catch { return []; }
-}
-function parseDoneReason(remark) {
-  try {
-    const obj = typeof remark === 'string' ? JSON.parse(remark) : (remark || {});
-    return obj.reason || '-';
-  } catch { return '-'; }
-}
 
 // 「🔄 刷新」全局按钮：按当前 tab 路由
 async function reload() {
@@ -721,7 +779,7 @@ async function togglePlanStatus(idOrRow, newStatus) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove(), loadUserMap()]);
+  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove(), loadUserMap(), loadMetricMap(), loadApplyIndex()]);
 
   // 从工作台跳转：?tab=todo&taskId=xxx → 切到待我审批 tab + 自动弹审批窗
   const queryTab = route.query.tab;
@@ -746,6 +804,7 @@ onMounted(async () => {
 .filter-grid {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
   .lab { font-size: 13px; color: $text-2; margin-bottom: 6px; }
+  .filter-actions { display: flex; align-items: flex-end; }
 }
 .table { padding: 14px 16px 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }

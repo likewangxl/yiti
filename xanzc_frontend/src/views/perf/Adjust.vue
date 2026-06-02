@@ -319,8 +319,10 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="客户名称">
-              <span class="cust-name-label">{{ custNameDisplay || '-' }}</span>
+            <el-form-item label="客户名称" prop="custName" required>
+              <el-input v-model="dlg.form.custName"
+                        :disabled="dlg.readOnly || custStat.found"
+                        :placeholder="custStat.found ? '' : '请输入客户名称'" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -334,8 +336,11 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="业务类型" prop="bizKind" required>
-              <el-select v-model="dlg.form.bizKind" :disabled="dlg.readOnly" multiple style="width:100%">
-                <el-option v-for="o in bizKindOptions" :key="o.value" :label="o.label" :value="o.value" />
+              <el-select v-model="dlg.form.bizKind"
+                         :disabled="dlg.readOnly || dlg.form.allocDim === 'ACCOUNT'"
+                         multiple style="width:100%"
+                         :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '按账户分配固定为存款' : '请选择业务类型（存款/贷款，可多选）'">
+                <el-option v-for="o in bizKindFormOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -351,29 +356,29 @@
         <!-- 查不到该客户的余额统计时告警（查到则不显示）-->
         <el-alert v-if="dlg.form.custNo && custStat.queried && !custStat.found"
                   type="warning" :closable="false" style="margin-bottom:12px"
-                  title="未查询到该客户/账号的余额数据，不允许提交审批" />
+                  title="未查询到该客户，请填写客户名称" />
 
         <!-- 余额概览（默认显示，数据来自 XAN_M98_CUST_STAT_SHOW3，按客户编号反显）-->
         <div class="card-h"><div class="title">余额概览</div></div>
         <el-row :gutter="16" style="margin-bottom:4px">
           <el-col :span="6">
             <el-form-item label="当前余额">
-              <el-input :model-value="custStat.currBal != null ? custStat.currBal : '-'" disabled />
+              <el-input :model-value="custIdx.MC_001 != null ? custIdx.MC_001 : '-'" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="6">
-            <el-form-item label="月日均余额">
-              <el-input :model-value="custStat.mAvgBal != null ? custStat.mAvgBal : '-'" disabled />
+            <el-form-item label="较上日余额">
+              <el-input :model-value="custIdx.MC_002 != null ? custIdx.MC_002 : '-'" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="6">
-            <el-form-item label="季日均余额">
-              <el-input :model-value="custStat.qAvgBal != null ? custStat.qAvgBal : '-'" disabled />
+            <el-form-item label="年均余额">
+              <el-input :model-value="custIdx.MC_003 != null ? custIdx.MC_003 : '-'" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="6">
-            <el-form-item label="年日均余额">
-              <el-input :model-value="custStat.yAvgBal != null ? custStat.yAvgBal : '-'" disabled />
+            <el-form-item label="较上年均余额">
+              <el-input :model-value="custIdx.MC_004 != null ? custIdx.MC_004 : '-'" disabled />
             </el-form-item>
           </el-col>
         </el-row>
@@ -519,7 +524,6 @@
           <el-button type="primary" :loading="dlg.reviewSaving" @click="onDlgReviewAction('APPROVE')">通过</el-button>
         </template>
         <el-button v-if="!dlg.readOnly && !dlg.reviewMode" type="primary" :loading="dlg.saving"
-                   :disabled="custStat.queried && !custStat.found"
                    @click="onSubmit">提交审批</el-button>
       </template>
     </el-dialog>
@@ -561,7 +565,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   submitAdjust, withdrawAdjust, getAdjustDetail,
   getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
-  getAllocPreview, getCustStat, suggestEmployees
+  getAllocPreview, getCustStat, getCustIndexValues, suggestEmployees
 } from '@/api/perf';
 import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -820,12 +824,18 @@ async function openTodoDetail(row) {
     dlg.approvalLogs = [];
     Object.assign(dlg.form, {
       custType: inferCustType(d.custType, d.bizKind), custNo: d.custNo || d.custId || '',
+      custName: d.custName || '',
       allocDim: d.allocDim,
       bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
       accountNo: d.accountNo,
       ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark,
       items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark, empLabel: empLabelOf(it) }))
     });
+    // 余额概览读快照（列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
+    custIdx.MC_001 = d.currBal ?? null;
+    custIdx.MC_002 = d.mAvgBal ?? null;
+    custIdx.MC_003 = d.qAvgBal ?? null;
+    custIdx.MC_004 = d.yAvgBal ?? null;
     // 申请信息条所需的 dlg 顶层字段（之前漏赋值导致 todo/done tab 查看时申请单号/申请人/机构/时间 全空）
     dlg.applyNo = d.applyNo || '';
     dlg.createdBy = d.createdBy || '';
@@ -874,7 +884,7 @@ async function openApprove(row) {
     approveDlg.hasOwners = false;
     if (row.nodeKey === 'biz_dept_review') {
       try {
-        const p = await getAllocPreview({ custNo: row.custId || row.custNo, allocDim: row.allocDim });
+        const p = await getAllocPreview({ custNo: row.custNo || row.custId, allocDim: row.allocDim });
         approveDlg.hasOwners = !!(p && p.allocList && p.allocList.length);
       } catch { approveDlg.hasOwners = false; }
       if (!approveDlg.hasOwners && approveDlg.routeTo === 'OWNER') approveDlg.routeTo = 'LEADER';
@@ -986,6 +996,18 @@ const bizKindMap = computed(() => {
   for (const o of bizKindOptions.value) m[o.value] = o.label;
   return m;
 });
+// 业务类型「存款 / 贷款」对应的字典编码（PERF_BIZ_KIND）
+const BIZ_DEPOSIT = 'CORP_DEPOSIT';
+const BIZ_LOAN = 'CORP_LOAN';
+// 新建申请弹框里业务类型可选项：
+// - 只读查看：展示全部（保证历史含中收/结构性等也能正常显示标签）
+// - 按账户分配(ACCOUNT)：仅「存款」（且默认固定为存款、不可改）
+// - 按规则分配(RULE)：全部 PERF_BIZ_KIND 字典项可选（默认选中存款+贷款，可多选可改）
+const bizKindFormOptions = computed(() => {
+  if (dlg.readOnly) return bizKindOptions.value;
+  if (dlg.form.allocDim === 'ACCOUNT') return bizKindOptions.value.filter(o => o.value === BIZ_DEPOSIT);
+  return bizKindOptions.value;
+});
 const BIZ_KIND_FALLBACK = {
   CORP_DEPOSIT: '对公存款', CORP_LOAN: '对公贷款', CORP_FOREX: '对公外汇',
   CORP_LARGE_CD: '大额存单', FEE_BIZ: '中间业务',
@@ -1012,6 +1034,12 @@ function resetCustStat() {
   custStat.currBal = custStat.mAvgBal = custStat.qAvgBal = custStat.yAvgBal = null;
   custStat.queried = false;
   custStat.found = false;
+}
+// 余额概览 4 项：按客户编号 + 昨日日期在 CUST_INDEX_RESULT 取 MC_001/MC_002/MC_003/MC_004 指标值，
+// 分别对应 当前余额 / 较上日余额 / 年均余额 / 较上年均余额；查无数据为 null → 页面显示 '-'
+const custIdx = reactive({ MC_001: null, MC_002: null, MC_003: null, MC_004: null });
+function resetCustIdx() {
+  custIdx.MC_001 = custIdx.MC_002 = custIdx.MC_003 = custIdx.MC_004 = null;
 }
 // XAN_M98_CUST_STAT_SHOW3 统计日期 STATIS_DT：
 // 查看/审批模式（dlg.createdTime 有值）取 申请日期-1；新建模式取 昨日。均 yyyy-MM-dd。
@@ -1049,7 +1077,7 @@ const dlg = reactive({
   approvalLogs: [], approvalLoading: false,
   applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
-    custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
+    custType: 'CORP', custNo: '', custName: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
     items: [{ empId: '', pct: 100, remark: '', empLabel: '' }]
   }
@@ -1059,6 +1087,7 @@ const totalPct = computed(() => dlg.form.items.reduce((s, x) => s + (Number(x.pc
 const dlgRules = {
   custType:   [{ required: true, message: '请选择客户类型' }],
   custNo:     [{ required: true, message: '请填写客户编号' }],
+  custName:   [{ required: true, message: '请填写客户名称' }],
   allocDim:   [{ required: true, message: '请选择分配维度' }],
   accountNo:  [{ validator: (rule, val, cb) => {
                   if (dlg.form.allocDim === 'ACCOUNT' && !(val && String(val).trim())) {
@@ -1140,8 +1169,13 @@ async function loadApprovalHistory(applyId) {
 }
 
 function onAllocDimChange(val) {
-  if (val !== 'ACCOUNT') {
+  if (val === 'ACCOUNT') {
+    // 按账户分配：业务类型固定为「存款」且不可修改
+    dlg.form.bizKind = [BIZ_DEPOSIT];
+  } else {
     dlg.form.accountNo = '';
+    // 按规则分配：业务类型默认「存款 + 贷款」（可改、可多选，选项为全部 PERF_BIZ_KIND）
+    dlg.form.bizKind = [BIZ_DEPOSIT, BIZ_LOAN];
   }
 }
 function openCreate() {
@@ -1149,10 +1183,12 @@ function openCreate() {
   dlg.viewingId = null;
   custNameDisplay.value = '';
   resetCustStat();
+  resetCustIdx();
   preview.loaded = false;
   preview.data = null;
   Object.assign(dlg.form, {
-    custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: [],
+    // 默认按规则分配 → 业务类型默认存款+贷款
+    custType: 'CORP', custNo: '', custName: '', allocDim: 'RULE', bizKind: [BIZ_DEPOSIT, BIZ_LOAN],
     accountNo: '', ownerOrgId: '', reason: '',
     items: [{ empId: '', pct: 100, remark: '', empLabel: '' }]
   });
@@ -1164,6 +1200,7 @@ async function openView(row) {
   dlg.approvalLogs = [];
   Object.assign(dlg.form, {
     custType: inferCustType(row.custType, row.bizKind), custNo: row.custNo || row.custId || '',
+    custName: row.custName || '',
     allocDim: row.allocDim || 'RULE',
     bizKind: row.bizKind ? (typeof row.bizKind === 'string' ? row.bizKind.split(',') : row.bizKind) : [],
     accountNo: row.accountNo || '',
@@ -1171,6 +1208,11 @@ async function openView(row) {
     reason: row.reason || row.remark || '',
     items: row.items?.length ? row.items.map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })) : [{ empId: '', pct: 100, remark: '' }]
   });
+  // 余额概览读快照（列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
+  custIdx.MC_001 = row.currBal ?? null;
+  custIdx.MC_002 = row.mAvgBal ?? null;
+  custIdx.MC_003 = row.qAvgBal ?? null;
+  custIdx.MC_004 = row.yAvgBal ?? null;
   // list 接口已有的申请人字段先塞进去，detail 接口再覆盖一次以拿到 createdByName/OrgName
   dlg.applyNo = row.applyNo || '';
   dlg.createdBy = row.createdBy || '';
@@ -1187,6 +1229,12 @@ async function openView(row) {
         accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
         items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) }))
       });
+      // 客户名称 + 余额概览以 detail 快照为准
+      if (d.custName) dlg.form.custName = d.custName;
+      custIdx.MC_001 = d.currBal ?? null;
+      custIdx.MC_002 = d.mAvgBal ?? null;
+      custIdx.MC_003 = d.qAvgBal ?? null;
+      custIdx.MC_004 = d.yAvgBal ?? null;
       dlg.applyNo = d.applyNo || dlg.applyNo;
       dlg.createdBy = d.createdBy || dlg.createdBy;
       dlg.createdByName = d.createdByName || dlg.createdByName;
@@ -1227,12 +1275,13 @@ async function onSubmit() {
     await submitAdjust({
       custType:   dlg.form.custType,
       custNo:     dlg.form.custNo,
-      // 反显的客户名称 + 余额概览随提交快照入库，列表/详情直接读
-      custName:   custNameDisplay.value || null,
-      currBal:    custStat.currBal,
-      mAvgBal:    custStat.mAvgBal,
-      qAvgBal:    custStat.qAvgBal,
-      yAvgBal:    custStat.yAvgBal,
+      // 客户名称 + 余额概览(MC_001..004)随提交快照入库，审批/查看直接读，不再实时取数
+      // 列复用：currBal=当前余额(MC_001) / mAvgBal=较上日余额(MC_002) / qAvgBal=年均余额(MC_003) / yAvgBal=较上年均余额(MC_004)
+      custName:   dlg.form.custName || null,
+      currBal:    custIdx.MC_001,
+      mAvgBal:    custIdx.MC_002,
+      qAvgBal:    custIdx.MC_003,
+      yAvgBal:    custIdx.MC_004,
       allocDim:   dlg.form.allocDim,
       bizKind:    Array.isArray(dlg.form.bizKind) ? dlg.form.bizKind.join(',') : dlg.form.bizKind,
       accountNo:  dlg.form.accountNo || undefined,
@@ -1269,25 +1318,39 @@ async function onWithdraw(row) {
 let custNoTimer = null;
 watch(() => dlg.form.custNo, (val) => {
   clearTimeout(custNoTimer);
-  if (!val || val.length < 2) { custNameDisplay.value = ''; resetCustStat(); preview.loaded = false; return; }
+  // 查看/审批：客户名称与余额概览直接读提交时的快照，不再按编号实时取数
+  if (dlg.readOnly) return;
+  if (!val || val.length < 2) { dlg.form.custName = ''; resetCustStat(); resetCustIdx(); preview.loaded = false; return; }
   custNoTimer = setTimeout(async () => {
+    // 记录上次是否"查到并锁定"——查不到时仅清掉这种锁定名，避免冲掉用户手输
+    const prevFound = custStat.found;
     try {
-      // 客户名称 + 余额均从 XAN_M98_CUST_STAT_SHOW3 按客户编号反显（列名为 DB 大写）
+      // 客户名称从 XAN_M98_CUST_STAT_SHOW3 按客户编号反显（列名为 DB 大写）
       // 统计日期 STATIS_DT：新建=昨日 / 查看·审批=申请日期-1
       const s = await getCustStat(val, custStatStatisDt());
       if (s) {
-        custNameDisplay.value = s.CUST_NAME || s.cust_name || '';
+        // 查到：反显客户名称并锁定（输入框 disabled）
+        dlg.form.custName = s.CUST_NAME || s.cust_name || '';
         custStat.currBal = s.CURR_BAL ?? null;
         custStat.mAvgBal = s.M_AVG_BAL ?? null;
         custStat.qAvgBal = s.Q_AVG_BAL ?? null;
         custStat.yAvgBal = s.Y_AVG_BAL ?? null;
         custStat.found = true;
       } else {
-        custNameDisplay.value = '';
+        // 查不到：允许手工输入；若此前是查到锁定的名称则清空
+        if (prevFound) dlg.form.custName = '';
         resetCustStat();
       }
       custStat.queried = true;
-    } catch { custNameDisplay.value = ''; resetCustStat(); custStat.queried = true; }
+    } catch { if (prevFound) dlg.form.custName = ''; resetCustStat(); custStat.queried = true; }
+    // 余额概览 4 项：按客户编号 + 昨日日期在 CUST_INDEX_RESULT 取 MC_001..004 指标值（独立失败兜底 '-'）
+    try {
+      const m = await getCustIndexValues(val, custStatStatisDt(), ['MC_001', 'MC_002', 'MC_003', 'MC_004']);
+      custIdx.MC_001 = m?.MC_001 ?? null;
+      custIdx.MC_002 = m?.MC_002 ?? null;
+      custIdx.MC_003 = m?.MC_003 ?? null;
+      custIdx.MC_004 = m?.MC_004 ?? null;
+    } catch { resetCustIdx(); }
   }, 500);
 });
 // 客户编号 / 分配维度变化时触发原业绩分配预览（ACCOUNT 维度只查按账号分配的最后一条）

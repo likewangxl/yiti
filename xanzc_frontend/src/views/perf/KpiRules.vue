@@ -19,16 +19,14 @@
             <el-option v-for="o in STATUS_OPTIONS" :key="o.value" :value="o.value" :label="o.label" />
           </el-select>
         </el-form-item>
-        <el-form-item label="适用周期">
-          <el-select v-model="f.cycleType" clearable placeholder="全部" style="width:160px" @change="reload">
-            <el-option v-for="o in CYCLE_OPTIONS" :key="o.v" :value="o.v" :label="o.l" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="更新时间">
           <el-date-picker v-model="f.dateRange" type="daterange" value-format="YYYY-MM-DD"
             range-separator="~" start-placeholder="开始" end-placeholder="结束" style="width:280px" />
         </el-form-item>
-        <el-form-item><el-button type="primary" @click="reload">查询</el-button></el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="reload">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -103,11 +101,6 @@
           <el-form-item label="方案名称" prop="schemeName">
             <el-input v-model="dlg.scheme.schemeName" :disabled="dlg.readOnly" />
           </el-form-item>
-          <el-form-item label="适用周期" prop="cycleType">
-            <el-select v-model="dlg.scheme.cycleType" :disabled="dlg.readOnly" style="width:100%">
-              <el-option v-for="o in CYCLE_OPTIONS" :key="o.v" :value="o.v" :label="o.l" />
-            </el-select>
-          </el-form-item>
           <el-form-item label="是否向员工开放明细" prop="openDetail">
             <el-select v-model="dlg.scheme.openDetail" :disabled="dlg.readOnly" style="width:100%">
               <el-option :value="true" label="是" />
@@ -135,11 +128,6 @@
         <el-table-column label="权重 %" width="120">
           <template #default="{row}">
             <el-input-number v-model="row.weight" :disabled="dlg.readOnly" :min="0" :max="100" :precision="0" :controls="false" style="width:100%" />
-          </template>
-        </el-table-column>
-        <el-table-column label="加倍系数" width="120">
-          <template #default="{row}">
-            <el-input-number v-model="row.multiplier" :disabled="dlg.readOnly" :min="0" :precision="2" :step="0.1" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
         <el-table-column label="计分上限" width="120">
@@ -171,8 +159,9 @@
         <strong>计分公式可用变量：</strong>
         <code>actual</code> <span class="dim">（实际值）</span>·
         <code>target</code> <span class="dim">（目标值）</span>·
+        <code>base</code> <span class="dim">（基础值）</span>·
         <code>complete_rate</code> <span class="dim">（完成率）</span>·
-        <span class="dim">最终得分 = ∑(权重 × min(max(score, min), max)) / 100</span>
+        <span class="dim">KPI完成率 = 实际值 ÷ 目标值 × 权重；超过计分上/下限时用 min / max 取上限 / 下限分值，例：min(max(actual / target * 权重, 计分下限), 计分上限)</span>
       </div>
 
       <template #footer>
@@ -210,11 +199,7 @@ const isCaizai = computed(() => {
 });
 // labelOf 名称冲突：保留下面行业版的 statusLabel（含 DISABLED → 已删除映射），useDict 只取 options
 const { options: STATUS_OPTIONS } = useDict('KPI_SCHEME_STATUS');
-const CYCLE_OPTIONS = [
-  { v: 'YEARLY',    l: '年度' },
-  { v: 'QUARTERLY', l: '季度' },
-  { v: 'MONTHLY',   l: '月度' }
-];
+// 适用周期 UI 已按需求移除（新增方案默认 cycleType=YEARLY，仍随提交透传给后端）
 
 const statusCls = (s) => ({ ACTIVE: 'tag-success', TRIAL_RUN: 'tag-warning', DRAFT: 'tag-info', INACTIVE: 'tag-info', DISABLED: 'tag-info' }[s] || 'tag-info');
 const statusLabel = (s) => ({ ACTIVE: '启用', TRIAL_RUN: '试运行', DRAFT: '草稿', INACTIVE: '已删除', DISABLED: '已删除' }[s] || s || '-');
@@ -244,6 +229,16 @@ const loading = ref(false);
 const pageNo = ref(1);
 const pageSize = ref(20);
 const f = reactive({ keyword: '', status: '', cycleType: '', dateRange: null });
+
+// 重置查询条件：清空所有筛选项 + 回到第 1 页后重新查询
+function resetFilters() {
+  f.keyword = '';
+  f.status = '';
+  f.cycleType = '';
+  f.dateRange = null;
+  pageNo.value = 1;
+  reload();
+}
 
 async function reload() {
   loading.value = true;

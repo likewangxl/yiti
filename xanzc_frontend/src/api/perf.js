@@ -116,6 +116,12 @@ export function getCustStat(custId, statisDt) {
     .then(unwrapPage)
     .then(r => (Array.isArray(r) ? r[0] : (r?.records || [])[0]) || null);
 }
+// 客户指标宽表（CUST_INDEX_RESULT）：按客户编号 + 数据日期取指定指标编号(MC_xxx)的值，
+// 返回 { 指标编号: 数值 }；查无数据的指标编号在结果中缺省 → 前端显示 '-'
+export function getCustIndexValues(custId, dataDate, codes) {
+  const params = { custId, dataDate, codes: Array.isArray(codes) ? codes.join(',') : codes };
+  return call('get', '/perf/metrics/cust-index-values', { params }, {});
+}
 export function createTargetPlan(data) {
   return call('post', '/perf/target-plans', { data }, { id: 'mock' });
 }

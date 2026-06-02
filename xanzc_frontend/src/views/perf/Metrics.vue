@@ -38,7 +38,9 @@
         >
           <template #default="{ node, data }">
             <span class="tree-node">
-              <span class="ico">{{ data.isMetric ? '📊' : '📁' }}</span>
+              <span v-if="!data.isMetric" class="ico">📁</span>
+              <span v-if="data.isMetric && data.raw?.metricLevel != null"
+                    class="lvl-badge" :class="'lvl-' + data.raw.metricLevel">{{ data.raw.metricLevel }}</span>
               <span :class="{ 'tree-leaf': data.isMetric }">{{ node.label }}</span>
               <el-tag v-if="data.isMetric" :class="statusCls(data.status)" effect="plain" size="small" class="tree-tag">
                 {{ statusLabel(data.status) }}
@@ -68,18 +70,20 @@
               <td class="lab">层级</td><td class="val">{{ detail.metricLevel != null ? detail.metricLevel + ' 级' : '-' }}</td>
             </tr>
             <tr>
+              <td class="lab">宽表槽位</td>
+              <td class="val">{{ detail.valSlot != null ? detail.valSlot : '-' }}</td>
               <td class="lab">计算方式</td><td class="val">{{ { AUTO:'自动', MANUAL:'手动' }[detail.calcMode] || detail.calcMode || '-' }}</td>
+            </tr>
+            <tr>
               <td class="lab">计算逻辑</td>
               <td class="val">
                 <el-tag :class="logicCls(detail.calcLogicType)" effect="plain">{{ { SQL:'SQL', EXPR:'Groovy' }[detail.calcLogicType] || detail.calcLogicType || '-' }}</el-tag>
               </td>
-            </tr>
-            <tr>
               <td class="lab">创建人</td><td class="val">{{ personLabel(detail.createdByUsername, detail.createdByName, detail.createdBy) }}</td>
-              <td class="lab">更新人</td><td class="val">{{ personLabel(detail.updatedByUsername, detail.updatedByName, detail.updatedBy) }}</td>
             </tr>
             <tr>
-              <td class="lab">更新时间</td><td class="val" colspan="3">{{ fmtTime(detail.updatedTime || detail.createdTime) }}</td>
+              <td class="lab">更新人</td><td class="val">{{ personLabel(detail.updatedByUsername, detail.updatedByName, detail.updatedBy) }}</td>
+              <td class="lab">更新时间</td><td class="val">{{ fmtTime(detail.updatedTime || detail.createdTime) }}</td>
             </tr>
             <tr v-if="detail.description">
               <td class="lab">详细描述</td><td class="val" colspan="3">{{ detail.description }}</td>
@@ -178,7 +182,7 @@
       <el-form ref="formRef" :model="dlg.form" :rules="formRules" label-position="top" size="default">
         <div class="form-grid">
           <el-form-item label="编码" prop="metricCode" required>
-            <el-input v-model="dlg.form.metricCode" :disabled="!!dlg.editing" placeholder="如 M00xx" maxlength="20" />
+            <el-input v-model="dlg.form.metricCode" :disabled="!!dlg.editing" placeholder="如 M_0001" maxlength="20" />
           </el-form-item>
           <el-form-item label="名称" prop="metricName" required>
             <el-input v-model="dlg.form.metricName" maxlength="100" />
@@ -528,32 +532,51 @@ function resolveCategory(m) {
   return sub ? `${g}/${sub}` : g;
 }
 
-// === 树结构：严格按 metric.metricCategory 一级分组（V1.10 后端 categories 接口提供骨架） ===
+// === 树结构：三级层次「维度 - 指标分类 - 指标」===
+// 维度展示名 + 排序（EMP/ORG/CUST 优先，维度无关型排最后）
+const DIM_LABEL = { EMP: '员工', ORG: '机构', CUST: '客户', NONE: '维度无关' };
+const DIM_ORDER = ['EMP', 'ORG', 'CUST'];
 const treeData = computed(() => {
-  // 1. 用后端 categories 接口建立骨架（保证空分类也显示）
-  const groups = new Map();
-  for (const c of categories.value) {
-    const label = c?.label || c?.value;
-    if (!label) continue;
-    groups.set(label, { id: 'g-' + label, label, children: [] });
-  }
-  // 2. 把每条指标挂到 metricCategory 对应节点；空 metricCategory 入"未分类"
-  for (const m of allMetrics.value) {
-    const cat = (m?.metricCategory && String(m.metricCategory).trim()) || UNCATEGORIZED_LABEL;
-    let node = groups.get(cat);
-    if (!node) {
-      node = { id: 'g-' + cat, label: cat, children: [] };
-      groups.set(cat, node);
+  // 维度节点 Map；每个维度节点内再用 _catMap 暂存「分类label → 分类节点」
+  const dimMap = new Map();
+  const getDim = (dimKey) => {
+    let d = dimMap.get(dimKey);
+    if (!d) {
+      d = { id: 'dim-' + dimKey, label: DIM_LABEL[dimKey] || dimKey, isDim: true, children: [], _catMap: new Map() };
+      dimMap.set(dimKey, d);
     }
-    const lvl = m.metricLevel ? `（${m.metricLevel}级）` : '';
-    node.children.push({
-      id: m.metricCode, label: `${m.metricName} ${lvl}`.trim(),
+    return d;
+  };
+  const getCat = (dimNode, dimKey, cat) => {
+    let c = dimNode._catMap.get(cat);
+    if (!c) {
+      c = { id: `dim-${dimKey}-cat-${cat}`, label: cat, children: [] };
+      dimNode._catMap.set(cat, c);
+      dimNode.children.push(c);
+    }
+    return c;
+  };
+  // 逐条指标挂到 维度 → 分类 → 指标；空维度归 NONE，空分类归"未分类"
+  for (const m of allMetrics.value) {
+    const dimKey = (m?.baseDim && String(m.baseDim).trim()) || 'NONE';
+    const cat = (m?.metricCategory && String(m.metricCategory).trim()) || UNCATEGORIZED_LABEL;
+    const catNode = getCat(getDim(dimKey), dimKey, cat);
+    catNode.children.push({
+      id: m.metricCode, label: m.metricName,
       isMetric: true, status: m.status, raw: m
     });
   }
-  // 3. 空分类节点放最后；非空按后端顺序
-  const all = Array.from(groups.values());
-  return all.filter(g => g.children.length).concat(all.filter(g => !g.children.length));
+  // 维度排序：EMP/ORG/CUST 在前，未知维度居中，维度无关(NONE)最后
+  const dims = Array.from(dimMap.values());
+  const rank = (node) => {
+    const k = node.id.replace(/^dim-/, '');
+    if (k === 'NONE') return 999;
+    const i = DIM_ORDER.indexOf(k);
+    return i === -1 ? 500 : i;
+  };
+  dims.sort((a, b) => rank(a) - rank(b));
+  dims.forEach(d => delete d._catMap); // 清掉临时索引，避免污染节点数据
+  return dims;
 });
 
 // === 详情 ===
@@ -924,7 +947,8 @@ function openEdit(row) {
     sqlText: row.sqlText || '', exprText: row.exprText || '', exprDisplay: row.exprDisplay || '', summaryRule: row.summaryRule || '',
     unit: row.unit || '', decimalPlaces: row.decimalPlaces ?? 2, valSlot: row.valSlot ?? 1,
     description: row.description || '',
-    _category: resolveCategory(row)
+    // 分类优先取数据表 metric_category 列（与下拉选项 CATEGORY_OPTIONS 同词表）；为空再按启发式兜底
+    _category: (row.metricCategory && String(row.metricCategory).trim()) || resolveCategory(row)
   });
   dlg.slots = resolveSlots(row);
   dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
@@ -1291,7 +1315,7 @@ onMounted(reload);
 }
 .layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 370px 1fr;
   gap: 12px;
 }
 .tree-col {
@@ -1319,6 +1343,17 @@ onMounted(reload);
   .ico { font-size: 13px; }
   .tree-leaf { color: $text-1; }
   .tree-tag { margin-left: auto; }
+  // 指标层级数字徽标（1/2/3），按层级配色
+  .lvl-badge {
+    flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    font-size: 11px; font-weight: 700; line-height: 1; color: #fff;
+    background: #909399;
+    &.lvl-1 { background: #409eff; }
+    &.lvl-2 { background: #67c23a; }
+    &.lvl-3 { background: #e6a23c; }
+  }
 }
 .detail-col {
   padding: 18px 22px;
