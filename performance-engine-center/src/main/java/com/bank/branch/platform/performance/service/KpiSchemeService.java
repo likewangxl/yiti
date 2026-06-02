@@ -231,8 +231,16 @@ public class KpiSchemeService {
                 .collect(Collectors.toMap(PerfMetricDef::getMetricCode, Function.identity()));
         for (PerfKpiItem item : items) {
             PerfMetricDef metricDef = defMap.get(item.getMetricCode());
-            if (metricDef == null || !STATUS_ACTIVE.equals(metricDef.getStatus())) {
-                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, item.getMetricCode());
+            if (metricDef == null) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "引用的指标不存在或已删除，无法发布: " + item.getMetricCode());
+            }
+            if (!STATUS_ACTIVE.equals(metricDef.getStatus())) {
+                // 指标须为 ACTIVE 才可发布；给出可操作的提示（指标编码 + 名称 + 当前状态）
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "指标未启用(状态=" + metricDef.getStatus() + ")，请先在指标库启用后再发布: "
+                                + item.getMetricCode()
+                                + (metricDef.getMetricName() != null ? "（" + metricDef.getMetricName() + "）" : ""));
             }
         }
 
