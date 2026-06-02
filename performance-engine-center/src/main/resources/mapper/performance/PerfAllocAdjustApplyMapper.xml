@@ -41,7 +41,7 @@
         SELECT COUNT(*)
         FROM PERF_ALLOC_ADJUST_APPLY
         WHERE status = 'IN_APPROVAL'
-          AND cust_id = #{custId}
+          AND cust_no = #{custNo}
           AND alloc_dim = #{allocDim}
     </select>
 

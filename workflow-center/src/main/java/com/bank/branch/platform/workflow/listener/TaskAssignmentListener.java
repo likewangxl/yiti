@@ -1,6 +1,8 @@
 package com.bank.branch.platform.workflow.listener;
 
+import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
@@ -35,6 +37,7 @@ public class TaskAssignmentListener implements TaskListener {
     private final NotifyApi notifyApi;
     private final RepositoryService repositoryService;
     private final UserApi userApi;
+    private final OrgApi orgApi;
     private final com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
 
     /**
@@ -61,12 +64,15 @@ public class TaskAssignmentListener implements TaskListener {
         // 解析候选组
         List<String> candidates = candidateResolverService.resolveCandidates(processDefinitionKey, nodeKey);
 
-        // branch_approve 节点：按发起人机构过滤，只让同机构的负责人审批
+        // branch_approve 节点：按"审批机构"过滤候选，只让该机构的经营机构负责人(分行/支行负责人)审批。
+        // 审批机构按发起人机构等级决定：等级3(支行)→上级机构(等级2,分行)；等级2→本机构。
         if ("branch_approve".equals(nodeKey)) {
             Object startOrgId = delegateTask.getVariable("startOrgId");
             if (startOrgId != null && !startOrgId.toString().isEmpty()) {
-                filterCandidatesByOrg(delegateTask, candidates, startOrgId.toString());
-                log.info("[TaskAssignmentListener] 任务 {} branch_approve 按机构 {} 过滤候选", taskId, startOrgId);
+                String approveOrg = resolveBranchApproveOrg(startOrgId.toString());
+                filterCandidatesByOrg(delegateTask, candidates, approveOrg);
+                log.info("[TaskAssignmentListener] 任务 {} branch_approve 发起机构 {} → 审批机构 {} 过滤候选",
+                        taskId, startOrgId, approveOrg);
                 notifyCandidates(delegateTask, candidates);
                 return;
             }
@@ -125,6 +131,30 @@ public class TaskAssignmentListener implements TaskListener {
                 log.warn("[TaskAssignmentListener] 发送通知失败，任务 {}，原因: {}", taskId, e.getMessage());
             }
         }
+    }
+
+    /**
+     * 机构负责人审批环节的审批机构解析：
+     * <ul>
+     *   <li>发起人机构等级 = 3（支行）→ 由上级机构（等级 2，分行）的负责人审批 → 取 parentOrgCode</li>
+     *   <li>发起人机构等级 = 2 → 由本机构负责人审批 → 取发起人机构</li>
+     *   <li>其它等级 / 查不到机构 / 无上级 → 兜底用发起人本机构（保持原行为）</li>
+     * </ul>
+     */
+    private String resolveBranchApproveOrg(String startOrgCode) {
+        try {
+            OrgDTO org = orgApi.getOrg(startOrgCode);
+            if (org != null && org.getOrgLevel() != null && org.getOrgLevel() == 3
+                    && org.getParentOrgCode() != null && !org.getParentOrgCode().isBlank()) {
+                log.info("[TaskAssignmentListener] branch_approve 三级机构 {} → 上级机构 {} 审批",
+                        startOrgCode, org.getParentOrgCode());
+                return org.getParentOrgCode();
+            }
+        } catch (Exception e) {
+            log.warn("[TaskAssignmentListener] 解析审批机构失败 startOrg={}，兜底本机构，原因 {}",
+                    startOrgCode, e.getMessage());
+        }
+        return startOrgCode;
     }
 
     /**

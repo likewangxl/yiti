@@ -165,6 +165,19 @@ public class MetricLifecycleFacade {
     }
 
     /**
+     * 按客户编号 + 数据日期取 CUST_INDEX_RESULT 指定指标值（余额概览反显）.
+     *
+     * @param custId   客户编号
+     * @param dataDate 数据日期（昨日）
+     * @param codes    指标编号列表（MC_001..MC_004）
+     * @return metricCode → 数值；查无数据的编号缺省
+     */
+    public java.util.Map<String, java.math.BigDecimal> custIndexValues(
+            String custId, LocalDate dataDate, java.util.List<String> codes) {
+        return metricCalcService.loadCustIndexValues(custId, dataDate, codes);
+    }
+
+    /**
      * 直接试运行 SQL / Groovy 文本（无需先保存指标），返回 DTO.
      */
     public MetricTrialRespDTO trialRunAdhocDto(String calcLogicType, String baseDim, String sqlText, String exprText,

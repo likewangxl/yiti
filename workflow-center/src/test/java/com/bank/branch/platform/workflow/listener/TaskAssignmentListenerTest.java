@@ -35,6 +35,9 @@ class TaskAssignmentListenerTest {
     @Mock
     private UserApi userApi;
 
+    @Mock
+    private com.bank.branch.platform.auth.api.OrgApi orgApi;
+
     @InjectMocks
     private TaskAssignmentListener taskAssignmentListener;
 

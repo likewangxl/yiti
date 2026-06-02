@@ -103,6 +103,26 @@ public class MetricDefController {
     }
 
     /**
+     * 按客户编号 + 数据日期取 CUST_INDEX_RESULT 指定指标值（MC_xxx）.
+     *
+     * <p>供"新建调整申请-余额概览"反显：客户编号 + 昨日日期 + 指标编号列表 →
+     * {@code {metricCode: 数值}}；查无数据的编号不出现在结果（前端显示 '-'）。
+     * 字面路径，优先于 {@code /{metricCode}} 匹配。
+     */
+    @GetMapping("/cust-index-values")
+    @Operation(summary = "按客户编号+数据日期取 CUST_INDEX_RESULT 指定指标值（余额概览反显）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<java.util.Map<String, java.math.BigDecimal>> custIndexValues(
+            @RequestParam("custId") @NotBlank String custId,
+            @RequestParam("dataDate")
+            @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataDate,
+            @RequestParam("codes") List<String> codes) {
+        log.debug("[MetricDefController.custIndexValues] custId={}, dataDate={}, codes={}", custId, dataDate, codes);
+        return ResponseWrapper.success(metricLifecycleFacade.custIndexValues(custId, dataDate, codes));
+    }
+
+    /**
      * Get metric definition by code.
      * 返回 MetricDefRespDTO，不暴露 entity 内部字段。
      */

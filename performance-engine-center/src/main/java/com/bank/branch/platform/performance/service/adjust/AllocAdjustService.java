@@ -151,11 +151,12 @@ public class AllocAdjustService {
         // 按客户编号(cust_no)查找客户主档；apply.cust_id 列保存客户内部主键 id，与现有跨模块 join 保持兼容
         String internalCustId = resolveInternalCustIdByCustNo(cmd.getCustNo());
 
-        // 同客户同维度去重：同一客户(cust_id) + 同一分配维度(alloc_dim)已存在审批中(IN_APPROVAL)的调整申请时，
+        // 同客户同维度去重：同一客户编号(cust_no) + 同一分配维度(alloc_dim)已存在审批中(IN_APPROVAL)的调整申请时，
         // 不允许重复提交，避免并行多笔调整审批落地后相互覆盖分配关系。
+        // 按 cust_no 去重（而非 cust_id）：手工录入客户 cust_id 为 null，用业务客户编号才能正确去重。
         // 去重粒度精确到维度：RULE 审批中不阻塞 ACCOUNT 的新提交，反之亦然。
         // 注意：PerfException 的 errorCode.format 已自动拼「基础消息 + ": " + arg」，此处只传 custNo，避免消息重复。
-        if (applyMapper.countInApprovalByCustAndDim(internalCustId, cmd.getAllocDim()) > 0) {
+        if (applyMapper.countInApprovalByCustAndDim(cmd.getCustNo(), cmd.getAllocDim()) > 0) {
             throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING, cmd.getCustNo());
         }
 
@@ -755,8 +756,10 @@ public class AllocAdjustService {
      * 下游 resolveOriginalOwnerEmpId 查不到有效分配会返回 null（"新客户或历史分配空"分支已优雅处理）。
      */
     private String resolveInternalCustIdByCustNo(String custNo) {
+        // 客户主档命中→cust_id 存内部主键；未命中（手工录入客户）→返回 null，客户编号只存入 cust_no，
+        // 不再把业务客户编号回填到 cust_id（避免 cust_id/cust_no 语义混淆）。
         Optional<CustomerDTO> opt = customerQueryApi.getCustomerByCustNo(custNo);
-        return opt.map(CustomerDTO::getId).orElse(custNo);
+        return opt.map(CustomerDTO::getId).orElse(null);
     }
 
     /**

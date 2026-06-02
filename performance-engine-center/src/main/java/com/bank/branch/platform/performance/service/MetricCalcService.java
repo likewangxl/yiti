@@ -410,6 +410,28 @@ public class MetricCalcService {
         };
     }
 
+    /**
+     * 按客户编号 + 数据日期，从 CUST_INDEX_RESULT 取指定指标编号(MC_xxx)的值。
+     *
+     * <p>供"新建调整申请-余额概览"反显用：版本按 (custId, dataDate) 反查最近导入版本，查不到降级 V1。
+     * 返回 metricCode → 值；查无数据的指标编号不出现在结果中（前端显示 '-'）。
+     *
+     * @param custId   客户编号
+     * @param dataDate 数据日期（一般取昨日）
+     * @param codes    指标编号列表（如 MC_001..MC_004）
+     * @return 命中值的 metricCode → 数值映射
+     */
+    public Map<String, java.math.BigDecimal> loadCustIndexValues(String custId, LocalDate dataDate, List<String> codes) {
+        if (custId == null || custId.isBlank() || codes == null || codes.isEmpty()) {
+            return java.util.Map.of();
+        }
+        String version = resolveDataVersionForSubject("CUST", custId, dataDate);
+        if (version == null) {
+            version = "V1";
+        }
+        return custIndexResultMapper.selectSlotValuesByCodes(custId, codes, dataDate, version);
+    }
+
     public Map<String, Object> loadGroovyVarsForSubject(String baseDim, String exprText,
                                                         LocalDate dataDate, String subjectId, String version) {
         List<String> refCodes = extractMetricCodesFromExpr(exprText);
