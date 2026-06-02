@@ -685,4 +685,6 @@ onMounted(async () => {
 .role-xfer-item { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .role-xfer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role-xfer-primary { margin-left: 8px; flex-shrink: 0; }
+/* 「已分配」面板(右侧最后一个)加宽 90px：默认 200px → 290px */
+:deep(.el-transfer-panel:last-child) { width: 290px; }
 </style>
