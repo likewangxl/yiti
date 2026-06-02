@@ -383,25 +383,61 @@
           </el-col>
         </el-row>
 
-        <!-- 原业绩分配（来自 getAllocPreview，仅展示当前分配，存贷款余额预览模块已删除）-->
-        <div v-if="preview.loaded && preview.data" class="preview-section" v-loading="preview.loading">
-          <div class="card-h"><div class="title">原业绩分配</div></div>
-          <el-table :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
+        <!-- 原业绩分配：自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
+        <div v-if="(dlg.form.custNo && preview.loaded) || dlg.readOnly || dlg.form.originalItems.length" class="preview-section" v-loading="preview.loading">
+          <div class="card-h">
+            <div class="title">原业绩分配</div>
+            <el-button v-if="!dlg.readOnly && !hasOriginalOwners" size="small" type="primary" plain @click="addOriginalRow">+ 添加原业绩分配</el-button>
+          </div>
+          <!-- 历史审批通过分配（自动查到）：只读 -->
+          <el-table v-if="hasOriginalOwners" :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
             <el-table-column prop="acctNo" label="账号" min-width="150" show-overflow-tooltip>
               <template #default="{row}">{{ row.acctNo || '-' }}</template>
             </el-table-column>
             <el-table-column label="员工名称" min-width="150" show-overflow-tooltip>
-              <template #default="{row}">
-                {{ row.username || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}
-              </template>
+              <template #default="{row}">{{ row.username || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}</template>
             </el-table-column>
             <el-table-column label="所属机构" min-width="180" show-overflow-tooltip>
-              <template #default="{row}">
-                {{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}
-              </template>
+              <template #default="{row}">{{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}</template>
             </el-table-column>
             <el-table-column prop="ratio" label="分配比例" width="100">
               <template #default="{row}">{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</template>
+            </el-table-column>
+          </el-table>
+          <!-- 查不到 → 手工录入（新建/编辑可增删）；查看/审批时只读展示已保存原业绩分配 -->
+          <el-table v-else :data="dlg.form.originalItems" size="small" border style="margin-bottom:12px" empty-text="未查到原业绩分配，请手工录入至少 1 条（除账号外必填）">
+            <el-table-column label="账号" min-width="140">
+              <template #default="{row}">
+                <el-input v-if="!dlg.readOnly" v-model="row.acctNo" size="small" placeholder="选填" clearable />
+                <span v-else>{{ row.acctNo || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="员工名称" min-width="200">
+              <template #default="{row}">
+                <el-autocomplete v-if="!dlg.readOnly" v-model="row.empLabel" size="small" style="width:100%"
+                  value-key="label" :fetch-suggestions="queryEmpSuggest" :trigger-on-focus="false" clearable
+                  placeholder="输入工号/姓名搜索" @select="(item) => onOrigEmpSelect(row, item)" @input="(v) => onOrigEmpInput(row, v)" />
+                <span v-else>{{ row.username || row.empId || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="所属机构" min-width="220">
+              <template #default="{row}">
+                <el-autocomplete v-if="!dlg.readOnly" v-model="row.orgLabel" size="small" style="width:100%"
+                  value-key="label" :fetch-suggestions="queryOrgSuggest" :trigger-on-focus="false" clearable
+                  placeholder="输入机构号/名称搜索" @select="(item) => onOrigOrgSelect(row, item)" @input="(v) => onOrigOrgInput(row, v)" />
+                <span v-else>{{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="分配比例" width="120">
+              <template #default="{row}">
+                <el-input-number v-if="!dlg.readOnly" v-model="row.ratio" :min="0" :max="100" :precision="2" size="small" controls-position="right" style="width:100%" />
+                <span v-else>{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center">
+              <template #default="{ $index }">
+                <el-button link type="danger" size="small" @click="removeOriginalRow($index)">删除</el-button>
+              </template>
             </el-table-column>
           </el-table>
         </div>
@@ -565,7 +601,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   submitAdjust, withdrawAdjust, getAdjustDetail,
   getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
-  getAllocPreview, getCustStat, getCustIndexValues, suggestEmployees
+  getAllocPreview, getCustStat, getCustIndexValues, suggestEmployees, suggestOrgs
 } from '@/api/perf';
 import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -592,6 +628,8 @@ const inferCustType = (custType, bizKind) => {
   return '';
 };
 const doneRowStatus = (row) => {
+  // 撤回优先：撤回也会把流程置为 CANCELLED，需先按申请状态区分「撤回」与「驳回」
+  if (row.status === 'WITHDRAWN') return 'WITHDRAWN';
   if (row.approvalResult === 'APPROVE' || row.processStatus === 'COMPLETED') return 'APPROVED';
   if (row.approvalResult === 'REJECT' || row.processStatus === 'CANCELLED') return 'REJECTED';
   if (row.status) return row.status;
@@ -829,7 +867,8 @@ async function openTodoDetail(row) {
       bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
       accountNo: d.accountNo,
       ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark,
-      items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark, empLabel: empLabelOf(it) }))
+      items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark, empLabel: empLabelOf(it) })),
+      originalItems: originalItemsFromDetail(d)
     });
     // 余额概览读快照（列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
     custIdx.MC_001 = d.currBal ?? null;
@@ -1079,7 +1118,8 @@ const dlg = reactive({
   form: {
     custType: 'CORP', custNo: '', custName: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
-    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }]
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    originalItems: []
   }
 });
 const dlgTitle = computed(() => dlg.reviewMode ? '审批调整申请' : dlg.readOnly ? '查看调整申请' : '新建调整申请');
@@ -1130,6 +1170,54 @@ function onEmpInput(row, val) {
 function empLabelOf(it) {
   if (it && it.username) return it.username + (it.empChnName ? '（' + it.empChnName + '）' : '');
   return (it && it.empId) || '';
+}
+
+// === 原业绩分配（手工录入）===
+function origRow() {
+  return { acctNo: '', empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '', ratio: 0 };
+}
+function addOriginalRow() { dlg.form.originalItems.push(origRow()); }
+function removeOriginalRow(i) { dlg.form.originalItems.splice(i, 1); }
+// 原业绩分配-员工下拉选中（empId 存登录名干净值，username/empChnName 留快照）
+function onOrigEmpSelect(row, item) {
+  row.empId = item.username || item.empId || '';
+  row.username = item.username || '';
+  row.empChnName = item.empChnName || '';
+  row.empLabel = item.label || row.empId;
+}
+function onOrigEmpInput(row, val) {
+  if (!val) { row.empId = ''; row.username = ''; row.empChnName = ''; return; }
+  if (!String(val).includes('（')) { row.empId = String(val).trim(); row.username = String(val).trim(); }
+}
+// 原业绩分配-机构下拉联想（按机构号/名称模糊匹配）
+async function queryOrgSuggest(queryString, cb) {
+  const kw = (queryString || '').trim();
+  if (!kw) { cb([]); return; }
+  try {
+    const list = await suggestOrgs(kw);
+    const arr = Array.isArray(list) ? list : [];
+    cb(arr.map(o => ({ ...o, label: o.orgName ? `${o.orgCode}（${o.orgName}）` : o.orgCode })));
+  } catch { cb([]); }
+}
+function onOrigOrgSelect(row, item) {
+  row.orgCode = item.orgCode || '';
+  row.orgName = item.orgName || '';
+  row.orgLabel = item.label || row.orgCode;
+}
+function onOrigOrgInput(row, val) {
+  if (!val) { row.orgCode = ''; row.orgName = ''; return; }
+  if (!String(val).includes('（')) { row.orgCode = String(val).trim(); }
+}
+// 查看/审批：从详情 items 拆出原业绩分配（item_kind=ORIGIN）
+function originalItemsFromDetail(d) {
+  return (d.items || []).filter(it => (it.itemKind || 'NEW') === 'ORIGIN').map(it => ({
+    acctNo: it.acctNo || '', empId: it.empId || '',
+    username: it.username || '', empChnName: it.empChnName || '',
+    orgCode: it.orgCode || '', orgName: it.orgName || '',
+    empLabel: empLabelOf(it),
+    orgLabel: it.orgCode ? (it.orgName ? `${it.orgCode}（${it.orgName}）` : it.orgCode) : '',
+    ratio: it.ratio
+  }));
 }
 function onDlgClosed() {
   dlg.viewingId = null;
@@ -1190,7 +1278,8 @@ function openCreate() {
     // 默认按规则分配 → 业务类型默认存款+贷款
     custType: 'CORP', custNo: '', custName: '', allocDim: 'RULE', bizKind: [BIZ_DEPOSIT, BIZ_LOAN],
     accountNo: '', ownerOrgId: '', reason: '',
-    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }]
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    originalItems: []
   });
   dlg.show = true;
 }
@@ -1227,7 +1316,8 @@ async function openView(row) {
         custType: d.custType || '', custNo: d.custNo || d.custId, allocDim: d.allocDim,
         bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
         accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
-        items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) }))
+        items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })),
+        originalItems: originalItemsFromDetail(d)
       });
       // 客户名称 + 余额概览以 detail 快照为准
       if (d.custName) dlg.form.custName = d.custName;
@@ -1270,6 +1360,18 @@ async function onSubmit() {
   }
   if (totalPct.value !== 100) return ElMessage.warning(`分配比例合计须为 100%，当前 ${totalPct.value}%`);
 
+  // 原业绩分配校验：自动查到历史分配则免手工；查不到则要求手工至少 1 条（除账号外必填）
+  if (!hasOriginalOwners.value) {
+    const origs = dlg.form.originalItems || [];
+    if (!origs.length) return ElMessage.warning('未查到原业绩分配，请手工录入至少 1 条原业绩分配记录');
+    for (let i = 0; i < origs.length; i++) {
+      const o = origs[i];
+      if (!o.empId) return ElMessage.warning(`原业绩分配第 ${i + 1} 行：请选择员工`);
+      if (!o.orgCode) return ElMessage.warning(`原业绩分配第 ${i + 1} 行：请选择所属机构`);
+      if (!(Number(o.ratio) > 0)) return ElMessage.warning(`原业绩分配第 ${i + 1} 行：请填写分配比例`);
+    }
+  }
+
   dlg.saving = true;
   try {
     await submitAdjust({
@@ -1287,7 +1389,13 @@ async function onSubmit() {
       accountNo:  dlg.form.accountNo || undefined,
       ownerOrgId: dlg.form.ownerOrgId || userStore.user?.mainOrgCode || userStore.user?.orgCode || '',
       reason:     dlg.form.reason,
-      items: dlg.form.items.map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' }))
+      items: dlg.form.items.map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' })),
+      // 原业绩分配（手工录入）；自动查到历史分配时不送，后端用历史会签名单
+      originalAllocList: hasOriginalOwners.value ? [] : (dlg.form.originalItems || []).map(o => ({
+        acctNo: o.acctNo || null, empId: o.empId,
+        username: o.username || null, empChnName: o.empChnName || null,
+        orgCode: o.orgCode, orgName: o.orgName || null, ratio: Number(o.ratio)
+      }))
     });
     ElMessage.success('已提交审批');
     dlg.show = false;

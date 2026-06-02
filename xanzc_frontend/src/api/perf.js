@@ -289,6 +289,14 @@ export function suggestEmployees(keyword) {
 }
 
 /**
+ * 机构自动补齐：按机构号/名称模糊匹配 EXT_ORG_INFO，返回 [{orgCode, orgName, ...}]。
+ * 供原业绩分配「所属机构」输入框联想（el-autocomplete）。
+ */
+export function suggestOrgs(keyword) {
+  return call('get', '/perf/alloc-adjust/org-suggest', { params: { keyword, limit: 20 } }, []);
+}
+
+/**
  * 业绩调整 - 我的待审批 列表（后端分页 + 4 字段过滤）.
  * @param {object} params - { keyword?, allocDim?, bizKind?, dateFrom?, dateTo?, pageNo?, pageSize? }
  * @returns PageResult 对象 { pageNo, pageSize, total, records }
