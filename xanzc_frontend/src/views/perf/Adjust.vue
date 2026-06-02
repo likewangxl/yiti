@@ -1585,4 +1585,5 @@ onMounted(async () => {
     word-break: break-all;
   }
 }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

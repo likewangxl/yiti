@@ -65,7 +65,8 @@ import { getMetricsTree } from '@/api/metrics';
 
 const props = defineProps({
   visible: Boolean,
-  modelValue: { type: Array, default: () => [] }   // 已选 metric code 数组
+  modelValue: { type: Array, default: () => [] },  // 已选 metric code 数组
+  dim: { type: String, default: '' }               // 当前查询维度 EMP/ORG/CUST，按它过滤指标
 });
 const emit = defineEmits(['update:visible', 'update:modelValue', 'confirm']);
 
@@ -109,7 +110,15 @@ function normalize(nodes) {
   });
 }
 
-const filteredTree = computed(() => tree.value);
+// 按维度过滤：顶层节点是 DIM_EMP / DIM_ORG / DIM_CUST（来自 buildMetricTree），
+// dim 指定时只展示该维度分支下的指标（直接展开其 children，省掉冗余的"员工指标"根）。
+const filteredTree = computed(() => {
+  if (!props.dim) return tree.value;
+  const hasDimRoots = tree.value.some(n => typeof n.code === 'string' && n.code.startsWith('DIM_'));
+  if (!hasDimRoots) return tree.value;             // 结构非预期则不过滤，避免误伤
+  const node = tree.value.find(n => n.code === `DIM_${props.dim}`);
+  return node ? (node.children || []) : [];        // 该维度无指标 → 空
+});
 
 const flatLeaves = computed(() => {
   const out = [];

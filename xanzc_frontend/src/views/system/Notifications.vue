@@ -188,10 +188,19 @@ async function onMarkAllRead() {
 }
 
 function onJump(row) {
+  const bizType = row.bizType || '';
+  const bizId = row.bizId;
   if (row.linkUrl) {
     router.push(row.linkUrl);
-  } else if ((row.notifyType === 'WORKFLOW' || row.bizType === 'WORKFLOW') && row.bizId) {
-    router.push({ path: '/perf/adjust', query: { tab: 'todo', taskId: row.bizId } });
+  } else if (bizType === 'TARGET_ADJUST') {
+    // 目标修正 → 目标管理「待我审批」（带 taskId 自动弹审批窗）
+    router.push({ path: '/perf/targets', query: { tab: 'todo', ...(bizId ? { taskId: bizId } : {}) } });
+  } else if (bizType === 'ALLOC_ADJUST') {
+    // 业绩调整审批 → 业绩调整「待我审批」
+    router.push({ path: '/perf/adjust', query: { tab: 'todo', action: 'open', ...(bizId ? { taskId: bizId } : {}) } });
+  } else if ((row.notifyType === 'WORKFLOW' || bizType === 'WORKFLOW') && bizId) {
+    // 兜底：其它工作流通知仍进业绩调整待办
+    router.push({ path: '/perf/adjust', query: { tab: 'todo', taskId: bizId } });
   }
   if (!row.isRead) onMarkRead(row);
 }
@@ -226,4 +235,5 @@ onMounted(reload);
 .text-muted { color: $text-4; }
 .link { color: $primary; cursor: pointer; text-decoration: underline; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

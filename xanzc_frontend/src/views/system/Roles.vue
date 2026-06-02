@@ -373,6 +373,7 @@ onMounted(reload);
 <style lang="scss" scoped>
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
 .pager { margin-top: 14px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .hint { color: $text-3; font-size: 12px; margin-top: 4px; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .menu-tree-wrap {

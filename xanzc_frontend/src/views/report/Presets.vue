@@ -243,4 +243,5 @@ async function doExport() {
 }
 .filter-form { margin-bottom: 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

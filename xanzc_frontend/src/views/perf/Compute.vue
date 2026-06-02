@@ -353,4 +353,5 @@ onMounted(reload);
   white-space: pre-wrap; color: #991b1b; margin: 10px 0 0;
 }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

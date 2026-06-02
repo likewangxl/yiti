@@ -127,4 +127,5 @@ onMounted(async () => {
 }
 .table { padding: 0; padding-bottom: 12px; }
 .pager { padding: 12px 20px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

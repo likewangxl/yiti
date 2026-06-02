@@ -604,4 +604,5 @@ $danger: #e53e3e;
     color: $text-3;
   }
 }
+.pagination-wrap :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

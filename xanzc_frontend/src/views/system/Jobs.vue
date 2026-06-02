@@ -205,6 +205,7 @@ async function loadLogs() {
 <style lang="scss" scoped>
 .table { padding: 0; padding-bottom: 12px; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 14px; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; background: $bg-soft; padding: 2px 6px; border-radius: 3px; }
 .disabled-op { color: #9CA3AF; font-size: 12px; }
 </style>

@@ -43,7 +43,7 @@
         <el-form inline size="default" class="filter-form">
           <el-form-item label="机构">
             <el-tag effect="plain" closable @close="clearOrg" v-if="pickedOrg">
-              {{ pickedOrgName }}（{{ pickedOrg }}）
+              {{ pickedOrgName }}（{{ pickedOrgDeptNo || '无编号' }}）
             </el-tag>
             <span v-else class="hint">未选择 · 显示全部</span>
           </el-form-item>
@@ -248,11 +248,13 @@
         <div class="form-pane">
           <div v-if="!orgDlg.mode" class="hint">点击左侧节点编辑，或上方「+ 新建根机构」</div>
           <el-form v-else label-width="80px" size="default">
-            <el-form-item label="编码">
-              <el-input v-model="orgDlg.form.orgCode" :disabled="orgDlg.mode !== 'create'" placeholder="字母数字下划线，<=20" maxlength="20" />
-            </el-form-item>
+            <!-- 编码：界面不再展示编码，新增后端自增 -->
             <el-form-item label="名称">
               <el-input v-model="orgDlg.form.orgName" placeholder="中文名称" maxlength="100" />
+            </el-form-item>
+            <!-- 机构编号：新增时用户输入，编辑时只读展示 -->
+            <el-form-item label="机构编号">
+              <el-input v-model="orgDlg.form.deptNo" :disabled="orgDlg.mode === 'edit'" placeholder="如 720199" maxlength="60" />
             </el-form-item>
             <el-form-item label="上级">
               <span class="hint">{{ orgDlg.parentLabel || '（根节点）' }}</span>
@@ -299,8 +301,9 @@ const fmtDateTime = (_row, _col, v) => v ? String(v).replace('T', ' ').slice(0, 
 const orgTreeRef = ref(null);
 const orgTree = ref([]);
 const orgKeyword = ref('');
-const pickedOrg = ref('');     // orgCode
+const pickedOrg = ref('');     // orgCode（内部查询用，不展示）
 const pickedOrgName = ref('');
+const pickedOrgDeptNo = ref(''); // 机构编号（界面展示用）
 watch(orgKeyword, v => orgTreeRef.value?.filter(v ?? ''));
 function filterOrgNode(value, data) {
   if (!value) return true;
@@ -313,12 +316,14 @@ function filterOrgNode(value, data) {
 function onOrgClick(node) {
   pickedOrg.value = node.code;
   pickedOrgName.value = node.name;
+  pickedOrgDeptNo.value = node.deptNo || '';
   pager.pageNo = 1;
   reload();
 }
 function clearOrg() {
   pickedOrg.value = '';
   pickedOrgName.value = '';
+  pickedOrgDeptNo.value = '';
   pager.pageNo = 1;
   reload();
 }
@@ -567,7 +572,7 @@ const orgDlg = reactive({
   show: false, saving: false,
   mode: null,       // 'create' | 'edit' | null
   picked: null,     // 当前选中的树节点 { code, name }
-  form: { orgCode: '', orgName: '', pId: '' },
+  form: { orgCode: '', orgName: '', pId: '', deptNo: '' },
   parentLabel: ''
 });
 function openOrgDlg() {
@@ -578,32 +583,32 @@ function openOrgDlg() {
 function orgDlgPick(node) {
   orgDlg.mode = 'edit';
   orgDlg.picked = node;
-  orgDlg.form = { orgCode: node.code, orgName: node.name, pId: '' };
+  orgDlg.form = { orgCode: node.code, orgName: node.name, pId: '', deptNo: node.deptNo || '' };
   orgDlg.parentLabel = '当前节点';
 }
 function orgDlgNewRoot() {
   orgDlg.mode = 'create';
   orgDlg.picked = null;
-  orgDlg.form = { orgCode: '', orgName: '', pId: '' };
+  orgDlg.form = { orgCode: '', orgName: '', pId: '', deptNo: '' };
   orgDlg.parentLabel = '（根节点）';
 }
 function orgDlgNewChild() {
   if (!orgDlg.picked) { ElMessage.warning('请先选中一个父节点'); return; }
   const parent = orgDlg.picked;
   orgDlg.mode = 'create';
-  orgDlg.form = { orgCode: '', orgName: '', pId: parent.code };
-  orgDlg.parentLabel = `${parent.name}（${parent.code}）`;
+  orgDlg.form = { orgCode: '', orgName: '', pId: parent.code, deptNo: '' };
+  orgDlg.parentLabel = `${parent.name}（${parent.deptNo || '无编号'}）`;
 }
 async function orgDlgSave() {
   if (!orgDlg.form.orgName?.trim()) { ElMessage.warning('请填机构名称'); return; }
   orgDlg.saving = true;
   try {
     if (orgDlg.mode === 'create') {
-      if (!orgDlg.form.orgCode?.trim()) { ElMessage.warning('请填机构编码'); return; }
+      // 编码不再前端填写，后端自增；机构编号 deptNo 由用户输入
       await createOrg({
-        orgCode: orgDlg.form.orgCode.trim(),
         orgName: orgDlg.form.orgName.trim(),
-        pId: orgDlg.form.pId || ''
+        pId: orgDlg.form.pId || '',
+        deptNo: orgDlg.form.deptNo?.trim() || ''
       });
       ElMessage.success('已新增');
     } else {

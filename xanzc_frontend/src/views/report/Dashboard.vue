@@ -4,10 +4,10 @@
     GET /api/reports/dashboard/president?orgCode=&date=
 -->
 <template>
-  <div class="rpt-dash">
+  <div class="rpt-dash" v-loading="loading">
     <div class="page-h">
       <h1>分行行长仪表盘</h1>
-      <span class="desc">{{ data.org }} · 数据日期 {{ data.date }}</span>
+      <span class="desc">{{ data.org || '全行' }} · 数据日期 {{ data.date || '—' }}</span>
       <div class="actions">
         <el-date-picker
           v-model="queryDate"
@@ -24,8 +24,11 @@
       </div>
     </div>
 
+    <!-- 数据全空时的提示（接口正常但当期无数据 / 接口失败） -->
+    <el-empty v-if="!loading && isEmpty" description="暂无仪表盘数据（当期指标数据未生成或无访问权限）" />
+
     <!-- 5 项 KPI 卡 -->
-    <div class="stats">
+    <div class="stats" v-show="!isEmpty">
       <div v-for="s in data.stats" :key="s.label" class="stat">
         <div class="label">{{ s.label }}</div>
         <div class="value">{{ s.value }}<span class="unit">{{ s.unit }}</span></div>
@@ -34,7 +37,7 @@
     </div>
 
     <!-- 主区：趋势图 + 机构存款排名 -->
-    <div class="cols">
+    <div class="cols" v-show="!isEmpty">
       <div class="card-section chart-card">
         <div class="card-h">
           <div class="title">存款 / 贷款 趋势（近 12 个月）</div>
@@ -72,17 +75,33 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { reportDashboard } from '@/mock';
 import { getDashboardPresident } from '@/api/report';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent]);
 
-const data = ref(reportDashboard);
-const queryDate = ref(reportDashboard.date);
+// 空骨架：避免一进页面闪现 mock 假数据（待真实接口返回后填充）
+const EMPTY_DASH = {
+  org: '', date: '',
+  stats: [],
+  trend: { months: [], deposit: [], loan: [] },
+  ranking: []
+};
+const data = ref({ ...EMPTY_DASH });
+const queryDate = ref('');
 const loading = ref(false);
 const exporting = ref(false);
+
+// 是否整体无数据：5 项 KPI 卡均无值 + 趋势全空 + 排名空 → 显示空状态而非半截页面
+const isEmpty = computed(() => {
+  const d = data.value || {};
+  const noStats = !Array.isArray(d.stats) || d.stats.every(s => s.value == null || s.value === '');
+  const t = d.trend || {};
+  const noTrend = !Array.isArray(t.months) || t.months.length === 0;
+  const noRank = !Array.isArray(d.ranking) || d.ranking.length === 0;
+  return noStats && noTrend && noRank;
+});
 
 // 不允许选未来日期
 function disabledDate(d) { return d && d.getTime() > Date.now(); }
@@ -90,21 +109,26 @@ function disabledDate(d) { return d && d.getTime() > Date.now(); }
 async function loadDashboard(date) {
   loading.value = true;
   try {
-    const r = await getDashboardPresident({ orgCode: '0000', date });
+    // 不传 orgCode：后端默认取全行顶层机构（西安分行 ORG_LEVEL=1）；
+    // date 为空时也不传，由后端取 SYS_CONTROL(ORG) 最新有效数据日期
+    const params = {};
+    if (date) params.date = date;
+    const r = await getDashboardPresident(params);
     if (r) {
-      data.value = r;
-      queryDate.value = r.date || date;
+      // 真实响应可能各区块为空，但仍按真实数据展示，不再回退假数据
+      data.value = { ...EMPTY_DASH, ...r, trend: { ...EMPTY_DASH.trend, ...(r.trend || {}) } };
+      queryDate.value = r.date || date || '';
     }
   } catch (e) {
-    // call() 已兜底 mock，这里仅保证 date 同步
-    data.value = { ...data.value, date };
-    queryDate.value = date;
+    // 接口失败：保持空骨架，不展示假数据
+    data.value = { ...EMPTY_DASH, date: date || '' };
+    queryDate.value = date || '';
   } finally {
     loading.value = false;
   }
 }
 
-onMounted(() => loadDashboard(queryDate.value));
+onMounted(() => loadDashboard(''));
 
 const trendOption = computed(() => ({
   grid: { top: 30, right: 24, bottom: 30, left: 50 },

@@ -266,4 +266,5 @@ onMounted(reload);
 .section-title { font-size: 14px; font-weight: 600; color: $text-1; padding: 14px 16px 10px; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

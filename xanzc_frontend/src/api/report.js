@@ -13,6 +13,7 @@
 //
 // 所有调用走 http.js 的 call(method, path, config, fallback)，后端不可用时使用 mock 兜底。
 import { call } from './http';
+import http, { API_BASE } from './http';
 import {
   reportDynamic, reportDashboard, reportPresets, reportSchemes,
   reportDimensions, reportSqlWhitelist, reportSqlHistory, reportSqlProbeResult
@@ -64,6 +65,38 @@ export function exportDynamic(payload) {
     dataDate:    payload.date
   };
   return call('post', '/reports/dynamic-query/export', { data: body }, () => ({ taskId: 'EXP-MOCK-' + Date.now() }));
+}
+
+// 动态查询「选择对象」员工搜索：搜 PT_USER（按工号/姓名），REPORT 权限
+export async function searchReportEmployees(keyword, limit = 20) {
+  const r = await call('get', '/reports/employees/search', { params: { keyword, limit } }, []);
+  return Array.isArray(r) ? r : (r?.records || []);
+}
+
+// 同步导出：直接拿后端 xlsx 流并触发浏览器下载（不走异步任务/MinIO）
+export async function exportDynamicFile(payload) {
+  const body = {
+    dim: payload.dim,
+    subjectIds:  (payload.subjects || []).map(s => (typeof s === 'string' ? s : s?.id)).filter(Boolean),
+    metricCodes: (payload.metrics  || []).map(m => (typeof m === 'string' ? m : m?.code)).filter(Boolean),
+    dataDate:    payload.date
+  };
+  const resp = await http.request({
+    method: 'post',
+    url: API_BASE + '/reports/dynamic-query/export-file',
+    data: body,
+    responseType: 'blob'
+  });
+  // 拦截器对非 envelope（blob）原样返回，这里 resp 即 Blob
+  const blob = resp instanceof Blob ? resp : new Blob([resp]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `动态指标查询_${payload.dim || ''}_${payload.date || ''}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ===== 保存方案（动态查询的"我的方案"）=====
@@ -185,8 +218,9 @@ function adaptDashboardResp(r) {
 }
 
 export function getDashboardPresident(params = {}) {
+  // 不传 mock 兜底：行长仪表盘要展示真实数据，接口失败宁可空也不显示假数据
   return call('get', '/reports/dashboard/president',
-    { params: mapDashboardParams(params) }, reportDashboard).then(adaptDashboardResp);
+    { params: mapDashboardParams(params) }, null).then(adaptDashboardResp);
 }
 export function getDashboardByOrg(orgCode, params = {}) {
   return call('get', `/reports/dashboard/org/${orgCode}`,
@@ -276,4 +310,11 @@ export function downloadFreeReportFile(batchId) {
 }
 export function deleteFreeReportBatch(batchId) {
   return call('delete', `/reports/free/batches/${batchId}`, {}, { ok: true });
+}
+// 禁用/启用自由报表（仅自由报表操作人）
+export function disableFreeReportBatch(batchId) {
+  return call('post', `/reports/free/batches/${batchId}/disable`, {}, { ok: true });
+}
+export function enableFreeReportBatch(batchId) {
+  return call('post', `/reports/free/batches/${batchId}/enable`, {}, { ok: true });
 }

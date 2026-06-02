@@ -833,6 +833,7 @@ onMounted(async () => {
 }
 .table { padding: 14px 16px 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .dim-banner {
   margin: 0 0 16px; padding: 10px 14px; border-radius: 4px;
   background: rgba(64, 158, 255, 0.08);

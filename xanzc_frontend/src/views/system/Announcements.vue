@@ -201,4 +201,5 @@ onMounted(reload);
 
 <style lang="scss" scoped>
 .pager { margin-top: 14px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

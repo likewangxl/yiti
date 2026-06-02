@@ -80,13 +80,6 @@
               🛡️ 统一认证登录
             </el-button>
           </div>
-
-          <div class="tip" v-if="USE_MOCK">
-            mock 模式：任意账号可登录（VITE_USE_MOCK=true）
-          </div>
-          <div class="tip" v-else>
-            提示：开发环境默认账号 <code>admin</code> / <code>123456</code>
-          </div>
         </el-form>
 
       </div>

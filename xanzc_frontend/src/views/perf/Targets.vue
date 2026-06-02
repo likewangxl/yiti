@@ -894,6 +894,7 @@ onMounted(async () => {
 }
 .table { padding: 14px 16px 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .tab-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .targets-tabs :deep(.el-tabs__header) { margin-bottom: 12px; }
 .review-meta {

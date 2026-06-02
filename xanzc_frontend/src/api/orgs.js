@@ -16,6 +16,8 @@ function toFront(node) {
   const code = node.code ?? node.orgCode;
   const name = node.name ?? node.orgName;
   const out = { code, name };
+  const deptNo = node.deptNo ?? node.dept_no;
+  if (deptNo != null) out.deptNo = deptNo;
   if (node.level ?? node.orgLevel) out.level = node.level ?? node.orgLevel;
   if (Array.isArray(node.children) && node.children.length) {
     out.children = node.children.map(toFront);

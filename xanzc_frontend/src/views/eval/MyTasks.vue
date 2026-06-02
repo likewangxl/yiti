@@ -674,4 +674,5 @@ $danger: #e53e3e;
     }
   }
 }
+.pagination-wrap :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>
