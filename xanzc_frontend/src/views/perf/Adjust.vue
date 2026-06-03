@@ -143,10 +143,15 @@
         </div>
         <div class="card-section table">
           <el-table :data="todos" size="default" empty-text="无符合条件的待审批" v-loading="todoLoading">
-            <el-table-column label="标题" min-width="220">
-              <template #default="{row}"><code class="mono">{{ row.title || row.businessKey }}</code></template>
+            <el-table-column label="申请编号" width="170">
+              <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="当前节点" width="140" prop="taskName" />
+            <el-table-column label="客户" min-width="190">
+              <template #default="{row}">
+                <div>{{ row.custNo || row.custId || '-' }}</div>
+                <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
+              </template>
+            </el-table-column>
             <el-table-column label="发起人" width="160">
               <template #default="{row}">
                 {{ row.startUserName || '-' }}
@@ -542,7 +547,7 @@
             <el-radio-group v-model="dlg.reviewRouteTo">
               <template v-if="dlg.reviewRow?.nodeKey === 'biz_dept_review'">
                 <el-radio value="LEADER">{{ dlg.reviewFlowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
-                <el-radio value="OWNER" :disabled="!hasOriginalOwners">交原业绩所属人审批{{ hasOriginalOwners ? '' : '（无原业绩分配，不可选）' }}</el-radio>
+                <el-radio value="OWNER" :disabled="!canRouteOwner">交原业绩所属人审批{{ canRouteOwner ? '' : '（无原业绩分配，不可选）' }}</el-radio>
               </template>
               <template v-else-if="dlg.reviewRow?.nodeKey === 'finance_review'">
                 <el-radio value="LEADER">交资财部负责人审批</el-radio>
@@ -1090,6 +1095,11 @@ function custStatStatisDt() {
 const preview = reactive({ loaded: false, loading: false, data: null });
 // 原业绩分配是否有数据（决定审批时能否选"交原业绩所属人审批"）
 const hasOriginalOwners = computed(() => (preview.data && preview.data.allocList && preview.data.allocList.length) > 0);
+// 本次申请明细表是否存在 item_kind=ORIGIN 记录（手工录入的原业绩分配，openTodoDetail 已拆入 dlg.form.originalItems）
+const hasOriginItems = computed(() => (dlg.form.originalItems?.length || 0) > 0);
+// 能否走"交原业绩所属人审批"：历史审批通过分配 OR 本次申请手工录入的原业绩分配；
+// 与后端 resolveOriginalOwnerEmpIds(preview 优先、否则回退手工 ORIGIN) 的会签名单来源一致
+const canRouteOwner = computed(() => hasOriginalOwners.value || hasOriginItems.value);
 function fmtAmt(v) {
   if (v == null) return '-';
   return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1498,6 +1508,9 @@ onMounted(async () => {
   // 自动弹审批：query 含 tab=todo + action=open + taskId 三者齐 + 有审批权限
   const isAutoOpen = queryTab === 'todo' && route.query.action === 'open'
                      && route.query.taskId && canApprove.value;
+  // 工作台已办「详情」跳转：tab=done + action=view → 已审批 tab + 弹只读详情
+  const isAutoViewDone = queryTab === 'done' && route.query.action === 'view'
+                         && (route.query.taskId || route.query.bizKey) && canApprove.value;
   if (isAutoOpen) {
     await reloadTodo();
     const row = todos.value.find(t => t.taskId === route.query.taskId);
@@ -1505,6 +1518,17 @@ onMounted(async () => {
       openTodoReview(row);
     } else {
       ElMessage.warning('任务已处理或不在当前页');
+    }
+  } else if (isAutoViewDone) {
+    await reloadDone();
+    const tid = route.query.taskId, bk = route.query.bizKey;
+    // 优先按 taskId/businessKey 命中当前页；不在当前页则用 businessKey 直接构造行拉详情
+    let row = dones.value.find(t => (tid && t.taskId === tid) || (bk && t.businessKey === bk));
+    if (!row && bk) row = { businessKey: bk };
+    if (row) {
+      openTodoDetail(row);
+    } else {
+      ElMessage.warning('申请不在当前页或已变更');
     }
   } else {
     reload();

@@ -877,6 +877,14 @@ onMounted(async () => {
       const row = todos.value.find(t => t.taskId === queryTaskId);
       if (row) openReview(row);
     }
+  } else if (queryTab === 'done' && canApprove.value) {
+    // 工作台已办「详情」跳转：?tab=done&bizKey=TARGET_ADJUST:{applyId} → 已审批 tab + 弹只读详情
+    activeTab.value = 'done';
+    await loadDones();
+    const applyId = (route.query.bizKey || '').split(':')[1];
+    const row = dones.value.find(d => (applyId && d.id === applyId) || (queryTaskId && d.taskId === queryTaskId));
+    if (row) openDetail(row);
+    else ElMessage.warning('申请不在已审批列表或已变更');
   }
 });
 </script>

@@ -184,11 +184,18 @@ async function loadTasks() {
 function resolveTaskRoute(row, mode) {
   const id = row.taskId || row.id;
   if (!id) return null;
+  // 已办「详情」→ 切到目标页"已审批"tab 并弹只读详情；待办「办理」→ 切"待我审批"tab 并弹审批窗。
+  // bizKey(businessKey, 形如 ALLOC_ADJUST:{applyId}) 透传，供接收页即便不在当前页也能直接拉详情。
+  const isDetail = mode === 'detail';
   if (row.bizType === 'TARGET_ADJUST') {
-    return { path: '/perf/targets', query: { tab: 'todo', taskId: id } };
+    return isDetail
+      ? { path: '/perf/targets', query: { tab: 'done', taskId: id, bizKey: row.businessKey } }
+      : { path: '/perf/targets', query: { tab: 'todo', taskId: id } };
   }
   if (row.bizType === 'ALLOC_ADJUST') {
-    return { path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: mode === 'detail' ? 'view' : 'open' } };
+    return isDetail
+      ? { path: '/perf/adjust', query: { tab: 'done', taskId: id, action: 'view', bizKey: row.businessKey } }
+      : { path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } };
   }
   return null;
 }
