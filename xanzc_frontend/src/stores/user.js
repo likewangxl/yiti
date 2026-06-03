@@ -26,6 +26,13 @@ export const useUserStore = defineStore('user', () => {
     const r = rs.find(x => x.roleId === activeRoleId.value) || rs[0];
     return r?.roleChName || '';
   });
+  // 是否系统管理员：当前激活角色为 SYS_ADMIN（与角色切换/后端 RBAC 口径一致）
+  const isSystemAdmin = computed(() => {
+    if (user.value?.isSystemAdmin === true) return true;
+    const rs = user.value?.roles || [];
+    const r = rs.find(x => x.roleId === activeRoleId.value) || rs[0];
+    return (r?.roleCode || '') === 'SYS_ADMIN';
+  });
 
   function setUser(u) {
     user.value = u;
@@ -44,5 +51,5 @@ export const useUserStore = defineStore('user', () => {
     setUser(null);
   }
 
-  return { user, isLoggedIn, displayName, orgName, roles, activeRoleId, roleName, setUser, setActiveRole, clear };
+  return { user, isLoggedIn, displayName, orgName, roles, activeRoleId, roleName, isSystemAdmin, setUser, setActiveRole, clear };
 });

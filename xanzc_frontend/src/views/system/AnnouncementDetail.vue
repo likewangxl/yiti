@@ -54,12 +54,15 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { getAnnouncementDetail, togglePinAnnouncement, deleteAnnouncement } from '@/api/announcement';
+import { useUserStore } from '@/stores/user';
 
 const route = useRoute();
 const router = useRouter();
+const userStore = useUserStore();
 const loading = ref(false);
 const data = ref(null);
-const isAdmin = computed(() => route.query.admin === '1');
+// 置顶/取消置顶/删除：仅系统管理员可见可操作（原 route.query.admin 不是真实权限判断）
+const isAdmin = computed(() => userStore.isSystemAdmin);
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 

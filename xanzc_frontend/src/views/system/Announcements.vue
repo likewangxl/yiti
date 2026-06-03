@@ -3,7 +3,7 @@
     <div class="page-h">
       <h1>公告管理</h1>
       <div class="actions">
-        <el-button type="primary" @click="openCreate">+ 新增公告</el-button>
+        <el-button v-if="userStore.isSystemAdmin" type="primary" @click="openCreate">+ 新增公告</el-button>
       </div>
     </div>
 
@@ -96,8 +96,10 @@ import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { listAnnouncementsAdmin, createAnnouncement, uploadAnnouncementFile, togglePinAnnouncement, deleteAnnouncement } from '@/api/announcement';
+import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
+const userStore = useUserStore();
 
 function fmtDate(t) {
   if (!t) return '-';
