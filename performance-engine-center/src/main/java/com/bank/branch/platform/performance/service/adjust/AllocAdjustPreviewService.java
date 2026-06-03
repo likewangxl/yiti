@@ -1,7 +1,5 @@
 package com.bank.branch.platform.performance.service.adjust;
 
-import com.bank.branch.platform.customer.api.CustomerQueryApi;
-import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
@@ -35,7 +33,6 @@ public class AllocAdjustPreviewService {
 
     private final PerfAllocAdjustApplyMapper applyMapper;
     private final PerfAllocAdjustItemMapper itemMapper;
-    private final CustomerQueryApi customerQueryApi;
 
     /**
      * 查询客户「原业绩分配」预览（取审批通过的最后一条申请明细）.
@@ -54,10 +51,9 @@ public class AllocAdjustPreviewService {
         if (!StringUtils.hasText(custNo)) {
             return new ArrayList<>();
         }
-        // 与提交入口同语义：custNo → 内部客户主键（解析不到时回退为 custNo），保证能命中 apply.cust_id
-        String internalCustId = customerQueryApi.getCustomerByCustNo(custNo)
-                .map(CustomerDTO::getId)
-                .orElse(custNo);
+        // 直接按用户输入的客户编号(cust_no)匹配 apply：提交侧 apply.cust_no 恒有值，
+        // 而手工录入客户 apply.cust_id 为 null，按 cust_id 匹配会查不到（见 AllocAdjustService.resolveInternalCustIdByCustNo）。
+        // 按 cust_no 匹配对主档客户与手工客户均成立，且与提交去重 countInApprovalByCustAndDim(cust_no) 口径一致。
 
         // 按账号分配只查 ACCOUNT 维度；规则分配/未指定则取 RULE + ACCOUNT 两者
         List<String> dims = "ACCOUNT".equals(allocDim) ? List.of("ACCOUNT") : DIMS;
@@ -65,7 +61,7 @@ public class AllocAdjustPreviewService {
         // 收集各维度「最后一条审批通过申请」的明细行（保留维度 + 账号上下文）
         List<RowCtx> rows = new ArrayList<>();
         for (String dim : dims) {
-            PerfAllocAdjustApply apply = applyMapper.selectLastApprovedByCustAndDim(internalCustId, dim);
+            PerfAllocAdjustApply apply = applyMapper.selectLastApprovedByCustAndDim(custNo, dim);
             if (apply == null) {
                 continue;
             }

@@ -1,7 +1,5 @@
 package com.bank.branch.platform.performance.service.adjust;
 
-import com.bank.branch.platform.customer.api.CustomerQueryApi;
-import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
@@ -16,7 +14,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
@@ -25,6 +22,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * {@link AllocAdjustPreviewService} 单元测试：原业绩分配预览。
+ *
+ * <p>预览按客户编号(cust_no)直接匹配 apply（与提交侧 apply.cust_no 落地一致）。
+ * 手工录入客户 apply.cust_id 为 null、仅 cust_no 有值，故必须按 cust_no 匹配，否则查不到。
  *
  * <p>员工 username/中文名/部门已在提交时快照存入 PERF_ALLOC_ADJUST_ITEM，预览直接读这些字段，
  * 不再关联 PT_USER/机构表。
@@ -36,8 +36,6 @@ class AllocAdjustPreviewServiceTest {
     private PerfAllocAdjustApplyMapper applyMapper;
     @Mock
     private PerfAllocAdjustItemMapper itemMapper;
-    @Mock
-    private CustomerQueryApi customerQueryApi;
 
     @InjectMocks
     private AllocAdjustPreviewService service;
@@ -72,36 +70,38 @@ class AllocAdjustPreviewServiceTest {
     }
 
     @Test
-    @DisplayName("custNo 经 CustomerQueryApi 解析为内部主键后查询 apply")
-    void resolvesCustNoToInternalId() {
-        CustomerDTO cust = new CustomerDTO();
-        cust.setId("INTERNAL_001");
-        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.of(cust));
-        when(applyMapper.selectLastApprovedByCustAndDim("INTERNAL_001", "RULE")).thenReturn(null);
-        when(applyMapper.selectLastApprovedByCustAndDim("INTERNAL_001", "ACCOUNT")).thenReturn(null);
+    @DisplayName("直接按用户输入的客户编号(cust_no)查询 apply，不再二次解析内部主键")
+    void queriesApplyByCustNoDirectly() {
+        when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE")).thenReturn(null);
+        when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
 
         assertThat(service.getLastApprovedAllocPreview("C001", null)).isEmpty();
 
-        verify(applyMapper).selectLastApprovedByCustAndDim("INTERNAL_001", "RULE");
-        verify(applyMapper).selectLastApprovedByCustAndDim("INTERNAL_001", "ACCOUNT");
+        verify(applyMapper).selectLastApprovedByCustAndDim("C001", "RULE");
+        verify(applyMapper).selectLastApprovedByCustAndDim("C001", "ACCOUNT");
     }
 
     @Test
-    @DisplayName("解析不到客户主键 → 回退用 custNo 匹配 apply.cust_id")
-    void fallbackToCustNoWhenCustomerNotFound() {
-        when(customerQueryApi.getCustomerByCustNo("RAW")).thenReturn(Optional.empty());
-        when(applyMapper.selectLastApprovedByCustAndDim("RAW", "RULE")).thenReturn(null);
-        when(applyMapper.selectLastApprovedByCustAndDim("RAW", "ACCOUNT")).thenReturn(null);
+    @DisplayName("手工录入客户(cust_id 为 null) → 按 cust_no='bbc' 仍能命中审批通过申请")
+    void manualCustomer_matchedByCustNo() {
+        when(applyMapper.selectLastApprovedByCustAndDim("bbc", "RULE"))
+                .thenReturn(apply("APPLY_BBC", "RULE", null));
+        lenient().when(applyMapper.selectLastApprovedByCustAndDim("bbc", "ACCOUNT")).thenReturn(null);
+        when(itemMapper.selectByApplyIdAndKind("APPLY_BBC", "NEW")).thenReturn(List.of(
+                item("rm_li", "rm_li", "李客户经理", "107", "营业部", "10"),
+                item("rm_zhang", "rm_zhang", "张客户经理", "107", "营业部", "90")));
 
-        assertThat(service.getLastApprovedAllocPreview("RAW", null)).isEmpty();
-        verify(applyMapper).selectLastApprovedByCustAndDim("RAW", "RULE");
+        List<AllocAdjustPreviewItemDTO> result = service.getLastApprovedAllocPreview("bbc", null);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(AllocAdjustPreviewItemDTO::getEmpId)
+                .containsExactly("rm_li", "rm_zhang");
+        verify(applyMapper).selectLastApprovedByCustAndDim("bbc", "RULE");
     }
 
     @Test
     @DisplayName("RULE + ACCOUNT 各一条审批通过申请 → 合并明细，直接读快照的员工/部门字段")
     void mergesRuleAndAccountReadsSnapshot() {
-        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
-
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
                 .thenReturn(apply("APPLY_RULE", "RULE", null));
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT"))
@@ -137,7 +137,6 @@ class AllocAdjustPreviewServiceTest {
     @Test
     @DisplayName("快照 username 为空（历史旧数据）→ 回退展示工号，部门留空")
     void blankSnapshotFallsBackToEmpId() {
-        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
                 .thenReturn(apply("APPLY_RULE", "RULE", null));
         lenient().when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
@@ -156,7 +155,6 @@ class AllocAdjustPreviewServiceTest {
     @Test
     @DisplayName("申请存在但无明细 → 跳过该维度")
     void applyWithoutItemsIsSkipped() {
-        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "RULE"))
                 .thenReturn(apply("APPLY_RULE", "RULE", null));
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT")).thenReturn(null);
@@ -168,7 +166,6 @@ class AllocAdjustPreviewServiceTest {
     @Test
     @DisplayName("allocDim=ACCOUNT → 只查 ACCOUNT 维度，不查 RULE")
     void accountDim_onlyQueriesAccount() {
-        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.empty());
         when(applyMapper.selectLastApprovedByCustAndDim("C001", "ACCOUNT"))
                 .thenReturn(apply("APPLY_ACCT", "ACCOUNT", "62200000001"));
         when(itemMapper.selectByApplyIdAndKind("APPLY_ACCT", "NEW")).thenReturn(List.of(

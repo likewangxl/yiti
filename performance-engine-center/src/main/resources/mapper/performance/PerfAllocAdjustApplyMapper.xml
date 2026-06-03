@@ -50,7 +50,7 @@
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PERF_ALLOC_ADJUST_APPLY
-        WHERE cust_id = #{custId}
+        WHERE cust_no = #{custNo}
           AND alloc_dim = #{allocDim}
           AND status = 'APPROVED'
         ORDER BY created_time DESC, id DESC
