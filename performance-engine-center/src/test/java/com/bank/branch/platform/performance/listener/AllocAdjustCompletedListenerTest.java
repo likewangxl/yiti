@@ -179,6 +179,51 @@ class AllocAdjustCompletedListenerTest {
     }
 
     @Test
+    @DisplayName("ORIGIN（原业绩分配）明细不落地为新分配关系，仅 NEW 明细生成 cust_alloc_relation")
+    void originItems_excludedFromAllocation() {
+        PerfAllocAdjustItem origin = item("EMP_OLD", "100.00");
+        origin.setItemKind("ORIGIN");
+        PerfAllocAdjustItem neo = item("EMP_A", "60.00");
+        neo.setItemKind("NEW");
+        when(itemMapper.selectByApplyId("APP_001")).thenReturn(Arrays.asList(origin, neo));
+
+        listener.onProcessCompleted(
+                new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
+
+        // 仅 NEW 明细落地为分配关系；ORIGIN 仅用于会签/留痕，不得成为生效分配
+        ArgumentCaptor<CustAllocRelation> cap = ArgumentCaptor.forClass(CustAllocRelation.class);
+        verify(allocRelationMapper, org.mockito.Mockito.times(1)).insert(cap.capture());
+        assertThat(cap.getValue().getEmpId()).isEqualTo("EMP_A");
+        // 事件 itemCount 也只计 NEW
+        ArgumentCaptor<AllocationAdjustmentApprovedEvent> evCap =
+                ArgumentCaptor.forClass(AllocationAdjustmentApprovedEvent.class);
+        verify(eventPublisher).publish(evCap.capture());
+        assertThat(evCap.getValue().getItemCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("手工录入客户 cust_id 为 null → 分配关系 cust_id 回退用 cust_no（避免 NOT NULL 插入失败致状态卡死）")
+    void manualCustomer_nullCustId_fallsBackToCustNo() {
+        PerfAllocAdjustApply manual = buildApply();
+        manual.setCustId(null);     // 手工录入客户：主档未命中，cust_id 按设计为 null
+        manual.setCustNo("bbc");    // 客户号只在 cust_no
+        when(applyMapper.selectByBusinessKey("ALLOC_ADJUST:APP_001")).thenReturn(manual);
+
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
+                        "PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null);
+        listener.onProcessCompleted(event);
+
+        // 关键：relation.cust_id 必须非空（回退 cust_no），否则 DB NOT NULL 约束抛异常 → 状态卡在 IN_APPROVAL
+        ArgumentCaptor<CustAllocRelation> relCap = ArgumentCaptor.forClass(CustAllocRelation.class);
+        verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(relCap.capture());
+        assertThat(relCap.getAllValues()).extracting(CustAllocRelation::getCustId)
+                .containsOnly("bbc");
+        // 状态正常推进
+        verify(applyMapper).updateStatus("APP_001", "APPROVED", null);
+    }
+
+    @Test
     @DisplayName("RETAIL_CARD 对 retail_v1 流程也能正常落地（bizKind 回放到事件）")
     void retailBizKind_flowsThrough() {
         PerfAllocAdjustApply retail = buildApply();

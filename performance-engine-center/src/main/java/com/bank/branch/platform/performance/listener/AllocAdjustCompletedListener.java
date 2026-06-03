@@ -106,13 +106,22 @@ public class AllocAdjustCompletedListener {
      * 审批通过：插入新分配关系 + 更新状态 + 发事件.
      */
     private void handleApproved(PerfAllocAdjustApply apply) {
-        List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(apply.getId());
+        // 仅 NEW 明细落地为生效分配关系；ORIGIN（手工录入的原业绩分配）仅供会签/留痕，
+        // 若一并插入会令同客户出现「新+原」两份生效分配（比例叠加错乱），故在此剔除。
+        List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(apply.getId()).stream()
+                .filter(it -> !"ORIGIN".equals(it.getItemKind()))
+                .collect(java.util.stream.Collectors.toList());
         LocalDate effectiveDate = LocalDate.now();
+
+        // 手工录入客户主档未命中时 apply.cust_id 按设计为 null（见 AllocAdjustService.resolveInternalCustIdByCustNo），
+        // 而 CUST_ALLOC_RELATION.cust_id 为 NOT NULL；回退用 cust_no 作为客户键（与 AllocAdjustPreviewService 读取侧
+        // .orElse(custNo) 同语义），避免 insert 抛 DataIntegrityViolation 致整批回滚、apply 状态卡死 IN_APPROVAL。
+        String relCustId = apply.getCustId() != null ? apply.getCustId() : apply.getCustNo();
 
         for (PerfAllocAdjustItem it : items) {
             CustAllocRelation rel = new CustAllocRelation();
             rel.setId(UUID.randomUUID().toString().replace("-", ""));
-            rel.setCustId(apply.getCustId());
+            rel.setCustId(relCustId);
             rel.setAllocDim(apply.getAllocDim());
             rel.setBizKind(apply.getBizKind());
             rel.setAccountNo(apply.getAccountNo());
