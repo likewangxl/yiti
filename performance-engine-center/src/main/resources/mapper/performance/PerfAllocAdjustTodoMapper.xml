@@ -10,7 +10,9 @@
         </foreach>
         <if test="keyword != null and keyword != ''">
             AND (a.apply_no LIKE CONCAT('%', #{keyword}, '%')
-                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%'))
+                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%')
+                 OR a.cust_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR a.cust_name LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         <if test="allocDim != null and allocDim != ''">
             AND a.alloc_dim = #{allocDim}
@@ -34,7 +36,8 @@
 
     <select id="selectMyTodos"
             resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
-        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_type AS custType, a.alloc_dim AS allocDim,
+        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_no AS custNo, a.cust_name AS custName,
+               a.cust_type AS custType, a.alloc_dim AS allocDim,
                a.biz_kind AS bizKind, a.account_no AS accountNo, a.status,
                a.business_key AS businessKey, a.process_instance_id AS processInstanceId,
                a.owner_org_id AS ownerOrgId, a.remark,
@@ -51,7 +54,9 @@
         WHERE a.created_by = #{createdBy}
         <if test="keyword != null and keyword != ''">
             AND (a.apply_no LIKE CONCAT('%', #{keyword}, '%')
-                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%'))
+                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%')
+                 OR a.cust_no LIKE CONCAT('%', #{keyword}, '%')
+                 OR a.cust_name LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         <if test="allocDim != null and allocDim != ''">
             AND a.alloc_dim = #{allocDim}
@@ -78,7 +83,8 @@
 
     <select id="selectMyApplies"
             resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
-        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_type AS custType, a.alloc_dim AS allocDim,
+        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_no AS custNo, a.cust_name AS custName,
+               a.cust_type AS custType, a.alloc_dim AS allocDim,
                a.biz_kind AS bizKind, a.account_no AS accountNo, a.status,
                a.business_key AS businessKey, a.process_instance_id AS processInstanceId,
                a.owner_org_id AS ownerOrgId, a.remark,
@@ -99,7 +105,8 @@
 
     <select id="selectMyDones"
             resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
-        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_type AS custType, a.alloc_dim AS allocDim,
+        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_no AS custNo, a.cust_name AS custName,
+               a.cust_type AS custType, a.alloc_dim AS allocDim,
                a.biz_kind AS bizKind, a.account_no AS accountNo, a.status,
                a.business_key AS businessKey, a.process_instance_id AS processInstanceId,
                a.owner_org_id AS ownerOrgId, a.remark,

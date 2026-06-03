@@ -85,6 +85,8 @@ public class AllocAdjustDoneService {
         d.setId(a.getId());
         d.setApplyNo(a.getApplyNo());
         d.setCustId(a.getCustId());
+        d.setCustNo(a.getCustNo());
+        d.setCustName(a.getCustName());
         d.setCustType(a.getCustType());
         d.setAllocDim(a.getAllocDim());
         d.setBizKind(a.getBizKind());
