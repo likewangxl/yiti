@@ -74,7 +74,8 @@
         FROM EXT_ORG_INFO
         WHERE ORGAN_STATE = 0
           AND (ORG_CODE LIKE CONCAT('%', #{keyword}, '%')
-               OR ORG_NAME LIKE CONCAT('%', #{keyword}, '%'))
+               OR ORG_NAME LIKE CONCAT('%', #{keyword}, '%')
+               OR DEPT_NO LIKE CONCAT('%', #{keyword}, '%'))
         ORDER BY ORG_LEVEL ASC, ORG_CODE ASC
         LIMIT #{limit}
     </select>
