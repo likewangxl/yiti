@@ -13,7 +13,7 @@ import java.util.List;
  *
  * <p>Service 层 {@code AllocAdjustService.submit(cmd)} 消费：
  * <ol>
- *   <li>校验字段：custNo / allocDim / bizKind / ownerOrgId / items 必填；
+ *   <li>校验字段：custId / allocDim / bizKind / ownerOrgId / items 必填；
  *       items 的 empId 去重、ratio 之和 ≤ 100（RULE 维度）</li>
  *   <li>调用 {@code CustomerQueryApi.getCustomerByCustNo} 按客户编号校验，并将客户主键 id 写入 apply.cust_id</li>
  *   <li>生成 applyNo（AA + yyyyMMdd + UUID 片段）+ 插入主从表</li>
@@ -30,8 +30,8 @@ public class SubmitAllocAdjustCmd {
     /** 客户类型：CORP / RETAIL（决定审批流路由）. */
     private String custType;
 
-    /** 客户编号（必填，对应 cust_master.cust_no 业务编号；Service 内部按编号查找客户主键后入库）. */
-    private String custNo;
+    /** 客户编号（必填，存入 PERF_ALLOC_ADJUST_APPLY.cust_id）. */
+    private String custId;
 
     /** 客户名称（前端反显，提交时快照入库）. */
     private String custName;

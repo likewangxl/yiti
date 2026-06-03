@@ -78,13 +78,13 @@ public class AllocAdjustController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
     @AuditLog(action = "ALLOC_ADJUST_CREATE", resourceType = "PERF_ALLOC_ADJUST", reasonRequired = true)
     public ResponseWrapper<Map<String, String>> create(@Valid @RequestBody AllocAdjustCreateReqDTO req) {
-        log.info("[AllocAdjustController.create] custNo={}, bizKind={}, itemCount={}",
-                req.getCustNo(), req.getBizKind(),
+        log.info("[AllocAdjustController.create] custId={}, bizKind={}, itemCount={}",
+                req.getCustId(), req.getBizKind(),
                 req.getItems() == null ? 0 : req.getItems().size());
 
         SubmitAllocAdjustCmd cmd = SubmitAllocAdjustCmd.builder()
                 .custType(req.getCustType())
-                .custNo(req.getCustNo())
+                .custId(req.getCustId())
                 .custName(req.getCustName())
                 .currBal(req.getCurrBal())
                 .mAvgBal(req.getMAvgBal())

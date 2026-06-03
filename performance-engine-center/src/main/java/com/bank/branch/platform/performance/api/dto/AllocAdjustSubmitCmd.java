@@ -28,8 +28,8 @@ public class AllocAdjustSubmitCmd {
     /** 客户类型：CORP / RETAIL（决定审批流路由）。 */
     private String custType;
 
-    /** 客户编号（cust_master.cust_no）。 */
-    private String custNo;
+    /** 客户编号（存入 PERF_ALLOC_ADJUST_APPLY.cust_id）。 */
+    private String custId;
 
     /** 分配维度：RULE / ACCOUNT。 */
     private String allocDim;

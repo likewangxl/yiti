@@ -114,9 +114,9 @@ public interface AllocApi {
      *
      * <p>维度过滤：{@code allocDim=ACCOUNT} 只取按账号分配的最后一条；{@code RULE} 或 null 取 RULE+ACCOUNT 两者。
      *
-     * @param custNo   客户编号（业务编号，内部解析为客户主键后匹配 apply.cust_id）
+     * @param custId   客户编号（匹配 apply.cust_id）
      * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null）
      * @return 预览项列表，可能为空列表，不会返回 null
      */
-    List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo, String allocDim);
+    List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim);
 }

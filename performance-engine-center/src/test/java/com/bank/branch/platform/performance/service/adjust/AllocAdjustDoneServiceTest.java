@@ -60,8 +60,8 @@ class AllocAdjustDoneServiceTest {
                 LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 21), 1, 20);
 
         assertThat(r.getRecords().get(0).getTaskId()).isEqualTo("T1");
-        // 「客户」列依赖 custNo（主显）+ custName（副显），cust_id 现网恒为 NULL
-        assertThat(r.getRecords().get(0).getCustNo()).isEqualTo("CN1");
+        // 「客户」列：custId（主显，即客户编号）+ custName（副显）
+        assertThat(r.getRecords().get(0).getCustId()).isEqualTo("C1");
         assertThat(r.getRecords().get(0).getCustName()).isEqualTo("张三");
     }
 
@@ -128,7 +128,6 @@ class AllocAdjustDoneServiceTest {
         a.setId(id);
         a.setApplyNo(applyNo);
         a.setCustId("C1");
-        a.setCustNo("CN1");
         a.setCustName("张三");
         a.setAllocDim("CUST");
         a.setBizKind("LOAN");

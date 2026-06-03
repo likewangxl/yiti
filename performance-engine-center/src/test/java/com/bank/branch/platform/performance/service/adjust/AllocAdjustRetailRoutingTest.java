@@ -69,7 +69,7 @@ class AllocAdjustRetailRoutingTest {
 
     private SubmitAllocAdjustCmd cmd(String bizKind, String allocDim, String accountNo) {
         return SubmitAllocAdjustCmd.builder()
-                .custNo("CN-RET-001")
+                .custId("CN-RET-001")
                 .allocDim(allocDim)
                 .bizKind(bizKind)
                 .accountNo(accountNo)
@@ -158,8 +158,8 @@ class AllocAdjustRetailRoutingTest {
         Map<String, Object> vars = started.getVariables();
         assertThat(vars).isNotNull();
         assertThat(vars).containsEntry("applyId", applyId);
-        // custId 流程变量写内部主键，保持下游 BPMN/Listener 兼容；custNo 业务编号同时透传
-        assertThat(vars).containsEntry("custId", "CUST_RET_001");
+        // custId/custNo 流程变量均写客户编号（cust_no 字段已并入 cust_id）
+        assertThat(vars).containsEntry("custId", "CN-RET-001");
         assertThat(vars).containsEntry("custNo", "CN-RET-001");
         assertThat(vars).containsEntry("bizKind", "RETAIL_CARD");
         assertThat(vars).containsEntry("allocDim", "RULE");

@@ -3,7 +3,7 @@
 <mapper namespace="com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper">
 
     <sql id="BASE_COLUMNS">
-        id, apply_no, cust_id, cust_no, cust_name, curr_bal, m_avg_bal, q_avg_bal, y_avg_bal,
+        id, apply_no, cust_id, cust_name, curr_bal, m_avg_bal, q_avg_bal, y_avg_bal,
         cust_type, alloc_dim, biz_kind, account_no, status,
         business_key, process_instance_id, owner_org_id, remark,
         created_by, created_time, updated_by, updated_time
@@ -41,7 +41,7 @@
         SELECT COUNT(*)
         FROM PERF_ALLOC_ADJUST_APPLY
         WHERE status = 'IN_APPROVAL'
-          AND cust_no = #{custNo}
+          AND cust_id = #{custId}
           AND alloc_dim = #{allocDim}
     </select>
 
@@ -50,7 +50,7 @@
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PERF_ALLOC_ADJUST_APPLY
-        WHERE cust_no = #{custNo}
+        WHERE cust_id = #{custId}
           AND alloc_dim = #{allocDim}
           AND status = 'APPROVED'
         ORDER BY created_time DESC, id DESC

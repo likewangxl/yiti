@@ -52,28 +52,27 @@ public interface PerfAllocAdjustApplyMapper extends BaseMapper<PerfAllocAdjustAp
     /**
      * 统计某客户在指定分配维度下处于审批中(IN_APPROVAL)的申请数（同客户同维度去重用）.
      *
-     * <p>区别于 {@link #countByConditions}：去重粒度精确到 (cust_no + alloc_dim)，
+     * <p>区别于 {@link #countByConditions}：去重粒度精确到 (cust_id + alloc_dim)，
      * 使「按规则分配」审批中的申请不阻塞「按账号分配」的新提交，反之亦然。
      *
-     * @param custNo   业务客户编号
+     * @param custId   客户编号（apply.cust_id，用户输入值）
      * @param allocDim 分配维度：RULE / ACCOUNT
      * @return 审批中的申请数
      */
-    long countInApprovalByCustAndDim(@Param("custNo") String custNo,
+    long countInApprovalByCustAndDim(@Param("custId") String custId,
                                      @Param("allocDim") String allocDim);
 
     /**
      * 查询某客户在指定分配维度下「审批通过的最后一条」申请.
      *
-     * <p>用于「原业绩分配」预览：按 cust_no + alloc_dim 过滤 status=APPROVED，
+     * <p>用于「原业绩分配」预览：按 cust_id + alloc_dim 过滤 status=APPROVED，
      * 按 created_time（申请提交时间）倒序取第一条（同时间以 id 倒序兜底）.
-     * 按业务客户编号(cust_no)匹配：手工录入客户 apply.cust_id 为 null，仅 cust_no 有值。
      *
-     * @param custNo   业务客户编号（apply.cust_no，用户输入值）
+     * @param custId   客户编号（apply.cust_id，用户输入值）
      * @param allocDim 分配维度：RULE / ACCOUNT
      * @return 最后一条审批通过的申请；无则返回 null
      */
-    PerfAllocAdjustApply selectLastApprovedByCustAndDim(@Param("custNo") String custNo,
+    PerfAllocAdjustApply selectLastApprovedByCustAndDim(@Param("custId") String custId,
                                                         @Param("allocDim") String allocDim);
 
     /**

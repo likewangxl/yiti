@@ -21,9 +21,9 @@ public class AllocAdjustCreateReqDTO {
     @NotBlank(message = "custType 必填")
     private String custType;
 
-    /** 客户编号（必填，对应 cust_master.cust_no；后端按编号查找客户主键后保存）. */
-    @NotBlank(message = "custNo 必填")
-    private String custNo;
+    /** 客户编号（必填，存入 PERF_ALLOC_ADJUST_APPLY.cust_id）. */
+    @NotBlank(message = "custId 必填")
+    private String custId;
 
     /** 客户名称（前端反显，提交时快照入库）. */
     private String custName;

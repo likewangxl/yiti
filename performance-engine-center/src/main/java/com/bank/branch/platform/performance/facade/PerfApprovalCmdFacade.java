@@ -41,7 +41,7 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
 
         SubmitAllocAdjustCmd serviceCmd = SubmitAllocAdjustCmd.builder()
                 .custType(cmd.getCustType())
-                .custNo(cmd.getCustNo())
+                .custId(cmd.getCustId())
                 .allocDim(cmd.getAllocDim())
                 .bizKind(cmd.getBizKind())
                 .accountNo(cmd.getAccountNo())
@@ -52,8 +52,8 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
                 .build();
 
         String applyId = allocAdjustService.submit(serviceCmd);
-        log.info("[PerfApprovalCmdFacade.submitAllocAdjust] applicant={}, custNo={}, applyId={}",
-                cmd.getApplicant(), cmd.getCustNo(), applyId);
+        log.info("[PerfApprovalCmdFacade.submitAllocAdjust] applicant={}, custId={}, applyId={}",
+                cmd.getApplicant(), cmd.getCustId(), applyId);
         return applyId;
     }
 

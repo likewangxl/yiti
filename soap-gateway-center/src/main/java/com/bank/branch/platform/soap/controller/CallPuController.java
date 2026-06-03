@@ -167,7 +167,7 @@ public class CallPuController {
 
         AllocAdjustSubmitCmd cmd = AllocAdjustSubmitCmd.builder()
                 .custType(custType)
-                .custNo(parm.getCustId())
+                .custId(parm.getCustId())
                 .allocDim(allocDim)
                 .bizKind(bizKind)
                 .accountNo(parm.getIouNo())

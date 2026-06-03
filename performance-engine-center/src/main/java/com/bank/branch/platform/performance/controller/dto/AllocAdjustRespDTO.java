@@ -21,11 +21,8 @@ public class AllocAdjustRespDTO {
     /** 申请编号. */
     private String applyNo;
 
-    /** 客户 ID（cust_master 内部主键）. */
+    /** 客户编号（PERF_ALLOC_ADJUST_APPLY.cust_id，即用户输入的客户编号）. */
     private String custId;
-
-    /** 客户编号（cust_master.cust_no，按 custId 反查回填；客户已删/查不到时为 null）. */
-    private String custNo;
 
     /** 客户名称（提交时快照；历史行回退反查，查不到为 null）. */
     private String custName;

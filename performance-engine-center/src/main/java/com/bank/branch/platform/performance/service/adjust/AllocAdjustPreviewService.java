@@ -43,17 +43,16 @@ public class AllocAdjustPreviewService {
      *   <li>{@code allocDim=RULE} 或为空 → 取 RULE + ACCOUNT 两个维度（按规则分配场景沿用并列展示）。</li>
      * </ul>
      *
-     * @param custNo   客户编号（业务编号；内部按编号解析为客户主键后匹配 apply.cust_id）
+     * @param custId   客户编号（匹配 apply.cust_id）
      * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null）
      * @return 预览项列表（可能为空，不会返回 null）
      */
-    public List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo, String allocDim) {
-        if (!StringUtils.hasText(custNo)) {
+    public List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim) {
+        if (!StringUtils.hasText(custId)) {
             return new ArrayList<>();
         }
-        // 直接按用户输入的客户编号(cust_no)匹配 apply：提交侧 apply.cust_no 恒有值，
-        // 而手工录入客户 apply.cust_id 为 null，按 cust_id 匹配会查不到（见 AllocAdjustService.resolveInternalCustIdByCustNo）。
-        // 按 cust_no 匹配对主档客户与手工客户均成立，且与提交去重 countInApprovalByCustAndDim(cust_no) 口径一致。
+        // 按用户输入的客户编号(cust_id)匹配 apply（cust_no 字段已并入 cust_id，提交侧 apply.cust_id 恒有值），
+        // 与提交去重 countInApprovalByCustAndDim(cust_id) 口径一致。
 
         // 按账号分配只查 ACCOUNT 维度；规则分配/未指定则取 RULE + ACCOUNT 两者
         List<String> dims = "ACCOUNT".equals(allocDim) ? List.of("ACCOUNT") : DIMS;
@@ -61,7 +60,7 @@ public class AllocAdjustPreviewService {
         // 收集各维度「最后一条审批通过申请」的明细行（保留维度 + 账号上下文）
         List<RowCtx> rows = new ArrayList<>();
         for (String dim : dims) {
-            PerfAllocAdjustApply apply = applyMapper.selectLastApprovedByCustAndDim(custNo, dim);
+            PerfAllocAdjustApply apply = applyMapper.selectLastApprovedByCustAndDim(custId, dim);
             if (apply == null) {
                 continue;
             }

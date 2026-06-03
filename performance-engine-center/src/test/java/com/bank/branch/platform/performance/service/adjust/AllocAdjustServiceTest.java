@@ -96,7 +96,7 @@ class AllocAdjustServiceTest {
 
     private SubmitAllocAdjustCmd baseCmd(String bizKind) {
         return SubmitAllocAdjustCmd.builder()
-                .custNo("CN-001")
+                .custId("CN-001")
                 .allocDim("RULE")
                 .bizKind(bizKind)
                 .ownerOrgId("ORG_001")
@@ -172,8 +172,8 @@ class AllocAdjustServiceTest {
         PerfAllocAdjustApply apply = applyCap.getValue();
         assertThat(apply.getStatus()).isEqualTo("IN_APPROVAL");
         assertThat(apply.getApplyNo()).isNotBlank();
-        // apply.cust_id 列保存的是按 custNo 查找到的内部主键 id
-        assertThat(apply.getCustId()).isEqualTo("CUST_001");
+        // apply.cust_id 直接存用户输入的客户编号
+        assertThat(apply.getCustId()).isEqualTo("CN-001");
         assertThat(apply.getAllocDim()).isEqualTo("RULE");
         assertThat(apply.getBizKind()).isEqualTo("CORP_LOAN");
         assertThat(apply.getOwnerOrgId()).isEqualTo("ORG_001");
@@ -181,27 +181,6 @@ class AllocAdjustServiceTest {
         assertThat(apply.getBusinessKey()).contains(apply.getId());
 
         verify(itemMapper).batchInsert(anyList());
-    }
-
-    @Test
-    @DisplayName("cust_master 查不到客户 → 不做提交校验，回退用 custNo 落库并正常发起流程")
-    void submit_customerNotFoundInMaster_fallsBackToCustNoAndStarts() {
-        // 客户编号在前端填写时已基于 XAN_M98 统计表校验过，提交期不再卡 cust_master 存在性
-        when(customerQueryApi.getCustomerByCustNo("CN-001")).thenReturn(Optional.empty());
-        when(workflowApi.startProcess(any(StartProcessCmd.class)))
-                .thenReturn(new WorkflowLaunchResp("PI_NF", null, null));
-
-        String id = service.submit(baseCmd("CORP_LOAN"));
-
-        assertThat(id).isNotBlank();
-        // 主档查不到时 cust_id 回退用 custNo 本身落库
-        ArgumentCaptor<PerfAllocAdjustApply> applyCap = ArgumentCaptor.forClass(PerfAllocAdjustApply.class);
-        verify(applyMapper).insert(applyCap.capture());
-        // 主档查不到时 cust_id 置 null（resolveInternalCustIdByCustNo 不再回退 custNo），custNo 仍单独落库
-        assertThat(applyCap.getValue().getCustId()).isNull();
-        assertThat(applyCap.getValue().getCustNo()).isEqualTo("CN-001");
-        // 流程照常发起
-        verify(workflowApi).startProcess(any(StartProcessCmd.class));
     }
 
     @Test
@@ -327,10 +306,10 @@ class AllocAdjustServiceTest {
     }
 
     @Test
-    @DisplayName("必填字段缺失（custNo 为空）→ 抛 VALIDATION_FAILED")
-    void submit_blankCustNo_throws() {
+    @DisplayName("必填字段缺失（custId 为空）→ 抛 VALIDATION_FAILED")
+    void submit_blankCustId_throws() {
         SubmitAllocAdjustCmd cmd = baseCmd("CORP_LOAN");
-        cmd.setCustNo(null);
+        cmd.setCustId(null);
 
         assertThatThrownBy(() -> service.submit(cmd))
                 .isInstanceOf(PerfException.class)
@@ -359,45 +338,24 @@ class AllocAdjustServiceTest {
                 .isInstanceOf(PerfException.class);
     }
 
-    // ========== 响应 DTO 回填 custNo（基于 cust_master 反查） ==========
+    // ========== 响应 DTO custId/custName 直接读 apply 快照 ==========
 
     @Test
-    @DisplayName("getByIdDto → 用 apply.custId(内部主键) 反查客户，回填 custNo 到响应")
-    void getByIdDto_populatesCustNoFromCustomerLookup() {
+    @DisplayName("getByIdDto → custId/客户名称直接读 apply 快照，不反查客户主档")
+    void getByIdDto_readsCustFromApplySnapshot() {
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId("APPLY_X");
         apply.setApplyNo("AA-X");
-        apply.setCustId("CUST_X");
+        apply.setCustId("CN-X");
+        apply.setCustName("客户X");
         apply.setStatus("IN_APPROVAL");
         when(applyMapper.selectByAllocApplyId("APPLY_X")).thenReturn(apply);
         when(itemMapper.selectByApplyId("APPLY_X")).thenReturn(Collections.emptyList());
-        CustomerDTO cust = new CustomerDTO();
-        cust.setId("CUST_X");
-        cust.setCustNo("CN-X");
-        when(customerQueryApi.getCustomer("CUST_X")).thenReturn(Optional.of(cust));
 
         AllocAdjustRespDTO dto = service.getByIdDto("APPLY_X");
 
-        assertThat(dto.getCustId()).isEqualTo("CUST_X");
-        assertThat(dto.getCustNo()).isEqualTo("CN-X");
-    }
-
-    @Test
-    @DisplayName("getByIdDto → cust_master 查不到时 custNo 兜底回显 custId（84f227e0 custNo兜底）")
-    void getByIdDto_customerMissing_fallsBackToCustId() {
-        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
-        apply.setId("APPLY_Y");
-        apply.setApplyNo("AA-Y");
-        apply.setCustId("CUST_GONE");
-        when(applyMapper.selectByAllocApplyId("APPLY_Y")).thenReturn(apply);
-        when(itemMapper.selectByApplyId("APPLY_Y")).thenReturn(Collections.emptyList());
-        when(customerQueryApi.getCustomer("CUST_GONE")).thenReturn(Optional.empty());
-
-        AllocAdjustRespDTO dto = service.getByIdDto("APPLY_Y");
-
-        assertThat(dto.getCustId()).isEqualTo("CUST_GONE");
-        // 查不到主档时 custNo 兜底回退用 custId 展示，不再留 null
-        assertThat(dto.getCustNo()).isEqualTo("CUST_GONE");
+        assertThat(dto.getCustId()).isEqualTo("CN-X");
+        assertThat(dto.getCustName()).isEqualTo("客户X");
     }
 
     @Test
@@ -501,9 +459,7 @@ class AllocAdjustServiceTest {
 
         assertThat(page.getRecords()).hasSize(2);
         assertThat(page.getRecords().get(0).getCustId()).isEqualTo("C1");
-        assertThat(page.getRecords().get(0).getCustNo()).isEqualTo("CN-1");
         assertThat(page.getRecords().get(1).getCustId()).isEqualTo("C2");
-        assertThat(page.getRecords().get(1).getCustNo()).isEqualTo("CN-2");
     }
 
     // ========== V1.4 S1.3: WORKFLOW_PARTICIPANT scope 路径 ==========

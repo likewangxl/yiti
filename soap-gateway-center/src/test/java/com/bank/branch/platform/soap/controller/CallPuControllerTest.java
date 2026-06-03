@@ -223,7 +223,7 @@ class CallPuControllerTest {
         assertThat(cmd.getCustType()).isEqualTo("CORP");
         assertThat(cmd.getAllocDim()).isEqualTo("ACCOUNT");
         assertThat(cmd.getBizKind()).isEqualTo("CORP_DEPOSIT");
-        assertThat(cmd.getCustNo()).isEqualTo("C001");
+        assertThat(cmd.getCustId()).isEqualTo("C001");
         assertThat(cmd.getAccountNo()).isEqualTo("ACC123");
         assertThat(cmd.getReason()).isEqualTo("调整理由");
         assertThat(cmd.getApplicant()).isEqualTo("E001");

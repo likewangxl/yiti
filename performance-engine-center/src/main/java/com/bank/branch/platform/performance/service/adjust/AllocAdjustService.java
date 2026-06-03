@@ -7,8 +7,6 @@ import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
-import com.bank.branch.platform.customer.api.CustomerQueryApi;
-import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.controller.dto.AllocAdjustRespDTO;
 import com.bank.branch.platform.performance.controller.dto.EmpSuggestRespDTO;
 import com.bank.branch.platform.performance.entity.CustAllocRelation;
@@ -90,7 +88,6 @@ public class AllocAdjustService {
     private final PerfAllocAdjustApplyMapper applyMapper;
     private final PerfAllocAdjustItemMapper itemMapper;
     private final CustAllocRelationMapper allocRelationMapper;
-    private final CustomerQueryApi customerQueryApi;
     private final WorkflowApi workflowApi;
     private final CurrentUserApi currentUserApi;
     private final UserApi userApi;
@@ -148,22 +145,21 @@ public class AllocAdjustService {
     public String submit(SubmitAllocAdjustCmd cmd) {
         validateBasic(cmd);
         validateItems(cmd);
-        // 按客户编号(cust_no)查找客户主档；apply.cust_id 列保存客户内部主键 id，与现有跨模块 join 保持兼容
-        String internalCustId = resolveInternalCustIdByCustNo(cmd.getCustNo());
+        // cust_id 直接存用户输入的客户编号（原 cust_no 字段已废弃，统一并入 cust_id）
+        String custId = cmd.getCustId();
 
-        // 同客户同维度去重：同一客户编号(cust_no) + 同一分配维度(alloc_dim)已存在审批中(IN_APPROVAL)的调整申请时，
+        // 同客户同维度去重：同一客户编号(cust_id) + 同一分配维度(alloc_dim)已存在审批中(IN_APPROVAL)的调整申请时，
         // 不允许重复提交，避免并行多笔调整审批落地后相互覆盖分配关系。
-        // 按 cust_no 去重（而非 cust_id）：手工录入客户 cust_id 为 null，用业务客户编号才能正确去重。
         // 去重粒度精确到维度：RULE 审批中不阻塞 ACCOUNT 的新提交，反之亦然。
-        // 注意：PerfException 的 errorCode.format 已自动拼「基础消息 + ": " + arg」，此处只传 custNo，避免消息重复。
-        if (applyMapper.countInApprovalByCustAndDim(cmd.getCustNo(), cmd.getAllocDim()) > 0) {
-            throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING, cmd.getCustNo());
+        // 注意：PerfException 的 errorCode.format 已自动拼「基础消息 + ": " + arg」，此处只传 custId，避免消息重复。
+        if (applyMapper.countInApprovalByCustAndDim(custId, cmd.getAllocDim()) > 0) {
+            throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING, custId);
         }
 
         // 原业绩分配会签名单：历史审批通过分配优先，查不到则回退本次手工录入的原业绩分配。
         // 「提交审批至少要有一条原业绩分配记录」——历史与手工皆为空时拒绝提交。
         List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(
-                cmd.getCustNo(), cmd.getAllocDim(), cmd.getOriginalAllocList());
+                custId, cmd.getAllocDim(), cmd.getOriginalAllocList());
         if (originalOwnerEmpIds.isEmpty()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "至少需要一条原业绩分配记录");
         }
@@ -177,9 +173,8 @@ public class AllocAdjustService {
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId(applyId);
         apply.setApplyNo(applyNo);
-        apply.setCustId(internalCustId);
-        // 提交时把前端反显的客户编号/名称 + 余额概览快照入库，列表/详情直接读，不再实时反查
-        apply.setCustNo(cmd.getCustNo());
+        apply.setCustId(custId);
+        // 提交时把前端反显的客户名称 + 余额概览快照入库，列表/详情直接读，不再实时反查
         apply.setCustName(cmd.getCustName());
         apply.setCurrBal(cmd.getCurrBal());
         apply.setMAvgBal(cmd.getMAvgBal());
@@ -245,16 +240,16 @@ public class AllocAdjustService {
         startCmd.setProcessDefinitionKey(processKey);
         startCmd.setStartUser(cmd.getApplicant());
         startCmd.setStartOrgId(cmd.getOwnerOrgId());
-        // 标题用业务编号(custNo)便于人工识别；流程变量 custId 写内部主键，下游 BPMN/Listener 已按此使用
-        startCmd.setTitle("分配关系调整-" + cmd.getCustNo() + "-" + applyNo);
+        // 标题用客户编号便于人工识别；流程变量 custId/custNo 均写客户编号（下游 BPMN/Listener 兼容读取）
+        startCmd.setTitle("分配关系调整-" + custId + "-" + applyNo);
         Map<String, Object> vars = new HashMap<>();
         vars.put("applyId", applyId);
-        vars.put("custId", internalCustId);
-        vars.put("custNo", cmd.getCustNo());
+        vars.put("custId", custId);
+        vars.put("custNo", custId);
         vars.put("bizKind", cmd.getBizKind());
         vars.put("allocDim", cmd.getAllocDim());
         // 单人指派候选（original_owner_approve 的 assignee 兜底）：历史当前分配优先，否则取会签名单首位。
-        String originalOwnerEmpId = resolveOriginalOwnerEmpId(internalCustId, cmd.getBizKind());
+        String originalOwnerEmpId = resolveOriginalOwnerEmpId(custId, cmd.getBizKind());
         if (isBlank(originalOwnerEmpId)) {
             originalOwnerEmpId = originalOwnerEmpIds.get(0);
         }
@@ -394,16 +389,11 @@ public class AllocAdjustService {
 
     /**
      * V1.3 R4.1：Controller 专用 DTO 版本详情查询（含 items）.
-     * <p>响应回填 custNo：按 apply.custId(内部主键) 反查 cust_master.cust_no；客户已删除时 custNo=null.
+     * <p>cust_id/客户名称直接读 apply 提交时快照，不再反查客户主档（cust_no 字段已并入 cust_id）.
      */
     public AllocAdjustRespDTO getByIdDto(String id) {
         ApplyWithItems bundle = getById(id);
-        // 一次反查 cust_master 同时拿 custNo + custName（客户已删/查不到时均为 null）
-        String custId = bundle.getApply().getCustId();
-        CustomerDTO cust = isBlank(custId) ? null : customerQueryApi.getCustomer(custId).orElse(null);
-        String custNo = cust != null ? cust.getCustNo() : null;
-        String custName = cust != null ? cust.getCustName() : null;
-        AllocAdjustRespDTO dto = toRespDto(bundle.getApply(), bundle.getItems(), custNo, custName);
+        AllocAdjustRespDTO dto = toRespDto(bundle.getApply(), bundle.getItems());
         // 展开申请人姓名 + 主机构名（仅详情，列表不展开避免 N+1）
         // 任何一项查询失败不阻塞主流程，对应字段留 null
         String createdBy = bundle.getApply().getCreatedBy();
@@ -488,10 +478,10 @@ public class AllocAdjustService {
      *
      * @return 工号列表（可能为空）
      */
-    private List<String> resolveOriginalOwnerEmpIds(String custNo, String allocDim,
+    private List<String> resolveOriginalOwnerEmpIds(String custId, String allocDim,
             List<SubmitAllocAdjustCmd.OriginalItem> manual) {
         List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> owners =
-                allocAdjustPreviewService.getLastApprovedAllocPreview(custNo, allocDim);
+                allocAdjustPreviewService.getLastApprovedAllocPreview(custId, allocDim);
         java.util.LinkedHashSet<String> rawEmpIds = new java.util.LinkedHashSet<>();
         if (owners != null) {
             for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO o : owners) {
@@ -563,18 +553,6 @@ public class AllocAdjustService {
     }
 
     /**
-     * 单条 custId(内部主键) → custNo 反查，客户不存在返回 null.
-     */
-    private String lookupCustNo(String internalCustId) {
-        if (isBlank(internalCustId)) {
-            return null;
-        }
-        return customerQueryApi.getCustomer(internalCustId)
-                .map(CustomerDTO::getCustNo)
-                .orElse(null);
-    }
-
-    /**
      * V1.3 R4.1 / V1.4 S1.3：Controller 专用 DTO 版本分页（列表不含 items）.
      *
      * <p>V1.4 S1.3 增强：注入 PerfScopeHelper 5 参 overload，bizKeyCol="business_key"，
@@ -612,58 +590,22 @@ public class AllocAdjustService {
                 status, bizKind, custId, ownerOrgId, createdBy, offset, pageSize,
                 frag.getSql(), frag.getParams());
 
-        // 批量反查 cust_master 拿 custNo + custName，避免循环单查；空 rows 跳过避免无谓 mapper 调用
-        Map<String, CustomerDTO> custMap = batchLookupCustomers(rows);
         List<AllocAdjustRespDTO> dtos = new ArrayList<>(rows.size());
         for (PerfAllocAdjustApply apply : rows) {
-            CustomerDTO c = custMap.get(apply.getCustId());
-            dtos.add(toRespDto(apply, java.util.Collections.emptyList(),
-                    c != null ? c.getCustNo() : null, c != null ? c.getCustName() : null));
+            dtos.add(toRespDto(apply, java.util.Collections.emptyList()));
         }
         return PageResult.of(pageNo, pageSize, total, dtos);
     }
 
     /**
-     * 收集 rows 中所有非空 custId 一次性 listCustomers，返回内部主键 → custNo 映射；
-     * rows 为空或全部 custId 为空时返回空 Map，不触发跨模块调用.
+     * V1.3 R4.1：entity → DTO 装配下沉到 Service. cust_id/客户名称直接读 apply 快照（cust_no 已并入 cust_id）.
      */
-    private Map<String, CustomerDTO> batchLookupCustomers(List<PerfAllocAdjustApply> rows) {
-        if (rows == null || rows.isEmpty()) {
-            return java.util.Collections.emptyMap();
-        }
-        Set<String> ids = new HashSet<>();
-        for (PerfAllocAdjustApply r : rows) {
-            if (!isBlank(r.getCustId())) {
-                ids.add(r.getCustId());
-            }
-        }
-        if (ids.isEmpty()) {
-            return java.util.Collections.emptyMap();
-        }
-        List<CustomerDTO> customers = customerQueryApi.listCustomers(new ArrayList<>(ids));
-        Map<String, CustomerDTO> map = new HashMap<>(customers.size());
-        for (CustomerDTO c : customers) {
-            map.put(c.getId(), c);
-        }
-        return map;
-    }
-
-    /**
-     * V1.3 R4.1：entity → DTO 装配下沉到 Service.
-     * <p>{@code custNo} 由调用方按内部主键反查后传入（单条 lookupCustNo / 批量 batchLookupCustNos），
-     * 查不到时传 null；此时 DTO 的 custNo 兜底回退用 apply.custId 展示（84f227e0 custNo兜底，
-     * 不抛错以兼容历史已删客户的 apply 行）.
-     */
-    private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items,
-                                        String custNo, String custName) {
+    private AllocAdjustRespDTO toRespDto(PerfAllocAdjustApply apply, List<PerfAllocAdjustItem> items) {
         AllocAdjustRespDTO dto = new AllocAdjustRespDTO();
         dto.setId(apply.getId());
         dto.setApplyNo(apply.getApplyNo());
         dto.setCustId(apply.getCustId());
-        // 优先读提交时快照的客户编号/名称；快照为空（历史行）回退到反查值，再兜底 custId
-        dto.setCustNo(!isBlank(apply.getCustNo()) ? apply.getCustNo()
-                : (custNo != null ? custNo : apply.getCustId()));
-        dto.setCustName(!isBlank(apply.getCustName()) ? apply.getCustName() : custName);
+        dto.setCustName(apply.getCustName());
         // 余额概览快照直接透传
         dto.setCurrBal(apply.getCurrBal());
         dto.setMAvgBal(apply.getMAvgBal());
@@ -735,8 +677,8 @@ public class AllocAdjustService {
         if (cmd == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "cmd is null");
         }
-        if (isBlank(cmd.getCustNo())) {
-            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "custNo 为空");
+        if (isBlank(cmd.getCustId())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "custId 为空");
         }
         if (isBlank(cmd.getAllocDim()) || !ALLOWED_ALLOC_DIMS.contains(cmd.getAllocDim())) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "allocDim 非法: " + cmd.getAllocDim());
@@ -811,19 +753,6 @@ public class AllocAdjustService {
         return null;
     }
 
-    /**
-     * 按客户编号(cust_no)查 cust_master 主档，命中则返回内部主键 id；
-     * <p>不做提交期存在性校验——客户编号在前端填写时已基于 XAN_M98 统计表反显校验过，
-     * 这里查不到主档（如客户主档与统计表口径不一致、或尚未建档）时不再抛错，
-     * 直接回退用 custNo 本身作为 cust_id 落库，保证申请可正常提交。
-     * 下游 resolveOriginalOwnerEmpId 查不到有效分配会返回 null（"新客户或历史分配空"分支已优雅处理）。
-     */
-    private String resolveInternalCustIdByCustNo(String custNo) {
-        // 客户主档命中→cust_id 存内部主键；未命中（手工录入客户）→返回 null，客户编号只存入 cust_no，
-        // 不再把业务客户编号回填到 cust_id（避免 cust_id/cust_no 语义混淆）。
-        Optional<CustomerDTO> opt = customerQueryApi.getCustomerByCustNo(custNo);
-        return opt.map(CustomerDTO::getId).orElse(null);
-    }
 
     /**
      * 按 bizKind 前缀路由流程（对齐生产 DDL：不引入 adjust_type 字段，

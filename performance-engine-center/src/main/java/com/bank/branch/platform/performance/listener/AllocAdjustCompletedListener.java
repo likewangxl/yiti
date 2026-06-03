@@ -113,10 +113,8 @@ public class AllocAdjustCompletedListener {
                 .collect(java.util.stream.Collectors.toList());
         LocalDate effectiveDate = LocalDate.now();
 
-        // 手工录入客户主档未命中时 apply.cust_id 按设计为 null（见 AllocAdjustService.resolveInternalCustIdByCustNo），
-        // 而 CUST_ALLOC_RELATION.cust_id 为 NOT NULL；回退用 cust_no 作为客户键（与 AllocAdjustPreviewService 读取侧
-        // .orElse(custNo) 同语义），避免 insert 抛 DataIntegrityViolation 致整批回滚、apply 状态卡死 IN_APPROVAL。
-        String relCustId = apply.getCustId() != null ? apply.getCustId() : apply.getCustNo();
+        // cust_id 即客户编号（cust_no 字段已并入 cust_id），提交侧恒有值，直接作为分配关系客户键。
+        String relCustId = apply.getCustId();
 
         for (PerfAllocAdjustItem it : items) {
             CustAllocRelation rel = new CustAllocRelation();

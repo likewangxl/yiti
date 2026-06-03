@@ -202,11 +202,10 @@ class AllocAdjustCompletedListenerTest {
     }
 
     @Test
-    @DisplayName("手工录入客户 cust_id 为 null → 分配关系 cust_id 回退用 cust_no（避免 NOT NULL 插入失败致状态卡死）")
-    void manualCustomer_nullCustId_fallsBackToCustNo() {
+    @DisplayName("cust_id 即客户编号 → 分配关系 cust_id 直接取 apply.cust_id")
+    void custId_usedDirectlyForRelation() {
         PerfAllocAdjustApply manual = buildApply();
-        manual.setCustId(null);     // 手工录入客户：主档未命中，cust_id 按设计为 null
-        manual.setCustNo("bbc");    // 客户号只在 cust_no
+        manual.setCustId("bbc");    // cust_id 即用户输入的客户编号（cust_no 字段已并入 cust_id）
         when(applyMapper.selectByBusinessKey("ALLOC_ADJUST:APP_001")).thenReturn(manual);
 
         ProcessCompletedEvent event =
@@ -214,12 +213,10 @@ class AllocAdjustCompletedListenerTest {
                         "PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null);
         listener.onProcessCompleted(event);
 
-        // 关键：relation.cust_id 必须非空（回退 cust_no），否则 DB NOT NULL 约束抛异常 → 状态卡在 IN_APPROVAL
         ArgumentCaptor<CustAllocRelation> relCap = ArgumentCaptor.forClass(CustAllocRelation.class);
         verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(relCap.capture());
         assertThat(relCap.getAllValues()).extracting(CustAllocRelation::getCustId)
                 .containsOnly("bbc");
-        // 状态正常推进
         verify(applyMapper).updateStatus("APP_001", "APPROVED", null);
     }
 

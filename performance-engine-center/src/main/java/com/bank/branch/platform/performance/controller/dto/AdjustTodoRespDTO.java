@@ -16,8 +16,6 @@ public class AdjustTodoRespDTO {
     private String id;
     private String applyNo;
     private String custId;
-    /** 客户编号（PERF_ALLOC_ADJUST_APPLY.cust_no），前端「客户」列主显字段（cust_id 现网恒为 NULL） */
-    private String custNo;
     /** 客户名称（PERF_ALLOC_ADJUST_APPLY.cust_name），前端「客户」列副显字段 */
     private String custName;
     private String custType;
