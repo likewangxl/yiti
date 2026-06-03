@@ -1189,18 +1189,22 @@ function onOrigEmpInput(row, val) {
   if (!val) { row.empId = ''; row.username = ''; row.empChnName = ''; return; }
   if (!String(val).includes('（')) { row.empId = String(val).trim(); row.username = String(val).trim(); }
 }
-// 原业绩分配-机构下拉联想（按机构号/名称模糊匹配）
+// 原业绩分配-机构下拉联想（按机构号/部门号/名称模糊匹配，展示 DEPT_NO + 机构名称）
 async function queryOrgSuggest(queryString, cb) {
   const kw = (queryString || '').trim();
   if (!kw) { cb([]); return; }
   try {
     const list = await suggestOrgs(kw);
     const arr = Array.isArray(list) ? list : [];
-    cb(arr.map(o => ({ ...o, label: o.orgName ? `${o.orgCode}（${o.orgName}）` : o.orgCode })));
+    cb(arr.map(o => {
+      const no = o.deptNo || o.orgCode;
+      return { ...o, label: o.orgName ? `${no}（${o.orgName}）` : no };
+    }));
   } catch { cb([]); }
 }
 function onOrigOrgSelect(row, item) {
-  row.orgCode = item.orgCode || '';
+  // 存部门号(DEPT_NO)作为「所属机构号」，与展示一致
+  row.orgCode = item.deptNo || item.orgCode || '';
   row.orgName = item.orgName || '';
   row.orgLabel = item.label || row.orgCode;
 }
