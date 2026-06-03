@@ -62,7 +62,7 @@
             </el-table-column>
             <el-table-column label="客户" min-width="190">
               <template #default="{row}">
-                <div>{{ row.custNo || row.custId || '-' }}</div>
+                <div>{{ row.custId || '-' }}</div>
                 <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
               </template>
             </el-table-column>
@@ -148,7 +148,7 @@
             </el-table-column>
             <el-table-column label="客户" min-width="190">
               <template #default="{row}">
-                <div>{{ row.custNo || row.custId || '-' }}</div>
+                <div>{{ row.custId || '-' }}</div>
                 <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
               </template>
             </el-table-column>
@@ -237,7 +237,7 @@
             </el-table-column>
             <el-table-column label="客户" min-width="190">
               <template #default="{row}">
-                <div>{{ row.custNo || row.custId || '-' }}</div>
+                <div>{{ row.custId || '-' }}</div>
                 <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
               </template>
             </el-table-column>
@@ -319,8 +319,8 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="客户编号" prop="custNo" required>
-              <el-input v-model="dlg.form.custNo" :disabled="dlg.readOnly" placeholder="如 C20260001" />
+            <el-form-item label="客户编号" prop="custId" required>
+              <el-input v-model="dlg.form.custId" :disabled="dlg.readOnly" placeholder="如 C20260001" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -359,7 +359,7 @@
         </el-row>
 
         <!-- 查不到该客户的余额统计时告警（查到则不显示）-->
-        <el-alert v-if="dlg.form.custNo && custStat.queried && !custStat.found"
+        <el-alert v-if="dlg.form.custId && custStat.queried && !custStat.found"
                   type="warning" :closable="false" style="margin-bottom:12px"
                   title="未查询到该客户，请填写客户名称" />
 
@@ -389,7 +389,7 @@
         </el-row>
 
         <!-- 原业绩分配：自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
-        <div v-if="(dlg.form.custNo && preview.loaded) || dlg.readOnly || dlg.form.originalItems.length" class="preview-section" v-loading="preview.loading">
+        <div v-if="(dlg.form.custId && preview.loaded) || dlg.readOnly || dlg.form.originalItems.length" class="preview-section" v-loading="preview.loading">
           <div class="card-h">
             <div class="title">原业绩分配</div>
             <el-button v-if="!dlg.readOnly && !hasOriginalOwners" size="small" type="primary" plain @click="addOriginalRow">+ 添加原业绩分配</el-button>
@@ -866,7 +866,7 @@ async function openTodoDetail(row) {
     dlg.viewingId = applyId;
     dlg.approvalLogs = [];
     Object.assign(dlg.form, {
-      custType: inferCustType(d.custType, d.bizKind), custNo: d.custNo || d.custId || '',
+      custType: inferCustType(d.custType, d.bizKind), custId: d.custId || '',
       custName: d.custName || '',
       allocDim: d.allocDim,
       bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
@@ -928,7 +928,7 @@ async function openApprove(row) {
     approveDlg.hasOwners = false;
     if (row.nodeKey === 'biz_dept_review') {
       try {
-        const p = await getAllocPreview({ custNo: row.custNo || row.custId, allocDim: row.allocDim });
+        const p = await getAllocPreview({ custNo: row.custId, allocDim: row.allocDim });
         approveDlg.hasOwners = !!(p && p.allocList && p.allocList.length);
       } catch { approveDlg.hasOwners = false; }
       if (!approveDlg.hasOwners && approveDlg.routeTo === 'OWNER') approveDlg.routeTo = 'LEADER';
@@ -1107,14 +1107,14 @@ function fmtAmt(v) {
 async function loadPreview(statisDt) {
   const f = dlg.form;
   // 原业绩分配按客户编号取 RULE/ACCOUNT 审批通过的最后一条，故只要有客户编号即可加载
-  if (!f.custNo) return;
+  if (!f.custId) return;
   preview.loaded = true;
   preview.loading = true;
   // 新建时传昨日，查看/审批时由调用方传入申请日期-1
   const dt = statisDt || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   try {
     preview.data = await getAllocPreview({
-      custType: f.custType, custNo: f.custNo, allocDim: f.allocDim, accountNo: f.accountNo || undefined,
+      custType: f.custType, custNo: f.custId, allocDim: f.allocDim, accountNo: f.accountNo || undefined,
       statisDt: dt
     });
   } catch { preview.data = null; }
@@ -1126,7 +1126,7 @@ const dlg = reactive({
   approvalLogs: [], approvalLoading: false,
   applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
-    custType: 'CORP', custNo: '', custName: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
+    custType: 'CORP', custId: '', custName: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
     items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
     originalItems: []
@@ -1136,7 +1136,7 @@ const dlgTitle = computed(() => dlg.reviewMode ? '审批调整申请' : dlg.read
 const totalPct = computed(() => dlg.form.items.reduce((s, x) => s + (Number(x.pct) || 0), 0));
 const dlgRules = {
   custType:   [{ required: true, message: '请选择客户类型' }],
-  custNo:     [{ required: true, message: '请填写客户编号' }],
+  custId:     [{ required: true, message: '请填写客户编号' }],
   custName:   [{ required: true, message: '请填写客户名称' }],
   allocDim:   [{ required: true, message: '请选择分配维度' }],
   accountNo:  [{ validator: (rule, val, cb) => {
@@ -1290,7 +1290,7 @@ function openCreate() {
   preview.data = null;
   Object.assign(dlg.form, {
     // 默认按规则分配 → 业务类型默认存款+贷款
-    custType: 'CORP', custNo: '', custName: '', allocDim: 'RULE', bizKind: [BIZ_DEPOSIT, BIZ_LOAN],
+    custType: 'CORP', custId: '', custName: '', allocDim: 'RULE', bizKind: [BIZ_DEPOSIT, BIZ_LOAN],
     accountNo: '', ownerOrgId: '', reason: '',
     items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
     originalItems: []
@@ -1302,7 +1302,7 @@ async function openView(row) {
   dlg.viewingId = row.id || row.applyNo;
   dlg.approvalLogs = [];
   Object.assign(dlg.form, {
-    custType: inferCustType(row.custType, row.bizKind), custNo: row.custNo || row.custId || '',
+    custType: inferCustType(row.custType, row.bizKind), custId: row.custId || '',
     custName: row.custName || '',
     allocDim: row.allocDim || 'RULE',
     bizKind: row.bizKind ? (typeof row.bizKind === 'string' ? row.bizKind.split(',') : row.bizKind) : [],
@@ -1327,7 +1327,7 @@ async function openView(row) {
     const d = await getAdjustDetail(dlg.viewingId);
     if (d?.id) {
       Object.assign(dlg.form, {
-        custType: d.custType || '', custNo: d.custNo || d.custId, allocDim: d.allocDim,
+        custType: d.custType || '', custId: d.custId, allocDim: d.allocDim,
         bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
         accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
         items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })),
@@ -1390,7 +1390,7 @@ async function onSubmit() {
   try {
     await submitAdjust({
       custType:   dlg.form.custType,
-      custNo:     dlg.form.custNo,
+      custId:     dlg.form.custId,
       // 客户名称 + 余额概览(MC_001..004)随提交快照入库，审批/查看直接读，不再实时取数
       // 列复用：currBal=当前余额(MC_001) / mAvgBal=较上日余额(MC_002) / qAvgBal=年均余额(MC_003) / yAvgBal=较上年均余额(MC_004)
       custName:   dlg.form.custName || null,
@@ -1438,7 +1438,7 @@ async function onWithdraw(row) {
 
 // 客户编号变化时查询客户名称
 let custNoTimer = null;
-watch(() => dlg.form.custNo, (val) => {
+watch(() => dlg.form.custId, (val) => {
   clearTimeout(custNoTimer);
   // 查看/审批：客户名称与余额概览直接读提交时的快照，不再按编号实时取数
   if (dlg.readOnly) return;
@@ -1478,12 +1478,12 @@ watch(() => dlg.form.custNo, (val) => {
 // 客户编号 / 分配维度变化时触发原业绩分配预览（ACCOUNT 维度只查按账号分配的最后一条）
 let previewTimer = null;
 watch(
-  () => [dlg.form.custNo, dlg.form.allocDim],
+  () => [dlg.form.custId, dlg.form.allocDim],
   () => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
       const f = dlg.form;
-      if (f.custNo && f.custNo.length >= 2) {
+      if (f.custId && f.custId.length >= 2) {
         loadPreview();
       } else {
         preview.loaded = false;
