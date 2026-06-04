@@ -119,6 +119,32 @@ class CallPuDispatchServiceTest {
         verify(perfApprovalQueryApi, never()).listAllocAdjustApprovals(any(), anyInt(), anyInt());
     }
 
+    // ==================== PERF_MY_LIST 我的申请列表 ====================
+
+    @Test
+    void perfMyList_resolvesEmployeeNo_andMapsWithdrawnTo3() {
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        AllocAdjustApprovalItemDTO dto = AllocAdjustApprovalItemDTO.builder()
+                .perfAdjustNo("PA_900").applyFullname("张三").custName("某某客户")
+                .status("WITHDRAWN").category("MINE").build();
+        when(perfApprovalQueryApi.listMyAllocAdjustApplications(eq("U001"), anyInt(), anyInt()))
+                .thenReturn(PageResult.of(1, 100, 1L, List.of(dto)));
+
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_MY_LIST");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        PerfListData data = (PerfListData) resp.getRspMsg();
+        assertThat(data.getPerfs()).hasSize(1);
+        assertThat(data.getPerfs().get(0).getApprStatus()).isEqualTo("3");
+        verify(perfApprovalQueryApi).listMyAllocAdjustApplications("U001", 1, 100);
+    }
+
     // ==================== PERF_APPR 审批（通过/驳回）====================
 
     @Test

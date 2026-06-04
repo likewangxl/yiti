@@ -101,6 +101,9 @@ public class CallPuDispatchService {
             if ("PERF_LIST".equals(ruleName)) {
                 return handlePerfList(parm);
             }
+            if ("PERF_MY_LIST".equals(ruleName)) {
+                return handleMyList(parm);
+            }
             if ("PERF_SAVE".equals(ruleName)) {
                 return handlePerfSave(parm);
             }
@@ -139,6 +142,21 @@ public class CallPuDispatchService {
         List<PerfListItem> perfs = page.getRecords().stream()
                 .map(this::toListItem)
                 .toList();
+        return CallPuResponse.ok(new PerfListData(perfs));
+    }
+
+    /**
+     * PERF_MY_LIST：按申请人（createdBy）拉取"我的申请"列表，全状态（含已撤回）。
+     */
+    private CallPuResponse handleMyList(CallPuRequest.Parm parm) {
+        String empId = parm != null ? parm.getEmployeeNo() : null;
+        if (!StringUtils.hasText(empId)) {
+            return CallPuResponse.fail("员工号不能为空");
+        }
+        String userId = resolveUserId(empId);
+        PageResult<AllocAdjustApprovalItemDTO> page =
+                perfApprovalQueryApi.listMyAllocAdjustApplications(userId, 1, PERF_LIST_PAGE_SIZE);
+        List<PerfListItem> perfs = page.getRecords().stream().map(this::toListItem).toList();
         return CallPuResponse.ok(new PerfListData(perfs));
     }
 
@@ -297,6 +315,9 @@ public class CallPuDispatchService {
         }
         if ("REJECTED".equals(status)) {
             return "2";
+        }
+        if ("WITHDRAWN".equals(status)) {
+            return "3";
         }
         return "0";
     }
