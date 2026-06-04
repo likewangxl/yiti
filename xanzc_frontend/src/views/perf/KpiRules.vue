@@ -412,7 +412,8 @@ async function openEdit(row, readOnly = false) {
     multiplier: Number(it.multiplier) || 1,
     minScore: Number(it.minScore) || 0,
     maxScore: Number(it.maxScore) || 120,
-    formula: getItemFormula(row.schemeCode, it.metricCode) || 'min(actual / target * 100, 120)'
+    // 优先用后端持久化的 formula；缺失再回退 localStorage 旧值 / 默认公式
+    formula: it.formula || getItemFormula(row.schemeCode, it.metricCode) || 'min(actual / target * 100, 120)'
   }));
   dlg.items = items;
   dlg.origItemMap = new Map(items.map(it => [it.id, { ...it }]));
@@ -465,13 +466,15 @@ async function onSave(targetStatus) {
         if (it.id) {
           await updateKpiItem(schemeId, it.id, {
             weight: it.weight, multiplier: it.multiplier || 1,
-            minScore: it.minScore, maxScore: it.maxScore
+            minScore: it.minScore, maxScore: it.maxScore,
+            formula: it.formula
           });
         } else {
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
             weight: it.weight, multiplier: it.multiplier || 1,
-            minScore: it.minScore, maxScore: it.maxScore
+            minScore: it.minScore, maxScore: it.maxScore,
+            formula: it.formula
           });
         }
       }
@@ -492,7 +495,8 @@ async function onSave(targetStatus) {
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
             weight: it.weight, multiplier: it.multiplier || 1,
-            minScore: it.minScore, maxScore: it.maxScore
+            minScore: it.minScore, maxScore: it.maxScore,
+            formula: it.formula
           });
         } catch {}
       }
