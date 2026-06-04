@@ -9,6 +9,7 @@ import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
 import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
 import com.bank.branch.platform.soap.controller.dto.PerfDetailData;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
@@ -17,10 +18,12 @@ import com.bank.branch.platform.soap.controller.dto.OrigAllocData;
 import com.bank.branch.platform.soap.controller.dto.PerfListData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -314,6 +317,87 @@ class CallPuDispatchServiceTest {
 
         assertThat(resp.getReturnCd()).isEqualTo("0");
         assertThat(((OrigAllocData) resp.getRspMsg()).getAllocaters()).isEmpty();
+    }
+
+    // ==================== PERF_SAVE 原/新分配拆分 ====================
+
+    /** 构造一条分配明细行（含 isOriginal 标记）。 */
+    private static CallPuRequest.Allocater allocater(String username, String fullname, String ratio, Integer isOriginal) {
+        CallPuRequest.Allocater a = new CallPuRequest.Allocater();
+        a.setUsername(username);
+        a.setFullname(fullname);
+        a.setRatio(ratio);
+        a.setIsOriginal(isOriginal);
+        return a;
+    }
+
+    @Test
+    void perfSave_splitsOriginalAndNewAllocaters_byIsOriginal() {
+        // 申请人 + 原/新分配各行工号统一解析为 USER_ID
+        when(userApi.getUsersByUsernames(any())).thenReturn(List.of(
+                user("E001", "U001"),
+                user("E100", "U100"),
+                user("E900", "U900")));
+        when(perfApprovalCmdApi.submitAllocAdjust(any())).thenReturn("AA123");
+
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setCustId("C001");
+        parm.setApplyType("1");          // CORP
+        parm.setApplyRule("1");          // ACCOUNT
+        parm.setIouNo("ACC1");
+        parm.setBusinessType("存款");     // CORP_DEPOSIT
+        parm.setAdjustExplain("调整理由");
+        parm.setAllocaters(List.of(
+                allocater("E900", "原始人", "100", 1),   // 原分配
+                allocater("E100", "新人", "70", 2)));     // 新分配
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_SAVE");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        ArgumentCaptor<AllocAdjustSubmitCmd> captor = ArgumentCaptor.forClass(AllocAdjustSubmitCmd.class);
+        verify(perfApprovalCmdApi).submitAllocAdjust(captor.capture());
+        AllocAdjustSubmitCmd cmd = captor.getValue();
+
+        // isOriginal != 1 的行 → items（NEW），empId 为 USER_ID
+        assertThat(cmd.getItems()).hasSize(1);
+        assertThat(cmd.getItems().get(0).getEmpId()).isEqualTo("U100");
+        assertThat(cmd.getItems().get(0).getRatio()).isEqualByComparingTo(new BigDecimal("70"));
+
+        // isOriginal == 1 的行 → originalAllocList（ORIGIN），empId 为 USER_ID + 姓名/工号快照
+        assertThat(cmd.getOriginalAllocList()).hasSize(1);
+        AllocAdjustSubmitCmd.OriginalItem orig = cmd.getOriginalAllocList().get(0);
+        assertThat(orig.getEmpId()).isEqualTo("U900");
+        assertThat(orig.getUsername()).isEqualTo("E900");
+        assertThat(orig.getEmpChnName()).isEqualTo("原始人");
+        assertThat(orig.getRatio()).isEqualByComparingTo(new BigDecimal("100"));
+
+        assertThat(cmd.getApplicant()).isEqualTo("U001");
+    }
+
+    @Test
+    void perfSave_noNewAllocaters_returnsFailAndNoSubmit() {
+        // 全部为原分配行（无新分配）→ 调整明细为空，拒绝提交
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setCustId("C001");
+        parm.setApplyType("1");
+        parm.setApplyRule("1");
+        parm.setIouNo("ACC1");
+        parm.setBusinessType("存款");
+        parm.setAdjustExplain("调整理由");
+        parm.setAllocaters(List.of(allocater("E900", "原始人", "100", 1)));
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_SAVE");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("99");
+        verify(perfApprovalCmdApi, never()).submitAllocAdjust(any());
     }
 
     // ==================== PERF_INFO 单据详情 ====================

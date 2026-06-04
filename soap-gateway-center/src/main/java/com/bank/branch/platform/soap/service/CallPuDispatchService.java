@@ -203,24 +203,51 @@ public class CallPuDispatchService {
         }
         // 只保留工号/比例齐全的明细行（与原 toSubmitItems 跳过逻辑一致）
         List<CallPuRequest.Allocater> validAllocaters = validAllocaters(parm.getAllocaters());
-        if (validAllocaters.isEmpty()) {
+        // 按 isOriginal 拆分：1=原业绩分配（→ originalAllocList / item_kind=ORIGIN），
+        // 其余（2/缺省）=调整后新分配（→ items / item_kind=NEW），口径对齐管理端。
+        List<CallPuRequest.Allocater> newAllocaters = new ArrayList<>();
+        List<CallPuRequest.Allocater> origAllocaters = new ArrayList<>();
+        for (CallPuRequest.Allocater a : validAllocaters) {
+            if (a.getIsOriginal() != null && a.getIsOriginal() == 1) {
+                origAllocaters.add(a);
+            } else {
+                newAllocaters.add(a);
+            }
+        }
+        if (newAllocaters.isEmpty()) {
             return CallPuResponse.fail("分配明细不能为空");
         }
 
-        // 申请人 + 各 allocater 的工号(USERNAME) 一次性解析为 perf 所需 USER_ID
+        // 申请人 + 原/新分配各行的工号(USERNAME) 一次性解析为 perf 所需 USER_ID
         Set<String> empNos = new LinkedHashSet<>();
         empNos.add(empId);
-        for (CallPuRequest.Allocater a : validAllocaters) {
+        for (CallPuRequest.Allocater a : newAllocaters) {
+            empNos.add(a.getUsername());
+        }
+        for (CallPuRequest.Allocater a : origAllocaters) {
             empNos.add(a.getUsername());
         }
         Map<String, String> userIdByEmpNo = resolveUserIds(empNos);
 
-        List<AllocAdjustSubmitCmd.Item> items = new ArrayList<>(validAllocaters.size());
-        for (CallPuRequest.Allocater a : validAllocaters) {
+        // 新分配 → items（NEW）
+        List<AllocAdjustSubmitCmd.Item> items = new ArrayList<>(newAllocaters.size());
+        for (CallPuRequest.Allocater a : newAllocaters) {
             items.add(AllocAdjustSubmitCmd.Item.builder()
                     .empId(userIdByEmpNo.get(a.getUsername().trim()))
                     .ratio(new BigDecimal(a.getRatio().trim()))
                     .remark(null)
+                    .build());
+        }
+
+        // 原分配 → originalAllocList（ORIGIN）；手机端只采集 工号/姓名/比例，
+        // username 存工号快照、fullname 存中文名快照，机构/账号留空由 perf 兜底。
+        List<AllocAdjustSubmitCmd.OriginalItem> originalAllocList = new ArrayList<>(origAllocaters.size());
+        for (CallPuRequest.Allocater a : origAllocaters) {
+            originalAllocList.add(AllocAdjustSubmitCmd.OriginalItem.builder()
+                    .empId(userIdByEmpNo.get(a.getUsername().trim()))
+                    .username(a.getUsername().trim())
+                    .empChnName(a.getFullname())
+                    .ratio(new BigDecimal(a.getRatio().trim()))
                     .build());
         }
 
@@ -233,6 +260,7 @@ public class CallPuDispatchService {
                 .reason(parm.getAdjustExplain())
                 .applicant(userIdByEmpNo.get(empId.trim()))
                 .items(items)
+                .originalAllocList(originalAllocList)
                 .build();
 
         String applyId = perfApprovalCmdApi.submitAllocAdjust(cmd);

@@ -64,6 +64,7 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
                 .reason(cmd.getReason())
                 .applicant(cmd.getApplicant())
                 .items(toServiceItems(cmd.getItems()))
+                .originalAllocList(toServiceOriginalItems(cmd.getOriginalAllocList()))
                 .build();
 
         String applyId = allocAdjustService.submit(serviceCmd);
@@ -128,6 +129,27 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
                     .empId(it.getEmpId())
                     .ratio(it.getRatio())
                     .remark(it.getRemark())
+                    .build());
+        }
+        return result;
+    }
+
+    /** 对外渠道原业绩分配 OriginalItem → Service Cmd OriginalItem（空安全），口径与管理端一致。 */
+    private List<SubmitAllocAdjustCmd.OriginalItem> toServiceOriginalItems(
+            List<AllocAdjustSubmitCmd.OriginalItem> items) {
+        if (items == null || items.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<SubmitAllocAdjustCmd.OriginalItem> result = new ArrayList<>(items.size());
+        for (AllocAdjustSubmitCmd.OriginalItem it : items) {
+            result.add(SubmitAllocAdjustCmd.OriginalItem.builder()
+                    .acctNo(it.getAcctNo())
+                    .empId(it.getEmpId())
+                    .username(it.getUsername())
+                    .empChnName(it.getEmpChnName())
+                    .orgCode(it.getOrgCode())
+                    .orgName(it.getOrgName())
+                    .ratio(it.getRatio())
                     .build());
         }
         return result;

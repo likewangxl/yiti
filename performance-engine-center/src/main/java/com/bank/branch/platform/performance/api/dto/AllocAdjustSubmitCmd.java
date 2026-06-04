@@ -52,6 +52,14 @@ public class AllocAdjustSubmitCmd {
     /** 调整后明细。 */
     private List<Item> items;
 
+    /**
+     * 原业绩分配（手工录入）。历史可查到时可空，否则提交校验要求至少 1 条。
+     *
+     * <p>与管理端 {@code AllocAdjustCreateReqDTO.originalAllocList} 同语义：外部渠道（callpu）把
+     * isOriginal=1 的明细行拆到此列表，由 perf 落地为 {@code item_kind=ORIGIN} 明细。</p>
+     */
+    private List<OriginalItem> originalAllocList;
+
     /** 调整明细项。 */
     @Data
     @Builder
@@ -67,5 +75,39 @@ public class AllocAdjustSubmitCmd {
 
         /** 说明（可空）。 */
         private String remark;
+    }
+
+    /**
+     * 原业绩分配项（手工录入）。字段对齐管理端 / Service {@code SubmitAllocAdjustCmd.OriginalItem}。
+     *
+     * <p>外部渠道仅采集 工号/姓名/比例，故 {@code acctNo}/{@code orgCode}/{@code orgName} 可空
+     * （Service {@code buildOriginalItems} 对缺失机构留空、按工号反查补 username/中文名）。</p>
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OriginalItem {
+
+        /** 账号（选填）。 */
+        private String acctNo;
+
+        /** 员工工号（必填，下传 USER_ID）。 */
+        private String empId;
+
+        /** 员工登录名/工号快照（可空）。 */
+        private String username;
+
+        /** 员工中文姓名快照（可空）。 */
+        private String empChnName;
+
+        /** 所属机构号（可空）。 */
+        private String orgCode;
+
+        /** 所属机构名称快照（可空）。 */
+        private String orgName;
+
+        /** 分配比例。 */
+        private BigDecimal ratio;
     }
 }

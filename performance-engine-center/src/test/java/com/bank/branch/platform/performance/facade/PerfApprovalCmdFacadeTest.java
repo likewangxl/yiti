@@ -1,20 +1,25 @@
 package com.bank.branch.platform.performance.facade;
 
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustService;
+import com.bank.branch.platform.performance.service.adjust.cmd.SubmitAllocAdjustCmd;
 import com.bank.branch.platform.workflow.api.TodoQueryApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -45,6 +50,40 @@ class PerfApprovalCmdFacadeTest {
         t.setTaskId(taskId);
         t.setBusinessKey(BIZ_KEY);
         return t;
+    }
+
+    @Test
+    void submitAllocAdjust_passesOriginalAllocListThroughToService() {
+        // ownerOrgId 已带入，避免触发主机构反查；断言 items 与 originalAllocList 均透传到 Service Cmd
+        AllocAdjustSubmitCmd cmd = AllocAdjustSubmitCmd.builder()
+                .custType("CORP")
+                .custId("C001")
+                .allocDim("ACCOUNT")
+                .bizKind("CORP_DEPOSIT")
+                .accountNo("ACC1")
+                .ownerOrgId("ORG1")
+                .reason("理由")
+                .applicant("U001")
+                .items(List.of(AllocAdjustSubmitCmd.Item.builder()
+                        .empId("U100").ratio(new BigDecimal("70")).build()))
+                .originalAllocList(List.of(AllocAdjustSubmitCmd.OriginalItem.builder()
+                        .empId("U900").username("E900").empChnName("原始人")
+                        .ratio(new BigDecimal("100")).build()))
+                .build();
+        when(allocAdjustService.submit(any())).thenReturn("AA123");
+
+        String applyId = facade.submitAllocAdjust(cmd);
+
+        assertThat(applyId).isEqualTo("AA123");
+        ArgumentCaptor<SubmitAllocAdjustCmd> captor = ArgumentCaptor.forClass(SubmitAllocAdjustCmd.class);
+        verify(allocAdjustService).submit(captor.capture());
+        SubmitAllocAdjustCmd serviceCmd = captor.getValue();
+        assertThat(serviceCmd.getItems()).hasSize(1);
+        assertThat(serviceCmd.getOriginalAllocList()).hasSize(1);
+        SubmitAllocAdjustCmd.OriginalItem orig = serviceCmd.getOriginalAllocList().get(0);
+        assertThat(orig.getEmpId()).isEqualTo("U900");
+        assertThat(orig.getEmpChnName()).isEqualTo("原始人");
+        assertThat(orig.getRatio()).isEqualByComparingTo(new BigDecimal("100"));
     }
 
     @Test
