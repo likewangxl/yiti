@@ -50,9 +50,6 @@ public class CreateMetricDefCmd {
     /** 表达式文本（指标编号 Groovy）. */
     private String exprText;
 
-    /** 表达式"含标签"展示串（指标编号·名称），与 exprText 同步保存. */
-    private String exprDisplay;
-
     /** 汇总规则. */
     private String summaryRule;
 

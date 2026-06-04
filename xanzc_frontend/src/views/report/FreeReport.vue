@@ -100,11 +100,18 @@ import {
 } from '@/api/report';
 import { useUserStore } from '@/stores/user';
 
-// 自由报表操作人(R_2FAB45A1) 或系统管理员(SYS_ADMIN)：可导入/禁用/启用/删除
+// 仅 系统管理员(SYS_ADMIN) / 资财部负责人(FINANCE_LEADER) / 自由报表操作人(R_2FAB45A1)：
+// 可导入/禁用/启用/删除。只看「当前激活角色」（current-user 返回全部角色但只给激活的打 primary 标记，
+// 切换角色后按钮随之变化；后端同样按激活角色判定）。
 const userStore = useUserStore();
+const OPERATOR_ROLES = ['R_2FAB45A1', 'SYS_ADMIN', 'FINANCE_LEADER'];
 const isOperator = computed(() => {
-  const codes = (userStore.user?.roles || []).map(r => r.roleCode);
-  return codes.includes('R_2FAB45A1') || codes.includes('SYS_ADMIN');
+  const roles = userStore.user?.roles || [];
+  // 优先用 activeRoleId 锁定当前激活角色，再退回 primary 标记
+  const activeId = userStore.activeRoleId;
+  const active = (activeId && roles.find(r => r.roleId === activeId))
+              || roles.find(r => r.primary);
+  return !!active && OPERATOR_ROLES.includes(active.roleCode);
 });
 
 const batches = ref([]);

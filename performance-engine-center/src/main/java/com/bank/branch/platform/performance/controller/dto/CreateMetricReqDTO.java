@@ -79,10 +79,6 @@ public class CreateMetricReqDTO {
     @Schema(description = "表达式文本（指标编号 Groovy，用于计算）")
     private String exprText;
 
-    /** 表达式含标签展示串。 */
-    @Schema(description = "表达式含标签展示串（指标编号·名称，用于查看显示），与 exprText 同步保存")
-    private String exprDisplay;
-
     /** 汇总规则。 */
     @Schema(description = "汇总规则: SUM/AVG/MAX/MIN/COUNT")
     @Pattern(regexp = "^(SUM|AVG|MAX|MIN|COUNT)$", message = "summaryRule 必须是 SUM、AVG、MAX、MIN 或 COUNT")

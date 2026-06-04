@@ -1008,8 +1008,7 @@ async function onSave(targetStatus) {
     calcLogicType: dlg.form.calcLogicType,
     sqlText: dlg.form.calcLogicType === 'SQL' ? (dlg.form.sqlText || null) : null,
     exprText: dlg.form.calcLogicType === 'EXPR' ? (dlg.form.exprText || null) : null,
-    // 含标签展示串：与 exprText 同步提交，后端存 expr_display 供查看显示
-    exprDisplay: dlg.form.calcLogicType === 'EXPR' ? (dlg.form.exprDisplay || null) : null,
+    // 含标签展示串(exprDisplay)已废弃：不再提交，后端按 exprText 实时派生用于查看显示
     summaryRule: dlg.form.calcLogicType === 'SUMMARY' ? (dlg.form.summaryRule || null) : null
   };
   try {

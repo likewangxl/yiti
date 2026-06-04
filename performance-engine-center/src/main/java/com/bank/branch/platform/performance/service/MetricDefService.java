@@ -276,8 +276,6 @@ public class MetricDefService {
         def.setCalcLogicType(cmd.getCalcLogicType());
         def.setSqlText(cmd.getSqlText());
         def.setExprText(cmd.getExprText());
-        // 含标签展示串与 expr_text 同步落库（仅用于查看显示，不参与计算）
-        def.setExprDisplay(cmd.getExprDisplay());
         def.setSummaryRule(cmd.getSummaryRule());
         def.setRefMetricCodes(toJson(refMetricCodes));
         // V1.9：状态字段优先取 cmd.status（导入路径透传 Excel statusFlag），未指定回落 ACTIVE
@@ -358,8 +356,6 @@ public class MetricDefService {
         patch.setCalcLogicType(cmd.getCalcLogicType());
         patch.setSqlText(cmd.getSqlText());
         patch.setExprText(cmd.getExprText());
-        // 含标签展示串与 expr_text 同步更新（selective：null 不覆盖）
-        patch.setExprDisplay(cmd.getExprDisplay());
         patch.setSummaryRule(cmd.getSummaryRule());
         if (refMetricCodesProvided) {
             patch.setRefMetricCodes(toJson(refMetricCodes));
@@ -393,9 +389,6 @@ public class MetricDefService {
         }
         if (cmd.getExprText() != null) {
             existing.setExprText(cmd.getExprText());
-        }
-        if (cmd.getExprDisplay() != null) {
-            existing.setExprDisplay(cmd.getExprDisplay());
         }
         if (cmd.getDescription() != null) {
             existing.setDescription(cmd.getDescription());
@@ -663,8 +656,51 @@ public class MetricDefService {
     public MetricDefRespDTO getByCodeDto(String metricCode) {
         PerfMetricDef def = getByCode(metricCode);
         MetricDefRespDTO dto = MetricAssembler.toRespDTO(def);
+        // expr_display 列已废弃：详情读取时按 expr_text 实时派生（M_xxx → M_xxx·名称）
+        dto.setExprDisplay(buildExprDisplay(def.getExprText()));
         fillOperatorNames(dto, def);
         return dto;
+    }
+
+    /** expr_text 中的指标编号模式（M_ + 字母数字下划线）. */
+    private static final java.util.regex.Pattern EXPR_METRIC_CODE =
+            java.util.regex.Pattern.compile("M_[A-Za-z0-9_]+");
+
+    /**
+     * 由 expr_text 实时派生"含标签"展示串：把每个 {@code M_xxx} 替换为 {@code M_xxx·指标名称}
+     * （查不到名称的编号原样保留）。expr_display 列已废弃，展示串改为读取时派生，唯一真相是 expr_text。
+     */
+    String buildExprDisplay(String exprText) {
+        if (!StringUtils.hasText(exprText)) {
+            return exprText;
+        }
+        java.util.LinkedHashSet<String> codes = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher scan = EXPR_METRIC_CODE.matcher(exprText);
+        while (scan.find()) {
+            codes.add(scan.group());
+        }
+        if (codes.isEmpty()) {
+            return exprText;
+        }
+        java.util.Map<String, String> nameByCode = new java.util.HashMap<>();
+        List<PerfMetricDef> defs = mapper.selectByMetricCodes(new java.util.ArrayList<>(codes));
+        if (defs != null) {
+            for (PerfMetricDef d : defs) {
+                if (d != null && d.getMetricCode() != null) {
+                    nameByCode.put(d.getMetricCode(), d.getMetricName());
+                }
+            }
+        }
+        StringBuffer sb = new StringBuffer();
+        java.util.regex.Matcher m = EXPR_METRIC_CODE.matcher(exprText);
+        while (m.find()) {
+            String code = m.group();
+            String name = nameByCode.get(code);
+            m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(
+                    StringUtils.hasText(name) ? code + "·" + name : code));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
 
     /**

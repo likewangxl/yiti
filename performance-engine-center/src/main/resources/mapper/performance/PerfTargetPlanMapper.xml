@@ -68,7 +68,7 @@
                 )
             </if>
         </where>
-        ORDER BY plan_code ASC
+        ORDER BY created_time DESC, plan_code ASC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -118,7 +118,7 @@
                 AND (${scopeFragment})
             </if>
         </where>
-        ORDER BY plan_code ASC
+        ORDER BY created_time DESC, plan_code ASC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 

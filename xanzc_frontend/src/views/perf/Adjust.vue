@@ -138,11 +138,15 @@
             <el-form-item>
               <el-button type="primary" @click="onTodoFilterChange">查询</el-button>
               <el-button @click="resetTodoFilters">重置</el-button>
+              <el-button type="success" plain :disabled="!todoSelection.length"
+                         @click="openBatchReview">批量审批{{ todoSelection.length ? `（${todoSelection.length}）` : '' }}</el-button>
             </el-form-item>
           </el-form>
         </div>
         <div class="card-section table">
-          <el-table :data="todos" size="default" empty-text="无符合条件的待审批" v-loading="todoLoading">
+          <el-table :data="todos" row-key="taskId" size="default" empty-text="无符合条件的待审批" v-loading="todoLoading"
+                    @selection-change="onTodoSelectionChange">
+            <el-table-column type="selection" width="48" />
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
@@ -595,6 +599,33 @@
       </template>
     </el-dialog>
 
+    <!-- 批量审批对话框（待我审批 tab 勾选后批量通过/驳回） -->
+    <el-dialog v-model="batchDlg.show" :title="`批量审批（共 ${batchDlg.rows.length} 条）`" width="540px" :close-on-click-modal="false">
+      <el-form label-position="top" size="default">
+        <el-form-item label="审批意见" required>
+          <el-input v-model="batchDlg.opinion" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请填写审批意见（必填，所有勾选申请共用）" />
+        </el-form-item>
+        <el-form-item v-if="batchDlg.nodeKey === 'biz_dept_review' || batchDlg.nodeKey === 'finance_review'" label="下一步审批">
+          <el-radio-group v-model="batchDlg.routeTo">
+            <template v-if="batchDlg.nodeKey === 'biz_dept_review'">
+              <el-radio value="LEADER">{{ batchDlg.flowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
+              <el-radio value="OWNER">交原业绩所属人审批</el-radio>
+            </template>
+            <template v-else-if="batchDlg.nodeKey === 'finance_review'">
+              <el-radio value="LEADER">交资财部负责人审批</el-radio>
+              <el-radio value="END">审批结束</el-radio>
+            </template>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchDlg.show = false">取消</el-button>
+        <el-button type="danger" :loading="batchDlg.saving" @click="onBatchReviewAction('REJECT')">驳回</el-button>
+        <el-button type="primary" :loading="batchDlg.saving" @click="onBatchReviewAction('APPROVE')">通过</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -1030,6 +1061,70 @@ async function onDlgReviewAction(action) {
     ElMessage.error(err?.bizMsg || err?.message || '审批失败');
   } finally {
     dlg.reviewSaving = false;
+  }
+}
+
+// ============ 待我审批 - 批量审批 ============
+const todoSelection = ref([]);
+function onTodoSelectionChange(rows) { todoSelection.value = rows || []; }
+
+// 批量审批弹窗 state（沿用单个审批的路由流转语义；processData 同单个）
+const batchDlg = reactive({ show: false, saving: false, opinion: '', routeTo: 'LEADER', nodeKey: '', flowType: 'CORP', rows: [] });
+
+function openBatchReview() {
+  const sel = todoSelection.value;
+  if (!sel.length) return ElMessage.warning('请先勾选要审批的申请');
+  // 必须同一审批环节：不同环节(节点)的"下一步审批"流转选项不同，混选无法统一处理
+  const nodeKeys = [...new Set(sel.map(r => r.nodeKey))];
+  if (nodeKeys.length > 1) {
+    return ElMessage.warning('请选择同一审批环节的任务再批量审批');
+  }
+  batchDlg.rows = [...sel];
+  batchDlg.nodeKey = nodeKeys[0] || '';
+  batchDlg.opinion = '';
+  batchDlg.routeTo = 'LEADER';
+  batchDlg.saving = false;
+  // 全部 retail 走零售部文案，否则公司部
+  batchDlg.flowType = sel.every(r => (r.processDefinitionKey || '').includes('retail')) ? 'RETAIL' : 'CORP';
+  batchDlg.show = true;
+}
+
+async function onBatchReviewAction(action) {
+  if (!batchDlg.opinion || !batchDlg.opinion.trim()) {
+    return ElMessage.warning('请填写审批意见');
+  }
+  batchDlg.saving = true;
+  let ok = 0;
+  const fails = [];
+  try {
+    // 逐条处理：claim → 通过(带 corp/finRouteTo 流转)/驳回，与单个审批一致；单条失败不阻断其余
+    for (const row of batchDlg.rows) {
+      try {
+        if (!row.taskId) throw new Error('任务 ID 缺失');
+        await ensureClaimed(row);
+        if (action === 'APPROVE') {
+          let formData;
+          if (row.nodeKey === 'biz_dept_review') formData = { corpRouteTo: batchDlg.routeTo };
+          else if (row.nodeKey === 'finance_review') formData = { finRouteTo: batchDlg.routeTo };
+          await approveTask(row.taskId, batchDlg.opinion, formData);
+        } else {
+          await rejectTask(row.taskId, batchDlg.opinion);
+        }
+        ok++;
+      } catch (e) {
+        fails.push(`${row.applyNo || row.taskId}：${e?.bizMsg || e?.message || '失败'}`);
+      }
+    }
+    if (fails.length === 0) {
+      ElMessage.success(`已${action === 'APPROVE' ? '通过' : '驳回'} ${ok} 条`);
+    } else {
+      ElMessage.warning(`成功 ${ok} 条，失败 ${fails.length} 条：${fails.slice(0, 3).join('；')}${fails.length > 3 ? ' …' : ''}`);
+    }
+    batchDlg.show = false;
+    todoSelection.value = [];
+    reloadTodo();
+  } finally {
+    batchDlg.saving = false;
   }
 }
 

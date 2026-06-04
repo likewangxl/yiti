@@ -135,6 +135,83 @@ class OrgServiceTest {
     }
 
     @Test
+    void createOrg_shouldAutoGenerateOrgCodeAndPersistDeptNo() {
+        // 新增：前端不传 orgCode，后端按 max 数字编码 +1 自增；deptNo 由用户输入落库
+        com.bank.branch.platform.auth.api.dto.OrgCreateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgCreateReqDTO();
+        req.setOrgName("新支行");
+        req.setPId("1");
+        req.setDeptNo("720199");
+
+        ExtOrgInfo parent = new ExtOrgInfo();
+        parent.setOrgCode("1");
+        parent.setOrgLevel(1);
+        when(orgMapper.selectByOrgCode("1")).thenReturn(parent);
+        when(orgMapper.selectMaxNumericOrgCode()).thenReturn(572L);
+        // 自增后回查新机构（getOrg 用）
+        ExtOrgInfo created = new ExtOrgInfo();
+        created.setOrgCode("573");
+        created.setOrgName("新支行");
+        created.setOrgLevel(2);
+        created.setDeptNo("720199");
+        when(orgMapper.selectByOrgCode("573")).thenReturn(created);
+
+        OrgDTO dto = orgService.createOrg(req);
+
+        assertThat(dto.getOrgCode()).isEqualTo("573");
+        // 落库实体：orgCode=573（自增）、deptNo=720199、level=父级+1=2
+        verify(orgMapper).insert(org.mockito.ArgumentMatchers.<ExtOrgInfo>argThat(e ->
+            "573".equals(e.getOrgCode())
+            && "720199".equals(e.getDeptNo())
+            && e.getOrgLevel() == 2
+            && "1".equals(e.getPId())));
+    }
+
+    @Test
+    void updateOrg_disable_withUsers_shouldThrow() {
+        // 机构下有用户时禁止禁用
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setOrganState(1);
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+        when(userOrgMapper.countUsersByOrgCode("ORG001", null)).thenReturn(3L);
+
+        assertThatThrownBy(() -> orgService.updateOrg("ORG001", req))
+            .isInstanceOf(BizException.class)
+            .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40303"));
+        verify(orgMapper, never()).updateById(org.mockito.ArgumentMatchers.<com.bank.branch.platform.auth.entity.ExtOrgInfo>any());
+    }
+
+    @Test
+    void updateOrg_disable_noUsers_shouldSetOrganState1() {
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setOrganState(1);
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+        when(userOrgMapper.countUsersByOrgCode("ORG001", null)).thenReturn(0L);
+
+        orgService.updateOrg("ORG001", req);
+
+        assertThat(branch.getOrganState()).isEqualTo(1);
+        verify(orgMapper).updateById(org.mockito.ArgumentMatchers.<com.bank.branch.platform.auth.entity.ExtOrgInfo>eq(branch));
+    }
+
+    @Test
+    void updateOrg_enable_shouldNotCheckUsers() {
+        // 启用(organState=0)无需校验用户数
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setOrganState(0);
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+
+        orgService.updateOrg("ORG001", req);
+
+        assertThat(branch.getOrganState()).isEqualTo(0);
+        verify(userOrgMapper, never()).countUsersByOrgCode(anyString(), any());
+        verify(orgMapper).updateById(org.mockito.ArgumentMatchers.<com.bank.branch.platform.auth.entity.ExtOrgInfo>eq(branch));
+    }
+
+    @Test
     void searchOrgs_shouldDelegateToMapper() {
         when(orgMapper.searchByKeyword("测试", 10)).thenReturn(List.of(branch));
 

@@ -25,7 +25,7 @@
         />
         <el-tree
           ref="orgTreeRef"
-          :data="orgTree"
+          :data="enabledOrgTree"
           node-key="code"
           :props="{ label: 'name', children: 'children' }"
           :default-expand-all="true"
@@ -175,7 +175,7 @@
         <el-form-item v-if="dlg.editing" label="机构" prop="orgCode">
           <el-tree-select
             v-model="dlg.form.orgCode"
-            :data="orgTree"
+            :data="enabledOrgTree"
             :props="{ label: 'name', value: 'code', children: 'children' }"
             node-key="code"
             check-strictly
@@ -233,6 +233,7 @@
       <div class="org-dlg-body">
         <div class="tree-pane">
           <el-button size="small" @click="orgDlgNewRoot">+ 新建根机构</el-button>
+          <!-- 维护弹窗展示全部机构（含已禁用），禁用项灰显并标「禁用」 -->
           <el-tree
             :data="orgTree"
             node-key="code"
@@ -243,7 +244,14 @@
             @node-click="orgDlgPick"
             empty-text="暂无机构"
             class="org-dlg-tree"
-          />
+          >
+            <template #default="{ data }">
+              <span :class="{ 'org-disabled': data.status === 1 }">
+                {{ data.name }}
+                <el-tag v-if="data.status === 1" size="small" class="tag-info" effect="plain" style="margin-left:6px">禁用</el-tag>
+              </span>
+            </template>
+          </el-tree>
         </div>
         <div class="form-pane">
           <div v-if="!orgDlg.mode" class="hint">点击左侧节点编辑，或上方「+ 新建根机构」</div>
@@ -258,6 +266,22 @@
             </el-form-item>
             <el-form-item label="上级">
               <span class="hint">{{ orgDlg.parentLabel || '（根节点）' }}</span>
+            </el-form-item>
+            <!-- 状态：编辑模式可启用/禁用；禁用后用户管理与各处机构树不再展示该机构 -->
+            <el-form-item v-if="orgDlg.mode === 'edit'" label="状态">
+              <el-tag :class="orgDlg.form.status === 1 ? 'tag-info' : 'tag-success'" effect="plain">
+                {{ orgDlg.form.status === 1 ? '已禁用' : '启用中' }}
+              </el-tag>
+              <el-button v-if="orgDlg.form.status === 1" size="small" type="success" plain
+                         :loading="orgDlg.saving" style="margin-left:10px"
+                         @click="orgDlgToggleStatus(0)">启用</el-button>
+              <el-popconfirm v-else
+                title="确认禁用该机构？禁用后用户将看不到它（机构下有用户则不允许禁用）。"
+                @confirm="orgDlgToggleStatus(1)">
+                <template #reference>
+                  <el-button size="small" type="warning" plain :loading="orgDlg.saving" style="margin-left:10px">禁用</el-button>
+                </template>
+              </el-popconfirm>
             </el-form-item>
             <el-form-item v-if="orgDlg.mode === 'edit'">
               <el-button size="small" @click="orgDlgNewChild">+ 在此下新建子机构</el-button>
@@ -300,6 +324,13 @@ const fmtDateTime = (_row, _col, v) => v ? String(v).replace('T', ' ').slice(0, 
 
 const orgTreeRef = ref(null);
 const orgTree = ref([]);
+// 只保留启用机构（status!==1）供左树 / 用户归属选择；维护弹窗仍用全量 orgTree
+const enabledOrgTree = computed(() => {
+  const filterEnabled = (nodes) => (nodes || [])
+    .filter(n => n.status !== 1)
+    .map(n => ({ ...n, children: n.children ? filterEnabled(n.children) : undefined }));
+  return filterEnabled(orgTree.value);
+});
 const orgKeyword = ref('');
 const pickedOrg = ref('');     // orgCode（内部查询用，不展示）
 const pickedOrgName = ref('');
@@ -583,8 +614,23 @@ function openOrgDlg() {
 function orgDlgPick(node) {
   orgDlg.mode = 'edit';
   orgDlg.picked = node;
-  orgDlg.form = { orgCode: node.code, orgName: node.name, pId: '', deptNo: node.deptNo || '' };
+  orgDlg.form = { orgCode: node.code, orgName: node.name, pId: '', deptNo: node.deptNo || '', status: node.status ?? 0 };
   orgDlg.parentLabel = '当前节点';
+}
+// 启用(0)/禁用(1)机构：禁用时若机构下有用户，后端返回 AUTH-40303，前端提示
+async function orgDlgToggleStatus(targetStatus) {
+  if (!orgDlg.picked) return;
+  orgDlg.saving = true;
+  try {
+    await updateOrg(orgDlg.picked.code, { organState: targetStatus });
+    ElMessage.success(targetStatus === 1 ? '已禁用' : '已启用');
+    orgDlg.form.status = targetStatus;
+    await loadOrg();
+    // 禁用/启用后刷新左侧列表（禁用的机构会从左树消失）
+    if (pickedOrg.value === orgDlg.picked.code && targetStatus === 1) clearOrg();
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '操作失败');
+  } finally { orgDlg.saving = false; }
 }
 function orgDlgNewRoot() {
   orgDlg.mode = 'create';
@@ -665,6 +711,7 @@ onMounted(async () => {
 .org-dlg-body .tree-pane { width: 320px; border-right: 1px solid $border-1; padding-right: 12px; overflow: auto; }
 .org-dlg-body .form-pane { flex: 1; overflow: auto; }
 .org-dlg-tree { margin-top: 10px; }
+.org-disabled { color: $text-3; text-decoration: line-through; }
 .card-h-mini {
   font-size: 14px; font-weight: 600;
   padding: 0 0 12px;

@@ -57,10 +57,10 @@ public interface OrgMapper extends BaseMapper<ExtOrgInfo> {
                                      @Param("limit") int limit);
 
     /**
-     * 取当前最大的纯数字机构编码，用于新增机构时自增生成 ORG_CODE。
-     * 非数字历史编码（如 ORGxxx）不参与比较。
+     * 查询当前最大的"纯数字"机构编码（CAST 为无符号整型）。
+     * <p>用于新增机构时后端自增生成 ORG_CODE = max + 1。非数字编码（如历史 ORGxxx）不参与。</p>
      *
-     * @return 最大数字编码（无纯数字行时返回 null）
+     * @return 最大数字编码，无记录或全非数字时返回 null
      */
     Long selectMaxNumericOrgCode();
 }

@@ -178,7 +178,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart, LineChart, PieChart as EPie } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { queryDynamic, exportDynamicFile, searchReportEmployees, getQueryDimensions, getSavedQuery } from '@/api/report';
+import { queryDynamic, exportDynamicFile, searchReportEmployees, getPickerScope, getQueryDimensions, getSavedQuery } from '@/api/report';
 import { getOrgTree, listOrgUsers } from '@/api/orgs';
 import { listMetrics } from '@/api/metrics';
 import MetricPicker from './components/MetricPicker.vue';
@@ -239,6 +239,26 @@ function reset() {
 // ============ 对象选择 dialog ============
 const subjectTreeRef = ref(null);
 const orgTreeData = ref([]);
+// 对象选择数据范围（按角色）：ALL 不限 / ORG_SUBTREE 本机构子树 / SELF 仅本人
+const pickerScope = ref({ mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
+
+// 按允许的机构编码裁剪机构树：保留 code 命中或有命中后代的节点（ALL 不裁剪）
+function filterTreeByCodes(nodes, codeSet) {
+  const out = [];
+  for (const n of nodes || []) {
+    const children = filterTreeByCodes(n.children, codeSet);
+    if (codeSet.has(n.code) || children.length) {
+      out.push({ ...n, children });
+    }
+  }
+  return out;
+}
+function scopedOrgTree() {
+  const sc = pickerScope.value;
+  if (!sc || sc.mode === 'ALL') return orgTreeData.value;
+  const set = new Set(sc.orgCodes || []);
+  return filterTreeByCodes(orgTreeData.value, set);
+}
 const subjectDlg = reactive({
   show: false,
   orgTree: [],
@@ -261,7 +281,7 @@ watch(() => subjectDlg.treeKw, (val) => {
 watch(() => subjectDlg.show, (visible) => {
   if (visible) {
     subjectDlg.selected = [...subjects.value];
-    subjectDlg.orgTree = orgTreeData.value;
+    subjectDlg.orgTree = scopedOrgTree();
     subjectDlg.treeKw = '';
     subjectDlg.empKw = '';
     subjectDlg.empSearchResults = [];
@@ -269,28 +289,63 @@ watch(() => subjectDlg.show, (visible) => {
   }
 });
 
-async function onOrgCheckChange() {
-  // leafOnly=false：勾父机构时连带其所有子机构（el-tree 自动连选），
-  // 父+子全部纳入，配合后端按机构精确匹配，实现"该机构下全部员工"。
-  // 之前传 true 只取叶子节点，导入真实多级机构树后，勾选中间机构（有下级）
-  // 会被过滤掉 → 不触发 listOrgUsers → 员工出不来。
+// 机构 → 员工 缓存：成功查过的机构存起来，重复勾选/取消不再重复请求（失败不缓存，下次会重试）
+const orgUsersCache = new Map();
+let orgCheckTimer = null;
+
+// 防抖：勾父机构时 el-tree 级联勾全部子节点，@check-change 会对每个节点各触发一次，
+// 若每次都跑一遍查询 → O(N²) 请求风暴、疯狂报错。
+// 这里把这一连串触发合并成"安静 150ms 后只跑一次"，既消除风暴又保留能加载数据的事件。
+function onOrgCheckChange() {
+  clearTimeout(orgCheckTimer);
+  orgCheckTimer = setTimeout(loadCheckedOrgEmployees, 150);
+}
+
+async function loadCheckedOrgEmployees() {
   const checkedNodes = subjectTreeRef.value?.getCheckedNodes() || [];
   if (dim.value === 'ORG') {
     subjectDlg.selected = checkedNodes.map(n => ({ id: n.code, name: n.name, org: '' }));
-  } else {
-    // EMP 模式：勾机构 → 加载该机构下全部员工
-    const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
-    for (const node of checkedNodes) {
-      try {
-        const users = await listOrgUsers(node.code, { pageSize: 100 });
-        const list = Array.isArray(users) ? users : (users?.records || []);
-        for (const u of list) {
-          const emp = { id: u.empId || u.userId, name: u.empName || u.userchnname || u.username, org: node.name };
-          if (!newSelected.some(s => s.id === emp.id)) newSelected.push(emp);
-        }
-      } catch {}
+    return;
+  }
+  // SELF（支行员工）：只能选自己——勾任意机构都只加入本人，不加载同机构同事
+  if (pickerScope.value.mode === 'SELF') {
+    const sc = pickerScope.value;
+    const base = subjectDlg.selected.filter(s => s._fromSearch);
+    if (checkedNodes.length && sc.selfEmpId && !base.some(s => s.id === sc.selfEmpId)) {
+      base.push({ id: sc.selfEmpId, name: sc.selfName || sc.selfEmpId, org: '' });
     }
-    subjectDlg.selected = newSelected;
+    subjectDlg.selected = base;
+    return;
+  }
+  // EMP 模式：勾机构（含级联子机构）→ 加载其下全部员工。
+  // 全选会勾上百个机构：用「分批并发(每批 8 个)+ 逐批刷新界面」，既快又能看到员工逐步出现，
+  // 且并发有上限不会变回请求风暴。
+  const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
+  const seen = new Set(newSelected.map(s => s.id));
+  const BATCH = 8;
+  for (let i = 0; i < checkedNodes.length; i += BATCH) {
+    const batch = checkedNodes.slice(i, i + BATCH);
+    const results = await Promise.all(batch.map(async (node) => {
+      let list = orgUsersCache.get(node.code);
+      if (list === undefined) {
+        try {
+          const users = await listOrgUsers(node.code, { pageSize: 100 });
+          list = Array.isArray(users) ? users : (users?.records || []);
+          orgUsersCache.set(node.code, list);   // 仅成功才缓存；失败不缓存，下次重试
+        } catch { list = []; }
+      }
+      return { node, list };
+    }));
+    for (const { node, list } of results) {
+      for (const u of list) {
+        const id = u.empId || u.userId;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          newSelected.push({ id, name: u.empName || u.userchnname || u.username, org: node.name });
+        }
+      }
+    }
+    subjectDlg.selected = [...newSelected];   // 逐批刷新，全选时能看到员工陆续出现
   }
 }
 
@@ -466,6 +521,7 @@ const chartOption = computed(() => {
 onMounted(async () => {
   await Promise.all([
     getOrgTree().then(tree => { orgTreeData.value = tree; }).catch(() => {}),
+    getPickerScope().then(sc => { if (sc && sc.mode) pickerScope.value = sc; }).catch(() => {}),
     listMetrics({ status: 'ACTIVE' })
       .then(list => { if (Array.isArray(list)) metricsList.value = list; })
       .catch(() => { metricsList.value = []; })

@@ -96,8 +96,8 @@ class MetricDefServiceTest {
     }
 
     @Test
-    @DisplayName("EXPR 指标创建：expr_display（含标签表达式）随 expr_text 一并落库")
-    void create_expr_persistsExprDisplayAlongsideExprText() {
+    @DisplayName("EXPR 指标创建：仅落库 expr_text（expr_display 列已废弃，不再持久化）")
+    void create_expr_persistsExprTextOnly() {
         CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
                 .metricCode("TEST_METRIC_EXPR")
                 .metricName("复合指标")
@@ -107,7 +107,6 @@ class MetricDefServiceTest {
                 .calcMode("AUTO")
                 .calcLogicType("EXPR")
                 .exprText("M_0001 + M_0002 * 2")
-                .exprDisplay("M_0001·营收 + M_0002·成本 * 2")
                 .operator("admin")
                 .build();
         when(mapper.selectByMetricCode("TEST_METRIC_EXPR")).thenReturn(null);
@@ -119,7 +118,23 @@ class MetricDefServiceTest {
         ArgumentCaptor<PerfMetricDef> captor = ArgumentCaptor.forClass(PerfMetricDef.class);
         verify(mapper).insert(captor.capture());
         assertThat(captor.getValue().getExprText()).isEqualTo("M_0001 + M_0002 * 2");
-        assertThat(captor.getValue().getExprDisplay()).isEqualTo("M_0001·营收 + M_0002·成本 * 2");
+    }
+
+    @Test
+    @DisplayName("buildExprDisplay：expr_text 的 M_xxx 实时派生为 M_xxx·名称（查不到名的编号原样保留）")
+    void buildExprDisplay_replacesCodesWithCodeDotName() {
+        PerfMetricDef m1 = new PerfMetricDef();
+        m1.setMetricCode("M_0001");
+        m1.setMetricName("一般性存款月均余额2");
+        PerfMetricDef m5 = new PerfMetricDef();
+        m5.setMetricCode("M_0005");
+        m5.setMetricName("一般性存款年日均余额");
+        when(mapper.selectByMetricCodes(org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(java.util.List.of(m1, m5));
+
+        String display = service.buildExprDisplay("M_0001 + M_0005");
+
+        assertThat(display).isEqualTo("M_0001·一般性存款月均余额2 + M_0005·一般性存款年日均余额");
     }
 
     @Test

@@ -82,8 +82,18 @@ public class OrgService {
         ExtOrgInfo e = orgMapper.selectByOrgCode(orgCode);
         if (e == null) throw new BizException("AUTH-40404", "机构不存在");
         if (req.getOrgName() != null && !req.getOrgName().isBlank()) e.setOrgName(req.getOrgName());
+        // 状态变更：禁用(1)前校验机构下无用户，否则拒绝；启用(0)无需校验
+        if (req.getOrganState() != null) {
+            if (req.getOrganState() == 1) {
+                long userCnt = userOrgMapper.countUsersByOrgCode(orgCode, null);
+                if (userCnt > 0) {
+                    throw new BizException("AUTH-40303", "该机构下还有 " + userCnt + " 个用户，请先迁移用户再禁用");
+                }
+            }
+            e.setOrganState(req.getOrganState());
+        }
         orgMapper.updateById(e);
-        log.info("[OrgService.updateOrg] orgCode={} newName={}", orgCode, e.getOrgName());
+        log.info("[OrgService.updateOrg] orgCode={} newName={} organState={}", orgCode, e.getOrgName(), e.getOrganState());
         return getOrg(orgCode);
     }
 

@@ -5,7 +5,7 @@
     <!-- V1.0.3：24 字段 + V1.9 新增 metric_category = 25 字段 -->
     <sql id="BASE_COLUMNS">
         id, metric_code, metric_name, metric_name_en, metric_desc, base_dim, metric_level,
-        calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, expr_display, summary_rule,
+        calc_freq, calc_mode, calc_logic_type, sql_text, expr_text, summary_rule,
         ref_metric_codes, val_slot, status, created_by, created_time, updated_by, updated_time,
         unit, decimal_places, deleted, description, metric_category
     </sql>
@@ -27,7 +27,6 @@
             <if test="calcLogicType != null">calc_logic_type = #{calcLogicType},</if>
             <if test="sqlText != null">sql_text = #{sqlText},</if>
             <if test="exprText != null">expr_text = #{exprText},</if>
-            <if test="exprDisplay != null">expr_display = #{exprDisplay},</if>
             <if test="summaryRule != null">summary_rule = #{summaryRule},</if>
             <if test="refMetricCodes != null">ref_metric_codes = #{refMetricCodes},</if>
             <if test="valSlot != null">val_slot = #{valSlot},</if>
