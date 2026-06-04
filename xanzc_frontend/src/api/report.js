@@ -67,6 +67,11 @@ export function exportDynamic(payload) {
   return call('post', '/reports/dynamic-query/export', { data: body }, () => ({ taskId: 'EXP-MOCK-' + Date.now() }));
 }
 
+// 动态查询「选择对象」数据范围：{ mode: ALL|ORG_SUBTREE|SELF, selfEmpId, selfName, orgCodes:[] }
+export async function getPickerScope() {
+  return call('get', '/reports/scope/picker', {}, { mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
+}
+
 // 动态查询「选择对象」员工搜索：搜 PT_USER（按工号/姓名），REPORT 权限
 export async function searchReportEmployees(keyword, limit = 20) {
   const r = await call('get', '/reports/employees/search', { params: { keyword, limit } }, []);

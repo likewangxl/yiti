@@ -115,16 +115,13 @@
           <el-tag v-if="scopeLoading" effect="plain" class="tag-info" size="small">加载中</el-tag>
         </div>
         <el-table :data="scopeRows" size="small" empty-text="无 BizType 配置" :max-height="999">
-          <el-table-column prop="bizType" label="BizType" width="130" />
-          <el-table-column label="DataScope" width="160">
+          <el-table-column prop="bizType" label="BizType" min-width="110" show-overflow-tooltip />
+          <el-table-column label="DataScope" width="96">
             <template #default="{row}">
               <el-tag :class="scopeCls(row.dataScope)" effect="plain">{{ scopeLabel(row.dataScope) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="原因" min-width="120">
-            <template #default="{row}"><span style="color:#6B7280;font-size:11px">{{ row.reason || '默认' }}</span></template>
-          </el-table-column>
-          <el-table-column label="操作" width="70">
+          <el-table-column label="操作" width="62" fixed="right">
             <template #default="{row}"><el-button link type="primary" size="small" @click="openScopeEditor(row)">修改</el-button></template>
           </el-table-column>
         </el-table>
