@@ -9,13 +9,17 @@ import lombok.Data;
 @Data
 public class OrgCreateReqDTO {
 
-    @NotBlank
+    /** 机构编码：可选。前端不传时后端按现有最大数字编码 +1 自增生成 */
     @Size(max = 20)
     private String orgCode;
 
     @NotBlank
     @Size(max = 100)
     private String orgName;
+
+    /** 机构编号（EXT_ORG_INFO.DEPT_NO），新增时由用户输入 */
+    @Size(max = 60)
+    private String deptNo;
 
     /** 上级机构编码 P_ID，根节点传空字符串或省略。
      *  Lombok 默认把 pId getter 转 getPid()，Jackson 序列化 key 也会变 pid；

@@ -135,6 +135,39 @@ class OrgServiceTest {
     }
 
     @Test
+    void createOrg_shouldAutoGenerateOrgCodeAndPersistDeptNo() {
+        // 新增：前端不传 orgCode，后端按 max 数字编码 +1 自增；deptNo 由用户输入落库
+        com.bank.branch.platform.auth.api.dto.OrgCreateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgCreateReqDTO();
+        req.setOrgName("新支行");
+        req.setPId("1");
+        req.setDeptNo("720199");
+
+        ExtOrgInfo parent = new ExtOrgInfo();
+        parent.setOrgCode("1");
+        parent.setOrgLevel(1);
+        when(orgMapper.selectByOrgCode("1")).thenReturn(parent);
+        when(orgMapper.selectMaxNumericOrgCode()).thenReturn(572L);
+        // 自增后回查新机构（getOrg 用）
+        ExtOrgInfo created = new ExtOrgInfo();
+        created.setOrgCode("573");
+        created.setOrgName("新支行");
+        created.setOrgLevel(2);
+        created.setDeptNo("720199");
+        when(orgMapper.selectByOrgCode("573")).thenReturn(created);
+
+        OrgDTO dto = orgService.createOrg(req);
+
+        assertThat(dto.getOrgCode()).isEqualTo("573");
+        // 落库实体：orgCode=573（自增）、deptNo=720199、level=父级+1=2
+        verify(orgMapper).insert(org.mockito.ArgumentMatchers.<ExtOrgInfo>argThat(e ->
+            "573".equals(e.getOrgCode())
+            && "720199".equals(e.getDeptNo())
+            && e.getOrgLevel() == 2
+            && "1".equals(e.getPId())));
+    }
+
+    @Test
     void searchOrgs_shouldDelegateToMapper() {
         when(orgMapper.searchByKeyword("测试", 10)).thenReturn(List.of(branch));
 
