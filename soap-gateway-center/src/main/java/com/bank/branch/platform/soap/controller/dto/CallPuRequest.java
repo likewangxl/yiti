@@ -72,6 +72,9 @@ public class CallPuRequest {
         /** 审批结论（PERF_APPR 用）：1=同意 / 2=拒绝。 */
         private String apprStatus;
 
+        /** 列表状态域（PERF_LIST 用）：PENDING=待审批 / DONE=已审批；空=合并。 */
+        private String queryStatus;
+
         /** 审批意见（PERF_APPR 用，可空）。 */
         private String apprOpinion;
 
