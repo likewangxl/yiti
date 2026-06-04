@@ -3,6 +3,7 @@ package com.bank.branch.platform.soap.controller;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
@@ -50,6 +51,9 @@ class CallPuFormUrlencodedCompatTest {
     @Mock
     private UserApi userApi;
 
+    @Mock
+    private AllocApi allocApi;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -64,7 +68,7 @@ class CallPuFormUrlencodedCompatTest {
     @BeforeEach
     void setUp() {
         CallPuDispatchService dispatchService = new CallPuDispatchService(
-                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi);
+                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi, allocApi);
         mockMvc = MockMvcBuilders.standaloneSetup(new CallPuController(dispatchService))
                 .addFilters(new CallPuContentTypeNormalizationFilter())
                 .build();
@@ -73,7 +77,7 @@ class CallPuFormUrlencodedCompatTest {
     @Test
     void formUrlencodedContentType_withJsonBody_isAcceptedNot415() throws Exception {
         when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
-        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U001"), anyInt(), anyInt()))
+        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U001"), eq(null), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 0L, List.of()));
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();

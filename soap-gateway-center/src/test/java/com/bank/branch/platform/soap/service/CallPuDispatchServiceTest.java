@@ -3,12 +3,15 @@ package com.bank.branch.platform.soap.service;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
+import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
+import com.bank.branch.platform.soap.controller.dto.OrigAllocData;
 import com.bank.branch.platform.soap.controller.dto.PerfListData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +51,8 @@ class CallPuDispatchServiceTest {
     private CustStatQueryApi custStatQueryApi;
     @Mock
     private UserApi userApi;
+    @Mock
+    private AllocApi allocApi;
 
     @InjectMocks
     private CallPuDispatchService service;
@@ -254,5 +259,58 @@ class CallPuDispatchServiceTest {
         CallPuResponse resp = service.dispatch(req);
 
         assertThat(resp.getReturnCd()).isEqualTo("99");
+    }
+
+    // ==================== PERF_ORIG_ALLOC 客户原分配关系回显 ====================
+
+    @Test
+    void perfOrigAlloc_returnsCurrentAllocations_withUsernameReverseLookup() {
+        CustAllocRelationDTO rel = new CustAllocRelationDTO();
+        rel.setEmpId("U002");
+        rel.setEmpName("李四");
+        rel.setRatio(new java.math.BigDecimal("60"));
+        when(allocApi.getCurrentAllocations("C001", "CORP_DEPOSIT")).thenReturn(List.of(rel));
+        UserDTO u = new UserDTO();
+        u.setEmpId("U002");
+        u.setUsername("E002");
+        when(userApi.getUserByEmpIds(List.of("U002"))).thenReturn(List.of(u));
+
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setCustId("C001");
+        parm.setApplyType("1");
+        parm.setBusinessType("存款");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_ORIG_ALLOC");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        OrigAllocData data = (OrigAllocData) resp.getRspMsg();
+        assertThat(data.getAllocaters()).hasSize(1);
+        OrigAllocData.OrigAllocItem item = data.getAllocaters().get(0);
+        assertThat(item.getUsername()).isEqualTo("E002");
+        assertThat(item.getFullname()).isEqualTo("李四");
+        assertThat(item.getRatio()).isEqualTo("60");
+        assertThat(item.getIsOriginal()).isEqualTo(1);
+    }
+
+    @Test
+    void perfOrigAlloc_emptyAllocations_returnsEmptyList() {
+        when(allocApi.getCurrentAllocations("C001", "CORP_DEPOSIT")).thenReturn(List.of());
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setCustId("C001");
+        parm.setApplyType("1");
+        parm.setBusinessType("存款");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_ORIG_ALLOC");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        assertThat(((OrigAllocData) resp.getRspMsg()).getAllocaters()).isEmpty();
     }
 }

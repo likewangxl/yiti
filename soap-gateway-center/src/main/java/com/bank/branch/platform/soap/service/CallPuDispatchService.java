@@ -3,14 +3,17 @@ package com.bank.branch.platform.soap.service;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
+import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
 import com.bank.branch.platform.soap.controller.dto.CustInfoData;
+import com.bank.branch.platform.soap.controller.dto.OrigAllocData;
 import com.bank.branch.platform.soap.controller.dto.PerfListData;
 import com.bank.branch.platform.soap.controller.dto.PerfListItem;
 import lombok.RequiredArgsConstructor;
@@ -85,6 +88,7 @@ public class CallPuDispatchService {
     private final PerfApprovalCmdApi perfApprovalCmdApi;
     private final CustStatQueryApi custStatQueryApi;
     private final UserApi userApi;
+    private final AllocApi allocApi;
 
     /**
      * callpu 统一分发入口。
@@ -115,6 +119,9 @@ public class CallPuDispatchService {
             }
             if ("PERF_APPR".equals(ruleName)) {
                 return handlePerfApprove(parm);
+            }
+            if ("PERF_ORIG_ALLOC".equals(ruleName)) {
+                return handleOrigAlloc(parm);
             }
             log.warn("[callpu] 不支持的 RuleName={}", ruleName);
             return CallPuResponse.fail("不支持的 RuleName: " + ruleName);
@@ -293,6 +300,62 @@ public class CallPuDispatchService {
         String userId = resolveUserId(empId);
         perfApprovalCmdApi.approveAllocAdjust(parm.getPerfAdjustNo(), userId, apprStatus, parm.getApprOpinion());
         return CallPuResponse.ok(null);
+    }
+
+    /**
+     * PERF_ORIG_ALLOC：按客户号 + 申请类型/业务类型拉取当前分配关系，供新增页回显。
+     */
+    private CallPuResponse handleOrigAlloc(CallPuRequest.Parm parm) {
+        if (parm == null) {
+            return CallPuResponse.fail("参数不能为空");
+        }
+        if (!StringUtils.hasText(parm.getCustId())) {
+            return CallPuResponse.fail("客户号不能为空");
+        }
+        String custType = APPLY_TYPE_TO_CUST_TYPE.get(parm.getApplyType());
+        if (custType == null) {
+            return CallPuResponse.fail("申请类型不合法: " + parm.getApplyType());
+        }
+        String bizKind = toBizKind(custType, parm.getBusinessType());
+        if (bizKind == null) {
+            return CallPuResponse.fail("业务类型不合法: " + parm.getBusinessType());
+        }
+
+        List<CustAllocRelationDTO> rels = allocApi.getCurrentAllocations(parm.getCustId(), bizKind);
+        if (rels == null || rels.isEmpty()) {
+            return CallPuResponse.ok(new OrigAllocData(new ArrayList<>()));
+        }
+
+        // 收集所有 USER_ID，批量反查工号（USERNAME）
+        Set<String> userIds = new LinkedHashSet<>();
+        for (CustAllocRelationDTO r : rels) {
+            if (StringUtils.hasText(r.getEmpId())) {
+                userIds.add(r.getEmpId());
+            }
+        }
+        Map<String, String> usernameByUserId = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<UserDTO> users = userApi.getUserByEmpIds(new ArrayList<>(userIds));
+            if (users != null) {
+                for (UserDTO u : users) {
+                    if (u != null && StringUtils.hasText(u.getEmpId())) {
+                        // UserDTO.empId = USER_ID，UserDTO.username = PT_USER.USERNAME（工号）
+                        usernameByUserId.put(u.getEmpId(), u.getUsername());
+                    }
+                }
+            }
+        }
+
+        List<OrigAllocData.OrigAllocItem> items = new ArrayList<>(rels.size());
+        for (CustAllocRelationDTO r : rels) {
+            items.add(OrigAllocData.OrigAllocItem.builder()
+                    .username(usernameByUserId.get(r.getEmpId()))
+                    .fullname(r.getEmpName())
+                    .ratio(r.getRatio() == null ? null : r.getRatio().toPlainString())
+                    .isOriginal(1)
+                    .build());
+        }
+        return CallPuResponse.ok(new OrigAllocData(items));
     }
 
     /** 将 perf 渠道 DTO 映射为手机端列表项（含时间格式化与状态码翻译）。 */

@@ -3,6 +3,7 @@ package com.bank.branch.platform.soap.controller;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
@@ -60,6 +61,9 @@ class CallPuControllerTest {
     @Mock
     private UserApi userApi;
 
+    @Mock
+    private AllocApi allocApi;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -79,7 +83,7 @@ class CallPuControllerTest {
             return names.stream().map(n -> user(n, "U_" + n)).toList();
         });
         CallPuDispatchService dispatchService = new CallPuDispatchService(
-                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi);
+                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi, allocApi);
         mockMvc = MockMvcBuilders.standaloneSetup(new CallPuController(dispatchService)).build();
     }
 
@@ -109,7 +113,7 @@ class CallPuControllerTest {
                 .status("IN_APPROVAL")
                 .category("TODO")
                 .build();
-        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U_E001"), anyInt(), anyInt()))
+        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U_E001"), eq(null), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 1L, List.of(dto)));
 
         mockMvc.perform(post("/api/callpu")
@@ -130,7 +134,7 @@ class CallPuControllerTest {
                 .perfAdjustNo("PA_A").status("APPROVED").category("DONE").build();
         AllocAdjustApprovalItemDTO rejected = AllocAdjustApprovalItemDTO.builder()
                 .perfAdjustNo("PA_R").status("REJECTED").category("DONE").build();
-        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U_E001"), anyInt(), anyInt()))
+        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U_E001"), eq(null), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 2L, List.of(approved, rejected)));
 
         mockMvc.perform(post("/api/callpu")
@@ -150,7 +154,7 @@ class CallPuControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ReturnCd").value("99"));
 
-        verify(perfApprovalQueryApi, never()).listAllocAdjustApprovals(eq(""), anyInt(), anyInt());
+        verify(perfApprovalQueryApi, never()).listAllocAdjustApprovals(eq(""), any(), anyInt(), anyInt());
     }
 
     @Test
