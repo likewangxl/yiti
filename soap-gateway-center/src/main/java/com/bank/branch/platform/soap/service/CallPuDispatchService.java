@@ -137,7 +137,8 @@ public class CallPuDispatchService {
         // 报文工号(USERNAME) → perf 所需 USER_ID
         String userId = resolveUserId(empId);
         PageResult<AllocAdjustApprovalItemDTO> page =
-                perfApprovalQueryApi.listAllocAdjustApprovals(userId, 1, PERF_LIST_PAGE_SIZE);
+                perfApprovalQueryApi.listAllocAdjustApprovals(
+                        userId, parm.getQueryStatus(), 1, PERF_LIST_PAGE_SIZE);
 
         List<PerfListItem> perfs = page.getRecords().stream()
                 .map(this::toListItem)

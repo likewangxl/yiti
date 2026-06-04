@@ -80,7 +80,7 @@ class CallPuDispatchServiceTest {
                 .custName("某某客户")
                 .status("IN_APPROVAL")
                 .build();
-        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U001"), anyInt(), anyInt()))
+        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U001"), eq(null), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 1L, List.of(dto)));
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
@@ -98,8 +98,8 @@ class CallPuDispatchServiceTest {
         assertThat(data.getPerfs().get(0).getPerfAdjustNo()).isEqualTo("PA_001");
         assertThat(data.getPerfs().get(0).getApprStatus()).isEqualTo("0");
         // 关键回归：透传的是 USER_ID，工号 E001 不得直达 perf
-        verify(perfApprovalQueryApi).listAllocAdjustApprovals("U001", 1, 100);
-        verify(perfApprovalQueryApi, never()).listAllocAdjustApprovals(eq("E001"), anyInt(), anyInt());
+        verify(perfApprovalQueryApi).listAllocAdjustApprovals("U001", null, 1, 100);
+        verify(perfApprovalQueryApi, never()).listAllocAdjustApprovals(eq("E001"), any(), anyInt(), anyInt());
     }
 
     @Test
@@ -116,7 +116,28 @@ class CallPuDispatchServiceTest {
         CallPuResponse resp = service.dispatch(req);
 
         assertThat(resp.getReturnCd()).isEqualTo("99");
-        verify(perfApprovalQueryApi, never()).listAllocAdjustApprovals(any(), anyInt(), anyInt());
+        verify(perfApprovalQueryApi, never()).listAllocAdjustApprovals(any(), any(), anyInt(), anyInt());
+    }
+
+    // ==================== PERF_LIST queryStatus 透传 ====================
+
+    @Test
+    void perfList_passesQueryStatusToPerf() {
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U001"), eq("PENDING"), anyInt(), anyInt()))
+                .thenReturn(PageResult.of(1, 100, 0L, List.of()));
+
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setQueryStatus("PENDING");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_LIST");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        verify(perfApprovalQueryApi).listAllocAdjustApprovals("U001", "PENDING", 1, 100);
     }
 
     // ==================== PERF_MY_LIST 我的申请列表 ====================
