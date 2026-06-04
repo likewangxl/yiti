@@ -25,4 +25,17 @@ public interface PerfApprovalQueryApi {
      * @return 合并去重后按申请时间倒序的分页结果；员工无任何待办/已办时返回空页
      */
     PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(String empId, int pageNo, int pageSize);
+
+    /**
+     * 查询某员工"作为申请人"提交的「分配关系调整」申请列表（全状态，含 WITHDRAWN）。
+     *
+     * <p>区别于 {@link #listAllocAdjustApprovals}（审批人视角）：本方法按 {@code createdBy = empId}
+     * 过滤，供手机端"我的申请"模块使用。</p>
+     *
+     * @param empId    申请人 USER_ID（网关已把报文工号转为 USER_ID）
+     * @param pageNo   页码（从 1 开始，&lt;1 归一为 1）
+     * @param pageSize 每页大小（&lt;1 归一为默认值）
+     * @return 按申请时间倒序的分页结果
+     */
+    PageResult<AllocAdjustApprovalItemDTO> listMyAllocAdjustApplications(String empId, int pageNo, int pageSize);
 }

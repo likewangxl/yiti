@@ -6,6 +6,8 @@ import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
 import com.bank.branch.platform.performance.controller.dto.AdjustTodoRespDTO;
+import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
+import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustDoneService;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustTodoService;
 import com.bank.branch.platform.portal.api.AddressBookApi;
@@ -49,6 +51,7 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
     private final AllocAdjustDoneService allocAdjustDoneService;
     private final AddressBookApi addressBookApi;
     private final CustomerQueryApi customerQueryApi;
+    private final PerfAllocAdjustApplyMapper allocAdjustApplyMapper;
 
     @Override
     public PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(String empId, int pageNo, int pageSize) {
@@ -58,7 +61,9 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                 empId, safePageNo, safePageSize);
 
         // 1. 拉取待办 + 已办（各自上限 FETCH_CAP，参数过滤全空 = 不限关键字/维度/日期）
-        PageResult<AdjustTodoRespDTO> todoPage = allocAdjustTodoService.listMyTodos(
+        //    待办走 *ByEmp 版本：callpu 无会话上下文，候选组按入参 empId 查库解析（避免 AUTH-40105）；
+        //    已办按 taskAssignee(empId) 查询，本就不依赖候选组/登录态，无需区分。
+        PageResult<AdjustTodoRespDTO> todoPage = allocAdjustTodoService.listMyTodosByEmp(
                 empId, null, null, null, null, null, 1, FETCH_CAP);
         PageResult<AdjustTodoRespDTO> donePage = allocAdjustDoneService.listMyDones(
                 empId, null, null, null, null, null, 1, FETCH_CAP);
@@ -93,6 +98,40 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
         }
         int to = Math.min(merged.size(), from + safePageSize);
         return PageResult.of(safePageNo, safePageSize, total, new ArrayList<>(merged.subList(from, to)));
+    }
+
+    @Override
+    public PageResult<AllocAdjustApprovalItemDTO> listMyAllocAdjustApplications(
+            String empId, int pageNo, int pageSize) {
+        int safePageNo = Math.max(pageNo, 1);
+        int safePageSize = pageSize < 1 ? DEFAULT_PAGE_SIZE : pageSize;
+        log.info("[PerfApprovalQueryFacade.listMyAllocAdjustApplications] empId={}, pageNo={}, pageSize={}",
+                empId, safePageNo, safePageSize);
+
+        long total = allocAdjustApplyMapper.countByConditions(null, null, null, null, empId);
+        int offset = (safePageNo - 1) * safePageSize;
+        if (offset >= total) {
+            return PageResult.of(safePageNo, safePageSize, total, Collections.emptyList());
+        }
+        List<PerfAllocAdjustApply> rows = allocAdjustApplyMapper.selectByConditions(
+                null, null, null, null, empId, offset, safePageSize);
+
+        Map<String, String> empNameCache = new HashMap<>();
+        List<AllocAdjustApprovalItemDTO> records = new ArrayList<>(rows.size());
+        for (PerfAllocAdjustApply e : rows) {
+            records.add(AllocAdjustApprovalItemDTO.builder()
+                    .perfAdjustNo(e.getId())
+                    .applyNo(e.getApplyNo())
+                    .custId(e.getCustId())
+                    .custName(e.getCustName())
+                    .createdBy(e.getCreatedBy())
+                    .applyFullname(resolveEmpName(e.getCreatedBy(), empNameCache))
+                    .applyTime(e.getCreatedTime())
+                    .status(e.getStatus())
+                    .category("MINE")
+                    .build());
+        }
+        return PageResult.of(safePageNo, safePageSize, total, records);
     }
 
     /** 把待办/已办的内部 DTO 转为对外审批项，并补齐申请人姓名 / 客户名称。 */
