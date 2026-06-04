@@ -44,7 +44,7 @@ import java.util.concurrent.Semaphore;
  *
  * <p>核心执行链（plan L2640-L2730）：
  * <ol>
- *   <li>角色 R_BACK_TECH 校验（缺失 → RPT-40302）</li>
+ *   <li>角色校验：仅资财部负责人 FINANCE_LEADER 可访问（缺失 → RPT-40302）</li>
  *   <li>SqlSafeValidator 校验 + LIMIT 标准化</li>
  *   <li>INSERT SQL_PROBE_HISTORY(status=RUNNING) 占位（出失联场景能查到 RUNNING 行）</li>
  *   <li>Semaphore.tryAcquire (并发上限 10)</li>
@@ -59,8 +59,9 @@ import java.util.concurrent.Semaphore;
 @Service
 public class SqlProbeServiceImpl implements SqlProbeService {
 
-    // getCurrentRoleCodes() 返回 roleCode（如 BACK_TECH / SYS_ADMIN），不是 roleId（R_BACK_TECH）
-    private static final String ROLE_BACK_TECH = "BACK_TECH";
+    // getCurrentRoleCodes() 返回 roleCode（如 FINANCE_LEADER），不是 roleId（R_FIN_LEAD）。
+    // SQL 探查仅对「资财部负责人」开放，其他角色（含 SYS_ADMIN / BACK_TECH）一律拒绝。
+    private static final String ROLE_FINANCE_LEADER = "FINANCE_LEADER";
 
     private static final int CONCURRENT_LIMIT = 10;
 
@@ -118,8 +119,8 @@ public class SqlProbeServiceImpl implements SqlProbeService {
     public SqlProbeExecuteRespDTO execute(SqlProbeExecuteReqDTO req) {
         // 1) 角色校验
         Set<String> roles = currentUserApi.getCurrentRoleCodes();
-        if (roles == null || !roles.contains(ROLE_BACK_TECH)) {
-            log.warn("[SqlProbeService] 拒绝：缺 R_BACK_TECH 角色 roles={}", roles);
+        if (roles == null || !roles.contains(ROLE_FINANCE_LEADER)) {
+            log.warn("[SqlProbeService] 拒绝：仅资财部负责人(FINANCE_LEADER)可访问 SQL 探查 roles={}", roles);
             throw new RptException(RptErrorCode.SQL_PROBE_NO_ACCESS);
         }
         String empId = currentUserApi.getCurrentEmpId();
