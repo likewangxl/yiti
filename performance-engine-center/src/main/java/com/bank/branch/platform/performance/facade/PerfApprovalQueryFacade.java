@@ -5,10 +5,13 @@ import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
 import com.bank.branch.platform.performance.controller.dto.AdjustTodoRespDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
+import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustDoneService;
+import com.bank.branch.platform.performance.service.adjust.AllocAdjustService;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustTodoService;
 import com.bank.branch.platform.portal.api.AddressBookApi;
 import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
@@ -52,6 +55,7 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
     private final AddressBookApi addressBookApi;
     private final CustomerQueryApi customerQueryApi;
     private final PerfAllocAdjustApplyMapper allocAdjustApplyMapper;
+    private final AllocAdjustService allocAdjustService;
 
     @Override
     public PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(String empId, int pageNo, int pageSize) {
@@ -187,5 +191,62 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
         String name = customerQueryApi.getCustomer(custId).map(CustomerDTO::getCustName).orElse(null);
         cache.put(custId, name);
         return name;
+    }
+
+    @Override
+    public AllocAdjustDetailDTO getAllocAdjustDetail(String perfAdjustNo, String empId) {
+        log.info("[PerfApprovalQueryFacade.getAllocAdjustDetail] perfAdjustNo={}, empId={}", perfAdjustNo, empId);
+        AllocAdjustService.ApplyWithItems loaded = allocAdjustService.getById(perfAdjustNo);
+        PerfAllocAdjustApply apply = loaded.getApply();
+        List<PerfAllocAdjustItem> items = loaded.getItems();
+
+        String status = apply.getStatus();
+        boolean canDelete = empId != null && empId.equals(apply.getCreatedBy())
+                && ("IN_APPROVAL".equals(status) || "DRAFT".equals(status));
+        boolean canApprove = "IN_APPROVAL".equals(status) && isMyTodo(empId, perfAdjustNo);
+
+        List<AllocAdjustDetailDTO.AllocItem> allocaters = new ArrayList<>();
+        if (items != null) {
+            for (PerfAllocAdjustItem it : items) {
+                boolean origin = "ORIGIN".equals(it.getItemKind());
+                allocaters.add(AllocAdjustDetailDTO.AllocItem.builder()
+                        .empId(it.getEmpId())
+                        .username(it.getUsername())
+                        .fullname(it.getEmpChnName())
+                        .ratio(it.getRatio() == null ? null : it.getRatio().toPlainString())
+                        .isOriginal(origin ? 1 : 2)
+                        .build());
+            }
+        }
+
+        Map<String, String> empNameCache = new HashMap<>();
+        return AllocAdjustDetailDTO.builder()
+                .perfAdjustNo(apply.getId())
+                .applyNo(apply.getApplyNo())
+                .custId(apply.getCustId())
+                .custName(apply.getCustName())
+                .custType(apply.getCustType())
+                .allocDim(apply.getAllocDim())
+                .bizKind(apply.getBizKind())
+                .accountNo(apply.getAccountNo())
+                .status(status)
+                .reason(apply.getRemark())
+                .createdBy(apply.getCreatedBy())
+                .applyFullname(resolveEmpName(apply.getCreatedBy(), empNameCache))
+                .applyTime(apply.getCreatedTime())
+                .canDelete(canDelete)
+                .canApprove(canApprove)
+                .allocaters(allocaters)
+                .build();
+    }
+
+    /** 该申请是否为 empId 的 Flowable 待办（命中即可审批）。 */
+    private boolean isMyTodo(String empId, String perfAdjustNo) {
+        if (empId == null) {
+            return false;
+        }
+        PageResult<AdjustTodoRespDTO> todos =
+                allocAdjustTodoService.listMyTodosByEmp(empId, null, null, null, null, null, 1, FETCH_CAP);
+        return todos.getRecords().stream().anyMatch(t -> perfAdjustNo.equals(t.getId()));
     }
 }

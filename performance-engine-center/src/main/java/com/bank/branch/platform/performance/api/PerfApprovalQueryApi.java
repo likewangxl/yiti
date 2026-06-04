@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.api;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
 
 /**
  * 绩效（分配关系调整）审批列表对外查询 Api。
@@ -51,4 +52,12 @@ public interface PerfApprovalQueryApi {
      * @return 按申请时间倒序的分页结果
      */
     PageResult<AllocAdjustApprovalItemDTO> listMyAllocAdjustApplications(String empId, int pageNo, int pageSize);
+
+    /**
+     * 查询「分配关系调整」单据详情（手机端详情页：含分配明细 + 审批/撤回能力标志）。
+     *
+     * @param perfAdjustNo 申请主键
+     * @param empId        当前操作员 USER_ID（用于判定 canApprove/canDelete）
+     */
+    AllocAdjustDetailDTO getAllocAdjustDetail(String perfAdjustNo, String empId);
 }
