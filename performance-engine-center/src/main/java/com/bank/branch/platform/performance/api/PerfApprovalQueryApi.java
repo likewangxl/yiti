@@ -27,6 +27,19 @@ public interface PerfApprovalQueryApi {
     PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(String empId, int pageNo, int pageSize);
 
     /**
+     * 按状态域查询审批列表：
+     * {@code statusFilter="PENDING"} 仅待办、{@code "DONE"} 仅已办、{@code null} 合并（同 3 参版）。
+     *
+     * @param empId        员工号（外部渠道传入；上游 callpu 已完成身份认证）
+     * @param statusFilter 状态过滤：{@code "PENDING"} 仅待办，{@code "DONE"} 仅已办，{@code null} 合并
+     * @param pageNo       页码（从 1 开始，&lt;1 归一为 1）
+     * @param pageSize     每页大小（&lt;1 归一为默认值）
+     * @return 按申请时间倒序的分页结果
+     */
+    PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(
+            String empId, String statusFilter, int pageNo, int pageSize);
+
+    /**
      * 查询某员工"作为申请人"提交的「分配关系调整」申请列表（全状态，含 WITHDRAWN）。
      *
      * <p>区别于 {@link #listAllocAdjustApprovals}（审批人视角）：本方法按 {@code createdBy = empId}

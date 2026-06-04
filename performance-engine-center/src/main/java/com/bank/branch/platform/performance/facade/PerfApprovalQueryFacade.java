@@ -55,18 +55,29 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
 
     @Override
     public PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(String empId, int pageNo, int pageSize) {
+        return listAllocAdjustApprovals(empId, null, pageNo, pageSize);
+    }
+
+    @Override
+    public PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(
+            String empId, String statusFilter, int pageNo, int pageSize) {
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = pageSize < 1 ? DEFAULT_PAGE_SIZE : pageSize;
-        log.info("[PerfApprovalQueryFacade.listAllocAdjustApprovals] empId={}, pageNo={}, pageSize={}",
-                empId, safePageNo, safePageSize);
+        log.info("[PerfApprovalQueryFacade.listAllocAdjustApprovals] empId={}, statusFilter={}, pageNo={}, pageSize={}",
+                empId, statusFilter, safePageNo, safePageSize);
+
+        boolean wantTodo = statusFilter == null || "PENDING".equals(statusFilter);
+        boolean wantDone = statusFilter == null || "DONE".equals(statusFilter);
 
         // 1. 拉取待办 + 已办（各自上限 FETCH_CAP，参数过滤全空 = 不限关键字/维度/日期）
         //    待办走 *ByEmp 版本：callpu 无会话上下文，候选组按入参 empId 查库解析（避免 AUTH-40105）；
         //    已办按 taskAssignee(empId) 查询，本就不依赖候选组/登录态，无需区分。
-        PageResult<AdjustTodoRespDTO> todoPage = allocAdjustTodoService.listMyTodosByEmp(
-                empId, null, null, null, null, null, 1, FETCH_CAP);
-        PageResult<AdjustTodoRespDTO> donePage = allocAdjustDoneService.listMyDones(
-                empId, null, null, null, null, null, 1, FETCH_CAP);
+        PageResult<AdjustTodoRespDTO> todoPage = wantTodo
+                ? allocAdjustTodoService.listMyTodosByEmp(empId, null, null, null, null, null, 1, FETCH_CAP)
+                : PageResult.of(1, FETCH_CAP, 0L, Collections.emptyList());
+        PageResult<AdjustTodoRespDTO> donePage = wantDone
+                ? allocAdjustDoneService.listMyDones(empId, null, null, null, null, null, 1, FETCH_CAP)
+                : PageResult.of(1, FETCH_CAP, 0L, Collections.emptyList());
 
         if (todoPage.getTotal() > FETCH_CAP || donePage.getTotal() > FETCH_CAP) {
             log.warn("[PerfApprovalQueryFacade] empId={} 审批记录超过拉取上限 {}，合并列表可能被截断"
