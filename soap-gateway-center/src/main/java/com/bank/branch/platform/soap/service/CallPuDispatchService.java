@@ -8,12 +8,14 @@ import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
 import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
 import com.bank.branch.platform.soap.controller.dto.CustInfoData;
 import com.bank.branch.platform.soap.controller.dto.OrigAllocData;
+import com.bank.branch.platform.soap.controller.dto.PerfDetailData;
 import com.bank.branch.platform.soap.controller.dto.PerfListData;
 import com.bank.branch.platform.soap.controller.dto.PerfListItem;
 import lombok.RequiredArgsConstructor;
@@ -122,6 +124,9 @@ public class CallPuDispatchService {
             }
             if ("PERF_ORIG_ALLOC".equals(ruleName)) {
                 return handleOrigAlloc(parm);
+            }
+            if ("PERF_INFO".equals(ruleName)) {
+                return handlePerfInfo(parm);
             }
             log.warn("[callpu] 不支持的 RuleName={}", ruleName);
             return CallPuResponse.fail("不支持的 RuleName: " + ruleName);
@@ -356,6 +361,54 @@ public class CallPuDispatchService {
                     .build());
         }
         return CallPuResponse.ok(new OrigAllocData(items));
+    }
+
+    /**
+     * PERF_INFO：单据详情，翻译为手机端 applyInfo.vue 的 dataForm 形态。
+     */
+    private CallPuResponse handlePerfInfo(CallPuRequest.Parm parm) {
+        if (parm == null) {
+            return CallPuResponse.fail("参数不能为空");
+        }
+        String empId = parm.getEmployeeNo();
+        if (!StringUtils.hasText(empId)) {
+            return CallPuResponse.fail("员工号不能为空");
+        }
+        if (!StringUtils.hasText(parm.getPerfAdjustNo())) {
+            return CallPuResponse.fail("审批编号不能为空");
+        }
+        String userId = resolveUserId(empId);
+        AllocAdjustDetailDTO detail = perfApprovalQueryApi.getAllocAdjustDetail(parm.getPerfAdjustNo(), userId);
+        if (detail == null) {
+            return CallPuResponse.fail("未查询到单据: " + parm.getPerfAdjustNo());
+        }
+        List<PerfDetailData.PerfAllocItem> allocaters = new ArrayList<>();
+        if (detail.getAllocaters() != null) {
+            for (AllocAdjustDetailDTO.AllocItem a : detail.getAllocaters()) {
+                allocaters.add(PerfDetailData.PerfAllocItem.builder()
+                        .username(a.getUsername())
+                        .fullname(a.getFullname())
+                        .ratio(a.getRatio())
+                        .isOriginal(a.getIsOriginal())
+                        .build());
+            }
+        }
+        PerfDetailData data = PerfDetailData.builder()
+                .perfAdjustNo(detail.getPerfAdjustNo())
+                .applyFullname(detail.getApplyFullname())
+                .custId(detail.getCustId())
+                .custName(detail.getCustName())
+                .applyType("RETAIL".equals(detail.getCustType()) ? "2" : "1")
+                .applyRule("RULE".equals(detail.getAllocDim()) ? "2" : "1")
+                .iouNo(detail.getAccountNo())
+                .businessType(detail.getBizKind())
+                .adjustExplain(detail.getReason())
+                .apprStatus(toApprStatus(detail.getStatus()))
+                .isCanAppr(detail.isCanApprove() ? 1 : 0)
+                .isCanDelete(detail.isCanDelete() ? 1 : 0)
+                .allocaters(allocaters)
+                .build();
+        return CallPuResponse.ok(data);
     }
 
     /** 将 perf 渠道 DTO 映射为手机端列表项（含时间格式化与状态码翻译）。 */

@@ -8,7 +8,9 @@ import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
 import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
+import com.bank.branch.platform.soap.controller.dto.PerfDetailData;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
 import com.bank.branch.platform.soap.controller.dto.OrigAllocData;
@@ -312,5 +314,42 @@ class CallPuDispatchServiceTest {
 
         assertThat(resp.getReturnCd()).isEqualTo("0");
         assertThat(((OrigAllocData) resp.getRspMsg()).getAllocaters()).isEmpty();
+    }
+
+    // ==================== PERF_INFO 单据详情 ====================
+
+    @Test
+    void perfInfo_translatesDetailToFrontendDataForm() {
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        AllocAdjustDetailDTO.AllocItem orig = AllocAdjustDetailDTO.AllocItem.builder()
+                .username("E1").fullname("张三").ratio("70").isOriginal(1).build();
+        AllocAdjustDetailDTO.AllocItem adj = AllocAdjustDetailDTO.AllocItem.builder()
+                .username("E2").fullname("李四").ratio("30").isOriginal(2).build();
+        AllocAdjustDetailDTO detail = AllocAdjustDetailDTO.builder()
+                .perfAdjustNo("PA_1").applyFullname("王五").custId("C001").custName("某客户")
+                .custType("CORP").allocDim("ACCOUNT").bizKind("CORP_DEPOSIT").accountNo("ACC9")
+                .status("IN_APPROVAL").reason("理由").canApprove(true).canDelete(false)
+                .allocaters(List.of(orig, adj)).build();
+        when(perfApprovalQueryApi.getAllocAdjustDetail("PA_1", "U001")).thenReturn(detail);
+
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setPerfAdjustNo("PA_1");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_INFO");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        PerfDetailData d = (PerfDetailData) resp.getRspMsg();
+        assertThat(d.getApplyType()).isEqualTo("1");   // CORP→1
+        assertThat(d.getApplyRule()).isEqualTo("1");    // ACCOUNT→1
+        assertThat(d.getIouNo()).isEqualTo("ACC9");
+        assertThat(d.getApprStatus()).isEqualTo("0");   // IN_APPROVAL→0
+        assertThat(d.getIsCanAppr()).isEqualTo(1);
+        assertThat(d.getIsCanDelete()).isEqualTo(0);
+        assertThat(d.getAllocaters()).hasSize(2);
+        verify(perfApprovalQueryApi).getAllocAdjustDetail("PA_1", "U001");
     }
 }
