@@ -168,6 +168,50 @@ class OrgServiceTest {
     }
 
     @Test
+    void updateOrg_disable_withUsers_shouldThrow() {
+        // 机构下有用户时禁止禁用
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setOrganState(1);
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+        when(userOrgMapper.countUsersByOrgCode("ORG001", null)).thenReturn(3L);
+
+        assertThatThrownBy(() -> orgService.updateOrg("ORG001", req))
+            .isInstanceOf(BizException.class)
+            .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40303"));
+        verify(orgMapper, never()).updateById(org.mockito.ArgumentMatchers.<com.bank.branch.platform.auth.entity.ExtOrgInfo>any());
+    }
+
+    @Test
+    void updateOrg_disable_noUsers_shouldSetOrganState1() {
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setOrganState(1);
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+        when(userOrgMapper.countUsersByOrgCode("ORG001", null)).thenReturn(0L);
+
+        orgService.updateOrg("ORG001", req);
+
+        assertThat(branch.getOrganState()).isEqualTo(1);
+        verify(orgMapper).updateById(org.mockito.ArgumentMatchers.<com.bank.branch.platform.auth.entity.ExtOrgInfo>eq(branch));
+    }
+
+    @Test
+    void updateOrg_enable_shouldNotCheckUsers() {
+        // 启用(organState=0)无需校验用户数
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setOrganState(0);
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+
+        orgService.updateOrg("ORG001", req);
+
+        assertThat(branch.getOrganState()).isEqualTo(0);
+        verify(userOrgMapper, never()).countUsersByOrgCode(anyString(), any());
+        verify(orgMapper).updateById(org.mockito.ArgumentMatchers.<com.bank.branch.platform.auth.entity.ExtOrgInfo>eq(branch));
+    }
+
+    @Test
     void searchOrgs_shouldDelegateToMapper() {
         when(orgMapper.searchByKeyword("测试", 10)).thenReturn(List.of(branch));
 
