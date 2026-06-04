@@ -175,6 +175,42 @@ class AllocAdjustTodoServiceTest {
         assertThat(row.getClaimable()).isNull();
     }
 
+    // ===== 两条链路隔离 =====
+
+    /** callpu 无会话链路：listMyTodosByEmp 走 workflow 的 *ByEmp 方法，不碰会话版方法。 */
+    @Test
+    void listMyTodosByEmp_usesWorkflowByEmpMethods_notSessionMethods() {
+        when(workflowTodoApi.listTodoBusinessKeysByEmp(EMP, BIZ_TYPE))
+                .thenReturn(Arrays.asList("ALLOC_ADJUST:A1"));
+        when(mapper.countMyTodos(any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        when(mapper.selectMyTodos(any(), any(), any(), any(), any(), any(), eq(0), eq(20)))
+                .thenReturn(Arrays.asList(buildApply("A1", "ADJ001", "C1", "CUST", "LOAN")));
+        Map<String, TaskRespDTO> meta = new HashMap<>();
+        meta.put("ALLOC_ADJUST:A1", buildTask("T1", "biz_dept_review"));
+        when(workflowTodoApi.findTaskRespByBusinessKeysByEmp(eq(EMP), eq(Arrays.asList("ALLOC_ADJUST:A1"))))
+                .thenReturn(meta);
+
+        PageResult<AdjustTodoRespDTO> r = service.listMyTodosByEmp(EMP, null, null, null, null, null, 1, 20);
+
+        assertThat(r.getTotal()).isEqualTo(1);
+        assertThat(r.getRecords().get(0).getTaskId()).isEqualTo("T1");
+        verify(workflowTodoApi).listTodoBusinessKeysByEmp(EMP, BIZ_TYPE);
+        verify(workflowTodoApi).findTaskRespByBusinessKeysByEmp(eq(EMP), eq(Arrays.asList("ALLOC_ADJUST:A1")));
+        verify(workflowTodoApi, never()).listMyTodoBusinessKeys(any(), any());
+        verify(workflowTodoApi, never()).findTaskRespByBusinessKeys(any(), any());
+    }
+
+    /** PC 会话链路守护：listMyTodos 仍走 workflow 会话版方法，不碰 *ByEmp。 */
+    @Test
+    void listMyTodos_pcSession_usesWorkflowSessionMethods_notByEmp() {
+        when(workflowTodoApi.listMyTodoBusinessKeys(EMP, BIZ_TYPE)).thenReturn(Collections.emptyList());
+
+        service.listMyTodos(EMP, null, null, null, null, null, 1, 20);
+
+        verify(workflowTodoApi).listMyTodoBusinessKeys(EMP, BIZ_TYPE);
+        verify(workflowTodoApi, never()).listTodoBusinessKeysByEmp(any(), any());
+    }
+
     // ===== test helpers =====
     private PerfAllocAdjustApply buildApply(String id, String applyNo, String custId, String dim, String kind) {
         PerfAllocAdjustApply a = new PerfAllocAdjustApply();

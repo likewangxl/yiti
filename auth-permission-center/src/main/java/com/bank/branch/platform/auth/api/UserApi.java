@@ -60,6 +60,23 @@ public interface UserApi {
     Set<String> getUserRoleCodes(String empId);
 
     /**
+     * 按 empId 计算工作流候选组标识集合（带前缀：{@code ROLE:{roleCode}} / {@code USER:{empId}} / {@code ORG:{mainOrgCode}}）。
+     * <p>
+     * 与 {@code CurrentUserApi.getCurrentCandidateGroupKeys()} 的区别：后者读登录态 ThreadLocal，
+     * 只能取「当前登录用户」的候选组；本方法按传入 empId 查库实时计算，<b>不依赖会话上下文</b>，
+     * 供 SOAP 网关 / callpu 等<b>无登录态</b>链路按指定员工查询工作流待办的候选可见性使用
+     * （否则会触发 AUTH-40105「未登录或会话已过期」）。
+     * 口径与 {@code AuthService.login} 构建 candidateGroupKeys 的逻辑保持一致：
+     * 每个 roleCode 加 {@code ROLE:} 前缀、固定加一项 {@code USER:{empId}}、有主机构时加 {@code ORG:{mainOrgCode}}。
+     * empId 为空时返回空集合，永不返回 null。
+     * </p>
+     *
+     * @param empId 员工ID（工号）
+     * @return 候选组标识集合（ROLE:/USER:/ORG: 前缀）；员工无角色/无主机构时仅含可推导项
+     */
+    Set<String> getCandidateGroupKeys(String empId);
+
+    /**
      * 按 roleCode 查所有启用员工 ID。
      * <p>用于 workflow / portal 等模块把候选组 roleCode 展开成员工列表（如发审批通知）。
      * 仅返启用 (PT_USER.ISENABLED=0) + 未被逻辑删除的角色 (PT_ROLE.RECORD_STATUS=0)。</p>

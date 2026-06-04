@@ -26,4 +26,8 @@ public class OrgCreateReqDTO {
 
     /** 机构层级，可选；前端不传时后端按父级 + 1 */
     private Integer orgLevel;
+
+    /** 部门编号（来自 xanpd sys_dept.DEPT_NO），可选 */
+    @Size(max = 50)
+    private String deptNo;
 }

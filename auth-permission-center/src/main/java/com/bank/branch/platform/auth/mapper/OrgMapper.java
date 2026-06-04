@@ -55,4 +55,12 @@ public interface OrgMapper extends BaseMapper<ExtOrgInfo> {
      */
     List<ExtOrgInfo> searchByKeyword(@Param("keyword") String keyword,
                                      @Param("limit") int limit);
+
+    /**
+     * 取当前最大的纯数字机构编码，用于新增机构时自增生成 ORG_CODE。
+     * 非数字历史编码（如 ORGxxx）不参与比较。
+     *
+     * @return 最大数字编码（无纯数字行时返回 null）
+     */
+    Long selectMaxNumericOrgCode();
 }

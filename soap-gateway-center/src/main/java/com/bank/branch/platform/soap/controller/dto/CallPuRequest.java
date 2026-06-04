@@ -29,6 +29,14 @@ public class CallPuRequest {
     @JsonProperty("Parm")
     private Parm parm;
 
+    /** 时间戳（callpu 外层透传，当前不参与分发/校验）。 */
+    @JsonProperty("timestamp")
+    private Long timestamp;
+
+    /** 报文签名 MD5（callpu 外层透传，当前不参与分发/校验）。 */
+    @JsonProperty("md5")
+    private String md5;
+
     /** callpu 业务参数对象。 */
     @Data
     public static class Parm {
@@ -58,8 +66,14 @@ public class CallPuRequest {
         /** 调整理由（→ reason）。 */
         private String adjustExplain;
 
-        /** 业绩调整审批编号（PERF_INFO 详情用）。 */
+        /** 业绩调整审批编号（PERF_INFO 详情 / PERF_RECALL / PERF_APPR 用）。 */
         private String perfAdjustNo;
+
+        /** 审批结论（PERF_APPR 用）：1=同意 / 2=拒绝。 */
+        private String apprStatus;
+
+        /** 审批意见（PERF_APPR 用，可空）。 */
+        private String apprOpinion;
 
         /** 分配明细（→ items）。 */
         private List<Allocater> allocaters;

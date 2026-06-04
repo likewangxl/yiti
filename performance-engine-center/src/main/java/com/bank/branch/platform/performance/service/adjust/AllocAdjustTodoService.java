@@ -58,10 +58,47 @@ public class AllocAdjustTodoService {
                                                     LocalDate dateTo,
                                                     int pageNo,
                                                     int pageSize) {
-        log.debug("[AllocAdjustTodoService.listMyTodos] empId={}, kw={}, dim={}, kind={}, from={}, to={}, page={}/{}",
-                empId, keyword, allocDim, bizKind, dateFrom, dateTo, pageNo, pageSize);
+        // PC 管理端会话链路：候选组取「当前登录用户」（走 workflow 会话版方法）
+        return doListMyTodos(empId, keyword, allocDim, bizKind, dateFrom, dateTo, pageNo, pageSize, false);
+    }
 
-        List<String> allTodoKeys = workflowTodoApi.listMyTodoBusinessKeys(empId, BIZ_TYPE);
+    /**
+     * 同 {@link #listMyTodos}，但候选组按传入 empId 查库解析（<b>不依赖登录会话</b>）。
+     * <p>供 callpu / SOAP 网关等<b>无会话上下文</b>链路使用（如 PERF_LIST 手机端待审批），
+     * empId 由上游渠道认证后透传；PC 管理端请继续用 {@link #listMyTodos} 以保持会话登录语义。</p>
+     */
+    public PageResult<AdjustTodoRespDTO> listMyTodosByEmp(String empId,
+                                                          String keyword,
+                                                          String allocDim,
+                                                          String bizKind,
+                                                          LocalDate dateFrom,
+                                                          LocalDate dateTo,
+                                                          int pageNo,
+                                                          int pageSize) {
+        return doListMyTodos(empId, keyword, allocDim, bizKind, dateFrom, dateTo, pageNo, pageSize, true);
+    }
+
+    /**
+     * 「我的待审批」公共实现。
+     *
+     * @param sessionLess true=无会话链路（候选组按 empId 查库解析，走 workflow *ByEmp 方法）；
+     *                    false=PC 会话链路（候选组取当前登录用户，走 workflow 会话版方法）
+     */
+    private PageResult<AdjustTodoRespDTO> doListMyTodos(String empId,
+                                                        String keyword,
+                                                        String allocDim,
+                                                        String bizKind,
+                                                        LocalDate dateFrom,
+                                                        LocalDate dateTo,
+                                                        int pageNo,
+                                                        int pageSize,
+                                                        boolean sessionLess) {
+        log.debug("[AllocAdjustTodoService.listMyTodos] empId={}, kw={}, dim={}, kind={}, from={}, to={}, page={}/{}, sessionLess={}",
+                empId, keyword, allocDim, bizKind, dateFrom, dateTo, pageNo, pageSize, sessionLess);
+
+        List<String> allTodoKeys = sessionLess
+                ? workflowTodoApi.listTodoBusinessKeysByEmp(empId, BIZ_TYPE)
+                : workflowTodoApi.listMyTodoBusinessKeys(empId, BIZ_TYPE);
         if (allTodoKeys.isEmpty()) {
             return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
         }
@@ -84,7 +121,9 @@ public class AllocAdjustTodoService {
         List<String> pageKeys = applies.stream()
                 .map(a -> BUSINESS_KEY_PREFIX + a.getId())
                 .collect(Collectors.toList());
-        Map<String, TaskRespDTO> metaMap = workflowTodoApi.findTaskRespByBusinessKeys(empId, pageKeys);
+        Map<String, TaskRespDTO> metaMap = sessionLess
+                ? workflowTodoApi.findTaskRespByBusinessKeysByEmp(empId, pageKeys)
+                : workflowTodoApi.findTaskRespByBusinessKeys(empId, pageKeys);
 
         List<AdjustTodoRespDTO> records = applies.stream()
                 .map(a -> mergeToDto(a, metaMap.get(BUSINESS_KEY_PREFIX + a.getId())))

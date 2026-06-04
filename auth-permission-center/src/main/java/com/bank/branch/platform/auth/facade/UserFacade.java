@@ -111,6 +111,26 @@ public class UserFacade implements UserApi {
     }
 
     @Override
+    public Set<String> getCandidateGroupKeys(String empId) {
+        if (empId == null || empId.isEmpty()) {
+            return Collections.emptySet();
+        }
+        // 口径对齐 AuthService.login：ROLE:{roleCode} / USER:{empId} / ORG:{mainOrgCode}
+        // 三种前缀对齐 CandidateResolverService.resolveCandidates 的输出，否则 BPMN 配
+        // USER/ORG 类型候选时该员工匹配不到 Flowable 候选组。
+        Set<String> keys = new HashSet<>();
+        for (String roleCode : getUserRoleCodes(empId)) {
+            keys.add("ROLE:" + roleCode);
+        }
+        keys.add("USER:" + empId);
+        var userOrg = userOrgMapper.selectByUserId(empId);
+        if (userOrg != null && userOrg.getOrgCode() != null) {
+            keys.add("ORG:" + userOrg.getOrgCode());
+        }
+        return keys;
+    }
+
+    @Override
     public List<String> getEmpIdsByRoleCode(String roleCode) {
         if (roleCode == null || roleCode.isEmpty()) {
             return new ArrayList<>();

@@ -34,4 +34,21 @@ public interface PerfApprovalCmdApi {
      * @param reason       撤回原因（可空，空则由实现兜底默认文案）
      */
     void withdrawAllocAdjust(String perfAdjustNo, String operator, String reason);
+
+    /**
+     * 审批「分配关系调整」申请（通过 / 驳回，<b>无会话版</b>）。
+     *
+     * <p>面向手机端等外部渠道（callpu {@code PERF_APPR}）：按 {@code perfAdjustNo} + 审批人
+     * {@code empId} 解析当前待办任务 —— <b>候选组 / 角色可见性即权限校验</b>：审批人看不到该待办
+     * （查不到 taskId）则拒绝审批。再按 {@code apprStatus} 走通过 / 驳回，委托 workflow 无会话审批，
+     * 全程不依赖登录会话。</p>
+     *
+     * @param perfAdjustNo 申请主键 id（手机端 perfAdjustNo）
+     * @param empId        审批人工号（外部渠道认证后透传）
+     * @param apprStatus   审批结论："1"=通过 / "2"=驳回
+     * @param opinion      审批意见（可空，空则由实现兜底默认文案）
+     * @throws IllegalStateException    审批人无该待办任务（无权审批 / 已被处理）
+     * @throws IllegalArgumentException apprStatus 非 "1"/"2"
+     */
+    void approveAllocAdjust(String perfAdjustNo, String empId, String apprStatus, String opinion);
 }

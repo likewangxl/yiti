@@ -42,6 +42,16 @@
             <artifactId>performance-engine-center</artifactId>
         </dependency>
 
+        <!--
+            auth-permission-center（仅用 UserApi）
+            报文 EmployeeNo / allocater 工号实为 PT_USER.USERNAME，需经 UserApi.getUsersByUsernames
+            转成 perf 下游所需的 USER_ID；同样只走对方 *Api，不碰其 service/mapper/entity。
+        -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>auth-permission-center</artifactId>
+        </dependency>
+
         <!-- Netty -->
         <dependency>
             <groupId>io.netty</groupId>
@@ -66,6 +76,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- Hutool JSON（SOAP 报文/callpu JSON 处理）；版本就近声明在本模块，不占用根 pom 统管 -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-json</artifactId>
+            <version>5.8.27</version>
         </dependency>
 
         <!-- 测试 -->

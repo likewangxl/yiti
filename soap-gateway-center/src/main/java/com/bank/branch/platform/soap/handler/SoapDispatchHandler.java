@@ -36,37 +36,80 @@ public class SoapDispatchHandler extends SimpleChannelInboundHandler<FullHttpReq
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
-        if (!HttpMethod.POST.equals(request.method())) {
-            sendResponse(ctx, HttpResponseStatus.METHOD_NOT_ALLOWED, "text/plain", "Only POST allowed");
+        String uri = request.uri();
+        // 路由键取 uri 路径(去掉查询串),对应报文里的服务号,如 /S080021264
+        String servicePath = stripQuery(uri);
+        String body = request.content().toString(StandardCharsets.UTF_8);
+
+        if (props.isLogRequest()) {
+            StringBuilder headers = new StringBuilder();
+            request.headers().forEach(h -> headers.append("  ").append(h.getKey()).append(": ").append(h.getValue()).append('\n'));
+            log.info("[SOAP-IN] 收到报文 remote={} method={} uri={}\nheaders:\n{}body:\n{}",
+                    ctx.channel().remoteAddress(), request.method(), uri, headers, body);
+        }
+
+        // 在 uri 处分流:isHealth → 健康检查;其余按服务号路由到业务端点
+        if (isHealthCheck(servicePath)) {
+            sendResponse(ctx, HttpResponseStatus.OK, "text/plain; charset=UTF-8",
+                    String.valueOf(healthCheck()));
             return;
         }
 
-        String uri = request.uri().split("\\?")[0];
-        String xmlBody = request.content().toString(StandardCharsets.UTF_8);
-
-        if (props.isLogRequest()) {
-            log.info("[SOAP-IN] uri={} body:\n{}", uri, xmlBody);
-        }
-
-        SoapEndpoint endpoint = endpointMap.get(uri);
+        SoapEndpoint endpoint = endpointMap.get(servicePath);
         if (endpoint == null) {
-            log.warn("[SOAP-IN] No endpoint for uri={}", uri);
-            sendSoapFault(ctx, "Client", "Unknown service path: " + uri);
+            log.warn("[SOAP-IN] 无匹配端点 servicePath={} 已注册={}", servicePath, endpointMap.keySet());
+            sendResponse(ctx, HttpResponseStatus.NOT_FOUND, "text/plain; charset=UTF-8",
+                    "no endpoint for " + servicePath);
             return;
         }
 
         try {
-            SoapMessage soapMessage = SoapEnvelopeParser.parse(xmlBody);
-            String responseXml = endpoint.invoke(soapMessage);
-
-            if (props.isLogRequest()) {
-                log.info("[SOAP-OUT] uri={} response:\n{}", uri, responseXml);
-            }
+            // 解析 SOAP 信封并补充 soapAction 头,交由端点处理
+            SoapMessage message = SoapEnvelopeParser.parse(body);
+            message.setSoapAction(headerValue(request, "soapAction"));
+            String responseXml = endpoint.invoke(message);
             sendResponse(ctx, HttpResponseStatus.OK, "text/xml; charset=UTF-8", responseXml);
         } catch (Exception e) {
-            log.error("[SOAP-IN] Processing failed uri={}", uri, e);
-            sendSoapFault(ctx, "Server", e.getMessage());
+            log.error("[SOAP-IN] 端点处理失败 servicePath={}", servicePath, e);
+            sendResponse(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "text/xml; charset=UTF-8",
+                    soapFault(e.getMessage()));
         }
+    }
+
+    /** 去掉 uri 的查询串,只保留路径部分作为路由键。 */
+    private String stripQuery(String uri) {
+        int q = uri.indexOf('?');
+        return q >= 0 ? uri.substring(0, q) : uri;
+    }
+
+    /** uri 是否为健康检查路径(去掉前导斜杠后忽略大小写匹配 ishealth)。 */
+    private boolean isHealthCheck(String servicePath) {
+        String path = servicePath.startsWith("/") ? servicePath.substring(1) : servicePath;
+        return "ishealth".equalsIgnoreCase(path);
+    }
+
+    /**
+     * 边车探活:宿主应用健康返回 0,不健康返回 1。
+     * 暂未接入具体健康判断逻辑,恒定上报健康。
+     */
+    private int healthCheck() {
+        return 0;
+    }
+
+    private String headerValue(FullHttpRequest request, String name) {
+        return request.headers().get(name);
+    }
+
+    /** 构造 SOAP Fault 信封(端点处理异常时回写)。 */
+    private String soapFault(String message) {
+        String safe = message == null ? "unknown error"
+                : message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">"
+                + "<soap:Body><soap:Fault>"
+                + "<faultcode>soap:Server</faultcode>"
+                + "<faultstring>" + safe + "</faultstring>"
+                + "</soap:Fault></soap:Body></soap:Envelope>";
     }
 
     @Override
@@ -92,24 +135,5 @@ public class SoapDispatchHandler extends SimpleChannelInboundHandler<FullHttpReq
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, bytes.length);
         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
         ctx.writeAndFlush(response);
-    }
-
-    private void sendSoapFault(ChannelHandlerContext ctx, String faultCode, String faultString) {
-        String fault = """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-                  <soap:Body>
-                    <soap:Fault>
-                      <faultcode>soap:%s</faultcode>
-                      <faultstring>%s</faultstring>
-                    </soap:Fault>
-                  </soap:Body>
-                </soap:Envelope>""".formatted(faultCode, escapeXml(faultString));
-        sendResponse(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "text/xml; charset=UTF-8", fault);
-    }
-
-    private static String escapeXml(String v) {
-        if (v == null) return "";
-        return v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

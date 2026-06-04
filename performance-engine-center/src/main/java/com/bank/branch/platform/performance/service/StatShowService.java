@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 财务统计展示表只读查询服务（XAN_M9B_EMP_STAT_SHOW3 / XAN_M98_CUST_STAT_SHOW3）.
@@ -79,6 +80,28 @@ public class StatShowService {
         log.debug("[StatShowService.pageCustStat] statisDt={}, branchNo={}, custId={}, custType={}, "
                 + "keyword={}, total={}", statisDt, branchNo, custId, custType, keyword, total);
         return PageResult.of(safeNo, safeSize, total, rows);
+    }
+
+    /**
+     * 按客户号查客户名称（XAN_M98_CUST_STAT_SHOW3，取一条）.
+     *
+     * <p>供外部渠道 callpu CASH_GETCUST_INFO 客户号查名；custId 为空、查无匹配或名称为空白
+     * 均返回 {@link Optional#empty()}（永不返回空白名）。</p>
+     *
+     * @param custId 客户号（CUST_ID）
+     * @return 客户名称（去空白后非空）；无匹配时 empty
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> getCustNameByCustId(String custId) {
+        if (custId == null || custId.isBlank()) {
+            return Optional.empty();
+        }
+        String custName = statShowMapper.selectCustNameByCustId(custId.trim());
+        log.debug("[StatShowService.getCustNameByCustId] custId={}, hit={}", custId, custName != null);
+        if (custName == null || custName.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(custName);
     }
 
     /** pageSize 归一化：缺省 20，上限 200，下限 1. */

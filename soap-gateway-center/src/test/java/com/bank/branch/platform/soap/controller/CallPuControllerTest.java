@@ -1,13 +1,15 @@
 package com.bank.branch.platform.soap.controller;
 
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
-import com.bank.branch.platform.customer.api.CustomerQueryApi;
-import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
+import com.bank.branch.platform.soap.service.CallPuDispatchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,7 +29,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,15 +55,32 @@ class CallPuControllerTest {
     private PerfApprovalCmdApi perfApprovalCmdApi;
 
     @Mock
-    private CustomerQueryApi customerQueryApi;
+    private CustStatQueryApi custStatQueryApi;
+
+    @Mock
+    private UserApi userApi;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** UserDTO（username=工号/PT_USER.USERNAME，empId=USER_ID/PT_USER.USER_ID）。 */
+    private static UserDTO user(String employeeNo, String userId) {
+        UserDTO dto = new UserDTO();
+        dto.setUsername(employeeNo);
+        dto.setEmpId(userId);
+        return dto;
+    }
+
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(
-                new CallPuController(perfApprovalQueryApi, perfApprovalCmdApi, customerQueryApi)).build();
+        // 工号(USERNAME) → USER_ID 约定：X → U_X；lenient 以容忍未触达解析的用例
+        lenient().when(userApi.getUsersByUsernames(anyList())).thenAnswer(inv -> {
+            List<String> names = inv.getArgument(0);
+            return names.stream().map(n -> user(n, "U_" + n)).toList();
+        });
+        CallPuDispatchService dispatchService = new CallPuDispatchService(
+                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi);
+        mockMvc = MockMvcBuilders.standaloneSetup(new CallPuController(dispatchService)).build();
     }
 
     private String json(Object o) throws Exception {
@@ -88,7 +109,7 @@ class CallPuControllerTest {
                 .status("IN_APPROVAL")
                 .category("TODO")
                 .build();
-        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("E001"), anyInt(), anyInt()))
+        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U_E001"), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 1L, List.of(dto)));
 
         mockMvc.perform(post("/api/callpu")
@@ -109,7 +130,7 @@ class CallPuControllerTest {
                 .perfAdjustNo("PA_A").status("APPROVED").category("DONE").build();
         AllocAdjustApprovalItemDTO rejected = AllocAdjustApprovalItemDTO.builder()
                 .perfAdjustNo("PA_R").status("REJECTED").category("DONE").build();
-        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("E001"), anyInt(), anyInt()))
+        when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U_E001"), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 2L, List.of(approved, rejected)));
 
         mockMvc.perform(post("/api/callpu")
@@ -158,10 +179,8 @@ class CallPuControllerTest {
 
     @Test
     void cashGetCustInfo_success_returnsCustName() throws Exception {
-        CustomerDTO customer = new CustomerDTO();
-        customer.setCustNo("C001");
-        customer.setCustName("某某有限公司");
-        when(customerQueryApi.getCustomerByCustNo("C001")).thenReturn(Optional.of(customer));
+        // 客户号查名走 perf XAN_M98_CUST_STAT_SHOW3：CUST_ID=C001 → CUST_NAME
+        when(custStatQueryApi.getCustNameByCustId("C001")).thenReturn(Optional.of("某某有限公司"));
 
         mockMvc.perform(post("/api/callpu")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -173,7 +192,7 @@ class CallPuControllerTest {
 
     @Test
     void cashGetCustInfo_notFound_returnsFail() throws Exception {
-        when(customerQueryApi.getCustomerByCustNo("CX")).thenReturn(Optional.empty());
+        when(custStatQueryApi.getCustNameByCustId("CX")).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/callpu")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -226,9 +245,10 @@ class CallPuControllerTest {
         assertThat(cmd.getCustId()).isEqualTo("C001");
         assertThat(cmd.getAccountNo()).isEqualTo("ACC123");
         assertThat(cmd.getReason()).isEqualTo("调整理由");
-        assertThat(cmd.getApplicant()).isEqualTo("E001");
+        // 关键回归：applicant 与 item.empId 均为解析后的 USER_ID，工号不得直达 perf
+        assertThat(cmd.getApplicant()).isEqualTo("U_E001");
         assertThat(cmd.getItems()).hasSize(2);
-        assertThat(cmd.getItems().get(0).getEmpId()).isEqualTo("E100");
+        assertThat(cmd.getItems().get(0).getEmpId()).isEqualTo("U_E100");
         assertThat(cmd.getItems().get(0).getRatio()).isEqualByComparingTo(new BigDecimal("60"));
     }
 
@@ -274,7 +294,7 @@ class CallPuControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ReturnCd").value("0"));
 
-        verify(perfApprovalCmdApi).withdrawAllocAdjust("AA001", "E001", null);
+        verify(perfApprovalCmdApi).withdrawAllocAdjust("AA001", "U_E001", null);
     }
 
     @Test
@@ -291,7 +311,7 @@ class CallPuControllerTest {
     @Test
     void perfRecall_serviceThrows_returnsFail() throws Exception {
         org.mockito.Mockito.doThrow(new RuntimeException("无权撤回他人申请"))
-                .when(perfApprovalCmdApi).withdrawAllocAdjust(eq("AA002"), eq("E999"), any());
+                .when(perfApprovalCmdApi).withdrawAllocAdjust(eq("AA002"), eq("U_E999"), any());
 
         mockMvc.perform(post("/api/callpu")
                         .contentType(MediaType.APPLICATION_JSON)

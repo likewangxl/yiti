@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "platform.soap.netty")
 public class SoapNettyProperties {
 
-    private int port = 9090;
+    private int port = 30522;
     private int bossThreads = 1;
     private int workerThreads = 4;
     private int maxContentLength = 10 * 1024 * 1024;

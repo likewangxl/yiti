@@ -80,11 +80,32 @@ public class TaskOperationService {
      * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
      */
     public void approveTask(String taskId, ApproveReqDTO req) {
+        // PC 管理端会话链路：empId 取当前登录用户，并校验其为任务办理人（须已签收）
         String empId = currentUserApi.getCurrentEmpId();
-        // 查询任务并校验办理人
         Task task = queryTaskOrThrow(taskId);
         verifyAssignee(task, empId);
+        doApprove(task, empId, req);
+    }
 
+    /**
+     * 审批通过（无会话版）：按<b>显式传入的 empId</b> 审批，<b>不校验 assignee、不要求签收</b>。
+     * <p>供 callpu / SOAP 网关等无登录态链路使用（如手机端 PERF_APPR）。
+     * 该 empId 是否有权审批此任务，由上游（perf 侧按候选组/角色可见性查出 taskId）保证——
+     * 查不到待办 taskId 就不会调到此方法。</p>
+     *
+     * @param taskId 任务ID
+     * @param empId  审批人工号（外部渠道认证后透传）
+     * @param req    审批请求DTO
+     * @throws BizException WF-40403 任务不存在
+     */
+    public void approveTaskByEmp(String taskId, String empId, ApproveReqDTO req) {
+        Task task = queryTaskOrThrow(taskId);
+        doApprove(task, empId, req);
+    }
+
+    /** 审批通过公共实现：加审批意见 → 完成任务（approved=true）→ 发事件。empId 仅用于留痕/事件。 */
+    private void doApprove(Task task, String empId, ApproveReqDTO req) {
+        String taskId = task.getId();
         // 添加审批意见
         taskService.addComment(taskId, task.getProcessInstanceId(), "APPROVE", req.getOpinion());
 
@@ -113,9 +134,30 @@ public class TaskOperationService {
      * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
      */
     public void rejectTask(String taskId, RejectReqDTO req) {
+        // PC 管理端会话链路：empId 取当前登录用户，并校验其为任务办理人（须已签收）
         String empId = currentUserApi.getCurrentEmpId();
         Task task = queryTaskOrThrow(taskId);
         verifyAssignee(task, empId);
+        doReject(task, empId, req);
+    }
+
+    /**
+     * 驳回（无会话版）：按<b>显式传入的 empId</b> 驳回，<b>不校验 assignee、不要求签收</b>。
+     * <p>供 callpu / SOAP 网关等无登录态链路使用（如手机端 PERF_APPR）；可见性由上游 perf 侧保证。</p>
+     *
+     * @param taskId 任务ID
+     * @param empId  审批人工号（外部渠道认证后透传）
+     * @param req    驳回请求DTO（opinion 审批意见）
+     * @throws BizException WF-40403 任务不存在
+     */
+    public void rejectTaskByEmp(String taskId, String empId, RejectReqDTO req) {
+        Task task = queryTaskOrThrow(taskId);
+        doReject(task, empId, req);
+    }
+
+    /** 驳回公共实现：写意见 → 强制终止流程 → 改 biz_process_map 状态 → 发事件。empId 仅用于留痕/事件。 */
+    private void doReject(Task task, String empId, RejectReqDTO req) {
+        String taskId = task.getId();
         String pid = task.getProcessInstanceId();
         String opinion = req.getOpinion();
 

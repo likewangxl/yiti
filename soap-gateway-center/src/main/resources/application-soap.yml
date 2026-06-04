@@ -1,7 +1,7 @@
 platform:
   soap:
     netty:
-      port: 9090
+      port: 30522
       boss-threads: 1
       worker-threads: 4
       max-content-length: 10485760
