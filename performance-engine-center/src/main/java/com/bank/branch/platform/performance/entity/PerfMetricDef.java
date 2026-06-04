@@ -55,9 +55,6 @@ public class PerfMetricDef {
     /** 二/三级指标表达式（指标编号 Groovy，用于计算）. */
     private String exprText;
 
-    /** 二/三级指标表达式的"含标签"展示串（指标编号·名称 + 运算符，用于查看显示），与 exprText 同步维护. */
-    private String exprDisplay;
-
     /** 机构汇总规则：SUM / AVG / MAX / MIN / COUNT. */
     private String summaryRule;
 
