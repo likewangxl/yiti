@@ -54,19 +54,28 @@
         <el-table-column label="版本" width="80" align="center">
           <template #default="{row}">{{ row.version || resolveVersion(row) }}</template>
         </el-table-column>
+        <el-table-column label="创建人" min-width="140">
+          <template #default="{row}">
+            <span v-if="row.createdByUsername || row.createdBy">{{ (row.createdByUsername || row.createdBy) }}{{ row.createdByName ? ' ' + row.createdByName : '' }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button>
             <!-- 复制版本/编辑/删除 仅资财部人员可见可操作 -->
             <template v-if="isCaizai">
               <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
-              <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
-              <el-popconfirm v-if="!isDisabled(row)" :title="`确认删除方案 ${row.schemeName}？`" @confirm="onDelete(row)">
-                <template #reference>
-                  <el-button link type="danger" size="small">删除</el-button>
-                </template>
-              </el-popconfirm>
-              <el-button v-else link size="small" disabled>已删除</el-button>
+              <!-- 编辑/删除：仅当前用户创建的方案才显示可操作 -->
+              <template v-if="row.createdByMe">
+                <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
+                <el-popconfirm v-if="!isDisabled(row)" :title="`确认删除方案 ${row.schemeName}？`" @confirm="onDelete(row)">
+                  <template #reference>
+                    <el-button link type="danger" size="small">删除</el-button>
+                  </template>
+                </el-popconfirm>
+                <el-button v-else link size="small" disabled>已删除</el-button>
+              </template>
             </template>
           </template>
         </el-table-column>
@@ -133,12 +142,12 @@
         </el-table-column>
         <el-table-column label="计分上限" width="120">
           <template #default="{row}">
-            <el-input-number v-model="row.maxScore" :disabled="dlg.readOnly" :precision="0" :controls="false" style="width:100%" />
+            <el-input-number v-model="row.maxScore" :disabled="dlg.readOnly" :min="0" :precision="0" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
         <el-table-column label="计分下限" width="120">
           <template #default="{row}">
-            <el-input-number v-model="row.minScore" :disabled="dlg.readOnly" :precision="0" :controls="false" style="width:100%" />
+            <el-input-number v-model="row.minScore" :disabled="dlg.readOnly" :min="0" :precision="0" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
         <el-table-column label="计分公式" min-width="280">
@@ -412,8 +421,8 @@ async function openEdit(row, readOnly = false) {
     multiplier: Number(it.multiplier) || 1,
     minScore: Number(it.minScore) || 0,
     maxScore: Number(it.maxScore) || 120,
-    // 优先用后端持久化的 formula；缺失再回退 localStorage 旧值 / 默认公式
-    formula: it.formula || getItemFormula(row.schemeCode, it.metricCode) || 'min(actual / target * 100, 120)'
+    // 计分公式以后端持久化值为准；留空就保持空（不再兜底默认串），由必输校验拦截
+    formula: it.formula || ''
   }));
   dlg.items = items;
   dlg.origItemMap = new Map(items.map(it => [it.id, { ...it }]));
@@ -431,6 +440,7 @@ async function onSave(targetStatus) {
   if (!dlg.items.length) return ElMessage.warning('至少添加 1 个指标');
   for (let i = 0; i < dlg.items.length; i++) {
     if (!dlg.items[i].metricCode) return ElMessage.warning(`第 ${i + 1} 行：请选择指标`);
+    if (!String(dlg.items[i].formula || '').trim()) return ElMessage.warning(`第 ${i + 1} 行：请填写计分公式`);
   }
   // 走一次 el-form 的中文必填校验（schemeFormRef）
   try { await schemeFormRef.value?.validate(); } catch { return; }

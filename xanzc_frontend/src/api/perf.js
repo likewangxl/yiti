@@ -404,6 +404,27 @@ export function listComputeBatches(params = {}) {
 export function getComputeBatch(id) {
   return call('get', `/perf/run-tasks/${id}`, {}, {});
 }
+// 考核计算统计：最后一次 KPI 计算任务(PERF_METRIC_CALC_TASK) 成功/失败/耗时 + 本月任务数
+export function getKpiScoreStats() {
+  return call('get', '/perf/kpi-score/stats', {},
+    { monthTaskCount: 0, lastSuccessCount: null, lastFailCount: null, lastDurationMs: null, lastStatus: null });
+}
+// 考核计算数据列表：KPI 方案级计算记录(PERF_KPI_CALC_LOG)，按数据日期 + 方案过滤，返回 {records, total}
+export function listKpiCalcLogs(params = {}) {
+  return call('get', '/perf/kpi-score/logs', { params }, { records: [], total: 0 }).then(unwrapPage);
+}
+// KPI 计算结果明细(PERF_KPI_SCORE)：维度/指标/对象/得分，按数据日期 + 方案 + 指标过滤分页
+export function listKpiScoreResults(params = {}) {
+  return call('get', '/perf/kpi-score/results', { params }, { records: [], total: 0 }).then(unwrapPage);
+}
+// KPI 方案的指标下拉项（仅含该方案配置的指标，含名称）
+export function listKpiSchemeMetrics(schemeCode) {
+  return call('get', '/perf/kpi-score/scheme-metrics', { params: { schemeCode } }, []);
+}
+// 触发 KPI 分值计算（数据日期 + 方案 + 触发原因，记审批日志）
+export function calcKpiScore(payload) {
+  return call('post', '/perf/kpi-score/calc', { data: payload }, 'OK');
+}
 export function triggerCompute(payload) {
   return call('post', '/perf/recalc', { data: payload }, { batch: 'CALC-MOCK-' + Date.now() });
 }
