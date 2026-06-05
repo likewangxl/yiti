@@ -119,7 +119,7 @@ class KpiScoreCalcServiceTest {
         plan.setId("P1");
         plan.setKpiSchemeId("S1");
         plan.setTargetCycle("YEAR");
-        when(targetPlanMapper.selectByCondition("S1", null, null, 0, 1000))
+        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000))
                 .thenReturn(List.of(plan));
 
         PerfMetricDef def = new PerfMetricDef();
@@ -192,7 +192,7 @@ class KpiScoreCalcServiceTest {
         item.setWeight(new BigDecimal("1"));
         item.setFormula(null); // 未配置公式
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
-        when(targetPlanMapper.selectByCondition("S1", null, null, 0, 1000)).thenReturn(List.of());
+        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000)).thenReturn(List.of());
 
         PerfMetricDef def = new PerfMetricDef();
         def.setBaseDim("EMP");

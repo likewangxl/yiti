@@ -3,12 +3,13 @@ package com.bank.branch.platform.performance.controller;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
-import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.performance.controller.dto.KpiScoreCalcReqDTO;
 import com.bank.branch.platform.performance.controller.dto.KpiScoreStatsDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricOptionDTO;
@@ -17,9 +18,11 @@ import com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO
 import com.bank.branch.platform.performance.service.KpiScoreCalcService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -45,6 +48,7 @@ public class KpiScoreCalcController {
     private final KpiScoreCalcService kpiScoreCalcService;
     private final CurrentUserApi currentUserApi;
     private final UserApi userApi;
+    private final AuditApi auditApi;
 
     /**
      * 触发 KPI 分值计算（考核计算页面"触发"按钮）.
@@ -55,21 +59,40 @@ public class KpiScoreCalcController {
      * @return 任务流水 ID
      */
     @PostMapping("/calc")
-    @Operation(summary = "触发/重算 KPI 得分（记审批日志）")
+    @Operation(summary = "触发/重算 KPI 得分（先记审计日志再计算）")
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
-    @AuditLog(action = "EXECUTE", resourceType = "KPI_SCORE", reasonRequired = true)
-    public ResponseWrapper<String> calc(@Valid @RequestBody KpiScoreCalcReqDTO req) {
+    public ResponseWrapper<String> calc(@Valid @RequestBody KpiScoreCalcReqDTO req,
+                                        HttpServletRequest request) {
         LocalDate dt = LocalDate.parse(req.getDataDate());
-        // 触发人工号 = 当前用户 empId 解析出的 PT_USER.username（约定：工号=username）
+        // 触发人工号 = 当前用户 empId 解析出的 PT_USER.username（约定：工号=username）；姓名取 displayName
         String empId = currentUserApi.getCurrentEmpId();
         String triggerBy = empId;
+        String empName = null;
         if (empId != null) {
             UserDTO u = userApi.getUserByEmpId(empId);
-            if (u != null && u.getUsername() != null) {
-                triggerBy = u.getUsername();
+            if (u != null) {
+                if (u.getUsername() != null) {
+                    triggerBy = u.getUsername();
+                }
+                empName = u.getDisplayName();
             }
         }
-        log.info("[KpiScoreCalcController.calc] dataDate={}, schemeCode={}, triggerBy={}, reason={}",
+
+        // 先记录触发审计日志（AuditApi.log 走 REQUIRES_NEW 独立事务，确保计算开始前先留痕），再调用计算服务
+        auditApi.log(AuditLogCmd.builder()
+                .traceId(MDC.get("traceId"))
+                .empId(empId)
+                .empName(empName)
+                .bizType(BizType.PERF_CONFIG.getCode())
+                .bizAction(BizAction.EXECUTE.name())
+                .resourceUrl(request.getRequestURI())
+                .requestMethod(request.getMethod())
+                .requestParams("dataDate=" + req.getDataDate() + ", schemeCode=" + req.getSchemeCode())
+                .responseStatus(200)
+                .reason(req.getReason())
+                .build());
+
+        log.info("[KpiScoreCalcController.calc] 审计已记录，开始计算 dataDate={}, schemeCode={}, triggerBy={}, reason={}",
                 dt, req.getSchemeCode(), triggerBy, req.getReason());
         String taskId = kpiScoreCalcService.calculate(dt, req.getSchemeCode(), "MANUAL", triggerBy);
         return ResponseWrapper.success(taskId);

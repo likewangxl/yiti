@@ -441,8 +441,12 @@ public class KpiScoreCalcService {
         if (items == null || items.isEmpty()) {
             return new SchemeStat(0, 0);
         }
-        // 方案关联的目标方案（perf_target_plan.kpi_scheme_id = scheme.id）
-        List<PerfTargetPlan> plans = targetPlanMapper.selectByCondition(scheme.getId(), null, null, 0, 1000);
+        // 方案关联的目标方案（perf_target_plan.kpi_scheme_id = scheme.id）：
+        // 仅取 状态=启用(ACTIVE) 且 数据日期落在 [start_date, end_date] 区间内的目标方案
+        List<PerfTargetPlan> plans = targetPlanMapper.selectByCondition(scheme.getId(), "ACTIVE", null, 0, 1000)
+                .stream()
+                .filter(p -> isDataDateInPlanRange(dataDate, p))
+                .toList();
 
         int scored = 0;
         int skipped = 0;
@@ -514,6 +518,28 @@ public class KpiScoreCalcService {
      * 周期键按各目标方案的 target_cycle 由数据日期派生（YEAR→yyyy，QUARTER→yyyyQn）。
      * 未匹配到目标值默认 0，未匹配到基础值默认 0。CUST 维度目标管理不覆盖，直接默认 0。
      */
+    /**
+     * 数据日期是否落在目标方案的起止日期区间内（含端点；某端点为空则该侧不限制）.
+     *
+     * @param dataDate 计算数据日期
+     * @param plan     目标方案
+     * @return true=在区间内（或方案未设置对应边界）
+     */
+    private boolean isDataDateInPlanRange(LocalDate dataDate, PerfTargetPlan plan) {
+        if (plan == null) {
+            return false;
+        }
+        LocalDate start = plan.getStartDate();
+        LocalDate end = plan.getEndDate();
+        if (start != null && dataDate.isBefore(start)) {
+            return false;
+        }
+        if (end != null && dataDate.isAfter(end)) {
+            return false;
+        }
+        return true;
+    }
+
     private TargetBase lookupTargetBase(List<PerfTargetPlan> plans, String baseDim,
                                         String subjectId, String metricCode, LocalDate dataDate) {
         if (plans == null || plans.isEmpty() || (!"EMP".equals(baseDim) && !"ORG".equals(baseDim))) {
