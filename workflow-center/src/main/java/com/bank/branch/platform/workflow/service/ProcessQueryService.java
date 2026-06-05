@@ -2,6 +2,7 @@ package com.bank.branch.platform.workflow.service;
 
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApprovalLogDTO;
@@ -335,6 +336,14 @@ public class ProcessQueryService {
                 log.warn("申请人姓名查询失败: startUserId={}", startUserId, e);
             }
             try {
+                UserDTO u = userApi.getUserByEmpId(startUserId);
+                if (u != null) {
+                    dto.setOperatorEmpNo(u.getUsername());
+                }
+            } catch (Exception e) {
+                log.warn("申请人工号查询失败: startUserId={}", startUserId, e);
+            }
+            try {
                 OrgDTO org = orgApi.getUserMainOrg(startUserId);
                 if (org != null) {
                     dto.setOperatorOrgName(org.getOrgName());
@@ -360,6 +369,15 @@ public class ProcessQueryService {
             // 获取操作人姓名
             String userName = userApi.getUserName(activity.getAssignee());
             dto.setOperatorName(userName);
+            // 获取操作人工号（PT_USER.username，展示用）
+            try {
+                UserDTO u = userApi.getUserByEmpId(activity.getAssignee());
+                if (u != null) {
+                    dto.setOperatorEmpNo(u.getUsername());
+                }
+            } catch (Exception e) {
+                log.warn("审批人工号查询失败: assignee={}", activity.getAssignee(), e);
+            }
             // 获取操作人机构名称
             OrgDTO org = orgApi.getUserMainOrg(activity.getAssignee());
             if (org != null) {

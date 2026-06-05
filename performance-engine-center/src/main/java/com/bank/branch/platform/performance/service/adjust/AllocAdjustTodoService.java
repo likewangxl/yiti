@@ -153,8 +153,10 @@ public class AllocAdjustTodoService {
             d.setClaimable(t.getClaimable());
             d.setStartUser(t.getStartUser());
             d.setStartUserName(t.getStartUserName());
+            d.setStartUserEmpNo(t.getStartUserEmpNo());
             d.setStartOrgId(t.getStartOrgId());
             d.setStartOrgName(t.getStartOrgName());
+            d.setStartOrgDeptNo(t.getStartOrgDeptNo());
             d.setStartTime(t.getStartTime());
             d.setTaskCreateTime(t.getTaskCreateTime());
             d.setSlaStatus(t.getSlaStatus());

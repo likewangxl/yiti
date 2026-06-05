@@ -20,10 +20,13 @@ public class ApprovalLogDTO {
     /** 节点名称 */
     private String nodeName;
 
-    /** 操作人工号 */
+    /** 操作人 USER_ID（PT_USER.user_id 内部主键） */
     private String operator;
 
-    /** 操作人姓名 */
+    /** 操作人工号（PT_USER.username，展示用） */
+    private String operatorEmpNo;
+
+    /** 操作人姓名（中文姓名 PT_USER.userchnname） */
     private String operatorName;
 
     /** 操作人机构名称 */

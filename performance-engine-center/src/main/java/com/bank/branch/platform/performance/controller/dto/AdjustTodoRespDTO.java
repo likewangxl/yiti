@@ -35,8 +35,10 @@ public class AdjustTodoRespDTO {
     private Boolean claimable;
     private String startUser;
     private String startUserName;
+    private String startUserEmpNo;
     private String startOrgId;
     private String startOrgName;
+    private String startOrgDeptNo;
     private LocalDateTime startTime;
     private LocalDateTime taskCreateTime;
     private String slaStatus;

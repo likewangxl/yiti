@@ -444,10 +444,20 @@ public class TodoQueryService {
             log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人姓名失败 startUser={}", startUser, e);
         }
         try {
+            // 发起人工号（PT_USER.username，展示用）：startUser 为 USER_ID 内部主键
+            com.bank.branch.platform.auth.api.dto.UserDTO u = userApi.getUserByEmpId(startUser);
+            if (u != null) {
+                dto.setStartUserEmpNo(u.getUsername());
+            }
+        } catch (Exception e) {
+            log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人工号失败 startUser={}", startUser, e);
+        }
+        try {
             OrgDTO mainOrg = orgApi.getUserMainOrg(startUser);
             if (mainOrg != null) {
                 dto.setStartOrgId(mainOrg.getOrgCode());
                 dto.setStartOrgName(mainOrg.getOrgName());
+                dto.setStartOrgDeptNo(mainOrg.getDeptNo());
             }
         } catch (Exception e) {
             log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人主机构失败 startUser={}", startUser, e);

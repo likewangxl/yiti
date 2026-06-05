@@ -405,6 +405,16 @@ public class AllocAdjustService {
                         createdBy, e.toString());
             }
             try {
+                // 申请人工号（PT_USER.username，展示用）：createdBy 为 USER_ID 内部主键
+                com.bank.branch.platform.auth.api.dto.UserDTO u = userApi.getUserByEmpId(createdBy);
+                if (u != null) {
+                    dto.setCreatedByUsername(u.getUsername());
+                }
+            } catch (Exception e) {
+                log.warn("[AllocAdjustService.getByIdDto] 申请人工号查询失败 createdBy={}, err={}",
+                        createdBy, e.toString());
+            }
+            try {
                 OrgDTO org = orgApi.getUserMainOrg(createdBy);
                 if (org != null) {
                     dto.setCreatedByOrgName(org.getOrgName());

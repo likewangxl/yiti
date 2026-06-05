@@ -33,17 +33,23 @@ public class TaskRespDTO {
     /** 流程标题 */
     private String title;
 
-    /** 发起人工号 */
+    /** 发起人 USER_ID（PT_USER.user_id 内部主键） */
     private String startUser;
 
     /** 发起人姓名（按 startUser 反查 PT_USER.userchnname） */
     private String startUserName;
+
+    /** 发起人工号（PT_USER.username，展示用） */
+    private String startUserEmpNo;
 
     /** 发起人机构编码（按 startUser 反查 EXT_USER_ORG → ORG_CODE） */
     private String startOrgId;
 
     /** 发起人机构名称（按 startOrgId 反查 EXT_ORG_INFO.ORG_NAME） */
     private String startOrgName;
+
+    /** 发起人机构部门号（EXT_ORG_INFO.DEPT_NO，展示用） */
+    private String startOrgDeptNo;
 
     /** 流程发起时间 */
     private LocalDateTime startTime;

@@ -260,8 +260,44 @@ public class KpiScoreCalcService {
          .last("LIMIT " + ((safeNo - 1) * safeSize) + ", " + safeSize);
         List<com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO> dtos =
                 kpiCalcLogMapper.selectList(w).stream().map(this::toLogDto).toList();
+        enrichTriggerByNames(dtos);
         return com.bank.branch.platform.common.web.PageResult.of(
                 safeNo, safeSize, total == null ? 0L : total, dtos);
+    }
+
+    /**
+     * 回填触发人中文姓名：triggerBy 为工号(username)，按 username 批量查 auth 用户取 displayName.
+     * 自动触发(triggerBy 为空)不解析。名称解析失败仅展示工号，不阻塞列表。
+     */
+    private void enrichTriggerByNames(
+            List<com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO> dtos) {
+        if (dtos.isEmpty()) {
+            return;
+        }
+        List<String> usernames = dtos.stream()
+                .map(com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO::getTriggerBy)
+                .filter(StringUtils::hasText).distinct().toList();
+        if (usernames.isEmpty()) {
+            return;
+        }
+        Map<String, String> nameByUsername = new java.util.HashMap<>();
+        try {
+            List<UserDTO> users = userApi.getUsersByUsernames(usernames);
+            if (users != null) {
+                for (UserDTO u : users) {
+                    if (u != null && StringUtils.hasText(u.getUsername())) {
+                        nameByUsername.put(u.getUsername(), u.getDisplayName());
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+            // 名称解析失败：仅展示工号
+        }
+        for (com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO d : dtos) {
+            if (StringUtils.hasText(d.getTriggerBy())) {
+                d.setTriggerByName(nameByUsername.get(d.getTriggerBy()));
+            }
+        }
     }
 
     /** PerfKpiCalcLog 实体 → 列表 DTO. */

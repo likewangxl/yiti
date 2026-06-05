@@ -28,6 +28,9 @@ public class PerfKpiCalcLogDTO {
     /** 触发人工号（PT_USER.username，自动触发为空）. */
     private String triggerBy;
 
+    /** 触发人中文姓名（按 triggerBy=username 反查 PT_USER.userchnname，自动触发为空）. */
+    private String triggerByName;
+
     /** 执行结果 SUCCESS / FAILED. */
     private String result;
 
