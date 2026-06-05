@@ -19,10 +19,6 @@
             <el-option v-for="o in STATUS_OPTIONS" :key="o.value" :value="o.value" :label="o.label" />
           </el-select>
         </el-form-item>
-        <el-form-item label="更新时间">
-          <el-date-picker v-model="f.dateRange" type="daterange" value-format="YYYY-MM-DD"
-            range-separator="~" start-placeholder="开始" end-placeholder="结束" style="width:280px" />
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="reload">查询</el-button>
           <el-button @click="resetFilters">重置</el-button>
