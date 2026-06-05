@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.controller;
 
 import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
+import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
 import com.bank.branch.platform.performance.controller.dto.ReleaseSlotReqDTO;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
@@ -33,9 +34,31 @@ class MetricRequestDtoValidationTest {
         validatorFactory.close();
     }
 
-    // V1.6 已显式去除 metricCode 的 @Pattern 约束（"放开格式限制：业务侧反馈大写+数字+下划线
-    // 约束太死"，见 CreateMetricReqDTO#metricCode 注释），lowercase 现为合法值。
-    // 原 createMetricReq_whenMetricCodeLowercase_shouldViolation 反契约测试 V1.10 删除。
+    // 新建指标：metricCode 首字符必须为大写字母（^[A-Z][A-Z0-9_]*$）。
+    // 编辑指标(UpdateMetricReqDTO，编码不可改) 与 引用指标(AddKpiItemReqDTO) 均不做编码格式校验。
+
+    @Test
+    void createMetricReq_whenMetricCodeDigitStart_shouldViolation() {
+        CreateMetricReqDTO req = new CreateMetricReqDTO();
+        req.setMetricCode("0602001");
+
+        Set<ConstraintViolation<CreateMetricReqDTO>> violations = validator.validateProperty(req, "metricCode");
+
+        assertThat(violations)
+                .extracting(ConstraintViolation::getPropertyPath)
+                .map(Object::toString)
+                .contains("metricCode");
+    }
+
+    @Test
+    void createMetricReq_whenMetricCodeUppercaseStart_shouldNotViolateOnPattern() {
+        CreateMetricReqDTO req = new CreateMetricReqDTO();
+        req.setMetricCode("M_0001");
+
+        Set<ConstraintViolation<CreateMetricReqDTO>> violations = validator.validateProperty(req, "metricCode");
+
+        assertThat(violations).isEmpty();
+    }
 
     @Test
     void changeStatusReq_whenReasonBlank_shouldViolation() {

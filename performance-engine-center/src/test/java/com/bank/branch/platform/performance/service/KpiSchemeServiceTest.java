@@ -66,6 +66,9 @@ class KpiSchemeServiceTest {
     @Mock
     private CacheManager cacheManager;
 
+    @Mock
+    private com.bank.branch.platform.auth.api.UserApi userApi;
+
     @InjectMocks
     private KpiSchemeService service;
 

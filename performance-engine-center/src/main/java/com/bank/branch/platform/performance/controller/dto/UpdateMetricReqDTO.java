@@ -15,7 +15,7 @@ public class UpdateMetricReqDTO {
     /** 指标编码。通常由路径变量传入，若请求体携带则需合法。 */
     @Schema(description = "指标编码")
     @Size(max = 64, message = "metricCode 长度不能超过 64")
-    @Pattern(regexp = "^[A-Z0-9_]+$", message = "metricCode 只允许大写字母、数字和下划线")
+    // 编辑指标时编码不可修改，不做编码格式校验
     private String metricCode;
 
     /** 指标名称。 */

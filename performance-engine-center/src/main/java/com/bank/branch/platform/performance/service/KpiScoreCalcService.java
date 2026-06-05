@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfKpiScheme;
+import com.bank.branch.platform.performance.entity.PerfKpiCalcLog;
 import com.bank.branch.platform.performance.entity.PerfKpiScore;
 import com.bank.branch.platform.performance.entity.PerfMetricCalcTask;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
@@ -19,6 +20,10 @@ import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.mapper.SubjectSlotValueRow;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +34,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -69,19 +75,27 @@ public class KpiScoreCalcService {
     private final PerfKpiScoreMapper scoreMapper;
     private final MetricDefService metricDefService;
     private final KpiScoreFormulaService formulaService;
+    /** 解析对象名称：员工姓名（auth 用户，subject_id=工号=PT_USER.username）/ 机构名称 + 机构号（auth 机构）. */
+    private final UserApi userApi;
+    private final OrgApi orgApi;
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
     private final CustIndexResultMapper custIndexResultMapper;
+    /** KPI 方案级计算记录：每方案处理完/异常结束落一条. */
+    private final com.bank.branch.platform.performance.mapper.PerfKpiCalcLogMapper kpiCalcLogMapper;
 
     /**
      * 执行 KPI 分值计算.
      *
-     * @param dataDate   数据日期（必填）
-     * @param schemeCode KPI 方案编码（可空，空=全部 ACTIVE 方案）
+     * @param dataDate    数据日期（必填）
+     * @param schemeCode  KPI 方案编码（可空，空=全部 ACTIVE 方案）
+     * @param triggerType 触发方式 AUTO 自动 / MANUAL 手动（空按 MANUAL）
+     * @param triggerBy   触发人工号（PT_USER.username，手动触发填，自动触发为空）
      * @return 任务流水 ID
      * @throws PerfException dataDate 为空 / 前置依赖未完成 / 中途计算失败（任务已置 FAILED）
      */
-    public String calculate(LocalDate dataDate, String schemeCode) {
+    public String calculate(LocalDate dataDate, String schemeCode, String triggerType, String triggerBy) {
+        String normalizedTrigger = "AUTO".equalsIgnoreCase(triggerType) ? "AUTO" : "MANUAL";
         if (dataDate == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "数据日期不能为空");
         }
@@ -142,10 +156,25 @@ public class KpiScoreCalcService {
             int totalScored = 0;
             int totalSkipped = 0;
             for (PerfKpiScheme scheme : schemes) {
-                SchemeStat stat = calcOneScheme(scheme, dataDate);
-                schemeSuccess++;
-                totalScored += stat.scored;
-                totalSkipped += stat.skipped;
+                // 每个方案落一条方案级记录（成功/异常各记一条）；异常仍 fail-fast 中止整任务
+                LocalDateTime schemeStart = LocalDateTime.now();
+                try {
+                    SchemeStat stat = calcOneScheme(scheme, dataDate);
+                    schemeSuccess++;
+                    totalScored += stat.scored;
+                    totalSkipped += stat.skipped;
+                    insertSchemeLog(dataDate, scheme.getSchemeCode(), normalizedTrigger, triggerBy,
+                            schemeStart, "SUCCESS", stat.scored, stat.skipped, null, taskId);
+                } catch (Exception schemeEx) {
+                    insertSchemeLog(dataDate, scheme.getSchemeCode(), normalizedTrigger, triggerBy,
+                            schemeStart, "FAILED", 0, 0, schemeEx.getMessage(), taskId);
+                    // 失败方案数记 1（fail-fast）；成功/跳过保留已处理量，供任务级统计
+                    task.setTotalCount(schemes.size());
+                    task.setSuccessCount(schemeSuccess);
+                    task.setFailCount(1);
+                    task.setSkipCount(totalSkipped);
+                    throw schemeEx;
+                }
             }
 
             task.setTotalCount(schemes.size());
@@ -167,6 +196,237 @@ public class KpiScoreCalcService {
             log.error("【KPI分值计算】任务异常 taskId={}: {}", taskId, e.getMessage(), e);
             throw new PerfException(PerfErrorCode.CALC_JOB_FAILED, e, "KPI分值计算失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 考核计算页面统计：从 {@code PERF_METRIC_CALC_TASK} 取 KPI 计算任务（task_type=KPI_SCORE_CALC）
+     * 的「最后一次任务成功数/失败数/耗时」+「本月任务数」.
+     *
+     * @return 统计 DTO（无任务时各"最后一次"字段为 null）
+     */
+    public com.bank.branch.platform.performance.controller.dto.KpiScoreStatsDTO getStats() {
+        com.bank.branch.platform.performance.controller.dto.KpiScoreStatsDTO dto =
+                new com.bank.branch.platform.performance.controller.dto.KpiScoreStatsDTO();
+        // 本月 KPI 计算任务数（按 start_time 落在本月）
+        LocalDateTime monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        Long monthCount = taskMapper.selectCount(new LambdaQueryWrapper<PerfMetricCalcTask>()
+                .eq(PerfMetricCalcTask::getTaskType, TASK_TYPE)
+                .ge(PerfMetricCalcTask::getStartTime, monthStart));
+        dto.setMonthTaskCount(monthCount == null ? 0L : monthCount);
+        // 最后一次 KPI 计算任务
+        List<PerfMetricCalcTask> last = taskMapper.selectList(new LambdaQueryWrapper<PerfMetricCalcTask>()
+                .eq(PerfMetricCalcTask::getTaskType, TASK_TYPE)
+                .orderByDesc(PerfMetricCalcTask::getStartTime)
+                .last("LIMIT 1"));
+        if (last != null && !last.isEmpty()) {
+            PerfMetricCalcTask t = last.get(0);
+            dto.setLastSuccessCount(t.getSuccessCount());
+            dto.setLastFailCount(t.getFailCount());
+            dto.setLastStatus(t.getStatus());
+            dto.setLastDataDate(t.getDataDate());
+            dto.setLastEndTime(t.getEndTime());
+            if (t.getStartTime() != null && t.getEndTime() != null) {
+                dto.setLastDurationMs(java.time.Duration.between(t.getStartTime(), t.getEndTime()).toMillis());
+            }
+        }
+        return dto;
+    }
+
+    /**
+     * 考核计算页面数据列表：分页查询 KPI 方案级计算记录（PERF_KPI_CALC_LOG），
+     * 支持按数据日期 + KPI方案编码过滤，按 id 倒序（最近在前）.
+     *
+     * @param dataDate   数据日期（可空）
+     * @param schemeCode KPI 方案编码（可空）
+     * @param pageNo     页码（&ge;1）
+     * @param pageSize   每页条数（1..100）
+     * @return 分页结果
+     */
+    public com.bank.branch.platform.common.web.PageResult<
+            com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO> pageLogs(
+            LocalDate dataDate, String schemeCode, int pageNo, int pageSize) {
+        int safeNo = Math.max(1, pageNo);
+        int safeSize = Math.min(100, Math.max(1, pageSize));
+        LambdaQueryWrapper<PerfKpiCalcLog> w = new LambdaQueryWrapper<>();
+        if (dataDate != null) {
+            w.eq(PerfKpiCalcLog::getDataDate, dataDate);
+        }
+        if (StringUtils.hasText(schemeCode)) {
+            w.eq(PerfKpiCalcLog::getSchemeCode, schemeCode.trim());
+        }
+        Long total = kpiCalcLogMapper.selectCount(w);
+        // selectCount 后再加排序 + LIMIT，避免污染 count 查询
+        w.orderByDesc(PerfKpiCalcLog::getId)
+         .last("LIMIT " + ((safeNo - 1) * safeSize) + ", " + safeSize);
+        List<com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO> dtos =
+                kpiCalcLogMapper.selectList(w).stream().map(this::toLogDto).toList();
+        return com.bank.branch.platform.common.web.PageResult.of(
+                safeNo, safeSize, total == null ? 0L : total, dtos);
+    }
+
+    /** PerfKpiCalcLog 实体 → 列表 DTO. */
+    private com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO toLogDto(PerfKpiCalcLog e) {
+        com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO d =
+                new com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO();
+        d.setId(e.getId());
+        d.setDataDate(e.getDataDate());
+        d.setSchemeCode(e.getSchemeCode());
+        d.setTriggerType(e.getTriggerType());
+        d.setTriggerBy(e.getTriggerBy());
+        d.setResult(e.getResult());
+        d.setStartTime(e.getStartTime());
+        d.setEndTime(e.getEndTime());
+        d.setScoredCount(e.getScoredCount());
+        d.setSkippedCount(e.getSkippedCount());
+        d.setErrorMsg(e.getErrorMsg());
+        return d;
+    }
+
+    /**
+     * KPI 计算结果详情：分页查询某数据日期 + KPI方案下的计分明细（PERF_KPI_SCORE），
+     * 按 维度（subject_type）/ 指标 / 对象 排序，供详情页展示.
+     *
+     * @param dataDate   数据日期（必填）
+     * @param schemeCode KPI 方案编码（必填）
+     * @param pageNo     页码（&ge;1）
+     * @param pageSize   每页条数（1..100）
+     * @return 分页结果
+     */
+    public com.bank.branch.platform.common.web.PageResult<
+            com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO> pageScores(
+            LocalDate dataDate, String schemeCode, String metricCode, String subjectType, int pageNo, int pageSize) {
+        int safeNo = Math.max(1, pageNo);
+        int safeSize = Math.min(100, Math.max(1, pageSize));
+        LambdaQueryWrapper<PerfKpiScore> w = new LambdaQueryWrapper<>();
+        if (dataDate != null) {
+            w.eq(PerfKpiScore::getDataDate, dataDate);
+        }
+        if (StringUtils.hasText(schemeCode)) {
+            w.eq(PerfKpiScore::getSchemeCode, schemeCode.trim());
+        }
+        if (StringUtils.hasText(metricCode)) {
+            w.eq(PerfKpiScore::getMetricCode, metricCode.trim());
+        }
+        if (StringUtils.hasText(subjectType)) {
+            w.eq(PerfKpiScore::getSubjectType, subjectType.trim());
+        }
+        Long total = scoreMapper.selectCount(w);
+        w.orderByAsc(PerfKpiScore::getMetricCode)
+         .orderByAsc(PerfKpiScore::getSubjectType)
+         .orderByAsc(PerfKpiScore::getSubjectId)
+         .last("LIMIT " + ((safeNo - 1) * safeSize) + ", " + safeSize);
+        List<com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO> dtos =
+                scoreMapper.selectList(w).stream().map(this::toScoreDto).toList();
+        enrichScoreNames(dtos);
+        return com.bank.branch.platform.common.web.PageResult.of(
+                safeNo, safeSize, total == null ? 0L : total, dtos);
+    }
+
+    /**
+     * KPI 计算结果详情页"指标"下拉：仅返回该 KPI 方案配置的指标（编号 + 名称）.
+     *
+     * @param schemeCode KPI 方案编码
+     * @return 指标下拉项列表（方案无指标/方案不存在时返回空）
+     */
+    public List<com.bank.branch.platform.performance.controller.dto.MetricOptionDTO> listSchemeMetrics(String schemeCode) {
+        if (!StringUtils.hasText(schemeCode)) {
+            return List.of();
+        }
+        PerfKpiScheme scheme = schemeMapper.selectBySchemeCode(schemeCode.trim());
+        if (scheme == null) {
+            return List.of();
+        }
+        java.util.LinkedHashMap<String, com.bank.branch.platform.performance.controller.dto.MetricOptionDTO> map =
+                new java.util.LinkedHashMap<>();
+        for (PerfKpiItem it : itemMapper.selectBySchemeId(scheme.getId())) {
+            String code = it.getMetricCode();
+            if (!StringUtils.hasText(code) || map.containsKey(code)) {
+                continue;
+            }
+            PerfMetricDef def = metricDefService.getByCodeOrNull(code);
+            map.put(code, new com.bank.branch.platform.performance.controller.dto.MetricOptionDTO(
+                    code, def == null ? code : def.getMetricName()));
+        }
+        return new java.util.ArrayList<>(map.values());
+    }
+
+    /**
+     * 回填结果明细的 指标名称 / 对象名称（EMP→员工姓名，ORG→机构名称；CUST 不解析）.
+     */
+    private void enrichScoreNames(List<com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO> dtos) {
+        if (dtos.isEmpty()) {
+            return;
+        }
+        Map<String, String> metricNames = new java.util.HashMap<>();
+        dtos.stream().map(d -> d.getMetricCode()).filter(StringUtils::hasText).distinct().forEach(code -> {
+            PerfMetricDef def = metricDefService.getByCodeOrNull(code);
+            if (def != null) {
+                metricNames.put(code, def.getMetricName());
+            }
+        });
+        // 员工姓名（EMP）：subject_id = 工号（PT_USER.username），按 username 批量查 auth 用户取中文姓名
+        List<String> empIds = dtos.stream().filter(d -> "EMP".equals(d.getSubjectType()))
+                .map(d -> d.getSubjectId()).filter(StringUtils::hasText).distinct().toList();
+        Map<String, String> empNames = new java.util.HashMap<>();
+        if (!empIds.isEmpty()) {
+            List<UserDTO> users = userApi.getUsersByUsernames(empIds);
+            if (users != null) {
+                for (UserDTO u : users) {
+                    if (u != null && StringUtils.hasText(u.getUsername())) {
+                        empNames.put(u.getUsername(), u.getDisplayName());
+                    }
+                }
+            }
+        }
+        // 机构（ORG）：subject_id = 内部机构编码（EXT_ORG_INFO.org_code），列表对象列展示业务机构号 dept_no + 机构名称
+        Map<String, String> orgDeptNos = new java.util.HashMap<>();
+        Map<String, String> orgNames = new java.util.HashMap<>();
+        dtos.stream().filter(d -> "ORG".equals(d.getSubjectType()))
+                .map(d -> d.getSubjectId()).filter(StringUtils::hasText).distinct().forEach(code -> {
+                    try {
+                        OrgDTO org = orgApi.getOrg(code);
+                        if (org != null) {
+                            if (StringUtils.hasText(org.getDeptNo())) {
+                                orgDeptNos.put(code, org.getDeptNo());
+                            }
+                            orgNames.put(code, org.getOrgName());
+                        }
+                    } catch (Exception ignore) {
+                        // 机构不存在/查询异常 → 名称留空，前端只显示编号
+                    }
+                });
+        for (com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO d : dtos) {
+            d.setMetricName(metricNames.get(d.getMetricCode()));
+            if ("EMP".equals(d.getSubjectType())) {
+                d.setSubjectName(empNames.get(d.getSubjectId()));
+            } else if ("ORG".equals(d.getSubjectType())) {
+                // 先按原始内部编码取机构名，再把对象列编码替换为业务机构号（dept_no），未解析到则保留内部编码
+                String origCode = d.getSubjectId();
+                d.setSubjectName(orgNames.get(origCode));
+                String deptNo = orgDeptNos.get(origCode);
+                if (StringUtils.hasText(deptNo)) {
+                    d.setSubjectId(deptNo);
+                }
+            }
+        }
+    }
+
+    /** PerfKpiScore 实体 → 结果明细 DTO. */
+    private com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO toScoreDto(PerfKpiScore e) {
+        com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO d =
+                new com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO();
+        d.setId(e.getId());
+        d.setDataDate(e.getDataDate());
+        d.setSchemeCode(e.getSchemeCode());
+        d.setSubjectType(e.getSubjectType());
+        d.setMetricCode(e.getMetricCode());
+        d.setSubjectId(e.getSubjectId());
+        d.setActualValue(e.getActualValue());
+        d.setWeight(e.getWeight());
+        d.setTargetValue(e.getTargetValue());
+        d.setBaseValue(e.getBaseValue());
+        d.setScore(e.getScore());
+        return d;
     }
 
     /**
@@ -220,7 +480,8 @@ public class KpiScoreCalcService {
                 BigDecimal actual = row.getValue();
                 TargetBase tb = lookupTargetBase(plans, baseDim, subjectId, metricCode, dataDate);
                 BigDecimal score = formulaService.evalScore(
-                        item.getFormula(), actual, tb.target, tb.base, weight);
+                        item.getFormula(), actual, tb.target, tb.base, weight,
+                        item.getMinScore(), item.getMaxScore());
                 upsertScore(dataDate, scheme.getSchemeCode(), metricCode, baseDim, subjectId,
                         actual, weight, tb.target, tb.base, score);
                 scored++;
@@ -304,6 +565,25 @@ public class KpiScoreCalcService {
         s.setBaseValue(base);
         s.setScore(score);
         scoreMapper.upsert(s);
+    }
+
+    /** 落一条 KPI 方案级计算记录（成功/异常各一条）；异常信息截断 2000. */
+    private void insertSchemeLog(LocalDate dataDate, String schemeCode, String triggerType, String triggerBy,
+                                 LocalDateTime startTime, String result, int scored, int skipped,
+                                 String errorMsg, String taskId) {
+        PerfKpiCalcLog calcLog = new PerfKpiCalcLog();
+        calcLog.setDataDate(dataDate);
+        calcLog.setSchemeCode(schemeCode);
+        calcLog.setTriggerType(triggerType);
+        calcLog.setTriggerBy(StringUtils.hasText(triggerBy) ? triggerBy.trim() : null);
+        calcLog.setStartTime(startTime);
+        calcLog.setEndTime(LocalDateTime.now());
+        calcLog.setResult(result);
+        calcLog.setScoredCount(scored);
+        calcLog.setSkippedCount(skipped);
+        calcLog.setErrorMsg(errorMsg != null && errorMsg.length() > 2000 ? errorMsg.substring(0, 2000) : errorMsg);
+        calcLog.setTaskId(taskId);
+        kpiCalcLogMapper.insert(calcLog);
     }
 
     /** 更新任务终态（状态 + 结束时间 + 错误原因，截断 5000）. */

@@ -5,7 +5,6 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -25,9 +24,7 @@ public class AddKpiItemReqDTO {
     @Schema(description = "指标编码", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "metricCode 不能为空")
     @Size(max = 64, message = "metricCode 长度不能超过 64")
-    // 首字符必须是大写字母, 与 CreateKpiSchemeReqDTO.schemeCode 对齐, 避免 "123_FOO" 这类非法命名.
-    // CreateMetricReqDTO.metricCode (Task 1 历史既定, 允许首字符为数字/下划线) 留作未来统一.
-    @Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "metricCode 首字符必须为大写字母, 且只允许大写字母、数字和下划线")
+    // 引用既有指标，不做编码格式校验（格式校验只在"新建指标"CreateMetricReqDTO 处做）
     private String metricCode;
 
     /** 权重 (0.0000 ~ 100.0000). */
@@ -52,8 +49,9 @@ public class AddKpiItemReqDTO {
     @DecimalMin(value = "0.0000", message = "maxScore 不能小于 0")
     private BigDecimal maxScore;
 
-    /** 计分公式 (可空), 变量 actual/target/base/weight, 支持 min/max, 例 min(actual / target * 100, 120). */
-    @Schema(description = "计分公式, 变量 actual/target/base/weight, 支持 min/max")
+    /** 计分公式 (必输), 变量 actual/target/base/weight, 支持 min/max, 例 min(actual / target * 100, 120). */
+    @Schema(description = "计分公式 (必输), 变量 actual/target/base/weight, 支持 min/max", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "计分公式不能为空")
     @Size(max = 500, message = "formula 长度不能超过 500")
     private String formula;
 }

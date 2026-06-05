@@ -62,6 +62,9 @@ class KpiScoreCalcServiceTest {
     @Mock private EmpIndexResultMapper empIndexResultMapper;
     @Mock private OrgIndexResultMapper orgIndexResultMapper;
     @Mock private CustIndexResultMapper custIndexResultMapper;
+    @Mock private com.bank.branch.platform.performance.mapper.PerfKpiCalcLogMapper kpiCalcLogMapper;
+    @Mock private com.bank.branch.platform.auth.api.UserApi userApi;
+    @Mock private com.bank.branch.platform.auth.api.OrgApi orgApi;
 
     @InjectMocks private KpiScoreCalcService service;
 
@@ -69,7 +72,7 @@ class KpiScoreCalcServiceTest {
 
     @Test
     void calculate_dataDateNull_throws() {
-        assertThatThrownBy(() -> service.calculate(null, null))
+        assertThatThrownBy(() -> service.calculate(null, null, "MANUAL", null))
                 .isInstanceOf(PerfException.class);
         verify(taskMapper, never()).insert(any(PerfMetricCalcTask.class));
     }
@@ -79,7 +82,7 @@ class KpiScoreCalcServiceTest {
         // 任一级别无 SUCCESS 记录 → 前置检查失败
         when(taskMapper.selectCount(any())).thenReturn(0L);
 
-        assertThatThrownBy(() -> service.calculate(DATA_DATE, null))
+        assertThatThrownBy(() -> service.calculate(DATA_DATE, null, "MANUAL", null))
                 .isInstanceOf(PerfException.class);
 
         // 已登记 RUNNING + 置 FAILED
@@ -136,10 +139,10 @@ class KpiScoreCalcServiceTest {
 
         when(formulaService.evalScore(eq("actual / target * weight"),
                 eq(new BigDecimal("80")), eq(new BigDecimal("100")),
-                eq(new BigDecimal("0")), eq(new BigDecimal("0.5"))))
+                eq(new BigDecimal("0")), eq(new BigDecimal("0.5")), any(), any()))
                 .thenReturn(new BigDecimal("0.4000"));
 
-        String taskId = service.calculate(DATA_DATE, null);
+        String taskId = service.calculate(DATA_DATE, null, "MANUAL", "tester01");
         assertThat(taskId).isNotBlank();
 
         ArgumentCaptor<PerfKpiScore> scoreCap = ArgumentCaptor.forClass(PerfKpiScore.class);
@@ -160,6 +163,17 @@ class KpiScoreCalcServiceTest {
         ArgumentCaptor<PerfMetricCalcTask> taskCap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
         verify(taskMapper, times(1)).updateById(taskCap.capture());
         assertThat(taskCap.getValue().getStatus()).isEqualTo("SUCCESS");
+
+        // 方案级计算记录：一条 SUCCESS，含触发方式/触发人/方案编码
+        ArgumentCaptor<com.bank.branch.platform.performance.entity.PerfKpiCalcLog> logCap =
+                ArgumentCaptor.forClass(com.bank.branch.platform.performance.entity.PerfKpiCalcLog.class);
+        verify(kpiCalcLogMapper, times(1)).insert(logCap.capture());
+        com.bank.branch.platform.performance.entity.PerfKpiCalcLog calcLog = logCap.getValue();
+        assertThat(calcLog.getSchemeCode()).isEqualTo("KPI_A");
+        assertThat(calcLog.getResult()).isEqualTo("SUCCESS");
+        assertThat(calcLog.getTriggerType()).isEqualTo("MANUAL");
+        assertThat(calcLog.getTriggerBy()).isEqualTo("tester01");
+        assertThat(calcLog.getDataDate()).isEqualTo(DATA_DATE);
     }
 
     @Test
@@ -187,7 +201,7 @@ class KpiScoreCalcServiceTest {
         when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5))
                 .thenReturn(List.of(new SubjectSlotValueRow("E001", new BigDecimal("80"))));
 
-        service.calculate(DATA_DATE, null);
+        service.calculate(DATA_DATE, null, "MANUAL", "tester01");
 
         verify(scoreMapper, never()).upsert(any());
         ArgumentCaptor<PerfMetricCalcTask> taskCap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);

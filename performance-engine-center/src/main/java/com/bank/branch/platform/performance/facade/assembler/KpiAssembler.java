@@ -46,6 +46,7 @@ public final class KpiAssembler {
                 .cycleType(scheme.getCycleType())
                 .openDetail(scheme.getOpenDetail() != null && scheme.getOpenDetail() == 1)
                 .status(scheme.getStatus())
+                .createdBy(scheme.getCreatedBy())
                 .items(itemDtos)
                 .build();
     }

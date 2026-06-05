@@ -29,7 +29,7 @@ public class KpiScoreCalcJob extends QuartzJobBean {
         LocalDate dataDate = LocalDate.now().minusDays(1);
         log.info(">>>>>>>>>> 【KPI分值定时任务】触发执行，数据日期={} <<<<<<<<<<", dataDate);
         try {
-            kpiScoreCalcService.calculate(dataDate, null);
+            kpiScoreCalcService.calculate(dataDate, null, "AUTO", null);
             log.info(">>>>>>>>>> 【KPI分值定时任务】执行完成 <<<<<<<<<<");
         } catch (Exception e) {
             // 任务失败原因已落 PERF_METRIC_CALC_TASK，这里仅记录不再抛（避免 Quartz misfire 重试风暴）

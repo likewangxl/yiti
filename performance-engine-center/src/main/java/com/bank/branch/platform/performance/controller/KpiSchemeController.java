@@ -100,15 +100,34 @@ public class KpiSchemeController {
         log.debug("[KpiSchemeController.list] cycleType={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 cycleType, status, keyword, pageNo, pageSize);
         // 非资财部人员（无 R_BACK_FINANCE / R_FIN_LEAD 角色）只能看到"向员工开放明细=是"的方案
-        Integer openDetailFilter = isCaiZaiDept() ? null : 1;
+        Integer openDetailFilter = canViewAllSchemes() ? null : 1;
         PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, status, keyword, openDetailFilter, pageNo, pageSize);
+        // 标记每行"是否当前用户创建"（前端据此控制编辑/删除按钮显隐）
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        if (dtoPage.getRecords() != null) {
+            for (KpiSchemeDTO dto : dtoPage.getRecords()) {
+                dto.setCreatedByMe(currentEmpId != null && currentEmpId.equals(dto.getCreatedBy()));
+            }
+        }
         return ResponseWrapper.page(dtoPage);
     }
 
     /** 当前用户是否为资财部人员（资财部经办人 R_BACK_FINANCE / 资财部负责人 R_FIN_LEAD）. */
-    private boolean isCaiZaiDept() {
+    /**
+     * 是否可查看全部 KPI 方案（含"向员工开放明细=否"的方案）.
+     *
+     * <p>资财部（R_BACK_FINANCE / R_FIN_LEAD）负责 KPI 配置、系统/后台管理员
+     * （R_ADMIN / R_BACK_TECH）需运维全量，均可查看全部方案；其余角色只看
+     * "向员工开放明细=是"的方案。
+     *
+     * <p>注意：{@code getCurrentRoleIds()} 取的是当前激活角色集合，admin 激活
+     * R_ADMIN 时不含 R_BACK_FINANCE，故必须显式纳入管理员角色，否则 admin
+     * 看不到未开放明细的方案。
+     */
+    private boolean canViewAllSchemes() {
         java.util.Set<String> roleIds = currentUserApi.getCurrentRoleIds();
-        return roleIds != null && (roleIds.contains("R_BACK_FINANCE") || roleIds.contains("R_FIN_LEAD"));
+        return roleIds != null && (roleIds.contains("R_BACK_FINANCE") || roleIds.contains("R_FIN_LEAD")
+                || roleIds.contains("R_ADMIN") || roleIds.contains("R_BACK_TECH"));
     }
 
     /**

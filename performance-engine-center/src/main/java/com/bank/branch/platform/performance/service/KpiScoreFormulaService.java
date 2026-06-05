@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * KPI 计分公式求值服务（KPI 分值计算专用）.
@@ -36,10 +37,27 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class KpiScoreFormulaService {
 
-    /** min / max 闭包前缀（保留入参原值与精度，按 Groovy 数值比较语义取小/取大）. */
+    /**
+     * 公式头部注入的闭包：
+     * <ul>
+     *   <li>{@code min}/{@code max}：取小/取大（保留 BigDecimal 精度）；</li>
+     *   <li>{@code __sdiv}：安全除法，除数为 0 时该次除法记 0（让公式自身的 min/max/下限继续生效，
+     *       而不是整条公式归零）。公式里的 {@code a / b} 会被 {@link #DIV_PATTERN} 改写为 {@code __sdiv(a, b)}。</li>
+     * </ul>
+     */
     private static final String HELPER_PREFIX =
             "def min = { a, b -> (a <= b) ? a : b }\n"
-            + "def max = { a, b -> (a >= b) ? a : b }\n";
+            + "def max = { a, b -> (a >= b) ? a : b }\n"
+            + "def __sdiv = { a, b -> (b == 0) ? 0 : a / b }\n";
+
+    /**
+     * 匹配 {@code 项 / 项} 的除法（项 = 标识符[含中文] / 数字 / 单层括号组），改写成 {@code __sdiv(项, 项)}.
+     * <p>避免目标值/基础值缺失导致分母为 0 时整条公式抛除零异常；除零时该次除法取 0。
+     */
+    private static final Pattern DIV_PATTERN = Pattern.compile(
+            "(\\([^()]*\\)|[A-Za-z_\\u4e00-\\u9fa5][A-Za-z0-9_\\u4e00-\\u9fa5]*|\\d+(?:\\.\\d+)?)"
+            + "\\s*/\\s*"
+            + "(\\([^()]*\\)|[A-Za-z_\\u4e00-\\u9fa5][A-Za-z0-9_\\u4e00-\\u9fa5]*|\\d+(?:\\.\\d+)?)");
 
     private final GroovyExecutor groovyExecutor;
     private final PerfEngineProperties properties;
@@ -47,11 +65,24 @@ public class KpiScoreFormulaService {
     /**
      * 按对象代入计分公式求得得分.
      *
-     * @param formula 计分公式文本（非空白；变量 actual/target/base/weight，支持 min/max）
-     * @param actual  实际值（null 视为 0）
-     * @param target  目标值（null 视为 0）
-     * @param base    基础值（null 视为 0）
-     * @param weight  权重（null 视为 0）
+     * <p>可用变量（中英双绑，前端公式提示用中文）：
+     * <ul>
+     *   <li>{@code actual} —— 实际值</li>
+     *   <li>{@code target} —— 目标值</li>
+     *   <li>{@code base} —— 基础值</li>
+     *   <li>{@code weight} / {@code 权重} —— 权重（PERF_KPI_ITEM.weight）</li>
+     *   <li>{@code 计分上限} —— 计分上限（PERF_KPI_ITEM.max_score）</li>
+     *   <li>{@code 计分下限} —— 计分下限（PERF_KPI_ITEM.min_score）</li>
+     * </ul>
+     * 支持 {@code min} / {@code max} 函数。
+     *
+     * @param formula  计分公式文本（非空白）
+     * @param actual   实际值（null 视为 0）
+     * @param target   目标值（null 视为 0）
+     * @param base     基础值（null 视为 0）
+     * @param weight   权重（null 视为 0）
+     * @param minScore 计分下限（null 视为 0）
+     * @param maxScore 计分上限（null 视为 0）
      * @return 得分
      * @throws com.bank.branch.platform.performance.exception.PerfException 公式非法 / 求值异常（如除零）
      */
@@ -59,20 +90,32 @@ public class KpiScoreFormulaService {
                                 BigDecimal actual,
                                 BigDecimal target,
                                 BigDecimal base,
-                                BigDecimal weight) {
-        String script = HELPER_PREFIX + formula;
+                                BigDecimal weight,
+                                BigDecimal minScore,
+                                BigDecimal maxScore) {
+        // 把 a / b 改写为安全除法 __sdiv(a, b)：除数为 0 时该次除法取 0，公式自身的 min/max/下限照常生效
+        String safeFormula = formula == null ? null : DIV_PATTERN.matcher(formula).replaceAll("__sdiv($1, $2)");
+        String script = HELPER_PREFIX + safeFormula;
+        BigDecimal w = weight == null ? BigDecimal.ZERO : weight;
+        BigDecimal lo = minScore == null ? BigDecimal.ZERO : minScore;
+        BigDecimal hi = maxScore == null ? BigDecimal.ZERO : maxScore;
         Map<String, Object> binding = new HashMap<>();
         binding.put("actual", actual == null ? BigDecimal.ZERO : actual);
         binding.put("target", target == null ? BigDecimal.ZERO : target);
         binding.put("base", base == null ? BigDecimal.ZERO : base);
-        binding.put("weight", weight == null ? BigDecimal.ZERO : weight);
+        // 权重：英文 weight + 中文 权重 双绑
+        binding.put("weight", w);
+        binding.put("权重", w);
+        // 计分上下限：对应 PERF_KPI_ITEM.max_score / min_score
+        binding.put("计分上限", hi);
+        binding.put("计分下限", lo);
 
         Duration timeout = Duration.ofSeconds(
                 Math.max(1, properties == null ? 30 : properties.getSqlTimeoutSeconds()));
         try {
             BigDecimal score = groovyExecutor.execute(script, binding, timeout);
-            log.debug("[KpiScoreFormula] formula='{}' actual={} target={} base={} weight={} score={}",
-                    formula, actual, target, base, weight, score);
+            log.debug("[KpiScoreFormula] formula='{}' actual={} target={} base={} weight={} min={} max={} score={}",
+                    formula, actual, target, base, w, lo, hi, score);
             return score;
         } catch (RuntimeException e) {
             // 业务约定：除零（目标值/基础值缺失致分母为 0）不中断任务，记 0 分；
