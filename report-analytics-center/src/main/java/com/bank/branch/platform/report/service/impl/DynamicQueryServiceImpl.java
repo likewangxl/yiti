@@ -1,5 +1,7 @@
 package com.bank.branch.platform.report.service.impl;
 
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.write.style.column.LongestMatchColumnWidthStyleStrategy;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
@@ -22,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -123,6 +126,49 @@ public class DynamicQueryServiceImpl implements DynamicQueryService {
                 .rows(rows)
                 .rowCount(rows.size())
                 .build();
+    }
+
+    /**
+     * 同步导出 Excel：复用 execute 查询结果，按"对象 + 各指标列"动态表头生成 xlsx 字节。
+     * 不走异步任务表/MinIO，由控制器直接以附件流返回，前端点导出即下载。
+     */
+    @Override
+    public byte[] exportExcel(DynamicQueryReqDTO req) {
+        DynamicQueryRespDTO resp = execute(req);
+        List<MetricColumnDTO> cols = resp.getColumns() != null ? resp.getColumns() : List.of();
+
+        // 动态表头：第 1 列"对象"，其后每个指标一列（用指标名，缺省回退指标编码）
+        List<List<String>> head = new ArrayList<>();
+        head.add(List.of("对象"));
+        for (MetricColumnDTO col : cols) {
+            String name = col.getMetricName() != null && !col.getMetricName().isBlank()
+                    ? col.getMetricName() : col.getMetricCode();
+            head.add(List.of(name));
+        }
+
+        // 数据行：对象名 + 各指标值（null 输出空串）
+        List<List<Object>> data = new ArrayList<>();
+        for (Map<String, Object> row : (resp.getRows() != null ? resp.getRows() : List.<Map<String, Object>>of())) {
+            List<Object> line = new ArrayList<>();
+            Object subjectName = row.get("subjectName");
+            line.add(subjectName != null ? subjectName : row.get("subjectId"));
+            for (MetricColumnDTO col : cols) {
+                Object v = row.get(col.getMetricCode());
+                line.add(v != null ? v.toString() : "");
+            }
+            data.add(line);
+        }
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            // 列宽按内容（含列名表头）自适应：LongestMatchColumnWidthStyleStrategy
+            EasyExcel.write(out)
+                    .registerWriteHandler(new LongestMatchColumnWidthStyleStrategy())
+                    .head(head).sheet("动态指标查询").doWrite(data);
+            return out.toByteArray();
+        } catch (Exception ex) {
+            log.warn("[DynamicQuery] 导出 Excel 生成失败 dim={} err={}", req.getDim(), ex.getMessage());
+            throw new RptException(RptErrorCode.EXPORT_START_FAILED, ex);
+        }
     }
 
     /**

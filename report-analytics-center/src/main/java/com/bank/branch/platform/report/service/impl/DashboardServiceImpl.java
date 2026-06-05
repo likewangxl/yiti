@@ -64,6 +64,8 @@ import java.util.stream.Collectors;
 public class DashboardServiceImpl implements DashboardService {
 
     private static final String ROLE_PRESIDENT = "R_PRESIDENT";
+    /** 全行顶层机构编码（西安分行，ORG_LEVEL=1）；行长仪表盘默认看全行 */
+    private static final String ROOT_ORG_CODE = "1";
 
     private static final int TOP_CUSTOMER_LIMIT = 10;
 
@@ -106,11 +108,15 @@ public class DashboardServiceImpl implements DashboardService {
             throw new RptException(RptErrorCode.DASHBOARD_NO_ACCESS);
         }
 
-        // 2) dataDate / orgCode 默认值兜底（V1.14 # 2：orgCode 为空回退到 currentUser）
-        LocalDate resolvedDate = dataDate != null ? dataDate : LocalDate.now();
-        String resolvedOrgCode = (orgCode != null && !orgCode.isBlank())
-                ? orgCode
-                : currentUserApi.getCurrentOrgCode();
+        // 2) dataDate 默认取 SYS_CONTROL(ORG) 最新有效数据日期（"读取最新版本control表关联数据"）；
+        //    orgCode 默认取全行顶层机构（ORG_LEVEL=1 的"西安分行"=1），实现"全行"视角而非行长个人部门
+        LocalDate latest = null;
+        try { latest = metricApi.getLatestDataDate("ORG"); } catch (RuntimeException e) {
+            log.warn("[DashboardService] 取 SYS_CONTROL(ORG) 最新日期失败，回退 now()：{}", e.getMessage());
+        }
+        LocalDate resolvedDate = dataDate != null ? dataDate
+                : (latest != null ? latest : LocalDate.now());
+        String resolvedOrgCode = (orgCode != null && !orgCode.isBlank()) ? orgCode : ROOT_ORG_CODE;
         // 后续逻辑沿用旧变量名 orgCode 表示已解析后的最终机构
         orgCode = resolvedOrgCode;
 
@@ -119,10 +125,10 @@ public class DashboardServiceImpl implements DashboardService {
                 DashboardPresidentMetrics.CORE_METRICS);
 
         // 4) 趋势图（12 月单条循环）
-        ChartDataDTO depositTrend = buildTrend("DEP_BAL_ORG",
-                "全行存款趋势", "存款余额", "亿元", orgCode, resolvedDate);
-        ChartDataDTO loanTrend = buildTrend("LOAN_BAL_ORG",
-                "全行贷款趋势", "贷款余额", "亿元", orgCode, resolvedDate);
+        ChartDataDTO depositTrend = buildTrend("M_0265",
+                "全行存款趋势", "一般性存款月均", "万元", orgCode, resolvedDate);
+        ChartDataDTO loanTrend = buildTrend("M_0348",
+                "全行贷款趋势", "对公一般性贷款", "万元", orgCode, resolvedDate);
 
         // 5) 机构排名
         List<OrgRankingItemDTO> ranking = buildOrgRanking(orgCode, resolvedDate);
@@ -350,15 +356,15 @@ public class DashboardServiceImpl implements DashboardService {
         for (String orgCode : subtree) {
             Map<String, BigDecimal> values = safeGetOrgMetrics(orgCode, dataDate,
                     DashboardPresidentMetrics.RANKING_METRICS);
-            BigDecimal score = values != null ? values.get("KPI_TOTAL_SCORE_ORG") : null;
-            BigDecimal actual = values != null ? values.get("DEP_BAL_ORG") : null;
+            // 无 KPI 综合得分/达成率数据，V1 按存款规模(M_0265)排名；actual=存款规模，achievementRate 复用同值用于排序
+            BigDecimal depBal = values != null ? values.get(DashboardPresidentMetrics.RANKING_SORT_METRIC) : null;
             String orgName = resolveOrgName(orgCode);
             items.add(OrgRankingItemDTO.builder()
                     .orgId(orgCode)
                     .orgName(orgName)
-                    .achievementRate(score) // V1.0 用 KPI 总分代替达成率
+                    .achievementRate(depBal) // V1 用存款规模排序（无达成率源数据）
                     .target(null)            // V2 接入 OrgKpiTarget 后回填
-                    .actual(actual)
+                    .actual(depBal)
                     .build());
         }
         // 2) 按 KPI 总分倒序排，取 Top 20，再回填 rank

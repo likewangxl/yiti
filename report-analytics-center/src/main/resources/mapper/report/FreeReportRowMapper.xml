@@ -14,15 +14,30 @@
         <if test="empName != null and empName != ''">
             AND r.COL_2 LIKE CONCAT('%', #{empName}, '%')
         </if>
-        <if test="empId != null and empId != ''">
-            AND r.EMP_ID = #{empId}
+        <!-- 行级数据权限：COL_1=工号, COL_2=姓名；工号经 PT_USER.USERNAME→USER_ID→EXT_USER_ORG.ORG_CODE 映射机构 -->
+        <if test="rowMode == 'SELF'">
+            AND r.COL_1 = #{selfEmpNo} AND r.COL_2 = #{selfName}
         </if>
-        <if test="orgCodes != null and orgCodes.size() > 0">
-            AND r.ORG_CODE IN
-            <foreach collection="orgCodes" item="oc" open="(" separator="," close=")">
-                #{oc}
-            </foreach>
+        <if test="rowMode == 'ORG_SUBTREE'">
+            AND r.COL_1 IN (
+                SELECT u.USERNAME FROM PT_USER u
+                JOIN EXT_USER_ORG uo ON uo.USER_ID = u.USER_ID
+                WHERE uo.ORG_CODE IN
+                <foreach collection="orgCodes" item="oc" open="(" separator="," close=")">#{oc}</foreach>
+            )
         </if>
+        <if test="rowMode == 'BRANCH_EMP'">
+            AND (
+                r.COL_1 IN (
+                    SELECT u.USERNAME FROM PT_USER u
+                    JOIN EXT_USER_ORG uo ON uo.USER_ID = u.USER_ID
+                    JOIN EXT_ORG_INFO o ON o.ORG_CODE = uo.ORG_CODE
+                    WHERE o.ORG_LEVEL = 3
+                )
+                OR (r.COL_1 = #{selfEmpNo} AND r.COL_2 = #{selfName})
+            )
+        </if>
+        <!-- rowMode == 'ALL' 不加行级过滤 -->
     </sql>
 
     <select id="countByBatch" resultType="long">

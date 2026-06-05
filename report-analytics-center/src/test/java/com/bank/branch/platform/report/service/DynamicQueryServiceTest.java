@@ -181,6 +181,36 @@ class DynamicQueryServiceTest {
     }
 
     @Test
+    void exportExcel_happyPath_returnsXlsxBytes() {
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        req.setSubjectIds(new ArrayList<>(List.of("E001", "E002")));
+        req.setMetricCodes(new ArrayList<>(List.of("M_DEPOSIT_BAL")));
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.ALL, "E001", "ORG001", Set.of(),
+                BizType.REPORT, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+        when(metricApi.getEmpMetricValues(eq("E001"), any(LocalDate.class), anyList()))
+                .thenReturn(Map.of("M_DEPOSIT_BAL", new BigDecimal("1000.00")));
+        when(metricApi.getEmpMetricValues(eq("E002"), any(LocalDate.class), anyList()))
+                .thenReturn(Map.of("M_DEPOSIT_BAL", new BigDecimal("2000.00")));
+        MetricDefDTO def = new MetricDefDTO();
+        def.setMetricCode("M_DEPOSIT_BAL");
+        def.setMetricName("存款余额");
+        when(metricApi.getMetricDef("M_DEPOSIT_BAL")).thenReturn(Optional.of(def));
+        lenient().when(orgApi.getUserMainOrg(any())).thenReturn(null);
+
+        byte[] bytes = service.exportExcel(req);
+
+        // xlsx 本质是 zip，magic number 为 PK\x03\x04
+        assertThat(bytes).isNotEmpty();
+        assertThat(bytes[0]).isEqualTo((byte) 'P');
+        assertThat(bytes[1]).isEqualTo((byte) 'K');
+    }
+
+    @Test
     void execute_custDim_happyPath_usesCustomerQueryApi() {
         DynamicQueryReqDTO req = new DynamicQueryReqDTO();
         req.setDim("CUST");

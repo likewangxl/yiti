@@ -80,6 +80,15 @@ public interface MetricApi {
     Map<String, BigDecimal> getOrgMetricValues(String orgCode, LocalDate dataDate, List<String> metricCodes);
 
     /**
+     * 取某维度 SYS_CONTROL 的最新有效数据日期（current_version 对应的 latest_data_date）.
+     * <p>供报表/仪表盘"读取最新版本汇总数据"使用，未配置时返回 null.
+     *
+     * @param scopeDim 维度 EMP / ORG / CUST
+     * @return 最新数据日期，无配置返回 null
+     */
+    LocalDate getLatestDataDate(String scopeDim);
+
+    /**
      * 查询客户指标实际值.
      * <p>V1.0 抛 UnsupportedOperationException; V1.1 实现.
      */
