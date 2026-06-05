@@ -545,7 +545,8 @@ async function onCloneVersion(row) {
         await addKpiItem(newId, {
           metricCode: it.metricCode,
           weight: it.weight, multiplier: it.multiplier,
-          minScore: it.minScore, maxScore: it.maxScore
+          minScore: it.minScore, maxScore: it.maxScore,
+          formula: it.formula
         });
       } catch {}
     }
