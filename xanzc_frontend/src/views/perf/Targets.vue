@@ -45,8 +45,9 @@
         <!-- 主表（方案级，每行 1 个方案） -->
         <div class="card-section table">
           <el-table :data="pagedPlans" size="default" empty-text="暂无目标方案" v-loading="loadingPlans">
-            <el-table-column label="方案编码" prop="planCode" width="160" />
-            <el-table-column label="方案名称" prop="planName" min-width="200" />
+            <el-table-column label="目标方案" min-width="260">
+              <template #default="{row}">{{ row.planCode }}{{ row.planName ? ' - ' + row.planName : '' }}</template>
+            </el-table-column>
             <el-table-column label="关联 KPI 方案" min-width="200">
               <template #default="{row}">{{ kpiLabelOf(row.kpiSchemeId) }}</template>
             </el-table-column>
@@ -69,9 +70,10 @@
                 <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right">
+            <el-table-column label="操作" width="200" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button>
+                <el-button link type="primary" size="small" @click="openPlanTrigger(row)">触发</el-button>
                 <!-- 仅创建人可编辑：业务规则 - 资财人员可看全行方案（ALL scope），但只能改自己的 -->
                 <el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
               </template>
@@ -88,9 +90,6 @@
               layout="total, sizes, prev, pager, next, jumper"
             />
           </div>
-
-          <el-alert type="info" :closable="false" show-icon style="margin-top:14px"
-            title="点击「管理目标值」进入子页面维护方案下的员工 / 机构目标值；修正审批通过后将触发 KPI 历史回算（生成新批次 CALC-YYMMDD-xxx）。" />
         </div>
       </el-tab-pane>
 
@@ -343,6 +342,29 @@
       </template>
     </el-dialog>
 
+    <!-- 触发 KPI 计算：KPI方案锁定为该目标方案关联的方案，仅选数据日期 + 触发原因 -->
+    <el-dialog v-model="kpiTrgDlg.show" title="确认触发 KPI 计算" width="520px" :close-on-click-modal="false">
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px"
+        title="该操作将基于所选数据日期的指标结果与目标值，重算该目标方案关联的 KPI 方案得分。" />
+      <el-form ref="kpiTrgFormRef" :model="kpiTrgDlg.form" :rules="kpiTrgRules" label-position="top" size="default">
+        <el-form-item label="数据日期" prop="dataDate">
+          <el-date-picker v-model="kpiTrgDlg.form.dataDate" type="date"
+            value-format="YYYY-MM-DD" style="width:100%" placeholder="选择数据日期" />
+        </el-form-item>
+        <el-form-item label="KPI方案">
+          <el-input :model-value="kpiTrgDlg.form.schemeLabel" disabled />
+        </el-form-item>
+        <el-form-item label="触发原因" prop="reason">
+          <el-input v-model="kpiTrgDlg.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请说明触发 KPI 计算的原因（将记入审计日志）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="kpiTrgDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="kpiTrgDlg.saving" @click="onConfirmPlanTrigger">确认执行</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -350,7 +372,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics } from '@/api/perf';
+import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics, calcKpiScore } from '@/api/perf';
 import { listUsers } from '@/api/users';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -388,6 +410,7 @@ const statusCls   = (s) => ({ ACTIVE: 'tag-success', DISABLED: 'tag-info' }[s] |
 // === KPI 方案下拉 + id→label 映射（用于表格"关联 KPI 方案"列翻译） ===
 const kpiSchemeOptions = ref([]);
 const kpiMap = ref(new Map());
+const kpiSchemeById = ref(new Map()); // kpiSchemeId → { code, name }（供"触发"弹框解析关联方案编码）
 async function loadKpiSchemeOptions() {
   try {
     const r = await listKpiRules({ pageSize: 100 });
@@ -396,14 +419,55 @@ async function loadKpiSchemeOptions() {
     // 选 DISABLED/DRAFT/TRIAL_RUN/INACTIVE 都会被 PERF-42200 拒绝；前端过滤掉非 ACTIVE。
     kpiSchemeOptions.value = arr.filter(s => s.status === 'ACTIVE');
     const m = new Map();
+    const byId = new Map();
     // kpiMap 保留全部（含非 ACTIVE）用于列表展示历史方案的名称翻译，不影响下拉过滤
     for (const s of arr) {
       const code = s.schemeCode || s.code || '';
       const name = s.schemeName || s.name || '';
       m.set(s.id, `${code} · ${name}`.replace(/^ · /, '').replace(/ · $/, ''));
+      byId.set(s.id, { code, name });
     }
     kpiMap.value = m;
+    kpiSchemeById.value = byId;
   } catch { /* 列表仍可显示 ID 兜底 */ }
+}
+
+// === 触发 KPI 计算（目标方案关联的 KPI 方案锁定）===
+const kpiTrgFormRef = ref(null);
+const kpiTrgDlg = reactive({
+  show: false, saving: false,
+  form: { dataDate: new Date().toISOString().slice(0, 10), schemeCode: '', schemeLabel: '', reason: '' }
+});
+const kpiTrgRules = {
+  dataDate: [{ required: true, message: '请选择数据日期' }],
+  reason:   [{ required: true, message: '请填写触发原因', trigger: 'blur' }]
+};
+function openPlanTrigger(row) {
+  const sch = row.kpiSchemeId ? kpiSchemeById.value.get(row.kpiSchemeId) : null;
+  if (!sch || !sch.code) {
+    return ElMessage.warning('该目标方案未关联有效的 KPI 方案，无法触发计算');
+  }
+  kpiTrgDlg.form.dataDate = new Date().toISOString().slice(0, 10);
+  kpiTrgDlg.form.schemeCode = sch.code;
+  kpiTrgDlg.form.schemeLabel = `${sch.code}${sch.name ? ' - ' + sch.name : ''}`;
+  kpiTrgDlg.form.reason = '';
+  kpiTrgDlg.show = true;
+}
+async function onConfirmPlanTrigger() {
+  try { await kpiTrgFormRef.value.validate(); } catch { return; }
+  kpiTrgDlg.saving = true;
+  try {
+    // 后端 /api/perf/kpi-score/calc：先记审计日志，再调用 KPI 计算服务
+    await calcKpiScore({
+      dataDate:   kpiTrgDlg.form.dataDate,
+      schemeCode: kpiTrgDlg.form.schemeCode,
+      reason:     (kpiTrgDlg.form.reason || '').trim()
+    });
+    ElMessage.success('已触发 KPI 计算');
+    kpiTrgDlg.show = false;
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '触发失败');
+  } finally { kpiTrgDlg.saving = false; }
 }
 const kpiLabelOf = (id) => kpiMap.value.get(id) || id || '-';
 
@@ -904,7 +968,8 @@ onMounted(async () => {
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
 .pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .tab-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.targets-tabs :deep(.el-tabs__header) { margin-bottom: 12px; }
+/* 取消审批后只保留「目标方案」，隐藏 tab 栏（待我审批/已审批不再使用） */
+.targets-tabs :deep(.el-tabs__header) { display: none; }
 .review-meta {
   background: rgba(64, 158, 255, 0.04);
   border-left: 3px solid #409eff;

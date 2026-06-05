@@ -8,10 +8,6 @@
       </div>
     </div>
 
-    <el-alert type="info" :closable="false"
-      title="线下调整后将触发 KPI 历史回算。'我的申请' = 当前账号提交的；'待我审批' = 流程任务派到我的。"
-      style="margin-bottom:12px" />
-
     <el-tabs v-model="activeTab" @tab-change="reload" class="adjust-tabs">
       <!-- ============ 我的申请 ============ -->
       <el-tab-pane label="我的申请" name="mine">

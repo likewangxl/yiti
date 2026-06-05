@@ -64,12 +64,6 @@
         <el-table-column label="结束时间" width="170">
           <template #default="{row}">{{ fmtTime(row.endTime) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="150">
-          <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openTriggerRow(row)">触发</el-button>
-            <el-button v-if="row.result === 'FAILED'" link type="primary" size="small" @click="openLogError(row)">查看错误</el-button>
-          </template>
-        </el-table-column>
       </el-table>
       <div class="pager">
         <el-pagination v-model:current-page="logPgNo" v-model:page-size="logPgSize" :page-sizes="[10,20,50]"
@@ -78,26 +72,23 @@
       </div>
     </div>
 
-    <!-- 触发计算 弹框（截图 181）—— UI 仅 3 字段，后端需要的 cycleType/cycleDateFrom/cycleDateTo/version/reason 在提交时自动派生 -->
+    <!-- 触发计算 弹框：数据日期 + KPI方案 + 触发原因 → 调 KPI 计算服务（先记审计日志再计算） -->
     <el-dialog v-model="trgDlg.show" title="确认触发 KPI 计算" width="520px" :close-on-click-modal="false">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px"
-        :title="`该操作将基于当前指标结果与目标值，重算 ${trgDlg.form.scheme} ${rangeLabel(trgDlg.form.scope)} KPI 得分。预计耗时 8 分钟，期间会锁定相关数据。`" />
+        title="该操作将基于所选数据日期的指标结果与目标值，重算指定 KPI 方案的得分。" />
       <el-form ref="trgFormRef" :model="trgDlg.form" :rules="trgRules" label-position="top" size="default">
-        <el-form-item label="方案" prop="scheme">
-          <el-select v-model="trgDlg.form.scheme" style="width:100%">
-            <el-option v-for="o in schemeOptions" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="范围" prop="scope">
-          <el-select v-model="trgDlg.form.scope" style="width:100%">
-            <el-option label="全行"   value="ALL" />
-            <el-option label="按机构" value="ORG" />
-            <el-option label="按员工" value="EMP" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="数据日期" prop="dataDate">
           <el-date-picker v-model="trgDlg.form.dataDate" type="date"
             value-format="YYYY-MM-DD" style="width:100%" placeholder="选择数据日期" />
+        </el-form-item>
+        <el-form-item label="KPI方案" prop="schemeCode">
+          <el-select v-model="trgDlg.form.schemeCode" filterable placeholder="请选择 KPI 方案" style="width:100%">
+            <el-option v-for="o in activeSchemeOptions" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="触发原因" prop="reason">
+          <el-input v-model="trgDlg.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请说明触发 KPI 计算的原因（将记入审计日志）" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -242,6 +233,7 @@ const logPgNo = ref(1);
 const logPgSize = ref(20);
 const logLoading = ref(false);
 const schemeSelOptions = ref([]);
+const activeSchemeOptions = ref([]); // 仅启用(ACTIVE) KPI 方案，供触发计算弹框下拉
 const schemeNameMap = ref({});
 function schemeLabel(code) {
   if (!code) return '-';
@@ -253,9 +245,14 @@ function fmtTime(t) {
 }
 async function loadSchemeOptions() {
   try {
-    const r = await listKpiRules({ pageSize: 200 });
+    // pageSize 上限 100（后端 @Max(100)，超限会 400 → 静默走 mock 兜底，导致真实方案丢失）
+    const r = await listKpiRules({ pageSize: 100 });
     const arr = Array.isArray(r) ? r : (r?.records || []);
     schemeSelOptions.value = arr.map(x => ({ value: x.schemeCode, label: `${x.schemeName || x.schemeCode}(${x.schemeCode})` }));
+    // 触发计算弹框的 KPI方案下拉：仅 状态=启用(ACTIVE) 的方案，展示「编号 - 名称」
+    activeSchemeOptions.value = arr
+      .filter(x => x.status === 'ACTIVE' && x.schemeCode)
+      .map(x => ({ value: x.schemeCode, label: `${x.schemeCode}${x.schemeName ? ' - ' + x.schemeName : ''}` }));
     const m = {};
     arr.forEach(x => { if (x.schemeCode) m[x.schemeCode] = x.schemeName || x.schemeCode; });
     schemeNameMap.value = m;
@@ -332,15 +329,17 @@ const schemeOptions = [
 ];
 const trgDlg = reactive({
   show: false, saving: false,
-  form: { scheme: NOW_QUARTER, scope: 'ALL', dataDate: new Date().toISOString().slice(0, 10) }
+  form: { schemeCode: '', dataDate: new Date().toISOString().slice(0, 10), reason: '' }
 });
 const trgRules = {
-  scheme:   [{ required: true, message: '请选择方案' }],
-  scope:    [{ required: true, message: '请选择范围' }],
-  dataDate: [{ required: true, message: '请选择数据日期' }]
+  dataDate:   [{ required: true, message: '请选择数据日期' }],
+  schemeCode: [{ required: true, message: '请选择 KPI 方案' }],
+  reason:     [{ required: true, message: '请填写触发原因', trigger: 'blur' }]
 };
 function openTrigger() {
   trgDlg.form.dataDate = new Date().toISOString().slice(0, 10);
+  trgDlg.form.schemeCode = '';
+  trgDlg.form.reason = '';
   trgDlg.show = true;
 }
 /**
@@ -389,18 +388,13 @@ async function onConfirmTrigger() {
   try { await trgFormRef.value.validate(); } catch { return; }
   trgDlg.saving = true;
   try {
-    const cyc = deriveCycle(trgDlg.form.scheme);
-    const d = new Date();
-    const version = `v${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
-    const reason = `前端触发 KPI 重算：${trgDlg.form.scheme} / ${rangeLabel(trgDlg.form.scope)} / 数据日期 ${trgDlg.form.dataDate}`;
-    const r = await triggerCompute({
-      cycleType:     cyc.cycleType,
-      cycleDateFrom: cyc.cycleDateFrom,
-      cycleDateTo:   trgDlg.form.dataDate || cyc.cycleDateTo,  // 用户选的数据日期作为终点
-      version,
-      reason
+    // 后端 /api/perf/kpi-score/calc：先记审计日志，再调用 KPI 计算服务
+    await calcKpiScore({
+      dataDate:   trgDlg.form.dataDate,
+      schemeCode: trgDlg.form.schemeCode,
+      reason:     (trgDlg.form.reason || '').trim()
     });
-    ElMessage.success(`已提交计算任务${r?.batch ? '：' + r.batch : ''}`);
+    ElMessage.success('已触发 KPI 计算');
     trgDlg.show = false;
     setTimeout(reload, 800);
   } catch (err) {
