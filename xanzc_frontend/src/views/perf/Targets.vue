@@ -73,11 +73,9 @@
             </el-table-column>
             <el-table-column label="创建人" min-width="180">
               <template #default="{row}">
-                <template v-if="userInfoMap.get(row.createdBy)">
-                  <div>{{ userInfoMap.get(row.createdBy).name || userInfoMap.get(row.createdBy).username || row.createdBy }}</div>
-                  <div v-if="userInfoMap.get(row.createdBy).username" style="color:#909399;font-size:12px;">{{ userInfoMap.get(row.createdBy).username }}</div>
-                </template>
-                <template v-else>{{ row.createdBy || '-' }}</template>
+                <!-- 创建人姓名/工号由后端目标方案列表解析返回（createdByName/createdByUsername），不再依赖管理员 /admin/users -->
+                <div>{{ row.createdByName || row.createdByUsername || row.createdBy || '-' }}</div>
+                <div v-if="row.createdByUsername" style="color:#909399;font-size:12px;">{{ row.createdByUsername }}</div>
               </template>
             </el-table-column>
             <el-table-column label="状态" width="80">
