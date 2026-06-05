@@ -20,6 +20,8 @@ public class PerfMetricCalcTask {
     private String taskType;
     private Integer metricLevel;
     private LocalDate dataDate;
+    /** KPI 方案编号（KPI 分值计算任务用，空=全部方案；其余任务为 null）. */
+    private String kpiSchemeCode;
     private String status;
     private LocalDateTime startTime;
     private LocalDateTime endTime;

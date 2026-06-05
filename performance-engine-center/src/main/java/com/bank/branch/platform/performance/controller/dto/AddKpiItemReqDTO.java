@@ -51,4 +51,9 @@ public class AddKpiItemReqDTO {
     @Schema(description = "最高分, 默认 999999")
     @DecimalMin(value = "0.0000", message = "maxScore 不能小于 0")
     private BigDecimal maxScore;
+
+    /** 计分公式 (可空), 变量 actual/target/base/weight, 支持 min/max, 例 min(actual / target * 100, 120). */
+    @Schema(description = "计分公式, 变量 actual/target/base/weight, 支持 min/max")
+    @Size(max = 500, message = "formula 长度不能超过 500")
+    private String formula;
 }

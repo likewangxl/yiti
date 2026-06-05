@@ -65,6 +65,7 @@ public final class KpiAssembler {
                 .multiplier(item.getMultiplier())
                 .minScore(item.getMinScore())
                 .maxScore(item.getMaxScore())
+                .formula(item.getFormula())
                 .sortNo(null)
                 .build();
     }

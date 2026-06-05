@@ -115,6 +115,19 @@ public interface CustIndexResultMapper extends BaseMapper<CustIndexResult> {
                                        @Param("version") String version);
 
     /**
+     * KPI 分值计算：取某数据日期下某 slot 的全部客户实际值（同客户多版本取最新 version）.
+     *
+     * <p>列名 {@code val_${slot}} 属 common-dev-guide §5 允许的动态列名例外，
+     * 调用方必须保证 {@code slot ∈ [1, 400]}。
+     *
+     * @param dataDate 数据日期
+     * @param slot     值槽（1..400，<strong>调用方必须校验</strong>）
+     * @return 每个客户（最新版本）的 (subjectId, value)；该槽位为 null 的对象不返回
+     */
+    List<SubjectSlotValueRow> selectLatestSlotValuesByDate(@Param("dataDate") LocalDate dataDate,
+                                                           @Param("slot") Integer slot);
+
+    /**
      * V1.7：按 subject + 多 metricCode 在单一 dataDate+version 下取宽表 slot 值.
      *
      * @param subject     客户 ID

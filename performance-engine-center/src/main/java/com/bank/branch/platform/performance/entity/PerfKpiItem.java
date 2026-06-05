@@ -41,6 +41,15 @@ public class PerfKpiItem {
     /** 最高分（decimal(10,4)，默认 999999）. */
     private BigDecimal maxScore;
 
+    /**
+     * 计分公式（varchar(500)，可空）.
+     *
+     * <p>前端 KpiRules.vue 编辑，可用变量 {@code actual}（实际值）/ {@code target}（目标值）/
+     * {@code base}（基础值）/ {@code weight}（权重），支持 {@code min} / {@code max} 函数，
+     * 例：{@code min(actual / target * 100, 120)}。KPI 分值计算时按对象代入求值。
+     */
+    private String formula;
+
     /** 创建时间. */
     private LocalDateTime createdTime;
 }

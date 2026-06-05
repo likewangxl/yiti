@@ -110,6 +110,19 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                       @Param("version") String version);
 
     /**
+     * KPI 分值计算：取某数据日期下某 slot 的全部员工实际值（同员工多版本取最新 version）.
+     *
+     * <p>列名 {@code val_${slot}} 属 common-dev-guide §5 允许的动态列名例外，
+     * 调用方必须保证 {@code slot ∈ [1, 400]}。
+     *
+     * @param dataDate 数据日期
+     * @param slot     值槽（1..400，<strong>调用方必须校验</strong>）
+     * @return 每个员工（最新版本）的 (subjectId, value)；该槽位为 null 的对象不返回
+     */
+    List<SubjectSlotValueRow> selectLatestSlotValuesByDate(@Param("dataDate") LocalDate dataDate,
+                                                           @Param("slot") Integer slot);
+
+    /**
      * V1.5 P4.1 新增：按 dataDate 列表批量查询同一 slot 的值.
      *
      * <p>用途：{@code MetricApi.getUserMetricCards} 的 mom/yoy 场景，一次 IN 查询

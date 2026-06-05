@@ -37,6 +37,9 @@ public class AddKpiItemCmd {
     /** 最高分（默认 999999）. */
     private BigDecimal maxScore;
 
+    /** 计分公式（可空，变量 actual/target/base/weight，支持 min/max）. */
+    private String formula;
+
     /** 操作人（审计用，当前表无 created_by 列，由 scheme 侧记录）. */
     private String operator;
 }

@@ -23,5 +23,7 @@ public class KpiItemDTO {
     private BigDecimal multiplier;
     private BigDecimal minScore;
     private BigDecimal maxScore;
+    /** 计分公式（变量 actual/target/base/weight，支持 min/max）. */
+    private String formula;
     private Integer sortNo;
 }

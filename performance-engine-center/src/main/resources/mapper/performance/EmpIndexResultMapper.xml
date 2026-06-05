@@ -120,4 +120,23 @@
         LIMIT 1
     </select>
 
+    <!--
+      KPI 分值计算：取某日某 slot 的全部员工实际值（同员工多版本按 updated_time 取最新行）。
+      val_${slot} 动态列名属 common-dev-guide §5 合法例外，Service 层强制校验 slot ∈ [1,400]。
+    -->
+    <select id="selectLatestSlotValuesByDate"
+            resultType="com.bank.branch.platform.performance.mapper.SubjectSlotValueRow">
+        SELECT t.emp_id AS subjectId,
+               t.val_${slot} AS value
+        FROM EMP_INDEX_RESULT t
+        JOIN (
+            SELECT emp_id, MAX(updated_time) AS mt
+            FROM EMP_INDEX_RESULT
+            WHERE data_date = #{dataDate}
+            GROUP BY emp_id
+        ) m ON t.emp_id = m.emp_id AND t.updated_time = m.mt
+        WHERE t.data_date = #{dataDate}
+          AND t.val_${slot} IS NOT NULL
+    </select>
+
 </mapper>
