@@ -148,7 +148,7 @@
         </el-table-column>
         <el-table-column label="计分公式" min-width="280">
           <template #default="{row}">
-            <el-input v-model="row.formula" :disabled="dlg.readOnly" placeholder="如 min(actual / target * 100, 120)" />
+            <el-input v-model="row.formula" :disabled="dlg.readOnly" :placeholder="dlg.readOnly ? '' : '如 min(actual / target * 100, 120)'" />
           </template>
         </el-table-column>
         <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center" fixed="right">
