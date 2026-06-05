@@ -46,10 +46,19 @@
         <div class="card-section table">
           <el-table :data="pagedPlans" size="default" empty-text="暂无目标方案" v-loading="loadingPlans">
             <el-table-column label="目标方案" min-width="260">
-              <template #default="{row}">{{ row.planCode }}{{ row.planName ? ' - ' + row.planName : '' }}</template>
+              <template #default="{row}">
+                <div>{{ row.planName || row.planCode || '-' }}</div>
+                <div v-if="row.planCode" style="color:#909399;font-size:12px;">{{ row.planCode }}</div>
+              </template>
             </el-table-column>
             <el-table-column label="关联 KPI 方案" min-width="200">
-              <template #default="{row}">{{ kpiLabelOf(row.kpiSchemeId) }}</template>
+              <template #default="{row}">
+                <template v-if="kpiSchemeById.get(row.kpiSchemeId)">
+                  <div>{{ kpiSchemeById.get(row.kpiSchemeId).name || kpiSchemeById.get(row.kpiSchemeId).code || '-' }}</div>
+                  <div v-if="kpiSchemeById.get(row.kpiSchemeId).code" style="color:#909399;font-size:12px;">{{ kpiSchemeById.get(row.kpiSchemeId).code }}</div>
+                </template>
+                <template v-else>{{ kpiLabelOf(row.kpiSchemeId) }}</template>
+              </template>
             </el-table-column>
             <el-table-column label="维度" width="80">
               <template #default="{row}">{{ dimLabel(row.targetDim) }}</template>
@@ -63,7 +72,13 @@
               </template>
             </el-table-column>
             <el-table-column label="创建人" min-width="180">
-              <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdBy || '-' }}</template>
+              <template #default="{row}">
+                <template v-if="userInfoMap.get(row.createdBy)">
+                  <div>{{ userInfoMap.get(row.createdBy).name || userInfoMap.get(row.createdBy).username || row.createdBy }}</div>
+                  <div v-if="userInfoMap.get(row.createdBy).username" style="color:#909399;font-size:12px;">{{ userInfoMap.get(row.createdBy).username }}</div>
+                </template>
+                <template v-else>{{ row.createdBy || '-' }}</template>
+              </template>
             </el-table-column>
             <el-table-column label="状态" width="80">
               <template #default="{row}">
@@ -286,7 +301,7 @@
       <div class="review-history" v-if="detailDlg.history.length" style="margin-top:12px">
         <div class="history-title">审批记录</div>
         <div v-for="(log, i) in sortedHistory" :key="i" class="history-item">
-          <span class="lab">{{ log.action === 'SUBMIT' ? '申请人' : '审批人' }}：</span>{{ log.operatorName || log.operator || '-' }}
+          <span class="lab">{{ log.action === 'SUBMIT' ? '申请人' : '审批人' }}：</span>{{ log.operatorName || log.operatorEmpNo || log.operator || '-' }}<span v-if="log.operatorEmpNo">（{{ log.operatorEmpNo }}）</span>
           <span class="sep">|</span>
           <span class="lab">节点：</span>{{ log.nodeName || log.nodeKey || '-' }}
           <span class="sep">|</span>
@@ -536,11 +551,14 @@ const loadingPlans = ref(false);
 
 // user_id → "username (中文名)" 映射，用于列表"创建人"列展示
 const userMap = ref(new Map());
+// user_id → { name:中文名, username:工号 }，用于"创建人"列两行展示（姓名 + 工号副标题）
+const userInfoMap = ref(new Map());
 async function loadUserMap() {
   try {
     const r = await listUsers({ pageSize: 200 });
     const list = Array.isArray(r) ? r : (r?.records || []);
     const m = new Map();
+    const info = new Map();
     for (const u of list) {
       const id = u.userId || u.empId;
       if (!id) continue;
@@ -549,8 +567,10 @@ async function loadUserMap() {
       // 形如 "finance_zhou (周八(资财))"；若任一为空则只显示有的部分
       const label = uname && cn ? `${uname} (${cn})` : (uname || cn || id);
       m.set(id, label);
+      info.set(id, { name: cn, username: uname });
     }
     userMap.value = m;
+    userInfoMap.value = info;
   } catch {
     // listUsers 403 等异常时静默——列表降级显示原始 user_id 不阻塞页面
   }

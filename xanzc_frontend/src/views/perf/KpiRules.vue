@@ -56,7 +56,10 @@
         </el-table-column>
         <el-table-column label="创建人" min-width="140">
           <template #default="{row}">
-            <span v-if="row.createdByUsername || row.createdBy">{{ (row.createdByUsername || row.createdBy) }}{{ row.createdByName ? ' ' + row.createdByName : '' }}</span>
+            <template v-if="row.createdByName || row.createdByUsername || row.createdBy">
+              <div>{{ row.createdByName || row.createdByUsername || row.createdBy }}</div>
+              <div v-if="row.createdByUsername || row.createdBy" style="color:#909399;font-size:12px;">{{ row.createdByUsername || row.createdBy }}</div>
+            </template>
             <span v-else>-</span>
           </template>
         </el-table-column>

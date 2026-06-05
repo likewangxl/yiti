@@ -51,6 +51,15 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="触发人" width="130">
+          <template #default="{row}">
+            <template v-if="row.triggerBy">
+              <div>{{ row.triggerByName || row.triggerBy }}</div>
+              <div style="color:#909399;font-size:12px;">{{ row.triggerBy }}</div>
+            </template>
+            <template v-else>-</template>
+          </template>
+        </el-table-column>
         <el-table-column label="执行结果" width="110">
           <template #default="{row}">
             <el-tag effect="plain" :class="row.result === 'SUCCESS' ? 'tag-success' : 'tag-danger'">

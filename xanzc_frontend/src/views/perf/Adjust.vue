@@ -58,8 +58,8 @@
             </el-table-column>
             <el-table-column label="客户" min-width="190">
               <template #default="{row}">
-                <div>{{ row.custId || '-' }}</div>
-                <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
+                <div>{{ row.custName || '-' }}</div>
+                <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
               </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
@@ -148,20 +148,21 @@
             </el-table-column>
             <el-table-column label="客户" min-width="190">
               <template #default="{row}">
-                <div>{{ row.custId || '-' }}</div>
-                <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
+                <div>{{ row.custName || '-' }}</div>
+                <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
               </template>
             </el-table-column>
             <el-table-column label="发起人" width="160">
               <template #default="{row}">
-                {{ row.startUserName || '-' }}
-                <span v-if="row.startUser" class="sub-id">({{ row.startUser }})</span>
+                <div>{{ row.startUserName || row.startUserEmpNo || row.startUser || '-' }}</div>
+                <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
               </template>
             </el-table-column>
             <el-table-column label="发起机构" width="220">
               <template #default="{row}">
-                <template v-if="row.startOrgName || row.startOrgId">
-                  {{ row.startOrgId || '-' }}<span v-if="row.startOrgName"> · {{ row.startOrgName }}</span>
+                <template v-if="row.startOrgName || row.startOrgDeptNo || row.startOrgId">
+                  <div>{{ row.startOrgName || '-' }}</div>
+                  <div v-if="row.startOrgDeptNo" class="sub-id">{{ row.startOrgDeptNo }}</div>
                 </template>
                 <template v-else>-</template>
               </template>
@@ -237,8 +238,8 @@
             </el-table-column>
             <el-table-column label="客户" min-width="190">
               <template #default="{row}">
-                <div>{{ row.custId || '-' }}</div>
-                <div v-if="row.custName" class="cust-name-sub">{{ row.custName }}</div>
+                <div>{{ row.custName || '-' }}</div>
+                <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
               </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
@@ -298,8 +299,8 @@
             <code class="mono">{{ dlg.applyNo || '-' }}</code>
           </el-descriptions-item>
           <el-descriptions-item label="申请人">
-            <span>{{ dlg.createdByName || '-' }}</span>
-            <span v-if="dlg.createdBy" class="sub-id">（{{ dlg.createdBy }}）</span>
+            <span>{{ dlg.createdByName || dlg.createdByUsername || dlg.createdBy || '-' }}</span>
+            <span v-if="dlg.createdByUsername" class="sub-id">（{{ dlg.createdByUsername }}）</span>
           </el-descriptions-item>
           <el-descriptions-item label="申请机构">
             {{ dlg.createdByOrgName || '-' }}
@@ -524,8 +525,8 @@
               </div>
               <div class="approval-meta">
                 <span class="meta-key">审核人：</span>
-                <span>{{ log.operatorName || log.operator || '-' }}</span>
-                <span v-if="log.operator && log.operatorName" class="sub-id">({{ log.operator }})</span>
+                <span>{{ log.operatorName || log.operatorEmpNo || log.operator || '-' }}</span>
+                <span v-if="log.operatorEmpNo" class="sub-id">（{{ log.operatorEmpNo }}）</span>
                 <span class="meta-sep">·</span>
                 <span class="meta-key">机构：</span>
                 <span>{{ log.operatorOrgName || '-' }}</span>
@@ -911,6 +912,7 @@ async function openTodoDetail(row) {
     dlg.applyNo = d.applyNo || '';
     dlg.createdBy = d.createdBy || '';
     dlg.createdByName = d.createdByName || '';
+    dlg.createdByUsername = d.createdByUsername || '';
     dlg.createdByOrgName = d.createdByOrgName || '';
     dlg.createdTime = d.createdTime || null;
     dlg.show = true;
