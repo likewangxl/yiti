@@ -34,6 +34,10 @@ public class TargetPlanDTO {
     private LocalDate endDate;
     /** 状态: ACTIVE/DISABLED. */
     private String status;
-    /** 创建人工号. */
+    /** 创建人 USER_ID（PT_USER.user_id 内部主键）. */
     private String createdBy;
+    /** 创建人中文姓名（按 createdBy 反查 PT_USER.userchnname，展示用）. */
+    private String createdByName;
+    /** 创建人工号（PT_USER.username，展示用）. */
+    private String createdByUsername;
 }
