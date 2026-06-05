@@ -327,13 +327,6 @@ function persistMeta(schemeCode, applyScope, items) {
   saveMeta(meta);
 }
 
-function resolveOrgScope(row) {
-  const fromMeta = getApplyScope(row);
-  if (fromMeta) return fromMeta;
-  const name = row.schemeName || '';
-  if (/中场|后台/.test(name)) return '中场支持部';
-  return '全部支行';
-}
 function resolveVersion(row) {
   return 'v' + ((row.id || row.schemeCode || '').slice(-1).match(/\d/) ? Math.max(1, parseInt((row.id || '1').replace(/\D/g, '').slice(-1)) || 1) : 1);
 }
