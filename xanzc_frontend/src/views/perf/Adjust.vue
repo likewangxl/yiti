@@ -255,8 +255,8 @@
             </el-table-column>
             <el-table-column label="申请人" width="160">
               <template #default="{row}">
-                {{ row.createdByName || row.startUserName || row.createdBy || '-' }}
-                <span v-if="row.createdBy" class="sub-id">({{ row.createdBy }})</span>
+                <div>{{ row.startUserName || row.createdByName || row.startUserEmpNo || row.createdBy || '-' }}</div>
+                <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
               </template>
             </el-table-column>
             <el-table-column label="申请时间" width="160">
