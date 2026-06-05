@@ -40,9 +40,6 @@
             <a class="link" @click="openEdit(row, true)">{{ row.schemeName }}</a>
           </template>
         </el-table-column>
-        <el-table-column label="适用范围" min-width="200">
-          <template #default="{row}">{{ resolveOrgScope(row) }}</template>
-        </el-table-column>
         <el-table-column label="指标项" width="90" align="center">
           <template #default="{row}">{{ row.itemCount ?? row.items?.length ?? '...' }}</template>
         </el-table-column>
