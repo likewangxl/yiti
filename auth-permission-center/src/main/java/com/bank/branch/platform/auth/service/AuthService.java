@@ -154,28 +154,8 @@ public class AuthService {
         resp.setPrimaryRoleCode(primaryRole.getRoleCode());
         resp.setPrimaryRoleName(primaryRole.getRoleChName());
 
-        // 登录成功后追加一步：通过边车调统一认证 S120030044 查授权信息（fail-open，异常不挡主流程）
-        // 对应 xanpd 的 LoginController.loginAfter → IAuthorityHandler.handleAuthorities → UserInfoFromUIAS
-        if (uniAuthSidecarClient != null) {
-            try {
-                UniAuthRespDTO uia = uniAuthSidecarClient.queryUserInfo(user.getUsername());
-                if (uia.isSuccess() && uia.getSvcBody() != null && uia.getSvcBody().getUserInfoQryRslt() != null) {
-                    session.setAttribute("UIAS_USER_BSC_INFO",
-                            uia.getSvcBody().getUserInfoQryRslt().getUserBscInfo());
-                    session.setAttribute("UIAS_INST_INFO_LIST",
-                            uia.getSvcBody().getUserInfoQryRslt().getInstInfoList());
-                    log.info("[AuthService.login] UIAS 授权同步成功 empId={}", user.getUserId());
-                } else {
-                    log.warn("[AuthService.login] UIAS 查询失败 empId={} returnCode={}",
-                            user.getUserId(),
-                            uia.getRspSvcHeader() == null ? null : uia.getRspSvcHeader().getReturnCode());
-                }
-            } catch (Exception e) {
-                log.warn("[AuthService.login] UIAS 查询异常（不阻断登录） empId={} err={}",
-                        user.getUserId(), e.getMessage());
-            }
-        }
-
+        // 普通账号密码登录不再同步调 UIAS 边车：内网边车不可达时 connect/read 超时会让登录卡数秒。
+        // 统一认证（loginByUniAuth）链路仍走 UIAS。
         log.info("[AuthService.login] 登录成功 empId={}, roles={}", user.getUserId(), roleCodes);
         return resp;
     }
