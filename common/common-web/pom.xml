@@ -16,10 +16,8 @@
             <artifactId>lombok</artifactId>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
+        <!-- spring-boot-starter-validation 已上提到根 pom 统一声明（它传递引入 tomcat-embed-el，
+             连同 starter-web 的内嵌 Tomcat 一并收敛到根 pom，换宝蓝德时只排除根 pom 一处即可） -->
 
         <!-- JdbcLockManager 用 (PT_LOCK 分布式锁去 Redis 后自建) -->
         <dependency>

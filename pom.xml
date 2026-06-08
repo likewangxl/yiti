@@ -183,6 +183,15 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!--
+          spring-boot-starter-validation 上提到此处统一声明（原在 common-web）。
+          它传递引入 tomcat-embed-el；连同 starter-web 的 tomcat-embed-core/websocket，
+          全部内嵌 Tomcat 制品都从本根 pom 出，换宝蓝德(BES)时只需在本文件排除一处。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
