@@ -48,10 +48,15 @@
         </userTask>
 
         <userTask id="original_owner_approve" name="原业绩所属人审批"
-                  flowable:assignee="${originalOwnerEmpId}">
+                  flowable:assignee="${ownerEmpId}">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
+            <!-- 与对公线一致：对 originalOwnerEmpIds 并行多实例会签，每个原所属人一个子任务，全部通过后流转 -->
+            <multiInstanceLoopCharacteristics isSequential="false"
+                    flowable:collection="${originalOwnerEmpIds}" flowable:elementVariable="ownerEmpId">
+                <completionCondition>${nrOfCompletedInstances == nrOfInstances}</completionCondition>
+            </multiInstanceLoopCharacteristics>
         </userTask>
 
         <exclusiveGateway id="gw1_join" name="零售部汇合"/>
