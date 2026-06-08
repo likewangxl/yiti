@@ -232,6 +232,7 @@ public class KpiSchemeController {
         AddKpiItemCmd cmd = AddKpiItemCmd.builder()
                 .schemeId(id)
                 .metricCode(req.getMetricCode())
+                .baseDim(req.getBaseDim())
                 .weight(req.getWeight())
                 .multiplier(req.getMultiplier())
                 .minScore(req.getMinScore())

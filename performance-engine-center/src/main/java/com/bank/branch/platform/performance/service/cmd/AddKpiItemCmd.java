@@ -25,6 +25,9 @@ public class AddKpiItemCmd {
     /** 指标编码（引用 perf_metric_def.metric_code）. */
     private String metricCode;
 
+    /** 指标维度（EMP/ORG/CUST，随指标固化落库，便于展示）. */
+    private String baseDim;
+
     /** 权重（decimal(10,4)）. */
     private BigDecimal weight;
 

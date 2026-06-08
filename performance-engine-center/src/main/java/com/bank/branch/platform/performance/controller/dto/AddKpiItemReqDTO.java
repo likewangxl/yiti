@@ -27,6 +27,11 @@ public class AddKpiItemReqDTO {
     // 引用既有指标，不做编码格式校验（格式校验只在"新建指标"CreateMetricReqDTO 处做）
     private String metricCode;
 
+    /** 指标维度 (EMP/ORG/CUST, 可空); 随所选指标固化落库, 便于列表/回显展示, 与指标 base_dim 一致. */
+    @Schema(description = "指标维度 EMP/ORG/CUST")
+    @Size(max = 8, message = "baseDim 长度不能超过 8")
+    private String baseDim;
+
     /** 权重 (0.0000 ~ 100.0000). */
     @Schema(description = "权重 0~100", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "weight 不能为空")
@@ -39,9 +44,8 @@ public class AddKpiItemReqDTO {
     @DecimalMin(value = "0.0000", message = "multiplier 不能小于 0")
     private BigDecimal multiplier;
 
-    /** 最低分 (可空, 默认 0). */
-    @Schema(description = "最低分, 默认 0")
-    @DecimalMin(value = "0.0000", message = "minScore 不能小于 0")
+    /** 最低分 (可空, 默认 0); 允许负值, 不限制最小值 (计分公式可产生负分场景). */
+    @Schema(description = "最低分, 默认 0, 允许负值")
     private BigDecimal minScore;
 
     /** 最高分 (可空, 默认 999999). */

@@ -124,6 +124,28 @@ class KpiItemServiceTest {
     }
 
     @Test
+    @DisplayName("新增方案项: 指标维度 baseDim 随 cmd 固化落库, 供列表展示直接读取")
+    void addItem_persistsBaseDim() {
+        stubSchemeExists("S_DIM");
+        when(itemMapper.selectBySchemeAndMetric("S_DIM", "TEST_KPI_METRIC_ORG")).thenReturn(null);
+
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_DIM")
+                .metricCode("TEST_KPI_METRIC_ORG")
+                .baseDim("ORG")
+                .weight(new BigDecimal("30.0000"))
+                .operator("admin")
+                .build();
+
+        PerfKpiItem created = service.addItem(cmd);
+
+        assertThat(created.getBaseDim()).isEqualTo("ORG");
+        ArgumentCaptor<PerfKpiItem> captor = ArgumentCaptor.forClass(PerfKpiItem.class);
+        verify(itemMapper).insert(captor.capture());
+        assertThat(captor.getValue().getBaseDim()).isEqualTo("ORG");
+    }
+
+    @Test
     @DisplayName("updateItem: 找不到 item 时抛 KPI_ITEM_NOT_FOUND")
     void updateItem_whenNotFound_throwsNotFound() {
         when(itemMapper.selectById("NO_SUCH")).thenReturn(null);

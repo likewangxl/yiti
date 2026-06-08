@@ -29,6 +29,14 @@ public class PerfKpiItem {
     /** 指标编码（人员维度，引用 perf_metric_def.metric_code）. */
     private String metricCode;
 
+    /**
+     * 指标维度（EMP/ORG/CUST，varchar(8)，可空）.
+     *
+     * <p>与所选指标 {@code perf_metric_def.base_dim} 一致，新增时随指标固化落库，
+     * 便于方案项列表/编辑回显直接展示维度，免去再 join 指标定义表。
+     */
+    private String baseDim;
+
     /** 权重（decimal(10,4)）. */
     private BigDecimal weight;
 

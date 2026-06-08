@@ -28,9 +28,8 @@ public class UpdateKpiItemReqDTO {
     @DecimalMin(value = "0.0000", message = "multiplier 不能小于 0")
     private BigDecimal multiplier;
 
-    /** 最低分. */
-    @Schema(description = "最低分")
-    @DecimalMin(value = "0.0000", message = "minScore 不能小于 0")
+    /** 最低分; 允许负值, 不限制最小值. */
+    @Schema(description = "最低分, 允许负值")
     private BigDecimal minScore;
 
     /** 最高分. */

@@ -19,6 +19,8 @@ public class KpiItemDTO {
     private String id;
     private String metricCode;
     private String metricName;
+    /** 指标维度（EMP/ORG/CUST，随指标固化，供前端列表/回显直接展示）. */
+    private String baseDim;
     private BigDecimal weight;
     private BigDecimal multiplier;
     private BigDecimal minScore;

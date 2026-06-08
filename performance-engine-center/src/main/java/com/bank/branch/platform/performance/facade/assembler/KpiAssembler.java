@@ -62,6 +62,7 @@ public final class KpiAssembler {
                 .id(item.getId())
                 .metricCode(item.getMetricCode())
                 .metricName(null)
+                .baseDim(item.getBaseDim())
                 .weight(item.getWeight())
                 .multiplier(item.getMultiplier())
                 .minScore(item.getMinScore())
