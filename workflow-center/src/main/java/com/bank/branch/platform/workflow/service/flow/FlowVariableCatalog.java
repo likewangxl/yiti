@@ -26,16 +26,41 @@ import java.util.stream.Collectors;
 @Component
 public class FlowVariableCatalog {
 
+    /**
+     * 发起人机构级别变量：由 {@code ProcessStartService} 启动流程时统一注入
+     * （1=总部 / 2=分行 / 3=支行）。供网关按 2级/3级机构走不同审批路径，
+     * 所有 bizType 均可用，故各业务变量列表都追加该项。
+     */
+    private static final FlowVariableDTO START_ORG_LEVEL =
+            new FlowVariableDTO("startOrgLevel", "发起人机构级别", "number");
+
     private static final Map<String, List<FlowVariableDTO>> CATALOG = Map.of(
-            // ALLOC_ADJUST：AllocAdjustService 实际写入 bizKind / allocDim
+            // ALLOC_ADJUST：AllocAdjustService 写入 bizKind / allocDim；系统注入 startOrgLevel；
+            // 经办审批时产出路由变量 corpRouteTo（部门走向 LEADER/OWNER）/ finRouteTo（资财部走向 LEADER/END）
             "ALLOC_ADJUST", List.of(
                     new FlowVariableDTO("bizKind",  "业务种类",  "string"),
-                    new FlowVariableDTO("allocDim", "分配维度",  "string")),
-            // TARGET_ADJUST：TargetAdjustService 实际写入 subjectType / subjectId / cycleKey
+                    new FlowVariableDTO("allocDim", "分配维度",  "string"),
+                    START_ORG_LEVEL,
+                    new FlowVariableDTO("corpRouteTo", "部门审批走向", "string"),
+                    new FlowVariableDTO("finRouteTo",  "资财部审批走向", "string")),
+            // TARGET_ADJUST：TargetAdjustService 实际写入 subjectType / subjectId / cycleKey + 系统注入 startOrgLevel
             "TARGET_ADJUST", List.of(
                     new FlowVariableDTO("subjectType", "主体类型", "string"),
                     new FlowVariableDTO("subjectId",   "主体标识", "string"),
-                    new FlowVariableDTO("cycleKey",    "周期键",   "string"))
+                    new FlowVariableDTO("cycleKey",    "周期键",   "string"),
+                    START_ORG_LEVEL)
+    );
+
+    /**
+     * VAR 审批人可选的「名单类流程变量」目录（按 bizType）。
+     * <p>这些变量由提交方启动流程时写入，值为审批人工号（单值或列表），供审批节点
+     * 选「流程变量」类型审批人时下拉选择，避免手输变量名出错。</p>
+     */
+    private static final Map<String, List<FlowVariableDTO>> APPROVER_VAR_CATALOG = Map.of(
+            // ALLOC_ADJUST：AllocAdjustService.submit 写入 originalOwnerEmpIds（原业绩分配名单）
+            "ALLOC_ADJUST", List.of(
+                    new FlowVariableDTO("originalOwnerEmpIds", "原业绩所属人", "list"))
+            // TARGET_ADJUST 无 VAR 审批人变量
     );
 
     /**
@@ -46,6 +71,16 @@ public class FlowVariableCatalog {
      */
     public List<FlowVariableDTO> variables(String bizType) {
         return CATALOG.getOrDefault(bizType, List.of());
+    }
+
+    /**
+     * 返回该业务类型 VAR 审批人可选的「名单类流程变量」；未知 bizType 返回空列表。
+     *
+     * @param bizType 业务类型
+     * @return 审批人变量 DTO 列表，不可变
+     */
+    public List<FlowVariableDTO> approverVariables(String bizType) {
+        return APPROVER_VAR_CATALOG.getOrDefault(bizType, List.of());
     }
 
     /**

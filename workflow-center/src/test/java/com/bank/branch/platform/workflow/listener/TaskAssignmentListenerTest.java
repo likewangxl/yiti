@@ -41,6 +41,9 @@ class TaskAssignmentListenerTest {
     @Mock
     private org.flowable.engine.TaskService taskService;
 
+    @Mock
+    private com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
+
     @InjectMocks
     private TaskAssignmentListener taskAssignmentListener;
 
@@ -209,6 +212,154 @@ class TaskAssignmentListenerTest {
 
         verify(delegateTask).addCandidateGroup("USER:E20001");
         verify(notifyApi, never()).batchSendNotifications(anyList());
+    }
+
+    /**
+     * 虚拟员工默认通过（泛化）：任意审批节点（非 original_owner_approve），
+     * 受理人为虚拟员工(userType=2) → 自动「默认同意」并完成任务，不走候选解析。
+     */
+    @Test
+    void notify_anyNodeVirtualAssignee_autoApproves() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:9");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("approval_x");   // 非 original_owner_approve
+        when(delegateTask.getId()).thenReturn("TASK_VT_X");
+        when(delegateTask.getAssignee()).thenReturn("U_VT2");
+        when(delegateTask.getProcessInstanceId()).thenReturn("PROC_X");
+        com.bank.branch.platform.auth.api.dto.UserDTO owner = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        owner.setUserType("2");
+        when(userApi.getUserByEmpId("U_VT2")).thenReturn(owner);
+
+        taskAssignmentListener.notify(delegateTask);
+
+        verify(taskService).addComment("TASK_VT_X", "PROC_X", "APPROVE", "默认同意");
+        verify(taskService).complete("TASK_VT_X", java.util.Map.of("approved", true));
+        verify(candidateResolverService, never()).resolveCandidates(anyString(), anyString());
+    }
+
+    /**
+     * 审批机构归属 SELF（本机构）：按发起人机构号过滤候选，ROLE 候选展开为该机构员工候选用户。
+     */
+    @Test
+    void notify_approveOrgScopeSelf_filtersByStartOrg() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:1");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("approval_1");
+        when(delegateTask.getId()).thenReturn("TASK_SELF");
+        stubProcDefKey("DSN_alloc:1:1", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "approval_1"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "approval_1"))
+                .thenReturn("SELF");
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_A");
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_A")).thenReturn(List.of("E_A1"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // 本机构：审批机构 = 发起人机构 ORG_A，候选用户来自该机构
+        verify(delegateTask).addCandidateUser("E_A1");
+        verify(orgApi, never()).getOrg(anyString());           // SELF 无需查上级
+    }
+
+    /**
+     * 审批机构归属 PARENT（上级机构）：审批机构取发起人机构的上级，按上级机构过滤候选。
+     */
+    @Test
+    void notify_approveOrgScopeParent_filtersByParentOrg() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:2");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("approval_1");
+        when(delegateTask.getId()).thenReturn("TASK_PARENT");
+        stubProcDefKey("DSN_alloc:1:2", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "approval_1"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "approval_1"))
+                .thenReturn("PARENT");
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setParentOrgCode("ORG_PARENT");
+        when(orgApi.getOrg("ORG_SUB")).thenReturn(org);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_PARENT")).thenReturn(List.of("E_P1"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // 上级机构：审批机构 = ORG_SUB 的上级 ORG_PARENT
+        verify(delegateTask).addCandidateUser("E_P1");
+    }
+
+    /**
+     * 审批机构归属 AUTO（按机构层级）：3 级支行 → 上级分行，按上级机构过滤候选。
+     */
+    @Test
+    void notify_approveOrgScopeAuto_routesByLevel() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:5");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve");
+        when(delegateTask.getId()).thenReturn("TASK_AUTO");
+        stubProcDefKey("DSN_alloc:1:5", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "branch_approve"))
+                .thenReturn("AUTO");
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setOrgLevel(3);
+        org.setParentOrgCode("ORG_PARENT");
+        when(orgApi.getOrg("ORG_SUB")).thenReturn(org);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_PARENT")).thenReturn(List.of("E_AUTO"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // AUTO：3 级支行审批机构取上级分行 ORG_PARENT
+        verify(delegateTask).addCandidateUser("E_AUTO");
+    }
+
+    /**
+     * 审批机构归属未配置（null）的普通节点：不做机构过滤，照常设置候选组。
+     */
+    @Test
+    void notify_noApproveOrgScope_noOrgFilter() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:3");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("approval_2");
+        when(delegateTask.getId()).thenReturn("TASK_NOSCOPE");
+        stubProcDefKey("DSN_alloc:1:3", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "approval_2"))
+                .thenReturn(List.of("ROLE:CUST_MANAGER"));
+        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "approval_2"))
+                .thenReturn(null);
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // 不限：照常设候选组，不做机构过滤
+        verify(delegateTask).addCandidateGroup("ROLE:CUST_MANAGER");
+        verify(delegateTask, never()).addCandidateUser(anyString());
+    }
+
+    /**
+     * 传入变量审批人（VAR，或签）：候选为 VAR:变量名 → 从流程变量取员工，设为候选用户。
+     */
+    @Test
+    void notify_varCandidate_addsCandidateUsersFromVariable() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:7");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("owner_node");
+        when(delegateTask.getId()).thenReturn("TASK_VAR");
+        stubProcDefKey("DSN_alloc:1:7", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "owner_node"))
+                .thenReturn(List.of("VAR:originalOwnerEmpIds"));
+        when(delegateTask.getVariable("originalOwnerEmpIds")).thenReturn(List.of("E1", "E2"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        verify(delegateTask).addCandidateUser("E1");
+        verify(delegateTask).addCandidateUser("E2");
+        verify(delegateTask, never()).addCandidateGroup(anyString());
     }
 
     /**

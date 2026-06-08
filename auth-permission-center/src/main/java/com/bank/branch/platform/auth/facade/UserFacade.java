@@ -149,6 +149,15 @@ public class UserFacade implements UserApi {
     }
 
     @Override
+    public List<String> getEmpIdsByOrg(String orgCode) {
+        if (orgCode == null || orgCode.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> empIds = userOrgMapper.selectEmpIdsByOrgCode(orgCode);
+        return empIds != null ? empIds : new ArrayList<>();
+    }
+
+    @Override
     public List<UserDTO> getUsersByUsernames(List<String> usernames) {
         if (usernames == null || usernames.isEmpty()) {
             return new ArrayList<>();

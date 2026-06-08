@@ -35,6 +35,12 @@ public class WfNodeCandidateConf {
     /** 候选值（JSON数组），对应 candidate_value */
     private String candidateValue;
 
+    /** 审批机构归属：SELF=本机构/PARENT=上级机构/NULL=不判断，对应 approve_org_scope */
+    private String approveOrgScope;
+
+    /** 机构角色固定机构码（机构角色审批人用，对应 org_code） */
+    private String orgCode;
+
     /** 创建时间，对应 created_time */
     private LocalDateTime createdTime;
 

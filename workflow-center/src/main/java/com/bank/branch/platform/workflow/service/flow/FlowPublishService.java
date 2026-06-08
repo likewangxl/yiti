@@ -182,21 +182,15 @@ public class FlowPublishService {
             if (CollectionUtils.isEmpty(approvers)) {
                 continue;
             }
-            // 按 approverType 分组，保持出现顺序；同组 value 去重保序
-            Map<String, List<String>> byType = new LinkedHashMap<>();
+            // 每个审批人写一条候选配置（不再按类型合并），保留各自的层级/机构信息
             for (FlowApproverDTO a : approvers) {
-                List<String> values = byType.computeIfAbsent(a.getApproverType(), k -> new ArrayList<>());
-                if (!values.contains(a.getApproverValue())) {
-                    values.add(a.getApproverValue());
+                WfNodeCandidateConf conf = mapApproverToConf(a, node);
+                if (conf == null) {
+                    continue;
                 }
-            }
-            for (Map.Entry<String, List<String>> entry : byType.entrySet()) {
-                WfNodeCandidateConf conf = new WfNodeCandidateConf();
                 conf.setId(newUuid());
                 conf.setProcessDefinitionKey(shadowKey);
                 conf.setNodeKey(node.getNodeKey());
-                conf.setCandidateType(entry.getKey());
-                conf.setCandidateValue(toJsonArray(entry.getValue()));
                 conf.setCreatedTime(LocalDateTime.now());
                 conf.setUpdatedTime(LocalDateTime.now());
                 nodeCandidateConfMapper.insert(conf);
@@ -204,6 +198,60 @@ public class FlowPublishService {
             }
         }
         return count;
+    }
+
+    /**
+     * 把一个审批人 DTO 映射为运行时候选配置行（candidate_type / candidate_value / approve_org_scope / org_code）：
+     * <ul>
+     *   <li>LEVEL_ROLE（层级角色）→ ROLE + approve_org_scope=SELF/PARENT（角色@发起或上级机构）</li>
+     *   <li>ORG_ROLE 选角色 → ROLE + org_code=固定机构（角色@该机构）</li>
+     *   <li>ORG_ROLE 不选角色 → ORG（该机构任一角色=全员）</li>
+     *   <li>USER / VAR → 原样</li>
+     *   <li>历史 ROLE / ORG（旧设计/导入）→ 原样 + 节点级 approveOrgScope 兼容</li>
+     * </ul>
+     * 主值为空的审批人返回 null（跳过）。
+     */
+    private WfNodeCandidateConf mapApproverToConf(FlowApproverDTO a, FlowNodeDTO node) {
+        String type = a.getApproverType() == null ? "" : a.getApproverType();
+        String value = a.getApproverValue();
+        WfNodeCandidateConf conf = new WfNodeCandidateConf();
+        switch (type) {
+            case "LEVEL_ROLE" -> {
+                if (isBlank(value)) return null;
+                conf.setCandidateType("ROLE");
+                conf.setCandidateValue(toJsonArray(List.of(value)));
+                conf.setApproveOrgScope(a.getOrgScope());
+            }
+            case "ORG_ROLE" -> {
+                if (isBlank(value)) return null;
+                if (!isBlank(a.getRoleCode())) {
+                    conf.setCandidateType("ROLE");
+                    conf.setCandidateValue(toJsonArray(List.of(a.getRoleCode())));
+                    conf.setOrgCode(value);                 // 固定机构
+                } else {
+                    conf.setCandidateType("ORG");
+                    conf.setCandidateValue(toJsonArray(List.of(value)));
+                }
+            }
+            case "USER", "VAR", "ROLE", "ORG" -> {
+                if (isBlank(value)) return null;
+                conf.setCandidateType(type);
+                conf.setCandidateValue(toJsonArray(List.of(value)));
+                // 历史 ROLE/ORG 兼容节点级机构归属
+                if ("ROLE".equals(type) || "ORG".equals(type)) {
+                    conf.setApproveOrgScope(node.getApproveOrgScope());
+                }
+            }
+            default -> {
+                return null;
+            }
+        }
+        return conf;
+    }
+
+    /** 空白判断（null 或全空格） */
+    private boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     /**

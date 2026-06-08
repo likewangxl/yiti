@@ -1,5 +1,7 @@
 package com.bank.branch.platform.workflow.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -39,6 +41,8 @@ public class ProcessStartService {
     private final TaskService taskService;
     private final BizProcessMapMapper bizProcessMapMapper;
     private final ApplicationEventPublisher eventPublisher;
+    /** 机构查询：解析发起人机构级别（startOrgLevel），供网关按 2级/3级机构分流 */
+    private final OrgApi orgApi;
 
     /**
      * 启动流程实例
@@ -85,6 +89,11 @@ public class ProcessStartService {
         if (cmd.getStartUser() != null) {
             vars.put("startUser", cmd.getStartUser());
         }
+        // 注入发起人机构级别（1=总部/2=分行/3=支行），供设计器网关按 2级/3级机构走不同审批路径
+        Integer startOrgLevel = resolveStartOrgLevel(cmd);
+        if (startOrgLevel != null) {
+            vars.put("startOrgLevel", startOrgLevel);
+        }
         ProcessInstance pi = runtimeService.startProcessInstanceByKey(
                 cmd.getProcessDefinitionKey(),
                 cmd.getBusinessKey(),
@@ -115,6 +124,33 @@ public class ProcessStartService {
         eventPublisher.publishEvent(new ProcessStartedEvent(pi.getId(), cmd.getBusinessKey(), cmd.getBizType()));
 
         return new WorkflowLaunchResp(pi.getId(), cmd.getBusinessKey(), firstTaskId);
+    }
+
+    /**
+     * 解析发起人所在机构的级别（1=总部 / 2=分行 / 3=支行）。
+     * <p>
+     * 优先用 {@code startOrgId} 机构编码解析；缺失时回退用发起人 {@code startUser} 的主机构。
+     * 任何异常或解析不到都返回 null（不写入 startOrgLevel），保证不阻塞流程启动。
+     * </p>
+     *
+     * @param cmd 流程启动命令
+     * @return 机构级别，无法解析时返回 null
+     */
+    private Integer resolveStartOrgLevel(StartProcessCmd cmd) {
+        try {
+            OrgDTO org = null;
+            if (cmd.getStartOrgId() != null) {
+                org = orgApi.getOrg(cmd.getStartOrgId());
+            } else if (cmd.getStartUser() != null) {
+                org = orgApi.getUserMainOrg(cmd.getStartUser());
+            }
+            return org != null ? org.getOrgLevel() : null;
+        } catch (Exception e) {
+            // 机构解析失败不影响流程启动，仅跳过 startOrgLevel 注入
+            log.warn("解析发起人机构级别失败，跳过 startOrgLevel 注入: startOrgId={}, startUser={}, err={}",
+                    cmd.getStartOrgId(), cmd.getStartUser(), e.getMessage());
+            return null;
+        }
     }
 
     /**

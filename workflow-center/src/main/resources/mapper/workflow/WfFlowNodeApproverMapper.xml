@@ -4,7 +4,7 @@
 
     <!-- WF_FLOW_NODE_APPROVER 全列查询片段 -->
     <sql id="BASE_COLUMNS">
-        id, node_id, approver_type, approver_value, sort_no, created_time
+        id, node_id, approver_type, approver_value, org_scope, role_code, sort_no, created_time
     </sql>
 
     <!-- 根据节点ID列表批量查询审批人规则，按 sort_no 升序排列 -->

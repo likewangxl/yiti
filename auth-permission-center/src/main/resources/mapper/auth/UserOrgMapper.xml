@@ -71,6 +71,15 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 查询指定机构下全部用户的工号(USER_ID)，供「机构角色」无角色场景（该机构任一角色均可审批） -->
+    <select id="selectEmpIdsByOrgCode" resultType="string">
+        SELECT u.USER_ID
+        FROM PT_USER u
+        INNER JOIN EXT_USER_ORG uo ON u.USER_ID = uo.USER_ID
+        WHERE uo.ORG_CODE = #{orgCode}
+        ORDER BY u.USER_ID ASC
+    </select>
+
     <!-- 统计指定机构下的用户数量 -->
     <select id="countUsersByOrgCode" resultType="long">
         SELECT COUNT(*)

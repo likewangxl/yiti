@@ -99,6 +99,14 @@ public interface UserApi {
     List<String> getEmpIdsByRoleCodeAndOrg(String roleCode, String orgCode);
 
     /**
+     * 按 orgCode 查该机构下全部用户工号（任一角色），供审批人「机构角色」不选角色场景。
+     *
+     * @param orgCode 机构编码
+     * @return 员工 ID 列表，无人或入参空时返空 List
+     */
+    List<String> getEmpIdsByOrg(String orgCode);
+
+    /**
      * 按 username 批量查用户信息。
      * <p>用于数据湖 Allocater_Id（对应 PT_USER.USERNAME）关联查员工姓名和机构。</p>
      *

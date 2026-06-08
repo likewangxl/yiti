@@ -117,7 +117,6 @@ public class FlowValidator {
         // ------------------------------------------------------------------
         // 规则 5 & 6：边引用节点存在性 + 条件字段/op 合法性
         // ------------------------------------------------------------------
-        Set<String> allowedFields = catalog.fields(bizType);
         for (FlowEdgeDTO edge : edges) {
             // 规则 6：fromNodeKey / toNodeKey 须存在于 nodes
             if (!nodeKeys.contains(edge.getFromNodeKey())) {
@@ -134,10 +133,12 @@ public class FlowValidator {
             if (condition != null && condition.getConditions() != null
                     && !condition.getConditions().isEmpty()) {
                 for (FlowConditionDTO.Cond cond : condition.getConditions()) {
-                    if (cond.getField() == null || !allowedFields.contains(cond.getField())) {
+                    // 仅要求字段非空；允许自定义变量名（路由变量如 corpRouteTo 由本流程运行时产出，
+                    // 无法预登记 FlowVariableCatalog 白名单）。受控表达式由 FlowConditionExpressionBuilder
+                    // 仅生成 ${field op value} 保证，无注入风险。
+                    if (cond.getField() == null || cond.getField().isBlank()) {
                         errors.add("边 [" + edge.getFromNodeKey() + " → " + edge.getToNodeKey()
-                                + "] 条件字段 [" + cond.getField() + "] 不在业务类型 [" + bizType
-                                + "] 的白名单中（可用字段：" + allowedFields + "）");
+                                + "] 条件字段不能为空");
                     }
                     if (cond.getOp() == null || !VALID_OPS.contains(cond.getOp())) {
                         errors.add("边 [" + edge.getFromNodeKey() + " → " + edge.getToNodeKey()

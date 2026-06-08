@@ -72,6 +72,30 @@ public class CandidateResolverService {
     }
 
     /**
+     * 解析指定流程节点的「审批机构归属」配置（SELF=本机构 / PARENT=上级机构 / null=不判断）。
+     * <p>
+     * 取该节点候选配置中首个非空 approveOrgScope（同一节点各候选行该值一致，由发布时统一写入）。
+     * 供 {@code TaskAssignmentListener} 决定是否按发起人机构/上级机构过滤候选。
+     * </p>
+     *
+     * @param processDefinitionKey 流程定义KEY
+     * @param nodeKey              节点KEY
+     * @return SELF / PARENT，未配置时返回 null
+     */
+    public String resolveApproveOrgScope(String processDefinitionKey, String nodeKey) {
+        List<WfNodeCandidateConf> configs = nodeCandidateConfMapper
+                .selectByProcessDefKeyAndNodeKey(processDefinitionKey, nodeKey);
+        if (configs == null) {
+            return null;
+        }
+        return configs.stream()
+                .map(WfNodeCandidateConf::getApproveOrgScope)
+                .filter(s -> s != null && !s.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
      * 解析 candidateValue JSON 数组字符串为字符串列表。
      *
      * @param candidateValue JSON 数组字符串，如 ["CUST_MANAGER","TEAM_LEAD"]

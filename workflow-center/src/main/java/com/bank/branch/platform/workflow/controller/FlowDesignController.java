@@ -102,6 +102,23 @@ public class FlowDesignController {
         return ResponseWrapper.success(vars);
     }
 
+    /**
+     * 查询指定业务类型 VAR 审批人可选的「名单类流程变量」目录（审批人下拉源）。
+     * <p>供审批节点选「流程变量」类型审批人时下拉选择，避免手输变量名出错。</p>
+     *
+     * @param bizType 业务类型（如 ALLOC_ADJUST）
+     * @return 审批人变量 DTO 列表
+     */
+    @GetMapping("/meta/approver-variables")
+    @Operation(summary = "查询 VAR 审批人可选变量目录")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
+    public ResponseWrapper<List<FlowVariableDTO>> approverVariables(
+            @RequestParam("bizType") String bizType) {
+        log.debug("[FlowDesignController.approverVariables] bizType={}", bizType);
+        List<FlowVariableDTO> vars = flowVariableCatalog.approverVariables(bizType);
+        return ResponseWrapper.success(vars);
+    }
+
     // ── 查询 ──────────────────────────────────────────────────────────────
 
     /**

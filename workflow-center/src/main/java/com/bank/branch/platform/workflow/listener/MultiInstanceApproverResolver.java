@@ -11,6 +11,7 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -78,7 +79,7 @@ public class MultiInstanceApproverResolver implements ExecutionListener {
             List<String> candidates = candidateResolverService.resolveCandidates(processDefinitionKey, nodeKey);
 
             // 展开成员工 ID 集合（去重，保序）
-            Set<String> empIds = expandCandidatesToEmpIds(candidates);
+            Set<String> empIds = expandCandidatesToEmpIds(candidates, execution);
 
             List<String> empIdList = new ArrayList<>(empIds);
             execution.setVariable(VAR_APPROVER_EMP_IDS, empIdList);
@@ -99,7 +100,7 @@ public class MultiInstanceApproverResolver implements ExecutionListener {
      * @param candidates 带前缀候选列表（如 "ROLE:BRANCH_HEAD"、"USER:E001"）
      * @return 员工 ID 集合，去重且保序
      */
-    private Set<String> expandCandidatesToEmpIds(List<String> candidates) {
+    private Set<String> expandCandidatesToEmpIds(List<String> candidates, DelegateExecution execution) {
         Set<String> empIds = new LinkedHashSet<>();
         for (String candidate : candidates) {
             if (candidate == null || candidate.isEmpty()) continue;
@@ -112,6 +113,8 @@ public class MultiInstanceApproverResolver implements ExecutionListener {
                     List<String> roleEmps = userApi.getEmpIdsByRoleCode(value);
                     if (roleEmps != null) empIds.addAll(roleEmps);
                 }
+                // VAR：从提交方传入的流程变量取审批人 empId（会签原业绩所属人 originalOwnerEmpIds 等）
+                case "VAR" -> empIds.addAll(readVarEmpIds(execution.getVariable(value)));
                 case "ORG" -> log.warn("[MultiInstanceApproverResolver] ORG 类型候选暂不支持展开，跳过 candidate={}", candidate);
                 default -> {
                     // 无前缀 fallback 当 empId（与 TaskAssignmentListener 保持一致）
@@ -120,5 +123,25 @@ public class MultiInstanceApproverResolver implements ExecutionListener {
             }
         }
         return empIds;
+    }
+
+    /**
+     * 把流程变量值解析为 empId 集合：列表/集合逐个取，单值直接取，空/null 返回空集。
+     *
+     * @param varValue 流程变量值（String 或 Collection）
+     * @return empId 集合（去重保序）
+     */
+    static Set<String> readVarEmpIds(Object varValue) {
+        Set<String> ids = new LinkedHashSet<>();
+        if (varValue == null) return ids;
+        if (varValue instanceof Collection<?> col) {
+            for (Object o : col) {
+                if (o != null && !o.toString().isEmpty()) ids.add(o.toString());
+            }
+        } else {
+            String s = varValue.toString();
+            if (!s.isEmpty()) ids.add(s);
+        }
+        return ids;
     }
 }

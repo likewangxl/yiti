@@ -159,21 +159,26 @@ public class FlowBpmnGenerator {
             FlowNodeDTO fromNode = nodeByKey.get(from);
             boolean fromIsApproval = fromNode != null && "APPROVAL".equals(fromNode.getNodeType());
 
+            SequenceFlow sf;
             if (fromIsApproval) {
                 // 审批节点出边改由其审批结果网关引出，叠加 approved==true（通过路径）
                 String passCond = combineApprovedTrue(conditionBuilder.toEl(e.getCondition()));
-                process.addFlowElement(sequenceFlow(
-                        flowSeq, approveGwId(from), to, passCond));
+                sf = sequenceFlow(flowSeq, approveGwId(from), to, passCond);
+                process.addFlowElement(sf);
             } else {
                 // 普通边 / 网关出边：直接生成，条件按原图渲染
                 String cond = conditionBuilder.toEl(e.getCondition());
-                SequenceFlow sf = sequenceFlow(flowSeq, from, to, cond);
+                sf = sequenceFlow(flowSeq, from, to, cond);
                 process.addFlowElement(sf);
                 // GATEWAY 的默认出边设为网关 defaultFlow
                 if (Boolean.TRUE.equals(e.getIsDefault())
                         && fromNode != null && "GATEWAY".equals(fromNode.getNodeType())) {
                     FlowableGatewayDefault.apply(process, from, sf.getId());
                 }
+            }
+            // 分支「输出名称」→ SequenceFlow.name，带入已部署 BPMN 供经办走向选择/反显
+            if (StringUtils.hasText(e.getOutputName())) {
+                sf.setName(e.getOutputName());
             }
         }
 

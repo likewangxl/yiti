@@ -29,8 +29,14 @@ public class WfFlowNodeApprover {
     /** 审批人类型：ROLE/ORG/EMP，对应 approver_type */
     private String approverType;
 
-    /** 审批人值（角色编码/机构代码/员工工号），对应 approver_value */
+    /** 审批人值（层级角色=角色码/机构角色=机构码/指定人=工号/变量=变量名），对应 approver_value */
     private String approverValue;
+
+    /** 层级（仅层级角色 LEVEL_ROLE）：SELF=发起机构 / PARENT=发起上级机构，对应 org_scope */
+    private String orgScope;
+
+    /** 可选角色码（仅机构角色 ORG_ROLE，空=该机构任一角色），对应 role_code */
+    private String roleCode;
 
     /** 排序序号，对应 sort_no */
     private Integer sortNo;
