@@ -122,11 +122,22 @@
         </span>
       </div>
       <el-table :data="dlg.items" size="default" border>
+        <!-- 维度：默认员工；切换维度动态过滤下方指标下拉内容。已配置项与指标一样锁定 -->
+        <el-table-column label="维度" width="110">
+          <template #default="{row}">
+            <el-select v-model="row.baseDim" :disabled="dlg.readOnly || (!!dlg.editingId && !!row.id)"
+              placeholder="维度" style="width:100%" @change="onDimChange(row)">
+              <el-option value="EMP" label="员工" />
+              <el-option value="ORG" label="机构" />
+              <el-option value="CUST" label="客户" />
+            </el-select>
+          </template>
+        </el-table-column>
         <el-table-column label="指标" min-width="190">
           <template #default="{row}">
             <!-- 编辑方案时，已配置指标项的"指标"不允许修改（仅新增项可选；权重/计分等仍可改）-->
             <el-select v-model="row.metricCode" :disabled="dlg.readOnly || (!!dlg.editingId && !!row.id)" filterable placeholder="选择指标" style="width:100%">
-              <el-option v-for="m in metricOptions" :key="m.metricCode"
+              <el-option v-for="m in metricsByDim(row.baseDim)" :key="m.metricCode"
                 :value="m.metricCode" :label="`${m.metricName}`" />
             </el-select>
           </template>
@@ -143,7 +154,8 @@
         </el-table-column>
         <el-table-column label="计分下限" width="120">
           <template #default="{row}">
-            <el-input-number v-model="row.minScore" :disabled="dlg.readOnly" :min="0" :precision="0" :controls="false" style="width:100%" />
+            <!-- 计分下限允许负值，不限制最小值 -->
+            <el-input-number v-model="row.minScore" :disabled="dlg.readOnly" :precision="0" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
         <el-table-column label="计分公式" min-width="280">
@@ -370,8 +382,26 @@ async function ensureMetrics() {
   } catch {}
 }
 
+/** 按维度(EMP/ORG/CUST)过滤指标下拉内容并按指标名称排序；维度为空时默认按员工 */
+function metricsByDim(dim) {
+  const d = dim || 'EMP';
+  return metricOptions.value
+    .filter(m => (m.baseDim || 'EMP') === d)
+    .slice()
+    .sort((a, b) => (a.metricName || '').localeCompare(b.metricName || '', 'zh-Hans-CN'));
+}
+/** 查指标的维度（编辑回显时回填行维度，使已选指标落在过滤列表内） */
+function metricBaseDim(code) {
+  return metricOptions.value.find(m => m.metricCode === code)?.baseDim || 'EMP';
+}
+/** 切换维度时清空已选指标（指标下拉内容随维度变化，旧指标可能不在新列表中） */
+function onDimChange(row) {
+  row.metricCode = '';
+}
+
 function defaultItem() {
-  return { id: null, metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, formula: '' };
+  // 默认维度为员工，指标下拉默认展示员工指标
+  return { id: null, baseDim: 'EMP', metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, formula: '' };
 }
 function addItemRow() {
   dlg.items.push(defaultItem());
@@ -405,6 +435,8 @@ async function openEdit(row, readOnly = false) {
   }
   const items = (detail?.items || row.items || []).map(it => ({
     id: it.id,
+    // 维度优先用后端固化值，缺失时再按所选指标回推，保证已选指标落在过滤后的下拉列表内
+    baseDim: it.baseDim || metricBaseDim(it.metricCode),
     metricCode: it.metricCode,
     weight: Number(it.weight) || 0,
     multiplier: Number(it.multiplier) || 1,
@@ -471,6 +503,7 @@ async function onSave(targetStatus) {
         } else {
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
+            baseDim: it.baseDim,
             weight: it.weight, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
             formula: it.formula
@@ -493,6 +526,7 @@ async function onSave(targetStatus) {
         try {
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
+            baseDim: it.baseDim,
             weight: it.weight, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
             formula: it.formula
