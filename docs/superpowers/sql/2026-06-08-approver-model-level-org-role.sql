@@ -16,3 +16,10 @@ ALTER TABLE WF_FLOW_NODE_APPROVER ADD COLUMN role_code varchar(64) NULL COMMENT 
 
 -- 运行时表（yiti + onepl）
 ALTER TABLE WF_NODE_CANDIDATE_CONF ADD COLUMN org_code varchar(64) NULL COMMENT '机构角色固定机构码' AFTER approve_org_scope;
+
+-- ----------------------------------------------------------------------------
+-- 运行时表 WF_NODE_CANDIDATE_CONF 删除旧唯一键 uk_pd_node_type(process_definition_key,
+-- node_key, candidate_type)：审批人模型改为「每审批人一行」后，同一节点同类型可有多行
+-- （如多个层级角色），旧唯一键会触发 Duplicate entry，发布报 500。yiti + onepl 均执行。
+-- ----------------------------------------------------------------------------
+ALTER TABLE WF_NODE_CANDIDATE_CONF DROP INDEX uk_pd_node_type;
