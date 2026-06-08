@@ -26,7 +26,10 @@
       <el-select
         v-model="cond.field"
         style="width: 140px; flex-shrink: 0"
-        placeholder="请选择字段"
+        placeholder="选择或输入变量"
+        filterable
+        allow-create
+        default-first-option
         @change="emitUpdate"
       >
         <el-option
@@ -55,10 +58,10 @@
         <el-option label="包含"      value="CONTAINS" />
       </el-select>
 
-      <!-- 值输入：IN/NOT_IN 给多值提示 -->
+      <!-- 值输入：窄面板下换行独占一行，加大宽度；IN/NOT_IN 给多值提示 -->
       <el-input
         v-model="cond.value"
-        style="flex: 1"
+        style="flex: 1 1 200px; min-width: 200px"
         :placeholder="isMultiValue(cond.op)
           ? '多个值逗号分隔，如 CORP,PER'
           : '请输入值'"
@@ -198,9 +201,10 @@ function emitUpdate() {
   white-space: nowrap;
 }
 
-/* 单条件行 */
+/* 单条件行：窄面板下允许换行，字段+运算符一行，值输入框换行加宽独占一行 */
 .condition-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
