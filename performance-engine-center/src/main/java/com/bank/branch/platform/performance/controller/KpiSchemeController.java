@@ -99,9 +99,13 @@ public class KpiSchemeController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[KpiSchemeController.list] cycleType={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 cycleType, status, keyword, pageNo, pageSize);
-        // 非资财部人员（无 R_BACK_FINANCE / R_FIN_LEAD 角色）只能看到"向员工开放明细=是"的方案
-        Integer openDetailFilter = canViewAllSchemes() ? null : 1;
-        PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, status, keyword, openDetailFilter, pageNo, pageSize);
+        // 非资财部人员（无 R_BACK_FINANCE / R_FIN_LEAD 等角色）：
+        //   1) 只能看到"向员工开放明细=是"的方案；
+        //   2) 只能看到已发布(ACTIVE)状态的方案（DRAFT/试运行/停用等一律不可见）。
+        boolean canViewAll = canViewAllSchemes();
+        Integer openDetailFilter = canViewAll ? null : 1;
+        String effectiveStatus = canViewAll ? status : "ACTIVE";
+        PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, effectiveStatus, keyword, openDetailFilter, pageNo, pageSize);
         // 标记每行"是否当前用户创建"（前端据此控制编辑/删除按钮显隐）
         String currentEmpId = currentUserApi.getCurrentEmpId();
         if (dtoPage.getRecords() != null) {
