@@ -173,6 +173,18 @@
         </dependencies>
     </dependencyManagement>
 
+    <!--
+      全模块共享依赖（被所有子模块继承）。
+      spring-boot-starter-web 在此统一声明一次（版本由上方 spring-boot-dependencies BOM 管理），
+      其传递依赖含内嵌 Tomcat（tomcat-embed-*）。各子模块不再重复声明，避免 12 处分散维护。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+    </dependencies>
+
     <build>
         <pluginManagement>
             <plugins>
