@@ -42,4 +42,21 @@ public interface SqlExecutor {
      *         当 SQL 执行失败 / 超时 / 结果列名不符合 {@code base_key}+{@code metric_value} 约定时
      */
     Map<String, BigDecimal> execute(String sql, Map<String, Object> params, Duration timeout);
+
+    /**
+     * 执行 KPI 计分 SQL 表达式并返回单个 {@code kpi_value}（KPI 得分）.
+     *
+     * <p>与 {@link #execute} 同源（只读 SELECT/WITH + 命名参数 + 超时），区别在结果列约定：
+     * 结果集只需含 {@code kpi_value}（{@code DECIMAL}，KPI得分）一列；对象id 不从 SQL 取，
+     * 由调用方按行传入。KPI 分值计算逐行绑定 {@code :dataDate/:weight/:maxScore/:minScore/
+     * :actual/:target/:base/:objId} 等标量参数后调用，单行表达式返回 1 行，取首行的 kpi_value。
+     *
+     * @param sql     KPI 计分 SQL 表达式（SELECT/WITH，结果列含 kpi_value）
+     * @param params  命名参数（{@code :name} 形式），可为空 Map
+     * @param timeout 查询超时；底层转为 {@code (int) timeout.getSeconds()}
+     * @return 首行 {@code kpi_value}（无结果行时返回 null）
+     * @throws com.bank.branch.platform.performance.exception.PerfException
+     *         当 SQL 执行失败 / 超时 / 结果列不含 {@code kpi_value} 时
+     */
+    BigDecimal executeScore(String sql, Map<String, Object> params, Duration timeout);
 }

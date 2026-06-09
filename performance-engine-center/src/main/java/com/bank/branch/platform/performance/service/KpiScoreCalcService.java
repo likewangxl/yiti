@@ -20,6 +20,7 @@ import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.mapper.SubjectSlotValueRow;
+import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
@@ -33,6 +34,9 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -66,6 +70,8 @@ public class KpiScoreCalcService {
 
     private static final String TASK_TYPE = "KPI_SCORE_CALC";
     private static final String TASK_NAME = "KPI分值计算";
+    /** KPI 计分 SQL 表达式单行执行超时（秒）. */
+    private static final Duration SQL_EXPR_TIMEOUT = Duration.ofSeconds(30);
 
     private final PerfMetricCalcTaskMapper taskMapper;
     private final PerfKpiSchemeMapper schemeMapper;
@@ -83,6 +89,8 @@ public class KpiScoreCalcService {
     private final CustIndexResultMapper custIndexResultMapper;
     /** KPI 方案级计算记录：每方案处理完/异常结束落一条. */
     private final com.bank.branch.platform.performance.mapper.PerfKpiCalcLogMapper kpiCalcLogMapper;
+    /** KPI 计分 SQL 表达式执行器（结果列 obj_id + kpi_value）. */
+    private final SqlExecutor sqlExecutor;
 
     /**
      * 执行 KPI 分值计算.
@@ -506,24 +514,33 @@ public class KpiScoreCalcService {
                 skipped++;
                 continue;
             }
-            if (!StringUtils.hasText(item.getFormula())) {
-                // 未配置计分公式：跳过该指标项（记录告警），不中断整个任务
-                log.warn("【KPI分值计算】方案={} 指标={} 未配置计分公式，跳过该项",
+            boolean hasSqlExpr = StringUtils.hasText(item.getSqlExpr());
+            boolean hasFormula = StringUtils.hasText(item.getFormula());
+            if (!hasSqlExpr && !hasFormula) {
+                // 既无 SQL 表达式也无计分公式：跳过该指标项（记录告警），不中断整个任务
+                log.warn("【KPI分值计算】方案={} 指标={} 未配置 SQL 表达式/计分公式，跳过该项",
                         scheme.getSchemeCode(), metricCode);
                 skipped++;
                 continue;
             }
 
             BigDecimal weight = item.getWeight();
+            // 构建数据集（需求 4/7）：KPI指标配置 ⟕ 指标结果数据 ⟕ 目标值，逐对象一行
+            // 列：指标 / 数据日期 / 对象id / 指标维度 / 权重 / 计分上限 / 计分下限 / 实际值 / 目标值 / 基础值
+            List<KpiScoreRow> dataset = new ArrayList<>(rows.size());
             for (SubjectSlotValueRow row : rows) {
-                String subjectId = row.getSubjectId();
-                BigDecimal actual = row.getValue();
-                TargetBase tb = lookupTargetBase(plans, baseDim, subjectId, metricCode, dataDate);
-                BigDecimal score = formulaService.evalScore(
-                        item.getFormula(), actual, tb.target, tb.base, weight,
-                        item.getMinScore(), item.getMaxScore());
-                upsertScore(dataDate, scheme.getSchemeCode(), metricCode, baseDim, subjectId,
-                        actual, weight, tb.target, tb.base, score);
+                TargetBase tb = lookupTargetBase(plans, baseDim, row.getSubjectId(), metricCode, dataDate);
+                dataset.add(new KpiScoreRow(metricCode, dataDate, row.getSubjectId(), baseDim,
+                        weight, item.getMaxScore(), item.getMinScore(), row.getValue(), tb.target, tb.base));
+            }
+            // 逐行计算并 upsert：优先用 SQL 表达式（需求 5），缺失时回退计分公式（兼容历史方案）
+            for (KpiScoreRow dr : dataset) {
+                BigDecimal score = hasSqlExpr
+                        ? evalScoreBySql(item.getSqlExpr(), dr)
+                        : formulaService.evalScore(item.getFormula(), dr.actual(), dr.target(), dr.base(),
+                                dr.weight(), dr.minScore(), dr.maxScore());
+                upsertScore(dataDate, scheme.getSchemeCode(), metricCode, baseDim, dr.objId(),
+                        dr.actual(), dr.weight(), dr.target(), dr.base(), score);
                 scored++;
             }
         }
@@ -658,11 +675,47 @@ public class KpiScoreCalcService {
         taskMapper.updateById(task);
     }
 
+    /**
+     * 用 KPI 指标项的 SQL 表达式逐行计算单个对象的 KPI 得分（需求 5）.
+     *
+     * <p>把数据集行的各列作为命名参数绑定：{@code :metricCode/:dataDate/:objId/:baseDim/:weight/
+     * :maxScore/:minScore/:actual/:target/:base}，执行表达式（结果列只需 {@code kpi_value}）。
+     * 对象id 不从 SQL 取（由 {@code dr.objId()} 落库），取首行 kpi_value 作为该对象得分。
+     *
+     * @param sqlExpr KPI 计分 SQL 表达式
+     * @param dr      数据集行
+     * @return 该对象 KPI 得分（SQL 未返回行时为 null）
+     */
+    private BigDecimal evalScoreBySql(String sqlExpr, KpiScoreRow dr) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("metricCode", dr.metricCode());
+        params.put("dataDate", dr.dataDate());
+        params.put("objId", dr.objId());
+        params.put("baseDim", dr.baseDim());
+        params.put("weight", dr.weight());
+        params.put("maxScore", dr.maxScore());
+        params.put("minScore", dr.minScore());
+        params.put("actual", dr.actual());
+        params.put("target", dr.target());
+        params.put("base", dr.base());
+        // 对象id 不从 SQL 取（由 dr.objId() 落库），SQL 只需返回 kpi_value
+        return sqlExecutor.executeScore(sqlExpr, params, SQL_EXPR_TIMEOUT);
+    }
+
     /** 单方案统计：计分对象数 / 跳过指标项数. */
     private record SchemeStat(int scored, int skipped) {
     }
 
     /** 目标值 / 基础值二元组. */
     private record TargetBase(BigDecimal target, BigDecimal base) {
+    }
+
+    /**
+     * KPI 计分数据集行（需求 4）：KPI指标配置 ⟕ 指标结果数据 ⟕ 目标值 的一行.
+     * 列 = 指标 / 数据日期 / 对象id / 指标维度 / 权重 / 计分上限 / 计分下限 / 实际值 / 目标值 / 基础值。
+     */
+    private record KpiScoreRow(String metricCode, LocalDate dataDate, String objId, String baseDim,
+                               BigDecimal weight, BigDecimal maxScore, BigDecimal minScore,
+                               BigDecimal actual, BigDecimal target, BigDecimal base) {
     }
 }

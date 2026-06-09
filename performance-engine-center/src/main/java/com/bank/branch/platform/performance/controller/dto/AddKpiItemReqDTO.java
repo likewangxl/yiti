@@ -53,9 +53,13 @@ public class AddKpiItemReqDTO {
     @DecimalMin(value = "0.0000", message = "maxScore 不能小于 0")
     private BigDecimal maxScore;
 
-    /** 计分公式 (必输), 变量 actual/target/base/weight, 支持 min/max, 例 min(actual / target * 100, 120). */
-    @Schema(description = "计分公式 (必输), 变量 actual/target/base/weight, 支持 min/max", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "计分公式不能为空")
+    /** 计分公式 (可空, 前端已取消计分公式列), 变量 actual/target/base/weight, 支持 min/max. */
+    @Schema(description = "计分公式 (可空), 变量 actual/target/base/weight, 支持 min/max")
     @Size(max = 500, message = "formula 长度不能超过 500")
     private String formula;
+
+    /** SQL 表达式 (可空), 支持 #{slot} 占位符, 用于自定义取数/计算. */
+    @Schema(description = "SQL 表达式, 支持 #{slot} 占位符")
+    @Size(max = 2000, message = "sqlExpr 长度不能超过 2000")
+    private String sqlExpr;
 }

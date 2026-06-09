@@ -58,6 +58,14 @@ public class PerfKpiItem {
      */
     private String formula;
 
+    /**
+     * SQL 表达式（varchar(2000)，可空）.
+     *
+     * <p>前端 KpiRules.vue 指标配置中单独一行编辑，支持 {@code #{slot}} 占位符，
+     * 用于自定义取数 / 计算逻辑（如 {@code SUM(#{slot1}) / NULLIF(#{slot2}, 0)}）。
+     */
+    private String sqlExpr;
+
     /** 创建时间. */
     private LocalDateTime createdTime;
 }

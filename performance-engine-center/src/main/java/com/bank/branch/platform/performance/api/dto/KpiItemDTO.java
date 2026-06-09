@@ -27,5 +27,7 @@ public class KpiItemDTO {
     private BigDecimal maxScore;
     /** 计分公式（变量 actual/target/base/weight，支持 min/max）. */
     private String formula;
+    /** SQL 表达式（支持 #{slot} 占位符，单独一行编辑/展示）. */
+    private String sqlExpr;
     private Integer sortNo;
 }

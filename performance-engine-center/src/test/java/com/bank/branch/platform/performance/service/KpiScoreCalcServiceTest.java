@@ -18,6 +18,7 @@ import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.mapper.SubjectSlotValueRow;
+import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -65,6 +66,7 @@ class KpiScoreCalcServiceTest {
     @Mock private com.bank.branch.platform.performance.mapper.PerfKpiCalcLogMapper kpiCalcLogMapper;
     @Mock private com.bank.branch.platform.auth.api.UserApi userApi;
     @Mock private com.bank.branch.platform.auth.api.OrgApi orgApi;
+    @Mock private SqlExecutor sqlExecutor;
 
     @InjectMocks private KpiScoreCalcService service;
 
@@ -174,6 +176,76 @@ class KpiScoreCalcServiceTest {
         assertThat(calcLog.getTriggerType()).isEqualTo("MANUAL");
         assertThat(calcLog.getTriggerBy()).isEqualTo("tester01");
         assertThat(calcLog.getDataDate()).isEqualTo(DATA_DATE);
+    }
+
+    @Test
+    void calculate_sqlExpr_executesSqlAndUpserts() {
+        when(taskMapper.selectCount(any())).thenReturn(1L); // 三级均已完成
+
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1");
+        scheme.setSchemeCode("KPI_A");
+        scheme.setStatus("ACTIVE");
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000))
+                .thenReturn(List.of(scheme));
+
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1");
+        item.setSchemeId("S1");
+        item.setMetricCode("M_0001");
+        item.setWeight(new BigDecimal("0.5"));
+        item.setMaxScore(new BigDecimal("120"));
+        item.setMinScore(new BigDecimal("0"));
+        // 配置 SQL 表达式（优先于公式）；公式留空。结果只需 kpi_value 列，obj_id 由传入 objId 决定
+        item.setSqlExpr("SELECT :actual / :target * :weight AS kpi_value");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+
+        PerfTargetPlan plan = new PerfTargetPlan();
+        plan.setId("P1");
+        plan.setKpiSchemeId("S1");
+        plan.setTargetCycle("YEAR");
+        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000))
+                .thenReturn(List.of(plan));
+
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_0001");
+        def.setBaseDim("EMP");
+        def.setValSlot(5);
+        when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
+
+        when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5))
+                .thenReturn(List.of(new SubjectSlotValueRow("E001", new BigDecimal("80"))));
+
+        PerfTargetValue tv = new PerfTargetValue();
+        tv.setTargetValue(new BigDecimal("100"));
+        tv.setBaseValue(new BigDecimal("0"));
+        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E001", "2026", "M_0001"))
+                .thenReturn(tv);
+
+        // SQL 执行器返回该对象的 KPI 得分（标量 kpi_value）
+        when(sqlExecutor.executeScore(eq(item.getSqlExpr()), any(), any()))
+                .thenReturn(new BigDecimal("0.4000"));
+
+        String taskId = service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+        assertThat(taskId).isNotBlank();
+
+        ArgumentCaptor<PerfKpiScore> scoreCap = ArgumentCaptor.forClass(PerfKpiScore.class);
+        verify(scoreMapper, times(1)).upsert(scoreCap.capture());
+        PerfKpiScore s = scoreCap.getValue();
+        assertThat(s.getSubjectType()).isEqualTo("EMP");
+        assertThat(s.getSubjectId()).isEqualTo("E001");
+        assertThat(s.getActualValue()).isEqualByComparingTo("80");
+        assertThat(s.getTargetValue()).isEqualByComparingTo("100");
+        assertThat(s.getBaseValue()).isEqualByComparingTo("0");
+        assertThat(s.getWeight()).isEqualByComparingTo("0.5");
+        assertThat(s.getScore()).isEqualByComparingTo("0.4");
+
+        // SQL 路径下不应再走公式引擎
+        verify(formulaService, never()).evalScore(any(), any(), any(), any(), any(), any(), any());
+
+        ArgumentCaptor<PerfMetricCalcTask> taskCap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
+        verify(taskMapper, times(1)).updateById(taskCap.capture());
+        assertThat(taskCap.getValue().getStatus()).isEqualTo("SUCCESS");
     }
 
     @Test

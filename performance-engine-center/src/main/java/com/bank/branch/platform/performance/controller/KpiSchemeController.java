@@ -238,6 +238,7 @@ public class KpiSchemeController {
                 .minScore(req.getMinScore())
                 .maxScore(req.getMaxScore())
                 .formula(req.getFormula())
+                .sqlExpr(req.getSqlExpr())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(kpiItemService.addItemDto(cmd));
@@ -260,6 +261,7 @@ public class KpiSchemeController {
                 .minScore(req.getMinScore())
                 .maxScore(req.getMaxScore())
                 .formula(req.getFormula())
+                .sqlExpr(req.getSqlExpr())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(kpiItemService.updateItemDto(itemId, cmd));
@@ -291,11 +293,13 @@ public class KpiSchemeController {
         for (AddKpiItemReqDTO item : reqItems) {
             cmds.add(AddKpiItemCmd.builder()
                     .metricCode(item.getMetricCode())
+                    .baseDim(item.getBaseDim())
                     .weight(item.getWeight())
                     .multiplier(item.getMultiplier())
                     .minScore(item.getMinScore())
                     .maxScore(item.getMaxScore())
                     .formula(item.getFormula())
+                    .sqlExpr(item.getSqlExpr())
                     .build());
         }
         return cmds;

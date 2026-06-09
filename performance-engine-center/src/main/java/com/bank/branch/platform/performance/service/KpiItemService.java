@@ -85,6 +85,7 @@ public class KpiItemService {
         item.setMinScore(cmd.getMinScore() != null ? cmd.getMinScore() : DEFAULT_MIN_SCORE);
         item.setMaxScore(cmd.getMaxScore() != null ? cmd.getMaxScore() : DEFAULT_MAX_SCORE);
         item.setFormula(cmd.getFormula());
+        item.setSqlExpr(cmd.getSqlExpr());
         item.setCreatedTime(LocalDateTime.now());
         itemMapper.insert(item);
         return item;
@@ -113,6 +114,7 @@ public class KpiItemService {
         patch.setMinScore(cmd.getMinScore());
         patch.setMaxScore(cmd.getMaxScore());
         patch.setFormula(cmd.getFormula());
+        patch.setSqlExpr(cmd.getSqlExpr());
         itemMapper.updateByIdSelective(patch);
 
         // 内存视图同步 (便于 Facade 层免二次查询)
@@ -130,6 +132,9 @@ public class KpiItemService {
         }
         if (cmd.getFormula() != null) {
             existing.setFormula(cmd.getFormula());
+        }
+        if (cmd.getSqlExpr() != null) {
+            existing.setSqlExpr(cmd.getSqlExpr());
         }
         return existing;
     }

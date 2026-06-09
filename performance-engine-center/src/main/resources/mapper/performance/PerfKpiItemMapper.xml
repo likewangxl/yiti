@@ -3,7 +3,7 @@
 <mapper namespace="com.bank.branch.platform.performance.mapper.PerfKpiItemMapper">
 
     <sql id="BASE_COLUMNS">
-        id, scheme_id, metric_code, base_dim, weight, multiplier, min_score, max_score, formula, created_time
+        id, scheme_id, metric_code, base_dim, weight, multiplier, min_score, max_score, formula, sql_expr, created_time
     </sql>
 
     <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
@@ -15,7 +15,7 @@
         <foreach collection="list" item="item" separator=",">
             (
                 #{item.id}, #{item.schemeId}, #{item.metricCode}, #{item.baseDim}, #{item.weight}, #{item.multiplier},
-                #{item.minScore}, #{item.maxScore}, #{item.formula}, #{item.createdTime}
+                #{item.minScore}, #{item.maxScore}, #{item.formula}, #{item.sqlExpr}, #{item.createdTime}
             )
         </foreach>
     </insert>
@@ -30,6 +30,7 @@
             <if test="minScore != null">min_score = #{minScore},</if>
             <if test="maxScore != null">max_score = #{maxScore},</if>
             <if test="formula != null">formula = #{formula},</if>
+            <if test="sqlExpr != null">sql_expr = #{sqlExpr},</if>
         </set>
         WHERE id = #{id}
     </update>

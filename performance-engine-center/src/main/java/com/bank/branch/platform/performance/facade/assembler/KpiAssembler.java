@@ -68,6 +68,7 @@ public final class KpiAssembler {
                 .minScore(item.getMinScore())
                 .maxScore(item.getMaxScore())
                 .formula(item.getFormula())
+                .sqlExpr(item.getSqlExpr())
                 .sortNo(null)
                 .build();
     }

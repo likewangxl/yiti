@@ -41,4 +41,9 @@ public class UpdateKpiItemReqDTO {
     @Schema(description = "计分公式, 变量 actual/target/base/weight, 支持 min/max")
     @Size(max = 500, message = "formula 长度不能超过 500")
     private String formula;
+
+    /** SQL 表达式 (可空, null 表示不修改), 支持 #{slot} 占位符. */
+    @Schema(description = "SQL 表达式, 支持 #{slot} 占位符")
+    @Size(max = 2000, message = "sqlExpr 长度不能超过 2000")
+    private String sqlExpr;
 }

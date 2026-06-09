@@ -43,6 +43,9 @@ public class AddKpiItemCmd {
     /** 计分公式（可空，变量 actual/target/base/weight，支持 min/max）. */
     private String formula;
 
+    /** SQL 表达式（可空，支持 #{slot} 占位符）. */
+    private String sqlExpr;
+
     /** 操作人（审计用，当前表无 created_by 列，由 scheme 侧记录）. */
     private String operator;
 }
