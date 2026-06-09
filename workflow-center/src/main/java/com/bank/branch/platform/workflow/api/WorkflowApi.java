@@ -81,4 +81,26 @@ public interface WorkflowApi {
      * @return {@code Optional.of("APPROVED" / "REJECTED")} 或 {@link Optional#empty()}
      */
     Optional<String> getProcessOutcome(String processInstanceId);
+
+    /**
+     * 审批通过指定任务（<b>无会话版</b>，供外部渠道按显式 empId 调用）。
+     * <p>不依赖登录态 ThreadLocal、不校验 assignee（不要求签收）；调用方（如 perf 渠道审批）须先
+     * 按候选组/角色可见性确认该 empId 能审批此任务（查出 taskId）后再调用。</p>
+     *
+     * @param taskId  任务ID
+     * @param empId   审批人工号（外部渠道认证后透传）
+     * @param opinion 审批意见（可空）
+     * @throws com.bank.branch.platform.common.web.exception.BizException WF-40403 任务不存在
+     */
+    void approveByEmp(String taskId, String empId, String opinion);
+
+    /**
+     * 驳回指定任务（<b>无会话版</b>，供外部渠道按显式 empId 调用）。可见性约定同 {@link #approveByEmp}。
+     *
+     * @param taskId  任务ID
+     * @param empId   审批人工号（外部渠道认证后透传）
+     * @param opinion 驳回意见（可空）
+     * @throws com.bank.branch.platform.common.web.exception.BizException WF-40403 任务不存在
+     */
+    void rejectByEmp(String taskId, String empId, String opinion);
 }

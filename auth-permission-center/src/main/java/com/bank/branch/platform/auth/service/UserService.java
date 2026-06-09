@@ -63,6 +63,7 @@ public class UserService {
         entity.setUserchnname(req.getUserchnname());
         entity.setEmail(req.getEmail());
         entity.setRemark(req.getRemark());
+        entity.setUserType(req.getUserType());
         entity.setPwd(passwordEncoder.encode(req.getInitialPassword()));
         entity.setIsExpired(0);
         entity.setIsLocked(0);
@@ -131,6 +132,7 @@ public class UserService {
         dto.setUserchnname(u.getUserchnname());
         dto.setEmail(u.getEmail());
         dto.setRemark(u.getRemark());
+        dto.setUserType(u.getUserType());
         dto.setIsExpired(u.getIsExpired());
         dto.setIsLocked(u.getIsLocked());
         dto.setIsEnabled(u.getIsEnabled());
@@ -153,6 +155,7 @@ public class UserService {
         if (req.getUserchnname() != null && !req.getUserchnname().isBlank()) u.setUserchnname(req.getUserchnname());
         if (req.getEmail() != null) u.setEmail(req.getEmail());
         if (req.getRemark() != null) u.setRemark(req.getRemark());
+        if (req.getUserType() != null) u.setUserType(req.getUserType());
         u.setUpdateTime(LocalDateTime.now());
         u.setUpdateAuthor(operator);
         userMapper.updateById(u);
@@ -281,6 +284,7 @@ public class UserService {
         dto.setUserchnname(u.getUserchnname());
         dto.setEmail(u.getEmail());
         dto.setRemark(u.getRemark());
+        dto.setUserType(u.getUserType());
         dto.setIsExpired(u.getIsExpired());
         dto.setIsLocked(u.getIsLocked());
         dto.setIsEnabled(u.getIsEnabled());

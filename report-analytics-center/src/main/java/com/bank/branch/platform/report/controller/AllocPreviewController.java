@@ -28,8 +28,8 @@ public class AllocPreviewController {
             @RequestParam(required = false) String allocDim,
             @RequestParam(required = false) String accountNo,
             @RequestParam(required = false) String statisDt) {
-        // 新口径仅按客户编号取 RULE/ACCOUNT 审批通过的最后一条分配，custType/allocDim/accountNo/statisDt
-        // 为兼容旧前端查询串保留入参但不再使用。
-        return ResponseWrapper.success(allocPreviewService.preview(custNo));
+        // 按客户编号取审批通过的最后一条分配；allocDim=ACCOUNT 只查按账号分配，RULE/空查两者。
+        // custType/accountNo/statisDt 为兼容旧前端查询串保留入参但不再使用。
+        return ResponseWrapper.success(allocPreviewService.preview(custNo, allocDim));
     }
 }

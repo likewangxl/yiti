@@ -7,6 +7,7 @@ import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
+import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
@@ -51,6 +52,9 @@ class TaskOperationServiceTest {
 
     @Mock
     private CurrentUserApi currentUserApi;
+
+    @Mock
+    private RuntimeService runtimeService;
 
     @InjectMocks
     private TaskOperationService taskOperationService;
@@ -188,7 +192,7 @@ class TaskOperationServiceTest {
      * 驳回成功：验证添加评论和完成任务（approved=false）被调用
      */
     @Test
-    void rejectTask_success_completesWithReject() {
+    void rejectTask_success_terminatesProcess() {
         // given
         when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
         Task mockTask = buildMockTask("TASK_001", "PID_001", "E001");
@@ -199,11 +203,9 @@ class TaskOperationServiceTest {
         // when
         taskOperationService.rejectTask("TASK_001", req);
 
-        // then
+        // then —— 当前实现：写驳回意见 + 强制终止流程实例（deleteProcessInstance，非 complete），发驳回事件
         verify(taskService).addComment("TASK_001", "PID_001", "REJECT", "资质不符合要求");
-        verify(taskService).complete(eq("TASK_001"), argThat((Map<String, Object> vars) ->
-                Boolean.FALSE.equals(vars.get("approved"))
-        ));
+        verify(runtimeService).deleteProcessInstance(eq("PID_001"), anyString());
         verify(eventPublisher).publishEvent(any(TaskOperationService.TaskRejectedEvent.class));
     }
 
@@ -322,6 +324,62 @@ class TaskOperationServiceTest {
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40403");
+    }
+
+    // ============ 无会话审批（approveTaskByEmp / rejectTaskByEmp，callpu/SOAP 链路）============
+
+    /**
+     * approveTaskByEmp：按显式 empId 审批，不读登录态、不校验 assignee
+     * （assignee 为他人/未签收也放行；可见性由上游 perf 候选组/角色校验保证）。
+     */
+    @Test
+    void approveTaskByEmp_noSession_completesWithoutAssigneeCheck() {
+        Task mockTask = buildMockTask("TASK_001", "PID_001", "OTHER");
+        mockTaskQuery(mockTask);
+
+        ApproveReqDTO req = new ApproveReqDTO("手机端同意", null);
+
+        taskOperationService.approveTaskByEmp("TASK_001", "E001", req);
+
+        verify(taskService).addComment("TASK_001", "PID_001", "APPROVE", "手机端同意");
+        verify(taskService).complete(eq("TASK_001"), argThat((Map<String, Object> vars) ->
+                Boolean.TRUE.equals(vars.get("approved"))
+        ));
+        verify(eventPublisher).publishEvent(any(TaskOperationService.TaskApprovedEvent.class));
+        verify(currentUserApi, never()).getCurrentEmpId();
+    }
+
+    /**
+     * approveTaskByEmp：任务不存在仍抛 WF-40403。
+     */
+    @Test
+    void approveTaskByEmp_taskNotFound_throwsWf40403() {
+        mockTaskQuery(null);
+        ApproveReqDTO req = new ApproveReqDTO("同意", null);
+
+        assertThatThrownBy(() -> taskOperationService.approveTaskByEmp("TASK_999", "E001", req))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40403");
+    }
+
+    /**
+     * rejectTaskByEmp：按显式 empId 驳回，不读登录态、不校验 assignee；终止流程 + 发驳回事件。
+     */
+    @Test
+    void rejectTaskByEmp_noSession_rejectsWithoutAssigneeCheck() {
+        Task mockTask = buildMockTask("TASK_001", "PID_001", "OTHER");
+        mockTaskQuery(mockTask);
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_001")).thenReturn(null);
+
+        RejectReqDTO req = new RejectReqDTO("手机端驳回");
+
+        taskOperationService.rejectTaskByEmp("TASK_001", "E001", req);
+
+        verify(taskService).addComment("TASK_001", "PID_001", "REJECT", "手机端驳回");
+        verify(runtimeService).deleteProcessInstance(eq("PID_001"), anyString());
+        verify(eventPublisher).publishEvent(any(TaskOperationService.TaskRejectedEvent.class));
+        verify(currentUserApi, never()).getCurrentEmpId();
     }
 
     /**

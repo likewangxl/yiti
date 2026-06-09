@@ -38,16 +38,17 @@ public class FreeReportServiceImpl implements FreeReportService {
     public String importExcel(String reportName, MultipartFile file, String empId, String empName) {
         log.info("[FreeReport.import] reportName={}, file={}, empId={}", reportName, file.getOriginalFilename(), empId);
 
-        // 相同文件名覆盖：先删旧批次DB数据（MinIO文件延后删，避免事务内调外部服务导致rollback-only）
+        // 同名 + 同操作人才覆盖：不同操作人传同名文件视为各自独立的批次
         String fileName = file.getOriginalFilename();
         List<String> oldFileKeys = new ArrayList<>();
         if (fileName != null) {
             List<RptFreeReportBatch> existing = batchMapper.selectByFileName(fileName);
             for (RptFreeReportBatch old : existing) {
+                if (!empId.equals(old.getUploaderEmpId())) continue;
                 rowMapper.deleteByBatchId(old.getId());
                 if (old.getFileObjectKey() != null) oldFileKeys.add(old.getFileObjectKey());
                 batchMapper.deleteById(old.getId());
-                log.info("[FreeReport.import] 覆盖旧批次 id={}, fileName={}", old.getId(), old.getFileName());
+                log.info("[FreeReport.import] 覆盖旧批次 id={}, fileName={}, uploader={}", old.getId(), old.getFileName(), empId);
             }
         }
 
@@ -62,6 +63,21 @@ public class FreeReportServiceImpl implements FreeReportService {
             Sheet sheet = wb.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) throw new BizException("RPT-40010", "Excel 无表头行");
+
+            // 预处理合并单元格：把合并区内每个 (row,col) 映射到主单元格的字符串值，
+            // 后续读 cell == null（合并区从属位）时 fallback 拿主单元格的值，避免姓名等列断行
+            Map<String, String> mergedAnchorValue = new HashMap<>();
+            for (org.apache.poi.ss.util.CellRangeAddress range : sheet.getMergedRegions()) {
+                Row anchorRow = sheet.getRow(range.getFirstRow());
+                Cell anchorCell = anchorRow != null ? anchorRow.getCell(range.getFirstColumn()) : null;
+                String anchorVal = anchorCell != null ? getCellString(anchorCell) : "";
+                if (anchorVal.isEmpty()) continue;
+                for (int r = range.getFirstRow(); r <= range.getLastRow(); r++) {
+                    for (int c = range.getFirstColumn(); c <= range.getLastColumn(); c++) {
+                        mergedAnchorValue.put(r + ":" + c, anchorVal);
+                    }
+                }
+            }
 
             headers = new ArrayList<>();
             for (int c = 0; c < headerRow.getLastCellNum(); c++) {
@@ -85,11 +101,17 @@ public class FreeReportServiceImpl implements FreeReportService {
             for (int r = 1; r <= sheet.getLastRowNum(); r++) {
                 Row row = sheet.getRow(r);
                 if (row == null) continue;
+                // 跳过隐藏行（Excel 模板里隐藏的辅助/计算行，业务用户视图看不到，不应入库）
+                if (row.getZeroHeight()) continue;
                 Map<String, String> rowData = new LinkedHashMap<>();
                 boolean hasData = false;
                 for (int c = 0; c < headers.size(); c++) {
                     Cell cell = row.getCell(c);
                     String val = cell != null ? getCellString(cell) : "";
+                    // 合并单元格从属位 fallback 到主单元格值
+                    if (val.isEmpty()) {
+                        val = mergedAnchorValue.getOrDefault(r + ":" + c, "");
+                    }
                     rowData.put("col_" + (c + 1), val);
                     if (!val.isEmpty()) hasData = true;
                 }
@@ -166,13 +188,14 @@ public class FreeReportServiceImpl implements FreeReportService {
     @Override
     public PageResult<Map<String, Object>> queryData(String batchId, String keyword,
                                                       String empNo, String empName,
-                                                      String scopeEmpId, List<String> scopeOrgCodes,
+                                                      String rowMode, String selfEmpNo, String selfName,
+                                                      List<String> scopeOrgCodes,
                                                       int pageNo, int pageSize) {
-        long total = rowMapper.countByBatch(batchId, keyword, empNo, empName, scopeEmpId, scopeOrgCodes);
+        long total = rowMapper.countByBatch(batchId, keyword, empNo, empName, rowMode, selfEmpNo, selfName, scopeOrgCodes);
         if (total == 0) return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
 
         int offset = (pageNo - 1) * pageSize;
-        List<RptFreeReportRow> rows = rowMapper.selectByBatch(batchId, keyword, empNo, empName, scopeEmpId, scopeOrgCodes, offset, pageSize);
+        List<RptFreeReportRow> rows = rowMapper.selectByBatch(batchId, keyword, empNo, empName, rowMode, selfEmpNo, selfName, scopeOrgCodes, offset, pageSize);
 
         List<Map<String, Object>> records = rows.stream().map(r -> {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -205,10 +228,69 @@ public class FreeReportServiceImpl implements FreeReportService {
 
     @Override
     public List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo,
-                                                String scopeEmpId, java.util.List<String> scopeOrgCodes) {
+                                                boolean includeDisabled) {
         java.time.LocalDateTime fromDt = dateFrom != null ? dateFrom.atStartOfDay() : null;
         java.time.LocalDateTime toDt = dateTo != null ? dateTo.plusDays(1).atStartOfDay() : null;
-        return batchMapper.selectBatchesWithScope(keyword, fromDt, toDt, scopeEmpId, scopeOrgCodes);
+        return batchMapper.selectBatches(keyword, fromDt, toDt, includeDisabled);
+    }
+
+    @Override
+    public String getBatchStatus(String batchId) {
+        RptFreeReportBatch batch = batchMapper.selectById(batchId);
+        return batch != null ? batch.getStatus() : null;
+    }
+
+    @Override
+    public byte[] exportFilteredExcel(String batchId, String rowMode, String selfEmpNo, String selfName,
+                                      List<String> orgCodes) {
+        // 列定义（表头）
+        List<Map<String, String>> colDefs = getColumns(batchId);
+        // 与 /data 同一套行级过滤，但不分页：pageSize 取过滤后总行数
+        long total = rowMapper.countByBatch(batchId, null, null, null, rowMode, selfEmpNo, selfName, orgCodes);
+        List<RptFreeReportRow> rows = total == 0 ? Collections.emptyList()
+                : rowMapper.selectByBatch(batchId, null, null, null, rowMode, selfEmpNo, selfName, orgCodes,
+                                          0, (int) Math.min(total, 100000));
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            Sheet sheet = wb.createSheet("数据");
+            // 表头
+            Row header = sheet.createRow(0);
+            for (int c = 0; c < colDefs.size(); c++) {
+                header.createCell(c).setCellValue(colDefs.get(c).getOrDefault("label", "col_" + (c + 1)));
+            }
+            // 数据行：按 col_defs 的 key 顺序取值（col_1/col_2 走专列，其余从 dataJson）
+            int rIdx = 1;
+            for (RptFreeReportRow r : rows) {
+                Map<String, String> extra = Collections.emptyMap();
+                if (r.getDataJson() != null && !r.getDataJson().isEmpty()) {
+                    try { extra = objectMapper.readValue(r.getDataJson(), new TypeReference<>() {}); }
+                    catch (Exception ignore) { /* keep empty */ }
+                }
+                Row row = sheet.createRow(rIdx++);
+                for (int c = 0; c < colDefs.size(); c++) {
+                    String key = colDefs.get(c).getOrDefault("key", "col_" + (c + 1));
+                    String val = switch (key) {
+                        case "col_1" -> r.getCol1();
+                        case "col_2" -> r.getCol2();
+                        default -> extra.get(key);
+                    };
+                    row.createCell(c).setCellValue(val != null ? val : "");
+                }
+            }
+            wb.write(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            throw new BizException("RPT-50001", "导出 Excel 失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void updateBatchStatus(String batchId, String status) {
+        RptFreeReportBatch batch = batchMapper.selectById(batchId);
+        if (batch == null) throw new BizException("RPT-40401", "批次不存在");
+        batchMapper.updateStatus(batchId, status);
+        log.info("[FreeReport.updateStatus] batchId={}, status={}", batchId, status);
     }
 
     @Override
@@ -225,6 +307,15 @@ public class FreeReportServiceImpl implements FreeReportService {
         RptFreeReportBatch batch = batchMapper.selectById(batchId);
         if (batch == null) return "report.xlsx";
         return batch.getFileName() != null ? batch.getFileName() : batch.getReportName() + ".xlsx";
+    }
+
+    @Override
+    public String getBatchFileObjectKey(String batchId) {
+        RptFreeReportBatch batch = batchMapper.selectById(batchId);
+        if (batch == null || batch.getFileObjectKey() == null) {
+            throw new BizException("RPT-40401", "批次不存在或无关联文件");
+        }
+        return batch.getFileObjectKey();
     }
 
     @Override

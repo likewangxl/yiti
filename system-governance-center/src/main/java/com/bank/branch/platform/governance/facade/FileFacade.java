@@ -80,4 +80,14 @@ public class FileFacade implements FileApi {
     public void deleteFile(String fileId) {
         fileService.deleteFile(fileId);
     }
+
+    @Override
+    public java.nio.file.Path getFilePath(String fileId) {
+        return fileService.getFilePath(fileId);
+    }
+
+    @Override
+    public String getFileName(String fileId) {
+        return fileService.getFileName(fileId);
+    }
 }

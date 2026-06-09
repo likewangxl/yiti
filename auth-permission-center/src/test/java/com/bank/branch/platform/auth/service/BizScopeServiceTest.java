@@ -36,7 +36,7 @@ class BizScopeServiceTest {
     @Test
     void resolveScope_singleRoleReturnsConfiguredScope() {
         PtRoleBizScope scope = makeScope("S_RM_LEAD", "R_RM", "LEAD", "SELF_CREATED");
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(scope));
 
         DataScopeType result = bizScopeService.resolveScope("E001", BizType.LEAD);
@@ -49,7 +49,7 @@ class BizScopeServiceTest {
         // CUST_MANAGER has ORG_SUBTREE; CORP_DEPT has ALL => result should be ALL
         PtRoleBizScope scope1 = makeScope("S1", "R_RM", "CUSTOMER", "ORG_SUBTREE");
         PtRoleBizScope scope2 = makeScope("S2", "R_CORP", "CUSTOMER", "ALL");
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM", "R_CORP"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM", "R_CORP"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(scope1));
         when(cacheService.getBizScopesByRoleId("R_CORP")).thenReturn(List.of(scope2));
 
@@ -59,19 +59,20 @@ class BizScopeServiceTest {
     }
 
     @Test
-    void resolveScope_noBizTypeScopeThrowsPermissionDenied() {
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+    void resolveScope_noBizTypeScopeReturnsSelf() {
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of()); // 没有 LOAN 配置
 
-        assertThatThrownBy(() -> bizScopeService.resolveScope("E001", BizType.LOAN))
-            .isInstanceOf(PermissionDeniedException.class);
+        // 未配置时默认 SELF（最小权限），不再抛异常拒绝访问
+        assertThat(bizScopeService.resolveScope("E001", BizType.LOAN))
+            .isEqualTo(DataScopeType.SELF);
     }
 
     @Test
     void getUserBizScopes_shouldMergeAllRoleScopes() {
         PtRoleBizScope leadScope = makeScope("S1", "R_RM", "LEAD", "SELF_CREATED");
         PtRoleBizScope reportScope = makeScope("S2", "R_RM", "REPORT", "SELF");
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(leadScope, reportScope));
 
         Map<BizType, DataScopeType> scopes = bizScopeService.getUserBizScopes("E001");
@@ -83,7 +84,7 @@ class BizScopeServiceTest {
     @Test
     void checkWritePermission_allScopeAlwaysReturnsTrue() {
         PtRoleBizScope scope = makeScope("S1", "R_ADMIN", "CUSTOMER", "ALL");
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_ADMIN"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_ADMIN"));
         when(cacheService.getBizScopesByRoleId("R_ADMIN")).thenReturn(List.of(scope));
 
         boolean result = bizScopeService.checkWritePermission("E001", BizType.CUSTOMER, "ORG_OTHER", "E999");
@@ -94,7 +95,7 @@ class BizScopeServiceTest {
     @Test
     void checkWritePermission_selfCreatedScopeMatchesCreatedBy() {
         PtRoleBizScope scope = makeScope("S1", "R_RM", "LEAD", "SELF_CREATED");
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(scope));
 
         assertThat(bizScopeService.checkWritePermission("E001", BizType.LEAD, "ORG001", "E001")).isTrue();
@@ -162,7 +163,7 @@ class BizScopeServiceTest {
     void checkWritePermission_defaultScopeReturnsFalse() {
         // ORG scope 在简化实现中返回 false
         PtRoleBizScope scope = makeScope("S1", "R_RM", "CUSTOMER", "ORG");
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(scope));
 
         assertThat(bizScopeService.checkWritePermission("E001", BizType.CUSTOMER, "ORG001", "E001")).isFalse();
@@ -170,7 +171,7 @@ class BizScopeServiceTest {
 
     @Test
     void checkWritePermission_noBizTypeConfigReturnsFalse() {
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of());
 
         assertThat(bizScopeService.checkWritePermission("E001", BizType.LOAN, "ORG001", "E001")).isFalse();
@@ -199,7 +200,7 @@ class BizScopeServiceTest {
         PtRoleBizScope active = makeScope("S1", "R_RM", "LEAD", "SELF_CREATED");
         PtRoleBizScope disabled = makeScope("S2", "R_RM", "LEAD", "ALL");
         disabled.setRecordStatus(1); // 已禁用
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(java.util.Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(java.util.Set.of("R_RM"));
         when(cacheService.getBizScopesByRoleId("R_RM")).thenReturn(List.of(active, disabled));
 
         DataScopeType result = bizScopeService.resolveScope("E001", BizType.LEAD);

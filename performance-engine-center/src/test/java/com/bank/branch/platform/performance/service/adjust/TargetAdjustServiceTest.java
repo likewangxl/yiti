@@ -65,6 +65,9 @@ class TargetAdjustServiceTest {
     private PerfTargetPlanMapper targetPlanMapper;
 
     @Mock
+    private com.bank.branch.platform.performance.mapper.PerfTargetValueMapper targetValueMapper;
+
+    @Mock
     private WorkflowApi workflowApi;
 
     @Mock
@@ -78,6 +81,9 @@ class TargetAdjustServiceTest {
 
     @Mock
     private PerfScopeHelper perfScopeHelper;
+
+    @Mock
+    private com.bank.branch.platform.performance.event.PerfEventPublisher eventPublisher;
 
     private TargetAdjustService service;
 
@@ -107,8 +113,8 @@ class TargetAdjustServiceTest {
     @BeforeEach
     void setUp() {
         // 2026-05-21：注入 7 依赖（V1.4 S1.3 起 5 个 + 2026-05-21 加 UserApi/OrgApi 用于 getByIdDto 申请人姓名/机构展开）
-        service = new TargetAdjustService(applyMapper, targetPlanMapper, workflowApi,
-                currentUserApi, userApi, orgApi, perfScopeHelper);
+        service = new TargetAdjustService(applyMapper, targetPlanMapper, targetValueMapper, workflowApi,
+                currentUserApi, userApi, orgApi, perfScopeHelper, eventPublisher);
 
         // 默认目标方案存在
         PerfTargetPlan plan = new PerfTargetPlan();
@@ -118,42 +124,41 @@ class TargetAdjustServiceTest {
     }
 
     @Test
-    @DisplayName("提交成功 → 启动 perf_target_adjust_v1 BPMN，状态 IN_APPROVAL")
-    void submit_ok_startsWorkflow() {
-        when(workflowApi.startProcess(any(StartProcessCmd.class)))
-                .thenReturn(new WorkflowLaunchResp("PI_T_001", null, null));
-
+    @DisplayName("提交成功 → 不再启动 BPMN，直接生效（upsert 目标值 + 发事件），状态 APPROVED")
+    void submit_ok_appliesDirectly() {
         String id = service.submit(baseCmd());
 
         assertThat(id).isNotBlank();
-        ArgumentCaptor<StartProcessCmd> cmdCap = ArgumentCaptor.forClass(StartProcessCmd.class);
-        verify(workflowApi).startProcess(cmdCap.capture());
-        assertThat(cmdCap.getValue().getProcessDefinitionKey()).isEqualTo("perf_target_adjust_v1");
-        assertThat(cmdCap.getValue().getBizType()).isEqualTo("TARGET_ADJUST");
+        // 不再启动审批流程
+        verify(workflowApi, never()).startProcess(any());
 
-        // 流程变量包含业务关键字段
-        assertThat(cmdCap.getValue().getVariables()).containsEntry("planId", "PLAN_001");
-        assertThat(cmdCap.getValue().getVariables()).containsEntry("subjectType", "EMP");
-        assertThat(cmdCap.getValue().getVariables()).containsEntry("subjectId", "EMP_001");
-        assertThat(cmdCap.getValue().getVariables()).containsEntry("cycleKey", "2026Q1");
+        // 直接落地目标值：两个 metricCode 各一条 upsert（一次 upsertBatch 批量）
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.List<com.bank.branch.platform.performance.entity.PerfTargetValue>> tvCap =
+                ArgumentCaptor.forClass(java.util.List.class);
+        verify(targetValueMapper).upsertBatch(tvCap.capture());
+        assertThat(tvCap.getValue()).hasSize(2);
+        assertThat(tvCap.getValue()).extracting(
+                com.bank.branch.platform.performance.entity.PerfTargetValue::getMetricCode)
+                .containsExactlyInAnyOrder("M_DEP_BAL", "M_FEE_INCOME");
+        assertThat(tvCap.getValue().get(0).getTargetValue()).isNotNull();
 
-        // 回写 processInstanceId
-        verify(applyMapper).updateStatus(id, "IN_APPROVAL", "PI_T_001");
+        // 发布领域事件（下游缓存失效 / 报表重算）
+        verify(eventPublisher).publish(
+                any(com.bank.branch.platform.performance.event.TargetAdjustmentApprovedEvent.class));
     }
 
     @Test
-    @DisplayName("insert apply 状态=IN_APPROVAL，remark JSON 承载 adjustments + reason")
+    @DisplayName("insert apply 状态=APPROVED（直接生效），remark JSON 承载 adjustments + reason")
     void submit_persistsApplyWithRemarkJson() {
-        when(workflowApi.startProcess(any(StartProcessCmd.class)))
-                .thenReturn(new WorkflowLaunchResp("PI_T_002", null, null));
-
         service.submit(baseCmd());
 
         ArgumentCaptor<PerfTargetAdjustApply> applyCap =
                 ArgumentCaptor.forClass(PerfTargetAdjustApply.class);
         verify(applyMapper).insert(applyCap.capture());
         PerfTargetAdjustApply apply = applyCap.getValue();
-        assertThat(apply.getStatus()).isEqualTo("IN_APPROVAL");
+        assertThat(apply.getStatus()).isEqualTo("APPROVED");
+        assertThat(apply.getProcessInstanceId()).isNull();
         assertThat(apply.getPlanId()).isEqualTo("PLAN_001");
         assertThat(apply.getSubjectType()).isEqualTo("EMP");
         assertThat(apply.getSubjectId()).isEqualTo("EMP_001");
@@ -266,8 +271,6 @@ class TargetAdjustServiceTest {
     @Test
     @DisplayName("subjectType=ORG 正常提交（双维度支持）")
     void submit_subjectTypeOrg_ok() {
-        when(workflowApi.startProcess(any(StartProcessCmd.class)))
-                .thenReturn(new WorkflowLaunchResp("PI_T_ORG_001", null, null));
         SubmitTargetAdjustCmd cmd = baseCmd();
         cmd.setSubjectType("ORG");
         cmd.setSubjectId("ORG_101");

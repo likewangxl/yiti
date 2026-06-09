@@ -65,8 +65,9 @@ public class UserRoleController {
     public ResponseWrapper<Void> bindRoles(
             @PathVariable("userId") String userId,
             @Valid @RequestBody UserRoleBindReqDTO req) {
-        log.info("[UserRoleController.bindRoles] userId={}, roleIds={}", userId, req.getRoleIds());
-        userRoleService.bindRoles(userId, req.getRoleIds(), req.getReason());
+        log.info("[UserRoleController.bindRoles] userId={}, roleIds={}, primaryRoleId={}",
+                userId, req.getRoleIds(), req.getPrimaryRoleId());
+        userRoleService.bindRoles(userId, req.getRoleIds(), req.getPrimaryRoleId(), req.getReason());
         return ResponseWrapper.success();
     }
 

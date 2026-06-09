@@ -180,16 +180,27 @@ class FlowValidatorTest {
     }
 
     /**
-     * 边条件中字段不在白名单时应报错。
+     * 边条件中字段为自定义变量（不在白名单）时应通过——路由变量由本流程运行时产出，无法预登记。
      */
     @Test
-    void condition_unknown_field_fails() {
+    void condition_customField_passes() {
         FlowGraphDTO g = linearGraph();
-        // 替换 start→a1 边，加入非白名单字段
-        g.getEdges().set(0, edgeWithCondition("start", "a1", "notWhitelisted", "EQ", "X"));
+        // 替换 start→a1 边，加入自定义路由变量 corpRouteTo（不在 catalog 白名单）
+        g.getEdges().set(0, edgeWithCondition("start", "a1", "corpRouteTo", "EQ", "LEADER"));
+        FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
+        assertThat(result.isOk()).isTrue();
+        assertThat(result.getErrors()).isEmpty();
+    }
+
+    /**
+     * 边条件字段为空时仍应报错（仅放宽白名单，不放宽"字段必填"）。
+     */
+    @Test
+    void condition_blankField_fails() {
+        FlowGraphDTO g = linearGraph();
+        g.getEdges().set(0, edgeWithCondition("start", "a1", null, "EQ", "X"));
         FlowValidator.ValidationResult result = validator.validate(g, "ALLOC_ADJUST");
         assertThat(result.isOk()).isFalse();
-        assertThat(result.getErrors()).anyMatch(e -> e.contains("notWhitelisted") || e.contains("白名单"));
     }
 
     /**

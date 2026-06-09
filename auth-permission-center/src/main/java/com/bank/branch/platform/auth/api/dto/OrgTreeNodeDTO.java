@@ -13,6 +13,8 @@ public class OrgTreeNodeDTO {
 
     private String orgCode;
     private String orgName;
+    /** 机构编号（EXT_ORG_INFO.DEPT_NO），前端展示用 */
+    private String deptNo;
     private Integer orgLevel;
     private String parentOrgCode;
     private Integer organState;

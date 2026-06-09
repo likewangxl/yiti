@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.service;
 import com.bank.branch.platform.performance.config.PerfEngineProperties;
 import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.entity.SysControl;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.dto.MetricTrialResult;
@@ -11,6 +12,7 @@ import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -56,16 +58,24 @@ public class MetricTrialService {
     private final SqlExecutor sqlExecutor;
     private final GroovyExecutor groovyExecutor;
     private final PerfEngineProperties perfEngineProperties;
+    /** EXPR 试运行时按 baseDim 选宽表加载 M_xxx 引用指标值，复用调度态绑定逻辑. */
+    private final MetricCalcService metricCalcService;
+    /** EXPR 试运行解析当前生效数据版本（宽表行按 version 隔离）. */
+    private final SysControlService sysControlService;
 
     @Autowired
     public MetricTrialService(MetricDefService metricDefService,
                               SqlExecutor sqlExecutor,
                               GroovyExecutor groovyExecutor,
-                              PerfEngineProperties perfEngineProperties) {
+                              PerfEngineProperties perfEngineProperties,
+                              MetricCalcService metricCalcService,
+                              SysControlService sysControlService) {
         this.metricDefService = metricDefService;
         this.sqlExecutor = sqlExecutor;
         this.groovyExecutor = groovyExecutor;
         this.perfEngineProperties = perfEngineProperties;
+        this.metricCalcService = metricCalcService;
+        this.sysControlService = sysControlService;
     }
 
     /**
@@ -91,15 +101,40 @@ public class MetricTrialService {
                     "指标已停用，禁止试运行：" + metricCode + "（请先启用后再试运行）");
         }
 
-        // 2. 解析 sampleSize（null/0 → 默认；> 100 → 收敛 100）
-        int effectiveSample = resolveSampleSize(sampleSize);
+        // 2-4. 共用分派逻辑
+        return runByDef(def, dataDate, sampleSize, params);
+    }
 
-        // 3. 解析超时（从 PerfEngineProperties）
+    /**
+     * 直接试运行 SQL / Groovy 文本（无需先保存指标）—— 新增指标页面"试运行"按钮直接取表达式执行.
+     *
+     * @param calcLogicType SQL / EXPR(GROOVY)
+     * @param sqlText       SQL 文本（SQL 场景）
+     * @param exprText      Groovy 表达式文本（EXPR 场景）
+     * @param dataDate      数据日期（:dataDate 等占位符值）
+     * @param sampleSize    样本条数
+     * @param params        附加参数（含对象值 :objectId）
+     * @return {@link MetricTrialResult}
+     */
+    public MetricTrialResult trialAdhoc(String calcLogicType, String baseDim, String sqlText, String exprText,
+                                        LocalDate dataDate, Integer sampleSize, Map<String, Object> params) {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("(未保存)");
+        def.setCalcLogicType(calcLogicType);
+        // EXPR 试运行需 baseDim 选宽表加载引用指标值；SQL 场景该字段不参与
+        def.setBaseDim(baseDim);
+        def.setSqlText(sqlText);
+        def.setExprText(exprText);
+        return runByDef(def, dataDate, sampleSize, params);
+    }
+
+    /** 共用：按 def（已保存或临时构造）按 calcLogicType 分派执行试运行. */
+    private MetricTrialResult runByDef(PerfMetricDef def, LocalDate dataDate,
+                                       Integer sampleSize, Map<String, Object> params) {
+        int effectiveSample = resolveSampleSize(sampleSize);
         int timeoutSeconds = perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds());
         Duration timeout = Duration.ofSeconds(timeoutSeconds);
-
-        // 4. 按 calcLogicType 分派
         String logicType = def.getCalcLogicType();
         long t0 = System.currentTimeMillis();
         MetricTrialResult result = new MetricTrialResult();
@@ -107,7 +142,7 @@ public class MetricTrialService {
         if ("SQL".equalsIgnoreCase(logicType)) {
             runSql(def, dataDate, params, timeout, effectiveSample, result);
         } else if ("EXPR".equalsIgnoreCase(logicType) || "GROOVY".equalsIgnoreCase(logicType)) {
-            runExpr(def, params, timeout, result);
+            runExpr(def, dataDate, params, timeout, result);
         } else {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "试运行不支持 calcLogicType=" + logicType);
@@ -135,6 +170,8 @@ public class MetricTrialService {
         if (dataDate != null) {
             mergedParams.putAll(DateMacroResolver.resolve(dataDate));
         }
+        // 对象id占位符 :objectId —— 由试运行的"对象值"输入框经 params 传入；未输入时绑 null，避免 SQL 含 :objectId 时绑定缺失报错
+        mergedParams.putIfAbsent("objectId", null);
 
         Map<String, BigDecimal> all = sqlExecutor.execute(def.getSqlText(), mergedParams, timeout);
         int total = all == null ? 0 : all.size();
@@ -158,20 +195,59 @@ public class MetricTrialService {
     }
 
     /**
-     * EXPR 指标试运行：调 GroovyExecutor → 返回单值.
+     * EXPR 指标试运行：按 (baseDim, dataDate, objectId, version) 从对应维度宽表加载表达式引用的
+     * 所有 {@code M_xxx} 指标值作为 Groovy 变量，再调 GroovyExecutor → 返回单值.
+     *
+     * <p>与调度态 {@link MetricCalcService#executeGroovyAndPersist} 的绑定口径一致，
+     * 解决"试运行 Groovy 报 No such property: M_xxxx"——引用指标未绑定的问题。
+     * objectId（对象值）由前端"对象值"输入框经 {@code params} 传入，缺失时引用指标兜底 ZERO。
      */
-    private void runExpr(PerfMetricDef def, Map<String, Object> params,
+    private void runExpr(PerfMetricDef def, LocalDate dataDate, Map<String, Object> params,
                          Duration timeout, MetricTrialResult result) {
         if (def.getExprText() == null || def.getExprText().isBlank()) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "EXPR 类型指标 exprText 为空: " + def.getMetricCode());
         }
-        Map<String, Object> vars = params == null ? Map.of() : params;
+        // 对象值（员工工号 / 机构编码 / 客户ID）——定位宽表中该主体那一行
+        String objectId = params == null || params.get("objectId") == null
+                ? null : String.valueOf(params.get("objectId"));
+        // 数据版本：优先按 (对象, 日期) 反查"最近导入"的版本（宽表数据散落多版本，SYS_CONTROL 当前版本未必有数据），
+        // 查不到再降级到 SYS_CONTROL 当前版本 / V1，避免取不到数据恒为 0。
+        String version = metricCalcService.resolveDataVersionForSubject(def.getBaseDim(), objectId, dataDate);
+        if (version == null) {
+            version = resolveCurrentVersion(def.getBaseDim());
+        }
+        // 加载宽表引用指标值（所有引用 code 必绑定，缺失值 ZERO，杜绝 No such property）
+        Map<String, Object> refValues = metricCalcService.loadGroovyVarsForSubject(
+                def.getBaseDim(), def.getExprText(), dataDate, objectId, version);
+        Map<String, Object> vars = new HashMap<>(refValues);
+        // params 中的其余自定义变量（如 objectId 本身）补充进去，不覆盖宽表指标值
+        if (params != null) {
+            for (Map.Entry<String, Object> e : params.entrySet()) {
+                vars.putIfAbsent(e.getKey(), e.getValue());
+            }
+        }
         BigDecimal value = groovyExecutor.execute(def.getExprText(), vars, timeout);
         result.setExprResult(value);
+        // 回传引用指标取值 + 命中版本，供前端"列出 Groovy 计算用到的用户指标数据"
+        result.setExprVars(refValues);
+        result.setDataVersion(version);
         result.setTotalRows(1);
         result.setSamples(List.of());
         result.setSampleSize(0);
+    }
+
+    /** 解析维度当前生效数据版本；无 SYS_CONTROL 记录（如试运行未初始化维度）降级 V1. */
+    private String resolveCurrentVersion(String baseDim) {
+        if (!StringUtils.hasText(baseDim)) {
+            return "V1";
+        }
+        try {
+            SysControl sc = sysControlService.getCurrentVersion(baseDim);
+            return sc != null && StringUtils.hasText(sc.getCurrentVersion()) ? sc.getCurrentVersion() : "V1";
+        } catch (Exception e) {
+            return "V1";
+        }
     }
 
     /** sampleSize 解析：null/0 回默认 20，>100 收敛 100. */

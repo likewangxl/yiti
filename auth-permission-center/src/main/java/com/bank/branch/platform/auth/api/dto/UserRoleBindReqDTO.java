@@ -21,4 +21,11 @@ public class UserRoleBindReqDTO {
     @NotBlank
     @Size(max = 200)
     private String reason;
+
+    /**
+     * 主角色ID（可选）。传入时将其设为该用户主角色；必须是本次绑定后用户已拥有的角色。
+     * 不传时由服务端保证用户至少有一个主角色（无主角色则取第一个已分配角色）。
+     */
+    @Size(max = 64)
+    private String primaryRoleId;
 }

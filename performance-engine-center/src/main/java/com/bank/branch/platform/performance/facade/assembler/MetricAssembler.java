@@ -64,6 +64,7 @@ public final class MetricAssembler {
         dto.setCalcLogicType(entity.getCalcLogicType());
         dto.setSqlText(entity.getSqlText());
         dto.setExprText(entity.getExprText());
+        // exprDisplay 不再从实体读取（列已废弃）；详情路径 getByCodeDto 按 exprText 实时派生后回填
         dto.setSummaryRule(entity.getSummaryRule());
         dto.setRefMetricCodes(entity.getRefMetricCodes());
         dto.setValSlot(entity.getValSlot());
@@ -72,6 +73,11 @@ public final class MetricAssembler {
         dto.setDecimalPlaces(entity.getDecimalPlaces());
         dto.setDescription(entity.getDescription());
         dto.setMetricCategory(entity.getMetricCategory());
+        // 审计字段：创建人/更新人原始 empId + 创建/更新时间（username/中文名由 Service 详情路径解析填充）
+        dto.setCreatedBy(entity.getCreatedBy());
+        dto.setUpdatedBy(entity.getUpdatedBy());
+        dto.setCreatedTime(entity.getCreatedTime());
+        dto.setUpdatedTime(entity.getUpdatedTime());
         return dto;
     }
 }

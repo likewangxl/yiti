@@ -60,6 +60,7 @@ public interface PerfKpiSchemeMapper extends BaseMapper<PerfKpiScheme> {
     List<PerfKpiScheme> selectByCondition(@Param("cycleType") String cycleType,
                                           @Param("status") String status,
                                           @Param("keyword") String keyword,
+                                          @Param("openDetail") Integer openDetail,
                                           @Param("offset") int offset,
                                           @Param("limit") int limit);
 
@@ -73,6 +74,7 @@ public interface PerfKpiSchemeMapper extends BaseMapper<PerfKpiScheme> {
      */
     long countByCondition(@Param("cycleType") String cycleType,
                           @Param("status") String status,
-                          @Param("keyword") String keyword);
+                          @Param("keyword") String keyword,
+                          @Param("openDetail") Integer openDetail);
 
 }

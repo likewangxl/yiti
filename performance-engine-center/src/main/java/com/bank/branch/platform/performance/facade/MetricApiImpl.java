@@ -293,6 +293,15 @@ public class MetricApiImpl implements MetricApi {
         return queryValues("CUST", custId, dataDate, metricCodes);
     }
 
+    @Override
+    public LocalDate getLatestDataDate(String scopeDim) {
+        if (scopeDim == null || scopeDim.isBlank()) {
+            return null;
+        }
+        SysControl sc = sysControlService.getCurrentVersion(scopeDim.toUpperCase());
+        return sc != null ? sc.getLatestDataDate() : null;
+    }
+
     /**
      * V1.4 S3.2: 按 cycleType 精确组装 cycleKey, 用于查 perf_target_value.
      *

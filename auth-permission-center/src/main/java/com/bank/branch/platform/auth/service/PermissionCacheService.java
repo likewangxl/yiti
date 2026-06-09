@@ -32,12 +32,31 @@ public class PermissionCacheService {
     private final RoleResourceMapper roleResourceMapper;
     private final UserRoleMapper userRoleMapper;
     private final RoleBizScopeMapper roleBizScopeMapper;
+    private final com.bank.branch.platform.auth.security.context.CurrentUserProvider currentUserProvider;
 
     // ── 直接读 DB（去 Redis） ─────────────────────────────────────
 
-    /** 获取用户的角色ID集合 */
+    /** 获取用户的角色ID集合（全部已分配角色） */
     public Set<String> getRoleIdsByEmpId(String empId) {
         return new HashSet<>(userRoleMapper.selectRoleIdsByUserId(empId));
+    }
+
+    /**
+     * 获取「本次请求生效」的角色ID集合：
+     * <p>当前会话已选定激活角色（角色切换/登录主角色）时，仅返回该激活角色，
+     * 使菜单/接口权限/数据范围都按当前角色解析；无会话上下文（跨模块内部调用、
+     * 定时任务等）或未设激活角色时，回退为全部已分配角色，保持原有行为。</p>
+     *
+     * @param empId 员工ID
+     * @return 生效角色ID集合
+     */
+    public Set<String> getEffectiveRoleIds(String empId) {
+        var ctx = currentUserProvider.get();
+        if (ctx != null && ctx.activeRoleId() != null
+                && empId != null && empId.equals(ctx.empId())) {
+            return java.util.Set.of(ctx.activeRoleId());
+        }
+        return getRoleIdsByEmpId(empId);
     }
 
     /** 获取角色绑定的资源ID集合 */

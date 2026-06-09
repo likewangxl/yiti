@@ -38,6 +38,11 @@ export function listFlowVariables(bizType) {
   return call('get', '/admin/workflow/flows/meta/variables', { params: { bizType } }, []);
 }
 
+/** VAR 审批人可选的「名单类流程变量」目录（按业务类型，审批人下拉源） */
+export function listApproverVariables(bizType) {
+  return call('get', '/admin/workflow/flows/meta/approver-variables', { params: { bizType } }, []);
+}
+
 /** 导入现有已部署流程为只读模型（幂等） */
 export function importExistingFlows() {
   return call('post', '/admin/workflow/flows/import-existing', { data: {} }, []);

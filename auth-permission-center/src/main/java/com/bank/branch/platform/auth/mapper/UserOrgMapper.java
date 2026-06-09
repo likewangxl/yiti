@@ -60,6 +60,14 @@ public interface UserOrgMapper {
     long countUsersByOrgCode(@Param("orgCode") String orgCode,
                              @Param("keyword") String keyword);
 
+    /**
+     * 查询指定机构下全部用户工号（USER_ID），供「机构角色」无角色场景（该机构任一角色均可审批）。
+     *
+     * @param orgCode 机构编码
+     * @return 工号列表
+     */
+    List<String> selectEmpIdsByOrgCode(@Param("orgCode") String orgCode);
+
     /** 新增用户机构关联（V1 单主机构）。 */
     int insert(ExtUserOrg userOrg);
 

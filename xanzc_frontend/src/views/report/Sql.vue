@@ -164,12 +164,10 @@ import { encryptSql } from '@/utils/sqlCrypto';
 const reason = ref('');
 const rowLimit = ref(1000);
 const timeoutSec = ref(30);
-const sql = ref(`SELECT cust_name, industry, SUM(amount) AS deposit_inc
-FROM mart_cust_deposit_daily d
-JOIN dim_customer c ON d.cust_id = c.id
-WHERE d.org_id = '0001' AND d.biz_date >= '2026-04-16'
-GROUP BY cust_name, industry
-ORDER BY deposit_inc DESC LIMIT 10`);
+const sql = ref(`SELECT cust_no, cust_name, industry, customer_type
+FROM CUST_MASTER
+ORDER BY cust_no
+LIMIT 10`);
 
 const whitelist = ref([]);
 const history = ref([]);
@@ -343,4 +341,5 @@ function formatCell(v) {
   .mono { font-family: Menlo, Consolas, monospace; font-size: 12px; }
   .wl { padding: 0 0 0 18px; line-height: 1.9; color: $text-2; }
 }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

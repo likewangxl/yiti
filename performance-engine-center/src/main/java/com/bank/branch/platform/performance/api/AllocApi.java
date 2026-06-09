@@ -112,8 +112,11 @@ public interface AllocApi {
      * {@code cust_alloc_relation}），供审批/新增调整申请页面的「原业绩分配」模块展示。
      * 每项已按员工工号补全 username / 中文姓名 / 机构号 / 机构名称。
      *
-     * @param custNo 客户编号（业务编号，内部解析为客户主键后匹配 apply.cust_id）
+     * <p>维度过滤：{@code allocDim=ACCOUNT} 只取按账号分配的最后一条；{@code RULE} 或 null 取 RULE+ACCOUNT 两者。
+     *
+     * @param custId   客户编号（匹配 apply.cust_id）
+     * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null）
      * @return 预览项列表，可能为空列表，不会返回 null
      */
-    List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo);
+    List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim);
 }

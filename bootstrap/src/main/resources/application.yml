@@ -3,6 +3,11 @@ server:
   servlet:
     context-path: /
 
+# 文件本地磁盘存储（替代 MinIO）—— 用绝对路径避免 JVM cwd 漂移导致上传/下载找不到同一目录
+file:
+  storage:
+    root: /home/djdev/lf/yiti/file-storage
+
 spring:
   profiles:
     active: dev

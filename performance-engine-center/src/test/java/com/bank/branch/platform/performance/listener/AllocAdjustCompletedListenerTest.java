@@ -179,6 +179,48 @@ class AllocAdjustCompletedListenerTest {
     }
 
     @Test
+    @DisplayName("ORIGIN（原业绩分配）明细不落地为新分配关系，仅 NEW 明细生成 cust_alloc_relation")
+    void originItems_excludedFromAllocation() {
+        PerfAllocAdjustItem origin = item("EMP_OLD", "100.00");
+        origin.setItemKind("ORIGIN");
+        PerfAllocAdjustItem neo = item("EMP_A", "60.00");
+        neo.setItemKind("NEW");
+        when(itemMapper.selectByApplyId("APP_001")).thenReturn(Arrays.asList(origin, neo));
+
+        listener.onProcessCompleted(
+                new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
+
+        // 仅 NEW 明细落地为分配关系；ORIGIN 仅用于会签/留痕，不得成为生效分配
+        ArgumentCaptor<CustAllocRelation> cap = ArgumentCaptor.forClass(CustAllocRelation.class);
+        verify(allocRelationMapper, org.mockito.Mockito.times(1)).insert(cap.capture());
+        assertThat(cap.getValue().getEmpId()).isEqualTo("EMP_A");
+        // 事件 itemCount 也只计 NEW
+        ArgumentCaptor<AllocationAdjustmentApprovedEvent> evCap =
+                ArgumentCaptor.forClass(AllocationAdjustmentApprovedEvent.class);
+        verify(eventPublisher).publish(evCap.capture());
+        assertThat(evCap.getValue().getItemCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("cust_id 即客户编号 → 分配关系 cust_id 直接取 apply.cust_id")
+    void custId_usedDirectlyForRelation() {
+        PerfAllocAdjustApply manual = buildApply();
+        manual.setCustId("bbc");    // cust_id 即用户输入的客户编号（cust_no 字段已并入 cust_id）
+        when(applyMapper.selectByBusinessKey("ALLOC_ADJUST:APP_001")).thenReturn(manual);
+
+        ProcessCompletedEvent event =
+                new ProcessCompletedEvent(
+                        "PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null);
+        listener.onProcessCompleted(event);
+
+        ArgumentCaptor<CustAllocRelation> relCap = ArgumentCaptor.forClass(CustAllocRelation.class);
+        verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(relCap.capture());
+        assertThat(relCap.getAllValues()).extracting(CustAllocRelation::getCustId)
+                .containsOnly("bbc");
+        verify(applyMapper).updateStatus("APP_001", "APPROVED", null);
+    }
+
+    @Test
     @DisplayName("RETAIL_CARD 对 retail_v1 流程也能正常落地（bizKind 回放到事件）")
     void retailBizKind_flowsThrough() {
         PerfAllocAdjustApply retail = buildApply();

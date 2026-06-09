@@ -169,7 +169,7 @@ public class AllocApiImpl implements AllocApi {
      * 查询客户「原业绩分配」预览（RULE + ACCOUNT 各取审批通过的最后一条申请明细）.
      */
     @Override
-    public List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custNo) {
-        return allocAdjustPreviewService.getLastApprovedAllocPreview(custNo);
+    public List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim) {
+        return allocAdjustPreviewService.getLastApprovedAllocPreview(custId, allocDim);
     }
 }

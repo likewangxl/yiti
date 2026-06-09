@@ -363,9 +363,9 @@ class AllocApiImplTest extends PerformanceServiceTestBase {
     void getLastApprovedAllocPreview_delegates() {
         var dto = new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
         dto.setAllocDim("RULE");
-        when(allocAdjustPreviewService.getLastApprovedAllocPreview("C001")).thenReturn(List.of(dto));
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview("C001", "RULE")).thenReturn(List.of(dto));
 
-        var result = allocApi.getLastApprovedAllocPreview("C001");
+        var result = allocApi.getLastApprovedAllocPreview("C001", "RULE");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getAllocDim()).isEqualTo("RULE");

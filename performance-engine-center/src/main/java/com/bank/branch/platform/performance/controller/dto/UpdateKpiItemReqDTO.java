@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.controller.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -27,13 +28,22 @@ public class UpdateKpiItemReqDTO {
     @DecimalMin(value = "0.0000", message = "multiplier 不能小于 0")
     private BigDecimal multiplier;
 
-    /** 最低分. */
-    @Schema(description = "最低分")
-    @DecimalMin(value = "0.0000", message = "minScore 不能小于 0")
+    /** 最低分; 允许负值, 不限制最小值. */
+    @Schema(description = "最低分, 允许负值")
     private BigDecimal minScore;
 
     /** 最高分. */
     @Schema(description = "最高分")
     @DecimalMin(value = "0.0000", message = "maxScore 不能小于 0")
     private BigDecimal maxScore;
+
+    /** 计分公式 (可空, null 表示不修改). */
+    @Schema(description = "计分公式, 变量 actual/target/base/weight, 支持 min/max")
+    @Size(max = 500, message = "formula 长度不能超过 500")
+    private String formula;
+
+    /** SQL 表达式 (可空, null 表示不修改), 支持 #{slot} 占位符. */
+    @Schema(description = "SQL 表达式, 支持 #{slot} 占位符")
+    @Size(max = 2000, message = "sqlExpr 长度不能超过 2000")
+    private String sqlExpr;
 }

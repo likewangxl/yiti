@@ -1,62 +1,94 @@
 <template>
-  <!-- 审批人选择器：多行并存（并集），每行 = {approverType, approverValue} -->
+  <!-- 审批人选择器：多行并存（并集）。每个审批人一块，块内每个下拉/输入各占一行竖排，保证窄面板显示完整。
+       数据：层级角色 {approverType:'LEVEL_ROLE', orgScope, approverValue=角色码}
+            机构角色 {approverType:'ORG_ROLE', approverValue=机构码, roleCode?}
+            指定人  {approverType:'USER', approverValue=工号}
+            流程变量 {approverType:'VAR', approverValue=变量名} -->
   <div class="approver-picker">
     <div
       v-for="(row, idx) in localList"
       :key="idx"
-      class="approver-row"
+      class="approver-block"
     >
-      <!-- 审批人类型下拉 -->
-      <el-select
-        v-model="row.approverType"
-        style="width: 110px; flex-shrink: 0"
-        placeholder="类型"
-        @change="onTypeChange(idx)"
-      >
-        <el-option label="角色" value="ROLE" />
-        <el-option label="机构" value="ORG" />
-        <el-option label="指定人" value="USER" />
-      </el-select>
-
-      <!-- ROLE：一次性加载角色列表 -->
-      <el-select
-        v-if="row.approverType === 'ROLE'"
-        v-model="row.approverValue"
-        style="flex: 1"
-        placeholder="请选择角色"
-        filterable
-        @change="onValueChange"
-      >
-        <el-option
-          v-for="r in roleOptions"
-          :key="r.roleCode"
-          :label="r.roleChName"
-          :value="r.roleCode"
+      <!-- 头部：类型 + 删除 -->
+      <div class="ab-head">
+        <el-select
+          v-model="row.approverType"
+          style="flex: 1"
+          placeholder="审批人类型"
+          @change="onTypeChange(idx)"
+        >
+          <el-option label="层级角色" value="LEVEL_ROLE" />
+          <el-option label="机构角色" value="ORG_ROLE" />
+          <el-option label="指定人" value="USER" />
+          <el-option label="流程变量" value="VAR" />
+        </el-select>
+        <el-button
+          type="danger"
+          :icon="Delete"
+          circle
+          size="small"
+          title="删除"
+          @click="removeRow(idx)"
         />
-      </el-select>
+      </div>
 
-      <!-- ORG：一次性加载机构平铺列表（树拍平） -->
-      <el-select
-        v-else-if="row.approverType === 'ORG'"
-        v-model="row.approverValue"
-        style="flex: 1"
-        placeholder="请选择机构"
-        filterable
-        @change="onValueChange"
-      >
-        <el-option
-          v-for="o in orgOptions"
-          :key="o.code"
-          :label="o.name"
-          :value="o.code"
-        />
-      </el-select>
+      <!-- 层级角色：层级（必选，无 label） + 角色，各占一行 -->
+      <template v-if="row.approverType === 'LEVEL_ROLE'">
+        <el-select
+          v-model="row.orgScope"
+          class="ab-ctrl"
+          placeholder="层级（空=不限机构层级）"
+          clearable
+          @change="onValueChange"
+        >
+          <el-option label="发起机构" value="SELF" />
+          <el-option label="发起上级机构" value="PARENT" />
+        </el-select>
+        <el-select
+          v-model="row.approverValue"
+          class="ab-ctrl"
+          placeholder="选择角色"
+          filterable
+          @change="onValueChange"
+        >
+          <el-option v-for="r in roleOptions" :key="r.roleCode" :label="r.roleChName" :value="r.roleCode" />
+        </el-select>
+      </template>
 
-      <!-- USER：关键字远程搜索员工 -->
+      <!-- 机构角色：机构 + 角色（可选），各占一行 -->
+      <template v-else-if="row.approverType === 'ORG_ROLE'">
+        <el-select
+          v-model="row.approverValue"
+          class="ab-ctrl"
+          placeholder="选择机构"
+          filterable
+          @change="onValueChange"
+        >
+          <el-option
+            v-for="o in orgOptions"
+            :key="o.code"
+            :label="o.deptNo ? `${o.name}（${o.deptNo}）` : o.name"
+            :value="o.code"
+          />
+        </el-select>
+        <el-select
+          v-model="row.roleCode"
+          class="ab-ctrl"
+          placeholder="角色（可选，空=该机构任一角色）"
+          clearable
+          filterable
+          @change="onValueChange"
+        >
+          <el-option v-for="r in roleOptions" :key="r.roleCode" :label="r.roleChName" :value="r.roleCode" />
+        </el-select>
+      </template>
+
+      <!-- 指定人：远程搜索 -->
       <el-select
         v-else-if="row.approverType === 'USER'"
         v-model="row.approverValue"
-        style="flex: 1"
+        class="ab-ctrl"
         placeholder="输入姓名/工号搜索"
         filterable
         remote
@@ -67,89 +99,91 @@
         <el-option
           v-for="u in userSearchOptions"
           :key="u.id"
-          :label="u.name + (u.org ? ' · ' + u.org : '')"
+          :label="`${u.name}（${u.id}）` + (u.org ? ' · ' + u.org : '')"
           :value="u.id"
         />
       </el-select>
 
-      <!-- 占位：类型未选时 -->
-      <el-input
-        v-else
-        disabled
-        placeholder="请先选择类型"
-        style="flex: 1"
-      />
-
-      <!-- 删除按钮 -->
-      <el-button
-        type="danger"
-        text
-        style="flex-shrink: 0; margin-left: 4px"
-        @click="removeRow(idx)"
-      >删除</el-button>
+      <!-- 流程变量：下拉 -->
+      <el-select
+        v-else-if="row.approverType === 'VAR'"
+        v-model="row.approverValue"
+        class="ab-ctrl"
+        placeholder="选择流程变量"
+        filterable
+        @change="onValueChange"
+      >
+        <el-option
+          v-for="v in approverVariables"
+          :key="v.field"
+          :label="`${v.label}（${v.field}）`"
+          :value="v.field"
+        />
+      </el-select>
     </div>
 
     <!-- 添加一行 -->
-    <el-button
-      type="primary"
-      text
-      style="margin-top: 6px"
-      @click="addRow"
-    >+ 添加审批人</el-button>
+    <el-button type="primary" text style="margin-top: 6px" @click="addRow">+ 添加审批人</el-button>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { listRoles } from '@/api/system';
+import { Delete } from '@element-plus/icons-vue';
+import { listAllRoles } from '@/api/system';
 import { getOrgTree } from '@/api/orgs';
-import { searchEmployees } from '@/api/employees';
+import { searchEmployees, getEmployee } from '@/api/employees';
 
-// ---- props / emits ----
 const props = defineProps({
-  /** v-model 绑定的审批人规则数组，每项 {approverType: 'ROLE'|'ORG'|'USER', approverValue: string} */
-  modelValue: { type: Array, default: () => [] }
+  /** v-model：审批人规则数组，每项 {approverType, approverValue, orgScope?, roleCode?} */
+  modelValue: { type: Array, default: () => [] },
+  /** VAR 审批人可选的名单类流程变量 [{field,label}] */
+  approverVariables: { type: Array, default: () => [] }
 });
 const emit = defineEmits(['update:modelValue']);
 
-// ---- 本地副本（深拷贝，避免直接改 props） ----
 const localList = ref([]);
-
-// 初始化 & 外部变更同步
 watch(
   () => props.modelValue,
   (val) => {
     localList.value = (val || []).map(r => ({ ...r }));
+    preloadUserLabels();   // 指定人反显：补全已选工号的姓名
   },
   { immediate: true, deep: true }
 );
 
-// ---- 角色选项（onMounted 拉取一次） ----
-const roleOptions = ref([]); // [{roleCode, roleChName}]
+/** 为已选「指定人」审批人预载姓名，使选中工号反显为「姓名（工号）」 */
+async function preloadUserLabels() {
+  const known = new Set(userSearchOptions.value.map(u => u.id));
+  const ids = localList.value
+    .filter(r => r.approverType === 'USER' && r.approverValue && !known.has(r.approverValue))
+    .map(r => r.approverValue);
+  for (const id of [...new Set(ids)]) {
+    try {
+      const u = await getEmployee(id);
+      if (u && u.id && !userSearchOptions.value.some(x => x.id === u.id)) {
+        userSearchOptions.value = [...userSearchOptions.value, u];
+      }
+    } catch { /* 单个失败忽略，不影响其它 */ }
+  }
+}
 
-// ---- 机构选项（树拍平，onMounted 拉取一次） ----
-const orgOptions = ref([]); // [{code, name}]
+const roleOptions = ref([]); // [{roleCode, roleChName}]（状态正常）
+const orgOptions = ref([]);  // [{code, name, deptNo}]
 
-/** 将机构树递归拍平为数组 */
 function flattenOrgTree(nodes, result = []) {
   for (const node of nodes || []) {
-    result.push({ code: node.code, name: node.name });
+    result.push({ code: node.code, name: node.name, deptNo: node.deptNo });
     if (node.children?.length) flattenOrgTree(node.children, result);
   }
   return result;
 }
 
-// ---- 人员搜索（远程，按输入关键字） ----
-const userSearchOptions = ref([]); // [{id, name, org}]
+const userSearchOptions = ref([]);
 const userSearchLoading = ref(false);
-
-/** 远程搜索员工（防空关键字） */
 async function onUserSearch(keyword) {
-  if (!keyword?.trim()) {
-    userSearchOptions.value = [];
-    return;
-  }
+  if (!keyword?.trim()) { userSearchOptions.value = []; return; }
   userSearchLoading.value = true;
   try {
     userSearchOptions.value = await searchEmployees(keyword.trim());
@@ -161,72 +195,76 @@ async function onUserSearch(keyword) {
   }
 }
 
-// ---- 初始加载角色 + 机构 ----
 onMounted(async () => {
-  // 角色列表
   try {
-    const roles = await listRoles({ pageSize: 200 });
-    roleOptions.value = (Array.isArray(roles) ? roles : []).map(r => ({
-      roleCode: r.roleCode || r.code || '',
-      roleChName: r.roleChName || r.roleChname || r.name || r.roleCode || ''
-    }));
+    const roles = await listAllRoles({ recordStatus: 0 });
+    const arr = Array.isArray(roles) ? roles : (roles?.records || []);
+    roleOptions.value = arr
+      .filter(r => r.recordStatus == null || r.recordStatus === 0)
+      .map(r => ({
+        roleCode: r.roleCode || r.code || '',
+        roleChName: r.roleChName || r.roleChname || r.name || r.roleCode || ''
+      }))
+      // 按角色名称排序（中文）
+      .sort((a, b) => (a.roleChName || '').localeCompare(b.roleChName || '', 'zh-Hans-CN'));
   } catch {
     ElMessage.warning('角色列表加载失败');
   }
-
-  // 机构树拍平
   try {
-    const tree = await getOrgTree();
-    orgOptions.value = flattenOrgTree(tree);
+    orgOptions.value = flattenOrgTree(await getOrgTree());
   } catch {
     ElMessage.warning('机构列表加载失败');
   }
 });
 
-// ---- 行操作 ----
-
-/** 添加一行（默认 ROLE 类型） */
+/** 添加一行（默认层级角色） */
 function addRow() {
-  localList.value = [...localList.value, { approverType: 'ROLE', approverValue: '' }];
+  localList.value = [...localList.value, { approverType: 'LEVEL_ROLE', approverValue: '', orgScope: '', roleCode: '' }];
   emitUpdate();
 }
 
-/** 删除指定行 */
 function removeRow(idx) {
-  const arr = localList.value.filter((_, i) => i !== idx);
-  localList.value = arr;
+  localList.value = localList.value.filter((_, i) => i !== idx);
   emitUpdate();
 }
 
-/** 类型切换时清空 approverValue */
+/** 类型切换时清空该行其它字段，避免脏值 */
 function onTypeChange(idx) {
-  localList.value[idx].approverValue = '';
-  // 切到 USER 时同时清空搜索结果
-  if (localList.value[idx].approverType === 'USER') {
-    userSearchOptions.value = [];
-  }
+  const r = localList.value[idx];
+  r.approverValue = '';
+  r.orgScope = '';
+  r.roleCode = '';
+  if (r.approverType === 'USER') userSearchOptions.value = [];
   emitUpdate();
 }
 
-/** 值变更时向父组件 emit */
-function onValueChange() {
-  emitUpdate();
-}
+function onValueChange() { emitUpdate(); }
 
-/** 深拷贝后 emit，确保父组件收到新引用 */
 function emitUpdate() {
   emit('update:modelValue', localList.value.map(r => ({ ...r })));
 }
 </script>
 
 <style scoped>
-.approver-picker {
-  width: 100%;
+.approver-picker { width: 100%; }
+/* 每个审批人一块，块内竖排 */
+.approver-block {
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  border-radius: 6px;
 }
-.approver-row {
+.ab-head {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
 }
+/* 块内每个控件独占一行 */
+.ab-ctrl {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+}
+.ab-ctrl:last-child { margin-bottom: 0; }
 </style>

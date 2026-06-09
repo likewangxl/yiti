@@ -57,7 +57,8 @@ class UserRoleControllerTest {
     @Test
     void bindRoles_shouldReturn200() throws Exception {
         // given
-        doNothing().when(userRoleService).bindRoles(anyString(), anyList(), anyString());
+        // bindRoles 现为 4 参（含 primaryRoleId，可能为 null → 用 any()）
+        doNothing().when(userRoleService).bindRoles(anyString(), anyList(), any(), anyString());
 
         UserRoleBindReqDTO req = new UserRoleBindReqDTO();
         req.setRoleIds(List.of("R_001", "R_002"));

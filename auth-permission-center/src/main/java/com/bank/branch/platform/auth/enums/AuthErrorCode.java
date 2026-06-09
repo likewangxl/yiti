@@ -22,6 +22,7 @@ public enum AuthErrorCode {
     ACCOUNT_DISABLED("AUTH-40104", "用户账号未启用"),
     NOT_AUTHENTICATED("AUTH-40105", "未登录或会话已过期"),
     PASSWORD_ATTEMPTS_EXCEEDED("AUTH-40106", "密码错误次数超限"),
+    USER_NO_ROLE("AUTH-40107", "用户未分配角色，禁止登录"),
 
     // 403 授权失败
     RBAC_DENIED("AUTH-40301", "无接口访问权限"),

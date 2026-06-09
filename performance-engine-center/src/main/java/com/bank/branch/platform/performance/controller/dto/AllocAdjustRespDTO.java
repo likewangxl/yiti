@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.controller.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -20,11 +21,26 @@ public class AllocAdjustRespDTO {
     /** 申请编号. */
     private String applyNo;
 
-    /** 客户 ID（cust_master 内部主键）. */
+    /** 客户编号（PERF_ALLOC_ADJUST_APPLY.cust_id，即用户输入的客户编号）. */
     private String custId;
 
-    /** 客户编号（cust_master.cust_no，按 custId 反查回填；客户已删/查不到时为 null）. */
-    private String custNo;
+    /** 客户名称（提交时快照；历史行回退反查，查不到为 null）. */
+    private String custName;
+
+    /** 当前余额（提交时快照）. */
+    private BigDecimal currBal;
+
+    /** 月均余额（提交时快照）. */
+    @JsonProperty("mAvgBal")
+    private BigDecimal mAvgBal;
+
+    /** 季日均余额（提交时快照）. */
+    @JsonProperty("qAvgBal")
+    private BigDecimal qAvgBal;
+
+    /** 年日均余额（提交时快照）. */
+    @JsonProperty("yAvgBal")
+    private BigDecimal yAvgBal;
 
     /** 客户类型：CORP / RETAIL. */
     private String custType;
@@ -59,6 +75,9 @@ public class AllocAdjustRespDTO {
     /** 申请人姓名（按 createdBy 反查 PT_USER）；用户已删时为 null. */
     private String createdByName;
 
+    /** 申请人工号（PT_USER.username，展示用）；查不到为 null. */
+    private String createdByUsername;
+
     /** 申请人主机构名称（按 createdBy 反查 EXT_USER_ORG + EXT_ORG_INFO）；查不到为 null. */
     private String createdByOrgName;
 
@@ -83,8 +102,26 @@ public class AllocAdjustRespDTO {
         /** 明细 ID. */
         private String id;
 
+        /** 明细类型：NEW=新分配 / ORIGIN=原业绩分配. */
+        private String itemKind;
+
+        /** 账号（原业绩分配选填）. */
+        private String acctNo;
+
         /** 员工工号. */
         private String empId;
+
+        /** 员工登录名（PT_USER.USERNAME；解析不到时回退为工号）. */
+        private String username;
+
+        /** 员工中文姓名（PT_USER.USERCHNNAME）. */
+        private String empChnName;
+
+        /** 所属部门号（快照）. */
+        private String orgCode;
+
+        /** 所属部门名称（快照）. */
+        private String orgName;
 
         /** 分配比例. */
         private BigDecimal ratio;

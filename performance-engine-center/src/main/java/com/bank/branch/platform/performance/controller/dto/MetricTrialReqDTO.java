@@ -36,4 +36,16 @@ public class MetricTrialReqDTO {
 
     /** 附加 SQL 参数（可选）. */
     private Map<String, Object> params;
+
+    /** 直接试运行（不读已存指标）：计算逻辑类型 SQL/EXPR；提供 sqlText 或 exprText 时生效. */
+    private String calcLogicType;
+
+    /** 直接试运行的基础维度 EMP/ORG/CUST（EXPR 场景按维度选宽表加载引用指标值）. */
+    private String baseDim;
+
+    /** 直接试运行的 SQL 文本（SQL 场景，未保存指标时由前端传入）. */
+    private String sqlText;
+
+    /** 直接试运行的 Groovy 表达式文本（EXPR 场景，未保存指标时由前端传入）. */
+    private String exprText;
 }

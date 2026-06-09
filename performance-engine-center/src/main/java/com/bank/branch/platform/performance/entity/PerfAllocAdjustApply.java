@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -40,8 +41,23 @@ public class PerfAllocAdjustApply {
     /** 申请编号（UK，格式 AA{yyyyMMdd}{序号}）. */
     private String applyNo;
 
-    /** 客户 ID（单客户维度调整）. */
+    /** 客户 ID（单客户维度调整；自本次重构起直接存储用户输入的客户编号，不再做主档反查）. */
     private String custId;
+
+    /** 客户名称（提交时反显快照）. */
+    private String custName;
+
+    /** 当前余额（提交时快照）. */
+    private BigDecimal currBal;
+
+    /** 月均余额（提交时快照）. */
+    private BigDecimal mAvgBal;
+
+    /** 季日均余额（提交时快照）. */
+    private BigDecimal qAvgBal;
+
+    /** 年日均余额（提交时快照）. */
+    private BigDecimal yAvgBal;
 
     /** 客户类型：CORP / RETAIL. */
     private String custType;

@@ -31,6 +31,12 @@ public class UpdateKpiItemCmd {
     /** 最高分. */
     private BigDecimal maxScore;
 
+    /** 计分公式（可空，null 表示不修改）. */
+    private String formula;
+
+    /** SQL 表达式（可空，null 表示不修改，支持 #{slot} 占位符）. */
+    private String sqlExpr;
+
     /** 操作人（审计用）. */
     private String operator;
 }

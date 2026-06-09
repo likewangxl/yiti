@@ -22,4 +22,7 @@ public class UserDTO {
 
     /** 主机构名称 */
     private String mainOrgName;
+
+    /** 用户类型（字典 USER_TYPE：1-员工 / 2-虚拟员工） */
+    private String userType;
 }

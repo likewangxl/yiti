@@ -5,7 +5,7 @@
       <span class="desc">方案 · 权重 · 公式预览 · 计分上下限</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
-        <el-button type="primary" @click="openCreate">+ 新增方案</el-button>
+        <el-button v-if="isCaizai" type="primary" @click="openCreate">+ 新增KPI方案</el-button>
       </div>
     </div>
 
@@ -19,16 +19,10 @@
             <el-option v-for="o in STATUS_OPTIONS" :key="o.value" :value="o.value" :label="o.label" />
           </el-select>
         </el-form-item>
-        <el-form-item label="适用周期">
-          <el-select v-model="f.cycleType" clearable placeholder="全部" style="width:160px" @change="reload">
-            <el-option v-for="o in CYCLE_OPTIONS" :key="o.v" :value="o.v" :label="o.l" />
-          </el-select>
+        <el-form-item>
+          <el-button type="primary" @click="reload">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
-        <el-form-item label="更新时间">
-          <el-date-picker v-model="f.dateRange" type="daterange" value-format="YYYY-MM-DD"
-            range-separator="~" start-placeholder="开始" end-placeholder="结束" style="width:280px" />
-        </el-form-item>
-        <el-form-item><el-button type="primary" @click="reload">查询</el-button></el-form-item>
       </el-form>
     </div>
 
@@ -42,9 +36,6 @@
             <a class="link" @click="openEdit(row, true)">{{ row.schemeName }}</a>
           </template>
         </el-table-column>
-        <el-table-column label="适用范围" min-width="200">
-          <template #default="{row}">{{ resolveOrgScope(row) }}</template>
-        </el-table-column>
         <el-table-column label="指标项" width="90" align="center">
           <template #default="{row}">{{ row.itemCount ?? row.items?.length ?? '...' }}</template>
         </el-table-column>
@@ -56,17 +47,32 @@
         <el-table-column label="版本" width="80" align="center">
           <template #default="{row}">{{ row.version || resolveVersion(row) }}</template>
         </el-table-column>
+        <el-table-column label="创建人" min-width="140">
+          <template #default="{row}">
+            <template v-if="row.createdByName || row.createdByUsername || row.createdBy">
+              <div>{{ row.createdByName || row.createdByUsername || row.createdBy }}</div>
+              <div v-if="row.createdByUsername || row.createdBy" style="color:#909399;font-size:12px;">{{ row.createdByUsername || row.createdBy }}</div>
+            </template>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button>
-            <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
-            <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
-            <el-popconfirm v-if="!isDisabled(row)" :title="`确认删除方案 ${row.schemeName}？`" @confirm="onDelete(row)">
-              <template #reference>
-                <el-button link type="danger" size="small">删除</el-button>
+            <!-- 复制版本/编辑/删除 仅资财部人员可见可操作 -->
+            <template v-if="isCaizai">
+              <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
+              <!-- 编辑/删除：仅当前用户创建的方案才显示可操作 -->
+              <template v-if="row.createdByMe">
+                <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
+                <el-popconfirm v-if="!isDisabled(row)" :title="`确认删除方案 ${row.schemeName}？`" @confirm="onDelete(row)">
+                  <template #reference>
+                    <el-button link type="danger" size="small">删除</el-button>
+                  </template>
+                </el-popconfirm>
+                <el-button v-else link size="small" disabled>已删除</el-button>
               </template>
-            </el-popconfirm>
-            <el-button v-else link size="small" disabled>已删除</el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -100,6 +106,12 @@
           <el-form-item label="方案名称" prop="schemeName">
             <el-input v-model="dlg.scheme.schemeName" :disabled="dlg.readOnly" />
           </el-form-item>
+          <el-form-item label="是否向员工开放明细" prop="openDetail">
+            <el-select v-model="dlg.scheme.openDetail" :disabled="dlg.readOnly" style="width:100%">
+              <el-option :value="true" label="是" />
+              <el-option :value="false" label="否" />
+            </el-select>
+          </el-form-item>
         </div>
       </el-form>
       <!-- 指标配置表 -->
@@ -109,11 +121,40 @@
           权重合计：{{ weightSum.toFixed(0) }}% {{ weightSum === 100 ? '✓' : '' }}
         </span>
       </div>
-      <el-table :data="dlg.items" size="default" border>
+      <!-- default-expand-all：SQL 表达式作为展开行单独占满一行编辑/展示 -->
+      <el-table :data="dlg.items" size="default" border default-expand-all>
+        <!-- 展开行：SQL 表达式（支持 #{slot} 占位符），单独一行全宽编辑 -->
+        <el-table-column type="expand">
+          <template #default="{row}">
+            <div class="sql-expr-row">
+              <span class="sql-expr-label">SQL 表达式 (支持 #{slot} 占位符)</span>
+              <el-input
+                v-model="row.sqlExpr"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 8 }"
+                :disabled="dlg.readOnly"
+                :placeholder="dlg.readOnly ? '' : '如 SELECT LEAST(:maxScore, GREATEST(:minScore, :actual / NULLIF(:target,0) * :weight)) AS kpi_value'"
+                @focus="onSqlFocus($event, row)"
+              />
+            </div>
+          </template>
+        </el-table-column>
+        <!-- 维度：默认员工；切换维度动态过滤下方指标下拉内容。编辑时允许修改（改维度会清空指标重选） -->
+        <el-table-column label="维度" width="110">
+          <template #default="{row}">
+            <el-select v-model="row.baseDim" :disabled="dlg.readOnly"
+              placeholder="维度" style="width:100%" @change="onDimChange(row)">
+              <el-option value="EMP" label="员工" />
+              <el-option value="ORG" label="机构" />
+              <el-option value="CUST" label="客户" />
+            </el-select>
+          </template>
+        </el-table-column>
         <el-table-column label="指标" min-width="190">
           <template #default="{row}">
+            <!-- 编辑方案时允许改指标：若已配置项换了指标，保存时按"删旧+新增"处理 -->
             <el-select v-model="row.metricCode" :disabled="dlg.readOnly" filterable placeholder="选择指标" style="width:100%">
-              <el-option v-for="m in metricOptions" :key="m.metricCode"
+              <el-option v-for="m in metricsByDim(row.baseDim)" :key="m.metricCode"
                 :value="m.metricCode" :label="`${m.metricName}`" />
             </el-select>
           </template>
@@ -125,17 +166,13 @@
         </el-table-column>
         <el-table-column label="计分上限" width="120">
           <template #default="{row}">
-            <el-input-number v-model="row.maxScore" :disabled="dlg.readOnly" :precision="0" :controls="false" style="width:100%" />
+            <el-input-number v-model="row.maxScore" :disabled="dlg.readOnly" :min="0" :precision="0" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
         <el-table-column label="计分下限" width="120">
           <template #default="{row}">
+            <!-- 计分下限允许负值，不限制最小值 -->
             <el-input-number v-model="row.minScore" :disabled="dlg.readOnly" :precision="0" :controls="false" style="width:100%" />
-          </template>
-        </el-table-column>
-        <el-table-column label="计分公式" min-width="280">
-          <template #default="{row}">
-            <el-input v-model="row.formula" :disabled="dlg.readOnly" placeholder="如 min(actual / target * 100, 120)" />
           </template>
         </el-table-column>
         <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center" fixed="right">
@@ -147,13 +184,19 @@
 
       <el-button v-if="!dlg.readOnly" plain @click="addItemRow" style="margin-top:10px">+ 添加指标</el-button>
 
-      <!-- 计分公式可用变量提示 -->
-      <div class="formula-hint">
-        <strong>计分公式可用变量：</strong>
-        <code>actual</code> <span class="dim">（实际值）</span>·
-        <code>target</code> <span class="dim">（目标值）</span>·
-        <code>complete_rate</code> <span class="dim">（完成率）</span>·
-        <span class="dim">最终得分 = ∑(权重 × min(max(score, min), max)) / 100</span>
+      <!-- SQL 可用变量提示（参考指标编辑）：点击占位符插入到 SQL 表达式光标处 -->
+      <div class="sql-date-macros" style="margin-top:12px">
+        <div class="hint-title">可用变量（点击插入到 SQL 光标处；后端按 dataDate 自动计算注入）</div>
+        <table class="hint-table">
+          <tr><th style="width:180px">SQL 占位符</th><th>含义</th></tr>
+          <tr v-for="m in SQL_MACROS" :key="m.token">
+            <td>
+              <code class="macro-btn" @mousedown.prevent="insertMacro(m.token)" :title="`点击插入 ${m.token}`">{{ m.token }}</code>
+            </td>
+            <td>{{ m.desc }}</td>
+          </tr>
+        </table>
+        <div class="hint-foot">结果列只需含 <code>kpi_value</code>(KPI得分)；对象id 由系统按行传入，无需在 SQL 中返回。</div>
       </div>
 
       <template #footer>
@@ -168,7 +211,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   listKpiRules, getKpiSchemeDetail,
@@ -181,13 +224,17 @@ import {
 // 状态从 SYS_DICT.dict_type='KPI_SCHEME_STATUS' 拉，不再写死中英文映射
 import { useDict } from '@/composables/useDict';
 import { getOrgTree } from '@/api/orgs';
+import { useUserStore } from '@/stores/user';
+
+// 资财部人员（角色 资财部经办人 R_BACK_FINANCE / 资财部负责人 R_FIN_LEAD）才可见新增/复制/编辑/删除
+const userStore = useUserStore();
+const isCaizai = computed(() => {
+  const roles = userStore.user?.roles || [];
+  return roles.some(r => r.roleId === 'R_BACK_FINANCE' || r.roleId === 'R_FIN_LEAD');
+});
 // labelOf 名称冲突：保留下面行业版的 statusLabel（含 DISABLED → 已删除映射），useDict 只取 options
 const { options: STATUS_OPTIONS } = useDict('KPI_SCHEME_STATUS');
-const CYCLE_OPTIONS = [
-  { v: 'YEARLY',    l: '年度' },
-  { v: 'QUARTERLY', l: '季度' },
-  { v: 'MONTHLY',   l: '月度' }
-];
+// 适用周期 UI 已按需求移除（新增方案默认 cycleType=YEARLY，仍随提交透传给后端）
 
 const statusCls = (s) => ({ ACTIVE: 'tag-success', TRIAL_RUN: 'tag-warning', DRAFT: 'tag-info', INACTIVE: 'tag-info', DISABLED: 'tag-info' }[s] || 'tag-info');
 const statusLabel = (s) => ({ ACTIVE: '启用', TRIAL_RUN: '试运行', DRAFT: '草稿', INACTIVE: '已删除', DISABLED: '已删除' }[s] || s || '-');
@@ -217,6 +264,16 @@ const loading = ref(false);
 const pageNo = ref(1);
 const pageSize = ref(20);
 const f = reactive({ keyword: '', status: '', cycleType: '', dateRange: null });
+
+// 重置查询条件：清空所有筛选项 + 回到第 1 页后重新查询
+function resetFilters() {
+  f.keyword = '';
+  f.status = '';
+  f.cycleType = '';
+  f.dateRange = null;
+  pageNo.value = 1;
+  reload();
+}
 
 async function reload() {
   loading.value = true;
@@ -295,13 +352,6 @@ function persistMeta(schemeCode, applyScope, items) {
   saveMeta(meta);
 }
 
-function resolveOrgScope(row) {
-  const fromMeta = getApplyScope(row);
-  if (fromMeta) return fromMeta;
-  const name = row.schemeName || '';
-  if (/中场|后台/.test(name)) return '中场支持部';
-  return '全部支行';
-}
 function resolveVersion(row) {
   return 'v' + ((row.id || row.schemeCode || '').slice(-1).match(/\d/) ? Math.max(1, parseInt((row.id || '1').replace(/\D/g, '').slice(-1)) || 1) : 1);
 }
@@ -318,9 +368,9 @@ const dlg = reactive({
   origItemMap: new Map()
 });
 const dlgTitle = computed(() => {
-  if (dlg.readOnly) return `查看方案 · ${dlg.scheme.schemeName || ''}`;
-  if (dlg.editingId) return `编辑方案 · ${dlg.scheme.schemeName || ''}`;
-  return '新增方案';
+  if (dlg.readOnly) return `查看KPI方案 · ${dlg.scheme.schemeName || ''}`;
+  if (dlg.editingId) return `编辑KPI方案 · ${dlg.scheme.schemeName || ''}`;
+  return '新增KPI方案';
 });
 const weightSum = computed(() => dlg.items.reduce((s, x) => s + (Number(x.weight) || 0), 0));
 
@@ -340,6 +390,42 @@ async function loadOrgTree() {
   } catch { orgTreeData.value = []; }
 }
 
+// SQL 表达式可用变量：数据日期（后端按 dataDate 注入）+ 当前 KPI 指标项配置值（权重/计分上下限/目标值/基础值）
+const SQL_MACROS = [
+  { token: ':dataDate', desc: '数据日期（由调度/计算传入）' },
+  { token: ':weight',   desc: '权重' },
+  { token: ':maxScore', desc: '计分上限' },
+  { token: ':minScore', desc: '计分下限' },
+  { token: ':actual',   desc: '实际值' },
+  { token: ':target',   desc: '目标值' },
+  { token: ':base',     desc: '基础值' }
+];
+
+// 当前聚焦的 SQL 表达式 textarea 与所属行（点击占位符时定位插入点）
+let activeSqlTa = null;
+let activeSqlRow = null;
+/** 记录聚焦的 SQL 表达式输入框（@focus 的 target 即内部 textarea） */
+function onSqlFocus(e, row) {
+  activeSqlTa = e?.target || null;
+  activeSqlRow = row;
+}
+/** 把占位符插到当前 SQL 表达式光标处；未聚焦时提示先点输入框 */
+function insertMacro(token) {
+  if (dlg.readOnly) return;
+  if (!activeSqlRow) { ElMessage.info('请先点击要插入的 SQL 表达式输入框'); return; }
+  const cur = activeSqlRow.sqlExpr || '';
+  const ta = activeSqlTa;
+  const start = ta?.selectionStart ?? cur.length;
+  const end = ta?.selectionEnd ?? start;
+  activeSqlRow.sqlExpr = cur.slice(0, start) + token + cur.slice(end);
+  nextTick(() => {
+    if (!ta) return;
+    ta.focus();
+    const pos = start + token.length;
+    ta.setSelectionRange(pos, pos);
+  });
+}
+
 const metricOptions = ref([]);
 async function ensureMetrics() {
   if (metricOptions.value.length) return;
@@ -349,8 +435,26 @@ async function ensureMetrics() {
   } catch {}
 }
 
+/** 按维度(EMP/ORG/CUST)过滤指标下拉内容并按指标名称排序；维度为空时默认按员工 */
+function metricsByDim(dim) {
+  const d = dim || 'EMP';
+  return metricOptions.value
+    .filter(m => (m.baseDim || 'EMP') === d)
+    .slice()
+    .sort((a, b) => (a.metricName || '').localeCompare(b.metricName || '', 'zh-Hans-CN'));
+}
+/** 查指标的维度（编辑回显时回填行维度，使已选指标落在过滤列表内） */
+function metricBaseDim(code) {
+  return metricOptions.value.find(m => m.metricCode === code)?.baseDim || 'EMP';
+}
+/** 切换维度时清空已选指标（指标下拉内容随维度变化，旧指标可能不在新列表中） */
+function onDimChange(row) {
+  row.metricCode = '';
+}
+
 function defaultItem() {
-  return { id: null, metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, formula: '' };
+  // 默认维度为员工，指标下拉默认展示员工指标
+  return { id: null, baseDim: 'EMP', metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, formula: '', sqlExpr: '' };
 }
 function addItemRow() {
   dlg.items.push(defaultItem());
@@ -384,12 +488,18 @@ async function openEdit(row, readOnly = false) {
   }
   const items = (detail?.items || row.items || []).map(it => ({
     id: it.id,
+    // 维度优先用后端固化值，缺失时再按所选指标回推，保证已选指标落在过滤后的下拉列表内
+    baseDim: it.baseDim || metricBaseDim(it.metricCode),
     metricCode: it.metricCode,
-    weight: Number(it.weight) || 0,
+    // 权重入库为小数（占比，sum=1），页面按百分比展示 → 读取 ×100
+    weight: Math.round((Number(it.weight) || 0) * 100),
     multiplier: Number(it.multiplier) || 1,
     minScore: Number(it.minScore) || 0,
     maxScore: Number(it.maxScore) || 120,
-    formula: getItemFormula(row.schemeCode, it.metricCode) || 'min(actual / target * 100, 120)'
+    // 计分公式以后端持久化值为准；留空就保持空（不再兜底默认串），由必输校验拦截
+    formula: it.formula || '',
+    // SQL 表达式（支持 #{slot} 占位符）：后端固化后回显，当前以返回值为准
+    sqlExpr: it.sqlExpr || ''
   }));
   dlg.items = items;
   dlg.origItemMap = new Map(items.map(it => [it.id, { ...it }]));
@@ -411,15 +521,9 @@ async function onSave(targetStatus) {
   // 走一次 el-form 的中文必填校验（schemeFormRef）
   try { await schemeFormRef.value?.validate(); } catch { return; }
 
-  // 后端 schemeCode @Pattern(^[A-Z][A-Z0-9_]*$) 是强约束 —— 前端无法砍。
-  // 折中：提交前自动转大写 + 替换非法字符为 _，并保证首字符是字母。
-  // 这样用户随便输小写/横线/中文都能落库，不再被后端拒。
+  // 后端已砍 schemeCode 格式校验，仅做 trim 兜底
   if (!dlg.editingId) {
-    let code = String(dlg.scheme.schemeCode || '').toUpperCase()
-      .replace(/[^A-Z0-9_]/g, '_')
-      .replace(/^[^A-Z]+/, '');
-    if (!code) code = 'KPI' + Date.now().toString().slice(-6);
-    dlg.scheme.schemeCode = code;
+    dlg.scheme.schemeCode = String(dlg.scheme.schemeCode || '').trim();
   }
 
   dlg.saving = true;
@@ -441,20 +545,30 @@ async function onSave(targetStatus) {
           try { await deleteKpiItem(schemeId, oid, '编辑移除'); } catch {}
         }
       }
-      // 新增 / 更新
-      // 后端 UpdateKpiItemReqDTO 仅 4 字段：weight / multiplier / maxScore / minScore（禁带 metricCode）
-      // 后端 AddKpiItemReqDTO 含 metricCode（新增时才需要）
+      // 新增 / 更新 / 换指标
+      // updateKpiItem 不能改 metricCode；已配置项若改了维度/指标 → 删旧 + 新增（指标是项的身份）
       for (const it of dlg.items) {
-        if (it.id) {
+        const orig = it.id ? dlg.origItemMap.get(it.id) : null;
+        const metricChanged = orig && orig.metricCode !== it.metricCode;
+        if (it.id && !metricChanged) {
           await updateKpiItem(schemeId, it.id, {
-            weight: it.weight, multiplier: it.multiplier || 1,
-            minScore: it.minScore, maxScore: it.maxScore
+            weight: it.weight / 100, multiplier: it.multiplier || 1,
+            minScore: it.minScore, maxScore: it.maxScore,
+            formula: it.formula,
+            sqlExpr: it.sqlExpr
           });
         } else {
+          // 已存在项换了指标：先删旧项（新指标 = 新项身份），再按新指标新增
+          if (it.id && metricChanged) {
+            try { await deleteKpiItem(schemeId, it.id, '编辑换指标'); } catch {}
+          }
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
-            weight: it.weight, multiplier: it.multiplier || 1,
-            minScore: it.minScore, maxScore: it.maxScore
+            baseDim: it.baseDim,
+            weight: it.weight / 100, multiplier: it.multiplier || 1,
+            minScore: it.minScore, maxScore: it.maxScore,
+            formula: it.formula,
+            sqlExpr: it.sqlExpr
           });
         }
       }
@@ -474,8 +588,11 @@ async function onSave(targetStatus) {
         try {
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
-            weight: it.weight, multiplier: it.multiplier || 1,
-            minScore: it.minScore, maxScore: it.maxScore
+            baseDim: it.baseDim,
+            weight: it.weight / 100, multiplier: it.multiplier || 1,
+            minScore: it.minScore, maxScore: it.maxScore,
+            formula: it.formula,
+            sqlExpr: it.sqlExpr
           });
         } catch {}
       }
@@ -521,7 +638,8 @@ async function onCloneVersion(row) {
         await addKpiItem(newId, {
           metricCode: it.metricCode,
           weight: it.weight, multiplier: it.multiplier,
-          minScore: it.minScore, maxScore: it.maxScore
+          minScore: it.minScore, maxScore: it.maxScore,
+          formula: it.formula
         });
       } catch {}
     }
@@ -565,6 +683,7 @@ onMounted(() => { reload(); loadOrgTree(); });
 .table { padding: 0; padding-bottom: 12px; }
 .link { color: $primary; cursor: pointer; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 14px; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 
 .form-grid {
@@ -597,4 +716,49 @@ onMounted(() => { reload(); loadOrgTree(); });
   }
   .dim { color: $text-3; }
 }
+
+/* SQL 表达式展开行：标签 + 全宽文本框，单独一行 */
+.sql-expr-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 4px 12px 8px;
+}
+.sql-expr-label {
+  flex-shrink: 0;
+  padding-top: 6px;
+  font-size: 13px;
+  color: $text-2;
+  white-space: nowrap;
+}
+.sql-expr-row :deep(.el-textarea) { flex: 1; }
+
+/* SQL 可用变量提示（参考指标编辑 Metrics.vue 的占位符/含义表） */
+.sql-date-macros {
+  background: #f7f9fc;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.sql-date-macros .hint-title { font-weight: 600; color: #303133; margin-bottom: 6px; }
+.sql-date-macros .hint-table { border-collapse: collapse; width: 100%; }
+.sql-date-macros .hint-table th,
+.sql-date-macros .hint-table td {
+  border: 1px solid #ebeef5;
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.sql-date-macros .hint-table th { background: #fafafa; color: #606266; font-weight: 500; }
+.sql-date-macros code { background: #fff5e6; color: #b87600; padding: 0 4px; border-radius: 2px; }
+.sql-date-macros code.macro-btn {
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.sql-date-macros code.macro-btn:hover { background: #ffd591; color: #874d00; box-shadow: 0 0 0 1px #fa8c16; }
+.sql-date-macros code.macro-btn:active { background: #fa8c16; color: #fff; }
+.sql-date-macros .hint-foot { margin-top: 8px; color: #909399; }
 </style>

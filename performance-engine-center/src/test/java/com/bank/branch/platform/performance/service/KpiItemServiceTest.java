@@ -124,6 +124,70 @@ class KpiItemServiceTest {
     }
 
     @Test
+    @DisplayName("新增方案项: 指标维度 baseDim 随 cmd 固化落库, 供列表展示直接读取")
+    void addItem_persistsBaseDim() {
+        stubSchemeExists("S_DIM");
+        when(itemMapper.selectBySchemeAndMetric("S_DIM", "TEST_KPI_METRIC_ORG")).thenReturn(null);
+
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_DIM")
+                .metricCode("TEST_KPI_METRIC_ORG")
+                .baseDim("ORG")
+                .weight(new BigDecimal("30.0000"))
+                .operator("admin")
+                .build();
+
+        PerfKpiItem created = service.addItem(cmd);
+
+        assertThat(created.getBaseDim()).isEqualTo("ORG");
+        ArgumentCaptor<PerfKpiItem> captor = ArgumentCaptor.forClass(PerfKpiItem.class);
+        verify(itemMapper).insert(captor.capture());
+        assertThat(captor.getValue().getBaseDim()).isEqualTo("ORG");
+    }
+
+    @Test
+    @DisplayName("新增方案项: SQL 表达式 sqlExpr 随 cmd 固化落库")
+    void addItem_persistsSqlExpr() {
+        stubSchemeExists("S_SQL");
+        when(itemMapper.selectBySchemeAndMetric("S_SQL", "TEST_KPI_METRIC_SQL")).thenReturn(null);
+
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_SQL")
+                .metricCode("TEST_KPI_METRIC_SQL")
+                .sqlExpr("SUM(#{slot1}) / NULLIF(#{slot2}, 0)")
+                .weight(new BigDecimal("25.0000"))
+                .operator("admin")
+                .build();
+
+        PerfKpiItem created = service.addItem(cmd);
+
+        assertThat(created.getSqlExpr()).isEqualTo("SUM(#{slot1}) / NULLIF(#{slot2}, 0)");
+        ArgumentCaptor<PerfKpiItem> captor = ArgumentCaptor.forClass(PerfKpiItem.class);
+        verify(itemMapper).insert(captor.capture());
+        assertThat(captor.getValue().getSqlExpr()).isEqualTo("SUM(#{slot1}) / NULLIF(#{slot2}, 0)");
+    }
+
+    @Test
+    @DisplayName("编辑方案项: 非空 sqlExpr 选择性 patch 落库")
+    void updateItem_patchesSqlExpr() {
+        PerfKpiItem existing = KpiTestDataBuilder.item("S_USQL", "TEST_KPI_METRIC_USQL");
+        existing.setId("ID_USQL");
+        when(itemMapper.selectById("ID_USQL")).thenReturn(existing);
+
+        UpdateKpiItemCmd cmd = UpdateKpiItemCmd.builder()
+                .sqlExpr("AVG(#{slot})")
+                .operator("admin")
+                .build();
+
+        PerfKpiItem updated = service.updateItem("ID_USQL", cmd);
+
+        assertThat(updated.getSqlExpr()).isEqualTo("AVG(#{slot})");
+        ArgumentCaptor<PerfKpiItem> captor = ArgumentCaptor.forClass(PerfKpiItem.class);
+        verify(itemMapper).updateByIdSelective(captor.capture());
+        assertThat(captor.getValue().getSqlExpr()).isEqualTo("AVG(#{slot})");
+    }
+
+    @Test
     @DisplayName("updateItem: 找不到 item 时抛 KPI_ITEM_NOT_FOUND")
     void updateItem_whenNotFound_throwsNotFound() {
         when(itemMapper.selectById("NO_SUCH")).thenReturn(null);

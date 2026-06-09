@@ -1,9 +1,9 @@
 <template>
-  <div>
+  <div class="flow-edit-page">
     <div class="page-h">
       <h1>
         审批流程编辑
-        <span class="sub">表单式编辑节点 / 审批人 / 连线 / 条件分支；保存草稿后发布生成影子流程，不影响现有线上审批</span>
+        <span class="sub">流程图式可视化编辑：拖入节点、连线表达流转、网关出边配置条件分支；保存草稿后发布生成影子流程，不影响现有线上审批</span>
       </h1>
       <div class="actions">
         <el-button @click="goBack">← 返回列表</el-button>
@@ -19,126 +19,66 @@
       type="warning"
       show-icon
       :closable="false"
-      title="只读导入流程，请返回列表用『克隆』另存后再编辑"
+      title="只读导入流程，仅供查看，请返回列表用『克隆』另存后再编辑"
     />
 
     <!-- 基本信息 -->
-    <div class="card-section">
-      <div class="sec-title">基本信息</div>
-      <el-form label-width="90px" size="default">
-        <el-form-item label="流程名称">
-          <el-input v-model="graph.name" :disabled="readonly" placeholder="请输入流程名称" maxlength="100" style="max-width: 360px" />
-        </el-form-item>
-        <el-form-item label="业务类型">
-          <span class="ro-text">{{ bizTypeLabel(graph.bizType) }}</span>
-        </el-form-item>
-      </el-form>
+    <div class="basic-bar">
+      <span class="bi-label">流程名称</span>
+      <el-input v-model="graph.name" :disabled="readonly" placeholder="请输入流程名称" maxlength="100" style="max-width: 320px" size="default" />
+      <span class="bi-label" style="margin-left: 20px">业务类型</span>
+      <span class="bi-val">{{ bizTypeLabel(graph.bizType) }}</span>
     </div>
 
-    <!-- 节点 -->
-    <div class="card-section">
-      <div class="sec-title">节点</div>
-      <el-table :data="graph.nodes" size="default" empty-text="暂无节点">
-        <el-table-column label="节点标识" min-width="150">
-          <template #default="{ row }">
-            <el-input v-model="row.nodeKey" :disabled="readonly" placeholder="唯一标识，如 start / approve1" />
-          </template>
-        </el-table-column>
-        <el-table-column label="名称" min-width="150">
-          <template #default="{ row }">
-            <el-input v-model="row.name" :disabled="readonly" placeholder="节点名称" />
-          </template>
-        </el-table-column>
-        <el-table-column label="类型" width="130">
-          <template #default="{ row }">
-            <el-select v-model="row.nodeType" :disabled="readonly" @change="onNodeTypeChange(row)">
-              <el-option v-for="t in NODE_TYPE_OPTIONS" :key="t.value" :label="t.label" :value="t.value" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="审批模式" width="130">
-          <template #default="{ row }">
-            <el-select v-model="row.approveMode" :disabled="readonly || row.nodeType !== 'APPROVAL'" placeholder="—">
-              <el-option label="或签" value="ANY" />
-              <el-option label="会签" value="ALL" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row, $index }">
-            <el-button
-              v-if="row.nodeType === 'APPROVAL'"
-              link
-              type="primary"
-              size="small"
-              @click="openApproverDlg(row)"
-            >配置审批人({{ (row.approvers || []).length }})</el-button>
-            <el-button link type="danger" size="small" :disabled="readonly" @click="removeNode($index)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-button v-if="!readonly" text type="primary" style="margin-top: 8px" @click="addNode">+ 添加节点</el-button>
+    <!-- 三栏：工具盘 | 画布 | 属性栏 -->
+    <div class="designer">
+      <!-- 左：节点工具盘（只读隐藏）-->
+      <FlowPalette
+        v-if="!readonly"
+        :has-start="hasStart"
+        @add-endpoint="addEndpoint"
+      />
+
+      <!-- 中：画布 -->
+      <div class="canvas-wrap">
+        <FlowCanvas
+          ref="canvasRef"
+          :nodes="graph.nodes"
+          :edges="graph.edges"
+          :selection="selection"
+          :variables="variables"
+          :readonly="readonly"
+          @select="onSelect"
+          @create-edge="onCreateEdge"
+          @drop-node="onDropNode"
+          @delete-node="onDeleteNode"
+          @delete-edge="onDeleteEdge"
+        />
+      </div>
+
+      <!-- 右：属性栏 -->
+      <div class="prop-panel">
+        <FlowNodePanel
+          v-if="selection.type === 'node' && selectedNode"
+          :node="selectedNode"
+          :readonly="readonly"
+          :approver-variables="approverVariables"
+          @delete="onDeleteNode(selection.key)"
+        />
+        <FlowEdgePanel
+          v-else-if="selection.type === 'edge' && selectedEdge"
+          :edge="selectedEdge"
+          :nodes="graph.nodes"
+          :variables="variables"
+          :readonly="readonly"
+          @delete="onDeleteEdge(selection.key)"
+        />
+        <div v-else class="prop-empty">
+          <div class="pe-icon">◇</div>
+          <div>选中节点编辑审批环节参数<br>选中连线编辑条件分支</div>
+        </div>
+      </div>
     </div>
-
-    <!-- 连线 -->
-    <div class="card-section">
-      <div class="sec-title">连线</div>
-      <el-table :data="graph.edges" size="default" empty-text="暂无连线">
-        <el-table-column label="起点" width="180">
-          <template #default="{ row }">
-            <el-select v-model="row.fromNodeKey" :disabled="readonly" filterable placeholder="选择起点节点" style="width: 100%">
-              <el-option v-for="n in nodeKeyOptions" :key="n.value" :label="n.label" :value="n.value" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="终点" width="180">
-          <template #default="{ row }">
-            <el-select v-model="row.toNodeKey" :disabled="readonly" filterable placeholder="选择终点节点" style="width: 100%">
-              <el-option v-for="n in nodeKeyOptions" :key="n.value" :label="n.label" :value="n.value" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="默认分支" width="100" align="center">
-          <template #default="{ row }">
-            <el-switch v-model="row.isDefault" :disabled="readonly" />
-          </template>
-        </el-table-column>
-        <el-table-column label="条件" min-width="200">
-          <template #default="{ row }">
-            <span class="cond-text">{{ conditionSummary(row.condition) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
-          <template #default="{ row, $index }">
-            <el-button link type="primary" size="small" @click="openConditionDlg(row)">编辑条件</el-button>
-            <el-button link type="danger" size="small" :disabled="readonly" @click="removeEdge($index)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-button v-if="!readonly" text type="primary" style="margin-top: 8px" @click="addEdge">+ 添加连线</el-button>
-    </div>
-
-    <!-- 结构预览 -->
-    <div class="card-section">
-      <div class="sec-title">结构预览</div>
-      <pre class="preview">{{ structurePreview }}</pre>
-    </div>
-
-    <!-- 审批人配置弹窗 -->
-    <el-dialog v-model="approverDlg.show" :title="`配置审批人 · ${approverDlg.node?.name || approverDlg.node?.nodeKey || ''}`" width="560px">
-      <ApproverPicker v-if="approverDlg.node" v-model="approverDlg.node.approvers" />
-      <template #footer>
-        <el-button type="primary" @click="approverDlg.show = false">完成</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 条件配置弹窗 -->
-    <el-dialog v-model="conditionDlg.show" title="编辑分支条件" width="640px">
-      <ConditionBuilder v-if="conditionDlg.edge" v-model="conditionDlg.edge.condition" :variables="variables" />
-      <template #footer>
-        <el-button type="primary" @click="conditionDlg.show = false">完成</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -146,9 +86,11 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { getFlow, saveFlow, publishFlow, listFlowVariables } from '@/api/flowDesign';
-import ApproverPicker from '@/views/system/flow/ApproverPicker.vue';
-import ConditionBuilder from '@/views/system/flow/ConditionBuilder.vue';
+import { getFlow, saveFlow, publishFlow, listFlowVariables, listApproverVariables } from '@/api/flowDesign';
+import FlowCanvas from '@/views/system/flow/FlowCanvas.vue';
+import FlowPalette from '@/views/system/flow/FlowPalette.vue';
+import FlowNodePanel from '@/views/system/flow/FlowNodePanel.vue';
+import FlowEdgePanel from '@/views/system/flow/FlowEdgePanel.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -156,39 +98,25 @@ const router = useRouter();
 const id = route.params.id;
 
 // 业务类型显示映射（与 FlowList 对齐）
-const BIZ_TYPE_MAP = {
-  ALLOC_ADJUST: '业绩调整',
-  TARGET_ADJUST: '目标方案'
-};
-function bizTypeLabel(type) {
-  return BIZ_TYPE_MAP[type] || (type ?? '-');
-}
+const BIZ_TYPE_MAP = { ALLOC_ADJUST: '业绩调整', TARGET_ADJUST: '目标方案' };
+function bizTypeLabel(type) { return BIZ_TYPE_MAP[type] || (type ?? '-'); }
 
-// 节点类型选项（value=后端枚举，label=中文）
-const NODE_TYPE_OPTIONS = [
-  { value: 'START', label: '开始' },
-  { value: 'APPROVAL', label: '审批' },
-  { value: 'GATEWAY', label: '网关' },
-  { value: 'END', label: '结束' }
-];
-const NODE_TYPE_MAP = NODE_TYPE_OPTIONS.reduce((m, t) => ((m[t.value] = t.label), m), {});
-
-// 条件运算符中文映射（与 ConditionBuilder 内选项对齐）
-const OP_LABEL_MAP = {
-  EQ: '等于', NE: '不等于', GT: '大于', GE: '大于等于',
-  LT: '小于', LE: '小于等于', IN: '属于', NOT_IN: '不属于', CONTAINS: '包含'
-};
-const LOGIC_LABEL_MAP = { AND: '且', OR: '或' };
+const NODE_DEFAULT_NAME = { START: '开始', APPROVAL: '审批', GATEWAY: '网关', END: '结束' };
 
 // === 主数据 ===
-// graph 用 reactive 持有，确保 nodes/edges/approvers 都是数组
 const graph = reactive({ name: '', bizType: '', nodes: [], edges: [] });
 // 条件分支可用变量白名单 [{field,label,type}]
 const variables = ref([]);
-// 只读导入流程标记：禁用保存/发布
+// VAR 审批人可选的名单类流程变量 [{field,label,type}]
+const approverVariables = ref([]);
+// 只读导入流程标记
 const readonly = ref(false);
 const saving = ref(false);
 const publishing = ref(false);
+
+// 当前选中：{ type:'node'|'edge'|null, key } —— key 为 nodeKey 或 edge 下标
+const selection = reactive({ type: null, key: null });
+const canvasRef = ref(null);
 
 onMounted(async () => {
   let model = null;
@@ -198,7 +126,6 @@ onMounted(async () => {
     ElMessage.error('加载流程失败：' + (e?.message || e));
   }
   model = model || {};
-  // 规整：确保数组字段不为 null
   graph.name = model.name || '';
   graph.bizType = model.bizType || '';
   graph.nodes = (Array.isArray(model.nodes) ? model.nodes : []).map(n => ({
@@ -206,120 +133,129 @@ onMounted(async () => {
     nodeType: n.nodeType || 'APPROVAL',
     name: n.name || '',
     approveMode: n.approveMode || (n.nodeType === 'APPROVAL' ? 'ANY' : null),
+    // 审批机构归属：SELF=本机构 / PARENT=上级机构 / null=不判断
     sortNo: n.sortNo,
+    // 画布坐标：后端可能为 null（旧数据），画布入场会兜底布局
+    posX: n.posX != null ? n.posX : null,
+    posY: n.posY != null ? n.posY : null,
     approvers: Array.isArray(n.approvers) ? n.approvers.map(a => ({ ...a })) : []
   }));
   graph.edges = (Array.isArray(model.edges) ? model.edges : []).map(e => ({
     fromNodeKey: e.fromNodeKey || '',
     toNodeKey: e.toNodeKey || '',
     isDefault: !!e.isDefault,
-    // condition 可能是对象或 null
+    // 分支「输出名称」（走向标签）
+    outputName: e.outputName || '',
     condition: e.condition && typeof e.condition === 'object' ? e.condition : null
   }));
-  // 只读导入标记（兼容多种字段命名）
   readonly.value = model.readonly === true || model.isReadonlyImport === true || model.isReadonlyImport === 1;
 
-  // 加载条件分支可用变量
   try {
     variables.value = await listFlowVariables(graph.bizType);
   } catch {
     variables.value = [];
   }
+  try {
+    approverVariables.value = await listApproverVariables(graph.bizType);
+  } catch {
+    approverVariables.value = [];
+  }
 });
 
-// 节点 nodeKey 下拉选项（连线起终点用）
-const nodeKeyOptions = computed(() =>
-  graph.nodes
-    .filter(n => n.nodeKey)
-    .map(n => ({ value: n.nodeKey, label: `${n.nodeKey}${n.name ? '（' + n.name + '）' : ''}` }))
+// === 选中态派生 ===
+const hasStart = computed(() => graph.nodes.some(n => n.nodeType === 'START'));
+const selectedNode = computed(() =>
+  selection.type === 'node' ? graph.nodes.find(n => n.nodeKey === selection.key) : null
+);
+const selectedEdge = computed(() =>
+  selection.type === 'edge' ? graph.edges[selection.key] : null
 );
 
-// === 节点操作 ===
-function addNode() {
-  graph.nodes.push({ nodeKey: '', nodeType: 'APPROVAL', name: '', approveMode: 'ANY', sortNo: undefined, approvers: [] });
+function onSelect(sel) {
+  selection.type = sel.type;
+  selection.key = sel.key;
 }
-function removeNode(idx) {
+
+// === nodeKey 生成（图内唯一）===
+function genNodeKey(type) {
+  if (type === 'START') return graph.nodes.some(n => n.nodeKey === 'start') ? uniq('start') : 'start';
+  const prefix = { END: 'end', APPROVAL: 'approval', GATEWAY: 'gateway' }[type] || 'node';
+  return uniq(prefix);
+}
+function uniq(prefix) {
+  let i = 1, key;
+  do { key = `${prefix}_${i++}`; } while (graph.nodes.some(n => n.nodeKey === key));
+  return key;
+}
+
+function makeNode(type, posX, posY) {
+  return {
+    nodeKey: genNodeKey(type),
+    nodeType: type,
+    name: NODE_DEFAULT_NAME[type] || '',
+    approveMode: type === 'APPROVAL' ? 'ANY' : null,
+    sortNo: graph.nodes.length + 1,
+    posX, posY,
+    approvers: []
+  };
+}
+
+// === 画布事件处理 ===
+
+/** 从工具盘拖入：在落点新增节点并选中 */
+function onDropNode({ nodeType, posX, posY }) {
+  const node = makeNode(nodeType, posX, posY);
+  graph.nodes.push(node);
+  onSelect({ type: 'node', key: node.nodeKey });
+}
+
+/** 端点按钮新增 START/END */
+function addEndpoint(type) {
+  if (type === 'START' && hasStart.value) {
+    ElMessage.warning('已存在开始节点');
+    return;
+  }
+  // START 放顶部居中，END 放底部
+  const posX = 360;
+  const posY = type === 'START' ? 30 : Math.max(120, graph.nodes.length * 30 + 120);
+  const node = makeNode(type, posX, posY);
+  graph.nodes.push(node);
+  onSelect({ type: 'node', key: node.nodeKey });
+}
+
+/** 建边并选中新边 */
+function onCreateEdge({ fromNodeKey, toNodeKey }) {
+  graph.edges.push({ fromNodeKey, toNodeKey, isDefault: false, outputName: '', condition: null });
+  onSelect({ type: 'edge', key: graph.edges.length - 1 });
+}
+
+/** 删节点 + 级联删相关边 + 清选中 */
+function onDeleteNode(nodeKey) {
+  const idx = graph.nodes.findIndex(n => n.nodeKey === nodeKey);
+  if (idx < 0) return;
   graph.nodes.splice(idx, 1);
-}
-/** 类型切换：非 APPROVAL 清空审批模式，切回 APPROVAL 补默认或签 */
-function onNodeTypeChange(row) {
-  if (row.nodeType === 'APPROVAL') {
-    if (!row.approveMode) row.approveMode = 'ANY';
-  } else {
-    row.approveMode = null;
-  }
-}
-
-// === 连线操作 ===
-function addEdge() {
-  graph.edges.push({ fromNodeKey: '', toNodeKey: '', isDefault: false, condition: null });
-}
-function removeEdge(idx) {
-  graph.edges.splice(idx, 1);
-}
-
-// === 审批人弹窗 ===
-const approverDlg = reactive({ show: false, node: null });
-function openApproverDlg(node) {
-  // 直接引用节点对象，ApproverPicker v-model 写回即生效
-  approverDlg.node = node;
-  approverDlg.show = true;
-}
-
-// === 条件弹窗 ===
-const conditionDlg = reactive({ show: false, edge: null });
-function openConditionDlg(edge) {
-  // 直接引用连线对象，ConditionBuilder v-model 写回 edge.condition 即生效
-  conditionDlg.edge = edge;
-  conditionDlg.show = true;
-}
-
-/** 把一条 condition 对象文字化成摘要，无条件返回 — */
-function conditionSummary(cond) {
-  if (!cond || !Array.isArray(cond.conditions) || cond.conditions.length === 0) return '—';
-  const parts = cond.conditions.map(c => {
-    const fieldLabel = (variables.value.find(v => v.field === c.field)?.label) || c.field || '?';
-    const opLabel = OP_LABEL_MAP[c.op] || c.op || '?';
-    return `${fieldLabel} ${opLabel} ${c.value ?? ''}`.trim();
-  });
-  const sep = ` ${LOGIC_LABEL_MAP[cond.logic] || '且'} `;
-  return parts.join(sep);
-}
-
-// === 结构预览（只读文本） ===
-const structurePreview = computed(() => {
-  if (graph.nodes.length === 0) return '（暂无节点）';
-  // 节点按 sortNo 升序，无 sortNo 的保持出现序排后
-  const ordered = [...graph.nodes].sort((a, b) => {
-    const sa = a.sortNo, sb = b.sortNo;
-    if (sa == null && sb == null) return 0;
-    if (sa == null) return 1;
-    if (sb == null) return -1;
-    return sa - sb;
-  });
-  const lines = [];
-  for (const n of ordered) {
-    const typeLabel = NODE_TYPE_MAP[n.nodeType] || n.nodeType || '?';
-    let extra = '';
-    if (n.nodeType === 'APPROVAL') {
-      const modeLabel = n.approveMode === 'ALL' ? '会签' : '或签';
-      const cnt = (n.approvers || []).length;
-      extra = ` · ${modeLabel} · 审批人${cnt}`;
-    }
-    lines.push(`[${typeLabel}] ${n.nodeKey || '(未命名)'}${n.name ? '【' + n.name + '】' : ''}${extra}`);
-    // 该节点的出边
-    const outEdges = graph.edges.filter(e => e.fromNodeKey === n.nodeKey);
-    for (const e of outEdges) {
-      const condLabel = conditionSummary(e.condition);
-      const defMark = e.isDefault ? '[默认] ' : '';
-      const condPart = condLabel === '—' ? '' : `（分支：${condLabel}）`;
-      lines.push(`    → ${defMark}${e.toNodeKey || '(未指定)'} ${condPart}`.trimEnd());
+  // 级联删除与该节点相连的边
+  for (let i = graph.edges.length - 1; i >= 0; i--) {
+    if (graph.edges[i].fromNodeKey === nodeKey || graph.edges[i].toNodeKey === nodeKey) {
+      graph.edges.splice(i, 1);
     }
   }
-  return lines.join('\n');
-});
+  clearSelection();
+}
 
-// === 规整 graph 给后端 ===
+/** 删边 + 清选中 */
+function onDeleteEdge(edgeIdx) {
+  if (edgeIdx == null || edgeIdx < 0 || edgeIdx >= graph.edges.length) return;
+  graph.edges.splice(edgeIdx, 1);
+  clearSelection();
+}
+
+function clearSelection() {
+  selection.type = null;
+  selection.key = null;
+}
+
+// === 规整 graph 给后端（透传 posX/posY）===
 function buildPayload() {
   return {
     name: graph.name,
@@ -328,21 +264,28 @@ function buildPayload() {
       nodeKey: n.nodeKey,
       nodeType: n.nodeType,
       name: n.name,
-      // 仅 APPROVAL 携带审批模式，其余置 null
       approveMode: n.nodeType === 'APPROVAL' ? (n.approveMode || 'ANY') : null,
       sortNo: n.sortNo != null ? n.sortNo : i,
-      approvers: (n.approvers || []).map(a => ({ approverType: a.approverType, approverValue: a.approverValue }))
+      posX: n.posX != null ? Math.round(n.posX) : null,
+      posY: n.posY != null ? Math.round(n.posY) : null,
+      approvers: (n.approvers || []).map(a => ({
+        approverType: a.approverType,
+        approverValue: a.approverValue,
+        orgScope: a.orgScope || null,
+        roleCode: a.roleCode || null
+      }))
     })),
     edges: graph.edges.map(e => ({
       fromNodeKey: e.fromNodeKey,
       toNodeKey: e.toNodeKey,
       isDefault: !!e.isDefault,
+      outputName: e.outputName || null,
       condition: e.condition || null
     }))
   };
 }
 
-/** 轻校验：返回问题数组（空数组=通过） */
+/** 轻校验：返回问题数组（空数组=通过）。与原表格式编辑器一致 */
 function validateGraph() {
   const errs = [];
   const startCount = graph.nodes.filter(n => n.nodeType === 'START').length;
@@ -350,13 +293,11 @@ function validateGraph() {
   if (startCount !== 1) errs.push(`必须恰好 1 个开始节点（当前 ${startCount} 个）`);
   if (endCount < 1) errs.push('至少需要 1 个结束节点');
 
-  // nodeKey 非空且唯一
   const keys = graph.nodes.map(n => n.nodeKey);
   if (keys.some(k => !k || !k.trim())) errs.push('存在空的节点标识');
   const dup = keys.filter((k, i) => k && keys.indexOf(k) !== i);
   if (dup.length) errs.push(`节点标识重复：${[...new Set(dup)].join('、')}`);
 
-  // 每个 APPROVAL 至少 1 审批人
   for (const n of graph.nodes) {
     if (n.nodeType === 'APPROVAL' && (n.approvers || []).length === 0) {
       errs.push(`审批节点「${n.name || n.nodeKey || '?'}」缺少审批人`);
@@ -372,7 +313,6 @@ function goBack() {
 
 async function doSave() {
   if (readonly.value) return;
-  // 轻校验只提示不阻断，后端最终校验
   const errs = validateGraph();
   if (errs.length) {
     ElMessage.warning('草稿存在待修正项：' + errs.join('；'));
@@ -390,7 +330,6 @@ async function doSave() {
 
 async function doPublish() {
   if (readonly.value) return;
-  // 发布前强制校验，不通过直接弹提示不调接口
   const errs = validateGraph();
   if (errs.length) {
     ElMessageBox.alert(
@@ -402,12 +341,10 @@ async function doPublish() {
   }
   publishing.value = true;
   try {
-    // 发布前先存一次草稿，确保后端拿到最新图
     await saveFlow(id, buildPayload());
     await publishFlow(id);
     ElMessage.success('发布成功');
   } catch (e) {
-    // 后端校验明细可能较长，用 alert 完整展示不自动消失
     ElMessageBox.alert(
       e?.message || '发布失败，请检查流程配置',
       '发布失败',
@@ -420,21 +357,59 @@ async function doPublish() {
 </script>
 
 <style lang="scss" scoped>
+/* 整页填满内容区高度，流程图编辑区占满剩余高度 */
+.flow-edit-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.page-h, .ro-alert, .basic-bar { flex-shrink: 0; }
 .page-h h1 .sub { font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400; }
 .ro-alert { margin-bottom: 14px; }
-.sec-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: $text-1; }
-.ro-text { color: $text-2; }
-.cond-text { color: $text-2; font-size: 13px; }
-.preview {
-  margin: 0;
+
+.basic-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 12px 14px;
-  background: $bg-soft;
+  margin-bottom: 12px;
+  background: #fff;
   border: 1px solid $border-2;
-  border-radius: 4px;
-  font-family: ui-monospace, monospace;
+  border-radius: 6px;
+}
+.bi-label { font-size: 13px; color: $text-2; }
+.bi-val { font-size: 13px; color: $text-1; font-weight: 600; }
+
+.designer {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  flex: 1;          /* 占满剩余高度 */
+  min-height: 420px;
+}
+.canvas-wrap { flex: 1; min-width: 0; }
+
+.prop-panel {
+  width: 320px;
+  flex-shrink: 0;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid $border-2;
+  border-radius: 6px;
+  overflow-y: auto;
+}
+.prop-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 360px;
+  gap: 12px;
+  color: $text-3;
   font-size: 13px;
   line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-all;
+  text-align: center;
 }
+.pe-icon { font-size: 40px; color: $border-2; }
 </style>

@@ -20,7 +20,8 @@ public class CreateMetricReqDTO {
     @Schema(description = "指标编码", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "metricCode 不能为空")
     @Size(max = 64, message = "metricCode 长度不能超过 64")
-    // V1.6 放开格式限制：业务侧反馈"大写+数字+下划线"约束太死，允许任意字符（仅留长度上限）
+    // 新建指标：首字符必须大写字母，且仅允许大写字母、数字、下划线（引用指标处不做此校验）
+    @Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "指标编号首字符必须为大写字母，且只允许大写字母、数字和下划线")
     private String metricCode;
 
     /** 指标名称。 */
@@ -37,6 +38,9 @@ public class CreateMetricReqDTO {
     /** 指标说明。 */
     @Schema(description = "指标说明")
     private String metricDesc;
+
+    @Schema(description = "指标详细描述（前端输入框内容，原样保存）")
+    private String description;
 
     /** 基础维度。V1.9 改造：允许为空，null 表示维度无关型指标（不入三大宽表、不进入自动调度）。 */
     @Schema(description = "基础维度: EMP/ORG/CUST；留空表示维度无关型指标")
@@ -72,7 +76,7 @@ public class CreateMetricReqDTO {
     private String sqlText;
 
     /** 表达式文本。 */
-    @Schema(description = "表达式文本")
+    @Schema(description = "表达式文本（指标编号 Groovy，用于计算）")
     private String exprText;
 
     /** 汇总规则。 */

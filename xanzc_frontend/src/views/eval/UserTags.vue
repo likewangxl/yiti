@@ -332,6 +332,7 @@ onMounted(async () => {
   justify-content: flex-end;
   margin-top: 12px;
 }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .muted {
   color: $text-3;
 }

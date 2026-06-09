@@ -3,7 +3,7 @@
 <mapper namespace="com.bank.branch.platform.performance.mapper.PerfKpiItemMapper">
 
     <sql id="BASE_COLUMNS">
-        id, scheme_id, metric_code, weight, multiplier, min_score, max_score, created_time
+        id, scheme_id, metric_code, base_dim, weight, multiplier, min_score, max_score, formula, sql_expr, created_time
     </sql>
 
     <!-- insert 由 MyBatis-Plus BaseMapper 提供 -->
@@ -14,8 +14,8 @@
         ) VALUES
         <foreach collection="list" item="item" separator=",">
             (
-                #{item.id}, #{item.schemeId}, #{item.metricCode}, #{item.weight}, #{item.multiplier},
-                #{item.minScore}, #{item.maxScore}, #{item.createdTime}
+                #{item.id}, #{item.schemeId}, #{item.metricCode}, #{item.baseDim}, #{item.weight}, #{item.multiplier},
+                #{item.minScore}, #{item.maxScore}, #{item.formula}, #{item.sqlExpr}, #{item.createdTime}
             )
         </foreach>
     </insert>
@@ -29,6 +29,8 @@
             <if test="multiplier != null">multiplier = #{multiplier},</if>
             <if test="minScore != null">min_score = #{minScore},</if>
             <if test="maxScore != null">max_score = #{maxScore},</if>
+            <if test="formula != null">formula = #{formula},</if>
+            <if test="sqlExpr != null">sql_expr = #{sqlExpr},</if>
         </set>
         WHERE id = #{id}
     </update>
@@ -66,6 +68,15 @@
         INNER JOIN PERF_KPI_SCHEME s ON i.scheme_id = s.id
         WHERE i.metric_code = #{metricCode}
           AND s.status = 'ACTIVE'
+    </select>
+
+    <select id="selectActiveSchemeRefsByMetric" parameterType="string" resultType="java.util.LinkedHashMap">
+        SELECT DISTINCT s.scheme_code AS schemeCode, s.scheme_name AS schemeName
+        FROM PERF_KPI_ITEM i
+        INNER JOIN PERF_KPI_SCHEME s ON i.scheme_id = s.id
+        WHERE i.metric_code = #{metricCode}
+          AND s.status = 'ACTIVE'
+        ORDER BY s.scheme_code
     </select>
 
 </mapper>

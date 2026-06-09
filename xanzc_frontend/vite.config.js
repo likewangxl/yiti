@@ -13,6 +13,7 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
   },
   server: {
+    host: '0.0.0.0',   // 监听所有网卡，允许用本机 IP 从其他机器访问（默认只绑 localhost）
     port: 8090,
     open: false,
     proxy: {

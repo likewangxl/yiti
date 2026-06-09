@@ -10,6 +10,8 @@ import lombok.Data;
 public class OrgDTO {
     private String orgCode;
     private String orgName;
+    /** 机构编号（来自 EXT_ORG_INFO.DEPT_NO / xanpd sys_dept.DEPT_NO） */
+    private String deptNo;
     private Integer orgLevel;
     /** 父机构编码，对应数据库 p_id 字段 */
     private String parentOrgCode;

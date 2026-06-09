@@ -189,6 +189,36 @@ class FlowBpmnGeneratorTest {
     }
 
     @Test
+    void edge_outputName_rendered_as_sequenceFlow_name() {
+        // 网关出边带「输出名称」→ 生成的 SequenceFlow.name 等于输出名称（带入已部署 BPMN）
+        FlowEdgeDTO gwToA = edge("gw", "a");
+        gwToA.setOutputName("提交部门负责人");
+        FlowGraphDTO g = graph("走向命名流",
+                Arrays.asList(
+                        node("start", "START", "开始"),
+                        node("gw", "GATEWAY", "网关"),
+                        node("a", "APPROVAL", "审批"),
+                        node("end", "END", "结束")),
+                Arrays.asList(edge("start", "gw"), gwToA, edge("a", "end")));
+        ((FlowNodeDTO) g.getNodes().get(2)).setApproveMode("ANY");
+        FlowApproverDTO ap = new FlowApproverDTO();
+        ap.setApproverType("ROLE");
+        ap.setApproverValue("CORP_DEPT");
+        ((FlowNodeDTO) g.getNodes().get(2)).setApprovers(Collections.singletonList(ap));
+
+        BpmnModel model = generator.generate(g, SHADOW_KEY);
+        Process process = model.getProcessById(SHADOW_KEY);
+
+        SequenceFlow gwA = process.getFlowElements().stream()
+                .filter(fe -> fe instanceof SequenceFlow)
+                .map(fe -> (SequenceFlow) fe)
+                .filter(sf -> "gw".equals(sf.getSourceRef()) && "a".equals(sf.getTargetRef()))
+                .findFirst().orElse(null);
+        assertNotNull(gwA, "应存在 gw → a 的边");
+        assertEquals("提交部门负责人", gwA.getName());
+    }
+
+    @Test
     void model_is_deployable() {
         BpmnModel model = generator.generate(linearGraph("ANY"), SHADOW_KEY);
         byte[] xml = new BpmnXMLConverter().convertToXML(model);

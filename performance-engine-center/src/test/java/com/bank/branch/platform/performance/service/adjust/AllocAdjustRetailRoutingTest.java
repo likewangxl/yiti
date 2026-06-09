@@ -58,12 +58,18 @@ class AllocAdjustRetailRoutingTest {
     @Mock
     private WorkflowApi workflowApi;
 
+    @Mock
+    private com.bank.branch.platform.performance.mapper.CustAllocRelationMapper allocRelationMapper;
+
+    @Mock
+    private AllocAdjustPreviewService allocAdjustPreviewService;
+
     @InjectMocks
     private AllocAdjustService service;
 
     private SubmitAllocAdjustCmd cmd(String bizKind, String allocDim, String accountNo) {
         return SubmitAllocAdjustCmd.builder()
-                .custNo("CN-RET-001")
+                .custId("CN-RET-001")
                 .allocDim(allocDim)
                 .bizKind(bizKind)
                 .accountNo(accountNo)
@@ -85,6 +91,11 @@ class AllocAdjustRetailRoutingTest {
         when(customerQueryApi.getCustomerByCustNo(anyString())).thenReturn(Optional.of(c));
         when(workflowApi.startProcess(any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_RET_AUTO", null, null));
+        // 原业绩分配（历史审批通过）非空，使提交校验「至少 1 条原业绩分配」通过
+        var owner = new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        owner.setEmpId("EMP_RET_A");
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview(anyString(), anyString()))
+                .thenReturn(java.util.List.of(owner));
     }
 
     @Test
@@ -147,8 +158,8 @@ class AllocAdjustRetailRoutingTest {
         Map<String, Object> vars = started.getVariables();
         assertThat(vars).isNotNull();
         assertThat(vars).containsEntry("applyId", applyId);
-        // custId 流程变量写内部主键，保持下游 BPMN/Listener 兼容；custNo 业务编号同时透传
-        assertThat(vars).containsEntry("custId", "CUST_RET_001");
+        // custId/custNo 流程变量均写客户编号（cust_no 字段已并入 cust_id）
+        assertThat(vars).containsEntry("custId", "CN-RET-001");
         assertThat(vars).containsEntry("custNo", "CN-RET-001");
         assertThat(vars).containsEntry("bizKind", "RETAIL_CARD");
         assertThat(vars).containsEntry("allocDim", "RULE");

@@ -49,4 +49,25 @@ public interface TodoQueryApi {
      * @return 以 businessKey 为 key 的 Map（不命中的 key 在 Map 中缺失）
      */
     Map<String, TaskRespDTO> findDoneTaskRespByBusinessKeys(String empId, List<String> businessKeys);
+
+    /**
+     * 同 {@link #listMyTodoBusinessKeys}，但候选组按传入 empId 查库实时解析，<b>不依赖登录会话</b>。
+     * <p>供 SOAP 网关 / callpu 等<b>无会话上下文</b>链路使用（请求线程无登录态，用会话版会抛 AUTH-40105）；
+     * PC 管理端请继续用 {@link #listMyTodoBusinessKeys} 以保持会话登录语义。</p>
+     *
+     * @param empId   员工 ID（由上游渠道认证后透传）
+     * @param bizType 业务类型
+     * @return businessKey 列表（去重，可能为空）
+     */
+    List<String> listTodoBusinessKeysByEmp(String empId, String bizType);
+
+    /**
+     * 同 {@link #findTaskRespByBusinessKeys}，但候选组按传入 empId 查库实时解析，<b>不依赖登录会话</b>。
+     * <p>供 SOAP 网关 / callpu 等无会话上下文链路使用；PC 管理端请继续用 {@link #findTaskRespByBusinessKeys}。</p>
+     *
+     * @param empId        员工 ID（由上游渠道认证后透传）
+     * @param businessKeys 待查的 businessKey 列表
+     * @return 以 businessKey 为 key 的 Map（不命中的 key 在 Map 中缺失）
+     */
+    Map<String, TaskRespDTO> findTaskRespByBusinessKeysByEmp(String empId, List<String> businessKeys);
 }

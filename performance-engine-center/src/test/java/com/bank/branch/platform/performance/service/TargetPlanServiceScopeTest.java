@@ -67,6 +67,9 @@ class TargetPlanServiceScopeTest {
     @Mock
     private CurrentUserApi currentUserApi;
 
+    @Mock
+    private com.bank.branch.platform.auth.api.UserApi userApi;
+
     private PerfScopeHelper perfScopeHelper;
 
     private TargetPlanService service;
@@ -76,7 +79,7 @@ class TargetPlanServiceScopeTest {
         this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
         this.service = new TargetPlanService(
                 targetPlanMapper, kpiSchemeService, cacheManager,
-                currentUserApi, perfScopeHelper);
+                currentUserApi, perfScopeHelper, userApi);
     }
 
     @Test

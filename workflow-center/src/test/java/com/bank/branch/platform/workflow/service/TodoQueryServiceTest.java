@@ -662,4 +662,98 @@ class TodoQueryServiceTest {
                 .containsExactly("TASK_080");
         assertThat(result.getRecords().get(0).getClaimable()).isTrue();
     }
+
+    // ── 两条链路隔离 ───────────────────────────────────────────────
+    // PC 管理端（会话登录）：listMyTodoBusinessKeys / findMyTaskRespByBusinessKeys
+    //   → 候选组取「当前登录用户」(currentUserApi.getCurrentCandidateGroupKeys)，保持会话语义。
+    // callpu / SOAP 网关（无会话）：listTodoBusinessKeysByEmp / findTaskRespByBusinessKeysByEmp
+    //   → 候选组按入参 empId 查库解析 (userApi.getCandidateGroupKeys)，避免 AUTH-40105。
+
+    /** PC 会话链路：listMyTodoBusinessKeys 取当前登录用户候选组，不碰 userApi.getCandidateGroupKeys。 */
+    @Test
+    void listMyTodoBusinessKeys_pcSession_usesCurrentUserCandidateGroups() {
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
+        Task t = buildMockTask("TASK_090", "业绩调整审批", "PID_090",
+                null, "branch_approve", "perf_alloc_adjust:1:1");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskCandidateOrAssigned("E10001")).thenReturn(tq);
+        when(tq.list()).thenReturn(List.of(t));
+        BizProcessMap map = buildBizProcessMap("PID_090", "ALLOC_ADJUST", "AA090");
+        when(bizProcessMapMapper.selectByProcessInstanceIdsAndBizType(List.of("PID_090"), "ALLOC_ADJUST"))
+                .thenReturn(List.of(map));
+
+        List<String> keys = todoQueryService.listMyTodoBusinessKeys("E10001", "ALLOC_ADJUST");
+
+        assertThat(keys).containsExactly("ALLOC_ADJUST:AA090");
+        verify(currentUserApi).getCurrentCandidateGroupKeys();
+        verify(userApi, never()).getCandidateGroupKeys(anyString());
+    }
+
+    /** callpu 无会话链路：listTodoBusinessKeysByEmp 按 empId 解析候选组，不读登录态。 */
+    @Test
+    void listTodoBusinessKeysByEmp_sessionLess_usesEmpIdCandidateGroups() {
+        when(userApi.getCandidateGroupKeys("E10001")).thenReturn(Collections.emptySet());
+        Task t = buildMockTask("TASK_090", "业绩调整审批", "PID_090",
+                null, "branch_approve", "perf_alloc_adjust:1:1");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskCandidateOrAssigned("E10001")).thenReturn(tq);
+        when(tq.list()).thenReturn(List.of(t));
+        BizProcessMap map = buildBizProcessMap("PID_090", "ALLOC_ADJUST", "AA090");
+        when(bizProcessMapMapper.selectByProcessInstanceIdsAndBizType(List.of("PID_090"), "ALLOC_ADJUST"))
+                .thenReturn(List.of(map));
+
+        List<String> keys = todoQueryService.listTodoBusinessKeysByEmp("E10001", "ALLOC_ADJUST");
+
+        assertThat(keys).containsExactly("ALLOC_ADJUST:AA090");
+        verify(userApi).getCandidateGroupKeys("E10001");
+        verify(currentUserApi, never()).getCurrentCandidateGroupKeys();
+    }
+
+    /** PC 会话链路：findMyTaskRespByBusinessKeys 取当前登录用户候选组。 */
+    @Test
+    void findMyTaskRespByBusinessKeys_pcSession_usesCurrentUserCandidateGroups() {
+        when(currentUserApi.getCurrentCandidateGroupKeys()).thenReturn(Collections.emptySet());
+        BizProcessMap map = buildBizProcessMap("PID_091", "ALLOC_ADJUST", "AA091");
+        when(bizProcessMapMapper.selectByBusinessKey("ALLOC_ADJUST:AA091")).thenReturn(map);
+        Task t = buildMockTask("TASK_091", "业绩调整审批", "PID_091",
+                "E10001", "branch_approve", "perf_alloc_adjust:1:1");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskCandidateOrAssigned("E10001")).thenReturn(tq);
+        when(tq.list()).thenReturn(List.of(t));
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_091")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(any(), any(), any())).thenReturn(SlaStatus.GREEN);
+
+        List<TaskRespDTO> res = todoQueryService.findMyTaskRespByBusinessKeys(
+                "E10001", List.of("ALLOC_ADJUST:AA091"));
+
+        assertThat(res).extracting(TaskRespDTO::getBusinessKey).containsExactly("ALLOC_ADJUST:AA091");
+        verify(currentUserApi).getCurrentCandidateGroupKeys();
+        verify(userApi, never()).getCandidateGroupKeys(anyString());
+    }
+
+    /** callpu 无会话链路：findTaskRespByBusinessKeysByEmp 按 empId 解析候选组。 */
+    @Test
+    void findTaskRespByBusinessKeysByEmp_sessionLess_usesEmpIdCandidateGroups() {
+        when(userApi.getCandidateGroupKeys("E10001")).thenReturn(Collections.emptySet());
+        BizProcessMap map = buildBizProcessMap("PID_091", "ALLOC_ADJUST", "AA091");
+        when(bizProcessMapMapper.selectByBusinessKey("ALLOC_ADJUST:AA091")).thenReturn(map);
+        Task t = buildMockTask("TASK_091", "业绩调整审批", "PID_091",
+                "E10001", "branch_approve", "perf_alloc_adjust:1:1");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskCandidateOrAssigned("E10001")).thenReturn(tq);
+        when(tq.list()).thenReturn(List.of(t));
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_091")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(any(), any(), any())).thenReturn(SlaStatus.GREEN);
+
+        List<TaskRespDTO> res = todoQueryService.findTaskRespByBusinessKeysByEmp(
+                "E10001", List.of("ALLOC_ADJUST:AA091"));
+
+        assertThat(res).extracting(TaskRespDTO::getBusinessKey).containsExactly("ALLOC_ADJUST:AA091");
+        verify(userApi).getCandidateGroupKeys("E10001");
+        verify(currentUserApi, never()).getCurrentCandidateGroupKeys();
+    }
 }

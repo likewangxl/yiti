@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
@@ -72,6 +74,8 @@ public class TargetPlanService {
     private final CurrentUserApi currentUserApi;
     /** V1.3 R1.2 新增：数据范围 SQL 片段生成器. */
     private final PerfScopeHelper perfScopeHelper;
+    /** 创建人姓名/工号解析（列表展示用；后端解析避免前端依赖管理员 /admin/users 端点）. */
+    private final UserApi userApi;
 
     /**
      * 新建目标方案.
@@ -351,7 +355,46 @@ public class TargetPlanService {
         for (PerfTargetPlan plan : raw.getRecords()) {
             dtos.add(TargetAssembler.toDto(plan));
         }
+        fillCreatorNames(dtos);
         return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * 回填创建人中文姓名 + 工号（createdBy 为 USER_ID，按 USER_ID 批量查 auth 用户）.
+     *
+     * <p>后端解析，避免前端经管理员专属 {@code /api/admin/users} 端点反查（非管理员会 403）.
+     * 解析失败/用户已删时对应字段留 null，前端回退展示 createdBy.
+     */
+    private void fillCreatorNames(List<TargetPlanDTO> dtos) {
+        List<String> userIds = dtos.stream()
+                .map(TargetPlanDTO::getCreatedBy)
+                .filter(org.springframework.util.StringUtils::hasText)
+                .distinct()
+                .toList();
+        if (userIds.isEmpty()) {
+            return;
+        }
+        java.util.Map<String, UserDTO> byId = new java.util.HashMap<>();
+        try {
+            List<UserDTO> users = userApi.getUserByEmpIds(userIds);
+            if (users != null) {
+                for (UserDTO u : users) {
+                    if (u != null && org.springframework.util.StringUtils.hasText(u.getEmpId())) {
+                        byId.put(u.getEmpId(), u);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[TargetPlanService.fillCreatorNames] 创建人解析失败，列表降级展示 USER_ID, err={}", e.toString());
+            return;
+        }
+        for (TargetPlanDTO dto : dtos) {
+            UserDTO u = byId.get(dto.getCreatedBy());
+            if (u != null) {
+                dto.setCreatedByName(u.getDisplayName());
+                dto.setCreatedByUsername(u.getUsername());
+            }
+        }
     }
 
     /**

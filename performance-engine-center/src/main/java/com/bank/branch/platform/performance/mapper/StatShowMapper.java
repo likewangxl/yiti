@@ -76,4 +76,15 @@ public interface StatShowMapper {
                        @Param("custId") String custId,
                        @Param("custType") String custType,
                        @Param("keyword") String keyword);
+
+    /**
+     * 按客户号查客户名称（XAN_M98_CUST_STAT_SHOW3，仅取一条 {@code LIMIT 1}）.
+     *
+     * <p>外部渠道（callpu CASH_GETCUST_INFO）客户号查名专用：只投影 {@code CUST_NAME} 一列，
+     * 按 {@code CUST_ID} 精确匹配；该展示表无主键、同一客户号可能多行，故 {@code LIMIT 1} 取首条。</p>
+     *
+     * @param custId 客户号（对应 {@code CUST_ID} 列）
+     * @return 客户名称；无匹配时返回 {@code null}
+     */
+    String selectCustNameByCustId(@Param("custId") String custId);
 }

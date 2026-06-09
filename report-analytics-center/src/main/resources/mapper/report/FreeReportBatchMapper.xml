@@ -22,12 +22,9 @@
         </where>
         ORDER BY IMPORT_TIME DESC LIMIT 200
     </select>
-    <!-- 带数据范围的批次查询 -->
-    <select id="selectBatchesWithScope" resultType="com.bank.branch.platform.report.entity.RptFreeReportBatch">
+    <!-- 批次列表：文件级全员公开；includeDisabled=false 过滤禁用文件 -->
+    <select id="selectBatches" resultType="com.bank.branch.platform.report.entity.RptFreeReportBatch">
         SELECT b.* FROM RPT_FREE_REPORT_BATCH b
-        <if test="scopeOrgCodes != null and scopeOrgCodes.size() > 0">
-            INNER JOIN EXT_USER_ORG uo ON b.UPLOADER_EMP_ID = uo.USER_ID
-        </if>
         <where>
             <if test="keyword != null and keyword != ''">
                 AND (b.REPORT_NAME LIKE CONCAT('%', #{keyword}, '%')
@@ -35,13 +32,13 @@
             </if>
             <if test="dateFrom != null">AND b.IMPORT_TIME &gt;= #{dateFrom}</if>
             <if test="dateTo != null">AND b.IMPORT_TIME &lt; #{dateTo}</if>
-            <if test="scopeEmpId != null">AND b.UPLOADER_EMP_ID = #{scopeEmpId}</if>
-            <if test="scopeOrgCodes != null and scopeOrgCodes.size() > 0">
-                AND uo.ORG_CODE IN
-                <foreach collection="scopeOrgCodes" item="code" open="(" separator="," close=")">#{code}</foreach>
-            </if>
+            <if test="!includeDisabled">AND b.STATUS &lt;&gt; 'DISABLED'</if>
         </where>
         ORDER BY b.IMPORT_TIME DESC LIMIT 200
     </select>
+
+    <update id="updateStatus">
+        UPDATE RPT_FREE_REPORT_BATCH SET STATUS = #{status}, UPDATED_TIME = NOW() WHERE ID = #{batchId}
+    </update>
 
 </mapper>

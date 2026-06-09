@@ -19,11 +19,13 @@ public interface FreeReportBatchMapper extends BaseMapper<RptFreeReportBatch> {
             @Param("dateFrom") java.time.LocalDateTime dateFrom,
             @Param("dateTo") java.time.LocalDateTime dateTo);
 
-    /** 带数据范围的批次查询：scopeEmpId 非空=只看该人；scopeOrgCodes 非空=只看这些机构下的人；都空=全量 */
-    List<RptFreeReportBatch> selectBatchesWithScope(
+    /** 批次列表（文件级全员公开）：includeDisabled=false 时过滤掉 STATUS='DISABLED' 的文件 */
+    List<RptFreeReportBatch> selectBatches(
             @Param("keyword") String keyword,
             @Param("dateFrom") java.time.LocalDateTime dateFrom,
             @Param("dateTo") java.time.LocalDateTime dateTo,
-            @Param("scopeEmpId") String scopeEmpId,
-            @Param("scopeOrgCodes") java.util.List<String> scopeOrgCodes);
+            @Param("includeDisabled") boolean includeDisabled);
+
+    /** 更新批次状态 */
+    int updateStatus(@Param("batchId") String batchId, @Param("status") String status);
 }

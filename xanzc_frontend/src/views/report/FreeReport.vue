@@ -3,7 +3,7 @@
     <div class="page-h">
       <h1>自由报表</h1>
       <div class="actions">
-        <el-button type="primary" @click="importDlg.show = true">导入 Excel</el-button>
+        <el-button v-if="isOperator" type="primary" @click="importDlg.show = true">导入 Excel</el-button>
       </div>
     </div>
 
@@ -40,20 +40,28 @@
         <el-table-column prop="rowCount" label="行数" width="80" align="right" />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{row}">
-            <el-tag :type="row.status === 'SUCCESS' ? 'success' : 'danger'" size="small" effect="plain">
-              {{ row.status === 'SUCCESS' ? '成功' : row.status }}
+            <el-tag :type="row.status === 'DISABLED' ? 'info' : (row.status === 'SUCCESS' ? 'success' : 'danger')" size="small" effect="plain">
+              {{ row.status === 'DISABLED' ? '已禁用' : (row.status === 'SUCCESS' ? '成功' : row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="$router.push(`/report/free/${row.id}`)">查看</el-button>
             <el-button link type="primary" size="small" @click="doDownload(row)">下载</el-button>
-            <el-popconfirm :title="`确认删除「${row.reportName}」？数据将不可恢复。`" @confirm="doDelete(row)">
-              <template #reference>
-                <el-button link type="danger" size="small">删除</el-button>
-              </template>
-            </el-popconfirm>
+            <template v-if="isOperator">
+              <el-button v-if="row.status === 'DISABLED'" link type="success" size="small" @click="doEnable(row)">启用</el-button>
+              <el-popconfirm v-else :title="`禁用后其他人将无法查看「${row.reportName}」，确认禁用？`" @confirm="doDisable(row)">
+                <template #reference>
+                  <el-button link type="warning" size="small">禁用</el-button>
+                </template>
+              </el-popconfirm>
+              <el-popconfirm :title="`确认删除「${row.reportName}」？数据将不可恢复。`" @confirm="doDelete(row)">
+                <template #reference>
+                  <el-button link type="danger" size="small">删除</el-button>
+                </template>
+              </el-popconfirm>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -87,8 +95,24 @@
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
-  importFreeReport, listFreeReportBatches, downloadFreeReportFile, deleteFreeReportBatch
+  importFreeReport, listFreeReportBatches, downloadFreeReportFile, deleteFreeReportBatch,
+  disableFreeReportBatch, enableFreeReportBatch
 } from '@/api/report';
+import { useUserStore } from '@/stores/user';
+
+// 仅 系统管理员(SYS_ADMIN) / 资财部负责人(FINANCE_LEADER) / 自由报表操作人(R_2FAB45A1)：
+// 可导入/禁用/启用/删除。只看「当前激活角色」（current-user 返回全部角色但只给激活的打 primary 标记，
+// 切换角色后按钮随之变化；后端同样按激活角色判定）。
+const userStore = useUserStore();
+const OPERATOR_ROLES = ['R_2FAB45A1', 'SYS_ADMIN', 'FINANCE_LEADER'];
+const isOperator = computed(() => {
+  const roles = userStore.user?.roles || [];
+  // 优先用 activeRoleId 锁定当前激活角色，再退回 primary 标记
+  const activeId = userStore.activeRoleId;
+  const active = (activeId && roles.find(r => r.roleId === activeId))
+              || roles.find(r => r.primary);
+  return !!active && OPERATOR_ROLES.includes(active.roleCode);
+});
 
 const batches = ref([]);
 const pgNo = ref(1);
@@ -175,6 +199,22 @@ async function doDelete(row) {
   } catch { ElMessage.error('删除失败'); }
 }
 
+async function doDisable(row) {
+  try {
+    await disableFreeReportBatch(row.id);
+    ElMessage.success('已禁用，其他人将无法查看');
+    reload();
+  } catch (e) { ElMessage.error('禁用失败：' + (e?.message || '')); }
+}
+
+async function doEnable(row) {
+  try {
+    await enableFreeReportBatch(row.id);
+    ElMessage.success('已启用');
+    reload();
+  } catch (e) { ElMessage.error('启用失败：' + (e?.message || '')); }
+}
+
 onMounted(reload);
 </script>
 
@@ -186,4 +226,5 @@ onMounted(reload);
 }
 .table { padding: 0; padding-bottom: 12px; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

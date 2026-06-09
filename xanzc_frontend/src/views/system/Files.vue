@@ -42,7 +42,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <div style="display:flex;justify-content:flex-end;padding:12px 0">
+      <div class="pager" style="display:flex;justify-content:flex-end;padding:12px 0">
         <el-pagination
           v-model:current-page="pageNo"
           v-model:page-size="pageSize"
@@ -126,4 +126,5 @@ onMounted(reload);
 
 <style lang="scss" scoped>
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

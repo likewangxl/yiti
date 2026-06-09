@@ -25,6 +25,9 @@ public class AddKpiItemCmd {
     /** 指标编码（引用 perf_metric_def.metric_code）. */
     private String metricCode;
 
+    /** 指标维度（EMP/ORG/CUST，随指标固化落库，便于展示）. */
+    private String baseDim;
+
     /** 权重（decimal(10,4)）. */
     private BigDecimal weight;
 
@@ -36,6 +39,12 @@ public class AddKpiItemCmd {
 
     /** 最高分（默认 999999）. */
     private BigDecimal maxScore;
+
+    /** 计分公式（可空，变量 actual/target/base/weight，支持 min/max）. */
+    private String formula;
+
+    /** SQL 表达式（可空，支持 #{slot} 占位符）. */
+    private String sqlExpr;
 
     /** 操作人（审计用，当前表无 created_by 列，由 scheme 侧记录）. */
     private String operator;

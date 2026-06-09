@@ -21,7 +21,7 @@ class RbacAuthorizerTest {
 
     @Test
     void authorize_roleHasResource_returnsTrue() {
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(Set.of("R_RM"));
         when(cacheService.getResourceIdsByRoleId("R_RM")).thenReturn(Set.of("RES_001", "RES_002"));
 
         assertThat(rbacAuthorizer.authorize("E001", "RES_001")).isTrue();
@@ -29,7 +29,7 @@ class RbacAuthorizerTest {
 
     @Test
     void authorize_noRoleHasResource_returnsFalse() {
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(Set.of("R_RM"));
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(Set.of("R_RM"));
         when(cacheService.getResourceIdsByRoleId("R_RM")).thenReturn(Set.of("RES_003"));
 
         assertThat(rbacAuthorizer.authorize("E001", "RES_001")).isFalse();
@@ -39,7 +39,7 @@ class RbacAuthorizerTest {
     void authorize_multipleRolesOneMatches_returnsTrue() {
         // 使用有序集合确保 R_RM（无权限）先迭代，R_ADMIN（有权限）后迭代
         Set<String> orderedRoles = new java.util.LinkedHashSet<>(List.of("R_RM", "R_ADMIN"));
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(orderedRoles);
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(orderedRoles);
         when(cacheService.getResourceIdsByRoleId("R_RM")).thenReturn(Set.of("RES_003"));
         when(cacheService.getResourceIdsByRoleId("R_ADMIN")).thenReturn(Set.of("RES_001"));
 
@@ -48,7 +48,7 @@ class RbacAuthorizerTest {
 
     @Test
     void authorize_noRoles_returnsFalse() {
-        when(cacheService.getRoleIdsByEmpId("E001")).thenReturn(Set.of());
+        when(cacheService.getEffectiveRoleIds("E001")).thenReturn(Set.of());
 
         assertThat(rbacAuthorizer.authorize("E001", "RES_001")).isFalse();
     }

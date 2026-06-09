@@ -1,5 +1,7 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.api.dto.KpiItemDTO;
 import com.bank.branch.platform.performance.api.dto.KpiSchemeDTO;
@@ -67,6 +69,8 @@ public class KpiSchemeService {
     private final KpiItemService kpiItemService;
     private final MetricDefService metricDefService;
     private final CacheManager cacheManager;
+    /** 解析创建人工号 → 姓名（列表"创建人"列展示用）. */
+    private final UserApi userApi;
 
     /**
      * 新建方案 + 方案项 (单事务).
@@ -231,8 +235,16 @@ public class KpiSchemeService {
                 .collect(Collectors.toMap(PerfMetricDef::getMetricCode, Function.identity()));
         for (PerfKpiItem item : items) {
             PerfMetricDef metricDef = defMap.get(item.getMetricCode());
-            if (metricDef == null || !STATUS_ACTIVE.equals(metricDef.getStatus())) {
-                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, item.getMetricCode());
+            if (metricDef == null) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "引用的指标不存在或已删除，无法发布: " + item.getMetricCode());
+            }
+            if (!STATUS_ACTIVE.equals(metricDef.getStatus())) {
+                // 指标须为 ACTIVE 才可发布；给出可操作的提示（指标编码 + 名称 + 当前状态）
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "指标未启用(状态=" + metricDef.getStatus() + ")，请先在指标库启用后再发布: "
+                                + item.getMetricCode()
+                                + (metricDef.getMetricName() != null ? "（" + metricDef.getMetricName() + "）" : ""));
             }
         }
 
@@ -293,7 +305,7 @@ public class KpiSchemeService {
      */
     @Transactional(readOnly = true)
     public List<PerfKpiScheme> listActiveSchemes() {
-        return schemeMapper.selectByCondition(null, STATUS_ACTIVE, null, 0, 1000);
+        return schemeMapper.selectByCondition(null, STATUS_ACTIVE, null, null, 0, 1000);
     }
 
     /**
@@ -307,13 +319,14 @@ public class KpiSchemeService {
      * @return 分页结果
      */
     @Transactional(readOnly = true)
-    public PageResult<PerfKpiScheme> page(String cycleType, String status, String keyword, int pageNo, int pageSize) {
+    public PageResult<PerfKpiScheme> page(String cycleType, String status, String keyword,
+                                          Integer openDetail, int pageNo, int pageSize) {
         int offset = Math.max(pageNo - 1, 0) * pageSize;
-        long total = schemeMapper.countByCondition(cycleType, status, keyword);
+        long total = schemeMapper.countByCondition(cycleType, status, keyword, openDetail);
         if (total == 0) {
             return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
         }
-        List<PerfKpiScheme> records = schemeMapper.selectByCondition(cycleType, status, keyword, offset, pageSize);
+        List<PerfKpiScheme> records = schemeMapper.selectByCondition(cycleType, status, keyword, openDetail, offset, pageSize);
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
@@ -323,13 +336,50 @@ public class KpiSchemeService {
      */
     @Transactional(readOnly = true)
     public PageResult<KpiSchemeDTO> pageDto(String cycleType, String status, String keyword,
-                                            int pageNo, int pageSize) {
-        PageResult<PerfKpiScheme> raw = page(cycleType, status, keyword, pageNo, pageSize);
+                                            Integer openDetail, int pageNo, int pageSize) {
+        PageResult<PerfKpiScheme> raw = page(cycleType, status, keyword, openDetail, pageNo, pageSize);
         List<KpiSchemeDTO> dtos = new java.util.ArrayList<>(raw.getRecords().size());
         for (PerfKpiScheme scheme : raw.getRecords()) {
             dtos.add(KpiAssembler.toDto(scheme, List.of()));
         }
+        fillCreatorNames(dtos);
         return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * 批量解析"创建人工号 → 姓名"，回填到列表 DTO 的 createdByName（列表"创建人"列展示用）.
+     *
+     * <p>createdBy 写入的是 {@code getCurrentEmpId()}（工号），按工号批量查 UserApi 取姓名；
+     * 查不到的工号 createdByName 留空，前端只显示工号。
+     *
+     * @param dtos 列表 DTO（原地回填）
+     */
+    private void fillCreatorNames(List<KpiSchemeDTO> dtos) {
+        List<String> empIds = dtos.stream()
+                .map(KpiSchemeDTO::getCreatedBy)
+                .filter(org.springframework.util.StringUtils::hasText)
+                .distinct()
+                .collect(Collectors.toList());
+        if (empIds.isEmpty()) {
+            return;
+        }
+        Map<String, UserDTO> userByEmpId = new java.util.HashMap<>();
+        List<UserDTO> users = userApi.getUserByEmpIds(empIds);
+        if (users != null) {
+            for (UserDTO u : users) {
+                if (u != null && org.springframework.util.StringUtils.hasText(u.getEmpId())) {
+                    userByEmpId.put(u.getEmpId(), u);
+                }
+            }
+        }
+        for (KpiSchemeDTO dto : dtos) {
+            UserDTO u = userByEmpId.get(dto.getCreatedBy());
+            if (u != null) {
+                // 工号 = PT_USER.username（非 USER_ID/createdBy），姓名 = displayName
+                dto.setCreatedByUsername(u.getUsername());
+                dto.setCreatedByName(u.getDisplayName());
+            }
+        }
     }
 
     /**

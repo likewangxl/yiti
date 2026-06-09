@@ -37,6 +37,9 @@ public class WfFlowNode {
     /** 审批模式：ANY/ALL，对应 approve_mode */
     private String approveMode;
 
+    /** 审批机构归属：SELF=本机构/PARENT=上级机构/NULL=不判断，对应 approve_org_scope */
+    private String approveOrgScope;
+
     /** 排序序号，对应 sort_no */
     private Integer sortNo;
 

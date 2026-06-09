@@ -78,10 +78,14 @@ public class KpiItemService {
         item.setId(generateId());
         item.setSchemeId(cmd.getSchemeId());
         item.setMetricCode(cmd.getMetricCode());
+        // 维度随指标固化落库（前端按维度过滤指标，二者天然一致），便于列表/回显直接展示
+        item.setBaseDim(cmd.getBaseDim());
         item.setWeight(cmd.getWeight());
         item.setMultiplier(cmd.getMultiplier() != null ? cmd.getMultiplier() : DEFAULT_MULTIPLIER);
         item.setMinScore(cmd.getMinScore() != null ? cmd.getMinScore() : DEFAULT_MIN_SCORE);
         item.setMaxScore(cmd.getMaxScore() != null ? cmd.getMaxScore() : DEFAULT_MAX_SCORE);
+        item.setFormula(cmd.getFormula());
+        item.setSqlExpr(cmd.getSqlExpr());
         item.setCreatedTime(LocalDateTime.now());
         itemMapper.insert(item);
         return item;
@@ -109,6 +113,8 @@ public class KpiItemService {
         patch.setMultiplier(cmd.getMultiplier());
         patch.setMinScore(cmd.getMinScore());
         patch.setMaxScore(cmd.getMaxScore());
+        patch.setFormula(cmd.getFormula());
+        patch.setSqlExpr(cmd.getSqlExpr());
         itemMapper.updateByIdSelective(patch);
 
         // 内存视图同步 (便于 Facade 层免二次查询)
@@ -123,6 +129,12 @@ public class KpiItemService {
         }
         if (cmd.getMaxScore() != null) {
             existing.setMaxScore(cmd.getMaxScore());
+        }
+        if (cmd.getFormula() != null) {
+            existing.setFormula(cmd.getFormula());
+        }
+        if (cmd.getSqlExpr() != null) {
+            existing.setSqlExpr(cmd.getSqlExpr());
         }
         return existing;
     }

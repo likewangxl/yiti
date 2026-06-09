@@ -66,6 +66,7 @@ public class AllocAdjustController {
     private final CurrentUserApi currentUserApi;
     private final AllocAdjustService allocAdjustService;
     private final WorkflowQueryApi workflowQueryApi;
+    private final com.bank.branch.platform.auth.api.OrgApi orgApi;
 
     /**
      * 提交分配关系调整申请.
@@ -77,13 +78,18 @@ public class AllocAdjustController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
     @AuditLog(action = "ALLOC_ADJUST_CREATE", resourceType = "PERF_ALLOC_ADJUST", reasonRequired = true)
     public ResponseWrapper<Map<String, String>> create(@Valid @RequestBody AllocAdjustCreateReqDTO req) {
-        log.info("[AllocAdjustController.create] custNo={}, bizKind={}, itemCount={}",
-                req.getCustNo(), req.getBizKind(),
+        log.info("[AllocAdjustController.create] custId={}, bizKind={}, itemCount={}",
+                req.getCustId(), req.getBizKind(),
                 req.getItems() == null ? 0 : req.getItems().size());
 
         SubmitAllocAdjustCmd cmd = SubmitAllocAdjustCmd.builder()
                 .custType(req.getCustType())
-                .custNo(req.getCustNo())
+                .custId(req.getCustId())
+                .custName(req.getCustName())
+                .currBal(req.getCurrBal())
+                .mAvgBal(req.getMAvgBal())
+                .qAvgBal(req.getQAvgBal())
+                .yAvgBal(req.getYAvgBal())
                 .allocDim(req.getAllocDim())
                 .bizKind(req.getBizKind())
                 .accountNo(req.getAccountNo())
@@ -91,9 +97,42 @@ public class AllocAdjustController {
                 .reason(req.getReason())
                 .applicant(currentUserApi.getCurrentEmpId())
                 .items(toCmdItems(req.getItems()))
+                .originalAllocList(toCmdOriginalItems(req.getOriginalAllocList()))
                 .build();
 
         return ResponseWrapper.success(allocAdjustService.submitDto(cmd));
+    }
+
+    /**
+     * 分配明细员工号输入框自动补齐：按关键字模糊匹配 PT_USER 工号/登录名/中文名.
+     *
+     * <p>放在 alloc-adjust 下、与新建/查看申请同 PERF_CONFIG 域 READ 权限，
+     * 保证调整申请页用户可调用（不复用 SYS_CONFIG 的 /admin/users，避免业务角色 403）.
+     */
+    @GetMapping("/emp-suggest")
+    @Operation(summary = "员工自动补齐（工号/登录名/中文名模糊匹配）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<com.bank.branch.platform.performance.controller.dto.EmpSuggestRespDTO>> empSuggest(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        log.debug("[AllocAdjustController.empSuggest] keyword={}, limit={}", keyword, limit);
+        return ResponseWrapper.success(allocAdjustService.suggestEmployees(keyword, limit));
+    }
+
+    /**
+     * 所属机构自动补齐：按机构号/名称模糊匹配 EXT_ORG_INFO，返回 [{orgCode, orgName, ...}].
+     * <p>供原业绩分配「所属机构」下拉联想（el-autocomplete）。复用 /api/perf/alloc-adjust/* GET
+     * 通配资源 + PERF_CONFIG READ，保证调整申请页用户可调用（不复用 SYS_CONFIG 的 /api/orgs，避免业务角色 403）.
+     */
+    @GetMapping("/org-suggest")
+    @Operation(summary = "机构自动补齐（机构号/名称模糊匹配）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<com.bank.branch.platform.auth.api.dto.OrgDTO>> orgSuggest(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        log.debug("[AllocAdjustController.orgSuggest] keyword={}, limit={}", keyword, limit);
+        int lim = (limit == null || limit <= 0) ? 20 : Math.min(limit, 50);
+        return ResponseWrapper.success(orgApi.searchOrgs(keyword, lim));
     }
 
     /**
@@ -196,6 +235,29 @@ public class AllocAdjustController {
                     .empId(it.getEmpId())
                     .ratio(it.getRatio())
                     .remark(it.getRemark())
+                    .build());
+        }
+        return cmds;
+    }
+
+    /**
+     * 请求 DTO → Service Cmd 的原业绩分配列表转换（空安全）.
+     */
+    private List<SubmitAllocAdjustCmd.OriginalItem> toCmdOriginalItems(
+            List<AllocAdjustCreateReqDTO.OriginalItem> reqItems) {
+        if (reqItems == null || reqItems.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<SubmitAllocAdjustCmd.OriginalItem> cmds = new ArrayList<>(reqItems.size());
+        for (AllocAdjustCreateReqDTO.OriginalItem it : reqItems) {
+            cmds.add(SubmitAllocAdjustCmd.OriginalItem.builder()
+                    .acctNo(it.getAcctNo())
+                    .empId(it.getEmpId())
+                    .username(it.getUsername())
+                    .empChnName(it.getEmpChnName())
+                    .orgCode(it.getOrgCode())
+                    .orgName(it.getOrgName())
+                    .ratio(it.getRatio())
                     .build());
         }
         return cmds;

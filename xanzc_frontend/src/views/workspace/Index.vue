@@ -30,7 +30,7 @@
         </div>
         <div v-if="!ntfRows.length" class="ntf-empty">暂无通知</div>
         <div v-for="n in ntfRows" :key="n.id || n.title" class="ntf" :class="{ unread: !n.isRead }"
-             @click="$router.push('/system/notifications')">
+             @click="onNtfClick(n)">
           <span class="dot" :class="{ active: !n.isRead }"></span>
           <div class="body">
             <div class="t">{{ n.title || '—' }}</div>
@@ -101,7 +101,7 @@ import { useRouter } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
-import { getWorkspace, listNotifications, getUnreadNotificationCount } from '@/api/workspace';
+import { getWorkspace, listNotifications, getUnreadNotificationCount, markRead } from '@/api/workspace';
 import { listTodoTasks, listDoneTasks } from '@/api/workflow';
 import { listRecentAnnouncements } from '@/api/announcement';
 
@@ -152,6 +152,18 @@ async function loadNotifications() {
   try { ntfUnread.value = await getUnreadNotificationCount(); } catch {}
 }
 
+// 点击通知：标记已读（未读角标 -1）后进入通知中心（详情）页
+async function onNtfClick(n) {
+  if (n && n.id && !n.isRead) {
+    try {
+      await markRead(n.id);
+      n.isRead = true;
+      ntfUnread.value = Math.max(0, (ntfUnread.value || 0) - 1);
+    } catch { /* 标记失败不阻塞跳转 */ }
+  }
+  router.push('/system/notifications');
+}
+
 // 我的任务
 const taskTab = ref('PENDING');
 const tasks = ref([]);
@@ -172,11 +184,18 @@ async function loadTasks() {
 function resolveTaskRoute(row, mode) {
   const id = row.taskId || row.id;
   if (!id) return null;
+  // 已办「详情」→ 切到目标页"已审批"tab 并弹只读详情；待办「办理」→ 切"待我审批"tab 并弹审批窗。
+  // bizKey(businessKey, 形如 ALLOC_ADJUST:{applyId}) 透传，供接收页即便不在当前页也能直接拉详情。
+  const isDetail = mode === 'detail';
   if (row.bizType === 'TARGET_ADJUST') {
-    return { path: '/perf/targets', query: { tab: 'todo', taskId: id } };
+    return isDetail
+      ? { path: '/perf/targets', query: { tab: 'done', taskId: id, bizKey: row.businessKey } }
+      : { path: '/perf/targets', query: { tab: 'todo', taskId: id } };
   }
   if (row.bizType === 'ALLOC_ADJUST') {
-    return { path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: mode === 'detail' ? 'view' : 'open' } };
+    return isDetail
+      ? { path: '/perf/adjust', query: { tab: 'done', taskId: id, action: 'view', bizKey: row.businessKey } }
+      : { path: '/perf/adjust', query: { tab: 'todo', taskId: id, action: 'open' } };
   }
   return null;
 }

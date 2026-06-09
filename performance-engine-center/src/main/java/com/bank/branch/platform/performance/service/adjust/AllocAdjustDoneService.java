@@ -43,17 +43,15 @@ public class AllocAdjustDoneService {
         log.debug("[AllocAdjustDoneService.listMyDones] empId={}, kw={}, dim={}, kind={}, from={}, to={}, page={}/{}",
                 empId, keyword, allocDim, bizKind, dateFrom, dateTo, pageNo, pageSize);
 
-        // 双路合并：workflow done keys + 业务表 APPROVED/REJECTED 申请 ID
+        // 已审批仅显示「本人」审批/驳回过的记录：取本人在 workflow 已完成任务对应的业务键。
+        // 驳回(deleteProcessInstance)后，本人那条任务仍在 ACT_HI_TASKINST 留痕(assignee + end_time)，
+        // listMyDoneBusinessKeys 的 taskAssignee(empId).finished() 同样能命中，故无需再补业务表。
+        // 不再 union 全局 selectFinishedApplyIds（否则会把他人完结的申请也带进本人已办，违背"只看本人审批过"）。
         List<String> wfKeys = workflowTodoApi.listMyDoneBusinessKeys(empId, BIZ_TYPE);
-        List<String> wfIds = wfKeys.stream()
+        List<String> applyIds = wfKeys.stream()
                 .map(k -> k.startsWith(BUSINESS_KEY_PREFIX) ? k.substring(BUSINESS_KEY_PREFIX.length()) : k)
+                .distinct()
                 .collect(Collectors.toList());
-
-        // 从业务表补充 APPROVED/REJECTED 的申请（包含驳回后 workflow 查不到的记录）
-        List<String> bizIds = mapper.selectFinishedApplyIds();
-        java.util.Set<String> allIdSet = new java.util.LinkedHashSet<>(wfIds);
-        allIdSet.addAll(bizIds);
-        List<String> applyIds = new java.util.ArrayList<>(allIdSet);
 
         if (applyIds.isEmpty()) {
             return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
@@ -87,6 +85,7 @@ public class AllocAdjustDoneService {
         d.setId(a.getId());
         d.setApplyNo(a.getApplyNo());
         d.setCustId(a.getCustId());
+        d.setCustName(a.getCustName());
         d.setCustType(a.getCustType());
         d.setAllocDim(a.getAllocDim());
         d.setBizKind(a.getBizKind());
@@ -103,8 +102,10 @@ public class AllocAdjustDoneService {
             d.setClaimable(t.getClaimable());
             d.setStartUser(t.getStartUser());
             d.setStartUserName(t.getStartUserName());
+            d.setStartUserEmpNo(t.getStartUserEmpNo());
             d.setStartOrgId(t.getStartOrgId());
             d.setStartOrgName(t.getStartOrgName());
+            d.setStartOrgDeptNo(t.getStartOrgDeptNo());
             d.setStartTime(t.getStartTime());
             d.setTaskCreateTime(t.getTaskCreateTime());
             d.setSlaStatus(t.getSlaStatus());

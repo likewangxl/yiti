@@ -10,24 +10,27 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.controller.dto.TargetAdjustRespDTO;
 import com.bank.branch.platform.performance.entity.PerfTargetAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfTargetPlan;
+import com.bank.branch.platform.performance.entity.PerfTargetValue;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.event.PerfEventPublisher;
+import com.bank.branch.platform.performance.event.TargetAdjustmentApprovedEvent;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfTargetAdjustApplyMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
+import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.service.adjust.cmd.SubmitTargetAdjustCmd;
 import com.bank.branch.platform.performance.service.scope.PerfScopeHelper;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
-import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
-import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,27 +81,33 @@ public class TargetAdjustService {
 
     private final PerfTargetAdjustApplyMapper applyMapper;
     private final PerfTargetPlanMapper targetPlanMapper;
+    private final PerfTargetValueMapper targetValueMapper;
     private final WorkflowApi workflowApi;
     private final CurrentUserApi currentUserApi;
     private final UserApi userApi;
     private final OrgApi orgApi;
     private final PerfScopeHelper perfScopeHelper;
+    private final PerfEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
     public TargetAdjustService(PerfTargetAdjustApplyMapper applyMapper,
                                PerfTargetPlanMapper targetPlanMapper,
+                               PerfTargetValueMapper targetValueMapper,
                                WorkflowApi workflowApi,
                                CurrentUserApi currentUserApi,
                                UserApi userApi,
                                OrgApi orgApi,
-                               PerfScopeHelper perfScopeHelper) {
+                               PerfScopeHelper perfScopeHelper,
+                               PerfEventPublisher eventPublisher) {
         this.applyMapper = applyMapper;
         this.targetPlanMapper = targetPlanMapper;
+        this.targetValueMapper = targetValueMapper;
         this.workflowApi = workflowApi;
         this.currentUserApi = currentUserApi;
         this.userApi = userApi;
         this.orgApi = orgApi;
         this.perfScopeHelper = perfScopeHelper;
+        this.eventPublisher = eventPublisher;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -116,63 +125,97 @@ public class TargetAdjustService {
     public String submit(SubmitTargetAdjustCmd cmd) {
         validateBasic(cmd);
         validateAdjustments(cmd);
-        PerfTargetPlan plan = validateAndGetTargetPlan(cmd.getPlanId());
+        validateAndGetTargetPlan(cmd.getPlanId());
 
         String applyId = genApplyId();
         String applyNo = genApplyNo();
         String businessKey = BIZ_KEY_PREFIX + applyId;
         String remarkJson = buildRemarkJson(cmd);
+        LocalDateTime now = LocalDateTime.now();
 
-        // 1. 落地主表（status=IN_APPROVAL，尚无 processInstanceId）
+        // 1. 落地主表（不再走审批流程：直接 APPROVED 生效，无 processInstanceId）
         PerfTargetAdjustApply apply = new PerfTargetAdjustApply();
         apply.setId(applyId);
         apply.setPlanId(cmd.getPlanId());
         apply.setSubjectType(cmd.getSubjectType());
         apply.setSubjectId(cmd.getSubjectId());
         apply.setCycleKey(cmd.getCycleKey());
-        apply.setStatus("IN_APPROVAL");
+        apply.setStatus("APPROVED");
         apply.setBusinessKey(businessKey);
         apply.setProcessInstanceId(null);
         apply.setOwnerOrgId(cmd.getOwnerOrgId());
         apply.setRemark(remarkJson);
         apply.setCreatedBy(cmd.getApplicant());
-        LocalDateTime now = LocalDateTime.now();
         apply.setCreatedTime(now);
         apply.setUpdatedBy(cmd.getApplicant());
         apply.setUpdatedTime(now);
         applyMapper.insert(apply);
 
-        // 2. 启动 Flowable 流程（单一 BPMN：perf_target_adjust_v1）
-        StartProcessCmd startCmd = new StartProcessCmd();
-        startCmd.setBizType(BIZ_TYPE);
-        startCmd.setBizId(applyId);
-        startCmd.setBusinessKey(businessKey);
-        startCmd.setProcessDefinitionKey(PROCESS_KEY);
-        startCmd.setStartUser(cmd.getApplicant());
-        startCmd.setStartOrgId(cmd.getOwnerOrgId());
-        startCmd.setTitle("目标修正-" + cmd.getSubjectType() + "-" + cmd.getSubjectId()
-                + "-" + applyNo);
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("applyId", applyId);
-        vars.put("planId", cmd.getPlanId());
-        vars.put("subjectType", cmd.getSubjectType());
-        vars.put("subjectId", cmd.getSubjectId());
-        vars.put("cycleKey", cmd.getCycleKey());
-        // 原业绩所属人：取目标方案的 ownerEmpId 作为 BPMN original_owner_approve
-        // 节点的 flowable:assignee 单人指派候选；plan.ownerEmpId 为空则不写此键.
-        if (!isBlank(plan.getOwnerEmpId())) {
-            vars.put("originalOwnerEmpId", plan.getOwnerEmpId());
-        }
-        startCmd.setVariables(vars);
-        WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
+        // 2. 直接落地目标值（内联原 TargetAdjustCompletedListener 审批通过的 upsert 逻辑）
+        applyAdjustmentsToTargetValues(cmd, now);
 
-        // 3. 回写 processInstanceId
-        applyMapper.updateStatus(applyId, "IN_APPROVAL", resp.getProcessInstanceId());
-        log.info("[TargetAdjustService.submit] applyId={}, applyNo={}, planId={}, subject={}:{}, "
-                        + "cycleKey={}, pid={}",
+        // 3. 发布领域事件（目标缓存失效 / 报表快照重算 / 通知 等下游消费，保持与审批通过路径一致）
+        eventPublisher.publish(new TargetAdjustmentApprovedEvent(
+                MDC.get("traceId"),
+                applyId,
+                cmd.getPlanId(),
+                cmd.getSubjectType(),
+                cmd.getSubjectId(),
+                cmd.getCycleKey(),
+                cmd.getApplicant()));
+
+        log.info("[TargetAdjustService.submit] 直接生效 applyId={}, applyNo={}, planId={}, subject={}:{}, "
+                        + "cycleKey={}, count={}",
                 applyId, applyNo, cmd.getPlanId(), cmd.getSubjectType(), cmd.getSubjectId(),
-                cmd.getCycleKey(), resp.getProcessInstanceId());
+                cmd.getCycleKey(), cmd.getAdjustments().size());
         return applyId;
+    }
+
+    /**
+     * 把修正明细直接落地到 {@code PERF_TARGET_VALUE}（按 UK upsert）.
+     *
+     * <p>取消审批后，目标修正"提交即生效"，本方法承接原
+     * {@code TargetAdjustCompletedListener.handleApproved} 的写入职责：
+     * 先按 UK 取现行作为 {@code base_value} / owner 列的兜底，避免 upsertBatch 的
+     * {@code ON DUPLICATE KEY UPDATE} 用 {@code VALUES(...)} 把未改动列覆盖为 null.
+     *
+     * @param cmd 提交命令（含 planId/subject/cycleKey/adjustments/applicant）
+     * @param now 统一的写入时间戳
+     */
+    private void applyAdjustmentsToTargetValues(SubmitTargetAdjustCmd cmd, LocalDateTime now) {
+        List<SubmitTargetAdjustCmd.TargetAdjustment> adjustments = cmd.getAdjustments();
+        List<PerfTargetValue> list = new ArrayList<>(adjustments.size());
+        String operator = cmd.getApplicant();
+        for (SubmitTargetAdjustCmd.TargetAdjustment a : adjustments) {
+            PerfTargetValue existing = targetValueMapper.selectByUniqueKey(
+                    cmd.getPlanId(), cmd.getSubjectType(), cmd.getSubjectId(),
+                    cmd.getCycleKey(), a.getMetricCode());
+
+            PerfTargetValue tv = new PerfTargetValue();
+            tv.setId(existing != null ? existing.getId()
+                    : UUID.randomUUID().toString().replace("-", ""));
+            tv.setPlanId(cmd.getPlanId());
+            tv.setSubjectType(cmd.getSubjectType());
+            tv.setSubjectId(cmd.getSubjectId());
+            tv.setCycleKey(cmd.getCycleKey());
+            tv.setMetricCode(a.getMetricCode());
+            tv.setTargetValue(a.getNewValue());
+            // 基础值：申请显式带了 newBaseValue 则落地，否则保留现值（不抹除）
+            tv.setBaseValue(a.getNewBaseValue() != null
+                    ? a.getNewBaseValue()
+                    : (existing != null ? existing.getBaseValue() : null));
+            // owner 列从现行保留，避免被 upsertBatch 的 VALUES 覆盖为 null
+            if (existing != null) {
+                tv.setOwnerEmpId(existing.getOwnerEmpId());
+                tv.setOwnerOrgCode(existing.getOwnerOrgCode());
+            }
+            tv.setCreatedBy(operator);
+            tv.setCreatedTime(now);
+            tv.setUpdatedBy(operator);
+            tv.setUpdatedTime(now);
+            list.add(tv);
+        }
+        targetValueMapper.upsertBatch(list);
     }
 
     /**

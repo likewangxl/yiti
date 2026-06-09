@@ -116,6 +116,12 @@ export function getCustStat(custId, statisDt) {
     .then(unwrapPage)
     .then(r => (Array.isArray(r) ? r[0] : (r?.records || [])[0]) || null);
 }
+// 客户指标宽表（CUST_INDEX_RESULT）：按客户编号 + 数据日期取指定指标编号(MC_xxx)的值，
+// 返回 { 指标编号: 数值 }；查无数据的指标编号在结果中缺省 → 前端显示 '-'
+export function getCustIndexValues(custId, dataDate, codes) {
+  const params = { custId, dataDate, codes: Array.isArray(codes) ? codes.join(',') : codes };
+  return call('get', '/perf/metrics/cust-index-values', { params }, {});
+}
 export function createTargetPlan(data) {
   return call('post', '/perf/target-plans', { data }, { id: 'mock' });
 }
@@ -275,6 +281,22 @@ export function getAllocPreview(params) {
 }
 
 /**
+ * 员工自动补齐：按关键字模糊匹配 PT_USER 工号/登录名/中文名，返回 [{empId, username, empChnName}]。
+ * 供分配明细员工号输入框联想（el-autocomplete）。
+ */
+export function suggestEmployees(keyword) {
+  return call('get', '/perf/alloc-adjust/emp-suggest', { params: { keyword, limit: 20 } }, []);
+}
+
+/**
+ * 机构自动补齐：按机构号/名称模糊匹配 EXT_ORG_INFO，返回 [{orgCode, orgName, ...}]。
+ * 供原业绩分配「所属机构」输入框联想（el-autocomplete）。
+ */
+export function suggestOrgs(keyword) {
+  return call('get', '/perf/alloc-adjust/org-suggest', { params: { keyword, limit: 20 } }, []);
+}
+
+/**
  * 业绩调整 - 我的待审批 列表（后端分页 + 4 字段过滤）.
  * @param {object} params - { keyword?, allocDim?, bizKind?, dateFrom?, dateTo?, pageNo?, pageSize? }
  * @returns PageResult 对象 { pageNo, pageSize, total, records }
@@ -381,6 +403,27 @@ export function listComputeBatches(params = {}) {
 }
 export function getComputeBatch(id) {
   return call('get', `/perf/run-tasks/${id}`, {}, {});
+}
+// 考核计算统计：最后一次 KPI 计算任务(PERF_METRIC_CALC_TASK) 成功/失败/耗时 + 本月任务数
+export function getKpiScoreStats() {
+  return call('get', '/perf/kpi-score/stats', {},
+    { monthTaskCount: 0, lastSuccessCount: null, lastFailCount: null, lastDurationMs: null, lastStatus: null });
+}
+// 考核计算数据列表：KPI 方案级计算记录(PERF_KPI_CALC_LOG)，按数据日期 + 方案过滤，返回 {records, total}
+export function listKpiCalcLogs(params = {}) {
+  return call('get', '/perf/kpi-score/logs', { params }, { records: [], total: 0 }).then(unwrapPage);
+}
+// KPI 计算结果明细(PERF_KPI_SCORE)：维度/指标/对象/得分，按数据日期 + 方案 + 指标过滤分页
+export function listKpiScoreResults(params = {}) {
+  return call('get', '/perf/kpi-score/results', { params }, { records: [], total: 0 }).then(unwrapPage);
+}
+// KPI 方案的指标下拉项（仅含该方案配置的指标，含名称）
+export function listKpiSchemeMetrics(schemeCode) {
+  return call('get', '/perf/kpi-score/scheme-metrics', { params: { schemeCode } }, []);
+}
+// 触发 KPI 分值计算（数据日期 + 方案 + 触发原因，记审批日志）
+export function calcKpiScore(payload) {
+  return call('post', '/perf/kpi-score/calc', { data: payload }, 'OK');
 }
 export function triggerCompute(payload) {
   return call('post', '/perf/recalc', { data: payload }, { batch: 'CALC-MOCK-' + Date.now() });

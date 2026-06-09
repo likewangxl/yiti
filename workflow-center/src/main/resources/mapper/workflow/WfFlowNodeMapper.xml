@@ -5,7 +5,7 @@
     <!-- WF_FLOW_NODE 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, flow_def_id, node_key, node_type, name, approve_mode,
-        sort_no, pos_x, pos_y, created_time, updated_time
+        approve_org_scope, sort_no, pos_x, pos_y, created_time, updated_time
     </sql>
 
     <!-- 根据流程定义ID查询所有节点，按 sort_no 升序排列 -->

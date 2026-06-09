@@ -21,6 +21,7 @@
         <module>business-application-center</module>
         <module>performance-engine-center</module>
         <module>report-analytics-center</module>
+        <module>soap-gateway-center</module>
         <module>bootstrap</module>
     </modules>
 
@@ -141,6 +142,13 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- soap-gateway-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>soap-gateway-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <!-- 第三方 -->
             <dependency>
                 <groupId>com.baomidou</groupId>
@@ -164,6 +172,27 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <!--
+      全模块共享依赖（被所有子模块继承）。
+      spring-boot-starter-web 在此统一声明一次（版本由上方 spring-boot-dependencies BOM 管理），
+      其传递依赖含内嵌 Tomcat（tomcat-embed-*）。各子模块不再重复声明，避免 12 处分散维护。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!--
+          spring-boot-starter-validation 上提到此处统一声明（原在 common-web）。
+          它传递引入 tomcat-embed-el；连同 starter-web 的 tomcat-embed-core/websocket，
+          全部内嵌 Tomcat 制品都从本根 pom 出，换宝蓝德(BES)时只需在本文件排除一处。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+    </dependencies>
 
     <build>
         <pluginManagement>

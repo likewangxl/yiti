@@ -110,6 +110,19 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                       @Param("version") String version);
 
     /**
+     * KPI 分值计算：取某数据日期下某 slot 的全部员工实际值（同员工多版本取最新 version）.
+     *
+     * <p>列名 {@code val_${slot}} 属 common-dev-guide §5 允许的动态列名例外，
+     * 调用方必须保证 {@code slot ∈ [1, 400]}。
+     *
+     * @param dataDate 数据日期
+     * @param slot     值槽（1..400，<strong>调用方必须校验</strong>）
+     * @return 每个员工（最新版本）的 (subjectId, value)；该槽位为 null 的对象不返回
+     */
+    List<SubjectSlotValueRow> selectLatestSlotValuesByDate(@Param("dataDate") LocalDate dataDate,
+                                                           @Param("slot") Integer slot);
+
+    /**
      * V1.5 P4.1 新增：按 dataDate 列表批量查询同一 slot 的值.
      *
      * <p>用途：{@code MetricApi.getUserMetricCards} 的 mom/yoy 场景，一次 IN 查询
@@ -171,7 +184,30 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
      * @param metricCodes 指标编码列表
      * @return metricCode -&gt; val_slot 映射
      */
-    Map<String, Integer> selectValSlotsByCodes(@Param("metricCodes") List<String> metricCodes);
+    List<Map<String, Object>> selectValSlotRows(@Param("metricCodes") List<String> metricCodes);
+
+    /**
+     * V1.7（V2 修复）：metricCode -&gt; val_slot 映射。
+     *
+     * <p>原 XML 用两列 {@code key/value} + 返回 {@code Map} 但无 {@code @MapKey}，MyBatis 会走
+     * {@code selectOne}：单行被错映射成 {@code {key,value}} 两条目（{@code get(code)} 返回 null）、
+     * 多行直接抛 {@code TooManyResultsException}，导致 Groovy 引用指标恒为 0。
+     * 改为 List 行查询 + Java 端聚合，杜绝该缺陷。
+     */
+    default Map<String, Integer> selectValSlotsByCodes(List<String> metricCodes) {
+        if (metricCodes == null || metricCodes.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Map<String, Integer> slotMap = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> row : selectValSlotRows(metricCodes)) {
+            Object code = row.get("metricCode");
+            Object slot = row.get("valSlot");
+            if (code != null && slot instanceof Number) {
+                slotMap.put(code.toString(), ((Number) slot).intValue());
+            }
+        }
+        return slotMap;
+    }
 
     /**
      * V1.7：按 slot 列号查单主体单值（val_${slot} 动态列名）.
@@ -189,6 +225,16 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                          @Param("slot") Integer slot,
                                          @Param("dataDate") java.time.LocalDate dataDate,
                                          @Param("version") String version);
+
+    /**
+     * 试运行：取某主体某日期"最近导入"的数据版本（按 updated_time 优先）。
+     *
+     * <p>宽表行按 (subject, data_date, version) 隔离，导入数据散落在多个时间戳版本里，
+     * SYS_CONTROL 当前版本未必就是该主体该日有数据的版本。试运行据此按数据反查真实值，
+     * 避免恒为 0。无数据返回 null。
+     */
+    String selectLatestVersionForSubject(@Param("subject") String subject,
+                                         @Param("dataDate") java.time.LocalDate dataDate);
 
     /**
      * V1.7：按 subject + 多 metricCode 在单一 dataDate+version 下取宽表 slot 值.

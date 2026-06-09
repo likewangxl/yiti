@@ -116,6 +116,39 @@ class CandidateResolverServiceTest {
     }
 
     /**
+     * resolveApproveOrgScope：取节点候选配置中首个非空 approveOrgScope。
+     */
+    @Test
+    void resolveApproveOrgScope_returnsConfiguredScope() {
+        WfNodeCandidateConf conf = new WfNodeCandidateConf();
+        conf.setCandidateType("ROLE");
+        conf.setCandidateValue("[\"BRANCH_HEAD\"]");
+        conf.setApproveOrgScope("PARENT");
+
+        when(nodeCandidateConfMapper.selectByProcessDefKeyAndNodeKey("DSN_x", "approval_1"))
+                .thenReturn(List.of(conf));
+
+        assertThat(candidateResolverService.resolveApproveOrgScope("DSN_x", "approval_1"))
+                .isEqualTo("PARENT");
+    }
+
+    /**
+     * resolveApproveOrgScope：未配置（无 conf / 全空）时返回 null。
+     */
+    @Test
+    void resolveApproveOrgScope_noScope_returnsNull() {
+        WfNodeCandidateConf conf = new WfNodeCandidateConf();
+        conf.setCandidateType("ROLE");
+        conf.setCandidateValue("[\"BRANCH_HEAD\"]");
+        // approveOrgScope 未设置（null）
+
+        when(nodeCandidateConfMapper.selectByProcessDefKeyAndNodeKey("DSN_x", "approval_2"))
+                .thenReturn(List.of(conf));
+
+        assertThat(candidateResolverService.resolveApproveOrgScope("DSN_x", "approval_2")).isNull();
+    }
+
+    /**
      * 测试 malicious/malformed JSON 时 parseCandidateValue 应返回空列表，不向上传播异常
      */
     @Test

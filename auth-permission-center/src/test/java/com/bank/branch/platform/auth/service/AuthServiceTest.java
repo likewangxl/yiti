@@ -102,7 +102,8 @@ class AuthServiceTest {
         role.setRoleId("R_RM");
         role.setRoleCode("CUST_MANAGER");
         role.setRoleChName("客户经理");
-        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(List.of(role));
+        // 用可变 List：login 会对角色列表排序把主角色置顶（List.of 不可变会抛 UnsupportedOperationException）
+        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(new java.util.ArrayList<>(List.of(role)));
 
         LoginRespDTO resp = authService.login("admin", "pass", session);
 
@@ -168,12 +169,17 @@ class AuthServiceTest {
         when(userMapper.selectByUsername("admin")).thenReturn(user);
         when(passwordEncoder.matches("pass", "hashed")).thenReturn(true);
         when(userOrgMapper.selectByUserId("E001")).thenReturn(null);
-        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(List.of());
+        // 无角色用户现禁止登录，这里给一个角色以测试「主机构为空」场景
+        PtRole role = new PtRole();
+        role.setRoleId("R_RM");
+        role.setRoleCode("CUST_MANAGER");
+        role.setRoleChName("客户经理");
+        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(new java.util.ArrayList<>(List.of(role)));
 
         LoginRespDTO resp = authService.login("admin", "pass", session);
 
         assertThat(resp.getMainOrgCode()).isNull();
-        assertThat(resp.getRoles()).isEmpty();
+        assertThat(resp.getRoles()).hasSize(1);
     }
 
     @Test

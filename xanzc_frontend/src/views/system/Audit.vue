@@ -260,6 +260,7 @@ onMounted(() => {
 <style lang="scss" scoped>
 .table { padding: 0; padding-bottom: 12px; }
 .pager { display: flex; justify-content: flex-end; padding: 12px 14px; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .trace { color: $text-3; }
 .dim { color: $text-3; }

@@ -19,6 +19,7 @@
             <if test="metricName != null">metric_name = #{metricName},</if>
             <if test="metricNameEn != null">metric_name_en = #{metricNameEn},</if>
             <if test="metricDesc != null">metric_desc = #{metricDesc},</if>
+            <if test="description != null">description = #{description},</if>
             <if test="baseDim != null">base_dim = #{baseDim},</if>
             <if test="metricLevel != null">metric_level = #{metricLevel},</if>
             <if test="calcFreq != null">calc_freq = #{calcFreq},</if>

@@ -23,4 +23,13 @@ public interface DynamicQueryService {
      * @return 查询结果（列定义 + 行数据）
      */
     DynamicQueryRespDTO execute(DynamicQueryReqDTO req);
+
+    /**
+     * 执行动态查询并导出为 Excel（同步直推，不走异步任务/MinIO）。
+     * 复用 {@link #execute(DynamicQueryReqDTO)} 的查询结果，按"对象 + 各指标列"生成 xlsx 字节。
+     *
+     * @param req 查询入参（与 execute 一致）
+     * @return xlsx 文件字节
+     */
+    byte[] exportExcel(DynamicQueryReqDTO req);
 }

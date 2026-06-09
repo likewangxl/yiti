@@ -1,5 +1,7 @@
 package com.bank.branch.platform.auth.security.filter;
 
+import com.bank.branch.platform.auth.entity.PtUser;
+import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.security.context.CurrentUserProvider;
 import com.bank.branch.platform.auth.service.AuthService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
@@ -27,6 +29,7 @@ class AuthenticationFilterTest {
     @Mock CurrentUserProvider currentUserProvider;
     @Mock FilterChain filterChain;
     @Mock ObjectMapper objectMapper;
+    @Mock UserMapper userMapper;
     @InjectMocks AuthenticationFilter filter;
 
     private MockHttpServletRequest request;
@@ -38,6 +41,12 @@ class AuthenticationFilterTest {
         response = new MockHttpServletResponse();
         // 401 响应需要序列化 ResponseWrapper，mock 默认返回 null → NPE
         lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        // 过滤器会按主键实时重查用户状态，返回启用且未锁定的用户以放行有效会话
+        PtUser fresh = new PtUser();
+        fresh.setUserId("E001");
+        fresh.setIsEnabled(0); // 0=启用
+        fresh.setIsLocked(0);
+        lenient().when(userMapper.selectByUserId("E001")).thenReturn(fresh);
     }
 
     @Test

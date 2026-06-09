@@ -5,6 +5,11 @@ target/
 .idea/
 *.iml
 .vscode/
+# Eclipse / STS
+.classpath
+.project
+.settings/
+.factorypath
 
 # OS
 .DS_Store

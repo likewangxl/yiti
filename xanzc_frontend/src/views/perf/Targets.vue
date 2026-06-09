@@ -11,11 +11,16 @@
     <el-tabs v-model="activeTab" @tab-change="onTabChange" class="targets-tabs">
       <!-- ============ 目标方案 ============ -->
       <el-tab-pane label="目标方案" name="plans">
-        <!-- 筛选栏（3 列：方案搜索 / 维度 / 状态）。表格基于 f 即时过滤 -->
+        <!-- 筛选栏（4 列：方案搜索 / 关联KPI方案 / 维度 / 状态）。表格基于 f 即时过滤 -->
         <div class="card-section filter-grid">
           <div>
             <div class="lab">方案搜索</div>
             <el-input v-model="f.keyword" clearable placeholder="方案编码 / 名称"
+              style="width:100%" @keyup.enter="reload" />
+          </div>
+          <div>
+            <div class="lab">关联KPI方案</div>
+            <el-input v-model="f.kpiKeyword" clearable placeholder="KPI 方案编码 / 名称"
               style="width:100%" @keyup.enter="reload" />
           </div>
           <div>
@@ -31,15 +36,29 @@
               <el-option label="停用" value="DISABLED" />
             </el-select>
           </div>
+          <div class="filter-actions">
+            <el-button type="primary" @click="reload">查询</el-button>
+            <el-button @click="resetFilters">重置</el-button>
+          </div>
         </div>
 
         <!-- 主表（方案级，每行 1 个方案） -->
         <div class="card-section table">
           <el-table :data="pagedPlans" size="default" empty-text="暂无目标方案" v-loading="loadingPlans">
-            <el-table-column label="方案编码" prop="planCode" width="160" />
-            <el-table-column label="方案名称" prop="planName" min-width="200" />
+            <el-table-column label="目标方案" min-width="260">
+              <template #default="{row}">
+                <div>{{ row.planName || row.planCode || '-' }}</div>
+                <div v-if="row.planCode" style="color:#909399;font-size:12px;">{{ row.planCode }}</div>
+              </template>
+            </el-table-column>
             <el-table-column label="关联 KPI 方案" min-width="200">
-              <template #default="{row}">{{ kpiLabelOf(row.kpiSchemeId) }}</template>
+              <template #default="{row}">
+                <template v-if="kpiSchemeById.get(row.kpiSchemeId)">
+                  <div>{{ kpiSchemeById.get(row.kpiSchemeId).name || kpiSchemeById.get(row.kpiSchemeId).code || '-' }}</div>
+                  <div v-if="kpiSchemeById.get(row.kpiSchemeId).code" style="color:#909399;font-size:12px;">{{ kpiSchemeById.get(row.kpiSchemeId).code }}</div>
+                </template>
+                <template v-else>{{ kpiLabelOf(row.kpiSchemeId) }}</template>
+              </template>
             </el-table-column>
             <el-table-column label="维度" width="80">
               <template #default="{row}">{{ dimLabel(row.targetDim) }}</template>
@@ -53,16 +72,21 @@
               </template>
             </el-table-column>
             <el-table-column label="创建人" min-width="180">
-              <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdBy || '-' }}</template>
+              <template #default="{row}">
+                <!-- 创建人姓名/工号由后端目标方案列表解析返回（createdByName/createdByUsername），不再依赖管理员 /admin/users -->
+                <div>{{ row.createdByName || row.createdByUsername || row.createdBy || '-' }}</div>
+                <div v-if="row.createdByUsername" style="color:#909399;font-size:12px;">{{ row.createdByUsername }}</div>
+              </template>
             </el-table-column>
             <el-table-column label="状态" width="80">
               <template #default="{row}">
                 <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right">
+            <el-table-column label="操作" width="200" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button>
+                <el-button link type="primary" size="small" @click="openPlanTrigger(row)">触发</el-button>
                 <!-- 仅创建人可编辑：业务规则 - 资财人员可看全行方案（ALL scope），但只能改自己的 -->
                 <el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
               </template>
@@ -79,21 +103,31 @@
               layout="total, sizes, prev, pager, next, jumper"
             />
           </div>
-
-          <el-alert type="info" :closable="false" show-icon style="margin-top:14px"
-            title="点击「管理目标值」进入子页面维护方案下的员工 / 机构目标值；修正审批通过后将触发 KPI 历史回算（生成新批次 CALC-YYMMDD-xxx）。" />
         </div>
       </el-tab-pane>
 
       <!-- ============ 待我审批（TARGET_ADJUST 流程任务） ============ -->
       <el-tab-pane v-if="canApprove" label="待我审批" name="todo">
         <div class="card-section table">
-          <el-table :data="pagedTodos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading">
-            <el-table-column label="申请编号" min-width="200">
-              <template #default="{row}"><code>{{ row.businessKey || row.bizId || '-' }}</code></template>
+          <div class="tab-actions">
+            <el-button type="primary" @click="openBatchReview">
+              批量审批{{ todoSelection.length ? `（已选 ${todoSelection.length}）` : '' }}
+            </el-button>
+          </div>
+          <el-table :data="pagedTodos" size="default" empty-text="暂无待审批任务" v-loading="todoLoading"
+                    @selection-change="onTodoSelectionChange">
+            <el-table-column type="selection" width="45" />
+            <el-table-column label="方案编号" min-width="150">
+              <template #default="{row}"><code class="mono">{{ planOfTodo(row)?.planCode || '-' }}</code></template>
             </el-table-column>
-            <el-table-column label="标题" min-width="220">
-              <template #default="{row}">{{ row.title || '-' }}</template>
+            <el-table-column label="方案名称" min-width="180">
+              <template #default="{row}">{{ planOfTodo(row)?.planName || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="关联KPI方案" min-width="180">
+              <template #default="{row}">{{ planOfTodo(row) ? kpiLabelOf(planOfTodo(row).kpiSchemeId) : '-' }}</template>
+            </el-table-column>
+            <el-table-column label="维度" width="80">
+              <template #default="{row}">{{ dimLabel(planOfTodo(row)?.targetDim) }}</template>
             </el-table-column>
             <el-table-column label="当前节点" width="160">
               <template #default="{row}">{{ row.taskName || row.nodeKey || '-' }}</template>
@@ -127,16 +161,20 @@
       <el-tab-pane v-if="canApprove" label="已审批" name="done">
         <div class="card-section table">
           <el-table :data="pagedDones" size="default" empty-text="暂无已审批记录" v-loading="doneLoading">
-            <el-table-column label="申请编号" min-width="200">
-              <template #default="{row}"><code>{{ row.businessKey || row.id || '-' }}</code></template>
+            <el-table-column label="方案编号" min-width="150">
+              <template #default="{row}"><code class="mono">{{ planOfDone(row)?.planCode || '-' }}</code></template>
             </el-table-column>
-            <el-table-column label="标题" min-width="220">
-              <template #default="{row}">
-                {{ (row.subjectType === 'EMP' ? '员工' : '机构') }} {{ row.subjectId || '' }} · {{ parseDoneAdj(row.remark).map(a => a.metricCode).join(', ') || '-' }}
-              </template>
+            <el-table-column label="方案名称" min-width="180">
+              <template #default="{row}">{{ planOfDone(row)?.planName || '-' }}</template>
             </el-table-column>
-            <el-table-column label="发起人" width="140">
-              <template #default="{row}">{{ row.createdByName || row.createdBy || '-' }}</template>
+            <el-table-column label="关联KPI方案" min-width="180">
+              <template #default="{row}">{{ planOfDone(row) ? kpiLabelOf(planOfDone(row).kpiSchemeId) : '-' }}</template>
+            </el-table-column>
+            <el-table-column label="维度" width="80">
+              <template #default="{row}">{{ dimLabel(planOfDone(row)?.targetDim || row.subjectType) }}</template>
+            </el-table-column>
+            <el-table-column label="发起人" width="160">
+              <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdByName || row.createdBy || '-' }}</template>
             </el-table-column>
             <el-table-column label="申请时间" width="170">
               <template #default="{row}">{{ fmtDateTime(row.createdTime) }}</template>
@@ -181,9 +219,8 @@
       <!-- 修正详情（从 PERF_TARGET_ADJUST_APPLY.remark JSON 解析） -->
       <div class="review-detail" v-if="reviewDlg.detail" v-loading="reviewDlg.detailLoading">
         <div v-for="(adj, i) in reviewDlg.detail.adjustments" :key="i" class="adj-item">
+          <div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div>
           <div>
-            <span class="lab">指标：</span>{{ adj.metricCode }}
-            <span class="sep">|</span>
             <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
             <span class="sep">→</span>
             <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
@@ -212,11 +249,28 @@
       </template>
     </el-dialog>
 
+    <!-- 批量审批弹窗：对所选的多条待审批记录统一通过 / 驳回 -->
+    <el-dialog v-model="batchDlg.show" title="批量审批" width="520px" :close-on-click-modal="false">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px"
+                :title="`已选 ${todoSelection.length} 条记录，将对全部所选记录统一处理。`" />
+      <el-form :model="batchDlg" label-position="top" size="default">
+        <el-form-item label="审批意见" required>
+          <el-input v-model="batchDlg.opinion" type="textarea" :rows="3"
+                    placeholder="请填写审批意见（必填，将记入每条审批日志）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchDlg.show = false">取消</el-button>
+        <el-button type="danger" :loading="batchDlg.saving" @click="submitBatchReview('REJECT')">驳回</el-button>
+        <el-button type="primary" :loading="batchDlg.saving" @click="submitBatchReview('APPROVE')">通过</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 已审批详情弹窗（只读） -->
     <el-dialog v-model="detailDlg.show" :title="detailTitle" width="580px" :close-on-click-modal="true">
       <div class="review-meta">
         <div><span class="lab">申请编号：</span><code>{{ detailDlg.row?.businessKey || detailDlg.row?.id || '-' }}</code></div>
-        <div><span class="lab">发起人：</span>{{ detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div>
+        <div><span class="lab">发起人：</span>{{ userMap.get(detailDlg.row?.createdBy) || detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div>
         <div><span class="lab">申请时间：</span>{{ fmtDateTime(detailDlg.row?.createdTime) }}</div>
         <div><span class="lab">审批结果：</span>
           <el-tag v-if="detailDlg.row?.status==='APPROVED'" class="tag-success" effect="plain">通过</el-tag>
@@ -227,9 +281,8 @@
       <!-- 修正详情 -->
       <div class="review-detail" v-if="detailDlg.detail" v-loading="detailDlg.loading">
         <div v-for="(adj, i) in detailDlg.detail.adjustments" :key="i" class="adj-item">
+          <div><span class="lab">指标：</span>{{ metricLabel(adj.metricCode) }}</div>
           <div>
-            <span class="lab">指标：</span>{{ adj.metricCode }}
-            <span class="sep">|</span>
             <span class="lab">原目标值：</span><strong>{{ fmtNum(adj.oldValue) }}</strong>
             <span class="sep">→</span>
             <span class="lab">新目标值：</span><strong class="new-val">{{ fmtNum(adj.newValue) }}</strong>
@@ -246,7 +299,7 @@
       <div class="review-history" v-if="detailDlg.history.length" style="margin-top:12px">
         <div class="history-title">审批记录</div>
         <div v-for="(log, i) in sortedHistory" :key="i" class="history-item">
-          <span class="lab">{{ log.action === 'SUBMIT' ? '申请人' : '审批人' }}：</span>{{ log.operatorName || log.operator || '-' }}
+          <span class="lab">{{ log.action === 'SUBMIT' ? '申请人' : '审批人' }}：</span>{{ log.operatorName || log.operatorEmpNo || log.operator || '-' }}<span v-if="log.operatorEmpNo">（{{ log.operatorEmpNo }}）</span>
           <span class="sep">|</span>
           <span class="lab">节点：</span>{{ log.nodeName || log.nodeKey || '-' }}
           <span class="sep">|</span>
@@ -269,17 +322,20 @@
           <el-input v-model="planDlg.form.planName" placeholder="如 2026 年度目标方案" />
         </el-form-item>
         <el-form-item label="关联 KPI 方案" prop="kpiSchemeId">
-          <el-select v-model="planDlg.form.kpiSchemeId" filterable placeholder="选择 KPI 方案" style="width:100%">
+          <el-select v-model="planDlg.form.kpiSchemeId" filterable placeholder="选择 KPI 方案" style="width:100%"
+                     :disabled="planDlg.editing && planDlg.hasValues">
             <el-option v-for="s in kpiSchemeOptions" :key="s.id"
                        :label="`${s.schemeCode || s.code || '-'} · ${s.schemeName || s.name || '-'}`"
                        :value="s.id" />
           </el-select>
+          <div v-if="planDlg.editing && planDlg.hasValues" class="lock-hint">该方案已存在目标值，关联 KPI 方案不可修改</div>
         </el-form-item>
         <el-form-item label="目标维度" prop="targetDim">
-          <el-radio-group v-model="planDlg.form.targetDim">
+          <el-radio-group v-model="planDlg.form.targetDim" :disabled="planDlg.editing && planDlg.hasValues">
             <el-radio value="EMP">人员（EMP）</el-radio>
             <el-radio value="ORG">机构（ORG）</el-radio>
           </el-radio-group>
+          <div v-if="planDlg.editing && planDlg.hasValues" class="lock-hint">该方案已存在目标值，目标维度不可修改</div>
         </el-form-item>
         <!-- 生效日期已隐藏：保存时由起始日期自动填充（onSavePlan 里 effectiveDate = startDate） -->
         <el-form-item label="起始日期" prop="startDate" required>
@@ -299,6 +355,29 @@
       </template>
     </el-dialog>
 
+    <!-- 触发 KPI 计算：KPI方案锁定为该目标方案关联的方案，仅选数据日期 + 触发原因 -->
+    <el-dialog v-model="kpiTrgDlg.show" title="确认触发 KPI 计算" width="520px" :close-on-click-modal="false">
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px"
+        title="该操作将基于所选数据日期的指标结果与目标值，重算该目标方案关联的 KPI 方案得分。" />
+      <el-form ref="kpiTrgFormRef" :model="kpiTrgDlg.form" :rules="kpiTrgRules" label-position="top" size="default">
+        <el-form-item label="数据日期" prop="dataDate">
+          <el-date-picker v-model="kpiTrgDlg.form.dataDate" type="date"
+            value-format="YYYY-MM-DD" style="width:100%" placeholder="选择数据日期" />
+        </el-form-item>
+        <el-form-item label="KPI方案">
+          <el-input :model-value="kpiTrgDlg.form.schemeLabel" disabled />
+        </el-form-item>
+        <el-form-item label="触发原因" prop="reason">
+          <el-input v-model="kpiTrgDlg.form.reason" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请说明触发 KPI 计算的原因（将记入审计日志）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="kpiTrgDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="kpiTrgDlg.saving" @click="onConfirmPlanTrigger">确认执行</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -306,7 +385,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
-import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory } from '@/api/perf';
+import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics, calcKpiScore } from '@/api/perf';
 import { listUsers } from '@/api/users';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -325,6 +404,13 @@ const canCreatePlan = computed(() => {
                           || c === 'BACK_FINANCE' || c === 'FINANCE_LEADER');
 });
 
+// 资财部负责人(FINANCE_LEADER)：可查看全部目标方案，不受"仅本人创建"限制
+const isFinanceLeader = computed(() => {
+  const roles = userStore.user?.roles || [];
+  const codes = roles.map(r => (typeof r === 'string' ? r : (r.roleId || r.roleCode)));
+  return codes.some(c => c === 'FINANCE_LEADER' || c === 'R_FIN_LEAD');
+});
+
 // === 维度 / 周期 / 状态 字典 ===
 const BASE_DIMS = [
   { v: 'EMP', l: '员工' },
@@ -337,6 +423,7 @@ const statusCls   = (s) => ({ ACTIVE: 'tag-success', DISABLED: 'tag-info' }[s] |
 // === KPI 方案下拉 + id→label 映射（用于表格"关联 KPI 方案"列翻译） ===
 const kpiSchemeOptions = ref([]);
 const kpiMap = ref(new Map());
+const kpiSchemeById = ref(new Map()); // kpiSchemeId → { code, name }（供"触发"弹框解析关联方案编码）
 async function loadKpiSchemeOptions() {
   try {
     const r = await listKpiRules({ pageSize: 100 });
@@ -345,30 +432,131 @@ async function loadKpiSchemeOptions() {
     // 选 DISABLED/DRAFT/TRIAL_RUN/INACTIVE 都会被 PERF-42200 拒绝；前端过滤掉非 ACTIVE。
     kpiSchemeOptions.value = arr.filter(s => s.status === 'ACTIVE');
     const m = new Map();
+    const byId = new Map();
     // kpiMap 保留全部（含非 ACTIVE）用于列表展示历史方案的名称翻译，不影响下拉过滤
     for (const s of arr) {
       const code = s.schemeCode || s.code || '';
       const name = s.schemeName || s.name || '';
       m.set(s.id, `${code} · ${name}`.replace(/^ · /, '').replace(/ · $/, ''));
+      byId.set(s.id, { code, name });
     }
     kpiMap.value = m;
+    kpiSchemeById.value = byId;
   } catch { /* 列表仍可显示 ID 兜底 */ }
+}
+
+// === 触发 KPI 计算（目标方案关联的 KPI 方案锁定）===
+const kpiTrgFormRef = ref(null);
+const kpiTrgDlg = reactive({
+  show: false, saving: false,
+  form: { dataDate: new Date().toISOString().slice(0, 10), schemeCode: '', schemeLabel: '', reason: '' }
+});
+const kpiTrgRules = {
+  dataDate: [{ required: true, message: '请选择数据日期' }],
+  reason:   [{ required: true, message: '请填写触发原因', trigger: 'blur' }]
+};
+function openPlanTrigger(row) {
+  const sch = row.kpiSchemeId ? kpiSchemeById.value.get(row.kpiSchemeId) : null;
+  if (!sch || !sch.code) {
+    return ElMessage.warning('该目标方案未关联有效的 KPI 方案，无法触发计算');
+  }
+  kpiTrgDlg.form.dataDate = new Date().toISOString().slice(0, 10);
+  kpiTrgDlg.form.schemeCode = sch.code;
+  kpiTrgDlg.form.schemeLabel = `${sch.code}${sch.name ? ' - ' + sch.name : ''}`;
+  kpiTrgDlg.form.reason = '';
+  kpiTrgDlg.show = true;
+}
+async function onConfirmPlanTrigger() {
+  try { await kpiTrgFormRef.value.validate(); } catch { return; }
+  kpiTrgDlg.saving = true;
+  try {
+    // 后端 /api/perf/kpi-score/calc：先记审计日志，再调用 KPI 计算服务
+    await calcKpiScore({
+      dataDate:   kpiTrgDlg.form.dataDate,
+      schemeCode: kpiTrgDlg.form.schemeCode,
+      reason:     (kpiTrgDlg.form.reason || '').trim()
+    });
+    ElMessage.success('已触发 KPI 计算');
+    kpiTrgDlg.show = false;
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '触发失败');
+  } finally { kpiTrgDlg.saving = false; }
 }
 const kpiLabelOf = (id) => kpiMap.value.get(id) || id || '-';
 
+// 指标编号 → 指标名称映射（审批详情里把"指标：M_0268"显示成"M_0268 · 名称"）
+const metricNameMap = ref(new Map());
+async function loadMetricMap() {
+  try {
+    const r = await listMetrics({ pageSize: 1000 });
+    const arr = Array.isArray(r) ? r : (r?.records || []);
+    const m = new Map();
+    for (const x of arr) {
+      if (x.metricCode) m.set(x.metricCode, x.metricName || '');
+    }
+    metricNameMap.value = m;
+  } catch { /* 取不到名称时回退仅显示编号 */ }
+}
+// 展示成 "M_0268 · 指标名称"；无名称或未命中时仅显示编号
+const metricLabel = (code) => {
+  if (!code) return '-';
+  const name = metricNameMap.value.get(code);
+  return name ? `${code} · ${name}` : code;
+};
+
+// ===== 审批列表展示方案信息（方案编号/名称/关联KPI方案/维度）=====
+// planId → 方案对象（来自已加载的目标方案列表 plans）
+const planById = computed(() => {
+  const m = new Map();
+  for (const p of plans.value) if (p.id != null) m.set(String(p.id), p);
+  return m;
+});
+// 目标修正申请索引：businessKey / id → apply，供"待我审批"(workflow task) 反查 planId
+const applyByKey = ref(new Map());
+async function loadApplyIndex() {
+  try {
+    const r = await listTargetAdjusts({ pageSize: 100 });
+    const arr = Array.isArray(r) ? r : (r?.records || []);
+    const m = new Map();
+    for (const a of arr) {
+      if (a.businessKey) m.set(a.businessKey, a);
+      if (a.id) m.set(String(a.id), a);
+    }
+    applyByKey.value = m;
+  } catch { /* 索引取不到则方案列回退显示 '-' */ }
+}
+// 待我审批行(workflow task) → 方案；先用 businessKey 反查 apply 再取 planId
+const planOfTodo = (row) => {
+  const a = applyByKey.value.get(row.businessKey) || applyByKey.value.get(row.bizId);
+  return a ? planById.value.get(String(a.planId)) : null;
+};
+// 已审批行(apply) → 方案（apply 自带 planId）
+const planOfDone = (row) => planById.value.get(String(row.planId));
+
 // === 方案列表 ===
 // f = 筛选条件（双向绑定到控件）。filteredPlans 直接读 f，输入即时过滤。
-const f = reactive({ keyword: '', targetDim: '', status: '' });
+const f = reactive({ keyword: '', kpiKeyword: '', targetDim: '', status: '' });
+
+// 重置查询条件：清空筛选项（表格基于 f 即时过滤，清空后自动恢复全量）
+function resetFilters() {
+  f.keyword = '';
+  f.kpiKeyword = '';
+  f.targetDim = '';
+  f.status = '';
+}
 const plans = ref([]);
 const loadingPlans = ref(false);
 
 // user_id → "username (中文名)" 映射，用于列表"创建人"列展示
 const userMap = ref(new Map());
+// user_id → { name:中文名, username:工号 }，用于"创建人"列两行展示（姓名 + 工号副标题）
+const userInfoMap = ref(new Map());
 async function loadUserMap() {
   try {
     const r = await listUsers({ pageSize: 200 });
     const list = Array.isArray(r) ? r : (r?.records || []);
     const m = new Map();
+    const info = new Map();
     for (const u of list) {
       const id = u.userId || u.empId;
       if (!id) continue;
@@ -377,8 +565,10 @@ async function loadUserMap() {
       // 形如 "finance_zhou (周八(资财))"；若任一为空则只显示有的部分
       const label = uname && cn ? `${uname} (${cn})` : (uname || cn || id);
       m.set(id, label);
+      info.set(id, { name: cn, username: uname });
     }
     userMap.value = m;
+    userInfoMap.value = info;
   } catch {
     // listUsers 403 等异常时静默——列表降级显示原始 user_id 不阻塞页面
   }
@@ -401,10 +591,18 @@ async function loadPlans() {
 // 即时过滤：f 任一字段变化都会触发 computed 重算，无需点"查询"
 const filteredPlans = computed(() => {
   let arr = plans.value;
+  // 目标方案：仅展示创建人=本人的记录；资财部负责人不受限制，可看全部
+  const myEmpId = userStore.user?.empId;
+  if (myEmpId && !isFinanceLeader.value) arr = arr.filter(p => p.createdBy === myEmpId);
   if (f.keyword) {
     const kw = String(f.keyword).toLowerCase();
     arr = arr.filter(p => (p.planCode || '').toLowerCase().includes(kw)
                        || (p.planName || '').toLowerCase().includes(kw));
+  }
+  if (f.kpiKeyword) {
+    const kw = String(f.kpiKeyword).toLowerCase();
+    // 按列表显示的「关联 KPI 方案」文案（编码 · 名称）模糊匹配
+    arr = arr.filter(p => String(kpiLabelOf(p.kpiSchemeId) || '').toLowerCase().includes(kw));
   }
   if (f.targetDim) arr = arr.filter(p => p.targetDim === f.targetDim);
   if (f.status)    arr = arr.filter(p => p.status === f.status);
@@ -465,6 +663,8 @@ async function loadTodos() {
     // listTodoTasks 经 unwrapPage 返回 {records,total}（非数组），必须取 records
     todos.value = Array.isArray(r) ? r : (r?.records || []);
     todoPager.pageNo = 1;
+    // 刷新申请索引，保证待审批行能按 businessKey 反查到方案信息
+    loadApplyIndex();
   } catch { todos.value = []; }
   finally { todoLoading.value = false; }
 }
@@ -525,19 +725,6 @@ async function openDetail(row) {
   detailDlg.loading = false;
 }
 
-// 已审批 tab remark JSON 解析 helper
-function parseDoneAdj(remark) {
-  try {
-    const obj = typeof remark === 'string' ? JSON.parse(remark) : (remark || {});
-    return obj.adjustments || [];
-  } catch { return []; }
-}
-function parseDoneReason(remark) {
-  try {
-    const obj = typeof remark === 'string' ? JSON.parse(remark) : (remark || {});
-    return obj.reason || '-';
-  } catch { return '-'; }
-}
 
 // 「🔄 刷新」全局按钮：按当前 tab 路由
 async function reload() {
@@ -610,6 +797,58 @@ async function submitReview(action) {
   }
 }
 
+// === 批量审批：多选 + 统一通过/驳回 ===
+const todoSelection = ref([]);
+function onTodoSelectionChange(rows) {
+  todoSelection.value = rows || [];
+}
+const batchDlg = reactive({ show: false, saving: false, opinion: '' });
+// 点击「批量审批」：必须已选 ≥1 条，否则报错；通过后弹出批量审批弹窗
+function openBatchReview() {
+  if (!todoSelection.value.length) {
+    return ElMessage.error('请至少选择一条待审批记录');
+  }
+  batchDlg.opinion = '';
+  batchDlg.show = true;
+}
+// 对所选全部记录统一通过/驳回；审批意见必填；逐条提交，统计成功/失败
+async function submitBatchReview(action) {
+  if (!batchDlg.opinion || !batchDlg.opinion.trim()) {
+    return ElMessage.warning('请填写审批意见');
+  }
+  const rows = todoSelection.value.filter(r => r && r.taskId);
+  if (!rows.length) {
+    return ElMessage.error('请至少选择一条待审批记录');
+  }
+  batchDlg.saving = true;
+  let ok = 0;
+  let fail = 0;
+  for (const row of rows) {
+    try {
+      await ensureClaimed(row);
+      if (action === 'APPROVE') {
+        await approveTask(row.taskId, batchDlg.opinion);
+      } else {
+        await rejectTask(row.taskId, batchDlg.opinion);
+      }
+      ok++;
+    } catch (e) {
+      fail++;
+    }
+  }
+  batchDlg.saving = false;
+  batchDlg.show = false;
+  const verb = action === 'APPROVE' ? '通过' : '驳回';
+  if (fail === 0) {
+    ElMessage.success(`批量${verb}成功：${ok} 条`);
+  } else {
+    ElMessage.warning(`批量${verb}完成：成功 ${ok} 条，失败 ${fail} 条`);
+  }
+  todoSelection.value = [];
+  await loadTodos();
+  dones.value = [];
+}
+
 // === 跳子页（带 planId 给 TargetValues.vue 预选方案） ===
 function openValues(row) {
   router.push({
@@ -621,7 +860,7 @@ function openValues(row) {
 // === 新增方案对话框 ===
 const planFormRef = ref(null);
 const planDlg = reactive({
-  show: false, saving: false, editing: null,
+  show: false, saving: false, editing: null, hasValues: false,
   form: { planCode: '', planName: '', kpiSchemeId: '', targetDim: 'EMP',
           effectiveDate: '', startDate: '', endDate: '' }
 });
@@ -636,6 +875,7 @@ const planRules = {
 };
 function openCreatePlan() {
   planDlg.editing = null;
+  planDlg.hasValues = false;
   Object.assign(planDlg.form, {
     planCode: '', planName: '', kpiSchemeId: '', targetDim: 'EMP',
     effectiveDate: '', startDate: '', endDate: ''
@@ -644,6 +884,7 @@ function openCreatePlan() {
 }
 async function openEditPlan(row) {
   planDlg.editing = row.id || row.planCode;
+  planDlg.hasValues = false;
   // 先确保 KPI 方案下拉的 options 已加载，否则 el-select 拿到 kpiSchemeId 也无 option 匹配显示空白
   if (!kpiSchemeOptions.value.length) {
     try { await loadKpiSchemeOptions(); } catch {}
@@ -655,6 +896,11 @@ async function openEditPlan(row) {
     _status: row.status || 'ACTIVE'
   });
   planDlg.show = true;
+  // 该方案是否已存在目标值：有则禁止修改关联 KPI 方案 / 目标维度（避免与已录目标值口径冲突）
+  try {
+    const tv = await listTargetValues({ planId: row.id, planCode: row.planCode, pageSize: 1 });
+    planDlg.hasValues = ((tv?.total ?? tv?.records?.length ?? 0) > 0);
+  } catch { planDlg.hasValues = false; }
 }
 async function onSavePlan() {
   try { await planFormRef.value.validate(); } catch { return; }
@@ -701,7 +947,7 @@ async function togglePlanStatus(idOrRow, newStatus) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove(), loadUserMap()]);
+  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove(), loadUserMap(), loadMetricMap(), loadApplyIndex()]);
 
   // 从工作台跳转：?tab=todo&taskId=xxx → 切到待我审批 tab + 自动弹审批窗
   const queryTab = route.query.tab;
@@ -713,23 +959,35 @@ onMounted(async () => {
       const row = todos.value.find(t => t.taskId === queryTaskId);
       if (row) openReview(row);
     }
+  } else if (queryTab === 'done' && canApprove.value) {
+    // 工作台已办「详情」跳转：?tab=done&bizKey=TARGET_ADJUST:{applyId} → 已审批 tab + 弹只读详情
+    activeTab.value = 'done';
+    await loadDones();
+    const applyId = (route.query.bizKey || '').split(':')[1];
+    const row = dones.value.find(d => (applyId && d.id === applyId) || (queryTaskId && d.taskId === queryTaskId));
+    if (row) openDetail(row);
+    else ElMessage.warning('申请不在已审批列表或已变更');
   }
 });
 </script>
 
 <style lang="scss" scoped>
+.lock-hint { font-size: 12px; color: $text-4; margin-top: 4px; line-height: 1.4; }
 .page-h h1 .sub {
   font-size: 13px; color: $text-3; margin-left: 12px; font-weight: 400;
   em { color: $text-4; font-style: normal; }
 }
 .filter-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
   .lab { font-size: 13px; color: $text-2; margin-bottom: 6px; }
+  .filter-actions { display: flex; align-items: flex-end; }
 }
 .table { padding: 14px 16px 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .tab-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.targets-tabs :deep(.el-tabs__header) { margin-bottom: 12px; }
+/* 取消审批后只保留「目标方案」，隐藏 tab 栏（待我审批/已审批不再使用） */
+.targets-tabs :deep(.el-tabs__header) { display: none; }
 .review-meta {
   background: rgba(64, 158, 255, 0.04);
   border-left: 3px solid #409eff;

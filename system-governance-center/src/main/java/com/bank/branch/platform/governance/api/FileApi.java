@@ -64,4 +64,22 @@ public interface FileApi {
      * @throws com.bank.branch.platform.common.web.exception.BizException GOV-40005 文件不存在
      */
     void deleteFile(String fileId);
+
+    /**
+     * Get absolute filesystem path. Business modules stream the file themselves
+     * via Files.copy to avoid forwarding to /api/files/{id}/download which would
+     * trigger a second RBAC check on G_FILE_DOWNLOAD resource.
+     *
+     * @param fileId file object id
+     * @return absolute path
+     */
+    java.nio.file.Path getFilePath(String fileId);
+
+    /**
+     * Get original file name for Content-Disposition header.
+     *
+     * @param fileId file object id
+     * @return original file name; "file" if id not found
+     */
+    String getFileName(String fileId);
 }

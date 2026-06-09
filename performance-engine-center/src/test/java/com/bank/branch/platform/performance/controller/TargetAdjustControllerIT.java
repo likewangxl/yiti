@@ -145,7 +145,7 @@ class TargetAdjustControllerIT extends PerformanceControllerTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.id").isNotEmpty())
-                .andExpect(jsonPath("$.data.status").value("IN_APPROVAL"));
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
     }
 
     @Test

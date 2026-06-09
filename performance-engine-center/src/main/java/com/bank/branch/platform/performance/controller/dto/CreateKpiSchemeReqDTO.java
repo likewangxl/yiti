@@ -20,11 +20,10 @@ import java.util.List;
 @Schema(description = "新建 KPI 方案请求")
 public class CreateKpiSchemeReqDTO {
 
-    /** 方案编码 (唯一, 大写 + 数字 + 下划线). */
+    /** 方案编码 (唯一). 不再强约束格式, 调用方自行保证唯一与可识别 */
     @Schema(description = "方案编码", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "schemeCode 不能为空")
     @Size(max = 64, message = "schemeCode 长度不能超过 64")
-    @Pattern(regexp = "^[A-Z][A-Z0-9_]*$", message = "schemeCode 必须以大写字母开头, 只允许大写字母、数字和下划线")
     private String schemeCode;
 
     /** 方案名称. */

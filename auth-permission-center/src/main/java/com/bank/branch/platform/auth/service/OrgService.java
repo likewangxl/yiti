@@ -45,7 +45,12 @@ public class OrgService {
     /** 新增机构。orgCode 不能与已有重复；orgLevel 不传时按父级 + 1 自动计算。 */
     @org.springframework.transaction.annotation.Transactional
     public OrgDTO createOrg(OrgCreateReqDTO req) {
-        if (orgMapper.selectByOrgCode(req.getOrgCode()) != null) {
+        // 机构编码：前端不传时后端自增（现有最大数字编码 +1）；传了则沿用并校验重复
+        String orgCode = req.getOrgCode();
+        if (orgCode == null || orgCode.isBlank()) {
+            Long maxCode = orgMapper.selectMaxNumericOrgCode();
+            orgCode = String.valueOf((maxCode == null ? 0L : maxCode) + 1);
+        } else if (orgMapper.selectByOrgCode(orgCode) != null) {
             throw new BizException("AUTH-40902", "机构编码已存在");
         }
         Integer level = req.getOrgLevel();
@@ -59,14 +64,15 @@ public class OrgService {
             }
         }
         ExtOrgInfo e = new ExtOrgInfo();
-        e.setOrgCode(req.getOrgCode());
+        e.setOrgCode(orgCode);
         e.setOrgName(req.getOrgName());
+        e.setDeptNo(req.getDeptNo());
         e.setOrgLevel(level);
         e.setPId(req.getPId() == null ? "" : req.getPId());
         e.setOrganState(0);
         e.setCreateTime(java.time.LocalDateTime.now());
         orgMapper.insert(e);
-        log.info("[OrgService.createOrg] orgCode={} pId={} level={}", e.getOrgCode(), e.getPId(), level);
+        log.info("[OrgService.createOrg] orgCode={} pId={} level={} deptNo={}", e.getOrgCode(), e.getPId(), level, e.getDeptNo());
         return getOrg(e.getOrgCode());
     }
 
@@ -76,8 +82,18 @@ public class OrgService {
         ExtOrgInfo e = orgMapper.selectByOrgCode(orgCode);
         if (e == null) throw new BizException("AUTH-40404", "机构不存在");
         if (req.getOrgName() != null && !req.getOrgName().isBlank()) e.setOrgName(req.getOrgName());
+        // 状态变更：禁用(1)前校验机构下无用户，否则拒绝；启用(0)无需校验
+        if (req.getOrganState() != null) {
+            if (req.getOrganState() == 1) {
+                long userCnt = userOrgMapper.countUsersByOrgCode(orgCode, null);
+                if (userCnt > 0) {
+                    throw new BizException("AUTH-40303", "该机构下还有 " + userCnt + " 个用户，请先迁移用户再禁用");
+                }
+            }
+            e.setOrganState(req.getOrganState());
+        }
         orgMapper.updateById(e);
-        log.info("[OrgService.updateOrg] orgCode={} newName={}", orgCode, e.getOrgName());
+        log.info("[OrgService.updateOrg] orgCode={} newName={} organState={}", orgCode, e.getOrgName(), e.getOrganState());
         return getOrg(orgCode);
     }
 
@@ -237,6 +253,7 @@ public class OrgService {
         OrgDTO dto = new OrgDTO();
         dto.setOrgCode(org.getOrgCode());
         dto.setOrgName(org.getOrgName());
+        dto.setDeptNo(org.getDeptNo());
         dto.setOrgLevel(org.getOrgLevel());
         dto.setParentOrgCode(org.getPId());
         dto.setOrganState(org.getOrganState());
@@ -358,6 +375,7 @@ public class OrgService {
         OrgTreeNodeDTO node = new OrgTreeNodeDTO();
         node.setOrgCode(org.getOrgCode());
         node.setOrgName(org.getOrgName());
+        node.setDeptNo(org.getDeptNo());
         node.setOrgLevel(org.getOrgLevel());
         node.setParentOrgCode(org.getPId());
         node.setOrganState(org.getOrganState());

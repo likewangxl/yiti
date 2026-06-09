@@ -67,8 +67,8 @@
       </div>
     </div>
 
-    <!-- 结果卡 -->
-    <div class="card-section result" v-if="hasResult">
+    <!-- 结果卡：始终展示，未查询时给空表框 + 提示，避免维度下方空荡荡 -->
+    <div class="card-section result">
       <div class="card-h">
         <div class="title">查询结果（{{ rows.length }} 行 × {{ pickedMetrics.length }} 指标）</div>
         <div class="chart-tabs">
@@ -79,7 +79,8 @@
         </div>
       </div>
 
-      <el-table v-if="view === 'table'" :data="pagedRows" size="default" stripe>
+      <el-table v-if="view === 'table'" :data="pagedRows" size="default" stripe
+                :empty-text="hasResult ? '无符合条件的数据' : '请选择指标和对象后点击「查询」'">
         <el-table-column prop="subject" :label="dimLabel" width="160" />
         <el-table-column
           v-for="c in pickedMetrics" :key="c" :prop="c"
@@ -109,6 +110,7 @@
           <el-input v-model="subjectDlg.treeKw" placeholder="搜索机构名称" size="small" clearable style="margin-bottom:8px" />
           <el-tree
             ref="subjectTreeRef"
+            :key="subjectDlg.openSeq"
             :data="subjectDlg.orgTree"
             show-checkbox
             node-key="code"
@@ -153,6 +155,7 @@
     <MetricPicker
       v-model:visible="pickerVisible"
       v-model="pickedMetrics"
+      :dim="dim"
     />
     <SchemeSaveDialog
       v-model:visible="saveSchemeVisible"
@@ -175,8 +178,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart, LineChart, PieChart as EPie } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { queryDynamic, exportDynamic, getQueryDimensions, getSavedQuery } from '@/api/report';
-import { searchEmployees } from '@/api/employees';
+import { queryDynamic, exportDynamicFile, searchReportEmployees, getPickerScope, getQueryDimensions, getSavedQuery } from '@/api/report';
 import { getOrgTree, listOrgUsers } from '@/api/orgs';
 import { listMetrics } from '@/api/metrics';
 import MetricPicker from './components/MetricPicker.vue';
@@ -190,7 +192,10 @@ const dimensions = ref([{ code: 'EMP', label: '员工' }, { code: 'ORG', label: 
 const metricsList = ref([]);
 const pickedMetrics = ref([]);
 const subjects = ref([]);
-const date = ref(new Date().toISOString().slice(0, 10));
+// 指标结果宽表的最新数据日期（当前 demo 数据落在 2026-04-21~2026-05-31）。
+// 后端按 data_date 精确匹配，默认取今天会查不到数据（全显示 "-"），故默认指向最新有数据的日期。
+const LATEST_DATA_DATE = '2026-05-31';
+const date = ref(LATEST_DATA_DATE);
 const view = ref('table');
 const querying = ref(false);
 const exporting = ref(false);
@@ -224,26 +229,36 @@ const formatNum = (v) => v == null ? '-' : (typeof v === 'number' ? v.toLocaleSt
 function removeMetric(c) { pickedMetrics.value = pickedMetrics.value.filter(x => x !== c); }
 function reset() {
   dim.value = 'EMP';
-  // 重置后默认重新挑当前维度第 1 个指标（若已加载），否则置空
-  pickedMetrics.value = pickFirstMetricsForDim('EMP', 1);
+  // 不预选指标，由用户自行挑
+  pickedMetrics.value = [];
   subjects.value = [];
-  date.value = '2026-04-22';
+  date.value = LATEST_DATA_DATE;
   hasResult.value = false;
-}
-
-// 从 metricsList 中按维度挑前 N 个指标（用于初始默认选中和 reset）
-function pickFirstMetricsForDim(d, n) {
-  const list = metricsList.value
-    .filter(m => (m.baseDim || 'EMP') === d)
-    .slice(0, n)
-    .map(m => m.metricCode || m.code)
-    .filter(Boolean);
-  return list;
 }
 
 // ============ 对象选择 dialog ============
 const subjectTreeRef = ref(null);
 const orgTreeData = ref([]);
+// 对象选择数据范围（按角色）：ALL 不限 / ORG_SUBTREE 本机构子树 / SELF 仅本人
+const pickerScope = ref({ mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
+
+// 按允许的机构编码裁剪机构树：保留 code 命中或有命中后代的节点（ALL 不裁剪）
+function filterTreeByCodes(nodes, codeSet) {
+  const out = [];
+  for (const n of nodes || []) {
+    const children = filterTreeByCodes(n.children, codeSet);
+    if (codeSet.has(n.code) || children.length) {
+      out.push({ ...n, children });
+    }
+  }
+  return out;
+}
+function scopedOrgTree() {
+  const sc = pickerScope.value;
+  if (!sc || sc.mode === 'ALL') return orgTreeData.value;
+  const set = new Set(sc.orgCodes || []);
+  return filterTreeByCodes(orgTreeData.value, set);
+}
 const subjectDlg = reactive({
   show: false,
   orgTree: [],
@@ -251,6 +266,7 @@ const subjectDlg = reactive({
   empKw: '',
   empSearchResults: [],
   selected: [],
+  openSeq: 0,   // 每次打开递增，给 el-tree 当 :key 强制重建，避免上次勾选残留
 });
 
 function filterOrgNode(value, data) {
@@ -265,31 +281,71 @@ watch(() => subjectDlg.treeKw, (val) => {
 watch(() => subjectDlg.show, (visible) => {
   if (visible) {
     subjectDlg.selected = [...subjects.value];
-    subjectDlg.orgTree = orgTreeData.value;
+    subjectDlg.orgTree = scopedOrgTree();
     subjectDlg.treeKw = '';
     subjectDlg.empKw = '';
     subjectDlg.empSearchResults = [];
+    subjectDlg.openSeq++;   // 强制 el-tree 重建：清掉上次的机构勾选残留，避免"勾着却没加载员工"
   }
 });
 
-async function onOrgCheckChange() {
-  const checkedNodes = subjectTreeRef.value?.getCheckedNodes(true) || [];
+// 机构 → 员工 缓存：成功查过的机构存起来，重复勾选/取消不再重复请求（失败不缓存，下次会重试）
+const orgUsersCache = new Map();
+let orgCheckTimer = null;
+
+// 防抖：勾父机构时 el-tree 级联勾全部子节点，@check-change 会对每个节点各触发一次，
+// 若每次都跑一遍查询 → O(N²) 请求风暴、疯狂报错。
+// 这里把这一连串触发合并成"安静 150ms 后只跑一次"，既消除风暴又保留能加载数据的事件。
+function onOrgCheckChange() {
+  clearTimeout(orgCheckTimer);
+  orgCheckTimer = setTimeout(loadCheckedOrgEmployees, 150);
+}
+
+async function loadCheckedOrgEmployees() {
+  const checkedNodes = subjectTreeRef.value?.getCheckedNodes() || [];
   if (dim.value === 'ORG') {
     subjectDlg.selected = checkedNodes.map(n => ({ id: n.code, name: n.name, org: '' }));
-  } else {
-    // EMP 模式：勾机构 → 加载该机构下全部员工
-    const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
-    for (const node of checkedNodes) {
-      try {
-        const users = await listOrgUsers(node.code, { pageSize: 100 });
-        const list = Array.isArray(users) ? users : (users?.records || []);
-        for (const u of list) {
-          const emp = { id: u.empId || u.userId, name: u.empName || u.userchnname || u.username, org: node.name };
-          if (!newSelected.some(s => s.id === emp.id)) newSelected.push(emp);
-        }
-      } catch {}
+    return;
+  }
+  // SELF（支行员工）：只能选自己——勾任意机构都只加入本人，不加载同机构同事
+  if (pickerScope.value.mode === 'SELF') {
+    const sc = pickerScope.value;
+    const base = subjectDlg.selected.filter(s => s._fromSearch);
+    if (checkedNodes.length && sc.selfEmpId && !base.some(s => s.id === sc.selfEmpId)) {
+      base.push({ id: sc.selfEmpId, name: sc.selfName || sc.selfEmpId, org: '' });
     }
-    subjectDlg.selected = newSelected;
+    subjectDlg.selected = base;
+    return;
+  }
+  // EMP 模式：勾机构（含级联子机构）→ 加载其下全部员工。
+  // 全选会勾上百个机构：用「分批并发(每批 8 个)+ 逐批刷新界面」，既快又能看到员工逐步出现，
+  // 且并发有上限不会变回请求风暴。
+  const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
+  const seen = new Set(newSelected.map(s => s.id));
+  const BATCH = 8;
+  for (let i = 0; i < checkedNodes.length; i += BATCH) {
+    const batch = checkedNodes.slice(i, i + BATCH);
+    const results = await Promise.all(batch.map(async (node) => {
+      let list = orgUsersCache.get(node.code);
+      if (list === undefined) {
+        try {
+          const users = await listOrgUsers(node.code, { pageSize: 100 });
+          list = Array.isArray(users) ? users : (users?.records || []);
+          orgUsersCache.set(node.code, list);   // 仅成功才缓存；失败不缓存，下次重试
+        } catch { list = []; }
+      }
+      return { node, list };
+    }));
+    for (const { node, list } of results) {
+      for (const u of list) {
+        const id = u.empId || u.userId;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          newSelected.push({ id, name: u.empName || u.userchnname || u.username, org: node.name });
+        }
+      }
+    }
+    subjectDlg.selected = [...newSelected];   // 逐批刷新，全选时能看到员工陆续出现
   }
 }
 
@@ -297,7 +353,8 @@ async function onEmpSearch() {
   const kw = subjectDlg.empKw?.trim();
   if (!kw) return;
   try {
-    subjectDlg.empSearchResults = await searchEmployees(kw, 20);
+    // 搜 PT_USER（报表专用接口，按工号/姓名匹配，REPORT 权限）；返回 [{id,name,org}]
+    subjectDlg.empSearchResults = await searchReportEmployees(kw, 20);
   } catch { subjectDlg.empSearchResults = []; }
 }
 
@@ -322,10 +379,12 @@ function addSubject(o) {
   objKw.value = '';
 }
 
-// 维度切换：清空已选对象，避免跨维度脏数据
+// 维度切换：清空已选对象 + 已选指标，避免跨维度脏数据
+// （指标按维度过滤后，残留的另一维度指标既不可见又会被带进查询）
 watch(dim, (cur, prev) => {
   if (cur === prev) return;
   subjects.value = [];
+  pickedMetrics.value = [];
   hasResult.value = false;
 });
 
@@ -354,15 +413,19 @@ async function doQuery() {
 }
 
 async function onExport() {
+  if (!pickedMetrics.value.length) { ElMessage.warning('请至少选择 1 个指标'); return; }
+  if (!subjects.value.length)      { ElMessage.warning('请至少选择 1 个对象'); return; }
   exporting.value = true;
   try {
-    const r = await exportDynamic({
+    await exportDynamicFile({
       dim: dim.value,
       metrics: pickedMetrics.value,
       subjects: subjects.value.map(s => s.id),
       date: date.value
     });
-    ElMessage.success(`导出任务已提交（taskId=${r?.taskId || 'mock'}）`);
+    ElMessage.success('导出成功，文件已开始下载');
+  } catch (e) {
+    ElMessage.error('导出失败：' + (e?.message || e));
   } finally {
     exporting.value = false;
   }
@@ -458,14 +521,12 @@ const chartOption = computed(() => {
 onMounted(async () => {
   await Promise.all([
     getOrgTree().then(tree => { orgTreeData.value = tree; }).catch(() => {}),
+    getPickerScope().then(sc => { if (sc && sc.mode) pickerScope.value = sc; }).catch(() => {}),
     listMetrics({ status: 'ACTIVE' })
       .then(list => { if (Array.isArray(list)) metricsList.value = list; })
       .catch(() => { metricsList.value = []; })
   ]);
-
-  if (!pickedMetrics.value.length) {
-    pickedMetrics.value = pickFirstMetricsForDim('EMP', 4);
-  }
+  // 不再默认预选指标，由用户自行从"选择指标"里挑
 });
 </script>
 
@@ -519,4 +580,5 @@ onMounted(async () => {
   }
 }
 .pager { display: flex; justify-content: flex-end; padding: 12px 0; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

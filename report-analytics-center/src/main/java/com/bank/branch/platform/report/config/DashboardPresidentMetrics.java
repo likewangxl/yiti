@@ -41,8 +41,10 @@ public final class DashboardPresidentMetrics {
      * 存款日均 / 贷款余额 / 不良贷款率 / 中间业务收入 / 本月新增有效客户.
      */
     public static final List<KpiCardMeta> KPI_CARD_METRICS = List.of(
-            new KpiCardMeta("DEP_BAL_ORG",                "存款日均",         "亿"),
-            new KpiCardMeta("LOAN_BAL_ORG",               "贷款余额",         "亿"),
+            // 存款/贷款映射到库内真实 ORG 指标码（M_0265 一般性存款月均余额 / M_0347 对公一般性贷款余额）；
+            // 不良/中收/新客 ORG 维度暂无源数据，保留卡片，值返回 null → 前端置灰显示 "--"
+            new KpiCardMeta("M_0265",                     "一般性存款月均",   "万"),
+            new KpiCardMeta("M_0348",                     "对公一般性贷款",   "万"),
             new KpiCardMeta("NPL_RATIO_ORG",              "不良贷款率",       "%"),
             new KpiCardMeta("FEE_INCOME_ORG_MONTH",       "中间业务收入",     "万"),
             new KpiCardMeta("NEW_VALID_CUST_ORG_MONTH",   "本月新增有效客户", "")
@@ -74,11 +76,9 @@ public final class DashboardPresidentMetrics {
             "LOAN_BAL_MOM_RATE"       // 贷款余额环比增长率
     );
 
-    /** 排行榜指标（下属机构排名） */
-    public static final List<String> RANKING_METRICS = List.of(
-            "KPI_TOTAL_SCORE_ORG",    // 综合得分
-            "DEP_BAL_ORG"             // 存款余额（V1.14 # 2 重命名 DEP_BAL_ORG_DAILY → DEP_BAL_ORG）
-    );
+    /** 排行榜指标（下属机构排名）。无 KPI 综合得分数据，V1 按存款规模(M_0265)排名 */
+    public static final String RANKING_SORT_METRIC = "M_0265";  // 一般性存款月均余额
+    public static final List<String> RANKING_METRICS = List.of(RANKING_SORT_METRIC);
 
     /** Top 客户贡献指标 */
     public static final List<String> CUST_CONTRIBUTION_METRICS = List.of(

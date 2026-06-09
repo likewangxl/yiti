@@ -46,6 +46,16 @@ export function logout() {
 }
 
 /**
+ * 切换当前角色（仅本次会话生效）
+ * 后端 POST /api/auth/switch-role，切换后菜单/接口权限/数据范围/工作流待办均按新角色。
+ * 调用方切换成功后应刷新页面，确保所有数据按新角色重新拉取。
+ */
+export function switchRole(roleId) {
+  if (USE_MOCK) return Promise.resolve({ roleId, roleChName: '切换角色(mock)' });
+  return http.post(API_BASE + '/auth/switch-role', { roleId });
+}
+
+/**
  * 取当前用户（用于页面刷新后恢复 store）
  * mock 模式下返回 mock 用户；真模式下走 call() 的 fallback 机制更稳
  */

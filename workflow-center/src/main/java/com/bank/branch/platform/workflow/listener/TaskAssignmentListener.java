@@ -1,12 +1,16 @@
 package com.bank.branch.platform.workflow.listener;
 
+import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.RepositoryService;
+import org.flowable.engine.TaskService;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.task.service.delegate.DelegateTask;
 import org.flowable.task.service.delegate.TaskListener;
@@ -35,6 +39,8 @@ public class TaskAssignmentListener implements TaskListener {
     private final NotifyApi notifyApi;
     private final RepositoryService repositoryService;
     private final UserApi userApi;
+    private final OrgApi orgApi;
+    private final TaskService taskService;
     private final com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
 
     /**
@@ -58,23 +64,43 @@ public class TaskAssignmentListener implements TaskListener {
         String nodeKey = delegateTask.getTaskDefinitionKey();
         String taskId = delegateTask.getId();
 
+        // 虚拟员工默认通过（泛化）：任意审批任务的受理人若为「虚拟员工」(字典 USER_TYPE=2)，
+        // 无需人工审批，自动默认审批通过，审批意见记「默认同意」，流程继续到后续节点。
+        // （原仅限 original_owner_approve 节点，现去掉 nodeKey 限制，对设计器重建的任意流程一致生效。）
+        if (autoApproveIfVirtualOwner(delegateTask, taskId)) {
+            return;
+        }
+
         // 解析候选组
         List<String> candidates = candidateResolverService.resolveCandidates(processDefinitionKey, nodeKey);
 
-        // branch_approve 节点：按发起人机构过滤，只让同机构的负责人审批
-        if ("branch_approve".equals(nodeKey)) {
+        // 审批机构归属过滤：节点配置 SELF(本机构) / PARENT(上级机构) 时，按发起人机构过滤候选，
+        // 只让对应机构的经营机构负责人审批。兼容历史静态流程：branch_approve 无显式配置时，
+        // 沿用「按发起人机构等级自动解析(3级支行→上级分行，2级→本机构)」的原有行为。
+        String orgScope = candidateResolverService.resolveApproveOrgScope(processDefinitionKey, nodeKey);
+        boolean legacyBranchApprove = orgScope == null && "branch_approve".equals(nodeKey);
+        if (orgScope != null || legacyBranchApprove) {
             Object startOrgId = delegateTask.getVariable("startOrgId");
             if (startOrgId != null && !startOrgId.toString().isEmpty()) {
-                filterCandidatesByOrg(delegateTask, candidates, startOrgId.toString());
-                log.info("[TaskAssignmentListener] 任务 {} branch_approve 按机构 {} 过滤候选", taskId, startOrgId);
+                String approveOrg = resolveApproveOrg(startOrgId.toString(), orgScope, legacyBranchApprove);
+                filterCandidatesByOrg(delegateTask, candidates, approveOrg);
+                log.info("[TaskAssignmentListener] 任务 {} 节点 {} 机构归属 {} 发起机构 {} → 审批机构 {} 过滤候选",
+                        taskId, nodeKey, orgScope != null ? orgScope : "AUTO", startOrgId, approveOrg);
                 notifyCandidates(delegateTask, candidates);
                 return;
             }
         }
 
-        // 其他节点：正常设置候选组
-        for (String group : candidates) {
-            delegateTask.addCandidateGroup(group);
+        // 其他节点：设置候选组；VAR 类型审批人从提交方传入的流程变量解析为候选用户
+        for (String c : candidates) {
+            if (c != null && c.startsWith("VAR:")) {
+                Object varValue = delegateTask.getVariable(c.substring(4));
+                for (String empId : MultiInstanceApproverResolver.readVarEmpIds(varValue)) {
+                    delegateTask.addCandidateUser(empId);
+                }
+            } else {
+                delegateTask.addCandidateGroup(c);
+            }
         }
 
         log.info("[TaskAssignmentListener] 任务 {} 已设置候选组 {}", taskId, candidates);
@@ -83,7 +109,7 @@ public class TaskAssignmentListener implements TaskListener {
         // candidates 含前缀（USER:E001 / ROLE:BRANCH_HEAD / ORG:O123），需展开成真实 empId 列表
         if (!candidates.isEmpty()) {
             try {
-                Set<String> empIds = expandCandidatesToEmpIds(candidates);
+                Set<String> empIds = expandCandidatesToEmpIds(candidates, delegateTask);
                 if (empIds.isEmpty()) {
                     log.info("[TaskAssignmentListener] 任务 {} 候选展开后无员工，不发通知 candidates={}", taskId, candidates);
                     return;
@@ -128,6 +154,96 @@ public class TaskAssignmentListener implements TaskListener {
     }
 
     /**
+     * 原业绩所属人审批：若原业绩所属人为虚拟员工(USER_TYPE=2)，自动以「默认同意」完成任务。
+     *
+     * <p>原业绩所属人取任务受理人（BPMN assignee=${ownerEmpId}），兜底取流程变量 ownerEmpId。
+     * 完成失败（如引擎并发）则吞异常返回 false，退回人工审批，保证流程不中断。
+     *
+     * @return true 表示已自动审批通过并完成任务（调用方应直接 return）；false 表示需走人工审批
+     */
+    private boolean autoApproveIfVirtualOwner(DelegateTask delegateTask, String taskId) {
+        // 仅当任务有具体受理人时才判断（会签多实例下为当前实例审批人 ${approver}）；
+        // 候选组节点（无 assignee）不存在"虚拟员工"概念，直接退回人工。
+        String assignee = delegateTask.getAssignee();
+        if (assignee == null || assignee.isEmpty()) {
+            return false;
+        }
+        try {
+            UserDTO owner = userApi.getUserByEmpId(assignee);
+            if (owner != null && "2".equals(owner.getUserType())) {
+                taskService.addComment(taskId, delegateTask.getProcessInstanceId(), "APPROVE", "默认同意");
+                taskService.complete(taskId, java.util.Map.of("approved", true));
+                log.info("[TaskAssignmentListener] 任务 {} 受理人 {} 为虚拟员工，自动默认同意并完成", taskId, assignee);
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("[TaskAssignmentListener] 虚拟员工自动审批失败 assignee={}，转人工审批，原因 {}",
+                    assignee, e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * 机构负责人审批环节的审批机构解析：
+     * <ul>
+     *   <li>发起人机构等级 = 3（支行）→ 由上级机构（等级 2，分行）的负责人审批 → 取 parentOrgCode</li>
+     *   <li>发起人机构等级 = 2 → 由本机构负责人审批 → 取发起人机构</li>
+     *   <li>其它等级 / 查不到机构 / 无上级 → 兜底用发起人本机构（保持原行为）</li>
+     * </ul>
+     */
+    /**
+     * 按节点「审批机构归属」配置解析审批机构编码：
+     * <ul>
+     *   <li>SELF   → 本机构：返回发起人机构编码（审批人机构号 = 发起人机构号）</li>
+     *   <li>PARENT → 上级机构：返回发起人机构的 parentOrgCode（无上级则兜底本机构）</li>
+     *   <li>legacyAuto（历史 branch_approve 无显式配置）→ 按机构等级自动解析（3级→上级，否则本机构）</li>
+     * </ul>
+     *
+     * @param startOrgCode 发起人机构编码
+     * @param scope        SELF / PARENT / null
+     * @param legacyAuto   是否走历史 branch_approve 等级自动解析
+     * @return 审批机构编码
+     */
+    private String resolveApproveOrg(String startOrgCode, String scope, boolean legacyAuto) {
+        try {
+            if ("SELF".equals(scope)) {
+                return startOrgCode;
+            }
+            if ("PARENT".equals(scope)) {
+                OrgDTO org = orgApi.getOrg(startOrgCode);
+                if (org != null && org.getParentOrgCode() != null && !org.getParentOrgCode().isBlank()) {
+                    return org.getParentOrgCode();
+                }
+                return startOrgCode;  // 无上级兜底本机构
+            }
+            // AUTO：按发起人机构层级自动解析（3级支行→上级分行 / 2级→本机构），与历史 branch_approve 行为一致
+            if ("AUTO".equals(scope) || legacyAuto) {
+                return resolveBranchApproveOrg(startOrgCode);
+            }
+        } catch (Exception e) {
+            log.warn("[TaskAssignmentListener] 解析审批机构失败 startOrg={}, scope={}，兜底本机构，原因 {}",
+                    startOrgCode, scope, e.getMessage());
+        }
+        return startOrgCode;
+    }
+
+    private String resolveBranchApproveOrg(String startOrgCode) {
+        try {
+            OrgDTO org = orgApi.getOrg(startOrgCode);
+            if (org != null && org.getOrgLevel() != null && org.getOrgLevel() == 3
+                    && org.getParentOrgCode() != null && !org.getParentOrgCode().isBlank()) {
+                log.info("[TaskAssignmentListener] branch_approve 三级机构 {} → 上级机构 {} 审批",
+                        startOrgCode, org.getParentOrgCode());
+                return org.getParentOrgCode();
+            }
+        } catch (Exception e) {
+            log.warn("[TaskAssignmentListener] 解析审批机构失败 startOrg={}，兜底本机构，原因 {}",
+                    startOrgCode, e.getMessage());
+        }
+        return startOrgCode;
+    }
+
+    /**
      * branch_approve 节点专用：按机构过滤候选人，直接指派同机构员工为候选用户。
      * 将 ROLE:XXX 候选展开后按 orgCode 过滤，设为任务的候选用户（非候选组）。
      */
@@ -158,7 +274,7 @@ public class TaskAssignmentListener implements TaskListener {
         String taskId = delegateTask.getId();
         if (candidates.isEmpty()) return;
         try {
-            Set<String> empIds = expandCandidatesToEmpIds(candidates);
+            Set<String> empIds = expandCandidatesToEmpIds(candidates, delegateTask);
             if (empIds.isEmpty()) return;
             String processInstanceId = delegateTask.getProcessInstanceId();
             com.bank.branch.platform.workflow.entity.BizProcessMap bizMap =
@@ -202,7 +318,7 @@ public class TaskAssignmentListener implements TaskListener {
      * - ORG:O123 → 暂不支持（auth 模块未提供按 org 查员工 API），log warn 跳过
      * </p>
      */
-    private Set<String> expandCandidatesToEmpIds(List<String> candidates) {
+    private Set<String> expandCandidatesToEmpIds(List<String> candidates, DelegateTask delegateTask) {
         Set<String> empIds = new LinkedHashSet<>();
         for (String candidate : candidates) {
             if (candidate == null || candidate.isEmpty()) continue;
@@ -215,6 +331,8 @@ public class TaskAssignmentListener implements TaskListener {
                     List<String> roleEmps = userApi.getEmpIdsByRoleCode(value);
                     if (roleEmps != null) empIds.addAll(roleEmps);
                 }
+                // VAR：从提交方传入的流程变量取审批人 empId
+                case "VAR" -> empIds.addAll(MultiInstanceApproverResolver.readVarEmpIds(delegateTask.getVariable(value)));
                 case "ORG" -> log.warn("[TaskAssignmentListener] ORG 类型候选暂不支持展开，跳过 candidate={}", candidate);
                 default -> {
                     // 无前缀 fallback 当 empId
@@ -227,11 +345,13 @@ public class TaskAssignmentListener implements TaskListener {
 
     /**
      * 是否抑制该 bizType 的待审批任务通知（仅进待办列表，不发通知消息）。
-     * <p>目前仅 TARGET_ADJUST（目标修正）：业务要求待审批不打扰，
-     * 仅审批通过/驳回时由 TargetAdjustCompletedListener 通知申请人。
+     * <p>业务要求：所有待审批任务只进「待办」列表，不再发"待办"通知消息，
+     * 避免工作台「通知」模块混入待办信息。审批结果（通过/驳回）仍由各
+     * *CompletedListener 单独通知申请人，不受此影响。
+     * <p>历史上仅 TARGET_ADJUST 被抑制，现统一对所有 bizType 抑制。
      */
     private boolean isNotifySuppressed(String bizType) {
-        return "TARGET_ADJUST".equals(bizType);
+        return true;
     }
 
     /** BIZ_TYPE → 中文标签，让通知标题更可读 */

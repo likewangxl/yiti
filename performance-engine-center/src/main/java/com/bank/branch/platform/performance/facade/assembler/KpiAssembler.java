@@ -46,6 +46,7 @@ public final class KpiAssembler {
                 .cycleType(scheme.getCycleType())
                 .openDetail(scheme.getOpenDetail() != null && scheme.getOpenDetail() == 1)
                 .status(scheme.getStatus())
+                .createdBy(scheme.getCreatedBy())
                 .items(itemDtos)
                 .build();
     }
@@ -61,10 +62,13 @@ public final class KpiAssembler {
                 .id(item.getId())
                 .metricCode(item.getMetricCode())
                 .metricName(null)
+                .baseDim(item.getBaseDim())
                 .weight(item.getWeight())
                 .multiplier(item.getMultiplier())
                 .minScore(item.getMinScore())
                 .maxScore(item.getMaxScore())
+                .formula(item.getFormula())
+                .sqlExpr(item.getSqlExpr())
                 .sortNo(null)
                 .build();
     }

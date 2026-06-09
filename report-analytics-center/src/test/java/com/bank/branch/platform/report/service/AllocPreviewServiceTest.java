@@ -44,11 +44,11 @@ class AllocPreviewServiceTest {
     @Test
     @DisplayName("有数据 → 字段映射正确，hasData=true，ratio 以纯字符串输出")
     void mapsItems() {
-        when(allocApi.getLastApprovedAllocPreview("C001")).thenReturn(List.of(
+        when(allocApi.getLastApprovedAllocPreview("C001", null)).thenReturn(List.of(
                 src("RULE", null, "rm_zhang", "张客户经理", "BJ_CY", "北京分行朝阳支行", "60"),
                 src("ACCOUNT", "62200000001", "corp_zhao", "赵公司部审核", "BJ_HQ", "北京分行总部", "40")));
 
-        AllocPreviewRespDTO resp = service.preview("C001");
+        AllocPreviewRespDTO resp = service.preview("C001", null);
 
         assertThat(resp.isHasData()).isTrue();
         assertThat(resp.getAllocList()).hasSize(2);
@@ -70,9 +70,9 @@ class AllocPreviewServiceTest {
     @Test
     @DisplayName("无数据 → 空列表 + hasData=false")
     void emptyWhenNoData() {
-        when(allocApi.getLastApprovedAllocPreview("C404")).thenReturn(List.of());
+        when(allocApi.getLastApprovedAllocPreview("C404", null)).thenReturn(List.of());
 
-        AllocPreviewRespDTO resp = service.preview("C404");
+        AllocPreviewRespDTO resp = service.preview("C404", null);
 
         assertThat(resp.isHasData()).isFalse();
         assertThat(resp.getAllocList()).isEmpty();
@@ -81,9 +81,9 @@ class AllocPreviewServiceTest {
     @Test
     @DisplayName("AllocApi 返回 null → 安全降级为空列表")
     void nullSafe() {
-        when(allocApi.getLastApprovedAllocPreview("CNULL")).thenReturn(null);
+        when(allocApi.getLastApprovedAllocPreview("CNULL", null)).thenReturn(null);
 
-        AllocPreviewRespDTO resp = service.preview("CNULL");
+        AllocPreviewRespDTO resp = service.preview("CNULL", null);
 
         assertThat(resp.isHasData()).isFalse();
         assertThat(resp.getAllocList()).isEmpty();

@@ -366,7 +366,12 @@ public class FlowDefService {
             node.setNodeType(dto.getNodeType());
             node.setName(dto.getName());
             node.setApproveMode(dto.getApproveMode());
+            // 审批机构归属（本机构/上级机构/不判断）随整图落库
+            node.setApproveOrgScope(dto.getApproveOrgScope());
             node.setSortNo(dto.getSortNo() != null ? dto.getSortNo() : i + 1);
+            // 画布坐标（可视化流程图编辑器节点位置）随整图落库
+            node.setPosX(dto.getPosX());
+            node.setPosY(dto.getPosY());
             node.setCreatedTime(LocalDateTime.now());
             node.setUpdatedTime(LocalDateTime.now());
             nodeMapper.insert(node);
@@ -381,6 +386,9 @@ public class FlowDefService {
                     approver.setNodeId(nodeId);
                     approver.setApproverType(adto.getApproverType());
                     approver.setApproverValue(adto.getApproverValue());
+                    // 层级角色的层级 / 机构角色的可选角色随审批人落库
+                    approver.setOrgScope(adto.getOrgScope());
+                    approver.setRoleCode(adto.getRoleCode());
                     approver.setSortNo(j + 1);
                     approver.setCreatedTime(LocalDateTime.now());
                     approverMapper.insert(approver);
@@ -396,6 +404,8 @@ public class FlowDefService {
             edge.setFlowDefId(flowDefId);
             edge.setFromNodeId(keyToId.get(dto.getFromNodeKey()));
             edge.setToNodeId(keyToId.get(dto.getToNodeKey()));
+            // 分支「输出名称」承载在 name 列
+            edge.setName(dto.getOutputName());
             edge.setIsDefault(Boolean.TRUE.equals(dto.getIsDefault()) ? 1 : 0);
             edge.setSortNo(i + 1);
             edge.setCreatedTime(LocalDateTime.now());
@@ -456,7 +466,12 @@ public class FlowDefService {
         dto.setNodeType(node.getNodeType());
         dto.setName(node.getName());
         dto.setApproveMode(node.getApproveMode());
+        // 审批机构归属回传前端，供节点属性面板还原
+        dto.setApproveOrgScope(node.getApproveOrgScope());
         dto.setSortNo(node.getSortNo());
+        // 画布坐标回传前端，供可视化编辑器还原节点位置
+        dto.setPosX(node.getPosX());
+        dto.setPosY(node.getPosY());
         return dto;
     }
 
@@ -464,6 +479,8 @@ public class FlowDefService {
         FlowApproverDTO dto = new FlowApproverDTO();
         dto.setApproverType(approver.getApproverType());
         dto.setApproverValue(approver.getApproverValue());
+        dto.setOrgScope(approver.getOrgScope());
+        dto.setRoleCode(approver.getRoleCode());
         return dto;
     }
 
@@ -471,6 +488,8 @@ public class FlowDefService {
         FlowEdgeDTO dto = new FlowEdgeDTO();
         dto.setFromNodeKey(nodeIdToKey.get(edge.getFromNodeId()));
         dto.setToNodeKey(nodeIdToKey.get(edge.getToNodeId()));
+        // name 列回传为分支「输出名称」
+        dto.setOutputName(edge.getName());
         dto.setIsDefault(Integer.valueOf(1).equals(edge.getIsDefault()));
 
         // conditionJson 反序列化为 FlowConditionDTO

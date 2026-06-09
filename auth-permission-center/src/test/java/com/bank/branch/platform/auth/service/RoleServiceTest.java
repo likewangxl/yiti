@@ -22,6 +22,8 @@ class RoleServiceTest {
 
     @Mock RoleMapper roleMapper;
     @Mock PermissionCacheService cacheService;
+    @Mock com.bank.branch.platform.auth.mapper.UserRoleMapper userRoleMapper;
+    @Mock com.bank.branch.platform.auth.mapper.RoleBizScopeMapper roleBizScopeMapper;
     @InjectMocks RoleService roleService;
 
     @Test

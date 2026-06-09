@@ -66,6 +66,9 @@ class KpiSchemeServiceTest {
     @Mock
     private CacheManager cacheManager;
 
+    @Mock
+    private com.bank.branch.platform.auth.api.UserApi userApi;
+
     @InjectMocks
     private KpiSchemeService service;
 
@@ -271,12 +274,12 @@ class KpiSchemeServiceTest {
     @Test
     @DisplayName("page: 条件查询包装为 PageResult")
     void page_returnsPageResult() {
-        when(schemeMapper.countByCondition("MONTHLY", "ACTIVE", "KW")).thenReturn(1L);
+        when(schemeMapper.countByCondition("MONTHLY", "ACTIVE", "KW", null)).thenReturn(1L);
         PerfKpiScheme one = KpiTestDataBuilder.scheme("P1");
-        when(schemeMapper.selectByCondition("MONTHLY", "ACTIVE", "KW", 0, 10))
+        when(schemeMapper.selectByCondition("MONTHLY", "ACTIVE", "KW", null, 0, 10))
                 .thenReturn(List.of(one));
 
-        PageResult<PerfKpiScheme> result = service.page("MONTHLY", "ACTIVE", "KW", 1, 10);
+        PageResult<PerfKpiScheme> result = service.page("MONTHLY", "ACTIVE", "KW", null, 1, 10);
         assertThat(result.getTotal()).isEqualTo(1L);
         assertThat(result.getRecords()).hasSize(1);
     }

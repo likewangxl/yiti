@@ -29,6 +29,14 @@ public class PerfKpiItem {
     /** 指标编码（人员维度，引用 perf_metric_def.metric_code）. */
     private String metricCode;
 
+    /**
+     * 指标维度（EMP/ORG/CUST，varchar(8)，可空）.
+     *
+     * <p>与所选指标 {@code perf_metric_def.base_dim} 一致，新增时随指标固化落库，
+     * 便于方案项列表/编辑回显直接展示维度，免去再 join 指标定义表。
+     */
+    private String baseDim;
+
     /** 权重（decimal(10,4)）. */
     private BigDecimal weight;
 
@@ -40,6 +48,23 @@ public class PerfKpiItem {
 
     /** 最高分（decimal(10,4)，默认 999999）. */
     private BigDecimal maxScore;
+
+    /**
+     * 计分公式（varchar(500)，可空）.
+     *
+     * <p>前端 KpiRules.vue 编辑，可用变量 {@code actual}（实际值）/ {@code target}（目标值）/
+     * {@code base}（基础值）/ {@code weight}（权重），支持 {@code min} / {@code max} 函数，
+     * 例：{@code min(actual / target * 100, 120)}。KPI 分值计算时按对象代入求值。
+     */
+    private String formula;
+
+    /**
+     * SQL 表达式（varchar(2000)，可空）.
+     *
+     * <p>前端 KpiRules.vue 指标配置中单独一行编辑，支持 {@code #{slot}} 占位符，
+     * 用于自定义取数 / 计算逻辑（如 {@code SUM(#{slot1}) / NULLIF(#{slot2}, 0)}）。
+     */
+    private String sqlExpr;
 
     /** 创建时间. */
     private LocalDateTime createdTime;

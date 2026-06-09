@@ -38,7 +38,9 @@
         >
           <template #default="{ node, data }">
             <span class="tree-node">
-              <span class="ico">{{ data.isMetric ? '📊' : '📁' }}</span>
+              <span v-if="!data.isMetric" class="ico">📁</span>
+              <span v-if="data.isMetric && data.raw?.metricLevel != null"
+                    class="lvl-badge" :class="'lvl-' + data.raw.metricLevel">{{ data.raw.metricLevel }}</span>
               <span :class="{ 'tree-leaf': data.isMetric }">{{ node.label }}</span>
               <el-tag v-if="data.isMetric" :class="statusCls(data.status)" effect="plain" size="small" class="tree-tag">
                 {{ statusLabel(data.status) }}
@@ -61,25 +63,27 @@
           <table class="meta-table">
             <tr>
               <td class="lab">编码</td><td class="val"><code class="mono">{{ detail.metricCode }}</code></td>
-              <td class="lab">分类</td><td class="val">{{ resolveCategory(detail) }}</td>
+              <td class="lab">分类</td><td class="val">{{ (detail.metricCategory && String(detail.metricCategory).trim()) || resolveCategory(detail) }}</td>
             </tr>
             <tr>
               <td class="lab">维度</td><td class="val">{{ { EMP:'员工', ORG:'机构', CUST:'客户' }[detail.baseDim] || detail.baseDim || '-' }}</td>
               <td class="lab">层级</td><td class="val">{{ detail.metricLevel != null ? detail.metricLevel + ' 级' : '-' }}</td>
             </tr>
             <tr>
+              <td class="lab">宽表槽位</td>
+              <td class="val">{{ detail.valSlot != null ? detail.valSlot : '-' }}</td>
               <td class="lab">计算方式</td><td class="val">{{ { AUTO:'自动', MANUAL:'手动' }[detail.calcMode] || detail.calcMode || '-' }}</td>
+            </tr>
+            <tr>
               <td class="lab">计算逻辑</td>
               <td class="val">
                 <el-tag :class="logicCls(detail.calcLogicType)" effect="plain">{{ { SQL:'SQL', EXPR:'Groovy' }[detail.calcLogicType] || detail.calcLogicType || '-' }}</el-tag>
               </td>
+              <td class="lab">创建人</td><td class="val">{{ personLabel(detail.createdByUsername, detail.createdByName, detail.createdBy) }}</td>
             </tr>
             <tr>
-              <td class="lab">创建人</td><td class="val">{{ detail.createdBy || '-' }}</td>
-              <td class="lab">更新人</td><td class="val">{{ detail.updatedBy || '-' }}</td>
-            </tr>
-            <tr>
-              <td class="lab">最近更新</td><td class="val" colspan="3">{{ detail.updatedTime || detail.createdTime || '-' }}</td>
+              <td class="lab">更新人</td><td class="val">{{ personLabel(detail.updatedByUsername, detail.updatedByName, detail.updatedBy) }}</td>
+              <td class="lab">更新时间</td><td class="val">{{ fmtTime(detail.updatedTime || detail.createdTime) }}</td>
             </tr>
             <tr v-if="detail.description">
               <td class="lab">详细描述</td><td class="val" colspan="3">{{ detail.description }}</td>
@@ -93,7 +97,7 @@
           </template>
           <template v-else-if="detail.calcLogicType === 'EXPR'">
             <div class="block-h">Groovy 表达式</div>
-            <pre class="code">{{ detail.exprText || '// 暂未配置表达式，可点【编辑】补充' }}</pre>
+            <pre class="code">{{ detail.exprDisplay || detail.exprText || '// 暂未配置表达式，可点【编辑】补充' }}</pre>
           </template>
           <template v-else-if="detail.calcLogicType === 'SUMMARY'">
             <div class="block-h">SUMMARY 汇总规则</div>
@@ -178,7 +182,7 @@
       <el-form ref="formRef" :model="dlg.form" :rules="formRules" label-position="top" size="default">
         <div class="form-grid">
           <el-form-item label="编码" prop="metricCode" required>
-            <el-input v-model="dlg.form.metricCode" :disabled="!!dlg.editing" placeholder="如 M00xx" maxlength="20" />
+            <el-input v-model="dlg.form.metricCode" :disabled="!!dlg.editing" placeholder="如 M_0001" maxlength="20" />
           </el-form-item>
           <el-form-item label="名称" prop="metricName" required>
             <el-input v-model="dlg.form.metricName" maxlength="100" />
@@ -220,31 +224,28 @@
             <el-radio value="SQL">SQL</el-radio>
             <el-radio value="EXPR">Groovy</el-radio>
           </el-radio-group>
+          <!-- EXPR 模式下，指标下拉 + 添加按钮与计算逻辑同行：选中指标点【添加】插入到表达式光标处 -->
+          <template v-if="dlg.form.calcLogicType === 'EXPR'">
+            <el-select v-model="exprPickCode" filterable clearable placeholder="选择指标插入表达式"
+                       style="width:260px;margin-left:16px">
+              <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
+                         :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
+            </el-select>
+            <el-button type="primary" style="margin-left:8px" :disabled="!exprPickCode"
+                       @click="insertMetricChip">添加</el-button>
+          </template>
           <div v-if="dlg.form.metricLevel === 1" style="font-size:12px;color:#999;margin-top:2px">1级指标仅支持SQL</div>
         </el-form-item>
 
         <template v-if="dlg.form.calcLogicType === 'EXPR'">
-          <el-form-item label="表达式构建">
-            <div class="expr-builder">
-              <div v-for="(row, idx) in dlg.form.exprRows" :key="idx" class="expr-row">
-                <el-select v-if="idx > 0" v-model="row.op" style="width:80px" placeholder="运算符" @change="buildExprText">
-                  <el-option value="+" label="+" />
-                  <el-option value="-" label="-" />
-                  <el-option value="*" label="*" />
-                  <el-option value="/" label="/" />
-                </el-select>
-                <span v-else style="width:80px;display:inline-block;text-align:center;color:#999">—</span>
-                <el-select v-model="row.metricCode" filterable style="flex:1" placeholder="选择上级指标" @change="buildExprText">
-                  <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
-                             :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
-                </el-select>
-                <el-button link type="danger" @click="removeExprRow(idx)" :disabled="dlg.form.exprRows.length <= 1">删除</el-button>
-              </div>
-              <el-button type="primary" link @click="addExprRow" style="margin-top:6px">+ 添加指标</el-button>
+          <el-form-item label="Groovy 表达式">
+            <div class="expr-edit-wrap">
+              <!-- 可编辑表达式区：指标以标签插入（可删除），运算符/数字/括号可直接键入 -->
+              <div ref="exprEditorRef" class="expr-editor" contenteditable="true"
+                   @input="syncExprText" @click="onExprEditorClick"
+                   data-placeholder="从上方选择指标点【添加】插入指标标签；运算符（+ - * / ( )）与数字可直接键入，例如：指标A + 指标B * 2"></div>
+              <div class="expr-hint">指标以标签形式嵌入，点标签上的 × 可删除；其余位置可自由编辑运算符与数字。</div>
             </div>
-          </el-form-item>
-          <el-form-item label="Groovy 表达式（自动生成）">
-            <el-input v-model="dlg.form.exprText" type="textarea" :rows="2" readonly />
           </el-form-item>
         </template>
         <el-form-item v-else :label="'SQL 表达式 (支持 #{slot} 占位符)'">
@@ -274,31 +275,62 @@
         <el-form-item label="试运行">
           <div class="trial-row">
             <el-date-picker v-model="dlg.trialDate" type="date" value-format="YYYY-MM-DD"
-              placeholder="数据日期（传给 SQL :dataDate）" style="flex:1; min-width:300px" />
-            <el-button type="primary" @click="onTrialFromDialog" :loading="dlg.trialing">▶ 试运行</el-button>
+              placeholder="数据日期（传给 SQL :dataDate）" style="flex:1; min-width:220px" />
+            <!-- 对象值：按基础维度联想（EMP=员工 / ORG=机构），映射 SQL :objectId -->
+            <el-autocomplete
+              v-model="dlg.trialSubject"
+              :fetch-suggestions="dlg.form.baseDim === 'ORG' ? queryOrgSuggest : (dlg.form.baseDim === 'EMP' ? queryEmpSuggest : queryNoSuggest)"
+              value-key="label"
+              clearable
+              :placeholder="dlg.form.baseDim === 'EMP' ? '对象值：员工(工号/姓名联想)→:objectId' : (dlg.form.baseDim === 'ORG' ? '对象值：机构(编号/名称联想)→:objectId' : '对象值 → :objectId')"
+              style="flex:1; min-width:240px"
+              @select="onTrialSubjectSelect"
+              @clear="dlg.trialSubjectId = ''"
+              @input="dlg.trialSubjectId = ''" />
+            <el-button type="primary" @click="onTrialFromDialog" :loading="dlg.trialing"
+                       :disabled="metricEditBlocked" :title="metricEditBlocked ? '指标数据加载完成后可用' : ''">▶ 试运行</el-button>
+            <span v-if="metricEditBlocked" style="margin-left:8px; color:#e6a23c; font-size:12px">指标数据加载中…</span>
             <el-tag v-if="dlg.trial.status === 'SUCCESS'" class="tag-success" effect="plain">
-              成功 · {{ dlg.trial.totalRows ?? dlg.trial.rows.length }} 行 · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
+              成功 · {{ dlg.trial.exprResult != null ? ('结果 ' + dlg.trial.exprResult) : ((dlg.trial.totalRows ?? dlg.trial.rows.length) + ' 行') }} · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
             </el-tag>
             <el-tag v-else-if="dlg.trial.status === 'FAILED'" class="tag-warning" effect="plain">
               失败 · {{ ((dlg.trial.cost || 0) / 1000).toFixed(1) }}s
             </el-tag>
           </div>
 
-          <!-- 试运行结果表 -->
+          <!-- 试运行结果：SQL 类→样本行表格；EXPR(Groovy) 类→单值（exprResult） -->
           <el-table v-if="dlg.trial.rows.length" :data="dlg.trial.rows" size="small" border style="margin-top: 12px">
             <el-table-column v-for="col in dlg.trial.cols" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
           </el-table>
+          <div v-else-if="dlg.trial.status === 'SUCCESS' && dlg.trial.exprResult != null"
+               class="trial-expr" style="margin-top: 12px">
+            <div>计算结果：<code class="mono">{{ dlg.trial.exprResult }}</code></div>
+            <!-- 列出 Groovy 计算用到的用户指标数据（含命中数据版本），方便核对结果为何是该值 -->
+            <div v-if="exprVarList(dlg.trial.exprVars).length" class="trial-vars" style="margin-top: 8px">
+              <div style="color:#909399; margin-bottom:4px">
+                Groovy 用到的指标取值<span v-if="dlg.trial.dataVersion">（数据版本 {{ dlg.trial.dataVersion }}）</span>：
+              </div>
+              <div v-for="v in exprVarList(dlg.trial.exprVars)" :key="v.code" style="line-height:1.9">
+                <code class="mono">{{ v.code }}</code><span v-if="v.name" style="color:#909399"> · {{ v.name }}</span>
+                ＝ <code class="mono">{{ v.value }}</code>
+                <span v-if="Number(v.value) === 0" style="color:#e6a23c">（该对象/日期宽表中无此指标数据，取 0）</span>
+              </div>
+            </div>
+          </div>
           <div v-else-if="dlg.trial.status === 'FAILED'" class="trial-error">
-            ✗ {{ dlg.trial.errorMsg || '试运行失败，请检查 SQL 是否合法' }}
+            ✗ {{ dlg.trial.errorMsg || '试运行失败，请检查 SQL/Groovy 表达式是否合法' }}
           </div>
         </el-form-item>
 
         <!-- 隐含字段（不让用户暴露太多复杂度） -->
       </el-form>
       <template #footer>
+        <span v-if="metricEditBlocked" style="margin-right:12px; color:#e6a23c; font-size:12px">指标数据加载中，请稍候…</span>
         <el-button @click="dlg.show = false">取消</el-button>
-        <el-button :loading="dlg.saving" @click="onSave('DRAFT')">保存为草稿</el-button>
-        <el-button type="primary" :loading="dlg.saving" @click="onSave('ACTIVE')">发布</el-button>
+        <el-button :loading="dlg.saving" :disabled="metricEditBlocked"
+                   :title="metricEditBlocked ? '指标数据加载完成后可用' : ''" @click="onSave('DRAFT')">保存为草稿</el-button>
+        <el-button type="primary" :loading="dlg.saving" :disabled="metricEditBlocked"
+                   :title="metricEditBlocked ? '指标数据加载完成后可用' : ''" @click="onSave('ACTIVE')">发布</el-button>
       </template>
     </el-dialog>
 
@@ -353,7 +385,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { Search } from '@element-plus/icons-vue';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { useRouter } from 'vue-router';
@@ -362,11 +394,49 @@ import {
   listMetrics, listMetricCategories, getMetricDetail,
   createMetric, updateMetric, deleteMetric,
   changeMetricStatus, trialRunMetric, executeMetric,
-  uploadImportFile
+  uploadImportFile, suggestEmployees
 } from '@/api/perf';
 import { listAuditLogs } from '@/api/system';
+import { getOrgTree } from '@/api/orgs';
 
 const router = useRouter();
+
+// 试运行"对象值"联想：员工走 emp-suggest；机构走机构树客户端过滤
+async function queryEmpSuggest(queryString, cb) {
+  const kw = (queryString || '').trim();
+  if (!kw) { cb([]); return; }
+  try {
+    const list = await suggestEmployees(kw);
+    const arr = Array.isArray(list) ? list : [];
+    cb(arr.map(u => ({ ...u, code: u.empId || u.username, label: u.empChnName ? `${u.username}（${u.empChnName}）` : u.username })));
+  } catch { cb([]); }
+}
+let _orgFlat = null;
+async function loadOrgFlat() {
+  if (_orgFlat) return _orgFlat;
+  const flat = [];
+  const walk = (nodes) => (nodes || []).forEach(n => {
+    const code = n.orgCode || n.value || n.id;
+    const name = n.orgName || n.label || n.name;
+    if (code) flat.push({ code: String(code), name: name || '', label: name ? `${code}（${name}）` : String(code) });
+    walk(n.children);
+  });
+  try { walk(await getOrgTree()); } catch { /* ignore */ }
+  _orgFlat = flat;
+  return flat;
+}
+async function queryOrgSuggest(queryString, cb) {
+  const kw = (queryString || '').trim().toLowerCase();
+  const flat = await loadOrgFlat();
+  if (!kw) { cb(flat.slice(0, 20)); return; }
+  cb(flat.filter(o => o.code.toLowerCase().includes(kw) || o.name.toLowerCase().includes(kw)).slice(0, 20));
+}
+function queryNoSuggest(_q, cb) { cb([]); }
+// 选中联想项：display 显示 label，objectId 存干净 code（工号/机构号）
+function onTrialSubjectSelect(item) {
+  dlg.trialSubjectId = item.code || '';
+  dlg.trialSubject = item.label || item.code || '';
+}
 
 // === 常量 ===
 const CATEGORY_OPTIONS = ['规模类', '效益类', '质量类', '合规类'];
@@ -412,7 +482,12 @@ const bizActionLabel = (a) => BIZ_ACTION_LABEL[a] || a || '—';
 const UNCATEGORIZED_LABEL = '未分类';
 const allMetrics = ref([]);
 const categories = ref([]);  // [{value, label}] 来自 GET /api/perf/metrics/categories
+// 指标列表加载态：加载中 / 是否已成功加载过。编辑指标的保存/发布/试运行都依赖 allMetrics
+// 解析引用指标标签与校验上级指标，未加载完成时禁止这些操作，避免按"空列表"误判引用非法。
+const metricsLoading = ref(false);
+const metricsLoaded = ref(false);
 async function reload() {
+  metricsLoading.value = true;
   try {
     const [r, cs] = await Promise.all([
       listMetrics({ pageSize: 100 }),
@@ -421,10 +496,21 @@ async function reload() {
     // 停用项保留在树里（按用户反馈），通过按钮 disable 限制操作即可
     if (Array.isArray(r)) allMetrics.value = r;
     categories.value = Array.isArray(cs) ? cs : [];
+    metricsLoaded.value = true;
     // 默认选中第一个指标
     if (allMetrics.value.length && !picked.value) onPick(allMetrics.value[0].metricCode);
-  } catch {}
+  } catch {
+    // 加载失败保持 metricsLoaded 原值（首次失败则仍为 false，继续禁止编辑保存）
+  } finally {
+    metricsLoading.value = false;
+  }
 }
+// 编辑指标弹框里"保存/发布/试运行"是否应禁用：列表加载中或尚未成功加载
+const metricEditBlocked = computed(() => metricsLoading.value || !metricsLoaded.value);
+// 列表晚于弹框加载完成时，重渲染表达式编辑器，把已存 exprText 里的指标编号还原成标签
+watch(metricsLoaded, (v) => {
+  if (v && dlg.show && dlg.form.calcLogicType === 'EXPR') nextTick(renderExprEditor);
+});
 
 // === 分类规则：优先 metricDesc(JSON)._category，其次按名称关键词推断 ===
 function categoryOf(m) {
@@ -446,37 +532,66 @@ function resolveCategory(m) {
   return sub ? `${g}/${sub}` : g;
 }
 
-// === 树结构：严格按 metric.metricCategory 一级分组（V1.10 后端 categories 接口提供骨架） ===
+// === 树结构：三级层次「维度 - 指标分类 - 指标」===
+// 维度展示名 + 排序（EMP/ORG/CUST 优先，维度无关型排最后）
+const DIM_LABEL = { EMP: '员工', ORG: '机构', CUST: '客户', NONE: '维度无关' };
+const DIM_ORDER = ['EMP', 'ORG', 'CUST'];
 const treeData = computed(() => {
-  // 1. 用后端 categories 接口建立骨架（保证空分类也显示）
-  const groups = new Map();
-  for (const c of categories.value) {
-    const label = c?.label || c?.value;
-    if (!label) continue;
-    groups.set(label, { id: 'g-' + label, label, children: [] });
-  }
-  // 2. 把每条指标挂到 metricCategory 对应节点；空 metricCategory 入"未分类"
-  for (const m of allMetrics.value) {
-    const cat = (m?.metricCategory && String(m.metricCategory).trim()) || UNCATEGORIZED_LABEL;
-    let node = groups.get(cat);
-    if (!node) {
-      node = { id: 'g-' + cat, label: cat, children: [] };
-      groups.set(cat, node);
+  // 维度节点 Map；每个维度节点内再用 _catMap 暂存「分类label → 分类节点」
+  const dimMap = new Map();
+  const getDim = (dimKey) => {
+    let d = dimMap.get(dimKey);
+    if (!d) {
+      d = { id: 'dim-' + dimKey, label: DIM_LABEL[dimKey] || dimKey, isDim: true, children: [], _catMap: new Map() };
+      dimMap.set(dimKey, d);
     }
-    const lvl = m.metricLevel ? `（${m.metricLevel}级）` : '';
-    node.children.push({
-      id: m.metricCode, label: `${m.metricName} ${lvl}`.trim(),
+    return d;
+  };
+  const getCat = (dimNode, dimKey, cat) => {
+    let c = dimNode._catMap.get(cat);
+    if (!c) {
+      c = { id: `dim-${dimKey}-cat-${cat}`, label: cat, children: [] };
+      dimNode._catMap.set(cat, c);
+      dimNode.children.push(c);
+    }
+    return c;
+  };
+  // 逐条指标挂到 维度 → 分类 → 指标；空维度归 NONE，空分类归"未分类"
+  for (const m of allMetrics.value) {
+    const dimKey = (m?.baseDim && String(m.baseDim).trim()) || 'NONE';
+    const cat = (m?.metricCategory && String(m.metricCategory).trim()) || UNCATEGORIZED_LABEL;
+    const catNode = getCat(getDim(dimKey), dimKey, cat);
+    catNode.children.push({
+      id: m.metricCode, label: m.metricName,
       isMetric: true, status: m.status, raw: m
     });
   }
-  // 3. 空分类节点放最后；非空按后端顺序
-  const all = Array.from(groups.values());
-  return all.filter(g => g.children.length).concat(all.filter(g => !g.children.length));
+  // 维度排序：EMP/ORG/CUST 在前，未知维度居中，维度无关(NONE)最后
+  const dims = Array.from(dimMap.values());
+  const rank = (node) => {
+    const k = node.id.replace(/^dim-/, '');
+    if (k === 'NONE') return 999;
+    const i = DIM_ORDER.indexOf(k);
+    return i === -1 ? 500 : i;
+  };
+  dims.sort((a, b) => rank(a) - rank(b));
+  dims.forEach(d => delete d._catMap); // 清掉临时索引，避免污染节点数据
+  return dims;
 });
 
 // === 详情 ===
 const picked = ref('');
 const detail = ref({});
+// 创建人/更新人展示：优先 "username（中文名）"，缺中文名退化为 username，再缺退回原始 empId
+function personLabel(username, chnName, raw) {
+  if (username) return chnName ? `${username}（${chnName}）` : username;
+  return raw || '-';
+}
+// LocalDateTime ISO 串（2026-05-31T18:30:00）转友好展示
+function fmtTime(t) {
+  if (!t) return '-';
+  return String(t).replace('T', ' ').slice(0, 19);
+}
 // 详情侧"试运行"按钮的结果展示（与编辑对话框里的 dlg.trial 独立，避免互相覆盖）
 const detailTrial = reactive({ status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], loading: false });
 function resetDetailTrial() {
@@ -558,6 +673,7 @@ const sqlInputRef = ref(null);
 // 后端 MetricTrialService.runSql 自动注入的 10 个 SQL 命名参数；点击下方变量符插入到光标位置
 const DATE_MACROS = [
   { token: ':dataDate',           desc: '数据日期（=dateToday，由调度/试运行传入）' },
+  { token: ':objectId',           desc: '对象id（试运行的"对象值"输入框映射；员工=工号/机构=机构号；真实执行为 null，建议写 (:objectId IS NULL OR x=:objectId)）' },
   { token: ':version',            desc: 'sys_control 当前版本' },
   { token: ':dateToday',          desc: '当前日期 T' },
   { token: ':dateYesterday',      desc: 'T-1 上一日期' },
@@ -590,22 +706,24 @@ function insertMacro(token) {
 const dlg = reactive({
   show: false, editing: null, saving: false,
   trialDate: null, trialing: false,
+  trialSubject: '', trialSubjectId: '',
   trial: { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] },
   slots: [],
   form: {
     metricCode: '', metricName: '', baseDim: 'EMP', metricLevel: 1,
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
-    sqlText: '', exprText: '', summaryRule: '',
+    sqlText: '', exprText: '', exprDisplay: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    exprRows: [{ op: '', metricCode: '' }],
     _category: '规模类'
   }
 });
 watch(() => dlg.form.metricLevel, (lvl) => {
   if (lvl === 1) dlg.form.calcLogicType = 'SQL';
   else if (lvl >= 2) dlg.form.calcLogicType = 'EXPR';
-  dlg.form.exprRows = [{ op: '', metricCode: '' }];
   dlg.form.exprText = '';
+  exprPickCode.value = '';
+  // 切换层级后清空表达式编辑器（DOM 渲染后执行）
+  nextTick(renderExprEditor);
 });
 const parentMetricOptions = computed(() => {
   const lvl = dlg.form.metricLevel;
@@ -617,28 +735,178 @@ const parentMetricOptions = computed(() => {
     && (!dim || m.baseDim === dim)
   );
 });
-function addExprRow() {
-  dlg.form.exprRows.push({ op: '+', metricCode: '' });
-}
-function removeExprRow(idx) {
-  dlg.form.exprRows.splice(idx, 1);
-  if (idx === 0 && dlg.form.exprRows.length) dlg.form.exprRows[0].op = '';
-  buildExprText();
-}
-function buildExprText() {
-  const parts = [];
-  for (const row of dlg.form.exprRows) {
-    if (!row.metricCode) continue;
-    if (parts.length > 0 && row.op) parts.push(row.op);
-    parts.push(row.metricCode);
+
+// ====== Groovy 表达式标签编辑器（contenteditable，指标=可删除标签，运算符/数字可自由编辑）======
+const exprEditorRef = ref(null);
+const exprPickCode = ref('');
+// 保存编辑器内最近一次光标 Range：点 el-select / 添加按钮会让编辑器失焦，需用它定位插入点
+let savedRange = null;
+
+// 监听全局 selectionchange，把落在编辑器内的光标 Range 暂存
+function onSelectionChange() {
+  const editor = exprEditorRef.value;
+  if (!editor) return;
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    if (editor.contains(r.startContainer)) savedRange = r.cloneRange();
   }
-  dlg.form.exprText = parts.join(' ');
+}
+onMounted(() => document.addEventListener('selectionchange', onSelectionChange));
+onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange));
+
+// 构造一个指标标签节点（显示 指标编号·指标名称 + 删除按钮）
+function makeChip(code) {
+  const m = allMetrics.value.find(x => x.metricCode === code);
+  const name = m ? (m.metricName || '') : '';
+  const span = document.createElement('span');
+  span.className = 'metric-chip';
+  span.setAttribute('contenteditable', 'false');
+  span.setAttribute('data-code', code);
+  const label = name ? `${code}·${name}` : code;
+  span.innerHTML = `<span class="chip-text">${label}</span><span class="chip-del" title="删除">×</span>`;
+  return span;
+}
+
+// 把选中指标作为标签插入到表达式光标处
+function insertMetricChip() {
+  const code = exprPickCode.value;
+  const editor = exprEditorRef.value;
+  if (!code || !editor) return;
+  editor.focus();
+  const sel = window.getSelection();
+  let range;
+  if (savedRange && editor.contains(savedRange.startContainer)) {
+    range = savedRange.cloneRange();
+  } else {
+    range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false); // 末尾
+  }
+  sel.removeAllRanges();
+  sel.addRange(range);
+  range.deleteContents();
+  const chip = makeChip(code);
+  const after = document.createTextNode(' '); // 标签后补一个空格，便于继续键入运算符
+  range.insertNode(after);
+  range.insertNode(chip);
+  // 光标移到空格之后
+  range.setStartAfter(after);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  savedRange = range.cloneRange();
+  exprPickCode.value = '';
+  syncExprText();
+}
+
+// 点击编辑器：处理标签上的 × 删除（事件委托）
+function onExprEditorClick(e) {
+  const del = e.target.closest && e.target.closest('.chip-del');
+  if (del) {
+    const chip = del.closest('.metric-chip');
+    if (chip) { chip.remove(); syncExprText(); }
+    e.preventDefault();
+  }
+}
+
+// 把编辑器内容序列化为后端 Groovy 表达式字符串：标签→指标编号，文本→原样
+function syncExprText() {
+  const editor = exprEditorRef.value;
+  if (!editor) return;
+  let out = '';
+  let displayOut = '';
+  editor.childNodes.forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent;
+      displayOut += node.textContent;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.classList && node.classList.contains('metric-chip')) {
+        const c = node.getAttribute('data-code');
+        const txt = node.querySelector('.chip-text');
+        out += ' ' + c + ' ';
+        displayOut += ' ' + (txt ? txt.textContent : c) + ' ';
+      } else {
+        out += node.textContent;
+        displayOut += node.textContent;
+      }
+    }
+  });
+  dlg.form.exprText = out.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+  dlg.form.exprDisplay = displayOut.replace(/\s+/g, ' ').trim();
+}
+
+// 校验 Groovy 表达式里"相邻两个操作数之间缺运算符"——两个指标标签/数字仅用空格相连时，
+// Groovy 会把前者当类名报 "unable to resolve class M_xxxx"。这里提前给出可读提示，命中返回错误文案，否则 null。
+function checkExprOperator(expr) {
+  const e = expr || '';
+  // M_xxx 紧跟 M_xxx / 数字，或 数字 紧跟 M_xxx，中间只有空白（无 + - * / 等运算符）
+  const m = e.match(/(\bM_[A-Za-z0-9_]+\b)\s+(\bM_[A-Za-z0-9_]+\b|\d+(?:\.\d+)?)/)
+        || e.match(/(\b\d+(?:\.\d+)?)\s+(\bM_[A-Za-z0-9_]+\b)/);
+  if (m) {
+    const disp = (c) => (allMetrics.value.find(x => x.metricCode === c)?.metricName)
+      ? `${c}·${allMetrics.value.find(x => x.metricCode === c).metricName}` : c;
+    return `表达式里「${disp(m[1])}」与「${disp(m[2])}」之间缺少运算符（如 + - * / 等），请补全后再试`;
+  }
+  return null;
+}
+
+// 把后端返回的 exprVars(对象: 指标编号→值) 转为带指标名的列表，供试运行结果展示"Groovy 用到的用户指标数据"
+function exprVarList(vars) {
+  if (!vars || typeof vars !== 'object') return [];
+  return Object.keys(vars).map((code) => {
+    const m = allMetrics.value.find((x) => x.metricCode === code);
+    return { code, name: m ? (m.metricName || '') : '', value: vars[code] };
+  });
+}
+
+// 把已存在的 exprText 反序列化渲染回编辑器（编辑场景）：命中已知指标编号→标签，其余→文本
+function renderExprEditor() {
+  const editor = exprEditorRef.value;
+  if (!editor) return;
+  editor.innerHTML = '';
+  const text = dlg.form.exprText || '';
+  if (!text) return;
+  const codes = allMetrics.value.map(m => m.metricCode).filter(Boolean)
+    .sort((a, b) => b.length - a.length); // 长编号优先，避免前缀误匹配
+  const isWord = (ch) => !!ch && /[A-Za-z0-9_]/.test(ch);
+  let i = 0;
+  while (i < text.length) {
+    let matched = null;
+    for (const c of codes) {
+      if (text.startsWith(c, i) && !isWord(text[i - 1]) && !isWord(text[i + c.length])) {
+        matched = c;
+        break;
+      }
+    }
+    if (matched) {
+      editor.appendChild(makeChip(matched));
+      editor.appendChild(document.createTextNode(' '));
+      i += matched.length;
+    } else {
+      const last = editor.lastChild;
+      if (last && last.nodeType === Node.TEXT_NODE) last.textContent += text[i];
+      else editor.appendChild(document.createTextNode(text[i]));
+      i++;
+    }
+  }
+  syncExprText();
+}
+
+// 读取编辑器内当前使用到的指标编号（用于保存前校验）
+function usedMetricCodes() {
+  const editor = exprEditorRef.value;
+  if (!editor) return [];
+  return Array.from(editor.querySelectorAll('.metric-chip')).map(n => n.getAttribute('data-code'));
 }
 function resetTrial() {
-  dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] };
+  dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], exprResult: null, exprVars: null, dataVersion: '' };
 }
 const formRules = {
-  metricCode: [{ required: true, message: '编码必填' }],
+  metricCode: [
+    { required: true, message: '编码必填' },
+    { pattern: /^[A-Z0-9_]+$/, message: '指标编号只允许大写字母、数字和下划线（与编辑规则一致）' }
+  ],
   metricName: [{ required: true, message: '名称必填' }],
   baseDim: [{ required: true, message: '基础维度必选' }],
   metricLevel: [{ required: true, message: '指标层级必选' }],
@@ -651,9 +919,8 @@ function defaultForm() {
   return {
     metricCode: '', metricName: '', baseDim: 'EMP', metricLevel: 1,
     calcFreq: 'DAY', calcLogicType: 'SQL', calcMode: 'AUTO',
-    sqlText: '', exprText: '', summaryRule: '',
+    sqlText: '', exprText: '', exprDisplay: '', summaryRule: '',
     unit: '', decimalPlaces: 2, valSlot: 1, description: '',
-    exprRows: [{ op: '', metricCode: '' }],
     _category: '规模类'
   };
 }
@@ -664,8 +931,12 @@ function openCreate() {
     { name: 'period_start', type: 'DATE', required: true, desc: '起始日期' },
     { name: 'period_end',   type: 'DATE', required: true, desc: '截止日期' }
   ];
-  dlg.trialDate = null; resetTrial();
+  dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
+  exprPickCode.value = '';
   dlg.show = true;
+  // 指标列表若未加载成功（首屏失败/仍在途），开窗时补一次拉取，避免弹框永久禁用保存
+  if (!metricsLoaded.value && !metricsLoading.value) reload();
+  nextTick(renderExprEditor);
 }
 function openEdit(row) {
   dlg.editing = row.metricCode;
@@ -673,33 +944,45 @@ function openEdit(row) {
     metricCode: row.metricCode, metricName: row.metricName,
     baseDim: row.baseDim, metricLevel: row.metricLevel,
     calcFreq: row.calcFreq, calcLogicType: row.calcLogicType, calcMode: row.calcMode,
-    sqlText: row.sqlText || '', exprText: row.exprText || '', summaryRule: row.summaryRule || '',
+    sqlText: row.sqlText || '', exprText: row.exprText || '', exprDisplay: row.exprDisplay || '', summaryRule: row.summaryRule || '',
     unit: row.unit || '', decimalPlaces: row.decimalPlaces ?? 2, valSlot: row.valSlot ?? 1,
-    description: row.description || row.metricDesc || '',
-    _category: resolveCategory(row)
+    description: row.description || '',
+    // 分类优先取数据表 metric_category 列（与下拉选项 CATEGORY_OPTIONS 同词表）；为空再按启发式兜底
+    _category: (row.metricCategory && String(row.metricCategory).trim()) || resolveCategory(row)
   });
   dlg.slots = resolveSlots(row);
-  dlg.trialDate = null; resetTrial();
+  dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
+  exprPickCode.value = '';
   dlg.show = true;
+  // 指标列表若未加载成功，开窗时补一次拉取（编辑场景还需靠它把已存 exprText 还原成指标标签）
+  if (!metricsLoaded.value && !metricsLoading.value) reload();
+  // 弹框渲染后，把已存的 exprText 还原成标签 + 文本
+  nextTick(renderExprEditor);
 }
 function addSlot() {
   dlg.slots.push({ name: '', type: 'DATE', required: false, desc: '' });
 }
 
 async function onSave(targetStatus) {
+  // 指标数据未加载完成时禁止保存/发布：否则引用指标标签解析、上级指标校验都基于空列表，会误判
+  if (metricEditBlocked.value) {
+    return ElMessage.warning('指标数据尚未加载完成，请稍候再保存/发布');
+  }
   try { await formRef.value.validate(); } catch { return; }
-  if (targetStatus === 'ACTIVE' && dlg.form.calcLogicType === 'EXPR' && dlg.form.exprText) {
-    const codes = dlg.form.exprRows.filter(r => r.metricCode).map(r => r.metricCode);
-    const ops = dlg.form.exprRows.filter((r, i) => i > 0 && r.op).map(r => r.op);
-    if (codes.length < 2) {
-      return ElMessage.warning('Groovy 表达式至少需要两个指标');
+  // 提交前把编辑器内容同步到 exprText（防止最后一次键入未触发 input）
+  if (dlg.form.calcLogicType === 'EXPR') syncExprText();
+  if (dlg.form.calcLogicType === 'EXPR') {
+    const opErr = checkExprOperator(dlg.form.exprText || '');
+    if (opErr) { ElMessage.warning(opErr); return; }
+  }
+  if (targetStatus === 'ACTIVE' && dlg.form.calcLogicType === 'EXPR') {
+    const codes = usedMetricCodes();
+    if (codes.length < 1) {
+      return ElMessage.warning('Groovy 表达式至少需要一个指标');
     }
-    if (ops.length !== codes.length - 1) {
-      return ElMessage.warning('Groovy 表达式运算符不完整，请检查每行的运算符');
-    }
-    for (const row of dlg.form.exprRows) {
-      if (row.metricCode && !parentMetricOptions.value.some(m => m.metricCode === row.metricCode)) {
-        return ElMessage.warning(`指标 ${row.metricCode} 不在上级已发布指标列表中`);
+    for (const c of codes) {
+      if (!parentMetricOptions.value.some(m => m.metricCode === c)) {
+        return ElMessage.warning(`指标 ${c} 不在上级已发布指标列表中`);
       }
     }
   }
@@ -716,6 +999,8 @@ async function onSave(targetStatus) {
     metricCode: dlg.form.metricCode,
     metricName: dlg.form.metricName,
     metricDesc: JSON.stringify(meta),
+    // 指标详细描述：完全按输入框内容提交，后端存 description 列，不再塞 metricDesc JSON
+    description: dlg.form.description || null,
     // V1.9 metric_category 独立列（前端分类下拉/树聚合靠它，不能只塞 metricDesc JSON）
     metricCategory: dlg.form._category || null,
     calcFreq: dlg.form.calcFreq,
@@ -723,6 +1008,7 @@ async function onSave(targetStatus) {
     calcLogicType: dlg.form.calcLogicType,
     sqlText: dlg.form.calcLogicType === 'SQL' ? (dlg.form.sqlText || null) : null,
     exprText: dlg.form.calcLogicType === 'EXPR' ? (dlg.form.exprText || null) : null,
+    // 含标签展示串(exprDisplay)已废弃：不再提交，后端按 exprText 实时派生用于查看显示
     summaryRule: dlg.form.calcLogicType === 'SUMMARY' ? (dlg.form.summaryRule || null) : null
   };
   try {
@@ -753,23 +1039,57 @@ async function onSave(targetStatus) {
 }
 
 async function onTrialFromDialog() {
-  if (!dlg.editing) return ElMessage.warning('请先保存指标后再试运行');
+  // 指标数据未加载完成时禁止试运行：EXPR 引用指标需靠 allMetrics 解析编号，空列表会取不到引用值
+  if (metricEditBlocked.value) {
+    return ElMessage.warning('指标数据尚未加载完成，请稍候再试运行');
+  }
+  // 直接取当前 SQL/Groovy 表达式执行，无需先保存指标
+  const logic = dlg.form.calcLogicType;
+  if (logic === 'EXPR') syncExprText();
+  const sqlText = logic === 'SQL' ? (dlg.form.sqlText || '').trim() : '';
+  const exprText = logic === 'EXPR' ? (dlg.form.exprText || '').trim() : '';
+  if (logic === 'SQL' && !sqlText) return ElMessage.warning('请先填写 SQL 表达式');
+  if (logic === 'EXPR' && !exprText) return ElMessage.warning('请先填写 Groovy 表达式');
+  if (logic !== 'SQL' && logic !== 'EXPR') return ElMessage.warning('该计算逻辑暂不支持试运行');
+  if (logic === 'EXPR') {
+    const opErr = checkExprOperator(exprText);
+    if (opErr) return ElMessage.warning(opErr);
+  }
   const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
   // 单日期模式：dlg.trialDate 是 'YYYY-MM-DD' 字符串，作为后端 :dataDate 占位符的值
   const dataDate = dlg.trialDate || yesterday;
+  // 对象值：优先取联想选中的干净 code，否则用手输原值；映射后端 SQL :objectId（始终下发，未填则 null）
+  const objectId = (dlg.trialSubjectId || dlg.trialSubject || '').trim() || null;
+  // Groovy 引用了其它指标(M_xxxx)时必须有对象值，才能按维度+日期+对象值从宽表取数；否则引用指标全为 0
+  if (logic === 'EXPR' && /\bM_[A-Za-z0-9_]+\b/.test(exprText) && !objectId) {
+    return ElMessage.warning('Groovy 引用了指标，请先填写【对象值】（按维度+数据日期定位宽表中该对象的指标值）');
+  }
   resetTrial();
   dlg.trialing = true;
   const t0 = Date.now();
   try {
-    const r = await trialRunMetric(dlg.editing, { dataDate, sampleSize: 10 });
-    // 后端 MetricTrialRespDTO: { status, totalRows, executionMillis, errorMsg, sampleRows }
+    // metricCode 仅作路由占位（命中已注册的 /{metricCode}/trial-run 资源）；实际执行用传入的表达式文本
+    const codeForPath = dlg.editing || dlg.form.metricCode || '_PREVIEW_';
+    const r = await trialRunMetric(codeForPath, {
+      dataDate, sampleSize: 10, params: { objectId },
+      calcLogicType: logic,
+      baseDim: dlg.form.baseDim,
+      sqlText: sqlText || undefined,
+      exprText: exprText || undefined
+    });
+    // 后端 MetricTrialRespDTO: { status, totalRows, executionMillis, errorMsg, sampleRows, exprResult }
     const rows = r?.sampleRows || [];
     const cols = rows.length ? Object.keys(rows[0]) : ['cust_id', 'org_id', 'metric_value'];
     dlg.trial = {
-      status: r?.status || (rows.length ? 'SUCCESS' : 'FAILED'),
+      status: r?.status || (rows.length || r?.exprResult != null ? 'SUCCESS' : 'FAILED'),
       cost: r?.executionMillis ?? (Date.now() - t0),
       totalRows: r?.totalRows ?? rows.length,
       errorMsg: r?.errorMsg || '',
+      // EXPR(Groovy) 单值结果：用于成功后反显「计算结果：xxx」
+      exprResult: r?.exprResult,
+      // EXPR 引用指标取值 + 命中数据版本：列出 Groovy 计算用到的用户指标数据
+      exprVars: r?.exprVars || null,
+      dataVersion: r?.dataVersion || '',
       rows, cols
     };
   } catch (err) {
@@ -948,15 +1268,53 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
-.expr-builder {
+.expr-edit-wrap {
   width: 100%;
-  .expr-row {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  .expr-editor {
+    min-height: 64px;
+    width: 100%;
+    border: 1px solid var(--el-border-color, #dcdfe6);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 28px;
+    background: #fff;
+    outline: none;
+    word-break: break-all;
+    &:focus { border-color: var(--el-color-primary, #409eff); }
+    &:empty::before {
+      content: attr(data-placeholder);
+      color: #b6bcc4;
+    }
+  }
+  .expr-hint { font-size: 12px; color: #999; margin-top: 4px; }
+  // 指标标签：编号·名称 + 删除按钮
+  :deep(.metric-chip) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 2px;
+    padding: 1px 4px 1px 8px;
+    border-radius: 4px;
+    background: var(--el-color-primary-light-9, #ecf5ff);
+    border: 1px solid var(--el-color-primary-light-5, #a0cfff);
+    color: var(--el-color-primary, #409eff);
+    font-size: 13px;
+    line-height: 20px;
+    user-select: none;
+    white-space: nowrap;
+    .chip-del {
+      cursor: pointer;
+      color: #909399;
+      font-weight: bold;
+      padding: 0 2px;
+      &:hover { color: var(--el-color-danger, #f56c6c); }
+    }
   }
 }
 .layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 370px 1fr;
   gap: 12px;
 }
 .tree-col {
@@ -984,6 +1342,17 @@ onMounted(reload);
   .ico { font-size: 13px; }
   .tree-leaf { color: $text-1; }
   .tree-tag { margin-left: auto; }
+  // 指标层级数字徽标（1/2/3），按层级配色
+  .lvl-badge {
+    flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    font-size: 11px; font-weight: 700; line-height: 1; color: #fff;
+    background: #909399;
+    &.lvl-1 { background: #409eff; }
+    &.lvl-2 { background: #67c23a; }
+    &.lvl-3 { background: #e6a23c; }
+  }
 }
 .detail-col {
   padding: 18px 22px;

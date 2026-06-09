@@ -444,10 +444,20 @@ public class TodoQueryService {
             log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人姓名失败 startUser={}", startUser, e);
         }
         try {
+            // 发起人工号（PT_USER.username，展示用）：startUser 为 USER_ID 内部主键
+            com.bank.branch.platform.auth.api.dto.UserDTO u = userApi.getUserByEmpId(startUser);
+            if (u != null) {
+                dto.setStartUserEmpNo(u.getUsername());
+            }
+        } catch (Exception e) {
+            log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人工号失败 startUser={}", startUser, e);
+        }
+        try {
             OrgDTO mainOrg = orgApi.getUserMainOrg(startUser);
             if (mainOrg != null) {
                 dto.setStartOrgId(mainOrg.getOrgCode());
                 dto.setStartOrgName(mainOrg.getOrgName());
+                dto.setStartOrgDeptNo(mainOrg.getDeptNo());
             }
         } catch (Exception e) {
             log.debug("[TodoQueryService.enrichStartUserOrg] 反查发起人主机构失败 startUser={}", startUser, e);
@@ -519,7 +529,32 @@ public class TodoQueryService {
         if (empId == null || bizType == null) {
             return new ArrayList<>();
         }
-        Set<String> candidateGroupKeys = currentUserApi.getCurrentCandidateGroupKeys();
+        // PC 管理端会话链路：候选组取「当前登录用户」（读登录态 ThreadLocal）
+        return doListTodoBusinessKeys(empId, bizType, currentUserApi.getCurrentCandidateGroupKeys());
+    }
+
+    /**
+     * 同 {@link #listMyTodoBusinessKeys}，但候选组按传入 empId 查库实时解析（<b>不读登录态 ThreadLocal</b>）。
+     * <p>供 SOAP 网关 / callpu 等<b>无会话上下文</b>链路调用——这些请求线程没有登录态，
+     * 若走 currentUserApi 会抛 AUTH-40105「未登录或会话已过期」。
+     * PC 管理端请继续用 {@link #listMyTodoBusinessKeys}（保持会话登录语义）。</p>
+     *
+     * @param empId   员工 ID（由上游渠道认证后透传）
+     * @param bizType 业务类型
+     * @return businessKey 列表（去重，可能为空）
+     */
+    public List<String> listTodoBusinessKeysByEmp(String empId, String bizType) {
+        if (empId == null || bizType == null) {
+            return new ArrayList<>();
+        }
+        // 无会话链路：候选组按入参 empId 查库解析
+        return doListTodoBusinessKeys(empId, bizType, userApi.getCandidateGroupKeys(empId));
+    }
+
+    /**
+     * 待办 businessKey 查询的公共实现；候选组由调用方按链路（会话 / 无会话）传入，本方法不感知来源。
+     */
+    private List<String> doListTodoBusinessKeys(String empId, String bizType, Set<String> candidateGroupKeys) {
         List<Task> tasks;
         if (candidateGroupKeys == null || candidateGroupKeys.isEmpty()) {
             tasks = taskService.createTaskQuery()
@@ -560,6 +595,27 @@ public class TodoQueryService {
         if (empId == null || businessKeys == null || businessKeys.isEmpty()) {
             return new ArrayList<>();
         }
+        // PC 管理端会话链路：候选组取「当前登录用户」（读登录态 ThreadLocal）
+        return doFindTaskRespByBusinessKeys(empId, businessKeys, currentUserApi.getCurrentCandidateGroupKeys());
+    }
+
+    /**
+     * 同 {@link #findMyTaskRespByBusinessKeys}，但候选组按传入 empId 查库实时解析（<b>不读登录态</b>）。
+     * 供 SOAP 网关 / callpu 等无会话上下文链路调用，避免 AUTH-40105；PC 管理端请继续用
+     * {@link #findMyTaskRespByBusinessKeys}（保持会话登录语义）。
+     */
+    public List<TaskRespDTO> findTaskRespByBusinessKeysByEmp(String empId, List<String> businessKeys) {
+        if (empId == null || businessKeys == null || businessKeys.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return doFindTaskRespByBusinessKeys(empId, businessKeys, userApi.getCandidateGroupKeys(empId));
+    }
+
+    /**
+     * 按 businessKey 反查 TaskRespDTO 的公共实现；候选组由调用方按链路传入，本方法不感知来源。
+     */
+    private List<TaskRespDTO> doFindTaskRespByBusinessKeys(String empId, List<String> businessKeys,
+                                                           Set<String> candidateGroupKeys) {
         // 1. businessKey → processInstanceId（N+1 在 pageSize≤100 可控）
         Set<String> targetPiids = new HashSet<>();
         for (String bk : businessKeys) {
@@ -571,8 +627,7 @@ public class TodoQueryService {
         if (targetPiids.isEmpty()) {
             return new ArrayList<>();
         }
-        // 2. 拿当前用户的全部待办 task，再按 processInstanceId 内存交集（保鉴权口径）
-        Set<String> candidateGroupKeys = currentUserApi.getCurrentCandidateGroupKeys();
+        // 2. 拿该员工全部待办 task，再按 processInstanceId 内存交集（保鉴权口径）
         List<Task> allTasks;
         if (candidateGroupKeys == null || candidateGroupKeys.isEmpty()) {
             allTasks = taskService.createTaskQuery()

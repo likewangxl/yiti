@@ -60,6 +60,7 @@ public class AllocAdjustMineService {
         d.setId(a.getId());
         d.setApplyNo(a.getApplyNo());
         d.setCustId(a.getCustId());
+        d.setCustName(a.getCustName());
         d.setAllocDim(a.getAllocDim());
         d.setBizKind(a.getBizKind());
         d.setOwnerOrgId(a.getOwnerOrgId());

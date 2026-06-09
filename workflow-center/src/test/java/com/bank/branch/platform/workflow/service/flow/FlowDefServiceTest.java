@@ -175,6 +175,138 @@ class FlowDefServiceTest {
     }
 
     // ------------------------------------------------------------------ //
+    //  3b. getGraph_carriesNodePositions                                  //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    @DisplayName("getGraph：节点画布坐标 posX/posY 随图返回")
+    void getGraph_carriesNodePositions() {
+        WfFlowDef def = draftDef("DEF-POS");
+        when(flowDefMapper.selectById("DEF-POS")).thenReturn(def);
+
+        WfFlowNode n1 = node("N1", "DEF-POS", "start");
+        n1.setPosX(120);
+        n1.setPosY(40);
+        when(nodeMapper.selectByFlowDefId("DEF-POS")).thenReturn(List.of(n1));
+        when(edgeMapper.selectByFlowDefId("DEF-POS")).thenReturn(List.of());
+
+        FlowGraphDTO result = service.getGraph("DEF-POS");
+
+        FlowNodeDTO startNode = result.getNodes().get(0);
+        assertThat(startNode.getPosX()).isEqualTo(120);
+        assertThat(startNode.getPosY()).isEqualTo(40);
+    }
+
+    // ------------------------------------------------------------------ //
+    //  3c. saveGraph_persistsNodePositions                                //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    @DisplayName("saveGraph：节点画布坐标 posX/posY 落库")
+    void saveGraph_persistsNodePositions() {
+        WfFlowDef def = draftDef("DEF-POS2");
+        when(flowDefMapper.selectById("DEF-POS2")).thenReturn(def);
+        when(nodeMapper.selectByFlowDefId("DEF-POS2")).thenReturn(List.of());
+
+        FlowGraphDTO graph = buildSimpleGraph();
+        // 给 start 节点设置坐标
+        graph.getNodes().get(0).setPosX(200);
+        graph.getNodes().get(0).setPosY(80);
+
+        service.saveGraph("DEF-POS2", graph, "user01");
+
+        // 捕获插入的节点，断言坐标透传落库
+        ArgumentCaptor<WfFlowNode> nodeCaptor = ArgumentCaptor.forClass(WfFlowNode.class);
+        verify(nodeMapper, atLeast(2)).insert(nodeCaptor.capture());
+        WfFlowNode startEntity = nodeCaptor.getAllValues().stream()
+                .filter(n -> "start".equals(n.getNodeKey()))
+                .findFirst().orElseThrow();
+        assertThat(startEntity.getPosX()).isEqualTo(200);
+        assertThat(startEntity.getPosY()).isEqualTo(80);
+    }
+
+    // ------------------------------------------------------------------ //
+    //  3d. approveOrgScope 往返                                            //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    @DisplayName("getGraph：审批机构归属 approveOrgScope 随图返回")
+    void getGraph_carriesApproveOrgScope() {
+        WfFlowDef def = draftDef("DEF-SCOPE");
+        when(flowDefMapper.selectById("DEF-SCOPE")).thenReturn(def);
+        WfFlowNode n1 = node("N1", "DEF-SCOPE", "a1");
+        n1.setApproveOrgScope("PARENT");
+        when(nodeMapper.selectByFlowDefId("DEF-SCOPE")).thenReturn(List.of(n1));
+        when(edgeMapper.selectByFlowDefId("DEF-SCOPE")).thenReturn(List.of());
+
+        FlowGraphDTO result = service.getGraph("DEF-SCOPE");
+        assertThat(result.getNodes().get(0).getApproveOrgScope()).isEqualTo("PARENT");
+    }
+
+    @Test
+    @DisplayName("saveGraph：审批机构归属 approveOrgScope 落库")
+    void saveGraph_persistsApproveOrgScope() {
+        WfFlowDef def = draftDef("DEF-SCOPE2");
+        when(flowDefMapper.selectById("DEF-SCOPE2")).thenReturn(def);
+        when(nodeMapper.selectByFlowDefId("DEF-SCOPE2")).thenReturn(List.of());
+
+        FlowGraphDTO graph = buildSimpleGraph();
+        graph.getNodes().get(1).setApproveOrgScope("SELF");   // a1 审批节点
+
+        service.saveGraph("DEF-SCOPE2", graph, "user01");
+
+        ArgumentCaptor<WfFlowNode> nodeCaptor = ArgumentCaptor.forClass(WfFlowNode.class);
+        verify(nodeMapper, atLeast(2)).insert(nodeCaptor.capture());
+        WfFlowNode a1 = nodeCaptor.getAllValues().stream()
+                .filter(n -> "a1".equals(n.getNodeKey())).findFirst().orElseThrow();
+        assertThat(a1.getApproveOrgScope()).isEqualTo("SELF");
+    }
+
+    // ------------------------------------------------------------------ //
+    //  3e. 连线输出名称 outputName 往返（映射 WF_FLOW_EDGE.name）           //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    @DisplayName("getGraph：连线输出名称 outputName 随图返回")
+    void getGraph_carriesEdgeOutputName() {
+        WfFlowDef def = draftDef("DEF-EOUT");
+        when(flowDefMapper.selectById("DEF-EOUT")).thenReturn(def);
+        WfFlowNode n1 = node("N1", "DEF-EOUT", "start");
+        WfFlowNode n2 = node("N2", "DEF-EOUT", "a1");
+        when(nodeMapper.selectByFlowDefId("DEF-EOUT")).thenReturn(List.of(n1, n2));
+        when(approverMapper.selectByNodeIds(ArgumentMatchers.anyList())).thenReturn(List.of());
+
+        WfFlowEdge edge = new WfFlowEdge();
+        edge.setId("E1");
+        edge.setFlowDefId("DEF-EOUT");
+        edge.setFromNodeId("N1");
+        edge.setToNodeId("N2");
+        edge.setName("提交部门负责人");   // name 列承载 outputName
+        edge.setIsDefault(0);
+        when(edgeMapper.selectByFlowDefId("DEF-EOUT")).thenReturn(List.of(edge));
+
+        FlowGraphDTO result = service.getGraph("DEF-EOUT");
+        assertThat(result.getEdges().get(0).getOutputName()).isEqualTo("提交部门负责人");
+    }
+
+    @Test
+    @DisplayName("saveGraph：连线输出名称 outputName 落库到 name 列")
+    void saveGraph_persistsEdgeOutputName() {
+        WfFlowDef def = draftDef("DEF-EOUT2");
+        when(flowDefMapper.selectById("DEF-EOUT2")).thenReturn(def);
+        when(nodeMapper.selectByFlowDefId("DEF-EOUT2")).thenReturn(List.of());
+
+        FlowGraphDTO graph = buildSimpleGraph();
+        graph.getEdges().get(0).setOutputName("提交原业绩所属人会签");
+
+        service.saveGraph("DEF-EOUT2", graph, "user01");
+
+        ArgumentCaptor<WfFlowEdge> edgeCaptor = ArgumentCaptor.forClass(WfFlowEdge.class);
+        verify(edgeMapper, atLeast(1)).insert(edgeCaptor.capture());
+        assertThat(edgeCaptor.getValue().getName()).isEqualTo("提交原业绩所属人会签");
+    }
+
+    // ------------------------------------------------------------------ //
     //  4. deleteDraft_published_throws                                    //
     // ------------------------------------------------------------------ //
 

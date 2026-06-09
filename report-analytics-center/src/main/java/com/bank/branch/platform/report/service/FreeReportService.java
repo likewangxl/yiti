@@ -37,7 +37,8 @@ public interface FreeReportService {
      */
     PageResult<Map<String, Object>> queryData(String batchId, String keyword,
                                                String empNo, String empName,
-                                               String scopeEmpId, List<String> scopeOrgCodes,
+                                               String rowMode, String selfEmpNo, String selfName,
+                                               List<String> scopeOrgCodes,
                                                int pageNo, int pageSize);
 
     /**
@@ -47,9 +48,23 @@ public interface FreeReportService {
 
     /**
      * 查询导入批次列表（支持时间筛选）。
+     * @param includeDisabled true=含禁用文件（操作人）；false=仅启用文件（其余角色）
      */
     List<RptFreeReportBatch> listBatches(String keyword, java.time.LocalDate dateFrom, java.time.LocalDate dateTo,
-                                        String scopeEmpId, java.util.List<String> scopeOrgCodes);
+                                        boolean includeDisabled);
+
+    /** 获取批次状态（SUCCESS / DISABLED），批次不存在返回 null */
+    String getBatchStatus(String batchId);
+
+    /**
+     * 导出按行级数据范围过滤后的 Excel（下载用，与 /data 同一套 rowMode 过滤，避免下载泄露全表）。
+     * @return xlsx 字节流
+     */
+    byte[] exportFilteredExcel(String batchId, String rowMode, String selfEmpNo, String selfName,
+                               java.util.List<String> orgCodes);
+
+    /** 更新批次状态（禁用/启用） */
+    void updateBatchStatus(String batchId, String status);
 
     /**
      * 获取原始文件下载 URL（MinIO 预签名）。
@@ -58,6 +73,9 @@ public interface FreeReportService {
 
     /** 获取批次原始文件名 */
     String getBatchFileName(String batchId);
+
+    /** 获取批次关联的 file_object_id，供下载入口直接调 FileApi.getFilePath 读流（绕开 governance 通用下载 RBAC） */
+    String getBatchFileObjectKey(String batchId);
 
     /**
      * 删除批次 + 关联行数据 + MinIO 文件。

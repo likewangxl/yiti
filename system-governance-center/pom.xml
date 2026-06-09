@@ -51,10 +51,6 @@
         </dependency>
 
         <!-- Spring Boot Web -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
 
         <!-- Caffeine 本地缓存（替代 Redis，开发联调用） -->
         <dependency>

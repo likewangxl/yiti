@@ -8,7 +8,9 @@
       → biz_dept_review             (公司部经办审批，formData.corpRouteTo: LEADER / OWNER)
       → gw1_corp_route              (排他网关)
           ├─ LEADER → biz_dept_leader_approve (公司部负责人审批) → gw1_join
-          └─ OWNER  → original_owner_approve  (原业绩所属人审批) → gw1_join
+          └─ OWNER  → original_owner_approve  (原业绩所属人审批，并行多实例会签：原业绩分配所有员工
+                       全部通过后) → biz_dept_leader_approve (公司部负责人审批) → gw1_join
+                       任一所属人驳回 → 终止流程置 REJECTED + 通知申请人
       → gw1_join
       → finance_review              (资财部经办审批，formData.finRouteTo: LEADER / END)
       → gw2_fin_route               (排他网关)
@@ -47,11 +49,21 @@
             </extensionElements>
         </userTask>
 
+        <!--
+          原业绩所属人审批：并行多实例会签。
+          collection=${originalOwnerEmpIds}（提交时算「原业绩分配模块」当前维度所有员工工号），
+          每个原所属人一个子任务，assignee=${ownerEmpId}；全部通过(completionCondition)后流向公司部负责人审批。
+          任一驳回 → rejectTask 终止整个流程并置 REJECTED + 通知申请人（既有机制）。
+        -->
         <userTask id="original_owner_approve" name="原业绩所属人审批"
-                  flowable:assignee="${originalOwnerEmpId}">
+                  flowable:assignee="${ownerEmpId}">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
+            <multiInstanceLoopCharacteristics isSequential="false"
+                    flowable:collection="${originalOwnerEmpIds}" flowable:elementVariable="ownerEmpId">
+                <completionCondition>${nrOfCompletedInstances == nrOfInstances}</completionCondition>
+            </multiInstanceLoopCharacteristics>
         </userTask>
 
         <exclusiveGateway id="gw1_join" name="公司部汇合"/>
@@ -86,7 +98,8 @@
         </sequenceFlow>
 
         <sequenceFlow id="f_leader_join" sourceRef="biz_dept_leader_approve" targetRef="gw1_join"/>
-        <sequenceFlow id="f_owner_join" sourceRef="original_owner_approve" targetRef="gw1_join"/>
+        <!-- 原业绩所属人全部会签通过后，流转到公司部负责人审批（OWNER 路径经公司部负责人再汇合） -->
+        <sequenceFlow id="f_owner_leader" sourceRef="original_owner_approve" targetRef="biz_dept_leader_approve"/>
 
         <!-- 汇合后进资财部 -->
         <sequenceFlow id="f_join_fin" sourceRef="gw1_join" targetRef="finance_review"/>

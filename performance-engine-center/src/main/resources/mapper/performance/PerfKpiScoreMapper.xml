@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.mapper.PerfKpiScoreMapper">
+
+    <!--
+      按唯一键 upsert：uk_date_scheme_metric_subject(data_date, scheme_code,
+      metric_code, subject_type, subject_id)。命中则更新数值列，否则插入。
+    -->
+    <insert id="upsert" parameterType="com.bank.branch.platform.performance.entity.PerfKpiScore">
+        INSERT INTO PERF_KPI_SCORE
+            (data_date, scheme_code, metric_code, subject_type, subject_id,
+             actual_value, weight, target_value, base_value, score)
+        VALUES
+            (#{dataDate}, #{schemeCode}, #{metricCode}, #{subjectType}, #{subjectId},
+             #{actualValue}, #{weight}, #{targetValue}, #{baseValue}, #{score})
+        ON DUPLICATE KEY UPDATE
+            actual_value = VALUES(actual_value),
+            weight       = VALUES(weight),
+            target_value = VALUES(target_value),
+            base_value   = VALUES(base_value),
+            score        = VALUES(score),
+            updated_time = NOW()
+    </insert>
+
+    <select id="countByDateAndScheme" resultType="long">
+        SELECT COUNT(*)
+        FROM PERF_KPI_SCORE
+        WHERE data_date = #{dataDate}
+          AND scheme_code = #{schemeCode}
+    </select>
+
+</mapper>

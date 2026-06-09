@@ -9,4 +9,7 @@ public class OrgUpdateReqDTO {
 
     @Size(max = 100)
     private String orgName;
+
+    /** 机构状态：0-启用，1-禁用。为 null 时不改状态（仅改名）。禁用时机构下有用户则拒绝。 */
+    private Integer organState;
 }

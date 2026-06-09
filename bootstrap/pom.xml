@@ -89,6 +89,10 @@
             <groupId>com.bank.branch.platform</groupId>
             <artifactId>report-analytics-center</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>soap-gateway-center</artifactId>
+        </dependency>
 
         <!-- 测试 -->
         <dependency>

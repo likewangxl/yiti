@@ -112,11 +112,56 @@ CREATE TABLE IF NOT EXISTS `PERF_KPI_ITEM` (
   `multiplier` decimal(10,4) NOT NULL DEFAULT 1 COMMENT '加倍系数',
   `min_score` decimal(10,4) NOT NULL DEFAULT 0 COMMENT '最低分',
   `max_score` decimal(10,4) NOT NULL DEFAULT 999999 COMMENT '最高分',
+  `formula` varchar(500) DEFAULT NULL COMMENT '计分公式（变量 actual/target/base/weight，支持 min/max）',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_scheme_metric` (`scheme_id`, `metric_code`),
   KEY `idx_scheme_id` (`scheme_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='KPI方案项';
+
+-- -------------------------------------------
+-- KPI 计分明细结果表（KPI 分值后台计算任务产出）
+-- -------------------------------------------
+CREATE TABLE IF NOT EXISTS `PERF_KPI_SCORE` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `data_date` date NOT NULL COMMENT '数据日期',
+  `scheme_code` varchar(64) NOT NULL COMMENT 'KPI方案编码',
+  `metric_code` varchar(64) NOT NULL COMMENT '指标编码',
+  `subject_type` varchar(10) NOT NULL COMMENT '对象类型 EMP/ORG/CUST',
+  `subject_id` varchar(64) NOT NULL COMMENT '对象ID(emp_id/org_code/cust_id)',
+  `actual_value` decimal(20,4) DEFAULT NULL COMMENT '实际值（指标结果表槽位值）',
+  `weight` decimal(10,4) DEFAULT NULL COMMENT '权重',
+  `target_value` decimal(20,4) DEFAULT NULL COMMENT '目标值（未匹配默认0）',
+  `base_value` decimal(20,4) DEFAULT NULL COMMENT '基础值（未匹配默认0）',
+  `score` decimal(20,4) DEFAULT NULL COMMENT '得分',
+  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_date_scheme_metric_subject` (`data_date`, `scheme_code`, `metric_code`, `subject_type`, `subject_id`),
+  KEY `idx_date_scheme` (`data_date`, `scheme_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='KPI计分明细结果';
+
+-- -------------------------------------------
+-- KPI 方案级计算记录表（每方案处理完/异常结束落一条）
+-- -------------------------------------------
+CREATE TABLE IF NOT EXISTS `PERF_KPI_CALC_LOG` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `data_date` date NOT NULL COMMENT '数据日期',
+  `scheme_code` varchar(64) NOT NULL COMMENT 'KPI方案编码',
+  `trigger_type` varchar(10) NOT NULL COMMENT '触发方式 AUTO自动 / MANUAL手动',
+  `trigger_by` varchar(64) DEFAULT NULL COMMENT '触发人工号(PT_USER.username)，自动触发为空',
+  `start_time` datetime DEFAULT NULL COMMENT '该方案计算开始时间',
+  `end_time` datetime DEFAULT NULL COMMENT '该方案计算结束时间',
+  `result` varchar(20) DEFAULT NULL COMMENT '计算结果 SUCCESS / FAILED',
+  `scored_count` int DEFAULT 0 COMMENT '计分对象数',
+  `skipped_count` int DEFAULT 0 COMMENT '跳过指标项数',
+  `error_msg` text COMMENT '异常信息',
+  `task_id` varchar(32) DEFAULT NULL COMMENT '关联 PERF_METRIC_CALC_TASK.id',
+  `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_date_scheme` (`data_date`, `scheme_code`),
+  KEY `idx_created_time` (`created_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='KPI方案级计算记录';
 
 -- -------------------------------------------
 -- 6. 目标方案

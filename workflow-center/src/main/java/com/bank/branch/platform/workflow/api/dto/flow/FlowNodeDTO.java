@@ -30,8 +30,20 @@ public class FlowNodeDTO {
     /** 审批模式（仅 APPROVAL 节点有效）：ALL（会签）/ ANY（或签） */
     private String approveMode;
 
+    /**
+     * 审批机构归属（仅 APPROVAL 节点有效）：
+     * SELF=本机构（审批人机构号=发起人机构号）/ PARENT=上级机构（审批人机构=发起人上级机构）/ null=不判断。
+     */
+    private String approveOrgScope;
+
     /** 排列序号，供前端渲染参考 */
     private Integer sortNo;
+
+    /** 画布横坐标（可视化流程图编辑器节点位置），旧数据可为 null，前端兜底自动布局 */
+    private Integer posX;
+
+    /** 画布纵坐标（可视化流程图编辑器节点位置），旧数据可为 null，前端兜底自动布局 */
+    private Integer posY;
 
     /** 审批人配置列表（APPROVAL 节点必须非空） */
     private List<FlowApproverDTO> approvers;

@@ -102,8 +102,8 @@ class SqlProbeServiceTest {
                 List.of("DROP", "DELETE", "UPDATE", "INSERT"),
                 1000, 5000, 3);
 
-        // 默认放行：当前用户具备 R_BACK_TECH（具体 case 可覆盖）
-        lenient().when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_BACK_TECH"));
+        // 默认放行：当前用户具备资财部负责人 FINANCE_LEADER（具体 case 可覆盖）
+        lenient().when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("FINANCE_LEADER"));
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E_TECH001");
         // 校验默认放行：返回 normalizedSql 等于 sql
         lenient().when(validator.validateAndNormalize(anyString())).thenAnswer(inv ->
@@ -115,8 +115,9 @@ class SqlProbeServiceTest {
     }
 
     @Test
-    void execute_withoutBackTechRole_rejects40302() {
-        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("R_RM"));
+    void execute_withoutFinanceLeaderRole_rejects40302() {
+        // 非资财部负责人（含 SYS_ADMIN / BACK_TECH）一律拒绝
+        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("SYS_ADMIN", "BACK_TECH"));
         SqlProbeExecuteReqDTO req = buildReq("SELECT * FROM CUST_MASTER", "诊断");
 
         assertThatThrownBy(() -> service.execute(req))

@@ -99,8 +99,39 @@ public class KpiSchemeController {
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         log.debug("[KpiSchemeController.list] cycleType={}, status={}, keyword={}, pageNo={}, pageSize={}",
                 cycleType, status, keyword, pageNo, pageSize);
-        PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, status, keyword, pageNo, pageSize);
+        // 非资财部人员（无 R_BACK_FINANCE / R_FIN_LEAD 等角色）：
+        //   1) 只能看到"向员工开放明细=是"的方案；
+        //   2) 只能看到已发布(ACTIVE)状态的方案（DRAFT/试运行/停用等一律不可见）。
+        boolean canViewAll = canViewAllSchemes();
+        Integer openDetailFilter = canViewAll ? null : 1;
+        String effectiveStatus = canViewAll ? status : "ACTIVE";
+        PageResult<KpiSchemeDTO> dtoPage = kpiSchemeService.pageDto(cycleType, effectiveStatus, keyword, openDetailFilter, pageNo, pageSize);
+        // 标记每行"是否当前用户创建"（前端据此控制编辑/删除按钮显隐）
+        String currentEmpId = currentUserApi.getCurrentEmpId();
+        if (dtoPage.getRecords() != null) {
+            for (KpiSchemeDTO dto : dtoPage.getRecords()) {
+                dto.setCreatedByMe(currentEmpId != null && currentEmpId.equals(dto.getCreatedBy()));
+            }
+        }
         return ResponseWrapper.page(dtoPage);
+    }
+
+    /** 当前用户是否为资财部人员（资财部经办人 R_BACK_FINANCE / 资财部负责人 R_FIN_LEAD）. */
+    /**
+     * 是否可查看全部 KPI 方案（含"向员工开放明细=否"的方案）.
+     *
+     * <p>资财部（R_BACK_FINANCE / R_FIN_LEAD）负责 KPI 配置、系统/后台管理员
+     * （R_ADMIN / R_BACK_TECH）需运维全量，均可查看全部方案；其余角色只看
+     * "向员工开放明细=是"的方案。
+     *
+     * <p>注意：{@code getCurrentRoleIds()} 取的是当前激活角色集合，admin 激活
+     * R_ADMIN 时不含 R_BACK_FINANCE，故必须显式纳入管理员角色，否则 admin
+     * 看不到未开放明细的方案。
+     */
+    private boolean canViewAllSchemes() {
+        java.util.Set<String> roleIds = currentUserApi.getCurrentRoleIds();
+        return roleIds != null && (roleIds.contains("R_BACK_FINANCE") || roleIds.contains("R_FIN_LEAD")
+                || roleIds.contains("R_ADMIN") || roleIds.contains("R_BACK_TECH"));
     }
 
     /**
@@ -201,10 +232,13 @@ public class KpiSchemeController {
         AddKpiItemCmd cmd = AddKpiItemCmd.builder()
                 .schemeId(id)
                 .metricCode(req.getMetricCode())
+                .baseDim(req.getBaseDim())
                 .weight(req.getWeight())
                 .multiplier(req.getMultiplier())
                 .minScore(req.getMinScore())
                 .maxScore(req.getMaxScore())
+                .formula(req.getFormula())
+                .sqlExpr(req.getSqlExpr())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(kpiItemService.addItemDto(cmd));
@@ -226,6 +260,8 @@ public class KpiSchemeController {
                 .multiplier(req.getMultiplier())
                 .minScore(req.getMinScore())
                 .maxScore(req.getMaxScore())
+                .formula(req.getFormula())
+                .sqlExpr(req.getSqlExpr())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(kpiItemService.updateItemDto(itemId, cmd));
@@ -257,10 +293,13 @@ public class KpiSchemeController {
         for (AddKpiItemReqDTO item : reqItems) {
             cmds.add(AddKpiItemCmd.builder()
                     .metricCode(item.getMetricCode())
+                    .baseDim(item.getBaseDim())
                     .weight(item.getWeight())
                     .multiplier(item.getMultiplier())
                     .minScore(item.getMinScore())
                     .maxScore(item.getMaxScore())
+                    .formula(item.getFormula())
+                    .sqlExpr(item.getSqlExpr())
                     .build());
         }
         return cmds;

@@ -684,4 +684,5 @@ $danger: #dc2626;
   padding-left: 8px;
   border-left: 3px solid $primary;
 }
+.pagination-bar :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

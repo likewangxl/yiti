@@ -56,6 +56,7 @@ public class UserFacade implements UserApi {
         dto.setEmpId(user.getUserId());
         dto.setUsername(user.getUsername());
         dto.setDisplayName(user.getUserchnname());
+        dto.setUserType(user.getUserType());
 
         // 获取主机构信息
         var userOrg = userOrgMapper.selectByUserId(empId);
@@ -110,6 +111,26 @@ public class UserFacade implements UserApi {
     }
 
     @Override
+    public Set<String> getCandidateGroupKeys(String empId) {
+        if (empId == null || empId.isEmpty()) {
+            return Collections.emptySet();
+        }
+        // 口径对齐 AuthService.login：ROLE:{roleCode} / USER:{empId} / ORG:{mainOrgCode}
+        // 三种前缀对齐 CandidateResolverService.resolveCandidates 的输出，否则 BPMN 配
+        // USER/ORG 类型候选时该员工匹配不到 Flowable 候选组。
+        Set<String> keys = new HashSet<>();
+        for (String roleCode : getUserRoleCodes(empId)) {
+            keys.add("ROLE:" + roleCode);
+        }
+        keys.add("USER:" + empId);
+        var userOrg = userOrgMapper.selectByUserId(empId);
+        if (userOrg != null && userOrg.getOrgCode() != null) {
+            keys.add("ORG:" + userOrg.getOrgCode());
+        }
+        return keys;
+    }
+
+    @Override
     public List<String> getEmpIdsByRoleCode(String roleCode) {
         if (roleCode == null || roleCode.isEmpty()) {
             return new ArrayList<>();
@@ -124,6 +145,15 @@ public class UserFacade implements UserApi {
             return new ArrayList<>();
         }
         List<String> empIds = userRoleMapper.selectEmpIdsByRoleCodeAndOrg(roleCode, orgCode);
+        return empIds != null ? empIds : new ArrayList<>();
+    }
+
+    @Override
+    public List<String> getEmpIdsByOrg(String orgCode) {
+        if (orgCode == null || orgCode.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> empIds = userOrgMapper.selectEmpIdsByOrgCode(orgCode);
         return empIds != null ? empIds : new ArrayList<>();
     }
 

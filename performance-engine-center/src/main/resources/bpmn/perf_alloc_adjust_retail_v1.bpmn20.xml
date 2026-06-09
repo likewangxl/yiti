@@ -8,7 +8,8 @@
       → biz_dept_review             (零售部经办审批，formData.corpRouteTo: LEADER / OWNER)
       → gw1_retail_route            (排他网关)
           ├─ LEADER → biz_dept_leader_approve (零售部负责人审批) → gw1_join
-          └─ OWNER  → original_owner_approve  (原业绩所属人审批) → gw1_join
+          └─ OWNER  → original_owner_approve  (原业绩所属人审批，并行多实例会签，全部通过后)
+                       → biz_dept_leader_approve (零售部负责人审批) → gw1_join
       → gw1_join
       → finance_review              (资财部经办审批，formData.finRouteTo: LEADER / END)
       → gw2_fin_route               (排他网关)
@@ -48,10 +49,15 @@
         </userTask>
 
         <userTask id="original_owner_approve" name="原业绩所属人审批"
-                  flowable:assignee="${originalOwnerEmpId}">
+                  flowable:assignee="${ownerEmpId}">
             <extensionElements>
                 <flowable:taskListener event="create" delegateExpression="${taskAssignmentListener}"/>
             </extensionElements>
+            <!-- 与对公线一致：对 originalOwnerEmpIds 并行多实例会签，每个原所属人一个子任务，全部通过后流转 -->
+            <multiInstanceLoopCharacteristics isSequential="false"
+                    flowable:collection="${originalOwnerEmpIds}" flowable:elementVariable="ownerEmpId">
+                <completionCondition>${nrOfCompletedInstances == nrOfInstances}</completionCondition>
+            </multiInstanceLoopCharacteristics>
         </userTask>
 
         <exclusiveGateway id="gw1_join" name="零售部汇合"/>
@@ -86,7 +92,8 @@
         </sequenceFlow>
 
         <sequenceFlow id="f_leader_join" sourceRef="biz_dept_leader_approve" targetRef="gw1_join"/>
-        <sequenceFlow id="f_owner_join" sourceRef="original_owner_approve" targetRef="gw1_join"/>
+        <!-- 原业绩所属人全部会签通过后，流转到零售部负责人审批（OWNER 路径经零售部负责人再汇合，与对公线一致） -->
+        <sequenceFlow id="f_owner_leader" sourceRef="original_owner_approve" targetRef="biz_dept_leader_approve"/>
 
         <!-- 汇合后进资财部 -->
         <sequenceFlow id="f_join_fin" sourceRef="gw1_join" targetRef="finance_review"/>

@@ -8,10 +8,6 @@
       </div>
     </div>
 
-    <el-alert type="info" :closable="false"
-      title="线下调整后将触发 KPI 历史回算。'我的申请' = 当前账号提交的；'待我审批' = 流程任务派到我的。"
-      style="margin-bottom:12px" />
-
     <el-tabs v-model="activeTab" @tab-change="reload" class="adjust-tabs">
       <!-- ============ 我的申请 ============ -->
       <el-tab-pane label="我的申请" name="mine">
@@ -60,8 +56,11 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户编号" min-width="160">
-              <template #default="{row}">{{ row.custNo || row.custId || '-' }}</template>
+            <el-table-column label="客户" min-width="190">
+              <template #default="{row}">
+                <div>{{ row.custName || '-' }}</div>
+                <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
+              </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
               <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
@@ -135,25 +134,35 @@
             <el-form-item>
               <el-button type="primary" @click="onTodoFilterChange">查询</el-button>
               <el-button @click="resetTodoFilters">重置</el-button>
+              <el-button type="success" plain :disabled="!todoSelection.length"
+                         @click="openBatchReview">批量审批{{ todoSelection.length ? `（${todoSelection.length}）` : '' }}</el-button>
             </el-form-item>
           </el-form>
         </div>
         <div class="card-section table">
-          <el-table :data="todos" size="default" empty-text="无符合条件的待审批" v-loading="todoLoading">
-            <el-table-column label="标题" min-width="220">
-              <template #default="{row}"><code class="mono">{{ row.title || row.businessKey }}</code></template>
+          <el-table :data="todos" row-key="taskId" size="default" empty-text="无符合条件的待审批" v-loading="todoLoading"
+                    @selection-change="onTodoSelectionChange">
+            <el-table-column type="selection" width="48" />
+            <el-table-column label="申请编号" width="170">
+              <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="当前节点" width="140" prop="taskName" />
+            <el-table-column label="客户" min-width="190">
+              <template #default="{row}">
+                <div>{{ row.custName || '-' }}</div>
+                <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
+              </template>
+            </el-table-column>
             <el-table-column label="发起人" width="160">
               <template #default="{row}">
-                {{ row.startUserName || '-' }}
-                <span v-if="row.startUser" class="sub-id">({{ row.startUser }})</span>
+                <div>{{ row.startUserName || row.startUserEmpNo || row.startUser || '-' }}</div>
+                <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
               </template>
             </el-table-column>
             <el-table-column label="发起机构" width="220">
               <template #default="{row}">
-                <template v-if="row.startOrgName || row.startOrgId">
-                  {{ row.startOrgId || '-' }}<span v-if="row.startOrgName"> · {{ row.startOrgName }}</span>
+                <template v-if="row.startOrgName || row.startOrgDeptNo || row.startOrgId">
+                  <div>{{ row.startOrgName || '-' }}</div>
+                  <div v-if="row.startOrgDeptNo" class="sub-id">{{ row.startOrgDeptNo }}</div>
                 </template>
                 <template v-else>-</template>
               </template>
@@ -227,8 +236,11 @@
             <el-table-column label="申请编号" width="170">
               <template #default="{row}"><code class="mono">{{ row.applyNo || row.id }}</code></template>
             </el-table-column>
-            <el-table-column label="客户编号" min-width="160">
-              <template #default="{row}">{{ row.custId || '-' }}</template>
+            <el-table-column label="客户" min-width="190">
+              <template #default="{row}">
+                <div>{{ row.custName || '-' }}</div>
+                <div v-if="row.custId" class="cust-name-sub">{{ row.custId }}</div>
+              </template>
             </el-table-column>
             <el-table-column label="维度" width="100">
               <template #default="{row}"><el-tag class="tag-info" effect="plain">{{ { RULE: '按规则', ACCOUNT: '按账户' }[row.allocDim] || row.allocDim || '-' }}</el-tag></template>
@@ -243,8 +255,8 @@
             </el-table-column>
             <el-table-column label="申请人" width="160">
               <template #default="{row}">
-                {{ row.createdByName || row.startUserName || row.createdBy || '-' }}
-                <span v-if="row.createdBy" class="sub-id">({{ row.createdBy }})</span>
+                <div>{{ row.startUserName || row.createdByName || row.startUserEmpNo || row.createdBy || '-' }}</div>
+                <div v-if="row.startUserEmpNo" class="sub-id">{{ row.startUserEmpNo }}</div>
               </template>
             </el-table-column>
             <el-table-column label="申请时间" width="160">
@@ -287,8 +299,8 @@
             <code class="mono">{{ dlg.applyNo || '-' }}</code>
           </el-descriptions-item>
           <el-descriptions-item label="申请人">
-            <span>{{ dlg.createdByName || '-' }}</span>
-            <span v-if="dlg.createdBy" class="sub-id">（{{ dlg.createdBy }}）</span>
+            <span>{{ dlg.createdByName || dlg.createdByUsername || dlg.createdBy || '-' }}</span>
+            <span v-if="dlg.createdByUsername" class="sub-id">（{{ dlg.createdByUsername }}）</span>
           </el-descriptions-item>
           <el-descriptions-item label="申请机构">
             {{ dlg.createdByOrgName || '-' }}
@@ -308,13 +320,15 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="客户编号" prop="custNo" required>
-              <el-input v-model="dlg.form.custNo" :disabled="dlg.readOnly" placeholder="如 C20260001" />
+            <el-form-item label="客户编号" prop="custId" required>
+              <el-input v-model="dlg.form.custId" :disabled="dlg.readOnly" placeholder="如 C20260001" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="客户名称">
-              <span class="cust-name-label">{{ custNameDisplay || '-' }}</span>
+            <el-form-item label="客户名称" prop="custName" required>
+              <el-input v-model="dlg.form.custName"
+                        :disabled="dlg.readOnly || custStat.found"
+                        :placeholder="custStat.found ? '' : '请输入客户名称'" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
@@ -328,69 +342,108 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="业务类型" prop="bizKind" required>
-              <el-select v-model="dlg.form.bizKind" :disabled="dlg.readOnly" multiple style="width:100%">
-                <el-option v-for="o in bizKindOptions" :key="o.value" :label="o.label" :value="o.value" />
+              <el-select v-model="dlg.form.bizKind"
+                         :disabled="dlg.readOnly || dlg.form.allocDim === 'ACCOUNT'"
+                         multiple style="width:100%"
+                         :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '按账户分配固定为存款' : '请选择业务类型（存款/贷款，可多选）'">
+                <el-option v-for="o in bizKindFormOptions" :key="o.value" :label="o.label" :value="o.value" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="账号">
+            <el-form-item label="账号" prop="accountNo" :required="dlg.form.allocDim === 'ACCOUNT'">
               <el-input v-model="dlg.form.accountNo"
                         :disabled="dlg.readOnly || dlg.form.allocDim !== 'ACCOUNT'"
-                        :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '请输入账号' : '仅按账户分配时可输入'" />
+                        :placeholder="dlg.form.allocDim === 'ACCOUNT' ? '请输入账号（必填）' : '仅按账户分配时可输入'" />
             </el-form-item>
           </el-col>
         </el-row>
 
         <!-- 查不到该客户的余额统计时告警（查到则不显示）-->
-        <el-alert v-if="dlg.form.custNo && custStat.queried && !custStat.found"
+        <el-alert v-if="dlg.form.custId && custStat.queried && !custStat.found"
                   type="warning" :closable="false" style="margin-bottom:12px"
-                  title="未查询到该客户/账号的余额数据，不允许提交审批" />
+                  title="未查询到该客户，请填写客户名称" />
 
         <!-- 余额概览（默认显示，数据来自 XAN_M98_CUST_STAT_SHOW3，按客户编号反显）-->
         <div class="card-h"><div class="title">余额概览</div></div>
         <el-row :gutter="16" style="margin-bottom:4px">
           <el-col :span="6">
             <el-form-item label="当前余额">
-              <el-input :model-value="custStat.currBal != null ? custStat.currBal : '-'" disabled />
+              <el-input :model-value="custIdx.MC_001 != null ? custIdx.MC_001 : '-'" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="6">
-            <el-form-item label="月日均余额">
-              <el-input :model-value="custStat.mAvgBal != null ? custStat.mAvgBal : '-'" disabled />
+            <el-form-item label="较上日余额">
+              <el-input :model-value="custIdx.MC_002 != null ? custIdx.MC_002 : '-'" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="6">
-            <el-form-item label="季日均余额">
-              <el-input :model-value="custStat.qAvgBal != null ? custStat.qAvgBal : '-'" disabled />
+            <el-form-item label="年均余额">
+              <el-input :model-value="custIdx.MC_003 != null ? custIdx.MC_003 : '-'" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="6">
-            <el-form-item label="年日均余额">
-              <el-input :model-value="custStat.yAvgBal != null ? custStat.yAvgBal : '-'" disabled />
+            <el-form-item label="较上年均余额">
+              <el-input :model-value="custIdx.MC_004 != null ? custIdx.MC_004 : '-'" disabled />
             </el-form-item>
           </el-col>
         </el-row>
 
-        <!-- 原业绩分配（来自 getAllocPreview，仅展示当前分配，存贷款余额预览模块已删除）-->
-        <div v-if="preview.loaded && preview.data" class="preview-section" v-loading="preview.loading">
-          <div class="card-h"><div class="title">原业绩分配</div></div>
-          <el-table :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
+        <!-- 原业绩分配：自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
+        <div v-if="(dlg.form.custId && preview.loaded) || dlg.readOnly || dlg.form.originalItems.length" class="preview-section" v-loading="preview.loading">
+          <div class="card-h">
+            <div class="title">原业绩分配</div>
+            <el-button v-if="!dlg.readOnly && !hasOriginalOwners" size="small" type="primary" plain @click="addOriginalRow">+ 添加原业绩分配</el-button>
+          </div>
+          <!-- 历史审批通过分配（自动查到）：只读 -->
+          <el-table v-if="hasOriginalOwners" :data="preview.data.allocList || []" size="small" border style="margin-bottom:12px" empty-text="暂无审批通过的分配记录">
             <el-table-column prop="acctNo" label="账号" min-width="150" show-overflow-tooltip>
               <template #default="{row}">{{ row.acctNo || '-' }}</template>
             </el-table-column>
             <el-table-column label="员工名称" min-width="150" show-overflow-tooltip>
-              <template #default="{row}">
-                {{ row.username || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}
-              </template>
+              <template #default="{row}">{{ row.username || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}</template>
             </el-table-column>
             <el-table-column label="所属机构" min-width="180" show-overflow-tooltip>
-              <template #default="{row}">
-                {{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}
-              </template>
+              <template #default="{row}">{{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}</template>
             </el-table-column>
             <el-table-column prop="ratio" label="分配比例" width="100">
               <template #default="{row}">{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</template>
+            </el-table-column>
+          </el-table>
+          <!-- 查不到 → 手工录入（新建/编辑可增删）；查看/审批时只读展示已保存原业绩分配 -->
+          <el-table v-else :data="dlg.form.originalItems" size="small" border style="margin-bottom:12px" empty-text="未查到原业绩分配，请手工录入至少 1 条（除账号外必填）">
+            <el-table-column label="账号" min-width="140">
+              <template #default="{row}">
+                <el-input v-if="!dlg.readOnly" v-model="row.acctNo" size="small" placeholder="选填" clearable />
+                <span v-else>{{ row.acctNo || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="员工名称" min-width="200">
+              <template #default="{row}">
+                <el-autocomplete v-if="!dlg.readOnly" v-model="row.empLabel" size="small" style="width:100%"
+                  value-key="label" :fetch-suggestions="queryEmpSuggest" :trigger-on-focus="false" clearable
+                  placeholder="输入工号/姓名搜索" @select="(item) => onOrigEmpSelect(row, item)" @input="(v) => onOrigEmpInput(row, v)" />
+                <span v-else>{{ row.username || row.empId || '-' }}{{ row.empChnName ? '（' + row.empChnName + '）' : '' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="所属机构" min-width="220">
+              <template #default="{row}">
+                <el-autocomplete v-if="!dlg.readOnly" v-model="row.orgLabel" size="small" style="width:100%"
+                  value-key="label" :fetch-suggestions="queryOrgSuggest" :trigger-on-focus="false" clearable
+                  placeholder="输入机构号/名称搜索" @select="(item) => onOrigOrgSelect(row, item)" @input="(v) => onOrigOrgInput(row, v)" />
+                <span v-else>{{ row.orgName || '-' }}{{ row.orgCode ? '（' + row.orgCode + '）' : '' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="分配比例" width="120">
+              <template #default="{row}">
+                <el-input-number v-if="!dlg.readOnly" v-model="row.ratio" :min="0" :max="100" :precision="2" size="small" controls-position="right" style="width:100%" />
+                <span v-else>{{ row.ratio != null && row.ratio !== '' ? row.ratio + '%' : '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center">
+              <template #default="{ $index }">
+                <el-button link type="danger" size="small" @click="removeOriginalRow($index)">删除</el-button>
+              </template>
             </el-table-column>
           </el-table>
         </div>
@@ -402,9 +455,25 @@
           </span>
         </div>
         <el-table :data="dlg.form.items" size="default" border>
-          <el-table-column label="员工号" width="160">
+          <el-table-column label="员工号" min-width="220">
             <template #default="{row}">
-              <el-input v-model="row.empId" :disabled="dlg.readOnly" size="small" placeholder="如 E001" />
+              <el-autocomplete
+                v-model="row.empLabel"
+                :disabled="dlg.readOnly"
+                size="small"
+                style="width:100%"
+                value-key="label"
+                :fetch-suggestions="queryEmpSuggest"
+                :trigger-on-focus="false"
+                clearable
+                placeholder="输入工号/登录名/中文名搜索"
+                @select="(item) => onEmpSelect(row, item)"
+                @change="(val) => onEmpInput(row, val)">
+                <template #default="{ item }">
+                  <span>{{ item.username }}</span>
+                  <span v-if="item.empChnName" style="color:#909399;margin-left:8px">{{ item.empChnName }}</span>
+                </template>
+              </el-autocomplete>
             </template>
           </el-table-column>
           <el-table-column label="承担比例 %" width="140">
@@ -456,8 +525,8 @@
               </div>
               <div class="approval-meta">
                 <span class="meta-key">审核人：</span>
-                <span>{{ log.operatorName || log.operator || '-' }}</span>
-                <span v-if="log.operator && log.operatorName" class="sub-id">({{ log.operator }})</span>
+                <span>{{ log.operatorName || log.operatorEmpNo || log.operator || '-' }}</span>
+                <span v-if="log.operatorEmpNo" class="sub-id">（{{ log.operatorEmpNo }}）</span>
                 <span class="meta-sep">·</span>
                 <span class="meta-key">机构：</span>
                 <span>{{ log.operatorOrgName || '-' }}</span>
@@ -479,7 +548,7 @@
             <el-radio-group v-model="dlg.reviewRouteTo">
               <template v-if="dlg.reviewRow?.nodeKey === 'biz_dept_review'">
                 <el-radio value="LEADER">{{ dlg.reviewFlowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
-                <el-radio value="OWNER">交原业绩所属人审批</el-radio>
+                <el-radio value="OWNER" :disabled="!canRouteOwner">交原业绩所属人审批{{ canRouteOwner ? '' : '（无原业绩分配，不可选）' }}</el-radio>
               </template>
               <template v-else-if="dlg.reviewRow?.nodeKey === 'finance_review'">
                 <el-radio value="LEADER">交资财部负责人审批</el-radio>
@@ -497,7 +566,6 @@
           <el-button type="primary" :loading="dlg.reviewSaving" @click="onDlgReviewAction('APPROVE')">通过</el-button>
         </template>
         <el-button v-if="!dlg.readOnly && !dlg.reviewMode" type="primary" :loading="dlg.saving"
-                   :disabled="custStat.queried && !custStat.found"
                    @click="onSubmit">提交审批</el-button>
       </template>
     </el-dialog>
@@ -513,7 +581,7 @@
           <el-radio-group v-model="approveDlg.routeTo">
             <template v-if="approveDlg.nodeKey === 'biz_dept_review'">
               <el-radio value="LEADER">{{ approveDlg.flowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
-              <el-radio value="OWNER">交原业绩所属人审批</el-radio>
+              <el-radio value="OWNER" :disabled="!approveDlg.hasOwners">交原业绩所属人审批{{ approveDlg.hasOwners ? '' : '（无原业绩分配，不可选）' }}</el-radio>
             </template>
             <template v-else-if="approveDlg.nodeKey === 'finance_review'">
               <el-radio value="LEADER">交资财部负责人审批</el-radio>
@@ -528,6 +596,33 @@
       </template>
     </el-dialog>
 
+    <!-- 批量审批对话框（待我审批 tab 勾选后批量通过/驳回） -->
+    <el-dialog v-model="batchDlg.show" :title="`批量审批（共 ${batchDlg.rows.length} 条）`" width="540px" :close-on-click-modal="false">
+      <el-form label-position="top" size="default">
+        <el-form-item label="审批意见" required>
+          <el-input v-model="batchDlg.opinion" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请填写审批意见（必填，所有勾选申请共用）" />
+        </el-form-item>
+        <el-form-item v-if="batchDlg.nodeKey === 'biz_dept_review' || batchDlg.nodeKey === 'finance_review'" label="下一步审批">
+          <el-radio-group v-model="batchDlg.routeTo">
+            <template v-if="batchDlg.nodeKey === 'biz_dept_review'">
+              <el-radio value="LEADER">{{ batchDlg.flowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
+              <el-radio value="OWNER">交原业绩所属人审批</el-radio>
+            </template>
+            <template v-else-if="batchDlg.nodeKey === 'finance_review'">
+              <el-radio value="LEADER">交资财部负责人审批</el-radio>
+              <el-radio value="END">审批结束</el-radio>
+            </template>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchDlg.show = false">取消</el-button>
+        <el-button type="danger" :loading="batchDlg.saving" @click="onBatchReviewAction('REJECT')">驳回</el-button>
+        <el-button type="primary" :loading="batchDlg.saving" @click="onBatchReviewAction('APPROVE')">通过</el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -539,7 +634,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   submitAdjust, withdrawAdjust, getAdjustDetail,
   getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
-  getAllocPreview, getCustStat
+  getAllocPreview, getCustStat, getCustIndexValues, suggestEmployees, suggestOrgs
 } from '@/api/perf';
 import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -566,6 +661,8 @@ const inferCustType = (custType, bizKind) => {
   return '';
 };
 const doneRowStatus = (row) => {
+  // 撤回优先：撤回也会把流程置为 CANCELLED，需先按申请状态区分「撤回」与「驳回」
+  if (row.status === 'WITHDRAWN') return 'WITHDRAWN';
   if (row.approvalResult === 'APPROVE' || row.processStatus === 'COMPLETED') return 'APPROVED';
   if (row.approvalResult === 'REJECT' || row.processStatus === 'CANCELLED') return 'REJECTED';
   if (row.status) return row.status;
@@ -797,17 +894,25 @@ async function openTodoDetail(row) {
     dlg.viewingId = applyId;
     dlg.approvalLogs = [];
     Object.assign(dlg.form, {
-      custType: inferCustType(d.custType, d.bizKind), custNo: d.custNo || d.custId || '',
+      custType: inferCustType(d.custType, d.bizKind), custId: d.custId || '',
+      custName: d.custName || '',
       allocDim: d.allocDim,
       bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
       accountNo: d.accountNo,
       ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark,
-      items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark }))
+      items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark, empLabel: empLabelOf(it) })),
+      originalItems: originalItemsFromDetail(d)
     });
+    // 余额概览读快照（列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
+    custIdx.MC_001 = d.currBal ?? null;
+    custIdx.MC_002 = d.mAvgBal ?? null;
+    custIdx.MC_003 = d.qAvgBal ?? null;
+    custIdx.MC_004 = d.yAvgBal ?? null;
     // 申请信息条所需的 dlg 顶层字段（之前漏赋值导致 todo/done tab 查看时申请单号/申请人/机构/时间 全空）
     dlg.applyNo = d.applyNo || '';
     dlg.createdBy = d.createdBy || '';
     dlg.createdByName = d.createdByName || '';
+    dlg.createdByUsername = d.createdByUsername || '';
     dlg.createdByOrgName = d.createdByOrgName || '';
     dlg.createdTime = d.createdTime || null;
     dlg.show = true;
@@ -834,7 +939,7 @@ async function ensureClaimed(row) {
 // 该节点表单含 needsOriginalOwnerApprove CHECKBOX，由经办勾选决定是否走原业绩所属人审批分支
 const approveDlg = reactive({
   show: false, saving: false, row: null,
-  opinion: '同意', routeTo: 'LEADER', nodeKey: '', flowType: 'CORP'
+  opinion: '同意', routeTo: 'LEADER', nodeKey: '', flowType: 'CORP', hasOwners: false
 });
 const approveDlgTitle = computed(
   () => `审批通过：${approveDlg.row?.title || approveDlg.row?.businessKey || ''}`
@@ -848,6 +953,15 @@ async function openApprove(row) {
     approveDlg.nodeKey = row.nodeKey;
     approveDlg.flowType = (row.processDefinitionKey || '').includes('retail') ? 'RETAIL' : 'CORP';
     approveDlg.saving = false;
+    // 原业绩分配为空时禁用"交原业绩所属人审批"：拉取该客户当前维度的原业绩分配判断有无所属人
+    approveDlg.hasOwners = false;
+    if (row.nodeKey === 'biz_dept_review') {
+      try {
+        const p = await getAllocPreview({ custNo: row.custId, allocDim: row.allocDim });
+        approveDlg.hasOwners = !!(p && p.allocList && p.allocList.length);
+      } catch { approveDlg.hasOwners = false; }
+      if (!approveDlg.hasOwners && approveDlg.routeTo === 'OWNER') approveDlg.routeTo = 'LEADER';
+    }
     approveDlg.show = true;
     return;
   }
@@ -948,12 +1062,88 @@ async function onDlgReviewAction(action) {
   }
 }
 
+// ============ 待我审批 - 批量审批 ============
+const todoSelection = ref([]);
+function onTodoSelectionChange(rows) { todoSelection.value = rows || []; }
+
+// 批量审批弹窗 state（沿用单个审批的路由流转语义；processData 同单个）
+const batchDlg = reactive({ show: false, saving: false, opinion: '', routeTo: 'LEADER', nodeKey: '', flowType: 'CORP', rows: [] });
+
+function openBatchReview() {
+  const sel = todoSelection.value;
+  if (!sel.length) return ElMessage.warning('请先勾选要审批的申请');
+  // 必须同一审批环节：不同环节(节点)的"下一步审批"流转选项不同，混选无法统一处理
+  const nodeKeys = [...new Set(sel.map(r => r.nodeKey))];
+  if (nodeKeys.length > 1) {
+    return ElMessage.warning('请选择同一审批环节的任务再批量审批');
+  }
+  batchDlg.rows = [...sel];
+  batchDlg.nodeKey = nodeKeys[0] || '';
+  batchDlg.opinion = '';
+  batchDlg.routeTo = 'LEADER';
+  batchDlg.saving = false;
+  // 全部 retail 走零售部文案，否则公司部
+  batchDlg.flowType = sel.every(r => (r.processDefinitionKey || '').includes('retail')) ? 'RETAIL' : 'CORP';
+  batchDlg.show = true;
+}
+
+async function onBatchReviewAction(action) {
+  if (!batchDlg.opinion || !batchDlg.opinion.trim()) {
+    return ElMessage.warning('请填写审批意见');
+  }
+  batchDlg.saving = true;
+  let ok = 0;
+  const fails = [];
+  try {
+    // 逐条处理：claim → 通过(带 corp/finRouteTo 流转)/驳回，与单个审批一致；单条失败不阻断其余
+    for (const row of batchDlg.rows) {
+      try {
+        if (!row.taskId) throw new Error('任务 ID 缺失');
+        await ensureClaimed(row);
+        if (action === 'APPROVE') {
+          let formData;
+          if (row.nodeKey === 'biz_dept_review') formData = { corpRouteTo: batchDlg.routeTo };
+          else if (row.nodeKey === 'finance_review') formData = { finRouteTo: batchDlg.routeTo };
+          await approveTask(row.taskId, batchDlg.opinion, formData);
+        } else {
+          await rejectTask(row.taskId, batchDlg.opinion);
+        }
+        ok++;
+      } catch (e) {
+        fails.push(`${row.applyNo || row.taskId}：${e?.bizMsg || e?.message || '失败'}`);
+      }
+    }
+    if (fails.length === 0) {
+      ElMessage.success(`已${action === 'APPROVE' ? '通过' : '驳回'} ${ok} 条`);
+    } else {
+      ElMessage.warning(`成功 ${ok} 条，失败 ${fails.length} 条：${fails.slice(0, 3).join('；')}${fails.length > 3 ? ' …' : ''}`);
+    }
+    batchDlg.show = false;
+    todoSelection.value = [];
+    reloadTodo();
+  } finally {
+    batchDlg.saving = false;
+  }
+}
+
 // ============ 业务类型字典 ============
 const bizKindOptions = ref([]);
 const bizKindMap = computed(() => {
   const m = {};
   for (const o of bizKindOptions.value) m[o.value] = o.label;
   return m;
+});
+// 业务类型「存款 / 贷款」对应的字典编码（PERF_BIZ_KIND）
+const BIZ_DEPOSIT = 'CORP_DEPOSIT';
+const BIZ_LOAN = 'CORP_LOAN';
+// 新建申请弹框里业务类型可选项：
+// - 只读查看：展示全部（保证历史含中收/结构性等也能正常显示标签）
+// - 按账户分配(ACCOUNT)：仅「存款」（且默认固定为存款、不可改）
+// - 按规则分配(RULE)：全部 PERF_BIZ_KIND 字典项可选（默认选中存款+贷款，可多选可改）
+const bizKindFormOptions = computed(() => {
+  if (dlg.readOnly) return bizKindOptions.value;
+  if (dlg.form.allocDim === 'ACCOUNT') return bizKindOptions.value.filter(o => o.value === BIZ_DEPOSIT);
+  return bizKindOptions.value;
 });
 const BIZ_KIND_FALLBACK = {
   CORP_DEPOSIT: '对公存款', CORP_LOAN: '对公贷款', CORP_FOREX: '对公外汇',
@@ -982,6 +1172,12 @@ function resetCustStat() {
   custStat.queried = false;
   custStat.found = false;
 }
+// 余额概览 4 项：按客户编号 + 昨日日期在 CUST_INDEX_RESULT 取 MC_001/MC_002/MC_003/MC_004 指标值，
+// 分别对应 当前余额 / 较上日余额 / 年均余额 / 较上年均余额；查无数据为 null → 页面显示 '-'
+const custIdx = reactive({ MC_001: null, MC_002: null, MC_003: null, MC_004: null });
+function resetCustIdx() {
+  custIdx.MC_001 = custIdx.MC_002 = custIdx.MC_003 = custIdx.MC_004 = null;
+}
 // XAN_M98_CUST_STAT_SHOW3 统计日期 STATIS_DT：
 // 查看/审批模式（dlg.createdTime 有值）取 申请日期-1；新建模式取 昨日。均 yyyy-MM-dd。
 function custStatStatisDt() {
@@ -990,6 +1186,13 @@ function custStatStatisDt() {
   return base.toISOString().slice(0, 10);
 }
 const preview = reactive({ loaded: false, loading: false, data: null });
+// 原业绩分配是否有数据（决定审批时能否选"交原业绩所属人审批"）
+const hasOriginalOwners = computed(() => (preview.data && preview.data.allocList && preview.data.allocList.length) > 0);
+// 本次申请明细表是否存在 item_kind=ORIGIN 记录（手工录入的原业绩分配，openTodoDetail 已拆入 dlg.form.originalItems）
+const hasOriginItems = computed(() => (dlg.form.originalItems?.length || 0) > 0);
+// 能否走"交原业绩所属人审批"：历史审批通过分配 OR 本次申请手工录入的原业绩分配；
+// 与后端 resolveOriginalOwnerEmpIds(preview 优先、否则回退手工 ORIGIN) 的会签名单来源一致
+const canRouteOwner = computed(() => hasOriginalOwners.value || hasOriginItems.value);
 function fmtAmt(v) {
   if (v == null) return '-';
   return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -997,14 +1200,14 @@ function fmtAmt(v) {
 async function loadPreview(statisDt) {
   const f = dlg.form;
   // 原业绩分配按客户编号取 RULE/ACCOUNT 审批通过的最后一条，故只要有客户编号即可加载
-  if (!f.custNo) return;
+  if (!f.custId) return;
   preview.loaded = true;
   preview.loading = true;
   // 新建时传昨日，查看/审批时由调用方传入申请日期-1
   const dt = statisDt || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   try {
     preview.data = await getAllocPreview({
-      custType: f.custType, custNo: f.custNo, allocDim: f.allocDim, accountNo: f.accountNo || undefined,
+      custType: f.custType, custNo: f.custId, allocDim: f.allocDim, accountNo: f.accountNo || undefined,
       statisDt: dt
     });
   } catch { preview.data = null; }
@@ -1016,17 +1219,24 @@ const dlg = reactive({
   approvalLogs: [], approvalLoading: false,
   applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
-    custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
+    custType: 'CORP', custId: '', custName: '', allocDim: 'RULE', bizKind: 'CORP_DEPOSIT',
     accountNo: '', ownerOrgId: '', reason: '',
-    items: [{ empId: '', pct: 100, remark: '' }]
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    originalItems: []
   }
 });
 const dlgTitle = computed(() => dlg.reviewMode ? '审批调整申请' : dlg.readOnly ? '查看调整申请' : '新建调整申请');
 const totalPct = computed(() => dlg.form.items.reduce((s, x) => s + (Number(x.pct) || 0), 0));
 const dlgRules = {
   custType:   [{ required: true, message: '请选择客户类型' }],
-  custNo:     [{ required: true, message: '请填写客户编号' }],
+  custId:     [{ required: true, message: '请填写客户编号' }],
+  custName:   [{ required: true, message: '请填写客户名称' }],
   allocDim:   [{ required: true, message: '请选择分配维度' }],
+  accountNo:  [{ validator: (rule, val, cb) => {
+                  if (dlg.form.allocDim === 'ACCOUNT' && !(val && String(val).trim())) {
+                    cb(new Error('按账号分配时请填写账号'));
+                  } else { cb(); }
+                }, trigger: ['blur', 'change'] }],
   bizKind:    [{ required: true, message: '请选择业务类型' }],
   // ownerOrgId 已隐藏，不再必填
   reason:     [
@@ -1035,8 +1245,87 @@ const dlgRules = {
   ]
 };
 
-function defaultItem() { return { empId: '', pct: 0, remark: '' }; }
+function defaultItem() { return { empId: '', pct: 0, remark: '', empLabel: '' }; }
 function addItemRow() { dlg.form.items.push(defaultItem()); }
+
+// 分配明细员工号自动补齐：按工号/登录名/中文名模糊匹配 PT_USER
+// 下拉项 label = "username（中文名）"，作为输入框显示内容；empId 另存干净值用于提交
+async function queryEmpSuggest(queryString, cb) {
+  const kw = (queryString || '').trim();
+  if (!kw) { cb([]); return; }
+  try {
+    const list = await suggestEmployees(kw);
+    const arr = Array.isArray(list) ? list : [];
+    cb(arr.map(u => ({ ...u, label: u.empChnName ? `${u.username}（${u.empChnName}）` : u.username })));
+  } catch { cb([]); }
+}
+// 选中下拉项：输入框显示 label，empId 存登录名（干净值，供提交/校验/原业绩分配解析）
+function onEmpSelect(row, item) {
+  row.empId = item.username || item.empId || '';
+  row.empLabel = item.label || row.empId;
+}
+// 自由输入（未从下拉选择）时同步 empId；已选项 label 含「（」则跳过，避免覆盖干净值
+function onEmpInput(row, val) {
+  if (!val) { row.empId = ''; return; }
+  if (!String(val).includes('（')) { row.empId = String(val).trim(); }
+}
+// 明细员工号显示文案：优先 username（中文名），无则回退工号（查看/审批页详情已带 username/empChnName）
+function empLabelOf(it) {
+  if (it && it.username) return it.username + (it.empChnName ? '（' + it.empChnName + '）' : '');
+  return (it && it.empId) || '';
+}
+
+// === 原业绩分配（手工录入）===
+function origRow() {
+  return { acctNo: '', empId: '', empLabel: '', username: '', empChnName: '', orgCode: '', orgName: '', orgLabel: '', ratio: 0 };
+}
+function addOriginalRow() { dlg.form.originalItems.push(origRow()); }
+function removeOriginalRow(i) { dlg.form.originalItems.splice(i, 1); }
+// 原业绩分配-员工下拉选中（empId 存登录名干净值，username/empChnName 留快照）
+function onOrigEmpSelect(row, item) {
+  row.empId = item.username || item.empId || '';
+  row.username = item.username || '';
+  row.empChnName = item.empChnName || '';
+  row.empLabel = item.label || row.empId;
+}
+function onOrigEmpInput(row, val) {
+  if (!val) { row.empId = ''; row.username = ''; row.empChnName = ''; return; }
+  if (!String(val).includes('（')) { row.empId = String(val).trim(); row.username = String(val).trim(); }
+}
+// 原业绩分配-机构下拉联想（按机构号/部门号/名称模糊匹配，展示 DEPT_NO + 机构名称）
+async function queryOrgSuggest(queryString, cb) {
+  const kw = (queryString || '').trim();
+  if (!kw) { cb([]); return; }
+  try {
+    const list = await suggestOrgs(kw);
+    const arr = Array.isArray(list) ? list : [];
+    cb(arr.map(o => {
+      const no = o.deptNo || o.orgCode;
+      return { ...o, label: o.orgName ? `${no}（${o.orgName}）` : no };
+    }));
+  } catch { cb([]); }
+}
+function onOrigOrgSelect(row, item) {
+  // 存部门号(DEPT_NO)作为「所属机构号」，与展示一致
+  row.orgCode = item.deptNo || item.orgCode || '';
+  row.orgName = item.orgName || '';
+  row.orgLabel = item.label || row.orgCode;
+}
+function onOrigOrgInput(row, val) {
+  if (!val) { row.orgCode = ''; row.orgName = ''; return; }
+  if (!String(val).includes('（')) { row.orgCode = String(val).trim(); }
+}
+// 查看/审批：从详情 items 拆出原业绩分配（item_kind=ORIGIN）
+function originalItemsFromDetail(d) {
+  return (d.items || []).filter(it => (it.itemKind || 'NEW') === 'ORIGIN').map(it => ({
+    acctNo: it.acctNo || '', empId: it.empId || '',
+    username: it.username || '', empChnName: it.empChnName || '',
+    orgCode: it.orgCode || '', orgName: it.orgName || '',
+    empLabel: empLabelOf(it),
+    orgLabel: it.orgCode ? (it.orgName ? `${it.orgCode}（${it.orgName}）` : it.orgCode) : '',
+    ratio: it.ratio
+  }));
+}
 function onDlgClosed() {
   dlg.viewingId = null;
   dlg.readOnly = false;
@@ -1075,8 +1364,13 @@ async function loadApprovalHistory(applyId) {
 }
 
 function onAllocDimChange(val) {
-  if (val !== 'ACCOUNT') {
+  if (val === 'ACCOUNT') {
+    // 按账户分配：业务类型固定为「存款」且不可修改
+    dlg.form.bizKind = [BIZ_DEPOSIT];
+  } else {
     dlg.form.accountNo = '';
+    // 按规则分配：业务类型默认「存款 + 贷款」（可改、可多选，选项为全部 PERF_BIZ_KIND）
+    dlg.form.bizKind = [BIZ_DEPOSIT, BIZ_LOAN];
   }
 }
 function openCreate() {
@@ -1084,12 +1378,15 @@ function openCreate() {
   dlg.viewingId = null;
   custNameDisplay.value = '';
   resetCustStat();
+  resetCustIdx();
   preview.loaded = false;
   preview.data = null;
   Object.assign(dlg.form, {
-    custType: 'CORP', custNo: '', allocDim: 'RULE', bizKind: [],
+    // 默认按规则分配 → 业务类型默认存款+贷款
+    custType: 'CORP', custId: '', custName: '', allocDim: 'RULE', bizKind: [BIZ_DEPOSIT, BIZ_LOAN],
     accountNo: '', ownerOrgId: '', reason: '',
-    items: [{ empId: '', pct: 100, remark: '' }]
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    originalItems: []
   });
   dlg.show = true;
 }
@@ -1098,14 +1395,20 @@ async function openView(row) {
   dlg.viewingId = row.id || row.applyNo;
   dlg.approvalLogs = [];
   Object.assign(dlg.form, {
-    custType: inferCustType(row.custType, row.bizKind), custNo: row.custNo || row.custId || '',
+    custType: inferCustType(row.custType, row.bizKind), custId: row.custId || '',
+    custName: row.custName || '',
     allocDim: row.allocDim || 'RULE',
     bizKind: row.bizKind ? (typeof row.bizKind === 'string' ? row.bizKind.split(',') : row.bizKind) : [],
     accountNo: row.accountNo || '',
     ownerOrgId: row.ownerOrgId || '',
     reason: row.reason || row.remark || '',
-    items: row.items?.length ? row.items.map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '' })) : [{ empId: '', pct: 100, remark: '' }]
+    items: row.items?.length ? row.items.map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })) : [{ empId: '', pct: 100, remark: '' }]
   });
+  // 余额概览读快照（列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
+  custIdx.MC_001 = row.currBal ?? null;
+  custIdx.MC_002 = row.mAvgBal ?? null;
+  custIdx.MC_003 = row.qAvgBal ?? null;
+  custIdx.MC_004 = row.yAvgBal ?? null;
   // list 接口已有的申请人字段先塞进去，detail 接口再覆盖一次以拿到 createdByName/OrgName
   dlg.applyNo = row.applyNo || '';
   dlg.createdBy = row.createdBy || '';
@@ -1117,11 +1420,18 @@ async function openView(row) {
     const d = await getAdjustDetail(dlg.viewingId);
     if (d?.id) {
       Object.assign(dlg.form, {
-        custType: d.custType || '', custNo: d.custNo || d.custId, allocDim: d.allocDim,
+        custType: d.custType || '', custId: d.custId, allocDim: d.allocDim,
         bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
         accountNo: d.accountNo, ownerOrgId: d.ownerOrgId, reason: d.reason || d.remark || '',
-        items: (d.items || []).map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '' }))
+        items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })),
+        originalItems: originalItemsFromDetail(d)
       });
+      // 客户名称 + 余额概览以 detail 快照为准
+      if (d.custName) dlg.form.custName = d.custName;
+      custIdx.MC_001 = d.currBal ?? null;
+      custIdx.MC_002 = d.mAvgBal ?? null;
+      custIdx.MC_003 = d.qAvgBal ?? null;
+      custIdx.MC_004 = d.yAvgBal ?? null;
       dlg.applyNo = d.applyNo || dlg.applyNo;
       dlg.createdBy = d.createdBy || dlg.createdBy;
       dlg.createdByName = d.createdByName || dlg.createdByName;
@@ -1141,6 +1451,9 @@ async function openView(row) {
 
 async function onSubmit() {
   try { await dlgFormRef.value.validate(); } catch { return; }
+  if (dlg.form.allocDim === 'ACCOUNT' && !(dlg.form.accountNo && dlg.form.accountNo.trim())) {
+    return ElMessage.warning('按账号分配时请填写账号');
+  }
   if (!dlg.form.items.length) return ElMessage.warning('至少添加 1 条分配明细');
   for (let i = 0; i < dlg.form.items.length; i++) {
     const it = dlg.form.items[i];
@@ -1154,17 +1467,42 @@ async function onSubmit() {
   }
   if (totalPct.value !== 100) return ElMessage.warning(`分配比例合计须为 100%，当前 ${totalPct.value}%`);
 
+  // 原业绩分配校验：自动查到历史分配则免手工；查不到则要求手工至少 1 条（除账号外必填）
+  if (!hasOriginalOwners.value) {
+    const origs = dlg.form.originalItems || [];
+    if (!origs.length) return ElMessage.warning('未查到原业绩分配，请手工录入至少 1 条原业绩分配记录');
+    for (let i = 0; i < origs.length; i++) {
+      const o = origs[i];
+      if (!o.empId) return ElMessage.warning(`原业绩分配第 ${i + 1} 行：请选择员工`);
+      if (!o.orgCode) return ElMessage.warning(`原业绩分配第 ${i + 1} 行：请选择所属机构`);
+      if (!(Number(o.ratio) > 0)) return ElMessage.warning(`原业绩分配第 ${i + 1} 行：请填写分配比例`);
+    }
+  }
+
   dlg.saving = true;
   try {
     await submitAdjust({
       custType:   dlg.form.custType,
-      custNo:     dlg.form.custNo,
+      custId:     dlg.form.custId,
+      // 客户名称 + 余额概览(MC_001..004)随提交快照入库，审批/查看直接读，不再实时取数
+      // 列复用：currBal=当前余额(MC_001) / mAvgBal=较上日余额(MC_002) / qAvgBal=年均余额(MC_003) / yAvgBal=较上年均余额(MC_004)
+      custName:   dlg.form.custName || null,
+      currBal:    custIdx.MC_001,
+      mAvgBal:    custIdx.MC_002,
+      qAvgBal:    custIdx.MC_003,
+      yAvgBal:    custIdx.MC_004,
       allocDim:   dlg.form.allocDim,
       bizKind:    Array.isArray(dlg.form.bizKind) ? dlg.form.bizKind.join(',') : dlg.form.bizKind,
       accountNo:  dlg.form.accountNo || undefined,
       ownerOrgId: dlg.form.ownerOrgId || userStore.user?.mainOrgCode || userStore.user?.orgCode || '',
       reason:     dlg.form.reason,
-      items: dlg.form.items.map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' }))
+      items: dlg.form.items.map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' })),
+      // 原业绩分配（手工录入）；自动查到历史分配时不送，后端用历史会签名单
+      originalAllocList: hasOriginalOwners.value ? [] : (dlg.form.originalItems || []).map(o => ({
+        acctNo: o.acctNo || null, empId: o.empId,
+        username: o.username || null, empChnName: o.empChnName || null,
+        orgCode: o.orgCode, orgName: o.orgName || null, ratio: Number(o.ratio)
+      }))
     });
     ElMessage.success('已提交审批');
     dlg.show = false;
@@ -1193,38 +1531,52 @@ async function onWithdraw(row) {
 
 // 客户编号变化时查询客户名称
 let custNoTimer = null;
-watch(() => dlg.form.custNo, (val) => {
+watch(() => dlg.form.custId, (val) => {
   clearTimeout(custNoTimer);
-  if (!val || val.length < 2) { custNameDisplay.value = ''; resetCustStat(); preview.loaded = false; return; }
+  // 查看/审批：客户名称与余额概览直接读提交时的快照，不再按编号实时取数
+  if (dlg.readOnly) return;
+  if (!val || val.length < 2) { dlg.form.custName = ''; resetCustStat(); resetCustIdx(); preview.loaded = false; return; }
   custNoTimer = setTimeout(async () => {
+    // 记录上次是否"查到并锁定"——查不到时仅清掉这种锁定名，避免冲掉用户手输
+    const prevFound = custStat.found;
     try {
-      // 客户名称 + 余额均从 XAN_M98_CUST_STAT_SHOW3 按客户编号反显（列名为 DB 大写）
+      // 客户名称从 XAN_M98_CUST_STAT_SHOW3 按客户编号反显（列名为 DB 大写）
       // 统计日期 STATIS_DT：新建=昨日 / 查看·审批=申请日期-1
       const s = await getCustStat(val, custStatStatisDt());
       if (s) {
-        custNameDisplay.value = s.CUST_NAME || s.cust_name || '';
+        // 查到：反显客户名称并锁定（输入框 disabled）
+        dlg.form.custName = s.CUST_NAME || s.cust_name || '';
         custStat.currBal = s.CURR_BAL ?? null;
         custStat.mAvgBal = s.M_AVG_BAL ?? null;
         custStat.qAvgBal = s.Q_AVG_BAL ?? null;
         custStat.yAvgBal = s.Y_AVG_BAL ?? null;
         custStat.found = true;
       } else {
-        custNameDisplay.value = '';
+        // 查不到：允许手工输入；若此前是查到锁定的名称则清空
+        if (prevFound) dlg.form.custName = '';
         resetCustStat();
       }
       custStat.queried = true;
-    } catch { custNameDisplay.value = ''; resetCustStat(); custStat.queried = true; }
+    } catch { if (prevFound) dlg.form.custName = ''; resetCustStat(); custStat.queried = true; }
+    // 余额概览 4 项：按客户编号 + 昨日日期在 CUST_INDEX_RESULT 取 MC_001..004 指标值（独立失败兜底 '-'）
+    try {
+      const m = await getCustIndexValues(val, custStatStatisDt(), ['MC_001', 'MC_002', 'MC_003', 'MC_004']);
+      custIdx.MC_001 = m?.MC_001 ?? null;
+      custIdx.MC_002 = m?.MC_002 ?? null;
+      custIdx.MC_003 = m?.MC_003 ?? null;
+      custIdx.MC_004 = m?.MC_004 ?? null;
+    } catch { resetCustIdx(); }
   }, 500);
 });
-// 客户编号变化时触发原业绩分配预览（新口径仅按客户编号取审批通过的最后一条，与维度/账号无关）
+// 客户编号 / 分配维度变化时触发原业绩分配预览（ACCOUNT 维度只查按账号分配的最后一条）
 let previewTimer = null;
 watch(
-  () => dlg.form.custNo,
+  () => [dlg.form.custId, dlg.form.allocDim],
   () => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
       const f = dlg.form;
-      if (f.custNo && f.custNo.length >= 2) {
+      if (f.custId && f.custId.length >= 2) {
         loadPreview();
       } else {
         preview.loaded = false;
@@ -1249,6 +1601,9 @@ onMounted(async () => {
   // 自动弹审批：query 含 tab=todo + action=open + taskId 三者齐 + 有审批权限
   const isAutoOpen = queryTab === 'todo' && route.query.action === 'open'
                      && route.query.taskId && canApprove.value;
+  // 工作台已办「详情」跳转：tab=done + action=view → 已审批 tab + 弹只读详情
+  const isAutoViewDone = queryTab === 'done' && route.query.action === 'view'
+                         && (route.query.taskId || route.query.bizKey) && canApprove.value;
   if (isAutoOpen) {
     await reloadTodo();
     const row = todos.value.find(t => t.taskId === route.query.taskId);
@@ -1256,6 +1611,17 @@ onMounted(async () => {
       openTodoReview(row);
     } else {
       ElMessage.warning('任务已处理或不在当前页');
+    }
+  } else if (isAutoViewDone) {
+    await reloadDone();
+    const tid = route.query.taskId, bk = route.query.bizKey;
+    // 优先按 taskId/businessKey 命中当前页；不在当前页则用 businessKey 直接构造行拉详情
+    let row = dones.value.find(t => (tid && t.taskId === tid) || (bk && t.businessKey === bk));
+    if (!row && bk) row = { businessKey: bk };
+    if (row) {
+      openTodoDetail(row);
+    } else {
+      ElMessage.warning('申请不在当前页或已变更');
     }
   } else {
     reload();
@@ -1269,6 +1635,11 @@ onMounted(async () => {
   line-height: 32px;
   color: $text-1;
   font-weight: 500;
+}
+.cust-name-sub {
+  font-size: 12px;
+  color: #909399;
+  line-height: 18px;
 }
 .preview-section {
   margin-bottom: 12px;
@@ -1335,4 +1706,5 @@ onMounted(async () => {
     word-break: break-all;
   }
 }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 </style>

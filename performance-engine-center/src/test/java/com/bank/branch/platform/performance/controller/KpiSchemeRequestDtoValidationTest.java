@@ -144,46 +144,43 @@ class KpiSchemeRequestDtoValidationTest {
     }
 
     @Test
-    void addKpiItemReq_whenMetricCodeLowercase_shouldViolation() {
+    void addKpiItemReq_whenFormulaBlank_shouldViolation() {
+        // 计分公式必输：留空 / 纯空格应触发 @NotBlank
         AddKpiItemReqDTO req = new AddKpiItemReqDTO();
-        req.setMetricCode("lower");
+        req.setMetricCode("M_X");
         req.setWeight(new BigDecimal("10"));
+        req.setFormula("  ");
 
-        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "metricCode");
+        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "formula");
 
         assertThat(violations)
                 .extracting(ConstraintViolation::getPropertyPath)
                 .map(Object::toString)
-                .contains("metricCode");
+                .contains("formula");
     }
 
     @Test
-    void addKpiItemReq_whenMetricCodeStartsWithDigit_shouldViolation() {
-        // Pattern 收严至 ^[A-Z][A-Z0-9_]*$ 后, 首字符必须是大写字母, 数字/下划线开头非法
+    void addKpiItemReq_whenFormulaPresent_shouldPass() {
         AddKpiItemReqDTO req = new AddKpiItemReqDTO();
-        req.setMetricCode("1METRIC");
-        req.setWeight(new BigDecimal("10"));
+        req.setFormula("min(actual / target * weight, 120)");
 
-        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "metricCode");
+        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "formula");
 
-        assertThat(violations)
-                .extracting(ConstraintViolation::getPropertyPath)
-                .map(Object::toString)
-                .contains("metricCode");
+        assertThat(violations).isEmpty();
     }
 
     @Test
-    void addKpiItemReq_whenMetricCodeStartsWithUnderscore_shouldViolation() {
+    void addKpiItemReq_whenMetricCodeDigitStart_shouldNotViolateOnPattern() {
+        // KPI 加项是"引用既有指标"，不做编码格式校验（格式校验只在新建指标 CreateMetricReqDTO 处）。
+        // 数字/下划线/小写开头的既有指标编码（如 0602001、99）都应能被引用。
         AddKpiItemReqDTO req = new AddKpiItemReqDTO();
-        req.setMetricCode("_METRIC");
+        req.setMetricCode("0602001");
         req.setWeight(new BigDecimal("10"));
+        req.setFormula("actual / target * 100");
 
-        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "metricCode");
+        Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validate(req);
 
-        assertThat(violations)
-                .extracting(ConstraintViolation::getPropertyPath)
-                .map(Object::toString)
-                .contains("metricCode");
+        assertThat(violations).isEmpty();
     }
 
     @Test

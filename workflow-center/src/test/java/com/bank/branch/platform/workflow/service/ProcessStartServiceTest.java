@@ -1,5 +1,7 @@
 package com.bank.branch.platform.workflow.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -61,6 +63,9 @@ class ProcessStartServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private OrgApi orgApi;
 
     @InjectMocks
     private ProcessStartService processStartService;
@@ -152,7 +157,7 @@ class ProcessStartServiceTest {
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_001");
         when(runtimeService.startProcessInstanceByKey(
-                cmd.getProcessDefinitionKey(), cmd.getBusinessKey(), cmd.getVariables()))
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
                 .thenReturn(pi);
 
         Task task = mock(Task.class);
@@ -195,7 +200,7 @@ class ProcessStartServiceTest {
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_001");
         when(runtimeService.startProcessInstanceByKey(
-                cmd.getProcessDefinitionKey(), cmd.getBusinessKey(), cmd.getVariables()))
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
                 .thenReturn(pi);
 
         Task task = mock(Task.class);
@@ -308,7 +313,7 @@ class ProcessStartServiceTest {
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_AUTO");
         when(runtimeService.startProcessInstanceByKey(
-                cmd.getProcessDefinitionKey(), cmd.getBusinessKey(), cmd.getVariables()))
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
                 .thenReturn(pi);
 
         mockTaskQuery(null);
@@ -336,12 +341,78 @@ class ProcessStartServiceTest {
         ProcessInstance pi = mock(ProcessInstance.class);
         when(pi.getId()).thenReturn("PID_NOVAR");
         when(runtimeService.startProcessInstanceByKey(
-                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), isNull()))
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
                 .thenReturn(pi);
         mockTaskQuery(null);
 
         WorkflowLaunchResp resp = processStartService.startProcess(cmd);
 
         assertThat(resp.getProcessInstanceId()).isEqualTo("PID_NOVAR");
+    }
+
+    // ── 发起人机构级别（startOrgLevel）注入 ─────────────────────────
+
+    /**
+     * startProcess：按发起机构编码解析机构级别，注入 startOrgLevel 流程变量，
+     * 供设计器网关按 2级/3级机构分流。
+     */
+    @Test
+    void startProcess_injectsStartOrgLevelFromOrg() {
+        StartProcessCmd cmd = buildCmd();              // startOrgId=ORG001
+        ProcessDefinition pd = mock(ProcessDefinition.class);
+        mockProcessDefinitionQuery(pd);
+        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+
+        OrgDTO org = new OrgDTO();
+        org.setOrgCode("ORG001");
+        org.setOrgLevel(3);                            // 3级支行
+        when(orgApi.getOrg("ORG001")).thenReturn(org);
+
+        ProcessInstance pi = mock(ProcessInstance.class);
+        when(pi.getId()).thenReturn("PID_LV3");
+        when(runtimeService.startProcessInstanceByKey(
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
+                .thenReturn(pi);
+        mockTaskQuery(null);
+
+        processStartService.startProcess(cmd);
+
+        // 捕获注入的流程变量，断言 startOrgLevel=3
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> varsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(runtimeService).startProcessInstanceByKey(
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), varsCaptor.capture());
+        assertThat(varsCaptor.getValue()).containsEntry("startOrgLevel", 3);
+    }
+
+    /**
+     * startProcess：startOrgId 缺失时回退用发起人主机构解析级别。
+     */
+    @Test
+    void startProcess_injectsStartOrgLevelFromUserMainOrg() {
+        StartProcessCmd cmd = buildCmd();
+        cmd.setStartOrgId(null);                        // 无机构编码 → 走发起人主机构
+        ProcessDefinition pd = mock(ProcessDefinition.class);
+        mockProcessDefinitionQuery(pd);
+        when(bizProcessMapMapper.existsRunningByBusinessKey(cmd.getBusinessKey())).thenReturn(false);
+
+        OrgDTO org = new OrgDTO();
+        org.setOrgLevel(2);                            // 2级分行
+        when(orgApi.getUserMainOrg("E001")).thenReturn(org);
+
+        ProcessInstance pi = mock(ProcessInstance.class);
+        when(pi.getId()).thenReturn("PID_LV2");
+        when(runtimeService.startProcessInstanceByKey(
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), anyMap()))
+                .thenReturn(pi);
+        mockTaskQuery(null);
+
+        processStartService.startProcess(cmd);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> varsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(runtimeService).startProcessInstanceByKey(
+                eq(cmd.getProcessDefinitionKey()), eq(cmd.getBusinessKey()), varsCaptor.capture());
+        assertThat(varsCaptor.getValue()).containsEntry("startOrgLevel", 2);
     }
 }

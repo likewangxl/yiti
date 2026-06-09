@@ -20,7 +20,20 @@
       <template #dropdown>
         <el-dropdown-menu>
           <el-dropdown-item disabled>
-            <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.roleName }}</span>
+            <span style="color:#9CA3AF;font-size:12px">{{ store.user?.username }} · {{ store.user?.deptNo || store.user?.mainOrgCode || '—' }}</span>
+          </el-dropdown-item>
+          <el-dropdown-item divided disabled>
+            <span style="color:#9CA3AF;font-size:12px">切换角色</span>
+          </el-dropdown-item>
+          <el-dropdown-item
+            v-for="r in store.roles"
+            :key="r.roleId"
+            :command="`role:${r.roleId}`"
+          >
+            <span :style="{ fontWeight: r.roleId === store.activeRoleId ? 600 : 400, minWidth: '120px', display: 'inline-flex', justifyContent: 'space-between', alignItems: 'center' }">
+              <span>{{ r.roleChName }}</span>
+              <span v-if="r.roleId === store.activeRoleId" style="color:#22c55e;margin-left:12px">✓</span>
+            </span>
           </el-dropdown-item>
           <el-dropdown-item divided command="changePassword">修改密码</el-dropdown-item>
           <el-dropdown-item command="logout">退出登录</el-dropdown-item>
@@ -60,7 +73,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
-import { logout } from '@/api/auth';
+import { logout, switchRole } from '@/api/auth';
 import { getUnreadCount } from '@/api/workspace';
 import { changeMyPassword } from '@/api/users';
 
@@ -86,6 +99,27 @@ const avatarLetter = computed(() => {
 });
 
 async function onCommand(cmd) {
+  if (typeof cmd === 'string' && cmd.startsWith('role:')) {
+    const roleId = cmd.slice(5);
+    if (roleId === store.activeRoleId) return; // 已是当前角色
+    const r = store.roles.find(x => x.roleId === roleId);
+    try {
+      await ElMessageBox.confirm(
+        `确认切换到角色「${r?.roleChName || roleId}」？切换后菜单、业务操作将按该角色权限显示与处理。`,
+        '切换角色', { type: 'warning', confirmButtonText: '确认切换', cancelButtonText: '取消' });
+    } catch { return; }
+    try {
+      await switchRole(roleId);
+      store.setActiveRole(roleId);
+      ElMessage.success(`已切换到「${r?.roleChName || roleId}」，正在进入工作台`);
+      // 跳转工作台并整页刷新，确保菜单/权限/数据范围全部按新角色重新拉取
+      await router.push('/workspace').catch(() => {});
+      setTimeout(() => window.location.reload(), 300);
+    } catch (e) {
+      ElMessage.error('切换角色失败：' + (e?.message || e));
+    }
+    return;
+  }
   if (cmd === 'logout') {
     try {
       await ElMessageBox.confirm('确定退出登录？', '提示', { type: 'warning' });

@@ -5,7 +5,7 @@
     <!-- WF_NODE_CANDIDATE_CONF 全列查询片段 -->
     <sql id="BASE_COLUMNS">
         id, process_definition_key, node_key,
-        candidate_type, candidate_value,
+        candidate_type, candidate_value, approve_org_scope, org_code,
         created_time, updated_time
     </sql>
 

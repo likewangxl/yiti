@@ -125,7 +125,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
     @Test
     void create_happyPath_returns200_andPersists() throws Exception {
         AllocAdjustCreateReqDTO req = new AllocAdjustCreateReqDTO();
-        req.setCustNo("CN-IT-C1");
+        req.setCustId("CN-IT-C1");
         req.setAllocDim("RULE");
         req.setBizKind("CORP_LOAN");
         req.setOwnerOrgId("ORG_IT");
@@ -150,7 +150,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
     @Test
     void create_emptyItems_returnsValidationFailed() throws Exception {
         AllocAdjustCreateReqDTO req = new AllocAdjustCreateReqDTO();
-        req.setCustNo("CN-IT-C1");
+        req.setCustId("CN-IT-C1");
         req.setAllocDim("RULE");
         req.setBizKind("CORP_LOAN");
         req.setOwnerOrgId("ORG_IT");
@@ -284,7 +284,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
     // ============= withdraw =============
 
     @Test
-    void withdraw_inApproval_transitionsToRejected() throws Exception {
+    void withdraw_inApproval_transitionsToWithdrawn() throws Exception {
         PerfAllocAdjustApply apply = buildExisting("WITHDRAW", "IN_APPROVAL", "CORP_LOAN");
         applyMapper.insert(apply);
 
@@ -296,7 +296,7 @@ class AllocAdjustControllerIT extends PerformanceControllerTestBase {
                 .andExpect(jsonPath("$.code").value("0"));
 
         PerfAllocAdjustApply after = applyMapper.selectById(apply.getId());
-        assertThat(after.getStatus()).isEqualTo("REJECTED");
+        assertThat(after.getStatus()).isEqualTo("WITHDRAWN");
     }
 
     @Test

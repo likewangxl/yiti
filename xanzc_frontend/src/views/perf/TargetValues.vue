@@ -33,22 +33,13 @@
       </div>
     </div>
 
-    <!-- 筛选栏（2 列）。方案/维度由 URL 传入锁定 -->
+    <!-- 筛选栏。方案/维度由 URL 传入锁定 -->
     <div class="card-section filter-grid">
       <div>
         <div class="lab">指标</div>
         <el-select v-model="f.metricCode" clearable filterable @change="loadValues" placeholder="全部" style="width:100%">
           <el-option v-for="m in filteredMetricOptions" :key="m.metricCode"
             :value="m.metricCode" :label="m.metricName" />
-        </el-select>
-      </div>
-      <div>
-        <div class="lab">状态</div>
-        <el-select v-model="f.approvalStatus" clearable @change="loadValues" placeholder="全部" style="width:100%">
-          <el-option label="已审批" value="APPROVED" />
-          <el-option label="修正中" value="ADJUSTING" />
-          <el-option label="待审批" value="PENDING" />
-          <el-option label="草稿" value="DRAFT" />
         </el-select>
       </div>
     </div>
@@ -58,48 +49,22 @@
       <el-table :data="pagedRows" size="default" empty-text="暂无目标值" v-loading="loadingValues">
         <el-table-column label="对象" min-width="200">
           <template #default="{row}">
-            <span class="subject">
-              <span class="ava" :style="{ background: avaColor(row.subjectName || row.subjectId) }">{{ avaChar(row.subjectName || row.subjectId) }}</span>
-              <span class="subject-text">
-                <!-- EMP: 员工号-姓名；ORG: 机构号-机构名 -->
-                <div>{{ row.subjectId || '-' }} - {{ row.subjectName || '-' }}</div>
-              </span>
-            </span>
+            <!-- EMP: 员工号-中文姓名；ORG: 机构部门编号(dept_no)-机构名 -->
+            <span class="subject-text">{{ row.subjectDisplayId || row.subjectId || '-' }} - {{ row.subjectName || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="指标" min-width="180">
-          <template #default="{row}">{{ row.metricName || row.metricCode }}</template>
+        <el-table-column label="指标" min-width="200">
+          <template #default="{row}">{{ row.metricCode }}{{ row.metricName ? ' - ' + row.metricName : '' }}</template>
         </el-table-column>
-        <el-table-column label="当前目标" width="110" align="right">
+        <el-table-column label="目标值" width="160" align="right">
           <template #default="{row}">{{ fmtNum(row.targetValue) }}</template>
         </el-table-column>
-        <el-table-column label="基础值" width="110" align="right">
+        <el-table-column label="基础值" width="160" align="right">
           <template #default="{row}">{{ row.baseValue != null ? fmtNum(row.baseValue) : '-' }}</template>
-        </el-table-column>
-        <el-table-column label="修正目标" width="140" align="right">
-          <template #default="{row}">
-            <strong>{{ fmtNum(row.currentTarget ?? row.targetValue) }}</strong>
-            <span v-if="hasAdjust(row)" class="adj-tag">↑修正</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="修正基础值" width="140" align="right">
-          <template #default="{row}">
-            <strong>{{ row.currentBaseValue != null ? fmtNum(row.currentBaseValue) : (row.baseValue != null ? fmtNum(row.baseValue) : '-') }}</strong>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template #default="{row}">
-            <el-tag :class="apprCls(row.approvalStatus)" effect="plain">{{ apprLabel(row.approvalStatus) }}</el-tag>
-          </template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{row}">
-            <!-- 修正中(ADJUSTING/IN_APPROVAL) 时禁止重复发起，避免并发审批 -->
-            <el-button
-              link type="primary" size="small"
-              :disabled="row.approvalStatus === 'ADJUSTING' || row.approvalStatus === 'IN_APPROVAL'"
-              @click="openAdjust(row)"
-            >修改</el-button>
+            <el-button link type="primary" size="small" @click="openAdjust(row)">修改</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -116,15 +81,14 @@
       </div>
 
       <el-alert type="info" :closable="false" show-icon style="margin-top:14px"
-        title="目标修正审批通过后将触发 KPI 历史回算（生成新批次 CALC-YYMMDD-xxx）。" />
+        title="目标修正保存后立即生效，并触发 KPI 历史回算（生成新批次 CALC-YYMMDD-xxx）。" />
     </div>
 
     <!-- 修正弹框：截图 180 -->
     <el-dialog v-model="adjDlg.show" :title="adjTitle" width="540px" :close-on-click-modal="false">
       <el-form ref="adjFormRef" :model="adjDlg.form" :rules="adjRules" label-position="top" size="default">
         <el-form-item label="当前目标">
-          <!-- 修正中/驳回 → 原目标值；审批通过 → 新目标值（已生效） -->
-          <el-input :model-value="fmtNum(adjDlg.row?.approvalStatus === 'APPROVED' ? (adjDlg.row?.currentTarget ?? adjDlg.row?.targetValue) : (adjDlg.row?.targetValue ?? adjDlg.row?.originalTarget))" disabled />
+          <el-input :model-value="fmtNum(adjDlg.row?.targetValue)" disabled />
         </el-form-item>
         <el-form-item label="修正后目标" prop="newValue" required>
           <el-input-number v-model="adjDlg.form.newValue" :precision="2" :controls="false" style="width:100%" />
@@ -138,14 +102,14 @@
         </el-form-item>
         <el-form-item label="修正原因" prop="reason" required>
           <el-input v-model="adjDlg.form.reason" type="textarea" :rows="3"
-            placeholder="请说明修正原因，将记入审批日志" />
+            placeholder="请说明修正原因，将记入修正记录" />
         </el-form-item>
       </el-form>
       <el-alert type="warning" :closable="false" show-icon
-        title="提交后将进入 1 级审批（直属上级）。审批通过将触发 KPI 历史回算。" />
+        title="保存后目标值立即生效，并触发 KPI 历史回算。" />
       <template #footer>
         <el-button @click="adjDlg.show = false">取消</el-button>
-        <el-button type="primary" :loading="adjDlg.saving" @click="onSubmitAdjust">提交审批</el-button>
+        <el-button type="primary" :loading="adjDlg.saving" @click="onSubmitAdjust">保存</el-button>
       </template>
     </el-dialog>
 
@@ -163,18 +127,21 @@
       <el-form ref="valFormRef" :model="valDlg.form" :rules="valRules" label-width="100px" size="default">
         <el-form-item label="对象" prop="subjectId">
           <el-autocomplete
-            v-model="valDlg.form.subjectId"
+            v-model="valDlg.form.subjectDisplay"
             :fetch-suggestions="querySubjectSuggestions"
             :placeholder="valDlg.form.subjectType === 'ORG'
-              ? '输入机构号或机构名搜索（如 02974000 / 资金财务部）'
+              ? '输入部门编号或机构名搜索（如 02974000 / 资金财务部）'
               : '输入用户名或中文名搜索（如 finance_zhou / 周八）'"
             clearable
             highlight-first-item
             style="width:100%"
+            @select="onSubjectSelect"
+            @clear="onSubjectClear"
           >
             <template #default="{ item }">
               <div style="display:flex; justify-content:space-between; gap:12px;">
-                <span style="font-family: ui-monospace, monospace;">{{ item.value }}</span>
+                <!-- ORG 显示部门编号(item.display)，EMP 显示用户名(item.value) -->
+                <span style="font-family: ui-monospace, monospace;">{{ item.display || item.value }}</span>
                 <span style="color:#999;">{{ item.label }}</span>
               </div>
             </template>
@@ -182,7 +149,7 @@
         </el-form-item>
         <el-form-item label="指标" prop="metricCode">
           <el-select v-model="valDlg.form.metricCode" filterable
-                     :placeholder="metricsForDim.length ? '请选择指标' : '所选维度暂无指标'"
+                     :placeholder="metricsForDim.length ? '请选择指标' : '所选 KPI 方案暂无可选指标'"
                      style="width:100%">
             <el-option v-for="m in metricsForDim" :key="m.metricCode"
                        :value="m.metricCode"
@@ -206,13 +173,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
   listTargets, listTargetValues, upsertTargetValue, batchUpsertTargetValues,
   submitTargetAdjust, listMetrics,
-  listKpiRules, listTargetAdjusts
+  listKpiRules, getKpiSchemeDetail
 } from '@/api/perf';
 import { listUsers } from '@/api/users';
 import { getOrgTree } from '@/api/orgs';
@@ -254,7 +221,8 @@ async function loadKpiMap() {
 // 后端 PERF_TARGET_VALUE 表只有 subject_id（员工号或机构编码），不返机构名/员工名/指标名
 // → 列表渲染时用这 3 个 map 把 ID 翻译成可读名称
 const empMap    = ref(new Map()); // empId → { name, orgName, orgCode }
-const orgMap    = ref(new Map()); // orgCode → orgName
+const orgMap    = ref(new Map()); // orgCode(内部机构编码) → orgName
+const orgDeptMap = ref(new Map()); // orgCode(内部机构编码) → deptNo(业务机构部门编号)
 const metricMap = ref(new Map()); // metricCode → metricName
 
 async function loadEmpMap() {
@@ -279,9 +247,19 @@ async function loadOrgMap() {
   try {
     const tree = await getOrgTree();
     const m = new Map();
-    const walk = (n) => { if (!n) return; if (n.code) m.set(n.code, n.name); (n.children || []).forEach(walk); };
+    const dm = new Map();
+    // getOrgTree 节点形态 { code:内部机构编码, name:机构名, deptNo:业务机构部门编号 }
+    const walk = (n) => {
+      if (!n) return;
+      if (n.code) {
+        m.set(n.code, n.name);
+        if (n.deptNo != null && n.deptNo !== '') dm.set(n.code, n.deptNo);
+      }
+      (n.children || []).forEach(walk);
+    };
     (Array.isArray(tree) ? tree : []).forEach(walk);
     orgMap.value = m;
+    orgDeptMap.value = dm;
   } catch {}
 }
 
@@ -301,10 +279,13 @@ function querySubjectSuggestions(query, cb) {
       }
     }
   } else if (dim === 'ORG') {
+    // 下拉内容展示「部门编号 + 机构名称」；入库 value 仍为机构编号（内部 org_code）
     for (const [code, name] of orgMap.value) {
       const nm = name || '';
-      if (!q || code.toLowerCase().includes(q) || nm.toLowerCase().includes(q)) {
-        out.push({ value: code, label: nm });
+      const deptNo = String(orgDeptMap.value.get(code) ?? '');
+      if (!q || code.toLowerCase().includes(q) || nm.toLowerCase().includes(q)
+          || deptNo.toLowerCase().includes(q)) {
+        out.push({ value: code, label: nm, display: deptNo || code });
         if (out.length >= 50) break;
       }
     }
@@ -419,105 +400,54 @@ const currentKpiLabel  = computed(() => {
 });
 const currentDimLabel  = computed(() => subjectTypeLabel(currentPlan.value?.targetDim) || '-');
 
+// 当前目标方案关联 KPI 方案里定义的指标 code 集合（新增目标值的指标下拉按此过滤：
+// 只显示目标方案所选 KPI 中定义的指标项）。
+const kpiMetricCodes = ref(new Set());
+async function loadKpiMetricCodes() {
+  const id = currentPlan.value?.kpiSchemeId;
+  if (!id) { kpiMetricCodes.value = new Set(); return; }
+  try {
+    const d = await getKpiSchemeDetail(id);
+    kpiMetricCodes.value = new Set((d?.items || []).map(it => it.metricCode).filter(Boolean));
+  } catch { kpiMetricCodes.value = new Set(); }
+}
+watch(() => currentPlan.value?.kpiSchemeId, () => { loadKpiMetricCodes(); }, { immediate: true });
+
 async function loadValues() {
   if (!f.planId) { values.value = []; pager.pageNo = 1; return; }
   pager.pageNo = 1;
   loadingValues.value = true;
   try {
-    // 1. 拉目标值 + 并行拉当前方案的全量修正申请（含 IN_APPROVAL / APPROVED / REJECTED）
-    const [r, adjusts] = await Promise.all([
-      listTargetValues({
-        planId: f.planId, planCode: f.planId,
-        subjectType: f.subjectType || undefined,
-        metricCode: f.metricCode || undefined,
-        pageSize: 100
-      }),
-      listTargetAdjusts({ planId: f.planId, pageSize: 100 }).catch(() => [])
-    ]);
-
-    // 2. 构建修正 lookup：key = "subjectType:subjectId:metricCode" → 最新一条申请的 { newValue, oldValue, status }
-    //    同一 key 可能有多条申请（如先驳回再重新提交），取 createdTime 最新的那条
-    const adjustMap = new Map();
-    // listTargetAdjusts 同样走 unwrapPage 返回 { records, total }
-    for (const adj of (Array.isArray(adjusts) ? adjusts : (adjusts?.records || []))) {
-      try {
-        const remark = typeof adj.remark === 'string' ? JSON.parse(adj.remark) : adj.remark;
-        const items = remark?.adjustments || [];
-        for (const item of items) {
-          const key = `${adj.subjectType}:${adj.subjectId}:${item.metricCode}`;
-          const existing = adjustMap.get(key);
-          const adjTime = new Date(adj.createdTime || 0).getTime();
-          if (!existing || adjTime > existing._time) {
-            adjustMap.set(key, {
-              newValue: item.newValue, oldValue: item.oldValue,
-              newBaseValue: item.newBaseValue, oldBaseValue: item.oldBaseValue,
-              status: adj.status, reason: remark.reason || '', _time: adjTime
-            });
-          }
-        }
-      } catch { /* remark 解析失败跳过 */ }
-    }
-
-    // listTargetValues 走 unwrapPage：分页响应 r = { records, total }，不兼容直接走
-    // mock 兜底导致页面只显示假数据。先拍平再判断。
+    // 目标修正取消审批后「提交即生效」，直接写 PERF_TARGET_VALUE，
+    // 列表不再 join PERF_TARGET_ADJUST_APPLY，直接展示主表的目标值/基础值。
+    const r = await listTargetValues({
+      planId: f.planId, planCode: f.planId,
+      subjectType: f.subjectType || undefined,
+      metricCode: f.metricCode || undefined,
+      pageSize: 100
+    });
+    // listTargetValues 走 unwrapPage：分页响应 r = { records, total }，先拍平再判断。
     const rows = Array.isArray(r) ? r : (r?.records || []);
-    if (rows.length) {
-      values.value = rows.map(x => {
-        let subjectName = x.subjectName || '';
-        let orgName     = x.orgName     || '';
-        let orgCode     = x.orgCode     || '';
-        if (x.subjectType === 'EMP') {
-          const e = empMap.value.get(x.subjectId);
-          if (e) { subjectName ||= e.name; orgName ||= e.orgName; orgCode ||= e.orgCode; }
-          if (!subjectName) subjectName = x.subjectId;
-        } else if (x.subjectType === 'ORG') {
-          orgCode ||= x.subjectId;
-          orgName ||= orgMap.value.get(x.subjectId) || x.subjectId;
-          subjectName ||= orgName;
-        }
-        const metricName = x.metricName || metricMap.value.get(x.metricCode) || x.metricCode;
-
-        // 3. join 修正申请：按最新申请的 status 决定行显示
-        //    IN_APPROVAL → 修正中 + currentTarget=newValue
-        //    APPROVED    → 通过（currentTarget=主表值，即已落库的 newValue）
-        //    REJECTED    → 已驳回 + currentTarget=原目标值（数值不变）
-        const adjKey = `${x.subjectType}:${x.subjectId}:${x.metricCode}`;
-        const adj = adjustMap.get(adjKey);
-        let approvalStatus = x.approvalStatus || '';
-        let currentTarget  = x.currentTarget ?? x.targetValue;
-        // 修正基础值：审批中/已通过 → 申请的 newBaseValue；驳回/无申请 → 主表 base_value
-        let currentBaseValue = x.baseValue;
-        if (adj) {
-          if (adj.status === 'IN_APPROVAL') {
-            approvalStatus = 'ADJUSTING';
-            currentTarget  = adj.newValue ?? currentTarget;
-            if (adj.newBaseValue != null) currentBaseValue = adj.newBaseValue;
-          } else if (adj.status === 'APPROVED') {
-            approvalStatus = 'APPROVED';
-            currentTarget  = adj.newValue ?? currentTarget;
-            // 审批通过后主表 base_value 已落库（listener 保留/更新），优先用主表值
-            if (adj.newBaseValue != null) currentBaseValue = adj.newBaseValue;
-          } else if (adj.status === 'REJECTED') {
-            approvalStatus = 'REJECTED';
-            currentTarget  = x.targetValue;
-            currentBaseValue = x.baseValue;
-          }
-        }
-
-        return {
-          ...x,
-          subjectName, orgName, orgCode, metricName,
-          currentTarget,
-          currentBaseValue,
-          adjustReason: adj?.reason || '',
-          originalTarget: x.originalTarget ?? x.targetValue,
-          completeRate:   x.completeRate ?? (x.cumulativeActual && x.targetValue ? (x.cumulativeActual / x.targetValue * 100) : null),
-          approvalStatus
-        };
-      });
-    } else {
-      values.value = [];
-    }
+    values.value = rows.map(x => {
+      let subjectName = x.subjectName || '';
+      let orgName     = x.orgName     || '';
+      let orgCode     = x.orgCode     || '';
+      if (x.subjectType === 'EMP') {
+        const e = empMap.value.get(x.subjectId);
+        if (e) { subjectName ||= e.name; orgName ||= e.orgName; orgCode ||= e.orgCode; }
+        if (!subjectName) subjectName = x.subjectId;
+      } else if (x.subjectType === 'ORG') {
+        orgCode ||= x.subjectId;
+        orgName ||= orgMap.value.get(x.subjectId) || x.subjectId;
+        subjectName ||= orgName;
+      }
+      const metricName = x.metricName || metricMap.value.get(x.metricCode) || x.metricCode;
+      // 对象列展示编号：EMP→员工号(subject_id)；ORG→业务机构部门编号(dept_no)，无映射回退内部编码
+      const subjectDisplayId = x.subjectType === 'ORG'
+        ? (orgDeptMap.value.get(x.subjectId) || x.subjectId)
+        : x.subjectId;
+      return { ...x, subjectName, orgName, orgCode, metricName, subjectDisplayId };
+    });
   } catch { values.value = []; } finally { loadingValues.value = false; }
 }
 
@@ -606,12 +536,10 @@ async function onSubmitAdjust() {
       oldBaseValue: curBase,
       newBaseValue: newBase
     });
-    ElMessage.success('已提交审批');
+    ElMessage.success('已保存，目标值已生效');
     adjDlg.show = false;
-    adjDlg.row.approvalStatus = 'ADJUSTING';
-    adjDlg.row.currentTarget  = adjDlg.form.newValue;
-    // 乐观更新：审批中先在"修正基础值"列显示新基础值
-    adjDlg.row.currentBaseValue = newBase != null ? newBase : adjDlg.row.baseValue;
+    // 直接生效后重新拉取主表，刷新「当前目标 / 基础值」
+    loadValues();
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '提交失败');
   } finally { adjDlg.saving = false; }
@@ -636,7 +564,8 @@ function inferCycleKey() {
 const valFormRef = ref(null);
 const valDlg = reactive({
   show: false, saving: false,
-  form: { subjectType: 'EMP', subjectId: '', metricCode: '', targetValue: 0, baseValue: null }
+  // subjectDisplay 仅用于输入框展示（ORG=部门编号+机构名称），subjectId 才是入库值（机构编号/工号）
+  form: { subjectType: 'EMP', subjectId: '', subjectDisplay: '', metricCode: '', targetValue: 0, baseValue: null }
 });
 // subjectType 不再在 UI 暴露：openCreateRow 从 currentPlan.targetDim 自动赋值
 const valRules = {
@@ -645,26 +574,52 @@ const valRules = {
   targetValue: [{ required: true, message: '请填写目标值' }]
 };
 
-// 新增弹框指标：仅 ACTIVE 状态 + 维度匹配
-const metricsForDim = computed(() =>
-  metricOptions.value.filter(m =>
+// 新增弹框指标：仅 ACTIVE + 维度匹配 + 只在「目标方案所选 KPI 方案定义的指标」范围内。
+// 方案关联了 KPI(kpiSchemeId) 时按该 KPI 的指标项过滤；无关联 KPI 时退回仅维度过滤。
+const metricsForDim = computed(() => {
+  const kpiId = currentPlan.value?.kpiSchemeId;
+  return metricOptions.value.filter(m =>
     m.status === 'ACTIVE'
     && (!m.baseDim || m.baseDim === valDlg.form.subjectType)
-  )
-);
+    && (!kpiId || kpiMetricCodes.value.has(m.metricCode))
+  );
+});
 
-function openCreateRow() {
+async function openCreateRow() {
   if (!f.planId) {
     return ElMessage.warning('请先选择目标方案再新增目标值');
   }
   // 维度从当前方案（H1 副标题展示的那条）的 targetDim 取，兜底 EMP
   const dim = currentPlan.value?.targetDim || 'EMP';
   Object.assign(valDlg.form, {
-    subjectType: dim, subjectId: '',
+    subjectType: dim, subjectId: '', subjectDisplay: '',
     metricCode: '', targetValue: 0, baseValue: null
   });
+  // 确保指标下拉已按当前方案的 KPI 指标项过滤就绪
+  await loadKpiMetricCodes();
   valDlg.show = true;
 }
+// 对象输入框：展示文本(subjectDisplay) 与 入库值(subjectId) 解耦
+let subjectSelecting = false;
+/** 从下拉选中：入库 subjectId=机构编号/工号；ORG 输入框展示「部门编号 机构名称」，EMP 展示工号 */
+function onSubjectSelect(item) {
+  subjectSelecting = true;
+  valDlg.form.subjectId = item.value;
+  valDlg.form.subjectDisplay = valDlg.form.subjectType === 'ORG'
+    ? `${item.display || item.value} ${item.label}`.trim()
+    : item.value;
+  nextTick(() => { subjectSelecting = false; });
+}
+function onSubjectClear() {
+  valDlg.form.subjectId = '';
+  valDlg.form.subjectDisplay = '';
+}
+// 手动键入（非下拉选择）：EMP 直接作为工号；ORG 必须从下拉选择，键入仅作筛选文本 → 清空已选编号
+watch(() => valDlg.form.subjectDisplay, (val) => {
+  if (subjectSelecting) return;
+  valDlg.form.subjectId = valDlg.form.subjectType === 'EMP' ? (val || '').trim() : '';
+});
+
 async function onSaveValue() {
   try { await valFormRef.value.validate(); } catch { return; }
   if (!f.planId) {
@@ -815,6 +770,7 @@ onMounted(async () => {
 }
 .table { padding: 14px 16px 12px; }
 .pager { margin-top: 12px; display: flex; justify-content: flex-end; }
+.pager :deep(.el-pagination) { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
 .dim-banner {
   margin: 0 0 16px; padding: 10px 14px; border-radius: 4px;
   background: rgba(64, 158, 255, 0.08);

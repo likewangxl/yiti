@@ -29,13 +29,14 @@ public class AllocPreviewService {
     /**
      * 查询分配预览数据（原业绩分配）.
      *
-     * @param custNo 客户编号
+     * @param custNo   客户编号
+     * @param allocDim 当前申请分配维度（ACCOUNT 只查按账号分配；RULE/null 查两者）
      * @return 预览结果（含原业绩分配列表）
      */
-    public AllocPreviewRespDTO preview(String custNo) {
+    public AllocPreviewRespDTO preview(String custNo, String allocDim) {
         AllocPreviewRespDTO resp = new AllocPreviewRespDTO();
 
-        List<AllocAdjustPreviewItemDTO> previewItems = allocApi.getLastApprovedAllocPreview(custNo);
+        List<AllocAdjustPreviewItemDTO> previewItems = allocApi.getLastApprovedAllocPreview(custNo, allocDim);
         List<AllocItem> allocList = new ArrayList<>();
         if (previewItems != null) {
             for (AllocAdjustPreviewItemDTO src : previewItems) {

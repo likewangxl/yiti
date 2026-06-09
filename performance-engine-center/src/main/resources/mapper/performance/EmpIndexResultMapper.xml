@@ -84,11 +84,13 @@
     </select>
 
     <!--
-      V1.7：取多 metricCode 对应的 val_slot 映射，查 perf_metric_def 表.
-      resultType 用 HashMap，MyBatis 将 key/value 列映射为 String/Integer。
+      V1.7（V2 修复）：取多 metricCode 对应的 val_slot 行，查 perf_metric_def 表.
+      返回每行 {metricCode, valSlot}，由接口 default 方法在 Java 端聚合成 Map<code, slot>。
+      原 selectValSlotsByCodes 返回 Map 无 @MapKey → MyBatis 走 selectOne，单行被错映射成
+      {key,value} 两条目、多行抛 TooManyResultsException，导致引用指标恒为 0。
     -->
-    <select id="selectValSlotsByCodes" resultType="java.util.HashMap">
-        SELECT metric_code AS `key`, val_slot AS `value`
+    <select id="selectValSlotRows" resultType="java.util.HashMap">
+        SELECT metric_code AS metricCode, val_slot AS valSlot
         FROM PERF_METRIC_DEF
         WHERE val_slot IS NOT NULL
           AND metric_code IN
@@ -106,6 +108,35 @@
           AND data_date = #{dataDate}
           AND version = #{version}
         LIMIT 1
+    </select>
+
+    <!-- 试运行：取某主体某日期"最近导入"的数据版本（按 updated_time 优先），供按数据反查值用. -->
+    <select id="selectLatestVersionForSubject" resultType="java.lang.String">
+        SELECT version
+        FROM EMP_INDEX_RESULT
+        WHERE emp_id = #{subject}
+          AND data_date = #{dataDate}
+        ORDER BY updated_time DESC, version DESC
+        LIMIT 1
+    </select>
+
+    <!--
+      KPI 分值计算：取某日某 slot 的全部员工实际值（同员工多版本按 updated_time 取最新行）。
+      val_${slot} 动态列名属 common-dev-guide §5 合法例外，Service 层强制校验 slot ∈ [1,400]。
+    -->
+    <select id="selectLatestSlotValuesByDate"
+            resultType="com.bank.branch.platform.performance.mapper.SubjectSlotValueRow">
+        SELECT t.emp_id AS subjectId,
+               t.val_${slot} AS value
+        FROM EMP_INDEX_RESULT t
+        JOIN (
+            SELECT emp_id, MAX(updated_time) AS mt
+            FROM EMP_INDEX_RESULT
+            WHERE data_date = #{dataDate}
+            GROUP BY emp_id
+        ) m ON t.emp_id = m.emp_id AND t.updated_time = m.mt
+        WHERE t.data_date = #{dataDate}
+          AND t.val_${slot} IS NOT NULL
     </select>
 
 </mapper>

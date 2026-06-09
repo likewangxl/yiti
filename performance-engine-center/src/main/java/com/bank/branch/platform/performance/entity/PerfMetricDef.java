@@ -52,7 +52,7 @@ public class PerfMetricDef {
     /** 一级指标 SQL / 存储过程文本. */
     private String sqlText;
 
-    /** 二/三级指标表达式. */
+    /** 二/三级指标表达式（指标编号 Groovy，用于计算）. */
     private String exprText;
 
     /** 机构汇总规则：SUM / AVG / MAX / MIN / COUNT. */

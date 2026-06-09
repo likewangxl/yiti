@@ -27,7 +27,8 @@ public class RbacAuthorizer {
      * @return true 表示有权限
      */
     public boolean authorize(String empId, String resourceId) {
-        Set<String> roleIds = cacheService.getRoleIdsByEmpId(empId);
+        // 按「本次请求生效角色」解析：会话切换角色后只认当前角色的授权
+        Set<String> roleIds = cacheService.getEffectiveRoleIds(empId);
         for (String roleId : roleIds) {
             Set<String> resourceIds = cacheService.getResourceIdsByRoleId(roleId);
             if (resourceIds.contains(resourceId)) {

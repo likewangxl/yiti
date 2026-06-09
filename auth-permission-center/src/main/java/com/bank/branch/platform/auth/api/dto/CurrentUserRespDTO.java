@@ -17,8 +17,12 @@ public class CurrentUserRespDTO {
     private String displayName;
     private String mainOrgCode;
     private String mainOrgName;
+    /** 主机构编号（EXT_ORG_INFO.DEPT_NO），前端头部展示用 */
+    private String deptNo;
     private Integer orgLevel;
     private List<RoleSimpleDTO> roles;
+    /** 当前激活角色ID（角色切换后为所切角色；roles 中该角色 primary=true） */
+    private String activeRoleId;
     /** 拥有的资源URL列表 */
     private List<String> permissions;
     /** 业务类型 -> 数据范围 映射 */

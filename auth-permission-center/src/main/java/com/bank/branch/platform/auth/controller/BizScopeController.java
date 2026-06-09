@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.dto.BizScopeMatrixRespDTO;
 import com.bank.branch.platform.auth.api.dto.BizScopeRespDTO;
 import com.bank.branch.platform.auth.api.dto.BizScopeSaveReqDTO;
 import com.bank.branch.platform.auth.service.BizScopeService;
+import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -82,6 +83,7 @@ public class BizScopeController {
     @PostMapping("")
     @Operation(summary = "保存业务数据范围配置", description = "存在则更新，不存在则新增（UPSERT 语义）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)
+    @AuditLog(action = "BIZ_SCOPE_SAVE", resourceType = "PT_ROLE_BIZ_SCOPE", reasonRequired = true)
     public ResponseWrapper<BizScopeRespDTO> saveBizScope(@Valid @RequestBody BizScopeSaveReqDTO req) {
         log.info("[BizScopeController.saveBizScope] roleId={}, bizType={}, dataScope={}",
                 req.getRoleId(), req.getBizType(), req.getDataScope());

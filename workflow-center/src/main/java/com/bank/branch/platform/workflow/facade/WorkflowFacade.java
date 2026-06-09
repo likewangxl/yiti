@@ -5,8 +5,11 @@ import com.bank.branch.platform.workflow.api.dto.BizProcessMapDTO;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
 import com.bank.branch.platform.workflow.api.dto.WorkflowLaunchResp;
 import com.bank.branch.platform.workflow.api.dto.CancelProcessReqDTO;
+import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
+import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.service.ProcessCommandService;
 import com.bank.branch.platform.workflow.service.ProcessStartService;
+import com.bank.branch.platform.workflow.service.TaskOperationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
@@ -30,6 +33,7 @@ public class WorkflowFacade implements WorkflowApi {
     private final ProcessStartService processStartService;
     private final ProcessCommandService processCommandService;
     private final HistoryService historyService;
+    private final TaskOperationService taskOperationService;
 
     /**
      * {@inheritDoc}
@@ -109,5 +113,21 @@ public class WorkflowFacade implements WorkflowApi {
                     processInstanceId, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void approveByEmp(String taskId, String empId, String opinion) {
+        taskOperationService.approveTaskByEmp(taskId, empId, new ApproveReqDTO(opinion, null));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void rejectByEmp(String taskId, String empId, String opinion) {
+        taskOperationService.rejectTaskByEmp(taskId, empId, new RejectReqDTO(opinion));
     }
 }

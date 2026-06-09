@@ -52,4 +52,11 @@
         <include refid="custWhere"/>
     </select>
 
+    <!-- 客户号查名（callpu CASH_GETCUST_INFO 专用）：仅投影 CUST_NAME，按 CUST_ID 精确匹配，LIMIT 1 取一条 -->
+    <select id="selectCustNameByCustId" resultType="java.lang.String">
+        SELECT CUST_NAME FROM XAN_M98_CUST_STAT_SHOW3
+        WHERE CUST_ID = #{custId}
+        LIMIT 1
+    </select>
+
 </mapper>

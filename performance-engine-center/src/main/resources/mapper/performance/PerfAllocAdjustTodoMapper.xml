@@ -10,7 +10,8 @@
         </foreach>
         <if test="keyword != null and keyword != ''">
             AND (a.apply_no LIKE CONCAT('%', #{keyword}, '%')
-                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%'))
+                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%')
+                 OR a.cust_name LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         <if test="allocDim != null and allocDim != ''">
             AND a.alloc_dim = #{allocDim}
@@ -34,7 +35,8 @@
 
     <select id="selectMyTodos"
             resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
-        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_type AS custType, a.alloc_dim AS allocDim,
+        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_name AS custName,
+               a.cust_type AS custType, a.alloc_dim AS allocDim,
                a.biz_kind AS bizKind, a.account_no AS accountNo, a.status,
                a.business_key AS businessKey, a.process_instance_id AS processInstanceId,
                a.owner_org_id AS ownerOrgId, a.remark,
@@ -46,12 +48,13 @@
         LIMIT #{offset}, #{pageSize}
     </select>
 
-    <!-- 我的申请 where（createdBy 硬约束 + status 可选 + 4 字段同 todo） -->
+    <!-- 我的申请 where（createdBy 硬约束 + status 可选 + 3 字段同 todo） -->
     <sql id="mineWhere">
         WHERE a.created_by = #{createdBy}
         <if test="keyword != null and keyword != ''">
             AND (a.apply_no LIKE CONCAT('%', #{keyword}, '%')
-                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%'))
+                 OR a.cust_id LIKE CONCAT('%', #{keyword}, '%')
+                 OR a.cust_name LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         <if test="allocDim != null and allocDim != ''">
             AND a.alloc_dim = #{allocDim}
@@ -78,7 +81,8 @@
 
     <select id="selectMyApplies"
             resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
-        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_type AS custType, a.alloc_dim AS allocDim,
+        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_name AS custName,
+               a.cust_type AS custType, a.alloc_dim AS allocDim,
                a.biz_kind AS bizKind, a.account_no AS accountNo, a.status,
                a.business_key AS businessKey, a.process_instance_id AS processInstanceId,
                a.owner_org_id AS ownerOrgId, a.remark,
@@ -90,14 +94,6 @@
         LIMIT #{offset}, #{pageSize}
     </select>
 
-    <!-- 业务表已完结申请 ID（APPROVED / REJECTED） -->
-    <select id="selectFinishedApplyIds" resultType="string">
-        SELECT id FROM PERF_ALLOC_ADJUST_APPLY
-        WHERE status IN ('APPROVED', 'REJECTED')
-        ORDER BY updated_time DESC
-        LIMIT 500
-    </select>
-
     <!-- 已审批：复用 todoWhere（同 todo SQL） -->
     <select id="countMyDones" resultType="long">
         SELECT COUNT(1)
@@ -107,7 +103,8 @@
 
     <select id="selectMyDones"
             resultType="com.bank.branch.platform.performance.entity.PerfAllocAdjustApply">
-        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_type AS custType, a.alloc_dim AS allocDim,
+        SELECT a.id, a.apply_no AS applyNo, a.cust_id AS custId, a.cust_name AS custName,
+               a.cust_type AS custType, a.alloc_dim AS allocDim,
                a.biz_kind AS bizKind, a.account_no AS accountNo, a.status,
                a.business_key AS businessKey, a.process_instance_id AS processInstanceId,
                a.owner_org_id AS ownerOrgId, a.remark,

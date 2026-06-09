@@ -16,6 +16,11 @@ function toFront(node) {
   const code = node.code ?? node.orgCode;
   const name = node.name ?? node.orgName;
   const out = { code, name };
+  const deptNo = node.deptNo ?? node.dept_no;
+  if (deptNo != null) out.deptNo = deptNo;
+  // 机构状态：0-启用 1-禁用（用于左树过滤 + 维护弹窗标记）
+  const status = node.status ?? node.organState;
+  if (status != null) out.status = status;
   if (node.level ?? node.orgLevel) out.level = node.level ?? node.orgLevel;
   if (Array.isArray(node.children) && node.children.length) {
     out.children = node.children.map(toFront);

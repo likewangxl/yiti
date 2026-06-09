@@ -16,6 +16,8 @@ public class AdjustTodoRespDTO {
     private String id;
     private String applyNo;
     private String custId;
+    /** 客户名称（PERF_ALLOC_ADJUST_APPLY.cust_name），前端「客户」列副显字段 */
+    private String custName;
     private String custType;
     private String allocDim;
     private String bizKind;
@@ -33,8 +35,10 @@ public class AdjustTodoRespDTO {
     private Boolean claimable;
     private String startUser;
     private String startUserName;
+    private String startUserEmpNo;
     private String startOrgId;
     private String startOrgName;
+    private String startOrgDeptNo;
     private LocalDateTime startTime;
     private LocalDateTime taskCreateTime;
     private String slaStatus;

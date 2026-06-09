@@ -253,6 +253,8 @@ com.bank.branch.platform.<module>/
 - **业务申请**: [business-application-center/CLAUDE.md](business-application-center/CLAUDE.md)
 - **门户与内容**: [portal-content-center/CLAUDE.md](portal-content-center/CLAUDE.md)
 - **绩效计算**: [performance-engine-center/CLAUDE.md](performance-engine-center/CLAUDE.md)
+- **报表分析**: [report-analytics-center/CLAUDE.md](report-analytics-center/CLAUDE.md)
+- **外部渠道网关（SOAP/callpu）**: [soap-gateway-center/CLAUDE.md](soap-gateway-center/CLAUDE.md) — Netty SOAP 服务 + callpu HTTP 网关；含 SYS_415 / urlencoded 兼容过滤器
 
 ### 共享开发规范
 - **[docs/common-dev-guide.md](docs/common-dev-guide.md)** — 统一响应模型、错误码规范、分页标准、鉴权链路、数据范围 SQL 模板、审计规范、事件发布、数据传输、日志规范 (所有模块必须遵守)

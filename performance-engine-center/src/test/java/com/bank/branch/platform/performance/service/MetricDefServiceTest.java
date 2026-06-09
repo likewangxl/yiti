@@ -50,11 +50,139 @@ class MetricDefServiceTest {
     @Mock
     private MetricCycleDetectService metricCycleDetectService;
 
+    @Mock
+    private com.bank.branch.platform.auth.api.UserApi userApi;
+
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private MetricDefService service;
+
+    @Test
+    @DisplayName("指标详情：创建人/更新人 empId 解析为 username + 中文名，并返回创建/更新时间")
+    void getByCodeDto_resolvesCreatorUpdaterUsernameAndChnName() {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("TEST_METRIC_AUDIT");
+        def.setMetricName("审计字段指标");
+        def.setCreatedBy("E001");
+        def.setUpdatedBy("E002");
+        java.time.LocalDateTime ct = java.time.LocalDateTime.of(2026, 5, 1, 9, 0, 0);
+        java.time.LocalDateTime ut = java.time.LocalDateTime.of(2026, 5, 31, 18, 30, 0);
+        def.setCreatedTime(ct);
+        def.setUpdatedTime(ut);
+        when(mapper.selectByMetricCode("TEST_METRIC_AUDIT")).thenReturn(def);
+
+        com.bank.branch.platform.auth.api.dto.UserDTO u1 = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        u1.setEmpId("E001");
+        u1.setUsername("rm_zhang");
+        u1.setDisplayName("张三");
+        com.bank.branch.platform.auth.api.dto.UserDTO u2 = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        u2.setEmpId("E002");
+        u2.setUsername("rm_li");
+        u2.setDisplayName("李四");
+        when(userApi.getUserByEmpIds(org.mockito.ArgumentMatchers.anyList())).thenReturn(List.of(u1, u2));
+
+        MetricDefRespDTO dto = service.getByCodeDto("TEST_METRIC_AUDIT");
+
+        assertThat(dto.getCreatedBy()).isEqualTo("E001");
+        assertThat(dto.getUpdatedBy()).isEqualTo("E002");
+        assertThat(dto.getCreatedByUsername()).isEqualTo("rm_zhang");
+        assertThat(dto.getCreatedByName()).isEqualTo("张三");
+        assertThat(dto.getUpdatedByUsername()).isEqualTo("rm_li");
+        assertThat(dto.getUpdatedByName()).isEqualTo("李四");
+        assertThat(dto.getCreatedTime()).isEqualTo(ct);
+        assertThat(dto.getUpdatedTime()).isEqualTo(ut);
+    }
+
+    @Test
+    @DisplayName("EXPR 指标创建：仅落库 expr_text（expr_display 列已废弃，不再持久化）")
+    void create_expr_persistsExprTextOnly() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_EXPR")
+                .metricName("复合指标")
+                .baseDim("EMP")
+                .metricLevel(2)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("EXPR")
+                .exprText("M_0001 + M_0002 * 2")
+                .operator("admin")
+                .build();
+        when(mapper.selectByMetricCode("TEST_METRIC_EXPR")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+        when(metricSlotService.allocSlot("EMP", 2, null)).thenReturn(7);
+
+        service.create(cmd);
+
+        ArgumentCaptor<PerfMetricDef> captor = ArgumentCaptor.forClass(PerfMetricDef.class);
+        verify(mapper).insert(captor.capture());
+        assertThat(captor.getValue().getExprText()).isEqualTo("M_0001 + M_0002 * 2");
+    }
+
+    @Test
+    @DisplayName("buildExprDisplay：expr_text 的 M_xxx 实时派生为 M_xxx·名称（查不到名的编号原样保留）")
+    void buildExprDisplay_replacesCodesWithCodeDotName() {
+        PerfMetricDef m1 = new PerfMetricDef();
+        m1.setMetricCode("M_0001");
+        m1.setMetricName("一般性存款月均余额2");
+        PerfMetricDef m5 = new PerfMetricDef();
+        m5.setMetricCode("M_0005");
+        m5.setMetricName("一般性存款年日均余额");
+        when(mapper.selectByMetricCodes(org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(java.util.List.of(m1, m5));
+
+        String display = service.buildExprDisplay("M_0001 + M_0005");
+
+        assertThat(display).isEqualTo("M_0001·一般性存款月均余额2 + M_0005·一般性存款年日均余额");
+    }
+
+    @Test
+    @DisplayName("指标创建：description（详细描述）原样落库，不做任何加工")
+    void create_persistsDescriptionVerbatim() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_DESC")
+                .metricName("详细描述指标")
+                .baseDim("EMP")
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("SQL")
+                .sqlText("SELECT 1")
+                .description("这是用户手动输入的详细描述，应原样保存")
+                .operator("admin")
+                .build();
+        when(mapper.selectByMetricCode("TEST_METRIC_DESC")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+        when(metricSlotService.allocSlot("EMP", 1, null)).thenReturn(3);
+
+        service.create(cmd);
+
+        ArgumentCaptor<PerfMetricDef> captor = ArgumentCaptor.forClass(PerfMetricDef.class);
+        verify(mapper).insert(captor.capture());
+        assertThat(captor.getValue().getDescription()).isEqualTo("这是用户手动输入的详细描述，应原样保存");
+    }
+
+    @Test
+    @DisplayName("EXPR 指标创建：expr_text 语法不合法 → 抛 METRIC_CALC_LOGIC_INVALID")
+    void create_expr_invalidExprText_throws() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_BAD_EXPR")
+                .metricName("非法表达式指标")
+                .baseDim("EMP")
+                .metricLevel(2)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("EXPR")
+                .exprText("M_0001 + ")
+                .operator("admin")
+                .build();
+
+        assertThatThrownBy(() -> service.create(cmd))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("不合法");
+        verify(mapper, never()).insert(any(PerfMetricDef.class));
+    }
 
     @Test
     @DisplayName("L1 指标创建时写主表且无引用")
@@ -170,7 +298,7 @@ class MetricDefServiceTest {
                 .calcFreq("DAY")
                 .calcMode("AUTO")
                 .calcLogicType("EXPR")
-                .exprText("#A + #B")
+                .exprText("REF_1 + REF_2")
                 .refMetricCodes("[\"REF_1\",\"REF_2\"]")
                 .operator("admin")
                 .build();

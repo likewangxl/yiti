@@ -106,13 +106,20 @@ public class AllocAdjustCompletedListener {
      * 审批通过：插入新分配关系 + 更新状态 + 发事件.
      */
     private void handleApproved(PerfAllocAdjustApply apply) {
-        List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(apply.getId());
+        // 仅 NEW 明细落地为生效分配关系；ORIGIN（手工录入的原业绩分配）仅供会签/留痕，
+        // 若一并插入会令同客户出现「新+原」两份生效分配（比例叠加错乱），故在此剔除。
+        List<PerfAllocAdjustItem> items = itemMapper.selectByApplyId(apply.getId()).stream()
+                .filter(it -> !"ORIGIN".equals(it.getItemKind()))
+                .collect(java.util.stream.Collectors.toList());
         LocalDate effectiveDate = LocalDate.now();
+
+        // cust_id 即客户编号（cust_no 字段已并入 cust_id），提交侧恒有值，直接作为分配关系客户键。
+        String relCustId = apply.getCustId();
 
         for (PerfAllocAdjustItem it : items) {
             CustAllocRelation rel = new CustAllocRelation();
             rel.setId(UUID.randomUUID().toString().replace("-", ""));
-            rel.setCustId(apply.getCustId());
+            rel.setCustId(relCustId);
             rel.setAllocDim(apply.getAllocDim());
             rel.setBizKind(apply.getBizKind());
             rel.setAccountNo(apply.getAccountNo());

@@ -26,6 +26,9 @@ public class CreateMetricDefCmd {
     /** 指标说明. */
     private String metricDesc;
 
+    /** 指标详细描述（前端"指标详细描述"输入框，原样保存）. */
+    private String description;
+
     /** 基础维度. */
     private String baseDim;
 
@@ -44,7 +47,7 @@ public class CreateMetricDefCmd {
     /** SQL 文本. */
     private String sqlText;
 
-    /** 表达式文本. */
+    /** 表达式文本（指标编号 Groovy）. */
     private String exprText;
 
     /** 汇总规则. */
