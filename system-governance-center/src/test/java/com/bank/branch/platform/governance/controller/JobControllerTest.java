@@ -107,7 +107,7 @@ class JobControllerTest {
         resp.setJobId("J_001");
         resp.setJobKey("DAILY_REPORT");
         resp.setTriggerType("MANUAL");
-        when(jobService.triggerJob(anyString(), anyString(), anyString())).thenReturn(resp);
+        when(jobService.triggerJob(anyString(), anyString(), any(), anyString())).thenReturn(resp);
 
         // when & then
         mockMvc.perform(post("/api/admin/sys/jobs/J_001/trigger")
@@ -126,22 +126,24 @@ class JobControllerTest {
         JobTriggerRespDTO resp = new JobTriggerRespDTO();
         resp.setJobId("J_001");
         resp.setTriggerType("MANUAL");
-        when(jobService.triggerJob(anyString(), anyString(), anyString())).thenReturn(resp);
+        when(jobService.triggerJob(anyString(), anyString(), any(), anyString())).thenReturn(resp);
 
         // when
         mockMvc.perform(post("/api/admin/sys/jobs/J_001/trigger")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"reason\": \"手动测试\"}"))
+                .content("{\"reason\": \"手动测试\", \"dataDate\": \"2026-06-03\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
 
-        // then - 验证 service.triggerJob 被传入正确的 empId（来自 DataScopeContext）
+        // then - 验证 service.triggerJob 被传入正确的 empId（来自 DataScopeContext）+ dataDate（来自请求体）
         ArgumentCaptor<String> jobIdCap = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> reasonCap = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> dataDateCap = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> empIdCap = ArgumentCaptor.forClass(String.class);
-        verify(jobService).triggerJob(jobIdCap.capture(), reasonCap.capture(), empIdCap.capture());
+        verify(jobService).triggerJob(jobIdCap.capture(), reasonCap.capture(), dataDateCap.capture(), empIdCap.capture());
         assertThat(jobIdCap.getValue()).isEqualTo("J_001");
         assertThat(reasonCap.getValue()).isEqualTo("手动测试");
+        assertThat(dataDateCap.getValue()).isEqualTo("2026-06-03");
         assertThat(empIdCap.getValue()).isEqualTo("emp001");
     }
 
@@ -171,7 +173,7 @@ class JobControllerTest {
 
     @Test
     void triggerJob_notFound_returnsBizError() throws Exception {
-        when(jobService.triggerJob(anyString(), anyString(), anyString()))
+        when(jobService.triggerJob(anyString(), anyString(), any(), anyString()))
                 .thenThrow(new BizException("GOV-40004", "任务不存在"));
 
         mockMvc.perform(post("/api/admin/sys/jobs/NOT_EXIST/trigger")
@@ -183,7 +185,7 @@ class JobControllerTest {
 
     @Test
     void triggerJob_alreadyRunning_returnsBizError() throws Exception {
-        when(jobService.triggerJob(anyString(), anyString(), anyString()))
+        when(jobService.triggerJob(anyString(), anyString(), any(), anyString()))
                 .thenThrow(new BizException("GOV-40903", "任务正在执行中"));
 
         mockMvc.perform(post("/api/admin/sys/jobs/J_001/trigger")
@@ -280,7 +282,7 @@ class JobControllerTest {
      */
     @Test
     void triggerJob_schedulerError_returnsBizError() throws Exception {
-        when(jobService.triggerJob(anyString(), anyString(), anyString()))
+        when(jobService.triggerJob(anyString(), anyString(), any(), anyString()))
                 .thenThrow(new BizException("GOV-50004", "任务触发失败"));
 
         mockMvc.perform(post("/api/admin/sys/jobs/J_001/trigger")

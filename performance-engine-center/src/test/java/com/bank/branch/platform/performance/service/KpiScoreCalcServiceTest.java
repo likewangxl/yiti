@@ -17,7 +17,17 @@ import com.bank.branch.platform.performance.mapper.PerfKpiScoreMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.performance.mapper.SubjectSlotValueRow;
+import com.bank.branch.platform.performance.mapper.KpiSubjectGroupRow;
+import com.bank.branch.platform.performance.mapper.KpiScopeFilter;
+import com.bank.branch.platform.performance.controller.dto.KpiScoreGroupPageDTO;
+import com.bank.branch.platform.performance.controller.dto.KpiScoreGroupRowDTO;
+import com.bank.branch.platform.performance.controller.dto.KpiScoreMetricCellDTO;
+import com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +46,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -288,5 +300,149 @@ class KpiScoreCalcServiceTest {
         assertThat(service.deriveCycleKey("QUARTER", LocalDate.of(2026, 6, 3))).isEqualTo("2026Q2");
         assertThat(service.deriveCycleKey("QUARTER", LocalDate.of(2026, 1, 31))).isEqualTo("2026Q1");
         assertThat(service.deriveCycleKey(null, LocalDate.of(2026, 12, 31))).isEqualTo("2026");
+    }
+
+    @Test
+    void getLatestLogDataDate_returnsMapperMaxDate() {
+        when(kpiCalcLogMapper.selectMaxDataDate()).thenReturn(LocalDate.of(2026, 6, 8));
+        assertThat(service.getLatestLogDataDate()).isEqualTo(LocalDate.of(2026, 6, 8));
+    }
+
+    @Test
+    void pageScoreGroups_groupsByObjectWithMetricCellsAndCompleteRate() {
+        // 指标列（listSchemeMetrics 路径）
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1");
+        scheme.setSchemeCode("KPI_A");
+        when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
+        PerfKpiItem i1 = new PerfKpiItem(); i1.setMetricCode("M_0001");
+        PerfKpiItem i2 = new PerfKpiItem(); i2.setMetricCode("M_0002");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(i1, i2));
+        PerfMetricDef d1 = new PerfMetricDef(); d1.setMetricCode("M_0001"); d1.setMetricName("新增客户");
+        PerfMetricDef d2 = new PerfMetricDef(); d2.setMetricCode("M_0002"); d2.setMetricName("存款日均");
+        when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(d1);
+        when(metricDefService.getByCodeOrNull("M_0002")).thenReturn(d2);
+
+        // 分组：1 个对象 E001，考核得分合计 0.7
+        when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any())).thenReturn(1L);
+        KpiSubjectGroupRow g = new KpiSubjectGroupRow();
+        g.setSubjectId("E001"); g.setSubjectType("EMP"); g.setTotalScore(new BigDecimal("0.7"));
+        when(scoreMapper.selectSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any(), eq(0), eq(20)))
+                .thenReturn(List.of(g));
+
+        // 该对象两条指标计分行
+        when(scoreMapper.selectByDateSchemeSubjects(eq(DATA_DATE), eq("KPI_A"), anyList()))
+                .thenReturn(List.of(
+                        scoreRow("E001", "M_0001", "80", "100", "0", "0.4"),
+                        scoreRow("E001", "M_0002", "50", "100", "10", "0.3")));
+
+        UserDTO u = new UserDTO();
+        u.setUsername("E001"); u.setDisplayName("张三");
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(u));
+
+        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", null, 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1L);
+        assertThat(page.getMetrics()).extracting("metricName")
+                .containsExactlyInAnyOrder("新增客户", "存款日均");
+        assertThat(page.getRecords()).hasSize(1);
+        KpiScoreGroupRowDTO row = page.getRecords().get(0);
+        assertThat(row.getSubjectId()).isEqualTo("E001");
+        assertThat(row.getSubjectName()).isEqualTo("张三");
+        assertThat(row.getTotalScore()).isEqualByComparingTo("0.7");
+        KpiScoreMetricCellDTO c1 = row.getMetrics().get("M_0001");
+        assertThat(c1.getActual()).isEqualByComparingTo("80");
+        assertThat(c1.getScore()).isEqualByComparingTo("0.4");
+        // 完成率 = (80-0)/100*100 = 80.00
+        assertThat(c1.getCompleteRate()).isEqualByComparingTo("80.00");
+        KpiScoreMetricCellDTO c2 = row.getMetrics().get("M_0002");
+        // 完成率 = (50-10)/100*100 = 40.00
+        assertThat(c2.getCompleteRate()).isEqualByComparingTo("40.00");
+    }
+
+    @Test
+    void pageScoreGroups_filtersMetricColumnsBySelectedDimension() {
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1");
+        scheme.setSchemeCode("KPI_A");
+        when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
+        PerfKpiItem i1 = new PerfKpiItem(); i1.setMetricCode("M_EMP");
+        PerfKpiItem i2 = new PerfKpiItem(); i2.setMetricCode("M_ORG");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(i1, i2));
+        PerfMetricDef de = new PerfMetricDef(); de.setMetricCode("M_EMP"); de.setMetricName("员工指标"); de.setBaseDim("EMP");
+        PerfMetricDef dor = new PerfMetricDef(); dor.setMetricCode("M_ORG"); dor.setMetricName("机构指标"); dor.setBaseDim("ORG");
+        when(metricDefService.getByCodeOrNull("M_EMP")).thenReturn(de);
+        when(metricDefService.getByCodeOrNull("M_ORG")).thenReturn(dor);
+
+        when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), eq("EMP"), any())).thenReturn(1L);
+        KpiSubjectGroupRow g = new KpiSubjectGroupRow();
+        g.setSubjectId("E001"); g.setSubjectType("EMP"); g.setTotalScore(new BigDecimal("0.4"));
+        when(scoreMapper.selectSubjectGroups(eq(DATA_DATE), eq("KPI_A"), eq("EMP"), any(), eq(0), eq(20)))
+                .thenReturn(List.of(g));
+        when(scoreMapper.selectByDateSchemeSubjects(eq(DATA_DATE), eq("KPI_A"), anyList()))
+                .thenReturn(List.of(scoreRow("E001", "M_EMP", "80", "100", "0", "0.4")));
+
+        // 选中 EMP 维度 → 指标列只剩 EMP 维度指标，过滤掉 ORG 指标组
+        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", "EMP", 1, 20);
+        assertThat(page.getMetrics()).extracting("metricCode").containsExactly("M_EMP");
+    }
+
+    @Test
+    void listScoresForExport_returnsEnrichedDetailRows() {
+        PerfKpiScore s = scoreRow("E001", "M_0001", "80", "100", "0", "0.4");
+        s.setDataDate(DATA_DATE); s.setSchemeCode("KPI_A"); s.setWeight(new BigDecimal("0.5"));
+        when(scoreMapper.selectList(any())).thenReturn(List.of(s));
+        PerfMetricDef def = new PerfMetricDef(); def.setMetricCode("M_0001"); def.setMetricName("新增客户");
+        when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
+        UserDTO u = new UserDTO(); u.setUsername("E001"); u.setDisplayName("张三");
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(u));
+
+        List<PerfKpiScoreResultDTO> rows = service.listScoresForExport(DATA_DATE, "KPI_A", "EMP", 50000);
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getMetricName()).isEqualTo("新增客户");
+        assertThat(rows.get(0).getSubjectName()).isEqualTo("张三");
+        assertThat(rows.get(0).getScore()).isEqualByComparingTo("0.4");
+    }
+
+    @Test
+    void pageScoreGroups_appliesOrgSubtreeScope_orgCodesAndSubtreeEmpIds() {
+        DataScopeContext ctx = new DataScopeContext();
+        ctx.setBizType(BizType.KPI_CALC);
+        ctx.setScope(DataScopeType.ORG_SUBTREE);
+        ctx.setEmpId("mgr");
+        ctx.setOrgSubtreeCodes(new java.util.LinkedHashSet<>(List.of("ORG1")));
+        DataScopeContext.set(ctx);
+        try {
+            when(userApi.getEmpIdsByOrg("ORG1")).thenReturn(List.of("E001", "E002"));
+            PerfKpiScheme scheme = new PerfKpiScheme();
+            scheme.setId("S1"); scheme.setSchemeCode("KPI_A");
+            when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
+            when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of());
+            ArgumentCaptor<KpiScopeFilter> cap = ArgumentCaptor.forClass(KpiScopeFilter.class);
+            when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), cap.capture())).thenReturn(0L);
+
+            service.pageScoreGroups(DATA_DATE, "KPI_A", null, 1, 20);
+
+            KpiScopeFilter scope = cap.getValue();
+            assertThat(scope.isScopeAll()).isFalse();
+            assertThat(scope.getOrgCodes()).containsExactly("ORG1");
+            assertThat(scope.getEmpIds()).containsExactlyInAnyOrder("E001", "E002");
+        } finally {
+            DataScopeContext.clear();
+        }
+    }
+
+    private static PerfKpiScore scoreRow(String subjectId, String metricCode,
+                                         String actual, String target, String base, String score) {
+        PerfKpiScore s = new PerfKpiScore();
+        s.setSubjectType("EMP");
+        s.setSubjectId(subjectId);
+        s.setMetricCode(metricCode);
+        s.setActualValue(new BigDecimal(actual));
+        s.setTargetValue(new BigDecimal(target));
+        s.setBaseValue(new BigDecimal(base));
+        s.setScore(new BigDecimal(score));
+        return s;
     }
 }

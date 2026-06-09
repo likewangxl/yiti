@@ -1,5 +1,7 @@
 package com.bank.branch.platform.governance.service;
 
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
@@ -42,6 +44,8 @@ class JobServiceTest {
     JobConfMapper jobConfMapper;
     @Mock
     JobRunLogMapper jobRunLogMapper;
+    @Mock
+    UserApi userApi;
     @InjectMocks
     JobService jobService;
 
@@ -320,6 +324,30 @@ class JobServiceTest {
         assertThat(page.getRecords().get(0).getJobId()).isEqualTo("JOB_001");
     }
 
+    /**
+     * 执行日志按工号(createdBy)回填触发人姓名(operatorName)，工号原样保留.
+     */
+    @Test
+    void listRunLogs_enrichesOperatorName() {
+        SysJobRunLog manualRun = makeRunLog("LOG_002", "JOB_001", "SUCCESS");
+        manualRun.setTriggerType("MANUAL");
+        manualRun.setCreatedBy("finance_zhou");
+        when(jobRunLogMapper.countByJobId("JOB_001")).thenReturn(1L);
+        when(jobRunLogMapper.selectByJobId(eq("JOB_001"), eq(0), eq(20))).thenReturn(List.of(manualRun));
+        UserDTO u = new UserDTO();
+        u.setUsername("finance_zhou");
+        u.setDisplayName("周八");
+        when(userApi.getUsersByUsernames(List.of("finance_zhou"))).thenReturn(List.of(u));
+        // @RequiredArgsConstructor 仅注入 final 字段，@Autowired(required=false) userApi 需反射注入（同 scheduler）
+        ReflectionTestUtils.setField(jobService, "userApi", userApi);
+
+        PageResult<JobRunLogDTO> page = jobService.listRunLogs("JOB_001", 1, 20);
+
+        JobRunLogDTO dto = page.getRecords().get(0);
+        assertThat(dto.getCreatedBy()).isEqualTo("finance_zhou");
+        assertThat(dto.getOperatorName()).isEqualTo("周八");
+    }
+
     // ── L1 补全测试 ──────────────────────────────────────────────
 
     /**
@@ -363,7 +391,7 @@ class JobServiceTest {
         ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
 
         // when
-        JobTriggerRespDTO resp = jobService.triggerJob("JOB_001", "手动测试", "emp001");
+        JobTriggerRespDTO resp = jobService.triggerJob("JOB_001", "手动测试", "2026-06-03", "emp001");
 
         // then - 验证 scheduler.triggerJob(JobKey, JobDataMap) 被调用
         ArgumentCaptor<JobKey> keyCap = ArgumentCaptor.forClass(JobKey.class);
@@ -377,6 +405,8 @@ class JobServiceTest {
         assertThat(data.getString("triggerType")).isEqualTo("MANUAL");
         assertThat(data.getString("operatorEmpId")).isEqualTo("emp001");
         assertThat(data.getString("triggerReason")).isEqualTo("手动测试");
+        // dataDate 透传到 JobDataMap，供计算类 Quartz Job 按指定日期启动计算
+        assertThat(data.getString("dataDate")).isEqualTo("2026-06-03");
 
         // 响应 DTO 含 jobId / triggerType=MANUAL / triggerTime
         assertThat(resp).isNotNull();
@@ -392,7 +422,7 @@ class JobServiceTest {
     void triggerJob_jobNotFound_throwsGov40004() {
         when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
 
-        assertThatThrownBy(() -> jobService.triggerJob("NOT_EXIST", "原因", "emp001"))
+        assertThatThrownBy(() -> jobService.triggerJob("NOT_EXIST", "原因", null, "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
     }
@@ -407,7 +437,7 @@ class JobServiceTest {
         when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
         // 不注入 scheduler，保持 null
 
-        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", "emp001"))
+        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", null, "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-50004"));
     }
@@ -426,7 +456,7 @@ class JobServiceTest {
         conf.setAllowManualTrigger(0);
         when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
 
-        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", "emp001"))
+        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", null, "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40302"));
     }

@@ -20,6 +20,14 @@ import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.mapper.SubjectSlotValueRow;
+import com.bank.branch.platform.performance.mapper.KpiSubjectGroupRow;
+import com.bank.branch.platform.performance.mapper.KpiScopeFilter;
+import com.bank.branch.platform.common.security.context.DataScopeContext;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.performance.controller.dto.KpiScoreGroupPageDTO;
+import com.bank.branch.platform.performance.controller.dto.KpiScoreGroupRowDTO;
+import com.bank.branch.platform.performance.controller.dto.KpiScoreMetricCellDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricOptionDTO;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
@@ -72,6 +80,8 @@ public class KpiScoreCalcService {
     private static final String TASK_NAME = "KPI分值计算";
     /** KPI 计分 SQL 表达式单行执行超时（秒）. */
     private static final Duration SQL_EXPR_TIMEOUT = Duration.ofSeconds(30);
+    /** 导出行数上限（防 OOM）. */
+    public static final int EXPORT_ROWS_CAP = 50000;
 
     private final PerfMetricCalcTaskMapper taskMapper;
     private final PerfKpiSchemeMapper schemeMapper;
@@ -250,6 +260,15 @@ public class KpiScoreCalcService {
      * @param pageSize   每页条数（1..100）
      * @return 分页结果
      */
+    /**
+     * 考核计算记录中的最大数据日期（供前端默认选中并展示最新一日的数据列表）.
+     *
+     * @return 最大 data_date；无记录时返回 null
+     */
+    public LocalDate getLatestLogDataDate() {
+        return kpiCalcLogMapper.selectMaxDataDate();
+    }
+
     public com.bank.branch.platform.common.web.PageResult<
             com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO> pageLogs(
             LocalDate dataDate, String schemeCode, int pageNo, int pageSize) {
@@ -364,6 +383,272 @@ public class KpiScoreCalcService {
         enrichScoreNames(dtos);
         return com.bank.branch.platform.common.web.PageResult.of(
                 safeNo, safeSize, total == null ? 0L : total, dtos);
+    }
+
+    /**
+     * 导出用：某数据日期 + 方案下的全部计分明细（PERF_KPI_SCORE 平铺记录，按 cap 上限），
+     * 含指标名称 / 对象姓名回填，供「导出KPI明细数据」.
+     *
+     * @param dataDate    数据日期
+     * @param schemeCode  方案编码
+     * @param subjectType 维度过滤（可空）
+     * @param cap         行数上限
+     * @return 明细 DTO 列表
+     */
+    public List<com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO> listScoresForExport(
+            LocalDate dataDate, String schemeCode, String subjectType, int cap) {
+        int safeCap = Math.max(1, cap);
+        LambdaQueryWrapper<PerfKpiScore> w = new LambdaQueryWrapper<>();
+        if (dataDate != null) {
+            w.eq(PerfKpiScore::getDataDate, dataDate);
+        }
+        if (StringUtils.hasText(schemeCode)) {
+            w.eq(PerfKpiScore::getSchemeCode, schemeCode.trim());
+        }
+        if (StringUtils.hasText(subjectType)) {
+            w.eq(PerfKpiScore::getSubjectType, subjectType.trim());
+        }
+        // 考核计算(KPI_CALC)数据范围过滤
+        KpiScopeFilter scope = resolveKpiScopeFilter();
+        if (!scope.isScopeAll()) {
+            boolean hasOrg = scope.getOrgCodes() != null && !scope.getOrgCodes().isEmpty();
+            boolean hasEmp = scope.getEmpIds() != null && !scope.getEmpIds().isEmpty();
+            if (!hasOrg && !hasEmp) {
+                return List.of();
+            }
+            w.and(qw -> qw
+                    .nested(hasOrg, n -> n.eq(PerfKpiScore::getSubjectType, "ORG")
+                            .in(PerfKpiScore::getSubjectId, scope.getOrgCodes()))
+                    .or(hasOrg && hasEmp)
+                    .nested(hasEmp, n -> n.eq(PerfKpiScore::getSubjectType, "EMP")
+                            .in(PerfKpiScore::getSubjectId, scope.getEmpIds())));
+        }
+        w.orderByAsc(PerfKpiScore::getSubjectType)
+         .orderByAsc(PerfKpiScore::getSubjectId)
+         .orderByAsc(PerfKpiScore::getMetricCode)
+         .last("LIMIT " + safeCap);
+        List<com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO> dtos =
+                scoreMapper.selectList(w).stream().map(this::toScoreDto).collect(java.util.stream.Collectors.toList());
+        enrichScoreNames(dtos);
+        return dtos;
+    }
+
+    /**
+     * KPI 计算结果详情（按对象分组）：在 PERF_KPI_SCORE 中按 (数据日期, KPI编码) 下
+     * 对 (对象ID, 对象类型) group by，每个对象一行——对象ID / 姓名 / 考核得分(该对象所有指标合计)，
+     * 之后动态展开该方案所有指标（按指标名排序），每指标格含 实际值/目标值/基础值/完成率/得分.
+     *
+     * @param dataDate    数据日期（必填）
+     * @param schemeCode  KPI 方案编码（必填）
+     * @param subjectType 对象类型过滤（可空=全部维度）
+     * @param pageNo      页码（&ge;1，按对象分页）
+     * @param pageSize    每页对象数（1..100）
+     * @return 分组分页结果（含指标列定义 + 对象行）
+     */
+    public KpiScoreGroupPageDTO pageScoreGroups(LocalDate dataDate, String schemeCode,
+                                                String subjectType, int pageNo, int pageSize) {
+        return groupPage(dataDate, schemeCode, subjectType,
+                Math.max(1, pageNo), Math.min(100, Math.max(1, pageSize)));
+    }
+
+    /**
+     * 导出用：按对象分组取数（不受每页 100 上限约束，按导出上限 cap 取首批对象）.
+     *
+     * @param cap 对象数上限（导出上限）
+     */
+    public KpiScoreGroupPageDTO exportScoreGroups(LocalDate dataDate, String schemeCode,
+                                                  String subjectType, int cap) {
+        return groupPage(dataDate, schemeCode, subjectType, 1, Math.max(1, cap));
+    }
+
+    /**
+     * 解析 考核计算(KPI_CALC) 数据范围 → PERF_KPI_SCORE 的 subject 过滤.
+     *
+     * <p>ALL→不过滤；ORG_SUBTREE→本机构+下级（ORG 对象限这些机构、EMP 对象限其下属员工）；
+     * ORG→仅本机构；SELF 及其它→仅本人员工。无 KPI_CALC 上下文（内部/测试）→不过滤。
+     */
+    private KpiScopeFilter resolveKpiScopeFilter() {
+        DataScopeContext ctx = DataScopeContext.current();
+        if (ctx == null || ctx.getBizType() != BizType.KPI_CALC || ctx.getScope() == null) {
+            return KpiScopeFilter.all();
+        }
+        switch (ctx.getScope()) {
+            case ALL:
+                return KpiScopeFilter.all();
+            case ORG_SUBTREE:
+                return orgScopeFilter(ctx.getOrgSubtreeCodes());
+            case ORG:
+                return orgScopeFilter(ctx.getOrgCode() == null
+                        ? java.util.Set.of() : java.util.Set.of(ctx.getOrgCode()));
+            case SELF:
+            case SELF_CREATED:
+            case SELF_ASSIGNED:
+            default:
+                String emp = ctx.getEmpId();
+                return KpiScopeFilter.of(emp == null ? List.of() : List.of(emp), List.of());
+        }
+    }
+
+    /** 机构集合 → 范围：ORG 对象限这些机构码，EMP 对象限这些机构下属员工工号（经 UserApi 解析）. */
+    private KpiScopeFilter orgScopeFilter(java.util.Set<String> orgCodes) {
+        if (orgCodes == null || orgCodes.isEmpty()) {
+            return KpiScopeFilter.of(List.of(), List.of());
+        }
+        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
+        for (String oc : orgCodes) {
+            try {
+                List<String> es = userApi.getEmpIdsByOrg(oc);
+                if (es != null) {
+                    empIds.addAll(es);
+                }
+            } catch (Exception ignore) {
+                // 单机构解析失败不影响其它
+            }
+        }
+        return KpiScopeFilter.of(new java.util.ArrayList<>(empIds), new java.util.ArrayList<>(orgCodes));
+    }
+
+    private KpiScoreGroupPageDTO groupPage(LocalDate dataDate, String schemeCode,
+                                           String subjectType, int safeNo, int safeSize) {
+        String sc = StringUtils.hasText(schemeCode) ? schemeCode.trim() : null;
+        String st = StringUtils.hasText(subjectType) ? subjectType.trim() : null;
+
+        KpiScoreGroupPageDTO page = new KpiScoreGroupPageDTO();
+        page.setPageNo(safeNo);
+        page.setPageSize(safeSize);
+        // 指标列：该方案指标，按指标名（中文）排序
+        List<MetricOptionDTO> metricCols = new java.util.ArrayList<>(listSchemeMetrics(sc));
+        // 选中维度时，仅保留该维度(base_dim)的指标列，过滤掉其他维度指标组
+        if (st != null) {
+            metricCols.removeIf(m -> {
+                PerfMetricDef def = metricDefService.getByCodeOrNull(m.getMetricCode());
+                return def == null || !st.equals(def.getBaseDim());
+            });
+        }
+        metricCols.sort(java.util.Comparator.comparing(
+                m -> m.getMetricName() == null ? "" : m.getMetricName(),
+                java.text.Collator.getInstance(java.util.Locale.CHINA)));
+        page.setMetrics(metricCols);
+
+        if (dataDate == null || sc == null) {
+            page.setRecords(List.of());
+            page.setTotal(0L);
+            return page;
+        }
+        // 考核计算(KPI_CALC)数据范围：本人 / 本机构+下级 / 全部
+        KpiScopeFilter scope = resolveKpiScopeFilter();
+        long total = scoreMapper.countSubjectGroups(dataDate, sc, st, scope);
+        page.setTotal(total);
+        if (total == 0) {
+            page.setRecords(List.of());
+            return page;
+        }
+        int offset = (safeNo - 1) * safeSize;
+        List<KpiSubjectGroupRow> groups = scoreMapper.selectSubjectGroups(dataDate, sc, st, scope, offset, safeSize);
+        if (groups.isEmpty()) {
+            page.setRecords(List.of());
+            return page;
+        }
+        // 当前页对象的全部指标计分行 → (对象类型|对象ID) → metricCode → 计分行
+        List<PerfKpiScore> scoreRows = scoreMapper.selectByDateSchemeSubjects(dataDate, sc, groups);
+        Map<String, Map<String, PerfKpiScore>> bySubject = new java.util.HashMap<>();
+        for (PerfKpiScore r : scoreRows) {
+            bySubject.computeIfAbsent(subjectKey(r.getSubjectType(), r.getSubjectId()), k -> new java.util.HashMap<>())
+                    .put(r.getMetricCode(), r);
+        }
+        List<KpiScoreGroupRowDTO> records = new java.util.ArrayList<>(groups.size());
+        for (KpiSubjectGroupRow g : groups) {
+            KpiScoreGroupRowDTO row = new KpiScoreGroupRowDTO();
+            row.setSubjectId(g.getSubjectId());
+            row.setSubjectType(g.getSubjectType());
+            row.setTotalScore(g.getTotalScore());
+            Map<String, PerfKpiScore> byMetric =
+                    bySubject.getOrDefault(subjectKey(g.getSubjectType(), g.getSubjectId()), Map.of());
+            Map<String, KpiScoreMetricCellDTO> cells = new java.util.HashMap<>();
+            for (MetricOptionDTO mo : metricCols) {
+                PerfKpiScore s = byMetric.get(mo.getMetricCode());
+                if (s == null) {
+                    continue;
+                }
+                KpiScoreMetricCellDTO cell = new KpiScoreMetricCellDTO();
+                cell.setActual(s.getActualValue());
+                cell.setTarget(s.getTargetValue());
+                cell.setBase(s.getBaseValue());
+                cell.setScore(s.getScore());
+                cell.setCompleteRate(calcCompleteRate(s.getActualValue(), s.getTargetValue(), s.getBaseValue()));
+                cells.put(mo.getMetricCode(), cell);
+            }
+            row.setMetrics(cells);
+            records.add(row);
+        }
+        enrichGroupNames(records);
+        page.setRecords(records);
+        return page;
+    }
+
+    /** (对象类型|对象ID) 复合键. */
+    private static String subjectKey(String type, String id) {
+        return (type == null ? "" : type) + "|" + (id == null ? "" : id);
+    }
+
+    /** 完成率(%) = (实际值-基础值)/目标值*100；目标值为 0/空或实际值空 → null，保留 2 位. */
+    private BigDecimal calcCompleteRate(BigDecimal actual, BigDecimal target, BigDecimal base) {
+        if (actual == null || target == null || target.signum() == 0) {
+            return null;
+        }
+        BigDecimal b = base == null ? BigDecimal.ZERO : base;
+        return actual.subtract(b)
+                .divide(target, 6, java.math.RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /** 回填分组行的对象姓名（EMP→员工姓名；ORG→机构名称且对象ID替换为业务机构号 dept_no）. */
+    private void enrichGroupNames(List<KpiScoreGroupRowDTO> rows) {
+        if (rows.isEmpty()) {
+            return;
+        }
+        List<String> empIds = rows.stream().filter(d -> "EMP".equals(d.getSubjectType()))
+                .map(KpiScoreGroupRowDTO::getSubjectId).filter(StringUtils::hasText).distinct().toList();
+        Map<String, String> empNames = new java.util.HashMap<>();
+        if (!empIds.isEmpty()) {
+            List<UserDTO> users = userApi.getUsersByUsernames(empIds);
+            if (users != null) {
+                for (UserDTO u : users) {
+                    if (u != null && StringUtils.hasText(u.getUsername())) {
+                        empNames.put(u.getUsername(), u.getDisplayName());
+                    }
+                }
+            }
+        }
+        Map<String, String> orgDeptNos = new java.util.HashMap<>();
+        Map<String, String> orgNames = new java.util.HashMap<>();
+        rows.stream().filter(d -> "ORG".equals(d.getSubjectType()))
+                .map(KpiScoreGroupRowDTO::getSubjectId).filter(StringUtils::hasText).distinct().forEach(code -> {
+                    try {
+                        OrgDTO org = orgApi.getOrg(code);
+                        if (org != null) {
+                            if (StringUtils.hasText(org.getDeptNo())) {
+                                orgDeptNos.put(code, org.getDeptNo());
+                            }
+                            orgNames.put(code, org.getOrgName());
+                        }
+                    } catch (Exception ignore) {
+                        // 机构查询异常 → 名称留空
+                    }
+                });
+        for (KpiScoreGroupRowDTO d : rows) {
+            if ("EMP".equals(d.getSubjectType())) {
+                d.setSubjectName(empNames.get(d.getSubjectId()));
+            } else if ("ORG".equals(d.getSubjectType())) {
+                String orig = d.getSubjectId();
+                d.setSubjectName(orgNames.get(orig));
+                String deptNo = orgDeptNos.get(orig);
+                if (StringUtils.hasText(deptNo)) {
+                    d.setSubjectId(deptNo);
+                }
+            }
+        }
     }
 
     /**

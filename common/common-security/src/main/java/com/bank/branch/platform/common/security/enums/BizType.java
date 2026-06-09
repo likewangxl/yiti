@@ -26,6 +26,7 @@ public enum BizType {
     SUPPORT_DEPT("SUPPORT_DEPT", "支撑部门管理"),
     REPORT("REPORT", "报表分析"),
     PERF_CONFIG("PERF_CONFIG", "绩效配置"),
+    KPI_CALC("KPI_CALC", "考核计算"),
     SYS_CONFIG("SYS_CONFIG", "系统配置"),
     ORG("ORG", "组织机构"),
     EVAL("EVAL", "内部评价");

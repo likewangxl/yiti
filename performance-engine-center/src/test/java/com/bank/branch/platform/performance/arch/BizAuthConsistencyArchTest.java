@@ -35,13 +35,14 @@ public class BizAuthConsistencyArchTest {
           .that().areDeclaredInClassesThat().haveSimpleNameEndingWith("Controller")
           .and().arePublic()
           .and().areAnnotatedWith(BizAuth.class)
-          .should(new ArchCondition<JavaMethod>("@BizAuth.bizType must be PERF_CONFIG") {
+          .should(new ArchCondition<JavaMethod>("@BizAuth.bizType must be PERF_CONFIG or KPI_CALC") {
               @Override
               public void check(JavaMethod method, ConditionEvents events) {
                   BizAuth ann = method.reflect().getAnnotation(BizAuth.class);
-                  if (ann.bizType() != BizType.PERF_CONFIG) {
+                  // KPI 计算结果详情/导出端点使用 KPI_CALC（考核计算数据范围），其余统一 PERF_CONFIG
+                  if (ann.bizType() != BizType.PERF_CONFIG && ann.bizType() != BizType.KPI_CALC) {
                       events.add(SimpleConditionEvent.violated(method,
-                          method.getFullName() + " 使用了非 PERF_CONFIG 的 BizType: " + ann.bizType()));
+                          method.getFullName() + " 使用了非 PERF_CONFIG/KPI_CALC 的 BizType: " + ann.bizType()));
                   }
               }
           });

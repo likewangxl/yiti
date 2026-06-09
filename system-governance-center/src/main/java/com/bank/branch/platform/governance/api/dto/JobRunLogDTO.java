@@ -34,4 +34,7 @@ public class JobRunLogDTO {
 
     /** 触发人工号 */
     private String createdBy;
+
+    /** 触发人姓名（按工号 createdBy 解析；手动触发展示用，解析失败为 null） */
+    private String operatorName;
 }

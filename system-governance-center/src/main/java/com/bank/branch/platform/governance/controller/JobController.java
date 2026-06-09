@@ -95,9 +95,9 @@ public class JobController {
             @PathVariable(value = "jobId") String jobId,
             @Valid @RequestBody JobTriggerReqDTO reqDTO) {
         String operatorEmpId = DataScopeContext.current().getEmpId();
-        log.info("[JobController.triggerJob] jobId={}, reason={}, operatorEmpId={}",
-                jobId, reqDTO.getReason(), operatorEmpId);
-        JobTriggerRespDTO resp = jobService.triggerJob(jobId, reqDTO.getReason(), operatorEmpId);
+        log.info("[JobController.triggerJob] jobId={}, reason={}, dataDate={}, operatorEmpId={}",
+                jobId, reqDTO.getReason(), reqDTO.getDataDate(), operatorEmpId);
+        JobTriggerRespDTO resp = jobService.triggerJob(jobId, reqDTO.getReason(), reqDTO.getDataDate(), operatorEmpId);
         return ResponseWrapper.success(resp);
     }
 
