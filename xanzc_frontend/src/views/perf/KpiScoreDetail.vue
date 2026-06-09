@@ -10,7 +10,7 @@
       </div>
     </div>
 
-    <!-- 查询：维度 + 指标（仅含该方案的指标）-->
+    <!-- 查询：维度（按对象分组展示，列动态为该方案的各指标组）-->
     <div class="card-section">
       <el-form :inline="true" size="default">
         <el-form-item label="维度">
@@ -18,46 +18,50 @@
             <el-option v-for="(label, val) in DIM" :key="val" :value="val" :label="label" />
           </el-select>
         </el-form-item>
-        <el-form-item label="指标">
-          <el-select v-model="metricCode" clearable filterable placeholder="全部指标" style="width:280px">
-            <el-option v-for="o in metricOptions" :key="o.metricCode" :value="o.metricCode"
-              :label="o.metricName ? `${o.metricName}(${o.metricCode})` : o.metricCode" />
-          </el-select>
-        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="onQuery">查询</el-button>
           <el-button @click="onReset">重置</el-button>
+          <el-button type="success" plain :loading="exporting==='scores'" @click="onExportScores">导出KPI得分</el-button>
+          <el-button type="success" plain :loading="exporting==='details'" @click="onExportDetails">导出KPI明细</el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <div class="card-section">
-      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无计算结果">
-        <el-table-column label="维度" width="110">
-          <template #default="{row}">{{ dimLabel(row.subjectType) }}</template>
+      <!-- 固定列：对象ID / 姓名 / 考核得分(合计)；之后每个指标一个分组列(指标名 + 实际/目标/基础/完成率/得分) -->
+      <el-table :data="records" size="small" border v-loading="loading" empty-text="暂无计算结果">
+        <!-- 维度：同一对象ID 可能在不同维度各有一行（如员工/客户工号撞号），按 对象ID+对象类型 分组 -->
+        <el-table-column label="维度" width="80" fixed>
+          <template #default="{row}">{{ DIM[row.subjectType] || row.subjectType || '-' }}</template>
         </el-table-column>
-        <el-table-column label="指标" min-width="200">
-          <template #default="{row}">{{ row.metricCode }}{{ row.metricName ? ' ' + row.metricName : '' }}</template>
+        <el-table-column label="对象ID" min-width="130" fixed prop="subjectId" />
+        <el-table-column label="姓名" min-width="110" fixed>
+          <template #default="{row}">{{ row.subjectName || '-' }}</template>
         </el-table-column>
-        <el-table-column label="对象" min-width="180">
-          <template #default="{row}">{{ row.subjectId }}{{ row.subjectName ? ' ' + row.subjectName : '' }}</template>
+        <el-table-column label="考核得分" width="100" fixed align="right">
+          <template #default="{row}"><strong>{{ fmtNum(row.totalScore) }}</strong></template>
         </el-table-column>
-        <el-table-column label="实际值" width="130" align="right">
-          <template #default="{row}">{{ fmtNum(row.actualValue) }}</template>
-        </el-table-column>
-        <el-table-column label="目标值" width="120" align="right">
-          <template #default="{row}">{{ fmtNum(row.targetValue) }}</template>
-        </el-table-column>
-        <el-table-column label="基础值" width="120" align="right">
-          <template #default="{row}">{{ fmtNum(row.baseValue) }}</template>
-        </el-table-column>
-        <el-table-column label="权重" width="100" align="right">
-          <template #default="{row}">{{ fmtNum(row.weight) }}</template>
-        </el-table-column>
-        <el-table-column label="得分" width="110" align="right" fixed="right">
-          <template #default="{row}"><strong>{{ fmtNum(row.score) }}</strong></template>
+
+        <el-table-column v-for="m in metrics" :key="m.metricCode"
+          :label="m.metricName || m.metricCode" align="center">
+          <el-table-column label="实际值" width="100" align="right">
+            <template #default="{row}">{{ fmtNum(cell(row, m).actual) }}</template>
+          </el-table-column>
+          <el-table-column label="目标值" width="100" align="right">
+            <template #default="{row}">{{ fmtNum(cell(row, m).target) }}</template>
+          </el-table-column>
+          <el-table-column label="基础值" width="100" align="right">
+            <template #default="{row}">{{ fmtNum(cell(row, m).base) }}</template>
+          </el-table-column>
+          <el-table-column label="完成率" width="100" align="right">
+            <template #default="{row}">{{ fmtRate(cell(row, m).completeRate) }}</template>
+          </el-table-column>
+          <el-table-column label="得分" width="90" align="right">
+            <template #default="{row}"><strong>{{ fmtNum(cell(row, m).score) }}</strong></template>
+          </el-table-column>
         </el-table-column>
       </el-table>
+
       <div class="pager">
         <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[20, 50, 100]"
           :total="total" background layout="total, sizes, prev, pager, next"
@@ -70,56 +74,97 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { listKpiScoreResults, listKpiSchemeMetrics } from '@/api/perf';
+import { ElMessage } from 'element-plus';
+import { listKpiScoreResults, exportKpiScores, exportKpiScoreDetails } from '@/api/perf';
 
 const route = useRoute();
 const router = useRouter();
 const dataDate = ref(route.query.dataDate || '');
 const schemeCode = ref(route.query.schemeCode || '');
 
-const rows = ref([]);
+const metrics = ref([]);   // 指标列定义 [{metricCode, metricName}]
+const records = ref([]);   // 对象行 [{subjectId, subjectName, totalScore, metrics:{code:{actual,target,base,completeRate,score}}}]
 const total = ref(0);
 const pgNo = ref(1);
 const pgSize = ref(20);
 const loading = ref(false);
-const metricCode = ref('');
 const subjectType = ref('');
-const metricOptions = ref([]);
-
-async function loadMetricOptions() {
-  try { metricOptions.value = (await listKpiSchemeMetrics(schemeCode.value)) || []; } catch {}
-}
-function onQuery() { pgNo.value = 1; loadData(); }
-function onReset() { metricCode.value = ''; subjectType.value = ''; pgNo.value = 1; loadData(); }
 
 const DIM = { EMP: '员工', ORG: '机构', CUST: '客户' };
-function dimLabel(t) { return DIM[t] || t || '-'; }
+const EMPTY_CELL = {};
+/** 取某行某指标的格数据（缺失返回空对象，模板按字段取值即为 '-'） */
+function cell(row, m) {
+  return (row.metrics && row.metrics[m.metricCode]) || EMPTY_CELL;
+}
 function fmtNum(v) {
   if (v == null || v === '') return '-';
   const n = Number(v);
   return Number.isNaN(n) ? v : (Math.round(n * 10000) / 10000);
 }
+function fmtRate(v) {
+  if (v == null || v === '') return '-';
+  const n = Number(v);
+  return Number.isNaN(n) ? v : `${Math.round(n * 100) / 100}%`;
+}
+
+function onQuery() { pgNo.value = 1; loadData(); }
+function onReset() { subjectType.value = ''; pgNo.value = 1; loadData(); }
+function onSizeChange() { pgNo.value = 1; loadData(); }
 function goBack() {
   if (window.history.length > 1) router.back();
   else router.push({ name: 'PerfCompute' });
 }
-function onSizeChange() { pgNo.value = 1; loadData(); }
+
+const exporting = ref('');
+/** 触发浏览器下载 blob */
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function exportParams() {
+  return {
+    dataDate: dataDate.value || undefined,
+    schemeCode: schemeCode.value || undefined,
+    subjectType: subjectType.value || undefined
+  };
+}
+async function onExportScores() {
+  exporting.value = 'scores';
+  try {
+    const blob = await exportKpiScores(exportParams());
+    saveBlob(blob, `KPI得分_${dataDate.value || ''}.xlsx`);
+  } catch { ElMessage.error('导出失败'); } finally { exporting.value = ''; }
+}
+async function onExportDetails() {
+  exporting.value = 'details';
+  try {
+    const blob = await exportKpiScoreDetails(exportParams());
+    saveBlob(blob, `KPI明细_${dataDate.value || ''}.xlsx`);
+  } catch { ElMessage.error('导出失败'); } finally { exporting.value = ''; }
+}
+
 async function loadData() {
   loading.value = true;
   try {
     const r = await listKpiScoreResults({
       dataDate: dataDate.value || undefined,
       schemeCode: schemeCode.value || undefined,
-      metricCode: metricCode.value || undefined,
       subjectType: subjectType.value || undefined,
       pageNo: pgNo.value, pageSize: pgSize.value
     });
-    rows.value = r?.records || [];
-    total.value = r?.total ?? rows.value.length;
-  } catch {} finally { loading.value = false; }
+    metrics.value = r?.metrics || [];
+    records.value = r?.records || [];
+    total.value = r?.total ?? records.value.length;
+  } catch { metrics.value = []; records.value = []; total.value = 0; } finally { loading.value = false; }
 }
 
-onMounted(() => { loadMetricOptions(); loadData(); });
+onMounted(loadData);
 </script>
 
 <style scoped lang="scss">

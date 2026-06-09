@@ -413,9 +413,22 @@ export function getKpiScoreStats() {
 export function listKpiCalcLogs(params = {}) {
   return call('get', '/perf/kpi-score/logs', { params }, { records: [], total: 0 }).then(unwrapPage);
 }
+// 考核计算记录最大数据日期（进入页面默认选中并展示最新一日）
+export function getLatestKpiCalcLogDate() {
+  return call('get', '/perf/kpi-score/logs/latest-date', {}, null);
+}
 // KPI 计算结果明细(PERF_KPI_SCORE)：维度/指标/对象/得分，按数据日期 + 方案 + 指标过滤分页
+// KPI 计算结果详情（按对象分组）：返回 { metrics:[列定义], records:[对象行], total, pageNo, pageSize }
 export function listKpiScoreResults(params = {}) {
-  return call('get', '/perf/kpi-score/results', { params }, { records: [], total: 0 }).then(unwrapPage);
+  return call('get', '/perf/kpi-score/results', { params }, { metrics: [], records: [], total: 0 });
+}
+// 导出KPI得分（页面透视格式 Excel，blob）
+export function exportKpiScores(params = {}) {
+  return call('get', '/perf/kpi-score/export-scores', { params, responseType: 'blob' }, null);
+}
+// 导出KPI明细数据（PERF_KPI_SCORE 平铺 Excel，blob）
+export function exportKpiScoreDetails(params = {}) {
+  return call('get', '/perf/kpi-score/export-details', { params, responseType: 'blob' }, null);
 }
 // KPI 方案的指标下拉项（仅含该方案配置的指标，含名称）
 export function listKpiSchemeMetrics(schemeCode) {

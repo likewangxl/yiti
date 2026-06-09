@@ -88,7 +88,8 @@
       <el-form ref="trgFormRef" :model="trgDlg.form" :rules="trgRules" label-position="top" size="default">
         <el-form-item label="数据日期" prop="dataDate">
           <el-date-picker v-model="trgDlg.form.dataDate" type="date"
-            value-format="YYYY-MM-DD" style="width:100%" placeholder="选择数据日期" />
+            value-format="YYYY-MM-DD" style="width:100%" placeholder="选择数据日期（不能大于今天）"
+            :disabled-date="trgDlg.disabledDate" />
         </el-form-item>
         <el-form-item label="KPI方案" prop="schemeCode">
           <el-select v-model="trgDlg.form.schemeCode" filterable placeholder="请选择 KPI 方案" style="width:100%">
@@ -166,7 +167,8 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
-  listComputeBatches, triggerCompute, getComputeBatch, getKpiScoreStats, listKpiCalcLogs, listKpiRules, calcKpiScore
+  listComputeBatches, triggerCompute, getComputeBatch, getKpiScoreStats, listKpiCalcLogs, listKpiRules, calcKpiScore,
+  getLatestKpiCalcLogDate
 } from '@/api/perf';
 
 // 后端 PerfRunTaskController 没有 /stats 端点；统计在前端从 rows 派生
@@ -338,7 +340,12 @@ const schemeOptions = [
 ];
 const trgDlg = reactive({
   show: false, saving: false,
-  form: { schemeCode: '', dataDate: new Date().toISOString().slice(0, 10), reason: '' }
+  form: { schemeCode: '', dataDate: new Date().toISOString().slice(0, 10), reason: '' },
+  // el-date-picker disabled-date：禁选今天之后的日期（数据日期不能大于当前日期）
+  disabledDate: (d) => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    return d.getTime() > t.getTime();
+  }
 });
 const trgRules = {
   dataDate:   [{ required: true, message: '请选择数据日期' }],
@@ -395,6 +402,10 @@ function deriveCycle(scheme) {
 }
 async function onConfirmTrigger() {
   try { await trgFormRef.value.validate(); } catch { return; }
+  // 数据日期不能大于当前日期（兜底，防止绕过 disabled-date）
+  const today = new Date().toISOString().slice(0, 10);
+  if (!trgDlg.form.dataDate) return ElMessage.warning('请选择数据日期');
+  if (trgDlg.form.dataDate > today) return ElMessage.warning(`数据日期不能大于今天（${today}）`);
   trgDlg.saving = true;
   try {
     // 后端 /api/perf/kpi-score/calc：先记审计日志，再调用 KPI 计算服务
@@ -462,7 +473,14 @@ async function onRetry(row) {
   } catch { ElMessage.error('重试失败'); }
 }
 
-onMounted(() => { loadSchemeOptions(); reload(); });
+// 进入页面：数据日期默认取计算记录中的最大日期，并展示该日期的数据列表
+async function initDefaultLogDate() {
+  try {
+    const d = await getLatestKpiCalcLogDate();
+    if (d) logQuery.dataDate = d;
+  } catch { /* 无记录或失败：保持空，展示全部 */ }
+}
+onMounted(async () => { loadSchemeOptions(); await initDefaultLogDate(); reload(); });
 </script>
 
 <style lang="scss" scoped>
