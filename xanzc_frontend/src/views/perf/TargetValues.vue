@@ -127,18 +127,21 @@
       <el-form ref="valFormRef" :model="valDlg.form" :rules="valRules" label-width="100px" size="default">
         <el-form-item label="对象" prop="subjectId">
           <el-autocomplete
-            v-model="valDlg.form.subjectId"
+            v-model="valDlg.form.subjectDisplay"
             :fetch-suggestions="querySubjectSuggestions"
             :placeholder="valDlg.form.subjectType === 'ORG'
-              ? '输入机构号或机构名搜索（如 02974000 / 资金财务部）'
+              ? '输入部门编号或机构名搜索（如 02974000 / 资金财务部）'
               : '输入用户名或中文名搜索（如 finance_zhou / 周八）'"
             clearable
             highlight-first-item
             style="width:100%"
+            @select="onSubjectSelect"
+            @clear="onSubjectClear"
           >
             <template #default="{ item }">
               <div style="display:flex; justify-content:space-between; gap:12px;">
-                <span style="font-family: ui-monospace, monospace;">{{ item.value }}</span>
+                <!-- ORG 显示部门编号(item.display)，EMP 显示用户名(item.value) -->
+                <span style="font-family: ui-monospace, monospace;">{{ item.display || item.value }}</span>
                 <span style="color:#999;">{{ item.label }}</span>
               </div>
             </template>
@@ -170,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
@@ -276,10 +279,13 @@ function querySubjectSuggestions(query, cb) {
       }
     }
   } else if (dim === 'ORG') {
+    // 下拉内容展示「部门编号 + 机构名称」；入库 value 仍为机构编号（内部 org_code）
     for (const [code, name] of orgMap.value) {
       const nm = name || '';
-      if (!q || code.toLowerCase().includes(q) || nm.toLowerCase().includes(q)) {
-        out.push({ value: code, label: nm });
+      const deptNo = String(orgDeptMap.value.get(code) ?? '');
+      if (!q || code.toLowerCase().includes(q) || nm.toLowerCase().includes(q)
+          || deptNo.toLowerCase().includes(q)) {
+        out.push({ value: code, label: nm, display: deptNo || code });
         if (out.length >= 50) break;
       }
     }
@@ -558,7 +564,8 @@ function inferCycleKey() {
 const valFormRef = ref(null);
 const valDlg = reactive({
   show: false, saving: false,
-  form: { subjectType: 'EMP', subjectId: '', metricCode: '', targetValue: 0, baseValue: null }
+  // subjectDisplay 仅用于输入框展示（ORG=部门编号+机构名称），subjectId 才是入库值（机构编号/工号）
+  form: { subjectType: 'EMP', subjectId: '', subjectDisplay: '', metricCode: '', targetValue: 0, baseValue: null }
 });
 // subjectType 不再在 UI 暴露：openCreateRow 从 currentPlan.targetDim 自动赋值
 const valRules = {
@@ -585,13 +592,34 @@ async function openCreateRow() {
   // 维度从当前方案（H1 副标题展示的那条）的 targetDim 取，兜底 EMP
   const dim = currentPlan.value?.targetDim || 'EMP';
   Object.assign(valDlg.form, {
-    subjectType: dim, subjectId: '',
+    subjectType: dim, subjectId: '', subjectDisplay: '',
     metricCode: '', targetValue: 0, baseValue: null
   });
   // 确保指标下拉已按当前方案的 KPI 指标项过滤就绪
   await loadKpiMetricCodes();
   valDlg.show = true;
 }
+// 对象输入框：展示文本(subjectDisplay) 与 入库值(subjectId) 解耦
+let subjectSelecting = false;
+/** 从下拉选中：入库 subjectId=机构编号/工号；ORG 输入框展示「部门编号 机构名称」，EMP 展示工号 */
+function onSubjectSelect(item) {
+  subjectSelecting = true;
+  valDlg.form.subjectId = item.value;
+  valDlg.form.subjectDisplay = valDlg.form.subjectType === 'ORG'
+    ? `${item.display || item.value} ${item.label}`.trim()
+    : item.value;
+  nextTick(() => { subjectSelecting = false; });
+}
+function onSubjectClear() {
+  valDlg.form.subjectId = '';
+  valDlg.form.subjectDisplay = '';
+}
+// 手动键入（非下拉选择）：EMP 直接作为工号；ORG 必须从下拉选择，键入仅作筛选文本 → 清空已选编号
+watch(() => valDlg.form.subjectDisplay, (val) => {
+  if (subjectSelecting) return;
+  valDlg.form.subjectId = valDlg.form.subjectType === 'EMP' ? (val || '').trim() : '';
+});
+
 async function onSaveValue() {
   try { await valFormRef.value.validate(); } catch { return; }
   if (!f.planId) {

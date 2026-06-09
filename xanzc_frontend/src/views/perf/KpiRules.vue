@@ -121,11 +121,28 @@
           权重合计：{{ weightSum.toFixed(0) }}% {{ weightSum === 100 ? '✓' : '' }}
         </span>
       </div>
-      <el-table :data="dlg.items" size="default" border>
-        <!-- 维度：默认员工；切换维度动态过滤下方指标下拉内容。已配置项与指标一样锁定 -->
+      <!-- default-expand-all：SQL 表达式作为展开行单独占满一行编辑/展示 -->
+      <el-table :data="dlg.items" size="default" border default-expand-all>
+        <!-- 展开行：SQL 表达式（支持 #{slot} 占位符），单独一行全宽编辑 -->
+        <el-table-column type="expand">
+          <template #default="{row}">
+            <div class="sql-expr-row">
+              <span class="sql-expr-label">SQL 表达式 (支持 #{slot} 占位符)</span>
+              <el-input
+                v-model="row.sqlExpr"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 8 }"
+                :disabled="dlg.readOnly"
+                :placeholder="dlg.readOnly ? '' : '如 SELECT LEAST(:maxScore, GREATEST(:minScore, :actual / NULLIF(:target,0) * :weight)) AS kpi_value'"
+                @focus="onSqlFocus($event, row)"
+              />
+            </div>
+          </template>
+        </el-table-column>
+        <!-- 维度：默认员工；切换维度动态过滤下方指标下拉内容。编辑时允许修改（改维度会清空指标重选） -->
         <el-table-column label="维度" width="110">
           <template #default="{row}">
-            <el-select v-model="row.baseDim" :disabled="dlg.readOnly || (!!dlg.editingId && !!row.id)"
+            <el-select v-model="row.baseDim" :disabled="dlg.readOnly"
               placeholder="维度" style="width:100%" @change="onDimChange(row)">
               <el-option value="EMP" label="员工" />
               <el-option value="ORG" label="机构" />
@@ -135,8 +152,8 @@
         </el-table-column>
         <el-table-column label="指标" min-width="190">
           <template #default="{row}">
-            <!-- 编辑方案时，已配置指标项的"指标"不允许修改（仅新增项可选；权重/计分等仍可改）-->
-            <el-select v-model="row.metricCode" :disabled="dlg.readOnly || (!!dlg.editingId && !!row.id)" filterable placeholder="选择指标" style="width:100%">
+            <!-- 编辑方案时允许改指标：若已配置项换了指标，保存时按"删旧+新增"处理 -->
+            <el-select v-model="row.metricCode" :disabled="dlg.readOnly" filterable placeholder="选择指标" style="width:100%">
               <el-option v-for="m in metricsByDim(row.baseDim)" :key="m.metricCode"
                 :value="m.metricCode" :label="`${m.metricName}`" />
             </el-select>
@@ -158,11 +175,6 @@
             <el-input-number v-model="row.minScore" :disabled="dlg.readOnly" :precision="0" :controls="false" style="width:100%" />
           </template>
         </el-table-column>
-        <el-table-column label="计分公式" min-width="280">
-          <template #default="{row}">
-            <el-input v-model="row.formula" :disabled="dlg.readOnly" :placeholder="dlg.readOnly ? '' : '如 min(actual / target * 100, 120)'" />
-          </template>
-        </el-table-column>
         <el-table-column v-if="!dlg.readOnly" label="操作" width="70" align="center" fixed="right">
           <template #default="{$index}">
             <el-button link type="danger" size="small" @click="dlg.items.splice($index, 1)">删除</el-button>
@@ -172,14 +184,19 @@
 
       <el-button v-if="!dlg.readOnly" plain @click="addItemRow" style="margin-top:10px">+ 添加指标</el-button>
 
-      <!-- 计分公式可用变量提示 -->
-      <div class="formula-hint">
-        <strong>计分公式可用变量：</strong>
-        <code>actual</code> <span class="dim">（实际值）</span>·
-        <code>target</code> <span class="dim">（目标值）</span>·
-        <code>base</code> <span class="dim">（基础值）</span>·
-        <code>complete_rate</code> <span class="dim">（完成率）</span>·
-        <span class="dim">KPI完成率 = 实际值 ÷ 目标值 × 权重；超过计分上/下限时用 min / max 取上限 / 下限分值，例：min(max(actual / target * 权重, 计分下限), 计分上限)</span>
+      <!-- SQL 可用变量提示（参考指标编辑）：点击占位符插入到 SQL 表达式光标处 -->
+      <div class="sql-date-macros" style="margin-top:12px">
+        <div class="hint-title">可用变量（点击插入到 SQL 光标处；后端按 dataDate 自动计算注入）</div>
+        <table class="hint-table">
+          <tr><th style="width:180px">SQL 占位符</th><th>含义</th></tr>
+          <tr v-for="m in SQL_MACROS" :key="m.token">
+            <td>
+              <code class="macro-btn" @mousedown.prevent="insertMacro(m.token)" :title="`点击插入 ${m.token}`">{{ m.token }}</code>
+            </td>
+            <td>{{ m.desc }}</td>
+          </tr>
+        </table>
+        <div class="hint-foot">结果列只需含 <code>kpi_value</code>(KPI得分)；对象id 由系统按行传入，无需在 SQL 中返回。</div>
       </div>
 
       <template #footer>
@@ -194,7 +211,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   listKpiRules, getKpiSchemeDetail,
@@ -373,6 +390,42 @@ async function loadOrgTree() {
   } catch { orgTreeData.value = []; }
 }
 
+// SQL 表达式可用变量：数据日期（后端按 dataDate 注入）+ 当前 KPI 指标项配置值（权重/计分上下限/目标值/基础值）
+const SQL_MACROS = [
+  { token: ':dataDate', desc: '数据日期（由调度/计算传入）' },
+  { token: ':weight',   desc: '权重' },
+  { token: ':maxScore', desc: '计分上限' },
+  { token: ':minScore', desc: '计分下限' },
+  { token: ':actual',   desc: '实际值' },
+  { token: ':target',   desc: '目标值' },
+  { token: ':base',     desc: '基础值' }
+];
+
+// 当前聚焦的 SQL 表达式 textarea 与所属行（点击占位符时定位插入点）
+let activeSqlTa = null;
+let activeSqlRow = null;
+/** 记录聚焦的 SQL 表达式输入框（@focus 的 target 即内部 textarea） */
+function onSqlFocus(e, row) {
+  activeSqlTa = e?.target || null;
+  activeSqlRow = row;
+}
+/** 把占位符插到当前 SQL 表达式光标处；未聚焦时提示先点输入框 */
+function insertMacro(token) {
+  if (dlg.readOnly) return;
+  if (!activeSqlRow) { ElMessage.info('请先点击要插入的 SQL 表达式输入框'); return; }
+  const cur = activeSqlRow.sqlExpr || '';
+  const ta = activeSqlTa;
+  const start = ta?.selectionStart ?? cur.length;
+  const end = ta?.selectionEnd ?? start;
+  activeSqlRow.sqlExpr = cur.slice(0, start) + token + cur.slice(end);
+  nextTick(() => {
+    if (!ta) return;
+    ta.focus();
+    const pos = start + token.length;
+    ta.setSelectionRange(pos, pos);
+  });
+}
+
 const metricOptions = ref([]);
 async function ensureMetrics() {
   if (metricOptions.value.length) return;
@@ -401,7 +454,7 @@ function onDimChange(row) {
 
 function defaultItem() {
   // 默认维度为员工，指标下拉默认展示员工指标
-  return { id: null, baseDim: 'EMP', metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, formula: '' };
+  return { id: null, baseDim: 'EMP', metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, formula: '', sqlExpr: '' };
 }
 function addItemRow() {
   dlg.items.push(defaultItem());
@@ -438,12 +491,15 @@ async function openEdit(row, readOnly = false) {
     // 维度优先用后端固化值，缺失时再按所选指标回推，保证已选指标落在过滤后的下拉列表内
     baseDim: it.baseDim || metricBaseDim(it.metricCode),
     metricCode: it.metricCode,
-    weight: Number(it.weight) || 0,
+    // 权重入库为小数（占比，sum=1），页面按百分比展示 → 读取 ×100
+    weight: Math.round((Number(it.weight) || 0) * 100),
     multiplier: Number(it.multiplier) || 1,
     minScore: Number(it.minScore) || 0,
     maxScore: Number(it.maxScore) || 120,
     // 计分公式以后端持久化值为准；留空就保持空（不再兜底默认串），由必输校验拦截
-    formula: it.formula || ''
+    formula: it.formula || '',
+    // SQL 表达式（支持 #{slot} 占位符）：后端固化后回显，当前以返回值为准
+    sqlExpr: it.sqlExpr || ''
   }));
   dlg.items = items;
   dlg.origItemMap = new Map(items.map(it => [it.id, { ...it }]));
@@ -461,7 +517,6 @@ async function onSave(targetStatus) {
   if (!dlg.items.length) return ElMessage.warning('至少添加 1 个指标');
   for (let i = 0; i < dlg.items.length; i++) {
     if (!dlg.items[i].metricCode) return ElMessage.warning(`第 ${i + 1} 行：请选择指标`);
-    if (!String(dlg.items[i].formula || '').trim()) return ElMessage.warning(`第 ${i + 1} 行：请填写计分公式`);
   }
   // 走一次 el-form 的中文必填校验（schemeFormRef）
   try { await schemeFormRef.value?.validate(); } catch { return; }
@@ -490,23 +545,30 @@ async function onSave(targetStatus) {
           try { await deleteKpiItem(schemeId, oid, '编辑移除'); } catch {}
         }
       }
-      // 新增 / 更新
-      // 后端 UpdateKpiItemReqDTO 仅 4 字段：weight / multiplier / maxScore / minScore（禁带 metricCode）
-      // 后端 AddKpiItemReqDTO 含 metricCode（新增时才需要）
+      // 新增 / 更新 / 换指标
+      // updateKpiItem 不能改 metricCode；已配置项若改了维度/指标 → 删旧 + 新增（指标是项的身份）
       for (const it of dlg.items) {
-        if (it.id) {
+        const orig = it.id ? dlg.origItemMap.get(it.id) : null;
+        const metricChanged = orig && orig.metricCode !== it.metricCode;
+        if (it.id && !metricChanged) {
           await updateKpiItem(schemeId, it.id, {
-            weight: it.weight, multiplier: it.multiplier || 1,
+            weight: it.weight / 100, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
-            formula: it.formula
+            formula: it.formula,
+            sqlExpr: it.sqlExpr
           });
         } else {
+          // 已存在项换了指标：先删旧项（新指标 = 新项身份），再按新指标新增
+          if (it.id && metricChanged) {
+            try { await deleteKpiItem(schemeId, it.id, '编辑换指标'); } catch {}
+          }
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
             baseDim: it.baseDim,
-            weight: it.weight, multiplier: it.multiplier || 1,
+            weight: it.weight / 100, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
-            formula: it.formula
+            formula: it.formula,
+            sqlExpr: it.sqlExpr
           });
         }
       }
@@ -527,9 +589,10 @@ async function onSave(targetStatus) {
           await addKpiItem(schemeId, {
             metricCode: it.metricCode,
             baseDim: it.baseDim,
-            weight: it.weight, multiplier: it.multiplier || 1,
+            weight: it.weight / 100, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
-            formula: it.formula
+            formula: it.formula,
+            sqlExpr: it.sqlExpr
           });
         } catch {}
       }
@@ -653,4 +716,49 @@ onMounted(() => { reload(); loadOrgTree(); });
   }
   .dim { color: $text-3; }
 }
+
+/* SQL 表达式展开行：标签 + 全宽文本框，单独一行 */
+.sql-expr-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 4px 12px 8px;
+}
+.sql-expr-label {
+  flex-shrink: 0;
+  padding-top: 6px;
+  font-size: 13px;
+  color: $text-2;
+  white-space: nowrap;
+}
+.sql-expr-row :deep(.el-textarea) { flex: 1; }
+
+/* SQL 可用变量提示（参考指标编辑 Metrics.vue 的占位符/含义表） */
+.sql-date-macros {
+  background: #f7f9fc;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.sql-date-macros .hint-title { font-weight: 600; color: #303133; margin-bottom: 6px; }
+.sql-date-macros .hint-table { border-collapse: collapse; width: 100%; }
+.sql-date-macros .hint-table th,
+.sql-date-macros .hint-table td {
+  border: 1px solid #ebeef5;
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.sql-date-macros .hint-table th { background: #fafafa; color: #606266; font-weight: 500; }
+.sql-date-macros code { background: #fff5e6; color: #b87600; padding: 0 4px; border-radius: 2px; }
+.sql-date-macros code.macro-btn {
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.sql-date-macros code.macro-btn:hover { background: #ffd591; color: #874d00; box-shadow: 0 0 0 1px #fa8c16; }
+.sql-date-macros code.macro-btn:active { background: #fa8c16; color: #fff; }
+.sql-date-macros .hint-foot { margin-top: 8px; color: #909399; }
 </style>
