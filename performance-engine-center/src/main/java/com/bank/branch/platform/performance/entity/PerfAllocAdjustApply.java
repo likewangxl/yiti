@@ -59,6 +59,18 @@ public class PerfAllocAdjustApply {
     /** 年日均余额（提交时快照）. */
     private BigDecimal yAvgBal;
 
+    /** 贷款-当前余额（提交时快照，MC_005），对应 loan_curr_bal. */
+    private BigDecimal loanCurrBal;
+
+    /** 贷款-较上日余额（提交时快照，MC_006），对应 loan_m_avg_bal. */
+    private BigDecimal loanMAvgBal;
+
+    /** 贷款-年均余额（提交时快照，MC_007），对应 loan_q_avg_bal. */
+    private BigDecimal loanQAvgBal;
+
+    /** 贷款-较上年均余额（提交时快照，MC_008），对应 loan_y_avg_bal. */
+    private BigDecimal loanYAvgBal;
+
     /** 客户类型：CORP / RETAIL. */
     private String custType;
 

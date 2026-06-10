@@ -42,6 +42,22 @@ public class AllocAdjustRespDTO {
     @JsonProperty("yAvgBal")
     private BigDecimal yAvgBal;
 
+    /** 贷款-当前余额（提交时快照，MC_005）. */
+    @JsonProperty("loanCurrBal")
+    private BigDecimal loanCurrBal;
+
+    /** 贷款-较上日余额（提交时快照，MC_006）. */
+    @JsonProperty("loanMAvgBal")
+    private BigDecimal loanMAvgBal;
+
+    /** 贷款-年均余额（提交时快照，MC_007）. */
+    @JsonProperty("loanQAvgBal")
+    private BigDecimal loanQAvgBal;
+
+    /** 贷款-较上年均余额（提交时快照，MC_008）. */
+    @JsonProperty("loanYAvgBal")
+    private BigDecimal loanYAvgBal;
+
     /** 客户类型：CORP / RETAIL. */
     private String custType;
 

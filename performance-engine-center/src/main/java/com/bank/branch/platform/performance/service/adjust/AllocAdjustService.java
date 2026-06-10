@@ -180,6 +180,10 @@ public class AllocAdjustService {
         apply.setMAvgBal(cmd.getMAvgBal());
         apply.setQAvgBal(cmd.getQAvgBal());
         apply.setYAvgBal(cmd.getYAvgBal());
+        apply.setLoanCurrBal(cmd.getLoanCurrBal());
+        apply.setLoanMAvgBal(cmd.getLoanMAvgBal());
+        apply.setLoanQAvgBal(cmd.getLoanQAvgBal());
+        apply.setLoanYAvgBal(cmd.getLoanYAvgBal());
         apply.setCustType(cmd.getCustType());
         apply.setAllocDim(cmd.getAllocDim());
         apply.setBizKind(cmd.getBizKind());
@@ -621,6 +625,10 @@ public class AllocAdjustService {
         dto.setMAvgBal(apply.getMAvgBal());
         dto.setQAvgBal(apply.getQAvgBal());
         dto.setYAvgBal(apply.getYAvgBal());
+        dto.setLoanCurrBal(apply.getLoanCurrBal());
+        dto.setLoanMAvgBal(apply.getLoanMAvgBal());
+        dto.setLoanQAvgBal(apply.getLoanQAvgBal());
+        dto.setLoanYAvgBal(apply.getLoanYAvgBal());
         dto.setCustType(apply.getCustType());
         dto.setAllocDim(apply.getAllocDim());
         dto.setBizKind(apply.getBizKind());

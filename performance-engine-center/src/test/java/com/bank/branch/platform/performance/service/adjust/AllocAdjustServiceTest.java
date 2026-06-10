@@ -184,6 +184,35 @@ class AllocAdjustServiceTest {
     }
 
     @Test
+    @DisplayName("submit 落库贷款余额快照 loanCurrBal/loanMAvgBal/loanQAvgBal/loanYAvgBal")
+    void submit_persistsLoanBalanceSnapshot() {
+        when(workflowApi.startProcess(any(StartProcessCmd.class)))
+                .thenReturn(new WorkflowLaunchResp("PI_LOAN", null, null));
+
+        SubmitAllocAdjustCmd cmd = SubmitAllocAdjustCmd.builder()
+                .custId("CN-001").allocDim("RULE").bizKind("CORP_LOAN")
+                .ownerOrgId("ORG_001").applicant("admin").reason("年度岗位调整")
+                .items(Arrays.asList(
+                        SubmitAllocAdjustCmd.Item.builder().empId("EMP_A").ratio(new BigDecimal("60.00")).build(),
+                        SubmitAllocAdjustCmd.Item.builder().empId("EMP_B").ratio(new BigDecimal("40.00")).build()))
+                .loanCurrBal(new BigDecimal("100.00"))
+                .loanMAvgBal(new BigDecimal("200.00"))
+                .loanQAvgBal(new BigDecimal("300.00"))
+                .loanYAvgBal(new BigDecimal("400.00"))
+                .build();
+
+        service.submit(cmd);
+
+        ArgumentCaptor<PerfAllocAdjustApply> cap = ArgumentCaptor.forClass(PerfAllocAdjustApply.class);
+        verify(applyMapper).insert(cap.capture());
+        PerfAllocAdjustApply apply = cap.getValue();
+        assertThat(apply.getLoanCurrBal()).isEqualByComparingTo("100.00");
+        assertThat(apply.getLoanMAvgBal()).isEqualByComparingTo("200.00");
+        assertThat(apply.getLoanQAvgBal()).isEqualByComparingTo("300.00");
+        assertThat(apply.getLoanYAvgBal()).isEqualByComparingTo("400.00");
+    }
+
+    @Test
     @DisplayName("同客户同维度已有审批中申请 → 抛 ALLOC_ADJUST_APPLY_RUNNING，不发起流程/不落库，消息不重复")
     void submit_inApprovalExistsForSameCustomerAndDim_throws() {
         // 同一客户编号(CN-001) + 同维度(RULE)已存在 IN_APPROVAL 状态的调整申请（去重按 cust_no）
