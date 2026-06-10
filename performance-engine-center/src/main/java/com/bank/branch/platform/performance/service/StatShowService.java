@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.customer.api.CustomerQueryApi;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.mapper.StatShowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,9 @@ public class StatShowService {
     private static final int MAX_PAGE_SIZE = 200;
 
     private final StatShowMapper statShowMapper;
+
+    /** 客户主档查询（跨模块 *Api）：客户名称按编号反显改从 CUST_MASTER 取数. */
+    private final CustomerQueryApi customerQueryApi;
 
     /**
      * 分页查询员工维度财务统计展示表.
@@ -102,6 +107,28 @@ public class StatShowService {
             return Optional.empty();
         }
         return Optional.of(custName);
+    }
+
+    /**
+     * 按客户编号从客户主档 {@code CUST_MASTER} 查询客户名称（新建调整申请页客户名称反显）。
+     *
+     * <p>替代原 {@link #getCustNameByCustId(String)} 从外部统计表 XAN_M98_CUST_STAT_SHOW3 取名的方式，
+     * 改走客户营销中心 {@link CustomerQueryApi#getCustomerByCustNo(String)}（cust_master.cust_no 列）。
+     * custNo 为空、客户主档无该编号或名称为空白均返回 {@link Optional#empty()}（永不返回空白名）。</p>
+     *
+     * @param custNo 客户编号（cust_master.cust_no）
+     * @return 客户名称（去空白后非空）；客户主档无匹配时 empty
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> getCustNameFromMaster(String custNo) {
+        if (custNo == null || custNo.isBlank()) {
+            return Optional.empty();
+        }
+        Optional<String> name = customerQueryApi.getCustomerByCustNo(custNo.trim())
+                .map(CustomerDTO::getCustName)
+                .filter(n -> n != null && !n.isBlank());
+        log.debug("[StatShowService.getCustNameFromMaster] custNo={}, hit={}", custNo, name.isPresent());
+        return name;
     }
 
     /** pageSize 归一化：缺省 20，上限 200，下限 1. */

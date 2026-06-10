@@ -62,9 +62,10 @@
         <el-table-column label="基础值" width="160" align="right">
           <template #default="{row}">{{ row.baseValue != null ? fmtNum(row.baseValue) : '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openAdjust(row)">修改</el-button>
+            <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -81,7 +82,7 @@
       </div>
 
       <el-alert type="info" :closable="false" show-icon style="margin-top:14px"
-        title="目标修正保存后立即生效，并触发 KPI 历史回算（生成新批次 CALC-YYMMDD-xxx）。" />
+        title="目标修正保存后立即生效，手动触发 KPI 历史回算。" />
     </div>
 
     <!-- 修正弹框：截图 180 -->
@@ -175,10 +176,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import {
   listTargets, listTargetValues, upsertTargetValue, batchUpsertTargetValues,
-  submitTargetAdjust, listMetrics,
+  submitTargetAdjust, listMetrics, deleteTargetValue,
   listKpiRules, getKpiSchemeDetail
 } from '@/api/perf';
 import { listUsers } from '@/api/users';
@@ -194,8 +195,8 @@ const router   = useRouter();
 const canTargetAdjust = computed(() => {
   const roles = userStore.user?.roles || [];
   const codes = roles.map(r => (typeof r === 'string' ? r : (r.roleId || r.roleCode)));
-  return codes.some(c => c === 'R_BACK_FINANCE' || c === 'BACK_FINANCE'
-                       || c === 'R_ADMIN' || c === 'SYS_ADMIN');
+  return codes.some(c => c === '238' || c === 'BACK_FINANCE'   // role_id：资财部经办人=238
+                       || c === '1' || c === 'SYS_ADMIN');       // role_id：系统管理员=1
 });
 
 // 返回上一级（目标管理主页）；用 router 不直接 location.href，保持 SPA 路由栈
@@ -223,6 +224,7 @@ async function loadKpiMap() {
 const empMap    = ref(new Map()); // empId → { name, orgName, orgCode }
 const orgMap    = ref(new Map()); // orgCode(内部机构编码) → orgName
 const orgDeptMap = ref(new Map()); // orgCode(内部机构编码) → deptNo(业务机构部门编号)
+const orgDeptToCode = ref(new Map()); // deptNo(EXT_ORG_INFO.DEPT_NO 业务机构部门编号) → orgCode(内部机构编码)
 const metricMap = ref(new Map()); // metricCode → metricName
 
 async function loadEmpMap() {
@@ -248,18 +250,23 @@ async function loadOrgMap() {
     const tree = await getOrgTree();
     const m = new Map();
     const dm = new Map();
-    // getOrgTree 节点形态 { code:内部机构编码, name:机构名, deptNo:业务机构部门编号 }
+    const d2c = new Map();
+    // getOrgTree 节点形态 { code:内部机构编码, name:机构名, deptNo:业务机构部门编号(EXT_ORG_INFO.DEPT_NO) }
     const walk = (n) => {
       if (!n) return;
       if (n.code) {
         m.set(n.code, n.name);
-        if (n.deptNo != null && n.deptNo !== '') dm.set(n.code, n.deptNo);
+        if (n.deptNo != null && n.deptNo !== '') {
+          dm.set(n.code, n.deptNo);
+          d2c.set(String(n.deptNo).trim(), n.code); // 反查：业务机构部门编号 → 内部机构编码
+        }
       }
       (n.children || []).forEach(walk);
     };
     (Array.isArray(tree) ? tree : []).forEach(walk);
     orgMap.value = m;
     orgDeptMap.value = dm;
+    orgDeptToCode.value = d2c;
   } catch {}
 }
 
@@ -481,6 +488,24 @@ const adjRules = {
   newValue: [{ required: true, message: '请填写修正后的目标值' }],
   reason:   [{ required: true, message: '请填写修正原因（将记入审批日志）', trigger: 'blur' }]
 };
+// 删除目标值：二次确认 → 物理删除 → 刷新列表
+async function onDelete(row) {
+  if (!row?.id) return ElMessage.warning('该行缺少 id，无法删除');
+  try {
+    await ElMessageBox.confirm(
+      `确定删除「${row.subjectName || row.subjectId || ''} · ${row.metricCode || ''}」的目标值吗？删除后不可恢复。`,
+      '删除确认',
+      { type: 'warning', confirmButtonText: '确定删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' }
+    );
+  } catch { return; } // 用户取消
+  try {
+    await deleteTargetValue(row.id);
+    ElMessage.success('已删除');
+    loadValues();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '删除失败');
+  }
+}
 function openAdjust(row) {
   // 防御：未选目标方案时提交会报"planId 必填"
   if (!f.planId) {
@@ -675,6 +700,8 @@ async function onImportFileSelected(e) {
   if (!file) return;
   const plan = currentPlan.value;
   if (!plan) { ElMessage.warning('当前方案信息缺失'); return; }
+  // 全屏加载遮罩：解析 Excel + 校验 + 批量入库期间显示「正在导入」旋转图标，表示处理中
+  const loading = ElLoading.service({ lock: true, text: '正在导入目标值，请稍候…', background: 'rgba(0, 0, 0, 0.6)' });
   try {
     const XLSX = await import('xlsx');
     const ab = await file.arrayBuffer();
@@ -690,7 +717,7 @@ async function onImportFileSelected(e) {
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
       if (!r || !r[1]) continue;
-      const subjectId = String(r[1]).trim();
+      let subjectId = String(r[1]).trim();
       const metricNameRaw = String(r[2] || '').trim();
       const targetValue = Number(r[3]);
       const baseValue = r[4] != null && r[4] !== '' ? Number(r[4]) : null;
@@ -702,8 +729,14 @@ async function onImportFileSelected(e) {
       if (dim === 'EMP' && !empMap.value.has(subjectId)) {
         errors.push(`第${i + 1}行: 员工「${subjectId}」在系统中不存在`); continue;
       }
-      if (dim === 'ORG' && !orgMap.value.has(subjectId)) {
-        errors.push(`第${i + 1}行: 机构「${subjectId}」在系统中不存在`); continue;
+      if (dim === 'ORG') {
+        // 机构号按 EXT_ORG_INFO.DEPT_NO（业务机构部门编号）校验匹配；命中后转换为内部机构编码入库，
+        // 与单条新增/对象列展示/KPI 计算的 subject_id（内部机构编码）口径保持一致
+        const code = orgDeptToCode.value.get(subjectId);
+        if (!code) {
+          errors.push(`第${i + 1}行: 机构号「${subjectId}」在机构信息(EXT_ORG_INFO.DEPT_NO)中不存在`); continue;
+        }
+        subjectId = code;
       }
       // 按指标名称反查 metricCode（仅匹配 ACTIVE 状态 + 维度匹配）
       const m = metricOptions.value.find(x => x.metricName === metricNameRaw && x.status === 'ACTIVE' && (!x.baseDim || x.baseDim === dim));
@@ -740,6 +773,7 @@ async function onImportFileSelected(e) {
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '导入失败');
   } finally {
+    loading.close();
     importFileRef.value.value = '';
   }
 }

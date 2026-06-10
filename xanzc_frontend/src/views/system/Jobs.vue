@@ -61,6 +61,15 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="执行人" width="130">
+          <template #default="{row}">
+            <template v-if="row.triggerType === 'MANUAL'">
+              <div>{{ row.operatorName || row.createdBy || '-' }}</div>
+              <div v-if="row.createdBy" style="color:#909399;font-size:12px;">{{ row.createdBy }}</div>
+            </template>
+            <span v-else style="color:#909399;">系统</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="startTime" label="开始时间" width="170" :formatter="fmtDateTimeCol" />
         <el-table-column prop="endTime" label="结束时间" width="170" :formatter="fmtDateTimeCol" />
         <el-table-column label="耗时(ms)" width="100" align="right">
@@ -96,12 +105,32 @@
         <el-button @click="logDlg.show = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 手动触发确认：数据日期(必输,不大于今天) + 触发原因(必输)；计算类任务按所选日期启动 -->
+    <el-dialog v-model="trgDlg.show" title="手动触发确认" width="480px" :close-on-click-modal="false">
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px"
+        :title="`手动触发任务 ${trgDlg.jobKey} 属高危操作；计算类任务（指标/KPI 计算）将按所选数据日期启动计算。`" />
+      <el-form label-width="90px" size="default">
+        <el-form-item label="数据日期" required>
+          <el-date-picker v-model="trgDlg.dataDate" type="date" value-format="YYYY-MM-DD"
+            style="width:100%" placeholder="选择数据日期（不能大于今天）" :disabled-date="trgDlg.disabledDate" />
+        </el-form-item>
+        <el-form-item label="触发原因" required>
+          <el-input v-model="trgDlg.reason" type="textarea" :rows="3" maxlength="500" show-word-limit
+            placeholder="请输入触发原因（必填，将记入审计日志）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="trgDlg.show = false">取消</el-button>
+        <el-button type="primary" :loading="trgDlg.saving" @click="confirmTrigger">确认触发</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { listJobs, pauseJob, resumeJob, triggerJob, listJobLogs } from '@/api/system';
 
@@ -145,24 +174,33 @@ async function onPause(row) {
 async function onResume(row) {
   try { await resumeJob(row.id); ElMessage.success('已恢复'); reload(); } catch {}
 }
-async function onTrigger(row) {
-  let reason = '';
+// 手动触发确认弹框：数据日期(必输,不大于今天) + 触发原因(必输)
+const trgDlg = reactive({
+  show: false, saving: false,
+  jobId: '', jobKey: '',
+  dataDate: new Date().toISOString().slice(0, 10),
+  reason: '',
+  // el-date-picker disabled-date：禁选今天之后（数据日期不能大于当前日期）
+  disabledDate: (d) => { const t = new Date(); t.setHours(0, 0, 0, 0); return d.getTime() > t.getTime(); }
+});
+function onTrigger(row) {
+  trgDlg.jobId = row.id;
+  trgDlg.jobKey = row.jobKey;
+  trgDlg.dataDate = new Date().toISOString().slice(0, 10);
+  trgDlg.reason = '';
+  trgDlg.show = true;
+}
+async function confirmTrigger() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!trgDlg.dataDate) return ElMessage.warning('请选择数据日期');
+  if (trgDlg.dataDate > today) return ElMessage.warning(`数据日期不能大于今天（${today}）`);
+  if (!trgDlg.reason.trim()) return ElMessage.warning('请填写触发原因');
+  trgDlg.saving = true;
   try {
-    const { value } = await ElMessageBox.prompt(
-      `手动触发任务 <b>${row.jobKey}</b> 属高危操作，请填写触发原因：`,
-      '手动触发确认',
-      {
-        dangerouslyUseHTMLString: true,
-        inputPlaceholder: '请输入触发原因（必填）',
-        inputValidator: (v) => v && v.trim() ? true : '原因不能为空',
-        confirmButtonText: '确认触发',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    );
-    reason = value.trim();
-  } catch { return; }
-  try { await triggerJob(row.id, reason); ElMessage.success('已触发'); } catch {}
+    await triggerJob(trgDlg.jobId, trgDlg.reason.trim(), trgDlg.dataDate);
+    ElMessage.success('已触发');
+    trgDlg.show = false;
+  } catch { /* call 内部已提示 */ } finally { trgDlg.saving = false; }
 }
 
 // === 日志弹窗 ===

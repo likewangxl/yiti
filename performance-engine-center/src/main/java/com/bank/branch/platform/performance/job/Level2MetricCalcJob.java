@@ -23,7 +23,8 @@ public class Level2MetricCalcJob extends QuartzJobBean {
 
     @Override
     protected void executeInternal(JobExecutionContext context) {
-        LocalDate dataDate = LocalDate.now().minusDays(1);
+        // 手动触发按指定数据日期；cron 自动触发回退昨日
+        LocalDate dataDate = JobTriggerParams.dataDate(context);
         log.info(">>>>>>>>>> 【2级指标定时任务】触发执行，数据日期={} <<<<<<<<<<", dataDate);
         try {
             metricBatchCalcService.execute(2, dataDate);

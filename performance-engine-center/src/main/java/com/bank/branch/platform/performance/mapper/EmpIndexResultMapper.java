@@ -58,6 +58,20 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                          @Param("value") BigDecimal value);
 
     /**
+     * 清空指定数据日期+版本下某 slot 的全部员工指标值（落库前清理，避免上一轮残留主体的脏数据）.
+     *
+     * <p>SQL：{@code UPDATE EMP_INDEX_RESULT SET val_{slot}=NULL WHERE data_date=#{dataDate} AND version=#{version}}。
+     * 仅置空该 slot 列，不影响同行其它指标列；之后由 {@link #insertSlotValue} 重新写入本轮结果。
+     *
+     * @param dataDate 数据日期
+     * @param version  数据版本
+     * @param slot     值槽（1..200）
+     */
+    void clearSlot(@Param("dataDate") LocalDate dataDate,
+                   @Param("version") String version,
+                   @Param("slot") Integer slot);
+
+    /**
      * 查询员工在指定 slot 上的指标值.
      *
      * @param empId    员工工号
@@ -70,6 +84,20 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                @Param("dataDate") LocalDate dataDate,
                                @Param("version") String version,
                                @Param("slot") Integer slot);
+
+    /**
+     * 查询员工在指定 slot 上的指标值（不限版本，只按 empId + dataDate，多版本取 updated_time 最新）。
+     * <p>供动态指标查询使用：动态查询不区分版本，只看数据日期；KPI 计算等仍走带 version 的
+     * {@link #selectSlotValue}。</p>
+     *
+     * @param empId    员工工号
+     * @param dataDate 数据日期
+     * @param slot     值槽（1..400，<strong>调用方必须校验</strong>）
+     * @return slot 值，行不存在或该槽未赋值返回 null
+     */
+    BigDecimal selectSlotValueNoVersion(@Param("empId") String empId,
+                                        @Param("dataDate") LocalDate dataDate,
+                                        @Param("slot") Integer slot);
 
     /**
      * 按 empIds 批量查询同一 slot 值.

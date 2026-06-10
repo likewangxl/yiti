@@ -26,10 +26,13 @@ public class KpiScoreCalcJob extends QuartzJobBean {
 
     @Override
     protected void executeInternal(JobExecutionContext context) {
-        LocalDate dataDate = LocalDate.now().minusDays(1);
-        log.info(">>>>>>>>>> 【KPI分值定时任务】触发执行，数据日期={} <<<<<<<<<<", dataDate);
+        // 手动触发携带 dataDate / triggerType / 触发人时按之执行；cron 自动触发回退昨日 + AUTO
+        LocalDate dataDate = JobTriggerParams.dataDate(context);
+        String triggerType = JobTriggerParams.triggerType(context);
+        String operatorEmpId = JobTriggerParams.operatorEmpId(context);
+        log.info(">>>>>>>>>> 【KPI分值定时任务】触发执行，数据日期={}，触发方式={} <<<<<<<<<<", dataDate, triggerType);
         try {
-            kpiScoreCalcService.calculate(dataDate, null, "AUTO", null);
+            kpiScoreCalcService.calculate(dataDate, null, triggerType, operatorEmpId);
             log.info(">>>>>>>>>> 【KPI分值定时任务】执行完成 <<<<<<<<<<");
         } catch (Exception e) {
             // 任务失败原因已落 PERF_METRIC_CALC_TASK，这里仅记录不再抛（避免 Quartz misfire 重试风暴）

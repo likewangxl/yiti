@@ -1033,8 +1033,21 @@ async function onSave(targetStatus) {
       ElMessage.success(targetStatus === 'ACTIVE' ? '已新增并发布' : '已保存为草稿');
     }
     dlg.show = false;
-    await reload();
-    onPick(dlg.editing || dlg.form.metricCode);
+    if (dlg.editing) {
+      // 编辑保存：只刷新被编辑的指标，不整树重载——原地更新该指标在列表里的名称/状态，
+      // 树是 allMetrics 派生的 computed，仅这一个叶子节点的标签/状态标签会变（编辑不改维度/分类，
+      // el-tree node-key=id 保留展开与选中状态）；右侧详情单独按编号重新拉取。
+      const edited = allMetrics.value.find(m => m.metricCode === dlg.editing);
+      if (edited) {
+        edited.metricName = dlg.form.metricName;
+        edited.status = targetStatus;
+      }
+      onPick(dlg.editing);
+    } else {
+      // 新增：需要后端分配的槽位/编号，整列表重载后定位到新指标
+      await reload();
+      onPick(dlg.form.metricCode);
+    }
   } catch {} finally { dlg.saving = false; }
 }
 

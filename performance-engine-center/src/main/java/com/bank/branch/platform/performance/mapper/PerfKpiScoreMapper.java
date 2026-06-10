@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * KPI 计分明细结果 Mapper（PERF_KPI_SCORE）.
@@ -37,4 +38,59 @@ public interface PerfKpiScoreMapper extends BaseMapper<PerfKpiScore> {
      */
     long countByDateAndScheme(@Param("dataDate") LocalDate dataDate,
                               @Param("schemeCode") String schemeCode);
+
+    /**
+     * 删除某数据日期 + 方案的全部计分明细（计算结果落库前先清理，避免上一轮残留的脏数据）.
+     *
+     * <p>SQL：{@code DELETE FROM PERF_KPI_SCORE WHERE data_date=#{dataDate} AND scheme_code=#{schemeCode}}。
+     * 在 {@code calcOneScheme} 开头调用，删除后再 upsert 本轮计算结果。
+     *
+     * @param dataDate   数据日期
+     * @param schemeCode 方案编码
+     * @return 删除行数
+     */
+    int deleteByDateAndScheme(@Param("dataDate") LocalDate dataDate,
+                              @Param("schemeCode") String schemeCode);
+
+    /**
+     * 统计某数据日期 + 方案下去重后的对象数（按 subject_id + subject_type group by）.
+     *
+     * @param dataDate    数据日期
+     * @param schemeCode  方案编码
+     * @param subjectType 对象类型过滤（可空=全部维度）
+     * @return 对象总数
+     */
+    long countSubjectGroups(@Param("dataDate") LocalDate dataDate,
+                            @Param("schemeCode") String schemeCode,
+                            @Param("subjectType") String subjectType,
+                            @Param("scope") KpiScopeFilter scope);
+
+    /**
+     * 按对象分组分页：每个对象一行（对象ID/类型 + 该对象所有指标 score 合计），按对象ID排序.
+     *
+     * @param dataDate    数据日期
+     * @param schemeCode  方案编码
+     * @param subjectType 对象类型过滤（可空）
+     * @param offset      偏移
+     * @param size        条数
+     * @return 对象分组行
+     */
+    List<KpiSubjectGroupRow> selectSubjectGroups(@Param("dataDate") LocalDate dataDate,
+                                                 @Param("schemeCode") String schemeCode,
+                                                 @Param("subjectType") String subjectType,
+                                                 @Param("scope") KpiScopeFilter scope,
+                                                 @Param("offset") int offset,
+                                                 @Param("size") int size);
+
+    /**
+     * 取指定对象集合（当前页对象）在某数据日期 + 方案下的全部指标计分行.
+     *
+     * @param dataDate   数据日期
+     * @param schemeCode 方案编码
+     * @param subjects   对象集合（subjectType + subjectId 对）
+     * @return 计分明细行（含所有指标）
+     */
+    List<PerfKpiScore> selectByDateSchemeSubjects(@Param("dataDate") LocalDate dataDate,
+                                                  @Param("schemeCode") String schemeCode,
+                                                  @Param("subjects") List<KpiSubjectGroupRow> subjects);
 }

@@ -43,6 +43,22 @@ public class AllocAdjustCreateReqDTO {
     @JsonProperty("yAvgBal")
     private BigDecimal yAvgBal;
 
+    /** 贷款-当前余额（MC_005，前端反显，提交时快照入库）. */
+    @JsonProperty("loanCurrBal")
+    private BigDecimal loanCurrBal;
+
+    /** 贷款-较上日余额（MC_006，前端反显，提交时快照入库）. */
+    @JsonProperty("loanMAvgBal")
+    private BigDecimal loanMAvgBal;
+
+    /** 贷款-年均余额（MC_007，前端反显，提交时快照入库）. */
+    @JsonProperty("loanQAvgBal")
+    private BigDecimal loanQAvgBal;
+
+    /** 贷款-较上年均余额（MC_008，前端反显，提交时快照入库）. */
+    @JsonProperty("loanYAvgBal")
+    private BigDecimal loanYAvgBal;
+
     /** 分配维度：RULE / ACCOUNT（必填）. */
     @NotBlank(message = "allocDim 必填")
     private String allocDim;

@@ -116,6 +116,10 @@ export function getCustStat(custId, statisDt) {
     .then(unwrapPage)
     .then(r => (Array.isArray(r) ? r[0] : (r?.records || [])[0]) || null);
 }
+// 客户名称改从客户主档 CUST_MASTER 反显（按客户编号）：返回 { custId, custName, found }
+export function getCustMasterName(custId) {
+  return call('get', '/perf/stat-show/cust-name', { params: { custId } }, { found: false });
+}
 // 客户指标宽表（CUST_INDEX_RESULT）：按客户编号 + 数据日期取指定指标编号(MC_xxx)的值，
 // 返回 { 指标编号: 数值 }；查无数据的指标编号在结果中缺省 → 前端显示 '-'
 export function getCustIndexValues(custId, dataDate, codes) {
@@ -136,6 +140,10 @@ export function upsertTargetValue(data) {
 }
 export function batchUpsertTargetValues(values) {
   return call('post', '/perf/target-values/batch', { data: { values } }, { ok: true });
+}
+// 物理删除单条目标值（按 id；前端二次确认后调用）
+export function deleteTargetValue(id) {
+  return call('delete', `/perf/target-values/${id}`, {}, { ok: true });
 }
 
 // ============================================================
@@ -413,9 +421,22 @@ export function getKpiScoreStats() {
 export function listKpiCalcLogs(params = {}) {
   return call('get', '/perf/kpi-score/logs', { params }, { records: [], total: 0 }).then(unwrapPage);
 }
+// 考核计算记录最大数据日期（进入页面默认选中并展示最新一日）
+export function getLatestKpiCalcLogDate() {
+  return call('get', '/perf/kpi-score/logs/latest-date', {}, null);
+}
 // KPI 计算结果明细(PERF_KPI_SCORE)：维度/指标/对象/得分，按数据日期 + 方案 + 指标过滤分页
+// KPI 计算结果详情（按对象分组）：返回 { metrics:[列定义], records:[对象行], total, pageNo, pageSize }
 export function listKpiScoreResults(params = {}) {
-  return call('get', '/perf/kpi-score/results', { params }, { records: [], total: 0 }).then(unwrapPage);
+  return call('get', '/perf/kpi-score/results', { params }, { metrics: [], records: [], total: 0 });
+}
+// 导出KPI得分（页面透视格式 Excel，blob）
+export function exportKpiScores(params = {}) {
+  return call('get', '/perf/kpi-score/export-scores', { params, responseType: 'blob' }, null);
+}
+// 导出KPI明细数据（PERF_KPI_SCORE 平铺 Excel，blob）
+export function exportKpiScoreDetails(params = {}) {
+  return call('get', '/perf/kpi-score/export-details', { params, responseType: 'blob' }, null);
 }
 // KPI 方案的指标下拉项（仅含该方案配置的指标，含名称）
 export function listKpiSchemeMetrics(schemeCode) {

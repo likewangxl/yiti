@@ -48,6 +48,18 @@ public class SubmitAllocAdjustCmd {
     /** 年日均余额（前端反显，提交时快照入库）. */
     private BigDecimal yAvgBal;
 
+    /** 贷款-当前余额（MC_005，前端反显，提交时快照入库）. */
+    private BigDecimal loanCurrBal;
+
+    /** 贷款-较上日余额（MC_006，前端反显，提交时快照入库）. */
+    private BigDecimal loanMAvgBal;
+
+    /** 贷款-年均余额（MC_007，前端反显，提交时快照入库）. */
+    private BigDecimal loanQAvgBal;
+
+    /** 贷款-较上年均余额（MC_008，前端反显，提交时快照入库）. */
+    private BigDecimal loanYAvgBal;
+
     /** 分配维度：RULE / ACCOUNT（必填）. */
     private String allocDim;
 

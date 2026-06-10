@@ -490,7 +490,8 @@ public class MetricApiImpl implements MetricApi {
             BigDecimal value;
             switch (baseDim) {
                 case "EMP":
-                    value = empIndexResultMapper.selectSlotValue(baseKey, effectiveDate, version, slot);
+                    // 动态查询/仪表盘不区分版本，只按数据日期取最新；KPI 计算仍走带 version 的 selectSlotValue
+                    value = empIndexResultMapper.selectSlotValueNoVersion(baseKey, effectiveDate, slot);
                     break;
                 case "ORG":
                     value = orgIndexResultMapper.selectSlotValue(baseKey, effectiveDate, version, slot);

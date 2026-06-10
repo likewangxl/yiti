@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * 财务统计展示表只读查询 REST 控制器.
@@ -80,5 +82,24 @@ public class StatShowController {
         PageResult<LinkedHashMap<String, Object>> page = statShowService.pageCustStat(
                 statisDt, branchNo, custId, custType, keyword, pageNo, pageSize);
         return ResponseWrapper.page(page);
+    }
+
+    /**
+     * 按客户编号从客户主档 CUST_MASTER 查询客户名称（新建调整申请页客户名称反显）.
+     *
+     * <p>替代原从 XAN_M98_CUST_STAT_SHOW3 取名：客户名称改走客户营销中心 CUST_MASTER。
+     * 返回 {@code {custId, custName, found}}；客户主档无该编号时 custName=null、found=false。
+     */
+    @GetMapping("/cust-name")
+    @Operation(summary = "按客户编号从客户主档 CUST_MASTER 查询客户名称（新建调整申请反显）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<Map<String, Object>> getCustMasterName(@RequestParam String custId) {
+        Optional<String> name = statShowService.getCustNameFromMaster(custId);
+        log.debug("[StatShowController.getCustMasterName] custId={}, found={}", custId, name.isPresent());
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("custId", custId);
+        body.put("custName", name.orElse(null));
+        body.put("found", name.isPresent());
+        return ResponseWrapper.success(body);
     }
 }

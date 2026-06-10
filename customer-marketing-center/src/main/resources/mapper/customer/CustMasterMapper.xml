@@ -123,4 +123,25 @@
         </where>
     </select>
 
+    <!-- 客户信息同步：外部统计表 XAN_M98_CUST_STAT_SHOW3 中、指定统计日期(STATIS_DT)下、
+         客户编号在 CUST_MASTER 不存在的客户，按 CUST_ID/CUST_NAME 去重后插入客户主档，
+         记录统计日期(statis_dt)与创建时间(created_time)。
+         cust_no 已存在的由 NOT EXISTS 过滤；cust_name 唯一键冲突由 INSERT IGNORE 静默跳过。 -->
+    <insert id="syncNewCustomersFromStat">
+        INSERT IGNORE INTO CUST_MASTER
+            (id, cust_no, cust_name, status, deleted, statis_dt, created_time)
+        SELECT REPLACE(UUID(), '-', ''), t.cust_id, t.cust_name, 'ACTIVE', 0, #{statisDt}, NOW()
+        FROM (
+            SELECT s.CUST_ID AS cust_id, s.CUST_NAME AS cust_name
+            FROM XAN_M98_CUST_STAT_SHOW3 s
+            WHERE s.STATIS_DT = #{statisDt}
+              AND s.CUST_ID IS NOT NULL AND s.CUST_ID &lt;&gt; ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM CUST_MASTER m
+                  WHERE m.cust_no = s.CUST_ID AND m.deleted = 0
+              )
+            GROUP BY s.CUST_ID, s.CUST_NAME
+        ) t
+    </insert>
+
 </mapper>

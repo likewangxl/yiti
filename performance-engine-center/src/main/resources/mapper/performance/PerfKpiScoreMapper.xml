@@ -29,4 +29,75 @@
           AND scheme_code = #{schemeCode}
     </select>
 
+    <!-- 计算结果落库前清理：删除该数据日期+方案的全部旧计分明细，避免上一轮残留脏数据 -->
+    <delete id="deleteByDateAndScheme">
+        DELETE FROM PERF_KPI_SCORE
+        WHERE data_date = #{dataDate}
+          AND scheme_code = #{schemeCode}
+    </delete>
+
+    <!--
+      考核计算(KPI_CALC)数据范围过滤：scopeAll=true 不过滤；否则 ORG 对象限 orgCodes、
+      EMP 对象限 empIds（两者皆空 → 1=0 无数据）。CUST 对象仅 全部 可见。
+    -->
+    <sql id="SCOPE_FILTER">
+        <if test="scope != null and !scope.scopeAll">
+            AND (
+            <trim prefixOverrides="OR ">
+                <if test="scope.orgCodes != null and scope.orgCodes.size() > 0">
+                    (subject_type = 'ORG' AND subject_id IN
+                    <foreach collection="scope.orgCodes" item="oc" open="(" separator="," close=")">#{oc}</foreach>)
+                </if>
+                <if test="scope.empIds != null and scope.empIds.size() > 0">
+                    OR (subject_type = 'EMP' AND subject_id IN
+                    <foreach collection="scope.empIds" item="ei" open="(" separator="," close=")">#{ei}</foreach>)
+                </if>
+                <if test="(scope.orgCodes == null or scope.orgCodes.size() == 0) and (scope.empIds == null or scope.empIds.size() == 0)">
+                    1 = 0
+                </if>
+            </trim>
+            )
+        </if>
+    </sql>
+
+    <!-- 去重对象数（按 subject_id + subject_type 分组后的行数） -->
+    <select id="countSubjectGroups" resultType="long">
+        SELECT COUNT(*) FROM (
+            SELECT 1
+            FROM PERF_KPI_SCORE
+            WHERE data_date = #{dataDate}
+              AND scheme_code = #{schemeCode}
+              <if test="subjectType != null"> AND subject_type = #{subjectType}</if>
+              <include refid="SCOPE_FILTER"/>
+            GROUP BY subject_id, subject_type
+        ) t
+    </select>
+
+    <!-- 按对象分组分页：对象ID/类型 + 该对象所有指标 score 合计(考核得分) -->
+    <select id="selectSubjectGroups" resultType="com.bank.branch.platform.performance.mapper.KpiSubjectGroupRow">
+        SELECT subject_id, subject_type, SUM(score) AS total_score
+        FROM PERF_KPI_SCORE
+        WHERE data_date = #{dataDate}
+          AND scheme_code = #{schemeCode}
+          <if test="subjectType != null"> AND subject_type = #{subjectType}</if>
+          <include refid="SCOPE_FILTER"/>
+        GROUP BY subject_id, subject_type
+        ORDER BY subject_id
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- 当前页对象的全部指标计分行 -->
+    <select id="selectByDateSchemeSubjects" resultType="com.bank.branch.platform.performance.entity.PerfKpiScore">
+        SELECT id, data_date, scheme_code, metric_code, subject_type, subject_id,
+               actual_value, weight, target_value, base_value, score
+        FROM PERF_KPI_SCORE
+        WHERE data_date = #{dataDate}
+          AND scheme_code = #{schemeCode}
+          AND (
+          <foreach collection="subjects" item="s" separator=" OR ">
+              (subject_type = #{s.subjectType} AND subject_id = #{s.subjectId})
+          </foreach>
+          )
+    </select>
+
 </mapper>

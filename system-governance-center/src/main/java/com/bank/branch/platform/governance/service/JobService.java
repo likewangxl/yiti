@@ -1,5 +1,7 @@
 package com.bank.branch.platform.governance.service;
 
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.JobConfDTO;
@@ -33,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -64,6 +67,14 @@ public class JobService {
      */
     @Autowired(required = false)
     private Scheduler scheduler;
+
+    /**
+     * auth 用户 Api（按工号解析触发人姓名）。
+     * <p>{@code required=false}：与 {@link #scheduler} 同理，测试上下文可能无此 bean，
+     * 缺失时执行日志仅展示工号、不解析姓名（{@link #enrichOperatorNames}）。</p>
+     */
+    @Autowired(required = false)
+    private UserApi userApi;
 
     private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -299,7 +310,76 @@ public class JobService {
         List<JobRunLogDTO> dtos = records.stream()
                 .map(this::toRunLogDTO)
                 .collect(Collectors.toList());
+        enrichOperatorNames(dtos);
         return PageResult.of(pageNo, pageSize, total, dtos);
+    }
+
+    /**
+     * 回填触发人姓名：createdBy 为工号(PT_USER.username)，按工号批量查 auth 用户取姓名.
+     *
+     * <p>系统/自动触发(createdBy 为空或非真实工号)解析不到时仅展示工号，不阻塞列表；
+     * userApi 缺失（测试上下文）时整体跳过。</p>
+     */
+    private void enrichOperatorNames(List<JobRunLogDTO> dtos) {
+        if (userApi == null || dtos == null || dtos.isEmpty()) {
+            return;
+        }
+        List<String> empIds = dtos.stream()
+                .map(JobRunLogDTO::getCreatedBy)
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (empIds.isEmpty()) {
+            return;
+        }
+        Map<String, String> nameByEmpId = new HashMap<>();
+        try {
+            List<UserDTO> users = userApi.getUsersByUsernames(empIds);
+            if (users != null) {
+                for (UserDTO u : users) {
+                    if (u != null && u.getUsername() != null && !u.getUsername().isBlank()) {
+                        nameByEmpId.put(u.getUsername(), u.getDisplayName());
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+            // 按工号解析失败：继续尝试 user_id 兜底
+        }
+        // created_by 历史上可能存 user_id(如 E40001) 而非工号(username)；按工号未命中的再按 user_id 兜底，
+        // 命中后用真实工号(username)覆盖展示值 createdBy（仅改响应、不改落库）并回填姓名，保证前端展示「工号 + 姓名」
+        Map<String, UserDTO> userById = new HashMap<>();
+        List<String> unresolved = empIds.stream()
+                .filter(k -> !nameByEmpId.containsKey(k))
+                .collect(Collectors.toList());
+        if (!unresolved.isEmpty()) {
+            try {
+                List<UserDTO> byId = userApi.getUserByEmpIds(unresolved);
+                if (byId != null) {
+                    for (UserDTO u : byId) {
+                        if (u != null && u.getEmpId() != null && !u.getEmpId().isBlank()) {
+                            userById.put(u.getEmpId(), u);
+                        }
+                    }
+                }
+            } catch (Exception ignore) {
+                // user_id 兜底失败：仅展示工号
+            }
+        }
+        for (JobRunLogDTO d : dtos) {
+            String cb = d.getCreatedBy();
+            if (cb == null || cb.isBlank()) {
+                continue;
+            }
+            if (nameByEmpId.containsKey(cb)) {
+                d.setOperatorName(nameByEmpId.get(cb));
+            } else if (userById.containsKey(cb)) {
+                UserDTO u = userById.get(cb);
+                if (u.getUsername() != null && !u.getUsername().isBlank()) {
+                    d.setCreatedBy(u.getUsername()); // 用真实工号覆盖展示（落库不变）
+                }
+                d.setOperatorName(u.getDisplayName());
+            }
+        }
     }
 
     /**
@@ -401,8 +481,9 @@ public class JobService {
      * @throws BizException GOV-40302 任务不允许手动触发（P3.3 修复 P3.2 错误码语义错配，原误用 GOV-40903）
      * @throws BizException GOV-50004 Scheduler 不可用 / SchedulerException
      */
-    public JobTriggerRespDTO triggerJob(String jobId, String reason, String operatorEmpId) {
-        log.info("[JobService.triggerJob] jobId={}, reason={}, operatorEmpId={}", jobId, reason, operatorEmpId);
+    public JobTriggerRespDTO triggerJob(String jobId, String reason, String dataDate, String operatorEmpId) {
+        log.info("[JobService.triggerJob] jobId={}, reason={}, dataDate={}, operatorEmpId={}",
+                jobId, reason, dataDate, operatorEmpId);
 
         // 1. 校验任务配置存在
         SysJobConf conf = jobConfMapper.selectById(jobId);
@@ -432,6 +513,10 @@ public class JobService {
         if (reason != null && !reason.isBlank()) {
             // reason 透传到 dataMap，JobListener 可写入 sys_job_run_log.reason
             data.put("triggerReason", reason);
+        }
+        if (dataDate != null && !dataDate.isBlank()) {
+            // dataDate 透传到 dataMap：计算类 Quartz Job 读取后按指定数据日期启动计算
+            data.put("dataDate", dataDate.trim());
         }
 
         // 5. 立即触发（JobKey 组与 P3.1 syncJobsOnStartup 一致：DEFAULT）

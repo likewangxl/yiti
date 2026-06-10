@@ -18,12 +18,24 @@
             updated_time = NOW()
     </insert>
 
+    <!-- 落库前清空：把该数据日期+版本下指定 slot 列全部置 NULL，避免上一轮残留主体的脏数据；只动该列 -->
+    <update id="clearSlot">
+        UPDATE ORG_INDEX_RESULT
+        SET val_${slot} = NULL, updated_time = NOW()
+        WHERE data_date = #{dataDate} AND version = #{version}
+    </update>
+
+    <!--
+      动态指标查询/仪表盘 ORG 维度取值：不再按 version 过滤，只按 org_code + data_date，
+      多版本取 updated_time 最新一行。version 形参保留以兼容接口签名，SQL 内不用。
+      （本方法仅 MetricApiImpl 动态查询/仪表盘使用，KPI 计算走 selectSlotValuesByOrgs 不受影响）
+    -->
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
         SELECT val_${slot}
         FROM ORG_INDEX_RESULT
         WHERE org_code = #{orgCode}
           AND data_date = #{dataDate}
-          AND version = #{version}
+        ORDER BY updated_time DESC
         LIMIT 1
     </select>
 

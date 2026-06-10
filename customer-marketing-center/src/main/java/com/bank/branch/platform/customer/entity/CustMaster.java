@@ -83,6 +83,9 @@ public class CustMaster {
     /** 逻辑删除：0-未删除/1-已删除，对应 deleted */
     private Integer deleted;
 
+    /** 统计日期（yyyy-MM-dd），客户信息同步来源日期，对应 statis_dt */
+    private String statisDt;
+
     /** 创建时间，对应 created_time */
     private LocalDateTime createdTime;
 

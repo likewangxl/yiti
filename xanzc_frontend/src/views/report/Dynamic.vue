@@ -82,6 +82,7 @@
       <el-table v-if="view === 'table'" :data="pagedRows" size="default" stripe
                 :empty-text="hasResult ? '无符合条件的数据' : '请选择指标和对象后点击「查询」'">
         <el-table-column prop="subject" :label="dimLabel" width="160" />
+        <el-table-column v-if="dim === 'EMP'" prop="empName" label="姓名" width="120" />
         <el-table-column
           v-for="c in pickedMetrics" :key="c" :prop="c"
           :label="metricLabel(c)" align="right">
@@ -103,9 +104,10 @@
     </div>
 
     <!-- 对象选择弹框：机构树 + 员工搜索 -->
-    <el-dialog v-model="subjectDlg.show" :title="dim === 'EMP' ? '选择员工' : '选择机构'" width="720px" :close-on-click-modal="false">
+    <el-dialog v-model="subjectDlg.show" :title="dim === 'EMP' ? '选择员工' : dim === 'CUST' ? '选择客户' : '选择机构'" width="720px" :close-on-click-modal="false">
       <div class="subject-picker">
-        <div class="picker-left">
+        <!-- 客户维度不用机构树，只用右侧搜索框 -->
+        <div class="picker-left" v-if="dim !== 'CUST'">
           <div class="picker-title">机构树（勾选{{ dim === 'EMP' ? '机构可选该机构下全部员工' : '机构' }}）</div>
           <el-input v-model="subjectDlg.treeKw" placeholder="搜索机构名称" size="small" clearable style="margin-bottom:8px" />
           <el-tree
@@ -132,6 +134,19 @@
               <div v-for="e in subjectDlg.empSearchResults" :key="e.id" class="emp-row" @click="addSubjectFromSearch(e)">
                 <span>{{ e.name }}</span>
                 <span class="muted">{{ e.org }}</span>
+              </div>
+            </div>
+          </template>
+          <template v-else-if="dim === 'CUST'">
+            <div class="picker-title">搜索客户</div>
+            <el-input v-model="subjectDlg.custKw" placeholder="输入客户名或客户号搜索" size="small" clearable
+                      @keyup.enter="onCustSearch" style="margin-bottom:8px">
+              <template #append><el-button @click="onCustSearch">搜索</el-button></template>
+            </el-input>
+            <div class="emp-results">
+              <div v-for="c in subjectDlg.custSearchResults" :key="c.id" class="emp-row" @click="addSubjectFromSearch(c)">
+                <span>{{ c.name }}</span>
+                <span class="muted">{{ c.org }}</span>
               </div>
             </div>
           </template>
@@ -170,7 +185,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Grid, Histogram, TrendCharts, PieChart, Folder, Plus, Download } from '@element-plus/icons-vue';
 import { use } from 'echarts/core';
@@ -178,7 +193,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart, LineChart, PieChart as EPie } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { queryDynamic, exportDynamicFile, searchReportEmployees, getPickerScope, getQueryDimensions, getSavedQuery } from '@/api/report';
+import { queryDynamic, exportDynamicFile, searchReportEmployees, searchReportCustomers, getPickerScope, getQueryDimensions, getSavedQuery } from '@/api/report';
 import { getOrgTree, listOrgUsers } from '@/api/orgs';
 import { listMetrics } from '@/api/metrics';
 import MetricPicker from './components/MetricPicker.vue';
@@ -188,7 +203,7 @@ import SchemeListDialog from './components/SchemeListDialog.vue';
 use([CanvasRenderer, BarChart, LineChart, EPie, GridComponent, TooltipComponent, LegendComponent]);
 
 const dim = ref('EMP');
-const dimensions = ref([{ code: 'EMP', label: '员工' }, { code: 'ORG', label: '机构' }]);
+const dimensions = ref([{ code: 'EMP', label: '员工' }, { code: 'ORG', label: '机构' }, { code: 'CUST', label: '客户' }]);
 const metricsList = ref([]);
 const pickedMetrics = ref([]);
 const subjects = ref([]);
@@ -201,7 +216,7 @@ const querying = ref(false);
 const exporting = ref(false);
 const hasResult = ref(true);
 
-// 结果数据 —— 默认填几行 demo 数字，后端返回会替换
+// 结果数据 —— 初始为空，点查询后由后端返回填充；查询失败一律清空（不回退假数据）
 const rows = ref([]);
 const resultPageNo = ref(1);
 const resultPageSize = ref(20);
@@ -209,15 +224,6 @@ const pagedRows = computed(() => {
   const start = (resultPageNo.value - 1) * resultPageSize.value;
   return rows.value.slice(start, start + resultPageSize.value);
 });
-function defaultRows() {
-  const seed = [6420, 9100, 22, 182, 5520, 7800, 18, 156, 4280, 11200, 15, 220, 3800, 5400, 12, 98, 7100, 8300, 25, 203];
-  return subjects.value.map((s, i) => {
-    const obj = { subject: dim.value === 'EMP' ? '员工' + s.name : s.name };
-    pickedMetrics.value.forEach((c, j) => { obj[c] = seed[(i * 4 + j) % seed.length]; });
-    return obj;
-  });
-}
-
 const dimLabel = computed(() => dimensions.value.find(d => d.code === dim.value)?.label || '对象');
 // metricMap：tolerant 同时消化两种字段命名（后端 MetricDefRespDTO.metricCode/metricName 与 mock metricsFlat.code/label）
 const metricMap = computed(() => Object.fromEntries(
@@ -265,6 +271,8 @@ const subjectDlg = reactive({
   treeKw: '',
   empKw: '',
   empSearchResults: [],
+  custKw: '',
+  custSearchResults: [],
   selected: [],
   openSeq: 0,   // 每次打开递增，给 el-tree 当 :key 强制重建，避免上次勾选残留
 });
@@ -285,6 +293,8 @@ watch(() => subjectDlg.show, (visible) => {
     subjectDlg.treeKw = '';
     subjectDlg.empKw = '';
     subjectDlg.empSearchResults = [];
+    subjectDlg.custKw = '';
+    subjectDlg.custSearchResults = [];
     subjectDlg.openSeq++;   // 强制 el-tree 重建：清掉上次的机构勾选残留，避免"勾着却没加载员工"
   }
 });
@@ -304,7 +314,13 @@ function onOrgCheckChange() {
 async function loadCheckedOrgEmployees() {
   const checkedNodes = subjectTreeRef.value?.getCheckedNodes() || [];
   if (dim.value === 'ORG') {
-    subjectDlg.selected = checkedNodes.map(n => ({ id: n.code, name: n.name, org: '' }));
+    // 西安分行/榆林总等上层机构只是树形结构的容器节点（filterTreeByCodes 为展示层级而保留），
+    // 它们的 code 并不在数据范围 orgCodes 内。勾上也不算选中，否则会把越权机构带进查询，
+    // 导致后端整单 RPT-40005「对象不在数据范围内」失败。ALL 不裁剪。
+    const sc = pickerScope.value;
+    const allow = (sc && sc.mode !== 'ALL') ? new Set(sc.orgCodes || []) : null;
+    const picked = allow ? checkedNodes.filter(n => allow.has(n.code)) : checkedNodes;
+    subjectDlg.selected = picked.map(n => ({ id: n.code, name: n.name, org: '' }));
     return;
   }
   // SELF（支行员工）：只能选自己——勾任意机构都只加入本人，不加载同机构同事
@@ -341,7 +357,8 @@ async function loadCheckedOrgEmployees() {
         const id = u.empId || u.userId;
         if (id && !seen.has(id)) {
           seen.add(id);
-          newSelected.push({ id, name: u.empName || u.userchnname || u.username, org: node.name });
+          // OrgUserDTO 的姓名在 displayName 字段（无 empName/userchnname）；缺失才退化工号 username
+          newSelected.push({ id, name: u.displayName || u.empName || u.userchnname || u.username, org: node.name });
         }
       }
     }
@@ -351,12 +368,37 @@ async function loadCheckedOrgEmployees() {
 
 async function onEmpSearch() {
   const kw = subjectDlg.empKw?.trim();
-  if (!kw) return;
+  if (!kw) { subjectDlg.empSearchResults = []; return; }
   try {
     // 搜 PT_USER（报表专用接口，按工号/姓名匹配，REPORT 权限）；返回 [{id,name,org}]
     subjectDlg.empSearchResults = await searchReportEmployees(kw, 20);
   } catch { subjectDlg.empSearchResults = []; }
 }
+
+// 员工搜索：边输边搜（防抖 300ms），无需点按钮；清空则清结果
+let empSearchTimer = null;
+watch(() => subjectDlg.empKw, () => {
+  clearTimeout(empSearchTimer);
+  if (!subjectDlg.empKw?.trim()) { subjectDlg.empSearchResults = []; return; }
+  empSearchTimer = setTimeout(onEmpSearch, 300);
+});
+
+async function onCustSearch() {
+  const kw = subjectDlg.custKw?.trim();
+  if (!kw) { subjectDlg.custSearchResults = []; return; }
+  try {
+    // 搜客户（按客户名/客户号，不限范围）；返回 [{id,name,org}]
+    subjectDlg.custSearchResults = await searchReportCustomers(kw, 20);
+  } catch { subjectDlg.custSearchResults = []; }
+}
+
+// 客户搜索：边输边搜（防抖 300ms），无需点按钮；清空则清结果
+let custSearchTimer = null;
+watch(() => subjectDlg.custKw, () => {
+  clearTimeout(custSearchTimer);
+  if (!subjectDlg.custKw?.trim()) { subjectDlg.custSearchResults = []; return; }
+  custSearchTimer = setTimeout(onCustSearch, 300);
+});
 
 function addSubjectFromSearch(emp) {
   if (subjectDlg.selected.some(s => s.id === emp.id)) return;
@@ -369,7 +411,7 @@ function confirmSubjects() {
 }
 
 function subjectLabel(s) {
-  if (dim.value === 'EMP') return '员工' + s.name;
+  // 统一显示名称：员工=姓名（不再加"员工"前缀）、机构=机构名、客户=客户名
   return s.name;
 }
 
@@ -379,13 +421,25 @@ function addSubject(o) {
   objKw.value = '';
 }
 
-// 维度切换：清空已选对象 + 已选指标，避免跨维度脏数据
+// 按当前维度拉取「对象选择」数据范围：员工维度走 REPORT_DYN_EMP、机构维度走 REPORT_DYN_ORG，
+// 两维度可在权限配置页独立设置，所以维度一变就要重新取一次。
+async function loadPickerScope() {
+  try {
+    const sc = await getPickerScope(dim.value);
+    if (sc && sc.mode) pickerScope.value = sc;
+  } catch { /* 失败保持上一次范围，picker 兜底 ALL */ }
+}
+
+// 维度切换：清空已选对象 + 已选指标，避免跨维度脏数据 + 重新拉取该维度的数据范围
 // （指标按维度过滤后，残留的另一维度指标既不可见又会被带进查询）
 watch(dim, (cur, prev) => {
   if (cur === prev) return;
   subjects.value = [];
   pickedMetrics.value = [];
   hasResult.value = false;
+  rows.value = [];          // 切维度清空结果表，避免遗留上一维度数据
+  resultPageNo.value = 1;
+  loadPickerScope();
 });
 
 async function doQuery() {
@@ -401,12 +455,15 @@ async function doQuery() {
     });
     if (r?.result) rows.value = r.result;
     else if (Array.isArray(r?.rows)) rows.value = r.rows;
-    else rows.value = defaultRows();
+    else rows.value = [];
     hasResult.value = true;
     ElMessage.success(`查询成功：${rows.value.length} 行`);
   } catch (e) {
-    rows.value = defaultRows();
-    hasResult.value = true;
+    // 查询失败（如对象越权 RPT-40005「对象不在数据范围内」）：必须清空结果，
+    // 绝不能回退假数据冒充查询成功——否则后端已拦截，前端却照样展示一桌假数字。
+    // 拦截器（http.js）已弹出后端真实错误提示，这里不再重复弹。
+    rows.value = [];
+    hasResult.value = false;
   } finally {
     querying.value = false;
   }
@@ -445,7 +502,8 @@ function openSaveScheme() {
     payload: {
       dim: dim.value,
       metrics: pickedMetrics.value,           // 传字符串 code 数组（saveQuery 内部 stringify）
-      subjects: subjects.value.map(s => s.id) // 传 id 字符串数组
+      // 传完整对象 {id,name,org}，载入方案时可直接反显名称
+      subjects: subjects.value.map(s => ({ id: s.id, name: s.name, org: s.org || '' }))
     }
   };
   saveSchemeVisible.value = true;
@@ -463,26 +521,22 @@ async function onSchemeLoad(scheme) {
   catch { ElMessage.error('载入方案失败'); return; }
   if (!detail) return;
 
-  // 1. 切维度（会触发 watch dim：清空 subjects + 按需懒加载 ORG/CUST 候选）
+  // 1. 切维度 —— watch(dim) 会清空 subjects/metrics，必须等它跑完(nextTick)再反显，否则反被清掉
   if (detail.dim && detail.dim !== dim.value) {
     dim.value = detail.dim;
-    // 等候选池就绪（最多 1.5s，每 100ms 探一次）
-    for (let i = 0; i < 15; i++) {
-      if (objectPool.value.length > 0) break;
-      await new Promise(r => setTimeout(r, 100));
-    }
+    await nextTick();
   }
 
   // 2. 反显指标（数组形态：['M0001', ...]）
   if (Array.isArray(detail.metrics)) pickedMetrics.value = [...detail.metrics];
 
-  // 3. 反显对象 —— ID 数组 → 候选池里反查为 {id, name, org} 对象
+  // 3. 反显对象 —— 新方案存的是 {id,name,org} 对象，老方案是纯 ID 字符串，两者都兼容
   if (Array.isArray(detail.subjects)) {
-    const pool = objectPool.value;
-    subjects.value = detail.subjects.map(id => {
-      const found = pool.find(o => o.id === id);
-      return found || { id, name: id, org: '' };  // 找不到时退化为只显示 ID
-    });
+    subjects.value = detail.subjects.map(s =>
+      typeof s === 'string'
+        ? { id: s, name: s, org: '' }
+        : { id: s.id, name: s.name || s.id, org: s.org || '' }
+    );
   }
   ElMessage.success(`已载入方案：${detail.name}`);
   doQuery();
@@ -490,12 +544,14 @@ async function onSchemeLoad(scheme) {
 
 // 图表 option
 const chartOption = computed(() => {
-  const xs = rows.value.map(r => r.subject);
+  // 图表类目用「姓名」：员工维度取 empName(姓名)，机构/客户维度 subject 本就是机构名/客户名
+  const labelOf = (r) => (dim.value === 'EMP' ? (r.empName || r.subject) : r.subject);
+  const xs = rows.value.map(labelOf);
   const series = pickedMetrics.value.map(c => ({
     name: metricLabel(c),
     type: view.value === 'bar' ? 'bar' : view.value === 'line' ? 'line' : 'pie',
     data: view.value === 'pie'
-      ? rows.value.map(r => ({ name: r.subject, value: r[c] || 0 }))
+      ? rows.value.map(r => ({ name: labelOf(r), value: r[c] || 0 }))
       : rows.value.map(r => r[c] || 0),
     smooth: view.value === 'line',
     radius: view.value === 'pie' ? '60%' : undefined
@@ -508,12 +564,29 @@ const chartOption = computed(() => {
       series: [series[0] || { type: 'pie', data: [] }]
     };
   }
+  // 对象（x 轴类目）多/名称长时：全部显示不自动隐藏 + 按数量旋转 + 长名截断 + containLabel 防裁剪，
+  // 超过 12 个再挂一条横向缩放条，避免挤成一团（解决「选超过 4 个柱状/折线图错乱」）。
+  const count = xs.length;
+  const rotate = count > 8 ? 45 : count > 4 ? 30 : 0;
   return {
     tooltip: { trigger: 'axis' },
     legend: { top: 0, right: 0 },
-    grid: { top: 36, left: 60, right: 20, bottom: 30 },
-    xAxis: { type: 'category', data: xs },
+    grid: { top: 36, left: 60, right: 20, bottom: count > 12 ? 56 : 30, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: xs,
+      axisLabel: {
+        interval: 0,               // 全部显示，不让 ECharts 自动隐藏类目
+        rotate,
+        hideOverlap: true,
+        formatter: (v) => (typeof v === 'string' && v.length > 10 ? v.slice(0, 10) + '…' : v)
+      }
+    },
     yAxis: { type: 'value' },
+    // 对象很多时给个横向缩放条
+    dataZoom: count > 12
+      ? [{ type: 'slider', start: 0, end: Math.max(20, Math.round(1200 / count)), bottom: 8, height: 16 }]
+      : undefined,
     series
   };
 });
@@ -521,7 +594,7 @@ const chartOption = computed(() => {
 onMounted(async () => {
   await Promise.all([
     getOrgTree().then(tree => { orgTreeData.value = tree; }).catch(() => {}),
-    getPickerScope().then(sc => { if (sc && sc.mode) pickerScope.value = sc; }).catch(() => {}),
+    getPickerScope(dim.value).then(sc => { if (sc && sc.mode) pickerScope.value = sc; }).catch(() => {}),
     listMetrics({ status: 'ACTIVE' })
       .then(list => { if (Array.isArray(list)) metricsList.value = list; })
       .catch(() => { metricsList.value = []; })
