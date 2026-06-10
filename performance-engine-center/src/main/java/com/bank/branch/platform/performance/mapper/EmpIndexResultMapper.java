@@ -86,6 +86,20 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                @Param("slot") Integer slot);
 
     /**
+     * 查询员工在指定 slot 上的指标值（不限版本，只按 empId + dataDate，多版本取 updated_time 最新）。
+     * <p>供动态指标查询使用：动态查询不区分版本，只看数据日期；KPI 计算等仍走带 version 的
+     * {@link #selectSlotValue}。</p>
+     *
+     * @param empId    员工工号
+     * @param dataDate 数据日期
+     * @param slot     值槽（1..400，<strong>调用方必须校验</strong>）
+     * @return slot 值，行不存在或该槽未赋值返回 null
+     */
+    BigDecimal selectSlotValueNoVersion(@Param("empId") String empId,
+                                        @Param("dataDate") LocalDate dataDate,
+                                        @Param("slot") Integer slot);
+
+    /**
      * 按 empIds 批量查询同一 slot 值.
      *
      * @param empIds   员工工号列表（非空；调用方应控制 &le; 500 批量上限）

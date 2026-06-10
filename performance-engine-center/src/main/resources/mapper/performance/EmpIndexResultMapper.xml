@@ -41,6 +41,16 @@
         LIMIT 1
     </select>
 
+    <!-- 动态指标查询用：不限版本，只按 emp_id + data_date，多版本取 updated_time 最新一行 -->
+    <select id="selectSlotValueNoVersion" resultType="java.math.BigDecimal">
+        SELECT val_${slot}
+        FROM EMP_INDEX_RESULT
+        WHERE emp_id = #{empId}
+          AND data_date = #{dataDate}
+        ORDER BY updated_time DESC
+        LIMIT 1
+    </select>
+
     <select id="selectSlotValuesByEmps"
             resultType="com.bank.branch.platform.performance.mapper.EmpMetricValueRow">
         SELECT emp_id AS empId,
