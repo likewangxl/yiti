@@ -22,7 +22,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -153,6 +155,25 @@ public class TargetValueController {
                 .operator(operator)
                 .build();
         int affected = targetValueService.upsertBatchFromCmd(batchCmd);
+        return ResponseWrapper.success(affected);
+    }
+
+    /**
+     * 物理删除单条目标值（目标值管理页"删除"操作，前端二次确认后调用）。
+     *
+     * <p>高危操作：独立 URL + {@code @BizAuth(DELETE)} + {@code @AuditLog} 审计；
+     * PERF_TARGET_VALUE 无逻辑删除列，直接物理删除。
+     *
+     * @param id 目标值主键
+     * @return 受影响行数（0 表示该 id 不存在）
+     */
+    @DeleteMapping("/{id}")
+    @Operation(summary = "物理删除目标值")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.DELETE)
+    @AuditLog(action = "DELETE", resourceType = "TARGET_VALUE")
+    public ResponseWrapper<Integer> delete(@PathVariable("id") String id) {
+        log.info("[TargetValueController.delete] id={}", id);
+        int affected = targetValueService.deleteById(id);
         return ResponseWrapper.success(affected);
     }
 }

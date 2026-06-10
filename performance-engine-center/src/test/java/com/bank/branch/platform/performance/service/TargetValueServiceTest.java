@@ -244,6 +244,27 @@ class TargetValueServiceTest {
         assertThat(result.getRecords()).hasSize(1);
     }
 
+    // ------------------------------- deleteById: 物理删除 -------------------------------
+
+    @Test
+    @DisplayName("deleteById: 物理删除委托 Mapper.deleteById 并返回受影响行数")
+    void deleteById_delegatesMapperAndReturnsAffected() {
+        when(targetValueMapper.deleteById("TV_1")).thenReturn(1);
+
+        int affected = service.deleteById("TV_1");
+
+        assertThat(affected).isEqualTo(1);
+        verify(targetValueMapper).deleteById("TV_1");
+    }
+
+    @Test
+    @DisplayName("deleteById: id 不存在时返回 0（幂等，不抛异常）")
+    void deleteById_notFound_returnsZero() {
+        when(targetValueMapper.deleteById("TV_X")).thenReturn(0);
+
+        assertThat(service.deleteById("TV_X")).isZero();
+    }
+
     // ------------------------------- helpers -------------------------------
 
     private static List<PerfTargetValue> buildValues(int n) {

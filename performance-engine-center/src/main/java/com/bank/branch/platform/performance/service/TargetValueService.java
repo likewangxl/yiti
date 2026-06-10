@@ -246,6 +246,22 @@ public class TargetValueService {
     }
 
     /**
+     * 按主键物理删除单条目标值（目标值管理页"删除"操作，前端二次确认后调用）。
+     *
+     * <p>PERF_TARGET_VALUE 无逻辑删除列，{@code BaseMapper.deleteById} 直接 {@code DELETE FROM}。
+     * 高危操作：Controller 侧标 {@code @AuditLog}；id 不存在返回 0（幂等，不抛异常）。
+     *
+     * @param id 目标值主键
+     * @return 受影响行数（0 表示该 id 不存在）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteById(String id) {
+        int affected = targetValueMapper.deleteById(id);
+        log.info("[TargetValueService.deleteById] id={}, affected={}", id, affected);
+        return affected;
+    }
+
+    /**
      * V1.3 R4.1：批量 upsert Cmd 版本，内部完成 entity 构造 + 复用既有 {@link #upsertBatch}.
      *
      * <p>Controller 只传 {@link UpsertTargetValueBatchCmd}，避免 Controller 层 {@code new PerfTargetValue()}.
