@@ -62,9 +62,16 @@
         </el-table-column>
         <el-table-column label="执行结果" width="110">
           <template #default="{row}">
-            <el-tag effect="plain" :class="row.result === 'SUCCESS' ? 'tag-success' : 'tag-danger'">
-              {{ row.result === 'SUCCESS' ? '成功' : (row.result === 'FAILED' ? '失败' : (row.result || '-')) }}
-            </el-tag>
+            <!-- 失败时悬浮展示错误原因（errorMsg）；成功/无错误信息时禁用 tooltip -->
+            <el-tooltip placement="top" effect="dark" :disabled="!row.errorMsg">
+              <template #content>
+                <div style="max-width:360px; white-space:pre-wrap; word-break:break-all;">{{ row.errorMsg }}</div>
+              </template>
+              <el-tag effect="plain" :class="row.result === 'SUCCESS' ? 'tag-success' : 'tag-danger'"
+                :style="row.errorMsg ? 'cursor:help' : ''">
+                {{ row.result === 'SUCCESS' ? '成功' : (row.result === 'FAILED' ? '失败' : (row.result || '-')) }}
+              </el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column label="开始时间" width="170">
