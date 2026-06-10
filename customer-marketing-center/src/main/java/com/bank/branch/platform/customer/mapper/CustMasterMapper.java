@@ -40,6 +40,19 @@ public interface CustMasterMapper extends BaseMapper<CustMaster> {
     CustMaster selectByCustNo(@Param("custNo") String custNo);
 
     /**
+     * 客户信息同步：把外部统计表 {@code XAN_M98_CUST_STAT_SHOW3} 中、指定统计日期下、
+     * 客户编号在 {@code CUST_MASTER} 不存在的客户，按 CUST_ID/CUST_NAME 去重后插入客户主档，
+     * 并记录统计日期(statis_dt)与创建时间(created_time)。
+     * <p>
+     * 客户编号已存在的由 NOT EXISTS 过滤；客户名称唯一键(uk_cust_name)冲突由 INSERT IGNORE 静默跳过。
+     * </p>
+     *
+     * @param statisDt 统计日期（yyyy-MM-dd），匹配 STATIS_DT
+     * @return 实际新增的客户主档记录数
+     */
+    int syncNewCustomersFromStat(@Param("statisDt") String statisDt);
+
+    /**
      * 分页查询客户主档列表（含逻辑删除过滤）。
      * <p>
      * keyword 模糊搜索 cust_name 和 unified_credit_code，status 精确匹配。

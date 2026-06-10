@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS `CUST_MASTER` (
   `lead_id` varchar(32) DEFAULT NULL COMMENT '来源线索ID',
   `status` varchar(20) DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE-正常, INACTIVE-停用',
   `deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '删除标记(0-否,1-是)',
+  `statis_dt` varchar(10) DEFAULT NULL COMMENT '统计日期(yyyy-MM-dd)，客户信息同步来源日期',
   `created_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
