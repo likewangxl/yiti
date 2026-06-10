@@ -3,7 +3,7 @@
     <!-- 页头 -->
     <div class="page-h">
       <h1>评价规则</h1>
-      <span class="desc">为每类被评价人配置评价人组及权重</span>
+      <span class="desc">为每类评价对象配置评价人组及权重</span>
       <div class="actions">
         <el-button type="primary" @click="openCreateDialog">新建规则</el-button>
       </div>
@@ -35,7 +35,7 @@
     >
       <el-table-column prop="ruleId" label="规则ID" width="80" />
       <el-table-column prop="ruleName" label="规则名称" min-width="160" />
-      <el-table-column label="被评价人标签" min-width="140">
+      <el-table-column label="评价对象标签" min-width="140">
         <template #default="{ row }">
           <span>{{ getTagName(row.beEvalTagId) }}</span>
         </template>
@@ -90,10 +90,10 @@
         </el-form-item>
 
         <!-- 被评价人标签（仅新建时可选） -->
-        <el-form-item label="被评价人标签" prop="beEvalTagId">
+        <el-form-item label="评价对象标签" prop="beEvalTagId">
           <el-select
             v-model="formData.beEvalTagId"
-            placeholder="请选择被评价人标签"
+            placeholder="请选择评价对象标签"
             filterable
             :disabled="formDialog.isEdit"
             style="width: 100%"
@@ -105,7 +105,7 @@
               :value="tag.tagId"
             />
           </el-select>
-          <div v-if="formDialog.isEdit" class="field-hint">编辑时不允许更改被评价人标签</div>
+          <div v-if="formDialog.isEdit" class="field-hint">编辑时不允许更改评价对象标签</div>
         </el-form-item>
 
         <!-- 评价人组配置 -->
@@ -215,7 +215,7 @@
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="规则ID">{{ detailDialog.rule.ruleId }}</el-descriptions-item>
           <el-descriptions-item label="规则名称">{{ detailDialog.rule.ruleName }}</el-descriptions-item>
-          <el-descriptions-item label="被评价人标签">
+          <el-descriptions-item label="评价对象标签">
             {{ getTagName(detailDialog.rule.beEvalTagId) }}
           </el-descriptions-item>
           <el-descriptions-item label="状态">

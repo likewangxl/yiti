@@ -2,7 +2,7 @@
   <div>
     <div class="page-h">
       <h1>人员标签</h1>
-      <span class="desc">维护人员的被评价人角色（单选）与评价人角色（多选）</span>
+      <span class="desc">维护人员评价角色（每人单选一个）</span>
     </div>
 
     <div class="card-section">
@@ -39,15 +39,9 @@
         <el-table-column label="角色" min-width="140">
           <template #default="{ row }">{{ (row.roleNames && row.roleNames.length) ? row.roleNames.join('，') : '—' }}</template>
         </el-table-column>
-        <el-table-column label="被评价人角色" min-width="130">
+        <el-table-column label="评价角色" min-width="160">
           <template #default="{ row }">
-            <el-tag v-if="row.beEvalTag" type="success" effect="plain" size="small">{{ row.beEvalTag.tagName }}</el-tag>
-            <span v-else class="muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="评价人角色" min-width="180">
-          <template #default="{ row }">
-            <span v-if="row.evalTags && row.evalTags.length">{{ row.evalTags.map(t => t.tagName).join('，') }}</span>
+            <el-tag v-if="row.tag" type="success" effect="plain" size="small">{{ row.tag.tagName }}</el-tag>
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
@@ -78,7 +72,7 @@
       <el-dialog v-model="importVisible" title="导入人员评价角色" width="640px">
         <div class="imp-tip">
           <el-button size="small" @click="doDownloadTpl">📥 下载导入模板</el-button>
-          <span class="muted">模板列：工号 / 被评价角色 / 评价角色；评价角色用逗号分隔。全部校验通过才会导入。</span>
+          <span class="muted">模板列：工号 / 角色 / 是否参与评价。全部校验通过才会导入。</span>
         </div>
         <el-upload
           ref="impUploaderRef"
@@ -120,14 +114,9 @@
       </div>
 
       <el-form label-width="110px" class="edit-form">
-        <el-form-item label="被评价人角色">
-          <el-select v-model="form.beEvalTagId" clearable filterable placeholder="单选，可清空" style="width: 100%" @change="onBeEvalChange">
-            <el-option v-for="t in beEvalOptions" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="评价人角色">
-          <el-select v-model="form.evalTagIds" multiple filterable placeholder="可多选" style="width: 100%">
-            <el-option v-for="t in evalOptions" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
+        <el-form-item label="评价角色">
+          <el-select v-model="form.tagId" clearable filterable placeholder="单选，可清空" style="width: 100%">
+            <el-option v-for="t in activeTags" :key="t.tagId" :value="t.tagId" :label="t.tagName" />
           </el-select>
         </el-form-item>
         <el-form-item label="是否参与评价">
@@ -268,32 +257,21 @@ function onPageChange(p) {
 const editVisible = ref(false);
 const editing = ref(null);
 const saving = ref(false);
-const form = reactive({ beEvalTagId: null, evalTagIds: [], evalEnabled: 0 });
+const form = reactive({ tagId: null, evalEnabled: 0 });
 
-// 全量启用标签（拍平，无类型）
+// 全量启用标签（拍平，无类型）—— 单一角色单选项
 const activeTags = computed(() => allTags.value.filter(t => t.status === 1));
-// 被评价角色选项 = 全量启用标签
-const beEvalOptions = computed(() => activeTags.value);
-// 评价角色选项 = 全量启用标签，排除已选被评价角色（局部排斥）
-const evalOptions = computed(() => activeTags.value.filter(t => t.tagId !== form.beEvalTagId));
-
-function onBeEvalChange() {
-  // 若评价角色里包含了新选的被评价角色，移除以满足互斥
-  form.evalTagIds = (form.evalTagIds || []).filter(id => id !== form.beEvalTagId);
-}
 
 function openEdit(row) {
   editing.value = row;
-  form.beEvalTagId = row.beEvalTag ? row.beEvalTag.tagId : null;
-  form.evalTagIds = (row.evalTags || []).map(t => t.tagId);
+  form.tagId = row.tag ? row.tag.tagId : null;
   form.evalEnabled = (row.evalEnabled === 1) ? 1 : 0;
   editVisible.value = true;
 }
 
 function onDialogClosed() {
   editing.value = null;
-  form.beEvalTagId = null;
-  form.evalTagIds = [];
+  form.tagId = null;
   form.evalEnabled = 0;
 }
 
@@ -301,7 +279,7 @@ async function handleSave() {
   if (!editing.value) return;
   saving.value = true;
   try {
-    await saveUserRoles(editing.value.userId, form.beEvalTagId ?? null, form.evalTagIds || [], form.evalEnabled);
+    await saveUserRoles(editing.value.userId, form.tagId ?? null, form.evalEnabled);
     ElMessage.success('保存成功');
     editVisible.value = false;
     await reload();

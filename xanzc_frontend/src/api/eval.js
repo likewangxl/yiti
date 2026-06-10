@@ -39,23 +39,15 @@ export function listUserTags(userId) {
   return call('get', '/admin/eval/user-tags', { params: { userId } }, []);
 }
 
-export function bindUserTags(userId, tagIds, roleType) {
-  return call('post', '/admin/eval/user-tags', { data: { userId, tagIds, roleType } }, { ok: true });
-}
-
-export function unbindUserTags(userId, tagIds) {
-  return call('delete', '/admin/eval/user-tags', { data: { userId, tagIds } }, { ok: true });
-}
-
 // 2026-05-29：人员标签列表化改造
-// 分页查询人员标签列表（含部门/岗位/角色 + 被评价人/评价人标签）
+// 分页查询人员标签列表（含部门/岗位/角色 + 单一评价角色标签）
 export function pageUserRoles(params = {}) {
   return call('get', '/admin/eval/user-tags/page', { params: { page: 1, pageSize: 20, ...params } }, { records: [], total: 0 });
 }
 
-// 覆盖式保存人员评价角色（被评价单选 / 评价人多选）+ 是否参与评价(1/0)
-export function saveUserRoles(userId, beEvalTagId, evalTagIds, evalEnabled) {
-  return call('put', `/admin/eval/user-tags/${userId}/roles`, { data: { beEvalTagId, evalTagIds, evalEnabled } }, { ok: true });
+// 2026-06-10：单一角色化——覆盖式保存人员评价角色（单标签）+ 是否参与评价(1/0)
+export function saveUserRoles(userId, tagId, evalEnabled) {
+  return call('put', `/admin/eval/user-tags/${userId}/roles`, { data: { tagId, evalEnabled } }, { ok: true });
 }
 
 // 2026-05-29：人员标签 导入 / 模板下载 / 导出
