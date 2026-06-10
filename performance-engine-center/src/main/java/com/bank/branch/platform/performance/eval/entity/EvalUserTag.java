@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * 人员标签关联表 EVAL_USER_TAG 贫血实体.
+ * 人员标签关联表 EVAL_USER_TAG 贫血实体（单一角色：每人至多一标签，无 role_type）.
  */
 @Data
 @TableName("EVAL_USER_TAG")
@@ -18,6 +18,4 @@ public class EvalUserTag {
     private String userId;
     /** 标签ID，关联 EVAL_TAG.TAG_ID. */
     private Long tagId;
-    /** 角色类型：1=被评价角色, 2=评价角色. */
-    private Integer roleType;
 }

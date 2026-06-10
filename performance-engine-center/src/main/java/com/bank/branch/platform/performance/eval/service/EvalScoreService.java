@@ -159,7 +159,7 @@ public class EvalScoreService {
     /**
      * 根据规则组列表匹配评价人所属组.
      *
-     * <p>groupType=1：按标签匹配，查询评价人持有的评价人标签（role_type=2），与 group.evalTagId 比对。
+     * <p>groupType=1：按标签匹配，查询评价人持有的唯一标签，与 group.evalTagId 比对。
      * <p>groupType=2：部门员工组，通过 OrgApi 判断评价人与被评价人是否同部门。
      *
      * @param groups       规则下所有评价人组
@@ -171,11 +171,11 @@ public class EvalScoreService {
         if (groups == null || groups.isEmpty()) {
             return null;
         }
-        List<Long> evalUserTagIds = evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2);
+        Long evalUserTagId = evalUserTagMapper.selectTagIdByUserId(evalUserId);
 
         for (EvalRuleGroup group : groups) {
             if (group.getGroupType() == 1) {
-                if (group.getEvalTagId() != null && evalUserTagIds.contains(group.getEvalTagId())) {
+                if (group.getEvalTagId() != null && group.getEvalTagId().equals(evalUserTagId)) {
                     return group;
                 }
             } else if (group.getGroupType() == 2) {

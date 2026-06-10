@@ -66,109 +66,46 @@ public class EvalUserTagService {
     }
 
     /**
-     * 批量绑定人员标签（增量，指定角色）.
-     * <p>局部排斥：若 batch 中任一标签已被该用户绑在对侧角色，抛 EVAL_ROLE_CONFLICT。</p>
+     * 覆盖式保存人员评价角色（单标签）：删除该用户旧关联，再写入至多一个标签。
      *
-     * @param userId   人员工号
-     * @param tagIds   标签ID列表
-     * @param roleType 角色类型：1=被评价角色, 2=评价角色
+     * @param userId 人员工号
+     * @param tagId  标签ID（null 表示清空角色）
+     * @throws PerfException EVAL_RULE_NOT_FOUND（标签不存在）
      */
     @Transactional(rollbackFor = Exception.class)
-    public void batchBind(String userId, List<Long> tagIds, Integer roleType) {
-        if (tagIds == null || tagIds.isEmpty()) return;
-        // 局部排斥：对侧角色已持有的标签不能再绑到本角色
-        int oppositeRole = (roleType != null && roleType == 1) ? 2 : 1;
-        List<Long> oppositeTagIds = evalUserTagMapper.selectTagIdsByUserIdAndType(userId, oppositeRole);
-        for (Long tid : tagIds) {
-            if (oppositeTagIds.contains(tid)) {
-                throw new PerfException(PerfErrorCode.EVAL_ROLE_CONFLICT, tid);
-            }
+    public void saveUserRole(String userId, Long tagId) {
+        // 1. 标签存在性校验
+        if (tagId != null && evalTagMapper.selectById(tagId) == null) {
+            throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, tagId);
         }
-        List<EvalUserTag> list = tagIds.stream().map(tagId -> {
-            EvalUserTag ut = new EvalUserTag();
-            ut.setUserId(userId);
-            ut.setTagId(tagId);
-            ut.setRoleType(roleType);
-            return ut;
-        }).collect(Collectors.toList());
-        evalUserTagMapper.batchInsert(list);
-    }
-
-    /** 批量解绑人员标签. */
-    @Transactional(rollbackFor = Exception.class)
-    public void batchUnbind(String userId, List<Long> tagIds) {
-        if (tagIds == null || tagIds.isEmpty()) return;
-        evalUserTagMapper.batchDelete(userId, tagIds);
-    }
-
-    /**
-     * 覆盖式保存人员的评价角色：删除该用户全部旧关联，再写入新的被评价人标签（至多一个，role=1）+ 评价人标签（多个，role=2）。
-     * <p>被评价单选由参数结构（单个 beEvalTagId）天然保证；局部排斥：评价角色与被评价角色不得包含同一标签。</p>
-     *
-     * @param userId      人员ID
-     * @param beEvalTagId 被评价人标签ID（role_type=1；null 表示清空被评价人角色）
-     * @param evalTagIds  评价人标签ID列表（role_type=2；null/空 表示清空评价人角色）
-     * @throws PerfException EVAL_RULE_NOT_FOUND（标签不存在）/ EVAL_ROLE_CONFLICT（评价角色与被评价角色冲突）
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void saveUserRoles(String userId, Long beEvalTagId, List<Long> evalTagIds) {
-        // 1. 评价人标签去重
-        List<Long> evalIds = (evalTagIds == null) ? List.of()
-                : evalTagIds.stream().distinct().collect(Collectors.toList());
-        // 2. 局部排斥：评价角色不能包含被评价角色（同一人）
-        if (beEvalTagId != null && evalIds.contains(beEvalTagId)) {
-            throw new PerfException(PerfErrorCode.EVAL_ROLE_CONFLICT, beEvalTagId);
-        }
-        // 3. 标签存在性校验（角色由 role_type 控制，此处仅校验标签存在）
-        if (beEvalTagId != null && evalTagMapper.selectById(beEvalTagId) == null) {
-            throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, beEvalTagId);
-        }
-        for (Long tid : evalIds) {
-            if (evalTagMapper.selectById(tid) == null) {
-                throw new PerfException(PerfErrorCode.EVAL_RULE_NOT_FOUND, tid);
-            }
-        }
-        // 4. 覆盖：删除该用户全部旧关联
+        // 2. 覆盖：删除该用户全部旧关联
         List<EvalUserTag> existing = evalUserTagMapper.selectByUserId(userId);
         if (!existing.isEmpty()) {
             List<Long> oldTagIds = existing.stream().map(EvalUserTag::getTagId).distinct().collect(Collectors.toList());
             evalUserTagMapper.batchDelete(userId, oldTagIds);
         }
-        // 5. 写入新组合：被评价 role_type=1，评价人 role_type=2
-        List<EvalUserTag> toInsert = new ArrayList<>();
-        if (beEvalTagId != null) {
+        // 3. 写入新标签（至多一个）
+        if (tagId != null) {
             EvalUserTag u = new EvalUserTag();
             u.setUserId(userId);
-            u.setTagId(beEvalTagId);
-            u.setRoleType(1);
-            toInsert.add(u);
+            u.setTagId(tagId);
+            evalUserTagMapper.batchInsert(List.of(u));
         }
-        for (Long tid : evalIds) {
-            EvalUserTag u = new EvalUserTag();
-            u.setUserId(userId);
-            u.setTagId(tid);
-            u.setRoleType(2);
-            toInsert.add(u);
-        }
-        if (!toInsert.isEmpty()) {
-            evalUserTagMapper.batchInsert(toInsert);
-        }
-        log.info("[EvalUserTagService.saveUserRoles] userId={} beEvalTagId={} evalTagIds={}", userId, beEvalTagId, evalIds);
+        log.info("[EvalUserTagService.saveUserRole] userId={} tagId={}", userId, tagId);
     }
 
     /**
-     * 覆盖式保存人员评价角色 + 写"是否参与评价"标记（同一事务，原子）。
+     * 覆盖式保存人员评价角色（单标签）+ 写"是否参与评价"标记（同一事务，原子）。
      * <p>语义：参与评价(是)=不在 EVAL_USER_SETTING 排除名单（默认）；不参与(否)=写入名单。
      * 仅显式 evalEnabled=0 视为"不参与"→入名单；null/1 一律视为"参与"→移出名单。</p>
      *
      * @param userId      人员工号
-     * @param beEvalTagId 被评价人标签ID（null 表示清空）
-     * @param evalTagIds  评价人标签ID列表（null/空 表示清空）
+     * @param tagId       标签ID（null 表示清空）
      * @param evalEnabled 是否参与评价：1=是 0=否；null 兜底为"参与"(是)
      */
     @Transactional(rollbackFor = Exception.class)
-    public void saveUserRolesWithSetting(String userId, Long beEvalTagId, List<Long> evalTagIds, Integer evalEnabled) {
-        saveUserRoles(userId, beEvalTagId, evalTagIds);
+    public void saveUserRoleWithSetting(String userId, Long tagId, Integer evalEnabled) {
+        saveUserRole(userId, tagId);
         // 仅显式 0 才"不参与"；null/1 视为参与（默认）。避免拆箱用 Integer.equals。
         boolean excluded = Integer.valueOf(0).equals(evalEnabled);
         if (excluded) {
@@ -176,7 +113,7 @@ public class EvalUserTagService {
         } else {
             evalUserSettingMapper.clearExcluded(userId);
         }
-        log.info("[EvalUserTagService.saveUserRolesWithSetting] userId={} excluded={}", userId, excluded);
+        log.info("[EvalUserTagService.saveUserRoleWithSetting] userId={} excluded={}", userId, excluded);
     }
 
     /** "否"（不参与）名单驱动模式下最大全量名单工号上限（防止超大结果集撑爆内存）。 */
@@ -347,17 +284,11 @@ public class EvalUserTagService {
             row.setRoleNames(roles.stream().map(RoleSimpleDTO::getRoleChName).collect(Collectors.toList()));
 
             List<EvalUserTagRow> tagRows = tagMap.getOrDefault(u.getEmpId(), List.of());
-            EvalUserTagBriefDTO beEval = tagRows.stream()
-                    .filter(t -> Integer.valueOf(1).equals(t.getRoleType()))
+            EvalUserTagBriefDTO tag = tagRows.stream()
                     .findFirst()
                     .map(t -> new EvalUserTagBriefDTO(t.getTagId(), t.getTagName()))
                     .orElse(null);
-            List<EvalUserTagBriefDTO> evalTags = tagRows.stream()
-                    .filter(t -> Integer.valueOf(2).equals(t.getRoleType()))
-                    .map(t -> new EvalUserTagBriefDTO(t.getTagId(), t.getTagName()))
-                    .collect(Collectors.toList());
-            row.setBeEvalTag(beEval);
-            row.setEvalTags(evalTags);
+            row.setTag(tag);
             // overlay：在排除名单内=不参与(0)，否则=参与(1)（默认参与）
             row.setEvalEnabled(excludedSet.contains(u.getEmpId()) ? 0 : 1);
             rows.add(row);

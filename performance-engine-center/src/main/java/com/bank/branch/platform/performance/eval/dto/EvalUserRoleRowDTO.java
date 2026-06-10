@@ -3,7 +3,7 @@ package com.bank.branch.platform.performance.eval.dto;
 import lombok.Data;
 import java.util.List;
 
-/** 人员标签列表的一行：人员基本信息 + RBAC 角色 + 被评价人角色（单） + 评价人角色（多）。 */
+/** 人员标签列表的一行：人员基本信息 + RBAC 角色 + 评价角色（单一角色，至多一个）。 */
 @Data
 public class EvalUserRoleRowDTO {
     /** 人员ID（工号，PT_USER.USER_ID）. */
@@ -16,10 +16,8 @@ public class EvalUserRoleRowDTO {
     private String position;
     /** RBAC 角色中文名列表（只读展示）. */
     private List<String> roleNames;
-    /** 被评价人角色（role_type=1，至多一个；无则 null）. */
-    private EvalUserTagBriefDTO beEvalTag;
-    /** 评价人角色（role_type=2，可多个）. */
-    private List<EvalUserTagBriefDTO> evalTags;
+    /** 评价角色标签（至多一个；无则 null）. */
+    private EvalUserTagBriefDTO tag;
     /** 是否参与评价：1=是 0=否. */
     private Integer evalEnabled;
 }

@@ -138,6 +138,39 @@ class EvalTaskServiceTest {
                 eq(targetId), eq(new BigDecimal("48.0")));
     }
 
+    // ─────────────────────────────────────────────
+    // 4. createTask：用单标签匹配规则生成 target
+    // ─────────────────────────────────────────────
+
+    @Test
+    void createTask_singleTag_matchesRule() {
+        java.time.LocalDateTime future = java.time.LocalDateTime.now().plusDays(1);
+        com.bank.branch.platform.performance.eval.entity.EvalRule rule =
+                new com.bank.branch.platform.performance.eval.entity.EvalRule();
+        rule.setRuleId(200L);
+        rule.setBeEvalTagId(5L);
+        rule.setStatus(1);
+        when(evalUserTagMapper.selectTagIdByUserId("101")).thenReturn(5L);
+        when(evalRuleMapper.selectByBeEvalTagId(5L)).thenReturn(rule);
+
+        evalTaskService.createTask("任务A", future, List.of("101"), "1");
+
+        verify(evalTaskTargetMapper).batchInsert(org.mockito.ArgumentMatchers.argThat(
+                list -> list.size() == 1 && list.get(0).getRuleId().equals(200L)
+                        && list.get(0).getBeEvalUserId().equals("101")));
+    }
+
+    @Test
+    void createTask_noTag_skips() {
+        java.time.LocalDateTime future = java.time.LocalDateTime.now().plusDays(1);
+        when(evalUserTagMapper.selectTagIdByUserId("101")).thenReturn(null);
+
+        evalTaskService.createTask("任务A", future, List.of("101"), "1");
+
+        verify(evalTaskTargetMapper, org.mockito.Mockito.never())
+                .batchInsert(org.mockito.ArgumentMatchers.anyList());
+    }
+
     // ──────────────────────────────────────────────────────────
     // 辅助方法
     // ──────────────────────────────────────────────────────────

@@ -55,24 +55,6 @@ public class EvalUserTagController {
         return ResponseWrapper.success(evalUserTagService.getByUserId(userId));
     }
 
-    @PostMapping
-    @Operation(summary = "批量绑定人员标签")
-    @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
-    public ResponseWrapper<Void> bind(@Validated @RequestBody BindReq req) {
-        log.info("[EvalUserTagController.bind] userId={}, tagIds={}, roleType={}", req.getUserId(), req.getTagIds(), req.getRoleType());
-        evalUserTagService.batchBind(req.getUserId(), req.getTagIds(), req.getRoleType());
-        return ResponseWrapper.success();
-    }
-
-    @DeleteMapping
-    @Operation(summary = "批量解绑人员标签")
-    @BizAuth(bizType = BizType.EVAL, action = BizAction.DELETE)
-    public ResponseWrapper<Void> unbind(@Validated @RequestBody BindReq req) {
-        log.info("[EvalUserTagController.unbind] userId={}, tagIds={}", req.getUserId(), req.getTagIds());
-        evalUserTagService.batchUnbind(req.getUserId(), req.getTagIds());
-        return ResponseWrapper.success();
-    }
-
     @GetMapping("/page")
     @Operation(summary = "分页查询人员标签列表（含部门/岗位/角色/是否参与评价）")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.LIST)
@@ -87,13 +69,13 @@ public class EvalUserTagController {
     }
 
     @PutMapping("/{userId}/roles")
-    @Operation(summary = "覆盖式保存人员评价角色（被评价单选/评价人多选）及参与评价开关")
+    @Operation(summary = "覆盖式保存人员评价角色（单标签）及参与评价开关")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
     public ResponseWrapper<Void> saveRoles(@PathVariable("userId") String userId,
                                            @Validated @RequestBody SaveRolesReq req) {
-        log.info("[EvalUserTagController.saveRoles] userId={}, beEvalTagId={}, evalTagIds={}, evalEnabled={}",
-                userId, req.getBeEvalTagId(), req.getEvalTagIds(), req.getEvalEnabled());
-        evalUserTagService.saveUserRolesWithSetting(userId, req.getBeEvalTagId(), req.getEvalTagIds(), req.getEvalEnabled());
+        log.info("[EvalUserTagController.saveRoles] userId={}, tagId={}, evalEnabled={}",
+                userId, req.getTagId(), req.getEvalEnabled());
+        evalUserTagService.saveUserRoleWithSetting(userId, req.getTagId(), req.getEvalEnabled());
         return ResponseWrapper.success();
     }
 
@@ -116,8 +98,7 @@ public class EvalUserTagController {
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
         EvalUserTagImportRow sample = new EvalUserTagImportRow();
         sample.setEmpId("100001");
-        sample.setBeEvalRoleName("支行行长");
-        sample.setEvalRoleNames("副行长,客户经理");
+        sample.setRoleName("支行行长");
         sample.setEvalEnabledText("是");
         EasyExcel.write(response.getOutputStream(), EvalUserTagImportRow.class)
                 .sheet("人员评价角色")
@@ -143,9 +124,7 @@ public class EvalUserTagController {
             e.setOrgName(r.getOrgName());
             e.setPosition(r.getPosition());
             e.setRoleNames(r.getRoleNames() == null ? "" : String.join("，", r.getRoleNames()));
-            e.setBeEvalRole(r.getBeEvalTag() == null ? "" : r.getBeEvalTag().getTagName());
-            e.setEvalRoles(r.getEvalTags() == null ? "" : r.getEvalTags().stream()
-                    .map(t -> t.getTagName()).collect(Collectors.joining("，")));
+            e.setRole(r.getTag() == null ? "" : r.getTag().getTagName());
             e.setEvalEnabled(Integer.valueOf(1).equals(r.getEvalEnabled()) ? "是" : "否");
             out.add(e);
         }
@@ -155,22 +134,10 @@ public class EvalUserTagController {
     }
 
     @Data
-    public static class BindReq {
-        @NotNull
-        private String userId;
-        private List<Long> tagIds;
-        /** 角色类型：1=被评价角色, 2=评价角色. */
-        @jakarta.validation.constraints.NotNull
-        private Integer roleType;
-    }
-
-    @Data
     public static class SaveRolesReq {
-        /** 被评价人标签ID（null 表示清空被评价人角色）. */
-        private Long beEvalTagId;
-        /** 评价人标签ID列表（null/空 表示清空评价人角色）. */
-        private List<Long> evalTagIds;
-        /** 是否参与评价：1=是 0=否；null 兜底为 0. */
+        /** 标签ID（null 表示清空角色）. */
+        private Long tagId;
+        /** 是否参与评价：1=是 0=否；null 兜底为参与. */
         private Integer evalEnabled;
     }
 }

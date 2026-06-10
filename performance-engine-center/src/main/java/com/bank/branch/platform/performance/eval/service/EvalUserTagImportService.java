@@ -25,8 +25,7 @@ import java.util.stream.Collectors;
 /**
  * 人员评价角色 Excel 导入服务。
  * <p>同步、原子：全部行校验通过才逐行覆盖式入库；任一行错误则一条都不写，返回行级错误明细。</p>
- * <p>标签采用扁平池语义（不再按 tag_type 分类型）：被评价角色与评价角色均从同一名称→tagId 映射解析，
- * 角色身份由"填在哪一列"决定。局部排斥：同一行的评价角色不得包含被评价角色。</p>
+ * <p>单一角色语义：每人至多一个标签，从扁平池名称→tagId 映射解析。被评价/评价方向由规则承载，与人员侧无关。</p>
  */
 @Slf4j
 @Service
@@ -124,54 +123,20 @@ public class EvalUserTagImportService {
                 continue;
             }
 
-            // 被评价角色：可空；填了则只能一个，从扁平池解析
-            Long beEvalTagId = null;
-            String beEvalRaw = r.getBeEvalRoleName() == null ? "" : r.getBeEvalRoleName().trim();
-            boolean rowFailed = false;
-            if (!beEvalRaw.isEmpty()) {
-                List<String> beNames = splitNames(beEvalRaw);
-                if (beNames.size() > 1) {
-                    errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "被评价角色只能填一个"));
-                    rowFailed = true;
-                } else {
-                    Long id = nameToId.get(beNames.get(0));
-                    if (id == null) {
-                        errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId,
-                                "被评价角色不存在：" + beNames.get(0)));
-                        rowFailed = true;
-                    } else {
-                        beEvalTagId = id;
-                    }
-                }
-            }
-            if (rowFailed) {
+            // 角色：必填，从扁平池解析单个标签
+            String roleRaw = r.getRoleName() == null ? "" : r.getRoleName().trim();
+            if (roleRaw.isEmpty()) {
+                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "角色不能为空"));
                 continue;
             }
-
-            // 评价角色：可空；逗号分隔去重；从扁平池解析
-            List<Long> evalTagIds = new ArrayList<>();
-            String evalRaw = r.getEvalRoleNames() == null ? "" : r.getEvalRoleNames().trim();
-            if (!evalRaw.isEmpty()) {
-                for (String name : splitNames(evalRaw)) {
-                    Long id = nameToId.get(name);
-                    if (id == null) {
-                        errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId,
-                                "评价角色不存在：" + name));
-                        rowFailed = true;
-                        break;
-                    }
-                    if (!evalTagIds.contains(id)) {
-                        evalTagIds.add(id);
-                    }
-                }
-            }
-            if (rowFailed) {
+            List<String> roleNames = splitNames(roleRaw);
+            if (roleNames.size() > 1) {
+                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "角色只能填一个"));
                 continue;
             }
-
-            // 局部排斥：评价角色不能包含被评价角色
-            if (beEvalTagId != null && evalTagIds.contains(beEvalTagId)) {
-                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "评价角色不能与被评价角色相同"));
+            Long tagId = nameToId.get(roleNames.get(0));
+            if (tagId == null) {
+                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "角色不存在：" + roleNames.get(0)));
                 continue;
             }
 
@@ -187,12 +152,7 @@ public class EvalUserTagImportService {
                 continue;
             }
 
-            if (beEvalTagId == null && evalTagIds.isEmpty()) {
-                errors.add(new EvalUserTagImportResultDTO.RowError(rowNo, empId, "被评价角色与评价角色不能同时为空"));
-                continue;
-            }
-
-            parsed.add(new ParsedRow(empId, beEvalTagId, evalTagIds, evalEnabled));
+            parsed.add(new ParsedRow(empId, tagId, evalEnabled));
         }
 
         // 4. 任一行错误 → 整体不入库
@@ -205,7 +165,7 @@ public class EvalUserTagImportService {
 
         // 5. 全部通过 → 逐行覆盖式入库
         for (ParsedRow p : parsed) {
-            evalUserTagService.saveUserRolesWithSetting(p.empId, p.beEvalTagId, p.evalTagIds, p.evalEnabled);
+            evalUserTagService.saveUserRoleWithSetting(p.empId, p.tagId, p.evalEnabled);
         }
         result.setSuccess(true);
         result.setImportedCount(parsed.size());
@@ -225,17 +185,15 @@ public class EvalUserTagImportService {
         return out;
     }
 
-    /** 校验通过的一行解析结果。 */
+    /** 校验通过的一行解析结果（单标签）。 */
     private static class ParsedRow {
         final String empId;
-        final Long beEvalTagId;
-        final List<Long> evalTagIds;
+        final Long tagId;
         final int evalEnabled;
 
-        ParsedRow(String empId, Long beEvalTagId, List<Long> evalTagIds, int evalEnabled) {
+        ParsedRow(String empId, Long tagId, int evalEnabled) {
             this.empId = empId;
-            this.beEvalTagId = beEvalTagId;
-            this.evalTagIds = evalTagIds;
+            this.tagId = tagId;
             this.evalEnabled = evalEnabled;
         }
     }

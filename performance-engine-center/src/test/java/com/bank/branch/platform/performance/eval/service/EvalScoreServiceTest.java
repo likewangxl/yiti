@@ -87,8 +87,8 @@ class EvalScoreServiceTest {
         when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
 
         // 评价人持有 tagId=50（评价人标签 tagType=2）
-        when(evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2))
-                .thenReturn(List.of(50L));
+        when(evalUserTagMapper.selectTagIdByUserId(evalUserId))
+                .thenReturn(50L);
 
         // 未重复
         when(evalScoreMapper.countByTargetIdAndEvalUserId(targetId, evalUserId)).thenReturn(0);
@@ -201,8 +201,8 @@ class EvalScoreServiceTest {
         group.setScoreMode(1);
         when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
 
-        when(evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2))
-                .thenReturn(List.of(50L));
+        when(evalUserTagMapper.selectTagIdByUserId(evalUserId))
+                .thenReturn(50L);
 
         // 已有记录 → 重复
         when(evalScoreMapper.countByTargetIdAndEvalUserId(targetId, evalUserId)).thenReturn(1);
@@ -244,8 +244,8 @@ class EvalScoreServiceTest {
         group.setScoreMode(2); // 等级打分
         when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
 
-        when(evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2))
-                .thenReturn(List.of(50L));
+        when(evalUserTagMapper.selectTagIdByUserId(evalUserId))
+                .thenReturn(50L);
         when(evalScoreMapper.countByTargetIdAndEvalUserId(targetId, evalUserId)).thenReturn(0);
         when(evalScoreMapper.insert(any(EvalScore.class))).thenReturn(1);
 
@@ -288,8 +288,8 @@ class EvalScoreServiceTest {
         group.setScoreMode(2); // 等级打分
         when(evalRuleGroupMapper.selectByRuleId(200L)).thenReturn(List.of(group));
 
-        when(evalUserTagMapper.selectTagIdsByUserIdAndType(evalUserId, 2))
-                .thenReturn(List.of(50L));
+        when(evalUserTagMapper.selectTagIdByUserId(evalUserId))
+                .thenReturn(50L);
 
         // 80 不在 {100, 95, 85, 75, 59} 中
         assertThatThrownBy(() -> evalScoreService.submitScore(taskId, targetId, evalUserId, 80))

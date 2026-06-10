@@ -70,7 +70,7 @@ public class EvalTaskService {
      * <ol>
      *   <li>校验 endTime > now，否则抛 EVAL_TASK_END_TIME_INVALID</li>
      *   <li>持久化 EvalTask 记录（status=0 进行中）</li>
-     *   <li>对每个被评价人查询其被评价人标签（role_type=1），匹配对应 EvalRule，生成 EvalTaskTarget</li>
+     *   <li>对每个被评价人查询其唯一标签，匹配对应 EvalRule，生成 EvalTaskTarget</li>
      * </ol>
      *
      * @param taskName       任务名称
@@ -99,18 +99,17 @@ public class EvalTaskService {
         task.setUpdateTime(LocalDateTime.now());
         evalTaskMapper.insert(task);
 
-        // 3. 为每个被评价人生成 target（匹配规则）
+        // 3. 为每个被评价人生成 target（用单标签匹配规则）
         List<EvalTaskTarget> targets = new ArrayList<>();
         for (String userId : beEvalUserIds) {
-            // 查询被评价人的被评价人标签（role_type=1）
-            List<Long> beEvalTagIds = evalUserTagMapper.selectTagIdsByUserIdAndType(userId, 1);
+            // 取被评价人唯一标签
+            Long tagId = evalUserTagMapper.selectTagIdByUserId(userId);
             Long ruleId = null;
-            for (Long tagId : beEvalTagIds) {
-                // 按被评价人标签查询匹配规则
+            if (tagId != null) {
+                // 按标签查询匹配规则
                 var rule = evalRuleMapper.selectByBeEvalTagId(tagId);
                 if (rule != null && rule.getStatus() == 1) {
                     ruleId = rule.getRuleId();
-                    break;
                 }
             }
             // 未匹配到规则时跳过（不强制，允许部分被评价人无规则）
