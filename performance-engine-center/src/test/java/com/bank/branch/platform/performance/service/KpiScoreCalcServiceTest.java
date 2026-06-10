@@ -162,6 +162,10 @@ class KpiScoreCalcServiceTest {
 
         ArgumentCaptor<PerfKpiScore> scoreCap = ArgumentCaptor.forClass(PerfKpiScore.class);
         verify(scoreMapper, times(1)).upsert(scoreCap.capture());
+        // 计算结果落库前先删除该数据日期+方案(KPI_A)的旧计分明细，再 upsert（避免脏数据）
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(scoreMapper);
+        order.verify(scoreMapper).deleteByDateAndScheme(DATA_DATE, "KPI_A");
+        order.verify(scoreMapper).upsert(any(PerfKpiScore.class));
         PerfKpiScore s = scoreCap.getValue();
         assertThat(s.getDataDate()).isEqualTo(DATA_DATE);
         assertThat(s.getSchemeCode()).isEqualTo("KPI_A");

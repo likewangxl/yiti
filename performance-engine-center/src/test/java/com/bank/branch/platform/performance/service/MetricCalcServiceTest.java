@@ -109,6 +109,10 @@ class MetricCalcServiceTest {
         verify(sqlExecutor, times(1)).execute(eq("SELECT id AS base_key, v AS metric_value FROM t"), anyMap(), any(Duration.class));
         verify(empIndexResultMapper).insertSlotValue(eq("E001"), eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(1), eq(new BigDecimal("10")));
         verify(empIndexResultMapper).insertSlotValue(eq("E002"), eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(1), eq(new BigDecimal("20")));
+        // 落库前先清空该数据日期+版本本指标(slot=1)的旧值，再 UPSERT（避免上一轮残留主体脏数据）
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(empIndexResultMapper);
+        order.verify(empIndexResultMapper).clearSlot(eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(1));
+        order.verify(empIndexResultMapper).insertSlotValue(eq("E001"), eq(LocalDate.of(2026, 4, 22)), eq("20260422"), eq(1), eq(new BigDecimal("10")));
 
         ArgumentCaptor<PerfRunTask> captor = ArgumentCaptor.forClass(PerfRunTask.class);
         // 至少一次 insert（PENDING） + updateStatus(RUNNING) + updateStatusWithParams(SUCCESS)

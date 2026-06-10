@@ -29,6 +29,13 @@
           AND scheme_code = #{schemeCode}
     </select>
 
+    <!-- 计算结果落库前清理：删除该数据日期+方案的全部旧计分明细，避免上一轮残留脏数据 -->
+    <delete id="deleteByDateAndScheme">
+        DELETE FROM PERF_KPI_SCORE
+        WHERE data_date = #{dataDate}
+          AND scheme_code = #{schemeCode}
+    </delete>
+
     <!--
       考核计算(KPI_CALC)数据范围过滤：scopeAll=true 不过滤；否则 ORG 对象限 orgCodes、
       EMP 对象限 empIds（两者皆空 → 1=0 无数据）。CUST 对象仅 全部 可见。

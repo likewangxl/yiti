@@ -25,6 +25,13 @@
             updated_time = NOW()
     </insert>
 
+    <!-- 落库前清空：把该数据日期+版本下指定 slot 列全部置 NULL，避免上一轮残留主体的脏数据；只动该列 -->
+    <update id="clearSlot">
+        UPDATE EMP_INDEX_RESULT
+        SET val_${slot} = NULL, updated_time = NOW()
+        WHERE data_date = #{dataDate} AND version = #{version}
+    </update>
+
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
         SELECT val_${slot}
         FROM EMP_INDEX_RESULT

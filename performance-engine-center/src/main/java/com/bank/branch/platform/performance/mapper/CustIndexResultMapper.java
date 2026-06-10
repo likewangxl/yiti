@@ -33,6 +33,17 @@ public interface CustIndexResultMapper extends BaseMapper<CustIndexResult> {
                          @Param("value") BigDecimal value);
 
     /**
+     * 清空指定数据日期+版本下某 slot 的全部客户指标值（落库前清理，避免上一轮残留主体的脏数据）.
+     *
+     * @param dataDate 数据日期
+     * @param version  数据版本
+     * @param slot     值槽（1..200）
+     */
+    void clearSlot(@Param("dataDate") LocalDate dataDate,
+                   @Param("version") String version,
+                   @Param("slot") Integer slot);
+
+    /**
      * 查询客户在指定 slot 上的指标值.
      */
     BigDecimal selectSlotValue(@Param("custId") String custId,

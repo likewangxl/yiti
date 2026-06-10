@@ -18,12 +18,25 @@
             updated_time = NOW()
     </insert>
 
+    <!-- 落库前清空：把该数据日期+版本下指定 slot 列全部置 NULL，避免上一轮残留主体的脏数据；只动该列 -->
+    <update id="clearSlot">
+        UPDATE CUST_INDEX_RESULT
+        SET val_${slot} = NULL, updated_time = NOW()
+        WHERE data_date = #{dataDate} AND version = #{version}
+    </update>
+
+    <!--
+      动态指标查询/仪表盘 CUST 维度取值：
+      入参 custId 是 CUST_MASTER.id（前端选客户传主键），而宽表 CUST_INDEX_RESULT.cust_id
+      存的是客户号 cust_no，需经 CUST_MASTER 翻译；不再按 version 过滤，只按 cust_no + data_date，
+      同客户同日多版本取 updated_time 最新一行。version 形参保留以兼容接口签名，SQL 内不用。
+    -->
     <select id="selectSlotValue" resultType="java.math.BigDecimal">
         SELECT val_${slot}
         FROM CUST_INDEX_RESULT
-        WHERE cust_id = #{custId}
+        WHERE cust_id = (SELECT cust_no FROM CUST_MASTER WHERE id = #{custId})
           AND data_date = #{dataDate}
-          AND version = #{version}
+        ORDER BY updated_time DESC
         LIMIT 1
     </select>
 

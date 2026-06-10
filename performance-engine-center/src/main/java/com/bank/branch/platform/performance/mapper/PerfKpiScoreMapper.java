@@ -40,6 +40,19 @@ public interface PerfKpiScoreMapper extends BaseMapper<PerfKpiScore> {
                               @Param("schemeCode") String schemeCode);
 
     /**
+     * 删除某数据日期 + 方案的全部计分明细（计算结果落库前先清理，避免上一轮残留的脏数据）.
+     *
+     * <p>SQL：{@code DELETE FROM PERF_KPI_SCORE WHERE data_date=#{dataDate} AND scheme_code=#{schemeCode}}。
+     * 在 {@code calcOneScheme} 开头调用，删除后再 upsert 本轮计算结果。
+     *
+     * @param dataDate   数据日期
+     * @param schemeCode 方案编码
+     * @return 删除行数
+     */
+    int deleteByDateAndScheme(@Param("dataDate") LocalDate dataDate,
+                              @Param("schemeCode") String schemeCode);
+
+    /**
      * 统计某数据日期 + 方案下去重后的对象数（按 subject_id + subject_type group by）.
      *
      * @param dataDate    数据日期

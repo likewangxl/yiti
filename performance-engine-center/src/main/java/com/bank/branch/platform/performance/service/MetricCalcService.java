@@ -514,10 +514,27 @@ public class MetricCalcService {
             log.info("[MetricCalc] metric={} 无结果，跳过 UPSERT", def.getMetricCode());
             return;
         }
+        String dim = baseDim == null ? "" : baseDim.toUpperCase();
+        // 落库前先清空该数据日期+版本下本指标(slot)的旧值，再写入本轮结果，
+        // 避免上一轮存在、本轮已不在结果集中的主体残留脏数据（被移除的主体值不再保留）。
+        switch (dim) {
+            case "EMP":
+                empIndexResultMapper.clearSlot(dataDate, version, slot);
+                break;
+            case "ORG":
+                orgIndexResultMapper.clearSlot(dataDate, version, slot);
+                break;
+            case "CUST":
+                custIndexResultMapper.clearSlot(dataDate, version, slot);
+                break;
+            default:
+                throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                        "未知 baseDim=" + baseDim);
+        }
         for (Map.Entry<String, BigDecimal> entry : values.entrySet()) {
             String key = entry.getKey();
             BigDecimal value = entry.getValue();
-            switch (baseDim == null ? "" : baseDim.toUpperCase()) {
+            switch (dim) {
                 case "EMP":
                     empIndexResultMapper.insertSlotValue(key, dataDate, version, slot, value);
                     break;

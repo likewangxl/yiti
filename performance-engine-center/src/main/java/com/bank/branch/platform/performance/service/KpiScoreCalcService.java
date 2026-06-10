@@ -800,6 +800,12 @@ public class KpiScoreCalcService {
      * @return 本方案计分对象数 / 跳过项数统计
      */
     private SchemeStat calcOneScheme(PerfKpiScheme scheme, LocalDate dataDate) {
+        // 计算结果落库前先删除该数据日期+该方案的旧计分明细，避免上一轮残留脏数据（重算时全量替换）
+        int deleted = scoreMapper.deleteByDateAndScheme(dataDate, scheme.getSchemeCode());
+        if (deleted > 0) {
+            log.info("【KPI分值计算】方案 {} 数据日期 {} 落库前清理旧计分明细 {} 条",
+                    scheme.getSchemeCode(), dataDate, deleted);
+        }
         List<PerfKpiItem> items = itemMapper.selectBySchemeId(scheme.getId());
         if (items == null || items.isEmpty()) {
             return new SchemeStat(0, 0);
