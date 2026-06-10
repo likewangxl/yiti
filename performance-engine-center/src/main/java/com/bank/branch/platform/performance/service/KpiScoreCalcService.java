@@ -518,8 +518,11 @@ public class KpiScoreCalcService {
             case SELF_CREATED:
             case SELF_ASSIGNED:
             default:
+                // ctx.getEmpId() 是 USER_ID，须解析成工号(username)，PERF_KPI_SCORE.subject_id(EMP) 存的是工号
                 String emp = ctx.getEmpId();
-                return KpiScopeFilter.of(emp == null ? List.of() : List.of(emp), List.of());
+                List<String> selfUsernames = emp == null
+                        ? List.of() : resolveUsernamesByUserIds(List.of(emp));
+                return KpiScopeFilter.of(selfUsernames, List.of());
         }
     }
 
@@ -528,18 +531,48 @@ public class KpiScoreCalcService {
         if (orgCodes == null || orgCodes.isEmpty()) {
             return KpiScopeFilter.of(List.of(), List.of());
         }
-        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<String> userIds = new java.util.LinkedHashSet<>();
         for (String oc : orgCodes) {
             try {
                 List<String> es = userApi.getEmpIdsByOrg(oc);
                 if (es != null) {
-                    empIds.addAll(es);
+                    userIds.addAll(es);
                 }
             } catch (Exception ignore) {
                 // 单机构解析失败不影响其它
             }
         }
-        return KpiScopeFilter.of(new java.util.ArrayList<>(empIds), new java.util.ArrayList<>(orgCodes));
+        // getEmpIdsByOrg 返回 USER_ID，须解析成工号(username)再作 EMP scope 过滤值
+        List<String> empUsernames = resolveUsernamesByUserIds(userIds);
+        return KpiScopeFilter.of(empUsernames, new java.util.ArrayList<>(orgCodes));
+    }
+
+    /**
+     * 把 auth 模块的 USER_ID 集合解析成工号(PT_USER.username)集合.
+     * auth 的 "empId" 语义是 USER_ID，而 perf 宽表/KPI 结果表的 EMP 主体存的是工号，
+     * 二者不一致会导致 ORG_SUBTREE/SELF 范围下按 USER_ID 过滤工号列查不到任何数据。
+     * 失败时 fail-close 返回空集（宁可少给不可错给），并记录告警。
+     */
+    private List<String> resolveUsernamesByUserIds(java.util.Collection<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        try {
+            List<UserDTO> users = userApi.getUserByEmpIds(new java.util.ArrayList<>(userIds));
+            if (users == null) {
+                return List.of();
+            }
+            java.util.LinkedHashSet<String> usernames = new java.util.LinkedHashSet<>();
+            for (UserDTO u : users) {
+                if (u != null && StringUtils.hasText(u.getUsername())) {
+                    usernames.add(u.getUsername());
+                }
+            }
+            return new java.util.ArrayList<>(usernames);
+        } catch (Exception e) {
+            log.warn("[KpiScoreCalcService] USER_ID→工号解析失败，范围过滤 fail-close 返回空集, userIds={}", userIds, e);
+            return List.of();
+        }
     }
 
     private KpiScoreGroupPageDTO groupPage(LocalDate dataDate, String schemeCode,

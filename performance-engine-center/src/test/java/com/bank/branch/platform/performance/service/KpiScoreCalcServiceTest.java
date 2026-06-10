@@ -419,7 +419,12 @@ class KpiScoreCalcServiceTest {
         ctx.setOrgSubtreeCodes(new java.util.LinkedHashSet<>(List.of("ORG1")));
         DataScopeContext.set(ctx);
         try {
-            when(userApi.getEmpIdsByOrg("ORG1")).thenReturn(List.of("E001", "E002"));
+            // getEmpIdsByOrg 返回的是 USER_ID（如 U1/U2），需经 getUserByEmpIds 解析成工号(username=E001/E002)，
+            // 因为 PERF_KPI_SCORE.subject_id(EMP) 存的是工号而非 USER_ID
+            when(userApi.getEmpIdsByOrg("ORG1")).thenReturn(List.of("U1", "U2"));
+            UserDTO d1 = new UserDTO(); d1.setEmpId("U1"); d1.setUsername("E001");
+            UserDTO d2 = new UserDTO(); d2.setEmpId("U2"); d2.setUsername("E002");
+            when(userApi.getUserByEmpIds(List.of("U1", "U2"))).thenReturn(List.of(d1, d2));
             PerfKpiScheme scheme = new PerfKpiScheme();
             scheme.setId("S1"); scheme.setSchemeCode("KPI_A");
             when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
