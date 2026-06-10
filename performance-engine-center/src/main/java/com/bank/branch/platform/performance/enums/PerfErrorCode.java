@@ -179,7 +179,9 @@ public enum PerfErrorCode {
     EVAL_IMPORT_FILE_EMPTY("PERF-40060", "导入文件为空"),
     EVAL_IMPORT_FILE_INVALID("PERF-40061", "导入文件解析失败"),
     EVAL_IMPORT_ROWS_EXCEEDED("PERF-40062", "导入行数超过上限"),
-    EVAL_ROLE_CONFLICT("PERF-40063", "评价角色不能与被评价角色相同");
+    EVAL_ROLE_CONFLICT("PERF-40063", "评价角色不能与被评价角色相同"),
+    EVAL_ASSIGN_ITEM_NOT_FOUND("PERF-40064", "待处理任务明细不存在"),
+    EVAL_IMPORT_TYPE_INVALID("PERF-40065", "导入类型非法");
 
     private final String code;
     private final String message;

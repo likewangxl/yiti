@@ -268,6 +268,12 @@ com.bank.branch.platform.<module>/
 - **schema 变更走 SQL 直接执行**：所有 DDL/DML 由开发或 DBA 直接在目标库执行（手工或 CI 脚本），不再依赖任何"按版本号自动 migrate"框架。
 - **历史 V1.0~V1.8 迁移脚本已全部删除**：`onepl` 与 `yiti` 当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
 
+### MyBatis-Plus 规范（新增功能绝对红线，2026-06-10 起）
+- **所有新增功能涉及的数据库访问统一使用 MyBatis-Plus**：Mapper 接口必须 `extends BaseMapper<T>`；单条 CRUD（`insert`/`selectById`/`updateById`/`deleteById` 等）直接用 BaseMapper 内置方法，**禁止**为这些方法重复写 XML；动态/简单条件查询优先 `LambdaQueryWrapper`/`LambdaUpdateWrapper`。
+- **XML 只写 BaseMapper 覆盖不到的自定义 SQL**：批量插入、跨表 JOIN、GROUP BY 聚合、带乐观条件的批更新等才落 `*Mapper.xml`（命名空间指向该 BaseMapper 接口）。
+- **实体**用 MyBatis-Plus 注解 `@TableName` / `@TableId(type = IdType.AUTO)`；**配置**已就绪（root 依赖 `mybatis-plus-spring-boot3-starter` 3.5.7、`map-underscore-to-camel-case: true`、各模块 `@MapperScan` + `MybatisPlusConfig`），新 Mapper 开箱即用，无需额外配置。
+- 既有遗留的纯 MyBatis 写法不强制回改，但**新增**一律按本规范。
+
 ### 子代理派遣规范（绝对红线）
 - **派遣任何 subagent（Agent 工具）时，model 参数必须 ≥ sonnet（即只能是 `sonnet` 或 `opus`），禁止使用 `haiku`**。
 - 即使 plan 文档建议"机械任务用 cheap model"，也要降级到 sonnet 而非 haiku。

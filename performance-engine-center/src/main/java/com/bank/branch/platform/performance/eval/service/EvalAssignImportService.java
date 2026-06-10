@@ -1,0 +1,244 @@
+package com.bank.branch.platform.performance.eval.service;
+
+import com.alibaba.excel.EasyExcel;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
+import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.governance.api.dto.DictItemDTO;
+import com.bank.branch.platform.performance.enums.PerfErrorCode;
+import com.bank.branch.platform.performance.eval.dto.EvalAssignImportResultDTO;
+import com.bank.branch.platform.performance.eval.dto.EvalAssignImportRow;
+import com.bank.branch.platform.performance.eval.entity.EvalAssignBatch;
+import com.bank.branch.platform.performance.eval.entity.EvalAssignItem;
+import com.bank.branch.platform.performance.eval.mapper.EvalAssignBatchMapper;
+import com.bank.branch.platform.performance.eval.mapper.EvalAssignItemMapper;
+import com.bank.branch.platform.performance.exception.PerfException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 待处理任务（评价任务）Excel 导入服务。
+ *
+ * <p>同步、原子：全部行校验通过才建批次并批量入库；任一行错误则一条都不写（all-or-none），返回行级错误明细。</p>
+ * <p>校验：双方工号为系统有效员工（部门/标签不校验）+ 权重标签命中字典 + 评价类型命中字典 + 文件内配对不重复。
+ * 截止时间随上传单独传入，作用于整批。</p>
+ */
+@Slf4j
+@Service
+public class EvalAssignImportService {
+
+    /** 单次导入最大行数保护。 */
+    private static final int MAX_IMPORT_ROWS = 5000;
+    /** 权重标签字典类型。 */
+    private static final String DICT_WEIGHT_TAG = "EVAL_WEIGHT_TAG";
+    /** 评价类型字典类型。 */
+    private static final String DICT_SCORE_TYPE = "EVAL_SCORE_TYPE";
+
+    private final UserApi userApi;
+    private final DictApi dictApi;
+    private final EvalAssignBatchMapper batchMapper;
+    private final EvalAssignItemMapper itemMapper;
+
+    public EvalAssignImportService(UserApi userApi, DictApi dictApi,
+                                   EvalAssignBatchMapper batchMapper,
+                                   EvalAssignItemMapper itemMapper) {
+        this.userApi = userApi;
+        this.dictApi = dictApi;
+        this.batchMapper = batchMapper;
+        this.itemMapper = itemMapper;
+    }
+
+    /**
+     * 解析并导入 Excel。
+     *
+     * @param file     上传的 .xlsx 文件
+     * @param taskType 待处理任务类型（EVAL/REWARD）
+     * @param deadline 打分截止时间
+     * @param createBy 创建人工号
+     * @return 导入结果
+     */
+    public EvalAssignImportResultDTO importExcel(MultipartFile file, String taskType,
+                                                 LocalDateTime deadline, String createBy) {
+        if (file == null || file.isEmpty()) {
+            throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_EMPTY);
+        }
+        List<EvalAssignImportRow> rows;
+        try {
+            rows = EasyExcel.read(file.getInputStream())
+                    .head(EvalAssignImportRow.class)
+                    .sheet()
+                    .doReadSync();
+        } catch (Exception e) {
+            log.warn("[EvalAssignImportService.importExcel] 解析失败: {}", e.getMessage());
+            throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_INVALID, e.getMessage());
+        }
+        if (rows.size() > MAX_IMPORT_ROWS) {
+            throw new PerfException(PerfErrorCode.EVAL_IMPORT_ROWS_EXCEEDED, rows.size(), MAX_IMPORT_ROWS);
+        }
+        return importRows(rows, taskType, deadline, createBy);
+    }
+
+    /**
+     * 校验全部行并原子入库。
+     *
+     * @param rows     解析后的行
+     * @param taskType 待处理任务类型（EVAL/REWARD）
+     * @param deadline 打分截止时间
+     * @param createBy 创建人工号
+     * @return 导入结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public EvalAssignImportResultDTO importRows(List<EvalAssignImportRow> rows, String taskType,
+                                                LocalDateTime deadline, String createBy) {
+        EvalAssignImportResultDTO result = new EvalAssignImportResultDTO();
+        if (rows == null || rows.isEmpty()) {
+            throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_EMPTY);
+        }
+        if (deadline == null) {
+            throw new PerfException(PerfErrorCode.EVAL_TASK_END_TIME_INVALID, (Object) null);
+        }
+
+        // 1. 字典：权重标签合法集合（同时接受标签/编码），评价类型 文本→编码 映射
+        Set<String> validWeights = new HashSet<>();
+        for (DictItemDTO d : dictApi.getDictItems(DICT_WEIGHT_TAG)) {
+            validWeights.add(d.getDictLabel());
+            validWeights.add(d.getDictCode());
+        }
+        Map<String, String> scoreTypeMap = new HashMap<>();
+        for (DictItemDTO d : dictApi.getDictItems(DICT_SCORE_TYPE)) {
+            scoreTypeMap.put(d.getDictLabel(), d.getDictCode());
+            scoreTypeMap.put(d.getDictCode(), d.getDictCode());
+        }
+
+        // 2. 工号有效性：收集双方全部工号批量查
+        Set<String> allIds = new HashSet<>();
+        for (EvalAssignImportRow r : rows) {
+            if (r.getBeEvalUserId() != null && !r.getBeEvalUserId().trim().isEmpty()) {
+                allIds.add(r.getBeEvalUserId().trim());
+            }
+            if (r.getEvalUserId() != null && !r.getEvalUserId().trim().isEmpty()) {
+                allIds.add(r.getEvalUserId().trim());
+            }
+        }
+        Set<String> existingIds = allIds.isEmpty() ? Set.of()
+                : userApi.getUserByEmpIds(new ArrayList<>(allIds)).stream()
+                .map(UserDTO::getEmpId).collect(Collectors.toSet());
+
+        // 3. 逐行校验
+        List<EvalAssignImportResultDTO.RowError> errors = new ArrayList<>();
+        List<EvalAssignItem> parsed = new ArrayList<>();
+        Set<String> seenPairs = new HashSet<>();
+
+        for (int i = 0; i < rows.size(); i++) {
+            int rowNo = i + 1;
+            EvalAssignImportRow r = rows.get(i);
+            String beId = trim(r.getBeEvalUserId());
+            String evId = trim(r.getEvalUserId());
+
+            if (beId.isEmpty()) {
+                errors.add(err(rowNo, "被打分员工编号不能为空"));
+                continue;
+            }
+            if (evId.isEmpty()) {
+                errors.add(err(rowNo, "打分员工编号不能为空"));
+                continue;
+            }
+            if (!existingIds.contains(beId)) {
+                errors.add(err(rowNo, "被打分员工工号不存在：" + beId));
+                continue;
+            }
+            if (!existingIds.contains(evId)) {
+                errors.add(err(rowNo, "打分员工工号不存在：" + evId));
+                continue;
+            }
+            // 权重标签：必填且命中字典
+            String weight = trim(r.getWeightTag());
+            if (weight.isEmpty()) {
+                errors.add(err(rowNo, "权重标签不能为空"));
+                continue;
+            }
+            if (!validWeights.contains(weight)) {
+                errors.add(err(rowNo, "权重标签不存在：" + weight));
+                continue;
+            }
+            // 评价类型：必填且命中字典，映射为编码
+            String scoreTypeText = trim(r.getScoreTypeText());
+            if (scoreTypeText.isEmpty()) {
+                errors.add(err(rowNo, "评价类型不能为空"));
+                continue;
+            }
+            String scoreType = scoreTypeMap.get(scoreTypeText);
+            if (scoreType == null) {
+                errors.add(err(rowNo, "评价类型不存在：" + scoreTypeText));
+                continue;
+            }
+            // 文件内配对去重
+            String pairKey = evId + "" + beId;
+            if (!seenPairs.add(pairKey)) {
+                errors.add(err(rowNo, "打分人与被打分人组合在文件内重复"));
+                continue;
+            }
+
+            EvalAssignItem item = new EvalAssignItem();
+            item.setEvalUserId(evId);
+            item.setEvalUserName(trim(r.getEvalUserName()));
+            item.setEvalUserTag(trim(r.getEvalUserTag()));
+            item.setEvalUserDept(trim(r.getEvalUserDept()));
+            item.setBeEvalUserId(beId);
+            item.setBeEvalUserName(trim(r.getBeEvalUserName()));
+            item.setBeEvalDept(trim(r.getBeEvalDept()));
+            item.setBeEvalTag(trim(r.getBeEvalTag()));
+            item.setWeightTag(weight);
+            item.setScoreType(scoreType);
+            item.setSubmitted(0);
+            parsed.add(item);
+        }
+
+        // 4. 任一行错误 → 整体不入库
+        if (!errors.isEmpty()) {
+            result.setSuccess(false);
+            result.setImportedCount(0);
+            result.setErrors(errors);
+            return result;
+        }
+
+        // 5. 全部通过 → 建批次 + 批量插明细
+        EvalAssignBatch batch = new EvalAssignBatch();
+        batch.setTaskType(taskType);
+        batch.setSource("IMPORT");
+        batch.setDeadline(deadline);
+        batch.setStatus(0);
+        batch.setCreateBy(createBy);
+        batch.setCreateTime(LocalDateTime.now());
+        batchMapper.insert(batch);
+
+        for (EvalAssignItem item : parsed) {
+            item.setBatchId(batch.getBatchId());
+        }
+        itemMapper.batchInsert(parsed);
+
+        result.setSuccess(true);
+        result.setImportedCount(parsed.size());
+        log.info("[EvalAssignImportService.importRows] 导入成功 batchId={} count={}", batch.getBatchId(), parsed.size());
+        return result;
+    }
+
+    private static String trim(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    private static EvalAssignImportResultDTO.RowError err(int row, String msg) {
+        return new EvalAssignImportResultDTO.RowError(row, msg);
+    }
+}

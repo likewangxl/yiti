@@ -113,7 +113,47 @@ export function closeTask(taskId) {
 }
 
 // ============================================================
-// 我的评价 (EvalScoreController: /api/eval)
+// 待处理任务（导入式评价任务）
+// 管理端导入 (EvalAssignAdminController: /api/admin/eval/assign)
+// ============================================================
+
+// 下载评价任务导入模板（10 列）
+export function downloadAssignTemplate() {
+  return call('get', '/admin/eval/assign/import-template', { responseType: 'blob' }, null);
+}
+
+// 导入评价任务：file + taskType + deadline(yyyy-MM-dd HH:mm:ss)
+export async function importAssign(file, taskType, deadline) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return call('post', '/admin/eval/assign/import', {
+    params: { taskType, deadline },
+    data: fd,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }, null);
+}
+
+// ============================================================
+// 待处理任务（用户端） (EvalPendingController: /api/eval/pending-tasks)
+// ============================================================
+
+// 我的待处理任务汇总（按被打分人部门聚合未提交明细）
+export function listPendingTasks() {
+  return call('get', '/eval/pending-tasks', {}, []);
+}
+
+// 某批次+部门下分配给我的明细
+export function listPendingItems(batchId, dept) {
+  return call('get', '/eval/pending-tasks/items', { params: { batchId, dept } }, []);
+}
+
+// 提交某条明细的打分
+export function submitPendingScore(itemId, score) {
+  return call('post', '/eval/pending-tasks/submit', { data: { itemId, score } }, { ok: true });
+}
+
+// ============================================================
+// 我的评价（规则驱动 / 自动生成，旧流程，前端入口已隐藏）(EvalScoreController: /api/eval)
 // ============================================================
 
 export function listMyTasks(params = {}) {

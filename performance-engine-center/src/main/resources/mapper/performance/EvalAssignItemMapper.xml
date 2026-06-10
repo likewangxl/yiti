@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalAssignItemMapper">
+
+    <sql id="BASE_COLUMNS">
+        item_id, batch_id, eval_user_id, eval_user_name, eval_user_tag, eval_user_dept,
+        be_eval_user_id, be_eval_user_name, be_eval_dept, be_eval_tag,
+        weight_tag, score_type, score, submitted, submit_time
+    </sql>
+
+    <insert id="batchInsert">
+        INSERT INTO EVAL_ASSIGN_ITEM
+        (batch_id, eval_user_id, eval_user_name, eval_user_tag, eval_user_dept,
+         be_eval_user_id, be_eval_user_name, be_eval_dept, be_eval_tag,
+         weight_tag, score_type, score, submitted, submit_time)
+        VALUES
+        <foreach collection="items" item="i" separator=",">
+            (#{i.batchId}, #{i.evalUserId}, #{i.evalUserName}, #{i.evalUserTag}, #{i.evalUserDept},
+             #{i.beEvalUserId}, #{i.beEvalUserName}, #{i.beEvalDept}, #{i.beEvalTag},
+             #{i.weightTag}, #{i.scoreType}, #{i.score}, #{i.submitted}, #{i.submitTime})
+        </foreach>
+    </insert>
+
+    <!-- 当前打分人未提交明细，按 批次 + 被打分人部门 聚合 -->
+    <select id="selectPendingGroups" resultType="com.bank.branch.platform.performance.eval.dto.EvalPendingGroupDTO">
+        SELECT i.batch_id        AS batchId,
+               b.task_type       AS taskType,
+               i.be_eval_dept    AS dept,
+               COUNT(*)          AS pendingCount,
+               b.deadline        AS deadline
+        FROM EVAL_ASSIGN_ITEM i
+        JOIN EVAL_ASSIGN_BATCH b ON i.batch_id = b.batch_id
+        WHERE i.eval_user_id = #{evalUserId} AND i.submitted = 0
+        GROUP BY i.batch_id, b.task_type, i.be_eval_dept, b.deadline
+        ORDER BY b.deadline ASC, i.batch_id ASC
+    </select>
+
+    <select id="selectByScorerBatchDept" resultType="com.bank.branch.platform.performance.eval.entity.EvalAssignItem">
+        SELECT <include refid="BASE_COLUMNS"/> FROM EVAL_ASSIGN_ITEM
+        WHERE eval_user_id = #{evalUserId} AND batch_id = #{batchId} AND be_eval_dept = #{dept}
+        ORDER BY submitted ASC, item_id ASC
+    </select>
+
+    <update id="markSubmitted">
+        UPDATE EVAL_ASSIGN_ITEM
+        SET score = #{score}, submitted = 1, submit_time = #{submitTime}
+        WHERE item_id = #{itemId} AND submitted = 0
+    </update>
+</mapper>

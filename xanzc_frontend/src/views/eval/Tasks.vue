@@ -6,7 +6,7 @@
       <h1>评价任务</h1>
       <span class="desc">发起评价活动 · 管理任务生命周期</span>
       <div class="actions">
-        <el-button type="primary" @click="openCreateDialog">新建任务</el-button>
+        <el-button type="primary" @click="openWizard">新增待处理任务</el-button>
       </div>
     </div>
 
@@ -162,6 +162,105 @@
       </template>
     </el-dialog>
 
+    <!-- ===== 新增待处理任务向导 ===== -->
+    <el-dialog
+      v-model="wizard.visible"
+      title="新增待处理任务"
+      width="660px"
+      :close-on-click-modal="false"
+      @closed="resetWizard"
+    >
+      <el-form label-width="100px" label-position="right">
+        <el-form-item label="任务来源">
+          <el-select v-model="wizard.source" placeholder="请选择来源" style="width: 100%" @change="onSourceChange">
+            <el-option v-for="o in sourceOptions" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+        </el-form-item>
+
+        <!-- 自动生成：沿用现有规则驱动 -->
+        <template v-if="wizard.source === 'AUTO'">
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="自动生成沿用现有规则驱动方式，按被评价人发起。"
+            style="margin-bottom: 12px"
+          />
+          <el-button type="primary" @click="goAutoCreate">前往自动生成</el-button>
+        </template>
+
+        <!-- 手工导入 -->
+        <template v-else-if="wizard.source === 'IMPORT'">
+          <el-form-item label="导入类型">
+            <el-select v-model="wizard.importType" placeholder="请选择导入类型" style="width: 100%">
+              <el-option v-for="o in importTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </el-form-item>
+
+          <el-alert
+            v-if="wizard.importType === 'REWARD'"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="奖励分配导入本期暂未开放。"
+          />
+
+          <!-- 评价任务导入 -->
+          <template v-if="wizard.importType === 'EVAL'">
+            <el-form-item label="截止时间">
+              <el-date-picker
+                v-model="wizard.deadline"
+                type="datetime"
+                placeholder="选择打分截止时间"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                :disabled-date="disabledDate"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-form-item label="导入文件">
+              <div style="width: 100%">
+                <div style="margin-bottom: 8px">
+                  <el-button size="small" @click="doDownloadTpl">📥 下载导入模板</el-button>
+                  <span class="form-tip">10 列：被打分人 编号/姓名/部门/标签 + 打分人 编号/姓名/标签/部门 + 权重标签 + 评价类型</span>
+                </div>
+                <el-upload
+                  ref="wizardUploaderRef"
+                  drag
+                  action="#"
+                  :auto-upload="false"
+                  :show-file-list="true"
+                  :limit="1"
+                  :on-change="onWizardFilePick"
+                  accept=".xlsx"
+                >
+                  <div class="el-upload__text">点击或拖拽 <em>.xlsx</em> 到此处</div>
+                </el-upload>
+              </div>
+            </el-form-item>
+
+            <div v-if="importErrors.length" class="imp-errors">
+              <div class="err-title">导入失败，请修正后重传（共 {{ importErrors.length }} 条问题）：</div>
+              <el-table :data="importErrors" size="small" border max-height="220">
+                <el-table-column prop="row" label="行号" width="80" />
+                <el-table-column prop="message" label="原因" min-width="320" />
+              </el-table>
+            </div>
+          </template>
+        </template>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="wizard.visible = false">取消</el-button>
+        <el-button
+          v-if="wizard.source === 'IMPORT' && wizard.importType === 'EVAL'"
+          type="primary"
+          :loading="importing"
+          :disabled="!wizardFile || !wizard.deadline"
+          @click="doImportAssign"
+        >开始导入</el-button>
+      </template>
+    </el-dialog>
+
     <!-- ===== 任务详情弹窗 ===== -->
     <el-dialog
       v-model="detailDialog.visible"
@@ -234,8 +333,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
-import { listTasks, getTaskDetail, createTask, closeTask } from '@/api/eval'
+import { listTasks, getTaskDetail, createTask, closeTask, downloadAssignTemplate, importAssign } from '@/api/eval'
 import { listUsers } from '@/api/users'
+import { useDict } from '@/composables/useDict'
+
+// 字典下拉：任务来源 / 导入类型
+const { options: sourceOptions } = useDict('EVAL_PENDING_SOURCE')
+const { options: importTypeOptions } = useDict('EVAL_IMPORT_TYPE')
 
 // ===================== 列表数据 =====================
 
@@ -429,6 +533,95 @@ async function handleCreateTask() {
   }
 }
 
+// ===================== 新增待处理任务向导 =====================
+
+const wizard = reactive({
+  visible: false,
+  source: '',
+  importType: '',
+  deadline: ''
+})
+const wizardFile = ref(null)
+const wizardUploaderRef = ref(null)
+const importErrors = ref([])
+const importing = ref(false)
+
+/** 打开向导 */
+function openWizard() {
+  wizard.visible = true
+}
+
+/** 重置向导状态 */
+function resetWizard() {
+  wizard.source = ''
+  wizard.importType = ''
+  wizard.deadline = ''
+  wizardFile.value = null
+  importErrors.value = []
+  wizardUploaderRef.value?.clearFiles()
+}
+
+/** 来源切换时清理下游选择 */
+function onSourceChange() {
+  wizard.importType = ''
+  wizard.deadline = ''
+  wizardFile.value = null
+  importErrors.value = []
+}
+
+/** 自动生成：沿用现有规则驱动新建弹窗 */
+function goAutoCreate() {
+  wizard.visible = false
+  openCreateDialog()
+}
+
+/** Blob 另存为文件 */
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/** 下载评价任务导入模板 */
+async function doDownloadTpl() {
+  try {
+    const blob = await downloadAssignTemplate()
+    saveBlob(blob, '评价任务导入模板.xlsx')
+  } catch (e) { /* http.js 已提示 */ }
+}
+
+/** 选择导入文件 */
+function onWizardFilePick(uploadFile) {
+  wizardFile.value = uploadFile.raw || null
+}
+
+/** 执行评价任务导入 */
+async function doImportAssign() {
+  if (!wizardFile.value || !wizard.deadline) return
+  importing.value = true
+  importErrors.value = []
+  try {
+    const res = await importAssign(wizardFile.value, 'EVAL', wizard.deadline)
+    if (res && res.success) {
+      ElMessage.success(`导入成功 ${res.importedCount} 条，已分发到各打分人的待处理任务`)
+      wizard.visible = false
+      loadList()
+    } else {
+      importErrors.value = (res && res.errors) || []
+      ElMessage.error('导入未通过校验，请查看错误明细')
+    }
+  } catch (e) {
+    // http.js 已弹错误消息
+  } finally {
+    importing.value = false
+  }
+}
+
 // ===================== 任务详情弹窗 =====================
 
 const detailDialog = reactive({ visible: false, loading: false, closing: false })
@@ -584,6 +777,18 @@ $danger: #e53e3e;
     font-size: 12px;
     color: $text-3;
     margin-top: 4px;
+    margin-left: 8px;
+  }
+
+  /* 导入错误明细 */
+  .imp-errors {
+    margin-top: 12px;
+
+    .err-title {
+      font-size: 13px;
+      color: $danger;
+      margin-bottom: 6px;
+    }
   }
 
   /* 详情弹窗 */

@@ -37,7 +37,7 @@ const routes = [
       { path: 'eval/user-tags', name: 'EvalUserTags', component: () => import('@/views/eval/UserTags.vue'), meta: { title: '人员标签', group: '内部评价' } },
       { path: 'eval/rules',     name: 'EvalRules',    component: () => import('@/views/eval/Rules.vue'),    meta: { title: '评价规则', group: '内部评价' } },
       { path: 'eval/tasks',     name: 'EvalTasks',    component: () => import('@/views/eval/Tasks.vue'),    meta: { title: '评价任务', group: '内部评价' } },
-      { path: 'eval/my-tasks',  name: 'EvalMyTasks',  component: () => import('@/views/eval/MyTasks.vue'),  meta: { title: '我的评价', group: '内部评价' } },
+      { path: 'eval/my-tasks',  name: 'EvalMyTasks',  component: () => import('@/views/eval/MyTasks.vue'),  meta: { title: '待处理任务', group: '内部评价' } },
 
       // 报表分析
       { path: 'report',           redirect: '/report/dynamic' },
