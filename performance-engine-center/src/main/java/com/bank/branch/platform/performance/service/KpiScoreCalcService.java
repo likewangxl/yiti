@@ -169,12 +169,13 @@ public class KpiScoreCalcService {
             }
             log.info("【KPI分值计算】待计算方案数={}", schemes.size());
 
-            // 3. 逐方案计算（fail-fast：任一方案计算抛异常即停止整个任务）
+            // 3. 逐方案计算（方案级隔离：单方案失败记录错误后继续处理下一个方案，不中止整任务）
             int schemeSuccess = 0;
+            int schemeFail = 0;
             int totalScored = 0;
             int totalSkipped = 0;
             for (PerfKpiScheme scheme : schemes) {
-                // 每个方案落一条方案级记录（成功/异常各记一条）；异常仍 fail-fast 中止整任务
+                // 每个方案落一条方案级记录（成功/失败各记一条到 PERF_KPI_CALC_LOG）
                 LocalDateTime schemeStart = LocalDateTime.now();
                 try {
                     SchemeStat stat = calcOneScheme(scheme, dataDate);
@@ -184,23 +185,27 @@ public class KpiScoreCalcService {
                     insertSchemeLog(dataDate, scheme.getSchemeCode(), normalizedTrigger, triggerBy,
                             schemeStart, "SUCCESS", stat.scored, stat.skipped, null, taskId);
                 } catch (Exception schemeEx) {
+                    // 单方案计算失败：记录错误信息后继续处理下一个方案（不再 fail-fast 中止整任务）
+                    schemeFail++;
+                    log.error("【KPI分值计算】方案 {} 计算失败，已记录并继续下一个方案: {}",
+                            scheme.getSchemeCode(), schemeEx.getMessage(), schemeEx);
                     insertSchemeLog(dataDate, scheme.getSchemeCode(), normalizedTrigger, triggerBy,
                             schemeStart, "FAILED", 0, 0, schemeEx.getMessage(), taskId);
-                    // 失败方案数记 1（fail-fast）；成功/跳过保留已处理量，供任务级统计
-                    task.setTotalCount(schemes.size());
-                    task.setSuccessCount(schemeSuccess);
-                    task.setFailCount(1);
-                    task.setSkipCount(totalSkipped);
-                    throw schemeEx;
                 }
             }
 
             task.setTotalCount(schemes.size());
             task.setSuccessCount(schemeSuccess);
+            task.setFailCount(schemeFail);
             task.setSkipCount(totalSkipped);
-            finishTask(task, "SUCCESS", null);
-            log.info("========== 【KPI分值计算】完成 taskId={}, 方案={}, 计分对象={}, 跳过项={} ==========",
-                    taskId, schemeSuccess, totalScored, totalSkipped);
+            // 全部方案失败才算任务 FAILED；否则任务完成（含部分失败），失败明细已逐方案落 PERF_KPI_CALC_LOG
+            boolean allFailed = schemeFail > 0 && schemeSuccess == 0;
+            String taskErr = allFailed
+                    ? ("KPI分值计算失败：全部 " + schemeFail + " 个方案计算失败")
+                    : null;
+            finishTask(task, allFailed ? "FAILED" : "SUCCESS", taskErr);
+            log.info("========== 【KPI分值计算】完成 taskId={}, 成功方案={}, 失败方案={}, 计分对象={}, 跳过项={} ==========",
+                    taskId, schemeSuccess, schemeFail, totalScored, totalSkipped);
             return taskId;
         } catch (PerfException pe) {
             // 前置检查 / 方案不存在已在上面 finishTask；这里兜底（避免重复写时 status 已是 FAILED 也无妨）
@@ -320,9 +325,38 @@ public class KpiScoreCalcService {
         } catch (Exception ignore) {
             // 名称解析失败：仅展示工号
         }
+        // trigger_by 历史上可能存 user_id(如 E40001) 而非工号(username)；按 username 未命中的再按 user_id 兜底，
+        // 命中后用真实工号(username)覆盖展示值 triggerBy（仅改响应、不改落库）并回填姓名，保证前端展示「工号 + 姓名」
+        java.util.Map<String, UserDTO> userById = new java.util.HashMap<>();
+        List<String> unresolved = usernames.stream()
+                .filter(k -> !nameByUsername.containsKey(k)).toList();
+        if (!unresolved.isEmpty()) {
+            try {
+                List<UserDTO> byId = userApi.getUserByEmpIds(unresolved);
+                if (byId != null) {
+                    for (UserDTO u : byId) {
+                        if (u != null && StringUtils.hasText(u.getEmpId())) {
+                            userById.put(u.getEmpId(), u);
+                        }
+                    }
+                }
+            } catch (Exception ignore) {
+                // user_id 兜底失败：仅展示工号
+            }
+        }
         for (com.bank.branch.platform.performance.controller.dto.PerfKpiCalcLogDTO d : dtos) {
-            if (StringUtils.hasText(d.getTriggerBy())) {
-                d.setTriggerByName(nameByUsername.get(d.getTriggerBy()));
+            String tb = d.getTriggerBy();
+            if (!StringUtils.hasText(tb)) {
+                continue;
+            }
+            if (nameByUsername.containsKey(tb)) {
+                d.setTriggerByName(nameByUsername.get(tb));
+            } else if (userById.containsKey(tb)) {
+                UserDTO u = userById.get(tb);
+                if (StringUtils.hasText(u.getUsername())) {
+                    d.setTriggerBy(u.getUsername()); // 用真实工号覆盖展示（落库不变）
+                }
+                d.setTriggerByName(u.getDisplayName());
             }
         }
     }

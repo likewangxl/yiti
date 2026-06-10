@@ -29,6 +29,7 @@ import com.bank.branch.platform.performance.controller.dto.KpiScoreGroupRowDTO;
 import com.bank.branch.platform.performance.controller.dto.KpiScoreMetricCellDTO;
 import com.bank.branch.platform.performance.controller.dto.PerfKpiScoreResultDTO;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -444,5 +445,80 @@ class KpiScoreCalcServiceTest {
         s.setBaseValue(new BigDecimal(base));
         s.setScore(new BigDecimal(score));
         return s;
+    }
+
+    @Test
+    @DisplayName("calculate: 单方案失败时记录错误并继续计算下一个方案（不中止整任务）")
+    void calculate_oneSchemeFails_recordsErrorAndContinuesNext() {
+        when(taskMapper.selectCount(any())).thenReturn(1L); // 三级均已完成
+
+        PerfKpiScheme s1 = new PerfKpiScheme();
+        s1.setId("S1"); s1.setSchemeCode("KPI_A"); s1.setStatus("ACTIVE");
+        PerfKpiScheme s2 = new PerfKpiScheme();
+        s2.setId("S2"); s2.setSchemeCode("KPI_B"); s2.setStatus("ACTIVE");
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000))
+                .thenReturn(List.of(s1, s2));
+
+        // 方案1：calcOneScheme 取指标项时抛异常 → 方案计算失败
+        when(itemMapper.selectBySchemeId("S1")).thenThrow(new RuntimeException("boom S1"));
+
+        // 方案2：完整 happy-path（应在方案1失败后继续被处理）
+        PerfKpiItem item2 = new PerfKpiItem();
+        item2.setId("I2"); item2.setSchemeId("S2"); item2.setMetricCode("M_0002");
+        item2.setWeight(new BigDecimal("0.5")); item2.setFormula("actual / target * weight");
+        when(itemMapper.selectBySchemeId("S2")).thenReturn(List.of(item2));
+        PerfTargetPlan plan2 = new PerfTargetPlan();
+        plan2.setId("P2"); plan2.setKpiSchemeId("S2"); plan2.setTargetCycle("YEAR");
+        when(targetPlanMapper.selectByCondition("S2", "ACTIVE", null, 0, 1000)).thenReturn(List.of(plan2));
+        PerfMetricDef def2 = new PerfMetricDef();
+        def2.setMetricCode("M_0002"); def2.setBaseDim("EMP"); def2.setValSlot(6);
+        when(metricDefService.getByCodeOrNull("M_0002")).thenReturn(def2);
+        when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 6))
+                .thenReturn(List.of(new SubjectSlotValueRow("E001", new BigDecimal("80"))));
+        PerfTargetValue tv2 = new PerfTargetValue();
+        tv2.setTargetValue(new BigDecimal("100")); tv2.setBaseValue(new BigDecimal("0"));
+        when(targetValueMapper.selectByUniqueKey("P2", "EMP", "E001", "2026", "M_0002")).thenReturn(tv2);
+        when(formulaService.evalScore(eq("actual / target * weight"),
+                eq(new BigDecimal("80")), eq(new BigDecimal("100")),
+                eq(new BigDecimal("0")), eq(new BigDecimal("0.5")), any(), any()))
+                .thenReturn(new BigDecimal("0.4000"));
+
+        String taskId = service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+
+        // 未抛异常 → 任务完成；关键：方案1失败后仍继续处理了方案2（取指标项 + 完成计分）
+        assertThat(taskId).isNotBlank();
+        verify(itemMapper).selectBySchemeId("S2");
+        verify(scoreMapper, times(1)).upsert(any(PerfKpiScore.class));
+        // 任务 SUCCESS（部分失败，非全失败）+ 成功/失败方案计数
+        ArgumentCaptor<PerfMetricCalcTask> taskCap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
+        verify(taskMapper, times(1)).updateById(taskCap.capture());
+        assertThat(taskCap.getValue().getStatus()).isEqualTo("SUCCESS");
+        assertThat(taskCap.getValue().getSuccessCount()).isEqualTo(1);
+        assertThat(taskCap.getValue().getFailCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("pageLogs: trigger_by 为 user_id(非工号) 时按 user_id 兜底回填触发人姓名")
+    void pageLogs_triggerByUserId_resolvesNameViaEmpIdFallback() {
+        com.bank.branch.platform.performance.entity.PerfKpiCalcLog logRow =
+                new com.bank.branch.platform.performance.entity.PerfKpiCalcLog();
+        logRow.setId(1L);
+        logRow.setTriggerType("MANUAL");
+        logRow.setTriggerBy("E40001");
+        when(kpiCalcLogMapper.selectCount(any())).thenReturn(1L);
+        when(kpiCalcLogMapper.selectList(any())).thenReturn(List.of(logRow));
+        // 非工号(username)，按 username 查不到
+        when(userApi.getUsersByUsernames(List.of("E40001"))).thenReturn(List.of());
+        // 按 user_id 兜底命中
+        UserDTO u = new UserDTO();
+        u.setEmpId("E40001"); u.setUsername("finance_zhou"); u.setDisplayName("周八(资财)");
+        when(userApi.getUserByEmpIds(List.of("E40001"))).thenReturn(List.of(u));
+
+        var page = service.pageLogs(null, null, 1, 20);
+
+        assertThat(page.getRecords()).hasSize(1);
+        // 展示值用真实工号(username)覆盖 user_id，并回填姓名 → 前端展示「工号 + 姓名」
+        assertThat(page.getRecords().get(0).getTriggerBy()).isEqualTo("finance_zhou");
+        assertThat(page.getRecords().get(0).getTriggerByName()).isEqualTo("周八(资财)");
     }
 }

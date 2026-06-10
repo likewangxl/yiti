@@ -343,12 +343,41 @@ public class JobService {
                 }
             }
         } catch (Exception ignore) {
-            // 姓名解析失败：仅展示工号
-            return;
+            // 按工号解析失败：继续尝试 user_id 兜底
+        }
+        // created_by 历史上可能存 user_id(如 E40001) 而非工号(username)；按工号未命中的再按 user_id 兜底，
+        // 命中后用真实工号(username)覆盖展示值 createdBy（仅改响应、不改落库）并回填姓名，保证前端展示「工号 + 姓名」
+        Map<String, UserDTO> userById = new HashMap<>();
+        List<String> unresolved = empIds.stream()
+                .filter(k -> !nameByEmpId.containsKey(k))
+                .collect(Collectors.toList());
+        if (!unresolved.isEmpty()) {
+            try {
+                List<UserDTO> byId = userApi.getUserByEmpIds(unresolved);
+                if (byId != null) {
+                    for (UserDTO u : byId) {
+                        if (u != null && u.getEmpId() != null && !u.getEmpId().isBlank()) {
+                            userById.put(u.getEmpId(), u);
+                        }
+                    }
+                }
+            } catch (Exception ignore) {
+                // user_id 兜底失败：仅展示工号
+            }
         }
         for (JobRunLogDTO d : dtos) {
-            if (d.getCreatedBy() != null) {
-                d.setOperatorName(nameByEmpId.get(d.getCreatedBy()));
+            String cb = d.getCreatedBy();
+            if (cb == null || cb.isBlank()) {
+                continue;
+            }
+            if (nameByEmpId.containsKey(cb)) {
+                d.setOperatorName(nameByEmpId.get(cb));
+            } else if (userById.containsKey(cb)) {
+                UserDTO u = userById.get(cb);
+                if (u.getUsername() != null && !u.getUsername().isBlank()) {
+                    d.setCreatedBy(u.getUsername()); // 用真实工号覆盖展示（落库不变）
+                }
+                d.setOperatorName(u.getDisplayName());
             }
         }
     }
