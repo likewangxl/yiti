@@ -141,6 +141,10 @@ export function upsertTargetValue(data) {
 export function batchUpsertTargetValues(values) {
   return call('post', '/perf/target-values/batch', { data: { values } }, { ok: true });
 }
+// 物理删除单条目标值（按 id；前端二次确认后调用）
+export function deleteTargetValue(id) {
+  return call('delete', `/perf/target-values/${id}`, {}, { ok: true });
+}
 
 // ============================================================
 // 数据导入 Import

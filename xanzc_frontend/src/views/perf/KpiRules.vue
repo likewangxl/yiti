@@ -154,8 +154,12 @@
           <template #default="{row}">
             <!-- 编辑方案时允许改指标：若已配置项换了指标，保存时按"删旧+新增"处理 -->
             <el-select v-model="row.metricCode" :disabled="dlg.readOnly" filterable placeholder="选择指标" style="width:100%">
+              <!-- 下拉项显示「指标名称 + 指标编号」：名称为主、编号灰字附后；label 含编号便于按编号检索/选中回显 -->
               <el-option v-for="m in metricsByDim(row.baseDim)" :key="m.metricCode"
-                :value="m.metricCode" :label="`${m.metricName}`" />
+                :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`">
+                <span>{{ m.metricName }}</span>
+                <span style="color:#8492a6;font-size:12px;margin-left:8px;">{{ m.metricCode }}</span>
+              </el-option>
             </el-select>
           </template>
         </el-table-column>
