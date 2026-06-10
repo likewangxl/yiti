@@ -359,35 +359,32 @@
           </el-col>
         </el-row>
 
-        <!-- 查不到该客户的余额统计时告警（查到则不显示）-->
+        <!-- 客户主档(CUST_MASTER)查不到该客户编号时告警（查到则不显示）-->
         <el-alert v-if="dlg.form.custId && custStat.queried && !custStat.found"
                   type="warning" :closable="false" style="margin-bottom:12px"
                   title="未查询到该客户，请填写客户名称" />
 
-        <!-- 余额概览（默认显示，数据来自 XAN_M98_CUST_STAT_SHOW3，按客户编号反显）-->
-        <div class="card-h"><div class="title">余额概览</div></div>
-        <el-row :gutter="16" style="margin-bottom:4px">
-          <el-col :span="6">
-            <el-form-item label="当前余额">
-              <el-input :model-value="custIdx.MC_001 != null ? custIdx.MC_001 : '-'" disabled />
-            </el-form-item>
-          </el-col>
-          <el-col :span="6">
-            <el-form-item label="较上日余额">
-              <el-input :model-value="custIdx.MC_002 != null ? custIdx.MC_002 : '-'" disabled />
-            </el-form-item>
-          </el-col>
-          <el-col :span="6">
-            <el-form-item label="年均余额">
-              <el-input :model-value="custIdx.MC_003 != null ? custIdx.MC_003 : '-'" disabled />
-            </el-form-item>
-          </el-col>
-          <el-col :span="6">
-            <el-form-item label="较上年均余额">
-              <el-input :model-value="custIdx.MC_004 != null ? custIdx.MC_004 : '-'" disabled />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <!-- 余额概览（label 方式展示）：按业务类型动态显隐——选含存款→存款余额(MC_001-004)，选含贷款→贷款余额(MC_005-008) -->
+        <!-- 存款余额：仅业务类型选含存款时显示 -->
+        <template v-if="showDepositBal">
+          <div class="bal-sub">存款余额</div>
+          <el-row :gutter="16" style="margin-bottom:4px">
+            <el-col :span="6"><el-form-item label="当前余额"><span class="bal-val">{{ fmtAmt(custIdx.MC_001) }}</span></el-form-item></el-col>
+            <el-col :span="6"><el-form-item label="较上日余额"><span class="bal-val">{{ fmtAmt(custIdx.MC_002) }}</span></el-form-item></el-col>
+            <el-col :span="6"><el-form-item label="年均余额"><span class="bal-val">{{ fmtAmt(custIdx.MC_003) }}</span></el-form-item></el-col>
+            <el-col :span="6"><el-form-item label="较上年均余额"><span class="bal-val">{{ fmtAmt(custIdx.MC_004) }}</span></el-form-item></el-col>
+          </el-row>
+        </template>
+        <!-- 贷款余额：仅业务类型选含贷款时显示 -->
+        <template v-if="showLoanBal">
+          <div class="bal-sub">贷款余额</div>
+          <el-row :gutter="16" style="margin-bottom:4px">
+            <el-col :span="6"><el-form-item label="当前余额"><span class="bal-val">{{ fmtAmt(custIdxLoan.MC_005) }}</span></el-form-item></el-col>
+            <el-col :span="6"><el-form-item label="较上日余额"><span class="bal-val">{{ fmtAmt(custIdxLoan.MC_006) }}</span></el-form-item></el-col>
+            <el-col :span="6"><el-form-item label="年均余额"><span class="bal-val">{{ fmtAmt(custIdxLoan.MC_007) }}</span></el-form-item></el-col>
+            <el-col :span="6"><el-form-item label="较上年均余额"><span class="bal-val">{{ fmtAmt(custIdxLoan.MC_008) }}</span></el-form-item></el-col>
+          </el-row>
+        </template>
 
         <!-- 原业绩分配：自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
         <div v-if="(dlg.form.custId && preview.loaded) || dlg.readOnly || dlg.form.originalItems.length" class="preview-section" v-loading="preview.loading">
@@ -634,7 +631,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   submitAdjust, withdrawAdjust, getAdjustDetail,
   getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
-  getAllocPreview, getCustStat, getCustIndexValues, suggestEmployees, suggestOrgs
+  getAllocPreview, getCustMasterName, getCustIndexValues, suggestEmployees, suggestOrgs
 } from '@/api/perf';
 import { approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -903,11 +900,16 @@ async function openTodoDetail(row) {
       items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark, empLabel: empLabelOf(it) })),
       originalItems: originalItemsFromDetail(d)
     });
-    // 余额概览读快照（列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
+    // 余额概览读快照（存款 MC_001..004 列复用：currBal=当前 / mAvgBal=较上日 / qAvgBal=年均 / yAvgBal=较上年均）
     custIdx.MC_001 = d.currBal ?? null;
     custIdx.MC_002 = d.mAvgBal ?? null;
     custIdx.MC_003 = d.qAvgBal ?? null;
     custIdx.MC_004 = d.yAvgBal ?? null;
+    // 贷款余额读快照（MC_005..008，与存款同步落库，查看/审批直接读，不再实时取数）
+    custIdxLoan.MC_005 = d.loanCurrBal ?? null;
+    custIdxLoan.MC_006 = d.loanMAvgBal ?? null;
+    custIdxLoan.MC_007 = d.loanQAvgBal ?? null;
+    custIdxLoan.MC_008 = d.loanYAvgBal ?? null;
     // 申请信息条所需的 dlg 顶层字段（之前漏赋值导致 todo/done tab 查看时申请单号/申请人/机构/时间 全空）
     dlg.applyNo = d.applyNo || '';
     dlg.createdBy = d.createdBy || '';
@@ -1154,6 +1156,12 @@ function fmtBizKind(val) {
   if (!val) return '-';
   return val.split(',').map(k => bizKindMap.value[k] || BIZ_KIND_FALLBACK[k] || k).join('、');
 }
+// 余额概览按业务类型动态显隐：业务类型(可多选)的标签含「存」→显示存款余额；含「贷」→显示贷款余额；其余不显示
+function bizKindLabel(k) {
+  return bizKindMap.value[k] || BIZ_KIND_FALLBACK[k] || k || '';
+}
+const showDepositBal = computed(() => (dlg.form.bizKind || []).some(k => bizKindLabel(k).includes('存')));
+const showLoanBal = computed(() => (dlg.form.bizKind || []).some(k => bizKindLabel(k).includes('贷')));
 async function loadBizKindDict() {
   try {
     const items = await listDictItems('PERF_BIZ_KIND');
@@ -1175,8 +1183,25 @@ function resetCustStat() {
 // 余额概览 4 项：按客户编号 + 昨日日期在 CUST_INDEX_RESULT 取 MC_001/MC_002/MC_003/MC_004 指标值，
 // 分别对应 当前余额 / 较上日余额 / 年均余额 / 较上年均余额；查无数据为 null → 页面显示 '-'
 const custIdx = reactive({ MC_001: null, MC_002: null, MC_003: null, MC_004: null });
+// 贷款余额（MC_005-008，固定槽位 5-8：当前/较上日/年均/较上年均贷款余额）
+const custIdxLoan = reactive({ MC_005: null, MC_006: null, MC_007: null, MC_008: null });
+function resetCustIdxLoan() {
+  custIdxLoan.MC_005 = custIdxLoan.MC_006 = custIdxLoan.MC_007 = custIdxLoan.MC_008 = null;
+}
 function resetCustIdx() {
   custIdx.MC_001 = custIdx.MC_002 = custIdx.MC_003 = custIdx.MC_004 = null;
+  resetCustIdxLoan();
+}
+// 按客户编号 + 统计日期取 CUST_INDEX_RESULT 的贷款余额（MC_005-008，独立失败兜底 '-'）
+async function loadCustIdxLoan(custId) {
+  if (!custId) { resetCustIdxLoan(); return; }
+  try {
+    const m = await getCustIndexValues(custId, custStatStatisDt(), ['MC_005', 'MC_006', 'MC_007', 'MC_008']);
+    custIdxLoan.MC_005 = m?.MC_005 ?? null;
+    custIdxLoan.MC_006 = m?.MC_006 ?? null;
+    custIdxLoan.MC_007 = m?.MC_007 ?? null;
+    custIdxLoan.MC_008 = m?.MC_008 ?? null;
+  } catch { resetCustIdxLoan(); }
 }
 // XAN_M98_CUST_STAT_SHOW3 统计日期 STATIS_DT：
 // 查看/审批模式（dlg.createdTime 有值）取 申请日期-1；新建模式取 昨日。均 yyyy-MM-dd。
@@ -1409,6 +1434,10 @@ async function openView(row) {
   custIdx.MC_002 = row.mAvgBal ?? null;
   custIdx.MC_003 = row.qAvgBal ?? null;
   custIdx.MC_004 = row.yAvgBal ?? null;
+  custIdxLoan.MC_005 = row.loanCurrBal ?? null;
+  custIdxLoan.MC_006 = row.loanMAvgBal ?? null;
+  custIdxLoan.MC_007 = row.loanQAvgBal ?? null;
+  custIdxLoan.MC_008 = row.loanYAvgBal ?? null;
   // list 接口已有的申请人字段先塞进去，detail 接口再覆盖一次以拿到 createdByName/OrgName
   dlg.applyNo = row.applyNo || '';
   dlg.createdBy = row.createdBy || '';
@@ -1432,6 +1461,10 @@ async function openView(row) {
       custIdx.MC_002 = d.mAvgBal ?? null;
       custIdx.MC_003 = d.qAvgBal ?? null;
       custIdx.MC_004 = d.yAvgBal ?? null;
+      custIdxLoan.MC_005 = d.loanCurrBal ?? null;
+      custIdxLoan.MC_006 = d.loanMAvgBal ?? null;
+      custIdxLoan.MC_007 = d.loanQAvgBal ?? null;
+      custIdxLoan.MC_008 = d.loanYAvgBal ?? null;
       dlg.applyNo = d.applyNo || dlg.applyNo;
       dlg.createdBy = d.createdBy || dlg.createdBy;
       dlg.createdByName = d.createdByName || dlg.createdByName;
@@ -1491,6 +1524,11 @@ async function onSubmit() {
       mAvgBal:    custIdx.MC_002,
       qAvgBal:    custIdx.MC_003,
       yAvgBal:    custIdx.MC_004,
+      // 贷款余额(MC_005..008)同步随提交快照入库，审批/查看直接读
+      loanCurrBal: custIdxLoan.MC_005,
+      loanMAvgBal: custIdxLoan.MC_006,
+      loanQAvgBal: custIdxLoan.MC_007,
+      loanYAvgBal: custIdxLoan.MC_008,
       allocDim:   dlg.form.allocDim,
       bizKind:    Array.isArray(dlg.form.bizKind) ? dlg.form.bizKind.join(',') : dlg.form.bizKind,
       accountNo:  dlg.form.accountNo || undefined,
@@ -1540,19 +1578,14 @@ watch(() => dlg.form.custId, (val) => {
     // 记录上次是否"查到并锁定"——查不到时仅清掉这种锁定名，避免冲掉用户手输
     const prevFound = custStat.found;
     try {
-      // 客户名称从 XAN_M98_CUST_STAT_SHOW3 按客户编号反显（列名为 DB 大写）
-      // 统计日期 STATIS_DT：新建=昨日 / 查看·审批=申请日期-1
-      const s = await getCustStat(val, custStatStatisDt());
-      if (s) {
-        // 查到：反显客户名称并锁定（输入框 disabled）
-        dlg.form.custName = s.CUST_NAME || s.cust_name || '';
-        custStat.currBal = s.CURR_BAL ?? null;
-        custStat.mAvgBal = s.M_AVG_BAL ?? null;
-        custStat.qAvgBal = s.Q_AVG_BAL ?? null;
-        custStat.yAvgBal = s.Y_AVG_BAL ?? null;
+      // 客户名称改从客户主档 CUST_MASTER 按客户编号反显（后端 CustomerQueryApi.getCustomerByCustNo）
+      const m = await getCustMasterName(val);
+      if (m && m.found) {
+        // 客户主档命中：反显客户名称并锁定（输入框 disabled）
+        dlg.form.custName = m.custName || '';
         custStat.found = true;
       } else {
-        // 查不到：允许手工输入；若此前是查到锁定的名称则清空
+        // 客户主档查不到：允许手工输入；若此前是查到锁定的名称则清空
         if (prevFound) dlg.form.custName = '';
         resetCustStat();
       }
@@ -1566,6 +1599,8 @@ watch(() => dlg.form.custId, (val) => {
       custIdx.MC_003 = m?.MC_003 ?? null;
       custIdx.MC_004 = m?.MC_004 ?? null;
     } catch { resetCustIdx(); }
+    // 贷款余额（MC_005-008）独立取数
+    loadCustIdxLoan(val);
   }, 500);
 });
 // 客户编号 / 分配维度变化时触发原业绩分配预览（ACCOUNT 维度只查按账号分配的最后一条）
@@ -1658,6 +1693,16 @@ onMounted(async () => {
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
 .sub-id { font-size: 12px; color: $text-3; margin-left: 4px; }
 
+/* 余额概览：分组小标题(存款/贷款余额) + label 方式金额 */
+.bal-sub {
+  font-size: 13px; font-weight: 600; color: $text-2;
+  margin: 4px 0 6px;
+}
+.bal-val {
+  display: inline-block;
+  font-size: 14px; font-weight: 600; color: $text-1;
+  line-height: 32px;
+}
 .card-h {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 0 10px;
