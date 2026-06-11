@@ -30,6 +30,10 @@ public class PerfDetailData {
     private Integer isCanAppr;
     /** 1=可撤回 / 0=否。 */
     private Integer isCanDelete;
+    /** 当前所处审批节点中文名（终态显示「已完成/已拒绝/已撤回」）。 */
+    private String currentNode;
+    /** 下一审批节点中文名（末节点「流程结束」、终态「无」）。 */
+    private String nextNode;
     /** 分配明细：原分配(isOriginal=1) + 调整后(isOriginal=2)。 */
     private List<PerfAllocItem> allocaters;
 

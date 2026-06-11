@@ -1,8 +1,7 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.common.web.PageResult;
-import com.bank.branch.platform.customer.api.CustomerQueryApi;
-import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
@@ -13,8 +12,9 @@ import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustDoneService;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustService;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustTodoService;
-import com.bank.branch.platform.portal.api.AddressBookApi;
-import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
+import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramDTO;
+import com.bank.branch.platform.workflow.api.dto.ProcessDiagramNodeDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -52,10 +52,10 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
 
     private final AllocAdjustTodoService allocAdjustTodoService;
     private final AllocAdjustDoneService allocAdjustDoneService;
-    private final AddressBookApi addressBookApi;
-    private final CustomerQueryApi customerQueryApi;
+    private final UserApi userApi;
     private final PerfAllocAdjustApplyMapper allocAdjustApplyMapper;
     private final AllocAdjustService allocAdjustService;
+    private final WorkflowQueryApi workflowQueryApi;
 
     @Override
     public PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(String empId, int pageNo, int pageSize) {
@@ -89,15 +89,14 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                     empId, FETCH_CAP, todoPage.getTotal(), donePage.getTotal());
         }
 
-        // 2. 合并去重（同一申请若既在待办又在已办，待办优先：仍可操作，显示为待审批）+ 补齐名称
+        // 2. 合并去重（同一申请若既在待办又在已办，待办优先：仍可操作，显示为待审批）+ 补齐申请人姓名
         Map<String, String> empNameCache = new HashMap<>();
-        Map<String, String> custNameCache = new HashMap<>();
         Map<String, AllocAdjustApprovalItemDTO> byId = new LinkedHashMap<>();
         for (AdjustTodoRespDTO t : todoPage.getRecords()) {
-            byId.put(t.getId(), toItem(t, "TODO", empNameCache, custNameCache));
+            byId.put(t.getId(), toItem(t, "TODO", empNameCache));
         }
         for (AdjustTodoRespDTO d : donePage.getRecords()) {
-            byId.putIfAbsent(d.getId(), toItem(d, "DONE", empNameCache, custNameCache));
+            byId.putIfAbsent(d.getId(), toItem(d, "DONE", empNameCache));
         }
 
         // 3. 按申请时间倒序
@@ -149,16 +148,21 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
         return PageResult.of(safePageNo, safePageSize, total, records);
     }
 
-    /** 把待办/已办的内部 DTO 转为对外审批项，并补齐申请人姓名 / 客户名称。 */
+    /**
+     * 把待办/已办的内部 DTO 转为对外审批项，并补齐申请人姓名。
+     *
+     * <p>客户名称直接取 {@code AdjustTodoRespDTO.custName}（即 PERF_ALLOC_ADJUST_APPLY.cust_name 快照），
+     * 与管理端已办 {@code AllocAdjustDoneService.mergeToDto} 完全同源，保证两端「客户名称」一致，
+     * 不再用 {@code CustomerQueryApi} 实时重查（避免客户改名后两端显示不一致）。</p>
+     */
     private AllocAdjustApprovalItemDTO toItem(AdjustTodoRespDTO src,
                                              String category,
-                                             Map<String, String> empNameCache,
-                                             Map<String, String> custNameCache) {
+                                             Map<String, String> empNameCache) {
         return AllocAdjustApprovalItemDTO.builder()
                 .perfAdjustNo(src.getId())
                 .applyNo(src.getApplyNo())
                 .custId(src.getCustId())
-                .custName(resolveCustName(src.getCustId(), custNameCache))
+                .custName(src.getCustName())
                 .createdBy(src.getCreatedBy())
                 .applyFullname(resolveEmpName(src.getCreatedBy(), empNameCache))
                 .applyTime(src.getCreatedTime())
@@ -167,7 +171,14 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                 .build();
     }
 
-    /** 员工号 → 姓名（通讯录），按 empId 缓存（含查不到的 null，避免重复 RPC）。 */
+    /**
+     * USER_ID → 姓名，按 USER_ID 缓存（含查不到的 null，避免重复 RPC）。
+     *
+     * <p>申请人 createdBy 物理存的是 PT_USER.USER_ID（短代理键），故必须走按 USER_ID 解析的
+     * {@link UserApi#getUserName}（口径与管理端 {@code AllocAdjustService.getByIdDto} 一致）。
+     * 早期误用 portal 通讯录 {@code AddressBookApi.getEmployee}（入参为工号 USERNAME），
+     * 把 USER_ID 当工号查 → 永远查不到 → 申请人姓名恒为空，本次修正。</p>
+     */
     private String resolveEmpName(String empId, Map<String, String> cache) {
         if (empId == null || empId.isBlank()) {
             return null;
@@ -175,21 +186,8 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
         if (cache.containsKey(empId)) {
             return cache.get(empId);
         }
-        String name = addressBookApi.getEmployee(empId).map(EmployeeDTO::getEmpName).orElse(null);
+        String name = userApi.getUserName(empId);
         cache.put(empId, name);
-        return name;
-    }
-
-    /** 客户ID → 客户名称，按 custId 缓存（含查不到的 null，避免重复 RPC）。 */
-    private String resolveCustName(String custId, Map<String, String> cache) {
-        if (custId == null || custId.isBlank()) {
-            return null;
-        }
-        if (cache.containsKey(custId)) {
-            return cache.get(custId);
-        }
-        String name = customerQueryApi.getCustomer(custId).map(CustomerDTO::getCustName).orElse(null);
-        cache.put(custId, name);
         return name;
     }
 
@@ -219,6 +217,9 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
             }
         }
 
+        // 当前/下一审批节点：IN_APPROVAL 取 Flowable 活动节点 + 静态链路推下一节点；终态走文案
+        String[] nodes = resolveNodes(apply);
+
         Map<String, String> empNameCache = new HashMap<>();
         return AllocAdjustDetailDTO.builder()
                 .perfAdjustNo(apply.getId())
@@ -236,8 +237,62 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                 .applyTime(apply.getCreatedTime())
                 .canDelete(canDelete)
                 .canApprove(canApprove)
+                .currentNode(nodes[0])
+                .nextNode(nodes[1])
                 .allocaters(allocaters)
                 .build();
+    }
+
+    /**
+     * 解析「当前节点 / 下一节点」中文名。
+     *
+     * <ul>
+     *   <li>IN_APPROVAL：按 {@code processInstanceId} 查 Flowable 活动 userTask 作为当前节点，
+     *       再用 {@link AllocAdjustNodeProgress} 按 custType 静态推算下一节点；</li>
+     *   <li>终态（APPROVED/REJECTED/WITHDRAWN/DRAFT）：当前节点显示终态文案，下一节点「无」；</li>
+     *   <li>查询异常 / 无活动节点 / 无 pid：当前「审批中」、下一节点留空，不抛异常。</li>
+     * </ul>
+     *
+     * @return 长度恒为 2 的数组：[0]=当前节点，[1]=下一节点
+     */
+    private String[] resolveNodes(PerfAllocAdjustApply apply) {
+        String status = apply.getStatus();
+        if (!"IN_APPROVAL".equals(status)) {
+            String cur;
+            switch (status == null ? "" : status) {
+                case "APPROVED": cur = "已完成"; break;
+                case "REJECTED": cur = "已拒绝"; break;
+                case "WITHDRAWN": cur = "已撤回"; break;
+                case "DRAFT": cur = "草稿"; break;
+                default: cur = "—";
+            }
+            return new String[]{cur, "无"};
+        }
+
+        String pid = apply.getProcessInstanceId();
+        if (pid == null || pid.isBlank()) {
+            return new String[]{"审批中", ""};
+        }
+        try {
+            ProcessDiagramDTO diagram = workflowQueryApi.getProcessNodes(pid);
+            ProcessDiagramNodeDTO active = null;
+            if (diagram != null && diagram.getNodes() != null) {
+                for (ProcessDiagramNodeDTO n : diagram.getNodes()) {
+                    if ("ACTIVE".equals(n.getStatus()) && "userTask".equals(n.getNodeType())) {
+                        active = n;
+                        break;
+                    }
+                }
+            }
+            if (active == null) {
+                return new String[]{"审批中", ""};
+            }
+            String next = AllocAdjustNodeProgress.nextNodeName(apply.getCustType(), active.getNodeKey());
+            return new String[]{active.getNodeName(), next};
+        } catch (Exception e) {
+            log.warn("[PerfApprovalQueryFacade.resolveNodes] 查询流程节点失败 pid={}, err={}", pid, e.getMessage());
+            return new String[]{"审批中", ""};
+        }
     }
 
     /** 该申请是否为 empId 的 Flowable 待办（命中即可审批）。 */

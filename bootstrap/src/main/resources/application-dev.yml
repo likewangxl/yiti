@@ -14,6 +14,14 @@ spring:
         stat:
           log-slow-sql: true
           slow-sql-millis: 5000
+        # slf4j 过滤器：在连接层打印「所有」走 Druid 的 SQL（含 Flowable taskService）。
+        # Flowable 有独立的 MyBatis SqlSessionFactory，但共用本 Druid 数据源，故此处必抓到。
+        # statement-executable-sql-log-enable=true → 把 ? 占位符替换成真实参数值后再打印。
+        slf4j:
+          enabled: true
+          statement-log-enabled: true
+          statement-executable-sql-log-enable: true
+          result-set-log-enabled: false   # 关闭结果集逐行打印，避免刷屏；只看 SQL 语句
 
 # CORS 由 CorsConfig (@Profile("dev")) 自动生效
 
@@ -30,6 +38,13 @@ logging:
   level:
     com.bank.branch.platform: DEBUG
     org.mybatis: DEBUG
+    # Druid slf4j 过滤器输出的 SQL 走这个 logger（连接层，含 Flowable taskService）
+    druid.sql.Statement: DEBUG
+    # 备选/补充：直接开 Flowable 自带 MyBatis 各 mapper 命名空间的 DEBUG，
+    # 可看到 selectTaskByQueryCriteria 等语句 + 入参（待办列表的候选组过滤即在此）
+    org.flowable.task.service.impl.persistence.entity: DEBUG
+    org.flowable.engine.impl.persistence.entity: DEBUG
+    org.flowable.identitylink.service.impl.persistence.entity: DEBUG
 
 # 边车（Sidecar）配置 —— 走 11003 端口的 HTTP+SOAP 通道，用于统一认证 S120030044
 platform:

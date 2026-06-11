@@ -9,8 +9,8 @@ import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
-import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
 import com.bank.branch.platform.soap.controller.dto.CustInfoData;
@@ -197,7 +197,8 @@ public class CallPuDispatchService {
         if (allocDim == null) {
             return CallPuResponse.fail("规则不合法: " + parm.getApplyRule());
         }
-        String bizKind = toBizKind(custType, parm.getBusinessType());
+        // 业务类型可多选：逐项翻译为 bizKind 码并逗号拼接（对齐管理端 PC 存储口径），任一项无法识别即判非法
+        String bizKind = toBizKindCsv(custType, parm.getBusinessType());
         if (bizKind == null) {
             return CallPuResponse.fail("业务类型不合法: " + parm.getBusinessType());
         }
@@ -254,6 +255,7 @@ public class CallPuDispatchService {
         AllocAdjustSubmitCmd cmd = AllocAdjustSubmitCmd.builder()
                 .custType(custType)
                 .custId(parm.getCustId())
+                .custName(parm.getCustName())
                 .allocDim(allocDim)
                 .bizKind(bizKind)
                 .accountNo(parm.getIouNo())
@@ -336,7 +338,13 @@ public class CallPuDispatchService {
     }
 
     /**
-     * PERF_ORIG_ALLOC：按客户号 + 申请类型/业务类型拉取当前分配关系，供新增页回显。
+     * PERF_ORIG_ALLOC：只按客户号反查「最近一次审批通过」的原业绩分配关系，供新增页回显。
+     *
+     * <p>口径与 PC/管理端（report 模块 {@code AllocPreviewService}）一致：委托
+     * {@link AllocApi#getLastApprovedAllocPreview(String, String)}，{@code allocDim=null}
+     * 表示纯按 {@code cust_id} 跨 RULE + ACCOUNT 两个维度各取最后一条 status=APPROVED 申请并合并，
+     * 不再依赖申请类型 / 业务类型。预览项的 {@code username} 即提交时快照的工号（PT_USER.USERNAME），
+     * 无需再经 USER_ID 反查。</p>
      */
     private CallPuResponse handleOrigAlloc(CallPuRequest.Parm parm) {
         if (parm == null) {
@@ -345,46 +353,20 @@ public class CallPuDispatchService {
         if (!StringUtils.hasText(parm.getCustId())) {
             return CallPuResponse.fail("客户号不能为空");
         }
-        String custType = APPLY_TYPE_TO_CUST_TYPE.get(parm.getApplyType());
-        if (custType == null) {
-            return CallPuResponse.fail("申请类型不合法: " + parm.getApplyType());
-        }
-        String bizKind = toBizKind(custType, parm.getBusinessType());
-        if (bizKind == null) {
-            return CallPuResponse.fail("业务类型不合法: " + parm.getBusinessType());
-        }
 
-        List<CustAllocRelationDTO> rels = allocApi.getCurrentAllocations(parm.getCustId(), bizKind);
-        if (rels == null || rels.isEmpty()) {
+        // allocDim 传 null：纯按客户号取两维度的「最近一次审批通过」分配关系
+        List<AllocAdjustPreviewItemDTO> previewItems =
+                allocApi.getLastApprovedAllocPreview(parm.getCustId(), null);
+        if (previewItems == null || previewItems.isEmpty()) {
             return CallPuResponse.ok(new OrigAllocData(new ArrayList<>()));
         }
 
-        // 收集所有 USER_ID，批量反查工号（USERNAME）
-        Set<String> userIds = new LinkedHashSet<>();
-        for (CustAllocRelationDTO r : rels) {
-            if (StringUtils.hasText(r.getEmpId())) {
-                userIds.add(r.getEmpId());
-            }
-        }
-        Map<String, String> usernameByUserId = new HashMap<>();
-        if (!userIds.isEmpty()) {
-            List<UserDTO> users = userApi.getUserByEmpIds(new ArrayList<>(userIds));
-            if (users != null) {
-                for (UserDTO u : users) {
-                    if (u != null && StringUtils.hasText(u.getEmpId())) {
-                        // UserDTO.empId = USER_ID，UserDTO.username = PT_USER.USERNAME（工号）
-                        usernameByUserId.put(u.getEmpId(), u.getUsername());
-                    }
-                }
-            }
-        }
-
-        List<OrigAllocData.OrigAllocItem> items = new ArrayList<>(rels.size());
-        for (CustAllocRelationDTO r : rels) {
+        List<OrigAllocData.OrigAllocItem> items = new ArrayList<>(previewItems.size());
+        for (AllocAdjustPreviewItemDTO p : previewItems) {
             items.add(OrigAllocData.OrigAllocItem.builder()
-                    .username(usernameByUserId.get(r.getEmpId()))
-                    .fullname(r.getEmpName())
-                    .ratio(r.getRatio() == null ? null : r.getRatio().toPlainString())
+                    .username(p.getUsername())
+                    .fullname(p.getEmpChnName())
+                    .ratio(p.getRatio() == null ? null : p.getRatio().toPlainString())
                     .isOriginal(1)
                     .build());
         }
@@ -434,6 +416,8 @@ public class CallPuDispatchService {
                 .apprStatus(toApprStatus(detail.getStatus()))
                 .isCanAppr(detail.isCanApprove() ? 1 : 0)
                 .isCanDelete(detail.isCanDelete() ? 1 : 0)
+                .currentNode(detail.getCurrentNode())
+                .nextNode(detail.getNextNode())
                 .allocaters(allocaters)
                 .build();
         return CallPuResponse.ok(data);
@@ -468,17 +452,28 @@ public class CallPuDispatchService {
     }
 
     /**
-     * 组装 bizKind = 前缀(custType) + "_" + 业务类型后缀。
+     * 组装多选业务类型的 bizKind 逗号串 = 各项「前缀(custType) + "_" + 后缀」用逗号拼接。
      *
-     * <p>businessType 单选；历史可能为逗号串，取首项。无法识别返回 null。</p>
+     * <p>手机端业务类型支持多选（如「存款,贷款」），需逐项翻译后逗号拼接，与管理端 PC 存储口径一致
+     * （perf 侧 biz_kind 列直接存逗号串，审批流按前缀路由仍正确）。空白项跳过；任一非空项无法识别返回 null。</p>
      */
-    private String toBizKind(String custType, String businessType) {
+    private String toBizKindCsv(String custType, String businessType) {
         if (!StringUtils.hasText(businessType)) {
             return null;
         }
-        String first = businessType.split(",")[0].trim();
-        String suffix = BUSINESS_TYPE_TO_BIZ_SUFFIX.get(first);
-        return suffix == null ? null : custType + "_" + suffix;
+        List<String> codes = new ArrayList<>();
+        for (String part : businessType.split(",")) {
+            String name = part.trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            String suffix = BUSINESS_TYPE_TO_BIZ_SUFFIX.get(name);
+            if (suffix == null) {
+                return null;
+            }
+            codes.add(custType + "_" + suffix);
+        }
+        return codes.isEmpty() ? null : String.join(",", codes);
     }
 
     /** 过滤出工号与比例齐全的分配明细行（其余跳过，与原 toSubmitItems 跳过逻辑一致）。 */

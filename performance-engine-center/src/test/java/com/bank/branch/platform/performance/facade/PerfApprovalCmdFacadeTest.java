@@ -22,6 +22,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -87,13 +88,21 @@ class PerfApprovalCmdFacadeTest {
     }
 
     @Test
-    void approveAllocAdjust_pass_callsApproveByEmpWithTaskId() {
+    void approveAllocAdjust_pass_passesDefaultRouteVarsToApproveByEmp() {
         when(todoQueryApi.findTaskRespByBusinessKeysByEmp("E001", List.of(BIZ_KEY)))
                 .thenReturn(Map.of(BIZ_KEY, task("T1")));
 
         facade.approveAllocAdjust("A1", "E001", "1", "同意");
 
-        verify(workflowApi).approveByEmp("T1", "E001", "同意");
+        // 手机端「同意」不带网关路由选择，后端按业务约定默认走最全链路：
+        // gw1_corp_route → OWNER（原业绩所属人会签）；gw2_fin_route → LEADER（资财部负责人审批）。
+        // 否则排他网关无分支命中，complete() 抛异常，流程到不了 <end>，状态无法回写 APPROVED。
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> formCap = ArgumentCaptor.forClass(Map.class);
+        verify(workflowApi).approveByEmp(eq("T1"), eq("E001"), eq("同意"), formCap.capture());
+        assertThat(formCap.getValue())
+                .containsEntry("corpRouteTo", "OWNER")
+                .containsEntry("finRouteTo", "LEADER");
         verify(workflowApi, never()).rejectByEmp(any(), any(), any());
     }
 
@@ -105,7 +114,7 @@ class PerfApprovalCmdFacadeTest {
         facade.approveAllocAdjust("A1", "E001", "2", "不同意");
 
         verify(workflowApi).rejectByEmp("T1", "E001", "不同意");
-        verify(workflowApi, never()).approveByEmp(any(), any(), any());
+        verify(workflowApi, never()).approveByEmp(any(), any(), any(), any());
     }
 
     @Test
@@ -126,7 +135,7 @@ class PerfApprovalCmdFacadeTest {
         assertThatThrownBy(() -> facade.approveAllocAdjust("A1", "E001", "1", "同意"))
                 .isInstanceOf(IllegalStateException.class);
 
-        verify(workflowApi, never()).approveByEmp(any(), any(), any());
+        verify(workflowApi, never()).approveByEmp(any(), any(), any(), any());
         verify(workflowApi, never()).rejectByEmp(any(), any(), any());
     }
 
@@ -138,7 +147,7 @@ class PerfApprovalCmdFacadeTest {
         assertThatThrownBy(() -> facade.approveAllocAdjust("A1", "E001", "9", "x"))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        verify(workflowApi, never()).approveByEmp(any(), any(), any());
+        verify(workflowApi, never()).approveByEmp(any(), any(), any(), any());
         verify(workflowApi, never()).rejectByEmp(any(), any(), any());
     }
 }

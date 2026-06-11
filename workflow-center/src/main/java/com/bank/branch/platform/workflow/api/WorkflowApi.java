@@ -95,6 +95,20 @@ public interface WorkflowApi {
     void approveByEmp(String taskId, String empId, String opinion);
 
     /**
+     * 审批通过指定任务（<b>无会话版，带节点表单/路由变量</b>，供外部渠道按显式 empId 调用）。
+     * <p>语义同 {@link #approveByEmp(String, String, String)}，额外把 {@code formData} 作为流程变量
+     * 写入 {@code complete}，供 BPMN 排他网关路由（如 perf 分配调整流程的 {@code corpRouteTo} /
+     * {@code finRouteTo}）。{@code formData} 为空时等价于三参版本。</p>
+     *
+     * @param taskId   任务ID
+     * @param empId    审批人工号（外部渠道认证后透传）
+     * @param opinion  审批意见（可空）
+     * @param formData 节点表单/路由变量（可空）
+     * @throws com.bank.branch.platform.common.web.exception.BizException WF-40403 任务不存在
+     */
+    void approveByEmp(String taskId, String empId, String opinion, java.util.Map<String, Object> formData);
+
+    /**
      * 驳回指定任务（<b>无会话版</b>，供外部渠道按显式 empId 调用）。可见性约定同 {@link #approveByEmp}。
      *
      * @param taskId  任务ID

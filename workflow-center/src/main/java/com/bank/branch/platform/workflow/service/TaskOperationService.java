@@ -100,6 +100,9 @@ public class TaskOperationService {
      */
     public void approveTaskByEmp(String taskId, String empId, ApproveReqDTO req) {
         Task task = queryTaskOrThrow(taskId);
+        // 无会话链路（候选组任务未签收）：complete 前显式把 assignee 设为审批人 empId，
+        // 否则 ACT_HI_TASKINST.ASSIGNEE_ 为 null，「已审批」查询 taskAssignee(empId).finished() 无法命中。
+        taskService.setAssignee(taskId, empId);
         doApprove(task, empId, req);
     }
 
@@ -152,6 +155,8 @@ public class TaskOperationService {
      */
     public void rejectTaskByEmp(String taskId, String empId, RejectReqDTO req) {
         Task task = queryTaskOrThrow(taskId);
+        // 同 approveTaskByEmp：complete 前签收，保证驳回记录在「已审批」列表可见（assignee 留痕）。
+        taskService.setAssignee(taskId, empId);
         doReject(task, empId, req);
     }
 

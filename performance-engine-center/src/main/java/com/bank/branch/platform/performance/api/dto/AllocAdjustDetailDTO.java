@@ -35,6 +35,16 @@ public class AllocAdjustDetailDTO {
     private boolean canDelete;
     /** 当前用户的待办且 IN_APPROVAL。 */
     private boolean canApprove;
+    /**
+     * 当前所处审批节点中文名（IN_APPROVAL 取 Flowable 活动 userTask 名；
+     * 终态显示「已完成/已拒绝/已撤回/草稿」）。
+     */
+    private String currentNode;
+    /**
+     * 下一审批节点中文名（按 callPu 硬编码路由的确定链路静态推算；
+     * 末节点显示「流程结束」，终态显示「无」）。
+     */
+    private String nextNode;
     private List<AllocItem> allocaters;
 
     @Data

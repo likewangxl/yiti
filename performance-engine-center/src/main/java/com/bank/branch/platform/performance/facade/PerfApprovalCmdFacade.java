@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,6 +42,13 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
     private static final String DEFAULT_APPROVE_OPINION = "手机端审批通过";
     private static final String DEFAULT_REJECT_OPINION = "手机端驳回";
 
+    /** 排他网关路由变量名（对齐 perf_alloc_adjust_corp_v1 / perf_alloc_adjust_retail_v1 BPMN）。 */
+    private static final String VAR_CORP_ROUTE_TO = "corpRouteTo";
+    private static final String VAR_FIN_ROUTE_TO = "finRouteTo";
+    /** 手机端「同意」不带路由选择时的默认路由：走最全审批链路。 */
+    private static final String DEFAULT_CORP_ROUTE = "OWNER";
+    private static final String DEFAULT_FIN_ROUTE = "LEADER";
+
     private final AllocAdjustService allocAdjustService;
     private final UserApi userApi;
     private final TodoQueryApi todoQueryApi;
@@ -57,6 +65,7 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
         SubmitAllocAdjustCmd serviceCmd = SubmitAllocAdjustCmd.builder()
                 .custType(cmd.getCustType())
                 .custId(cmd.getCustId())
+                .custName(cmd.getCustName())
                 .allocDim(cmd.getAllocDim())
                 .bizKind(cmd.getBizKind())
                 .accountNo(cmd.getAccountNo())
@@ -96,7 +105,14 @@ public class PerfApprovalCmdFacade implements PerfApprovalCmdApi {
 
         if (APPR_PASS.equals(apprStatus)) {
             String op = StringUtils.hasText(opinion) ? opinion : DEFAULT_APPROVE_OPINION;
-            workflowApi.approveByEmp(taskId, empId, op);
+            // 手机端「同意」不带网关路由选择，后端按业务约定默认走最全审批链路：
+            // gw1_corp_route → OWNER（原业绩所属人会签）、gw2_fin_route → LEADER（资财部负责人审批）。
+            // 否则排他网关无分支条件命中，complete() 抛异常，流程到不了 <end>，
+            // ProcessCompletedEvent(APPROVED) 不会发布，apply.status 无法回写 APPROVED。
+            Map<String, Object> routeVars = new HashMap<>();
+            routeVars.put(VAR_CORP_ROUTE_TO, DEFAULT_CORP_ROUTE);
+            routeVars.put(VAR_FIN_ROUTE_TO, DEFAULT_FIN_ROUTE);
+            workflowApi.approveByEmp(taskId, empId, op, routeVars);
             log.info("[PerfApprovalCmdFacade.approveAllocAdjust] 通过 perfAdjustNo={}, empId={}, taskId={}",
                     perfAdjustNo, empId, taskId);
         } else if (APPR_REJECT.equals(apprStatus)) {

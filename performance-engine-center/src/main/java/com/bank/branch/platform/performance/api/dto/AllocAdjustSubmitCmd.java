@@ -31,6 +31,9 @@ public class AllocAdjustSubmitCmd {
     /** 客户编号（存入 PERF_ALLOC_ADJUST_APPLY.cust_id）。 */
     private String custId;
 
+    /** 客户名称（前端反显，提交时随报文带入并快照入库 PERF_ALLOC_ADJUST_APPLY.cust_name）。 */
+    private String custName;
+
     /** 分配维度：RULE / ACCOUNT。 */
     private String allocDim;
 

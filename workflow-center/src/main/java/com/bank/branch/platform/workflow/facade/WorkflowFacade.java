@@ -120,7 +120,15 @@ public class WorkflowFacade implements WorkflowApi {
      */
     @Override
     public void approveByEmp(String taskId, String empId, String opinion) {
-        taskOperationService.approveTaskByEmp(taskId, empId, new ApproveReqDTO(opinion, null));
+        approveByEmp(taskId, empId, opinion, null);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void approveByEmp(String taskId, String empId, String opinion, java.util.Map<String, Object> formData) {
+        taskOperationService.approveTaskByEmp(taskId, empId, new ApproveReqDTO(opinion, formData));
     }
 
     /**

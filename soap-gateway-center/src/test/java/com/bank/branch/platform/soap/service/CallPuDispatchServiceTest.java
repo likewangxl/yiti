@@ -9,8 +9,8 @@ import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
 import com.bank.branch.platform.performance.api.PerfApprovalQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
-import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
 import com.bank.branch.platform.soap.controller.dto.PerfDetailData;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
@@ -268,23 +268,25 @@ class CallPuDispatchServiceTest {
 
     // ==================== PERF_ORIG_ALLOC 客户原分配关系回显 ====================
 
+    /** 构造一条「原业绩分配预览」明细（工号 username 已是快照，无需 USER_ID 反查）。 */
+    private static AllocAdjustPreviewItemDTO previewItem(String username, String empChnName, String ratio) {
+        AllocAdjustPreviewItemDTO dto = new AllocAdjustPreviewItemDTO();
+        dto.setUsername(username);
+        dto.setEmpChnName(empChnName);
+        dto.setRatio(new BigDecimal(ratio));
+        return dto;
+    }
+
     @Test
-    void perfOrigAlloc_returnsCurrentAllocations_withUsernameReverseLookup() {
-        CustAllocRelationDTO rel = new CustAllocRelationDTO();
-        rel.setEmpId("U002");
-        rel.setEmpName("李四");
-        rel.setRatio(new java.math.BigDecimal("60"));
-        when(allocApi.getCurrentAllocations("C001", "CORP_DEPOSIT")).thenReturn(List.of(rel));
-        UserDTO u = new UserDTO();
-        u.setEmpId("U002");
-        u.setUsername("E002");
-        when(userApi.getUserByEmpIds(List.of("U002"))).thenReturn(List.of(u));
+    void perfOrigAlloc_returnsLastApprovedPreview_byCustIdOnly() {
+        // 与 PC/管理端口径一致：只按客户号取「最近一次审批通过」的原分配关系（allocDim=null → 两维度合并）
+        when(allocApi.getLastApprovedAllocPreview("C001", null))
+                .thenReturn(List.of(previewItem("E002", "李四", "60")));
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setCustId("C001");
-        parm.setApplyType("1");
-        parm.setBusinessType("存款");
+        // 故意不传 applyType / businessType：新口径只依赖客户号，不应再要求这两项
         CallPuRequest req = new CallPuRequest();
         req.setRuleName("PERF_ORIG_ALLOC");
         req.setParm(parm);
@@ -299,16 +301,17 @@ class CallPuDispatchServiceTest {
         assertThat(item.getFullname()).isEqualTo("李四");
         assertThat(item.getRatio()).isEqualTo("60");
         assertThat(item.getIsOriginal()).isEqualTo(1);
+        // 新口径不再调用「当前分配关系」与 USER_ID 反查
+        verify(allocApi, never()).getCurrentAllocations(any(), any());
+        verify(userApi, never()).getUserByEmpIds(any());
     }
 
     @Test
-    void perfOrigAlloc_emptyAllocations_returnsEmptyList() {
-        when(allocApi.getCurrentAllocations("C001", "CORP_DEPOSIT")).thenReturn(List.of());
+    void perfOrigAlloc_emptyPreview_returnsEmptyList() {
+        when(allocApi.getLastApprovedAllocPreview("C001", null)).thenReturn(List.of());
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setCustId("C001");
-        parm.setApplyType("1");
-        parm.setBusinessType("存款");
         CallPuRequest req = new CallPuRequest();
         req.setRuleName("PERF_ORIG_ALLOC");
         req.setParm(parm);
@@ -317,6 +320,19 @@ class CallPuDispatchServiceTest {
 
         assertThat(resp.getReturnCd()).isEqualTo("0");
         assertThat(((OrigAllocData) resp.getRspMsg()).getAllocaters()).isEmpty();
+    }
+
+    @Test
+    void perfOrigAlloc_blankCustId_returnsFail() {
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_ORIG_ALLOC");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("99");
     }
 
     // ==================== PERF_SAVE 原/新分配拆分 ====================
@@ -379,6 +395,57 @@ class CallPuDispatchServiceTest {
     }
 
     @Test
+    void perfSave_multipleBusinessTypes_joinsBizKindCodesWithComma() {
+        // 选了「存款 + 贷款」两个业务类型 → bizKind 应逗号拼接两个码，而非只取首项
+        when(userApi.getUsersByUsernames(any())).thenReturn(List.of(
+                user("E001", "U001"),
+                user("E100", "U100")));
+        when(perfApprovalCmdApi.submitAllocAdjust(any())).thenReturn("AA124");
+
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setCustId("C001");
+        parm.setApplyType("1");              // CORP
+        parm.setApplyRule("2");              // RULE
+        parm.setBusinessType("存款,贷款");    // → CORP_DEPOSIT,CORP_LOAN
+        parm.setAdjustExplain("调整理由");
+        parm.setAllocaters(List.of(allocater("E100", "新人", "100", 2)));
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_SAVE");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        ArgumentCaptor<AllocAdjustSubmitCmd> captor = ArgumentCaptor.forClass(AllocAdjustSubmitCmd.class);
+        verify(perfApprovalCmdApi).submitAllocAdjust(captor.capture());
+        assertThat(captor.getValue().getBizKind()).isEqualTo("CORP_DEPOSIT,CORP_LOAN");
+    }
+
+    @Test
+    void perfSave_unknownBusinessTypeAmongMultiple_returnsFail() {
+        // 多项里有一个无法识别 → 整体判非法，拒绝提交
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setCustId("C001");
+        parm.setApplyType("1");
+        parm.setApplyRule("2");
+        parm.setBusinessType("存款,不存在的类型");
+        parm.setAdjustExplain("调整理由");
+        parm.setAllocaters(List.of(allocater("E100", "新人", "100", 2)));
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_SAVE");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("99");
+        // 必须因「业务类型不合法」被拒（而非更早的工号解析等其它原因）
+        assertThat(String.valueOf(resp.getRspMsg())).contains("业务类型不合法");
+        verify(perfApprovalCmdApi, never()).submitAllocAdjust(any());
+    }
+
+    @Test
     void perfSave_noNewAllocaters_returnsFailAndNoSubmit() {
         // 全部为原分配行（无新分配）→ 调整明细为空，拒绝提交
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
@@ -413,6 +480,7 @@ class CallPuDispatchServiceTest {
                 .perfAdjustNo("PA_1").applyFullname("王五").custId("C001").custName("某客户")
                 .custType("CORP").allocDim("ACCOUNT").bizKind("CORP_DEPOSIT").accountNo("ACC9")
                 .status("IN_APPROVAL").reason("理由").canApprove(true).canDelete(false)
+                .currentNode("资财部经办审批").nextNode("资财部负责人审批")
                 .allocaters(List.of(orig, adj)).build();
         when(perfApprovalQueryApi.getAllocAdjustDetail("PA_1", "U001")).thenReturn(detail);
 
@@ -434,6 +502,8 @@ class CallPuDispatchServiceTest {
         assertThat(d.getIsCanAppr()).isEqualTo(1);
         assertThat(d.getIsCanDelete()).isEqualTo(0);
         assertThat(d.getAllocaters()).hasSize(2);
+        assertThat(d.getCurrentNode()).isEqualTo("资财部经办审批");
+        assertThat(d.getNextNode()).isEqualTo("资财部负责人审批");
         verify(perfApprovalQueryApi).getAllocAdjustDetail("PA_1", "U001");
     }
 }
