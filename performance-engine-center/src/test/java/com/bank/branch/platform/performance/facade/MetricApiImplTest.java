@@ -65,10 +65,10 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
         PerfMetricDef m1 = metric("M001", "指标一", "EMP", 1);
         PerfMetricDef m2 = metric("M002", "指标二", "EMP", 2);
         when(metricDefService.getByCodes(List.of("M001", "M002"))).thenReturn(List.of(m1, m2));
-        // slot=1 的 M001 = 100；slot=2 的 M002 = 200
-        when(empIndexResultMapper.selectSlotValue(eq("E001"), any(LocalDate.class), eq("v1"), eq(1)))
+        // slot=1 的 M001 = 100；slot=2 的 M002 = 200（EMP 维度走不带 version 的 NoVersion 查询）
+        when(empIndexResultMapper.selectSlotValueNoVersion(eq("E001"), any(LocalDate.class), eq(1)))
                 .thenReturn(new BigDecimal("100"));
-        when(empIndexResultMapper.selectSlotValue(eq("E001"), any(LocalDate.class), eq("v1"), eq(2)))
+        when(empIndexResultMapper.selectSlotValueNoVersion(eq("E001"), any(LocalDate.class), eq(2)))
                 .thenReturn(new BigDecimal("200"));
         when(sysControlService.getCurrentVersion("EMP")).thenReturn(sysControl("v1"));
 
@@ -86,7 +86,7 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
         PerfMetricDef m1 = metric("M001", "指标一", "EMP", 1);
         when(metricDefService.getByCodes(List.of("M001"))).thenReturn(List.of(m1));
         when(sysControlService.getCurrentVersion("EMP")).thenReturn(sysControl("v1", LocalDate.of(2026, 1, 15)));
-        when(empIndexResultMapper.selectSlotValue(eq("E001"), eq(LocalDate.of(2026, 1, 15)), eq("v1"), eq(1)))
+        when(empIndexResultMapper.selectSlotValueNoVersion(eq("E001"), eq(LocalDate.of(2026, 1, 15)), eq(1)))
                 .thenReturn(new BigDecimal("50"));
 
         Map<String, BigDecimal> result = metricApi.getEmpMetricValues("E001", null, List.of("M001"));
@@ -101,7 +101,7 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
         noSlot.setValSlot(null);
         when(metricDefService.getByCodes(List.of("M001", "M099"))).thenReturn(List.of(m1, noSlot));
         when(sysControlService.getCurrentVersion("EMP")).thenReturn(sysControl("v1"));
-        when(empIndexResultMapper.selectSlotValue(eq("E001"), any(LocalDate.class), eq("v1"), eq(1)))
+        when(empIndexResultMapper.selectSlotValueNoVersion(eq("E001"), any(LocalDate.class), eq(1)))
                 .thenReturn(new BigDecimal("10"));
 
         Map<String, BigDecimal> result = metricApi.getEmpMetricValues(
@@ -132,7 +132,7 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
         org.setValSlot(2);
         when(metricDefService.getByCodes(List.of("M001", "M002"))).thenReturn(List.of(emp, org));
         when(sysControlService.getCurrentVersion("EMP")).thenReturn(sysControl("v1"));
-        when(empIndexResultMapper.selectSlotValue(eq("E001"), any(LocalDate.class), eq("v1"), eq(1)))
+        when(empIndexResultMapper.selectSlotValueNoVersion(eq("E001"), any(LocalDate.class), eq(1)))
                 .thenReturn(new BigDecimal("3"));
 
         Map<String, BigDecimal> result = metricApi.getEmpMetricValues(
@@ -179,7 +179,7 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
         PerfMetricDef m1 = metric("M001", "指标一", "EMP", 1);
         when(metricDefService.getByCodes(List.of("M001"))).thenReturn(List.of(m1));
         when(sysControlService.getCurrentVersion("EMP")).thenReturn(sysControl("v1"));
-        when(empIndexResultMapper.selectSlotValue(eq("E001"), any(LocalDate.class), eq("v1"), eq(1)))
+        when(empIndexResultMapper.selectSlotValueNoVersion(eq("E001"), any(LocalDate.class), eq(1)))
                 .thenReturn(null);
 
         Map<String, BigDecimal> result = metricApi.getEmpMetricValues(
@@ -227,6 +227,30 @@ class MetricApiImplTest extends PerformanceServiceTestBase {
         assertThat(metricApi.listMetrics("EMP", 1))
                 .extracting("metricCode")
                 .containsExactly("M001");
+    }
+
+    @Test
+    @DisplayName("listEmpIdsWithData：委托 selectDistinctEmpIdsByDate(不限 version)")
+    void listEmpIdsWithData_delegatesToMapper() {
+        LocalDate d = LocalDate.of(2026, 4, 22);
+        when(empIndexResultMapper.selectDistinctEmpIdsByDate(d)).thenReturn(List.of("1001", "1002"));
+        assertThat(metricApi.listEmpIdsWithData(d)).containsExactly("1001", "1002");
+    }
+
+    @Test
+    @DisplayName("listOrgCodesWithData：委托 selectDistinctOrgCodesByDate(不限 version)")
+    void listOrgCodesWithData_delegatesToMapper() {
+        LocalDate d = LocalDate.of(2026, 4, 22);
+        when(orgIndexResultMapper.selectDistinctOrgCodesByDate(d)).thenReturn(List.of("O1", "O2"));
+        assertThat(metricApi.listOrgCodesWithData(d)).containsExactly("O1", "O2");
+    }
+
+    @Test
+    @DisplayName("listCustIdsWithData：委托 selectDistinctCustIdsByDate(不限 version)")
+    void listCustIdsWithData_delegatesToMapper() {
+        LocalDate d = LocalDate.of(2026, 4, 22);
+        when(custIndexResultMapper.selectDistinctCustIdsByDate(d)).thenReturn(List.of("C1"));
+        assertThat(metricApi.listCustIdsWithData(d)).containsExactly("C1");
     }
 
     private static PerfMetricDef metric(String code, String name) {

@@ -138,6 +138,17 @@ public interface EmpIndexResultMapper extends BaseMapper<EmpIndexResult> {
                                       @Param("version") String version);
 
     /**
+     * 查询指定 data_date 下的 distinct empId 集合（不限 version）.
+     *
+     * <p>动态指标查询"不选对象=查范围内全部对象"用：与取值逻辑一致按日期取，不绑定 version，
+     * 避免漏掉非当前 version 才有数据的员工。
+     *
+     * @param dataDate 数据日期
+     * @return 员工工号列表（可能为空）
+     */
+    List<String> selectDistinctEmpIdsByDate(@Param("dataDate") LocalDate dataDate);
+
+    /**
      * KPI 分值计算：取某数据日期下某 slot 的全部员工实际值（同员工多版本取最新 version）.
      *
      * <p>列名 {@code val_${slot}} 属 common-dev-guide §5 允许的动态列名例外，

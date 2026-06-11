@@ -55,6 +55,27 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleClientAbort_brokenPipe_shouldReturn499NotError() {
+        // 客户端提前断连（写响应时 Broken pipe）：识别为断连，返回 SYS_499 而非按系统异常 SYS_500
+        Exception ex = new RuntimeException("flush failed",
+                new java.io.IOException("Broken pipe"));
+        ResponseEntity<ResponseWrapper<?>> resp = handler.handleException(ex);
+        assertEquals("SYS_499", resp.getBody().getCode());
+    }
+
+    @Test
+    void handleClientAbort_byExceptionClassName_shouldReturn499() {
+        // 容器抛 ClientAbortException（BES/Tomcat 类名相同），按类名识别
+        @SuppressWarnings("serial")
+        class ClientAbortException extends RuntimeException {
+            ClientAbortException(String m) { super(m); }
+        }
+        ResponseEntity<ResponseWrapper<?>> resp =
+                handler.handleException(new ClientAbortException("aborted"));
+        assertEquals("SYS_499", resp.getBody().getCode());
+    }
+
+    @Test
     void handlePermissionDenied_customCode_shouldPreserveCode() {
         PermissionDeniedException ex = new PermissionDeniedException("AUTH-40303", "写范围校验失败");
         ResponseEntity<ResponseWrapper<?>> resp = handler.handlePermissionDeniedException(ex);

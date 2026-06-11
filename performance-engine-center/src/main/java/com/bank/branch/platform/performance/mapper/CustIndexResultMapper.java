@@ -126,6 +126,15 @@ public interface CustIndexResultMapper extends BaseMapper<CustIndexResult> {
                                        @Param("version") String version);
 
     /**
+     * 取某日下宽表所有出现的客户 cust_id（不限 version）.
+     * <p>动态指标查询"不选对象=查范围内全部客户"用，与取值一致按日期取、不绑定 version。
+     *
+     * @param dataDate 数据日期
+     * @return 该日宽表已有的客户 ID 列表（可能为空）
+     */
+    List<String> selectDistinctCustIdsByDate(@Param("dataDate") LocalDate dataDate);
+
+    /**
      * KPI 分值计算：取某数据日期下某 slot 的全部客户实际值（同客户多版本取最新 version）.
      *
      * <p>列名 {@code val_${slot}} 属 common-dev-guide §5 允许的动态列名例外，

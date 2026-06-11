@@ -508,4 +508,22 @@ public class MetricApiImpl implements MetricApi {
         }
         return result;
     }
+
+    /** 列出某日宽表有数据的员工工号（不限 version），动态查询"不选=全部"用。 */
+    @Override
+    public List<String> listEmpIdsWithData(LocalDate dataDate) {
+        return empIndexResultMapper.selectDistinctEmpIdsByDate(dataDate);
+    }
+
+    /** 列出某日宽表有数据的机构编码（不限 version）。 */
+    @Override
+    public List<String> listOrgCodesWithData(LocalDate dataDate) {
+        return orgIndexResultMapper.selectDistinctOrgCodesByDate(dataDate);
+    }
+
+    /** 列出某日宽表有数据的客户 ID（不限 version）。 */
+    @Override
+    public List<String> listCustIdsWithData(LocalDate dataDate) {
+        return custIndexResultMapper.selectDistinctCustIdsByDate(dataDate);
+    }
 }

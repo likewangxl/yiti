@@ -80,6 +80,14 @@
         ORDER BY emp_id
     </select>
 
+    <!-- 动态查询"不选对象=查全部"：按日期取 distinct empId，不限 version -->
+    <select id="selectDistinctEmpIdsByDate" resultType="java.lang.String">
+        SELECT DISTINCT emp_id
+        FROM EMP_INDEX_RESULT
+        WHERE data_date = #{dataDate}
+        ORDER BY emp_id
+    </select>
+
     <!--
       V1.5 P4.1：按 dataDate 列表批量查询同一 slot 值.
       一次 IN 查询返回 (data_date, val_{slot}) 行投影列表，

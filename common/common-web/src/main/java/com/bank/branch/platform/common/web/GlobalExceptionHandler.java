@@ -125,11 +125,44 @@ public class GlobalExceptionHandler {
 
     /**
      * 兜底异常处理 - 返回 500
+     * <p>客户端提前断连（浏览器刷新/关页、网关回收空闲连接、服务重启瞬间）会在写响应 flush 时抛
+     * ClientAbortException / IOException(Broken pipe…)，这不是服务端故障，降级为 debug 不打 ERROR 堆栈，
+     * 避免日志刷屏误导排查。返回体此时也写不回客户端，仅占位。</p>
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseWrapper<?>> handleException(Exception ex) {
+        if (isClientAbort(ex)) {
+            log.debug("客户端提前断开连接（忽略）: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseWrapper.error("SYS_499", "客户端连接已中断"));
+        }
         log.error("系统异常", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ResponseWrapper.error("SYS_500", "系统繁忙，请稍后重试"));
+    }
+
+    /**
+     * 判断异常链是否为「客户端断连」。
+     * <p>不硬依赖某容器的 ClientAbortException 类（BES 用 com.bes.* / Tomcat 用 org.apache.catalina.*），
+     * 改用「类名 == ClientAbortException」或「IOException 且 message 命中断连关键词」跨容器识别。</p>
+     */
+    private boolean isClientAbort(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if ("ClientAbortException".equals(t.getClass().getSimpleName())) {
+                return true;
+            }
+            String m = t.getMessage();
+            if (t instanceof java.io.IOException && m != null) {
+                String s = m.toLowerCase();
+                if (s.contains("broken pipe") || s.contains("connection reset")
+                        || s.contains("aborted") || s.contains("中止")) {
+                    return true;
+                }
+            }
+            if (t.getCause() == t) {
+                break;   // 防御自引用导致死循环
+            }
+        }
+        return false;
     }
 }

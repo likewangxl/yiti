@@ -102,6 +102,14 @@
         ORDER BY cust_id
     </select>
 
+    <!-- 动态查询"不选对象=查全部"：按日期取 distinct custId，不限 version -->
+    <select id="selectDistinctCustIdsByDate" resultType="java.lang.String">
+        SELECT DISTINCT cust_id
+        FROM CUST_INDEX_RESULT
+        WHERE data_date = #{dataDate}
+        ORDER BY cust_id
+    </select>
+
     <!--
       KPI 分值计算：取某日某 slot 的全部客户实际值（同客户多版本按 updated_time 取最新行）。
       val_${slot} 动态列名属 common-dev-guide §5 合法例外，Service 层强制校验 slot ∈ [1,400]。

@@ -94,4 +94,13 @@ public interface ResourceMapper extends BaseMapper<PtResource> {
      * @return 公共接口资源 ID 列表
      */
     List<String> selectPublicInterfaceIds();
+
+    /**
+     * 批量查询启用资源（STATUS=0）的 URL，按资源 ID 集合。
+     * <p>用于 getUserPermissions 一次性取全部可访问 URL，替代逐条 selectByResourceId 的 N+1。</p>
+     *
+     * @param ids 资源 ID 集合（调用方需保证非空）
+     * @return 去重的启用资源 URL 列表
+     */
+    List<String> selectEnabledUrlsByResourceIds(@Param("ids") java.util.Collection<String> ids);
 }

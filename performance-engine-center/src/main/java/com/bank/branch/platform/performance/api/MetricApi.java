@@ -93,4 +93,30 @@ public interface MetricApi {
      * <p>V1.0 抛 UnsupportedOperationException; V1.1 实现.
      */
     Map<String, BigDecimal> getCustMetricValues(String custId, LocalDate dataDate, List<String> metricCodes);
+
+    /**
+     * 列出某日宽表中有数据的全部员工工号（不限 version）.
+     * <p>动态指标查询"不选对象=查范围内全部对象"用：对象集合取自当天宽表实际有数据的对象，
+     * 天然有界、避免返回全是空值的行。调用方需再按数据范围裁剪。
+     *
+     * @param dataDate 数据日期
+     * @return 员工工号列表（可能为空）
+     */
+    List<String> listEmpIdsWithData(LocalDate dataDate);
+
+    /**
+     * 列出某日宽表中有数据的全部机构编码（不限 version）.同 {@link #listEmpIdsWithData}。
+     *
+     * @param dataDate 数据日期
+     * @return 机构编码列表（可能为空）
+     */
+    List<String> listOrgCodesWithData(LocalDate dataDate);
+
+    /**
+     * 列出某日宽表中有数据的全部客户 ID（不限 version）.同 {@link #listEmpIdsWithData}。
+     *
+     * @param dataDate 数据日期
+     * @return 客户 ID 列表（可能为空）
+     */
+    List<String> listCustIdsWithData(LocalDate dataDate);
 }

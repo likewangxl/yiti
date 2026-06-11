@@ -3,8 +3,10 @@ package com.bank.branch.platform.report.service;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
@@ -44,14 +46,13 @@ import static org.mockito.Mockito.when;
 /**
  * DynamicQueryService 单元测试（Task M1.2.1，Red）.
  *
- * <p>覆盖 A.2 POST /api/reports/dynamic-query 的 5 个分支：
+ * <p>覆盖 A.2 POST /api/reports/dynamic-query 的分支：
  * <ul>
- *   <li>subjectIds > 100 → RPT-40007</li>
- *   <li>metricCodes > 20 → RPT-40008</li>
  *   <li>subject 不在数据范围（ALL 以外降级 SELF 命中不到） → RPT-40005</li>
  *   <li>invalid dim → RPT-40006</li>
  *   <li>happy path（EMP，ALL scope）→ 返回 columns + rows</li>
  * </ul>
+ * <p>注：对象/指标个数上限（原 RPT-40007 / RPT-40008）已按业务要求取消。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class DynamicQueryServiceTest {
@@ -71,6 +72,9 @@ class DynamicQueryServiceTest {
     @Mock
     private CustomerQueryApi customerQueryApi;
 
+    @Mock
+    private UserApi userApi;
+
     @InjectMocks
     private DynamicQueryServiceImpl service;
 
@@ -79,31 +83,7 @@ class DynamicQueryServiceTest {
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
     }
 
-    @Test
-    void execute_subjectIdsExceeds100_throwsRpt40007() {
-        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
-        req.setDim("EMP");
-        req.setSubjectIds(IntStream.range(0, 101).mapToObj(i -> "E" + i).collect(Collectors.toList()));
-        req.setMetricCodes(List.of("M1"));
-        req.setDataDate(LocalDate.of(2026, 4, 1));
-
-        assertThatThrownBy(() -> service.execute(req))
-                .isInstanceOf(RptException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-40007");
-    }
-
-    @Test
-    void execute_metricCodesExceeds20_throwsRpt40008() {
-        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
-        req.setDim("EMP");
-        req.setSubjectIds(List.of("E001"));
-        req.setMetricCodes(IntStream.range(0, 21).mapToObj(i -> "M" + i).collect(Collectors.toList()));
-        req.setDataDate(LocalDate.of(2026, 4, 1));
-
-        assertThatThrownBy(() -> service.execute(req))
-                .isInstanceOf(RptException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-40008");
-    }
+    // 注：对象/指标个数上限（原 RPT-40007 / RPT-40008）已按业务要求取消，相关上限测试随之移除。
 
     @Test
     void execute_invalidDim_throwsRpt40006() {
@@ -127,10 +107,11 @@ class DynamicQueryServiceTest {
         req.setDataDate(LocalDate.of(2026, 4, 1));
 
         // 配置 SELF 范围，scope.empId=E001，但请求查 E_OTHER → 应抛 RPT-40005
+        // EMP 维度数据范围按维度分流到 REPORT_DYN_EMP
         DataScopeContext scope = new DataScopeContext(
                 DataScopeType.SELF, "E001", "ORG001", Set.of(),
-                BizType.REPORT, BizAction.LIST);
-        when(bizScopeApi.buildScopeContext(eq("E001"), eq(BizType.REPORT), eq(BizAction.LIST)))
+                BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(eq("E001"), eq(BizType.REPORT_DYN_EMP), eq(BizAction.LIST)))
                 .thenReturn(scope);
 
         assertThatThrownBy(() -> service.execute(req))
@@ -243,6 +224,72 @@ class DynamicQueryServiceTest {
                 .containsEntry("subjectId", "C001")
                 .containsEntry("subjectName", "测试客户")
                 .containsEntry("M_CUST_AUM", new BigDecimal("5000.00"));
+    }
+
+    @Test
+    void execute_noSubjects_emp_enumeratesAllInScope() {
+        // 不选对象：EMP 维度按数据范围枚举当天宽表全部员工（工号→USER_ID），再查值
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        req.setSubjectIds(null);   // 不选对象
+        req.setMetricCodes(List.of("M1"));
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.ALL, "E001", "ORG001", Set.of(), BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+
+        // 枚举：宽表当天有数据的工号
+        when(metricApi.listEmpIdsWithData(any(LocalDate.class))).thenReturn(List.of("1001", "1002"));
+        UserDTO u1 = new UserDTO(); u1.setEmpId("U1"); u1.setUsername("1001"); u1.setMainOrgCode("ORG001");
+        UserDTO u2 = new UserDTO(); u2.setEmpId("U2"); u2.setUsername("1002"); u2.setMainOrgCode("ORG001");
+        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(u1, u2));
+        lenient().when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u1, u2));
+
+        when(metricApi.getEmpMetricValues(eq("1001"), any(LocalDate.class), anyList()))
+                .thenReturn(Map.of("M1", new BigDecimal("10")));
+        when(metricApi.getEmpMetricValues(eq("1002"), any(LocalDate.class), anyList()))
+                .thenReturn(Map.of("M1", new BigDecimal("20")));
+        MetricDefDTO def = new MetricDefDTO(); def.setMetricCode("M1"); def.setMetricName("指标1");
+        when(metricApi.getMetricDef("M1")).thenReturn(Optional.of(def));
+        lenient().when(orgApi.getUserMainOrg(any())).thenReturn(null);
+
+        DynamicQueryRespDTO resp = service.execute(req);
+
+        assertThat(resp.getTotal()).isEqualTo(2);
+        assertThat(resp.getRows()).hasSize(2);
+        assertThat(resp.getRows().get(0)).containsEntry("subjectId", "1001");
+    }
+
+    @Test
+    void execute_pagination_returnsCurrentPageAndTotal() {
+        // 选了 5 个对象，pageNo=2 pageSize=2 → 当前页 2 条、total=5
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        req.setSubjectIds(new ArrayList<>(List.of("E1", "E2", "E3", "E4", "E5")));
+        req.setMetricCodes(List.of("M1"));
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+        req.setPageNo(2);
+        req.setPageSize(2);
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.ALL, "E001", "ORG001", Set.of(), BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+        lenient().when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
+        MetricDefDTO def = new MetricDefDTO(); def.setMetricCode("M1"); def.setMetricName("指标1");
+        when(metricApi.getMetricDef("M1")).thenReturn(Optional.of(def));
+        lenient().when(metricApi.getEmpMetricValues(any(), any(LocalDate.class), anyList()))
+                .thenReturn(Map.of("M1", new BigDecimal("1")));
+        lenient().when(orgApi.getUserMainOrg(any())).thenReturn(null);
+
+        DynamicQueryRespDTO resp = service.execute(req);
+
+        assertThat(resp.getTotal()).isEqualTo(5);
+        assertThat(resp.getPageNo()).isEqualTo(2);
+        assertThat(resp.getPageSize()).isEqualTo(2);
+        assertThat(resp.getRows()).hasSize(2);
+        assertThat(resp.getRows().get(0)).containsEntry("subjectId", "E3");
+        assertThat(resp.getRows().get(1)).containsEntry("subjectId", "E4");
     }
 
     @Test

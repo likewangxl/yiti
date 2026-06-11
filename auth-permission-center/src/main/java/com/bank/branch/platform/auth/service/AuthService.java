@@ -380,17 +380,15 @@ public class AuthService {
         Set<String> roleCodes = roles.stream().map(PtRole::getRoleCode).collect(Collectors.toSet());
         boolean isAdmin = roleCodes.contains("SYS_ADMIN");
 
-        // 收集用户可访问的所有资源 URL（去重）
-        Set<String> resourceUrls = new java.util.HashSet<>();
+        // 先汇总所有角色的资源 ID（去重），再一次性批量查 PT_RESOURCE 取启用资源的 URL，
+        // 避免对每个资源 ID 各发一次 selectByResourceId 造成 N+1（大数据量下登录后该接口可慢到 20s+ 刷屏）
+        Set<String> resourceIds = new java.util.HashSet<>();
         for (String roleId : roleIds) {
-            Set<String> resourceIds = cacheService.getResourceIdsByRoleId(roleId);
-            for (String resId : resourceIds) {
-                PtResource res = resourceMapper.selectByResourceId(resId);
-                if (res != null && res.getStatus() != null && res.getStatus() == 0) {
-                    resourceUrls.add(res.getResourceUrl());
-                }
-            }
+            resourceIds.addAll(cacheService.getResourceIdsByRoleId(roleId));
         }
+        Set<String> resourceUrls = resourceIds.isEmpty()
+            ? new java.util.HashSet<>()
+            : new java.util.HashSet<>(resourceMapper.selectEnabledUrlsByResourceIds(resourceIds));
 
         // 收集用户的业务数据范围
         Map<String, String> bizScopes = bizScopeService.getUserBizScopes(empId)

@@ -118,4 +118,13 @@
           AND (PARENT_RESOURCE_ID IS NULL OR PARENT_RESOURCE_ID = '')
     </select>
 
+    <!-- 批量取启用资源 URL（getUserPermissions 用，替代逐条 selectByResourceId 的 N+1） -->
+    <select id="selectEnabledUrlsByResourceIds" resultType="java.lang.String">
+        SELECT DISTINCT RESOURCE_URL
+        FROM PT_RESOURCE
+        WHERE STATUS = 0
+          AND RESOURCE_ID IN
+          <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
 </mapper>

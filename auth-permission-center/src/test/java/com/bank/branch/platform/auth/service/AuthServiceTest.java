@@ -8,6 +8,10 @@ import com.bank.branch.platform.auth.mapper.OrgMapper;
 import com.bank.branch.platform.auth.mapper.UserMapper;
 import com.bank.branch.platform.auth.mapper.UserOrgMapper;
 import com.bank.branch.platform.auth.mapper.UserRoleMapper;
+import com.bank.branch.platform.auth.mapper.ResourceMapper;
+import com.bank.branch.platform.auth.entity.PtResource;
+import com.bank.branch.platform.auth.service.BizScopeService;
+import com.bank.branch.platform.auth.service.PermissionCacheService;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import org.mockito.ArgumentCaptor;
 import com.bank.branch.platform.common.web.exception.AuthException;
@@ -35,6 +39,9 @@ class AuthServiceTest {
     @Mock OrgMapper orgMapper;
     @Mock PasswordEncoder passwordEncoder;
     @Mock HttpSession session;
+    @Mock PermissionCacheService cacheService;
+    @Mock BizScopeService bizScopeService;
+    @Mock ResourceMapper resourceMapper;
     @InjectMocks AuthService authService;
 
     @Test
@@ -212,5 +219,25 @@ class AuthServiceTest {
 
         CurrentUserContext result = authService.getCurrentUser(session);
         assertThat(result.empId()).isEqualTo("E001");
+    }
+
+    @Test
+    void getUserPermissions_shouldBatchQueryResources_noN1() {
+        // 两个角色共 3 个资源 ID，应一次性批量查 PT_RESOURCE，而非逐条 selectByResourceId（N+1）
+        PtRole r1 = new PtRole(); r1.setRoleId("R1"); r1.setRoleCode("ROLE_A");
+        PtRole r2 = new PtRole(); r2.setRoleId("R2"); r2.setRoleCode("ROLE_B");
+        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(List.of(r1, r2));
+        when(cacheService.getResourceIdsByRoleId("R1")).thenReturn(Set.of("RES_1", "RES_2"));
+        when(cacheService.getResourceIdsByRoleId("R2")).thenReturn(Set.of("RES_2", "RES_3"));
+        // 一次批量查返回启用资源 URL（RES_3 假设被禁用，不在结果里）
+        when(resourceMapper.selectEnabledUrlsByResourceIds(any())).thenReturn(List.of("/api/a", "/api/b"));
+        when(bizScopeService.getUserBizScopes("E001")).thenReturn(java.util.Map.of());
+
+        var dto = authService.getUserPermissions("E001");
+
+        assertThat(dto.getResourceUrls()).containsExactlyInAnyOrder("/api/a", "/api/b");
+        assertThat(dto.getRoleCodes()).containsExactlyInAnyOrder("ROLE_A", "ROLE_B");
+        // 关键：不再逐条单查 → 无 N+1
+        verify(resourceMapper, never()).selectByResourceId(anyString());
     }
 }
