@@ -22,6 +22,7 @@
 |---|---|---|
 | performance-engine-center | PerfApprovalQueryApi / PerfApprovalCmdApi | 分配关系调整审批列表 / 新增 / 撤回 |
 | customer-marketing-center | CustomerQueryApi | 客户号查名 |
+| system-governance-center | DictApi | SYS_DICT_ITEMS 查字典 + PERF_SAVE 业务类型字典码校验（PERF_BIZ_KIND） |
 
 ## 包结构
 
@@ -70,7 +71,8 @@ Netty(30522) → SoapDispatchHandler 按 request.uri() 分流：
 ## callpu HTTP 网关（`POST /api/callpu`）
 
 - **统一入口**：`CallPuController#dispatch`，按请求体 `RuleName` 分发。
-- **已支持 RuleName**：`PERF_LIST`（审批列表）/ `PERF_SAVE`（新增分配调整申请）/ `CASH_GETCUST_INFO`（客户号查名）/ `PERF_RECALL`（撤回申请）。
+- **已支持 RuleName**：`PERF_LIST`（审批列表）/ `PERF_MY_LIST`（我的申请）/ `PERF_SAVE`（新增分配调整申请）/ `CASH_GETCUST_INFO`（客户号查名）/ `PERF_RECALL`（撤回申请）/ `PERF_APPR`（审批通过/驳回）/ `PERF_ORIG_ALLOC`（原分配回显）/ `PERF_INFO`（单据详情）/ `SYS_DICT_ITEMS`（按 `dictType` 查启用字典项，手机端业务类型选项 PERF_BIZ_KIND 用，回传 `{items:[{dictCode,dictLabel}]}`）。
+- **业务类型口径（PERF_BIZ_KIND）**：手机端业务类型从 `SYS_DICT_ITEMS` 实时拉取（label=dictLabel 展示、value=dictCode 提交），`PERF_SAVE` 直接以字典码逗号串落 perf `biz_kind` 并经 `DictApi.isValidDictValue` 校验，**不再做中文→码翻译**（与 PC 管理端 `listDictItems`/`submitAdjust` 完全一致）。
 - **响应信封**：`CallPuResponse`，成功 `ReturnCd="0"`，失败 `ReturnCd="99"`，**始终 HTTP 200**（前端以 `response.ReturnCd == "0"` 判定成功）。`dispatch` 内统一 try-catch，业务异常降级为失败信封，避免被全局异常处理器改写成平台标准响应格式。
 - **鉴权**：外部渠道入口，身份认证由上游 callpu/ESB 完成（员工号随报文传入），故**未挂** `@BizAuth`。
 - **字段约定**：DTO 用 `@JsonProperty` 对齐手机端大写字段名（`RuleName`/`Parm`/`EmployeeNo` 等）。

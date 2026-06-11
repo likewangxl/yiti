@@ -60,8 +60,11 @@ public class CallPuRequest {
         /** 账号/借据号（→ accountNo）。 */
         private String iouNo;
 
-        /** 业务类型（中文，单选；历史可能逗号串，取首项 → bizKind 后缀）。 */
+        /** 业务类型（PERF_BIZ_KIND 字典码，可多选逗号串，如 CORP_DEPOSIT,CORP_LOAN；直接落 bizKind）。 */
         private String businessType;
+
+        /** 字典类型编码（SYS_DICT_ITEMS 用，如 PERF_BIZ_KIND）。 */
+        private String dictType;
 
         /** 调整理由（→ reason）。 */
         private String adjustExplain;

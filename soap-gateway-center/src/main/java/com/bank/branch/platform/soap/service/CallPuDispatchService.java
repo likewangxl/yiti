@@ -3,6 +3,8 @@ package com.bank.branch.platform.soap.service;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
@@ -14,6 +16,7 @@ import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
 import com.bank.branch.platform.soap.controller.dto.CustInfoData;
+import com.bank.branch.platform.soap.controller.dto.DictItemData;
 import com.bank.branch.platform.soap.controller.dto.OrigAllocData;
 import com.bank.branch.platform.soap.controller.dto.PerfDetailData;
 import com.bank.branch.platform.soap.controller.dto.PerfListData;
@@ -53,6 +56,7 @@ import java.util.Set;
  *   <li>{@code CASH_GETCUST_INFO} —— 客户号查名（{@link CustStatQueryApi}，查 XAN_M98_CUST_STAT_SHOW3）</li>
  *   <li>{@code PERF_RECALL} —— 撤回申请（{@link PerfApprovalCmdApi}）</li>
  *   <li>{@code PERF_APPR} —— 审批申请（通过/驳回，{@link PerfApprovalCmdApi}）</li>
+ *   <li>{@code SYS_DICT_ITEMS} —— 按字典类型查启用字典项（{@link DictApi}，业务类型选项 PERF_BIZ_KIND）</li>
  * </ul>
  *
  * <p>跨模块红线：仅通过对方 {@code *Api} 调用，不直接依赖其 service/mapper/entity。</p>
@@ -78,19 +82,15 @@ public class CallPuDispatchService {
             "1", "ACCOUNT",
             "2", "RULE");
 
-    /** 业务类型中文 → bizKind 后缀（对齐 BIZ_KIND 字典；结构性存款暂用 STRUCT_DEPOSIT，待业务确认）。 */
-    private static final Map<String, String> BUSINESS_TYPE_TO_BIZ_SUFFIX = Map.of(
-            "存款", "DEPOSIT",
-            "贷款", "LOAN",
-            "中收", "INTERMEDIATE",
-            "大额存单", "NCD",
-            "结构性存款", "STRUCT_DEPOSIT");
+    /** 业务类型字典编码（与 PC 管理端 PERF_BIZ_KIND 同源）。 */
+    private static final String DICT_PERF_BIZ_KIND = "PERF_BIZ_KIND";
 
     private final PerfApprovalQueryApi perfApprovalQueryApi;
     private final PerfApprovalCmdApi perfApprovalCmdApi;
     private final CustStatQueryApi custStatQueryApi;
     private final UserApi userApi;
     private final AllocApi allocApi;
+    private final DictApi dictApi;
 
     /**
      * callpu 统一分发入口。
@@ -127,6 +127,9 @@ public class CallPuDispatchService {
             }
             if ("PERF_INFO".equals(ruleName)) {
                 return handlePerfInfo(parm);
+            }
+            if ("SYS_DICT_ITEMS".equals(ruleName)) {
+                return handleDictItems(parm);
             }
             log.warn("[callpu] 不支持的 RuleName={}", ruleName);
             return CallPuResponse.fail("不支持的 RuleName: " + ruleName);
@@ -197,11 +200,8 @@ public class CallPuDispatchService {
         if (allocDim == null) {
             return CallPuResponse.fail("规则不合法: " + parm.getApplyRule());
         }
-        // 业务类型可多选：逐项翻译为 bizKind 码并逗号拼接（对齐管理端 PC 存储口径），任一项无法识别即判非法
-        String bizKind = toBizKindCsv(custType, parm.getBusinessType());
-        if (bizKind == null) {
-            return CallPuResponse.fail("业务类型不合法: " + parm.getBusinessType());
-        }
+        // 业务类型可多选：前端已传 PERF_BIZ_KIND 字典码逗号串（对齐 PC 存储口径），逐项校验合法后原样落库
+        String bizKind = validateBizKindCsv(parm.getBusinessType());
         // 只保留工号/比例齐全的明细行（与原 toSubmitItems 跳过逻辑一致）
         List<CallPuRequest.Allocater> validAllocaters = validAllocaters(parm.getAllocaters());
         // 按 isOriginal 拆分：1=原业绩分配（→ originalAllocList / item_kind=ORIGIN），
@@ -452,28 +452,58 @@ public class CallPuDispatchService {
     }
 
     /**
-     * 组装多选业务类型的 bizKind 逗号串 = 各项「前缀(custType) + "_" + 后缀」用逗号拼接。
+     * SYS_DICT_ITEMS：按字典类型查启用字典项，回传手机端选项所需的 {code,label}。
      *
-     * <p>手机端业务类型支持多选（如「存款,贷款」），需逐项翻译后逗号拼接，与管理端 PC 存储口径一致
-     * （perf 侧 biz_kind 列直接存逗号串，审批流按前缀路由仍正确）。空白项跳过；任一非空项无法识别返回 null。</p>
+     * <p>口径与 PC 管理端 {@code listDictItems} 一致：{@link DictApi#getDictItems} 已只返 ACTIVE 且按
+     * sort_order 升序。dictType 为空即失败信封；查无字典项回传空 items（前端选项为空，不报错）。</p>
      */
-    private String toBizKindCsv(String custType, String businessType) {
+    private CallPuResponse handleDictItems(CallPuRequest.Parm parm) {
+        String dictType = parm != null ? parm.getDictType() : null;
+        if (!StringUtils.hasText(dictType)) {
+            return CallPuResponse.fail("字典类型不能为空");
+        }
+        List<DictItemDTO> items = dictApi.getDictItems(dictType);
+        List<DictItemData.Item> result = new ArrayList<>(items == null ? 0 : items.size());
+        if (items != null) {
+            for (DictItemDTO d : items) {
+                result.add(DictItemData.Item.builder()
+                        .dictCode(d.getDictCode())
+                        .dictLabel(d.getDictLabel())
+                        .build());
+            }
+        }
+        return CallPuResponse.ok(new DictItemData(result));
+    }
+
+    /**
+     * 校验并规整多选业务类型的 bizKind 逗号串（前端已传 PERF_BIZ_KIND 字典码，与 PC 存储口径一致）。
+     *
+     * <p>逐项 trim、跳过空白项，用 {@link DictApi#isValidDictValue} 校验每个码在 PERF_BIZ_KIND 下存在且启用；
+     * 任一非空项非法即抛 {@link IllegalArgumentException}（由 {@link #dispatch} 兜底为失败信封）。
+     * 校验通过则原样逗号拼接落 perf {@code biz_kind}（审批流按码前缀路由，与 PC 完全一致）。</p>
+     *
+     * @param businessType 前端传入的业务类型字典码逗号串（如 {@code CORP_DEPOSIT,CORP_LOAN}）
+     * @return 去空后原样拼接的字典码串（非空）
+     */
+    private String validateBizKindCsv(String businessType) {
         if (!StringUtils.hasText(businessType)) {
-            return null;
+            throw new IllegalArgumentException("业务类型不能为空");
         }
         List<String> codes = new ArrayList<>();
         for (String part : businessType.split(",")) {
-            String name = part.trim();
-            if (name.isEmpty()) {
+            String code = part.trim();
+            if (code.isEmpty()) {
                 continue;
             }
-            String suffix = BUSINESS_TYPE_TO_BIZ_SUFFIX.get(name);
-            if (suffix == null) {
-                return null;
+            if (!dictApi.isValidDictValue(DICT_PERF_BIZ_KIND, code)) {
+                throw new IllegalArgumentException("业务类型不合法: " + code);
             }
-            codes.add(custType + "_" + suffix);
+            codes.add(code);
         }
-        return codes.isEmpty() ? null : String.join(",", codes);
+        if (codes.isEmpty()) {
+            throw new IllegalArgumentException("业务类型不能为空");
+        }
+        return String.join(",", codes);
     }
 
     /** 过滤出工号与比例齐全的分配明细行（其余跳过，与原 toSubmitItems 跳过逻辑一致）。 */

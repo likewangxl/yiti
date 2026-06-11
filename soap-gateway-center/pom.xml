@@ -52,6 +52,16 @@
             <artifactId>auth-permission-center</artifactId>
         </dependency>
 
+        <!--
+            system-governance-center（仅用 DictApi）
+            SYS_DICT_ITEMS 查字典 + PERF_SAVE 业务类型字典码校验，只走 DictApi，
+            不碰其 service/mapper/entity；显式声明（原经 perf 传递依赖）。
+        -->
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>system-governance-center</artifactId>
+        </dependency>
+
         <!-- Netty -->
         <dependency>
             <groupId>io.netty</groupId>

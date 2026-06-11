@@ -3,6 +3,7 @@ package com.bank.branch.platform.soap.controller;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
@@ -54,6 +55,9 @@ class CallPuFormUrlencodedCompatTest {
     @Mock
     private AllocApi allocApi;
 
+    @Mock
+    private DictApi dictApi;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -68,7 +72,7 @@ class CallPuFormUrlencodedCompatTest {
     @BeforeEach
     void setUp() {
         CallPuDispatchService dispatchService = new CallPuDispatchService(
-                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi, allocApi);
+                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi, allocApi, dictApi);
         mockMvc = MockMvcBuilders.standaloneSetup(new CallPuController(dispatchService))
                 .addFilters(new CallPuContentTypeNormalizationFilter())
                 .build();

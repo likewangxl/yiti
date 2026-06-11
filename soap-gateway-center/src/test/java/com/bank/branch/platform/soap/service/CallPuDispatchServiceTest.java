@@ -3,6 +3,8 @@ package com.bank.branch.platform.soap.service;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
@@ -14,6 +16,7 @@ import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
 import com.bank.branch.platform.soap.controller.dto.PerfDetailData;
 import com.bank.branch.platform.soap.controller.dto.CallPuRequest;
 import com.bank.branch.platform.soap.controller.dto.CallPuResponse;
+import com.bank.branch.platform.soap.controller.dto.DictItemData;
 import com.bank.branch.platform.soap.controller.dto.OrigAllocData;
 import com.bank.branch.platform.soap.controller.dto.PerfListData;
 import org.junit.jupiter.api.Test;
@@ -58,6 +61,8 @@ class CallPuDispatchServiceTest {
     private UserApi userApi;
     @Mock
     private AllocApi allocApi;
+    @Mock
+    private DictApi dictApi;
 
     @InjectMocks
     private CallPuDispatchService service;
@@ -355,6 +360,8 @@ class CallPuDispatchServiceTest {
                 user("E100", "U100"),
                 user("E900", "U900")));
         when(perfApprovalCmdApi.submitAllocAdjust(any())).thenReturn("AA123");
+        // 前端已传字典码，网关只校验合法性（不再做中文→码翻译）
+        when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_DEPOSIT")).thenReturn(true);
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
@@ -362,7 +369,7 @@ class CallPuDispatchServiceTest {
         parm.setApplyType("1");          // CORP
         parm.setApplyRule("1");          // ACCOUNT
         parm.setIouNo("ACC1");
-        parm.setBusinessType("存款");     // CORP_DEPOSIT
+        parm.setBusinessType("CORP_DEPOSIT");   // 字典码直传
         parm.setAdjustExplain("调整理由");
         parm.setAllocaters(List.of(
                 allocater("E900", "原始人", "100", 1),   // 原分配
@@ -396,18 +403,20 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfSave_multipleBusinessTypes_joinsBizKindCodesWithComma() {
-        // 选了「存款 + 贷款」两个业务类型 → bizKind 应逗号拼接两个码，而非只取首项
+        // 选了「存款 + 贷款」两个业务类型字典码 → bizKind 原样逗号拼接落库（不翻译、不丢项）
         when(userApi.getUsersByUsernames(any())).thenReturn(List.of(
                 user("E001", "U001"),
                 user("E100", "U100")));
         when(perfApprovalCmdApi.submitAllocAdjust(any())).thenReturn("AA124");
+        when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_DEPOSIT")).thenReturn(true);
+        when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_LOAN")).thenReturn(true);
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setCustId("C001");
         parm.setApplyType("1");              // CORP
         parm.setApplyRule("2");              // RULE
-        parm.setBusinessType("存款,贷款");    // → CORP_DEPOSIT,CORP_LOAN
+        parm.setBusinessType("CORP_DEPOSIT,CORP_LOAN");   // 字典码直传
         parm.setAdjustExplain("调整理由");
         parm.setAllocaters(List.of(allocater("E100", "新人", "100", 2)));
         CallPuRequest req = new CallPuRequest();
@@ -424,13 +433,16 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfSave_unknownBusinessTypeAmongMultiple_returnsFail() {
-        // 多项里有一个无法识别 → 整体判非法，拒绝提交
+        // 多项里有一个字典码非法（isValidDictValue=false）→ 整体判非法，拒绝提交
+        when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_DEPOSIT")).thenReturn(true);
+        when(dictApi.isValidDictValue("PERF_BIZ_KIND", "NOT_A_CODE")).thenReturn(false);
+
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setCustId("C001");
         parm.setApplyType("1");
         parm.setApplyRule("2");
-        parm.setBusinessType("存款,不存在的类型");
+        parm.setBusinessType("CORP_DEPOSIT,NOT_A_CODE");
         parm.setAdjustExplain("调整理由");
         parm.setAllocaters(List.of(allocater("E100", "新人", "100", 2)));
         CallPuRequest req = new CallPuRequest();
@@ -448,13 +460,14 @@ class CallPuDispatchServiceTest {
     @Test
     void perfSave_noNewAllocaters_returnsFailAndNoSubmit() {
         // 全部为原分配行（无新分配）→ 调整明细为空，拒绝提交
+        when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_DEPOSIT")).thenReturn(true);
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setCustId("C001");
         parm.setApplyType("1");
         parm.setApplyRule("1");
         parm.setIouNo("ACC1");
-        parm.setBusinessType("存款");
+        parm.setBusinessType("CORP_DEPOSIT");
         parm.setAdjustExplain("调整理由");
         parm.setAllocaters(List.of(allocater("E900", "原始人", "100", 1)));
         CallPuRequest req = new CallPuRequest();
@@ -505,5 +518,55 @@ class CallPuDispatchServiceTest {
         assertThat(d.getCurrentNode()).isEqualTo("资财部经办审批");
         assertThat(d.getNextNode()).isEqualTo("资财部负责人审批");
         verify(perfApprovalQueryApi).getAllocAdjustDetail("PA_1", "U001");
+    }
+
+    // ==================== SYS_DICT_ITEMS 查字典（业务类型选项）====================
+
+    /** 构造一条字典项 DTO（仅 code/label 用于本场景）。 */
+    private static DictItemDTO dictItem(String dictCode, String dictLabel) {
+        DictItemDTO dto = new DictItemDTO();
+        dto.setDictType("PERF_BIZ_KIND");
+        dto.setDictCode(dictCode);
+        dto.setDictLabel(dictLabel);
+        return dto;
+    }
+
+    @Test
+    void dictItems_returnsActiveItemsMappedToCodeAndLabel() {
+        // DictApi.getDictItems 已只返 ACTIVE 且按 sort_order；网关原样映射为 {dictCode,dictLabel}
+        when(dictApi.getDictItems("PERF_BIZ_KIND")).thenReturn(List.of(
+                dictItem("CORP_DEPOSIT", "存款"),
+                dictItem("CORP_LOAN", "贷款"),
+                dictItem("FEE_BIZ", "中收")));
+
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setDictType("PERF_BIZ_KIND");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("SYS_DICT_ITEMS");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        assertThat(resp.getRspMsg()).isInstanceOf(DictItemData.class);
+        DictItemData data = (DictItemData) resp.getRspMsg();
+        assertThat(data.getItems()).hasSize(3);
+        assertThat(data.getItems().get(0).getDictCode()).isEqualTo("CORP_DEPOSIT");
+        assertThat(data.getItems().get(0).getDictLabel()).isEqualTo("存款");
+        assertThat(data.getItems().get(2).getDictCode()).isEqualTo("FEE_BIZ");
+        verify(dictApi).getDictItems("PERF_BIZ_KIND");
+    }
+
+    @Test
+    void dictItems_blankDictType_returnsFailAndNoDictCall() {
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();   // dictType 缺省
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("SYS_DICT_ITEMS");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("99");
+        verify(dictApi, never()).getDictItems(any());
     }
 }

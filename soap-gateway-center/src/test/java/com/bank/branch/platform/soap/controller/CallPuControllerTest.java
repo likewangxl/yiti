@@ -3,6 +3,7 @@ package com.bank.branch.platform.soap.controller;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.CustStatQueryApi;
 import com.bank.branch.platform.performance.api.PerfApprovalCmdApi;
@@ -64,6 +65,9 @@ class CallPuControllerTest {
     @Mock
     private AllocApi allocApi;
 
+    @Mock
+    private DictApi dictApi;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -83,7 +87,7 @@ class CallPuControllerTest {
             return names.stream().map(n -> user(n, "U_" + n)).toList();
         });
         CallPuDispatchService dispatchService = new CallPuDispatchService(
-                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi, allocApi);
+                perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi, allocApi, dictApi);
         mockMvc = MockMvcBuilders.standaloneSetup(new CallPuController(dispatchService)).build();
     }
 
@@ -216,8 +220,9 @@ class CallPuControllerTest {
     }
 
     @Test
-    void perfSave_success_translatesAndSubmits() throws Exception {
+    void perfSave_success_validatesAndSubmits() throws Exception {
         when(perfApprovalCmdApi.submitAllocAdjust(any())).thenReturn("AA999");
+        when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_DEPOSIT")).thenReturn(true);
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
@@ -225,7 +230,7 @@ class CallPuControllerTest {
         parm.setApplyType("1");   // 公司 → CORP
         parm.setApplyRule("1");   // 账号 → ACCOUNT
         parm.setIouNo("ACC123");
-        parm.setBusinessType("存款"); // → DEPOSIT
+        parm.setBusinessType("CORP_DEPOSIT"); // 字典码直传
         parm.setAdjustExplain("调整理由");
         parm.setAllocaters(List.of(
                 allocater("E100", "张三", "60"),
