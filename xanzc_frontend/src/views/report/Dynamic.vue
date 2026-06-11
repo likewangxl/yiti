@@ -109,12 +109,18 @@
         <!-- 客户维度不用机构树，只用右侧搜索框 -->
         <div class="picker-left" v-if="dim !== 'CUST'">
           <div class="picker-title">机构树（勾选{{ dim === 'EMP' ? '机构可选该机构下全部员工' : '机构' }}）</div>
+          <!-- ORG 维度：独立勾选，可选是否把勾选机构连同其下级一起纳入 -->
+          <el-checkbox v-if="dim === 'ORG'" v-model="subjectDlg.includeSubOrg" size="small" style="margin-bottom:8px"
+                       @change="onOrgCheckChange">包含下级机构</el-checkbox>
           <el-input v-model="subjectDlg.treeKw" placeholder="搜索机构名称" size="small" clearable style="margin-bottom:8px" />
+          <!-- ORG 维度：check-strictly 父子独立，勾「西安分行」只选它本身不级联子机构；
+               EMP 维度：保持级联，勾机构=加载其下全部员工 -->
           <el-tree
             ref="subjectTreeRef"
             :key="subjectDlg.openSeq"
             :data="subjectDlg.orgTree"
             show-checkbox
+            :check-strictly="dim === 'ORG'"
             node-key="code"
             default-expand-all
             :filter-node-method="filterOrgNode"
@@ -207,9 +213,12 @@ const dimensions = ref([{ code: 'EMP', label: '员工' }, { code: 'ORG', label: 
 const metricsList = ref([]);
 const pickedMetrics = ref([]);
 const subjects = ref([]);
-// 指标结果宽表的最新数据日期（当前 demo 数据落在 2026-04-21~2026-05-31）。
-// 后端按 data_date 精确匹配，默认取今天会查不到数据（全显示 "-"），故默认指向最新有数据的日期。
-const LATEST_DATA_DATE = '2026-05-31';
+// 数据日期默认取当天（本地时区 YYYY-MM-DD）
+const LATEST_DATA_DATE = (() => {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+})();
 const date = ref(LATEST_DATA_DATE);
 const view = ref('table');
 const querying = ref(false);
@@ -274,6 +283,7 @@ const subjectDlg = reactive({
   custKw: '',
   custSearchResults: [],
   selected: [],
+  includeSubOrg: false,   // ORG 维度：勾选机构时是否连同其全部下级机构一并纳入
   openSeq: 0,   // 每次打开递增，给 el-tree 当 :key 强制重建，避免上次勾选残留
 });
 
@@ -295,6 +305,7 @@ watch(() => subjectDlg.show, (visible) => {
     subjectDlg.empSearchResults = [];
     subjectDlg.custKw = '';
     subjectDlg.custSearchResults = [];
+    subjectDlg.includeSubOrg = false;   // 每次打开默认「仅本级」，避免上次开关状态残留
     subjectDlg.openSeq++;   // 强制 el-tree 重建：清掉上次的机构勾选残留，避免"勾着却没加载员工"
   }
 });
@@ -319,7 +330,18 @@ async function loadCheckedOrgEmployees() {
     // 导致后端整单 RPT-40005「对象不在数据范围内」失败。ALL 不裁剪。
     const sc = pickerScope.value;
     const allow = (sc && sc.mode !== 'ALL') ? new Set(sc.orgCodes || []) : null;
-    const picked = allow ? checkedNodes.filter(n => allow.has(n.code)) : checkedNodes;
+    // 「包含下级机构」开启：把每个勾选机构展开成它+全部下级；关闭：只取勾选的本级
+    let nodes = checkedNodes;
+    if (subjectDlg.includeSubOrg) {
+      const acc = new Map();
+      const collect = (n) => {
+        if (!acc.has(n.code)) acc.set(n.code, { code: n.code, name: n.name });
+        (n.children || []).forEach(collect);
+      };
+      checkedNodes.forEach(collect);
+      nodes = [...acc.values()];
+    }
+    const picked = allow ? nodes.filter(n => allow.has(n.code)) : nodes;
     subjectDlg.selected = picked.map(n => ({ id: n.code, name: n.name, org: '' }));
     return;
   }
