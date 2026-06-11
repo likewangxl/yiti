@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.eval.mapper;
 
 import com.bank.branch.platform.performance.eval.dto.EvalPendingGroupDTO;
+import com.bank.branch.platform.performance.eval.entity.EvalAssignBatch;
 import com.bank.branch.platform.performance.eval.entity.EvalAssignItem;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
@@ -21,7 +22,7 @@ public interface EvalAssignItemMapper extends BaseMapper<EvalAssignItem> {
     int batchInsert(@Param("items") List<EvalAssignItem> items);
 
     /**
-     * 查询某打分人未提交明细，按 batch_id + 被打分人部门聚合（跨表 JOIN 聚合，自定义 SQL）。
+     * 查询某打分人未提交明细，按 batch_id + 被打分人部门聚合（仅 ACTIVE status=0 批次）。
      *
      * @param evalUserId 打分人工号
      * @return 汇总行（batchId / taskType / dept / pendingCount / deadline）
@@ -39,4 +40,25 @@ public interface EvalAssignItemMapper extends BaseMapper<EvalAssignItem> {
     int markSubmitted(@Param("itemId") Long itemId,
                       @Param("score") Integer score,
                       @Param("submitTime") LocalDateTime submitTime);
+
+    /** 管理端-分页查询批次下明细（含已提交分数）。 */
+    List<EvalAssignItem> selectByBatchId(@Param("batchId") Long batchId,
+                                         @Param("offset") int offset,
+                                         @Param("limit") int limit);
+
+    /** 管理端-批次下明细总数。 */
+    long countByBatchId(@Param("batchId") Long batchId);
+
+    /** 管理端-按条件分页查询批次列表（含明细数 itemCount）。 */
+    List<EvalAssignBatch> selectBatchesByCondition(@Param("status") Integer status,
+                                                    @Param("keyword") String keyword,
+                                                    @Param("offset") int offset,
+                                                    @Param("limit") int limit);
+
+    /** 管理端-按条件统计批次数。 */
+    long countBatchesByCondition(@Param("status") Integer status,
+                                  @Param("keyword") String keyword);
+
+    /** 按批次ID删除全部明细。 */
+    int deleteByBatchId(@Param("batchId") Long batchId);
 }

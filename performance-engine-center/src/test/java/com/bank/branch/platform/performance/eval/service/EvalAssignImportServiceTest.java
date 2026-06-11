@@ -103,7 +103,7 @@ class EvalAssignImportServiceTest {
                 row("B1", "被一", "信贷部", "客户经理", "E1", "评一", "支行长", "管理部", "主要", "数值打分"),
                 row("B2", "被二", "信贷部", "客户经理", "E2", "评二", "支行长", "管理部", "次要", "等级打分"));
 
-        EvalAssignImportResultDTO res = service.importRows(rows, "EVAL", deadline, "ADMIN");
+        EvalAssignImportResultDTO res = service.importRows(rows, "EVAL", "测试任务", deadline, "ADMIN");
 
         assertThat(res.isSuccess()).isTrue();
         assertThat(res.getImportedCount()).isEqualTo(2);
@@ -112,6 +112,7 @@ class EvalAssignImportServiceTest {
         ArgumentCaptor<EvalAssignBatch> batchCap = ArgumentCaptor.forClass(EvalAssignBatch.class);
         verify(batchMapper).insert(batchCap.capture());
         assertThat(batchCap.getValue().getTaskType()).isEqualTo("EVAL");
+        assertThat(batchCap.getValue().getBatchName()).isEqualTo("测试任务");
         assertThat(batchCap.getValue().getSource()).isEqualTo("IMPORT");
         assertThat(batchCap.getValue().getDeadline()).isEqualTo(deadline);
 
@@ -136,7 +137,7 @@ class EvalAssignImportServiceTest {
                 row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"),
                 row("B2", "被二", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"));
 
-        EvalAssignImportResultDTO res = service.importRows(rows, "EVAL", deadline, "ADMIN");
+        EvalAssignImportResultDTO res = service.importRows(rows, "EVAL", "测试任务", deadline, "ADMIN");
 
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getImportedCount()).isZero();
@@ -153,7 +154,7 @@ class EvalAssignImportServiceTest {
         mockUsersExist("B1"); // E1 不存在
         EvalAssignImportResultDTO res = service.importRows(
                 List.of(row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分")),
-                "EVAL", deadline, "ADMIN");
+                "EVAL", "测试任务", deadline, "ADMIN");
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("打分员工工号不存在");
     }
@@ -164,7 +165,7 @@ class EvalAssignImportServiceTest {
         mockUsersExist("B1", "E1");
         EvalAssignImportResultDTO res = service.importRows(
                 List.of(row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "不存在权重", "数值打分")),
-                "EVAL", deadline, "ADMIN");
+                "EVAL", "测试任务", deadline, "ADMIN");
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("权重标签");
     }
@@ -175,7 +176,7 @@ class EvalAssignImportServiceTest {
         mockUsersExist("B1", "E1");
         EvalAssignImportResultDTO res = service.importRows(
                 List.of(row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "主要", "星级")),
-                "EVAL", deadline, "ADMIN");
+                "EVAL", "测试任务", deadline, "ADMIN");
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("评价类型");
     }
@@ -187,7 +188,7 @@ class EvalAssignImportServiceTest {
         EvalAssignImportResultDTO res = service.importRows(List.of(
                 row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"),
                 row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "次要", "等级打分")),
-                "EVAL", deadline, "ADMIN");
+                "EVAL", "测试任务", deadline, "ADMIN");
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().stream().anyMatch(e -> e.getMessage().contains("重复"))).isTrue();
     }
@@ -197,7 +198,7 @@ class EvalAssignImportServiceTest {
     void importRows_emptyIds_rowError() {
         EvalAssignImportResultDTO res = service.importRows(List.of(
                 row("", "被一", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分")),
-                "EVAL", deadline, "ADMIN");
+                "EVAL", "测试任务", deadline, "ADMIN");
         assertThat(res.isSuccess()).isFalse();
         assertThat(res.getErrors().get(0).getMessage()).contains("被打分员工编号");
         verify(batchMapper, never()).insert(any(EvalAssignBatch.class));

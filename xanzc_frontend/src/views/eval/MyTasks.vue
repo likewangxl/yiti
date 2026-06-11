@@ -13,10 +13,13 @@
       </div>
 
       <el-table v-loading="loading" :data="groups" border stripe style="width: 100%">
-        <el-table-column label="任务类型" width="130" align="center">
+        <el-table-column label="任务类型" width="100" align="center">
           <template #default="{ row }">
             <span class="tag-type">{{ row.taskTypeLabel || row.taskType }}</span>
           </template>
+        </el-table-column>
+        <el-table-column prop="taskName" label="任务名称" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.taskName || '—' }}</template>
         </el-table-column>
         <el-table-column prop="dept" label="部门" min-width="180">
           <template #default="{ row }">{{ row.dept || '—' }}</template>
@@ -42,8 +45,8 @@
     <template v-else>
       <div class="page-h">
         <el-button :icon="ArrowLeft" plain @click="exitProcess">返回</el-button>
-        <h1 class="process-title">{{ processView.group.dept || '无部门' }}</h1>
-        <span class="desc">{{ processView.group.taskTypeLabel || processView.group.taskType }}</span>
+        <h1 class="process-title">{{ processView.group.taskName || processView.group.dept || '无部门' }}</h1>
+        <span class="desc">{{ processView.group.taskTypeLabel || processView.group.taskType }} · {{ processView.group.dept || '' }}</span>
         <div class="deadline-hint">
           <el-icon><Clock /></el-icon>
           截止：{{ formatDateTime(processView.group.deadline) }}

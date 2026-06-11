@@ -108,6 +108,10 @@ public class EvalAssignService {
         if (batch == null || batch.getDeadline() == null || !batch.getDeadline().isAfter(LocalDateTime.now())) {
             throw new PerfException(PerfErrorCode.EVAL_TASK_CLOSED, item.getBatchId());
         }
+        // 批次状态：仅 ACTIVE(0) 可打分，DRAFT(2) 或 CLOSED(1) 拒绝
+        if (batch.getStatus() == null || batch.getStatus() != 0) {
+            throw new PerfException(PerfErrorCode.EVAL_BATCH_NOT_ACTIVE);
+        }
         // 分数校验：按评价类型分支
         if ("GRADE".equals(item.getScoreType())) {
             if (!GRADE_SCORES.contains(score)) {

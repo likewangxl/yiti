@@ -25,7 +25,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * 待处理任务（评价任务）Excel 导入服务。
@@ -64,12 +63,13 @@ public class EvalAssignImportService {
      *
      * @param file     上传的 .xlsx 文件
      * @param taskType 待处理任务类型（EVAL/REWARD）
+     * @param taskName 任务名称（必填）
      * @param deadline 打分截止时间
      * @param createBy 创建人工号
      * @return 导入结果
      */
     public EvalAssignImportResultDTO importExcel(MultipartFile file, String taskType,
-                                                 LocalDateTime deadline, String createBy) {
+                                                 String taskName, LocalDateTime deadline, String createBy) {
         if (file == null || file.isEmpty()) {
             throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_EMPTY);
         }
@@ -86,7 +86,7 @@ public class EvalAssignImportService {
         if (rows.size() > MAX_IMPORT_ROWS) {
             throw new PerfException(PerfErrorCode.EVAL_IMPORT_ROWS_EXCEEDED, rows.size(), MAX_IMPORT_ROWS);
         }
-        return importRows(rows, taskType, deadline, createBy);
+        return importRows(rows, taskType, taskName, deadline, createBy);
     }
 
     /**
@@ -94,13 +94,14 @@ public class EvalAssignImportService {
      *
      * @param rows     解析后的行
      * @param taskType 待处理任务类型（EVAL/REWARD）
+     * @param taskName 任务名称
      * @param deadline 打分截止时间
      * @param createBy 创建人工号
      * @return 导入结果
      */
     @Transactional(rollbackFor = Exception.class)
     public EvalAssignImportResultDTO importRows(List<EvalAssignImportRow> rows, String taskType,
-                                                LocalDateTime deadline, String createBy) {
+                                                String taskName, LocalDateTime deadline, String createBy) {
         EvalAssignImportResultDTO result = new EvalAssignImportResultDTO();
         if (rows == null || rows.isEmpty()) {
             throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_EMPTY);
@@ -121,7 +122,7 @@ public class EvalAssignImportService {
             scoreTypeMap.put(d.getDictCode(), d.getDictCode());
         }
 
-        // 2. 工号有效性：收集双方全部工号批量查
+        // 2. 工号有效性：先按 USER_ID 查，再按 USERNAME 补充，构建 输入→规范USER_ID 映射
         Set<String> allIds = new HashSet<>();
         for (EvalAssignImportRow r : rows) {
             if (r.getBeEvalUserId() != null && !r.getBeEvalUserId().trim().isEmpty()) {
@@ -131,9 +132,23 @@ public class EvalAssignImportService {
                 allIds.add(r.getEvalUserId().trim());
             }
         }
-        Set<String> existingIds = allIds.isEmpty() ? Set.of()
-                : userApi.getUserByEmpIds(new ArrayList<>(allIds)).stream()
-                .map(UserDTO::getEmpId).collect(Collectors.toSet());
+        // 输入→规范USER_ID 映射：Excel 可填 USER_ID 或 USERNAME
+        Map<String, String> idToEmpId = new HashMap<>();
+        if (!allIds.isEmpty()) {
+            List<String> idList = new ArrayList<>(allIds);
+            // 先按 USER_ID 查
+            for (UserDTO u : userApi.getUserByEmpIds(idList)) {
+                idToEmpId.put(u.getEmpId(), u.getEmpId());
+            }
+            // 再按 USERNAME 补充（不覆盖已有的 USER_ID 映射）
+            List<UserDTO> byUsernames = userApi.getUsersByUsernames(idList);
+            if (byUsernames != null) {
+                for (UserDTO u : byUsernames) {
+                    idToEmpId.putIfAbsent(u.getUsername(), u.getEmpId());
+                }
+            }
+        }
+        Set<String> existingIds = idToEmpId.keySet();
 
         // 3. 逐行校验
         List<EvalAssignImportResultDTO.RowError> errors = new ArrayList<>();
@@ -162,6 +177,9 @@ public class EvalAssignImportService {
                 errors.add(err(rowNo, "打分员工工号不存在：" + evId));
                 continue;
             }
+            // 输入可能是 USERNAME，规范化为真正的 USER_ID 后再存储
+            beId = idToEmpId.getOrDefault(beId, beId);
+            evId = idToEmpId.getOrDefault(evId, evId);
             // 权重标签：必填且命中字典
             String weight = trim(r.getWeightTag());
             if (weight.isEmpty()) {
@@ -216,9 +234,10 @@ public class EvalAssignImportService {
         // 5. 全部通过 → 建批次 + 批量插明细
         EvalAssignBatch batch = new EvalAssignBatch();
         batch.setTaskType(taskType);
+        batch.setBatchName(taskName);
         batch.setSource("IMPORT");
         batch.setDeadline(deadline);
-        batch.setStatus(0);
+        batch.setStatus(2); // 导入后置为 DRAFT，需管理员确认发布后才变为 ACTIVE(0)
         batch.setCreateBy(createBy);
         batch.setCreateTime(LocalDateTime.now());
         batchMapper.insert(batch);

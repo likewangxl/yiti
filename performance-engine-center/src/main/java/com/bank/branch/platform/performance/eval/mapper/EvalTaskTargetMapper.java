@@ -15,4 +15,5 @@ public interface EvalTaskTargetMapper extends BaseMapper<EvalTaskTarget> {
     List<EvalTaskTarget> selectByTaskId(@Param("taskId") Long taskId);
     int batchInsert(@Param("list") List<EvalTaskTarget> list);
     int updateFinalScore(@Param("targetId") Long targetId, @Param("finalScore") BigDecimal finalScore);
+    int deleteByTaskId(@Param("taskId") Long taskId);
 }

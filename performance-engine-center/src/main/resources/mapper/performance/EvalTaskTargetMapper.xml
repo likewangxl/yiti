@@ -13,4 +13,8 @@
     <update id="updateFinalScore">
         UPDATE EVAL_TASK_TARGET SET final_score = #{finalScore} WHERE target_id = #{targetId}
     </update>
+
+    <delete id="deleteByTaskId">
+        DELETE FROM EVAL_TASK_TARGET WHERE task_id = #{taskId}
+    </delete>
 </mapper>

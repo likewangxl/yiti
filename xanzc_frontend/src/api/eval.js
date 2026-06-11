@@ -122,15 +122,39 @@ export function downloadAssignTemplate() {
   return call('get', '/admin/eval/assign/import-template', { responseType: 'blob' }, null);
 }
 
-// 导入评价任务：file + taskType + deadline(yyyy-MM-dd HH:mm:ss)
-export async function importAssign(file, taskType, deadline) {
+// 导入评价任务：file + taskType + taskName + deadline(yyyy-MM-dd HH:mm:ss)
+export async function importAssign(file, taskType, taskName, deadline) {
   const fd = new FormData();
   fd.append('file', file);
   return call('post', '/admin/eval/assign/import', {
-    params: { taskType, deadline },
+    params: { taskType, taskName, deadline },
     data: fd,
     headers: { 'Content-Type': 'multipart/form-data' }
   }, null);
+}
+
+// ============================================================
+// 批次管理 (EvalAssignBatchController: /api/admin/eval/assign/batches)
+// ============================================================
+
+// 管理端-分页查询导入批次列表
+export function listAssignBatches(params = {}) {
+  return call('get', '/admin/eval/assign/batches', { params: { page: 1, pageSize: 20, ...params } }, { records: [], total: 0 });
+}
+
+// 管理端-查询批次详情（含分页明细）
+export function getAssignBatchDetail(batchId, params = {}) {
+  return call('get', `/admin/eval/assign/batches/${batchId}`, { params: { page: 1, pageSize: 50, ...params } }, { batch: {}, items: { records: [], total: 0 } });
+}
+
+// 管理端-确认发布草稿批次
+export function publishAssignBatch(batchId) {
+  return call('post', `/admin/eval/assign/batches/${batchId}/publish`, {}, { ok: true });
+}
+
+// 管理端-导出批次明细 Excel
+export function exportAssignBatchItems(batchId) {
+  return call('get', `/admin/eval/assign/batches/${batchId}/export`, { params: {}, responseType: 'blob' }, null);
 }
 
 // ============================================================
@@ -166,4 +190,21 @@ export function listMyTaskTargets(taskId) {
 
 export function submitScore(data) {
   return call('post', '/eval/scores', { data }, { ok: true });
+}
+
+// ============================================================
+// 统一评价任务列表（管理端，合并规则任务 + 导入批次）
+// ============================================================
+
+export function listUnifiedTasks(params = {}) {
+  return call('get', '/admin/eval/tasks/unified', { params: { page: 1, pageSize: 20, ...params } }, { records: [], total: 0 });
+}
+
+export function exportRuleTask(taskId) {
+  return call('get', `/admin/eval/tasks/${taskId}/export`, { params: {}, responseType: 'blob' }, null);
+}
+
+// 删除评价任务（硬删除，需截止时间已过）
+export function deleteUnifiedTask(sourceType, sourceId) {
+  return call('delete', `/admin/eval/tasks/unified/${sourceType}/${sourceId}`, {}, { ok: true });
 }

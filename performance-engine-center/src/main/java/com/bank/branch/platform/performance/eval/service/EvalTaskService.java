@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.eval.service;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.eval.entity.EvalRuleGroup;
 import com.bank.branch.platform.performance.eval.entity.EvalScore;
@@ -14,10 +16,16 @@ import com.bank.branch.platform.performance.eval.mapper.EvalTaskTargetMapper;
 import com.bank.branch.platform.performance.eval.mapper.EvalUserTagMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -47,6 +55,7 @@ public class EvalTaskService {
     private final EvalRuleGroupMapper evalRuleGroupMapper;
     private final EvalScoreMapper evalScoreMapper;
     private final EvalUserTagMapper evalUserTagMapper;
+    private final UserApi userApi;
 
     @Autowired
     public EvalTaskService(EvalTaskMapper evalTaskMapper,
@@ -54,13 +63,15 @@ public class EvalTaskService {
                            EvalRuleMapper evalRuleMapper,
                            EvalRuleGroupMapper evalRuleGroupMapper,
                            EvalScoreMapper evalScoreMapper,
-                           EvalUserTagMapper evalUserTagMapper) {
+                           EvalUserTagMapper evalUserTagMapper,
+                           UserApi userApi) {
         this.evalTaskMapper = evalTaskMapper;
         this.evalTaskTargetMapper = evalTaskTargetMapper;
         this.evalRuleMapper = evalRuleMapper;
         this.evalRuleGroupMapper = evalRuleGroupMapper;
         this.evalScoreMapper = evalScoreMapper;
         this.evalUserTagMapper = evalUserTagMapper;
+        this.userApi = userApi;
     }
 
     /**
@@ -206,6 +217,55 @@ public class EvalTaskService {
      */
     public List<EvalTaskTarget> getTargetsByTaskId(Long taskId) {
         return evalTaskTargetMapper.selectByTaskId(taskId);
+    }
+
+    /**
+     * 导出任务下的被评价人明细为 Excel。
+     *
+     * @param taskId 任务ID
+     * @return Excel 字节流
+     */
+    public byte[] exportTargets(Long taskId) {
+        EvalTask task = getById(taskId);
+        if (task == null) {
+            throw new PerfException(PerfErrorCode.EVAL_ASSIGN_ITEM_NOT_FOUND, taskId);
+        }
+        List<EvalTaskTarget> targets = evalTaskTargetMapper.selectByTaskId(taskId);
+
+        // 按被评价人 USER_ID 批量查姓名
+        java.util.Map<String, String> nameMap = new java.util.HashMap<>();
+        if (!targets.isEmpty()) {
+            List<String> ids = targets.stream().map(EvalTaskTarget::getBeEvalUserId).distinct().collect(Collectors.toList());
+            for (UserDTO u : userApi.getUserByEmpIds(ids)) {
+                nameMap.put(u.getEmpId(), u.getDisplayName());
+            }
+        }
+
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("被评价明细");
+            Row header = sheet.createRow(0);
+            String[] cols = {"记录ID", "被评价人工号", "被评价人姓名", "规则ID", "最终得分"};
+            for (int i = 0; i < cols.length; i++) {
+                header.createCell(i).setCellValue(cols[i]);
+            }
+            for (int i = 0; i < targets.size(); i++) {
+                EvalTaskTarget t = targets.get(i);
+                Row row = sheet.createRow(i + 1);
+                row.createCell(0).setCellValue(t.getTargetId());
+                row.createCell(1).setCellValue(t.getBeEvalUserId());
+                row.createCell(2).setCellValue(nameMap.getOrDefault(t.getBeEvalUserId(),
+                        t.getBeEvalUserId()));
+                row.createCell(3).setCellValue(t.getRuleId());
+                row.createCell(4).setCellValue(t.getFinalScore() == null ? ""
+                        : t.getFinalScore().toPlainString());
+            }
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+        } catch (IOException e) {
+            log.error("[EvalTaskService.exportTargets] 导出失败 taskId={}", taskId, e);
+            throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_INVALID, "Excel 生成失败");
+        }
     }
 
     // ──────────────────────────────────────────────────────────

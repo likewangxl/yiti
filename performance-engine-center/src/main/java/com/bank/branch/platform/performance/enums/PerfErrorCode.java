@@ -181,7 +181,10 @@ public enum PerfErrorCode {
     EVAL_IMPORT_ROWS_EXCEEDED("PERF-40062", "导入行数超过上限"),
     EVAL_ROLE_CONFLICT("PERF-40063", "评价角色不能与被评价角色相同"),
     EVAL_ASSIGN_ITEM_NOT_FOUND("PERF-40064", "待处理任务明细不存在"),
-    EVAL_IMPORT_TYPE_INVALID("PERF-40065", "导入类型非法");
+    EVAL_IMPORT_TYPE_INVALID("PERF-40065", "导入类型非法"),
+    EVAL_BATCH_NOT_ACTIVE("PERF-40066", "批次未发布或已结束，暂不可打分"),
+    EVAL_BATCH_NOT_DRAFT("PERF-40067", "仅草稿状态的批次可发布"),
+    EVAL_TASK_DELETE_BEFORE_DEADLINE("PERF-40068", "截止时间未到不可删除");
 
     private final String code;
     private final String message;

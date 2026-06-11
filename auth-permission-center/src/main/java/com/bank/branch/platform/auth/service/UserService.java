@@ -43,10 +43,10 @@ public class UserService {
      */
     @org.springframework.transaction.annotation.Transactional
     public void create(UserCreateReqDTO req, String operator) {
-        // userId 可选：前端不传时自动生成 U_ + UUID 8 位大写
+        // userId 可选：前端不传时默认与 username 一致
         String userId = req.getUserId();
         if (userId == null || userId.isBlank()) {
-            userId = "U_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+            userId = req.getUsername();
             req.setUserId(userId);
         }
         if (userMapper.selectByUserId(userId) != null) {

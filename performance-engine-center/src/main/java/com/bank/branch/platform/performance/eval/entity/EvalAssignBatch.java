@@ -31,4 +31,7 @@ public class EvalAssignBatch {
     private String createBy;
     /** 创建时间. */
     private LocalDateTime createTime;
+    /** 明细数量（仅列表查询填充，非 DB 列）. */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private Long itemCount;
 }

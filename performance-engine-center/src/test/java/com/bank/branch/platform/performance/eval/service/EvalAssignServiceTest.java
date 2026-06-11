@@ -53,6 +53,7 @@ class EvalAssignServiceTest {
         EvalAssignBatch b = new EvalAssignBatch();
         b.setBatchId(id);
         b.setDeadline(deadline);
+        b.setStatus(0); // ACTIVE
         return b;
     }
 
@@ -196,5 +197,19 @@ class EvalAssignServiceTest {
                 .isInstanceOf(PerfException.class)
                 .extracting(e -> ((PerfException) e).getErrorCode())
                 .isEqualTo(PerfErrorCode.EVAL_ASSIGN_ITEM_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("提交：批次为草稿状态 → 批次未激活")
+    void submit_batchNotActive() {
+        when(itemMapper.selectById(10L)).thenReturn(item(10L, "E1", "NUM", 0, 1L));
+        EvalAssignBatch draft = batch(1L, LocalDateTime.now().plusDays(1));
+        draft.setStatus(2); // DRAFT
+        when(batchMapper.selectById(1L)).thenReturn(draft);
+
+        assertThatThrownBy(() -> service.submitScore("E1", 10L, 80))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.EVAL_BATCH_NOT_ACTIVE);
     }
 }

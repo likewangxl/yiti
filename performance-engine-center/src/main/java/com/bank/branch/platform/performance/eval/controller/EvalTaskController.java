@@ -12,6 +12,7 @@ import com.bank.branch.platform.performance.eval.service.EvalTaskService;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -24,6 +25,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -142,5 +146,22 @@ public class EvalTaskController {
         log.info("[EvalTaskController.close] taskId={}", taskId);
         evalTaskService.closeTask(taskId);
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 导出规则任务被评价人明细为 Excel。
+     *
+     * @param taskId 任务ID
+     */
+    @GetMapping("/{taskId}/export")
+    @Operation(summary = "导出规则任务明细 Excel")
+    @BizAuth(bizType = BizType.EVAL, action = BizAction.EXPORT)
+    public void export(@PathVariable("taskId") Long taskId, HttpServletResponse response) throws IOException {
+        log.info("[EvalTaskController.export] taskId={}", taskId);
+        byte[] data = evalTaskService.exportTargets(taskId);
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        String fileName = URLEncoder.encode("规则任务明细_" + taskId + ".xlsx", StandardCharsets.UTF_8);
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + fileName);
+        response.getOutputStream().write(data);
     }
 }

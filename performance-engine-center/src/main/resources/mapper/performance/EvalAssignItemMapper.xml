@@ -21,17 +21,19 @@
         </foreach>
     </insert>
 
-    <!-- 当前打分人未提交明细，按 批次 + 被打分人部门 聚合 -->
+    <!-- 当前打分人未提交明细，按 批次 + 被打分人部门 聚合（只返回 deadline 未过的进行中批次） -->
     <select id="selectPendingGroups" resultType="com.bank.branch.platform.performance.eval.dto.EvalPendingGroupDTO">
         SELECT i.batch_id        AS batchId,
                b.task_type       AS taskType,
+               b.batch_name      AS taskName,
                i.be_eval_dept    AS dept,
                COUNT(*)          AS pendingCount,
                b.deadline        AS deadline
         FROM EVAL_ASSIGN_ITEM i
         JOIN EVAL_ASSIGN_BATCH b ON i.batch_id = b.batch_id
-        WHERE i.eval_user_id = #{evalUserId} AND i.submitted = 0
-        GROUP BY i.batch_id, b.task_type, i.be_eval_dept, b.deadline
+        WHERE i.eval_user_id = #{evalUserId} AND i.submitted = 0 AND b.status = 0
+          AND b.deadline IS NOT NULL AND b.deadline > NOW()
+        GROUP BY i.batch_id, b.task_type, b.batch_name, i.be_eval_dept, b.deadline
         ORDER BY b.deadline ASC, i.batch_id ASC
     </select>
 
@@ -46,4 +48,46 @@
         SET score = #{score}, submitted = 1, submit_time = #{submitTime}
         WHERE item_id = #{itemId} AND submitted = 0
     </update>
+
+    <!-- 管理端-分页查询批次明细（含已提交分数） -->
+    <select id="selectByBatchId" resultType="com.bank.branch.platform.performance.eval.entity.EvalAssignItem">
+        SELECT <include refid="BASE_COLUMNS"/> FROM EVAL_ASSIGN_ITEM
+        WHERE batch_id = #{batchId}
+        ORDER BY submitted ASC, item_id ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countByBatchId" resultType="long">
+        SELECT COUNT(*) FROM EVAL_ASSIGN_ITEM WHERE batch_id = #{batchId}
+    </select>
+
+    <!-- 管理端-分页查询批次 -->
+    <select id="selectBatchesByCondition" resultType="com.bank.branch.platform.performance.eval.entity.EvalAssignBatch">
+        SELECT b.*, COUNT(i.item_id) AS itemCount
+        FROM EVAL_ASSIGN_BATCH b
+        LEFT JOIN EVAL_ASSIGN_ITEM i ON b.batch_id = i.batch_id
+        <where>
+            <if test="status != null">AND b.status = #{status}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (b.batch_id LIKE CONCAT('%', #{keyword}, '%') OR b.create_by LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        GROUP BY b.batch_id
+        ORDER BY b.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countBatchesByCondition" resultType="long">
+        SELECT COUNT(*) FROM EVAL_ASSIGN_BATCH b
+        <where>
+            <if test="status != null">AND b.status = #{status}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (b.batch_id LIKE CONCAT('%', #{keyword}, '%') OR b.create_by LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
+
+    <delete id="deleteByBatchId">
+        DELETE FROM EVAL_ASSIGN_ITEM WHERE batch_id = #{batchId}
+    </delete>
 </mapper>

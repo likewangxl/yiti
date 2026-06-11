@@ -12,4 +12,8 @@
     <select id="countByTargetIdAndEvalUserId" resultType="int">
         SELECT COUNT(*) FROM EVAL_SCORE WHERE target_id = #{targetId} AND eval_user_id = #{evalUserId}
     </select>
+
+    <delete id="deleteByTaskId">
+        DELETE FROM EVAL_SCORE WHERE task_id = #{taskId}
+    </delete>
 </mapper>

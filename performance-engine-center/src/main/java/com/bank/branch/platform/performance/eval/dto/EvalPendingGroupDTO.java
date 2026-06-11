@@ -13,6 +13,8 @@ public class EvalPendingGroupDTO {
     private Long batchId;
     /** 任务类型编码（EVAL/REWARD）. */
     private String taskType;
+    /** 任务名称（批次名称）. */
+    private String taskName;
     /** 任务类型展示名（字典翻译，如"评价任务"）. */
     private String taskTypeLabel;
     /** 被打分人部门. */

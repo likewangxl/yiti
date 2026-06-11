@@ -69,6 +69,7 @@ public class EvalAssignAdminController {
      *
      * @param file     上传的 .xlsx 文件
      * @param taskType 待处理任务类型（EVAL/REWARD，本期主要 EVAL）
+     * @param taskName 任务名称（必填）
      * @param deadline 打分截止时间（yyyy-MM-dd HH:mm:ss）
      * @return 导入结果（成功条数或行级错误明细）
      */
@@ -78,11 +79,12 @@ public class EvalAssignAdminController {
     public ResponseWrapper<EvalAssignImportResultDTO> importExcel(
             @RequestPart("file") MultipartFile file,
             @RequestParam(value = "taskType", defaultValue = "EVAL") String taskType,
+            @RequestParam("taskName") String taskName,
             @RequestParam("deadline")
             @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime deadline) {
         String createBy = currentUserApi.getCurrentEmpId();
-        log.info("[EvalAssignAdminController.importExcel] fileName={}, taskType={}, deadline={}, createBy={}",
-                file != null ? file.getOriginalFilename() : null, taskType, deadline, createBy);
-        return ResponseWrapper.success(evalAssignImportService.importExcel(file, taskType, deadline, createBy));
+        log.info("[EvalAssignAdminController.importExcel] fileName={}, taskType={}, taskName={}, deadline={}, createBy={}",
+                file != null ? file.getOriginalFilename() : null, taskType, taskName, deadline, createBy);
+        return ResponseWrapper.success(evalAssignImportService.importExcel(file, taskType, taskName, deadline, createBy));
     }
 }

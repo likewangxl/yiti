@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalUnifiedMapper">
+
+    <!-- 统一分页查询：UNION ALL EVAL_TASK + EVAL_ASSIGN_BATCH，外层排序分页 -->
+    <select id="selectUnified" resultType="com.bank.branch.platform.performance.eval.dto.UnifiedEvalTaskRow">
+        SELECT * FROM (
+            (
+                SELECT
+                    t.task_id                AS source_id,
+                    'AUTO'                   AS source_type,
+                    'EVAL'                   AS task_type,
+                    t.task_name              AS task_name,
+                    t.start_time             AS start_time,
+                    t.end_time               AS end_time,
+                    t.status                 AS status,
+                    t.create_by              AS create_by,
+                    t.create_time            AS create_time,
+                    NULL                     AS item_count
+                FROM EVAL_TASK t
+                <where>
+                    <if test="status != null">AND t.status = #{status}</if>
+                    <if test="keyword != null and keyword != ''">AND t.task_name LIKE CONCAT('%', #{keyword}, '%')</if>
+                </where>
+            )
+            UNION ALL
+            (
+                SELECT
+                    b.batch_id               AS source_id,
+                    b.source                 AS source_type,
+                    b.task_type              AS task_type,
+                    COALESCE(b.batch_name, CONCAT('批次', b.batch_id)) AS task_name,
+                    b.create_time            AS start_time,
+                    b.deadline               AS end_time,
+                    b.status                 AS status,
+                    b.create_by              AS create_by,
+                    b.create_time            AS create_time,
+                    COUNT(i.item_id)         AS item_count
+                FROM EVAL_ASSIGN_BATCH b
+                LEFT JOIN EVAL_ASSIGN_ITEM i ON b.batch_id = i.batch_id
+                <where>
+                    <if test="status != null">AND b.status = #{status}</if>
+                    <if test="keyword != null and keyword != ''">
+                        AND (b.batch_name LIKE CONCAT('%', #{keyword}, '%')
+                             OR b.create_by LIKE CONCAT('%', #{keyword}, '%'))
+                    </if>
+                </where>
+                GROUP BY b.batch_id
+            )
+        ) AS unified
+        ORDER BY create_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统一总数：两表 COUNT 求和 -->
+    <select id="countUnified" resultType="long">
+        SELECT SUM(cnt) FROM (
+            SELECT COUNT(*) AS cnt FROM EVAL_TASK t
+            <where>
+                <if test="status != null">AND t.status = #{status}</if>
+                <if test="keyword != null and keyword != ''">AND t.task_name LIKE CONCAT('%', #{keyword}, '%')</if>
+            </where>
+            UNION ALL
+            SELECT COUNT(*) AS cnt FROM EVAL_ASSIGN_BATCH b
+            <where>
+                <if test="status != null">AND b.status = #{status}</if>
+                <if test="keyword != null and keyword != ''">
+                    AND (b.batch_name LIKE CONCAT('%', #{keyword}, '%')
+                         OR b.create_by LIKE CONCAT('%', #{keyword}, '%'))
+                </if>
+            </where>
+        ) AS t
+    </select>
+</mapper>

@@ -52,18 +52,46 @@ INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, s
 ('EVAL_WT_MAIN',     'EVAL_WEIGHT_TAG',     'MAIN',   '主要',     'MAIN',   1, 'ACTIVE'),
 ('EVAL_WT_MINOR',    'EVAL_WEIGHT_TAG',     'MINOR',  '次要',     'MINOR',  2, 'ACTIVE');
 
--- ---------- 3. PT_RESOURCE 资源登记（PERF_EVAL_23~27）----------
+-- ---------- 3. PT_RESOURCE 资源登记（PERF_EVAL_26~30）----------
 INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, STATUS) VALUES
-('PERF_EVAL_23', '/api/admin/eval/assign/import-template', 'GET',  '下载待处理任务导入模板', 0, 0),
-('PERF_EVAL_24', '/api/admin/eval/assign/import',          'POST', '导入待处理任务',         0, 0),
-('PERF_EVAL_25', '/api/eval/pending-tasks',                'GET',  '我的待处理任务汇总',     0, 0),
+('PERF_EVAL_28', '/api/eval/pending-tasks',                'GET',  '我的待处理任务汇总',     0, 0),
 ('PERF_EVAL_26', '/api/eval/pending-tasks/items',          'GET',  '待处理任务明细',         0, 0),
-('PERF_EVAL_27', '/api/eval/pending-tasks/submit',         'POST', '提交待处理任务打分',     0, 0);
+('PERF_EVAL_27', '/api/eval/pending-tasks/submit',         'POST', '提交待处理任务打分',     0, 0),
+('PERF_EVAL_29', '/api/admin/eval/assign/import-template', 'GET',  '下载待处理任务导入模板', 0, 0),
+('PERF_EVAL_30', '/api/admin/eval/assign/import',          'POST', '导入待处理任务',         0, 0);
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID)
+SELECT REPLACE(UUID(), '-', ''), rr.ROLE_ID, src.RESOURCE_ID
+FROM PT_ROLE_RESOURCE rr
+CROSS JOIN PT_RESOURCE src
+WHERE rr.RESOURCE_ID = 'PERF_EVAL_17'
+  AND src.RESOURCE_ID IN ('PERF_EVAL_28','PERF_EVAL_26','PERF_EVAL_27','PERF_EVAL_29','PERF_EVAL_30');
+
+-- ---------- 4. PT_RESOURCE 资源登记（PERF_EVAL_31~34：批次管理端）----------
+INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, STATUS) VALUES
+('PERF_EVAL_31', '/api/admin/eval/assign/batches',         'GET',  '管理端-批次列表',         0, 0),
+('PERF_EVAL_32', '/api/admin/eval/assign/batches/*',       'GET',  '管理端-批次详情+明细',    0, 0),
+('PERF_EVAL_33', '/api/admin/eval/assign/batches/*/publish','POST', '管理端-确认发布批次',     0, 0),
+('PERF_EVAL_34', '/api/admin/eval/assign/batches/*/export', 'GET',  '管理端-导出批次明细Excel', 0, 0);
 
 INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID)
 SELECT REPLACE(UUID(), '-', ''), 'R_ADMIN', RESOURCE_ID
-FROM PT_RESOURCE WHERE RESOURCE_ID IN ('PERF_EVAL_23','PERF_EVAL_24','PERF_EVAL_25','PERF_EVAL_26','PERF_EVAL_27');
+FROM PT_RESOURCE WHERE RESOURCE_ID IN ('PERF_EVAL_31','PERF_EVAL_32','PERF_EVAL_33','PERF_EVAL_34');
 
 INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID)
 SELECT REPLACE(UUID(), '-', ''), 'R_BACK_TECH', RESOURCE_ID
-FROM PT_RESOURCE WHERE RESOURCE_ID IN ('PERF_EVAL_23','PERF_EVAL_24','PERF_EVAL_25','PERF_EVAL_26','PERF_EVAL_27');
+FROM PT_RESOURCE WHERE RESOURCE_ID IN ('PERF_EVAL_31','PERF_EVAL_32','PERF_EVAL_33','PERF_EVAL_34');
+
+-- ---------- 5. PT_RESOURCE 资源登记（PERF_EVAL_35~37：统一列表/导出/删除）----------
+INSERT IGNORE INTO PT_RESOURCE (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, STATUS) VALUES
+('PERF_EVAL_35', '/api/admin/eval/tasks/unified',       'GET',    '统一评价任务列表',   0, 0),
+('PERF_EVAL_36', '/api/admin/eval/tasks/*/export',      'GET',    '规则任务明细导出',   0, 0),
+('PERF_EVAL_37', '/api/admin/eval/tasks/unified/*/*',   'DELETE', '删除评价任务',       0, 0);
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID)
+SELECT REPLACE(UUID(), '-', ''), 'R_ADMIN', RESOURCE_ID
+FROM PT_RESOURCE WHERE RESOURCE_ID IN ('PERF_EVAL_35','PERF_EVAL_36','PERF_EVAL_37');
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID)
+SELECT REPLACE(UUID(), '-', ''), 'R_BACK_TECH', RESOURCE_ID
+FROM PT_RESOURCE WHERE RESOURCE_ID IN ('PERF_EVAL_35','PERF_EVAL_36','PERF_EVAL_37');
