@@ -501,6 +501,11 @@ public class KpiScoreCalcService {
      * <p>ALL→不过滤；ORG_SUBTREE→本机构+下级（ORG 对象限这些机构、EMP 对象限其下属员工）；
      * ORG→仅本机构；SELF 及其它→仅本人员工。无 KPI_CALC 上下文（内部/测试）→不过滤。
      */
+    /** 指标是否为「已发布」状态：生产 DDL 默认值 ACTIVE 与显式 PUBLISHED 均视为已发布. */
+    private static boolean isPublishedStatus(String status) {
+        return "ACTIVE".equals(status) || "PUBLISHED".equals(status);
+    }
+
     private KpiScopeFilter resolveKpiScopeFilter() {
         DataScopeContext ctx = DataScopeContext.current();
         if (ctx == null || ctx.getBizType() != BizType.KPI_CALC || ctx.getScope() == null) {
@@ -855,8 +860,13 @@ public class KpiScoreCalcService {
         for (PerfKpiItem item : items) {
             String metricCode = item.getMetricCode();
             PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
-            if (def == null) {
-                throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
+            // 指标不存在 或 状态非已发布(ACTIVE/PUBLISHED) → 跳过该指标项，不中断整个方案计算
+            if (def == null || !isPublishedStatus(def.getStatus())) {
+                log.warn("【KPI分值计算】方案={} 指标={} {}，跳过该项",
+                        scheme.getSchemeCode(), metricCode,
+                        def == null ? "指标不存在" : "状态非已发布(" + def.getStatus() + ")");
+                skipped++;
+                continue;
             }
             Integer slot = def.getValSlot();
             if (slot == null || slot < 1 || slot > 400) {

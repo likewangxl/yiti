@@ -141,6 +141,7 @@ class KpiScoreCalcServiceTest {
         def.setMetricCode("M_0001");
         def.setBaseDim("EMP");
         def.setValSlot(5);
+        def.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
 
         when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5))
@@ -228,6 +229,7 @@ class KpiScoreCalcServiceTest {
         def.setMetricCode("M_0001");
         def.setBaseDim("EMP");
         def.setValSlot(5);
+        def.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
 
         when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5))
@@ -286,6 +288,7 @@ class KpiScoreCalcServiceTest {
         PerfMetricDef def = new PerfMetricDef();
         def.setBaseDim("EMP");
         def.setValSlot(5);
+        def.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
         when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5))
                 .thenReturn(List.of(new SubjectSlotValueRow("E001", new BigDecimal("80"))));
@@ -480,7 +483,7 @@ class KpiScoreCalcServiceTest {
         plan2.setId("P2"); plan2.setKpiSchemeId("S2"); plan2.setTargetCycle("YEAR");
         when(targetPlanMapper.selectByCondition("S2", "ACTIVE", null, 0, 1000)).thenReturn(List.of(plan2));
         PerfMetricDef def2 = new PerfMetricDef();
-        def2.setMetricCode("M_0002"); def2.setBaseDim("EMP"); def2.setValSlot(6);
+        def2.setMetricCode("M_0002"); def2.setBaseDim("EMP"); def2.setValSlot(6); def2.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_0002")).thenReturn(def2);
         when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 6))
                 .thenReturn(List.of(new SubjectSlotValueRow("E001", new BigDecimal("80"))));
@@ -529,5 +532,50 @@ class KpiScoreCalcServiceTest {
         // 展示值用真实工号(username)覆盖 user_id，并回填姓名 → 前端展示「工号 + 姓名」
         assertThat(page.getRecords().get(0).getTriggerBy()).isEqualTo("finance_zhou");
         assertThat(page.getRecords().get(0).getTriggerByName()).isEqualTo("周八(资财)");
+    }
+
+    // ==================== 指标不存在 / 状态非已发布 → 跳过该指标项 ====================
+
+    @Test
+    @DisplayName("calcOneScheme: KPI 指标不存在 → 跳过该项不抛异常，方案继续完成（不计分）")
+    void calculate_metricNotFound_skipsItemWithoutThrow() {
+        when(taskMapper.selectCount(any())).thenReturn(1L); // 1/2/3 级均已完成
+        PerfKpiScheme s = new PerfKpiScheme();
+        s.setId("S1"); s.setSchemeCode("KPI_A"); s.setStatus("ACTIVE");
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(s));
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1"); item.setSchemeId("S1"); item.setMetricCode("M_MISSING");
+        item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+        // 指标不存在
+        when(metricDefService.getByCodeOrNull("M_MISSING")).thenReturn(null);
+
+        String taskId = service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+
+        assertThat(taskId).isNotBlank();
+        // 该指标被跳过：不计分落库，且不抛异常中断
+        verify(scoreMapper, never()).upsert(any(PerfKpiScore.class));
+    }
+
+    @Test
+    @DisplayName("calcOneScheme: KPI 指标状态非已发布(DRAFT) → 跳过该项，方案继续完成（不计分）")
+    void calculate_metricNotPublished_skipsItem() {
+        when(taskMapper.selectCount(any())).thenReturn(1L);
+        PerfKpiScheme s = new PerfKpiScheme();
+        s.setId("S1"); s.setSchemeCode("KPI_A"); s.setStatus("ACTIVE");
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(s));
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1"); item.setSchemeId("S1"); item.setMetricCode("M_DRAFT");
+        item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+        PerfMetricDef draftDef = new PerfMetricDef();
+        draftDef.setMetricCode("M_DRAFT"); draftDef.setBaseDim("EMP"); draftDef.setValSlot(5);
+        draftDef.setStatus("DRAFT"); // 草稿态 → 跳过
+        when(metricDefService.getByCodeOrNull("M_DRAFT")).thenReturn(draftDef);
+
+        String taskId = service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+
+        assertThat(taskId).isNotBlank();
+        verify(scoreMapper, never()).upsert(any(PerfKpiScore.class));
     }
 }

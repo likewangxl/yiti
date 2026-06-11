@@ -84,9 +84,11 @@ public class MetricBatchCalcService {
             }
 
             // 3. 查找所有已发布+自动+对应级别的指标
+            //    「已发布」= status ∈ {ACTIVE, PUBLISHED}（生产 DDL 默认值 ACTIVE 与显式 PUBLISHED 等价），
+            //    排除草稿(DRAFT)/已停用(DISABLED)，只计算已发布指标。
             List<PerfMetricDef> metrics = metricDefMapper.selectList(
                     new LambdaQueryWrapper<PerfMetricDef>()
-                            .eq(PerfMetricDef::getStatus, "ACTIVE")
+                            .in(PerfMetricDef::getStatus, "ACTIVE", "PUBLISHED")
                             .eq(PerfMetricDef::getCalcMode, "AUTO")
                             .eq(PerfMetricDef::getMetricLevel, metricLevel)
                             .eq(PerfMetricDef::getDeleted, 0));

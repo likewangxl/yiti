@@ -1,0 +1,82 @@
+package com.bank.branch.platform.performance.service;
+
+import com.bank.branch.platform.performance.entity.PerfMetricDef;
+import com.bank.branch.platform.performance.mapper.PerfMetricCalcLogMapper;
+import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
+import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
+import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.time.LocalDate;
+import java.util.Collections;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * MetricBatchCalcService 单元测试。
+ *
+ * <p>核心：1/2/3 级指标批量计算只选「已发布」指标——status ∈ {ACTIVE, PUBLISHED}
+ * （生产 DDL 默认值 ACTIVE 与显式 PUBLISHED 等价），排除草稿(DRAFT)/已停用(DISABLED)。
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class MetricBatchCalcServiceTest {
+
+    @Mock
+    private PerfMetricCalcTaskMapper taskMapper;
+    @Mock
+    private PerfMetricCalcLogMapper logMapper;
+    @Mock
+    private PerfMetricDefMapper metricDefMapper;
+    @Mock
+    private MetricCalcService metricCalcService;
+    @Mock
+    private PerfRunTaskMapper perfRunTaskMapper;
+
+    @InjectMocks
+    private MetricBatchCalcService service;
+
+    /** 预热 PerfMetricDef 的 lambda 缓存，使 LambdaQueryWrapper.getTargetSql() 可在纯单测中渲染. */
+    @BeforeAll
+    static void initTableInfo() {
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), ""), PerfMetricDef.class);
+    }
+
+    @Test
+    @DisplayName("execute: 选指标 status 条件为 IN (ACTIVE, PUBLISHED)，只取已发布指标")
+    void execute_selectsOnlyPublishedMetrics() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<LambdaQueryWrapper<PerfMetricDef>> cap =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        // 返回空指标集合 → execute 在「无指标」处早退，不触发线程池/实际计算
+        when(metricDefMapper.selectList(cap.capture())).thenReturn(Collections.emptyList());
+
+        service.execute(1, LocalDate.of(2026, 6, 11));
+
+        verify(metricDefMapper).selectList(any());
+        LambdaQueryWrapper<PerfMetricDef> wrapper = cap.getValue();
+        // 触发 SQL 片段生成，使 MyBatis-Plus 填充 paramNameValuePairs（懒填充）
+        wrapper.getTargetSql();
+        // 绑定参数应同时包含 ACTIVE 与 PUBLISHED（IN 条件两个取值），而不含 DRAFT/DISABLED
+        var boundValues = wrapper.getParamNameValuePairs().values();
+        assertThat(boundValues).contains("ACTIVE", "PUBLISHED");
+        assertThat(boundValues).doesNotContain("DRAFT", "DISABLED");
+    }
+}
