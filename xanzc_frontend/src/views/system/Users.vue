@@ -399,7 +399,16 @@ async function reload() {
     // 已选机构时走机构子路由，未选时走全量
     let r;
     if (pickedOrg.value) {
-      r = await listOrgUsers(pickedOrg.value, params);
+      // 机构用户接口用单个 keyword（同时模糊工号/用户名/姓名），把工号、姓名合并传过去；
+      // 状态/锁定单独传 isEnabled/isLocked（后端已支持）
+      const keyword = filters.userchnname?.trim() || filters.username?.trim() || undefined;
+      r = await listOrgUsers(pickedOrg.value, {
+        pageNo: pager.pageNo,
+        pageSize: pager.pageSize,
+        keyword,
+        isEnabled: filters.isEnabled ?? undefined,
+        isLocked: filters.isLocked ?? undefined
+      });
     } else {
       r = await listUsers(params);
     }
