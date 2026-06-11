@@ -25,6 +25,8 @@ public enum BizType {
     SUPPORT("SUPPORT", "支撑类业务"),
     SUPPORT_DEPT("SUPPORT_DEPT", "支撑部门管理"),
     REPORT("REPORT", "报表分析"),
+    REPORT_DYN_EMP("REPORT_DYN_EMP", "动态查询-员工维度"),
+    REPORT_DYN_ORG("REPORT_DYN_ORG", "动态查询-机构维度"),
     PERF_CONFIG("PERF_CONFIG", "绩效配置"),
     KPI_CALC("KPI_CALC", "考核计算"),
     SYS_CONFIG("SYS_CONFIG", "系统配置"),

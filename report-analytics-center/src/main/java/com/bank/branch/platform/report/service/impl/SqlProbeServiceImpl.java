@@ -59,9 +59,9 @@ import java.util.concurrent.Semaphore;
 @Service
 public class SqlProbeServiceImpl implements SqlProbeService {
 
-    // getCurrentRoleCodes() 返回 roleCode（如 FINANCE_LEADER），不是 roleId（R_FIN_LEAD）。
-    // SQL 探查仅对「资财部负责人」开放，其他角色（含 SYS_ADMIN / BACK_TECH）一律拒绝。
-    private static final String ROLE_FINANCE_LEADER = "FINANCE_LEADER";
+    // getCurrentRoleCodes() 返回 roleCode（如 FINANCE_LEADER），不是 roleId。
+    // SQL 探查对「资财部负责人(FINANCE_LEADER) / 资财部经办人(BACK_FINANCE)」开放，其他角色一律拒绝。
+    private static final Set<String> ROLE_SQL_PROBE_ALLOWED = Set.of("FINANCE_LEADER", "BACK_FINANCE");
 
     private static final int CONCURRENT_LIMIT = 10;
 
@@ -119,8 +119,8 @@ public class SqlProbeServiceImpl implements SqlProbeService {
     public SqlProbeExecuteRespDTO execute(SqlProbeExecuteReqDTO req) {
         // 1) 角色校验
         Set<String> roles = currentUserApi.getCurrentRoleCodes();
-        if (roles == null || !roles.contains(ROLE_FINANCE_LEADER)) {
-            log.warn("[SqlProbeService] 拒绝：仅资财部负责人(FINANCE_LEADER)可访问 SQL 探查 roles={}", roles);
+        if (roles == null || roles.stream().noneMatch(ROLE_SQL_PROBE_ALLOWED::contains)) {
+            log.warn("[SqlProbeService] 拒绝：仅资财部负责人/资财部经办人可访问 SQL 探查 roles={}", roles);
             throw new RptException(RptErrorCode.SQL_PROBE_NO_ACCESS);
         }
         String empId = currentUserApi.getCurrentEmpId();

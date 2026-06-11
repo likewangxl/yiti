@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
@@ -47,12 +48,18 @@ public class ReportScopeController {
     private final BizScopeApi bizScopeApi;
 
     @GetMapping("/picker")
-    @Operation(summary = "对象选择数据范围（按 REPORT 的 DataScope 配置）")
+    @Operation(summary = "对象选择数据范围（按维度的 DataScope 配置：EMP→REPORT_DYN_EMP / ORG→REPORT_DYN_ORG）")
     @BizAuth(bizType = BizType.REPORT, action = BizAction.LIST)
-    public ResponseWrapper<Map<String, Object>> picker() {
+    public ResponseWrapper<Map<String, Object>> picker(
+            @RequestParam(value = "dim", defaultValue = "EMP") String dim) {
         String empId = currentUserApi.getCurrentEmpId();
         var ctx = currentUserApi.getCurrentUserContext();
-        DataScopeContext scope = bizScopeApi.buildScopeContext(empId, BizType.REPORT, BizAction.LIST);
+        // 按维度分流数据范围，与查询执行层 DynamicQueryService 保持一致：
+        // EMP→REPORT_DYN_EMP（员工维度），ORG→REPORT_DYN_ORG（机构维度），其它回退 REPORT。
+        BizType scopeBizType = "ORG".equals(dim) ? BizType.REPORT_DYN_ORG
+                : "EMP".equals(dim) ? BizType.REPORT_DYN_EMP
+                : BizType.REPORT;
+        DataScopeContext scope = bizScopeApi.buildScopeContext(empId, scopeBizType, BizAction.LIST);
 
         String mode;
         List<String> orgCodes = new ArrayList<>();

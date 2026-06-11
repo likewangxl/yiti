@@ -173,10 +173,11 @@ public class KpiScoreCalcController {
             @RequestParam(value = "dataDate", required = false) String dataDate,
             @RequestParam(value = "schemeCode", required = false) String schemeCode,
             @RequestParam(value = "subjectType", required = false) String subjectType,
+            @RequestParam(value = "subjectKeyword", required = false) String subjectKeyword,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
         LocalDate dt = (dataDate != null && !dataDate.isEmpty()) ? LocalDate.parse(dataDate) : null;
-        KpiScoreGroupPageDTO page = kpiScoreCalcService.pageScoreGroups(dt, schemeCode, subjectType, pageNo, pageSize);
+        KpiScoreGroupPageDTO page = kpiScoreCalcService.pageScoreGroups(dt, schemeCode, subjectType, subjectKeyword, pageNo, pageSize);
         return ResponseWrapper.success(page);
     }
 
@@ -221,18 +222,20 @@ public class KpiScoreCalcController {
         List<MetricOptionDTO> metrics = data.getMetrics() == null ? List.of() : data.getMetrics();
 
         // 动态两级表头：固定列 + 每指标 5 子列（指标名跨列合并）
+        // 注意：内层 List 必须可变（new ArrayList），EasyExcel 的 ExcelHeadProperty.initHeadRowNumber
+        // 会对深度不足的列 .add() 补齐表头行数；若用 List.of() 不可变会抛 UnsupportedOperationException。
         List<List<String>> head = new ArrayList<>();
-        head.add(List.of("维度"));
-        head.add(List.of("对象ID"));
-        head.add(List.of("姓名"));
-        head.add(List.of("考核得分"));
+        head.add(new ArrayList<>(List.of("维度")));
+        head.add(new ArrayList<>(List.of("对象ID")));
+        head.add(new ArrayList<>(List.of("姓名")));
+        head.add(new ArrayList<>(List.of("考核得分")));
         for (MetricOptionDTO m : metrics) {
             String mn = m.getMetricName() != null ? m.getMetricName() : m.getMetricCode();
-            head.add(List.of(mn, "实际值"));
-            head.add(List.of(mn, "目标值"));
-            head.add(List.of(mn, "基础值"));
-            head.add(List.of(mn, "完成率(%)"));
-            head.add(List.of(mn, "得分"));
+            head.add(new ArrayList<>(List.of(mn, "实际值")));
+            head.add(new ArrayList<>(List.of(mn, "目标值")));
+            head.add(new ArrayList<>(List.of(mn, "基础值")));
+            head.add(new ArrayList<>(List.of(mn, "完成率(%)")));
+            head.add(new ArrayList<>(List.of(mn, "得分")));
         }
         List<List<Object>> rows = new ArrayList<>();
         for (KpiScoreGroupRowDTO r : (data.getRecords() == null ? List.<KpiScoreGroupRowDTO>of() : data.getRecords())) {

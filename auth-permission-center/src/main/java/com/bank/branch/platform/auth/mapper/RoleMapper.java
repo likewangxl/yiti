@@ -38,6 +38,16 @@ public interface RoleMapper extends BaseMapper<PtRole> {
     PtRole selectByRoleCode(String roleCode);
 
     /**
+     * 取下一个数字 ROLE_ID（当前最大数字 +1），用于新增角色「应用序号自增」。
+     * ROLE_ID 列虽为 varchar，但已对齐内网改为数字字符串；非数字值 CAST 为 0 不影响。
+     *
+     * @return 下一个可用的数字 ROLE_ID（表空时返回 1）
+     */
+    @org.apache.ibatis.annotations.Select(
+            "SELECT IFNULL(MAX(CAST(ROLE_ID AS UNSIGNED)), 0) + 1 FROM PT_ROLE")
+    long nextNumericRoleId();
+
+    /**
      * 分页查询角色列表，支持按关键字（角色名/编码模糊）和状态过滤。
      *
      * @param keyword      搜索关键字，模糊匹配 ROLE_CODE 和 ROLE_CHNAME，为 null 时不过滤

@@ -357,9 +357,12 @@ public class MetricDefService {
         patch.setCalcFreq(cmd.getCalcFreq());
         patch.setCalcMode(cmd.getCalcMode());
         patch.setCalcLogicType(cmd.getCalcLogicType());
-        patch.setSqlText(cmd.getSqlText());
-        patch.setExprText(cmd.getExprText());
-        patch.setSummaryRule(cmd.getSummaryRule());
+        // 编辑总是提交完整表单：表达式三字段（sql/expr/summary）按提交值落库；
+        // 清空(null)→空串，否则 updateByIdSelective 的 <if !=null> 会跳过、清空无法落库
+        // （同时修复切换计算逻辑类型后旧表达式残留：非当前类型的字段前端传 null → 此处置空串清掉）。
+        patch.setSqlText(cmd.getSqlText() != null ? cmd.getSqlText() : "");
+        patch.setExprText(cmd.getExprText() != null ? cmd.getExprText() : "");
+        patch.setSummaryRule(cmd.getSummaryRule() != null ? cmd.getSummaryRule() : "");
         if (refMetricCodesProvided) {
             patch.setRefMetricCodes(toJson(refMetricCodes));
         }
@@ -390,17 +393,12 @@ public class MetricDefService {
         if (cmd.getCalcLogicType() != null) {
             existing.setCalcLogicType(cmd.getCalcLogicType());
         }
-        if (cmd.getSqlText() != null) {
-            existing.setSqlText(cmd.getSqlText());
-        }
-        if (cmd.getExprText() != null) {
-            existing.setExprText(cmd.getExprText());
-        }
+        // 表达式三字段：编辑提交即权威，清空(null)→空串同步到返回视图（与 patch 落库口径一致）
+        existing.setSqlText(cmd.getSqlText() != null ? cmd.getSqlText() : "");
+        existing.setExprText(cmd.getExprText() != null ? cmd.getExprText() : "");
+        existing.setSummaryRule(cmd.getSummaryRule() != null ? cmd.getSummaryRule() : "");
         if (cmd.getDescription() != null) {
             existing.setDescription(cmd.getDescription());
-        }
-        if (cmd.getSummaryRule() != null) {
-            existing.setSummaryRule(cmd.getSummaryRule());
         }
         if (refMetricCodesProvided) {
             existing.setRefMetricCodes(toJson(refMetricCodes));
@@ -673,6 +671,13 @@ public class MetricDefService {
             java.util.regex.Pattern.compile("M_[A-Za-z0-9_]+");
 
     /**
+     * expr_text 中的指标引用（标识符操作数）模式：任意以字母/下划线开头的标识符。
+     * 指标编号不限 M_ 前缀（如 REF_1），数字/运算符/括号不是指标引用。
+     */
+    private static final java.util.regex.Pattern EXPR_IDENTIFIER =
+            java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+    /**
      * 由 expr_text 实时派生"含标签"展示串：把每个 {@code M_xxx} 替换为 {@code M_xxx·指标名称}
      * （查不到名称的编号原样保留）。expr_display 列已废弃，展示串改为读取时派生，唯一真相是 expr_text。
      */
@@ -853,6 +858,11 @@ public class MetricDefService {
         if (!isValidExprSyntax(exprText)) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "Groovy 表达式不合法：" + exprText);
+        }
+        // 表达式可为空（上方已放行）；非空时至少引用一个指标（标识符操作数），否则纯常量无计算意义
+        if (!EXPR_IDENTIFIER.matcher(exprText).find()) {
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                    "Groovy 表达式不为空时至少需要引用一个指标：" + exprText);
         }
     }
 

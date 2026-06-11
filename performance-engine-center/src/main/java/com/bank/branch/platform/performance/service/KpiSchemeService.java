@@ -219,9 +219,8 @@ public class KpiSchemeService {
         if (scheme == null) {
             throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
-        if (STATUS_DISABLED.equals(scheme.getStatus())) {
-            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "已禁用方案不可发布: " + id);
-        }
+        // DISABLED（已删除）方案允许「启用」：等价于重新发布回 ACTIVE，仍走下方引用指标 ACTIVE 校验，
+        // 保证启用后暴露给计算引擎的方案所有引用指标都有效。
 
         List<PerfKpiItem> items = kpiItemService.listBySchemeId(id);
         // 空方案也允许发布 (方案结构定型后再补 item 的使用场景),

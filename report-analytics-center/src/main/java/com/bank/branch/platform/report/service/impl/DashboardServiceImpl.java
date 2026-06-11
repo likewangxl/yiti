@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
 
-    private static final String ROLE_PRESIDENT = "R_PRESIDENT";
+    private static final String ROLE_PRESIDENT = "2";  // 分行行长 ROLE_ID（对齐内网 sys_role 后改为数字）
     /** 全行顶层机构编码（西安分行，ORG_LEVEL=1）；行长仪表盘默认看全行 */
     private static final String ROOT_ORG_CODE = "1";
 

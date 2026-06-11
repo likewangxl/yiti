@@ -185,6 +185,27 @@ class MetricDefServiceTest {
     }
 
     @Test
+    @DisplayName("EXPR 指标：表达式非空但不引用任何指标 → 抛 METRIC_CALC_LOGIC_INVALID")
+    void create_expr_nonEmptyWithoutMetric_throws() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_NO_REF")
+                .metricName("无引用表达式指标")
+                .baseDim("EMP")
+                .metricLevel(2)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("EXPR")
+                .exprText("100 + 50") // 语法合法但不引用任何 M_ 指标
+                .operator("admin")
+                .build();
+
+        assertThatThrownBy(() -> service.create(cmd))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("至少需要引用一个指标");
+        verify(mapper, never()).insert(any(PerfMetricDef.class));
+    }
+
+    @Test
     @DisplayName("L1 指标创建时写主表且无引用")
     void create_L1_insertsDefAndNoRefs() {
         CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
@@ -458,6 +479,33 @@ class MetricDefServiceTest {
         // 返回视图同步新层级；val_slot 保持不变（不重分配）
         assertThat(updated.getMetricLevel()).isEqualTo(2);
         assertThat(updated.getValSlot()).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("编辑清空 Groovy 表达式（exprText=null）→ patch 以空串落库，选择性更新可写入清空")
+    void update_clearExprText_persistedAsEmptyString() {
+        PerfMetricDef existing = metric("TEST_METRIC_CLR", 2);
+        existing.setId("ID_CLR");
+        existing.setMetricLevel(2);
+        existing.setCalcLogicType("EXPR");
+        existing.setExprText("M_0001 + M_0002");
+
+        UpdateMetricDefCmd cmd = UpdateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_CLR")
+                .metricName("n")
+                .calcLogicType("EXPR")
+                .exprText(null) // 用户删除了 Groovy 表达式
+                .operator("admin")
+                .build();
+        when(mapper.selectByMetricCode("TEST_METRIC_CLR")).thenReturn(existing);
+
+        PerfMetricDef updated = service.update(cmd);
+
+        ArgumentCaptor<PerfMetricDef> captor = ArgumentCaptor.forClass(PerfMetricDef.class);
+        verify(mapper).updateByIdSelective(captor.capture());
+        // 非 null 空串 → mapper <if exprText!=null> 命中，expr_text 落库为 ''（清空）
+        assertThat(captor.getValue().getExprText()).isEqualTo("");
+        assertThat(updated.getExprText()).isEqualTo("");
     }
 
     @Test

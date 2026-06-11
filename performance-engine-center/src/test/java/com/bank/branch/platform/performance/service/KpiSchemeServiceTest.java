@@ -131,6 +131,24 @@ class KpiSchemeServiceTest {
         verify(schemeMapper).updateStatusById("S_PUB_OK", "ACTIVE", "admin");
     }
 
+    @Test
+    @DisplayName("publish: 已删除(DISABLED)方案可被启用回 ACTIVE（引用指标均 ACTIVE）")
+    void publish_whenSchemeDisabled_enablesBackToActive() {
+        PerfKpiScheme scheme = KpiTestDataBuilder.scheme("PUB_EN");
+        scheme.setId("S_PUB_EN");
+        scheme.setStatus("DISABLED"); // 已删除/停用
+        when(schemeMapper.selectById("S_PUB_EN")).thenReturn(scheme);
+        PerfKpiItem item = KpiTestDataBuilder.item("S_PUB_EN", "TEST_KPI_ACTIVE_A");
+        when(kpiItemService.listBySchemeId("S_PUB_EN")).thenReturn(List.of(item));
+        when(metricDefService.getByCodes(anyList()))
+                .thenReturn(List.of(activeMetric("TEST_KPI_ACTIVE_A")));
+
+        PerfKpiScheme enabled = service.publish("S_PUB_EN", "admin");
+
+        assertThat(enabled.getStatus()).isEqualTo("ACTIVE");
+        verify(schemeMapper).updateStatusById("S_PUB_EN", "ACTIVE", "admin");
+    }
+
     // ------------------------------- create 父子事务场景 -------------------------------
 
     @Test

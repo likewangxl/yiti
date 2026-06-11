@@ -55,4 +55,13 @@
     <delete id="deleteByBatchId">
         DELETE FROM RPT_FREE_REPORT_ROW WHERE BATCH_ID = #{batchId}
     </delete>
+
+    <!-- 批量插入：ID 自增不入列；调用方按分批（如每 500 行）传入，避免单条往返导致大文件超时 -->
+    <insert id="insertBatch">
+        INSERT INTO RPT_FREE_REPORT_ROW (BATCH_ID, EMP_ID, ORG_CODE, COL_1, COL_2, DATA_JSON, CREATED_TIME)
+        VALUES
+        <foreach collection="rows" item="r" separator=",">
+            (#{r.batchId}, #{r.empId}, #{r.orgCode}, #{r.col1}, #{r.col2}, #{r.dataJson}, #{r.createdTime})
+        </foreach>
+    </insert>
 </mapper>

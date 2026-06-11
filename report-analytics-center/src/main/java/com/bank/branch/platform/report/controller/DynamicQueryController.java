@@ -12,6 +12,8 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.customer.api.CustomerQueryApi;
+import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.report.dto.req.DynamicQueryReqDTO;
 import com.bank.branch.platform.report.dto.resp.DynamicQueryRespDTO;
 import com.bank.branch.platform.report.service.DynamicQueryService;
@@ -50,6 +52,7 @@ public class DynamicQueryController {
     private final CurrentUserApi currentUserApi;
     private final OrgApi orgApi;
     private final BizScopeApi bizScopeApi;
+    private final CustomerQueryApi customerQueryApi;
 
     /**
      * 执行动态查询：根据 dim + subjectIds + metricCodes + dataDate 返回行列数据.
@@ -59,6 +62,31 @@ public class DynamicQueryController {
     @Operation(summary = "A.2 执行动态查询")
     public ResponseWrapper<DynamicQueryRespDTO> dynamicQuery(@Valid @RequestBody DynamicQueryReqDTO req) {
         return ResponseWrapper.success(dynamicQueryService.execute(req));
+    }
+
+    /**
+     * 动态查询「选择对象」客户搜索：按客户名/客户号模糊搜（复用 CustomerQueryApi.searchCustomers）。
+     * <p>客户维度按产品决策<b>不做数据范围限制</b>，这里不按机构过滤，直接返回匹配客户。</p>
+     * 返回 [{id: 客户内部ID, name: 客户名(缺则客户号), org: 归属机构名}]，供前端对象选择框使用。
+     */
+    @GetMapping("/customers/search")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.LIST)
+    @Operation(summary = "动态查询客户搜索（不限范围，按客户名/客户号）")
+    public ResponseWrapper<List<Map<String, String>>> searchCustomers(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        int size = Math.min(Math.max(limit, 1), 50);
+        List<CustomerDTO> custs = customerQueryApi.searchCustomers(keyword, size);
+        List<Map<String, String>> out = new ArrayList<>();
+        for (CustomerDTO c : custs) {
+            String name = c.getCustName() != null && !c.getCustName().isBlank() ? c.getCustName()
+                    : (c.getCustNo() != null ? c.getCustNo() : "");
+            out.add(Map.of(
+                    "id", c.getId() != null ? c.getId() : "",
+                    "name", name,
+                    "org", c.getOwnerOrgName() != null ? c.getOwnerOrgName() : ""));
+        }
+        return ResponseWrapper.success(out);
     }
 
     /**
@@ -75,7 +103,8 @@ public class DynamicQueryController {
         int size = Math.min(Math.max(limit, 1), 50);
 
         String selfEmpId = currentUserApi.getCurrentEmpId();
-        DataScopeContext scope = bizScopeApi.buildScopeContext(selfEmpId, BizType.REPORT, BizAction.LIST);
+        // 员工搜索属员工维度，按 REPORT_DYN_EMP 取范围，与选择框/执行层口径一致
+        DataScopeContext scope = bizScopeApi.buildScopeContext(selfEmpId, BizType.REPORT_DYN_EMP, BizAction.LIST);
         DataScopeType type = scope != null ? scope.scopeType() : null;
         boolean allowAll = type == DataScopeType.ALL;
         boolean selfOnly = !allowAll && type != DataScopeType.ORG && type != DataScopeType.ORG_SUBTREE;

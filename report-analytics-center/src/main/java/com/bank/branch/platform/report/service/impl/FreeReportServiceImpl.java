@@ -35,6 +35,7 @@ public class FreeReportServiceImpl implements FreeReportService {
     private final ObjectMapper objectMapper;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public String importExcel(String reportName, MultipartFile file, String empId, String empName) {
         log.info("[FreeReport.import] reportName={}, file={}, empId={}", reportName, file.getOriginalFilename(), empId);
 
@@ -151,7 +152,12 @@ public class FreeReportServiceImpl implements FreeReportService {
         }
         batchMapper.insert(batch);
 
-        // 保存行数据
+        // 保存行数据 —— 分批批量插入（每批 500）。原逐条 insert 对 3000 行要 3000 次 DB 往返，
+        // 大文件会超时只写入一部分；批量插入 + 整个方法 @Transactional 保证：要么全部写入、要么回滚，
+        // 不再出现「批次记 3000、实际只入 2000」的不一致。
+        final int CHUNK = 500;
+        LocalDateTime now = LocalDateTime.now();
+        List<RptFreeReportRow> buffer = new ArrayList<>(CHUNK);
         for (Map<String, String> rowData : dataRows) {
             RptFreeReportRow row = new RptFreeReportRow();
             row.setBatchId(batchId);
@@ -171,8 +177,15 @@ public class FreeReportServiceImpl implements FreeReportService {
             } catch (Exception e) {
                 row.setDataJson("{}");
             }
-            row.setCreatedTime(LocalDateTime.now());
-            rowMapper.insert(row);
+            row.setCreatedTime(now);
+            buffer.add(row);
+            if (buffer.size() >= CHUNK) {
+                rowMapper.insertBatch(buffer);
+                buffer.clear();
+            }
+        }
+        if (!buffer.isEmpty()) {
+            rowMapper.insertBatch(buffer);
         }
 
         log.info("[FreeReport.import] 完成 batchId={}, rows={}", batchId, dataRows.size());

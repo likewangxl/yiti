@@ -108,7 +108,9 @@ public class RoleService {
             throw new BizException(AuthErrorCode.ROLE_CODE_DUPLICATE.getCode(),
                     AuthErrorCode.ROLE_CODE_DUPLICATE.getMessage());
         }
-        String roleId = "R_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        // ROLE_ID 已对齐内网数字编号：新增角色取当前最大数字 +1（应用序号自增，列仍 varchar）。
+        // 角色创建是低频管理操作，MAX+1 的并发竞态可接受。
+        String roleId = String.valueOf(roleMapper.nextNumericRoleId());
         PtRole role = new PtRole();
         role.setRoleId(roleId);
         role.setRoleCode(roleCode);

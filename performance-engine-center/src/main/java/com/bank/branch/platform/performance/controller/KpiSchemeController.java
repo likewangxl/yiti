@@ -130,8 +130,9 @@ public class KpiSchemeController {
      */
     private boolean canViewAllSchemes() {
         java.util.Set<String> roleIds = currentUserApi.getCurrentRoleIds();
-        return roleIds != null && (roleIds.contains("R_BACK_FINANCE") || roleIds.contains("R_FIN_LEAD")
-                || roleIds.contains("R_ADMIN") || roleIds.contains("R_BACK_TECH"));
+        // ROLE_ID 已对齐内网 sys_role：资财部经办人=238 / 资财部负责人=129 / 系统管理员=1 / 中后台员工(科技)=229
+        return roleIds != null && (roleIds.contains("238") || roleIds.contains("129")
+                || roleIds.contains("1") || roleIds.contains("229"));
     }
 
     /**

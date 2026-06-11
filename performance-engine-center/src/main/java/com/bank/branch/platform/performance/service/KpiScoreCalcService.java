@@ -480,8 +480,8 @@ public class KpiScoreCalcService {
      * @return 分组分页结果（含指标列定义 + 对象行）
      */
     public KpiScoreGroupPageDTO pageScoreGroups(LocalDate dataDate, String schemeCode,
-                                                String subjectType, int pageNo, int pageSize) {
-        return groupPage(dataDate, schemeCode, subjectType,
+                                                String subjectType, String subjectKeyword, int pageNo, int pageSize) {
+        return groupPage(dataDate, schemeCode, subjectType, subjectKeyword,
                 Math.max(1, pageNo), Math.min(100, Math.max(1, pageSize)));
     }
 
@@ -492,7 +492,7 @@ public class KpiScoreCalcService {
      */
     public KpiScoreGroupPageDTO exportScoreGroups(LocalDate dataDate, String schemeCode,
                                                   String subjectType, int cap) {
-        return groupPage(dataDate, schemeCode, subjectType, 1, Math.max(1, cap));
+        return groupPage(dataDate, schemeCode, subjectType, null, 1, Math.max(1, cap));
     }
 
     /**
@@ -581,7 +581,7 @@ public class KpiScoreCalcService {
     }
 
     private KpiScoreGroupPageDTO groupPage(LocalDate dataDate, String schemeCode,
-                                           String subjectType, int safeNo, int safeSize) {
+                                           String subjectType, String subjectKeyword, int safeNo, int safeSize) {
         String sc = StringUtils.hasText(schemeCode) ? schemeCode.trim() : null;
         String st = StringUtils.hasText(subjectType) ? subjectType.trim() : null;
 
@@ -610,18 +610,60 @@ public class KpiScoreCalcService {
         // 考核计算(KPI_CALC)数据范围：本人 / 本机构+下级 / 全部
         KpiScopeFilter scope = resolveKpiScopeFilter();
         long total = scoreMapper.countSubjectGroups(dataDate, sc, st, scope);
-        page.setTotal(total);
         if (total == 0) {
+            page.setTotal(0L);
             page.setRecords(List.of());
             return page;
         }
         int offset = (safeNo - 1) * safeSize;
-        List<KpiSubjectGroupRow> groups = scoreMapper.selectSubjectGroups(dataDate, sc, st, scope, offset, safeSize);
-        if (groups.isEmpty()) {
-            page.setRecords(List.of());
+        // 对象名称模糊关键字（按对象名称/对象ID 不区分大小写匹配）
+        String kw = StringUtils.hasText(subjectKeyword) ? subjectKeyword.trim().toLowerCase() : null;
+
+        if (kw == null) {
+            // 无关键字：DB 分页（高效）
+            page.setTotal(total);
+            List<KpiSubjectGroupRow> groups = scoreMapper.selectSubjectGroups(dataDate, sc, st, scope, offset, safeSize);
+            List<KpiScoreGroupRowDTO> records = buildGroupRecords(groups, dataDate, sc, metricCols);
+            enrichGroupNames(records);
+            page.setRecords(records);
             return page;
         }
-        // 当前页对象的全部指标计分行 → (对象类型|对象ID) → metricCode → 计分行
+
+        // 关键字模式：对象名称是读取时 enrich（非 DB 列），无法下推 SQL；
+        // 取全部对象组 → 装配 → enrich 名称 → 按对象名称/ID 模糊过滤 → 内存分页。
+        // 单方案单日期下对象数有界（数据范围内的员工/机构），上限 SEARCH_SUBJECT_CAP 保护。
+        List<KpiSubjectGroupRow> allGroups = scoreMapper.selectSubjectGroups(
+                dataDate, sc, st, scope, 0, (int) Math.min(total, SEARCH_SUBJECT_CAP));
+        List<KpiScoreGroupRowDTO> allRecords = buildGroupRecords(allGroups, dataDate, sc, metricCols);
+        enrichGroupNames(allRecords);
+        List<KpiScoreGroupRowDTO> matched = new java.util.ArrayList<>();
+        for (KpiScoreGroupRowDTO r : allRecords) {
+            String name = r.getSubjectName() == null ? "" : r.getSubjectName().toLowerCase();
+            String id = r.getSubjectId() == null ? "" : r.getSubjectId().toLowerCase();
+            if (name.contains(kw) || id.contains(kw)) {
+                matched.add(r);
+            }
+        }
+        page.setTotal((long) matched.size());
+        int from = Math.min(offset, matched.size());
+        int to = Math.min(from + safeSize, matched.size());
+        page.setRecords(matched.subList(from, to));
+        return page;
+    }
+
+    /** 对象名称模糊查询时单方案单日期对象数上限（防一次取数过大）. */
+    private static final int SEARCH_SUBJECT_CAP = 5000;
+
+    /**
+     * 按对象分组装配计分行（对象/姓名占位 + 各指标单元格），名称由调用方再 enrich.
+     * <p>分页路径与关键字全量路径共用，避免装配逻辑重复。
+     */
+    private List<KpiScoreGroupRowDTO> buildGroupRecords(List<KpiSubjectGroupRow> groups,
+            LocalDate dataDate, String sc, List<MetricOptionDTO> metricCols) {
+        if (groups == null || groups.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        // 这批对象的全部指标计分行 → (对象类型|对象ID) → metricCode → 计分行
         List<PerfKpiScore> scoreRows = scoreMapper.selectByDateSchemeSubjects(dataDate, sc, groups);
         Map<String, Map<String, PerfKpiScore>> bySubject = new java.util.HashMap<>();
         for (PerfKpiScore r : scoreRows) {
@@ -653,9 +695,7 @@ public class KpiScoreCalcService {
             row.setMetrics(cells);
             records.add(row);
         }
-        enrichGroupNames(records);
-        page.setRecords(records);
-        return page;
+        return records;
     }
 
     /** (对象类型|对象ID) 复合键. */

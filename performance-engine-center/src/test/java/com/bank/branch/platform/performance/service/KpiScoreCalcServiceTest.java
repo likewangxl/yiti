@@ -348,7 +348,7 @@ class KpiScoreCalcServiceTest {
         u.setUsername("E001"); u.setDisplayName("张三");
         when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(u));
 
-        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", null, 1, 20);
+        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", null, null, 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(1L);
         assertThat(page.getMetrics()).extracting("metricName")
@@ -366,6 +366,42 @@ class KpiScoreCalcServiceTest {
         KpiScoreMetricCellDTO c2 = row.getMetrics().get("M_0002");
         // 完成率 = (50-10)/100*100 = 40.00
         assertThat(c2.getCompleteRate()).isEqualByComparingTo("40.00");
+    }
+
+    @Test
+    @DisplayName("pageScoreGroups: 对象名称模糊关键字 → 仅返回名称命中的对象（取全量 enrich 后内存过滤+分页）")
+    void pageScoreGroups_filtersBySubjectNameKeyword() {
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1"); scheme.setSchemeCode("KPI_A");
+        when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
+        PerfKpiItem i1 = new PerfKpiItem(); i1.setMetricCode("M_0001");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(i1));
+        PerfMetricDef d1 = new PerfMetricDef(); d1.setMetricCode("M_0001"); d1.setMetricName("新增客户");
+        when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(d1);
+
+        // 2 个对象：E001(张三) / E002(李四)
+        when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any())).thenReturn(2L);
+        KpiSubjectGroupRow g1 = new KpiSubjectGroupRow();
+        g1.setSubjectId("E001"); g1.setSubjectType("EMP"); g1.setTotalScore(new BigDecimal("0.7"));
+        KpiSubjectGroupRow g2 = new KpiSubjectGroupRow();
+        g2.setSubjectId("E002"); g2.setSubjectType("EMP"); g2.setTotalScore(new BigDecimal("0.5"));
+        // 关键字模式取全部对象：offset=0, limit=min(total=2, CAP)=2
+        when(scoreMapper.selectSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any(), eq(0), eq(2)))
+                .thenReturn(List.of(g1, g2));
+        when(scoreMapper.selectByDateSchemeSubjects(eq(DATA_DATE), eq("KPI_A"), anyList()))
+                .thenReturn(List.of(
+                        scoreRow("E001", "M_0001", "80", "100", "0", "0.7"),
+                        scoreRow("E002", "M_0001", "50", "100", "0", "0.5")));
+        UserDTO u1 = new UserDTO(); u1.setUsername("E001"); u1.setDisplayName("张三");
+        UserDTO u2 = new UserDTO(); u2.setUsername("E002"); u2.setDisplayName("李四");
+        when(userApi.getUsersByUsernames(List.of("E001", "E002"))).thenReturn(List.of(u1, u2));
+
+        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", null, "张", 1, 20);
+
+        assertThat(page.getTotal()).isEqualTo(1L);
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).getSubjectId()).isEqualTo("E001");
+        assertThat(page.getRecords().get(0).getSubjectName()).isEqualTo("张三");
     }
 
     @Test
@@ -391,7 +427,7 @@ class KpiScoreCalcServiceTest {
                 .thenReturn(List.of(scoreRow("E001", "M_EMP", "80", "100", "0", "0.4")));
 
         // 选中 EMP 维度 → 指标列只剩 EMP 维度指标，过滤掉 ORG 指标组
-        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", "EMP", 1, 20);
+        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", "EMP", null, 1, 20);
         assertThat(page.getMetrics()).extracting("metricCode").containsExactly("M_EMP");
     }
 
@@ -435,7 +471,7 @@ class KpiScoreCalcServiceTest {
             ArgumentCaptor<KpiScopeFilter> cap = ArgumentCaptor.forClass(KpiScopeFilter.class);
             when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), cap.capture())).thenReturn(0L);
 
-            service.pageScoreGroups(DATA_DATE, "KPI_A", null, 1, 20);
+            service.pageScoreGroups(DATA_DATE, "KPI_A", null, null, 1, 20);
 
             KpiScopeFilter scope = cap.getValue();
             assertThat(scope.isScopeAll()).isFalse();
