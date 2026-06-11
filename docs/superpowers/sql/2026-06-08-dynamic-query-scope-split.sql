@@ -1,0 +1,27 @@
+-- 动态查询数据范围按维度拆分：新增 REPORT_DYN_EMP（员工维度）/ REPORT_DYN_ORG（机构维度）
+-- 不再共用 REPORT，使同一角色可「员工维度只看自己、机构维度按分配看机构」。
+-- 幂等：已存在对应 (ROLE_ID, BIZ_TYPE) 行则跳过。
+-- ID 格式 SDE_/SDO_ + ROLE_ID（ID 列仅 varchar(32)，沿用 S_<ROLE_CODE>_<BIZ_TYPE> 会超长；
+--   ROLE_ID 唯一且最长 17，SDE_/SDO_ 前缀后最长 21，安全）。
+-- 默认值：EMP=SELF（最小权限）；ORG=拷贝该角色现有 REPORT 值（无则 SELF）。
+
+-- 1) 员工维度：所有角色默认 SELF（只看自己）
+INSERT INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
+SELECT CONCAT('SDE_', r.ROLE_ID), r.ROLE_ID, 'REPORT_DYN_EMP', 'SELF',
+       0, NOW(), 'system', '动态查询员工维度数据范围-初始化'
+FROM PT_ROLE r
+WHERE NOT EXISTS (
+    SELECT 1 FROM PT_ROLE_BIZ_SCOPE s
+    WHERE s.ROLE_ID = r.ROLE_ID AND s.BIZ_TYPE = 'REPORT_DYN_EMP'
+);
+
+-- 2) 机构维度：拷贝该角色现有 REPORT 数据范围（无 REPORT 行则 SELF）
+INSERT INTO PT_ROLE_BIZ_SCOPE (ID, ROLE_ID, BIZ_TYPE, DATA_SCOPE, RECORD_STATUS, CREATE_TIME, CREATE_USER, REMARK)
+SELECT CONCAT('SDO_', r.ROLE_ID), r.ROLE_ID, 'REPORT_DYN_ORG',
+       COALESCE(rep.DATA_SCOPE, 'SELF'), 0, NOW(), 'system', '动态查询机构维度数据范围-初始化(拷贝REPORT)'
+FROM PT_ROLE r
+LEFT JOIN PT_ROLE_BIZ_SCOPE rep ON rep.ROLE_ID = r.ROLE_ID AND rep.BIZ_TYPE = 'REPORT'
+WHERE NOT EXISTS (
+    SELECT 1 FROM PT_ROLE_BIZ_SCOPE s
+    WHERE s.ROLE_ID = r.ROLE_ID AND s.BIZ_TYPE = 'REPORT_DYN_ORG'
+);
