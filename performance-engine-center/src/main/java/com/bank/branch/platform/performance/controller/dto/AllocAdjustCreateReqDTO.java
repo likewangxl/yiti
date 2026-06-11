@@ -17,6 +17,11 @@ import java.util.List;
 @Data
 public class AllocAdjustCreateReqDTO {
 
+    /**
+     * 草稿 ID（仅「保存为草稿」编辑既有草稿时传入；为空=新建草稿；{@code /create} 直接提交时忽略）.
+     */
+    private String id;
+
     /** 客户类型：CORP（对公）/ RETAIL（零售），决定审批流路由. */
     @NotBlank(message = "custType 必填")
     private String custType;

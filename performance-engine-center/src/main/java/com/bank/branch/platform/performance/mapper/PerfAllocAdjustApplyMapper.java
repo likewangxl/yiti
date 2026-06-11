@@ -90,6 +90,18 @@ public interface PerfAllocAdjustApplyMapper extends BaseMapper<PerfAllocAdjustAp
                      @Param("processInstanceId") String processInstanceId);
 
     /**
+     * 更新草稿主表可编辑字段（客户/维度/业务类型/账号/余额快照/备注等）.
+     *
+     * <p>仅供「编辑草稿」复用：按 id 覆盖业务字段 + updated_by/updated_time，
+     * 不动 created_by/created_time/status/business_key/process_instance_id。
+     * 调用方须先校验该 id 当前为 DRAFT 状态。
+     *
+     * @param apply 携带新字段值的实体（id 必填）
+     * @return 受影响行数
+     */
+    int updateDraft(PerfAllocAdjustApply apply);
+
+    /**
      * 条件分页查询（支持 status/bizKind/custId/ownerOrgId/createdBy 任意组合）.
      *
      * @param status      状态过滤（nullable）

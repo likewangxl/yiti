@@ -673,4 +673,140 @@ class AllocAdjustServiceTest {
 
         verify(workflowApi, never()).cancelProcess(anyString(), anyString());
     }
+
+    // ==================== 草稿（保存为草稿 / 编辑 / 草稿提交审批）====================
+
+    @Test
+    @DisplayName("saveDraft 新建：落库 status=DRAFT，不发起流程，不回写状态")
+    void saveDraft_new_persistsDraftWithoutWorkflow() {
+        String id = service.saveDraft(baseCmd("CORP_LOAN"), null);
+
+        assertThat(id).isNotBlank();
+        ArgumentCaptor<PerfAllocAdjustApply> cap = ArgumentCaptor.forClass(PerfAllocAdjustApply.class);
+        verify(applyMapper).insert(cap.capture());
+        assertThat(cap.getValue().getStatus()).isEqualTo("DRAFT");
+        assertThat(cap.getValue().getApplyNo()).isNotBlank();
+        verify(itemMapper).batchInsert(anyList());
+        // 草稿不进审批流程
+        verify(workflowApi, never()).startProcess(any());
+        verify(applyMapper, never()).updateStatus(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("saveDraft 宽松校验：比例合计>100 / 无原业绩分配 也能存草稿（不抛、不起流程）")
+    void saveDraft_lenient_allowsIncompleteData() {
+        SubmitAllocAdjustCmd cmd = baseCmd("CORP_LOAN");
+        cmd.setItems(Arrays.asList(
+                SubmitAllocAdjustCmd.Item.builder().empId("EMP_A").ratio(new BigDecimal("70")).build(),
+                SubmitAllocAdjustCmd.Item.builder().empId("EMP_B").ratio(new BigDecimal("50")).build()));
+        // 原业绩分配历史查不到也不阻塞草稿
+        when(allocAdjustPreviewService.getLastApprovedAllocPreview(anyString(), anyString()))
+                .thenReturn(Collections.emptyList());
+
+        String id = service.saveDraft(cmd, null);
+
+        assertThat(id).isNotBlank();
+        verify(applyMapper).insert(any(PerfAllocAdjustApply.class));
+        verify(workflowApi, never()).startProcess(any());
+    }
+
+    @Test
+    @DisplayName("saveDraft 缺客户编号 → 抛 VALIDATION_FAILED，不落库")
+    void saveDraft_blankCustId_throws() {
+        SubmitAllocAdjustCmd cmd = baseCmd("CORP_LOAN");
+        cmd.setCustId(null);
+
+        assertThatThrownBy(() -> service.saveDraft(cmd, null))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+    }
+
+    @Test
+    @DisplayName("saveDraft 编辑既有草稿：更新主表 + 重建明细（delete+insert），保持 DRAFT，不起流程")
+    void saveDraft_updateExistingDraft_updatesAndReplacesItems() {
+        PerfAllocAdjustApply existing = new PerfAllocAdjustApply();
+        existing.setId("D1");
+        existing.setApplyNo("AA-D1");
+        existing.setStatus("DRAFT");
+        existing.setCreatedBy("admin");
+        when(applyMapper.selectByAllocApplyId("D1")).thenReturn(existing);
+
+        String id = service.saveDraft(baseCmd("CORP_LOAN"), "D1");
+
+        assertThat(id).isEqualTo("D1");
+        verify(applyMapper).updateDraft(any(PerfAllocAdjustApply.class));
+        verify(itemMapper).deleteByApplyId("D1");
+        verify(itemMapper).batchInsert(anyList());
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+        verify(workflowApi, never()).startProcess(any());
+    }
+
+    @Test
+    @DisplayName("saveDraft 编辑非草稿（IN_APPROVAL）→ 抛 VALIDATION_FAILED，不更新")
+    void saveDraft_updateNonDraft_throws() {
+        PerfAllocAdjustApply existing = new PerfAllocAdjustApply();
+        existing.setId("X1");
+        existing.setStatus("IN_APPROVAL");
+        when(applyMapper.selectByAllocApplyId("X1")).thenReturn(existing);
+
+        assertThatThrownBy(() -> service.saveDraft(baseCmd("CORP_LOAN"), "X1"))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(applyMapper, never()).updateDraft(any());
+        verify(itemMapper, never()).deleteByApplyId(anyString());
+    }
+
+    @Test
+    @DisplayName("submitDraft：载入 DRAFT → 完整校验通过 → 起流程 → 回写 IN_APPROVAL")
+    void submitDraft_validatesAndStartsWorkflow() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("D2");
+        apply.setApplyNo("AA-D2");
+        apply.setStatus("DRAFT");
+        apply.setCustId("CN-001");
+        apply.setCustType("CORP");
+        apply.setAllocDim("RULE");
+        apply.setBizKind("CORP_LOAN");
+        apply.setOwnerOrgId("ORG_001");
+        apply.setCreatedBy("admin");
+        when(applyMapper.selectByAllocApplyId("D2")).thenReturn(apply);
+        PerfAllocAdjustItem n1 = new PerfAllocAdjustItem();
+        n1.setItemKind("NEW"); n1.setEmpId("EMP_A"); n1.setRatio(new BigDecimal("60"));
+        PerfAllocAdjustItem n2 = new PerfAllocAdjustItem();
+        n2.setItemKind("NEW"); n2.setEmpId("EMP_B"); n2.setRatio(new BigDecimal("40"));
+        when(itemMapper.selectByApplyId("D2")).thenReturn(Arrays.asList(n1, n2));
+        when(workflowApi.startProcess(any(StartProcessCmd.class)))
+                .thenReturn(new WorkflowLaunchResp("PI_D2", null, null));
+
+        String id = service.submitDraft("D2", "admin");
+
+        assertThat(id).isEqualTo("D2");
+        ArgumentCaptor<StartProcessCmd> cap = ArgumentCaptor.forClass(StartProcessCmd.class);
+        verify(workflowApi).startProcess(cap.capture());
+        assertThat(cap.getValue().getProcessDefinitionKey()).isEqualTo("perf_alloc_adjust_corp_v1");
+        verify(applyMapper).updateStatus("D2", "IN_APPROVAL", "PI_D2");
+        // 不应新建（既有草稿原地提交）
+        verify(applyMapper, never()).insert(any(PerfAllocAdjustApply.class));
+    }
+
+    @Test
+    @DisplayName("submitDraft 非草稿状态 → 抛 VALIDATION_FAILED，不起流程")
+    void submitDraft_nonDraft_throws() {
+        PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
+        apply.setId("D3");
+        apply.setStatus("IN_APPROVAL");
+        when(applyMapper.selectByAllocApplyId("D3")).thenReturn(apply);
+
+        assertThatThrownBy(() -> service.submitDraft("D3", "admin"))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(workflowApi, never()).startProcess(any());
+    }
 }

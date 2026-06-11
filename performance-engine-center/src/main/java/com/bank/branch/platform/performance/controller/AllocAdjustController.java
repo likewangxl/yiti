@@ -82,7 +82,45 @@ public class AllocAdjustController {
                 req.getCustId(), req.getBizKind(),
                 req.getItems() == null ? 0 : req.getItems().size());
 
-        SubmitAllocAdjustCmd cmd = SubmitAllocAdjustCmd.builder()
+        return ResponseWrapper.success(allocAdjustService.submitDto(toCmd(req)));
+    }
+
+    /**
+     * 保存为草稿：落库录入信息，状态 DRAFT，<b>不进入审批流程</b>.
+     *
+     * <p>{@code req.id} 为空=新建草稿，非空=编辑既有草稿（仅 DRAFT 可改）。
+     * 宽松校验由 Service 层 {@code saveDraft} 承担（允许半成品）。
+     */
+    @PostMapping("/save-draft")
+    @Operation(summary = "保存为草稿（不进入审批流程）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
+    @AuditLog(action = "ALLOC_ADJUST_SAVE_DRAFT", resourceType = "PERF_ALLOC_ADJUST")
+    public ResponseWrapper<Map<String, String>> saveDraft(@Valid @RequestBody AllocAdjustCreateReqDTO req) {
+        log.info("[AllocAdjustController.saveDraft] id={}, custId={}, bizKind={}",
+                req.getId(), req.getCustId(), req.getBizKind());
+        return ResponseWrapper.success(allocAdjustService.saveDraftDto(toCmd(req), req.getId()));
+    }
+
+    /**
+     * 草稿提交审批：将既有 DRAFT 申请提交进入审批流程（DRAFT→IN_APPROVAL）.
+     *
+     * <p>完整校验 + 去重在 Service 层 {@code submitDraft} 执行；提交人取当前登录工号作为流程发起人。
+     */
+    @PostMapping("/{id}/submit")
+    @Operation(summary = "草稿提交审批")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.WRITE)
+    @AuditLog(action = "ALLOC_ADJUST_SUBMIT_DRAFT", resourceType = "PERF_ALLOC_ADJUST")
+    public ResponseWrapper<Map<String, String>> submitDraft(@PathVariable("id") @NotBlank String id) {
+        log.info("[AllocAdjustController.submitDraft] id={}", id);
+        return ResponseWrapper.success(
+                allocAdjustService.submitDraftDto(id, currentUserApi.getCurrentEmpId()));
+    }
+
+    /**
+     * 请求 DTO → Service Cmd（create / save-draft 共用）.
+     */
+    private SubmitAllocAdjustCmd toCmd(AllocAdjustCreateReqDTO req) {
+        return SubmitAllocAdjustCmd.builder()
                 .custType(req.getCustType())
                 .custId(req.getCustId())
                 .custName(req.getCustName())
@@ -103,8 +141,6 @@ public class AllocAdjustController {
                 .items(toCmdItems(req.getItems()))
                 .originalAllocList(toCmdOriginalItems(req.getOriginalAllocList()))
                 .build();
-
-        return ResponseWrapper.success(allocAdjustService.submitDto(cmd));
     }
 
     /**

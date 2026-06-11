@@ -74,6 +74,34 @@
         WHERE id = #{id}
     </update>
 
+    <!--
+      编辑草稿：覆盖业务可编辑字段 + updated_by/updated_time。
+      不动 status / business_key / process_instance_id / created_by / created_time。
+      调用方须先校验该 id 当前为 DRAFT。
+    -->
+    <update id="updateDraft">
+        UPDATE PERF_ALLOC_ADJUST_APPLY
+        SET cust_id = #{custId},
+            cust_name = #{custName},
+            curr_bal = #{currBal},
+            m_avg_bal = #{mAvgBal},
+            q_avg_bal = #{qAvgBal},
+            y_avg_bal = #{yAvgBal},
+            loan_curr_bal = #{loanCurrBal},
+            loan_m_avg_bal = #{loanMAvgBal},
+            loan_q_avg_bal = #{loanQAvgBal},
+            loan_y_avg_bal = #{loanYAvgBal},
+            cust_type = #{custType},
+            alloc_dim = #{allocDim},
+            biz_kind = #{bizKind},
+            account_no = #{accountNo},
+            owner_org_id = #{ownerOrgId},
+            remark = #{remark},
+            updated_by = #{updatedBy},
+            updated_time = NOW()
+        WHERE id = #{id}
+    </update>
+
     <sql id="CONDITION_WHERE">
         <where>
             <if test="status != null and status != ''">

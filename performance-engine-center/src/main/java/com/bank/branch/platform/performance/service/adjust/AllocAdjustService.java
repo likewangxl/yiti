@@ -148,16 +148,10 @@ public class AllocAdjustService {
         // cust_id 直接存用户输入的客户编号（原 cust_no 字段已废弃，统一并入 cust_id）
         String custId = cmd.getCustId();
 
-        // 同客户同维度去重：同一客户编号(cust_id) + 同一分配维度(alloc_dim)已存在审批中(IN_APPROVAL)的调整申请时，
-        // 不允许重复提交，避免并行多笔调整审批落地后相互覆盖分配关系。
-        // 去重粒度精确到维度：RULE 审批中不阻塞 ACCOUNT 的新提交，反之亦然。
-        // 注意：PerfException 的 errorCode.format 已自动拼「基础消息 + ": " + arg」，此处只传 custId，避免消息重复。
-        if (applyMapper.countInApprovalByCustAndDim(custId, cmd.getAllocDim()) > 0) {
-            throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING, custId);
-        }
+        // 同客户同维度去重：审批中(IN_APPROVAL)已存在则拒绝重复提交，避免并行调整相互覆盖。
+        checkNoInApprovalDuplicate(custId, cmd.getAllocDim());
 
-        // 原业绩分配会签名单：历史审批通过分配优先，查不到则回退本次手工录入的原业绩分配。
-        // 「提交审批至少要有一条原业绩分配记录」——历史与手工皆为空时拒绝提交。
+        // 原业绩分配会签名单：历史审批通过分配优先，查不到则回退本次手工录入。提交审批必须非空。
         List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(
                 custId, cmd.getAllocDim(), cmd.getOriginalAllocList());
         if (originalOwnerEmpIds.isEmpty()) {
@@ -166,15 +160,148 @@ public class AllocAdjustService {
 
         String applyId = genApplyId();
         String applyNo = genApplyNo();
-        String businessKey = "ALLOC_ADJUST:" + applyId;
-        String processKey = resolveProcessKey(cmd.getCustType(), cmd.getBizKind());
 
-        // 1. 落地主表（status=IN_APPROVAL，尚无 processInstanceId）
+        // 1. 落地主表（status=IN_APPROVAL，尚无 processInstanceId）+ 明细
+        PerfAllocAdjustApply apply = buildApply(applyId, applyNo, cmd, "IN_APPROVAL");
+        applyMapper.insert(apply);
+        persistItems(applyId, cmd);
+
+        // 2. 启动 Flowable 流程并回写 processInstanceId（异常冒泡回滚，避免残留无 pid 的 apply）
+        String pid = startApprovalWorkflow(applyId, applyNo, custId, cmd, originalOwnerEmpIds);
+        applyMapper.updateStatus(applyId, "IN_APPROVAL", pid);
+        log.info("[AllocAdjustService.submit] applyId={}, applyNo={}, pid={}", applyId, applyNo, pid);
+        return applyId;
+    }
+
+    /**
+     * 保存为草稿：落库录入信息，状态 DRAFT，<b>不进入审批流程</b>.
+     *
+     * <p>与 {@link #submit} 的关键差异：
+     * <ul>
+     *   <li>宽松校验——只校验 {@code custId}/{@code applicant} 必填 + allocDim 枚举（若填），
+     *       不强制 items 非空、比例合计、原业绩分配非空，允许保存半成品。</li>
+     *   <li>不调 {@link WorkflowApi#startProcess}，不写 processInstanceId。</li>
+     * </ul>
+     *
+     * @param cmd 录入数据
+     * @param id  既有草稿 ID；为空=新建草稿，非空=编辑既有草稿（仅 DRAFT 可改）
+     * @return 草稿 applyId
+     * @throws PerfException VALIDATION_FAILED（custId 缺失 / 编辑目标不存在或非 DRAFT）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public String saveDraft(SubmitAllocAdjustCmd cmd, String id) {
+        validateDraftBasic(cmd);
+        String applyId;
+        String applyNo;
+        if (isBlank(id)) {
+            // 新建草稿
+            applyId = genApplyId();
+            applyNo = genApplyNo();
+            PerfAllocAdjustApply apply = buildApply(applyId, applyNo, cmd, "DRAFT");
+            applyMapper.insert(apply);
+        } else {
+            // 编辑既有草稿：仅 DRAFT 可改，保留原 applyNo/创建人/创建时间，重建明细
+            PerfAllocAdjustApply existing = applyMapper.selectByAllocApplyId(id);
+            if (existing == null) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "草稿不存在: " + id);
+            }
+            if (!"DRAFT".equals(existing.getStatus())) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "仅草稿状态可编辑: " + existing.getStatus());
+            }
+            applyId = id;
+            applyNo = existing.getApplyNo();
+            PerfAllocAdjustApply apply = buildApply(applyId, applyNo, cmd, "DRAFT");
+            // 保留原创建人/创建时间，仅更新可编辑字段
+            apply.setCreatedBy(existing.getCreatedBy());
+            apply.setCreatedTime(existing.getCreatedTime());
+            applyMapper.updateDraft(apply);
+            // 明细全量重建：先清后插，避免残留旧明细
+            itemMapper.deleteByApplyId(applyId);
+        }
+        persistItems(applyId, cmd);
+        log.info("[AllocAdjustService.saveDraft] applyId={}, applyNo={}, mode={}",
+                applyId, applyNo, isBlank(id) ? "CREATE" : "UPDATE");
+        return applyId;
+    }
+
+    /**
+     * 草稿提交审批：载入既有 DRAFT 申请 → 完整校验 + 去重 → 起流程 → 状态 DRAFT→IN_APPROVAL.
+     *
+     * <p>草稿明细已落库，本方法<b>不重新插入</b>，仅按持久化数据重建 cmd 走完整审批校验，
+     * 与新建直接提交（{@link #submit}）共用同一套校验与流程启动逻辑。
+     *
+     * @param id       草稿 applyId
+     * @param operator 提交人 empId（作为流程发起人）
+     * @return applyId
+     * @throws PerfException VALIDATION_FAILED（不存在 / 非 DRAFT / 校验不通过）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public String submitDraft(String id, String operator) {
+        if (isBlank(id)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "id 为空");
+        }
+        PerfAllocAdjustApply apply = applyMapper.selectByAllocApplyId(id);
+        if (apply == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "草稿不存在: " + id);
+        }
+        if (!"DRAFT".equals(apply.getStatus())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "仅草稿状态可提交审批: " + apply.getStatus());
+        }
+        List<PerfAllocAdjustItem> persisted = itemMapper.selectByApplyId(id);
+        SubmitAllocAdjustCmd cmd = rebuildCmdFromPersisted(apply, persisted, operator);
+
+        validateBasic(cmd);
+        validateItems(cmd);
+        checkNoInApprovalDuplicate(cmd.getCustId(), cmd.getAllocDim());
+        List<String> originalOwnerEmpIds = resolveOriginalOwnerEmpIds(
+                cmd.getCustId(), cmd.getAllocDim(), cmd.getOriginalAllocList());
+        if (originalOwnerEmpIds.isEmpty()) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "至少需要一条原业绩分配记录");
+        }
+        // 起流程并回写状态（草稿明细已在库，不重插）
+        String pid = startApprovalWorkflow(id, apply.getApplyNo(), cmd.getCustId(), cmd, originalOwnerEmpIds);
+        applyMapper.updateStatus(id, "IN_APPROVAL", pid);
+        log.info("[AllocAdjustService.submitDraft] applyId={}, applyNo={}, pid={}", id, apply.getApplyNo(), pid);
+        return id;
+    }
+
+    /**
+     * 同客户同维度审批中(IN_APPROVAL)去重校验。
+     * <p>去重粒度精确到维度：RULE 审批中不阻塞 ACCOUNT 的新提交，反之亦然。
+     * PerfException 的 errorCode.format 已自动拼「基础消息 + ": " + arg」，只传 custId 避免重复。
+     */
+    private void checkNoInApprovalDuplicate(String custId, String allocDim) {
+        if (applyMapper.countInApprovalByCustAndDim(custId, allocDim) > 0) {
+            throw new PerfException(PerfErrorCode.ALLOC_ADJUST_APPLY_RUNNING, custId);
+        }
+    }
+
+    /** 草稿宽松校验：仅 custId/applicant 必填；allocDim 若填须合法。其余留空允许保存半成品。 */
+    private void validateDraftBasic(SubmitAllocAdjustCmd cmd) {
+        if (cmd == null) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "cmd is null");
+        }
+        if (isBlank(cmd.getCustId())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "custId 为空");
+        }
+        if (!isBlank(cmd.getAllocDim()) && !ALLOWED_ALLOC_DIMS.contains(cmd.getAllocDim())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "allocDim 非法: " + cmd.getAllocDim());
+        }
+        if (isBlank(cmd.getApplicant())) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "applicant 为空");
+        }
+    }
+
+    /** 组装 apply 主表实体（提交/草稿共用，status 由调用方传入）. */
+    private PerfAllocAdjustApply buildApply(String applyId, String applyNo,
+                                            SubmitAllocAdjustCmd cmd, String status) {
         PerfAllocAdjustApply apply = new PerfAllocAdjustApply();
         apply.setId(applyId);
         apply.setApplyNo(applyNo);
-        apply.setCustId(custId);
-        // 提交时把前端反显的客户名称 + 余额概览快照入库，列表/详情直接读，不再实时反查
+        apply.setCustId(cmd.getCustId());
+        // 客户名称 + 余额概览快照随保存入库，列表/详情直接读，不再实时反查
         apply.setCustName(cmd.getCustName());
         apply.setCurrBal(cmd.getCurrBal());
         apply.setMAvgBal(cmd.getMAvgBal());
@@ -188,8 +315,8 @@ public class AllocAdjustService {
         apply.setAllocDim(cmd.getAllocDim());
         apply.setBizKind(cmd.getBizKind());
         apply.setAccountNo(cmd.getAccountNo());
-        apply.setStatus("IN_APPROVAL");
-        apply.setBusinessKey(businessKey);
+        apply.setStatus(status);
+        apply.setBusinessKey("ALLOC_ADJUST:" + applyId);
         apply.setProcessInstanceId(null);
         apply.setOwnerOrgId(cmd.getOwnerOrgId());
         apply.setRemark(cmd.getReason());
@@ -198,24 +325,34 @@ public class AllocAdjustService {
         apply.setCreatedTime(now);
         apply.setUpdatedBy(cmd.getApplicant());
         apply.setUpdatedTime(now);
-        applyMapper.insert(apply);
+        return apply;
+    }
 
-        // 2. 批量插入明细。提交时快照员工 username/中文姓名/所属部门号/部门名称存入明细，
-        //    后续预览/详情查询直接读这些列，不再实时关联 PT_USER / 机构表（口径冻结在提交时点）。
+    /**
+     * 落地明细（NEW + ORIGIN）。提交/草稿共用：
+     * NEW 明细快照员工 username/中文名/部门，ORIGIN 由 {@link #buildOriginalItems} 组装。
+     * cmd.items 为空（草稿半成品）时只落 ORIGIN（或都不落）。
+     */
+    private void persistItems(String applyId, SubmitAllocAdjustCmd cmd) {
+        List<SubmitAllocAdjustCmd.Item> srcItems = cmd.getItems() != null
+                ? cmd.getItems() : java.util.Collections.emptyList();
         java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
-        for (SubmitAllocAdjustCmd.Item it : cmd.getItems()) {
+        for (SubmitAllocAdjustCmd.Item it : srcItems) {
             if (!isBlank(it.getEmpId())) {
                 empIds.add(it.getEmpId());
             }
         }
         java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = resolveUsersByTokens(empIds);
-        List<PerfAllocAdjustItem> items = new ArrayList<>(cmd.getItems().size());
-        for (SubmitAllocAdjustCmd.Item it : cmd.getItems()) {
+        List<PerfAllocAdjustItem> items = new ArrayList<>(srcItems.size());
+        for (SubmitAllocAdjustCmd.Item it : srcItems) {
+            if (isBlank(it.getEmpId())) {
+                continue; // 草稿半成品空行跳过
+            }
             PerfAllocAdjustItem entity = new PerfAllocAdjustItem();
             entity.setId(UUID.randomUUID().toString().replace("-", ""));
             entity.setApplyId(applyId);
             entity.setEmpId(it.getEmpId());
-            com.bank.branch.platform.auth.api.dto.UserDTO u = it.getEmpId() != null ? userMap.get(it.getEmpId()) : null;
+            com.bank.branch.platform.auth.api.dto.UserDTO u = userMap.get(it.getEmpId());
             // username 解析不到时回退工号，避免空白；中文名/部门解析不到留空
             entity.setUsername((u != null && !isBlank(u.getUsername())) ? u.getUsername() : it.getEmpId());
             entity.setEmpChnName(u != null ? u.getDisplayName() : null);
@@ -226,22 +363,27 @@ public class AllocAdjustService {
             entity.setRemark(it.getRemark());
             items.add(entity);
         }
-        itemMapper.batchInsert(items);
-
-        // 2.1 原业绩分配（手工录入）落地：item_kind=ORIGIN；机构号/名称用手工录入值
-        //     （可能异于员工主机构），员工登录名/中文名缺失时按工号解析快照兜底。
+        if (!items.isEmpty()) {
+            itemMapper.batchInsert(items);
+        }
+        // 原业绩分配（手工录入）落地：item_kind=ORIGIN
         List<PerfAllocAdjustItem> originItems = buildOriginalItems(applyId, cmd.getOriginalAllocList());
         if (!originItems.isEmpty()) {
             itemMapper.batchInsert(originItems);
         }
+    }
 
-        // 3. 启动 Flowable 流程 —— 在 apply 持久化之后、status 回写之前
-        //    异常冒泡回滚事务，避免 apply 残留无 processInstanceId
+    /**
+     * 启动审批流程，返回 processInstanceId（提交/草稿提交共用）。
+     * <p>businessKey 固定 {@code ALLOC_ADJUST:applyId}；流程变量含会签名单与单人兜底审批人。
+     */
+    private String startApprovalWorkflow(String applyId, String applyNo, String custId,
+                                         SubmitAllocAdjustCmd cmd, List<String> originalOwnerEmpIds) {
         StartProcessCmd startCmd = new StartProcessCmd();
         startCmd.setBizType(BIZ_TYPE);
         startCmd.setBizId(applyId);
-        startCmd.setBusinessKey(businessKey);
-        startCmd.setProcessDefinitionKey(processKey);
+        startCmd.setBusinessKey("ALLOC_ADJUST:" + applyId);
+        startCmd.setProcessDefinitionKey(resolveProcessKey(cmd.getCustType(), cmd.getBizKind()));
         startCmd.setStartUser(cmd.getApplicant());
         startCmd.setStartOrgId(cmd.getOwnerOrgId());
         // 标题用客户编号便于人工识别；流程变量 custId/custNo 均写客户编号（下游 BPMN/Listener 兼容读取）
@@ -258,16 +400,64 @@ public class AllocAdjustService {
             originalOwnerEmpId = originalOwnerEmpIds.get(0);
         }
         vars.put("originalOwnerEmpId", originalOwnerEmpId);
-        // 原业绩分配会签名单（corp_v1 并行多实例 collection），前面已校验非空（历史或手工录入）。
+        // 原业绩分配会签名单（corp_v1 并行多实例 collection），前面已校验非空。
         vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
+        return resp.getProcessInstanceId();
+    }
 
-        // 4. 回写 processInstanceId（状态已 IN_APPROVAL，此次仅补 processInstanceId）
-        applyMapper.updateStatus(applyId, "IN_APPROVAL", resp.getProcessInstanceId());
-        log.info("[AllocAdjustService.submit] applyId={}, applyNo={}, processKey={}, pid={}",
-                applyId, applyNo, processKey, resp.getProcessInstanceId());
-        return applyId;
+    /**
+     * 草稿提交：按持久化的 apply + items 重建 SubmitAllocAdjustCmd，供完整审批校验/流程启动复用。
+     * <p>NEW 明细 → items；ORIGIN 明细 → originalAllocList；applicant 取传入 operator，
+     * 缺失时回退 apply.createdBy（保证发起人非空）。
+     */
+    private SubmitAllocAdjustCmd rebuildCmdFromPersisted(PerfAllocAdjustApply apply,
+            List<PerfAllocAdjustItem> persisted, String operator) {
+        List<SubmitAllocAdjustCmd.Item> items = new ArrayList<>();
+        List<SubmitAllocAdjustCmd.OriginalItem> origins = new ArrayList<>();
+        if (persisted != null) {
+            for (PerfAllocAdjustItem it : persisted) {
+                if ("ORIGIN".equals(it.getItemKind())) {
+                    origins.add(SubmitAllocAdjustCmd.OriginalItem.builder()
+                            .acctNo(it.getAcctNo())
+                            .empId(it.getEmpId())
+                            .username(it.getUsername())
+                            .empChnName(it.getEmpChnName())
+                            .orgCode(it.getOrgCode())
+                            .orgName(it.getOrgName())
+                            .ratio(it.getRatio())
+                            .build());
+                } else {
+                    items.add(SubmitAllocAdjustCmd.Item.builder()
+                            .empId(it.getEmpId())
+                            .ratio(it.getRatio())
+                            .remark(it.getRemark())
+                            .build());
+                }
+            }
+        }
+        return SubmitAllocAdjustCmd.builder()
+                .custType(apply.getCustType())
+                .custId(apply.getCustId())
+                .custName(apply.getCustName())
+                .currBal(apply.getCurrBal())
+                .mAvgBal(apply.getMAvgBal())
+                .qAvgBal(apply.getQAvgBal())
+                .yAvgBal(apply.getYAvgBal())
+                .loanCurrBal(apply.getLoanCurrBal())
+                .loanMAvgBal(apply.getLoanMAvgBal())
+                .loanQAvgBal(apply.getLoanQAvgBal())
+                .loanYAvgBal(apply.getLoanYAvgBal())
+                .allocDim(apply.getAllocDim())
+                .bizKind(apply.getBizKind())
+                .accountNo(apply.getAccountNo())
+                .ownerOrgId(apply.getOwnerOrgId())
+                .reason(apply.getRemark())
+                .applicant(!isBlank(operator) ? operator : apply.getCreatedBy())
+                .items(items)
+                .originalAllocList(origins)
+                .build();
     }
 
     /**
@@ -385,6 +575,30 @@ public class AllocAdjustService {
     public Map<String, String> submitDto(SubmitAllocAdjustCmd cmd) {
         String id = submit(cmd);
         ApplyWithItems loaded = getById(id);
+        return Map.of(
+                "id", loaded.getApply().getId(),
+                "applyNo", loaded.getApply().getApplyNo(),
+                "status", loaded.getApply().getStatus());
+    }
+
+    /**
+     * Controller 专用：保存为草稿 + 回显 {id, applyNo, status=DRAFT}.
+     */
+    public Map<String, String> saveDraftDto(SubmitAllocAdjustCmd cmd, String id) {
+        String savedId = saveDraft(cmd, id);
+        ApplyWithItems loaded = getById(savedId);
+        return Map.of(
+                "id", loaded.getApply().getId(),
+                "applyNo", loaded.getApply().getApplyNo(),
+                "status", loaded.getApply().getStatus());
+    }
+
+    /**
+     * Controller 专用：草稿提交审批 + 回显 {id, applyNo, status=IN_APPROVAL}.
+     */
+    public Map<String, String> submitDraftDto(String id, String operator) {
+        String submittedId = submitDraft(id, operator);
+        ApplyWithItems loaded = getById(submittedId);
         return Map.of(
                 "id", loaded.getApply().getId(),
                 "applyNo", loaded.getApply().getApplyNo(),
