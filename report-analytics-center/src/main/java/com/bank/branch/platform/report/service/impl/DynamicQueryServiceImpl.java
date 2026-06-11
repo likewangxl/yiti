@@ -97,9 +97,16 @@ public class DynamicQueryServiceImpl implements DynamicQueryService {
         List<String> baseSubjects;
         Map<String, UserDTO> empMap;
         if (noSubjectSelected) {
-            // 枚举当天宽表实际有数据的对象（天然有界，避免返回全空行）；EMP 维度需把工号转回 USER_ID
-            empMap = new HashMap<>();
-            baseSubjects = enumerateSubjectsByDim(req.getDim(), req.getDataDate(), empMap);
+            if (DIM_EMP.equals(req.getDim()) && scope != null && isSelfScope(scope.scopeType())) {
+                // SELF 范围默认查本人：直接用本人（不走宽表枚举），即使本人当天无指标数据也显示一行（指标列空）
+                String self = scope.empId();
+                baseSubjects = (self != null && !self.isEmpty()) ? new ArrayList<>(List.of(self)) : new ArrayList<>();
+                empMap = buildEmpMap(baseSubjects);
+            } else {
+                // 其它范围：枚举当天宽表实际有数据的对象（天然有界，避免返回海量全空行）；EMP 维度把工号转回 USER_ID
+                empMap = new HashMap<>();
+                baseSubjects = enumerateSubjectsByDim(req.getDim(), req.getDataDate(), empMap);
+            }
         } else {
             baseSubjects = req.getSubjectIds();
             // EMP 维度：先批量取用户信息（含主机构 mainOrgCode），用于范围校验 + 结果回填工号/姓名
@@ -188,6 +195,13 @@ public class DynamicQueryServiceImpl implements DynamicQueryService {
      * </ul>
      * 返回的集合仍会经 filterBySubjectScope 按数据范围裁剪。
      */
+    /** 是否「本人」类数据范围（SELF / SELF_CREATED / SELF_ASSIGNED）。 */
+    private boolean isSelfScope(DataScopeType type) {
+        return type == DataScopeType.SELF
+                || type == DataScopeType.SELF_CREATED
+                || type == DataScopeType.SELF_ASSIGNED;
+    }
+
     private List<String> enumerateSubjectsByDim(String dim, LocalDate dataDate, Map<String, UserDTO> empMap) {
         switch (dim) {
             case DIM_EMP -> {

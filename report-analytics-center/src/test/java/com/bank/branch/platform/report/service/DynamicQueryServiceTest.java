@@ -262,6 +262,35 @@ class DynamicQueryServiceTest {
     }
 
     @Test
+    void execute_noSubjects_selfScope_showsSelfRowEvenWithoutData() {
+        // SELF 范围默认查本人：即使本人当天宽表无指标数据，也要显示一行（指标值为空），而非整行消失
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        req.setSubjectIds(null);   // 不选对象（默认本人）
+        req.setMetricCodes(List.of("M1"));
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.SELF, "U1", "ORG001", Set.of(), BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+        UserDTO me = new UserDTO(); me.setEmpId("U1"); me.setUsername("1001"); me.setMainOrgCode("ORG001");
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(me));
+        // 本人当天无数据：取值返回空
+        when(metricApi.getEmpMetricValues(eq("1001"), any(LocalDate.class), anyList())).thenReturn(Map.of());
+        MetricDefDTO def = new MetricDefDTO(); def.setMetricCode("M1"); def.setMetricName("指标1");
+        when(metricApi.getMetricDef("M1")).thenReturn(Optional.of(def));
+        lenient().when(orgApi.getUserMainOrg(any())).thenReturn(null);
+
+        DynamicQueryRespDTO resp = service.execute(req);
+
+        assertThat(resp.getTotal()).isEqualTo(1);
+        assertThat(resp.getRows()).hasSize(1);
+        assertThat(resp.getRows().get(0)).containsEntry("subjectId", "1001");
+        // 指标无数据 → 该列不入 row（前端显示 "-"）
+        assertThat(resp.getRows().get(0)).doesNotContainKey("M1");
+    }
+
+    @Test
     void execute_pagination_returnsCurrentPageAndTotal() {
         // 选了 5 个对象，pageNo=2 pageSize=2 → 当前页 2 条、total=5
         DynamicQueryReqDTO req = new DynamicQueryReqDTO();
