@@ -18,6 +18,10 @@
             <el-option v-for="(label, val) in DIM" :key="val" :value="val" :label="label" />
           </el-select>
         </el-form-item>
+        <el-form-item label="对象">
+          <el-input v-model="subjectKeyword" clearable placeholder="按对象名称模糊查询" style="width:200px"
+                    @keyup.enter="onQuery" @clear="onQuery" />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="onQuery">查询</el-button>
           <el-button @click="onReset">重置</el-button>
@@ -89,6 +93,7 @@ const pgNo = ref(1);
 const pgSize = ref(20);
 const loading = ref(false);
 const subjectType = ref('');
+const subjectKeyword = ref(''); // 对象名称模糊查询关键字
 
 const DIM = { EMP: '员工', ORG: '机构', CUST: '客户' };
 const EMPTY_CELL = {};
@@ -108,7 +113,7 @@ function fmtRate(v) {
 }
 
 function onQuery() { pgNo.value = 1; loadData(); }
-function onReset() { subjectType.value = ''; pgNo.value = 1; loadData(); }
+function onReset() { subjectType.value = ''; subjectKeyword.value = ''; pgNo.value = 1; loadData(); }
 function onSizeChange() { pgNo.value = 1; loadData(); }
 function goBack() {
   if (window.history.length > 1) router.back();
@@ -156,6 +161,7 @@ async function loadData() {
       dataDate: dataDate.value || undefined,
       schemeCode: schemeCode.value || undefined,
       subjectType: subjectType.value || undefined,
+      subjectKeyword: subjectKeyword.value || undefined,
       pageNo: pgNo.value, pageSize: pgSize.value
     });
     metrics.value = r?.metrics || [];

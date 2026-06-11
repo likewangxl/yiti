@@ -8,24 +8,48 @@ import { perfMetricsTree, perfMetricDetail, metricsFlat } from '@/mock';
 
 // 维度根节点（与 reportDimensions 对齐）
 const DIM_LABELS = { EMP: '员工指标', ORG: '机构指标', CUST: '客户指标' };
-// metric_level 子分组
-const LEVEL_LABELS = { 1: '一级（基础）', 2: '二级（复合）', 3: '三级（汇总）' };
+// 业务类型展示顺序（与指标库 Metrics.vue 的 CATEGORY_OPTIONS 对齐），未列出的排其后，"其他"垫底
+const CATEGORY_ORDER = ['规模类', '效益类', '质量类', '合规类'];
+const CATEGORY_FALLBACK = '其他';
+
+/**
+ * 取单个指标的「业务类型」：优先 metricCategory 列（规模类/效益类/质量类/合规类），
+ * 其次解析 metricDesc(JSON)._category 顶层，最后归入"其他"。与指标库列表分组口径一致。
+ */
+function categoryOf(m) {
+  if (m.metricCategory && String(m.metricCategory).trim()) {
+    return String(m.metricCategory).trim();
+  }
+  try {
+    const meta = m.metricDesc ? JSON.parse(m.metricDesc) : null;
+    if (meta && meta._category) return String(meta._category).split('/')[0];
+  } catch { /* metricDesc 非 JSON，忽略 */ }
+  return CATEGORY_FALLBACK;
+}
+
+function categorySort(a, b) {
+  const ia = CATEGORY_ORDER.indexOf(a);
+  const ib = CATEGORY_ORDER.indexOf(b);
+  const ra = ia === -1 ? (a === CATEGORY_FALLBACK ? 999 : 500) : ia;
+  const rb = ib === -1 ? (b === CATEGORY_FALLBACK ? 999 : 500) : ib;
+  return ra - rb || a.localeCompare(b);
+}
 
 /**
  * 把 yiti 返回的扁平 records（MetricDefRespDTO[]）转成 MetricPicker 期望的 tree：
  *   [{ id, label, children: [{ id, label, children: [{ id: metricCode, label }] }] }]
- * 顶层按 baseDim 分组（员工/机构/客户）；二层按 metricLevel；叶子是单个指标。
- * 同维度同层级若指标少于 2 条，则二层折叠掉（不给 metricLevel 单独建子节点，避免出现"一级 → 1 个指标"的浪费层级）。
+ * 顶层按 baseDim 分组（员工/机构/客户）；二层按「业务类型」（metricCategory，如规模类/效益类）；叶子是单个指标。
+ * 二层始终保留，便于「勾选某业务类型 = 选中该类全部指标」。
  */
 function buildMetricTree(records) {
   const byDim = new Map();
   for (const m of records || []) {
     const dim = m.baseDim || 'OTHER';
     if (!byDim.has(dim)) byDim.set(dim, new Map());
-    const byLevel = byDim.get(dim);
-    const lv = m.metricLevel ?? 0;
-    if (!byLevel.has(lv)) byLevel.set(lv, []);
-    byLevel.get(lv).push({
+    const byCat = byDim.get(dim);
+    const cat = categoryOf(m);
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push({
       // 叶子：以 metricCode 作为 tree node-key（MetricPicker 用它作 picked 的 code）
       id: m.metricCode,
       label: m.metricName || m.metricCode,
@@ -35,29 +59,19 @@ function buildMetricTree(records) {
     });
   }
   const tree = [];
-  for (const [dim, byLevel] of byDim) {
+  for (const [dim, byCat] of byDim) {
     const dimNode = {
       id: `DIM_${dim}`,
       label: DIM_LABELS[dim] || dim,
       children: []
     };
-    const allLeaves = [];
-    for (const [lv, leaves] of [...byLevel].sort((a, b) => a[0] - b[0])) {
-      // 按 metricCode 升序，UI 稳定
-      leaves.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
-      allLeaves.push({ lv, leaves });
-    }
-    // 同维度只有一种 level → 折叠 level 子分组
-    if (allLeaves.length === 1) {
-      dimNode.children = allLeaves[0].leaves;
-    } else {
-      for (const { lv, leaves } of allLeaves) {
-        dimNode.children.push({
-          id: `DIM_${dim}_LV${lv}`,
-          label: LEVEL_LABELS[lv] || `层级 ${lv}`,
-          children: leaves
-        });
-      }
+    for (const cat of [...byCat.keys()].sort(categorySort)) {
+      const leaves = byCat.get(cat).sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+      dimNode.children.push({
+        id: `DIM_${dim}_CAT_${cat}`,
+        label: cat,
+        children: leaves
+      });
     }
     tree.push(dimNode);
   }
@@ -66,21 +80,22 @@ function buildMetricTree(records) {
 
 /**
  * 指标树（动态指标查询使用）：
- *   1) 调真接口 GET /api/perf/metrics?status=ACTIVE&pageSize=100
- *      （后端 MetricDefController 限定 @Max(100)；指标库通常 ≤ 100 条，足够覆盖）
- *   2) 拿 PageResult.records 后客户端 buildTree
+ *   1) 单次请求 GET /api/perf/metrics?status=ACTIVE
+ *      —— 后端该接口已不分页（返回 List<MetricDefRespDTO> 全量，pageNo/pageSize 会被忽略），
+ *         一次即可取到全部已发布指标，无需翻页。
+ *   2) 客户端 buildTree（维度 → 业务类型 → 指标）
  *   3) 后端不可用 / 返回空时回退 mock perfMetricsTree
  */
 export async function getMetricsTree() {
-  const page = await call(
+  const resp = await call(
     'get',
     '/perf/metrics',
-    { params: { status: 'ACTIVE', pageNo: 1, pageSize: 100 } },
+    { params: { status: 'ACTIVE' } },
     null   // 不给 fallback：拿不到时直接 reject 让我们 catch 后返回 mock tree
   ).catch(() => null);
 
-  // PageResult 形如 { records, total, pageNo, pageSize } —— 也兼容直接返回数组的环境
-  const records = Array.isArray(page) ? page : page?.records;
+  // 该接口返回 List（数组）；兼容历史 PageResult({records}) 形态
+  const records = Array.isArray(resp) ? resp : resp?.records;
   if (Array.isArray(records) && records.length) {
     return buildMetricTree(records);
   }

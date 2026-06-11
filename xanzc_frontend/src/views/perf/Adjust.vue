@@ -79,6 +79,7 @@
             <el-table-column label="操作" width="180" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openView(row)">查看</el-button>
+                <el-button v-if="row.status === 'DRAFT'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
                 <el-popconfirm
                   v-if="canWithdraw(row.status)"
                   :title="`确认撤回申请 ${row.applyNo || row.id}？`"
@@ -386,8 +387,8 @@
           </el-row>
         </template>
 
-        <!-- 原业绩分配：自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
-        <div v-if="(dlg.form.custId && preview.loaded) || dlg.readOnly || dlg.form.originalItems.length" class="preview-section" v-loading="preview.loading">
+        <!-- 原业绩分配：常驻显示（不做动态显隐，仅内容动态更新）；自动查到历史审批通过分配→只读展示；查不到→手工录入（除账号外必填，至少 1 条）-->
+        <div class="preview-section" v-loading="preview.loading">
           <div class="card-h">
             <div class="title">原业绩分配</div>
             <el-button v-if="!dlg.readOnly && !hasOriginalOwners" size="small" type="primary" plain @click="addOriginalRow">+ 添加原业绩分配</el-button>
@@ -562,6 +563,8 @@
           <el-button type="danger" :loading="dlg.reviewSaving" @click="onDlgReviewAction('REJECT')">驳回</el-button>
           <el-button type="primary" :loading="dlg.reviewSaving" @click="onDlgReviewAction('APPROVE')">通过</el-button>
         </template>
+        <el-button v-if="!dlg.readOnly && !dlg.reviewMode" :loading="dlg.draftSaving"
+                   @click="onSaveDraft">保存为草稿</el-button>
         <el-button v-if="!dlg.readOnly && !dlg.reviewMode" type="primary" :loading="dlg.saving"
                    @click="onSubmit">提交审批</el-button>
       </template>
@@ -629,7 +632,7 @@ import { useRoute } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  submitAdjust, withdrawAdjust, getAdjustDetail,
+  submitAdjust, saveDraftAdjust, submitDraftAdjust, withdrawAdjust, getAdjustDetail,
   getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
   getAllocPreview, getCustMasterName, getCustIndexValues, suggestEmployees, suggestOrgs
 } from '@/api/perf';
@@ -1239,7 +1242,7 @@ async function loadPreview(statisDt) {
   finally { preview.loading = false; }
 }
 const dlg = reactive({
-  show: false, readOnly: false, saving: false, viewingId: null,
+  show: false, readOnly: false, saving: false, draftSaving: false, viewingId: null, editingId: null,
   reviewMode: false, reviewRow: null, reviewOpinion: '', reviewSaving: false, reviewRouteTo: 'LEADER', reviewFlowType: 'CORP',
   approvalLogs: [], approvalLoading: false,
   applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
@@ -1250,7 +1253,7 @@ const dlg = reactive({
     originalItems: []
   }
 });
-const dlgTitle = computed(() => dlg.reviewMode ? '审批调整申请' : dlg.readOnly ? '查看调整申请' : '新建调整申请');
+const dlgTitle = computed(() => dlg.reviewMode ? '审批调整申请' : dlg.readOnly ? '查看调整申请' : dlg.editingId ? '编辑调整申请' : '新建调整申请');
 const totalPct = computed(() => dlg.form.items.reduce((s, x) => s + (Number(x.pct) || 0), 0));
 const dlgRules = {
   custType:   [{ required: true, message: '请选择客户类型' }],
@@ -1353,6 +1356,7 @@ function originalItemsFromDetail(d) {
 }
 function onDlgClosed() {
   dlg.viewingId = null;
+  dlg.editingId = null;
   dlg.readOnly = false;
   dlg.reviewMode = false;
   dlg.reviewRow = null;
@@ -1401,6 +1405,7 @@ function onAllocDimChange(val) {
 function openCreate() {
   dlg.readOnly = false;
   dlg.viewingId = null;
+  dlg.editingId = null;
   custNameDisplay.value = '';
   resetCustStat();
   resetCustIdx();
@@ -1417,6 +1422,7 @@ function openCreate() {
 }
 async function openView(row) {
   dlg.readOnly = true;
+  dlg.editingId = null;
   dlg.viewingId = row.id || row.applyNo;
   dlg.approvalLogs = [];
   Object.assign(dlg.form, {
@@ -1482,6 +1488,64 @@ async function openView(row) {
   loadApprovalHistory(dlg.viewingId);
 }
 
+// 编辑草稿：复用新建弹窗（非只读），从详情反显已录入信息。仅 DRAFT 行可进入。
+async function openEdit(row) {
+  dlg.readOnly = false;
+  dlg.reviewMode = false;
+  dlg.editingId = row.id || row.applyNo;
+  dlg.viewingId = null;
+  dlg.approvalLogs = [];
+  custNameDisplay.value = '';
+  resetCustStat();
+  resetCustIdx();
+  preview.loaded = false;
+  preview.data = null;
+  // 先用列表行预填
+  Object.assign(dlg.form, {
+    custType: inferCustType(row.custType, row.bizKind), custId: row.custId || '',
+    custName: row.custName || '', allocDim: row.allocDim || 'RULE',
+    bizKind: row.bizKind ? (typeof row.bizKind === 'string' ? row.bizKind.split(',') : row.bizKind) : [],
+    accountNo: row.accountNo || '', ownerOrgId: row.ownerOrgId || '',
+    reason: row.reason || row.remark || '',
+    items: [{ empId: '', pct: 100, remark: '', empLabel: '' }],
+    originalItems: []
+  });
+  dlg.applyNo = row.applyNo || '';
+  dlg.show = true;
+  try {
+    const d = await getAdjustDetail(dlg.editingId);
+    if (d?.id) {
+      Object.assign(dlg.form, {
+        custType: d.custType || 'CORP', custId: d.custId, allocDim: d.allocDim || 'RULE',
+        bizKind: d.bizKind ? (typeof d.bizKind === 'string' ? d.bizKind.split(',') : d.bizKind) : [],
+        accountNo: d.accountNo || '', ownerOrgId: d.ownerOrgId || '', reason: d.reason || d.remark || '',
+        items: (d.items || []).filter(it => (it.itemKind || 'NEW') === 'NEW').map(it => ({ empId: it.empId, pct: it.pct ?? it.ratio, remark: it.remark || '', empLabel: empLabelOf(it) })),
+        originalItems: originalItemsFromDetail(d)
+      });
+      if (!dlg.form.items.length) dlg.form.items = [{ empId: '', pct: 100, remark: '', empLabel: '' }];
+      if (d.custName) dlg.form.custName = d.custName;
+      // 余额概览快照反显（列复用）
+      custIdx.MC_001 = d.currBal ?? null;
+      custIdx.MC_002 = d.mAvgBal ?? null;
+      custIdx.MC_003 = d.qAvgBal ?? null;
+      custIdx.MC_004 = d.yAvgBal ?? null;
+      custIdxLoan.MC_005 = d.loanCurrBal ?? null;
+      custIdxLoan.MC_006 = d.loanMAvgBal ?? null;
+      custIdxLoan.MC_007 = d.loanQAvgBal ?? null;
+      custIdxLoan.MC_008 = d.loanYAvgBal ?? null;
+      dlg.applyNo = d.applyNo || dlg.applyNo;
+      dlg.createdTime = d.createdTime || dlg.createdTime;
+      // 编辑态客户编号是反显的，依赖 custId watch 不可靠（防抖/同值）；
+      // 这里按草稿创建日-1 主动触发一次原业绩分配数据拉取（statisDt 与查看一致）
+      const ct = d.createdTime || dlg.createdTime;
+      const statisDt = ct
+        ? new Date(new Date(ct).getTime() - 86400000).toISOString().slice(0, 10)
+        : undefined;
+      loadPreview(statisDt);
+    }
+  } catch {}
+}
+
 async function onSubmit() {
   try { await dlgFormRef.value.validate(); } catch { return; }
   if (dlg.form.allocDim === 'ACCOUNT' && !(dlg.form.accountNo && dlg.form.accountNo.trim())) {
@@ -1514,40 +1578,74 @@ async function onSubmit() {
 
   dlg.saving = true;
   try {
-    await submitAdjust({
-      custType:   dlg.form.custType,
-      custId:     dlg.form.custId,
-      // 客户名称 + 余额概览(MC_001..004)随提交快照入库，审批/查看直接读，不再实时取数
-      // 列复用：currBal=当前余额(MC_001) / mAvgBal=较上日余额(MC_002) / qAvgBal=年均余额(MC_003) / yAvgBal=较上年均余额(MC_004)
-      custName:   dlg.form.custName || null,
-      currBal:    custIdx.MC_001,
-      mAvgBal:    custIdx.MC_002,
-      qAvgBal:    custIdx.MC_003,
-      yAvgBal:    custIdx.MC_004,
-      // 贷款余额(MC_005..008)同步随提交快照入库，审批/查看直接读
-      loanCurrBal: custIdxLoan.MC_005,
-      loanMAvgBal: custIdxLoan.MC_006,
-      loanQAvgBal: custIdxLoan.MC_007,
-      loanYAvgBal: custIdxLoan.MC_008,
-      allocDim:   dlg.form.allocDim,
-      bizKind:    Array.isArray(dlg.form.bizKind) ? dlg.form.bizKind.join(',') : dlg.form.bizKind,
-      accountNo:  dlg.form.accountNo || undefined,
-      ownerOrgId: dlg.form.ownerOrgId || userStore.user?.mainOrgCode || userStore.user?.orgCode || '',
-      reason:     dlg.form.reason,
-      items: dlg.form.items.map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' })),
-      // 原业绩分配（手工录入）；自动查到历史分配时不送，后端用历史会签名单
-      originalAllocList: hasOriginalOwners.value ? [] : (dlg.form.originalItems || []).map(o => ({
-        acctNo: o.acctNo || null, empId: o.empId,
-        username: o.username || null, empChnName: o.empChnName || null,
-        orgCode: o.orgCode, orgName: o.orgName || null, ratio: Number(o.ratio)
-      }))
-    });
+    const payload = buildAdjustPayload();
+    if (dlg.editingId) {
+      // 编辑草稿后提交：先存草稿持久化本次编辑，再走草稿提交审批（DRAFT→IN_APPROVAL）
+      await saveDraftAdjust({ ...payload, id: dlg.editingId });
+      await submitDraftAdjust(dlg.editingId);
+    } else {
+      // 新建直接提交审批
+      await submitAdjust(payload);
+    }
     ElMessage.success('已提交审批');
     dlg.show = false;
     reloadMine();
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '提交失败');
   } finally { dlg.saving = false; }
+}
+
+/**
+ * 组装提交/草稿入库 payload（提交审批与保存草稿共用）。
+ * 余额概览快照随保存入库（列复用 currBal/mAvgBal/... + loan*），审批/查看直接读。
+ */
+function buildAdjustPayload() {
+  return {
+    custType:   dlg.form.custType,
+    custId:     dlg.form.custId,
+    custName:   dlg.form.custName || null,
+    currBal:    custIdx.MC_001,
+    mAvgBal:    custIdx.MC_002,
+    qAvgBal:    custIdx.MC_003,
+    yAvgBal:    custIdx.MC_004,
+    loanCurrBal: custIdxLoan.MC_005,
+    loanMAvgBal: custIdxLoan.MC_006,
+    loanQAvgBal: custIdxLoan.MC_007,
+    loanYAvgBal: custIdxLoan.MC_008,
+    allocDim:   dlg.form.allocDim,
+    bizKind:    Array.isArray(dlg.form.bizKind) ? dlg.form.bizKind.join(',') : dlg.form.bizKind,
+    accountNo:  dlg.form.accountNo || undefined,
+    ownerOrgId: dlg.form.ownerOrgId || userStore.user?.mainOrgCode || userStore.user?.orgCode || '',
+    reason:     dlg.form.reason,
+    // 仅送已填员工号的明细行（草稿可能含空行）
+    items: (dlg.form.items || []).filter(it => it.empId).map(it => ({ empId: it.empId, ratio: Number(it.pct), remark: it.remark || '' })),
+    // 原业绩分配（手工录入）；自动查到历史分配时不送，后端用历史会签名单
+    originalAllocList: hasOriginalOwners.value ? [] : (dlg.form.originalItems || []).filter(o => o.empId).map(o => ({
+      acctNo: o.acctNo || null, empId: o.empId,
+      username: o.username || null, empChnName: o.empChnName || null,
+      orgCode: o.orgCode, orgName: o.orgName || null, ratio: Number(o.ratio)
+    }))
+  };
+}
+
+/**
+ * 保存为草稿：宽松校验（仅需客户编号），把已录入信息落库为 DRAFT，不进入审批流程。
+ * 新建草稿成功后记下 id，便于继续编辑/直接提交。
+ */
+async function onSaveDraft() {
+  if (!dlg.form.custId || !String(dlg.form.custId).trim()) {
+    return ElMessage.warning('请先填写客户编号再保存草稿');
+  }
+  dlg.draftSaving = true;
+  try {
+    const resp = await saveDraftAdjust({ ...buildAdjustPayload(), id: dlg.editingId || undefined });
+    if (resp && resp.id && !dlg.editingId) dlg.editingId = resp.id;
+    ElMessage.success('已保存为草稿');
+    dlg.show = false;
+    reloadMine();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '保存草稿失败');
+  } finally { dlg.draftSaving = false; }
 }
 
 async function onWithdraw(row) {

@@ -3,6 +3,7 @@
     <div class="page-h">
       <h1>自由报表</h1>
       <div class="actions">
+        <el-button v-if="isOperator" @click="downloadTemplate">下载模板</el-button>
         <el-button v-if="isOperator" type="primary" @click="importDlg.show = true">导入 Excel</el-button>
       </div>
     </div>
@@ -141,6 +142,20 @@ async function reload() {
     if (!params.keyword && !params.dateFrom) allBatches.value = batches.value;
   } catch { batches.value = []; }
   finally { loading.value = false; }
+}
+
+// 下载导入模板：只含「工号、姓名」两列表头（顺序须与后端导入校验一致——第1列工号、第2列姓名）
+async function downloadTemplate() {
+  try {
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.aoa_to_sheet([['工号', '姓名']]);
+    ws['!cols'] = [{ wch: 18 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '导入模板');
+    XLSX.writeFile(wb, '自由报表导入模板.xlsx');
+  } catch (e) {
+    ElMessage.error('模板下载失败：' + (e?.message || e));
+  }
 }
 
 // 导入

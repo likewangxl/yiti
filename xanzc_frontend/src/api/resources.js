@@ -13,34 +13,8 @@
 
 import { call } from './http';
 
-// === Mock 兜底数据 ===
-const mockResourceTree = [
-  {
-    resourceId: 'M-WORKSPACE', menuName: '工作台', resourceUrl: '/workspace', resourceMethod: 'GET',
-    isMenu: 0, menuEndFlag: '1', menuRankNo: 1, status: 0, children: []
-  },
-  {
-    resourceId: 'M-PERF', menuName: '绩效与考核', resourceUrl: '/perf', resourceMethod: 'GET',
-    isMenu: 0, menuEndFlag: '0', menuRankNo: 2, status: 0,
-    children: [
-      { resourceId: 'M-PERF-METRICS',  menuName: '指标库',  resourceUrl: '/perf/metrics',   resourceMethod: 'GET', isMenu: 0, menuEndFlag: '1', menuRankNo: 1, status: 0, children: [] },
-      { resourceId: 'M-PERF-KPI',      menuName: 'KPI规则', resourceUrl: '/perf/kpi-rules', resourceMethod: 'GET', isMenu: 0, menuEndFlag: '1', menuRankNo: 2, status: 0, children: [] },
-      { resourceId: 'M-PERF-TARGET',   menuName: '目标管理', resourceUrl: '/perf/targets',  resourceMethod: 'GET', isMenu: 0, menuEndFlag: '1', menuRankNo: 3, status: 0, children: [] }
-    ]
-  },
-  {
-    resourceId: 'M-SYS', menuName: '系统设置', resourceUrl: '/system', resourceMethod: 'GET',
-    isMenu: 0, menuEndFlag: '0', menuRankNo: 9, status: 0,
-    children: [
-      { resourceId: 'M-SYS-USER', menuName: '用户管理', resourceUrl: '/system/users', resourceMethod: 'GET', isMenu: 0, menuEndFlag: '1', menuRankNo: 1, status: 0, children: [] },
-      { resourceId: 'M-SYS-ROLE', menuName: '角色管理', resourceUrl: '/system/roles', resourceMethod: 'GET', isMenu: 0, menuEndFlag: '1', menuRankNo: 2, status: 0, children: [] }
-    ]
-  },
-  {
-    resourceId: 'R-PERF-API', menuName: '绩效接口', resourceUrl: '/api/perf/**', resourceMethod: '*',
-    isMenu: 1, menuEndFlag: '1', menuRankNo: 100, status: 0, children: []
-  }
-];
+// 兜底置空：后端不返回数据 = 空，不再显示假菜单/资源树
+const mockResourceTree = [];
 
 // 获取资源/菜单树
 //   params: { status?, sysCode? }

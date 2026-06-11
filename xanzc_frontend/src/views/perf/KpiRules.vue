@@ -70,7 +70,11 @@
                     <el-button link type="danger" size="small">删除</el-button>
                   </template>
                 </el-popconfirm>
-                <el-button v-else link size="small" disabled>已删除</el-button>
+                <el-popconfirm v-else :title="`确认启用方案 ${row.schemeName}？`" @confirm="onEnable(row)">
+                  <template #reference>
+                    <el-button link type="success" size="small">启用</el-button>
+                  </template>
+                </el-popconfirm>
               </template>
             </template>
           </template>
@@ -234,7 +238,8 @@ import { useUserStore } from '@/stores/user';
 const userStore = useUserStore();
 const isCaizai = computed(() => {
   const roles = userStore.user?.roles || [];
-  return roles.some(r => r.roleId === 'R_BACK_FINANCE' || r.roleId === 'R_FIN_LEAD');
+  // ROLE_ID 已对齐内网数字：资财部经办人=238 / 资财部负责人=129
+  return roles.some(r => r.roleId === '238' || r.roleId === '129');
 });
 // labelOf 名称冲突：保留下面行业版的 statusLabel（含 DISABLED → 已删除映射），useDict 只取 options
 const { options: STATUS_OPTIONS } = useDict('KPI_SCHEME_STATUS');
@@ -641,9 +646,11 @@ async function onCloneVersion(row) {
       try {
         await addKpiItem(newId, {
           metricCode: it.metricCode,
+          baseDim: it.baseDim,
           weight: it.weight, multiplier: it.multiplier,
           minScore: it.minScore, maxScore: it.maxScore,
-          formula: it.formula
+          formula: it.formula,
+          sqlExpr: it.sqlExpr
         });
       } catch {}
     }
@@ -651,6 +658,18 @@ async function onCloneVersion(row) {
     reload();
   } catch {
     ElMessage.error('复制失败');
+  }
+}
+
+// 启用已删除方案：等价于重新发布回 ACTIVE（后端 publish 已放开 DISABLED→ACTIVE，仍校验引用指标均启用）
+async function onEnable(row) {
+  try {
+    await publishKpiScheme(row.id || row.schemeCode, '启用已删除方案');
+    ElMessage.success('已启用');
+    row.status = 'ACTIVE'; // 前端先行回显启用态
+    reload();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '启用失败');
   }
 }
 

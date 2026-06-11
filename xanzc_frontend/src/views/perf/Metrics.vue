@@ -975,14 +975,21 @@ async function onSave(targetStatus) {
     const opErr = checkExprOperator(dlg.form.exprText || '');
     if (opErr) { ElMessage.warning(opErr); return; }
   }
-  if (targetStatus === 'ACTIVE' && dlg.form.calcLogicType === 'EXPR') {
-    const codes = usedMetricCodes();
-    if (codes.length < 1) {
-      return ElMessage.warning('Groovy 表达式至少需要一个指标');
-    }
-    for (const c of codes) {
-      if (!parentMetricOptions.value.some(m => m.metricCode === c)) {
-        return ElMessage.warning(`指标 ${c} 不在上级已发布指标列表中`);
+  if (dlg.form.calcLogicType === 'EXPR') {
+    // Groovy 表达式可以为空；非空时至少需要引用一个指标
+    const expr = (dlg.form.exprText || '').trim();
+    if (expr) {
+      const codes = usedMetricCodes();
+      if (codes.length < 1) {
+        return ElMessage.warning('Groovy 表达式不为空时至少需要一个指标');
+      }
+      // 发布(ACTIVE)时，引用的指标必须都在上级已发布指标列表中
+      if (targetStatus === 'ACTIVE') {
+        for (const c of codes) {
+          if (!parentMetricOptions.value.some(m => m.metricCode === c)) {
+            return ElMessage.warning(`指标 ${c} 不在上级已发布指标列表中`);
+          }
+        }
       }
     }
   }
@@ -1013,8 +1020,10 @@ async function onSave(targetStatus) {
   };
   try {
     if (dlg.editing) {
-      // Update DTO 不含 baseDim/metricLevel/preferredSlot/status，也不含 metricCategory（仅 create 时落到独立列）
-      const { metricCategory, ...updatePayload } = basePayload;
+      // Update DTO 含 metricLevel（允许编辑层级落库，后端 val_slot 不变）；
+      // 不含 baseDim/preferredSlot/status，也不含 metricCategory（仅 create 时落到独立列）
+      const { metricCategory, ...rest } = basePayload;
+      const updatePayload = { ...rest, metricLevel: dlg.form.metricLevel };
       await updateMetric(dlg.editing, updatePayload);
       if (targetStatus !== detail.value.status) {
         await changeMetricStatus(dlg.editing, targetStatus, '编辑保存');
@@ -1041,6 +1050,8 @@ async function onSave(targetStatus) {
       if (edited) {
         edited.metricName = dlg.form.metricName;
         edited.status = targetStatus;
+        // 层级可编辑：同步新层级，派生树 computed 会把该指标重新归到对应层级组
+        edited.metricLevel = dlg.form.metricLevel;
       }
       onPick(dlg.editing);
     } else {

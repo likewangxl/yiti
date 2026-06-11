@@ -400,7 +400,7 @@ const userStore = useUserStore();
 const canCreatePlan = computed(() => {
   const roles = userStore.user?.roles || [];
   const codes = roles.map(r => (typeof r === 'string' ? r : (r.roleId || r.roleCode)));
-  return codes.some(c => c === 'R_BACK_FINANCE' || c === 'R_FIN_LEAD'
+  return codes.some(c => c === '238' || c === '129'   // role_id：资财部经办人=238 / 资财部负责人=129
                           || c === 'BACK_FINANCE' || c === 'FINANCE_LEADER');
 });
 
@@ -408,7 +408,7 @@ const canCreatePlan = computed(() => {
 const isFinanceLeader = computed(() => {
   const roles = userStore.user?.roles || [];
   const codes = roles.map(r => (typeof r === 'string' ? r : (r.roleId || r.roleCode)));
-  return codes.some(c => c === 'FINANCE_LEADER' || c === 'R_FIN_LEAD');
+  return codes.some(c => c === 'FINANCE_LEADER' || c === '129');  // role_id：资财部负责人=129
 });
 
 // === 维度 / 周期 / 状态 字典 ===

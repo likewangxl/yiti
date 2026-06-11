@@ -24,7 +24,6 @@
             :default-checked-keys="picked"
             :props="treeProps"
             :filter-node-method="filterNode"
-            check-strictly
             @check="onCheck"
           >
             <template #default="{ data }">

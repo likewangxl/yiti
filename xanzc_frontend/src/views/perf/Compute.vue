@@ -430,18 +430,8 @@ async function onConfirmTrigger() {
 }
 
 // === 快照抽屉 ===
-const SNAP_MOCK = {
-  rows: [
-    { emp: '张三', m1: 73.3, m2: 80.3, m3: 67.4, m4: 95.0, m5: 88.0, m6: 92.0, total: 80.6 },
-    { emp: '李四', m1: 95.5, m2: 92.0, m3: 86.7, m4: 100.0, m5: 90.0, m6: 85.0, total: 90.7 },
-    { emp: '孙七', m1: 68.0, m2: 61.1, m3: 72.0, m4: 88.0, m5: 75.0, m6: 80.0, total: 72.4 }
-  ],
-  changes: [
-    '修改了 <strong>3</strong> 名员工的考核结果',
-    '张三总分从 <strong>78.4</strong> 调整为 <strong>80.6</strong>（+2.2）',
-    '触发原因：业绩调整 <a class="lk">ADJ-2026-022</a> 通过 → 回算'
-  ]
-};
+// 兜底置空：后端没返回快照 = 空，不再显示假数据
+const SNAP_MOCK = { rows: [], changes: [] };
 const snapDlg = reactive({ show: false, batch: '', rows: [], changes: [] });
 async function openSnapshot(row) {
   snapDlg.batch = row.batch;

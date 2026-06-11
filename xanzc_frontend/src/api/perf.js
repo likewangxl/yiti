@@ -279,6 +279,17 @@ export function getAdjustDetail(id) {
 export function submitAdjust(data) {
   return call('post', '/perf/alloc-adjust/create', { data }, { id: 'ADJ-MOCK-' + Date.now() });
 }
+/**
+ * 保存为草稿（不进入审批流程）。data.id 为空=新建草稿，非空=编辑既有草稿。
+ * 返回 { id, applyNo, status: 'DRAFT' }。
+ */
+export function saveDraftAdjust(data) {
+  return call('post', '/perf/alloc-adjust/save-draft', { data }, { id: 'DRAFT-MOCK-' + Date.now(), status: 'DRAFT' });
+}
+/** 草稿提交审批：DRAFT → IN_APPROVAL。返回 { id, applyNo, status: 'IN_APPROVAL' }。 */
+export function submitDraftAdjust(id) {
+  return call('post', `/perf/alloc-adjust/${id}/submit`, {}, { id, status: 'IN_APPROVAL' });
+}
 export function withdrawAdjust(id, reason) {
   return call('post', `/perf/alloc-adjust/${id}/withdraw`, { data: { reason } }, { ok: true });
 }

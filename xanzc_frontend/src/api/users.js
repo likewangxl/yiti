@@ -11,25 +11,9 @@
 
 import { call, unwrapPage } from './http';
 
-// === Mock 兜底数据 ===
-const mockUsers = [
-  { userId: 'admin',     username: 'admin',     userchnname: '系统管理员',  email: 'admin@bank.cn',  remark: '13800138000', isEnabled: 0, isLocked: 0, isExpired: 0, createTime: '2026-01-01 09:00:00', createAuthor: 'system' },
-  { userId: 'U10001',    username: 'zhangsan',  userchnname: '张三',        email: 'zs@bank.cn',     remark: '13901390001', isEnabled: 0, isLocked: 0, isExpired: 0, createTime: '2026-02-10 10:30:00', createAuthor: 'admin' },
-  { userId: 'U10002',    username: 'lisi',      userchnname: '李四',        email: 'ls@bank.cn',     remark: '13901390002', isEnabled: 0, isLocked: 0, isExpired: 0, createTime: '2026-02-12 11:00:00', createAuthor: 'admin' },
-  { userId: 'U10003',    username: 'wangwu',    userchnname: '王五',        email: 'ww@bank.cn',     remark: '13901390003', isEnabled: 1, isLocked: 0, isExpired: 0, createTime: '2026-02-15 14:20:00', createAuthor: 'admin' },
-  { userId: 'U10004',    username: 'zhaoliu',   userchnname: '赵六',        email: 'zl@bank.cn',     remark: '13901390004', isEnabled: 0, isLocked: 1, isExpired: 0, createTime: '2026-03-01 09:15:00', createAuthor: 'admin' },
-  { userId: 'U10005',    username: 'sunqi',     userchnname: '孙七',        email: 'sq@bank.cn',     remark: '13901390005', isEnabled: 0, isLocked: 0, isExpired: 1, createTime: '2026-03-08 16:40:00', createAuthor: 'admin' }
-];
-
-const mockUserRoles = {
-  admin:    [{ roleId: 'R_ADMIN',     roleCode: 'SYS_ADMIN',  roleChName: '系统管理员' }],
-  U10001:   [{ roleId: 'R_CM',        roleCode: 'CUST_MGR',   roleChName: '客户经理' }],
-  U10002:   [{ roleId: 'R_CM',        roleCode: 'CUST_MGR',   roleChName: '客户经理' },
-             { roleId: 'R_OG',        roleCode: 'ORG_LEAD',   roleChName: '机构负责人' }],
-  U10003:   [],
-  U10004:   [{ roleId: 'R_OG',        roleCode: 'ORG_LEAD',   roleChName: '机构负责人' }],
-  U10005:   []
-};
+// 兜底置空：后端不返回数据 = 空，不再显示假用户/假角色
+const mockUsers = [];
+const mockUserRoles = {};
 
 // 表头展示用：状态文案 + 颜色
 export const USER_STATUS_LABEL = { 0: '启用', 1: '停用' };
