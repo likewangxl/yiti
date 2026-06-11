@@ -46,6 +46,9 @@ export async function queryDynamic(payload) {
     metricCodes: (payload.metrics  || []).map(m => (typeof m === 'string' ? m : m?.code)).filter(Boolean),
     dataDate:    payload.date  // 后端 LocalDate 接受 ISO 字符串
   };
+  // 服务端分页（可选）：传了 pageNo/pageSize 后端只返回当前页对象，不选对象=按范围查全部也不会拖爆
+  if (payload.pageNo)   body.pageNo   = payload.pageNo;
+  if (payload.pageSize) body.pageSize = payload.pageSize;
   const r = await call('post', '/reports/dynamic-query', { data: body }, reportDynamic);
   if (Array.isArray(r?.rows)) {
     r.rows = r.rows.map(row => {
@@ -68,13 +71,20 @@ export function exportDynamic(payload) {
 }
 
 // 动态查询「选择对象」数据范围：{ mode: ALL|ORG_SUBTREE|SELF, selfEmpId, selfName, orgCodes:[] }
-export async function getPickerScope() {
-  return call('get', '/reports/scope/picker', {}, { mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
+// dim 决定数据范围来源：EMP→REPORT_DYN_EMP（员工维度）/ ORG→REPORT_DYN_ORG（机构维度），两维度独立配置
+export async function getPickerScope(dim = 'EMP') {
+  return call('get', '/reports/scope/picker', { params: { dim } }, { mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
 }
 
 // 动态查询「选择对象」员工搜索：搜 PT_USER（按工号/姓名），REPORT 权限
 export async function searchReportEmployees(keyword, limit = 20) {
   const r = await call('get', '/reports/employees/search', { params: { keyword, limit } }, []);
+  return Array.isArray(r) ? r : (r?.records || []);
+}
+
+// 动态查询「选择对象」客户搜索：按客户名/客户号搜（不限范围）；返回 [{id,name,org}]
+export async function searchReportCustomers(keyword, limit = 20) {
+  const r = await call('get', '/reports/customers/search', { params: { keyword, limit } }, []);
   return Array.isArray(r) ? r : (r?.records || []);
 }
 
@@ -141,18 +151,28 @@ export async function getSavedQuery(id) {
   return r;
 }
 
+// 归一化对象列表为 [{id,name,org}]，兼容传入纯 id 字符串（老调用）或完整对象
+function normSubjects(list) {
+  return (list || []).map(s =>
+    typeof s === 'string'
+      ? { id: s, name: s, org: '' }
+      : { id: s?.id, name: s?.name || s?.id, org: s?.org || '' }
+  ).filter(s => s.id);
+}
+
 /**
  * 保存方案。
- * @param payload {{ name:string, dim:string, metrics:string[], subjects:Array<string|{id:string}> }}
- * 内部把 metrics → metricCodes JSON 字符串、subjects → subjectIds JSON 字符串。
+ * @param payload {{ name:string, dim:string, metrics:string[], subjects:Array<string|{id,name,org}> }}
+ * 内部把 metrics → metricCodes JSON 字符串、subjects → subjectIds JSON 字符串（存完整对象含名称）。
  */
 export function saveQuery(payload) {
-  const subjectIds  = (payload.subjects || []).map(s => (typeof s === 'string' ? s : s?.id)).filter(Boolean);
+  // 存「完整对象」{id,name,org} 而非仅 id —— 载入方案时可直接反显名称，无需再反查候选池
+  const subjects    = normSubjects(payload.subjects);
   const metricCodes = (payload.metrics  || []).map(m => (typeof m === 'string' ? m : m?.code)).filter(Boolean);
   const body = {
     name: payload.name,
     dim:  payload.dim,
-    subjectIds:  JSON.stringify(subjectIds),
+    subjectIds:  JSON.stringify(subjects),
     metricCodes: JSON.stringify(metricCodes)
   };
   return call('post', '/reports/saved-queries', { data: body },
@@ -165,7 +185,7 @@ export function updateSavedQuery(id, payload) {
   if (payload.name != null) body.name = payload.name;
   if (payload.dim  != null) body.dim  = payload.dim;
   if (Array.isArray(payload.subjects)) {
-    body.subjectIds = JSON.stringify(payload.subjects.map(s => (typeof s === 'string' ? s : s?.id)).filter(Boolean));
+    body.subjectIds = JSON.stringify(normSubjects(payload.subjects));
   }
   if (Array.isArray(payload.metrics)) {
     body.metricCodes = JSON.stringify(payload.metrics.map(m => (typeof m === 'string' ? m : m?.code)).filter(Boolean));

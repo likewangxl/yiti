@@ -46,12 +46,16 @@
         </div>
 
         <div class="col grow">
-          <div class="lab">③ 对象 (已选 {{ subjects.length }})</div>
-          <div class="tags click" @click="subjectDlg.show = true">
+          <div class="lab">③ 对象 (已选 {{ subjects.length }}，不选=查全部可见对象)</div>
+          <div class="tags" :class="{ click: !selfOnlyPicker }"
+               @click="!selfOnlyPicker && (subjectDlg.show = true)">
             <el-tag v-for="s in subjects" :key="s.id" closable effect="plain" @close.stop="subjects = subjects.filter(x => x !== s)">
               {{ subjectLabel(s) }}
             </el-tag>
-            <el-tag class="add" effect="plain">+ 选择</el-tag>
+            <!-- SELF 范围只能看本人：不让选对象，默认查本人。客户维度不限范围，不受此限 -->
+            <el-tag v-if="selfOnlyPicker" type="info" effect="plain">仅本人</el-tag>
+            <el-tag v-else-if="!subjects.length" class="add" effect="plain">+ 选择（默认全部）</el-tag>
+            <el-tag v-else class="add" effect="plain">+ 选择</el-tag>
           </div>
         </div>
 
@@ -79,7 +83,7 @@
         </div>
       </div>
 
-      <el-table v-if="view === 'table'" :data="pagedRows" size="default" stripe
+      <el-table v-if="view === 'table'" :data="rows" size="default" stripe
                 :empty-text="hasResult ? '无符合条件的数据' : '请选择指标和对象后点击「查询」'">
         <el-table-column prop="subject" :label="dimLabel" width="160" />
         <el-table-column v-if="dim === 'EMP'" prop="empName" label="姓名" width="120" />
@@ -94,9 +98,11 @@
           v-model:current-page="resultPageNo"
           v-model:page-size="resultPageSize"
           :page-sizes="[10, 20, 50, 100]"
-          :total="rows.length"
+          :total="resultTotal"
           background
           layout="total, sizes, prev, pager, next, jumper"
+          @current-change="onPageChange"
+          @size-change="onPageSizeChange"
         />
       </div>
 
@@ -109,18 +115,18 @@
         <!-- 客户维度不用机构树，只用右侧搜索框 -->
         <div class="picker-left" v-if="dim !== 'CUST'">
           <div class="picker-title">机构树（勾选{{ dim === 'EMP' ? '机构可选该机构下全部员工' : '机构' }}）</div>
-          <!-- ORG 维度：独立勾选，可选是否把勾选机构连同其下级一起纳入 -->
-          <el-checkbox v-if="dim === 'ORG'" v-model="subjectDlg.includeSubOrg" size="small" style="margin-bottom:8px"
-                       @change="onOrgCheckChange">包含下级机构</el-checkbox>
+          <!-- 机构/员工维度：独立勾选，可选是否把勾选机构连同其下级一起纳入 -->
+          <el-checkbox v-if="dim !== 'CUST'" v-model="subjectDlg.includeSubOrg" size="small" style="margin-bottom:8px"
+                       @change="onIncludeSubOrgChange">包含下级机构</el-checkbox>
           <el-input v-model="subjectDlg.treeKw" placeholder="搜索机构名称" size="small" clearable style="margin-bottom:8px" />
-          <!-- ORG 维度：check-strictly 父子独立，勾「西安分行」只选它本身不级联子机构；
-               EMP 维度：保持级联，勾机构=加载其下全部员工 -->
+          <!-- 机构/员工维度均 check-strictly 父子独立：勾哪个算哪个，不级联误勾上级容器机构；
+               是否带下级由「包含下级机构」开关控制 -->
           <el-tree
             ref="subjectTreeRef"
             :key="subjectDlg.openSeq"
             :data="subjectDlg.orgTree"
             show-checkbox
-            :check-strictly="dim === 'ORG'"
+            :check-strictly="dim !== 'CUST'"
             node-key="code"
             default-expand-all
             :filter-node-method="filterOrgNode"
@@ -229,10 +235,8 @@ const hasResult = ref(true);
 const rows = ref([]);
 const resultPageNo = ref(1);
 const resultPageSize = ref(20);
-const pagedRows = computed(() => {
-  const start = (resultPageNo.value - 1) * resultPageSize.value;
-  return rows.value.slice(start, start + resultPageSize.value);
-});
+// 服务端分页：rows 仅当前页，resultTotal 为符合条件的对象总数（后端返回）
+const resultTotal = ref(0);
 const dimLabel = computed(() => dimensions.value.find(d => d.code === dim.value)?.label || '对象');
 // metricMap：tolerant 同时消化两种字段命名（后端 MetricDefRespDTO.metricCode/metricName 与 mock metricsFlat.code/label）
 const metricMap = computed(() => Object.fromEntries(
@@ -256,6 +260,8 @@ const subjectTreeRef = ref(null);
 const orgTreeData = ref([]);
 // 对象选择数据范围（按角色）：ALL 不限 / ORG_SUBTREE 本机构子树 / SELF 仅本人
 const pickerScope = ref({ mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
+// 仅本人选择器：SELF 范围默认只能看自己、不让选；客户维度不限数据范围，不受此限
+const selfOnlyPicker = computed(() => pickerScope.value.mode === 'SELF' && dim.value !== 'CUST');
 
 // 按允许的机构编码裁剪机构树：保留 code 命中或有命中后代的节点（ALL 不裁剪）
 function filterTreeByCodes(nodes, codeSet) {
@@ -322,6 +328,31 @@ function onOrgCheckChange() {
   orgCheckTimer = setTimeout(loadCheckedOrgEmployees, 150);
 }
 
+// 「包含下级机构」开关：开启时把已勾机构的全部下级也勾到树上（可见反馈）；
+// 关闭时收起到最上层（祖先已勾的子节点取消勾选）。改完再重算选中对象。
+function onIncludeSubOrgChange(val) {
+  const tree = subjectTreeRef.value;
+  if (tree) {
+    const keys = new Set(tree.getCheckedKeys());
+    if (val) {
+      // 开：已勾节点的所有后代都勾上
+      const addDesc = (n) => (n.children || []).forEach(c => { keys.add(c.code); addDesc(c); });
+      tree.getCheckedNodes().forEach(addDesc);
+    } else {
+      // 关：祖先也被勾的节点取消，只保留最上层勾选
+      const walk = (n, ancestorChecked) => {
+        const checked = keys.has(n.code);
+        if (checked && ancestorChecked) keys.delete(n.code);
+        (n.children || []).forEach(c => walk(c, ancestorChecked || checked));
+      };
+      (subjectDlg.orgTree || []).forEach(n => walk(n, false));
+    }
+    tree.setCheckedKeys([...keys]);
+  }
+  clearTimeout(orgCheckTimer);
+  orgCheckTimer = setTimeout(loadCheckedOrgEmployees, 150);
+}
+
 async function loadCheckedOrgEmployees() {
   const checkedNodes = subjectTreeRef.value?.getCheckedNodes() || [];
   if (dim.value === 'ORG') {
@@ -358,11 +389,28 @@ async function loadCheckedOrgEmployees() {
   // EMP 模式：勾机构（含级联子机构）→ 加载其下全部员工。
   // 全选会勾上百个机构：用「分批并发(每批 8 个)+ 逐批刷新界面」，既快又能看到员工逐步出现，
   // 且并发有上限不会变回请求风暴。
+  // 数据范围过滤：勾子机构时 el-tree 级联会把「仅作容器展示、不在数据范围内」的上级机构（如西安分行）
+  // 也勾成全选，若直接加载其员工会把越权用户（如一级机构行长）带出 → 后端 RPT-40005 整单失败。
+  // 故与 ORG 维度一致，按数据范围 orgCodes 过滤掉越权机构再加载（ALL 不限）。
+  const empSc = pickerScope.value;
+  const empAllow = (empSc && empSc.mode !== 'ALL') ? new Set(empSc.orgCodes || []) : null;
+  // 独立勾选：默认只取勾中的机构；「包含下级机构」开启时展开为它+全部下级
+  let empNodes = checkedNodes;
+  if (subjectDlg.includeSubOrg) {
+    const acc = new Map();
+    const collect = (n) => {
+      if (!acc.has(n.code)) acc.set(n.code, { code: n.code, name: n.name, children: n.children });
+      (n.children || []).forEach(collect);
+    };
+    checkedNodes.forEach(collect);
+    empNodes = [...acc.values()];
+  }
+  const orgNodes = empAllow ? empNodes.filter(n => empAllow.has(n.code)) : empNodes;
   const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
   const seen = new Set(newSelected.map(s => s.id));
   const BATCH = 8;
-  for (let i = 0; i < checkedNodes.length; i += BATCH) {
-    const batch = checkedNodes.slice(i, i + BATCH);
+  for (let i = 0; i < orgNodes.length; i += BATCH) {
+    const batch = orgNodes.slice(i, i + BATCH);
     const results = await Promise.all(batch.map(async (node) => {
       let list = orgUsersCache.get(node.code);
       if (list === undefined) {
@@ -464,27 +512,40 @@ watch(dim, (cur, prev) => {
   loadPickerScope();
 });
 
-async function doQuery() {
+// 点「查询」按钮：回到第 1 页再查
+function doQuery() {
+  resultPageNo.value = 1;
+  return runQuery();
+}
+// 翻页 / 改每页条数：向后端请求对应页
+function onPageChange(p) { resultPageNo.value = p; runQuery(); }
+function onPageSizeChange(s) { resultPageSize.value = s; resultPageNo.value = 1; runQuery(); }
+
+// 实际发起查询（服务端分页）。不选对象=按数据范围查"能看到的全部对象"，故不再强制选对象。
+async function runQuery() {
   if (!pickedMetrics.value.length) { ElMessage.warning('请至少选择 1 个指标'); return; }
-  if (!subjects.value.length)      { ElMessage.warning('请至少选择 1 个对象'); return; }
   querying.value = true;
   try {
     const r = await queryDynamic({
       dim: dim.value,
       metrics: pickedMetrics.value,
-      subjects: subjects.value.map(s => s.id),
-      date: date.value
+      subjects: subjects.value.map(s => s.id),   // 空数组=不选对象，后端按范围查全部
+      date: date.value,
+      pageNo: resultPageNo.value,
+      pageSize: resultPageSize.value
     });
-    if (r?.result) rows.value = r.result;
-    else if (Array.isArray(r?.rows)) rows.value = r.rows;
+    if (Array.isArray(r?.rows)) rows.value = r.rows;
+    else if (r?.result) rows.value = r.result;
     else rows.value = [];
+    resultTotal.value = (r?.total != null) ? r.total : rows.value.length;
     hasResult.value = true;
-    ElMessage.success(`查询成功：${rows.value.length} 行`);
+    ElMessage.success(`查询成功：共 ${resultTotal.value} 个对象`);
   } catch (e) {
     // 查询失败（如对象越权 RPT-40005「对象不在数据范围内」）：必须清空结果，
     // 绝不能回退假数据冒充查询成功——否则后端已拦截，前端却照样展示一桌假数字。
     // 拦截器（http.js）已弹出后端真实错误提示，这里不再重复弹。
     rows.value = [];
+    resultTotal.value = 0;
     hasResult.value = false;
   } finally {
     querying.value = false;
@@ -493,7 +554,7 @@ async function doQuery() {
 
 async function onExport() {
   if (!pickedMetrics.value.length) { ElMessage.warning('请至少选择 1 个指标'); return; }
-  if (!subjects.value.length)      { ElMessage.warning('请至少选择 1 个对象'); return; }
+  // 不选对象=导出数据范围内全部对象（导出不分页，后端返回全量）
   exporting.value = true;
   try {
     await exportDynamicFile({
