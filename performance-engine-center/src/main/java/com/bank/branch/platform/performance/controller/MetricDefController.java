@@ -215,6 +215,7 @@ public class MetricDefController {
         log.info("[MetricDefController.update] metricCode={}", metricCode);
         UpdateMetricDefCmd cmd = UpdateMetricDefCmd.builder()
                 .metricCode(metricCode)
+                .metricLevel(req.getMetricLevel())
                 .metricName(req.getMetricName())
                 .metricNameEn(req.getMetricNameEn())
                 .metricDesc(req.getMetricDesc())

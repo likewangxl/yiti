@@ -434,6 +434,33 @@ class MetricDefServiceTest {
     }
 
     @Test
+    @DisplayName("更新指标层级 → patch 携带 metricLevel 落库，返回视图同步（val_slot 不变）")
+    void update_metricLevel_persistedToPatchAndView() {
+        PerfMetricDef existing = metric("TEST_METRIC_LVL", 1);
+        existing.setId("ID_LVL");
+        existing.setMetricLevel(1);
+        existing.setValSlot(7);
+
+        UpdateMetricDefCmd cmd = UpdateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_LVL")
+                .metricName("n")
+                .metricLevel(2) // 1 级 → 2 级
+                .operator("admin")
+                .build();
+        when(mapper.selectByMetricCode("TEST_METRIC_LVL")).thenReturn(existing);
+
+        PerfMetricDef updated = service.update(cmd);
+
+        ArgumentCaptor<PerfMetricDef> captor = ArgumentCaptor.forClass(PerfMetricDef.class);
+        verify(mapper).updateByIdSelective(captor.capture());
+        // patch 携带新层级 → mapper <if metricLevel!=null> 落库 metric_level
+        assertThat(captor.getValue().getMetricLevel()).isEqualTo(2);
+        // 返回视图同步新层级；val_slot 保持不变（不重分配）
+        assertThat(updated.getMetricLevel()).isEqualTo(2);
+        assertThat(updated.getValSlot()).isEqualTo(7);
+    }
+
+    @Test
     @DisplayName("非 ACTIVE 状态不可停用")
     void disable_whenStatusNotActive_throws40905() {
         PerfMetricDef existing = metric("TEST_METRIC_DISABLED", 1);

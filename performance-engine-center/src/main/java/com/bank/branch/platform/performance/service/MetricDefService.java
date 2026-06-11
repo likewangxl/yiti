@@ -335,18 +335,21 @@ public class MetricDefService {
             String effMode = cmd.getCalcMode() != null ? cmd.getCalcMode() : existing.getCalcMode();
             validateExprIfNeeded(effLogic, effMode, cmd.getExprText());
         }
+        // 指标层级：允许编辑修改；后续 patch 落库、约束校验均以「新层级」为准（val_slot 保持不变）
+        Integer effectiveLevel = cmd.getMetricLevel() != null ? cmd.getMetricLevel() : existing.getMetricLevel();
         boolean refMetricCodesProvided = cmd.getRefMetricCodes() != null && !cmd.getRefMetricCodes().isBlank();
         List<String> refMetricCodes = refMetricCodesProvided
                 ? parseRefMetricCodes(cmd.getRefMetricCodes())
                 : Collections.emptyList();
         if (refMetricCodesProvided) {
             Map<String, Integer> refMetricLevels = loadRefMetricLevels(refMetricCodes);
-            metricCycleDetectService.checkLevelConstraint(existing.getMetricLevel(), refMetricLevels);
+            metricCycleDetectService.checkLevelConstraint(effectiveLevel, refMetricLevels);
             metricCycleDetectService.checkNoCycle(metricRefService.loadFullGraph(), existing.getMetricCode(), refMetricCodes);
         }
 
         PerfMetricDef patch = new PerfMetricDef();
         patch.setId(existing.getId());
+        patch.setMetricLevel(cmd.getMetricLevel());
         patch.setMetricName(cmd.getMetricName());
         patch.setMetricNameEn(cmd.getMetricNameEn());
         patch.setMetricDesc(cmd.getMetricDesc());
@@ -366,6 +369,9 @@ public class MetricDefService {
             metricRefService.setRefs(existing.getMetricCode(), refMetricCodes);
         }
 
+        if (cmd.getMetricLevel() != null) {
+            existing.setMetricLevel(cmd.getMetricLevel());
+        }
         if (cmd.getMetricName() != null) {
             existing.setMetricName(cmd.getMetricName());
         }

@@ -17,6 +17,9 @@ public class UpdateMetricDefCmd {
     /** 指标编码（作为更新键）. */
     private String metricCode;
 
+    /** 指标层级（1/2/3）. 允许编辑修改并落库；val_slot 保持不变. */
+    private Integer metricLevel;
+
     /** 指标名称. */
     private String metricName;
 

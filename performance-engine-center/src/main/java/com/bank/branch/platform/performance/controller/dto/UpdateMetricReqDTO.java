@@ -18,6 +18,10 @@ public class UpdateMetricReqDTO {
     // 编辑指标时编码不可修改，不做编码格式校验
     private String metricCode;
 
+    /** 指标层级（1/2/3）。允许编辑修改并落库。 */
+    @Schema(description = "指标层级（1/2/3）")
+    private Integer metricLevel;
+
     /** 指标名称。 */
     @Schema(description = "指标名称")
     @Size(max = 200, message = "metricName 长度不能超过 200")
