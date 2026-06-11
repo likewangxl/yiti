@@ -89,10 +89,13 @@ public class OrgController {
     public ResponseWrapper<OrgUserDTO> getOrgUsers(
             @PathVariable String orgCode,
             @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "isEnabled", required = false) Integer isEnabled,
+            @RequestParam(value = "isLocked", required = false) Integer isLocked,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        log.debug("[OrgController.getOrgUsers] orgCode={}, keyword={}, pageNo={}, pageSize={}", orgCode, keyword, pageNo, pageSize);
-        PageResult<OrgUserDTO> result = orgService.getOrgUsers(orgCode, keyword, pageNo, pageSize);
+        log.debug("[OrgController.getOrgUsers] orgCode={}, keyword={}, isEnabled={}, isLocked={}, pageNo={}, pageSize={}",
+                orgCode, keyword, isEnabled, isLocked, pageNo, pageSize);
+        PageResult<OrgUserDTO> result = orgService.getOrgUsers(orgCode, keyword, isEnabled, isLocked, pageNo, pageSize);
         return ResponseWrapper.page(result);
     }
 

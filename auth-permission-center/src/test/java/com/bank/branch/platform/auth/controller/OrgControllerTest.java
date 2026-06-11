@@ -108,7 +108,7 @@ class OrgControllerTest {
         user.setRoles(List.of(role));
 
         PageResult<OrgUserDTO> page = PageResult.of(1, 20, 1, List.of(user));
-        when(orgService.getOrgUsers(eq("ORG001"), any(), eq(1), eq(20))).thenReturn(page);
+        when(orgService.getOrgUsers(eq("ORG001"), any(), any(), any(), eq(1), eq(20))).thenReturn(page);
 
         // when & then
         mockMvc.perform(get("/api/orgs/ORG001/users")

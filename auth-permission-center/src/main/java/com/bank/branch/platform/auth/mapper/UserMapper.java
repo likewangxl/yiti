@@ -49,6 +49,8 @@ public interface UserMapper extends BaseMapper<PtUser> {
      */
     List<PtUser> selectOrgUsersByPage(@Param("orgCode") String orgCode,
                                       @Param("keyword") String keyword,
+                                      @Param("isEnabled") Integer isEnabled,
+                                      @Param("isLocked") Integer isLocked,
                                       @Param("offset") int offset,
                                       @Param("limit") int limit);
 
@@ -57,9 +59,12 @@ public interface UserMapper extends BaseMapper<PtUser> {
      *
      * @param orgCode 机构编码
      * @param keyword 关键字
+     * @param isEnabled 启用状态过滤（0/1），null 不过滤
+     * @param isLocked 锁定状态过滤（0/1），null 不过滤
      * @return 用户总数
      */
-    long countOrgUsers(@Param("orgCode") String orgCode, @Param("keyword") String keyword);
+    long countOrgUsers(@Param("orgCode") String orgCode, @Param("keyword") String keyword,
+                       @Param("isEnabled") Integer isEnabled, @Param("isLocked") Integer isLocked);
 
     /**
      * 根据用户名（登录名）查询用户信息，用于登录认证。

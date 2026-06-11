@@ -208,12 +208,14 @@ public class OrgService {
      * @param pageSize 每页条数
      * @return 分页结果
      */
-    public PageResult<OrgUserDTO> getOrgUsers(String orgCode, String keyword, int pageNo, int pageSize) {
-        log.debug("[OrgService.getOrgUsers] orgCode={}, keyword={}, pageNo={}, pageSize={}", orgCode, keyword, pageNo, pageSize);
+    public PageResult<OrgUserDTO> getOrgUsers(String orgCode, String keyword,
+                                              Integer isEnabled, Integer isLocked, int pageNo, int pageSize) {
+        log.debug("[OrgService.getOrgUsers] orgCode={}, keyword={}, isEnabled={}, isLocked={}, pageNo={}, pageSize={}",
+                orgCode, keyword, isEnabled, isLocked, pageNo, pageSize);
         int offset = (pageNo - 1) * pageSize;
 
-        List<PtUser> users = userMapper.selectOrgUsersByPage(orgCode, keyword, offset, pageSize);
-        long total = userMapper.countOrgUsers(orgCode, keyword);
+        List<PtUser> users = userMapper.selectOrgUsersByPage(orgCode, keyword, isEnabled, isLocked, offset, pageSize);
+        long total = userMapper.countOrgUsers(orgCode, keyword, isEnabled, isLocked);
 
         List<OrgUserDTO> records = buildOrgUserDtoList(users);
         return PageResult.of(pageNo, pageSize, total, records);

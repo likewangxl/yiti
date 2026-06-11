@@ -67,8 +67,11 @@
         WHERE uo.ORG_CODE = #{orgCode}
         <if test="keyword != null and keyword != ''">
             AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
                  OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
         </if>
+        <if test="isEnabled != null">AND u.ISENABLED = #{isEnabled}</if>
+        <if test="isLocked != null">AND u.ISLOCKED = #{isLocked}</if>
         ORDER BY u.USER_ID
     </select>
 
@@ -80,8 +83,11 @@
         WHERE uo.ORG_CODE = #{orgCode}
         <if test="keyword != null and keyword != ''">
             AND (u.USER_ID LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%')
                  OR u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%'))
         </if>
+        <if test="isEnabled != null">AND u.ISENABLED = #{isEnabled}</if>
+        <if test="isLocked != null">AND u.ISLOCKED = #{isLocked}</if>
     </select>
 
     <!-- 仅更新密码错误计数，单独写 SQL 而非走 updateById 的原因：
