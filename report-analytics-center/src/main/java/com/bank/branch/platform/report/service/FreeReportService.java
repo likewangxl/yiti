@@ -74,7 +74,7 @@ public interface FreeReportService {
     /** 获取批次原始文件名 */
     String getBatchFileName(String batchId);
 
-    /** 获取批次关联的 file_object_id，供下载入口直接调 FileApi.getFilePath 读流（绕开 governance 通用下载 RBAC） */
+    /** 获取批次关联的 file_object_id，供下载入口调 FileApi.getFileContent 读 OBS 字节流 */
     String getBatchFileObjectKey(String batchId);
 
     /**
