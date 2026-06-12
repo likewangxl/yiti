@@ -85,7 +85,7 @@ class PerfImportServiceTest {
     void startImport_routesByImportType_target() {
         MultipartFile f = fakeFile("targets.xlsx");
 
-        String batchId = service.startImport("TARGET", f, "admin", null);
+        String batchId = service.startImport("TARGET", f, "admin", null, null);
 
         assertThat(batchId).isNotBlank();
         verify(targetStrategy).execute(any(PerfImportBatch.class), eq(f), any());
@@ -98,7 +98,7 @@ class PerfImportServiceTest {
     void startImport_routesByImportType_baseData() {
         MultipartFile f = fakeFile("base.xlsx");
 
-        service.startImport("BASE_DATA", f, "admin", null);
+        service.startImport("BASE_DATA", f, "admin", null, null);
 
         verify(baseDataStrategy).execute(any(PerfImportBatch.class), eq(f), any());
         verify(targetStrategy, never()).execute(any(), any(), any());
@@ -109,7 +109,7 @@ class PerfImportServiceTest {
     void startImport_routesByImportType_alloc() {
         MultipartFile f = fakeFile("alloc.xlsx");
 
-        service.startImport("ALLOC", f, "admin", null);
+        service.startImport("ALLOC", f, "admin", null, null);
 
         verify(allocStrategy).execute(any(PerfImportBatch.class), eq(f), any());
         verify(targetStrategy, never()).execute(any(), any(), any());
@@ -120,7 +120,7 @@ class PerfImportServiceTest {
     void startImport_unknownImportType_throwsBizKindInvalid() {
         MultipartFile f = fakeFile("foo.xlsx");
 
-        assertThatThrownBy(() -> service.startImport("UNKNOWN_TYPE", f, "admin", null))
+        assertThatThrownBy(() -> service.startImport("UNKNOWN_TYPE", f, "admin", null, null))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.BIZ_KIND_INVALID));
@@ -129,7 +129,7 @@ class PerfImportServiceTest {
     @Test
     @DisplayName("startImport：importType 为空白 → 抛 VALIDATION_FAILED (PERF-42200)")
     void startImport_blankImportType_throwsValidationFailed() {
-        assertThatThrownBy(() -> service.startImport("", fakeFile("f.xlsx"), "admin", null))
+        assertThatThrownBy(() -> service.startImport("", fakeFile("f.xlsx"), "admin", null, null))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.VALIDATION_FAILED));
@@ -138,7 +138,7 @@ class PerfImportServiceTest {
     @Test
     @DisplayName("startImport：file 为空 → 抛 VALIDATION_FAILED (PERF-42200)")
     void startImport_nullFile_throwsValidationFailed() {
-        assertThatThrownBy(() -> service.startImport("TARGET", null, "admin", null))
+        assertThatThrownBy(() -> service.startImport("TARGET", null, "admin", null, null))
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.VALIDATION_FAILED));
@@ -150,7 +150,7 @@ class PerfImportServiceTest {
         when(targetStrategy.execute(any(), any(), any()))
                 .thenReturn(new ImportResult(10, 10, 0, null));
 
-        String batchId = service.startImport("TARGET", fakeFile("t.xlsx"), "admin", null);
+        String batchId = service.startImport("TARGET", fakeFile("t.xlsx"), "admin", null, null);
 
         assertThat(batchId).isNotBlank();
 
@@ -171,7 +171,7 @@ class PerfImportServiceTest {
     @Test
     @DisplayName("startImport：源文件归档到 OBS → fileApi.upload 调用 + sourceObjectKey 落库")
     void startImport_archivesSourceFileToObs() {
-        String batchId = service.startImport("TARGET", fakeFile("imp.xlsx"), "admin", null);
+        String batchId = service.startImport("TARGET", fakeFile("imp.xlsx"), "admin", null, null);
 
         assertThat(batchId).isNotBlank();
         verify(fileApi).upload(any(MultipartFile.class), eq("admin"), eq(FileCategory.PERF_IMPORT));
@@ -188,7 +188,7 @@ class PerfImportServiceTest {
             throw new RuntimeException("parse fail");
         }).when(targetStrategy).execute(any(), any(), any());
 
-        assertThatThrownBy(() -> service.startImport("TARGET", fakeFile("t.xlsx"), "admin", null))
+        assertThatThrownBy(() -> service.startImport("TARGET", fakeFile("t.xlsx"), "admin", null, null))
                 .isInstanceOf(RuntimeException.class);
 
         verify(batchMapper).updateStatus(anyString(), eq("FAILED"), any());

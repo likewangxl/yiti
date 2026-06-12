@@ -20,8 +20,13 @@ import java.time.LocalDate;
  * <p>历史：V1.12 初版用 Excel Sheet 名携带 dataDate（每 Sheet 一个日期），
  * 2026-05-19 改为前端日期选择器经 HTTP 参数注入，Sheet 名变为纯展示用。
  */
-public record ImportContext(LocalDate dataDate) {
+public record ImportContext(LocalDate dataDate, String schemeCode) {
 
-    /** 空上下文（无任何参数），供不需要 context 的 4 个策略复用. */
-    public static final ImportContext EMPTY = new ImportContext(null);
+    /** 空上下文（无任何参数），供不需要 context 的策略复用. */
+    public static final ImportContext EMPTY = new ImportContext(null, null);
+
+    /** 兼容旧调用：仅传 dataDate（schemeCode 置空），METRIC_RESULT 等沿用. */
+    public ImportContext(LocalDate dataDate) {
+        this(dataDate, null);
+    }
 }

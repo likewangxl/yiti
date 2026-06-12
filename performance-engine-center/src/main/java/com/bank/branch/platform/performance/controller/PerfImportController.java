@@ -81,18 +81,19 @@ public class PerfImportController {
     @AuditLog(action = "PERF_IMPORT_UPLOAD", resourceType = "PERF_IMPORT_BATCH")
     public ResponseWrapper<PerfImportUploadRespDTO> upload(@RequestParam("importType") @NotBlank String importType,
                                                            @RequestParam("file") MultipartFile file,
-                                                           @RequestParam(value = "dataDate", required = false) String dataDate) {
+                                                           @RequestParam(value = "dataDate", required = false) String dataDate,
+                                                           @RequestParam(value = "schemeCode", required = false) String schemeCode) {
         // V1.11：响应破坏性变更为 PerfImportUploadRespDTO（含 insertedRows / updatedRows），
         // 前端从 data: string 改为 data: { batchId, totalRows, insertedRows, updatedRows, errorRows }
-        log.info("[PerfImportController.upload] importType={}, fileName={}, size={}, dataDate={}",
+        log.info("[PerfImportController.upload] importType={}, fileName={}, size={}, dataDate={}, schemeCode={}",
                 importType, file == null ? null : file.getOriginalFilename(),
-                file == null ? 0 : file.getSize(), dataDate);
+                file == null ? 0 : file.getSize(), dataDate, schemeCode);
         if (file == null || file.isEmpty()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "file 不能为空");
         }
         LocalDate parsedDataDate = parseDataDate(dataDate);
         String operatorId = currentUserApi.getCurrentEmpId();
-        String batchId = perfImportService.startImport(importType, file, operatorId, parsedDataDate);
+        String batchId = perfImportService.startImport(importType, file, operatorId, parsedDataDate, schemeCode);
         PerfImportBatchRespDTO batchDto = perfImportService.getBatchDto(batchId);
         PerfImportUploadRespDTO resp = PerfImportUploadRespDTO.builder()
                 .batchId(batchId)

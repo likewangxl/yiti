@@ -80,7 +80,8 @@ public class PerfImportServiceImpl implements PerfImportService {
     }
 
     @Override
-    public String startImport(String importType, MultipartFile file, String operatorId, LocalDate dataDate) {
+    public String startImport(String importType, MultipartFile file, String operatorId,
+                              LocalDate dataDate, String schemeCode) {
         if (importType == null || importType.isBlank()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "importType 必填");
         }
@@ -90,6 +91,17 @@ public class PerfImportServiceImpl implements PerfImportService {
         ImportStrategy strategy = strategyMap.get(importType);
         if (strategy == null) {
             throw new PerfException(PerfErrorCode.BIZ_KIND_INVALID, importType);
+        }
+        // KPI_SCORE 整文件必填：数据日期 + KPI 方案编码（均由页面输入项传入）
+        if ("KPI_SCORE".equals(importType)) {
+            if (dataDate == null) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "dataDate 必填（KPI_SCORE 必传 yyyy-MM-dd）");
+            }
+            if (schemeCode == null || schemeCode.isBlank()) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "schemeCode 必填（KPI_SCORE 必传 KPI 方案编码）");
+            }
         }
         // METRIC_RESULT dataDate 整文件必填（V1.12 微调）；其他类型忽略 dataDate
         if ("METRIC_RESULT".equals(importType) && dataDate == null) {
@@ -123,7 +135,7 @@ public class PerfImportServiceImpl implements PerfImportService {
 
         // 3) 调用策略执行，包装状态机
         try {
-            ImportContext ctx = new ImportContext(dataDate);
+            ImportContext ctx = new ImportContext(dataDate, schemeCode);
             ImportResult result = strategy.execute(batch, file, ctx);
             if (result == null) {
                 result = new ImportResult(0, 0, 0, null);

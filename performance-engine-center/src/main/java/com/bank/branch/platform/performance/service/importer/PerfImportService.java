@@ -33,11 +33,13 @@ public interface PerfImportService {
      * @param importType 导入类型（TARGET / BASE_DATA / ALLOC / METRIC_DEF / METRIC_RESULT）
      * @param file       Excel 文件（不得为 null/空）
      * @param operatorId 操作人员工号（写入 createdBy）
-     * @param dataDate   数据日期：仅 METRIC_RESULT 需要且必填，其他类型忽略；
+     * @param dataDate   数据日期：METRIC_RESULT / KPI_SCORE 必填，其他类型忽略；
      *                   缺失/格式错由 Controller 层 fail-fast
+     * @param schemeCode KPI 方案编码：仅 KPI_SCORE 必填（页面方案下拉传入），其他类型忽略
      * @return 新建批次的主键 id
      */
-    String startImport(String importType, MultipartFile file, String operatorId, LocalDate dataDate);
+    String startImport(String importType, MultipartFile file, String operatorId,
+                       LocalDate dataDate, String schemeCode);
 
     /**
      * 按主键查询批次，不存在时抛 {@code IMPORT_BATCH_NOT_FOUND}.
