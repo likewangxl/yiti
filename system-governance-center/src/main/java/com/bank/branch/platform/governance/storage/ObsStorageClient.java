@@ -1,0 +1,100 @@
+package com.bank.branch.platform.governance.storage;
+
+import com.bank.branch.platform.common.web.exception.BizException;
+import com.obs.services.ObsClient;
+import com.obs.services.model.HttpMethodEnum;
+import com.obs.services.model.ObsObject;
+import com.obs.services.model.TemporarySignatureRequest;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+
+/**
+ * 华为云 OBS 读写工具类（仿参考 PdObsClient 的调用习惯）。
+ * <p>懒连接：{@link #init()} 仅构造客户端对象，不发起网络请求；真正连接发生在首次 put/get 调用时，
+ * 因此 dev/CI 无真实 OBS 也能正常启动，单测通过 mock {@link ObsClient} 验证委托。</p>
+ */
+@Slf4j
+@Component
+public class ObsStorageClient {
+
+    @Value("${obs.endPoint}")
+    private String endPoint;
+
+    @Value("${obs.accessKey}")
+    private String accessKey;
+
+    @Value("${obs.secretKey}")
+    private String secretKey;
+
+    @Value("${obs.bucketName}")
+    private String bucketName;
+
+    @Value("${obs.presignExpireSeconds:600}")
+    private long presignExpireSeconds;
+
+    private ObsClient obsClient;
+
+    @PostConstruct
+    public void init() {
+        this.obsClient = new ObsClient(accessKey, secretKey, endPoint);
+        log.info("[ObsStorageClient] 初始化完成 endPoint={}, bucket={}", endPoint, bucketName);
+    }
+
+    @PreDestroy
+    public void close() {
+        if (obsClient != null) {
+            try {
+                obsClient.close();
+            } catch (Exception e) {
+                log.warn("[ObsStorageClient] 关闭失败", e);
+            }
+        }
+    }
+
+    /** 写：字节数组 → OBS 对象。 */
+    public void putObject(byte[] bytes, String key) {
+        try (InputStream in = new ByteArrayInputStream(bytes)) {
+            obsClient.putObject(bucketName, key, in);
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] putObject 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 上传失败: " + e.getMessage(), e);
+        }
+    }
+
+    /** 读：OBS 对象 → 字节数组。 */
+    public byte[] getBytes(String key) {
+        try {
+            ObsObject obj = obsClient.getObject(bucketName, key);
+            try (InputStream in = obj.getObjectContent()) {
+                return in.readAllBytes();
+            }
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] getBytes 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 读取失败: " + e.getMessage(), e);
+        }
+    }
+
+    /** 删：OBS 对象。 */
+    public void deleteByKey(String key) {
+        try {
+            obsClient.deleteObject(bucketName, key);
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] deleteByKey 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 删除失败: " + e.getMessage(), e);
+        }
+    }
+
+    /** 预签名临时下载 URL（GET）。 */
+    public String generatePresignedUrl(String key) {
+        TemporarySignatureRequest req = new TemporarySignatureRequest(HttpMethodEnum.GET, presignExpireSeconds);
+        req.setBucketName(bucketName);
+        req.setObjectKey(key);
+        return obsClient.createTemporarySignature(req).getSignedUrl();
+    }
+}
