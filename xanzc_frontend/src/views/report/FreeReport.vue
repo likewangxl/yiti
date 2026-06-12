@@ -80,7 +80,7 @@
         <el-form-item label="选择文件">
           <el-upload ref="importUploaderRef" drag action="#" :auto-upload="false" :show-file-list="true"
                      multiple :on-change="onFilePick" accept=".xlsx,.xls">
-            <div style="padding:20px 0">点击或拖拽 .xlsx 到此处（支持多文件）</div>
+            <div style="padding:20px 0">点击或拖拽 .xlsx 到此处（支持多文件，单个最大 50MB）</div>
           </el-upload>
         </el-form-item>
       </el-form>
@@ -162,8 +162,18 @@ async function downloadTemplate() {
 const importDlg = ref({ show: false, reportName: '', files: [], uploading: false });
 const importUploaderRef = ref(null);
 
+const MAX_IMPORT_BYTES = 50 * 1024 * 1024; // 单文件 50MB，与后端 multipart/FileService 对齐
+
 function onFilePick(file, fileList) {
-  importDlg.value.files = fileList.filter(f => f.raw).map(f => f.raw);
+  // 上传前本地拦截超 50MB 的文件：提示并从待上传列表移除，不发请求
+  if (file.size > MAX_IMPORT_BYTES) {
+    ElMessage.error(`文件「${file.name}」超过 50MB，无法导入`);
+    const idx = fileList.indexOf(file);
+    if (idx > -1) fileList.splice(idx, 1);
+  }
+  importDlg.value.files = fileList
+    .filter(f => f.raw && f.raw.size <= MAX_IMPORT_BYTES)
+    .map(f => f.raw);
 }
 
 async function doImport() {
