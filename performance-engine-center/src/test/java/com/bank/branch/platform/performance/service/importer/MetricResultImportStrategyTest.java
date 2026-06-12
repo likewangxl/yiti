@@ -2,6 +2,7 @@ package com.bank.branch.platform.performance.service.importer;
 
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.SysControl;
@@ -111,7 +112,8 @@ class MetricResultImportStrategyTest {
                 });
 
         // 员工 / 机构存在性默认放行（具体 case 再覆盖）
-        lenient().when(userApi.getUserName(anyString())).thenReturn("mock-user");
+        // EMP 维度对象=工号，按工号查 PT_USER（getUsersByUsernames），默认返回非空=存在
+        lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
         lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
         lenient().when(sysControlService.getCurrentVersion(anyString()))
                 .thenReturn(sysControl("V1"));
@@ -216,9 +218,9 @@ class MetricResultImportStrategyTest {
     }
 
     @Test
-    @DisplayName("4.c 违反：EMP baseDim 员工号不在 ADDRBOOK_EMPLOYEE → errorSummary 记录，不入库")
+    @DisplayName("4.c 违反：EMP baseDim 工号不在 PT_USER（按工号查）→ errorSummary 记录，不入库")
     void execute_empNotFound_recordedInErrorSummary() {
-        when(userApi.getUserName("E_GHOST")).thenReturn(null);
+        when(userApi.getUsersByUsernames(List.of("E_GHOST"))).thenReturn(List.of());
 
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "EMP", "E_GHOST", "基础性存款月均余额", new BigDecimal("10")});

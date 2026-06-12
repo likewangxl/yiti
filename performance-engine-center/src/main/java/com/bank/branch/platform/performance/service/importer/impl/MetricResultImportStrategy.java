@@ -16,6 +16,7 @@ import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricResultImportRow;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -317,7 +318,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
         }
     }
 
-    /** 3/4) 主体存在性校验（EMP→ADDRBOOK_EMPLOYEE；ORG→EXT_ORG_INFO；CUST/null 跳过）. */
+    /** 3/4) 主体存在性校验（EMP→按工号查 PT_USER.username；ORG→EXT_ORG_INFO；CUST/null 跳过）. */
     private void validateSubjectExists(MetricResultImportRow row) {
         String dim = row.getBaseDim();
         String subject = row.getSubjectKey();
@@ -325,9 +326,12 @@ public class MetricResultImportStrategy implements ImportStrategy {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "维度对象必填");
         }
         if ("EMP".equals(dim)) {
-            if (userApi.getUserName(subject) == null) {
+            // 维度对象=员工工号(PT_USER.username)，与宽表 emp_id 存储口径一致；按工号校验存在性
+            // （不能按 USER_ID 查，否则工号查不到被误判"不存在"）
+            List<UserDTO> users = userApi.getUsersByUsernames(List.of(subject));
+            if (users == null || users.isEmpty()) {
                 throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                        "员工不存在（ADDRBOOK_EMPLOYEE）: " + subject);
+                        "员工不存在（工号）: " + subject);
             }
         } else if ("ORG".equals(dim)) {
             if (orgApi.getOrg(subject) == null) {
