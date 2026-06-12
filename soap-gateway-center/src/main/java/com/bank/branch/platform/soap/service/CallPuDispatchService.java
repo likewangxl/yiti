@@ -31,11 +31,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * callpu 分发服务（手机端绩效审批网关业务核心）。
@@ -219,33 +217,27 @@ public class CallPuDispatchService {
             return CallPuResponse.fail("分配明细不能为空");
         }
 
-        // 申请人 + 原/新分配各行的工号(USERNAME) 一次性解析为 perf 所需 USER_ID
-        Set<String> empNos = new LinkedHashSet<>();
-        empNos.add(empId);
-        for (CallPuRequest.Allocater a : newAllocaters) {
-            empNos.add(a.getUsername());
-        }
-        for (CallPuRequest.Allocater a : origAllocaters) {
-            empNos.add(a.getUsername());
-        }
-        Map<String, String> userIdByEmpNo = resolveUserIds(empNos);
+        // 申请人工号(USERNAME) → perf 所需 USER_ID（applicant/created_by 物理用短代理键）
+        String applicantUserId = resolveUserId(empId);
 
-        // 新分配 → items（NEW）
+        // 新分配 → items（NEW）。empId 直接落工号(USERNAME)，与 PC 管理端一致：
+        // 审批通过后该工号原样写入 cust_alloc_relation.emp_id（perf 侧仅按工号补全姓名/部门，不改值）。
         List<AllocAdjustSubmitCmd.Item> items = new ArrayList<>(newAllocaters.size());
         for (CallPuRequest.Allocater a : newAllocaters) {
             items.add(AllocAdjustSubmitCmd.Item.builder()
-                    .empId(userIdByEmpNo.get(a.getUsername().trim()))
+                    .empId(a.getUsername().trim())
                     .ratio(new BigDecimal(a.getRatio().trim()))
                     .remark(null)
                     .build());
         }
 
         // 原分配 → originalAllocList（ORIGIN）；手机端只采集 工号/姓名/比例，
-        // username 存工号快照、fullname 存中文名快照，机构/账号留空由 perf 兜底。
+        // empId/username 均落工号(USERNAME)（seedOriginalAllocRelations 原样写 cust_alloc_relation.emp_id，
+        // 口径对齐 PC 管理端）；fullname 存中文名快照，机构/账号留空由 perf 兜底。
         List<AllocAdjustSubmitCmd.OriginalItem> originalAllocList = new ArrayList<>(origAllocaters.size());
         for (CallPuRequest.Allocater a : origAllocaters) {
             originalAllocList.add(AllocAdjustSubmitCmd.OriginalItem.builder()
-                    .empId(userIdByEmpNo.get(a.getUsername().trim()))
+                    .empId(a.getUsername().trim())
                     .username(a.getUsername().trim())
                     .empChnName(a.getFullname())
                     .ratio(new BigDecimal(a.getRatio().trim()))
@@ -260,7 +252,7 @@ public class CallPuDispatchService {
                 .bizKind(bizKind)
                 .accountNo(parm.getIouNo())
                 .reason(parm.getAdjustExplain())
-                .applicant(userIdByEmpNo.get(empId.trim()))
+                .applicant(applicantUserId)
                 .items(items)
                 .originalAllocList(originalAllocList)
                 .build();

@@ -254,10 +254,11 @@ class CallPuControllerTest {
         assertThat(cmd.getCustId()).isEqualTo("C001");
         assertThat(cmd.getAccountNo()).isEqualTo("ACC123");
         assertThat(cmd.getReason()).isEqualTo("调整理由");
-        // 关键回归：applicant 与 item.empId 均为解析后的 USER_ID，工号不得直达 perf
+        // 关键回归：applicant 为解析后的 USER_ID（created_by 用短代理键）；
+        // item.empId 直接落工号(USERNAME)，与 PC 一致（审批通过后原样写 cust_alloc_relation.emp_id）
         assertThat(cmd.getApplicant()).isEqualTo("U_E001");
         assertThat(cmd.getItems()).hasSize(2);
-        assertThat(cmd.getItems().get(0).getEmpId()).isEqualTo("U_E100");
+        assertThat(cmd.getItems().get(0).getEmpId()).isEqualTo("E100");
         assertThat(cmd.getItems().get(0).getRatio()).isEqualByComparingTo(new BigDecimal("60"));
     }
 

@@ -376,7 +376,7 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfSave_splitsOriginalAndNewAllocaters_byIsOriginal() {
-        // 申请人 + 原/新分配各行工号统一解析为 USER_ID
+        // 申请人工号解析为 USER_ID（applicant 用短代理键）；分配明细 empId 直接落工号(USERNAME)，与 PC 一致
         when(userApi.getUsersByUsernames(any())).thenReturn(List.of(
                 user("E001", "U001"),
                 user("E100", "U100"),
@@ -407,15 +407,15 @@ class CallPuDispatchServiceTest {
         verify(perfApprovalCmdApi).submitAllocAdjust(captor.capture());
         AllocAdjustSubmitCmd cmd = captor.getValue();
 
-        // isOriginal != 1 的行 → items（NEW），empId 为 USER_ID
+        // isOriginal != 1 的行 → items（NEW），empId 为工号(USERNAME)，审批通过后原样写 cust_alloc_relation.emp_id
         assertThat(cmd.getItems()).hasSize(1);
-        assertThat(cmd.getItems().get(0).getEmpId()).isEqualTo("U100");
+        assertThat(cmd.getItems().get(0).getEmpId()).isEqualTo("E100");
         assertThat(cmd.getItems().get(0).getRatio()).isEqualByComparingTo(new BigDecimal("70"));
 
-        // isOriginal == 1 的行 → originalAllocList（ORIGIN），empId 为 USER_ID + 姓名/工号快照
+        // isOriginal == 1 的行 → originalAllocList（ORIGIN），empId 为工号(USERNAME) + 姓名/工号快照（与 PC 一致）
         assertThat(cmd.getOriginalAllocList()).hasSize(1);
         AllocAdjustSubmitCmd.OriginalItem orig = cmd.getOriginalAllocList().get(0);
-        assertThat(orig.getEmpId()).isEqualTo("U900");
+        assertThat(orig.getEmpId()).isEqualTo("E900");
         assertThat(orig.getUsername()).isEqualTo("E900");
         assertThat(orig.getEmpChnName()).isEqualTo("原始人");
         assertThat(orig.getRatio()).isEqualByComparingTo(new BigDecimal("100"));
