@@ -3,10 +3,13 @@ server:
   servlet:
     context-path: /
 
-# 文件本地磁盘存储（替代 MinIO）—— 用绝对路径避免 JVM cwd 漂移导致上传/下载找不到同一目录
-file:
-  storage:
-    root: /home/djdev/lf/yiti/file-storage
+# 华为云 OBS 对象存储（统一文件存储）—— 凭证为 xanpd 占位，部署时替换为本项目 OBS 资源
+obs:
+  endPoint: obs.sh-dev.oshxccloud.spdbdev.com
+  accessKey: QAU28T7BR57S2ENQDDNP
+  secretKey: V87zaTAZM7NvESzL2dJB3HIVvAmf3xmYT5fkffSX
+  bucketName: xanpd-kf-bucket-01
+  presignExpireSeconds: 600
 
 spring:
   profiles:
