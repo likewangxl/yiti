@@ -4,6 +4,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.report.entity.RptFreeReportBatch;
 import com.bank.branch.platform.report.entity.RptFreeReportRow;
 import com.bank.branch.platform.report.mapper.FreeReportBatchMapper;
@@ -41,20 +42,21 @@ public class FreeReportServiceImpl implements FreeReportService {
 
         // 同名 + 同操作人才覆盖：不同操作人传同名文件视为各自独立的批次
         String fileName = file.getOriginalFilename();
-        List<String> oldFileKeys = new ArrayList<>();
         if (fileName != null) {
             List<RptFreeReportBatch> existing = batchMapper.selectByFileName(fileName);
             for (RptFreeReportBatch old : existing) {
                 if (!empId.equals(old.getUploaderEmpId())) continue;
                 rowMapper.deleteByBatchId(old.getId());
-                if (old.getFileObjectKey() != null) oldFileKeys.add(old.getFileObjectKey());
                 batchMapper.deleteById(old.getId());
                 log.info("[FreeReport.import] 覆盖旧批次 id={}, fileName={}, uploader={}", old.getId(), old.getFileName(), empId);
             }
+            // 不清理旧 OBS 文件：MD5 去重下新旧批次可能共享同一 FILE_OBJECT，删旧文件会误删新批次仍在用的对象；
+            // 且对已不存在的记录调 deleteFile 会抛异常，把 @Transactional 导入事务标记为 rollback-only 致整单回滚。
+            // 旧对象留在 OBS 作为可接受的孤儿（按业务决策不做清理）。
         }
 
-        // 上传文件到 MinIO
-        FileObjectDTO uploaded = fileApi.upload(file, empId);
+        // 上传文件到 OBS（自由报表用 zybb 类型前缀）
+        FileObjectDTO uploaded = fileApi.upload(file, empId, FileCategory.FREE_REPORT);
         String fileObjectKey = uploaded.getId();
 
         // 解析 Excel
@@ -189,11 +191,6 @@ public class FreeReportServiceImpl implements FreeReportService {
         }
 
         log.info("[FreeReport.import] 完成 batchId={}, rows={}", batchId, dataRows.size());
-
-        // 事务内 DB 操作全部完成后，清理 MinIO 旧文件（不影响事务）
-        for (String key : oldFileKeys) {
-            try { fileApi.deleteFile(key); } catch (Exception e) { log.warn("清理旧 MinIO 文件失败 key={}", key); }
-        }
 
         return batchId;
     }
