@@ -32,6 +32,11 @@ public class PerfDetailData {
     private Integer isCanDelete;
     /** 当前所处审批节点中文名（终态显示「已完成/已拒绝/已撤回」）。 */
     private String currentNode;
+    /**
+     * 当前活动节点 KEY（taskDefinitionKey，如 {@code biz_dept_review}/{@code finance_review}）。
+     * 经办审批端按此决定「下一步审批」选择（终态 / 无活动节点为 null）。
+     */
+    private String currentNodeKey;
     /** 下一审批节点中文名（末节点「流程结束」、终态「无」）。 */
     private String nextNode;
     /** 分配明细：原分配(isOriginal=1) + 调整后(isOriginal=2)。 */

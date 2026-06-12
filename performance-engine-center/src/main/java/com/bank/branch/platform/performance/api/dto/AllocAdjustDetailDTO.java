@@ -41,6 +41,11 @@ public class AllocAdjustDetailDTO {
      */
     private String currentNode;
     /**
+     * 当前活动节点 KEY（taskDefinitionKey，如 {@code biz_dept_review}/{@code finance_review}）。
+     * 供经办审批端按节点决定「下一步审批」表单（终态 / 无活动节点时为 null）。
+     */
+    private String currentNodeKey;
+    /**
      * 下一审批节点中文名（按 callPu 硬编码路由的确定链路静态推算；
      * 末节点显示「流程结束」，终态显示「无」）。
      */

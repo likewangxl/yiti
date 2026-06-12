@@ -43,12 +43,24 @@ public interface PerfApprovalCmdApi {
      * （查不到 taskId）则拒绝审批。再按 {@code apprStatus} 走通过 / 驳回，委托 workflow 无会话审批，
      * 全程不依赖登录会话。</p>
      *
+     * <p><b>下一步路由（{@code routeTo}）</b>：与管理端经办审批一致，仅在「同意」且当前节点是含排他网关的
+     * 经办节点时生效——</p>
+     * <ul>
+     *   <li>{@code biz_dept_review}（公司部/零售部经办）→ 写网关变量 {@code corpRouteTo}：
+     *       {@code LEADER}（交部门负责人）/ {@code OWNER}（交原业绩所属人会签）；</li>
+     *   <li>{@code finance_review}（资财部经办）→ 写网关变量 {@code finRouteTo}：
+     *       {@code LEADER}（交资财部负责人）/ {@code END}（审批结束）。</li>
+     * </ul>
+     * <p>其余节点忽略 {@code routeTo}；经办节点未传 {@code routeTo} 时按默认走最全链路
+     * （corp→OWNER、fin→LEADER），保持老渠道兼容不卡流程。</p>
+     *
      * @param perfAdjustNo 申请主键 id（手机端 perfAdjustNo）
      * @param empId        审批人工号（外部渠道认证后透传）
      * @param apprStatus   审批结论："1"=通过 / "2"=驳回
      * @param opinion      审批意见（可空，空则由实现兜底默认文案）
+     * @param routeTo      经办节点下一步路由选择（可空；非经办节点 / 驳回时忽略）
      * @throws IllegalStateException    审批人无该待办任务（无权审批 / 已被处理）
      * @throws IllegalArgumentException apprStatus 非 "1"/"2"
      */
-    void approveAllocAdjust(String perfAdjustNo, String empId, String apprStatus, String opinion);
+    void approveAllocAdjust(String perfAdjustNo, String empId, String apprStatus, String opinion, String routeTo);
 }

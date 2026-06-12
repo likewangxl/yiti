@@ -249,6 +249,7 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                 .canDelete(canDelete)
                 .canApprove(canApprove)
                 .currentNode(nodes[0])
+                .currentNodeKey(nodes[2])
                 .nextNode(nodes[1])
                 .allocaters(allocaters)
                 .build();
@@ -264,7 +265,7 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
      *   <li>查询异常 / 无活动节点 / 无 pid：当前「审批中」、下一节点留空，不抛异常。</li>
      * </ul>
      *
-     * @return 长度恒为 2 的数组：[0]=当前节点，[1]=下一节点
+     * @return 长度恒为 3 的数组：[0]=当前节点中文名，[1]=下一节点中文名，[2]=当前节点 KEY（无活动节点为 null）
      */
     private String[] resolveNodes(PerfAllocAdjustApply apply) {
         String status = apply.getStatus();
@@ -277,12 +278,12 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                 case "DRAFT": cur = "草稿"; break;
                 default: cur = "—";
             }
-            return new String[]{cur, "无"};
+            return new String[]{cur, "无", null};
         }
 
         String pid = apply.getProcessInstanceId();
         if (pid == null || pid.isBlank()) {
-            return new String[]{"审批中", ""};
+            return new String[]{"审批中", "", null};
         }
         try {
             ProcessDiagramDTO diagram = workflowQueryApi.getProcessNodes(pid);
@@ -296,13 +297,13 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
                 }
             }
             if (active == null) {
-                return new String[]{"审批中", ""};
+                return new String[]{"审批中", "", null};
             }
             String next = AllocAdjustNodeProgress.nextNodeName(apply.getCustType(), active.getNodeKey());
-            return new String[]{active.getNodeName(), next};
+            return new String[]{active.getNodeName(), next, active.getNodeKey()};
         } catch (Exception e) {
             log.warn("[PerfApprovalQueryFacade.resolveNodes] 查询流程节点失败 pid={}, err={}", pid, e.getMessage());
-            return new String[]{"审批中", ""};
+            return new String[]{"审批中", "", null};
         }
     }
 

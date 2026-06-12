@@ -198,7 +198,28 @@ class CallPuDispatchServiceTest {
         CallPuResponse resp = service.dispatch(req);
 
         assertThat(resp.getReturnCd()).isEqualTo("0");
-        verify(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "1", "同意");
+        // 未传 routeTo（老渠道/非经办节点），透传 null，由 perf Facade 兜底默认链路
+        verify(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "1", "同意", null);
+    }
+
+    @Test
+    void perfAppr_pass_forwardsRouteTo_toPerf() {
+        // 经办节点「同意」带下一步路由选择：网关原样透传 routeTo 给 perf（由 perf 按节点落 corp/finRouteTo）
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        CallPuRequest.Parm parm = new CallPuRequest.Parm();
+        parm.setEmployeeNo("E001");
+        parm.setPerfAdjustNo("A1");
+        parm.setApprStatus("1");
+        parm.setApprOpinion("同意");
+        parm.setRouteTo("OWNER");
+        CallPuRequest req = new CallPuRequest();
+        req.setRuleName("PERF_APPR");
+        req.setParm(parm);
+
+        CallPuResponse resp = service.dispatch(req);
+
+        assertThat(resp.getReturnCd()).isEqualTo("0");
+        verify(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "1", "同意", "OWNER");
     }
 
     @Test
@@ -216,7 +237,8 @@ class CallPuDispatchServiceTest {
         CallPuResponse resp = service.dispatch(req);
 
         assertThat(resp.getReturnCd()).isEqualTo("0");
-        verify(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "2", "不同意");
+        // 驳回不涉及路由，routeTo 透传 null
+        verify(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "2", "不同意", null);
     }
 
     @Test
@@ -232,7 +254,7 @@ class CallPuDispatchServiceTest {
         CallPuResponse resp = service.dispatch(req);
 
         assertThat(resp.getReturnCd()).isEqualTo("99");
-        verify(perfApprovalCmdApi, never()).approveAllocAdjust(any(), any(), any(), any());
+        verify(perfApprovalCmdApi, never()).approveAllocAdjust(any(), any(), any(), any(), any());
         verify(userApi, never()).getUsersByUsernames(any());
     }
 
@@ -249,7 +271,7 @@ class CallPuDispatchServiceTest {
         CallPuResponse resp = service.dispatch(req);
 
         assertThat(resp.getReturnCd()).isEqualTo("99");
-        verify(perfApprovalCmdApi, never()).approveAllocAdjust(any(), any(), any(), any());
+        verify(perfApprovalCmdApi, never()).approveAllocAdjust(any(), any(), any(), any(), any());
         verify(userApi, never()).getUsersByUsernames(any());
     }
 
@@ -257,7 +279,7 @@ class CallPuDispatchServiceTest {
     void perfAppr_businessException_returnsFail() {
         when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
         doThrow(new IllegalStateException("无权审批"))
-                .when(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "1", null);
+                .when(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "1", null, null);
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setPerfAdjustNo("A1");

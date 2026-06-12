@@ -81,6 +81,13 @@ public class CallPuRequest {
         /** 审批意见（PERF_APPR 用，可空）。 */
         private String apprOpinion;
 
+        /**
+         * 经办节点「下一步审批」路由选择（PERF_APPR 同意时用，可空）。
+         * biz_dept_review：LEADER（交部门负责人）/ OWNER（交原业绩所属人）；
+         * finance_review：LEADER（交资财部负责人）/ END（审批结束）。
+         */
+        private String routeTo;
+
         /** 分配明细（→ items）。 */
         private List<Allocater> allocaters;
     }

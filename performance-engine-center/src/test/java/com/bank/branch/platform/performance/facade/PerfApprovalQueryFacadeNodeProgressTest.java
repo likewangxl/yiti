@@ -92,6 +92,7 @@ class PerfApprovalQueryFacadeNodeProgressTest {
         AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_1", "U001");
 
         assertThat(d.getCurrentNode()).isEqualTo("资财部经办审批");
+        assertThat(d.getCurrentNodeKey()).isEqualTo("finance_review");
         assertThat(d.getNextNode()).isEqualTo("资财部负责人审批");
     }
 
@@ -105,6 +106,7 @@ class PerfApprovalQueryFacadeNodeProgressTest {
         AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_1", "U001");
 
         assertThat(d.getCurrentNode()).isEqualTo("资财部负责人审批");
+        assertThat(d.getCurrentNodeKey()).isEqualTo("finance_leader_approve");
         assertThat(d.getNextNode()).isEqualTo("流程结束");
     }
 
@@ -116,6 +118,7 @@ class PerfApprovalQueryFacadeNodeProgressTest {
         AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_1", "U001");
 
         assertThat(d.getCurrentNode()).isEqualTo("已完成");
+        assertThat(d.getCurrentNodeKey()).isNull();
         assertThat(d.getNextNode()).isEqualTo("无");
     }
 
@@ -149,6 +152,7 @@ class PerfApprovalQueryFacadeNodeProgressTest {
         AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_1", "U001");
 
         assertThat(d.getCurrentNode()).isEqualTo("审批中");
+        assertThat(d.getCurrentNodeKey()).isNull();
         assertThat(d.getNextNode()).isEmpty();
     }
 
@@ -162,6 +166,7 @@ class PerfApprovalQueryFacadeNodeProgressTest {
         AllocAdjustDetailDTO d = facade.getAllocAdjustDetail("PA_1", "U001");
 
         assertThat(d.getCurrentNode()).isEqualTo("原业绩所属人审批");
+        assertThat(d.getCurrentNodeKey()).isEqualTo("original_owner_approve");
         assertThat(d.getNextNode()).isEqualTo("资财部经办审批");
     }
 }

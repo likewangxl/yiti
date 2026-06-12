@@ -334,7 +334,10 @@ public class CallPuDispatchService {
         }
         // 报文工号(USERNAME) → perf 所需 USER_ID
         String userId = resolveUserId(empId);
-        perfApprovalCmdApi.approveAllocAdjust(parm.getPerfAdjustNo(), userId, apprStatus, parm.getApprOpinion());
+        // routeTo：经办节点「下一步审批」选择（biz_dept_review→LEADER/OWNER；finance_review→LEADER/END），
+        // 非经办节点 / 驳回时透传 null，由 perf Facade 按当前节点忽略或兜底默认链路。
+        perfApprovalCmdApi.approveAllocAdjust(parm.getPerfAdjustNo(), userId, apprStatus,
+                parm.getApprOpinion(), parm.getRouteTo());
         return CallPuResponse.ok(null);
     }
 
@@ -418,6 +421,7 @@ public class CallPuDispatchService {
                 .isCanAppr(detail.isCanApprove() ? 1 : 0)
                 .isCanDelete(detail.isCanDelete() ? 1 : 0)
                 .currentNode(detail.getCurrentNode())
+                .currentNodeKey(detail.getCurrentNodeKey())
                 .nextNode(detail.getNextNode())
                 .allocaters(allocaters)
                 .build();
