@@ -16,6 +16,11 @@ spring:
     active: dev
   main:
     allow-bean-definition-overriding: true
+  servlet:
+    multipart:
+      # 自由报表/数据导入等上传上限，与 governance FileService 的 50MB 校验对齐（默认仅 1MB）
+      max-file-size: 50MB
+      max-request-size: 60MB
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
