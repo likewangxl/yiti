@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 /**
  * KpiExportStrategy 单元测试（V1.2 Task Q6.2 Red）.
  *
- * <p>KpiResultMapper 与 MinioClient 均 mock 化，验证策略的:
+ * <p>KpiResultMapper 与 FileApi 均 mock 化，验证策略的:
  * <ul>
  *   <li>exportType 标识 = "KPI"</li>
  *   <li>解析 params_json（schemeCode / cycleType / cycleDate / asOfDate）</li>

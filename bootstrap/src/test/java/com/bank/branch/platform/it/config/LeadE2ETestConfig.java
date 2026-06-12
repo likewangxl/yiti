@@ -3,7 +3,7 @@ package com.bank.branch.platform.it.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.minio.MinioClient;
+import com.bank.branch.platform.governance.storage.ObsStorageClient;
 import org.mybatis.spring.annotation.MapperScan;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -66,7 +66,7 @@ public class LeadE2ETestConfig {
 
     @Bean
     @Primary
-    public MinioClient minioClient() {
-        return Mockito.mock(MinioClient.class);
+    public ObsStorageClient obsStorageClient() {
+        return Mockito.mock(ObsStorageClient.class);
     }
 }

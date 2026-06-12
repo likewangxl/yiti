@@ -3,7 +3,7 @@ package com.bank.branch.platform.it.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.minio.MinioClient;
+import com.bank.branch.platform.governance.storage.ObsStorageClient;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.RepositoryService;
@@ -106,13 +106,12 @@ public class TestMockConfig {
     }
 
     /**
-     * Mock MinioClient — governance 模块的 MinioConfig 需要此 Bean。
-     * 注意: MinioConfig 自己会创建 MinioClient，使用 @Primary 覆盖。
+     * Mock ObsStorageClient — 覆盖 governance 的真实 OBS 客户端，IT 不触真实 OBS。
      */
     @Bean
     @Primary
-    public MinioClient minioClient() {
-        return Mockito.mock(MinioClient.class);
+    public ObsStorageClient obsStorageClient() {
+        return Mockito.mock(ObsStorageClient.class);
     }
 
     /**
