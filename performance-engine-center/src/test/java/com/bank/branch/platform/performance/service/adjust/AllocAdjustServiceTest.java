@@ -776,9 +776,9 @@ class AllocAdjustServiceTest {
         apply.setCreatedBy("admin");
         when(applyMapper.selectByAllocApplyId("D2")).thenReturn(apply);
         PerfAllocAdjustItem n1 = new PerfAllocAdjustItem();
-        n1.setItemKind("NEW"); n1.setEmpId("EMP_A"); n1.setRatio(new BigDecimal("60"));
+        n1.setEmpId("EMP_A"); n1.setRatio(new BigDecimal("60"));
         PerfAllocAdjustItem n2 = new PerfAllocAdjustItem();
-        n2.setItemKind("NEW"); n2.setEmpId("EMP_B"); n2.setRatio(new BigDecimal("40"));
+        n2.setEmpId("EMP_B"); n2.setRatio(new BigDecimal("40"));
         when(itemMapper.selectByApplyId("D2")).thenReturn(Arrays.asList(n1, n2));
         when(workflowApi.startProcess(any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_D2", null, null));

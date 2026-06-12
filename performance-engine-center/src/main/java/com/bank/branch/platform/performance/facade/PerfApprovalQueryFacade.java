@@ -204,17 +204,28 @@ public class PerfApprovalQueryFacade implements PerfApprovalQueryApi {
         boolean canApprove = "IN_APPROVAL".equals(status) && isMyTodo(empId, perfAdjustNo);
 
         List<AllocAdjustDetailDTO.AllocItem> allocaters = new ArrayList<>();
+        // 调整明细（PERF_ALLOC_ADJUST_ITEM，item_kind 已废弃，统一标 isOriginal=2 调整后分配）
         if (items != null) {
             for (PerfAllocAdjustItem it : items) {
-                boolean origin = "ORIGIN".equals(it.getItemKind());
                 allocaters.add(AllocAdjustDetailDTO.AllocItem.builder()
                         .empId(it.getEmpId())
                         .username(it.getUsername())
                         .fullname(it.getEmpChnName())
                         .ratio(it.getRatio() == null ? null : it.getRatio().toPlainString())
-                        .isOriginal(origin ? 1 : 2)
+                        .isOriginal(2)
                         .build());
             }
+        }
+        // 原业绩分配（cust_alloc_relation 当前生效 is_original='2'，详情展示标 isOriginal=1）
+        for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO src
+                : allocAdjustService.getOriginalAllocPreview(apply.getCustId(), apply.getAllocDim())) {
+            allocaters.add(AllocAdjustDetailDTO.AllocItem.builder()
+                    .empId(src.getEmpId())
+                    .username(src.getUsername())
+                    .fullname(src.getEmpChnName())
+                    .ratio(src.getRatio() == null ? null : src.getRatio().toPlainString())
+                    .isOriginal(1)
+                    .build());
         }
 
         // 当前/下一审批节点：IN_APPROVAL 取 Flowable 活动节点 + 静态链路推下一节点；终态走文案

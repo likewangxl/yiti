@@ -71,7 +71,6 @@ class PerfApprovalQueryFacadeDetailTest {
         PerfAllocAdjustItem origin = new PerfAllocAdjustItem();
         origin.setId("ITEM_1");
         origin.setApplyId("PA_1");
-        origin.setItemKind("ORIGIN");
         origin.setEmpId("E1");
         origin.setUsername("zhangsan");
         origin.setEmpChnName("张三");
@@ -80,7 +79,6 @@ class PerfApprovalQueryFacadeDetailTest {
         PerfAllocAdjustItem newItem = new PerfAllocAdjustItem();
         newItem.setId("ITEM_2");
         newItem.setApplyId("PA_1");
-        newItem.setItemKind("NEW");
         newItem.setEmpId("E2");
         newItem.setUsername("lisi");
         newItem.setEmpChnName("李四");
@@ -95,6 +93,8 @@ class PerfApprovalQueryFacadeDetailTest {
         AllocAdjustService.ApplyWithItems bundle =
                 new AllocAdjustService.ApplyWithItems(buildApply(), buildItems());
         when(allocAdjustService.getById("PA_1")).thenReturn(bundle);
+        // 原业绩分配改从 cust_alloc_relation 取（item_kind 废弃后）；本陈旧测试默认空，避免 NPE
+        when(allocAdjustService.getOriginalAllocPreview(any(), any())).thenReturn(List.of());
 
         // 待办列表包含 PA_1，empId=U001 → canApprove=true
         AdjustTodoRespDTO todoItem = new AdjustTodoRespDTO();

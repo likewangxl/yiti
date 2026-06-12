@@ -200,26 +200,20 @@ class AllocAdjustCompletedListenerTest {
     }
 
     @Test
-    @DisplayName("ORIGIN（原业绩分配）明细不落地为新分配关系，仅 NEW 明细生成 cust_alloc_relation")
-    void originItems_excludedFromAllocation() {
-        PerfAllocAdjustItem origin = item("EMP_OLD", "100.00");
-        origin.setItemKind("ORIGIN");
-        PerfAllocAdjustItem neo = item("EMP_A", "60.00");
-        neo.setItemKind("NEW");
-        when(itemMapper.selectByApplyId("APP_001")).thenReturn(Arrays.asList(origin, neo));
-
+    @DisplayName("ITEM 全部明细落地为生效分配（item_kind 已废弃，原业绩分配不再存于 ITEM）")
+    void allItemsLandAsAllocation() {
+        // selectByApplyId 已在 setupCommon stub 为 EMP_A(60)/EMP_B(40) 两条调整明细
         listener.onProcessCompleted(
                 new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
 
-        // 仅 NEW 明细落地为分配关系；ORIGIN 仅用于会签/留痕，不得成为生效分配
         ArgumentCaptor<CustAllocRelation> cap = ArgumentCaptor.forClass(CustAllocRelation.class);
-        verify(allocRelationMapper, org.mockito.Mockito.times(1)).insert(cap.capture());
-        assertThat(cap.getValue().getEmpId()).isEqualTo("EMP_A");
-        // 事件 itemCount 也只计 NEW
+        verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(cap.capture());
+        assertThat(cap.getAllValues()).extracting(CustAllocRelation::getEmpId)
+                .containsExactlyInAnyOrder("EMP_A", "EMP_B");
         ArgumentCaptor<AllocationAdjustmentApprovedEvent> evCap =
                 ArgumentCaptor.forClass(AllocationAdjustmentApprovedEvent.class);
         verify(eventPublisher).publish(evCap.capture());
-        assertThat(evCap.getValue().getItemCount()).isEqualTo(1);
+        assertThat(evCap.getValue().getItemCount()).isEqualTo(2);
     }
 
     @Test

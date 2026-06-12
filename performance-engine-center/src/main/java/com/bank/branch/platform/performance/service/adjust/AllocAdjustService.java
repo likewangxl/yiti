@@ -358,7 +358,6 @@ public class AllocAdjustService {
             entity.setEmpChnName(u != null ? u.getDisplayName() : null);
             entity.setOrgCode(u != null ? u.getMainOrgCode() : null);
             entity.setOrgName(u != null ? u.getMainOrgName() : null);
-            entity.setItemKind("NEW");
             entity.setRatio(it.getRatio());
             entity.setRemark(it.getRemark());
             items.add(entity);
@@ -366,11 +365,10 @@ public class AllocAdjustService {
         if (!items.isEmpty()) {
             itemMapper.batchInsert(items);
         }
-        // 原业绩分配（手工录入）落地：item_kind=ORIGIN
+        // 原业绩分配（手工录入）不再落 PERF_ALLOC_ADJUST_ITEM（item_kind 已废弃）；
+        // 直接 seed 到 cust_alloc_relation（当前生效 is_original='2'）。buildOriginalItems 仅做工号→姓名/部门补全。
         List<PerfAllocAdjustItem> originItems = buildOriginalItems(applyId, cmd.getOriginalAllocList());
         if (!originItems.isEmpty()) {
-            itemMapper.batchInsert(originItems);
-            // 手工录入的原业绩分配同步落库 cust_alloc_relation（当前生效 is_original='2'）
             seedOriginalAllocRelations(cmd, originItems);
         }
     }
@@ -460,26 +458,16 @@ public class AllocAdjustService {
     private SubmitAllocAdjustCmd rebuildCmdFromPersisted(PerfAllocAdjustApply apply,
             List<PerfAllocAdjustItem> persisted, String operator) {
         List<SubmitAllocAdjustCmd.Item> items = new ArrayList<>();
+        // PERF_ALLOC_ADJUST_ITEM 现仅存调整明细（item_kind 已废弃）；原业绩分配在 cust_alloc_relation，
+        // 会签名单由 resolveOriginalOwnerEmpIds 改读 cust_alloc_relation，这里 originalAllocList 留空即可。
         List<SubmitAllocAdjustCmd.OriginalItem> origins = new ArrayList<>();
         if (persisted != null) {
             for (PerfAllocAdjustItem it : persisted) {
-                if ("ORIGIN".equals(it.getItemKind())) {
-                    origins.add(SubmitAllocAdjustCmd.OriginalItem.builder()
-                            .acctNo(it.getAcctNo())
-                            .empId(it.getEmpId())
-                            .username(it.getUsername())
-                            .empChnName(it.getEmpChnName())
-                            .orgCode(it.getOrgCode())
-                            .orgName(it.getOrgName())
-                            .ratio(it.getRatio())
-                            .build());
-                } else {
-                    items.add(SubmitAllocAdjustCmd.Item.builder()
-                            .empId(it.getEmpId())
-                            .ratio(it.getRatio())
-                            .remark(it.getRemark())
-                            .build());
-                }
+                items.add(SubmitAllocAdjustCmd.Item.builder()
+                        .empId(it.getEmpId())
+                        .ratio(it.getRatio())
+                        .remark(it.getRemark())
+                        .build());
             }
         }
         return SubmitAllocAdjustCmd.builder()
@@ -729,6 +717,18 @@ public class AllocAdjustService {
     }
 
     /**
+     * 供审批详情等读取「原业绩分配」= 当前生效分配（cust_alloc_relation is_original='2'）.
+     *
+     * @param custId   客户编号
+     * @param allocDim 分配维度 RULE/ACCOUNT/null
+     * @return 原业绩分配预览项（可能为空）
+     */
+    public List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO>
+            getOriginalAllocPreview(String custId, String allocDim) {
+        return allocAdjustPreviewService.getLastApprovedAllocPreview(custId, allocDim);
+    }
+
+    /**
      * 按 token（工号或登录名）双解析员工，Key=原始 token.
      *
      * <p>先按工号(USER_ID)解析，未命中的 token 再按登录名(USERNAME)兜底；查询失败返回已解析部分。
@@ -847,7 +847,6 @@ public class AllocAdjustService {
             PerfAllocAdjustItem e = new PerfAllocAdjustItem();
             e.setId(UUID.randomUUID().toString().replace("-", ""));
             e.setApplyId(applyId);
-            e.setItemKind("ORIGIN");
             e.setAcctNo(o.getAcctNo());
             e.setEmpId(o.getEmpId());
             e.setUsername(!isBlank(o.getUsername()) ? o.getUsername()
@@ -943,8 +942,9 @@ public class AllocAdjustService {
             for (PerfAllocAdjustItem it : items) {
                 AllocAdjustRespDTO.Item iDto = new AllocAdjustRespDTO.Item();
                 iDto.setId(it.getId());
-                // 明细类型缺失（旧数据）默认 NEW；ORIGIN 为手工录入的原业绩分配
-                iDto.setItemKind(isBlank(it.getItemKind()) ? "NEW" : it.getItemKind());
+                // PERF_ALLOC_ADJUST_ITEM 现仅存调整明细，统一标 NEW；原业绩分配(ORIGIN)由
+                // getByIdDto 的 reflectOriginalAllocFromCurrent 从 cust_alloc_relation 反显追加
+                iDto.setItemKind("NEW");
                 iDto.setAcctNo(it.getAcctNo());
                 iDto.setEmpId(it.getEmpId());
                 // 直接读提交时快照的员工/部门字段，不再关联 PT_USER/机构表；
