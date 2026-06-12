@@ -82,7 +82,8 @@ public class PerfImportController {
     public ResponseWrapper<PerfImportUploadRespDTO> upload(@RequestParam("importType") @NotBlank String importType,
                                                            @RequestParam("file") MultipartFile file,
                                                            @RequestParam(value = "dataDate", required = false) String dataDate,
-                                                           @RequestParam(value = "schemeCode", required = false) String schemeCode) {
+                                                           @RequestParam(value = "schemeCode", required = false) String schemeCode,
+                                                           @RequestParam(value = "archiveSource", required = false, defaultValue = "true") boolean archiveSource) {
         // V1.11：响应破坏性变更为 PerfImportUploadRespDTO（含 insertedRows / updatedRows），
         // 前端从 data: string 改为 data: { batchId, totalRows, insertedRows, updatedRows, errorRows }
         log.info("[PerfImportController.upload] importType={}, fileName={}, size={}, dataDate={}, schemeCode={}",
@@ -93,7 +94,7 @@ public class PerfImportController {
         }
         LocalDate parsedDataDate = parseDataDate(dataDate);
         String operatorId = currentUserApi.getCurrentEmpId();
-        String batchId = perfImportService.startImport(importType, file, operatorId, parsedDataDate, schemeCode);
+        String batchId = perfImportService.startImport(importType, file, operatorId, parsedDataDate, schemeCode, archiveSource);
         PerfImportBatchRespDTO batchDto = perfImportService.getBatchDto(batchId);
         PerfImportUploadRespDTO resp = PerfImportUploadRespDTO.builder()
                 .batchId(batchId)

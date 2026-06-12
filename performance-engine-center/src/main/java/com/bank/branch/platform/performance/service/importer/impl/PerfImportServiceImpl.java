@@ -81,7 +81,7 @@ public class PerfImportServiceImpl implements PerfImportService {
 
     @Override
     public String startImport(String importType, MultipartFile file, String operatorId,
-                              LocalDate dataDate, String schemeCode) {
+                              LocalDate dataDate, String schemeCode, boolean archiveSource) {
         if (importType == null || importType.isBlank()) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "importType 必填");
         }
@@ -109,9 +109,14 @@ public class PerfImportServiceImpl implements PerfImportService {
                     "dataDate 必填（METRIC_RESULT 必传 yyyy-MM-dd）");
         }
 
-        // 0) 归档源文件到 OBS（put），记录 objectKey 供事后查底/重跑/下载。
-        //    用 MultipartFile 重载：FileService 内部读 getBytes()，与后续 strategy 解析互不影响（getBytes 幂等）。
-        FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
+        // 0) 源文件归档到 OBS（CBS 上传）——两条分支：
+        //    archiveSource=true（「立即上传」）→ 走正常 CBS 归档，记录 objectKey；
+        //    archiveSource=false（「上传并导入」）→ 不走 CBS，跳过归档，直接解析入库（导入只读上传的 MultipartFile）。
+        String sourceObjectKey = null;
+        if (archiveSource) {
+            FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
+            sourceObjectKey = archived.getId();
+        }
 
         // 1) 创建批次，初始 CREATED
         PerfImportBatch batch = new PerfImportBatch();
@@ -120,7 +125,7 @@ public class PerfImportServiceImpl implements PerfImportService {
         batch.setImportType(importType);
         batch.setFileName(file.getOriginalFilename());
         batch.setFileMd5(null); // V1.1 本期简化：不做 MD5 幂等
-        batch.setSourceObjectKey(archived.getId());
+        batch.setSourceObjectKey(sourceObjectKey);
         batch.setStatus("CREATED");
         batch.setTotalRows(0);
         batch.setSuccessRows(0);

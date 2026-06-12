@@ -22,6 +22,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -63,7 +64,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     @Test
     void upload_validFile_returnsRespDTO() throws Exception {
         // V1.11：startImport 返回 batchId，controller 通过 getBatchDto 装配为 DTO
-        Mockito.when(perfImportService.startImport(eq("TARGET"), any(), anyString(), any(), any()))
+        Mockito.when(perfImportService.startImport(eq("TARGET"), any(), anyString(), any(), any(), anyBoolean()))
                 .thenReturn("BATCH_123");
         PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
                 .id("BATCH_123")
@@ -93,7 +94,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     @Test
     void upload_metricDef_returnsRespDTOWithInsertAndUpdateCounts() throws Exception {
         // V1.11：METRIC_DEF 导入返回新增 + 更新计数
-        Mockito.when(perfImportService.startImport(eq("METRIC_DEF"), any(), anyString(), any(), any()))
+        Mockito.when(perfImportService.startImport(eq("METRIC_DEF"), any(), anyString(), any(), any(), anyBoolean()))
                 .thenReturn("BATCH_M11");
         PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
                 .id("BATCH_M11")
@@ -123,7 +124,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
     void upload_partialErrors_returnsErrorSummaryInResponse() throws Exception {
         // 2026-05-19 微调：行级最大努力分支下产生的 errorSummary（写到 batch.remark）
         // 必须透传到 upload 同步响应，让前端无需二次查 batch detail 即可弹错误提示
-        Mockito.when(perfImportService.startImport(eq("METRIC_RESULT"), any(), anyString(), any(), any()))
+        Mockito.when(perfImportService.startImport(eq("METRIC_RESULT"), any(), anyString(), any(), any(), anyBoolean()))
                 .thenReturn("BATCH_MR_E");
         PerfImportBatchRespDTO batchDto = PerfImportBatchRespDTO.builder()
                 .id("BATCH_MR_E")
@@ -162,7 +163,7 @@ class PerfImportControllerIT extends PerformanceControllerTestBase {
 
     @Test
     void upload_unknownImportType_returnsBizKindInvalid() throws Exception {
-        Mockito.when(perfImportService.startImport(eq("UNKNOWN"), any(), anyString(), any(), any()))
+        Mockito.when(perfImportService.startImport(eq("UNKNOWN"), any(), anyString(), any(), any(), anyBoolean()))
                 .thenThrow(new PerfException(PerfErrorCode.BIZ_KIND_INVALID, "UNKNOWN"));
 
         MockMultipartFile file = new MockMultipartFile("file", "x.xlsx",

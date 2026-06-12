@@ -36,10 +36,13 @@ public interface PerfImportService {
      * @param dataDate   数据日期：METRIC_RESULT / KPI_SCORE 必填，其他类型忽略；
      *                   缺失/格式错由 Controller 层 fail-fast
      * @param schemeCode KPI 方案编码：仅 KPI_SCORE 必填（页面方案下拉传入），其他类型忽略
+     * @param archiveSource 是否把源文件归档到 OBS（CBS 上传）：
+     *                      {@code true}（「立即上传」）走正常 CBS 归档；
+     *                      {@code false}（「上传并导入」）跳过归档，直接解析入库
      * @return 新建批次的主键 id
      */
     String startImport(String importType, MultipartFile file, String operatorId,
-                       LocalDate dataDate, String schemeCode);
+                       LocalDate dataDate, String schemeCode, boolean archiveSource);
 
     /**
      * 按主键查询批次，不存在时抛 {@code IMPORT_BATCH_NOT_FOUND}.
