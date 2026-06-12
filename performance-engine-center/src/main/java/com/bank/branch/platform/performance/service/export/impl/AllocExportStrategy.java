@@ -10,10 +10,10 @@ import com.bank.branch.platform.performance.service.export.ExportStrategy;
 import com.bank.branch.platform.performance.service.export.model.AllocExportRow;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -39,16 +39,12 @@ import java.util.List;
 public class AllocExportStrategy implements ExportStrategy {
 
     private final CustAllocRelationMapper allocRelationMapper;
-    private final MinioClient minioClient;
-    private final String minioBucketName;
+    private final FileApi fileApi;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public AllocExportStrategy(CustAllocRelationMapper allocRelationMapper,
-                               MinioClient minioClient,
-                               @Qualifier("minioBucketName") String minioBucketName) {
+    public AllocExportStrategy(CustAllocRelationMapper allocRelationMapper, FileApi fileApi) {
         this.allocRelationMapper = allocRelationMapper;
-        this.minioClient = minioClient;
-        this.minioBucketName = minioBucketName;
+        this.fileApi = fileApi;
     }
 
     @Override
@@ -84,26 +80,23 @@ public class AllocExportStrategy implements ExportStrategy {
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
-        // 4) 上传 MinIO
-        String fileKey = "perf/export/" + task.getId() + "/alloc_relation_"
-                + System.currentTimeMillis() + ".xlsx";
-        try (ByteArrayInputStream in = new ByteArrayInputStream(bytes)) {
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(minioBucketName)
-                    .object(fileKey)
-                    .stream(in, bytes.length, -1)
-                    .contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    .build());
+        // 4) 上传 OBS（统一走 FileApi），fileKey 存 file_object.id 供下载预签名
+        String fileName = "alloc_relation_" + System.currentTimeMillis() + ".xlsx";
+        FileObjectDTO dto;
+        try {
+            dto = fileApi.upload(bytes, fileName,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    task.getOperatorId(), FileCategory.EXPORT_ALLOC);
         } catch (Exception ex) {
-            log.warn("[AllocExportStrategy] MinIO 上传失败 taskId={}: {}", task.getId(), ex.getMessage());
+            log.warn("[AllocExportStrategy] OBS 上传失败 taskId={}: {}", task.getId(), ex.getMessage());
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
-        task.setFileKey(fileKey);
+        task.setFileKey(dto.getId());
         task.setFileSize((long) bytes.length);
 
         log.info("[AllocExportStrategy] 导出完成 taskId={}, rows={}, fileKey={}",
-                task.getId(), rows.size(), fileKey);
+                task.getId(), rows.size(), dto.getId());
         return rows.size();
     }
 

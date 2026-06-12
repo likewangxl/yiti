@@ -8,9 +8,9 @@ import com.bank.branch.platform.performance.mapper.EmpIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.EmpMetricValueRow;
 import com.bank.branch.platform.performance.mapper.OrgIndexResultMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
-import io.minio.MinioClient;
-import io.minio.ObjectWriteResponse;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,8 +26,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -48,20 +49,22 @@ class MetricExportStrategyTest {
     private PerfMetricDefMapper metricDefMapper;
     private EmpIndexResultMapper empIndexResultMapper;
     private OrgIndexResultMapper orgIndexResultMapper;
-    private MinioClient minioClient;
+    private FileApi fileApi;
     private MetricExportStrategy strategy;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         metricDefMapper = mock(PerfMetricDefMapper.class);
         empIndexResultMapper = mock(EmpIndexResultMapper.class);
         orgIndexResultMapper = mock(OrgIndexResultMapper.class);
-        minioClient = mock(MinioClient.class);
+        fileApi = mock(FileApi.class);
         strategy = new MetricExportStrategy(metricDefMapper, empIndexResultMapper,
-                orgIndexResultMapper, minioClient, "branch-platform");
+                orgIndexResultMapper, fileApi);
 
-        ObjectWriteResponse resp = mock(ObjectWriteResponse.class);
-        when(minioClient.putObject(any(PutObjectArgs.class))).thenReturn(resp);
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F_OBS_METRIC");
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(dto);
     }
 
     @Test
@@ -91,8 +94,10 @@ class MetricExportStrategyTest {
         int rowCount = strategy.execute(task);
 
         assertThat(rowCount).isEqualTo(2);
-        assertThat(task.getFileKey()).contains("metric_result_").endsWith(".xlsx");
+        assertThat(task.getFileKey()).isEqualTo("F_OBS_METRIC");
         assertThat(task.getFileSize()).isNotNull().isPositive();
+        verify(fileApi).upload(any(byte[].class), anyString(), anyString(), anyString(),
+                eq(FileCategory.EXPORT_METRIC));
     }
 
     @Test
@@ -121,8 +126,8 @@ class MetricExportStrategyTest {
     }
 
     @Test
-    @DisplayName("execute：MinIO 抛异常 → EXPORT_FILE_GENERATE_FAILED (PERF-50002)")
-    void execute_minioThrows_wraps() throws Exception {
+    @DisplayName("execute：OBS 抛异常 → EXPORT_FILE_GENERATE_FAILED (PERF-50002)")
+    void execute_obsThrows_wraps() {
         PerfExportTask task = buildTask("{\"metricCodes\":[\"M_T1\"],\"baseDim\":\"EMP\","
                 + "\"dataDate\":\"2026-04-01\",\"version\":\"v20260401\"}");
         PerfMetricDef def = new PerfMetricDef();
@@ -134,7 +139,8 @@ class MetricExportStrategyTest {
                 .thenReturn(List.of("E_1"));
         when(empIndexResultMapper.selectSlotValuesByEmps(anyList(), any(LocalDate.class),
                 anyString(), any())).thenReturn(sampleMetricRows("E_1"));
-        doThrow(new RuntimeException("S3 down")).when(minioClient).putObject(any(PutObjectArgs.class));
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("OBS down"));
 
         assertThatThrownBy(() -> strategy.execute(task))
                 .isInstanceOf(PerfException.class)

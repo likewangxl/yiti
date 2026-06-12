@@ -10,10 +10,10 @@ import com.bank.branch.platform.performance.service.export.ExportStrategy;
 import com.bank.branch.platform.performance.service.export.model.KpiExportRow;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -51,16 +51,12 @@ public class KpiExportStrategy implements ExportStrategy {
     public static final int EXPORT_ROWS_LIMIT = 200000;
 
     private final KpiResultMapper kpiResultMapper;
-    private final MinioClient minioClient;
-    private final String minioBucketName;
+    private final FileApi fileApi;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public KpiExportStrategy(KpiResultMapper kpiResultMapper,
-                             MinioClient minioClient,
-                             @Qualifier("minioBucketName") String minioBucketName) {
+    public KpiExportStrategy(KpiResultMapper kpiResultMapper, FileApi fileApi) {
         this.kpiResultMapper = kpiResultMapper;
-        this.minioClient = minioClient;
-        this.minioBucketName = minioBucketName;
+        this.fileApi = fileApi;
     }
 
     @Override
@@ -96,27 +92,24 @@ public class KpiExportStrategy implements ExportStrategy {
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
-        // 4) 上传 MinIO
-        String fileKey = buildFileKey(task.getId());
-        try (ByteArrayInputStream in = new ByteArrayInputStream(bytes)) {
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(minioBucketName)
-                    .object(fileKey)
-                    .stream(in, bytes.length, -1)
-                    .contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    .build());
+        // 4) 上传 OBS（统一走 FileApi），fileKey 存 file_object.id 供下载预签名
+        String fileName = "kpi_result_" + System.currentTimeMillis() + ".xlsx";
+        FileObjectDTO dto;
+        try {
+            dto = fileApi.upload(bytes, fileName,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    task.getOperatorId(), FileCategory.EXPORT_KPI);
         } catch (Exception ex) {
-            log.warn("[KpiExportStrategy] MinIO 上传失败 taskId={}, fileKey={}: {}",
-                    task.getId(), fileKey, ex.getMessage());
+            log.warn("[KpiExportStrategy] OBS 上传失败 taskId={}: {}", task.getId(), ex.getMessage());
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
         // 5) 回写 task 结果字段
-        task.setFileKey(fileKey);
+        task.setFileKey(dto.getId());
         task.setFileSize((long) bytes.length);
 
         log.info("[KpiExportStrategy] 导出完成 taskId={}, rows={}, size={}, fileKey={}",
-                task.getId(), rows.size(), bytes.length, fileKey);
+                task.getId(), rows.size(), bytes.length, dto.getId());
 
         return rows.size();
     }
@@ -171,10 +164,6 @@ public class KpiExportStrategy implements ExportStrategy {
                     .build());
         }
         return rows;
-    }
-
-    private static String buildFileKey(String taskId) {
-        return "perf/export/" + taskId + "/kpi_result_" + System.currentTimeMillis() + ".xlsx";
     }
 
     /** 解析后参数结构（内部 POJO，无需公开）. */

@@ -5,9 +5,9 @@ import com.bank.branch.platform.performance.entity.PerfExportTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.KpiResultMapper;
-import io.minio.MinioClient;
-import io.minio.ObjectWriteResponse;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,18 +46,19 @@ import static org.mockito.Mockito.when;
 class KpiExportStrategyTest {
 
     private KpiResultMapper kpiResultMapper;
-    private MinioClient minioClient;
+    private FileApi fileApi;
     private KpiExportStrategy strategy;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         kpiResultMapper = mock(KpiResultMapper.class);
-        minioClient = mock(MinioClient.class);
-        strategy = new KpiExportStrategy(kpiResultMapper, minioClient, "branch-platform");
+        fileApi = mock(FileApi.class);
+        strategy = new KpiExportStrategy(kpiResultMapper, fileApi);
 
-        // putObject 默认成功
-        ObjectWriteResponse resp = mock(ObjectWriteResponse.class);
-        when(minioClient.putObject(any(PutObjectArgs.class))).thenReturn(resp);
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F_OBS_KPI");
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(dto);
     }
 
     @Test
@@ -81,16 +81,14 @@ class KpiExportStrategyTest {
         int rowCount = strategy.execute(task);
 
         assertThat(rowCount).isEqualTo(3);
-        assertThat(task.getFileKey()).isNotBlank();
-        assertThat(task.getFileKey()).contains("perf/export/").contains(task.getId()).endsWith(".xlsx");
+        assertThat(task.getFileKey()).isEqualTo("F_OBS_KPI");
         assertThat(task.getFileSize()).isNotNull().isPositive();
 
-        // 验证 MinIO 上传调用
-        ArgumentCaptor<PutObjectArgs> putCaptor = ArgumentCaptor.forClass(PutObjectArgs.class);
-        verify(minioClient).putObject(putCaptor.capture());
-        PutObjectArgs put = putCaptor.getValue();
-        assertThat(put.bucket()).isEqualTo("branch-platform");
-        assertThat(put.object()).isEqualTo(task.getFileKey());
+        // 验证 OBS 上传调用（文件名前缀 + category）
+        ArgumentCaptor<String> nameCap = ArgumentCaptor.forClass(String.class);
+        verify(fileApi).upload(any(byte[].class), nameCap.capture(), anyString(), anyString(),
+                eq(FileCategory.EXPORT_KPI));
+        assertThat(nameCap.getValue()).startsWith("kpi_result_").endsWith(".xlsx");
     }
 
     @Test
@@ -119,16 +117,16 @@ class KpiExportStrategyTest {
     }
 
     @Test
-    @DisplayName("execute：MinIO 上传抛异常 → 抛 EXPORT_FILE_GENERATE_FAILED (PERF-50002)")
-    void execute_minioThrows_wrapsToExportFileGenerateFailed() throws Exception {
+    @DisplayName("execute：OBS 上传抛异常 → 抛 EXPORT_FILE_GENERATE_FAILED (PERF-50002)")
+    void execute_obsThrows_wrapsToExportFileGenerateFailed() {
         PerfExportTask task = buildTask("{\"cycleType\":\"MONTHLY\",\"cycleDate\":\"2026-03-31\","
                 + "\"asOfDate\":\"2026-04-01\"}");
         when(kpiResultMapper.countForExport(anyString(), any(LocalDate.class),
                 any(LocalDate.class), any())).thenReturn(1L);
         when(kpiResultMapper.selectForExport(anyString(), any(LocalDate.class),
                 any(LocalDate.class), any(), anyInt())).thenReturn(sampleKpiResults(1));
-        doThrow(new RuntimeException("S3 connection refused"))
-                .when(minioClient).putObject(any(PutObjectArgs.class));
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("OBS connection refused"));
 
         assertThatThrownBy(() -> strategy.execute(task))
                 .isInstanceOf(PerfException.class)

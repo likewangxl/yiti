@@ -10,10 +10,10 @@ import com.bank.branch.platform.performance.service.export.ExportStrategy;
 import com.bank.branch.platform.performance.service.export.model.KpiDetailExportRow;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -42,16 +42,12 @@ import java.util.List;
 public class DetailExportStrategy implements ExportStrategy {
 
     private final KpiResultMapper kpiResultMapper;
-    private final MinioClient minioClient;
-    private final String minioBucketName;
+    private final FileApi fileApi;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public DetailExportStrategy(KpiResultMapper kpiResultMapper,
-                                MinioClient minioClient,
-                                @Qualifier("minioBucketName") String minioBucketName) {
+    public DetailExportStrategy(KpiResultMapper kpiResultMapper, FileApi fileApi) {
         this.kpiResultMapper = kpiResultMapper;
-        this.minioClient = minioClient;
-        this.minioBucketName = minioBucketName;
+        this.fileApi = fileApi;
     }
 
     @Override
@@ -112,26 +108,23 @@ public class DetailExportStrategy implements ExportStrategy {
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
-        // 5) 上传 MinIO
-        String fileKey = "perf/export/" + task.getId() + "/kpi_detail_"
-                + System.currentTimeMillis() + ".xlsx";
-        try (ByteArrayInputStream in = new ByteArrayInputStream(bytes)) {
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(minioBucketName)
-                    .object(fileKey)
-                    .stream(in, bytes.length, -1)
-                    .contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    .build());
+        // 5) 上传 OBS（统一走 FileApi），fileKey 存 file_object.id 供下载预签名
+        String fileName = "kpi_detail_" + System.currentTimeMillis() + ".xlsx";
+        FileObjectDTO dto;
+        try {
+            dto = fileApi.upload(bytes, fileName,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    task.getOperatorId(), FileCategory.EXPORT_DETAIL);
         } catch (Exception ex) {
-            log.warn("[DetailExportStrategy] MinIO 上传失败 taskId={}: {}", task.getId(), ex.getMessage());
+            log.warn("[DetailExportStrategy] OBS 上传失败 taskId={}: {}", task.getId(), ex.getMessage());
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
-        task.setFileKey(fileKey);
+        task.setFileKey(dto.getId());
         task.setFileSize((long) bytes.length);
 
         log.info("[DetailExportStrategy] 导出完成 taskId={}, kpis={}, rows={}, fileKey={}",
-                task.getId(), kpis.size(), rows.size(), fileKey);
+                task.getId(), kpis.size(), rows.size(), dto.getId());
         return rows.size();
     }
 

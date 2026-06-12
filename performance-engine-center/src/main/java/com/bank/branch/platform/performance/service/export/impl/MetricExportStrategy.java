@@ -14,10 +14,10 @@ import com.bank.branch.platform.performance.service.export.model.MetricExportRow
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -59,20 +59,17 @@ public class MetricExportStrategy implements ExportStrategy {
     private final PerfMetricDefMapper metricDefMapper;
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
-    private final MinioClient minioClient;
-    private final String minioBucketName;
+    private final FileApi fileApi;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public MetricExportStrategy(PerfMetricDefMapper metricDefMapper,
                                 EmpIndexResultMapper empIndexResultMapper,
                                 OrgIndexResultMapper orgIndexResultMapper,
-                                MinioClient minioClient,
-                                @Qualifier("minioBucketName") String minioBucketName) {
+                                FileApi fileApi) {
         this.metricDefMapper = metricDefMapper;
         this.empIndexResultMapper = empIndexResultMapper;
         this.orgIndexResultMapper = orgIndexResultMapper;
-        this.minioClient = minioClient;
-        this.minioBucketName = minioBucketName;
+        this.fileApi = fileApi;
     }
 
     @Override
@@ -183,26 +180,23 @@ public class MetricExportStrategy implements ExportStrategy {
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
-        // 5) 上传 MinIO
-        String fileKey = "perf/export/" + task.getId() + "/metric_result_"
-                + System.currentTimeMillis() + ".xlsx";
-        try (ByteArrayInputStream in = new ByteArrayInputStream(bytes)) {
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(minioBucketName)
-                    .object(fileKey)
-                    .stream(in, bytes.length, -1)
-                    .contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    .build());
+        // 5) 上传 OBS（统一走 FileApi），fileKey 存 file_object.id 供下载预签名
+        String fileName = "metric_result_" + System.currentTimeMillis() + ".xlsx";
+        FileObjectDTO dto;
+        try {
+            dto = fileApi.upload(bytes, fileName,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    task.getOperatorId(), FileCategory.EXPORT_METRIC);
         } catch (Exception ex) {
-            log.warn("[MetricExportStrategy] MinIO 上传失败 taskId={}: {}", task.getId(), ex.getMessage());
+            log.warn("[MetricExportStrategy] OBS 上传失败 taskId={}: {}", task.getId(), ex.getMessage());
             throw new PerfException(PerfErrorCode.EXPORT_FILE_GENERATE_FAILED, ex, ex.getMessage());
         }
 
-        task.setFileKey(fileKey);
+        task.setFileKey(dto.getId());
         task.setFileSize((long) bytes.length);
 
         log.info("[MetricExportStrategy] 导出完成 taskId={}, rows={}, fileKey={}",
-                task.getId(), rows.size(), fileKey);
+                task.getId(), rows.size(), dto.getId());
         return rows.size();
     }
 

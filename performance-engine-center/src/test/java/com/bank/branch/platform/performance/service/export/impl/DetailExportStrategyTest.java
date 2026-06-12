@@ -5,9 +5,9 @@ import com.bank.branch.platform.performance.entity.PerfExportTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.KpiResultMapper;
-import io.minio.MinioClient;
-import io.minio.ObjectWriteResponse;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,8 +23,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -45,17 +46,19 @@ import static org.mockito.Mockito.when;
 class DetailExportStrategyTest {
 
     private KpiResultMapper kpiResultMapper;
-    private MinioClient minioClient;
+    private FileApi fileApi;
     private DetailExportStrategy strategy;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         kpiResultMapper = mock(KpiResultMapper.class);
-        minioClient = mock(MinioClient.class);
-        strategy = new DetailExportStrategy(kpiResultMapper, minioClient, "branch-platform");
+        fileApi = mock(FileApi.class);
+        strategy = new DetailExportStrategy(kpiResultMapper, fileApi);
 
-        ObjectWriteResponse resp = mock(ObjectWriteResponse.class);
-        when(minioClient.putObject(any(PutObjectArgs.class))).thenReturn(resp);
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F_OBS_DETAIL");
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(dto);
     }
 
     @Test
@@ -78,7 +81,9 @@ class DetailExportStrategyTest {
         int rowCount = strategy.execute(task);
 
         assertThat(rowCount).isEqualTo(6);  // 2 员工 × 3 items
-        assertThat(task.getFileKey()).contains("kpi_detail_").endsWith(".xlsx");
+        assertThat(task.getFileKey()).isEqualTo("F_OBS_DETAIL");
+        verify(fileApi).upload(any(byte[].class), anyString(), anyString(), anyString(),
+                eq(FileCategory.EXPORT_DETAIL));
     }
 
     @Test
@@ -132,15 +137,16 @@ class DetailExportStrategyTest {
     }
 
     @Test
-    @DisplayName("execute：MinIO 抛异常 → EXPORT_FILE_GENERATE_FAILED")
-    void execute_minioThrows_wraps() throws Exception {
+    @DisplayName("execute：OBS 抛异常 → EXPORT_FILE_GENERATE_FAILED")
+    void execute_obsThrows_wraps() {
         PerfExportTask task = buildTask("{\"cycleType\":\"MONTHLY\",\"cycleDate\":\"2026-03-31\","
                 + "\"asOfDate\":\"2026-04-01\"}");
         when(kpiResultMapper.countForExport(anyString(), any(LocalDate.class),
                 any(LocalDate.class), any())).thenReturn(1L);
         when(kpiResultMapper.selectForExport(anyString(), any(LocalDate.class),
                 any(LocalDate.class), any(), anyInt())).thenReturn(List.of(sampleKpi("E_1")));
-        doThrow(new RuntimeException("S3 down")).when(minioClient).putObject(any(PutObjectArgs.class));
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("OBS down"));
 
         assertThatThrownBy(() -> strategy.execute(task))
                 .isInstanceOf(PerfException.class)

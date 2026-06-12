@@ -5,9 +5,9 @@ import com.bank.branch.platform.performance.entity.PerfExportTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.CustAllocRelationMapper;
-import io.minio.MinioClient;
-import io.minio.ObjectWriteResponse;
-import io.minio.PutObjectArgs;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,8 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -40,17 +42,19 @@ import static org.mockito.Mockito.when;
 class AllocExportStrategyTest {
 
     private CustAllocRelationMapper allocRelationMapper;
-    private MinioClient minioClient;
+    private FileApi fileApi;
     private AllocExportStrategy strategy;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         allocRelationMapper = mock(CustAllocRelationMapper.class);
-        minioClient = mock(MinioClient.class);
-        strategy = new AllocExportStrategy(allocRelationMapper, minioClient, "branch-platform");
+        fileApi = mock(FileApi.class);
+        strategy = new AllocExportStrategy(allocRelationMapper, fileApi);
 
-        ObjectWriteResponse resp = mock(ObjectWriteResponse.class);
-        when(minioClient.putObject(any(PutObjectArgs.class))).thenReturn(resp);
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F_OBS_ALLOC");
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(dto);
     }
 
     @Test
@@ -70,7 +74,9 @@ class AllocExportStrategyTest {
         int rowCount = strategy.execute(task);
 
         assertThat(rowCount).isEqualTo(3);
-        assertThat(task.getFileKey()).contains("alloc_relation_").endsWith(".xlsx");
+        assertThat(task.getFileKey()).isEqualTo("F_OBS_ALLOC");
+        verify(fileApi).upload(any(byte[].class), anyString(), anyString(), anyString(),
+                eq(FileCategory.EXPORT_ALLOC));
     }
 
     @Test
@@ -97,13 +103,14 @@ class AllocExportStrategyTest {
     }
 
     @Test
-    @DisplayName("execute：MinIO 抛异常 → EXPORT_FILE_GENERATE_FAILED")
-    void execute_minioThrows_wraps() throws Exception {
+    @DisplayName("execute：OBS 抛异常 → EXPORT_FILE_GENERATE_FAILED")
+    void execute_obsThrows_wraps() {
         PerfExportTask task = buildTask("{\"effectiveDate\":\"2026-04-01\"}");
         when(allocRelationMapper.countForExport(any(), any(), any(LocalDate.class))).thenReturn(1L);
         when(allocRelationMapper.selectForExport(any(), any(), any(LocalDate.class), anyInt()))
                 .thenReturn(sampleAllocRelations(1));
-        doThrow(new RuntimeException("S3 down")).when(minioClient).putObject(any(PutObjectArgs.class));
+        when(fileApi.upload(any(byte[].class), anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("OBS down"));
 
         assertThatThrownBy(() -> strategy.execute(task))
                 .isInstanceOf(PerfException.class)
