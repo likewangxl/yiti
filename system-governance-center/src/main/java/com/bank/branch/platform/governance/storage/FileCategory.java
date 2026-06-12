@@ -25,6 +25,10 @@ public final class FileCategory {
     public static final String EXPORT_DYNAMIC = "bbdc";
     /** 客户池汇总导出 */
     public static final String EXPORT_CUSTPOOL = "khchz";
+    /** 触达汇总导出 */
+    public static final String EXPORT_TOUCH = "cdhz";
+    /** 绩效汇总导出 */
+    public static final String EXPORT_PERFSUM = "jxhz";
     /** 公告附件 */
     public static final String ANNOUNCEMENT = "gg";
     /** 通用/默认 */

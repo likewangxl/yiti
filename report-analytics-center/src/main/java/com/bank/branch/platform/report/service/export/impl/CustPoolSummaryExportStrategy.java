@@ -3,6 +3,7 @@ package com.bank.branch.platform.report.service.export.impl;
 import com.alibaba.excel.EasyExcel;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.report.entity.RptExportTask;
 import com.bank.branch.platform.report.service.export.ExportStrategy;
 import com.bank.branch.platform.report.service.export.model.CustPoolExportRow;
@@ -65,7 +66,7 @@ public class CustPoolSummaryExportStrategy implements ExportStrategy {
 
         String fileName = "custpool_summary_" + task.getId() + ".xlsx";
         MultipartFile mf = new ByteArrayMultipartFile(bytes, "file", fileName, CONTENT_TYPE_XLSX);
-        FileObjectDTO uploaded = fileApi.upload(mf, task.getOperatorId());
+        FileObjectDTO uploaded = fileApi.upload(mf, task.getOperatorId(), FileCategory.EXPORT_CUSTPOOL);
         task.setFileKey(uploaded.getId());
         task.setFileSize(uploaded.getFileSize() != null ? uploaded.getFileSize() : (long) bytes.length);
         log.info("[CustPoolExport] 上传完成 taskId={} rows={} fileId={} size={}",

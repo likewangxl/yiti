@@ -66,7 +66,7 @@ class ExportStrategiesTest {
     @Test
     void dynamicQueryExport_execute_shouldCallFileApiUploadAndWriteFileId() {
         FileApi fileApi = Mockito.mock(FileApi.class);
-        when(fileApi.upload(any(), anyString())).thenReturn(stubFileObject("FID-DQ-001", 1024L));
+        when(fileApi.upload(any(), anyString(), anyString())).thenReturn(stubFileObject("FID-DQ-001", 1024L));
 
         ExportStrategy s = new DynamicQueryExportStrategy(fileApi);
         RptExportTask t = newTask("DYNAMIC_QUERY");
@@ -78,7 +78,7 @@ class ExportStrategiesTest {
         assertThat(t.getFileSize()).isEqualTo(1024L);
 
         ArgumentCaptor<MultipartFile> fileCap = ArgumentCaptor.forClass(MultipartFile.class);
-        verify(fileApi, times(1)).upload(fileCap.capture(), anyString());
+        verify(fileApi, times(1)).upload(fileCap.capture(), anyString(), anyString());
         // 文件名包含 taskId 便于运维定位
         assertThat(fileCap.getValue().getOriginalFilename()).contains(t.getId());
         assertThat(fileCap.getValue().getSize()).isPositive();
@@ -87,7 +87,7 @@ class ExportStrategiesTest {
     @Test
     void touchSummaryExport_execute_shouldCallFileApiUploadAndWriteFileId() {
         FileApi fileApi = Mockito.mock(FileApi.class);
-        when(fileApi.upload(any(), anyString())).thenReturn(stubFileObject("FID-TS-001", 512L));
+        when(fileApi.upload(any(), anyString(), anyString())).thenReturn(stubFileObject("FID-TS-001", 512L));
 
         ExportStrategy s = new TouchSummaryExportStrategy(fileApi);
         RptExportTask t = newTask("TOUCH_SUMMARY");
@@ -96,13 +96,13 @@ class ExportStrategiesTest {
         assertThat(t.getFileKey()).isEqualTo("FID-TS-001");
         assertThat(t.getFileSize()).isEqualTo(512L);
 
-        verify(fileApi, times(1)).upload(any(), anyString());
+        verify(fileApi, times(1)).upload(any(), anyString(), anyString());
     }
 
     @Test
     void perfSummaryExport_execute_shouldCallFileApiUploadAndWriteFileId() {
         FileApi fileApi = Mockito.mock(FileApi.class);
-        when(fileApi.upload(any(), anyString())).thenReturn(stubFileObject("FID-PS-001", 768L));
+        when(fileApi.upload(any(), anyString(), anyString())).thenReturn(stubFileObject("FID-PS-001", 768L));
 
         ExportStrategy s = new PerfSummaryExportStrategy(fileApi);
         RptExportTask t = newTask("PERF_SUMMARY");
@@ -111,13 +111,13 @@ class ExportStrategiesTest {
         assertThat(t.getFileKey()).isEqualTo("FID-PS-001");
         assertThat(t.getFileSize()).isEqualTo(768L);
 
-        verify(fileApi, times(1)).upload(any(), anyString());
+        verify(fileApi, times(1)).upload(any(), anyString(), anyString());
     }
 
     @Test
     void custPoolSummaryExport_execute_shouldCallFileApiUploadAndWriteFileId() {
         FileApi fileApi = Mockito.mock(FileApi.class);
-        when(fileApi.upload(any(), anyString())).thenReturn(stubFileObject("FID-CP-001", 256L));
+        when(fileApi.upload(any(), anyString(), anyString())).thenReturn(stubFileObject("FID-CP-001", 256L));
 
         ExportStrategy s = new CustPoolSummaryExportStrategy(fileApi);
         RptExportTask t = newTask("CUSTPOOL_SUMMARY");
@@ -126,7 +126,7 @@ class ExportStrategiesTest {
         assertThat(t.getFileKey()).isEqualTo("FID-CP-001");
         assertThat(t.getFileSize()).isEqualTo(256L);
 
-        verify(fileApi, times(1)).upload(any(), anyString());
+        verify(fileApi, times(1)).upload(any(), anyString(), anyString());
     }
 
     private RptExportTask newTask(String type) {
