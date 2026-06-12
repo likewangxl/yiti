@@ -75,6 +75,7 @@ class AllocAdjustCompletedListenerTest {
         a.setStatus("IN_APPROVAL");
         a.setBusinessKey("ALLOC_ADJUST:APP_001");
         a.setOwnerOrgId("ORG_001");
+        a.setCustType("CORP");
         a.setCreatedBy("admin");
         return a;
     }
@@ -150,7 +151,26 @@ class AllocAdjustCompletedListenerTest {
     }
 
     @Test
-    @DisplayName("REJECTED 流程 → 仅更新 status=REJECTED，不改分配关系，不发事件")
+    @DisplayName("APPROVED → 先把同 key(cust_id+cust_type+alloc_dim+account_no) 旧分配置为原(is_original=1)，新分配以 is_original=2 + cust_type 入库")
+    void approved_marksExistingAsOriginal_insertsNewAsCurrent() {
+        listener.onProcessCompleted(
+                new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
+
+        // 插入新分配前：按 cust_id+cust_type+alloc_dim+account_no 把旧分配标记为原分配(is_original=1)
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(allocRelationMapper);
+        inOrder.verify(allocRelationMapper).markOriginalByKey("CUST_001", "CORP", "RULE", null);
+        inOrder.verify(allocRelationMapper, org.mockito.Mockito.times(2))
+                .insert(any(CustAllocRelation.class));
+
+        // 新分配默认 is_original=2，cust_type 取自审批申请
+        ArgumentCaptor<CustAllocRelation> cap = ArgumentCaptor.forClass(CustAllocRelation.class);
+        verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(cap.capture());
+        assertThat(cap.getAllValues()).extracting(CustAllocRelation::getIsOriginal).containsOnly("2");
+        assertThat(cap.getAllValues()).extracting(CustAllocRelation::getCustType).containsOnly("CORP");
+    }
+
+    @Test
+    @DisplayName("REJECTED 流程 → 仅更新 status=REJECTED，不改分配关系，不发事件，不标记原分配")
     void rejected_onlyUpdatesStatus_noAllocationChange_noEvent() {
         ProcessCompletedEvent event =
                 new ProcessCompletedEvent(
@@ -159,6 +179,7 @@ class AllocAdjustCompletedListenerTest {
 
         verify(applyMapper).updateStatus("APP_001", "REJECTED", null);
         verify(allocRelationMapper, never()).insert(any(CustAllocRelation.class));
+        verify(allocRelationMapper, never()).markOriginalByKey(any(), any(), any(), any());
         verify(eventPublisher, never()).publish(any());
     }
 

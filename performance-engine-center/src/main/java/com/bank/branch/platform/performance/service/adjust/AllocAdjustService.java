@@ -370,6 +370,51 @@ public class AllocAdjustService {
         List<PerfAllocAdjustItem> originItems = buildOriginalItems(applyId, cmd.getOriginalAllocList());
         if (!originItems.isEmpty()) {
             itemMapper.batchInsert(originItems);
+            // 手工录入的原业绩分配同步落库 cust_alloc_relation（当前生效 is_original='2'）
+            seedOriginalAllocRelations(cmd, originItems);
+        }
+    }
+
+    /**
+     * 手工录入的原业绩分配同步落库 {@code cust_alloc_relation}（当前生效，{@code is_original='2'}）.
+     *
+     * <p>仅当该客户当前<b>无</b> is_original='2' 分配时写入——即确为「手工录入」场景
+     * （预填回写来自既有 is_original='2'，再写会重复），对应需求「如果没有数据手工输入」。
+     *
+     * <p>字段：{@code source_batch_id=null} / {@code source_process_date=null} / {@code is_original='2'}；
+     * 姓名、部门取手工录入快照（fullname / dept_no / dept_name）；cust_type 取审批申请。
+     */
+    private void seedOriginalAllocRelations(SubmitAllocAdjustCmd cmd, List<PerfAllocAdjustItem> originItems) {
+        List<CustAllocRelation> existing =
+                allocRelationMapper.selectCurrentOriginalByCust(cmd.getCustId(), cmd.getAllocDim());
+        if (existing != null && !existing.isEmpty()) {
+            return; // 已有当前生效分配（预填场景），不重复写入
+        }
+        java.time.LocalDate today = java.time.LocalDate.now();
+        String operator = !isBlank(cmd.getApplicant()) ? cmd.getApplicant() : null;
+        for (PerfAllocAdjustItem it : originItems) {
+            CustAllocRelation rel = new CustAllocRelation();
+            rel.setId(UUID.randomUUID().toString().replace("-", ""));
+            rel.setCustId(cmd.getCustId());
+            rel.setCustType(cmd.getCustType());
+            rel.setAllocDim(cmd.getAllocDim());
+            rel.setBizKind(cmd.getBizKind());
+            rel.setAccountNo(!isBlank(it.getAcctNo()) ? it.getAcctNo() : cmd.getAccountNo());
+            rel.setEmpId(it.getEmpId());
+            rel.setFullname(it.getEmpChnName());
+            rel.setDeptNo(it.getOrgCode());
+            rel.setDeptName(it.getOrgName());
+            rel.setRatio(it.getRatio());
+            // 手工录入即当前生效分配
+            rel.setIsOriginal("2");
+            rel.setEffectiveDate(today);
+            rel.setEndDate(null);
+            // 手工录入无来源批次/业务日期
+            rel.setSourceBatchId(null);
+            rel.setSourceProcessDate(null);
+            rel.setCreatedBy(operator);
+            rel.setUpdatedBy(operator);
+            allocRelationMapper.insert(rel);
         }
     }
 
@@ -643,7 +688,44 @@ public class AllocAdjustService {
             }
         }
         // 明细员工 username/中文名/部门 已在 toRespDto 直接读 item 快照字段，无需再关联 PT_USER/机构表
+        // R2：「原业绩分配」从当前生效分配(is_original='2')反显；为空回退持久化 ORIGIN 快照
+        reflectOriginalAllocFromCurrent(dto, bundle.getApply());
         return dto;
+    }
+
+    /**
+     * 编辑/查看「原业绩分配」改从 {@code cust_alloc_relation} 当前生效分配（{@code is_original='2'}）反显.
+     *
+     * <p>命中当前生效分配时：保留 NEW 明细，ORIGIN 明细整体替换为当前生效分配；
+     * 未命中（无 is_original='2'）时：保留持久化的 ORIGIN 快照不变（避免老数据视图空白）。
+     */
+    private void reflectOriginalAllocFromCurrent(AllocAdjustRespDTO dto, PerfAllocAdjustApply apply) {
+        List<com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO> current =
+                allocAdjustPreviewService.getLastApprovedAllocPreview(apply.getCustId(), apply.getAllocDim());
+        if (current == null || current.isEmpty()) {
+            return;
+        }
+        List<AllocAdjustRespDTO.Item> rebuilt = new ArrayList<>();
+        if (dto.getItems() != null) {
+            for (AllocAdjustRespDTO.Item it : dto.getItems()) {
+                if (!"ORIGIN".equals(it.getItemKind())) {
+                    rebuilt.add(it); // 保留 NEW
+                }
+            }
+        }
+        for (com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO src : current) {
+            AllocAdjustRespDTO.Item iDto = new AllocAdjustRespDTO.Item();
+            iDto.setItemKind("ORIGIN");
+            iDto.setAcctNo(src.getAccountNo());
+            iDto.setEmpId(src.getEmpId());
+            iDto.setUsername(src.getUsername());
+            iDto.setEmpChnName(src.getEmpChnName());
+            iDto.setOrgCode(src.getOrgCode());
+            iDto.setOrgName(src.getOrgName());
+            iDto.setRatio(src.getRatio());
+            rebuilt.add(iDto);
+        }
+        dto.setItems(rebuilt);
     }
 
     /**

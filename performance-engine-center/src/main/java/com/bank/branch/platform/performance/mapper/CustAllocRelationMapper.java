@@ -47,6 +47,36 @@ public interface CustAllocRelationMapper extends BaseMapper<CustAllocRelation> {
                                                      @Param("asOfDate") LocalDate asOfDate);
 
     /**
+     * 插入新分配前置：把同一 key（cust_id + cust_type + alloc_dim + account_no）命中的存量分配
+     * 标记为「原分配」{@code is_original='1'}，使新插入的 {@code is_original='2'} 行成为唯一当前分配。
+     *
+     * <p>account_no / cust_type 为 null 时按 {@code IS NULL} 精确匹配（RULE 维度 account_no 为空）。
+     *
+     * @param custId   客户编号
+     * @param custType 客户类型 CORP/RETAIL（nullable，来源审批申请）
+     * @param allocDim 分配维度 RULE/ACCOUNT
+     * @param accountNo 账号（nullable）
+     * @return 受影响行数（命中并置 1 的存量分配条数，0 表示无存量）
+     */
+    int markOriginalByKey(@Param("custId") String custId,
+                          @Param("custType") String custType,
+                          @Param("allocDim") String allocDim,
+                          @Param("accountNo") String accountNo);
+
+    /**
+     * 原业绩分配反显：取该客户当前生效分配（{@code is_original='2'}）。
+     *
+     * <p>{@code allocDim='ACCOUNT'} 只取 ACCOUNT 维度；RULE/空 取 RULE+ACCOUNT 两维（RULE 在前）。
+     * 姓名/部门直接读快照列 fullname/dept_no/dept_name。
+     *
+     * @param custId   客户编号
+     * @param allocDim 分配维度 RULE/ACCOUNT/null
+     * @return 当前生效分配列表（可能为空）
+     */
+    List<CustAllocRelation> selectCurrentOriginalByCust(@Param("custId") String custId,
+                                                        @Param("allocDim") String allocDim);
+
+    /**
      * 查某客户在 asOfDate 时点生效的所有分配关系（全业务种类）.
      *
      * @param custId   客户 ID

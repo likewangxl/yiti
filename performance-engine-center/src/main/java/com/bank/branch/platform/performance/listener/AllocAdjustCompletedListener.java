@@ -61,6 +61,9 @@ public class AllocAdjustCompletedListener {
     /** workflow outcome 语义：审批拒绝. */
     private static final String OUTCOME_REJECTED = "REJECTED";
 
+    /** is_original：新分配默认值 2（当前生效，非原分配；存量被新分配取代时置 1）. */
+    private static final String IS_ORIGINAL_NO = "2";
+
     private final PerfAllocAdjustApplyMapper applyMapper;
     private final PerfAllocAdjustItemMapper itemMapper;
     private final CustAllocRelationMapper allocRelationMapper;
@@ -116,15 +119,29 @@ public class AllocAdjustCompletedListener {
         // cust_id 即客户编号（cust_no 字段已并入 cust_id），提交侧恒有值，直接作为分配关系客户键。
         String relCustId = apply.getCustId();
 
+        if (!items.isEmpty()) {
+            // 插入新分配前：按 cust_id + cust_type + alloc_dim + account_no 命中的存量分配置为「原分配」
+            // （is_original=1），让本次新插入的 is_original=2 行成为唯一当前分配。cust_type 取自审批申请。
+            allocRelationMapper.markOriginalByKey(
+                    relCustId, apply.getCustType(), apply.getAllocDim(), apply.getAccountNo());
+        }
+
         for (PerfAllocAdjustItem it : items) {
             CustAllocRelation rel = new CustAllocRelation();
             rel.setId(UUID.randomUUID().toString().replace("-", ""));
             rel.setCustId(relCustId);
+            rel.setCustType(apply.getCustType());
             rel.setAllocDim(apply.getAllocDim());
             rel.setBizKind(apply.getBizKind());
             rel.setAccountNo(apply.getAccountNo());
             rel.setEmpId(it.getEmpId());
+            // 姓名/部门快照（供原业绩分配反显直接读，不再 UserApi 补全）
+            rel.setFullname(it.getEmpChnName());
+            rel.setDeptNo(it.getOrgCode());
+            rel.setDeptName(it.getOrgName());
             rel.setRatio(it.getRatio());
+            // 新分配默认 is_original=2（当前生效，非原分配）
+            rel.setIsOriginal(IS_ORIGINAL_NO);
             rel.setEffectiveDate(effectiveDate);
             rel.setEndDate(null);
             // 关联调整申请作为追溯标记

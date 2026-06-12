@@ -54,8 +54,23 @@ public class CustAllocRelation {
     /** 账号（账号维度必填，nullable）. */
     private String accountNo;
 
+    /** 客户类型：CORP/RETAIL（来源审批申请 apply.cust_type）. */
+    private String custType;
+
+    /** 是否原分配关系：1=是（被新分配取代），2=否（当前新分配）. */
+    private String isOriginal;
+
     /** 员工工号（普通用户数据范围过滤基准：emp_id = currentUserId）. */
     private String empId;
+
+    /** 员工姓名（快照，反显直接读，不再 UserApi 补全）. */
+    private String fullname;
+
+    /** 部门编号（快照）. */
+    private String deptNo;
+
+    /** 部门名称（快照）. */
+    private String deptName;
 
     /** 分配比例（0-100, decimal(5,2)）. */
     private BigDecimal ratio;
