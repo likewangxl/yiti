@@ -40,15 +40,15 @@ class FileControllerTest {
     }
 
     @Test
-    void downloadFile_should302Redirect() throws Exception {
-        // given
-        when(fileService.getDownloadUrl(anyString()))
-                .thenReturn("https://minio.local/bucket/path/file.pdf");
+    void downloadFile_streamsBytesFromObs() throws Exception {
+        // given：下载从 OBS 读字节流式回传（非 302）
+        when(fileService.getFileContent("F_001")).thenReturn("pdf-bytes".getBytes());
+        when(fileService.getFileName("F_001")).thenReturn("file.pdf");
 
-        // when & then：302重定向到预签名URL
+        // when & then：200 + 八位字节流内容
         mockMvc.perform(get("/api/files/F_001/download"))
-                .andExpect(status().isFound())
-                .andExpect(redirectedUrl("https://minio.local/bucket/path/file.pdf"));
+                .andExpect(status().isOk())
+                .andExpect(content().bytes("pdf-bytes".getBytes()));
     }
 
     @Test
@@ -102,7 +102,7 @@ class FileControllerTest {
 
     @Test
     void downloadFile_fileNotFound_returnsBizError() throws Exception {
-        when(fileService.getDownloadUrl(anyString()))
+        when(fileService.getFileContent(anyString()))
                 .thenThrow(new BizException("GOV-40404", "文件不存在"));
 
         mockMvc.perform(get("/api/files/NOT_EXIST/download"))
