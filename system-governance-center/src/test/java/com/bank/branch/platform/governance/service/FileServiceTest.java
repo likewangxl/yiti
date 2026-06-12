@@ -6,11 +6,12 @@ import com.bank.branch.platform.governance.entity.BizFileRel;
 import com.bank.branch.platform.governance.entity.FileObject;
 import com.bank.branch.platform.governance.mapper.BizFileRelMapper;
 import com.bank.branch.platform.governance.mapper.FileObjectMapper;
-import io.minio.MinioClient;
-import io.minio.ObjectWriteResponse;
+import com.bank.branch.platform.governance.storage.FileCategory;
+import com.bank.branch.platform.governance.storage.ObsStorageClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -23,17 +24,15 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * 文件服务单元测试
- * <p>
- * 使用 Mockito 模拟 MinioClient，不依赖真实 MinIO 服务。
- * 覆盖场景：格式校验、大小校验、MD5 去重、正常上传、文件不存在、绑定幂等、列表查询。
- * </p>
+ * 文件服务单元测试。
+ * <p>Mock {@link ObsStorageClient}，不依赖真实 OBS。覆盖：格式/大小校验、MD5 去重、
+ * 带类型前缀上传、下载预签名、内容读取、删除、绑定幂等、列表查询。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class FileServiceTest {
 
     @Mock
-    MinioClient minioClient;
+    ObsStorageClient obsStorageClient;
     @Mock
     FileObjectMapper fileObjectMapper;
     @Mock
@@ -43,12 +42,9 @@ class FileServiceTest {
 
     @BeforeEach
     void setUp() {
-        fileService = new FileService("/tmp/test-file-storage", fileObjectMapper, bizFileRelMapper);
+        fileService = new FileService(obsStorageClient, fileObjectMapper, bizFileRelMapper);
     }
 
-    /**
-     * 上传文件格式不在白名单时，应抛出 GOV-42203 异常
-     */
     @Test
     void upload_invalidFormat_throwsGov42203() {
         MockMultipartFile file = new MockMultipartFile(
@@ -60,15 +56,10 @@ class FileServiceTest {
                 .isEqualTo("GOV-42203");
     }
 
-    /**
-     * 上传文件大小超过 50MB 时，应抛出 GOV-42204 异常
-     */
     @Test
     void upload_exceedsMaxSize_throwsGov42204() {
-        // 创建一个超过 50MB 的文件（实际不分配大数组，使用 Mock 控制 getSize）
         MockMultipartFile file = new MockMultipartFile(
                 "file", "big.pdf", "application/pdf", new byte[100]);
-        // 由于 MockMultipartFile 的 getSize() 返回字节数组长度，需要使用 spy 来覆盖
         MockMultipartFile spyFile = spy(file);
         when(spyFile.getSize()).thenReturn(51L * 1024 * 1024);
 
@@ -78,19 +69,14 @@ class FileServiceTest {
                 .isEqualTo("GOV-42204");
     }
 
-    /**
-     * 上传文件 MD5 已存在时，应直接返回已有记录，不调用 MinIO 上传
-     */
     @Test
-    void upload_duplicateMd5_returnsExisting() throws Exception {
+    void upload_duplicateMd5_returnsExisting() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "test.pdf", "application/pdf", "hello".getBytes());
 
         FileObject existing = new FileObject();
         existing.setId("F_EXISTING");
         existing.setFileName("test.pdf");
-        existing.setFileSize(5L);
-        existing.setFileType("application/pdf");
         existing.setMd5Hash("5d41402abc4b2a76b9719d911017c592");
         existing.setUploadedBy("EMP001");
 
@@ -99,37 +85,44 @@ class FileServiceTest {
         FileObjectDTO result = fileService.upload(file, "EMP001", null, null);
 
         assertThat(result.getId()).isEqualTo("F_EXISTING");
-        // MinIO 不应被调用
-        verify(minioClient, never()).putObject(any());
-        // Mapper insert 不应被调用
+        verify(obsStorageClient, never()).putObject(any(), anyString());
         verify(fileObjectMapper, never()).insert((FileObject) any());
     }
 
-    /**
-     * 正常上传文件时，应调用 MinIO putObject 并插入数据库记录
-     */
     @Test
-    void upload_success_uploadsToMinioAndInsertsRecord() throws Exception {
+    void upload_putsToObsWithCategoryPrefix_andStoresKey() {
         MockMultipartFile file = new MockMultipartFile(
-                "file", "report.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "data".getBytes());
-
+                "file", "r.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "x".getBytes());
         when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
-        when(minioClient.putObject(any())).thenReturn(
-                new ObjectWriteResponse(null, "branch-platform", null, "test-path", null, null));
 
-        FileObjectDTO result = fileService.upload(file, "EMP002", null, null);
+        FileObjectDTO dto = fileService.upload(file, "U1", null, null, FileCategory.FREE_REPORT);
 
-        assertThat(result).isNotNull();
-        assertThat(result.getFileName()).isEqualTo("report.xlsx");
-        assertThat(result.getUploadedBy()).isEqualTo("EMP002");
-        verify(minioClient, times(1)).putObject(any());
-        verify(fileObjectMapper, times(1)).insert((FileObject) any());
+        ArgumentCaptor<String> keyCap = ArgumentCaptor.forClass(String.class);
+        verify(obsStorageClient).putObject(any(byte[].class), keyCap.capture());
+        assertThat(keyCap.getValue()).matches("\\d{4}/\\d{2}/\\d{2}/zybb_[0-9a-f]+\\.xlsx");
+
+        ArgumentCaptor<FileObject> foCap = ArgumentCaptor.forClass(FileObject.class);
+        verify(fileObjectMapper).insert(foCap.capture());
+        assertThat(foCap.getValue().getStoragePath()).isEqualTo(keyCap.getValue());
+        assertThat(foCap.getValue().getBucketName()).isEqualTo("obs");
+        assertThat(dto.getFileName()).isEqualTo("r.xlsx");
     }
 
-    /**
-     * 获取下载 URL 时，文件不存在应抛出 GOV-40005 异常
-     */
+    @Test
+    void uploadBytes_putsToObsWithCategory() {
+        when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
+
+        FileObjectDTO dto = fileService.upload("data".getBytes(), "exp.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "U2", FileCategory.EXPORT_KPI);
+
+        ArgumentCaptor<String> keyCap = ArgumentCaptor.forClass(String.class);
+        verify(obsStorageClient).putObject(any(byte[].class), keyCap.capture());
+        assertThat(keyCap.getValue()).matches("\\d{4}/\\d{2}/\\d{2}/jxkpi_[0-9a-f]+\\.xlsx");
+        assertThat(dto).isNotNull();
+    }
+
     @Test
     void getDownloadUrl_fileNotFound_throwsGov40005() {
         when(fileObjectMapper.selectById("NOT_EXIST")).thenReturn(null);
@@ -140,9 +133,38 @@ class FileServiceTest {
                 .isEqualTo("GOV-40005");
     }
 
-    /**
-     * 绑定文件时，若关联已存在则跳过插入（幂等）
-     */
+    @Test
+    void getDownloadUrl_success_returnsPresignedUrl() {
+        FileObject fo = new FileObject();
+        fo.setId("F_001");
+        fo.setStoragePath("2026/06/12/zybb_a.xlsx");
+        when(fileObjectMapper.selectById("F_001")).thenReturn(fo);
+        when(obsStorageClient.generatePresignedUrl("2026/06/12/zybb_a.xlsx"))
+                .thenReturn("https://obs/presigned");
+
+        assertThat(fileService.getDownloadUrl("F_001")).isEqualTo("https://obs/presigned");
+    }
+
+    @Test
+    void getFileContent_readsFromObs() {
+        FileObject fo = new FileObject();
+        fo.setId("F_002");
+        fo.setStoragePath("k");
+        when(fileObjectMapper.selectById("F_002")).thenReturn(fo);
+        when(obsStorageClient.getBytes("k")).thenReturn("bytes".getBytes());
+
+        assertThat(fileService.getFileContent("F_002")).isEqualTo("bytes".getBytes());
+    }
+
+    @Test
+    void getFileContent_notFound_throwsGov40005() {
+        when(fileObjectMapper.selectById("NOPE")).thenReturn(null);
+        assertThatThrownBy(() -> fileService.getFileContent("NOPE"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("GOV-40005");
+    }
+
     @Test
     void bindFile_idempotent_skipsIfExists() {
         FileObject fo = new FileObject();
@@ -156,9 +178,6 @@ class FileServiceTest {
         verify(bizFileRelMapper, never()).insert((BizFileRel) any());
     }
 
-    /**
-     * 查询业务关联文件列表，应正确委托并返回结果
-     */
     @Test
     void listBizFiles_returnsFiles() {
         BizFileRel rel = new BizFileRel();
@@ -184,11 +203,6 @@ class FileServiceTest {
         assertThat(result.get(0).getFileRole()).isEqualTo("ATTACHMENT");
     }
 
-    // ── L1 补全测试 ──────────────────────────────────────────────
-
-    /**
-     * 删除文件：文件不存在时抛出 GOV-40005
-     */
     @Test
     void deleteFile_notFound_throwsGov40005() {
         when(fileObjectMapper.selectById("NOT_EXIST")).thenReturn(null);
@@ -199,45 +213,22 @@ class FileServiceTest {
                 .isEqualTo("GOV-40005");
     }
 
-    /**
-     * 删除文件：成功删除 DB 记录和关联
-     */
     @Test
-    void deleteFile_success_deletesRecordAndRelations() {
+    void deleteFile_success_deletesObsAndRecordAndRelations() {
         FileObject fo = new FileObject();
         fo.setId("F_001");
-        fo.setStoragePath("2026/04/test.pdf");
-        fo.setBucketName("branch-platform");
+        fo.setStoragePath("2026/06/12/zybb_x.pdf");
         when(fileObjectMapper.selectById("F_001")).thenReturn(fo);
         when(fileObjectMapper.deleteById("F_001")).thenReturn(1);
         when(bizFileRelMapper.deleteByFileObjectId("F_001")).thenReturn(2);
 
         fileService.deleteFile("F_001");
 
+        verify(obsStorageClient).deleteByKey("2026/06/12/zybb_x.pdf");
         verify(fileObjectMapper).deleteById("F_001");
         verify(bizFileRelMapper).deleteByFileObjectId("F_001");
     }
 
-    /**
-     * 获取下载 URL：成功场景
-     */
-    @Test
-    void getDownloadUrl_success_returnsPresignedUrl() throws Exception {
-        FileObject fo = new FileObject();
-        fo.setId("F_001");
-        fo.setStoragePath("2026/04/test.pdf");
-        fo.setBucketName("branch-platform");
-        when(fileObjectMapper.selectById("F_001")).thenReturn(fo);
-        when(minioClient.getPresignedObjectUrl(any())).thenReturn("https://minio/presigned-url");
-
-        String url = fileService.getDownloadUrl("F_001");
-
-        assertThat(url).isEqualTo("https://minio/presigned-url");
-    }
-
-    /**
-     * 绑定文件：文件不存在时抛出 GOV-40005
-     */
     @Test
     void bindFile_fileNotFound_throwsGov40005() {
         when(fileObjectMapper.selectById("NOT_EXIST")).thenReturn(null);
@@ -248,9 +239,6 @@ class FileServiceTest {
                 .isEqualTo("GOV-40005");
     }
 
-    /**
-     * 绑定文件：新建关联成功
-     */
     @Test
     void bindFile_newRelation_insertsRecord() {
         FileObject fo = new FileObject();
@@ -271,9 +259,6 @@ class FileServiceTest {
         ));
     }
 
-    /**
-     * 查询业务关联文件：无关联时返回空列表
-     */
     @Test
     void listBizFiles_noRelations_returnsEmptyList() {
         when(bizFileRelMapper.selectByBizTypeAndBizId("CUSTOMER", "C999"))
@@ -284,19 +269,15 @@ class FileServiceTest {
         assertThat(result).isEmpty();
     }
 
-    /**
-     * 上传文件：合法格式（大写扩展名 .PDF）应被接受
-     */
     @Test
-    void upload_validFormatPdf_succeeds() throws Exception {
+    void upload_validFormatPdf_succeeds() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "report.PDF", "application/pdf", "data".getBytes());
         when(fileObjectMapper.selectByMd5Hash(anyString())).thenReturn(null);
-        when(minioClient.putObject(any())).thenReturn(
-                new ObjectWriteResponse(null, "branch-platform", null, "test-path", null, null));
 
         FileObjectDTO result = fileService.upload(file, "EMP001", null, null);
 
         assertThat(result).isNotNull();
+        verify(obsStorageClient).putObject(any(byte[].class), anyString());
     }
 }
