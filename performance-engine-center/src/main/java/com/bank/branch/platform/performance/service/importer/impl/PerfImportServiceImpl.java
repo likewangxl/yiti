@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.service.importer.impl;
 
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -54,10 +57,13 @@ public class PerfImportServiceImpl implements PerfImportService {
 
     private final PerfImportBatchMapper batchMapper;
     private final Map<String, ImportStrategy> strategyMap;
+    private final FileApi fileApi;
 
     public PerfImportServiceImpl(PerfImportBatchMapper batchMapper,
-                                 List<ImportStrategy> strategies) {
+                                 List<ImportStrategy> strategies,
+                                 FileApi fileApi) {
         this.batchMapper = batchMapper;
+        this.fileApi = fileApi;
         this.strategyMap = new HashMap<>();
         for (ImportStrategy s : strategies) {
             String type = s.importType();
@@ -91,6 +97,10 @@ public class PerfImportServiceImpl implements PerfImportService {
                     "dataDate 必填（METRIC_RESULT 必传 yyyy-MM-dd）");
         }
 
+        // 0) 归档源文件到 OBS（put），记录 objectKey 供事后查底/重跑/下载。
+        //    用 MultipartFile 重载：FileService 内部读 getBytes()，与后续 strategy 解析互不影响（getBytes 幂等）。
+        FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
+
         // 1) 创建批次，初始 CREATED
         PerfImportBatch batch = new PerfImportBatch();
         batch.setId(generateId());
@@ -98,6 +108,7 @@ public class PerfImportServiceImpl implements PerfImportService {
         batch.setImportType(importType);
         batch.setFileName(file.getOriginalFilename());
         batch.setFileMd5(null); // V1.1 本期简化：不做 MD5 幂等
+        batch.setSourceObjectKey(archived.getId());
         batch.setStatus("CREATED");
         batch.setTotalRows(0);
         batch.setSuccessRows(0);

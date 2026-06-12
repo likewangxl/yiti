@@ -1,6 +1,7 @@
 package com.bank.branch.platform.portal.controller;
 
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.portal.controller.dto.announcement.AnnouncementCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.announcement.AnnouncementFileDTO;
 import com.bank.branch.platform.portal.controller.dto.announcement.AnnouncementRespDTO;
@@ -39,6 +40,7 @@ import java.util.List;
 public class AnnouncementController {
 
     private final AnnouncementService announcementService;
+    private final FileApi fileApi;
 
     // ==================== 公开端点 ====================
 
@@ -72,16 +74,13 @@ public class AnnouncementController {
     @Operation(summary = "下载公告附件")
     public void downloadFile(@PathVariable String fileId, HttpServletResponse response) throws IOException {
         AnnouncementFile af = announcementService.getFile(fileId);
-        Path path = Paths.get(af.getFilePath());
-        if (!Files.exists(path)) {
-            response.sendError(404, "文件不存在");
-            return;
-        }
+        // filePath 列存的是 OBS fileId，从 OBS 读字节流式回传
+        byte[] data = fileApi.getFileContent(af.getFilePath());
         String encoded = URLEncoder.encode(af.getFileName(), StandardCharsets.UTF_8).replace("+", "%20");
         response.setContentType("application/octet-stream");
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encoded);
-        response.setContentLengthLong(Files.size(path));
-        Files.copy(path, response.getOutputStream());
+        response.setContentLengthLong(data.length);
+        response.getOutputStream().write(data);
     }
 
     // ==================== 管理端点 ====================

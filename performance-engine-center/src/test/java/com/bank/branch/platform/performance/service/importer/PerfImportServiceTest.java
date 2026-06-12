@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.service.importer;
 
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -42,6 +45,7 @@ class PerfImportServiceTest {
     private TargetImportStrategy targetStrategy;
     private BaseDataImportStrategy baseDataStrategy;
     private AllocRelationImportStrategy allocStrategy;
+    private FileApi fileApi;
     private PerfImportServiceImpl service;
 
     @BeforeEach
@@ -50,6 +54,7 @@ class PerfImportServiceTest {
         targetStrategy = mock(TargetImportStrategy.class);
         baseDataStrategy = mock(BaseDataImportStrategy.class);
         allocStrategy = mock(AllocRelationImportStrategy.class);
+        fileApi = mock(FileApi.class);
 
         when(targetStrategy.importType()).thenReturn("TARGET");
         when(baseDataStrategy.importType()).thenReturn("BASE_DATA");
@@ -61,8 +66,13 @@ class PerfImportServiceTest {
         when(baseDataStrategy.execute(any(), any(), any())).thenReturn(empty);
         when(allocStrategy.execute(any(), any(), any())).thenReturn(empty);
 
+        // 源文件归档默认返回一个 fileId
+        FileObjectDTO archived = new FileObjectDTO();
+        archived.setId("F_IMP_SRC");
+        when(fileApi.upload(any(MultipartFile.class), anyString(), anyString())).thenReturn(archived);
+
         List<ImportStrategy> strategies = List.of(targetStrategy, baseDataStrategy, allocStrategy);
-        service = new PerfImportServiceImpl(batchMapper, strategies);
+        service = new PerfImportServiceImpl(batchMapper, strategies, fileApi);
     }
 
     private MultipartFile fakeFile(String name) {
@@ -156,6 +166,19 @@ class PerfImportServiceTest {
         verify(batchMapper).updateStatus(eq(batchId), eq("RUNNING"), any());
         verify(batchMapper).updateStatus(eq(batchId), eq("SUCCESS"), any());
         verify(batchMapper).updateCounts(eq(batchId), eq(10), eq(10), eq(0), eq(0));
+    }
+
+    @Test
+    @DisplayName("startImport：源文件归档到 OBS → fileApi.upload 调用 + sourceObjectKey 落库")
+    void startImport_archivesSourceFileToObs() {
+        String batchId = service.startImport("TARGET", fakeFile("imp.xlsx"), "admin", null);
+
+        assertThat(batchId).isNotBlank();
+        verify(fileApi).upload(any(MultipartFile.class), eq("admin"), eq(FileCategory.PERF_IMPORT));
+
+        ArgumentCaptor<PerfImportBatch> cap = ArgumentCaptor.forClass(PerfImportBatch.class);
+        verify(batchMapper).insert(cap.capture());
+        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("F_IMP_SRC");
     }
 
     @Test

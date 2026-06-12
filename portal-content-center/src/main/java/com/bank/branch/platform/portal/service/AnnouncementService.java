@@ -3,6 +3,9 @@ package com.bank.branch.platform.portal.service;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.context.CurrentUserContext;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.portal.controller.dto.announcement.AnnouncementCreateReqDTO;
 import com.bank.branch.platform.portal.controller.dto.announcement.AnnouncementFileDTO;
 import com.bank.branch.platform.portal.controller.dto.announcement.AnnouncementRespDTO;
@@ -41,9 +44,7 @@ public class AnnouncementService {
     private final AnnouncementMapper announcementMapper;
     private final AnnouncementFileMapper announcementFileMapper;
     private final CurrentUserApi currentUserApi;
-
-    @Value("${announcement.upload-dir:/home/djdev/lf/yiti/announcement-files}")
-    private String uploadDir;
+    private final FileApi fileApi;
 
     /**
      * 分页查询公告列表（仅未删除，公开端用）
@@ -124,35 +125,28 @@ public class AnnouncementService {
     }
 
     /**
-     * 上传公告附件（保存到本地文件系统）
+     * 上传公告附件（存华为云 OBS，经 governance FileApi）。
+     * <p>AnnouncementFile.filePath 列复用，存 FileApi 返回的 fileId；下载时用 fileApi.getFileContent(fileId) 读 OBS。</p>
      */
     public AnnouncementFileDTO uploadFile(String announcementId, MultipartFile file) {
         String empId = currentUserApi.getCurrentEmpId();
-        String fileId = UUID.randomUUID().toString();
         String originalName = file.getOriginalFilename();
-        String ext = "";
-        if (originalName != null && originalName.contains(".")) {
-            ext = originalName.substring(originalName.lastIndexOf("."));
-        }
-        String storedName = fileId + ext;
-
         try {
-            Path dir = Paths.get(uploadDir, announcementId);
-            Files.createDirectories(dir);
-            Path target = dir.resolve(storedName);
-            file.transferTo(target.toFile());
+            FileObjectDTO uploaded = fileApi.upload(file.getBytes(), originalName,
+                    file.getContentType(), empId, FileCategory.ANNOUNCEMENT);
 
             AnnouncementFile af = new AnnouncementFile();
-            af.setId(fileId);
+            af.setId(UUID.randomUUID().toString());
             af.setAnnouncementId(announcementId);
             af.setFileName(originalName);
             af.setFileSize(file.getSize());
-            af.setFilePath(target.toString());
+            af.setFilePath(uploaded.getId());   // 存 OBS fileId（filePath 列复用）
             af.setUploadedBy(empId);
             af.setUploadTime(LocalDateTime.now());
             announcementFileMapper.insert(af);
 
-            log.info("[AnnouncementService.uploadFile] fileId={}, annId={}, fileName={}", fileId, announcementId, originalName);
+            log.info("[AnnouncementService.uploadFile] fileId={}, annId={}, fileName={}",
+                    uploaded.getId(), announcementId, originalName);
             return toFileDto(af);
         } catch (IOException e) {
             throw new BizException("PORTAL-50001", "文件保存失败: " + e.getMessage());

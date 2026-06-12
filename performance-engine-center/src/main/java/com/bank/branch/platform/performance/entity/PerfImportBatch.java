@@ -58,6 +58,9 @@ public class PerfImportBatch {
     /** 文件 MD5（幂等校验）. */
     private String fileMd5;
 
+    /** 导入源文件归档到 OBS 的 fileId（FileApi.upload 返回，供事后查底/重跑/下载）. */
+    private String sourceObjectKey;
+
     /** 状态：CREATED / RUNNING / SUCCESS / FAILED（语义由 Service 层保证）. */
     private String status;
 
