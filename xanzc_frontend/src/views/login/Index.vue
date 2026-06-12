@@ -30,7 +30,7 @@
       <div class="form-card">
         <div class="form-h">
           <div class="welcome">欢迎登录</div>
-          <div class="hint">请使用账号登录后台</div>
+          <div class="hint">{{ showNormal ? '请使用账号登录后台' : '请使用统一认证登录' }}</div>
         </div>
 
         <el-form
@@ -41,41 +41,43 @@
           class="form"
           @keyup.enter="onSubmit"
         >
-          <el-form-item prop="username">
-            <el-input
-              v-model="form.username"
-              placeholder="用户名"
-              clearable
-              autocomplete="username"
-            >
-              <template #prefix><span class="ico">👤</span></template>
-            </el-input>
-          </el-form-item>
+          <template v-if="showNormal">
+            <el-form-item prop="username">
+              <el-input
+                v-model="form.username"
+                placeholder="用户名"
+                clearable
+                autocomplete="username"
+              >
+                <template #prefix><span class="ico">👤</span></template>
+              </el-input>
+            </el-form-item>
 
-          <el-form-item prop="password">
-            <el-input
-              v-model="form.password"
-              type="password"
-              placeholder="密码"
-              show-password
-              autocomplete="current-password"
-            >
-              <template #prefix><span class="ico">🔒</span></template>
-            </el-input>
-          </el-form-item>
+            <el-form-item prop="password">
+              <el-input
+                v-model="form.password"
+                type="password"
+                placeholder="密码"
+                show-password
+                autocomplete="current-password"
+              >
+                <template #prefix><span class="ico">🔒</span></template>
+              </el-input>
+            </el-form-item>
 
-          <el-button
-            type="primary"
-            class="btn-login"
-            :loading="loading"
-            @click="onSubmit"
-          >
-            {{ loading ? '登录中...' : '登 录' }}
-          </el-button>
+            <el-button
+              type="primary"
+              class="btn-login"
+              :loading="loading"
+              @click="onSubmit"
+            >
+              {{ loading ? '登录中...' : '登 录' }}
+            </el-button>
+          </template>
 
           <!-- 统一认证登录入口：直接 302 到后端 /api/auth/uniauth/redirect → UIAS 单点登录页 -->
-          <div class="alt-login">
-            <span class="divider">或</span>
+          <div v-if="showUias" class="alt-login">
+            <span v-if="showNormal" class="divider">或</span>
             <el-button class="btn-uniauth" @click="onUniAuthClick">
               🛡️ 统一认证登录
             </el-button>
@@ -88,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { login, uniAuthLogin } from '@/api/auth';
@@ -98,6 +100,15 @@ import { USE_MOCK } from '@/api/http';
 const router = useRouter();
 const route  = useRoute();
 const store  = useUserStore();
+
+// 通过 URL 区分登录方式：
+//   默认（不带后缀）→ 统一认证(UIAS)登录    http://localhost:8090/#/login
+//   ?normal        → 普通账号密码登录        http://localhost:8090/#/login?normal
+//   （兼容旧写法 ?mode=normal）
+const isNormal = computed(() =>
+  route.query.normal !== undefined || String(route.query.mode || '').toLowerCase() === 'normal');
+const showNormal = computed(() => isNormal.value);
+const showUias   = computed(() => !isNormal.value);
 
 const formRef = ref(null);
 const loading = ref(false);
@@ -115,7 +126,7 @@ const rules = {
 };
 
 async function onSubmit() {
-  if (loading.value) return;
+  if (loading.value || !showNormal.value) return;   // 仅 UIAS 模式下回车不触发普通登录
   try {
     await formRef.value.validate();
   } catch (_) { return; }
