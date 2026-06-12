@@ -9,9 +9,14 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * {@link CustStatQueryApi} 实现：委托 {@link StatShowService#getCustNameByCustId} 查 XAN_M98_CUST_STAT_SHOW3.
+ * {@link CustStatQueryApi} 实现：薄封装，仅做对外契约暴露；业务逻辑下沉在 {@link StatShowService}.
  *
- * <p>薄封装，仅做对外契约暴露；业务逻辑（空值处理、LIMIT 1 取一条）下沉在 service 层。</p>
+ * <ul>
+ *   <li>{@link #getCustNameFromMaster(String)} —— 委托 {@link StatShowService#getCustNameFromMaster}
+ *       查客户主档 CUST_MASTER（当前口径，与 PC 管理端一致）</li>
+ *   <li>{@link #getCustNameByCustId(String)} —— 委托 {@link StatShowService#getCustNameByCustId}
+ *       查 XAN_M98_CUST_STAT_SHOW3（已弃用，保留兼容）</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -21,7 +26,13 @@ public class CustStatQueryFacade implements CustStatQueryApi {
     private final StatShowService statShowService;
 
     @Override
+    @Deprecated
     public Optional<String> getCustNameByCustId(String custId) {
         return statShowService.getCustNameByCustId(custId);
+    }
+
+    @Override
+    public Optional<String> getCustNameFromMaster(String custNo) {
+        return statShowService.getCustNameFromMaster(custNo);
     }
 }

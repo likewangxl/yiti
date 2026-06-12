@@ -53,7 +53,7 @@ import java.util.Set;
  * <ul>
  *   <li>{@code PERF_LIST} —— 审批列表（{@link PerfApprovalQueryApi}）</li>
  *   <li>{@code PERF_SAVE} —— 新增分配关系调整申请（{@link PerfApprovalCmdApi}）</li>
- *   <li>{@code CASH_GETCUST_INFO} —— 客户号查名（{@link CustStatQueryApi}，查 XAN_M98_CUST_STAT_SHOW3）</li>
+ *   <li>{@code CASH_GETCUST_INFO} —— 客户号查名（{@link CustStatQueryApi}，查客户主档 CUST_MASTER）</li>
  *   <li>{@code PERF_RECALL} —— 撤回申请（{@link PerfApprovalCmdApi}）</li>
  *   <li>{@code PERF_APPR} —— 审批申请（通过/驳回，{@link PerfApprovalCmdApi}）</li>
  *   <li>{@code SYS_DICT_ITEMS} —— 按字典类型查启用字典项（{@link DictApi}，业务类型选项 PERF_BIZ_KIND）</li>
@@ -278,8 +278,9 @@ public class CallPuDispatchService {
         if (!StringUtils.hasText(custNo)) {
             return CallPuResponse.fail("客户号不能为空");
         }
-        // 客户号查名改走 perf 客户维度展示表 XAN_M98_CUST_STAT_SHOW3（CUST_ID → CUST_NAME，LIMIT 1）
-        Optional<String> custName = custStatQueryApi.getCustNameByCustId(custNo);
+        // 客户号查名改走客户主档 CUST_MASTER（cust_no → custName），与 PC 管理端
+        // StatShowController#getCustMasterName 同口径；不再查旧统计表 XAN_M98_CUST_STAT_SHOW3
+        Optional<String> custName = custStatQueryApi.getCustNameFromMaster(custNo);
         if (custName.isEmpty()) {
             return CallPuResponse.fail("未查询到客户: " + custNo);
         }

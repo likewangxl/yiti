@@ -101,7 +101,7 @@ class CallPuFormUrlencodedCompatTest {
 
     @Test
     void applicationJsonContentType_stillWorks() throws Exception {
-        when(custStatQueryApi.getCustNameByCustId(eq("C001")))
+        when(custStatQueryApi.getCustNameFromMaster(eq("C001")))
                 .thenReturn(java.util.Optional.empty());
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();

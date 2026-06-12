@@ -187,8 +187,8 @@ class CallPuControllerTest {
 
     @Test
     void cashGetCustInfo_success_returnsCustName() throws Exception {
-        // 客户号查名走 perf XAN_M98_CUST_STAT_SHOW3：CUST_ID=C001 → CUST_NAME
-        when(custStatQueryApi.getCustNameByCustId("C001")).thenReturn(Optional.of("某某有限公司"));
+        // 客户号查名改走客户主档 CUST_MASTER（与 PC 管理端同口径）：cust_no=C001 → custName
+        when(custStatQueryApi.getCustNameFromMaster("C001")).thenReturn(Optional.of("某某有限公司"));
 
         mockMvc.perform(post("/api/callpu")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -200,7 +200,7 @@ class CallPuControllerTest {
 
     @Test
     void cashGetCustInfo_notFound_returnsFail() throws Exception {
-        when(custStatQueryApi.getCustNameByCustId("CX")).thenReturn(Optional.empty());
+        when(custStatQueryApi.getCustNameFromMaster("CX")).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/callpu")
                         .contentType(MediaType.APPLICATION_JSON)
