@@ -150,8 +150,9 @@ public class KpiScoreImportStrategy implements ImportStrategy {
             }
             String subject = r.subject.trim();
             if ("ORG".equals(dim)) {
-                if (orgApi.getOrg(subject) == null) {
-                    errors.add(loc + "机构不存在（EXT_ORG_INFO 部门编号）: " + subject);
+                // 维度对象=机构编号(EXT_ORG_INFO.DEPT_NO)，按 DEPT_NO 校验存在性
+                if (orgApi.getOrgByDeptNo(subject) == null) {
+                    errors.add(loc + "机构不存在（EXT_ORG_INFO 部门编号 DEPT_NO）: " + subject);
                     continue;
                 }
             } else if ("EMP".equals(dim)) {

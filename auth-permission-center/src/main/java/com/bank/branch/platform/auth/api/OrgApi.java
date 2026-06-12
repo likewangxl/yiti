@@ -21,6 +21,17 @@ public interface OrgApi {
     OrgDTO getOrg(String orgCode);
 
     /**
+     * 根据机构编号（EXT_ORG_INFO.DEPT_NO）查询机构信息.
+     *
+     * <p>部门编号(dept_no) 是来自 xanpd sys_dept 的机构编号，与 org_code 不同口径；
+     * 业务侧（如指标/KPI 结果导入）的"机构对象"按部门编号校验存在性时使用。
+     *
+     * @param deptNo 机构编号（DEPT_NO）
+     * @return 机构DTO，不存在时返回 null
+     */
+    OrgDTO getOrgByDeptNo(String deptNo);
+
+    /**
      * 查询指定机构及其所有下属机构（含自身）
      *
      * @param orgCode 根机构编码

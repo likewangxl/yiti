@@ -31,6 +31,14 @@ public interface OrgMapper extends BaseMapper<ExtOrgInfo> {
     ExtOrgInfo selectByOrgCode(String orgCode);
 
     /**
+     * 根据机构编号（DEPT_NO）查询机构信息.
+     *
+     * @param deptNo 机构编号（EXT_ORG_INFO.DEPT_NO）
+     * @return 机构实体，不存在时返回 null（多条时取首条）
+     */
+    ExtOrgInfo selectByDeptNo(String deptNo);
+
+    /**
      * 查询全量机构信息列表（不过滤 ORGAN_STATE），用于构建完整机构树。
      *
      * @return 全部机构列表

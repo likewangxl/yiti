@@ -114,7 +114,7 @@ class MetricResultImportStrategyTest {
         // 员工 / 机构存在性默认放行（具体 case 再覆盖）
         // EMP 维度对象=工号，按工号查 PT_USER（getUsersByUsernames），默认返回非空=存在
         lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
-        lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
+        lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(new OrgDTO());
         lenient().when(sysControlService.getCurrentVersion(anyString()))
                 .thenReturn(sysControl("V1"));
 
@@ -236,7 +236,7 @@ class MetricResultImportStrategyTest {
     @Test
     @DisplayName("4.d 违反：ORG baseDim 机构号不在 EXT_ORG_INFO → errorSummary 记录，不入库")
     void execute_orgNotFound_recordedInErrorSummary() {
-        when(orgApi.getOrg("O_GHOST")).thenReturn(null);
+        when(orgApi.getOrgByDeptNo("O_GHOST")).thenReturn(null);
 
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "ORG", "O_GHOST", "基础性存款年日均余额", new BigDecimal("10")});
@@ -250,10 +250,10 @@ class MetricResultImportStrategyTest {
     }
 
     @Test
-    @DisplayName("4.e 违反：Excel 行 baseDim 与指标定义 base_dim 不一致 → errorSummary 记录，不入库")
+    @DisplayName("4.e：指标名仅在 EMP 维度存在，Excel 行写 ORG → 该维度下查不到指标，errorSummary 记录不入库")
     void execute_baseDimMismatch_recordedInErrorSummary() {
-        // "基础性存款月均余额" 是 EMP 维度指标（mock 配置 slot=1, baseDim=EMP）
-        // 但 Excel 把基础维度写成 ORG → 必须报"基础维度不匹配"，不能静默写到 ORG_INDEX_RESULT.val_1
+        // "基础性存款月均余额" 仅 EMP 维度（mock slot=1, baseDim=EMP）；Excel 写成 ORG
+        // → 按 (ORG+指标名) 查不到 → 报"指标在该维度下不存在"，不会静默写到 ORG_INDEX_RESULT.val_1
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "ORG", "O001", "基础性存款月均余额", new BigDecimal("100")});
 
@@ -263,9 +263,8 @@ class MetricResultImportStrategyTest {
         assertThat(result.getErrorRows()).isEqualTo(1);
         assertThat(result.getSuccessRows()).isZero();
         assertThat(result.getErrorSummary())
-                .contains("基础维度不匹配")
+                .contains("指标在该维度下不存在")
                 .contains("基础性存款月均余额")
-                .contains("EMP")
                 .contains("ORG");
         verify(empMapper, never()).insertSlotValue(any(), any(), any(), any(Integer.class), any());
         verify(orgMapper, never()).insertSlotValue(any(), any(), any(), any(Integer.class), any());
@@ -286,8 +285,7 @@ class MetricResultImportStrategyTest {
         assertThat(result.getErrorRows()).isEqualTo(1);
         assertThat(result.getSuccessRows()).isZero();
         assertThat(result.getErrorSummary())
-                .contains("基础维度不匹配")
-                .contains("EMP");
+                .contains("指标在该维度下不存在");
         verify(empMapper, never()).insertSlotValue(any(), any(), any(), any(Integer.class), any());
     }
 

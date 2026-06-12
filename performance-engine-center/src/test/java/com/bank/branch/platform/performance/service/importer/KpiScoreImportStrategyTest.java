@@ -70,7 +70,7 @@ class KpiScoreImportStrategyTest {
                 metricDef("M_ORG", "机构存款余额", "ORG"),
                 metricDef("M_CUST", "客户余额", "CUST")));
         // 存在性默认放行
-        lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
+        lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(new OrgDTO());
         lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
         lenient().when(kpiScoreMapper.upsert(any())).thenReturn(1);
 
@@ -136,7 +136,7 @@ class KpiScoreImportStrategyTest {
     @Test
     @DisplayName("ORG 维度对象不在机构表 → 整批失败，不 upsert")
     void execute_orgNotExist_throws() {
-        when(orgApi.getOrg("999")).thenReturn(null);
+        when(orgApi.getOrgByDeptNo("999")).thenReturn(null);
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{"ORG", "机构存款余额", "999", 88, 200, 30, 220, 180});
 

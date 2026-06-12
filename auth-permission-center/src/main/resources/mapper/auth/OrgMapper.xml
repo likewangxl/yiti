@@ -34,6 +34,16 @@
         WHERE ORG_CODE = #{orgCode}
     </select>
 
+    <!-- 按机构编号(DEPT_NO)查询；dept_no 可能非唯一，取首条用于存在性校验. -->
+    <select id="selectByDeptNo" parameterType="string"
+            resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        WHERE DEPT_NO = #{deptNo}
+        LIMIT 1
+    </select>
+
     <!--
         查询全量机构数据，用于系统启动时构建完整机构树缓存。
         不过滤 ORGAN_STATE，以便业务层自行决定是否展示已删除机构。

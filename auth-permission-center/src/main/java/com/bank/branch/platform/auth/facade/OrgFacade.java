@@ -34,6 +34,11 @@ public class OrgFacade implements OrgApi {
         return orgService.getOrg(orgCode);
     }
 
+    @Override
+    public OrgDTO getOrgByDeptNo(String deptNo) {
+        return orgService.getOrgByDeptNo(deptNo);
+    }
+
     /**
      * 查询指定机构及其所有下属机构（含自身）
      * 递归遍历机构树，结果包含根节点本身

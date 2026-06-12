@@ -131,6 +131,23 @@ public class OrgService {
     }
 
     /**
+     * 根据机构编号（EXT_ORG_INFO.DEPT_NO）查询机构.
+     *
+     * @param deptNo 机构编号（DEPT_NO）
+     * @return 机构DTO，不存在返回 null
+     */
+    public OrgDTO getOrgByDeptNo(String deptNo) {
+        if (deptNo == null || deptNo.isBlank()) {
+            return null;
+        }
+        ExtOrgInfo org = orgMapper.selectByDeptNo(deptNo);
+        if (org == null) {
+            return null;
+        }
+        return toDto(org);
+    }
+
+    /**
      * 获取机构子树（含自身），递归遍历子机构
      *
      * @param orgCode 根机构编码

@@ -136,7 +136,7 @@ public class MetricResultImportStrategy implements ImportStrategy {
         }
 
         // 批量预取所有 metricName → PerfMetricDef，规避逐行 DB 往返
-        Map<String, PerfMetricDef> defByName = loadMetricDefMap(rows);
+        Map<String, PerfMetricDef> defByDimAndName = loadMetricDefMap(rows);
 
         // version 缓存（每个 baseDim 一次 sys_control 查询）
         Map<String, String> versionByDim = new HashMap<>();
@@ -164,24 +164,19 @@ public class MetricResultImportStrategy implements ImportStrategy {
                     throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "指标数值必填");
                 }
 
-                PerfMetricDef def = defByName.get(row.getMetricName());
+                // 按 (维度 + 指标名) 查指标定义：同名指标可跨维度并存，行的维度决定取哪一条。
+                // 该名在本行维度下不存在 → METRIC_NOT_FOUND（区别于"换个维度才有"）。
+                PerfMetricDef def = defByDimAndName.get(dimKey(row.getBaseDim(), row.getMetricName()));
                 if (def == null) {
                     throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND,
-                            "指标名称: " + row.getMetricName());
+                            "指标在该维度下不存在（维度=" + row.getBaseDim()
+                                    + "，指标名=" + row.getMetricName() + "）");
                 }
                 if (def.getValSlot() == null) {
                     throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
                             "指标未分配 val_slot: " + row.getMetricName());
                 }
-
-                // 基础维度一致性校验（2026-05-19 修复：Excel 行 baseDim 与指标定义 base_dim 必须严格相等，
-                // 否则会按错误维度的 slot 写到错误宽表，且静默通过）。null==null 视为相等，仍走维度无关型分支。
-                if (!Objects.equals(row.getBaseDim(), def.getBaseDim())) {
-                    throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                            "基础维度不匹配（指标 " + def.getMetricName()
-                                    + " 期望 " + def.getBaseDim()
-                                    + "，Excel 行=" + row.getBaseDim() + "）");
-                }
+                // 按 (维度+名) 命中后 def.baseDim == row.baseDim 恒成立，无需再单独做一致性校验。
 
                 if (row.getBaseDim() == null) {
                     // 维度无关型：def.baseDim 也为 null 才会到此分支，仍不入三大宽表
@@ -334,9 +329,10 @@ public class MetricResultImportStrategy implements ImportStrategy {
                         "员工不存在（工号）: " + subject);
             }
         } else if ("ORG".equals(dim)) {
-            if (orgApi.getOrg(subject) == null) {
+            // 维度对象=机构编号(EXT_ORG_INFO.DEPT_NO)，按 DEPT_NO 校验存在性（不能按 ORG_CODE 查）
+            if (orgApi.getOrgByDeptNo(subject) == null) {
                 throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
-                        "机构不存在（EXT_ORG_INFO）: " + subject);
+                        "机构不存在（EXT_ORG_INFO 部门编号 DEPT_NO）: " + subject);
             }
         }
         // CUST 由产品后续接入客户主数据校验，本期跳过（与用户需求一致）
@@ -378,13 +374,21 @@ public class MetricResultImportStrategy implements ImportStrategy {
             return Collections.emptyMap();
         }
         List<PerfMetricDef> defs = metricDefMapper.selectByMetricNames(new ArrayList<>(names));
+        // 按 (维度 + 指标名) 建键：同名指标可跨维度并存（如 EMP 与 ORG 各一条），
+        // 仅按名会取错维度的定义导致"基础维度不匹配"误判。首命中优先。
         Map<String, PerfMetricDef> map = new HashMap<>(names.size());
         if (defs != null) {
             for (PerfMetricDef d : defs) {
-                map.put(d.getMetricName(), d);
+                map.putIfAbsent(dimKey(d.getBaseDim(), d.getMetricName()), d);
             }
         }
         return map;
+    }
+
+    /** (维度 + 指标名) 组合键；维度 null（维度无关型）归一为空串前缀. */
+    private static String dimKey(String baseDim, String metricName) {
+        return (baseDim == null ? "" : baseDim.trim().toUpperCase()) + "|"
+                + (metricName == null ? "" : metricName.trim());
     }
 
     private static String formatErrorPrefix(MetricResultImportRow row) {
