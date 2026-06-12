@@ -28,7 +28,38 @@ public interface FileApi {
     FileObjectDTO upload(MultipartFile file, String uploadedBy);
 
     /**
-     * 获取文件下载URL（MinIO 预签名 URL，有效期 1 小时）
+     * 上传文件到 OBS，带类型前缀 category（OBS 对象名形如 {prefix}_{uuid}）。
+     *
+     * @param file       文件
+     * @param uploadedBy 上传人工号
+     * @param category   类型前缀，见 {@link com.bank.branch.platform.governance.storage.FileCategory}
+     * @return 文件对象信息
+     */
+    FileObjectDTO upload(MultipartFile file, String uploadedBy, String category);
+
+    /**
+     * 字节直传到 OBS（导出/导入/公告等无 MultipartFile 场景）。
+     *
+     * @param bytes       文件内容
+     * @param filename    原始文件名（用于取扩展名与展示）
+     * @param contentType MIME 类型
+     * @param uploadedBy  上传人工号
+     * @param category    类型前缀，见 {@link com.bank.branch.platform.governance.storage.FileCategory}
+     * @return 文件对象信息
+     */
+    FileObjectDTO upload(byte[] bytes, String filename, String contentType, String uploadedBy, String category);
+
+    /**
+     * 读取文件字节内容（供业务模块自行流式下载，替代原 getFilePath 本地读盘）。
+     *
+     * @param fileId 文件对象ID
+     * @return 文件字节内容
+     * @throws com.bank.branch.platform.common.web.exception.BizException GOV-40005 文件不存在
+     */
+    byte[] getFileContent(String fileId);
+
+    /**
+     * 获取文件下载URL（OBS 预签名临时 URL）
      *
      * @param fileId 文件对象ID
      * @return 预签名下载 URL
@@ -64,16 +95,6 @@ public interface FileApi {
      * @throws com.bank.branch.platform.common.web.exception.BizException GOV-40005 文件不存在
      */
     void deleteFile(String fileId);
-
-    /**
-     * Get absolute filesystem path. Business modules stream the file themselves
-     * via Files.copy to avoid forwarding to /api/files/{id}/download which would
-     * trigger a second RBAC check on G_FILE_DOWNLOAD resource.
-     *
-     * @param fileId file object id
-     * @return absolute path
-     */
-    java.nio.file.Path getFilePath(String fileId);
 
     /**
      * Get original file name for Content-Disposition header.

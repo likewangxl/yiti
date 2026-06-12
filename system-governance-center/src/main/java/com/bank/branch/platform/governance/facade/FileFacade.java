@@ -32,7 +32,23 @@ public class FileFacade implements FileApi {
      */
     @Override
     public FileObjectDTO upload(MultipartFile file, String uploadedBy) {
-        return fileService.upload(file, uploadedBy, null, null);
+        return fileService.upload(file, uploadedBy, null, null,
+                com.bank.branch.platform.governance.storage.FileCategory.GENERAL);
+    }
+
+    @Override
+    public FileObjectDTO upload(MultipartFile file, String uploadedBy, String category) {
+        return fileService.upload(file, uploadedBy, null, null, category);
+    }
+
+    @Override
+    public FileObjectDTO upload(byte[] bytes, String filename, String contentType, String uploadedBy, String category) {
+        return fileService.upload(bytes, filename, contentType, uploadedBy, category);
+    }
+
+    @Override
+    public byte[] getFileContent(String fileId) {
+        return fileService.getFileContent(fileId);
     }
 
     /**
@@ -79,11 +95,6 @@ public class FileFacade implements FileApi {
     @Override
     public void deleteFile(String fileId) {
         fileService.deleteFile(fileId);
-    }
-
-    @Override
-    public java.nio.file.Path getFilePath(String fileId) {
-        return fileService.getFilePath(fileId);
     }
 
     @Override
