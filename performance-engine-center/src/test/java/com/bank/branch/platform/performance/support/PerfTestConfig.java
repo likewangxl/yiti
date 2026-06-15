@@ -6,6 +6,7 @@ import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
@@ -176,7 +177,12 @@ public class PerfTestConfig {
     @Bean
     @Primary
     public UserApi userApi() {
-        return Mockito.mock(UserApi.class);
+        UserApi m = Mockito.mock(UserApi.class);
+        // 2026-06-15：TargetValueService 注入 UserApi 校验 EMP 工号存在性（PT_USER.username）；
+        // 默认放行（返回非空 UserDTO 列表视作"工号存在"），单测/IT 可 @MockBean 覆盖。
+        Mockito.when(m.getUsersByUsernames(Mockito.anyList()))
+                .thenReturn(java.util.List.of(new UserDTO()));
+        return m;
     }
 
     /**

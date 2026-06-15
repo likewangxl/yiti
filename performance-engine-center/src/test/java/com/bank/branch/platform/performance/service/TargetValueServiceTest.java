@@ -1,5 +1,9 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.entity.PerfTargetValue;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -7,6 +11,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
 import com.bank.branch.platform.performance.support.TargetTestDataBuilder;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,8 +29,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -50,8 +57,98 @@ class TargetValueServiceTest {
     @Mock
     private PerfTargetValueMapper targetValueMapper;
 
+    /** 2026-06-15：目标值主体存在性校验下沉后端，EMP 查 PT_USER 工号. */
+    @Mock
+    private UserApi userApi;
+
+    /** 2026-06-15：ORG 维度查 EXT_ORG_INFO（部门编号优先，编码兜底）. */
+    @Mock
+    private OrgApi orgApi;
+
     @InjectMocks
     private TargetValueService service;
+
+    /**
+     * 宽松默认桩：员工/机构默认存在，让既有 upsert 用例（EMP/E001 等）不被新校验拦截；
+     * 负向用例各自覆盖具体 subjectId 的桩。
+     */
+    @BeforeEach
+    void permissiveDefaults() {
+        lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
+        lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(null);
+        lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
+    }
+
+    // ------------------------------- 主体存在性校验（2026-06-15 后端下沉） -------------------------------
+
+    @Test
+    @DisplayName("upsertBatch: EMP 工号在 PT_USER 不存在 → 抛 VALIDATION_FAILED 且不落库")
+    void upsertBatch_empNotExist_throwsAndNoUpsert() {
+        when(userApi.getUsersByUsernames(List.of("GHOST"))).thenReturn(Collections.emptyList());
+        List<PerfTargetValue> list = List.of(TargetTestDataBuilder.value(
+                "P1", "EMP", "GHOST", "2026", "M_A", new BigDecimal("100")));
+
+        assertThatThrownBy(() -> service.upsertBatch(list, "admin"))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED))
+                .hasMessageContaining("GHOST");
+        verify(targetValueMapper, never()).upsertBatch(anyList());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("upsertBatch: ORG 维度对象=部门编号(DEPT_NO) → 命中后归一为内部机构编码入库")
+    void upsertBatch_orgByDeptNo_normalizedToOrgCode() {
+        OrgDTO org = new OrgDTO();
+        org.setOrgCode("107");
+        org.setDeptNo("720100");
+        when(orgApi.getOrgByDeptNo("720100")).thenReturn(org);
+        when(targetValueMapper.upsertBatch(anyList())).thenReturn(1);
+        List<PerfTargetValue> list = List.of(TargetTestDataBuilder.value(
+                "P1", "ORG", "720100", "2026", "M_A", new BigDecimal("100")));
+
+        service.upsertBatch(list, "admin");
+
+        ArgumentCaptor<List<PerfTargetValue>> cap =
+                (ArgumentCaptor<List<PerfTargetValue>>) (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+        verify(targetValueMapper).upsertBatch(cap.capture());
+        assertThat(cap.getValue().get(0).getSubjectId()).isEqualTo("107");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("upsertBatch: ORG 维度对象=内部机构编码 → getOrgByDeptNo 落空走 getOrg 兜底，编码保持不变")
+    void upsertBatch_orgByCodeFallback_keepsSubjectId() {
+        when(orgApi.getOrgByDeptNo("107")).thenReturn(null);
+        OrgDTO org = new OrgDTO();
+        org.setOrgCode("107");
+        when(orgApi.getOrg("107")).thenReturn(org);
+        when(targetValueMapper.upsertBatch(anyList())).thenReturn(1);
+        List<PerfTargetValue> list = List.of(TargetTestDataBuilder.value(
+                "P1", "ORG", "107", "2026", "M_A", new BigDecimal("100")));
+
+        service.upsertBatch(list, "admin");
+
+        ArgumentCaptor<List<PerfTargetValue>> cap =
+                (ArgumentCaptor<List<PerfTargetValue>>) (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+        verify(targetValueMapper).upsertBatch(cap.capture());
+        assertThat(cap.getValue().get(0).getSubjectId()).isEqualTo("107");
+    }
+
+    @Test
+    @DisplayName("upsertBatch: ORG 部门编号/编码均不存在 → 抛 VALIDATION_FAILED 且不落库")
+    void upsertBatch_orgNotExist_throwsAndNoUpsert() {
+        when(orgApi.getOrgByDeptNo("999999")).thenReturn(null);
+        when(orgApi.getOrg("999999")).thenReturn(null);
+        List<PerfTargetValue> list = List.of(TargetTestDataBuilder.value(
+                "P1", "ORG", "999999", "2026", "M_A", new BigDecimal("100")));
+
+        assertThatThrownBy(() -> service.upsertBatch(list, "admin"))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED))
+                .hasMessageContaining("999999");
+        verify(targetValueMapper, never()).upsertBatch(anyList());
+    }
 
     // ------------------------------- upsertBatch: 核心 5 场景 -------------------------------
 

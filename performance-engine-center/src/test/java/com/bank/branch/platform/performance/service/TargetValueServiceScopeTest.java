@@ -74,7 +74,8 @@ class TargetValueServiceScopeTest {
     @BeforeEach
     void setUp() {
         this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
-        this.service = new TargetValueService(targetValueMapper, currentUserApi, perfScopeHelper);
+        // 本测试只覆盖 pageWithScope 读路径，不触发主体存在性校验，userApi/orgApi 传 null 即可
+        this.service = new TargetValueService(targetValueMapper, currentUserApi, perfScopeHelper, null, null);
     }
 
     @Test

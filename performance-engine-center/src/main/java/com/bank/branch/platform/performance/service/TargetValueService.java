@@ -1,6 +1,10 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
@@ -52,6 +56,10 @@ public class TargetValueService {
     private final CurrentUserApi currentUserApi;
     /** V1.3 R1.1 新增：数据范围 SQL 片段生成器. */
     private final PerfScopeHelper perfScopeHelper;
+    /** 2026-06-15：EMP 维度工号存在性校验（PT_USER.username）. */
+    private final UserApi userApi;
+    /** 2026-06-15：ORG 维度机构存在性校验 + 部门编号归一（EXT_ORG_INFO）. */
+    private final OrgApi orgApi;
 
     /**
      * 批量 upsert 目标值.
@@ -81,8 +89,9 @@ public class TargetValueService {
         if (list.size() > BATCH_UPPER_LIMIT) {
             throw new PerfException(PerfErrorCode.BATCH_QUERY_EXCEEDS_LIMIT, list.size());
         }
-        // 强制覆盖 createdBy 为当前操作人 (I-2 安全契约)
+        // 强制覆盖 createdBy 为当前操作人 (I-2 安全契约) + 主体存在性后端校验（2026-06-15）
         for (PerfTargetValue v : list) {
+            validateAndNormalizeSubject(v);
             v.setCreatedBy(operator);
             if (v.getId() == null || v.getId().isBlank()) {
                 v.setId(generateId());
@@ -92,6 +101,56 @@ public class TargetValueService {
         log.info("[TargetValueService.upsertBatch] operator={}, inputSize={}, affected={}",
                 operator, list.size(), affected);
         return affected;
+    }
+
+    /**
+     * 主体存在性校验 + ORG 归一化（2026-06-15）.
+     *
+     * <p>目标值导入/录入的工号、部门编号一律由后端直连数据库校验，<b>不再依赖前端缓存</b>
+     * （前端缓存受 pageSize 上限截断，会把真实存在的员工误判为"不存在"）。
+     * <ul>
+     *   <li>EMP：subjectId=工号，必须存在于 PT_USER.username（{@code userApi.getUsersByUsernames}）。</li>
+     *   <li>ORG：subjectId 可为部门编号(EXT_ORG_INFO.DEPT_NO)或内部机构编码；命中部门编号则
+     *       归一为内部机构编码入库（与单条录入/对象列展示/KPI 计算的 subject_id 口径一致），
+     *       否则按内部编码兜底校验（{@code orgApi.getOrg}）。</li>
+     *   <li>CUST/其他维度：不校验。</li>
+     * </ul>
+     * 校验不通过先 {@code log.warn} 留痕（便于运维排查"哪个工号/机构被拦"），再抛
+     * {@link PerfErrorCode#VALIDATION_FAILED}；单条导入由调用方 catch 累计到 errorSummary，
+     * 批量端点则整批失败。
+     *
+     * @param v 待校验目标值（ORG 命中部门编号时其 subjectId 会被原地归一为内部机构编码）
+     */
+    private void validateAndNormalizeSubject(PerfTargetValue v) {
+        String type = v.getSubjectType();
+        String subject = v.getSubjectId();
+        if (subject == null || subject.isBlank()) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "对象编号必填");
+        }
+        if ("EMP".equals(type)) {
+            List<UserDTO> users = userApi.getUsersByUsernames(List.of(subject));
+            if (users == null || users.isEmpty()) {
+                log.warn("[TargetValueService] 目标值主体校验失败：员工工号在系统中不存在 subjectId={}, planId={}",
+                        subject, v.getPlanId());
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "员工工号在系统中不存在: " + subject);
+            }
+        } else if ("ORG".equals(type)) {
+            // 部门编号优先：命中则归一为内部机构编码入库
+            OrgDTO byDept = orgApi.getOrgByDeptNo(subject);
+            if (byDept != null) {
+                if (byDept.getOrgCode() != null && !byDept.getOrgCode().isBlank()) {
+                    v.setSubjectId(byDept.getOrgCode());
+                }
+                return;
+            }
+            // 兜底：subjectId 本身可能已是内部机构编码（单条录入从下拉选择）
+            if (orgApi.getOrg(subject) == null) {
+                log.warn("[TargetValueService] 目标值主体校验失败：机构(部门编号/编码)在系统中不存在 subjectId={}, planId={}",
+                        subject, v.getPlanId());
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "机构(部门编号)在系统中不存在: " + subject);
+            }
+        }
+        // CUST/null 等其他维度不做主体存在性校验
     }
 
     /**
