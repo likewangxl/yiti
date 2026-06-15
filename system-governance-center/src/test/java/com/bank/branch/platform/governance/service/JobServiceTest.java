@@ -348,6 +348,30 @@ class JobServiceTest {
         assertThat(dto.getOperatorName()).isEqualTo("周八");
     }
 
+    /**
+     * 执行日志关联 PERF_METRIC_CALC_TASK：处理状态(task.status)与错误原因(task.error_msg)透传到 DTO.
+     * 关联不到时（processStatus / errorMsg 为 null）DTO 字段保持 null，由前端渲染为 '—'。
+     */
+    @Test
+    void listRunLogs_carriesProcessStatusAndTaskErrorMsg() {
+        SysJobRunLog joined = makeRunLog("LOG_003", "JOB_001", "FAILED");
+        joined.setProcessStatus("PARTIAL_FAILED");      // 来自 PERF_METRIC_CALC_TASK.status
+        joined.setErrorMsg("Groovy 计算第 3 个主体失败");   // 来自 PERF_METRIC_CALC_TASK.error_msg
+        SysJobRunLog unjoined = makeRunLog("LOG_004", "JOB_001", "SUCCESS"); // 无关联任务
+        when(jobRunLogMapper.countByJobId("JOB_001")).thenReturn(2L);
+        when(jobRunLogMapper.selectByJobId(eq("JOB_001"), eq(0), eq(20)))
+                .thenReturn(List.of(joined, unjoined));
+
+        PageResult<JobRunLogDTO> page = jobService.listRunLogs("JOB_001", 1, 20);
+
+        JobRunLogDTO d0 = page.getRecords().get(0);
+        assertThat(d0.getProcessStatus()).isEqualTo("PARTIAL_FAILED");
+        assertThat(d0.getErrorMsg()).isEqualTo("Groovy 计算第 3 个主体失败");
+        JobRunLogDTO d1 = page.getRecords().get(1);
+        assertThat(d1.getProcessStatus()).isNull();
+        assertThat(d1.getErrorMsg()).isNull();
+    }
+
     // ── L1 补全测试 ──────────────────────────────────────────────
 
     /**

@@ -29,7 +29,16 @@ public class JobRunLogDTO {
     /** 运行状态 RUNNING/SUCCESS/FAILED */
     private String status;
 
-    /** 错误信息（失败时） */
+    /**
+     * 处理状态（来自 PERF_METRIC_CALC_TASK.status，左连接取值）。
+     * 取值 SUCCESS/FAILED/PARTIAL_FAILED/RUNNING；关联不到对应计算任务时为 null（前端展示 '—'）。
+     */
+    private String processStatus;
+
+    /**
+     * 错误信息（来自 PERF_METRIC_CALC_TASK.error_msg，左连接取值）。
+     * 关联不到对应计算任务时为 null（前端展示 '—'）。
+     */
     private String errorMsg;
 
     /** 触发人工号 */

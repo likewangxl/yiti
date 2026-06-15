@@ -2,13 +2,6 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bank.branch.platform.governance.mapper.JobRunLogMapper">
 
-    <!-- SYS_JOB_RUN_LOG 全列查询片段（V1.6 新增 scheduled_fire_time） -->
-    <sql id="BASE_COLUMNS">
-        id, job_id, trigger_type, reason,
-        start_time, end_time, status, error_msg,
-        created_by, created_time, scheduled_fire_time
-    </sql>
-
     <!-- insert / selectById / updateById 由 MyBatis-Plus BaseMapper 提供 -->
 
     <!-- 判断指定任务是否存在 RUNNING 状态的执行日志（并发防控） -->
@@ -19,13 +12,29 @@
           AND status = 'RUNNING'
     </select>
 
-    <!-- 分页查询指定任务的执行日志，按创建时间倒序 -->
+    <!--
+        分页查询指定任务的执行日志，按创建时间倒序。
+        左连接 PERF_METRIC_CALC_TASK（id 一致：JobExecutionLogger 写入的 runLogId 已被计算任务复用为主键），
+        取该表的 status 作「处理状态」、error_msg 作「错误原因」。
+        关联不到（非计算类任务）时两字段为 NULL，前端渲染为 '—'；
+        故错误原因不再读 SYS_JOB_RUN_LOG.error_msg，统一以计算任务表为准。
+    -->
     <select id="selectByJobId" resultType="com.bank.branch.platform.governance.entity.SysJobRunLog">
         SELECT
-            <include refid="BASE_COLUMNS"/>
-        FROM SYS_JOB_RUN_LOG
-        WHERE job_id = #{jobId}
-        ORDER BY created_time DESC
+            l.id, l.job_id, l.trigger_type, l.reason,
+            l.start_time, l.end_time, l.status,
+            l.created_by, l.created_time, l.scheduled_fire_time,
+            t.status          AS process_status,
+            t.error_msg       AS error_msg
+        FROM SYS_JOB_RUN_LOG l
+        <!--
+            两表 id 列 collation 不一致（SYS_JOB_RUN_LOG.id=utf8mb4_general_ci，
+            PERF_METRIC_CALC_TASK.id=utf8mb4_0900_ai_ci），直接 = 比较会触发
+            "Illegal mix of collations"。强制把关联列统一到 general_ci 再比较。
+        -->
+        LEFT JOIN PERF_METRIC_CALC_TASK t ON t.id COLLATE utf8mb4_general_ci = l.id
+        WHERE l.job_id = #{jobId}
+        ORDER BY l.created_time DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 

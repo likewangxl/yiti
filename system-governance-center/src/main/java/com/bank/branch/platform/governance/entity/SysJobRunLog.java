@@ -1,6 +1,7 @@
 package com.bank.branch.platform.governance.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -51,4 +52,13 @@ public class SysJobRunLog {
 
     /** Quartz 计划触发时间（V1.6 新增，用于 misfire 排查），对应 scheduled_fire_time */
     private LocalDateTime scheduledFireTime;
+
+    /**
+     * 处理状态（非本表列，左连接 PERF_METRIC_CALC_TASK 取 status）。
+     * <p>仅指标/KPI 计算类任务的执行日志（id = PERF_METRIC_CALC_TASK.id）能关联到值
+     * （SUCCESS/FAILED/PARTIAL_FAILED/RUNNING），其余任务为 null（前端渲染为 '—'）。
+     * {@code @TableField(exist=false)} 避免 BaseMapper 的 insert/updateById 误把它当作真实列。</p>
+     */
+    @TableField(exist = false)
+    private String processStatus;
 }

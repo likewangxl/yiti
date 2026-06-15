@@ -729,6 +729,9 @@ public class JobService {
         dto.setStartTime(entity.getStartTime() != null ? entity.getStartTime().format(ISO_FORMATTER) : null);
         dto.setEndTime(entity.getEndTime() != null ? entity.getEndTime().format(ISO_FORMATTER) : null);
         dto.setStatus(entity.getStatus());
+        // 处理状态 / 错误原因 来自左连接的 PERF_METRIC_CALC_TASK（kpi_scheme_code / error_msg），
+        // 关联不到时为 null，前端渲染为 '—'
+        dto.setProcessStatus(entity.getProcessStatus());
         dto.setErrorMsg(entity.getErrorMsg());
         dto.setCreatedBy(entity.getCreatedBy());
         return dto;
