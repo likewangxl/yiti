@@ -24,7 +24,8 @@ class RptErrorCodeTest {
 
     @Test
     void shouldHaveExactly30ErrorCodes_AfterM5Extension() {
-        assertThat(RptErrorCode.values()).hasSize(30);
+        // 31 条：M0.3.1 基线 25 + M5.4.1 扩展 5 + 2026-06-15 AMAS_APPROVAL_NOT_FOUND 1
+        assertThat(RptErrorCode.values()).hasSize(31);
     }
 
     @Test
@@ -83,7 +84,7 @@ class RptErrorCodeTest {
             .distinct()
             .count();
         assertThat(distinct)
-            .as("RPT 30 条错误码必须唯一无重复")
-            .isEqualTo(30);
+            .as("RPT 31 条错误码必须唯一无重复")
+            .isEqualTo(31);
     }
 }
