@@ -93,6 +93,29 @@ class KpiScoreCalcServiceTest {
     }
 
     @Test
+    @DisplayName("calculate(runLogId): 用 SYS_JOB_RUN_LOG.id 作为 PERF_METRIC_CALC_TASK.id")
+    void calculate_withRunLogId_usesItAsTaskId() {
+        when(taskMapper.selectCount(any())).thenReturn(0L); // 依赖未完成→任务置FAILED，仅校验插入 id
+        assertThatThrownBy(() -> service.calculate(DATA_DATE, null, "AUTO", null, "KPIRUN1234567890ABCDEF1234567890"))
+                .isInstanceOf(PerfException.class);
+        ArgumentCaptor<PerfMetricCalcTask> cap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
+        verify(taskMapper).insert(cap.capture());
+        assertThat(cap.getValue().getId()).isEqualTo("KPIRUN1234567890ABCDEF1234567890");
+    }
+
+    @Test
+    @DisplayName("calculate(无 runLogId 4参): 回退生成 32 位 UUID")
+    void calculate_fourArg_generatesUuid() {
+        when(taskMapper.selectCount(any())).thenReturn(0L);
+        assertThatThrownBy(() -> service.calculate(DATA_DATE, null, "AUTO", null))
+                .isInstanceOf(PerfException.class);
+        ArgumentCaptor<PerfMetricCalcTask> cap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
+        verify(taskMapper).insert(cap.capture());
+        assertThat(cap.getValue().getId()).hasSize(32);
+    }
+
+    @Test
+    @DisplayName("calculate: 前置依赖未完成→任务置 FAILED 且不计分")
     void calculate_levelNotAllDone_marksTaskFailedAndDoesNotScore() {
         // 任一级别无 SUCCESS 记录 → 前置检查失败
         when(taskMapper.selectCount(any())).thenReturn(0L);

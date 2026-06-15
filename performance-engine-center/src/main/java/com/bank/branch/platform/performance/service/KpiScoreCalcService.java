@@ -113,13 +113,26 @@ public class KpiScoreCalcService {
      * @throws PerfException dataDate 为空 / 前置依赖未完成 / 中途计算失败（任务已置 FAILED）
      */
     public String calculate(LocalDate dataDate, String schemeCode, String triggerType, String triggerBy) {
+        return calculate(dataDate, schemeCode, triggerType, triggerBy, null);
+    }
+
+    /**
+     * KPI 分值计算（带运行日志 id）.
+     *
+     * @param runLogId 本次调度的 {@code SYS_JOB_RUN_LOG.id}；非空则用作
+     *                 {@code PERF_METRIC_CALC_TASK.id}，便于两表关联；为空（手动/事件触发）回退 UUID
+     */
+    public String calculate(LocalDate dataDate, String schemeCode, String triggerType, String triggerBy, String runLogId) {
         String normalizedTrigger = "AUTO".equalsIgnoreCase(triggerType) ? "AUTO" : "MANUAL";
         if (dataDate == null) {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "数据日期不能为空");
         }
         String normalizedScheme = StringUtils.hasText(schemeCode) ? schemeCode.trim() : null;
 
-        String taskId = UUID.randomUUID().toString().replace("-", "");
+        // task.id 复用本次运行日志 id（SYS_JOB_RUN_LOG.id），便于与执行日志关联；为空回退 UUID
+        String taskId = (runLogId != null && !runLogId.isBlank())
+                ? runLogId.trim()
+                : UUID.randomUUID().toString().replace("-", "");
         PerfMetricCalcTask task = new PerfMetricCalcTask();
         task.setId(taskId);
         task.setTaskName(TASK_NAME);

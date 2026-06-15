@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service;
 
+import com.bank.branch.platform.performance.entity.PerfMetricCalcTask;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.mapper.PerfMetricCalcLogMapper;
 import com.bank.branch.platform.performance.mapper.PerfMetricCalcTaskMapper;
@@ -78,5 +79,41 @@ class MetricBatchCalcServiceTest {
         var boundValues = wrapper.getParamNameValuePairs().values();
         assertThat(boundValues).contains("ACTIVE", "PUBLISHED");
         assertThat(boundValues).doesNotContain("DRAFT", "DISABLED");
+    }
+
+    @Test
+    @DisplayName("execute(runLogId): 用 SYS_JOB_RUN_LOG.id 作为 PERF_METRIC_CALC_TASK.id，便于两表关联")
+    void execute_withRunLogId_usesItAsTaskId() {
+        when(metricDefMapper.selectList(any())).thenReturn(Collections.emptyList());
+        ArgumentCaptor<PerfMetricCalcTask> cap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
+
+        service.execute(1, LocalDate.of(2026, 6, 11), "RUNLOG1234567890ABCDEF1234567890");
+
+        verify(taskMapper).insert(cap.capture());
+        assertThat(cap.getValue().getId()).isEqualTo("RUNLOG1234567890ABCDEF1234567890");
+    }
+
+    @Test
+    @DisplayName("execute(空 runLogId): 回退生成 32 位 UUID 作为 task id")
+    void execute_blankRunLogId_generatesUuid() {
+        when(metricDefMapper.selectList(any())).thenReturn(Collections.emptyList());
+        ArgumentCaptor<PerfMetricCalcTask> cap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
+
+        service.execute(2, LocalDate.of(2026, 6, 11), "  ");
+
+        verify(taskMapper).insert(cap.capture());
+        assertThat(cap.getValue().getId()).hasSize(32);
+    }
+
+    @Test
+    @DisplayName("execute(2参兼容): 旧入口仍生成 UUID 作为 task id")
+    void execute_twoArg_generatesUuid() {
+        when(metricDefMapper.selectList(any())).thenReturn(Collections.emptyList());
+        ArgumentCaptor<PerfMetricCalcTask> cap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
+
+        service.execute(3, LocalDate.of(2026, 6, 11));
+
+        verify(taskMapper).insert(cap.capture());
+        assertThat(cap.getValue().getId()).hasSize(32);
     }
 }

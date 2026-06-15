@@ -30,9 +30,11 @@ public class KpiScoreCalcJob extends QuartzJobBean {
         LocalDate dataDate = JobTriggerParams.dataDate(context);
         String triggerType = JobTriggerParams.triggerType(context);
         String operatorEmpId = JobTriggerParams.operatorEmpId(context);
+        // 复用 JobExecutionLogger 放入 context 的运行日志 id 作为 PERF_METRIC_CALC_TASK.id
+        String runLogId = (String) context.get("runLogId");
         log.info(">>>>>>>>>> 【KPI分值定时任务】触发执行，数据日期={}，触发方式={} <<<<<<<<<<", dataDate, triggerType);
         try {
-            kpiScoreCalcService.calculate(dataDate, null, triggerType, operatorEmpId);
+            kpiScoreCalcService.calculate(dataDate, null, triggerType, operatorEmpId, runLogId);
             log.info(">>>>>>>>>> 【KPI分值定时任务】执行完成 <<<<<<<<<<");
         } catch (Exception e) {
             // 任务失败原因已落 PERF_METRIC_CALC_TASK，这里仅记录不再抛（避免 Quartz misfire 重试风暴）

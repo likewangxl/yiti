@@ -25,9 +25,11 @@ public class Level3MetricCalcJob extends QuartzJobBean {
     protected void executeInternal(JobExecutionContext context) {
         // 手动触发按指定数据日期；cron 自动触发回退昨日
         LocalDate dataDate = JobTriggerParams.dataDate(context);
+        // 复用 JobExecutionLogger 放入 context 的运行日志 id 作为 PERF_METRIC_CALC_TASK.id
+        String runLogId = (String) context.get("runLogId");
         log.info(">>>>>>>>>> 【3级指标定时任务】触发执行，数据日期={} <<<<<<<<<<", dataDate);
         try {
-            metricBatchCalcService.execute(3, dataDate);
+            metricBatchCalcService.execute(3, dataDate, runLogId);
             log.info(">>>>>>>>>> 【3级指标定时任务】执行完成 <<<<<<<<<<");
         } catch (Exception e) {
             log.error(">>>>>>>>>> 【3级指标定时任务】执行异常: {} <<<<<<<<<<", e.getMessage(), e);

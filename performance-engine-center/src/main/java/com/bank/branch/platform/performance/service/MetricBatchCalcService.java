@@ -36,13 +36,28 @@ public class MetricBatchCalcService {
     private final com.bank.branch.platform.performance.mapper.PerfRunTaskMapper perfRunTaskMapper;
 
     /**
-     * 执行指定级别的指标批量计算
+     * 执行指定级别的指标批量计算（旧入口：自动生成 task id）.
      */
     public void execute(int metricLevel, LocalDate dataDate) {
+        execute(metricLevel, dataDate, null);
+    }
+
+    /**
+     * 执行指定级别的指标批量计算.
+     *
+     * @param metricLevel 指标级别 1/2/3
+     * @param dataDate    数据日期
+     * @param runLogId    本次调度的 {@code SYS_JOB_RUN_LOG.id}；非空则用作
+     *                    {@code PERF_METRIC_CALC_TASK.id}，便于两表关联；为空（手动直调等）回退 UUID
+     */
+    public void execute(int metricLevel, LocalDate dataDate, String runLogId) {
         if (metricLevel < 1 || metricLevel > 3) {
             throw new IllegalArgumentException("指标级别必须为 1/2/3，当前值: " + metricLevel);
         }
-        String taskId = UUID.randomUUID().toString().replace("-", "");
+        // task.id 复用本次运行日志 id（SYS_JOB_RUN_LOG.id），便于与执行日志关联；为空回退 UUID
+        String taskId = (runLogId != null && !runLogId.isBlank())
+                ? runLogId.trim()
+                : UUID.randomUUID().toString().replace("-", "");
         String taskName = metricLevel + "级指标批量计算";
 
         log.info("========== 【{}级指标批量计算】开始 ==========", metricLevel);
