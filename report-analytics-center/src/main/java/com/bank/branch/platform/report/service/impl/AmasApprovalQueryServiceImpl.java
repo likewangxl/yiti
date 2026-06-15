@@ -1,5 +1,12 @@
 package com.bank.branch.platform.report.service.impl;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.dto.DataScopeContext;
+import com.bank.branch.platform.common.security.context.CurrentUserContext;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.report.dto.req.AmasApprovalQueryReqDTO;
@@ -42,6 +49,10 @@ public class AmasApprovalQueryServiceImpl implements AmasApprovalQueryService {
     private final AmasPerfAdjustApprovalMapper approvalMapper;
     private final AmasPerformanceAllocationMapper allocationMapper;
     private final AmasApprRecordMapper apprRecordMapper;
+    /** 当前用户（数据范围主体）. */
+    private final CurrentUserApi currentUserApi;
+    /** BizType.REPORT 数据范围标签. */
+    private final BizScopeApi bizScopeApi;
 
     @Override
     public PageResult<AmasApprovalRowVO> pageList(AmasApprovalQueryReqDTO req, PageRequest page) {
@@ -72,6 +83,8 @@ public class AmasApprovalQueryServiceImpl implements AmasApprovalQueryService {
         if (StringUtils.hasText(q.getApplyTimeEnd())) {
             w.le(AmasPerfAdjustApproval::getApplyTime, q.getApplyTimeEnd().trim());
         }
+        // BizType.REPORT 数据范围控制
+        applyReportScope(w);
         // 申请时间倒序
         w.orderByDesc(AmasPerfAdjustApproval::getApplyTime);
 
@@ -80,6 +93,29 @@ public class AmasApprovalQueryServiceImpl implements AmasApprovalQueryService {
         List<AmasApprovalRowVO> rows = result.getRecords().stream()
                 .map(this::toRowVO).collect(Collectors.toList());
         return PageResult.of(page.getPageNo(), page.getPageSize(), result.getTotal(), rows);
+    }
+
+    /**
+     * 应用 BizType.REPORT 数据范围（DATA_SCOPE）到 AMAS 审批历史列表查询.
+     *
+     * <p>AMAS 审批表无机构列，无法按机构过滤；故 ALL → 不过滤，其余一切非 ALL 范围
+     * （ORG/ORG_SUBTREE/SELF/...）一律收敛到「本人申请」（APPLY_USERNAME = 当前用户工号），
+     * 保守 fail-close。无 currentUser/bizScope（测试上下文）时不过滤。</p>
+     */
+    private void applyReportScope(LambdaQueryWrapper<AmasPerfAdjustApproval> w) {
+        if (currentUserApi == null || bizScopeApi == null) {
+            return;
+        }
+        String empId = currentUserApi.getCurrentEmpId();
+        DataScopeContext scope = bizScopeApi.buildScopeContext(empId, BizType.REPORT, BizAction.LIST);
+        DataScopeType type = scope != null ? scope.scopeType() : null;
+        if (type == null || type == DataScopeType.ALL) {
+            return;
+        }
+        // AMAS.APPLY_USERNAME 存的是工号(username)，从当前用户上下文取工号做本人过滤
+        CurrentUserContext uc = currentUserApi.getCurrentUserContext();
+        String username = uc != null ? uc.username() : null;
+        w.eq(AmasPerfAdjustApproval::getApplyUsername, StringUtils.hasText(username) ? username : "__none__");
     }
 
     @Override

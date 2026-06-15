@@ -1,5 +1,7 @@
 package com.bank.branch.platform.report.service;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.report.dto.req.AmasApprovalQueryReqDTO;
@@ -45,6 +47,10 @@ class AmasApprovalQueryServiceImplTest {
     private AmasPerformanceAllocationMapper allocationMapper;
     @Mock
     private AmasApprRecordMapper apprRecordMapper;
+    @Mock
+    private CurrentUserApi currentUserApi;
+    @Mock
+    private BizScopeApi bizScopeApi;
 
     @InjectMocks
     private AmasApprovalQueryServiceImpl service;
