@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-本文件为 Claude Code 提供项目上下文和开发指导。后续所有回答全部使用中文，打开和编辑文件时全部使用UTF-8编码，当前开发环境为windows环境
+后续所有回答全部使用中文，打开和编辑文件时全部使用UTF-8编码
 
 ## 项目概述
 
@@ -77,14 +77,14 @@ pom.xml `surefire/failsafe` 的 argLine 已含 `-Dfile.encoding=UTF-8`，无需�
 | 模块 | 包名 | 状态 | 说明 |
 |------|------|------|------|
 | `common` | com.bank.branch.platform.common.* | 已完成 | 公共基础设施层 (5 个子模块) |
-| `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
-| `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
+| `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 |
+| `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 |
 | `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
-| `customer-marketing-center` | com.bank.branch.platform.customer | V1.8 已交付（2026-05-01）| 客户营销中心 (114 Java + 49 测试，0 UOE)；V1.8 LeadCallbackCompensation @Scheduled→Quartz 迁移 |
-| `business-application-center` | com.bank.branch.platform.bizapp | 已完成 | 业务申请中心 (60 Java + 26 测试，0 UOE) |
-| `portal-content-center` | com.bank.branch.platform.portal | 已完成（V1.13 # 1 解绑 yiti） | 门户与内容中心 (108 Java + 38 测试，0 UOE)；V1.13 # 1 application-test.yml 解绑 yiti → onepl_test_bootstrap |
-| `performance-engine-center` | com.bank.branch.platform.performance | V1.7 + V1.13 # 1 测试库一统 | 绩效计算中心 (V1.0-V1.5 累积 + V1.6 Quartz 整合 + V1.7 指标级调度)；V1.13 # 1 application-test.yml 解绑 yiti + 启用 Quartz JDBC + 38 测试 fixture 大小写治理 |
-| `report-analytics-center` | com.bank.branch.platform.report | V1.0 已交付（2026-04-25） | 报表分析中心 (25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步 + SQL 探查) |
+| `customer-marketing-center` | com.bank.branch.platform.customer | 已完成 | 客户营销中心 |
+| `business-application-center` | com.bank.branch.platform.bizapp | 已完成 | 业务申请中心 |
+| `portal-content-center` | com.bank.branch.platform.portal | 已完成 | 门户与内容中心 |
+| `performance-engine-center` | com.bank.branch.platform.performance | 已完成 | 绩效计算中心 |
+| `report-analytics-center` | com.bank.branch.platform.report | 已完成 | 报表分析中心 |
 | `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
 
 **全部 9 个业务模块已交付**，无尚未实现模块。
@@ -103,9 +103,9 @@ workflow-center (依赖 auth + governance)
 portal-content-center (依赖 auth + governance + workflow，通用域不持有核心域状态) ← 已交付
 customer-marketing-center (依赖 auth + governance + workflow) ← V1.8 已交付（2026-05-01）；LeadCallbackCompensation @Scheduled → Quartz 集群调度（job_key=LEAD_CALLBACK_COMPENSATE）；CustomerSchedulingConfig 删除，@EnableScheduling 归属 PerformanceSchedulingConfig
 business-application-center (依赖 auth + governance + workflow + customer-marketing + portal) ← 已交付
-performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.6 已交付（Quartz 整合）
+performance-engine-center (依赖 auth + governance + workflow + customer-marketing) 
 
-report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖) ← V1.0 已交付（2026-04-25）
+report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖) 
 
 bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ```
@@ -124,20 +124,6 @@ bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ### 包结构规范
 
 强制：使用多module进行开发结构如下
-```text
-com.bank.branch.platform
-├─ common                        存放公用组件 ✅ 已完成 (5 个子模块)
-├─ auth-permission-center        认证授权中心 ✅ 已完成
-├─ system-governance-center      系统治理中心 ✅ 已完成
-├─ workflow-center               工作流中心 ✅ 已完成
-├─ bootstrap                     启动入口 ✅ 已完成
-├─ portal-content-center         门户与内容中心 ✅ 已完成（108 Java + 38 测试）
-├─ customer-marketing-center     客户营销中心 ✅ V1.8 已交付（2026-05-01）（114 Java + 49 测试）；V1.8 LeadCallbackCompensation @Scheduled→Quartz 迁移
-├─ business-application-center   业务申请中心 ✅ 已完成（60 Java + 26 测试）
-├─ performance-engine-center     绩效计算中心 ✅ V1.7 + V1.13 # 1（V1.6 Quartz 整合：Spring `@Scheduled`/ShedLock 全部迁移到 Quartz 集群调度，QRTZ_LOCKS 行锁接管防重；JobApi 精简到 1 方法 getJobConf；JobExecutionLogger 全局 Quartz JobListener 统一写日志；V1.13 # 1 application-test.yml 解绑 yiti 开发库迁到 onepl_test_bootstrap + 显式启用 Quartz JDBC clustered）
-└─ report-analytics-center       报表分析中心 ✅ V1.0 已交付（25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步导出 + SQL 探查 / surefire 103 + failsafe 70 = 173 全绿）
-```
-
 ```
 com.bank.branch.platform.<module>/
 ├── api/              # 对外接口 (唯一可跨模块依赖)
@@ -199,7 +185,7 @@ com.bank.branch.platform.<module>/
 
 ### 开发环境
 
-- **数据库**: MySQL 8.0 本地实例 (`localhost:3306/onepl 用户:root, 密码 123456`)
+- **数据库**: MySQL 8.0 本地实例 (`localhost:3306/yiti 用户:root, 密码 djdev`)
 - **缓存**: Redis 6.X 本地实例 (`localhost:6379`)
 - **对象存储**: MinIO 本地服务
 - **日志级别**: DEBUG (com.bank.platform), INFO (root)
@@ -236,13 +222,6 @@ com.bank.branch.platform.<module>/
 - **功能文档**: `project_ana.md`
 - **docs 目录**: 各模块详细设计文档 + DDL + 共享开发规范 (见 `docs/CLAUDE.md`)
 - **运维 Runbook**: `docs/modules/system-governance-center/09-运维Runbook.md` — sys_job_conf / Quartz 集群调度运维权威指南（V1.9 整合）
-- **V1.10 测试库合一 spec**: `docs/superpowers/specs/2026-05-01-v1.10-test-db-unification-design.md` — 唯一 `onepl_test_bootstrap`，FlywayTestBase 真接管 perf/rpt schema
-- **V1.11 # 1 spec**: `docs/superpowers/specs/2026-05-01-v1.11-5it-diagnosis-design.md` — listener 嵌套 AFTER_COMMIT 链改同步调用（方向 C），5 IT 诊断 + 修复
-- **V1.11 # 1 plan**: `docs/superpowers/plans/2026-05-01-v1.11-1-5it-diagnosis-impl.md`
-- **V1.12 schema 治理 spec**: `docs/superpowers/specs/2026-05-01-v1.12-schema-and-data-cleanup-design.md` — onepl_test_bootstrap schema column drift 修复 + 8 customer 小写历史表 DROP + bizapp/MetricScheduledE2EIT 数据 cleanup
-- **V1.13 # 1 测试库一统 spec**: `docs/superpowers/specs/2026-05-02-v1.13-test-db-unification-design.md` — onepl_test_bootstrap 23 张其他模块小写双胞胎 DROP（V1.13 自己脚本 `docs/superpowers/sql/2026-05-02-v1.13-drop-other-lowercase-tables.sql`）+ perf/portal application-test.yml 解绑 yiti 改 onepl_test_bootstrap + perf 启用 Quartz JDBC + 38 测试文件 80+ 处 SQL 上下文 lowercase→uppercase 一致性治理（perl word-boundary sed）+ Flyway history 17 V_*.sql mark success=1 绕开生产 V_*.sql 大小写不一致 + 幂等 init v2 脚本 `docs/superpowers/sql/2026-05-02-v1.13-onepl-test-bootstrap-init-v2.sql`；customer/bizapp/portal/bootstrap surefire 全绿 + report surefire 全绿（fix SqlSafeValidatorTest 期望大写后），perf failsafe errors 27→2、残 6 fail 全部归因（V1.13 # 1b spike 2 + V1.13 # 1d 副作用 4 + V1.7 已知 baseline 3）。
-- **V1.13 # 1d 生产 V_*.sql 大写化 + yiti 库清理**: 2026-05-02 增量交付；perf V_*.sql 9 文件（V1_0_1/V1_0_3/V1_2_3/V1_2_5/V1_3_0/V1_4_0 + undo U1_0_3/U1_0_4/U1_4_0）37 处 SQL 上下文 lowercase→uppercase（perl word-boundary sed），生产 fresh deploy 修复（onepl 库 lower_case_table_names=0 大小写一致）；yiti 开发库 32 张小写双胞胎 DROP（mysqldump 备份 80KB 归档；脚本 `docs/superpowers/sql/2026-05-02-v1.13-drop-yiti-lowercase-tables.sql`）；onepl_test_bootstrap V_*.sql 真跑 V1.0.0~V1.2.5 全 success（V1.3.0+ 因不幂等保留 mark skip → V1.13 # 1e）；perf failsafe errors 27→0、failures 6 全归因
-- **V1.13 候选清单**：# 1 + # 1d 已交付；# 1b MetricScheduledE2EIT 业务层 Quartz JobKey 注入失败 spike（2 fail）；~~# 1e V_*.sql 幂等化~~（**已作废**：项目废弃 Flyway 后整个 V_*FlywayIT 体系已移除）；# 2 V1.8 P6 业务/数据状态；# 3 SummaryControllerIT 500 (V1.12 # 4 老登记)；# 5 WorkflowCallbackListener REQUIRES_NEW 嵌套简化；# 6 LeadRejectedEvent dead code 定调
 
 ### 模块级 CLAUDE.md (开发时必须参考)
 - **公共基础设施**: [common/CLAUDE.md](common/CLAUDE.md)
@@ -264,9 +243,8 @@ com.bank.branch.platform.<module>/
 - **禁止事后狂补测试**：严禁无视 TDD，先凭直觉写完一大堆业务逻辑再去凑测试的行为。
 
 ### Flyway 禁令（绝对红线）
-- **本项目已彻底废弃 Flyway**：禁止引入 `flyway-core` / `flyway-mysql` 任何版本依赖；禁止在 `application*.yml` 出现 `spring.flyway.*` 配置；禁止新增 `V*__*.sql` / `U*__*.sql` 命名风格的迁移脚本；禁止编写 `*FlywayIT` / `*FlywayTestBase` 类。
-- **schema 变更走 SQL 直接执行**：所有 DDL/DML 由开发或 DBA 直接在目标库执行（手工或 CI 脚本），不再依赖任何"按版本号自动 migrate"框架。
-- **历史 V1.0~V1.8 迁移脚本已全部删除**：`onepl` 与 `yiti` 当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
+- **本项目已彻底废弃 Flyway**：。
+- **schema 变更走 SQL 直接执行**：。
 
 ### MyBatis-Plus 规范（新增功能绝对红线，2026-06-10 起）
 - **所有新增功能涉及的数据库访问统一使用 MyBatis-Plus**：Mapper 接口必须 `extends BaseMapper<T>`；单条 CRUD（`insert`/`selectById`/`updateById`/`deleteById` 等）直接用 BaseMapper 内置方法，**禁止**为这些方法重复写 XML；动态/简单条件查询优先 `LambdaQueryWrapper`/`LambdaUpdateWrapper`。
