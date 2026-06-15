@@ -32,6 +32,17 @@ public interface OrgApi {
     OrgDTO getOrgByDeptNo(String deptNo);
 
     /**
+     * 按机构编码集合批量查询机构信息（一次取数，替代逐个 {@link #getOrg} 的 N+1）。
+     *
+     * <p>入参为空/全空白返回空列表；未命中的编码不在返回列表中（不补 null），
+     * 调用方按 {@link OrgDTO#getOrgCode()} 自行建映射。</p>
+     *
+     * @param orgCodes 机构编码集合（可空）
+     * @return 命中的机构 DTO 列表
+     */
+    List<OrgDTO> getOrgsByCodes(java.util.Collection<String> orgCodes);
+
+    /**
      * 查询指定机构及其所有下属机构（含自身）
      *
      * @param orgCode 根机构编码

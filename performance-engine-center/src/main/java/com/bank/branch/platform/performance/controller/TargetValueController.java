@@ -7,6 +7,7 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.performance.api.dto.TargetSubjectDTO;
 import com.bank.branch.platform.performance.api.dto.TargetValueDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueBatchReqDTO;
 import com.bank.branch.platform.performance.controller.dto.UpsertTargetValueReqDTO;
@@ -92,6 +93,24 @@ public class TargetValueController {
         PageResult<TargetValueDTO> dtoPage = targetValueService.pageWithScopeDto(
                 planId, subjectType, subjectId, cycleKey, pageNo, pageSize);
         return ResponseWrapper.page(dtoPage);
+    }
+
+    /**
+     * 目标值「对象」下拉（方案内目标值去重 + 标签解析，2026-06-15）.
+     *
+     * <p>用于目标值管理页查询区的对象下拉：EMP→「工号 姓名」、ORG→「部门编号 机构名称」。
+     * 复用 LIST 鉴权资源族（GET /api/perf/target-values/subjects → P_PERF_TGT_V_SUBJ）。
+     *
+     * @param planId 目标方案ID（必填）
+     * @return 去重并解析标签后的对象列表
+     */
+    @GetMapping("/subjects")
+    @Operation(summary = "目标值对象下拉（方案内去重）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
+    public ResponseWrapper<List<TargetSubjectDTO>> subjects(
+            @RequestParam(value = "planId") @NotBlank String planId) {
+        log.debug("[TargetValueController.subjects] planId={}", planId);
+        return ResponseWrapper.success(targetValueService.listSubjects(planId));
     }
 
     /**

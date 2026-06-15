@@ -34,6 +34,15 @@
         WHERE ORG_CODE = #{orgCode}
     </select>
 
+    <!-- 按机构编码集合批量查询（替代逐个 selectByOrgCode 的 N+1） -->
+    <select id="selectByOrgCodes" resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        WHERE ORG_CODE IN
+        <foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+    </select>
+
     <!-- 按机构编号(DEPT_NO)查询；dept_no 可能非唯一，取首条用于存在性校验. -->
     <select id="selectByDeptNo" parameterType="string"
             resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">

@@ -39,6 +39,15 @@ public interface OrgMapper extends BaseMapper<ExtOrgInfo> {
     ExtOrgInfo selectByDeptNo(String deptNo);
 
     /**
+     * 按机构编码集合批量查询（命中唯一索引 uk_ext_org_info_org_code）。
+     * <p>供批量名称回填等场景一次取数，替代逐个 {@link #selectByOrgCode} 的 N+1。</p>
+     *
+     * @param codes 机构编码集合（调用方保证非空、已去重去空白）
+     * @return 命中的机构实体列表（无命中返回空列表）
+     */
+    List<ExtOrgInfo> selectByOrgCodes(@Param("codes") java.util.Collection<String> codes);
+
+    /**
      * 查询全量机构信息列表（不过滤 ORGAN_STATE），用于构建完整机构树。
      *
      * @return 全部机构列表

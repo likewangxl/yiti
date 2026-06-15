@@ -56,6 +56,22 @@ class OrgServiceTest {
     }
 
     @Test
+    void getOrgsByCodes_mapsBatchResultsToDtos() {
+        when(orgMapper.selectByOrgCodes(any())).thenReturn(List.of(branch, sub1));
+        List<OrgDTO> dtos = orgService.getOrgsByCodes(List.of("ORG001", "ORG001001"));
+        assertThat(dtos).extracting(OrgDTO::getOrgCode)
+                .containsExactlyInAnyOrder("ORG001", "ORG001001");
+    }
+
+    @Test
+    void getOrgsByCodes_emptyOrNull_returnsEmptyNoQuery() {
+        assertThat(orgService.getOrgsByCodes(null)).isEmpty();
+        assertThat(orgService.getOrgsByCodes(List.of())).isEmpty();
+        assertThat(orgService.getOrgsByCodes(List.of("  "))).isEmpty();
+        verify(orgMapper, never()).selectByOrgCodes(any());
+    }
+
+    @Test
     void getOrg_shouldReturnDtoWhenExists() {
         when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
 

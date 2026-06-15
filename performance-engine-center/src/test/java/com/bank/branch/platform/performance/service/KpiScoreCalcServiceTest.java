@@ -428,6 +428,39 @@ class KpiScoreCalcServiceTest {
     }
 
     @Test
+    @DisplayName("pageScoreGroups: ORG 维度 → 批量 getOrgsByCodes 回填机构名称，对象ID 替换为部门编号")
+    void pageScoreGroups_orgEnrichesViaBatch() {
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1"); scheme.setSchemeCode("KPI_A");
+        when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
+        PerfKpiItem i1 = new PerfKpiItem(); i1.setMetricCode("M_ORG");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(i1));
+        PerfMetricDef dor = new PerfMetricDef();
+        dor.setMetricCode("M_ORG"); dor.setMetricName("机构指标"); dor.setBaseDim("ORG");
+        when(metricDefService.getByCodeOrNull("M_ORG")).thenReturn(dor);
+
+        when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), eq("ORG"), any())).thenReturn(1L);
+        KpiSubjectGroupRow g = new KpiSubjectGroupRow();
+        g.setSubjectId("ORGX"); g.setSubjectType("ORG"); g.setTotalScore(new BigDecimal("0.5"));
+        when(scoreMapper.selectSubjectGroups(eq(DATA_DATE), eq("KPI_A"), eq("ORG"), any(), eq(0), eq(20)))
+                .thenReturn(List.of(g));
+        when(scoreMapper.selectByDateSchemeSubjects(eq(DATA_DATE), eq("KPI_A"), anyList()))
+                .thenReturn(List.of(scoreRow("ORGX", "M_ORG", "80", "100", "0", "0.5")));
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setOrgCode("ORGX"); org.setDeptNo("D100"); org.setOrgName("某支行");
+        when(orgApi.getOrgsByCodes(anyList())).thenReturn(List.of(org));
+
+        KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", "ORG", null, 1, 20);
+
+        assertThat(page.getRecords()).hasSize(1);
+        KpiScoreGroupRowDTO row = page.getRecords().get(0);
+        assertThat(row.getSubjectName()).isEqualTo("某支行");
+        assertThat(row.getSubjectId()).isEqualTo("D100"); // 对象ID 替换为部门编号
+        verify(orgApi).getOrgsByCodes(anyList());
+        verify(orgApi, never()).getOrg(any());
+    }
+
+    @Test
     void pageScoreGroups_filtersMetricColumnsBySelectedDimension() {
         PerfKpiScheme scheme = new PerfKpiScheme();
         scheme.setId("S1");

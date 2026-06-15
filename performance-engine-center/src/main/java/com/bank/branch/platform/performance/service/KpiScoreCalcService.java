@@ -748,20 +748,27 @@ public class KpiScoreCalcService {
         }
         Map<String, String> orgDeptNos = new java.util.HashMap<>();
         Map<String, String> orgNames = new java.util.HashMap<>();
-        rows.stream().filter(d -> "ORG".equals(d.getSubjectType()))
-                .map(KpiScoreGroupRowDTO::getSubjectId).filter(StringUtils::hasText).distinct().forEach(code -> {
-                    try {
-                        OrgDTO org = orgApi.getOrg(code);
-                        if (org != null) {
-                            if (StringUtils.hasText(org.getDeptNo())) {
-                                orgDeptNos.put(code, org.getDeptNo());
-                            }
-                            orgNames.put(code, org.getOrgName());
+        // ORG 名称批量回填（一次 getOrgsByCodes 替代逐个 getOrg 的 N+1）
+        List<String> orgCodes = rows.stream().filter(d -> "ORG".equals(d.getSubjectType()))
+                .map(KpiScoreGroupRowDTO::getSubjectId).filter(StringUtils::hasText).distinct().toList();
+        if (!orgCodes.isEmpty()) {
+            try {
+                List<OrgDTO> orgs = orgApi.getOrgsByCodes(orgCodes);
+                if (orgs != null) {
+                    for (OrgDTO org : orgs) {
+                        if (org == null || !StringUtils.hasText(org.getOrgCode())) {
+                            continue;
                         }
-                    } catch (Exception ignore) {
-                        // 机构查询异常 → 名称留空
+                        if (StringUtils.hasText(org.getDeptNo())) {
+                            orgDeptNos.put(org.getOrgCode(), org.getDeptNo());
+                        }
+                        orgNames.put(org.getOrgCode(), org.getOrgName());
                     }
-                });
+                }
+            } catch (Exception ignore) {
+                // 机构批量查询异常 → 名称留空
+            }
+        }
         for (KpiScoreGroupRowDTO d : rows) {
             if ("EMP".equals(d.getSubjectType())) {
                 d.setSubjectName(empNames.get(d.getSubjectId()));

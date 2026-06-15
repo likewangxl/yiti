@@ -40,6 +40,17 @@ public class OrgFacade implements OrgApi {
     }
 
     /**
+     * 按机构编码集合批量查询机构信息（委托 OrgService，替代逐个 getOrg 的 N+1）。
+     *
+     * @param orgCodes 机构编码集合（可空）
+     * @return 命中的机构 DTO 列表
+     */
+    @Override
+    public List<OrgDTO> getOrgsByCodes(java.util.Collection<String> orgCodes) {
+        return orgService.getOrgsByCodes(orgCodes);
+    }
+
+    /**
      * 查询指定机构及其所有下属机构（含自身）
      * 递归遍历机构树，结果包含根节点本身
      *

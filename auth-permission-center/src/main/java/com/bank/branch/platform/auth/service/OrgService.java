@@ -131,6 +131,33 @@ public class OrgService {
     }
 
     /**
+     * 按机构编码集合批量查询机构信息（一次取数，替代逐个 {@link #getOrg} 的 N+1）。
+     *
+     * <p>入参为空/全空白时直接返回空列表、不查库；内部去重去空白后批量 IN 查询。
+     * 未命中的编码不在返回列表中（不补 null），调用方按 orgCode 自行建映射。</p>
+     *
+     * @param orgCodes 机构编码集合（可空）
+     * @return 命中的机构 DTO 列表（无命中/空入参返回空列表）
+     */
+    public List<OrgDTO> getOrgsByCodes(java.util.Collection<String> orgCodes) {
+        if (orgCodes == null || orgCodes.isEmpty()) {
+            return List.of();
+        }
+        List<String> distinct = orgCodes.stream()
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        List<ExtOrgInfo> rows = orgMapper.selectByOrgCodes(distinct);
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        return rows.stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    /**
      * 根据机构编号（EXT_ORG_INFO.DEPT_NO）查询机构.
      *
      * @param deptNo 机构编号（DEPT_NO）

@@ -5,9 +5,13 @@ import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.entity.PerfKpiItem;
+import com.bank.branch.platform.performance.entity.PerfTargetPlan;
 import com.bank.branch.platform.performance.entity.PerfTargetValue;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
+import com.bank.branch.platform.performance.mapper.PerfKpiItemMapper;
+import com.bank.branch.platform.performance.mapper.PerfTargetPlanMapper;
 import com.bank.branch.platform.performance.mapper.PerfTargetValueMapper;
 import com.bank.branch.platform.performance.service.cmd.UpsertTargetValueCmd;
 import com.bank.branch.platform.performance.support.TargetTestDataBuilder;
@@ -65,6 +69,14 @@ class TargetValueServiceTest {
     @Mock
     private OrgApi orgApi;
 
+    /** 2026-06-15：解析目标方案关联的 KPI 方案（校验指标是否在方案内）. */
+    @Mock
+    private PerfTargetPlanMapper targetPlanMapper;
+
+    /** 2026-06-15：取 KPI 方案定义的指标项集合. */
+    @Mock
+    private PerfKpiItemMapper kpiItemMapper;
+
     @InjectMocks
     private TargetValueService service;
 
@@ -77,6 +89,116 @@ class TargetValueServiceTest {
         lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
         lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(null);
         lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
+    }
+
+    // ------------------------------- 对象下拉（方案内去重 + 标签解析，2026-06-15） -------------------------------
+
+    @Test
+    @DisplayName("listSubjects: EMP→工号+姓名、ORG→部门编号+机构名称")
+    void listSubjects_resolvesEmpAndOrgLabels() {
+        PerfTargetValue emp = new PerfTargetValue();
+        emp.setSubjectType("EMP");
+        emp.setSubjectId("E001");
+        PerfTargetValue org = new PerfTargetValue();
+        org.setSubjectType("ORG");
+        org.setSubjectId("ORG_X");
+        when(targetValueMapper.selectDistinctSubjectsByPlan("P1")).thenReturn(List.of(emp, org));
+        UserDTO u = new UserDTO();
+        u.setUsername("E001");
+        u.setDisplayName("张三");
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(u));
+        OrgDTO o = new OrgDTO();
+        o.setOrgCode("ORG_X");
+        o.setDeptNo("D100");
+        o.setOrgName("某支行");
+        when(orgApi.getOrg("ORG_X")).thenReturn(o);
+
+        List<com.bank.branch.platform.performance.api.dto.TargetSubjectDTO> subs = service.listSubjects("P1");
+
+        assertThat(subs).hasSize(2);
+        var empDto = subs.stream().filter(s -> "EMP".equals(s.getSubjectType())).findFirst().orElseThrow();
+        assertThat(empDto.getSubjectId()).isEqualTo("E001");
+        assertThat(empDto.getDisplayId()).isEqualTo("E001");
+        assertThat(empDto.getName()).isEqualTo("张三");
+        assertThat(empDto.getLabel()).contains("E001").contains("张三");
+        var orgDto = subs.stream().filter(s -> "ORG".equals(s.getSubjectType())).findFirst().orElseThrow();
+        assertThat(orgDto.getSubjectId()).isEqualTo("ORG_X"); // 入库口径保持内部编码
+        assertThat(orgDto.getDisplayId()).isEqualTo("D100");
+        assertThat(orgDto.getName()).isEqualTo("某支行");
+        assertThat(orgDto.getLabel()).contains("D100").contains("某支行");
+    }
+
+    @Test
+    @DisplayName("listSubjects: ORG subjectId=部门编号 → 按 DEPT_NO 解析机构名称")
+    void listSubjects_orgByDeptNo_resolvesLabel() {
+        PerfTargetValue org = new PerfTargetValue();
+        org.setSubjectType("ORG");
+        org.setSubjectId("174100"); // 入库即部门编号
+        when(targetValueMapper.selectDistinctSubjectsByPlan("P1")).thenReturn(List.of(org));
+        OrgDTO o = new OrgDTO();
+        o.setOrgCode("130");
+        o.setDeptNo("174100");
+        o.setOrgName("榆林分行营业部");
+        when(orgApi.getOrgByDeptNo("174100")).thenReturn(o);
+
+        List<com.bank.branch.platform.performance.api.dto.TargetSubjectDTO> subs = service.listSubjects("P1");
+
+        assertThat(subs).hasSize(1);
+        assertThat(subs.get(0).getSubjectId()).isEqualTo("174100");
+        assertThat(subs.get(0).getDisplayId()).isEqualTo("174100");
+        assertThat(subs.get(0).getName()).isEqualTo("榆林分行营业部");
+        assertThat(subs.get(0).getLabel()).isEqualTo("174100 榆林分行营业部");
+    }
+
+    @Test
+    @DisplayName("listSubjects: planId 空 → 抛 VALIDATION_FAILED")
+    void listSubjects_blankPlanId_throws() {
+        assertThatThrownBy(() -> service.listSubjects(" "))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
+    }
+
+    // ------------------------------- 指标必须属于目标方案关联的 KPI 方案（2026-06-15） -------------------------------
+
+    @Test
+    @DisplayName("upsertBatch: 指标不在目标方案关联的 KPI 方案中 → 抛 PERF-42204 且不落库")
+    void upsertBatch_metricNotInKpiScheme_throwsAndNoUpsert() {
+        PerfTargetPlan plan = new PerfTargetPlan();
+        plan.setId("P1");
+        plan.setKpiSchemeId("S1");
+        when(targetPlanMapper.selectById("P1")).thenReturn(plan);
+        PerfKpiItem good = new PerfKpiItem();
+        good.setMetricCode("M_GOOD");
+        when(kpiItemMapper.selectBySchemeId("S1")).thenReturn(List.of(good));
+
+        List<PerfTargetValue> list = List.of(TargetTestDataBuilder.value(
+                "P1", "EMP", "E001", "2026", "M_BAD", new BigDecimal("100")));
+
+        assertThatThrownBy(() -> service.upsertBatch(list, "admin"))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.IMPORT_METRIC_NOT_IN_KPI))
+                .hasMessageContaining("M_BAD");
+        verify(targetValueMapper, never()).upsertBatch(anyList());
+    }
+
+    @Test
+    @DisplayName("upsertBatch: 指标在目标方案关联的 KPI 方案中 → 正常落库")
+    void upsertBatch_metricInKpiScheme_proceeds() {
+        PerfTargetPlan plan = new PerfTargetPlan();
+        plan.setId("P1");
+        plan.setKpiSchemeId("S1");
+        when(targetPlanMapper.selectById("P1")).thenReturn(plan);
+        PerfKpiItem good = new PerfKpiItem();
+        good.setMetricCode("M_GOOD");
+        when(kpiItemMapper.selectBySchemeId("S1")).thenReturn(List.of(good));
+        when(targetValueMapper.upsertBatch(anyList())).thenReturn(1);
+
+        List<PerfTargetValue> list = List.of(TargetTestDataBuilder.value(
+                "P1", "EMP", "E001", "2026", "M_GOOD", new BigDecimal("100")));
+
+        int affected = service.upsertBatch(list, "admin");
+        assertThat(affected).isEqualTo(1);
+        verify(targetValueMapper).upsertBatch(anyList());
     }
 
     // ------------------------------- 主体存在性校验（2026-06-15 后端下沉） -------------------------------

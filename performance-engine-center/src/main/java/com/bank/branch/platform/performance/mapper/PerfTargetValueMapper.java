@@ -135,4 +135,15 @@ public interface PerfTargetValueMapper extends BaseMapper<PerfTargetValue> {
                                    @Param("cycleKey") String cycleKey,
                                    @Param("scopeFragment") String scopeFragment,
                                    @Param("scopeParams") Map<String, Object> scopeParams);
+
+    /**
+     * 2026-06-15：查询某目标方案下所有目标值去重后的对象（subject_type + subject_id）。
+     *
+     * <p>用于目标值管理页查询区的「对象」下拉。仅投影 subject_type / subject_id 两列，
+     * 标签（工号+姓名 / 部门编号+机构名称）由 Service 层调用 UserApi / OrgApi 解析。
+     *
+     * @param planId 目标方案ID（必填）
+     * @return 去重的对象列表（仅填充 subjectType / subjectId）
+     */
+    List<PerfTargetValue> selectDistinctSubjectsByPlan(@Param("planId") String planId);
 }
