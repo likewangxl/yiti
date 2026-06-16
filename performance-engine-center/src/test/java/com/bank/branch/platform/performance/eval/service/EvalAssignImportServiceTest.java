@@ -47,9 +47,14 @@ class EvalAssignImportServiceTest {
         return d;
     }
 
-    private UserDTO user(String empId) {
+    /**
+     * 构造 UserDTO：username 与 empId(USER_ID) 显式区分，
+     * 用于验证「按用户名校验 + 归一为 USER_ID 存储」（方案 A）。
+     */
+    private UserDTO user(String empId, String username) {
         UserDTO u = new UserDTO();
         u.setEmpId(empId);
+        u.setUsername(username);
         return u;
     }
 
@@ -87,12 +92,16 @@ class EvalAssignImportServiceTest {
         });
     }
 
-    private void mockUsersExist(String... empIds) {
+    /**
+     * 入参为「用户名」（Excel 员工编号列填写的内容）；每个用户名映射到 USER_ID = "ID_" + 用户名，
+     * 校验只走 USERNAME 路径（{@code getUsersByUsernames}）。
+     */
+    private void mockUsersExist(String... usernames) {
         List<UserDTO> users = new ArrayList<>();
-        for (String e : empIds) {
-            users.add(user(e));
+        for (String name : usernames) {
+            users.add(user("ID_" + name, name));
         }
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(users);
+        when(userApi.getUsersByUsernames(anyList())).thenReturn(users);
     }
 
     @Test
@@ -127,6 +136,24 @@ class EvalAssignImportServiceTest {
         assertThat(items.get(0).getWeightTag()).isEqualTo("主要");
         assertThat(items.get(0).getBeEvalDept()).isEqualTo("信贷部");
         assertThat(items.get(0).getSubmitted()).isEqualTo(0);
+        // Excel 填用户名(B1/E1...)，入库归一为 USER_ID(ID_*)，供下游「我的待处理任务」按 USER_ID 匹配
+        assertThat(items.stream().map(EvalAssignItem::getBeEvalUserId).collect(Collectors.toList()))
+                .containsExactly("ID_B1", "ID_B2");
+        assertThat(items.stream().map(EvalAssignItem::getEvalUserId).collect(Collectors.toList()))
+                .containsExactly("ID_E1", "ID_E2");
+    }
+
+    @Test
+    @DisplayName("员工编号填 USER_ID 而非用户名 → 行错误（不再接受 USER_ID）")
+    void importRows_userIdInsteadOfUsername_rowError() {
+        // 系统中存在用户：username=N1，USER_ID=ID_N1；Excel 误填 USER_ID(ID_N1) 作被打分人编号
+        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(user("ID_N1", "N1")));
+        EvalAssignImportResultDTO res = service.importRows(
+                List.of(row("ID_N1", "被一", "信贷部", "t", "N1", "评一", "t", "d", "主要", "数值打分")),
+                "EVAL", "测试任务", deadline, "ADMIN");
+        assertThat(res.isSuccess()).isFalse();
+        assertThat(res.getErrors().get(0).getMessage()).contains("被打分员工用户名不存在");
+        verify(itemMapper, never()).batchInsert(anyList());
     }
 
     @Test
@@ -143,7 +170,7 @@ class EvalAssignImportServiceTest {
         assertThat(res.getImportedCount()).isZero();
         assertThat(res.getErrors()).hasSize(1);
         assertThat(res.getErrors().get(0).getRow()).isEqualTo(2);
-        assertThat(res.getErrors().get(0).getMessage()).contains("被打分员工工号不存在");
+        assertThat(res.getErrors().get(0).getMessage()).contains("被打分员工用户名不存在");
         verify(batchMapper, never()).insert(any(EvalAssignBatch.class));
         verify(itemMapper, never()).batchInsert(anyList());
     }
@@ -156,7 +183,7 @@ class EvalAssignImportServiceTest {
                 List.of(row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分")),
                 "EVAL", "测试任务", deadline, "ADMIN");
         assertThat(res.isSuccess()).isFalse();
-        assertThat(res.getErrors().get(0).getMessage()).contains("打分员工工号不存在");
+        assertThat(res.getErrors().get(0).getMessage()).contains("打分员工用户名不存在");
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.eval.service;
 
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.eval.entity.EvalAssignBatch;
 import com.bank.branch.platform.performance.eval.entity.EvalAssignItem;
@@ -34,15 +35,20 @@ import java.util.Map;
 public class EvalAssignAdminService {
 
     private static final int DEFAULT_PAGE_SIZE = 20;
+    /** 评价类型字典类型（导出时编码→中文名称反查）。 */
+    private static final String DICT_SCORE_TYPE = "EVAL_SCORE_TYPE";
 
     private final EvalAssignBatchMapper batchMapper;
     private final EvalAssignItemMapper itemMapper;
+    private final DictApi dictApi;
 
     @Autowired
     public EvalAssignAdminService(EvalAssignBatchMapper batchMapper,
-                                   EvalAssignItemMapper itemMapper) {
+                                   EvalAssignItemMapper itemMapper,
+                                   DictApi dictApi) {
         this.batchMapper = batchMapper;
         this.itemMapper = itemMapper;
+        this.dictApi = dictApi;
     }
 
     /**
@@ -150,7 +156,9 @@ public class EvalAssignAdminService {
                 row.createCell(6).setCellValue(it.getBeEvalTag() == null ? "" : it.getBeEvalTag());
                 row.createCell(7).setCellValue(it.getBeEvalDept() == null ? "" : it.getBeEvalDept());
                 row.createCell(8).setCellValue(it.getWeightTag() == null ? "" : it.getWeightTag());
-                row.createCell(9).setCellValue(it.getScoreType() == null ? "" : it.getScoreType());
+                // 评价类型：DB 存的是字典编码（NUM/GRADE），导出按 EVAL_SCORE_TYPE 字典反查为中文名称
+                row.createCell(9).setCellValue(it.getScoreType() == null ? ""
+                        : dictApi.getDictLabel(DICT_SCORE_TYPE, it.getScoreType()));
                 row.createCell(10).setCellValue(it.getScore() == null ? "" : String.valueOf(it.getScore()));
                 row.createCell(11).setCellValue(it.getSubmitted() != null && it.getSubmitted() == 1 ? "已提交" : "未提交");
                 row.createCell(12).setCellValue(it.getSubmitTime() == null ? "" : it.getSubmitTime().format(dtf));

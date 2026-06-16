@@ -30,7 +30,8 @@ import java.util.Set;
  * 待处理任务（评价任务）Excel 导入服务。
  *
  * <p>同步、原子：全部行校验通过才建批次并批量入库；任一行错误则一条都不写（all-or-none），返回行级错误明细。</p>
- * <p>校验：双方工号为系统有效员工（部门/标签不校验）+ 权重标签命中字典 + 评价类型命中字典 + 文件内配对不重复。
+ * <p>校验：双方「员工编号」填登录用户名(PT_USER.USER_NAME)且为系统有效员工（部门/标签不校验，入库归一为 USER_ID）
+ * + 权重标签命中字典 + 评价类型命中字典 + 文件内配对不重复。
  * 截止时间随上传单独传入，作用于整批。</p>
  */
 @Slf4j
@@ -122,33 +123,31 @@ public class EvalAssignImportService {
             scoreTypeMap.put(d.getDictCode(), d.getDictCode());
         }
 
-        // 2. 工号有效性：先按 USER_ID 查，再按 USERNAME 补充，构建 输入→规范USER_ID 映射
-        Set<String> allIds = new HashSet<>();
+        // 2. 员工有效性：Excel「员工编号」列填写的是登录用户名（PT_USER.USER_NAME），
+        //    只按 USERNAME 校验（不再接受 USER_ID），构建 用户名→规范USER_ID 映射。
+        //    入库仍归一为 USER_ID，下游「我的待处理任务」按 USER_ID 匹配当前登录人（CurrentUserApi.getCurrentEmpId）。
+        Set<String> allNames = new HashSet<>();
         for (EvalAssignImportRow r : rows) {
             if (r.getBeEvalUserId() != null && !r.getBeEvalUserId().trim().isEmpty()) {
-                allIds.add(r.getBeEvalUserId().trim());
+                allNames.add(r.getBeEvalUserId().trim());
             }
             if (r.getEvalUserId() != null && !r.getEvalUserId().trim().isEmpty()) {
-                allIds.add(r.getEvalUserId().trim());
+                allNames.add(r.getEvalUserId().trim());
             }
         }
-        // 输入→规范USER_ID 映射：Excel 可填 USER_ID 或 USERNAME
-        Map<String, String> idToEmpId = new HashMap<>();
-        if (!allIds.isEmpty()) {
-            List<String> idList = new ArrayList<>(allIds);
-            // 先按 USER_ID 查
-            for (UserDTO u : userApi.getUserByEmpIds(idList)) {
-                idToEmpId.put(u.getEmpId(), u.getEmpId());
-            }
-            // 再按 USERNAME 补充（不覆盖已有的 USER_ID 映射）
-            List<UserDTO> byUsernames = userApi.getUsersByUsernames(idList);
+        // 用户名→规范USER_ID 映射
+        Map<String, String> nameToUserId = new HashMap<>();
+        if (!allNames.isEmpty()) {
+            List<UserDTO> byUsernames = userApi.getUsersByUsernames(new ArrayList<>(allNames));
             if (byUsernames != null) {
                 for (UserDTO u : byUsernames) {
-                    idToEmpId.putIfAbsent(u.getUsername(), u.getEmpId());
+                    if (u.getUsername() != null) {
+                        nameToUserId.put(u.getUsername(), u.getEmpId());
+                    }
                 }
             }
         }
-        Set<String> existingIds = idToEmpId.keySet();
+        Set<String> existingNames = nameToUserId.keySet();
 
         // 3. 逐行校验
         List<EvalAssignImportResultDTO.RowError> errors = new ArrayList<>();
@@ -169,17 +168,17 @@ public class EvalAssignImportService {
                 errors.add(err(rowNo, "打分员工编号不能为空"));
                 continue;
             }
-            if (!existingIds.contains(beId)) {
-                errors.add(err(rowNo, "被打分员工工号不存在：" + beId));
+            if (!existingNames.contains(beId)) {
+                errors.add(err(rowNo, "被打分员工用户名不存在：" + beId));
                 continue;
             }
-            if (!existingIds.contains(evId)) {
-                errors.add(err(rowNo, "打分员工工号不存在：" + evId));
+            if (!existingNames.contains(evId)) {
+                errors.add(err(rowNo, "打分员工用户名不存在：" + evId));
                 continue;
             }
-            // 输入可能是 USERNAME，规范化为真正的 USER_ID 后再存储
-            beId = idToEmpId.getOrDefault(beId, beId);
-            evId = idToEmpId.getOrDefault(evId, evId);
+            // 输入是 USERNAME，规范化为真正的 USER_ID 后再存储（下游按 USER_ID 匹配打分人）
+            beId = nameToUserId.getOrDefault(beId, beId);
+            evId = nameToUserId.getOrDefault(evId, evId);
             // 权重标签：必填且命中字典
             String weight = trim(r.getWeightTag());
             if (weight.isEmpty()) {
