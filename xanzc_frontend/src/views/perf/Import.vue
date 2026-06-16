@@ -93,7 +93,7 @@
         <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]" :total="rows.length" background layout="total, sizes, prev, pager, next" />
       </div>
       <div class="empty-tip">
-        ⓘ 后端暂未提供"全局批次列表"接口；本表仅展示当前浏览器最近 50 次本地上传记录（点"刷新"可拉取每条最新状态）。
+        ⓘ 本表仅展示当前浏览器最近 50 次本地上传记录（点"刷新"可拉取每条最新状态）。
       </div>
     </div>
   </div>

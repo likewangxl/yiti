@@ -1,4 +1,5 @@
 import { call, unwrapPage } from './http';
+import { fmtDateTime } from '@/utils/datetime';
 import {
   perfMetricsTree, perfMetricDetail, perfKpiRules,
   perfTargets, perfImports, perfComputeBatches
@@ -226,7 +227,7 @@ export async function uploadImportFile(importType, file, dataDate, meta = {}) {
     uploader: meta.uploader || '当前用户',
     valid: 0, total: 0,
     status: 'PROCESSING',
-    time: new Date().toISOString().slice(0, 19).replace('T', ' ')
+    time: fmtDateTime(new Date()) // 本地时间，避免 toISOString() 的 UTC 比本地早 8 小时
   });
   return normalized;
 }
