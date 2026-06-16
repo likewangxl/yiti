@@ -870,8 +870,12 @@ public class KpiScoreCalcService {
                 continue;
             }
             PerfMetricDef def = metricDefService.getByCodeOrNull(code);
+            if (def == null) {
+                // 指标表(PERF_METRIC_DEF)中已不存在（被删除/未登记）→ 不展示该指标列（结果详情列 + 指标下拉同源收敛）
+                continue;
+            }
             map.put(code, new com.bank.branch.platform.performance.controller.dto.MetricOptionDTO(
-                    code, def == null ? code : def.getMetricName()));
+                    code, def.getMetricName()));
         }
         return new java.util.ArrayList<>(map.values());
     }

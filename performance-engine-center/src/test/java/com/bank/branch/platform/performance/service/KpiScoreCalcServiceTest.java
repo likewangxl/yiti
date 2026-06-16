@@ -427,6 +427,25 @@ class KpiScoreCalcServiceTest {
     }
 
     @Test
+    @DisplayName("listSchemeMetrics: 指标不在指标表(PERF_METRIC_DEF)中 → 不返回该指标列")
+    void listSchemeMetrics_excludesMetricsNotInMetricDef() {
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1"); scheme.setSchemeCode("KPI_A");
+        when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
+        PerfKpiItem ok = new PerfKpiItem(); ok.setMetricCode("M_OK");
+        PerfKpiItem missing = new PerfKpiItem(); missing.setMetricCode("M_MISSING");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(ok, missing));
+        PerfMetricDef def = new PerfMetricDef(); def.setMetricCode("M_OK"); def.setMetricName("有效指标");
+        when(metricDefService.getByCodeOrNull("M_OK")).thenReturn(def);
+        when(metricDefService.getByCodeOrNull("M_MISSING")).thenReturn(null); // 指标表中没有
+
+        var metrics = service.listSchemeMetrics("KPI_A");
+
+        assertThat(metrics).extracting("metricCode").containsExactly("M_OK");
+        assertThat(metrics).extracting("metricName").containsExactly("有效指标");
+    }
+
+    @Test
     @DisplayName("pageScoreGroups: ORG 维度 → 批量 getOrgsByCodes 回填机构名称，对象ID 替换为部门编号")
     void pageScoreGroups_orgEnrichesViaBatch() {
         PerfKpiScheme scheme = new PerfKpiScheme();
