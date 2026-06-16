@@ -642,26 +642,91 @@ public class KpiScoreCalcService {
             return page;
         }
 
-        // 关键字模式：对象名称是读取时 enrich（非 DB 列），无法下推 SQL；
-        // 取全部对象组 → 装配 → enrich 名称 → 按对象名称/ID 模糊过滤 → 内存分页。
-        // 单方案单日期下对象数有界（数据范围内的员工/机构），上限 SEARCH_SUBJECT_CAP 保护。
-        List<KpiSubjectGroupRow> allGroups = scoreMapper.selectSubjectGroups(
-                dataDate, sc, st, scope, 0, (int) Math.min(total, SEARCH_SUBJECT_CAP));
-        List<KpiScoreGroupRowDTO> allRecords = buildGroupRecords(allGroups, dataDate, sc, metricCols);
-        enrichGroupNames(allRecords);
-        List<KpiScoreGroupRowDTO> matched = new java.util.ArrayList<>();
-        for (KpiScoreGroupRowDTO r : allRecords) {
-            String name = r.getSubjectName() == null ? "" : r.getSubjectName().toLowerCase();
-            String id = r.getSubjectId() == null ? "" : r.getSubjectId().toLowerCase();
-            if (name.contains(kw) || id.contains(kw)) {
-                matched.add(r);
-            }
+        // 关键字模式（方案B）：对象名称是 enrich 派生字段、非 DB 列，无法直接下推 SQL 过滤。
+        // 改为先把关键字翻译成 subject_id 集合（EMP 工号 via UserApi.pageUsers / ORG 机构码 via OrgApi.searchOrgs），
+        // 与数据范围求交后复用 SCOPE_FILTER（subject_id IN）走 DB 分页，避免"全取 + 内存过滤"的遍历。
+        KpiScopeFilter effective = intersectKeywordWithScope(scope, kw, st);
+        if (isEmptyFilter(effective)) {
+            page.setTotal(0L);
+            page.setRecords(List.of());
+            return page;
         }
-        page.setTotal((long) matched.size());
-        int from = Math.min(offset, matched.size());
-        int to = Math.min(from + safeSize, matched.size());
-        page.setRecords(matched.subList(from, to));
+        long kwTotal = scoreMapper.countSubjectGroups(dataDate, sc, st, effective);
+        if (kwTotal == 0) {
+            page.setTotal(0L);
+            page.setRecords(List.of());
+            return page;
+        }
+        page.setTotal(kwTotal);
+        List<KpiSubjectGroupRow> kwGroups = scoreMapper.selectSubjectGroups(dataDate, sc, st, effective, offset, safeSize);
+        List<KpiScoreGroupRowDTO> kwRecords = buildGroupRecords(kwGroups, dataDate, sc, metricCols);
+        enrichGroupNames(kwRecords);
+        page.setRecords(kwRecords);
         return page;
+    }
+
+    /**
+     * 方案B：把对象名称/工号关键字翻译成 subject_id 集合（EMP=工号、ORG=机构编码），并与数据范围求交。
+     *
+     * <p>EMP 经 {@link UserApi#pageUsers}（匹配 工号/姓名）取 username；ORG 经 {@link OrgApi#searchOrgs}
+     * （匹配 机构名/编码）取 orgCode。选定维度（st）时只翻译对应维度，另一维度留空。
+     * 结果与数据范围 {@code scope} 求交后，复用 SCOPE_FILTER（subject_id IN）下推 DB 分页。</p>
+     */
+    private KpiScopeFilter intersectKeywordWithScope(KpiScopeFilter scope, String kw, String st) {
+        List<String> kwEmpIds = "ORG".equals(st) ? List.of() : searchEmpIdsByKeyword(kw);
+        List<String> kwOrgCodes = "EMP".equals(st) ? List.of() : searchOrgCodesByKeyword(kw);
+        if (scope == null || scope.isScopeAll()) {
+            return KpiScopeFilter.of(kwEmpIds, kwOrgCodes);
+        }
+        return KpiScopeFilter.of(
+                intersectIds(scope.getEmpIds(), kwEmpIds),
+                intersectIds(scope.getOrgCodes(), kwOrgCodes));
+    }
+
+    /** 关键字 → 匹配的员工工号集合（UserApi.pageUsers 匹配 工号/姓名，取 username）。失败 fail-soft 返回空。 */
+    private List<String> searchEmpIdsByKeyword(String kw) {
+        try {
+            com.bank.branch.platform.common.web.PageResult<UserDTO> p =
+                    userApi.pageUsers(kw, 1, SEARCH_SUBJECT_CAP);
+            if (p == null || p.getRecords() == null) {
+                return List.of();
+            }
+            return p.getRecords().stream()
+                    .map(UserDTO::getUsername).filter(StringUtils::hasText).distinct().toList();
+        } catch (Exception e) {
+            log.warn("[KpiScoreCalcService] 关键字→工号 翻译失败 kw={}", kw, e);
+            return List.of();
+        }
+    }
+
+    /** 关键字 → 匹配的机构编码集合（OrgApi.searchOrgs 匹配 机构名/编码，取 orgCode）。失败 fail-soft 返回空。 */
+    private List<String> searchOrgCodesByKeyword(String kw) {
+        try {
+            List<OrgDTO> orgs = orgApi.searchOrgs(kw, SEARCH_SUBJECT_CAP);
+            if (orgs == null) {
+                return List.of();
+            }
+            return orgs.stream().map(OrgDTO::getOrgCode).filter(StringUtils::hasText).distinct().toList();
+        } catch (Exception e) {
+            log.warn("[KpiScoreCalcService] 关键字→机构编码 翻译失败 kw={}", kw, e);
+            return List.of();
+        }
+    }
+
+    /** 两集合求交（任一为空 → 空）。 */
+    private static List<String> intersectIds(List<String> a, List<String> b) {
+        if (a == null || a.isEmpty() || b == null || b.isEmpty()) {
+            return List.of();
+        }
+        java.util.Set<String> set = new java.util.HashSet<>(a);
+        return b.stream().filter(set::contains).distinct().toList();
+    }
+
+    /** 受限范围且 EMP/ORG 集合皆空 → 必无结果（直接返回空页，免一次 DB 查询）。 */
+    private static boolean isEmptyFilter(KpiScopeFilter f) {
+        return f != null && !f.isScopeAll()
+                && (f.getEmpIds() == null || f.getEmpIds().isEmpty())
+                && (f.getOrgCodes() == null || f.getOrgCodes().isEmpty());
     }
 
     /** 对象名称模糊查询时单方案单日期对象数上限（防一次取数过大）. */

@@ -392,7 +392,7 @@ class KpiScoreCalcServiceTest {
     }
 
     @Test
-    @DisplayName("pageScoreGroups: 对象名称模糊关键字 → 仅返回名称命中的对象（取全量 enrich 后内存过滤+分页）")
+    @DisplayName("pageScoreGroups: 对象名称模糊关键字 → 翻译成工号集合(UserApi.pageUsers)，复用 SCOPE_FILTER 走 DB 分页（不再全取内存筛）")
     void pageScoreGroups_filtersBySubjectNameKeyword() {
         PerfKpiScheme scheme = new PerfKpiScheme();
         scheme.setId("S1"); scheme.setSchemeCode("KPI_A");
@@ -402,22 +402,21 @@ class KpiScoreCalcServiceTest {
         PerfMetricDef d1 = new PerfMetricDef(); d1.setMetricCode("M_0001"); d1.setMetricName("新增客户");
         when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(d1);
 
-        // 2 个对象：E001(张三) / E002(李四)
-        when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any())).thenReturn(2L);
+        // 方案B：关键字"张" → UserApi.pageUsers 翻译出工号 E001（仅命中的对象）
+        UserDTO u1 = new UserDTO(); u1.setUsername("E001"); u1.setDisplayName("张三");
+        when(userApi.pageUsers(eq("张"), anyInt(), anyInt()))
+                .thenReturn(com.bank.branch.platform.common.web.PageResult.of(1, 5000, 1L, List.of(u1)));
+        // searchOrgs 未打桩 → 返回 null（服务内兜底为空），机构维度无命中
+
+        // 翻译后用 effective filter（empIds=[E001]）走 DB 分页：count + 当前页
+        when(scoreMapper.countSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any())).thenReturn(1L);
         KpiSubjectGroupRow g1 = new KpiSubjectGroupRow();
         g1.setSubjectId("E001"); g1.setSubjectType("EMP"); g1.setTotalScore(new BigDecimal("0.7"));
-        KpiSubjectGroupRow g2 = new KpiSubjectGroupRow();
-        g2.setSubjectId("E002"); g2.setSubjectType("EMP"); g2.setTotalScore(new BigDecimal("0.5"));
-        // 关键字模式取全部对象：offset=0, limit=min(total=2, CAP)=2
-        when(scoreMapper.selectSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any(), eq(0), eq(2)))
-                .thenReturn(List.of(g1, g2));
+        when(scoreMapper.selectSubjectGroups(eq(DATA_DATE), eq("KPI_A"), isNull(), any(), eq(0), eq(20)))
+                .thenReturn(List.of(g1));
         when(scoreMapper.selectByDateSchemeSubjects(eq(DATA_DATE), eq("KPI_A"), anyList()))
-                .thenReturn(List.of(
-                        scoreRow("E001", "M_0001", "80", "100", "0", "0.7"),
-                        scoreRow("E002", "M_0001", "50", "100", "0", "0.5")));
-        UserDTO u1 = new UserDTO(); u1.setUsername("E001"); u1.setDisplayName("张三");
-        UserDTO u2 = new UserDTO(); u2.setUsername("E002"); u2.setDisplayName("李四");
-        when(userApi.getUsersByUsernames(List.of("E001", "E002"))).thenReturn(List.of(u1, u2));
+                .thenReturn(List.of(scoreRow("E001", "M_0001", "80", "100", "0", "0.7")));
+        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(u1));
 
         KpiScoreGroupPageDTO page = service.pageScoreGroups(DATA_DATE, "KPI_A", null, "张", 1, 20);
 
