@@ -47,6 +47,8 @@ const routes = [
       { path: 'report/free',      name: 'ReportFree',    component: () => import('@/views/report/FreeReport.vue'), meta: { title: '自由报表', group: '报表分析' } },
       { path: 'report/free/:batchId', name: 'ReportFreeDetail', component: () => import('@/views/report/FreeReportDetail.vue'), meta: { title: '报表详情', group: '报表分析' } },
       { path: 'report/sql',       name: 'ReportSql',     component: () => import('@/views/report/Sql.vue'),       meta: { title: 'SQL 探查',     group: '报表分析' } },
+      { path: 'report/amas-approvals', name: 'ReportAmasApprovals', component: () => import('@/views/report/AmasApprovals.vue'), meta: { title: '业绩分配查询', group: '报表分析' } },
+      { path: 'report/amas-approvals/:perfAdjustNo', name: 'ReportAmasApprovalDetail', component: () => import('@/views/report/AmasApprovalDetail.vue'), meta: { title: '业绩分配审批详情', group: '报表分析', hideInMenu: true } },
 
       // 系统设置
       { path: 'system/users',      name: 'SysUsers',      component: () => import('@/views/system/Users.vue'),      meta: { title: '用户管理', group: '系统设置' } },

@@ -343,3 +343,28 @@ export function disableFreeReportBatch(batchId) {
 export function enableFreeReportBatch(batchId) {
   return call('post', `/reports/free/batches/${batchId}/enable`, {}, { ok: true });
 }
+
+// ===== 业绩分配审批历史（AMAS，只读）=====
+// 后端 AmasApprovalHistoryController：
+//   GET /api/reports/amas-approvals          列表（申请时间倒序，顶部查询项）
+//   GET /api/reports/amas-approvals/{no}     详情（分配明细 + 审批流程）
+// 分页响应经 http 拦截器返回 body.page（{ records, total, pageNo, pageSize }）。
+export function listAmasApprovals(params = {}) {
+  return call('get', '/reports/amas-approvals', { params }, { records: [], total: 0 });
+}
+export function getAmasApprovalDetail(perfAdjustNo) {
+  return call('get', `/reports/amas-approvals/${encodeURIComponent(perfAdjustNo)}`, {},
+    { approval: {}, allocations: [], apprRecords: [] });
+}
+
+// ===== 业绩调整（PERF_ALLOC_ADJUST_APPLY，只读）—— 同页面「业绩调整」Tab =====
+// 后端 AllocAdjustHistoryController：
+//   GET /api/reports/alloc-adjust-applies          列表（申请时间倒序，顶部查询项）
+//   GET /api/reports/alloc-adjust-applies/{id}     详情（申请信息 + 业绩分配数据）
+export function listAllocAdjustApplies(params = {}) {
+  return call('get', '/reports/alloc-adjust-applies', { params }, { records: [], total: 0 });
+}
+export function getAllocAdjustApplyDetail(id) {
+  return call('get', `/reports/alloc-adjust-applies/${encodeURIComponent(id)}`, {},
+    { apply: {}, items: [] });
+}

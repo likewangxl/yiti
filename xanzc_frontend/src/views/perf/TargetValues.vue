@@ -36,6 +36,14 @@
     <!-- 筛选栏。方案/维度由 URL 传入锁定 -->
     <div class="card-section filter-grid">
       <div>
+        <div class="lab">对象</div>
+        <el-select v-model="f.subjectId" clearable filterable @change="loadValues"
+          :loading="loadingSubjects" placeholder="全部" style="width:100%">
+          <el-option v-for="s in subjectOptions" :key="s.subjectId"
+            :value="s.subjectId" :label="s.label" />
+        </el-select>
+      </div>
+      <div>
         <div class="lab">指标</div>
         <el-select v-model="f.metricCode" clearable filterable @change="loadValues" placeholder="全部" style="width:100%">
           <el-option v-for="m in filteredMetricOptions" :key="m.metricCode"
@@ -178,7 +186,7 @@ import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import {
-  listTargets, listTargetValues, upsertTargetValue, batchUpsertTargetValues,
+  listTargets, listTargetValues, listTargetValueSubjects, upsertTargetValue, batchUpsertTargetValues,
   submitTargetAdjust, listMetrics, deleteTargetValue,
   listKpiRules, getKpiSchemeDetail
 } from '@/api/perf';
@@ -387,9 +395,23 @@ const filteredMetricOptions = computed(() => {
 });
 
 // === 目标值 ===
-const f = reactive({ planId: '', subjectType: '', metricCode: '', approvalStatus: '' });
+const f = reactive({ planId: '', subjectType: '', subjectId: '', metricCode: '', approvalStatus: '' });
 const values = ref([]);
 const loadingValues = ref(false);
+
+// === 对象下拉（方案内目标值去重；EMP→工号+姓名，ORG→部门编号+机构名称）===
+const subjectOptions = ref([]);
+const loadingSubjects = ref(false);
+async function loadSubjects() {
+  if (!f.planId) { subjectOptions.value = []; return; }
+  loadingSubjects.value = true;
+  try {
+    const r = await listTargetValueSubjects(f.planId);
+    subjectOptions.value = Array.isArray(r) ? r : (r?.records || []);
+  } catch { subjectOptions.value = []; } finally { loadingSubjects.value = false; }
+}
+// 方案切换：重载对象下拉并清空已选对象（避免跨方案残留过滤）
+watch(() => f.planId, () => { f.subjectId = ''; loadSubjects(); }, { immediate: true });
 
 // === 当前传入方案上下文（H1 副标题用，仅显示名称，不显示方案/KPI 的 ID） ===
 const currentPlan      = computed(() =>
@@ -430,6 +452,7 @@ async function loadValues() {
     const r = await listTargetValues({
       planId: f.planId, planCode: f.planId,
       subjectType: f.subjectType || undefined,
+      subjectId: f.subjectId || undefined,
       metricCode: f.metricCode || undefined,
       pageSize: 100
     });
@@ -462,6 +485,7 @@ const filteredRows = computed(() => {
   let arr = values.value;
   if (f.approvalStatus) arr = arr.filter(r => r.approvalStatus === f.approvalStatus);
   if (f.subjectType)    arr = arr.filter(r => r.subjectType === f.subjectType);
+  if (f.subjectId)      arr = arr.filter(r => r.subjectId === f.subjectId);
   if (f.metricCode)     arr = arr.filter(r => r.metricCode === f.metricCode);
   return arr;
 });
@@ -652,16 +676,9 @@ async function onSaveValue() {
   }
   const dim = valDlg.form.subjectType;
   const sid = valDlg.form.subjectId;
-  // 员工/机构存在性校验（同时打到浏览器 console，便于 F12 留痕排查；
-  // 前端校验失败 HTTP 请求不会发出，所以后端 boot.log 看不到这条错误）
-  if (dim === 'EMP' && !empMap.value.has(sid)) {
-    console.warn('[onSaveValue] EMP 不存在', { sid, empMapSize: empMap.value.size, planId: f.planId });
-    return ElMessage.error(`员工「${sid}」在系统中不存在`);
-  }
-  if (dim === 'ORG' && !orgMap.value.has(sid)) {
-    console.warn('[onSaveValue] ORG 不存在', { sid, orgMapSize: orgMap.value.size, planId: f.planId });
-    return ElMessage.error(`机构「${sid}」在系统中不存在`);
-  }
+  // 2026-06-15：员工工号/机构部门编号的存在性校验已下沉后端（直连 PT_USER / EXT_ORG_INFO 校验）。
+  // 前端不再用 empMap/orgMap 缓存判存在性（缓存受 pageSize 上限截断会误判），
+  // 不存在时后端抛 VALIDATION_FAILED，下方 catch 用 err.bizMsg 展示。
   // 同一方案下 对象+指标 不能重复（检查已有数据）
   const dup = values.value.find(v => v.subjectId === sid && v.metricCode === valDlg.form.metricCode);
   if (dup) {
@@ -725,19 +742,9 @@ async function onImportFileSelected(e) {
         errors.push(`第${i + 1}行: 数据不完整`);
         continue;
       }
-      // 按维度校验员工/机构对象是否存在
-      if (dim === 'EMP' && !empMap.value.has(subjectId)) {
-        errors.push(`第${i + 1}行: 员工「${subjectId}」在系统中不存在`); continue;
-      }
-      if (dim === 'ORG') {
-        // 机构号按 EXT_ORG_INFO.DEPT_NO（业务机构部门编号）校验匹配；命中后转换为内部机构编码入库，
-        // 与单条新增/对象列展示/KPI 计算的 subject_id（内部机构编码）口径保持一致
-        const code = orgDeptToCode.value.get(subjectId);
-        if (!code) {
-          errors.push(`第${i + 1}行: 机构号「${subjectId}」在机构信息(EXT_ORG_INFO.DEPT_NO)中不存在`); continue;
-        }
-        subjectId = code;
-      }
+      // 2026-06-15：员工工号/机构部门编号的存在性校验下沉后端（直连 PT_USER / EXT_ORG_INFO）。
+      // 前端不再用 empMap/orgDeptToCode 缓存判存在性与做 deptNo→编码转换（缓存受 pageSize 截断会误判）；
+      // EMP 直接发工号、ORG 直接发部门编号(DEPT_NO)，由后端 upsertBatch 校验并把 ORG 归一为内部机构编码入库。
       // 按指标名称反查 metricCode（仅匹配 ACTIVE 状态 + 维度匹配）
       const m = metricOptions.value.find(x => x.metricName === metricNameRaw && x.status === 'ACTIVE' && (!x.baseDim || x.baseDim === dim));
       if (!m) { errors.push(`第${i + 1}行: 指标「${metricNameRaw}」未找到`); continue; }

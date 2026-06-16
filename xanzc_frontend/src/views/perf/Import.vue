@@ -12,17 +12,16 @@
         <el-form-item label="导入类型">
           <el-radio-group v-model="kind">
             <el-radio value="METRIC_RESULT">指标结果</el-radio>
-            <el-radio value="ALLOC">KPI 结果</el-radio>
+            <el-radio value="KPI_SCORE">KPI 结果</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="数据日期">
           <el-date-picker v-model="date" type="date" value-format="YYYY-MM-DD" style="width:260px" />
         </el-form-item>
         <el-form-item label="方案" v-if="kind !== 'METRIC_RESULT'">
-          <el-select v-model="plan" style="width:260px">
-            <el-option value="2026Q2" label="2026Q2 KPI" />
-            <el-option value="2026Q1" label="2026Q1 KPI" />
-            <el-option value="2025Y"  label="2025Y KPI"  />
+          <el-select v-model="plan" style="width:260px" clearable placeholder="选择启用的 KPI 方案">
+            <el-option v-for="s in schemes" :key="s.schemeCode" :value="s.schemeCode"
+                       :label="s.schemeName ? `${s.schemeName}（${s.schemeCode}）` : s.schemeCode" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -50,7 +49,7 @@
 
       <div v-if="picked" class="picked">
         已选择：<strong>{{ picked.name }}</strong>（{{ fmtSize(picked.size) }}）
-        <el-button type="primary" :loading="uploading" @click="onUpload" style="margin-left:12px">立即上传</el-button>
+        <el-button type="primary" :loading="uploading" @click="onUpload(true)" style="margin-left:12px">立即上传</el-button>
         <el-button @click="picked = null; uploaderRef?.clearFiles()">取消</el-button>
       </div>
     </div>
@@ -107,7 +106,8 @@ import { fmtDateTimeCol } from '@/utils/datetime';
 import { UploadFilled } from '@element-plus/icons-vue';
 import {
   listImports, uploadImportFile,
-  refreshImportStatus, retryImport, deleteImportBatch, downloadImportErrors
+  refreshImportStatus, retryImport, deleteImportBatch, downloadImportErrors,
+  listKpiRules
 } from '@/api/perf';
 
 const kind = ref('METRIC_RESULT');
@@ -123,7 +123,7 @@ const pgNo = ref(1);
 const pgSize = ref(20);
 const pagedRows = computed(() => rows.value.slice((pgNo.value - 1) * pgSize.value, pgNo.value * pgSize.value));
 
-const TYPE_LABEL = { METRIC_RESULT: '指标结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
+const TYPE_LABEL = { METRIC_RESULT: '指标结果', KPI_SCORE: 'KPI 结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
 const typeLabel = (t) => TYPE_LABEL[t] || t || '-';
 const STATUS_LABEL = { PROCESSING: '导入中', SUCCESS: '已完成', FAILED: '失败', PENDING: '排队中' };
 const statusLabel = (s) => STATUS_LABEL[s] || s || '-';
@@ -143,6 +143,15 @@ async function reload() {
   } catch {} finally { loading.value = false; }
 }
 
+// 方案下拉：只取状态=启用(ACTIVE)的 KPI 方案
+const schemes = ref([]);
+async function loadSchemes() {
+  try {
+    const raw = await listKpiRules({ status: 'ACTIVE', pageSize: 100 });
+    schemes.value = Array.isArray(raw) ? raw : (raw?.records || []);
+  } catch { schemes.value = []; }
+}
+
 // === 上传 ===
 const uploaderRef = ref(null);
 const picked = ref(null);
@@ -157,15 +166,21 @@ function onFilePick(file) {
   }
   picked.value = file.raw;
 }
-async function onUpload() {
+async function onUpload(archive = true) {
   if (!picked.value) return ElMessage.warning('请先选择文件');
   // V1.12 微调：METRIC_RESULT 必填 dataDate（前端 picker 默认今天），缺失提前拦截避免后端 422
   if (kind.value === 'METRIC_RESULT' && !date.value) {
     return ElMessage.warning('请选择数据日期');
   }
+  // KPI 结果导入：数据日期 + KPI 方案均必填（落库 PERF_KPI_SCORE 的 data_date / scheme_code）
+  if (kind.value === 'KPI_SCORE') {
+    if (!date.value) return ElMessage.warning('请选择数据日期');
+    if (!plan.value) return ElMessage.warning('请选择 KPI 方案');
+  }
   uploading.value = true;
   try {
-    const result = await uploadImportFile(kind.value, picked.value, date.value, { uploader: '当前用户' });
+    const result = await uploadImportFile(kind.value, picked.value, date.value,
+      { uploader: '当前用户', schemeCode: plan.value, archiveSource: archive });
     const { batchId, errorRows = 0, errorSummary } = result || {};
     if (errorRows > 0) {
       // 2026-05-19 微调：行级校验失败的批次（例如机构号不在 EXT_ORG_INFO）必须明显告警，
@@ -219,7 +234,8 @@ async function downloadTpl() {
   // 指标定义 / 指标结果：直接下载 public/templates 下的真实模板文件
   const STATIC_TPL = {
     METRIC_DEF:    { url: '/templates/指标表上传模板.xlsx',  name: '指标表上传模板.xlsx' },
-    METRIC_RESULT: { url: '/templates/指标结果模板.xlsx', name: '指标结果模板.xlsx' }
+    METRIC_RESULT: { url: '/templates/指标结果模板.xlsx', name: '指标结果模板.xlsx' },
+    KPI_SCORE:     { url: '/templates/KPI结果导入模板.xlsx', name: 'KPI结果导入模板.xlsx' }
   };
   const staticTpl = STATIC_TPL[kind.value];
   if (staticTpl) {
@@ -255,7 +271,7 @@ async function downloadTpl() {
   }
 }
 
-onMounted(reload);
+onMounted(() => { reload(); loadSchemes(); });
 </script>
 
 <style lang="scss" scoped>

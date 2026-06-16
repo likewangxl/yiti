@@ -78,7 +78,7 @@
             </el-table-column>
             <el-table-column label="操作" width="180" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openView(row)">查看</el-button>
+                <el-button link type="primary" size="small" @click="openSharedView(row)">查看</el-button>
                 <el-button v-if="row.status === 'DRAFT'" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
                 <el-popconfirm
                   v-if="canWithdraw(row.status)"
@@ -265,7 +265,7 @@
             </el-table-column>
             <el-table-column label="操作" width="120" fixed="right">
               <template #default="{row}">
-                <el-button link type="primary" size="small" @click="openTodoDetail(row)">查看申请</el-button>
+                <el-button link type="primary" size="small" @click="openSharedView(row)">查看申请</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -623,11 +623,14 @@
       </template>
     </el-dialog>
 
+    <!-- 查看调整申请（共享只读组件，与业绩分配查询页共用） -->
+    <AllocAdjustViewDialog v-model="viewDialog.show" :apply-id="viewDialog.applyId" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue';
+import AllocAdjustViewDialog from '@/components/AllocAdjustViewDialog.vue';
 import { useRoute } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -1240,6 +1243,15 @@ async function loadPreview(statisDt) {
     });
   } catch { preview.data = null; }
   finally { preview.loading = false; }
+}
+// 查看调整申请：统一走共享只读组件（与业绩分配查询页内容一致）；审批仍用原表单弹框，不改动任何现有函数
+const viewDialog = reactive({ show: false, applyId: '' });
+function openSharedView(row) {
+  const fromBk = (row.businessKey || '').split(':')[1];
+  const applyId = fromBk || row.id || row.applyNo || row.bizId;
+  if (!applyId) { ElMessage.warning('无法识别申请 ID'); return; }
+  viewDialog.applyId = String(applyId);
+  viewDialog.show = true;
 }
 const dlg = reactive({
   show: false, readOnly: false, saving: false, draftSaving: false, viewingId: null, editingId: null,

@@ -135,6 +135,10 @@ export function updateTargetPlan(id, data) {
 export function listTargetValues(params = {}) {
   return call('get', '/perf/target-values', { params }, []).then(unwrapPage);
 }
+// 目标值「对象」下拉（方案内目标值去重；EMP→工号+姓名，ORG→部门编号+机构名称）
+export function listTargetValueSubjects(planId) {
+  return call('get', '/perf/target-values/subjects', { params: { planId } }, []);
+}
 export function upsertTargetValue(data) {
   return call('post', '/perf/target-values', { data }, { ok: true });
 }
@@ -194,6 +198,12 @@ export async function uploadImportFile(importType, file, dataDate, meta = {}) {
   if (dataDate) {
     params.dataDate = dataDate;
   }
+  // KPI_SCORE：KPI 方案编码经 query 参 schemeCode 传入（落 PERF_KPI_SCORE.scheme_code）
+  if (meta.schemeCode) {
+    params.schemeCode = meta.schemeCode;
+  }
+  // archiveSource：true=「立即上传」走 CBS（OBS 归档）；false=「上传并导入」不走 CBS。默认 true。
+  params.archiveSource = meta.archiveSource !== false;
   // V1.11 后端响应破坏性变更：data 从 string 变为 PerfImportUploadRespDTO 对象，
   // 需要从对象里取 batchId 字段；mock 路径仍返回字符串，二者兼容
   // 2026-05-19 微调：返回完整对象（含 errorRows / errorSummary），让调用方区分"已提交但有错"与"完全成功"

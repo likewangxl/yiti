@@ -505,7 +505,7 @@ async function loadPickerScope() {
 watch(dim, (cur, prev) => {
   if (cur === prev) return;
   subjects.value = [];      // 对象按维度不同，切维度清空
-  // 指标保留：切维度不清空已选指标（按用户要求）
+  pickedMetrics.value = []; // 切维度清空已选指标，默认无指标选中（按用户要求）
   hasResult.value = false;
   rows.value = [];          // 切维度清空结果表，避免遗留上一维度数据
   resultPageNo.value = 1;

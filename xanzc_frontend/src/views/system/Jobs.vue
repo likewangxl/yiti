@@ -72,9 +72,6 @@
         </el-table-column>
         <el-table-column prop="startTime" label="开始时间" width="170" :formatter="fmtDateTimeCol" />
         <el-table-column prop="endTime" label="结束时间" width="170" :formatter="fmtDateTimeCol" />
-        <el-table-column label="耗时(ms)" width="100" align="right">
-          <template #default="{row}">{{ row.durationMs != null ? row.durationMs : '—' }}</template>
-        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{row}">
             <el-tag
@@ -83,11 +80,18 @@
             >{{ row.status || '—' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="errorMsg" label="错误信息" min-width="200" show-overflow-tooltip>
-          <template #default="{row}">{{ row.errorMsg || '—' }}</template>
+        <el-table-column label="处理状态" width="110">
+          <template #default="{row}">
+            <el-tag
+              v-if="row.processStatus"
+              :class="{ SUCCESS: 'tag-success', FAILED: 'tag-danger', PARTIAL_FAILED: 'tag-warning', RUNNING: 'tag-warning' }[row.processStatus] || 'tag-info'"
+              effect="plain" size="small"
+            >{{ procStatusLabel(row.processStatus) }}</el-tag>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
-        <el-table-column label="操作人" width="120">
-          <template #default="{row}">{{ row.operatorEmpId || '—' }}</template>
+        <el-table-column prop="errorMsg" label="错误原因" min-width="200" show-overflow-tooltip>
+          <template #default="{row}">{{ row.errorMsg || '—' }}</template>
         </el-table-column>
       </el-table>
       <div class="pager">
@@ -95,7 +99,7 @@
           v-model:current-page="logDlg.pageNo"
           v-model:page-size="logDlg.pageSize"
           :total="logDlg.total"
-          :page-sizes="[20, 50]"
+          :page-sizes="[10, 20, 50]"
           layout="total, sizes, prev, pager, next, jumper"
           @current-change="loadLogs"
           @size-change="() => { logDlg.pageNo = 1; loadLogs(); }"
@@ -137,6 +141,8 @@ import { listJobs, pauseJob, resumeJob, triggerJob, listJobLogs } from '@/api/sy
 // === 状态辅助 ===
 const statusCls = (s) => ({ ACTIVE: 'tag-success', PAUSED: 'tag-warning', DISABLED: 'tag-danger' }[s] || 'tag-info');
 const statusLabel = (s) => ({ ACTIVE: '运行中', PAUSED: '已暂停', DISABLED: '已禁用' }[s] || s || '-');
+// 处理状态：来自 PERF_METRIC_CALC_TASK.status（计算类任务才有值）
+const procStatusLabel = (s) => ({ SUCCESS: '成功', FAILED: '失败', PARTIAL_FAILED: '部分失败', RUNNING: '执行中' }[s] || s);
 
 // === 任务列表 ===
 const rows = ref([]);
@@ -212,7 +218,7 @@ const logDlg = reactive({
   total: 0,
   loading: false,
   pageNo: 1,
-  pageSize: 20
+  pageSize: 10
 });
 
 async function openLogs(row) {
