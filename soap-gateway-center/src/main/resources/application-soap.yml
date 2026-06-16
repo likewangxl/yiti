@@ -1,9 +1,0 @@
-platform:
-  soap:
-    netty:
-      port: 30522
-      boss-threads: 1
-      worker-threads: 4
-      max-content-length: 10485760
-      read-idle-seconds: 60
-      log-request: true
