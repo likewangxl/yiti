@@ -136,12 +136,20 @@ export function createTargetPlan(data) {
 export function updateTargetPlan(id, data) {
   return call('put', `/perf/target-plans/${id}`, { data }, { ok: true });
 }
+// 删除目标方案（级联物理删除其全部目标值）
+export function deleteTargetPlan(id) {
+  return call('delete', `/perf/target-plans/${id}`, {}, { ok: true });
+}
 export function listTargetValues(params = {}) {
   return call('get', '/perf/target-values', { params }, []).then(unwrapPage);
 }
 // 目标值「对象」下拉（方案内目标值去重；EMP→工号+姓名，ORG→部门编号+机构名称）
 export function listTargetValueSubjects(planId) {
   return call('get', '/perf/target-values/subjects', { params: { planId } }, []);
+}
+// 目标值「阶段名称」下拉（方案内目标值阶段名称去重，非空）
+export function listTargetValueStageNames(planId) {
+  return call('get', '/perf/target-values/stage-names', { params: { planId } }, []);
 }
 export function upsertTargetValue(data) {
   return call('post', '/perf/target-values', { data }, { ok: true });

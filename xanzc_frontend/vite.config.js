@@ -14,12 +14,12 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',   // 监听所有网卡，允许用本机 IP 从其他机器访问（默认只绑 localhost）
-    port: 8091,
+    port: 8090,
     strictPort: true,  // 端口固定 8090：被占用时直接报错，而非静默漂移到 8091/8092
     open: false,
     proxy: {
       '/api': {
-        target: 'http://localhost:18081',
+        target: 'http://localhost:18080',
         changeOrigin: true
       }
     }

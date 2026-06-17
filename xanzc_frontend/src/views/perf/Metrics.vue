@@ -28,12 +28,14 @@
           ref="treeRef"
           :data="treeData"
           node-key="id"
-          :default-expand-all="true"
+          :default-expanded-keys="expandedKeys"
           :expand-on-click-node="false"
           :highlight-current="true"
           :current-node-key="picked"
           :filter-node-method="filterTreeNode"
           @node-click="onTreeClick"
+          @node-expand="onNodeExpand"
+          @node-collapse="onNodeCollapse"
           empty-text="暂无指标"
         >
           <template #default="{ node, data }">
@@ -497,6 +499,8 @@ async function reload() {
     if (Array.isArray(r)) allMetrics.value = r;
     categories.value = Array.isArray(cs) ? cs : [];
     metricsLoaded.value = true;
+    // 初始/刷新/新增：默认展开全部维度与分类（编辑保存不走 reload，故不会重置用户已调整的展开态）
+    expandedKeys.value = collectFolderKeys();
     // 默认选中第一个指标
     if (allMetrics.value.length && !picked.value) onPick(allMetrics.value[0].metricCode);
   } catch {
@@ -575,9 +579,39 @@ const treeData = computed(() => {
     return i === -1 ? 500 : i;
   };
   dims.sort((a, b) => rank(a) - rank(b));
-  dims.forEach(d => delete d._catMap); // 清掉临时索引，避免污染节点数据
+  // 同一分类下的指标按「指标名称」中文升序排列（叶子节点 label = metricName）
+  dims.forEach(d => {
+    (d.children || []).forEach(cat => {
+      if (Array.isArray(cat.children)) {
+        cat.children.sort((a, b) =>
+          String(a.label || '').localeCompare(String(b.label || ''), 'zh'));
+      }
+    });
+    delete d._catMap; // 清掉临时索引，避免污染节点数据
+  });
   return dims;
 });
+
+// 树展开态：用受控 default-expanded-keys 取代 default-expand-all，
+// 否则 treeData 每次重算（如编辑保存原地改 allMetrics）都会被强制全展开、丢失用户折叠态。
+const expandedKeys = ref([]);
+function onNodeExpand(data) {
+  if (data?.id != null && !expandedKeys.value.includes(data.id)) expandedKeys.value.push(data.id);
+}
+function onNodeCollapse(data) {
+  if (data?.id == null) return;
+  const i = expandedKeys.value.indexOf(data.id);
+  if (i > -1) expandedKeys.value.splice(i, 1);
+}
+// 收集全部「维度/分类」文件夹节点 key（叶子=指标不入展开态）
+function collectFolderKeys() {
+  const keys = [];
+  for (const dim of treeData.value) {
+    if (dim?.id != null) keys.push(dim.id);
+    for (const cat of (dim.children || [])) if (cat?.id != null) keys.push(cat.id);
+  }
+  return keys;
+}
 
 // === 详情 ===
 const picked = ref('');

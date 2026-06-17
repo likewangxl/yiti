@@ -47,3 +47,17 @@ export async function searchEmployees(keyword, limit = 20) {
   const r = await call('get', '/employees/search', { params: { keyword, limit } }, []);
   return Array.isArray(r) ? r.map(toFront) : [];
 }
+
+// ============================================================
+// 通讯录页专用：保留原始 EmployeeDetailDTO（含 mobile/email/responsibleProducts/selfDesc/updatedTime/canEdit）
+// ============================================================
+
+// GET /api/employees —— 原始分页（EmployeeQueryReqDTO: keyword/orgCode/position/status/pageNo/pageSize）
+export function pageEmployees(params = {}) {
+  return call('get', '/employees', { params }, { records: [], total: 0 });
+}
+
+// PUT /api/employees/{empId} —— 编辑（EmployeeUpdateReqDTO: mobile/email/position/selfDesc/responsibleProductIds）
+export function updateEmployee(empId, data) {
+  return call('put', `/employees/${empId}`, { data }, { ok: true });
+}

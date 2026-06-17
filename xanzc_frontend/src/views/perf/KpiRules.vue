@@ -5,9 +5,14 @@
       <span class="desc">方案 · 权重 · 公式预览 · 计分上下限</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
+        <el-button v-if="isCaizai" @click="downloadKpiTpl">下载模板</el-button>
+        <el-button v-if="isCaizai" :loading="importing" @click="triggerImportKpi">导入KPI方案</el-button>
         <el-button v-if="isCaizai" type="primary" @click="openCreate">+ 新增KPI方案</el-button>
       </div>
     </div>
+    <!-- 隐藏的文件选择框：导入KPI方案 -->
+    <input ref="importKpiInput" type="file" accept=".xlsx,.xls" style="display:none"
+      @change="onImportKpiFile" />
 
     <div class="card-section">
       <el-form :inline="true" size="default">
@@ -44,9 +49,6 @@
             <el-tag :class="statusCls(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="版本" width="80" align="center">
-          <template #default="{row}">{{ row.version || resolveVersion(row) }}</template>
-        </el-table-column>
         <el-table-column label="创建人" min-width="140">
           <template #default="{row}">
             <template v-if="row.createdByName || row.createdByUsername || row.createdBy">
@@ -56,25 +58,15 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row, true)">查看</el-button>
             <!-- 复制版本/编辑/删除 仅资财部人员可见可操作 -->
             <template v-if="isCaizai">
               <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="onCloneVersion(row)">复制版本</el-button>
-              <!-- 编辑/删除：仅当前用户创建的方案才显示可操作 -->
+              <!-- 编辑：仅当前用户创建的方案才显示可操作（启用/禁用已移入编辑弹框） -->
               <template v-if="row.createdByMe">
                 <el-button link type="primary" size="small" :disabled="isDisabled(row)" @click="openEdit(row, false)">编辑</el-button>
-                <el-popconfirm v-if="!isDisabled(row)" :title="`确认删除方案 ${row.schemeName}？`" @confirm="onDelete(row)">
-                  <template #reference>
-                    <el-button link type="danger" size="small">删除</el-button>
-                  </template>
-                </el-popconfirm>
-                <el-popconfirm v-else :title="`确认启用方案 ${row.schemeName}？`" @confirm="onEnable(row)">
-                  <template #reference>
-                    <el-button link type="success" size="small">启用</el-button>
-                  </template>
-                </el-popconfirm>
               </template>
             </template>
           </template>
@@ -116,6 +108,15 @@
               <el-option :value="false" label="否" />
             </el-select>
           </el-form-item>
+          <!-- 员工角色范围：状态=可用的角色（按角色名称排序）；多选，留空表示不限制 -->
+          <el-form-item label="员工角色范围" prop="empRoleScopes">
+            <el-select v-model="dlg.scheme.empRoleScopes" :disabled="dlg.readOnly"
+              multiple filterable
+              placeholder="不限制（留空=全部员工）" style="width:100%">
+              <el-option v-for="r in empRoleOptions" :key="r.roleCode"
+                :value="r.roleCode" :label="r.roleChName" />
+            </el-select>
+          </el-form-item>
         </div>
       </el-form>
       <!-- 指标配置表 -->
@@ -125,12 +126,25 @@
           权重合计：{{ weightSum.toFixed(0) }}% {{ weightSum === 100 ? '✓' : '' }}
         </span>
       </div>
-      <!-- default-expand-all：SQL 表达式作为展开行单独占满一行编辑/展示 -->
+      <!-- default-expand-all：表达式（计算表达式 / SQL 表达式）作为展开行单独占满一行编辑/展示 -->
       <el-table :data="dlg.items" size="default" border default-expand-all>
-        <!-- 展开行：SQL 表达式（支持 #{slot} 占位符），单独一行全宽编辑 -->
+        <!-- 展开行：按所选表达式类型显示「计算表达式」或「SQL 表达式」，二者互斥单独全宽编辑 -->
         <el-table-column type="expand">
           <template #default="{row}">
-            <div class="sql-expr-row">
+            <!-- 计算表达式（默认）：与 SQL 表达式互斥 -->
+            <div v-if="row.exprType !== 'SQL'" class="sql-expr-row">
+              <span class="sql-expr-label">计算表达式</span>
+              <el-input
+                v-model="row.formula"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 8 }"
+                :disabled="dlg.readOnly"
+                :placeholder="dlg.readOnly ? '' : '如 min(actual / target * 100, 100)'"
+                @focus="onExprFocus($event, row, 'formula')"
+              />
+            </div>
+            <!-- SQL 表达式（支持 #{slot} 占位符） -->
+            <div v-else class="sql-expr-row">
               <span class="sql-expr-label">SQL 表达式 (支持 #{slot} 占位符)</span>
               <el-input
                 v-model="row.sqlExpr"
@@ -138,7 +152,7 @@
                 :autosize="{ minRows: 2, maxRows: 8 }"
                 :disabled="dlg.readOnly"
                 :placeholder="dlg.readOnly ? '' : '如 SELECT LEAST(:maxScore, GREATEST(:minScore, :actual / NULLIF(:target,0) * :weight)) AS kpi_value'"
-                @focus="onSqlFocus($event, row)"
+                @focus="onExprFocus($event, row, 'sqlExpr')"
               />
             </div>
           </template>
@@ -167,6 +181,15 @@
             </el-select>
           </template>
         </el-table-column>
+        <!-- 表达式类型：计算表达式 / SQL 表达式 互斥，默认计算表达式；切换只控制展开行展示哪一个，提交时按类型取值 -->
+        <el-table-column label="表达式类型" width="130">
+          <template #default="{row}">
+            <el-radio-group v-model="row.exprType" :disabled="dlg.readOnly" size="small">
+              <el-radio-button value="FORMULA">计算表达式</el-radio-button>
+              <el-radio-button value="SQL">SQL表达式</el-radio-button>
+            </el-radio-group>
+          </template>
+        </el-table-column>
         <el-table-column label="权重 %" width="120">
           <template #default="{row}">
             <el-input-number v-model="row.weight" :disabled="dlg.readOnly" :min="0" :max="100" :precision="0" :controls="false" style="width:100%" />
@@ -192,11 +215,11 @@
 
       <el-button v-if="!dlg.readOnly" plain @click="addItemRow" style="margin-top:10px">+ 添加指标</el-button>
 
-      <!-- SQL 可用变量提示（参考指标编辑）：点击占位符插入到 SQL 表达式光标处 -->
+      <!-- 可用变量提示：点击占位符插入到「当前聚焦的表达式」光标处（计算表达式用裸名、SQL 表达式用 :占位符） -->
       <div class="sql-date-macros" style="margin-top:12px">
-        <div class="hint-title">可用变量（点击插入到 SQL 光标处；后端按 dataDate 自动计算注入）</div>
+        <div class="hint-title">可用变量（先点要插入的表达式输入框，再点变量插入到光标处；后端按 dataDate 自动计算注入）</div>
         <table class="hint-table">
-          <tr><th style="width:180px">SQL 占位符</th><th>含义</th></tr>
+          <tr><th style="width:180px">变量</th><th>含义</th></tr>
           <tr v-for="m in SQL_MACROS" :key="m.token">
             <td>
               <code class="macro-btn" @mousedown.prevent="insertMacro(m.token)" :title="`点击插入 ${m.token}`">{{ m.token }}</code>
@@ -204,12 +227,17 @@
             <td>{{ m.desc }}</td>
           </tr>
         </table>
-        <div class="hint-foot">结果列只需含 <code>kpi_value</code>(KPI得分)；对象id 由系统按行传入，无需在 SQL 中返回。</div>
+        <div class="hint-foot">SQL 表达式结果列只需含 <code>kpi_value</code>(KPI得分)；对象id 由系统按行传入，无需在 SQL 中返回。计算表达式直接用裸变量名（如 <code>actual</code> / <code>target</code>）。</div>
       </div>
 
       <template #footer>
         <el-button @click="dlg.show = false">{{ dlg.readOnly ? '关闭' : '取消' }}</el-button>
         <template v-if="!dlg.readOnly">
+          <!-- 启用/禁用：仅编辑已存在方案时显示，按当前状态切换 -->
+          <template v-if="dlg.editingId">
+            <el-button v-if="dlg.scheme.status === 'DISABLED'" type="success" :loading="dlg.saving" @click="onToggleSchemeStatus('ACTIVE')">启用</el-button>
+            <el-button v-else type="warning" :loading="dlg.saving" @click="onToggleSchemeStatus('DISABLED')">禁用</el-button>
+          </template>
           <el-button :loading="dlg.saving" @click="onSave('TRIAL_RUN')">保存为草稿</el-button>
           <el-button type="primary" :loading="dlg.saving" @click="onSave('ACTIVE')">发布</el-button>
         </template>
@@ -222,10 +250,10 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  listKpiRules, getKpiSchemeDetail,
+  listKpiRules, getKpiSchemeDetail, listKpiEmpRoles,
   createKpiScheme, updateKpiScheme, deleteKpiScheme, publishKpiScheme,
   addKpiItem, updateKpiItem, deleteKpiItem,
-  listMetrics
+  listMetrics, uploadImportFile
 } from '@/api/perf';
 
 // === 字典 ===
@@ -246,7 +274,7 @@ const { options: STATUS_OPTIONS } = useDict('KPI_SCHEME_STATUS');
 // 适用周期 UI 已按需求移除（新增方案默认 cycleType=YEARLY，仍随提交透传给后端）
 
 const statusCls = (s) => ({ ACTIVE: 'tag-success', TRIAL_RUN: 'tag-warning', DRAFT: 'tag-info', INACTIVE: 'tag-info', DISABLED: 'tag-info' }[s] || 'tag-info');
-const statusLabel = (s) => ({ ACTIVE: '启用', TRIAL_RUN: '试运行', DRAFT: '草稿', INACTIVE: '已删除', DISABLED: '已删除' }[s] || s || '-');
+const statusLabel = (s) => ({ ACTIVE: '启用', TRIAL_RUN: '试运行', DRAFT: '草稿', INACTIVE: '禁用', DISABLED: '禁用' }[s] || s || '-');
 // 已删除（停用）方案：按钮失效
 const isDisabled = (row) => row.status === 'INACTIVE' || row.status === 'DISABLED';
 
@@ -282,6 +310,42 @@ function resetFilters() {
   f.dateRange = null;
   pageNo.value = 1;
   reload();
+}
+
+// ============ KPI 方案模板下载 / 导入 ============
+const importKpiInput = ref(null);
+const importing = ref(false);
+
+// 下载静态模板（前端 public/templates 下，浏览器直接拉取）
+function downloadKpiTpl() {
+  window.open('/templates/KPI方案上传模板.xlsx', '_blank');
+}
+// 触发隐藏 file input
+function triggerImportKpi() {
+  importKpiInput.value && importKpiInput.value.click();
+}
+// 选中文件后上传：importType=KPI_SCHEME，整批 all-or-none（后端校验不通过会抛错回显）
+async function onImportKpiFile(ev) {
+  const file = ev?.target?.files?.[0];
+  if (!file) return;
+  importing.value = true;
+  try {
+    const resp = await uploadImportFile('KPI_SCHEME', file);
+    const total = resp?.totalRows ?? 0;
+    const errorRows = resp?.errorRows ?? 0;
+    if (errorRows > 0) {
+      ElMessage.warning(resp?.errorSummary || `导入完成，但有 ${errorRows} 行失败`);
+    } else {
+      ElMessage.success(`导入成功：共 ${total} 条指标项`);
+    }
+    await reload();
+  } catch (err) {
+    // 后端校验失败（指标/角色/表达式类型等）→ all-or-none 抛错，原因回显到页面
+    ElMessage.error(err?.bizMsg || err?.message || '导入失败：请检查模板数据');
+  } finally {
+    importing.value = false;
+    if (importKpiInput.value) importKpiInput.value.value = '';
+  }
 }
 
 async function reload() {
@@ -371,7 +435,7 @@ const dlg = reactive({
   readOnly: false,
   editingId: null,
   saving: false,
-  scheme: { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '' },
+  scheme: { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '', empRoleScopes: [] },
   items: [],
   // 缓存原 items（用于增删 diff）
   origItemMap: new Map()
@@ -410,27 +474,34 @@ const SQL_MACROS = [
   { token: ':base',     desc: '基础值' }
 ];
 
-// 当前聚焦的 SQL 表达式 textarea 与所属行（点击占位符时定位插入点）
-let activeSqlTa = null;
-let activeSqlRow = null;
-/** 记录聚焦的 SQL 表达式输入框（@focus 的 target 即内部 textarea） */
-function onSqlFocus(e, row) {
-  activeSqlTa = e?.target || null;
-  activeSqlRow = row;
+// 当前聚焦的表达式 textarea、所属行、字段名（'formula' 或 'sqlExpr'），点击占位符时定位插入点
+let activeExprTa = null;
+let activeExprRow = null;
+let activeExprField = null;
+/** 记录聚焦的表达式输入框（@focus 的 target 即内部 textarea）；field 区分计算表达式/SQL 表达式 */
+function onExprFocus(e, row, field) {
+  activeExprTa = e?.target || null;
+  activeExprRow = row;
+  activeExprField = field;
 }
-/** 把占位符插到当前 SQL 表达式光标处；未聚焦时提示先点输入框 */
+/**
+ * 把占位符插到「当前聚焦的表达式」光标处：
+ * 计算表达式聚焦则插入 formula，SQL 表达式聚焦则插入 sqlExpr；未聚焦时提示先点输入框。
+ */
 function insertMacro(token) {
   if (dlg.readOnly) return;
-  if (!activeSqlRow) { ElMessage.info('请先点击要插入的 SQL 表达式输入框'); return; }
-  const cur = activeSqlRow.sqlExpr || '';
-  const ta = activeSqlTa;
+  if (!activeExprRow || !activeExprField) { ElMessage.info('请先点击要插入的表达式输入框'); return; }
+  // 计算表达式用裸变量名（actual/target...），SQL 表达式用 :占位符；故插入 formula 时去掉前导冒号
+  const text = activeExprField === 'formula' ? token.replace(/^:/, '') : token;
+  const cur = activeExprRow[activeExprField] || '';
+  const ta = activeExprTa;
   const start = ta?.selectionStart ?? cur.length;
   const end = ta?.selectionEnd ?? start;
-  activeSqlRow.sqlExpr = cur.slice(0, start) + token + cur.slice(end);
+  activeExprRow[activeExprField] = cur.slice(0, start) + text + cur.slice(end);
   nextTick(() => {
     if (!ta) return;
     ta.focus();
-    const pos = start + token.length;
+    const pos = start + text.length;
     ta.setSelectionRange(pos, pos);
   });
 }
@@ -442,6 +513,24 @@ async function ensureMetrics() {
     const ms = await listMetrics({ pageSize: 100 });
     if (Array.isArray(ms)) metricOptions.value = ms.filter(m => m.status === 'ACTIVE');
   } catch {}
+}
+
+// === 员工角色范围下拉（可用角色，后端已按名称排序）===
+const empRoleOptions = ref([]);
+async function ensureEmpRoles() {
+  if (empRoleOptions.value.length) return;
+  try {
+    const rs = await listKpiEmpRoles();
+    empRoleOptions.value = Array.isArray(rs) ? rs : (rs?.records || []);
+  } catch { empRoleOptions.value = []; }
+}
+
+// 指标项表达式：选中类型决定提交 formula(计算表达式) 或 sqlExpr(SQL表达式)，互斥
+function exprFields(it) {
+  // exprType 缺省时（如克隆源自原始明细）按是否有 SQL 表达式回推，保证互斥写入
+  const sql = it.exprType ? it.exprType === 'SQL'
+                          : !!(it.sqlExpr && String(it.sqlExpr).trim());
+  return { formula: sql ? '' : (it.formula || ''), sqlExpr: sql ? (it.sqlExpr || '') : '' };
 }
 
 /** 按维度(EMP/ORG/CUST)过滤指标下拉内容并按指标名称排序；维度为空时默认按员工 */
@@ -463,7 +552,8 @@ function onDimChange(row) {
 
 function defaultItem() {
   // 默认维度为员工，指标下拉默认展示员工指标
-  return { id: null, baseDim: 'EMP', metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, formula: '', sqlExpr: '' };
+  // exprType 默认 FORMULA(计算表达式)，与 SQL 表达式互斥；formula 裸变量名(Groovy)、sqlExpr 用 :命名参数(JDBC) 各给默认计分公式
+  return { id: null, baseDim: 'EMP', metricCode: '', weight: 10, multiplier: 1, minScore: 0, maxScore: 120, exprType: 'FORMULA', formula: 'min(max(actual / target * weight, minScore), maxScore)', sqlExpr: 'select LEAST(GREATEST(:actual/:target*:weight, :minScore), :maxScore) as kpi_value' };
 }
 function addItemRow() {
   dlg.items.push(defaultItem());
@@ -471,9 +561,10 @@ function addItemRow() {
 
 async function openCreate() {
   await ensureMetrics();
+  await ensureEmpRoles();
   dlg.readOnly = false;
   dlg.editingId = null;
-  dlg.scheme = { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '' };
+  dlg.scheme = { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '', empRoleScopes: [] };
   dlg.items = [defaultItem()];
   dlg.origItemMap = new Map();
   dlg.show = true;
@@ -481,6 +572,7 @@ async function openCreate() {
 
 async function openEdit(row, readOnly = false) {
   await ensureMetrics();
+  await ensureEmpRoles();
   dlg.readOnly = readOnly;
   dlg.editingId = row.id || row.schemeCode;
   dlg.scheme = {
@@ -488,12 +580,19 @@ async function openEdit(row, readOnly = false) {
     schemeName: row.schemeName || '',
     cycleType:  row.cycleType  || 'YEARLY',
     openDetail: !!row.openDetail,
-    applyScope: getApplyScope(row)
+    applyScope: getApplyScope(row),
+    empRoleScopes: Array.isArray(row.empRoleScopes) ? row.empRoleScopes : [],
+    // 当前方案状态：编辑弹框「启用/禁用」按钮据此切换
+    status: row.status || ''
   };
   // 优先用列表 reload 时已 prefetch 的 _detailCache
   let detail = row._detailCache;
   if (!detail) {
     try { detail = await getKpiSchemeDetail(row.id || row.schemeCode); } catch {}
+  }
+  // 员工角色范围以详情(getByIdDto)为准回显
+  if (Array.isArray(detail?.empRoleScopes)) {
+    dlg.scheme.empRoleScopes = detail.empRoleScopes;
   }
   const items = (detail?.items || row.items || []).map(it => ({
     id: it.id,
@@ -505,6 +604,8 @@ async function openEdit(row, readOnly = false) {
     multiplier: Number(it.multiplier) || 1,
     minScore: Number(it.minScore) || 0,
     maxScore: Number(it.maxScore) || 120,
+    // 表达式类型按回显值推断：有 SQL 表达式 → SQL，否则计算表达式
+    exprType: (it.sqlExpr && String(it.sqlExpr).trim()) ? 'SQL' : 'FORMULA',
     // 计分公式以后端持久化值为准；留空就保持空（不再兜底默认串），由必输校验拦截
     formula: it.formula || '',
     // SQL 表达式（支持 #{slot} 占位符）：后端固化后回显，当前以返回值为准
@@ -525,7 +626,15 @@ async function onSave(targetStatus) {
   if (!dlg.scheme.schemeName) return ElMessage.warning('请填写方案名称');
   if (!dlg.items.length) return ElMessage.warning('至少添加 1 个指标');
   for (let i = 0; i < dlg.items.length; i++) {
-    if (!dlg.items[i].metricCode) return ElMessage.warning(`第 ${i + 1} 行：请选择指标`);
+    const it = dlg.items[i];
+    if (!it.metricCode) return ElMessage.warning(`第 ${i + 1} 行：请选择指标`);
+    // 计算表达式 / SQL 表达式 互斥且必选：按所选类型校验对应表达式非空
+    const ef = exprFields(it);
+    if (it.exprType === 'SQL') {
+      if (!String(ef.sqlExpr || '').trim()) return ElMessage.warning(`第 ${i + 1} 行：请填写 SQL 表达式`);
+    } else {
+      if (!String(ef.formula || '').trim()) return ElMessage.warning(`第 ${i + 1} 行：请填写计算表达式`);
+    }
   }
   // 走一次 el-form 的中文必填校验（schemeFormRef）
   try { await schemeFormRef.value?.validate(); } catch { return; }
@@ -543,7 +652,8 @@ async function onSave(targetStatus) {
       await updateKpiScheme(dlg.editingId, {
         schemeName: dlg.scheme.schemeName,
         cycleType:  dlg.scheme.cycleType,
-        openDetail: dlg.scheme.openDetail
+        openDetail: dlg.scheme.openDetail,
+        empRoleScopes: dlg.scheme.empRoleScopes || []
       });
       schemeId = dlg.editingId;
       // 同步 items：新增 / 更新 / 删除（按 id 比对）
@@ -563,8 +673,7 @@ async function onSave(targetStatus) {
           await updateKpiItem(schemeId, it.id, {
             weight: it.weight / 100, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
-            formula: it.formula,
-            sqlExpr: it.sqlExpr
+            ...exprFields(it)
           });
         } else {
           // 已存在项换了指标：先删旧项（新指标 = 新项身份），再按新指标新增
@@ -576,8 +685,7 @@ async function onSave(targetStatus) {
             baseDim: it.baseDim,
             weight: it.weight / 100, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
-            formula: it.formula,
-            sqlExpr: it.sqlExpr
+            ...exprFields(it)
           });
         }
       }
@@ -587,7 +695,8 @@ async function onSave(targetStatus) {
         schemeCode: dlg.scheme.schemeCode,
         schemeName: dlg.scheme.schemeName,
         cycleType:  dlg.scheme.cycleType,
-        openDetail: dlg.scheme.openDetail
+        openDetail: dlg.scheme.openDetail,
+        empRoleScopes: dlg.scheme.empRoleScopes || []
       });
       schemeId = created?.id || dlg.scheme.schemeCode;
       // 标记为"刚创建"，下次 reload 时排在第一行
@@ -600,8 +709,7 @@ async function onSave(targetStatus) {
             baseDim: it.baseDim,
             weight: it.weight / 100, multiplier: it.multiplier || 1,
             minScore: it.minScore, maxScore: it.maxScore,
-            formula: it.formula,
-            sqlExpr: it.sqlExpr
+            ...exprFields(it)
           });
         } catch {}
       }
@@ -649,8 +757,7 @@ async function onCloneVersion(row) {
           baseDim: it.baseDim,
           weight: it.weight, multiplier: it.multiplier,
           minScore: it.minScore, maxScore: it.maxScore,
-          formula: it.formula,
-          sqlExpr: it.sqlExpr
+          ...exprFields(it)
         });
       } catch {}
     }
@@ -671,6 +778,26 @@ async function onEnable(row) {
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '启用失败');
   }
+}
+
+// 编辑弹框内「启用/禁用」：启用→后端 publish(校验引用指标均启用) 回 ACTIVE；禁用→后端 disable 置 DISABLED
+async function onToggleSchemeStatus(target) {
+  if (!dlg.editingId) return;
+  dlg.saving = true;
+  try {
+    if (target === 'ACTIVE') {
+      await publishKpiScheme(dlg.editingId, '编辑启用');
+      ElMessage.success('已启用');
+    } else {
+      await deleteKpiScheme(dlg.editingId, '编辑禁用');
+      ElMessage.success('已禁用');
+    }
+    dlg.scheme.status = target;
+    dlg.show = false;
+    reload();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '操作失败');
+  } finally { dlg.saving = false; }
 }
 
 async function onDelete(row) {

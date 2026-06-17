@@ -4,30 +4,24 @@
       <h1>目标管理 <span class="sub">方案级管理：新增方案 / 进入子页维护目标值</span></h1>
       <div class="actions">
         <el-button @click="reload" :loading="loadingPlans || todoLoading || doneLoading">刷新</el-button>
+        <el-button v-if="activeTab==='plans' && canCreatePlan" @click="downloadPlanTpl">下载模板</el-button>
+        <el-button v-if="activeTab==='plans' && canCreatePlan" :loading="importing" @click="triggerImportPlan">导入目标方案</el-button>
         <el-button v-if="activeTab==='plans' && canCreatePlan" type="primary" @click="openCreatePlan">+ 新增方案</el-button>
       </div>
     </div>
+    <!-- 隐藏的文件选择框：导入目标方案 -->
+    <input ref="importPlanInput" type="file" accept=".xlsx,.xls" style="display:none"
+      @change="onImportPlanFile" />
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange" class="targets-tabs">
       <!-- ============ 目标方案 ============ -->
       <el-tab-pane label="目标方案" name="plans">
-        <!-- 筛选栏（4 列：方案搜索 / 关联KPI方案 / 维度 / 状态）。表格基于 f 即时过滤 -->
+        <!-- 筛选栏（2 列：方案搜索 / 状态）。表格基于 f 即时过滤 -->
         <div class="card-section filter-grid">
           <div>
             <div class="lab">方案搜索</div>
             <el-input v-model="f.keyword" clearable placeholder="方案编码 / 名称"
               style="width:100%" @keyup.enter="reload" />
-          </div>
-          <div>
-            <div class="lab">关联KPI方案</div>
-            <el-input v-model="f.kpiKeyword" clearable placeholder="KPI 方案编码 / 名称"
-              style="width:100%" @keyup.enter="reload" />
-          </div>
-          <div>
-            <div class="lab">目标维度</div>
-            <el-select v-model="f.targetDim" clearable placeholder="全部" style="width:100%">
-              <el-option v-for="o in BASE_DIMS" :key="o.v" :value="o.v" :label="o.l" />
-            </el-select>
           </div>
           <div>
             <div class="lab">状态</div>
@@ -51,25 +45,8 @@
                 <div v-if="row.planCode" style="color:#909399;font-size:12px;">{{ row.planCode }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="关联 KPI 方案" min-width="200">
-              <template #default="{row}">
-                <template v-if="kpiSchemeById.get(row.kpiSchemeId)">
-                  <div>{{ kpiSchemeById.get(row.kpiSchemeId).name || kpiSchemeById.get(row.kpiSchemeId).code || '-' }}</div>
-                  <div v-if="kpiSchemeById.get(row.kpiSchemeId).code" style="color:#909399;font-size:12px;">{{ kpiSchemeById.get(row.kpiSchemeId).code }}</div>
-                </template>
-                <template v-else>{{ kpiLabelOf(row.kpiSchemeId) }}</template>
-              </template>
-            </el-table-column>
-            <el-table-column label="维度" width="80">
-              <template #default="{row}">{{ dimLabel(row.targetDim) }}</template>
-            </el-table-column>
-            <el-table-column label="起止日期" min-width="200">
-              <template #default="{row}">
-                <span v-if="row.startDate || row.endDate">
-                  {{ row.startDate || '…' }} ~ {{ row.endDate || '…' }}
-                </span>
-                <span v-else>-</span>
-              </template>
+            <el-table-column label="创建时间" min-width="170">
+              <template #default="{row}">{{ fmtDateTime(row.createdTime) || '-' }}</template>
             </el-table-column>
             <el-table-column label="创建人" min-width="180">
               <template #default="{row}">
@@ -86,9 +63,9 @@
             <el-table-column label="操作" width="200" fixed="right">
               <template #default="{row}">
                 <el-button link type="primary" size="small" @click="openValues(row)">目标值</el-button>
-                <el-button link type="primary" size="small" @click="openPlanTrigger(row)">触发</el-button>
-                <!-- 仅创建人可编辑：业务规则 - 资财人员可看全行方案（ALL scope），但只能改自己的 -->
+                <!-- 仅创建人可编辑/删除：业务规则 - 资财人员可看全行方案（ALL scope），但只能改自己的 -->
                 <el-button v-if="row.createdBy === userStore.user?.empId" link type="primary" size="small" @click="openEditPlan(row)">编辑</el-button>
+                <el-button v-if="row.createdBy === userStore.user?.empId" link type="danger" size="small" @click="onDeletePlan(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -125,9 +102,6 @@
             </el-table-column>
             <el-table-column label="关联KPI方案" min-width="180">
               <template #default="{row}">{{ planOfTodo(row) ? kpiLabelOf(planOfTodo(row).kpiSchemeId) : '-' }}</template>
-            </el-table-column>
-            <el-table-column label="维度" width="80">
-              <template #default="{row}">{{ dimLabel(planOfTodo(row)?.targetDim) }}</template>
             </el-table-column>
             <el-table-column label="当前节点" width="160">
               <template #default="{row}">{{ row.taskName || row.nodeKey || '-' }}</template>
@@ -169,9 +143,6 @@
             </el-table-column>
             <el-table-column label="关联KPI方案" min-width="180">
               <template #default="{row}">{{ planOfDone(row) ? kpiLabelOf(planOfDone(row).kpiSchemeId) : '-' }}</template>
-            </el-table-column>
-            <el-table-column label="维度" width="80">
-              <template #default="{row}">{{ dimLabel(planOfDone(row)?.targetDim || row.subjectType) }}</template>
             </el-table-column>
             <el-table-column label="发起人" width="160">
               <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdByName || row.createdBy || '-' }}</template>
@@ -321,29 +292,8 @@
         <el-form-item label="方案名称" prop="planName">
           <el-input v-model="planDlg.form.planName" placeholder="如 2026 年度目标方案" />
         </el-form-item>
-        <el-form-item label="关联 KPI 方案" prop="kpiSchemeId">
-          <el-select v-model="planDlg.form.kpiSchemeId" filterable placeholder="选择 KPI 方案" style="width:100%"
-                     :disabled="planDlg.editing && planDlg.hasValues">
-            <el-option v-for="s in kpiSchemeOptions" :key="s.id"
-                       :label="`${s.schemeCode || s.code || '-'} · ${s.schemeName || s.name || '-'}`"
-                       :value="s.id" />
-          </el-select>
-          <div v-if="planDlg.editing && planDlg.hasValues" class="lock-hint">该方案已存在目标值，关联 KPI 方案不可修改</div>
-        </el-form-item>
-        <el-form-item label="目标维度" prop="targetDim">
-          <el-radio-group v-model="planDlg.form.targetDim" :disabled="planDlg.editing && planDlg.hasValues">
-            <el-radio value="EMP">人员（EMP）</el-radio>
-            <el-radio value="ORG">机构（ORG）</el-radio>
-          </el-radio-group>
-          <div v-if="planDlg.editing && planDlg.hasValues" class="lock-hint">该方案已存在目标值，目标维度不可修改</div>
-        </el-form-item>
-        <!-- 生效日期已隐藏：保存时由起始日期自动填充（onSavePlan 里 effectiveDate = startDate） -->
-        <el-form-item label="起始日期" prop="startDate" required>
-          <el-date-picker v-model="planDlg.form.startDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="截止日期" prop="endDate">
-          <el-date-picker v-model="planDlg.form.endDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
+        <!-- 关联KPI方案/目标维度/起止日期 均不在 UI 暴露：
+             目标维度固定 EMP；关联KPI方案留空（后端放开校验）；生效日期后端为空时默认当天 -->
       </el-form>
       <template #footer>
         <el-button @click="planDlg.show = false">取消</el-button>
@@ -384,8 +334,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
-import { listTargets, createTargetPlan, updateTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics, calcKpiScore } from '@/api/perf';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { listTargets, createTargetPlan, updateTargetPlan, deleteTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics, calcKpiScore, uploadImportFile } from '@/api/perf';
 import { listUsers } from '@/api/users';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
@@ -535,13 +485,11 @@ const planOfDone = (row) => planById.value.get(String(row.planId));
 
 // === 方案列表 ===
 // f = 筛选条件（双向绑定到控件）。filteredPlans 直接读 f，输入即时过滤。
-const f = reactive({ keyword: '', kpiKeyword: '', targetDim: '', status: '' });
+const f = reactive({ keyword: '', status: '' });
 
 // 重置查询条件：清空筛选项（表格基于 f 即时过滤，清空后自动恢复全量）
 function resetFilters() {
   f.keyword = '';
-  f.kpiKeyword = '';
-  f.targetDim = '';
   f.status = '';
 }
 const plans = ref([]);
@@ -599,12 +547,6 @@ const filteredPlans = computed(() => {
     arr = arr.filter(p => (p.planCode || '').toLowerCase().includes(kw)
                        || (p.planName || '').toLowerCase().includes(kw));
   }
-  if (f.kpiKeyword) {
-    const kw = String(f.kpiKeyword).toLowerCase();
-    // 按列表显示的「关联 KPI 方案」文案（编码 · 名称）模糊匹配
-    arr = arr.filter(p => String(kpiLabelOf(p.kpiSchemeId) || '').toLowerCase().includes(kw));
-  }
-  if (f.targetDim) arr = arr.filter(p => p.targetDim === f.targetDim);
   if (f.status)    arr = arr.filter(p => p.status === f.status);
   return arr;
 });
@@ -869,10 +811,45 @@ const planRules = {
   planCode:      [{ required: true, message: '请填写方案编码' },
                   { pattern: /^[A-Z][A-Z0-9_]*$/, message: '方案编码必须以大写字母开头，仅含大写字母/数字/下划线' }],
   planName:      [{ required: true, message: '请填写方案名称' }],
-  kpiSchemeId:   [{ required: true, message: '请选择关联 KPI 方案' }],
-  targetDim:     [{ required: true, message: '请选择目标维度' }],
-  startDate:     [{ required: true, message: '请选择起始日期（同时作为生效日期）' }],
 };
+// ============ 目标方案模板下载 / 导入 ============
+const importPlanInput = ref(null);
+const importing = ref(false);
+
+// 下载静态模板（前端 public/templates 下，浏览器直接拉取）
+function downloadPlanTpl() {
+  window.open('/templates/目标方案上传模板.xlsx', '_blank');
+}
+// 触发隐藏 file input
+function triggerImportPlan() {
+  importPlanInput.value && importPlanInput.value.click();
+}
+// 选中文件后上传：importType=TARGET_PLAN，整批 all-or-none（后端校验不通过会抛错回显）
+async function onImportPlanFile(ev) {
+  const file = ev?.target?.files?.[0];
+  if (!file) return;
+  importing.value = true;
+  try {
+    const resp = await uploadImportFile('TARGET_PLAN', file);
+    const total = resp?.totalRows ?? 0;
+    const errorRows = resp?.errorRows ?? 0;
+    if (errorRows > 0) {
+      // 理论上 all-or-none 不会走到这里（失败即抛错），兜底提示
+      ElMessage.warning(resp?.errorSummary || `导入完成，但有 ${errorRows} 行失败`);
+    } else {
+      ElMessage.success(`导入成功：共 ${total} 条目标值`);
+    }
+    await reload();
+  } catch (err) {
+    // 后端校验失败（指标/对象/维度/日期重叠等）→ all-or-none 抛错，原因回显到页面
+    ElMessage.error(err?.bizMsg || err?.message || '导入失败：请检查模板数据');
+  } finally {
+    importing.value = false;
+    // 清空，便于同名文件可再次选择触发 change
+    if (importPlanInput.value) importPlanInput.value.value = '';
+  }
+}
+
 function openCreatePlan() {
   planDlg.editing = null;
   planDlg.hasValues = false;
@@ -943,6 +920,26 @@ async function togglePlanStatus(idOrRow, newStatus) {
     loadPlans();
   } catch (err) {
     ElMessage.error(err?.bizMsg || err?.message || '操作失败');
+  }
+}
+
+// 删除目标方案：二次确认 + 警告会清除该目标及其全部目标值 → 后端物理删除 → 提示并刷新
+async function onDeletePlan(row) {
+  const id = row.id || row.planCode;
+  const name = row.planName || row.planCode || '该目标方案';
+  try {
+    await ElMessageBox.confirm(
+      `确认删除「${name}」吗？删除将清除该目标方案及其下所有目标值，且不可恢复！`,
+      '删除确认',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' }
+    );
+  } catch { return; } // 用户取消
+  try {
+    await deleteTargetPlan(id);
+    ElMessage.success('已删除该目标方案及其全部目标值');
+    loadPlans();
+  } catch (err) {
+    ElMessage.error(err?.bizMsg || err?.message || '删除失败');
   }
 }
 

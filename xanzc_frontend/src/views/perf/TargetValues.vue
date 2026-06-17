@@ -4,18 +4,11 @@
       <h1>目标值管理
         <span class="sub" v-if="currentPlan">
           方案：<em>{{ currentPlanLabel }}</em>
-          <span class="dot">·</span>
-          关联 KPI：<em>{{ currentKpiLabel }}</em>
-          <span class="dot">·</span>
-          维度：<em>{{ currentDimLabel }}</em>
         </span>
         <span class="sub" v-else>单条 / 批量 / 修正 <em>(修正会触发回算)</em></span>
       </h1>
       <div class="actions">
         <el-button link type="primary" @click="backToTargets">← 返回目标管理</el-button>
-        <el-button @click="triggerImportFile">📥 导入目标值</el-button>
-        <el-button @click="downloadTpl">📄 下载模板</el-button>
-        <input ref="importFileRef" type="file" accept=".xlsx,.xls" style="display:none" @change="onImportFileSelected" />
         <!-- 仅方案创建人可新增目标值；非创建人时按钮置灰并通过 tooltip 解释原因 -->
         <el-tooltip
           :disabled="!plans.length || currentPlan?.createdBy === userStore.user?.empId"
@@ -36,6 +29,19 @@
     <!-- 筛选栏。方案/维度由 URL 传入锁定 -->
     <div class="card-section filter-grid">
       <div>
+        <div class="lab">维度</div>
+        <el-select v-model="f.subjectType" clearable placeholder="全部" style="width:100px">
+          <el-option value="EMP" label="员工" />
+          <el-option value="ORG" label="机构" />
+        </el-select>
+      </div>
+      <div>
+        <div class="lab">阶段名称</div>
+        <el-select v-model="f.stageName" clearable filterable placeholder="全部" style="width:200px">
+          <el-option v-for="s in stageNameOptions" :key="s" :value="s" :label="s" />
+        </el-select>
+      </div>
+      <div>
         <div class="lab">对象</div>
         <el-select v-model="f.subjectId" clearable filterable @change="loadValues"
           :loading="loadingSubjects" placeholder="全部" style="width:100%">
@@ -55,24 +61,41 @@
     <!-- 主表 -->
     <div class="card-section table">
       <el-table :data="pagedRows" size="default" empty-text="暂无目标值" v-loading="loadingValues">
-        <el-table-column label="对象" min-width="200">
+        <el-table-column label="维度" width="90">
+          <template #default="{row}">{{ subjectTypeLabel(row.subjectType) || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="对象" min-width="190">
           <template #default="{row}">
-            <!-- EMP: 员工号-中文姓名；ORG: 机构部门编号(dept_no)-机构名 -->
-            <span class="subject-text">{{ row.subjectDisplayId || row.subjectId || '-' }} - {{ row.subjectName || '-' }}</span>
+            <!-- 主标题：员工名称/机构名称；副标题：工号/部门编号 -->
+            <div>{{ row.subjectName || '-' }}</div>
+            <div style="color:#909399;font-size:12px;">{{ row.subjectDisplayId || row.subjectId || '-' }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="指标" min-width="200">
-          <template #default="{row}">{{ row.metricCode }}{{ row.metricName ? ' - ' + row.metricName : '' }}</template>
+        <el-table-column label="指标" min-width="190">
+          <template #default="{row}">
+            <!-- 主标题：指标名称；副标题：指标编号 -->
+            <div>{{ row.metricName || row.metricCode || '-' }}</div>
+            <div style="color:#909399;font-size:12px;">{{ row.metricCode }}</div>
+          </template>
         </el-table-column>
-        <el-table-column label="目标值" width="160" align="right">
+        <el-table-column label="阶段名称" min-width="120">
+          <template #default="{row}">{{ row.stageName || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="起止日期" min-width="210">
+          <template #default="{row}">
+            <span v-if="row.startDate || row.endDate">{{ row.startDate || '…' }} ~ {{ row.endDate || '…' }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="目标值" width="140" align="right">
           <template #default="{row}">{{ fmtNum(row.targetValue) }}</template>
         </el-table-column>
-        <el-table-column label="基础值" width="160" align="right">
+        <el-table-column label="基础值" width="140" align="right">
           <template #default="{row}">{{ row.baseValue != null ? fmtNum(row.baseValue) : '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="110" fixed="right">
           <template #default="{row}">
-            <el-button link type="primary" size="small" @click="openAdjust(row)">修改</el-button>
+            <el-button link type="primary" size="small" @click="openEditRow(row)">修改</el-button>
             <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -127,16 +150,28 @@
          - planId 用当前选中的 f.planId
          - cycleKey 由 inferCycleKey() 自动派生
          - subjectType 用 currentPlan.targetDim（目标管理主页传入方案的维度） -->
-    <el-dialog v-model="valDlg.show" title="新增目标值" width="500px">
-      <!-- 维度横幅：从目标管理传入，置于所有输入项之上、不允许修改 -->
-      <div class="dim-banner">
-        当前对象维度：<el-tag class="tag-info" effect="dark">{{ subjectTypeLabel(valDlg.form.subjectType) || '-' }}</el-tag>
-        <span class="dim-hint">（由目标方案确定，下方指标按此维度过滤）</span>
-      </div>
+    <el-dialog v-model="valDlg.show" :title="valDlg.editing ? '修改目标值' : '新增目标值'" width="500px">
       <el-form ref="valFormRef" :model="valDlg.form" :rules="valRules" label-width="100px" size="default">
+        <el-form-item label="阶段名称" prop="stageName">
+          <el-input v-model="valDlg.form.stageName" maxlength="100" clearable placeholder="如 一阶段" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="起始日期" prop="startDate">
+          <el-date-picker v-model="valDlg.form.startDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择起始日期" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="截止日期" prop="endDate">
+          <el-date-picker v-model="valDlg.form.endDate" type="date" value-format="YYYY-MM-DD" placeholder="请选择截止日期" style="width:100%" />
+        </el-form-item>
+        <!-- 维度：选择后「对象」「指标」下拉随之动态变化；修改模式下身份字段锁定 -->
+        <el-form-item label="维度" prop="subjectType">
+          <el-select v-model="valDlg.form.subjectType" :disabled="valDlg.editing" @change="onDimChange" style="width:100%">
+            <el-option value="EMP" label="员工" />
+            <el-option value="ORG" label="机构" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="对象" prop="subjectId">
           <el-autocomplete
             v-model="valDlg.form.subjectDisplay"
+            :disabled="valDlg.editing"
             :fetch-suggestions="querySubjectSuggestions"
             :placeholder="valDlg.form.subjectType === 'ORG'
               ? '输入部门编号或机构名搜索（如 02974000 / 资金财务部）'
@@ -157,7 +192,7 @@
           </el-autocomplete>
         </el-form-item>
         <el-form-item label="指标" prop="metricCode">
-          <el-select v-model="valDlg.form.metricCode" filterable
+          <el-select v-model="valDlg.form.metricCode" filterable :disabled="valDlg.editing"
                      :placeholder="metricsForDim.length ? '请选择指标' : '所选 KPI 方案暂无可选指标'"
                      style="width:100%">
             <el-option v-for="m in metricsForDim" :key="m.metricCode"
@@ -186,7 +221,7 @@ import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import {
-  listTargets, listTargetValues, listTargetValueSubjects, upsertTargetValue, batchUpsertTargetValues,
+  listTargets, listTargetValues, listTargetValueSubjects, listTargetValueStageNames, upsertTargetValue, batchUpsertTargetValues,
   submitTargetAdjust, listMetrics, deleteTargetValue,
   listKpiRules, getKpiSchemeDetail
 } from '@/api/perf';
@@ -395,7 +430,7 @@ const filteredMetricOptions = computed(() => {
 });
 
 // === 目标值 ===
-const f = reactive({ planId: '', subjectType: '', subjectId: '', metricCode: '', approvalStatus: '' });
+const f = reactive({ planId: '', subjectType: '', subjectId: '', metricCode: '', stageName: '', approvalStatus: '' });
 const values = ref([]);
 const loadingValues = ref(false);
 
@@ -410,8 +445,20 @@ async function loadSubjects() {
     subjectOptions.value = Array.isArray(r) ? r : (r?.records || []);
   } catch { subjectOptions.value = []; } finally { loadingSubjects.value = false; }
 }
-// 方案切换：重载对象下拉并清空已选对象（避免跨方案残留过滤）
-watch(() => f.planId, () => { f.subjectId = ''; loadSubjects(); }, { immediate: true });
+// 阶段名称下拉：方案内所有目标值阶段名称去重（来自后端 distinct 端点）
+const stageNameOptions = ref([]);
+async function loadStageNames() {
+  if (!f.planId) { stageNameOptions.value = []; return; }
+  try {
+    const r = await listTargetValueStageNames(f.planId);
+    stageNameOptions.value = Array.isArray(r) ? r : (r?.records || []);
+  } catch { stageNameOptions.value = []; }
+}
+// 方案切换：重载对象/阶段名称下拉并清空已选过滤（避免跨方案残留）
+watch(() => f.planId, () => {
+  f.subjectId = ''; f.stageName = '';
+  loadSubjects(); loadStageNames();
+}, { immediate: true });
 
 // === 当前传入方案上下文（H1 副标题用，仅显示名称，不显示方案/KPI 的 ID） ===
 const currentPlan      = computed(() =>
@@ -487,6 +534,7 @@ const filteredRows = computed(() => {
   if (f.subjectType)    arr = arr.filter(r => r.subjectType === f.subjectType);
   if (f.subjectId)      arr = arr.filter(r => r.subjectId === f.subjectId);
   if (f.metricCode)     arr = arr.filter(r => r.metricCode === f.metricCode);
+  if (f.stageName)      arr = arr.filter(r => r.stageName === f.stageName);
   return arr;
 });
 
@@ -613,11 +661,17 @@ function inferCycleKey() {
 const valFormRef = ref(null);
 const valDlg = reactive({
   show: false, saving: false,
+  // editing=true 时复用本弹框做「修改」：反显行数据、锁定身份字段(维度/对象/指标/周期键)、保存走同 UK upsert 更新
+  editing: false, editCycleKey: '',
   // subjectDisplay 仅用于输入框展示（ORG=部门编号+机构名称），subjectId 才是入库值（机构编号/工号）
-  form: { subjectType: 'EMP', subjectId: '', subjectDisplay: '', metricCode: '', targetValue: 0, baseValue: null }
+  form: { stageName: '', startDate: '', endDate: '', subjectType: 'EMP', subjectId: '', subjectDisplay: '', metricCode: '', targetValue: 0, baseValue: null }
 });
 // subjectType 不再在 UI 暴露：openCreateRow 从 currentPlan.targetDim 自动赋值
 const valRules = {
+  stageName:   [{ required: true, message: '请填写阶段名称' }],
+  startDate:   [{ required: true, message: '请选择起始日期' }],
+  endDate:     [{ required: true, message: '请选择截止日期' }],
+  subjectType: [{ required: true, message: '请选择维度' }],
   subjectId:   [{ required: true, message: '请填写对象编号（员工号 / 机构编码）' }],
   metricCode:  [{ required: true, message: '请选择指标' }],
   targetValue: [{ required: true, message: '请填写目标值' }]
@@ -638,14 +692,46 @@ async function openCreateRow() {
   if (!f.planId) {
     return ElMessage.warning('请先选择目标方案再新增目标值');
   }
-  // 维度从当前方案（H1 副标题展示的那条）的 targetDim 取，兜底 EMP
-  const dim = currentPlan.value?.targetDim || 'EMP';
+  // 维度默认选中「员工」(EMP)，用户可在对话框中切换
+  valDlg.editing = false;
+  valDlg.editCycleKey = '';
   Object.assign(valDlg.form, {
-    subjectType: dim, subjectId: '', subjectDisplay: '',
+    stageName: '', startDate: '', endDate: '',
+    subjectType: 'EMP', subjectId: '', subjectDisplay: '',
     metricCode: '', targetValue: 0, baseValue: null
   });
   // 确保指标下拉已按当前方案的 KPI 指标项过滤就绪
   await loadKpiMetricCodes();
+  valDlg.show = true;
+}
+
+/**
+ * 修改：复用「新增目标值」弹框做编辑。反显行数据 + 锁定身份字段（维度/对象/指标），
+ * 保存时按相同 UK (plan+维度+对象+周期键+指标) 走 upsert → ON DUPLICATE KEY UPDATE 更新原行。
+ */
+async function openEditRow(row) {
+  if (!f.planId) {
+    return ElMessage.warning('请先在顶部「方案」筛选中选择一个目标方案，再修改目标值');
+  }
+  await loadKpiMetricCodes();
+  // 对象输入框展示：ORG=「部门编号 机构名」，EMP=工号
+  const subjectDisplay = row.subjectType === 'ORG'
+    ? `${row.subjectDisplayId || row.subjectId} ${row.subjectName || ''}`.trim()
+    : row.subjectId;
+  Object.assign(valDlg.form, {
+    stageName: row.stageName || '',
+    startDate: row.startDate || '',
+    endDate: row.endDate || '',
+    subjectType: row.subjectType || 'EMP',
+    subjectId: row.subjectId || '',
+    subjectDisplay,
+    metricCode: row.metricCode || '',
+    targetValue: Number(row.targetValue) || 0,
+    baseValue: row.baseValue != null ? Number(row.baseValue) : null
+  });
+  valDlg.editing = true;
+  // 修改走原行周期键（保证命中同一 UK），不再用 inferCycleKey 派生
+  valDlg.editCycleKey = row.cycleKey || '';
   valDlg.show = true;
 }
 // 对象输入框：展示文本(subjectDisplay) 与 入库值(subjectId) 解耦
@@ -663,6 +749,12 @@ function onSubjectClear() {
   valDlg.form.subjectId = '';
   valDlg.form.subjectDisplay = '';
 }
+// 维度切换：清空已选「对象」与「指标」，使两者下拉按新维度重新取值（对象走 querySubjectSuggestions、指标走 metricsForDim）
+function onDimChange() {
+  valDlg.form.subjectId = '';
+  valDlg.form.subjectDisplay = '';
+  valDlg.form.metricCode = '';
+}
 // 手动键入（非下拉选择）：EMP 直接作为工号；ORG 必须从下拉选择，键入仅作筛选文本 → 清空已选编号
 watch(() => valDlg.form.subjectDisplay, (val) => {
   if (subjectSelecting) return;
@@ -679,10 +771,12 @@ async function onSaveValue() {
   // 2026-06-15：员工工号/机构部门编号的存在性校验已下沉后端（直连 PT_USER / EXT_ORG_INFO 校验）。
   // 前端不再用 empMap/orgMap 缓存判存在性（缓存受 pageSize 上限截断会误判），
   // 不存在时后端抛 VALIDATION_FAILED，下方 catch 用 err.bizMsg 展示。
-  // 同一方案下 对象+指标 不能重复（检查已有数据）
-  const dup = values.value.find(v => v.subjectId === sid && v.metricCode === valDlg.form.metricCode);
-  if (dup) {
-    return ElMessage.error(`对象「${sid}」+指标「${valDlg.form.metricCode}」在当前方案中已存在`);
+  // 同一方案下 对象+指标 不能重复（仅新增时校验；修改模式本就是更新原行，跳过）
+  if (!valDlg.editing) {
+    const dup = values.value.find(v => v.subjectId === sid && v.metricCode === valDlg.form.metricCode);
+    if (dup) {
+      return ElMessage.error(`对象「${sid}」+指标「${valDlg.form.metricCode}」在当前方案中已存在`);
+    }
   }
   valDlg.saving = true;
   try {
@@ -690,13 +784,18 @@ async function onSaveValue() {
       planId:      f.planId,
       subjectType: valDlg.form.subjectType,
       subjectId:   valDlg.form.subjectId,
-      cycleKey:    inferCycleKey(),
+      // 修改用原行周期键命中同一 UK → 更新；新增用 inferCycleKey 派生
+      cycleKey:    valDlg.editing ? valDlg.editCycleKey : inferCycleKey(),
       metricCode:  valDlg.form.metricCode,
       targetValue: valDlg.form.targetValue
     };
     if (valDlg.form.baseValue != null && valDlg.form.baseValue !== '') {
       payload.baseValue = valDlg.form.baseValue;
     }
+    // 阶段名称 / 起止日期：可空，仅在填写时提交
+    if (valDlg.form.stageName) payload.stageName = valDlg.form.stageName;
+    if (valDlg.form.startDate) payload.startDate = valDlg.form.startDate;
+    if (valDlg.form.endDate)   payload.endDate = valDlg.form.endDate;
     await upsertTargetValue(payload);
     ElMessage.success('已保存');
     valDlg.show = false;
@@ -806,7 +905,7 @@ onMounted(async () => {
   .dot { margin: 0 6px; color: $text-4; }
 }
 .filter-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+  display: grid; grid-template-columns: 120px 220px 1fr 1fr; gap: 16px;
   .lab { font-size: 13px; color: $text-2; margin-bottom: 6px; }
 }
 .table { padding: 14px 16px 12px; }

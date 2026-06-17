@@ -22,6 +22,12 @@ const routes = [
       { path: 'announcement/:id', name: 'AnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情' } },
       { path: 'workspace/notifications', name: 'NotificationList', component: () => import('@/views/workspace/NotificationList.vue'), meta: { title: '通知列表', group: '工作台' } },
 
+      // 信息聚合
+      { path: 'info/nav',          name: 'InfoNav',        component: () => import('@/views/info/NavHub.vue'),      meta: { title: '网址导航',     group: '信息聚合' } },
+      { path: 'info/address-book', name: 'InfoAddressBook', component: () => import('@/views/info/AddressBook.vue'), meta: { title: '通讯录',       group: '信息聚合' } },
+      { path: 'info/products',     name: 'InfoProducts',   component: () => import('@/views/info/ProductLib.vue'),  meta: { title: '产品资料库',   group: '信息聚合' } },
+      { path: 'info/documents',    name: 'InfoDocuments',  component: () => import('@/views/info/DocCenter.vue'),   meta: { title: '常用文档',     group: '信息聚合' } },
+
       // 绩效与考核
       { path: 'perf/metrics',     name: 'PerfMetrics',   component: () => import('@/views/perf/Metrics.vue'),   meta: { title: '指标库', group: '绩效与考核' } },
       { path: 'perf/kpi-rules',   name: 'PerfKpiRules',  component: () => import('@/views/perf/KpiRules.vue'),  meta: { title: 'KPI 规则', group: '绩效与考核' } },
