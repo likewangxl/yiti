@@ -7,6 +7,7 @@ import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.portal.service.AddrbookQueryService;
 import com.bank.branch.platform.portal.service.AddressBookService;
 import com.bank.branch.platform.portal.service.AnnouncementService;
 import com.bank.branch.platform.portal.service.DocService;
@@ -90,6 +91,7 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected NavService navService;
     @MockBean protected ProductService productService;
     @MockBean protected ProductExportService productExportService;
+    @MockBean protected AddrbookQueryService addrbookQueryService;
     @MockBean protected ShortcutService shortcutService;
     @MockBean protected WorkspaceService workspaceService;
 }

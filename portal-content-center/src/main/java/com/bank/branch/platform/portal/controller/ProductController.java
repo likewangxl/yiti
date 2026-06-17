@@ -10,10 +10,12 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
+import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductUpdateReqDTO;
 import com.bank.branch.platform.portal.convert.ProductConverter;
 import com.bank.branch.platform.portal.entity.ProductInfo;
+import com.bank.branch.platform.portal.service.AddrbookQueryService;
 import com.bank.branch.platform.portal.service.ProductExportService;
 import com.bank.branch.platform.portal.service.ProductService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,6 +34,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +48,7 @@ public class ProductController {
 
     private final ProductService productService;
     private final ProductExportService productExportService;
+    private final AddrbookQueryService addrbookQueryService;
     private final BizScopeApi bizScopeApi;
     private final CurrentUserApi currentUserApi;
 
@@ -53,8 +57,28 @@ public class ProductController {
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.LIST)
     public ResponseWrapper<ProductDTO> listProducts(@Valid ProductQueryReqDTO req) {
         PageResult<ProductInfo> entityPage = productService.listProducts(req);
-        List<ProductDTO> dtos = entityPage.getRecords().stream().map(ProductConverter::toDTO).collect(Collectors.toList());
+        List<ProductDTO> dtos = entityPage.getRecords().stream()
+                .map(ProductConverter::toDTO)
+                .map(this::withResponsibleEmpNames)
+                .collect(Collectors.toList());
         return ResponseWrapper.page(PageResult.of(entityPage.getPageNo(), entityPage.getPageSize(), entityPage.getTotal(), dtos));
+    }
+
+    /**
+     * 按 responsibleEmpIds 批量解析负责人姓名，填充 responsibleEmpNames（顿号分隔）。
+     * 姓名缺失（如离职/未维护）时回退展示工号，避免空白。
+     */
+    private ProductDTO withResponsibleEmpNames(ProductDTO dto) {
+        List<String> empIds = dto.getResponsibleEmpIds();
+        if (empIds == null || empIds.isEmpty()) {
+            return dto.toBuilder().responsibleEmpNames("").build();
+        }
+        Map<String, String> nameMap = addrbookQueryService.listResponsibleEmps(empIds).stream()
+                .collect(Collectors.toMap(ResponsibleEmpDTO::getEmpId, ResponsibleEmpDTO::getEmpName, (a, b) -> a));
+        String names = empIds.stream()
+                .map(id -> nameMap.getOrDefault(id, id))
+                .collect(Collectors.joining("、"));
+        return dto.toBuilder().responsibleEmpNames(names).build();
     }
 
     /** D.3 查询支持中场支持的产品 */

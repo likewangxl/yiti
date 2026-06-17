@@ -2,6 +2,7 @@ package com.bank.branch.platform.portal.controller;
 
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
+import com.bank.branch.platform.portal.api.dto.ResponsibleEmpDTO;
 import com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO;
 import com.bank.branch.platform.portal.entity.ProductInfo;
 import com.bank.branch.platform.portal.service.ProductExportService;
@@ -74,6 +75,24 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.page.total").value(1))
                 .andExpect(jsonPath("$.page.records[0].productCode").value("DEPOSIT_001"));
+    }
+
+    @Test @WithMockEmpContext(empId = "E10001", dataScope = "ORG_SUBTREE", orgSubtree = {"ORG_SZ_001"})
+    void listProductsShouldResolveResponsibleEmpNames() throws Exception {
+        ProductInfo entity = new ProductInfo();
+        entity.setId("P001"); entity.setProductCode("DEPOSIT_001"); entity.setProductName("活期存款");
+        entity.setProductCategory("CAT_DEPOSIT"); entity.setProductDeptOrgCode("ORG_SZ_001");
+        entity.setStatus("ACTIVE");
+        entity.setResponsibleEmpIds(List.of("E001", "E002"));
+        when(productService.listProducts(any(ProductQueryReqDTO.class)))
+                .thenReturn(PageResult.of(1, 20, 1L, List.of(entity)));
+        ResponsibleEmpDTO e1 = new ResponsibleEmpDTO(); e1.setEmpId("E001"); e1.setEmpName("张三");
+        ResponsibleEmpDTO e2 = new ResponsibleEmpDTO(); e2.setEmpId("E002"); e2.setEmpName("李四");
+        when(addrbookQueryService.listResponsibleEmps(List.of("E001", "E002")))
+                .thenReturn(List.of(e1, e2));
+        mockMvc.perform(get("/api/products").param("pageNo", "1").param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.records[0].responsibleEmpNames").value("张三、李四"));
     }
 
     @Test @WithMockEmpContext(empId = "E10001", dataScope = "ORG", orgSubtree = {"ORG_SZ_001"})

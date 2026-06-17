@@ -15,7 +15,7 @@ import java.util.List;
  * @see com.bank.branch.platform.portal.convert.ProductConverter
  */
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class ProductDTO {
 
     /** 产品ID */
@@ -50,6 +50,9 @@ public class ProductDTO {
 
     /** 产品负责人工号列表 */
     List<String> responsibleEmpIds;
+
+    /** 产品负责人姓名（逗号/顿号分隔，列表展示用；Controller 层按 responsibleEmpIds 批量解析填充） */
+    String responsibleEmpNames;
 
     /** 状态 ACTIVE/DISABLED */
     String status;
