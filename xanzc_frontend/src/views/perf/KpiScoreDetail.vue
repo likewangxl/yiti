@@ -32,7 +32,7 @@
     </div>
 
     <div class="card-section">
-      <!-- 固定列：对象ID / 姓名 / 考核得分(合计)；之后每个指标一个分组列(指标名 + 实际/目标/基础/完成率/得分) -->
+      <!-- 固定列：对象ID / 姓名 / 考核得分(合计)；之后每个指标一个分组列(指标名 + 实际/目标/基础/完成率/权重/得分) -->
       <el-table :data="records" size="small" border v-loading="loading" empty-text="暂无计算结果">
         <!-- 维度：同一对象ID 可能在不同维度各有一行（如员工/客户工号撞号），按 对象ID+对象类型 分组 -->
         <el-table-column label="维度" width="80" fixed>
@@ -60,6 +60,9 @@
           <el-table-column label="完成率" width="100" align="right">
             <template #default="{row}">{{ fmtRate(cell(row, m).completeRate) }}</template>
           </el-table-column>
+          <el-table-column label="权重" width="90" align="right">
+            <template #default>{{ fmtNum(m.weight) }}</template>
+          </el-table-column>
           <el-table-column label="得分" width="90" align="right">
             <template #default="{row}"><strong>{{ fmtNum(cell(row, m).score) }}</strong></template>
           </el-table-column>
@@ -85,8 +88,11 @@ const route = useRoute();
 const router = useRouter();
 const dataDate = ref(route.query.dataDate || '');
 const schemeCode = ref(route.query.schemeCode || '');
+const schemeName = ref(route.query.schemeName || '');
+// 导出文件名前缀：优先方案名称，缺失回退方案编码
+function exportPrefix() { return schemeName.value || schemeCode.value || 'KPI'; }
 
-const metrics = ref([]);   // 指标列定义 [{metricCode, metricName}]
+const metrics = ref([]);   // 指标列定义 [{metricCode, metricName, weight}]
 const records = ref([]);   // 对象行 [{subjectId, subjectName, totalScore, metrics:{code:{actual,target,base,completeRate,score}}}]
 const total = ref(0);
 const pgNo = ref(1);
@@ -143,14 +149,14 @@ async function onExportScores() {
   exporting.value = 'scores';
   try {
     const blob = await exportKpiScores(exportParams());
-    saveBlob(blob, `KPI得分_${dataDate.value || ''}.xlsx`);
+    saveBlob(blob, `${exportPrefix()}_得分_${dataDate.value || ''}.xlsx`);
   } catch { ElMessage.error('导出失败'); } finally { exporting.value = ''; }
 }
 async function onExportDetails() {
   exporting.value = 'details';
   try {
     const blob = await exportKpiScoreDetails(exportParams());
-    saveBlob(blob, `KPI明细_${dataDate.value || ''}.xlsx`);
+    saveBlob(blob, `${exportPrefix()}_明细_${dataDate.value || ''}.xlsx`);
   } catch { ElMessage.error('导出失败'); } finally { exporting.value = ''; }
 }
 

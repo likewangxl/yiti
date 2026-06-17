@@ -301,7 +301,11 @@ function openLogError(row) {
 const router = useRouter();
 function goDetail(row) {
   if (!row.schemeCode) return;
-  router.push({ name: 'PerfKpiScoreDetail', query: { dataDate: row.dataDate, schemeCode: row.schemeCode } });
+  // 透传方案名称，供详情页导出文件名「KPI方案名称_得分/明细_数据日期.xlsx」使用
+  router.push({ name: 'PerfKpiScoreDetail', query: {
+    dataDate: row.dataDate, schemeCode: row.schemeCode,
+    schemeName: schemeNameMap.value[row.schemeCode] || ''
+  } });
 }
 
 // 按行触发计算：输入触发原因 → 记审批日志 + 调 KPI 计算服务（数据日期 + 方案编码）

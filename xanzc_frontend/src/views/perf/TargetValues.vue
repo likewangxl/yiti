@@ -771,11 +771,19 @@ async function onSaveValue() {
   // 2026-06-15：员工工号/机构部门编号的存在性校验已下沉后端（直连 PT_USER / EXT_ORG_INFO 校验）。
   // 前端不再用 empMap/orgMap 缓存判存在性（缓存受 pageSize 上限截断会误判），
   // 不存在时后端抛 VALIDATION_FAILED，下方 catch 用 err.bizMsg 展示。
-  // 同一方案下 对象+指标 不能重复（仅新增时校验；修改模式本就是更新原行，跳过）
+  // 同一方案下 维度+对象+指标+阶段名称 不能重复（对齐唯一索引 uk_plan_subject_metric_stage）
+  // 仅新增时校验；修改模式本就是更新原行，跳过
   if (!valDlg.editing) {
-    const dup = values.value.find(v => v.subjectId === sid && v.metricCode === valDlg.form.metricCode);
+    const stageName = (valDlg.form.stageName || '').trim();
+    const dup = values.value.find(v =>
+      v.subjectType === dim &&
+      v.subjectId === sid &&
+      v.metricCode === valDlg.form.metricCode &&
+      (v.stageName || '').trim() === stageName);
     if (dup) {
-      return ElMessage.error(`对象「${sid}」+指标「${valDlg.form.metricCode}」在当前方案中已存在`);
+      const stagePart = stageName ? `+阶段名称「${stageName}」` : '（未填阶段名称）';
+      return ElMessage.error(
+        `对象「${sid}」+指标「${valDlg.form.metricCode}」${stagePart}在当前方案中已存在`);
     }
   }
   valDlg.saving = true;
