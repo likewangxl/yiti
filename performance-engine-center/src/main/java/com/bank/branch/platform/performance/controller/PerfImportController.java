@@ -5,6 +5,7 @@ import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.controller.dto.PerfImportUploadRespDTO;
@@ -13,6 +14,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.importer.PerfImportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -172,5 +177,43 @@ public class PerfImportController {
         log.info("[PerfImportController.delete] batchId={}", batchId);
         perfImportService.delete(batchId);
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 分页查询导入批次列表（应用统一 DATA_SCOPE：管理员全见 / 其他角色仅见自己）.
+     *
+     * <p>不分导入类型，固定排除 DELETED，按 created_time 倒序。
+     */
+    @GetMapping("/batches")
+    @Operation(summary = "分页查询导入批次列表")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
+    public ResponseWrapper<PageResult<PerfImportBatchRespDTO>> pageBatches(
+            @RequestParam(value = "pageNo", required = false, defaultValue = "1") int pageNo,
+            @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize) {
+        log.debug("[PerfImportController.pageBatches] pageNo={}, pageSize={}", pageNo, pageSize);
+        return ResponseWrapper.success(perfImportService.pageBatches(pageNo, pageSize));
+    }
+
+    /**
+     * 下载批次源文件（从 OBS 流式返回）.
+     *
+     * <p>鉴权同列表数据范围：非管理员只能下载自己的批次；source_object_key 为空抛
+     * IMPORT_BATCH_NO_SOURCE_FILE。
+     */
+    @GetMapping("/batches/{batchId}/source-file")
+    @Operation(summary = "下载导入源文件")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXPORT)
+    @AuditLog(action = "PERF_IMPORT_DOWNLOAD_SOURCE", resourceType = "PERF_IMPORT_BATCH")
+    public void downloadSourceFile(@PathVariable("batchId") @NotBlank String batchId,
+                                   HttpServletResponse response) throws IOException {
+        log.info("[PerfImportController.downloadSourceFile] batchId={}", batchId);
+        PerfImportService.ImportSourceFile src = perfImportService.getSourceFile(batchId);
+        byte[] data = src.content();
+        response.setContentType("application/octet-stream");
+        response.setHeader("Content-Disposition",
+                "attachment; filename=\"" + URLEncoder.encode(src.fileName(), StandardCharsets.UTF_8) + "\"");
+        response.setContentLengthLong(data.length);
+        response.getOutputStream().write(data);
+        response.flushBuffer();
     }
 }

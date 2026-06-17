@@ -1,5 +1,13 @@
 package com.bank.branch.platform.performance.service.importer.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.governance.storage.FileCategory;
@@ -58,12 +66,18 @@ public class PerfImportServiceImpl implements PerfImportService {
     private final PerfImportBatchMapper batchMapper;
     private final Map<String, ImportStrategy> strategyMap;
     private final FileApi fileApi;
+    private final CurrentUserApi currentUserApi;
+    private final BizScopeApi bizScopeApi;
 
     public PerfImportServiceImpl(PerfImportBatchMapper batchMapper,
                                  List<ImportStrategy> strategies,
-                                 FileApi fileApi) {
+                                 FileApi fileApi,
+                                 CurrentUserApi currentUserApi,
+                                 BizScopeApi bizScopeApi) {
         this.batchMapper = batchMapper;
         this.fileApi = fileApi;
+        this.currentUserApi = currentUserApi;
+        this.bizScopeApi = bizScopeApi;
         this.strategyMap = new HashMap<>();
         for (ImportStrategy s : strategies) {
             String type = s.importType();
@@ -109,14 +123,11 @@ public class PerfImportServiceImpl implements PerfImportService {
                     "dataDate 必填（METRIC_RESULT 必传 yyyy-MM-dd）");
         }
 
-        // 0) 源文件归档到 OBS（CBS 上传）——两条分支：
-        //    archiveSource=true（「立即上传」）→ 走正常 CBS 归档，记录 objectKey；
-        //    archiveSource=false（「上传并导入」）→ 不走 CBS，跳过归档，直接解析入库（导入只读上传的 MultipartFile）。
-        String sourceObjectKey = null;
-        if (archiveSource) {
-            FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
-            sourceObjectKey = archived.getId();
-        }
+        // 0) 源文件强制归档到 OBS（CBS 上传），记录 objectKey。
+        //    2026-06-17 起：无论「立即上传」还是「上传并导入」均归档，保证每条批次都能下载源文件。
+        //    archiveSource 入参保留以兼容签名，但实现内忽略（始终归档）。
+        FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
+        String sourceObjectKey = archived.getId();
 
         // 1) 创建批次，初始 CREATED
         PerfImportBatch batch = new PerfImportBatch();
@@ -217,7 +228,13 @@ public class PerfImportServiceImpl implements PerfImportService {
     @Override
     public PerfImportBatchRespDTO getBatchDto(String batchId) {
         // V1.3 R4.1：DTO 装配下沉到 Service，Controller 不再持有 PerfImportBatch
-        PerfImportBatch b = getBatch(batchId);
+        return toDto(getBatch(batchId));
+    }
+
+    /**
+     * PerfImportBatch → 响应 DTO（统一装配，列表/详情共用）.
+     */
+    private PerfImportBatchRespDTO toDto(PerfImportBatch b) {
         int updated = b.getUpdatedRows() == null ? 0 : b.getUpdatedRows();
         int success = b.getSuccessRows() == null ? 0 : b.getSuccessRows();
         int inserted = Math.max(0, success - updated);
@@ -226,6 +243,7 @@ public class PerfImportServiceImpl implements PerfImportService {
                 .batchNo(b.getBatchNo())
                 .importType(b.getImportType())
                 .fileName(b.getFileName())
+                .sourceObjectKey(b.getSourceObjectKey())
                 .status(b.getStatus())
                 .totalRows(b.getTotalRows())
                 .successRows(b.getSuccessRows())
@@ -237,6 +255,54 @@ public class PerfImportServiceImpl implements PerfImportService {
                 .createdTime(b.getCreatedTime())
                 .updatedTime(b.getUpdatedTime())
                 .build();
+    }
+
+    @Override
+    public PageResult<PerfImportBatchRespDTO> pageBatches(int pageNo, int pageSize) {
+        int safePageNo = Math.max(pageNo, 1);
+        int safePageSize = pageSize <= 0 ? 10 : Math.min(pageSize, 100);
+        String selfEmpId = resolveSelfEmpId(); // null=管理员全见；否则=仅该用户
+
+        Page<PerfImportBatch> page = new Page<>(safePageNo, safePageSize);
+        LambdaQueryWrapper<PerfImportBatch> qw = new LambdaQueryWrapper<PerfImportBatch>()
+                .ne(PerfImportBatch::getStatus, "DELETED")
+                // selfEmpId 取自认证 ThreadLocal, 可信; 条件式拼接, 非用户入参
+                .eq(selfEmpId != null, PerfImportBatch::getCreatedBy, selfEmpId)
+                .orderByDesc(PerfImportBatch::getCreatedTime);
+        IPage<PerfImportBatch> result = batchMapper.selectPage(page, qw);
+
+        List<PerfImportBatchRespDTO> dtos = result.getRecords().stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+        return PageResult.of(safePageNo, safePageSize, result.getTotal(), dtos);
+    }
+
+    /**
+     * 解析当前用户的数据范围：返回需要施加的 created_by 过滤值；
+     * {@code null} 表示管理员（DataScopeType.ALL）全见、不过滤。
+     */
+    private String resolveSelfEmpId() {
+        String empId = currentUserApi.getCurrentEmpId();
+        DataScopeType scope = bizScopeApi.resolveScope(empId, BizType.PERF_CONFIG);
+        return scope == DataScopeType.ALL ? null : empId;
+    }
+
+    @Override
+    public ImportSourceFile getSourceFile(String batchId) {
+        PerfImportBatch b = getBatch(batchId);
+        // 数据范围校验：非管理员只能下载自己的批次
+        String selfEmpId = resolveSelfEmpId();
+        if (selfEmpId != null && !selfEmpId.equals(b.getCreatedBy())) {
+            throw new PerfException(PerfErrorCode.IMPORT_BATCH_NO_PERMISSION, batchId);
+        }
+        String objectKey = b.getSourceObjectKey();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw new PerfException(PerfErrorCode.IMPORT_BATCH_NO_SOURCE_FILE, batchId);
+        }
+        byte[] content = fileApi.getFileContent(objectKey);
+        String fileName = b.getFileName() == null || b.getFileName().isBlank()
+                ? (b.getBatchNo() + ".xlsx") : b.getFileName();
+        return new ImportSourceFile(fileName, content);
     }
 
     private static String generateId() {

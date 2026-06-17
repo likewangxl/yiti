@@ -185,7 +185,13 @@ public enum PerfErrorCode {
     EVAL_BATCH_NOT_ACTIVE("PERF-40066", "批次未发布或已结束，暂不可打分"),
     EVAL_BATCH_NOT_DRAFT("PERF-40067", "仅草稿状态的批次可发布"),
     EVAL_TASK_DELETE_BEFORE_DEADLINE("PERF-40068", "截止时间未到不可删除"),
-    KPI_ITEM_EXPR_REQUIRED("PERF-40069", "指标项必须且只能配置一种表达式（计算表达式 或 SQL表达式）");
+    KPI_ITEM_EXPR_REQUIRED("PERF-40069", "指标项必须且只能配置一种表达式（计算表达式 或 SQL表达式）"),
+
+    /** 导入批次越权访问（非本人批次且非管理员数据范围） */
+    IMPORT_BATCH_NO_PERMISSION("PERF-40070", "无权访问该导入批次"),
+
+    /** 导入批次无归档源文件（source_object_key 为空，多为旧数据） */
+    IMPORT_BATCH_NO_SOURCE_FILE("PERF-40071", "该批次无可下载的源文件");
 
     private final String code;
     private final String message;

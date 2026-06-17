@@ -1,8 +1,15 @@
 package com.bank.branch.platform.performance.service.importer;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.bank.branch.platform.auth.api.BizScopeApi;
+import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import com.bank.branch.platform.governance.storage.FileCategory;
+import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -46,6 +53,8 @@ class PerfImportServiceTest {
     private BaseDataImportStrategy baseDataStrategy;
     private AllocRelationImportStrategy allocStrategy;
     private FileApi fileApi;
+    private CurrentUserApi currentUserApi;
+    private BizScopeApi bizScopeApi;
     private PerfImportServiceImpl service;
 
     @BeforeEach
@@ -55,6 +64,8 @@ class PerfImportServiceTest {
         baseDataStrategy = mock(BaseDataImportStrategy.class);
         allocStrategy = mock(AllocRelationImportStrategy.class);
         fileApi = mock(FileApi.class);
+        currentUserApi = mock(CurrentUserApi.class);
+        bizScopeApi = mock(BizScopeApi.class);
 
         when(targetStrategy.importType()).thenReturn("TARGET");
         when(baseDataStrategy.importType()).thenReturn("BASE_DATA");
@@ -71,8 +82,12 @@ class PerfImportServiceTest {
         archived.setId("F_IMP_SRC");
         when(fileApi.upload(any(MultipartFile.class), anyString(), anyString())).thenReturn(archived);
 
+        // 默认当前用户 admin + 数据范围 ALL（管理员全见），子测试按需覆盖
+        when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
+        when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.ALL);
+
         List<ImportStrategy> strategies = List.of(targetStrategy, baseDataStrategy, allocStrategy);
-        service = new PerfImportServiceImpl(batchMapper, strategies, fileApi);
+        service = new PerfImportServiceImpl(batchMapper, strategies, fileApi, currentUserApi, bizScopeApi);
     }
 
     private MultipartFile fakeFile(String name) {
@@ -182,16 +197,16 @@ class PerfImportServiceTest {
     }
 
     @Test
-    @DisplayName("startImport archiveSource=false（上传并导入）→ 不走 CBS：不调 fileApi.upload，sourceObjectKey 留空")
-    void startImport_archiveSourceFalse_skipsObs() {
+    @DisplayName("startImport：强制归档——archiveSource=false 仍归档 OBS 并落 sourceObjectKey")
+    void startImport_forcedArchive_evenWhenArchiveSourceFalse() {
         String batchId = service.startImport("TARGET", fakeFile("imp.xlsx"), "admin", null, null, false);
 
         assertThat(batchId).isNotBlank();
-        verify(fileApi, never()).upload(any(MultipartFile.class), anyString(), any());
+        verify(fileApi).upload(any(MultipartFile.class), eq("admin"), eq(FileCategory.PERF_IMPORT));
 
         ArgumentCaptor<PerfImportBatch> cap = ArgumentCaptor.forClass(PerfImportBatch.class);
         verify(batchMapper).insert(cap.capture());
-        assertThat(cap.getValue().getSourceObjectKey()).isNull();
+        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("F_IMP_SRC");
     }
 
     @Test
@@ -244,5 +259,115 @@ class PerfImportServiceTest {
                 .isInstanceOf(PerfException.class)
                 .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
                         .isEqualTo(PerfErrorCode.VALIDATION_FAILED));
+    }
+
+    // ---------- pageBatches（DATA_SCOPE）----------
+
+    @Test
+    @DisplayName("pageBatches：管理员(ALL) → 返回映射后的 DTO 分页（含 sourceObjectKey）")
+    void pageBatches_adminScopeAll_returnsMappedDtos() {
+        when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.ALL);
+        stubSelectPageReturnsOne();
+
+        PageResult<PerfImportBatchRespDTO> r = service.pageBatches(1, 10);
+
+        assertThat(r.getRecords()).hasSize(1);
+        assertThat(r.getTotal()).isEqualTo(1L);
+        assertThat(r.getRecords().get(0).getSourceObjectKey()).isEqualTo("OBJ1");
+        verify(batchMapper).selectPage(any(), any());
+    }
+
+    @Test
+    @DisplayName("pageBatches：普通用户(非ALL) → 正常返回（created_by 过滤由 resolveSelfEmpId 施加，见下载越权用例）")
+    void pageBatches_nonAdminScope_returnsList() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("u001");
+        when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.SELF);
+        stubSelectPageReturnsOne();
+
+        PageResult<PerfImportBatchRespDTO> r = service.pageBatches(1, 10);
+
+        assertThat(r.getRecords()).hasSize(1);
+        verify(batchMapper).selectPage(any(), any());
+    }
+
+    // ---------- getSourceFile（下载 + 数据范围）----------
+
+    @Test
+    @DisplayName("getSourceFile：正常 → 返回文件名 + OBS 字节")
+    void getSourceFile_happyPath_returnsBytes() {
+        PerfImportBatch b = batchWith("B1", "admin", "OBJ1");
+        when(batchMapper.selectByBatchId("B1")).thenReturn(b);
+        when(fileApi.getFileContent("OBJ1")).thenReturn(new byte[]{9, 8, 7});
+
+        PerfImportService.ImportSourceFile src = service.getSourceFile("B1");
+
+        assertThat(src.fileName()).isEqualTo("imp.xlsx");
+        assertThat(src.content()).containsExactly(9, 8, 7);
+    }
+
+    @Test
+    @DisplayName("getSourceFile：普通用户下载他人批次 → IMPORT_BATCH_NO_PERMISSION")
+    void getSourceFile_nonAdminOthersBatch_throwsNoPermission() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("u001");
+        when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.SELF);
+        when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "someoneElse", "OBJ1"));
+
+        assertThatThrownBy(() -> service.getSourceFile("B1"))
+                .isInstanceOf(PerfException.class)
+                .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
+                        .isEqualTo(PerfErrorCode.IMPORT_BATCH_NO_PERMISSION));
+    }
+
+    @Test
+    @DisplayName("getSourceFile：管理员可下载他人批次")
+    void getSourceFile_adminOthersBatch_allowed() {
+        when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.ALL);
+        when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "someoneElse", "OBJ1"));
+        when(fileApi.getFileContent("OBJ1")).thenReturn(new byte[]{1});
+
+        PerfImportService.ImportSourceFile src = service.getSourceFile("B1");
+        assertThat(src.content()).containsExactly(1);
+    }
+
+    @Test
+    @DisplayName("getSourceFile：source_object_key 为空（旧数据）→ IMPORT_BATCH_NO_SOURCE_FILE")
+    void getSourceFile_nullObjectKey_throwsNoSourceFile() {
+        when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "admin", null));
+
+        assertThatThrownBy(() -> service.getSourceFile("B1"))
+                .isInstanceOf(PerfException.class)
+                .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
+                        .isEqualTo(PerfErrorCode.IMPORT_BATCH_NO_SOURCE_FILE));
+    }
+
+    @Test
+    @DisplayName("getBatchDto：含 sourceObjectKey")
+    void getBatchDto_exposesSourceObjectKey() {
+        when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "admin", "OBJ1"));
+        PerfImportBatchRespDTO dto = service.getBatchDto("B1");
+        assertThat(dto.getSourceObjectKey()).isEqualTo("OBJ1");
+    }
+
+    // ---------- helpers ----------
+
+    private PerfImportBatch batchWith(String id, String createdBy, String objectKey) {
+        PerfImportBatch b = new PerfImportBatch();
+        b.setId(id);
+        b.setBatchNo("IMP" + id);
+        b.setImportType("TARGET");
+        b.setFileName("imp.xlsx");
+        b.setSourceObjectKey(objectKey);
+        b.setStatus("SUCCESS");
+        b.setCreatedBy(createdBy);
+        return b;
+    }
+
+    private void stubSelectPageReturnsOne() {
+        when(batchMapper.selectPage(any(), any())).thenAnswer(inv -> {
+            Page<PerfImportBatch> p = inv.getArgument(0);
+            p.setRecords(List.of(batchWith("B1", "admin", "OBJ1")));
+            p.setTotal(1L);
+            return p;
+        });
     }
 }

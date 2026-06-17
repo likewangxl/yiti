@@ -37,6 +37,10 @@ public class PerfImportBatchRespDTO {
     @Schema(description = "文件名")
     private String fileName;
 
+    /** 源文件在 OBS 的对象键（FILE_OBJECT.id）；为空表示无可下载源文件（旧数据）. */
+    @Schema(description = "源文件对象键（OBS，空=无源文件）")
+    private String sourceObjectKey;
+
     /** 状态：CREATED / RUNNING / SUCCESS / FAILED / DELETED. */
     @Schema(description = "状态")
     private String status;

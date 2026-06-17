@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.service.importer;
 
+import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import org.springframework.web.multipart.MultipartFile;
@@ -87,4 +88,34 @@ public interface PerfImportService {
      * @return 响应 DTO（不存在则抛 IMPORT_BATCH_NOT_FOUND）
      */
     PerfImportBatchRespDTO getBatchDto(String batchId);
+
+    /**
+     * 分页查询导入批次列表（应用统一 DATA_SCOPE）.
+     *
+     * <p>数据范围：管理员（DataScopeType.ALL）可见全部；其他角色仅见自己创建的批次
+     * （{@code created_by = 当前用户}）。固定排除 DELETED，按 created_time 倒序。
+     *
+     * @param pageNo   页码（从 1 起）
+     * @param pageSize 页大小
+     * @return 分页 DTO 结果
+     */
+    PageResult<PerfImportBatchRespDTO> pageBatches(int pageNo, int pageSize);
+
+    /**
+     * 取批次源文件（从 OBS 读取字节），用于操作列「下载文件」.
+     *
+     * <p>鉴权：同列表数据范围——非管理员只能下载自己批次，否则抛
+     * {@code IMPORT_BATCH_NO_PERMISSION}。{@code source_object_key} 为空抛
+     * {@code IMPORT_BATCH_NO_SOURCE_FILE}。批次不存在抛 {@code IMPORT_BATCH_NOT_FOUND}。
+     *
+     * @param batchId 批次 ID
+     * @return 源文件名 + 字节内容
+     */
+    ImportSourceFile getSourceFile(String batchId);
+
+    /**
+     * 源文件下载载荷（文件名 + 字节）.
+     */
+    record ImportSourceFile(String fileName, byte[] content) {
+    }
 }
