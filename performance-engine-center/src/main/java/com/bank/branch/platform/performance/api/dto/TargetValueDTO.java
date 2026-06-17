@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * 目标值 DTO.
@@ -29,4 +30,10 @@ public class TargetValueDTO {
     private String metricCode;
     private BigDecimal targetValue;
     private BigDecimal baseValue;
+    /** 阶段名称（2026-06-17 新增）. */
+    private String stageName;
+    /** 起始日期（2026-06-17 新增）. */
+    private LocalDate startDate;
+    /** 截止日期（2026-06-17 新增）. */
+    private LocalDate endDate;
 }

@@ -204,13 +204,23 @@ class TargetRequestDtoValidationTest {
     }
 
     @Test
-    void createPlanReq_whenEffectiveDateNull_shouldViolation() {
+    void createPlanReq_whenEffectiveDateNull_shouldPass() {
+        // 放开必填：effectiveDate 可空（Service 层为空时默认取当天）
         CreateTargetPlanReqDTO req = okPlanReq();
         req.setEffectiveDate(null);
 
         Set<ConstraintViolation<CreateTargetPlanReqDTO>> violations = validator.validateProperty(req, "effectiveDate");
-        assertThat(violations).extracting(ConstraintViolation::getPropertyPath)
-                .map(Object::toString).contains("effectiveDate");
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void createPlanReq_whenKpiSchemeIdBlank_shouldPass() {
+        // 放开必填：kpiSchemeId 可空（留空=不关联，Service 仅在非空时校验 ACTIVE）
+        CreateTargetPlanReqDTO req = okPlanReq();
+        req.setKpiSchemeId("");
+
+        Set<ConstraintViolation<CreateTargetPlanReqDTO>> violations = validator.validateProperty(req, "kpiSchemeId");
+        assertThat(violations).isEmpty();
     }
 
     @Test

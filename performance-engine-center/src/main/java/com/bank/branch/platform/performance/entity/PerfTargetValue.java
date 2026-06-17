@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -43,6 +44,15 @@ public class PerfTargetValue {
 
     /** 基础值（decimal(20,4)，可空）. */
     private BigDecimal baseValue;
+
+    /** 阶段名称（2026-06-17 新增，可空）. */
+    private String stageName;
+
+    /** 起始日期（2026-06-17 新增，可空）. */
+    private LocalDate startDate;
+
+    /** 截止日期（2026-06-17 新增，可空）. */
+    private LocalDate endDate;
 
     /**
      * 归属员工 ID（V1.4 S2.1 新增，SELF / SELF_ASSIGNED scope 列）.

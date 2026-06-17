@@ -242,6 +242,10 @@ public class TargetValueService {
         // V1.4 S2.2: 透传 owner 字段（可空）
         v.setOwnerEmpId(cmd.getOwnerEmpId());
         v.setOwnerOrgCode(cmd.getOwnerOrgCode());
+        // 2026-06-17: 透传 阶段名称 / 起止日期（可空）
+        v.setStageName(cmd.getStageName());
+        v.setStartDate(cmd.getStartDate());
+        v.setEndDate(cmd.getEndDate());
         // createdBy 在 upsertBatch 内部强制覆盖, 此处不设置
         return upsertBatch(Collections.singletonList(v), cmd.getOperator());
     }
@@ -413,6 +417,10 @@ public class TargetValueService {
             // V1.4 S2.2: 透传 owner 字段（可空）
             v.setOwnerEmpId(item.getOwnerEmpId());
             v.setOwnerOrgCode(item.getOwnerOrgCode());
+            // 2026-06-17: 透传 阶段名称 / 起止日期（可空）
+            v.setStageName(item.getStageName());
+            v.setStartDate(item.getStartDate());
+            v.setEndDate(item.getEndDate());
             // createdBy 在 upsertBatch 内部强制覆盖为 operator (I-2), 此处不设置
             list.add(v);
         }
@@ -498,6 +506,21 @@ public class TargetValueService {
     /** 下拉标签：有名称则「编号 名称」，否则仅编号. */
     private static String buildLabel(String id, String name) {
         return (name == null || name.isBlank()) ? id : id + " " + name;
+    }
+
+    /**
+     * 2026-06-17：某目标方案下所有目标值的「阶段名称」去重列表（非空），供查询区下拉。
+     *
+     * @param planId 目标方案ID（必填）
+     * @return 去重的非空阶段名称列表（可能为空）
+     */
+    @Transactional(readOnly = true)
+    public List<String> listStageNames(String planId) {
+        if (planId == null || planId.isBlank()) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "planId 必填");
+        }
+        List<String> names = targetValueMapper.selectDistinctStageNamesByPlan(planId);
+        return names == null ? Collections.emptyList() : names;
     }
 
     private String generateId() {

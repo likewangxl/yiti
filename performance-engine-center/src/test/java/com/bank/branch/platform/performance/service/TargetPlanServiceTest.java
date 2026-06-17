@@ -69,14 +69,35 @@ class TargetPlanServiceTest {
     // ------------------------------- create: 必含 DoD 场景 -------------------------------
 
     @Test
-    @DisplayName("create: effectiveDate 为 null 时抛 PARAM_INVALID (退化 L1366 场景 - 选项 A)")
-    void create_whenEffectiveDateNull_throws() {
+    @DisplayName("create: effectiveDate 为 null 时默认取今天并创建成功（放开必填）")
+    void create_whenEffectiveDateNull_defaultsToTodayAndSucceeds() {
         CreateTargetPlanCmd cmd = buildCmd("TP_NULL_EFF", "KS_ACTIVE", null);
+        when(targetPlanMapper.selectByPlanCode("TEST_TGT_TP_NULL_EFF")).thenReturn(null);
+        when(kpiSchemeService.getByIdOrNull("KS_ACTIVE"))
+                .thenReturn(Optional.of(activeScheme("KS_ACTIVE")));
 
-        assertThatThrownBy(() -> service.create(cmd))
-                .isInstanceOfSatisfying(PerfException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED));
-        verify(targetPlanMapper, never()).insert(any(PerfTargetPlan.class));
+        PerfTargetPlan created = service.create(cmd);
+
+        assertThat(created).isNotNull();
+        ArgumentCaptor<PerfTargetPlan> captor = ArgumentCaptor.forClass(PerfTargetPlan.class);
+        verify(targetPlanMapper).insert(captor.capture());
+        // effectiveDate 为空时回退当天，满足 DB NOT NULL 约束
+        assertThat(captor.getValue().getEffectiveDate()).isEqualTo(LocalDate.now());
+    }
+
+    @Test
+    @DisplayName("create: kpiSchemeId 为空白时跳过 ACTIVE 校验并创建成功（放开关联）")
+    void create_whenKpiSchemeBlank_skipsValidationAndSucceeds() {
+        CreateTargetPlanCmd cmd = buildCmd("TP_KS_BLANK", "", LocalDate.now());
+        when(targetPlanMapper.selectByPlanCode("TEST_TGT_TP_KS_BLANK")).thenReturn(null);
+
+        PerfTargetPlan created = service.create(cmd);
+
+        assertThat(created).isNotNull();
+        // 未关联 KPI 方案：原样存空串（列 NOT NULL，空串合法），且不查询 KpiSchemeService
+        assertThat(created.getKpiSchemeId()).isEqualTo("");
+        verify(kpiSchemeService, never()).getByIdOrNull(any());
+        verify(targetPlanMapper).insert(any(PerfTargetPlan.class));
     }
 
     @Test

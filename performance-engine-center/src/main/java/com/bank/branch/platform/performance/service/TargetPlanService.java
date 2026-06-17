@@ -25,7 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -92,9 +94,8 @@ public class TargetPlanService {
      */
     @Transactional(rollbackFor = Exception.class)
     public PerfTargetPlan create(CreateTargetPlanCmd cmd) {
-        if (cmd.getEffectiveDate() == null) {
-            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "effectiveDate 必填");
-        }
+        // effectiveDate 放开必填：为空时回退当天（perf_target_plan.effective_date 列 NOT NULL）
+        LocalDate effectiveDate = cmd.getEffectiveDate() != null ? cmd.getEffectiveDate() : LocalDate.now();
         // planCode UK 预校验先行, 提前拒绝避免后续 kpiScheme 查询浪费;
         // 预校验与 insert 之间的并发窗口由 DuplicateKeyException 兜底.
         // V1.1 P8.1 修正：目标方案编码重复不再复用 METRIC_CODE_DUP（"指标编码已存在"），
@@ -103,10 +104,13 @@ public class TargetPlanService {
             throw new PerfException(PerfErrorCode.TARGET_PLAN_CODE_EXISTS, cmd.getPlanCode());
         }
 
-        // 引用校验: KPI 方案必须 ACTIVE (发布态), DRAFT/DISABLED 均拒绝
-        Optional<PerfKpiScheme> schemeOpt = kpiSchemeService.getByIdOrNull(cmd.getKpiSchemeId());
-        if (schemeOpt.isEmpty() || !KPI_STATUS_ACTIVE.equals(schemeOpt.get().getStatus())) {
-            throw new PerfException(PerfErrorCode.VALIDATION_FAILED, cmd.getKpiSchemeId());
+        // 关联 KPI 方案放开必填：仅当显式传入 kpiSchemeId 时才校验其为 ACTIVE（DRAFT/DISABLED/不存在拒绝）；
+        // 留空表示不关联（kpi_scheme_id 列 NOT NULL，原样存空串即可）
+        if (StringUtils.hasText(cmd.getKpiSchemeId())) {
+            Optional<PerfKpiScheme> schemeOpt = kpiSchemeService.getByIdOrNull(cmd.getKpiSchemeId());
+            if (schemeOpt.isEmpty() || !KPI_STATUS_ACTIVE.equals(schemeOpt.get().getStatus())) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, cmd.getKpiSchemeId());
+            }
         }
 
         PerfTargetPlan plan = new PerfTargetPlan();
@@ -116,7 +120,7 @@ public class TargetPlanService {
         plan.setKpiSchemeId(cmd.getKpiSchemeId());
         plan.setTargetDim(cmd.getTargetDim());
         plan.setTargetCycle(cmd.getTargetCycle());
-        plan.setEffectiveDate(cmd.getEffectiveDate());
+        plan.setEffectiveDate(effectiveDate);
         plan.setStartDate(cmd.getStartDate());
         plan.setEndDate(cmd.getEndDate());
         plan.setStatus(STATUS_ACTIVE);

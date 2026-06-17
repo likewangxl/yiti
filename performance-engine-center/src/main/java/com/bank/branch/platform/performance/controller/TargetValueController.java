@@ -114,6 +114,24 @@ public class TargetValueController {
     }
 
     /**
+     * 目标值「阶段名称」下拉（方案内去重，非空）。
+     *
+     * <p>用于目标值管理页查询区的「阶段名称」下拉。
+     * 复用 LIST 鉴权资源族（GET /api/perf/target-values/stage-names → P_PERF_TGT_V_STAGE）。
+     *
+     * @param planId 目标方案ID（必填）
+     * @return 去重的非空阶段名称列表
+     */
+    @GetMapping("/stage-names")
+    @Operation(summary = "目标值阶段名称下拉（方案内去重）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
+    public ResponseWrapper<List<String>> stageNames(
+            @RequestParam(value = "planId") @NotBlank String planId) {
+        log.debug("[TargetValueController.stageNames] planId={}", planId);
+        return ResponseWrapper.success(targetValueService.listStageNames(planId));
+    }
+
+    /**
      * 单值 upsert. 冲突 (UK 相同) 时更新 target_value / base_value, 否则新增。
      *
      * <p>返回受影响行数 (MySQL 语义: 新增 1 / 更新 2)。
@@ -133,6 +151,9 @@ public class TargetValueController {
                 .metricCode(req.getMetricCode())
                 .targetValue(req.getTargetValue())
                 .baseValue(req.getBaseValue())
+                .stageName(req.getStageName())
+                .startDate(req.getStartDate())
+                .endDate(req.getEndDate())
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         int affected = targetValueService.upsertOne(cmd);
@@ -166,6 +187,9 @@ public class TargetValueController {
                     .metricCode(item.getMetricCode())
                     .targetValue(item.getTargetValue())
                     .baseValue(item.getBaseValue())
+                    .stageName(item.getStageName())
+                    .startDate(item.getStartDate())
+                    .endDate(item.getEndDate())
                     // operator 仅在 batchCmd 顶层设置，I-2 强制覆盖 created_by 在 Service 侧处理
                     .build());
         }

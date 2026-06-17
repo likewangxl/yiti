@@ -365,6 +365,9 @@ class TargetValueServiceTest {
                 .metricCode("M_A")
                 .targetValue(new BigDecimal("1000"))
                 .baseValue(new BigDecimal("100"))
+                .stageName("一阶段")
+                .startDate(java.time.LocalDate.of(2026, 1, 1))
+                .endDate(java.time.LocalDate.of(2026, 6, 30))
                 .operator("admin")
                 .build();
         when(targetValueMapper.upsertBatch(anyList())).thenReturn(1);
@@ -386,6 +389,10 @@ class TargetValueServiceTest {
         assertThat(actual.getBaseValue()).isEqualByComparingTo("100");
         assertThat(actual.getCreatedBy()).isEqualTo("admin");
         assertThat(actual.getId()).isNotBlank();
+        // 新增：阶段名称 / 起止日期 透传到实体
+        assertThat(actual.getStageName()).isEqualTo("一阶段");
+        assertThat(actual.getStartDate()).isEqualTo(java.time.LocalDate.of(2026, 1, 1));
+        assertThat(actual.getEndDate()).isEqualTo(java.time.LocalDate.of(2026, 6, 30));
     }
 
     // ------------------------------- getByUniqueKey / listByPlan 场景 -------------------------------

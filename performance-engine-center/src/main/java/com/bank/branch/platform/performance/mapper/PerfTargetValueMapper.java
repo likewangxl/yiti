@@ -146,4 +146,14 @@ public interface PerfTargetValueMapper extends BaseMapper<PerfTargetValue> {
      * @return 去重的对象列表（仅填充 subjectType / subjectId）
      */
     List<PerfTargetValue> selectDistinctSubjectsByPlan(@Param("planId") String planId);
+
+    /**
+     * 2026-06-17：查询某目标方案下所有目标值的「阶段名称」去重列表（非空）。
+     *
+     * <p>用于目标值管理页查询区的「阶段名称」下拉。
+     *
+     * @param planId 目标方案ID（必填）
+     * @return 去重的非空阶段名称列表（按名称排序）
+     */
+    List<String> selectDistinctStageNamesByPlan(@Param("planId") String planId);
 }

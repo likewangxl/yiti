@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.controller.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * 目标值 upsert 请求 DTO (单值).
@@ -67,4 +69,19 @@ public class UpsertTargetValueReqDTO {
     /** 基础值 (可空, decimal(20,4)). */
     @Schema(description = "基础值 (可空)")
     private BigDecimal baseValue;
+
+    /** 阶段名称 (可空). */
+    @Schema(description = "阶段名称 (可空)")
+    @Size(max = 100, message = "stageName 长度不能超过 100")
+    private String stageName;
+
+    /** 起始日期 (可空, yyyy-MM-dd). */
+    @Schema(description = "起始日期 yyyy-MM-dd (可空)")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate startDate;
+
+    /** 截止日期 (可空, yyyy-MM-dd). */
+    @Schema(description = "截止日期 yyyy-MM-dd (可空)")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate endDate;
 }

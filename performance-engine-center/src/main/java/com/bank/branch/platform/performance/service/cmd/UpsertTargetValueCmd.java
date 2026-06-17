@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * 目标值 upsert 命令 (单值).
@@ -43,6 +44,15 @@ public class UpsertTargetValueCmd {
 
     /** 基础值 (可空). */
     private BigDecimal baseValue;
+
+    /** 阶段名称（2026-06-17 新增，可空）. */
+    private String stageName;
+
+    /** 起始日期（2026-06-17 新增，可空）. */
+    private LocalDate startDate;
+
+    /** 截止日期（2026-06-17 新增，可空）. */
+    private LocalDate endDate;
 
     /**
      * 归属员工 ID（V1.4 S2.2 新增，可空）.

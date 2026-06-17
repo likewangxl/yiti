@@ -68,6 +68,9 @@ public final class TargetAssembler {
                 .metricCode(value.getMetricCode())
                 .targetValue(value.getTargetValue())
                 .baseValue(value.getBaseValue())
+                .stageName(value.getStageName())
+                .startDate(value.getStartDate())
+                .endDate(value.getEndDate())
                 .build();
     }
 }

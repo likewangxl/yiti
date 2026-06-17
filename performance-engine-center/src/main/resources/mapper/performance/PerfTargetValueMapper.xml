@@ -4,7 +4,8 @@
 
     <sql id="BASE_COLUMNS">
         id, plan_id, subject_type, subject_id, cycle_key, metric_code,
-        target_value, base_value, owner_emp_id, owner_org_code,
+        target_value, base_value, stage_name, start_date, end_date,
+        owner_emp_id, owner_org_code,
         created_by, created_time, updated_by, updated_time
     </sql>
 
@@ -19,18 +20,23 @@
     <insert id="upsertBatch">
         INSERT INTO PERF_TARGET_VALUE (id, plan_id, subject_type, subject_id,
             cycle_key, metric_code, target_value, base_value,
+            stage_name, start_date, end_date,
             owner_emp_id, owner_org_code,
             created_by, created_time)
         VALUES
         <foreach collection="list" item="v" separator=",">
             (#{v.id}, #{v.planId}, #{v.subjectType}, #{v.subjectId},
              #{v.cycleKey}, #{v.metricCode}, #{v.targetValue}, #{v.baseValue},
+             #{v.stageName}, #{v.startDate}, #{v.endDate},
              #{v.ownerEmpId}, #{v.ownerOrgCode},
              #{v.createdBy}, NOW())
         </foreach>
         ON DUPLICATE KEY UPDATE
             target_value = VALUES(target_value),
             base_value = VALUES(base_value),
+            stage_name = VALUES(stage_name),
+            start_date = VALUES(start_date),
+            end_date = VALUES(end_date),
             owner_emp_id = VALUES(owner_emp_id),
             owner_org_code = VALUES(owner_org_code),
             updated_time = NOW(),
@@ -151,6 +157,16 @@
         FROM PERF_TARGET_VALUE
         WHERE plan_id = #{planId}
         ORDER BY subject_type, subject_id
+    </select>
+
+    <!-- 2026-06-17：方案内目标值去重「阶段名称」（非空），供「阶段名称」下拉 -->
+    <select id="selectDistinctStageNamesByPlan" resultType="java.lang.String">
+        SELECT DISTINCT stage_name
+        FROM PERF_TARGET_VALUE
+        WHERE plan_id = #{planId}
+          AND stage_name IS NOT NULL
+          AND stage_name &lt;&gt; ''
+        ORDER BY stage_name
     </select>
 
 </mapper>

@@ -3,7 +3,6 @@ package com.bank.branch.platform.performance.controller.dto;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -39,9 +38,8 @@ public class CreateTargetPlanReqDTO {
     @Size(max = 100, message = "planName 长度不能超过 100")
     private String planName;
 
-    /** 关联 KPI 方案ID (varchar 32). */
-    @Schema(description = "关联 KPI 方案ID", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "kpiSchemeId 不能为空")
+    /** 关联 KPI 方案ID (varchar 32, 可空; 留空表示不关联, Service 仅当非空时校验 ACTIVE). */
+    @Schema(description = "关联 KPI 方案ID(可空)", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @Size(max = 32, message = "kpiSchemeId 长度不能超过 32")
     private String kpiSchemeId;
 
@@ -57,9 +55,8 @@ public class CreateTargetPlanReqDTO {
     @Pattern(regexp = "^(YEAR|QUARTER)$", message = "targetCycle 必须是 YEAR 或 QUARTER")
     private String targetCycle;
 
-    /** 生效日期 (必填). */
-    @Schema(description = "生效日期 yyyy-MM-dd", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "effectiveDate 不能为空")
+    /** 生效日期 (可空; 留空由 Service 默认取当天). */
+    @Schema(description = "生效日期 yyyy-MM-dd(可空,默认当天)", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate effectiveDate;
 
