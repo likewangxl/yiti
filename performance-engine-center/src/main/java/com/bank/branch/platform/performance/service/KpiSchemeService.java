@@ -101,6 +101,7 @@ public class KpiSchemeService {
         scheme.setSchemeName(cmd.getSchemeName());
         scheme.setCycleType(cmd.getCycleType());
         scheme.setOpenDetail(cmd.getOpenDetail() != null ? cmd.getOpenDetail() : 0);
+        scheme.setEmpRoleScope(cmd.getEmpRoleScope());
         scheme.setStatus(STATUS_DRAFT);
         LocalDateTime now = LocalDateTime.now();
         scheme.setCreatedBy(cmd.getOperator());
@@ -151,8 +152,12 @@ public class KpiSchemeService {
         patch.setSchemeName(cmd.getSchemeName());
         patch.setCycleType(cmd.getCycleType());
         patch.setOpenDetail(cmd.getOpenDetail());
+        patch.setEmpRoleScope(cmd.getEmpRoleScope());
         patch.setUpdatedBy(cmd.getOperator());
         schemeMapper.updateByIdSelective(patch);
+        if (cmd.getEmpRoleScope() != null) {
+            existing.setEmpRoleScope(cmd.getEmpRoleScope());
+        }
 
         if (cmd.getSchemeName() != null) {
             existing.setSchemeName(cmd.getSchemeName());

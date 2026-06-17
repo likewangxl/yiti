@@ -74,6 +74,8 @@ public class KpiItemService {
         if (itemMapper.selectBySchemeAndMetric(cmd.getSchemeId(), cmd.getMetricCode()) != null) {
             throw new PerfException(PerfErrorCode.METRIC_CODE_DUP, cmd.getSchemeId(), cmd.getMetricCode());
         }
+        // 计算表达式 与 SQL 表达式 互斥且必选（恰好一个）
+        validateExprMutex(cmd.getFormula(), cmd.getSqlExpr());
         PerfKpiItem item = new PerfKpiItem();
         item.setId(generateId());
         item.setSchemeId(cmd.getSchemeId());
@@ -107,14 +109,17 @@ public class KpiItemService {
         if (existing == null) {
             throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
+        // 计算表达式 与 SQL 表达式 互斥且必选（恰好一个）；选中项落库、另一项清空(写空串覆盖)
+        validateExprMutex(cmd.getFormula(), cmd.getSqlExpr());
+        boolean hasFormula = org.springframework.util.StringUtils.hasText(cmd.getFormula());
         PerfKpiItem patch = new PerfKpiItem();
         patch.setId(id);
         patch.setWeight(cmd.getWeight());
         patch.setMultiplier(cmd.getMultiplier());
         patch.setMinScore(cmd.getMinScore());
         patch.setMaxScore(cmd.getMaxScore());
-        patch.setFormula(cmd.getFormula());
-        patch.setSqlExpr(cmd.getSqlExpr());
+        patch.setFormula(hasFormula ? cmd.getFormula() : "");
+        patch.setSqlExpr(hasFormula ? "" : cmd.getSqlExpr());
         itemMapper.updateByIdSelective(patch);
 
         // 内存视图同步 (便于 Facade 层免二次查询)
@@ -130,13 +135,20 @@ public class KpiItemService {
         if (cmd.getMaxScore() != null) {
             existing.setMaxScore(cmd.getMaxScore());
         }
-        if (cmd.getFormula() != null) {
-            existing.setFormula(cmd.getFormula());
-        }
-        if (cmd.getSqlExpr() != null) {
-            existing.setSqlExpr(cmd.getSqlExpr());
-        }
+        // 表达式互斥：内存视图同步为"选中项=值、另一项清空"
+        existing.setFormula(hasFormula ? cmd.getFormula() : null);
+        existing.setSqlExpr(hasFormula ? null : cmd.getSqlExpr());
         return existing;
+    }
+
+    /** 计算表达式(formula) 与 SQL 表达式(sqlExpr) 互斥且必选：恰好一个非空，否则抛 KPI_ITEM_EXPR_REQUIRED. */
+    private static void validateExprMutex(String formula, String sqlExpr) {
+        boolean hasFormula = org.springframework.util.StringUtils.hasText(formula);
+        boolean hasSql = org.springframework.util.StringUtils.hasText(sqlExpr);
+        if (hasFormula == hasSql) {
+            // 都空（未选）或都填（未互斥）
+            throw new PerfException(PerfErrorCode.KPI_ITEM_EXPR_REQUIRED);
+        }
     }
 
     /**

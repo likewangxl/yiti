@@ -94,6 +94,33 @@ class KpiItemServiceTest {
     }
 
     @Test
+    @DisplayName("addItem: 计算表达式与SQL表达式 都空 → KPI_ITEM_EXPR_REQUIRED(必选)")
+    void addItem_noExpr_throwsExprRequired() {
+        stubSchemeExists("S_E");
+        when(itemMapper.selectBySchemeAndMetric("S_E", "TEST_KPI_M_E")).thenReturn(null);
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_E").metricCode("TEST_KPI_M_E").weight(new BigDecimal("10")).operator("admin").build();
+        assertThatThrownBy(() -> service.addItem(cmd))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_EXPR_REQUIRED));
+        verify(itemMapper, never()).insert(any(PerfKpiItem.class));
+    }
+
+    @Test
+    @DisplayName("addItem: 计算表达式与SQL表达式 都填 → KPI_ITEM_EXPR_REQUIRED(互斥)")
+    void addItem_bothExpr_throwsExprRequired() {
+        stubSchemeExists("S_B");
+        when(itemMapper.selectBySchemeAndMetric("S_B", "TEST_KPI_M_B")).thenReturn(null);
+        AddKpiItemCmd cmd = AddKpiItemCmd.builder()
+                .schemeId("S_B").metricCode("TEST_KPI_M_B").weight(new BigDecimal("10"))
+                .formula("actual").sqlExpr("SELECT 1 AS kpi_value").operator("admin").build();
+        assertThatThrownBy(() -> service.addItem(cmd))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.KPI_ITEM_EXPR_REQUIRED));
+        verify(itemMapper, never()).insert(any(PerfKpiItem.class));
+    }
+
+    @Test
     @DisplayName("新增方案项成功: 生成 id + 默认值补齐 + mapper.insert 被调用一次")
     void addItem_whenValid_insertsWithDefaults() {
         stubSchemeExists("S_OK");
@@ -103,6 +130,7 @@ class KpiItemServiceTest {
                 .schemeId("S_OK")
                 .metricCode("TEST_KPI_METRIC_B")
                 .weight(new BigDecimal("40.0000"))
+                .formula("min(actual/target*100, 100)")
                 .operator("admin")
                 .build();
 
@@ -134,6 +162,7 @@ class KpiItemServiceTest {
                 .metricCode("TEST_KPI_METRIC_ORG")
                 .baseDim("ORG")
                 .weight(new BigDecimal("30.0000"))
+                .formula("min(actual/target*100, 100)")
                 .operator("admin")
                 .build();
 
@@ -209,8 +238,10 @@ class KpiItemServiceTest {
         existing.setId("ID_UPD");
         when(itemMapper.selectById("ID_UPD")).thenReturn(existing);
 
+        // 表达式必选：本次更新携带计算表达式（formula）
         UpdateKpiItemCmd cmd = UpdateKpiItemCmd.builder()
                 .weight(new BigDecimal("80.0000"))
+                .formula("min(actual/target*100, 100)")
                 .operator("admin")
                 .build();
 
@@ -222,7 +253,10 @@ class KpiItemServiceTest {
         PerfKpiItem patch = captor.getValue();
         assertThat(patch.getId()).isEqualTo("ID_UPD");
         assertThat(patch.getWeight()).isEqualByComparingTo("80.0000");
-        // 未提供的字段不应被写入 patch
+        // 选中计算表达式 → formula 落库、sqlExpr 清空(空串覆盖)
+        assertThat(patch.getFormula()).isEqualTo("min(actual/target*100, 100)");
+        assertThat(patch.getSqlExpr()).isEmpty();
+        // 其余未提供字段仍不写入 patch
         assertThat(patch.getMultiplier()).isNull();
         assertThat(patch.getMinScore()).isNull();
         assertThat(patch.getMaxScore()).isNull();

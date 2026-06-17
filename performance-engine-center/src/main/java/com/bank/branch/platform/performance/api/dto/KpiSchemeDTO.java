@@ -24,6 +24,8 @@ public class KpiSchemeDTO {
     private String cycleType;
     /** 是否向员工开放明细. */
     private Boolean openDetail;
+    /** 员工角色范围（角色编码数组，回显用；空=不限定）. */
+    private List<String> empRoleScopes;
     /** 状态: ACTIVE/DISABLED. */
     private String status;
     /** 创建人内部ID（PT_USER.USER_ID，= createdBy 原值，内部用）. */

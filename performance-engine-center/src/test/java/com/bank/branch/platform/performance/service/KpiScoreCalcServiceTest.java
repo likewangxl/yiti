@@ -220,6 +220,63 @@ class KpiScoreCalcServiceTest {
     }
 
     @Test
+    @DisplayName("calculate: 方案配置员工角色范围 → 仅算所选角色员工，且目标值为空者跳过")
+    void calculate_empRoleScope_filtersAndSkipsMissingTarget() {
+        when(taskMapper.selectCount(any())).thenReturn(1L); // 三级均已完成
+
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1"); scheme.setSchemeCode("KPI_A"); scheme.setStatus("ACTIVE");
+        scheme.setEmpRoleScope("R_X"); // 仅 R_X 角色员工参与计算
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(scheme));
+
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1"); item.setSchemeId("S1"); item.setMetricCode("M_0001");
+        item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+
+        PerfTargetPlan plan = new PerfTargetPlan();
+        plan.setId("P1"); plan.setKpiSchemeId("S1"); plan.setTargetCycle("YEAR");
+        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000)).thenReturn(List.of(plan));
+
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_0001"); def.setBaseDim("EMP"); def.setValSlot(5); def.setStatus("ACTIVE");
+        when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
+
+        // 角色 R_X → USER_ID {U1,U2} → 工号 {E001,E002}（E003 不在角色内）
+        when(userApi.getEmpIdsByRoleCode("R_X")).thenReturn(List.of("U1", "U2"));
+        com.bank.branch.platform.auth.api.dto.UserDTO u1 = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        u1.setUsername("E001");
+        com.bank.branch.platform.auth.api.dto.UserDTO u2 = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        u2.setUsername("E002");
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u1, u2));
+
+        // 当日 EMP 指标值：E001/E002(在角色内) + E003(不在角色内)
+        when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5)).thenReturn(List.of(
+                new SubjectSlotValueRow("E001", new BigDecimal("80")),
+                new SubjectSlotValueRow("E002", new BigDecimal("70")),
+                new SubjectSlotValueRow("E003", new BigDecimal("60"))));
+
+        // 仅 E001 有目标值；E002 无目标值 → 跳过；E003 不在角色 → 不计算
+        PerfTargetValue tv = new PerfTargetValue();
+        tv.setTargetValue(new BigDecimal("100")); tv.setBaseValue(new BigDecimal("0"));
+        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E001", "2026", "M_0001")).thenReturn(tv);
+        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E002", "2026", "M_0001")).thenReturn(null);
+
+        when(formulaService.evalScore(eq("actual / target * weight"),
+                eq(new BigDecimal("80")), eq(new BigDecimal("100")), eq(new BigDecimal("0")),
+                eq(new BigDecimal("0.5")), any(), any())).thenReturn(new BigDecimal("0.4000"));
+
+        service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+
+        // 仅 E001 计分（E002 目标空跳过、E003 不在角色范围）
+        ArgumentCaptor<PerfKpiScore> cap = ArgumentCaptor.forClass(PerfKpiScore.class);
+        verify(scoreMapper, times(1)).upsert(cap.capture());
+        assertThat(cap.getValue().getSubjectId()).isEqualTo("E001");
+        // E003 不在角色范围 → 不应查询其目标值
+        verify(targetValueMapper, never()).selectByUniqueKey("P1", "EMP", "E003", "2026", "M_0001");
+    }
+
+    @Test
     void calculate_sqlExpr_executesSqlAndUpserts() {
         when(taskMapper.selectCount(any())).thenReturn(1L); // 三级均已完成
 
@@ -237,7 +294,7 @@ class KpiScoreCalcServiceTest {
         item.setWeight(new BigDecimal("0.5"));
         item.setMaxScore(new BigDecimal("120"));
         item.setMinScore(new BigDecimal("0"));
-        // 配置 SQL 表达式（优先于公式）；公式留空。结果只需 kpi_value 列，obj_id 由传入 objId 决定
+        // 仅配置 SQL 表达式、公式留空 → 走 SQL。结果只需 kpi_value 列，obj_id 由传入 objId 决定
         item.setSqlExpr("SELECT :actual / :target * :weight AS kpi_value");
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
 
@@ -288,6 +345,71 @@ class KpiScoreCalcServiceTest {
         ArgumentCaptor<PerfMetricCalcTask> taskCap = ArgumentCaptor.forClass(PerfMetricCalcTask.class);
         verify(taskMapper, times(1)).updateById(taskCap.capture());
         assertThat(taskCap.getValue().getStatus()).isEqualTo("SUCCESS");
+    }
+
+    /**
+     * 同时配置「计算表达式」与「SQL 表达式」时，优先用计算表达式计分（需求：formula 优先、SQL 兜底）。
+     */
+    @Test
+    void calculate_bothExpr_prefersFormula() {
+        when(taskMapper.selectCount(any())).thenReturn(1L); // 三级均已完成
+
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1");
+        scheme.setSchemeCode("KPI_A");
+        scheme.setStatus("ACTIVE");
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000))
+                .thenReturn(List.of(scheme));
+
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1");
+        item.setSchemeId("S1");
+        item.setMetricCode("M_0001");
+        item.setWeight(new BigDecimal("0.5"));
+        item.setMaxScore(new BigDecimal("120"));
+        item.setMinScore(new BigDecimal("0"));
+        // 两种表达式都配置：按需求计算表达式优先，SQL 表达式应被忽略
+        item.setFormula("actual / target * weight");
+        item.setSqlExpr("SELECT :actual / :target * :weight AS kpi_value");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+
+        PerfTargetPlan plan = new PerfTargetPlan();
+        plan.setId("P1");
+        plan.setKpiSchemeId("S1");
+        plan.setTargetCycle("YEAR");
+        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000))
+                .thenReturn(List.of(plan));
+
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_0001");
+        def.setBaseDim("EMP");
+        def.setValSlot(5);
+        def.setStatus("ACTIVE");
+        when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
+
+        when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5))
+                .thenReturn(List.of(new SubjectSlotValueRow("E001", new BigDecimal("80"))));
+
+        PerfTargetValue tv = new PerfTargetValue();
+        tv.setTargetValue(new BigDecimal("100"));
+        tv.setBaseValue(new BigDecimal("0"));
+        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E001", "2026", "M_0001"))
+                .thenReturn(tv);
+
+        // 计算表达式引擎返回得分
+        when(formulaService.evalScore(eq("actual / target * weight"),
+                any(), any(), any(), any(), any(), any()))
+                .thenReturn(new BigDecimal("0.4000"));
+
+        String taskId = service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+        assertThat(taskId).isNotBlank();
+
+        ArgumentCaptor<PerfKpiScore> scoreCap = ArgumentCaptor.forClass(PerfKpiScore.class);
+        verify(scoreMapper, times(1)).upsert(scoreCap.capture());
+        assertThat(scoreCap.getValue().getScore()).isEqualByComparingTo("0.4");
+
+        // 计算表达式优先：SQL 执行器不应被调用
+        verify(sqlExecutor, never()).executeScore(any(), any(), any());
     }
 
     @Test

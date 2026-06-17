@@ -593,6 +593,34 @@ public class KpiScoreCalcService {
         }
     }
 
+    /**
+     * 解析方案「员工角色范围」(角色编码 CSV) → 员工工号集合（仅用于 EMP 维度计算过滤）.
+     *
+     * <p>每个角色经 {@link UserApi#getEmpIdsByRoleCode}(返回 USER_ID) → {@link #resolveUsernamesByUserIds} 转工号。
+     * 空/空白 → 返回 {@code null}（不限定，全员参与）；非空但解析不到成员 → 空集合（无 EMP 对象参与计算）。</p>
+     */
+    private java.util.Set<String> resolveRoleScopeUsernames(String empRoleScope) {
+        if (!StringUtils.hasText(empRoleScope)) {
+            return null;
+        }
+        java.util.LinkedHashSet<String> userIds = new java.util.LinkedHashSet<>();
+        for (String c : empRoleScope.split(",")) {
+            String code = c.trim();
+            if (code.isEmpty()) {
+                continue;
+            }
+            try {
+                List<String> ids = userApi.getEmpIdsByRoleCode(code);
+                if (ids != null) {
+                    userIds.addAll(ids);
+                }
+            } catch (Exception e) {
+                log.warn("[KPI计算] 角色 {} 解析员工失败，忽略该角色: {}", code, e.getMessage());
+            }
+        }
+        return new java.util.HashSet<>(resolveUsernamesByUserIds(userIds));
+    }
+
     private KpiScoreGroupPageDTO groupPage(LocalDate dataDate, String schemeCode,
                                            String subjectType, String subjectKeyword, int safeNo, int safeSize) {
         String sc = StringUtils.hasText(schemeCode) ? schemeCode.trim() : null;
@@ -984,6 +1012,10 @@ public class KpiScoreCalcService {
                 .filter(p -> isDataDateInPlanRange(dataDate, p))
                 .toList();
 
+        // 员工角色范围（仅 EMP 维度生效）：解析所选角色的员工工号集合；为空(null)=不限定，全员参与计算
+        java.util.Set<String> roleEmpUsernames = resolveRoleScopeUsernames(scheme.getEmpRoleScope());
+        boolean roleScoped = roleEmpUsernames != null;
+
         int scored = 0;
         int skipped = 0;
         for (PerfKpiItem item : items) {
@@ -1025,17 +1057,27 @@ public class KpiScoreCalcService {
             // 构建数据集（需求 4/7）：KPI指标配置 ⟕ 指标结果数据 ⟕ 目标值，逐对象一行
             // 列：指标 / 数据日期 / 对象id / 指标维度 / 权重 / 计分上限 / 计分下限 / 实际值 / 目标值 / 基础值
             List<KpiScoreRow> dataset = new ArrayList<>(rows.size());
+            boolean empDim = "EMP".equals(baseDim);
             for (SubjectSlotValueRow row : rows) {
+                // 角色范围：EMP 维度且方案配置了角色范围时，仅计算所选角色的员工，其余对象不计算
+                if (roleScoped && empDim && !roleEmpUsernames.contains(row.getSubjectId())) {
+                    continue;
+                }
                 TargetBase tb = lookupTargetBase(plans, baseDim, row.getSubjectId(), metricCode, dataDate);
+                // 目标值为空：角色范围模式下该员工无目标值 → 跳过不计分，处理下一条
+                if (roleScoped && empDim && !tb.found) {
+                    skipped++;
+                    continue;
+                }
                 dataset.add(new KpiScoreRow(metricCode, dataDate, row.getSubjectId(), baseDim,
                         weight, item.getMaxScore(), item.getMinScore(), row.getValue(), tb.target, tb.base));
             }
-            // 逐行计算并 upsert：优先用 SQL 表达式（需求 5），缺失时回退计分公式（兼容历史方案）
+            // 逐行计算并 upsert：优先用计算表达式（formula），未配置时回退 SQL 表达式
             for (KpiScoreRow dr : dataset) {
-                BigDecimal score = hasSqlExpr
-                        ? evalScoreBySql(item.getSqlExpr(), dr)
-                        : formulaService.evalScore(item.getFormula(), dr.actual(), dr.target(), dr.base(),
-                                dr.weight(), dr.minScore(), dr.maxScore());
+                BigDecimal score = hasFormula
+                        ? formulaService.evalScore(item.getFormula(), dr.actual(), dr.target(), dr.base(),
+                                dr.weight(), dr.minScore(), dr.maxScore())
+                        : evalScoreBySql(item.getSqlExpr(), dr);
                 upsertScore(dataDate, scheme.getSchemeCode(), metricCode, baseDim, dr.objId(),
                         dr.actual(), dr.weight(), dr.target(), dr.base(), score);
                 scored++;
@@ -1093,7 +1135,7 @@ public class KpiScoreCalcService {
     private TargetBase lookupTargetBase(List<PerfTargetPlan> plans, String baseDim,
                                         String subjectId, String metricCode, LocalDate dataDate) {
         if (plans == null || plans.isEmpty() || (!"EMP".equals(baseDim) && !"ORG".equals(baseDim))) {
-            return new TargetBase(BigDecimal.ZERO, BigDecimal.ZERO);
+            return new TargetBase(false, BigDecimal.ZERO, BigDecimal.ZERO);
         }
         for (PerfTargetPlan plan : plans) {
             String cycleKey = deriveCycleKey(plan.getTargetCycle(), dataDate);
@@ -1102,10 +1144,10 @@ public class KpiScoreCalcService {
             if (tv != null) {
                 BigDecimal target = tv.getTargetValue() == null ? BigDecimal.ZERO : tv.getTargetValue();
                 BigDecimal base = tv.getBaseValue() == null ? BigDecimal.ZERO : tv.getBaseValue();
-                return new TargetBase(target, base);
+                return new TargetBase(true, target, base);
             }
         }
-        return new TargetBase(BigDecimal.ZERO, BigDecimal.ZERO);
+        return new TargetBase(false, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     /**
@@ -1203,8 +1245,8 @@ public class KpiScoreCalcService {
     private record SchemeStat(int scored, int skipped) {
     }
 
-    /** 目标值 / 基础值二元组. */
-    private record TargetBase(BigDecimal target, BigDecimal base) {
+    /** 目标值 / 基础值二元组（{@code found}=是否命中 perf_target_value 行，用于"目标为空则跳过"判定）. */
+    private record TargetBase(boolean found, BigDecimal target, BigDecimal base) {
     }
 
     /**

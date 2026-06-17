@@ -33,6 +33,9 @@ public class CreateKpiSchemeCmd {
     /** 是否向员工开放明细 (0=否, 1=是). */
     private Integer openDetail;
 
+    /** 员工角色范围 (角色编码 CSV, 可空=不限定). */
+    private String empRoleScope;
+
     /** 方案项列表 (可空, 表示先建空方案). */
     private List<AddKpiItemCmd> items;
 

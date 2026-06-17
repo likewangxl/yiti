@@ -45,10 +45,20 @@ public final class KpiAssembler {
                 .schemeName(scheme.getSchemeName())
                 .cycleType(scheme.getCycleType())
                 .openDetail(scheme.getOpenDetail() != null && scheme.getOpenDetail() == 1)
+                .empRoleScopes(splitCsv(scheme.getEmpRoleScope()))
                 .status(scheme.getStatus())
                 .createdBy(scheme.getCreatedBy())
                 .items(itemDtos)
                 .build();
+    }
+
+    /** 角色编码 CSV → 数组（回显用）；空 → 空列表. */
+    private static List<String> splitCsv(String csv) {
+        if (csv == null || csv.isBlank()) {
+            return Collections.emptyList();
+        }
+        return java.util.Arrays.stream(csv.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).distinct().toList();
     }
 
     /**

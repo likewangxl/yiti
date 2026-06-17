@@ -27,4 +27,8 @@ public class UpdateKpiSchemeReqDTO {
     /** 是否向员工开放明细 (可空). */
     @Schema(description = "是否向员工开放明细")
     private Boolean openDetail;
+
+    /** 员工角色范围 (角色编码多选, 可空; 传空数组=清空不限定). */
+    @Schema(description = "员工角色范围(角色编码数组, 可空)")
+    private java.util.List<String> empRoleScopes;
 }
