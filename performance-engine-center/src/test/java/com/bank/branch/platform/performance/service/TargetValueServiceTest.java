@@ -89,6 +89,9 @@ class TargetValueServiceTest {
         lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
         lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(null);
         lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
+        // 默认无同对象同指标的存量目标值（日期重叠校验默认放行）
+        lenient().when(targetValueMapper.selectByPlanSubjectMetric(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(java.util.Collections.emptyList());
     }
 
     // ------------------------------- 对象下拉（方案内去重 + 标签解析，2026-06-15） -------------------------------
@@ -393,6 +396,76 @@ class TargetValueServiceTest {
         assertThat(actual.getStageName()).isEqualTo("一阶段");
         assertThat(actual.getStartDate()).isEqualTo(java.time.LocalDate.of(2026, 1, 1));
         assertThat(actual.getEndDate()).isEqualTo(java.time.LocalDate.of(2026, 6, 30));
+    }
+
+    // ------------------------------- upsertOne 阶段日期区间重叠校验（2026-06-17） -------------------------------
+
+    @Test
+    @DisplayName("upsertOne: 同对象同指标日期区间重叠 → 抛 TARGET_VALUE_DATE_OVERLAP 且不落库")
+    void upsertOne_whenDateOverlap_throws() {
+        PerfTargetValue exist = new PerfTargetValue();
+        exist.setId("TV_OLD");
+        exist.setCycleKey("2026Q1");
+        exist.setStageName("一阶段");
+        exist.setStartDate(java.time.LocalDate.of(2026, 1, 1));
+        exist.setEndDate(java.time.LocalDate.of(2026, 6, 30));
+        when(targetValueMapper.selectByPlanSubjectMetric("P1", "EMP", "E001", "M_A"))
+                .thenReturn(List.of(exist));
+
+        UpsertTargetValueCmd cmd = UpsertTargetValueCmd.builder()
+                .planId("P1").subjectType("EMP").subjectId("E001").cycleKey("2026Q2").metricCode("M_A")
+                .targetValue(new BigDecimal("1000"))
+                .startDate(java.time.LocalDate.of(2026, 3, 1)).endDate(java.time.LocalDate.of(2026, 9, 30))
+                .operator("admin").build();
+
+        assertThatThrownBy(() -> service.upsertOne(cmd))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_VALUE_DATE_OVERLAP));
+        verify(targetValueMapper, never()).upsertBatch(anyList());
+    }
+
+    @Test
+    @DisplayName("upsertOne: 同对象同指标日期不重叠 → 正常落库")
+    void upsertOne_whenNoDateOverlap_proceeds() {
+        PerfTargetValue exist = new PerfTargetValue();
+        exist.setId("TV_OLD");
+        exist.setCycleKey("2026Q1");
+        exist.setStartDate(java.time.LocalDate.of(2026, 1, 1));
+        exist.setEndDate(java.time.LocalDate.of(2026, 3, 31));
+        when(targetValueMapper.selectByPlanSubjectMetric("P1", "EMP", "E001", "M_A"))
+                .thenReturn(List.of(exist));
+        when(targetValueMapper.upsertBatch(anyList())).thenReturn(1);
+
+        UpsertTargetValueCmd cmd = UpsertTargetValueCmd.builder()
+                .planId("P1").subjectType("EMP").subjectId("E001").cycleKey("2026Q2").metricCode("M_A")
+                .targetValue(new BigDecimal("1000"))
+                .startDate(java.time.LocalDate.of(2026, 4, 1)).endDate(java.time.LocalDate.of(2026, 6, 30))
+                .operator("admin").build();
+
+        assertThat(service.upsertOne(cmd)).isEqualTo(1);
+        verify(targetValueMapper).upsertBatch(anyList());
+    }
+
+    @Test
+    @DisplayName("upsertOne: 重叠行就是被修改行本身(同 cycleKey) → 不算冲突，正常更新")
+    void upsertOne_whenOverlapIsSameRow_proceeds() {
+        PerfTargetValue same = new PerfTargetValue();
+        same.setId("TV_SAME");
+        same.setCycleKey("2026Q2"); // 与 cmd 相同的 cycleKey = 同一行
+        same.setStartDate(java.time.LocalDate.of(2026, 1, 1));
+        same.setEndDate(java.time.LocalDate.of(2026, 12, 31));
+        when(targetValueMapper.selectByPlanSubjectMetric("P1", "EMP", "E001", "M_A"))
+                .thenReturn(List.of(same));
+        when(targetValueMapper.upsertBatch(anyList())).thenReturn(1);
+
+        UpsertTargetValueCmd cmd = UpsertTargetValueCmd.builder()
+                .planId("P1").subjectType("EMP").subjectId("E001").cycleKey("2026Q2").metricCode("M_A")
+                .targetValue(new BigDecimal("1000"))
+                .startDate(java.time.LocalDate.of(2026, 3, 1)).endDate(java.time.LocalDate.of(2026, 9, 30))
+                .operator("admin").build();
+
+        assertThat(service.upsertOne(cmd)).isEqualTo(1);
+        verify(targetValueMapper).upsertBatch(anyList());
     }
 
     // ------------------------------- getByUniqueKey / listByPlan 场景 -------------------------------

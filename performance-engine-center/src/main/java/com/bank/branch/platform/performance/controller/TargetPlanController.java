@@ -22,6 +22,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -151,5 +152,23 @@ public class TargetPlanController {
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(targetPlanService.updateByIdDto(id, cmd));
+    }
+
+    /**
+     * 物理删除目标方案及其全部目标值（高危，不可恢复）。
+     *
+     * <p>前端二次确认后调用；后端单事务级联物理删除 {@code PERF_TARGET_VALUE} + {@code PERF_TARGET_PLAN}。
+     *
+     * @param id 目标方案ID
+     * @return 删除的目标值条数
+     */
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除目标方案（级联删除目标值，物理删除）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.DELETE)
+    @AuditLog(action = "DELETE", resourceType = "TARGET_PLAN")
+    public ResponseWrapper<Integer> delete(@PathVariable("id") @NotBlank String id) {
+        log.info("[TargetPlanController.delete] 物理删除目标方案 id={}", id);
+        int deletedValues = targetPlanService.deleteWithValues(id, currentUserApi.getCurrentEmpId());
+        return ResponseWrapper.success(deletedValues);
     }
 }

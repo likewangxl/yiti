@@ -621,6 +621,32 @@ public class KpiScoreCalcService {
         return new java.util.HashSet<>(resolveUsernamesByUserIds(userIds));
     }
 
+    /**
+     * 批量解析 员工工号 → 所属机构编码(mainOrgCode)，供机构(ORG)维度指标取数。
+     *
+     * @param usernames 员工工号集合
+     * @return 工号 → 机构编码 映射（无机构者不入 map）
+     */
+    private java.util.Map<String, String> resolveEmpOrgMap(java.util.Set<String> usernames) {
+        java.util.Map<String, String> map = new java.util.HashMap<>();
+        if (usernames == null || usernames.isEmpty()) {
+            return map;
+        }
+        try {
+            List<UserDTO> users = userApi.getUsersByUsernames(new java.util.ArrayList<>(usernames));
+            if (users != null) {
+                for (UserDTO u : users) {
+                    if (u != null && StringUtils.hasText(u.getUsername()) && StringUtils.hasText(u.getMainOrgCode())) {
+                        map.put(u.getUsername(), u.getMainOrgCode());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[KPI计算] 批量解析员工所属机构失败: {}", e.getMessage());
+        }
+        return map;
+    }
+
     private KpiScoreGroupPageDTO groupPage(LocalDate dataDate, String schemeCode,
                                            String subjectType, String subjectKeyword, int safeNo, int safeSize) {
         String sc = StringUtils.hasText(schemeCode) ? schemeCode.trim() : null;
@@ -1005,16 +1031,28 @@ public class KpiScoreCalcService {
         if (items == null || items.isEmpty()) {
             return new SchemeStat(0, 0);
         }
-        // 方案关联的目标方案（perf_target_plan.kpi_scheme_id = scheme.id）：
-        // 仅取 状态=启用(ACTIVE) 且 数据日期落在 [start_date, end_date] 区间内的目标方案
-        List<PerfTargetPlan> plans = targetPlanMapper.selectByCondition(scheme.getId(), "ACTIVE", null, 0, 1000)
-                .stream()
-                .filter(p -> isDataDateInPlanRange(dataDate, p))
-                .toList();
-
-        // 员工角色范围（仅 EMP 维度生效）：解析所选角色的员工工号集合；为空(null)=不限定，全员参与计算
+        // 员工范围：角色范围非空 → 所选角色的员工工号；为空 → 目标值里出现过的员工(EMP 对象)为全集
         java.util.Set<String> roleEmpUsernames = resolveRoleScopeUsernames(scheme.getEmpRoleScope());
-        boolean roleScoped = roleEmpUsernames != null;
+        List<String> metricCodes = items.stream()
+                .map(PerfKpiItem::getMetricCode)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        java.util.Set<String> empUniverse;
+        if (roleEmpUsernames != null) {
+            empUniverse = roleEmpUsernames;
+        } else {
+            List<String> ids = metricCodes.isEmpty()
+                    ? java.util.List.of()
+                    : targetValueMapper.selectDistinctActiveEmpSubjects(metricCodes, dataDate);
+            empUniverse = new java.util.LinkedHashSet<>(ids == null ? java.util.List.of() : ids);
+        }
+        if (empUniverse.isEmpty()) {
+            log.info("【KPI分值计算】方案={} 员工范围为空（角色范围/目标值均无匹配员工），不计分", scheme.getSchemeCode());
+            return new SchemeStat(0, 0);
+        }
+        // 员工 → 所属机构(mainOrgCode) 批量解析，供机构(ORG)维度指标取机构实际值/目标值
+        java.util.Map<String, String> empOrgMap = resolveEmpOrgMap(empUniverse);
 
         int scored = 0;
         int skipped = 0;
@@ -1035,51 +1073,74 @@ public class KpiScoreCalcService {
                         "指标 " + metricCode + " 未分配合法 val_slot，无法计分");
             }
             String baseDim = def.getBaseDim();
-            List<SubjectSlotValueRow> rows = loadSubjectValues(baseDim, dataDate, slot);
-            if (rows == null) {
-                // 维度无关型（base_dim 非 EMP/ORG/CUST）：无对象集合，跳过该指标
-                log.info("【KPI分值计算】方案={} 指标={} base_dim={} 非主体维度，跳过",
+            boolean empDim = "EMP".equals(baseDim);
+            boolean orgDim = "ORG".equals(baseDim);
+            if (!empDim && !orgDim) {
+                // 本期 KPI 仅支持 员工(EMP)/机构(ORG) 维度指标；其余（客户/维度无关）跳过
+                log.info("【KPI分值计算】方案={} 指标={} base_dim={} 非 EMP/ORG 维度，跳过",
                         scheme.getSchemeCode(), metricCode, baseDim);
                 skipped++;
                 continue;
             }
-            boolean hasSqlExpr = StringUtils.hasText(item.getSqlExpr());
             boolean hasFormula = StringUtils.hasText(item.getFormula());
-            if (!hasSqlExpr && !hasFormula) {
-                // 既无 SQL 表达式也无计分公式：跳过该指标项（记录告警），不中断整个任务
-                log.warn("【KPI分值计算】方案={} 指标={} 未配置 SQL 表达式/计分公式，跳过该项",
+            boolean hasSqlExpr = StringUtils.hasText(item.getSqlExpr());
+            if (!hasFormula && !hasSqlExpr) {
+                // 既无计算表达式也无 SQL 表达式：跳过该指标项（记录告警），不中断整个任务
+                log.warn("【KPI分值计算】方案={} 指标={} 未配置 计算表达式/SQL 表达式，跳过该项",
                         scheme.getSchemeCode(), metricCode);
                 skipped++;
                 continue;
             }
+            // 该 slot + 维度 的实际值映射：EMP→EMP宽表[工号]，ORG→ORG宽表[机构]，一次性加载避免逐对象往返
+            java.util.Map<String, BigDecimal> actualMap = new java.util.HashMap<>();
+            List<SubjectSlotValueRow> rows = loadSubjectValues(baseDim, dataDate, slot);
+            if (rows != null) {
+                for (SubjectSlotValueRow r : rows) {
+                    actualMap.put(r.getSubjectId(), r.getValue());
+                }
+            }
 
             BigDecimal weight = item.getWeight();
-            // 构建数据集（需求 4/7）：KPI指标配置 ⟕ 指标结果数据 ⟕ 目标值，逐对象一行
-            // 列：指标 / 数据日期 / 对象id / 指标维度 / 权重 / 计分上限 / 计分下限 / 实际值 / 目标值 / 基础值
-            List<KpiScoreRow> dataset = new ArrayList<>(rows.size());
-            boolean empDim = "EMP".equals(baseDim);
-            for (SubjectSlotValueRow row : rows) {
-                // 角色范围：EMP 维度且方案配置了角色范围时，仅计算所选角色的员工，其余对象不计算
-                if (roleScoped && empDim && !roleEmpUsernames.contains(row.getSubjectId())) {
-                    continue;
+            // 逐员工：按维度确定 目标值对象 与 实际值键；无目标值则跳过；得分统一按工号落库
+            for (String empUser : empUniverse) {
+                String targetSubjectType;
+                String targetSubjectId;
+                String actualKey;
+                if (empDim) {
+                    targetSubjectType = "EMP";
+                    targetSubjectId = empUser;
+                    actualKey = empUser;
+                } else {
+                    String orgCode = empOrgMap.get(empUser);
+                    if (!StringUtils.hasText(orgCode)) {
+                        // 员工无所属机构 → 机构维度无法取数，跳过
+                        skipped++;
+                        continue;
+                    }
+                    targetSubjectType = "ORG";
+                    targetSubjectId = orgCode;
+                    actualKey = orgCode;
                 }
-                TargetBase tb = lookupTargetBase(plans, baseDim, row.getSubjectId(), metricCode, dataDate);
-                // 目标值为空：角色范围模式下该员工无目标值 → 跳过不计分，处理下一条
-                if (roleScoped && empDim && !tb.found) {
+                PerfTargetValue tv = targetValueMapper.selectActiveCoveringByDimSubjectMetric(
+                        targetSubjectType, targetSubjectId, metricCode, dataDate);
+                // 该 员工/机构 × 指标 在目标值中未定义 → 不计算，跳过
+                if (tv == null) {
                     skipped++;
                     continue;
                 }
-                dataset.add(new KpiScoreRow(metricCode, dataDate, row.getSubjectId(), baseDim,
-                        weight, item.getMaxScore(), item.getMinScore(), row.getValue(), tb.target, tb.base));
-            }
-            // 逐行计算并 upsert：优先用计算表达式（formula），未配置时回退 SQL 表达式
-            for (KpiScoreRow dr : dataset) {
+                BigDecimal target = tv.getTargetValue() == null ? BigDecimal.ZERO : tv.getTargetValue();
+                BigDecimal base = tv.getBaseValue() == null ? BigDecimal.ZERO : tv.getBaseValue();
+                BigDecimal actual = actualMap.getOrDefault(actualKey, BigDecimal.ZERO);
+                KpiScoreRow dr = new KpiScoreRow(metricCode, dataDate, empUser, baseDim,
+                        weight, item.getMaxScore(), item.getMinScore(), actual, target, base);
+                // 计算表达式优先、否则 SQL 表达式（每指标一个表达式）
                 BigDecimal score = hasFormula
-                        ? formulaService.evalScore(item.getFormula(), dr.actual(), dr.target(), dr.base(),
-                                dr.weight(), dr.minScore(), dr.maxScore())
+                        ? formulaService.evalScore(item.getFormula(), actual, target, base,
+                                weight, item.getMinScore(), item.getMaxScore())
                         : evalScoreBySql(item.getSqlExpr(), dr);
-                upsertScore(dataDate, scheme.getSchemeCode(), metricCode, baseDim, dr.objId(),
-                        dr.actual(), dr.weight(), dr.target(), dr.base(), score);
+                // 得分落库：对象类型=员工(EMP)、对象ID=工号、指标=该指标（机构维度指标亦按工号落库）
+                upsertScore(dataDate, scheme.getSchemeCode(), metricCode, "EMP", empUser,
+                        actual, weight, target, base, score);
                 scored++;
             }
         }

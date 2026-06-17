@@ -70,6 +70,8 @@ public class TargetPlanService {
     private static final String TARGET_PLAN_CACHE = "perf:target_plan";
 
     private final PerfTargetPlanMapper targetPlanMapper;
+    /** 2026-06-17：物理删除目标方案时级联删除其目标值（按 plan_id）. */
+    private final com.bank.branch.platform.performance.mapper.PerfTargetValueMapper targetValueMapper;
     private final KpiSchemeService kpiSchemeService;
     private final CacheManager cacheManager;
     /** V1.3 R1.2 新增：当前用户读取（数据范围注入路径使用）. */
@@ -227,6 +229,31 @@ public class TargetPlanService {
                 id, existing.getPlanCode(), operator, reason);
         targetPlanMapper.updateStatusById(id, STATUS_DISABLED, operator);
         registerAfterCommitEvict(id);
+    }
+
+    /**
+     * 2026-06-17：物理删除目标方案及其全部目标值（高危，不可恢复）。
+     *
+     * <p>流程：校验方案存在 → 先物理删除该方案下全部 {@code PERF_TARGET_VALUE}（按 plan_id）→
+     * 再物理删除 {@code PERF_TARGET_PLAN} 主记录 → 注册 afterCommit 缓存 evict。
+     * 整个删除在单事务内，任一步失败回滚。
+     *
+     * @param id       目标方案ID
+     * @param operator 操作人（审计用）
+     * @return 删除的目标值条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int deleteWithValues(String id, String operator) {
+        PerfTargetPlan existing = targetPlanMapper.selectById(id);
+        if (existing == null) {
+            throw new PerfException(PerfErrorCode.TARGET_PLAN_NOT_FOUND, id);
+        }
+        int deletedValues = targetValueMapper.deleteByPlanId(id);
+        targetPlanMapper.deleteById(id);
+        log.info("[TargetPlanService.deleteWithValues] 物理删除目标方案 id={}, planCode={}, 级联删除目标值 {} 条, operator={}",
+                id, existing.getPlanCode(), deletedValues, operator);
+        registerAfterCommitEvict(id);
+        return deletedValues;
     }
 
     /**

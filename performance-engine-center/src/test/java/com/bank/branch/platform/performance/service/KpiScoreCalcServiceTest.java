@@ -153,12 +153,9 @@ class KpiScoreCalcServiceTest {
         item.setFormula("actual / target * weight");
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
 
-        PerfTargetPlan plan = new PerfTargetPlan();
-        plan.setId("P1");
-        plan.setKpiSchemeId("S1");
-        plan.setTargetCycle("YEAR");
-        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000))
-                .thenReturn(List.of(plan));
+        // 角色范围为空 → 员工全集 = 目标值里出现过的员工(EMP 对象)
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_0001"), DATA_DATE))
+                .thenReturn(List.of("E001"));
 
         PerfMetricDef def = new PerfMetricDef();
         def.setMetricCode("M_0001");
@@ -173,7 +170,7 @@ class KpiScoreCalcServiceTest {
         PerfTargetValue tv = new PerfTargetValue();
         tv.setTargetValue(new BigDecimal("100"));
         tv.setBaseValue(new BigDecimal("0"));
-        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E001", "2026", "M_0001"))
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("EMP", "E001", "M_0001", DATA_DATE))
                 .thenReturn(tv);
 
         when(formulaService.evalScore(eq("actual / target * weight"),
@@ -234,10 +231,6 @@ class KpiScoreCalcServiceTest {
         item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
 
-        PerfTargetPlan plan = new PerfTargetPlan();
-        plan.setId("P1"); plan.setKpiSchemeId("S1"); plan.setTargetCycle("YEAR");
-        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000)).thenReturn(List.of(plan));
-
         PerfMetricDef def = new PerfMetricDef();
         def.setMetricCode("M_0001"); def.setBaseDim("EMP"); def.setValSlot(5); def.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
@@ -259,8 +252,8 @@ class KpiScoreCalcServiceTest {
         // 仅 E001 有目标值；E002 无目标值 → 跳过；E003 不在角色 → 不计算
         PerfTargetValue tv = new PerfTargetValue();
         tv.setTargetValue(new BigDecimal("100")); tv.setBaseValue(new BigDecimal("0"));
-        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E001", "2026", "M_0001")).thenReturn(tv);
-        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E002", "2026", "M_0001")).thenReturn(null);
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("EMP", "E001", "M_0001", DATA_DATE)).thenReturn(tv);
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("EMP", "E002", "M_0001", DATA_DATE)).thenReturn(null);
 
         when(formulaService.evalScore(eq("actual / target * weight"),
                 eq(new BigDecimal("80")), eq(new BigDecimal("100")), eq(new BigDecimal("0")),
@@ -273,7 +266,59 @@ class KpiScoreCalcServiceTest {
         verify(scoreMapper, times(1)).upsert(cap.capture());
         assertThat(cap.getValue().getSubjectId()).isEqualTo("E001");
         // E003 不在角色范围 → 不应查询其目标值
-        verify(targetValueMapper, never()).selectByUniqueKey("P1", "EMP", "E003", "2026", "M_0001");
+        verify(targetValueMapper, never()).selectActiveCoveringByDimSubjectMetric("EMP", "E003", "M_0001", DATA_DATE);
+    }
+
+    @Test
+    @DisplayName("calculate: 机构(ORG)维度指标 → 取员工所属机构的机构实际值/目标值，得分按工号落库")
+    void calculate_orgDimMetric_usesEmployeeOrgAndStoresByEmp() {
+        when(taskMapper.selectCount(any())).thenReturn(1L);
+
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1"); scheme.setSchemeCode("KPI_A"); scheme.setStatus("ACTIVE");
+        scheme.setEmpRoleScope("R_X");
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(scheme));
+
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1"); item.setSchemeId("S1"); item.setMetricCode("M_ORG");
+        item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+
+        // 角色 R_X → 员工 E001（所属机构 ORG9）
+        when(userApi.getEmpIdsByRoleCode("R_X")).thenReturn(List.of("U1"));
+        com.bank.branch.platform.auth.api.dto.UserDTO u = new com.bank.branch.platform.auth.api.dto.UserDTO();
+        u.setUsername("E001"); u.setMainOrgCode("ORG9");
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u));   // 角色→工号
+        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(u)); // 工号→所属机构
+
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_ORG"); def.setBaseDim("ORG"); def.setValSlot(7); def.setStatus("ACTIVE");
+        when(metricDefService.getByCodeOrNull("M_ORG")).thenReturn(def);
+
+        // 机构维度实际值取 ORG 宽表（按机构 ORG9）
+        when(orgIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 7))
+                .thenReturn(List.of(new SubjectSlotValueRow("ORG9", new BigDecimal("90"))));
+
+        // 目标值按 机构(ORG, ORG9) 查
+        PerfTargetValue tv = new PerfTargetValue();
+        tv.setTargetValue(new BigDecimal("200")); tv.setBaseValue(new BigDecimal("0"));
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("ORG", "ORG9", "M_ORG", DATA_DATE)).thenReturn(tv);
+
+        when(formulaService.evalScore(eq("actual / target * weight"),
+                eq(new BigDecimal("90")), eq(new BigDecimal("200")), eq(new BigDecimal("0")),
+                eq(new BigDecimal("0.5")), any(), any())).thenReturn(new BigDecimal("0.2250"));
+
+        service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+
+        ArgumentCaptor<PerfKpiScore> cap = ArgumentCaptor.forClass(PerfKpiScore.class);
+        verify(scoreMapper, times(1)).upsert(cap.capture());
+        PerfKpiScore s = cap.getValue();
+        assertThat(s.getSubjectType()).isEqualTo("EMP");      // 得分按员工落库
+        assertThat(s.getSubjectId()).isEqualTo("E001");       // 对象ID=工号
+        assertThat(s.getMetricCode()).isEqualTo("M_ORG");     // 指标=机构维度指标
+        assertThat(s.getActualValue()).isEqualByComparingTo("90");   // 机构实际值
+        assertThat(s.getTargetValue()).isEqualByComparingTo("200");  // 机构目标值
+        assertThat(s.getScore()).isEqualByComparingTo("0.225");
     }
 
     @Test
@@ -298,12 +343,9 @@ class KpiScoreCalcServiceTest {
         item.setSqlExpr("SELECT :actual / :target * :weight AS kpi_value");
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
 
-        PerfTargetPlan plan = new PerfTargetPlan();
-        plan.setId("P1");
-        plan.setKpiSchemeId("S1");
-        plan.setTargetCycle("YEAR");
-        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000))
-                .thenReturn(List.of(plan));
+        // 角色范围为空 → 员工全集 = 目标值里出现过的员工(EMP 对象)
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_0001"), DATA_DATE))
+                .thenReturn(List.of("E001"));
 
         PerfMetricDef def = new PerfMetricDef();
         def.setMetricCode("M_0001");
@@ -318,7 +360,7 @@ class KpiScoreCalcServiceTest {
         PerfTargetValue tv = new PerfTargetValue();
         tv.setTargetValue(new BigDecimal("100"));
         tv.setBaseValue(new BigDecimal("0"));
-        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E001", "2026", "M_0001"))
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("EMP", "E001", "M_0001", DATA_DATE))
                 .thenReturn(tv);
 
         // SQL 执行器返回该对象的 KPI 得分（标量 kpi_value）
@@ -373,12 +415,9 @@ class KpiScoreCalcServiceTest {
         item.setSqlExpr("SELECT :actual / :target * :weight AS kpi_value");
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
 
-        PerfTargetPlan plan = new PerfTargetPlan();
-        plan.setId("P1");
-        plan.setKpiSchemeId("S1");
-        plan.setTargetCycle("YEAR");
-        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000))
-                .thenReturn(List.of(plan));
+        // 角色范围为空 → 员工全集 = 目标值里出现过的员工(EMP 对象)
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_0001"), DATA_DATE))
+                .thenReturn(List.of("E001"));
 
         PerfMetricDef def = new PerfMetricDef();
         def.setMetricCode("M_0001");
@@ -393,7 +432,7 @@ class KpiScoreCalcServiceTest {
         PerfTargetValue tv = new PerfTargetValue();
         tv.setTargetValue(new BigDecimal("100"));
         tv.setBaseValue(new BigDecimal("0"));
-        when(targetValueMapper.selectByUniqueKey("P1", "EMP", "E001", "2026", "M_0001"))
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("EMP", "E001", "M_0001", DATA_DATE))
                 .thenReturn(tv);
 
         // 计算表达式引擎返回得分
@@ -426,9 +465,10 @@ class KpiScoreCalcServiceTest {
         item.setSchemeId("S1");
         item.setMetricCode("M_0001");
         item.setWeight(new BigDecimal("1"));
-        item.setFormula(null); // 未配置公式
+        item.setFormula(null); // 未配置公式（也无 SQL 表达式）
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
-        when(targetPlanMapper.selectByCondition("S1", "ACTIVE", null, 0, 1000)).thenReturn(List.of());
+        // 角色范围为空 → 员工全集非空（进入指标项循环后，因无表达式而在指标项层跳过）
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_0001"), DATA_DATE)).thenReturn(List.of("E001"));
 
         PerfMetricDef def = new PerfMetricDef();
         def.setBaseDim("EMP");
@@ -711,9 +751,8 @@ class KpiScoreCalcServiceTest {
         item2.setId("I2"); item2.setSchemeId("S2"); item2.setMetricCode("M_0002");
         item2.setWeight(new BigDecimal("0.5")); item2.setFormula("actual / target * weight");
         when(itemMapper.selectBySchemeId("S2")).thenReturn(List.of(item2));
-        PerfTargetPlan plan2 = new PerfTargetPlan();
-        plan2.setId("P2"); plan2.setKpiSchemeId("S2"); plan2.setTargetCycle("YEAR");
-        when(targetPlanMapper.selectByCondition("S2", "ACTIVE", null, 0, 1000)).thenReturn(List.of(plan2));
+        // 角色范围为空 → 员工全集 = 目标值里出现过的员工(EMP 对象)
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_0002"), DATA_DATE)).thenReturn(List.of("E001"));
         PerfMetricDef def2 = new PerfMetricDef();
         def2.setMetricCode("M_0002"); def2.setBaseDim("EMP"); def2.setValSlot(6); def2.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_0002")).thenReturn(def2);
@@ -721,7 +760,7 @@ class KpiScoreCalcServiceTest {
                 .thenReturn(List.of(new SubjectSlotValueRow("E001", new BigDecimal("80"))));
         PerfTargetValue tv2 = new PerfTargetValue();
         tv2.setTargetValue(new BigDecimal("100")); tv2.setBaseValue(new BigDecimal("0"));
-        when(targetValueMapper.selectByUniqueKey("P2", "EMP", "E001", "2026", "M_0002")).thenReturn(tv2);
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("EMP", "E001", "M_0002", DATA_DATE)).thenReturn(tv2);
         when(formulaService.evalScore(eq("actual / target * weight"),
                 eq(new BigDecimal("80")), eq(new BigDecimal("100")),
                 eq(new BigDecimal("0")), eq(new BigDecimal("0.5")), any(), any()))

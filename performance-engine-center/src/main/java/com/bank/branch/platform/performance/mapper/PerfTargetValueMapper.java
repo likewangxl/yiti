@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -156,4 +157,47 @@ public interface PerfTargetValueMapper extends BaseMapper<PerfTargetValue> {
      * @return 去重的非空阶段名称列表（按名称排序）
      */
     List<String> selectDistinctStageNamesByPlan(@Param("planId") String planId);
+
+    /**
+     * 2026-06-17：查询某方案下「同对象、同指标」的全部目标值（用于阶段日期区间重叠校验）。
+     *
+     * @param planId      方案ID
+     * @param subjectType 对象类型
+     * @param subjectId   对象ID
+     * @param metricCode  指标编码
+     * @return 命中的目标值列表（含 cycle_key / stage_name / start_date / end_date）
+     */
+    List<PerfTargetValue> selectByPlanSubjectMetric(@Param("planId") String planId,
+                                                    @Param("subjectType") String subjectType,
+                                                    @Param("subjectId") String subjectId,
+                                                    @Param("metricCode") String metricCode);
+
+    /**
+     * 2026-06-17 KPI 计算改造：取「方案ACTIVE + 目标值起止日期涵盖数据日期」的单条目标值。
+     *
+     * <p>用于 KPI 单方案计算按 (维度对象, 指标) 取目标值/基础值。同一 (对象,指标) 因日期不重叠校验，
+     * 覆盖某数据日期的至多一条。
+     *
+     * @param subjectType 对象类型 EMP/ORG
+     * @param subjectId   对象ID（EMP=工号 / ORG=机构编码）
+     * @param metricCode  指标编码
+     * @param dataDate    KPI 计算数据日期
+     * @return 命中的目标值（含 target/base），无则 null
+     */
+    PerfTargetValue selectActiveCoveringByDimSubjectMetric(@Param("subjectType") String subjectType,
+                                                           @Param("subjectId") String subjectId,
+                                                           @Param("metricCode") String metricCode,
+                                                           @Param("dataDate") LocalDate dataDate);
+
+    /**
+     * 2026-06-17 KPI 计算改造：角色范围为空时的员工全集 = 目标值里出现过的员工（EMP 对象）。
+     *
+     * <p>取「方案ACTIVE + 目标值起止日期涵盖数据日期 + 指标∈KPI配置指标」的去重 EMP 工号。
+     *
+     * @param metricCodes KPI 方案配置的指标编码集合（非空）
+     * @param dataDate    KPI 计算数据日期
+     * @return 去重的员工工号
+     */
+    List<String> selectDistinctActiveEmpSubjects(@Param("metricCodes") List<String> metricCodes,
+                                                 @Param("dataDate") LocalDate dataDate);
 }

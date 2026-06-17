@@ -230,6 +230,8 @@ public class TargetValueService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int upsertOne(UpsertTargetValueCmd cmd) {
+        // 2026-06-17：同方案下 同对象+同指标 的阶段日期区间不能重叠（不通过则不落库）
+        validateNoDateOverlap(cmd);
         PerfTargetValue v = new PerfTargetValue();
         v.setId(generateId());
         v.setPlanId(cmd.getPlanId());
@@ -521,6 +523,47 @@ public class TargetValueService {
         }
         List<String> names = targetValueMapper.selectDistinctStageNamesByPlan(planId);
         return names == null ? Collections.emptyList() : names;
+    }
+
+    /**
+     * 2026-06-17：校验同方案下「同对象、同指标」的阶段日期区间不重叠。
+     *
+     * <p>仅当新值起止日期都非空时校验；与之比较的已存在行起止日期为空则跳过。
+     * 同 UK（cycle_key 相同）即本次被 upsert 更新的同一行，排除在外。
+     * 闭区间重叠判定：{@code newStart <= existEnd && existStart <= newEnd}。
+     *
+     * @param cmd upsert 命令
+     * @throws PerfException {@link PerfErrorCode#TARGET_VALUE_DATE_OVERLAP} 当区间重叠时
+     */
+    private void validateNoDateOverlap(UpsertTargetValueCmd cmd) {
+        java.time.LocalDate ns = cmd.getStartDate();
+        java.time.LocalDate ne = cmd.getEndDate();
+        if (ns == null || ne == null) {
+            return; // 无完整区间不校验
+        }
+        List<PerfTargetValue> existing = targetValueMapper.selectByPlanSubjectMetric(
+                cmd.getPlanId(), cmd.getSubjectType(), cmd.getSubjectId(), cmd.getMetricCode());
+        if (existing == null) {
+            return;
+        }
+        for (PerfTargetValue e : existing) {
+            // 同 cycle_key = 本次被更新的同一行，跳过自身
+            if (java.util.Objects.equals(e.getCycleKey(), cmd.getCycleKey())) {
+                continue;
+            }
+            java.time.LocalDate es = e.getStartDate();
+            java.time.LocalDate ee = e.getEndDate();
+            if (es == null || ee == null) {
+                continue;
+            }
+            // 闭区间重叠：ns <= ee 且 es <= ne
+            if (!ns.isAfter(ee) && !es.isAfter(ne)) {
+                String stage = (e.getStageName() == null || e.getStageName().isBlank())
+                        ? "" : "「" + e.getStageName() + "」";
+                throw new PerfException(PerfErrorCode.TARGET_VALUE_DATE_OVERLAP,
+                        "与已存在阶段" + stage + "[" + es + " ~ " + ee + "]冲突");
+            }
+        }
     }
 
     private String generateId() {

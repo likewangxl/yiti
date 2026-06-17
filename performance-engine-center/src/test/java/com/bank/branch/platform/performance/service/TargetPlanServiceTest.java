@@ -58,6 +58,9 @@ class TargetPlanServiceTest {
     private PerfTargetPlanMapper targetPlanMapper;
 
     @Mock
+    private com.bank.branch.platform.performance.mapper.PerfTargetValueMapper targetValueMapper;
+
+    @Mock
     private KpiSchemeService kpiSchemeService;
 
     @Mock
@@ -177,6 +180,36 @@ class TargetPlanServiceTest {
         // planCode UK 预校验先行, 绝不会走到 KpiSchemeService
         verify(kpiSchemeService, never()).getByIdOrNull(any());
         verify(targetPlanMapper, never()).insert(any(PerfTargetPlan.class));
+    }
+
+    // ------------------------------- deleteWithValues（物理删除方案+目标值）-------------------------------
+
+    @Test
+    @DisplayName("deleteWithValues: 先删目标值再删方案，返回删除目标值条数")
+    void deleteWithValues_deletesValuesThenPlan() {
+        PerfTargetPlan existing = TargetTestDataBuilder.plan("DEL", "KS_ACTIVE");
+        existing.setId("P_DEL");
+        when(targetPlanMapper.selectById("P_DEL")).thenReturn(existing);
+        when(targetValueMapper.deleteByPlanId("P_DEL")).thenReturn(3);
+
+        int deleted = service.deleteWithValues("P_DEL", "admin");
+
+        assertThat(deleted).isEqualTo(3);
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(targetValueMapper, targetPlanMapper);
+        inOrder.verify(targetValueMapper).deleteByPlanId("P_DEL");
+        inOrder.verify(targetPlanMapper).deleteById("P_DEL");
+    }
+
+    @Test
+    @DisplayName("deleteWithValues: 方案不存在 → 抛 TARGET_PLAN_NOT_FOUND, 不删任何数据")
+    void deleteWithValues_whenNotFound_throws() {
+        when(targetPlanMapper.selectById("P_NONE")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.deleteWithValues("P_NONE", "admin"))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.TARGET_PLAN_NOT_FOUND));
+        verify(targetValueMapper, never()).deleteByPlanId(any());
+        verify(targetPlanMapper, never()).deleteById(org.mockito.ArgumentMatchers.anyString());
     }
 
     // ------------------------------- getByCode / getByIdOrNull -------------------------------

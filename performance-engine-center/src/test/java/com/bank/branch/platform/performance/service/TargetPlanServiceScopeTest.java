@@ -77,8 +77,9 @@ class TargetPlanServiceScopeTest {
     @BeforeEach
     void setUp() {
         this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
+        // 第2参 targetValueMapper：scope 测试不触达物理删除，传 null 即可
         this.service = new TargetPlanService(
-                targetPlanMapper, kpiSchemeService, cacheManager,
+                targetPlanMapper, null, kpiSchemeService, cacheManager,
                 currentUserApi, perfScopeHelper, userApi);
     }
 

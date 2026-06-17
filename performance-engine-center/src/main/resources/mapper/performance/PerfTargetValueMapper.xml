@@ -159,6 +159,44 @@
         ORDER BY subject_type, subject_id
     </select>
 
+    <!-- 2026-06-17 KPI 计算改造：方案ACTIVE + 目标值起止日期涵盖数据日期 的单条目标值（含 target/base） -->
+    <select id="selectActiveCoveringByDimSubjectMetric" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
+        SELECT tv.*
+        FROM PERF_TARGET_VALUE tv
+        JOIN PERF_TARGET_PLAN tp ON tv.plan_id = tp.id
+        WHERE tp.status = 'ACTIVE'
+          AND tv.subject_type = #{subjectType}
+          AND tv.subject_id = #{subjectId}
+          AND tv.metric_code = #{metricCode}
+          AND tv.start_date &lt;= #{dataDate}
+          AND tv.end_date &gt;= #{dataDate}
+        LIMIT 1
+    </select>
+
+    <!-- 2026-06-17 KPI 计算改造：角色范围为空时员工全集 = 目标值里出现过的 EMP 对象（覆盖数据日期 + 指标∈KPI指标） -->
+    <select id="selectDistinctActiveEmpSubjects" resultType="java.lang.String">
+        SELECT DISTINCT tv.subject_id
+        FROM PERF_TARGET_VALUE tv
+        JOIN PERF_TARGET_PLAN tp ON tv.plan_id = tp.id
+        WHERE tp.status = 'ACTIVE'
+          AND tv.subject_type = 'EMP'
+          AND tv.start_date &lt;= #{dataDate}
+          AND tv.end_date &gt;= #{dataDate}
+          AND tv.metric_code IN
+          <foreach collection="metricCodes" item="mc" open="(" separator="," close=")">#{mc}</foreach>
+    </select>
+
+    <!-- 2026-06-17：方案内 同对象+同指标 的全部目标值，用于阶段日期区间重叠校验 -->
+    <select id="selectByPlanSubjectMetric" resultType="com.bank.branch.platform.performance.entity.PerfTargetValue">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM PERF_TARGET_VALUE
+        WHERE plan_id = #{planId}
+          AND subject_type = #{subjectType}
+          AND subject_id = #{subjectId}
+          AND metric_code = #{metricCode}
+    </select>
+
     <!-- 2026-06-17：方案内目标值去重「阶段名称」（非空），供「阶段名称」下拉 -->
     <select id="selectDistinctStageNamesByPlan" resultType="java.lang.String">
         SELECT DISTINCT stage_name
