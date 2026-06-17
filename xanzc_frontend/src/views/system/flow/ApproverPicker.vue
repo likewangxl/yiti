@@ -133,7 +133,7 @@ import { ElMessage } from 'element-plus';
 import { Delete } from '@element-plus/icons-vue';
 import { listAllRoles } from '@/api/system';
 import { getOrgTree } from '@/api/orgs';
-import { searchEmployees, getEmployee } from '@/api/employees';
+import { searchEmployees, getEmployee } from '@/api/userDirectory';
 
 const props = defineProps({
   /** v-model：审批人规则数组，每项 {approverType, approverValue, orgScope?, roleCode?} */

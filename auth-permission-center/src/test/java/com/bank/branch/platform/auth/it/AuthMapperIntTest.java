@@ -1,5 +1,6 @@
 package com.bank.branch.platform.auth.it;
 
+import com.bank.branch.platform.auth.api.dto.UserDirectoryDTO;
 import com.bank.branch.platform.auth.entity.*;
 import com.bank.branch.platform.auth.mapper.*;
 import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
@@ -54,6 +55,9 @@ class AuthMapperIntTest {
 
     @Autowired
     private UserOrgMapper userOrgMapper;
+
+    @Autowired
+    private UserDirectoryMapper userDirectoryMapper;
 
     @Test
     @DisplayName("用户查询: 根据 userId 查询用户信息")
@@ -186,6 +190,53 @@ class AuthMapperIntTest {
         ExtUserOrg userOrg = userOrgMapper.selectByUserId("user001");
         assertThat(userOrg).isNotNull();
         assertThat(userOrg.getOrgCode()).isEqualTo("BJ_CY");
+    }
+
+    // ===== 用户通讯录三表联查（PT_USER + EXT_USER_ORG + EXT_ORG_INFO） =====
+
+    @Test
+    @DisplayName("通讯录: 按姓名模糊搜索带出主机构信息")
+    void directory_searchByName() {
+        List<UserDirectoryDTO> r = userDirectoryMapper.searchByKeyword("张", 20);
+        assertThat(r).hasSize(1);
+        UserDirectoryDTO d = r.get(0);
+        assertThat(d.getEmpId()).isEqualTo("user001");          // empId = USER_ID 代理键
+        assertThat(d.getEmpName()).isEqualTo("张三");            // empName = USERCHNNAME
+        assertThat(d.getOrgCode()).isEqualTo("BJ_CY");
+        assertThat(d.getOrgName()).isEqualTo("北京分行朝阳支行"); // 来自 EXT_ORG_INFO
+        assertThat(d.getStatus()).isEqualTo("ACTIVE");          // ISENABLED=0 → ACTIVE
+        assertThat(d.getPosition()).isNull();                   // 三表无来源
+    }
+
+    @Test
+    @DisplayName("通讯录: 按工号(USERNAME)模糊搜索同样命中")
+    void directory_searchByUsername() {
+        List<UserDirectoryDTO> r = userDirectoryMapper.searchByKeyword("user002", 20);
+        assertThat(r).hasSize(1);
+        assertThat(r.get(0).getEmpName()).isEqualTo("李四");
+    }
+
+    @Test
+    @DisplayName("通讯录: limit 限制返回条数")
+    void directory_searchRespectsLimit() {
+        // 关键字命中 user001/user002/admin(USERNAME 均含 'a'? 否)；用通配姓名“四/三”精确，改用 limit=1 验证
+        List<UserDirectoryDTO> r = userDirectoryMapper.searchByKeyword("user", 1);
+        assertThat(r).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("通讯录: 按 empId(USER_ID) 查详情")
+    void directory_selectByEmpId() {
+        UserDirectoryDTO d = userDirectoryMapper.selectByEmpId("user001");
+        assertThat(d).isNotNull();
+        assertThat(d.getEmpName()).isEqualTo("张三");
+        assertThat(d.getOrgName()).isEqualTo("北京分行朝阳支行");
+    }
+
+    @Test
+    @DisplayName("通讯录: empId 不存在返回 null")
+    void directory_selectByEmpId_notFound() {
+        assertThat(userDirectoryMapper.selectByEmpId("nonexistent")).isNull();
     }
 }
 

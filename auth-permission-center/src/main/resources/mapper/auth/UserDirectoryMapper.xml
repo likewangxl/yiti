@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.auth.mapper.UserDirectoryMapper">
+
+    <!--
+      用户通讯录三表联查（替代原 ADDRBOOK_EMPLOYEE 数据源）：
+        PT_USER u        —— 员工主体；empId=u.USER_ID(代理键)、empName=u.USERCHNNAME、在职=u.ISENABLED=0
+        EXT_USER_ORG uo  —— 用户-机构归属；一人可多机构，取主机构一条（子查询 ORDER BY ORG_CODE LIMIT 1，
+                            沿用 OrgService.getUserMainOrg 的“取一条”约定，加 ORDER BY 保证确定性）
+        EXT_ORG_INFO o   —— 机构详情，提供 orgCode/orgName
+      position 三表无来源恒为 NULL；status 在职恒为 'ACTIVE'，与原通讯录展示口径一致。
+      列别名直接对齐 UserDirectoryDTO 属性名（配合 mapUnderscoreToCamelCase 自动映射）。
+    -->
+
+    <!-- 共用投影列 -->
+    <sql id="DIRECTORY_COLUMNS">
+        u.USER_ID      AS empId,
+        u.USERCHNNAME  AS empName,
+        o.ORG_CODE     AS orgCode,
+        o.ORG_NAME     AS orgName,
+        NULL           AS position,
+        'ACTIVE'       AS status
+    </sql>
+
+    <!-- 主机构关联：每个用户只取一条机构，保证结果 1 用户 1 行 -->
+    <sql id="MAIN_ORG_JOIN">
+        LEFT JOIN EXT_USER_ORG uo
+               ON uo.USER_ID = u.USER_ID
+              AND uo.ORG_CODE = (
+                  SELECT x.ORG_CODE FROM EXT_USER_ORG x
+                  WHERE x.USER_ID = u.USER_ID
+                  ORDER BY x.ORG_CODE
+                  LIMIT 1
+              )
+        LEFT JOIN EXT_ORG_INFO o ON o.ORG_CODE = uo.ORG_CODE
+    </sql>
+
+    <!-- 关键字搜索在职员工（对应原 /api/employees/search） -->
+    <select id="searchByKeyword" resultType="com.bank.branch.platform.auth.api.dto.UserDirectoryDTO">
+        SELECT
+        <include refid="DIRECTORY_COLUMNS"/>
+        FROM PT_USER u
+        <include refid="MAIN_ORG_JOIN"/>
+        WHERE u.ISENABLED = 0
+        <if test="keyword != null and keyword != ''">
+            AND (u.USERCHNNAME LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.USERNAME LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY u.USERCHNNAME ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 按 empId(=USER_ID) 查单个员工详情（对应原 /api/employees/{empId}，不做在职过滤） -->
+    <select id="selectByEmpId" resultType="com.bank.branch.platform.auth.api.dto.UserDirectoryDTO">
+        SELECT
+        <include refid="DIRECTORY_COLUMNS"/>
+        FROM PT_USER u
+        <include refid="MAIN_ORG_JOIN"/>
+        WHERE u.USER_ID = #{empId}
+    </select>
+
+</mapper>
