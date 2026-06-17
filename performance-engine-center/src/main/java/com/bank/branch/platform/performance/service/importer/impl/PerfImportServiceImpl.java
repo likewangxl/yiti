@@ -8,9 +8,6 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
-import com.bank.branch.platform.governance.api.FileApi;
-import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
-import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -19,6 +16,7 @@ import com.bank.branch.platform.performance.mapper.PerfImportBatchMapper;
 import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
+import com.bank.branch.platform.performance.service.importer.LocalImportFileStorage;
 import com.bank.branch.platform.performance.service.importer.PerfImportService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -65,17 +63,17 @@ public class PerfImportServiceImpl implements PerfImportService {
 
     private final PerfImportBatchMapper batchMapper;
     private final Map<String, ImportStrategy> strategyMap;
-    private final FileApi fileApi;
+    private final LocalImportFileStorage localFileStorage;
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
 
     public PerfImportServiceImpl(PerfImportBatchMapper batchMapper,
                                  List<ImportStrategy> strategies,
-                                 FileApi fileApi,
+                                 LocalImportFileStorage localFileStorage,
                                  CurrentUserApi currentUserApi,
                                  BizScopeApi bizScopeApi) {
         this.batchMapper = batchMapper;
-        this.fileApi = fileApi;
+        this.localFileStorage = localFileStorage;
         this.currentUserApi = currentUserApi;
         this.bizScopeApi = bizScopeApi;
         this.strategyMap = new HashMap<>();
@@ -123,11 +121,10 @@ public class PerfImportServiceImpl implements PerfImportService {
                     "dataDate 必填（METRIC_RESULT 必传 yyyy-MM-dd）");
         }
 
-        // 0) 源文件强制归档到 OBS（CBS 上传），记录 objectKey。
-        //    2026-06-17 起：无论「立即上传」还是「上传并导入」均归档，保证每条批次都能下载源文件。
-        //    archiveSource 入参保留以兼容签名，但实现内忽略（始终归档）。
-        FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
-        String sourceObjectKey = archived.getId();
+        // 0) 源文件保存到后端本地目录（不走 OBS），记录相对 key 供后续下载源文件。
+        //    2026-06-17 起：导入源文件改本地目录存储 + 就地解析（指标库/KPI规则/目标管理等共用）。
+        //    archiveSource 入参保留以兼容签名，但实现内忽略（始终落本地）。
+        String sourceObjectKey = localFileStorage.save(file);
 
         // 1) 创建批次，初始 CREATED
         PerfImportBatch batch = new PerfImportBatch();
@@ -299,7 +296,7 @@ public class PerfImportServiceImpl implements PerfImportService {
         if (objectKey == null || objectKey.isBlank()) {
             throw new PerfException(PerfErrorCode.IMPORT_BATCH_NO_SOURCE_FILE, batchId);
         }
-        byte[] content = fileApi.getFileContent(objectKey);
+        byte[] content = localFileStorage.read(objectKey);
         String fileName = b.getFileName() == null || b.getFileName().isBlank()
                 ? (b.getBatchNo() + ".xlsx") : b.getFileName();
         return new ImportSourceFile(fileName, content);
