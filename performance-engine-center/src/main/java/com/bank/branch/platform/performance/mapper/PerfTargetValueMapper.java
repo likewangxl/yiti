@@ -173,6 +173,17 @@ public interface PerfTargetValueMapper extends BaseMapper<PerfTargetValue> {
                                                     @Param("metricCode") String metricCode);
 
     /**
+     * 2026-06-17：一次性查询某方案下的**全部**目标值，用于导入时批量做阶段日期重叠校验.
+     *
+     * <p>替代逐 (对象,指标) 组调用 {@link #selectByPlanSubjectMetric}（5 万行重导入会 N+1 数万次查询），
+     * 改为单次按 plan_id 拉全量、调用方在内存按 (对象,指标) 分组判重叠。
+     *
+     * @param planId 方案ID
+     * @return 该方案全部目标值（含 subject_type/subject_id/metric_code/stage_name/start_date/end_date）
+     */
+    List<PerfTargetValue> selectAllByPlanId(@Param("planId") String planId);
+
+    /**
      * 2026-06-17 KPI 计算改造：取「方案ACTIVE + 目标值起止日期涵盖数据日期」的单条目标值。
      *
      * <p>用于 KPI 单方案计算按 (维度对象, 指标) 取目标值/基础值。同一 (对象,指标) 因日期不重叠校验，

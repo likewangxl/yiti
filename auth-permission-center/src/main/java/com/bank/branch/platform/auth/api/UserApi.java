@@ -116,6 +116,17 @@ public interface UserApi {
     List<UserDTO> getUsersByUsernames(List<String> usernames);
 
     /**
+     * 批量过滤出「确实存在」的用户名（工号），用于大批量存在性校验.
+     *
+     * <p>与 {@link #getUsersByUsernames(List)} 不同：本方法**只做存在性判断**，单次/分片 IN 查询，
+     * 不装配机构等 DTO 信息，避免逐人 N+1（导入 5 万行时 getUsersByUsernames 会触发约 15 万次查询）。
+     *
+     * @param usernames 待校验用户名列表（null/空 → 返回空）
+     * @return 其中在 PT_USER 中存在的用户名子集（去重，顺序不保证）
+     */
+    List<String> filterExistingUsernames(List<String> usernames);
+
+    /**
      * 按关键词分页查询用户（工号/登录名/中文名 OR 模糊），供 performance 人员标签列表用。
      *
      * @param keyword  关键词（null/空 不过滤）

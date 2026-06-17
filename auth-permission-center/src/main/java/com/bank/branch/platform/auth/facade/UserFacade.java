@@ -175,6 +175,30 @@ public class UserFacade implements UserApi {
         return results;
     }
 
+    /** 单次/分片 IN 查询过滤存在的用户名，不走逐人 getUserByEmpId（避免大批量 N+1）. */
+    @Override
+    public List<String> filterExistingUsernames(List<String> usernames) {
+        if (usernames == null || usernames.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 去重 + 分片（每片 1000，规避超大 IN 列表与预编译占位符上限）
+        List<String> distinct = new ArrayList<>(new java.util.LinkedHashSet<>(usernames));
+        java.util.Set<String> existing = new java.util.LinkedHashSet<>();
+        final int chunk = 1000;
+        for (int from = 0; from < distinct.size(); from += chunk) {
+            int to = Math.min(from + chunk, distinct.size());
+            List<PtUser> users = userMapper.selectByUsernames(distinct.subList(from, to));
+            if (users != null) {
+                for (PtUser u : users) {
+                    if (u.getUsername() != null) {
+                        existing.add(u.getUsername());
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(existing);
+    }
+
     @Override
     public PageResult<UserDTO> pageUsers(String keyword, int pageNo, int pageSize) {
         // 入参归一：页码最小 1，页大小区间 [1, 100]，默认 20
