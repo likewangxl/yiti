@@ -84,18 +84,17 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
     /** 默认操作人（PerfImportBatch.createdBy 缺失时兜底）. */
     private static final String DEFAULT_OPERATOR = "import";
 
-    // 列下标（与模板列序对齐）
+    // 列下标（与模板列序对齐；2026-06-17 模板取消「维度」列，维度改取自指标定义）
     private static final int COL_INDEX_NO = 0;
     private static final int COL_SCHEME_CODE = 1;
     private static final int COL_SCHEME_NAME = 2;
     private static final int COL_EMP_ROLE_SCOPE = 3;
-    private static final int COL_DIM = 4;
-    private static final int COL_METRIC_NAME = 5;
-    private static final int COL_EXPR_TYPE = 6;
-    private static final int COL_EXPR_CONTENT = 7;
-    private static final int COL_WEIGHT = 8;
-    private static final int COL_MAX_SCORE = 9;
-    private static final int COL_MIN_SCORE = 10;
+    private static final int COL_METRIC_NAME = 4;
+    private static final int COL_EXPR_TYPE = 5;
+    private static final int COL_EXPR_CONTENT = 6;
+    private static final int COL_WEIGHT = 7;
+    private static final int COL_MAX_SCORE = 8;
+    private static final int COL_MIN_SCORE = 9;
 
     private final PerfMetricDefMapper metricDefMapper;
     private final PerfKpiSchemeMapper schemeMapper;
@@ -295,7 +294,6 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
                 .schemeCode(getString(row.getCell(COL_SCHEME_CODE), formatter))
                 .schemeName(getString(row.getCell(COL_SCHEME_NAME), formatter))
                 .empRoleScopeRaw(getString(row.getCell(COL_EMP_ROLE_SCOPE), formatter))
-                .dimRaw(getString(row.getCell(COL_DIM), formatter))
                 .metricName(getString(row.getCell(COL_METRIC_NAME), formatter))
                 .exprTypeRaw(getString(row.getCell(COL_EXPR_TYPE), formatter))
                 .exprContent(getString(row.getCell(COL_EXPR_CONTENT), formatter))

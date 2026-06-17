@@ -10,13 +10,13 @@ import java.math.BigDecimal;
 /**
  * KPI 方案导入行模型（2026-06-17，importType=KPI_SCHEME）.
  *
- * <p>对齐「KPI方案上传模板.xlsx」（sheet1，第 0 行表头，从第 1 行起数据），11 列：
+ * <p>对齐「KPI方案上传模板.xlsx」（sheet1，第 0 行表头，从第 1 行起数据），10 列
+ * （2026-06-17 取消「维度」列，方案项 base_dim 取自指标定义）：
  * <ol>
  *   <li>序号（透传，不参与业务）</li>
  *   <li>方案编号（必填）</li>
  *   <li>方案名称（必填）</li>
  *   <li>员工角色范围（方案级，按英文逗号分割的角色名称，可空；按方案分组取首次出现行的值）</li>
- *   <li>维度（忽略业务用途，方案项 base_dim 取自指标定义 base_dim）</li>
  *   <li>指标名称（必须存在于 PERF_METRIC_DEF.metric_name）</li>
  *   <li>表达式类型（"计算表达式"=FORMULA / "SQL表达式"=SQL，兼容大小写 FORMULA/SQL）</li>
  *   <li>表达式（可空；按类型路由 formula / sql_expr）</li>
@@ -47,9 +47,6 @@ public class KpiSchemeImportRow {
 
     /** 员工角色范围原文（方案级，按英文逗号分割的角色名称，可空）. */
     private String empRoleScopeRaw;
-
-    /** 维度列原文（忽略业务用途，方案项 base_dim 取自指标定义）. */
-    private String dimRaw;
 
     /** 指标名称（中文，必须存在于 PERF_METRIC_DEF）. */
     private String metricName;

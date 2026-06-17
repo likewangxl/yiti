@@ -113,11 +113,11 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("happy path：1 方案 2 指标行（FORMULA + SQL）→ Writer 收到 2 个 item，字段正确")
     void execute_happyPath_writerReceivesTwoItems() {
         List<Object[]> rows = new ArrayList<>();
-        // 序号,方案编号,方案名称,角色范围,维度,指标名,表达式类型,表达式,权重,计分上线,计分下限
-        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,柜员", "员工", "存款余额",
+        // 序号,方案编号,方案名称,角色范围,指标名,表达式类型,表达式,权重,计分上线,计分下限（已取消「维度」列）
+        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,柜员", "存款余额",
                 "计算表达式", "min(actual/target*weight,100)", new BigDecimal("10"),
                 new BigDecimal("120"), new BigDecimal("10")});
-        rows.add(new Object[]{2, "KPI_A", "方案A", "理财经理,柜员", "机构", "中间业务收入",
+        rows.add(new Object[]{2, "KPI_A", "方案A", "理财经理,柜员", "中间业务收入",
                 "SQL表达式", "SUM(#{slot1})", new BigDecimal("20"),
                 new BigDecimal("130"), new BigDecimal("5")});
 
@@ -160,7 +160,7 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("角色范围多个名 → roleCode CSV 正确传给 writer")
     void execute_multiRoleScope_csvOfCodes() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,柜员", "员工", "存款余额",
+        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,柜员", "存款余额",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
@@ -181,7 +181,7 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("角色范围为空 → empRoleScope=null")
     void execute_blankRoleScope_nullScope() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "KPI_A", "方案A", null, "员工", "存款余额",
+        rows.add(new Object[]{1, "KPI_A", "方案A", null, "存款余额",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
@@ -199,7 +199,7 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("表达式为空 → 通过，formula/sqlExpr 皆空")
     void execute_blankExpr_bothNull() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "KPI_A", "方案A", null, "员工", "存款余额",
+        rows.add(new Object[]{1, "KPI_A", "方案A", null, "存款余额",
                 "计算表达式", null, new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
@@ -219,7 +219,7 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("指标不存在 → 抛 PerfException 含'指标不存在'，never 调 Writer")
     void execute_unknownMetric_throws() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "KPI_A", "方案A", null, "员工", "不存在的指标",
+        rows.add(new Object[]{1, "KPI_A", "方案A", null, "不存在的指标",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
@@ -233,7 +233,7 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("表达式类型非法 → 抛错，never 调 Writer")
     void execute_invalidExprType_throws() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "KPI_A", "方案A", null, "员工", "存款余额",
+        rows.add(new Object[]{1, "KPI_A", "方案A", null, "存款余额",
                 "胡乱类型", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
@@ -247,7 +247,7 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("角色名不存在 → 抛错含'角色不存在'，never 调 Writer")
     void execute_unknownRole_throws() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,不存在的角色", "员工", "存款余额",
+        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,不存在的角色", "存款余额",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
@@ -261,7 +261,7 @@ class KpiSchemeImportStrategyTest {
     @DisplayName("方案编号缺失 → 抛错，never 调 Writer")
     void execute_blankSchemeCode_throws() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, null, "方案A", null, "员工", "存款余额",
+        rows.add(new Object[]{1, null, "方案A", null, "存款余额",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
@@ -288,12 +288,12 @@ class KpiSchemeImportStrategyTest {
         return r;
     }
 
-    /** 写单 sheet 文件：表头 11 列 + 给定数据行. */
+    /** 写单 sheet 文件：表头 10 列（已取消「维度」列）+ 给定数据行. */
     private static MultipartFile writeExcel(List<Object[]> rows) {
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("KPI方案");
             Row header = sheet.createRow(0);
-            String[] heads = {"序号", "方案编号", "方案名称", "员工角色范围", "维度",
+            String[] heads = {"序号", "方案编号", "方案名称", "员工角色范围",
                     "指标名称", "表达式类型", "表达式", "权重", "计分上线", "计分下限"};
             for (int i = 0; i < heads.length; i++) {
                 header.createCell(i).setCellValue(heads[i]);
