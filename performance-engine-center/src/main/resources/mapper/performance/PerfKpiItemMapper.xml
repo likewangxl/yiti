@@ -20,6 +20,27 @@
         </foreach>
     </insert>
 
+    <!-- 批量 upsert（KPI 方案导入用，2026-06-17）：唯一键 uk_scheme_metric(scheme_id, metric_code） -->
+    <insert id="upsertBatch">
+        INSERT INTO PERF_KPI_ITEM (
+            <include refid="BASE_COLUMNS"/>
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.id}, #{item.schemeId}, #{item.metricCode}, #{item.baseDim}, #{item.weight}, #{item.multiplier},
+                #{item.minScore}, #{item.maxScore}, #{item.formula}, #{item.sqlExpr}, #{item.createdTime}
+            )
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            base_dim = VALUES(base_dim),
+            weight = VALUES(weight),
+            multiplier = VALUES(multiplier),
+            min_score = VALUES(min_score),
+            max_score = VALUES(max_score),
+            formula = VALUES(formula),
+            sql_expr = VALUES(sql_expr)
+    </insert>
+
     <update id="updateByIdSelective" parameterType="com.bank.branch.platform.performance.entity.PerfKpiItem">
         UPDATE PERF_KPI_ITEM
         <set>

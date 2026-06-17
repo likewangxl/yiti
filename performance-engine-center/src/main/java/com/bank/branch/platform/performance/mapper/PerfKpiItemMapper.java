@@ -27,6 +27,18 @@ public interface PerfKpiItemMapper extends BaseMapper<PerfKpiItem> {
     int insertBatch(@Param("list") List<PerfKpiItem> items);
 
     /**
+     * 批量 upsert 方案项（KPI 方案导入用，2026-06-17）.
+     *
+     * <p>INSERT ... ON DUPLICATE KEY UPDATE，唯一键 uk_scheme_metric(scheme_id, metric_code)。
+     * 命中既有项时更新 base_dim/weight/multiplier/min_score/max_score/formula/sql_expr，
+     * 不更新 id/scheme_id/metric_code/created_time。
+     *
+     * @param list 方案项列表
+     * @return 受影响行数
+     */
+    int upsertBatch(@Param("list") List<PerfKpiItem> list);
+
+    /**
      * 按主键选择性更新.
      *
      * <p>perf_kpi_item 表无 updated_time 列作为 {@code <set>} 兜底锚点,
