@@ -6,6 +6,9 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
+import com.bank.branch.platform.governance.storage.FileCategory;
 import com.bank.branch.platform.performance.controller.dto.PerfImportBatchRespDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -49,7 +52,9 @@ class PerfImportServiceTest {
     private TargetImportStrategy targetStrategy;
     private BaseDataImportStrategy baseDataStrategy;
     private AllocRelationImportStrategy allocStrategy;
+    private ImportStrategy localPlanStrategy; // 本地存储类型代表：TARGET_PLAN
     private LocalImportFileStorage localFileStorage;
+    private FileApi fileApi;
     private CurrentUserApi currentUserApi;
     private BizScopeApi bizScopeApi;
     private PerfImportServiceImpl service;
@@ -60,29 +65,38 @@ class PerfImportServiceTest {
         targetStrategy = mock(TargetImportStrategy.class);
         baseDataStrategy = mock(BaseDataImportStrategy.class);
         allocStrategy = mock(AllocRelationImportStrategy.class);
+        localPlanStrategy = mock(ImportStrategy.class);
         localFileStorage = mock(LocalImportFileStorage.class);
+        fileApi = mock(FileApi.class);
         currentUserApi = mock(CurrentUserApi.class);
         bizScopeApi = mock(BizScopeApi.class);
 
         when(targetStrategy.importType()).thenReturn("TARGET");
         when(baseDataStrategy.importType()).thenReturn("BASE_DATA");
         when(allocStrategy.importType()).thenReturn("ALLOC");
+        when(localPlanStrategy.importType()).thenReturn("TARGET_PLAN");
 
         // 默认每个策略返回空结果（子测试按需覆盖）
         ImportResult empty = new ImportResult(0, 0, 0, null);
         when(targetStrategy.execute(any(), any(), any())).thenReturn(empty);
         when(baseDataStrategy.execute(any(), any(), any())).thenReturn(empty);
         when(allocStrategy.execute(any(), any(), any())).thenReturn(empty);
+        when(localPlanStrategy.execute(any(), any(), any())).thenReturn(empty);
 
-        // 源文件保存到本地默认返回一个 key
-        when(localFileStorage.save(any(MultipartFile.class))).thenReturn("F_IMP_SRC");
+        // 本地存储类型 → localFileStorage.save 返回本地 key；OBS 类型 → fileApi.upload 返回 objectKey
+        when(localFileStorage.save(any(MultipartFile.class))).thenReturn("F_LOCAL");
+        FileObjectDTO obs = new FileObjectDTO();
+        obs.setId("F_OBS");
+        when(fileApi.upload(any(MultipartFile.class), anyString(), anyString())).thenReturn(obs);
 
         // 默认当前用户 admin + 数据范围 ALL（管理员全见），子测试按需覆盖
         when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
         when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.ALL);
 
-        List<ImportStrategy> strategies = List.of(targetStrategy, baseDataStrategy, allocStrategy);
-        service = new PerfImportServiceImpl(batchMapper, strategies, localFileStorage, currentUserApi, bizScopeApi);
+        List<ImportStrategy> strategies = List.of(targetStrategy, baseDataStrategy, allocStrategy, localPlanStrategy);
+        // 本地存储类型 = 指标库/KPI规则/目标管理（其余走 OBS）
+        service = new PerfImportServiceImpl(batchMapper, strategies, localFileStorage, fileApi,
+                currentUserApi, bizScopeApi, "METRIC_DEF,KPI_SCHEME,TARGET_PLAN");
     }
 
     private MultipartFile fakeFile(String name) {
@@ -179,29 +193,44 @@ class PerfImportServiceTest {
     }
 
     @Test
-    @DisplayName("startImport archiveSource=true → 存本地目录：localFileStorage.save 调用 + sourceObjectKey 落库")
-    void startImport_archiveSourceTrue_savesToLocalDir() {
+    @DisplayName("startImport：非本地类型(TARGET) → 归档 OBS：fileApi.upload 调用 + sourceObjectKey 落库，不调本地")
+    void startImport_nonLocalType_archivesToObs() {
         String batchId = service.startImport("TARGET", fakeFile("imp.xlsx"), "admin", null, null, true);
 
         assertThat(batchId).isNotBlank();
-        verify(localFileStorage).save(any(MultipartFile.class));
+        verify(fileApi).upload(any(MultipartFile.class), eq("admin"), eq(FileCategory.PERF_IMPORT));
+        verify(localFileStorage, never()).save(any(MultipartFile.class));
 
         ArgumentCaptor<PerfImportBatch> cap = ArgumentCaptor.forClass(PerfImportBatch.class);
         verify(batchMapper).insert(cap.capture());
-        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("F_IMP_SRC");
+        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("F_OBS");
     }
 
     @Test
-    @DisplayName("startImport：强制保存——archiveSource=false 仍存本地目录并落 sourceObjectKey")
+    @DisplayName("startImport：本地类型(TARGET_PLAN) → 存本地目录：localFileStorage.save 调用，不走 OBS")
+    void startImport_localType_savesToLocalDir() {
+        String batchId = service.startImport("TARGET_PLAN", fakeFile("imp.xlsx"), "admin", null, null, true);
+
+        assertThat(batchId).isNotBlank();
+        verify(localFileStorage).save(any(MultipartFile.class));
+        verify(fileApi, never()).upload(any(MultipartFile.class), anyString(), anyString());
+
+        ArgumentCaptor<PerfImportBatch> cap = ArgumentCaptor.forClass(PerfImportBatch.class);
+        verify(batchMapper).insert(cap.capture());
+        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("F_LOCAL");
+    }
+
+    @Test
+    @DisplayName("startImport：archiveSource=false 仍保存（非本地类型走 OBS）")
     void startImport_forcedSave_evenWhenArchiveSourceFalse() {
         String batchId = service.startImport("TARGET", fakeFile("imp.xlsx"), "admin", null, null, false);
 
         assertThat(batchId).isNotBlank();
-        verify(localFileStorage).save(any(MultipartFile.class));
+        verify(fileApi).upload(any(MultipartFile.class), eq("admin"), eq(FileCategory.PERF_IMPORT));
 
         ArgumentCaptor<PerfImportBatch> cap = ArgumentCaptor.forClass(PerfImportBatch.class);
         verify(batchMapper).insert(cap.capture());
-        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("F_IMP_SRC");
+        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("F_OBS");
     }
 
     @Test
@@ -292,7 +321,7 @@ class PerfImportServiceTest {
     void getSourceFile_happyPath_returnsBytes() {
         PerfImportBatch b = batchWith("B1", "admin", "OBJ1");
         when(batchMapper.selectByBatchId("B1")).thenReturn(b);
-        when(localFileStorage.read("OBJ1")).thenReturn(new byte[]{9, 8, 7});
+        when(fileApi.getFileContent("OBJ1")).thenReturn(new byte[]{9, 8, 7});
 
         PerfImportService.ImportSourceFile src = service.getSourceFile("B1");
 
@@ -318,7 +347,7 @@ class PerfImportServiceTest {
     void getSourceFile_adminOthersBatch_allowed() {
         when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.ALL);
         when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "someoneElse", "OBJ1"));
-        when(localFileStorage.read("OBJ1")).thenReturn(new byte[]{1});
+        when(fileApi.getFileContent("OBJ1")).thenReturn(new byte[]{1});
 
         PerfImportService.ImportSourceFile src = service.getSourceFile("B1");
         assertThat(src.content()).containsExactly(1);
