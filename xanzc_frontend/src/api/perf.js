@@ -1,8 +1,7 @@
 import { call, unwrapPage } from './http';
-import { fmtDateTime } from '@/utils/datetime';
 import {
   perfMetricsTree, perfMetricDetail, perfKpiRules,
-  perfTargets, perfImports, perfComputeBatches
+  perfTargets, perfComputeBatches
 } from '@/mock';
 
 // 后端 perf 真实路径整理（PerfXxxController @RequestMapping）：
@@ -74,6 +73,10 @@ export function listKpiRules(params = {}) {
 }
 export function getKpiSchemeDetail(id) {
   return call('get', `/perf/kpi-schemes/${id}`, {}, { items: [] });
+}
+// KPI 方案「员工角色范围」下拉：可用角色(按名称排序)，返回 [{roleCode, roleChName}]
+export function listKpiEmpRoles() {
+  return call('get', '/perf/kpi-schemes/emp-roles', {}, []);
 }
 export function createKpiScheme(data) {
   return call('post', '/perf/kpi-schemes', { data }, { id: 'mock' });
@@ -156,36 +159,18 @@ export function deleteTargetValue(id) {
 // 后端 PerfImportController 端点（V1.1）：
 //   POST   /api/perf/import/upload?importType=XXX     → 上传 + 同步启动（返回 batchId String）
 //   GET    /api/perf/import/batches/{batchId}         → 批次详情
+//   GET    /api/perf/import/batches                   → 分页列表（DATA_SCOPE：管理员全见/其他仅自己）
 //   GET    /api/perf/import/batches/{batchId}/errors  → 错误明细 List<String>
+//   GET    /api/perf/import/batches/{batchId}/source-file → 下载源文件（OBS）
 //   POST   /api/perf/import/batches/{batchId}/retry   → 重试失败批次
 //   DELETE /api/perf/import/batches/{batchId}         → 删除（高危, 必填 reason）
-//   ※ 后端没有"批次列表"端点；前端"最近导入"列表通过 localStorage 维护用户本地上传记录
 // ============================================================
-const LS_RECENT_IMPORTS = 'perfImports:recent:v1';
 
-export function listImports() {
-  // 后端无列表 API；从 localStorage 读最近 50 条本地上传记录
-  // （Promise 形式保持调用方一致性）
-  return Promise.resolve(loadLocalImports()).catch(() => perfImports);
-}
-function loadLocalImports() {
-  try { return JSON.parse(localStorage.getItem(LS_RECENT_IMPORTS) || '[]'); } catch { return []; }
-}
-function pushLocalImport(rec) {
-  const arr = loadLocalImports();
-  arr.unshift(rec);
-  try { localStorage.setItem(LS_RECENT_IMPORTS, JSON.stringify(arr.slice(0, 50))); } catch {}
-}
-function patchLocalImport(batchId, patch) {
-  const arr = loadLocalImports();
-  const i = arr.findIndex(x => x.batchId === batchId || x.id === batchId);
-  if (i < 0) return;
-  arr[i] = { ...arr[i], ...patch };
-  try { localStorage.setItem(LS_RECENT_IMPORTS, JSON.stringify(arr)); } catch {}
-}
-function removeLocalImport(batchId) {
-  const arr = loadLocalImports().filter(x => x.batchId !== batchId && x.id !== batchId);
-  try { localStorage.setItem(LS_RECENT_IMPORTS, JSON.stringify(arr)); } catch {}
+// 分页查询导入批次（DB 落库，替代旧 localStorage 本地记录）。
+// 返回后端统一分页结构 { records, total, pageNo, pageSize }。
+export function listImports({ pageNo = 1, pageSize = 10 } = {}) {
+  return call('get', '/perf/import/batches', { params: { pageNo, pageSize } },
+    { records: [], total: 0 });
 }
 // 上传：importType ∈ TARGET / BASE_DATA / ALLOC / METRIC_DEF / METRIC_RESULT
 // 后端要求 multipart `file` + 查询参 `importType`；
@@ -217,18 +202,7 @@ export async function uploadImportFile(importType, file, dataDate, meta = {}) {
   const normalized = (resp && typeof resp === 'object')
     ? { batchId: resp.batchId || resp.id, ...resp }
     : { batchId: resp };
-  // 写入 localStorage 历史
-  pushLocalImport({
-    batchId: normalized.batchId,
-    id: normalized.batchId,
-    type: importType,
-    file: file?.name || '-',
-    fileSize: file?.size || 0,
-    uploader: meta.uploader || '当前用户',
-    valid: 0, total: 0,
-    status: 'PROCESSING',
-    time: fmtDateTime(new Date()) // 本地时间，避免 toISOString() 的 UTC 比本地早 8 小时
-  });
+  // 批次已落库（perf_import_batch），列表直接从 DB 刷新，无需本地缓存
   return normalized;
 }
 export function getImportBatch(batchId) {
@@ -238,33 +212,33 @@ export function getImportErrors(batchId) {
   return call('get', `/perf/import/batches/${batchId}/errors`, {}, []);
 }
 export async function retryImport(batchId) {
-  const r = await call('post', `/perf/import/batches/${batchId}/retry`, {}, { ok: true });
-  patchLocalImport(batchId, { status: 'PROCESSING' });
-  return r;
+  return call('post', `/perf/import/batches/${batchId}/retry`, {}, { ok: true });
 }
 export async function deleteImportBatch(batchId, reason = '前端删除') {
   // 后端 @AuditLog reasonRequired=true：reason 须经 X-Audit-Reason header 或 body
-  const r = await call('delete', `/perf/import/batches/${batchId}`, {
+  return call('delete', `/perf/import/batches/${batchId}`, {
     data: { reason },
     headers: { 'X-Audit-Reason': encodeURIComponent(reason) }
   }, { ok: true });
-  removeLocalImport(batchId);
-  return r;
 }
-// 刷新单条状态（轮询/手动刷新用）
+// 刷新单条状态（手动刷新用）：直接拉后端详情，调用方据此刷新列表
 export async function refreshImportStatus(batchId) {
   try {
-    const d = await getImportBatch(batchId);
-    if (d?.status) {
-      patchLocalImport(batchId, {
-        status:  d.status,
-        valid:   d.successRows ?? d.valid ?? 0,
-        total:   d.totalRows   ?? d.total ?? 0,
-        errMsg:  d.errorMsg ?? d.remark ?? null
-      });
-    }
-    return d;
+    return await getImportBatch(batchId);
   } catch { return null; }
+}
+// 下载导入源文件（OBS）→ 触发浏览器另存。
+// fileName 由列表行（fileName 字段）传入；http 响应拦截器对二进制只返回 Blob，拿不到响应头。
+export async function downloadImportSourceFile(batchId, fileName) {
+  const blob = await call('get', `/perf/import/batches/${batchId}/source-file`,
+    { responseType: 'blob' }, null);
+  if (!blob) return;
+  const data = blob instanceof Blob ? blob : new Blob([blob]);
+  const url = URL.createObjectURL(data);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName || `import-${batchId}.xlsx`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
 }
 // 错误明细 → 触发浏览器下载 .txt
 export async function downloadImportErrors(batchId) {

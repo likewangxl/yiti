@@ -56,7 +56,7 @@
 
     <div class="card-section">
       <div class="section-title">最近导入</div>
-      <el-table :data="pagedRows" size="default" empty-text="暂无导入记录" v-loading="loading">
+      <el-table :data="rows" size="default" empty-text="暂无导入记录" v-loading="loading">
         <el-table-column prop="batchId" label="批次号" width="220">
           <template #default="{row}"><code class="mono">{{ row.batchId || row.id }}</code></template>
         </el-table-column>
@@ -74,9 +74,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="time" label="时间" width="170" :formatter="fmtDateTimeCol" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="360" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="onRefreshOne(row)">刷新</el-button>
+            <el-button link type="primary" size="small" :disabled="!row.sourceObjectKey"
+                       :title="row.sourceObjectKey ? '' : '无源文件'" @click="onDownloadSource(row)">下载文件</el-button>
             <el-button link type="primary" size="small" @click="onDownloadErrors(row)">下载错误</el-button>
             <el-button v-if="row.status === 'FAILED'" link type="primary" size="small" @click="onRetry(row)">重试</el-button>
             <el-popconfirm
@@ -90,24 +92,21 @@
         </el-table-column>
       </el-table>
       <div class="pager">
-        <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]" :total="rows.length" background layout="total, sizes, prev, pager, next" />
-      </div>
-      <div class="empty-tip">
-        ⓘ 本表仅展示当前浏览器最近 50 次本地上传记录（点"刷新"可拉取每条最新状态）。
+        <el-pagination v-model:current-page="pgNo" v-model:page-size="pgSize" :page-sizes="[10,20,50]" :total="total" background layout="total, sizes, prev, pager, next" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
 import { UploadFilled } from '@element-plus/icons-vue';
 import {
   listImports, uploadImportFile,
   refreshImportStatus, retryImport, deleteImportBatch, downloadImportErrors,
-  listKpiRules
+  downloadImportSourceFile, listKpiRules
 } from '@/api/perf';
 
 const kind = ref('METRIC_RESULT');
@@ -121,16 +120,23 @@ watch(kind, (k) => {
 const loading = ref(false);
 const pgNo = ref(1);
 const pgSize = ref(20);
-const pagedRows = computed(() => rows.value.slice((pgNo.value - 1) * pgSize.value, pgNo.value * pgSize.value));
+const total = ref(0);
+// 服务端分页：rows 即当前页数据，分页变化重新拉取
+watch([pgNo, pgSize], () => reload());
 
 const TYPE_LABEL = { METRIC_RESULT: '指标结果', KPI_SCORE: 'KPI 结果', ALLOC: 'KPI 结果', TARGET: '目标值' };
 const typeLabel = (t) => TYPE_LABEL[t] || t || '-';
-const STATUS_LABEL = { PROCESSING: '导入中', SUCCESS: '已完成', FAILED: '失败', PENDING: '排队中' };
+const STATUS_LABEL = {
+  CREATED: '已创建', RUNNING: '导入中', PROCESSING: '导入中',
+  SUCCESS: '已完成', FAILED: '失败', PENDING: '排队中'
+};
 const statusLabel = (s) => STATUS_LABEL[s] || s || '-';
 const statusCls = (s) => ({
   SUCCESS: 'tag-success',
   FAILED: 'tag-danger',
+  RUNNING: 'tag-warning',
   PROCESSING: 'tag-warning',
+  CREATED: 'tag-info',
   PENDING: 'tag-info'
 }[s] || 'tag-info');
 const fmtSize = (n) => n ? (n > 1024*1024 ? (n/1024/1024).toFixed(2) + ' MB' : (n/1024).toFixed(0) + ' KB') : '-';
@@ -138,9 +144,33 @@ const fmtSize = (n) => n ? (n > 1024*1024 ? (n/1024/1024).toFixed(2) + ' MB' : (
 async function reload() {
   loading.value = true;
   try {
-    const r = await listImports();
-    rows.value = Array.isArray(r) ? r : [];
-  } catch {} finally { loading.value = false; }
+    const r = await listImports({ pageNo: pgNo.value, pageSize: pgSize.value });
+    const records = Array.isArray(r) ? r : (r?.records || []);
+    rows.value = records.map(b => ({
+      batchId: b.id,
+      id: b.id,
+      type: b.importType,
+      file: b.fileName,
+      fileName: b.fileName,
+      sourceObjectKey: b.sourceObjectKey,
+      uploader: b.createdBy,
+      valid: b.successRows ?? 0,
+      total: b.totalRows ?? 0,
+      status: b.status,
+      time: b.createdTime
+    }));
+    total.value = Array.isArray(r) ? records.length : (r?.total ?? records.length);
+  } catch { rows.value = []; total.value = 0; } finally { loading.value = false; }
+}
+
+// 下载源文件（旧数据无 sourceObjectKey 时按钮已置灰，这里再兜底）
+async function onDownloadSource(row) {
+  if (!row.sourceObjectKey) { ElMessage.warning('该批次无源文件'); return; }
+  try {
+    await downloadImportSourceFile(row.batchId || row.id, row.fileName);
+  } catch (e) {
+    ElMessage.error(e?.message || '下载失败');
+  }
 }
 
 // 方案下拉：只取状态=启用(ACTIVE)的 KPI 方案
