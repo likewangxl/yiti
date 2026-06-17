@@ -1031,24 +1031,24 @@ public class KpiScoreCalcService {
         if (items == null || items.isEmpty()) {
             return new SchemeStat(0, 0);
         }
-        // 员工范围：角色范围非空 → 所选角色的员工工号；为空 → 目标值里出现过的员工(EMP 对象)为全集
-        java.util.Set<String> roleEmpUsernames = resolveRoleScopeUsernames(scheme.getEmpRoleScope());
+        // 员工范围基础集：无论角色范围是否为空，都以「目标值里出现过的员工」为基础
+        // （方案ACTIVE + 目标值起止日期涵盖数据日期 + 指标∈本方案KPI指标 的去重 EMP 工号）
         List<String> metricCodes = items.stream()
                 .map(PerfKpiItem::getMetricCode)
                 .filter(StringUtils::hasText)
                 .distinct()
                 .toList();
-        java.util.Set<String> empUniverse;
+        List<String> baseIds = metricCodes.isEmpty()
+                ? java.util.List.of()
+                : targetValueMapper.selectDistinctActiveEmpSubjects(metricCodes, dataDate);
+        java.util.Set<String> empUniverse = new java.util.LinkedHashSet<>(baseIds == null ? java.util.List.of() : baseIds);
+        // 角色范围非空 → 在基础集中再筛出匹配所选角色的员工（交集）；为空(null) → 不过滤，基础集即全集
+        java.util.Set<String> roleEmpUsernames = resolveRoleScopeUsernames(scheme.getEmpRoleScope());
         if (roleEmpUsernames != null) {
-            empUniverse = roleEmpUsernames;
-        } else {
-            List<String> ids = metricCodes.isEmpty()
-                    ? java.util.List.of()
-                    : targetValueMapper.selectDistinctActiveEmpSubjects(metricCodes, dataDate);
-            empUniverse = new java.util.LinkedHashSet<>(ids == null ? java.util.List.of() : ids);
+            empUniverse.retainAll(roleEmpUsernames);
         }
         if (empUniverse.isEmpty()) {
-            log.info("【KPI分值计算】方案={} 员工范围为空（角色范围/目标值均无匹配员工），不计分", scheme.getSchemeCode());
+            log.info("【KPI分值计算】方案={} 员工范围为空（目标值基础集 ∩ 角色范围 无匹配员工），不计分", scheme.getSchemeCode());
             return new SchemeStat(0, 0);
         }
         // 员工 → 所属机构(mainOrgCode) 批量解析，供机构(ORG)维度指标取机构实际值/目标值

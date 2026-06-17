@@ -235,7 +235,10 @@ class KpiScoreCalcServiceTest {
         def.setMetricCode("M_0001"); def.setBaseDim("EMP"); def.setValSlot(5); def.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_0001")).thenReturn(def);
 
-        // 角色 R_X → USER_ID {U1,U2} → 工号 {E001,E002}（E003 不在角色内）
+        // 基础集：目标值里出现过的员工 {E001,E002}（E003 不在目标值基础集内）
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_0001"), DATA_DATE))
+                .thenReturn(List.of("E001", "E002"));
+        // 角色 R_X → USER_ID {U1,U2} → 工号 {E001,E002}（与基础集取交集仍为 {E001,E002}；E003 不在角色内）
         when(userApi.getEmpIdsByRoleCode("R_X")).thenReturn(List.of("U1", "U2"));
         com.bank.branch.platform.auth.api.dto.UserDTO u1 = new com.bank.branch.platform.auth.api.dto.UserDTO();
         u1.setUsername("E001");
@@ -294,6 +297,10 @@ class KpiScoreCalcServiceTest {
         PerfMetricDef def = new PerfMetricDef();
         def.setMetricCode("M_ORG"); def.setBaseDim("ORG"); def.setValSlot(7); def.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_ORG")).thenReturn(def);
+
+        // 基础集：目标值里出现过的员工 {E001}（与角色 R_X 的 {E001} 取交集 = {E001}）
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_ORG"), DATA_DATE))
+                .thenReturn(List.of("E001"));
 
         // 机构维度实际值取 ORG 宽表（按机构 ORG9）
         when(orgIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 7))

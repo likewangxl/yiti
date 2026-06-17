@@ -21,12 +21,15 @@
 落库前 `scoreMapper.deleteByDateAndScheme(dataDate, schemeCode)` 删除该数据日期+该方案的旧计分明细，避免脏数据。
 
 ### 3.2 确定员工范围（empUniverse）
-| 方案「员工角色范围」`emp_role_scope` | 员工全集 |
-|---|---|
-| **非空** | 所选角色的员工工号集合（`UserApi.getEmpIdsByRoleCode`(USER_ID) → 工号）|
-| **空** | **目标值里出现过的员工**：`selectDistinctActiveEmpSubjects(metricCodes, dataDate)` —— 取「目标方案 ACTIVE + 目标值起止日期涵盖数据日期 + 指标∈本方案 KPI 指标」的去重 EMP 工号 |
+**基础集（始终）= 目标值里出现过的员工**：`selectDistinctActiveEmpSubjects(metricCodes, dataDate)` —— 取「目标方案 ACTIVE + 目标值起止日期涵盖数据日期 + 指标∈本方案 KPI 指标」的去重 EMP 工号。
 
-- 员工全集为空 → 本方案不计分（返回 0/0）。
+再按「员工角色范围」`emp_role_scope` 收窄：
+| `emp_role_scope` | 员工全集 |
+|---|---|
+| **空** | = 基础集（不过滤）|
+| **非空** | = **基础集 ∩ 所选角色成员**（`UserApi.getEmpIdsByRoleCode`(USER_ID) → 工号，与基础集取交集）|
+
+- 员工全集为空（基础集 ∩ 角色范围 无匹配）→ 本方案不计分（返回 0/0）。
 - 批量解析 **工号 → 所属机构 `mainOrgCode`**（`resolveEmpOrgMap`，经 `UserApi.getUsersByUsernames`），供 ORG 维度指标取机构数。
 
 ### 3.3 逐「KPI 指标项 × 员工」计算
@@ -73,7 +76,7 @@
 |---|---|---|
 | 计算驱动 | 宽表对象集驱动 | **员工集合 × 指标**（员工驱动）|
 | 目标方案关联 | `kpi_scheme_id` 直连 + 由 `targetCycle` 派生 cycleKey 查目标值 | **不再用 kpi_scheme_id**；按 (维度对象, 指标) + 目标值起止日期涵盖数据日期 查 |
-| 员工范围 | 全宽表对象（角色范围仅 EMP 过滤） | 角色范围成员；为空=目标值里出现过的员工 |
+| 员工范围 | 全宽表对象（角色范围仅 EMP 过滤） | **基础集=目标值里出现过的员工**；角色范围非空时在基础集上取交集，为空时即基础集 |
 | ORG 指标 | 按机构对象计分 | 按**员工所属机构**取机构实际值/目标值，得分仍落**员工工号** |
 | 无目标值 | 仍计分（target=0） | **跳过不计算** |
 
