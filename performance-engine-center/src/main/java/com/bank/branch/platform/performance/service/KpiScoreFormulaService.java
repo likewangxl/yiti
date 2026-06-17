@@ -107,6 +107,9 @@ public class KpiScoreFormulaService {
         binding.put("weight", w);
         binding.put("权重", w);
         // 计分上下限：对应 PERF_KPI_ITEM.max_score / min_score
+        // 英文 minScore / maxScore + 中文 计分下限 / 计分上限 双绑（模板默认公式用英文裸变量名）
+        binding.put("minScore", lo);
+        binding.put("maxScore", hi);
         binding.put("计分上限", hi);
         binding.put("计分下限", lo);
 

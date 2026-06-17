@@ -85,6 +85,25 @@ class KpiScoreFormulaServiceTest extends PerformanceServiceTestBase {
     }
 
     @Test
+    void evalScore_英文变量minScore封顶maxScore() {
+        // 模板默认公式 min(max(actual/target*weight, minScore), maxScore)：英文变量须可用
+        // actual=200,target=100,weight=100 → 2*100=200；max(200,minScore 10)=200；min(200,maxScore 120)=120
+        BigDecimal score = service.evalScore("min(max(actual / target * weight, minScore), maxScore)",
+                new BigDecimal("200"), new BigDecimal("100"), BigDecimal.ZERO, new BigDecimal("100"),
+                new BigDecimal("10"), new BigDecimal("120"));
+        assertThat(score).isEqualByComparingTo("120");
+    }
+
+    @Test
+    void evalScore_目标值为0但有minScore_应取minScore而非0() {
+        // 模板默认公式 + 除零：max(0, minScore 15)=15；min(15, maxScore 120)=15
+        BigDecimal score = service.evalScore("min(max(actual / target * weight, minScore), maxScore)",
+                new BigDecimal("50"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("100"),
+                new BigDecimal("15"), new BigDecimal("120"));
+        assertThat(score).isEqualByComparingTo("15");
+    }
+
+    @Test
     void evalScore_目标值为0除零记0分() {
         // 业务约定：除零（目标值/基础值缺失致分母为 0）不中断任务，记 0 分
         BigDecimal score = service.evalScore("actual / target * weight",
