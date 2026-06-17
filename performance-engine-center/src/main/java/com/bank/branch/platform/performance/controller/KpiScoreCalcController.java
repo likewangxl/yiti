@@ -235,6 +235,7 @@ public class KpiScoreCalcController {
             head.add(new ArrayList<>(List.of(mn, "目标值")));
             head.add(new ArrayList<>(List.of(mn, "基础值")));
             head.add(new ArrayList<>(List.of(mn, "完成率(%)")));
+            head.add(new ArrayList<>(List.of(mn, "权重")));
             head.add(new ArrayList<>(List.of(mn, "得分")));
         }
         List<List<Object>> rows = new ArrayList<>();
@@ -250,6 +251,8 @@ public class KpiScoreCalcController {
                 row.add(c == null ? null : c.getTarget());
                 row.add(c == null ? null : c.getBase());
                 row.add(c == null ? null : c.getCompleteRate());
+                // 权重为该 KPI 指标列固有值（与对象行无关），各行重复输出
+                row.add(m.getWeight());
                 row.add(c == null ? null : c.getScore());
             }
             rows.add(row);

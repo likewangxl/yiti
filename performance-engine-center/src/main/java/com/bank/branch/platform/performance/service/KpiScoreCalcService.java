@@ -929,7 +929,7 @@ public class KpiScoreCalcService {
                 continue;
             }
             map.put(code, new com.bank.branch.platform.performance.controller.dto.MetricOptionDTO(
-                    code, def.getMetricName()));
+                    code, def.getMetricName(), it.getWeight()));
         }
         return new java.util.ArrayList<>(map.values());
     }

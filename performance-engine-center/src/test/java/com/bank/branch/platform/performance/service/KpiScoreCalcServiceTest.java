@@ -601,7 +601,7 @@ class KpiScoreCalcServiceTest {
         PerfKpiScheme scheme = new PerfKpiScheme();
         scheme.setId("S1"); scheme.setSchemeCode("KPI_A");
         when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(scheme);
-        PerfKpiItem ok = new PerfKpiItem(); ok.setMetricCode("M_OK");
+        PerfKpiItem ok = new PerfKpiItem(); ok.setMetricCode("M_OK"); ok.setWeight(new BigDecimal("60"));
         PerfKpiItem missing = new PerfKpiItem(); missing.setMetricCode("M_MISSING");
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(ok, missing));
         PerfMetricDef def = new PerfMetricDef(); def.setMetricCode("M_OK"); def.setMetricName("有效指标");
@@ -612,6 +612,8 @@ class KpiScoreCalcServiceTest {
 
         assertThat(metrics).extracting("metricCode").containsExactly("M_OK");
         assertThat(metrics).extracting("metricName").containsExactly("有效指标");
+        // 指标列携带该 KPI 指标的权重（结果详情页「权重」列用）
+        assertThat(metrics.get(0).getWeight()).isEqualByComparingTo("60");
     }
 
     @Test
