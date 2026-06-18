@@ -371,6 +371,15 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item label="业绩分配日期">
+          <el-date-picker
+            v-model="execDlg.allocDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="SQL 的 :allocDate（留空默认=数据日期）"
+            style="width: 100%"
+          />
+        </el-form-item>
         <el-form-item label="执行原因" required>
           <el-input v-model="execDlg.reason" type="textarea" :rows="3" placeholder="高危操作，必填执行原因" />
         </el-form-item>
@@ -707,6 +716,7 @@ const sqlInputRef = ref(null);
 // 后端 MetricTrialService.runSql 自动注入的 10 个 SQL 命名参数；点击下方变量符插入到光标位置
 const DATE_MACROS = [
   { token: ':dataDate',           desc: '数据日期（=dateToday，由调度/试运行传入）' },
+  { token: ':allocDate',          desc: '业绩分配日期（定时任务=T-1；手动执行由弹窗"业绩分配日期"指定，留空默认=数据日期）' },
   { token: ':objectId',           desc: '对象id（试运行的"对象值"输入框映射；员工=工号/机构=机构号；真实执行为 null，建议写 (:objectId IS NULL OR x=:objectId)）' },
   { token: ':version',            desc: 'sys_control 当前版本' },
   { token: ':dateToday',          desc: '当前日期 T' },
@@ -1193,6 +1203,7 @@ async function onTrialRun() {
 function onExecute() {
   execDlg.metricCode = detail.value.metricCode;
   execDlg.dataDate = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);  // 默认昨日
+  execDlg.allocDate = '';   // 业绩分配日期（留空默认=数据日期，由后端兜底）
   execDlg.reason = '';
   execDlg.submitting = false;
   execDlg.show = true;
@@ -1209,6 +1220,8 @@ async function confirmExecute() {
   try {
     await executeMetric(execDlg.metricCode, {
       dataDate: execDlg.dataDate,
+      // 业绩分配日期：填了就传，留空不传（后端默认=数据日期）
+      allocDate: execDlg.allocDate || undefined,
       cascade: true,
       async: true,
       reason: execDlg.reason.trim()
@@ -1268,6 +1281,7 @@ const execDlg = reactive({
   show: false,
   metricCode: '',
   dataDate: '',
+  allocDate: '',   // 业绩分配日期（SQL :allocDate；留空默认=数据日期）
   reason: '',
   submitting: false,
   // el-date-picker disabled-date：禁选今天之后的日期（含 0 点比较）
