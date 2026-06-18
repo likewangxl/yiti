@@ -62,8 +62,8 @@
         </el-table-column>
         <el-table-column label="负责产品" min-width="200">
           <template #default="{row}">
-            <template v-if="row.responsibleProducts && row.responsibleProducts.length">
-              <el-tag v-for="p in row.responsibleProducts" :key="p.id" class="prod-tag" effect="plain" type="info">{{ p.productName }}</el-tag>
+            <template v-if="rowProducts(row).length">
+              <el-tag v-for="p in rowProducts(row)" :key="p.id" class="prod-tag" effect="plain" type="info">{{ p.productName }}</el-tag>
             </template>
             <span v-else class="muted">—</span>
           </template>
@@ -150,6 +150,21 @@ function isStale(v) {
   const d = new Date(v);
   if (isNaN(d.getTime())) return false;
   return (Date.now() - d.getTime()) > 60 * 24 * 3600 * 1000;
+}
+
+// 产品 id → {id, productName} 映射（products 由 supportAvailableProducts 加载）
+const productById = computed(() => {
+  const m = {};
+  for (const p of products.value) m[p.id] = p;
+  return m;
+});
+// 列表「负责产品」展示：列表接口只回 responsibleProductIds（不回 responsibleProducts），
+// 故用已加载的 products 把 id 映射成名称；若后端已带 responsibleProducts 则优先用之。
+function rowProducts(row) {
+  if (row.responsibleProducts && row.responsibleProducts.length) return row.responsibleProducts;
+  return (row.responsibleProductIds || [])
+    .map(id => productById.value[id] || { id, productName: id })
+    .filter(Boolean);
 }
 
 // 客户端附加过滤（负责产品 / 60天未更新）—— 后端查询参不含这两项
