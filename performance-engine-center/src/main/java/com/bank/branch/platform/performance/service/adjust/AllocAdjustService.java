@@ -67,11 +67,17 @@ public class AllocAdjustService {
     /** RULE 维度下 ratio 合计上限（100%）. */
     private static final BigDecimal RULE_RATIO_MAX = new BigDecimal("100");
 
-    /** 对公流程定义 key. */
+    /** 【已停用·保留回退】对公静态 BPMN 流程定义 key. */
     public static final String PROCESS_KEY_CORP = "perf_alloc_adjust_corp_v1";
 
-    /** 零售流程定义 key. */
+    /** 【已停用·保留回退】零售静态 BPMN 流程定义 key. */
     public static final String PROCESS_KEY_RETAIL = "perf_alloc_adjust_retail_v1";
+
+    /** 对公分配关系调整审批（设计器）flowKey. */
+    public static final String FLOW_KEY_CORP_DESIGNER = "alloc_corp_designer";
+
+    /** 零售分配关系调整审批（设计器）flowKey. */
+    public static final String FLOW_KEY_RETAIL_DESIGNER = "alloc_retail_designer";
 
     /** 流程业务类型（对齐 workflow-center 支持的 bizType 枚举）. */
     public static final String BIZ_TYPE = "ALLOC_ADJUST";
@@ -445,9 +451,40 @@ public class AllocAdjustService {
         vars.put("originalOwnerEmpId", originalOwnerEmpId);
         // 原业绩分配会签名单（corp_v1 并行多实例 collection），前面已校验非空。
         vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
+        // 设计器流程网关分流：种入发起机构级别等启动变量（corpRouteTo/finRouteTo 由审批 formData 提供，不在此种）
+        buildStartVariables(cmd.getOwnerOrgId(), vars);
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
         return resp.getProcessInstanceId();
+    }
+
+    /**
+     * 组装流程启动变量。在原有 applyId/custId/... 基础上，补种设计器流程网关分流所需的
+     * 「启动决定型」变量 {@code startOrgLevel}（发起机构行政级别，取 {@link OrgApi#getOrg} 的 orgLevel）。
+     *
+     * <p>该变量驱动设计器对公/零售流程「2 级机构本机构审批 / 3 级机构上级分行审批」网关
+     * （EL 为数字比较 {@code startOrgLevel == 2}，故种 Integer）。审批人选择型变量
+     * {@code corpRouteTo}/{@code finRouteTo} 不在此种入，由审批时 formData 提供。
+     * 取机构失败不阻断起流程（仅告警），由网关默认分支或后续报错暴露。</p>
+     *
+     * @param ownerOrgId 发起/归属机构编码
+     * @param vars       已含基础变量的可变 Map（原地补充并返回）
+     * @return 补充后的变量 Map
+     */
+    private Map<String, Object> buildStartVariables(String ownerOrgId, Map<String, Object> vars) {
+        if (!isBlank(ownerOrgId)) {
+            try {
+                OrgDTO org = orgApi.getOrg(ownerOrgId);
+                if (org != null && org.getOrgLevel() != null) {
+                    // Integer 直接种入：EL 为数字比较 startOrgLevel == 2（设计器实测）
+                    vars.put("startOrgLevel", org.getOrgLevel());
+                }
+            } catch (Exception e) {
+                log.warn("[AllocAdjustService.buildStartVariables] 取机构级别失败 ownerOrgId={}, err={}",
+                        ownerOrgId, e.toString());
+            }
+        }
+        return vars;
     }
 
     /**
@@ -1087,8 +1124,11 @@ public class AllocAdjustService {
      * @param bizKind 业务种类（非空）
      * @return BPMN 流程定义 key
      * @throws PerfException BIZ_KIND_INVALID 当 bizKind 不属于 CORP / RETAIL / PER / FEE 任一族
+     * @deprecated V1.x 起业绩调整审批改走设计器动态流程（{@link #resolveProcessKey}）；
+     *             本方法保留以便快速回退，当前不被调用。回退方式见 {@link #resolveProcessKey} 注释。
      */
-    private String resolveProcessKey(String custType, String bizKind) {
+    @Deprecated
+    private String resolveStaticProcessKey(String custType, String bizKind) {
         // 优先按客户类型路由（对公→corp_v1，零售→retail_v1）
         if (custType != null && !custType.isBlank()) {
             String ct = custType.toUpperCase();
@@ -1106,6 +1146,61 @@ public class AllocAdjustService {
             return PROCESS_KEY_RETAIL;
         }
         throw new PerfException(PerfErrorCode.BIZ_KIND_INVALID, bizKind);
+    }
+
+    /**
+     * 按客户类型解析「已发布设计器审批流程」的 Flowable 流程定义 KEY：
+     * 对公（CORP）→ {@link #FLOW_KEY_CORP_DESIGNER}，零售/个人/中间业务 → {@link #FLOW_KEY_RETAIL_DESIGNER}，
+     * 再经 {@link WorkflowApi#resolveDesignerProcDefKey} 取已部署 procDefKey（未发布则 fail-fast）。
+     *
+     * <p>custType 为空时回退按 bizKind 前缀判定（兼容旧数据），判定口径与原静态路由
+     * {@link #resolveStaticProcessKey} 一致。原静态 BPMN 逻辑保留于该方法以便回退——
+     * 回退方式：把本方法体改回 {@code return resolveStaticProcessKey(custType, bizKind);}。</p>
+     *
+     * @param custType 客户类型 CORP/RETAIL（优先）
+     * @param bizKind  业务种类（custType 为空时回退依据）
+     * @return 已发布设计器流程的 deployedProcDefKey（如 DSN_alloc_corp_designer）
+     * @throws PerfException BIZ_KIND_INVALID 当 bizKind 不属于任何已知族
+     */
+    private String resolveProcessKey(String custType, String bizKind) {
+        String flowKey = resolveDesignerFlowKey(custType, bizKind);
+        return workflowApi.resolveDesignerProcDefKey(flowKey);
+    }
+
+    /**
+     * 客户类型/业务种类 → 设计器 flowKey（对公 vs 零售族）。判定口径同原静态路由。
+     *
+     * @param custType 客户类型 CORP/RETAIL（优先）
+     * @param bizKind  业务种类（custType 为空时回退依据）
+     * @return 设计器 flowKey（alloc_corp_designer / alloc_retail_designer）
+     * @throws PerfException BIZ_KIND_INVALID 当 bizKind 不属于任何已知族
+     */
+    private String resolveDesignerFlowKey(String custType, String bizKind) {
+        if (custType != null && !custType.isBlank()) {
+            String ct = custType.toUpperCase();
+            if ("CORP".equals(ct)) return FLOW_KEY_CORP_DESIGNER;
+            if ("RETAIL".equals(ct)) return FLOW_KEY_RETAIL_DESIGNER;
+        }
+        String upper = bizKind == null ? "" : bizKind.toUpperCase();
+        if (upper.startsWith("CORP_") || upper.equals("CORP")) {
+            return FLOW_KEY_CORP_DESIGNER;
+        }
+        if (upper.startsWith("RETAIL_") || upper.equals("RETAIL")
+                || upper.startsWith("PER_") || upper.equals("PER")
+                || upper.startsWith("FEE_") || upper.equals("FEE_BIZ")) {
+            return FLOW_KEY_RETAIL_DESIGNER;
+        }
+        throw new PerfException(PerfErrorCode.BIZ_KIND_INVALID, bizKind);
+    }
+
+    /** 仅供 resolveProcessKey 路由单测：除 workflowApi 外其余依赖置 null。 */
+    static AllocAdjustService forRouteTest(WorkflowApi workflowApi) {
+        return new AllocAdjustService(null, null, null, workflowApi, null, null, null, null, null);
+    }
+
+    /** 仅供 buildStartVariables 单测：除 orgApi 外其余依赖置 null。 */
+    static AllocAdjustService forStartVarsTest(OrgApi orgApi) {
+        return new AllocAdjustService(null, null, null, null, null, null, orgApi, null, null);
     }
 
     /**
