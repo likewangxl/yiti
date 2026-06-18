@@ -9,6 +9,8 @@ import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.portal.service.AddrbookQueryService;
 import com.bank.branch.platform.portal.service.AddressBookService;
+import com.bank.branch.platform.portal.service.AddrbookImportService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.bank.branch.platform.portal.service.AnnouncementService;
 import com.bank.branch.platform.portal.service.DocService;
 import com.bank.branch.platform.portal.service.NavService;
@@ -86,6 +88,9 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected NotifyApi notifyApi;
     @MockBean protected AuditApi auditApi;
     @MockBean protected AddressBookService addressBookService;
+    @MockBean protected AddrbookImportService addrbookImportService;
+    // common-web 的 LockAutoConfig.lockManager 需要 JdbcTemplate；切片上下文无 DataSource，故 mock
+    @MockBean protected JdbcTemplate jdbcTemplate;
     @MockBean protected AnnouncementService announcementService;
     @MockBean protected DocService docService;
     @MockBean protected NavService navService;

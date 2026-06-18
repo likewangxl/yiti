@@ -44,8 +44,13 @@ class AddressBookControllerTest extends AbstractControllerIntegrationTest {
     @Test @WithMockEmpContext(empId = "E10001", dataScope = "ORG_SUBTREE", orgSubtree = {"ORG_SZ_001"})
     void listEmployees_returns200() throws Exception {
         AddrbookEmployee emp = buildEmployee("E001", "张三");
+        emp.setResponsibleProductIds(Arrays.asList("P001"));
         PageResult<AddrbookEmployee> page = PageResult.of(1, 20, 1L, List.of(emp));
         when(addressBookService.listEmployees(any(EmployeeQueryReqDTO.class))).thenReturn(page);
+
+        ProductInfo p1 = new ProductInfo();
+        p1.setId("P001"); p1.setProductCode("DEPOSIT_001"); p1.setProductName("活期存款"); p1.setProductCategory("CAT_DEPOSIT");
+        when(addressBookService.listProductsByIds(Arrays.asList("P001"))).thenReturn(Arrays.asList(p1));
 
         mockMvc.perform(get("/api/employees").param("pageNo", "1").param("pageSize", "20"))
                 .andExpect(status().isOk())
@@ -53,7 +58,11 @@ class AddressBookControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.page.total").value(1))
                 .andExpect(jsonPath("$.page.records[0].empId").value("E001"))
                 .andExpect(jsonPath("$.page.records[0].empName").value("张三"))
-                .andExpect(jsonPath("$.page.records[0].mobile").value("138****5678"));
+                // 通讯录列表/详情返回原始手机号：编辑抽屉用 row.mobile 回填并原样回传，脱敏会损坏数据
+                .andExpect(jsonPath("$.page.records[0].mobile").value("13812345678"))
+                // 列表也应回填「负责产品」简要列表（修复前此字段为空 → 前端显示 -）
+                .andExpect(jsonPath("$.page.records[0].responsibleProducts").isArray())
+                .andExpect(jsonPath("$.page.records[0].responsibleProducts[0].productName").value("活期存款"));
     }
 
     // ===== C.2 GET /api/employees/{empId} =====
@@ -78,7 +87,7 @@ class AddressBookControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.empId").value("E001"))
                 .andExpect(jsonPath("$.data.empName").value("张三"))
-                .andExpect(jsonPath("$.data.mobile").value("138****5678"))
+                .andExpect(jsonPath("$.data.mobile").value("13812345678"))
                 .andExpect(jsonPath("$.data.maintainerEmpId").value("E999"))
                 .andExpect(jsonPath("$.data.responsibleProducts").isArray())
                 .andExpect(jsonPath("$.data.responsibleProducts[0].productCode").value("DEPOSIT_001"));

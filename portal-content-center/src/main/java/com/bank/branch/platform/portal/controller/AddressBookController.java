@@ -38,6 +38,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -55,8 +56,7 @@ public class AddressBookController {
     private final AddrbookImportService addrbookImportService;
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
-
-    /** 当前用户是否对通讯录有全量数据范围（管理员）→ 可编辑所有人。 */
+    /** ADDRBOOK 数据范围=ALL（管理员）可编辑所有人；其余仅可编辑本人。 */
     private boolean canEditAll() {
         String empId = currentUserApi.getCurrentEmpId();
         return empId != null && bizScopeApi.resolveScope(empId, BizType.ADDRBOOK) == DataScopeType.ALL;
@@ -78,6 +78,29 @@ public class AddressBookController {
                     return d;
                 })
                 .collect(Collectors.toList());
+
+        // 批量回填「负责产品」简要列表：收集本页所有产品ID，一次查出并按ID建映射，避免逐行 N+1
+        List<String> allProductIds = dtos.stream()
+                .map(EmployeeDetailDTO::getResponsibleProductIds)
+                .filter(ids -> ids != null)
+                .flatMap(List::stream)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, ProductBriefDTO> briefById = addressBookService.listProductsByIds(allProductIds).stream()
+                .map(this::toProductBrief)
+                .collect(Collectors.toMap(ProductBriefDTO::getId, b -> b, (a, b) -> a));
+        for (EmployeeDetailDTO d : dtos) {
+            List<String> ids = d.getResponsibleProductIds();
+            if (ids == null || ids.isEmpty()) {
+                d.setResponsibleProducts(Collections.emptyList());
+            } else {
+                d.setResponsibleProducts(ids.stream()
+                        .map(briefById::get)
+                        .filter(b -> b != null)
+                        .collect(Collectors.toList()));
+            }
+        }
+
         return ResponseWrapper.page(PageResult.of(
                 entityPage.getPageNo(), entityPage.getPageSize(),
                 entityPage.getTotal(), dtos));
