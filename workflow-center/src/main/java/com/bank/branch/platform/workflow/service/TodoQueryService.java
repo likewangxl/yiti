@@ -333,9 +333,16 @@ public class TodoQueryService {
     }
 
     /**
-     * 从设计器流程图中提取「当前节点的命名出边」作为审批分支选项。
-     * <p>只取 fromNodeKey==当前 nodeKey 且 outputName 非空的边；routeVariables 取该边
-     * condition 内 op=EQ 的 field→value（驱动发布后排他网关路由）。无图/无命中返回空列表。</p>
+     * 从设计器流程图中提取「当前节点的下一步走向分支选项」。
+     * <p>规则：取当前节点的出边——
+     * <ul>
+     *   <li>出边本身有 outputName（命名）→ 直接作为一个分支选项；</li>
+     *   <li>出边无名但目标是 GATEWAY 节点 → <b>穿透网关</b>，把该网关的命名出边作为分支选项。
+     *       （真实 alloc 设计器结构：审批节点 biz_dept_review/finance_review 经无名边连到
+     *       gw1_route/gw2_route 网关，命名分支「部门负责人审批/原业绩所属人会签」等挂在网关出边上。）</li>
+     * </ul>
+     * routeVariables 取该命名边 condition 内 op=EQ 的 field→value（驱动排他网关路由，如 corpRouteTo）。
+     * 无图/无命中返回空列表。</p>
      *
      * @param graph   设计器流程图（FlowDefService.getGraph 结果）
      * @param nodeKey 当前任务节点 key（task.taskDefinitionKey）
@@ -347,28 +354,53 @@ public class TodoQueryService {
         if (graph == null || graph.getEdges() == null || nodeKey == null) {
             return result;
         }
-        for (com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO e : graph.getEdges()) {
-            if (!nodeKey.equals(e.getFromNodeKey()) || e.getOutputName() == null) {
-                continue; // 只暴露当前节点的「命名」出边（结构边 name 为 null 跳过）
+        // nodeKey → nodeType（判断出边目标是否网关）
+        Map<String, String> typeByKey = new java.util.HashMap<>();
+        if (graph.getNodes() != null) {
+            for (com.bank.branch.platform.workflow.api.dto.flow.FlowNodeDTO n : graph.getNodes()) {
+                typeByKey.put(n.getNodeKey(), n.getNodeType());
             }
-            com.bank.branch.platform.workflow.api.dto.BranchOptionDTO b =
-                    new com.bank.branch.platform.workflow.api.dto.BranchOptionDTO();
-            b.setOutputName(e.getOutputName());
-            b.setToNodeKey(e.getToNodeKey());
-            b.setIsDefault(Boolean.TRUE.equals(e.getIsDefault()));
-            Map<String, Object> vars = new LinkedHashMap<>();
-            com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO cond = e.getCondition();
-            if (cond != null && cond.getConditions() != null) {
-                for (com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO.Cond c : cond.getConditions()) {
-                    if ("EQ".equals(c.getOp()) && c.getField() != null) {
-                        vars.put(c.getField(), c.getValue()); // 选中该分支须写入的路由变量
+        }
+        for (com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO e : graph.getEdges()) {
+            if (!nodeKey.equals(e.getFromNodeKey())) {
+                continue;
+            }
+            if (e.getOutputName() != null) {
+                result.add(toBranchOption(e)); // 命名边直接作为分支
+            } else if ("GATEWAY".equals(typeByKey.get(e.getToNodeKey()))) {
+                // 穿透网关：把网关的命名出边作为分支选项
+                String gwKey = e.getToNodeKey();
+                for (com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO ge : graph.getEdges()) {
+                    if (gwKey.equals(ge.getFromNodeKey()) && ge.getOutputName() != null) {
+                        result.add(toBranchOption(ge));
                     }
                 }
             }
-            b.setRouteVariables(vars);
-            result.add(b);
         }
         return result;
+    }
+
+    /**
+     * 把一条命名出边转为分支选项 DTO：outputName=展示标签，routeVariables=该边 EQ 条件的 field→value。
+     */
+    private static com.bank.branch.platform.workflow.api.dto.BranchOptionDTO toBranchOption(
+            com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO e) {
+        com.bank.branch.platform.workflow.api.dto.BranchOptionDTO b =
+                new com.bank.branch.platform.workflow.api.dto.BranchOptionDTO();
+        b.setOutputName(e.getOutputName());
+        b.setToNodeKey(e.getToNodeKey());
+        b.setIsDefault(Boolean.TRUE.equals(e.getIsDefault()));
+        Map<String, Object> vars = new LinkedHashMap<>();
+        com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO cond = e.getCondition();
+        if (cond != null && cond.getConditions() != null) {
+            for (com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO.Cond c : cond.getConditions()) {
+                if ("EQ".equals(c.getOp()) && c.getField() != null) {
+                    vars.put(c.getField(), c.getValue()); // 选中该分支须写入的路由变量
+                }
+            }
+        }
+        b.setRouteVariables(vars);
+        return b;
     }
 
     // ========== 内部方法 ==========

@@ -4,6 +4,7 @@ import com.bank.branch.platform.workflow.api.dto.BranchOptionDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO;
 import com.bank.branch.platform.workflow.api.dto.flow.FlowGraphDTO;
+import com.bank.branch.platform.workflow.api.dto.flow.FlowNodeDTO;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -60,5 +61,37 @@ class TodoQueryServiceBranchTest {
     @Test
     void computeOutgoingBranches_nullGraph_returnsEmpty() {
         assertTrue(TodoQueryService.computeOutgoingBranches(null, "biz_dept_review").isEmpty());
+    }
+
+    private FlowNodeDTO node(String key, String type) {
+        FlowNodeDTO n = new FlowNodeDTO();
+        n.setNodeKey(key);
+        n.setNodeType(type);
+        return n;
+    }
+
+    @Test
+    void computeOutgoingBranches_throughGateway_returnsGatewayNamedEdges() {
+        // 审批节点 → 无名边 → 网关 → 两条命名分支（真实 alloc 设计器结构）
+        FlowGraphDTO g = new FlowGraphDTO();
+        g.setNodes(List.of(
+                node("biz_dept_review", "APPROVAL"),
+                node("gw1_route", "GATEWAY"),
+                node("biz_dept_leader_approve", "APPROVAL"),
+                node("original_owner_approve", "APPROVAL")
+        ));
+        g.setEdges(List.of(
+                edge("biz_dept_review", "gw1_route", null, null, null),                 // 审批节点→网关，无名
+                edge("gw1_route", "biz_dept_leader_approve", "部门负责人审批", "corpRouteTo", "LEADER"),
+                edge("gw1_route", "original_owner_approve", "原业绩所属人会签", "corpRouteTo", "OWNER")
+        ));
+
+        List<BranchOptionDTO> branches = TodoQueryService.computeOutgoingBranches(g, "biz_dept_review");
+
+        assertEquals(2, branches.size());
+        assertEquals("部门负责人审批", branches.get(0).getOutputName());
+        assertEquals("LEADER", branches.get(0).getRouteVariables().get("corpRouteTo"));
+        assertEquals("原业绩所属人会签", branches.get(1).getOutputName());
+        assertEquals("OWNER", branches.get(1).getRouteVariables().get("corpRouteTo"));
     }
 }
