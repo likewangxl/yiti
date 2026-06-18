@@ -27,9 +27,9 @@
 | 6 AllocAdjustService 切换设计器流程 | ✅ 完成 | AllocAdjustServiceDesignerRouteTest 4/4（含路由+startOrgLevel） |
 | 7 startOrgLevel 启动变量 | ✅ 完成 | 同上（buildStartVariables 测试） |
 | 9 前端三对话框分支动态化 | ✅ 完成 | vue-tsc 无 Adjust.vue 报错；wangyq commit 7e0de330 |
-| 8 端到端 HTTP 联调 | ⏸ 待人工 | **环境阻塞**：①沙箱在工具调用间回收后台 server（SpringApplicationShutdownHook 被发）；②`perf_alloc_adjust_apply`/`perf_alloc_adjust_item` 只在 `onepl_test_v103`，dev profile 却连 `yiti` → 在 yiti 上 submit 会因缺表 500。需把应用指向 onepl（或在 yiti 建 perf 业务表）且保持 server 常驻后，按 Task 8 步骤手工走查。后端单测 11/11 + 全量 install + 流程已部署，已覆盖除「活体 HTTP 往返」外的全部逻辑。 |
+| 8 端到端 HTTP 联调 | ✅ 通过（活体） | 单条自包含命令启动后端→`POST /api/perf/alloc-adjust/create`(custType=CORP) 返回 `IN_APPROVAL`；流程实例 proc def=**`DSN_alloc_corp_designer`**（设计器流程）；启动变量 `startOrgLevel=2`(Integer) 正确种入并路由到 `branch_approve_l2`（2级机构）；`originalOwnerEmpId/Ids`(VAR会签) 已种入。证明 perf 切换+网关分流+VAR审批人全链路活体打通。（注：yiti perf 表本就存在[大写命名]，活体无需建表——见 [[reference_yiti_perf_tables_uppercase]]。outgoingBranches 的 HTTP 反显已由单测+数据层覆盖；当前首任务在 branch_approve_l2 无命名出边，需审批推进到 biz_dept_review 节点才反显2分支。） |
 
-后端单测合计：workflow-center 7 + perf 4 = **11/11 通过**；`mvn clean install -Dmaven.test.skip=true` exit 0。
+后端单测合计：workflow-center 7 + perf 4 = **11/11 通过**；`mvn clean install -Dmaven.test.skip=true` exit 0；活体 e2e 提交→设计器流程启动 已验证。
 
 **构建/测试约定（项目既有坑）：**
 - 跨模块改动后先 `mvn clean install -DskipTests`（portal 协作者 WIP 测试编译坏，用 `-Dmaven.test.skip=true` 跳过测试编译做 install/package）。
