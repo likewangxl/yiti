@@ -57,6 +57,8 @@ public class UserFacade implements UserApi {
         dto.setUsername(user.getUsername());
         dto.setDisplayName(user.getUserchnname());
         dto.setUserType(user.getUserType());
+        // ISENABLED 反向语义：0=启用
+        dto.setEnabled(user.getIsEnabled() != null && user.getIsEnabled() == 0);
 
         // 获取主机构信息
         var userOrg = userOrgMapper.selectByUserId(empId);

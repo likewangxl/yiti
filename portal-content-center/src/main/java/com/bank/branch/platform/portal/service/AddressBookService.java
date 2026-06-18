@@ -1,6 +1,9 @@
 package com.bank.branch.platform.portal.service;
 
+import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.trace.MdcUtils;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
@@ -43,6 +46,7 @@ public class AddressBookService {
     private final AddrbookEmployeeMapper addrbookEmployeeMapper;
     private final ProductInfoMapper productInfoMapper;
     private final CurrentUserApi currentUserApi;
+    private final BizScopeApi bizScopeApi;
     private final AuditApi auditApi;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -60,13 +64,13 @@ public class AddressBookService {
         int pageSize = req.getPageSize() != null ? req.getPageSize() : 20;
         int offset = (pageNo - 1) * pageSize;
 
-        long total = addrbookEmployeeMapper.countPage(req.getKeyword(), req.getOrgCode(), req.getStatus());
+        long total = addrbookEmployeeMapper.countPage(req.getKeyword(), req.getOrgCode(), req.getPosition(), req.getStatus());
         if (total == 0) {
             return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
         }
 
         List<AddrbookEmployee> records = addrbookEmployeeMapper.selectPage(
-                req.getKeyword(), req.getOrgCode(), req.getStatus(), offset, pageSize);
+                req.getKeyword(), req.getOrgCode(), req.getPosition(), req.getStatus(), offset, pageSize);
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
@@ -123,10 +127,10 @@ public class AddressBookService {
                     PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
         }
 
-        // 3. 权限校验：本人可编辑，否则需同机构（V1 简化）
+        // 3. 权限校验（数据范围）：本人可编辑；非本人仅管理员(DataScopeType.ALL)可编辑，其余拒绝。
         if (!operatorEmpId.equals(targetEmpId)) {
-            String operatorOrgCode = currentUserApi.getCurrentOrgCode();
-            if (!Objects.equals(operatorOrgCode, target.getOrgCode())) {
+            DataScopeType scope = bizScopeApi.resolveScope(operatorEmpId, BizType.ADDRBOOK);
+            if (scope != DataScopeType.ALL) {
                 throw new BizException(
                         PortalErrorCode.NO_RIGHT_TO_EDIT_OTHER.getCode(),
                         PortalErrorCode.NO_RIGHT_TO_EDIT_OTHER.getMessage());

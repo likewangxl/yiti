@@ -95,6 +95,7 @@ public interface AddrbookEmployeeMapper extends BaseMapper<AddrbookEmployee> {
      */
     List<AddrbookEmployee> selectPage(@Param("keyword") String keyword,
                                       @Param("orgCode") String orgCode,
+                                      @Param("position") String position,
                                       @Param("status") String status,
                                       @Param("offset") int offset,
                                       @Param("limit") int limit);
@@ -109,6 +110,7 @@ public interface AddrbookEmployeeMapper extends BaseMapper<AddrbookEmployee> {
      */
     long countPage(@Param("keyword") String keyword,
                    @Param("orgCode") String orgCode,
+                   @Param("position") String position,
                    @Param("status") String status);
 
     /**

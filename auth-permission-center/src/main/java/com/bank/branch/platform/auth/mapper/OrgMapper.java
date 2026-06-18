@@ -48,6 +48,14 @@ public interface OrgMapper extends BaseMapper<ExtOrgInfo> {
     List<ExtOrgInfo> selectByOrgCodes(@Param("codes") java.util.Collection<String> codes);
 
     /**
+     * 按机构名称集合批量查询（含重名）。通讯录导入按机构名称反查编码用。
+     *
+     * @param names 机构名称集合（调用方保证非空、已去重去空白）
+     * @return 命中的机构实体列表（含重名；无命中返回空列表）
+     */
+    List<ExtOrgInfo> selectByOrgNames(@Param("names") java.util.Collection<String> names);
+
+    /**
      * 查询全量机构信息列表（不过滤 ORGAN_STATE），用于构建完整机构树。
      *
      * @return 全部机构列表

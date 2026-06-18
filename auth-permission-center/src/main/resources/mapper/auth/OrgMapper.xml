@@ -43,6 +43,14 @@
         <foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
     </select>
 
+    <select id="selectByOrgNames" resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        WHERE ORG_NAME IN
+        <foreach collection="names" item="n" open="(" separator="," close=")">#{n}</foreach>
+    </select>
+
     <!-- 按机构编号(DEPT_NO)查询；dept_no 可能非唯一，取首条用于存在性校验. -->
     <select id="selectByDeptNo" parameterType="string"
             resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">

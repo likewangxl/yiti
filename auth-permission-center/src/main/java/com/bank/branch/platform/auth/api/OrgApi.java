@@ -43,6 +43,16 @@ public interface OrgApi {
     List<OrgDTO> getOrgsByCodes(java.util.Collection<String> orgCodes);
 
     /**
+     * 按机构名称集合批量查询机构信息（通讯录导入按机构名称反查编码用）。
+     *
+     * <p>名称可能重复，返回所有同名机构；调用方需自行处理重名歧义（命中 &gt;1 视为歧义）。</p>
+     *
+     * @param orgNames 机构名称集合（可空）
+     * @return 命中的机构 DTO 列表（含重名）
+     */
+    List<OrgDTO> getOrgsByNames(java.util.Collection<String> orgNames);
+
+    /**
      * 查询指定机构及其所有下属机构（含自身）
      *
      * @param orgCode 根机构编码

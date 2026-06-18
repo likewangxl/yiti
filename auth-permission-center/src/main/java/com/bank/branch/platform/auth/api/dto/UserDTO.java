@@ -25,4 +25,7 @@ public class UserDTO {
 
     /** 用户类型（字典 USER_TYPE：1-员工 / 2-虚拟员工） */
     private String userType;
+
+    /** 是否启用（true=启用；映射 PT_USER.ISENABLED==0，反向语义） */
+    private Boolean enabled;
 }

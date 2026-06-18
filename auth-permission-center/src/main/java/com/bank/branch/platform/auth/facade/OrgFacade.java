@@ -50,6 +50,11 @@ public class OrgFacade implements OrgApi {
         return orgService.getOrgsByCodes(orgCodes);
     }
 
+    @Override
+    public List<OrgDTO> getOrgsByNames(java.util.Collection<String> orgNames) {
+        return orgService.getOrgsByNames(orgNames);
+    }
+
     /**
      * 查询指定机构及其所有下属机构（含自身）
      * 递归遍历机构树，结果包含根节点本身

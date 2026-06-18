@@ -65,12 +65,12 @@ class AddressBookServiceTest {
         req.setOrgCode("ORG_SZ_001");
         req.setStatus("ACTIVE");
 
-        when(addrbookEmployeeMapper.countPage("张", "ORG_SZ_001", "ACTIVE")).thenReturn(2L);
+        when(addrbookEmployeeMapper.countPage("张", "ORG_SZ_001", null, "ACTIVE")).thenReturn(2L);
         List<AddrbookEmployee> employees = Arrays.asList(
                 buildEmployee("E001", "张三"),
                 buildEmployee("E002", "张四")
         );
-        when(addrbookEmployeeMapper.selectPage("张", "ORG_SZ_001", "ACTIVE", 0, 10))
+        when(addrbookEmployeeMapper.selectPage("张", "ORG_SZ_001", null, "ACTIVE", 0, 10))
                 .thenReturn(employees);
 
         PageResult<AddrbookEmployee> result = addressBookService.listEmployees(req);
@@ -87,13 +87,13 @@ class AddressBookServiceTest {
         EmployeeQueryReqDTO req = new EmployeeQueryReqDTO();
         req.setPageNo(1);
         req.setPageSize(20);
-        when(addrbookEmployeeMapper.countPage(null, null, null)).thenReturn(0L);
+        when(addrbookEmployeeMapper.countPage(null, null, null, null)).thenReturn(0L);
 
         PageResult<AddrbookEmployee> result = addressBookService.listEmployees(req);
 
         assertThat(result.getTotal()).isEqualTo(0L);
         assertThat(result.getRecords()).isEmpty();
-        verify(addrbookEmployeeMapper, never()).selectPage(any(), any(), any(), anyInt(), anyInt());
+        verify(addrbookEmployeeMapper, never()).selectPage(any(), any(), any(), any(), anyInt(), anyInt());
     }
 
     // ===== getEmployee =====

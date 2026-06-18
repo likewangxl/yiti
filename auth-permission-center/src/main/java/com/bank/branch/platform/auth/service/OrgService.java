@@ -158,6 +158,31 @@ public class OrgService {
     }
 
     /**
+     * 按机构名称集合批量查询（含重名）。通讯录导入按机构名称反查编码用。
+     *
+     * @param orgNames 机构名称集合（可空）
+     * @return 命中的机构 DTO 列表（含重名）
+     */
+    public List<OrgDTO> getOrgsByNames(java.util.Collection<String> orgNames) {
+        if (orgNames == null || orgNames.isEmpty()) {
+            return List.of();
+        }
+        List<String> distinct = orgNames.stream()
+                .filter(n -> n != null && !n.isBlank())
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.toList());
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        List<ExtOrgInfo> rows = orgMapper.selectByOrgNames(distinct);
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        return rows.stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    /**
      * 根据机构编号（EXT_ORG_INFO.DEPT_NO）查询机构.
      *
      * @param deptNo 机构编号（DEPT_NO）

@@ -156,18 +156,18 @@ class AddrbookEmployeeMapperIntegrationTest extends AbstractMapperIntegrationTes
         mapper.insert(e3);
 
         // Act - 按机构代码过滤
-        List<AddrbookEmployee> result = mapper.selectPage(null, "ORG_SZ_001", null, 0, 10);
+        List<AddrbookEmployee> result = mapper.selectPage(null, "ORG_SZ_001", null, null, 0, 10);
 
         // Assert
         assertThat(result).hasSize(2);
         assertThat(result).allMatch(e -> "ORG_SZ_001".equals(e.getOrgCode()));
 
         // 按机构 + 状态过滤
-        List<AddrbookEmployee> activeOnly = mapper.selectPage(null, "ORG_SZ_001", "ACTIVE", 0, 10);
+        List<AddrbookEmployee> activeOnly = mapper.selectPage(null, "ORG_SZ_001", null, "ACTIVE", 0, 10);
         assertThat(activeOnly).hasSize(1);
 
         // countPage 与 selectPage 一致
-        long count = mapper.countPage(null, "ORG_SZ_001", "ACTIVE");
+        long count = mapper.countPage(null, "ORG_SZ_001", null, "ACTIVE");
         assertThat(count).isEqualTo(1);
     }
 

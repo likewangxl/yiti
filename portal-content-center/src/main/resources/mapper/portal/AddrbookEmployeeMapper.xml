@@ -102,10 +102,14 @@
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR emp_id LIKE CONCAT('%', #{keyword}, '%')
                  OR mobile LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         <if test="orgCode != null and orgCode != ''">
             AND org_code = #{orgCode}
+        </if>
+        <if test="position != null and position != ''">
+            AND position LIKE CONCAT('%', #{position}, '%')
         </if>
         <if test="status != null and status != ''">
             AND status = #{status}
@@ -120,10 +124,14 @@
         WHERE deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (emp_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR emp_id LIKE CONCAT('%', #{keyword}, '%')
                  OR mobile LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         <if test="orgCode != null and orgCode != ''">
             AND org_code = #{orgCode}
+        </if>
+        <if test="position != null and position != ''">
+            AND position LIKE CONCAT('%', #{position}, '%')
         </if>
         <if test="status != null and status != ''">
             AND status = #{status}
