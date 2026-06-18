@@ -787,7 +787,10 @@ EOF
 
 ## Task 7：startApprovalWorkflow 种入设计器流程所需启动变量（startOrgLevel 等）
 
-> **依据 Task 0 Step 5 捕获的启动变量清单填写本任务。** 已知至少需 `startOrgLevel`（对公流程按发起机构级别 2/3 分流的网关变量）。下方以 `startOrgLevel` 为例；若清单含更多启动型变量，按同法补齐。审批人选择型变量（corpRouteTo/finRouteTo）**不**在此种入。
+> **Task 0 实测结论（已捕获）**：对公/零售两条流程的条件变量完全一致——
+> - **审批选择型**（不在此种入，由 formData 提供）：`corpRouteTo`∈{LEADER,OWNER}、`finRouteTo`∈{LEADER,END}（非数字 → EL `xxx == 'LEADER'`，formData 传字符串）。
+> - **启动决定型**（本任务种入）：`startOrgLevel`∈{2,3}。condition value 为纯数字字符串 `"2"`/`"3"`，FlowConditionExpressionBuilder 生成的 EL 为 `startOrgLevel == 2`（**无引号、数字比较**）。因此 **必须种 Integer**（直接 `org.getOrgLevel()`），**不可** `String.valueOf`，否则 JUEL 字符串/数字比较语义有歧义。
+> - 注意：`startOrgLevel` 两条出边 isDefault 均为 0；若发起机构 orgLevel 不在 {2,3}（如总行 1 级），排他网关无匹配出边会抛 "No outgoing sequence flow"。本计划按业务实际（分配调整由 2/3 级机构发起）实现；执行 Task 8 时若遇非 2/3 级发起场景，反馈用户在设计器补默认边（非本计划代码问题）。
 
 **Files:**
 - Modify: `performance-engine-center/.../service/adjust/AllocAdjustService.java`（`startApprovalWorkflow`）
@@ -828,7 +831,7 @@ class AllocAdjustServiceStartVarsTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> vars = (Map<String, Object>) m.invoke(svc, "0201", new java.util.HashMap<String,Object>());
 
-        assertEquals("2", vars.get("startOrgLevel"));
+        assertEquals(2, vars.get("startOrgLevel")); // Integer，匹配 EL 数字比较 startOrgLevel == 2
     }
 }
 ```
@@ -857,8 +860,8 @@ Expected: 失败。
             try {
                 OrgDTO org = orgApi.getOrgByCode(ownerOrgId); // 方法名以 OrgApi 实际为准
                 if (org != null && org.getOrgLevel() != null) {
-                    // 类型（Integer vs String）以 Task 0 实测网关 EL 为准
-                    vars.put("startOrgLevel", String.valueOf(org.getOrgLevel()));
+                    // Integer 直接种入：EL 为数字比较 startOrgLevel == 2（Task 0 实测）
+                    vars.put("startOrgLevel", org.getOrgLevel());
                 }
             } catch (Exception e) {
                 log.warn("[AllocAdjustService.buildStartVariables] 取机构级别失败 ownerOrgId={}, err={}",
