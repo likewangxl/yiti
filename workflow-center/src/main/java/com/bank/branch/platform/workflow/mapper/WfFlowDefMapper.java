@@ -24,4 +24,20 @@ public interface WfFlowDefMapper extends BaseMapper<WfFlowDef> {
      * @return 流程定义，若不存在返回 null
      */
     WfFlowDef selectByFlowKey(@Param("flowKey") String flowKey);
+
+    /**
+     * 根据已部署的 Flowable 流程定义 KEY（deployed_proc_def_key，如
+     * {@code DSN_alloc_corp_designer}）反查设计器流程定义。
+     * <p>供运行期由「当前任务的 processDefinitionKey」反查其设计器图，
+     * 计算审批节点的命名出边选项。未命中返回 null。</p>
+     *
+     * @param deployedProcDefKey 已部署流程定义 KEY
+     * @return 流程定义，未命中返回 null
+     */
+    default WfFlowDef selectByDeployedProcDefKey(String deployedProcDefKey) {
+        return selectOne(com.baomidou.mybatisplus.core.toolkit.Wrappers
+                .<WfFlowDef>lambdaQuery()
+                .eq(WfFlowDef::getDeployedProcDefKey, deployedProcDefKey)
+                .last("LIMIT 1"));
+    }
 }

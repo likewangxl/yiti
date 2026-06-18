@@ -117,4 +117,16 @@ public interface WorkflowApi {
      * @throws com.bank.branch.platform.common.web.exception.BizException WF-40403 任务不存在
      */
     void rejectByEmp(String taskId, String empId, String opinion);
+
+    /**
+     * 按设计器流程 flowKey 解析其「已发布」的 Flowable 流程定义 KEY（deployed_proc_def_key）。
+     * <p>供 perf 等业务模块在起流程时按 custType 选对公/零售设计器流程；
+     * 流程未发布（status≠PUBLISHED 或 deployed_proc_def_key 为空）时抛 WF-40401，
+     * 调用方据此 fail-fast 提示「请先发布对应审批流程」。</p>
+     *
+     * @param flowKey 设计器流程唯一键（如 alloc_corp_designer）
+     * @return 已部署流程定义 KEY（如 DSN_alloc_corp_designer）
+     * @throws com.bank.branch.platform.common.web.exception.BizException WF-40401 流程不存在或未发布
+     */
+    String resolveDesignerProcDefKey(String flowKey);
 }

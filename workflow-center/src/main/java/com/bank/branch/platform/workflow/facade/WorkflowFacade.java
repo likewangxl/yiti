@@ -34,6 +34,7 @@ public class WorkflowFacade implements WorkflowApi {
     private final ProcessCommandService processCommandService;
     private final HistoryService historyService;
     private final TaskOperationService taskOperationService;
+    private final com.bank.branch.platform.workflow.service.flow.DesignerFlowLookupService designerFlowLookupService;
 
     /**
      * {@inheritDoc}
@@ -137,5 +138,13 @@ public class WorkflowFacade implements WorkflowApi {
     @Override
     public void rejectByEmp(String taskId, String empId, String opinion) {
         taskOperationService.rejectTaskByEmp(taskId, empId, new RejectReqDTO(opinion));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String resolveDesignerProcDefKey(String flowKey) {
+        return designerFlowLookupService.resolveDeployedProcDefKey(flowKey);
     }
 }

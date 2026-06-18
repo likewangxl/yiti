@@ -29,4 +29,11 @@ public class TaskDetailRespDTO {
 
     /** 审批日志列表 */
     private List<ApprovalLogDTO> approvalLogs;
+
+    /**
+     * 当前审批节点的「下一步走向」分支选项（来自设计器图当前节点的命名出边）。
+     * <p>仅设计器动态流程（procDefKey 以 DSN_ 前缀）任务会填充；静态 BPMN 任务为空列表。
+     * 前端当 size≥2 时渲染分支单选，选中项的 routeVariables 并入审批 formData。</p>
+     */
+    private List<BranchOptionDTO> outgoingBranches;
 }

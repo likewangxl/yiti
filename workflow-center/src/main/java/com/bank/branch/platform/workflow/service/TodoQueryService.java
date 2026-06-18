@@ -70,6 +70,8 @@ public class TodoQueryService {
     private final CurrentUserApi currentUserApi;
     private final UserApi userApi;
     private final OrgApi orgApi;
+    private final com.bank.branch.platform.workflow.service.flow.FlowDefService flowDefService;
+    private final com.bank.branch.platform.workflow.mapper.WfFlowDefMapper flowDefMapper;
 
     /**
      * 解析 JSON 字符串为 List。
@@ -297,7 +299,76 @@ public class TodoQueryService {
         List<ApprovalLogDTO> approvalLogs = convertCommentsToLogs(comments);
         detail.setApprovalLogs(approvalLogs);
 
+        // 8. 设计器动态流程：填充当前节点命名出边作为「下一步走向」分支选项（静态 BPMN 任务为空）
+        detail.setOutgoingBranches(resolveOutgoingBranches(processDefinitionKey, task.getTaskDefinitionKey()));
+
         return detail;
+    }
+
+    /**
+     * 设计器动态流程任务的出边分支解析：仅 procDefKey 以 DSN_ 前缀的流程才反查设计器图。
+     * 任何异常/未命中均返回空列表，绝不阻断任务详情主流程。
+     *
+     * @param processDefinitionKey 当前任务的流程定义 KEY
+     * @param nodeKey              当前任务节点 key（taskDefinitionKey）
+     * @return 分支选项列表（可能为空，不为 null）
+     */
+    private List<com.bank.branch.platform.workflow.api.dto.BranchOptionDTO> resolveOutgoingBranches(
+            String processDefinitionKey, String nodeKey) {
+        if (processDefinitionKey == null || !processDefinitionKey.startsWith("DSN_")) {
+            return new ArrayList<>();
+        }
+        try {
+            com.bank.branch.platform.workflow.entity.WfFlowDef def =
+                    flowDefMapper.selectByDeployedProcDefKey(processDefinitionKey);
+            if (def == null) {
+                return new ArrayList<>();
+            }
+            return computeOutgoingBranches(flowDefService.getGraph(def.getId()), nodeKey);
+        } catch (Exception e) {
+            log.warn("[TodoQueryService.resolveOutgoingBranches] 出边解析失败 procDefKey={}, nodeKey={}",
+                    processDefinitionKey, nodeKey, e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 从设计器流程图中提取「当前节点的命名出边」作为审批分支选项。
+     * <p>只取 fromNodeKey==当前 nodeKey 且 outputName 非空的边；routeVariables 取该边
+     * condition 内 op=EQ 的 field→value（驱动发布后排他网关路由）。无图/无命中返回空列表。</p>
+     *
+     * @param graph   设计器流程图（FlowDefService.getGraph 结果）
+     * @param nodeKey 当前任务节点 key（task.taskDefinitionKey）
+     * @return 分支选项列表（可能为空，不为 null）
+     */
+    static List<com.bank.branch.platform.workflow.api.dto.BranchOptionDTO> computeOutgoingBranches(
+            com.bank.branch.platform.workflow.api.dto.flow.FlowGraphDTO graph, String nodeKey) {
+        List<com.bank.branch.platform.workflow.api.dto.BranchOptionDTO> result = new ArrayList<>();
+        if (graph == null || graph.getEdges() == null || nodeKey == null) {
+            return result;
+        }
+        for (com.bank.branch.platform.workflow.api.dto.flow.FlowEdgeDTO e : graph.getEdges()) {
+            if (!nodeKey.equals(e.getFromNodeKey()) || e.getOutputName() == null) {
+                continue; // 只暴露当前节点的「命名」出边（结构边 name 为 null 跳过）
+            }
+            com.bank.branch.platform.workflow.api.dto.BranchOptionDTO b =
+                    new com.bank.branch.platform.workflow.api.dto.BranchOptionDTO();
+            b.setOutputName(e.getOutputName());
+            b.setToNodeKey(e.getToNodeKey());
+            b.setIsDefault(Boolean.TRUE.equals(e.getIsDefault()));
+            Map<String, Object> vars = new LinkedHashMap<>();
+            com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO cond = e.getCondition();
+            if (cond != null && cond.getConditions() != null) {
+                for (com.bank.branch.platform.workflow.api.dto.flow.FlowConditionDTO.Cond c : cond.getConditions()) {
+                    if ("EQ".equals(c.getOp()) && c.getField() != null) {
+                        vars.put(c.getField(), c.getValue()); // 选中该分支须写入的路由变量
+                    }
+                }
+            }
+            b.setRouteVariables(vars);
+            result.add(b);
+        }
+        return result;
     }
 
     // ========== 内部方法 ==========
