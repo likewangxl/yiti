@@ -29,6 +29,10 @@ public class MetricExecuteReqDTO {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate dataDate;
 
+    /** 业绩分配日期（可选，SQL :allocDate；留空后端兜底=数据日期）. */
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate allocDate;
+
     /** 是否级联刷新下游，默认 true. */
     private Boolean cascade = Boolean.TRUE;
 

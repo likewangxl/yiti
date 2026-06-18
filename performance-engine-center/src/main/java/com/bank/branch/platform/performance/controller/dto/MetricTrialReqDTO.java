@@ -29,6 +29,10 @@ public class MetricTrialReqDTO {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate dataDate;
 
+    /** 业绩分配日期（可选，SQL :allocDate；留空后端兜底=数据日期）. */
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate allocDate;
+
     /** 样本条数（可选，默认 20，上限 100）. */
     @Min(value = 1, message = "sampleSize 必须 >=1")
     @Max(value = 100, message = "sampleSize 不能超过 100")

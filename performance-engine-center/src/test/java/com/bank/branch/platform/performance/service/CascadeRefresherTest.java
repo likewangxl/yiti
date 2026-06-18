@@ -75,10 +75,10 @@ class CascadeRefresherTest {
         cascadeRefresher.refreshCascade("C", LocalDate.of(2026, 4, 22), "20260422");
 
         InOrder order = inOrder(metricCalcService);
-        order.verify(metricCalcService).calcMetric(eq("C"), any(LocalDate.class), eq("20260422"));
-        order.verify(metricCalcService).calcMetric(eq("B"), any(LocalDate.class), eq("20260422"));
-        order.verify(metricCalcService).calcMetric(eq("A"), any(LocalDate.class), eq("20260422"));
-        verify(metricCalcService, times(3)).calcMetric(any(), any(), any());
+        order.verify(metricCalcService).calcMetric(eq("C"), any(LocalDate.class), eq("20260422"), eq("MANUAL"), any());
+        order.verify(metricCalcService).calcMetric(eq("B"), any(LocalDate.class), eq("20260422"), eq("MANUAL"), any());
+        order.verify(metricCalcService).calcMetric(eq("A"), any(LocalDate.class), eq("20260422"), eq("MANUAL"), any());
+        verify(metricCalcService, times(3)).calcMetric(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -89,7 +89,7 @@ class CascadeRefresherTest {
 
         cascadeRefresher.refreshCascade("ROOT", LocalDate.of(2026, 4, 22), "v1");
 
-        verify(metricCalcService, times(1)).calcMetric(eq("ROOT"), any(), eq("v1"));
+        verify(metricCalcService, times(1)).calcMetric(eq("ROOT"), any(), eq("v1"), eq("MANUAL"), any());
     }
 
     @Test
@@ -111,7 +111,7 @@ class CascadeRefresherTest {
                 .isEqualTo(PerfErrorCode.METRIC_CALC_LOGIC_INVALID);
 
         // 超深时必须在开始计算前就拒绝
-        verify(metricCalcService, never()).calcMetric(any(), any(), any());
+        verify(metricCalcService, never()).calcMetric(any(), any(), any(), any(), any());
     }
 
     @Test

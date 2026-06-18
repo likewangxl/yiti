@@ -142,10 +142,22 @@ public class MetricLifecycleFacade {
      */
     public MetricTrialRespDTO trialRunDto(String metricCode, LocalDate dataDate,
                                           Integer sampleSize, Map<String, Object> params) {
+        // 旧签名兼容：业绩分配日期 allocDate 不传 → null
+        return trialRunDto(metricCode, dataDate, sampleSize, params, null);
+    }
+
+    /**
+     * Trial 运行装配 DTO（新增业绩分配日期 :allocDate 入参）.
+     *
+     * @param allocDate 业绩分配日期（可为 null，Service 绑定阶段兜底为 dataDate）
+     * @see #trialRunDto(String, LocalDate, Integer, Map)
+     */
+    public MetricTrialRespDTO trialRunDto(String metricCode, LocalDate dataDate,
+                                          Integer sampleSize, Map<String, Object> params, LocalDate allocDate) {
         LocalDateTime startedAt = LocalDateTime.now();
         String trialTaskId = UUID.randomUUID().toString().replace("-", "");
         MetricTrialResult serviceResult = metricTrialService.trial(
-                metricCode, dataDate, sampleSize, params);
+                metricCode, dataDate, sampleSize, params, allocDate);
         LocalDateTime endedAt = LocalDateTime.now();
         return MetricTrialRespDTO.builder()
                 .taskId(trialTaskId)
@@ -182,10 +194,23 @@ public class MetricLifecycleFacade {
      */
     public MetricTrialRespDTO trialRunAdhocDto(String calcLogicType, String baseDim, String sqlText, String exprText,
                                                LocalDate dataDate, Integer sampleSize, Map<String, Object> params) {
+        // 旧签名兼容：业绩分配日期 allocDate 不传 → null
+        return trialRunAdhocDto(calcLogicType, baseDim, sqlText, exprText, dataDate, sampleSize, params, null);
+    }
+
+    /**
+     * 直接试运行 SQL / Groovy 文本（新增业绩分配日期 :allocDate 入参），返回 DTO.
+     *
+     * @param allocDate 业绩分配日期（可为 null，Service 绑定阶段兜底为 dataDate）
+     * @see #trialRunAdhocDto(String, String, String, String, LocalDate, Integer, Map)
+     */
+    public MetricTrialRespDTO trialRunAdhocDto(String calcLogicType, String baseDim, String sqlText, String exprText,
+                                               LocalDate dataDate, Integer sampleSize, Map<String, Object> params,
+                                               LocalDate allocDate) {
         LocalDateTime startedAt = LocalDateTime.now();
         String trialTaskId = UUID.randomUUID().toString().replace("-", "");
         MetricTrialResult serviceResult = metricTrialService.trialAdhoc(
-                calcLogicType, baseDim, sqlText, exprText, dataDate, sampleSize, params);
+                calcLogicType, baseDim, sqlText, exprText, dataDate, sampleSize, params, allocDate);
         LocalDateTime endedAt = LocalDateTime.now();
         return MetricTrialRespDTO.builder()
                 .taskId(trialTaskId)
@@ -216,6 +241,21 @@ public class MetricLifecycleFacade {
      * </ol>
      */
     public RunTaskInfoDTO executeMetric(String metricCode, LocalDate dataDate, Boolean cascadeInput) {
+        // 旧签名兼容：业绩分配日期 allocDate 不传 → null（Service 绑定阶段兜底为 dataDate）
+        return executeMetric(metricCode, dataDate, cascadeInput, null);
+    }
+
+    /**
+     * 指标立即执行（新增业绩分配日期 :allocDate 入参）.
+     *
+     * <p>非 cascade 分支透传到 {@link MetricCalcService#calcMetric(String, LocalDate, String, String, LocalDate)}；
+     * cascade 分支透传到 {@link CascadeRefresher#refreshCascade(String, LocalDate, String, LocalDate)}。
+     * allocDate 为 null 时由下游绑定阶段兜底为 dataDate（手动执行可由页面指定具体业绩分配日期）。
+     *
+     * @param allocDate 业绩分配日期（可为 null）
+     * @see #executeMetric(String, LocalDate, Boolean)
+     */
+    public RunTaskInfoDTO executeMetric(String metricCode, LocalDate dataDate, Boolean cascadeInput, LocalDate allocDate) {
         // 预校验指标存在性：不存在时抛 PERF-40001，避免产生孤立 run_task
         PerfMetricDef def = metricDefService.getByCode(metricCode);
 
@@ -234,9 +274,10 @@ public class MetricLifecycleFacade {
         boolean cascade = cascadeInput == null ? Boolean.TRUE : cascadeInput;
         String taskId;
         if (cascade) {
-            taskId = cascadeRefresher.refreshCascade(metricCode, dataDate, version);
+            taskId = cascadeRefresher.refreshCascade(metricCode, dataDate, version, allocDate);
         } else {
-            taskId = metricCalcService.calcMetric(metricCode, dataDate, version);
+            // 原非 cascade 调 3 参 calcMetric（默认 triggerType=MANUAL），改带 allocDate 的 5 参重载
+            taskId = metricCalcService.calcMetric(metricCode, dataDate, version, "MANUAL", allocDate);
         }
 
         // V1.3 R3.3：从 PERF_RUN_TASK 读取真实状态（Service 可能已同步完成为 SUCCESS/FAILED，

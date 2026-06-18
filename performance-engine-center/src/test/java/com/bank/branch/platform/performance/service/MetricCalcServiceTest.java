@@ -314,8 +314,9 @@ class MetricCalcServiceTest {
         ArgumentCaptor<Map<String, Object>> paramsCap = ArgumentCaptor.captor();
         verify(sqlExecutor).execute(eq(def.getSqlText()), paramsCap.capture(), any(Duration.class));
         Map<String, Object> captured = paramsCap.getValue();
+        // 12 项 = dataDate + version + 8 个派生日期宏 + objectId 占位 + allocDate（业绩分配日期）
         assertThat(captured)
-                .hasSize(10)
+                .hasSize(12)
                 .containsEntry("dataDate", dataDate)
                 .containsEntry("version", "V1")
                 .containsEntry("dateToday", dataDate)
@@ -325,7 +326,42 @@ class MetricCalcServiceTest {
                 .containsEntry("dateQuarterEnd", LocalDate.of(2026, 6, 30))
                 .containsEntry("datePrevQuarterEnd", LocalDate.of(2026, 3, 31))
                 .containsEntry("dateYearEnd", LocalDate.of(2026, 12, 31))
-                .containsEntry("datePrevYearEnd", LocalDate.of(2025, 12, 31));
+                .containsEntry("datePrevYearEnd", LocalDate.of(2025, 12, 31))
+                // allocDate 未显式传 → 兜底为 dataDate
+                .containsEntry("allocDate", dataDate);
+    }
+
+    @Test
+    @DisplayName("业绩分配日期：显式传入 allocDate → params.allocDate 等于该日期")
+    void executeSqlAndPersist_explicitAllocDate_boundIntoParams() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        when(metricDefService.getByCodeOrNull("TEST_CALC_ALLOC_01")).thenReturn(def);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 6, 17);
+        LocalDate allocDate = LocalDate.of(2026, 6, 10);
+        // 5 参重载：手动执行 / 试运行场景显式传页面指定的业绩分配日期
+        metricCalcService.calcMetric("TEST_CALC_ALLOC_01", dataDate, "V1", "MANUAL", allocDate);
+
+        ArgumentCaptor<Map<String, Object>> paramsCap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), paramsCap.capture(), any(Duration.class));
+        assertThat(paramsCap.getValue()).containsEntry("allocDate", allocDate);
+    }
+
+    @Test
+    @DisplayName("业绩分配日期：allocDate=null → 兜底等于 dataDate（定时链路默认 T-1）")
+    void executeSqlAndPersist_nullAllocDate_defaultsToDataDate() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        when(metricDefService.getByCodeOrNull("TEST_CALC_ALLOC_02")).thenReturn(def);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 6, 17);
+        // 旧 4 参重载（triggerType 但不带 allocDate）→ allocDate 兜底为 dataDate
+        metricCalcService.calcMetric("TEST_CALC_ALLOC_02", dataDate, "V1", "MANUAL");
+
+        ArgumentCaptor<Map<String, Object>> paramsCap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), paramsCap.capture(), any(Duration.class));
+        assertThat(paramsCap.getValue()).containsEntry("allocDate", dataDate);
     }
 
     // ========== 测试构造器 ==========

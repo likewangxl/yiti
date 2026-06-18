@@ -143,7 +143,27 @@ public class MetricCalcService {
      * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC/SUMMARY 未支持 / slot 未分配
      */
     public String calcMetric(String metricCode, LocalDate dataDate, String version, String triggerType) {
-        return calcMetricWithStats(metricCode, dataDate, version, triggerType).runTaskId();
+        // 业绩分配日期 allocDate 不传 → 委托 5 参重载传 null，由 SQL 绑定阶段兜底为 dataDate
+        return calcMetric(metricCode, dataDate, version, triggerType, null);
+    }
+
+    /**
+     * 执行单个指标的计算（新增业绩分配日期 :allocDate 入参）.
+     *
+     * <p>allocDate 非派生变量，作为入参显式传入：定时任务链路默认 null（绑定阶段兜底为 dataDate，
+     * 即 T-1）；手动执行 / 试运行可由页面指定具体业绩分配日期。
+     *
+     * @param metricCode  指标编码（必填）
+     * @param dataDate    数据日期（必填）
+     * @param version     数据版本（必填）
+     * @param triggerType 触发类型（SCHEDULED/MANUAL/RECALC，spec § 4.5）
+     * @param allocDate   业绩分配日期（可为 null，绑定阶段兜底为 dataDate）
+     * @return run_task 主键 ID
+     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC/SUMMARY 未支持 / slot 未分配
+     */
+    public String calcMetric(String metricCode, LocalDate dataDate, String version,
+                             String triggerType, LocalDate allocDate) {
+        return calcMetricWithStats(metricCode, dataDate, version, triggerType, allocDate).runTaskId();
     }
 
     /**
@@ -154,6 +174,18 @@ public class MetricCalcService {
      * 仅返回类型从 String runTaskId 扩展为 {@link MetricCalcResult}。
      */
     public MetricCalcResult calcMetricWithStats(String metricCode, LocalDate dataDate, String version, String triggerType) {
+        // 业绩分配日期不传 → 委托 5 参重载传 null（绑定阶段兜底为 dataDate）
+        return calcMetricWithStats(metricCode, dataDate, version, triggerType, null);
+    }
+
+    /**
+     * V1.13+ 在 {@link #calcMetricWithStats(String, LocalDate, String, String)} 基础上新增业绩分配
+     * 日期 :allocDate 入参（非派生，作为参数显式传入；null 时绑定阶段兜底为 dataDate）.
+     *
+     * @param allocDate 业绩分配日期（可为 null，绑定阶段兜底为 dataDate）
+     */
+    public MetricCalcResult calcMetricWithStats(String metricCode, LocalDate dataDate, String version,
+                                                String triggerType, LocalDate allocDate) {
         // 1. 定义加载与基本校验——指标不存在直接抛，不插 run_task（计划要求）
         PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
@@ -183,7 +215,7 @@ public class MetricCalcService {
             String logicType = def.getCalcLogicType();
             SubjectStats stats;
             if ("SQL".equalsIgnoreCase(logicType)) {
-                stats = executeSqlAndPersist(def, dataDate, version, jobKey, triggerType);
+                stats = executeSqlAndPersist(def, dataDate, version, jobKey, triggerType, allocDate);
             } else if ("EXPR".equalsIgnoreCase(logicType) || "GROOVY".equalsIgnoreCase(logicType)) {
                 stats = executeGroovyAndPersist(def, dataDate, version, jobKey, triggerType);
             } else if ("PROC".equalsIgnoreCase(logicType) || "SUMMARY".equalsIgnoreCase(logicType)) {
@@ -225,10 +257,11 @@ public class MetricCalcService {
      *
      * @param jobKey      任务键（透传到 SubjectStats）
      * @param triggerType 触发类型（透传到 SubjectStats）
+     * @param allocDate   业绩分配日期（:allocDate；null 时兜底为 dataDate）
      * @return SubjectStats（SQL 类型按结果行数计，全部视为成功）
      */
     private SubjectStats executeSqlAndPersist(PerfMetricDef def, LocalDate dataDate, String version,
-                                               String jobKey, String triggerType) {
+                                               String jobKey, String triggerType, LocalDate allocDate) {
         if (def.getSqlText() == null || def.getSqlText().isBlank()) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "SQL 类型指标 sqlText 为空: " + def.getMetricCode());
@@ -237,6 +270,9 @@ public class MetricCalcService {
         params.put("dataDate", dataDate);
         params.put("version", version);
         params.putAll(DateMacroResolver.resolve(dataDate));
+        // 业绩分配日期 :allocDate —— 非派生入参；定时链路传 null 兜底为 dataDate（已是 T-1），
+        // 手动执行 / 试运行由页面指定。放在 DateMacroResolver.resolve 之后，避免被派生宏覆盖。
+        params.put("allocDate", allocDate != null ? allocDate : dataDate);
         // 对象id占位符 :objectId —— 真实调度执行无单主体上下文，绑定 null；
         // 生产 SQL 应写成 (:objectId IS NULL OR emp_id = :objectId)，使试运行(传值)与真实执行(null=全量)都成立
         params.putIfAbsent("objectId", null);

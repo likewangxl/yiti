@@ -291,19 +291,22 @@ public class MetricDefController {
     @AuditLog(action = "METRIC_TRIAL_RUN", resourceType = "PERF_METRIC_TRIAL")
     public ResponseWrapper<MetricTrialRespDTO> trialRun(@PathVariable("metricCode") @NotBlank String metricCode,
                                                         @Valid @RequestBody MetricTrialReqDTO req) {
-        log.info("[MetricDefController.trialRun] metricCode={}, dataDate={}, sampleSize={}",
-                metricCode, req.getDataDate(), req.getSampleSize());
+        // 业绩分配日期随请求体传入（与 dataDate 同口径），留空后端绑定阶段兜底为 dataDate
+        java.time.LocalDate allocDate = req.getAllocDate();
+        log.info("[MetricDefController.trialRun] metricCode={}, dataDate={}, sampleSize={}, allocDate={}",
+                metricCode, req.getDataDate(), req.getSampleSize(), allocDate);
         // 直接试运行：前端传了 sqlText / exprText 时，不读已存指标，直接执行该表达式（新增指标页面无需先保存）
         boolean adhoc = (req.getSqlText() != null && !req.getSqlText().isBlank())
                 || (req.getExprText() != null && !req.getExprText().isBlank());
         if (adhoc) {
+            // allocDate 为空时传 null，后端绑定阶段兜底为 dataDate
             return ResponseWrapper.success(metricLifecycleFacade.trialRunAdhocDto(
                     req.getCalcLogicType(), req.getBaseDim(), req.getSqlText(), req.getExprText(),
-                    req.getDataDate(), req.getSampleSize(), req.getParams()));
+                    req.getDataDate(), req.getSampleSize(), req.getParams(), allocDate));
         }
         // V1.3 R4.1：装配下沉到 Facade
         return ResponseWrapper.success(metricLifecycleFacade.trialRunDto(
-                metricCode, req.getDataDate(), req.getSampleSize(), req.getParams()));
+                metricCode, req.getDataDate(), req.getSampleSize(), req.getParams(), allocDate));
     }
 
     /**
@@ -323,11 +326,14 @@ public class MetricDefController {
     public ResponseWrapper<RunTaskInfoDTO> execute(
             @PathVariable("metricCode") @NotBlank String metricCode,
             @Valid @RequestBody MetricExecuteReqDTO req) {
-        log.info("[MetricDefController.execute] metricCode={}, dataDate={}, cascade={}, reason={}",
-                metricCode, req.getDataDate(), req.getCascade(), req.getReason());
+        // 业绩分配日期随请求体传入（与 dataDate 同口径），留空后端绑定阶段兜底为 dataDate
+        java.time.LocalDate allocDate = req.getAllocDate();
+        log.info("[MetricDefController.execute] metricCode={}, dataDate={}, cascade={}, allocDate={}, reason={}",
+                metricCode, req.getDataDate(), req.getCascade(), allocDate, req.getReason());
         // V1.3 R4.1：Facade.executeMetric 内部完成 sys_control 版本解析 + cascade 路由 +
         // run_task 真实 status 读取；Controller 不再感知 entity.
+        // allocDate 为空时传 null，后端绑定阶段兜底为 dataDate。
         return ResponseWrapper.success(metricLifecycleFacade.executeMetric(
-                metricCode, req.getDataDate(), req.getCascade()));
+                metricCode, req.getDataDate(), req.getCascade(), allocDate));
     }
 }

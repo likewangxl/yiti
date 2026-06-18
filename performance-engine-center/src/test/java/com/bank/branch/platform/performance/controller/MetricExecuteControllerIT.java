@@ -80,7 +80,7 @@ class MetricExecuteControllerIT extends PerformanceControllerTestBase {
         metricDefMapper.insert(def);
 
         when(metricCalcService.calcMetric(eq("TEST_METRIC_EXEC_NO_CASCADE"),
-                any(LocalDate.class), any()))
+                any(LocalDate.class), any(), any(), any()))
                 .thenReturn("TASK_EXEC_0001");
 
         MetricExecuteReqDTO req = new MetricExecuteReqDTO();
@@ -97,8 +97,8 @@ class MetricExecuteControllerIT extends PerformanceControllerTestBase {
                 .andExpect(jsonPath("$.data.status").exists());
 
         verify(metricCalcService).calcMetric(eq("TEST_METRIC_EXEC_NO_CASCADE"),
-                eq(LocalDate.of(2026, 4, 20)), any());
-        verify(cascadeRefresher, never()).refreshCascade(any(), any(), any());
+                eq(LocalDate.of(2026, 4, 20)), any(), any(), any());
+        verify(cascadeRefresher, never()).refreshCascade(any(), any(), any(), any());
     }
 
     @Test
@@ -109,7 +109,7 @@ class MetricExecuteControllerIT extends PerformanceControllerTestBase {
         metricDefMapper.insert(def);
 
         when(cascadeRefresher.refreshCascade(eq("TEST_METRIC_EXEC_CASCADE"),
-                any(LocalDate.class), any()))
+                any(LocalDate.class), any(), any()))
                 .thenReturn("ROOT_TASK_0002");
 
         MetricExecuteReqDTO req = new MetricExecuteReqDTO();
@@ -125,8 +125,8 @@ class MetricExecuteControllerIT extends PerformanceControllerTestBase {
                 .andExpect(jsonPath("$.data.taskId").value("ROOT_TASK_0002"));
 
         verify(cascadeRefresher).refreshCascade(eq("TEST_METRIC_EXEC_CASCADE"),
-                eq(LocalDate.of(2026, 4, 20)), any());
-        verify(metricCalcService, never()).calcMetric(any(), any(), any());
+                eq(LocalDate.of(2026, 4, 20)), any(), any());
+        verify(metricCalcService, never()).calcMetric(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -211,7 +211,7 @@ class MetricExecuteControllerIT extends PerformanceControllerTestBase {
         runTaskMapper.insert(task);
 
         when(cascadeRefresher.refreshCascade(eq("TEST_METRIC_EXEC_DTO"),
-                any(LocalDate.class), any()))
+                any(LocalDate.class), any(), any()))
                 .thenReturn(preTaskId);
 
         MetricExecuteReqDTO req = new MetricExecuteReqDTO();

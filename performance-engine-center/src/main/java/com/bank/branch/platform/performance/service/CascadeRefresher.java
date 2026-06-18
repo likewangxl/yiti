@@ -73,6 +73,20 @@ public class CascadeRefresher {
      * @throws PerfException 深度越界 / 环路 / 计算失败透传
      */
     public String refreshCascade(String rootMetricCode, LocalDate dataDate, String version) {
+        // 旧签名兼容：业绩分配日期 allocDate 不传 → null（calcMetric 绑定阶段兜底为 dataDate）
+        return refreshCascade(rootMetricCode, dataDate, version, null);
+    }
+
+    /**
+     * 级联刷新（新增业绩分配日期 :allocDate 入参）.
+     *
+     * <p>同一 allocDate 透传到级联链上每个下游指标的 {@link MetricCalcService#calcMetric}，
+     * 保证整条级联使用一致的业绩分配日期；null 时由 calcMetric 绑定阶段兜底为 dataDate。
+     *
+     * @param allocDate 业绩分配日期（可为 null，绑定阶段兜底为 dataDate）
+     * @see #refreshCascade(String, LocalDate, String)
+     */
+    public String refreshCascade(String rootMetricCode, LocalDate dataDate, String version, LocalDate allocDate) {
         int maxDepth = Math.max(1, perfEngineProperties.getCascadeMaxDepth());
 
         // 1. BFS 收集下游集合（含根）+ 深度检查
@@ -125,8 +139,10 @@ public class CascadeRefresher {
         String rootTaskId = null;
         for (String code : order) {
             if (fired.add(code)) {
-                log.info("[CascadeRefresher] 刷新指标 {} （date={}, version={}）", code, dataDate, version);
-                String taskId = metricCalcService.calcMetric(code, dataDate, version);
+                log.info("[CascadeRefresher] 刷新指标 {} （date={}, version={}, allocDate={}）",
+                        code, dataDate, version, allocDate);
+                // triggerType 沿用原 3 参 calcMetric 的默认 MANUAL；allocDate 透传到整条级联
+                String taskId = metricCalcService.calcMetric(code, dataDate, version, "MANUAL", allocDate);
                 if (rootMetricCode.equals(code) && rootTaskId == null) {
                     rootTaskId = taskId;
                 }
@@ -137,7 +153,7 @@ public class CascadeRefresher {
         for (String code : affectedNodes) {
             if (fired.add(code)) {
                 log.warn("[CascadeRefresher] 拓扑遗漏节点补算 {}", code);
-                String taskId = metricCalcService.calcMetric(code, dataDate, version);
+                String taskId = metricCalcService.calcMetric(code, dataDate, version, "MANUAL", allocDate);
                 if (rootMetricCode.equals(code) && rootTaskId == null) {
                     rootTaskId = taskId;
                 }

@@ -90,6 +90,18 @@ public class MetricTrialService {
      */
     public MetricTrialResult trial(String metricCode, LocalDate dataDate,
                                    Integer sampleSize, Map<String, Object> params) {
+        // 旧签名兼容：业绩分配日期 allocDate 不传 → null（绑定阶段兜底为 dataDate）
+        return trial(metricCode, dataDate, sampleSize, params, null);
+    }
+
+    /**
+     * 试运行指标（新增业绩分配日期 :allocDate 入参）.
+     *
+     * @param allocDate 业绩分配日期（可为 null，绑定阶段兜底为 dataDate）
+     * @see #trial(String, LocalDate, Integer, Map)
+     */
+    public MetricTrialResult trial(String metricCode, LocalDate dataDate,
+                                   Integer sampleSize, Map<String, Object> params, LocalDate allocDate) {
         // 1. 加载指标定义，不存在或软删除均抛 METRIC_NOT_FOUND
         PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
@@ -102,7 +114,7 @@ public class MetricTrialService {
         }
 
         // 2-4. 共用分派逻辑
-        return runByDef(def, dataDate, sampleSize, params);
+        return runByDef(def, dataDate, sampleSize, params, allocDate);
     }
 
     /**
@@ -118,6 +130,19 @@ public class MetricTrialService {
      */
     public MetricTrialResult trialAdhoc(String calcLogicType, String baseDim, String sqlText, String exprText,
                                         LocalDate dataDate, Integer sampleSize, Map<String, Object> params) {
+        // 旧签名兼容：业绩分配日期 allocDate 不传 → null（绑定阶段兜底为 dataDate）
+        return trialAdhoc(calcLogicType, baseDim, sqlText, exprText, dataDate, sampleSize, params, null);
+    }
+
+    /**
+     * 直接试运行 SQL / Groovy 文本（新增业绩分配日期 :allocDate 入参）.
+     *
+     * @param allocDate 业绩分配日期（可为 null，绑定阶段兜底为 dataDate）
+     * @see #trialAdhoc(String, String, String, String, LocalDate, Integer, Map)
+     */
+    public MetricTrialResult trialAdhoc(String calcLogicType, String baseDim, String sqlText, String exprText,
+                                        LocalDate dataDate, Integer sampleSize, Map<String, Object> params,
+                                        LocalDate allocDate) {
         PerfMetricDef def = new PerfMetricDef();
         def.setMetricCode("(未保存)");
         def.setCalcLogicType(calcLogicType);
@@ -125,12 +150,12 @@ public class MetricTrialService {
         def.setBaseDim(baseDim);
         def.setSqlText(sqlText);
         def.setExprText(exprText);
-        return runByDef(def, dataDate, sampleSize, params);
+        return runByDef(def, dataDate, sampleSize, params, allocDate);
     }
 
     /** 共用：按 def（已保存或临时构造）按 calcLogicType 分派执行试运行. */
     private MetricTrialResult runByDef(PerfMetricDef def, LocalDate dataDate,
-                                       Integer sampleSize, Map<String, Object> params) {
+                                       Integer sampleSize, Map<String, Object> params, LocalDate allocDate) {
         int effectiveSample = resolveSampleSize(sampleSize);
         int timeoutSeconds = perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds());
@@ -140,7 +165,7 @@ public class MetricTrialService {
         MetricTrialResult result = new MetricTrialResult();
 
         if ("SQL".equalsIgnoreCase(logicType)) {
-            runSql(def, dataDate, params, timeout, effectiveSample, result);
+            runSql(def, dataDate, params, timeout, effectiveSample, result, allocDate);
         } else if ("EXPR".equalsIgnoreCase(logicType) || "GROOVY".equalsIgnoreCase(logicType)) {
             runExpr(def, dataDate, params, timeout, result);
         } else {
@@ -157,7 +182,7 @@ public class MetricTrialService {
      */
     private void runSql(PerfMetricDef def, LocalDate dataDate,
                         Map<String, Object> params, Duration timeout,
-                        int effectiveSample, MetricTrialResult result) {
+                        int effectiveSample, MetricTrialResult result, LocalDate allocDate) {
         if (def.getSqlText() == null || def.getSqlText().isBlank()) {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "SQL 类型指标 sqlText 为空: " + def.getMetricCode());
@@ -170,6 +195,9 @@ public class MetricTrialService {
         if (dataDate != null) {
             mergedParams.putAll(DateMacroResolver.resolve(dataDate));
         }
+        // 业绩分配日期 :allocDate —— 非派生入参；试运行由页面指定，缺省时兜底为 dataDate。
+        // 放在 DateMacroResolver.resolve 之后，避免被派生宏覆盖（put 强制覆盖用户/宏同名键）。
+        mergedParams.put("allocDate", allocDate != null ? allocDate : dataDate);
         // 对象id占位符 :objectId —— 由试运行的"对象值"输入框经 params 传入；未输入时绑 null，避免 SQL 含 :objectId 时绑定缺失报错
         mergedParams.putIfAbsent("objectId", null);
 

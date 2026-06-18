@@ -221,6 +221,56 @@ class MetricTrialServiceTest {
                 "dateYearEnd", "datePrevYearEnd");
     }
 
+    @Test
+    @DisplayName("业绩分配日期：trial 显式传 allocDate → params.allocDate 等于该日期")
+    void trial_explicitAllocDate_boundIntoParams() {
+        PerfMetricDef def = buildSqlMetric();
+        when(metricDefService.getByCodeOrNull("TEST_TRIAL_ALLOC_01")).thenReturn(def);
+        when(perfEngineProperties.getSqlTimeoutSeconds()).thenReturn(30);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 6, 17);
+        LocalDate allocDate = LocalDate.of(2026, 6, 10);
+        metricTrialService.trial("TEST_TRIAL_ALLOC_01", dataDate, 20, null, allocDate);
+
+        ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), cap.capture(), any(Duration.class));
+        assertThat(cap.getValue()).containsEntry("allocDate", allocDate);
+    }
+
+    @Test
+    @DisplayName("业绩分配日期：trial allocDate=null → 兜底等于 dataDate")
+    void trial_nullAllocDate_defaultsToDataDate() {
+        PerfMetricDef def = buildSqlMetric();
+        when(metricDefService.getByCodeOrNull("TEST_TRIAL_ALLOC_02")).thenReturn(def);
+        when(perfEngineProperties.getSqlTimeoutSeconds()).thenReturn(30);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 6, 17);
+        metricTrialService.trial("TEST_TRIAL_ALLOC_02", dataDate, 20, null, null);
+
+        ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), cap.capture(), any(Duration.class));
+        assertThat(cap.getValue()).containsEntry("allocDate", dataDate);
+    }
+
+    @Test
+    @DisplayName("业绩分配日期：trialAdhoc 显式传 allocDate → params.allocDate 等于该日期")
+    void trialAdhoc_explicitAllocDate_boundIntoParams() {
+        when(perfEngineProperties.getSqlTimeoutSeconds()).thenReturn(30);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(Map.of());
+
+        LocalDate dataDate = LocalDate.of(2026, 6, 17);
+        LocalDate allocDate = LocalDate.of(2026, 6, 10);
+        metricTrialService.trialAdhoc("SQL", "EMP",
+                "SELECT 1 AS base_key, 2 AS metric_value WHERE :allocDate IS NOT NULL",
+                null, dataDate, 20, null, allocDate);
+
+        ArgumentCaptor<Map<String, Object>> cap = ArgumentCaptor.captor();
+        verify(sqlExecutor).execute(anyString(), cap.capture(), any(Duration.class));
+        assertThat(cap.getValue()).containsEntry("allocDate", allocDate);
+    }
+
     // ========== 测试构造器 ==========
 
     private PerfMetricDef buildSqlMetric() {
