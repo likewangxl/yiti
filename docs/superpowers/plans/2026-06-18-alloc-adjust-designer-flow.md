@@ -12,6 +12,25 @@
 
 **Tech Stack:** Spring Boot 3.2.3 / JDK17 / MyBatis-Plus / Flowable 7.0.1（仅 workflow-center 直连）/ MySQL8（库名 yiti，root/djdev，ALTER 需 yiti+onepl 双跑——本计划无 DDL）/ 前端 Vue3 + Element Plus（在 `/home/djdev/wangyq/yiti/xanzc_frontend`）。
 
+---
+
+## 执行状态（2026-06-18）
+
+| Task | 状态 | 验证 |
+|------|------|------|
+| 0 发布两条设计器流程 | ✅ 完成 | 两条 PUBLISHED，deployed_proc_def_key=DSN_alloc_{corp,retail}_designer；ACT_RE_PROCDEF 确认已部署 Flowable |
+| 1 BranchOptionDTO | ✅ 完成 | 编译通过 |
+| 2 selectByDeployedProcDefKey | ✅ 完成 | 单测 |
+| 3 TaskDetailRespDTO.outgoingBranches | ✅ 完成 | 编译通过 |
+| 4 TodoQueryService 分支计算 | ✅ 完成 | TodoQueryServiceBranchTest 3/3 |
+| 5 resolveDesignerProcDefKey + DesignerFlowLookupService | ✅ 完成 | DesignerFlowLookupServiceTest 4/4 |
+| 6 AllocAdjustService 切换设计器流程 | ✅ 完成 | AllocAdjustServiceDesignerRouteTest 4/4（含路由+startOrgLevel） |
+| 7 startOrgLevel 启动变量 | ✅ 完成 | 同上（buildStartVariables 测试） |
+| 9 前端三对话框分支动态化 | ✅ 完成 | vue-tsc 无 Adjust.vue 报错；wangyq commit 7e0de330 |
+| 8 端到端 HTTP 联调 | ⏸ 待人工 | **环境阻塞**：①沙箱在工具调用间回收后台 server（SpringApplicationShutdownHook 被发）；②`perf_alloc_adjust_apply`/`perf_alloc_adjust_item` 只在 `onepl_test_v103`，dev profile 却连 `yiti` → 在 yiti 上 submit 会因缺表 500。需把应用指向 onepl（或在 yiti 建 perf 业务表）且保持 server 常驻后，按 Task 8 步骤手工走查。后端单测 11/11 + 全量 install + 流程已部署，已覆盖除「活体 HTTP 往返」外的全部逻辑。 |
+
+后端单测合计：workflow-center 7 + perf 4 = **11/11 通过**；`mvn clean install -Dmaven.test.skip=true` exit 0。
+
 **构建/测试约定（项目既有坑）：**
 - 跨模块改动后先 `mvn clean install -DskipTests`（portal 协作者 WIP 测试编译坏，用 `-Dmaven.test.skip=true` 跳过测试编译做 install/package）。
 - 单模块单测：`mvn -pl workflow-center test -Dtest=XxxTest -Dmaven.test.skip=false`（perf 同理 `-pl performance-engine-center`）。
