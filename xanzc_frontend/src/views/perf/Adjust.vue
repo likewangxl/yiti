@@ -542,16 +542,12 @@
             <el-input v-model="dlg.reviewOpinion" type="textarea" :rows="3" maxlength="500" show-word-limit
               placeholder="请填写评审意见（必填）" />
           </el-form-item>
-          <el-form-item v-if="dlg.reviewRow?.nodeKey === 'biz_dept_review' || dlg.reviewRow?.nodeKey === 'finance_review'" label="下一步审批">
-            <el-radio-group v-model="dlg.reviewRouteTo">
-              <template v-if="dlg.reviewRow?.nodeKey === 'biz_dept_review'">
-                <el-radio value="LEADER">{{ dlg.reviewFlowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
-                <el-radio value="OWNER" :disabled="!canRouteOwner">交原业绩所属人审批{{ canRouteOwner ? '' : '（无原业绩分配，不可选）' }}</el-radio>
-              </template>
-              <template v-else-if="dlg.reviewRow?.nodeKey === 'finance_review'">
-                <el-radio value="LEADER">交资财部负责人审批</el-radio>
-                <el-radio value="END">审批结束</el-radio>
-              </template>
+          <el-form-item v-if="dlg.reviewBranches.length >= 2" label="下一步走向">
+            <el-radio-group v-model="dlg.reviewBranchIdx">
+              <el-radio v-for="(b, i) in dlg.reviewBranches" :key="i" :value="i"
+                        :disabled="isOwnerBranch(b) && !canRouteOwner">
+                {{ b.outputName }}{{ isOwnerBranch(b) && !canRouteOwner ? '（无原业绩分配，不可选）' : '' }}
+              </el-radio>
             </el-radio-group>
           </el-form-item>
         </el-form>
@@ -577,16 +573,12 @@
           <el-input v-model="approveDlg.opinion" type="textarea" :rows="3" maxlength="500" show-word-limit
             placeholder="请填写审批意见（可空）" />
         </el-form-item>
-        <el-form-item label="下一步审批">
-          <el-radio-group v-model="approveDlg.routeTo">
-            <template v-if="approveDlg.nodeKey === 'biz_dept_review'">
-              <el-radio value="LEADER">{{ approveDlg.flowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
-              <el-radio value="OWNER" :disabled="!approveDlg.hasOwners">交原业绩所属人审批{{ approveDlg.hasOwners ? '' : '（无原业绩分配，不可选）' }}</el-radio>
-            </template>
-            <template v-else-if="approveDlg.nodeKey === 'finance_review'">
-              <el-radio value="LEADER">交资财部负责人审批</el-radio>
-              <el-radio value="END">审批结束</el-radio>
-            </template>
+        <el-form-item label="下一步走向">
+          <el-radio-group v-model="approveDlg.branchIdx">
+            <el-radio v-for="(b, i) in approveDlg.branches" :key="i" :value="i"
+                      :disabled="isOwnerBranch(b) && !approveDlg.hasOwners">
+              {{ b.outputName }}{{ isOwnerBranch(b) && !approveDlg.hasOwners ? '（无原业绩分配，不可选）' : '' }}
+            </el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
@@ -603,16 +595,9 @@
           <el-input v-model="batchDlg.opinion" type="textarea" :rows="3" maxlength="500" show-word-limit
             placeholder="请填写审批意见（必填，所有勾选申请共用）" />
         </el-form-item>
-        <el-form-item v-if="batchDlg.nodeKey === 'biz_dept_review' || batchDlg.nodeKey === 'finance_review'" label="下一步审批">
-          <el-radio-group v-model="batchDlg.routeTo">
-            <template v-if="batchDlg.nodeKey === 'biz_dept_review'">
-              <el-radio value="LEADER">{{ batchDlg.flowType === 'RETAIL' ? '交零售部负责人审批' : '交公司部负责人审批' }}</el-radio>
-              <el-radio value="OWNER">交原业绩所属人审批</el-radio>
-            </template>
-            <template v-else-if="batchDlg.nodeKey === 'finance_review'">
-              <el-radio value="LEADER">交资财部负责人审批</el-radio>
-              <el-radio value="END">审批结束</el-radio>
-            </template>
+        <el-form-item v-if="batchDlg.branches.length >= 2" label="下一步走向">
+          <el-radio-group v-model="batchDlg.branchIdx">
+            <el-radio v-for="(b, i) in batchDlg.branches" :key="i" :value="i">{{ b.outputName }}</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
@@ -639,7 +624,7 @@ import {
   getAdjustApprovalHistory, listMyAdjustTodos, listMyAdjustApplies, listMyAdjustDones,
   getAllocPreview, getCustMasterName, getCustIndexValues, suggestEmployees, suggestOrgs
 } from '@/api/perf';
-import { approveTask, rejectTask, claimTask } from '@/api/workflow';
+import { approveTask, rejectTask, claimTask, getTaskDetail } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { listDictItems } from '@/api/system';
@@ -947,33 +932,60 @@ async function ensureClaimed(row) {
 // 该节点表单含 needsOriginalOwnerApprove CHECKBOX，由经办勾选决定是否走原业绩所属人审批分支
 const approveDlg = reactive({
   show: false, saving: false, row: null,
-  opinion: '同意', routeTo: 'LEADER', nodeKey: '', flowType: 'CORP', hasOwners: false
+  opinion: '同意', nodeKey: '', hasOwners: false,
+  // 设计器流程「下一步走向」分支选项（来自后端 outgoingBranches：当前节点命名出边），
+  // branchIdx 为所选分支下标；分支标签/路由变量全部由设计器流转连线动态驱动，不再硬编码
+  branches: [], branchIdx: 0
 });
 const approveDlgTitle = computed(
   () => `审批通过：${approveDlg.row?.title || approveDlg.row?.businessKey || ''}`
 );
 
+/**
+ * 拉取任务详情中的「下一步走向」分支选项（设计器当前节点的命名出边）。
+ * 失败/无返回时回空数组，调用方据 length 决定是否展示分支单选。
+ */
+async function loadOutgoingBranches(taskId) {
+  if (!taskId) return [];
+  try {
+    const detail = await getTaskDetail(taskId);
+    return Array.isArray(detail?.outgoingBranches) ? detail.outgoingBranches : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 该分支是否「交原业绩所属人审批」（routeVariables 任一值为 OWNER），用于无原业绩分配时禁用。 */
+function isOwnerBranch(b) {
+  return b && b.routeVariables && Object.values(b.routeVariables).some(v => v === 'OWNER');
+}
+
+/** 选定首个可选分支下标（跳过因无原业绩分配而禁用的 OWNER 分支）。 */
+function firstSelectableBranch(branches, hasOwners) {
+  const idx = branches.findIndex(b => !(isOwnerBranch(b) && !hasOwners));
+  return idx >= 0 ? idx : 0;
+}
+
 async function openApprove(row) {
-  if (row.nodeKey === 'biz_dept_review' || row.nodeKey === 'finance_review') {
+  // 设计器流程：先拉当前节点的命名出边作为「下一步走向」选项
+  const branches = await loadOutgoingBranches(row.taskId);
+  if (branches.length >= 2) {
     approveDlg.row = row;
     approveDlg.opinion = '同意';
-    approveDlg.routeTo = 'LEADER';
     approveDlg.nodeKey = row.nodeKey;
-    approveDlg.flowType = (row.processDefinitionKey || '').includes('retail') ? 'RETAIL' : 'CORP';
     approveDlg.saving = false;
-    // 原业绩分配为空时禁用"交原业绩所属人审批"：拉取该客户当前维度的原业绩分配判断有无所属人
+    // 原业绩分配为空时禁用「交原业绩所属人审批」分支：拉取该客户当前维度的原业绩分配判断有无所属人
     approveDlg.hasOwners = false;
-    if (row.nodeKey === 'biz_dept_review') {
-      try {
-        const p = await getAllocPreview({ custNo: row.custId, allocDim: row.allocDim });
-        approveDlg.hasOwners = !!(p && p.allocList && p.allocList.length);
-      } catch { approveDlg.hasOwners = false; }
-      if (!approveDlg.hasOwners && approveDlg.routeTo === 'OWNER') approveDlg.routeTo = 'LEADER';
-    }
+    try {
+      const p = await getAllocPreview({ custNo: row.custId, allocDim: row.allocDim });
+      approveDlg.hasOwners = !!(p && p.allocList && p.allocList.length);
+    } catch { approveDlg.hasOwners = false; }
+    approveDlg.branches = branches;
+    approveDlg.branchIdx = firstSelectableBranch(branches, approveDlg.hasOwners);
     approveDlg.show = true;
     return;
   }
-  // 其他节点：沿用简单意见输入
+  // 单分支/无分支节点：沿用简单意见输入（无走向可选）
   let opinion;
   try {
     const r = await ElMessageBox.prompt('请填写审批意见（可空）', `审批通过：${row.title || row.businessKey}`, {
@@ -993,13 +1005,13 @@ async function openApprove(row) {
 
 async function onApproveSubmit() {
   if (!approveDlg.row) return;
+  const chosen = approveDlg.branches[approveDlg.branchIdx];
+  if (!chosen) return ElMessage.warning('请选择下一步走向');
   approveDlg.saving = true;
   try {
     await ensureClaimed(approveDlg.row);
-    const varName = approveDlg.nodeKey === 'finance_review' ? 'finRouteTo' : 'corpRouteTo';
-    await approveTask(approveDlg.row.taskId, approveDlg.opinion, {
-      [varName]: approveDlg.routeTo
-    });
+    // formData 直接取所选分支的 routeVariables（如 {corpRouteTo:'LEADER'}），驱动设计器排他网关路由
+    await approveTask(approveDlg.row.taskId, approveDlg.opinion, { ...(chosen.routeVariables || {}) });
     ElMessage.success('已通过');
     approveDlg.show = false;
     reloadTodo();
@@ -1035,8 +1047,9 @@ async function openTodoReview(row) {
   dlg.reviewRow = row;
   dlg.reviewOpinion = '';
   dlg.reviewSaving = false;
-  dlg.reviewRouteTo = 'LEADER';
-  dlg.reviewFlowType = (row.processDefinitionKey || '').includes('retail') ? 'RETAIL' : 'CORP';
+  // 设计器流程：拉当前节点命名出边作为「下一步走向」选项（canRouteOwner 决定 OWNER 分支可选性）
+  dlg.reviewBranches = await loadOutgoingBranches(row.taskId);
+  dlg.reviewBranchIdx = firstSelectableBranch(dlg.reviewBranches, canRouteOwner.value);
 }
 async function onDlgReviewAction(action) {
   if (!dlg.reviewOpinion || !dlg.reviewOpinion.trim()) {
@@ -1049,12 +1062,9 @@ async function onDlgReviewAction(action) {
   try {
     await ensureClaimed(dlg.reviewRow);
     if (action === 'APPROVE') {
-      let formData;
-      if (dlg.reviewRow.nodeKey === 'biz_dept_review') {
-        formData = { corpRouteTo: dlg.reviewRouteTo };
-      } else if (dlg.reviewRow.nodeKey === 'finance_review') {
-        formData = { finRouteTo: dlg.reviewRouteTo };
-      }
+      // 设计器流程：formData 取所选「下一步走向」分支的 routeVariables；无分支节点则不带
+      const chosen = dlg.reviewBranches[dlg.reviewBranchIdx];
+      const formData = chosen ? { ...(chosen.routeVariables || {}) } : undefined;
       await approveTask(dlg.reviewRow.taskId, dlg.reviewOpinion, formData);
       ElMessage.success('已通过');
     } else {
@@ -1075,12 +1085,12 @@ const todoSelection = ref([]);
 function onTodoSelectionChange(rows) { todoSelection.value = rows || []; }
 
 // 批量审批弹窗 state（沿用单个审批的路由流转语义；processData 同单个）
-const batchDlg = reactive({ show: false, saving: false, opinion: '', routeTo: 'LEADER', nodeKey: '', flowType: 'CORP', rows: [] });
+const batchDlg = reactive({ show: false, saving: false, opinion: '', nodeKey: '', rows: [], branches: [], branchIdx: 0 });
 
-function openBatchReview() {
+async function openBatchReview() {
   const sel = todoSelection.value;
   if (!sel.length) return ElMessage.warning('请先勾选要审批的申请');
-  // 必须同一审批环节：不同环节(节点)的"下一步审批"流转选项不同，混选无法统一处理
+  // 必须同一审批环节：不同环节(节点)的"下一步走向"分支选项不同，混选无法统一处理
   const nodeKeys = [...new Set(sel.map(r => r.nodeKey))];
   if (nodeKeys.length > 1) {
     return ElMessage.warning('请选择同一审批环节的任务再批量审批');
@@ -1088,10 +1098,10 @@ function openBatchReview() {
   batchDlg.rows = [...sel];
   batchDlg.nodeKey = nodeKeys[0] || '';
   batchDlg.opinion = '';
-  batchDlg.routeTo = 'LEADER';
   batchDlg.saving = false;
-  // 全部 retail 走零售部文案，否则公司部
-  batchDlg.flowType = sel.every(r => (r.processDefinitionKey || '').includes('retail')) ? 'RETAIL' : 'CORP';
+  // 同一环节 → 分支选项一致，取首条任务的命名出边作为共用「下一步走向」选项
+  batchDlg.branches = await loadOutgoingBranches(sel[0]?.taskId);
+  batchDlg.branchIdx = 0;
   batchDlg.show = true;
 }
 
@@ -1109,9 +1119,9 @@ async function onBatchReviewAction(action) {
         if (!row.taskId) throw new Error('任务 ID 缺失');
         await ensureClaimed(row);
         if (action === 'APPROVE') {
-          let formData;
-          if (row.nodeKey === 'biz_dept_review') formData = { corpRouteTo: batchDlg.routeTo };
-          else if (row.nodeKey === 'finance_review') formData = { finRouteTo: batchDlg.routeTo };
+          // 共用所选分支的 routeVariables 应用到每条任务（同环节分支一致）
+          const chosen = batchDlg.branches[batchDlg.branchIdx];
+          const formData = chosen ? { ...(chosen.routeVariables || {}) } : undefined;
           await approveTask(row.taskId, batchDlg.opinion, formData);
         } else {
           await rejectTask(row.taskId, batchDlg.opinion);
@@ -1255,7 +1265,8 @@ function openSharedView(row) {
 }
 const dlg = reactive({
   show: false, readOnly: false, saving: false, draftSaving: false, viewingId: null, editingId: null,
-  reviewMode: false, reviewRow: null, reviewOpinion: '', reviewSaving: false, reviewRouteTo: 'LEADER', reviewFlowType: 'CORP',
+  reviewMode: false, reviewRow: null, reviewOpinion: '', reviewSaving: false,
+  reviewBranches: [], reviewBranchIdx: 0,
   approvalLogs: [], approvalLoading: false,
   applyNo: '', createdBy: '', createdByName: '', createdByOrgName: '', createdTime: null,
   form: {
