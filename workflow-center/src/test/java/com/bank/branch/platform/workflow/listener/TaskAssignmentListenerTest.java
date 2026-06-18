@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.Mockito.*;
 
@@ -250,8 +251,8 @@ class TaskAssignmentListenerTest {
 
         when(candidateResolverService.resolveCandidates("DSN_alloc", "approval_1"))
                 .thenReturn(List.of("ROLE:BRANCH_HEAD"));
-        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "approval_1"))
-                .thenReturn("SELF");
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "approval_1"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "SELF"));
         when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_A");
         when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_A")).thenReturn(List.of("E_A1"));
 
@@ -275,8 +276,8 @@ class TaskAssignmentListenerTest {
 
         when(candidateResolverService.resolveCandidates("DSN_alloc", "approval_1"))
                 .thenReturn(List.of("ROLE:BRANCH_HEAD"));
-        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "approval_1"))
-                .thenReturn("PARENT");
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "approval_1"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "PARENT"));
         when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
         com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
         org.setParentOrgCode("ORG_PARENT");
@@ -302,8 +303,7 @@ class TaskAssignmentListenerTest {
 
         when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve"))
                 .thenReturn(List.of("ROLE:BRANCH_HEAD"));
-        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "branch_approve"))
-                .thenReturn("AUTO");
+        // 历史静态 branch_approve 节点：无显式机构归属(scopeMap 空) → 走机构等级自动解析(AUTO)
         when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
         com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
         org.setOrgLevel(3);
@@ -330,14 +330,48 @@ class TaskAssignmentListenerTest {
 
         when(candidateResolverService.resolveCandidates("DSN_alloc", "approval_2"))
                 .thenReturn(List.of("ROLE:CUST_MANAGER"));
-        when(candidateResolverService.resolveApproveOrgScope("DSN_alloc", "approval_2"))
-                .thenReturn(null);
+        // 无机构归属配置(scopeMap 空) → 不做机构过滤
 
         taskAssignmentListener.notify(delegateTask);
 
         // 不限：照常设候选组，不做机构过滤
         verify(delegateTask).addCandidateGroup("ROLE:CUST_MANAGER");
         verify(delegateTask, never()).addCandidateUser(anyString());
+    }
+
+    /**
+     * 同一节点混合机构归属（用户上报场景）：branch_approve_l3 既有 PARENT(上级机构) 的机构负责人，
+     * 又有「不限机构」的公司业绩预审角色(CORP_PERF_REV)。修复前节点级单一 scope 把 PARENT 套到全部
+     * 候选，导致 CORP_PERF_REV 也被按上级机构过滤、该角色用户看不到待办。
+     * 修复后：PARENT 角色按上级机构过滤为候选用户；不限机构的角色整组作为候选组。
+     */
+    @Test
+    void notify_mixedOrgScope_unscopedRoleStaysWholeCandidateGroup() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc_corp_designer:3:x");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve_l3");
+        when(delegateTask.getId()).thenReturn("TASK_MIX");
+        stubProcDefKey("DSN_alloc_corp_designer:3:x", "DSN_alloc_corp_designer");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc_corp_designer", "branch_approve_l3"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD", "ROLE:CORP_PERF_REV"));
+        // 只有 BRANCH_HEAD 配了 PARENT；CORP_PERF_REV 不在 map = 不限机构
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc_corp_designer", "branch_approve_l3"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "PARENT"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setParentOrgCode("ORG_PARENT");
+        when(orgApi.getOrg("ORG_SUB")).thenReturn(org);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_PARENT")).thenReturn(List.of("E_HEAD"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // PARENT：按上级机构过滤为候选用户
+        verify(delegateTask).addCandidateUser("E_HEAD");
+        // 不限机构：整组作候选组（关键修复点——修复前会被 PARENT 误过滤而丢失）
+        verify(delegateTask).addCandidateGroup("ROLE:CORP_PERF_REV");
+        // PARENT 角色被机构过滤，不再作为整组候选组
+        verify(delegateTask, never()).addCandidateGroup("ROLE:BRANCH_HEAD");
     }
 
     /**
@@ -353,6 +387,7 @@ class TaskAssignmentListenerTest {
 
         when(candidateResolverService.resolveCandidates("DSN_alloc", "owner_node"))
                 .thenReturn(List.of("VAR:originalOwnerEmpIds"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn(null);
         when(delegateTask.getVariable("originalOwnerEmpIds")).thenReturn(List.of("E1", "E2"));
 
         taskAssignmentListener.notify(delegateTask);

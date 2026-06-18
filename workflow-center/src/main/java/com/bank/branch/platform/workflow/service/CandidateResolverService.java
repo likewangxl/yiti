@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 流程节点候选人解析服务。
@@ -93,6 +95,40 @@ public class CandidateResolverService {
                 .filter(s -> s != null && !s.isBlank())
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * 解析「每个候选人各自的审批机构归属」映射：带前缀候选标识（如 {@code ROLE:CORP_PERF_REV}）→
+     * 该审批人配置的 {@code approve_org_scope}（SELF / PARENT）。
+     * <p>
+     * 仅收录<b>显式配置了机构归属</b>的审批人；未配置机构归属的审批人<b>不在</b> map 中
+     * （调用方据此对其不做机构过滤、整组角色作为候选组，避免同一节点混合机构归属时
+     * 把"不限机构"的审批人也按别的审批人的 SELF/PARENT 误过滤——
+     * 这是 {@link #resolveApproveOrgScope} 节点级单一取值无法表达的逐行语义）。
+     * </p>
+     *
+     * @param processDefinitionKey 流程定义KEY
+     * @param nodeKey              节点KEY
+     * @return 带前缀候选标识 → SELF/PARENT 的映射（保持配置顺序），无则空 map
+     */
+    public Map<String, String> resolveCandidateScopeMap(String processDefinitionKey, String nodeKey) {
+        List<WfNodeCandidateConf> configs = nodeCandidateConfMapper
+                .selectByProcessDefKeyAndNodeKey(processDefinitionKey, nodeKey);
+        Map<String, String> scopeByCandidate = new LinkedHashMap<>();
+        if (configs == null) {
+            return scopeByCandidate;
+        }
+        for (WfNodeCandidateConf conf : configs) {
+            String scope = conf.getApproveOrgScope();
+            if (scope == null || scope.isBlank()) {
+                continue; // 不限机构的审批人不收录
+            }
+            String prefix = conf.getCandidateType() + ":";
+            for (String value : parseCandidateValue(conf.getCandidateValue())) {
+                scopeByCandidate.put(prefix + value, scope);
+            }
+        }
+        return scopeByCandidate;
     }
 
     /**

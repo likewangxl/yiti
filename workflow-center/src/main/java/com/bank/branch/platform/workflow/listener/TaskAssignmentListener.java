@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -71,86 +72,50 @@ public class TaskAssignmentListener implements TaskListener {
             return;
         }
 
-        // 解析候选组
+        // 解析候选组（前缀化标识列表，VAR/ROLE/ORG/USER）
         List<String> candidates = candidateResolverService.resolveCandidates(processDefinitionKey, nodeKey);
+        // 每个审批人各自的「审批机构归属」（SELF/PARENT）；未配置机构归属的审批人不在此 map 中。
+        // 逐行 scope 是为了支持同一节点混合机构归属：例如 branch_approve_l3 既有 PARENT(上级机构)的
+        // 机构负责人，又有「不限机构」的公司业绩预审角色——后者必须整组作为候选组，不能被前者的
+        // PARENT 误过滤掉（否则该角色用户在工作台看不到待办）。
+        Map<String, String> scopeByCandidate =
+                candidateResolverService.resolveCandidateScopeMap(processDefinitionKey, nodeKey);
+        // 历史静态 branch_approve 节点（整节点无任何显式机构归属）→ 按发起人机构等级自动解析
+        boolean legacyBranchApprove = "branch_approve".equals(nodeKey) && scopeByCandidate.isEmpty();
+        Object startOrgIdVar = delegateTask.getVariable("startOrgId");
+        String startOrgId = startOrgIdVar != null ? startOrgIdVar.toString() : null;
+        boolean hasStartOrg = startOrgId != null && !startOrgId.isEmpty();
 
-        // 审批机构归属过滤：节点配置 SELF(本机构) / PARENT(上级机构) 时，按发起人机构过滤候选，
-        // 只让对应机构的经营机构负责人审批。兼容历史静态流程：branch_approve 无显式配置时，
-        // 沿用「按发起人机构等级自动解析(3级支行→上级分行，2级→本机构)」的原有行为。
-        String orgScope = candidateResolverService.resolveApproveOrgScope(processDefinitionKey, nodeKey);
-        boolean legacyBranchApprove = orgScope == null && "branch_approve".equals(nodeKey);
-        if (orgScope != null || legacyBranchApprove) {
-            Object startOrgId = delegateTask.getVariable("startOrgId");
-            if (startOrgId != null && !startOrgId.toString().isEmpty()) {
-                String approveOrg = resolveApproveOrg(startOrgId.toString(), orgScope, legacyBranchApprove);
-                filterCandidatesByOrg(delegateTask, candidates, approveOrg);
-                log.info("[TaskAssignmentListener] 任务 {} 节点 {} 机构归属 {} 发起机构 {} → 审批机构 {} 过滤候选",
-                        taskId, nodeKey, orgScope != null ? orgScope : "AUTO", startOrgId, approveOrg);
-                notifyCandidates(delegateTask, candidates);
-                return;
-            }
-        }
-
-        // 其他节点：设置候选组；VAR 类型审批人从提交方传入的流程变量解析为候选用户
+        // 逐个候选人按各自机构归属分派：
+        //  - VAR:变量名               → 从流程变量取审批人，设为候选用户（不做机构过滤）
+        //  - 配 SELF/PARENT(或历史 branch_approve)且有发起机构 → 按对应机构过滤该角色成员为候选用户
+        //  - 其余(不限机构)           → 整组角色/机构/用户作为候选组（该角色全部成员可见）
         for (String c : candidates) {
-            if (c != null && c.startsWith("VAR:")) {
+            if (c == null || c.isEmpty()) {
+                continue;
+            }
+            if (c.startsWith("VAR:")) {
                 Object varValue = delegateTask.getVariable(c.substring(4));
                 for (String empId : MultiInstanceApproverResolver.readVarEmpIds(varValue)) {
                     delegateTask.addCandidateUser(empId);
                 }
+                continue;
+            }
+            String scope = scopeByCandidate.get(c);
+            if ((scope != null || legacyBranchApprove) && hasStartOrg) {
+                String approveOrg = resolveApproveOrg(startOrgId, scope, legacyBranchApprove);
+                filterCandidatesByOrg(delegateTask, java.util.List.of(c), approveOrg);
+                log.info("[TaskAssignmentListener] 任务 {} 节点 {} 候选 {} 机构归属 {} 发起机构 {} → 审批机构 {}",
+                        taskId, nodeKey, c, scope != null ? scope : "AUTO", startOrgId, approveOrg);
             } else {
                 delegateTask.addCandidateGroup(c);
             }
         }
+        log.info("[TaskAssignmentListener] 任务 {} 节点 {} 候选分派完成 candidates={} 机构归属={}",
+                taskId, nodeKey, candidates, scopeByCandidate);
 
-        log.info("[TaskAssignmentListener] 任务 {} 已设置候选组 {}", taskId, candidates);
-
-        // 尝试发送通知，失败不影响流程
-        // candidates 含前缀（USER:E001 / ROLE:BRANCH_HEAD / ORG:O123），需展开成真实 empId 列表
-        if (!candidates.isEmpty()) {
-            try {
-                Set<String> empIds = expandCandidatesToEmpIds(candidates, delegateTask);
-                if (empIds.isEmpty()) {
-                    log.info("[TaskAssignmentListener] 任务 {} 候选展开后无员工，不发通知 candidates={}", taskId, candidates);
-                    return;
-                }
-                // 从 BizProcessMap 拿具体业务信息，让通知标题和类型更明确
-                String processInstanceId = delegateTask.getProcessInstanceId();
-                com.bank.branch.platform.workflow.entity.BizProcessMap bizMap =
-                        bizProcessMapMapper.selectByProcessInstanceId(processInstanceId);
-                String bizType = bizMap != null ? bizMap.getBizType() : null;
-                String bizId = bizMap != null ? bizMap.getBizId() : null;
-                // 目标修正：按业务要求，待审批任务只进「待办」列表，不发通知消息；
-                // 仅审批通过/驳回时由 TargetAdjustCompletedListener 通知申请人。
-                if (isNotifySuppressed(bizType)) {
-                    log.info("[TaskAssignmentListener] 任务 {} bizType={} 跳过待审批通知（仅进待办）", taskId, bizType);
-                    return;
-                }
-                String taskName = delegateTask.getName();
-                String bizLabel = resolveBizLabel(bizType);
-                String title = bizLabel != null
-                        ? "待办：" + bizLabel + (taskName != null ? " · " + taskName : "")
-                        : "您有新的待办任务";
-                String content = bizLabel != null
-                        ? "您有一条【" + bizLabel + "】待办" + (taskName != null ? "（" + taskName + "）" : "") + "，请及时处理"
-                        : "您有新待办任务，请及时处理";
-
-                List<NotificationCmd> cmds = empIds.stream()
-                        .map(empId -> NotificationCmd.builder()
-                                .targetEmpId(empId)
-                                .title(title)
-                                .content(content)
-                                .notifyType("WORKFLOW")
-                                .bizType(bizType)
-                                .bizId(bizId)
-                                .build())
-                        .collect(Collectors.toList());
-                notifyApi.batchSendNotifications(cmds);
-                log.info("[TaskAssignmentListener] 任务 {} 已通知 {} 个员工", taskId, empIds.size());
-            } catch (Exception e) {
-                log.warn("[TaskAssignmentListener] 发送通知失败，任务 {}，原因: {}", taskId, e.getMessage());
-            }
-        }
+        // 待审批任务统一只进「待办」、不发通知（isNotifySuppressed 恒为 true），复用 notifyCandidates 收口
+        notifyCandidates(delegateTask, candidates);
     }
 
     /**
