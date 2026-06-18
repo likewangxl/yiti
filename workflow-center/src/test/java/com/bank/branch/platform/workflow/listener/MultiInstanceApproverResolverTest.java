@@ -141,6 +141,7 @@ class MultiInstanceApproverResolverTest {
 
         when(candidateResolverService.resolveCandidates("DSN_x", "owner_node"))
                 .thenReturn(List.of("VAR:originalOwnerEmpIds"));
+        when(execution.getVariable("rejected")).thenReturn(false); // 已初始化，notify 不再重置
         when(execution.getVariable("originalOwnerEmpIds")).thenReturn(List.of("E1", "E2"));
 
         resolver.notify(execution);
@@ -165,6 +166,7 @@ class MultiInstanceApproverResolverTest {
 
         when(candidateResolverService.resolveCandidates("DSN_x", "owner_node"))
                 .thenReturn(List.of("VAR:ownerEmpId"));
+        when(execution.getVariable("rejected")).thenReturn(false); // 已初始化，notify 不再重置
         when(execution.getVariable("ownerEmpId")).thenReturn("E9");
 
         resolver.notify(execution);
@@ -173,6 +175,44 @@ class MultiInstanceApproverResolverTest {
         ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
         verify(execution).setVariable(eq("approverEmpIds"), captor.capture());
         assertThat(captor.getValue()).containsExactly("E9");
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 3d: 会签入口初始化 rejected=false（避免完成条件 EL 解析不到 rejected 报错）
+    // -----------------------------------------------------------------------
+    @Test
+    void initializes_rejected_false_when_absent() {
+        String pdId = "DSN_owner:1:3";
+        DelegateExecution execution = mock(DelegateExecution.class);
+        when(execution.getProcessDefinitionId()).thenReturn(pdId);
+        when(execution.getCurrentActivityId()).thenReturn("owner_node");
+        stubProcDefKey(pdId, "DSN_x");
+        when(candidateResolverService.resolveCandidates("DSN_x", "owner_node"))
+                .thenReturn(Collections.emptyList());
+        when(execution.getVariable("rejected")).thenReturn(null);
+
+        resolver.notify(execution);
+
+        verify(execution).setVariable("rejected", false);
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 3e: rejected 已存在则不覆盖（保留驳回短路语义）
+    // -----------------------------------------------------------------------
+    @Test
+    void does_not_overwrite_existing_rejected() {
+        String pdId = "DSN_owner:1:4";
+        DelegateExecution execution = mock(DelegateExecution.class);
+        when(execution.getProcessDefinitionId()).thenReturn(pdId);
+        when(execution.getCurrentActivityId()).thenReturn("owner_node");
+        stubProcDefKey(pdId, "DSN_x");
+        when(candidateResolverService.resolveCandidates("DSN_x", "owner_node"))
+                .thenReturn(Collections.emptyList());
+        when(execution.getVariable("rejected")).thenReturn(true);
+
+        resolver.notify(execution);
+
+        verify(execution, never()).setVariable(eq("rejected"), any());
     }
 
     // -----------------------------------------------------------------------

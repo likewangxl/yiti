@@ -70,6 +70,14 @@ public class MultiInstanceApproverResolver implements ExecutionListener {
         String nodeKey = execution.getCurrentActivityId();
         log.debug("[MultiInstanceApproverResolver] processDefinitionId={}, nodeKey={}", processDefinitionId, nodeKey);
 
+        // 会签完成条件 ${rejected == true || nrOfCompletedInstances >= nrOfInstances}（FlowBpmnGenerator 生成）
+        // 引用 rejected 变量。审批通过(approved=true)从不设置 rejected，首个实例完成时 JUEL 解析不到该
+        // 标识符会抛 PropertyNotFoundException: Cannot resolve identifier 'rejected'。在会签入口初始化为
+        // false（不覆盖已存在值），使完成条件可解析。运行期生效，无需重新发布已部署流程。
+        if (execution.getVariable("rejected") == null) {
+            execution.setVariable("rejected", false);
+        }
+
         try {
             // 通过 RepositoryService 反查真实 BPMN KEY（Flowable 7 的 processDefinitionId 为 UUID，不能 split）
             ProcessDefinition pd = repositoryService.getProcessDefinition(processDefinitionId);
