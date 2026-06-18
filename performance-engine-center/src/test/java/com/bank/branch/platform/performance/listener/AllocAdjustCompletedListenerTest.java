@@ -1,5 +1,7 @@
 package com.bank.branch.platform.performance.listener;
 
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.performance.entity.CustAllocRelation;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustItem;
@@ -21,11 +23,14 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -62,8 +67,21 @@ class AllocAdjustCompletedListenerTest {
     @Mock
     private PerfEventPublisher eventPublisher;
 
+    @Mock
+    private UserApi userApi;
+
     @InjectMocks
     private AllocAdjustCompletedListener listener;
+
+    private UserDTO userDto(String empId, String name, String orgCode, String orgName) {
+        UserDTO u = new UserDTO();
+        u.setEmpId(empId);
+        u.setUsername(empId);
+        u.setDisplayName(name);
+        u.setMainOrgCode(orgCode);
+        u.setMainOrgName(orgName);
+        return u;
+    }
 
     private PerfAllocAdjustApply buildApply() {
         PerfAllocAdjustApply a = new PerfAllocAdjustApply();
@@ -97,6 +115,11 @@ class AllocAdjustCompletedListenerTest {
                 .thenReturn(Arrays.asList(
                         item("EMP_A", "60.00"),
                         item("EMP_B", "40.00")));
+        // 工号→用户：审批通过插入时回填 fullname/dept_no/dept_name
+        when(userApi.getUserByEmpIds(any()))
+                .thenReturn(Arrays.asList(
+                        userDto("EMP_A", "张三", "O1", "机构一"),
+                        userDto("EMP_B", "李四", "O2", "机构二")));
     }
 
     @Test
@@ -157,8 +180,10 @@ class AllocAdjustCompletedListenerTest {
                 new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
 
         // 插入新分配前：按 cust_id+cust_type+alloc_dim+account_no 把旧分配标记为原分配(is_original=1)
+        // 并把失效日期 end_date 置为当天
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(allocRelationMapper);
-        inOrder.verify(allocRelationMapper).markOriginalByKey("CUST_001", "CORP", "RULE", null);
+        inOrder.verify(allocRelationMapper).markOriginalByKey(
+                eq("CUST_001"), eq("CORP"), eq("RULE"), isNull(), eq(LocalDate.now()));
         inOrder.verify(allocRelationMapper, org.mockito.Mockito.times(2))
                 .insert(any(CustAllocRelation.class));
 
@@ -167,6 +192,26 @@ class AllocAdjustCompletedListenerTest {
         verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(cap.capture());
         assertThat(cap.getAllValues()).extracting(CustAllocRelation::getIsOriginal).containsOnly("2");
         assertThat(cap.getAllValues()).extracting(CustAllocRelation::getCustType).containsOnly("CORP");
+    }
+
+    @Test
+    @DisplayName("APPROVED → 插入分配时按工号回填 fullname/dept_no/dept_name（UserApi 解析）")
+    void approved_fillsFullnameAndDeptFromUserApi() {
+        listener.onProcessCompleted(
+                new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
+
+        ArgumentCaptor<CustAllocRelation> cap = ArgumentCaptor.forClass(CustAllocRelation.class);
+        verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(cap.capture());
+        CustAllocRelation a = cap.getAllValues().stream()
+                .filter(r -> "EMP_A".equals(r.getEmpId())).findFirst().orElseThrow();
+        assertThat(a.getFullname()).isEqualTo("张三");
+        assertThat(a.getDeptNo()).isEqualTo("O1");
+        assertThat(a.getDeptName()).isEqualTo("机构一");
+        CustAllocRelation b = cap.getAllValues().stream()
+                .filter(r -> "EMP_B".equals(r.getEmpId())).findFirst().orElseThrow();
+        assertThat(b.getFullname()).isEqualTo("李四");
+        assertThat(b.getDeptNo()).isEqualTo("O2");
+        assertThat(b.getDeptName()).isEqualTo("机构二");
     }
 
     @Test
@@ -179,7 +224,7 @@ class AllocAdjustCompletedListenerTest {
 
         verify(applyMapper).updateStatus("APP_001", "REJECTED", null);
         verify(allocRelationMapper, never()).insert(any(CustAllocRelation.class));
-        verify(allocRelationMapper, never()).markOriginalByKey(any(), any(), any(), any());
+        verify(allocRelationMapper, never()).markOriginalByKey(any(), any(), any(), any(), any());
         verify(eventPublisher, never()).publish(any());
     }
 

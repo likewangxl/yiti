@@ -52,16 +52,21 @@ public interface CustAllocRelationMapper extends BaseMapper<CustAllocRelation> {
      *
      * <p>account_no / cust_type 为 null 时按 {@code IS NULL} 精确匹配（RULE 维度 account_no 为空）。
      *
+     * <p>同时把命中行的失效日期 {@code end_date} 置为 {@code endDate}（当天），与新分配
+     * {@code effective_date=今天} 形成连续时间线。
+     *
      * @param custId   客户编号
      * @param custType 客户类型 CORP/RETAIL（nullable，来源审批申请）
      * @param allocDim 分配维度 RULE/ACCOUNT
      * @param accountNo 账号（nullable）
+     * @param endDate  失效日期（当天）
      * @return 受影响行数（命中并置 1 的存量分配条数，0 表示无存量）
      */
     int markOriginalByKey(@Param("custId") String custId,
                           @Param("custType") String custType,
                           @Param("allocDim") String allocDim,
-                          @Param("accountNo") String accountNo);
+                          @Param("accountNo") String accountNo,
+                          @Param("endDate") java.time.LocalDate endDate);
 
     /**
      * 原业绩分配反显：取该客户当前生效分配（{@code is_original='2'}）。

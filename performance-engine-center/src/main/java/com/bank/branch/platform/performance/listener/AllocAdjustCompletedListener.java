@@ -69,6 +69,8 @@ public class AllocAdjustCompletedListener {
     private final CustAllocRelationMapper allocRelationMapper;
     private final PerfEventPublisher eventPublisher;
     private final com.bank.branch.platform.governance.api.NotifyApi notifyApi;
+    /** 审批通过插入分配关系时，按工号回填姓名/部门快照. */
+    private final com.bank.branch.platform.auth.api.UserApi userApi;
 
     /**
      * 监听流程完成事件入口.
@@ -119,12 +121,18 @@ public class AllocAdjustCompletedListener {
 
         if (!items.isEmpty()) {
             // 插入新分配前：按 cust_id + cust_type + alloc_dim + account_no 命中的存量分配置为「原分配」
-            // （is_original=1），让本次新插入的 is_original=2 行成为唯一当前分配。cust_type 取自审批申请。
+            // （is_original=1）并把失效日期 end_date 置为当天，让本次新插入的 is_original=2 行成为
+            // 唯一当前分配。cust_type 取自审批申请。
             allocRelationMapper.markOriginalByKey(
-                    relCustId, apply.getCustType(), apply.getAllocDim(), apply.getAccountNo());
+                    relCustId, apply.getCustType(), apply.getAllocDim(), apply.getAccountNo(),
+                    effectiveDate);
         }
 
+        // 按工号批量解析 姓名/部门，插入时回填 fullname/dept_no/dept_name（明细快照为空时兜底）
+        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> userMap = resolveUserMap(items);
+
         for (PerfAllocAdjustItem it : items) {
+            com.bank.branch.platform.auth.api.dto.UserDTO u = userMap.get(it.getEmpId());
             CustAllocRelation rel = new CustAllocRelation();
             rel.setId(UUID.randomUUID().toString().replace("-", ""));
             rel.setCustId(relCustId);
@@ -133,10 +141,10 @@ public class AllocAdjustCompletedListener {
             rel.setBizKind(apply.getBizKind());
             rel.setAccountNo(apply.getAccountNo());
             rel.setEmpId(it.getEmpId());
-            // 姓名/部门快照（供原业绩分配反显直接读，不再 UserApi 补全）
-            rel.setFullname(it.getEmpChnName());
-            rel.setDeptNo(it.getOrgCode());
-            rel.setDeptName(it.getOrgName());
+            // 姓名/部门：优先 UserApi 解析（工号→姓名/机构），解析不到回退调整明细快照
+            rel.setFullname(firstNonBlank(u == null ? null : u.getDisplayName(), it.getEmpChnName()));
+            rel.setDeptNo(firstNonBlank(u == null ? null : u.getMainOrgCode(), it.getOrgCode()));
+            rel.setDeptName(firstNonBlank(u == null ? null : u.getMainOrgName(), it.getOrgName()));
             rel.setRatio(it.getRatio());
             // 新分配默认 is_original=2（当前生效，非原分配）
             rel.setIsOriginal(IS_ORIGINAL_NO);
@@ -168,6 +176,64 @@ public class AllocAdjustCompletedListener {
                 apply.getId(), items.size());
 
         notifyApplicant(apply, "通过", "您的业绩分配调整申请已通过，调整已生效。");
+    }
+
+    /**
+     * 按调整明细的工号批量解析用户（工号→姓名/机构），键为 empId 与 username 双登记，
+     * 供插入分配关系时回填 fullname/dept_no/dept_name。UserApi 异常不阻断审批落地（返回已解析部分）。
+     */
+    private java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> resolveUserMap(
+            List<PerfAllocAdjustItem> items) {
+        java.util.Map<String, com.bank.branch.platform.auth.api.dto.UserDTO> map = new java.util.HashMap<>();
+        java.util.LinkedHashSet<String> empIds = new java.util.LinkedHashSet<>();
+        for (PerfAllocAdjustItem it : items) {
+            if (it.getEmpId() != null && !it.getEmpId().isBlank()) {
+                empIds.add(it.getEmpId());
+            }
+        }
+        if (empIds.isEmpty()) {
+            return map;
+        }
+        try {
+            List<com.bank.branch.platform.auth.api.dto.UserDTO> byId =
+                    userApi.getUserByEmpIds(new java.util.ArrayList<>(empIds));
+            if (byId != null) {
+                for (com.bank.branch.platform.auth.api.dto.UserDTO u : byId) {
+                    if (u != null && u.getEmpId() != null) {
+                        map.put(u.getEmpId(), u);
+                    }
+                }
+            }
+            // 工号若是登录名(username) 未命中 empId，回退按 username 解析
+            List<String> remaining = new java.util.ArrayList<>();
+            for (String token : empIds) {
+                if (!map.containsKey(token)) {
+                    remaining.add(token);
+                }
+            }
+            if (!remaining.isEmpty()) {
+                List<com.bank.branch.platform.auth.api.dto.UserDTO> byName =
+                        userApi.getUsersByUsernames(remaining);
+                if (byName != null) {
+                    for (com.bank.branch.platform.auth.api.dto.UserDTO u : byName) {
+                        if (u != null && u.getUsername() != null) {
+                            map.putIfAbsent(u.getUsername(), u);
+                        }
+                    }
+                }
+            }
+        } catch (RuntimeException ex) {
+            log.warn("[AllocAdjustCompletedListener] 工号解析姓名/部门失败，回退明细快照: {}", ex.getMessage());
+        }
+        return map;
+    }
+
+    /** 取首个非空白字符串. */
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        return b;
     }
 
     /**
