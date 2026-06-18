@@ -61,3 +61,10 @@ export function pageEmployees(params = {}) {
 export function updateEmployee(empId, data) {
   return call('put', `/employees/${empId}`, { data }, { ok: true });
 }
+
+// POST /api/employees/import —— 导入（原子全或无，成功返回导入行数；失败 throw 带行号原因）
+export function importEmployeesFile(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return call('post', '/employees/import', { data: fd, headers: { 'Content-Type': 'multipart/form-data' } }, null);
+}

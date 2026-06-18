@@ -2,6 +2,13 @@
   <div class="ab-page">
     <div class="page-h">
       <h1>分行通讯录 <span class="sub">模糊搜索 · 60 天未更新提醒 · 勾选产品反向更新产品库</span></h1>
+      <div class="actions">
+        <el-button @click="downloadTemplate">📥 下载模板</el-button>
+        <el-upload ref="importUploaderRef" :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="onImportPick" style="display:inline-block">
+          <el-button :loading="importing">📤 导入</el-button>
+        </el-upload>
+        <el-button @click="exportData">导出</el-button>
+      </div>
     </div>
 
     <div class="card-section">
@@ -12,8 +19,9 @@
         </el-form-item>
         <el-form-item label="组织节点">
           <el-tree-select v-model="filters.orgCode" :data="orgTree" check-strictly clearable
+                          filterable :filter-node-method="orgFilter"
                           :props="{ label: 'name', value: 'code', children: 'children' }"
-                          placeholder="全部" style="width:200px" @change="reload" />
+                          placeholder="选择 / 输入机构编号或名称" style="width:240px" @change="reload" />
         </el-form-item>
         <el-form-item label="岗位">
           <el-input v-model="filters.position" placeholder="全部" clearable style="width:150px"
@@ -79,7 +87,7 @@
     </div>
 
     <!-- 编辑抽屉 -->
-    <el-drawer v-model="drawer" :title="`编辑通讯录 · ${cur?.empName || ''}`" size="520px">
+    <el-drawer v-model="drawer" :title="`编辑通讯录 · ${cur?.empName || ''}`" size="840px">
       <div v-if="cur" class="drawer-body">
         <el-alert type="info" :closable="false" show-icon
                   title="勾选「负责产品」将自动反向更新产品资料库的「产品负责人」字段。" style="margin-bottom:16px" />
@@ -118,14 +126,16 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
-import { pageEmployees, updateEmployee } from '@/api/employees';
+import { pageEmployees, updateEmployee, importEmployeesFile } from '@/api/employees';
 import { supportAvailableProducts } from '@/api/products';
 import { getOrgTree } from '@/api/orgs';
 
 const loading = ref(false);
 const saving = ref(false);
+const importing = ref(false);
+const importUploaderRef = ref(null);
 const rows = ref([]);
 const total = ref(0);
 const pgNo = ref(1);
@@ -171,6 +181,40 @@ async function reload() {
 async function loadRefs() {
   try { products.value = await supportAvailableProducts() || []; } catch { products.value = []; }
   try { orgTree.value = await getOrgTree() || []; } catch { orgTree.value = []; }
+}
+
+// 组织树过滤：按机构编号(code) 或 名称(name) 模糊匹配
+function orgFilter(value, data) {
+  if (!value) return true;
+  const v = String(value).toLowerCase();
+  return (data.name || '').toLowerCase().includes(v) || (data.code || '').toLowerCase().includes(v);
+}
+
+// ---- 模板 / 导入 / 导出 ----
+function downloadTemplate() {
+  window.open('/api/employees/template', '_blank');
+}
+function exportData() {
+  const p = new URLSearchParams();
+  if (filters.value.keyword) p.append('keyword', filters.value.keyword);
+  if (filters.value.orgCode) p.append('orgCode', filters.value.orgCode);
+  if (filters.value.position) p.append('position', filters.value.position);
+  window.open('/api/employees/export?' + p.toString(), '_blank');
+}
+async function onImportPick(file) {
+  if (!file?.raw) return;
+  importing.value = true;
+  try {
+    const n = await importEmployeesFile(file.raw);
+    ElMessage.success(`导入成功 ${n ?? ''} 条`);
+    reload();
+  } catch (e) {
+    // 后端原子校验失败：err.message 含「第 N 行：原因」
+    ElMessageBox.alert(e?.message || '导入失败', '导入失败', { type: 'error', confirmButtonText: '知道了' });
+  } finally {
+    importing.value = false;
+    importUploaderRef.value?.clearFiles(); // 清空已选文件，保证可重复选同名/不同文件
+  }
 }
 
 // ---- 编辑抽屉 ----
