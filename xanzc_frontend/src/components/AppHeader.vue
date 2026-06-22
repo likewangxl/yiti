@@ -73,7 +73,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useUserStore } from '@/stores/user';
-import { logout, switchRole } from '@/api/auth';
+import { logout, switchRole, getCurrentUser } from '@/api/auth';
 import { getUnreadCount } from '@/api/workspace';
 import { changeMyPassword } from '@/api/users';
 
@@ -110,11 +110,18 @@ async function onCommand(cmd) {
     } catch { return; }
     try {
       await switchRole(roleId);
-      store.setActiveRole(roleId);
+      // 切换后重新拉取后端「权威」当前用户（已激活新角色：roles 主标记、activeRoleId 等均为服务端真值），
+      // 全量覆盖本地 store，避免整页刷新后路由守卫「有 user 就不再拉 current-user」而沿用登录时旧缓存。
+      // 拉取失败再退回仅 patch activeRoleId，保证切换不被网络抖动卡死。
+      try {
+        const fresh = await getCurrentUser();
+        if (fresh && fresh.empId && fresh.empId !== 'mock') store.setUser(fresh);
+        else store.setActiveRole(roleId);
+      } catch { store.setActiveRole(roleId); }
       ElMessage.success(`已切换到「${r?.roleChName || roleId}」，正在进入工作台`);
-      // 跳转工作台并整页刷新，确保菜单/权限/数据范围全部按新角色重新拉取
+      // 跳转工作台并整页刷新，确保菜单/权限/数据范围/待办全部按新角色重新拉取
       await router.push('/workspace').catch(() => {});
-      setTimeout(() => window.location.reload(), 300);
+      window.location.reload();
     } catch (e) {
       ElMessage.error('切换角色失败：' + (e?.message || e));
     }
