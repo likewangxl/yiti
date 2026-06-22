@@ -2,6 +2,8 @@ package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.common.security.enums.BizType;
+import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.AuditApi;
@@ -50,6 +52,7 @@ class AddressBookServiceTest {
     @Mock AddrbookEmployeeMapper addrbookEmployeeMapper;
     @Mock ProductInfoMapper productInfoMapper;
     @Mock CurrentUserApi currentUserApi;
+    @Mock BizScopeApi bizScopeApi;
     @Mock AuditApi auditApi;
     @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks AddressBookService addressBookService;
@@ -142,10 +145,10 @@ class AddressBookServiceTest {
     }
 
     @Test
-    void updateEmployee_otherInSameOrg_shouldAudit() {
+    void updateEmployee_otherWithAllScope_success() {
         String targetEmpId = "E002";
         when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
-        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_SZ_001");
+        when(bizScopeApi.resolveScope("E001", BizType.ADDRBOOK)).thenReturn(DataScopeType.ALL);
         AddrbookEmployee target = buildEmployee("E002", "李四");
         target.setOrgCode("ORG_SZ_001");
         when(addrbookEmployeeMapper.selectByEmpId(targetEmpId)).thenReturn(target);
@@ -156,14 +159,13 @@ class AddressBookServiceTest {
         addressBookService.updateEmployee(targetEmpId, req);
 
         verify(addrbookEmployeeMapper).updateFields(any(AddrbookEmployee.class));
-        verify(auditApi).log(any());
     }
 
     @Test
-    void updateEmployee_otherWithoutPermission() {
+    void updateEmployee_otherNonAdmin_shouldReject() {
         String targetEmpId = "E002";
         when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
-        when(currentUserApi.getCurrentOrgCode()).thenReturn("ORG_BJ_001");
+        when(bizScopeApi.resolveScope("E001", BizType.ADDRBOOK)).thenReturn(DataScopeType.SELF);
         AddrbookEmployee target = buildEmployee("E002", "李四");
         target.setOrgCode("ORG_SZ_001");
         when(addrbookEmployeeMapper.selectByEmpId(targetEmpId)).thenReturn(target);

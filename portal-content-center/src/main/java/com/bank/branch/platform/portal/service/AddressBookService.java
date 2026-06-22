@@ -127,7 +127,7 @@ public class AddressBookService {
                     PortalErrorCode.EMPLOYEE_RESIGNED.getMessage());
         }
 
-        // 3. 权限校验（数据范围）：本人可编辑；非本人仅管理员(DataScopeType.ALL)可编辑，其余拒绝。
+        // 3. 权限校验（数据范围）：本人可编辑；非本人仅 ADDRBOOK 数据范围=ALL（管理员）可编辑，其余拒绝。
         if (!operatorEmpId.equals(targetEmpId)) {
             DataScopeType scope = bizScopeApi.resolveScope(operatorEmpId, BizType.ADDRBOOK);
             if (scope != DataScopeType.ALL) {
