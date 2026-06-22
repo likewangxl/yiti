@@ -37,6 +37,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="reload">查询</el-button>
+          <el-button @click="resetFilters">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -165,6 +166,13 @@ function rowProducts(row) {
   return (row.responsibleProductIds || [])
     .map(id => productById.value[id] || { id, productName: id })
     .filter(Boolean);
+}
+
+// 重置筛选条件并重新查询
+function resetFilters() {
+  filters.value = { keyword: '', orgCode: '', position: '', productId: '', stale60: false };
+  pgNo.value = 1;
+  reload();
 }
 
 // 客户端附加过滤（负责产品 / 60天未更新）—— 后端查询参不含这两项

@@ -44,8 +44,12 @@
           <el-table-column label="更新时间" width="170">
             <template #default="{row}">{{ fmtDate(row.updatedTime) }}</template>
           </el-table-column>
-          <el-table-column label="下载次数" width="90" align="right">
-            <template #default="{row}">{{ row.downloadCount != null ? row.downloadCount : '—' }}</template>
+          <el-table-column label="状态" width="90">
+            <template #default="{row}">
+              <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" effect="plain">
+                {{ row.status === 'ACTIVE' ? '启用' : '禁用' }}
+              </el-tag>
+            </template>
           </el-table-column>
           <el-table-column label="操作" width="160" fixed="right">
             <template #default="{row}">
