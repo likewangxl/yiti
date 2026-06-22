@@ -35,6 +35,12 @@ public class DocumentDTO {
     /** 状态 ACTIVE/DISABLED */
     String status;
 
+    /** 文件大小（字节，来自关联 FileObject，Service/Controller 层填充） */
+    Long fileSize;
+
+    /** 更新人工号 */
+    String updatedBy;
+
     /** 更新时间 */
     LocalDateTime updatedTime;
 }

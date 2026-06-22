@@ -4,6 +4,7 @@ import com.bank.branch.platform.governance.api.dto.FileObjectDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 文件管理对外API
@@ -103,4 +104,12 @@ public interface FileApi {
      * @return original file name; "file" if id not found
      */
     String getFileName(String fileId);
+
+    /**
+     * 批量获取文件大小（字节）。
+     *
+     * @param fileIds 文件对象ID列表
+     * @return id -> fileSize 映射；不存在的 id 不在结果中
+     */
+    Map<String, Long> getFileSizes(List<String> fileIds);
 }

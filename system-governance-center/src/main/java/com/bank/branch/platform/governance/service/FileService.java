@@ -188,7 +188,9 @@ public class FileService {
             throw new BizException(GovErrorCode.FILE_NOT_FOUND.getCode(),
                     GovErrorCode.FILE_NOT_FOUND.getMessage());
         }
-        return obsStorageClient.generatePresignedUrl(fileObject.getStoragePath());
+        // ⚠️ 临时本地方案：OBS 预签名不可用，改为返回应用内流式下载端点（前端 window.open → vite 代理 → 后端流式返回）。
+        // 切回 OBS 时还原为：return obsStorageClient.generatePresignedUrl(fileObject.getStoragePath());
+        return "/api/files/" + fileId + "/download";
     }
 
     /**
@@ -282,6 +284,18 @@ public class FileService {
     public String getFileName(String fileId) {
         FileObject fileObject = fileObjectMapper.selectById(fileId);
         return fileObject != null ? fileObject.getFileName() : "file";
+    }
+
+    /** 批量获取文件大小：id -> fileSize（用 MyBatis-Plus BaseMapper.selectBatchIds 一次查出）。 */
+    public java.util.Map<String, Long> getFileSizes(java.util.List<String> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Map<String, Long> sizeMap = new java.util.HashMap<>();
+        for (FileObject fo : fileObjectMapper.selectBatchIds(fileIds)) {
+            sizeMap.put(fo.getId(), fo.getFileSize());
+        }
+        return sizeMap;
     }
 
     /**
