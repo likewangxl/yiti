@@ -164,6 +164,58 @@ class MetricDefServiceTest {
     }
 
     @Test
+    @DisplayName("指标名维度后缀归一：无后缀时按维度追加 -员工/-机构/-客户")
+    void applyDimensionSuffix_appendsByDimWhenNoSuffix() {
+        assertThat(MetricDefService.applyDimensionSuffix("客户数", "EMP")).isEqualTo("客户数-员工");
+        assertThat(MetricDefService.applyDimensionSuffix("客户数", "ORG")).isEqualTo("客户数-机构");
+        assertThat(MetricDefService.applyDimensionSuffix("客户数", "CUST")).isEqualTo("客户数-客户");
+        // 维度小写/带空格也归一
+        assertThat(MetricDefService.applyDimensionSuffix("  客户数 ", "emp")).isEqualTo("客户数-员工");
+    }
+
+    @Test
+    @DisplayName("指标名维度后缀归一：已带任一后缀(员工/机构/客户)则不再追加")
+    void applyDimensionSuffix_keepsWhenAlreadyHasAnySuffix() {
+        assertThat(MetricDefService.applyDimensionSuffix("客户数-员工", "EMP")).isEqualTo("客户数-员工");
+        assertThat(MetricDefService.applyDimensionSuffix("客户数-机构", "CUST")).isEqualTo("客户数-机构");
+        assertThat(MetricDefService.applyDimensionSuffix("客户数-客户", "ORG")).isEqualTo("客户数-客户");
+    }
+
+    @Test
+    @DisplayName("指标名维度后缀归一：维度为空 / 非法 / 指标名为空时不追加")
+    void applyDimensionSuffix_noDimOrNullName_noAppend() {
+        assertThat(MetricDefService.applyDimensionSuffix("某指标", null)).isEqualTo("某指标");
+        assertThat(MetricDefService.applyDimensionSuffix("某指标", "")).isEqualTo("某指标");
+        assertThat(MetricDefService.applyDimensionSuffix("某指标", "XYZ")).isEqualTo("某指标");
+        assertThat(MetricDefService.applyDimensionSuffix(null, "EMP")).isNull();
+    }
+
+    @Test
+    @DisplayName("新增指标：指标名按维度自动补后缀后落库")
+    void create_appendsDimensionSuffixToMetricName() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("TEST_METRIC_SUFFIX")
+                .metricName("新客户数")
+                .baseDim("CUST")
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("SQL")
+                .sqlText("SELECT 1")
+                .operator("admin")
+                .build();
+        when(mapper.selectByMetricCode("TEST_METRIC_SUFFIX")).thenReturn(null);
+        when(metricRefService.loadFullGraph()).thenReturn(Collections.emptyMap());
+        when(metricSlotService.allocSlot("CUST", 1, null)).thenReturn(5);
+
+        service.create(cmd);
+
+        ArgumentCaptor<PerfMetricDef> captor = ArgumentCaptor.forClass(PerfMetricDef.class);
+        verify(mapper).insert(captor.capture());
+        assertThat(captor.getValue().getMetricName()).isEqualTo("新客户数-客户");
+    }
+
+    @Test
     @DisplayName("EXPR 指标创建：expr_text 语法不合法 → 抛 METRIC_CALC_LOGIC_INVALID")
     void create_expr_invalidExprText_throws() {
         CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()

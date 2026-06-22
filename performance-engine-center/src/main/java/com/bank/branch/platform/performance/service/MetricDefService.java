@@ -120,6 +120,8 @@ public class MetricDefService {
     @Transactional(rollbackFor = Exception.class)
     public UpsertMetricDefResult upsertByName(CreateMetricDefCmd cmd, String operator) {
         cmd.setOperator(operator);
+        // 导入路径：先按维度补后缀，再以归一后的名字匹配已有记录（保证与已带后缀记录命中更新而非重复插）
+        cmd.setMetricName(applyDimensionSuffix(cmd.getMetricName(), cmd.getBaseDim()));
         PerfMetricDef existing = mapper.selectByMetricName(cmd.getMetricName(), cmd.getBaseDim());
         if (existing == null) {
             // 新增路径
@@ -244,8 +246,37 @@ public class MetricDefService {
      * @param cmd 新建命令
      * @return 新建后的指标定义
      */
+    /** 基础维度 → 指标名中文后缀. */
+    private static final java.util.Map<String, String> DIM_NAME_SUFFIX = java.util.Map.of(
+            "EMP", "-员工", "ORG", "-机构", "CUST", "-客户");
+
+    /**
+     * 指标名维度后缀归一：指标名结尾若不是「-员工 / -机构 / -客户」任一，则按基础维度
+     * (EMP/ORG/CUST) 自动追加对应后缀。已带任一后缀则原样返回（幂等）；维度为空或非
+     * EMP/ORG/CUST、或指标名为空时不追加。新增与导入两条路径统一调用本方法。
+     *
+     * @param metricName 原指标名（可空）
+     * @param baseDim    基础维度 EMP/ORG/CUST（可空，大小写/空格不敏感）
+     * @return 归一后的指标名
+     */
+    static String applyDimensionSuffix(String metricName, String baseDim) {
+        if (metricName == null) {
+            return null;
+        }
+        String name = metricName.trim();
+        for (String suffix : DIM_NAME_SUFFIX.values()) {
+            if (name.endsWith(suffix)) {
+                return name; // 已带任一维度后缀 → 不重复追加
+            }
+        }
+        String suffix = baseDim == null ? null : DIM_NAME_SUFFIX.get(baseDim.trim().toUpperCase());
+        return suffix == null ? name : name + suffix;
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public PerfMetricDef create(CreateMetricDefCmd cmd) {
+        // 指标名按基础维度自动补后缀（-员工/-机构/-客户）；新增与导入(upsertByName)统一在入口归一
+        cmd.setMetricName(applyDimensionSuffix(cmd.getMetricName(), cmd.getBaseDim()));
         // Groovy 计算逻辑：保存前先校验 expr_text 表达式语法合法（不合法直接拒绝，避免脏表达式入库）
         validateExprIfNeeded(cmd.getCalcLogicType(), cmd.getCalcMode(), cmd.getExprText());
         if (mapper.selectByMetricCode(cmd.getMetricCode()) != null) {
