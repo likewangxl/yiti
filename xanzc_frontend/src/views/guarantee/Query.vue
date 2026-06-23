@@ -27,12 +27,17 @@
         <el-table-column type="selection" width="45" reserve-selection />
         <el-table-column label="序号" type="index" width="64"
           :index="i => (pager.pageNo - 1) * pager.pageSize + i + 1" />
-        <el-table-column label="客户名称" prop="clientName" min-width="180" show-overflow-tooltip />
+        <el-table-column label="客户名称" prop="clientName" min-width="200" />
         <el-table-column label="业务额度（万元）" prop="notionalAmount" min-width="160" align="right" />
         <el-table-column label="剩余额度（万元）" prop="occupyNotionalAmount" min-width="160" align="right" />
         <el-table-column label="融资额度（万元）" prop="usableNominalSum" min-width="160" align="right" />
         <el-table-column label="授信到期日" prop="lastExpire" min-width="120" />
-        <el-table-column label="经办人" prop="userName" min-width="110" />
+        <el-table-column label="经办人" min-width="130">
+          <template #default="{ row }">
+            <div>{{ row.userDisplayName || row.userName || '-' }}</div>
+            <div v-if="row.userName" style="color:#909399;font-size:12px;">{{ row.userName }}</div>
+          </template>
+        </el-table-column>
         <el-table-column label="数据变动日期" prop="createTime" min-width="170" />
         <el-table-column label="变更日期" prop="updateTime" min-width="170" />
         <el-table-column label="操作" width="90" fixed="right">
@@ -76,8 +81,8 @@
           <el-date-picker v-model="dlg.form.lastExpire" type="date" value-format="YYYY-MM-DD"
             placeholder="选择授信到期日" style="width:100%" />
         </el-form-item>
-        <el-form-item label="经办人" prop="userName">
-          <el-input v-model="dlg.form.userName" maxlength="20" placeholder="请输入经办人" />
+        <el-form-item label="经办人工号" prop="userName">
+          <el-input v-model="dlg.form.userName" maxlength="20" placeholder="请输入员工工号" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -131,7 +136,7 @@ const rules = {
   usableNominalSum:    [{ required: true, message: '请输入融资额度', trigger: 'blur' },
                       { validator: amountValidator('融资额度'), trigger: 'blur' }],
   lastExpire:        [{ required: true, message: '请选择授信到期日', trigger: 'change' }],
-  userName:          [{ required: true, message: '请输入经办人', trigger: 'blur' }]
+  userName:          [{ required: true, message: '请输入员工工号', trigger: 'blur' }]
 };
 
 async function load() {
