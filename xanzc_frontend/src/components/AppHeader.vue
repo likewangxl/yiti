@@ -44,8 +44,6 @@
     <div class="icon-btn" @click="$router.push('/system/notifications')" title="通知中心" style="cursor:pointer">
       <el-badge :value="unread" :max="99" :hidden="!unread">🔔</el-badge>
     </div>
-    <div class="icon-btn">❓</div>
-    <div class="icon-btn">👤</div>
 
     <!-- 修改密码弹窗（用户改自己的密码，要求旧密码） -->
     <el-dialog v-model="pwdDlg.show" title="修改密码" width="440px" :close-on-click-modal="false">
