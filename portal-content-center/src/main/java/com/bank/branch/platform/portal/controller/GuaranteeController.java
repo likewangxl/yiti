@@ -1,6 +1,8 @@
 package com.bank.branch.platform.portal.controller;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
@@ -34,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -53,6 +56,7 @@ public class GuaranteeController {
     private final GuaranteeService guaranteeService;
     private final GuaranteeExportService guaranteeExportService;
     private final CurrentUserApi currentUserApi;
+    private final UserApi userApi;
 
     /** 分页查询担保信息列表。 */
     @GetMapping
@@ -62,8 +66,39 @@ public class GuaranteeController {
         List<GuaranteeDTO> dtos = page.getRecords().stream()
                 .map(GuaranteeConverter::toDTO)
                 .collect(Collectors.toList());
+        fillUserDisplayName(dtos);
         return ResponseWrapper.page(PageResult.of(
                 (int) page.getCurrent(), (int) page.getSize(), page.getTotal(), dtos));
+    }
+
+    /**
+     * 批量把经办人工号（operator，= PT_USER.username）解析为姓名，填充 {@code userDisplayName}。
+     * 查无 / 离职 / 解析异常时回退为工号本身，保证列表主标题不空白。一次 IN 查询，避免逐行 N+1。
+     */
+    private void fillUserDisplayName(List<GuaranteeDTO> dtos) {
+        List<String> empNos = dtos.stream()
+                .map(GuaranteeDTO::getUserName)
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (empNos.isEmpty()) {
+            return;
+        }
+        Map<String, String> nameMap;
+        try {
+            nameMap = userApi.getUsersByUsernames(empNos).stream()
+                    .filter(u -> u.getUsername() != null)
+                    .collect(Collectors.toMap(UserDTO::getUsername,
+                            u -> u.getDisplayName() != null && !u.getDisplayName().isBlank()
+                                    ? u.getDisplayName() : u.getUsername(),
+                            (a, b) -> a));
+        } catch (Exception e) {
+            nameMap = Map.of();
+        }
+        for (GuaranteeDTO dto : dtos) {
+            String no = dto.getUserName();
+            dto.setUserDisplayName(no == null ? null : nameMap.getOrDefault(no, no));
+        }
     }
 
     /** 担保信息详情（编辑反显用）。 */

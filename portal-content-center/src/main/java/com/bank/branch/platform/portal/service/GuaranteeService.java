@@ -1,6 +1,7 @@
 package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.portal.convert.GuaranteeConverter;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeSaveReqDTO;
 import com.bank.branch.platform.portal.entity.ZhGuaranteeInfo;
@@ -140,9 +141,10 @@ public class GuaranteeService {
     /** 把保存入参的字段拷贝到实体（新增/编辑共用）。 */
     private void applySaveFields(ZhGuaranteeInfo entity, GuaranteeSaveReqDTO req) {
         entity.setClientName(req.getClientName());
-        entity.setNotionalAmount(req.getNotionalAmount());
-        entity.setOccupyNotionalAmount(req.getOccupyNotionalAmount());
-        entity.setUsableNominalSum(req.getUsableNominalSum());
+        // 三个金额表单按"万元"录入，落库前 ×10000 转"元"存储（与读取 ÷10000 对称）
+        entity.setNotionalAmount(GuaranteeConverter.toYuan(req.getNotionalAmount()));
+        entity.setOccupyNotionalAmount(GuaranteeConverter.toYuan(req.getOccupyNotionalAmount()));
+        entity.setUsableNominalSum(GuaranteeConverter.toYuan(req.getUsableNominalSum()));
         entity.setLastExpire(req.getLastExpire());
         entity.setUserName(req.getUserName());
     }

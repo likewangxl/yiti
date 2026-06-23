@@ -64,9 +64,10 @@ class GuaranteeServiceTest {
         verify(guaranteeMapper).insert(captor.capture());
         ZhGuaranteeInfo saved = captor.getValue();
         assertThat(saved.getClientName()).isEqualTo("某某公司");
-        assertThat(saved.getNotionalAmount()).isEqualTo("1000");
-        assertThat(saved.getOccupyNotionalAmount()).isEqualTo("300");
-        assertThat(saved.getUsableNominalSum()).isEqualTo("700");
+        // 金额表单按万元录入，落库前 ×10000 转元
+        assertThat(saved.getNotionalAmount()).isEqualTo("10000000.00");
+        assertThat(saved.getOccupyNotionalAmount()).isEqualTo("3000000.00");
+        assertThat(saved.getUsableNominalSum()).isEqualTo("7000000.00");
         assertThat(saved.getLastExpire()).isEqualTo("2027-12-31");
         assertThat(saved.getUserName()).isEqualTo("finance_zhou");
         assertThat(saved.getCreateUser()).isEqualTo("admin");

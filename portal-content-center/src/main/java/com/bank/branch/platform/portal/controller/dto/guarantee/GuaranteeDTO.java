@@ -28,8 +28,11 @@ public class GuaranteeDTO {
     /** 授信到期日 */
     private String lastExpire;
 
-    /** 经办人（属性名 userName，存 operator 列） */
+    /** 经办人工号（属性名 userName，存 operator 列） */
     private String userName;
+
+    /** 经办人姓名（由工号 userName 解析，列表展示主标题；离职/查无回退工号） */
+    private String userDisplayName;
 
     /** 数据变动日期（yyyy-MM-dd HH:mm:ss） */
     private String createTime;
