@@ -34,6 +34,9 @@ public enum PortalErrorCode {
     DOC_NOT_FOUND              ("PORTAL-40401", "文档不存在"),
     NO_RIGHT_TO_DOC            ("PORTAL-40304", "无权维护文档"),
 
+    // ===== 担保信息域 =====
+    GUARANTEE_NOT_FOUND        ("PORTAL-40006", "担保信息不存在"),
+
     // ===== 通用 =====
     PARAM_INVALID              ("PORTAL-42200", "参数校验失败"),
     FILE_OBJECT_NOT_FOUND      ("PORTAL-42203", "附件对象不存在"),
