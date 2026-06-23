@@ -40,11 +40,11 @@ class GuaranteeServiceTest {
     private GuaranteeSaveReqDTO sampleReq() {
         GuaranteeSaveReqDTO req = new GuaranteeSaveReqDTO();
         req.setClientName("某某公司");
-        req.setAmountManage("1000");
-        req.setUsableExposureSum("300");
-        req.setExposureAmount("700");
+        req.setNotionalAmount("1000");
+        req.setOccupyNotionalAmount("300");
+        req.setUsableNominalSum("700");
         req.setLastExpire("2027-12-31");
-        req.setOperator("finance_zhou");
+        req.setUserName("finance_zhou");
         return req;
     }
 
@@ -64,11 +64,11 @@ class GuaranteeServiceTest {
         verify(guaranteeMapper).insert(captor.capture());
         ZhGuaranteeInfo saved = captor.getValue();
         assertThat(saved.getClientName()).isEqualTo("某某公司");
-        assertThat(saved.getAmountManage()).isEqualTo("1000");
-        assertThat(saved.getUsableExposureSum()).isEqualTo("300");
-        assertThat(saved.getExposureAmount()).isEqualTo("700");
+        assertThat(saved.getNotionalAmount()).isEqualTo("1000");
+        assertThat(saved.getOccupyNotionalAmount()).isEqualTo("300");
+        assertThat(saved.getUsableNominalSum()).isEqualTo("700");
         assertThat(saved.getLastExpire()).isEqualTo("2027-12-31");
-        assertThat(saved.getOperator()).isEqualTo("finance_zhou");
+        assertThat(saved.getUserName()).isEqualTo("finance_zhou");
         assertThat(saved.getCreateUser()).isEqualTo("admin");
         assertThat(saved.getCreateTime()).isNotNull();
         assertThat(saved.getType()).isEqualTo("1");

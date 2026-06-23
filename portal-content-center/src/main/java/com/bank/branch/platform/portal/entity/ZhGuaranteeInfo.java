@@ -14,11 +14,11 @@ import java.time.LocalDateTime;
  * <p>页面字段 → 物理列映射（业务方表列含义较泛，此处按担保查询页面口径绑定，前端表单/列表与本映射保持一致）：
  * <ul>
  *   <li>客户名称           → client_name</li>
- *   <li>业务额度（万元）    → amount_manage</li>
- *   <li>剩余额度（万元）    → usableexposuresum</li>
- *   <li>融资额度（万元）    → exposure_amount</li>
+ *   <li>业务额度（万元）    → notional_amount</li>
+ *   <li>剩余额度（万元）    → occupy_notional_amount</li>
+ *   <li>融资额度（万元）    → usablenominalsum</li>
  *   <li>授信到期日          → last_expire</li>
- *   <li>经办人              → operator</li>
+ *   <li>经办人（userName）  → operator</li>
  *   <li>数据变动日期（只读）→ create_time</li>
  *   <li>变更日期（只读）    → update_time</li>
  * </ul>
@@ -37,25 +37,25 @@ public class ZhGuaranteeInfo {
     @TableField("client_name")
     private String clientName;
 
-    /** 业务额度（万元），对应 amount_manage */
-    @TableField("amount_manage")
-    private String amountManage;
+    /** 业务额度（万元），对应 notional_amount */
+    @TableField("notional_amount")
+    private String notionalAmount;
 
-    /** 剩余额度（万元），对应 usableexposuresum */
-    @TableField("usableexposuresum")
-    private String usableExposureSum;
+    /** 剩余额度（万元），对应 occupy_notional_amount */
+    @TableField("occupy_notional_amount")
+    private String occupyNotionalAmount;
 
-    /** 融资额度（万元），对应 exposure_amount */
-    @TableField("exposure_amount")
-    private String exposureAmount;
+    /** 融资额度（万元），对应 usablenominalsum */
+    @TableField("usablenominalsum")
+    private String usableNominalSum;
 
     /** 授信到期日，对应 last_expire */
     @TableField("last_expire")
     private String lastExpire;
 
-    /** 经办人，对应 operator */
+    /** 经办人（属性名 userName），对应 operator 列 */
     @TableField("operator")
-    private String operator;
+    private String userName;
 
     /** 创建人工号，对应 create_user */
     @TableField("create_user")

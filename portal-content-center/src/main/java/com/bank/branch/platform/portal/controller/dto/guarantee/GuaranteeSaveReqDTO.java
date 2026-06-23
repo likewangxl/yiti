@@ -17,23 +17,23 @@ public class GuaranteeSaveReqDTO {
     @Size(max = 100, message = "客户名称长度不能超过100")
     private String clientName;
 
-    /** 业务额度（万元） */
-    @Size(max = 50, message = "业务额度长度不能超过50")
-    private String amountManage;
+    /** 业务额度（万元），对应 notional_amount */
+    @Size(max = 30, message = "业务额度长度不能超过30")
+    private String notionalAmount;
 
-    /** 剩余额度（万元） */
-    @Size(max = 20, message = "剩余额度长度不能超过20")
-    private String usableExposureSum;
+    /** 剩余额度（万元），对应 occupy_notional_amount */
+    @Size(max = 30, message = "剩余额度长度不能超过30")
+    private String occupyNotionalAmount;
 
-    /** 融资额度（万元） */
-    @Size(max = 30, message = "融资额度长度不能超过30")
-    private String exposureAmount;
+    /** 融资额度（万元），对应 usablenominalsum */
+    @Size(max = 20, message = "融资额度长度不能超过20")
+    private String usableNominalSum;
 
     /** 授信到期日（yyyy-MM-dd） */
     @Size(max = 30, message = "授信到期日长度不能超过30")
     private String lastExpire;
 
-    /** 经办人 */
+    /** 经办人（属性名 userName，存 operator 列） */
     @Size(max = 20, message = "经办人长度不能超过20")
-    private String operator;
+    private String userName;
 }

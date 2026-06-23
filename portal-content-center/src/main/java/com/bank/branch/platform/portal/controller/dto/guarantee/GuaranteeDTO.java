@@ -16,20 +16,20 @@ public class GuaranteeDTO {
     /** 客户名称 */
     private String clientName;
 
-    /** 业务额度（万元） */
-    private String amountManage;
+    /** 业务额度（万元），对应 notional_amount */
+    private String notionalAmount;
 
-    /** 剩余额度（万元） */
-    private String usableExposureSum;
+    /** 剩余额度（万元），对应 occupy_notional_amount */
+    private String occupyNotionalAmount;
 
-    /** 融资额度（万元） */
-    private String exposureAmount;
+    /** 融资额度（万元），对应 usablenominalsum */
+    private String usableNominalSum;
 
     /** 授信到期日 */
     private String lastExpire;
 
-    /** 经办人 */
-    private String operator;
+    /** 经办人（属性名 userName，存 operator 列） */
+    private String userName;
 
     /** 数据变动日期（yyyy-MM-dd HH:mm:ss） */
     private String createTime;

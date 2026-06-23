@@ -15,19 +15,19 @@ public class GuaranteeExportRow {
     private String clientName;
 
     @ExcelProperty("业务额度（万元）")
-    private String amountManage;
+    private String notionalAmount;
 
     @ExcelProperty("剩余额度（万元）")
-    private String usableExposureSum;
+    private String occupyNotionalAmount;
 
     @ExcelProperty("融资额度（万元）")
-    private String exposureAmount;
+    private String usableNominalSum;
 
     @ExcelProperty("授信到期日")
     private String lastExpire;
 
     @ExcelProperty("经办人")
-    private String operator;
+    private String userName;
 
     @ExcelProperty("数据变动日期")
     private String createTime;

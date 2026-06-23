@@ -140,10 +140,10 @@ public class GuaranteeService {
     /** 把保存入参的字段拷贝到实体（新增/编辑共用）。 */
     private void applySaveFields(ZhGuaranteeInfo entity, GuaranteeSaveReqDTO req) {
         entity.setClientName(req.getClientName());
-        entity.setAmountManage(req.getAmountManage());
-        entity.setUsableExposureSum(req.getUsableExposureSum());
-        entity.setExposureAmount(req.getExposureAmount());
+        entity.setNotionalAmount(req.getNotionalAmount());
+        entity.setOccupyNotionalAmount(req.getOccupyNotionalAmount());
+        entity.setUsableNominalSum(req.getUsableNominalSum());
         entity.setLastExpire(req.getLastExpire());
-        entity.setOperator(req.getOperator());
+        entity.setUserName(req.getUserName());
     }
 }

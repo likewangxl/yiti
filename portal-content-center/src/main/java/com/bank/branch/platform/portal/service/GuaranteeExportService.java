@@ -53,11 +53,11 @@ public class GuaranteeExportService {
     private GuaranteeExportRow toRow(ZhGuaranteeInfo e) {
         GuaranteeExportRow row = new GuaranteeExportRow();
         row.setClientName(e.getClientName());
-        row.setAmountManage(e.getAmountManage());
-        row.setUsableExposureSum(e.getUsableExposureSum());
-        row.setExposureAmount(e.getExposureAmount());
+        row.setNotionalAmount(e.getNotionalAmount());
+        row.setOccupyNotionalAmount(e.getOccupyNotionalAmount());
+        row.setUsableNominalSum(e.getUsableNominalSum());
         row.setLastExpire(e.getLastExpire());
-        row.setOperator(e.getOperator());
+        row.setUserName(e.getUserName());
         row.setCreateTime(e.getCreateTime() != null ? e.getCreateTime().format(DT_FMT) : "");
         row.setUpdateTime(e.getUpdateTime() != null ? e.getUpdateTime() : "");
         return row;
