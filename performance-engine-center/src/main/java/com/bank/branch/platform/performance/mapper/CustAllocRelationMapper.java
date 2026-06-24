@@ -47,26 +47,22 @@ public interface CustAllocRelationMapper extends BaseMapper<CustAllocRelation> {
                                                      @Param("asOfDate") LocalDate asOfDate);
 
     /**
-     * 插入新分配前置：把同一 key（cust_id + cust_type + alloc_dim + account_no）命中的存量分配
-     * 标记为「原分配」{@code is_original='1'}，使新插入的 {@code is_original='2'} 行成为唯一当前分配。
+     * 插入新分配前置：把该客户（{@code cust_id}）名下<strong>全部</strong> {@code is_original='2'}
+     * 的存量分配标记为「原分配」{@code is_original='1'}，确保插入完成后只有本次新增的
+     * {@code is_original='2'} 行是当前分配。
      *
-     * <p>account_no / cust_type 为 null 时按 {@code IS NULL} 精确匹配（RULE 维度 account_no 为空）。
+     * <p>范围为整客户（不再按 cust_type/alloc_dim/account_no 细分），即一次业绩调整审批通过后，
+     * 该客户此前所有当前分配整体失效，由本次新分配取代。
      *
      * <p>同时把命中行的失效日期 {@code end_date} 置为 {@code endDate}（当天），与新分配
      * {@code effective_date=今天} 形成连续时间线。
      *
-     * @param custId   客户编号
-     * @param custType 客户类型 CORP/RETAIL（nullable，来源审批申请）
-     * @param allocDim 分配维度 RULE/ACCOUNT
-     * @param accountNo 账号（nullable）
-     * @param endDate  失效日期（当天）
-     * @return 受影响行数（命中并置 1 的存量分配条数，0 表示无存量）
+     * @param custId  客户编号
+     * @param endDate 失效日期（当天）
+     * @return 受影响行数（命中并置 1 的存量当前分配条数，0 表示无存量）
      */
-    int markOriginalByKey(@Param("custId") String custId,
-                          @Param("custType") String custType,
-                          @Param("allocDim") String allocDim,
-                          @Param("accountNo") String accountNo,
-                          @Param("endDate") java.time.LocalDate endDate);
+    int markAllOriginalByCustId(@Param("custId") String custId,
+                                @Param("endDate") java.time.LocalDate endDate);
 
     /**
      * 原业绩分配反显：取该客户当前生效分配（{@code is_original='2'}）。

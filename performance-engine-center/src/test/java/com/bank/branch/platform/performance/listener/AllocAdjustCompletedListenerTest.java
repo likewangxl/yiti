@@ -30,7 +30,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -174,16 +173,16 @@ class AllocAdjustCompletedListenerTest {
     }
 
     @Test
-    @DisplayName("APPROVED → 先把同 key(cust_id+cust_type+alloc_dim+account_no) 旧分配置为原(is_original=1)，新分配以 is_original=2 + cust_type 入库")
-    void approved_marksExistingAsOriginal_insertsNewAsCurrent() {
+    @DisplayName("APPROVED → 先把该客户(cust_id)全部 is_original=2 旧分配置为原(is_original=1)，再插入新分配(is_original=2)")
+    void approved_marksAllCustomerOriginal_insertsNewAsCurrent() {
         listener.onProcessCompleted(
                 new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
 
-        // 插入新分配前：按 cust_id+cust_type+alloc_dim+account_no 把旧分配标记为原分配(is_original=1)
-        // 并把失效日期 end_date 置为当天
+        // 插入新分配前：按 cust_id 把该客户全部 is_original=2 的存量分配标记为原分配(is_original=1)
+        // 并把失效日期 end_date 置为当天，确保只有本次新插入的记录 is_original=2
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(allocRelationMapper);
-        inOrder.verify(allocRelationMapper).markOriginalByKey(
-                eq("CUST_001"), eq("CORP"), eq("RULE"), isNull(), eq(LocalDate.now()));
+        inOrder.verify(allocRelationMapper).markAllOriginalByCustId(
+                eq("CUST_001"), eq(LocalDate.now()));
         inOrder.verify(allocRelationMapper, org.mockito.Mockito.times(2))
                 .insert(any(CustAllocRelation.class));
 
@@ -224,7 +223,7 @@ class AllocAdjustCompletedListenerTest {
 
         verify(applyMapper).updateStatus("APP_001", "REJECTED", null);
         verify(allocRelationMapper, never()).insert(any(CustAllocRelation.class));
-        verify(allocRelationMapper, never()).markOriginalByKey(any(), any(), any(), any(), any());
+        verify(allocRelationMapper, never()).markAllOriginalByCustId(any(), any());
         verify(eventPublisher, never()).publish(any());
     }
 
