@@ -45,15 +45,19 @@
     </select>
 
     <!--
-        插入新分配前置：把该客户(cust_id)名下全部 is_original='2' 的存量分配置为「原分配」is_original='1'，
-        并把 end_date 置为当天，确保插入完成后只有本次新增的分配记录 is_original='2'（整客户取代，不再按
-        cust_type/alloc_dim/account_no 细分）。
+        插入新分配前置：把该客户(cust_id)名下、与审批账号(account_no)匹配的全部 is_original='2'
+        存量分配置为「原分配」is_original='1'，并把 end_date 置为当天，确保插入完成后只有本次新增的
+        分配记录 is_original='2'。account_no 由审批申请传入，为 null(RULE 维度无账号)时按 IS NULL 匹配。
     -->
     <update id="markAllOriginalByCustId">
         UPDATE CUST_ALLOC_RELATION
            SET is_original = '1', end_date = #{endDate}, updated_time = NOW()
          WHERE cust_id = #{custId}
            AND is_original = '2'
+           <choose>
+               <when test="accountNo != null"> AND account_no = #{accountNo} </when>
+               <otherwise> AND account_no IS NULL </otherwise>
+           </choose>
     </update>
 
     <!--

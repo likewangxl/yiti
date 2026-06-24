@@ -120,9 +120,10 @@ public class AllocAdjustCompletedListener {
         String relCustId = apply.getCustId();
 
         if (!items.isEmpty()) {
-            // 插入新分配前：把该客户(cust_id)名下全部 is_original=2 的存量分配置为「原分配」(is_original=1)
-            // 并把失效日期 end_date 置为当天，确保插入完成后只有本次新增的 is_original=2 行是当前分配。
-            allocRelationMapper.markAllOriginalByCustId(relCustId, effectiveDate);
+            // 插入新分配前：把该客户(cust_id)名下、与审批账号(account_no)匹配的全部 is_original=2 存量
+            // 分配置为「原分配」(is_original=1)，并把失效日期 end_date 置为当天，确保插入完成后只有本次
+            // 新增的 is_original=2 行是当前分配。account_no 取自审批申请（RULE 维度为 null → 按 IS NULL）。
+            allocRelationMapper.markAllOriginalByCustId(relCustId, apply.getAccountNo(), effectiveDate);
         }
 
         // 按工号批量解析 姓名/部门，插入时回填 fullname/dept_no/dept_name（明细快照为空时兜底）

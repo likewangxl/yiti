@@ -30,6 +30,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -180,9 +181,10 @@ class AllocAdjustCompletedListenerTest {
 
         // 插入新分配前：按 cust_id 把该客户全部 is_original=2 的存量分配标记为原分配(is_original=1)
         // 并把失效日期 end_date 置为当天，确保只有本次新插入的记录 is_original=2
+        // account_no 由审批申请传入；本例 apply.accountNo 为 null（RULE 维度）→ 按 IS NULL 匹配
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(allocRelationMapper);
         inOrder.verify(allocRelationMapper).markAllOriginalByCustId(
-                eq("CUST_001"), eq(LocalDate.now()));
+                eq("CUST_001"), isNull(), eq(LocalDate.now()));
         inOrder.verify(allocRelationMapper, org.mockito.Mockito.times(2))
                 .insert(any(CustAllocRelation.class));
 
@@ -191,6 +193,21 @@ class AllocAdjustCompletedListenerTest {
         verify(allocRelationMapper, org.mockito.Mockito.times(2)).insert(cap.capture());
         assertThat(cap.getAllValues()).extracting(CustAllocRelation::getIsOriginal).containsOnly("2");
         assertThat(cap.getAllValues()).extracting(CustAllocRelation::getCustType).containsOnly("CORP");
+    }
+
+    @Test
+    @DisplayName("APPROVED → 降级时 account_no 由审批申请传入（ACCOUNT 维度按具体账号过滤）")
+    void approved_marksOriginalScopedByAccountNo() {
+        PerfAllocAdjustApply acct = buildApply();
+        acct.setAllocDim("ACCOUNT");
+        acct.setAccountNo("ACC_888");
+        when(applyMapper.selectByBusinessKey("ALLOC_ADJUST:APP_001")).thenReturn(acct);
+
+        listener.onProcessCompleted(
+                new ProcessCompletedEvent("PI_APP_001", "ALLOC_ADJUST:APP_001", "APPROVED", null));
+
+        verify(allocRelationMapper).markAllOriginalByCustId(
+                eq("CUST_001"), eq("ACC_888"), eq(LocalDate.now()));
     }
 
     @Test
@@ -223,7 +240,7 @@ class AllocAdjustCompletedListenerTest {
 
         verify(applyMapper).updateStatus("APP_001", "REJECTED", null);
         verify(allocRelationMapper, never()).insert(any(CustAllocRelation.class));
-        verify(allocRelationMapper, never()).markAllOriginalByCustId(any(), any());
+        verify(allocRelationMapper, never()).markAllOriginalByCustId(any(), any(), any());
         verify(eventPublisher, never()).publish(any());
     }
 
