@@ -368,6 +368,18 @@ export function getAmasApprovalDetail(perfAdjustNo) {
     { approval: {}, allocations: [], apprRecords: [] });
 }
 
+// ===== 定价审批查询（AMAS_PRICE_APPROVAL，只读）=====
+// 后端 AmasPriceApprovalController：GET /api/reports/amas-price-approvals
+//   查询项：custName(客户名称,模糊) / applyFullname(申请人姓名,模糊) / apprStatus / applyTimeStart/End
+//   数据范围按 BizType.REPORT 标签控制（本机构 / 本级及下级机构，基于 APPLY_DEPTNO）。
+export function listPriceApprovals(params = {}) {
+  return call('get', '/reports/amas-price-approvals', { params }, { records: [], total: 0 });
+}
+// GET /api/reports/amas-price-approvals/{priceApprId} —— 详情
+export function getPriceApprovalDetail(priceApprId) {
+  return call('get', `/reports/amas-price-approvals/${encodeURIComponent(priceApprId)}`, {}, {});
+}
+
 // ===== 业绩调整（PERF_ALLOC_ADJUST_APPLY，只读）—— 同页面「业绩调整」Tab =====
 // 后端 AllocAdjustHistoryController：
 //   GET /api/reports/alloc-adjust-applies          列表（申请时间倒序，顶部查询项）

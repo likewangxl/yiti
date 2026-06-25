@@ -18,11 +18,11 @@
         <div class="role-list">
           <div
             v-for="r in filteredRoles" :key="r.roleId"
-            :class="['role', { active: r.roleId === pickedRoleId }]"
+            :class="['role', { active: r.roleId === pickedRoleId, disabled: r.recordStatus !== 0 }]"
             @click="onPickRole(r.roleId)"
           >
             <div class="r-info">
-              <div class="r-name">👤 {{ r.roleChName || r.roleId }}</div>
+              <div class="r-name">👤 {{ r.roleChName || r.roleId }}<el-tag v-if="r.recordStatus !== 0" type="info" size="small" effect="plain" class="r-status-tag">停用</el-tag></div>
               <div class="r-code"><code>{{ r.roleCode }}</code></div>
             </div>
             <span class="cnt">{{ r.userCount != null ? r.userCount + ' 人' : '-' }}</span>
@@ -115,7 +115,12 @@
           <el-tag v-if="scopeLoading" effect="plain" class="tag-info" size="small">加载中</el-tag>
         </div>
         <el-table :data="scopeRows" size="small" empty-text="无 BizType 配置" :max-height="999">
-          <el-table-column prop="bizType" label="BizType" min-width="110" show-overflow-tooltip />
+          <el-table-column label="BizType" min-width="130">
+            <template #default="{ row }">
+              <div class="bt-name">{{ row.bizTypeLabel }}</div>
+              <div class="bt-code">{{ row.bizType }}</div>
+            </template>
+          </el-table-column>
           <el-table-column label="DataScope" width="96">
             <template #default="{row}">
               <el-tag :class="scopeCls(row.dataScope)" effect="plain">{{ scopeLabel(row.dataScope) }}</el-tag>
@@ -349,11 +354,13 @@ const scopeMatrix = ref(null);
 const scopeLoading = ref(false);
 const scopeRows = computed(() => {
   if (!scopeMatrix.value) return [];
-  const { bizTypes, matrix } = scopeMatrix.value;
+  const { bizTypes, matrix, bizTypeLabels } = scopeMatrix.value;
   const rid = pickedRoleId.value;
   const cell = matrix?.[rid] || {};
+  const labels = bizTypeLabels || {};
   return (bizTypes || []).map(bt => ({
     bizType: bt,
+    bizTypeLabel: labels[bt] || bt, // 中文名来自后端 matrix.bizTypeLabels（BizType 枚举 description，单一真相源）
     dataScope: cell[bt] || 'NONE',
     reason: '' // 后端 matrix 接口未返回 reason，编辑时再带
   }));
@@ -518,6 +525,15 @@ onMounted(reload);
   }
 }
 .role-list, .res-list { flex: 1; overflow: auto; }
+/* 已禁用角色置灰 */
+.role.disabled {
+  .r-name { color: #c0c4cc; }
+  .r-code code { color: #c0c4cc; }
+  .cnt { color: #c0c4cc; }
+}
+.r-status-tag { margin-left: 6px; }
+.bt-name { color: #303133; }
+.bt-code { color: #909399; font-size: 12px; }
 
 .role {
   padding: 10px 14px; display: flex; align-items: center; cursor: pointer;

@@ -206,7 +206,10 @@
       >
         <template #default="{ option }">
           <span class="role-xfer-item">
-            <span class="role-xfer-name">{{ option.roleChName }}</span>
+            <span class="role-xfer-name">
+              {{ option.roleChName }}
+              <el-tag v-if="option.recordStatus !== 0" type="info" size="small" effect="plain" class="role-status-tag">停用</el-tag>
+            </span>
             <el-radio
               v-if="roleDlg.value.includes(option.roleId)"
               :model-value="roleDlg.primaryRoleId"
@@ -559,12 +562,20 @@ async function openAssignRoles(user) {
       getUserRoles(user.userId)
     ]);
     const roleArr = allRoles?.records || (Array.isArray(allRoles) ? allRoles : []);
-    const opts = roleArr.map(r => ({
-      roleId: r.roleId || r.id,
-      roleChName: r.roleChName || r.name || r.roleId || r.id
-    }));
-    roleDlg.options = opts;
     const boundArr = Array.isArray(bound) ? bound : [];
+    const boundSet = new Set(boundArr.map(r => r.roleId || r.id));
+    const opts = roleArr.map(r => {
+      const roleId = r.roleId || r.id;
+      const recordStatus = typeof r.recordStatus === 'number' ? r.recordStatus : 0;
+      return {
+        roleId,
+        roleChName: r.roleChName || r.name || roleId,
+        recordStatus,
+        // 已禁用(recordStatus!==0)且未分配的角色：置灰不可选；已分配的禁用角色保留可解绑
+        disabled: recordStatus !== 0 && !boundSet.has(roleId)
+      };
+    });
+    roleDlg.options = opts;
     roleDlg.value = boundArr.map(r => r.roleId || r.id);
     // 回显主角色：后端 primary=true 的角色，缺失则取第一个
     const primary = boundArr.find(r => r.primary);
@@ -812,6 +823,7 @@ onMounted(async () => {
 .role-dlg-tip { color: $text-3; font-size: 12px; }
 .role-xfer-item { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .role-xfer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-status-tag { margin-left: 6px; }
 .role-xfer-primary { margin-left: 8px; flex-shrink: 0; }
 /* 「已分配」面板(右侧最后一个)加宽 90px：默认 200px → 290px */
 :deep(.el-transfer-panel:last-child) { width: 290px; }
