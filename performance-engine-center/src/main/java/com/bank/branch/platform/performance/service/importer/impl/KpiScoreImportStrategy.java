@@ -2,7 +2,6 @@ package com.bank.branch.platform.performance.service.importer.impl;
 
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.entity.PerfKpiScore;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
@@ -156,8 +155,8 @@ public class KpiScoreImportStrategy implements ImportStrategy {
                     continue;
                 }
             } else if ("EMP".equals(dim)) {
-                List<UserDTO> users = userApi.getUsersByUsernames(List.of(subject));
-                if (users == null || users.isEmpty()) {
+                // 轻量 filterExistingUsernames（单次 IN、仅存在性）规避 getUsersByUsernames 的逐人 N+1
+                if (userApi.filterExistingUsernames(List.of(subject)).isEmpty()) {
                     errors.add(loc + "员工不存在（PT_USER 工号）: " + subject);
                     continue;
                 }

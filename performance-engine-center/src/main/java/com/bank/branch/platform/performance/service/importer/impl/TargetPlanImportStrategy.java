@@ -68,7 +68,7 @@ import java.util.Set;
  *   <li>维度：员工→EMP，机构→ORG（兼容 EMP/ORG 大小写），其它报错</li>
  *   <li>指标名称必须在 PERF_METRIC_DEF 存在（批量预取 name→def），取 metricCode；
  *       且指标 base_dim 必须与行维度一致（维度正确性）</li>
- *   <li>对象存在性：EMP → 工号须在 PT_USER（UserApi.getUsersByUsernames）；
+ *   <li>对象存在性：EMP → 工号须在 PT_USER（UserApi.filterExistingUsernames，批量分片 IN）；
  *       ORG → 部门编号须在机构表（OrgApi.getOrgByDeptNo），并把 subjectId 归一为内部机构编码</li>
  *   <li>阶段起止日期可解析为 LocalDate；阶段名称非空（uk 的一部分）</li>
  *   <li>目标值非空且可解析 BigDecimal；基础值可空</li>

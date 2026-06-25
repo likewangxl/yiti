@@ -1,7 +1,6 @@
 package com.bank.branch.platform.soap.service;
 
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.dto.DictItemDTO;
@@ -30,7 +29,6 @@ import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -525,8 +523,8 @@ public class CallPuDispatchService {
      * applicant/operator/approver/empId 等参数物理使用的是 {@code USER_ID}（短代理键）。直接透传会导致
      * 查空 / 越权校验失败 / 工作流认领不到任务，故在网关入口统一转换。</p>
      *
-     * <p>一次查库（{@link UserApi#getUsersByUsernames}，按 USERNAME 过滤，返回的 {@code UserDTO.empId}
-     * 即 USER_ID）；任一工号在 {@code PT_USER} 查不到即抛 {@link IllegalArgumentException}，
+     * <p>一次查库（{@link UserApi#mapUsernamesToEmpId}，按 USERNAME 分片 IN 过滤，仅取 USERNAME/USER_ID，
+     * 不装配机构等 DTO，避免 N+1）；任一工号在 {@code PT_USER} 查不到即抛 {@link IllegalArgumentException}，
      * 由 {@link #dispatch} 兜底为失败信封（ReturnCd=99）。</p>
      *
      * @param employeeNos 报文工号集合（可含空白/重复，内部过滤去重）
@@ -541,16 +539,8 @@ public class CallPuDispatchService {
         if (distinct.isEmpty()) {
             return Map.of();
         }
-        List<UserDTO> users = userApi.getUsersByUsernames(distinct);
-        Map<String, String> userIdByEmpNo = new HashMap<>();
-        if (users != null) {
-            for (UserDTO u : users) {
-                if (u != null && StringUtils.hasText(u.getUsername()) && StringUtils.hasText(u.getEmpId())) {
-                    // UserDTO.username = PT_USER.USERNAME(工号)，UserDTO.empId = PT_USER.USER_ID
-                    userIdByEmpNo.put(u.getUsername(), u.getEmpId());
-                }
-            }
-        }
+        // 轻量批量：返回「工号(USERNAME) → USER_ID」映射（仅含存在者），不逐人装配 DTO，规避 N+1
+        Map<String, String> userIdByEmpNo = userApi.mapUsernamesToEmpId(distinct);
         for (String no : distinct) {
             if (!userIdByEmpNo.containsKey(no)) {
                 throw new IllegalArgumentException("未知员工号: " + no);

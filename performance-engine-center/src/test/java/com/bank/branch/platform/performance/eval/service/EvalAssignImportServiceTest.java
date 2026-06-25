@@ -1,7 +1,6 @@
 package com.bank.branch.platform.performance.eval.service;
 
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.performance.eval.dto.EvalAssignImportResultDTO;
@@ -47,17 +46,6 @@ class EvalAssignImportServiceTest {
         return d;
     }
 
-    /**
-     * 构造 UserDTO：username 与 empId(USER_ID) 显式区分，
-     * 用于验证「按用户名校验 + 归一为 USER_ID 存储」（方案 A）。
-     */
-    private UserDTO user(String empId, String username) {
-        UserDTO u = new UserDTO();
-        u.setEmpId(empId);
-        u.setUsername(username);
-        return u;
-    }
-
     /** 10 列 helper。 */
     private EvalAssignImportRow row(String beId, String beName, String beDept, String beTag,
                                     String evId, String evName, String evTag, String evDept,
@@ -94,14 +82,14 @@ class EvalAssignImportServiceTest {
 
     /**
      * 入参为「用户名」（Excel 员工编号列填写的内容）；每个用户名映射到 USER_ID = "ID_" + 用户名，
-     * 校验只走 USERNAME 路径（{@code getUsersByUsernames}）。
+     * 校验只走 USERNAME 路径（轻量批量 {@code mapUsernamesToEmpId}，单次/分片 IN，无逐人 N+1）。
      */
     private void mockUsersExist(String... usernames) {
-        List<UserDTO> users = new ArrayList<>();
+        java.util.Map<String, String> nameToUserId = new java.util.HashMap<>();
         for (String name : usernames) {
-            users.add(user("ID_" + name, name));
+            nameToUserId.put(name, "ID_" + name);
         }
-        when(userApi.getUsersByUsernames(anyList())).thenReturn(users);
+        when(userApi.mapUsernamesToEmpId(anyList())).thenReturn(nameToUserId);
     }
 
     @Test
@@ -147,7 +135,7 @@ class EvalAssignImportServiceTest {
     @DisplayName("员工编号填 USER_ID 而非用户名 → 行错误（不再接受 USER_ID）")
     void importRows_userIdInsteadOfUsername_rowError() {
         // 系统中存在用户：username=N1，USER_ID=ID_N1；Excel 误填 USER_ID(ID_N1) 作被打分人编号
-        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(user("ID_N1", "N1")));
+        when(userApi.mapUsernamesToEmpId(anyList())).thenReturn(java.util.Map.of("N1", "ID_N1"));
         EvalAssignImportResultDTO res = service.importRows(
                 List.of(row("ID_N1", "被一", "信贷部", "t", "N1", "评一", "t", "d", "主要", "数值打分")),
                 "EVAL", "测试任务", deadline, "ADMIN");

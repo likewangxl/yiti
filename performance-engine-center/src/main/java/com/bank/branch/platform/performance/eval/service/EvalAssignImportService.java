@@ -2,7 +2,6 @@ package com.bank.branch.platform.performance.eval.service;
 
 import com.alibaba.excel.EasyExcel;
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -135,18 +134,11 @@ public class EvalAssignImportService {
                 allNames.add(r.getEvalUserId().trim());
             }
         }
-        // 用户名→规范USER_ID 映射
-        Map<String, String> nameToUserId = new HashMap<>();
-        if (!allNames.isEmpty()) {
-            List<UserDTO> byUsernames = userApi.getUsersByUsernames(new ArrayList<>(allNames));
-            if (byUsernames != null) {
-                for (UserDTO u : byUsernames) {
-                    if (u.getUsername() != null) {
-                        nameToUserId.put(u.getUsername(), u.getEmpId());
-                    }
-                }
-            }
-        }
+        // 用户名→规范USER_ID 映射：走轻量批量查询（单次/分片 IN，仅取 USERNAME/USER_ID，
+        // 不逐人装配机构/角色等 DTO，规避 getUsersByUsernames 的 N+1；导入只需存在性 + 工号归一）。
+        Map<String, String> nameToUserId = allNames.isEmpty()
+                ? new HashMap<>()
+                : userApi.mapUsernamesToEmpId(new ArrayList<>(allNames));
         Set<String> existingNames = nameToUserId.keySet();
 
         // 3. 逐行校验

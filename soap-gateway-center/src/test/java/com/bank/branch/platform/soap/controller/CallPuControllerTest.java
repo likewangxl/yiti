@@ -1,7 +1,6 @@
 package com.bank.branch.platform.soap.controller;
 
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.api.AllocApi;
@@ -25,7 +24,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,20 +72,17 @@ class CallPuControllerTest {
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** UserDTO（username=工号/PT_USER.USERNAME，empId=USER_ID/PT_USER.USER_ID）。 */
-    private static UserDTO user(String employeeNo, String userId) {
-        UserDTO dto = new UserDTO();
-        dto.setUsername(employeeNo);
-        dto.setEmpId(userId);
-        return dto;
-    }
 
     @BeforeEach
     void setUp() {
         // 工号(USERNAME) → USER_ID 约定：X → U_X；lenient 以容忍未触达解析的用例
-        lenient().when(userApi.getUsersByUsernames(anyList())).thenAnswer(inv -> {
+        lenient().when(userApi.mapUsernamesToEmpId(anyList())).thenAnswer(inv -> {
             List<String> names = inv.getArgument(0);
-            return names.stream().map(n -> user(n, "U_" + n)).toList();
+            Map<String, String> m = new HashMap<>();
+            for (String n : names) {
+                m.put(n, "U_" + n);
+            }
+            return m;
         });
         CallPuDispatchService dispatchService = new CallPuDispatchService(
                 perfApprovalQueryApi, perfApprovalCmdApi, custStatQueryApi, userApi, allocApi, dictApi);

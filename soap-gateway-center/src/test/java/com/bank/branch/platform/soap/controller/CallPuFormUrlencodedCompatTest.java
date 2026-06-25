@@ -1,7 +1,6 @@
 package com.bank.branch.platform.soap.controller;
 
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.api.AllocApi;
@@ -22,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -61,13 +61,6 @@ class CallPuFormUrlencodedCompatTest {
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** UserDTO（username=工号/PT_USER.USERNAME，empId=USER_ID/PT_USER.USER_ID）。 */
-    private static UserDTO user(String employeeNo, String userId) {
-        UserDTO dto = new UserDTO();
-        dto.setUsername(employeeNo);
-        dto.setEmpId(userId);
-        return dto;
-    }
 
     @BeforeEach
     void setUp() {
@@ -80,7 +73,7 @@ class CallPuFormUrlencodedCompatTest {
 
     @Test
     void formUrlencodedContentType_withJsonBody_isAcceptedNot415() throws Exception {
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U001"), eq(null), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 0L, List.of()));
 

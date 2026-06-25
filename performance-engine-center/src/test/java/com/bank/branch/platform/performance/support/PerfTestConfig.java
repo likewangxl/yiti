@@ -182,6 +182,10 @@ public class PerfTestConfig {
         // 默认放行（返回非空 UserDTO 列表视作"工号存在"），单测/IT 可 @MockBean 覆盖。
         Mockito.when(m.getUsersByUsernames(Mockito.anyList()))
                 .thenReturn(java.util.List.of(new UserDTO()));
+        // 2026-06-25：导入校验（TargetValueService/MetricResultImportStrategy/KpiScoreImportStrategy）
+        // 改用轻量 filterExistingUsernames 做存在性校验，默认放行（输入即视作全部存在）。
+        Mockito.when(m.filterExistingUsernames(Mockito.anyList()))
+                .thenAnswer(inv -> new java.util.ArrayList<>(inv.getArgument(0)));
         return m;
     }
 

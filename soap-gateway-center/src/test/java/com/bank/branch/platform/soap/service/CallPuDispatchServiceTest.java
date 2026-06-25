@@ -1,7 +1,6 @@
 package com.bank.branch.platform.soap.service;
 
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.dto.DictItemDTO;
@@ -28,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,7 +45,7 @@ import static org.mockito.Mockito.when;
  * 这里直接断言返回的 {@link CallPuResponse} 对象（不经 MockMvc）。</p>
  *
  * <p><b>身份转换</b>：报文 EmployeeNo / allocater 工号实为 {@code PT_USER.USERNAME}，
- * dispatch 须经 {@link UserApi#getUsersByUsernames} 转成 perf 所需的 {@code USER_ID}（{@code UserDTO.empId}）
+ * dispatch 须经 {@link UserApi#mapUsernamesToEmpId} 转成 perf 所需的 {@code USER_ID}
  * 再下传。下列测试统一约定工号 {@code E001 → U001}。</p>
  */
 @ExtendWith(MockitoExtension.class)
@@ -67,13 +67,6 @@ class CallPuDispatchServiceTest {
     @InjectMocks
     private CallPuDispatchService service;
 
-    /** 构造一个 UserDTO（username=工号/PT_USER.USERNAME，empId=USER_ID/PT_USER.USER_ID）。 */
-    private static UserDTO user(String employeeNo, String userId) {
-        UserDTO dto = new UserDTO();
-        dto.setUsername(employeeNo);
-        dto.setEmpId(userId);
-        return dto;
-    }
 
     @Test
     void unsupportedRuleName_returnsFail() {
@@ -88,7 +81,7 @@ class CallPuDispatchServiceTest {
     @Test
     void perfList_resolvesEmployeeNoToUserId_andReturnsMappedItems() {
         // 工号 E001 → USER_ID U001；perf 必须收到 U001 而非工号 E001
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         AllocAdjustApprovalItemDTO dto = AllocAdjustApprovalItemDTO.builder()
                 .perfAdjustNo("PA_001")
                 .applyFullname("张三")
@@ -120,7 +113,7 @@ class CallPuDispatchServiceTest {
     @Test
     void unknownEmployeeNo_returnsFail_andNoPerfCall() {
         // 工号在 PT_USER 查不到 → 失败信封，且不触达 perf
-        when(userApi.getUsersByUsernames(List.of("E404"))).thenReturn(List.of());
+        when(userApi.mapUsernamesToEmpId(List.of("E404"))).thenReturn(Map.of());
 
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E404");
@@ -138,7 +131,7 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfList_passesQueryStatusToPerf() {
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         when(perfApprovalQueryApi.listAllocAdjustApprovals(eq("U001"), eq("PENDING"), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 100, 0L, List.of()));
 
@@ -159,7 +152,7 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfMyList_resolvesEmployeeNo_andMapsWithdrawnTo3() {
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         AllocAdjustApprovalItemDTO dto = AllocAdjustApprovalItemDTO.builder()
                 .perfAdjustNo("PA_900").applyFullname("张三").custName("某某客户")
                 .status("WITHDRAWN").category("MINE").build();
@@ -185,7 +178,7 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfAppr_pass_resolvesUserId_callsApproveAndReturnsOk() {
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setPerfAdjustNo("A1");
@@ -205,7 +198,7 @@ class CallPuDispatchServiceTest {
     @Test
     void perfAppr_pass_forwardsRouteTo_toPerf() {
         // 经办节点「同意」带下一步路由选择：网关原样透传 routeTo 给 perf（由 perf 按节点落 corp/finRouteTo）
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setPerfAdjustNo("A1");
@@ -224,7 +217,7 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfAppr_reject_resolvesUserId_callsApproveWithStatus2() {
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
         parm.setEmployeeNo("E001");
         parm.setPerfAdjustNo("A1");
@@ -255,7 +248,7 @@ class CallPuDispatchServiceTest {
 
         assertThat(resp.getReturnCd()).isEqualTo("99");
         verify(perfApprovalCmdApi, never()).approveAllocAdjust(any(), any(), any(), any(), any());
-        verify(userApi, never()).getUsersByUsernames(any());
+        verify(userApi, never()).mapUsernamesToEmpId(any());
     }
 
     @Test
@@ -272,12 +265,12 @@ class CallPuDispatchServiceTest {
 
         assertThat(resp.getReturnCd()).isEqualTo("99");
         verify(perfApprovalCmdApi, never()).approveAllocAdjust(any(), any(), any(), any(), any());
-        verify(userApi, never()).getUsersByUsernames(any());
+        verify(userApi, never()).mapUsernamesToEmpId(any());
     }
 
     @Test
     void perfAppr_businessException_returnsFail() {
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         doThrow(new IllegalStateException("无权审批"))
                 .when(perfApprovalCmdApi).approveAllocAdjust("A1", "U001", "1", null, null);
         CallPuRequest.Parm parm = new CallPuRequest.Parm();
@@ -377,10 +370,10 @@ class CallPuDispatchServiceTest {
     @Test
     void perfSave_splitsOriginalAndNewAllocaters_byIsOriginal() {
         // 申请人工号解析为 USER_ID（applicant 用短代理键）；分配明细 empId 直接落工号(USERNAME)，与 PC 一致
-        when(userApi.getUsersByUsernames(any())).thenReturn(List.of(
-                user("E001", "U001"),
-                user("E100", "U100"),
-                user("E900", "U900")));
+        when(userApi.mapUsernamesToEmpId(any())).thenReturn(Map.of(
+                "E001", "U001",
+                "E100", "U100",
+                "E900", "U900"));
         when(perfApprovalCmdApi.submitAllocAdjust(any())).thenReturn("AA123");
         // 前端已传字典码，网关只校验合法性（不再做中文→码翻译）
         when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_DEPOSIT")).thenReturn(true);
@@ -426,9 +419,9 @@ class CallPuDispatchServiceTest {
     @Test
     void perfSave_multipleBusinessTypes_joinsBizKindCodesWithComma() {
         // 选了「存款 + 贷款」两个业务类型字典码 → bizKind 原样逗号拼接落库（不翻译、不丢项）
-        when(userApi.getUsersByUsernames(any())).thenReturn(List.of(
-                user("E001", "U001"),
-                user("E100", "U100")));
+        when(userApi.mapUsernamesToEmpId(any())).thenReturn(Map.of(
+                "E001", "U001",
+                "E100", "U100"));
         when(perfApprovalCmdApi.submitAllocAdjust(any())).thenReturn("AA124");
         when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_DEPOSIT")).thenReturn(true);
         when(dictApi.isValidDictValue("PERF_BIZ_KIND", "CORP_LOAN")).thenReturn(true);
@@ -506,7 +499,7 @@ class CallPuDispatchServiceTest {
 
     @Test
     void perfInfo_translatesDetailToFrontendDataForm() {
-        when(userApi.getUsersByUsernames(List.of("E001"))).thenReturn(List.of(user("E001", "U001")));
+        when(userApi.mapUsernamesToEmpId(List.of("E001"))).thenReturn(Map.of("E001", "U001"));
         AllocAdjustDetailDTO.AllocItem orig = AllocAdjustDetailDTO.AllocItem.builder()
                 .username("E1").fullname("张三").ratio("70").isOriginal(1).build();
         AllocAdjustDetailDTO.AllocItem adj = AllocAdjustDetailDTO.AllocItem.builder()

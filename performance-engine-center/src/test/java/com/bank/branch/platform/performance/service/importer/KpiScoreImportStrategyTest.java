@@ -71,7 +71,8 @@ class KpiScoreImportStrategyTest {
                 metricDef("M_CUST", "客户余额", "CUST")));
         // 存在性默认放行
         lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(new OrgDTO());
-        lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
+        lenient().when(userApi.filterExistingUsernames(anyList()))
+                .thenAnswer(inv -> new java.util.ArrayList<>(inv.getArgument(0)));
         lenient().when(kpiScoreMapper.upsert(any())).thenReturn(1);
 
         batch = new PerfImportBatch();
@@ -149,7 +150,7 @@ class KpiScoreImportStrategyTest {
     @Test
     @DisplayName("EMP 维度对象不在 PT_USER 工号 → 整批失败，不 upsert")
     void execute_empNotExist_throws() {
-        when(userApi.getUsersByUsernames(List.of("GHOST"))).thenReturn(List.of());
+        when(userApi.filterExistingUsernames(List.of("GHOST"))).thenReturn(List.of());
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{"EMP", "一般性存款月均", "GHOST", 90, 100, 50, 110, 80});
 

@@ -87,6 +87,9 @@ class TargetValueServiceTest {
     @BeforeEach
     void permissiveDefaults() {
         lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
+        // 存在性校验已下沉到轻量 filterExistingUsernames：默认放行（输入即视作存在），负向用例各自覆盖
+        lenient().when(userApi.filterExistingUsernames(anyList()))
+                .thenAnswer(inv -> new java.util.ArrayList<>(inv.getArgument(0)));
         lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(null);
         lenient().when(orgApi.getOrg(anyString())).thenReturn(new OrgDTO());
         // 默认无同对象同指标的存量目标值（日期重叠校验默认放行）
@@ -209,7 +212,7 @@ class TargetValueServiceTest {
     @Test
     @DisplayName("upsertBatch: EMP 工号在 PT_USER 不存在 → 抛 VALIDATION_FAILED 且不落库")
     void upsertBatch_empNotExist_throwsAndNoUpsert() {
-        when(userApi.getUsersByUsernames(List.of("GHOST"))).thenReturn(Collections.emptyList());
+        when(userApi.filterExistingUsernames(List.of("GHOST"))).thenReturn(Collections.emptyList());
         List<PerfTargetValue> list = List.of(TargetTestDataBuilder.value(
                 "P1", "EMP", "GHOST", "2026", "M_A", new BigDecimal("100")));
 

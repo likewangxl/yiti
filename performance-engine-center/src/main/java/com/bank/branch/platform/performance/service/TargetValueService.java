@@ -145,8 +145,8 @@ public class TargetValueService {
             throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "对象编号必填");
         }
         if ("EMP".equals(type)) {
-            List<UserDTO> users = userApi.getUsersByUsernames(List.of(subject));
-            if (users == null || users.isEmpty()) {
+            // 轻量 filterExistingUsernames（单次 IN、仅存在性）规避 getUsersByUsernames 的逐人 N+1
+            if (userApi.filterExistingUsernames(List.of(subject)).isEmpty()) {
                 log.warn("[TargetValueService] 目标值主体校验失败：员工工号在系统中不存在 subjectId={}, planId={}",
                         subject, v.getPlanId());
                 throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "员工工号在系统中不存在: " + subject);

@@ -112,8 +112,9 @@ class MetricResultImportStrategyTest {
                 });
 
         // 员工 / 机构存在性默认放行（具体 case 再覆盖）
-        // EMP 维度对象=工号，按工号查 PT_USER（getUsersByUsernames），默认返回非空=存在
-        lenient().when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(new UserDTO()));
+        // EMP 维度对象=工号，按工号查 PT_USER（轻量 filterExistingUsernames，仅存在性），默认放行=存在
+        lenient().when(userApi.filterExistingUsernames(anyList()))
+                .thenAnswer(inv -> new java.util.ArrayList<>(inv.getArgument(0)));
         lenient().when(orgApi.getOrgByDeptNo(anyString())).thenReturn(new OrgDTO());
         lenient().when(sysControlService.getCurrentVersion(anyString()))
                 .thenReturn(sysControl("V1"));
@@ -220,7 +221,7 @@ class MetricResultImportStrategyTest {
     @Test
     @DisplayName("4.c 违反：EMP baseDim 工号不在 PT_USER（按工号查）→ errorSummary 记录，不入库")
     void execute_empNotFound_recordedInErrorSummary() {
-        when(userApi.getUsersByUsernames(List.of("E_GHOST"))).thenReturn(List.of());
+        when(userApi.filterExistingUsernames(List.of("E_GHOST"))).thenReturn(List.of());
 
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "EMP", "E_GHOST", "基础性存款月均余额", new BigDecimal("10")});

@@ -16,7 +16,6 @@ import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
 import com.bank.branch.platform.performance.service.importer.model.MetricResultImportRow;
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -323,8 +322,8 @@ public class MetricResultImportStrategy implements ImportStrategy {
         if ("EMP".equals(dim)) {
             // 维度对象=员工工号(PT_USER.username)，与宽表 emp_id 存储口径一致；按工号校验存在性
             // （不能按 USER_ID 查，否则工号查不到被误判"不存在"）
-            List<UserDTO> users = userApi.getUsersByUsernames(List.of(subject));
-            if (users == null || users.isEmpty()) {
+            // 用轻量 filterExistingUsernames（单次 IN、仅存在性）规避 getUsersByUsernames 的逐人 N+1
+            if (userApi.filterExistingUsernames(List.of(subject)).isEmpty()) {
                 throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
                         "员工不存在（工号）: " + subject);
             }

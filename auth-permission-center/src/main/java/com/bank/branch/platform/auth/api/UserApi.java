@@ -127,6 +127,21 @@ public interface UserApi {
     List<String> filterExistingUsernames(List<String> usernames);
 
     /**
+     * 批量查询「用户名 → USER_ID」映射，用于大批量导入时的存在性校验 + 工号归一。
+     *
+     * <p>与 {@link #getUsersByUsernames(List)} 不同：本方法**只做单次/分片 IN 查询**，
+     * 仅取 USERNAME / USER_ID 两列，**不逐人装配机构/角色等 DTO**，因此不会触发 N+1
+     * （{@code getUsersByUsernames} 对每个用户回调 {@code getUserByEmpId}，导入 5 万行约 15 万次查询）。
+     *
+     * <p>典型场景：评价任务/分配明细导入时，Excel「员工编号」列填登录用户名，
+     * 需一次性校验是否为系统有效员工，并把用户名归一为 USER_ID 存储。
+     *
+     * @param usernames 待查询用户名列表（null/空 → 返回空 Map）
+     * @return 其中在 PT_USER 中存在的「用户名 → USER_ID」映射（去重，仅含存在者）
+     */
+    Map<String, String> mapUsernamesToEmpId(List<String> usernames);
+
+    /**
      * 按关键词分页查询用户（工号/登录名/中文名 OR 模糊），供 performance 人员标签列表用。
      *
      * @param keyword  关键词（null/空 不过滤）
