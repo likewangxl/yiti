@@ -66,6 +66,14 @@ public class AmasApprovalQueryServiceImpl implements AmasApprovalQueryService {
         if (StringUtils.hasText(q.getApplyUsername())) {
             w.eq(AmasPerfAdjustApproval::getApplyUsername, q.getApplyUsername().trim());
         }
+        // 申请人姓名：模糊
+        if (StringUtils.hasText(q.getApplyFullname())) {
+            w.like(AmasPerfAdjustApproval::getApplyFullname, q.getApplyFullname().trim());
+        }
+        // 客户名称：模糊
+        if (StringUtils.hasText(q.getCustName())) {
+            w.like(AmasPerfAdjustApproval::getCustName, q.getCustName().trim());
+        }
         // 客户关键词：客户号 或 客户名称 模糊
         if (StringUtils.hasText(q.getCustKeyword())) {
             String kw = q.getCustKeyword().trim();
@@ -129,10 +137,13 @@ public class AmasApprovalQueryServiceImpl implements AmasApprovalQueryService {
                         new LambdaQueryWrapper<AmasPerformanceAllocation>()
                                 .eq(AmasPerformanceAllocation::getPerfAdjustNo, perfAdjustNo))
                 .stream().map(this::toAllocationVO).collect(Collectors.toList());
-        // 审批流程：REGION_DT_ID 关联，按序号倒序
+        // 审批流程：REGION_DT_ID 关联，按审批时间倒序（APPR_TIME 为 yyyy-MM-dd HH:mm:ss 定长串，
+        // 字符串降序即时间降序；未审批节点 APPR_TIME 为 NULL，MySQL DESC 下排在最后）。
+        // 同审批时间或时间缺失时以序号 APPR_SEQ 降序兜底，保证排序稳定。
         List<AmasApprRecordVO> apprRecords = apprRecordMapper.selectList(
                         new LambdaQueryWrapper<AmasApprRecord>()
                                 .eq(AmasApprRecord::getRegionDtId, perfAdjustNo)
+                                .orderByDesc(AmasApprRecord::getApprTime)
                                 .orderByDesc(AmasApprRecord::getApprSeq))
                 .stream().map(this::toApprRecordVO).collect(Collectors.toList());
 

@@ -17,6 +17,12 @@ public class AmasApprovalQueryReqDTO {
     /** 申请人工号（精确匹配）. */
     private String applyUsername;
 
+    /** 申请人姓名（模糊匹配）. */
+    private String applyFullname;
+
+    /** 客户名称（模糊匹配）. */
+    private String custName;
+
     /** 客户关键词（匹配客户号或客户名称，模糊）. */
     private String custKeyword;
 

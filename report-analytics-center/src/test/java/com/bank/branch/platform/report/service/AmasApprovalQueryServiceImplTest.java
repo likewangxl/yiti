@@ -16,16 +16,21 @@ import com.bank.branch.platform.report.mapper.AmasApprRecordMapper;
 import com.bank.branch.platform.report.mapper.AmasPerfAdjustApprovalMapper;
 import com.bank.branch.platform.report.mapper.AmasPerformanceAllocationMapper;
 import com.bank.branch.platform.report.service.impl.AmasApprovalQueryServiceImpl;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collection;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,6 +95,32 @@ class AmasApprovalQueryServiceImplTest {
     }
 
     @Test
+    @DisplayName("pageList: 申请人姓名 + 客户名称 模糊 → 生成 LIKE 条件")
+    void pageList_fuzzyByFullnameAndCustName_buildsLike() {
+        Page<AmasPerfAdjustApproval> mpPage = new Page<>(1, 20);
+        mpPage.setRecords(List.of());
+        mpPage.setTotal(0L);
+        ArgumentCaptor<LambdaQueryWrapper<AmasPerfAdjustApproval>> cap =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        when(approvalMapper.selectPage(any(IPage.class), cap.capture())).thenReturn(mpPage);
+
+        AmasApprovalQueryReqDTO req = new AmasApprovalQueryReqDTO();
+        req.setApplyFullname("张三");
+        req.setCustName("某某公司");
+        service.pageList(req, new PageRequest());
+
+        // 注册实体 TableInfo 后渲染 SQL（MyBatis-Plus 的 like 参数值惰性生成，须 getTargetSql 触发）
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""),
+                AmasPerfAdjustApproval.class);
+        LambdaQueryWrapper<AmasPerfAdjustApproval> w = cap.getValue();
+        String sql = w.getTargetSql().toLowerCase();
+        Collection<Object> vals = w.getParamNameValuePairs().values();
+        // 两个字段都生成了 LIKE 条件，值被包成 %value%
+        assertThat(sql).contains("apply_fullname").contains("cust_name");
+        assertThat(vals).contains("%张三%", "%某某公司%");
+    }
+
+    @Test
     @DisplayName("detail: 主记录存在 → 聚合分配明细 + 审批流程返回")
     void detail_found_aggregates() {
         AmasPerfAdjustApproval approval = new AmasPerfAdjustApproval();
@@ -110,6 +141,29 @@ class AmasApprovalQueryServiceImplTest {
         assertThat(vo.getApproval().getPerfAdjustNo()).isEqualTo("PA001");
         assertThat(vo.getAllocations()).hasSize(1);
         assertThat(vo.getApprRecords()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("detail: 审批流程按审批时间(APPR_TIME)倒序、序号兜底")
+    void detail_apprRecords_orderByApprTimeDesc() {
+        AmasPerfAdjustApproval approval = new AmasPerfAdjustApproval();
+        approval.setPerfAdjustNo("PA001");
+        when(approvalMapper.selectById("PA001")).thenReturn(approval);
+        when(allocationMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of());
+
+        ArgumentCaptor<LambdaQueryWrapper<AmasApprRecord>> cap =
+                ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        when(apprRecordMapper.selectList(cap.capture())).thenReturn(List.of());
+
+        service.detail("PA001");
+
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""),
+                AmasApprRecord.class);
+        String sql = cap.getValue().getTargetSql().toLowerCase();
+        // 主排序 appr_time desc，次排序 appr_seq desc
+        assertThat(sql).contains("order by");
+        assertThat(sql.indexOf("appr_time")).isGreaterThanOrEqualTo(0);
+        assertThat(sql.indexOf("appr_time")).isLessThan(sql.indexOf("appr_seq"));
     }
 
     @Test
