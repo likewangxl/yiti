@@ -11,9 +11,12 @@ import com.bank.branch.platform.auth.service.UserService;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
+import com.alibaba.excel.EasyExcel;
+import com.bank.branch.platform.auth.controller.dto.UserExportRow;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +56,22 @@ public class UserController {
     public ResponseWrapper<PageResult<UserListItemRespDTO>> list(@ModelAttribute UserQueryReqDTO q) {
         log.debug("[UserController.list] q={}", q);
         return ResponseWrapper.success(userService.pageUsers(q));
+    }
+
+    @GetMapping("/export")
+    @Operation(summary = "导出全部用户（含绑定角色）")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
+    public void export(HttpServletResponse response) throws java.io.IOException {
+        log.info("[UserController.export] 导出全部用户");
+        java.util.List<UserExportRow> rows = userService.exportAllUsers();
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setCharacterEncoding("utf-8");
+        String fileName = java.net.URLEncoder.encode("用户列表", java.nio.charset.StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+        response.setHeader("Content-Disposition", "attachment;filename*=utf-8''" + fileName + ".xlsx");
+        EasyExcel.write(response.getOutputStream(), UserExportRow.class)
+                .sheet("用户列表")
+                .doWrite(rows);
     }
 
     @GetMapping("/{username}/exists")

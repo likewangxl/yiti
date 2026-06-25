@@ -76,12 +76,39 @@ public class OrgService {
         return getOrg(e.getOrgCode());
     }
 
-    /** 更新机构名称（不支持改 orgCode / pId / level，避免破坏树结构） */
+    /** 更新机构：支持改名 / 改上级(P_ID，防成环+重算 level) / 改状态 */
     @org.springframework.transaction.annotation.Transactional
     public OrgDTO updateOrg(String orgCode, OrgUpdateReqDTO req) {
         ExtOrgInfo e = orgMapper.selectByOrgCode(orgCode);
         if (e == null) throw new BizException("AUTH-40404", "机构不存在");
         if (req.getOrgName() != null && !req.getOrgName().isBlank()) e.setOrgName(req.getOrgName());
+        // 上级变更（pId 为 null 不改；空串=设为根节点；否则改挂到目标机构下）
+        if (req.getPId() != null) {
+            String newPId = req.getPId().trim();
+            if (newPId.equals(orgCode)) {
+                throw new BizException("AUTH-40010", "上级机构不能选自身");
+            }
+            int newLevel;
+            if (newPId.isEmpty()) {
+                newLevel = 1; // 根节点
+            } else {
+                ExtOrgInfo parent = orgMapper.selectByOrgCode(newPId);
+                if (parent == null) throw new BizException("AUTH-40404", "上级机构不存在");
+                // 防成环：从目标上级沿 P_ID 向上回溯，若遇到本机构说明把自己挂到了自己的子孙下
+                String cursor = newPId;
+                int guard = 0;
+                while (cursor != null && !cursor.isEmpty() && guard++ < 100) {
+                    if (cursor.equals(orgCode)) {
+                        throw new BizException("AUTH-40011", "上级机构不能选择自身的下级机构（会造成循环）");
+                    }
+                    ExtOrgInfo c = orgMapper.selectByOrgCode(cursor);
+                    cursor = c != null ? c.getPId() : null;
+                }
+                newLevel = parent.getOrgLevel() != null ? parent.getOrgLevel() + 1 : 2;
+            }
+            e.setPId(newPId);
+            e.setOrgLevel(newLevel);
+        }
         // 状态变更：禁用(1)前校验机构下无用户，否则拒绝；启用(0)无需校验
         if (req.getOrganState() != null) {
             if (req.getOrganState() == 1) {

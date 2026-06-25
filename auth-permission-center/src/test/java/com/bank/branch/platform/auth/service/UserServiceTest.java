@@ -26,13 +26,51 @@ class UserServiceTest {
 
     @Mock UserMapper userMapper;
     @Mock com.bank.branch.platform.auth.mapper.UserOrgMapper userOrgMapper;
+    @Mock com.bank.branch.platform.auth.mapper.UserRoleMapper userRoleMapper;
     @Mock BCryptPasswordEncoder passwordEncoder;
     AuthUserProperties props = new AuthUserProperties();
     UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userMapper, userOrgMapper, passwordEncoder, props);
+        userService = new UserService(userMapper, userOrgMapper, userRoleMapper, passwordEncoder, props);
+    }
+
+    // ---------- exportAllUsers ----------
+    @Test
+    void exportAllUsers_returnsAllUsersWithJoinedRoleNames_andForwardSemanticStatus() {
+        PtUser u = new PtUser();
+        u.setUserId("E001");
+        u.setUsername("10086");
+        u.setUserchnname("张三");
+        u.setEmail("z3@bank.com");
+        u.setUserType("1");
+        u.setIsEnabled(0);   // 0=启用
+        u.setIsLocked(1);    // 1=锁定
+        u.setRemark("备注X");
+
+        when(userMapper.countByQuery(any())).thenReturn(1L);
+        when(userMapper.selectByQuery(any(), eq(0), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(java.util.List.of(u));
+
+        com.bank.branch.platform.auth.entity.PtRole r1 = new com.bank.branch.platform.auth.entity.PtRole();
+        r1.setRoleChName("系统管理员");
+        com.bank.branch.platform.auth.entity.PtRole r2 = new com.bank.branch.platform.auth.entity.PtRole();
+        r2.setRoleChName("资财部负责人");
+        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(java.util.List.of(r1, r2));
+
+        java.util.List<com.bank.branch.platform.auth.controller.dto.UserExportRow> rows =
+                userService.exportAllUsers();
+
+        assertThat(rows).hasSize(1);
+        var row = rows.get(0);
+        assertThat(row.getUsername()).isEqualTo("10086");
+        assertThat(row.getUserchnname()).isEqualTo("张三");
+        assertThat(row.getStatus()).isEqualTo("启用");
+        assertThat(row.getLocked()).isEqualTo("锁定");
+        assertThat(row.getRoles()).isEqualTo("系统管理员、资财部负责人");
+        assertThat(row.getEmail()).isEqualTo("z3@bank.com");
+        assertThat(row.getRemark()).isEqualTo("备注X");
     }
 
     // ---------- create ----------

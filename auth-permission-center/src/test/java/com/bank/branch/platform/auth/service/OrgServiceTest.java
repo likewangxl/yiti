@@ -228,6 +228,50 @@ class OrgServiceTest {
     }
 
     @Test
+    void updateOrg_changeParent_reassignsPIdAndRecomputesLevel() {
+        // 把 sub1(原挂 ORG001 level3) 改挂到 sub2(level3) 下 → 新 level=4
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setPId("ORG001002");
+        when(orgMapper.selectByOrgCode("ORG001001")).thenReturn(sub1);
+        when(orgMapper.selectByOrgCode("ORG001002")).thenReturn(sub2);
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+
+        orgService.updateOrg("ORG001001", req);
+
+        verify(orgMapper).updateById(org.mockito.ArgumentMatchers.<ExtOrgInfo>argThat(e ->
+            "ORG001002".equals(e.getPId()) && e.getOrgLevel() != null && e.getOrgLevel() == 4));
+    }
+
+    @Test
+    void updateOrg_parentSelf_rejects() {
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setPId("ORG001001");
+        when(orgMapper.selectByOrgCode("ORG001001")).thenReturn(sub1);
+
+        assertThatThrownBy(() -> orgService.updateOrg("ORG001001", req))
+            .isInstanceOf(BizException.class)
+            .hasFieldOrPropertyWithValue("code", "AUTH-40010");
+        verify(orgMapper, never()).updateById(org.mockito.ArgumentMatchers.<ExtOrgInfo>any());
+    }
+
+    @Test
+    void updateOrg_parentIsOwnDescendant_rejectsCycle() {
+        // 把 ORG001 改挂到自己的子 sub1(ORG001001) 下 → 成环
+        com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO req =
+            new com.bank.branch.platform.auth.api.dto.OrgUpdateReqDTO();
+        req.setPId("ORG001001");
+        when(orgMapper.selectByOrgCode("ORG001")).thenReturn(branch);
+        when(orgMapper.selectByOrgCode("ORG001001")).thenReturn(sub1);
+
+        assertThatThrownBy(() -> orgService.updateOrg("ORG001", req))
+            .isInstanceOf(BizException.class)
+            .hasFieldOrPropertyWithValue("code", "AUTH-40011");
+        verify(orgMapper, never()).updateById(org.mockito.ArgumentMatchers.<ExtOrgInfo>any());
+    }
+
+    @Test
     void searchOrgs_shouldDelegateToMapper() {
         when(orgMapper.searchByKeyword("测试", 10)).thenReturn(List.of(branch));
 

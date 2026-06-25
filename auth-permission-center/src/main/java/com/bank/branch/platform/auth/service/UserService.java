@@ -30,8 +30,59 @@ public class UserService {
 
     private final UserMapper userMapper;
     private final UserOrgMapper userOrgMapper;
+    private final com.bank.branch.platform.auth.mapper.UserRoleMapper userRoleMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final AuthUserProperties props;
+
+    /**
+     * 导出全部用户（用户管理「导出」按钮）。忽略筛选条件，返回系统内所有用户，
+     * 每个用户带上其在 PT_USER_ROLE 绑定的全部角色中文名（以「、」拼接）。
+     *
+     * <p>状态做正向语义转换：ISENABLED 0=启用/其它=停用，ISLOCKED 1=锁定/其它=正常。
+     * 角色按用户逐个查询（管理操作、低频，N+1 可接受）。</p>
+     */
+    public java.util.List<com.bank.branch.platform.auth.controller.dto.UserExportRow> exportAllUsers() {
+        com.bank.branch.platform.auth.api.dto.UserQueryReqDTO q =
+                new com.bank.branch.platform.auth.api.dto.UserQueryReqDTO();
+        long total = userMapper.countByQuery(q);
+        int size = (int) Math.min(Math.max(total, 1L), 100000L);
+        java.util.List<PtUser> users = userMapper.selectByQuery(q, 0, size);
+        java.time.format.DateTimeFormatter fmt =
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        java.util.List<com.bank.branch.platform.auth.controller.dto.UserExportRow> rows =
+                new java.util.ArrayList<>(users.size());
+        for (PtUser u : users) {
+            com.bank.branch.platform.auth.controller.dto.UserExportRow r =
+                    new com.bank.branch.platform.auth.controller.dto.UserExportRow();
+            r.setUsername(u.getUsername());
+            r.setUserchnname(u.getUserchnname());
+            r.setUserType(mapUserType(u.getUserType()));
+            r.setStatus(u.getIsEnabled() != null && u.getIsEnabled() == 0 ? "启用" : "停用");
+            r.setLocked(u.getIsLocked() != null && u.getIsLocked() == 1 ? "锁定" : "正常");
+            java.util.List<com.bank.branch.platform.auth.entity.PtRole> roles =
+                    userRoleMapper.selectRolesByUserId(u.getUserId());
+            r.setRoles(roles == null ? "" : roles.stream()
+                    .map(com.bank.branch.platform.auth.entity.PtRole::getRoleChName)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.joining("、")));
+            r.setEmail(u.getEmail());
+            r.setRemark(u.getRemark());
+            r.setCreateTime(u.getCreateTime() != null ? fmt.format(u.getCreateTime()) : "");
+            rows.add(r);
+        }
+        log.info("[UserService.exportAllUsers] 导出用户数={}", rows.size());
+        return rows;
+    }
+
+    /** 用户类型字典 USER_TYPE：1-员工 / 2-虚拟员工，未知原样返回. */
+    private String mapUserType(String userType) {
+        if (userType == null) return "";
+        return switch (userType) {
+            case "1" -> "员工";
+            case "2" -> "虚拟员工";
+            default -> userType;
+        };
+    }
 
     /**
      * 新增用户。
