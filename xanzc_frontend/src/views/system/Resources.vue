@@ -60,10 +60,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="220" align="right" fixed="right">
+        <el-table-column label="操作" width="300" align="right" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click.stop="openCreate(row)">+ 子菜单</el-button>
             <el-button link type="primary" size="small" @click.stop="openEdit(row)">编辑</el-button>
+            <el-button
+              v-if="row.menuEndFlag === '1'"
+              link type="primary" size="small" @click.stop="openAssign(row)">分配角色</el-button>
             <el-popconfirm
               :title="`确认删除「${row.menuName}」？子菜单会一并失效，操作不可逆。`"
               @confirm="doDelete(row)"
@@ -136,6 +139,38 @@
         <el-button type="primary" :loading="dlg.saving" @click="saveDlg">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 分配角色弹窗（仅叶子菜单）-->
+    <el-dialog
+      v-model="assign.show"
+      :title="`分配角色 —— ${assign.menuName}`"
+      width="560px"
+    >
+      <div class="assign-tip">为该菜单选择可访问的角色，保存后立即生效（落库 PT_ROLE_RESOURCE）。</div>
+      <el-select
+        v-model="assign.roleIds"
+        multiple
+        filterable
+        clearable
+        placeholder="选择角色（默认显示已绑定角色）"
+        style="width:100%"
+        v-loading="assign.loading"
+      >
+        <el-option
+          v-for="r in roleOptions"
+          :key="r.roleId"
+          :value="r.roleId"
+          :label="r.roleChName || r.roleCode || r.roleId"
+        >
+          <span>{{ r.roleChName || r.roleCode || r.roleId }}</span>
+          <span class="route-mono">{{ r.roleCode }}</span>
+        </el-option>
+      </el-select>
+      <template #footer>
+        <el-button @click="assign.show = false">取消</el-button>
+        <el-button type="primary" :loading="assign.saving" @click="saveAssign">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -146,8 +181,10 @@ import { ElMessage } from 'element-plus';
 import { Search, Refresh, Plus } from '@element-plus/icons-vue';
 import {
   listResourceTree, createResource, updateResource, deleteResource,
+  getResourceRoles, assignResourceRoles,
   END_FLAG_OPTIONS
 } from '@/api/resources';
+import { listAllRoles } from '@/api/system';
 
 const router = useRouter();
 // 菜单 URL 强制下拉选 — 选项来自 router 已注册路由扁平化
@@ -277,6 +314,46 @@ async function doDelete(row) {
   }
 }
 
+// === 分配角色（仅叶子菜单）===
+const rawRoles = ref([]);
+// 下拉只显示「状态=可用」的角色（recordStatus=0），停用角色不可选
+const roleOptions = computed(() => rawRoles.value.filter(r => Number(r.recordStatus) === 0));
+const assign = reactive({ show: false, saving: false, loading: false, resourceId: '', menuName: '', roleIds: [] });
+
+async function openAssign(row) {
+  assign.resourceId = row.resourceId;
+  assign.menuName = row.menuName;
+  assign.roleIds = [];
+  assign.show = true;
+  assign.loading = true;
+  try {
+    // 角色全量列表（缓存复用）+ 该资源已绑定角色（默认勾选）
+    const [roles, bound] = await Promise.all([
+      rawRoles.value.length ? Promise.resolve(rawRoles.value) : listAllRoles({}),
+      getResourceRoles(row.resourceId)
+    ]);
+    rawRoles.value = Array.isArray(roles) ? roles : (roles?.records || []);
+    assign.roleIds = (bound || []).map(String);
+  } catch (e) {
+    ElMessage.error('加载角色失败：' + (e?.message || e));
+  } finally {
+    assign.loading = false;
+  }
+}
+
+async function saveAssign() {
+  assign.saving = true;
+  try {
+    await assignResourceRoles(assign.resourceId, assign.roleIds, '菜单分配角色');
+    ElMessage.success('已保存');
+    assign.show = false;
+  } catch (e) {
+    ElMessage.error('保存失败：' + (e?.message || e));
+  } finally {
+    assign.saving = false;
+  }
+}
+
 onMounted(reload);
 </script>
 
@@ -331,4 +408,5 @@ onMounted(reload);
 
 .hint { color: $text-3; font-size: 12px; margin-left: 8px; }
 .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+.assign-tip { color: $text-3; font-size: 12px; margin-bottom: 10px; }
 </style>

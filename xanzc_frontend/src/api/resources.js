@@ -39,6 +39,17 @@ export function deleteResource(resourceId, reason = '前端删除') {
   return call('delete', `/admin/resources/${resourceId}`, { params: { reason } }, { ok: true });
 }
 
+// === 分配角色（资源维度）===
+// GET /api/admin/resources/{resourceId}/roles → List<String> 已绑角色ID
+export function getResourceRoles(resourceId) {
+  return call('get', `/admin/resources/${encodeURIComponent(resourceId)}/roles`, {}, []);
+}
+// PUT /api/admin/resources/{resourceId}/roles → 全量设置该资源绑定角色
+export function assignResourceRoles(resourceId, roleIds, reason = '菜单分配角色') {
+  return call('put', `/admin/resources/${encodeURIComponent(resourceId)}/roles`,
+    { data: { roleIds, reason } }, { ok: true });
+}
+
 // === 常量 ===
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', '*'];
 export const IS_MENU_OPTIONS = [
