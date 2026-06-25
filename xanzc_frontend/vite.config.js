@@ -15,6 +15,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',   // 监听所有网卡，允许用本机 IP 从其他机器访问（默认只绑 localhost）
     port: 8090,
+    // 允许通过花生壳/内网穿透域名访问（否则 Vite 校验 Host 头会返回 "Blocked request. This host is not allowed."）
+    allowedHosts: ['1916dn17xs12.vicp.fun'],
     strictPort: true,  // 端口固定 8090：被占用时直接报错，而非静默漂移到 8091/8092
     open: false,
     proxy: {
