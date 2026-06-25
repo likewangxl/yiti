@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.dto.ResourceCreateReqDTO;
 import com.bank.branch.platform.auth.api.dto.ResourceTreeNodeDTO;
 import com.bank.branch.platform.auth.api.dto.ResourceUpdateReqDTO;
 import com.bank.branch.platform.auth.api.dto.RoleMenuReplaceReqDTO;
+import com.bank.branch.platform.auth.api.dto.ResourceRoleAssignReqDTO;
 import com.bank.branch.platform.auth.api.dto.RoleResourceBindReqDTO;
 import com.bank.branch.platform.auth.api.dto.RoleResourceReplaceReqDTO;
 import com.bank.branch.platform.auth.service.ResourceService;
@@ -208,6 +209,33 @@ public class ResourceController {
             @Valid @RequestBody RoleMenuReplaceReqDTO req) {
         log.info("[ResourceController.replaceMenus] roleId={}, menuIds={}", roleId, req.getMenuIds());
         roleResourceService.replaceMenus(roleId, req.getMenuIds(), req.getReason());
+        return ResponseWrapper.success();
+    }
+
+    // ─── 资源维度分配角色（菜单管理页"分配角色"）─────────────────────────
+
+    /**
+     * 查询绑定了指定资源（菜单）的全部角色ID列表，用于"分配角色"对话框回显已选角色。
+     */
+    @GetMapping("/resources/{resourceId}/roles")
+    @Operation(summary = "查询资源已绑定角色ID列表")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.READ)
+    public ResponseWrapper<List<String>> getResourceRoleIds(@PathVariable("resourceId") String resourceId) {
+        log.debug("[ResourceController.getResourceRoleIds] resourceId={}", resourceId);
+        return ResponseWrapper.success(roleResourceService.getRoleIdsByResource(resourceId));
+    }
+
+    /**
+     * 全量设置指定资源（菜单）的绑定角色（资源维度替换：把"哪些角色能访问该资源"整体设为 roleIds）。
+     */
+    @PutMapping("/resources/{resourceId}/roles")
+    @Operation(summary = "设置资源绑定角色")
+    @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.PERMISSION_CHANGE)
+    public ResponseWrapper<Void> assignResourceRoles(
+            @PathVariable("resourceId") String resourceId,
+            @Valid @RequestBody ResourceRoleAssignReqDTO req) {
+        log.info("[ResourceController.assignResourceRoles] resourceId={}, roleIds={}", resourceId, req.getRoleIds());
+        roleResourceService.assignRolesToResource(resourceId, req.getRoleIds(), req.getReason());
         return ResponseWrapper.success();
     }
 }

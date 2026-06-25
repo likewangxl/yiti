@@ -46,6 +46,14 @@ public interface RoleResourceMapper extends BaseMapper<PtRoleResource> {
     int deleteByResourceId(String resourceId);
 
     /**
+     * 查询绑定了指定资源的全部角色ID列表（资源维度反查），用于"菜单分配角色"对话框回显。
+     *
+     * @param resourceId 资源ID
+     * @return 角色ID列表
+     */
+    List<String> selectRoleIdsByResourceId(String resourceId);
+
+    /**
      * 判断指定角色与资源的授权关系是否存在，用于幂等性校验。
      *
      * @param roleId     角色ID

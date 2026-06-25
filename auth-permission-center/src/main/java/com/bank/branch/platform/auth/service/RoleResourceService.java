@@ -188,6 +188,52 @@ public class RoleResourceService {
                 roleId, menuIds.size(), interfaceCount);
     }
 
+    /**
+     * 资源维度反查：绑定了指定资源的全部角色ID列表。
+     * <p>用于菜单管理页"分配角色"对话框回显已绑定角色。</p>
+     *
+     * @param resourceId 资源ID
+     * @return 角色ID列表
+     */
+    public List<String> getRoleIdsByResource(String resourceId) {
+        return roleResourceMapper.selectRoleIdsByResourceId(resourceId);
+    }
+
+    /**
+     * 全量设置某资源（菜单）的绑定角色（先删该资源所有角色绑定，再按传入角色重建）。
+     * <p>语义：把"哪些角色能看到/访问该资源"整体替换为 {@code roleIds}。
+     * 旧绑定与新绑定涉及的角色缓存都需失效（否则被解绑的角色缓存仍残留该资源）。</p>
+     *
+     * @param resourceId 资源ID
+     * @param roleIds    替换后的角色ID列表（空=清空该资源的所有角色绑定）
+     * @param reason     操作原因（审计用）
+     */
+    @Transactional
+    public void assignRolesToResource(String resourceId, List<String> roleIds, String reason) {
+        if (resourceMapper.selectById(resourceId) == null) {
+            throw new BizException(AuthErrorCode.RESOURCE_NOT_FOUND.getCode(),
+                AuthErrorCode.RESOURCE_NOT_FOUND.getMessage());
+        }
+        List<String> targetRoleIds = roleIds == null ? List.of() : roleIds;
+        // 受影响角色 = 旧绑定 ∪ 新绑定（两侧缓存都要失效）
+        java.util.Set<String> affected = new java.util.HashSet<>(
+                roleResourceMapper.selectRoleIdsByResourceId(resourceId));
+        affected.addAll(targetRoleIds);
+        // 先删该资源现有角色绑定
+        roleResourceMapper.deleteByResourceId(resourceId);
+        // 按角色重建绑定（去重，避免传入重复角色造成重复行）
+        for (String roleId : new java.util.LinkedHashSet<>(targetRoleIds)) {
+            insertBinding(roleId, resourceId);
+        }
+        // 失效每个受影响角色的资源缓存，并发布批量缓存失效事件
+        for (String roleId : affected) {
+            cacheService.evictRoleResourceCache(roleId);
+        }
+        publishCacheInvalidatedEvent(affected, reason);
+        log.info("[RoleResourceService.assignRolesToResource] 资源={} 绑定角色数={}，受影响角色={}",
+                resourceId, targetRoleIds.size(), affected.size());
+    }
+
     private void insertBinding(String roleId, String resourceId) {
         PtRoleResource rr = new PtRoleResource();
         rr.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
@@ -199,9 +245,16 @@ public class RoleResourceService {
     // ── 私有方法 ──────────────────────────────────────────────────
 
     private void publishCacheInvalidatedEvent(String roleId, String reason) {
+        publishCacheInvalidatedEvent(Set.of(roleId), reason);
+    }
+
+    private void publishCacheInvalidatedEvent(Set<String> roleIds, String reason) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return;
+        }
         PermissionCacheInvalidatedEvent event = new PermissionCacheInvalidatedEvent();
         event.setChangeType("ROLE_RESOURCE");
-        event.setAffectedRoleIds(Set.of(roleId));
+        event.setAffectedRoleIds(Set.copyOf(roleIds));
         event.setOperator("SYSTEM");
         event.setReason(reason);
         event.setEventId("evt_" + System.currentTimeMillis());

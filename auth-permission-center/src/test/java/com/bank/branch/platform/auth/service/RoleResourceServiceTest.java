@@ -178,6 +178,61 @@ class RoleResourceServiceTest {
         assertThat(ids).containsExactly("M_PERF_METRICS", "M_REPORT_DYNAMIC");
     }
 
+    // ── 资源维度分配角色 ──────────────────────────────────────────
+
+    @Test
+    void getRoleIdsByResource_shouldReturnMapperResult() {
+        when(roleResourceMapper.selectRoleIdsByResourceId("M_HIST_PERF_ADJUST"))
+            .thenReturn(List.of("1", "229"));
+
+        List<String> ids = roleResourceService.getRoleIdsByResource("M_HIST_PERF_ADJUST");
+
+        assertThat(ids).containsExactly("1", "229");
+    }
+
+    @Test
+    void assignRolesToResource_shouldThrowWhenResourceNotFound() {
+        when(resourceMapper.selectById("NOPE")).thenReturn(null);
+
+        assertThatThrownBy(() -> roleResourceService.assignRolesToResource("NOPE", List.of("1"), "原因"))
+            .isInstanceOf(BizException.class)
+            .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("AUTH-40402"));
+        verify(roleResourceMapper, never()).deleteByResourceId(anyString());
+    }
+
+    @Test
+    void assignRolesToResource_shouldDeleteThenInsert_andEvictAffectedRoles() {
+        com.bank.branch.platform.auth.entity.PtResource res = new com.bank.branch.platform.auth.entity.PtResource();
+        res.setResourceId("M_HIST_PERF_ADJUST");
+        when(resourceMapper.selectById("M_HIST_PERF_ADJUST")).thenReturn(res);
+        // 旧绑定 {1,5}，新绑定 {1,229} → 受影响应含被解绑的 5 与新增的 229
+        when(roleResourceMapper.selectRoleIdsByResourceId("M_HIST_PERF_ADJUST"))
+            .thenReturn(List.of("1", "5"));
+
+        roleResourceService.assignRolesToResource("M_HIST_PERF_ADJUST", List.of("1", "229"), "分配角色");
+
+        verify(roleResourceMapper).deleteByResourceId("M_HIST_PERF_ADJUST");
+        verify(roleResourceMapper, times(2)).insert(any(PtRoleResource.class)); // 1, 229
+        verify(cacheService).evictRoleResourceCache("1");
+        verify(cacheService).evictRoleResourceCache("5");
+        verify(cacheService).evictRoleResourceCache("229");
+        verify(eventPublisher).publishEvent(any());
+    }
+
+    @Test
+    void assignRolesToResource_emptyRoleIds_clearsBindings() {
+        com.bank.branch.platform.auth.entity.PtResource res = new com.bank.branch.platform.auth.entity.PtResource();
+        res.setResourceId("M_X");
+        when(resourceMapper.selectById("M_X")).thenReturn(res);
+        when(roleResourceMapper.selectRoleIdsByResourceId("M_X")).thenReturn(List.of("7"));
+
+        roleResourceService.assignRolesToResource("M_X", List.of(), "清空");
+
+        verify(roleResourceMapper).deleteByResourceId("M_X");
+        verify(roleResourceMapper, never()).insert(any(PtRoleResource.class));
+        verify(cacheService).evictRoleResourceCache("7");
+    }
+
     private PtRole makeRole(String roleId) {
         PtRole r = new PtRole();
         r.setRoleId(roleId);

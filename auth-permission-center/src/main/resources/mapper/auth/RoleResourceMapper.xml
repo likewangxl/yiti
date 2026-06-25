@@ -31,6 +31,13 @@
         WHERE RESOURCE_ID = #{resourceId}
     </delete>
 
+    <!-- 资源维度反查：绑定了该资源的全部角色ID（供"菜单分配角色"对话框回显） -->
+    <select id="selectRoleIdsByResourceId" parameterType="string" resultType="string">
+        SELECT ROLE_ID
+        FROM PT_ROLE_RESOURCE
+        WHERE RESOURCE_ID = #{resourceId}
+    </select>
+
     <!--
         判断角色与资源的授权关系是否存在。
         使用 COUNT(*) > 0 的写法，MyBatis 能将数值型结果自动映射到 boolean。
