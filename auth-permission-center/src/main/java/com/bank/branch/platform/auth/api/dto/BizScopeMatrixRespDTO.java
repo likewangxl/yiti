@@ -16,4 +16,6 @@ public class BizScopeMatrixRespDTO {
     private List<String> bizTypes;
     /** roleId -> (bizType -> dataScope) 的二维映射 */
     private Map<String, Map<String, String>> matrix;
+    /** bizType 编码 -> 中文名称（来源 common-security BizType 枚举 description，前端展示单一真相源） */
+    private Map<String, String> bizTypeLabels;
 }

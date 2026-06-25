@@ -292,10 +292,18 @@ public class BizScopeService {
                     .put(scope.getBizType(), scope.getDataScope());
         }
 
+        // 4. BizType 编码 → 中文名称映射（单一真相源 = common-security BizType 枚举 description），
+        //    供前端「数据范围」BizType 列动态展示中文，避免前端硬编码副本与后端漂移。
+        Map<String, String> bizTypeLabels = new HashMap<>();
+        for (BizType bt : BizType.values()) {
+            bizTypeLabels.put(bt.getCode(), bt.getDescription());
+        }
+
         BizScopeMatrixRespDTO result = new BizScopeMatrixRespDTO();
         result.setRoles(roleDtos);
         result.setBizTypes(bizTypes);
         result.setMatrix(matrix);
+        result.setBizTypeLabels(bizTypeLabels);
         log.debug("[BizScopeService.getBizScopeMatrix] 矩阵构建完成，roles={}, bizTypes={}",
                 roleDtos.size(), bizTypes.size());
         return result;
