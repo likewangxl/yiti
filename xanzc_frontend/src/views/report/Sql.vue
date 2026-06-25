@@ -58,7 +58,7 @@
     <div v-if="exportTasks.length" class="card-section export-tasks">
       <div class="card-h">
         <div class="title">下载任务</div>
-        <el-button link type="primary" size="small" @click="loadExportTasks" :loading="exportTasksLoading" style="margin-left:auto">刷新</el-button>
+        <el-button link type="primary" size="small" @click="refreshExportTasks" :loading="exportTasksLoading" style="margin-left:auto">刷新</el-button>
       </div>
       <el-table :data="exportTasks" size="default" stripe>
         <el-table-column prop="createdTime" label="时间" width="160" :formatter="fmtDateTimeCol" />
@@ -312,11 +312,14 @@ const exporting = ref(false);
 const exportTasks = ref([]);
 const exportTasksLoading = ref(false);
 let pollTimer = null;
+let pollCount = 0;
+const MAX_POLLS = 40; // 轮询上限：40 × 3s = 2 分钟。即使后台任务卡死，也不会无限循环查询
 
 function statusLabel(s) {
   return { RUNNING: '处理中', SUCCESS: '成功', FAILED: '失败' }[s] || s;
 }
 
+// 只拉一次列表，不含任何定时逻辑
 async function loadExportTasks() {
   exportTasksLoading.value = true;
   try {
@@ -327,18 +330,31 @@ async function loadExportTasks() {
   } finally {
     exportTasksLoading.value = false;
   }
-  ensurePolling();
 }
 
-// 有 RUNNING 任务才轮询；全部终态则停，避免空转
-function ensurePolling() {
-  const hasRunning = exportTasks.value.some(t => t.status === 'RUNNING');
-  if (hasRunning && !pollTimer) {
-    pollTimer = setInterval(loadExportTasks, 3000);
-  } else if (!hasRunning && pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+// 启动轮询：每 3s 拉一次；全部终态 → 停；达到 2 分钟上限 → 停并提示（防止后台卡死时前端死循环）
+function startPolling() {
+  stopPolling();
+  pollCount = 0;
+  pollTimer = setInterval(async () => {
+    await loadExportTasks();
+    pollCount++;
+    const hasRunning = exportTasks.value.some(t => t.status === 'RUNNING');
+    if (!hasRunning) {
+      stopPolling();
+    } else if (pollCount >= MAX_POLLS) {
+      stopPolling();
+      ElMessage.warning('下载任务长时间未完成，已停止自动刷新；可点「刷新」继续查看，或联系管理员排查');
+    }
+  }, 3000);
+}
+
+// 手动刷新（列表「刷新」按钮 / 进页面）：拉一次，仍有 RUNNING 才重启轮询
+async function refreshExportTasks() {
+  await loadExportTasks();
+  if (exportTasks.value.some(t => t.status === 'RUNNING')) startPolling();
 }
 
 async function createExport() {
@@ -349,6 +365,7 @@ async function createExport() {
     await createSqlExport({ sql: encryptSql(sql.value), remark: reason.value });
     ElMessage.success('已提交下载任务，可在下方「下载任务」查看进度');
     await loadExportTasks();
+    startPolling();
   } catch (e) {
     ElMessage.error('提交下载失败：' + (e?.message || '后端校验未通过'));
   } finally {
@@ -373,8 +390,8 @@ async function downloadFile(row) {
   }
 }
 
-onMounted(loadExportTasks);
-onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });
+onMounted(refreshExportTasks);
+onUnmounted(stopPolling);
 
 // 关键字大写 + 主子句换行 —— 不是真正的 SQL parser，覆盖常见 SELECT/JOIN/WHERE/GROUP BY 等
 const FORMAT_KEYWORDS = [
