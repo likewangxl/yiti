@@ -19,6 +19,7 @@ import com.bank.branch.platform.performance.mapper.PerfImportBatchMapper;
 import com.bank.branch.platform.performance.service.importer.ImportContext;
 import com.bank.branch.platform.performance.service.importer.ImportResult;
 import com.bank.branch.platform.performance.service.importer.ImportStrategy;
+import com.bank.branch.platform.performance.service.importer.LocalImportFileStorage;
 import com.bank.branch.platform.performance.service.importer.PerfImportService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -63,19 +65,29 @@ public class PerfImportServiceImpl implements PerfImportService {
     /** 同毫秒批次号后缀计数器（跨重启不保证连续，只保证单机同毫秒唯一）. */
     private static final AtomicInteger BATCH_NO_SEQ = new AtomicInteger(0);
 
+    /**
+     * 走「本地目录」存储的导入类型（不上传 OBS）：指标导入 / KPI 导入 / 目标导入.
+     * 其余类型（TARGET / BASE_DATA / ALLOC / METRIC_RESULT / KPI_SCORE）仍归档 OBS。
+     * 下载源文件时按 {@code import_type} 反向分流到对应存储读取。
+     */
+    private static final Set<String> LOCAL_STORAGE_TYPES = Set.of("METRIC_DEF", "KPI_SCHEME", "TARGET_PLAN");
+
     private final PerfImportBatchMapper batchMapper;
     private final Map<String, ImportStrategy> strategyMap;
     private final FileApi fileApi;
+    private final LocalImportFileStorage localImportFileStorage;
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
 
     public PerfImportServiceImpl(PerfImportBatchMapper batchMapper,
                                  List<ImportStrategy> strategies,
                                  FileApi fileApi,
+                                 LocalImportFileStorage localImportFileStorage,
                                  CurrentUserApi currentUserApi,
                                  BizScopeApi bizScopeApi) {
         this.batchMapper = batchMapper;
         this.fileApi = fileApi;
+        this.localImportFileStorage = localImportFileStorage;
         this.currentUserApi = currentUserApi;
         this.bizScopeApi = bizScopeApi;
         this.strategyMap = new HashMap<>();
@@ -123,10 +135,16 @@ public class PerfImportServiceImpl implements PerfImportService {
                     "dataDate 必填（METRIC_RESULT 必传 yyyy-MM-dd）");
         }
 
-        // 0) 源文件一律归档到 OBS（与自由报表一致），记录 objectKey 供后续下载源文件。
+        // 0) 源文件归档：指标 / KPI / 目标 三类导入存「本地目录」（不上传 OBS），其余仍归档 OBS。
+        //    sourceObjectKey 落库：本地存储=相对 key（yyyyMMdd/<uuid>.<ext>）；OBS=file_object 主键。
         //    archiveSource 入参保留以兼容签名，但实现内忽略（始终归档）。
-        FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
-        String sourceObjectKey = archived.getId();
+        String sourceObjectKey;
+        if (LOCAL_STORAGE_TYPES.contains(importType)) {
+            sourceObjectKey = localImportFileStorage.save(file);
+        } else {
+            FileObjectDTO archived = fileApi.upload(file, operatorId, FileCategory.PERF_IMPORT);
+            sourceObjectKey = archived.getId();
+        }
 
         // 1) 创建批次，初始 CREATED
         PerfImportBatch batch = new PerfImportBatch();
@@ -298,8 +316,10 @@ public class PerfImportServiceImpl implements PerfImportService {
         if (objectKey == null || objectKey.isBlank()) {
             throw new PerfException(PerfErrorCode.IMPORT_BATCH_NO_SOURCE_FILE, batchId);
         }
-        // 源文件统一从 OBS 读取（与保存时一致）
-        byte[] content = fileApi.getFileContent(objectKey);
+        // 与保存时一致：指标 / KPI / 目标 三类从本地目录读取，其余从 OBS 读取
+        byte[] content = LOCAL_STORAGE_TYPES.contains(b.getImportType())
+                ? localImportFileStorage.read(objectKey)
+                : fileApi.getFileContent(objectKey);
         String fileName = b.getFileName() == null || b.getFileName().isBlank()
                 ? (b.getBatchNo() + ".xlsx") : b.getFileName();
         return new ImportSourceFile(fileName, content);

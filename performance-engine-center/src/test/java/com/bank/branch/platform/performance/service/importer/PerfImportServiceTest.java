@@ -18,6 +18,7 @@ import com.bank.branch.platform.performance.service.importer.impl.AllocRelationI
 import com.bank.branch.platform.performance.service.importer.impl.BaseDataImportStrategy;
 import com.bank.branch.platform.performance.service.importer.impl.PerfImportServiceImpl;
 import com.bank.branch.platform.performance.service.importer.impl.TargetImportStrategy;
+import com.bank.branch.platform.performance.service.importer.LocalImportFileStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,12 @@ class PerfImportServiceTest {
     private TargetImportStrategy targetStrategy;
     private BaseDataImportStrategy baseDataStrategy;
     private AllocRelationImportStrategy allocStrategy;
+    /** 三类本地存储导入（指标 / KPI / 目标）策略，用接口 mock 注入 importType. */
+    private ImportStrategy metricDefStrategy;
+    private ImportStrategy kpiSchemeStrategy;
+    private ImportStrategy targetPlanStrategy;
     private FileApi fileApi;
+    private LocalImportFileStorage localImportFileStorage;
     private CurrentUserApi currentUserApi;
     private BizScopeApi bizScopeApi;
     private PerfImportServiceImpl service;
@@ -63,31 +69,45 @@ class PerfImportServiceTest {
         targetStrategy = mock(TargetImportStrategy.class);
         baseDataStrategy = mock(BaseDataImportStrategy.class);
         allocStrategy = mock(AllocRelationImportStrategy.class);
+        metricDefStrategy = mock(ImportStrategy.class);
+        kpiSchemeStrategy = mock(ImportStrategy.class);
+        targetPlanStrategy = mock(ImportStrategy.class);
         fileApi = mock(FileApi.class);
+        localImportFileStorage = mock(LocalImportFileStorage.class);
         currentUserApi = mock(CurrentUserApi.class);
         bizScopeApi = mock(BizScopeApi.class);
 
         when(targetStrategy.importType()).thenReturn("TARGET");
         when(baseDataStrategy.importType()).thenReturn("BASE_DATA");
         when(allocStrategy.importType()).thenReturn("ALLOC");
+        when(metricDefStrategy.importType()).thenReturn("METRIC_DEF");
+        when(kpiSchemeStrategy.importType()).thenReturn("KPI_SCHEME");
+        when(targetPlanStrategy.importType()).thenReturn("TARGET_PLAN");
 
         // 默认每个策略返回空结果（子测试按需覆盖）
         ImportResult empty = new ImportResult(0, 0, 0, null);
         when(targetStrategy.execute(any(), any(), any())).thenReturn(empty);
         when(baseDataStrategy.execute(any(), any(), any())).thenReturn(empty);
         when(allocStrategy.execute(any(), any(), any())).thenReturn(empty);
+        when(metricDefStrategy.execute(any(), any(), any())).thenReturn(empty);
+        when(kpiSchemeStrategy.execute(any(), any(), any())).thenReturn(empty);
+        when(targetPlanStrategy.execute(any(), any(), any())).thenReturn(empty);
 
-        // 源文件统一归档 OBS：fileApi.upload 返回 objectKey
+        // OBS 归档（非本地类型）：fileApi.upload 返回 objectKey
         FileObjectDTO obs = new FileObjectDTO();
         obs.setId("F_OBS");
         when(fileApi.upload(any(MultipartFile.class), anyString(), anyString())).thenReturn(obs);
+        // 本地存储（指标 / KPI / 目标）：save 返回相对 key
+        when(localImportFileStorage.save(any(MultipartFile.class))).thenReturn("20260625/localkey.xlsx");
 
         // 默认当前用户 admin + 数据范围 ALL（管理员全见），子测试按需覆盖
         when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
         when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.ALL);
 
-        List<ImportStrategy> strategies = List.of(targetStrategy, baseDataStrategy, allocStrategy);
-        service = new PerfImportServiceImpl(batchMapper, strategies, fileApi, currentUserApi, bizScopeApi);
+        List<ImportStrategy> strategies = List.of(targetStrategy, baseDataStrategy, allocStrategy,
+                metricDefStrategy, kpiSchemeStrategy, targetPlanStrategy);
+        service = new PerfImportServiceImpl(batchMapper, strategies, fileApi, localImportFileStorage,
+                currentUserApi, bizScopeApi);
     }
 
     private MultipartFile fakeFile(String name) {
@@ -210,6 +230,47 @@ class PerfImportServiceTest {
     }
 
     @Test
+    @DisplayName("startImport：METRIC_DEF（指标导入）→ 存本地，不上传 OBS，sourceObjectKey=本地 key")
+    void startImport_metricDef_savesToLocal_notObs() {
+        String batchId = service.startImport("METRIC_DEF", fakeFile("metric.xlsx"), "admin", null, null, true);
+
+        assertThat(batchId).isNotBlank();
+        verify(localImportFileStorage).save(any(MultipartFile.class));
+        verify(fileApi, never()).upload(any(MultipartFile.class), anyString(), anyString());
+
+        ArgumentCaptor<PerfImportBatch> cap = ArgumentCaptor.forClass(PerfImportBatch.class);
+        verify(batchMapper).insert(cap.capture());
+        assertThat(cap.getValue().getSourceObjectKey()).isEqualTo("20260625/localkey.xlsx");
+    }
+
+    @Test
+    @DisplayName("startImport：KPI_SCHEME（KPI 导入）→ 存本地，不上传 OBS")
+    void startImport_kpiScheme_savesToLocal_notObs() {
+        service.startImport("KPI_SCHEME", fakeFile("kpi.xlsx"), "admin", null, null, true);
+
+        verify(localImportFileStorage).save(any(MultipartFile.class));
+        verify(fileApi, never()).upload(any(MultipartFile.class), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("startImport：TARGET_PLAN（目标导入）→ 存本地，不上传 OBS")
+    void startImport_targetPlan_savesToLocal_notObs() {
+        service.startImport("TARGET_PLAN", fakeFile("plan.xlsx"), "admin", null, null, true);
+
+        verify(localImportFileStorage).save(any(MultipartFile.class));
+        verify(fileApi, never()).upload(any(MultipartFile.class), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("startImport：TARGET（目标值，非本地类型）→ 走 OBS，不写本地")
+    void startImport_target_archivesToObs_notLocal() {
+        service.startImport("TARGET", fakeFile("t.xlsx"), "admin", null, null, true);
+
+        verify(fileApi).upload(any(MultipartFile.class), eq("admin"), eq(FileCategory.PERF_IMPORT));
+        verify(localImportFileStorage, never()).save(any(MultipartFile.class));
+    }
+
+    @Test
     @DisplayName("startImport：策略抛异常 → 批次 updateStatus=FAILED 并向上抛")
     void startImport_strategyThrows_marksFailed_andRethrows() {
         doAnswer(inv -> {
@@ -303,6 +364,21 @@ class PerfImportServiceTest {
 
         assertThat(src.fileName()).isEqualTo("imp.xlsx");
         assertThat(src.content()).containsExactly(9, 8, 7);
+    }
+
+    @Test
+    @DisplayName("getSourceFile：本地类型批次（METRIC_DEF）→ 从本地目录读取，不读 OBS")
+    void getSourceFile_localType_readsFromLocalStorage() {
+        PerfImportBatch b = batchWith("BL", "admin", "20260625/localkey.xlsx");
+        b.setImportType("METRIC_DEF");
+        when(batchMapper.selectByBatchId("BL")).thenReturn(b);
+        when(localImportFileStorage.read("20260625/localkey.xlsx")).thenReturn(new byte[]{5, 6});
+
+        PerfImportService.ImportSourceFile src = service.getSourceFile("BL");
+
+        assertThat(src.content()).containsExactly(5, 6);
+        verify(localImportFileStorage).read("20260625/localkey.xlsx");
+        verify(fileApi, never()).getFileContent(anyString());
     }
 
     @Test
