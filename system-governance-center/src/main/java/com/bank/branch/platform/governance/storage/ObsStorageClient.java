@@ -1,77 +1,100 @@
 package com.bank.branch.platform.governance.storage;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.obs.services.ObsClient;
+import com.obs.services.model.HttpMethodEnum;
+import com.obs.services.model.ObsObject;
+import com.obs.services.model.TemporarySignatureRequest;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 
 /**
- * 文件存储客户端。
- *
- * <p>⚠️ 临时本地实现：本地无华为云 OBS，暂改为写本地文件系统（基目录 {@code file-storage}），
- * 方法签名与原 OBS 版本保持一致，便于联调验证后整体切回 OBS。
- * 切回 OBS 时还原本类即可（git 历史保留原实现）。</p>
+ * 华为云 OBS 读写工具类（仿参考 PdObsClient 的调用习惯）。
+ * <p>懒连接：{@link #init()} 仅构造客户端对象，不发起网络请求；真正连接发生在首次 put/get 调用时，
+ * 因此 dev/CI 无真实 OBS 也能正常启动，单测通过 mock {@link ObsClient} 验证委托。</p>
  */
 @Slf4j
 @Component
 public class ObsStorageClient {
 
-    /** 本地存储基目录（相对运行目录，与既有 file-storage/yyyy/MM/dd 结构一致） */
-    private static final Path BASE_DIR = Paths.get("file-storage");
+    @Value("${obs.endPoint}")
+    private String endPoint;
 
-    /** 把对象 key 解析为本地路径，并防止路径穿越。 */
-    private Path resolve(String key) {
-        Path base = BASE_DIR.normalize().toAbsolutePath();
-        Path p = base.resolve(key).normalize();
-        if (!p.startsWith(base)) {
-            throw new BizException("GOV-50001", "非法存储路径: " + key);
-        }
-        return p;
+    @Value("${obs.accessKey}")
+    private String accessKey;
+
+    @Value("${obs.secretKey}")
+    private String secretKey;
+
+    @Value("${obs.bucketName}")
+    private String bucketName;
+
+    @Value("${obs.presignExpireSeconds:600}")
+    private long presignExpireSeconds;
+
+    private ObsClient obsClient;
+
+    @PostConstruct
+    public void init() {
+        this.obsClient = new ObsClient(accessKey, secretKey, endPoint);
+        log.info("[ObsStorageClient] 初始化完成 endPoint={}, bucket={}", endPoint, bucketName);
     }
 
-    /** 写：字节数组 → 本地文件。 */
+    @PreDestroy
+    public void close() {
+        if (obsClient != null) {
+            try {
+                obsClient.close();
+            } catch (Exception e) {
+                log.warn("[ObsStorageClient] 关闭失败", e);
+            }
+        }
+    }
+
+    /** 写：字节数组 → OBS 对象。 */
     public void putObject(byte[] bytes, String key) {
-        try {
-            Path p = resolve(key);
-            Files.createDirectories(p.getParent());
-            Files.write(p, bytes);
-            log.info("[ObsStorageClient(local)] putObject key={} -> {}", key, p);
-        } catch (IOException e) {
-            log.error("[ObsStorageClient(local)] putObject 失败 key={}", key, e);
-            throw new BizException("GOV-50001", "本地存储写入失败: " + e.getMessage(), e);
+        try (InputStream in = new ByteArrayInputStream(bytes)) {
+            obsClient.putObject(bucketName, key, in);
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] putObject 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 上传失败: " + e.getMessage(), e);
         }
     }
 
-    /** 读：本地文件 → 字节数组。 */
+    /** 读：OBS 对象 → 字节数组。 */
     public byte[] getBytes(String key) {
         try {
-            return Files.readAllBytes(resolve(key));
-        } catch (IOException e) {
-            log.error("[ObsStorageClient(local)] getBytes 失败 key={}", key, e);
-            throw new BizException("GOV-50001", "本地存储读取失败: " + e.getMessage(), e);
+            ObsObject obj = obsClient.getObject(bucketName, key);
+            try (InputStream in = obj.getObjectContent()) {
+                return in.readAllBytes();
+            }
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] getBytes 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 读取失败: " + e.getMessage(), e);
         }
     }
 
-    /** 删：本地文件。 */
+    /** 删：OBS 对象。 */
     public void deleteByKey(String key) {
         try {
-            Files.deleteIfExists(resolve(key));
-        } catch (IOException e) {
-            log.error("[ObsStorageClient(local)] deleteByKey 失败 key={}", key, e);
-            throw new BizException("GOV-50001", "本地存储删除失败: " + e.getMessage(), e);
+            obsClient.deleteObject(bucketName, key);
+        } catch (Exception e) {
+            log.error("[ObsStorageClient] deleteByKey 失败 key={}", key, e);
+            throw new BizException("GOV-50001", "OBS 删除失败: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * 预签名临时下载 URL —— 本地实现下不适用。
-     * <p>本地方案改由 {@code FileService.getDownloadUrl} 返回应用内流式下载端点
-     * {@code /api/files/{fileId}/download}，本方法保留仅为签名兼容。</p>
-     */
+    /** 预签名临时下载 URL（GET）。 */
     public String generatePresignedUrl(String key) {
-        throw new UnsupportedOperationException("本地存储无预签名 URL，请走 /api/files/{fileId}/download");
+        TemporarySignatureRequest req = new TemporarySignatureRequest(HttpMethodEnum.GET, presignExpireSeconds);
+        req.setBucketName(bucketName);
+        req.setObjectKey(key);
+        return obsClient.createTemporarySignature(req).getSignedUrl();
     }
 }

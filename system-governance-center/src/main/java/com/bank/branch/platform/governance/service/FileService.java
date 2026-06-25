@@ -188,9 +188,7 @@ public class FileService {
             throw new BizException(GovErrorCode.FILE_NOT_FOUND.getCode(),
                     GovErrorCode.FILE_NOT_FOUND.getMessage());
         }
-        // ⚠️ 临时本地方案：OBS 预签名不可用，改为返回应用内流式下载端点（前端 window.open → vite 代理 → 后端流式返回）。
-        // 切回 OBS 时还原为：return obsStorageClient.generatePresignedUrl(fileObject.getStoragePath());
-        return "/api/files/" + fileId + "/download";
+        return obsStorageClient.generatePresignedUrl(fileObject.getStoragePath());
     }
 
     /**
