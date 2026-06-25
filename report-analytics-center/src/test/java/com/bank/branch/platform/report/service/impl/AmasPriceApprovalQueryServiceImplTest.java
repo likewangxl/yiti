@@ -1,11 +1,5 @@
 package com.bank.branch.platform.report.service.impl;
 
-import com.bank.branch.platform.auth.api.BizScopeApi;
-import com.bank.branch.platform.auth.api.CurrentUserApi;
-import com.bank.branch.platform.auth.api.dto.DataScopeContext;
-import com.bank.branch.platform.common.security.enums.BizAction;
-import com.bank.branch.platform.common.security.enums.BizType;
-import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.report.dto.req.AmasPriceApprovalQueryReqDTO;
@@ -24,7 +18,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,7 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * AmasPriceApprovalQueryServiceImpl 单元测试（只读查询 + REPORT 数据范围分支）.
+ * AmasPriceApprovalQueryServiceImpl 单元测试（只读查询，已取消数据范围控制）.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -42,10 +35,6 @@ class AmasPriceApprovalQueryServiceImplTest {
 
     @Mock
     private AmasPriceApprovalMapper priceApprovalMapper;
-    @Mock
-    private CurrentUserApi currentUserApi;
-    @Mock
-    private BizScopeApi bizScopeApi;
 
     @InjectMocks
     private AmasPriceApprovalQueryServiceImpl service;
@@ -69,10 +58,6 @@ class AmasPriceApprovalQueryServiceImplTest {
         return page;
     }
 
-    private DataScopeContext scope(DataScopeType type, String orgCode, Set<String> subtree) {
-        return new DataScopeContext(type, "admin", orgCode, subtree, BizType.REPORT, BizAction.LIST);
-    }
-
     @Test
     void pageList_custNameAndApplyFullnameFuzzy_mapsVo() {
         when(priceApprovalMapper.selectPage(any(IPage.class), any())).thenReturn(onePage());
@@ -89,37 +74,8 @@ class AmasPriceApprovalQueryServiceImplTest {
     }
 
     @Test
-    void pageList_allScope_queriesWithoutOrgFilter() {
-        // buildScopeContext 返回 ALL → 不加机构过滤，正常查询
-        when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
-        when(bizScopeApi.buildScopeContext("admin", BizType.REPORT, BizAction.LIST))
-                .thenReturn(scope(DataScopeType.ALL, "O1", null));
-        when(priceApprovalMapper.selectPage(any(IPage.class), any())).thenReturn(onePage());
-
-        PageResult<AmasPriceApprovalVO> result = service.pageList(new AmasPriceApprovalQueryReqDTO(), new PageRequest());
-        assertThat(result.getRecords()).hasSize(1);
-        verify(priceApprovalMapper, times(1)).selectPage(any(IPage.class), any());
-    }
-
-    @Test
-    void pageList_orgSubtreeScope_appliesDeptSubtreeAndQueries() {
-        // 本级及下级机构：orgSubtreeCodes 非空 → APPLY_DEPTNO IN (...)
-        when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
-        when(bizScopeApi.buildScopeContext("admin", BizType.REPORT, BizAction.LIST))
-                .thenReturn(scope(DataScopeType.ORG_SUBTREE, "O1", Set.of("O1", "O11", "O12")));
-        when(priceApprovalMapper.selectPage(any(IPage.class), any())).thenReturn(onePage());
-
-        PageResult<AmasPriceApprovalVO> result = service.pageList(new AmasPriceApprovalQueryReqDTO(), new PageRequest());
-        assertThat(result.getRecords()).hasSize(1);
-        verify(priceApprovalMapper, times(1)).selectPage(any(IPage.class), any());
-    }
-
-    @Test
-    void pageList_orgScope_appliesOwnDeptAndQueries() {
-        // 本机构：APPLY_DEPTNO = orgCode
-        when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
-        when(bizScopeApi.buildScopeContext("admin", BizType.REPORT, BizAction.LIST))
-                .thenReturn(scope(DataScopeType.ORG, "O1", null));
+    void pageList_noDataScopeFilter_queriesWithoutOrgOrUserNarrowing() {
+        // 数据范围控制已取消：不注入 CurrentUserApi/BizScopeApi，授权用户可见全量数据
         when(priceApprovalMapper.selectPage(any(IPage.class), any())).thenReturn(onePage());
 
         PageResult<AmasPriceApprovalVO> result = service.pageList(new AmasPriceApprovalQueryReqDTO(), new PageRequest());
