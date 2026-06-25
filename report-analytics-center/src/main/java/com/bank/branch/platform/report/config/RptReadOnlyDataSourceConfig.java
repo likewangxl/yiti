@@ -106,6 +106,9 @@ public class RptReadOnlyDataSourceConfig {
         ds.setMinIdle(minIdle);
         ds.setInitialSize(minIdle);
         ds.setQueryTimeout(queryTimeoutSec);
+        // maxWait：池耗尽时取连接的最大等待(ms)，避免 Druid 默认 -1（无限等待）导致
+        // 异步导出线程 getConnection() 永久阻塞、任务永远停在 RUNNING。
+        ds.setMaxWait(15000);
         ds.setTestOnBorrow(false);
         ds.setTestWhileIdle(true);
         ds.setName("rptReadOnlyDataSource");

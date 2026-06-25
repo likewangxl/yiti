@@ -53,11 +53,13 @@ class UserServiceTest {
         when(userMapper.selectByQuery(any(), eq(0), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(java.util.List.of(u));
 
-        com.bank.branch.platform.auth.entity.PtRole r1 = new com.bank.branch.platform.auth.entity.PtRole();
-        r1.setRoleChName("系统管理员");
-        com.bank.branch.platform.auth.entity.PtRole r2 = new com.bank.branch.platform.auth.entity.PtRole();
-        r2.setRoleChName("资财部负责人");
-        when(userRoleMapper.selectRolesByUserId("E001")).thenReturn(java.util.List.of(r1, r2));
+        // 批量取角色（避免 N+1）：selectRolesByUserIds 返回 UserRoleItemDTO 列表
+        com.bank.branch.platform.auth.api.dto.UserRoleItemDTO i1 = new com.bank.branch.platform.auth.api.dto.UserRoleItemDTO();
+        i1.setUserId("E001"); i1.setRoleChName("系统管理员");
+        com.bank.branch.platform.auth.api.dto.UserRoleItemDTO i2 = new com.bank.branch.platform.auth.api.dto.UserRoleItemDTO();
+        i2.setUserId("E001"); i2.setRoleChName("资财部负责人");
+        when(userRoleMapper.selectRolesByUserIds(java.util.List.of("E001")))
+                .thenReturn(java.util.List.of(i1, i2));
 
         java.util.List<com.bank.branch.platform.auth.controller.dto.UserExportRow> rows =
                 userService.exportAllUsers();

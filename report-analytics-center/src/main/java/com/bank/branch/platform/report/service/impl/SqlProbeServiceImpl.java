@@ -317,8 +317,10 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             updateExportTerminal(taskId, "FAILED", null, null, null, "并发数超限，请稍后重试");
             return;
         }
+        // 分阶段日志：内网若卡住，日志能定位卡在 取连接/查询/写Excel/写库 哪一步
         try (Connection conn = readOnlyDataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(normalizedSql)) {
+            log.info("[SqlProbeService.runExport] taskId={} 已取连接 ({}ms)", taskId, System.currentTimeMillis() - startMs);
             try {
                 conn.setReadOnly(true);
             } catch (SQLException ignore) {
@@ -328,16 +330,20 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             try (ResultSet rs = stmt.executeQuery()) {
                 List<String> columns = readColumns(rs);
                 List<Map<String, Object>> rows = readRows(rs, columns);
+                log.info("[SqlProbeService.runExport] taskId={} 查询完成 rows={} ({}ms)", taskId, rows.size(), System.currentTimeMillis() - startMs);
                 byte[] excel = buildExcelBytes(columns, rows);
+                log.info("[SqlProbeService.runExport] taskId={} Excel生成 bytes={} ({}ms)", taskId, excel.length, System.currentTimeMillis() - startMs);
                 String fileName = "SQL探查导出_" + taskId.substring(0, 8) + ".xlsx";
                 updateExportTerminal(taskId, "SUCCESS", rows.size(), fileName, excel, null);
                 safelyAudit(empId, taskId, "SUCCESS", remark, normalizedSql, null);
                 log.info("[SqlProbeService.runExport] 导出成功 taskId={} rows={} bytes={} elapsedMs={}",
                         taskId, rows.size(), excel.length, System.currentTimeMillis() - startMs);
             }
-        } catch (Exception ex) {
-            log.warn("[SqlProbeService.runExport] 导出失败 taskId={} cause={}", taskId, ex.getMessage());
-            updateExportTerminal(taskId, "FAILED", null, null, null, ex.getMessage());
+        } catch (Throwable ex) {
+            // 捕获 Throwable（含 Error，如 OOM/临时盘问题），确保任何失败都落 FAILED 而非永久 RUNNING
+            log.warn("[SqlProbeService.runExport] 导出失败 taskId={} ({}ms) cause={}",
+                    taskId, System.currentTimeMillis() - startMs, ex.toString());
+            updateExportTerminal(taskId, "FAILED", null, null, null, String.valueOf(ex.getMessage()));
             safelyAudit(empId, taskId, "FAILED", remark, normalizedSql, ex.getMessage());
         } finally {
             semaphore.release();
@@ -420,10 +426,11 @@ public class SqlProbeServiceImpl implements SqlProbeService {
      * ===================================================================== */
 
     /** 把列定义 + 行数据写成 xlsx 字节（动态列：表头=查询结果列名）。
-     *  用 SXSSF 流式写（内存只保留最近 100 行，其余刷到临时盘），抗超大结果集；写完 dispose 清临时文件。 */
+     *  用纯内存 XSSF（不落临时盘）——文件最终整体存 DB BLOB，本就全量在内存；
+     *  且规避 SXSSF 在服务端写/读临时文件（低熵 SecureRandom、临时盘只读/满）导致的卡死。 */
     private byte[] buildExcelBytes(List<String> columns, List<Map<String, Object>> rows) throws java.io.IOException {
-        org.apache.poi.xssf.streaming.SXSSFWorkbook wb = new org.apache.poi.xssf.streaming.SXSSFWorkbook(100);
-        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
             org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("查询结果");
             org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
             for (int c = 0; c < columns.size(); c++) {
@@ -439,8 +446,6 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             }
             wb.write(out);
             return out.toByteArray();
-        } finally {
-            wb.dispose(); // 删除 SXSSF 落盘的临时文件
         }
     }
 

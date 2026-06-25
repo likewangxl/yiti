@@ -39,7 +39,7 @@ public class UserService {
      * 每个用户带上其在 PT_USER_ROLE 绑定的全部角色中文名（以「、」拼接）。
      *
      * <p>状态做正向语义转换：ISENABLED 0=启用/其它=停用，ISLOCKED 1=锁定/其它=正常。
-     * 角色按用户逐个查询（管理操作、低频，N+1 可接受）。</p>
+     * 角色用 {@code selectRolesByUserIds} 批量查询（分块 IN，避免 N+1：内网 4000+ 用户逐个查会超时）。</p>
      */
     public java.util.List<com.bank.branch.platform.auth.controller.dto.UserExportRow> exportAllUsers() {
         com.bank.branch.platform.auth.api.dto.UserQueryReqDTO q =
@@ -47,6 +47,19 @@ public class UserService {
         long total = userMapper.countByQuery(q);
         int size = (int) Math.min(Math.max(total, 1L), 100000L);
         java.util.List<PtUser> users = userMapper.selectByQuery(q, 0, size);
+
+        // 一次性批量取所有用户的角色名（分块 500/批，IN 列表不至于过大），按 userId 归并
+        java.util.List<String> allIds = users.stream().map(PtUser::getUserId).toList();
+        java.util.Map<String, java.util.List<String>> roleNameMap = new java.util.HashMap<>();
+        final int CHUNK = 500;
+        for (int i = 0; i < allIds.size(); i += CHUNK) {
+            java.util.List<String> chunk = allIds.subList(i, Math.min(i + CHUNK, allIds.size()));
+            for (com.bank.branch.platform.auth.api.dto.UserRoleItemDTO it : userRoleMapper.selectRolesByUserIds(chunk)) {
+                if (it.getRoleChName() == null) continue;
+                roleNameMap.computeIfAbsent(it.getUserId(), k -> new java.util.ArrayList<>()).add(it.getRoleChName());
+            }
+        }
+
         java.time.format.DateTimeFormatter fmt =
                 java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         java.util.List<com.bank.branch.platform.auth.controller.dto.UserExportRow> rows =
@@ -59,12 +72,8 @@ public class UserService {
             r.setUserType(mapUserType(u.getUserType()));
             r.setStatus(u.getIsEnabled() != null && u.getIsEnabled() == 0 ? "启用" : "停用");
             r.setLocked(u.getIsLocked() != null && u.getIsLocked() == 1 ? "锁定" : "正常");
-            java.util.List<com.bank.branch.platform.auth.entity.PtRole> roles =
-                    userRoleMapper.selectRolesByUserId(u.getUserId());
-            r.setRoles(roles == null ? "" : roles.stream()
-                    .map(com.bank.branch.platform.auth.entity.PtRole::getRoleChName)
-                    .filter(java.util.Objects::nonNull)
-                    .collect(java.util.stream.Collectors.joining("、")));
+            java.util.List<String> rs = roleNameMap.get(u.getUserId());
+            r.setRoles(rs == null ? "" : String.join("、", rs));
             r.setEmail(u.getEmail());
             r.setRemark(u.getRemark());
             r.setCreateTime(u.getCreateTime() != null ? fmt.format(u.getCreateTime()) : "");
