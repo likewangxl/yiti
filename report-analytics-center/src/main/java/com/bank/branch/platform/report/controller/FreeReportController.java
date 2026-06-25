@@ -38,19 +38,16 @@ public class FreeReportController {
     private final FileApi fileApi;
 
     // 导入/禁用/启用/删除仍按角色判定（这是「能操作」权限，非数据范围）；行级数据范围已改读 DataScope。
-    // 仅：系统管理员 / 资财部负责人 / 自由报表操作人 可操作。
+    // 仅：自由报表操作人 可操作（管理员 / 资财部负责人不再具备这些操作按钮，仅保留查看）。
     private static final String ROLE_FREE_REPORT_OPERATOR = "R_2FAB45A1"; // 自由报表操作人
-    private static final String ROLE_SYS_ADMIN = "SYS_ADMIN";             // 系统管理员
-    private static final String ROLE_FINANCE_LEADER = "FINANCE_LEADER";   // 资财部负责人
 
     private static final String STATUS_DISABLED = "DISABLED";
     private static final String STATUS_SUCCESS = "SUCCESS";
 
-    /** 是否自由报表操作人（或 SYS_ADMIN）：可导入 / 禁用 / 启用 / 查看禁用文件 */
+    /** 是否自由报表操作人：可导入 / 禁用 / 启用 / 查看禁用文件 */
     private boolean isOperator() {
         Set<String> rc = currentUserApi.getCurrentRoleCodes();
-        return rc != null && (rc.contains(ROLE_FREE_REPORT_OPERATOR)
-                || rc.contains(ROLE_SYS_ADMIN) || rc.contains(ROLE_FINANCE_LEADER));
+        return rc != null && rc.contains(ROLE_FREE_REPORT_OPERATOR);
     }
 
     /** 行级数据范围解析结果 */

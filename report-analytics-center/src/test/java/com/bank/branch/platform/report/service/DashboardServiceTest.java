@@ -217,16 +217,8 @@ class DashboardServiceTest {
         assertThat(stats.get(2).getUnit()).isEqualTo("%");
     }
 
-    @Test
-    void getPresidentDashboard_withoutRolePresident_throwsRpt40301() {
-        when(currentUserApi.getCurrentRoleIds()).thenReturn(Set.of("R_RM", "R_TELLER"));
-
-        // RptException.message 仅含 msg（不含 code），用 errorCode 字段断言更精确
-        assertThatThrownBy(() -> service.getPresidentDashboard(null, LocalDate.parse("2026-04-09")))
-                .isInstanceOf(RptException.class)
-                .satisfies(ex -> assertThat(((RptException) ex).getErrorCode())
-                        .isEqualTo(RptErrorCode.DASHBOARD_NO_ACCESS));
-    }
+    // 已去掉服务层角色白名单校验：访问控制交由菜单授权（有"行长仪表盘"菜单即可看），
+    // 故原 getPresidentDashboard_withoutRolePresident_throwsRpt40301 用例删除。
 
     @Test
     void getPresidentDashboard_withNullDataDate_fallsBackToToday() {

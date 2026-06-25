@@ -63,7 +63,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
 
-    private static final String ROLE_PRESIDENT = "2";  // 分行行长 ROLE_ID（对齐内网 sys_role 后改为数字）
     /** 全行顶层机构编码（西安分行，ORG_LEVEL=1）；行长仪表盘默认看全行 */
     private static final String ROOT_ORG_CODE = "1";
 
@@ -100,15 +99,10 @@ public class DashboardServiceImpl implements DashboardService {
                     + "? #orgCode : @currentUserApi.getCurrentOrgCode())",
             unless = "#result == null")
     public PresidentDashboardRespDTO getPresidentDashboard(String orgCode, LocalDate dataDate) {
-        // 1) 角色校验 —— 常量 R_PRESIDENT 是 PT_ROLE.ROLE_ID（生产 ROLE_CODE 为 "BRANCH_PRE"），
-        //    所以必须查 ROLE_IDS。早期版本误用 getCurrentRoleCodes() 导致行长账号也被拒。
-        Set<String> roles = currentUserApi.getCurrentRoleIds();
-        if (roles == null || !roles.contains(ROLE_PRESIDENT)) {
-            log.warn("[DashboardService] 非 R_PRESIDENT 角色访问行长仪表盘：roleIds={}", roles);
-            throw new RptException(RptErrorCode.DASHBOARD_NO_ACCESS);
-        }
+        // 访问控制交由菜单授权（@BizAuth + PT_ROLE_RESOURCE）：有"行长仪表盘"菜单即可查看，
+        // 服务层不再硬编码角色白名单（原仅 R_PRESIDENT/ROLE_ID=2 可看）。
 
-        // 2) dataDate 默认取 SYS_CONTROL(ORG) 最新有效数据日期（"读取最新版本control表关联数据"）；
+        // dataDate 默认取 SYS_CONTROL(ORG) 最新有效数据日期（"读取最新版本control表关联数据"）；
         //    orgCode 默认取全行顶层机构（ORG_LEVEL=1 的"西安分行"=1），实现"全行"视角而非行长个人部门
         LocalDate latest = null;
         try { latest = metricApi.getLatestDataDate("ORG"); } catch (RuntimeException e) {

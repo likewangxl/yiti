@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.service.impl;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.common.web.PageRequest;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.governance.api.AuditApi;
@@ -8,7 +9,10 @@ import com.bank.branch.platform.governance.api.dto.AuditLogCmd;
 import com.bank.branch.platform.report.dto.req.SqlProbeExecuteReqDTO;
 import com.bank.branch.platform.report.dto.resp.SchemaWhitelistRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExecuteRespDTO;
+import com.bank.branch.platform.report.dto.resp.SqlProbeExportFileDTO;
+import com.bank.branch.platform.report.dto.resp.SqlProbeExportTaskRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeHistoryRespDTO;
+import com.bank.branch.platform.report.entity.SqlProbeExportTask;
 import com.bank.branch.platform.report.entity.SqlProbeHistory;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.exception.RptException;
@@ -44,12 +48,12 @@ import java.util.concurrent.Semaphore;
  *
  * <p>核心执行链（plan L2640-L2730）：
  * <ol>
- *   <li>角色校验：仅资财部负责人 FINANCE_LEADER 可访问（缺失 → RPT-40302）</li>
+ *   <li>访问控制：交由菜单授权（@BizAuth + PT_ROLE_RESOURCE），服务层不再硬编码角色白名单</li>
  *   <li>SqlSafeValidator 校验 + LIMIT 标准化</li>
  *   <li>INSERT SQL_PROBE_HISTORY(status=RUNNING) 占位（出失联场景能查到 RUNNING 行）</li>
  *   <li>Semaphore.tryAcquire (并发上限 10)</li>
- *   <li>readOnlyDataSource 取连接 + setReadOnly + setQueryTimeout 30s + setMaxRows 1000</li>
- *   <li>executeQuery + 行 Map 装配（最多 1000 行）</li>
+ *   <li>readOnlyDataSource 取连接 + setReadOnly + setQueryTimeout 30s（行数不再限制）</li>
+ *   <li>executeQuery + 行 Map 装配（返回全部结果行，仅受 30s 超时约束）</li>
  *   <li>UPDATE 终态 (SUCCESS / TIMEOUT / FAILED) + AuditApi.log 同步</li>
  * </ol>
  *
@@ -59,15 +63,9 @@ import java.util.concurrent.Semaphore;
 @Service
 public class SqlProbeServiceImpl implements SqlProbeService {
 
-    // getCurrentRoleCodes() 返回 roleCode（如 FINANCE_LEADER），不是 roleId。
-    // SQL 探查对「资财部负责人(FINANCE_LEADER) / 资财部经办人(BACK_FINANCE)」开放，其他角色一律拒绝。
-    private static final Set<String> ROLE_SQL_PROBE_ALLOWED = Set.of("FINANCE_LEADER", "BACK_FINANCE");
-
     private static final int CONCURRENT_LIMIT = 10;
 
     private static final int QUERY_TIMEOUT_SEC = 30;
-
-    private static final int MAX_ROWS = 1000;
 
     private final SqlSafeValidator validator;
 
@@ -90,6 +88,18 @@ public class SqlProbeServiceImpl implements SqlProbeService {
 
     private final int maxSubqueryDepthView;
 
+    /** 用户 API：把历史/审计里的 empId 解析成用户名称. */
+    private final UserApi userApi;
+
+    /** 异步导出任务表 mapper（MyBatis-Plus BaseMapper）. */
+    private final com.bank.branch.platform.report.mapper.SqlProbeExportTaskMapper exportTaskMapper;
+
+    /** SQL 探查异步导出专用线程池. */
+    private final java.util.concurrent.Executor exportExecutor;
+
+    /** 列表最多返回的导出任务条数. */
+    private static final int EXPORT_TASK_LIST_LIMIT = 50;
+
     private final Semaphore semaphore = new Semaphore(CONCURRENT_LIMIT);
 
     public SqlProbeServiceImpl(
@@ -102,7 +112,10 @@ public class SqlProbeServiceImpl implements SqlProbeService {
             @Value("#{'${rpt.sql.probe.forbidden-keywords:DROP,DELETE,UPDATE,INSERT,TRUNCATE,ALTER,CREATE,RENAME,REPLACE,GRANT,REVOKE,LOCK,UNLOCK,SET,CALL,EXEC,EXECUTE,LOAD,SHUTDOWN,USE,DESCRIBE,EXPLAIN,SHOW,COMMIT,ROLLBACK,SAVEPOINT,DECLARE,HANDLER,SIGNAL,RESIGNAL}'.split(',')}") List<String> forbiddenKeywordsView,
             @Value("${rpt.sql.probe.max-rows:1000}") int maxRowsView,
             @Value("${rpt.sql.probe.max-sql-length:5000}") int maxSqlLengthView,
-            @Value("${rpt.sql.probe.max-subquery-depth:3}") int maxSubqueryDepthView) {
+            @Value("${rpt.sql.probe.max-subquery-depth:3}") int maxSubqueryDepthView,
+            UserApi userApi,
+            com.bank.branch.platform.report.mapper.SqlProbeExportTaskMapper exportTaskMapper,
+            @Qualifier("sqlProbeExportExecutor") java.util.concurrent.Executor exportExecutor) {
         this.validator = validator;
         this.historyMapper = historyMapper;
         this.currentUserApi = currentUserApi;
@@ -113,19 +126,17 @@ public class SqlProbeServiceImpl implements SqlProbeService {
         this.maxRowsView = maxRowsView;
         this.maxSqlLengthView = maxSqlLengthView;
         this.maxSubqueryDepthView = maxSubqueryDepthView;
+        this.userApi = userApi;
+        this.exportTaskMapper = exportTaskMapper;
+        this.exportExecutor = exportExecutor;
     }
 
     @Override
     public SqlProbeExecuteRespDTO execute(SqlProbeExecuteReqDTO req) {
-        // 1) 角色校验
-        Set<String> roles = currentUserApi.getCurrentRoleCodes();
-        if (roles == null || roles.stream().noneMatch(ROLE_SQL_PROBE_ALLOWED::contains)) {
-            log.warn("[SqlProbeService] 拒绝：仅资财部负责人/资财部经办人可访问 SQL 探查 roles={}", roles);
-            throw new RptException(RptErrorCode.SQL_PROBE_NO_ACCESS);
-        }
+        // 访问控制交由菜单授权（@BizAuth），服务层不再做角色白名单校验
         String empId = currentUserApi.getCurrentEmpId();
 
-        // 2) 校验 + 标准化 SQL（校验失败直接抛，不入库 / 不审计）
+        // 校验 + 标准化 SQL（校验失败直接抛，不入库 / 不审计）
         SqlSafeResult safe = validator.validateAndNormalize(req.getSql());
         String normalizedSql = safe.getNormalizedSql();
 
@@ -157,7 +168,7 @@ public class SqlProbeServiceImpl implements SqlProbeService {
                 // 部分 mock / 异常实现可能不支持，忽略
             }
             stmt.setQueryTimeout(QUERY_TIMEOUT_SEC);
-            stmt.setMaxRows(MAX_ROWS);
+            // 行数限制已取消：内联执行返回全部结果（仍受 30s 超时保护），超大数据请走异步导出下载
 
             try (ResultSet rs = stmt.executeQuery()) {
                 List<String> columns = readColumns(rs);
@@ -201,13 +212,30 @@ public class SqlProbeServiceImpl implements SqlProbeService {
         List<SqlProbeHistory> records = historyMapper.selectByEmpIdPaged(
                 empId, page.getOffset(), page.getPageSize());
         List<SqlProbeHistoryRespDTO> dtos = records.stream().map(this::toDto).toList();
-        // 列表 sqlText 截断 200 字
+        Map<String, String> nameCache = new HashMap<>();
         dtos.forEach(d -> {
+            // 列表 sqlText 截断 200 字
             if (d.getSqlText() != null && d.getSqlText().length() > 200) {
                 d.setSqlText(d.getSqlText().substring(0, 200) + "...");
             }
+            // 操作人展示为用户名称（按 empId 缓存解析）
+            d.setEmpName(resolveEmpName(d.getEmpId(), nameCache));
         });
         return PageResult.of(page.getPageNo(), page.getPageSize(), total, dtos);
+    }
+
+    /** 把 empId 解析成用户名称，按 map 缓存避免同页重复查询；解析失败回退 empId. */
+    private String resolveEmpName(String empId, Map<String, String> cache) {
+        if (!StringUtils.hasText(empId)) return empId;
+        return cache.computeIfAbsent(empId, id -> {
+            try {
+                String name = userApi.getUserName(id);
+                return StringUtils.hasText(name) ? name : id;
+            } catch (RuntimeException e) {
+                log.warn("[SqlProbeService] 解析操作人名称失败 empId={} cause={}", id, e.getMessage());
+                return id;
+            }
+        });
     }
 
     @Override
@@ -221,7 +249,9 @@ public class SqlProbeServiceImpl implements SqlProbeService {
         if (!StringUtils.hasText(hist.getEmpId()) || !hist.getEmpId().equals(currentEmp)) {
             throw new RptException(RptErrorCode.SQL_PROBE_NO_ACCESS);
         }
-        return toDto(hist);
+        SqlProbeHistoryRespDTO dto = toDto(hist);
+        dto.setEmpName(resolveEmpName(hist.getEmpId(), new HashMap<>()));
+        return dto;
     }
 
     @Override
@@ -244,9 +274,175 @@ public class SqlProbeServiceImpl implements SqlProbeService {
                 .build();
     }
 
+    @Override
+    public String createExport(SqlProbeExecuteReqDTO req) {
+        // 访问控制交由菜单授权（@BizAuth）；不再做角色白名单校验
+        String empId = currentUserApi.getCurrentEmpId();
+
+        // 校验 + 标准化 SQL（失败直接抛，不建任务）
+        SqlSafeResult safe = validator.validateAndNormalize(req.getSql());
+        String normalizedSql = safe.getNormalizedSql();
+
+        // 插入 RUNNING 占位任务
+        String taskId = UUID.randomUUID().toString().replace("-", "");
+        SqlProbeExportTask task = new SqlProbeExportTask();
+        task.setId(taskId);
+        task.setEmpId(empId);
+        task.setSqlText(normalizedSql);
+        task.setRemark(req.getRemark());
+        task.setStatus("RUNNING");
+        task.setCreatedTime(LocalDateTime.now());
+        exportTaskMapper.insert(task);
+
+        // 提交后台线程异步执行（提交失败兜底标记 FAILED）
+        try {
+            exportExecutor.execute(() -> runExport(taskId, empId, normalizedSql, req.getRemark()));
+        } catch (RuntimeException e) {
+            log.error("[SqlProbeService.createExport] 任务提交失败 taskId={}", taskId, e);
+            updateExportTerminal(taskId, "FAILED", null, null, null, "任务启动失败：" + e.getMessage());
+            throw new RptException(RptErrorCode.EXPORT_START_FAILED);
+        }
+        log.info("[SqlProbeService.createExport] 已创建导出任务 taskId={} empId={}", taskId, empId);
+        return taskId;
+    }
+
+    /**
+     * 后台执行 SQL 导出：跑查询（无行数限制，仅 30s 超时）→ SXSSF 流式写 xlsx → 存任务表 FILE_CONTENT.
+     * <p>任何异常都吞掉并落 FAILED，避免线程池工作线程因未捕获异常中断。</p>
+     */
+    void runExport(String taskId, String empId, String normalizedSql, String remark) {
+        long startMs = System.currentTimeMillis();
+        if (!semaphore.tryAcquire()) {
+            log.warn("[SqlProbeService.runExport] 并发数超限（{}），taskId={}", CONCURRENT_LIMIT, taskId);
+            updateExportTerminal(taskId, "FAILED", null, null, null, "并发数超限，请稍后重试");
+            return;
+        }
+        try (Connection conn = readOnlyDataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(normalizedSql)) {
+            try {
+                conn.setReadOnly(true);
+            } catch (SQLException ignore) {
+                // 部分实现不支持，忽略
+            }
+            stmt.setQueryTimeout(QUERY_TIMEOUT_SEC);
+            try (ResultSet rs = stmt.executeQuery()) {
+                List<String> columns = readColumns(rs);
+                List<Map<String, Object>> rows = readRows(rs, columns);
+                byte[] excel = buildExcelBytes(columns, rows);
+                String fileName = "SQL探查导出_" + taskId.substring(0, 8) + ".xlsx";
+                updateExportTerminal(taskId, "SUCCESS", rows.size(), fileName, excel, null);
+                safelyAudit(empId, taskId, "SUCCESS", remark, normalizedSql, null);
+                log.info("[SqlProbeService.runExport] 导出成功 taskId={} rows={} bytes={} elapsedMs={}",
+                        taskId, rows.size(), excel.length, System.currentTimeMillis() - startMs);
+            }
+        } catch (Exception ex) {
+            log.warn("[SqlProbeService.runExport] 导出失败 taskId={} cause={}", taskId, ex.getMessage());
+            updateExportTerminal(taskId, "FAILED", null, null, null, ex.getMessage());
+            safelyAudit(empId, taskId, "FAILED", remark, normalizedSql, ex.getMessage());
+        } finally {
+            semaphore.release();
+        }
+    }
+
+    @Override
+    public List<SqlProbeExportTaskRespDTO> listExportTasks() {
+        String empId = currentUserApi.getCurrentEmpId();
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SqlProbeExportTask> qw =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        // 列表只取轻量列，显式排除 FILE_CONTENT 大字段，避免把每行 xlsx 字节读进内存
+        qw.select(SqlProbeExportTask::getId, SqlProbeExportTask::getEmpId, SqlProbeExportTask::getSqlText,
+                  SqlProbeExportTask::getRemark, SqlProbeExportTask::getStatus, SqlProbeExportTask::getRowCount,
+                  SqlProbeExportTask::getFileName, SqlProbeExportTask::getErrorMsg,
+                  SqlProbeExportTask::getCreatedTime, SqlProbeExportTask::getFinishedTime)
+          .eq(SqlProbeExportTask::getEmpId, empId)
+          .orderByDesc(SqlProbeExportTask::getCreatedTime)
+          .last("LIMIT " + EXPORT_TASK_LIST_LIMIT);
+        return exportTaskMapper.selectList(qw).stream().map(this::toExportDto).toList();
+    }
+
+    @Override
+    public SqlProbeExportFileDTO getExportFile(String taskId) {
+        SqlProbeExportTask task = exportTaskMapper.selectById(taskId);
+        if (task == null) {
+            throw new RptException(RptErrorCode.EXPORT_TASK_NOT_FOUND_OR_EXPIRED);
+        }
+        // 仅本人可下载自己的导出任务
+        String currentEmp = currentUserApi.getCurrentEmpId();
+        if (!StringUtils.hasText(task.getEmpId()) || !task.getEmpId().equals(currentEmp)) {
+            throw new RptException(RptErrorCode.EXPORT_DOWNLOAD_FORBIDDEN);
+        }
+        if (!"SUCCESS".equals(task.getStatus()) || task.getFileContent() == null) {
+            throw new RptException(RptErrorCode.EXPORT_TASK_NOT_READY);
+        }
+        String fileName = StringUtils.hasText(task.getFileName()) ? task.getFileName() : "sql-export.xlsx";
+        return SqlProbeExportFileDTO.builder().fileName(fileName).content(task.getFileContent()).build();
+    }
+
+    /** 更新导出任务终态（updateById NOT_NULL 策略：null 字段不覆盖）. */
+    private void updateExportTerminal(String taskId, String status, Integer rowCount,
+                                      String fileName, byte[] fileContent, String errorMsg) {
+        try {
+            SqlProbeExportTask upd = new SqlProbeExportTask();
+            upd.setId(taskId);
+            upd.setStatus(status);
+            upd.setRowCount(rowCount);
+            upd.setFileName(fileName);
+            upd.setFileContent(fileContent);
+            upd.setErrorMsg(errorMsg != null && errorMsg.length() > 500 ? errorMsg.substring(0, 500) : errorMsg);
+            upd.setFinishedTime(LocalDateTime.now());
+            exportTaskMapper.updateById(upd);
+        } catch (RuntimeException e) {
+            log.error("[SqlProbeService.updateExportTerminal] 更新失败 taskId={} status={} cause={}",
+                    taskId, status, e.getMessage());
+        }
+    }
+
+    private SqlProbeExportTaskRespDTO toExportDto(SqlProbeExportTask e) {
+        String sql = e.getSqlText();
+        if (sql != null && sql.length() > 200) {
+            sql = sql.substring(0, 200) + "...";
+        }
+        return SqlProbeExportTaskRespDTO.builder()
+                .id(e.getId())
+                .sqlText(sql)
+                .remark(e.getRemark())
+                .status(e.getStatus())
+                .rowCount(e.getRowCount())
+                .fileName(e.getFileName())
+                .errorMsg(e.getErrorMsg())
+                .createdTime(e.getCreatedTime())
+                .finishedTime(e.getFinishedTime())
+                .build();
+    }
+
     /* =====================================================================
      * 辅助方法
      * ===================================================================== */
+
+    /** 把列定义 + 行数据写成 xlsx 字节（动态列：表头=查询结果列名）。
+     *  用 SXSSF 流式写（内存只保留最近 100 行，其余刷到临时盘），抗超大结果集；写完 dispose 清临时文件。 */
+    private byte[] buildExcelBytes(List<String> columns, List<Map<String, Object>> rows) throws java.io.IOException {
+        org.apache.poi.xssf.streaming.SXSSFWorkbook wb = new org.apache.poi.xssf.streaming.SXSSFWorkbook(100);
+        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("查询结果");
+            org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+            for (int c = 0; c < columns.size(); c++) {
+                header.createCell(c).setCellValue(columns.get(c));
+            }
+            int rIdx = 1;
+            for (Map<String, Object> row : rows) {
+                org.apache.poi.ss.usermodel.Row r = sheet.createRow(rIdx++);
+                for (int c = 0; c < columns.size(); c++) {
+                    Object v = row.get(columns.get(c));
+                    r.createCell(c).setCellValue(v != null ? String.valueOf(v) : "");
+                }
+            }
+            wb.write(out);
+            return out.toByteArray();
+        } finally {
+            wb.dispose(); // 删除 SXSSF 落盘的临时文件
+        }
+    }
 
     private List<String> readColumns(ResultSet rs) throws SQLException {
         ResultSetMetaData md = rs.getMetaData();
@@ -259,15 +455,14 @@ public class SqlProbeServiceImpl implements SqlProbeService {
     }
 
     private List<Map<String, Object>> readRows(ResultSet rs, List<String> columns) throws SQLException {
+        // 行数限制已取消：读取全部结果行（仅受 30s 查询超时约束）
         List<Map<String, Object>> out = new ArrayList<>();
-        int rowsRead = 0;
-        while (rs.next() && rowsRead < MAX_ROWS) {
+        while (rs.next()) {
             Map<String, Object> row = new HashMap<>(columns.size() * 2);
             for (int i = 0; i < columns.size(); i++) {
                 row.put(columns.get(i), rs.getObject(i + 1));
             }
             out.add(row);
-            rowsRead++;
         }
         return out;
     }

@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
@@ -87,6 +88,15 @@ class SqlProbeServiceTest {
     @Mock
     private ResultSetMetaData metaData;
 
+    @Mock
+    private com.bank.branch.platform.auth.api.UserApi userApi;
+
+    @Mock
+    private com.bank.branch.platform.report.mapper.SqlProbeExportTaskMapper exportTaskMapper;
+
+    /** 直接执行器：让 runExport 在 createExport 内同步跑完，便于断言. */
+    private final java.util.concurrent.Executor directExecutor = Runnable::run;
+
     private SqlProbeServiceImpl service;
 
     @BeforeEach
@@ -100,10 +110,11 @@ class SqlProbeServiceTest {
                 readOnlyDataSource,
                 List.of("cust_master", "kpi_result"),
                 List.of("DROP", "DELETE", "UPDATE", "INSERT"),
-                1000, 5000, 3);
+                1000, 5000, 3,
+                userApi,
+                exportTaskMapper,
+                directExecutor);
 
-        // 默认放行：当前用户具备资财部负责人 FINANCE_LEADER（具体 case 可覆盖）
-        lenient().when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("FINANCE_LEADER"));
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E_TECH001");
         // 校验默认放行：返回 normalizedSql 等于 sql
         lenient().when(validator.validateAndNormalize(anyString())).thenAnswer(inv ->
@@ -112,17 +123,6 @@ class SqlProbeServiceTest {
         // DataSource 链路默认 mock
         lenient().when(readOnlyDataSource.getConnection()).thenReturn(connection);
         lenient().when(connection.prepareStatement(anyString())).thenReturn(statement);
-    }
-
-    @Test
-    void execute_withoutFinanceLeaderRole_rejects40302() {
-        // 非资财部负责人（含 SYS_ADMIN / BACK_TECH）一律拒绝
-        when(currentUserApi.getCurrentRoleCodes()).thenReturn(Set.of("SYS_ADMIN", "BACK_TECH"));
-        SqlProbeExecuteReqDTO req = buildReq("SELECT * FROM CUST_MASTER", "诊断");
-
-        assertThatThrownBy(() -> service.execute(req))
-                .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-40302");
     }
 
     @Test
@@ -215,6 +215,74 @@ class SqlProbeServiceTest {
         assertThat(updateCap.getValue().getStatus()).isEqualTo("FAILED");
 
         verify(auditApi, atLeastOnce()).log(any());
+    }
+
+    @Test
+    void createExport_success_insertsRunning_thenRunStoresXlsxInDb_andMarksSuccess() throws SQLException {
+        // 模拟 ResultSet：1 列 id，2 行
+        when(statement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.getMetaData()).thenReturn(metaData);
+        when(metaData.getColumnCount()).thenReturn(1);
+        when(metaData.getColumnLabel(1)).thenReturn("id");
+        when(resultSet.next()).thenReturn(true, true, false);
+        when(resultSet.getObject(1)).thenReturn(1, 2);
+
+        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM CUST_MASTER", "导出客户");
+
+        String taskId = service.createExport(req);
+        assertThat(taskId).isNotBlank();
+
+        // 插入 RUNNING 占位
+        ArgumentCaptor<com.bank.branch.platform.report.entity.SqlProbeExportTask> insertCap =
+                ArgumentCaptor.forClass(com.bank.branch.platform.report.entity.SqlProbeExportTask.class);
+        verify(exportTaskMapper).insert(insertCap.capture());
+        assertThat(insertCap.getValue().getStatus()).isEqualTo("RUNNING");
+        assertThat(insertCap.getValue().getEmpId()).isEqualTo("E_TECH001");
+
+        // directExecutor 同步跑完 runExport → 生成 xlsx 存库 + 终态 SUCCESS
+        ArgumentCaptor<com.bank.branch.platform.report.entity.SqlProbeExportTask> updCap =
+                ArgumentCaptor.forClass(com.bank.branch.platform.report.entity.SqlProbeExportTask.class);
+        verify(exportTaskMapper).updateById(updCap.capture());
+        assertThat(updCap.getValue().getStatus()).isEqualTo("SUCCESS");
+        assertThat(updCap.getValue().getRowCount()).isEqualTo(2);
+        assertThat(updCap.getValue().getFileName()).endsWith(".xlsx");
+        assertThat(updCap.getValue().getFileContent()).isNotNull();
+        assertThat(updCap.getValue().getFileContent().length).isGreaterThan(0);
+        // 不再做角色校验：不应触碰 getCurrentRoleCodes
+        verify(currentUserApi, org.mockito.Mockito.never()).getCurrentRoleCodes();
+    }
+
+    @Test
+    void createExport_queryFails_marksTaskFailed_notThrowFromBackgroundRun() throws SQLException {
+        when(statement.executeQuery()).thenThrow(new SQLException("table missing"));
+        SqlProbeExecuteReqDTO req = buildReq("SELECT id FROM CUST_MASTER", "导出排查");
+
+        String taskId = service.createExport(req); // 后台 run 吞异常，createExport 本身不抛
+        assertThat(taskId).isNotBlank();
+
+        ArgumentCaptor<com.bank.branch.platform.report.entity.SqlProbeExportTask> updCap =
+                ArgumentCaptor.forClass(com.bank.branch.platform.report.entity.SqlProbeExportTask.class);
+        verify(exportTaskMapper).updateById(updCap.capture());
+        assertThat(updCap.getValue().getStatus()).isEqualTo("FAILED");
+        assertThat(updCap.getValue().getFileContent()).isNull();
+    }
+
+    @Test
+    void queryHistory_resolvesOperatorEmpIdToUserName() {
+        SqlProbeHistory h = new SqlProbeHistory();
+        h.setId("H1");
+        h.setEmpId("E_TECH001");
+        h.setSqlText("SELECT 1");
+        h.setStatus("SUCCESS");
+        when(historyMapper.countByEmpId("E_TECH001")).thenReturn(1L);
+        when(historyMapper.selectByEmpIdPaged(eq("E_TECH001"), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of(h));
+        when(userApi.getUserName("E_TECH001")).thenReturn("张三");
+
+        var page = service.queryHistory(new com.bank.branch.platform.common.web.PageRequest());
+
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).getEmpName()).isEqualTo("张三");
     }
 
     private SqlProbeExecuteReqDTO buildReq(String sql, String remark) {

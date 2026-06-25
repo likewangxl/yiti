@@ -25,6 +25,9 @@ public class SqlProbeHistoryRespDTO {
     /** 执行人工号 */
     private String empId;
 
+    /** 执行人用户名称（由 empId 解析，列表/详情展示用） */
+    private String empName;
+
     /** SQL 语句（列表场景截断 200 字） */
     private String sqlText;
 

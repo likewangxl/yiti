@@ -9,10 +9,13 @@ import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.report.dto.req.SqlProbeExecuteReqDTO;
 import com.bank.branch.platform.report.dto.resp.SchemaWhitelistRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeExecuteRespDTO;
+import com.bank.branch.platform.report.dto.resp.SqlProbeExportFileDTO;
+import com.bank.branch.platform.report.dto.resp.SqlProbeExportTaskRespDTO;
 import com.bank.branch.platform.report.dto.resp.SqlProbeHistoryRespDTO;
 import com.bank.branch.platform.report.service.SqlProbeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * SQL 探查 REST 控制器（D 章 4 接口，M4.2 / M4.3 阶段）.
@@ -93,5 +98,51 @@ public class RptSqlProbeController {
     @Operation(summary = "D.4 SQL 探查白名单展示")
     public ResponseWrapper<SchemaWhitelistRespDTO> getSchemaWhitelist() {
         return ResponseWrapper.success(sqlProbeService.getSchemaWhitelist());
+    }
+
+    /**
+     * D.5 创建 SQL 探查「异步下载」任务（后台跑 SQL 生成 xlsx 存库，立即返回 taskId）.
+     */
+    @PostMapping("/export")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.EXECUTE_SQL)
+    @Operation(summary = "D.5 创建 SQL 探查异步导出任务")
+    public ResponseWrapper<java.util.Map<String, String>> createExport(@Valid @RequestBody SqlProbeExecuteReqDTO req) {
+        // 前端传的 sql 为 AES 加密 Base64，先解密（与 execute 一致）
+        try {
+            req.setSql(com.bank.branch.platform.report.support.SqlCryptoUtil.decrypt(req.getSql()));
+        } catch (Exception e) {
+            log.warn("[SqlProbe] 导出 SQL 解密失败，尝试按明文执行（兼容旧版前端）");
+        }
+        String taskId = sqlProbeService.createExport(req);
+        return ResponseWrapper.success(java.util.Map.of("taskId", taskId));
+    }
+
+    /**
+     * D.6 查询本人 SQL 探查导出任务列表（轮询进度用）.
+     */
+    @GetMapping("/export/tasks")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.LIST)
+    @Operation(summary = "D.6 SQL 探查导出任务列表")
+    public ResponseWrapper<List<SqlProbeExportTaskRespDTO>> listExportTasks() {
+        return ResponseWrapper.success(sqlProbeService.listExportTasks());
+    }
+
+    /**
+     * D.7 下载 SQL 探查导出文件（仅本人、任务成功后）.
+     */
+    @GetMapping("/export/{taskId}/download")
+    @BizAuth(bizType = BizType.REPORT, action = BizAction.READ)
+    @Operation(summary = "D.7 下载 SQL 探查导出文件")
+    public void downloadExport(@PathVariable @NotBlank(message = "taskId 不能为空") String taskId,
+                               HttpServletResponse response) throws java.io.IOException {
+        SqlProbeExportFileDTO file = sqlProbeService.getExportFile(taskId);
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setCharacterEncoding("utf-8");
+        String fileName = java.net.URLEncoder.encode(
+                file.getFileName() != null ? file.getFileName() : "sql-export.xlsx",
+                java.nio.charset.StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+        response.setHeader("Content-Disposition", "attachment;filename*=utf-8''" + fileName);
+        response.getOutputStream().write(file.getContent());
+        response.getOutputStream().flush();
     }
 }

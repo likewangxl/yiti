@@ -175,6 +175,15 @@
                 <groupId>com.alibaba</groupId>
                 <artifactId>easyexcel</artifactId>
                 <version>${easyexcel.version}</version>
+                <!-- EasyExcel 3.3.4 默认带旧 POI 4.1.2 的 poi-ooxml-schemas，与项目 poi-ooxml 5.2.5 共存时
+                     XSSFWorkbook.onWorkbookCreate 报 NoSuchFieldError: Factory。5.x 已用 poi-ooxml-lite 取代
+                     schemas，故全局排除旧 schemas（poi/poi-ooxml 经 Maven 仲裁统一为 5.2.5）。 -->
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.poi</groupId>
+                        <artifactId>poi-ooxml-schemas</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
         </dependencies>
     </dependencyManagement>
