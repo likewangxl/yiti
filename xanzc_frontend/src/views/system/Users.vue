@@ -4,6 +4,7 @@
       <h1>用户管理 <span class="sub">按机构筛选 · 启停/锁解/重置密码 · 分配角色</span></h1>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
+        <el-button @click="exportUsers">导出</el-button>
         <el-button type="primary" @click="openCreate">+ 新增用户</el-button>
       </div>
     </div>
@@ -265,7 +266,14 @@
               <el-input v-model="orgDlg.form.deptNo" :disabled="orgDlg.mode === 'edit'" placeholder="如 720199" maxlength="60" />
             </el-form-item>
             <el-form-item label="上级">
-              <span class="hint">{{ orgDlg.parentLabel || '（根节点）' }}</span>
+              <el-select
+                v-model="orgDlg.form.pId"
+                filterable clearable
+                placeholder="（根节点 / 无上级）"
+                style="width:100%"
+              >
+                <el-option v-for="o in parentOptions" :key="o.code" :label="o.name" :value="o.code" />
+              </el-select>
             </el-form-item>
             <!-- 状态：编辑模式可启用/禁用；禁用后用户管理与各处机构树不再展示该机构 -->
             <el-form-item v-if="orgDlg.mode === 'edit'" label="状态">
@@ -312,7 +320,7 @@ import { Search } from '@element-plus/icons-vue';
 import {
   listUsers, getUser, createUser, updateUser,
   deleteUsers, resetUsersPassword, activeUsers, inactiveUsers, lockUsers, unlockUsers,
-  getUserRoles, replaceUserRoles, bindUserRoles,
+  getUserRoles, replaceUserRoles, bindUserRoles, exportUsersBlob,
   USER_STATUS_LABEL, USER_LOCK_LABEL
 } from '@/api/users';
 import { listAllRoles, listDictItems } from '@/api/system';
@@ -384,6 +392,23 @@ function resetFilters() {
   reload();
 }
 function onSelectionChange(rs) { selection.value = rs; }
+
+// 导出全部用户（含绑定角色）：blob 直接下载，不跳转/不开新标签页；忽略筛选条件
+async function exportUsers() {
+  try {
+    const blob = await exportUsersBlob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '用户列表.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    ElMessage.error('导出失败：' + (e?.message || '请稍后重试'));
+  }
+}
 
 async function reload() {
   loading.value = true;
@@ -615,6 +640,34 @@ const orgDlg = reactive({
   form: { orgCode: '', orgName: '', pId: '', deptNo: '' },
   parentLabel: ''
 });
+
+// 机构树扁平化为 [{code,name}]，供「上级」模糊搜索下拉用
+const flatOrgs = computed(() => {
+  const out = [];
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      out.push({ code: n.code, name: n.name });
+      if (n.children?.length) walk(n.children);
+    }
+  };
+  walk(orgTree.value);
+  return out;
+});
+// 子机构编码 → 父机构编码 映射（编辑时回填当前上级）
+const orgParentMap = computed(() => {
+  const map = {};
+  const walk = (nodes, parentCode) => {
+    for (const n of nodes || []) {
+      map[n.code] = parentCode || '';
+      if (n.children?.length) walk(n.children, n.code);
+    }
+  };
+  walk(orgTree.value, '');
+  return map;
+});
+// 上级候选：全部机构，排除自身（编辑时不能把自己设为自己的上级；成环由后端再校验）
+const parentOptions = computed(() =>
+  flatOrgs.value.filter(o => o.code !== orgDlg.form.orgCode));
 function openOrgDlg() {
   orgDlg.show = true;
   orgDlg.mode = null;
@@ -623,7 +676,14 @@ function openOrgDlg() {
 function orgDlgPick(node) {
   orgDlg.mode = 'edit';
   orgDlg.picked = node;
-  orgDlg.form = { orgCode: node.code, orgName: node.name, pId: '', deptNo: node.deptNo || '', status: node.status ?? 0 };
+  // pId 回填当前上级编码（根节点为空），供「上级」下拉默认选中
+  orgDlg.form = {
+    orgCode: node.code,
+    orgName: node.name,
+    pId: orgParentMap.value[node.code] || '',
+    deptNo: node.deptNo || '',
+    status: node.status ?? 0
+  };
   orgDlg.parentLabel = '当前节点';
 }
 // 启用(0)/禁用(1)机构：禁用时若机构下有用户，后端返回 AUTH-40303，前端提示
@@ -667,7 +727,11 @@ async function orgDlgSave() {
       });
       ElMessage.success('已新增');
     } else {
-      await updateOrg(orgDlg.picked.code, { orgName: orgDlg.form.orgName.trim() });
+      // 上级可改：pId 为空表示设为根节点；后端校验不能选自身/子孙(成环)
+      await updateOrg(orgDlg.picked.code, {
+        orgName: orgDlg.form.orgName.trim(),
+        pId: orgDlg.form.pId || ''
+      });
       ElMessage.success('已更新');
     }
     await loadOrg();

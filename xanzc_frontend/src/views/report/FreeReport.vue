@@ -101,11 +101,11 @@ import {
 } from '@/api/report';
 import { useUserStore } from '@/stores/user';
 
-// 仅 系统管理员(SYS_ADMIN) / 资财部负责人(FINANCE_LEADER) / 自由报表操作人(R_2FAB45A1)：
-// 可导入/禁用/启用/删除。只看「当前激活角色」（current-user 返回全部角色但只给激活的打 primary 标记，
+// 仅 自由报表操作人(R_2FAB45A1) 可导入/禁用/启用；管理员、资财部负责人均不再显示这些按钮。
+// 只看「当前激活角色」（current-user 返回全部角色但只给激活的打 primary 标记，
 // 切换角色后按钮随之变化；后端同样按激活角色判定）。
 const userStore = useUserStore();
-const OPERATOR_ROLES = ['R_2FAB45A1', 'SYS_ADMIN', 'FINANCE_LEADER'];
+const OPERATOR_ROLES = ['R_2FAB45A1'];
 const isOperator = computed(() => {
   const roles = userStore.user?.roles || [];
   // 优先用 activeRoleId 锁定当前激活角色，再退回 primary 标记

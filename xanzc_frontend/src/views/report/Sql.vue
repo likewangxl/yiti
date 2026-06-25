@@ -12,25 +12,14 @@
   <div class="rpt-sql">
     <div class="page-h">
       <h1>SQL 探查</h1>
-      <span class="desc">高危：仅 SELECT · 自动行限 1000 · 30s 超时 · 全程审计 · 传输加密</span>
+      <span class="desc">仅 SELECT · 30s 超时 · 全程审计 · 传输加密</span>
     </div>
-
-    <el-alert type="error" :closable="false" class="warn">
-      <template #title>
-        ⚠ 高危操作：所有 SQL 将记录在审计日志（操作人 / SQL / 原因 / 影响行数 / TraceId）。
-        仅允许 <b>SELECT</b>，仅允许查询 <b>{{ whitelist.length }}</b> 张白名单表，自动追加 <b>LIMIT 1000</b>，超过 30s 自动终止。
-      </template>
-    </el-alert>
 
     <div class="card-section input">
       <div class="row">
         <div class="col grow">
           <div class="lab"><span class="req">*</span> 执行原因</div>
           <el-input v-model="reason" placeholder="必填，进入审计" maxlength="100" />
-        </div>
-        <div class="col">
-          <div class="lab">行数限制</div>
-          <el-input-number v-model="rowLimit" :min="1" :max="1000" :step="100" controls-position="right" style="width:160px" />
         </div>
         <div class="col">
           <div class="lab">超时(秒)</div>
@@ -56,10 +45,56 @@
       <div class="ops">
         <el-button @click="formatSql">格式化</el-button>
         <el-button :icon="List"   @click="historyVisible = true">查看历史</el-button>
-        <el-button type="primary" :loading="running" :disabled="!valid" @click="run" class="run">
+        <el-button :icon="Download" :loading="exporting" :disabled="!valid" @click="createExport" class="run">
+          下载
+        </el-button>
+        <el-button type="primary" :loading="running" :disabled="!valid" @click="run">
           ▶ 执行
         </el-button>
       </div>
+    </div>
+
+    <!-- 异步导出任务列表：点「下载」后任务进这里，轮询进度，成功后点「下载文件」 -->
+    <div v-if="exportTasks.length" class="card-section export-tasks">
+      <div class="card-h">
+        <div class="title">下载任务</div>
+        <el-button link type="primary" size="small" @click="loadExportTasks" :loading="exportTasksLoading" style="margin-left:auto">刷新</el-button>
+      </div>
+      <el-table :data="exportTasks" size="default" stripe>
+        <el-table-column prop="createdTime" label="时间" width="160" :formatter="fmtDateTimeCol" />
+        <el-table-column label="SQL（节选）" show-overflow-tooltip>
+          <template #default="{ row }">{{ (row.sqlText || '').slice(0, 80) }}</template>
+        </el-table-column>
+        <el-table-column prop="remark" label="原因" width="140" show-overflow-tooltip />
+        <el-table-column label="进度" width="150">
+          <template #default="{ row }">
+            <el-progress
+              :percentage="row.status === 'RUNNING' ? 50 : 100"
+              :status="row.status === 'SUCCESS' ? 'success' : (row.status === 'FAILED' ? 'exception' : undefined)"
+              :indeterminate="row.status === 'RUNNING'"
+              :duration="1" :stroke-width="10"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'SUCCESS' ? 'success' : (row.status === 'FAILED' ? 'danger' : 'warning')"
+                    size="small" effect="plain">{{ statusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="rowCount" label="行数" width="80" align="right">
+          <template #default="{ row }">{{ row.rowCount != null ? row.rowCount : '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="110">
+          <template #default="{ row }">
+            <el-button v-if="row.status === 'SUCCESS'" type="primary" link size="small" @click="downloadFile(row)">下载文件</el-button>
+            <el-tooltip v-else-if="row.status === 'FAILED'" :content="row.errorMsg || '执行失败'" placement="top">
+              <span class="fail-hint">失败</span>
+            </el-tooltip>
+            <span v-else class="mono" style="color:#999">处理中…</span>
+          </template>
+        </el-table-column>
+      </el-table>
     </div>
 
     <div v-if="result && !running" class="card-section result">
@@ -107,7 +142,9 @@
         @row-click="onPickHistory"
       >
         <el-table-column prop="createdTime" label="时间" width="160" :formatter="fmtDateTimeCol" />
-        <el-table-column prop="empId"      label="操作人" width="120" />
+        <el-table-column label="操作人" width="120">
+          <template #default="{ row }">{{ row.empName || row.empId }}</template>
+        </el-table-column>
         <el-table-column prop="remark"     label="原因" width="160" show-overflow-tooltip />
         <el-table-column label="SQL（节选）" show-overflow-tooltip>
           <template #default="{ row }">{{ (row.sqlText || '').slice(0, 80) }}</template>
@@ -154,15 +191,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fmtDateTimeCol } from '@/utils/datetime';
-import { List, Search } from '@element-plus/icons-vue';
-import { executeSqlProbe, getSqlWhitelist, getSqlHistory, getSqlHistoryItem } from '@/api/report';
+import { List, Search, Download } from '@element-plus/icons-vue';
+import { executeSqlProbe, getSqlWhitelist, getSqlHistory, getSqlHistoryItem,
+         createSqlExport, listSqlExportTasks, downloadSqlExportBlob } from '@/api/report';
 import { encryptSql } from '@/utils/sqlCrypto';
 
 const reason = ref('');
-const rowLimit = ref(1000);
 const timeoutSec = ref(30);
 const sql = ref(`SELECT cust_no, cust_name, industry, customer_type
 FROM CUST_MASTER
@@ -270,6 +307,75 @@ async function run() {
   }
 }
 
+// ===== SQL 异步下载（导出任务：后台生成→列表轮询进度→点击下载） =====
+const exporting = ref(false);
+const exportTasks = ref([]);
+const exportTasksLoading = ref(false);
+let pollTimer = null;
+
+function statusLabel(s) {
+  return { RUNNING: '处理中', SUCCESS: '成功', FAILED: '失败' }[s] || s;
+}
+
+async function loadExportTasks() {
+  exportTasksLoading.value = true;
+  try {
+    const r = await listSqlExportTasks();
+    exportTasks.value = Array.isArray(r) ? r : (r?.records || []);
+  } catch (e) {
+    exportTasks.value = [];
+  } finally {
+    exportTasksLoading.value = false;
+  }
+  ensurePolling();
+}
+
+// 有 RUNNING 任务才轮询；全部终态则停，避免空转
+function ensurePolling() {
+  const hasRunning = exportTasks.value.some(t => t.status === 'RUNNING');
+  if (hasRunning && !pollTimer) {
+    pollTimer = setInterval(loadExportTasks, 3000);
+  } else if (!hasRunning && pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+async function createExport() {
+  if (!valid.value) { ElMessage.warning('请先通过校验'); return; }
+  exporting.value = true;
+  try {
+    // 与执行一致：sql 加密后提交，后端解密；后台异步生成
+    await createSqlExport({ sql: encryptSql(sql.value), remark: reason.value });
+    ElMessage.success('已提交下载任务，可在下方「下载任务」查看进度');
+    await loadExportTasks();
+  } catch (e) {
+    ElMessage.error('提交下载失败：' + (e?.message || '后端校验未通过'));
+  } finally {
+    exporting.value = false;
+  }
+}
+
+// blob 直接下载：拿字节后用临时 <a download> 触发，不跳转/不开新标签页
+async function downloadFile(row) {
+  try {
+    const blob = await downloadSqlExportBlob(row.id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = row.fileName || 'sql-export.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    ElMessage.error('下载失败：' + (e?.message || '请稍后重试'));
+  }
+}
+
+onMounted(loadExportTasks);
+onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });
+
 // 关键字大写 + 主子句换行 —— 不是真正的 SQL parser，覆盖常见 SELECT/JOIN/WHERE/GROUP BY 等
 const FORMAT_KEYWORDS = [
   'SELECT','FROM','WHERE','GROUP BY','HAVING','ORDER BY','LIMIT','OFFSET',
@@ -334,6 +440,9 @@ function formatCell(v) {
   }
   .result { padding: 16px 20px;
     .audit { color: $success; font-weight: 400; font-size: 12px; }
+  }
+  .export-tasks { padding: 16px 20px;
+    .fail-hint { color: $danger; cursor: default; }
   }
   .card-h { display: flex; align-items: center; padding: 0 0 12px; border-bottom: 1px solid $border-1; margin-bottom: 12px;
     .title { font-size: 14px; font-weight: 600; }

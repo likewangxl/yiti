@@ -306,6 +306,17 @@ export function getSqlHistory(params = {}) {
 export function getSqlHistoryItem(id) {
   return call('get', `/reports/sql-probe/history/${id}`, {}, () => reportSqlHistory.find(h => h.id === id) || reportSqlHistory[0]);
 }
+// SQL 探查「异步下载」：创建任务(后台跑) / 轮询任务列表 / 下载文件
+export function createSqlExport(payload) {
+  return call('post', '/reports/sql-probe/export', { data: payload }, { taskId: 'mock' });
+}
+export function listSqlExportTasks() {
+  return call('get', '/reports/sql-probe/export/tasks', {}, []);
+}
+// 下载：responseType=blob 直接拿字节（拦截器对非 envelope 原样返回 blob），调用方用临时 <a download> 触发，不跳转
+export function downloadSqlExportBlob(taskId) {
+  return http.get(`${API_BASE}/reports/sql-probe/export/${taskId}/download`, { responseType: 'blob' });
+}
 
 // ===== 导出任务 =====
 export function getExportTask(taskId) {

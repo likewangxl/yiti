@@ -9,7 +9,13 @@
 //
 // 后端不可用时回退 mock（仅 GET），形态与后端一致。
 
-import { call, unwrapPage } from './http';
+import http, { call, unwrapPage, API_BASE } from './http';
+
+// 导出全部用户为 Excel：responseType=blob 直接拿字节（拦截器对非 envelope 原样返回 blob），
+// 由调用方生成临时 <a download> 触发下载，不跳转/不开新标签页
+export function exportUsersBlob() {
+  return http.get(`${API_BASE}/admin/users/export`, { responseType: 'blob' });
+}
 
 // 兜底置空：后端不返回数据 = 空，不再显示假用户/假角色
 const mockUsers = [];
