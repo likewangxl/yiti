@@ -142,6 +142,21 @@ public interface UserApi {
     Map<String, String> mapUsernamesToEmpId(List<String> usernames);
 
     /**
+     * 批量查询「USER_ID → 用户名(工号 USERNAME)」映射，用于大批量导出时按 USER_ID 反查登录名。
+     *
+     * <p>与 {@link #getUserByEmpIds(List)} 不同：本方法**只做单次/分片 IN 查询**，
+     * 仅取 USER_ID / USERNAME 两列，**不逐人装配机构/角色等 DTO**，因此不会触发 N+1
+     * （{@code getUserByEmpIds} 对每个 USER_ID 回调 {@code getUserByEmpId}，每人 3 次查询）。
+     *
+     * <p>典型场景：评价明细 Excel 导出（20 万行）时，去重 USER_ID 后一次性反查工号展示，
+     * 由于一个批次的去重人数有限（打分人+被打分人），分片查询次数 ≈ 去重数/1000。
+     *
+     * @param empIds 待查询 USER_ID 列表（null/空 → 返回空 Map）
+     * @return 其中在 PT_USER 中存在的「USER_ID → 用户名」映射（去重，仅含存在者）
+     */
+    Map<String, String> mapEmpIdsToUsername(List<String> empIds);
+
+    /**
      * 按关键词分页查询用户（工号/登录名/中文名 OR 模糊），供 performance 人员标签列表用。
      *
      * @param keyword  关键词（null/空 不过滤）

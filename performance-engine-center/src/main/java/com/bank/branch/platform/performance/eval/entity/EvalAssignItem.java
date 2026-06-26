@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.eval.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -45,4 +46,17 @@ public class EvalAssignItem {
     private Integer submitted;
     /** 提交时间. */
     private LocalDateTime submitTime;
+
+    /**
+     * 打分人登录名（PT_USER.username，即工号），非表字段。
+     * <p>仅批次详情展示用：由 Service 经 UserApi 按 eval_user_id(USER_ID) 反查填充。</p>
+     */
+    @TableField(exist = false)
+    private String evalUserUsername;
+    /**
+     * 被打分人登录名（PT_USER.username，即工号），非表字段。
+     * <p>仅批次详情展示用：由 Service 经 UserApi 按 be_eval_user_id(USER_ID) 反查填充。</p>
+     */
+    @TableField(exist = false)
+    private String beEvalUserUsername;
 }

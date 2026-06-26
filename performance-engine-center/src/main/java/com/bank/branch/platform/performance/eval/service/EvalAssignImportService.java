@@ -13,6 +13,7 @@ import com.bank.branch.platform.performance.eval.mapper.EvalAssignBatchMapper;
 import com.bank.branch.platform.performance.eval.mapper.EvalAssignItemMapper;
 import com.bank.branch.platform.performance.exception.PerfException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,6 +44,14 @@ public class EvalAssignImportService {
     private static final String DICT_WEIGHT_TAG = "EVAL_WEIGHT_TAG";
     /** 评价类型字典类型。 */
     private static final String DICT_SCORE_TYPE = "EVAL_SCORE_TYPE";
+
+    /**
+     * 单次 batchInsert 的最大明细条数：超过则分多批写入，避免单条 INSERT 语句过大触发
+     * MySQL {@code max_allowed_packet} 上限。默认 1000，可经 {@code application.yml}
+     * 的 {@code perf.eval.import.batch-insert-size} 覆盖（不写死）。
+     */
+    @Value("${perf.eval.import.batch-insert-size:1000}")
+    private int batchInsertSize = 1000;
 
     private final UserApi userApi;
     private final DictApi dictApi;
@@ -236,12 +245,21 @@ public class EvalAssignImportService {
         for (EvalAssignItem item : parsed) {
             item.setBatchId(batch.getBatchId());
         }
-        itemMapper.batchInsert(parsed);
+        // 分批写入：单批不超过 batchInsertSize，规避单条 INSERT 过大触发 max_allowed_packet
+        for (int from = 0; from < parsed.size(); from += batchInsertSize) {
+            int to = Math.min(from + batchInsertSize, parsed.size());
+            itemMapper.batchInsert(parsed.subList(from, to));
+        }
 
         result.setSuccess(true);
         result.setImportedCount(parsed.size());
         log.info("[EvalAssignImportService.importRows] 导入成功 batchId={} count={}", batch.getBatchId(), parsed.size());
         return result;
+    }
+
+    /** 设置单批写入上限（仅供测试覆盖默认配置）。 */
+    void setBatchInsertSize(int batchInsertSize) {
+        this.batchInsertSize = batchInsertSize;
     }
 
     private static String trim(String s) {

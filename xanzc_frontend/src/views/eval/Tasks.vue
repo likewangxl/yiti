@@ -214,10 +214,14 @@
         </el-descriptions>
         <div class="detail-section-title">评价明细</div>
         <el-table :data="batchDetail.data.items.records" border stripe size="small" style="width: 100%; margin-top: 8px">
-          <el-table-column prop="evalUserId" label="打分人工号" width="110" align="center" />
+          <el-table-column label="打分人工号" width="110" align="center">
+            <template #default="{ row }">{{ row.evalUserUsername || row.evalUserId }}</template>
+          </el-table-column>
           <el-table-column prop="evalUserName" label="打分人" min-width="100" />
           <el-table-column prop="evalUserDept" label="打分人部门" min-width="120" />
-          <el-table-column prop="beEvalUserId" label="被打分人工号" width="110" align="center" />
+          <el-table-column label="被打分人工号" width="110" align="center">
+            <template #default="{ row }">{{ row.beEvalUserUsername || row.beEvalUserId }}</template>
+          </el-table-column>
           <el-table-column prop="beEvalUserName" label="被打分人" min-width="100" />
           <el-table-column prop="beEvalDept" label="被打分人部门" min-width="120" />
           <el-table-column prop="weightTag" label="权重" width="70" align="center" />
@@ -571,6 +575,12 @@ async function doImportAssign() {
   importErrors.value = []
   try {
     const res = await importAssign(wizardFile.value, 'EVAL', wizard.taskName, wizard.deadline)
+    // 错误数超过阈值：后端回 CSV 文件流，直接下载给用户查看具体行号与原因
+    if (res && res.csv) {
+      saveBlob(res.blob, '导入错误明细.csv')
+      ElMessage.warning('错误数据较多，已下载「导入错误明细.csv」，请打开查看具体行号与错误原因')
+      return
+    }
     if (res && res.success) {
       ElMessage.success(`导入成功 ${res.importedCount} 条，已生成草稿批次`)
       wizard.visible = false
@@ -579,7 +589,7 @@ async function doImportAssign() {
       importErrors.value = (res && res.errors) || []
       ElMessage.error('导入未通过校验，请查看错误明细')
     }
-  } catch (e) { /* http.js 已提示 */ }
+  } catch (e) { ElMessage.error('导入失败：' + (e?.message || '未知错误')) }
   finally { importing.value = false }
 }
 

@@ -199,6 +199,44 @@ class EvalAssignServiceTest {
                 .isEqualTo(PerfErrorCode.EVAL_ASSIGN_ITEM_NOT_FOUND);
     }
 
+    // ---------------- 批量提交打分 ----------------
+
+    @Test
+    @DisplayName("批量提交：多条合法 → 全部写库")
+    void submitBatch_allValid_marksAll() {
+        when(itemMapper.selectById(10L)).thenReturn(item(10L, "E1", "NUM", 0, 1L));
+        when(itemMapper.selectById(11L)).thenReturn(item(11L, "E1", "GRADE", 0, 1L));
+        when(batchMapper.selectById(1L)).thenReturn(batch(1L, LocalDateTime.now().plusDays(1)));
+
+        service.submitScoreBatch("E1", List.of(
+                new EvalAssignService.ScoreEntry(10L, 90),
+                new EvalAssignService.ScoreEntry(11L, 95)));
+
+        verify(itemMapper).markSubmitted(eq(10L), eq(90), any());
+        verify(itemMapper).markSubmitted(eq(11L), eq(95), any());
+    }
+
+    @Test
+    @DisplayName("批量提交：其中一条非法等级 → 抛超范围（生产由事务整体回滚）")
+    void submitBatch_oneInvalid_throws() {
+        lenient().when(itemMapper.selectById(10L)).thenReturn(item(10L, "E1", "NUM", 0, 1L));
+        lenient().when(itemMapper.selectById(11L)).thenReturn(item(11L, "E1", "GRADE", 0, 1L));
+        lenient().when(batchMapper.selectById(1L)).thenReturn(batch(1L, LocalDateTime.now().plusDays(1)));
+
+        assertThatThrownBy(() -> service.submitScoreBatch("E1", List.of(
+                new EvalAssignService.ScoreEntry(11L, 80))))
+                .isInstanceOf(PerfException.class)
+                .extracting(e -> ((PerfException) e).getErrorCode())
+                .isEqualTo(PerfErrorCode.EVAL_SCORE_OUT_OF_RANGE);
+    }
+
+    @Test
+    @DisplayName("批量提交：空列表 → 直接返回不写库")
+    void submitBatch_empty_noop() {
+        service.submitScoreBatch("E1", List.of());
+        verify(itemMapper, never()).markSubmitted(any(), any(), any());
+    }
+
     @Test
     @DisplayName("提交：批次为草稿状态 → 批次未激活")
     void submit_batchNotActive() {

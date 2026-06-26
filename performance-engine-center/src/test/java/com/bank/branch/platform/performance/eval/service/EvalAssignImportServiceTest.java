@@ -209,6 +209,35 @@ class EvalAssignImportServiceTest {
     }
 
     @Test
+    @DisplayName("明细条数超过单批上限 → 分多次 batchInsert，每批不超过上限")
+    void importRows_overBatchSize_splitsIntoChunks() {
+        // 单批上限设为 2（可配置，非写死），构造 5 条合法明细 → 期望分 3 批：2 + 2 + 1
+        service.setBatchInsertSize(2);
+        mockUsersExist("B1", "B2", "B3", "B4", "B5", "E1");
+        List<EvalAssignImportRow> rows = List.of(
+                row("B1", "被一", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"),
+                row("B2", "被二", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"),
+                row("B3", "被三", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"),
+                row("B4", "被四", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"),
+                row("B5", "被五", "信贷部", "t", "E1", "评一", "t", "d", "主要", "数值打分"));
+
+        EvalAssignImportResultDTO res = service.importRows(rows, "EVAL", "测试任务", deadline, "ADMIN");
+
+        assertThat(res.isSuccess()).isTrue();
+        assertThat(res.getImportedCount()).isEqualTo(5);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EvalAssignItem>> chunkCap = ArgumentCaptor.forClass(List.class);
+        verify(itemMapper, times(3)).batchInsert(chunkCap.capture());
+        List<List<EvalAssignItem>> chunks = chunkCap.getAllValues();
+        assertThat(chunks.stream().map(List::size).collect(Collectors.toList())).containsExactly(2, 2, 1);
+        // 每批均不超过上限，且全部回填同一批次 ID
+        assertThat(chunks).allSatisfy(c -> assertThat(c.size()).isLessThanOrEqualTo(2));
+        assertThat(chunks.stream().flatMap(List::stream))
+                .allMatch(i -> i.getBatchId().equals(99L));
+    }
+
+    @Test
     @DisplayName("打分人/被打分人编号为空 → 行错误")
     void importRows_emptyIds_rowError() {
         EvalAssignImportResultDTO res = service.importRows(List.of(

@@ -123,14 +123,31 @@ export function downloadAssignTemplate() {
 }
 
 // 导入评价任务：file + taskType + taskName + deadline(yyyy-MM-dd HH:mm:ss)
+// 同一端点两种回包，统一用 blob 接收再按 Content-Type 分流：
+//   - 错误数 ≤ 阈值：后端回 JSON 信封(ResponseWrapper)，解包后返回结果 DTO({success, importedCount, errors}) 供前端展示
+//   - 错误数 > 阈值：后端回 CSV 文件流(text/csv)，返回 { csv: true, blob } 交由调用方触发下载
 export async function importAssign(file, taskType, taskName, deadline) {
   const fd = new FormData();
   fd.append('file', file);
-  return call('post', '/admin/eval/assign/import', {
+  // responseType=blob：同一端点可能回 JSON 或 CSV 文件流，先拿二进制，避免拦截器按 JSON 误解析
+  const blob = await call('post', '/admin/eval/assign/import', {
     params: { taskType, taskName, deadline },
     data: fd,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    responseType: 'blob'
   }, null);
+  // 错误数超过阈值：后端直接回 CSV 文件流，交调用方触发下载
+  if (blob && typeof blob.type === 'string' && blob.type.includes('csv')) {
+    return { csv: true, blob };
+  }
+  // 否则是 JSON 信封：responseType=blob 下响应拦截器不再自动解包，这里手动解析
+  const text = await blob.text();
+  let body;
+  try { body = JSON.parse(text); } catch { throw new Error('导入响应解析失败'); }
+  if (body && (body.code === '00000' || body.code === 0 || body.code === '0')) {
+    return body.data;
+  }
+  throw new Error((body && (body.message || body.msg)) || '导入失败');
 }
 
 // ============================================================
@@ -174,6 +191,11 @@ export function listPendingItems(batchId, dept) {
 // 提交某条明细的打分
 export function submitPendingScore(itemId, score) {
   return call('post', '/eval/pending-tasks/submit', { data: { itemId, score } }, { ok: true });
+}
+
+// 批量提交某部门下多人打分（一个事务 all-or-none）。items: [{ itemId, score }]
+export function submitPendingScoreBatch(items) {
+  return call('post', '/eval/pending-tasks/submit-batch', { data: { items } }, { ok: true });
 }
 
 // ============================================================
