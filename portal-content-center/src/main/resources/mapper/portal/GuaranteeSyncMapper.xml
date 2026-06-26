@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.portal.mapper.GuaranteeSyncMapper">
+
+    <!-- ============================================================
+         担保信息每日同步 SQL（口径见 db/ 下同名截图，原样迁移）
+         数据源 clms_ed_credit_info，目标 zh_guarantee_info / ccms_business_contract
+         start 为 MySQL 保留字，统一加反引号
+         ============================================================ -->
+
+    <!-- 当日 clms 贷记额度记录数（同步前置判空） -->
+    <select id="getClmsCount" resultType="int">
+        select count(1) from clms_ed_credit_info
+        where substring( hive_sys_time ,1,10)= #{ydate}
+        and credittype in(000020,010010)
+    </select>
+
+    <!-- 用 clms 当日担保类额度数据更新担保表已存在客户（按客户名匹配，取每个客户最大 creditno 的一条） -->
+    <update id="updateToGuarantee">
+        UPDATE zh_guarantee_info a,(SELECT a.* FROM clms_ed_credit_info a,(SELECT
+        customerid,MAX( creditno ) AS creditno FROM clms_ed_credit_info b
+        WHERE substring( hive_sys_time, 1, 10 )= #{ydate} AND
+        REPLACE(expiredate,'/','-')> #{ydate} AND credittype = 010010 AND
+        customername LIKE '%担保%' GROUP BY customerid ) b
+        WHERE a.customerid = b.customerid AND a.creditno = b.creditno AND
+        substring( a.hive_sys_time, 1, 10 )= #{ydate}
+        AND REPLACE( a.expiredate,'/','-')> #{ydate} AND a.credittype = 010010
+        AND a.customername LIKE '%担保%' ) b
+        SET a.client_num=b.customerid,a.client_name=b.customername
+        ,a.notional_amount=b.execnominalsum,a.occupy_notional_amount=b.usablenominalsum
+        , a.occupy_exposure_amount=b.usablenominalsum ,
+        a.usablenominalsum=b.suboccupynominalsum , a.`start`=b.startdate ,
+        a.last_expire=b.expiredate , a.operator=b.inputuserid
+        ,a.create_time=SYSDATE()
+        WHERE a.client_name=b.customername
+    </update>
+
+    <!-- 把 clms 当日担保类、且担保表尚不存在的客户插入担保表 -->
+    <insert id="saveToGuarantee">
+        INSERT INTO zh_guarantee_info ( client_num, client_name, notional_amount,
+        occupy_notional_amount, occupy_exposure_amount, usablenominalsum,
+        `start`, last_expire, operator )
+        SELECT
+        a.customerid,a.customername,a.execnominalsum,a.usablenominalsum,a.usablenominalsum,
+        a.suboccupynominalsum,a.startdate,a.expiredate,a.inputuserid
+        FROM clms_ed_credit_info a,(
+        SELECT customerid,MAX( creditno ) AS creditno FROM clms_ed_credit_info b
+        WHERE substring( hive_sys_time, 1, 10 )= #{ydate} AND
+        REPLACE(b.expiredate,'/','-')> #{ydate} AND credittype = 010010
+        AND customername LIKE '%担保%' GROUP BY customerid ) b
+        WHERE a.customerid = b.customerid AND a.creditno = b.creditno AND substring(
+        a.hive_sys_time, 1, 10 )= #{ydate}
+        AND REPLACE( a.expiredate, '/','-')> #{ydate} AND a.credittype = 010010
+        AND a.customername LIKE '%担保%' AND customername NOT IN ( SELECT
+        client_name FROM zh_guarantee_info )
+    </insert>
+
+    <!-- 把 clms 当日 000020 类额度数据归集插入 ccms_business_contract -->
+    <insert id="saveToCcmsBusiness">
+        insert into ccms_business_contract (customerid,customername,
+        exposurebalance,usableexposuresum,
+        usablenominalsum,businesssum2,putoutdate,maturity,operateuserid)
+        select customerid,customername, suboccupynominalsum , usablenominalsum
+        ,usablenominalsum , execnominalsum ,startdate,expiredate,inputuserid
+        from clms_ed_credit_info
+        where substring( hive_sys_time ,1,10)= #{ydate}
+        and credittype =000020
+    </insert>
+
+    <!-- 刷新担保表全表 update_time 为当前时间 -->
+    <update id="updateToGuaranteeUpdate">
+        UPDATE zh_guarantee_info a SET a.update_time=SYSDATE()
+    </update>
+
+</mapper>

@@ -1,10 +1,13 @@
 package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeCreateResultDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeSaveReqDTO;
+import com.bank.branch.platform.portal.entity.CcmsBusinessContract;
 import com.bank.branch.platform.portal.entity.ZhGuaranteeInfo;
 import com.bank.branch.platform.portal.enums.PortalErrorCode;
+import com.bank.branch.platform.portal.mapper.CcmsBusinessContractMapper;
 import com.bank.branch.platform.portal.mapper.ZhGuaranteeInfoMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
@@ -16,12 +19,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,13 +39,18 @@ class GuaranteeServiceTest {
     @Mock
     private ZhGuaranteeInfoMapper guaranteeMapper;
 
+    @Mock
+    private CcmsBusinessContractMapper contractMapper;
+
     @InjectMocks
     private GuaranteeService guaranteeService;
 
     private GuaranteeSaveReqDTO sampleReq() {
         GuaranteeSaveReqDTO req = new GuaranteeSaveReqDTO();
+        req.setClientNo("C0001");
         req.setClientName("某某公司");
-        req.setNotionalAmount("1000");
+        // 故意带货币符号与千分位，验证落库前被清洗（front_insert_replace.jpg 口径）
+        req.setNotionalAmount("¥1,000.00");
         req.setOccupyNotionalAmount("300");
         req.setUsableNominalSum("700");
         req.setLastExpire("2027-12-31");
@@ -48,8 +58,30 @@ class GuaranteeServiceTest {
         return req;
     }
 
+    /** 模拟客户在担保表不存在（重复校验通过）。 */
+    private void mockClientNotExists() {
+        when(guaranteeMapper.selectCount(any())).thenReturn(0L);
+    }
+
     @Test
-    void create_setsFieldsCreatorAndCreateTime_returnsGeneratedId() {
+    void create_clientExists_throwsClientExists() {
+        when(guaranteeMapper.selectCount(any())).thenReturn(2L);
+
+        assertThatThrownBy(() -> guaranteeService.create(sampleReq(), "admin"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", PortalErrorCode.GUARANTEE_CLIENT_EXISTS.getCode());
+
+        // 已存在直接拒绝，不查合同、不落库
+        verify(contractMapper, never()).selectList(any());
+        verify(guaranteeMapper, never()).insert(any(ZhGuaranteeInfo.class));
+        verify(guaranteeMapper, never()).batchInsert(any());
+    }
+
+    @Test
+    void create_noContract_insertsManualRecord_returnsGeneratedId() {
+        mockClientNotExists();
+        // 合同表无记录
+        when(contractMapper.selectList(any())).thenReturn(List.of());
         // insert 时模拟 MyBatis-Plus 回填自增主键
         doAnswer(inv -> {
             ZhGuaranteeInfo e = inv.getArgument(0);
@@ -57,22 +89,79 @@ class GuaranteeServiceTest {
             return 1;
         }).when(guaranteeMapper).insert(any(ZhGuaranteeInfo.class));
 
-        Long id = guaranteeService.create(sampleReq(), "admin");
+        GuaranteeCreateResultDTO result = guaranteeService.create(sampleReq(), "admin");
 
-        assertThat(id).isEqualTo(99L);
+        assertThat(result.getSource()).isEqualTo("MANUAL");
+        assertThat(result.getCount()).isEqualTo(1);
+        assertThat(result.getId()).isEqualTo(99L);
+        verify(guaranteeMapper, never()).batchInsert(any());
         ArgumentCaptor<ZhGuaranteeInfo> captor = ArgumentCaptor.forClass(ZhGuaranteeInfo.class);
         verify(guaranteeMapper).insert(captor.capture());
         ZhGuaranteeInfo saved = captor.getValue();
+        assertThat(saved.getClientNo()).isEqualTo("C0001");
         assertThat(saved.getClientName()).isEqualTo("某某公司");
-        // 金额表单按万元录入，落库前 ×10000 转元
-        assertThat(saved.getNotionalAmount()).isEqualTo("10000000.00");
-        assertThat(saved.getOccupyNotionalAmount()).isEqualTo("3000000.00");
-        assertThat(saved.getUsableNominalSum()).isEqualTo("7000000.00");
+        // 金额按「元」原值存储，仅清洗 ¥ 与千分位 ，（不做 ×10000 换算）
+        assertThat(saved.getNotionalAmount()).isEqualTo("1000.00");
+        assertThat(saved.getOccupyNotionalAmount()).isEqualTo("300");
+        assertThat(saved.getUsableNominalSum()).isEqualTo("700");
         assertThat(saved.getLastExpire()).isEqualTo("2027-12-31");
         assertThat(saved.getUserName()).isEqualTo("finance_zhou");
         assertThat(saved.getCreateUser()).isEqualTo("admin");
         assertThat(saved.getCreateTime()).isNotNull();
         assertThat(saved.getType()).isEqualTo("1");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void create_contractHit_batchInsertsMappedRows_ignoresFormData() {
+        mockClientNotExists();
+        when(contractMapper.selectList(any())).thenReturn(List.of(contract("LINE-A"), contract("LINE-B")));
+        when(guaranteeMapper.batchInsert(any())).thenReturn(2);
+
+        GuaranteeCreateResultDTO result = guaranteeService.create(sampleReq(), "admin");
+
+        assertThat(result.getSource()).isEqualTo("CONTRACT");
+        assertThat(result.getCount()).isEqualTo(2);
+        assertThat(result.getId()).isNull();
+        // 命中合同：走批量插入，绝不落前端单条
+        verify(guaranteeMapper, never()).insert(any(ZhGuaranteeInfo.class));
+        ArgumentCaptor<List<ZhGuaranteeInfo>> captor = ArgumentCaptor.forClass(List.class);
+        verify(guaranteeMapper).batchInsert(captor.capture());
+        List<ZhGuaranteeInfo> rows = captor.getValue();
+        assertThat(rows).hasSize(2);
+        ZhGuaranteeInfo r = rows.get(0);
+        assertThat(r.getClientNo()).isEqualTo("C0001");
+        assertThat(r.getClientName()).isEqualTo("某某公司");
+        assertThat(r.getAmountType()).isEqualTo("LINE-A");
+        // 合同金额按「元」原值落库（不做 ×10000），尾零去除
+        assertThat(r.getNotionalAmount()).isEqualTo("8888");
+        assertThat(r.getUsableNominalSum()).isEqualTo("3000");
+        assertThat(r.getOccupyExposureAmount()).isEqualTo("1500");
+        assertThat(r.getExpired()).isEqualTo("2030-01-01");
+        assertThat(r.getStart()).isEqualTo("2029-05-01");        // 额度生效日 → start
+        assertThat(r.getBasicId()).isNull();                     // 合同表无 basic_id，恒 null
+        assertThat(r.getLastExpire()).isEqualTo("2031-06-30");
+        assertThat(r.getOrgan()).isEqualTo("ORG88");
+        assertThat(r.getUserName()).isEqualTo("op_li");
+        assertThat(r.getCreateUser()).isEqualTo("admin");
+        assertThat(r.getCreateTime()).isNotNull();
+        assertThat(r.getType()).isEqualTo("1");
+    }
+
+    private CcmsBusinessContract contract(String creditType) {
+        CcmsBusinessContract c = new CcmsBusinessContract();
+        c.setCustomerId("C0001");
+        c.setCustomerName("某某公司");
+        c.setCreditTypeFlag(creditType);
+        c.setBusinessSum2(new BigDecimal("8888.000000"));
+        c.setUsableNominalSum(new BigDecimal("3000.000000"));
+        c.setExposureBalance(new BigDecimal("1500.000000"));
+        c.setMaturity("2030-01-01");
+        c.setPutoutDate("2029-05-01");
+        c.setTermDate3("2031-06-30");
+        c.setOperateOrgId("ORG88");
+        c.setOperateUserId("op_li");
+        return c;
     }
 
     @Test

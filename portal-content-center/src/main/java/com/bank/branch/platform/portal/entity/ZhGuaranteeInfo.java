@@ -33,13 +33,45 @@ public class ZhGuaranteeInfo {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
+    /** 客户号，对应 client_num（注意：物理列名为 client_num，非 client_no） */
+    @TableField("client_num")
+    private String clientNo;
+
     /** 客户名称，对应 client_name */
     @TableField("client_name")
     private String clientName;
 
+    /** 客户基础id，对应 basic_id（合同导入时来源列为空，保持 null） */
+    @TableField("basic_id")
+    private String basicId;
+
+    /** 额度类型，对应 amount_type（合同导入时取 credittypeflag） */
+    @TableField("amount_type")
+    private String amountType;
+
     /** 业务额度（万元），对应 notional_amount */
     @TableField("notional_amount")
     private String notionalAmount;
+
+    /** 已占用敞口金额，对应 occupy_exposure_amount（合同导入时取 exposurebalance） */
+    @TableField("occupy_exposure_amount")
+    private String occupyExposureAmount;
+
+    /** 可用敞口金额，对应 usableexposuresum（合同导入时取 usableexposuresum） */
+    @TableField("usableexposuresum")
+    private String usableExposureSum;
+
+    /** 到期日，对应 expired（合同导入时取 maturity 额度到期日） */
+    @TableField("expired")
+    private String expired;
+
+    /** 额度生效日，对应 start 列（SQL 保留字，加反引号；合同导入时取 putoutdate） */
+    @TableField("`start`")
+    private String start;
+
+    /** 经办机构，对应 organ（合同导入时取 operateorgid） */
+    @TableField("organ")
+    private String organ;
 
     /** 剩余额度（万元），对应 occupy_notional_amount */
     @TableField("occupy_notional_amount")

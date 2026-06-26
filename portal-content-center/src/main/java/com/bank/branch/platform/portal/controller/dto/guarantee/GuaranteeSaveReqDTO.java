@@ -12,6 +12,11 @@ import lombok.Data;
 @Data
 public class GuaranteeSaveReqDTO {
 
+    /** 客户号（必填，用于合同表反查与重复校验） */
+    @NotBlank(message = "客户号不能为空")
+    @Size(max = 50, message = "客户号长度不能超过50")
+    private String clientNo;
+
     /** 客户名称（必填） */
     @NotBlank(message = "客户名称不能为空")
     @Size(max = 100, message = "客户名称长度不能超过100")

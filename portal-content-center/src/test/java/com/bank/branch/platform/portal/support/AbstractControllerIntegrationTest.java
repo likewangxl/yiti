@@ -3,6 +3,7 @@ package com.bank.branch.platform.portal.support;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
@@ -13,6 +14,8 @@ import com.bank.branch.platform.portal.service.AddrbookImportService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.bank.branch.platform.portal.service.AnnouncementService;
 import com.bank.branch.platform.portal.service.DocService;
+import com.bank.branch.platform.portal.service.GuaranteeExportService;
+import com.bank.branch.platform.portal.service.GuaranteeService;
 import com.bank.branch.platform.portal.service.NavService;
 import com.bank.branch.platform.portal.service.ProductExportService;
 import com.bank.branch.platform.portal.service.ProductService;
@@ -81,6 +84,7 @@ public abstract class AbstractControllerIntegrationTest {
     }
 
     @MockBean protected CurrentUserApi currentUserApi;
+    @MockBean protected UserApi userApi;
     @MockBean protected BizScopeApi bizScopeApi;
     @MockBean protected OrgApi orgApi;
     @MockBean protected DictApi dictApi;
@@ -99,4 +103,6 @@ public abstract class AbstractControllerIntegrationTest {
     @MockBean protected AddrbookQueryService addrbookQueryService;
     @MockBean protected ShortcutService shortcutService;
     @MockBean protected WorkspaceService workspaceService;
+    @MockBean protected GuaranteeService guaranteeService;
+    @MockBean protected GuaranteeExportService guaranteeExportService;
 }

@@ -36,6 +36,7 @@ public enum PortalErrorCode {
 
     // ===== 担保信息域 =====
     GUARANTEE_NOT_FOUND        ("PORTAL-40006", "担保信息不存在"),
+    GUARANTEE_CLIENT_EXISTS    ("PORTAL-40906", "客户已存在"),
 
     // ===== 通用 =====
     PARAM_INVALID              ("PORTAL-42200", "参数校验失败"),

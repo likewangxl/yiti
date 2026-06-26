@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.portal.mapper.ZhGuaranteeInfoMapper">
+
+    <!-- 单条 CRUD / 分页 / 批量删除均由 BaseMapper 提供，此处仅补 BaseMapper 覆盖不到的批量插入 -->
+
+    <!-- 批量插入担保信息（合同导入：单条 SQL 多 VALUES）。id 自增不显式给值，create_time 由调用方统一赋值 -->
+    <insert id="batchInsert">
+        INSERT INTO zh_guarantee_info (
+            client_num, client_name, basic_id, amount_type,
+            notional_amount, occupy_notional_amount, occupy_exposure_amount,
+            usableexposuresum, usablenominalsum,
+            expired, `start`, last_expire, organ, operator,
+            create_user, create_time, type
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.clientNo}, #{item.clientName}, #{item.basicId}, #{item.amountType},
+                #{item.notionalAmount}, #{item.occupyNotionalAmount}, #{item.occupyExposureAmount},
+                #{item.usableExposureSum}, #{item.usableNominalSum},
+                #{item.expired}, #{item.start}, #{item.lastExpire}, #{item.organ}, #{item.userName},
+                #{item.createUser}, #{item.createTime}, #{item.type}
+            )
+        </foreach>
+    </insert>
+
+</mapper>

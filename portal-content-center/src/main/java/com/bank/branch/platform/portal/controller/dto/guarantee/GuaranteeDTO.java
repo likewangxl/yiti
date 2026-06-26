@@ -13,6 +13,9 @@ public class GuaranteeDTO {
     /** 主键 */
     private Long id;
 
+    /** 客户号 */
+    private String clientNo;
+
     /** 客户名称 */
     private String clientName;
 

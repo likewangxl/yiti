@@ -9,6 +9,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeBatchDeleteReqDTO;
+import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeCreateResultDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeSaveReqDTO;
@@ -108,10 +109,15 @@ public class GuaranteeController {
         return ResponseWrapper.success(GuaranteeConverter.toDTO(guaranteeService.getById(id)));
     }
 
-    /** 新增担保信息。 */
+    /**
+     * 新增担保信息。
+     *
+     * <p>客户号 + 客户名称已存在 → 返回「客户已存在」（PORTAL-40906）；命中合同表 → 按合同批量导入
+     * （忽略表单数据）；合同表无记录 → 落库表单单条数据。返回结果含落库来源与条数。</p>
+     */
     @PostMapping
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.WRITE)
-    public ResponseWrapper<Long> create(@Valid @RequestBody GuaranteeSaveReqDTO req) {
+    public ResponseWrapper<GuaranteeCreateResultDTO> create(@Valid @RequestBody GuaranteeSaveReqDTO req) {
         return ResponseWrapper.success(guaranteeService.create(req, currentUserApi.getCurrentEmpId()));
     }
 

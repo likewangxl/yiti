@@ -27,10 +27,11 @@
         <el-table-column type="selection" width="45" reserve-selection />
         <el-table-column label="序号" type="index" width="64"
           :index="i => (pager.pageNo - 1) * pager.pageSize + i + 1" />
+        <el-table-column label="客户号" prop="clientNo" min-width="140" />
         <el-table-column label="客户名称" prop="clientName" min-width="200" />
-        <el-table-column label="业务额度（万元）" prop="notionalAmount" min-width="160" align="right" />
-        <el-table-column label="剩余额度（万元）" prop="occupyNotionalAmount" min-width="160" align="right" />
-        <el-table-column label="融资额度（万元）" prop="usableNominalSum" min-width="160" align="right" />
+        <el-table-column label="业务额度（元）" prop="notionalAmount" min-width="160" align="right" />
+        <el-table-column label="剩余额度（元）" prop="occupyNotionalAmount" min-width="160" align="right" />
+        <el-table-column label="融资额度（元）" prop="usableNominalSum" min-width="160" align="right" />
         <el-table-column label="授信到期日" prop="lastExpire" min-width="120" />
         <el-table-column label="经办人" min-width="130">
           <template #default="{ row }">
@@ -65,16 +66,21 @@
     <el-dialog v-model="dlg.show" :title="dlg.editId ? '编辑担保信息' : '新增担保信息'"
                width="560px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="dlg.form" :rules="rules" label-width="150px">
-        <el-form-item label="客户名称" prop="clientName">
-          <el-input v-model="dlg.form.clientName" maxlength="100" placeholder="请输入客户名称" />
+        <el-form-item label="客户号" prop="clientNo">
+          <el-input v-model="dlg.form.clientNo" maxlength="50" placeholder="请输入客户号"
+            :disabled="!!dlg.editId" />
         </el-form-item>
-        <el-form-item label="业务额度（万元）" prop="notionalAmount">
+        <el-form-item label="客户名称" prop="clientName">
+          <el-input v-model="dlg.form.clientName" maxlength="100" placeholder="请输入客户名称"
+            :disabled="!!dlg.editId" />
+        </el-form-item>
+        <el-form-item label="业务额度（元）" prop="notionalAmount">
           <el-input v-model="dlg.form.notionalAmount" maxlength="50" placeholder="请输入业务额度" />
         </el-form-item>
-        <el-form-item label="剩余额度（万元）" prop="occupyNotionalAmount">
+        <el-form-item label="剩余额度（元）" prop="occupyNotionalAmount">
           <el-input v-model="dlg.form.occupyNotionalAmount" maxlength="20" placeholder="请输入剩余额度" />
         </el-form-item>
-        <el-form-item label="融资额度（万元）" prop="usableNominalSum">
+        <el-form-item label="融资额度（元）" prop="usableNominalSum">
           <el-input v-model="dlg.form.usableNominalSum" maxlength="30" placeholder="请输入融资额度" />
         </el-form-item>
         <el-form-item label="授信到期日" prop="lastExpire">
@@ -111,14 +117,15 @@ const pager = reactive({ pageNo: 1, pageSize: 20 });
 
 const formRef = ref();
 const emptyForm = () => ({
-  clientName: '', notionalAmount: '', occupyNotionalAmount: '',
+  clientNo: '', clientName: '', notionalAmount: '', occupyNotionalAmount: '',
   usableNominalSum: '', lastExpire: '', userName: ''
 });
 const dlg = reactive({ show: false, saving: false, editId: null, form: emptyForm() });
 // 金额类型校验：非负数字，最多两位小数（非空交由 required 规则处理）
+// 容忍货币符号 ¥ 与千分位 ,（后端入库前会统一清洗，见 front_insert_replace 口径）
 function amountValidator(label) {
   return (rule, value, callback) => {
-    const v = value == null ? '' : String(value).trim();
+    const v = (value == null ? '' : String(value)).replace(/[¥,]/g, '').trim();
     if (v === '') return callback();
     if (!/^\d+(\.\d{1,2})?$/.test(v)) {
       return callback(new Error(`${label}需为非负数字，最多两位小数`));
@@ -128,6 +135,7 @@ function amountValidator(label) {
 }
 
 const rules = {
+  clientNo:          [{ required: true, message: '请输入客户号', trigger: 'blur' }],
   clientName:        [{ required: true, message: '请输入客户名称', trigger: 'blur' }],
   notionalAmount:      [{ required: true, message: '请输入业务额度', trigger: 'blur' },
                       { validator: amountValidator('业务额度'), trigger: 'blur' }],
@@ -172,7 +180,7 @@ async function openEdit(row) {
   dlg.editId = row.id;
   // 先用列表行填充，再请求详情反显最新数据
   dlg.form = {
-    clientName: row.clientName || '', notionalAmount: row.notionalAmount || '',
+    clientNo: row.clientNo || '', clientName: row.clientName || '', notionalAmount: row.notionalAmount || '',
     occupyNotionalAmount: row.occupyNotionalAmount || '', usableNominalSum: row.usableNominalSum || '',
     lastExpire: row.lastExpire || '', userName: row.userName || ''
   };
@@ -182,7 +190,7 @@ async function openEdit(row) {
     const d = await getGuarantee(row.id);
     if (d && d.id) {
       dlg.form = {
-        clientName: d.clientName || '', notionalAmount: d.notionalAmount || '',
+        clientNo: d.clientNo || '', clientName: d.clientName || '', notionalAmount: d.notionalAmount || '',
         occupyNotionalAmount: d.occupyNotionalAmount || '', usableNominalSum: d.usableNominalSum || '',
         lastExpire: d.lastExpire || '', userName: d.userName || ''
       };
@@ -200,13 +208,19 @@ async function onSave() {
       await updateGuarantee(dlg.editId, dlg.form);
       ElMessage.success('保存成功');
     } else {
-      await createGuarantee(dlg.form);
-      ElMessage.success('新增成功');
+      const r = await createGuarantee(dlg.form);
+      // 命中合同表 → 按合同批量导入（忽略表单录入）；否则落库表单单条
+      if (r && r.source === 'CONTRACT') {
+        ElMessage.success(`已按合同导入 ${r.count} 条记录`);
+      } else {
+        ElMessage.success('新增成功');
+      }
     }
     dlg.show = false;
     load();
   } catch (e) {
-    ElMessage.error('保存失败：' + (e?.message || e));
+    // 后端「客户已存在」(PORTAL-40906) 等业务错误直接透出 message
+    ElMessage.error(e?.message || '保存失败');
   } finally {
     dlg.saving = false;
   }
