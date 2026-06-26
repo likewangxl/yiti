@@ -61,6 +61,15 @@
         SELECT COUNT(*) FROM EVAL_ASSIGN_ITEM WHERE batch_id = #{batchId}
     </select>
 
+    <!-- 批次下去重的全部相关 USER_ID（打分人 ∪ 被打分人），供大批量导出一次性反查工号 -->
+    <select id="selectDistinctUserIdsByBatch" resultType="java.lang.String">
+        SELECT eval_user_id FROM EVAL_ASSIGN_ITEM
+        WHERE batch_id = #{batchId} AND eval_user_id IS NOT NULL AND eval_user_id != ''
+        UNION
+        SELECT be_eval_user_id FROM EVAL_ASSIGN_ITEM
+        WHERE batch_id = #{batchId} AND be_eval_user_id IS NOT NULL AND be_eval_user_id != ''
+    </select>
+
     <!-- 管理端-分页查询批次 -->
     <select id="selectBatchesByCondition" resultType="com.bank.branch.platform.performance.eval.entity.EvalAssignBatch">
         SELECT b.*, COUNT(i.item_id) AS itemCount

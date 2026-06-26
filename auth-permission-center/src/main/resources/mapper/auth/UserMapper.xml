@@ -48,6 +48,14 @@
         <foreach item="u" collection="usernames" open="(" separator="," close=")">#{u}</foreach>
     </select>
 
+    <!-- 按 USER_ID 列表批量反查（USER_ID → USERNAME），供大批量导出工号展示 -->
+    <select id="selectByUserIds" resultType="com.bank.branch.platform.auth.entity.PtUser">
+        SELECT <include refid="BASE_COLUMNS"/>
+        FROM PT_USER
+        WHERE USER_ID IN
+        <foreach item="u" collection="userIds" open="(" separator="," close=")">#{u}</foreach>
+    </select>
+
     <!-- 根据机构编码查询该机构下的所有用户（G.2） -->
     <select id="selectByOrgCode" parameterType="string"
             resultType="com.bank.branch.platform.auth.entity.PtUser">

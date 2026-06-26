@@ -49,6 +49,13 @@ public interface EvalAssignItemMapper extends BaseMapper<EvalAssignItem> {
     /** 管理端-批次下明细总数。 */
     long countByBatchId(@Param("batchId") Long batchId);
 
+    /**
+     * 查询批次下去重的全部相关 USER_ID（打分人 ∪ 被打分人）。
+     * <p>用于大批量导出前一次性反查工号：明细行可达 20 万，但去重人数有限，
+     * 据此走轻量批量 {@code UserApi.mapEmpIdsToUsername} 避免逐行 N+1。</p>
+     */
+    List<String> selectDistinctUserIdsByBatch(@Param("batchId") Long batchId);
+
     /** 管理端-按条件分页查询批次列表（含明细数 itemCount）。 */
     List<EvalAssignBatch> selectBatchesByCondition(@Param("status") Integer status,
                                                     @Param("keyword") String keyword,

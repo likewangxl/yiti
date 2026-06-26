@@ -77,6 +77,14 @@ public interface UserMapper extends BaseMapper<PtUser> {
     List<PtUser> selectByUsernames(@Param("usernames") List<String> usernames);
 
     /**
+     * 按 USER_ID 列表批量查询用户（仅用于 USER_ID → USERNAME 反查），单次 IN 查询。
+     *
+     * @param userIds USER_ID 列表（调用方保证非空、已分片）
+     * @return 命中的用户实体列表
+     */
+    List<PtUser> selectByUserIds(@Param("userIds") List<String> userIds);
+
+    /**
      * 更新指定用户的密码错误计数。
      * 登录失败时递增，登录成功后重置为 0。
      *

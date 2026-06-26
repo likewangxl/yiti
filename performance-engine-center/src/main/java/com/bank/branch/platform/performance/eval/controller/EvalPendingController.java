@@ -11,6 +11,7 @@ import com.bank.branch.platform.performance.eval.service.EvalAssignService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +79,25 @@ public class EvalPendingController {
         return ResponseWrapper.success();
     }
 
+    /**
+     * 批量提交某部门下多人打分（一个事务 all-or-none）。
+     *
+     * <p>用户在部门处理视图录完整组打分后一键提交；任一条不合法则整批回滚。</p>
+     */
+    @PostMapping("/submit-batch")
+    @Operation(summary = "批量提交待处理任务打分")
+    @BizAuth(bizType = BizType.EVAL, action = BizAction.WRITE)
+    public ResponseWrapper<Void> submitBatch(@RequestBody @Valid SubmitBatchReq req) {
+        String evalUserId = currentUserApi.getCurrentEmpId();
+        log.info("[EvalPendingController.submitBatch] evalUserId={}, count={}",
+                evalUserId, req.getItems().size());
+        List<EvalAssignService.ScoreEntry> entries = req.getItems().stream()
+                .map(i -> new EvalAssignService.ScoreEntry(i.getItemId(), i.getScore()))
+                .toList();
+        evalAssignService.submitScoreBatch(evalUserId, entries);
+        return ResponseWrapper.success();
+    }
+
     /** 提交打分请求体。 */
     @Data
     public static class SubmitReq {
@@ -87,5 +107,14 @@ public class EvalPendingController {
         /** 分数（必填；数值 10~100 或等级预设值，由 service 按评价类型校验）。 */
         @NotNull
         private Integer score;
+    }
+
+    /** 批量提交打分请求体。 */
+    @Data
+    public static class SubmitBatchReq {
+        /** 待提交明细分数列表（必填，至少一条）。 */
+        @NotEmpty
+        @Valid
+        private List<SubmitReq> items;
     }
 }

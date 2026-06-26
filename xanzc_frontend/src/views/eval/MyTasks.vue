@@ -47,6 +47,14 @@
         <el-button :icon="ArrowLeft" plain @click="exitProcess">返回</el-button>
         <h1 class="process-title">{{ processView.group.taskName || processView.group.dept || '无部门' }}</h1>
         <span class="desc">{{ processView.group.taskTypeLabel || processView.group.taskType }} · {{ processView.group.dept || '' }}</span>
+        <div class="proc-actions">
+          <el-button
+            type="primary"
+            :loading="submittingAll"
+            :disabled="pendingCount === 0"
+            @click="handleSubmitAll"
+          >全部提交{{ pendingCount > 0 ? `（${pendingCount}）` : '' }}</el-button>
+        </div>
         <div class="deadline-hint">
           <el-icon><Clock /></el-icon>
           截止：{{ formatDateTime(processView.group.deadline) }}
@@ -60,9 +68,6 @@
         </el-table-column>
         <el-table-column prop="beEvalDept" label="部门" min-width="140">
           <template #default="{ row }">{{ row.beEvalDept || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="beEvalTag" label="标签" width="120">
-          <template #default="{ row }">{{ row.beEvalTag || '—' }}</template>
         </el-table-column>
         <el-table-column label="评级 / 分数" min-width="260">
           <template #default="{ row }">
@@ -111,10 +116,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Clock, Check } from '@element-plus/icons-vue'
-import { listPendingTasks, listPendingItems, submitPendingScore } from '@/api/eval'
+import { listPendingTasks, listPendingItems, submitPendingScore, submitPendingScoreBatch } from '@/api/eval'
 
 // 等级打分选项：等级名 -> 对应分值（与系统口径一致）
 const LEVEL_OPTIONS = [
@@ -124,6 +129,8 @@ const LEVEL_OPTIONS = [
   { label: '一般', score: 75 },
   { label: '不满意', score: 59 },
 ]
+// 等级打分默认值："比较满意"
+const GRADE_DEFAULT_SCORE = 95
 
 // ===================== 汇总列表 =====================
 const loading = ref(false)
@@ -146,6 +153,10 @@ const processView = reactive({ active: false, group: null, loading: false, items
 // 每行打分草稿：itemId -> 分数
 const editScores = reactive({})
 const submittingId = ref(null)
+// 批量提交中
+const submittingAll = ref(false)
+// 当前部门未提交人数（用于"全部提交"按钮禁用与计数）
+const pendingCount = computed(() => processView.items.filter(it => it.submitted !== 1).length)
 
 async function enterProcess(group) {
   processView.group = group
@@ -156,10 +167,10 @@ async function enterProcess(group) {
   try {
     const items = await listPendingItems(group.batchId, group.dept || '')
     processView.items = Array.isArray(items) ? items : []
-    // 初始化草稿：数值默认 80，等级不预选
+    // 初始化草稿：数值默认 90 分，等级默认"比较满意"(GRADE_DEFAULT_SCORE)
     for (const it of processView.items) {
       if (it.submitted !== 1) {
-        editScores[it.itemId] = it.scoreType === 'NUM' ? 80 : null
+        editScores[it.itemId] = it.scoreType === 'NUM' ? 90 : GRADE_DEFAULT_SCORE
       }
     }
   } catch (e) {
@@ -194,6 +205,39 @@ async function handleSubmit(row) {
     ElMessage.error('提交失败：' + (e?.message || '未知错误'))
   } finally {
     submittingId.value = null
+  }
+}
+
+// 一键提交本部门全部未提交人员：先校验每条都已录分，再整批提交（后端 all-or-none）
+async function handleSubmitAll() {
+  const pending = processView.items.filter(it => it.submitted !== 1)
+  if (pending.length === 0) {
+    ElMessage.warning('没有待提交的打分')
+    return
+  }
+  // 逐条校验是否已录分
+  const payload = []
+  for (const it of pending) {
+    const score = editScores[it.itemId]
+    if (score === null || score === undefined || score === '') {
+      ElMessage.warning(`「${it.beEvalUserName || it.beEvalUserId}」${it.scoreType === 'NUM' ? '请填写分数' : '请选择评价等级'}`)
+      return
+    }
+    payload.push({ itemId: it.itemId, score })
+  }
+  submittingAll.value = true
+  try {
+    await submitPendingScoreBatch(payload)
+    // 整批成功后本地置为已提交
+    for (const it of pending) {
+      it.submitted = 1
+      it.score = editScores[it.itemId]
+    }
+    ElMessage.success(`已提交 ${payload.length} 人评价`)
+  } catch (e) {
+    ElMessage.error('批量提交失败：' + (e?.message || '未知错误'))
+  } finally {
+    submittingAll.value = false
   }
 }
 
@@ -240,6 +284,10 @@ $primary: #4361ee;
     .actions { margin-left: auto; }
   }
 
+  .proc-actions {
+    margin-left: auto;
+  }
+
   .deadline-hint {
     display: flex;
     align-items: center;
@@ -247,7 +295,7 @@ $primary: #4361ee;
     font-size: 13px;
     padding: 4px 10px;
     border-radius: 6px;
-    margin-left: auto;
+    margin-left: 12px;
     color: #d46b08;
     background: #fff7e6;
   }

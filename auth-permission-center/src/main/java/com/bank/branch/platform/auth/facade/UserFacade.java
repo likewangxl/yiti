@@ -226,6 +226,30 @@ public class UserFacade implements UserApi {
     }
 
     @Override
+    public Map<String, String> mapEmpIdsToUsername(List<String> empIds) {
+        Map<String, String> idToName = new HashMap<>();
+        if (empIds == null || empIds.isEmpty()) {
+            return idToName;
+        }
+        // 去重 + 分片（每片 1000，规避超大 IN 列表与预编译占位符上限），与 mapUsernamesToEmpId 同款范式。
+        // 仅取 selectByUserIds 返回的 USER_ID/USERNAME 两列，不回调 getUserByEmpId，避免逐人 N+1。
+        List<String> distinct = new ArrayList<>(new java.util.LinkedHashSet<>(empIds));
+        final int chunk = 1000;
+        for (int from = 0; from < distinct.size(); from += chunk) {
+            int to = Math.min(from + chunk, distinct.size());
+            List<PtUser> users = userMapper.selectByUserIds(distinct.subList(from, to));
+            if (users != null) {
+                for (PtUser u : users) {
+                    if (u.getUserId() != null) {
+                        idToName.put(u.getUserId(), u.getUsername());
+                    }
+                }
+            }
+        }
+        return idToName;
+    }
+
+    @Override
     public PageResult<UserDTO> pageUsers(String keyword, int pageNo, int pageSize) {
         // 入参归一：页码最小 1，页大小区间 [1, 100]，默认 20
         int p = pageNo < 1 ? 1 : pageNo;

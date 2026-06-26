@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.eval.service;
 
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.performance.eval.entity.EvalAssignBatch;
 import com.bank.branch.platform.performance.eval.entity.EvalAssignItem;
@@ -21,6 +22,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -31,11 +34,12 @@ class EvalAssignAdminServiceTest {
     @Mock EvalAssignBatchMapper batchMapper;
     @Mock EvalAssignItemMapper itemMapper;
     @Mock DictApi dictApi;
+    @Mock UserApi userApi;
     EvalAssignAdminService service;
 
     @BeforeEach
     void setUp() {
-        service = new EvalAssignAdminService(batchMapper, itemMapper, dictApi);
+        service = new EvalAssignAdminService(batchMapper, itemMapper, dictApi, userApi);
     }
 
     private EvalAssignItem item(String scoreType) {
@@ -58,6 +62,9 @@ class EvalAssignAdminServiceTest {
         when(batchMapper.selectById(2L)).thenReturn(batch);
         when(itemMapper.selectByBatchId(eq(2L), anyInt(), anyInt()))
                 .thenReturn(List.of(item("NUM"), item("GRADE")));
+        lenient().when(itemMapper.selectDistinctUserIdsByBatch(2L))
+                .thenReturn(List.of("ID_E1", "ID_B1"));
+        lenient().when(userApi.mapEmpIdsToUsername(anyList())).thenReturn(java.util.Map.of());
         // 字典编码 → 中文名称 反查
         lenient().when(dictApi.getDictLabel("EVAL_SCORE_TYPE", "NUM")).thenReturn("数值打分");
         lenient().when(dictApi.getDictLabel("EVAL_SCORE_TYPE", "GRADE")).thenReturn("等级打分");
@@ -73,5 +80,53 @@ class EvalAssignAdminServiceTest {
             assertThat(r1.getCell(9).getStringCellValue()).isEqualTo("数值打分");
             assertThat(r2.getCell(9).getStringCellValue()).isEqualTo("等级打分");
         }
+    }
+
+    @Test
+    @DisplayName("导出：打分人/被打分人工号列输出 PT_USER.username（经 UserApi 批量反查）")
+    void exportItems_userIdColumns_showUsername() throws Exception {
+        EvalAssignBatch batch = new EvalAssignBatch();
+        batch.setBatchId(2L);
+        when(batchMapper.selectById(2L)).thenReturn(batch);
+        when(itemMapper.selectByBatchId(eq(2L), anyInt(), anyInt()))
+                .thenReturn(List.of(item("NUM")));
+        when(itemMapper.selectDistinctUserIdsByBatch(2L))
+                .thenReturn(List.of("ID_E1", "ID_B1"));
+        // 去重 USER_ID 一次性反查工号
+        when(userApi.mapEmpIdsToUsername(anyList()))
+                .thenReturn(java.util.Map.of("ID_E1", "scorer01", "ID_B1", "target01"));
+        lenient().when(dictApi.getDictLabel(eq("EVAL_SCORE_TYPE"), anyString())).thenReturn("数值打分");
+
+        byte[] data = service.exportItems(2L);
+
+        try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(data))) {
+            Sheet sheet = wb.getSheetAt(0);
+            Row r1 = sheet.getRow(1);
+            // 第 0 列=打分人工号、第 4 列=被打分人工号，均显示 username
+            assertThat(r1.getCell(0).getStringCellValue()).isEqualTo("scorer01");
+            assertThat(r1.getCell(4).getStringCellValue()).isEqualTo("target01");
+        }
+    }
+
+    @Test
+    @DisplayName("批次详情：打分人/被打分人工号(USER_ID)经 UserApi 翻译为 PT_USER.username")
+    void getBatchDetail_fillsUsernameFromUserApi() {
+        EvalAssignBatch batch = new EvalAssignBatch();
+        batch.setBatchId(3L);
+        when(batchMapper.selectById(3L)).thenReturn(batch);
+        when(itemMapper.selectByBatchId(eq(3L), anyInt(), anyInt()))
+                .thenReturn(List.of(item("NUM")));
+        when(itemMapper.countByBatchId(3L)).thenReturn(1L);
+        // ID_E1 / ID_B1 是入库的 USER_ID，UserApi 批量反查得到登录名(工号)
+        when(userApi.mapEmpIdsToUsername(anyList()))
+                .thenReturn(java.util.Map.of("ID_E1", "scorer01", "ID_B1", "target01"));
+
+        @SuppressWarnings("unchecked")
+        com.bank.branch.platform.common.web.PageResult<EvalAssignItem> page =
+                (com.bank.branch.platform.common.web.PageResult<EvalAssignItem>)
+                        service.getBatchDetail(3L, 1, 50).get("items");
+        EvalAssignItem it = page.getRecords().get(0);
+        assertThat(it.getEvalUserUsername()).isEqualTo("scorer01");
+        assertThat(it.getBeEvalUserUsername()).isEqualTo("target01");
     }
 }

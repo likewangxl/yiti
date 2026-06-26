@@ -127,6 +127,32 @@ public class EvalAssignService {
                 itemId, evalUserId, score, item.getScoreType());
     }
 
+    /**
+     * 批量提交某部门下多人打分（一个事务 all-or-none）。
+     *
+     * <p>逐条复用 {@link #submitScore(String, Long, int)} 的全部校验（归属/未提交/截止/状态/分值）；
+     * 因同处一个 {@code @Transactional}，任一条失败则整批回滚，不会出现"部分人已提交"的脏状态。
+     * 这样前端可在录完整部门的打分后"一键提交"。</p>
+     *
+     * @param evalUserId 当前登录人工号（打分人）
+     * @param entries    待提交明细分数列表（itemId + score）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void submitScoreBatch(String evalUserId, List<ScoreEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
+        for (ScoreEntry e : entries) {
+            submitScore(evalUserId, e.itemId(), e.score());
+        }
+        log.info("[EvalAssignService.submitScoreBatch] 批量提交成功 evalUserId={} count={}",
+                evalUserId, entries.size());
+    }
+
+    /** 批量提交单条：明细ID + 分数。 */
+    public record ScoreEntry(Long itemId, int score) {
+    }
+
     /** 实体 → 明细 DTO。 */
     private EvalPendingItemDTO toItemDTO(EvalAssignItem i) {
         EvalPendingItemDTO d = new EvalPendingItemDTO();

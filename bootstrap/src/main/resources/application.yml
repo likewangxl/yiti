@@ -1,5 +1,5 @@
 server:
-  port: 18080
+  port: 18081
   servlet:
     context-path: /
 
@@ -111,7 +111,7 @@ platform:
   #   --platform.soap.netty.port=30523，否则 30522 端口冲突会导致整个上下文启动失败。
   soap:
     netty:
-      port: 30523
+      port: 30522
       boss-threads: 1
       worker-threads: 4
       max-content-length: 10485760
@@ -124,6 +124,12 @@ perf:
       enabled: false
     startup-sync:
       enabled: false
+  eval:
+    import:
+      # 评价任务导入：单次 batchInsert 最大条数（超过则分批写入，规避 max_allowed_packet）
+      batch-insert-size: 1000
+      # 评价任务导入：错误数据超过该条数时不返回 JSON，改为生成错误明细 CSV 文件供下载
+      error-csv-threshold: 100
 
 auth:
   user:
