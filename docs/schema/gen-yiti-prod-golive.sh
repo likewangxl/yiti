@@ -5,10 +5,15 @@
 #   产物 2：seed-yiti-prod-golive.sql     —— 数据初始化（基础参数/RBAC组织/审批流程/指标数据）
 # 用法：bash docs/schema/gen-yiti-prod-golive.sh
 # 说明：业务数据表（客户/线索/贷款/触达/审批运行态等）不导出数据，上线后为空。
+#
+# 连接：必须走 TCP（-h127.0.0.1），因为 root@localhost 是 auth_socket 插件，
+#       默认 socket 连接会 access denied；root@127.0.0.1 才认密码。
 # =====================================================================
 set -euo pipefail
 DB=yiti
-DUMP="mysqldump -uroot -pdjdev --single-transaction --no-tablespaces --skip-comments --set-gtid-purged=OFF"
+HOST_OPTS="-h127.0.0.1 -P3306"
+DUMP="mysqldump -uroot -pdjdev $HOST_OPTS --single-transaction --no-tablespaces --skip-comments --set-gtid-purged=OFF"
+MYSQLC="mysql -uroot -pdjdev $HOST_OPTS -N"
 OUT_DDL="docs/schema/ddl-yiti-prod-golive.sql"
 OUT_SEED="docs/schema/seed-yiti-prod-golive.sql"
 
@@ -43,6 +48,13 @@ emit_group () {  # $1=标题  $2...=表名
   echo "-- ---------------------------------------------------------------------" >> "$OUT_SEED"
   $DUMP $SEED_OPTS $DB "$@" >> "$OUT_SEED"
 }
+emit_table_where () {  # $1=标题  $2=表名  $3=WHERE条件
+  echo "" >> "$OUT_SEED"
+  echo "-- ---------------------------------------------------------------------" >> "$OUT_SEED"
+  echo "-- $1" >> "$OUT_SEED"
+  echo "-- ---------------------------------------------------------------------" >> "$OUT_SEED"
+  $DUMP $SEED_OPTS --where="$3" $DB "$2" >> "$OUT_SEED"
+}
 
 {
   echo "-- =====================================================================";
@@ -62,10 +74,39 @@ emit_group "①bis 定时任务配置（SYS_JOB_CONF；QRTZ_* 启动期自动重
 # ② RBAC / 组织：机构 → 用户 → 角色 → 绑定（按依赖顺序）
 emit_group "② RBAC 与组织（机构/用户/角色/资源/数据范围绑定）" \
   EXT_ORG_INFO EXT_USER_ORG PT_USER PT_ROLE PT_USER_ROLE PT_RESOURCE PT_ROLE_RESOURCE PT_ROLE_BIZ_SCOPE
-# ③ 审批流程：超时/候选人/表单配置 + Flowable 已部署流程定义（ACT_RE_*/ACT_GE_BYTEARRAY）
-emit_group "③ 审批流程（节点配置 + Flowable 已部署 BPMN 流程定义）" \
-  WF_TIMEOUT_RULE WF_NODE_CANDIDATE_CONF WF_NODE_FORM_CONF \
-  ACT_GE_BYTEARRAY ACT_RE_DEPLOYMENT ACT_RE_PROCDEF
+
+# ③ 审批流程：节点配置（设计器节点表）
+emit_group "③ 审批流程节点配置（超时/候选人/表单）" \
+  WF_TIMEOUT_RULE WF_NODE_CANDIDATE_CONF WF_NODE_FORM_CONF
+
+# ③bis 设计器已部署流程定义（Flowable ACT_*）—— 只导业绩调整对公/零售设计器流程的「生效版本」
+#   原因：业绩调整(分配调整)审批主代码走设计器路由 resolveDesignerProcDefKey →
+#         DSN_alloc_corp_designer / DSN_alloc_retail_designer，这两个流程 classpath 没有文件、
+#         只存在于 ACT_* 表，不导则上线后 fail-fast 发不起审批。
+#   刻意排除：静态流程(lead/loan/perf_alloc_*_v1，由 classpath 启动自动部署) + DSN_IT_PUB_*(IT测试流程)。
+DESIGNER_KEYS="'DSN_alloc_corp_designer','DSN_alloc_retail_designer'"
+# 取每个设计器流程「最新版本」的 DEPLOYMENT_ID_（Flowable 默认按 latest version 发起）
+RAW_DEP_IDS=$($MYSQLC -e "
+  SELECT p.DEPLOYMENT_ID_ FROM ${DB}.ACT_RE_PROCDEF p
+  WHERE p.KEY_ IN ($DESIGNER_KEYS)
+    AND p.VERSION_ = (SELECT MAX(p2.VERSION_) FROM ${DB}.ACT_RE_PROCDEF p2 WHERE p2.KEY_ = p.KEY_);")
+if [ -z "$RAW_DEP_IDS" ]; then
+  echo "ERROR: 库中未找到 DSN_alloc_corp_designer / DSN_alloc_retail_designer 的部署。" >&2
+  echo "       请先在设计器发布对公/零售分配关系调整审批后再运行本脚本。" >&2
+  exit 1
+fi
+# 拼成 SQL 列表：'id1','id2'
+DEP_IN=$(echo "$RAW_DEP_IDS" | sed "s/.*/'&'/" | paste -sd, -)
+echo "[gen] 设计器流程生效版部署 ID = $DEP_IN" >&2
+
+# 三张表按 deployment 精确过滤导出（顺序：部署 → 二进制 → 流程定义）
+emit_table_where "③bis 设计器流程部署 ACT_RE_DEPLOYMENT（仅对公/零售分配调整生效版）" \
+  ACT_RE_DEPLOYMENT "ID_ IN ($DEP_IN)"
+emit_table_where "③bis 设计器流程二进制 ACT_GE_BYTEARRAY（BPMN/流程图）" \
+  ACT_GE_BYTEARRAY "DEPLOYMENT_ID_ IN ($DEP_IN)"
+emit_table_where "③bis 设计器流程定义 ACT_RE_PROCDEF（DSN_alloc_*_designer 生效版）" \
+  ACT_RE_PROCDEF "DEPLOYMENT_ID_ IN ($DEP_IN)"
+
 # ④ 指标数据：版本控制 + 指标定义/引用 + KPI 方案/项 + 目标方案
 emit_group "④ 指标数据（版本/指标定义/引用/KPI方案/目标方案）" \
   SYS_CONTROL PERF_METRIC_DEF PERF_METRIC_REF PERF_KPI_SCHEME PERF_KPI_ITEM PERF_TARGET_PLAN
