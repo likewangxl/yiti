@@ -1,6 +1,7 @@
 package com.bank.branch.platform.portal.service;
 
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.portal.convert.GuaranteeConverter;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeCreateResultDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeQueryReqDTO;
 import com.bank.branch.platform.portal.controller.dto.guarantee.GuaranteeSaveReqDTO;
@@ -225,15 +226,15 @@ public class GuaranteeService {
     /**
      * 把保存入参的字段拷贝到实体（新增/编辑共用）。
      *
-     * <p>金额按「元」原值存储，仅清洗前端可能带入的货币格式特殊字符（{@code ¥}、千分位 {@code ,}），
-     * 口径见 {@code db/front_insert_replace.jpg}。</p>
+     * <p>三个金额表单按「万元」录入：先清洗前端可能带入的货币格式特殊字符（{@code ¥}、千分位 {@code ,}，
+     * 口径见 {@code db/front_insert_replace.jpg}），再 ×10000 转「元」落库（与读取 ÷10000 对称）。</p>
      */
     private void applySaveFields(ZhGuaranteeInfo entity, GuaranteeSaveReqDTO req) {
         entity.setClientNo(req.getClientNo());
         entity.setClientName(req.getClientName());
-        entity.setNotionalAmount(stripAmount(req.getNotionalAmount()));
-        entity.setOccupyNotionalAmount(stripAmount(req.getOccupyNotionalAmount()));
-        entity.setUsableNominalSum(stripAmount(req.getUsableNominalSum()));
+        entity.setNotionalAmount(GuaranteeConverter.toYuan(stripAmount(req.getNotionalAmount())));
+        entity.setOccupyNotionalAmount(GuaranteeConverter.toYuan(stripAmount(req.getOccupyNotionalAmount())));
+        entity.setUsableNominalSum(GuaranteeConverter.toYuan(stripAmount(req.getUsableNominalSum())));
         entity.setLastExpire(req.getLastExpire());
         entity.setUserName(req.getUserName());
     }

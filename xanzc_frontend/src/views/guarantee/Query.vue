@@ -29,9 +29,9 @@
           :index="i => (pager.pageNo - 1) * pager.pageSize + i + 1" />
         <el-table-column label="客户号" prop="clientNo" min-width="140" />
         <el-table-column label="客户名称" prop="clientName" min-width="200" />
-        <el-table-column label="业务额度（元）" prop="notionalAmount" min-width="160" align="right" />
-        <el-table-column label="剩余额度（元）" prop="occupyNotionalAmount" min-width="160" align="right" />
-        <el-table-column label="融资额度（元）" prop="usableNominalSum" min-width="160" align="right" />
+        <el-table-column label="业务额度（万元）" prop="notionalAmount" min-width="160" align="right" />
+        <el-table-column label="剩余额度（万元）" prop="occupyNotionalAmount" min-width="160" align="right" />
+        <el-table-column label="融资额度（万元）" prop="usableNominalSum" min-width="160" align="right" />
         <el-table-column label="授信到期日" prop="lastExpire" min-width="120" />
         <el-table-column label="经办人" min-width="130">
           <template #default="{ row }">
@@ -74,13 +74,13 @@
           <el-input v-model="dlg.form.clientName" maxlength="100" placeholder="请输入客户名称"
             :disabled="!!dlg.editId" />
         </el-form-item>
-        <el-form-item label="业务额度（元）" prop="notionalAmount">
+        <el-form-item label="业务额度（万元）" prop="notionalAmount">
           <el-input v-model="dlg.form.notionalAmount" maxlength="50" placeholder="请输入业务额度" />
         </el-form-item>
-        <el-form-item label="剩余额度（元）" prop="occupyNotionalAmount">
+        <el-form-item label="剩余额度（万元）" prop="occupyNotionalAmount">
           <el-input v-model="dlg.form.occupyNotionalAmount" maxlength="20" placeholder="请输入剩余额度" />
         </el-form-item>
-        <el-form-item label="融资额度（元）" prop="usableNominalSum">
+        <el-form-item label="融资额度（万元）" prop="usableNominalSum">
           <el-input v-model="dlg.form.usableNominalSum" maxlength="30" placeholder="请输入融资额度" />
         </el-form-item>
         <el-form-item label="授信到期日" prop="lastExpire">

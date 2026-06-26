@@ -100,10 +100,10 @@ class GuaranteeServiceTest {
         ZhGuaranteeInfo saved = captor.getValue();
         assertThat(saved.getClientNo()).isEqualTo("C0001");
         assertThat(saved.getClientName()).isEqualTo("某某公司");
-        // 金额按「元」原值存储，仅清洗 ¥ 与千分位 ，（不做 ×10000 换算）
-        assertThat(saved.getNotionalAmount()).isEqualTo("1000.00");
-        assertThat(saved.getOccupyNotionalAmount()).isEqualTo("300");
-        assertThat(saved.getUsableNominalSum()).isEqualTo("700");
+        // 金额按「万元」录入：先清洗 ¥ 与千分位 ，再 ×10000 转「元」落库
+        assertThat(saved.getNotionalAmount()).isEqualTo("10000000.00");
+        assertThat(saved.getOccupyNotionalAmount()).isEqualTo("3000000.00");
+        assertThat(saved.getUsableNominalSum()).isEqualTo("7000000.00");
         assertThat(saved.getLastExpire()).isEqualTo("2027-12-31");
         assertThat(saved.getUserName()).isEqualTo("finance_zhou");
         assertThat(saved.getCreateUser()).isEqualTo("admin");
