@@ -12,8 +12,11 @@ import lombok.Data;
 @Data
 public class GuaranteeSaveReqDTO {
 
-    /** 客户号（必填，用于合同表反查与重复校验） */
-    @NotBlank(message = "客户号不能为空")
+    /**
+     * 客户号（前端不再录入，恒为空）。
+     * 服务层仍保留按客户号 + 客户名称的重复校验与合同表反查判断（此处不再强制必填，
+     * 空值时该判断自然命中不到记录，相当于幌子，不影响新增落库）。
+     */
     @Size(max = 50, message = "客户号长度不能超过50")
     private String clientNo;
 
