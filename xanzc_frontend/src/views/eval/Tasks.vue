@@ -16,6 +16,8 @@
         <el-option label="进行中" :value="0" />
         <el-option label="已结束" :value="1" />
         <el-option label="草稿" :value="2" />
+        <el-option label="处理中" :value="3" />
+        <el-option label="导入失败" :value="4" />
       </el-select>
       <el-input v-model="filter.keyword" placeholder="搜索任务名称/批次/创建人" clearable style="width: 240px; margin-left: 12px"
         @keyup.enter="handleFilterChange" @clear="handleFilterChange">
@@ -48,6 +50,8 @@
           <span v-if="row.status === 2" class="tag-warning">草稿</span>
           <span v-else-if="row.status === 0" class="tag-success">进行中</span>
           <span v-else-if="row.status === 1" class="tag-info">已结束</span>
+          <span v-else-if="row.status === 3" class="tag-warning">处理中</span>
+          <span v-else-if="row.status === 4" class="tag-danger">导入失败</span>
           <span v-else class="tag-info">{{ row.status }}</span>
         </template>
       </el-table-column>
@@ -206,6 +210,8 @@
             <span v-if="batchDetail.data.batch.status === 2" class="tag-warning">草稿</span>
             <span v-else-if="batchDetail.data.batch.status === 0" class="tag-success">进行中</span>
             <span v-else-if="batchDetail.data.batch.status === 1" class="tag-info">已结束</span>
+            <span v-else-if="batchDetail.data.batch.status === 3" class="tag-warning">处理中</span>
+            <span v-else-if="batchDetail.data.batch.status === 4" class="tag-danger">导入失败</span>
           </el-descriptions-item>
           <el-descriptions-item label="任务类型">{{ batchDetail.data.batch.taskType === 'EVAL' ? '评价任务' : batchDetail.data.batch.taskType }}</el-descriptions-item>
           <el-descriptions-item label="截止时间">{{ formatDateTime(batchDetail.data.batch.deadline) }}</el-descriptions-item>
@@ -263,7 +269,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import {
@@ -547,9 +553,21 @@ const wizardUploaderRef = ref(null)
 const importErrors = ref([])
 const importing = ref(false)
 
+// 轮询定时器（向导关闭 / 组件卸载时必须清理，避免内存泄漏与重复轮询）
+let pollTimer = null
+
+function clearPollTimer() {
+  if (pollTimer !== null) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
+
 function openWizard() { wizard.visible = true }
 
 function resetWizard() {
+  clearPollTimer()          // 关闭向导时停止未完成的轮询
+  importing.value = false   // 重置导入状态，防止按钮残留"导入处理中…"
   wizard.source = ''
   wizard.importType = ''
   wizard.taskName = ''
@@ -573,24 +591,83 @@ async function doImportAssign() {
   if (!wizardFile.value || !wizard.deadline || !wizard.taskName) return
   importing.value = true
   importErrors.value = []
+  clearPollTimer()
+
+  let batchId
   try {
     const res = await importAssign(wizardFile.value, 'EVAL', wizard.taskName, wizard.deadline)
-    // 错误数超过阈值：后端回 CSV 文件流，直接下载给用户查看具体行号与原因
-    if (res && res.csv) {
-      saveBlob(res.blob, '导入错误明细.csv')
-      ElMessage.warning('错误数据较多，已下载「导入错误明细.csv」，请打开查看具体行号与错误原因')
+    batchId = res && res.batchId
+    if (!batchId) {
+      ElMessage.error('导入请求未返回批次ID，请刷新重试')
+      importing.value = false
       return
     }
-    if (res && res.success) {
-      ElMessage.success(`导入成功 ${res.importedCount} 条，已生成草稿批次`)
-      wizard.visible = false
-      loadList()
-    } else {
-      importErrors.value = (res && res.errors) || []
-      ElMessage.error('导入未通过校验，请查看错误明细')
+  } catch (e) {
+    ElMessage.error('导入提交失败：' + (e?.message || '未知错误'))
+    importing.value = false
+    return
+  }
+
+  // 后端已接收并进入异步处理（status=3=IMPORTING）
+  // 启动轮询：每 2s 查一次，上限 5 分钟
+  const startTime = Date.now()
+  const MAX_POLL_MS = 5 * 60 * 1000
+
+  async function poll() {
+    // 向导已被用户手动关闭，停止轮询（resetWizard 会把 importing 置 false）
+    if (!wizard.visible) return
+
+    try {
+      const detail = await getAssignBatchDetail(batchId)
+      const batch = detail && detail.batch
+      const status = batch && batch.status
+
+      if (status === 2) {
+        // 导入成功，批次进入草稿状态，需人工确认发布
+        ElMessage.success(`导入成功，共 ${batch.importedCount ?? 0} 条，请在批次中确认发布`)
+        importing.value = false
+        wizard.visible = false
+        loadList()
+        return
+      }
+
+      if (status === 4) {
+        // 导入失败：解析 errorSummary 灌入错误表格
+        let errors = []
+        if (batch.errorSummary) {
+          try {
+            errors = JSON.parse(batch.errorSummary)
+          } catch {
+            // 解析失败时整体作为一条提示
+            errors = [{ row: '—', message: batch.errorSummary }]
+          }
+        }
+        if (!Array.isArray(errors) || errors.length === 0) {
+          errors = [{ row: '—', message: '导入失败，请检查文件格式后重传' }]
+        }
+        importErrors.value = errors
+        ElMessage.error('导入未通过校验，请查看错误明细，修正后重传')
+        importing.value = false
+        return
+      }
+
+      // status===3（处理中）或其他未终态：检查超时再继续
+      if (Date.now() - startTime >= MAX_POLL_MS) {
+        ElMessage.warning('仍在处理，请稍后在批次列表查看结果')
+        importing.value = false
+        return
+      }
+
+      // 2s 后再次查询
+      pollTimer = setTimeout(poll, 2000)
+    } catch (e) {
+      ElMessage.error('查询导入进度失败：' + (e?.message || '未知错误'))
+      importing.value = false
     }
-  } catch (e) { ElMessage.error('导入失败：' + (e?.message || '未知错误')) }
-  finally { importing.value = false }
+  }
+
+  // 首次轮询延迟 2s，等待后端异步线程启动
+  pollTimer = setTimeout(poll, 2000)
 }
 
 // ===================== 删除 =====================
@@ -620,6 +697,9 @@ async function handleDelete(row) {
 // ===================== 生命周期 =====================
 
 onMounted(() => { loadList() })
+
+// 组件卸载时清理轮询定时器，防止内存泄漏
+onUnmounted(() => { clearPollTimer() })
 </script>
 
 <style lang="scss" scoped>
