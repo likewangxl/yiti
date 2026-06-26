@@ -37,8 +37,6 @@ import java.util.Set;
 @Service
 public class EvalAssignImportService {
 
-    /** 单次导入最大行数保护。 */
-    private static final int MAX_IMPORT_ROWS = 5000;
     /** 权重标签字典类型。 */
     private static final String DICT_WEIGHT_TAG = "EVAL_WEIGHT_TAG";
     /** 评价类型字典类型。 */
@@ -82,9 +80,6 @@ public class EvalAssignImportService {
         } catch (Exception e) {
             log.warn("[EvalAssignImportService.importExcel] 解析失败: {}", e.getMessage());
             throw new PerfException(PerfErrorCode.EVAL_IMPORT_FILE_INVALID, e.getMessage());
-        }
-        if (rows.size() > MAX_IMPORT_ROWS) {
-            throw new PerfException(PerfErrorCode.EVAL_IMPORT_ROWS_EXCEEDED, rows.size(), MAX_IMPORT_ROWS);
         }
         return importRows(rows, taskType, taskName, deadline, createBy);
     }
