@@ -25,8 +25,14 @@ public class EvalAssignBatch {
     private String source;
     /** 打分截止时间. */
     private LocalDateTime deadline;
-    /** 状态：0=进行中, 1=已结束. */
+    /** 状态：0=进行中, 1=已结束, 2=草稿, 3=处理中(IMPORTING), 4=导入失败(IMPORT_FAILED). */
     private Integer status;
+    /** 解析出的总行数（异步导入处理结束时回填，DB 列 TOTAL_ROWS）. */
+    private Integer totalRows;
+    /** 成功入库条数（全部校验通过时回填，DB 列 IMPORTED_COUNT）. */
+    private Integer importedCount;
+    /** 失败时行级错误明细 JSON（封顶前 N 条，DB 列 ERROR_SUMMARY）. */
+    private String errorSummary;
     /** 创建人工号. */
     private String createBy;
     /** 创建时间. */
