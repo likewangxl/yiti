@@ -68,13 +68,14 @@ public class EvalUnifiedService {
     /**
      * 删除评价任务（硬删除）。
      *
-     * <p>校验截止时间：截止时间未到则拒绝删除。
+     * <p>校验截止时间：截止时间未到则拒绝删除。<b>例外</b>：草稿(未发布, status=2)的导入批次随时可删，
+     * 因其尚未发布给打分人、不存在已采集数据，不受截止时间约束。
      * <p>规则任务(AUTO)：级联删除 EVAL_SCORE → EVAL_TASK_TARGET → EVAL_TASK。
      * <p>导入批次(IMPORT)：级联删除 EVAL_ASSIGN_ITEM → EVAL_ASSIGN_BATCH。
      *
      * @param sourceType AUTO=规则任务, 其他=导入批次
      * @param sourceId   任务ID 或 批次ID
-     * @throws PerfException 截止时间未到时抛 EVAL_TASK_DELETE_BEFORE_DEADLINE
+     * @throws PerfException 截止时间未到且非草稿时抛 EVAL_TASK_DELETE_BEFORE_DEADLINE
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteUnified(String sourceType, Long sourceId) {
@@ -96,7 +97,9 @@ public class EvalUnifiedService {
             if (batch == null) {
                 throw new PerfException(PerfErrorCode.EVAL_ASSIGN_ITEM_NOT_FOUND, sourceId);
             }
-            if (batch.getDeadline() != null && batch.getDeadline().isAfter(LocalDateTime.now())) {
+            // 草稿(未发布, status=2)随时可删；已发布(ACTIVE/CLOSED)才需截止时间已过
+            boolean draft = batch.getStatus() != null && batch.getStatus() == 2;
+            if (!draft && batch.getDeadline() != null && batch.getDeadline().isAfter(LocalDateTime.now())) {
                 throw new PerfException(PerfErrorCode.EVAL_TASK_DELETE_BEFORE_DEADLINE,
                         "截止时间 " + batch.getDeadline() + "，当前不可删除");
             }

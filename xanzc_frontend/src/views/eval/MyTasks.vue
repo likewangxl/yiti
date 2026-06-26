@@ -48,6 +48,16 @@
         <h1 class="process-title">{{ processView.group.taskName || processView.group.dept || '无部门' }}</h1>
         <span class="desc">{{ processView.group.taskTypeLabel || processView.group.taskType }} · {{ processView.group.dept || '' }}</span>
         <div class="proc-actions">
+          <!-- 默认级别 / 默认分数：仅覆盖"用户尚未手动调整过"的行，不动已手动改过的 -->
+          <div class="default-setter">
+            <span class="ds-label">默认级别</span>
+            <el-select v-model="defaultGrade" size="small" style="width: 150px" @change="applyDefaultGrade">
+              <el-option v-for="opt in LEVEL_OPTIONS" :key="opt.score" :label="`${opt.label}（${opt.score}分）`" :value="opt.score" />
+            </el-select>
+            <span class="ds-label">默认分数</span>
+            <el-input-number v-model="defaultNum" :min="10" :max="100" :step="1" size="small"
+              controls-position="right" style="width: 120px" @change="applyDefaultNum" />
+          </div>
           <el-button
             type="primary"
             :loading="submittingAll"
@@ -84,12 +94,14 @@
               v-model="editScores[row.itemId]"
               :min="10" :max="100" :step="1" size="small" controls-position="right"
               style="width: 140px"
+              @change="markTouched(row.itemId)"
             />
             <!-- 等级打分 -->
             <el-select
               v-else
               v-model="editScores[row.itemId]"
               placeholder="选择等级" size="small" style="width: 200px"
+              @change="markTouched(row.itemId)"
             >
               <el-option
                 v-for="opt in LEVEL_OPTIONS"
@@ -133,6 +145,8 @@ const LEVEL_OPTIONS = [
 ]
 // 等级打分默认值："比较满意"
 const GRADE_DEFAULT_SCORE = 95
+// 数值打分默认值
+const NUM_DEFAULT_SCORE = 90
 
 // ===================== 汇总列表 =====================
 const loading = ref(false)
@@ -154,6 +168,11 @@ async function loadGroups() {
 const processView = reactive({ active: false, group: null, loading: false, items: [] })
 // 每行打分草稿：itemId -> 分数
 const editScores = reactive({})
+// 用户手动调整过的行：itemId -> true（默认级别/分数只覆盖未手动调整过的行）
+const touched = reactive({})
+// 顶部"默认级别 / 默认分数"输入：等级默认"比较满意"、数值默认 90
+const defaultGrade = ref(GRADE_DEFAULT_SCORE)
+const defaultNum = ref(NUM_DEFAULT_SCORE)
 const submittingId = ref(null)
 // 批量提交中
 const submittingAll = ref(false)
@@ -166,13 +185,17 @@ async function enterProcess(group) {
   processView.items = []
   processView.loading = true
   Object.keys(editScores).forEach(k => delete editScores[k])
+  // 进入新部门：清空"已手动调整"标记，默认级别/分数复位到基础默认值
+  Object.keys(touched).forEach(k => delete touched[k])
+  defaultGrade.value = GRADE_DEFAULT_SCORE
+  defaultNum.value = NUM_DEFAULT_SCORE
   try {
     const items = await listPendingItems(group.batchId, group.dept || '')
     processView.items = Array.isArray(items) ? items : []
-    // 初始化草稿：数值默认 90 分，等级默认"比较满意"(GRADE_DEFAULT_SCORE)
+    // 初始化草稿：数值默认 NUM_DEFAULT_SCORE，等级默认"比较满意"(GRADE_DEFAULT_SCORE)
     for (const it of processView.items) {
       if (it.submitted !== 1) {
-        editScores[it.itemId] = it.scoreType === 'NUM' ? 90 : GRADE_DEFAULT_SCORE
+        editScores[it.itemId] = it.scoreType === 'NUM' ? NUM_DEFAULT_SCORE : GRADE_DEFAULT_SCORE
       }
     }
   } catch (e) {
@@ -188,6 +211,29 @@ function exitProcess() {
   processView.items = []
   // 返回时刷新汇总，人数随提交同步
   loadGroups()
+}
+
+// 标记某行已被用户手动调整（之后默认级别/分数不再覆盖它）
+function markTouched(itemId) {
+  touched[itemId] = true
+}
+
+// 默认级别变更：覆盖所有"未提交且用户未手动调整过"的等级打分行
+function applyDefaultGrade(val) {
+  for (const it of processView.items) {
+    if (it.submitted !== 1 && it.scoreType === 'GRADE' && !touched[it.itemId]) {
+      editScores[it.itemId] = val
+    }
+  }
+}
+
+// 默认分数变更：覆盖所有"未提交且用户未手动调整过"的数值打分行
+function applyDefaultNum(val) {
+  for (const it of processView.items) {
+    if (it.submitted !== 1 && it.scoreType === 'NUM' && !touched[it.itemId]) {
+      editScores[it.itemId] = val
+    }
+  }
 }
 
 async function handleSubmit(row) {
@@ -288,6 +334,24 @@ $primary: #4361ee;
 
   .proc-actions {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .default-setter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: $bg-soft;
+
+      .ds-label {
+        font-size: 13px;
+        color: $text-1;
+        white-space: nowrap;
+      }
+    }
   }
 
   .deadline-hint {

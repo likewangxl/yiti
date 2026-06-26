@@ -46,7 +46,7 @@ public class EvalUnifiedController {
     }
 
     @DeleteMapping("/{sourceType}/{sourceId}")
-    @Operation(summary = "删除评价任务（硬删除，需截止时间已过）")
+    @Operation(summary = "删除评价任务（硬删除，需截止时间已过；草稿/未发布批次不受此限制）")
     @BizAuth(bizType = BizType.EVAL, action = BizAction.DELETE)
     public ResponseWrapper<String> delete(
             @PathVariable String sourceType,
