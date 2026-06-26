@@ -58,6 +58,8 @@ const routes = [
 
       // 历史数据查询
       { path: 'guarantee/query',  name: 'GuaranteeQuery', component: () => import('@/views/guarantee/Query.vue'), meta: { title: '担保查询', group: '历史数据查询' } },
+      { path: 'guarantee/data-import', name: 'HistoryDataImport', component: () => import('@/views/guarantee/DataImport.vue'), meta: { title: '数据导入查询', group: '历史数据查询' } },
+      { path: 'guarantee/notice', name: 'HistoryNotice', component: () => import('@/views/guarantee/Notice.vue'), meta: { title: '公告查询', group: '历史数据查询' } },
       { path: 'history/price-approval', name: 'HistoryPriceApproval', component: () => import('@/views/history/PriceApproval.vue'), meta: { title: '定价审批查询', group: '历史数据查询' } },
       { path: 'history/price-approval/:priceApprId', name: 'HistoryPriceApprovalDetail', component: () => import('@/views/history/PriceApprovalDetail.vue'), meta: { title: '定价审批详情', group: '历史数据查询', hideInMenu: true } },
       { path: 'history/perf-adjust', name: 'HistoryPerfAdjust', component: () => import('@/views/history/PerfAdjustQuery.vue'), meta: { title: '业绩调整查询', group: '历史数据查询' } },
