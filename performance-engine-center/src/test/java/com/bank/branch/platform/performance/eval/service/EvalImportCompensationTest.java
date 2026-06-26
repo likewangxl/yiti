@@ -66,7 +66,7 @@ class EvalImportCompensationTest {
         when(batchMapper.selectList(any()))
                 .thenReturn(List.of(importing(2L, LocalDateTime.now().minusMinutes(1))));
         assertThat(compensation.compensateStaleImporting()).isZero();
-        verify(batchMapper, org.mockito.Mockito.never()).updateById(any());
+        verify(batchMapper, org.mockito.Mockito.never()).updateById(any(EvalAssignBatch.class));
     }
 
     @Test
@@ -77,6 +77,6 @@ class EvalImportCompensationTest {
 
         compensation.run(null);
 
-        verify(batchMapper, times(1)).updateById(any());
+        verify(batchMapper, times(1)).updateById(any(EvalAssignBatch.class));
     }
 }
