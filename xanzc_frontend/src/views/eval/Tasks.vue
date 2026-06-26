@@ -218,6 +218,16 @@
           <el-descriptions-item label="导入人">{{ batchDetail.data.batch.createBy }}</el-descriptions-item>
           <el-descriptions-item label="导入时间">{{ formatDateTime(batchDetail.data.batch.createTime) }}</el-descriptions-item>
         </el-descriptions>
+        <!-- 导入失败(4)：明细未入库、评价明细为空，改为展示行级错误明细 -->
+        <div v-if="batchDetail.data.batch.status === 4">
+          <div class="detail-section-title">导入错误明细<span v-if="batchErrorInfo.truncated" style="font-weight: normal; color: #909399; font-size: 12px; margin-left: 6px">（仅显示前 {{ batchErrorInfo.errors.length }} 条，共 {{ batchErrorInfo.total }} 条，修正后请重新导入）</span></div>
+          <el-table :data="batchErrorInfo.errors" border stripe size="small" max-height="320" style="width: 100%; margin-top: 8px">
+            <el-table-column prop="row" label="行号" width="100" align="center" />
+            <el-table-column prop="message" label="错误信息" min-width="320" show-overflow-tooltip />
+          </el-table>
+        </div>
+        <!-- 其它状态：展示评价明细 -->
+        <div v-else>
         <div class="detail-section-title">评价明细</div>
         <el-table :data="batchDetail.data.items.records" border stripe size="small" style="width: 100%; margin-top: 8px">
           <el-table-column label="打分人工号" width="110" align="center">
@@ -257,6 +267,7 @@
             @size-change="loadBatchDetailItems" @current-change="loadBatchDetailItems"
           />
         </div>
+        </div>
       </div>
       <template #footer>
         <el-button v-if="batchDetail.data && batchDetail.data.batch.status === 2"
@@ -269,7 +280,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import {
@@ -566,8 +577,8 @@ function clearPollTimer() {
 function openWizard() { wizard.visible = true }
 
 function resetWizard() {
-  clearPollTimer()          // 关闭向导时停止未完成的轮询
-  importing.value = false   // 重置导入状态，防止按钮残留"导入处理中…"
+  // 轮询已与弹窗解耦（受理成功即关窗，结果在后台轮询并消息通知），关窗不再取消轮询
+  importing.value = false
   wizard.source = ''
   wizard.importType = ''
   wizard.taskName = ''
@@ -608,67 +619,67 @@ async function doImportAssign() {
     return
   }
 
-  // 后端已接收并进入异步处理（status=3=IMPORTING）
-  // 启动轮询：每 2s 查一次，上限 5 分钟
+  // 后端已受理（status=3=IMPORTING），接口已返回 → 立即关闭向导：
+  // 校验/入库在后台异步进行，结果由下方轮询用全局消息通知，并刷新列表（先显示「处理中」批次）。
+  importing.value = false
+  wizard.visible = false
+  loadList()
+  ElMessage.info('导入已受理，正在后台处理，结果将自动通知')
+
+  // 后台轮询该批次状态（与弹窗解耦）：每 2s 一次，上限 5 分钟
   const startTime = Date.now()
   const MAX_POLL_MS = 5 * 60 * 1000
 
   async function poll() {
-    // 向导已被用户手动关闭，停止轮询（resetWizard 会把 importing 置 false）
-    if (!wizard.visible) return
-
     try {
       const detail = await getAssignBatchDetail(batchId)
       const batch = detail && detail.batch
       const status = batch && batch.status
 
       if (status === 2) {
-        // 导入成功，批次进入草稿状态，需人工确认发布
+        // 导入成功 → 草稿，待人工确认发布
         ElMessage.success(`导入成功，共 ${batch.importedCount ?? 0} 条，请在批次中确认发布`)
-        importing.value = false
-        wizard.visible = false
         loadList()
         return
       }
-
       if (status === 4) {
-        // 导入失败：解析 errorSummary 灌入错误表格
-        let errors = []
-        if (batch.errorSummary) {
-          try {
-            errors = JSON.parse(batch.errorSummary)
-          } catch {
-            // 解析失败时整体作为一条提示
-            errors = [{ row: '—', message: batch.errorSummary }]
-          }
-        }
-        if (!Array.isArray(errors) || errors.length === 0) {
-          errors = [{ row: '—', message: '导入失败，请检查文件格式后重传' }]
-        }
-        importErrors.value = errors
-        ElMessage.error('导入未通过校验，请查看错误明细，修正后重传')
-        importing.value = false
+        // 导入失败：提示错误条数，行级明细在「批次详情」查看
+        const { total } = parseErrorSummary(batch.errorSummary)
+        ElMessage.error(`导入失败，共 ${total} 条错误，请在批次详情查看明细后重传`)
+        loadList()
         return
       }
-
-      // status===3（处理中）或其他未终态：检查超时再继续
+      // 处理中：超时则停止，否则 2s 后再查
       if (Date.now() - startTime >= MAX_POLL_MS) {
-        ElMessage.warning('仍在处理，请稍后在批次列表查看结果')
-        importing.value = false
+        ElMessage.warning('导入仍在处理，请稍后在批次列表查看结果')
+        loadList()
         return
       }
-
-      // 2s 后再次查询
       pollTimer = setTimeout(poll, 2000)
     } catch (e) {
       ElMessage.error('查询导入进度失败：' + (e?.message || '未知错误'))
-      importing.value = false
     }
   }
 
   // 首次轮询延迟 2s，等待后端异步线程启动
   pollTimer = setTimeout(poll, 2000)
 }
+
+// 解析后端 ERROR_SUMMARY（形如 {total, truncated, errors:[{row,message}]}；兼容纯数组 / 非 JSON 串）
+function parseErrorSummary(errorSummary) {
+  if (!errorSummary) return { total: 0, truncated: false, errors: [] }
+  try {
+    const obj = JSON.parse(errorSummary)
+    if (Array.isArray(obj)) return { total: obj.length, truncated: false, errors: obj }
+    const errors = Array.isArray(obj.errors) ? obj.errors : []
+    return { total: obj.total ?? errors.length, truncated: !!obj.truncated, errors }
+  } catch {
+    return { total: 1, truncated: false, errors: [{ row: '—', message: errorSummary }] }
+  }
+}
+
+// 批次详情：导入失败(4)时的行级错误明细（解析 batch.errorSummary）
+const batchErrorInfo = computed(() => parseErrorSummary(batchDetail.data?.batch?.errorSummary))
 
 // ===================== 删除 =====================
 
