@@ -3,6 +3,10 @@
 
 import { call, unwrapPage } from './http';
 
+// 导出/下载类请求超时（默认全局 15s 太短）：批次明细可达 20 万行，后端 SXSSF 流式生成 Excel
+// 约需 1 分钟以上，前端必须放宽超时，否则后端还没生成完 axios 就 abort 取消了。
+const EXPORT_TIMEOUT_MS = 300000; // 5 分钟
+
 // ============================================================
 // 标签管理 (EvalTagController: /api/admin/eval/tags)
 // ============================================================
@@ -65,7 +69,7 @@ export function downloadImportTemplate() {
 }
 
 export function exportUserRoles(keyword, evalEnabled) {
-  return call('get', '/admin/eval/user-tags/export', { params: { keyword, evalEnabled }, responseType: 'blob' }, null);
+  return call('get', '/admin/eval/user-tags/export', { params: { keyword, evalEnabled }, responseType: 'blob', timeout: EXPORT_TIMEOUT_MS }, null);
 }
 
 // ============================================================
@@ -169,9 +173,9 @@ export function publishAssignBatch(batchId) {
   return call('post', `/admin/eval/assign/batches/${batchId}/publish`, {}, { ok: true });
 }
 
-// 管理端-导出批次明细 Excel
+// 管理端-导出批次明细 Excel（大批次可达 20 万行，放宽超时避免后端生成未完前端就取消）
 export function exportAssignBatchItems(batchId) {
-  return call('get', `/admin/eval/assign/batches/${batchId}/export`, { params: {}, responseType: 'blob' }, null);
+  return call('get', `/admin/eval/assign/batches/${batchId}/export`, { params: {}, responseType: 'blob', timeout: EXPORT_TIMEOUT_MS }, null);
 }
 
 // ============================================================
@@ -223,7 +227,7 @@ export function listUnifiedTasks(params = {}) {
 }
 
 export function exportRuleTask(taskId) {
-  return call('get', `/admin/eval/tasks/${taskId}/export`, { params: {}, responseType: 'blob' }, null);
+  return call('get', `/admin/eval/tasks/${taskId}/export`, { params: {}, responseType: 'blob', timeout: EXPORT_TIMEOUT_MS }, null);
 }
 
 // 删除评价任务（硬删除，需截止时间已过）

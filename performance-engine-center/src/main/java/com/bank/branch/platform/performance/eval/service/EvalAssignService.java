@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.eval.service;
 
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -16,7 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,14 +43,17 @@ public class EvalAssignService {
     private final EvalAssignItemMapper itemMapper;
     private final EvalAssignBatchMapper batchMapper;
     private final DictApi dictApi;
+    private final UserApi userApi;
 
     @Autowired
     public EvalAssignService(EvalAssignItemMapper itemMapper,
                              EvalAssignBatchMapper batchMapper,
-                             DictApi dictApi) {
+                             DictApi dictApi,
+                             UserApi userApi) {
         this.itemMapper = itemMapper;
         this.batchMapper = batchMapper;
         this.dictApi = dictApi;
+        this.userApi = userApi;
     }
 
     /**
@@ -77,7 +84,17 @@ public class EvalAssignService {
      */
     public List<EvalPendingItemDTO> listMyPendingItems(String evalUserId, Long batchId, String dept) {
         List<EvalAssignItem> items = itemMapper.selectByScorerBatchDept(evalUserId, batchId, dept == null ? "" : dept);
-        return items.stream().map(this::toItemDTO).collect(Collectors.toList());
+        // 明细里 be_eval_user_id 存的是 USER_ID，前端工号列要展示登录名(PT_USER.username)。
+        // 跨模块禁止直连 pt_user，收集去重 USER_ID 后单次走 auth UserApi 批量反查（分片 IN），
+        // 避免逐行 N+1；查不到的 USER_ID（已删除用户等）回退为原 USER_ID 兜底展示。
+        Set<String> beUserIds = items.stream()
+                .map(EvalAssignItem::getBeEvalUserId)
+                .filter(id -> id != null && !id.isEmpty())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, String> idToUsername = beUserIds.isEmpty()
+                ? Collections.emptyMap()
+                : userApi.mapEmpIdsToUsername(new ArrayList<>(beUserIds));
+        return items.stream().map(i -> toItemDTO(i, idToUsername)).collect(Collectors.toList());
     }
 
     /**
@@ -153,11 +170,12 @@ public class EvalAssignService {
     public record ScoreEntry(Long itemId, int score) {
     }
 
-    /** 实体 → 明细 DTO。 */
-    private EvalPendingItemDTO toItemDTO(EvalAssignItem i) {
+    /** 实体 → 明细 DTO（idToUsername：USER_ID→登录名，工号列展示用，查不到回退原 USER_ID）。 */
+    private EvalPendingItemDTO toItemDTO(EvalAssignItem i, Map<String, String> idToUsername) {
         EvalPendingItemDTO d = new EvalPendingItemDTO();
         d.setItemId(i.getItemId());
         d.setBeEvalUserId(i.getBeEvalUserId());
+        d.setBeEvalUserUsername(idToUsername.getOrDefault(i.getBeEvalUserId(), i.getBeEvalUserId()));
         d.setBeEvalUserName(i.getBeEvalUserName());
         d.setBeEvalDept(i.getBeEvalDept());
         d.setBeEvalTag(i.getBeEvalTag());

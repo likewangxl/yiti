@@ -62,7 +62,9 @@
       </div>
 
       <el-table v-loading="processView.loading" :data="processView.items" border stripe style="width: 100%">
-        <el-table-column prop="beEvalUserId" label="被打分人编号" width="130" align="center" />
+        <el-table-column label="被打分人编号" width="130" align="center">
+          <template #default="{ row }">{{ row.beEvalUserUsername || row.beEvalUserId }}</template>
+        </el-table-column>
         <el-table-column prop="beEvalUserName" label="被打分人姓名" min-width="120">
           <template #default="{ row }">{{ row.beEvalUserName || '—' }}</template>
         </el-table-column>
@@ -220,7 +222,7 @@ async function handleSubmitAll() {
   for (const it of pending) {
     const score = editScores[it.itemId]
     if (score === null || score === undefined || score === '') {
-      ElMessage.warning(`「${it.beEvalUserName || it.beEvalUserId}」${it.scoreType === 'NUM' ? '请填写分数' : '请选择评价等级'}`)
+      ElMessage.warning(`「${it.beEvalUserName || it.beEvalUserUsername || it.beEvalUserId}」${it.scoreType === 'NUM' ? '请填写分数' : '请选择评价等级'}`)
       return
     }
     payload.push({ itemId: it.itemId, score })

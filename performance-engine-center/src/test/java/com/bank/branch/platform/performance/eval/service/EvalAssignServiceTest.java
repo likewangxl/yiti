@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.eval.service;
 
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.dto.DictItemDTO;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -31,11 +32,12 @@ class EvalAssignServiceTest {
     @Mock EvalAssignItemMapper itemMapper;
     @Mock EvalAssignBatchMapper batchMapper;
     @Mock DictApi dictApi;
+    @Mock UserApi userApi;
     EvalAssignService service;
 
     @BeforeEach
     void setUp() {
-        service = new EvalAssignService(itemMapper, batchMapper, dictApi);
+        service = new EvalAssignService(itemMapper, batchMapper, dictApi, userApi);
     }
 
     private EvalAssignItem item(Long id, String scorer, String scoreType, Integer submitted, Long batchId) {
@@ -87,12 +89,14 @@ class EvalAssignServiceTest {
     }
 
     @Test
-    @DisplayName("明细：实体映射为 DTO")
+    @DisplayName("明细：实体映射为 DTO，被打分人工号反查展示 username")
     void listMyPendingItems_mapsEntities() {
         EvalAssignItem i1 = item(10L, "E1", "NUM", 0, 1L);
         EvalAssignItem i2 = item(11L, "E1", "GRADE", 1, 1L);
         i2.setScore(85);
         when(itemMapper.selectByScorerBatchDept("E1", 1L, "信贷部")).thenReturn(List.of(i1, i2));
+        // 被打分人 USER_ID(B1) → 登录名(zhangsan)，单次批量反查
+        when(userApi.mapEmpIdsToUsername(anyList())).thenReturn(java.util.Map.of("B1", "zhangsan"));
 
         List<EvalPendingItemDTO> out = service.listMyPendingItems("E1", 1L, "信贷部");
 
@@ -102,6 +106,25 @@ class EvalAssignServiceTest {
         assertThat(out.get(0).getSubmitted()).isEqualTo(0);
         assertThat(out.get(1).getScore()).isEqualTo(85);
         assertThat(out.get(1).getSubmitted()).isEqualTo(1);
+        // 工号列展示 PT_USER.username（明细存的是 USER_ID）
+        assertThat(out.get(0).getBeEvalUserUsername()).isEqualTo("zhangsan");
+        assertThat(out.get(1).getBeEvalUserUsername()).isEqualTo("zhangsan");
+        // 原始 USER_ID 仍保留
+        assertThat(out.get(0).getBeEvalUserId()).isEqualTo("B1");
+    }
+
+    @Test
+    @DisplayName("明细：被打分人工号在 PT_USER 查不到时回退展示原 USER_ID")
+    void listMyPendingItems_usernameNotFound_fallsBackToUserId() {
+        EvalAssignItem i1 = item(10L, "E1", "NUM", 0, 1L);
+        when(itemMapper.selectByScorerBatchDept("E1", 1L, "信贷部")).thenReturn(List.of(i1));
+        // 反查结果为空（用户已删除等）→ 回退原 USER_ID
+        when(userApi.mapEmpIdsToUsername(anyList())).thenReturn(java.util.Map.of());
+
+        List<EvalPendingItemDTO> out = service.listMyPendingItems("E1", 1L, "信贷部");
+
+        assertThat(out).hasSize(1);
+        assertThat(out.get(0).getBeEvalUserUsername()).isEqualTo("B1");
     }
 
     // ---------------- 提交打分 ----------------

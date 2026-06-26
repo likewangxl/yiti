@@ -9,8 +9,10 @@ import lombok.Data;
 public class EvalPendingItemDTO {
     /** 明细ID. */
     private Long itemId;
-    /** 被打分人工号. */
+    /** 被打分人工号（明细存的是 USER_ID）. */
     private String beEvalUserId;
+    /** 被打分人登录名（PT_USER.username，由 USER_ID 反查，前端工号列展示用）. */
+    private String beEvalUserUsername;
     /** 被打分人姓名. */
     private String beEvalUserName;
     /** 被打分人部门. */
