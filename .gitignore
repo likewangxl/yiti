@@ -30,3 +30,16 @@ dist/
 *.local
 .env.local
 .env.*.local
+
+# 运行时文件存储 / 上传产物
+/file-storage/
+/bootstrap/file-storage/
+/announcement-files/
+/bootstrap/src/main/resources/static/
+
+# Python 缓存（schema 生成脚本）
+__pycache__/
+
+# 本地打包归档产物
+*.Z
+tar.sh
