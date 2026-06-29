@@ -147,7 +147,7 @@ class JobServiceQuartzIntegrationIT {
         jobService.syncJobsOnStartup();
 
         // when - 通过 JobService.triggerJob 走真实 Scheduler 路径
-        jobService.triggerJob("JOB_IT_003", "集成测试触发", "2026-06-03", "emp_it_001");
+        jobService.triggerJob("JOB_IT_003", "集成测试触发", "2026-06-03", null, "emp_it_001");
 
         // then - 真实 Scheduler 异步执行，JobExecutionLogger.jobToBeExecuted 被调用 → runLogMapper.insert 被调用
         // 给真实 Scheduler 异步线程一点时间执行（最多等 5 秒）
