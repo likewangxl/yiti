@@ -285,6 +285,9 @@ onMounted(() => { loadRefs(); reload(); });
 .pager { margin-top: 12px; text-align: right; }
 .sec-title { font-size: 13px; font-weight: 600; color: #303133; margin: 16px 0 10px; }
 .ro-info { margin-bottom: 4px; }
+/* 基本信息两列等宽：固定布局 + 统一 label 宽度，两个 content 单元格平分剩余宽度 */
+.ro-info :deep(.el-descriptions__table) { table-layout: fixed; width: 100%; }
+.ro-info :deep(.el-descriptions__label) { width: 90px; }
 .prod-checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .prod-checks :deep(.el-checkbox) { margin-right: 0; }
 </style>
