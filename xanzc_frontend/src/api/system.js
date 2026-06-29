@@ -79,9 +79,10 @@ export async function listJobs(params = {}) {
 }
 export function pauseJob(id) { return call('put', `/admin/sys/jobs/${id}/pause`, {}, { ok: true }); }
 export function resumeJob(id) { return call('put', `/admin/sys/jobs/${id}/resume`, {}, { ok: true }); }
-export function triggerJob(id, reason = '手动触发', dataDate) {
+export function triggerJob(id, reason = '手动触发', dataDate, allocDate) {
   const data = { reason };
   if (dataDate) data.dataDate = dataDate; // 计算类任务按指定数据日期启动
+  if (allocDate) data.allocDate = allocDate; // 1级指标批量计算按指定业绩分配日期（非必输）
   return call('post', `/admin/sys/jobs/${id}/trigger`, { data }, { ok: true });
 }
 export async function listJobLogs(jobId, params = {}) {

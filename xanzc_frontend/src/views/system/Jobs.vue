@@ -114,10 +114,15 @@
     <el-dialog v-model="trgDlg.show" title="手动触发确认" width="480px" :close-on-click-modal="false">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:14px"
         :title="`手动触发任务 ${trgDlg.jobKey} 属高危操作；计算类任务（指标/KPI 计算）将按所选数据日期启动计算。`" />
-      <el-form label-width="90px" size="default">
+      <el-form label-width="100px" size="default">
         <el-form-item label="数据日期" required>
           <el-date-picker v-model="trgDlg.dataDate" type="date" value-format="YYYY-MM-DD"
             style="width:100%" placeholder="选择数据日期（不能大于今天）" :disabled-date="trgDlg.disabledDate" />
+        </el-form-item>
+        <!-- 业绩分配日期：仅 1 级指标批量计算可选填；缺省时后端兜底为数据日期 -->
+        <el-form-item v-if="trgDlg.jobKey === 'LEVEL1_METRIC_CALC'" label="业绩分配日期">
+          <el-date-picker v-model="trgDlg.allocDate" type="date" value-format="YYYY-MM-DD"
+            style="width:100%" clearable placeholder="可选，留空则默认与数据日期一致" :disabled-date="trgDlg.disabledDate" />
         </el-form-item>
         <el-form-item label="触发原因" required>
           <el-input v-model="trgDlg.reason" type="textarea" :rows="3" maxlength="500" show-word-limit
@@ -185,14 +190,16 @@ const trgDlg = reactive({
   show: false, saving: false,
   jobId: '', jobKey: '',
   dataDate: new Date().toISOString().slice(0, 10),
+  allocDate: '', // 业绩分配日期：仅 1 级指标批量计算可选填，留空则后端兜底为数据日期
   reason: '',
-  // el-date-picker disabled-date：禁选今天之后（数据日期不能大于当前日期）
+  // el-date-picker disabled-date：禁选今天之后（数据/业绩分配日期不能大于当前日期）
   disabledDate: (d) => { const t = new Date(); t.setHours(0, 0, 0, 0); return d.getTime() > t.getTime(); }
 });
 function onTrigger(row) {
   trgDlg.jobId = row.id;
   trgDlg.jobKey = row.jobKey;
   trgDlg.dataDate = new Date().toISOString().slice(0, 10);
+  trgDlg.allocDate = '';
   trgDlg.reason = '';
   trgDlg.show = true;
 }
@@ -200,10 +207,14 @@ async function confirmTrigger() {
   const today = new Date().toISOString().slice(0, 10);
   if (!trgDlg.dataDate) return ElMessage.warning('请选择数据日期');
   if (trgDlg.dataDate > today) return ElMessage.warning(`数据日期不能大于今天（${today}）`);
+  // 业绩分配日期非必输；仅当填写时校验不大于今天
+  if (trgDlg.allocDate && trgDlg.allocDate > today) return ElMessage.warning(`业绩分配日期不能大于今天（${today}）`);
   if (!trgDlg.reason.trim()) return ElMessage.warning('请填写触发原因');
   trgDlg.saving = true;
   try {
-    await triggerJob(trgDlg.jobId, trgDlg.reason.trim(), trgDlg.dataDate);
+    // 仅 1 级指标批量计算透传 allocDate；其它任务弹窗不显示该项，allocDate 恒为空
+    const allocDate = trgDlg.jobKey === 'LEVEL1_METRIC_CALC' ? (trgDlg.allocDate || undefined) : undefined;
+    await triggerJob(trgDlg.jobId, trgDlg.reason.trim(), trgDlg.dataDate, allocDate);
     ElMessage.success('已触发');
     trgDlg.show = false;
   } catch { /* call 内部已提示 */ } finally { trgDlg.saving = false; }
