@@ -34,9 +34,10 @@
 
     <div class="card-section">
       <el-table :data="rows" v-loading="loading" empty-text="暂无产品">
-        <el-table-column prop="productDeptOrgName" label="产品部门" width="140" show-overflow-tooltip />
-        <el-table-column prop="productName" label="产品名称" width="150" show-overflow-tooltip />
-        <el-table-column prop="description" label="产品说明" min-width="220" show-overflow-tooltip />
+        <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
+        <el-table-column prop="productDeptOrgName" label="产品部门" width="190" class-name="wrap-cell" />
+        <el-table-column prop="productName" label="产品名称" width="200" class-name="wrap-cell" />
+        <el-table-column prop="description" label="产品说明" min-width="270" class-name="wrap-cell" />
         <el-table-column label="中场支持" width="100" align="center">
           <template #default="{row}">
             <el-tag :type="row.supportForSupportRequest ? 'success' : 'info'" effect="plain">
@@ -60,7 +61,9 @@
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="primary" size="small" :disabled="!row.fileObjectId" @click="downloadAttach(row)">附件</el-button>
+            <el-tooltip :disabled="!row.fileObjectId" :content="row.fileName || '下载附件'" placement="top">
+              <el-button link type="primary" size="small" :disabled="!row.fileObjectId" @click="downloadAttach(row)">附件</el-button>
+            </el-tooltip>
             <el-popconfirm :title="`确认删除「${row.productName}」？`" @confirm="onDelete(row)">
               <template #reference><el-button link type="danger" size="small">删除</el-button></template>
             </el-popconfirm>
@@ -104,7 +107,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="附件">
-          <el-upload :auto-upload="false" :show-file-list="true" :limit="1" :on-change="onFilePick" :on-remove="onFileRemove">
+          <el-upload ref="uploadRef" :auto-upload="false" :show-file-list="true" :limit="1" :on-change="onFilePick" :on-remove="onFileRemove">
             <el-button>选择文件</el-button>
             <template #tip>
               <span v-if="form.fileObjectId && !pickedFile" class="hint">已有附件（重新选择可替换）</span>
@@ -121,7 +124,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
 import { call } from '@/api/http';
@@ -140,6 +143,8 @@ const orgTree = ref([]);
 const filters = ref({ keyword: '', productDeptOrgCode: '', supportForSupportRequest: '', status: '' });
 
 const fmtDate = (v) => fmtDateTime(v);
+// 序号列：跨分页连续编号（第 N 页接续上一页）
+const indexMethod = (i) => (pgNo.value - 1) * pgSize.value + i + 1;
 
 async function reload() {
   loading.value = true;
@@ -169,6 +174,7 @@ function downloadAttach(row) {
 const dialogVisible = ref(false);
 const editing = ref(null);
 const pickedFile = ref(null);
+const uploadRef = ref(null);
 const form = ref({});
 function blankForm() {
   return {
@@ -181,6 +187,7 @@ function openCreate() {
   editing.value = null; pickedFile.value = null;
   form.value = blankForm();
   dialogVisible.value = true;
+  nextTick(() => uploadRef.value?.clearFiles());
 }
 function openEdit(row) {
   editing.value = row; pickedFile.value = null;
@@ -191,6 +198,7 @@ function openEdit(row) {
     fileObjectId: row.fileObjectId || ''
   };
   dialogVisible.value = true;
+  nextTick(() => uploadRef.value?.clearFiles());
 }
 function onFilePick(file) { pickedFile.value = file?.raw || null; }
 function onFileRemove() { pickedFile.value = null; }
@@ -213,8 +221,10 @@ async function submit() {
       await updateProduct(editing.value.id, {
         productName: form.value.productName,
         productCategory: form.value.productCategory,
+        productDeptOrgCode: form.value.productDeptOrgCode || undefined,
         description: form.value.description,
         supportForSupportRequest: form.value.supportForSupportRequest,
+        status: form.value.status,
         fileObjectId,
         // 负责人不在此维护（反向来自通讯录）→ 不传 responsibleEmpIds
       });
@@ -251,4 +261,20 @@ onMounted(() => { loadOrg(); reload(); });
 .filter-bar { margin: 0; }
 .pager { margin-top: 12px; text-align: right; }
 .hint { color: #909399; font-size: 12px; margin-left: 8px; }
+/* 产品部门 / 产品名称 / 产品说明 列内容换行显示，长串自动断行 */
+:deep(.wrap-cell .cell) {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+}
+/* 上传文件列表：文件名全称显示，不省略（去掉 Element 默认单行省略号） */
+:deep(.el-upload-list__item-name) {
+  white-space: normal;
+  word-break: break-all;
+  overflow: visible;
+  text-overflow: clip;
+}
+:deep(.el-upload-list__item) {
+  height: auto;
+}
 </style>
