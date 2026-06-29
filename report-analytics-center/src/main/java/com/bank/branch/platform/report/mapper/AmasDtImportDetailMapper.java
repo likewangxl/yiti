@@ -43,7 +43,7 @@ public interface AmasDtImportDetailMapper extends BaseMapper<AmasDtImportDetail>
             + "     MAX(CASE WHEN DT_TITLE_NO = #{titleNo} THEN DT_DETAILS END) LIKE CONCAT('%', #{kw}, '%')"
             + "   </foreach>"
             + " </if>"
-            + " ORDER BY MIN(DT_DETAILD_SNO) LIMIT #{size} OFFSET #{offset}"
+            + " ORDER BY MIN(DT_DETAILS_SNO) LIMIT #{size} OFFSET #{offset}"
             + "</script>")
     List<String> pageFlags(@Param("batchNum") String batchNum,
                            @Param("filters") Map<String, String> filters,

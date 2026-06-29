@@ -327,7 +327,7 @@ public class EvalAssignImportService {
                 continue;
             }
             // 文件内配对去重
-            String pairKey = evId + "" + beId;
+            String pairKey = evId + "-" + beId;
             if (!seenPairs.add(pairKey)) {
                 errors.add(err(rowNo, "打分人与被打分人组合在文件内重复"));
                 continue;

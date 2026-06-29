@@ -32,7 +32,7 @@ import java.util.Set;
 /**
  * 数据导入查询实现：只读。批次列表按 DT_BATCHNUM 聚合分页；
  * 批次数据由 sup（表头，按 DT_TITLE_SNO 排序、隐藏列 DT_ISSHOW=2 不展示）+ details（单元格）
- * 按 DT_FLAG 透视成行（DT_DETAILD_SNO 升序，保持行首次出现顺序）。
+ * 按 DT_FLAG 透视成行（DT_DETAILS_SNO 升序，保持行首次出现顺序）。
  * 查看走逻辑行 DT_FLAG 分页；导出整批生成 Excel（不分页）。
  */
 @Slf4j
@@ -163,7 +163,7 @@ public class DataImportQueryServiceImpl implements DataImportQueryService {
         LambdaQueryWrapper<AmasDtImportDetail> dw = new LambdaQueryWrapper<>();
         dw.eq(AmasDtImportDetail::getDtBatchnum, batchNum)
           .in(AmasDtImportDetail::getDtFlag, flags)
-          .orderByAsc(AmasDtImportDetail::getDtDetaildSno);
+          .orderByAsc(AmasDtImportDetail::getDtDetailsSno);
         List<AmasDtImportDetail> cells = detailMapper.selectList(dw);
 
         Map<String, Map<String, Object>> rowMap = new LinkedHashMap<>();
