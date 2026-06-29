@@ -453,6 +453,17 @@ public class AllocAdjustService {
         vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
         // 设计器流程网关分流：种入发起机构级别等启动变量（corpRouteTo/finRouteTo 由审批 formData 提供，不在此种）
         buildStartVariables(cmd.getOwnerOrgId(), vars);
+        // 前置校验：业绩分配调整仅限 2级/3级机构员工发起。
+        // 设计器流程 gw_level「机构层级路由」网关只覆盖 startOrgLevel==2/3 且无默认分支，
+        // 1级机构或无机构归属会让网关选不出出线、抛 Flowable 系统异常；此处提前 fail-fast 给前端友好提示。
+        Object startOrgLevel = vars.get("startOrgLevel");
+        if (!(startOrgLevel instanceof Integer)
+                || ((Integer) startOrgLevel != 2 && (Integer) startOrgLevel != 3)) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "业绩调整申请仅限2级、3级机构员工发起"
+                            + (startOrgLevel == null ? "（未查询到您的机构归属）"
+                                                     : "（您所在机构为" + startOrgLevel + "级）"));
+        }
         startCmd.setVariables(vars);
         WorkflowLaunchResp resp = workflowApi.startProcess(startCmd);
         return resp.getProcessInstanceId();
