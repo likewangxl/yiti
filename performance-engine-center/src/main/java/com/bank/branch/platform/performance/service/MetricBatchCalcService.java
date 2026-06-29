@@ -39,11 +39,11 @@ public class MetricBatchCalcService {
      * 执行指定级别的指标批量计算（旧入口：自动生成 task id）.
      */
     public void execute(int metricLevel, LocalDate dataDate) {
-        execute(metricLevel, dataDate, null);
+        execute(metricLevel, dataDate, null, null);
     }
 
     /**
-     * 执行指定级别的指标批量计算.
+     * 执行指定级别的指标批量计算（不带业绩分配日期；2/3 级与历史调用方走此入口）.
      *
      * @param metricLevel 指标级别 1/2/3
      * @param dataDate    数据日期
@@ -51,6 +51,22 @@ public class MetricBatchCalcService {
      *                    {@code PERF_METRIC_CALC_TASK.id}，便于两表关联；为空（手动直调等）回退 UUID
      */
     public void execute(int metricLevel, LocalDate dataDate, String runLogId) {
+        execute(metricLevel, dataDate, null, runLogId);
+    }
+
+    /**
+     * 执行指定级别的指标批量计算（带业绩分配日期 :allocDate 入参）.
+     *
+     * <p>allocDate 仅 1 级指标批量计算（{@code Level1MetricCalcJob}）手动触发时由页面传入，
+     * 为 null 时透传到 {@link MetricCalcService#calcMetricWithStats} 由计算引擎兜底为 dataDate。
+     *
+     * @param metricLevel 指标级别 1/2/3
+     * @param dataDate    数据日期
+     * @param allocDate   业绩分配日期（可为 null，兜底 dataDate）
+     * @param runLogId    本次调度的 {@code SYS_JOB_RUN_LOG.id}；非空则用作
+     *                    {@code PERF_METRIC_CALC_TASK.id}，便于两表关联；为空（手动直调等）回退 UUID
+     */
+    public void execute(int metricLevel, LocalDate dataDate, LocalDate allocDate, String runLogId) {
         if (metricLevel < 1 || metricLevel > 3) {
             throw new IllegalArgumentException("指标级别必须为 1/2/3，当前值: " + metricLevel);
         }
@@ -132,7 +148,7 @@ public class MetricBatchCalcService {
 
             List<Future<?>> futures = new ArrayList<>();
             for (PerfMetricDef def : metrics) {
-                futures.add(executor.submit(() -> calcSingleMetric(taskId, metricLevel, def, dataDate, successCount, failCount, skipCount, failedMetrics)));
+                futures.add(executor.submit(() -> calcSingleMetric(taskId, metricLevel, def, dataDate, allocDate, successCount, failCount, skipCount, failedMetrics)));
             }
 
             for (Future<?> f : futures) {
@@ -168,7 +184,7 @@ public class MetricBatchCalcService {
      * 计算单个指标
      */
     private void calcSingleMetric(String taskId, int metricLevel, PerfMetricDef def, LocalDate dataDate,
-                                   AtomicInteger successCount, AtomicInteger failCount,
+                                   LocalDate allocDate, AtomicInteger successCount, AtomicInteger failCount,
                                    AtomicInteger skipCount, List<String> failedMetrics) {
         String logId = UUID.randomUUID().toString().replace("-", "");
         PerfMetricCalcLog calcLog = new PerfMetricCalcLog();
@@ -202,8 +218,9 @@ public class MetricBatchCalcService {
                     metricLevel, def.getMetricCode(), def.getMetricName(), def.getCalcLogicType(), dataDate);
 
             // V1.13+：calcMetricWithStats 直接返回 SubjectStats，success 即实际写入宽表的主体数
+            // allocDate 透传为 :allocDate 入参（null 时计算引擎兜底为 dataDate）
             MetricCalcResult result = metricCalcService.calcMetricWithStats(
-                    def.getMetricCode(), dataDate, "V1", "BATCH");
+                    def.getMetricCode(), dataDate, "V1", "BATCH", allocDate);
             int rowCount = result.success();
 
             calcLog.setStatus("SUCCESS");

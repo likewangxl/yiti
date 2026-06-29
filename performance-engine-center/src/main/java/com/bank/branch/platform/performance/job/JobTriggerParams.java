@@ -40,6 +40,27 @@ public final class JobTriggerParams {
         return LocalDate.now().minusDays(1);
     }
 
+    /**
+     * 解析业绩分配日期：JobDataMap 含合法 {@code allocDate}(yyyy-MM-dd) 则用之，否则返回 null.
+     *
+     * <p>与 {@link #dataDate(JobExecutionContext)} 不同——allocDate 是<em>可选</em>入参，缺失/非法
+     * 时返回 {@code null}（而非回退昨日），由下游计算引擎兜底为 dataDate（即 T-1）。
+     *
+     * @param context Quartz 执行上下文
+     * @return 业绩分配日期；缺失或解析失败返回 null
+     */
+    public static LocalDate allocDate(JobExecutionContext context) {
+        String raw = str(context, "allocDate");
+        if (raw != null && !raw.isBlank()) {
+            try {
+                return LocalDate.parse(raw.trim());
+            } catch (Exception e) {
+                log.warn("[JobTriggerParams] allocDate 解析失败，返回 null（兜底 dataDate）：raw={}", raw);
+            }
+        }
+        return null;
+    }
+
     /** 触发方式：MANUAL（手动）/ AUTO（缺省，自动/定时）. */
     public static String triggerType(JobExecutionContext context) {
         String t = str(context, "triggerType");

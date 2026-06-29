@@ -43,6 +43,26 @@ class JobTriggerParamsTest {
     }
 
     @Test
+    void allocDate_validInMap_parsed() {
+        JobDataMap data = new JobDataMap();
+        data.put("allocDate", "2026-06-02");
+        assertThat(JobTriggerParams.allocDate(ctxWith(data))).isEqualTo(LocalDate.of(2026, 6, 2));
+    }
+
+    @Test
+    void allocDate_absent_returnsNull() {
+        // 与 dataDate 不同：缺失时返回 null（不回退昨日），由计算引擎兜底为 dataDate
+        assertThat(JobTriggerParams.allocDate(ctxWith(new JobDataMap()))).isNull();
+    }
+
+    @Test
+    void allocDate_invalid_returnsNull() {
+        JobDataMap data = new JobDataMap();
+        data.put("allocDate", "not-a-date");
+        assertThat(JobTriggerParams.allocDate(ctxWith(data))).isNull();
+    }
+
+    @Test
     void triggerType_manualAndDefault() {
         JobDataMap manual = new JobDataMap();
         manual.put("triggerType", "MANUAL");

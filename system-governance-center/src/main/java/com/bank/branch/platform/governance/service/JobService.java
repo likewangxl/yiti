@@ -481,9 +481,10 @@ public class JobService {
      * @throws BizException GOV-40302 任务不允许手动触发（P3.3 修复 P3.2 错误码语义错配，原误用 GOV-40903）
      * @throws BizException GOV-50004 Scheduler 不可用 / SchedulerException
      */
-    public JobTriggerRespDTO triggerJob(String jobId, String reason, String dataDate, String operatorEmpId) {
-        log.info("[JobService.triggerJob] jobId={}, reason={}, dataDate={}, operatorEmpId={}",
-                jobId, reason, dataDate, operatorEmpId);
+    public JobTriggerRespDTO triggerJob(String jobId, String reason, String dataDate,
+                                        String allocDate, String operatorEmpId) {
+        log.info("[JobService.triggerJob] jobId={}, reason={}, dataDate={}, allocDate={}, operatorEmpId={}",
+                jobId, reason, dataDate, allocDate, operatorEmpId);
 
         // 1. 校验任务配置存在
         SysJobConf conf = jobConfMapper.selectById(jobId);
@@ -517,6 +518,11 @@ public class JobService {
         if (dataDate != null && !dataDate.isBlank()) {
             // dataDate 透传到 dataMap：计算类 Quartz Job 读取后按指定数据日期启动计算
             data.put("dataDate", dataDate.trim());
+        }
+        if (allocDate != null && !allocDate.isBlank()) {
+            // allocDate 透传到 dataMap：1 级指标批量计算（LEVEL1_METRIC_CALC）读取后作为 :allocDate 入参；
+            // 为空则不放键，由计算引擎兜底为 dataDate。其它任务不读该键，无副作用。
+            data.put("allocDate", allocDate.trim());
         }
 
         // 5. 立即触发（JobKey 组与 P3.1 syncJobsOnStartup 一致：DEFAULT）

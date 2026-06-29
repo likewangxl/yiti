@@ -27,4 +27,14 @@ public class JobTriggerReqDTO {
      */
     @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "数据日期格式必须为 yyyy-MM-dd")
     private String dataDate;
+
+    /**
+     * 业绩分配日期（yyyy-MM-dd，可空，非必输）.
+     *
+     * <p>仅 1 级指标批量计算（jobKey=LEVEL1_METRIC_CALC）手动触发时携带，经 JobDataMap 透传给
+     * {@code Level1MetricCalcJob}，最终作为指标计算的 {@code :allocDate} 入参；为空时由计算引擎
+     * 兜底为 dataDate（即 T-1）。其它任务忽略该值。前端按非必输 + 不大于当前日期校验。
+     */
+    @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "业绩分配日期格式必须为 yyyy-MM-dd")
+    private String allocDate;
 }

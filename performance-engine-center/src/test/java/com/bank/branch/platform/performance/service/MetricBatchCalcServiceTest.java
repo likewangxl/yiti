@@ -116,4 +116,47 @@ class MetricBatchCalcServiceTest {
         verify(taskMapper).insert(cap.capture());
         assertThat(cap.getValue().getId()).hasSize(32);
     }
+
+    @Test
+    @DisplayName("execute(4参): 业绩分配日期 allocDate 透传到 calcMetricWithStats 第 5 入参")
+    void execute_withAllocDate_passedToCalcMetricWithStats() {
+        // given - 单个 SQL 类指标，使 calcSingleMetric 真正调到 calcMetricWithStats
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_0001");
+        def.setMetricName("测试指标");
+        def.setCalcLogicType("SQL");
+        def.setSqlText("SELECT 1");
+        when(metricDefMapper.selectList(any())).thenReturn(java.util.List.of(def));
+        when(metricCalcService.calcMetricWithStats(
+                any(), any(), any(), any(), any()))
+                .thenReturn(new MetricCalcResult("RT1", 1, 1, 0));
+
+        LocalDate dataDate = LocalDate.of(2026, 6, 11);
+        LocalDate allocDate = LocalDate.of(2026, 6, 10);
+
+        // when - 4 参入口携带 allocDate
+        service.execute(1, dataDate, allocDate, "RUNLOG1234567890ABCDEF1234567890");
+
+        // then - allocDate 作为第 5 入参透传
+        verify(metricCalcService).calcMetricWithStats("M_0001", dataDate, "V1", "BATCH", allocDate);
+    }
+
+    @Test
+    @DisplayName("execute(3参兼容): allocDate 缺省以 null 透传，由计算引擎兜底 dataDate")
+    void execute_threeArg_passesNullAllocDate() {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_0002");
+        def.setMetricName("测试指标2");
+        def.setCalcLogicType("SQL");
+        def.setSqlText("SELECT 1");
+        when(metricDefMapper.selectList(any())).thenReturn(java.util.List.of(def));
+        when(metricCalcService.calcMetricWithStats(
+                any(), any(), any(), any(), any()))
+                .thenReturn(new MetricCalcResult("RT2", 1, 1, 0));
+
+        LocalDate dataDate = LocalDate.of(2026, 6, 11);
+        service.execute(1, dataDate, "RUNLOG1234567890ABCDEF1234567890");
+
+        verify(metricCalcService).calcMetricWithStats("M_0002", dataDate, "V1", "BATCH", null);
+    }
 }

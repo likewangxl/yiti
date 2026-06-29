@@ -26,11 +26,13 @@ public class Level1MetricCalcJob extends QuartzJobBean {
     protected void executeInternal(JobExecutionContext context) {
         // 手动触发按指定数据日期；cron 自动触发回退昨日
         LocalDate dataDate = JobTriggerParams.dataDate(context);
+        // 业绩分配日期：手动触发可选携带，缺失为 null，由计算引擎兜底为 dataDate
+        LocalDate allocDate = JobTriggerParams.allocDate(context);
         // 复用 JobExecutionLogger 放入 context 的运行日志 id 作为 PERF_METRIC_CALC_TASK.id
         String runLogId = (String) context.get("runLogId");
-        log.info(">>>>>>>>>> 【1级指标定时任务】触发执行，数据日期={} <<<<<<<<<<", dataDate);
+        log.info(">>>>>>>>>> 【1级指标定时任务】触发执行，数据日期={}，业绩分配日期={} <<<<<<<<<<", dataDate, allocDate);
         try {
-            metricBatchCalcService.execute(1, dataDate, runLogId);
+            metricBatchCalcService.execute(1, dataDate, allocDate, runLogId);
             log.info(">>>>>>>>>> 【1级指标定时任务】执行完成 <<<<<<<<<<");
         } catch (Exception e) {
             log.error(">>>>>>>>>> 【1级指标定时任务】执行异常: {} <<<<<<<<<<", e.getMessage(), e);

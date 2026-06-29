@@ -415,7 +415,7 @@ class JobServiceTest {
         ReflectionTestUtils.setField(jobService, "scheduler", scheduler);
 
         // when
-        JobTriggerRespDTO resp = jobService.triggerJob("JOB_001", "手动测试", "2026-06-03", "emp001");
+        JobTriggerRespDTO resp = jobService.triggerJob("JOB_001", "手动测试", "2026-06-03", "2026-06-02", "emp001");
 
         // then - 验证 scheduler.triggerJob(JobKey, JobDataMap) 被调用
         ArgumentCaptor<JobKey> keyCap = ArgumentCaptor.forClass(JobKey.class);
@@ -431,6 +431,8 @@ class JobServiceTest {
         assertThat(data.getString("triggerReason")).isEqualTo("手动测试");
         // dataDate 透传到 JobDataMap，供计算类 Quartz Job 按指定日期启动计算
         assertThat(data.getString("dataDate")).isEqualTo("2026-06-03");
+        // allocDate 透传到 JobDataMap，供 1 级指标批量计算作为 :allocDate 入参
+        assertThat(data.getString("allocDate")).isEqualTo("2026-06-02");
 
         // 响应 DTO 含 jobId / triggerType=MANUAL / triggerTime
         assertThat(resp).isNotNull();
@@ -446,7 +448,7 @@ class JobServiceTest {
     void triggerJob_jobNotFound_throwsGov40004() {
         when(jobConfMapper.selectById("NOT_EXIST")).thenReturn(null);
 
-        assertThatThrownBy(() -> jobService.triggerJob("NOT_EXIST", "原因", null, "emp001"))
+        assertThatThrownBy(() -> jobService.triggerJob("NOT_EXIST", "原因", null, null, "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40004"));
     }
@@ -461,7 +463,7 @@ class JobServiceTest {
         when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
         // 不注入 scheduler，保持 null
 
-        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", null, "emp001"))
+        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", null, null, "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-50004"));
     }
@@ -480,7 +482,7 @@ class JobServiceTest {
         conf.setAllowManualTrigger(0);
         when(jobConfMapper.selectById("JOB_001")).thenReturn(conf);
 
-        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", null, "emp001"))
+        assertThatThrownBy(() -> jobService.triggerJob("JOB_001", "原因", null, null, "emp001"))
                 .isInstanceOf(BizException.class)
                 .satisfies(e -> assertThat(((BizException) e).getCode()).isEqualTo("GOV-40302"));
     }
