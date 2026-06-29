@@ -106,4 +106,9 @@ public class FileFacade implements FileApi {
     public java.util.Map<String, Long> getFileSizes(List<String> fileIds) {
         return fileService.getFileSizes(fileIds);
     }
+
+    @Override
+    public java.util.Map<String, String> getFileNames(List<String> fileIds) {
+        return fileService.getFileNames(fileIds);
+    }
 }

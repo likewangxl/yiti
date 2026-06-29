@@ -270,6 +270,24 @@ class FileServiceTest {
     }
 
     @Test
+    void getFileNames_batch_returnsIdToNameMap() {
+        FileObject a = new FileObject(); a.setId("F_A"); a.setFileName("a.pdf");
+        FileObject b = new FileObject(); b.setId("F_B"); b.setFileName("b.docx");
+        when(fileObjectMapper.selectBatchIds(List.of("F_A", "F_B"))).thenReturn(List.of(a, b));
+
+        var map = fileService.getFileNames(List.of("F_A", "F_B"));
+
+        assertThat(map).containsEntry("F_A", "a.pdf").containsEntry("F_B", "b.docx");
+    }
+
+    @Test
+    void getFileNames_emptyOrNull_returnsEmptyMap() {
+        assertThat(fileService.getFileNames(Collections.emptyList())).isEmpty();
+        assertThat(fileService.getFileNames(null)).isEmpty();
+        verify(fileObjectMapper, never()).selectBatchIds(any());
+    }
+
+    @Test
     void upload_validFormatPdf_succeeds() {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "report.PDF", "application/pdf", "data".getBytes());

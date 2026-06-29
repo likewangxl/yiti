@@ -63,6 +63,8 @@ public class ProductService {
                 .keyword(req.getKeyword())
                 .category(req.getCategory())
                 .status(req.getStatus())
+                .productDeptOrgCode(req.getProductDeptOrgCode())
+                .supportForSupportRequest(req.getSupportForSupportRequest())
                 .offset(offset)
                 .limit(pageSize)
                 .dataScope(pojo)
@@ -168,10 +170,16 @@ public class ProductService {
         patch.setId(id);
         if (req.getProductName() != null) { patch.setProductName(req.getProductName()); existing.setProductName(req.getProductName()); }
         if (req.getProductCategory() != null) { patch.setProductCategory(req.getProductCategory()); existing.setProductCategory(req.getProductCategory()); }
+        // 产品部门可改：同步 owner_org_id，与 createProduct 中两者绑定的语义保持一致
+        if (req.getProductDeptOrgCode() != null) {
+            patch.setProductDeptOrgCode(req.getProductDeptOrgCode()); existing.setProductDeptOrgCode(req.getProductDeptOrgCode());
+            patch.setOwnerOrgId(req.getProductDeptOrgCode()); existing.setOwnerOrgId(req.getProductDeptOrgCode());
+        }
         if (req.getDescription() != null) { patch.setDescription(req.getDescription()); existing.setDescription(req.getDescription()); }
         if (req.getSupportForSupportRequest() != null) { patch.setSupportForSupportRequest(req.getSupportForSupportRequest()); existing.setSupportForSupportRequest(req.getSupportForSupportRequest()); }
         if (req.getFileObjectId() != null) { patch.setFileObjectId(req.getFileObjectId()); existing.setFileObjectId(req.getFileObjectId()); }
         if (empIdsChanged) { patch.setResponsibleEmpIds(newEmpIds); existing.setResponsibleEmpIds(newEmpIds); }
+        if (req.getStatus() != null) { patch.setStatus(req.getStatus()); existing.setStatus(req.getStatus()); }
         patch.setUpdatedBy(currentEmpId);
         productInfoMapper.updateById(patch);
         if (empIdsChanged) { syncResponsibleToAddrbook(id, oldEmpIds, newEmpIds != null ? newEmpIds : Collections.emptyList(), currentEmpId); }

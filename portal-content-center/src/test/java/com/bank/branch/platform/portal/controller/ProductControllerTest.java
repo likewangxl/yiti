@@ -95,6 +95,36 @@ class ProductControllerTest extends AbstractControllerIntegrationTest {
                 .andExpect(jsonPath("$.page.records[0].responsibleEmpNames").value("张三、李四"));
     }
 
+    @Test @WithMockEmpContext(empId = "E10001", dataScope = "ORG_SUBTREE", orgSubtree = {"ORG_SZ_001"})
+    void listProductsShouldResolveProductDeptOrgName() throws Exception {
+        ProductInfo entity = new ProductInfo();
+        entity.setId("P001"); entity.setProductCode("DEPOSIT_001"); entity.setProductName("活期存款");
+        entity.setProductCategory("CAT_DEPOSIT"); entity.setProductDeptOrgCode("ORG_SZ_001");
+        entity.setStatus("ACTIVE");
+        when(productService.listProducts(any(ProductQueryReqDTO.class)))
+                .thenReturn(PageResult.of(1, 20, 1L, List.of(entity)));
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setOrgCode("ORG_SZ_001"); org.setOrgName("深圳分行");
+        when(orgApi.getOrgsByCodes(any())).thenReturn(List.of(org));
+        mockMvc.perform(get("/api/products").param("pageNo", "1").param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.records[0].productDeptOrgName").value("深圳分行"));
+    }
+
+    @Test @WithMockEmpContext(empId = "E10001", dataScope = "ORG_SUBTREE", orgSubtree = {"ORG_SZ_001"})
+    void listProductsShouldResolveAttachmentFileName() throws Exception {
+        ProductInfo entity = new ProductInfo();
+        entity.setId("P001"); entity.setProductCode("DEPOSIT_001"); entity.setProductName("活期存款");
+        entity.setProductCategory("CAT_DEPOSIT"); entity.setProductDeptOrgCode("ORG_SZ_001");
+        entity.setStatus("ACTIVE"); entity.setFileObjectId("F_A");
+        when(productService.listProducts(any(ProductQueryReqDTO.class)))
+                .thenReturn(PageResult.of(1, 20, 1L, List.of(entity)));
+        when(fileApi.getFileNames(any())).thenReturn(java.util.Map.of("F_A", "说明书.pdf"));
+        mockMvc.perform(get("/api/products").param("pageNo", "1").param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.records[0].fileName").value("说明书.pdf"));
+    }
+
     @Test @WithMockEmpContext(empId = "E10001", dataScope = "ORG", orgSubtree = {"ORG_SZ_001"})
     void listProductsShouldReturn200WithEmptyPageWhenNoResults() throws Exception {
         PageResult<ProductInfo> emptyPage = PageResult.of(1, 20, 0L, Collections.emptyList());

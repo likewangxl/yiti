@@ -48,6 +48,9 @@ public class ProductDTO {
     /** 附件对象ID */
     String fileObjectId;
 
+    /** 附件原始文件名（Controller 层按 fileObjectId 批量解析填充，无附件为 null） */
+    String fileName;
+
     /** 产品负责人工号列表 */
     List<String> responsibleEmpIds;
 

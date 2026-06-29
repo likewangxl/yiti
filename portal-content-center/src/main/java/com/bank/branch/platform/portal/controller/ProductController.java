@@ -2,11 +2,14 @@ package com.bank.branch.platform.portal.controller;
 
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.portal.api.dto.ProductCreateReqDTO;
 import com.bank.branch.platform.portal.api.dto.ProductDTO;
 import com.bank.branch.platform.portal.api.dto.ProductSimpleDTO;
@@ -51,17 +54,66 @@ public class ProductController {
     private final AddrbookQueryService addrbookQueryService;
     private final BizScopeApi bizScopeApi;
     private final CurrentUserApi currentUserApi;
+    private final OrgApi orgApi;
+    private final FileApi fileApi;
 
     /** D.1 分页查询产品列表 */
     @GetMapping
     @BizAuth(bizType = BizType.PRODUCT, action = BizAction.LIST)
     public ResponseWrapper<ProductDTO> listProducts(@Valid ProductQueryReqDTO req) {
         PageResult<ProductInfo> entityPage = productService.listProducts(req);
-        List<ProductDTO> dtos = entityPage.getRecords().stream()
+        List<ProductDTO> base = entityPage.getRecords().stream()
                 .map(ProductConverter::toDTO)
                 .map(this::withResponsibleEmpNames)
                 .collect(Collectors.toList());
+        // 批量解析产品部门机构名称 + 附件文件名（各单次取数，避免逐行 N+1），回填供列表展示
+        Map<String, String> orgNameMap = resolveProductDeptOrgNames(base);
+        Map<String, String> fileNameMap = resolveAttachmentFileNames(base);
+        List<ProductDTO> dtos = base.stream()
+                .map(dto -> dto.toBuilder()
+                        .productDeptOrgName(dto.getProductDeptOrgCode() == null ? null
+                                : orgNameMap.get(dto.getProductDeptOrgCode()))
+                        .fileName(dto.getFileObjectId() == null ? null
+                                : fileNameMap.get(dto.getFileObjectId()))
+                        .build())
+                .collect(Collectors.toList());
         return ResponseWrapper.page(PageResult.of(entityPage.getPageNo(), entityPage.getPageSize(), entityPage.getTotal(), dtos));
+    }
+
+    /**
+     * 批量解析附件 fileObjectId → fileName 映射（单次 FileApi 取数，避免 N+1）。
+     * 无附件或 FileApi 返回空时返回空映射。
+     */
+    private Map<String, String> resolveAttachmentFileNames(List<ProductDTO> dtos) {
+        List<String> fileIds = dtos.stream()
+                .map(ProductDTO::getFileObjectId)
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (fileIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Map<String, String> names = fileApi.getFileNames(fileIds);
+        return names != null ? names : java.util.Collections.emptyMap();
+    }
+
+    /**
+     * 批量解析产品部门 orgCode → orgName 映射（单次 OrgApi 取数，避免 N+1）。
+     * 入参无有效编码或 OrgApi 返回 null 时返回空映射，调用方按缺失处理（列表列显示空）。
+     */
+    private Map<String, String> resolveProductDeptOrgNames(List<ProductDTO> dtos) {
+        java.util.Set<String> codes = dtos.stream()
+                .map(ProductDTO::getProductDeptOrgCode)
+                .filter(c -> c != null && !c.isBlank())
+                .collect(Collectors.toSet());
+        if (codes.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        List<OrgDTO> orgs = orgApi.getOrgsByCodes(codes);
+        if (orgs == null || orgs.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        return orgs.stream().collect(Collectors.toMap(OrgDTO::getOrgCode, OrgDTO::getOrgName, (a, b) -> a));
     }
 
     /**

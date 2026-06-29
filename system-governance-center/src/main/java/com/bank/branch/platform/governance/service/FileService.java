@@ -296,6 +296,18 @@ public class FileService {
         return sizeMap;
     }
 
+    /** 批量获取文件名：id -> fileName（一次查出，供列表展示附件名/tooltip）。 */
+    public java.util.Map<String, String> getFileNames(java.util.List<String> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Map<String, String> nameMap = new java.util.HashMap<>();
+        for (FileObject fo : fileObjectMapper.selectBatchIds(fileIds)) {
+            nameMap.put(fo.getId(), fo.getFileName());
+        }
+        return nameMap;
+    }
+
     /**
      * 删除文件：删 OBS 对象 + 文件记录 + 业务关联。
      *

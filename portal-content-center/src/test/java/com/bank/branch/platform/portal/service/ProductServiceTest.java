@@ -201,6 +201,28 @@ class ProductServiceTest {
                 .satisfies(ex -> assertThat(((BizException) ex).getCode()).isEqualTo(PortalErrorCode.PRODUCT_NOT_FOUND.getCode()));
     }
 
+    @Test
+    void listProductsShouldPassSupportAndDeptFilters() {
+        com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO req =
+                new com.bank.branch.platform.portal.controller.dto.product.ProductQueryReqDTO();
+        req.setSupportForSupportRequest(true);
+        req.setProductDeptOrgCode("ORG_SZ_001");
+        req.setPageNo(1); req.setPageSize(20);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        when(productInfoMapper.countProducts(any(com.bank.branch.platform.portal.service.dto.ProductListQuery.class))).thenReturn(1L);
+        when(productInfoMapper.listProducts(any(com.bank.branch.platform.portal.service.dto.ProductListQuery.class)))
+                .thenReturn(List.of(buildProduct("P001", "DEPOSIT_001", List.of())));
+
+        productService.listProducts(req);
+
+        // 组装的查询对象必须携带中场支持 / 产品部门筛选，否则 Mapper 的 <if> 不命中 → 返回全部
+        ArgumentCaptor<com.bank.branch.platform.portal.service.dto.ProductListQuery> captor =
+                ArgumentCaptor.forClass(com.bank.branch.platform.portal.service.dto.ProductListQuery.class);
+        verify(productInfoMapper).listProducts(captor.capture());
+        assertThat(captor.getValue().getSupportForSupportRequest()).isTrue();
+        assertThat(captor.getValue().getProductDeptOrgCode()).isEqualTo("ORG_SZ_001");
+    }
+
     // ========== D.4 createProduct 补充测试 ==========
 
     @Test
@@ -375,6 +397,43 @@ class ProductServiceTest {
 
         productService.updateProduct("P001", req);
         verify(eventPublisher, never()).publishEvent(any(ProductResponsibleUpdatedEvent.class));
+    }
+
+    @Test
+    void updateProductShouldPersistProductDeptOrgCode() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
+        existing.setProductDeptOrgCode("ORG_OLD");
+        existing.setOwnerOrgId("ORG_OLD");
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setProductDeptOrgCode("ORG_NEW");
+
+        ProductInfo result = productService.updateProduct("P001", req);
+
+        // patch 必须把新部门写入 updateById，且 owner_org_id 与产品部门保持一致（与 createProduct 语义对齐）
+        ArgumentCaptor<ProductInfo> captor = ArgumentCaptor.forClass(ProductInfo.class);
+        verify(productInfoMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getProductDeptOrgCode()).isEqualTo("ORG_NEW");
+        assertThat(captor.getValue().getOwnerOrgId()).isEqualTo("ORG_NEW");
+        assertThat(result.getProductDeptOrgCode()).isEqualTo("ORG_NEW");
+    }
+
+    @Test
+    void updateProductShouldPersistStatus() {
+        ProductInfo existing = buildProduct("P001", "DEPOSIT_001", List.of());
+        existing.setStatus("ACTIVE");
+        when(productInfoMapper.selectByIdForUpdate("P001")).thenReturn(existing);
+        when(currentUserApi.getCurrentEmpId()).thenReturn("OPERATOR01");
+        ProductUpdateReqDTO req = new ProductUpdateReqDTO();
+        req.setStatus("DISABLED");
+
+        ProductInfo result = productService.updateProduct("P001", req);
+
+        ArgumentCaptor<ProductInfo> captor = ArgumentCaptor.forClass(ProductInfo.class);
+        verify(productInfoMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo("DISABLED");
+        assertThat(result.getStatus()).isEqualTo("DISABLED");
     }
 
     @Test

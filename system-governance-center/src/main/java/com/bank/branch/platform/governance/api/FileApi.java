@@ -112,4 +112,12 @@ public interface FileApi {
      * @return id -> fileSize 映射；不存在的 id 不在结果中
      */
     Map<String, Long> getFileSizes(List<String> fileIds);
+
+    /**
+     * 批量获取文件名（供列表展示附件名/tooltip，避免逐行 {@link #getFileName} 的 N+1）。
+     *
+     * @param fileIds 文件对象ID列表
+     * @return id -> fileName 映射；入参空返回空映射，不存在的 id 不在结果中
+     */
+    Map<String, String> getFileNames(List<String> fileIds);
 }
