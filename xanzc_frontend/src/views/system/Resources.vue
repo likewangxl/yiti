@@ -91,11 +91,12 @@
           <el-input v-model="dlg.form.menuName" placeholder="如：客户管理" maxlength="64" />
         </el-form-item>
 
-        <el-form-item label="路由路径" prop="resourceUrl">
+        <el-form-item label="路由路径" prop="resourceUrl" :required="dlg.form.menuEndFlag === '1'">
           <el-select
             v-model="dlg.form.resourceUrl"
-            placeholder="从已注册前端路由中选择"
+            :placeholder="dlg.form.menuEndFlag === '1' ? '叶子菜单必选：从已注册前端路由中选择' : '父节点/目录可不选'"
             filterable
+            clearable
             style="width:100%"
           >
             <el-option
@@ -249,7 +250,14 @@ const dlg = reactive({
   },
   rules: {
     menuName:    [{ required: true, message: '菜单名必填', trigger: 'blur' }, { max: 64, message: '不超过 64 位', trigger: 'blur' }],
-    resourceUrl: [{ required: true, message: '路由路径必填', trigger: 'change' }],
+    // 路由路径：仅「叶子节点」必填；父节点/目录（含一级菜单）只做分组、不跳转，可不选
+    resourceUrl: [{
+      validator: (rule, value, cb) =>
+        (dlg.form.menuEndFlag === '1' && !value)
+          ? cb(new Error('叶子菜单必须选择路由路径'))
+          : cb(),
+      trigger: 'change'
+    }],
     menuEndFlag: [{ required: true, message: '请选择节点形态', trigger: 'change' }]
   }
 });
@@ -292,7 +300,9 @@ async function saveDlg() {
       await updateResource(dlg.editing, rest);
       ElMessage.success('已更新');
     } else {
-      const payload = { ...rest };
+      // ResourceCreateReqDTO 白名单不含 status（创建不支持设隐藏菜单），剥离以免后端严格反序列化报错
+      // eslint-disable-next-line no-unused-vars
+      const { status, ...payload } = rest;
       if (dlg.parent) payload.parentResourceId = dlg.parent.resourceId;
       await createResource(payload);
       ElMessage.success('已创建');
