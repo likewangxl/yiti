@@ -149,15 +149,18 @@ public class ResourceService {
             Integer isMenu, String menuEndFlag, Integer menuRankNo, String parentResourceId, String sysCode,
             String menuIconUrl) {
         log.info("[ResourceService.createResource] url={}, method={}, sysCode={}", resourceUrl, resourceMethod, sysCode);
-        // 校验 URL + Method + SysCode 唯一性，防止重复注册导致鉴权歧义
-        if (resourceMapper.selectByUrlAndMethod(resourceUrl, resourceMethod, sysCode) != null) {
+        // 父节点/目录菜单允许不选路由（不跳转）；仅对用户填写的非空 URL 校验三元唯一
+        boolean hasUrl = resourceUrl != null && !resourceUrl.isBlank();
+        if (hasUrl && resourceMapper.selectByUrlAndMethod(resourceUrl, resourceMethod, sysCode) != null) {
             throw new BizException(AuthErrorCode.RESOURCE_URL_METHOD_DUPLICATE.getCode(),
                     AuthErrorCode.RESOURCE_URL_METHOD_DUPLICATE.getMessage());
         }
         String resourceId = "RES_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         PtResource resource = new PtResource();
         resource.setResourceId(resourceId);
-        resource.setResourceUrl(resourceUrl);
+        // 不选路由时按既有分组约定生成唯一占位 URL（#group/<id>，# 前缀不跳转），
+        // 避免与 uk(url+method+sysCode) 唯一索引冲突；与既有 #group/xxx 分组菜单一致
+        resource.setResourceUrl(hasUrl ? resourceUrl : ("#group/" + resourceId));
         resource.setResourceMethod(resourceMethod);
         resource.setMenuName(menuName);
         resource.setIsMenu(isMenu);
