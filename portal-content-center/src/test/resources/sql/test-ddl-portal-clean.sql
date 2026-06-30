@@ -113,3 +113,65 @@ CREATE TABLE IF NOT EXISTS `doc_info` (
   `updated_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='文档信息表';
+
+-- -------------------------------------------
+-- 6. 担保信息同步相关表（GUARANTEE_INFO_SYNC 定时任务专用，源自 prod DDL）
+--    字符集刻意沿用 prod：源表 clms/ccms 为 utf8mb3，目标 zh_guarantee_info 为 utf8mb4，
+--    以在集成测试中真实复现 client_name(utf8mb4) ↔ customername(utf8mb3) 的跨字符集 JOIN。
+-- -------------------------------------------
+CREATE TABLE IF NOT EXISTS `clms_ed_credit_info` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `creditno` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '额度编号',
+  `credittype` varchar(30) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '额度类型',
+  `execnominalsum` decimal(24,6) DEFAULT NULL COMMENT '当前额度金额',
+  `usablenominalsum` decimal(24,6) DEFAULT NULL COMMENT '可用额度金额',
+  `suboccupynominalsum` decimal(24,6) DEFAULT NULL COMMENT '额度占用金额',
+  `startdate` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '起始日',
+  `expiredate` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '到期日',
+  `customerid` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '客户编号',
+  `customername` varchar(300) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '客户名称',
+  `inputuserid` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '登记人',
+  `hive_sys_time` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '更新时间',
+  `pt_dt` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL,
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE IF NOT EXISTS `zh_guarantee_info` (
+  `id` int NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `client_num` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '客户号',
+  `client_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '客户名称',
+  `basic_id` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '客户基础id',
+  `amount_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '额度类型',
+  `notional_amount` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '名义金额',
+  `occupy_notional_amount` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '已占用名义金额',
+  `occupy_exposure_amount` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '已占用敞口金额',
+  `expired` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '到期日',
+  `start` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '起始日',
+  `last_expire` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '授信到期日',
+  `organ` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '经办机构',
+  `operator` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '经办人',
+  `usableexposuresum` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '可用敞口金额',
+  `usablenominalsum` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '可用名义金额',
+  `create_user` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '创建人',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT '1' COMMENT '类型',
+  `update_time` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  KEY `zh_guarantee_info_name` (`client_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC COMMENT='担保信息';
+
+CREATE TABLE IF NOT EXISTS `ccms_business_contract` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `customerid` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '客户号',
+  `customername` varchar(300) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '客户名称',
+  `exposurebalance` decimal(24,6) DEFAULT NULL COMMENT '已占用金额(敞口)',
+  `businesssum2` decimal(24,6) DEFAULT NULL COMMENT '名义金额',
+  `usableexposuresum` decimal(24,6) DEFAULT NULL COMMENT '可用敞口金额',
+  `usablenominalsum` decimal(24,6) DEFAULT NULL COMMENT '可用名义金额',
+  `putoutdate` varchar(15) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '额度生效日期',
+  `maturity` varchar(15) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '额度到期日',
+  `operateuserid` varchar(60) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci DEFAULT NULL COMMENT '经办人',
+  `sjsj` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  KEY `index_business_customerid` (`customerid`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 ROW_FORMAT=DYNAMIC;

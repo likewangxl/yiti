@@ -12,47 +12,65 @@
     <select id="getClmsCount" resultType="int">
         select count(1) from clms_ed_credit_info
         where substring( hive_sys_time ,1,10)= #{ydate}
-        and credittype in(000020,010010)
+        and credittype in ('000020','010010')
     </select>
 
-    <!-- 用 clms 当日担保类额度数据更新担保表已存在客户（按客户名匹配，取每个客户最大 creditno 的一条） -->
+    <!-- 用 clms 当日担保类额度数据更新担保表已存在客户（按客户名匹配，取每个客户最大 creditno 的一条）。
+         性能重写（2026-06-30）：原"内层 GROUP BY MAX(creditno) + 外层自连接回原表"会把同一批过滤条件
+         逐行重算并对源表扫两遍，加上跨字符集 JOIN 无法走索引，几百行也能跑出 10s+ 致连接超时。
+         改为 ROW_NUMBER() 单遍扫描去重，先收敛成"每客户一行"的小集合再 JOIN ~百行的担保表，
+         语义等价（creditno 字典序取最大），且修掉并列最大 creditno 时更新多次的不确定性。 -->
     <update id="updateToGuarantee">
-        UPDATE zh_guarantee_info a,(SELECT a.* FROM clms_ed_credit_info a,(SELECT
-        customerid,MAX( creditno ) AS creditno FROM clms_ed_credit_info b
-        WHERE substring( hive_sys_time, 1, 10 )= #{ydate} AND
-        REPLACE(expiredate,'/','-')> #{ydate} AND credittype = 010010 AND
-        customername LIKE '%担保%' GROUP BY customerid ) b
-        WHERE a.customerid = b.customerid AND a.creditno = b.creditno AND
-        substring( a.hive_sys_time, 1, 10 )= #{ydate}
-        AND REPLACE( a.expiredate,'/','-')> #{ydate} AND a.credittype = 010010
-        AND a.customername LIKE '%担保%' ) b
-        SET a.client_num=b.customerid,a.client_name=b.customername
-        ,a.notional_amount=b.execnominalsum,a.occupy_notional_amount=b.usablenominalsum
-        , a.occupy_exposure_amount=b.usablenominalsum ,
-        a.usablenominalsum=b.suboccupynominalsum , a.`start`=b.startdate ,
-        a.last_expire=b.expiredate , a.operator=b.inputuserid
-        ,a.create_time=SYSDATE()
-        WHERE a.client_name=b.customername
+        UPDATE zh_guarantee_info a
+        JOIN (
+            SELECT customerid, customername, execnominalsum, usablenominalsum,
+                   suboccupynominalsum, startdate, expiredate, inputuserid
+            FROM (
+                SELECT t.customerid, t.customername, t.execnominalsum, t.usablenominalsum,
+                       t.suboccupynominalsum, t.startdate, t.expiredate, t.inputuserid,
+                       ROW_NUMBER() OVER ( PARTITION BY t.customerid ORDER BY t.creditno DESC ) AS rn
+                FROM clms_ed_credit_info t
+                WHERE substring( t.hive_sys_time, 1, 10 ) = #{ydate}
+                  AND REPLACE( t.expiredate, '/', '-' ) > #{ydate}
+                  AND t.credittype = '010010'
+                  AND t.customername LIKE '%担保%'
+            ) x
+            WHERE x.rn = 1
+        ) b ON a.client_name = b.customername
+        SET a.client_num=b.customerid, a.client_name=b.customername
+        , a.notional_amount=b.execnominalsum, a.occupy_notional_amount=b.usablenominalsum
+        , a.occupy_exposure_amount=b.usablenominalsum
+        , a.usablenominalsum=b.suboccupynominalsum, a.`start`=b.startdate
+        , a.last_expire=b.expiredate, a.operator=b.inputuserid
+        , a.create_time=NOW()
     </update>
 
-    <!-- 把 clms 当日担保类、且担保表尚不存在的客户插入担保表 -->
+    <!-- 把 clms 当日担保类、且担保表尚不存在的客户插入担保表。
+         性能重写（2026-06-30）：与 updateToGuarantee 同源反模式（自连接 groupwise-max 双扫源表），
+         同样改为 ROW_NUMBER() 单遍去重；NOT IN 子查询补 client_name IS NOT NULL，
+         避免担保表存在 NULL 名时 NOT IN 整体落空导致一条都插不进。 -->
     <insert id="saveToGuarantee">
         INSERT INTO zh_guarantee_info ( client_num, client_name, notional_amount,
         occupy_notional_amount, occupy_exposure_amount, usablenominalsum,
         `start`, last_expire, operator )
-        SELECT
-        a.customerid,a.customername,a.execnominalsum,a.usablenominalsum,a.usablenominalsum,
-        a.suboccupynominalsum,a.startdate,a.expiredate,a.inputuserid
-        FROM clms_ed_credit_info a,(
-        SELECT customerid,MAX( creditno ) AS creditno FROM clms_ed_credit_info b
-        WHERE substring( hive_sys_time, 1, 10 )= #{ydate} AND
-        REPLACE(b.expiredate,'/','-')> #{ydate} AND credittype = 010010
-        AND customername LIKE '%担保%' GROUP BY customerid ) b
-        WHERE a.customerid = b.customerid AND a.creditno = b.creditno AND substring(
-        a.hive_sys_time, 1, 10 )= #{ydate}
-        AND REPLACE( a.expiredate, '/','-')> #{ydate} AND a.credittype = 010010
-        AND a.customername LIKE '%担保%' AND customername NOT IN ( SELECT
-        client_name FROM zh_guarantee_info )
+        SELECT b.customerid, b.customername, b.execnominalsum, b.usablenominalsum, b.usablenominalsum,
+               b.suboccupynominalsum, b.startdate, b.expiredate, b.inputuserid
+        FROM (
+            SELECT customerid, customername, execnominalsum, usablenominalsum,
+                   suboccupynominalsum, startdate, expiredate, inputuserid
+            FROM (
+                SELECT t.customerid, t.customername, t.execnominalsum, t.usablenominalsum,
+                       t.suboccupynominalsum, t.startdate, t.expiredate, t.inputuserid,
+                       ROW_NUMBER() OVER ( PARTITION BY t.customerid ORDER BY t.creditno DESC ) AS rn
+                FROM clms_ed_credit_info t
+                WHERE substring( t.hive_sys_time, 1, 10 ) = #{ydate}
+                  AND REPLACE( t.expiredate, '/', '-' ) > #{ydate}
+                  AND t.credittype = '010010'
+                  AND t.customername LIKE '%担保%'
+            ) x
+            WHERE x.rn = 1
+        ) b
+        WHERE b.customername NOT IN ( SELECT client_name FROM zh_guarantee_info WHERE client_name IS NOT NULL )
     </insert>
 
     <!-- 把 clms 当日 000020 类额度数据归集插入 ccms_business_contract -->
