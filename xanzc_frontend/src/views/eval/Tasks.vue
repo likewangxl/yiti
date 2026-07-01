@@ -65,7 +65,7 @@
           <el-button v-if="row.status === 2" type="success" link @click="handlePublish(row)">发布</el-button>
           <el-button v-if="row.sourceType === 'AUTO' && row.status === 0" type="danger" link @click="handleCloseTask(row)">关闭</el-button>
           <el-button type="primary" link @click="handleExport(row)">导出</el-button>
-          <el-button v-if="row.status === 0 || row.status === 2 || isDeadlinePassed(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
+          <el-button v-if="row.status === 0 || row.status === 2 || row.status === 4 || isDeadlinePassed(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
