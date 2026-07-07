@@ -419,7 +419,8 @@ async function queryEmpSuggest(queryString, cb) {
   try {
     const list = await suggestEmployees(kw);
     const arr = Array.isArray(list) ? list : [];
-    cb(arr.map(u => ({ ...u, code: u.empId || u.username, label: u.empChnName ? `${u.username}（${u.empChnName}）` : u.username })));
+    // :objectId 应下发员工工号(username)，而非 DB userId(empId)；缺 username 才退回 empId
+    cb(arr.map(u => ({ ...u, code: u.username || u.empId, label: u.empChnName ? `${u.username}（${u.empChnName}）` : u.username })));
   } catch { cb([]); }
 }
 let _orgFlat = null;
