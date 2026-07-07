@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  统计展示表旬度归档按日 SQL。表名为固定白名单字面量（StatShowArchiveJob.MAIN_TABLES + _H1/_H2/_H3），
+  用 ${} 拼接；STATIS_DT 一律 #{} 占位，无注入风险。STATIS_DT 为 yyyy-MM-dd 定宽字符串，等值/BETWEEN 即按日期。
+  所有语句按单日操作，命中索引 idx_statis_dt，每次 ≤ 一天数据量。
+-->
+<mapper namespace="com.bank.branch.platform.performance.mapper.StatShowArchiveMapper">
+
+    <select id="countByTableDate" resultType="long">
+        SELECT COUNT(*) FROM ${table} WHERE STATIS_DT = #{dt}
+    </select>
+
+    <insert id="insertHistByDate">
+        INSERT INTO ${histTable}
+        SELECT * FROM ${mainTable}
+        WHERE STATIS_DT = #{dt}
+    </insert>
+
+    <delete id="deleteHistByDate">
+        DELETE FROM ${histTable} WHERE STATIS_DT = #{dt}
+    </delete>
+
+    <select id="selectMaxStatisDt" resultType="java.lang.String">
+        SELECT MAX(STATIS_DT) FROM ${mainTable}
+        WHERE STATIS_DT BETWEEN #{start} AND #{end}
+    </select>
+
+    <delete id="deleteMainByDate">
+        DELETE FROM ${mainTable} WHERE STATIS_DT = #{dt}
+    </delete>
+
+</mapper>
