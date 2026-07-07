@@ -278,17 +278,12 @@
           <div class="trial-row">
             <el-date-picker v-model="dlg.trialDate" type="date" value-format="YYYY-MM-DD"
               placeholder="数据日期（传给 SQL :dataDate）" style="flex:1; min-width:220px" />
-            <!-- 对象值：按基础维度联想（EMP=员工 / ORG=机构），映射 SQL :objectId -->
-            <el-autocomplete
+            <!-- 对象值：普通输入框，输入什么传什么，直接映射 SQL :objectId（不做联想） -->
+            <el-input
               v-model="dlg.trialSubject"
-              :fetch-suggestions="dlg.form.baseDim === 'ORG' ? queryOrgSuggest : (dlg.form.baseDim === 'EMP' ? queryEmpSuggest : queryNoSuggest)"
-              value-key="label"
               clearable
-              :placeholder="dlg.form.baseDim === 'EMP' ? '对象值：员工(工号/姓名联想)→:objectId' : (dlg.form.baseDim === 'ORG' ? '对象值：机构(编号/名称联想)→:objectId' : '对象值 → :objectId')"
-              style="flex:1; min-width:240px"
-              @select="onTrialSubjectSelect"
-              @clear="dlg.trialSubjectId = ''"
-              @input="dlg.trialSubjectId = ''" />
+              :placeholder="dlg.form.baseDim === 'EMP' ? '对象值：员工工号 → :objectId' : (dlg.form.baseDim === 'ORG' ? '对象值：机构编号 → :objectId' : '对象值 → :objectId')"
+              style="flex:1; min-width:240px" />
             <el-button type="primary" @click="onTrialFromDialog" :loading="dlg.trialing"
                        :disabled="metricEditBlocked" :title="metricEditBlocked ? '指标数据加载完成后可用' : ''">▶ 试运行</el-button>
             <span v-if="metricEditBlocked" style="margin-left:8px; color:#e6a23c; font-size:12px">指标数据加载中…</span>
