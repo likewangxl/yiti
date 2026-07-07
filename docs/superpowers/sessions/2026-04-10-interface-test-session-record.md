@@ -349,7 +349,7 @@ bcrypt.hashpw(b'123456', bcrypt.gensalt(rounds=10))
 
 ### 8.2 Git worktree 清理
 
-- 删除 `.claude/worktrees/` 目录
+- 删除 `.worktrees/` 目录
 - `git worktree prune -v`
 - 删除僵尸分支 `worktree-governance-interface-fix`
 
@@ -361,8 +361,8 @@ bcrypt.hashpw(b'123456', bcrypt.gensalt(rounds=10))
 ### 8.4 最终 git 状态
 
 ```
- M .claude/settings.json
- M .claude/settings.local.json
+ M .wt/settings.json
+ M .wt/settings.local.json
 ```
 
 以及本次会话新增的：

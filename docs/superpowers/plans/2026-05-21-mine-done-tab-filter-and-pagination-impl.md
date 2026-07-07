@@ -1,6 +1,6 @@
 # 「我的申请」+「已审批」tab V2 扩展 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development or executing-plans。
 
 **Goal:** 复用 V1 todo tab 模式给「我的申请」和「已审批」加查询条件 + 分页 + 防越权硬约束。
 

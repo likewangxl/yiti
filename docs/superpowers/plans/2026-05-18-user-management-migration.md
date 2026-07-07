@@ -1,6 +1,6 @@
 # User Management Migration Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 xanpd_backend 的 12 个用户管理接口（CRUD + 启用/禁用/锁定/解锁 + 密码重置/修改）以 yiti 架构规范（DTO、`@BizAuth`、TDD、`PT_RESOURCE` 登记、统一响应、`BizException`、BCrypt）增量迁移到 `auth-permission-center`，复用现有 `PtUser`/`UserMapper`/`UserApi`，对外契约零变更。
 

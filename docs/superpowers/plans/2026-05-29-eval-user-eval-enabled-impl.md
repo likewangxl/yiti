@@ -1,6 +1,6 @@
 # 人员标签"是否启用评价"字段 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 给"人员标签"页每个人增加"是否启用评价"布尔位，列表默认只显示启用者，并把该字段贯通查询过滤、覆盖式保存、导入模板/校验、导出。
 
@@ -9,7 +9,7 @@
 **Tech Stack:** Spring Boot 3.2.3 / JDK 17 / MyBatis(-Plus) / EasyExcel / JUnit5 + Mockito + AssertJ（surefire 单测）/ Vue3 + Element Plus。
 
 **关键约束（务必遵守）:**
-- TDD 红-绿-重构，每步独立 commit；子代理 model 必须 ≥ sonnet（禁 haiku）。
+- TDD 红-绿-重构，每步独立 commit；子代理 model 须为高能力模型。
 - 中文注释 + UTF-8；Mapper XML 用 `#{}`。
 - eval 子域**当前没有任何 Mapper IT**，统一用 mock service 单测（surefire `*Test.java`）+ 手工 smoke 验证 SQL；本计划沿用该模式，**不新增真实 DB Mapper IT**。
 - 项目已废弃 Flyway：DDL 手工执行，禁止 `V*__*.sql` 命名 / `*FlywayIT`。

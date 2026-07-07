@@ -1,6 +1,6 @@
 # D-中模块审计实施计划
 
-> **面向执行代理**：建议使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans` 逐任务执行。所有步骤使用 `- [ ]` 复选框记录进度。
+> **面向执行代理**：建议使用 `subagent-driven-development`（推荐）或 `executing-plans` 逐任务执行。所有步骤使用 `- [ ]` 复选框记录进度。
 >
 > **规范依据**：`docs/superpowers/specs/2026-04-15-d-med-module-audit-design.md`（已评审通过并获用户批准）
 
@@ -92,7 +92,7 @@ cd C:/Users/52140/Desktop/yiti && git add pom.xml && git commit -m "chore(pom): 
 版本托管，使 bootstrap 等下游模块可以跨模块引用它们而不再需要显式声明版本，
 解决 'dependencies.dependency.version is missing' 的 Maven 构建阻塞问题。
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+"
 ```
 
 期望：git 显示 1 文件修改，10 行 insertions 左右。
@@ -154,7 +154,7 @@ cd C:/Users/52140/Desktop/yiti && git ls-files --deleted | grep -E "(hs_err|repl
 # 若 /tmp/.to-stage.txt 非空再执行下一行
 cd C:/Users/52140/Desktop/yiti && git rm --cached $(cat /tmp/.to-stage.txt) 2>/dev/null; git add -u -- '*hs_err_pid*.log' '*replay_pid*.log' && git commit -m "chore: 清理 JVM 崩溃日志垃圾 (hs_err_* / replay_*)
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+"
 ```
 
 如步骤 4 已 `working tree clean`，跳过本步骤，在计划记录中注明"commit #2 无需生成，文件本未被跟踪"。
@@ -681,7 +681,7 @@ cd C:/Users/52140/Desktop/yiti && git add docs/superpowers/audits/2026-04-15-mod
 - checklist: 25 条（V1:8 / V2:7 / V3:5 / V4:5）
 - portal / customer / bizapp 三模块并行审计报告
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+"
 ```
 
 期望：4 文件新增，git 提交成功。
@@ -797,7 +797,7 @@ cd C:/Users/52140/Desktop/yiti && git add docs/superpowers/audits/2026-04-15-d-m
 
 总缺陷数 / 跨模块共性问题 / 整改优先级建议
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -978,7 +978,7 @@ cd C:/Users/52140/Desktop/yiti && git add CLAUDE.md && git commit -m "docs: 同�
 基于 D-中审计结论，将 3 个已实现模块从 ⏳ 骨架 改为 ✅ 已完成，
 同步更新模块状态表、依赖图、包结构规范与模块级 CLAUDE.md 链接清单。
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1105,7 +1105,7 @@ mvn spring-boot:run
 ```bash
 cd C:/Users/52140/Desktop/yiti && git add bootstrap/CLAUDE.md && git commit -m "docs: 补全 bootstrap 模块级 CLAUDE.md
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+"
 ```
 
 ---

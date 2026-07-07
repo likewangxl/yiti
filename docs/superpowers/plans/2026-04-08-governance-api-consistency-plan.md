@@ -1,6 +1,6 @@
 # Governance 模块接口一致性修复实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 A、B 模块中不符合文档定义的接口从 `@RequestParam` 改为 `@RequestBody`，保持与 `03-接口设计与报文.md` 文档一致。
 

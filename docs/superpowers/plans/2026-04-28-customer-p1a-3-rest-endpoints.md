@@ -1,11 +1,11 @@
 # P1a 客户营销 3 个真缺失 REST 端点 — 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (inline) — 用户已选 inline execution，opus review 在最后一次性做。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans (inline) — 用户已选 inline execution，review 在最后一次性做。
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 补齐 03 文档要求但代码缺失的 3 个 REST 端点（`POST /api/claims/{id}/re-touch`、`GET /api/admin/touch-tasks/summary`、`GET /api/leads/import/batches/{batchId}`），并落地 A1 强依赖的 2 条新错误码（`CUST-40908/40909`）。
 
-**Architecture:** Controller 包装现有/新增 Service；A1 新增 `ClaimService.reTouch` 业务方法和 2 个 `CustomerErrorCode` 枚举；A2/A3 仅 Controller。严格 TDD：先 service 单元测试（仅 A1）→ Controller 集成测试（3 端点）→ 实现 → 文档同步 → opus subagent 一次 review spec+code。
+**Architecture:** Controller 包装现有/新增 Service；A1 新增 `ClaimService.reTouch` 业务方法和 2 个 `CustomerErrorCode` 枚举；A2/A3 仅 Controller。严格 TDD：先 service 单元测试（仅 A1）→ Controller 集成测试（3 端点）→ 实现 → 文档同步 → subagent 一次 review spec+code。
 
 **Tech Stack:** Spring Boot 3.2.3 + MyBatis 3.0.3 + JUnit 5 + Mockito + MockMvc + H2（测试）+ MySQL（生产）
 
@@ -439,7 +439,7 @@ private LeadImportBatchDetailRespDTO toDetailRespDTO(LeadImportBatch e) {
 
 ---
 
-## Task 11: 全量验收 + opus subagent review
+## Task 11: 全量验收 + subagent review
 
 - [ ] **Step 1: 全模块测试**
 
@@ -454,13 +454,13 @@ MAVEN_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED" mvn test -pl customer-m
 grep -rn "TODO\|XXX\|FIXME" customer-marketing-center/src/main/java/com/bank/branch/platform/customer/{controller,service,dto}/ 2>/dev/null | grep -v "已知技术债\|@author\|License"
 ```
 
-- [ ] **Step 3: 派 opus 子 agent 一次性 review spec + code（按用户指令）**
+- [ ] **Step 3: 派 子 agent 一次性 review spec + code（按用户指令）**
 
 ```
 Agent({
-  description: "P1a opus review — spec + code",
-  subagent_type: "oh-my-claudecode:code-reviewer",
-  model: "opus",
+  description: "P1a review — spec + code",
+  subagent_type: "内部工具:code-reviewer",
+  model=高配,
   prompt: "对 P1a 批次（commit ded0cef..HEAD）做严格的 spec + code review。
     Spec: docs/superpowers/specs/2026-04-28-customer-p1a-3-rest-endpoints-design.md
     Plan: docs/superpowers/plans/2026-04-28-customer-p1a-3-rest-endpoints.md
@@ -479,7 +479,7 @@ Agent({
 
 ```bash
 git add customer-marketing-center/ docs/modules/customer-marketing-center/02-后端架构.md docs/modules/customer-marketing-center/03-接口设计与报文.md docs/superpowers/sql/2026-04-28-customer-p1a-rest-pt-resource.sql docs/superpowers/sessions/2026-04-28-customer-marketing-center-doc-code-deviation.md docs/superpowers/plans/2026-04-28-customer-p1a-3-rest-endpoints.md
-git commit -m "feat(customer-v1): P1a — 3 REST 端点（re-touch / admin summary / batch detail）+ CUST-40908/40909 + opus reviewed"
+git commit -m "feat(customer-v1): P1a — 3 REST 端点（re-touch / admin summary / batch detail）+ CUST-40908/40909 + reviewed"
 git pull --rebase origin master
 git push origin master
 ```
@@ -498,5 +498,5 @@ git push origin master
 
 ## 执行交接
 
-按用户指令选 **Inline Execution**（subagent-driven 在每 task 派 agent 与"最后一次性 opus review"冲突）。
-执行入口：本计划就地按 Task 1→11 顺序跑，过程不再额外 invoke 其它技能；最后一步 Task 11 派 opus 子 agent 做合并 review。
+按用户指令选 **Inline Execution**（subagent-driven 在每 task 派 agent 与"最后一次性 review"冲突）。
+执行入口：本计划就地按 Task 1→11 顺序跑，过程不再额外 invoke 其它技能；最后一步 Task 11 派 子 agent 做合并 review。

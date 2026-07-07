@@ -197,6 +197,5 @@ D.3 POST /api/admin/sys/audit-logs/export -- 导出审计日志
 
 ---
 
-**维护者**：Claude Code
 **最近更新**：2026-04-10
 **下一次复审**：governance D.3 升级完成后，更新本文档 §2 表格和 §3.2 章节

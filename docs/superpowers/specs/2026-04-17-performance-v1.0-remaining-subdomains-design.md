@@ -6,7 +6,7 @@
 | 目标模块 | `performance-engine-center`（V1.0 配置与版本骨架） |
 | 覆盖范围 | 剩余 5 个子域：指标库 / KPI 方案 / 目标方案 / 运行任务 / 分配关系 |
 | 编写日期 | 2026-04-17 |
-| 作者 | Claude Code + leid（通过 brainstorming 确认） |
+| 作者 | leid（通过 brainstorming 确认） |
 | 与原 spec 的关系 | **增量补充**，不替代原 [2026-04-15-performance-engine-center-v1.0-design.md](2026-04-15-performance-engine-center-v1.0-design.md)（v1.2） |
 | 前置审计 | 本 spec 基于 2026-04-17 对已交付骨架 + sys_control 子域的代码审计（0 个 P0/P1 整改项） |
 
@@ -532,5 +532,5 @@ refactor(perf): <子域> <边界场景> - <修复点>
 1. 提交到 git（`docs(spec): 绩效中心 V1.0 剩余 5 子域细化设计`）
 2. 走 `spec-document-reviewer` 审查循环（最多 3 轮），修复发现的问题
 3. 审查通过后由用户人工复核
-4. 调用 `superpowers:writing-plans` 产出同日期命名的 plan 文件 `docs/superpowers/plans/2026-04-17-performance-v1.0-remaining-subdomains-impl.md`
+4. 调用 `writing-plans` 产出同日期命名的 plan 文件 `docs/superpowers/plans/2026-04-17-performance-v1.0-remaining-subdomains-impl.md`
 5. 按 plan 进入 TDD 实施（单人串行，从顺位 1 指标库开始）

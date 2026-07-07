@@ -1,6 +1,6 @@
 # business-application-center 契约对齐实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task with a fresh sonnet subagent per task + two-stage review (spec reviewer + code quality reviewer, both sonnet). Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` to implement this plan task-by-task with a fresh 标准 subagent per task + two-stage review (spec reviewer + code quality reviewer, both 标准). Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 business-application-center 从 17/30 契约对齐度提升到 ≥27/30,消除所有 P0 阻断问题,修复大部分 P1 功能缺失,按余量推进 P2。
 
@@ -8,9 +8,9 @@
 
 **Tech Stack:** Java 17 + Spring Boot 3.2.3 + MyBatis 3.0.3 + Flowable 7.0.1 + JUnit 5 + Mockito + AssertJ + MockMvc + H2 (MySQL 兼容模式)
 
-**Branch:** 当前工作树已在 `claude/suspicious-kirch-8968cd` 分支(customer-marketing-center 对齐的延续)。本计划所有提交直接追加到该分支。
+**Branch:** 当前工作树已在 `feat/suspicious-kirch-8968cd` 分支(customer-marketing-center 对齐的延续)。本计划所有提交直接追加到该分支。
 
-**Worktree:** `D:\Project\oneplate\.claude\worktrees\suspicious-kirch-8968cd\`
+**Worktree:** `D:\Project\oneplate\.worktrees\suspicious-kirch-8968cd\`
 
 **成功标准:**
 - 全部 Phase 任务测试绿(`mvn -f business-application-center/pom.xml clean test` 0 失败)
@@ -20,9 +20,9 @@
 - 最终整体 review APPROVED 后合并到 master 并推送
 
 **执行策略(用户偏好):**
-- 每个 Task 由 fresh sonnet 子代理实现(`implementer`),Task 完成后并行调度 `spec reviewer` + `code quality reviewer`(均为 sonnet)
-- **每个 Phase 末尾立即 `git push -u origin claude/suspicious-kirch-8968cd`**
-- 全部 Phase 完成 + 最终 review 通过后:`git checkout master && git merge --no-ff claude/suspicious-kirch-8968cd && git push origin master`
+- 每个 Task 由 fresh 子代理实现(`implementer`),Task 完成后并行调度 `spec reviewer` + `code quality reviewer`
+- **每个 Phase 末尾立即 `git push -u origin feat/suspicious-kirch-8968cd`**
+- 全部 Phase 完成 + 最终 review 通过后:`git checkout master && git merge --no-ff feat/suspicious-kirch-8968cd && git push origin master`
 - Task 内 implementer 自行 commit(保留细粒度 commit,不 squash)
 
 ---
@@ -111,7 +111,7 @@ docs/superpowers/sql/
 
 **Phase 结束动作:**
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd push -u origin claude/suspicious-kirch-8968cd
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd push -u origin feat/suspicious-kirch-8968cd
 ```
 
 ---
@@ -156,7 +156,7 @@ void publishesEventWithOutcomeAndReason() {
 - [ ] **Step 2: 运行测试验证失败**
 
 ```bash
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/workflow-center/pom.xml -Dtest=ProcessCompletedListenerTest#publishesEventWithOutcomeAndReason test
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/workflow-center/pom.xml -Dtest=ProcessCompletedListenerTest#publishesEventWithOutcomeAndReason test
 ```
 Expected: FAIL — record 没有 `outcome()` / `reason()` 方法。
 
@@ -190,15 +190,15 @@ eventPublisher.publishEvent(new ProcessCompletedEvent(
 - [ ] **Step 4: 运行新测试 + 全模块回归测试验证通过**
 
 ```bash
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/workflow-center/pom.xml clean test
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/workflow-center/pom.xml clean test
 ```
 Expected: PASS(新增测试 + 所有既有测试)。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd add workflow-center/
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd commit -m "feat(workflow): ProcessCompletedEvent 补 outcome/reason 供下游区分审批结果"
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd add workflow-center/
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd commit -m "feat(workflow): ProcessCompletedEvent 补 outcome/reason 供下游区分审批结果"
 ```
 
 **通过标准:** workflow-center 全模块测试绿;`ProcessCompletedEvent` 有 4 个字段;publisher 正确读取 approved/reason。
@@ -262,7 +262,7 @@ class LoanApplyDTOConverterTest {
 - [ ] **Step 2: 运行测试验证失败(类不存在)**
 
 ```bash
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml -Dtest=LoanApplyDTOConverterTest test
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml -Dtest=LoanApplyDTOConverterTest test
 ```
 Expected: FAIL — `LoanApplyDTOConverter` 未定义。
 
@@ -318,15 +318,15 @@ public class LoanApplyDTOConverter {
 - [ ] **Step 4: 运行全模块测试**
 
 ```bash
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml clean test
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml clean test
 ```
 Expected: 所有 facade 测试因 mock 签名变更可能需要微调(新增 `customerQueryApi.getCustomer(...)` stub),补齐后全绿。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd add business-application-center/
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd commit -m "refactor(bizapp): API DTO 层去除 deleted + 引入 converter 补 custName/productName"
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd add business-application-center/
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd commit -m "refactor(bizapp): API DTO 层去除 deleted + 引入 converter 补 custName/productName"
 ```
 
 **通过标准:** `LoanApplyDTO` / `SupportRequestDTO` 无 `deleted` 字段;Converter 测试覆盖单条 + 批量 + 缺失场景;facade 测试全绿。
@@ -389,7 +389,7 @@ void listPage_returnsListItemDTO_notEntity() throws Exception {
 - [ ] **Step 3: 运行测试验证失败**
 
 ```bash
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml -Dtest=LoanControllerTest#listPage_returnsListItemDTO_notEntity test
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml -Dtest=LoanControllerTest#listPage_returnsListItemDTO_notEntity test
 ```
 Expected: FAIL — `loanService.listPageAsDTO` 不存在。
 
@@ -404,14 +404,14 @@ Expected: FAIL — `loanService.listPageAsDTO` 不存在。
 
 ```bash
 # 先本模块
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml clean test
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/business-application-center/pom.xml clean test
 # 再跨模块(防止 report-analytics / performance-engine 因 DTO 字段变更编译失败)
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/bootstrap/pom.xml clean install -DskipTests
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/bootstrap/pom.xml clean install -DskipTests
 ```
 
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd add business-application-center/
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd commit -m "refactor(bizapp): Controller 改用 ListItemDTO 返回,停止暴露 Entity"
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd add business-application-center/
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd commit -m "refactor(bizapp): Controller 改用 ListItemDTO 返回,停止暴露 Entity"
 ```
 
 **通过标准:** 3 个 Controller 的 `listPage` / `getById` 不再引用 `LoanApply` / `SupportRequest` Entity 类;响应 JSON 无 `deleted` 字段;Controller 测试断言更新并全绿。
@@ -775,7 +775,7 @@ git commit -m "feat(bizapp): 14 个高危端点补齐 @AuditLog(transfer/cancel/
 **Phase 1 结束动作:**
 
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd push -u origin claude/suspicious-kirch-8968cd
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd push -u origin feat/suspicious-kirch-8968cd
 ```
 
 ---
@@ -786,7 +786,7 @@ git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd push -u ori
 
 **Phase 结束动作:**
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd push origin claude/suspicious-kirch-8968cd
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd push origin feat/suspicious-kirch-8968cd
 ```
 
 ---
@@ -991,7 +991,7 @@ git commit -m "feat(bizapp): LoanDetailResp 补 custInfo + canOperate"
 **Phase 2 结束动作:**
 
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd push origin claude/suspicious-kirch-8968cd
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd push origin feat/suspicious-kirch-8968cd
 ```
 
 ---
@@ -1079,7 +1079,7 @@ git commit -m "test(bootstrap): 新增 BusinessApplicationCenterIT 最小闭环�
 **Phase 3 结束动作:**
 
 ```bash
-git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd push origin claude/suspicious-kirch-8968cd
+git -C D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd push origin feat/suspicious-kirch-8968cd
 ```
 
 ---
@@ -1091,11 +1091,11 @@ git -C D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd push origin
 - [ ] **Step A: Full build 回归**
 
 ```bash
-mvn -f D:/Project/oneplate/.claude/worktrees/suspicious-kirch-8968cd/pom.xml clean install
+mvn -f D:/Project/oneplate/.worktrees/suspicious-kirch-8968cd/pom.xml clean install
 ```
 Expected: BUILD SUCCESS,business-application-center 测试数 ≥ 140。
 
-- [ ] **Step B: 分派 sonnet 模型的"最终整体 review"子代理**
+- [ ] **Step B: 分派 标准模型的"最终整体 review"子代理**
   - 输入:分析报告 + 本计划 + 所有 commit 列表(`git log --oneline 2f1efd2..HEAD`)
   - 要求:评估评分提升是否达标(≥27/30);检查是否有遗漏的 P0/P1;给出 APPROVED 或 ISSUES FOUND
 
@@ -1107,7 +1107,7 @@ Expected: BUILD SUCCESS,business-application-center 测试数 ≥ 140。
 git -C D:/Project/oneplate fetch origin
 git -C D:/Project/oneplate checkout master
 git -C D:/Project/oneplate pull origin master
-git -C D:/Project/oneplate merge --no-ff claude/suspicious-kirch-8968cd -m "Merge bizapp contract alignment (Phase 1-3)
+git -C D:/Project/oneplate merge --no-ff feat/suspicious-kirch-8968cd -m "Merge bizapp contract alignment (Phase 1-3)
 
 - P0 7 项全部修复(Entity→DTO / AFTER_COMMIT / REJECTED 分支 / @AuditLog / 枚举 / create 返回 / deleted 字段)
 - P1 5 项修复(submit 返回 / batch 上限 / dispatchRemark / 参数重命名 / LoanDetailResp 富化)
@@ -1119,7 +1119,7 @@ git -C D:/Project/oneplate push origin master
 - [ ] **Step E: 切回原分支避免打扰其他工作**
 
 ```bash
-git -C D:/Project/oneplate checkout claude/eloquent-mcnulty-f2072a
+git -C D:/Project/oneplate checkout feat/eloquent-mcnulty-f2072a
 ```
 
 ---
@@ -1129,10 +1129,10 @@ git -C D:/Project/oneplate checkout claude/eloquent-mcnulty-f2072a
 每个 Task 执行模式:
 
 ```
-implementer (sonnet)
+implementer 
   └─ Red → Green → Refactor → commit
      ↓
- 并行双阶段审查(均为 sonnet):
+ 并行双阶段审查:
   ├─ spec reviewer: 对照计划文档检查是否完成全部 Step
   └─ code quality reviewer: 检查代码规范、测试质量、DRY/YAGNI
      ↓
@@ -1141,7 +1141,7 @@ implementer (sonnet)
 ```
 
 **Subagent 调度约束(来自用户偏好 `feedback_subagent_model.md`):**
-- 默认 `model: "sonnet"`;仅当 sonnet 明确 BLOCKED 才可申请升级,升级前须与用户确认
+- 默认 `model=标准`;仅当 标准 明确 BLOCKED 才可申请升级,升级前须与用户确认
 - 简单任务(如 Task 2.2 / Task 3.1 这类机械变更)可合并 reviewer,但 implementer 保持独立
 
 **Push 节奏约束(来自用户偏好 `feedback_phase_commit_push.md`):**

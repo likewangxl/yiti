@@ -1,6 +1,6 @@
 # OBS 文件存储统一改造 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把全项目文件存储（自由报表、绩效导出、数据导入、公告附件、通用文件管理）统一收敛到华为云 OBS，移除 MinIO 与半成品本地存储。
 
@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-12-obs-storage-migration-design.md`
 
-**全局约束：** 遵守 TDD 红-绿-重构；Flyway 禁用（schema 走直执 SQL）；跨模块只走 `*Api`；子代理 model≥sonnet。
+**全局约束：** 遵守 TDD 红-绿-重构；Flyway 禁用（schema 走直执 SQL）；跨模块只走 `*Api`；子代理须为高能力模型。
 
 ---
 

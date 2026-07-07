@@ -47,7 +47,7 @@ class RptModuleStructureArchTest {
      * V1.0 红线守护：{@code api/} 包下不允许出现任何 {@code *Api.java}
      * （仅允许 {@code package-info.java} 占位）.
      *
-     * <p>本规则对应 plan/CLAUDE.md 声称的"只读支撑域不暴露 *Api 接口"硬约束。
+     * <p>本规则对应 架构规约 声称的"只读支撑域不暴露 *Api 接口"硬约束。
      * 检查方式参考 {@link RptNoV11UOEArchTest}：文件扫描，不走 ArchUnit 反射，
      * 避免 ClassFileImporter 在空包/纯 package-info 包上的边界行为差异。
      *

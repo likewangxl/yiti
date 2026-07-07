@@ -1,7 +1,6 @@
 # 客户营销中心 — P1a 3 个真缺失 REST 端点设计
 
 > **背景**：[2026-04-28 偏离度分析底稿](../sessions/2026-04-28-customer-marketing-center-doc-code-deviation.md) §10.4 / §10.8 列出 3 个文档要求但代码未实现的 REST 端点。本设计为补齐方案。
-> **作者**：Claude (Opus 4.7)
 > **日期**：2026-04-28
 > **批次**：A（共 A/B/C 三批，本批仅含 3 个 REST 端点；422 错误码 = 批次 B；403 错误码 = 批次 C）
 > **状态**：已与用户对齐 task_type=FOLLOW_UP 决策，进入实现
@@ -168,7 +167,7 @@ RESOURCE_ID 严格 ≤ 20 字符（项目硬约束）。
 ### 5.4 完成验收
 1. `mvn test -pl customer-marketing-center` 全绿（旧 321 + 新 ~17 = ~338 测试）
 2. `MAVEN_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED"` 解 cglib 兼容
-3. opus 子 agent 一次性 review spec + code，输出 severity-rated 反馈
+3. 子 agent 一次性 review spec + code，输出 severity-rated 反馈
 4. 应用 review 反馈后 commit + push
 
 ---

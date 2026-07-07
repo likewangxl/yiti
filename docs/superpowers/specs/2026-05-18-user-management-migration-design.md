@@ -1,6 +1,5 @@
 # 用户管理模块从 xanpd_backend 移植到 yiti — 设计文档
 
-**作者**: Claude (受 djdev 委托)
 **日期**: 2026-05-18
 **目标模块**: `auth-permission-center`
 **关联背景**: 将 `/home/djdev/lf/xanpd_backend` 内 `UserController` 的 12 个用户管理接口完整移植到 yiti（Branch Platform），与 yiti 现有 `PtUser` / `UserMapper` / `UserApi` 基础对齐，遵守 yiti CLAUDE.md 红线（TDD、`PT_RESOURCE` 登记、`@BizAuth`、DTO 边界、统一响应、模块分层）。

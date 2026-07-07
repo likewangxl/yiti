@@ -1,6 +1,6 @@
 # performance-engine-center V1.4 迭代计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 消化 V1.3 承接的 8 项剩余技术债（+V1.3 末 reviewer 新发现的 V1_2_5 文档勘误 1 项 = 共 9 项），重点完成 WORKFLOW_PARTICIPANT 跨模块落地、Target ScopeColumns DDL 细化、getUserMetricCards mom/yoy 精化三大功能扩展，并修补小改进项。
 
@@ -89,7 +89,6 @@ DDL 核查确认：perf_target_plan / perf_target_value / perf_kpi_item
 是纯文字谬误，不对应物理列。V1_2_5 脚本只处理 perf_metric_def 是正确的，
 S0.1 仅修文字不改代码。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```

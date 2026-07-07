@@ -1,6 +1,6 @@
 # 人员标签页面列表化改造 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把"人员标签"页从"搜一个人→绑/解绑标签"的主从页，改造成"全量人员分页列表 + 行内编辑"的表格页，被评价人角色单选、评价人角色多选。
 
@@ -18,7 +18,7 @@
 - **PerfException**：`throw new PerfException(PerfErrorCode.XXX, args...)`；`getErrorCode()` 返回枚举，单测用 `assertThat(ex.getErrorCode()).isEqualTo(...)`。
 - **PT_RESOURCE 必须登记**：`AuthorizationInterceptor` 未匹配到资源返回 403（AUTH-40302）。新 URL 必须加 `PT_RESOURCE` 行 + 角色绑定，否则上线即 403。
 - **测试分工**：纯 Mockito 单测命名 `*Test.java`（surefire，`mvn test` 触发）。本计划后端测试全部走纯 Mockito 单测，与既有 `EvalTagServiceTest` / `UserFacade` 同风格，不写 `*IT.java`。
-- **子代理派遣**：如分派 subagent，model 必须 ≥ sonnet（禁用 haiku）。
+- **子代理派遣**：如分派 subagent，model 须为高能力模型。
 
 ## 文件结构
 
@@ -131,7 +131,7 @@ git add auth-permission-center/src/main/java/com/bank/branch/platform/auth/mappe
         auth-permission-center/src/main/resources/mapper/auth/UserMapper.xml
 git commit -m "feat(auth): UserMapper 新增 keyword OR 分页查询（人员标签列表用）
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ### Task A2：UserApi 加 pageUsers / getRolesByUserIds（TDD）
@@ -338,7 +338,7 @@ git add auth-permission-center/src/main/java/com/bank/branch/platform/auth/api/U
         auth-permission-center/src/test/java/com/bank/branch/platform/auth/facade/UserFacadePageRolesTest.java
 git commit -m "feat(auth): UserApi 新增 pageUsers / getRolesByUserIds（人员标签列表聚合用）
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -433,7 +433,7 @@ Expected: BUILD SUCCESS
 git add performance-engine-center/src/main/java/com/bank/branch/platform/performance/eval/dto/
 git commit -m "feat(eval): 人员标签列表 DTO + mapper 投影类
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ### Task B2：EvalUserTagMapper 批量查询 + 错误码
@@ -496,7 +496,7 @@ git add performance-engine-center/src/main/java/com/bank/branch/platform/perform
         performance-engine-center/src/main/java/com/bank/branch/platform/performance/enums/PerfErrorCode.java
 git commit -m "feat(eval): EvalUserTagMapper 批量查询 + EVAL_TAG_TYPE_MISMATCH 错误码
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ### Task B3：EvalUserTagService 扩依赖 + saveUserRoles（TDD）
@@ -764,7 +764,7 @@ git add performance-engine-center/src/main/java/com/bank/branch/platform/perform
         performance-engine-center/src/test/java/com/bank/branch/platform/performance/support/PerfTestConfig.java
 git commit -m "feat(eval): EvalUserTagService 覆盖式保存 saveUserRoles + 类型校验
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ### Task B4：EvalUserTagService.pageUserRoles 聚合（TDD）
@@ -973,7 +973,7 @@ git add performance-engine-center/src/main/java/com/bank/branch/platform/perform
         performance-engine-center/src/test/java/com/bank/branch/platform/performance/eval/service/EvalUserRoleServiceTest.java
 git commit -m "feat(eval): EvalUserTagService.pageUserRoles 聚合分页查询
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ### Task B5：EvalUserTagController 新增 2 端点
@@ -1043,7 +1043,7 @@ Expected: BUILD SUCCESS，全绿（含 EvalTagServiceTest / EvalUserRoleServiceT
 git add performance-engine-center/src/main/java/com/bank/branch/platform/performance/eval/controller/EvalUserTagController.java
 git commit -m "feat(eval): user-tags 新增 /page 聚合查询 + /{userId}/roles 覆盖式保存端点
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1098,7 +1098,7 @@ Expected: 2 行 PT_RESOURCE + 4 行 PT_ROLE_RESOURCE 插入成功
 git add docs/superpowers/sql/2026-05-29-eval-user-tags-page-resource-seed.sql
 git commit -m "chore(eval): 人员标签列表 2 端点 PT_RESOURCE 登记脚本
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1131,7 +1131,7 @@ export function saveUserRoles(userId, beEvalTagId, evalTagIds) {
 git add xanzc_frontend/src/api/eval.js
 git commit -m "feat(eval-ui): api 新增 pageUserRoles / saveUserRoles
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ### Task D2：UserTags.vue 重写为表格 + 编辑弹窗
@@ -1381,7 +1381,7 @@ Expected: build 成功，无语法/引用错误
 git add xanzc_frontend/src/views/eval/UserTags.vue
 git commit -m "feat(eval-ui): 人员标签页重写为列表 + 行内编辑弹窗
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---

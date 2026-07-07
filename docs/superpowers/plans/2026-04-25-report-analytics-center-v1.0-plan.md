@@ -1,6 +1,6 @@
 # Report-Analytics-Center V1.0 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实施 report-analytics-center 模块 V1.0，落地 25 个 REST 接口 + 3 张自有表 + 跨模块只读聚合。
 
@@ -285,7 +285,6 @@ chore(report-v1): report-analytics-center Maven 模块脚手架（Task M0.1.1）
 - 子 pom.xml 声明 6 个内部依赖 + jsqlparser 4.9 + easyexcel 3.3.4 + caffeine
 - RptModuleStructureArchTest 守护模块声明（pom + jsqlparser + easyexcel）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -475,7 +474,6 @@ feat(report-v1): V1_0_0 Flyway 基线 DDL 落地（Green，Task M0.2.1）
 - rpt_snapshot_task：V1 仅建表预留
 - V1_0_0FlywayIT 守护 3 张表 + 关键字段存在
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -651,7 +649,6 @@ feat(report-v1): RptErrorCode 25 条基线错误码（Green，Task M0.3.1，修�
 - RptErrorCodeTest 守护数量 25 + 前缀 + 中文消息 + 唯一性 + 关键码值（含 EXPORT_START_FAILED）
 - 修复 F1：原 plan 错把 25 写为 18（漏 42004/42006/42009/50002/50003）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -743,7 +740,6 @@ test(report-v1): 6 架构守护 + 包结构骨架（Green，Task M0.4.1）
 - CrossModuleApiOnlyArchTest：跨模块只走 *Api
 - NoUoeInFacadeTestsArchTest：facade 测试禁 assertThrows(UOE)
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -902,7 +898,6 @@ feat(report-v1): 3 张自有表 Entity + Mapper 雏形（Green，Task M0.5.1）
 - 3 对 Mapper 接口 + XML（insert + selectById + count + update + delete 基础方法）
 - RptSavedQueryMapperIT 守护 round-trip + countByEmpId
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -992,7 +987,6 @@ chore(report-v1): F11 修补 — Controller IT 测试基础设施（BaseControll
 - 约定 B（备选）：@Sql 提前 INSERT 测试 PT_RESOURCE 行
 - 生产 V1_0_X__rpt_*_pt_resources.sql 保留集中注册（不分散到每个接口 commit）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1193,7 +1187,6 @@ feat(report-v1): A.1 GET /query-dimensions 维度+指标树（Green，Task M1.1.
 - DictApi 翻译 REPORT_DIM / METRIC_CATEGORY 中文名
 - MetaServiceTest 覆盖正常 + 非法入参分支
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1301,7 +1294,6 @@ feat(report-v1): A.2 POST /dynamic-query 动态查询执行（Green，Task M1.2.
 - 错误码：40007/40008/40005/40004
 - DynamicQueryServiceTest 覆盖 5 个分支
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1475,7 +1467,6 @@ feat(report-v1): B.2 POST /saved-queries 保存（10 条上限 + 自动删最旧
 - SavedQueryServiceTest 覆盖 < 10 / = 10 / > 10 三分支
 - 错误码：无（业务上不返错，超限静默删旧）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1662,7 +1653,6 @@ feat(report-v1): 仪表盘预置指标常量 + Caffeine 缓存（Green，Task M2
 - 全部 List.of(...) 不可变，DashboardPresidentMetricsTest 守护数量与不可变性
 - ReportCacheConfig：5 个 Caffeine 缓存（dashboard / metric-tree / 3 类 summary），TTL 5min
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1825,7 +1815,6 @@ feat(report-v1): C.1 GET /dashboard/president 分行行长仪表盘（Green，Ta
 - Caffeine 缓存 5min，按 (dataDate, orgCode) 区分
 - DashboardServiceTest 覆盖角色通过/拒绝两分支
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2130,7 +2119,6 @@ feat(report-v1): C.3 GET /perf-summary 绩效汇总（KpiApi V1.1 真调，Green
 - subjectIds 上限 100；单条循环（V1.1+ 计划切 batchGet 切换登记 M6.3 技术债）
 - try-catch 包装上游异常 → RPT-50001（R4 fail-close）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2610,7 +2598,6 @@ feat(report-v1): SqlSafeValidator JSqlParser 4.9 AST 校验（Green，Task M4.1.
 - SqlSafeValidatorTest 覆盖 ≥15 边界用例（通过+拒绝+LIMIT 三类）
 - 错误码：42001 / 42002 / 42003 / 42007 / 42008
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2748,7 +2735,6 @@ feat(report-v1): D.1 POST /sql-probe/execute SQL 探查执行（Green，Task M4.
 - 并发 Semaphore(10) + 超时 30s + maxRows 1000
 - 错误码：40302/42001/42002/42003/42005/42007/42008
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -2868,7 +2854,6 @@ feat(report-v1): rptReadOnlyDataSource 独立只读数据源（Green，Task M4.2
 - maxActive=10 + queryTimeout=30s 与 SqlProbeService Semaphore 对齐
 - 配置 rpt.datasource.read-only.*（密码走环境变量 RPT_SQL_PROBE_PASSWORD）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3207,7 +3192,6 @@ feat(report-v1): RptExportService 骨架（Green，Task M5.2.2）
 - 4 个 ExportStrategy（DYNAMIC_QUERY/TOUCH_SUMMARY/PERF_SUMMARY/CUSTPOOL_SUMMARY）依赖装配
 - V1.0 同步执行（与 PerfExport V1.2 同模型，V1.1+ 计划切异步）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3522,7 +3506,6 @@ feat(report-v1): RptErrorCode J 章扩展 5 条（Green，Task M5.4.1，修复 F
 - 守护数量 25 → 30
 - 02 §6.4 RPT-50002 与 03 §J.4 RPT-50002 同码合并（已在基线，不重复扩展）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3628,7 +3611,6 @@ chore(report-v1): M6.1 全量回归 + 25 PT_RESOURCE 守护（Task M6.1.1）
 - mvn clean verify 全绿（surefire + failsafe）
 - 6 架构守护绿（BizAuth / NoEntityInController / NoMapperInController / PackageStructure / CrossModuleApiOnly / NoUoeInFacadeTests）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3711,7 +3693,6 @@ docs(report-v1): V1.0 技术债清算 + V1.1 规划登记（Task M6.3.1）
 - 6 项 V1.0 已知技术债登记（性能/异步/快照/数据版本/WORKFLOW_PARTICIPANT/snapshot 启用）
 - V1.1 规划清单（batch 切换 / 真异步 / 4 固定报表导出 / 报表订阅）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3786,7 +3767,6 @@ docs(perf-v1.1): MetricApi/KpiApi Javadoc 同步 V1.1 P2.6 真实交付状态（
 - 副产物源由：report V1.0 plan reviewer 因过时 Javadoc 误判为 UOE 状态（F2/F4 误判修补）
 - 跨模块小修补，不影响功能；防止 V1.1+ 撰写者同样被误导
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -3933,7 +3913,6 @@ M0（6-8h）→ push → M1（12-15h）→ push → M2（8-10h）→ push
 ---
 
 **计划编写时间**：2026-04-25
-**计划编写者**：Opus 4.7（1M context）
 **最后更新**：2026-04-25
 
 

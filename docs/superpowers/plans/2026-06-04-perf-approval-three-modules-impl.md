@@ -1,6 +1,6 @@
 # 手机端业绩调整审批拆分三模块 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把手机端"业绩调整"单一合并列表拆成"我的申请 / 待审批 / 已审批"三个独立模块，每模块只操作与自己相关的数据；新增页自动回显客户原分配关系。
 
@@ -222,7 +222,7 @@ Expected: PASS（1 test）。
 ```bash
 cd /home/djdev/lijh/yiti && git add -A && git commit -m "feat(perf): 新增按申请人查询分配调整申请 listMyAllocAdjustApplications
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 （非 git 仓库则跳过本步。）
 
@@ -407,7 +407,7 @@ Expected: PASS（含 Task 1.1 / 1.2 新测 + 任何已有 facade 测试）。
 ```bash
 cd /home/djdev/lijh/yiti && git add -A && git commit -m "feat(perf): 审批列表加 statusFilter 重载（PENDING 仅待办 / DONE 仅已办）
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 - [ ] **Step 7: install 到本地 .m2（供网关模块编译用最新接口）**
@@ -489,7 +489,7 @@ Expected: BUILD SUCCESS。
 ```bash
 cd /home/djdev/lijh/yiti && git add -A && git commit -m "feat(gateway): CallPuRequest.Parm 加 queryStatus + 新增 OrigAllocData DTO
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -586,7 +586,7 @@ Expected: PASS（含新用例与原有用例）。
 ```bash
 cd /home/djdev/lijh/yiti && git add -A && git commit -m "feat(gateway): 新增 PERF_MY_LIST 分发 + WITHDRAWN→3 状态映射
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -656,7 +656,7 @@ Expected: PASS（全部用例）。
 ```bash
 cd /home/djdev/lijh/yiti && git add -A && git commit -m "feat(gateway): PERF_LIST 透传 queryStatus 到 perf 状态域查询
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -834,7 +834,7 @@ Expected: BUILD SUCCESS。
 ```bash
 cd /home/djdev/lijh/yiti && git add -A && git commit -m "feat(gateway): 新增 PERF_ORIG_ALLOC 分发（客户原分配关系回显，USER_ID 反查工号）
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---

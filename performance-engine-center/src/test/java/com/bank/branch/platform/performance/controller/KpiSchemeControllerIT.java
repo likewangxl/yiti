@@ -383,7 +383,7 @@ class KpiSchemeControllerIT extends PerformanceControllerTestBase {
         assertBizAuth("delete", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, BizAction.DELETE);
         assertAuditLog("delete", new Class<?>[]{String.class, ReleaseSlotReqDTO.class}, "DELETE", true);
 
-        // Q8.5a 对齐 Controller 实际注解与 CLAUDE.md §7.1.1 对照表：
+        // Q8.5a 对齐 Controller 实际注解与 架构规约 §7.1.1 对照表：
         // POST /api/perf/kpi-schemes/{id}/publish → action=EXECUTE → P_PERF_KPI_PUB
         assertBizAuth("publish", new Class<?>[]{String.class, PublishKpiSchemeReqDTO.class}, BizAction.EXECUTE);
         assertAuditLog("publish", new Class<?>[]{String.class, PublishKpiSchemeReqDTO.class}, "PUBLISH", true);

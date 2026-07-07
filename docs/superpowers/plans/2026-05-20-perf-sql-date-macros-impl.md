@@ -1,6 +1,6 @@
 # 指标 SQL 日期宏 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 为 `perf_metric_def.sql_text` 提供 8 个由后端按 `dataDate` 自动注入的强类型 `LocalDate` 命名参数（`:dateToday` / `:dateYesterday` / `:dateMonthEnd` / `:datePrevMonthEnd` / `:dateQuarterEnd` / `:datePrevQuarterEnd` / `:dateYearEnd` / `:datePrevYearEnd`），统一日期口径，免去业务方手写 MySQL 日期函数。
 
@@ -195,7 +195,6 @@ dateQuarterEnd/datePrevQuarterEnd/dateYearEnd/datePrevYearEnd
 6 个 surefire 用例覆盖闰年 / 季初跨年 / 季末当日 / 年初跨年 / 普通日 / null 抛错。
 本 commit 仅引入纯函数，未接入任何调用方。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -316,7 +315,6 @@ feat(perf): MetricCalcService.executeSqlAndPersist 注入 8 个日期宏
 
 新增 1 case 用 ArgumentCaptor 校验 8 个宏 + 2 个固定参数全部进入 params。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -462,7 +460,6 @@ dataDate=null 兜底分支跳过宏注入，避免破坏 trial 默认入口。
 - runSql_userParamsCannotOverrideSystemMacros
 - runSql_nullDataDate_doesNotInjectMacros
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -578,7 +575,6 @@ feat(perf-fe): 指标编辑对话框增加日期变量提示卡
 
 注：wangyq 副本同步已 cp，不进入本仓库提交范围（wangyq 是另一独立目录）。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -676,7 +672,6 @@ docs(perf): 同步 SQL 日期宏到 03 接口文档附录 + CLAUDE.md V1.13 微�
 - performance-engine-center/CLAUDE.md 加 V1.13 微调段，登记 DateMacroResolver
   与两条调用方改造范围，链接 spec/plan/测试净增数
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```

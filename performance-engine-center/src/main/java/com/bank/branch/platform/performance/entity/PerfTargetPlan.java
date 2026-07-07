@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 /**
  * 目标方案表 perf_target_plan 贫血实体.
  *
- * <p>对齐 DDL：12 列，主键 varchar(32)（id / kpiSchemeId 统一 String，见模块 CLAUDE.md 关键设计原则 3）.
+ * <p>对齐 DDL：12 列，主键 varchar(32)（id / kpiSchemeId 统一 String，见模块架构规约 关键设计原则 3）.
  * <p>唯一键：uk_plan_code(plan_code)
  * <p>索引：idx_status(status)
  */

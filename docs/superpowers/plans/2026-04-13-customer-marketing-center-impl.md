@@ -1,6 +1,6 @@
 # Customer-Marketing-Center Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the customer-marketing-center module — 36 REST endpoints across 7 capability domains (tag management, lead management, customer master, customer pool, claim management, touch tasks, touch reports) + 5 external APIs, using strict TDD with Service unit tests, Mapper tests, and Controller MockMvc tests.
 
@@ -25,7 +25,7 @@
 1. Read the spec sections and source doc sections referenced in the task
 2. Verify actual method signatures of cross-module APIs by reading source files
 3. Follow `portal-content-center` patterns (最新参考模块)
-4. Use `superpowers:test-driven-development` skill for every coding task
+4. Use `test-driven-development` skill for every coding task
 
 **IMPORTANT - Common module classes to use:**
 

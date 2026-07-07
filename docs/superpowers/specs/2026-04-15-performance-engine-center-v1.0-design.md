@@ -7,7 +7,7 @@
 | 交付版本 | V1.0（配置与版本骨架） |
 | 编写日期 | 2026-04-15 |
 | 修订版本 | v1.2（2026-04-15，根据环境探针结果回退 v1.1 的 DDL 调整 4 项 + planId 类型回 String） |
-| 作者 | Claude Code + leid（通过 brainstorming 确认） |
+| 作者 | leid（通过 brainstorming 确认） |
 | 交付策略 | 纵切分期（B 方案） + 骨架先行 + 子域并行 + 集成收敛（C 方案） |
 | 后续版本 | V1.1（计算与导入）、V1.2（业务流程与回算） |
 
@@ -985,7 +985,7 @@ CLAUDE.md TDD 红线：
 
 ### 9.5 阶段 3：代码审查（P3）
 
-使用 `superpowers:code-reviewer` 子代理，审查重点：
+使用 `code-reviewer` 子代理，审查重点：
 
 1. TDD 节奏（git 历史体现红→绿→重构）
 2. CLAUDE.md 规范（`@BizAuth`、`@AuditLog`、跨模块调用、中文注释、UTF-8）
@@ -1103,6 +1103,6 @@ CLAUDE.md TDD 红线：
 
 | 日期 | 版本 | 变更 | 作者 |
 |---|---|---|---|
-| 2026-04-15 | v1.0 | 初稿，经 5 轮澄清 + 9 节分节确认后定稿 | Claude Code + leid |
-| 2026-04-15 | v1.1 | 根据首轮 spec review 意见修订 10 项：Api 权威对齐+UOE 占位、planId 统一 Long、DDL UK 补齐、Redis 锁时序修正、并发测试例外策略、端点数统一 35、PT_RESOURCE 前缀 `P_PERF_*`、阶段 2 集成 SQL 执行、槽位释放语义明确、BizType/resourceType 映射表 | Claude Code + leid |
-| 2026-04-15 | v1.2 | **环境探针后回退 v1.1 的 4 项 DDL 调整**：① `perf_target_plan.id` 保持 `varchar(32)`（TargetApi 改回 `String planId`），② 配置表不加 `deleted` 列，③ 配置表 UK 不含 `deleted`，④ 槽位唯一由 Redis 锁 + Service 业务校验保证（无 DB UK）；PT_RESOURCE 实际列名确认（`RESOURCE_URL/RESOURCE_METHOD/MENU_NAME/SYS_CODE`，无 `BIZ_TYPE/ACTION` 字段，BizType 存于 `pt_role_biz_scope` 表）；字典表实际为 `sys_dict + sys_dict_item` | Claude Code + leid |
+| 2026-04-15 | v1.0 | 初稿，经 5 轮澄清 + 9 节分节确认后定稿 | leid |
+| 2026-04-15 | v1.1 | 根据首轮 spec review 意见修订 10 项：Api 权威对齐+UOE 占位、planId 统一 Long、DDL UK 补齐、Redis 锁时序修正、并发测试例外策略、端点数统一 35、PT_RESOURCE 前缀 `P_PERF_*`、阶段 2 集成 SQL 执行、槽位释放语义明确、BizType/resourceType 映射表 | leid |
+| 2026-04-15 | v1.2 | **环境探针后回退 v1.1 的 4 项 DDL 调整**：① `perf_target_plan.id` 保持 `varchar(32)`（TargetApi 改回 `String planId`），② 配置表不加 `deleted` 列，③ 配置表 UK 不含 `deleted`，④ 槽位唯一由 Redis 锁 + Service 业务校验保证（无 DB UK）；PT_RESOURCE 实际列名确认（`RESOURCE_URL/RESOURCE_METHOD/MENU_NAME/SYS_CODE`，无 `BIZ_TYPE/ACTION` 字段，BizType 存于 `pt_role_biz_scope` 表）；字典表实际为 `sys_dict + sys_dict_item` | leid |

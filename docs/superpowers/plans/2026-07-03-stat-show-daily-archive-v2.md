@@ -1,6 +1,6 @@
 # 统计展示表「日增量归档 + 分批清理 + 主表瘦身」实施计划（v2）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 用一条每天循环执行的 Quartz 任务，把两张统计展示主表按天增量归档到 6 张历史表，并在旬边界日按天分批清理旧数据、月初按天分批瘦身主表——全程幂等、无大事务。
 

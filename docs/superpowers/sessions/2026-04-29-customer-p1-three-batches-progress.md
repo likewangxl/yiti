@@ -13,7 +13,7 @@
 2. 422 系列 8 条错误码补实现
 3. 403 系列 7 条错误码补实现
 
-用户决策：**全部落地**，按用户先前批次顺序拆 A/B/C 三批，inline 执行 + 末端 opus
+用户决策：**全部落地**，按用户先前批次顺序拆 A/B/C 三批，inline 执行 + 末端 reviewer
 合并 spec+code review 模式。
 
 **P1 整体进度**：✓ 全部交付，3 commit 推送 master。
@@ -54,7 +54,7 @@
 - PT_RESOURCE：`docs/superpowers/sql/2026-04-28-customer-p1a-rest-pt-resource.sql`（3 INSERT）
 - 文档：CLAUDE.md REST 表 +3 行；02 §3 dto/req+resp +2 行；偏离度底稿 §10.4/§10.8 标 done
 
-### 2.4 opus reviewer 结论
+### 2.4 reviewer 结论
 
 APPROVE WITH MINOR CHANGES — 0 CRITICAL / 1 MAJOR 已修（CustomerErrorCode 409 段按编号重排）/
 4 MINOR 留作 B/C 技术债（NPE 防御、SecureRandom、@BizAuth 真实切面集成测试、explicit DTO 工厂方法）。
@@ -87,7 +87,7 @@ APPROVE WITH MINOR CHANGES — 0 CRITICAL / 1 MAJOR 已修（CustomerErrorCode 4
 | CUST-42207 TOUCH_LOG_PHOTO_LIMIT_EXCEEDED | TouchLogService.assertPhotoCountWithinLimit (>9) |
 | CUST-42208 TOUCH_LOG_PHOTO_FORMAT_INVALID | TouchLogService.assertPhotoFormatsAllowed (jpg/jpeg/png/heic) |
 
-### 3.3 opus reviewer 结论
+### 3.3 reviewer 结论
 
 REQUEST CHANGES → 1 MAJOR（custId 重复假阳性）已修（assertCustIdsValid 入口先 LinkedHashSet 去重）。
 3 MINOR 留作技术债（手写 JSON 解析切 Jackson / 10MB 阈值 / 前端 i18n CUST-40006→CUST-42205 迁移）。
@@ -133,7 +133,7 @@ REQUEST CHANGES → 1 MAJOR（custId 重复假阳性）已修（assertCustIdsVal
 - `TouchTaskService.cancel(taskId, reason)` → `cancel(taskId, reason, operatorEmpId, isAdmin)`
 - `ClaimService.cancelClaim(claimId, reason, empId)` → `+operatorOrgCode`
 
-bootstrap CustomerMarketingCenterIT.java:150 同步更新（opus 发现的 CRITICAL 漏改已修）。
+bootstrap CustomerMarketingCenterIT.java:150 同步更新（reviewer 发现的 CRITICAL 漏改已修）。
 
 ### 4.5 ⚠️ BREAKING CHANGE
 
@@ -144,7 +144,7 @@ bootstrap CustomerMarketingCenterIT.java:150 同步更新（opus 发现的 CRITI
 
 **前端 i18n 字符串映射需同步更新**。
 
-### 4.6 opus reviewer 结论
+### 4.6 reviewer 结论
 
 REQUEST CHANGES → 1 CRITICAL（bootstrap IT markSuccess 旧签名）已修；
 3 MAJOR 部分修复（UserApi 加 cache javadoc 标注 / 偏离度新增 follow-up 段含
@@ -205,7 +205,7 @@ mvn install 把当前 main 类编译进 m2 jar 后，stash pop 还原源码但 j
 P1a 写了完整 spec + plan，P1B/P1C 沿用 inline 模式（直接侦察 → 决策点确认 → 执行）。
 Inline 模式更高效，但需要：
 - 明确决策点抛给用户（不假定）
-- 末端 opus 合并 review 弥补缺失的预审
+- 末端 reviewer 合并 review 弥补缺失的预审
 - 提交时 commit message 完整描述决策与边界
 
 ### 6.4 sed 批量更新测试方法签名

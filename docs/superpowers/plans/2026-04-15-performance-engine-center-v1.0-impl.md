@@ -1,6 +1,6 @@
 # performance-engine-center V1.0 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` (recommended) or `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 交付 performance-engine-center V1.0（配置与版本骨架）：13 张表 + 35 个 REST 端点 + 7 个对外 Api（21 实现 + 13 UOE 占位）+ 完整测试，可 `mvn package` 通过、bootstrap 启动、Knife4j 可联调。
 
@@ -2080,7 +2080,7 @@ git tag -a perf-v1.0-phase2 -m "performance-engine-center V1.0 phase 2 integrati
 
 - [ ] **Step 1: 调度 code-reviewer 子代理**
 
-使用 `Agent` 工具，subagent_type=`superpowers:code-reviewer`，prompt 模板：
+使用 `Agent` 工具，subagent_type=`code-reviewer`，prompt 模板：
 
 ```
 你是 performance-engine-center V1.0 的代码审查员。阶段 0-2 已完成，现在需要你全面审查代码质量。

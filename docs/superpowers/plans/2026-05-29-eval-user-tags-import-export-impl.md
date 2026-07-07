@@ -1,6 +1,6 @@
 # 人员标签页 工号字符型治理 + 导入/导出/模板/查询按钮 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 先把 eval 模块 4 处工号列从 BIGINT 治理为 VARCHAR(50)（工号本质字符型），再在其上为人员标签页新增显式查询按钮、Excel 同步原子导入（全部校验通过才入库）、导入模板下载、按关键词导出。
 
@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-05-29-eval-user-tags-import-export-design.md`（§3.0 工号字符型治理）
 
-**子代理派遣红线：** 所有 subagent 的 model 必须 ≥ sonnet，禁止 haiku。
+**子代理派遣红线：** 所有 subagent 的 model 须为高能力模型，禁用低配模型。
 
 **前置事实（实现者必读）:**
 - 现网 yiti 库：`EVAL_USER_TAG` 仅 3 行（USER_ID=3431，数字字符串）；`PT_USER.USER_ID` 为 varchar(50)，样例工号 `2280/3431` 等。

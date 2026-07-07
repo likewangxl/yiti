@@ -1,6 +1,6 @@
 # Performance Three-Step Closure Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` (recommended) or `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 按 `1 -> 2 -> 3` 顺序完成 `performance-engine-center` 的指标库 Controller 闭环、模块级回归、KPI 子域完整闭环，并在每个实现任务后执行“规格符合性 review -> 代码质量 review”双门禁。
 

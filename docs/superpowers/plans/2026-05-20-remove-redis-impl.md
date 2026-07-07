@@ -1,6 +1,6 @@
 # 去 Redis 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** yiti 后端去掉 Redis 依赖，session 改 Spring Session JDBC，权限/绩效缓存改直接读 DB，绩效分布式锁改自建 PT_LOCK 表 + JdbcLockManager。
 
@@ -148,7 +148,6 @@ chore(deps): bootstrap 移除 redis 依赖 + 加 spring-session-jdbc
 注意：本 commit 之后应用启动会因 SPRING_SESSION 表不存在失败，
 下个 commit (feat(session)) 加表 SQL 后才能完整启动。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -312,7 +311,6 @@ feat(session): Spring Session JDBC 建表 SQL + SessionJdbcIT 集成测试
 SQL 文件需 DBA 手工执行（项目已废 Flyway）。
 本 commit 后应用可完整启动（前一 commit deps 改完 + 本 commit 建表 + JDBC 自动接管 session 存储）。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -542,7 +540,6 @@ refactor(auth-cache): PermissionCacheService 去 redis 直接读 DB
 权限校验热路径：PT_USER_ROLE/PT_ROLE_RESOURCE 主键索引点查 ~0.1ms，
 对业务无感（业务 SQL 本来 10ms+）。后期发现热点可补 caffeine。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -653,7 +650,6 @@ refactor(perf-cache): 绩效模块 2 处缓存去 redis
 性能影响：批量查 100 条客户分配关系约 5-10ms，可接受。
 后期发现热点可补 caffeine。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1063,7 +1059,6 @@ feat(lock): 自建 LockManager + JdbcLockManager + 替换绩效 4 处 redis 锁
 
 对应测试改 mock LockManager。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```

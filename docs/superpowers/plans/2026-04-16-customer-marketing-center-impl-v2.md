@@ -1,6 +1,6 @@
 ﻿# Customer-Marketing-Center Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在已有枚举与 Maven 模块基础上，完成 `customer-marketing-center` 的 7 个能力域、外部 API、事件发布与 bootstrap 集成验证，使其成为后续 `business-application-center`、`performance-engine-center`、`report-analytics-center` 的稳定上游。
 

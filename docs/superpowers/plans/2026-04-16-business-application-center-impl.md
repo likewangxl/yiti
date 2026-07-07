@@ -1,6 +1,6 @@
 ﻿# Business-Application-Center Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 从零创建 `business-application-center`，完成资产投放申请、中场支持申请、承接办理、导出与对外 API，使其成为 `performance-engine-center` 与 `report-analytics-center` 的业务事实源。
 

@@ -1,6 +1,6 @@
 # Portal-Content-Center V1 Slice Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the portal-content-center module's V1 first slice — 10 REST endpoints (workspace aggregation A.1-A.3 + product catalog D.1-D.7) using TDD with Service unit tests + Mapper Testcontainers integration tests + Controller MockMvc integration tests.
 
@@ -22,7 +22,7 @@
 1. Read the spec sections referenced in the task
 2. Verify the actual method signatures of cross-module APIs by reading the source files (don't trust your memory)
 3. Follow `system-governance-center` patterns for Entity/Mapper/Service (governance is the most recent reference module)
-4. Use the `superpowers:test-driven-development` skill for every coding task — write the failing test FIRST, run it to verify red, then implement minimal code to green, then refactor
+4. Use the `test-driven-development` skill for every coding task — write the failing test FIRST, run it to verify red, then implement minimal code to green, then refactor
 
 **IMPORTANT - Common module classes to use:**
 
@@ -3071,7 +3071,7 @@ Before declaring V1 slice complete:
 - [ ] All 10 endpoints respond 200 OK to curl smoke tests
 - [ ] 14+ commits in `git log` (one per phase/interface)
 - [ ] PT_RESOURCE align SQL committed and applied
-- [ ] Run `superpowers:requesting-code-review` skill to invoke code-reviewer subagent for the entire V1 slice
+- [ ] Run `requesting-code-review` skill to invoke code-reviewer subagent for the entire V1 slice
 
 
 

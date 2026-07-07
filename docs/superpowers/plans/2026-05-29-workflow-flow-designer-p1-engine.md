@@ -1,7 +1,7 @@
 # 审批流程设计器 P1（后端引擎）实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> **子代理红线**：派遣任何 subagent 时 model 必须 ≥ sonnet（禁用 haiku）。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **子代理红线**：派遣任何 subagent 时 model 须为高能力模型。
 
 **Goal:** 在 workflow-center 建成"DB 流程模型 → 生成 BPMN → 部署到影子 key"的后端引擎与管理 API，默认零影响现有审批。
 

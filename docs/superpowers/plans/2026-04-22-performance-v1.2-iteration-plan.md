@@ -1,6 +1,6 @@
 # performance-engine-center V1.2 迭代计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 交付 V1.2 流程与事件能力——分配关系调整审批（对公/零售）、目标修正审批、sys_control 回滚、4 类领域事件发布、批量导出、定时清理任务，补齐数据范围过滤闭环。
 

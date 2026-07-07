@@ -1,6 +1,6 @@
 # 内部相互评价模块实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在 performance-engine-center 模块的 eval 子包中实现银行内部相互评价功能（7 张表、19 个 REST 接口、1 个 Quartz Job）。
 

@@ -1,6 +1,6 @@
 # Auth Controller 接口对齐实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal**: 将 auth-permission-center 模块下的各 Controller 实现与 `docs/modules/auth-permission-center/03-接口设计与报文.md` 严格对齐，修复 5 处不一致。
 

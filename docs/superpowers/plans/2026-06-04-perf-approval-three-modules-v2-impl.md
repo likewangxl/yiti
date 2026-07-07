@@ -4,7 +4,6 @@
 
 **Goal:** 补 `PERF_INFO` 详情接口；优化新增页样式；我的申请顶部 add-o + 列表撤回；待审批内联审批；已审批折叠展示分配对比。
 
-**约束:** 后端 JDK17 (`JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64 mvn`)；TDD；**精确 `git add`，禁止 `git add -A`**；前端 `front/xazc_transfer_front` 非 git，写+人工验证；commit 尾 `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`。分支 `feat/perf-approval-three-modules`（已有 baseline + v1 提交）。
 
 ## 已探明的后端事实（实现依据）
 - `AllocAdjustService.getById(id)` → `ApplyWithItems{apply: PerfAllocAdjustApply, items: List<PerfAllocAdjustItem>}`。

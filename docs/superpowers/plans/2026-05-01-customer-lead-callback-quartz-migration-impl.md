@@ -1,6 +1,6 @@
 # V1.8 — Customer Lead 回调补偿 Quartz 迁移实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 `LeadCallbackCompensationService` 从 Spring `@Scheduled` 迁移到 Quartz 集群调度，使整个仓库的业务定时任务由 `sys_job_conf` + Quartz 统一管理。
 
@@ -31,7 +31,7 @@
 | `customer-marketing-center/src/main/java/com/bank/branch/platform/customer/config/CustomerSchedulingConfig.java` | 删除 | P4 |
 | `bootstrap/src/test/java/com/bank/branch/platform/it/LeadCallbackJobRegisteredIT.java` | 新建 | P5 |
 | `CLAUDE.md`（root） | 修改（V1.8 状态） | P7 |
-| `.claude/CLAUDE.md` | 修改（V1.8 状态） | P7 |
+| `.wt/CLAUDE.md` | 修改（V1.8 状态） | P7 |
 | `customer-marketing-center/CLAUDE.md` | 修改 | P7 |
 | `performance-engine-center/CLAUDE.md` | 修改 | P7 |
 
@@ -961,7 +961,7 @@ git push origin master
 
 **Files:**
 - Modify: `CLAUDE.md`
-- Modify: `.claude/CLAUDE.md`（与 root 内容大体一致，需同步）
+- Modify: `.wt/CLAUDE.md`（与 root 内容大体一致，需同步）
 
 - [ ] **Step 1: 在「当前已实现的模块」表中更新 customer-marketing-center 状态**
 
@@ -985,13 +985,13 @@ git push origin master
 customer-marketing-center V1.8 已交付：LeadCallbackCompensation @Scheduled → Quartz 集群调度（job_key=LEAD_CALLBACK_COMPENSATE）；CustomerSchedulingConfig 删除，@EnableScheduling 归属 PerformanceSchedulingConfig
 ```
 
-- [ ] **Step 3: 同步 .claude/CLAUDE.md**
+- [ ] **Step 3: 同步 .wt/CLAUDE.md**
 
 ```bash
-diff CLAUDE.md .claude/CLAUDE.md
+diff CLAUDE.md .wt/CLAUDE.md
 ```
 
-把 Step 1 / Step 2 改动同步到 `.claude/CLAUDE.md`（项目惯例两份并存，需保持同步）。
+把 Step 1 / Step 2 改动同步到 `.wt/CLAUDE.md`（项目惯例两份并存，需保持同步）。
 
 ### Task 7.2: 更新 customer-marketing-center/CLAUDE.md
 
@@ -1063,14 +1063,14 @@ cron='0 */5 * * * ?', misfire=DO_NOTHING；多实例由 QRTZ_LOCKS 行锁防重�
 - [ ] **Step 1: 提交**
 
 ```bash
-git add CLAUDE.md .claude/CLAUDE.md \
+git add CLAUDE.md .wt/CLAUDE.md \
         customer-marketing-center/CLAUDE.md \
         performance-engine-center/CLAUDE.md
 
 git commit -m "$(cat <<'EOF'
 docs: V1.8 P7 CLAUDE.md 同步交付状态
 
-- root + .claude/CLAUDE.md：customer-marketing-center 标注 V1.8 已交付
+- root + .wt/CLAUDE.md：customer-marketing-center 标注 V1.8 已交付
 - customer-marketing-center/CLAUDE.md：新增 V1.8 改动进度章节、
   job/quartz 子包记录、V1.9 候选事项
 - performance-engine-center/CLAUDE.md：V1.8 微调
@@ -1208,7 +1208,7 @@ DDL：
   - U1_8_0__remove_lead_callback_compensate_job.sql（DELETE 1 行）
   - bootstrap data.sql：seed +1 行
 文档：
-  - root + .claude/CLAUDE.md：customer-marketing-center 标注 V1.8 已交付
+  - root + .wt/CLAUDE.md：customer-marketing-center 标注 V1.8 已交付
   - customer-marketing-center/CLAUDE.md：V1.8 改动进度章节
   - performance-engine-center/CLAUDE.md：V1.8 微调说明
 git：
@@ -1239,7 +1239,7 @@ git：
 
 按 brainstorming 阶段拍板：
 
-- **Sub-skill：** `superpowers:subagent-driven-development`
+- **Sub-skill：** `subagent-driven-development`
 - **Branch：** master 直接 push（每 phase 末尾）
 - **Subagent model：** P1 / P3 / P4 / P7 用 cheap model（机械任务）；P2 / P5 / P6 用 standard model（含探查/调试判断）；最终 review 用 capable model
 - **Two-stage review per task：** spec compliance → code quality（如 V1.7 节奏）

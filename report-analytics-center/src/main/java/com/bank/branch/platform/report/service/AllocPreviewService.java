@@ -17,7 +17,7 @@ import java.util.List;
  *
  * <p>只读委托：调用 perf 的 {@link AllocApi#getLastApprovedAllocPreview(String)} 取该客户
  * RULE / ACCOUNT 两个维度下「审批通过的最后一条」分配调整申请明细，装配为前端展示 DTO。
- * report 模块不直接访问 perf 自有表（PERF_ALLOC_ADJUST_*），严格走 *Api（CLAUDE.md 跨模块红线）。
+ * report 模块不直接访问 perf 自有表（PERF_ALLOC_ADJUST_*），严格走 *Api（架构规约 跨模块红线）。
  */
 @Slf4j
 @Service

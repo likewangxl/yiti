@@ -1,7 +1,6 @@
 # 去 Redis 设计
 
 **日期**：2026-05-20  
-**作者**：djdev + Claude  
 **模块**：bootstrap / common-web / auth-permission-center / performance-engine-center  
 **关联记忆**：[[2026-launch-context]] 6-10 上线 · [[wangyq-uias-edgecar-protocol]]（Spring Session JDBC 注意 Serializable）
 

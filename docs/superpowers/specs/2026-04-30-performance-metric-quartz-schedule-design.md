@@ -813,4 +813,4 @@ mvn -pl performance-engine-center flyway:undo  # 反向 V1_7_1 + V1_7_0
 
 ---
 
-**末尾**：本 spec 完成 brainstorming 阶段。下一步进入 `superpowers:writing-plans` 生成详细实现计划。
+**末尾**：本 spec 完成 brainstorming 阶段。下一步进入 `writing-plans` 生成详细实现计划。

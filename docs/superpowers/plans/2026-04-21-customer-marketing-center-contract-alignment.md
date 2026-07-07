@@ -1,6 +1,6 @@
 # customer-marketing-center 契约对齐修复计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 `customer-marketing-center` 模块的代码实现严格对齐到 `docs/modules/customer-marketing-center/` 文档 (尤其 04-对外API契约.md / 01-功能规格.md §7.3bis) — 补齐 20+ 缺失 API 方法、修正触达状态机、引入 DTO 对外封装、补齐关键 REST 端点、同步更新 business-application-center 下游调用方。
 
@@ -981,10 +981,10 @@ cd bootstrap && mvn spring-boot:run
 
 每个 Task 子代理应接收：
 1. 任务编号 + 完整 Task 段落原文
-2. 所在工作目录 (`D:\Project\oneplate\.claude\worktrees\suspicious-kirch-8968cd`)
+2. 所在工作目录 (`D:\Project\oneplate\.worktrees\suspicious-kirch-8968cd`)
 3. 完成条件：所有 Step 打勾 + 对应提交已完成
 4. 必须遵守: TDD 红线 / UTF-8 编码 / Windows bash shell
 
 ---
 
-**全文完。Plan 作者: Claude Opus 4.7 / 2026-04-21**
+**全文完。2026-04-21**

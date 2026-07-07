@@ -208,8 +208,7 @@ bootstrap ✅（依赖全部 9 模块已闭环）
 
 ## 用户/Agent 协作约定（沿用）
 
-- 子代理统一使用 opus 模型（用户指令优先于 MEMORY.md sonnet 默认）
-- 中文 commit message + HEREDOC 格式 + `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` 尾行
+- 子代理统一使用 高配模型（用户指令优先于 MEMORY.md 标准 默认）
 - `git add` 显式列文件，禁用 `git add -A`
 - TDD 严格 Red-Green 分离（测试先 Red 再 Green，每步独立 commit）
 - 每个 Phase 完成即 push origin
@@ -241,4 +240,4 @@ bootstrap ✅（依赖全部 9 模块已闭环）
 **文档生成时间**：2026-04-25
 **对应 git HEAD（push 后）**：`19a6a80`
 **会话累计 commit（本期分量）**：4 commit
-**平台累计 commit（含历史）**：237 + 4 = **241 commit**（performance V1.0-V1.5 共 225 + report V1.0 共 67 + 根 CLAUDE 修正 1 + 状态存档 1 + A 方案 4 = 实际 git log 计数）
+**平台累计 commit（含历史）**：237 + 4 = **241 commit**（performance V1.0-V1.5 共 225 + report V1.0 共 67 + 根架构规约 修正 1 + 状态存档 1 + A 方案 4 = 实际 git log 计数）

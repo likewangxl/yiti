@@ -1,6 +1,6 @@
 ﻿# Report-Analytics-Center Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 从零创建 `report-analytics-center`，在 V1 只读边界内完成 P0 能力：动态指标查询、查询方案管理、分行行长仪表盘、SQL 探查、固定汇总报表与异步导出框架。
 

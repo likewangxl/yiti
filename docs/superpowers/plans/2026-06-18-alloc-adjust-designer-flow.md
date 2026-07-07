@@ -1,6 +1,6 @@
 # 业绩调整审批改走「设计器动态流程」+ 经办人分支选择 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 全程遵守项目 TDD 红线（红-绿-重构，每步提交）。派遣 subagent 时 model 必须 ≥ sonnet。中文回答，UTF-8。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 全程遵守项目 TDD 红线（红-绿-重构，每步提交）。派遣 subagent 时 model 须为高能力模型。中文回答，UTF-8。
 
 **Goal:** 让业绩调整审批的「审批环节 + 流转分支」完全由审批流程设计器中的「对公分配关系调整审批（设计器）/零售分配关系调整审批（设计器）」动态驱动；申请按客户类型自动走对公/零售流程；当某审批节点有 ≥2 条出边时，把出边「输出名称（流转连线 name）」反显到审批页面供经办人选择走向。原静态 BPMN 审批代码全部保留以便回退（不加运行时开关）。
 
@@ -123,7 +123,6 @@ git add docs/superpowers/plans/2026-06-18-alloc-adjust-designer-flow.md
 git commit -F - <<'EOF'
 docs(perf/alloc): 记录设计器流程启动变量清单（startOrgLevel 等）
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -184,7 +183,6 @@ git add workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/
 git commit -F - <<'EOF'
 feat(wf/flow): 新增 BranchOptionDTO 承载审批节点出边选项
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -278,7 +276,6 @@ git add workflow-center/src/main/java/com/bank/branch/platform/workflow/mapper/W
 git commit -F - <<'EOF'
 feat(wf/flow): WfFlowDefMapper 新增 selectByDeployedProcDefKey 反查
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -314,7 +311,6 @@ git add workflow-center/src/main/java/com/bank/branch/platform/workflow/api/dto/
 git commit -F - <<'EOF'
 feat(wf/task): TaskDetailRespDTO 新增 outgoingBranches 出边选项字段
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -502,7 +498,6 @@ git add workflow-center/src/main/java/com/bank/branch/platform/workflow/service/
 git commit -F - <<'EOF'
 feat(wf/task): 任务详情填充设计器流程当前节点命名出边作为分支选项
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -643,7 +638,6 @@ git add workflow-center/src/main/java/com/bank/branch/platform/workflow/api/Work
 git commit -F - <<'EOF'
 feat(wf/api): 新增 resolveDesignerProcDefKey 按 flowKey 解析已发布设计器流程
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -798,7 +792,6 @@ git add performance-engine-center/src/main/java/com/bank/branch/platform/perform
 git commit -F - <<'EOF'
 feat(perf/alloc): 业绩调整审批路由切换到已发布设计器流程（静态逻辑改名保留回退）
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -918,7 +911,6 @@ git add performance-engine-center/src/main/java/com/bank/branch/platform/perform
 git commit -F - <<'EOF'
 feat(perf/alloc): 起流程种入 startOrgLevel 等设计器网关分流启动变量
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 
@@ -1027,7 +1019,6 @@ git add -A
 git commit -F - <<'EOF'
 feat(perf/alloc): 审批页按设计器出边输出名称反显分支供经办人选择走向
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 ```
 

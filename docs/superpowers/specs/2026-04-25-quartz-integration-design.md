@@ -2,9 +2,8 @@
 
 **版本**: v1.0
 **创建日期**: 2026-04-25
-**作者**: Claude (Opus 4.7) + 用户协同 brainstorming
 **子项目编号**: B（3 子项目 refactor 中的第 2 个）
-**Worktree**: `D:\Project\oneplate\.claude\worktrees\refactor-quartz-job`
+**Worktree**: `D:\Project\oneplate\.worktrees\refactor-quartz-job`
 **Branch**: `refactor/quartz-job-integration`（基于 master `af66ccd` 分叉）
 **前置子项目**: A（Excel→EasyExcel）已完成（merged: `subproject/A-excel-DONE` 已 push）
 **后续子项目**: C（MyBatis-Plus 引入），3 子项目全部完成后统一合并 master

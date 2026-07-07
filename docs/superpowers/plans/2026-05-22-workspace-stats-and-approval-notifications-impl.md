@@ -1,6 +1,6 @@
 # V3 workspace stats + 审批通知 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans。
 
 **Goal:** workspace stats 联动真实 todo count + 未读通知；审批/撤回自动给申请人或下一节点 assignee 发通知。
 

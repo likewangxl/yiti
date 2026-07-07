@@ -1,7 +1,7 @@
 # 审批流程设计器 P2（前端设计器）实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development。逐任务执行。
-> **子代理红线**：派遣 subagent 时 model 必须 ≥ sonnet（禁 haiku）。
+> **For agentic workers:** REQUIRED SUB-SKILL: subagent-driven-development。逐任务执行。
+> **子代理红线**：派遣 subagent 时 model 须为高能力模型。
 > **前端仓库红线**：前端代码在 **wangyq** 仓库（`/home/djdev/wangyq/yiti/xanzc_frontend`，vite 实跑此处），**不是** lf。所有前端文件创建/编辑/提交都在 wangyq；提交用 `git -C /home/djdev/wangyq/yiti`。本计划文档本身存于 lf docs。
 
 **Goal:** 在 xanzc_frontend 建「审批流程管理」表单式设计器：列表查看所有流程 + 编辑页增删改环节/审批人(角色·机构·人 多条件并存·或签会签)/条件分支，对接 P1 后端 `/api/admin/workflow/flows`。

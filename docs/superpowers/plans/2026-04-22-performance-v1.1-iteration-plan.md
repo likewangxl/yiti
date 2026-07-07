@@ -1,6 +1,6 @@
 # performance-engine-center V1.1 迭代计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 交付 V1.1 核心业务能力——指标计算执行引擎（SQL + Groovy + 级联刷新）、KPI 定时计算、数据导入统一入口、外部数据上报闭环、历史回算。
 

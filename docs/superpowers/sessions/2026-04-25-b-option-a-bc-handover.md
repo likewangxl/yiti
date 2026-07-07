@@ -26,7 +26,7 @@
 
 ---
 
-## 累计 31+ commits + handover 多次续接更新（origin/claude/crazy-joliot-0e2a1f）
+## 累计 31+ commits + handover 多次续接更新（origin/feat/crazy-joliot-0e2a1f）
 
 ```
 a71ef53 chore(cleanup): 删除 H2 hack 残留（FU-15 B C5 收尾）  ← Phase 2.6 FU-15 B
@@ -225,7 +225,7 @@ PT_RESOURCE.RESOURCE_ID 是 varchar(20)，原 superpowers/sql/2026-04-11-portal-
 
 **合并执行**：
 1. `git checkout master && git pull --ff-only origin master` → 同步至 b01ffda
-2. `git merge --no-ff claude/crazy-joliot-0e2a1f` → 自动合并产生 cf7b64c
+2. `git merge --no-ff feat/crazy-joliot-0e2a1f` → 自动合并产生 cf7b64c
 3. **测试库 V1.6 quartz schema 同步**：跑 `docs/schema/migrations/2026-04-25-quartz-integration.sql`
    - sys_job_conf 加 `quartz_job_class` + `misfire_policy` 字段
    - sys_job_run_log 加 `scheduled_fire_time` 字段
@@ -417,7 +417,7 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 ### Phase 2.6 FU-15 B — ✅ 已完成（compact 后续接交付，commits `2ec276e` ~ `a71ef53`）
 
-详见上文「决策 12」。预估 4-6h，实际约 3.5h（含 2 次轻调研 + Docker 阻塞决策切 B 方案 + opus implementer 5 commits + opus reviewer ✅）。reviewer ✅ 通过 + 9 项 follow-up（FU-22 ~ FU-30，全不阻塞，详见末尾 V1.7+ 跟踪段）。
+详见上文「决策 12」。预估 4-6h，实际约 3.5h（含 2 次轻调研 + Docker 阻塞决策切 B 方案 + implementer 5 commits + reviewer ✅）。reviewer ✅ 通过 + 9 项 follow-up（FU-22 ~ FU-30，全不阻塞，详见末尾 V1.7+ 跟踪段）。
 
 **为什么从 testcontainers 改成 B 方案**：本会话开始后探测发现 Windows 本地无 Docker（where docker 找不到 + Docker Desktop 未装 + WSL 未装），用户选 B 方案（用本地 onepl_test_bootstrap 库 + 直连 localhost:3306）。与 performance/report 模块统一架构，无需 Docker 即可达到 FU-15 根本目标"测试与生产 DDL 完全一致"。
 
@@ -520,10 +520,9 @@ commits `1bd5301` `c29046a` 已 push。详见上文「决策 8」。预估 30-45
 
 ## 用户偏好沿用
 
-- 子代理模型分层：**Explore→sonnet，其他（implementer/reviewer）→opus**（详见 `~/.claude/projects/D--Project-oneplate/memory/feedback_subagent_model.md`）
+- 子代理模型分层：**Explore→标准，其他（implementer/reviewer）→高配**（详见 `~/.wt/projects/D--Project-oneplate/memory/feedback_subagent_model.md`）
 - 每 task = implementer + 1 综合 reviewer（不分 spec/code 两阶段）
 - Phase 完成即 push origin，全部完成合并 master（A 方案直接在 master 上做）
-- 中文 commit message + HEREDOC 格式 + `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` 尾行
 - `git add` 显式列文件，禁用 `git add -A`
 - TDD 严格 Red-Green 分离（红 IT commit 与 fix commit 分离）
 - 禁用 `--no-verify` / `--no-gpg-sign`
@@ -570,7 +569,7 @@ mvn 全量回归验证（FU-27）：`mvn clean install -DskipTests + mvn verify 
 主代理应：
 1. Read 本 handover doc（确认 FU-14 + FU-15 B 全部 ✅）
 2. 验证 git status clean + 7 commits ahead of origin/master
-3. `git checkout master && git merge --no-ff claude/crazy-joliot-0e2a1f -m "..."` 第四次合并
+3. `git checkout master && git merge --no-ff feat/crazy-joliot-0e2a1f -m "..."` 第四次合并
 4. push master + push branch
 5. handover doc 末尾元数据更新（HEAD / commit count）
 

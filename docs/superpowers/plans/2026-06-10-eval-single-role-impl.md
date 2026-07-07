@@ -1,6 +1,6 @@
 # 评价体系单一角色化 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将评价模块从「每人 1 被评价标签 + N 评价标签」改为「每人至多 1 个标签、无 role_type」，方向完全由评价规则承载。
 

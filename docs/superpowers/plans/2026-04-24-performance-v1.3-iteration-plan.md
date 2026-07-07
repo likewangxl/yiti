@@ -1,6 +1,6 @@
 # performance-engine-center V1.3 迭代计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 消化 V1.1/V1.2 累积的 12 项技术债，并对 V1.2 遗留的 5 处 UOE 方法给出实际实现，使 performance-engine-center 在生产运行下具备最低噪音、最小技术债、完全可观测的状态。
 
@@ -119,7 +119,6 @@ fix(perf-v1.3): V1_2_5 清理 V1.0 NULL deleted 历史数据（Task R0.1）
 V1.0 MetricDefService.create 未初始化 deleted 字段导致生产可能存在 NULL 孤儿行，
 Q8.5b 修复但未清理历史数据。V1_2_5 幂等 UPDATE 补救。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```

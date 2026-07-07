@@ -1,6 +1,6 @@
 # 信息聚合模块（前端）实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development 或 executing-plans，逐任务实现。步骤用 `- [ ]` 跟踪。
+> **For agentic workers:** REQUIRED SUB-SKILL: subagent-driven-development 或 executing-plans，逐任务实现。步骤用 `- [ ]` 跟踪。
 
 **Goal:** 在 wangyq 前端新增「信息聚合」一级菜单，照效果图做网址导航/通讯录/产品资料库/常用文档 4 个 PC 页面，接 portal-content-center 既有 API。
 

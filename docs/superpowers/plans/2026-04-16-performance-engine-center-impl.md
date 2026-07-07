@@ -1,6 +1,6 @@
 ﻿# Performance-Engine-Center Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 从零创建 `performance-engine-center`，完成数据版本、指标定义、KPI 方案、目标值、分配关系、审批调整、KPI 计算与对外只读 API，为 portal 工作台与 report 报表提供统一指标和 KPI 数据源。
 

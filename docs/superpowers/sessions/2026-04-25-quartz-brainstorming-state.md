@@ -96,9 +96,9 @@ void failJobRun(String runLogId, String errorMsg);
 
 ## 工作环境
 
-- **Worktree**: `D:\Project\oneplate\.claude\worktrees\refactor-quartz-job`
+- **Worktree**: `D:\Project\oneplate\.worktrees\refactor-quartz-job`
 - **Branch**: `refactor/quartz-job-integration`（从 master `af66ccd` 分叉）
-- **子代理模型**: sonnet（按 user memory）
+- **子代理模型**: 标准（按 user memory）
 - **执行节奏**: implementer + 1 次合并 spec+quality reviewer（与子项目 A 后期一致）
 
 ---

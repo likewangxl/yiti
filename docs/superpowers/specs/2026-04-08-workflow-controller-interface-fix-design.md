@@ -1,7 +1,6 @@
 # Workflow Center 接口一致性修复 - 设计文档
 
 > **Date:** 2026-04-08
-> **Author:** Claude Code
 > **Status:** APPROVED
 
 ## 背景

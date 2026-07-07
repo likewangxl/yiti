@@ -1,6 +1,6 @@
 # performance-engine-center V1.0 整改计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 修复 V1.0 已交付代码与文档/DDL 权威源的偏离，使 V1.0 骨架在上线 V1.1 之前达到"契约闭环、DDL 完备、错误码可被跨模块消费"的稳定态。
 
@@ -1494,7 +1494,7 @@ git commit --allow-empty -m "chore(perf-v1.0): @BizAuth.action 与 03 文档一�
 
 ### Task Z1：整改验收清单
 
-- [ ] **Step 1：重放整改前的 Opus 分析报告**
+- [ ] **Step 1：重放整改前的 分析报告**
 
 对照 Top 5 风险清单：
 1. 主键类型契约 → Task A2（03/04/05 三份文档统一到 String）✅

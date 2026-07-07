@@ -1,6 +1,6 @@
 # 评价标签去类型化 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把"被评价/评价"角色从 `EVAL_TAG.tag_type`（标签属性）搬到使用处（`EVAL_USER_TAG.role_type` + 规则的列），让标签管理页拍平为无类型标签池，人员标签页与评价规则仍区分两角色并施加局部排斥。
 
@@ -12,7 +12,7 @@
 
 **全局约束（红线）**：
 - TDD 红-绿-重构，每步独立 commit
-- 派遣 subagent 时 model 必须 ≥ sonnet，禁用 haiku
+- 派遣 subagent 时 model 须为高能力模型，禁用低配模型
 - 中文注释，UTF-8 编码
 - 禁止引入 Flyway / `spring.flyway.*` / `V*__*.sql`
 
@@ -831,6 +831,6 @@ git commit -m "docs(eval): 记录标签去类型化交付摘要"
 
 ## 完成后
 
-全部 Task 完成后，调用 superpowers:finishing-a-development-branch 收尾（当前分支 feat/eval-participate-flag，用户已确认就地叠加）。
+全部 Task 完成后，调用 finishing-a-development-branch 收尾（当前分支 feat/eval-participate-flag，用户已确认就地叠加）。
 
 **生产部署提醒**：onepl 生产库部署前需同样跑冲突预检 + 迁移脚本；EVAL_USER_SETTING 旧语义与本特性正交。

@@ -143,7 +143,6 @@ fix(portal-v1): MetricAdapter 切到 performance 正式 MetricApi（P1 关键债
 - MetricAdapter 注入正式 API，工作台指标卡不再永远走降级分支
 - portal CLAUDE.md "当前实现说明" 同步更新
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 
 ```
@@ -153,7 +152,6 @@ docs(modules): customer/bizapp CLAUDE.md 登记 V1.0 已知技术债
 - business-application-center 登记 4 项（错误码缺 5 近义码覆盖 / 3 V2 TODO）
 - 治理类问题，待 V1.1 整改
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 
 ---
@@ -172,8 +170,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ## compact 后续接执行步骤
 
 1. **第一步**：Read 本文档
-2. **第二步**：派发 polish patch agent（opus 模型），任务清单按 A.1-A.5 执行
-3. **第三步**：派发 polish review agent（opus 模型），核验：
+2. **第二步**：派发 polish patch agent（高配模型），任务清单按 A.1-A.5 执行
+3. **第三步**：派发 polish review agent（高配模型），核验：
    - portal 工作台指标卡真实调用 performance MetricApi
    - portal/customer/bizapp CLAUDE.md 技术债章节完整登记
    - 测试全绿（≥ 700 tests 跨 4 模块）
@@ -214,8 +212,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ## 用户/Agent 协作约定
 
-- 子代理统一使用 opus 模型（用户指令优先于 MEMORY.md sonnet 默认）
-- 每个 commit 中文 message + HEREDOC 格式 + `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` 尾行
+- 子代理统一使用 高配模型（用户指令优先于 MEMORY.md 标准 默认）
 - `git add` 显式列文件，不用 `git add -A`
 - TDD 严格 Red-Green 分离（A 方案因为是文档/重构，不强制 Red+Green，但生产代码改动需测试守护）
 - 每个 Phase 完成后 push，全部完成合并 master（A 方案在 master 上直接做，无需合并）
@@ -224,4 +221,4 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 **文档生成时间**：2026-04-25
 **对应 git HEAD**：`97b31df`
-**会话累计 commit**：237（performance V1.0-V1.5 共 225 + report V1.0 共 67 + 根 CLAUDE 修正 1 = 实际 git log 计数从迭代起点起算）
+**会话累计 commit**：237（performance V1.0-V1.5 共 225 + report V1.0 共 67 + 根架构规约 修正 1 = 实际 git log 计数从迭代起点起算）

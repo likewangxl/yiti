@@ -25,9 +25,9 @@
 | Brainstorming Q1-Q7 | sessions/2026-04-25-quartz-brainstorming-state.md | ✅ |
 | 7 节 design 章节 | (用户逐节同意) | ✅ |
 | Spec 文档（830 行） | specs/2026-04-25-quartz-integration-design.md | ✅ commits 497e225/560fb81/e354042 |
-| Spec Round 1 + Round 2 评审 | sonnet → opus | ✅ Approved |
+| Spec Round 1 + Round 2 评审 | 标准 → 高配 | ✅ Approved |
 | Plan 文档（1900 行 / 27 task / 4 Phase） | plans/2026-04-25-quartz-integration-impl.md | ✅ commits 07e508b/db816fe |
-| Plan reviewer（opus）| 6 advisory 全部采纳 | ✅ Approved |
+| Plan reviewer| 6 advisory 全部采纳 | ✅ Approved |
 
 ---
 
@@ -113,10 +113,10 @@ P1.1 已完成（commit f9da831 + reviewer Approved）。下一个 task 是 **P1
 **完整 task 描述见 plan**: `docs/superpowers/plans/2026-04-25-quartz-integration-impl.md` 的 "Task P1.2" 章节（约 100 行 DDL 代码 + 4 步骤）。
 
 **派发要点**：
-- 模型：opus（user memory `feedback_subagent_model.md`）
+- 模型：高配（user memory `feedback_subagent_model.md`）
 - 不让 implementer 读 plan 文件，**主代理读 plan 后把完整 task text 粘到 prompt**
 - 包含：4 个 Step（创建 ddl-quartz.sql / 在 onepl 库执行 / 同步 docs/schema/CLAUDE.md / Commit）
-- 工作目录：`D:/Project/oneplate/.claude/worktrees/refactor-quartz-job`
+- 工作目录：`D:/Project/oneplate/.worktrees/refactor-quartz-job`
 
 ### 2. P1.2 implementer DONE → 派发 P1.2 综合 reviewer
 
@@ -135,8 +135,8 @@ reviewer 关键检查项：
 
 每个 task：
 1. 主代理读 plan 提取完整 task text + 上下文
-2. 派发 implementer（opus）
-3. implementer 报 DONE → 派发综合 reviewer（opus）
+2. 派发 implementer
+3. implementer 报 DONE → 派发综合 reviewer
 4. reviewer Approved → TodoWrite 标完成 → 进入下一 task
 5. reviewer Issues → implementer 修复 → 复审
 
@@ -146,16 +146,16 @@ Phase 末（P1.7 / P2.7 / P3.7 / P4.6）执行 mvn clean install 验证 + push r
 
 ## 关键文件路径速查
 
-- **Worktree 根**: `D:\Project\oneplate\.claude\worktrees\refactor-quartz-job`
+- **Worktree 根**: `D:\Project\oneplate\.worktrees\refactor-quartz-job`
 - **Branch**: `refactor/quartz-job-integration`（基于 master `af66ccd`）
 - **Spec**: `docs/superpowers/specs/2026-04-25-quartz-integration-design.md`
 - **Plan**: `docs/superpowers/plans/2026-04-25-quartz-integration-impl.md`
 - **Brainstorming state**: `docs/superpowers/sessions/2026-04-25-quartz-brainstorming-state.md`
 - **本状态文档**: `docs/superpowers/sessions/2026-04-25-quartz-implementation-state.md`
-- **超能力 skill 路径**: `C:\Users\52140\.claude\plugins\cache\superpowers-marketplace\superpowers\5.0.5\skills\subagent-driven-development\`
+- **内部 skill 路径**: `C:\Users\52140\<plugins>\<skills>\subagent-driven-development\`
 
 ## 关键 user memory
 
-- `feedback_subagent_model.md`：子代理统一 opus 1m
+- `feedback_subagent_model.md`：子代理统一 高配模型
 - `feedback_subagent_review_pacing.md`：reviewer 合并为 1 个
 - `feedback_phase_commit_push.md`：每 Phase 末 push remote，3 子项目全完才合并 master

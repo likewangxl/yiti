@@ -1,7 +1,6 @@
 # 菜单分配（Menu Assignment）设计
 
 **日期**：2026-05-20  
-**作者**：djdev + Claude  
 **模块**：auth-permission-center / xanzc_frontend  
 **关联记忆**：[[2026-launch-context]] 6-10 上线、W0 启动周
 
@@ -382,7 +381,7 @@ commit 4: feat(frontend): AppSidebar 接入 menuPaths + userStore 扩展 + route
                 / src/stores/user.js / src/router/index.js
 ```
 
-每个 commit 末尾带 `Co-Authored-By: Claude` 标注。
+每个 commit 末尾带署名标注。
 
 ---
 

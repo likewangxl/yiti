@@ -1,6 +1,6 @@
 # AUTH 接口一致性修复实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 对 `docs/modules/auth-permission-center/03-接口设计与报文.md` 做 3 处文档修正，使文档描述与代码实际行为一致。
 

@@ -1,6 +1,6 @@
 # performance-engine-center V1.0 剩余 5 子域实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development` (recommended) or `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在已完成的骨架 + sys_control 子域之上，以 TDD 红-绿-重构节奏串行交付剩余 5 个子域（指标库 / KPI 方案 / 目标方案 / 运行任务 / 分配关系），完成 V1.0 全部 35 REST 端点 + 7 对外 Api 的实现。
 
@@ -10,7 +10,7 @@
 
 **Spec 引用:** [docs/superpowers/specs/2026-04-17-performance-v1.0-remaining-subdomains-design.md](../specs/2026-04-17-performance-v1.0-remaining-subdomains-design.md)（配合原 V1.0 spec v1.2 阅读）
 
-**工作目录:** `C:/Users/52140/Desktop/yiti/.claude/worktrees/eloquent-mcnulty-f2072a/`（所有 `mvn` 和 `git` 命令假定此为 CWD）
+**工作目录:** `C:/Users/52140/Desktop/yiti/.worktrees/eloquent-mcnulty-f2072a/`（所有 `mvn` 和 `git` 命令假定此为 CWD）
 
 ---
 
@@ -19,12 +19,12 @@
 - [ ] **Step 0.1: 确认工作目录在 worktree**
 
 Run: `git rev-parse --show-toplevel`
-Expected: `C:/Users/52140/Desktop/yiti/.claude/worktrees/eloquent-mcnulty-f2072a`
+Expected: `C:/Users/52140/Desktop/yiti/.worktrees/eloquent-mcnulty-f2072a`
 
 - [ ] **Step 0.2: 确认当前分支**
 
 Run: `git branch --show-current`
-Expected: `claude/eloquent-mcnulty-f2072a`
+Expected: `feat/eloquent-mcnulty-f2072a`
 
 - [ ] **Step 0.3: 确认基线 mvn 测试全绿（sys_control 子域已完成）**
 

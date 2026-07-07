@@ -1,6 +1,6 @@
 # 指标级 Quartz 调度改造 V1.7 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 performance 模块 `PERF_METRIC_DEF` 表的 `calc_freq` 枚举字段改造为可驱动 Quartz 调度的 cron 表达式机制；每条 ACTIVE+AUTO 指标 1:1 注册一个 Quartz Job 自动跑全量明细入库；删除 `DailyKpiCalcJob`，KPI 方案改事件驱动重算。
 

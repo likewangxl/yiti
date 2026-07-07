@@ -1,6 +1,6 @@
 # Quartz 整合 sys_job_conf — 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. **每个 task 一个 implementer + 1 个合并 reviewer**（按子项目 A 末期节奏，避免子代理数量爆炸）。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. **每个 task 一个 implementer + 1 个合并 reviewer**（按子项目 A 末期节奏，避免子代理数量爆炸）。
 
 **Goal:** 将 performance-engine-center 的 3 个 `@Scheduled` 定时任务整合到嵌入式 Quartz 2.3.2 集群模式，统一通过 system-governance-center 的 sys_job_conf 表管理；删除 ShedLock；精简 JobApi 至 1 方法；JobController 5 端点真正可用。
 
@@ -10,7 +10,7 @@
 
 **Spec:** [docs/superpowers/specs/2026-04-25-quartz-integration-design.md](../specs/2026-04-25-quartz-integration-design.md)
 
-**Worktree:** `D:\Project\oneplate\.claude\worktrees\refactor-quartz-job`
+**Worktree:** `D:\Project\oneplate\.worktrees\refactor-quartz-job`
 **Branch:** `refactor/quartz-job-integration`（基于 master `af66ccd`）
 
 **与 Spec 的命名对齐说明**：spec 中称为 `JobConfService` 的服务，**实际类名为 `JobService`**（已存在 `system-governance-center/src/main/java/com/bank/branch/platform/governance/service/JobService.java`）。本 plan 一律使用真实类名 `JobService`。
@@ -78,8 +78,8 @@
 | **总计** | | **27 task** | |
 
 **子代理派发节奏**（按用户确认的子项目 A 末期 B 节奏）：
-- 每个 task 派发 **1 个 implementer**（opus 1m）
-- 完成后派发 **1 个合并 spec+quality reviewer**（opus 1m）
+- 每个 task 派发 **1 个 implementer**（高配模型）
+- 完成后派发 **1 个合并 spec+quality reviewer**（高配模型）
 - reviewer 通过则进入下一 task；reviewer 标 issue 则返工
 
 **Phase 推送策略**（按 user memory `feedback_phase_commit_push.md`）：
@@ -141,7 +141,7 @@ git commit -m "feat(quartz-B): P1.1 add spring-boot-starter-quartz dependency
 - Spring Boot 3.2.3 自带 quartz 2.3.2，无需显式 version
 - ShedLock 依赖暂保留，P4.1 统一删除
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -358,7 +358,7 @@ git commit -m "feat(quartz-B): P1.2 add Quartz 2.3.2 DDL (11 QRTZ_* tables)
 - 同库 onepl（spec 决策 #3=A）
 - 同步 docs/schema/CLAUDE.md 文件清单
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -462,7 +462,7 @@ git commit -m "feat(quartz-B): P1.3 sys_job_conf/sys_job_run_log 字段扩展 + 
 - 3 条业务 Job 记录初始化（DAILY_KPI_CALC / SYS_CONTROL_CLEANUP / PERF_RUN_TASK_CLEANUP）
 - ddl-governance.sql 同步标注 V1.6 字段
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -607,7 +607,7 @@ git commit -m "feat(quartz-B): P1.4 AutowiringSpringBeanJobFactory + 2 单元测
   让 Quartz Job 实例化时自动完成 @Autowired 字段注入
 - TDD: Red → Green 闭环
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -928,7 +928,7 @@ git commit -m "feat(quartz-B): P1.5 JobExecutionLogger + Mapper 扩展 + 5 单�
 - 异常隔离：内部 try-catch，不影响业务调度
 - Mapper 新增 4 方法（selectByJobKey/updateLastRunTime/updateSuccess/updateFailed）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1097,7 +1097,7 @@ git commit -m "feat(quartz-B): P1.6 QuartzConfig + application.yml + 集成测�
 - 集成测试: SpringBootTest @ memory job-store-type 验证 Scheduler bean 可用
 - @ConditionalOnProperty(matchIfMissing=true) 默认启用
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1160,7 +1160,7 @@ git commit -m "refactor(quartz-B): P2.1 DailyKpiCalcJob 删 @Scheduled/@Schedule
 - 保留 @Component + run() void 业务方法不变（KpiSchemeService.listActiveSchemes 调用链不变）
 - 测试调整：移除 @Scheduled 验证，保留 run() 业务行为测试
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1183,7 +1183,7 @@ git commit -m "refactor(quartz-B): P2.2 SysControlCleanupJob 删 @Scheduled/@Sch
 - 保留 @Value keep-count（业务参数，与调度无关）
 - 保留 int run() 返回值（删除行数总和）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1206,7 +1206,7 @@ git commit -m "refactor(quartz-B): P2.3 PerfRunTaskCleanupJob 删 @Scheduled/@Sc
 - 保留 @Value retention-days
 - 保留 int run() 返回值
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1314,7 +1314,7 @@ git commit -m "feat(quartz-B): P2.4 DailyKpiCalcQuartzJob + 2 单元测试
 - 不加 @Component（Quartz 反射创建，AutowiringSpringBeanJobFactory 注入）
 - 异常路径：JobExecutionException(refire=false)
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1347,7 +1347,7 @@ git commit -m "feat(quartz-B): P2.5 SysControlCleanupQuartzJob + 2 单元测试
 - 同 P2.4 模式，但显式忽略 run() 的 int 返回值
 - 调度链路不消费返回值（仅业务/单测断言时使用）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1366,7 +1366,7 @@ git commit -m "feat(quartz-B): P2.6 PerfRunTaskCleanupQuartzJob + 2 单元测试
 
 - 同 P2.5 模式
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1688,7 +1688,7 @@ git commit -m "refactor(quartz-B): P4.1 删除 ShedLock 全部痕迹
 - 验证全库 grep shedlock|@SchedulerLock|ShedLockConfig = 0 行
 - 防重能力由 Quartz Cluster QRTZ_LOCKS 行锁接管（spec 决策 #2=A）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1729,7 +1729,7 @@ git commit -m "refactor(quartz-B): P4.2 JobApi 精简到 1 方法（删 startJob
 - 全库 grep 验证 0 行外部调用方
 - 写日志由 JobExecutionLogger 内部直接调用 SysJobRunLogService（不走 *Api）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---
@@ -1762,7 +1762,7 @@ git commit -m "chore(quartz-B): P4.3 application.yml 配置清理验证（已就
 - 业务参数 perf.job.sys-control-cleanup.keep-count + perf.job.run-task-cleanup.retention-days 保留
 - spring.quartz.* 配置块（P1.6 已添加）验证完整
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 如无变更则跳过 Commit。
@@ -1816,7 +1816,7 @@ git commit -m "docs(quartz-B): P4.4 4 份 CLAUDE.md 同步 V1.6 quartz 整合
 - performance-engine/CLAUDE.md: 删 ShedLock 章节 + 新增 Quartz 包装 Job 章节
 - docs/CLAUDE.md: ddl-quartz.sql 说明（P1.2 已部分）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+"
 ```
 
 ---

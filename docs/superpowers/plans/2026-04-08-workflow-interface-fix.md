@@ -1,6 +1,6 @@
 # Workflow Controller 接口一致性修复 - 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 修复 TaskController 中硬编码 "CURRENT_USER" 占位符问题，改为注入 CurrentUserApi 获取真实 empId，同时将 4 个写操作接口改为 DTO 模式调用 service。
 

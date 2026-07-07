@@ -327,7 +327,7 @@ public class TargetValueService {
      *
      * <p>V1.4 S2.3 演进：V1.3 R1.1 因 DDL 无 owner_emp_id / owner_org_code 列,
      * SELF / ORG 全部降级到 created_by；V1.4 S2.1 引入独立字段后, 本方法升级
-     * ScopeColumns 切到精确列, 模块 CLAUDE.md 技术债 #5 标记已消化.
+     * ScopeColumns 切到精确列, 模块架构规约 技术债 #5 标记已消化.
      *
      * @param planId      目标方案ID (可空，空则按 scope 跨方案查询)
      * @param subjectType 对象类型 EMP/ORG (可空)

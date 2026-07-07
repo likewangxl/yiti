@@ -2,7 +2,6 @@
 
 **创建日期**：2026-04-11
 **修订日期**：2026-04-11（r3，根据 spec-document-reviewer 第二轮反馈修订）
-**作者**：Claude Code (与 leid 协作)
 **模块**：`portal-content-center`
 **版本**：V1 首版（仅实现 10 个接口的子集）
 
@@ -811,14 +810,13 @@ feat(portal): D.3 支持中场支持的产品查询
 - ProductController GET /api/products/support-available
 - Mapper 集成测试覆盖 status/deleted/support 过滤
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 ```
 
 ### 7.8 subagent 使用策略
 
-- **Phase 0 / 1 / 2**：主 Claude 直接执行（涉及 Maven 骨架和基础组件，需要上下文连贯）
+- **Phase 0 / 1 / 2**：主执行者 直接执行（涉及 Maven 骨架和基础组件，需要上下文连贯）
 - **Phase 3-11（业务接口）**：每个 Phase 启动一个 subagent，严格 TDD 红-绿-重构
-- **Phase 12**：主 Claude 收尾 + 启动 `superpowers:code-reviewer` 审查整体实现
+- **Phase 12**：主执行者 收尾 + 启动 `code-reviewer` 审查整体实现
 
 ---
 
@@ -858,11 +856,11 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 ## 10. 后续步骤
 
 1. 本 spec 由 spec-document-reviewer 审查并由用户最终确认
-2. 进入 `superpowers:writing-plans` 技能，基于本 spec 生成详细的任务级实现计划（每个 Phase 的 Task 列表、TDD 红-绿-重构顺序、验收 checkpoint）
-3. 实现计划确认后，启动 `superpowers:subagent-driven-development` 执行
+2. 进入 `writing-plans` 技能，基于本 spec 生成详细的任务级实现计划（每个 Phase 的 Task 列表、TDD 红-绿-重构顺序、验收 checkpoint）
+3. 实现计划确认后，启动 `subagent-driven-development` 执行
 4. 每个 Phase 完成后 commit
-5. 全部完成后，启动 `superpowers:code-reviewer` 进行最终审查
-6. 根据 review 反馈修正，进入 `superpowers:finishing-a-development-branch` 流程
+5. 全部完成后，启动 `code-reviewer` 进行最终审查
+6. 根据 review 反馈修正，进入 `finishing-a-development-branch` 流程
 
 ---
 

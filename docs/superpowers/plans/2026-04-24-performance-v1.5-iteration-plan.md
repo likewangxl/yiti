@@ -1,6 +1,6 @@
 # Performance-Engine-Center V1.5 Iteration Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 清理 V1.4 交付后登记的 6 项遗留清单，performance-engine-center 技术债清零。
 
@@ -183,7 +183,6 @@ V1.3 R3.2 @Deprecated 承诺"1 版本后删除"。V1.5 P1.1 兑现：
 - 删除 2 个依赖兼容行为的过时 case（respDTO_deserializeLegacySamples_viaJsonAlias /
   respDTO_deprecatedGetSamples_stillReturnsSampleRows）
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -201,7 +200,6 @@ V1.3 R3.2 → V1.5 兼容承诺期满，彻底清理：
 - 同步清理 JsonAlias/JsonIgnore import
 生产代码 zero consumer（Grep 确认：仅 3 处测试引用，Red 阶段已删除/改写）。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -306,7 +304,6 @@ null。V1.5 P2.1 补 2 case 守护：
 V1.4 Green 实现已支持此行为，测试加上后即通过；本 commit 属于"行为守护测试补齐"
 而非新功能，不单独拆 Red/Green 两 commit。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -581,7 +578,6 @@ V1.4 reviewer M01 观察项：codeToCycleType 首命中策略在方案 A(QUARTER
 - 新 case 1：多 scheme 不同 cycleType → 生成 2 张卡片，分别查到各自 target
 - 新 case 2：多 scheme 同 cycleType → 去重仅生成 1 张卡片
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -599,7 +595,6 @@ V1.4 reviewer M01：替换 codeToCycleType LinkedHashMap 为 LinkedHashSet<Metri
 前端契约），前端按 metricCode+cycleType 作为唯一键展示。
 顺带把单卡组装抽到 buildCard(...) 提高可读性。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -964,7 +959,6 @@ V1.5 P4.1 改为单次 IN 查询：
 - Facade 测试：getUserMetricCards_batchesWideTableQueries 断言 batch API
   调用 1 次，旧 selectSlotValue 不再被调用
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -984,7 +978,6 @@ V1.4 reviewer M02 消化：新增单次 IN 查询 API，一次拉回多日期的
 - default 方法 selectSlotValuesByDates 把 List→Map 聚合责任留在 Mapper 接口
 - dates=null/空时 short-circuit 返回空 Map 不下发 SQL
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1001,7 +994,6 @@ V1.4 reviewer M02：每卡片 3 次串行查询 → 1 次 IN 查询。20 metric 
 60 次 → 20 次。既有 MetricApiImplCardsTest 的 stub 同步升级到 batch API；
 MetricApiImplTest 宽表点查场景不受影响（queryValues 路径仍用 selectSlotValue）。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1191,7 +1183,6 @@ ISO 周；其他 cycleType 保持 minusYears(1)。
 - 新 case 1: WEEKLY 期望命中 yearAgoWeek52 的 mock 值
 - 新 case 2: QUARTERLY 保持 minusYears(1)，仍走 2025-04-01 路径
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1209,7 +1200,6 @@ V1.4 reviewer M03 消化：新增 calculateYearAgoDate(cycleType, date)：
 buildCard 内替换 yearAgoDate 计算。与 V1.4 S3.3 的 calculatePreviousDate
 结构对称，维护性更好。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1395,7 +1385,6 @@ V1.4 S2 reviewer 观察：V1_4_0 DDL 加了 owner_emp_id / owner_org_code，
 PerfTargetValueMapper.xml 无 updateByIdSelective 方法（更新路径只有
 upsertBatch），V1.5 P6.1 仅处理 PerfTargetPlanMapper.xml。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1412,7 +1401,6 @@ V1.4 reviewer 观察消化：在 plan_code/plan_name 后追加 2 个动态分支
 - <if test="ownerOrgCode != null">owner_org_code = #{ownerOrgCode},</if>
 null 时跳过、非 null 时更新，与既有字段一致的 MyBatis selective 语义。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1465,7 +1453,6 @@ chore(perf-v1.5): P7.1 全量回归通过（Task P7.1）
 - 6 架构守护绿
 - workflow-center + bootstrap 不受 performance V1.5 变更影响
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1540,7 +1527,6 @@ docs(perf-v1.5): V1.5 交付后文档全量同步（Task P7.2）
 - 04 对外 API 契约: getUserMetricCards 追加多 cycleType 分组语义说明
 - 03 接口设计与报文: §A.5 MetricTrialRespDTO samples 历史备注改为 V1.5 已删除
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1600,7 +1586,6 @@ docs(perf-v1.5): V1.5 技术债清算 + V1.4 遗留 6 项全消化（Task P7.3�
 - 新增"V1.5 已消化项"章节记录清偿明细
 - "V1.6+ 遗留项"表清空，performance 模块技术债清零
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```

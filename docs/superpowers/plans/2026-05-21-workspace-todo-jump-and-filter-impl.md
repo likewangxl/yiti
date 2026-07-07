@@ -1,6 +1,6 @@
 # 工作台办理跳转「待我审批」+ 按条件查询 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让工作台「办理」按钮一步跳到「待我审批」tab 并自动弹审批；同时给「待我审批」加 4 字段筛选 + 后端分页。
 
@@ -352,7 +352,6 @@ feat(workflow): 暴露 TodoQueryApi 供 perf 按 businessKey 反查 task
 用于业务模块（如 perf 业绩调整）按业务字段二次过滤待办，
 保持「workflow 是唯一调用 Flowable 模块」边界。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -417,7 +416,6 @@ feat(perf): 新增 AdjustTodoRespDTO（业务+workflow 字段扁平结构）
 
 供 GET /api/perf/adjusts/my-todos 响应使用。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -537,7 +535,6 @@ feat(perf): 新增 PerfAllocAdjustTodoMapper count + select 待审批分页查�
 
 业务字段过滤：keyword(apply_no/cust_id) + allocDim + bizKind + dateRange。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -921,7 +918,6 @@ DB少于workflow/meta缺失。
 数据流：workflow.listMyTodoBusinessKeys → mapper IN+过滤+分页 →
 workflow.findTaskRespByBusinessKeys → merge 扁平 DTO。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1051,7 +1047,6 @@ pageSize 上限 100；dateFrom/dateTo 闭区间，service 内部转 exclusive。
 PT_RESOURCE 登记 SQL 见 docs/superpowers/sql/2026-05-21-pt-resource-adjust-my-todos.sql
 （手工跑后才能被鉴权拦截器识别）。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1066,7 +1061,6 @@ chore(sql): PT_RESOURCE 登记 /api/perf/adjusts/my-todos
 
 配合 lf yiti 新接口；部署前 mysql 手工跑。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1113,7 +1107,6 @@ feat(frontend): 新增 listMyAdjustTodos 调用 perf 新接口
 
 对接 lf yiti GET /api/perf/adjusts/my-todos。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1163,7 +1156,6 @@ feat(workspace): 办理按钮跳 /perf/adjust 加 tab=todo 直达「待我审批
 
 之前默认落「我的申请」要手切，体验差；现一步直达对应 task 待办 tab。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1375,7 +1367,6 @@ feat(perf-adjust): 待我审批 tab 加 4 字段查询 + 后端分页 + 切到�
 - 数据源切到 /api/perf/adjusts/my-todos（替代 /workflow/tasks）
 - 查询/重置/翻页/改 pageSize 都触发 reload
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -1480,7 +1471,6 @@ feat(perf-adjust): mounted 读 query.tab/action/taskId 自动弹审批
 工作台办理点击 → 自动落「待我审批」tab + 弹出对应 task 审批 dialog。
 找不到 taskId 时（已处理/不在当前页）提示「任务已处理或不在当前页」。
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```

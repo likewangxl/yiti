@@ -1,7 +1,7 @@
 # 审批流程设计器 P3（现有流程只读导入）实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development。逐任务执行。
-> **子代理红线**：model ≥ sonnet。后端在 **lf**（/home/djdev/lf/yiti，分支 feature/wf-flow-designer-p1）。
+> **For agentic workers:** REQUIRED SUB-SKILL: subagent-driven-development。逐任务执行。
+> **子代理红线**：model 须为高能力模型。后端在 **lf**（/home/djdev/lf/yiti，分支 feature/wf-flow-designer-p1）。
 
 **Goal:** 把现有 3 条已部署流程（perf_target_adjust_v1 / perf_alloc_adjust_corp_v1 / perf_alloc_adjust_retail_v1）反向导入成 WF_FLOW_* **只读模型**（is_readonly_import=1），使设计器「查看所有流程」展示现状、可克隆；零影响线上。
 
