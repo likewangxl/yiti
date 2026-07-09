@@ -180,7 +180,7 @@
 
     <!-- 编辑/新增 弹框 -->
     <el-dialog v-model="dlg.show" :title="dlg.editing ? '编辑指标 · ' + dlg.form.metricName : '新增指标'"
-      width="780px" top="5vh" @closed="dlg.editing = null">
+      width="780px" top="5vh" @closed="dlg.editing = null" @opened="onExprDialogOpened">
       <el-form ref="formRef" :model="dlg.form" :rules="formRules" label-position="top" size="default">
         <div class="form-grid">
           <el-form-item label="编码" prop="metricCode" required>
@@ -1077,6 +1077,12 @@ function openEdit(row) {
   if (!metricsLoaded.value && !metricsLoading.value) reload();
   // 弹框渲染后，把已存的 exprText 还原成标签 + 文本
   nextTick(renderExprEditor);
+}
+// el-dialog 首次打开时其内容（含 contenteditable 表达式编辑器）才异步挂载完成；
+// openEdit 里的单次 nextTick 此刻 exprEditorRef 仍为 null → renderExprEditor 空跑，
+// 导致首次打开 Groovy 表达式渲染不出来。改由 @opened（过渡结束、DOM 就绪后触发）兜底渲染。
+function onExprDialogOpened() {
+  if (dlg.form.calcLogicType === 'EXPR') nextTick(renderExprEditor);
 }
 function addSlot() {
   dlg.slots.push({ name: '', type: 'DATE', required: false, desc: '' });
