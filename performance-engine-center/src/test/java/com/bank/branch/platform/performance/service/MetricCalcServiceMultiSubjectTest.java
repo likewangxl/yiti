@@ -20,11 +20,13 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -179,6 +181,36 @@ class MetricCalcServiceMultiSubjectTest {
         } catch (Exception e) {
             throw new AssertionError("params_json 解析失败: " + json, e);
         }
+    }
+
+    @Test
+    @DisplayName("EXPR 引用含取值时间后缀：按 DateMacroResolver 目标日期读宽表并以完整 token 绑定")
+    void calcMetric_exprWithValueTimeSuffix_bindsHistoricalValues() {
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("TEST_METRIC_DELTA");
+        def.setBaseDim("EMP");
+        def.setCalcLogicType("EXPR");
+        def.setValSlot(5);
+        def.setExprText("M_A - M_A__D1");
+        def.setDeleted(0);
+        when(metricDefService.getByCodeOrNull("TEST_METRIC_DELTA")).thenReturn(def);
+
+        LocalDate dataDate = LocalDate.of(2026, 7, 9);
+        String version = "V1";
+        when(empMapper.selectDistinctEmpIds(dataDate, version)).thenReturn(List.of("E001"));
+        when(empMapper.selectValSlotsByCodes(anyList())).thenReturn(Map.of("M_A", 3));
+        when(empMapper.selectValBySlot("E001", 3, dataDate, version)).thenReturn(new BigDecimal("100"));
+        when(empMapper.selectValBySlot("E001", 3, LocalDate.of(2026, 7, 8), version)).thenReturn(new BigDecimal("30"));
+        ArgumentCaptor<Map<String, Object>> varsCaptor = ArgumentCaptor.forClass(Map.class);
+        when(groovyExecutor.execute(eq("M_A - M_A__D1"), varsCaptor.capture(), any(Duration.class)))
+            .thenReturn(new BigDecimal("70"));
+
+        service.calcMetric("TEST_METRIC_DELTA", dataDate, version);
+
+        Map<String, Object> vars = varsCaptor.getValue();
+        assertThat(vars).containsEntry("M_A", new BigDecimal("100"));
+        assertThat(vars).containsEntry("M_A__D1", new BigDecimal("30"));
+        verify(empMapper).insertSlotValue("E001", dataDate, version, 5, new BigDecimal("70"));
     }
 
     private PerfMetricDef exprDef(String code) {

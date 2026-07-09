@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.performance.config.PerfEngineProperties;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
+import com.bank.branch.platform.performance.enums.MetricValueTimeEnum;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.event.MetricCalcCompletedEvent;
 import com.bank.branch.platform.performance.exception.PerfException;
@@ -14,6 +15,7 @@ import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.dto.SubjectStats;
 import com.bank.branch.platform.performance.service.engine.DateMacroResolver;
 import com.bank.branch.platform.performance.service.engine.GroovyExecutor;
+import com.bank.branch.platform.performance.service.engine.MetricRefTokenParser;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -318,18 +320,24 @@ public class MetricCalcService {
             return SubjectStats.empty(jobKey, triggerType);
         }
 
-        // V1.13+：refCodes 来自两路并集——def.ref_metric_codes（业务/前端登记的）+ 正则从 expr_text
-        // 扫描出的 M_xxx 字面量。前端"表达式构建器"暂未把公式里的指标自动写回 ref_metric_codes，
-        // 后端兜底解析保证 Groovy vars 完整覆盖公式里出现的所有 metric_code。
-        List<String> refCodes = mergeRefCodes(
-                parseRefMetricCodes(def.getRefMetricCodes()),
-                extractMetricCodesFromExpr(def.getExprText()));
+        // V1.13+ 取值时间：token 承载取值时间，按 baseCode 预查 slot、按 token 绑定变量
+        List<MetricRefTokenParser.RefToken> refTokens =
+                new ArrayList<>(MetricRefTokenParser.parse(def.getExprText()));
+        // 声明式 ref_metric_codes 里的裸编码按今日补齐（去重）
+        for (String declared : parseRefMetricCodes(def.getRefMetricCodes())) {
+            boolean exists = refTokens.stream().anyMatch(rt -> rt.token().equals(declared));
+            if (!exists) {
+                refTokens.add(new MetricRefTokenParser.RefToken(declared, declared, MetricValueTimeEnum.TODAY));
+            }
+        }
+        List<String> baseCodes = refTokens.stream()
+                .map(MetricRefTokenParser.RefToken::baseCode).distinct().toList();
         Duration timeout = Duration.ofSeconds(perfEngineProperties == null
                 ? 30 : Math.max(1, perfEngineProperties.getSqlTimeoutSeconds()));
 
-        // V1.7 N+1 优化：预查 metricCode → val_slot 映射 1 次，避免 N 主体 × N 次重查
-        Map<String, Integer> slotMap = refCodes.isEmpty() ? Map.of()
-                : resolveSlotMap(def.getBaseDim(), refCodes);
+        // V1.7 N+1 优化：预查 baseCode → val_slot 映射 1 次，避免 N 主体 × N 次重查
+        Map<String, Integer> slotMap = baseCodes.isEmpty() ? Map.of()
+                : resolveSlotMap(def.getBaseDim(), baseCodes);
 
         int success = 0;
         int failed = 0;
@@ -338,8 +346,8 @@ public class MetricCalcService {
 
         for (String subject : subjects) {
             try {
-                // 使用预查的 slotMap 加载引用指标值（避免每主体重查 slotMap）
-                Map<String, Object> vars = loadRefValuesBySlotMap(subject, slotMap, refCodes,
+                // 按 RefToken 逐个解析取值时间目标日期加载引用指标值（避免每主体重查 slotMap）
+                Map<String, Object> vars = loadRefValuesByTokens(subject, refTokens, slotMap,
                         def.getBaseDim(), dataDate, version);
                 BigDecimal value = groovyExecutor.execute(def.getExprText(), vars, timeout);
                 outputs.put(subject, value);
@@ -411,6 +419,45 @@ public class MetricCalcService {
                 };
             }
             result.put(refCode, value != null ? value : BigDecimal.ZERO);
+        }
+        return result;
+    }
+
+    /**
+     * V1.13+：按 RefToken 逐个解析目标日期，从宽表取值，以完整 token 为变量名绑定.
+     *
+     * <p>目标日期 = timePoint.resolve(dataDate)（复用 DateMacroResolver）；缺 slot / 查无值 → ZERO。
+     *
+     * @param subject   主体 ID（员工工号/机构编码/客户 ID）
+     * @param refTokens 引用 token 列表（含 baseCode 与取值时间）
+     * @param slotMap   baseCode -&gt; val_slot 预查结果
+     * @param baseDim   基础维度（EMP/ORG/CUST）
+     * @param dataDate  数据日期
+     * @param version   数据版本（一律用本轮 version，不做历史版本反查）
+     * @return 完整 token -&gt; 指标值 映射（作为 Groovy vars）
+     */
+    private Map<String, Object> loadRefValuesByTokens(String subject,
+                                                      List<MetricRefTokenParser.RefToken> refTokens,
+                                                      Map<String, Integer> slotMap,
+                                                      String baseDim, LocalDate dataDate, String version) {
+        if (refTokens == null || refTokens.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> result = new HashMap<>();
+        for (MetricRefTokenParser.RefToken rt : refTokens) {
+            Integer slot = slotMap.get(rt.baseCode());
+            BigDecimal value = null;
+            if (slot != null) {
+                LocalDate targetDate = rt.timePoint().resolve(dataDate);
+                value = switch (baseDim == null ? "" : baseDim.toUpperCase()) {
+                    case "EMP"  -> empIndexResultMapper.selectValBySlot(subject, slot, targetDate, version);
+                    case "ORG"  -> orgIndexResultMapper.selectValBySlot(subject, slot, targetDate, version);
+                    case "CUST" -> custIndexResultMapper.selectValBySlot(subject, slot, targetDate, version);
+                    default -> throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                            "未知 baseDim=" + baseDim);
+                };
+            }
+            result.put(rt.token(), value != null ? value : BigDecimal.ZERO);
         }
         return result;
     }
