@@ -204,7 +204,7 @@ public class MetricCalcService {
 
         // 3. 生成任务 ID 并插入 PENDING 记录（先插入再切状态，便于 FAILED 场景可见）
         String taskId = UUID.randomUUID().toString().replace("-", "");
-        insertPendingTask(taskId, metricCode, dataDate, version);
+        insertPendingTask(taskId, metricCode, dataDate, version, triggerType);
 
         try {
             // 4. 切换 RUNNING
@@ -583,10 +583,11 @@ public class MetricCalcService {
     }
 
     private void insertPendingTask(String taskId, String metricCode,
-                                   LocalDate dataDate, String version) {
+                                   LocalDate dataDate, String version, String triggerType) {
         PerfRunTask task = new PerfRunTask();
         task.setId(taskId);
         task.setTaskType("METRIC_RUN");
+        task.setTriggerType(triggerType);
         task.setTaskKey(metricCode);
         task.setDataDate(dataDate);
         task.setDataVersion(version);

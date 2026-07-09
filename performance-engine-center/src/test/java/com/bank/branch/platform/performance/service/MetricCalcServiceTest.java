@@ -366,6 +366,21 @@ class MetricCalcServiceTest {
     }
 
     @Test
+    @DisplayName("落库：insertPendingTask 把 triggerType 写入 run_task")
+    void calcMetric_persistsTriggerType() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        when(metricDefService.getByCodeOrNull("TEST_CALC_EMP_01")).thenReturn(def);
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class)))
+                .thenReturn(Map.of("E001", new BigDecimal("1")));
+
+        metricCalcService.calcMetric("TEST_CALC_EMP_01", LocalDate.of(2026, 7, 9), "V1", "RECALC");
+
+        ArgumentCaptor<PerfRunTask> cap = ArgumentCaptor.forClass(PerfRunTask.class);
+        verify(perfRunTaskMapper).insert(cap.capture());
+        assertThat(cap.getValue().getTriggerType()).isEqualTo("RECALC");
+    }
+
+    @Test
     @DisplayName("试运行 loadGroovyVarsForSubject：含取值时间后缀按目标日期取值并以完整 token 绑定")
     void loadGroovyVarsForSubject_withSuffix_bindsHistoricalValue() {
         LocalDate dataDate = LocalDate.of(2026, 7, 9);

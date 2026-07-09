@@ -71,8 +71,8 @@ class HistoryRecalcServiceTest {
         String reason = "月末对齐";
         String operator = "admin";
 
-        // calcMetric 始终返回唯一 taskId
-        when(metricCalcService.calcMetric(anyString(), any(LocalDate.class), eq(version)))
+        // calcMetric 始终返回唯一 taskId（HistoryRecalcService 固定以 triggerType="RECALC" 调用 4 参重载）
+        when(metricCalcService.calcMetric(anyString(), any(LocalDate.class), eq(version), eq("RECALC")))
                 .thenReturn("TASK_CHILD_1");
 
         String parentTaskId = historyRecalcService.recalc(start, end, metricCodes, version, reason, operator);
@@ -81,7 +81,7 @@ class HistoryRecalcServiceTest {
 
         // 6 次 calcMetric（3 天 × 2 指标）
         verify(metricCalcService, times(6))
-                .calcMetric(anyString(), any(LocalDate.class), eq(version));
+                .calcMetric(anyString(), any(LocalDate.class), eq(version), eq("RECALC"));
 
         // 验证父 task 插入（taskType=RECALC）
         ArgumentCaptor<PerfRunTask> insertCap = ArgumentCaptor.forClass(PerfRunTask.class);
@@ -111,15 +111,15 @@ class HistoryRecalcServiceTest {
         def2.setStatus("ACTIVE");
         when(metricDefService.listActiveMetrics(null, null))
                 .thenReturn(List.of(def1, def2));
-        when(metricCalcService.calcMetric(anyString(), any(LocalDate.class), eq(version)))
+        when(metricCalcService.calcMetric(anyString(), any(LocalDate.class), eq(version), eq("RECALC")))
                 .thenReturn("TASK_AUTO");
 
         String parentTaskId = historyRecalcService.recalc(date, date, null, version, "auto scan", "sys");
 
         assertThat(parentTaskId).isNotBlank();
         verify(metricDefService).listActiveMetrics(null, null);
-        verify(metricCalcService).calcMetric(eq("M_AUTO_1"), eq(date), eq(version));
-        verify(metricCalcService).calcMetric(eq("M_AUTO_2"), eq(date), eq(version));
+        verify(metricCalcService).calcMetric(eq("M_AUTO_1"), eq(date), eq(version), eq("RECALC"));
+        verify(metricCalcService).calcMetric(eq("M_AUTO_2"), eq(date), eq(version), eq("RECALC"));
     }
 
     @Test
@@ -128,9 +128,9 @@ class HistoryRecalcServiceTest {
         LocalDate date = LocalDate.of(2026, 3, 1);
         List<String> metricCodes = List.of("M_OK", "M_FAIL");
 
-        when(metricCalcService.calcMetric(eq("M_OK"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_OK"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("TASK_OK");
-        when(metricCalcService.calcMetric(eq("M_FAIL"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_FAIL"), eq(date), anyString(), eq("RECALC")))
                 .thenThrow(new PerfException(PerfErrorCode.CALC_JOB_FAILED, "mock failure"));
 
         String parentTaskId = historyRecalcService.recalc(date, date, metricCodes, "v1", "part", "op");
@@ -139,8 +139,8 @@ class HistoryRecalcServiceTest {
         // 父 task 被标记为 PARTIAL（而非 FAILED / SUCCESS）
         verify(perfRunTaskMapper).updateStatus(eq(parentTaskId), eq("PARTIAL"), any());
         // 两个子指标均尝试执行（错误不中断循环）
-        verify(metricCalcService).calcMetric(eq("M_OK"), eq(date), anyString());
-        verify(metricCalcService).calcMetric(eq("M_FAIL"), eq(date), anyString());
+        verify(metricCalcService).calcMetric(eq("M_OK"), eq(date), anyString(), eq("RECALC"));
+        verify(metricCalcService).calcMetric(eq("M_FAIL"), eq(date), anyString(), eq("RECALC"));
     }
 
     @Test
@@ -153,7 +153,7 @@ class HistoryRecalcServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
 
-        verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString());
+        verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString(), anyString());
         verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
     }
 
@@ -167,7 +167,7 @@ class HistoryRecalcServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
 
-        verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString());
+        verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString(), anyString());
     }
 
     @Test
@@ -180,7 +180,7 @@ class HistoryRecalcServiceTest {
         String parentTaskId = historyRecalcService.recalc(date, date, null, "v1", "empty", "op");
 
         assertThat(parentTaskId).isNotBlank();
-        verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString());
+        verify(metricCalcService, never()).calcMetric(anyString(), any(), anyString(), anyString());
         verify(perfRunTaskMapper).updateStatus(eq(parentTaskId), eq("SUCCESS"), any());
     }
 
@@ -192,14 +192,14 @@ class HistoryRecalcServiceTest {
         defX.setMetricCode("M_X");
         defX.setStatus("ACTIVE");
         when(metricDefService.listActiveMetrics(null, null)).thenReturn(List.of(defX));
-        when(metricCalcService.calcMetric(eq("M_X"), eq(date), anyString())).thenReturn("T_X");
+        when(metricCalcService.calcMetric(eq("M_X"), eq(date), anyString(), eq("RECALC"))).thenReturn("T_X");
 
         String parentTaskId = historyRecalcService.recalc(
                 date, date, Collections.emptyList(), "v1", "empty list", "op");
 
         assertThat(parentTaskId).isNotBlank();
         verify(metricDefService).listActiveMetrics(null, null);
-        verify(metricCalcService).calcMetric(eq("M_X"), eq(date), eq("v1"));
+        verify(metricCalcService).calcMetric(eq("M_X"), eq(date), eq("v1"), eq("RECALC"));
     }
 
     /**
@@ -215,7 +215,7 @@ class HistoryRecalcServiceTest {
     void recalc_writesCycleTypeIntoParamsJson() {
         LocalDate date = LocalDate.of(2026, 3, 1);
         List<String> metricCodes = List.of("M_A");
-        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("CHILD_Q1");
 
         historyRecalcService.recalc(
@@ -246,7 +246,7 @@ class HistoryRecalcServiceTest {
     void recalc_cycleTypeNull_skipsFieldInParamsJson() {
         LocalDate date = LocalDate.of(2026, 3, 1);
         List<String> metricCodes = List.of("M_A");
-        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("CHILD_NULL");
 
         // cycleType 传 null，走 6 参签名兜底到 7 参重载 cycleType=null
@@ -277,7 +277,7 @@ class HistoryRecalcServiceTest {
     void recalc_cycleTypeEmptyString_skipsFieldInParamsJson() {
         LocalDate date = LocalDate.of(2026, 3, 1);
         List<String> metricCodes = List.of("M_A");
-        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("CHILD_EMPTY");
 
         // 显式传 ""，避开 6 参兜底到 null 的路径
@@ -305,7 +305,7 @@ class HistoryRecalcServiceTest {
     void recalc_cycleTypeWhitespace_skipsFieldInParamsJson() {
         LocalDate date = LocalDate.of(2026, 3, 1);
         List<String> metricCodes = List.of("M_A");
-        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("CHILD_WS");
 
         historyRecalcService.recalc(date, date, metricCodes, "v1", "原因 P2 whitespace", "op", "   ");
@@ -330,7 +330,7 @@ class HistoryRecalcServiceTest {
     void recalc_cycleTypeNotNull_includesField_V14_behaviorUnchanged() {
         LocalDate date = LocalDate.of(2026, 3, 1);
         List<String> metricCodes = List.of("M_A");
-        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_A"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("CHILD_Q");
 
         historyRecalcService.recalc(
@@ -356,9 +356,9 @@ class HistoryRecalcServiceTest {
         LocalDate date = LocalDate.of(2026, 3, 1);
         List<String> metricCodes = List.of("M_P1", "M_P2");
 
-        when(metricCalcService.calcMetric(eq("M_P1"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_P1"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("CHILD_TASK_001");
-        when(metricCalcService.calcMetric(eq("M_P2"), eq(date), anyString()))
+        when(metricCalcService.calcMetric(eq("M_P2"), eq(date), anyString(), eq("RECALC")))
                 .thenReturn("CHILD_TASK_002");
 
         String parentTaskId = historyRecalcService.recalc(

@@ -42,6 +42,9 @@ public class PerfRunTask {
     /** 任务类型：METRIC_TRIAL / METRIC_RUN / KPI_RUN / RECALC. */
     private String taskType;
 
+    /** 触发来源：RECALC / SCHEDULED / MANUAL（V1.13+ 任务监控用）. */
+    private String triggerType;
+
     /** 关键键（如 metric_code；V1.0 亦作为"任务编号"唯一标识使用，映射 DDL 的 task_key）. */
     private String taskKey;
 

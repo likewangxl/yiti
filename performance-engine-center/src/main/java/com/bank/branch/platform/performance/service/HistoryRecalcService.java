@@ -120,7 +120,7 @@ public class HistoryRecalcService {
         for (LocalDate date : dates) {
             for (String metricCode : effectiveMetricCodes) {
                 try {
-                    String childTaskId = metricCalcService.calcMetric(metricCode, date, version);
+                    String childTaskId = metricCalcService.calcMetric(metricCode, date, version, "RECALC");
                     childTaskIds.add(childTaskId);
                     successCount++;
                 } catch (PerfException pe) {
@@ -246,6 +246,7 @@ public class HistoryRecalcService {
         PerfRunTask parent = new PerfRunTask();
         parent.setId(taskId);
         parent.setTaskType("RECALC");
+        parent.setTriggerType("RECALC");
         parent.setTaskKey("RECALC_" + start + "_" + end);
         parent.setDataDate(start);
         parent.setDataVersion(version);
