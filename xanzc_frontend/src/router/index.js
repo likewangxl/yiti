@@ -43,6 +43,7 @@ const routes = [
       { path: 'perf/import',      name: 'PerfImport',    component: () => import('@/views/perf/Import.vue'),    meta: { title: '数据导入', group: '绩效与考核' } },
       { path: 'perf/adjust',      name: 'PerfAdjust',    component: () => import('@/views/perf/Adjust.vue'),    meta: { title: '业绩调整', group: '绩效与考核' } },
       { path: 'perf/compute',     name: 'PerfCompute',   component: () => import('@/views/perf/Compute.vue'),   meta: { title: '考核计算', group: '绩效与考核' } },
+      { path: 'perf/task-monitor', name: 'PerfTaskMonitor', component: () => import('@/views/perf/TaskMonitor.vue'), meta: { title: '任务监控', group: '绩效与考核' } },
       { path: 'perf/kpi-score-detail', name: 'PerfKpiScoreDetail', component: () => import('@/views/perf/KpiScoreDetail.vue'), meta: { title: 'KPI计算结果详情', group: '绩效与考核', hideInMenu: true } },
 
       // 内部评价

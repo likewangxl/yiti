@@ -416,6 +416,11 @@ export function listComputeBatches(params = {}) {
 export function getComputeBatch(id) {
   return call('get', `/perf/run-tasks/${id}`, {}, {});
 }
+// 运行任务监控列表（分页）：taskType/triggerType/taskKey/status/startedBy/dataDateFrom/dataDateTo + pageNo/pageSize
+// 返回 { records, total }（unwrapPage 剥出 records 数组，保留 total 供分页组件用）
+export function listRunTasks(params = {}) {
+  return call('get', '/perf/run-tasks', { params }, { records: [], total: 0 }).then(unwrapPage);
+}
 // 考核计算统计：最后一次 KPI 计算任务(PERF_METRIC_CALC_TASK) 成功/失败/耗时 + 本月任务数
 export function getKpiScoreStats() {
   return call('get', '/perf/kpi-score/stats', {},
