@@ -785,25 +785,35 @@ const parentMetricOptions = computed(() => {
 // ====== Groovy 表达式标签编辑器（contenteditable，指标=可删除标签，运算符/数字可自由编辑）======
 const exprEditorRef = ref(null);
 const exprPickCode = ref('');
-// 取值时间：为每次引用指定取历史哪一天的指标结果。value 即落库 token 后缀（今日为空）。
-const exprPickTime = ref('');
+// 取值时间：为每次引用指定取历史哪一天的指标结果。
+// value=下拉选中值（今日用非空哨兵 'TODAY'，规避 el-select 空串 option 选中/复位失灵的坑）；
+// suffix=真实落库 token 后缀（今日为空串）。
+const exprPickTime = ref('TODAY');
 const VALUE_TIME_OPTIONS = [
-  { label: '今日', value: '' },
-  { label: '昨日', value: '__D1' },
-  { label: '上月末', value: '__PME' },
-  { label: '上季末', value: '__PQE' },
-  { label: '上年末', value: '__PYE' }
+  { label: '今日', value: 'TODAY', suffix: '' },
+  { label: '昨日', value: '__D1', suffix: '__D1' },
+  { label: '上月末', value: '__PME', suffix: '__PME' },
+  { label: '上季末', value: '__PQE', suffix: '__PQE' },
+  { label: '上年末', value: '__PYE', suffix: '__PYE' }
 ];
 // 系统保留后缀（与后端 MetricValueTimeEnum / MetricRefTokenParser 一致）
 const RESERVED_SUFFIXES = ['__D1', '__PME', '__PQE', '__PYE'];
-// 把完整 token 拆成 { baseCode, suffix, timeLabel }：尾段命中保留后缀→历史档，否则整体为编号（今日）
+// 当前下拉选中值 → 真实 token 后缀（今日→''）
+function selectedSuffix() {
+  const opt = VALUE_TIME_OPTIONS.find(t => t.value === exprPickTime.value);
+  return opt ? opt.suffix : '';
+}
+// 把完整 token 拆成 { baseCode, suffix, timeLabel }：只按真实保留后缀 __xxx 判定，避免 'TODAY' 之类误伤。
+// 无后缀=今日，也返回 timeLabel='今日'，让 chip 统一显示 @取值时间（避免用户误以为没生效）。
 function splitToken(token) {
-  for (const t of VALUE_TIME_OPTIONS) {
-    if (t.value && token.endsWith(t.value)) {
-      return { baseCode: token.slice(0, -t.value.length), suffix: t.value, timeLabel: t.label };
+  for (const suf of RESERVED_SUFFIXES) {
+    if (token.endsWith(suf)) {
+      const opt = VALUE_TIME_OPTIONS.find(t => t.suffix === suf);
+      return { baseCode: token.slice(0, -suf.length), suffix: suf, timeLabel: opt ? opt.label : '' };
     }
   }
-  return { baseCode: token, suffix: '', timeLabel: '' };
+  const today = VALUE_TIME_OPTIONS.find(t => t.suffix === '');
+  return { baseCode: token, suffix: '', timeLabel: today ? today.label : '今日' };
 }
 // 保存编辑器内最近一次光标 Range：点 el-select / 添加按钮会让编辑器失焦，需用它定位插入点
 let savedRange = null;
@@ -839,7 +849,7 @@ function makeChip(token) {
 // 把选中指标作为标签插入到表达式光标处
 function insertMetricChip() {
   // 完整 token = 指标编号 + 取值时间后缀（今日为空后缀）
-  const code = exprPickCode.value ? exprPickCode.value + (exprPickTime.value || '') : '';
+  const code = exprPickCode.value ? exprPickCode.value + selectedSuffix() : '';
   const editor = exprEditorRef.value;
   if (!code || !editor) return;
   editor.focus();
@@ -1040,7 +1050,7 @@ function openCreate() {
   ];
   dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
   exprPickCode.value = '';
-  exprPickTime.value = '';
+  exprPickTime.value = 'TODAY';
   dlg.show = true;
   // 指标列表若未加载成功（首屏失败/仍在途），开窗时补一次拉取，避免弹框永久禁用保存
   if (!metricsLoaded.value && !metricsLoading.value) reload();
@@ -1061,7 +1071,7 @@ function openEdit(row) {
   dlg.slots = resolveSlots(row);
   dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
   exprPickCode.value = '';
-  exprPickTime.value = '';
+  exprPickTime.value = 'TODAY';
   dlg.show = true;
   // 指标列表若未加载成功，开窗时补一次拉取（编辑场景还需靠它把已存 exprText 还原成指标标签）
   if (!metricsLoaded.value && !metricsLoading.value) reload();
