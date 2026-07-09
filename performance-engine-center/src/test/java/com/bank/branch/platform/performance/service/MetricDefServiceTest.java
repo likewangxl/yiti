@@ -258,6 +258,28 @@ class MetricDefServiceTest {
     }
 
     @Test
+    @DisplayName("create：metricCode 以取值时间保留后缀 __PME 结尾 → 抛 METRIC_CODE_RESERVED_SUFFIX")
+    void create_reservedSuffixCode_throws() {
+        CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()
+                .metricCode("M_BALANCE__PME")
+                .metricName("保留后缀指标")
+                .baseDim("EMP")
+                .metricLevel(1)
+                .calcFreq("DAY")
+                .calcMode("AUTO")
+                .calcLogicType("SQL")
+                .sqlText("SELECT 1")
+                .operator("admin")
+                .build();
+
+        assertThatThrownBy(() -> service.create(cmd))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.METRIC_CODE_RESERVED_SUFFIX);
+        verify(mapper, never()).insert(any(PerfMetricDef.class));
+    }
+
+    @Test
     @DisplayName("L1 指标创建时写主表且无引用")
     void create_L1_insertsDefAndNoRefs() {
         CreateMetricDefCmd cmd = CreateMetricDefCmd.builder()

@@ -229,12 +229,18 @@
           <!-- EXPR 模式下，指标下拉 + 添加按钮与计算逻辑同行：选中指标点【添加】插入到表达式光标处 -->
           <template v-if="dlg.form.calcLogicType === 'EXPR'">
             <el-select v-model="exprPickCode" filterable clearable placeholder="选择指标插入表达式"
-                       style="width:260px;margin-left:16px">
+                       style="width:240px;margin-left:16px">
               <el-option v-for="m in parentMetricOptions" :key="m.metricCode"
                          :value="m.metricCode" :label="`${m.metricName}（${m.metricCode}）`" />
             </el-select>
+            <!-- 取值时间：为该次引用指定取历史哪一天的指标结果（今日/昨日/上月末/上季末/上年末） -->
+            <el-select v-model="exprPickTime" style="width:110px;margin-left:8px" title="取值时间">
+              <el-option v-for="t in VALUE_TIME_OPTIONS" :key="t.value" :value="t.value" :label="t.label" />
+            </el-select>
             <el-button type="primary" style="margin-left:8px" :disabled="!exprPickCode"
                        @click="insertMetricChip">添加</el-button>
+            <el-button style="margin-left:8px" title="插入安全除法：除数为 0 时结果取 0"
+                       @click="insertDiv">÷ 安全除</el-button>
           </template>
           <div v-if="dlg.form.metricLevel === 1" style="font-size:12px;color:#999;margin-top:2px">1级指标仅支持SQL</div>
         </el-form-item>
@@ -779,6 +785,26 @@ const parentMetricOptions = computed(() => {
 // ====== Groovy 表达式标签编辑器（contenteditable，指标=可删除标签，运算符/数字可自由编辑）======
 const exprEditorRef = ref(null);
 const exprPickCode = ref('');
+// 取值时间：为每次引用指定取历史哪一天的指标结果。value 即落库 token 后缀（今日为空）。
+const exprPickTime = ref('');
+const VALUE_TIME_OPTIONS = [
+  { label: '今日', value: '' },
+  { label: '昨日', value: '__D1' },
+  { label: '上月末', value: '__PME' },
+  { label: '上季末', value: '__PQE' },
+  { label: '上年末', value: '__PYE' }
+];
+// 系统保留后缀（与后端 MetricValueTimeEnum / MetricRefTokenParser 一致）
+const RESERVED_SUFFIXES = ['__D1', '__PME', '__PQE', '__PYE'];
+// 把完整 token 拆成 { baseCode, suffix, timeLabel }：尾段命中保留后缀→历史档，否则整体为编号（今日）
+function splitToken(token) {
+  for (const t of VALUE_TIME_OPTIONS) {
+    if (t.value && token.endsWith(t.value)) {
+      return { baseCode: token.slice(0, -t.value.length), suffix: t.value, timeLabel: t.label };
+    }
+  }
+  return { baseCode: token, suffix: '', timeLabel: '' };
+}
 // 保存编辑器内最近一次光标 Range：点 el-select / 添加按钮会让编辑器失焦，需用它定位插入点
 let savedRange = null;
 
@@ -795,22 +821,25 @@ function onSelectionChange() {
 onMounted(() => document.addEventListener('selectionchange', onSelectionChange));
 onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange));
 
-// 构造一个指标标签节点（显示 指标编号·指标名称 + 删除按钮）
-function makeChip(code) {
-  const m = allMetrics.value.find(x => x.metricCode === code);
+// 构造一个指标标签节点（显示 指标编号·指标名称[@取值时间] + 删除按钮）；data-code 存完整 token
+function makeChip(token) {
+  const { baseCode, timeLabel } = splitToken(token);
+  const m = allMetrics.value.find(x => x.metricCode === baseCode);
   const name = m ? (m.metricName || '') : '';
   const span = document.createElement('span');
   span.className = 'metric-chip';
   span.setAttribute('contenteditable', 'false');
-  span.setAttribute('data-code', code);
-  const label = name ? `${code}·${name}` : code;
+  span.setAttribute('data-code', token);
+  const base = name ? `${baseCode}·${name}` : baseCode;
+  const label = timeLabel ? `${base} @${timeLabel}` : base;
   span.innerHTML = `<span class="chip-text">${label}</span><span class="chip-del" title="删除">×</span>`;
   return span;
 }
 
 // 把选中指标作为标签插入到表达式光标处
 function insertMetricChip() {
-  const code = exprPickCode.value;
+  // 完整 token = 指标编号 + 取值时间后缀（今日为空后缀）
+  const code = exprPickCode.value ? exprPickCode.value + (exprPickTime.value || '') : '';
   const editor = exprEditorRef.value;
   if (!code || !editor) return;
   editor.focus();
@@ -837,6 +866,33 @@ function insertMetricChip() {
   sel.addRange(range);
   savedRange = range.cloneRange();
   exprPickCode.value = '';
+  syncExprText();
+}
+
+// 插入安全除法模板 div( , ) —— 除数为 0 时后端返回 0，避免整表达式报错
+function insertDiv() {
+  const editor = exprEditorRef.value;
+  if (!editor) return;
+  editor.focus();
+  const sel = window.getSelection();
+  let range;
+  if (savedRange && editor.contains(savedRange.startContainer)) {
+    range = savedRange.cloneRange();
+  } else {
+    range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+  }
+  sel.removeAllRanges();
+  sel.addRange(range);
+  range.deleteContents();
+  const tpl = document.createTextNode('div( , )');
+  range.insertNode(tpl);
+  range.setStartAfter(tpl);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  savedRange = range.cloneRange();
   syncExprText();
 }
 
@@ -914,10 +970,18 @@ function renderExprEditor() {
   while (i < text.length) {
     let matched = null;
     for (const c of codes) {
-      if (text.startsWith(c, i) && !isWord(text[i - 1]) && !isWord(text[i + c.length])) {
-        matched = c;
-        break;
+      if (!text.startsWith(c, i) || isWord(text[i - 1])) continue;
+      const afterIdx = i + c.length;
+      // 编号后是词边界 → 今日 token
+      if (!isWord(text[afterIdx])) { matched = c; break; }
+      // 编号后紧跟保留后缀（__D1/__PME/...）→ 历史档 token（编号 + 后缀整体识别为一个标签）
+      for (const suf of RESERVED_SUFFIXES) {
+        if (text.startsWith(suf, afterIdx) && !isWord(text[afterIdx + suf.length])) {
+          matched = c + suf;
+          break;
+        }
       }
+      if (matched) break;
     }
     if (matched) {
       editor.appendChild(makeChip(matched));
@@ -937,7 +1001,10 @@ function renderExprEditor() {
 function usedMetricCodes() {
   const editor = exprEditorRef.value;
   if (!editor) return [];
-  return Array.from(editor.querySelectorAll('.metric-chip')).map(n => n.getAttribute('data-code'));
+  // data-code 存的是完整 token（可能含取值时间后缀）；引用校验只关心底层指标编号，去重返回 baseCode
+  const bases = Array.from(editor.querySelectorAll('.metric-chip'))
+    .map(n => splitToken(n.getAttribute('data-code') || '').baseCode);
+  return [...new Set(bases)];
 }
 function resetTrial() {
   dlg.trial = { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [], exprResult: null, exprVars: null, dataVersion: '' };
@@ -973,6 +1040,7 @@ function openCreate() {
   ];
   dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
   exprPickCode.value = '';
+  exprPickTime.value = '';
   dlg.show = true;
   // 指标列表若未加载成功（首屏失败/仍在途），开窗时补一次拉取，避免弹框永久禁用保存
   if (!metricsLoaded.value && !metricsLoading.value) reload();
@@ -993,6 +1061,7 @@ function openEdit(row) {
   dlg.slots = resolveSlots(row);
   dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
   exprPickCode.value = '';
+  exprPickTime.value = '';
   dlg.show = true;
   // 指标列表若未加载成功，开窗时补一次拉取（编辑场景还需靠它把已存 exprText 还原成指标标签）
   if (!metricsLoaded.value && !metricsLoading.value) reload();
