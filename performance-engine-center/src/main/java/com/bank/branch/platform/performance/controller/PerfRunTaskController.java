@@ -78,19 +78,26 @@ public class PerfRunTaskController {
     @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
     public ResponseWrapper<PerfRunTaskDTO> list(
             @RequestParam(value = "taskType", required = false) String taskType,
+            @RequestParam(value = "triggerType", required = false) String triggerType,
+            @RequestParam(value = "taskKey", required = false) String taskKey,
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "startedBy", required = false) String startedBy,
             @RequestParam(value = "dataDate", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataDate,
+            @RequestParam(value = "dataDateFrom", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataDateFrom,
+            @RequestParam(value = "dataDateTo", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataDateTo,
             @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         // 记录 empId 便于排查数据范围相关问题 (未登录时此处会抛 AuthException → 401)
         String empId = currentUserApi.getCurrentEmpId();
-        log.debug("[PerfRunTaskController.list] empId={}, taskType={}, status={}, dataDate={}, pageNo={}, pageSize={}",
-                empId, taskType, status, dataDate, pageNo, pageSize);
+        log.debug("[PerfRunTaskController.list] empId={}, taskType={}, triggerType={}, taskKey={}, status={}, "
+                        + "startedBy={}, dataDate={}, dataDateFrom={}, dataDateTo={}, pageNo={}, pageSize={}",
+                empId, taskType, triggerType, taskKey, status, startedBy, dataDate, dataDateFrom, dataDateTo, pageNo, pageSize);
 
-        // V1.13 Task 5 临时改造：Controller 参数尚未扩展（triggerType/startedBy/dataDateFrom/dataDateTo
-        // 留给 Task 6 正式接入），此处先按现有 4 个参数构造 RunTaskQuery 以保证编译通过。
-        RunTaskQuery query = new RunTaskQuery(taskType, null, null, status, null, dataDate, null, null);
+        RunTaskQuery query = new RunTaskQuery(taskType, triggerType, taskKey, status, startedBy,
+                dataDate, dataDateFrom, dataDateTo);
         PageResult<PerfRunTaskDTO> dtoPage = perfRunTaskService.pageDto(query, pageNo, pageSize);
         return ResponseWrapper.page(dtoPage);
     }
