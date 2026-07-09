@@ -1,0 +1,14 @@
+========================================================================
+0630 上线后未执行脚本（需在生产/上线库手工执行的表结构变更）
+本地 onepl / onepl_test_bootstrap 已执行；此处登记供上线环境执行。
+========================================================================
+
+-- ----------------------------------------------------------------------
+-- 2026-07-09  指标任务执行监控页：PERF_RUN_TASK 加 trigger_type（触发来源）列 + 复合索引
+-- 用途：区分指标计算子任务的触发来源（RECALC 重算 / SCHEDULED 定时 / MANUAL 手动），
+--       任务监控页按 trigger_type=RECALC 过滤展示"指标重算"任务。
+-- 幂等版本见：docs/superpowers/sql/2026-07-09-perf-run-task-add-trigger-type.sql
+-- ----------------------------------------------------------------------
+ALTER TABLE `PERF_RUN_TASK`
+  ADD COLUMN `trigger_type` varchar(20) DEFAULT NULL COMMENT '触发来源：RECALC/SCHEDULED/MANUAL' AFTER `task_type`,
+  ADD KEY `idx_type_trigger` (`task_type`, `trigger_type`);
