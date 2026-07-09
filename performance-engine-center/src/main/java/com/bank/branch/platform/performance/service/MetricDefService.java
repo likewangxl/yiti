@@ -273,8 +273,31 @@ public class MetricDefService {
         return suffix == null ? name : name + suffix;
     }
 
+    /** 取值时间引用 token 的系统保留后缀，真实指标编码禁止以其结尾. */
+    private static final List<String> RESERVED_METRIC_CODE_SUFFIXES = List.of("__D1", "__PME", "__PQE", "__PYE");
+
+    /**
+     * 校验指标编码未使用取值时间保留后缀，否则抛 {@link PerfErrorCode#METRIC_CODE_RESERVED_SUFFIX}.
+     *
+     * @param metricCode 指标编码（可空，空则跳过）
+     */
+    private void validateMetricCodeSuffix(String metricCode) {
+        if (metricCode == null) {
+            return;
+        }
+        for (String suffix : RESERVED_METRIC_CODE_SUFFIXES) {
+            if (metricCode.endsWith(suffix)) {
+                throw new PerfException(PerfErrorCode.METRIC_CODE_RESERVED_SUFFIX,
+                        "指标编码 " + metricCode + " 不能以保留后缀 " + suffix + " 结尾");
+            }
+        }
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public PerfMetricDef create(CreateMetricDefCmd cmd) {
+        // 指标编码禁止以取值时间保留后缀结尾（__D1/__PME/__PQE/__PYE），否则会与引用 token 语义冲突。
+        // 新增与导入(upsertByName)新增分支统一在此入口拦截。
+        validateMetricCodeSuffix(cmd.getMetricCode());
         // 指标名按基础维度自动补后缀（-员工/-机构/-客户）；新增与导入(upsertByName)统一在入口归一
         cmd.setMetricName(applyDimensionSuffix(cmd.getMetricName(), cmd.getBaseDim()));
         // Groovy 计算逻辑：保存前先校验 expr_text 表达式语法合法（不合法直接拒绝，避免脏表达式入库）
