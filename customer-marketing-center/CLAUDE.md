@@ -453,8 +453,8 @@ V1.12 交付后未解决项 + 实施过程发现的副产品延期至 V1.13：
 | 2 | V1.8 P6 已登记业务/数据状态问题：KpiSchemeControllerIT 4E + AllocRelationControllerIT 4F + PerfRunTaskMapperIT 7F+1E + CustAllocRelationMapperIT 10F | 中 | V1.8 P6 转入（延期 V1.11→V1.12→V1.13）| V1.13 候选 |
 | 3 | 3 个 *SummaryControllerIT.submit*Export Status 500（疑数据库连接池或前置数据缺失）| 低 | V1.10 P2 retry-3 探查（延期 V1.11→V1.12→V1.13）| V1.13 候选 |
 | 4 | MetricScheduledE2EIT 业务层 Quartz JobKey 注入失败（V1.7 e2e 测试在 V1.10 测试库合一后暴露；schema column drift 修复后仍 fail）| 中 | V1.12 # 2 实施暴露 | V1.13 候选 |
-| 5 | WorkflowCallbackListener REQUIRES_NEW + reconcileApproved REQUIRES_NEW 嵌套冗余简化（外层防御层是否必要） | 低 | V1.11 # 1 architect Opus 建议 | V1.13 候选 |
-| 6 | LeadRejectedEvent dead code 定调（删除 / 加 V2 listener / 加 TODO） | 低 | V1.11 # 1 architect Opus 建议 | V1.13 候选 |
+| 5 | WorkflowCallbackListener REQUIRES_NEW + reconcileApproved REQUIRES_NEW 嵌套冗余简化（外层防御层是否必要） | 低 | V1.11 # 1 架构评审建议 | V1.13 候选 |
+| 6 | LeadRejectedEvent dead code 定调（删除 / 加 V2 listener / 加 TODO） | 低 | V1.11 # 1 架构评审建议 | V1.13 候选 |
 
 ## V1.0 已知技术债（2026-04-25）
 

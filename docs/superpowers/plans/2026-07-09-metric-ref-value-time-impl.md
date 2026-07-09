@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-09-metric-ref-value-time-design.md`
 
-**根 CLAUDE.md 红线：** 严格 TDD（红-绿-重构，每步独立 commit）；中文注释 + UTF-8；子代理 model ≥ sonnet。
+**根 CLAUDE.md 红线：** 严格 TDD（红-绿-重构，每步独立 commit）；中文注释 + UTF-8；子代理 model 用较强档位。
 
 ---
 
