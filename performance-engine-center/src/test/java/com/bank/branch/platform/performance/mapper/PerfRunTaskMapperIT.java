@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfRunTask;
+import com.bank.branch.platform.performance.service.dto.RunTaskQuery;
 import com.bank.branch.platform.performance.support.PerformanceMapperTestBase;
 import com.bank.branch.platform.performance.support.RunTaskTestDataBuilder;
 import org.junit.jupiter.api.DisplayName;
@@ -9,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -104,7 +106,8 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
         assertThat(loadedC.getStartedBy()).isEqualTo("USER_CC");
 
         // 再验证 selectByCondition 在 filter=null 下会把 3 种 started_by 都包含进来
-        List<PerfRunTask> list = mapper.selectByCondition(null, null, null, null, null, 0, 500);
+        List<PerfRunTask> list = mapper.selectByCondition(
+                new RunTaskQuery(null, null, null, null, null, null, null, null), null, 0, 500);
         assertThat(list).extracting(PerfRunTask::getStartedBy)
                 .contains("USER_AA", "USER_BB", "USER_CC");
     }
@@ -121,12 +124,13 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
         insertRaw(tc);
 
         // 场景 1: filter = null -> 管理员全见 (应至少看到 3 条)
-        long adminCount = mapper.countByCondition(null, null, null, null, null);
+        RunTaskQuery emptyQuery = new RunTaskQuery(null, null, null, null, null, null, null, null);
+        long adminCount = mapper.countByCondition(emptyQuery, null);
         assertThat(adminCount).isGreaterThanOrEqualTo(3L);
 
         // 场景 2: filter = "AND started_by='USER_A'" -> 只应返回 USER_A 的数据
         String filter = "AND started_by = 'USER_A'";
-        List<PerfRunTask> userAList = mapper.selectByCondition(null, null, null, null, filter, 0, 100);
+        List<PerfRunTask> userAList = mapper.selectByCondition(emptyQuery, filter, 0, 100);
         assertThat(userAList).isNotEmpty();
         assertThat(userAList).extracting(PerfRunTask::getStartedBy).containsOnly("USER_A");
         // 至少包含本测试的 DS_A
@@ -137,7 +141,7 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
                 .doesNotContain("TEST_RT_DS_B", "TEST_RT_DS_C");
 
         // 场景 3: count 一致性 —— filter 下 count 仅统计 USER_A
-        long userACount = mapper.countByCondition(null, null, null, null, filter);
+        long userACount = mapper.countByCondition(emptyQuery, filter);
         assertThat(userACount).isEqualTo(userAList.size());
     }
 
@@ -152,7 +156,8 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
         insertRaw(trial);
 
         String filter = "AND started_by = 'USER_TYP'";
-        List<PerfRunTask> list = mapper.selectByCondition("METRIC_TRIAL", null, null, null, filter, 0, 100);
+        List<PerfRunTask> list = mapper.selectByCondition(
+                new RunTaskQuery("METRIC_TRIAL", null, null, null, null, null, null, null), filter, 0, 100);
 
         assertThat(list).extracting(PerfRunTask::getTaskType).containsOnly("METRIC_TRIAL");
         assertThat(list).extracting(PerfRunTask::getTaskKey).contains("TEST_RT_TYPE_TRIAL");
@@ -170,7 +175,8 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
         insertRaw(success);
 
         String filter = "AND started_by = 'USER_ST'";
-        List<PerfRunTask> list = mapper.selectByCondition(null, null, "SUCCESS", null, filter, 0, 100);
+        List<PerfRunTask> list = mapper.selectByCondition(
+                new RunTaskQuery(null, null, null, "SUCCESS", null, null, null, null), filter, 0, 100);
 
         assertThat(list).extracting(PerfRunTask::getStatus).containsOnly("SUCCESS");
         assertThat(list).extracting(PerfRunTask::getTaskKey).contains("TEST_RT_ST_SUC");
@@ -196,6 +202,38 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
         assertThat(count).isGreaterThanOrEqualTo(2L);
     }
 
+    /** 构造带 triggerType 的任务并落库（走 MyBatis-Plus BaseMapper.insert，覆盖 trigger_type 新列）. */
+    private void insertRt(String id, String taskType, String triggerType, String taskKey,
+                          String status, LocalDate dataDate, String startedBy) {
+        PerfRunTask t = new PerfRunTask();
+        t.setId(id);
+        t.setTaskType(taskType);
+        t.setTriggerType(triggerType);
+        t.setTaskKey(taskKey);
+        t.setStatus(status);
+        t.setDataDate(dataDate);
+        t.setStartedBy(startedBy);
+        t.setStartTime(LocalDateTime.now());
+        mapper.insert(t);
+    }
+
+    @Test
+    @DisplayName("selectByCondition 可按 triggerType 过滤")
+    void selectByCondition_filtersByTriggerType() {
+        insertRt("IT_RT_RECALC", "METRIC_RUN", "RECALC", "M_0046", "SUCCESS",
+                LocalDate.of(2026, 7, 9), "E01");
+        insertRt("IT_RT_SCHED", "METRIC_RUN", "SCHEDULED", "M_0046", "SUCCESS",
+                LocalDate.of(2026, 7, 9), "E01");
+
+        RunTaskQuery q = new RunTaskQuery("METRIC_RUN", "RECALC", null, null, null, null, null, null);
+        long total = mapper.countByCondition(q, null);
+        List<PerfRunTask> rows = mapper.selectByCondition(q, null, 0, 20);
+
+        assertThat(total).isEqualTo(1);
+        assertThat(rows).extracting(PerfRunTask::getId).containsExactly("IT_RT_RECALC");
+        assertThat(rows.get(0).getTriggerType()).isEqualTo("RECALC");
+    }
+
     @Test
     @DisplayName("countByCondition 与 selectByCondition 过滤条件一致")
     void countByCondition_sameAsSelect() {
@@ -207,8 +245,9 @@ class PerfRunTaskMapperIT extends PerformanceMapperTestBase {
         insertRaw(RunTaskTestDataBuilder.task("CMP_5", "METRIC_RUN", LocalDate.now(), "SUCCESS", "USER_CMP"));
 
         String filter = "AND started_by = 'USER_CMP'";
-        List<PerfRunTask> list = mapper.selectByCondition(null, null, "RUNNING", null, filter, 0, 100);
-        long count = mapper.countByCondition(null, null, "RUNNING", null, filter);
+        RunTaskQuery runningQuery = new RunTaskQuery(null, null, null, "RUNNING", null, null, null, null);
+        List<PerfRunTask> list = mapper.selectByCondition(runningQuery, filter, 0, 100);
+        long count = mapper.countByCondition(runningQuery, filter);
 
         assertThat(count).isEqualTo(list.size());
         assertThat(count).isEqualTo(3L);

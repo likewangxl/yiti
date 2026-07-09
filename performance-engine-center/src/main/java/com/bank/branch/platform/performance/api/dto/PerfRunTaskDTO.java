@@ -23,6 +23,8 @@ public class PerfRunTaskDTO {
     private String taskType;
     /** 关键键 (如 metric_code). */
     private String taskKey;
+    /** 指标中文名（V1.13 新增：taskType=METRIC_RUN 时按 taskKey=metric_code 批量解析补齐，查不到为 null）. */
+    private String taskKeyName;
     /** 数据日期. */
     private LocalDate dataDate;
     /** 数据版本. */
@@ -31,6 +33,8 @@ public class PerfRunTaskDTO {
     private String status;
     /** 发起人 emp_id. */
     private String startedBy;
+    /** 发起人姓名（V1.13 新增：按 startedBy 批量查通讯录补齐，查不到为 null）. */
+    private String startedByName;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     /** 错误信息 (FAILED 时填充). */

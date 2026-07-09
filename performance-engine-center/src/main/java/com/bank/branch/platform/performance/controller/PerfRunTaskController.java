@@ -8,6 +8,7 @@ import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
+import com.bank.branch.platform.performance.service.dto.RunTaskQuery;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
@@ -87,8 +88,10 @@ public class PerfRunTaskController {
         log.debug("[PerfRunTaskController.list] empId={}, taskType={}, status={}, dataDate={}, pageNo={}, pageSize={}",
                 empId, taskType, status, dataDate, pageNo, pageSize);
 
-        PageResult<PerfRunTaskDTO> dtoPage = perfRunTaskService.pageDto(
-                taskType, null, status, dataDate, pageNo, pageSize);
+        // V1.13 Task 5 临时改造：Controller 参数尚未扩展（triggerType/startedBy/dataDateFrom/dataDateTo
+        // 留给 Task 6 正式接入），此处先按现有 4 个参数构造 RunTaskQuery 以保证编译通过。
+        RunTaskQuery query = new RunTaskQuery(taskType, null, null, status, null, dataDate, null, null);
+        PageResult<PerfRunTaskDTO> dtoPage = perfRunTaskService.pageDto(query, pageNo, pageSize);
         return ResponseWrapper.page(dtoPage);
     }
 

@@ -32,32 +32,51 @@
         LIMIT 1
     </select>
 
+    <!--
+        V1.13 起过滤条件收敛到 RunTaskQuery (q.*)，新增 triggerType/startedBy/dataDateFrom/dataDateTo。
+    -->
+    <sql id="CONDITION_WHERE">
+        <if test="q.taskType != null and q.taskType != ''">
+            AND task_type = #{q.taskType}
+        </if>
+        <if test="q.triggerType != null and q.triggerType != ''">
+            AND trigger_type = #{q.triggerType}
+        </if>
+        <if test="q.taskKey != null and q.taskKey != ''">
+            AND task_key = #{q.taskKey}
+        </if>
+        <if test="q.status != null and q.status != ''">
+            AND status = #{q.status}
+        </if>
+        <if test="q.startedBy != null and q.startedBy != ''">
+            AND started_by = #{q.startedBy}
+        </if>
+        <if test="q.dataDate != null">
+            AND data_date = #{q.dataDate}
+        </if>
+        <if test="q.dataDateFrom != null">
+            AND data_date &gt;= #{q.dataDateFrom}
+        </if>
+        <if test="q.dataDateTo != null">
+            AND data_date &lt;= #{q.dataDateTo}
+        </if>
+        <!--
+            数据范围 SQL 片段注入 (合法 ${}):
+            - null / 空串 -> 管理员全见
+            - 非空 -> 由 DataScopeApi 生成形如 " AND started_by = 'xxx' "
+            调用方必须保证来源可信, 见 Mapper Javadoc 的安全声明.
+        -->
+        <if test="dataScopeFilter != null and dataScopeFilter != ''">
+            ${dataScopeFilter}
+        </if>
+    </sql>
+
     <select id="selectByCondition" resultType="com.bank.branch.platform.performance.entity.PerfRunTask">
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PERF_RUN_TASK
         <where>
-            <if test="taskType != null and taskType != ''">
-                AND task_type = #{taskType}
-            </if>
-            <if test="taskKey != null and taskKey != ''">
-                AND task_key = #{taskKey}
-            </if>
-            <if test="status != null and status != ''">
-                AND status = #{status}
-            </if>
-            <if test="dataDate != null">
-                AND data_date = #{dataDate}
-            </if>
-            <!--
-                数据范围 SQL 片段注入 (合法 ${}):
-                - null / 空串 -> 管理员全见
-                - 非空 -> 由 DataScopeApi 生成形如 " AND started_by = 'xxx' "
-                调用方必须保证来源可信, 见 Mapper Javadoc 的安全声明.
-            -->
-            <if test="dataScopeFilter != null and dataScopeFilter != ''">
-                ${dataScopeFilter}
-            </if>
+            <include refid="CONDITION_WHERE"/>
         </where>
         ORDER BY start_time DESC, id DESC
         LIMIT #{limit} OFFSET #{offset}
@@ -67,22 +86,7 @@
         SELECT COUNT(*)
         FROM PERF_RUN_TASK
         <where>
-            <if test="taskType != null and taskType != ''">
-                AND task_type = #{taskType}
-            </if>
-            <if test="taskKey != null and taskKey != ''">
-                AND task_key = #{taskKey}
-            </if>
-            <if test="status != null and status != ''">
-                AND status = #{status}
-            </if>
-            <if test="dataDate != null">
-                AND data_date = #{dataDate}
-            </if>
-            <!-- 数据范围 SQL 片段注入，语义同 selectByCondition. -->
-            <if test="dataScopeFilter != null and dataScopeFilter != ''">
-                ${dataScopeFilter}
-            </if>
+            <include refid="CONDITION_WHERE"/>
         </where>
     </select>
 

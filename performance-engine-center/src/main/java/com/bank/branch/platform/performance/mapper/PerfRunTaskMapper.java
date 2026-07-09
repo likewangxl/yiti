@@ -1,6 +1,7 @@
 package com.bank.branch.platform.performance.mapper;
 
 import com.bank.branch.platform.performance.entity.PerfRunTask;
+import com.bank.branch.platform.performance.service.dto.RunTaskQuery;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -46,19 +47,16 @@ public interface PerfRunTaskMapper extends BaseMapper<PerfRunTask> {
      * <p>普通用户场景：{@code dataScopeFilter} 应由 DataScopeApi 传回 {@code " AND started_by = '#{empId}' "} 之类的片段；
      * 管理员场景：{@code dataScopeFilter} 传 {@code null} 表示全见。
      *
-     * @param taskType        类型（nullable）
-     * @param taskKey         关键键（nullable）
-     * @param status          状态（nullable）
-     * @param dataDate        数据日期（nullable）
+     * <p>V1.13 起过滤条件收敛到 {@link RunTaskQuery}（新增 triggerType/startedBy/dataDateFrom/dataDateTo），
+     * 避免方法签名随过滤维度增长持续膨胀。
+     *
+     * @param q               查询过滤条件（nullable 字段表示不过滤）
      * @param dataScopeFilter 数据范围 SQL 片段（nullable；管理员全见时传 null）
      * @param offset          偏移量
      * @param limit           每页大小
      * @return 任务日志列表
      */
-    List<PerfRunTask> selectByCondition(@Param("taskType") String taskType,
-                                        @Param("taskKey") String taskKey,
-                                        @Param("status") String status,
-                                        @Param("dataDate") LocalDate dataDate,
+    List<PerfRunTask> selectByCondition(@Param("q") RunTaskQuery q,
                                         @Param("dataScopeFilter") String dataScopeFilter,
                                         @Param("offset") int offset,
                                         @Param("limit") int limit);
@@ -66,17 +64,11 @@ public interface PerfRunTaskMapper extends BaseMapper<PerfRunTask> {
     /**
      * 条件计数（与 {@link #selectByCondition} 过滤条件保持一致，包含同样的数据范围片段）.
      *
-     * @param taskType        类型（nullable）
-     * @param taskKey         关键键（nullable）
-     * @param status          状态（nullable）
-     * @param dataDate        数据日期（nullable）
+     * @param q               查询过滤条件（nullable 字段表示不过滤）
      * @param dataScopeFilter 数据范围 SQL 片段（nullable）
      * @return 总数
      */
-    long countByCondition(@Param("taskType") String taskType,
-                          @Param("taskKey") String taskKey,
-                          @Param("status") String status,
-                          @Param("dataDate") LocalDate dataDate,
+    long countByCondition(@Param("q") RunTaskQuery q,
                           @Param("dataScopeFilter") String dataScopeFilter);
 
     /**

@@ -6,22 +6,31 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
+import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.facade.assembler.RunTaskAssembler;
+import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
+import com.bank.branch.platform.performance.service.dto.RunTaskQuery;
+import com.bank.branch.platform.portal.api.AddressBookApi;
+import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * 绩效任务执行日志服务（V1.0 只读）.
@@ -57,6 +66,10 @@ public class PerfRunTaskService {
     private final PerfRunTaskMapper runTaskMapper;
     private final CurrentUserApi currentUserApi;
     private final BizScopeApi bizScopeApi;
+    /** V1.13：批量解析 METRIC_RUN 任务 taskKey(metric_code) → 指标中文名. */
+    private final PerfMetricDefMapper metricDefMapper;
+    /** V1.13：批量解析 startedBy(emp_id) → 发起人姓名（跨模块 portal 通讯录）. */
+    private final AddressBookApi addressBookApi;
 
     /**
      * 按主键查询任务日志.
@@ -92,25 +105,20 @@ public class PerfRunTaskService {
      *   <li>{@link PerfRunTaskMapper#selectByCondition} 取当前页数据</li>
      * </ol>
      *
-     * @param taskType 任务类型（nullable）
-     * @param taskKey  任务关键键（nullable）
-     * @param status   状态（nullable）
-     * @param dataDate 数据日期（nullable）
+     * @param q        查询过滤条件（nullable 字段表示不过滤）
      * @param pageNo   页码（从 1 起）
      * @param pageSize 页大小
      * @return 分页结果
      */
     @Transactional(readOnly = true)
-    public PageResult<PerfRunTask> page(String taskType, String taskKey, String status,
-                                        LocalDate dataDate, int pageNo, int pageSize) {
+    public PageResult<PerfRunTask> page(RunTaskQuery q, int pageNo, int pageSize) {
         String dataScopeFilter = resolveScopeFilter();
-        long total = runTaskMapper.countByCondition(taskType, taskKey, status, dataDate, dataScopeFilter);
+        long total = runTaskMapper.countByCondition(q, dataScopeFilter);
         if (total == 0L) {
             return PageResult.of(pageNo, pageSize, 0L, Collections.emptyList());
         }
         int offset = Math.max(pageNo - 1, 0) * pageSize;
-        List<PerfRunTask> records = runTaskMapper.selectByCondition(
-                taskType, taskKey, status, dataDate, dataScopeFilter, offset, pageSize);
+        List<PerfRunTask> records = runTaskMapper.selectByCondition(q, dataScopeFilter, offset, pageSize);
         return PageResult.of(pageNo, pageSize, total, records);
     }
 
@@ -137,23 +145,68 @@ public class PerfRunTaskService {
      * 守护），本方法为 Controller 提供"入 DTO 出 DTO"的纯接口，entity 装配收敛到
      * Service 层完成。
      *
-     * @param taskType 任务类型（nullable）
-     * @param taskKey  任务关键键（nullable）
-     * @param status   状态（nullable）
-     * @param dataDate 数据日期（nullable）
+     * @param q        查询过滤条件（nullable 字段表示不过滤）
      * @param pageNo   页码（从 1 起）
      * @param pageSize 页大小
      * @return 分页 DTO 结果
      */
     @Transactional(readOnly = true)
-    public PageResult<PerfRunTaskDTO> pageDto(String taskType, String taskKey, String status,
-                                              LocalDate dataDate, int pageNo, int pageSize) {
-        PageResult<PerfRunTask> raw = page(taskType, taskKey, status, dataDate, pageNo, pageSize);
+    public PageResult<PerfRunTaskDTO> pageDto(RunTaskQuery q, int pageNo, int pageSize) {
+        PageResult<PerfRunTask> raw = page(q, pageNo, pageSize);
         List<PerfRunTaskDTO> dtos = new ArrayList<>(raw.getRecords().size());
         for (PerfRunTask task : raw.getRecords()) {
             dtos.add(RunTaskAssembler.toDto(task));
         }
+        enrich(dtos, raw.getRecords());
         return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * V1.13：批量补齐 {@link PerfRunTaskDTO#getTaskKeyName()}（指标中文名）与
+     * {@link PerfRunTaskDTO#getStartedByName()}（发起人姓名），零 N+1。
+     *
+     * <p>指标名解析：仅 {@code taskType=METRIC_RUN} 的任务把 {@code taskKey} 视为
+     * metric_code，批量调用 {@link PerfMetricDefMapper#selectByMetricCodes} 一次性查回；
+     * 发起人姓名解析：所有任务的 {@code startedBy} 去重后批量调用
+     * {@link AddressBookApi#getEmployees} 一次性查回。两者查不到均保留 null，不抛异常。
+     *
+     * @param dtos 待补齐的 DTO 列表（原地修改）
+     * @param raw  与 dtos 一一对应的原始实体列表（取 taskType/taskKey/startedBy）
+     */
+    private void enrich(List<PerfRunTaskDTO> dtos, List<PerfRunTask> raw) {
+        if (CollectionUtils.isEmpty(dtos)) {
+            return;
+        }
+
+        // 指标中文名：仅 METRIC_RUN 任务的 taskKey 视为 metric_code
+        List<String> metricCodes = raw.stream()
+                .filter(t -> "METRIC_RUN".equals(t.getTaskType()) && t.getTaskKey() != null)
+                .map(PerfRunTask::getTaskKey)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, String> metricNameByCode = metricCodes.isEmpty() ? Collections.emptyMap()
+                : metricDefMapper.selectByMetricCodes(metricCodes).stream()
+                        .collect(Collectors.toMap(PerfMetricDef::getMetricCode, PerfMetricDef::getMetricName,
+                                (a, b) -> a));
+
+        // 发起人姓名：全部任务的 startedBy 去重批量查
+        List<String> empIds = raw.stream()
+                .map(PerfRunTask::getStartedBy)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, String> empNameById = empIds.isEmpty() ? Collections.emptyMap()
+                : addressBookApi.getEmployees(empIds).stream()
+                        .collect(Collectors.toMap(EmployeeDTO::getEmpId, EmployeeDTO::getEmpName, (a, b) -> a));
+
+        for (int i = 0; i < dtos.size(); i++) {
+            PerfRunTaskDTO dto = dtos.get(i);
+            PerfRunTask task = raw.get(i);
+            if ("METRIC_RUN".equals(task.getTaskType())) {
+                dto.setTaskKeyName(metricNameByCode.get(task.getTaskKey()));
+            }
+            dto.setStartedByName(empNameById.get(task.getStartedBy()));
+        }
     }
 
     /**
