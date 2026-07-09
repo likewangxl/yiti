@@ -386,44 +386,6 @@ public class MetricCalcService {
     }
 
     /**
-     * V1.7：基于预查的 slotMap，per-subject 取每个 slot 的值（N+1 优化的 per-subject 步骤）.
-     *
-     * @param subject  主体 ID（员工工号/机构编码/客户 ID）
-     * @param slotMap  metricCode -&gt; val_slot 预查结果
-     * @param baseDim  基础维度（EMP/ORG/CUST）
-     * @param dataDate 数据日期
-     * @param version  数据版本
-     * @return 指标编码 -&gt; 指标值 映射（作为 Groovy vars）
-     */
-    private Map<String, Object> loadRefValuesBySlotMap(String subject, Map<String, Integer> slotMap,
-                                                        List<String> refCodes,
-                                                        String baseDim, LocalDate dataDate, String version) {
-        if (refCodes == null || refCodes.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, Object> result = new HashMap<>();
-        // V1.13+：遍历原始 refCodes 而非 slotMap.keys，保证所有引用指标都进 vars。
-        // - slotMap 缺失（def.val_slot=NULL，根本没分配槽位）→ 直接 BigDecimal.ZERO
-        // - slotMap 命中但宽表查无该 (subject, slot) 行/列值→ 也兜底 BigDecimal.ZERO
-        // 目的：避免 Groovy "No such property" 或 null + number NPE，让 EXPR 公式总能跑通。
-        for (String refCode : refCodes) {
-            Integer slot = slotMap.get(refCode);
-            BigDecimal value = null;
-            if (slot != null) {
-                value = switch (baseDim == null ? "" : baseDim.toUpperCase()) {
-                    case "EMP"  -> empIndexResultMapper.selectValBySlot(subject, slot, dataDate, version);
-                    case "ORG"  -> orgIndexResultMapper.selectValBySlot(subject, slot, dataDate, version);
-                    case "CUST" -> custIndexResultMapper.selectValBySlot(subject, slot, dataDate, version);
-                    default -> throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
-                            "未知 baseDim=" + baseDim);
-                };
-            }
-            result.put(refCode, value != null ? value : BigDecimal.ZERO);
-        }
-        return result;
-    }
-
-    /**
      * V1.13+：按 RefToken 逐个解析目标日期，从宽表取值，以完整 token 为变量名绑定.
      *
      * <p>目标日期 = timePoint.resolve(dataDate)（复用 DateMacroResolver）；缺 slot / 查无值 → ZERO。
@@ -517,22 +479,24 @@ public class MetricCalcService {
 
     public Map<String, Object> loadGroovyVarsForSubject(String baseDim, String exprText,
                                                         LocalDate dataDate, String subjectId, String version) {
-        List<String> refCodes = extractMetricCodesFromExpr(exprText);
-        Map<String, Object> vars = new HashMap<>();
-        if (refCodes.isEmpty()) {
-            return vars;
+        // V1.13+ 取值时间：与真实计算共用 token 口径（baseCode 预查 slot，token 绑变量、按取值时间取历史日期）
+        List<MetricRefTokenParser.RefToken> refTokens = MetricRefTokenParser.parse(exprText);
+        if (refTokens.isEmpty()) {
+            return new HashMap<>();
         }
         String dim = baseDim == null ? "" : baseDim.toUpperCase();
         if (!dim.equals("EMP") && !dim.equals("ORG") && !dim.equals("CUST")) {
             // 维度无关/未知维度：无法定位宽表，引用指标兜底 ZERO（保证 Groovy 可跑）
-            for (String code : refCodes) {
-                vars.put(code, BigDecimal.ZERO);
+            Map<String, Object> vars = new HashMap<>();
+            for (MetricRefTokenParser.RefToken rt : refTokens) {
+                vars.put(rt.token(), BigDecimal.ZERO);
             }
             return vars;
         }
-        Map<String, Integer> slotMap = resolveSlotMap(dim, refCodes);
-        vars.putAll(loadRefValuesBySlotMap(subjectId, slotMap, refCodes, dim, dataDate, version));
-        return vars;
+        List<String> baseCodes = refTokens.stream()
+                .map(MetricRefTokenParser.RefToken::baseCode).distinct().toList();
+        Map<String, Integer> slotMap = resolveSlotMap(dim, baseCodes);
+        return loadRefValuesByTokens(subjectId, refTokens, slotMap, dim, dataDate, version);
     }
 
     /**
@@ -551,39 +515,6 @@ public class MetricCalcService {
             log.warn("[MetricCalc] refMetricCodes 解析失败: {}", e.getMessage());
             return List.of();
         }
-    }
-
-    /** V1.13+：正则匹配 Groovy/EXPR 公式里出现的 metric_code 字面量（形如 M_0269、M_00X、M_AUM_TOTAL）. */
-    private static final java.util.regex.Pattern METRIC_CODE_PATTERN =
-            java.util.regex.Pattern.compile("\\bM_[A-Za-z0-9_]+\\b");
-
-    /**
-     * V1.13+：从 expr_text 正则提取所有 M_xxx 形式的 metric_code 字面量，去重保序.
-     *
-     * <p>用于 ref_metric_codes 字段为空时的兜底——前端"表达式构建器"暂未把公式里的指标
-     * 自动写回 def.ref_metric_codes，由后端在 calc 时主动解析。
-     */
-    private List<String> extractMetricCodesFromExpr(String exprText) {
-        if (exprText == null || exprText.isBlank()) {
-            return List.of();
-        }
-        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
-        java.util.regex.Matcher m = METRIC_CODE_PATTERN.matcher(exprText);
-        while (m.find()) {
-            set.add(m.group());
-        }
-        return new ArrayList<>(set);
-    }
-
-    /** V1.13+：把 def.ref_metric_codes 与正则提取结果合并，保留顺序去重. */
-    private List<String> mergeRefCodes(List<String> declared, List<String> extracted) {
-        if ((declared == null || declared.isEmpty()) && (extracted == null || extracted.isEmpty())) {
-            return List.of();
-        }
-        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
-        if (declared != null) set.addAll(declared);
-        if (extracted != null) set.addAll(extracted);
-        return new ArrayList<>(set);
     }
 
     /**

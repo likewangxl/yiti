@@ -364,6 +364,22 @@ class MetricCalcServiceTest {
         assertThat(paramsCap.getValue()).containsEntry("allocDate", dataDate);
     }
 
+    @Test
+    @DisplayName("试运行 loadGroovyVarsForSubject：含取值时间后缀按目标日期取值并以完整 token 绑定")
+    void loadGroovyVarsForSubject_withSuffix_bindsHistoricalValue() {
+        LocalDate dataDate = LocalDate.of(2026, 7, 9);
+        when(empIndexResultMapper.selectValSlotsByCodes(anyList())).thenReturn(Map.of("M_A", 3));
+        when(empIndexResultMapper.selectValBySlot("E001", 3, dataDate, "V1")).thenReturn(new BigDecimal("100"));
+        when(empIndexResultMapper.selectValBySlot("E001", 3, LocalDate.of(2026, 6, 30), "V1"))
+                .thenReturn(new BigDecimal("80"));
+
+        Map<String, Object> vars = metricCalcService.loadGroovyVarsForSubject(
+                "EMP", "M_A - M_A__PME", dataDate, "E001", "V1");
+
+        assertThat(vars).containsEntry("M_A", new BigDecimal("100"));
+        assertThat(vars).containsEntry("M_A__PME", new BigDecimal("80"));
+    }
+
     // ========== 测试构造器 ==========
 
     private PerfMetricDef buildEmpSqlMetric() {
