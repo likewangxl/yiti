@@ -140,7 +140,9 @@ public class GroovyExecutorImpl implements GroovyExecutor {
         ensureExecutor();
 
         Callable<Object> task = () -> {
-            Binding binding = new Binding(vars == null ? Map.of() : vars);
+            Binding binding = new Binding(vars == null ? new java.util.HashMap<>() : new java.util.HashMap<>(vars));
+            // 注入安全除法闭包 div(a,b)：除数为 0 → 0，固定 scale 规避无限小数异常
+            binding.setVariable("div", new SafeDivClosure(this));
             GroovyShell shell = new GroovyShell(binding, compilerConfig);
             return shell.evaluate(expr);
         };
@@ -160,6 +162,11 @@ public class GroovyExecutorImpl implements GroovyExecutor {
             Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
             if (cause instanceof PerfException pe) {
                 throw pe;
+            }
+            // 除数为 0 / 无限小数（手写裸 / 触发）：兜底返回 0，不使该主体失败（spec §9）
+            if (cause instanceof ArithmeticException) {
+                log.warn("[GroovyExecutor] 算术异常兜底返回 0: {}", cause.getMessage());
+                return BigDecimal.ZERO;
             }
             log.warn("[GroovyExecutor] 表达式执行失败: {}", cause.getMessage());
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID, cause,
