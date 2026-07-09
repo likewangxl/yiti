@@ -248,6 +248,7 @@ CREATE TABLE IF NOT EXISTS `PERF_IMPORT_BATCH` (
 CREATE TABLE IF NOT EXISTS `PERF_RUN_TASK` (
   `id` varchar(32) NOT NULL COMMENT '任务ID',
   `task_type` varchar(30) NOT NULL COMMENT '类型：METRIC_TRIAL/METRIC_RUN/KPI_RUN/RECALC',
+  `trigger_type` varchar(20) DEFAULT NULL COMMENT '触发来源：RECALC/SCHEDULED/MANUAL',
   `task_key` varchar(100) DEFAULT NULL COMMENT '关键键(如metric_code)',
   `data_date` date DEFAULT NULL COMMENT '数据日期',
   `data_version` varchar(32) DEFAULT NULL COMMENT '数据版本',
@@ -263,7 +264,8 @@ CREATE TABLE IF NOT EXISTS `PERF_RUN_TASK` (
   KEY `idx_task_type` (`task_type`),
   KEY `idx_status` (`status`),
   KEY `idx_started_by` (`started_by`),
-  KEY `idx_created_time` (`created_time`)
+  KEY `idx_created_time` (`created_time`),
+  KEY `idx_type_trigger` (`task_type`, `trigger_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='绩效任务执行日志';
 
 -- -------------------------------------------
