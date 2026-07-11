@@ -39,7 +39,7 @@ public class EvalAssignAdminController {
     private final CurrentUserApi currentUserApi;
 
     /**
-     * 下载评价任务导入模板（10 列）。
+     * 下载评价任务导入模板（11 列）。
      */
     @GetMapping("/import-template")
     @Operation(summary = "下载待处理任务导入模板")
@@ -52,6 +52,7 @@ public class EvalAssignAdminController {
         sample.setBeEvalUserId("100002");
         sample.setBeEvalUserName("张三");
         sample.setBeEvalDept("信贷部");
+        sample.setGroupDept("零售条线");
         sample.setBeEvalTag("客户经理");
         sample.setEvalUserId("100001");
         sample.setEvalUserName("李四");
