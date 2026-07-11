@@ -48,6 +48,8 @@ class EvalAssignAdminServiceTest {
         it.setEvalUserName("评一");
         it.setBeEvalUserId("ID_B1");
         it.setBeEvalUserName("被一");
+        it.setBeEvalDept("信贷部");
+        it.setGroupDept("零售条线");
         it.setWeightTag("主要");
         it.setScoreType(scoreType);
         it.setSubmitted(0);
@@ -73,12 +75,15 @@ class EvalAssignAdminServiceTest {
 
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(data))) {
             Sheet sheet = wb.getSheetAt(0);
-            // 第 9 列（0-based）= 评价类型
-            assertThat(sheet.getRow(0).getCell(9).getStringCellValue()).isEqualTo("评价类型");
+            // 第 8 列(0-based)=分组部门（新插入，被打分人部门之后）
+            assertThat(sheet.getRow(0).getCell(8).getStringCellValue()).isEqualTo("分组部门");
+            assertThat(sheet.getRow(1).getCell(8).getStringCellValue()).isEqualTo("零售条线");
+            // 第 10 列=评价类型（因分组部门插入右移 1）
+            assertThat(sheet.getRow(0).getCell(10).getStringCellValue()).isEqualTo("评价类型");
             Row r1 = sheet.getRow(1);
             Row r2 = sheet.getRow(2);
-            assertThat(r1.getCell(9).getStringCellValue()).isEqualTo("数值打分");
-            assertThat(r2.getCell(9).getStringCellValue()).isEqualTo("等级打分");
+            assertThat(r1.getCell(10).getStringCellValue()).isEqualTo("数值打分");
+            assertThat(r2.getCell(10).getStringCellValue()).isEqualTo("等级打分");
         }
     }
 

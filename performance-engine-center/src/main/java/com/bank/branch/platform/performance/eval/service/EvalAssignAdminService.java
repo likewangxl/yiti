@@ -193,7 +193,7 @@ public class EvalAssignAdminService {
             Sheet sheet = wb.createSheet("评价明细");
             Row header = sheet.createRow(0);
             String[] cols = {"打分人工号", "打分人姓名", "打分人标签", "打分人部门",
-                    "被打分人工号", "被打分人姓名", "被打分人标签", "被打分人部门",
+                    "被打分人工号", "被打分人姓名", "被打分人标签", "被打分人部门", "分组部门",
                     "权重标签", "评价类型", "分数", "提交状态", "提交时间"};
             for (int i = 0; i < cols.length; i++) {
                 header.createCell(i).setCellValue(cols[i]);
@@ -219,14 +219,15 @@ public class EvalAssignAdminService {
                     row.createCell(5).setCellValue(it.getBeEvalUserName() == null ? "" : it.getBeEvalUserName());
                     row.createCell(6).setCellValue(it.getBeEvalTag() == null ? "" : it.getBeEvalTag());
                     row.createCell(7).setCellValue(it.getBeEvalDept() == null ? "" : it.getBeEvalDept());
-                    row.createCell(8).setCellValue(it.getWeightTag() == null ? "" : it.getWeightTag());
+                    row.createCell(8).setCellValue(it.getGroupDept() == null ? "" : it.getGroupDept());
+                    row.createCell(9).setCellValue(it.getWeightTag() == null ? "" : it.getWeightTag());
                     // 评价类型：DB 存字典编码（NUM/GRADE），导出按 EVAL_SCORE_TYPE 字典反查中文名（缓存复用）
                     String st = it.getScoreType();
-                    row.createCell(9).setCellValue(st == null ? ""
+                    row.createCell(10).setCellValue(st == null ? ""
                             : scoreTypeLabelCache.computeIfAbsent(st, k -> dictApi.getDictLabel(DICT_SCORE_TYPE, k)));
-                    row.createCell(10).setCellValue(it.getScore() == null ? "" : String.valueOf(it.getScore()));
-                    row.createCell(11).setCellValue(it.getSubmitted() != null && it.getSubmitted() == 1 ? "已提交" : "未提交");
-                    row.createCell(12).setCellValue(it.getSubmitTime() == null ? "" : it.getSubmitTime().format(dtf));
+                    row.createCell(11).setCellValue(it.getScore() == null ? "" : String.valueOf(it.getScore()));
+                    row.createCell(12).setCellValue(it.getSubmitted() != null && it.getSubmitted() == 1 ? "已提交" : "未提交");
+                    row.createCell(13).setCellValue(it.getSubmitTime() == null ? "" : it.getSubmitTime().format(dtf));
                 }
                 if (items.size() < EXPORT_PAGE_SIZE) {
                     break;
