@@ -21,7 +21,7 @@
         <el-table-column prop="taskName" label="任务名称" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">{{ row.taskName || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="dept" label="部门" min-width="180">
+        <el-table-column prop="dept" label="分组部门" min-width="180">
           <template #default="{ row }">{{ row.dept || '—' }}</template>
         </el-table-column>
         <el-table-column label="待评价人数" width="120" align="center">

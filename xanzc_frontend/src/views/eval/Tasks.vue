@@ -139,7 +139,7 @@
               <div style="width: 100%">
                 <div style="margin-bottom: 8px">
                   <el-button size="small" @click="doDownloadTpl">📥 下载导入模板</el-button>
-                  <span class="form-tip">10 列：被打分人 编号/姓名/部门/标签 + 打分人 编号/姓名/标签/部门 + 权重标签 + 评价类型</span>
+                  <span class="form-tip">11 列：被打分人 编号/姓名/部门 + 分组部门 + 被打分人标签 + 打分人 编号/姓名/标签/部门 + 权重标签 + 评价类型</span>
                 </div>
                 <el-upload ref="wizardUploaderRef" drag action="#" :auto-upload="false"
                   :show-file-list="true" :limit="1" :on-change="onWizardFilePick" accept=".xlsx">
@@ -240,6 +240,7 @@
           </el-table-column>
           <el-table-column prop="beEvalUserName" label="被打分人" min-width="100" />
           <el-table-column prop="beEvalDept" label="被打分人部门" min-width="120" />
+          <el-table-column prop="groupDept" label="分组部门" min-width="120" />
           <el-table-column prop="weightTag" label="权重" width="70" align="center" />
           <el-table-column label="评价类型" width="90" align="center">
             <template #default="{ row: it }">{{ it.scoreType === 'NUM' ? '数值' : it.scoreType === 'GRADE' ? '等级' : it.scoreType }}</template>
