@@ -125,21 +125,21 @@
               <el-option v-for="o in importTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
             </el-select>
           </el-form-item>
-          <el-alert v-if="wizard.importType === 'REWARD'" type="warning" :closable="false" show-icon
-            title="奖励分配导入本期暂未开放。" />
-          <template v-if="wizard.importType === 'EVAL'">
+          <template v-if="wizard.importType === 'EVAL' || wizard.importType === 'REWARD'">
             <el-form-item label="任务名称" required>
               <el-input v-model="wizard.taskName" placeholder="请输入任务名称" maxlength="64" show-word-limit />
             </el-form-item>
             <el-form-item label="截止时间">
-              <el-date-picker v-model="wizard.deadline" type="datetime" placeholder="选择打分截止时间"
+              <el-date-picker v-model="wizard.deadline" type="datetime"
+                :placeholder="wizard.importType === 'REWARD' ? '选择分配截止时间' : '选择打分截止时间'"
                 value-format="YYYY-MM-DD HH:mm:ss" :disabled-date="disabledDate" style="width: 100%" />
             </el-form-item>
             <el-form-item label="导入文件">
               <div style="width: 100%">
                 <div style="margin-bottom: 8px">
                   <el-button size="small" @click="doDownloadTpl">📥 下载导入模板</el-button>
-                  <span class="form-tip">11 列：被打分人 编号/姓名/部门 + 分组部门 + 被打分人标签 + 打分人 编号/姓名/标签/部门 + 权重标签 + 评价类型</span>
+                  <span v-if="wizard.importType === 'REWARD'" class="form-tip">8 列：被分配人工号/姓名 + 部门名称 + 原始值 + 分配值(留空) + 兑现值 + 分配人工号 + 分配合计</span>
+                  <span v-else class="form-tip">11 列：被打分人 编号/姓名/部门 + 分组部门 + 被打分人标签 + 打分人 编号/姓名/标签/部门 + 权重标签 + 评价类型</span>
                 </div>
                 <el-upload ref="wizardUploaderRef" drag action="#" :auto-upload="false"
                   :show-file-list="true" :limit="1" :on-change="onWizardFilePick" accept=".xlsx">
@@ -159,7 +159,7 @@
       </el-form>
       <template #footer>
         <el-button @click="wizard.visible = false">取消</el-button>
-        <el-button v-if="wizard.source === 'IMPORT' && wizard.importType === 'EVAL'"
+        <el-button v-if="wizard.source === 'IMPORT' && (wizard.importType === 'EVAL' || wizard.importType === 'REWARD')"
           type="primary" :loading="importing" :disabled="!wizardFile || !wizard.deadline || !wizard.taskName" @click="doImportAssign">
           开始导入
         </el-button>
@@ -213,7 +213,7 @@
             <span v-else-if="batchDetail.data.batch.status === 3" class="tag-warning">处理中</span>
             <span v-else-if="batchDetail.data.batch.status === 4" class="tag-danger">导入失败</span>
           </el-descriptions-item>
-          <el-descriptions-item label="任务类型">{{ batchDetail.data.batch.taskType === 'EVAL' ? '评价任务' : batchDetail.data.batch.taskType }}</el-descriptions-item>
+          <el-descriptions-item label="任务类型">{{ batchDetail.data.batch.taskType === 'EVAL' ? '评价任务' : (batchDetail.data.batch.taskType === 'REWARD' ? '奖励分配' : batchDetail.data.batch.taskType) }}</el-descriptions-item>
           <el-descriptions-item label="截止时间">{{ formatDateTime(batchDetail.data.batch.deadline) }}</el-descriptions-item>
           <el-descriptions-item label="导入人">{{ batchDetail.data.batch.createBy }}</el-descriptions-item>
           <el-descriptions-item label="导入时间">{{ formatDateTime(batchDetail.data.batch.createTime) }}</el-descriptions-item>
@@ -225,6 +225,51 @@
             <el-table-column prop="row" label="行号" width="100" align="center" />
             <el-table-column prop="message" label="错误信息" min-width="320" show-overflow-tooltip />
           </el-table>
+        </div>
+        <!-- 其它状态 + REWARD：展示奖励分配明细 -->
+        <div v-else-if="batchDetail.data.batch.taskType === 'REWARD'">
+        <div class="detail-section-title">奖励分配明细</div>
+        <el-table :data="batchDetail.data.items.records" border stripe size="small" style="width: 100%; margin-top: 8px">
+          <el-table-column label="被分配人工号" width="120" align="center">
+            <template #default="{ row: it }">{{ it.beAssignedUserId }}</template>
+          </el-table-column>
+          <el-table-column prop="beAssignedUserName" label="被分配人" min-width="100" />
+          <el-table-column prop="deptName" label="部门" min-width="120" />
+          <el-table-column label="分配人工号" width="110" align="center">
+            <template #default="{ row: it }">{{ it.assignUserUsername || it.assignUserId }}</template>
+          </el-table-column>
+          <el-table-column label="原始值" width="90" align="right">
+            <template #default="{ row: it }">{{ it.originalValue ?? '—' }}</template>
+          </el-table-column>
+          <el-table-column label="兑现值" width="90" align="right">
+            <template #default="{ row: it }">{{ it.cashValue ?? '—' }}</template>
+          </el-table-column>
+          <el-table-column label="分配合计" width="90" align="right">
+            <template #default="{ row: it }">{{ it.assignTotal ?? '—' }}</template>
+          </el-table-column>
+          <el-table-column label="分配值" width="90" align="right">
+            <template #default="{ row: it }">
+              <span v-if="it.submitted === 1" class="score-submitted">{{ it.assignValue }}</span>
+              <span v-else class="score-empty">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="提交状态" width="90" align="center">
+            <template #default="{ row: it }">
+              <span :class="it.submitted === 1 ? 'tag-success' : 'tag-info'">{{ it.submitted === 1 ? '已提交' : '未提交' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="submitTime" label="提交时间" width="160" align="center">
+            <template #default="{ row: it }">{{ formatDateTime(it.submitTime) }}</template>
+          </el-table-column>
+        </el-table>
+        <div class="pagination-wrap" style="margin-top: 12px">
+          <el-pagination
+            v-model:current-page="batchDetail.itemPage.pageNo" v-model:page-size="batchDetail.itemPage.pageSize"
+            :total="batchDetail.data.items.total" :page-sizes="[20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper" background small
+            @size-change="loadBatchDetailItems" @current-change="loadBatchDetailItems"
+          />
+        </div>
         </div>
         <!-- 其它状态：展示评价明细 -->
         <div v-else>
@@ -273,7 +318,7 @@
       <template #footer>
         <el-button v-if="batchDetail.data && batchDetail.data.batch.status === 2"
           type="success" :loading="batchDetail.publishing" @click="handlePublishFromDetail">确认发布</el-button>
-        <el-button @click="handleExportById(batchDetail.data?.batch?.batchId, 'batch')">导出 Excel</el-button>
+        <el-button @click="handleExportById(batchDetail.data?.batch?.batchId, batchDetail.data?.batch?.taskType === 'REWARD' ? 'reward' : 'batch')">导出 Excel</el-button>
         <el-button @click="batchDetail.visible = false">关闭</el-button>
       </template>
     </el-dialog>
@@ -288,7 +333,8 @@ import {
   listUnifiedTasks, getTaskDetail, createTask, closeTask,
   downloadAssignTemplate, importAssign,
   getAssignBatchDetail, publishAssignBatch, exportAssignBatchItems, exportRuleTask,
-  deleteUnifiedTask
+  deleteUnifiedTask,
+  downloadRewardTemplate, importReward, getRewardBatchDetail, exportRewardBatchItems
 } from '@/api/eval'
 import { listUsers } from '@/api/users'
 import { useDict } from '@/composables/useDict'
@@ -378,7 +424,10 @@ async function openDetail(row) {
     batchDetail.itemPage.pageNo = 1
     batchDetail.itemPage.pageSize = 50
     try {
-      batchDetail.data = await getAssignBatchDetail(row.sourceId, { page: 1, pageSize: 50 })
+      // 按任务类型路由：REWARD 走奖励分配批次详情（明细在 EVAL_REWARD_ITEM），其余走评价批次详情
+      batchDetail.data = row.taskType === 'REWARD'
+        ? await getRewardBatchDetail(row.sourceId, { page: 1, pageSize: 50 })
+        : await getAssignBatchDetail(row.sourceId, { page: 1, pageSize: 50 })
     } catch (e) {
       ElMessage.error('加载批次详情失败：' + (e?.message || '未知错误'))
       batchDetail.visible = false
@@ -392,7 +441,9 @@ async function loadBatchDetailItems() {
   if (!batchDetail.data) return
   batchDetail.loading = true
   try {
-    batchDetail.data = await getAssignBatchDetail(batchDetail.data.batch.batchId,
+    const isReward = batchDetail.data.batch.taskType === 'REWARD'
+    const fetch = isReward ? getRewardBatchDetail : getAssignBatchDetail
+    batchDetail.data = await fetch(batchDetail.data.batch.batchId,
       { page: batchDetail.itemPage.pageNo, pageSize: batchDetail.itemPage.pageSize })
   } catch (e) {
     ElMessage.error('加载明细失败：' + (e?.message || '未知错误'))
@@ -436,16 +487,26 @@ async function handlePublishFromDetail() {
 // ===================== 导出 =====================
 
 async function handleExport(row) {
-  const type = (row.sourceType === 'AUTO' && row.taskType === 'EVAL') ? 'rule' : 'batch'
+  let type = 'batch'
+  if (row.sourceType === 'AUTO' && row.taskType === 'EVAL') type = 'rule'
+  else if (row.taskType === 'REWARD') type = 'reward'
   await handleExportById(row.sourceId, type)
 }
 
 async function handleExportById(id, type) {
   try {
-    const blob = type === 'rule' ? await exportRuleTask(id) : await exportAssignBatchItems(id)
-    const filename = type === 'rule'
-      ? `规则任务明细_${id}.xlsx`
-      : `评价明细_batch_${id}.xlsx`
+    let blob
+    let filename
+    if (type === 'rule') {
+      blob = await exportRuleTask(id)
+      filename = `规则任务明细_${id}.xlsx`
+    } else if (type === 'reward') {
+      blob = await exportRewardBatchItems(id)
+      filename = `奖励分配明细_batch_${id}.xlsx`
+    } else {
+      blob = await exportAssignBatchItems(id)
+      filename = `评价明细_batch_${id}.xlsx`
+    }
     saveBlob(blob, filename)
   } catch (e) { /* http.js 已提示 */ }
 }
@@ -594,20 +655,30 @@ function onSourceChange() { wizard.importType = ''; wizard.taskName = ''; wizard
 function goAutoCreate() { wizard.visible = false; openCreateDialog() }
 
 async function doDownloadTpl() {
-  try { saveBlob(await downloadAssignTemplate(), '评价任务导入模板.xlsx') } catch (e) { /* */ }
+  try {
+    if (wizard.importType === 'REWARD') {
+      saveBlob(await downloadRewardTemplate(), '奖励分配导入模板.xlsx')
+    } else {
+      saveBlob(await downloadAssignTemplate(), '评价任务导入模板.xlsx')
+    }
+  } catch (e) { /* */ }
 }
 
 function onWizardFilePick(uploadFile) { wizardFile.value = uploadFile.raw || null }
 
 async function doImportAssign() {
   if (!wizardFile.value || !wizard.deadline || !wizard.taskName) return
+  // 捕获当前导入类型（轮询期间向导可能已重置），后续按类型路由到对应批次详情接口
+  const importType = wizard.importType
   importing.value = true
   importErrors.value = []
   clearPollTimer()
 
   let batchId
   try {
-    const res = await importAssign(wizardFile.value, 'EVAL', wizard.taskName, wizard.deadline)
+    const res = importType === 'REWARD'
+      ? await importReward(wizardFile.value, wizard.taskName, wizard.deadline)
+      : await importAssign(wizardFile.value, 'EVAL', wizard.taskName, wizard.deadline)
     batchId = res && res.batchId
     if (!batchId) {
       ElMessage.error('导入请求未返回批次ID，请刷新重试')
@@ -633,7 +704,9 @@ async function doImportAssign() {
 
   async function poll() {
     try {
-      const detail = await getAssignBatchDetail(batchId)
+      const detail = importType === 'REWARD'
+        ? await getRewardBatchDetail(batchId)
+        : await getAssignBatchDetail(batchId)
       const batch = detail && detail.batch
       const status = batch && batch.status
 
