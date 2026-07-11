@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -75,10 +76,10 @@ class EvalAssignAdminServiceTest {
 
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(data))) {
             Sheet sheet = wb.getSheetAt(0);
-            // 第 8 列(0-based)=分组部门（新插入，被打分人部门之后）
-            assertThat(sheet.getRow(0).getCell(8).getStringCellValue()).isEqualTo("分组部门");
-            assertThat(sheet.getRow(1).getCell(8).getStringCellValue()).isEqualTo("零售条线");
-            // 第 10 列=评价类型（因分组部门插入右移 1）
+            // 列顺序以导入模板为准：被打分人在前 → 第 3 列(0-based)=分组部门（被打分人部门之后）
+            assertThat(sheet.getRow(0).getCell(3).getStringCellValue()).isEqualTo("分组部门");
+            assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("零售条线");
+            // 第 10 列=评价类型（导出独有尾列 分数/提交状态/提交时间 之前的最后一列）
             assertThat(sheet.getRow(0).getCell(10).getStringCellValue()).isEqualTo("评价类型");
             Row r1 = sheet.getRow(1);
             Row r2 = sheet.getRow(2);
@@ -107,9 +108,9 @@ class EvalAssignAdminServiceTest {
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(data))) {
             Sheet sheet = wb.getSheetAt(0);
             Row r1 = sheet.getRow(1);
-            // 第 0 列=打分人工号、第 4 列=被打分人工号，均显示 username
-            assertThat(r1.getCell(0).getStringCellValue()).isEqualTo("scorer01");
-            assertThat(r1.getCell(4).getStringCellValue()).isEqualTo("target01");
+            // 列顺序以导入模板为准：第 0 列=被打分人编号、第 5 列=打分人编号，均显示 username
+            assertThat(r1.getCell(0).getStringCellValue()).isEqualTo("target01");
+            assertThat(r1.getCell(5).getStringCellValue()).isEqualTo("scorer01");
         }
     }
 
@@ -133,5 +134,14 @@ class EvalAssignAdminServiceTest {
         EvalAssignItem it = page.getRecords().get(0);
         assertThat(it.getEvalUserUsername()).isEqualTo("scorer01");
         assertThat(it.getBeEvalUserUsername()).isEqualTo("target01");
+    }
+
+    @Test
+    @DisplayName("closeExpiredBatches：委托 batchMapper 批更新并返回关闭条数")
+    void closeExpiredBatches_delegatesAndReturnsCount() {
+        when(batchMapper.closeExpiredBatches()).thenReturn(3);
+        int n = service.closeExpiredBatches();
+        assertThat(n).isEqualTo(3);
+        verify(batchMapper).closeExpiredBatches();
     }
 }
