@@ -34,6 +34,8 @@ public class EvalAssignItem {
     private String beEvalUserName;
     /** 被打分人部门（导入快照，分组键，空存空串）. */
     private String beEvalDept;
+    /** 分组部门（导入快照，汇总优先键，空串则回退 be_eval_dept）. */
+    private String groupDept;
     /** 被打分人标签（导入快照）. */
     private String beEvalTag;
     /** 权重标签（字典 EVAL_WEIGHT_TAG）. */

@@ -195,6 +195,8 @@ public enum PerfErrorCode {
     EVAL_BATCH_NOT_ACTIVE("PERF-40066", "批次未发布或已结束，暂不可打分"),
     EVAL_BATCH_NOT_DRAFT("PERF-40067", "仅草稿状态的批次可发布"),
     EVAL_TASK_DELETE_BEFORE_DEADLINE("PERF-40068", "截止时间未到不可删除"),
+    EVAL_REWARD_ASSIGN_NOT_POSITIVE("PERF-40072", "分配值必须大于0"),
+    EVAL_REWARD_SUM_MISMATCH("PERF-40073", "分配值之和必须等于分配合计"),
     KPI_ITEM_EXPR_REQUIRED("PERF-40069", "指标项必须且只能配置一种表达式（计算表达式 或 SQL表达式）"),
 
     /** 导入批次越权访问（非本人批次且非管理员数据范围） */

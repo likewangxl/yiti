@@ -190,6 +190,67 @@ export function submitPendingScoreBatch(items) {
 }
 
 // ============================================================
+// 奖励分配（管理端） (EvalRewardAdminController: /api/admin/eval/reward)
+// ============================================================
+
+// 下载奖励分配导入模板（8 列）
+export function downloadRewardTemplate() {
+  return call('get', '/admin/eval/reward/import-template', { responseType: 'blob' }, null);
+}
+
+// 导入奖励分配：file + taskName + deadline(yyyy-MM-dd HH:mm:ss)
+// 异步接口：后端立即返回 { batchId, status }（status=3=IMPORTING）；前端轮询 getRewardBatchDetail 获取结果。
+export function importReward(file, taskName, deadline) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return call('post', '/admin/eval/reward/import', {
+    params: { taskName, deadline },
+    data: fd,
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000
+  }, null);
+}
+
+// 管理端-分页查询奖励分配批次列表
+export function listRewardBatches(params = {}) {
+  return call('get', '/admin/eval/reward/batches', { params: { page: 1, pageSize: 20, ...params } }, { records: [], total: 0 });
+}
+
+// 管理端-查询奖励分配批次详情（含分页明细）
+export function getRewardBatchDetail(batchId, params = {}) {
+  return call('get', `/admin/eval/reward/batches/${batchId}`, { params: { page: 1, pageSize: 50, ...params } }, { batch: {}, items: { records: [], total: 0 } });
+}
+
+// 管理端-确认发布奖励分配草稿批次
+export function publishRewardBatch(batchId) {
+  return call('post', `/admin/eval/reward/batches/${batchId}/publish`, {}, { ok: true });
+}
+
+// 管理端-导出奖励分配批次明细 Excel
+export function exportRewardBatchItems(batchId) {
+  return call('get', `/admin/eval/reward/batches/${batchId}/export`, { params: {}, responseType: 'blob', timeout: EXPORT_TIMEOUT_MS }, null);
+}
+
+// ============================================================
+// 奖励分配（用户端） (EvalRewardPendingController: /api/eval/reward-tasks)
+// ============================================================
+
+// 我的奖励分配待处理汇总（按部门聚合未提交明细）
+export function listRewardPendingTasks() {
+  return call('get', '/eval/reward-tasks', {}, []);
+}
+
+// 某批次+部门下分配给我的明细
+export function listRewardPendingItems(batchId, dept) {
+  return call('get', '/eval/reward-tasks/items', { params: { batchId, dept } }, []);
+}
+
+// 一次性提交某部门下全部被分配人的分配值。items: [{ itemId, assignValue }]
+export function submitRewardBatch(batchId, dept, items) {
+  return call('post', '/eval/reward-tasks/submit-batch', { data: { batchId, dept, items } }, { ok: true });
+}
+
+// ============================================================
 // 我的评价（规则驱动 / 自动生成，旧流程，前端入口已隐藏）(EvalScoreController: /api/eval)
 // ============================================================
 

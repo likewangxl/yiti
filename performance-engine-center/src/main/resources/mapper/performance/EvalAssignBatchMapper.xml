@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalAssignBatchMapper">
+
+    <!-- 关闭已过截止时间的进行中批次（status 0→1）：评价导入 + 奖励分配 共表处理 -->
+    <update id="closeExpiredBatches">
+        UPDATE EVAL_ASSIGN_BATCH
+        SET status = 1
+        WHERE status = 0
+          AND deadline IS NOT NULL
+          AND deadline &lt;= NOW()
+    </update>
+</mapper>

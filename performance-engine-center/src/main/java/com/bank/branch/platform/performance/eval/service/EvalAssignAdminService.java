@@ -166,6 +166,24 @@ public class EvalAssignAdminService {
     }
 
     /**
+     * 关闭已过截止时间的进行中批次（status 0→1），覆盖评价导入(EVAL)与奖励分配(REWARD)。
+     *
+     * <p>由 {@code EvalAssignBatchExpireJob}（Quartz，job_key=EVAL_ASSIGN_BATCH_EXPIRE）周期调用：
+     * 过了 deadline 的进行中批次统一置「已结束」，管理端列表状态与用户端「不可再提交」保持一致，
+     * 避免过期批次一直停留在「进行中」误导。批次不再可提交（用户端提交本就按 deadline 拒绝）。</p>
+     *
+     * @return 本次关闭的批次数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int closeExpiredBatches() {
+        int closed = batchMapper.closeExpiredBatches();
+        if (closed > 0) {
+            log.info("[EvalAssignAdminService.closeExpiredBatches] 关闭过期批次 {} 个", closed);
+        }
+        return closed;
+    }
+
+    /**
      * 导出批次明细为 Excel。
      *
      * @param batchId 批次ID
@@ -192,8 +210,10 @@ public class EvalAssignAdminService {
         try {
             Sheet sheet = wb.createSheet("评价明细");
             Row header = sheet.createRow(0);
-            String[] cols = {"打分人工号", "打分人姓名", "打分人标签", "打分人部门",
-                    "被打分人工号", "被打分人姓名", "被打分人标签", "被打分人部门",
+            // 列顺序以导入模板（EvalAssignImportRow）为准：被打分人在前 → 分组部门 → 被打分人标签 →
+            // 打分人各列 → 权重标签 → 评价类型；尾部再接导出独有的 分数/提交状态/提交时间。
+            String[] cols = {"被打分员工编号", "被打分员工姓名", "被打分员工部门", "分组部门", "被打分员工标签",
+                    "打分员工编号", "打分员工姓名", "打分员工标签", "打分员工部门",
                     "权重标签", "评价类型", "分数", "提交状态", "提交时间"};
             for (int i = 0; i < cols.length; i++) {
                 header.createCell(i).setCellValue(cols[i]);
@@ -211,22 +231,25 @@ public class EvalAssignAdminService {
                     // 工号列展示 PT_USER.USERNAME（查不到回退原 USER_ID 兜底）
                     String scorerName = idToUsername.getOrDefault(it.getEvalUserId(), it.getEvalUserId());
                     String targetName = idToUsername.getOrDefault(it.getBeEvalUserId(), it.getBeEvalUserId());
-                    row.createCell(0).setCellValue(scorerName == null ? "" : scorerName);
-                    row.createCell(1).setCellValue(it.getEvalUserName() == null ? "" : it.getEvalUserName());
-                    row.createCell(2).setCellValue(it.getEvalUserTag() == null ? "" : it.getEvalUserTag());
-                    row.createCell(3).setCellValue(it.getEvalUserDept() == null ? "" : it.getEvalUserDept());
-                    row.createCell(4).setCellValue(targetName == null ? "" : targetName);
-                    row.createCell(5).setCellValue(it.getBeEvalUserName() == null ? "" : it.getBeEvalUserName());
-                    row.createCell(6).setCellValue(it.getBeEvalTag() == null ? "" : it.getBeEvalTag());
-                    row.createCell(7).setCellValue(it.getBeEvalDept() == null ? "" : it.getBeEvalDept());
-                    row.createCell(8).setCellValue(it.getWeightTag() == null ? "" : it.getWeightTag());
+                    // 被打分人段（col 0-4，含分组部门）
+                    row.createCell(0).setCellValue(targetName == null ? "" : targetName);
+                    row.createCell(1).setCellValue(it.getBeEvalUserName() == null ? "" : it.getBeEvalUserName());
+                    row.createCell(2).setCellValue(it.getBeEvalDept() == null ? "" : it.getBeEvalDept());
+                    row.createCell(3).setCellValue(it.getGroupDept() == null ? "" : it.getGroupDept());
+                    row.createCell(4).setCellValue(it.getBeEvalTag() == null ? "" : it.getBeEvalTag());
+                    // 打分人段（col 5-8）
+                    row.createCell(5).setCellValue(scorerName == null ? "" : scorerName);
+                    row.createCell(6).setCellValue(it.getEvalUserName() == null ? "" : it.getEvalUserName());
+                    row.createCell(7).setCellValue(it.getEvalUserTag() == null ? "" : it.getEvalUserTag());
+                    row.createCell(8).setCellValue(it.getEvalUserDept() == null ? "" : it.getEvalUserDept());
+                    row.createCell(9).setCellValue(it.getWeightTag() == null ? "" : it.getWeightTag());
                     // 评价类型：DB 存字典编码（NUM/GRADE），导出按 EVAL_SCORE_TYPE 字典反查中文名（缓存复用）
                     String st = it.getScoreType();
-                    row.createCell(9).setCellValue(st == null ? ""
+                    row.createCell(10).setCellValue(st == null ? ""
                             : scoreTypeLabelCache.computeIfAbsent(st, k -> dictApi.getDictLabel(DICT_SCORE_TYPE, k)));
-                    row.createCell(10).setCellValue(it.getScore() == null ? "" : String.valueOf(it.getScore()));
-                    row.createCell(11).setCellValue(it.getSubmitted() != null && it.getSubmitted() == 1 ? "已提交" : "未提交");
-                    row.createCell(12).setCellValue(it.getSubmitTime() == null ? "" : it.getSubmitTime().format(dtf));
+                    row.createCell(11).setCellValue(it.getScore() == null ? "" : String.valueOf(it.getScore()));
+                    row.createCell(12).setCellValue(it.getSubmitted() != null && it.getSubmitted() == 1 ? "已提交" : "未提交");
+                    row.createCell(13).setCellValue(it.getSubmitTime() == null ? "" : it.getSubmitTime().format(dtf));
                 }
                 if (items.size() < EXPORT_PAGE_SIZE) {
                     break;

@@ -9,4 +9,12 @@ import org.apache.ibatis.annotations.Mapper;
  */
 @Mapper
 public interface EvalAssignBatchMapper extends BaseMapper<EvalAssignBatch> {
+
+    /**
+     * 关闭已过截止时间的进行中批次（status 0→1），覆盖评价导入(EVAL)与奖励分配(REWARD)。
+     * <p>带条件的批更新，落 XML：{@code UPDATE ... SET status=1 WHERE status=0 AND deadline<=NOW()}。</p>
+     *
+     * @return 本次关闭的批次数
+     */
+    int closeExpiredBatches();
 }

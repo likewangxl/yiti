@@ -3,7 +3,7 @@
   <div class="pending-tasks-page">
 
     <!-- ===== 汇总列表视图 ===== -->
-    <template v-if="!processView.active">
+    <template v-if="!processView.active && !rewardView.active">
       <div class="page-h">
         <h1>待处理任务</h1>
         <span class="desc">按部门汇总 · 逐人评价打分</span>
@@ -21,7 +21,7 @@
         <el-table-column prop="taskName" label="任务名称" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">{{ row.taskName || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="dept" label="部门" min-width="180">
+        <el-table-column prop="dept" label="分组部门" min-width="180">
           <template #default="{ row }">{{ row.dept || '—' }}</template>
         </el-table-column>
         <el-table-column label="待评价人数" width="120" align="center">
@@ -40,6 +40,9 @@
         <template #empty>暂无待处理任务</template>
       </el-table>
     </template>
+
+    <!-- ===== 奖励分配（明细分配）视图 ===== -->
+    <RewardTask v-else-if="rewardView.active" :group="rewardView.group" @back="exitReward" />
 
     <!-- ===== 处理（明细打分）视图 ===== -->
     <template v-else>
@@ -133,7 +136,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Clock, Check } from '@element-plus/icons-vue'
-import { listPendingTasks, listPendingItems, submitPendingScore, submitPendingScoreBatch } from '@/api/eval'
+import { listPendingTasks, listPendingItems, submitPendingScore, submitPendingScoreBatch, listRewardPendingTasks } from '@/api/eval'
+import RewardTask from './RewardTask.vue'
 
 // 等级打分选项：等级名 -> 对应分值（与系统口径一致）
 const LEVEL_OPTIONS = [
@@ -155,8 +159,16 @@ const groups = ref([])
 async function loadGroups() {
   loading.value = true
   try {
-    const r = await listPendingTasks()
-    groups.value = Array.isArray(r) ? r : (r?.records || [])
+    // 汇总复用：并行拉取 评价(EVAL) + 奖励分配(REWARD) 两个待处理接口，客户端合并为一张列表。
+    // 任一接口失败不阻断另一个（reward 端点未授权/未上线时仍能看到评价任务）。
+    const [evalRes, rewardRes] = await Promise.allSettled([listPendingTasks(), listRewardPendingTasks()])
+    const evalGroups = evalRes.status === 'fulfilled'
+      ? (Array.isArray(evalRes.value) ? evalRes.value : (evalRes.value?.records || []))
+      : []
+    const rewardGroups = rewardRes.status === 'fulfilled'
+      ? (Array.isArray(rewardRes.value) ? rewardRes.value : (rewardRes.value?.records || []))
+      : []
+    groups.value = [...evalGroups, ...rewardGroups]
   } catch (e) {
     ElMessage.error('加载待处理任务失败：' + (e?.message || '未知错误'))
   } finally {
@@ -164,8 +176,26 @@ async function loadGroups() {
   }
 }
 
+// 点击「处理」按 taskType 分流：REWARD → 奖励分配明细；其余 → 现有打分明细
+function enterProcess(row) {
+  if (row.taskType === 'REWARD') {
+    rewardView.group = row
+    rewardView.active = true
+    return
+  }
+  enterScoreProcess(row)
+}
+
 // ===================== 处理视图 =====================
 const processView = reactive({ active: false, group: null, loading: false, items: [] })
+// 奖励分配处理视图（REWARD 走独立子组件 RewardTask）
+const rewardView = reactive({ active: false, group: null })
+
+function exitReward() {
+  rewardView.active = false
+  rewardView.group = null
+  loadGroups() // 返回刷新汇总，人数随提交同步
+}
 // 每行打分草稿：itemId -> 分数
 const editScores = reactive({})
 // 用户手动调整过的行：itemId -> true（默认级别/分数只覆盖未手动调整过的行）
@@ -179,7 +209,7 @@ const submittingAll = ref(false)
 // 当前部门未提交人数（用于"全部提交"按钮禁用与计数）
 const pendingCount = computed(() => processView.items.filter(it => it.submitted !== 1).length)
 
-async function enterProcess(group) {
+async function enterScoreProcess(group) {
   processView.group = group
   processView.active = true
   processView.items = []

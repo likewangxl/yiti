@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.performance.eval.mapper.EvalRewardItemMapper">
+
+    <sql id="BASE_COLUMNS">
+        item_id, batch_id, assign_user_id, be_assigned_user_id, be_assigned_user_name,
+        dept_name, original_value, cash_value, assign_total, assign_value, submitted, submit_time
+    </sql>
+
+    <insert id="batchInsert">
+        INSERT INTO EVAL_REWARD_ITEM
+        (batch_id, assign_user_id, be_assigned_user_id, be_assigned_user_name,
+         dept_name, original_value, cash_value, assign_total, assign_value, submitted, submit_time)
+        VALUES
+        <foreach collection="items" item="i" separator=",">
+            (#{i.batchId}, #{i.assignUserId}, #{i.beAssignedUserId}, #{i.beAssignedUserName},
+             #{i.deptName}, #{i.originalValue}, #{i.cashValue}, #{i.assignTotal},
+             #{i.assignValue}, #{i.submitted}, #{i.submitTime})
+        </foreach>
+    </insert>
+
+    <!-- 当前分配人未提交明细，按 批次 + 部门 聚合（含 assign_total，组内一致取 MAX 即该值） -->
+    <select id="selectRewardPendingGroups" resultType="com.bank.branch.platform.performance.eval.dto.EvalRewardPendingGroupDTO">
+        SELECT i.batch_id     AS batchId,
+               b.task_type     AS taskType,
+               b.batch_name    AS taskName,
+               i.dept_name     AS dept,
+               COUNT(*)        AS pendingCount,
+               MAX(i.assign_total) AS assignTotal,
+               b.deadline      AS deadline
+        FROM EVAL_REWARD_ITEM i
+        JOIN EVAL_ASSIGN_BATCH b ON i.batch_id = b.batch_id
+        WHERE i.assign_user_id = #{assignUserId} AND i.submitted = 0 AND b.status = 0
+          AND b.deadline IS NOT NULL AND b.deadline > NOW()
+        GROUP BY i.batch_id, b.task_type, b.batch_name, i.dept_name, b.deadline
+        ORDER BY b.deadline ASC, i.batch_id ASC
+    </select>
+
+    <select id="selectByAssignerBatchDept" resultType="com.bank.branch.platform.performance.eval.entity.EvalRewardItem">
+        SELECT <include refid="BASE_COLUMNS"/> FROM EVAL_REWARD_ITEM
+        WHERE assign_user_id = #{assignUserId} AND batch_id = #{batchId} AND dept_name = #{dept}
+        ORDER BY submitted ASC, item_id ASC
+    </select>
+
+    <update id="markAssigned">
+        UPDATE EVAL_REWARD_ITEM
+        SET assign_value = #{assignValue}, submitted = 1, submit_time = #{submitTime}
+        WHERE item_id = #{itemId} AND submitted = 0
+    </update>
+
+    <select id="selectByBatchId" resultType="com.bank.branch.platform.performance.eval.entity.EvalRewardItem">
+        SELECT <include refid="BASE_COLUMNS"/> FROM EVAL_REWARD_ITEM
+        WHERE batch_id = #{batchId}
+        ORDER BY submitted ASC, item_id ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countByBatchId" resultType="long">
+        SELECT COUNT(*) FROM EVAL_REWARD_ITEM WHERE batch_id = #{batchId}
+    </select>
+
+    <select id="selectDistinctAssignerIdsByBatch" resultType="java.lang.String">
+        SELECT DISTINCT assign_user_id FROM EVAL_REWARD_ITEM
+        WHERE batch_id = #{batchId} AND assign_user_id IS NOT NULL AND assign_user_id != ''
+    </select>
+
+    <select id="selectRewardBatchesByCondition" resultType="com.bank.branch.platform.performance.eval.entity.EvalAssignBatch">
+        SELECT b.*, COUNT(i.item_id) AS itemCount
+        FROM EVAL_ASSIGN_BATCH b
+        LEFT JOIN EVAL_REWARD_ITEM i ON b.batch_id = i.batch_id
+        <where>
+            b.task_type = 'REWARD'
+            <if test="status != null">AND b.status = #{status}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (b.batch_id LIKE CONCAT('%', #{keyword}, '%') OR b.create_by LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        GROUP BY b.batch_id
+        ORDER BY b.create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countRewardBatchesByCondition" resultType="long">
+        SELECT COUNT(*) FROM EVAL_ASSIGN_BATCH b
+        <where>
+            b.task_type = 'REWARD'
+            <if test="status != null">AND b.status = #{status}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (b.batch_id LIKE CONCAT('%', #{keyword}, '%') OR b.create_by LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+    </select>
+
+    <delete id="deleteByBatchId">
+        DELETE FROM EVAL_REWARD_ITEM WHERE batch_id = #{batchId}
+    </delete>
+</mapper>

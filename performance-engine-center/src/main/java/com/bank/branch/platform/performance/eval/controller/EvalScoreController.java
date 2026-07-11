@@ -6,6 +6,7 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.performance.eval.dto.SubmitScoreReq;
 import com.bank.branch.platform.performance.eval.entity.EvalTask;
 import com.bank.branch.platform.performance.eval.entity.EvalTaskTarget;
 import com.bank.branch.platform.performance.eval.service.EvalScoreService;
@@ -15,8 +16,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -39,32 +38,6 @@ public class EvalScoreController {
     private final EvalTaskService evalTaskService;
     private final EvalScoreService evalScoreService;
     private final CurrentUserApi currentUserApi;
-
-    // =============================================
-    // 请求 DTO
-    // =============================================
-
-    /**
-     * 提交打分请求体.
-     */
-    @Data
-    public static class SubmitScoreReq {
-        /** 评价任务ID（必填）. */
-        @NotNull
-        private Long taskId;
-        /** 被评价人明细ID（必填）. */
-        @NotNull
-        private Long targetId;
-        /** 打分，范围 10~100（必填）. */
-        @NotNull
-        @Min(10)
-        @Max(100)
-        private Integer score;
-    }
-
-    // =============================================
-    // 端点
-    // =============================================
 
     /**
      * 查询我的待评价任务列表.
