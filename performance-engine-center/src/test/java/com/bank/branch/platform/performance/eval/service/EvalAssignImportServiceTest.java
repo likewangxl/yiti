@@ -356,4 +356,28 @@ class EvalAssignImportServiceTest {
         assertThat(updated.getStatus()).isEqualTo(4);
         assertThat(updated.getErrorSummary()).contains("导入异常");
     }
+
+    // ================== 分组部门映射 ==================
+
+    @Test
+    @DisplayName("processImport：分组部门列映射进 item（含 trim），未填则存空串")
+    void processImport_mapsGroupDept() {
+        mockUsersExist("B1", "B2", "E1");
+        when(batchMapper.selectById(99L)).thenReturn(importingBatch(99L));
+        EvalAssignImportRow withGroup = row("B1", "被一", "信贷部", "客户经理",
+                "E1", "评一", "支行长", "管理部", "主要", "数值打分");
+        withGroup.setGroupDept("  零售条线  "); // 前后空格验证 trim
+        EvalAssignImportRow noGroup = row("B2", "被二", "零售部", "客户经理",
+                "E1", "评一", "支行长", "管理部", "主要", "数值打分");
+        // noGroup.groupDept 未设置 → null → 入库空串
+
+        service.processImport(99L, List.of(withGroup, noGroup), "EVAL", "测试任务", deadline, "ADMIN");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EvalAssignItem>> cap = ArgumentCaptor.forClass(List.class);
+        verify(itemMapper).batchInsert(cap.capture());
+        List<EvalAssignItem> items = cap.getValue();
+        assertThat(items.get(0).getGroupDept()).isEqualTo("零售条线");
+        assertThat(items.get(1).getGroupDept()).isEqualTo("");
+    }
 }

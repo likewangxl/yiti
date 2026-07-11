@@ -341,6 +341,7 @@ public class EvalAssignImportService {
             item.setBeEvalUserId(beId);
             item.setBeEvalUserName(trim(r.getBeEvalUserName()));
             item.setBeEvalDept(trim(r.getBeEvalDept()));
+            item.setGroupDept(trim(r.getGroupDept()));
             item.setBeEvalTag(trim(r.getBeEvalTag()));
             item.setWeightTag(weight);
             item.setScoreType(scoreType);

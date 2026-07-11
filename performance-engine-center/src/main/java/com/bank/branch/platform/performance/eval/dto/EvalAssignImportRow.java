@@ -4,7 +4,7 @@ import com.alibaba.excel.annotation.ExcelProperty;
 import lombok.Data;
 
 /**
- * 待处理任务（评价任务）导入 Excel 行模型（10 列，按业务约定顺序）。
+ * 待处理任务（评价任务）导入 Excel 行模型（11 列，按业务约定顺序）。
  */
 @Data
 public class EvalAssignImportRow {
@@ -14,6 +14,8 @@ public class EvalAssignImportRow {
     private String beEvalUserName;
     @ExcelProperty("被打分员工部门")
     private String beEvalDept;
+    @ExcelProperty("分组部门")
+    private String groupDept;
     @ExcelProperty("被打分员工标签")
     private String beEvalTag;
     @ExcelProperty("打分员工编号")
