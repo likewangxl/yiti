@@ -7,13 +7,12 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.eval.dto.EvalPendingGroupDTO;
 import com.bank.branch.platform.performance.eval.dto.EvalPendingItemDTO;
+import com.bank.branch.platform.performance.eval.dto.SubmitBatchReq;
+import com.bank.branch.platform.performance.eval.dto.SubmitReq;
 import com.bank.branch.platform.performance.eval.service.EvalAssignService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -96,25 +95,5 @@ public class EvalPendingController {
                 .toList();
         evalAssignService.submitScoreBatch(evalUserId, entries);
         return ResponseWrapper.success();
-    }
-
-    /** 提交打分请求体。 */
-    @Data
-    public static class SubmitReq {
-        /** 明细ID（必填）。 */
-        @NotNull
-        private Long itemId;
-        /** 分数（必填；数值 10~100 或等级预设值，由 service 按评价类型校验）。 */
-        @NotNull
-        private Integer score;
-    }
-
-    /** 批量提交打分请求体。 */
-    @Data
-    public static class SubmitBatchReq {
-        /** 待提交明细分数列表（必填，至少一条）。 */
-        @NotEmpty
-        @Valid
-        private List<SubmitReq> items;
     }
 }

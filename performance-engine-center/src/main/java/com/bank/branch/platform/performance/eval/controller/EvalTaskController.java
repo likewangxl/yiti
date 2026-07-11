@@ -6,25 +6,21 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.performance.eval.dto.CreateTaskReq;
 import com.bank.branch.platform.performance.eval.entity.EvalTask;
 import com.bank.branch.platform.performance.eval.entity.EvalTaskTarget;
 import com.bank.branch.platform.performance.eval.service.EvalTaskService;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -45,31 +41,6 @@ public class EvalTaskController {
 
     private final EvalTaskService evalTaskService;
     private final CurrentUserApi currentUserApi;
-
-    // =============================================
-    // 请求 DTO
-    // =============================================
-
-    /**
-     * 发起评价任务请求体.
-     */
-    @Data
-    public static class CreateTaskReq {
-        /** 任务名称（必填）. */
-        @NotBlank
-        private String taskName;
-        /** 截止时间（必须晚于当前时间）. */
-        @NotNull
-        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-        private LocalDateTime endTime;
-        /** 被评价人工号列表（必填）. */
-        @NotNull
-        private List<String> beEvalUserIds;
-    }
-
-    // =============================================
-    // 端点
-    // =============================================
 
     /**
      * 分页查询评价任务列表.

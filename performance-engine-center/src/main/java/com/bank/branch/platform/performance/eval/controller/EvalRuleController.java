@@ -5,6 +5,9 @@ import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.performance.eval.dto.CreateRuleReq;
+import com.bank.branch.platform.performance.eval.dto.GroupReq;
+import com.bank.branch.platform.performance.eval.dto.UpdateRuleReq;
 import com.bank.branch.platform.performance.eval.entity.EvalRule;
 import com.bank.branch.platform.performance.eval.entity.EvalRuleGroup;
 import com.bank.branch.platform.performance.eval.service.EvalRuleService;
@@ -15,15 +18,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -41,60 +40,6 @@ import java.util.stream.Collectors;
 public class EvalRuleController {
 
     private final EvalRuleService evalRuleService;
-
-    // =============================================
-    // 请求 DTO
-    // =============================================
-
-    /**
-     * 评价人组请求体.
-     */
-    @Data
-    public static class GroupReq {
-        /** 组类型：1=按标签选人, 2=部门员工组. */
-        @NotNull
-        private Integer groupType;
-        /** type=1 时的评价人标签ID（type=2 时可为 null）. */
-        private Long evalTagId;
-        /** 权重百分比（如 60.00），所有组之和必须 = 100.00. */
-        @NotNull
-        private BigDecimal weight;
-        /** 排序序号. */
-        private Integer sortOrder;
-        /** 评分方式：1=数值打分（默认）, 2=等级打分. */
-        private Integer scoreMode;
-    }
-
-    /**
-     * 新建规则请求体.
-     */
-    @Data
-    public static class CreateRuleReq {
-        /** 规则名称（必填，不能为空白）. */
-        @NotBlank
-        private String ruleName;
-        /** 被评价人标签ID（必填，唯一约束）. */
-        @NotNull
-        private Long beEvalTagId;
-        /** 评价人组列表. */
-        private List<GroupReq> groups;
-    }
-
-    /**
-     * 更新规则请求体.
-     */
-    @Data
-    public static class UpdateRuleReq {
-        /** 规则名称（必填，不能为空白）. */
-        @NotBlank
-        private String ruleName;
-        /** 评价人组列表. */
-        private List<GroupReq> groups;
-    }
-
-    // =============================================
-    // 端点
-    // =============================================
 
     /**
      * 分页查询规则列表.

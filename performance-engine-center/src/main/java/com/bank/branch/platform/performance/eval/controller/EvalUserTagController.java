@@ -10,14 +10,13 @@ import com.bank.branch.platform.performance.eval.dto.EvalUserRoleExportRow;
 import com.bank.branch.platform.performance.eval.dto.EvalUserRoleRowDTO;
 import com.bank.branch.platform.performance.eval.dto.EvalUserTagImportResultDTO;
 import com.bank.branch.platform.performance.eval.dto.EvalUserTagImportRow;
+import com.bank.branch.platform.performance.eval.dto.SaveRolesReq;
 import com.bank.branch.platform.performance.eval.entity.EvalUserTag;
 import com.bank.branch.platform.performance.eval.service.EvalUserTagImportService;
 import com.bank.branch.platform.performance.eval.service.EvalUserTagService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -28,7 +27,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 人员标签关联管理控制器.
@@ -133,11 +131,4 @@ public class EvalUserTagController {
                 .doWrite(out);
     }
 
-    @Data
-    public static class SaveRolesReq {
-        /** 标签ID（null 表示清空角色）. */
-        private Long tagId;
-        /** 是否参与评价：1=是 0=否；null 兜底为参与. */
-        private Integer evalEnabled;
-    }
 }
