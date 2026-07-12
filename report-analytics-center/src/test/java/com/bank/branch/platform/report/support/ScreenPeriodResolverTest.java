@@ -57,22 +57,24 @@ class ScreenPeriodResolverTest {
     }
 
     @Test
-    void resolve_rangeMissingOrInverted_throws43008() {
+    void resolve_rangeMissingOrInverted_throws43011() {
+        // 周期参数非法（RANGE 缺 from/to、日期倒挂、格式错）属入参校验失败 → 43011，与执行失败 43008 分离
         assertThatThrownBy(() -> ScreenPeriodResolver.resolve("RANGE", null, "2026-01-01", TODAY))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+                .hasFieldOrPropertyWithValue("code", "RPT-43011");
         assertThatThrownBy(() -> ScreenPeriodResolver.resolve("RANGE", "2026-02-01", "2026-01-01", TODAY))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+                .hasFieldOrPropertyWithValue("code", "RPT-43011");
         assertThatThrownBy(() -> ScreenPeriodResolver.resolve("RANGE", "bad-date", "2026-01-01", TODAY))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+                .hasFieldOrPropertyWithValue("code", "RPT-43011");
     }
 
     @Test
-    void resolve_unknownPeriod_throws43008() {
+    void resolve_unknownPeriod_throws43011() {
+        // 未知 period 同属周期参数非法 → 43011
         assertThatThrownBy(() -> ScreenPeriodResolver.resolve("LAST_100Y", null, null, TODAY))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+                .hasFieldOrPropertyWithValue("code", "RPT-43011");
     }
 }

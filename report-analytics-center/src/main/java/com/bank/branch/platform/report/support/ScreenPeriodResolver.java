@@ -34,8 +34,9 @@ public final class ScreenPeriodResolver {
             case "LAST_6M_EOM":
                 return new ResolvedPeriod(today.minusMonths(6).withDayOfMonth(1), today, false, true);
             case "RANGE":
+                // 周期参数非法均归入 43011（入参校验失败），与 SQL 执行失败 43008 语义分离
                 if (dateFrom == null || dateTo == null) {
-                    throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED);
+                    throw new RptException(RptErrorCode.SCREEN_PERIOD_INVALID);
                 }
                 LocalDate f;
                 LocalDate t;
@@ -43,14 +44,14 @@ public final class ScreenPeriodResolver {
                     f = LocalDate.parse(dateFrom);
                     t = LocalDate.parse(dateTo);
                 } catch (DateTimeParseException e) {
-                    throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, e);
+                    throw new RptException(RptErrorCode.SCREEN_PERIOD_INVALID, e);
                 }
                 if (f.isAfter(t)) {
-                    throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED);
+                    throw new RptException(RptErrorCode.SCREEN_PERIOD_INVALID);
                 }
                 return new ResolvedPeriod(f, t, false, false);
             default:
-                throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED);
+                throw new RptException(RptErrorCode.SCREEN_PERIOD_INVALID);
         }
     }
 }

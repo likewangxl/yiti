@@ -68,12 +68,13 @@ class ScreenQueryEngineTest {
     }
 
     @Test
-    void buildWide_missingContextParam_throws43008() {
+    void buildWide_missingContextParam_throws43010() {
+        // 上下文参数缺失属"入参校验失败"，应返回 43010（缺少必填上下文参数），与真实执行失败 43008 语义分离
         String cfg = "{\"table\":\"EMP_INDEX_RESULT\",\"subjectCol\":\"emp_id\",\"subjectParam\":\"empId\","
                 + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"x\",\"slot\":1}]}";
         assertThatThrownBy(() -> engine.build("WIDE_TABLE", cfg, req("LATEST", Map.of()), 1000, TODAY))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+                .hasFieldOrPropertyWithValue("code", "RPT-43010");
     }
 
     // ===== KPI_RESULT =====
@@ -120,11 +121,12 @@ class ScreenQueryEngineTest {
     }
 
     @Test
-    void buildCustom_missingContextParam_throws43008() {
+    void buildCustom_missingContextParam_throws43010() {
+        // 自定义 SQL 用了 #{empId}/#{orgCode} 占位但上下文未传，同属入参校验失败 → 43010
         String cfg = "{\"sql\":\"SELECT COUNT(*) AS cnt FROM ACT_RU_TASK WHERE assignee_ = #{empId}\",\"dateCol\":null}";
         assertThatThrownBy(() -> engine.build("CUSTOM_SQL", cfg, req("LATEST", Map.of()), 1000, TODAY))
                 .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+                .hasFieldOrPropertyWithValue("code", "RPT-43010");
     }
 
     @Test

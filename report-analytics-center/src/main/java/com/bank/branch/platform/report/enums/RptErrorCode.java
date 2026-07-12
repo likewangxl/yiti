@@ -142,6 +142,10 @@ public enum RptErrorCode {
     SCREEN_DS_IN_USE("RPT-43007", "数据源已被大屏区块引用，不可删除"),
     SCREEN_DATA_QUERY_FAILED("RPT-43008", "大屏取数执行失败"),
     SCREEN_DS_CONFIG_INVALID("RPT-43009", "数据源配置非法"),
+    /** 缺少必填上下文参数（empId/orgCode/custNo）——入参校验失败，与执行失败 43008 语义分离，前端据此渲染引导态而非红字报错 */
+    SCREEN_CTX_PARAM_MISSING("RPT-43010", "大屏取数缺少必填上下文参数"),
+    /** 周期参数非法（RANGE 缺 from/to、日期格式错、from>to、未知 period）——入参校验失败，与执行失败 43008 分离 */
+    SCREEN_PERIOD_INVALID("RPT-43011", "大屏取数周期参数非法"),
 
     // =============================================
     // 500xx 系统错误（3 条）

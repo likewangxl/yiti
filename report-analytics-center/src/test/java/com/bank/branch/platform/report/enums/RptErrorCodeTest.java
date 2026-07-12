@@ -25,10 +25,11 @@ class RptErrorCodeTest {
 
     @Test
     void shouldHaveExactly30ErrorCodes_AfterM5Extension() {
-        // 42 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
+        // 44 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
         // + NOTICE_NOT_FOUND 1（此前断言遗漏该项，实际已是 33，此次一并订正 32→33）
         // + 大屏子域 9 条（RPT-43001~43009）= 42
-        assertThat(RptErrorCode.values()).hasSize(42);
+        // + FIX-1 错误码语义分离 2 条（RPT-43010 缺必填上下文参数 / RPT-43011 周期参数非法）= 44
+        assertThat(RptErrorCode.values()).hasSize(44);
     }
 
     @Test
@@ -83,6 +84,9 @@ class RptErrorCodeTest {
         assertThat(RptErrorCode.SCREEN_DS_IN_USE.getCode()).isEqualTo("RPT-43007");
         assertThat(RptErrorCode.SCREEN_DATA_QUERY_FAILED.getCode()).isEqualTo("RPT-43008");
         assertThat(RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode()).isEqualTo("RPT-43009");
+        // FIX-1 错误码语义分离：43010 缺必填上下文参数 / 43011 周期参数非法
+        assertThat(RptErrorCode.SCREEN_CTX_PARAM_MISSING.getCode()).isEqualTo("RPT-43010");
+        assertThat(RptErrorCode.SCREEN_PERIOD_INVALID.getCode()).isEqualTo("RPT-43011");
     }
 
     @Test
@@ -101,7 +105,7 @@ class RptErrorCodeTest {
             .distinct()
             .count();
         assertThat(distinct)
-            .as("RPT 42 条错误码必须唯一无重复")
-            .isEqualTo(42);
+            .as("RPT 44 条错误码必须唯一无重复")
+            .isEqualTo(44);
     }
 }

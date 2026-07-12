@@ -223,8 +223,8 @@ public class ScreenQueryEngine {
         for (String name : parsed.paramNames()) {
             Object v = vals.get(name);
             if (v == null) {
-                // SQL 用到了 orgCode/empId 占位但上下文没传 → 快速失败
-                throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED);
+                // SQL 用到了 orgCode/empId 占位但上下文没传 → 入参校验失败（43010），非 SQL 执行失败（43008）
+                throw new RptException(RptErrorCode.SCREEN_CTX_PARAM_MISSING);
             }
             params.add(v);
         }
@@ -235,7 +235,8 @@ public class ScreenQueryEngine {
     private String ctxParam(ScreenDataReqDTO req, String name) {
         String v = req.getContextParams() == null ? null : req.getContextParams().get(name);
         if (v == null || v.isBlank()) {
-            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED);
+            // 必填上下文参数（empId/orgCode/custNo）缺失属入参校验失败（43010），前端据此渲染引导态而非当作 SQL 执行失败（43008）
+            throw new RptException(RptErrorCode.SCREEN_CTX_PARAM_MISSING);
         }
         return v;
     }
