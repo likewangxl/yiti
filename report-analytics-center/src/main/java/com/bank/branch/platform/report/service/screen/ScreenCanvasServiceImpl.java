@@ -50,9 +50,11 @@ import java.util.stream.Collectors;
 @Service
 public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
-    /** 组件类型白名单(用户输入必须验证红线) */
+    /** 组件类型白名单(用户输入必须验证红线)。MapCenter(省级屏地图,Task10 渲染层已支持
+     * component==='MapCenter' 独立渲染分支)不是 ChartWidget,不占 block 行、无 innerType,
+     * 但仍需在此白名单内才能保存(Task11 三屏重配发现的缺口,补齐)。 */
     private static final Set<String> COMPONENT_TYPES = Set.of(
-            "ChartWidget", "TextLabel", "ImageBox", "RectShape", "BorderDecor", "ClockWidget");
+            "ChartWidget", "TextLabel", "ImageBox", "RectShape", "BorderDecor", "ClockWidget", "MapCenter");
     /** ChartWidget 的 innerType 白名单(复用现有 5 图表) */
     private static final Set<String> INNER_TYPES = Set.of(
             "METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS");

@@ -129,6 +129,18 @@ class ScreenCanvasServiceTest {
         org.assertj.core.api.Assertions.assertThat(resp.getCanvasDraftJson()).contains("TextLabel");
     }
 
+    /** MapCenter(省级屏地图,Task10 渲染层已支持独立渲染分支)必须在组件白名单内可保存,
+     * 且不应触发仅对 ChartWidget 生效的 innerType 校验(无 innerType/blockId 也应正常通过). */
+    @Test
+    void save_mapCenterComponent_acceptedWithoutInnerTypeOrBlockId() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 3));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        var resp = service.saveCanvas(req(7L, 3,
+                comp("MapCenter", null, Map.of("top", 96, "left", 640, "width", 640, "height", 880))));
+        assertThat(resp.getCanvasVersion()).isEqualTo(4);
+        assertThat(resp.getCanvasDraftJson()).contains("MapCenter");
+    }
+
     /** 归属校验:ChartWidget 携带的 blockId 指向他屏 block 行,必须拦截,禁止越权改写. */
     @Test
     void save_blockIdOwnedByOtherScreen_throws43006() {
