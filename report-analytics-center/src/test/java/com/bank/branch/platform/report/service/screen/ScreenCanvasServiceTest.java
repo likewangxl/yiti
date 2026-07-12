@@ -263,4 +263,67 @@ class ScreenCanvasServiceTest {
                 org.mockito.ArgumentMatchers.<RptScreen>argThat(x ->
                         x.getCanvasDraftJson() != null && x.getCanvasDraftJson().contains("w-9")));
     }
+
+    /** 回滚:归档快照原样覆盖 PUBLISHED_JSON. */
+    @org.junit.jupiter.api.Test
+    void rollback_ok_appliesArchivedSnapshot() {
+        RptScreen s = screen(7L, 5);
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        com.bank.branch.platform.report.entity.RptScreenPublishLog logEntry =
+                new com.bank.branch.platform.report.entity.RptScreenPublishLog();
+        logEntry.setId(200L);
+        logEntry.setScreenId(7L);
+        logEntry.setSnapshotJson("{\"schemaVersion\":1,\"components\":[]}");
+        when(publishLogMapper.selectById(200L)).thenReturn(logEntry);
+        when(canvasMapper.applyPublished(anyLong(), anyString(), anyInt(), anyString())).thenReturn(1);
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO();
+        req.setScreenId(7L);
+        req.setPublishLogId(200L);
+        service.rollbackCanvas(req);
+
+        org.mockito.Mockito.verify(canvasMapper).applyPublished(
+                org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.eq(logEntry.getSnapshotJson()),
+                org.mockito.ArgumentMatchers.eq(1), anyString());
+    }
+
+    /** 归档条目所属屏与请求屏不一致(跨屏越权回滚)→ 拒绝. */
+    @org.junit.jupiter.api.Test
+    void rollback_logBelongsToOtherScreen_throws43004() {
+        RptScreen s = screen(7L, 5);
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        com.bank.branch.platform.report.entity.RptScreenPublishLog logEntry =
+                new com.bank.branch.platform.report.entity.RptScreenPublishLog();
+        logEntry.setId(200L);
+        logEntry.setScreenId(888L); // 属于别的屏
+        logEntry.setSnapshotJson("{}");
+        when(publishLogMapper.selectById(200L)).thenReturn(logEntry);
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasRollbackReqDTO();
+        req.setScreenId(7L);
+        req.setPublishLogId(200L);
+        assertThatThrownBy(() -> service.rollbackCanvas(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43004");
+    }
+
+    /** 归档列表:按 id 倒序,不回传 snapshotJson 全文. */
+    @org.junit.jupiter.api.Test
+    void listPublishLogs_returnsMappedList() {
+        com.bank.branch.platform.report.entity.RptScreenPublishLog l1 =
+                new com.bank.branch.platform.report.entity.RptScreenPublishLog();
+        l1.setId(201L);
+        l1.setScreenId(7L);
+        l1.setPublishedBy("E001");
+        l1.setPublishedAt(java.time.LocalDateTime.of(2026, 7, 12, 10, 0));
+        when(publishLogMapper.selectList(any())).thenReturn(java.util.List.of(l1));
+
+        var list = service.listPublishLogs(7L);
+
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).getId()).isEqualTo(201L);
+        assertThat(list.get(0).getScreenId()).isEqualTo(7L);
+        assertThat(list.get(0).getPublishedBy()).isEqualTo("E001");
+    }
 }
