@@ -73,7 +73,7 @@ class RptErrorCodeTest {
 
     @Test
     void screenErrorCodes_shouldExistWith43xxxPrefix() {
-        // 大屏子域 8 个错误码：RPT-43001 ~ RPT-43008
+        // 大屏子域 9 个错误码：RPT-43001 ~ RPT-43009
         assertThat(RptErrorCode.SCREEN_DS_NOT_FOUND.getCode()).isEqualTo("RPT-43001");
         assertThat(RptErrorCode.SCREEN_DS_SQL_INVALID.getCode()).isEqualTo("RPT-43002");
         assertThat(RptErrorCode.SCREEN_DS_TIMESERIES_NEED_DATECOL.getCode()).isEqualTo("RPT-43003");

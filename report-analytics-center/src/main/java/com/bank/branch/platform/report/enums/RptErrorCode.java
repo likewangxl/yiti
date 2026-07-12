@@ -132,7 +132,7 @@ public enum RptErrorCode {
     /** metricCodes 为空或包含未授权指标 */
     EXPORT_METRIC_CODES_INVALID("RPT-42211", "metricCodes 为空或包含未授权指标"),
 
-    // 430xx 大屏子域（8 条，2026-07-12 screen-dashboard）
+    // 430xx 大屏子域（9 条，2026-07-12 screen-dashboard）
     SCREEN_DS_NOT_FOUND("RPT-43001", "大屏数据源不存在"),
     SCREEN_DS_SQL_INVALID("RPT-43002", "自定义 SQL 校验不通过"),
     SCREEN_DS_TIMESERIES_NEED_DATECOL("RPT-43003", "时序型自定义 SQL 数据源必须声明日期列"),
