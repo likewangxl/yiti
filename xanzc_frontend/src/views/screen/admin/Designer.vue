@@ -68,7 +68,7 @@
         <template v-if="selected">
           <el-form label-position="top" size="default">
             <el-form-item label="组件类型">
-              <el-select v-model="selected.componentType" style="width:100%">
+              <el-select v-model="selected.componentType" style="width:100%" @change="ensureTimeseriesBinding(selected)">
                 <el-option v-for="(l, t) in TYPE_LABELS" :key="t" :label="l" :value="t" />
               </el-select>
             </el-form-item>
@@ -236,7 +236,24 @@ function styleOf(b) { return parseJ(b.styleJson); }
 function drillOf(b) { return parseJ(b.drillJson); }
 function patchBind(b, patch) { b.bindJson = JSON.stringify({ ...bindOf(b), ...patch }); renderKey.value++; }
 function patchStyle(b, patch) { b.styleJson = JSON.stringify({ ...styleOf(b), ...patch }); renderKey.value++; }
-function patchDrill(b, patch) { b.drillJson = JSON.stringify({ ...drillOf(b), ...patch }); renderKey.value++; }
+function patchDrill(b, patch) {
+  b.drillJson = JSON.stringify({ ...drillOf(b), ...patch });
+  renderKey.value++;
+  // 钻取开关置为开启时，联动校验数据源是否时序型（需求 4.3.2）
+  if (patch.drillEnabled === true) ensureTimeseriesBinding(b);
+}
+// 组件类型切为 LINE_TREND、或钻取开启时要求时序型数据源；当前绑定的数据源若非时序型则清空并提示
+function ensureTimeseriesBinding(b) {
+  const needTs = b.componentType === 'LINE_TREND' || drillOf(b).drillEnabled;
+  if (!needTs) return;
+  const bind = bindOf(b);
+  if (!bind.dsId) return;
+  const ds = datasources.value.find(d => d.id === bind.dsId);
+  if (ds && ds.dsType !== 'TIMESERIES') {
+    patchBind(b, { dsId: null });
+    ElMessage.warning('已清空数据源：该组件/钻取要求时序型数据源');
+  }
+}
 function patchJump(b, code) {
   const d = drillOf(b);
   if (!code) delete d.jump;
@@ -287,6 +304,10 @@ function removeBlock(b) {
   if (selected.value === b) selected.value = null;
 }
 function removeRow(region, rowNo) {
+  // 若当前选中块属于被删行，先清空选中，避免右侧属性面板悬挂编辑已删除对象（对齐 removeBlock 的清理逻辑）
+  if (selected.value && selected.value.region === region && selected.value.rowNo === rowNo) {
+    selected.value = null;
+  }
   model.value.blocks = model.value.blocks.filter(b => !(b.region === region && b.rowNo === rowNo));
 }
 function moveRow(region, ri, dir) {
