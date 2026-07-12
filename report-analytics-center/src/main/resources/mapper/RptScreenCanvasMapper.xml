@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.report.mapper.RptScreenCanvasMapper">
+
+    <!-- 乐观锁:仅 canvas_version=#{expected} 时更新草稿并自增版本;命中 0 行=冲突 -->
+    <update id="bumpVersion">
+        UPDATE RPT_SCREEN
+        SET canvas_style_json = #{styleJson},
+            canvas_draft_json = #{draftJson},
+            canvas_version    = canvas_version + 1,
+            publish_status    = CASE WHEN publish_status = 1 THEN 2 ELSE publish_status END,
+            updated_time      = NOW()
+        WHERE id = #{id} AND canvas_version = #{expected} AND deleted = 0
+    </update>
+
+    <!-- 发布态整体更新 -->
+    <update id="applyPublished">
+        UPDATE RPT_SCREEN
+        SET canvas_published_json = #{publishedJson},
+            publish_status        = #{publishStatus},
+            published_at          = NOW(),
+            published_by          = #{empId},
+            updated_time          = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+</mapper>
