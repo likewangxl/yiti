@@ -51,7 +51,7 @@
         <!-- 宽表引导式 -->
         <template v-if="dlg.form.sourceKind === 'WIDE_TABLE'">
           <el-form-item label="宽表" required>
-            <el-select v-model="dlg.wide.table" style="width:100%">
+            <el-select v-model="dlg.wide.table" style="width:100%" @change="dlg.wide.metricCodes = []">
               <el-option label="员工指标宽表 (EMP_INDEX_RESULT)" value="EMP_INDEX_RESULT" />
               <el-option label="机构指标宽表 (ORG_INDEX_RESULT)" value="ORG_INDEX_RESULT" />
             </el-select>
@@ -189,15 +189,25 @@ function openCreate() {
   dlg.show = true;
 }
 
+// 安全解析 JSON：解析失败时提示并回退到默认值，避免弹窗因脏数据无法打开
+function safeParse(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    ElMessage.warning('配置 JSON 解析失败，已按空配置打开');
+    return fallback;
+  }
+}
+
 function openEdit(row) {
   dlg.editing = row.id;
-  const cfg = JSON.parse(row.configJson || '{}');
+  const cfg = safeParse(row.configJson || '{}', {});
   Object.assign(dlg.form, {
     dsName: row.dsName, sourceKind: row.sourceKind, dsType: row.dsType, reason: ''
   });
   if (row.sourceKind === 'WIDE_TABLE') {
     Object.assign(dlg.wide, { table: cfg.table, metricCodes: (cfg.metrics || []).map(m => m.metricCode),
-      timeParams: JSON.parse(row.timeParamJson || '[]') });
+      timeParams: safeParse(row.timeParamJson || '[]', []) });
   } else if (row.sourceKind === 'KPI_RESULT') {
     Object.assign(dlg.kpi, { cycleType: cfg.cycleType || 'MONTHLY' });
   } else {
@@ -208,6 +218,16 @@ function openEdit(row) {
 
 async function onSave() {
   if (!dlg.form.dsName) { ElMessage.warning('名称必填'); return; }
+  if (dlg.form.sourceKind === 'WIDE_TABLE' && dlg.wide.metricCodes.length === 0) {
+    ElMessage.warning('请至少选择一个指标'); return;
+  }
+  if (dlg.form.sourceKind === 'CUSTOM_SQL') {
+    if (!dlg.sql.text.trim()) { ElMessage.warning('SQL 语句必填'); return; }
+    if (dlg.form.dsType === 'TIMESERIES' && !dlg.sql.dateCol.trim()) {
+      ElMessage.warning('时序型必须声明日期列'); return;
+    }
+    if (!dlg.form.reason.trim()) { ElMessage.warning('操作原因必填（高危审计）'); return; }
+  }
   dlg.saving = true;
   try {
     const body = {
