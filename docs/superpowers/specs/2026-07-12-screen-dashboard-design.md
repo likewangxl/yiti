@@ -89,9 +89,9 @@ xanzc_frontend
 | row_no / col_no | 区域内行号 / 行内列号（排序即位置） |
 | width_pct / height_pct | int 百分比：width 为行内占比，height 为区域内行高占比 |
 | component_type | METRIC_CARD / LINE_TREND / PIE_SHARE / RANK_LIST / FLOW_STATUS |
-| bind_json | `{dsId, items:[{key,label}], valueCol, nameCol, …}` 数据项绑定 |
+| bind_json | `{dsId, items:[{col,label}], valueCol, nameCol, …}` 数据项绑定 |
 | style_json | `{title, unit, format, decimals, colors[], refreshSec}` |
-| drill_json | `{drillEnabled, drillPeriods:[LAST_10D,…], jump:{targetScreenCode, paramMapping:{orgCode:"…", empId:"…"}}}` |
+| drill_json | `{drillEnabled, drillPeriods:[LAST_10D,…], jump:{targetScreenCode, params:{orgCode:"$col:org_code"}}}` |
 | 通用列 | 同上 |
 
 ### 4.4 RPT_SCREEN_MAP_POINT（支行地图点位）
