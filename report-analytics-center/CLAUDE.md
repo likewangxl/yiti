@@ -36,6 +36,39 @@ V1.0 交付内容：
 > spec/plan：docs/superpowers/specs/2026-07-12-screen-dashboard-design.md /
 > docs/superpowers/plans/2026-07-12-screen-dashboard-impl.md。
 
+> 2026-07-12 screen 子域 V2：大屏画布设计器（拖拽式所见即所得，替代 V1 行块布局配置台）——
+> `RPT_SCREEN` 增补 7 列双态字段：`canvas_style_json`（画布全局样式，含 schemaVersion）/
+> `canvas_draft_json`（草稿态组件树，编辑器唯一读写对象）/ `canvas_published_json`（发布态渲染包，
+> 线上与预览只读）/ `canvas_version`（真乐观锁，保存时 `WHERE canvas_version=?` 冲突即 RPT-43012）/
+> `publish_status`（0未发布/1已发布/2已发布但有未发布修改）/ `published_at` / `published_by`；
+> 新表 `RPT_SCREEN_PUBLISH_LOG`（发布归档，按屏滚动保留最近 10 份，回滚用）。
+> 管理端 6 端点 `/api/screen/admin/canvas/*`（`ScreenCanvasAdminController`）：
+> `GET /{id}` 加载 / `POST /save` 保存草稿(乐观锁) / `POST /publish` 发布(高危：结构化一致性校验+
+> 合成渲染包+归档+审计) / `POST /rollback` 回滚(高危：从归档恢复) / `POST /discard` 放弃草稿(发布态
+> 覆盖草稿) / `GET /{id}/publish-logs` 发布归档列表。6 条新 PT_RESOURCE：`R_RPT_SCR_CV_GET/SAVE/
+> PUB/RB/DISC/LOG`（load/save/discard/log 复用 `R_RPT_SCR_CFG_SAVE` 角色集；publish/rollback 独立
+> 高危，复用 `R_RPT_SQL_EXEC` 角色集；`R_ADMIN` 全量兜底）。新错误码 `RPT-43012
+> SCREEN_CANVAS_CONFLICT`（画布保存冲突）+ 取数上下文 `RPT-43010/43011`。
+> 渲染改读：`ScreenViewController` 由读行块布局改为读 `canvas_published_json`
+> （`?preview=draft` 走草稿，需登录 + 管理端菜单门禁，V1.1 待补独立校验 `R_RPT_SCR_CV_GET`，
+> 现阶段 3 屏开发测试态可接受，无敏感数据）；无 fallback，旧 Designer 组件与行块渲染分支已删除。
+> 前端 `xanzc_frontend/src/views/screen/designer/`：`DesignerV2.vue` 三栏（组件面板/画布/属性面板）+
+> `canvas/`（CanvasCore 拖拽缩放/Shape 8点缩放/MarkLine 吸附/ContextMenu 右键菜单）+
+> `panels/`（ComponentPanel/LayerPanel/CommonAttr/CanvasAttr）+ `widgets/` 两层注册
+> （`componentsMap` 手写字典 5 素材：TextLabel/ImageBox/RectShape/BorderDecor/ClockWidget +
+> `import.meta.glob` 自动扫描 9 图表：area-stack/bar-compare/flow-status/gauge/line-trend/
+> metric-card/pie-share/rank-list/table-list + MapCenter 复用运行时组件，不入拖拽面板） +
+> `utils/`（scale/snap/snapshotStack(undo/redo)/clipboard 4 个纯函数模块）；
+> `src/api/screen.js` 新增 6 个画布 API 函数；vitest 新增 designer 相关用例。
+> DDL/资源/种子脚本：`docs/superpowers/sql/2026-07-12-screen-canvas-{ddl,resources}.sql` +
+> `docs/superpowers/sql/2026-07-13-screen-canvas-seed.sql`（三屏经画布管理端 API 实测重配发布后
+> 导出，非直接 UPDATE；执行前置链见该脚本头注释，严禁跳过/乱序）。
+> spec/plan：`docs/superpowers/specs/2026-07-12-screen-canvas-designer-design.md` /
+> `docs/superpowers/plans/2026-07-12-screen-canvas-designer-impl.md`。
+> 已知遗留（非一期阻塞，V1.1 待跟进）：`?preview=draft` 当前仅"登录 + 管理端菜单门禁"即可见草稿，
+> 未做独立资源校验（若草稿未来承载敏感数据需补 `R_RPT_SCR_CV_GET` 专项校验）；
+> `discardDraft` 未做前置状态校验、也绕过乐观锁（plan-mandated，未发布屏 discard 会写空草稿并误标已发布）。
+
 ## 红线（不被任何业务模块依赖）
 
 `report-analytics-center` 是**只读**模块，**禁止**被任何业务模块依赖：
@@ -92,7 +125,7 @@ src/main/java/com/bank/branch/platform/report/
 ├── mapper/           # MyBatis Mapper（4 个：RptSavedQueryMapper / RptSnapshotTaskMapper / SqlProbeHistoryMapper / RptExportTaskMapper）
 ├── entity/           # 贫血模型（4 个）
 ├── enums/            # 错误码 + 状态枚举
-│   └── RptErrorCode.java（30 条 RPT-* 错误码）
+│   └── RptErrorCode.java（45 条 RPT-* 错误码，含 screen 子域 43001-43012）
 ├── exception/
 │   └── RptException.java（extends BizException）
 ├── config/           # Spring 配置
@@ -143,15 +176,20 @@ src/main/resources/
 | RptExportController | GET    /api/reports/export-tasks/{taskId}/download | REPORT/EXPORT | R_RPT_EXP_DOWNLOAD |
 | （占位） | POST /api/reports/sql-probe/export（V1.1+） | - | R_RPT_SQL_EXP（STATUS=1 disabled） |
 
-## 30 条 RptErrorCode（25 基线 + 5 J 章扩展）
+## 45 条 RptErrorCode（V1.0 基线 30 条 + screen 子域 43001-43012 共 15 条）
 
 - 40001-40010：业务态错误（saved query / data version / dim mismatch / size limits / export task NOT_FOUND/NOT_READY）
 - 40301-40303：权限错误（无访问 / 数据范围不足）
 - 42001-42009：SQL 探查（语法 / 白名单 / 关键字 / 行数 / 超时 / 并发 / 仅 SELECT / 长度 / 执行）
 - 42207-42211：J 章扩展（行数 / 任务过期 / 下载越权 / DATA_SCOPE / metricCodes）
+- 43001-43009：screen 大屏基础子域（数据源不存在/SQL校验/时序缺日期列/大屏不存在/组件数据源不匹配/布局非法/数据源占用/取数失败/数据源配置非法）
+- 43010-43011：screen 取数上下文（缺必填上下文参数 / 取数周期参数非法）
+- 43012：`SCREEN_CANVAS_CONFLICT`——画布设计器 V2 保存乐观锁冲突（详见下方"V2 画布设计器"段）
 - 50001-50003：跨模块 / 缓存 / 异步导出启动失败（含 EXPORT_START_FAILED）
 
-守护：`RptErrorCodeTest` 6 case（30 条 + 唯一性 + 中文消息 + EXPORT_START_FAILED 必含）。
+守护：`RptErrorCodeTest` 6 case（45 条 + 唯一性 + 中文消息 + EXPORT_START_FAILED 必含）。
+
+> 历史记录：本节此前长期停留在"30 条（25 基线 + 5 J 章扩展）"，2026-07-12 screen 子域首次交付（43001-43009）与本次 V2 画布设计器（43010-43012）均未同步刷新此计数，本次一并订正为代码实测真值。
 
 ## 异步导出（V1.0 同步执行模型）
 
