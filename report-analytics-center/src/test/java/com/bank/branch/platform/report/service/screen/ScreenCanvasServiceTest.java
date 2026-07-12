@@ -42,12 +42,15 @@ class ScreenCanvasServiceTest {
     @Mock private RptScreenDatasourceMapper dsMapper;
     @Mock private RptScreenCanvasMapper canvasMapper;
     @Mock private CurrentUserApi currentUserApi;
+    @Mock private com.bank.branch.platform.report.mapper.RptScreenPublishLogMapper publishLogMapper;
+    @Mock private com.bank.branch.platform.governance.api.AuditApi auditApi;
 
     private ScreenCanvasServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ScreenCanvasServiceImpl(screenMapper, blockMapper, dsMapper, canvasMapper, currentUserApi);
+        service = new ScreenCanvasServiceImpl(screenMapper, blockMapper, dsMapper, canvasMapper, currentUserApi,
+                publishLogMapper, auditApi);
         lenient().when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
     }
 
@@ -194,5 +197,70 @@ class ScreenCanvasServiceTest {
         assertThat(existingNode.getBlockId()).isEqualTo(50L);
         assertThat(newNode.getBlockId()).isEqualTo(88L);             // insert 生成的新 id 回吐进组件树
         assertThat(resp.getCanvasDraftJson()).contains("\"blockId\":50").contains("\"blockId\":88");
+    }
+
+    @org.junit.jupiter.api.Test
+    void publish_blockIdSetMismatch_throws43006() {
+        RptScreen s = screen(7L, 5);
+        // 草稿引用 blockId=1001,但本屏 block 行集合不含它 → 一致性校验失败
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"w-1\",\"component\":\"ChartWidget\",\"innerType\":\"METRIC_CARD\","
+                + "\"blockId\":1001,\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        when(blockMapper.selectList(any())).thenReturn(java.util.List.of()); // 无 block 行
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+        assertThatThrownBy(() -> service.publishCanvas(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+    }
+
+    @org.junit.jupiter.api.Test
+    void publish_ok_writesPublishedAndArchives() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasStyleJson("{\"schemaVersion\":1,\"adaptor\":\"keepProportion\"}");
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"w-1\",\"component\":\"ChartWidget\",\"innerType\":\"METRIC_CARD\","
+                + "\"blockId\":1001,\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        com.bank.branch.platform.report.entity.RptScreenBlock b =
+                new com.bank.branch.platform.report.entity.RptScreenBlock();
+        b.setId(1001L);
+        b.setScreenId(7L);
+        b.setComponentType("METRIC_CARD");
+        b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
+        when(blockMapper.selectList(any())).thenReturn(java.util.List.of(b));
+        when(canvasMapper.applyPublished(anyLong(), anyString(), anyInt(), anyString())).thenReturn(1);
+        // 归档滚动:selectList 查历史条数(返回空即无需裁剪)
+        when(publishLogMapper.selectList(any())).thenReturn(java.util.List.of());
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+        service.publishCanvas(req);
+
+        org.mockito.Mockito.verify(canvasMapper).applyPublished(
+                org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.contains("bindSnapshots"),
+                anyInt(), anyString());
+        org.mockito.Mockito.verify(publishLogMapper).insert(
+                any(com.bank.branch.platform.report.entity.RptScreenPublishLog.class));
+    }
+
+    @org.junit.jupiter.api.Test
+    void discard_copiesPublishedComponentsToDraft() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasPublishedJson("{\"schemaVersion\":1,\"canvasStyle\":{},"
+                + "\"components\":[{\"id\":\"w-9\",\"component\":\"TextLabel\","
+                + "\"style\":{\"top\":0,\"left\":0,\"width\":10,\"height\":10}}],\"bindSnapshots\":{}}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        service.discardDraft(7L);
+        // 放弃后 draft 组件树来自 published.components
+        // (显式类型见证:BaseMapper 同时有 updateById(T)/updateById(Collection<T>) 两个重载,
+        //  argThat 的 lambda 目标类型推断在重载消解阶段是二义的,不加 <RptScreen> 编译不过)
+        org.mockito.Mockito.verify(screenMapper).updateById(
+                org.mockito.ArgumentMatchers.<RptScreen>argThat(x ->
+                        x.getCanvasDraftJson() != null && x.getCanvasDraftJson().contains("w-9")));
     }
 }
