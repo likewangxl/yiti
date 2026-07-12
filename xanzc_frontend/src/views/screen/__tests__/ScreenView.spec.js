@@ -68,4 +68,57 @@ describe('ScreenView.vue', () => {
     expect(wrapper.find('.stub-renderer').exists()).toBe(false);
     expect(wrapper.text()).toContain('网络异常');
   });
+
+  // rev-t10 复审 Important-1:简报 Interfaces 声明消费 utils/scale.stageStyle,但示例代码硬编码
+  // Math.min(始终按 keepProportion),canvasStyle.adaptor 四策略从未接线。用不同宽高比的视口验证
+  // 每种策略算出的 scale 与"若仍是旧 Math.min 硬编码"会得到的值不同,证明真正切换了公式来源。
+  function setViewport(w, h) {
+    Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
+  }
+  function stageScale(w) {
+    const style = w.find('.scr-stage').attributes('style');
+    const m = /scale\(([\d.]+)\)/.exec(style);
+    return m ? Number(m[1]) : null;
+  }
+
+  it('canvasStyle.adaptor="keep" 时舞台不缩放(scale=1),不随视口变化', async () => {
+    setViewport(800, 600); // 800/1920≈.417、600/1080≈.556——若仍走旧 Math.min 会得到 ≈.417，非 1
+    getScreenViewMock.mockResolvedValue({
+      screenName: 'X', renderPackageJson: '{"canvasStyle":{"adaptor":"keep"},"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(stageScale(wrapper)).toBe(1);
+  });
+
+  it('canvasStyle.adaptor="widthFirst" 时按宽度比铺满(scale=视口宽/1920)', async () => {
+    setViewport(1920, 600); // sw=1、sh≈.556——旧 Math.min 会取较小的 sh≈.556，widthFirst 应为 1
+    getScreenViewMock.mockResolvedValue({
+      screenName: 'X', renderPackageJson: '{"canvasStyle":{"adaptor":"widthFirst"},"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(stageScale(wrapper)).toBe(1);
+  });
+
+  it('canvasStyle.adaptor="heightFirst" 时按高度比铺满(scale=视口高/1080)', async () => {
+    setViewport(600, 1080); // sw≈.3125、sh=1——旧 Math.min 会取较小的 sw≈.3125，heightFirst 应为 1
+    getScreenViewMock.mockResolvedValue({
+      screenName: 'X', renderPackageJson: '{"canvasStyle":{"adaptor":"heightFirst"},"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(stageScale(wrapper)).toBe(1);
+  });
+
+  it('canvasStyle.adaptor 缺省(或 keepProportion)时保持原 Math.min 等比适配行为(回归)', async () => {
+    setViewport(960, 1080); // sw=.5、sh=1 → min=.5
+    getScreenViewMock.mockResolvedValue({
+      screenName: 'X', renderPackageJson: '{"canvasStyle":{},"components":[]}', mapPoints: []
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(stageScale(wrapper)).toBe(0.5);
+  });
 });

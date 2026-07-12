@@ -34,9 +34,11 @@ const stageCss = computed(() => ({
   background: props.renderPackage.canvasStyle?.background || 'transparent'
 }));
 function absStyle(c) {
-  return { position: 'absolute', top: c.style.top + 'px', left: c.style.left + 'px',
-    width: c.style.width + 'px', height: c.style.height + 'px',
-    opacity: c.style.opacity ?? 1 };
+  // c.style||{} 兜底:防脏渲染包节点缺 style 时 undefined.top 报错(rev-t10 复审 Minor)
+  const s = c.style || {};
+  return { position: 'absolute', top: (s.top ?? 0) + 'px', left: (s.left ?? 0) + 'px',
+    width: (s.width ?? 0) + 'px', height: (s.height ?? 0) + 'px',
+    opacity: s.opacity ?? 1 };
 }
 function widgetOf(component) { return findWidget(component); }
 /** 从 bindSnapshots 合成 BlockContainer 需要的 block(bindJson/styleJson/drillJson 字符串);

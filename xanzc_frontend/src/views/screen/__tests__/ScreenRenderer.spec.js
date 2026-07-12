@@ -31,6 +31,13 @@ describe('ScreenRenderer.vue', () => {
     expect(() => mount(ScreenRenderer, { global: { stubs } })).not.toThrow();
   });
 
+  it('组件节点缺 style 时不抛错(absStyle 兜底 top/left/width/height=0),rev-t10 复审 Minor', () => {
+    const c = { id: 'w0', component: 'TextLabel', propValue: {}, isShow: true }; // 无 style 字段
+    let wrapper;
+    expect(() => { wrapper = mount(ScreenRenderer, { props: { renderPackage: pkg([c]) }, global: { stubs } }); }).not.toThrow();
+    expect(wrapper.find('.scr-abs').attributes('style')).toContain('top: 0px');
+  });
+
   it('素材组件(TextLabel)按 style 绝对定位', () => {
     const c = { id: 'w1', component: 'TextLabel', style: { top: 10, left: 20, width: 300, height: 40 },
       propValue: { text: 'hi' }, isShow: true };

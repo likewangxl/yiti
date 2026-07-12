@@ -24,6 +24,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getScreenView } from '@/api/screen';
+import { stageStyle } from '@/views/screen/designer/utils/scale';
 import ScreenRenderer from './components/ScreenRenderer.vue';
 
 const route = useRoute();
@@ -56,14 +57,18 @@ async function load() {
       resp.renderPackage = null;
     }
     view.value = resp;
+    fit(); // 缩放策略随渲染包 canvasStyle.adaptor 变化，拿到 view 后需重新计算(mounted 时早于本函数，先按缺省策略占位)
   } catch (e) {
     loadError.value = e?.message || '未知错误';
   }
 }
 
 function fit() {
-  // 1920×1080 设计稿等比缩放，电视墙/投屏一致
-  scale.value = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  // 1920×1080 设计稿按 canvasStyle.adaptor 适配窗口(缺省 keepProportion，即原 Math.min 等比适配行为)。
+  // 统一走 utils/scale.stageStyle(四策略 keep/keepProportion/widthFirst/heightFirst 唯一实现来源)，
+  // 不再自行硬编码 Math.min——旧实现恒等于 keepProportion，adaptor 字段从未真正接线(rev-t10 复审 Important-1)。
+  const adaptor = view.value?.renderPackage?.canvasStyle?.adaptor || 'keepProportion';
+  scale.value = stageStyle(adaptor, window.innerWidth, window.innerHeight).scale;
 }
 
 let clockTimer = null;
