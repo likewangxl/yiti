@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -180,6 +181,14 @@ class ScreenConfigServiceTest {
         assertThat(view.getScreen().getViewLevel()).isEqualTo("PROVINCE");
         assertThat(view.getMapPoints()).hasSize(1);
         assertThat(view.getMapPoints().get(0).getOrgCode()).isEqualTo("610100");
+    }
+
+    @Test
+    void saveMapPoints_null_throws43006_withoutDeleting() {
+        assertThatThrownBy(() -> service.saveMapPoints(null))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+        verify(pointMapper, never()).delete(any(Wrapper.class));
     }
 
     @Test

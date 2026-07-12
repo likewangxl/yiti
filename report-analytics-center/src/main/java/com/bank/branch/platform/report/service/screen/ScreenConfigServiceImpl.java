@@ -146,10 +146,12 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveMapPoints(List<MapPointDTO> points) {
-        pointMapper.delete(new LambdaQueryWrapper<>());
+        // 覆盖式保存语义：null 视为非法入参直接拒绝（防止误清全表点位且无恢复手段）；
+        // 空列表 [] 才是"清空全部点位"的合法表达，允许继续执行下面的删除。
         if (points == null) {
-            return;
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
         }
+        pointMapper.delete(new LambdaQueryWrapper<>());
         for (MapPointDTO p : points) {
             RptScreenMapPoint e = new RptScreenMapPoint();
             e.setOrgCode(p.getOrgCode());
