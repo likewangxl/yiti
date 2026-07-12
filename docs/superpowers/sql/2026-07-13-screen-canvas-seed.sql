@@ -3,16 +3,26 @@
 --   canvas_draft_json/canvas_published_json/canvas_version/publish_status/published_at/published_by)
 --   + RPT_SCREEN_BLOCK(三屏全部取数配置行)+ RPT_SCREEN_DATASOURCE(三屏引用的 7 条数据源全集)
 --   + RPT_SCREEN_MAP_POINT(3 条,PROVINCE 屏地图点位)+ RPT_SCREEN_PUBLISH_LOG(三屏发布归档)。
--- 前提:先执行 2026-07-12-screen-canvas-ddl.sql 建结构(RPT_SCREEN 增量 ALTER 字段 +
---   CREATE TABLE RPT_SCREEN_PUBLISH_LOG);【严禁执行 2026-07-12-screen-dashboard-ddl.sql】
---   (那是更早的 V1 大屏基线,含 DROP TABLE,与本脚本无关且具破坏性)。
+-- 前提(fresh 库按顺序执行,勿跳步/勿乱序):
+--   1) 2026-07-12-screen-dashboard-ddl.sql —— 建 4 张基表(RPT_SCREEN/RPT_SCREEN_BLOCK/
+--      RPT_SCREEN_DATASOURCE/RPT_SCREEN_MAP_POINT)。该脚本含 DROP TABLE,仅用于从 0 建库,
+--      【严禁在已有数据的库上重复执行】(会清空既有数据,具破坏性)。
+--   2) 2026-07-12-screen-canvas-ddl.sql —— 画布双态增量列(RPT_SCREEN 增量 ALTER 字段)+
+--      CREATE TABLE RPT_SCREEN_PUBLISH_LOG(发布归档表)。
+--   3) 【跳过 2026-07-12-screen-dashboard-seed*.sql 系列(含 seed.sql 与 seed-province-fix.sql)
+--      ——严禁在本种子之前执行】:它们对同一批 id(9101-9103 屏 / 9001-9007 数据源 / 1-10 号
+--      block)做旧版行/块布局种子插入,与本种子的画布态数据是同一批主键的两个不同版本;若先
+--      跑了 dashboard-seed 系列再跑本种子会主键冲突失败,本种子数据已完整取代其内容,无需
+--      再执行 dashboard-seed 系列。
+--   4) 本种子文件 —— 直接导入即可(承接步骤 1)/2)建好的空表,首次 fresh 部署无需 REPLACE)。
 -- 重配方式:全程经画布管理端 API(POST /api/screen/admin/canvas/save → publish),未直接 UPDATE
 --   RPT_SCREEN,已走服务端乐观锁校验/审计链路;三屏均实测 GET /api/screen/view/{code} 验证
 --   state=published、组件数与 bindSnapshots 一致、PROVINCE mapPoints=3。详见
 --   .superpowers/sdd/canvas-task-11-report.md。
--- 注意:RPT_SCREEN/RPT_SCREEN_BLOCK/RPT_SCREEN_DATASOURCE 均为 INSERT(非 REPLACE),fresh 库
---   (刚跑完 DDL 基线,无同 id 行)可直接导入;若目标库已有同 id 行(如重复执行本脚本),需先手工
---   清理对应行或将 INSERT 改 REPLACE INTO 再执行,避免主键冲突失败。
+-- 注意:RPT_SCREEN/RPT_SCREEN_BLOCK/RPT_SCREEN_DATASOURCE 均为 INSERT(非 REPLACE),按上述前提
+--   链首次导入的 fresh 库(无同 id 行)可直接导入;若目标库已有同 id 行(如重复执行本脚本,或
+--   误跑过 dashboard-seed 系列),需先手工清理对应行或将 INSERT 改 REPLACE INTO 再执行,避免
+--   主键冲突失败。
 -- MySQL dump 10.13  Distrib 8.0.33, for Linux (x86_64)
 --
 -- Host: localhost    Database: yiti
