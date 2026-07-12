@@ -51,7 +51,15 @@ export function newComponentFromMeta(component, innerType) {
     isLock: false, isShow: true
   };
   if (component === 'ChartWidget') {
-    node.innerType = innerType || 'METRIC_CARD';
+    const type = innerType || 'METRIC_CARD';
+    // 注册表层兜底门禁:面板层(Task 9 ComponentPanel)按 enabled 过滤拖拽入口,
+    // 但不能假定所有调用方都经过面板——这里对 enabled:false 的占位图表类型直接拒绝,
+    // 防止"面板层以为注册表兜底、注册表以为面板层已过滤"的两头漏防。
+    const chartMeta = chartMetas.find(c => c.innerType === type);
+    if (chartMeta && chartMeta.enabled === false) {
+      throw new Error('该图表类型尚未启用: ' + type);
+    }
+    node.innerType = type;
     node.blockId = null;      // 待保存时后端 upsert 得 id
     node.bindJson = '{}';
     node.styleJson = JSON.stringify({ title: '未命名图表', refreshSec: 60 });
