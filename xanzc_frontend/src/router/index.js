@@ -11,6 +11,13 @@ const routes = [
     component: () => import('@/views/login/Index.vue'),
     meta: { title: '登录', public: true }
   },
+  // 经营大屏：顶层全屏路由（不进 DefaultLayout，无 sidebar/header；仍走登录守卫）
+  {
+    path: '/screen/:screenCode',
+    name: 'ScreenView',
+    component: () => import('@/views/screen/ScreenView.vue'),
+    meta: { title: '经营大屏' }
+  },
   {
     path: '/',
     component: DefaultLayout,
@@ -55,6 +62,8 @@ const routes = [
       { path: 'report/sql',       name: 'ReportSql',     component: () => import('@/views/report/Sql.vue'),       meta: { title: 'SQL 探查',     group: '报表分析' } },
       { path: 'report/amas-approvals', name: 'ReportAmasApprovals', component: () => import('@/views/report/AmasApprovals.vue'), meta: { title: '业绩分配查询', group: '报表分析' } },
       { path: 'report/amas-approvals/:perfAdjustNo', name: 'ReportAmasApprovalDetail', component: () => import('@/views/report/AmasApprovalDetail.vue'), meta: { title: '业绩分配审批详情', group: '报表分析', hideInMenu: true } },
+      { path: 'screen-admin/datasources', name: 'ScreenAdminDs',       component: () => import('@/views/screen/admin/Datasources.vue'), meta: { title: '大屏数据源', group: '报表分析' } },
+      { path: 'screen-admin/designer',    name: 'ScreenAdminDesigner', component: () => import('@/views/screen/admin/Designer.vue'),    meta: { title: '大屏设计器', group: '报表分析' } },
 
       // 历史数据查询
       { path: 'guarantee/query',  name: 'GuaranteeQuery', component: () => import('@/views/guarantee/Query.vue'), meta: { title: '担保查询', group: '历史数据查询' } },
