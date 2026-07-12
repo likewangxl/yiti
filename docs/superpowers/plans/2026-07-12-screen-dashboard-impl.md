@@ -1329,6 +1329,8 @@ public class ScreenQueryEngine {
 
     private final DataSource readOnlyDataSource;
     private final SqlSafeValidator validator;
+    /** 大屏白名单（大写表名）——SqlSafeValidator 自 3f22660c 起不再做白名单拒绝（SQL 探查产品决策），大屏按 D1 决策在引擎侧自查 */
+    private final Set<String> whitelistUpper;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final int maxRows;
 
@@ -1346,12 +1348,23 @@ public class ScreenQueryEngine {
         this.readOnlyDataSource = readOnlyDataSource;
         this.maxRows = maxRows;
         this.validator = new SqlSafeValidator(whitelistTables, forbiddenKeywords, maxRows, 8000, 3);
+        this.whitelistUpper = whitelistTables.stream()
+                .map(t -> t.trim().toUpperCase(java.util.Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     /** 校验自定义 SQL 模板（保存/试跑/每次执行都调用），失败抛 RPT-43002 */
     public void validateCustomSql(String sqlTemplate) {
         try {
-            validator.validateAndNormalize(ScreenSqlTemplate.toValidatable(sqlTemplate));
+            // SqlSafeValidator 只做语法/关键字/深度校验并返回表名列表（不再白名单拒绝，见 3f22660c）；
+            // 大屏白名单在此自查（返回 tables 已统一大写，getter 名以 SqlSafeResult 源码为准）
+            var result = validator.validateAndNormalize(ScreenSqlTemplate.toValidatable(sqlTemplate));
+            for (String table : result.getTables()) {
+                if (!whitelistUpper.contains(table)) {
+                    log.warn("[ScreenQueryEngine] 自定义 SQL 命中白名单外表 {}", table);
+                    throw new RptException(RptErrorCode.SCREEN_DS_SQL_INVALID);
+                }
+            }
         } catch (RptException e) {
             throw e;
         } catch (BizException e) {
@@ -1549,7 +1562,7 @@ public class ScreenQueryEngine {
 }
 ```
 
-注意：`SqlSafeValidator` 的真实包名以现有源码为准（`report/support/`，import 按现状写；若在其他包，调整 import 即可）。
+注意：①`SqlSafeValidator`/`SqlSafeResult` 的真实包名与 getter 名以现有源码为准（`report/support/`）。②**白名单拒绝必须在引擎侧自查**（如上代码）：`SqlSafeValidator` 自 commit 3f22660c 起第 7 步只提取表名不再拒绝白名单外表（其基线测试 `validate_tableNotInWhitelist_rejects42002` 因此历史性红着，与本任务无关，不要去修它）；引擎用 `SqlSafeResult` 返回的大写表名列表对照 `whitelistUpper` 拒绝，违规抛 RPT-43002——单测 `buildCustom_tableNotWhitelisted_throws43002` 的预期不变。
 
 - [ ] **Step 5: 跑单测确认通过**
 
