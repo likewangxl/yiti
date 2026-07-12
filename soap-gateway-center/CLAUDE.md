@@ -6,7 +6,7 @@
 
 **soap-gateway-center** 是**外部渠道接入网关**模块，负责把手机端 / ICPS / ESB 等外部渠道的报文，转换为对内部各业务模块 `*Api` 的调用。模块包含两条独立的接入链路：
 
-1. **Netty SOAP 服务**（独立端口，默认 `30522`，见 `application-soap.yml`）：基于 Netty 的轻量 HTTP/SOAP 服务端，`SoapDispatchHandler` 按 **uri(=服务号) 路由**到对应 `SoapEndpoint` 实现；无匹配端点回 404，端点异常回 SOAP Fault。
+1. **Netty SOAP 服务**（独立端口，`SoapNettyProperties` 代码默认 `30522`，当前 `bootstrap/application.yml` 显式配置为 `30523`）：基于 Netty 的轻量 HTTP/SOAP 服务端，`SoapDispatchHandler` 按 **uri(=服务号) 路由**到对应 `SoapEndpoint` 实现；无匹配端点回 404，端点异常回 SOAP Fault。
 2. **callpu HTTP 网关**（走主应用 Spring MVC，`POST /api/callpu`）：手机端绩效审批网关，按报文 `RuleName` 分发到具体业务方法，返回 `{ReturnCd, RspMsg}` 信封。
 
 > **两条链路共用业务核心**：分发逻辑统一下沉到 `service/CallPuDispatchService`，HTTP 入口（`CallPuController`）与 SOAP 端点（`AxlryPrsRvrSysSvcEndpoint`）都委托它，避免重复实现 PERF_LIST / PERF_SAVE / CASH_GETCUST_INFO / PERF_RECALL。
@@ -14,14 +14,19 @@
 **基础包名**: `com.bank.branch.platform.soap`
 **Maven 坐标**: `com.bank.branch.platform:soap-gateway-center`
 
+**与主平台的关系**：本模块**不独立启动**，无自己的 `@SpringBootApplication`；由根 `pom.xml` 聚合为一个 module，并被 `bootstrap/pom.xml` 显式声明依赖，随 `bootstrap` 的 `BranchPlatformApplication`（唯一启动入口）一起装配。`SoapNettyServer` 实现 `SmartLifecycle`，随 Spring 容器启停，在与主 HTTP 端口（`server.port`）相同的 JVM 进程内，额外绑定并监听独立的 Netty 端口（`platform.soap.netty.port`，当前配置为 `30523`）。
+
+> **配置来源**：模块曾规划的 `application-soap.yml` 已删除，`platform.soap.netty.*` 与 `platform.sidecar.*` 当前唯一生效来源是 `bootstrap/src/main/resources/application.yml`（该文件不会被 Spring Boot 自动加载到独立配置文件，只能在 bootstrap 里改）。
+
 ## 跨模块依赖
 
 仅通过对方 `*Api` 调用，**禁止**直接依赖其 service/mapper/entity：
 
 | 上游模块 | *Api | 用途 |
 |---|---|---|
-| performance-engine-center | PerfApprovalQueryApi / PerfApprovalCmdApi | 分配关系调整审批列表 / 新增 / 撤回 |
+| performance-engine-center | PerfApprovalQueryApi / PerfApprovalCmdApi / AllocApi / CustStatQueryApi | 分配关系调整审批列表 / 新增 / 撤回；原分配回显；客户统计查询 |
 | customer-marketing-center | CustomerQueryApi | 客户号查名 |
+| auth-permission-center | UserApi | 报文 `EmployeeNo`/`allocater`（`PT_USER.USERNAME`）批量转 `USER_ID`（`mapUsernamesToEmpId`） |
 | system-governance-center | DictApi | SYS_DICT_ITEMS 查字典 + PERF_SAVE 业务类型字典码校验（PERF_BIZ_KIND） |
 
 ## 包结构
@@ -31,9 +36,14 @@ src/main/java/com/bank/branch/platform/soap/
 ├── config/
 │   ├── SoapNettyProperties.java                  # platform.soap.netty.* 配置（port/线程/超时等）
 │   ├── SoapNettyServer.java                      # Netty 服务端（SmartLifecycle 随 Spring 启停）
-│   └── CallPuContentTypeNormalizationFilter.java # callpu 入口 Content-Type 归一化（见下「415 修复」）
+│   ├── CallPuContentTypeNormalizationFilter.java # callpu 入口 Content-Type 归一化（见下「415 修复」）
+│   ├── SidecarUniauthProperties.java             # platform.sidecar.uniauth.source-sys-id 绑定
+│   ├── SidecarRegistrationChecker.java           # 应用就绪后异步轮询边车 /isready+/up 完成注册，@PreDestroy 调 /down 注销
+│   ├── SidecarProbe.java                         # 边车探测抽象接口
+│   └── HttpSidecarProbe.java                     # JDK HttpClient 生产实现（调 platform.sidecar.health-base-url）
 ├── controller/
 │   ├── CallPuController.java                      # POST /api/callpu 统一分发入口
+│   ├── SideCarHealthCheckController.java          # GET /ishealth（HTTP 侧，Spring MVC，边车定时探活，恒返回 0）
 │   └── dto/                                       # CallPuRequest / CallPuResponse / *Data / *Item
 ├── endpoint/                                      # SoapEndpoint 接口 + EchoSoapEndpoint / AxlryPrsRvrSysSvcEndpoint
 │   └── bind/                                       # SOAP body 强类型绑定（ReqAxlryPrsRvrSysSvcType / ReqSvcHeaderType）
@@ -47,7 +57,7 @@ src/main/java/com/bank/branch/platform/soap/
 外部渠道（Axis2）以 SOAP 1.1 报文 `POST /S080021264`（uri 即服务号）下发,链路：
 
 ```
-Netty(30522) → SoapDispatchHandler 按 request.uri() 分流：
+Netty(30523，当前 bootstrap 配置值；代码默认 30522) → SoapDispatchHandler 按 request.uri() 分流：
    - uri = /ishealth(忽略大小写) → 健康检查,回 0(健康)/1(不健康),不解析 SOAP
    - uri = /S080021264          → AxlryPrsRvrSysSvcEndpoint
         → SoapBodyBinder 把 soap:Body 绑定为 ReqAxlryPrsRvrSysSvcType（剥离含服务号的命名空间）

@@ -44,7 +44,7 @@ V1.0 报表只读消费 4 个上游模块的 *Api（共 10 个接口）：
 | auth-permission-center | OrgApi | 机构层级（仪表盘 ORG / ORG_SUBTREE）|
 | governance | DictApi | 字典翻译（动态查询元数据 metaTree 节点）|
 | governance | AuditApi | 双写审计（SQL 探查 / 异步导出 / 仪表盘 READ）|
-| governance | FileApi | MinIO 上传（4 ExportStrategy upload + getDownloadUrl 拉预签名 URL）|
+| governance | FileApi | 对象存储上传（governance 已从 MinIO 迁移至华为云 OBS；4 ExportStrategy upload + getDownloadUrl 拉预签名 URL）|
 | performance | MetricApi | 指标查询（仪表盘 + 动态查询）|
 | performance | KpiApi | KPI 查询（PerfSummary）|
 | customer-marketing | CustomerQueryApi | 客户池查询（CustPoolSummary）|
@@ -194,8 +194,8 @@ DATA_SCOPE 类型在 3 处生效：
 ## 环境依赖
 
 - MySQL 8.0：`onepl`（生产）/ `onepl_test_bootstrap`（测试 IT，V1.10 合一后唯一测试库；原 onepl_test_v103 废弃）
-- Redis 6.X：localhost:6379（缓存 + 限流 + 锁）
-- MinIO（governance.FileApi.upload 实际依赖，文件 bucket 由 governance 管理）
+- 缓存：`ReportCacheConfig`（Caffeine `@Primary` CacheManager，TTL 5 分钟 + maxSize 500，整个平台共享）；**2026-05-20 项目已去 Redis**，report 模块本身未使用 Redis，也未见 LockManager/限流组件调用
+- 对象存储：华为云 OBS（governance.FileApi.upload 实际依赖，已替代原 MinIO，bucket 由 governance 管理）
 - 上游模块依赖（10 个 *Api，见上文）
 
 ## 开发 Checklist（新增功能时）
@@ -229,7 +229,7 @@ DATA_SCOPE 类型在 3 处生效：
 | 12 | M5 reviewer #4：ObjectMapper 独立实例 → 共享 Spring Bean | 低 | M5 reviewer | V1.1 替换为 @Qualifier 注入 |
 | 13 | SqlProbeServiceImpl#getHistoryDetail 不存在时错误码错配（用 SAVED_QUERY_NOT_FOUND） | 中 | code 审查 I-1 | 待 V1.1 新增 SQL_PROBE_HISTORY_NOT_FOUND |
 | 14 | PerfSummaryServiceImpl#L75 subjectName = subjectId 兜底，未通过 OrgApi/CustomerQueryApi 翻译 | 低 | code 审查 M-2 | V1.1 引入 OrgApi/CustQueryApi 翻译 |
-| 15 | 仪表盘 Caffeine 单实例（V1.1 切 Redis 共享缓存） | 低 | code 审查观察 | V1.1 切共享缓存 |
+| 15 | 仪表盘 Caffeine 单实例（V1.0 计划 V1.1 切 Redis 共享缓存） | 低 | code 审查观察 | 已解决：`ReportCacheConfig` 改为全平台共享的 `@Primary` Caffeine CacheManager（未引入 Redis，2026-05-20 项目已去 Redis） |
 
 ## V1.1 规划
 

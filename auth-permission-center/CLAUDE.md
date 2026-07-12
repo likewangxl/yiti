@@ -10,7 +10,7 @@
 
 **Maven 坐标**: `com.bank.branch.platform:auth-permission-center`
 
-**对外契约**: 5 个 `*Api` 接口，供所有业务模块依赖。
+**对外契约**: 7 个 `*Api` 接口（AuthApi / CurrentUserApi / ResourceApi / BizScopeApi / OrgApi / RoleApi / UserApi），供所有业务模块依赖。
 
 ## 依赖关系
 
@@ -60,7 +60,7 @@ src/main/java/com/bank/branch/platform/auth/
 - `isSystemAdmin()`
 
 ### ResourceApi
-资源/权限查询 (Redis 缓存)。
+资源/权限查询（已去 Redis，直接查库，见下文"权限数据读取（已去 Redis）"章节）。
 - `matchResource(url, method)` - 匹配请求 URL+Method 到已注册的 PT_RESOURCE
 - `hasResourcePermission(empId, resourceId)` - 检查用户是否有 RBAC 权限访问该资源
 - `listUserResources(empId)` / `listUserResourceUrls(empId)` - 获取用户所有可访问资源/URL
@@ -73,7 +73,7 @@ src/main/java/com/bank/branch/platform/auth/
 - `getUserBizScopes(empId)` - 批量获取用户所有 BizType 到 DataScope 的映射
 
 ### OrgApi
-组织管理查询 (Redis 缓存)。
+组织管理查询（已去 Redis，直接查库，见下文"权限数据读取（已去 Redis）"章节）。
 - `getOrg(orgCode)` / `getOrgSubtree(orgCode)` / `getOrgSubtreeCodes(orgCode)`
 - `getUserMainOrg(empId)` / `searchOrgs(keyword, limit)`
 
@@ -116,17 +116,13 @@ src/main/java/com/bank/branch/platform/auth/
 | `EXT_ORG_INFO` | ExtOrgInfo | 组织信息 (ORG_CODE, P_ID, 层级: 1=总部, 2=分行, 3=支行) |
 | `EXT_USER_ORG` | ExtUserOrg | 用户-组织关系 (USER_ID, ORG_CODE 联合主键) |
 
-## 缓存 (Cache-Aside, 5 分钟 TTL)
+## 权限数据读取（已去 Redis）
 
-| Key 模式 | 内容 |
-|----------|------|
-| `auth:user-roles:{empId}` | 用户的角色列表 |
-| `auth:role-resource:{roleId}` | 角色的资源列表 |
-| `auth:biz-scope:{roleId}` | 角色的 BizScope 列表 |
-| `auth:resource:all` | 全站资源映射 |
-| `auth:org-subtree:{orgCode}` | 组织子树代码 |
+> ⚠️ 原设计为 Cache-Aside (Redis, 5 分钟 TTL)，Key 模式为 `auth:user-roles:{empId}` / `auth:role-resource:{roleId}` / `auth:biz-scope:{roleId}` / `auth:resource:all` / `auth:org-subtree:{orgCode}`。**2026-05-20 项目去 Redis 后已改为直接查库**：行内多实例环境无共享 Redis 可用，且 `PT_USER_ROLE`/`PT_ROLE_RESOURCE` 均为主键索引点查（~0.1ms），业务 SQL 本身耗时更高，去掉缓存层对热路径性能无感知影响。
 
-权限变更时发布 `PermissionCacheInvalidatedEvent` 事件通知其他模块刷新缓存。事件类型: `USER_ROLE`, `ROLE_RESOURCE`, `BIZ_SCOPE`。
+- `getRoleIdsByEmpId` / `getEffectiveRoleIds` / `getResourceIdsByRoleId` / `getAllResources` / `getBizScopesByRoleId` 现均直查 Mapper
+- `evictXxxCache` 系列方法保留原方法签名，实现改为 NoOp（仅打 debug 日志），避免动 `RoleService`/`UserRoleService`/`BizScopeService`/`RoleResourceService` 里大量调用点；后续如发现真实热点可改回本地缓存 (Caffeine)
+- 权限变更时仍发布 `PermissionCacheInvalidatedEvent` 事件（事件类型: `USER_ROLE`, `ROLE_RESOURCE`, `BIZ_SCOPE`），但目前仓库内无其他监听者消费——事件保留是为兼容未来重新引入缓存/多节点通知的扩展点，而非当前有实际效果的失效通知
 
 ## REST 端点
 
@@ -150,4 +146,4 @@ src/main/java/com/bank/branch/platform/auth/
 | `RoleResourceService` | 角色-资源增量绑定 (幂等) 和全量替换, 发布事件 |
 | `BizScopeService` | 数据范围解析 (多角色联合策略), BizScope CRUD (upsert) |
 | `OrgService` | 组织架构查询, 递归子树收集, 模糊搜索 |
-| `PermissionCacheService` | Redis 缓存管理, 缓存失效, 事件发布 |
+| `PermissionCacheService` | 权限数据直查（已去 Redis）, 缓存失效 NoOp 兼容层, 事件发布 |

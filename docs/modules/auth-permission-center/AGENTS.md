@@ -1,3 +1,6 @@
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-04-14 | Updated: 2026-07-12 -->
+
 # docs/modules/auth-permission-center/AGENTS.md
 
 本文件约束 `docs/modules/auth-permission-center/` 下的认证授权文档，统一使用 UTF-8。
@@ -16,7 +19,7 @@
 
 ## 维护要求
 
-- 与 `WORKFLOW_PARTICIPANT` 相关的说明必须区分“当前已实现能力”和“依赖 workflow-center 后续补齐的能力”，不要默认 workflow-center 已公开参与者 Java API。
+- `WORKFLOW_PARTICIPANT` 数据范围已由 performance-engine-center V1.4 落地真实查询（不再是占位实现），`workflow-center` 也已公开正式 Bean `WorkflowQueryApi`；文档不要再默认写成“尚未补齐”，如遇后续新 BizType 接入 `WORKFLOW_PARTICIPANT`，仍需注明其查询链路依赖哪个模块的哪个接口。
 - 用户、角色、机构字段命名变化时，要同步检查依赖这些字段的治理、工作流、门户文档。
 
 ## 覆盖关系

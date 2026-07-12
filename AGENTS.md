@@ -1,7 +1,8 @@
+<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
 
 # AGENTS.md
 
-本文件为 Codex 提供项目上下文和开发指导。后续所有回答全部使用中文，打开和编辑文件时全部使用UTF-8编码
+本文件为 AI 编码代理提供项目上下文和开发指导。后续所有回答全部使用中文，打开和编辑文件时全部使用UTF-8编码。
 
 ## 项目概述
 
@@ -11,59 +12,47 @@
 
 ## 技术栈
 
-**后端** (Spring Boot 3.2.3 + JDK 17):
-
-- ORM框架: MyBatis 3.0.3
-- 工作流引擎: Flowable 7.0.1 (嵌入式)
-- 数据库: MySQL 8.0 + Druid 连接池
-- 缓存/Session: Redis 6.X (Spring Session)
-- API文档: Knife4j 4.4.0
-- 对象存储: MinIO 8.5.7
-
-**工具链**:
-
-- 构建工具: Maven
-- 包管理: Maven 多模块项目
-- 版本控制: Git
+- **后端**: Spring Boot 3.2.3 + JDK 17、MyBatis 3.0.3（新增功能一律 MyBatis-Plus，见下文红线）、Flowable 7.0.1（嵌入式）、MySQL 8.0 + Druid、Spring Session JDBC（session 落 MySQL `SPRING_SESSION` 表，**2026-05 已去 Redis**）、Knife4j 4.4.0、MinIO 8.5.7
+- **前端** (`xanzc_frontend/`): Vue 3 + Vite 4 + Element Plus + Pinia
+- **构建**: Maven 多模块项目；版本控制 Git
 
 ## 开发指令
 
 ```bash
-# 安装依赖
-mvn clean install
-
-# 启动开发服务器
-cd bootstrap
-mvn spring-boot:run
-
-# 运行测试
-mvn test
-
-# 运行特定模块测试
-cd <module-name>
-mvn test
-
-# 构建打包
-mvn clean package
+mvn clean install -DskipTests        # 安装/刷新全部模块到本地 .m2（跨模块改动后必跑）
+cd bootstrap && mvn spring-boot:run  # 启动开发服务器
+mvn test                             # 运行单元测试（surefire）
+mvn verify                           # 全量测试含 IT（failsafe）
+mvn clean package                    # 构建打包
 ```
 
+## 测试 / IT 执行注意事项
 
-## 当前已实现的模块
+- **Stale jar**：bootstrap 的 `@SpringBootTest` 依赖其他模块最新类时，必须先 `mvn clean install -DskipTests` 再 `mvn test -pl bootstrap`，否则旧 jar 会引发 `ConflictingBeanDefinitionException` 等怪错。
+- **Surefire vs Failsafe**：`*Test.java`/`*Tests.java` → surefire（`mvn test`）；`*IT.java` → failsafe（`mvn verify`）；新集成测试按 `*IT.java` 命名。
+- **UTF-8 已全局配置**：surefire/failsafe argLine 已含 `-Dfile.encoding=UTF-8`，无需在 `@Sql` 上加 `@SqlConfig(encoding="UTF-8")`。
 
-| 模块 | 包名 | 状态 | 说明 |
-|------|------|------|------|
-| `common` | com.bank.branch.platform.common.* | 已完成 | 公共基础设施层 (5 个子模块) |
-| `auth-permission-center` | com.bank.branch.platform.auth | 已完成 | 认证授权中心 (RBAC + 数据范围) |
-| `system-governance-center` | com.bank.branch.platform.governance | 已完成 | 系统治理中心 (7 大治理域) |
-| `workflow-center` | com.bank.branch.platform.workflow | 已完成 | 工作流中心 (Flowable 7.0.1 集成) |
-| `customer-marketing-center` | com.bank.branch.platform.customer | 已完成 | 客户营销中心 (113 Java + 46 测试，0 UOE) |
-| `business-application-center` | com.bank.branch.platform.bizapp | 已完成 | 业务申请中心 (60 Java + 26 测试，0 UOE) |
-| `portal-content-center` | com.bank.branch.platform.portal | 已完成 | 门户与内容中心 (108 Java + 38 测试，0 UOE) |
-| `performance-engine-center` | com.bank.branch.platform.performance | V1.6 已交付（quartz 整合） | 绩效计算中心 (V1.0-V1.5 累积能力 + V1.6 Spring `@Scheduled`/ShedLock → Quartz 集群调度迁移) |
-| `report-analytics-center` | com.bank.branch.platform.report | V1.0 已交付（2026-04-25） | 报表分析中心 (25 REST + 4 表 + 跨模块只读 + 4 ExportStrategy 异步 + SQL 探查) |
-| `bootstrap` | com.bank.branch.platform | 已完成 | Spring Boot 启动入口 |
+## 模块结构与依赖
 
-**全部 9 个业务模块已交付**，无尚未实现模块。
+全部 9 个业务模块 + bootstrap 均已交付，无尚未实现模块。各模块细节见对应模块的 AGENTS.md / CLAUDE.md，此处不重复维护。
+
+| 模块 | 包名 | 说明 |
+|------|------|------|
+| `common` | com.bank.branch.platform.common.* | 公共基础设施 (web/trace/security/aop/db 5 个子模块) |
+| `auth-permission-center` | com.bank.branch.platform.auth | 认证授权中心 (RBAC + 数据范围) |
+| `system-governance-center` | com.bank.branch.platform.governance | 系统治理中心 (含 sys_job_conf / Quartz 集群调度) |
+| `workflow-center` | com.bank.branch.platform.workflow | 工作流中心 (Flowable 集成) |
+| `customer-marketing-center` | com.bank.branch.platform.customer | 客户营销中心 |
+| `business-application-center` | com.bank.branch.platform.bizapp | 业务申请中心 |
+| `portal-content-center` | com.bank.branch.platform.portal | 门户与内容中心 |
+| `performance-engine-center` | com.bank.branch.platform.performance | 绩效计算中心 (含 eval 考核评价/奖励分配) |
+| `report-analytics-center` | com.bank.branch.platform.report | 报表分析中心 (只读) |
+| `bootstrap` | com.bank.branch.platform | 唯一的 Spring Boot 启动入口 |
+
+此外还有两个工程：
+
+- `soap-gateway-center/` — 外部渠道 SOAP/callpu 网关（包名 `...platform.soap`）：随 bootstrap 同 JVM 启动，`SoapNettyServer` 额外监听独立 Netty 端口；另提供 `POST /api/callpu` HTTP 入口
+- `xanzc_frontend/` — Vue 3 + Vite 前端（npm 工程，不在 Maven 聚合内，`npm run dev` 启动）
 
 ### 当前模块依赖图
 
@@ -76,14 +65,14 @@ system-governance-center (依赖 auth)  ← 被 workflow 依赖
   ↑
 workflow-center (依赖 auth + governance)
   ↑
-portal-content-center (依赖 auth + governance + workflow，通用域不持有核心域状态) ← 已交付
-customer-marketing-center (依赖 auth + governance + workflow) ← 已交付
-business-application-center (依赖 auth + governance + workflow + customer-marketing + portal) ← 已交付
-performance-engine-center (依赖 auth + governance + workflow + customer-marketing) ← V1.6 已交付（Quartz 整合）
+portal-content-center (依赖 auth + governance + workflow，通用域不持有核心域状态)
+customer-marketing-center (依赖 auth + governance + workflow)
+business-application-center (依赖 auth + governance + workflow + customer-marketing + portal)
+performance-engine-center (依赖 auth + governance + workflow + customer-marketing)
 
-report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖) ← V1.0 已交付（2026-04-25）
+report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖)
 
-bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
+bootstrap (依赖所有业务模块，是唯一的 Spring Boot 启动入口)
 ```
 
 ### 模块间依赖规则
@@ -100,20 +89,6 @@ bootstrap (依赖所有已实现模块, 是唯一的 Spring Boot 启动入口)
 ### 包结构规范
 
 强制：使用多module进行开发结构如下
-```text
-com.bank.branch.platform
-├─ common                        存放公用组件 ✅ 已完成 (5 个子模块)
-├─ auth-permission-center        认证授权中心 ✅ 已完成
-├─ system-governance-center      系统治理中心 ✅ 已完成
-├─ workflow-center               工作流中心 ✅ 已完成
-├─ portal-content-center         门户与内容中心 ✅ 已完成
-├─ customer-marketing-center     客户营销中心 ✅ 已完成
-├─ business-application-center   业务申请中心 ✅ 已完成
-├─ bootstrap                     启动入口 ✅ 已完成
-├─ performance-engine-center     绩效计算中心 ✅ V1.6 已交付（Quartz 整合：Spring `@Scheduled`/ShedLock → Quartz 集群调度，QRTZ_LOCKS 行锁防重；JobApi 精简到 1 方法）
-└─ report-analytics-center       报表分析中心 ✅ V1.0 已交付（2026-04-25）
-```
-
 ```
 com.bank.branch.platform.<module>/
 ├── api/              # 对外接口 (唯一可跨模块依赖)
@@ -149,34 +124,24 @@ com.bank.branch.platform.<module>/
 
 1. **显式优于隐式**: 不使用魔法约定，所有配置显式声明
 2. **简单优于复杂**: 使用贫血模型 (Service + DAO + Entity)，避免过度设计
-3. **无状态设计**: 所有模块无状态，Session/缓存通过 Redis 实现
+3. **无状态设计**: 所有模块无状态，Session 经 Spring Session JDBC 落 MySQL 共享（已去 Redis，分布式锁用 `LockManager`/`PT_LOCK` 表）
 4. **Fail Close**: 权限缓存失效时默认拒绝访问
 5. **全链路追踪**: 所有跨模块调用携带 TraceID
 
-
 ## 性能和安全规范
 
-### API 性能要求
-
-- 所有 API 响应时间 < 500ms (目标)
-- 慢查询 > 5s 必须告警
-- 数据库查询优化（使用索引和缓存）
-- 实现分页和懒加载（默认 pageSize=20，最大 100）
-
-### 安全规范
-
-- 所有用户输入必须验证和清理
-- 敏感数据加密存储（密码使用 BCrypt）
-- 实现基于 `PT_RESOURCE` 的 RBAC 权限控制
+- 所有 API 响应时间 < 500ms (目标)；慢查询 > 5s 必须告警
+- 数据库查询优化（索引 + 缓存）；分页懒加载（默认 pageSize=20，最大 100）
+- 所有用户输入必须验证和清理；敏感数据加密存储（密码 BCrypt）
+- 基于 `PT_RESOURCE` 的 RBAC 权限控制
 - 高危操作必须独立 URL、单独授权、单独审计
-- 敏感字段日志输出必须脱敏（手机号、身份证、账号、金额）
+- 敏感字段日志脱敏（手机号、身份证、账号、金额）
 
 ## 环境配置
 
 ### 开发环境
 
-- **数据库**: MySQL 8.0 本地实例 (`localhost:3306/onepl 用户:root, 密码 123456`)
-- **缓存**: Redis 6.X 本地实例 (`localhost:6379`)
+- **数据库**: MySQL 8.0 本地实例 (`localhost:3306/yiti 用户:root, 密码 djdev`)
 - **对象存储**: MinIO 本地服务
 - **日志级别**: DEBUG (com.bank.platform), INFO (root)
 
@@ -187,9 +152,11 @@ com.bank.branch.platform.<module>/
 - Flowable history level: `audit`
 - MyBatis mapper 位置: `classpath*:mapper/**/*Mapper.xml`
 
-### API 文档
+### 端口与 API 文档
 
-- Knife4j UI: `http://localhost:8080/doc.html` (启动后访问)
+- 后端 `server.port`: **18081**；SOAP 网关 Netty 端口: 30523（`platform.soap.netty.port`）
+- 前端 dev server: 8090（`/api` 代理到 `http://localhost:18081`）
+- Knife4j UI: `http://localhost:18081/doc.html` (启动后访问)
 
 ## 开发 Checklist
 
@@ -211,6 +178,7 @@ com.bank.branch.platform.<module>/
 - **设计文档**: `project_ana_技术方案与架构拆分.md`
 - **功能文档**: `project_ana.md`
 - **docs 目录**: 各模块详细设计文档 + DDL + 共享开发规范 (见 `docs/AGENTS.md`)
+- **运维 Runbook**: `docs/modules/system-governance-center/09-运维Runbook.md` — sys_job_conf / Quartz 集群调度运维权威指南（V1.9 整合）
 
 ### 模块级 AGENTS.md (开发时必须参考)
 - **公共基础设施**: [common/AGENTS.md](common/AGENTS.md)
@@ -223,6 +191,8 @@ com.bank.branch.platform.<module>/
 - **绩效计算**: [performance-engine-center/AGENTS.md](performance-engine-center/AGENTS.md)
 - **报表分析**: [report-analytics-center/AGENTS.md](report-analytics-center/AGENTS.md)
 - **启动入口**: [bootstrap/AGENTS.md](bootstrap/AGENTS.md)
+- **外部渠道网关（SOAP/callpu）**: [soap-gateway-center/AGENTS.md](soap-gateway-center/AGENTS.md)
+- **前端**: [xanzc_frontend/AGENTS.md](xanzc_frontend/AGENTS.md)
 
 ### 共享开发规范
 - **[docs/common-dev-guide.md](docs/common-dev-guide.md)** — 统一响应模型、错误码规范、分页标准、鉴权链路、数据范围 SQL 模板、审计规范、事件发布、数据传输、日志规范 (所有模块必须遵守)
@@ -230,3 +200,19 @@ com.bank.branch.platform.<module>/
 ### TDD (测试驱动开发) 绝对红线
 - **红-绿-重构 (Red-Green-Refactor) 闭环**：一切特性的开发或者 Bug 修复，必须先写测试（让他失败，Red），再写最简代码让他通过（Green），最后重构优化（Refactor）。
 - **禁止事后狂补测试**：严禁无视 TDD，先凭直觉写完一大堆业务逻辑再去凑测试的行为。
+
+### Flyway 禁令（绝对红线）
+- **本项目已彻底废弃 Flyway**：禁止引入 `flyway-core` / `flyway-mysql` 任何版本依赖；禁止在 `application*.yml` 出现 `spring.flyway.*` 配置；禁止新增 `V*__*.sql` / `U*__*.sql` 命名风格的迁移脚本；禁止编写 `*FlywayIT` / `*FlywayTestBase` 类。
+- **schema 变更走 SQL 直接执行**：所有 DDL/DML 由开发或 DBA 直接在目标库执行（手工或 CI 脚本），不再依赖任何"按版本号自动 migrate"框架。
+- **历史迁移脚本已全部删除**：`onepl` 与 `yiti` 当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
+
+### MyBatis-Plus 规范（新增功能绝对红线，2026-06-10 起）
+- **所有新增功能涉及的数据库访问统一使用 MyBatis-Plus**：Mapper 接口必须 `extends BaseMapper<T>`；单条 CRUD（`insert`/`selectById`/`updateById`/`deleteById` 等）直接用 BaseMapper 内置方法，**禁止**为这些方法重复写 XML；动态/简单条件查询优先 `LambdaQueryWrapper`/`LambdaUpdateWrapper`。
+- **XML 只写 BaseMapper 覆盖不到的自定义 SQL**：批量插入、跨表 JOIN、GROUP BY 聚合、带乐观条件的批更新等才落 `*Mapper.xml`（命名空间指向该 BaseMapper 接口）。
+- **实体**用 MyBatis-Plus 注解 `@TableName` / `@TableId(type = IdType.AUTO)`；**配置**已就绪（root 依赖 `mybatis-plus-spring-boot3-starter` 3.5.7、`map-underscore-to-camel-case: true`、各模块 `@MapperScan` + `MybatisPlusConfig`），新 Mapper 开箱即用，无需额外配置。
+- 既有遗留的纯 MyBatis 写法不强制回改，但**新增**一律按本规范。
+
+### 子代理派遣规范（绝对红线）
+- **派遣任何 subagent（Agent 工具）时，model 参数必须 ≥ sonnet（即只能是 `sonnet` 或 `opus`），禁止使用 `haiku`**。
+- 即使 plan 文档建议"机械任务用 cheap model"，也要降级到 sonnet 而非 haiku。
+- 此规则适用于全部 subagent 类型（executor、explore、code-reviewer、debugger 等），无例外。

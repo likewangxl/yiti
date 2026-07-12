@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-26 | Updated: 2026-04-26 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
 
 # business-application-center
 
@@ -28,10 +28,11 @@
 | Directory | Purpose |
 |-----------|---------|
 | `api/` | 5 个对外 API 接口 + 8 个 DTO + 2 个 Converter |
+| `config/` | `BizAppCacheConfig.java` |
 | `controller/` | 3 个 REST 控制器（LoanController 9 端点 / SupportController 8 端点 / SupportDeptController 4 端点） |
 | `facade/` | 5 个 API 实现 |
-| `service/` | 8 个业务服务（LoanService / SupportService / SupportDeptService / BizApplySearchService 等） |
-| `mapper/` | 2 个 MyBatis Mapper 接口 + 2 个 XML |
+| `service/` | 9 个业务服务（LoanService / SupportService / SupportDeptService / BizApplySearchService 等） |
+| `mapper/` | 2 个 MyBatis-Plus Mapper 接口（`extends BaseMapper`）+ 2 个 XML（自定义 SQL） |
 | `entity/` | 2 个实体（LoanApply / SupportRequest） |
 | `enums/` | 5 个枚举（含 BizAppErrorCode 31 条错误码） |
 | `event/` | 7 个领域事件（LoanSubmitted / SupportDispatched 等） |
@@ -73,15 +74,15 @@
 - `portal-content-center`（ProductApi）
 
 ### External
-- MyBatis 3.0.3 — ORM
+- MyBatis-Plus — ORM（2 个 Mapper 均已迁移到 `BaseMapper`，表名全大写）
 - Flowable 7.0.1 — 工作流引擎（通过 workflow-center）
 
 ## Database Tables (2 张)
 
 | Table | Entity | Description |
 |-------|--------|-------------|
-| `loan_apply` | LoanApply | 资产投放申请（applyNo, custId, creditAmount, businessKey=LOAN:{id}） |
-| `support_request` | SupportRequest | 中场支持申请（requestNo, submitGroupId, supportDeptId, businessKey=SUPPORT:{id}） |
+| `LOAN_APPLY` | LoanApply | 资产投放申请（applyNo, custId, creditAmount, businessKey=LOAN:{id}） |
+| `SUPPORT_REQUEST` | SupportRequest | 中场支持申请（requestNo, submitGroupId, supportDeptId, businessKey=SUPPORT:{id}） |
 
 ## V1.0 已知技术债（2026-04-25）
 

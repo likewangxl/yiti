@@ -4,7 +4,7 @@
 
 ## 模块概述
 
-**system-governance-center** 是系统治理中心，提供字典管理、系统配置、工作日历、审计日志、通知、文件管理、定时任务等通用治理能力。
+**system-governance-center** 是系统治理中心，提供字典管理、系统配置、工作日历、审计日志、通知、文件管理（华为云 OBS，已替代早期 MinIO）、定时任务（Quartz 集群调度）等通用治理能力。
 
 **基础包名**: `com.bank.branch.platform.governance`
 
@@ -30,19 +30,24 @@ src/main/java/com/bank/branch/platform/governance/
 │   ├── NotifyApi.java
 │   ├── FileApi.java
 │   └── JobApi.java
-├── api/dto/          # 请求/响应 DTO (15 个类)
-├── controller/       # REST 控制器 (8 个)
-├── config/           # Spring 配置 (GovCacheConfig, MinioConfig)
+├── api/dto/          # 请求/响应 DTO (27 个类，含 V1.7 RegisterJobCmd)
+├── controller/       # REST 控制器 (11 个，管理端/公开端拆分)
+├── config/           # Spring 配置 (AutowiringSpringBeanJobFactory, MemoryCacheService, QuartzConfig)
 ├── entity/           # 数据库实体 (9 类)
 ├── facade/           # API 实现 (7 个 @Service)
 ├── handler/          # GovAuditLogHandler (实现 common-aop 的 AuditLogHandler SPI)
-├── mapper/           # MyBatis Mapper (9 个接口)
-└── service/          # 业务逻辑 (7 个 Service)
+├── job/              # SpringSessionCleanupQuartzJob（Quartz 反射创建，不加 @Component）
+├── listener/         # JobExecutionLogger（全局 Quartz JobListener）
+├── mapper/           # MyBatis-Plus Mapper (10 个接口)
+├── service/          # 业务逻辑 (9 个 Service)
+└── storage/          # ObsStorageClient + FileCategory（华为云 OBS 读写工具，替代原 MinIO）
 ```
+
+> **缓存/存储后端变更**：`GovCacheConfig`（`RedisTemplate`）与 `MinioConfig`（`MinioClient`）已不存在。`DictApi`/`ConfigApi`/`CalendarApi` 的缓存改由 `config/MemoryCacheService`（Caffeine）承载；文件存储改由 `storage/ObsStorageClient` 直接管理华为云 OBS 连接。
 
 ## 7 个对外 API 接口
 
-### DictApi (Redis 缓存 TTL 10 分钟)
+### DictApi (内存缓存 Caffeine TTL 10 分钟)
 
 | 方法 | 用途 |
 |------|------|
@@ -52,7 +57,7 @@ src/main/java/com/bank/branch/platform/governance/
 | `batchGetDictItems(dictTypes)` | 批量获取多种类型字典项 |
 | `isValidDictValue(type, value)` | 校验值是否存在且为 ACTIVE 状态 |
 
-### ConfigApi (Redis 缓存 TTL 10 分钟)
+### ConfigApi (内存缓存 Caffeine TTL 10 分钟)
 
 | 方法 | 用途 |
 |------|------|
@@ -60,7 +65,7 @@ src/main/java/com/bank/branch/platform/governance/
 | `getConfigValue(key, defaultValue)` | 获取配置值, 带默认值 |
 | `getConfigValue(key, Class<T>)` | 类型化获取 (Integer/Long/Boolean/String) |
 
-### CalendarApi (Redis 缓存 TTL 24 小时)
+### CalendarApi (内存缓存 Caffeine TTL 24 小时)
 
 | 方法 | 用途 |
 |------|------|
@@ -89,8 +94,8 @@ src/main/java/com/bank/branch/platform/governance/
 
 | 方法 | 用途 |
 |------|------|
-| `upload(file, uploadedBy)` | 上传文件到 MinIO, 后缀白名单校验, MD5 去重 |
-| `getDownloadUrl(fileId)` | 获取 MinIO 预签名下载 URL (1 小时有效) |
+| `upload(file, uploadedBy)` | 上传文件到华为云 OBS（已替代原 MinIO）, 后缀白名单校验, MD5 去重 |
+| `getDownloadUrl(fileId)` | 获取 OBS 预签名下载 URL (1 小时有效) |
 | `bindFile(bizType, bizId, fileObjectId, fileRole)` | 关联文件到业务对象 (幂等) |
 | `listBizFiles(bizType, bizId)` | 获取业务对象关联的文件列表 |
 | `deleteFile(fileId)` | 删除文件及所有关联 |
@@ -122,12 +127,15 @@ src/main/java/com/bank/branch/platform/governance/
 
 | Controller | 路径 | 鉴权 | 说明 |
 |------------|------|------|------|
-| DictController | `/api/sys/dicts/` (公开), `/api/admin/sys/dicts` (CRUD) | `@BizAuth(SYS_CONFIG, CONFIG/READ)` | 字典管理 |
+| DictController | `GET /api/sys/dicts`, `GET /api/sys/dicts/{dictType}/items` | 公开只读 | 字典类型列表 + 字典项查询 |
+| AdminDictController | `POST/PUT/DELETE /api/admin/sys/dicts`, `PUT /api/admin/sys/dicts/{id}/status` | `@BizAuth(SYS_CONFIG, CONFIG)` | 字典增删改 + 启停 |
 | ConfigController | `/api/admin/sys/configs` (分页, 更新) | `@BizAuth(SYS_CONFIG, CONFIG/READ)` | 系统 KV 配置 |
-| CalendarController | `/api/admin/sys/calendar` (获取年份, 切换, 初始化) | `@BizAuth(SYS_CONFIG, CONFIG/READ)` | 工作日历管理 |
+| CalendarController | `/api/admin/sys/calendar` (获取年份, 切换, 初始化, 导入) | `@BizAuth(SYS_CONFIG, CONFIG/READ)` | 工作日历管理 |
+| PublicCalendarController | `GET /api/sys/calendar?year=&month=` | 公开只读 | 按月查询日历, 无鉴权 |
 | AuditLogController | `/api/admin/audit-logs` | `@BizAuth(SYS_CONFIG, READ)` | 审计日志查询 (禁止删除/编辑) |
 | NotificationController | `/api/notifications` (列表, 未读数, 标记已读) | 无 `@BizAuth` (用户端) | 用户通知收件箱 |
-| FileController | `/api/files/upload`, `/api/files/{fileId}/download-url` | 部分鉴权 | 文件上传/下载/绑定 |
+| FileController | `/api/files/upload`, `/api/files/{fileId}/download`, `GET /api/files`, `DELETE /api/files/{fileId}` | 部分鉴权 | 按业务关联的文件上传/下载/查询/删除 |
+| AdminFileController | `GET /api/admin/sys/files` (分页) | `@BizAuth(SYS_CONFIG, READ)` | 管理后台全局文件列表 |
 | JobController | `/api/admin/sys/jobs` (列表, 日志, 触发, 暂停, 恢复) | `@BizAuth(SYS_CONFIG)` | 定时任务管理 |
 | SqlProbeController | `/api/admin/sql-probe/execute`, `/api/admin/sql-probe/history` | `@BizAuth(SYS_CONFIG, EXECUTE_SQL/READ)` | 受限只读 SQL 查询 + 全量审计 |
 
@@ -140,7 +148,7 @@ src/main/java/com/bank/branch/platform/governance/
 | `sys_calendar_day` | SysCalendarDay | 工作日历天 (day 为主键, is_workday: 1/0) |
 | `audit_log` | AuditLog | 审计日志 (immutable, 无 updated_time 字段) |
 | `user_notification` | UserNotification | 用户通知收件箱 (title, content TEXT, is_read) |
-| `file_object` | FileObject | MinIO 文件元数据 (fileName, fileSize, fileType, md5Hash) |
+| `file_object` | FileObject | OBS 文件元数据 (fileName, fileSize, fileType, md5Hash) |
 | `biz_file_rel` | BizFileRel | 业务-文件关联 (biz_type + biz_id + fileObjectId 唯一, M:N) |
 | `sys_job_conf` | SysJobConf | 定时任务定义 (jobKey 唯一, cronExpr, status) |
 | `sys_job_run_log` | SysJobRunLog | 任务执行记录 (triggerType: SCHEDULED/MANUAL, status: RUNNING/SUCCESS/FAILED) |
@@ -156,9 +164,11 @@ src/main/java/com/bank/branch/platform/governance/
 
 | 配置类 | 说明 |
 |--------|------|
-| `GovCacheConfig` | 定义 `RedisTemplate<String, Object>` (String key 序列化, JSON value 序列化), `@ConditionalOnMissingBean` 避免与其他模块冲突 |
-| `MinioConfig` | 创建 `MinioClient` bean (从 `minio.endpoint`, `minio.access-key`, `minio.secret-key`, `minio.bucket` 读取) |
-| `QuartzConfig` | V1.6 引入：定义 `SchedulerFactoryBeanCustomizer`，注册 `JobExecutionLogger` 为全局 `JobListener`；`JobService.syncJobsOnStartup` 在 `ApplicationReadyEvent` 后扫描 `sys_job_conf` 表批量同步 JobDetail / Trigger 到 Quartz |
+| `MemoryCacheService` | Caffeine 内存缓存服务 (`get`/`put`/`evict`)，供 Dict/Config/Calendar Service 使用，替代原 `GovCacheConfig`（`RedisTemplate`）；`maximumSize=10000`、全局 `expireAfterWrite=1 小时`，`put` 方法保留 `ttl` 入参兼容原调用签名但不区分 per-entry TTL |
+| `AutowiringSpringBeanJobFactory` | 继承 `SpringBeanJobFactory`，Quartz 反射创建 Job 实例后补齐 `@Autowired` 字段注入 |
+| `QuartzConfig` | V1.6 引入：注册 `AutowiringSpringBeanJobFactory` 为 JobFactory + `JobExecutionLogger` 为全局 `JobListener`（通过 `SchedulerFactoryBeanCustomizer`）；`JobService.syncJobsOnStartup` 在 `ApplicationReadyEvent` 后扫描 `sys_job_conf` 表批量同步 JobDetail / Trigger 到 Quartz |
+
+> `MinioConfig`（`MinioClient` bean）已不存在；文件存储改由 `storage/ObsStorageClient` 直接管理华为云 OBS 连接（懒连接：`@PostConstruct` 只构造客户端，首次 put/get 才真正发起网络请求）。
 
 ## Quartz 集群调度（V1.6 引入）
 

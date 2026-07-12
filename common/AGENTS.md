@@ -1,3 +1,6 @@
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
+
 # common/AGENTS.md
 
 本文件为 `common` 模块提供上下文说明。
@@ -44,6 +47,8 @@ common-web (基础)
 | `PageRequest` | 分页入参 (pageNo, pageSize, sortBy, sortDir) |
 | `PageResult<T>` | 分页出参 (pageNo, pageSize, total, records) |
 | `RequestValidator` | 手动 JSR-303 校验工具 |
+| `LockManager` / `JdbcLockManager` | 分布式锁 (`PT_LOCK` 表 + `SELECT FOR UPDATE`，去 Redis 后自建，CAS 释放防误删) |
+| `SidecarHttpClient` | 边车 (银行 ESF 网关) HTTP 客户端，支持 JSON(11002)/SOAP(11003) 调用，自动拼流水号 |
 
 ### common-trace (`com.bank.branch.platform.common.trace`)
 
@@ -98,6 +103,7 @@ MyBatis 拦截器、审计字段自动填充、Druid 配置。
 | `AuditFieldFiller` | MyBatis 拦截器, 自动填充 created_by, created_time, updated_by, updated_time |
 | `SlowSqlInterceptor` | MyBatis 拦截器, 慢 SQL 检测 (默认 5000ms, 可通过 `platform.slow-sql-threshold-ms` 配置) |
 | `DruidConfig` | 标记配置类, 实际 Druid 配置来自 `spring.datasource.druid.*` |
+| `MybatisPlusConfig` | MyBatis-Plus 核心配置 (`MybatisPlusInterceptor` + 分页插件)，与老三个拦截器正交并存，新增功能统一走 MyBatis-Plus `BaseMapper` |
 
 ## 自动配置
 

@@ -57,10 +57,10 @@ src/main/java/com/bank/branch/platform/bizapp/
 ├── listener/         # 工作流事件监听 (2 个，Phase 3 改造)
 │   ├── LoanWorkflowListener.java      # ProcessCompletedEvent → 贷款状态更新
 │   └── SupportWorkflowListener.java   # ProcessCompletedEvent → 支持状态更新（含 REJECTED 分支）
-├── mapper/           # MyBatis Mapper (2 个接口 + XML)
+├── mapper/           # MyBatis-Plus Mapper (2 个接口 extends BaseMapper + XML 自定义 SQL)
 │   ├── LoanApplyMapper (+ LoanApplyMapper.xml)
 │   └── SupportRequestMapper (+ SupportRequestMapper.xml，Phase 3 新增 conditionalUpdateStatus)
-└── service/          # 业务逻辑 (8 个)
+└── service/          # 业务逻辑 (9 个)
     ├── BizStateMachine.java              # 统一状态机 (Loan + Support)
     ├── BizNoGenerator.java               # 编号生成 (LA/SR+日期+序号)
     ├── LoanService.java                  # 资产投放全流程
@@ -114,8 +114,10 @@ src/main/java/com/bank/branch/platform/bizapp/
 
 | 表 | 实体 | 说明 |
 |----|------|------|
-| `loan_apply` | LoanApply | 资产投放申请 (applyNo, custId, creditAmount, status, businessKey=LOAN:{id}) |
-| `support_request` | SupportRequest | 中场支持申请 (requestNo, submitGroupId, productId, supportDeptId, assignedEmpId, status, businessKey=SUPPORT:{id}) |
+| `LOAN_APPLY` | LoanApply | 资产投放申请 (applyNo, custId, creditAmount, status, businessKey=LOAN:{id}) |
+| `SUPPORT_REQUEST` | SupportRequest | 中场支持申请 (requestNo, submitGroupId, productId, supportDeptId, assignedEmpId, status, businessKey=SUPPORT:{id}) |
+
+> 表名现已全大写（MyBatis-Plus 迁移后与 `@TableName` 注解对齐），2 个 Mapper 均已 `extends BaseMapper`，单条 CRUD 由 BaseMapper 提供，`*Mapper.xml` 仅保留分页/统计等自定义 SQL。
 
 ## 关键设计
 

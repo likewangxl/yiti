@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-26 | Updated: 2026-04-26 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
 
 # bootstrap
 
@@ -8,15 +8,17 @@ Spring Boot 启动入口，唯一的应用装配器。负责运行时组件扫�
 
 **基础包名**: `com.bank.branch.platform`
 **Maven 坐标**: `com.bank.branch.platform:bootstrap`
-**配置文件**: 4 个 profile（dev / test / flowable-e2e / flowable-real-env）
+**配置文件**: 5 个 profile（dev / test / flowable-e2e / flowable-real-env / lead-e2e）
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `src/main/java/com/bank/branch/platform/BranchPlatformApplication.java` | Spring Boot 启动入口（`@SpringBootApplication`） |
-| `src/main/java/com/bank/branch/platform/config/BootstrapMyBatisConfig.java` | 跨模块 MapperScan（注册全部 8 个业务模块的 mapper 包） |
+| `src/main/java/com/bank/branch/platform/config/BootstrapMyBatisConfig.java` | 跨模块 MapperScan（注册全部业务模块的 mapper 包） |
 | `src/main/java/com/bank/branch/platform/config/JacksonConfig.java` | Jackson ObjectMapper 自定义（JavaTimeModule + 时间戳） |
+| `src/main/java/com/bank/branch/platform/config/SpaForwardConfig.java` | 前后端一体部署的 SPA 路由回退（history 模式深链接 → index.html，`/api/**` 与带扩展名资源不回退） |
+| `src/main/java/com/bank/branch/platform/config/SpaEntryController.java` | 路径式 `/login` 302 重定向到 hash 登录页 `/#/login` |
 | `src/main/java/com/bank/branch/platform/bridge/PerformanceMetricApiBridge.java` | Portal ↔ Performance DIP 桥（实现 portal.adapter.MetricApi） |
 | `src/main/resources/application.yml` | 主配置（MySQL+Druid / Redis Session / Flowable / MyBatis / Knife4j） |
 | `src/main/resources/application-dev.yml` | 开发环境（Druid 监控 / CORS / DEBUG 日志） |
@@ -26,7 +28,7 @@ Spring Boot 启动入口，唯一的应用装配器。负责运行时组件扫�
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/main/java/com/bank/branch/platform/config/` | 启动配置（BootstrapMyBatisConfig / JacksonConfig） |
+| `src/main/java/com/bank/branch/platform/config/` | 启动配置（BootstrapMyBatisConfig / JacksonConfig / SpaForwardConfig / SpaEntryController） |
 | `src/main/java/com/bank/branch/platform/bridge/` | DIP 桥接（Portal MetricApi → Performance MetricApi） |
 | `src/test/java/com/bank/branch/platform/it/` | 集成测试（SmokeTest / CrossModuleApiTest / FullAuthChainTest / Flowable E2E / 各模块 IT） |
 | `src/test/java/com/bank/branch/platform/it/config/` | 测试配置（TestMockConfig / TestSecurityConfig / FlowableE2ETestConfig） |
@@ -42,22 +44,22 @@ Spring Boot 启动入口，唯一的应用装配器。负责运行时组件扫�
 
 ### Testing Requirements
 - 集成测试从 bootstrap 运行（全模块上下文）
-- 测试 profile 隔离：`test`（H2）→ `flowable-e2e`（H2 LEGACY + Flowable）→ `flowable-real-env`（MySQL+Redis+Flowable）
+- 测试 profile 隔离：`test`（H2）→ `flowable-e2e`（H2 LEGACY + Flowable）→ `flowable-real-env`（MySQL+Redis+Flowable）→ `lead-e2e`（`LeadWorkflowE2EIT` 专用）
 - SmokeTest 验证应用上下文能正常加载
 
 ### Common Patterns
 - 组件扫描从 `com.bank.branch.platform` 根包自动发现所有模块 Bean
 - 无 `@ComponentScan` 覆盖，依赖 Spring Boot 默认行为
-- 4 个 Spring profile 分层隔离（dev / test / flowable-e2e / flowable-real-env）
+- 5 个 Spring profile 分层隔离（dev / test / flowable-e2e / flowable-real-env / lead-e2e）
 
 ## Dependencies
 
 ### Internal
-- 依赖所有项目模块: `common-*` (5) + `auth-permission-center` + `system-governance-center` + `workflow-center` + `portal-content-center` + `customer-marketing-center` + `business-application-center` + `performance-engine-center` + `report-analytics-center`
+- 依赖所有项目模块: `common-*` (5) + `auth-permission-center` + `system-governance-center` + `workflow-center` + `portal-content-center` + `customer-marketing-center` + `business-application-center` + `performance-engine-center` + `report-analytics-center` + `soap-gateway-center`（callpu 渠道网关，新增模块，详见 `soap-gateway-center/CLAUDE.md`）
 
 ### External
 - `spring-boot-starter-web` — Spring Boot Web
-- `spring-boot-starter-data-redis` + `spring-session-data-redis` — Redis Session
+- `spring-session-jdbc` — Session 落 MySQL（`SPRING_SESSION` 表；已去 Redis，`spring-boot-starter-data-redis` 现仅 test scope）
 - `mysql-connector-j` + `Druid` — 数据库连接池
 - `knife4j-openapi3-jakarta` — API 文档
 - `flowable-spring-boot-starter` — 工作流引擎

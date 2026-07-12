@@ -7,6 +7,18 @@
 > 等内容仅作为**历史档案**保留，不再代表当前可执行/可启用的能力；相关脚本与测试基类均已从源码中删除。
 > 新增 schema 变更请直接以 SQL 在目标库执行，**禁止**重新引入 Flyway。
 
+> ⚠️ **2026-05-20 起项目已去 Redis**（源码核实：`config/PerformanceRedisConfig` 现为
+> `ConcurrentMapCacheManager` JVM 内存缓存；`facade/SysControlFacade`、`listener/KpiCascadeListener`、
+> `service/DataTaskService` 的分布式锁/防重均已改用 common-web `LockManager`/`JdbcLockManager`
+> —— 基于 `PT_LOCK` 表 + `SELECT FOR UPDATE`，非 Redis SETNX；Session 全局改走 Spring Session JDBC
+> （MySQL `SPRING_SESSION` 表）；本模块 pom.xml 的 `spring-boot-starter-data-redis` 现仅 `test` scope，
+> 供遗留并发 IT 用 testcontainers-redis 自启容器）。
+> 本文件下方 V1.2~V1.7 历史变更日志中提到的 "Redis 分布式锁" "Redis SETNX 30s 防重" "Redis 缓存"
+> "ShedLock"（V1.6 已删除其全部痕迹）等描述均为**历史档案**，记录当时的真实交付状态，
+> 但均已被上述机制替换；现状请以本文档「环境依赖」「关键设计原则」章节与同目录 `AGENTS.md` 为准。
+> 部分模块源码内部注释（如 `SysControlFacade`/`KpiCascadeListener`/`DataTaskService` 的 Javadoc）
+> 仍留有 "Redis" 字样未同步更新，属源码文档债务，不代表运行时真实依赖。
+
 ## 模块概述
 
 **performance-engine-center** 是绩效计算中心（核心域），为整个平台提供指标库管理、KPI 方案设计、目标管理、客户分配关系查询、数据版本控制、调整审批流程、异步导出、数据范围注入等能力。
@@ -176,6 +188,10 @@ Facade 层 UOE 清零，**新增**架构测试 `NoUoeInFacadeTestsArchTest` 守�
 
 ## 包结构
 
+> ⚠️ **本节为 V1.0~V1.3 交付时的历史快照**，标注的接口数/DTO 数/错误码数/Controller 数等均为当时值，
+> 未随后续版本（含 eval 子域、指标级 Quartz 调度、待处理任务等）滚动更新。当前实际包结构与文件清单
+> 请以同目录 `AGENTS.md` 的「Key Files」「Subdirectories」表为准（更贴近代码现状）。
+
 ```
 src/main/java/com/bank/branch/platform/performance/
 ├── api/                    # 7 个对外 Api 接口 + 14 DTO + 1 Cmd
@@ -187,7 +203,7 @@ src/main/java/com/bank/branch/platform/performance/
 │   ├── DataTaskApi.java        (1 方法, V1.1 交付)
 │   ├── AllocApi.java           (10 方法, 全部 V1.0 实现)
 │   └── dto/ (14 DTO + cmd/1 Cmd)
-├── config/                 # Spring 配置 (AutoConfig / MyBatis / Redis)
+├── config/                 # Spring 配置 (AutoConfig / MyBatis / Redis, 2026-05-20 去 Redis 后 Redis 相关配置已替换为 JVM 内存缓存, 见下文「环境依赖」)
 ├── controller/             # REST 控制器 (V1.0/V1.1: 8 个 Controller, 35 端点)
 ├── facade/                 # 对外 Api 实现 + 分布式锁 (Facade 申请/释放)
 ├── service/                # 业务逻辑 (V1.1: 含 MetricCalcService/KpiCalcService/PerfImportService/HistoryRecalcService)
@@ -253,15 +269,34 @@ V1.3 相关架构守护：
 
 **Task A2 已结清（2026-04-22）**：03/04/05 三份文档的主键类型已统一修订为 `String (varchar(32))`，技术债已结清。
 
-### 4. 配置表缓存策略
+### 4. 配置表缓存策略（2026-05-20 去 Redis 后现状）
 
-Redis 缓存 `perf:metric_def:{code}`, `perf:kpi_scheme:{id}`, `perf:target_plan:{id}`, `perf:sys_control:{scopeDim}` 等。所有 evict 通过 `TransactionSynchronizationManager.registerSynchronization` 的 `afterCommit` 回调触发，避免事务前脏数据污染缓存。
+> 原 v1.2 设计为 Redis 缓存（5 min TTL，跨实例共享）；2026-05-20 去 Redis 后改为 JVM 内存缓存，
+> 历史 Redis 细节见文件顶部档案标注。
 
-### 5. Redis 锁在 Facade 层申请 (v1.2)
+`config/PerformanceRedisConfig`（类名沿用未改，实际是 JVM 内存缓存配置）声明 `ConcurrentMapCacheManager`，
+预注册 `perf:kpi_scheme` / `perf:metric_def` / `perf:metric_def:list` / `perf:target_plan` 4 个 cache 名，
+`@Cacheable`/`@CacheEvict` 注解全部保留不变。所有 evict 仍通过 `TransactionSynchronizationManager.registerSynchronization`
+的 `afterCommit` 回调触发，避免事务前脏数据污染缓存；区别是 JVM 内存缓存无 TTL、且每实例独立
+（多实例场景下写实例 evict 后仅本实例立即生效，其余实例的旧缓存条目要等下次自然过期式 evict 才会更新，
+配置表低频写场景可接受此弱一致性）。
+
+### 5. 分布式锁在 Facade 层申请（LockManager/JdbcLockManager，2026-05-20 去 Redis 后现状）
 
 Spring `@Transactional` 方法内无法在 "事务外" 申请锁。正确分层：
-- `SysControlFacade.switchVersion` → 申请 Redis 锁 → 调 Service `@Transactional` 方法 → finally 释放锁
+- `SysControlFacade.switchVersion`/`rollback` → 申请分布式锁 → 调 Service `@Transactional` 方法 → finally 释放锁
 - `MetricApiImpl.allocSlot`（槽位分配）同理
+- `KpiCascadeListener.triggerScheme`（KPI 联动防重）、`DataTaskService.report`（外部上报幂等）同样在方法体内
+  申请/释放分布式锁，锁粒度分别是 `kpi:cascade:{schemeCode}:{cycleDate}:{version}` / `perf:data_task:{taskId}`
+
+> 原 v1.2 设计锁实现是 Redis（`SETNX` + Lua compare-and-del）；2026-05-20 去 Redis 后，
+> 底层实现统一改为 common-web 的 `LockManager`/`JdbcLockManager`——基于 `PT_LOCK` 表
+> （`LOCK_KEY`/`HOLDER`/`ACQUIRED_AT`/`EXPIRES_AT`）+ `SELECT ... FOR UPDATE` 行锁 + 独立事务
+> `Propagation.REQUIRES_NEW`（`tryLock`/`unlock` 各自短事务，不污染业务事务），语义（tryLock 失败即拒绝、
+> TTL 到期可被其他线程强占、finally 释放）与原 Redis 实现等价，调用方 API（`tryLock(key, holder, ttlMs)`/
+> `unlock(key, holder)`）不变，故 Facade/Listener/Service 层代码结构未变。
+> **注意**：上述三处源码类的 Javadoc 注释仍留有 "Redis 分布式锁"/"Redis SETNX" 字样未同步更新，
+> 属源码文档债务（非本文档范围），实际运行时依赖已是 `LockManager`。
 
 ### 6. 并发测试例外策略
 
@@ -339,12 +374,27 @@ V1.0 使用 `BizType.PERF_CONFIG`（粗粒度）+ PT_RESOURCE ID `P_PERF_*`（�
 
 ## 环境依赖
 
-- MySQL 8.0 本地实例：`jdbc:mysql://localhost:3306/onepl`（root/123456）
-- 测试 IT 数据库：`onepl_test_bootstrap`（V1.10 合一后唯一测试库；原 onepl_test_v103 废弃）
-- Redis 6.X 本地实例：`localhost:6379`
-- 13 张 perf_* 表已在 onepl 库部署（来自 `docs/schema/ddl-performance.sql`）
-- `pt_resource` 已注册 35 条 `P_PERF_*` 资源（V1_0_1 脚本）
-- `sys_dict_item` 已注册 39 条 `PERF_*` 字典项（V1_0_2 脚本）
+> ⚠️ 本节 2026-07-12 按源码/配置核实校准：开发库连接串与 Redis 相关描述已过时，下方为当前事实
+> （历史 onepl/123456/Redis 描述见文件顶部档案标注，不再准确）。
+
+- 后端服务端口：**18081**（`bootstrap/src/main/resources/application.yml` `server.port`），
+  Knife4j UI：`http://localhost:18081/doc.html`
+- MySQL 8.0 本地实例：`jdbc:mysql://localhost:3306/yiti`（root/djdev；`onepl`/`123456` 是历史遗留口径，
+  当前 `bootstrap/src/main/resources/application.yml` 实际连接串已是 `yiti`）
+- 测试 IT 数据库：`onepl_test_bootstrap`（V1.10 合一后唯一测试库；原 onepl_test_v103 废弃；
+  V1.13 # 1 起 `performance-engine-center/src/test/resources/application-test.yml` 从 `yiti` 开发库
+  解绑改走此库，与其余模块 IT 一致）
+- **2026-05-20 起项目已去 Redis**：本模块不再依赖 Redis 服务本身——
+  - 缓存：`config/PerformanceRedisConfig` 改为 `ConcurrentMapCacheManager`（JVM 内存缓存）
+  - 分布式锁/防重：`LockManager`/`JdbcLockManager`（`PT_LOCK` 表 + `SELECT FOR UPDATE`）
+  - Session：全局改走 Spring Session JDBC（MySQL `SPRING_SESSION` 表）
+  - `spring-boot-starter-data-redis` 在本模块 `pom.xml` 仅 `test` scope，配合 `testcontainers-redis`
+    供 `SysControlConcurrentIT`/`DataTaskServiceIdempotentIT` 等遗留并发 IT 自启容器使用，
+    **不代表生产/开发环境仍需本地 Redis 实例**
+- perf_* 表已在 `yiti` 库部署（V1.0 基线 13 张，来自 `docs/schema/ddl-performance.sql`；
+  当前连同 eval 子域共约 30 张，完整清单见同目录 `AGENTS.md`「Database Tables」）
+- `pt_resource` 已注册 35 条 `P_PERF_*` 资源（V1_0_1 脚本，为 V1.0 基线；后续版本新增资源见各版本变更日志）
+- `sys_dict_item` 已注册 39 条 `PERF_*` 字典项（V1_0_2 脚本，为 V1.0 基线）
 
 ## 开发 Checklist（新增功能时）
 
@@ -673,8 +723,10 @@ SELECT COUNT(*), COUNT(DISTINCT created_by)
 ### V1.3 启用前置检查（DDL 历史档案）
 
 > ⚠️ **本节已作为历史档案保留**：项目废弃 Flyway 后，原 V1_2_5 / V1_3_0 等 SQL 文件已删除，
-> 当期 schema 已在 onepl 生产库稳定运行。新环境部署直接 `mysqldump` onepl 库即可，无需任何
-> 版本化预检流程。下面留存的预检 SQL 仍可作为"已有库做幂等修复"时的参考。
+> 当期 schema 已在 `yiti` 库稳定运行（2026-07-12 核实：`onepl` 是本文档历史遗留口径，
+> 当前开发/生产 schema 权威源是 `yiti`，对应 `docs/schema/ddl-yiti-prod-golive.sql`）。
+> 新环境部署直接 `mysqldump` `yiti` 库即可，无需任何版本化预检流程。
+> 下面留存的预检 SQL 仍可作为"已有库做幂等修复"时的参考。
 
 **1. perf_metric_def NULL deleted 历史数据清理（已应用）**
 

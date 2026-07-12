@@ -1,3 +1,6 @@
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
+
 # portal-content-center/AGENTS.md
 
 本文件为 `portal-content-center` 模块提供上下文说明。
@@ -30,15 +33,22 @@
 src/main/java/com/bank/branch/platform/portal/
 ├── api/              # 对外 API 接口
 │   └── dto/          # 请求/响应 DTO
-├── controller/       # REST 控制器
+├── adapter/          # 跨模块适配器 (DataScopeAdapter / MetricAdapter+MetricApi / WorkflowQueryAdapter)
+├── controller/       # REST 控制器 (含担保 GuaranteeController / 公告 AnnouncementController)
+├── convert/          # 手动 DTO 转换器
+├── event/            # Spring 内部事件
 ├── facade/           # API 实现
-├── service/          # 业务逻辑
+├── job/quartz/       # Quartz Job (GuaranteeSyncJob —— 担保信息每日同步)
+├── listener/         # 事件监听器
+├── service/          # 业务逻辑 (含担保 GuaranteeService/GuaranteeSyncService/GuaranteeExportService、公告 AnnouncementService、通讯录导入 AddrbookImportService)
 ├── mapper/           # MyBatis Mapper
-├── entity/           # 数据库实体
+├── entity/           # 数据库实体 (含担保 ZhGuaranteeInfo/CcmsBusinessContract、公告 Announcement/AnnouncementFile)
 ├── enums/            # 错误码枚举 (PortalErrorCode, PORTAL-{HTTP_STATUS}{SEQ})
 ├── config/           # Spring 配置 (PortalCacheConfig 等)
-└── exception/        # 模块异常
+└── typehandler/      # MyBatis 类型处理器
 ```
+
+> 注：模块内无独立 `exception/` 包，异常统一走 `common-web` 的 `BizException`。
 
 ## 第三方依赖
 

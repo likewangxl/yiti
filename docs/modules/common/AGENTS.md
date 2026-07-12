@@ -1,3 +1,6 @@
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-04-14 | Updated: 2026-07-12 -->
+
 # docs/modules/common/AGENTS.md
 
 本文件约束 `docs/modules/common/` 下的基础设施文档，统一使用 UTF-8。

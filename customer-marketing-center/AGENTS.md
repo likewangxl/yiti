@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-26 | Updated: 2026-04-29 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
 
 # customer-marketing-center
 
@@ -9,7 +9,7 @@
 **基础包名**: `com.bank.branch.platform.customer`
 **Maven 坐标**: `com.bank.branch.platform:customer-marketing-center`
 **对外契约**: 5 个 `*Api` 接口 + 36 个 REST 端点（含 P1A 三个新增端点）。
-**当前版本**: V1.0 + P1 三批改动（2026-04-29 P1A/P1B/P1C 已交付）
+**当前版本**: V1.0 + P1 三批改动 + V1.8 Quartz 迁移（2026-05-01 已交付，详见下方 V1.8 章节）
 
 ## Key Files
 
@@ -21,6 +21,7 @@
 | `src/main/java/com/bank/branch/platform/customer/api/ClaimApi.java` | 认领查询 API（6 方法） |
 | `src/main/java/com/bank/branch/platform/customer/api/TouchTaskQueryApi.java` | 触达任务查询 API（8 方法） |
 | `src/main/java/com/bank/branch/platform/customer/config/CustomerCacheConfig.java` | 缓存 Key/TTL 常量 + 防雪崩抖动 |
+| `src/main/java/com/bank/branch/platform/customer/job/quartz/LeadCallbackCompensateQuartzJob.java` | V1.8 新增：线索回调补偿 Quartz Job（`org.quartz.Job` 实现，替代原 `@Scheduled`） |
 
 ## Subdirectories
 
@@ -37,6 +38,8 @@
 | `listener/` | 5 个事件监听器（WorkflowCallbackListener + LeadApprovedListener + ClaimCreatedListener 等） |
 | `dto/req/` | 18 个请求 DTO |
 | `dto/resp/` | 5 个响应 VO |
+| `job/quartz/` | 1 个 Quartz Job（V1.8 新增，`LeadCallbackCompensateQuartzJob`；`config/CustomerSchedulingConfig` 已删除，`@EnableScheduling` 归属 performance 模块） |
+| `arch/` | ArchUnit 守护测试（V1.8 新增 `NoCustomerScheduledArchTest`，禁止模块内回退使用 `@Scheduled`） |
 
 ## For AI Agents
 
@@ -51,7 +54,7 @@
 - 集成测试: MockMvc + H2（Controller 层），基类 `AbstractControllerIntegrationTest`
 - 测试配置: `CustomerTestConfiguration.java` + `application-test.yml`（H2 MySQL 兼容模式）
 - Mock 用户上下文: `@WithMockEmpContext` 注解 + `MockEmpContextExtension`
-- 当前测试数: 46 个测试文件
+- 当前测试数: 53 个测试文件（含 V1.8 新增 Quartz Job 测试 + ArchUnit 守护测试）
 
 ### Common Patterns
 - 线索审批通过 `WorkflowApi.startProcess()` 启动 Flowable 流程，`SELECT FOR UPDATE` 防并发
@@ -71,7 +74,7 @@
 ### External
 - MyBatis 3.0.3 — ORM
 - Flowable 7.0.1 — 工作流引擎（通过 workflow-center）
-- Redis 6.X — 缓存（Cache-Aside，5 分钟 TTL）
+- 缓存：`CustomerCacheConfig` 仅保留 Cache-Aside Key/TTL 常量与防雪崩抖动算法（2026-05 去 Redis 后为预留配置位，当前无缓存中间件依赖）
 
 ## Database Tables (8 张)
 
@@ -96,12 +99,20 @@
 
 **⚠ BREAKING CHANGE (P1C)**：CUST-40003 (LEAD_NOT_DRAFT) 重命名为 CUST-40301 (LEAD_EDIT_FORBIDDEN)。前端 i18n 需同步更新。完整记录见 `docs/superpowers/sessions/2026-04-29-customer-p1-three-batches-progress.md`。
 
+## V1.8 改动（2026-05-01 已交付，供 Agent 参考）
+
+`LeadCallbackCompensationService` 由 Spring `@Scheduled` 迁移到 Quartz 集群调度：
+- 新增 `job/quartz/LeadCallbackCompensateQuartzJob`；`config/CustomerSchedulingConfig` 已删除（`@EnableScheduling` 归属 `performance-engine-center`）
+- 新增 `arch/NoCustomerScheduledArchTest`（ArchUnit 守护，防止模块内回退使用 `@Scheduled`）
+- job_key=`LEAD_CALLBACK_COMPENSATE`，cron=`0 */5 * * * ?`；多实例由 `QRTZ_LOCKS` 行锁防重
+- 完整历史记录见模块 `CLAUDE.md` V1.8~V1.13 章节
+
 ## V1.0 已知技术债（P1 三批后剩余）
 
 | # | Title | Priority |
 |---|-------|----------|
 | 1 | 错误码：~~403 系列 7 条~~（P1C 已补 4 条触发 + 3 占位）；~~422 系列 8 条~~（P1B 已补 7 + 1 占位）；500 仍缺 | 中 |
-| 2 | 零 ArchUnit 守护（无 arch/ 子目录） | 中 |
+| 2 | ~~零 ArchUnit 守护~~（V1.8 已补 `arch/NoCustomerScheduledArchTest`，仅覆盖调度回退场景，非全面 ArchUnit 覆盖） | 低 |
 | 3 | 线索导入行级校验简化未实现（4 处 TODO） | 低 |
 | 4 | CROSS_ORG 审计待 @AuditLog 升级（3 处 TODO） | 低 |
 | 5 | WorkflowCallbackListener 未区分 APPROVED/REJECTED | 低 |

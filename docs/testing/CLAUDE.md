@@ -12,9 +12,11 @@
 ## 前置条件
 
 1. **MySQL** 运行中 (`localhost:3306`)
-2. **Redis** 运行中 (`localhost:6379`)
+2. ~~Redis~~ 不再需要 —— 2026-05 起主代码已去 Redis（Session 走 Spring Session JDBC，落 MySQL `SPRING_SESSION` 表）
 3. 数据库 `onepl` 已创建
 4. Bootstrap 服务已启动: `mvn spring-boot:run`（在 bootstrap 目录）
+
+> **与当前开发环境的差异**：`test-data.sql` / `api-test.sh` 里硬编码的连接目标是历史遗留的 `onepl` 库 + 密码 `123456`；当前 `bootstrap/src/main/resources/application.yml` 的开发环境默认已改为 `jdbc:mysql://localhost:3306/yiti`（`root`/`djdev`，见根 `CLAUDE.md`「环境配置」）。手工执行下方命令前，请按实际连接的库名/密码调整，不要照抄 `onepl`/`123456`。
 
 ## 使用步骤
 
@@ -69,3 +71,5 @@ BCrypt hash: `$2a$10$nURd20BPbYGR7t1zaKF4We6yuGFQn6Ck3jW4IcgEU2HHCSd1NO/Iy`
 dev 环境: `jdbc:mysql://localhost:3306/onepl`
 用户名: `root`
 密码: `123456`
+
+> **历史遗留说明**：以上连接信息为 `test-data.sql`/`api-test.sh` 硬编码的历史遗留值，当前实际开发库已迁移为 `yiti`（`root`/`djdev`），详见「前置条件」节说明及根 `CLAUDE.md`「环境配置」。

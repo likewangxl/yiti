@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-26 | Updated: 2026-04-26 -->
+<!-- Generated: 2026-04-26 | Updated: 2026-07-12 -->
 
 # common-db
 
@@ -18,6 +18,7 @@ MyBatis 拦截器集合：分页拦截、审计字段自动填充、慢 SQL 检�
 | `SlowSqlInterceptor.java` | MyBatis SQL 执行耗时监控，超过阈值（默认 5000ms）输出 WARN 日志含原始 SQL |
 | `DruidConfig.java` | `@Configuration` 标记类，实际配置通过 `spring.datasource.druid.*` 由 druid-spring-boot-3-starter 接管 |
 | `config/DbAutoConfiguration.java` | 自动配置（注册 PageInterceptor + AuditFieldFiller + SlowSqlInterceptor，Import DruidConfig） |
+| `config/MybatisPlusConfig.java` | MyBatis-Plus 核心配置，注册 `MybatisPlusInterceptor`（含 `PaginationInnerInterceptor`，MySQL 方言，maxLimit=100）；与老三个拦截器正交并存 |
 
 ## For AI Agents
 
@@ -26,6 +27,7 @@ MyBatis 拦截器集合：分页拦截、审计字段自动填充、慢 SQL 检�
 - `PageInterceptor` 依赖 `PageRequest` 参数出现在 Mapper 方法签名中
 - `AuditFieldFiller` 的字段名是约定的（`createdBy`, `createdTime`, `updatedBy`, `updatedTime`），新实体必须使用相同命名
 - 慢 SQL 阈值可通过 `platform.slow-sql-threshold-ms` 配置
+- 新增功能的数据库访问统一走 MyBatis-Plus（`BaseMapper` + `MybatisPlusConfig` 分页插件），老三个拦截器（PageInterceptor/AuditFieldFiller/SlowSqlInterceptor）继续对遗留 MyBatis XML 生效，两套机制并存不冲突
 
 ## Dependencies
 

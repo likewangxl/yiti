@@ -1,3 +1,6 @@
+<!-- Parent: ../AGENTS.md -->
+<!-- Generated: 2026-04-07 | Updated: 2026-07-12 -->
+
 # docs/testing/AGENTS.md
 
 本目录存放 API 集成测试相关的文件和脚本。
@@ -8,13 +11,16 @@
 |------|------|
 | `test-data.sql` | API 测试用种子数据（MySQL），包含 auth/governance/workflow 测试数据 |
 | `api-test.sh` | API 集成测试脚本（bash/curl） |
+| `interface-design-check.md` | 三模块（auth/governance/workflow）接口设计与实现一致性核对报告（核对日期 2026-04-08，逐接口对照 `03-接口设计与报文.md` 与实际 Controller/Service），历史核对记录，非持续维护文档 |
 
 ## 前置条件
 
 1. **MySQL** 运行中 (`localhost:3306`)
-2. **Redis** 运行中 (`localhost:6379`)
+2. ~~Redis~~ 不再需要 —— 2026-05 起主代码已去 Redis（Session 走 Spring Session JDBC，落 MySQL `SPRING_SESSION` 表）
 3. 数据库 `onepl` 已创建
 4. Bootstrap 服务已启动: `mvn spring-boot:run`（在 bootstrap 目录）
+
+> **与当前开发环境的差异**：`test-data.sql` / `api-test.sh` 里硬编码的连接目标是历史遗留的 `onepl` 库 + 密码 `123456`；当前 `bootstrap/src/main/resources/application.yml` 的开发环境默认已改为 `jdbc:mysql://localhost:3306/yiti`（`root`/`djdev`，见根 `CLAUDE.md`「环境配置」）。手工执行下方命令前，请按实际连接的库名/密码调整，不要照抄 `onepl`/`123456`。
 
 ## 使用步骤
 
