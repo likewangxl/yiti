@@ -25,11 +25,12 @@ class RptErrorCodeTest {
 
     @Test
     void shouldHaveExactly30ErrorCodes_AfterM5Extension() {
-        // 44 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
+        // 45 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
         // + NOTICE_NOT_FOUND 1（此前断言遗漏该项，实际已是 33，此次一并订正 32→33）
         // + 大屏子域 9 条（RPT-43001~43009）= 42
         // + FIX-1 错误码语义分离 2 条（RPT-43010 缺必填上下文参数 / RPT-43011 周期参数非法）= 44
-        assertThat(RptErrorCode.values()).hasSize(44);
+        // + 画布保存冲突 RPT-43012 = 45
+        assertThat(RptErrorCode.values()).hasSize(45);
     }
 
     @Test
@@ -87,6 +88,8 @@ class RptErrorCodeTest {
         // FIX-1 错误码语义分离：43010 缺必填上下文参数 / 43011 周期参数非法
         assertThat(RptErrorCode.SCREEN_CTX_PARAM_MISSING.getCode()).isEqualTo("RPT-43010");
         assertThat(RptErrorCode.SCREEN_PERIOD_INVALID.getCode()).isEqualTo("RPT-43011");
+        // 一期画布设计器新增:43012 画布保存冲突(真乐观锁)
+        assertThat(RptErrorCode.SCREEN_CANVAS_CONFLICT.getCode()).isEqualTo("RPT-43012");
     }
 
     @Test
@@ -105,7 +108,7 @@ class RptErrorCodeTest {
             .distinct()
             .count();
         assertThat(distinct)
-            .as("RPT 44 条错误码必须唯一无重复")
-            .isEqualTo(44);
+            .as("RPT 45 条错误码必须唯一无重复")
+            .isEqualTo(45);
     }
 }
