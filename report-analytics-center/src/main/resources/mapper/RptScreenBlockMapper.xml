@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.report.mapper.RptScreenBlockMapper">
+
+    <select id="countByDsId" resultType="int">
+        SELECT COUNT(*)
+          FROM RPT_SCREEN_BLOCK
+         WHERE JSON_EXTRACT(bind_json, '$.dsId') = #{dsId}
+    </select>
+
+</mapper>
