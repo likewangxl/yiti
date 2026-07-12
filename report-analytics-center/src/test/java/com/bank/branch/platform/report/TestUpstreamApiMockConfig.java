@@ -3,11 +3,13 @@ package com.bank.branch.platform.report;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.TouchTaskQueryApi;
 import com.bank.branch.platform.governance.api.AuditApi;
 import com.bank.branch.platform.governance.api.DictApi;
 import com.bank.branch.platform.governance.api.FileApi;
+import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.MetricApi;
 import org.mockito.Mockito;
@@ -77,5 +79,22 @@ public class TestUpstreamApiMockConfig {
     @Bean
     public FileApi fileApi() {
         return Mockito.mock(FileApi.class);
+    }
+
+    /**
+     * AllocPreviewService（业绩调整分配预览）依赖，补齐兜底 mock（原漏配，导致
+     * 任何启用完整 ReportTestApplication 上下文的测试装配阶段找不到该 Bean 而失败）.
+     */
+    @Bean
+    public AllocApi allocApi() {
+        return Mockito.mock(AllocApi.class);
+    }
+
+    /**
+     * DynamicQueryServiceImpl 依赖，补齐兜底 mock（原漏配，同上 AllocApi 场景）.
+     */
+    @Bean
+    public UserApi userApi() {
+        return Mockito.mock(UserApi.class);
     }
 }
