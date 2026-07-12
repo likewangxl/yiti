@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequestMapping("/api/screen/view")
-@Tag(name = "大屏-运行时", description = "整屏配置读取（屏+区块+PROVINCE 点位）")
+@Tag(name = "大屏-运行时", description = "渲染包读取（发布态/草稿态 + PROVINCE 点位；preview=draft 读草稿）")
 @RequiredArgsConstructor
 public class ScreenViewController {
 
@@ -34,9 +34,11 @@ public class ScreenViewController {
     public ResponseWrapper<ScreenRenderRespDTO> view(
             @PathVariable String screenCode,
             @RequestParam(required = false) String preview) {
-        // preview=draft:草稿预览。@BizAuth READ + 登录已保证会话有效;
-        // 屏管理权限的进一步收敛:前端仅从管理端设计器(R_RPT_SCR_CV_* 菜单门禁)入口触发预览,
-        // 且草稿内容非敏感(3 屏为开发测试态)。若后续草稿承载敏感数据,再补独立管理端渲染端点(见 §风险)。
+        // preview=draft:草稿预览。如实描述现状:后端目前仅执行 @BizAuth(REPORT, READ)校验,
+        // 与 published 分支同一权限位,未额外校验"屏管理权限"——"前端仅从管理端设计器
+        // (R_RPT_SCR_CV_* 菜单门禁)入口触发预览"只是前端约定,不是服务端强制边界。
+        // 该已知缺口本期可接受(草稿内容当前非敏感,3 屏均为开发测试态);收敛计划留 Task 10/V1.1:
+        // 若后续草稿承载敏感数据,需补独立管理端渲染端点做服务端强校验。
         String state = "draft".equalsIgnoreCase(preview) ? "draft" : "published";
         return ResponseWrapper.success(configService.getRenderByCode(screenCode, state));
     }

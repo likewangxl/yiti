@@ -202,6 +202,15 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         d.setScreenCode(s.getScreenCode());
         d.setScreenName(s.getScreenName());
         d.setViewLevel(s.getViewLevel());
+        // mapPoints 沿用旧 getViewByCode 的实时查询语义:仅 PROVINCE 屏现查现填,不烘焙进渲染包,
+        // published/draft 两态一致(点位数据独立于画布双态)。
+        if ("PROVINCE".equals(s.getViewLevel())) {
+            d.setMapPoints(pointMapper.selectList(new LambdaQueryWrapper<RptScreenMapPoint>()
+                            .eq(RptScreenMapPoint::getStatus, "ACTIVE"))
+                    .stream().map(this::toPointDto).collect(Collectors.toList()));
+        } else {
+            d.setMapPoints(List.of());
+        }
         boolean draft = "draft".equalsIgnoreCase(state);
         if (draft) {
             // 草稿态:临时合成一个只含 components 的渲染包(bindSnapshots 由前端设计器内已持有 block,
