@@ -31,4 +31,12 @@ describe('widgets 注册表', () => {
     expect(disabled).toBeTruthy(); // 前提:9 图表元数据里确有占位类型,否则本用例区分力为零
     expect(() => newComponentFromMeta('ChartWidget', disabled.innerType)).toThrow('该图表类型尚未启用');
   });
+  it('MapCenter(省级屏地图,复用运行时 MapCenter.vue)已登记 findWidget/findAttr,但不进入可拖拽素材面板', () => {
+    // materialMetas 驱动 ComponentPanel 的拖拽入口;MapCenter 的 props 契约是 mapPoints 数组,
+    // 与素材类 element/propValue 完全不同,一期不开放拖拽创建,故意不并入 materialMetas(仍 5 个)。
+    expect(findWidget('MapCenter')).toBeTruthy();
+    expect(findAttr('MapCenter')).toBeTruthy();
+    expect(materialMetas.length).toBe(5);
+    expect(materialMetas.some(m => m.component === 'MapCenter')).toBe(false);
+  });
 });

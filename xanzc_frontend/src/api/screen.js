@@ -47,8 +47,11 @@ export function saveMapPoints(points) {
 }
 
 // ===== 大屏运行时 =====
-export function getScreenView(screenCode) {
-  return call('get', `/screen/view/${screenCode}`, {}, null);
+// preview='draft' 读草稿包(需登录 + REPORT/READ 权限,详见 ScreenViewController);不传读发布态。
+// silent:false(默认)——整屏加载失败要提示;区块级取数走 queryScreenData 单独 silent。
+export function getScreenView(screenCode, preview) {
+  const params = preview ? { preview } : {};
+  return call('get', `/screen/view/${screenCode}`, { params }, null);
 }
 export function queryScreenData(body) {
   // silent:true —— 大屏区块取数失败不弹全局 toast，由 BlockContainer 按业务码内联展示（引导态/错误态），

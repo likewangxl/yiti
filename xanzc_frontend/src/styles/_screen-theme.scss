@@ -34,18 +34,25 @@
     width: 1920px;
     height: 1080px;
     transform-origin: center center;
-    display: flex;
-    flex-direction: column;
   }
 
+  // .scr-header 改为浮层（不再走 flex 占位）：ScreenRenderer 的渲染包画布是硬编码 1920×1080
+  // 绝对定位（与 DesignerV2 画布编辑器 CanvasCore.vue 的设计基准 1:1，WYSIWYG 契约），若 header 按
+  // 旧 flex-column 占 72px 高度会把画布挤到 .scr-stage 固定 1080px 高度之外，在多数窗口尺寸下被
+  // .screen-root 的 overflow:hidden 裁掉底部内容（真实回归，渲染层切换任务发现并修复）。
   .scr-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
     height: 72px;
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
     border-bottom: 1px solid var(--scr-border);
     box-shadow: 0 1px 12px rgba(0, 229, 255, 0.12);
+    background: linear-gradient(180deg, rgba(3, 8, 28, .55) 0%, rgba(3, 8, 28, 0) 100%);
 
     .scr-title {
       display: flex;
@@ -98,9 +105,10 @@
     }
   }
 
-  .scr-body { flex: 1; display: flex; gap: 12px; padding: 12px 16px 16px; min-height: 0; }
-  .scr-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; }
-  .scr-row { display: flex; gap: 12px; min-height: 0; }
+  // 无 padding/gap、铺满整个 1920×1080 舞台——ScreenRenderer 的画布是硬编码 1920×1080 绝对定位，
+  // 任何 padding 都会让画布坐标系相对 .scr-stage 偏移，与 DesignerV2 画布编辑器错位。
+  // 组件自身间距完全由各自 style.top/left/width/height 决定，不依赖容器 gap。
+  .scr-body { position: absolute; inset: 0; }
 
   .scr-block {
     position: relative;

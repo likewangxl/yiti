@@ -3,12 +3,15 @@
     <div class="scr-stage" :style="{ transform: `translate(-50%, -50%) scale(${scale})` }">
       <div class="scr-header">
         <span class="scr-back" @click="goBack">‹ 返回</span>
-        <span class="scr-title">{{ view?.screen?.screenName || '经营管理大屏' }}</span>
+        <span class="scr-title">{{ view?.screenName || '经营管理大屏' }}</span>
         <span class="scr-clock"><span class="scr-live-dot" /> {{ clock }}</span>
       </div>
-      <div class="scr-body" v-if="view">
-        <ScreenRenderer :screen="view.screen" :blocks="view.blocks"
-                        :map-points="view.mapPoints" :context="context" />
+      <div class="scr-body" v-if="view && view.renderPackage">
+        <ScreenRenderer :render-package="view.renderPackage" :map-points="view.mapPoints" :context="context" />
+      </div>
+      <!-- 屏从未发布时后端 renderPackageJson=null(已知行为,本期不改)——判空渲染引导态，不裸 JSON.parse(null) -->
+      <div v-else-if="view && !view.renderPackage" class="scr-guide-empty" style="margin:auto">
+        该大屏尚未发布
       </div>
       <div v-else-if="loadError" class="scr-block-err" style="margin:auto">
         大屏配置加载失败：{{ loadError }}
@@ -41,7 +44,18 @@ async function load() {
   loadError.value = '';
   view.value = null;
   try {
-    view.value = await getScreenView(route.params.screenCode);
+    const resp = await getScreenView(route.params.screenCode, route.query.preview);
+    if (resp.renderPackageJson) {
+      try {
+        resp.renderPackage = JSON.parse(resp.renderPackageJson);
+      } catch {
+        throw new Error('渲染包解析失败');
+      }
+    } else {
+      // 屏从未发布——renderPackage 留 null，交给模板判空渲染「该大屏尚未发布」引导态
+      resp.renderPackage = null;
+    }
+    view.value = resp;
   } catch (e) {
     loadError.value = e?.message || '未知错误';
   }
@@ -64,7 +78,7 @@ function goBack() {
   else router.push('/workspace');
 }
 
-watch(() => [route.params.screenCode, route.query.orgCode, route.query.empId], load);
+watch(() => [route.params.screenCode, route.query.orgCode, route.query.empId, route.query.preview], load);
 
 onMounted(() => {
   fit();
@@ -81,4 +95,11 @@ onBeforeUnmount(() => {
 
 <style lang="scss">
 @use '@/styles/screen.scss';
+
+// 「该大屏尚未发布」引导态——中性弱化文案，与 .scr-block-err 的报错红区分语义
+.scr-guide-empty {
+  color: var(--scr-text-dim);
+  font-size: 15px;
+  letter-spacing: 1px;
+}
 </style>

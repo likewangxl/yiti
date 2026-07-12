@@ -1,63 +1,64 @@
 <template>
-  <template v-for="col in columns" :key="col.region">
-    <!-- PROVINCE 的 MAIN 固定渲染地图 -->
-    <div class="scr-col" :style="{ flex: col.flex }">
-      <MapCenter v-if="col.isMap" :map-points="mapPoints" />
-      <template v-else>
-        <div v-for="row in col.rows" :key="row.rowNo" class="scr-row"
-             :style="{ flex: row.heightPct + ' 1 0' }">
-          <BlockContainer v-for="b in row.blocks" :key="b.id"
-                          :block="b" :context="context"
-                          :style="{ flex: b.widthPct + ' 1 0' }" />
-        </div>
-      </template>
+  <div class="scr-canvas-render" :style="stageCss">
+    <div v-for="c in components" :key="c.id" class="scr-abs"
+         :style="absStyle(c)" v-show="c.isShow !== false">
+      <!-- ChartWidget:注入 bindSnapshot 后复用 BlockContainer 取数;快照缺失(如草稿预览态
+           bindSnapshots 恒空,详见后端 composeDraftPreview)不裸传 null 给 BlockContainer(会
+           空指针崩溃),渲染中性占位。 -->
+      <BlockContainer v-if="c.component === 'ChartWidget' && blockOf(c)" :block="blockOf(c)" :context="context" />
+      <div v-else-if="c.component === 'ChartWidget'" class="scr-abs-empty">暂无预览数据</div>
+      <!-- MapCenter 走独立分支:其 props 契约是 mapPoints 数组(来自 ScreenRenderRespDTO.mapPoints，
+           PROVINCE 屏实时回填)，与素材类 widgets 的 element/propValue 签名不同，不经 widgetOf 通用注册。 -->
+      <MapCenter v-else-if="c.component === 'MapCenter'" :map-points="mapPoints" />
+      <component v-else :is="widgetOf(c.component)" :element="c" mode="runtime" />
     </div>
-  </template>
+  </div>
 </template>
-
 <script setup>
+// 运行时渲染——读发布态渲染包(canvasStyle + components + bindSnapshots),组件绝对定位铺在
+// 1920×1080 舞台(外层 ScreenView 已 transform: scale 整体缩放，这里只按设计态像素绝对定位)。
+// 已删除旧「region/row/block flex 布局」分支(3 屏直接切换，无 fallback)。
 import { computed } from 'vue';
 import BlockContainer from './BlockContainer.vue';
 import MapCenter from './MapCenter.vue';
+import { findWidget } from '@/views/screen/designer/widgets';
 
 const props = defineProps({
-  screen: { type: Object, required: true },
-  blocks: { type: Array, default: () => [] },
+  renderPackage: { type: Object, default: () => ({ components: [], bindSnapshots: {}, canvasStyle: {} }) },
   mapPoints: { type: Array, default: () => [] },
   context: { type: Object, default: () => ({}) }
 });
-
-// region → 行分组（rowNo 升序，行内 colNo 升序，行高取首块 heightPct）
-function groupRows(regionBlocks) {
-  const byRow = new Map();
-  for (const b of regionBlocks) {
-    if (!byRow.has(b.rowNo)) byRow.set(b.rowNo, []);
-    byRow.get(b.rowNo).push(b);
-  }
-  return [...byRow.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([rowNo, list]) => ({
-      rowNo,
-      heightPct: list[0]?.heightPct || 50,
-      blocks: list.sort((a, b) => a.colNo - b.colNo)
-    }));
+const components = computed(() => props.renderPackage.components || []);
+const stageCss = computed(() => ({
+  position: 'relative', width: '1920px', height: '1080px',
+  background: props.renderPackage.canvasStyle?.background || 'transparent'
+}));
+function absStyle(c) {
+  return { position: 'absolute', top: c.style.top + 'px', left: c.style.left + 'px',
+    width: c.style.width + 'px', height: c.style.height + 'px',
+    opacity: c.style.opacity ?? 1 };
 }
-
-const columns = computed(() => {
-  const isProvince = props.screen?.viewLevel === 'PROVINCE';
-  const regions = ['LEFT', 'MAIN', 'RIGHT'];
-  const out = [];
-  for (const region of regions) {
-    const regionBlocks = props.blocks.filter(b => b.region === region);
-    const isMap = isProvince && region === 'MAIN';
-    if (!isMap && regionBlocks.length === 0) continue; // 空区域不占位（MAIN 地图除外）
-    out.push({
-      region,
-      isMap,
-      flex: region === 'MAIN' ? 2 : 1, // MAIN 双倍宽（省级 25/50/25）
-      rows: groupRows(regionBlocks)
-    });
-  }
-  return out;
-});
+function widgetOf(component) { return findWidget(component); }
+/** 从 bindSnapshots 合成 BlockContainer 需要的 block(bindJson/styleJson/drillJson 字符串);
+ *  快照缺失时返回 null，由模板 v-if 隔离，不直接传给 BlockContainer。 */
+function blockOf(c) {
+  const snap = (props.renderPackage.bindSnapshots || {})[String(c.blockId)];
+  if (!snap) return null;
+  return {
+    id: c.blockId,
+    componentType: c.innerType || snap.componentType,
+    bindJson: JSON.stringify(snap.bind || {}),
+    styleJson: JSON.stringify(snap.styleCfg || {}),
+    drillJson: JSON.stringify(snap.drill || {})
+  };
+}
 </script>
+<style scoped>
+.scr-canvas-render { transform-origin: top left; }
+.scr-abs { overflow: hidden; }
+.scr-abs-empty {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  color: var(--scr-text-dim, #7d9bc9); font-size: 13px;
+  border: 1px dashed rgba(96, 148, 214, .38); box-sizing: border-box;
+}
+</style>

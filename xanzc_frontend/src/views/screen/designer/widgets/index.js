@@ -18,6 +18,11 @@ import clockWidgetMeta from './clock-widget/meta';
 import ChartWidget from './chart-widget/Component.vue';
 import ChartWidgetAttr from './chart-widget/Attr.vue';
 import chartWidgetMeta from './chart-widget/meta';
+// MapCenter:省级屏地图,复用运行时组件(props 是 mapPoints 数组,与素材类 element/propValue 签名不同)。
+// 只登记进 componentsMap 供 findWidget/findAttr 查得到；不并入 materialMetas——见下方 mapCenterMeta 注释。
+import MapCenter from '@/views/screen/components/MapCenter.vue';
+import MapCenterAttr from './map-center/Attr.vue';
+import mapCenterMeta from './map-center/meta';
 
 const componentsMap = {
   TextLabel, TextLabelAttr,
@@ -25,10 +30,15 @@ const componentsMap = {
   RectShape, RectShapeAttr,
   BorderDecor, BorderDecorAttr,
   ClockWidget, ClockWidgetAttr,
-  ChartWidget, ChartWidgetAttr
+  ChartWidget, ChartWidgetAttr,
+  MapCenter, MapCenterAttr
 };
 
 export const materialMetas = [textLabelMeta, imageBoxMeta, rectShapeMeta, borderDecorMeta, clockWidgetMeta];
+// mapCenterMeta 故意不并入上面的 materialMetas:它驱动 ComponentPanel 的拖拽入口，而 MapCenter
+// 一期不开放拖拽创建(运行时由 ScreenRenderer 按 component==='MapCenter' 走独立分支注入 mapPoints，
+// 不经拖拽面板/newComponentFromMeta 生成节点；地图组件由屏配置直投渲染包 components 节点)。
+export { mapCenterMeta };
 
 // 图表类型自动扫描注册(eager 同步纳入):9 个 charts/*.js
 const chartModules = import.meta.glob('./chart-widget/charts/*.js', { eager: true });

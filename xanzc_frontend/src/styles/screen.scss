@@ -1,6 +1,7 @@
 // 经营大屏深色主题（独立于后台浅色 tokens）。
 // 全屏铺满定位（position:fixed）与 1920×1080 舞台/区块通用视觉分层：
-// 通用视觉资产见 ./screen-theme（.scr-surface mixin），设计器内嵌预览缩略容器复用同一 mixin，见 admin/Designer.vue。
+// 通用视觉资产见 ./screen-theme（.scr-surface mixin）。旧 admin/Designer.vue 曾复用同一 mixin，
+// 该文件已在渲染层切换任务（ScreenRenderer 改绝对定位画布）删除；现唯一消费方是本文件的 .screen-root。
 @use './screen-theme' as theme;
 
 .screen-root {

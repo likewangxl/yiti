@@ -37,7 +37,7 @@
 <script setup>
 // 设计器 V2 组装页——三栏(组件/图层 | 画布 | 属性)+ 顶部工具条(屏选择/undo-redo/缩放/预览/放弃/回滚/保存/发布)
 // + 全局快捷键。数据流:loadCanvas 拉编辑器快照灌 store → 画布/面板直接读写 store → 保存/发布把 store
-// 序列化回 toSavePayload() 打给后端。旧 admin/Designer.vue 本任务不删(留给渲染层切换任务处理)。
+// 序列化回 toSavePayload() 打给后端。旧 admin/Designer.vue 与运行时行/块渲染分支已在渲染层切换任务删除。
 import { ref, onMounted, onBeforeUnmount, provide } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { listScreens, getScreenCanvas, saveScreenCanvas, publishScreenCanvas,
