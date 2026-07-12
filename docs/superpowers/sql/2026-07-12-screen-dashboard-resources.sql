@@ -1,0 +1,101 @@
+-- 大屏端点 PT_RESOURCE 资源注册 + 角色绑定（2026-07-12）
+-- 12 API 端点 + 1 条 GET /map-points 独立补行（ResourceMatcher 按 URL+METHOD 匹配，不能与 CFG_LIST 共用）+ 2 管理页菜单，共 15 条资源。
+-- 幂等：先删后插。目标库 yiti + onepl_test_bootstrap 手工执行。
+--
+-- Step 1 核实结论（对照 PT_RESOURCE 真实结构，2026-07-12 现场 SHOW COLUMNS + 报表分析组样例核实）：
+--   1) PT_RESOURCE 存在 PARENT_RESOURCE_ID（varchar(60)，无 FK 约束）父子列，菜单树靠该列挂接，非隐式排序。
+--   2) "报表分析" 分组：RESOURCE_ID='M_GROUP_REPORT'，RESOURCE_URL='#group/report'，RESOURCE_METHOD='MENU'，
+--      SYS_CODE='YITI'，PARENT_RESOURCE_ID=NULL，MENU_RANK_NO=4，ISMENU=1，MENU_ENDFLAG=0，STATUS=0。
+--   3) 组下叶子菜单样例（M_REPORT_DASHBOARD/M_REPORT_SQL 等 7 条）：PARENT_RESOURCE_ID='M_GROUP_REPORT'，
+--      RESOURCE_METHOD 统一为 'MENU'（不是 GET）；SYS_CODE 统一 'YITI'；MENU_ENDFLAG='1'；STATUS=0；
+--      MENU_RANK_NO 当前占用到 6（M_REPORT_AMAS）。
+--   => 本脚本两条菜单行按此结果对齐：RESOURCE_METHOD='MENU'、SYS_CODE='YITI'、PARENT_RESOURCE_ID='M_GROUP_REPORT'、
+--      MENU_RANK_NO 续编 7/8（原任务模板里的 95/96、GET、PLATFORM、无父级均已按现场结构修正）。
+--   4) API 资源 SYS_CODE：现场 R_RPT_DASH_PRES / R_RPT_SQL_EXEC 等同源 R_RPT_* 系列 43/52 条使用 SYS_CODE='RPT'
+--      （PT_RESOURCE.SYS_CODE 代表模块归属标识，仅用于唯一索引 uk_pt_resource_url_method_sys 与后台展示分组过滤，
+--      不参与 ResourceMatcher/RbacAuthorizer 运行时鉴权判定，已读代码确认），本脚本 13 条 API 资源随之改用 'RPT'
+--      （原任务模板的 'PLATFORM' 未按现场约定，予以修正）。PT_ROLE_RESOURCE.SYS_CODE 维持 'PLATFORM'（该表全局默认值，
+--      与 R_RPT_DASH_PRES/R_RPT_SQL_EXEC 现有绑定行一致）。
+--
+-- 角色策略：查看类(VIEW/DATA) 复制 R_RPT_DASH_PRES 的角色集；管理类(含两条菜单) 复制 R_RPT_SQL_EXEC 的
+-- 角色集（R_BACK_TECH）并补 R_ADMIN 全量兜底。后续可在 系统管理→资源管理 界面调整。
+
+-- 1) 清理旧行（幂等重跑；含 R_RPT_SCR_MAP_LIST，原任务模板 DELETE 清单漏列已在此补齐）
+DELETE FROM PT_ROLE_RESOURCE WHERE RESOURCE_ID IN
+  ('R_RPT_SCR_DS_LIST','R_RPT_SCR_DS_SAVE','R_RPT_SCR_DS_UPD','R_RPT_SCR_DS_DEL','R_RPT_SCR_DS_TRY',
+   'R_RPT_SCR_CFG_LIST','R_RPT_SCR_CFG_GET','R_RPT_SCR_CFG_SAVE','R_RPT_SCR_CFG_DEL','R_RPT_SCR_MAP_SAVE',
+   'R_RPT_SCR_MAP_LIST','R_RPT_SCR_VIEW','R_RPT_SCR_DATA','M_RPT_SCR_DS','M_RPT_SCR_DSN');
+DELETE FROM PT_RESOURCE WHERE RESOURCE_ID IN
+  ('R_RPT_SCR_DS_LIST','R_RPT_SCR_DS_SAVE','R_RPT_SCR_DS_UPD','R_RPT_SCR_DS_DEL','R_RPT_SCR_DS_TRY',
+   'R_RPT_SCR_CFG_LIST','R_RPT_SCR_CFG_GET','R_RPT_SCR_CFG_SAVE','R_RPT_SCR_CFG_DEL','R_RPT_SCR_MAP_SAVE',
+   'R_RPT_SCR_MAP_LIST','R_RPT_SCR_VIEW','R_RPT_SCR_DATA','M_RPT_SCR_DS','M_RPT_SCR_DSN');
+
+-- 2) API 资源（ISMENU=0，STATUS=0 启用；RESOURCE_ID ≤20 字符；SYS_CODE='RPT' 对齐 R_RPT_* 现场约定）
+INSERT INTO PT_RESOURCE
+  (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, UPDATE_TIME)
+VALUES
+  ('R_RPT_SCR_DS_LIST','/api/screen/admin/datasources',        'GET',   '大屏-数据源列表', 0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_DS_SAVE','/api/screen/admin/datasources',        'POST',  '大屏-数据源新建', 0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_DS_UPD', '/api/screen/admin/datasources/*',      'PUT',   '大屏-数据源更新', 0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_DS_DEL', '/api/screen/admin/datasources/*',      'DELETE','大屏-数据源删除', 0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_DS_TRY', '/api/screen/admin/datasources/try-run','POST',  '大屏-数据源试跑(高危)',0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_CFG_LIST','/api/screen/admin/screens',           'GET',   '大屏-屏列表',     0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_CFG_GET','/api/screen/admin/screens/*',          'GET',   '大屏-屏详情',     0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_CFG_SAVE','/api/screen/admin/screens',           'POST',  '大屏-屏保存',     0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_CFG_DEL','/api/screen/admin/screens/*',          'DELETE','大屏-屏删除',     0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_MAP_SAVE','/api/screen/admin/map-points',        'PUT',   '大屏-点位保存',   0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_VIEW',   '/api/screen/view/*',                   'GET',   '大屏-整屏读取',   0,0,0,0,'RPT',NOW(),NOW()),
+  ('R_RPT_SCR_DATA',   '/api/screen/data',                     'POST',  '大屏-统一取数',   0,0,0,0,'RPT',NOW(),NOW());
+
+-- GET /api/screen/admin/map-points 与 GET /api/screen/admin/screens（R_RPT_SCR_CFG_LIST）URL 不同，
+-- ResourceMatcher 按 URL+METHOD 精确匹配，须单独补一条资源（不能复用 CFG_LIST）：
+INSERT INTO PT_RESOURCE
+  (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, STATUS, SYS_CODE, CREATE_TIME, UPDATE_TIME)
+VALUES
+  ('R_RPT_SCR_MAP_LIST','/api/screen/admin/map-points','GET','大屏-点位列表',0,0,0,0,'RPT',NOW(),NOW());
+
+-- 3) 菜单行（Step 1 现场核实结果对齐：RESOURCE_METHOD='MENU'、SYS_CODE='YITI'、
+--    PARENT_RESOURCE_ID='M_GROUP_REPORT' 挂在"报表分析"分组下，MENU_RANK_NO 续编该组现有最大值 6 之后）
+INSERT INTO PT_RESOURCE
+  (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_RANK_NO, ISMENU, MENU_ENDFLAG, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_TIME, UPDATE_TIME)
+VALUES
+  ('M_RPT_SCR_DS',  '/screen-admin/datasources', 'MENU', '大屏数据源', 7, 1, '1', 'M_GROUP_REPORT', 0, 'YITI', NOW(), NOW()),
+  ('M_RPT_SCR_DSN', '/screen-admin/designer',    'MENU', '大屏设计器', 8, 1, '1', 'M_GROUP_REPORT', 0, 'YITI', NOW(), NOW());
+
+-- 4) 角色绑定
+-- 4a) 查看类（VIEW/DATA）复制 R_RPT_DASH_PRES 的角色集
+INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
+SELECT CONCAT('SCRV_', t.RESOURCE_ID, '_', r.ROLE_ID), r.ROLE_ID, t.RESOURCE_ID, 'PLATFORM', NOW()
+FROM PT_ROLE_RESOURCE r
+CROSS JOIN (
+  SELECT 'R_RPT_SCR_VIEW' AS RESOURCE_ID UNION ALL SELECT 'R_RPT_SCR_DATA'
+) t
+WHERE r.RESOURCE_ID = 'R_RPT_DASH_PRES';
+
+-- 4b) 管理类（含两条菜单）复制 R_RPT_SQL_EXEC 的角色集（R_BACK_TECH）
+INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
+SELECT CONCAT('SCRA_', t.RESOURCE_ID, '_', r.ROLE_ID), r.ROLE_ID, t.RESOURCE_ID, 'PLATFORM', NOW()
+FROM PT_ROLE_RESOURCE r
+CROSS JOIN (
+  SELECT 'R_RPT_SCR_DS_LIST' AS RESOURCE_ID UNION ALL SELECT 'R_RPT_SCR_DS_SAVE' UNION ALL
+  SELECT 'R_RPT_SCR_DS_UPD'  UNION ALL SELECT 'R_RPT_SCR_DS_DEL'  UNION ALL SELECT 'R_RPT_SCR_DS_TRY' UNION ALL
+  SELECT 'R_RPT_SCR_CFG_LIST' UNION ALL SELECT 'R_RPT_SCR_CFG_GET' UNION ALL SELECT 'R_RPT_SCR_CFG_SAVE' UNION ALL
+  SELECT 'R_RPT_SCR_CFG_DEL' UNION ALL SELECT 'R_RPT_SCR_MAP_SAVE' UNION ALL SELECT 'R_RPT_SCR_MAP_LIST' UNION ALL
+  SELECT 'M_RPT_SCR_DS' UNION ALL SELECT 'M_RPT_SCR_DSN'
+) t
+WHERE r.RESOURCE_ID = 'R_RPT_SQL_EXEC';
+
+-- 4c) 全量兜底：R_ADMIN 补齐尚未持有的新资源（全部 15 条）
+INSERT INTO PT_ROLE_RESOURCE (ID, ROLE_ID, RESOURCE_ID, SYS_CODE, CREATE_TIME)
+SELECT CONCAT('SCRB_', t.RESOURCE_ID, '_R_ADMIN'), 'R_ADMIN', t.RESOURCE_ID, 'PLATFORM', NOW()
+FROM (
+  SELECT 'R_RPT_SCR_DS_LIST' AS RESOURCE_ID UNION ALL SELECT 'R_RPT_SCR_DS_SAVE' UNION ALL
+  SELECT 'R_RPT_SCR_DS_UPD'  UNION ALL SELECT 'R_RPT_SCR_DS_DEL'  UNION ALL SELECT 'R_RPT_SCR_DS_TRY' UNION ALL
+  SELECT 'R_RPT_SCR_CFG_LIST' UNION ALL SELECT 'R_RPT_SCR_CFG_GET' UNION ALL SELECT 'R_RPT_SCR_CFG_SAVE' UNION ALL
+  SELECT 'R_RPT_SCR_CFG_DEL' UNION ALL SELECT 'R_RPT_SCR_MAP_SAVE' UNION ALL SELECT 'R_RPT_SCR_MAP_LIST' UNION ALL
+  SELECT 'R_RPT_SCR_VIEW' UNION ALL SELECT 'R_RPT_SCR_DATA' UNION ALL
+  SELECT 'M_RPT_SCR_DS' UNION ALL SELECT 'M_RPT_SCR_DSN'
+) t
+WHERE NOT EXISTS (
+  SELECT 1 FROM PT_ROLE_RESOURCE x WHERE x.ROLE_ID = 'R_ADMIN' AND x.RESOURCE_ID = t.RESOURCE_ID
+);
