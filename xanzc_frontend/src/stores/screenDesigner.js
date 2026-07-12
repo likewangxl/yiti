@@ -19,6 +19,9 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   const publishStatus = ref(0);
   const canvasStyle = ref({ schemaVersion: 1, designWidth: 1920, designHeight: 1080,
     background: '#050e2b', adaptor: 'keepProportion', themeOverride: {} });
+  // CANVAS_DRAFT_JSON 契约的顶层 schemaVersion(与 canvasStyle.schemaVersion 是两套独立版本号,
+  // 分别对应 draft/style 两份 JSON 契约);loadFromEditor 装载、toSavePayload 原样带回(评审 Important-2)。
+  const draftSchemaVersion = ref(1);
   const componentData = ref([]);
   const curComponent = ref(null);
   const curIndex = ref(-1);
@@ -30,9 +33,13 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   let stack = createSnapshotStack(60);
   let snapshotDisableUntil = 0;
   let debounceTimer = null;
+  // stack 是普通闭包变量,Vue 响应式系统追踪不到其内部读写;canUndo/canRedo 的 computed
+  // 若只读 stack 本身,首次求值后既无依赖可触发重算,会永久缓存首次结果(评审 Important-1)。
+  // 用这个版本号 ref 作为显式响应式依赖:每次栈发生实际变化就自增,逼 computed 重新求值。
+  const stackVersion = ref(0);
 
-  const canUndo = computed(() => snapCanUndo(stack));
-  const canRedo = computed(() => snapCanRedo(stack));
+  const canUndo = computed(() => { void stackVersion.value; return snapCanUndo(stack); });
+  const canRedo = computed(() => { void stackVersion.value; return snapCanRedo(stack); });
 
   function snapshotBody() {
     return { componentData: deepClone(componentData.value), canvasStyle: deepClone(canvasStyle.value) };
@@ -55,6 +62,7 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     const top = stack.data[stack.index];
     if (top && JSON.stringify(top) === JSON.stringify(body)) return;
     stack = snapRecord(stack, body);
+    stackVersion.value++;
     dirty.value = true;
   }
   /** 防抖记快照(拖拽/属性连续修改用) */
@@ -65,10 +73,12 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   }
   function undo() {
     applySnapshot(snapUndo(stack));
+    stackVersion.value++;
     snapshotDisableUntil = Date.now() + 3000;
   }
   function redo() {
     applySnapshot(snapRedo(stack));
+    stackVersion.value++;
     snapshotDisableUntil = Date.now() + 3000;
   }
 
@@ -82,6 +92,7 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     blocks.value = resp.blocks || [];
     canvasStyle.value = parse(resp.canvasStyleJson, canvasStyle.value);
     const draft = parse(resp.canvasDraftJson, { components: [] });
+    draftSchemaVersion.value = draft.schemaVersion ?? 1;
     componentData.value = Array.isArray(draft.components) ? draft.components : [];
     curComponent.value = null;
     curIndex.value = -1;
@@ -93,6 +104,7 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     return {
       screenId: screenId.value,
       expectedVersion: canvasVersion.value,
+      schemaVersion: draftSchemaVersion.value,
       canvasStyle: deepClone(canvasStyle.value),
       // ChartWidget 携带 bind/style/drill(供后端 upsert block);素材组件带 propValue
       components: componentData.value.map(c => deepClone(c))
@@ -101,6 +113,7 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   function adoptSaveResult(resp) {
     canvasVersion.value = resp.canvasVersion;
     const draft = parse(resp.canvasDraftJson, { components: [] });
+    draftSchemaVersion.value = draft.schemaVersion ?? draftSchemaVersion.value;
     componentData.value = Array.isArray(draft.components) ? draft.components : componentData.value;
     dirty.value = false;
   }
@@ -170,7 +183,7 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
 
   return {
     screenId, screenCode, viewLevel, canvasVersion, publishStatus,
-    canvasStyle, componentData, curComponent, curIndex, blocks, scale, dirty,
+    canvasStyle, draftSchemaVersion, componentData, curComponent, curIndex, blocks, scale, dirty,
     canUndo, canRedo,
     loadFromEditor, toSavePayload, adoptSaveResult,
     addComponent, removeCurrent, selectComponent, setShapeStyle,

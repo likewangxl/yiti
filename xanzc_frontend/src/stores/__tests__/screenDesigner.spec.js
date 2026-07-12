@@ -51,4 +51,32 @@ describe('screenDesigner store', () => {
     store.redo();
     expect(store.componentData.length).toBe(1);
   });
+
+  // Important-1(评审):stack 是普通闭包变量,canUndo/canRedo 若不显式追踪响应式依赖,
+  // computed 只会在首次访问时求值一次并永久缓存——即使栈内容已经变化也不会重算。
+  it('canUndo/canRedo 随快照栈变化响应式更新(Important-1)', () => {
+    const store = useScreenDesignerStore();
+    expect(store.canUndo).toBe(false);
+    expect(store.canRedo).toBe(false);
+    store.recordSnapshot();                       // 第 1 条快照:空态
+    store.addComponent({ id: 'z', component: 'RectShape', style: {} }); // 状态变化 + 内部第 2 条快照
+    expect(store.canUndo).toBe(true);
+    store.undo();
+    expect(store.canUndo).toBe(false);
+    expect(store.canRedo).toBe(true);
+  });
+
+  // Important-2(评审):toSavePayload 缺 CANVAS_DRAFT_JSON 契约的顶层 schemaVersion,
+  // loadFromEditor 把 draft.schemaVersion 丢弃,导致往返序列化丢字段。
+  it('toSavePayload 输出顶层 schemaVersion,与 loadFromEditor 装载的 draft.schemaVersion 对齐(Important-2)', () => {
+    const store = useScreenDesignerStore();
+    store.loadFromEditor({
+      screenId: 9, canvasVersion: 1, publishStatus: 0,
+      canvasStyleJson: JSON.stringify({ schemaVersion: 1, adaptor: 'keep' }),
+      canvasDraftJson: JSON.stringify({ schemaVersion: 1, components: [] }),
+      blocks: []
+    });
+    const payload = store.toSavePayload();
+    expect(payload.schemaVersion).toBe(1);
+  });
 });
