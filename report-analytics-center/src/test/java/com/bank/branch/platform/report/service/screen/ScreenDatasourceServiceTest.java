@@ -20,8 +20,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
+import com.bank.branch.platform.report.dto.resp.ScreenDatasourceRespDTO;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -206,5 +209,77 @@ class ScreenDatasourceServiceTest {
         assertThat(resp.getColumns()).containsExactly("cnt");
         verify(engine).tryRun(any(), any(), any());
         verify(auditApi).log(any());
+    }
+
+    @Test
+    void tryRun_engineThrows_stillAudits() {
+        ScreenTryRunReqDTO req = new ScreenTryRunReqDTO();
+        req.setSourceKind("CUSTOM_SQL");
+        req.setDsType("SINGLE");
+        req.setConfigJson("{\"sql\":\"SELECT COUNT(*) AS cnt FROM ACT_RU_TASK\",\"dateCol\":null}");
+        req.setReason("试跑失败场景");
+        doThrow(new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED))
+                .when(engine).tryRun(any(), any(), any());
+
+        assertThatThrownBy(() -> service.tryRun(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+        // 修复①验证点：即使 engine.tryRun 执行抛异常，safelyAudit 仍需在 finally 中留痕
+        verify(auditApi).log(any());
+    }
+
+    @Test
+    void update_notFound_throws43001() {
+        when(dsMapper.selectById(5L)).thenReturn(null);
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("不存在的数据源");
+        req.setSourceKind("KPI_RESULT");
+        req.setConfigJson("{\"cycleType\":\"MONTHLY\"}");
+
+        assertThatThrownBy(() -> service.update(5L, req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43001");
+        verify(dsMapper, never()).updateById(any(RptScreenDatasource.class));
+    }
+
+    @Test
+    void update_keepsDsCodeUnchanged() {
+        RptScreenDatasource existing = new RptScreenDatasource();
+        existing.setId(6L);
+        existing.setDsCode("SCRDS_OLD");
+        when(dsMapper.selectById(6L)).thenReturn(existing);
+
+        ScreenDatasourceSaveReqDTO req = new ScreenDatasourceSaveReqDTO();
+        req.setDsName("更新后的名称");
+        req.setSourceKind("KPI_RESULT");
+        req.setConfigJson("{\"cycleType\":\"QUARTERLY\"}");
+
+        service.update(6L, req);
+
+        ArgumentCaptor<RptScreenDatasource> cap = ArgumentCaptor.forClass(RptScreenDatasource.class);
+        verify(dsMapper).updateById(cap.capture());
+        // dsCode 由 save 时一次性生成，update 不应重新生成/覆盖
+        assertThat(cap.getValue().getDsCode()).isEqualTo("SCRDS_OLD");
+        assertThat(cap.getValue().getDsName()).isEqualTo("更新后的名称");
+    }
+
+    @Test
+    void list_filtersByDsTypeAndKeyword() {
+        RptScreenDatasource e = new RptScreenDatasource();
+        e.setId(7L);
+        e.setDsCode("SCRDS_ABC12345");
+        e.setDsName("存款趋势-关键指标");
+        e.setDsType("TIMESERIES");
+        e.setCreatedTime(LocalDateTime.of(2026, 1, 1, 0, 0));
+        when(dsMapper.selectList(any())).thenReturn(List.of(e));
+
+        List<ScreenDatasourceRespDTO> result = service.list("TIMESERIES", "关键");
+
+        assertThat(result).hasSize(1);
+        ScreenDatasourceRespDTO dto = result.get(0);
+        assertThat(dto.getDsCode()).isEqualTo("SCRDS_ABC12345");
+        assertThat(dto.getDsName()).isEqualTo("存款趋势-关键指标");
+        assertThat(dto.getDsType()).isEqualTo("TIMESERIES");
+        assertThat(dto.getCreatedTime()).isEqualTo(LocalDateTime.of(2026, 1, 1, 0, 0));
     }
 }

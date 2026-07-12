@@ -137,9 +137,16 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         dataReq.setDateFrom(req.getDateFrom());
         dataReq.setDateTo(req.getDateTo());
         dataReq.setContextParams(req.getContextParams());
-        ScreenDataRespDTO resp = engine.tryRun(probe.getSourceKind(), probe.getConfigJson(), dataReq);
-        safelyAudit("EXECUTE_SQL", "tryRun kind=" + req.getSourceKind(), req.getReason());
-        return resp;
+        // try/finally 兜底：engine.tryRun 执行阶段抛异常也必须留痕，不能只审计成功路径
+        boolean success = false;
+        try {
+            ScreenDataRespDTO resp = engine.tryRun(probe.getSourceKind(), probe.getConfigJson(), dataReq);
+            success = true;
+            return resp;
+        } finally {
+            String detail = "tryRun kind=" + req.getSourceKind() + ", result=" + (success ? "SUCCESS" : "FAILED");
+            safelyAudit("EXECUTE_SQL", detail, req.getReason());
+        }
     }
 
     @Override

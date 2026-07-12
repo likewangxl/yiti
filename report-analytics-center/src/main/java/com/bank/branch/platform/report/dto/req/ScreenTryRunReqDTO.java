@@ -18,7 +18,7 @@ public class ScreenTryRunReqDTO {
     /** TIMESERIES / SINGLE */
     private String dsType;
 
-    /** 类型化配置 JSON；WIDE_TABLE 试跑须已含 metrics[].slot（前端先保存再试跑，或由列表带出） */
+    /** 类型化配置 JSON；WIDE_TABLE 只需 metrics[].metricCode，服务端试跑时自动翻译槽位 */
     @NotBlank
     private String configJson;
 
