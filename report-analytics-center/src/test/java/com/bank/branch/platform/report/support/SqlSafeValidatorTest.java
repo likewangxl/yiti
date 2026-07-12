@@ -1,7 +1,6 @@
 package com.bank.branch.platform.report.support;
 
 import com.bank.branch.platform.common.web.exception.BizException;
-import com.bank.branch.platform.report.exception.RptException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
