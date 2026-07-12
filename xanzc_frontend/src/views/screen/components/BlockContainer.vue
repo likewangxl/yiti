@@ -89,7 +89,7 @@ function onItemClick({ col, label, row }) {
 let timer = null;
 onMounted(() => {
   load();
-  const sec = Number(styleCfg.value.refreshSec || 60);
+  const sec = Number(styleCfg.value.refreshSec ?? 60);
   if (sec > 0) {
     timer = setInterval(() => { if (!document.hidden && !drillItem.value) load(); }, sec * 1000);
   }
