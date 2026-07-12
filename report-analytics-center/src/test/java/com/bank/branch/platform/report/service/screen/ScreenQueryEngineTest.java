@@ -90,6 +90,17 @@ class ScreenQueryEngineTest {
     }
 
     @Test
+    void buildKpi_yearly_supported() {
+        // FIX-2: KPI_RESULT 库中真实口径为 YEARLY（MONTHLY 0 行），引擎必须支持 YEARLY，
+        // 否则个人屏 KPI 卡/趋势即使 empId 正确也永远空 rows
+        var q = engine.build("KPI_RESULT", "{\"cycleType\":\"YEARLY\"}",
+                req("LATEST", Map.of("empId", "E001")), 1000, TODAY);
+        assertThat(q.sql()).contains("FROM KPI_RESULT WHERE emp_id = ? AND cycle_type = ?");
+        assertThat(q.sql()).endsWith("ORDER BY cycle_date DESC LIMIT 1");
+        assertThat(q.params()).containsExactly("E001", "YEARLY");
+    }
+
+    @Test
     void buildKpi_illegalCycleType_throws43009() {
         assertThatThrownBy(() -> engine.build("KPI_RESULT", "{\"cycleType\":\"HOURLY\"}",
                 req("LATEST", Map.of("empId", "E001")), 1000, TODAY))

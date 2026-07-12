@@ -54,7 +54,9 @@ public class ScreenQueryEngine {
             "ORG_INDEX_RESULT", new String[]{"org_code", "orgCode", "ORG"},
             "CUST_INDEX_RESULT", new String[]{"cust_no", "custNo", "CUST"});
 
-    private static final Set<String> KPI_CYCLE_TYPES = Set.of("MONTHLY", "QUARTERLY");
+    // KPI_RESULT 允许的周期类型：库中真实口径以 YEARLY 为主（MONTHLY/QUARTERLY 亦保留），
+    // 缺 YEARLY 会导致个人屏 KPI 卡/趋势即使 empId 正确也永远空 rows（FIX-2）
+    private static final Set<String> KPI_CYCLE_TYPES = Set.of("MONTHLY", "QUARTERLY", "YEARLY");
 
     private final DataSource readOnlyDataSource;
     private final SqlSafeValidator validator;
