@@ -40,6 +40,10 @@
   // 绝对定位（与 DesignerV2 画布编辑器 CanvasCore.vue 的设计基准 1:1，WYSIWYG 契约），若 header 按
   // 旧 flex-column 占 72px 高度会把画布挤到 .scr-stage 固定 1080px 高度之外，在多数窗口尺寸下被
   // .screen-root 的 overflow:hidden 裁掉底部内容（真实回归，渲染层切换任务发现并修复）。
+  // 浮层必须"轻"：pointer-events:none 让鼠标事件穿透到画布（钻取/跳转点可能落在顶部 72px 内），
+  // 仅返回按钮等真正可交互元素单独开 pointer-events:auto。
+  // 已知遗留（记入 Task 11 布局规范）：画布坐标 y:0~72 区域视觉上会被本浮层遮盖，3 屏重配时
+  // 该区间顶部留白或仅放背景装饰，不放可读文字/可点击区块。
   .scr-header {
     position: absolute;
     top: 0;
@@ -53,6 +57,7 @@
     border-bottom: 1px solid var(--scr-border);
     box-shadow: 0 1px 12px rgba(0, 229, 255, 0.12);
     background: linear-gradient(180deg, rgba(3, 8, 28, .55) 0%, rgba(3, 8, 28, 0) 100%);
+    pointer-events: none;
 
     .scr-title {
       display: flex;
@@ -83,6 +88,7 @@
       cursor: pointer;
       font-size: 14px;
       transition: color .2s;
+      pointer-events: auto; // 唯一可交互元素——header 整体 pointer-events:none，此处单独收回
       &:hover { color: var(--scr-cyan); }
     }
     .scr-clock {
