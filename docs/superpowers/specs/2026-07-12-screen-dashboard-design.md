@@ -142,8 +142,8 @@ xanzc_frontend
 `POST /api/screen/data`：
 
 ```json
-// 请求
-{ "dsId": 1, "timeParam": {"period": "LAST_10D"},
+// 请求（timeParam 落地为扁平字段，非嵌套对象：period 必填，RANGE 时 dateFrom/dateTo 必填）
+{ "dsId": 1, "period": "LAST_10D", "dateFrom": null, "dateTo": null,
   "contextParams": {"orgCode": "610100", "empId": null} }
 // 响应（统一二维结构，所有组件同构消费）
 { "columns": ["data_date", "存款余额", "贷款余额"],
@@ -157,7 +157,7 @@ xanzc_frontend
 
 ## 6. REST 端点、PT_RESOURCE、错误码
 
-### 6.1 端点清单（12 个）
+### 6.1 端点清单（12 个端点 + 1 条 GET /map-points 独立补行，共 13 条 API 资源）
 
 | Controller | 端点 | 鉴权 action | RESOURCE_ID |
 |---|---|---|---|
@@ -170,12 +170,14 @@ xanzc_frontend
 | 〃 | GET /api/screen/admin/screens/{id} | READ | R_RPT_SCR_CFG_GET |
 | 〃 | POST /api/screen/admin/screens | WRITE | R_RPT_SCR_CFG_SAVE（屏+区块整体保存） |
 | 〃 | DELETE /api/screen/admin/screens/{id} | DELETE | R_RPT_SCR_CFG_DEL |
-| 〃 | PUT /api/screen/admin/map-points | WRITE | R_RPT_SCR_MAP_SAVE（整表覆盖保存）；GET 复用 R_RPT_SCR_CFG_LIST |
+| 〃 | PUT /api/screen/admin/map-points | WRITE | R_RPT_SCR_MAP_SAVE（整表覆盖保存） |
+| 〃 | GET /api/screen/admin/map-points | LIST | R_RPT_SCR_MAP_LIST（独立资源；ResourceMatcher 按 URL+METHOD 精确匹配，与 CFG_LIST 的 GET /screens URL 不同，不能复用） |
 | ScreenViewController | GET /api/screen/view/{screenCode} | READ | R_RPT_SCR_VIEW（整屏配置：屏+区块+点位） |
 | ScreenDataController | POST /api/screen/data | READ | R_RPT_SCR_DATA |
 
 - 全部 `@BizAuth(bizType = BizType.REPORT, action = …)`；写操作 `@AuditLog`；自定义 SQL 保存/试跑 `@AuditLog(reasonRequired = true)`。
-- PT_RESOURCE 注册 SQL 随 DDL 脚本一并提供；配置类资源绑管理角色，VIEW/DATA 绑大屏查看角色。
+- PT_RESOURCE 注册 SQL 随 DDL 脚本一并提供（`docs/superpowers/sql/2026-07-12-screen-dashboard-resources.sql`）；配置类资源绑管理角色，VIEW/DATA 绑大屏查看角色。
+- **实现对齐（现场核实结果）**：13 条 API 资源 `SYS_CODE='RPT'`（对齐 `R_RPT_DASH_PRES`/`R_RPT_SQL_EXEC` 等既有 R_RPT_* 系列的现场约定；`SYS_CODE` 仅用于 `uk_pt_resource_url_method_sys` 唯一索引与后台展示分组过滤，不参与 `ResourceMatcher`/`RbacAuthorizer` 运行时鉴权）。2 条菜单资源 `M_RPT_SCR_DS`（大屏数据源）/`M_RPT_SCR_DSN`（大屏设计器）`RESOURCE_METHOD='MENU'`、`SYS_CODE='YITI'`、`PARENT_RESOURCE_ID='M_GROUP_REPORT'`（挂"报表分析"菜单分组下），与该分组下既有 7 条叶子菜单（`M_REPORT_DASHBOARD`/`M_REPORT_SQL` 等）的现场结构保持一致；`PT_ROLE_RESOURCE.SYS_CODE` 维持全局默认值 `'PLATFORM'`。
 - 大屏查看不做行级 DATA_SCOPE（管理视角，靠角色 + 页面参数控制范围）——与 DashboardController 现状一致。
 
 ### 6.2 新增错误码（RPT-43xxx 段，避开既有 4xxxx/42xxx）
@@ -190,6 +192,7 @@ xanzc_frontend
 | RPT-43006 | SCREEN_LAYOUT_INVALID 布局非法（占比越界/固定区违规） |
 | RPT-43007 | SCREEN_DS_IN_USE 数据源被区块引用不可删除 |
 | RPT-43008 | SCREEN_DATA_QUERY_FAILED 取数执行失败（超时/越权表） |
+| RPT-43009 | SCREEN_DS_CONFIG_INVALID 数据源配置非法 |
 
 ## 7. 前端配置后台（嵌现有管理框架）
 
@@ -244,7 +247,7 @@ ScreenView.vue  路由 /screen/:screenCode?orgCode=&empId=（独立全屏，无�
 
 ## 11. 测试策略（TDD 红线）
 
-- **单测（surefire, *Test）**：ScreenSqlValidator ≥15 边界用例（对齐 SqlSafeValidator 标准）；ScreenDatasourceService 槽位翻译/能力标签/日期列校验；ScreenConfigService 联动校验/布局合法性/固定区约束/引用删除保护；ScreenQueryEngine 周期模板→日期范围换算、占位参数绑定、LIMIT 包裹。
+- **单测（surefire, *Test）**：复用既有 `SqlSafeValidator`（其 ≥15 边界用例守护继续生效，未新建 ScreenSqlValidator）+ `ScreenSqlTemplate`/`ScreenQueryEngine` 新增用例（周期模板→日期范围换算、占位参数绑定、LIMIT 包裹、白名单表校验）；ScreenDatasourceService 槽位翻译/能力标签/日期列校验；ScreenConfigService 联动校验/布局合法性/固定区约束/引用删除保护。
 - **IT（failsafe, *IT）**：4 张表 Mapper CRUD；QueryEngine 对真库宽表取数（LATEST/范围/月末时点）；Controller `@BizAuth`/`@AuditLog` 声明基线。
 - **前端**：以种子配置对三级屏手工验收（渲染/钻取/跳转/自适应缩放）。
 

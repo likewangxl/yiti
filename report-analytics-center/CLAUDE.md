@@ -26,6 +26,16 @@ V1.0 交付内容：
 
 **Spec / Plan**: `docs/superpowers/plans/2026-04-25-report-analytics-center-v1.0-plan.md`
 
+> 2026-07-12 screen 子域：经营管理大屏（三级视角 + 全配置化）——新增 4 张配置表
+> `RPT_SCREEN_DATASOURCE`/`RPT_SCREEN`/`RPT_SCREEN_BLOCK`/`RPT_SCREEN_MAP_POINT`（MyBatis-Plus），
+> 查询执行引擎 `ScreenQueryEngine` 走 rptReadOnlyDataSource + 表白名单直查（D1 决策，白名单见
+> `rpt.screen.whitelist-tables` 默认值），三类数据源（宽表引导/KPI引导/自定义SQL#{param}占位）。
+> 13 API 资源 + 2 菜单（R_RPT_SCR_*/M_RPT_SCR_*），错误码 RPT-43001~43009。
+> 前端 /screen/:screenCode 全屏深色三级大屏（陕西地图+钻取+跳转）+ 两个配置后台页。
+> DDL/资源/种子脚本：docs/superpowers/sql/2026-07-12-screen-dashboard-{ddl,resources,seed}.sql。
+> spec/plan：docs/superpowers/specs/2026-07-12-screen-dashboard-design.md /
+> docs/superpowers/plans/2026-07-12-screen-dashboard-impl.md。
+
 ## 红线（不被任何业务模块依赖）
 
 `report-analytics-center` 是**只读**模块，**禁止**被任何业务模块依赖：
