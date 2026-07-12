@@ -246,6 +246,52 @@ class ScreenCanvasServiceTest {
                 anyInt(), anyString());
         org.mockito.Mockito.verify(publishLogMapper).insert(
                 any(com.bank.branch.platform.report.entity.RptScreenPublishLog.class));
+        // 高危发布操作必须留痕:审计恰好写入 1 次(rev-t3 补测)
+        org.mockito.Mockito.verify(auditApi, org.mockito.Mockito.times(1)).log(any());
+    }
+
+    /** 归档滚动:超过 PUBLISH_LOG_KEEP(10)份时,只删最旧的那些(id 最小),不动最近 10 份(rev-t3 补测). */
+    @org.junit.jupiter.api.Test
+    void publish_archiveExceeds10_trimsOldestTwo() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasStyleJson("{\"schemaVersion\":1,\"adaptor\":\"keepProportion\"}");
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"w-1\",\"component\":\"ChartWidget\",\"innerType\":\"METRIC_CARD\","
+                + "\"blockId\":1001,\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        com.bank.branch.platform.report.entity.RptScreenBlock b =
+                new com.bank.branch.platform.report.entity.RptScreenBlock();
+        b.setId(1001L);
+        b.setScreenId(7L);
+        b.setComponentType("METRIC_CARD");
+        b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
+        when(blockMapper.selectList(any())).thenReturn(java.util.List.of(b));
+        when(canvasMapper.applyPublished(anyLong(), anyString(), anyInt(), anyString())).thenReturn(1);
+
+        // 归档滚动:mock 12 条既有归档,按 id 倒序构造(对齐实现 orderByDesc(id) 的真实查询排序:新→旧)
+        java.util.List<com.bank.branch.platform.report.entity.RptScreenPublishLog> archives =
+                new java.util.ArrayList<>();
+        for (long id = 12; id >= 1; id--) {
+            com.bank.branch.platform.report.entity.RptScreenPublishLog l =
+                    new com.bank.branch.platform.report.entity.RptScreenPublishLog();
+            l.setId(id);
+            l.setScreenId(7L);
+            archives.add(l);
+        }
+        when(publishLogMapper.selectList(any())).thenReturn(archives);
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+        service.publishCanvas(req);
+
+        // 12 份中保留最近 10(id=3..12),删最旧 2 份(id=1,2);deleteById(Serializable) 重载用 anyLong() 显式定型避开
+        // BaseMapper.deleteById(Serializable)/deleteById(T) 双重载的 any() 二义(与 updateById 同类 javac 限制)
+        org.mockito.Mockito.verify(publishLogMapper, org.mockito.Mockito.times(2))
+                .deleteById(org.mockito.ArgumentMatchers.anyLong());
+        org.mockito.Mockito.verify(publishLogMapper).deleteById(1L);
+        org.mockito.Mockito.verify(publishLogMapper).deleteById(2L);
+        org.mockito.Mockito.verify(publishLogMapper, org.mockito.Mockito.never()).deleteById(3L);
     }
 
     @org.junit.jupiter.api.Test
@@ -286,6 +332,8 @@ class ScreenCanvasServiceTest {
                 org.mockito.ArgumentMatchers.eq(7L),
                 org.mockito.ArgumentMatchers.eq(logEntry.getSnapshotJson()),
                 org.mockito.ArgumentMatchers.eq(1), anyString());
+        // 高危回滚操作必须留痕:审计恰好写入 1 次(rev-t3 补测)
+        org.mockito.Mockito.verify(auditApi, org.mockito.Mockito.times(1)).log(any());
     }
 
     /** 归档条目所属屏与请求屏不一致(跨屏越权回滚)→ 拒绝. */
