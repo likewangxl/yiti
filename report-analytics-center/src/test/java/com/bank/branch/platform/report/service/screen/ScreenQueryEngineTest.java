@@ -133,4 +133,12 @@ class ScreenQueryEngineTest {
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43009");
     }
+
+    @Test
+    void validateCustomSql_validatorError_convergesTo43002() {
+        // 语法非法 SQL：SqlSafeValidator 会抛 RPT-42001，引擎必须收敛为 43002
+        assertThatThrownBy(() -> engine.validateCustomSql("SELECT FROM WHERE"))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43002");
+    }
 }

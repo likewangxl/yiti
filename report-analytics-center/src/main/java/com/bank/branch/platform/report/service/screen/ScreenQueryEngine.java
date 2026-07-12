@@ -84,21 +84,20 @@ public class ScreenQueryEngine {
 
     /** 校验自定义 SQL 模板（保存/试跑/每次执行都调用），失败抛 RPT-43002 */
     public void validateCustomSql(String sqlTemplate) {
+        com.bank.branch.platform.report.support.SqlSafeResult result;
         try {
-            // SqlSafeValidator 只做语法/关键字/深度校验并返回表名列表（不再白名单拒绝，见 3f22660c）；
-            // 大屏白名单在此自查（SqlSafeResult#getReferencedTables() 已统一大写，见源码 §referencedTables 字段）
-            var result = validator.validateAndNormalize(ScreenSqlTemplate.toValidatable(sqlTemplate));
-            for (String table : result.getReferencedTables()) {
-                if (!whitelistUpper.contains(table)) {
-                    log.warn("[ScreenQueryEngine] 自定义 SQL 命中白名单外表 {}", table);
-                    throw new RptException(RptErrorCode.SCREEN_DS_SQL_INVALID);
-                }
-            }
-        } catch (RptException e) {
-            throw e;
+            // SqlSafeValidator/ScreenSqlTemplate 抛的一切校验错（含 RPT-42xxx 语法/关键字/深度校验）
+            // 统一收敛为大屏语义 43002（保留原因链）；SqlSafeValidator 自 3f22660c 起只提取表名不做白名单拒绝
+            result = validator.validateAndNormalize(ScreenSqlTemplate.toValidatable(sqlTemplate));
         } catch (BizException e) {
-            // SqlSafeValidator 抛的 RPT-42xxx 统一收敛为大屏语义的 43002（保留原因链）
             throw new RptException(RptErrorCode.SCREEN_DS_SQL_INVALID, e);
+        }
+        // 白名单拒绝在引擎侧自查（SqlSafeResult#getReferencedTables() 已统一大写，见源码 §referencedTables 字段）
+        for (String table : result.getReferencedTables()) {
+            if (!whitelistUpper.contains(table)) {
+                log.warn("[ScreenQueryEngine] 自定义 SQL 命中白名单外表 {}", table);
+                throw new RptException(RptErrorCode.SCREEN_DS_SQL_INVALID);
+            }
         }
     }
 
