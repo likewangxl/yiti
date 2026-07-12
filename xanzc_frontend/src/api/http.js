@@ -44,18 +44,27 @@ http.interceptors.response.use(
       }
       // 业务失败：yiti 字段名是 message，不是 msg
       const m = body.message || body.msg;
-      ElMessage.error(m || `请求失败 (${body.code})`);
-      return Promise.reject(new Error(m || String(body.code)));
+      // silent 标记（如大屏区块取数）：不弹全局 toast，交由调用方按业务码内联展示；避免多区块并行失败时 toast 轰炸
+      if (!res.config?.silent) {
+        ElMessage.error(m || `请求失败 (${body.code})`);
+      }
+      // reject 的 error 携带业务码（如 RPT-43010），业务侧 catch 可据此区分「缺参引导」与「真错误」
+      const bizErr = new Error(m || String(body.code));
+      bizErr.code = body.code;
+      return Promise.reject(bizErr);
     }
     // 非 envelope（比如二进制、流），原样返回
     return body;
   },
   err => {
+    // silent 标记（如大屏区块取数）：抑制全局 toast，交由调用方内联展示；401 会话过期不受抑制（必须提示+跳登录）
+    const silent = err.config?.silent;
     if (err.response) {
       const { status, data } = err.response;
       // 后端 yiti 业务错也走 200 + ResponseWrapper.error；这里 4xx/5xx 通常是 Spring 框架级
       // 错误（参数校验失败、JSON 反序列化错），data 里仍可能有 { code, message }
       const bizMsg = data?.message || data?.msg;
+      const bizCode = data?.code;
       if (status === 401) {
         // 登录接口本身返回的 401 不要再跳登录页（避免登录失败时 ElMessage 被覆盖）
         if (!err.config?.url?.endsWith('/auth/login')) {
@@ -63,17 +72,18 @@ http.interceptors.response.use(
           gotoLogin();
         }
       } else if (status === 403) {
-        ElMessage.error('没有权限');
+        if (!silent) ElMessage.error('没有权限');
       } else if (status >= 500) {
-        ElMessage.error(bizMsg || '服务器异常，请稍后重试');
+        if (!silent) ElMessage.error(bizMsg || '服务器异常，请稍后重试');
       } else {
         // 400 Bad Request 等：把后端真实 message 抛出，方便用户看到"metricCode 不能为空"等
-        ElMessage.error(bizMsg || `请求失败 (${status})`);
+        if (!silent) ElMessage.error(bizMsg || `请求失败 (${status})`);
       }
-      // 把 message 挂到 err 对象上，业务侧 catch 能直接读 err.message
+      // 把 message / 业务码挂到 err 对象上，业务侧 catch 能直接读 err.message / err.code
       if (bizMsg) err.message = bizMsg;
+      if (bizCode) err.code = bizCode;
     } else {
-      ElMessage.error('网络异常或后端未启动');
+      if (!silent) ElMessage.error('网络异常或后端未启动');
     }
     return Promise.reject(err);
   }

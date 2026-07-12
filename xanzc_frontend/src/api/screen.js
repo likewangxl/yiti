@@ -51,5 +51,7 @@ export function getScreenView(screenCode) {
   return call('get', `/screen/view/${screenCode}`, {}, null);
 }
 export function queryScreenData(body) {
-  return call('post', '/screen/data', { data: body }, null);
+  // silent:true —— 大屏区块取数失败不弹全局 toast，由 BlockContainer 按业务码内联展示（引导态/错误态），
+  // 避免一屏多区块并行失败时 toast 轰炸（配合 http.js 响应拦截器的 silent 分支）
+  return call('post', '/screen/data', { data: body, silent: true }, null);
 }

@@ -6,6 +6,7 @@
     </div>
     <div class="scr-block-body" v-loading="loading" element-loading-background="rgba(5,14,43,.6)">
       <div v-if="error" class="scr-block-err">{{ error }}</div>
+      <div v-else-if="guide" class="scr-block-guide">{{ guide }}</div>
       <DrillTrend v-else-if="drillItem" :bind="bind" :context="context"
                   :item="drillItem" :periods="drill.drillPeriods || ['LAST_10D']" />
       <component v-else-if="data" :is="componentMap[block.componentType]"
@@ -49,12 +50,14 @@ const drill = computed(() => parse(props.block.drillJson));
 
 const data = ref(null);
 const loading = ref(false);
-const error = ref('');
+const error = ref('');    // 真错误（红字）：周期非法 43011 / 执行失败 43008 / 其他
+const guide = ref('');    // 引导态（非报错）：缺必填上下文参数 43010，提示补 orgCode/empId
 const drillItem = ref(null); // { col, label } —— 非空即钻取态
 
 async function load() {
   loading.value = true;
   error.value = '';
+  guide.value = '';
   try {
     data.value = await queryScreenData({
       dsId: bind.value.dsId,
@@ -62,7 +65,14 @@ async function load() {
       contextParams: { orgCode: props.context.orgCode || null, empId: props.context.empId || null }
     });
   } catch (e) {
-    error.value = e?.message || '取数失败';
+    // 缺必填上下文参数（RPT-43010）不是真错误，是"还没给取数条件"，渲染引导占位而非红字报错；
+    // 周期非法(43011)/SQL 执行失败(43008)/其他仍按错误态红字展示
+    if (e?.code === 'RPT-43010') {
+      data.value = null;
+      guide.value = '请提供 orgCode / empId 后查看数据';
+    } else {
+      error.value = e?.message || '取数失败';
+    }
   } finally {
     loading.value = false;
   }
@@ -96,3 +106,23 @@ onMounted(() => {
 });
 onBeforeUnmount(() => { if (timer) clearInterval(timer); });
 </script>
+
+<style scoped>
+/* 引导占位态（缺必填上下文参数）——柔和青灰、非红字，与 .scr-block-err 错误态视觉区分；
+   scoped 随组件 chunk 生效，设计器预览与全屏大屏两个入口均可读，不依赖 screen.scss 是否被引入 */
+.scr-block-guide {
+  height: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #7f9bc4;
+  background: rgba(64, 158, 255, .05);
+  border: 1px dashed rgba(96, 148, 214, .38);
+  border-radius: 6px;
+}
+</style>
