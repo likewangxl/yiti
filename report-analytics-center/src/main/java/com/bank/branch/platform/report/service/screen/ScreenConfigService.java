@@ -32,4 +32,7 @@ public interface ScreenConfigService {
 
     /** 运行时读取整屏配置（ACTIVE；PROVINCE 附 ACTIVE 点位） */
     ScreenViewRespDTO getViewByCode(String screenCode);
+
+    /** 运行时渲染包读取:state=published(默认) 读 PUBLISHED_JSON,draft 读草稿合成包 */
+    com.bank.branch.platform.report.dto.resp.ScreenRenderRespDTO getRenderByCode(String screenCode, String state);
 }

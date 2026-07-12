@@ -187,6 +187,51 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
         return view;
     }
 
+    @Override
+    public com.bank.branch.platform.report.dto.resp.ScreenRenderRespDTO
+            getRenderByCode(String screenCode, String state) {
+        List<RptScreen> hits = screenMapper.selectList(new LambdaQueryWrapper<RptScreen>()
+                .eq(RptScreen::getScreenCode, screenCode)
+                .eq(RptScreen::getStatus, "ACTIVE"));
+        if (hits.isEmpty()) {
+            throw new RptException(RptErrorCode.SCREEN_NOT_FOUND);
+        }
+        RptScreen s = hits.get(0);
+        var d = new com.bank.branch.platform.report.dto.resp.ScreenRenderRespDTO();
+        d.setScreenId(s.getId());
+        d.setScreenCode(s.getScreenCode());
+        d.setScreenName(s.getScreenName());
+        d.setViewLevel(s.getViewLevel());
+        boolean draft = "draft".equalsIgnoreCase(state);
+        if (draft) {
+            // 草稿态:临时合成一个只含 components 的渲染包(bindSnapshots 由前端设计器内已持有 block,
+            // 或运行时按 blockId 走 /api/screen/data 实时取数);此处直投 draft 组件树 + style。
+            d.setRenderPackageJson(composeDraftPreview(s));
+            d.setState("draft");
+        } else {
+            d.setRenderPackageJson(s.getCanvasPublishedJson());
+            d.setState("published");
+        }
+        return d;
+    }
+
+    private String composeDraftPreview(RptScreen s) {
+        try {
+            com.fasterxml.jackson.databind.node.ObjectNode pkg = objectMapper.createObjectNode();
+            pkg.put("schemaVersion", 1);
+            pkg.set("canvasStyle", objectMapper.readTree(
+                    s.getCanvasStyleJson() == null ? "{}" : s.getCanvasStyleJson()));
+            com.fasterxml.jackson.databind.JsonNode draft = objectMapper.readTree(
+                    s.getCanvasDraftJson() == null ? "{}" : s.getCanvasDraftJson());
+            pkg.set("components", draft.path("components").isMissingNode()
+                    ? objectMapper.createArrayNode() : draft.path("components"));
+            pkg.putObject("bindSnapshots"); // 草稿预览留空,ChartWidget 走实时取数
+            return pkg.toString();
+        } catch (Exception e) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
+        }
+    }
+
     // ===== 内部 =====
 
     private void validate(ScreenSaveReqDTO req) {
