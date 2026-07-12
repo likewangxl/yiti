@@ -68,13 +68,15 @@
 
 模块惯例沿用:不暴露 *Api、@BizAuth(bizType=REPORT)、RptException 仅 (code)/(code,Throwable)、新增 DB 访问一律 MyBatis-Plus。
 
+> URL 前缀勘误(2026-07-12 计划阶段核实):既有 4 个 Screen Controller 与 13 条 PT_RESOURCE 的实际前缀为 `/api/screen/...`(非 `/api/report/screen/...`),新端点与实况保持一致。
+
 | 端点 | 职责 | 权限 |
 |------|------|------|
-| `GET /api/report/screen/admin/canvas/{id}` | 编辑器加载:styleJson + draftJson + blocks 行 | 现有屏管理资源 |
-| `POST /api/report/screen/admin/canvas/save` | 保存草稿:styleJson + draftJson + blocks 增删改,单事务;乐观锁冲突→RPT-43012 | 现有屏管理资源 |
-| `POST /api/report/screen/admin/canvas/publish` | 发布:解析 JSON 收集 blockId 集合与行数据交叉校验(结构化解析,禁字符串 contains)→ 合成渲染包 → 写 PUBLISHED_JSON + 归档 + 状态机流转 | **R_RPT_SCR_PUBLISH(高危:独立 URL/单独授权/单独审计)** |
-| `POST /api/report/screen/admin/canvas/rollback` | 从归档回滚指定一次发布到 PUBLISHED_JSON | R_RPT_SCR_PUBLISH |
-| `POST /api/report/screen/admin/canvas/discard` | 放弃草稿:发布态覆盖 DRAFT_JSON | 现有屏管理资源 |
+| `GET /api/screen/admin/canvas/{id}` | 编辑器加载:styleJson + draftJson + blocks 行 | 现有屏管理资源 |
+| `POST /api/screen/admin/canvas/save` | 保存草稿:styleJson + draftJson + blocks 增删改,单事务;乐观锁冲突→RPT-43012 | 现有屏管理资源 |
+| `POST /api/screen/admin/canvas/publish` | 发布:解析 JSON 收集 blockId 集合与行数据交叉校验(结构化解析,禁字符串 contains)→ 合成渲染包 → 写 PUBLISHED_JSON + 归档 + 状态机流转 | **R_RPT_SCR_PUBLISH(高危:独立 URL/单独授权/单独审计)** |
+| `POST /api/screen/admin/canvas/rollback` | 从归档回滚指定一次发布到 PUBLISHED_JSON | R_RPT_SCR_PUBLISH |
+| `POST /api/screen/admin/canvas/discard` | 放弃草稿:发布态覆盖 DRAFT_JSON | 现有屏管理资源 |
 
 **服务端校验**(用户输入必须验证红线):组件类型白名单、blockId 归属校验(禁越权引用他屏 block)、画布 JSON ≤ 2MB、数值范围(坐标/尺寸)。新增错误码:`RPT-43012 画布保存冲突`(错误码守护测试同步)。
 
@@ -125,7 +127,7 @@ xanzc_frontend/src/views/screen/designer/utils/  # snap.js / scale.js / snapshot
 
 ## 6. 测试策略(TDD 红线)
 
-- **后端**(surefire `*Test`,先 Red 后 Green):画布保存(乐观锁→43012、blockId 归属、组件白名单、JSON 上限)、发布(渲染包合成、归档滚动 10 份、回滚)、RptErrorCode 守护测试同步;回归门禁:`mvn test -pl report-analytics-center` 失败数 ≤ 基线 9 个 pre-existing;
+- **后端**(surefire `*Test`,先 Red 后 Green):画布保存(乐观锁→43012、blockId 归属、组件白名单、JSON 上限)、发布(渲染包合成、归档滚动 10 份、回滚)、RptErrorCode 守护测试同步;回归门禁:`mvn test -pl report-analytics-center` 失败数不超过实施启动时**实测记录**的 pre-existing 基线(近两次实测分别为 10 与 9,以启动时实测值为准);
 - **前端**:吸附计算/缩放换算/快照栈抽为纯函数 utils,**引入 vitest(devDependency,用户已确认)** 仅测纯函数;`npx vite build --logLevel error` exit 0 门禁沿用;
 - 提交纪律:每步独立 commit + pathspec,不卷入工作区既有未提交文件。
 
