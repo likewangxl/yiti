@@ -262,6 +262,45 @@ class ScreenCanvasServiceTest {
         org.mockito.Mockito.verify(auditApi, org.mockito.Mockito.times(1)).log(any());
     }
 
+    /** MapCenter 节点(省级屏地图)不是 ChartWidget、无 blockId,发布时的 blockId 一致性校验只遍历
+     * component=="ChartWidget" 的节点,天然跳过它;含 MapCenter 的画布应正常 publish 成功,且
+     * MapCenter 节点原样保留在发布包 components 里(供运行时 ScreenRenderer 渲染),不进 bindSnapshots. */
+    @org.junit.jupiter.api.Test
+    void publish_withMapCenterNode_succeedsAndKeepsNodeOutOfBindSnapshots() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasStyleJson("{\"schemaVersion\":1,\"adaptor\":\"keepProportion\"}");
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"w-1\",\"component\":\"ChartWidget\",\"innerType\":\"METRIC_CARD\","
+                + "\"blockId\":1001,\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}},"
+                + "{\"id\":\"w-map\",\"component\":\"MapCenter\","
+                + "\"style\":{\"top\":96,\"left\":640,\"width\":640,\"height\":880}}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        com.bank.branch.platform.report.entity.RptScreenBlock b =
+                new com.bank.branch.platform.report.entity.RptScreenBlock();
+        b.setId(1001L);
+        b.setScreenId(7L);
+        b.setComponentType("METRIC_CARD");
+        b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
+        when(blockMapper.selectList(any())).thenReturn(java.util.List.of(b));
+        when(canvasMapper.applyPublished(anyLong(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(publishLogMapper.selectList(any())).thenReturn(java.util.List.of());
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+
+        // 不抛异常即证明 MapCenter 天然兼容发布链路(无需为它伪造 blockId)
+        service.publishCanvas(req);
+
+        ArgumentCaptor<String> pkgCaptor = ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(canvasMapper).applyPublished(
+                org.mockito.ArgumentMatchers.eq(7L), pkgCaptor.capture(), anyInt(), anyString());
+        assertThat(pkgCaptor.getValue())
+                .contains("\"component\":\"MapCenter\"")     // 节点原样保留进发布包 components
+                .contains("\"bindSnapshots\":{\"1001\":{")    // 仅 ChartWidget 的 blockId=1001 有快照且非空
+                .doesNotContain("\"1001\":{}");
+    }
+
     /** 归档滚动:超过 PUBLISH_LOG_KEEP(10)份时,只删最旧的那些(id 最小),不动最近 10 份(rev-t3 补测). */
     @org.junit.jupiter.api.Test
     void publish_archiveExceeds10_trimsOldestTwo() {
