@@ -188,7 +188,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   listScreens, getScreen, saveScreen, listMapPoints, saveMapPoints, listScreenDatasources
@@ -387,6 +387,10 @@ onMounted(async () => {
   if (screens.value.length) { curId.value = screens.value[0].id; await loadScreen(curId.value); }
   setTimeout(fitPreview, 0);
   window.addEventListener('resize', fitPreview);
+});
+// 对照 ScreenView.vue：SPA 内反复进出设计器会累积 resize 监听器（闭包持有旧 previewRef），卸载时清理
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', fitPreview);
 });
 </script>
 
