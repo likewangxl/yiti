@@ -55,3 +55,23 @@ export function queryScreenData(body) {
   // 避免一屏多区块并行失败时 toast 轰炸（配合 http.js 响应拦截器的 silent 分支）
   return call('post', '/screen/data', { data: body, silent: true }, null);
 }
+
+// ===== 画布设计器 V2(双态) =====
+export function getScreenCanvas(id) {
+  return call('get', `/screen/admin/canvas/${id}`, {}, null);
+}
+export function saveScreenCanvas(data) {
+  return call('post', '/screen/admin/canvas/save', { data });
+}
+export function publishScreenCanvas(data) {
+  return call('post', '/screen/admin/canvas/publish', { data });
+}
+export function rollbackScreenCanvas(data) {
+  return call('post', '/screen/admin/canvas/rollback', { data });
+}
+export function discardScreenCanvas(screenId) {
+  return call('post', '/screen/admin/canvas/discard', { data: { screenId } });
+}
+export function listScreenPublishLogs(id) {
+  return call('get', `/screen/admin/canvas/${id}/publish-logs`, {}, []);
+}
