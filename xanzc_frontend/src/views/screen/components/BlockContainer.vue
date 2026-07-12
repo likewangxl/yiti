@@ -55,6 +55,15 @@ const guide = ref('');    // 引导态（非报错）：缺必填上下文参数
 const drillItem = ref(null); // { col, label } —— 非空即钻取态
 
 async function load() {
+  // FIX-4: 未选数据源（新建区块 bindJson='{}' → dsId undefined）时不发请求。
+  // 否则 dsId 缺失会被后端 @NotNull 拦成 400，用户看到与业务无关的"请求失败(400)"；直接渲染引导占位。
+  if (!bind.value.dsId) {
+    loading.value = false;
+    error.value = '';
+    data.value = null;
+    guide.value = '请先选择数据源';
+    return;
+  }
   loading.value = true;
   error.value = '';
   guide.value = '';
