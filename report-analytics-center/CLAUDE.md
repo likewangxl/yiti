@@ -176,20 +176,22 @@ src/main/resources/
 | RptExportController | GET    /api/reports/export-tasks/{taskId}/download | REPORT/EXPORT | R_RPT_EXP_DOWNLOAD |
 | （占位） | POST /api/reports/sql-probe/export（V1.1+） | - | R_RPT_SQL_EXP（STATUS=1 disabled） |
 
-## 45 条 RptErrorCode（V1.0 基线 30 条 + screen 子域 43001-43012 共 15 条）
+## 45 条 RptErrorCode（非 screen 子域 33 条 + screen 子域 43001~43012 共 12 条）
 
-- 40001-40010：业务态错误（saved query / data version / dim mismatch / size limits / export task NOT_FOUND/NOT_READY）
-- 40301-40303：权限错误（无访问 / 数据范围不足）
-- 42001-42009：SQL 探查（语法 / 白名单 / 关键字 / 行数 / 超时 / 并发 / 仅 SELECT / 长度 / 执行）
-- 42207-42211：J 章扩展（行数 / 任务过期 / 下载越权 / DATA_SCOPE / metricCodes）
-- 43001-43009：screen 大屏基础子域（数据源不存在/SQL校验/时序缺日期列/大屏不存在/组件数据源不匹配/布局非法/数据源占用/取数失败/数据源配置非法）
-- 43010-43011：screen 取数上下文（缺必填上下文参数 / 取数周期参数非法）
-- 43012：`SCREEN_CANVAS_CONFLICT`——画布设计器 V2 保存乐观锁冲突（详见下方"V2 画布设计器"段）
-- 50001-50003：跨模块 / 缓存 / 异步导出启动失败（含 EXPORT_START_FAILED）
+- 40001-40013：业务态错误 13 条（saved query ×3 / data version / dim mismatch / size limits ×2 / export task NOT_FOUND/NOT_READY / amas-approval / alloc-adjust-apply / notice）
+- 40301-40303：权限错误 3 条（无访问 / SQL 探查无权 / 数据范围不足）
+- 42001-42009：SQL 探查 9 条（语法 / 白名单 / 关键字 / 行数 / 超时 / 并发 / 仅 SELECT / 长度 / 执行）
+- 42207-42211：J 章扩展 5 条（行数 / 任务过期 / 下载越权 / DATA_SCOPE / metricCodes）
+- 43001-43009：screen 大屏基础子域 9 条（数据源不存在/SQL校验/时序缺日期列/大屏不存在/组件数据源不匹配/布局非法/数据源占用/取数失败/数据源配置非法）
+- 43010-43011：screen 取数上下文 2 条（缺必填上下文参数 / 取数周期参数非法）
+- 43012：`SCREEN_CANVAS_CONFLICT`——画布设计器 V2 保存乐观锁冲突（详见上方"V2 画布设计器"段），screen 子域合计 12 条（43001~43012）
+- 50001-50003：跨模块 / 缓存 / 异步导出启动失败 3 条（含 EXPORT_START_FAILED）
 
 守护：`RptErrorCodeTest` 6 case（45 条 + 唯一性 + 中文消息 + EXPORT_START_FAILED 必含）。
 
-> 历史记录：本节此前长期停留在"30 条（25 基线 + 5 J 章扩展）"，2026-07-12 screen 子域首次交付（43001-43009）与本次 V2 画布设计器（43010-43012）均未同步刷新此计数，本次一并订正为代码实测真值。
+> 历史记录：本节此前长期停留在"30 条（25 基线 + 5 J 章扩展）"，未计入 amas-approval/alloc-adjust-apply/notice
+> 历史扩展 3 条（非 screen 子域实为 33 条）；2026-07-12 screen 子域首次交付（43001-43009）与本次 V2 画布
+> 设计器（43010-43012）均未同步刷新此计数，本次一并订正为代码实测真值（33 + 12 = 45）。
 
 ## 异步导出（V1.0 同步执行模型）
 
