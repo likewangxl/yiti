@@ -4,18 +4,19 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * report-analytics-center 模块错误码定义（Task M0.3.1，M5.4.1 扩展至 30 条）.
+ * report-analytics-center 模块错误码定义（Task M0.3.1，M5.4.1 扩展至 30 条，2026-07-12 大屏子域扩展至 42 条）.
  *
  * <p>格式: RPT-{HTTP_STATUS}{SEQ}
- * <p>权威来源: docs/modules/report-analytics-center/02-后端架构.md §6.5「基线 25 条」+ 03 §J.4「J 章导出 5 条」
+ * <p>权威来源: docs/modules/report-analytics-center/02-后端架构.md §6.5「基线 25 条」+ 03 §J.4「J 章导出 5 条」+ 大屏需求 43xxx 子域
  * <p>使用: throw new RptException(RptErrorCode.SAVED_QUERY_NOT_FOUND, id);
  *
- * <p>V1 合计 30 条（业务 10 + 权限 3 + SQL 探查 9 + J 章导出 5 + 系统 3）：
+ * <p>V1 合计 42 条（业务 13 + 权限 3 + SQL 探查 9 + J 章导出 5 + 大屏子域 9 + 系统 3）：
  * <ul>
- *   <li>400xx 业务错误 10 条（saved-query / data-version / subject / metric / export-task）</li>
+ *   <li>400xx 业务错误 13 条（saved-query / data-version / subject / metric / export-task / amas / alloc-adjust / notice）</li>
  *   <li>403xx 权限 3 条（DASHBOARD / SQL_PROBE / DATA_SCOPE）</li>
  *   <li>420xx SQL 探查 9 条（含 plan F1 漏项 42004 / 42006 / 42009）</li>
  *   <li>422xx J 章导出 5 条（M5.4.1 扩展，42207~42211）</li>
+ *   <li>430xx 大屏子域 9 条（2026-07-12 screen-dashboard，43001~43009）</li>
  *   <li>500xx 系统 3 条（含 plan F1 漏项 50002 / 50003 EXPORT_START_FAILED）</li>
  * </ul>
  *
@@ -130,6 +131,17 @@ public enum RptErrorCode {
 
     /** metricCodes 为空或包含未授权指标 */
     EXPORT_METRIC_CODES_INVALID("RPT-42211", "metricCodes 为空或包含未授权指标"),
+
+    // 430xx 大屏子域（8 条，2026-07-12 screen-dashboard）
+    SCREEN_DS_NOT_FOUND("RPT-43001", "大屏数据源不存在"),
+    SCREEN_DS_SQL_INVALID("RPT-43002", "自定义 SQL 校验不通过"),
+    SCREEN_DS_TIMESERIES_NEED_DATECOL("RPT-43003", "时序型自定义 SQL 数据源必须声明日期列"),
+    SCREEN_NOT_FOUND("RPT-43004", "大屏不存在"),
+    SCREEN_BLOCK_BIND_MISMATCH("RPT-43005", "组件类型与数据源能力不匹配"),
+    SCREEN_LAYOUT_INVALID("RPT-43006", "大屏布局配置非法"),
+    SCREEN_DS_IN_USE("RPT-43007", "数据源已被大屏区块引用，不可删除"),
+    SCREEN_DATA_QUERY_FAILED("RPT-43008", "大屏取数执行失败"),
+    SCREEN_DS_CONFIG_INVALID("RPT-43009", "数据源配置非法"),
 
     // =============================================
     // 500xx 系统错误（3 条）
