@@ -9,6 +9,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { PieChart as EPie } from 'echarts/charts';
 import { TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
+import { SCR_COLOR, SCR_PALETTE_WIDE, scrAxisLabel } from '@/styles/screenChartTheme';
 
 use([CanvasRenderer, EPie, TooltipComponent, LegendComponent]);
 
@@ -28,13 +29,13 @@ const pieData = computed(() => {
 });
 
 const option = computed(() => ({
-  color: ['#00e5ff', '#3d7eff', '#ffd76a', '#00e676', '#ff8a65', '#ba68c8', '#4dd0e1', '#fff176', '#90caf9', '#a5d6a7'],
-  tooltip: { trigger: 'item', backgroundColor: 'rgba(5,14,43,.9)', textStyle: { color: '#d5e6ff' } },
-  legend: { orient: 'vertical', right: 4, top: 'middle', textStyle: { color: '#7d9bc9', fontSize: 12 } },
+  color: SCR_PALETTE_WIDE,
+  tooltip: { trigger: 'item', backgroundColor: 'rgba(5,14,43,.9)', textStyle: { color: SCR_COLOR.text } },
+  legend: { orient: 'vertical', right: 4, top: 'middle', textStyle: { ...scrAxisLabel(), fontSize: 12 } },
   series: [{
     type: 'pie', radius: ['38%', '68%'], center: ['38%', '50%'],
-    label: { color: '#d5e6ff', formatter: '{b}\n{d}%' },
-    itemStyle: { borderColor: '#050e2b', borderWidth: 2 },
+    label: { color: SCR_COLOR.text, formatter: '{b}\n{d}%' },
+    itemStyle: { borderColor: SCR_COLOR.bgDeep, borderWidth: 2 },
     data: pieData.value
   }]
 }));

@@ -4,12 +4,16 @@
       <div class="fs-num">{{ t.value }}</div>
       <div class="fs-name">{{ t.name }}</div>
     </div>
-    <div v-if="!tiles.length" class="scr-block-err">暂无流程数据</div>
+    <div v-if="!tiles.length" class="scr-block-empty">
+      <el-icon class="scr-empty-icon"><DocumentRemove /></el-icon>
+      <span>暂无流程数据</span>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
+import { DocumentRemove } from '@element-plus/icons-vue';
 
 const props = defineProps({
   columns: { type: Array, default: () => [] },

@@ -13,6 +13,7 @@ import { GeoComponent, TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { useRouter } from 'vue-router';
 import shaanxiGeo from '@/assets/geo/shaanxi.json';
+import { SCR_COLOR, scrTooltipStyle } from '@/styles/screenChartTheme';
 
 use([CanvasRenderer, MapChart, EffectScatterChart, GeoComponent, TooltipComponent]);
 registerMap('shaanxi', shaanxiGeo);
@@ -23,8 +24,7 @@ const props = defineProps({
 const router = useRouter();
 
 const option = computed(() => ({
-  tooltip: { backgroundColor: 'rgba(5,14,43,.9)', borderColor: 'rgba(0,229,255,.4)',
-             textStyle: { color: '#d5e6ff' } },
+  tooltip: scrTooltipStyle(),
   geo: {
     map: 'shaanxi',
     roam: false,
@@ -49,9 +49,9 @@ const option = computed(() => ({
     coordinateSystem: 'geo',
     symbolSize: 14,
     rippleEffect: { brushType: 'stroke', scale: 3.2 },
-    label: { show: true, position: 'right', color: '#ffd76a', fontSize: 13,
+    label: { show: true, position: 'right', color: SCR_COLOR.gold, fontSize: 13,
              formatter: p => p.name },
-    itemStyle: { color: '#ffd76a', shadowColor: 'rgba(255,215,106,.8)', shadowBlur: 10 },
+    itemStyle: { color: SCR_COLOR.gold, shadowColor: 'rgba(255,215,106,.8)', shadowBlur: 10 },
     tooltip: { formatter: p => `${p.name}<br/>点击进入支行大屏` },
     data: props.mapPoints.map(p => ({
       name: p.orgName,

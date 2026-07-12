@@ -9,6 +9,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
+import { SCR_PALETTE, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle } from '@/styles/screenChartTheme';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent]);
 
@@ -20,24 +21,21 @@ const props = defineProps({
 });
 const emit = defineEmits(['item-click']);
 
-const PALETTE = ['#00e5ff', '#ffd76a', '#3d7eff', '#00e676', '#ff8a65'];
-
 const seriesCols = computed(() => {
   const its = props.bind.items || [];
   return its.length ? its.map(i => i.col) : props.columns.slice(1);
 });
 
 const option = computed(() => ({
-  color: props.styleCfg.colors?.length ? props.styleCfg.colors : PALETTE,
+  color: props.styleCfg.colors?.length ? props.styleCfg.colors : SCR_PALETTE,
   grid: { top: 34, right: 16, bottom: 26, left: 56 },
-  tooltip: { trigger: 'axis', backgroundColor: 'rgba(5,14,43,.9)', borderColor: 'rgba(0,229,255,.4)',
-             textStyle: { color: '#d5e6ff' } },
-  legend: { top: 4, textStyle: { color: '#7d9bc9' } },
+  tooltip: { trigger: 'axis', ...scrTooltipStyle() },
+  legend: { top: 4, textStyle: scrAxisLabel() },
   xAxis: { type: 'category', data: props.rows.map(r => r[0]),
-           axisLine: { lineStyle: { color: 'rgba(125,155,201,.4)' } },
-           axisLabel: { color: '#7d9bc9' } },
-  yAxis: { type: 'value', axisLabel: { color: '#7d9bc9' },
-           splitLine: { lineStyle: { color: 'rgba(125,155,201,.15)' } } },
+           axisLine: scrAxisLine(),
+           axisLabel: scrAxisLabel() },
+  yAxis: { type: 'value', axisLabel: scrAxisLabel(),
+           splitLine: scrSplitLine() },
   series: seriesCols.value.map(col => {
     const idx = props.columns.indexOf(col);
     return {

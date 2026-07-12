@@ -9,7 +9,7 @@
     </div>
 
     <div class="card-section" v-loading="loading">
-      <el-table :data="list" size="default">
+      <el-table :data="list" size="default" stripe border>
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="dsCode" label="编码" width="140" />
         <el-table-column prop="dsName" label="名称" min-width="160" />

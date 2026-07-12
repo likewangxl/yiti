@@ -4,12 +4,16 @@
       <div class="mc-label">{{ it.label || it.col }}</div>
       <div class="mc-value">{{ fmt(valueOf(it.col)) }}<span class="mc-unit">{{ styleCfg.unit || '' }}</span></div>
     </div>
-    <div v-if="!items.length" class="scr-block-err">未绑定数据项</div>
+    <div v-if="!items.length" class="scr-block-empty">
+      <el-icon class="scr-empty-icon"><Warning /></el-icon>
+      <span>未绑定数据项</span>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
+import { Warning } from '@element-plus/icons-vue';
 
 const props = defineProps({
   columns: { type: Array, default: () => [] },

@@ -1,6 +1,7 @@
 <template>
   <div class="dt-wrap">
-    <div class="dt-tabs">
+    <!-- 未勾选任何钻取周期时不渲染空 tab 栏，避免出现无切换入口的空白条（fe Minor-7） -->
+    <div v-if="periods && periods.length" class="dt-tabs">
       <span v-for="p in periods" :key="p" class="dt-tab" :class="{ on: p === period }"
             @click="switchPeriod(p)">{{ PERIOD_LABELS[p] || p }}</span>
     </div>
@@ -19,6 +20,7 @@ import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { queryScreenData } from '@/api/screen';
+import { SCR_COLOR, scrAxisLabel, scrAxisLine, scrSplitLine, scrTooltipStyle } from '@/styles/screenChartTheme';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
 
@@ -60,14 +62,14 @@ const option = computed(() => {
   const idx = cols.indexOf(props.item.col);
   return {
     grid: { top: 20, right: 16, bottom: 26, left: 56 },
-    tooltip: { trigger: 'axis', backgroundColor: 'rgba(5,14,43,.9)', textStyle: { color: '#d5e6ff' } },
+    tooltip: { trigger: 'axis', ...scrTooltipStyle() },
     xAxis: { type: 'category', data: rows.map(r => r[0]),
-             axisLabel: { color: '#7d9bc9' }, axisLine: { lineStyle: { color: 'rgba(125,155,201,.4)' } } },
-    yAxis: { type: 'value', axisLabel: { color: '#7d9bc9' },
-             splitLine: { lineStyle: { color: 'rgba(125,155,201,.15)' } } },
+             axisLabel: scrAxisLabel(), axisLine: scrAxisLine() },
+    yAxis: { type: 'value', axisLabel: scrAxisLabel(),
+             splitLine: scrSplitLine() },
     series: [{
       name: props.item.label, type: 'line', smooth: true, symbol: 'circle', symbolSize: 6,
-      lineStyle: { color: '#00e5ff', width: 2 }, itemStyle: { color: '#00e5ff' },
+      lineStyle: { color: SCR_COLOR.cyan, width: 2 }, itemStyle: { color: SCR_COLOR.cyan },
       areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
         { offset: 0, color: 'rgba(0,229,255,.35)' }, { offset: 1, color: 'rgba(0,229,255,0)' }] } },
       data: rows.map(r => (idx >= 0 ? r[idx] : null))

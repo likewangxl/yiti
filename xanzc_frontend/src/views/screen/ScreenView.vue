@@ -4,7 +4,7 @@
       <div class="scr-header">
         <span class="scr-back" @click="goBack">‹ 返回</span>
         <span class="scr-title">{{ view?.screen?.screenName || '经营管理大屏' }}</span>
-        <span class="scr-clock">{{ clock }}</span>
+        <span class="scr-clock"><span class="scr-live-dot" /> {{ clock }}</span>
       </div>
       <div class="scr-body" v-if="view">
         <ScreenRenderer :screen="view.screen" :blocks="view.blocks"

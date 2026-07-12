@@ -6,12 +6,16 @@
       <div class="rl-bar"><div class="rl-fill" :style="{ width: r.pct + '%' }" /></div>
       <span class="rl-val">{{ fmt(r.value) }}</span>
     </div>
-    <div v-if="!ranked.length" class="scr-block-err">暂无数据</div>
+    <div v-if="!ranked.length" class="scr-block-empty">
+      <el-icon class="scr-empty-icon"><DocumentRemove /></el-icon>
+      <span>暂无数据</span>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
+import { DocumentRemove } from '@element-plus/icons-vue';
 
 const props = defineProps({
   columns: { type: Array, default: () => [] },
@@ -50,10 +54,10 @@ function onClick(r) {
   &:hover { background: rgba(0, 229, 255, .08); border-radius: 4px; } }
 .rl-no { width: 22px; height: 22px; border-radius: 4px; text-align: center; line-height: 22px;
   font-size: 13px; background: rgba(125, 155, 201, .2); color: var(--scr-text-dim); flex: none;
-  &.top { background: linear-gradient(135deg, #ffd76a, #ff8a65); color: #1b1b1b; font-weight: 700; } }
+  &.top { background: linear-gradient(135deg, var(--scr-num), #ff8a65); color: #1b1b1b; font-weight: 700; } }
 .rl-name { width: 96px; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
 .rl-bar { flex: 1; height: 8px; background: rgba(125, 155, 201, .15); border-radius: 4px; overflow: hidden; }
-.rl-fill { height: 100%; background: linear-gradient(90deg, #3d7eff, #00e5ff); border-radius: 4px; }
+.rl-fill { height: 100%; background: linear-gradient(90deg, var(--scr-blue), var(--scr-cyan)); border-radius: 4px; }
 .rl-val { width: 90px; text-align: right; font-size: 14px; color: var(--scr-num);
   font-variant-numeric: tabular-nums; flex: none; }
 </style>

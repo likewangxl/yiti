@@ -6,7 +6,10 @@
     </div>
     <div class="scr-block-body" v-loading="loading" element-loading-background="rgba(5,14,43,.6)">
       <div v-if="error" class="scr-block-err">{{ error }}</div>
-      <div v-else-if="guide" class="scr-block-guide">{{ guide }}</div>
+      <div v-else-if="guide" class="scr-block-guide">
+        <el-icon class="scr-block-guide-icon"><InfoFilled /></el-icon>
+        <span>{{ guide }}</span>
+      </div>
       <DrillTrend v-else-if="drillItem" :bind="bind" :context="context"
                   :item="drillItem" :periods="drill.drillPeriods || ['LAST_10D']" />
       <component v-else-if="data" :is="componentMap[block.componentType]"
@@ -19,6 +22,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { InfoFilled } from '@element-plus/icons-vue';
 import { queryScreenData } from '@/api/screen';
 import MetricCard from './MetricCard.vue';
 import LineTrend from './LineTrend.vue';
@@ -123,8 +127,10 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
   height: 100%;
   min-height: 48px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   text-align: center;
   padding: 10px 14px;
   font-size: 13px;
@@ -134,4 +140,5 @@ onBeforeUnmount(() => { if (timer) clearInterval(timer); });
   border: 1px dashed rgba(96, 148, 214, .38);
   border-radius: 6px;
 }
+.scr-block-guide-icon { font-size: 18px; color: #5c8fd6; opacity: .85; }
 </style>
