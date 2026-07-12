@@ -1,5 +1,5 @@
 <template>
-  <div class="dsn2" :class="'scr-surface-host'">
+  <div class="dsn2 scr-surface-host">
     <!-- 顶部工具条 -->
     <div class="dsn2-toolbar">
       <el-select v-model="curId" placeholder="选择大屏" size="small" style="width:220px" @change="loadCanvas">
@@ -44,13 +44,13 @@ import { listScreens, getScreenCanvas, saveScreenCanvas, publishScreenCanvas,
   discardScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs } from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { fitScale, clampRect } from '@/views/screen/designer/utils/scale';
+import { cloneComponentForClipboard, pasteFromClipboard } from '@/views/screen/designer/utils/clipboard';
 import { findAttr } from '@/views/screen/designer/widgets';
 import CanvasCore from './canvas/CanvasCore.vue';
 import ComponentPanel from './panels/ComponentPanel.vue';
 import LayerPanel from './panels/LayerPanel.vue';
 import CanvasAttr from './panels/CanvasAttr.vue';
 
-const router = useRouter();
 const store = useScreenDesignerStore();
 const screens = ref([]);
 const curId = ref(null);
@@ -58,6 +58,7 @@ const leftTab = ref('comp');
 const saving = ref(false);
 const publishing = ref(false);
 const scalePct = ref(50);
+const clipboard = ref(null); // Ctrl+C/V 本地剪贴板,与 ContextMenu.vue 右键复制粘贴各自独立持有
 provide('previewContext', { orgCode: '', empId: '' }); // 设计态预览上下文(空→43010 引导态)
 
 function attrOf(component) { return findAttr(component); }
@@ -79,17 +80,47 @@ async function onSave() {
     ElMessage.success('已保存草稿');
   } catch (e) {
     if (e?.code === 'RPT-43012') {
-      // 乐观锁冲突:二次确认强制覆盖(前端带最新 version 重发)。
-      // ElMessageBox.confirm 取消/关闭时 reject('cancel')，须单独兜住，否则冒泡成未捕获 rejection
-      // (对齐全仓库既有 confirm 用法惯例，如 AppHeader.vue/Permission.vue 的 try{await confirm}catch{return})。
-      try {
-        await ElMessageBox.confirm('画布已被他处保存,是否重新加载最新版本?', '保存冲突', { type: 'warning' });
-        await loadCanvas();
-      } catch { /* 用户取消:保留当前草稿编辑态,不覆盖 */ }
+      // 二次失败(如强制覆盖重发时又撞上新的并发保存)已由 http 拦截器统一 toast,
+      // 这里只吞掉避免冒泡成未捕获 rejection,不重复弹错。
+      try { await handleSaveConflict(); } catch { /* 已 toast,吞掉 */ }
     }
   } finally { saving.value = false; }
 }
+/**
+ * 43012 乐观锁冲突处理(规格 §9):二次确认给两个选择——
+ * 「强制覆盖」:只取服务器最新 canvasVersion,本地组件树/样式原样重发,即以本地改动覆盖服务器
+ * (对方修改会丢失,文案需明确警示);「放弃本地并重载」:丢弃本地编辑,拉取服务器最新草稿。
+ * 用 ElMessageBox 的 confirm/cancel/close 三态区分(distinguishCancelAndClose),
+ * 仅关闭弹框(close)不做任何操作,保留当前草稿编辑态。
+ */
+async function handleSaveConflict() {
+  let action;
+  try {
+    await ElMessageBox.confirm(
+      '画布已被他处保存。“强制覆盖”会用你当前的本地改动覆盖服务器最新版本(对方的修改将丢失);'
+      + '“放弃本地并重载”会丢弃你的本地改动,加载服务器最新草稿。',
+      '保存冲突',
+      { type: 'warning', confirmButtonText: '强制覆盖', cancelButtonText: '放弃本地并重载', distinguishCancelAndClose: true }
+    );
+    action = 'overwrite';
+  } catch (reason) {
+    action = reason === 'cancel' ? 'reload' : 'dismiss';
+  }
+  if (action === 'overwrite') {
+    const latest = await getScreenCanvas(store.screenId);
+    const resp = await saveScreenCanvas({ ...store.toSavePayload(), expectedVersion: latest.canvasVersion });
+    store.adoptSaveResult(resp);
+    ElMessage.success('已强制覆盖保存');
+  } else if (action === 'reload') {
+    await loadCanvas();
+    ElMessage.info('已重新加载最新版本');
+  }
+  // dismiss:用户仅关闭弹框,不做任何操作
+}
 async function onPublish() {
+  try {
+    await ElMessageBox.confirm('发布后大屏线上立即生效,确认发布当前草稿?', '发布确认', { type: 'warning' });
+  } catch { return; }
   publishing.value = true;
   try {
     await saveScreenCanvas(store.toSavePayload()).then(store.adoptSaveResult); // 先存后发,保证发布最新
@@ -126,6 +157,15 @@ function onKey(e) {
   if (meta && e.key.toLowerCase() === 'z') { e.preventDefault(); store.undo(); }
   else if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); store.redo(); }
   else if (meta && e.key.toLowerCase() === 's') { e.preventDefault(); onSave(); }
+  else if (meta && e.key.toLowerCase() === 'c') {
+    // 复制:与 ContextMenu.vue 右键"复制"同一口径(纯函数 cloneComponentForClipboard),
+    // 各自持有独立剪贴板变量,不跨入口共享状态。
+    if (store.curComponent) { e.preventDefault(); clipboard.value = cloneComponentForClipboard(store.curComponent); }
+  }
+  else if (meta && e.key.toLowerCase() === 'v') {
+    const node = pasteFromClipboard(clipboard.value);
+    if (node) { e.preventDefault(); store.addComponent(node); } // addComponent 内部已选中新节点
+  }
   else if (e.key === 'Delete') { store.removeCurrent(); }
   else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && store.curComponent) {
     e.preventDefault();
