@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>覆盖 plan L2204-L2310 「≥15 case」要求，分组：
  * <ol>
  *   <li>通过用例（3）：simple SELECT、Whitelist JOIN、Subquery depth ≤ 3</li>
- *   <li>白名单拒绝（1）：未登记表 → RPT-42002</li>
+ *   <li>表名提取（1）：未登记表 → 3f22660c 起不再拒绝，allowed=true 且表名进结果表名列表</li>
  *   <li>禁用关键字（5）：DROP / DELETE / UPDATE / INSERT / 大小写不敏感 → RPT-42003</li>
  *   <li>仅 SELECT（1）：SHOW TABLES → RPT-42007</li>
  *   <li>UNION / EXCEPT / INTERSECT 拒绝（1）→ RPT-42001</li>
@@ -62,14 +62,20 @@ class SqlSafeValidatorTest {
     }
 
     // =====================================================================
-    // 2) 拒绝用例（白名单）
+    // 2) 表名提取（白名单拒绝已于 3f22660c 移除）
     // =====================================================================
 
+    /**
+     * 3f22660c（feat(report): SQL 探查去白名单 + AES 加密传输）起，
+     * {@link SqlSafeValidator} 第 7 步不再对非白名单表拒绝，仅提取表名供调用方自查
+     * （大屏 ScreenQueryEngine 即依赖此提取结果做自身白名单校验）。
+     * 本用例原名 {@code validate_tableNotInWhitelist_rejects42002} 断言恒红，翻转为现状语义。
+     */
     @Test
-    void validate_tableNotInWhitelist_rejects42002() {
-        assertThatThrownBy(() -> v.validateAndNormalize("SELECT * FROM secret_table"))
-                .isInstanceOf(BizException.class)
-                .hasFieldOrPropertyWithValue("code", "RPT-42002");
+    void validate_tableNotInWhitelist_nowAllowed_tablesExtracted() {
+        SqlSafeResult r = v.validateAndNormalize("SELECT * FROM secret_table");
+        assertThat(r.isAllowed()).isTrue();
+        assertThat(r.getReferencedTables()).contains("SECRET_TABLE");
     }
 
     // =====================================================================

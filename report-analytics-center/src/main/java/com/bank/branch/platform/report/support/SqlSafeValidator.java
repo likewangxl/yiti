@@ -39,7 +39,8 @@ import java.util.regex.Pattern;
  *   <li>仅 Select 语句 → RPT-42007（SHOW / EXPLAIN / CALL 等非 Select 拒绝）</li>
  *   <li>禁 UNION / EXCEPT / INTERSECT（SetOperationList）→ RPT-42001</li>
  *   <li>子查询深度 ≤ {@code maxSubqueryDepth}（默认 3）→ RPT-42001</li>
- *   <li>白名单表（TablesNamesFinder）→ RPT-42002</li>
+ *   <li>表名提取（TablesNamesFinder，白名单拒绝已于 3f22660c 移除，仅提取供调用方自查——
+ *       大屏 ScreenQueryEngine 即如此）</li>
  *   <li>LIMIT 标准化（无则追加 maxRows / 超则截断 / 内则保留）</li>
  * </ol>
  *
