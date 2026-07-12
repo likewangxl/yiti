@@ -6,10 +6,10 @@
         <el-select v-model="curId" placeholder="选择大屏" style="width:220px" @change="loadScreen">
           <el-option v-for="s in screens" :key="s.id" :label="`${s.screenName} (${s.viewLevel})`" :value="s.id" />
         </el-select>
-        <el-button @click="openCreateScreen">+ 新建屏</el-button>
-        <el-button v-if="model && model.viewLevel === 'PROVINCE'" @click="pointDlg.show = true">地图点位</el-button>
-        <el-button v-if="model" @click="previewFull">全屏预览</el-button>
-        <el-button v-if="model" type="primary" :loading="saving" @click="onSave">保 存</el-button>
+        <el-button :icon="Plus" @click="openCreateScreen">新建屏</el-button>
+        <el-button v-if="model && model.viewLevel === 'PROVINCE'" :icon="Location" @click="pointDlg.show = true">地图点位</el-button>
+        <el-button v-if="model" :icon="FullScreen" @click="previewFull">全屏预览</el-button>
+        <el-button v-if="model" type="primary" :icon="Check" :loading="saving" @click="onSave">保 存</el-button>
       </div>
     </div>
 
@@ -19,25 +19,28 @@
         <div v-for="region in editableRegions" :key="region" class="dsn-region">
           <div class="dsn-region-h">
             <b>{{ REGION_LABELS[region] }}</b>
-            <el-button link size="small" @click="addRow(region)">+ 行</el-button>
+            <el-button link size="small" :icon="Plus" @click="addRow(region)">添加一行</el-button>
           </div>
           <div v-for="(row, ri) in rowsOf(region)" :key="ri" class="dsn-row-item">
             <div class="dsn-row-h">
-              <span>第 {{ row.rowNo }} 行 · 高</span>
+              <span class="dsn-row-tag">第 {{ row.rowNo }} 行</span>
+              <span class="dsn-row-h-label">行高</span>
               <el-input-number v-model="row.blocks[0].heightPct" :min="1" :max="100" size="small"
-                               style="width:90px" @change="syncRowHeight(row)" />%
-              <el-button link size="small" @click="moveRow(region, ri, -1)">↑</el-button>
-              <el-button link size="small" @click="moveRow(region, ri, 1)">↓</el-button>
-              <el-button link size="small" @click="addBlock(region, row.rowNo)">+块</el-button>
-              <el-button link type="danger" size="small" @click="removeRow(region, row.rowNo)">删行</el-button>
+                               style="width:90px" @change="syncRowHeight(row)" />
+              <span class="dsn-row-h-label">%</span>
+              <span class="dsn-row-h-spacer" />
+              <el-button link size="small" :icon="ArrowUp" @click="moveRow(region, ri, -1)" />
+              <el-button link size="small" :icon="ArrowDown" @click="moveRow(region, ri, 1)" />
+              <el-button link size="small" :icon="Plus" @click="addBlock(region, row.rowNo)">加块</el-button>
+              <el-button link type="danger" size="small" :icon="Delete" @click="removeRow(region, row.rowNo)">删行</el-button>
             </div>
             <div v-for="b in row.blocks" :key="b._key" class="dsn-block-item"
                  :class="{ on: selected === b }" @click="selected = b">
-              <span>{{ TYPE_LABELS[b.componentType] }}</span>
+              <span class="dsn-b-type">{{ TYPE_LABELS[b.componentType] }}</span>
               <span class="dsn-b-title">{{ styleOf(b).title || '未命名' }}</span>
-              <span>宽<el-input-number v-model="b.widthPct" :min="1" :max="100" size="small"
+              <span class="dsn-b-width">宽<el-input-number v-model="b.widthPct" :min="1" :max="100" size="small"
                                        style="width:80px" @click.stop />%</span>
-              <el-button link type="danger" size="small" @click.stop="removeBlock(b)">✕</el-button>
+              <el-button link type="danger" size="small" :icon="Close" @click.stop="removeBlock(b)" />
             </div>
           </div>
         </div>
@@ -47,7 +50,12 @@
 
       <!-- 中：实时预览（复用运行时渲染引擎，所见即所得） -->
       <div class="card-section dsn-preview-wrap">
-        <div class="dsn-preview screen-root" ref="previewRef">
+        <div class="dsn-preview-hd">
+          <span class="dsn-preview-hd-dot" />
+          <span>实时预览</span>
+          <span class="dsn-preview-hd-hint">所见即所得 · 与线上大屏同一渲染引擎</span>
+        </div>
+        <div class="dsn-preview" ref="previewRef">
           <div class="scr-stage" :style="{ transform: `translate(-50%, -50%) scale(${previewScale})` }">
             <div class="scr-header"><span class="scr-title">{{ model.screenName }}</span></div>
             <div class="scr-body">
@@ -56,11 +64,12 @@
             </div>
           </div>
         </div>
-        <el-form inline size="small" class="dsn-ctx">
-          <el-form-item label="预览 orgCode"><el-input v-model="previewCtx.orgCode" style="width:130px" /></el-form-item>
-          <el-form-item label="预览 empId"><el-input v-model="previewCtx.empId" style="width:130px" /></el-form-item>
-          <el-button size="small" @click="renderKey++">刷新预览</el-button>
-        </el-form>
+        <div class="dsn-ctx">
+          <span class="dsn-ctx-label">预览参数</span>
+          <el-input v-model="previewCtx.orgCode" placeholder="orgCode" size="small" style="width:130px" />
+          <el-input v-model="previewCtx.empId" placeholder="empId" size="small" style="width:130px" />
+          <el-button size="small" :icon="Refresh" @click="renderKey++">刷新预览</el-button>
+        </div>
       </div>
 
       <!-- 右：属性面板 -->
@@ -85,30 +94,44 @@
                 <el-option v-for="p in ['LATEST','LAST_10D','LAST_1M','LAST_6M_EOM']" :key="p" :label="p" :value="p" />
               </el-select>
             </el-form-item>
-            <el-form-item label="数据项（卡片/折线；一行一个：列名|显示名）">
+            <el-form-item label="数据项（卡片/折线）">
               <el-input :model-value="itemsText(selected)" type="textarea" :rows="3"
+                        class="dsn-mono-textarea" placeholder="列名|显示名"
                         @update:model-value="v => setItemsText(selected, v)" />
+              <div class="dsn-field-hint">一行一个，格式：列名|显示名（显示名可省略）</div>
             </el-form-item>
             <el-form-item label="名称列 / 数值列（排名/饼图/流程）">
-              <div style="display:flex;gap:6px">
+              <div class="dsn-field-row">
                 <el-input :model-value="bindOf(selected).nameCol" placeholder="nameCol"
                           @update:model-value="v => patchBind(selected, { nameCol: v })" />
                 <el-input :model-value="bindOf(selected).valueCol" placeholder="valueCol"
                           @update:model-value="v => patchBind(selected, { valueCol: v })" />
               </div>
             </el-form-item>
-            <el-form-item label="标题 / 单位 / 小数位 / 刷新秒">
-              <div style="display:flex;gap:6px">
+            <div class="dsn-field-grid">
+              <div class="dsn-field">
+                <label>标题</label>
                 <el-input :model-value="styleOf(selected).title" placeholder="标题"
                           @update:model-value="v => patchStyle(selected, { title: v })" />
-                <el-input :model-value="styleOf(selected).unit" placeholder="单位" style="width:90px"
+              </div>
+              <div class="dsn-field">
+                <label>单位</label>
+                <el-input :model-value="styleOf(selected).unit" placeholder="如 % / 万元"
                           @update:model-value="v => patchStyle(selected, { unit: v })" />
+              </div>
+              <div class="dsn-field">
+                <label>小数位</label>
                 <el-input-number :model-value="styleOf(selected).decimals ?? 2" :min="0" :max="6"
+                                 style="width:100%"
                                  @update:model-value="v => patchStyle(selected, { decimals: v })" />
+              </div>
+              <div class="dsn-field">
+                <label>刷新秒</label>
                 <el-input-number :model-value="styleOf(selected).refreshSec ?? 60" :min="0" :max="3600"
+                                 style="width:100%"
                                  @update:model-value="v => patchStyle(selected, { refreshSec: v })" />
               </div>
-            </el-form-item>
+            </div>
             <el-divider>钻取与跳转</el-divider>
             <el-form-item>
               <el-switch :model-value="drillOf(selected).drillEnabled" active-text="区块内趋势钻取（仅时序数据源）"
@@ -190,6 +213,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
+import {
+  Plus, Location, FullScreen, Check, ArrowUp, ArrowDown, Delete, Close, Refresh
+} from '@element-plus/icons-vue';
 import {
   listScreens, getScreen, saveScreen, listMapPoints, saveMapPoints, listScreenDatasources
 } from '@/api/screen';
@@ -395,20 +421,91 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-.dsn-cols { display: grid; grid-template-columns: 320px 1fr 340px; gap: 12px; align-items: start; }
+@use '@/styles/tokens.scss' as *;
+
+.dsn-cols { display: grid; grid-template-columns: 320px 1fr 340px; gap: 14px; align-items: start; }
+
+// ---- 左：结构树 ----
 .dsn-tree { max-height: 76vh; overflow-y: auto; }
-.dsn-region { margin-bottom: 10px; }
-.dsn-region-h { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
-.dsn-row-item { border: 1px dashed #d0d7e2; border-radius: 6px; padding: 6px; margin-bottom: 6px; }
-.dsn-row-h { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #6b7a90; flex-wrap: wrap; }
-.dsn-block-item { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 6px;
-  border-radius: 4px; cursor: pointer; margin-top: 4px;
-  &.on { background: #e8f3ff; outline: 1px solid #409eff; } }
-.dsn-b-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #909db1; }
+.dsn-region { margin-bottom: 14px; &:last-child { margin-bottom: 0; } }
+.dsn-region-h {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid $border-1;
+  b { font-size: 13px; color: $text-2; letter-spacing: .5px; }
+}
+.dsn-row-item {
+  background: $bg-soft;
+  border: 1px solid $border-1;
+  border-radius: 8px;
+  padding: 8px 8px 6px;
+  margin-bottom: 8px;
+  transition: border-color .15s;
+  &:hover { border-color: $border-2; }
+}
+.dsn-row-h {
+  display: flex; align-items: center; gap: 2px; font-size: 12px; color: $text-3; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.dsn-row-tag { font-size: 12px; font-weight: 600; color: $text-2; margin-right: 4px; }
+.dsn-row-h-label { color: $text-4; margin: 0 2px; }
+.dsn-row-h-spacer { flex: 1; }
+.dsn-block-item {
+  display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 8px;
+  border-radius: 6px; cursor: pointer; margin-top: 4px;
+  border: 1px solid transparent;
+  background: $bg-card;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+  &:hover { border-color: $border-2; }
+  &.on { background: $primary-100; border-color: $primary-400; box-shadow: inset 2px 0 0 $primary; }
+}
+.dsn-b-type {
+  flex: none; font-size: 12px; color: $primary; background: $primary-100;
+  padding: 1px 6px; border-radius: 4px;
+}
+.dsn-b-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: $text-3; }
+.dsn-b-width { flex: none; display: flex; align-items: center; gap: 2px; font-size: 12px; color: $text-4; }
+
+// ---- 中：实时预览（深色舞台 + 浅色外壳的"电视墙"过渡） ----
 .dsn-preview-wrap { overflow: hidden; }
-.dsn-preview { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden;
-  // 覆盖 screen-root 的 fixed 定位，改为容器内预览
-  position: relative !important; inset: auto !important; }
-.dsn-ctx { margin-top: 8px; }
+.dsn-preview-hd {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  font-size: 13px; font-weight: 600; color: $text-2;
+}
+.dsn-preview-hd-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: $success;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, .15);
+}
+.dsn-preview-hd-hint { font-weight: 400; font-size: 12px; color: $text-4; margin-left: 4px; }
+.dsn-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 6px solid #0b1330;
+  box-shadow: 0 8px 28px rgba(3, 8, 28, .28);
+}
+.dsn-ctx { margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dsn-ctx-label { font-size: 12px; color: $text-4; }
+
+// ---- 右：属性面板 ----
 .dsn-props { max-height: 76vh; overflow-y: auto; }
+.dsn-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-bottom: 18px; }
+.dsn-field label { display: block; font-size: 12px; color: $text-4; margin-bottom: 4px; }
+.dsn-field-row { display: flex; gap: 6px; }
+.dsn-field-hint { font-size: 12px; color: $text-4; margin-top: 4px; }
+:deep(.dsn-mono-textarea textarea) { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; }
+</style>
+
+<style lang="scss">
+// 设计器内嵌预览复用运行时组件的 .scr-* 类名（ScreenRenderer/BlockContainer 等子组件模板），
+// scoped 样式无法穿透子组件，故用独立的全局样式块引入主题 mixin；
+// 与 screen.scss 的 .screen-root 共用同一份视觉资产（见 src/styles/_screen-theme.scss），
+// 但不含 position:fixed 全屏定位，避免污染设计器的管理页布局（定位交给上面 scoped 的 .dsn-preview 容器）。
+@use '@/styles/screen-theme' as theme;
+
+.dsn-preview {
+  @include theme.scr-surface;
+}
 </style>
