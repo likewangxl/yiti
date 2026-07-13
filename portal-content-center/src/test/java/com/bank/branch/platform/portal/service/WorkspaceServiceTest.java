@@ -107,7 +107,7 @@ class WorkspaceServiceTest {
         notifDTO.setBizId("BIZ001");
         notifDTO.setLinkUrl("/notifications/N001");
         PageResult<NotificationDTO> notifPage = PageResult.of(1, 5, 1, List.of(notifDTO));
-        when(notifyApi.queryNotifications(eq("E10001"), eq(false), any(PageRequest.class)))
+        when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(notifPage);
 
         // metricCards
@@ -163,7 +163,7 @@ class WorkspaceServiceTest {
         when(workflowQueryAdapter.listPending("E10001", 5)).thenReturn(Collections.emptyList());
         when(notifyApi.countUnread("E10001")).thenReturn(0);
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
-        when(notifyApi.queryNotifications(eq("E10001"), eq(false), any(PageRequest.class)))
+        when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
         when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
 
@@ -191,7 +191,7 @@ class WorkspaceServiceTest {
         when(workflowQueryAdapter.listPending("E10001", 5)).thenReturn(Collections.emptyList());
         when(notifyApi.countUnread("E10001")).thenThrow(new RuntimeException("NotifyApi unavailable"));
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
-        when(notifyApi.queryNotifications(eq("E10001"), eq(false), any(PageRequest.class)))
+        when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
         when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
 
@@ -214,7 +214,7 @@ class WorkspaceServiceTest {
         when(workflowQueryAdapter.listPending("E10001", 5)).thenReturn(Collections.emptyList());
         when(notifyApi.countUnread("E10001")).thenReturn(0);
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
-        when(notifyApi.queryNotifications(eq("E10001"), eq(false), any(PageRequest.class)))
+        when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
         when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
 
@@ -248,7 +248,7 @@ class WorkspaceServiceTest {
         when(shortcutService.listMyShortcuts()).thenReturn(Collections.emptyList());
         when(notifyApi.countUnread("E10001")).thenReturn(0);
         PageResult<NotificationDTO> emptyPage = PageResult.of(1, 5, 0, Collections.emptyList());
-        when(notifyApi.queryNotifications(eq("E10001"), eq(false), any(PageRequest.class)))
+        when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(emptyPage);
         when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
 
@@ -291,7 +291,7 @@ class WorkspaceServiceTest {
         when(workflowQueryAdapter.countPending("E10001")).thenReturn(0);
         when(workflowQueryAdapter.listPending("E10001", 5)).thenReturn(Collections.emptyList());
         when(notifyApi.countUnread("E10001")).thenReturn(0);
-        when(notifyApi.queryNotifications(eq("E10001"), eq(false), any(PageRequest.class)))
+        when(notifyApi.queryNotifications(eq("E10001"), isNull(), any(PageRequest.class)))
                 .thenReturn(notifPage);
         when(metricAdapter.fetch("E10001")).thenReturn(Collections.emptyList());
 

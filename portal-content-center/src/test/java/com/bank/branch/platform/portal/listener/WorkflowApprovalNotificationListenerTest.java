@@ -43,7 +43,7 @@ class WorkflowApprovalNotificationListenerTest {
         verify(notificationService).sendNotification(captor.capture());
         NotificationCmd cmd = captor.getValue();
         assertThat(cmd.getTargetEmpId()).isEqualTo("E10001");
-        assertThat(cmd.getContent()).isEqualTo("您的申请已通过审批 by zhangsan");
+        assertThat(cmd.getContent()).isEqualTo("您的【业绩调整审批】申请已通过审批（审批人：zhangsan）");
         assertThat(cmd.getBizType()).isEqualTo("ALLOC_ADJUST");
         assertThat(cmd.getBizId()).isEqualTo("A1");
     }
@@ -59,7 +59,7 @@ class WorkflowApprovalNotificationListenerTest {
 
         ArgumentCaptor<NotificationCmd> captor = ArgumentCaptor.forClass(NotificationCmd.class);
         verify(notificationService).sendNotification(captor.capture());
-        assertThat(captor.getValue().getContent()).isEqualTo("您的申请被驳回 by lisi");
+        assertThat(captor.getValue().getContent()).isEqualTo("您的【流程】申请被驳回（审批人：lisi）");
     }
 
     @Test
@@ -75,7 +75,7 @@ class WorkflowApprovalNotificationListenerTest {
         verify(notificationService).sendNotification(captor.capture());
         NotificationCmd cmd = captor.getValue();
         assertThat(cmd.getTargetEmpId()).isEqualTo("E20001");
-        assertThat(cmd.getContent()).isEqualTo("申请人 wangwu 已撤回申请");
+        assertThat(cmd.getContent()).isEqualTo("【流程】申请人 wangwu 已撤回申请");
     }
 
     @Test
