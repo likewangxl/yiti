@@ -287,10 +287,11 @@ onMounted(async () => {
   }
 });
 
-// 转交：仅 RUNNING 且有活跃任务（currentTaskId，见 ProcessMonitorItemDTO）的行可转交；
-// 已结束流程或查询瞬间恰好处于节点切换空档（currentTaskId 缺省）禁用按钮，避免点开弹窗后提交必错。
+// 转交：仅 RUNNING、有活跃任务（currentTaskId）且该任务已有办理人（currentAssignee）的行可转交。
+// 追加 currentAssignee 判定：未签收的候选组任务当前处理人为「-」，from_emp_id NOT NULL 落库必失败，
+// 后端会明确拒绝「任务尚未签收」，此处提前禁用按钮避免点开弹窗后提交必错（I2 整改）。
 function canTransfer(row) {
-  return row.processStatus === 'RUNNING' && !!row.currentTaskId;
+  return row.processStatus === 'RUNNING' && !!row.currentTaskId && !!row.currentAssignee;
 }
 
 const transferDlg = reactive({ show: false, task: null });

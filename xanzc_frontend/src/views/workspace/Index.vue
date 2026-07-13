@@ -124,11 +124,11 @@
       </el-table>
     </div>
 
-    <!-- 我转出的（只读）：我发起的转交，展示进度，不提供任何操作（撤回等走审批流监控页） -->
+    <!-- 我发起的：我作为发起人发起的转交（按 initiator 过滤，秘书代发起也能看到）。
+         待认领（PENDING_ACCEPT）行可就地撤回，其余状态仅查看。 -->
     <div class="card-section">
       <div class="card-h">
-        <div class="title">我转出的</div>
-        <span class="hint">只读</span>
+        <div class="title">我发起的</div>
         <a class="more" @click="loadTransferOutbox">刷新</a>
       </div>
       <el-table :data="transferOutboxRows" stripe size="small" v-loading="transferOutboxLoading" empty-text="暂无转出记录">
@@ -149,9 +149,11 @@
         <el-table-column label="发起时间" width="140">
           <template #default="{ row }">{{ fmtDateTime(row.initiatedTime) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80">
+        <el-table-column label="操作" width="120">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="viewOutboxRow(row)">查看</el-button>
+            <el-button v-if="row.status === 'PENDING_ACCEPT'" type="danger" link size="small"
+              :loading="row._acting" @click="cancelTransfer(row)">撤回</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -170,7 +172,7 @@ import { workspace as initial } from '@/mock';
 import { getWorkspace, listNotifications, getUnreadNotificationCount, markRead } from '@/api/workspace';
 import {
   listTodoTasks, listDoneTasks,
-  transferInbox, transferAccept, transferDecline, transferOutbox
+  transferInbox, transferAccept, transferDecline, transferOutbox, transferCancel
 } from '@/api/workflow';
 import { listRecentAnnouncements } from '@/api/announcement';
 
@@ -291,6 +293,22 @@ async function loadTransferOutbox() {
   try {
     transferOutboxRows.value = await transferOutbox();
   } catch { transferOutboxRows.value = []; } finally { transferOutboxLoading.value = false; }
+}
+
+// 撤回：仅发起人本人可撤回待认领转交（后端 cancel 按 initiator 授权）。二次确认后调 transferCancel，
+// 成功即刷新列表（该行状态流出 PENDING_ACCEPT，撤回按钮随之消失，原办理人只读锁天然解除）。
+async function cancelTransfer(row) {
+  try {
+    await ElMessageBox.confirm(`确认撤回转交：${row.nodeName || row.businessKey || ''}？`, '撤回转交', {
+      type: 'warning', confirmButtonText: '撤回', cancelButtonText: '取消'
+    });
+  } catch { return; } // 用户取消
+  row._acting = true;
+  try {
+    await transferCancel(row.id);
+    ElMessage.success('已撤回');
+    loadTransferOutbox();
+  } catch { /* http.js 拦截器已 toast 错误详情 */ } finally { row._acting = false; }
 }
 
 const TRANSFER_STATUS_MAP = {

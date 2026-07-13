@@ -115,6 +115,10 @@ public class TaskOperationService {
      */
     public void approveTaskByEmp(String taskId, String empId, ApproveReqDTO req) {
         Task task = queryTaskOrThrow(taskId);
+        // 转交待认领期间原任务对任何办理动作只读——无会话审批路径（callpu/SOAP 手机端 PERF_APPR，
+        // 恰是 ALLOC_ADJUST/TARGET_ADJUST 唯一可发起转交的两种 bizType）同样必须过锁，否则会绕过
+        // 「原办理人只读」保证并把待认领转交记录卡成永久孤儿（详见 C1 终审整改）。
+        ensureNotTransferLocked(taskId);
         // 无会话链路（候选组任务未签收）：complete 前显式把 assignee 设为审批人 empId，
         // 否则 ACT_HI_TASKINST.ASSIGNEE_ 为 null，「已审批」查询 taskAssignee(empId).finished() 无法命中。
         taskService.setAssignee(taskId, empId);
@@ -174,6 +178,8 @@ public class TaskOperationService {
      */
     public void rejectTaskByEmp(String taskId, String empId, RejectReqDTO req) {
         Task task = queryTaskOrThrow(taskId);
+        // 转交待认领期间只读，无会话驳回路径同样过锁（同 approveTaskByEmp，防 C1 锁绕过）。
+        ensureNotTransferLocked(taskId);
         // 同 approveTaskByEmp：complete 前签收，保证驳回记录在「已审批」列表可见（assignee 留痕）。
         taskService.setAssignee(taskId, empId);
         doReject(task, empId, req);

@@ -341,6 +341,43 @@ class TaskOperationServiceTest {
     }
 
     /**
+     * C1 整改：approveTaskByEmp（callpu/SOAP 无会话审批路径）在存在待认领转交时也必须过只读锁，
+     * 抛 WF-40913 且绝不推进到 taskService.complete —— 否则会绕过「原办理人只读」保证。
+     */
+    @Test
+    void approveTaskByEmp_blockedWhenPendingTransfer() {
+        Task t = buildMockTask("TASK_1", "PID_1", "OTHER");
+        mockTaskQuery(t);
+        when(wfTaskTransferMapper.selectActiveByTaskId("TASK_1")).thenReturn(new WfTaskTransfer());
+
+        assertThatThrownBy(() -> taskOperationService.approveTaskByEmp("TASK_1", "E001", new ApproveReqDTO("同意", null)))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40913");
+
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+        verify(taskService, never()).complete(anyString(), anyMap());
+    }
+
+    /**
+     * C1 整改：rejectTaskByEmp 同样必须过只读锁，抛 WF-40913 且绝不推进到 deleteProcessInstance。
+     */
+    @Test
+    void rejectTaskByEmp_blockedWhenPendingTransfer() {
+        Task t = buildMockTask("TASK_1", "PID_1", "OTHER");
+        mockTaskQuery(t);
+        when(wfTaskTransferMapper.selectActiveByTaskId("TASK_1")).thenReturn(new WfTaskTransfer());
+
+        assertThatThrownBy(() -> taskOperationService.rejectTaskByEmp("TASK_1", "E001", new RejectReqDTO("不符合")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40913");
+
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+        verify(runtimeService, never()).deleteProcessInstance(anyString(), anyString());
+    }
+
+    /**
      * approveTaskByEmp：任务不存在仍抛 WF-40403。
      */
     @Test

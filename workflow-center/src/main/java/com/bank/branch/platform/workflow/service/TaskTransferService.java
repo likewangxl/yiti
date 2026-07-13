@@ -22,7 +22,7 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.identitylink.api.IdentityLinkType;
 import org.flowable.task.api.Task;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,6 +72,8 @@ public class TaskTransferService {
     private static final String STATUS_ACCEPTED = "ACCEPTED";
     private static final String STATUS_REJECTED = "REJECTED";
     private static final String STATUS_CANCELLED = "CANCELLED";
+    /** 认领/拒绝时发现原任务已被其他路径完成/取消/删除，把悬挂的待认领转交置此终态（I1 孤儿转交整改）。 */
+    private static final String STATUS_INVALIDATED = "INVALIDATED";
 
     /**
      * 发起两阶段转交。
@@ -93,9 +95,11 @@ public class TaskTransferService {
      * @param taskId 任务ID
      * @param req    转交发起请求（接收人工号 + 原因）
      * @return 转交记录ID
-     * @throws BizException WF-40403 任务不存在；WF-40910 已有待认领转交；
-     *                       WF-40911 接收人不在本机构；WF-40912 接收人无该节点办理资格
+     * @throws BizException WF-40403 任务不存在；WF-40917 任务尚未签收；WF-40918 不能转交给本人；
+     *                       WF-40910 已有待认领转交；WF-40911 接收人不在本机构；
+     *                       WF-40912 接收人无该节点办理资格
      */
+    @Transactional
     public String initiate(String taskId, TransferInitiateReqDTO req) {
         String initiator = currentUserApi.getCurrentEmpId();
         String initiatorOrg = currentUserApi.getCurrentOrgCode();
@@ -104,6 +108,20 @@ public class TaskTransferService {
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null) {
             throw new BizException(WfErrorCode.TASK_NOT_FOUND.getCode(), WfErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+
+        // 候选组任务未签收时 assignee 为 null，from_emp_id NOT NULL 直接插会抛 DataIntegrityViolationException，
+        // 原实现被下面的 catch 误兜成 WF-40910「已有待认领转交」假冲突。这里显式前置校验，
+        // 给出明确的「任务尚未签收，无法转交」错误（I2 整改）。
+        String fromEmpId = task.getAssignee();
+        if (fromEmpId == null) {
+            throw new BizException(WfErrorCode.TRANSFER_TASK_NOT_CLAIMED.getCode(),
+                    WfErrorCode.TRANSFER_TASK_NOT_CLAIMED.getMessage());
+        }
+        // 自转交防御：转给被转出者本人或发起人自己均无意义（前端 TransferDialog 已过滤，服务层兜底）。
+        if (fromEmpId.equals(toEmpId) || initiator.equals(toEmpId)) {
+            throw new BizException(WfErrorCode.TRANSFER_SELF_NOT_ALLOWED.getCode(),
+                    WfErrorCode.TRANSFER_SELF_NOT_ALLOWED.getMessage());
         }
 
         // 单活校验：同一任务不能同时存在两条待认领转交
@@ -142,7 +160,7 @@ public class TaskTransferService {
         t.setTaskId(taskId);
         t.setNodeKey(task.getTaskDefinitionKey());
         t.setNodeName(task.getName());
-        t.setFromEmpId(task.getAssignee());
+        t.setFromEmpId(fromEmpId);
         t.setInitiatorEmpId(initiator);
         t.setToEmpId(toEmpId);
         t.setOrgCode(initiatorOrg);
@@ -158,11 +176,12 @@ public class TaskTransferService {
         }
         // 单活约束在 DB 侧还有一道生成列+唯一索引兜底（uk_active_task，见 ddl-workflow-monitor.sql）：
         // 上面的先查后插存在竞态窗口（并发 initiate 都读到 selectActiveByTaskId==null），
-        // 竞态败者在这里插入时会命中唯一索引冲突，兜成与预检查一致的 WF-40910，而不是让
-        // DataIntegrityViolationException 原始泄漏给调用方。
+        // 竞态败者在这里插入时会命中唯一索引冲突，兜成与预检查一致的 WF-40910。
+        // 只兜「唯一键冲突」这一类（DuplicateKeyException），不再宽泛捕获 DataIntegrityViolationException——
+        // 后者还包含 NOT NULL 等其他约束违约（如 from_emp_id 为空），一律当作待认领冲突会掩盖真实错误（I2 整改）。
         try {
             wfTaskTransferMapper.insert(t);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DuplicateKeyException e) {
             throw new BizException(WfErrorCode.TRANSFER_ALREADY_PENDING.getCode(),
                     WfErrorCode.TRANSFER_ALREADY_PENDING.getMessage());
         }
@@ -256,6 +275,11 @@ public class TaskTransferService {
                     WfErrorCode.TRANSFER_NOT_RECEIVER.getMessage());
         }
 
+        // I1：原任务可能已被其它路径（perf 无会话审批完成 / 撤单/驳回 deleteProcessInstance）删除。
+        // setAssignee 前先校验任务仍存在，否则对已删 task 会抛 FlowableObjectNotFoundException 脏 500，
+        // 且转交永久卡 PENDING_ACCEPT 成僵尸——改为把转交置 INVALIDATED 终态 + 抛干净的 WF-40916。
+        ensureUnderlyingTaskAlive(t);
+
         // 乐观流转：并发败者（返回0）在此拦截，绝不能推进到下面的 setAssignee
         int n = wfTaskTransferMapper.updateStatusIfPending(transferId, STATUS_ACCEPTED, null, LocalDateTime.now());
         if (n == 0) {
@@ -323,6 +347,10 @@ public class TaskTransferService {
             throw new BizException(WfErrorCode.TRANSFER_REJECT_REASON_REQUIRED.getCode(),
                     WfErrorCode.TRANSFER_REJECT_REASON_REQUIRED.getMessage());
         }
+
+        // I1：addComment 前先校验原任务仍存在（同 accept）。任务已被删则置 INVALIDATED + 抛 WF-40916，
+        // 避免对已删 task addComment 抛 FlowableObjectNotFoundException 脏 500 及僵尸转交。
+        ensureUnderlyingTaskAlive(t);
 
         // 乐观流转：并发败者（返回0）在此拦截，绝不能推进到下面的加评论/通知
         int n = wfTaskTransferMapper.updateStatusIfPending(transferId, STATUS_REJECTED, reason, LocalDateTime.now());
@@ -396,6 +424,23 @@ public class TaskTransferService {
                     WfErrorCode.TRANSFER_NOT_FOUND_OR_PROCESSED.getMessage());
         }
         return t;
+    }
+
+    /**
+     * I1：认领/拒绝推进前校验原 Flowable 任务仍存在。任务已被其它路径（perf 无会话审批完成、
+     * 撤单/驳回 {@code deleteProcessInstance} 等）删除时，把悬挂的待认领转交乐观置为 INVALIDATED 终态
+     * （{@code updateStatusIfPending}，仅命中仍为 PENDING_ACCEPT 的行），并抛干净的 WF-40916——
+     * 避免对已删 task 调 {@code setAssignee}/{@code addComment} 抛 FlowableObjectNotFoundException 脏 500，
+     * 也让收件箱不再残留永远认领不掉的僵尸条目（转交状态流出 PENDING_ACCEPT 后 selectActiveByTaskId 查不到，锁天然解除）。
+     */
+    private void ensureUnderlyingTaskAlive(WfTaskTransfer t) {
+        Task task = taskService.createTaskQuery().taskId(t.getTaskId()).singleResult();
+        if (task == null) {
+            wfTaskTransferMapper.updateStatusIfPending(t.getId(), STATUS_INVALIDATED,
+                    "原任务已不存在，转交失效", LocalDateTime.now());
+            throw new BizException(WfErrorCode.TRANSFER_TASK_GONE.getCode(),
+                    WfErrorCode.TRANSFER_TASK_GONE.getMessage());
+        }
     }
 
     /**

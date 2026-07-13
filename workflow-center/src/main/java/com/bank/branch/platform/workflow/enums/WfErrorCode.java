@@ -35,6 +35,9 @@ public enum WfErrorCode {
     TASK_TRANSFER_LOCKED("WF-40913", "任务转交待认领中，不可办理"),
     TRANSFER_NOT_FOUND_OR_PROCESSED("WF-40914", "转交不存在或已处理"),
     TRANSFER_STATE_CHANGED("WF-40915", "转交状态已变更"),
+    TRANSFER_TASK_GONE("WF-40916", "原任务已不存在，转交失效"),
+    TRANSFER_TASK_NOT_CLAIMED("WF-40917", "任务尚未签收，无法转交"),
+    TRANSFER_SELF_NOT_ALLOWED("WF-40918", "不能将任务转交给本人"),
 
     // 403 无权限
     TRANSFER_NOT_RECEIVER("WF-40303", "只有接收人可认领"),

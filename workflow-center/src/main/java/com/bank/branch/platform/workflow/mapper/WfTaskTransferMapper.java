@@ -26,6 +26,6 @@ public interface WfTaskTransferMapper extends BaseMapper<WfTaskTransfer> {
     /** 收件箱：某员工待认领的转交任务列表。 */
     List<WfTaskTransfer> selectInbox(String toEmpId);
 
-    /** 发件箱：某员工发起的转交任务列表（待认领+已认领）。 */
-    List<WfTaskTransfer> selectOutbox(String fromEmpId);
+    /** 发件箱：某员工<b>作为发起人（initiator_emp_id）</b>发起的转交任务列表（待认领+已认领）。 */
+    List<WfTaskTransfer> selectOutbox(String initiatorEmpId);
 }

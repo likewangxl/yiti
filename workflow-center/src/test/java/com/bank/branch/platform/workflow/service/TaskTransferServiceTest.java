@@ -172,6 +172,57 @@ class TaskTransferServiceTest {
                 .isEqualTo("WF-40403");
     }
 
+    /**
+     * I2：对未签收的候选组任务（assignee==null）发起转交 → 明确的「任务尚未签收」WF-40917，
+     * 而非被 NOT NULL 违约误兜成 WF-40910 假冲突；不写库，也不再走单活/机构等后续校验。
+     */
+    @Test
+    void initiate_rejectsWhenTaskNotClaimed() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        Task task = mock(Task.class);
+        when(task.getAssignee()).thenReturn(null); // 未签收候选组任务
+        mockTaskQuery(task);
+
+        assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_TO, "忙")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40917");
+
+        verify(wfTaskTransferMapper, never()).selectActiveByTaskId(anyString());
+        verify(wfTaskTransferMapper, never()).insert(any(WfTaskTransfer.class));
+    }
+
+    /** 自转交防御：接收人 == 被转出者本人（fromEmpId=assignee）→ WF-40918，不写库。 */
+    @Test
+    void initiate_rejectsSelfTransferToFrom() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask()); // assignee = E_FROM
+
+        assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_FROM, "忙")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40918");
+
+        verify(wfTaskTransferMapper, never()).insert(any(WfTaskTransfer.class));
+    }
+
+    /** 自转交防御：接收人 == 发起人本人（initiator）→ WF-40918，不写库。 */
+    @Test
+    void initiate_rejectsSelfTransferToInitiator() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask()); // assignee = E_FROM, initiator = E_SEC
+
+        assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_SEC, "忙")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40918");
+
+        verify(wfTaskTransferMapper, never()).insert(any(WfTaskTransfer.class));
+    }
+
     /** 接收人主机构 ≠ 发起人机构 → 拒绝（WF-40911）。 */
     @Test
     void initiate_rejectsReceiverOutsideOrg() {
@@ -486,6 +537,7 @@ class TaskTransferServiceTest {
     void accept_success_setsAssigneeUpdatesMapRecordsOrgAndNotifies() {
         when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
         when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(mockTask()); // I1：原任务仍存在
         when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("ACCEPTED"), isNull(), any(LocalDateTime.class)))
                 .thenReturn(1);
         BizProcessMap map = new BizProcessMap();
@@ -517,6 +569,7 @@ class TaskTransferServiceTest {
     void accept_success_skipsMapUpdateWhenMapNull() {
         when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
         when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(mockTask()); // I1：原任务仍存在
         when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("ACCEPTED"), isNull(), any(LocalDateTime.class)))
                 .thenReturn(1);
         when(bizProcessMapMapper.selectByProcessInstanceId(PID)).thenReturn(null);
@@ -535,6 +588,7 @@ class TaskTransferServiceTest {
     void accept_concurrentLoser_throwsAndNeverSetsAssignee() {
         when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
         when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(mockTask()); // I1：原任务仍存在，冲突来自乐观流转（非任务消失）
         when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("ACCEPTED"), isNull(), any(LocalDateTime.class)))
                 .thenReturn(0);
 
@@ -592,6 +646,29 @@ class TaskTransferServiceTest {
         verify(taskService, never()).setAssignee(anyString(), anyString());
     }
 
+    /**
+     * I1：认领时原任务已被其它路径完成/删除（{@code taskQuery} 查不到）→ 把悬挂的待认领转交乐观置为
+     * INVALIDATED 终态并抛干净的 WF-40916，绝不对已删 task 调 setAssignee（不产生 FlowableObjectNotFoundException
+     * 脏 500，也不把 ACCEPTED 写进去）。
+     */
+    @Test
+    void accept_whenUnderlyingTaskGone_invalidatesTransferAndThrows() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(null); // 原任务已不存在
+
+        assertThatThrownBy(() -> taskTransferService.accept(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40916");
+
+        verify(wfTaskTransferMapper).updateStatusIfPending(eq(TRANSFER_ID), eq("INVALIDATED"),
+                eq("原任务已不存在，转交失效"), any(LocalDateTime.class));
+        verify(wfTaskTransferMapper, never()).updateStatusIfPending(anyString(), eq("ACCEPTED"), any(), any());
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+        verifyNoInteractions(wfProcessOrgService, notifyApi);
+    }
+
     // ==================== decline ====================
 
     /**
@@ -602,6 +679,7 @@ class TaskTransferServiceTest {
     void decline_success_setsRejectedAddsCommentAndNotifiesInitiatorAndFrom() {
         when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
         when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(mockTask()); // I1：原任务仍存在
         when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("REJECTED"), eq("时间冲突，请转他人处理"), any(LocalDateTime.class)))
                 .thenReturn(1);
 
@@ -665,6 +743,7 @@ class TaskTransferServiceTest {
     void decline_concurrentLoser_throwsConflict() {
         when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
         when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(mockTask()); // I1：原任务仍存在，冲突来自乐观流转（非任务消失）
         when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("REJECTED"), anyString(), any(LocalDateTime.class)))
                 .thenReturn(0);
 
@@ -673,6 +752,28 @@ class TaskTransferServiceTest {
                 .extracting("code")
                 .isEqualTo("WF-40915");
 
+        verify(taskService, never()).addComment(anyString(), anyString(), anyString(), any());
+        verifyNoInteractions(notifyApi);
+    }
+
+    /**
+     * I1：拒绝时原任务已被删除（{@code taskQuery} 查不到）→ 同样置 INVALIDATED + 抛 WF-40916，
+     * 绝不对已删 task addComment、不写 REJECTED、不通知。
+     */
+    @Test
+    void decline_whenUnderlyingTaskGone_invalidatesTransferAndThrows() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(null); // 原任务已不存在
+
+        assertThatThrownBy(() -> taskTransferService.decline(TRANSFER_ID, "时间冲突"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40916");
+
+        verify(wfTaskTransferMapper).updateStatusIfPending(eq(TRANSFER_ID), eq("INVALIDATED"),
+                eq("原任务已不存在，转交失效"), any(LocalDateTime.class));
+        verify(wfTaskTransferMapper, never()).updateStatusIfPending(anyString(), eq("REJECTED"), any(), any());
         verify(taskService, never()).addComment(anyString(), anyString(), anyString(), any());
         verifyNoInteractions(notifyApi);
     }

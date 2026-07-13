@@ -40,9 +40,12 @@
         ORDER BY initiated_time DESC
     </select>
 
+    <!-- 发件箱按 initiator_emp_id（发起人）过滤，与 cancel() 的撤回授权（initiator）及 javadoc
+         「当前登录用户发起的转交」对齐：秘书代发起（initiator=秘书, from=原办理人）时，秘书须能在
+         自己的发件箱看到并撤回这条转交；按 from_emp_id 过滤会让发起人查不到、无从撤回（I3 整改）。 -->
     <select id="selectOutbox" parameterType="string" resultMap="BASE">
         SELECT * FROM WF_TASK_TRANSFER
-        WHERE from_emp_id = #{fromEmpId} AND status IN ('PENDING_ACCEPT','ACCEPTED')
+        WHERE initiator_emp_id = #{initiatorEmpId} AND status IN ('PENDING_ACCEPT','ACCEPTED')
         ORDER BY initiated_time DESC
     </select>
 </mapper>

@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS `WF_TASK_TRANSFER` (
   `initiator_emp_id` varchar(32) NOT NULL,
   `to_emp_id` varchar(32) NOT NULL,
   `org_code` varchar(32) DEFAULT NULL,
-  `status` varchar(20) NOT NULL DEFAULT 'PENDING_ACCEPT',
+  `status` varchar(20) NOT NULL DEFAULT 'PENDING_ACCEPT' COMMENT '转交状态：PENDING_ACCEPT 待认领 / ACCEPTED 已认领 / REJECTED 接收人拒绝 / CANCELLED 发起人撤回 / INVALIDATED 原任务已不存在致转交失效（认领或拒绝时发现底层 Flowable 任务被其它路径完成/取消/删除，无 schema 变更，仍走该 varchar 列）',
   `transfer_reason` varchar(500) NOT NULL,
   `reject_reason` varchar(500) DEFAULT NULL,
   `initiated_time` datetime DEFAULT CURRENT_TIMESTAMP,
