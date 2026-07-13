@@ -63,7 +63,8 @@ const routes = [
       { path: 'report/amas-approvals', name: 'ReportAmasApprovals', component: () => import('@/views/report/AmasApprovals.vue'), meta: { title: '业绩分配查询', group: '报表分析' } },
       { path: 'report/amas-approvals/:perfAdjustNo', name: 'ReportAmasApprovalDetail', component: () => import('@/views/report/AmasApprovalDetail.vue'), meta: { title: '业绩分配审批详情', group: '报表分析', hideInMenu: true } },
       { path: 'screen-admin/datasources', name: 'ScreenAdminDs',       component: () => import('@/views/screen/admin/Datasources.vue'), meta: { title: '大屏数据源', group: '报表分析' } },
-      { path: 'screen-admin/designer',    name: 'ScreenAdminDesigner', component: () => import('@/views/screen/designer/DesignerV2.vue'),    meta: { title: '大屏设计器', group: '报表分析' } },
+      // fullBleed:设计器需要整块内容区(去 padding),高度契约见 DefaultLayout .content--full
+      { path: 'screen-admin/designer',    name: 'ScreenAdminDesigner', component: () => import('@/views/screen/designer/DesignerV2.vue'),    meta: { title: '大屏设计器', group: '报表分析', fullBleed: true } },
 
       // 历史数据查询
       { path: 'guarantee/query',  name: 'GuaranteeQuery', component: () => import('@/views/guarantee/Query.vue'), meta: { title: '担保查询', group: '历史数据查询' } },

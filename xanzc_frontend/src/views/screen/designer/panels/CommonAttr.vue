@@ -3,13 +3,14 @@
     <el-collapse v-model="open">
       <el-collapse-item title="位置与尺寸" name="pos">
         <el-form label-width="42px" size="small">
+          <!-- controls-position=right + 宽度铺满:±横排的默认形态(~150px)在窄栏两列布局下会被截断 -->
           <div class="row2">
-            <el-form-item label="X"><el-input-number :model-value="element.style.left" :min="0" @change="v => set('left', v)" /></el-form-item>
-            <el-form-item label="Y"><el-input-number :model-value="element.style.top" :min="0" @change="v => set('top', v)" /></el-form-item>
+            <el-form-item label="X"><el-input-number controls-position="right" :model-value="element.style.left" :min="0" @change="v => set('left', v)" /></el-form-item>
+            <el-form-item label="Y"><el-input-number controls-position="right" :model-value="element.style.top" :min="0" @change="v => set('top', v)" /></el-form-item>
           </div>
           <div class="row2">
-            <el-form-item label="宽"><el-input-number :model-value="element.style.width" :min="1" @change="v => set('width', v)" /></el-form-item>
-            <el-form-item label="高"><el-input-number :model-value="element.style.height" :min="1" @change="v => set('height', v)" /></el-form-item>
+            <el-form-item label="宽"><el-input-number controls-position="right" :model-value="element.style.width" :min="1" @change="v => set('width', v)" /></el-form-item>
+            <el-form-item label="高"><el-input-number controls-position="right" :model-value="element.style.height" :min="1" @change="v => set('height', v)" /></el-form-item>
           </div>
         </el-form>
       </el-collapse-item>
@@ -47,4 +48,7 @@ function setOpacity(v) {
 </script>
 <style scoped>
 .dsn-attr { padding: 8px; } .row2 { display: flex; gap: 8px; }
+.row2 .el-form-item { flex: 1; min-width: 0; margin-right: 0; }
+/* :deep 同时覆盖本组件与 slot 里各组件私有属性(如图表"刷新(秒)")的数字输入,统一铺满栏宽 */
+.dsn-attr :deep(.el-input-number) { width: 100%; }
 </style>

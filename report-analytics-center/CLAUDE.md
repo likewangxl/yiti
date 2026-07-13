@@ -69,6 +69,16 @@ V1.0 交付内容：
 > 未做独立资源校验（若草稿未来承载敏感数据需补 `R_RPT_SCR_CV_GET` 专项校验）；
 > `discardDraft` 未做前置状态校验、也绕过乐观锁（plan-mandated，未发布屏 discard 会写空草稿并误标已发布）。
 
+> 2026-07-13 设计器 V2 页面整改（纯前端，后端/SQL 零改动）：①设计器路由声明 `meta.fullBleed`，
+> `DefaultLayout` 对其去内容区 padding，`DesignerV2` 高度改 `100%`（原写死 `calc(100vh - 60px)`
+> 与壳层实际 52+40+32px 不符，超高 64px 致整页滚动条）；②`CommonAttr` 数字输入改
+> `controls-position="right"` + 宽度铺满、右栏 260→300px（修 X/Y/宽/高输入被截断）；
+> ③首屏加载完自动"适应窗口"；④工具条新增「新建大屏」弹框（复用既有
+> `POST /api/screen/admin/screens` upsert 端点与 `R_RPT_SCR_CFG_SAVE` 资源，id/screenCode
+> 留空走后端新建分支自动生成 `SCR_XXXXXXXX`）。vitest 53→60（新增 7 条：新建流程×2/
+> 自动适应×1/CommonAttr 模板契约×1/DefaultLayout full-bleed 契约×3）。
+> 操作指南同步：`docs/modules/report-analytics-center/10-大屏设计器操作指南.md`。
+
 ## 红线（不被任何业务模块依赖）
 
 `report-analytics-center` 是**只读**模块，**禁止**被任何业务模块依赖：

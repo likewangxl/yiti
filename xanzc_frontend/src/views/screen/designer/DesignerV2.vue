@@ -5,6 +5,7 @@
       <el-select v-model="curId" placeholder="选择大屏" size="small" style="width:220px" @change="loadCanvas">
         <el-option v-for="s in screens" :key="s.id" :label="`${s.screenName} (${s.viewLevel})`" :value="s.id" />
       </el-select>
+      <el-button size="small" @click="openCreate">新建</el-button>
       <span class="spacer" />
       <el-button-group size="small">
         <el-button :disabled="!store.canUndo" @click="store.undo()">撤销</el-button>
@@ -32,15 +33,30 @@
         <CanvasAttr v-else />
       </div>
     </div>
+    <!-- 新建大屏:id/screenCode 留空走后端新建分支(服务端生成 SCR_XXXXXXXX 编码) -->
+    <el-dialog v-model="createVisible" title="新建大屏" width="420px" :close-on-click-modal="false">
+      <el-form label-width="72px" size="small" @submit.prevent>
+        <el-form-item label="屏名称"><el-input v-model="createForm.screenName" maxlength="50" placeholder="必填,如:网点经营看板" /></el-form-item>
+        <el-form-item label="层级">
+          <el-select v-model="createForm.viewLevel">
+            <el-option v-for="l in VIEW_LEVELS" :key="l.value" :label="l.label" :value="l.value" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="createVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="creating" @click="onCreateSubmit">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 <script setup>
 // 设计器 V2 组装页——三栏(组件/图层 | 画布 | 属性)+ 顶部工具条(屏选择/undo-redo/缩放/预览/放弃/回滚/保存/发布)
 // + 全局快捷键。数据流:loadCanvas 拉编辑器快照灌 store → 画布/面板直接读写 store → 保存/发布把 store
 // 序列化回 toSavePayload() 打给后端。旧 admin/Designer.vue 与运行时行/块渲染分支已在渲染层切换任务删除。
-import { ref, onMounted, onBeforeUnmount, provide } from 'vue';
+import { ref, reactive, nextTick, onMounted, onBeforeUnmount, provide } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { listScreens, getScreenCanvas, saveScreenCanvas, publishScreenCanvas,
+import { listScreens, getScreenCanvas, saveScreen, saveScreenCanvas, publishScreenCanvas,
   discardScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs } from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 import { fitScale, clampRect } from '@/views/screen/designer/utils/scale';
@@ -68,6 +84,30 @@ function fitWindow() {
   if (wrap) { const s = fitScale(wrap.clientWidth - 48, wrap.clientHeight - 48); store.scale = s; scalePct.value = Math.round(s * 100); }
 }
 async function loadScreens() { screens.value = await listScreens(); if (screens.value[0]) { curId.value = screens.value[0].id; await loadCanvas(); } }
+
+// ===== 新建大屏(复用既有 ScreenConfigAdminController 的整体 upsert 端点,后端零改动) =====
+const VIEW_LEVELS = [
+  { value: 'PROVINCE', label: '省分行 (PROVINCE)' },
+  { value: 'BRANCH', label: '支行 (BRANCH)' },
+  { value: 'PERSON', label: '个人 (PERSON)' }
+];
+const createVisible = ref(false);
+const creating = ref(false);
+const createForm = reactive({ screenName: '', viewLevel: 'BRANCH' });
+function openCreate() { createForm.screenName = ''; createForm.viewLevel = 'BRANCH'; createVisible.value = true; }
+async function onCreateSubmit() {
+  const screenName = createForm.screenName.trim();
+  if (!screenName) { ElMessage.warning('请填写屏名称'); return; }
+  creating.value = true;
+  try {
+    const id = await saveScreen({ screenName, viewLevel: createForm.viewLevel });
+    screens.value = await listScreens();
+    curId.value = id;
+    await loadCanvas(); // 新屏画布字段为空,loadFromEditor 走缺省分支得到空画布草稿
+    createVisible.value = false;
+    ElMessage.success('已新建大屏,当前为空画布草稿');
+  } finally { creating.value = false; }
+}
 async function loadCanvas() {
   const resp = await getScreenCanvas(curId.value);
   store.loadFromEditor(resp);
@@ -179,12 +219,20 @@ function onKey(e) {
     store.pushSnapshotDebounced();
   }
 }
-onMounted(() => { loadScreens(); window.addEventListener('keydown', onKey); });
+onMounted(async () => {
+  window.addEventListener('keydown', onKey);
+  await loadScreens();
+  // 首屏加载完自动适应窗口:默认 50% 缩放与中栏尺寸无关,首屏观感差(设计器页面整改 #3)
+  await nextTick();
+  fitWindow();
+});
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 <style scoped lang="scss">
 @use '@/styles/screen-theme' as theme;
-.dsn2 { display: flex; flex-direction: column; height: calc(100vh - 60px); background: #03081c; }
+// 高度撑满 DefaultLayout 的 .content--full(路由 meta.fullBleed 去 padding 后恰好铺满),
+// 不再写死 calc(100vh - Npx) 猜壳层高度——header 52 + 面包屑 40 + padding 32 曾致超高 64px 整页滚动
+.dsn2 { display: flex; flex-direction: column; height: 100%; background: #03081c; }
 .scr-surface-host { @include theme.scr-theme-vars; } // 供画布内复用 .scr-* 视觉变量
 .dsn2-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   border-bottom: 1px solid rgba(0,229,255,.2); }
@@ -192,6 +240,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .dsn2-cols { flex: 1; display: flex; min-height: 0; }
 .dsn2-left, .dsn2-right { width: 260px; flex: none; overflow: auto; background: #050e2b;
   border-right: 1px solid rgba(0,229,255,.15); }
-.dsn2-right { border-right: none; border-left: 1px solid rgba(0,229,255,.15); }
+.dsn2-right { width: 300px; border-right: none; border-left: 1px solid rgba(0,229,255,.15); } // 右栏 260→300:容纳两列数字输入与图表取数表单
 .dsn2-center { flex: 1; min-width: 0; }
 </style>
