@@ -69,4 +69,46 @@ public interface BizProcessMapMapper extends BaseMapper<BizProcessMap> {
     List<BizProcessMap> selectByProcessInstanceIdsAndBizType(
             @Param("processInstanceIds") List<String> processInstanceIds,
             @Param("bizType") String bizType);
+
+    /**
+     * 审批流监控分页查询（数据范围通过 orgScope 过滤）。
+     * <p>
+     * {@code orgScope} 为 {@code null} 表示全行不过滤（ALL / 系统管理员）；
+     * 非空集合走 {@code EXISTS(WF_PROCESS_ORG ...)} 过滤参与机构。
+     * 调用方（Service）保证空集合（非 null）永远不会传入此方法，否则 XML 的
+     * {@code IN ()} 在 MySQL 中是语法错误。
+     * </p>
+     *
+     * @param status    流程状态（可空，精确匹配）
+     * @param bizType   业务类型（可空，精确匹配）
+     * @param keyword   标题关键字（可空，模糊匹配）
+     * @param startedBy 发起人工号（可空，精确匹配）
+     * @param orgScope  机构编码集合，null=全行不过滤，非空集合=按参与机构过滤
+     * @param offset    分页偏移
+     * @param size      分页大小
+     * @return 映射记录列表
+     */
+    List<BizProcessMap> selectMonitorPage(@Param("status") String status,
+                                           @Param("bizType") String bizType,
+                                           @Param("keyword") String keyword,
+                                           @Param("startedBy") String startedBy,
+                                           @Param("orgScope") java.util.Collection<String> orgScope,
+                                           @Param("offset") int offset,
+                                           @Param("size") int size);
+
+    /**
+     * 审批流监控计数（条件与 {@link #selectMonitorPage} 一致）。
+     *
+     * @param status    流程状态（可空，精确匹配）
+     * @param bizType   业务类型（可空，精确匹配）
+     * @param keyword   标题关键字（可空，模糊匹配）
+     * @param startedBy 发起人工号（可空，精确匹配）
+     * @param orgScope  机构编码集合，null=全行不过滤，非空集合=按参与机构过滤
+     * @return 总记录数
+     */
+    long countMonitor(@Param("status") String status,
+                       @Param("bizType") String bizType,
+                       @Param("keyword") String keyword,
+                       @Param("startedBy") String startedBy,
+                       @Param("orgScope") java.util.Collection<String> orgScope);
 }

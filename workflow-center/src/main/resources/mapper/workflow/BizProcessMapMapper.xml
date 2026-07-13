@@ -69,4 +69,32 @@
         </foreach>
     </select>
 
+    <!-- 审批流监控查询公共 WHERE：orgScope==null 表示全行不过滤；非 null 走 EXISTS(WF_PROCESS_ORG) -->
+    <sql id="MONITOR_WHERE">
+        <where>
+            <if test="status != null and status != ''"> AND m.process_status = #{status} </if>
+            <if test="bizType != null and bizType != ''"> AND m.biz_type = #{bizType} </if>
+            <if test="startedBy != null and startedBy != ''"> AND m.start_user = #{startedBy} </if>
+            <if test="keyword != null and keyword != ''"> AND m.title LIKE CONCAT('%', #{keyword}, '%') </if>
+            <if test="orgScope != null">
+                AND EXISTS (SELECT 1 FROM WF_PROCESS_ORG wpo
+                            WHERE wpo.process_instance_id = m.process_instance_id
+                              AND wpo.org_code IN
+                            <foreach collection="orgScope" item="oc" open="(" separator="," close=")">#{oc}</foreach>)
+            </if>
+        </where>
+    </sql>
+
+    <!-- 审批流监控分页查询（调用方保证 orgScope 非 null 时一定非空，避免 IN () 语法错） -->
+    <select id="selectMonitorPage" resultType="com.bank.branch.platform.workflow.entity.BizProcessMap">
+        SELECT <include refid="BASE_COLUMNS"/> FROM BIZ_PROCESS_MAP m
+        <include refid="MONITOR_WHERE"/>
+        ORDER BY m.start_time DESC LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- 审批流监控计数（条件与 selectMonitorPage 一致） -->
+    <select id="countMonitor" resultType="long">
+        SELECT COUNT(*) FROM BIZ_PROCESS_MAP m <include refid="MONITOR_WHERE"/>
+    </select>
+
 </mapper>
