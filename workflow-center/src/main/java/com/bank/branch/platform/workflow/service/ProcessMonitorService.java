@@ -10,6 +10,8 @@ import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.TaskService;
+import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
@@ -36,6 +38,8 @@ public class ProcessMonitorService {
     private final BizProcessMapMapper bizProcessMapMapper;
     private final CurrentUserApi currentUserApi;
     private final OrgApi orgApi;
+    /** 批量补全当前活跃任务ID（转交入口用），见 {@link #resolveActiveTaskIds}。 */
+    private final TaskService taskService;
 
     /**
      * 分页查询审批流监控列表。
@@ -97,7 +101,7 @@ public class ProcessMonitorService {
     }
 
     /**
-     * 将实体列表转换为 DTO 列表，批量补全发起人/当前处理人的主机构编码，避免 N+1 查询。
+     * 将实体列表转换为 DTO 列表，批量补全发起人/当前处理人的主机构编码 + 当前活跃任务ID，避免 N+1 查询。
      */
     private List<ProcessMonitorItemDTO> toDtos(List<BizProcessMap> rows) {
         Set<String> emps = new HashSet<>();
@@ -118,6 +122,8 @@ public class ProcessMonitorService {
             }
         }
 
+        Map<String, String> pidToTaskId = resolveActiveTaskIds(rows);
+
         return rows.stream().map(r -> {
             ProcessMonitorItemDTO dto = new ProcessMonitorItemDTO();
             dto.setProcessInstanceId(r.getProcessInstanceId());
@@ -129,9 +135,42 @@ public class ProcessMonitorService {
             dto.setStartUserOrgCode(empToOrg.get(r.getStartUser()));
             dto.setCurrentAssignee(r.getCurrentAssignee());
             dto.setCurrentAssigneeOrgCode(empToOrg.get(r.getCurrentAssignee()));
+            dto.setCurrentTaskId(pidToTaskId.get(r.getProcessInstanceId()));
             dto.setStartTime(r.getStartTime());
             dto.setEndTime(r.getEndTime());
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * 批量解析各流程实例当前活跃的 Flowable 用户任务ID，供前端转交入口
+     * （{@code POST /api/workflow/monitor/tasks/{taskId}/transfer}）使用。
+     * <p>
+     * 单次查询覆盖整页（{@code processInstanceIdIn}），避免逐行查询造成的 N+1。已结束流程
+     * （COMPLETED/CANCELLED）在运行时表查不到任务，对应值缺省不放入返回 Map（前端据此判断不可转交）。
+     * </p>
+     * <p>
+     * 单活假设：本应用审批流均为顺序单办理人 userTask（无并行网关），同一流程实例任意时刻
+     * 至多一个活跃任务，故按 processInstanceId 覆盖写入即可；若未来引入并行网关产生多活跃任务，
+     * 这里会丢失除最后一个之外的任务ID——不阻断监控列表展示，仅影响转交入口精确性，属已知限制。
+     * </p>
+     */
+    private Map<String, String> resolveActiveTaskIds(List<BizProcessMap> rows) {
+        if (rows.isEmpty()) {
+            return Map.of();
+        }
+        Set<String> pids = rows.stream()
+                .map(BizProcessMap::getProcessInstanceId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (pids.isEmpty()) {
+            return Map.of();
+        }
+        List<Task> tasks = taskService.createTaskQuery().processInstanceIdIn(pids).active().list();
+        Map<String, String> map = new HashMap<>();
+        for (Task t : tasks) {
+            map.put(t.getProcessInstanceId(), t.getId());
+        }
+        return map;
     }
 }

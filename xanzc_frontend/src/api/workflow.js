@@ -72,3 +72,42 @@ export function getProcessNodes(processInstanceId) {
 export function processDiagramUrl(processInstanceId) {
   return `${API_BASE}/workflow/processes/${processInstanceId}/diagram`;
 }
+
+// ===================== 任务转交待认领（TaskTransferController / TaskTransferService） =====================
+// 两阶段转交：发起（秘书/行长，挂在监控域下）→ 接收人收件箱认领/拒绝 → 发起人发件箱查看/撤回。
+// 与 approveTask/rejectTask 同源节点的一步到位 transferTask（TaskController）不是同一回事。
+
+/**
+ * 发起转交（待认领）。挂在监控域下，仅秘书岗/行长可调（对齐 WORKFLOW_MONITOR·TRANSFER 鉴权）。
+ * @param {string} taskId
+ * @param {{toEmpId:string, reason:string}} payload
+ * @returns 转交记录ID
+ */
+export function transferInitiate(taskId, { toEmpId, reason }) {
+  return call('post', `/workflow/monitor/tasks/${taskId}/transfer`, { data: { toEmpId, reason } }, { ok: true });
+}
+
+/** 转交收件箱：当前登录用户待认领的转交任务列表 */
+export function transferInbox() {
+  return call('get', '/workflow/transfers/inbox', {}, []).then(r => r || []);
+}
+
+/** 认领转交（接收人本人） */
+export function transferAccept(id) {
+  return call('post', `/workflow/transfers/${id}/accept`, { data: {} }, { ok: true });
+}
+
+/** 拒绝转交（接收人本人，理由必填） */
+export function transferDecline(id, { reason }) {
+  return call('post', `/workflow/transfers/${id}/decline`, { data: { reason } }, { ok: true });
+}
+
+/** 转交发件箱：当前登录用户发起的转交任务列表（待认领+已认领） */
+export function transferOutbox() {
+  return call('get', '/workflow/transfers/outbox', {}, []).then(r => r || []);
+}
+
+/** 撤回转交（发起人本人） */
+export function transferCancel(id) {
+  return call('post', `/workflow/transfers/${id}/cancel`, { data: {} }, { ok: true });
+}

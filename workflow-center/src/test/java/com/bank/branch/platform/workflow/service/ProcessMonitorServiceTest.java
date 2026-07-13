@@ -5,18 +5,27 @@ import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
+import com.bank.branch.platform.workflow.api.dto.ProcessMonitorItemDTO;
+import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
+import org.flowable.engine.TaskService;
+import org.flowable.task.api.Task;
+import org.flowable.task.api.TaskQuery;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,6 +43,8 @@ class ProcessMonitorServiceTest {
     private CurrentUserApi currentUserApi;
     @Mock
     private OrgApi orgApi;
+    @Mock
+    private TaskService taskService;
     @InjectMocks
     private ProcessMonitorService service;
 
@@ -84,5 +95,38 @@ class ProcessMonitorServiceTest {
         } finally {
             DataScopeContext.clear();
         }
+    }
+
+    @Test
+    void nonEmptyRows_populatesCurrentTaskId() {
+        // 覆盖 toDtos()/resolveActiveTaskIds() 批量补全路径：一行 RUNNING 流程有活跃任务，
+        // 断言 taskService 按 processInstanceIdIn(...).active() 查出的 taskId 正确写回对应行。
+        BizProcessMap row = new BizProcessMap();
+        row.setProcessInstanceId("PI-1");
+        row.setBusinessKey("ALLOC_ADJUST:1");
+        row.setBizType("ALLOC_ADJUST");
+        row.setProcessStatus("RUNNING");
+        row.setCurrentAssignee("E001");
+
+        when(currentUserApi.isSystemAdmin()).thenReturn(true);
+        when(bizProcessMapMapper.countMonitor(any(), any(), any(), any(), isNull())).thenReturn(1L);
+        when(bizProcessMapMapper.selectMonitorPage(any(), any(), any(), any(), isNull(), eq(0), eq(20)))
+                .thenReturn(List.of(row));
+
+        TaskQuery taskQuery = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.processInstanceIdIn(any())).thenReturn(taskQuery);
+        when(taskQuery.active()).thenReturn(taskQuery);
+        Task task = mock(Task.class);
+        when(task.getProcessInstanceId()).thenReturn("PI-1");
+        when(task.getId()).thenReturn("TASK-1");
+        when(taskQuery.list()).thenReturn(List.of(task));
+
+        var page = service.query("RUNNING", null, null, null, 1, 20);
+
+        assertThat(page.getRecords()).hasSize(1);
+        ProcessMonitorItemDTO dto = page.getRecords().get(0);
+        assertThat(dto.getProcessInstanceId()).isEqualTo("PI-1");
+        assertThat(dto.getCurrentTaskId()).isEqualTo("TASK-1");
     }
 }

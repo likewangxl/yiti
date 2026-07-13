@@ -75,7 +75,11 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
-            <el-button link type="info" size="small" disabled title="待 P3 转交功能接入">转交</el-button>
+            <el-button
+              link type="primary" size="small"
+              :disabled="!canTransfer(row)"
+              :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交'"
+              @click="openTransfer(row)">转交</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -184,13 +188,20 @@
         <el-button @click="detail.show = false">关闭</el-button>
       </template>
     </el-drawer>
+
+    <!-- 转交弹窗：秘书岗/行长把该行当前活跃任务转交给本机构其他人（待认领后生效） -->
+    <TransferDialog v-model="transferDlg.show" :task="transferDlg.task" @success="reload" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { monitorProcesses, getProcessInfo, getProcessHistory, getProcessNodes, processDiagramUrl } from '@/api/workflow';
 import { fmtDateTime } from '@/utils/datetime';
+import TransferDialog from '@/components/TransferDialog.vue';
+
+const route = useRoute();
 
 // 业务类型字典：与 FlowList.vue 保持一致（当前平台仅这两种流程业务类型）
 const BIZ_TYPE_OPTIONS = [
@@ -265,7 +276,28 @@ function onReset() {
   reload();
 }
 
-onMounted(reload);
+onMounted(async () => {
+  await reload();
+  // 支持从「工作台 · 我转出的」查看入口跳转过来时直接展开对应流程详情（复用本页详情抽屉，
+  // 不重复实现一份只读详情），行数据在当前页查不到时退化为按 processInstanceId 单独拉取。
+  const pid = route.query.processInstanceId;
+  if (pid) {
+    const row = rows.value.find(r => r.processInstanceId === pid) || { processInstanceId: pid, businessKey: route.query.businessKey || '' };
+    openDetail(row);
+  }
+});
+
+// 转交：仅 RUNNING 且有活跃任务（currentTaskId，见 ProcessMonitorItemDTO）的行可转交；
+// 已结束流程或查询瞬间恰好处于节点切换空档（currentTaskId 缺省）禁用按钮，避免点开弹窗后提交必错。
+function canTransfer(row) {
+  return row.processStatus === 'RUNNING' && !!row.currentTaskId;
+}
+
+const transferDlg = reactive({ show: false, task: null });
+function openTransfer(row) {
+  transferDlg.task = { taskId: row.currentTaskId, nodeName: row.title || row.businessKey, businessKey: row.businessKey };
+  transferDlg.show = true;
+}
 
 // 详情抽屉：并行拉取实例详情 / 历史 / 节点，流程图走 <img> 直连（同源 session cookie）
 const detail = reactive({

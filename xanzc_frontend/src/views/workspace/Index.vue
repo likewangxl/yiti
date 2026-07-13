@@ -90,19 +90,88 @@
       </el-table>
     </div>
 
+    <!-- 待认领转交：秘书/行长转交给我、待我认领的任务（两阶段转交第二阶段） -->
+    <div class="card-section">
+      <div class="card-h">
+        <div class="title">待认领转交</div>
+        <a class="more" @click="loadTransferInbox">刷新</a>
+      </div>
+      <el-table :data="transferInboxRows" stripe size="small" v-loading="transferInboxLoading" empty-text="暂无待认领转交">
+        <el-table-column label="节点 / 业务键" min-width="200">
+          <template #default="{ row }">
+            <div>{{ row.nodeName || '-' }}</div>
+            <div class="task-sub">{{ row.businessKey || '' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="原办理人" width="110">
+          <template #default="{ row }">{{ row.fromEmpId || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="发起人" width="110">
+          <template #default="{ row }">{{ row.initiatorEmpId || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="转交原因" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.transferReason || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="发起时间" width="140">
+          <template #default="{ row }">{{ fmtDateTime(row.initiatedTime) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="120">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" :loading="row._acting" @click="acceptTransfer(row)">认领</el-button>
+            <el-button type="danger" link size="small" :loading="row._acting" @click="declineTransfer(row)">拒绝</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- 我转出的（只读）：我发起的转交，展示进度，不提供任何操作（撤回等走审批流监控页） -->
+    <div class="card-section">
+      <div class="card-h">
+        <div class="title">我转出的</div>
+        <span class="hint">只读</span>
+        <a class="more" @click="loadTransferOutbox">刷新</a>
+      </div>
+      <el-table :data="transferOutboxRows" stripe size="small" v-loading="transferOutboxLoading" empty-text="暂无转出记录">
+        <el-table-column label="节点 / 业务键" min-width="200">
+          <template #default="{ row }">
+            <div>{{ row.nodeName || '-' }}</div>
+            <div class="task-sub">{{ row.businessKey || '' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="接收人" width="110">
+          <template #default="{ row }">{{ row.toEmpId || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain" :class="transferStatusCls(row.status)">{{ transferStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="发起时间" width="140">
+          <template #default="{ row }">{{ fmtDateTime(row.initiatedTime) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="80">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="viewOutboxRow(row)">查看</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { useRouter } from 'vue-router';
 import { fmtDateTime } from '@/utils/datetime';
 import { useUserStore } from '@/stores/user';
 import { workspace as initial } from '@/mock';
 import { getWorkspace, listNotifications, getUnreadNotificationCount, markRead } from '@/api/workspace';
-import { listTodoTasks, listDoneTasks } from '@/api/workflow';
+import {
+  listTodoTasks, listDoneTasks,
+  transferInbox, transferAccept, transferDecline, transferOutbox
+} from '@/api/workflow';
 import { listRecentAnnouncements } from '@/api/announcement';
 
 const router = useRouter();
@@ -179,6 +248,65 @@ async function loadTasks() {
 }
 
 
+// 转交待认领收件箱：秘书/行长转交给我、待我认领或拒绝的任务
+const transferInboxRows = ref([]);
+const transferInboxLoading = ref(false);
+async function loadTransferInbox() {
+  transferInboxLoading.value = true;
+  try {
+    transferInboxRows.value = await transferInbox();
+  } catch { transferInboxRows.value = []; } finally { transferInboxLoading.value = false; }
+}
+
+async function acceptTransfer(row) {
+  row._acting = true;
+  try {
+    await transferAccept(row.id);
+    ElMessage.success('已认领');
+    loadTransferInbox();
+  } catch { /* http.js 拦截器已 toast 错误详情 */ } finally { row._acting = false; }
+}
+
+async function declineTransfer(row) {
+  let reason;
+  try {
+    const r = await ElMessageBox.prompt('请填写拒绝理由（必填）', `拒绝转交：${row.nodeName || row.businessKey || ''}`, {
+      type: 'warning', inputPattern: /\S+/, inputErrorMessage: '拒绝理由必填'
+    });
+    reason = r.value;
+  } catch { return; } // 用户取消
+  row._acting = true;
+  try {
+    await transferDecline(row.id, { reason });
+    ElMessage.success('已拒绝');
+    loadTransferInbox();
+  } catch { /* http.js 拦截器已 toast 错误详情 */ } finally { row._acting = false; }
+}
+
+// 我转出的（只读）：我发起的转交进度
+const transferOutboxRows = ref([]);
+const transferOutboxLoading = ref(false);
+async function loadTransferOutbox() {
+  transferOutboxLoading.value = true;
+  try {
+    transferOutboxRows.value = await transferOutbox();
+  } catch { transferOutboxRows.value = []; } finally { transferOutboxLoading.value = false; }
+}
+
+const TRANSFER_STATUS_MAP = {
+  PENDING_ACCEPT: { label: '待认领', cls: 'tag-warning' },
+  ACCEPTED: { label: '已认领', cls: 'tag-success' },
+  REJECTED: { label: '已拒绝', cls: 'tag-danger' },
+  CANCELLED: { label: '已撤回', cls: 'tag-info' }
+};
+const transferStatusLabel = (s) => TRANSFER_STATUS_MAP[s]?.label || s || '-';
+const transferStatusCls = (s) => TRANSFER_STATUS_MAP[s]?.cls || 'tag-info';
+
+// 查看：复用「审批流监控」页详情抽屉（该页仅秘书/行长可访问，与发起转交同一角色门槛，权限对齐）
+function viewOutboxRow(row) {
+  router.push({ path: '/system/workflow-monitor', query: { processInstanceId: row.processInstanceId, businessKey: row.businessKey || undefined } });
+}
+
 // bizType → 本台（绩效/管理台）对应审批页。LOAN/SUPPORT/LEAD/TOUCH 属业务台(xanpd)，
 // 本台无对应页面，给出提示而非误跳 /perf/adjust。
 function resolveTaskRoute(row, mode) {
@@ -223,6 +351,8 @@ onMounted(async () => {
   loadTasks();
   loadAnnouncements();
   loadNotifications();
+  loadTransferInbox();
+  loadTransferOutbox();
 });
 </script>
 
