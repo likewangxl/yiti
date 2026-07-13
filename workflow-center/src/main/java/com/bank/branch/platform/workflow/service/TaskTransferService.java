@@ -5,6 +5,8 @@ import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.entity.WfTaskTransfer;
@@ -21,6 +23,7 @@ import org.flowable.identitylink.api.IdentityLinkType;
 import org.flowable.task.api.Task;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -59,8 +62,13 @@ public class TaskTransferService {
      * </p>
      */
     private final UserApi userApi;
+    /** 参与机构快照写入唯一入口，认领成功后记录接收人的主机构参与该流程实例（source=TRANSFER）。 */
+    private final WfProcessOrgService wfProcessOrgService;
+    /** 认领成功后通知发起人（用于秘书代发起、原办理人等场景知悉转交结果）。 */
+    private final NotifyApi notifyApi;
 
     private static final String STATUS_PENDING_ACCEPT = "PENDING_ACCEPT";
+    private static final String STATUS_ACCEPTED = "ACCEPTED";
 
     /**
      * 发起两阶段转交。
@@ -170,6 +178,70 @@ public class TaskTransferService {
      */
     public boolean hasPendingTransfer(String taskId) {
         return wfTaskTransferMapper.selectActiveByTaskId(taskId) != null;
+    }
+
+    /**
+     * 接收人认领转交（两阶段转交的第二阶段）：将办理权真正转移给接收人。
+     * <p>
+     * 校验链（任一不通过即抛异常，不写库）：
+     * <ol>
+     *   <li>转交记录存在且仍为 PENDING_ACCEPT（WF-40914，覆盖"不存在"和"已处理"两种情形）</li>
+     *   <li>当前登录用户即接收人（WF-40303，只有接收人本人可认领）</li>
+     * </ol>
+     * 校验通过后先做乐观状态流转（{@code updateStatusIfPending}），若并发下已被其他请求（如发起人撤销、
+     * 接收人在另一端重复点击）抢先流转，返回 0 → 抛 WF-40915 冲突异常，<b>不再</b>推进到 setAssignee，
+     * 避免并发败者仍然改写 Flowable assignee 造成状态不一致。
+     * </p>
+     * <p>
+     * 乐观更新命中后依次：改 Flowable 任务 assignee → 同步 {@code biz_process_map.current_assignee}
+     * （查不到映射不阻断）→ 记参与机构快照（source=TRANSFER）→ 任务加认领评论留痕 → 通知发起人。
+     * </p>
+     *
+     * @param transferId 转交记录ID
+     * @throws BizException WF-40914 转交不存在或已处理；WF-40303 非接收人；WF-40915 并发状态已变更
+     */
+    @Transactional
+    public void accept(String transferId) {
+        String me = currentUserApi.getCurrentEmpId();
+        WfTaskTransfer t = wfTaskTransferMapper.selectById(transferId);
+        if (t == null || !STATUS_PENDING_ACCEPT.equals(t.getStatus())) {
+            throw new BizException(WfErrorCode.TRANSFER_NOT_FOUND_OR_PROCESSED.getCode(),
+                    WfErrorCode.TRANSFER_NOT_FOUND_OR_PROCESSED.getMessage());
+        }
+        if (!me.equals(t.getToEmpId())) {
+            throw new BizException(WfErrorCode.TRANSFER_NOT_RECEIVER.getCode(),
+                    WfErrorCode.TRANSFER_NOT_RECEIVER.getMessage());
+        }
+
+        // 乐观流转：并发败者（返回0）在此拦截，绝不能推进到下面的 setAssignee
+        int n = wfTaskTransferMapper.updateStatusIfPending(transferId, STATUS_ACCEPTED, null, LocalDateTime.now());
+        if (n == 0) {
+            throw new BizException(WfErrorCode.TRANSFER_STATE_CHANGED.getCode(),
+                    WfErrorCode.TRANSFER_STATE_CHANGED.getMessage());
+        }
+
+        taskService.setAssignee(t.getTaskId(), me);
+
+        BizProcessMap map = bizProcessMapMapper.selectByProcessInstanceId(t.getProcessInstanceId());
+        if (map != null) {
+            map.setCurrentAssignee(me);
+            bizProcessMapMapper.updateById(map);
+        }
+
+        wfProcessOrgService.record(t.getProcessInstanceId(), me, "TRANSFER");
+        taskService.addComment(t.getTaskId(), t.getProcessInstanceId(), "TRANSFER_ACCEPTED", null);
+
+        notifyApi.sendNotification(NotificationCmd.builder()
+                .targetEmpId(t.getInitiatorEmpId())
+                .title("转交已被认领")
+                .content("任务[" + t.getNodeName() + "]已被" + me + "认领")
+                .notifyType("WORKFLOW")
+                .bizType(t.getBizType())
+                .bizId(t.getBusinessKey())
+                .build());
+
+        log.info("转交认领: transferId={}, taskId={}, to={}, initiator={}",
+                transferId, t.getTaskId(), me, t.getInitiatorEmpId());
     }
 
     /**

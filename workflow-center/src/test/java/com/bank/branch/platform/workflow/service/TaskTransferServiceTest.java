@@ -5,6 +5,8 @@ import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
+import com.bank.branch.platform.governance.api.NotifyApi;
+import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.entity.WfTaskTransfer;
@@ -24,6 +26,7 @@ import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.springframework.dao.DuplicateKeyException;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -32,9 +35,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -55,6 +62,8 @@ class TaskTransferServiceTest {
     @Mock private OrgApi orgApi;
     @Mock private CurrentUserApi currentUserApi;
     @Mock private UserApi userApi;
+    @Mock private WfProcessOrgService wfProcessOrgService;
+    @Mock private NotifyApi notifyApi;
 
     @InjectMocks
     private TaskTransferService taskTransferService;
@@ -68,6 +77,7 @@ class TaskTransferServiceTest {
     private static final String E_SEC = "E_SEC";
     private static final String E_TO = "E_TO";
     private static final String ORG_A = "ORG_A";
+    private static final String TRANSFER_ID = "TRANSFER_1";
 
     /**
      * 构建标准任务 mock。字段按 lenient 打桩：不同测试用例在不同校验步骤提前 return/throw，
@@ -384,5 +394,139 @@ class TaskTransferServiceTest {
 
         when(wfTaskTransferMapper.selectActiveByTaskId("TASK_2")).thenReturn(null);
         assertThat(taskTransferService.hasPendingTransfer("TASK_2")).isFalse();
+    }
+
+    // ==================== accept ====================
+
+    /** 构建一条标准 PENDING_ACCEPT 转交记录，接收人为 E_TO。 */
+    private WfTaskTransfer pendingTransfer() {
+        WfTaskTransfer t = new WfTaskTransfer();
+        t.setId(TRANSFER_ID);
+        t.setProcessInstanceId(PID);
+        t.setTaskId(TASK_ID);
+        t.setNodeKey(NODE_KEY);
+        t.setNodeName("机构负责人审批");
+        t.setFromEmpId(E_FROM);
+        t.setInitiatorEmpId(E_SEC);
+        t.setToEmpId(E_TO);
+        t.setOrgCode(ORG_A);
+        t.setStatus("PENDING_ACCEPT");
+        t.setBizType("LOAN");
+        t.setBusinessKey("LOAN:LA001");
+        return t;
+    }
+
+    /**
+     * 认领成功：乐观更新命中（返回1）→ 依次 setAssignee、biz_process_map.currentAssignee 改为接收人、
+     * 记参与机构（source=TRANSFER）、加认领评论、通知发起人。
+     */
+    @Test
+    void accept_success_setsAssigneeUpdatesMapRecordsOrgAndNotifies() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("ACCEPTED"), isNull(), any(LocalDateTime.class)))
+                .thenReturn(1);
+        BizProcessMap map = new BizProcessMap();
+        map.setId("MAP_1");
+        map.setProcessInstanceId(PID);
+        map.setCurrentAssignee(E_FROM);
+        when(bizProcessMapMapper.selectByProcessInstanceId(PID)).thenReturn(map);
+
+        taskTransferService.accept(TRANSFER_ID);
+
+        verify(taskService).setAssignee(TASK_ID, E_TO);
+
+        ArgumentCaptor<BizProcessMap> mapCaptor = ArgumentCaptor.forClass(BizProcessMap.class);
+        verify(bizProcessMapMapper).updateById(mapCaptor.capture());
+        assertThat(mapCaptor.getValue().getCurrentAssignee()).isEqualTo(E_TO);
+
+        verify(wfProcessOrgService).record(PID, E_TO, "TRANSFER");
+        verify(taskService).addComment(TASK_ID, PID, "TRANSFER_ACCEPTED", null);
+
+        ArgumentCaptor<NotificationCmd> notifyCaptor = ArgumentCaptor.forClass(NotificationCmd.class);
+        verify(notifyApi).sendNotification(notifyCaptor.capture());
+        assertThat(notifyCaptor.getValue().getTargetEmpId()).isEqualTo(E_SEC);
+    }
+
+    /**
+     * biz_process_map 查不到映射（map==null）时跳过更新，不阻断认领主流程。
+     */
+    @Test
+    void accept_success_skipsMapUpdateWhenMapNull() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("ACCEPTED"), isNull(), any(LocalDateTime.class)))
+                .thenReturn(1);
+        when(bizProcessMapMapper.selectByProcessInstanceId(PID)).thenReturn(null);
+
+        taskTransferService.accept(TRANSFER_ID);
+
+        verify(taskService).setAssignee(TASK_ID, E_TO);
+        verify(bizProcessMapMapper, never()).updateById(any(BizProcessMap.class));
+    }
+
+    /**
+     * 并发冲突：乐观更新未命中（updateStatusIfPending 返回0，说明状态已被其他并发请求改变）
+     * → 抛 WF-40915 冲突异常，且绝不能推进到 setAssignee（避免并发败者仍改写 assignee）。
+     */
+    @Test
+    void accept_concurrentLoser_throwsAndNeverSetsAssignee() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("ACCEPTED"), isNull(), any(LocalDateTime.class)))
+                .thenReturn(0);
+
+        assertThatThrownBy(() -> taskTransferService.accept(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40915");
+
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+        verifyNoInteractions(wfProcessOrgService, notifyApi);
+    }
+
+    /** 非接收人尝试认领 → 拒绝（WF-40303），不触发乐观更新。 */
+    @Test
+    void accept_rejectsNonReceiver() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E_OTHER");
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+
+        assertThatThrownBy(() -> taskTransferService.accept(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40303");
+
+        verify(wfTaskTransferMapper, never()).updateStatusIfPending(anyString(), anyString(), any(), any());
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+    }
+
+    /** 转交记录不存在 → WF-40914。 */
+    @Test
+    void accept_rejectsWhenTransferNotFound() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> taskTransferService.accept(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40914");
+
+        verify(taskService, never()).setAssignee(anyString(), anyString());
+    }
+
+    /** 转交已非 PENDING_ACCEPT（已认领/已拒绝/已撤销）→ WF-40914，不可重复认领。 */
+    @Test
+    void accept_rejectsWhenAlreadyProcessed() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        WfTaskTransfer t = pendingTransfer();
+        t.setStatus("ACCEPTED");
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(t);
+
+        assertThatThrownBy(() -> taskTransferService.accept(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40914");
+
+        verify(taskService, never()).setAssignee(anyString(), anyString());
     }
 }

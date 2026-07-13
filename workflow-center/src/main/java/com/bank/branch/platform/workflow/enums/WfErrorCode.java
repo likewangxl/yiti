@@ -30,6 +30,11 @@ public enum WfErrorCode {
     TRANSFER_RECEIVER_NOT_IN_ORG("WF-40911", "接收人不在本机构"),
     TRANSFER_RECEIVER_NOT_CANDIDATE("WF-40912", "接收人无该节点办理资格"),
     TASK_TRANSFER_LOCKED("WF-40913", "任务转交待认领中，不可办理"),
+    TRANSFER_NOT_FOUND_OR_PROCESSED("WF-40914", "转交不存在或已处理"),
+    TRANSFER_STATE_CHANGED("WF-40915", "转交状态已变更"),
+
+    // 403 无权限
+    TRANSFER_NOT_RECEIVER("WF-40303", "只有接收人可认领"),
 
     // 500 内部错误
     ENGINE_ERROR("WF-50001", "流程引擎异常");
