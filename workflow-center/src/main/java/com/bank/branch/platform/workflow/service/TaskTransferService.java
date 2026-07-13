@@ -8,6 +8,7 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
+import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.entity.WfTaskTransfer;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
@@ -180,6 +181,50 @@ public class TaskTransferService {
      */
     public boolean hasPendingTransfer(String taskId) {
         return wfTaskTransferMapper.selectActiveByTaskId(taskId) != null;
+    }
+
+    /**
+     * 转交收件箱：当前登录用户待认领的转交任务列表（{@code WfTaskTransferMapper#selectInbox}，
+     * status=PENDING_ACCEPT，按发起时间倒序）。
+     *
+     * @return 展示项列表，可能为空
+     */
+    public List<TransferItemDTO> listInbox() {
+        String me = currentUserApi.getCurrentEmpId();
+        return wfTaskTransferMapper.selectInbox(me).stream().map(this::toItemDTO).toList();
+    }
+
+    /**
+     * 转交发件箱：当前登录用户发起的转交任务列表（{@code WfTaskTransferMapper#selectOutbox}，
+     * status ∈ {PENDING_ACCEPT, ACCEPTED}，按发起时间倒序）。
+     *
+     * @return 展示项列表，可能为空
+     */
+    public List<TransferItemDTO> listOutbox() {
+        String me = currentUserApi.getCurrentEmpId();
+        return wfTaskTransferMapper.selectOutbox(me).stream().map(this::toItemDTO).toList();
+    }
+
+    /** 实体 → 展示 DTO，收件箱/发件箱共用同一转换，不把实体直接暴露给 Controller/前端。 */
+    private TransferItemDTO toItemDTO(WfTaskTransfer t) {
+        TransferItemDTO dto = new TransferItemDTO();
+        dto.setId(t.getId());
+        dto.setProcessInstanceId(t.getProcessInstanceId());
+        dto.setTaskId(t.getTaskId());
+        dto.setBusinessKey(t.getBusinessKey());
+        dto.setBizType(t.getBizType());
+        dto.setNodeKey(t.getNodeKey());
+        dto.setNodeName(t.getNodeName());
+        dto.setFromEmpId(t.getFromEmpId());
+        dto.setInitiatorEmpId(t.getInitiatorEmpId());
+        dto.setToEmpId(t.getToEmpId());
+        dto.setOrgCode(t.getOrgCode());
+        dto.setStatus(t.getStatus());
+        dto.setTransferReason(t.getTransferReason());
+        dto.setRejectReason(t.getRejectReason());
+        dto.setInitiatedTime(t.getInitiatedTime());
+        dto.setDecidedTime(t.getDecidedTime());
+        return dto;
     }
 
     /**

@@ -8,6 +8,7 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
+import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.entity.WfTaskTransfer;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
@@ -395,6 +396,66 @@ class TaskTransferServiceTest {
 
         when(wfTaskTransferMapper.selectActiveByTaskId("TASK_2")).thenReturn(null);
         assertThat(taskTransferService.hasPendingTransfer("TASK_2")).isFalse();
+    }
+
+    // ==================== listInbox / listOutbox ====================
+
+    /**
+     * 收件箱：取当前登录用户 empId 调用 {@code mapper.selectInbox}，实体逐条转换为
+     * {@code TransferItemDTO}，字段须与实体一一对应（不遗漏/不错位）。
+     */
+    @Test
+    void listInbox_delegatesToMapperAndMapsToItemDTO() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        WfTaskTransfer t = pendingTransfer();
+        when(wfTaskTransferMapper.selectInbox(E_TO)).thenReturn(List.of(t));
+
+        List<TransferItemDTO> result = taskTransferService.listInbox();
+
+        verify(wfTaskTransferMapper).selectInbox(E_TO);
+        assertThat(result).hasSize(1);
+        TransferItemDTO dto = result.get(0);
+        assertThat(dto.getId()).isEqualTo(TRANSFER_ID);
+        assertThat(dto.getTaskId()).isEqualTo(TASK_ID);
+        assertThat(dto.getProcessInstanceId()).isEqualTo(PID);
+        assertThat(dto.getNodeKey()).isEqualTo(NODE_KEY);
+        assertThat(dto.getFromEmpId()).isEqualTo(E_FROM);
+        assertThat(dto.getInitiatorEmpId()).isEqualTo(E_SEC);
+        assertThat(dto.getToEmpId()).isEqualTo(E_TO);
+        assertThat(dto.getOrgCode()).isEqualTo(ORG_A);
+        assertThat(dto.getStatus()).isEqualTo("PENDING_ACCEPT");
+        assertThat(dto.getBizType()).isEqualTo("LOAN");
+        assertThat(dto.getBusinessKey()).isEqualTo("LOAN:LA001");
+    }
+
+    /** 发件箱：取当前登录用户 empId 调用 {@code mapper.selectOutbox}，实体转换为展示 DTO。 */
+    @Test
+    void listOutbox_delegatesToMapperAndMapsToItemDTO() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        WfTaskTransfer t = pendingTransfer();
+        t.setStatus("ACCEPTED");
+        t.setDecidedTime(LocalDateTime.now());
+        when(wfTaskTransferMapper.selectOutbox(E_SEC)).thenReturn(List.of(t));
+
+        List<TransferItemDTO> result = taskTransferService.listOutbox();
+
+        verify(wfTaskTransferMapper).selectOutbox(E_SEC);
+        assertThat(result).hasSize(1);
+        TransferItemDTO dto = result.get(0);
+        assertThat(dto.getId()).isEqualTo(TRANSFER_ID);
+        assertThat(dto.getStatus()).isEqualTo("ACCEPTED");
+        assertThat(dto.getDecidedTime()).isEqualTo(t.getDecidedTime());
+        assertThat(dto.getInitiatorEmpId()).isEqualTo(E_SEC);
+        assertThat(dto.getToEmpId()).isEqualTo(E_TO);
+    }
+
+    /** 收件箱为空时返回空列表，不抛异常。 */
+    @Test
+    void listInbox_returnsEmptyListWhenNoPending() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectInbox(E_TO)).thenReturn(List.of());
+
+        assertThat(taskTransferService.listInbox()).isEmpty();
     }
 
     // ==================== accept ====================
