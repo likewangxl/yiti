@@ -40,6 +40,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -528,5 +529,152 @@ class TaskTransferServiceTest {
                 .isEqualTo("WF-40914");
 
         verify(taskService, never()).setAssignee(anyString(), anyString());
+    }
+
+    // ==================== decline ====================
+
+    /**
+     * 拒绝成功：乐观更新命中（REJECTED，理由落库）→ 任务加拒绝评论留痕，且同时通知发起人
+     * 与原办理人（fromEmpId）——两者都需要知悉转交未被接收人认领。
+     */
+    @Test
+    void decline_success_setsRejectedAddsCommentAndNotifiesInitiatorAndFrom() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("REJECTED"), eq("时间冲突，请转他人处理"), any(LocalDateTime.class)))
+                .thenReturn(1);
+
+        taskTransferService.decline(TRANSFER_ID, "时间冲突，请转他人处理");
+
+        verify(taskService).addComment(TASK_ID, PID, "TRANSFER_REJECTED", "时间冲突，请转他人处理");
+
+        ArgumentCaptor<NotificationCmd> notifyCaptor = ArgumentCaptor.forClass(NotificationCmd.class);
+        verify(notifyApi, times(2)).sendNotification(notifyCaptor.capture());
+        List<String> targets = notifyCaptor.getAllValues().stream().map(NotificationCmd::getTargetEmpId).toList();
+        assertThat(targets).containsExactlyInAnyOrder(E_SEC, E_FROM);
+        assertThat(notifyCaptor.getAllValues())
+                .allSatisfy(cmd -> assertThat(cmd.getContent()).contains("时间冲突，请转他人处理"));
+    }
+
+    /** 拒绝理由为空（服务层兜底，与 Controller @Valid 独立）→ WF-40001，不触发乐观更新与通知。 */
+    @Test
+    void decline_rejectsBlankReason_throwsAndDoesNotUpdate() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+
+        assertThatThrownBy(() -> taskTransferService.decline(TRANSFER_ID, "   "))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40001");
+
+        verify(wfTaskTransferMapper, never()).updateStatusIfPending(anyString(), anyString(), any(), any());
+        verifyNoInteractions(notifyApi);
+        verify(taskService, never()).addComment(anyString(), anyString(), anyString(), any());
+    }
+
+    /** 非接收人尝试拒绝 → WF-40304，不触发乐观更新。 */
+    @Test
+    void decline_rejectsNonReceiver_throwsAndDoesNotUpdate() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E_OTHER");
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+
+        assertThatThrownBy(() -> taskTransferService.decline(TRANSFER_ID, "理由"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40304");
+
+        verify(wfTaskTransferMapper, never()).updateStatusIfPending(anyString(), anyString(), any(), any());
+        verifyNoInteractions(notifyApi);
+    }
+
+    /** 转交不存在或已处理 → WF-40914（与 accept 共用同一加载校验）。 */
+    @Test
+    void decline_rejectsWhenTransferNotFound() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> taskTransferService.decline(TRANSFER_ID, "理由"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40914");
+    }
+
+    /** 并发冲突：乐观更新未命中 → WF-40915，且绝不能推进到加评论/通知。 */
+    @Test
+    void decline_concurrentLoser_throwsConflict() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("REJECTED"), anyString(), any(LocalDateTime.class)))
+                .thenReturn(0);
+
+        assertThatThrownBy(() -> taskTransferService.decline(TRANSFER_ID, "理由"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40915");
+
+        verify(taskService, never()).addComment(anyString(), anyString(), anyString(), any());
+        verifyNoInteractions(notifyApi);
+    }
+
+    // ==================== cancel ====================
+
+    /** 撤回成功：乐观更新命中（CANCELLED）→ 通知接收人，reject_reason 传 null。 */
+    @Test
+    void cancel_success_setsCancelledAndNotifiesReceiver() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("CANCELLED"), isNull(), any(LocalDateTime.class)))
+                .thenReturn(1);
+
+        taskTransferService.cancel(TRANSFER_ID);
+
+        ArgumentCaptor<NotificationCmd> notifyCaptor = ArgumentCaptor.forClass(NotificationCmd.class);
+        verify(notifyApi).sendNotification(notifyCaptor.capture());
+        assertThat(notifyCaptor.getValue().getTargetEmpId()).isEqualTo(E_TO);
+
+        verifyNoInteractions(taskService);
+    }
+
+    /** 非发起人尝试撤回 → WF-40305，不触发乐观更新。 */
+    @Test
+    void cancel_rejectsNonInitiator_throwsAndDoesNotUpdate() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E_OTHER");
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+
+        assertThatThrownBy(() -> taskTransferService.cancel(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40305");
+
+        verify(wfTaskTransferMapper, never()).updateStatusIfPending(anyString(), anyString(), any(), any());
+        verifyNoInteractions(notifyApi);
+    }
+
+    /** 转交不存在或已处理 → WF-40914（与 accept 共用同一加载校验）。 */
+    @Test
+    void cancel_rejectsWhenTransferNotFound() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> taskTransferService.cancel(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40914");
+    }
+
+    /** 并发冲突：乐观更新未命中 → WF-40915，且绝不能推进到通知。 */
+    @Test
+    void cancel_concurrentLoser_throwsConflict() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("CANCELLED"), isNull(), any(LocalDateTime.class)))
+                .thenReturn(0);
+
+        assertThatThrownBy(() -> taskTransferService.cancel(TRANSFER_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40915");
+
+        verifyNoInteractions(notifyApi);
     }
 }

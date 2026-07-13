@@ -69,6 +69,8 @@ public class TaskTransferService {
 
     private static final String STATUS_PENDING_ACCEPT = "PENDING_ACCEPT";
     private static final String STATUS_ACCEPTED = "ACCEPTED";
+    private static final String STATUS_REJECTED = "REJECTED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
 
     /**
      * 发起两阶段转交。
@@ -203,11 +205,7 @@ public class TaskTransferService {
     @Transactional
     public void accept(String transferId) {
         String me = currentUserApi.getCurrentEmpId();
-        WfTaskTransfer t = wfTaskTransferMapper.selectById(transferId);
-        if (t == null || !STATUS_PENDING_ACCEPT.equals(t.getStatus())) {
-            throw new BizException(WfErrorCode.TRANSFER_NOT_FOUND_OR_PROCESSED.getCode(),
-                    WfErrorCode.TRANSFER_NOT_FOUND_OR_PROCESSED.getMessage());
-        }
+        WfTaskTransfer t = requirePending(transferId);
         if (!me.equals(t.getToEmpId())) {
             throw new BizException(WfErrorCode.TRANSFER_NOT_RECEIVER.getCode(),
                     WfErrorCode.TRANSFER_NOT_RECEIVER.getMessage());
@@ -242,6 +240,140 @@ public class TaskTransferService {
 
         log.info("转交认领: transferId={}, taskId={}, to={}, initiator={}",
                 transferId, t.getTaskId(), me, t.getInitiatorEmpId());
+    }
+
+    /**
+     * 接收人拒绝转交（两阶段转交的另一终态分支）。
+     * <p>
+     * 校验链（任一不通过即抛异常，不写库）：
+     * <ol>
+     *   <li>转交记录存在且仍为 PENDING_ACCEPT（WF-40914，与 {@link #accept} 共用同一加载校验）</li>
+     *   <li>当前登录用户即接收人（WF-40304，只有接收人本人可拒绝）</li>
+     *   <li>拒绝理由非空（WF-40001）——Controller 层（Task 12）已用 {@code @Valid}
+     *       挡在最外层，这里是服务层防御性兜底，防止未来出现绕过 Controller 直接调用
+     *       Service 的调用路径</li>
+     * </ol>
+     * 校验通过后先做乐观状态流转（{@code updateStatusIfPending}），命中后依次：任务加拒绝评论留痕
+     * （含理由）→ 同时通知发起人与原办理人（{@code fromEmpId}），两者都需要知悉转交未被接收人认领。
+     * </p>
+     * <p>
+     * <b>解锁天然发生</b>：转交记录状态一旦流出 PENDING_ACCEPT，{@code selectActiveByTaskId}
+     * 即查不到该任务的生效转交——原办理人的"转交待认领只读锁"（Task 9）随之解除，无需额外解锁代码。
+     * </p>
+     *
+     * @param transferId 转交记录ID
+     * @param reason     拒绝理由（必填）
+     * @throws BizException WF-40914 转交不存在或已处理；WF-40304 非接收人；
+     *                       WF-40001 理由为空；WF-40915 并发状态已变更
+     */
+    @Transactional
+    public void decline(String transferId, String reason) {
+        String me = currentUserApi.getCurrentEmpId();
+        WfTaskTransfer t = requirePending(transferId);
+        if (!me.equals(t.getToEmpId())) {
+            throw new BizException(WfErrorCode.TRANSFER_DECLINE_NOT_RECEIVER.getCode(),
+                    WfErrorCode.TRANSFER_DECLINE_NOT_RECEIVER.getMessage());
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new BizException(WfErrorCode.TRANSFER_REJECT_REASON_REQUIRED.getCode(),
+                    WfErrorCode.TRANSFER_REJECT_REASON_REQUIRED.getMessage());
+        }
+
+        // 乐观流转：并发败者（返回0）在此拦截，绝不能推进到下面的加评论/通知
+        int n = wfTaskTransferMapper.updateStatusIfPending(transferId, STATUS_REJECTED, reason, LocalDateTime.now());
+        if (n == 0) {
+            throw new BizException(WfErrorCode.TRANSFER_STATE_CHANGED.getCode(),
+                    WfErrorCode.TRANSFER_STATE_CHANGED.getMessage());
+        }
+
+        taskService.addComment(t.getTaskId(), t.getProcessInstanceId(), "TRANSFER_REJECTED", reason);
+        notifyInitiatorAndFrom(t, "转交被拒绝", "任务[" + t.getNodeName() + "]转交被接收人拒绝，理由：" + reason);
+
+        log.info("转交拒绝: transferId={}, taskId={}, receiver={}, initiator={}, from={}",
+                transferId, t.getTaskId(), me, t.getInitiatorEmpId(), t.getFromEmpId());
+    }
+
+    /**
+     * 发起人撤回转交（两阶段转交的第三终态分支）。
+     * <p>
+     * 校验链（任一不通过即抛异常，不写库）：
+     * <ol>
+     *   <li>转交记录存在且仍为 PENDING_ACCEPT（WF-40914，与 {@link #accept} 共用同一加载校验）</li>
+     *   <li>当前登录用户即发起人（WF-40305，只有发起人本人可撤回；秘书代发起场景下，
+     *       撤回权限归属发起人 {@code initiatorEmpId} 而非原办理人 {@code fromEmpId}）</li>
+     * </ol>
+     * 校验通过后乐观流转为 CANCELLED（{@code rejectReason} 传 null），命中后通知接收人。
+     * 转交记录状态流出 PENDING_ACCEPT 后 {@code selectActiveByTaskId} 即查不到该任务的生效转交，
+     * 原办理人的转交待认领只读锁（Task 9）天然解除，无需额外解锁代码。
+     * </p>
+     *
+     * @param transferId 转交记录ID
+     * @throws BizException WF-40914 转交不存在或已处理；WF-40305 非发起人；WF-40915 并发状态已变更
+     */
+    @Transactional
+    public void cancel(String transferId) {
+        String me = currentUserApi.getCurrentEmpId();
+        WfTaskTransfer t = requirePending(transferId);
+        if (!me.equals(t.getInitiatorEmpId())) {
+            throw new BizException(WfErrorCode.TRANSFER_CANCEL_NOT_INITIATOR.getCode(),
+                    WfErrorCode.TRANSFER_CANCEL_NOT_INITIATOR.getMessage());
+        }
+
+        // 乐观流转：并发败者（返回0）在此拦截，绝不能推进到下面的通知
+        int n = wfTaskTransferMapper.updateStatusIfPending(transferId, STATUS_CANCELLED, null, LocalDateTime.now());
+        if (n == 0) {
+            throw new BizException(WfErrorCode.TRANSFER_STATE_CHANGED.getCode(),
+                    WfErrorCode.TRANSFER_STATE_CHANGED.getMessage());
+        }
+
+        notifyApi.sendNotification(NotificationCmd.builder()
+                .targetEmpId(t.getToEmpId())
+                .title("转交已撤回")
+                .content("任务[" + t.getNodeName() + "]转交被发起人撤回")
+                .notifyType("WORKFLOW")
+                .bizType(t.getBizType())
+                .bizId(t.getBusinessKey())
+                .build());
+
+        log.info("转交撤回: transferId={}, taskId={}, initiator={}, receiver={}",
+                transferId, t.getTaskId(), me, t.getToEmpId());
+    }
+
+    /**
+     * 加载待认领转交记录，须存在且状态仍为 PENDING_ACCEPT，否则统一按 WF-40914（转交不存在或已处理）
+     * 拒绝——不区分"记录根本不存在"与"已被处理过（认领/拒绝/撤回）"两种情形，避免向调用方泄漏
+     * 转交记录的存在性/历史状态信息。{@link #accept}/{@link #decline}/{@link #cancel} 共用。
+     */
+    private WfTaskTransfer requirePending(String transferId) {
+        WfTaskTransfer t = wfTaskTransferMapper.selectById(transferId);
+        if (t == null || !STATUS_PENDING_ACCEPT.equals(t.getStatus())) {
+            throw new BizException(WfErrorCode.TRANSFER_NOT_FOUND_OR_PROCESSED.getCode(),
+                    WfErrorCode.TRANSFER_NOT_FOUND_OR_PROCESSED.getMessage());
+        }
+        return t;
+    }
+
+    /**
+     * 拒绝场景下同时通知发起人与原办理人（{@code fromEmpId}）：两者都需要知悉转交未被接收人认领，
+     * 任务仍停留在原办理人手中（转交锁已随状态流转解除）。
+     */
+    private void notifyInitiatorAndFrom(WfTaskTransfer t, String title, String content) {
+        notifyApi.sendNotification(NotificationCmd.builder()
+                .targetEmpId(t.getInitiatorEmpId())
+                .title(title)
+                .content(content)
+                .notifyType("WORKFLOW")
+                .bizType(t.getBizType())
+                .bizId(t.getBusinessKey())
+                .build());
+        notifyApi.sendNotification(NotificationCmd.builder()
+                .targetEmpId(t.getFromEmpId())
+                .title(title)
+                .content(content)
+                .notifyType("WORKFLOW")
+                .bizType(t.getBizType())
+                .bizId(t.getBusinessKey())
+                .build());
     }
 
     /**

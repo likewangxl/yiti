@@ -11,6 +11,9 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum WfErrorCode {
 
+    // 400 参数校验
+    TRANSFER_REJECT_REASON_REQUIRED("WF-40001", "拒绝理由不能为空"),
+
     // 404 资源不存在
     RESOURCE_NOT_FOUND("WF-40400", "资源不存在"),
     PROCESS_DEF_NOT_FOUND("WF-40401", "流程定义不存在"),
@@ -35,6 +38,8 @@ public enum WfErrorCode {
 
     // 403 无权限
     TRANSFER_NOT_RECEIVER("WF-40303", "只有接收人可认领"),
+    TRANSFER_DECLINE_NOT_RECEIVER("WF-40304", "只有接收人可拒绝"),
+    TRANSFER_CANCEL_NOT_INITIATOR("WF-40305", "只有发起人可撤回"),
 
     // 500 内部错误
     ENGINE_ERROR("WF-50001", "流程引擎异常");
