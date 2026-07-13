@@ -3,6 +3,7 @@ package com.bank.branch.platform.performance.support;
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.RoleApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
@@ -12,9 +13,14 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
+import com.bank.branch.platform.governance.api.AuditApi;
+import com.bank.branch.platform.governance.api.DictApi;
+import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.governance.api.JobApi;
+import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.portal.api.AddressBookApi;
 import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
+import com.bank.branch.platform.workflow.api.TodoQueryApi;
 import com.bank.branch.platform.workflow.api.WorkflowApi;
 import com.bank.branch.platform.workflow.api.WorkflowQueryApi;
 import com.bank.branch.platform.workflow.api.dto.StartProcessCmd;
@@ -123,6 +129,72 @@ public class PerfTestConfig {
                         Mockito.anyString(), Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Set.of());
         return m;
+    }
+
+    /**
+     * 测试用 TodoQueryApi（分配/目标调整待办·已办查询引入）：
+     * PerfApprovalCmdFacade / AllocAdjustTodoService / AllocAdjustDoneService 构造器注入
+     * workflow-center 的 TodoQueryApi 按 businessKey 反查 Flowable 待办/已办；因 PerfTestApp
+     * 仅扫描 performance 子包，workflow 真实 Bean 不会装配，加载完整上下文的 IT 会因
+     * "No qualifying bean of type TodoQueryApi" 启动失败。此处提供默认空 mock
+     * （List→空列表、Map→空表，Mockito 对集合返回类型的默认行为即空集合），
+     * 需验证具体待办/已办行为的单测走各自 {@code @Mock}/{@code @MockBean} 覆盖。
+     */
+    @Bean
+    @Primary
+    public TodoQueryApi todoQueryApi() {
+        return Mockito.mock(TodoQueryApi.class);
+    }
+
+    /**
+     * 测试用 RoleApi（auth）：perf 主代码构造器注入按角色查询能力，PerfTestApp 仅扫描
+     * performance 子包，auth 真实 Bean 不装配，加载完整上下文的 IT 会因缺此 Bean 启动失败。
+     * 提供默认空 mock（集合返回类型默认空集合）；需断言行为的单测走各自 {@code @Mock}/{@code @MockBean}。
+     */
+    @Bean
+    @Primary
+    public RoleApi roleApi() {
+        return Mockito.mock(RoleApi.class);
+    }
+
+    /**
+     * 测试用 AuditApi（governance）：审计写入（@AuditLog 切面 / 业务显式调用）依赖此 Bean，
+     * 测试上下文无 governance 真实 Bean，提供默认空 mock 避免上下文启动失败；单测可 {@code @MockBean} 覆盖。
+     */
+    @Bean
+    @Primary
+    public AuditApi auditApi() {
+        return Mockito.mock(AuditApi.class);
+    }
+
+    /**
+     * 测试用 DictApi（governance）：eval/导入等按字典码翻译走 DictApi，测试上下文无 governance 真实 Bean，
+     * 提供默认空 mock 避免上下文启动失败；需断言字典行为的单测走各自 {@code @Mock}/{@code @MockBean}。
+     */
+    @Bean
+    @Primary
+    public DictApi dictApi() {
+        return Mockito.mock(DictApi.class);
+    }
+
+    /**
+     * 测试用 FileApi（governance）：导出/导入落 MinIO 的文件能力，测试上下文无 governance 真实 Bean，
+     * 提供默认空 mock 避免上下文启动失败；单测可 {@code @MockBean} 覆盖。
+     */
+    @Bean
+    @Primary
+    public FileApi fileApi() {
+        return Mockito.mock(FileApi.class);
+    }
+
+    /**
+     * 测试用 NotifyApi（governance）：审批/任务通知能力，测试上下文无 governance 真实 Bean，
+     * 提供默认空 mock 避免上下文启动失败；单测可 {@code @MockBean} 覆盖。
+     */
+    @Bean
+    @Primary
+    public NotifyApi notifyApi() {
+        return Mockito.mock(NotifyApi.class);
     }
 
     /**
