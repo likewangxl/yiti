@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bank.branch.platform.workflow.mapper.WfTaskTransferMapper">
+
+    <resultMap id="BASE" type="com.bank.branch.platform.workflow.entity.WfTaskTransfer">
+        <id column="id" property="id"/>
+        <result column="process_instance_id" property="processInstanceId"/>
+        <result column="task_id" property="taskId"/>
+        <result column="business_key" property="businessKey"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="node_key" property="nodeKey"/>
+        <result column="node_name" property="nodeName"/>
+        <result column="from_emp_id" property="fromEmpId"/>
+        <result column="initiator_emp_id" property="initiatorEmpId"/>
+        <result column="to_emp_id" property="toEmpId"/>
+        <result column="org_code" property="orgCode"/>
+        <result column="status" property="status"/>
+        <result column="transfer_reason" property="transferReason"/>
+        <result column="reject_reason" property="rejectReason"/>
+        <result column="initiated_time" property="initiatedTime"/>
+        <result column="decided_time" property="decidedTime"/>
+    </resultMap>
+
+    <select id="selectActiveByTaskId" parameterType="string" resultMap="BASE">
+        SELECT * FROM WF_TASK_TRANSFER
+        WHERE task_id = #{taskId} AND status = 'PENDING_ACCEPT'
+        ORDER BY initiated_time DESC LIMIT 1
+    </select>
+
+    <update id="updateStatusIfPending">
+        UPDATE WF_TASK_TRANSFER
+        SET status = #{status}, reject_reason = #{rejectReason}, decided_time = #{decidedTime}
+        WHERE id = #{id} AND status = 'PENDING_ACCEPT'
+    </update>
+
+    <select id="selectInbox" parameterType="string" resultMap="BASE">
+        SELECT * FROM WF_TASK_TRANSFER
+        WHERE to_emp_id = #{toEmpId} AND status = 'PENDING_ACCEPT'
+        ORDER BY initiated_time DESC
+    </select>
+
+    <select id="selectOutbox" parameterType="string" resultMap="BASE">
+        SELECT * FROM WF_TASK_TRANSFER
+        WHERE from_emp_id = #{fromEmpId} AND status IN ('PENDING_ACCEPT','ACCEPTED')
+        ORDER BY initiated_time DESC
+    </select>
+</mapper>
