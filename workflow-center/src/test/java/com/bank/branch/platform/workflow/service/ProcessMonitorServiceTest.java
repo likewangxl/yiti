@@ -13,9 +13,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,11 +40,25 @@ class ProcessMonitorServiceTest {
     @Test
     void admin_noOrgFilter() {
         when(currentUserApi.isSystemAdmin()).thenReturn(true);
-        when(bizProcessMapMapper.countMonitor(any(), any(), any(), any(), isNull())).thenReturn(0L);
+        when(bizProcessMapMapper.countMonitor(any(), any(), any(), any(), isNull())).thenReturn(1L);
+        when(bizProcessMapMapper.selectMonitorPage(any(), any(), any(), any(), isNull(), eq(0), eq(20)))
+                .thenReturn(java.util.List.of());
 
         service.query("RUNNING", null, null, null, 1, 20);
 
         verify(bizProcessMapMapper).selectMonitorPage(any(), any(), any(), any(), isNull(), eq(0), eq(20));
+    }
+
+    @Test
+    void zeroCount_skipsPageQuery() {
+        when(currentUserApi.isSystemAdmin()).thenReturn(true);
+        when(bizProcessMapMapper.countMonitor(any(), any(), any(), any(), isNull())).thenReturn(0L);
+
+        service.query("RUNNING", null, null, null, 1, 20);
+
+        // total==0 时不应再查分页，省一次 DB 往返
+        verify(bizProcessMapMapper, never())
+                .selectMonitorPage(any(), any(), any(), any(), any(), anyInt(), anyInt());
     }
 
     @Test

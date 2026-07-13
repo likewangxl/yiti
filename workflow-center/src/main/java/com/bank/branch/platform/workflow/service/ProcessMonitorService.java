@@ -62,7 +62,8 @@ public class ProcessMonitorService {
         }
 
         long total = bizProcessMapMapper.countMonitor(status, bizType, keyword, startedBy, orgScope);
-        List<BizProcessMap> rows = bizProcessMapMapper.selectMonitorPage(
+        // total==0 时跳过分页查询，省掉一次零命中的 DB 往返
+        List<BizProcessMap> rows = total == 0 ? List.of() : bizProcessMapMapper.selectMonitorPage(
                 status, bizType, keyword, startedBy, orgScope, offset, size);
 
         List<ProcessMonitorItemDTO> dtos = toDtos(rows);
