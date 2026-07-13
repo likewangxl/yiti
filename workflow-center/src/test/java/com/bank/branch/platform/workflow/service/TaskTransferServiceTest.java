@@ -22,6 +22,7 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.util.Collections;
 import java.util.List;
@@ -29,6 +30,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -173,14 +175,21 @@ class TaskTransferServiceTest {
                 .isEqualTo("WF-40911");
     }
 
-    /** 接收人机构信息查不到（null）同样按不在本机构拒绝。 */
+    /**
+     * 接收人查不到主机构 → 同样按不在本机构拒绝（WF-40911）。
+     * <p>
+     * 真实 {@code OrgApi.getUserMainOrg} 在接收人无 {@code EXT_USER_ORG} 主机构记录时不会返回
+     * {@code null}，而是抛 {@code BizException(AUTH-40403, "用户不存在")}——桩必须还原这个真实契约
+     * （抛异常而非返回 null），否则测的是一个不可能出现的假场景。
+     * </p>
+     */
     @Test
     void initiate_rejectsReceiverWithNoMainOrg() {
         when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
         when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
         mockTaskQuery(mockTask());
         when(wfTaskTransferMapper.selectActiveByTaskId(TASK_ID)).thenReturn(null);
-        when(orgApi.getUserMainOrg(E_TO)).thenReturn(null);
+        when(orgApi.getUserMainOrg(E_TO)).thenThrow(new BizException("AUTH-40403", "用户不存在"));
 
         assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_TO, "忙")))
                 .isInstanceOf(BizException.class)
@@ -198,6 +207,31 @@ class TaskTransferServiceTest {
         existing.setId("EXIST_1");
         existing.setStatus("PENDING_ACCEPT");
         when(wfTaskTransferMapper.selectActiveByTaskId(TASK_ID)).thenReturn(existing);
+
+        assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_TO, "忙")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40910");
+    }
+
+    /**
+     * 单活约束的 DB 侧兜底：预检查（{@code selectActiveByTaskId}）读到 null 通过后，
+     * 并发的另一发起请求先一步插入并占用了 {@code uk_active_task} 唯一索引，本次
+     * {@code insert} 命中唯一索引冲突抛 {@code DataIntegrityViolationException}（
+     * {@code DuplicateKeyException} 是其子类）—— 须兜成与预检查一致的 WF-40910，
+     * 而不是把底层 DB 异常泄漏给调用方。
+     */
+    @Test
+    void initiate_rejectsWhenInsertRaceLosesToUniqueIndex() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask());
+        when(wfTaskTransferMapper.selectActiveByTaskId(TASK_ID)).thenReturn(null);
+        when(orgApi.getUserMainOrg(E_TO)).thenReturn(org(ORG_A));
+        mockPdKey();
+        when(candidateResolverService.resolveCandidates(PD_KEY, NODE_KEY)).thenReturn(List.of("USER:" + E_TO));
+        when(userApi.getCandidateGroupKeys(E_TO)).thenReturn(Set.of("USER:" + E_TO));
+        when(wfTaskTransferMapper.insert(any(WfTaskTransfer.class))).thenThrow(new DuplicateKeyException("dup"));
 
         assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_TO, "忙")))
                 .isInstanceOf(BizException.class)
@@ -232,8 +266,10 @@ class TaskTransferServiceTest {
     }
 
     /**
-     * 接收人节点资格达标路径一：节点候选（ROLE:BRANCH_HEAD）与接收人候选组标识
-     * （{@code UserApi.getCandidateGroupKeys} 计算出的 ROLE:BRANCH_HEAD）存在交集 → 放行。
+     * 接收人节点资格达标——无候选身份链接兜底路径：任务完全没有 candidate 身份链接（
+     * {@code getIdentityLinksForTask} 未打桩，Mockito 默认返回空列表，反映"节点从未被
+     * 机构收窄过"，如纯直接指派节点）→ 回退节点原始配置，节点候选（ROLE:BRANCH_HEAD）
+     * 与接收人候选组标识存在交集 → 放行。
      */
     @Test
     void initiate_acceptsReceiverViaRoleCandidateIntersection() {
@@ -250,13 +286,14 @@ class TaskTransferServiceTest {
         String transferId = taskTransferService.initiate(TASK_ID, req(E_TO, "忙"));
 
         assertThat(transferId).isNotBlank();
-        verify(wfTaskTransferMapper).insert(org.mockito.ArgumentMatchers.any(WfTaskTransfer.class));
+        verify(wfTaskTransferMapper).insert(any(WfTaskTransfer.class));
     }
 
     /**
-     * 接收人节点资格达标路径二：节点原始配置候选（ROLE:OTHER_ROLE）不含接收人，但任务实际身份链接
+     * 接收人节点资格达标——权威身份链接（userId 直接匹配）：任务实际身份链接
      * （{@code taskService.getIdentityLinksForTask}）里有一条 candidate 类型、userId 直接等于接收人
-     * 的链接 —— 反映 TaskAssignmentListener 按机构过滤后把候选具体化为该用户 → 仍应放行。
+     * 的链接（反映 TaskAssignmentListener 按机构过滤后把候选具体化为该用户），节点原始配置
+     * （ROLE:OTHER_ROLE）故意不含接收人，用来证明放行来自权威链接本身、不是回退节点配置 → 仍应放行。
      */
     @Test
     void initiate_acceptsReceiverViaTaskIdentityLinkDirectUser() {
@@ -277,7 +314,66 @@ class TaskTransferServiceTest {
         String transferId = taskTransferService.initiate(TASK_ID, req(E_TO, "忙"));
 
         assertThat(transferId).isNotBlank();
-        verify(wfTaskTransferMapper).insert(org.mockito.ArgumentMatchers.any(WfTaskTransfer.class));
+        verify(wfTaskTransferMapper).insert(any(WfTaskTransfer.class));
+    }
+
+    /**
+     * 接收人节点资格达标——权威身份链接（groupId 命中接收人候选组标识）：任务实际候选身份链接
+     * 保留为组（{@code addCandidateGroup}，未被机构收窄具体化为用户），groupId="ROLE:BRANCH_HEAD"
+     * 命中接收人候选组标识；节点原始配置（ROLE:OTHER_ROLE）故意不含接收人，证明放行来自权威链接
+     * 本身 → 仍应放行。
+     */
+    @Test
+    void initiate_acceptsReceiverViaTaskIdentityLinkGroupMatch() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask());
+        when(wfTaskTransferMapper.selectActiveByTaskId(TASK_ID)).thenReturn(null);
+        when(orgApi.getUserMainOrg(E_TO)).thenReturn(org(ORG_A));
+        mockPdKey();
+        when(candidateResolverService.resolveCandidates(PD_KEY, NODE_KEY)).thenReturn(List.of("ROLE:OTHER_ROLE"));
+        when(userApi.getCandidateGroupKeys(E_TO))
+                .thenReturn(Set.of("ROLE:BRANCH_HEAD", "USER:" + E_TO, "ORG:" + ORG_A));
+
+        IdentityLink link = mock(IdentityLink.class);
+        when(link.getType()).thenReturn("candidate");
+        when(link.getGroupId()).thenReturn("ROLE:BRANCH_HEAD");
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(List.of(link));
+
+        String transferId = taskTransferService.initiate(TASK_ID, req(E_TO, "忙"));
+
+        assertThat(transferId).isNotBlank();
+        verify(wfTaskTransferMapper).insert(any(WfTaskTransfer.class));
+    }
+
+    /**
+     * 越权绕过场景关闭校验：节点原始配置（ROLE:BRANCH_HEAD）未经机构过滤，接收人恰好也持有
+     * 该角色（在 receiverKeys 里），但任务实际身份链接（{@code getIdentityLinksForTask}）已被
+     * {@code TaskAssignmentListener} 按机构收窄为另一具体用户（{@code E_OTHER_ORG_USER}，反映
+     * 秘书代发起时接收人机构 == 发起人机构、但节点真实候选被收窄到另一机构的场景）——接收人不在
+     * 这份权威名单里 → 必须拒绝（WF-40912），不能因为节点原始配置里存在同角色就用「||」短路放行。
+     */
+    @Test
+    void initiate_rejectsReceiverWhenTaskCandidateNarrowedToOtherUser() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask());
+        when(wfTaskTransferMapper.selectActiveByTaskId(TASK_ID)).thenReturn(null);
+        when(orgApi.getUserMainOrg(E_TO)).thenReturn(org(ORG_A));
+        mockPdKey();
+        when(candidateResolverService.resolveCandidates(PD_KEY, NODE_KEY)).thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(userApi.getCandidateGroupKeys(E_TO))
+                .thenReturn(Set.of("ROLE:BRANCH_HEAD", "USER:" + E_TO, "ORG:" + ORG_A));
+
+        IdentityLink link = mock(IdentityLink.class);
+        when(link.getType()).thenReturn("candidate");
+        when(link.getUserId()).thenReturn("E_OTHER_ORG_USER");
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(List.of(link));
+
+        assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_TO, "忙")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40912");
     }
 
     /** hasPendingTransfer 直接透传 mapper.selectActiveByTaskId 是否非空。 */

@@ -19,6 +19,7 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.identitylink.api.IdentityLinkType;
 import org.flowable.task.api.Task;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -101,7 +102,16 @@ public class TaskTransferService {
         }
 
         // 接收人 ∈ 本机构：机构-用户为 1:1，主机构编码须等于发起人机构编码
-        OrgDTO toOrg = orgApi.getUserMainOrg(toEmpId);
+        // OrgApi.getUserMainOrg 在接收人无 EXT_USER_ORG 主机构记录时不返回 null，而是抛
+        // BizException(AUTH-40403 用户不存在)——须兜住转译为本模块的 WF-40911，否则会把
+        // auth 模块的原始异常泄漏给调用方（错模块、错语义）。
+        OrgDTO toOrg;
+        try {
+            toOrg = orgApi.getUserMainOrg(toEmpId);
+        } catch (BizException e) {
+            throw new BizException(WfErrorCode.TRANSFER_RECEIVER_NOT_IN_ORG.getCode(),
+                    WfErrorCode.TRANSFER_RECEIVER_NOT_IN_ORG.getMessage());
+        }
         if (toOrg == null || !Objects.equals(initiatorOrg, toOrg.getOrgCode())) {
             throw new BizException(WfErrorCode.TRANSFER_RECEIVER_NOT_IN_ORG.getCode(),
                     WfErrorCode.TRANSFER_RECEIVER_NOT_IN_ORG.getMessage());
@@ -135,7 +145,16 @@ public class TaskTransferService {
             t.setBusinessKey(map.getBusinessKey());
             t.setBizType(map.getBizType());
         }
-        wfTaskTransferMapper.insert(t);
+        // 单活约束在 DB 侧还有一道生成列+唯一索引兜底（uk_active_task，见 ddl-workflow-monitor.sql）：
+        // 上面的先查后插存在竞态窗口（并发 initiate 都读到 selectActiveByTaskId==null），
+        // 竞态败者在这里插入时会命中唯一索引冲突，兜成与预检查一致的 WF-40910，而不是让
+        // DataIntegrityViolationException 原始泄漏给调用方。
+        try {
+            wfTaskTransferMapper.insert(t);
+        } catch (DataIntegrityViolationException e) {
+            throw new BizException(WfErrorCode.TRANSFER_ALREADY_PENDING.getCode(),
+                    WfErrorCode.TRANSFER_ALREADY_PENDING.getMessage());
+        }
 
         taskService.addComment(taskId, task.getProcessInstanceId(), "TRANSFER_INITIATED", req.getReason());
         log.info("转交发起: taskId={}, from={}, to={}, initiator={}, transferId={}",
@@ -167,33 +186,29 @@ public class TaskTransferService {
      * 接收人资格校验：接收人 ∈ 该节点可办理者。
      * <p>
      * Flowable IDM 关闭、候选模型为前缀化标识（{@code ROLE:xxx}/{@code ORG:xxx}/{@code USER:xxx}，
-     * 见 {@link CandidateResolverService#resolveCandidates}）。双路校验取「或」，任一命中即合格：
+     * 见 {@link CandidateResolverService#resolveCandidates}）。以「任务实际身份链接」为权威依据，
+     * 只有该任务完全没有 candidate 身份链接时才回退到节点原始配置：
      * </p>
      * <ol>
-     *   <li><b>节点配置候选</b>（{@code nodeCandidates}，未经机构过滤的原始配置）：接收人显式在
-     *       {@code USER:} 名单，或接收人按 {@link UserApi#getCandidateGroupKeys} 计算出的候选组
-     *       标识（同样 ROLE:/USER:/ORG: 前缀口径）与节点候选存在交集；</li>
-     *   <li><b>任务实际身份链接</b>（{@code taskService.getIdentityLinksForTask}）：
-     *       {@code TaskAssignmentListener} 在任务创建时可能按发起人机构对候选做二次过滤
-     *       （如 branch_approve 把 ROLE 展开为具体 {@code addCandidateUser}），此时该任务实例
-     *       真实候选集合可能比节点原始配置更窄或已具体化为用户，只查节点配置会漏判「机构过滤后
-     *       其实不具备资格 / 已具体化为其他人」的场景，故额外核对任务上真实挂的 candidate 身份链接
-     *       （type=candidate 的 userId 直接匹配，或 groupId 命中接收人候选组标识）。</li>
+     *   <li><b>任务实际身份链接</b>（{@code taskService.getIdentityLinksForTask}，type=candidate）
+     *       非空 → <b>只</b>按这份权威名单判定：接收人 userId 直接匹配，或 groupId 命中接收人的
+     *       候选组标识（{@link UserApi#getCandidateGroupKeys}，ROLE:/USER:/ORG: 前缀口径）。
+     *       <b>不再</b>额外 OR 上节点原始配置——{@code TaskAssignmentListener} 在任务创建时可能按
+     *       发起机构把候选收窄为具体机构下的用户（如 branch_approve 系列节点 {@code addCandidateUser}），
+     *       若仍拿未过滤的原始 {@code nodeCandidates} 去交集，会放行一个同角色但不在收窄范围内、
+     *       实际根本不是该任务候选人的接收人（越权绕过）。</li>
+     *   <li><b>节点配置候选</b>（{@code nodeCandidates}，未经机构过滤的原始配置）：仅当任务
+     *       <b>完全没有</b> candidate 类型身份链接时才使用（例如纯直接指派节点，从未被
+     *       机构收窄过，不存在"权威名单被绕过"的风险），判定口径同上（USER: 精确匹配 或
+     *       receiverKeys 交集）。</li>
      * </ol>
      */
     private boolean isEligibleReceiver(String taskId, List<String> nodeCandidates, String toEmpId) {
         Set<String> receiverKeys = userApi.getCandidateGroupKeys(toEmpId);
 
-        if (candidateContains(nodeCandidates, receiverKeys, toEmpId)) {
-            return true;
-        }
-
-        List<IdentityLink> links = taskService.getIdentityLinksForTask(taskId);
-        if (links != null) {
-            for (IdentityLink link : links) {
-                if (!IdentityLinkType.CANDIDATE.equals(link.getType())) {
-                    continue;
-                }
+        List<IdentityLink> candidateLinks = extractCandidateLinks(taskId);
+        if (!candidateLinks.isEmpty()) {
+            for (IdentityLink link : candidateLinks) {
                 if (toEmpId.equals(link.getUserId())) {
                     return true;
                 }
@@ -201,8 +216,22 @@ public class TaskTransferService {
                     return true;
                 }
             }
+            return false;
         }
-        return false;
+
+        // 任务完全没有 candidate 身份链接（未被机构收窄过，如纯直接指派节点）→ 回退节点原始配置
+        return candidateContains(nodeCandidates, receiverKeys, toEmpId);
+    }
+
+    /** 取任务上 type=candidate 的身份链接列表（Flowable {@code getIdentityLinksForTask} 可能返回 null）。 */
+    private List<IdentityLink> extractCandidateLinks(String taskId) {
+        List<IdentityLink> links = taskService.getIdentityLinksForTask(taskId);
+        if (links == null) {
+            return List.of();
+        }
+        return links.stream()
+                .filter(link -> IdentityLinkType.CANDIDATE.equals(link.getType()))
+                .toList();
     }
 
     /**

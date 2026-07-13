@@ -42,11 +42,13 @@ CREATE TABLE IF NOT EXISTS `WF_TASK_TRANSFER` (
   `reject_reason` varchar(500) DEFAULT NULL,
   `initiated_time` datetime DEFAULT CURRENT_TIMESTAMP,
   `decided_time` datetime DEFAULT NULL,
+  `active_task_key` varchar(64) GENERATED ALWAYS AS (IF(status='PENDING_ACCEPT', task_id, NULL)) STORED COMMENT '单活约束生成列：仅 PENDING_ACCEPT 行取 task_id，其余为 NULL，配合唯一索引保证同一任务最多一条待认领转交（NULL 不参与唯一性冲突，终态行可并存多条）',
   PRIMARY KEY (`id`),
   KEY `idx_task_status` (`task_id`,`status`),
   KEY `idx_to_status` (`to_emp_id`,`status`),
   KEY `idx_from` (`from_emp_id`),
-  KEY `idx_pi` (`process_instance_id`)
+  KEY `idx_pi` (`process_instance_id`),
+  UNIQUE KEY `uk_active_task` (`active_task_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='任务转交待认领生命周期';
 
 -- -------------------------------------------
