@@ -13,7 +13,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -123,17 +122,15 @@ class CalendarServiceTest {
     // ── 5. initYear ──────────────────────────────────────────────
 
     @Test
-    void initYear_idempotent_skipsExistingDates() {
+    void initYear_resetMode_deletesRangeThenReinsertsAllDays() {
         int year = 2026;
-        when(calendarMapper.existsByDay(LocalDate.of(2026, 1, 1))).thenReturn(true);
-        when(calendarMapper.existsByDay(argThat(d ->
-                d != null && !d.equals(LocalDate.of(2026, 1, 1))
-        ))).thenReturn(false);
         when(calendarMapper.insert((SysCalendarDay) any())).thenReturn(1);
 
         calendarService.initYear(year);
 
-        verify(calendarMapper, never()).insert(argThat((SysCalendarDay day) ->
+        // 重置模式：先清空该年度整段，再逐日无条件重建（不再按 existsByDay 跳过已存在日期）
+        verify(calendarMapper).deleteByRange(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31));
+        verify(calendarMapper).insert(argThat((SysCalendarDay day) ->
                 day.getDay().equals(LocalDate.of(2026, 1, 1))
         ));
         verify(calendarMapper).insert(argThat((SysCalendarDay day) ->
