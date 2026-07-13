@@ -12,9 +12,11 @@ import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.entity.WfNodeFormConf;
+import com.bank.branch.platform.workflow.entity.WfTaskTransfer;
 import com.bank.branch.platform.workflow.enums.SlaStatus;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import com.bank.branch.platform.workflow.mapper.NodeFormConfMapper;
+import com.bank.branch.platform.workflow.mapper.WfTaskTransferMapper;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.task.Comment;
@@ -80,6 +82,9 @@ class TodoQueryServiceTest {
 
     @Mock
     private OrgApi orgApi;
+
+    @Mock
+    private WfTaskTransferMapper wfTaskTransferMapper;
 
     @InjectMocks
     private TodoQueryService todoQueryService;
@@ -378,6 +383,38 @@ class TodoQueryServiceTest {
 
         verify(nodeFormConfMapper).selectByProcessDefKeyAndNodeKey("loan_approve", "userTask4");
         verify(taskService).getProcessInstanceComments("PID_004");
+    }
+
+    /**
+     * 获取任务详情：任务存在待认领的转交时，RuntimeAccess 锁定 —— 原办理人不可 approve/reject/transfer/claim
+     * （Task 9：转交锁）。
+     */
+    @Test
+    void getTaskDetail_pendingTransfer_locksRuntimeAccess() {
+        Task mockTask = buildMockTask("TASK_005", "风控审核", "PID_005",
+                "E10004", "userTask5", "loan_approve:1:790");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId("TASK_005")).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(mockTask);
+
+        BizProcessMap map = buildBizProcessMap("PID_005", "LOAN", "LA005");
+        when(bizProcessMapMapper.selectByProcessInstanceId("PID_005")).thenReturn(map);
+        when(slaCalculationService.calculateSlaStatus(eq("loan_approve"), eq("userTask5"), any(LocalDateTime.class)))
+                .thenReturn(SlaStatus.GREEN);
+        when(nodeFormConfMapper.selectByProcessDefKeyAndNodeKey("loan_approve", "userTask5")).thenReturn(null);
+        when(taskService.getProcessInstanceComments("PID_005")).thenReturn(Collections.emptyList());
+
+        // 该任务当前存在一条 PENDING_ACCEPT 转交记录 → 锁定
+        when(wfTaskTransferMapper.selectActiveByTaskId("TASK_005")).thenReturn(new WfTaskTransfer());
+
+        TaskDetailRespDTO detail = todoQueryService.getTaskDetail("TASK_005", "E10004");
+
+        assertThat(detail.getRuntimeAccess().getIsAssignee()).isTrue();
+        assertThat(detail.getRuntimeAccess().getCanApprove()).isFalse();
+        assertThat(detail.getRuntimeAccess().getCanReject()).isFalse();
+        assertThat(detail.getRuntimeAccess().getCanTransfer()).isFalse();
+        assertThat(detail.getRuntimeAccess().getCanClaim()).isFalse();
     }
 
     /**

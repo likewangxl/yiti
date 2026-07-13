@@ -18,6 +18,7 @@ import com.bank.branch.platform.workflow.enums.SlaStatus;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
 import com.bank.branch.platform.workflow.mapper.NodeFormConfMapper;
+import com.bank.branch.platform.workflow.mapper.WfTaskTransferMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +73,8 @@ public class TodoQueryService {
     private final OrgApi orgApi;
     private final com.bank.branch.platform.workflow.service.flow.FlowDefService flowDefService;
     private final com.bank.branch.platform.workflow.mapper.WfFlowDefMapper flowDefMapper;
+    /** 转交锁判定：任务存在 PENDING_ACCEPT 转交记录时，RuntimeAccess 对原办理人只读（Task 9）。 */
+    private final WfTaskTransferMapper wfTaskTransferMapper;
 
     /**
      * 解析 JSON 字符串为 List。
@@ -265,14 +268,15 @@ public class TodoQueryService {
         TaskDetailRespDTO detail = new TaskDetailRespDTO();
         detail.setTaskInfo(taskInfo);
 
-        // 4. 构建运行时权限（Task 2.6 增强）
+        // 4. 构建运行时权限（Task 2.6 增强；Task 9：转交待认领期间对原办理人只读）
         RuntimeAccessDTO runtimeAccess = new RuntimeAccessDTO();
         boolean isAssignee = empId.equals(task.getAssignee());
+        boolean locked = wfTaskTransferMapper.selectActiveByTaskId(task.getId()) != null;
         runtimeAccess.setIsAssignee(isAssignee);
-        runtimeAccess.setCanClaim(!isAssignee && task.getAssignee() == null); // TODO: 需检查候选人
-        runtimeAccess.setCanApprove(isAssignee);
-        runtimeAccess.setCanReject(isAssignee);
-        runtimeAccess.setCanTransfer(isAssignee);
+        runtimeAccess.setCanClaim(!isAssignee && task.getAssignee() == null && !locked); // TODO: 需检查候选人
+        runtimeAccess.setCanApprove(isAssignee && !locked);
+        runtimeAccess.setCanReject(isAssignee && !locked);
+        runtimeAccess.setCanTransfer(isAssignee && !locked);
         runtimeAccess.setIsCandidate(false); // TODO: 需检查候选人
         detail.setRuntimeAccess(runtimeAccess);
 

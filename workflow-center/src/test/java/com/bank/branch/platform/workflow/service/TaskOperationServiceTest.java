@@ -6,7 +6,9 @@ import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
+import com.bank.branch.platform.workflow.entity.WfTaskTransfer;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
+import com.bank.branch.platform.workflow.mapper.WfTaskTransferMapper;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
@@ -58,6 +60,9 @@ class TaskOperationServiceTest {
 
     @Mock
     private WfProcessOrgService wfProcessOrgService;
+
+    @Mock
+    private WfTaskTransferMapper wfTaskTransferMapper;
 
     @InjectMocks
     private TaskOperationService taskOperationService;
@@ -143,6 +148,25 @@ class TaskOperationServiceTest {
                 .isEqualTo("WF-40904");
     }
 
+    /**
+     * 签收时任务存在待认领的转交，应抛出 WF-40913 异常，且不调用 taskService.claim
+     */
+    @Test
+    void claimTask_blockedWhenPendingTransfer() {
+        // given
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        Task mockTask = buildMockTask("TASK_1", "PID_1", null);
+        mockTaskQuery(mockTask);
+        when(wfTaskTransferMapper.selectActiveByTaskId("TASK_1")).thenReturn(new WfTaskTransfer());
+
+        // when & then
+        assertThatThrownBy(() -> taskOperationService.claimTask("TASK_1"))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40913");
+        verify(taskService, never()).claim(anyString(), anyString());
+    }
+
     // ==================== approveTask ====================
 
     /**
@@ -189,6 +213,22 @@ class TaskOperationServiceTest {
         verify(eventPublisher).publishEvent(any(TaskOperationService.TaskApprovedEvent.class));
     }
 
+    /**
+     * 审批时任务存在待认领的转交，应抛出 WF-40913 异常，且不调用 taskService.complete
+     */
+    @Test
+    void approve_blockedWhenPendingTransfer() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        Task t = buildMockTask("TASK_1", "PID_1", "E001");
+        mockTaskQuery(t);
+        when(wfTaskTransferMapper.selectActiveByTaskId("TASK_1")).thenReturn(new WfTaskTransfer());
+        assertThatThrownBy(() -> taskOperationService.approveTask("TASK_1", new ApproveReqDTO("同意", Map.of())))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40913");
+        verify(taskService, never()).complete(anyString(), anyMap());
+    }
+
     // ==================== rejectTask ====================
 
     /**
@@ -210,6 +250,22 @@ class TaskOperationServiceTest {
         verify(taskService).addComment("TASK_001", "PID_001", "REJECT", "资质不符合要求");
         verify(runtimeService).deleteProcessInstance(eq("PID_001"), anyString());
         verify(eventPublisher).publishEvent(any(TaskOperationService.TaskRejectedEvent.class));
+    }
+
+    /**
+     * 驳回时任务存在待认领的转交，应抛出 WF-40913 异常，且不调用 runtimeService.deleteProcessInstance
+     */
+    @Test
+    void reject_blockedWhenPendingTransfer() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        Task t = buildMockTask("TASK_1", "PID_1", "E001");
+        mockTaskQuery(t);
+        when(wfTaskTransferMapper.selectActiveByTaskId("TASK_1")).thenReturn(new WfTaskTransfer());
+        assertThatThrownBy(() -> taskOperationService.rejectTask("TASK_1", new RejectReqDTO("不符合")))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40913");
+        verify(runtimeService, never()).deleteProcessInstance(anyString(), anyString());
     }
 
     // ==================== transferTask ====================

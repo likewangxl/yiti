@@ -9,6 +9,7 @@ import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
+import com.bank.branch.platform.workflow.mapper.WfTaskTransferMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.RuntimeService;
@@ -40,6 +41,11 @@ public class TaskOperationService {
     private final CurrentUserApi currentUserApi;
     /** 参与机构快照写入唯一入口（D5：有具体办理人时记录，claim/approve 各记一次） */
     private final WfProcessOrgService wfProcessOrgService;
+    /**
+     * 转交锁校验直接注入 Mapper（不注入 TaskTransferService），避免与
+     * TaskTransferService（依赖本类查询任务信息）之间形成服务→服务循环依赖。
+     */
+    private final WfTaskTransferMapper wfTaskTransferMapper;
 
     /**
      * 签收任务
@@ -54,6 +60,9 @@ public class TaskOperationService {
         String empId = currentUserApi.getCurrentEmpId();
         // 查询任务，不存在则抛异常
         Task task = queryTaskOrThrow(taskId);
+
+        // 转交待认领期间，原任务对任何办理动作只读（含签收）
+        ensureNotTransferLocked(taskId);
 
         // 检查任务是否已被签收
         if (task.getAssignee() != null) {
@@ -88,6 +97,7 @@ public class TaskOperationService {
         // PC 管理端会话链路：empId 取当前登录用户，并校验其为任务办理人（须已签收）
         String empId = currentUserApi.getCurrentEmpId();
         Task task = queryTaskOrThrow(taskId);
+        ensureNotTransferLocked(taskId);
         verifyAssignee(task, empId);
         doApprove(task, empId, req);
     }
@@ -148,6 +158,7 @@ public class TaskOperationService {
         // PC 管理端会话链路：empId 取当前登录用户，并校验其为任务办理人（须已签收）
         String empId = currentUserApi.getCurrentEmpId();
         Task task = queryTaskOrThrow(taskId);
+        ensureNotTransferLocked(taskId);
         verifyAssignee(task, empId);
         doReject(task, empId, req);
     }
@@ -255,6 +266,20 @@ public class TaskOperationService {
                     WfErrorCode.TASK_NOT_FOUND.getMessage());
         }
         return task;
+    }
+
+    /**
+     * 校验任务是否处于转交待认领锁定中，锁定则抛出 WF-40913。
+     * <p>锁定判定：{@code WF_TASK_TRANSFER} 表存在该 taskId 的 PENDING_ACCEPT 记录
+     * （{@link WfTaskTransferMapper#selectActiveByTaskId} 非 null）。
+     * 锁定期间原办理人不可 approve/reject/claim，避免与转交流程并发冲突（详见 Task 9）。</p>
+     */
+    private void ensureNotTransferLocked(String taskId) {
+        if (wfTaskTransferMapper.selectActiveByTaskId(taskId) != null) {
+            throw new BizException(
+                    WfErrorCode.TASK_TRANSFER_LOCKED.getCode(),
+                    WfErrorCode.TASK_TRANSFER_LOCKED.getMessage());
+        }
     }
 
     /**
