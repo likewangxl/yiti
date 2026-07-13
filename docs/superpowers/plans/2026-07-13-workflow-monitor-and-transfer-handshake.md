@@ -682,7 +682,7 @@ long countMonitor(@Param("status") String status,
     SELECT COUNT(*) FROM BIZ_PROCESS_MAP m <include refid="MONITOR_WHERE"/>
 </select>
 ```
-（`BASE_COLUMNS` 复用现有 sql fragment。`orgScope` 传空集合 `[]` 会导致 EXISTS 恒假→秘书零机构时看不到任何数据，符合 Fail-Close；传 `null` 才是"全行"。）
+（`BASE_COLUMNS` 复用现有 sql fragment。约定：`orgScope==null` 才是"全行"不过滤；**空集合永远不会传到这里**——Service 在空集时已短路返回空结果，避免 `IN ()` MySQL 语法错。）
 
 - [ ] **Step 2: DTO**（`ProcessMonitorItemDTO.java`）
 
@@ -782,7 +782,11 @@ public class ProcessMonitorService {
         int size = Math.min(Math.max(pageSize, 1), 100);
         int offset = (Math.max(pageNo, 1) - 1) * size;
 
-        Collection<String> orgScope = resolveOrgScope();  // null=全行；空集=看不到
+        Collection<String> orgScope = resolveOrgScope();  // null=全行；空集=Fail-Close(看不到)
+        // 空集(非 null)直接返回空结果，绝不进 SQL —— 否则 XML 的 IN () 是 MySQL 语法错
+        if (orgScope != null && orgScope.isEmpty()) {
+            return PageResult.of(pageNo, size, 0, List.of());
+        }
         long total = bizProcessMapMapper.countMonitor(status, bizType, keyword, startedBy, orgScope);
         List<BizProcessMap> rows = total == 0 ? List.of()
                 : bizProcessMapMapper.selectMonitorPage(status, bizType, keyword, startedBy, orgScope, offset, size);
