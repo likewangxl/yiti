@@ -2,7 +2,7 @@
 
 本文件为 `docs/modules/` 目录提供上下文说明。这里存放了各模块的详细设计文档。
 
-**文档状态（2026-07-12 刷新）**：全部 9 个模块文档已就绪，共计 76 份文档（较 2026-04-10 基线新增 2 份：`system-governance-center/09-运维Runbook.md`、`performance-engine-center/原业绩分配预览查询口径.md`）。所有 9 个业务模块目前均已完整交付（详见根 `CLAUDE.md` 模块状态表），本目录文档需以此为准，不要再假设某模块"尚未整体落地"。
+**文档状态（2026-07-13 刷新）**：全部 9 个模块文档已就绪，共计 77 份文档（较 2026-04-10 基线新增 3 份：`system-governance-center/09-运维Runbook.md`、`performance-engine-center/原业绩分配预览查询口径.md`、`report-analytics-center/10-大屏设计器操作指南.md`）。所有 9 个业务模块目前均已完整交付（详见根 `CLAUDE.md` 模块状态表），本目录文档需以此为准，不要再假设某模块"尚未整体落地"。
 
 ## 目录结构
 
@@ -35,8 +35,9 @@ docs/modules/
 ├── performance-engine-center/             # 绩效计算中心 (10 份)
 │   ├── 01-功能规格.md ~ 09-依赖契约摘要.md（9 份）
 │   └── 原业绩分配预览查询口径.md          # 分配预览查询口径补充说明（非编号系列，2026-06-09 新增）
-└── report-analytics-center/               # 报表分析中心 (9 份)
-    └── 01-功能规格.md ~ 09-依赖契约摘要.md
+└── report-analytics-center/               # 报表分析中心 (10 份)
+    ├── 01-功能规格.md ~ 09-依赖契约摘要.md（9 份）
+    └── 10-大屏设计器操作指南.md            # 大屏画布设计器V2操作手册（2026-07-13 新增）
 ```
 
 ## 各模块文档索引
@@ -75,8 +76,8 @@ docs/modules/
 **核心域** — 绩效计算中心，负责指标库、KPI 规则、目标管理、考核计算、分配关系调整、sys_control 版本控制，V1.6 起 Quartz 集群调度整合，并持续在演进 eval（内部相互评价）/ 奖励分配（REWARD）子域（表结构见 `docs/schema/ddl-eval.sql`，尚未回写本目录 05/09 文档）。
 依赖：auth / governance / workflow / customer。
 
-### report-analytics-center (9 份文档)
-**支撑域（纯只读）** — 报表分析中心，提供动态指标查询、固定管理报表、SQL 探查。已交付 V1.0（2026-04-25）。
+### report-analytics-center (10 份文档，含 `10-大屏设计器操作指南.md`)
+**支撑域（纯只读）** — 报表分析中心，提供动态指标查询、固定管理报表、SQL 探查与大屏画布设计器（2026-07-13 画布设计器 V2 交付，操作手册见 `10-大屏设计器操作指南.md`）。已交付 V1.0（2026-04-25）。
 **只读原则**：不反向写业务数据，不被任何模块依赖。
 依赖：auth / governance / customer / performance。
 

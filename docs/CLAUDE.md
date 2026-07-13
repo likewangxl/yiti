@@ -70,7 +70,7 @@ docs/
 | `08-初始化数据清单.md` | 种子数据 |
 | `09-依赖契约摘要.md` | 依赖其他模块的契约 |
 
-**全部 9 个模块文档已就绪（2026-07-12 刷新，共 76 份）**：
+**全部 9 个模块文档已就绪（2026-07-13 刷新，共 77 份）**：
 
 | 模块 | 文档数 | 类型 |
 |---|---|---|
@@ -82,7 +82,7 @@ docs/
 | `customer-marketing-center` | 9 | 核心域 |
 | `business-application-center` | 9 | 核心域 |
 | `performance-engine-center` | 10（含 `原业绩分配预览查询口径.md`） | 核心域 |
-| `report-analytics-center` | 9 | 支撑域（只读） |
+| `report-analytics-center` | 10（含 `10-大屏设计器操作指南.md`） | 支撑域（只读） |
 
 ## 数据脚本分层约定
 
