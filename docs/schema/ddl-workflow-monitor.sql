@@ -48,3 +48,23 @@ CREATE TABLE IF NOT EXISTS `WF_TASK_TRANSFER` (
   KEY `idx_from` (`from_emp_id`),
   KEY `idx_pi` (`process_instance_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='任务转交待认领生命周期';
+
+-- -------------------------------------------
+-- 3. 存量参与机构回填（人工执行一次）
+-- 覆盖 Task 3 挂点上线前已存在的历史流程实例：
+--   - 已有办理人（ACT_HI_TASKINST.ASSIGNEE_ 非空）的任务经办人机构
+--   - 已发起流程（BIZ_PROCESS_MAP.start_user）的发起人机构
+-- 依赖 uk_pi_org 唯一键去重；INSERT IGNORE 保证与运行时写入幂等共存，可重复执行。
+-- -------------------------------------------
+
+-- 历史办理人机构
+INSERT IGNORE INTO WF_PROCESS_ORG(id, process_instance_id, org_code, source, first_seen_time)
+SELECT REPLACE(UUID(),'-',''), t.PROC_INST_ID_, uo.ORG_CODE, 'BACKFILL', NOW()
+FROM ACT_HI_TASKINST t JOIN EXT_USER_ORG uo ON uo.USER_ID = t.ASSIGNEE_
+WHERE t.ASSIGNEE_ IS NOT NULL
+GROUP BY t.PROC_INST_ID_, uo.ORG_CODE;
+-- 发起人机构
+INSERT IGNORE INTO WF_PROCESS_ORG(id, process_instance_id, org_code, source, first_seen_time)
+SELECT REPLACE(UUID(),'-',''), m.process_instance_id, uo.ORG_CODE, 'BACKFILL', NOW()
+FROM BIZ_PROCESS_MAP m JOIN EXT_USER_ORG uo ON uo.USER_ID = m.start_user
+GROUP BY m.process_instance_id, uo.ORG_CODE;

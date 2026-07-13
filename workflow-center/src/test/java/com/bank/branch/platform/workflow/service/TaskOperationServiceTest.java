@@ -56,6 +56,9 @@ class TaskOperationServiceTest {
     @Mock
     private RuntimeService runtimeService;
 
+    @Mock
+    private WfProcessOrgService wfProcessOrgService;
+
     @InjectMocks
     private TaskOperationService taskOperationService;
 

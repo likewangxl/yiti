@@ -43,6 +43,8 @@ public class ProcessStartService {
     private final ApplicationEventPublisher eventPublisher;
     /** 机构查询：解析发起人机构级别（startOrgLevel），供网关按 2级/3级机构分流 */
     private final OrgApi orgApi;
+    /** 参与机构快照写入唯一入口（D5：流程发起时记录发起人机构） */
+    private final WfProcessOrgService wfProcessOrgService;
 
     /**
      * 启动流程实例
@@ -113,6 +115,9 @@ public class ProcessStartService {
         map.setTitle(cmd.getTitle());
         map.setStartTime(LocalDateTime.now());
         bizProcessMapMapper.insert(map);
+
+        // 4.1 记录参与机构快照（D5：流程发起时记发起人机构，source=START）
+        wfProcessOrgService.record(pi.getId(), cmd.getStartUser(), "START");
 
         // 5. 查询首个任务（可能为 null，如第一个节点是自动任务）
         Task firstTask = taskService.createTaskQuery()

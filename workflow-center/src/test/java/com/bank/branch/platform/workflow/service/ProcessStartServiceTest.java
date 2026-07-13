@@ -67,6 +67,9 @@ class ProcessStartServiceTest {
     @Mock
     private OrgApi orgApi;
 
+    @Mock
+    private WfProcessOrgService wfProcessOrgService;
+
     @InjectMocks
     private ProcessStartService processStartService;
 

@@ -38,6 +38,8 @@ public class TaskOperationService {
     private final BizProcessMapMapper bizProcessMapMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final CurrentUserApi currentUserApi;
+    /** 参与机构快照写入唯一入口（D5：有具体办理人时记录，claim/approve 各记一次） */
+    private final WfProcessOrgService wfProcessOrgService;
 
     /**
      * 签收任务
@@ -65,6 +67,9 @@ public class TaskOperationService {
 
         // 更新 BIZ_PROCESS_MAP 当前办理人
         updateCurrentAssignee(task.getProcessInstanceId(), empId);
+
+        // 记录参与机构快照（D5：签收即有具体办理人，source=CLAIM）
+        wfProcessOrgService.record(task.getProcessInstanceId(), empId, "CLAIM");
 
         log.info("任务签收成功: taskId={}, empId={}", taskId, empId);
     }
@@ -119,6 +124,9 @@ public class TaskOperationService {
         }
         vars.put("approved", true);
         taskService.complete(taskId, vars);
+
+        // 记录参与机构快照（D5：审批通过即有具体办理人，source=APPROVE）
+        wfProcessOrgService.record(task.getProcessInstanceId(), empId, "APPROVE");
 
         // 发布事件
         eventPublisher.publishEvent(new TaskApprovedEvent(taskId, task.getProcessInstanceId(), empId));

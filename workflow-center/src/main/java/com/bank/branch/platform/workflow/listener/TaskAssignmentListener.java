@@ -7,6 +7,7 @@ import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.service.CandidateResolverService;
+import com.bank.branch.platform.workflow.service.WfProcessOrgService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.RepositoryService;
@@ -43,6 +44,8 @@ public class TaskAssignmentListener implements TaskListener {
     private final OrgApi orgApi;
     private final TaskService taskService;
     private final com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
+    /** 参与机构快照写入唯一入口（D5：任务创建时解析出具体受理人才记录，仅候选组不记） */
+    private final WfProcessOrgService wfProcessOrgService;
 
     /**
      * 任务创建事件回调。
@@ -57,6 +60,12 @@ public class TaskAssignmentListener implements TaskListener {
      */
     @Override
     public void notify(DelegateTask delegateTask) {
+        // 记录参与机构快照（D5：任务创建时若已解析出具体受理人，即非仅候选组，source=ASSIGN）
+        if (delegateTask.getAssignee() != null) {
+            wfProcessOrgService.record(delegateTask.getProcessInstanceId(),
+                    delegateTask.getAssignee(), "ASSIGN");
+        }
+
         // Flowable 7 默认使用 UUID 作 processDefinitionId（无 ":" 分隔），不能 split(":")[0]。
         // 走 RepositoryService 反查 ProcessDefinition.getKey() 拿真实 BPMN KEY。
         String processDefinitionId = delegateTask.getProcessDefinitionId();

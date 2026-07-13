@@ -45,6 +45,9 @@ class TaskAssignmentListenerTest {
     @Mock
     private com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
 
+    @Mock
+    private com.bank.branch.platform.workflow.service.WfProcessOrgService wfProcessOrgService;
+
     @InjectMocks
     private TaskAssignmentListener taskAssignmentListener;
 
