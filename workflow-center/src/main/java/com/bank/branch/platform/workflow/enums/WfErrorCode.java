@@ -26,6 +26,9 @@ public enum WfErrorCode {
     TASK_ALREADY_CLAIMED("WF-40904", "任务已被签收"),
     PROCESS_NOT_RUNNING("WF-40905", "流程实例不存在或已结束"),
     FLOW_PUBLISH_VALIDATION_FAILED("WF-40906", "流程图发布校验未通过"),
+    TRANSFER_ALREADY_PENDING("WF-40910", "该任务已有待认领的转交"),
+    TRANSFER_RECEIVER_NOT_IN_ORG("WF-40911", "接收人不在本机构"),
+    TRANSFER_RECEIVER_NOT_CANDIDATE("WF-40912", "接收人无该节点办理资格"),
 
     // 500 内部错误
     ENGINE_ERROR("WF-50001", "流程引擎异常");
