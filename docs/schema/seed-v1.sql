@@ -1532,6 +1532,35 @@ INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`,
   ('856e42b87e6c11f1aff4000c295dbb8c','R_SUPPORT_SEC','WORKFLOW_MONITOR','ORG',0,'2026-07-13 00:00:00','wf-monitor-2026-07-13','2026-07-13 00:00:00','wf-monitor-2026-07-13','秘书岗-本机构监控'),
   ('856e44e77e6c11f1aff4000c295dbb8c','R_PRESIDENT','WORKFLOW_MONITOR','ALL',0,'2026-07-13 00:00:00','wf-monitor-2026-07-13','2026-07-13 00:00:00','wf-monitor-2026-07-13','分行行长-全行监控');
 
+-- 补漏：Task 6 只登记了 RES_WF_MONITOR_LIST 资源行 + 数据范围（PT_ROLE_BIZ_SCOPE），
+-- 漏了 RBAC 授权绑定（PT_ROLE_RESOURCE）——AuthorizationInterceptor Step 2
+-- rbacAuthorizer.authorize() 是独立于 DataScopeContext 的前置门禁，未绑定时秘书/行长
+-- 调用 GET /api/workflow/monitor/processes 一律 403 AUTH-40301。Task 7 手测时发现，随手补上。
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES
+  ('a3f1c2e87e6c11f1aff4000c295dbb01','R_SUPPORT_SEC','RES_WF_MONITOR_LIST','PLATFORM','2026-07-13 00:00:00'),
+  ('a3f1c4a27e6c11f1aff4000c295dbb02','R_PRESIDENT','RES_WF_MONITOR_LIST','PLATFORM','2026-07-13 00:00:00');
+
+-- ============================================================================
+-- 2026-07-13 审批流监控 侧边栏菜单资源 + 角色绑定（workflow-monitor-transfer Task 7）
+-- 前端路由 /system/workflow-monitor（WorkflowMonitor.vue，系统设置组，紧跟审批流程之后）
+-- 侧边栏来自 GET /api/auth/my-menus（按角色过滤的 PT_RESOURCE 菜单树），
+-- 仅加前端路由不加菜单行不会显示，故补 ISMENU=1 菜单资源行。
+-- 注：ROLE_ID 采用本文件既有约定（R_PRESIDENT / R_SUPPORT_SEC）；LIVE DB(yiti) 当前
+-- 实际 ROLE_ID 已对齐内网为数字 231 / 2（见 2026-06-10-role-id-realign-to-intranet.sql），
+-- 对应的落库脚本见 docs/superpowers/sql/2026-07-13-workflow-monitor-menu.sql（数字 ID 版本）。
+-- ============================================================================
+INSERT IGNORE INTO PT_RESOURCE
+  (`RESOURCE_ID`, `RESOURCE_URL`, `RESOURCE_METHOD`, `MENU_NAME`, `MENU_ICON_URL`, `MENU_RANK_NO`,
+   `ISMENU`, `MENU_ENDFLAG`, `PARENT_RESOURCE_ID`, `STATUS`, `SYS_CODE`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`)
+VALUES
+  ('M_SYS_WF_MONITOR', '/system/workflow-monitor', 'GET', '审批流监控', NULL, 14,
+   1, '1', 'M_GROUP_SYSTEM', 0, 'YITI', '2026-07-13 00:00:00', 'seed', '2026-07-13 00:00:00', 'seed',
+   '系统设置-审批流监控（workflow-monitor-transfer Task 7）');
+
+INSERT IGNORE INTO PT_ROLE_RESOURCE (`ID`, `ROLE_ID`, `RESOURCE_ID`, `SYS_CODE`, `CREATE_TIME`) VALUES
+  ('b7c2d1e87e6c11f1aff4000c295dbb01','R_SUPPORT_SEC','M_SYS_WF_MONITOR','YITI','2026-07-13 00:00:00'),
+  ('b7c2d3f47e6c11f1aff4000c295dbb02','R_PRESIDENT','M_SYS_WF_MONITOR','YITI','2026-07-13 00:00:00');
+
 -- ============================================================================
 -- END OF seed-v1.sql
 -- ============================================================================

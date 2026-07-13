@@ -1,4 +1,4 @@
-import { call, unwrapPage } from './http';
+import { call, unwrapPage, API_BASE } from './http';
 
 // 工作流任务接口 wrapper（对接 workflow-center TaskController /api/workflow/tasks）
 
@@ -44,4 +44,31 @@ export function approveTask(taskId, opinion, formData) {
 /** 驳回 */
 export function rejectTask(taskId, opinion) {
   return call('post', `/workflow/tasks/${taskId}/reject`, { data: { opinion } }, { ok: true });
+}
+
+// ===================== 审批流监控（ProcessMonitorController / ProcessController） =====================
+
+/** 审批流监控列表（分页） */
+export function monitorProcesses(params = {}) {
+  return call('get', '/workflow/monitor/processes', { params: { pageSize: 20, ...params } }, []).then(unwrapPage);
+}
+
+/** 流程实例详情（发起人/当前节点/状态/耗时等） */
+export function getProcessInfo(processInstanceId) {
+  return call('get', `/workflow/processes/${processInstanceId}`, {}, {});
+}
+
+/** 流程历史节点（审批日志，按时间顺序） */
+export function getProcessHistory(processInstanceId) {
+  return call('get', `/workflow/processes/${processInstanceId}/history`, {}, []);
+}
+
+/** 流程进度图结构化数据（节点状态/处理人） */
+export function getProcessNodes(processInstanceId) {
+  return call('get', `/workflow/processes/${processInstanceId}/nodes`, {}, {});
+}
+
+/** 流程进度图 PNG 地址，供 <img> 直接引用（同源走 session cookie，无需单独取 blob） */
+export function processDiagramUrl(processInstanceId) {
+  return `${API_BASE}/workflow/processes/${processInstanceId}/diagram`;
 }

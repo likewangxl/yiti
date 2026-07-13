@@ -90,7 +90,8 @@ const routes = [
       { path: 'system/announcements', name: 'SysAnnouncements', component: () => import('@/views/system/Announcements.vue'), meta: { title: '公告管理', group: '系统设置' } },
       { path: 'system/announcements/:id', name: 'SysAnnouncementDetail', component: () => import('@/views/system/AnnouncementDetail.vue'), meta: { title: '公告详情', group: '系统设置' } },
       { path: 'system/workflow-flows', name: 'SysWorkflowFlows', component: () => import('@/views/system/FlowList.vue'), meta: { title: '审批流程', group: '系统设置' } },
-      { path: 'system/workflow-flows/:id', name: 'SysWorkflowFlowEdit', component: () => import('@/views/system/FlowEdit.vue'), meta: { title: '审批流程编辑', group: '系统设置' } }
+      { path: 'system/workflow-flows/:id', name: 'SysWorkflowFlowEdit', component: () => import('@/views/system/FlowEdit.vue'), meta: { title: '审批流程编辑', group: '系统设置' } },
+      { path: 'system/workflow-monitor', name: 'SysWorkflowMonitor', component: () => import('@/views/system/WorkflowMonitor.vue'), meta: { title: '审批流监控', group: '系统设置' } }
     ]
   }
 ];
