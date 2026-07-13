@@ -1520,5 +1520,18 @@ SELECT MD5(CONCAT(r.ROLE_ID, '|', 'P_PERF_TGT_AD_HIS')),
  WHERE COALESCE(r.RECORD_STATUS, 0) = 0;
 
 -- ============================================================================
+-- 2026-07-13 审批流监控端点资源 + 秘书岗/行长数据范围种子（workflow-monitor-transfer Task 6）
+-- ============================================================================
+INSERT IGNORE INTO PT_RESOURCE (`RESOURCE_ID`,`RESOURCE_URL`,`RESOURCE_METHOD`,`MENU_NAME`,`MENU_ICON_URL`,`MENU_RANK_NO`,`ISMENU`,`MENU_ENDFLAG`,`PARENT_RESOURCE_ID`,`STATUS`,`SYS_CODE`,`CREATE_TIME`,`CREATE_USER`,`UPDATE_TIME`,`UPDATE_USER`,`REMARK`)
+VALUES ('RES_WF_MONITOR_LIST','/api/workflow/monitor/processes','GET','审批流监控列表',NULL,0,0,'0',NULL,0,'PLATFORM','2026-07-13 00:00:00','wf-monitor-2026-07-13','2026-07-13 00:00:00','wf-monitor-2026-07-13','v1 workflow-monitor-transfer Task6');
+
+-- 数据范围：秘书岗（R_SUPPORT_SEC）=ORG（本机构），分行行长（R_PRESIDENT）=ALL（全行）
+-- 注：ROLE_ID 采用本文件既有约定（R_PRESIDENT / R_SUPPORT_SEC，见上文 PT_ROLE 段）；
+--     若目标环境 PT_ROLE 数据已漂移出实际不同的 ROLE_ID（如历史 dump 导入），执行前须按环境实际值替换。
+INSERT IGNORE INTO PT_ROLE_BIZ_SCOPE (`ID`, `ROLE_ID`, `BIZ_TYPE`, `DATA_SCOPE`, `RECORD_STATUS`, `CREATE_TIME`, `CREATE_USER`, `UPDATE_TIME`, `UPDATE_USER`, `REMARK`) VALUES
+  ('856e42b87e6c11f1aff4000c295dbb8c','R_SUPPORT_SEC','WORKFLOW_MONITOR','ORG',0,'2026-07-13 00:00:00','wf-monitor-2026-07-13','2026-07-13 00:00:00','wf-monitor-2026-07-13','秘书岗-本机构监控'),
+  ('856e44e77e6c11f1aff4000c295dbb8c','R_PRESIDENT','WORKFLOW_MONITOR','ALL',0,'2026-07-13 00:00:00','wf-monitor-2026-07-13','2026-07-13 00:00:00','wf-monitor-2026-07-13','分行行长-全行监控');
+
+-- ============================================================================
 -- END OF seed-v1.sql
 -- ============================================================================
