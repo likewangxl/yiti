@@ -2,7 +2,9 @@ package com.bank.branch.platform.customer.service;
 
 import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.aop.annotation.AuditLog;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
@@ -38,6 +40,8 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -60,6 +64,8 @@ public class CustomerService {
     private final ApplicationEventPublisher eventPublisher;
     /** 用于 listPageAsDTO 回填 ownerOrgName（OrgApi 自带缓存）。 */
     private final OrgApi orgApi;
+    /** P1C 转交接收人资格校验：查接收人角色码 + 主机构。 */
+    private final UserApi userApi;
 
     /**
      * 按 ID 查询客户主档，不存在时抛出 BizException。
@@ -190,6 +196,19 @@ public class CustomerService {
         if (!StringUtils.hasText(reason)) {
             throw new BizException(CustomerErrorCode.TRANSFER_REASON_REQUIRED.getCode(),
                     CustomerErrorCode.TRANSFER_REASON_REQUIRED.getMessage());
+        }
+
+        // P1C 接收人资格校验：接收人须具备客户经理角色 R_RM（CUST-40306），
+        // 且其主机构须与客户当前所属机构一致（CUST-40307），防止越权 / 跨机构转交
+        Set<String> receiverRoles = userApi.getUserRoleCodes(toEmpId);
+        if (receiverRoles == null || !receiverRoles.contains("R_RM")) {
+            throw new BizException(CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getCode(),
+                    CustomerErrorCode.TRANSFER_ROLE_MISMATCH.getMessage());
+        }
+        UserDTO receiver = userApi.getUserByEmpId(toEmpId);
+        if (receiver == null || !Objects.equals(claim.getOrgId(), receiver.getMainOrgCode())) {
+            throw new BizException(CustomerErrorCode.TRANSFER_ORG_MISMATCH.getCode(),
+                    CustomerErrorCode.TRANSFER_ORG_MISMATCH.getMessage());
         }
 
         String fromEmpId = claim.getMaintainerEmpId();
