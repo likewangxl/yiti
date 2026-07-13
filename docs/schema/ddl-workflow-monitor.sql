@@ -20,4 +20,4 @@ CREATE TABLE IF NOT EXISTS `WF_PROCESS_ORG` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pi_org` (`process_instance_id`,`org_code`),
   KEY `idx_org_pi` (`org_code`,`process_instance_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审批流参与机构快照';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='审批流参与机构快照';
