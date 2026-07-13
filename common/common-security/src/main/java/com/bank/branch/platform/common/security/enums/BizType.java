@@ -31,7 +31,8 @@ public enum BizType {
     KPI_CALC("KPI_CALC", "考核计算"),
     SYS_CONFIG("SYS_CONFIG", "系统配置"),
     ORG("ORG", "组织机构"),
-    EVAL("EVAL", "内部评价");
+    EVAL("EVAL", "内部评价"),
+    WORKFLOW_MONITOR("WORKFLOW_MONITOR", "工作流监控");
 
     private final String code;
     private final String description;

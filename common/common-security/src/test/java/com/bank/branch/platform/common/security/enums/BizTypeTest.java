@@ -22,4 +22,8 @@ class BizTypeTest {
     @Test void valueOf_invalidName_shouldThrow() {
         assertThrows(IllegalArgumentException.class, () -> BizType.valueOf("INVALID"));
     }
+
+    @Test void workflowMonitorExists() {
+        assertEquals("WORKFLOW_MONITOR", BizType.valueOf("WORKFLOW_MONITOR").getCode());
+    }
 }
