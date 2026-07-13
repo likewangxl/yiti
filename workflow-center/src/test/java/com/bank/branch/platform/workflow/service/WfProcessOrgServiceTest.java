@@ -11,7 +11,9 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,5 +60,18 @@ class WfProcessOrgServiceTest {
         service.record("PID_1", "E500", "ASSIGN");
 
         verify(mapper, never()).insertIgnore(any());
+    }
+
+    @Test
+    void record_swallowsExceptionWhenMapperInsertThrows() {
+        // insertIgnore 只吞唯一键冲突，不吞死锁/锁等待超时/连接断开这类 DataAccessException；
+        // record() 必须整体兜住，绝不能让 DB 异常穿透到调用方（4 个挂点均非 @Transactional，
+        // TaskAssignmentListener 还跑在 Flowable 自己的命令执行里）。
+        OrgDTO org = new OrgDTO();
+        org.setOrgCode("ORG_A");
+        when(orgApi.getUserMainOrg("E001")).thenReturn(org);
+        when(mapper.insertIgnore(any())).thenThrow(new DataIntegrityViolationException("boom"));
+
+        assertDoesNotThrow(() -> service.record("PID_1", "E001", "START"));
     }
 }

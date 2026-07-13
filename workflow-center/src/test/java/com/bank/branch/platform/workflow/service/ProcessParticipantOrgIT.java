@@ -275,8 +275,8 @@ class ProcessParticipantOrgIT {
         String pi = resp.getProcessInstanceId();
         currentPi = pi;
 
-        // 发起后：参与机构含发起人主机构 ORG_START
-        assertThat(wfProcessOrgMapper.selectOrgCodesByPi(pi)).contains("ORG_START");
+        // 发起后：参与机构精确等于 {ORG_START}（首节点仅候选组角色，不应有 ASSIGN 记录混入）
+        assertThat(wfProcessOrgMapper.selectOrgCodesByPi(pi)).containsExactly("ORG_START");
 
         when(currentUserApi.getCurrentEmpId()).thenReturn("E_HANDLER");
         String taskId = resp.getFirstTaskId();
@@ -284,7 +284,7 @@ class ProcessParticipantOrgIT {
 
         taskOperationService.claimTask(taskId);
 
-        // 签收后：追加办理人主机构 ORG_H，发起人机构仍在
-        assertThat(wfProcessOrgMapper.selectOrgCodesByPi(pi)).contains("ORG_START", "ORG_H");
+        // 签收后：参与机构精确等于 {ORG_START, ORG_H}，无多余（如误触发的 ASSIGN）记录
+        assertThat(wfProcessOrgMapper.selectOrgCodesByPi(pi)).containsExactlyInAnyOrder("ORG_START", "ORG_H");
     }
 }

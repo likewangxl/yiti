@@ -28,25 +28,27 @@ public class WfProcessOrgService {
         if (empId == null || empId.isBlank() || processInstanceId == null) {
             return;
         }
-        OrgDTO org;
+        // 本方法是全挂点唯一写入入口，绝不能把异常抛回调用方（Flowable 监听器/流程启动/审批 REST）。
+        // 整体兜底：机构查询（OrgApi 在 empId 无 EXT_USER_ORG 映射时抛 BizException(AUTH-40403)）
+        // 与落库（insertIgnore 遇死锁/锁等待超时/连接断开时抛 DataAccessException，"IGNORE" 只吞
+        // 唯一键冲突，不吞这些）都可能抛未受检异常，必须一并兜住，否则会 500 一个已提交的操作
+        // 或打断 Flowable 自己的命令执行。
         try {
-            org = orgApi.getUserMainOrg(empId);
+            OrgDTO org = orgApi.getUserMainOrg(empId);
+            if (org == null || org.getOrgCode() == null) {
+                log.warn("[WfProcessOrgService.record] 机构未知, empId={}, pi={}", empId, processInstanceId);
+                return;
+            }
+            WfProcessOrg row = new WfProcessOrg();
+            row.setId(UUID.randomUUID().toString().replace("-", ""));
+            row.setProcessInstanceId(processInstanceId);
+            row.setOrgCode(org.getOrgCode());
+            row.setSource(source);
+            row.setFirstSeenTime(LocalDateTime.now());
+            wfProcessOrgMapper.insertIgnore(row);
         } catch (RuntimeException ex) {
-            // OrgApi.getUserMainOrg 在 empId 无 EXT_USER_ORG 映射时会抛 BizException(AUTH-40403)，
-            // 本方法是全挂点唯一写入入口，绝不能把异常抛回调用方（Flowable 监听器/流程启动），兜住并跳过。
-            log.warn("[WfProcessOrgService.record] 机构查询异常, empId={}, pi={}", empId, processInstanceId, ex);
-            return;
+            log.warn("[WfProcessOrgService.record] 写入参与机构异常, empId={}, pi={}, source={}",
+                    empId, processInstanceId, source, ex);
         }
-        if (org == null || org.getOrgCode() == null) {
-            log.warn("[WfProcessOrgService.record] 机构未知, empId={}, pi={}", empId, processInstanceId);
-            return;
-        }
-        WfProcessOrg row = new WfProcessOrg();
-        row.setId(UUID.randomUUID().toString().replace("-", ""));
-        row.setProcessInstanceId(processInstanceId);
-        row.setOrgCode(org.getOrgCode());
-        row.setSource(source);
-        row.setFirstSeenTime(LocalDateTime.now());
-        wfProcessOrgMapper.insertIgnore(row);
     }
 }
