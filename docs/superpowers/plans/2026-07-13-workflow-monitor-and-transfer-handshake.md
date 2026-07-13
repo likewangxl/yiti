@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS `WF_PROCESS_ORG` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pi_org` (`process_instance_id`,`org_code`),
   KEY `idx_org_pi` (`org_code`,`process_instance_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审批流参与机构快照';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='审批流参与机构快照';
+-- COLLATE 必须与 BIZ_PROCESS_MAP(utf8mb4_general_ci) 一致，否则 Task5 的 process_instance_id EXISTS-join 报 Illegal mix of collations
 ```
 
 - [ ] **Step 2: 实体**（`WfProcessOrg.java`）
@@ -317,7 +318,7 @@ CREATE TABLE IF NOT EXISTS `WF_TASK_TRANSFER` (
   KEY `idx_to_status` (`to_emp_id`,`status`),
   KEY `idx_from` (`from_emp_id`),
   KEY `idx_pi` (`process_instance_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务转交待认领生命周期';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='任务转交待认领生命周期';
 ```
 
 - [ ] **Step 2: 实体**（`WfTaskTransfer.java`）— 字段逐一对应上表，`@TableId(value="id", type=IdType.INPUT) String id`，其余 `String`/`LocalDateTime`，`@Data @TableName("WF_TASK_TRANSFER")`。
