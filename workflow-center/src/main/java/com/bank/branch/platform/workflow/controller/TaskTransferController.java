@@ -26,8 +26,8 @@ import java.util.List;
 /**
  * 任务转交待认领控制器：发起（秘书岗/行长代发起）+ 接收人收件箱/认领/拒绝 + 发起人发件箱/撤回。
  * <p>
- * 与 {@link TaskController#transferTask} 一步到位直接改 assignee 不同：本控制器对应
- * {@link com.bank.branch.platform.workflow.service.TaskTransferService} 的两阶段转交
+ * 旧单阶段「一步到位直接改 assignee」的转交（{@code TaskController#transferTask}）已下线；
+ * 本控制器对应 {@link com.bank.branch.platform.workflow.service.TaskTransferService} 的两阶段转交
  * （发起后先落 {@code WF_TASK_TRANSFER} 待认领记录，须接收人主动认领/拒绝才真正转移办理权）。
  * </p>
  * <p>

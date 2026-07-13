@@ -8,7 +8,6 @@ import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
-import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.service.TaskOperationService;
 import com.bank.branch.platform.workflow.service.TodoQueryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -153,23 +152,6 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.code").value("0"));
     }
 
-    @Test
-    void transferTask_shouldReturn200() throws Exception {
-        // given
-        doNothing().when(taskOperationService).transferTask(anyString(), any(TransferReqDTO.class));
-
-        TransferReqDTO req = new TransferReqDTO();
-        req.setTargetEmpId("EMP002");
-        req.setReason("出差交接");
-
-        // when & then
-        mockMvc.perform(post("/api/workflow/tasks/T_001/transfer")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("0"));
-    }
-
     // ── L2 错误路径测试 ──────────────────────────────────────────
 
     @Test
@@ -228,18 +210,6 @@ class TaskControllerTest {
         RejectReqDTO req = new RejectReqDTO();
 
         mockMvc.perform(post("/api/workflow/tasks/T_001/reject")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(req)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void transferTask_missingToEmpId_returns400() throws Exception {
-        // toEmpId 为空，触发 @NotBlank 校验
-        TransferReqDTO req = new TransferReqDTO();
-        req.setReason("出差交接");
-
-        mockMvc.perform(post("/api/workflow/tasks/T_001/transfer")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());

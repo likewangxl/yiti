@@ -4,7 +4,6 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
-import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.entity.WfTaskTransfer;
 import com.bank.branch.platform.workflow.mapper.BizProcessMapMapper;
@@ -37,7 +36,6 @@ import static org.mockito.Mockito.*;
  * 3. 签收时任务已被签收抛 WF-40904
  * 4. 审批时非办理人抛 WF-40903
  * 5. 审批成功完成任务
- * 6. 转交成功变更办理人
  * </p>
  */
 @ExtendWith(MockitoExtension.class)
@@ -268,56 +266,6 @@ class TaskOperationServiceTest {
         verify(runtimeService, never()).deleteProcessInstance(anyString(), anyString());
     }
 
-    // ==================== transferTask ====================
-
-    /**
-     * 转交成功：验证变更办理人和更新 biz_process_map
-     */
-    @Test
-    void transferTask_success_changesAssignee() {
-        // given
-        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
-        Task mockTask = buildMockTask("TASK_001", "PID_001", "E001");
-        mockTaskQuery(mockTask);
-
-        BizProcessMap map = new BizProcessMap();
-        map.setId("MAP_001");
-        map.setProcessInstanceId("PID_001");
-        when(bizProcessMapMapper.selectByProcessInstanceId("PID_001")).thenReturn(map);
-
-        TransferReqDTO req = new TransferReqDTO("E002", "本人出差");
-
-        // when
-        taskOperationService.transferTask("TASK_001", req);
-
-        // then
-        verify(taskService).setAssignee("TASK_001", "E002");
-        verify(taskService).addComment("TASK_001", "PID_001", "TRANSFER", "本人出差");
-        verify(bizProcessMapMapper).updateById(ArgumentMatchers.<BizProcessMap>argThat(m ->
-                "E002".equals(m.getCurrentAssignee())
-        ));
-        verify(eventPublisher).publishEvent(any(TaskOperationService.TaskTransferredEvent.class));
-    }
-
-    /**
-     * 转交时非任务办理人，应抛出 WF-40903 异常
-     */
-    @Test
-    void transferTask_notAssignee_throwsWf40903() {
-        // given
-        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
-        Task mockTask = buildMockTask("TASK_001", "PID_001", "OTHER");
-        mockTaskQuery(mockTask);
-
-        TransferReqDTO req = new TransferReqDTO("E002", "本人出差");
-
-        // when & then
-        assertThatThrownBy(() -> taskOperationService.transferTask("TASK_001", req))
-                .isInstanceOf(BizException.class)
-                .extracting("code")
-                .isEqualTo("WF-40903");
-    }
-
     // ── L1 补全测试 ──────────────────────────────────────────────
 
     /**
@@ -367,22 +315,6 @@ class TaskOperationServiceTest {
                 .isInstanceOf(BizException.class)
                 .extracting("code")
                 .isEqualTo("WF-40903");
-    }
-
-    /**
-     * 转交时任务不存在，应抛出 WF-40403 异常
-     */
-    @Test
-    void transferTask_taskNotFound_throwsWf40403() {
-        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
-        mockTaskQuery(null);
-
-        TransferReqDTO req = new TransferReqDTO("E002", "出差");
-
-        assertThatThrownBy(() -> taskOperationService.transferTask("TASK_999", req))
-                .isInstanceOf(BizException.class)
-                .extracting("code")
-                .isEqualTo("WF-40403");
     }
 
     // ============ 无会话审批（approveTaskByEmp / rejectTaskByEmp，callpu/SOAP 链路）============

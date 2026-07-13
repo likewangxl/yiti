@@ -75,7 +75,7 @@ export function processDiagramUrl(processInstanceId) {
 
 // ===================== 任务转交待认领（TaskTransferController / TaskTransferService） =====================
 // 两阶段转交：发起（秘书/行长，挂在监控域下）→ 接收人收件箱认领/拒绝 → 发起人发件箱查看/撤回。
-// 与 approveTask/rejectTask 同源节点的一步到位 transferTask（TaskController）不是同一回事。
+// 旧单阶段「一步到位」transferTask（TaskController，已下线）不是同一回事，前端本就未接过它。
 
 /**
  * 发起转交（待认领）。挂在监控域下，仅秘书岗/行长可调（对齐 WORKFLOW_MONITOR·TRANSFER 鉴权）。

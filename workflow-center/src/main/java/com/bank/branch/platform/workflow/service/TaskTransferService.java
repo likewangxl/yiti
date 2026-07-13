@@ -35,8 +35,8 @@ import java.util.UUID;
 /**
  * 任务转交（两阶段：发起待认领 + 接收人认领/拒绝）— 发起侧服务。
  * <p>
- * 与 {@link TaskOperationService#transferTask} 一步到位直接改 assignee 不同：本服务只落
- * {@code WF_TASK_TRANSFER} 待认领记录（status=PENDING_ACCEPT），不改变 Flowable 任务的
+ * 旧单阶段「一步到位直接改 assignee」的转交（{@code TaskOperationService#transferTask}）已下线；
+ * 本服务只落 {@code WF_TASK_TRANSFER} 待认领记录（status=PENDING_ACCEPT），不改变 Flowable 任务的
  * assignee，须接收人认领后才真正转移办理权（认领/拒绝逻辑见后续任务）。
  * </p>
  */

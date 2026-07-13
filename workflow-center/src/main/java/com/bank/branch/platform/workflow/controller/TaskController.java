@@ -7,7 +7,6 @@ import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskDetailRespDTO;
 import com.bank.branch.platform.workflow.api.dto.TaskRespDTO;
-import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.service.TaskOperationService;
 import com.bank.branch.platform.workflow.service.TodoQueryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 任务操作控制器
  * <p>
- * 提供待办/已办查询、任务详情、签收、审批、驳回、转交等接口。
+ * 提供待办/已办查询、任务详情、签收、审批、驳回等接口。
+ * 旧单阶段转交（transfer）已下线，转交统一走 {@link TaskTransferController} 的两阶段流程。
  * 无 @BizAuth 注解，通过 empId 自然过滤数据。
  * </p>
  */
@@ -158,21 +158,4 @@ public class TaskController {
         return ResponseWrapper.success();
     }
 
-    /**
-     * 转交任务
-     * 设计文档 B.4: POST /api/workflow/tasks/{taskId}/transfer
-     *
-     * @param taskId 任务ID
-     * @param req    转交请求 (targetEmpId, reason)
-     * @return 成功响应
-     */
-    @PostMapping("/{taskId}/transfer")
-    @Operation(summary = "转交任务")
-    public ResponseWrapper<Void> transferTask(
-            @PathVariable(value = "taskId") String taskId,
-            @Valid @RequestBody TransferReqDTO req) {
-        log.info("[TaskController.transferTask] taskId={}, targetEmpId={}", taskId, req.getTargetEmpId());
-        taskOperationService.transferTask(taskId, req);
-        return ResponseWrapper.success();
-    }
 }

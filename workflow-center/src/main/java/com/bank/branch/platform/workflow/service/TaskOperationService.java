@@ -4,7 +4,6 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.workflow.api.dto.ApproveReqDTO;
 import com.bank.branch.platform.workflow.api.dto.RejectReqDTO;
-import com.bank.branch.platform.workflow.api.dto.TransferReqDTO;
 import com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
 import com.bank.branch.platform.workflow.enums.WfErrorCode;
@@ -25,8 +24,9 @@ import java.util.Map;
 /**
  * 任务操作服务
  * <p>
- * 提供任务签收、审批通过、驳回、转交等核心操作。
+ * 提供任务签收、审批通过、驳回等核心操作。
  * 所有操作会校验任务存在性和办理人权限，并同步更新 BIZ_PROCESS_MAP 映射表。
+ * 旧单阶段转交（transferTask）已下线，转交统一走 {@link TaskTransferService} 的两阶段流程。
  * </p>
  */
 @Slf4j
@@ -219,38 +219,6 @@ public class TaskOperationService {
         log.info("任务驳回 + 流程终止: taskId={}, empId={}, pid={}, opinion={}", taskId, empId, pid, opinion);
     }
 
-    /**
-     * 转交任务
-     * <p>
-     * 当前办理人将任务转交给其他人员，变更任务办理人并同步更新映射表。
-     * </p>
-     *
-     * @param taskId 任务ID
-     * @param req    转交请求DTO（targetEmpId 接收人，reason 转交原因）
-     * @throws BizException WF-40403 任务不存在；WF-40903 非任务办理人
-     */
-    public void transferTask(String taskId, TransferReqDTO req) {
-        String fromEmpId = currentUserApi.getCurrentEmpId();
-        String toEmpId = req.getTargetEmpId();
-        // 查询任务并校验办理人
-        Task task = queryTaskOrThrow(taskId);
-        verifyAssignee(task, fromEmpId);
-
-        // 变更办理人
-        taskService.setAssignee(taskId, toEmpId);
-
-        // 添加转交备注
-        taskService.addComment(taskId, task.getProcessInstanceId(), "TRANSFER", req.getReason());
-
-        // 更新 BIZ_PROCESS_MAP 当前办理人
-        updateCurrentAssignee(task.getProcessInstanceId(), toEmpId);
-
-        // 发布事件
-        eventPublisher.publishEvent(new TaskTransferredEvent(taskId, task.getProcessInstanceId(), fromEmpId, toEmpId));
-
-        log.info("任务转交: taskId={}, from={}, to={}, reason={}", taskId, fromEmpId, toEmpId, req.getReason());
-    }
-
     // ==================== 私有方法 ====================
 
     /**
@@ -314,7 +282,4 @@ public class TaskOperationService {
 
     /** 任务驳回事件 */
     public record TaskRejectedEvent(String taskId, String processInstanceId, String empId) {}
-
-    /** 任务转交事件 */
-    public record TaskTransferredEvent(String taskId, String processInstanceId, String fromEmpId, String toEmpId) {}
 }
