@@ -61,6 +61,9 @@ class MetricTrialServiceTest {
     @Mock
     private PerfEngineProperties perfEngineProperties;
 
+    @Mock
+    private MetricCalcService metricCalcService;
+
     @InjectMocks
     private MetricTrialService metricTrialService;
 

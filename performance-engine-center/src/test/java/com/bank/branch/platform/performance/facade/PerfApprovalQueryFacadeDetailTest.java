@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
@@ -10,8 +11,6 @@ import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustDoneService;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustService;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustTodoService;
-import com.bank.branch.platform.portal.api.AddressBookApi;
-import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,7 +23,6 @@ import org.mockito.quality.Strictness;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,7 +39,7 @@ class PerfApprovalQueryFacadeDetailTest {
 
     @Mock private AllocAdjustTodoService allocAdjustTodoService;
     @Mock private AllocAdjustDoneService allocAdjustDoneService;
-    @Mock private AddressBookApi addressBookApi;
+    @Mock private UserApi userApi;
     @Mock private CustomerQueryApi customerQueryApi;
     @Mock private PerfAllocAdjustApplyMapper allocAdjustApplyMapper;
     @Mock private AllocAdjustService allocAdjustService;
@@ -66,16 +64,12 @@ class PerfApprovalQueryFacadeDetailTest {
         return apply;
     }
 
-    /** 构造两条明细：一条 ORIGIN（张三/70%），一条 NEW（李四/30%）。 */
+    /**
+     * PERF_ALLOC_ADJUST_ITEM 明细 = 「调整后分配」(isOriginal=2)：李四/30%。
+     * item_kind 废弃后，「原业绩分配」(isOriginal=1) 不再存于 item 表，改由
+     * {@code getOriginalAllocPreview}（cust_alloc_relation 当前生效分配）提供，见 setUp。
+     */
     private List<PerfAllocAdjustItem> buildItems() {
-        PerfAllocAdjustItem origin = new PerfAllocAdjustItem();
-        origin.setId("ITEM_1");
-        origin.setApplyId("PA_1");
-        origin.setEmpId("E1");
-        origin.setUsername("zhangsan");
-        origin.setEmpChnName("张三");
-        origin.setRatio(new BigDecimal("70.00"));
-
         PerfAllocAdjustItem newItem = new PerfAllocAdjustItem();
         newItem.setId("ITEM_2");
         newItem.setApplyId("PA_1");
@@ -84,7 +78,7 @@ class PerfApprovalQueryFacadeDetailTest {
         newItem.setEmpChnName("李四");
         newItem.setRatio(new BigDecimal("30.00"));
 
-        return List.of(origin, newItem);
+        return List.of(newItem);
     }
 
     @BeforeEach
@@ -93,8 +87,15 @@ class PerfApprovalQueryFacadeDetailTest {
         AllocAdjustService.ApplyWithItems bundle =
                 new AllocAdjustService.ApplyWithItems(buildApply(), buildItems());
         when(allocAdjustService.getById("PA_1")).thenReturn(bundle);
-        // 原业绩分配改从 cust_alloc_relation 取（item_kind 废弃后）；本陈旧测试默认空，避免 NPE
-        when(allocAdjustService.getOriginalAllocPreview(any(), any())).thenReturn(List.of());
+        // 原业绩分配（isOriginal=1）改从 cust_alloc_relation 当前生效分配取（item_kind 废弃后）：
+        // 张三/70% 作为「原业绩分配」，与 apply 明细「调整后分配」李四/30%（isOriginal=2）合计两条。
+        com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO origin =
+                new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
+        origin.setEmpId("E1");
+        origin.setUsername("zhangsan");
+        origin.setEmpChnName("张三");
+        origin.setRatio(new BigDecimal("70.00"));
+        when(allocAdjustService.getOriginalAllocPreview(any(), any())).thenReturn(List.of(origin));
 
         // 待办列表包含 PA_1，empId=U001 → canApprove=true
         AdjustTodoRespDTO todoItem = new AdjustTodoRespDTO();
@@ -104,9 +105,8 @@ class PerfApprovalQueryFacadeDetailTest {
                 eq("U001"), any(), any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 500, 1L, List.of(todoItem)));
 
-        // 申请人 U001 → 王五
-        EmployeeDTO emp = EmployeeDTO.builder().empId("U001").empName("王五").build();
-        when(addressBookApi.getEmployee("U001")).thenReturn(Optional.of(emp));
+        // 申请人 U001 → 王五（姓名解析已由 portal 通讯录 AddressBookApi 迁移到 auth UserApi.getUserName）
+        when(userApi.getUserName("U001")).thenReturn("王五");
     }
 
     @Test

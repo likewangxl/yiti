@@ -135,8 +135,9 @@ class MetricCalcServiceTest {
     void calcMetric_exprOnOrg_writesOrgWideTable() {
         PerfMetricDef def = buildOrgExprMetric();
         when(metricDefService.getByCodeOrNull("TEST_CALC_ORG_01")).thenReturn(def);
-        // V1.7 EXPR 多主体路径：subjectFetcher 返回一个主体
-        when(subjectFetcher.fetch(anyString(), anyMap())).thenReturn(List.of("O001"));
+        // V1.13+ EXPR 多主体路径：主体集合从 ORG 宽表按 (dataDate, version) 现取（废弃 subject_sql/SubjectFetcher）
+        when(orgIndexResultMapper.selectDistinctOrgCodes(LocalDate.of(2026, 4, 22), "20260422"))
+                .thenReturn(List.of("O001"));
         when(groovyExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(new BigDecimal("42"));
 
         String taskId = metricCalcService.calcMetric("TEST_CALC_ORG_01", LocalDate.of(2026, 4, 22), "20260422");

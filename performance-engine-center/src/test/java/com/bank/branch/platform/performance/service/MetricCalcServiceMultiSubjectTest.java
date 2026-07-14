@@ -80,7 +80,8 @@ class MetricCalcServiceMultiSubjectTest {
         PerfMetricDef def = exprDef("M_A");
         when(metricDefService.getByCodeOrNull("M_A")).thenReturn(def);
         List<String> subjects = IntStream.range(0, 100).mapToObj(i -> "E" + i).toList();
-        when(subjectFetcher.fetch(eq("SELECT emp_id FROM t"), anyMap())).thenReturn(subjects);
+        // V1.13+：EXPR/GROOVY 主体集合改从宽表按 (dataDate, version) 现取（废弃 subject_sql/SubjectFetcher）
+        when(empMapper.selectDistinctEmpIds(LocalDate.of(2026, 4, 30), "v1")).thenReturn(subjects);
         when(groovyExecutor.execute(anyString(), anyMap(), any(Duration.class)))
             .thenReturn(new BigDecimal("100"));
 
@@ -99,7 +100,8 @@ class MetricCalcServiceMultiSubjectTest {
         PerfMetricDef def = exprDef("M_A");
         when(metricDefService.getByCodeOrNull("M_A")).thenReturn(def);
         List<String> subjects = IntStream.range(0, 100).mapToObj(i -> "E" + i).toList();
-        when(subjectFetcher.fetch(anyString(), anyMap())).thenReturn(subjects);
+        // V1.13+：EXPR/GROOVY 主体集合改从宽表按 (dataDate, version) 现取（废弃 subject_sql/SubjectFetcher）
+        when(empMapper.selectDistinctEmpIds(LocalDate.of(2026, 4, 30), "v1")).thenReturn(subjects);
         AtomicInteger callCount = new AtomicInteger();
         when(groovyExecutor.execute(anyString(), anyMap(), any(Duration.class)))
             .thenAnswer(inv -> {
@@ -125,7 +127,8 @@ class MetricCalcServiceMultiSubjectTest {
         PerfMetricDef def = exprDef("M_A");
         when(metricDefService.getByCodeOrNull("M_A")).thenReturn(def);
         List<String> subjects = IntStream.range(0, 100).mapToObj(i -> "E" + i).toList();
-        when(subjectFetcher.fetch(anyString(), anyMap())).thenReturn(subjects);
+        // V1.13+：EXPR/GROOVY 主体集合改从宽表按 (dataDate, version) 现取（废弃 subject_sql/SubjectFetcher）
+        when(empMapper.selectDistinctEmpIds(LocalDate.of(2026, 4, 30), "v1")).thenReturn(subjects);
         when(groovyExecutor.execute(anyString(), anyMap(), any(Duration.class)))
             .thenThrow(new ArithmeticException("div by zero"));
 
@@ -143,7 +146,7 @@ class MetricCalcServiceMultiSubjectTest {
     void empty_subject_set_status_SUCCESS_skip() {
         PerfMetricDef def = exprDef("M_A");
         when(metricDefService.getByCodeOrNull("M_A")).thenReturn(def);
-        when(subjectFetcher.fetch(anyString(), anyMap())).thenReturn(List.of());
+        when(empMapper.selectDistinctEmpIds(LocalDate.of(2026, 4, 30), "v1")).thenReturn(List.of());
 
         service.calcMetric("M_A", LocalDate.of(2026, 4, 30), "v1");
 
@@ -159,7 +162,8 @@ class MetricCalcServiceMultiSubjectTest {
         PerfMetricDef def = exprDef("M_A");
         when(metricDefService.getByCodeOrNull("M_A")).thenReturn(def);
         List<String> subjects = IntStream.range(0, 50).mapToObj(i -> "E" + i).toList();
-        when(subjectFetcher.fetch(anyString(), anyMap())).thenReturn(subjects);
+        // V1.13+：EXPR/GROOVY 主体集合改从宽表按 (dataDate, version) 现取（废弃 subject_sql/SubjectFetcher）
+        when(empMapper.selectDistinctEmpIds(LocalDate.of(2026, 4, 30), "v1")).thenReturn(subjects);
         when(groovyExecutor.execute(anyString(), anyMap(), any(Duration.class)))
             .thenThrow(new ArithmeticException("err"));
 

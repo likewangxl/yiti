@@ -38,7 +38,8 @@ class KpiSchemeRequestDtoValidationTest {
     }
 
     @Test
-    void createKpiSchemeReq_whenSchemeCodeLowercase_shouldViolation() {
+    void createKpiSchemeReq_whenSchemeCodeLowercase_shouldPass() {
+        // schemeCode 不再强约束大写格式（仅 @NotBlank + @Size≤64），小写/下划线均可，调用方自证唯一。
         CreateKpiSchemeReqDTO req = new CreateKpiSchemeReqDTO();
         req.setSchemeCode("lower_case");
         req.setSchemeName("n");
@@ -47,10 +48,7 @@ class KpiSchemeRequestDtoValidationTest {
 
         Set<ConstraintViolation<CreateKpiSchemeReqDTO>> violations = validator.validateProperty(req, "schemeCode");
 
-        assertThat(violations)
-                .extracting(ConstraintViolation::getPropertyPath)
-                .map(Object::toString)
-                .contains("schemeCode");
+        assertThat(violations).isEmpty();
     }
 
     @Test
@@ -144,8 +142,8 @@ class KpiSchemeRequestDtoValidationTest {
     }
 
     @Test
-    void addKpiItemReq_whenFormulaBlank_shouldViolation() {
-        // 计分公式必输：留空 / 纯空格应触发 @NotBlank
+    void addKpiItemReq_whenFormulaBlank_shouldPass() {
+        // 计分公式改为可空（前端已取消计分公式列，仅保留 @Size≤500）：留空 / 纯空格不再触发校验。
         AddKpiItemReqDTO req = new AddKpiItemReqDTO();
         req.setMetricCode("M_X");
         req.setWeight(new BigDecimal("10"));
@@ -153,10 +151,7 @@ class KpiSchemeRequestDtoValidationTest {
 
         Set<ConstraintViolation<AddKpiItemReqDTO>> violations = validator.validateProperty(req, "formula");
 
-        assertThat(violations)
-                .extracting(ConstraintViolation::getPropertyPath)
-                .map(Object::toString)
-                .contains("formula");
+        assertThat(violations).isEmpty();
     }
 
     @Test

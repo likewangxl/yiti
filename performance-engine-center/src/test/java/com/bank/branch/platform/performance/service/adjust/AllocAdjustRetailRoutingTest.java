@@ -1,5 +1,7 @@
 package com.bank.branch.platform.performance.service.adjust;
 
+import com.bank.branch.platform.auth.api.OrgApi;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
@@ -56,6 +58,9 @@ class AllocAdjustRetailRoutingTest {
     private CustomerQueryApi customerQueryApi;
 
     @Mock
+    private OrgApi orgApi;
+
+    @Mock
     private WorkflowApi workflowApi;
 
     @Mock
@@ -89,8 +94,18 @@ class AllocAdjustRetailRoutingTest {
         c.setId("CUST_RET_001");
         c.setCustNo("CN-RET-001");
         when(customerQueryApi.getCustomerByCustNo(anyString())).thenReturn(Optional.of(c));
+        // 发起机构级别（设计器网关分流依据 + submit 前置校验「仅限 2/3 级机构发起」）：种 2 级
+        OrgDTO org = new OrgDTO();
+        org.setOrgLevel(2);
+        when(orgApi.getOrg(anyString())).thenReturn(org);
         when(workflowApi.startProcess(any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_RET_AUTO", null, null));
+        // 审批流已改走设计器动态流程：submit 经 resolveDesignerProcDefKey(flowKey) 取已部署 procDefKey。
+        // 单测把「对公/零售设计器 flowKey」解析回原静态流程 KEY，路由断言语义保持不变。
+        when(workflowApi.resolveDesignerProcDefKey("alloc_corp_designer"))
+                .thenReturn(AllocAdjustService.PROCESS_KEY_CORP);
+        when(workflowApi.resolveDesignerProcDefKey("alloc_retail_designer"))
+                .thenReturn(AllocAdjustService.PROCESS_KEY_RETAIL);
         // 原业绩分配（历史审批通过）非空，使提交校验「至少 1 条原业绩分配」通过
         var owner = new com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO();
         owner.setEmpId("EMP_RET_A");

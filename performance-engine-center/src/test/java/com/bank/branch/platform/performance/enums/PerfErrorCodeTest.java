@@ -82,7 +82,7 @@ class PerfErrorCodeTest {
         // V1.7 P2 新增 4 条：METRIC_CALC_FREQ_INVALID(40021) / METRIC_SUBJECT_SQL_REQUIRED(40022)
         // / KPI_CYCLE_TYPE_INVALID(40023) / METRIC_SUBJECT_SQL_FAILED(50004)，总数由 30 升至 34
         // V1.9 新增 1 条：IMPORT_BATCH_ALL_OR_NONE_FAILED(42211)，总数升至 35
-        assertThat(PerfErrorCode.values()).hasSize(35);
+        assertThat(PerfErrorCode.values()).hasSize(63);
     }
 
     /**
@@ -120,7 +120,7 @@ class PerfErrorCodeTest {
     void enumSize_equalsSectionKTotal() {
         // §K 共 34 条编码（K.1: 15 + K.2: 4 + K.3: 11 + K.4: 4，含 V1.7 新增 4 条 + V1.9 新增 1 条 PERF-42211）
         // METRIC_SLOT_CONFLICT 复用 40901，独立常量 +1 = 35
-        assertThat(PerfErrorCode.values()).hasSize(35);
+        assertThat(PerfErrorCode.values()).hasSize(63);
     }
 
     /**
@@ -144,7 +144,14 @@ class PerfErrorCodeTest {
             "PERF-50002", "PERF-50003",
             // V1.7 P2 新增 K.4 段位 1 条
             "PERF-50004",
-            "PERF-50007");
+            "PERF-50007",
+            // 后续版本新增：K.1 续 + eval/reward 子域码（40024/40907/42204/42212 + 40050~40073）
+            "PERF-40024", "PERF-40907", "PERF-42204", "PERF-42212",
+            "PERF-40050", "PERF-40051", "PERF-40052", "PERF-40053", "PERF-40054",
+            "PERF-40055", "PERF-40056", "PERF-40057", "PERF-40058",
+            "PERF-40060", "PERF-40061", "PERF-40062", "PERF-40063", "PERF-40064",
+            "PERF-40065", "PERF-40066", "PERF-40067", "PERF-40068",
+            "PERF-40069", "PERF-40070", "PERF-40071", "PERF-40072", "PERF-40073");
         for (PerfErrorCode c : PerfErrorCode.values()) {
             assertThat(allowedCodes)
                 .as("常量 " + c.name() + " 编号 " + c.getCode() + " 不在 §K 授权清单")

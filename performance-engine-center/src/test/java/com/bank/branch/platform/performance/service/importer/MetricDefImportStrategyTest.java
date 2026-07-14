@@ -2,7 +2,6 @@ package com.bank.branch.platform.performance.service.importer;
 
 import com.alibaba.excel.EasyExcel;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
-import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
 import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.service.MetricDefService;
@@ -24,7 +23,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -102,8 +100,10 @@ class MetricDefImportStrategyTest {
     }
 
     @Test
-    @DisplayName("metric_code 空 → 按 M_{indexNo:04d} 自动生成")
+    @DisplayName("metric_code 空 → 按文件内自增序号 autoSeq 生成 M_{autoSeq:04d}（DB 现有 M_ 最大号+1 递增）")
     void execute_emptyMetricCode_generates() {
+        // 空 code 时按 autoSeq 递增（DB 无 M_ 现存 → 从 1 起），与 indexNo 列无关：
+        // 第 2 行 indexNo=42 但仍生成 M_0002，防止 indexNo 稀疏/重复导致的自动编码冲突。
         List<MetricDefImportRow> rows = List.of(
                 row(1, 1, "存款余额", null, "规模类", "AUTO", "select 1", "ACTIVE"),
                 row(42, 2, "存款日均", "", "规模类", "AUTO", "select 2", "ACTIVE"));
@@ -116,7 +116,7 @@ class MetricDefImportStrategyTest {
         verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         List<CreateMetricDefCmd> cmds = captor.getValue();
         assertThat(cmds.get(0).getMetricCode()).isEqualTo("M_0001");
-        assertThat(cmds.get(1).getMetricCode()).isEqualTo("M_0042");
+        assertThat(cmds.get(1).getMetricCode()).isEqualTo("M_0002");
     }
 
     @Test
@@ -208,10 +208,12 @@ class MetricDefImportStrategyTest {
     }
 
     @Test
-    @DisplayName("V1.9：导入指标 baseDim 默认 null（维度无关型指标）")
-    void execute_baseDim_defaultsToNull() {
-        List<MetricDefImportRow> rows = List.of(
-                row(1, 1, "通用指标", "M_META", "规模类", "AUTO", "select 1", "ACTIVE"));
+    @DisplayName("导入指标 baseDim 透传（模板「基础维度」列 EMP/ORG/CUST，归一大写）")
+    void execute_baseDim_passedThroughFromExcel() {
+        // 模板新增「基础维度」列后，baseDim 必填并透传到 cmd（不再默认 null / 维度无关型）
+        MetricDefImportRow r = row(1, 1, "机构指标", "M_META", "规模类", "AUTO", "select 1", "ACTIVE");
+        r.setBaseDim("org"); // 小写：验证生产侧 trim().toUpperCase() 归一
+        List<MetricDefImportRow> rows = List.of(r);
         MultipartFile file = writeExcel(rows);
 
         strategy.execute(batch, file, ImportContext.EMPTY);
@@ -220,23 +222,25 @@ class MetricDefImportStrategyTest {
         ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
         verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
         CreateMetricDefCmd cmd = captor.getValue().get(0);
-        // V1.9：Excel 模板无 base_dim 列，所有导入指标 baseDim=null，不占 slot
-        assertThat(cmd.getBaseDim()).isNull();
+        assertThat(cmd.getBaseDim()).isEqualTo("ORG");
     }
 
     @Test
-    @DisplayName("来源=2 但 calcRule 空 → 整批失败")
-    void execute_source2_emptyCalcRule_throws() {
+    @DisplayName("空 calcRule 不再由 strategy 拦截 → 透传到 service（空 SQL 合法性由 MetricDefService.create 校验）")
+    void execute_emptyCalcRule_delegatesToService() {
+        // 早期「来源=2 空 calcRule 整批失败」拦截已移除：strategy 只做翻译/去重/格式级 all-or-none，
+        // 空 SQL 由服务层 create() 以 METRIC_CALC_LOGIC_INVALID 校验（见 MetricDefServiceTest）。
         List<MetricDefImportRow> rows = List.of(
                 row(1, 1, "缺SQL", "M_NOSQL", "规模类", "AUTO", "", "ACTIVE"));
         MultipartFile file = writeExcel(rows);
 
-        assertThatThrownBy(() -> strategy.execute(batch, file, ImportContext.EMPTY))
-                .isInstanceOf(PerfException.class)
-                .satisfies(e -> assertThat(((PerfException) e).getErrorCode())
-                        .isEqualTo(PerfErrorCode.IMPORT_BATCH_ALL_OR_NONE_FAILED))
-                .hasMessageContaining("第2行");
-        verify(metricDefService, never()).batchUpsertByName(anyList(), anyString());
+        strategy.execute(batch, file, ImportContext.EMPTY);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<CreateMetricDefCmd>> captor = ArgumentCaptor.forClass(List.class);
+        verify(metricDefService).batchUpsertByName(captor.capture(), anyString());
+        // EasyExcel 空单元格回读为 null；strategy 不校验空 SQL，原样透传（null/空）
+        assertThat(captor.getValue().get(0).getSqlText()).isNullOrEmpty();
     }
 
     @Test
@@ -338,6 +342,9 @@ class MetricDefImportStrategyTest {
         r.setMetricLevel(level);
         r.setMetricName(name);
         r.setMetricCode(code);
+        // 基础维度必填（模板新增「基础维度（EMP/ORG/CUST）」列）：fixture 默认 EMP，
+        // 需覆盖具体维度的用例（如透传断言）可单独 setBaseDim 覆盖。
+        r.setBaseDim("EMP");
         r.setMetricCategory(category);
         r.setCalcMode(calcMode);
         r.setCalcRule(rule);

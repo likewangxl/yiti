@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
@@ -7,8 +8,6 @@ import com.bank.branch.platform.performance.entity.PerfAllocAdjustApply;
 import com.bank.branch.platform.performance.mapper.PerfAllocAdjustApplyMapper;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustDoneService;
 import com.bank.branch.platform.performance.service.adjust.AllocAdjustTodoService;
-import com.bank.branch.platform.portal.api.AddressBookApi;
-import com.bank.branch.platform.portal.api.dto.EmployeeDTO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -29,7 +27,7 @@ class PerfApprovalQueryFacadeMyApplyTest {
 
     @Mock private AllocAdjustTodoService allocAdjustTodoService;
     @Mock private AllocAdjustDoneService allocAdjustDoneService;
-    @Mock private AddressBookApi addressBookApi;
+    @Mock private UserApi userApi;
     @Mock private CustomerQueryApi customerQueryApi;
     @Mock private PerfAllocAdjustApplyMapper allocAdjustApplyMapper;
 
@@ -52,8 +50,8 @@ class PerfApprovalQueryFacadeMyApplyTest {
         when(allocAdjustApplyMapper.countByConditions(
                 eq(null), eq(null), eq(null), eq(null), eq("U001")))
                 .thenReturn(1L);
-        when(addressBookApi.getEmployee("U001"))
-                .thenReturn(Optional.of(EmployeeDTO.builder().empName("张三").build()));
+        // 姓名解析已由 portal 通讯录 AddressBookApi 迁移到 auth UserApi.getUserName（入参为 USER_ID）
+        when(userApi.getUserName("U001")).thenReturn("张三");
 
         PageResult<AllocAdjustApprovalItemDTO> page =
                 facade.listMyAllocAdjustApplications("U001", 1, 15);

@@ -1,12 +1,10 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.governance.api.JobApi;
-import com.bank.branch.platform.governance.api.dto.RegisterJobCmd;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.mapper.PerfMetricDefMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 
@@ -63,17 +61,19 @@ class MetricSchedulerServiceTest {
     }
 
     @Test
-    void isSchedulable_EXPR_subjectSql_blank_false() {
+    void isSchedulable_EXPR_subjectSql_blank_true() {
+        // V1.13+：废弃「EXPR/GROOVY subject_sql 必填」约束，主体集合改运行期从宽表现取，
+        // 故 subject_sql 为空仍可调度（其余条件满足）。
         PerfMetricDef def = newDef("M_X", "ACTIVE", "AUTO", "EXPR", 0);
         def.setSubjectSql(null);
-        assertThat(scheduler.isSchedulable(def)).isFalse();
+        assertThat(scheduler.isSchedulable(def)).isTrue();
     }
 
     @Test
-    void isSchedulable_GROOVY_subjectSql_blank_false() {
+    void isSchedulable_GROOVY_subjectSql_blank_true() {
         PerfMetricDef def = newDef("M_Y", "ACTIVE", "AUTO", "GROOVY", 0);
         def.setSubjectSql("  ");
-        assertThat(scheduler.isSchedulable(def)).isFalse();
+        assertThat(scheduler.isSchedulable(def)).isTrue();
     }
 
     @Test
@@ -84,15 +84,12 @@ class MetricSchedulerServiceTest {
     }
 
     @Test
-    void register_calls_jobApi_with_correct_jobKey_and_cron() {
+    void register_disabled_doesNotCallJobApi() {
+        // V1.13+：按运维要求关停自动写入 SYS_JOB_CONF/QRTZ_*，register 已短路为 no-op，不再触达 jobApi。
         PerfMetricDef def = newDef("M_DEPOSIT", "ACTIVE", "AUTO", "SQL", 0);
         def.setCalcFreq("DAY");
         scheduler.register(def);
-        ArgumentCaptor<RegisterJobCmd> cap = ArgumentCaptor.forClass(RegisterJobCmd.class);
-        verify(jobApi).registerJob(cap.capture());
-        assertThat(cap.getValue().getJobKey()).isEqualTo("PERF_METRIC_M_DEPOSIT");
-        assertThat(cap.getValue().getCronExpr()).isEqualTo("0 0 2 * * ?");
-        assertThat(cap.getValue().getJobData()).containsEntry("metricCode", "M_DEPOSIT");
+        verify(jobApi, never()).registerJob(any());
     }
 
     @Test
@@ -111,14 +108,15 @@ class MetricSchedulerServiceTest {
     }
 
     @Test
-    void syncOnStartup_counts_success_and_failed() {
+    void syncOnStartup_registerDisabled_doesNotCallJobApi() {
+        // V1.13+：register 已关停为 no-op，syncOnStartup 仍遍历 selectSchedulable 但不再写 jobApi，且不抛异常。
         PerfMetricDef ok = newDef("M_OK", "ACTIVE", "AUTO", "SQL", 0);
         ok.setCalcFreq("DAY");
         PerfMetricDef bad = newDef("M_BAD", "ACTIVE", "AUTO", "SQL", 0);
-        bad.setCalcFreq("HOURLY");   // 触发 cronResolver 抛异常
+        bad.setCalcFreq("HOURLY");
         when(perfMetricDefMapper.selectSchedulable()).thenReturn(List.of(ok, bad));
         scheduler.syncOnStartup();   // 不抛
-        verify(jobApi, times(1)).registerJob(any());   // 仅 ok 被注册
+        verify(jobApi, never()).registerJob(any());
     }
 
     private PerfMetricDef newDef(String code, String status, String mode, String logic, int deleted) {
