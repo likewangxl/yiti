@@ -406,50 +406,11 @@ import {
   listMetrics, listMetricCategories, getMetricDetail,
   createMetric, updateMetric, deleteMetric,
   changeMetricStatus, trialRunMetric, executeMetric,
-  uploadImportFile, suggestEmployees
+  uploadImportFile
 } from '@/api/perf';
 import { listAuditLogs } from '@/api/system';
-import { getOrgTree } from '@/api/orgs';
 
 const router = useRouter();
-
-// 试运行"对象值"联想：员工走 emp-suggest；机构走机构树客户端过滤
-async function queryEmpSuggest(queryString, cb) {
-  const kw = (queryString || '').trim();
-  if (!kw) { cb([]); return; }
-  try {
-    const list = await suggestEmployees(kw);
-    const arr = Array.isArray(list) ? list : [];
-    // :objectId 应下发员工工号(username)，而非 DB userId(empId)；缺 username 才退回 empId
-    cb(arr.map(u => ({ ...u, code: u.username || u.empId, label: u.empChnName ? `${u.username}（${u.empChnName}）` : u.username })));
-  } catch { cb([]); }
-}
-let _orgFlat = null;
-async function loadOrgFlat() {
-  if (_orgFlat) return _orgFlat;
-  const flat = [];
-  const walk = (nodes) => (nodes || []).forEach(n => {
-    const code = n.orgCode || n.value || n.id;
-    const name = n.orgName || n.label || n.name;
-    if (code) flat.push({ code: String(code), name: name || '', label: name ? `${code}（${name}）` : String(code) });
-    walk(n.children);
-  });
-  try { walk(await getOrgTree()); } catch { /* ignore */ }
-  _orgFlat = flat;
-  return flat;
-}
-async function queryOrgSuggest(queryString, cb) {
-  const kw = (queryString || '').trim().toLowerCase();
-  const flat = await loadOrgFlat();
-  if (!kw) { cb(flat.slice(0, 20)); return; }
-  cb(flat.filter(o => o.code.toLowerCase().includes(kw) || o.name.toLowerCase().includes(kw)).slice(0, 20));
-}
-function queryNoSuggest(_q, cb) { cb([]); }
-// 选中联想项：display 显示 label，objectId 存干净 code（工号/机构号）
-function onTrialSubjectSelect(item) {
-  dlg.trialSubjectId = item.code || '';
-  dlg.trialSubject = item.label || item.code || '';
-}
 
 // === 常量 ===
 const CATEGORY_OPTIONS = ['规模类', '效益类', '质量类', '合规类'];
@@ -752,7 +713,7 @@ function insertMacro(token) {
 const dlg = reactive({
   show: false, editing: null, saving: false,
   trialDate: null, trialing: false,
-  trialSubject: '', trialSubjectId: '',
+  trialSubject: '',
   trial: { status: '', cost: 0, totalRows: 0, errorMsg: '', rows: [], cols: [] },
   slots: [],
   form: {
@@ -1048,7 +1009,7 @@ function openCreate() {
     { name: 'period_start', type: 'DATE', required: true, desc: '起始日期' },
     { name: 'period_end',   type: 'DATE', required: true, desc: '截止日期' }
   ];
-  dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
+  dlg.trialDate = null; dlg.trialSubject = ''; resetTrial();
   exprPickCode.value = '';
   exprPickTime.value = 'TODAY';
   dlg.show = true;
@@ -1069,7 +1030,7 @@ function openEdit(row) {
     _category: (row.metricCategory && String(row.metricCategory).trim()) || resolveCategory(row)
   });
   dlg.slots = resolveSlots(row);
-  dlg.trialDate = null; dlg.trialSubject = ''; dlg.trialSubjectId = ''; resetTrial();
+  dlg.trialDate = null; dlg.trialSubject = ''; resetTrial();
   exprPickCode.value = '';
   exprPickTime.value = 'TODAY';
   dlg.show = true;
@@ -1207,8 +1168,8 @@ async function onTrialFromDialog() {
   const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
   // 单日期模式：dlg.trialDate 是 'YYYY-MM-DD' 字符串，作为后端 :dataDate 占位符的值
   const dataDate = dlg.trialDate || yesterday;
-  // 对象值：优先取联想选中的干净 code，否则用手输原值；映射后端 SQL :objectId（始终下发，未填则 null）
-  const objectId = (dlg.trialSubjectId || dlg.trialSubject || '').trim() || null;
+  // 对象值：普通输入框手输原值，直接映射后端 SQL :objectId（始终下发，未填则 null）
+  const objectId = (dlg.trialSubject || '').trim() || null;
   // Groovy 引用了其它指标(M_xxxx)时必须有对象值，才能按维度+日期+对象值从宽表取数；否则引用指标全为 0
   if (logic === 'EXPR' && /\bM_[A-Za-z0-9_]+\b/.test(exprText) && !objectId) {
     return ElMessage.warning('Groovy 引用了指标，请先填写【对象值】（按维度+数据日期定位宽表中该对象的指标值）');
