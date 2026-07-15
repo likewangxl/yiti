@@ -12,6 +12,7 @@ import com.bank.branch.platform.governance.api.FileApi;
 import com.bank.branch.platform.performance.api.AllocApi;
 import com.bank.branch.platform.performance.api.KpiApi;
 import com.bank.branch.platform.performance.api.MetricApi;
+import com.bank.branch.platform.performance.api.MetricQueryApi;
 import org.mockito.Mockito;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,6 +35,14 @@ public class TestUpstreamApiMockConfig {
     @Bean
     public MetricApi metricApi() {
         return Mockito.mock(MetricApi.class);
+    }
+
+    /**
+     * DynamicQueryServiceImpl EMP 维度 N+1 修复新增依赖，补齐兜底 mock（同上 UserApi 场景）.
+     */
+    @Bean
+    public MetricQueryApi metricQueryApi() {
+        return Mockito.mock(MetricQueryApi.class);
     }
 
     @Bean

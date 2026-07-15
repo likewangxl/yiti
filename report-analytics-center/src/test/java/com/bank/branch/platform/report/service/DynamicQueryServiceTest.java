@@ -13,6 +13,8 @@ import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.MetricApi;
+import com.bank.branch.platform.performance.api.MetricQueryApi;
+import com.bank.branch.platform.performance.api.dto.EmpMetricSnapshotDTO;
 import com.bank.branch.platform.performance.api.dto.MetricDefDTO;
 import com.bank.branch.platform.report.dto.req.DynamicQueryReqDTO;
 import com.bank.branch.platform.report.dto.resp.DynamicQueryRespDTO;
@@ -39,8 +41,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -65,6 +71,9 @@ class DynamicQueryServiceTest {
 
     @Mock
     private MetricApi metricApi;
+
+    @Mock
+    private MetricQueryApi metricQueryApi;
 
     @Mock
     private OrgApi orgApi;
@@ -133,11 +142,14 @@ class DynamicQueryServiceTest {
                 BizType.REPORT, BizAction.LIST);
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
 
-        // 2) MetricApi.getEmpMetricValues 返回单指标值
-        when(metricApi.getEmpMetricValues(eq("E001"), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("M_DEPOSIT_BAL", new BigDecimal("1000.00")));
-        when(metricApi.getEmpMetricValues(eq("E002"), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("M_DEPOSIT_BAL", new BigDecimal("2000.00")));
+        // 2) MetricQueryApi.batchQueryEmpSnapshots 批量返回两员工指标值（N+1 修复后 EMP 维度不再逐员工查）
+        when(metricQueryApi.batchQueryEmpSnapshots(eq(List.of("E001", "E002")),
+                any(LocalDate.class), any(LocalDate.class), eq(List.of("M_DEPOSIT_BAL"))))
+                .thenReturn(List.of(
+                        EmpMetricSnapshotDTO.builder().empId("E001")
+                                .metricValues(Map.of("M_DEPOSIT_BAL", new BigDecimal("1000.00"))).build(),
+                        EmpMetricSnapshotDTO.builder().empId("E002")
+                                .metricValues(Map.of("M_DEPOSIT_BAL", new BigDecimal("2000.00"))).build()));
 
         // 3) getMetricDef 提供列定义
         MetricDefDTO def = new MetricDefDTO();
@@ -159,6 +171,10 @@ class DynamicQueryServiceTest {
         assertThat(resp.getRows().get(0))
                 .containsEntry("subjectId", "E001")
                 .containsEntry("M_DEPOSIT_BAL", new BigDecimal("1000.00"));
+
+        // 防回归关键断言：EMP 维度改走批量 API，不再逐员工调用 getEmpMetricValues
+        verify(metricQueryApi, times(1)).batchQueryEmpSnapshots(anyList(), any(), any(), anyList());
+        verify(metricApi, never()).getEmpMetricValues(any(), any(), any());
     }
 
     @Test
@@ -173,10 +189,13 @@ class DynamicQueryServiceTest {
                 DataScopeType.ALL, "E001", "ORG001", Set.of(),
                 BizType.REPORT, BizAction.LIST);
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
-        when(metricApi.getEmpMetricValues(eq("E001"), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("M_DEPOSIT_BAL", new BigDecimal("1000.00")));
-        when(metricApi.getEmpMetricValues(eq("E002"), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("M_DEPOSIT_BAL", new BigDecimal("2000.00")));
+        when(metricQueryApi.batchQueryEmpSnapshots(eq(List.of("E001", "E002")),
+                any(LocalDate.class), any(LocalDate.class), eq(List.of("M_DEPOSIT_BAL"))))
+                .thenReturn(List.of(
+                        EmpMetricSnapshotDTO.builder().empId("E001")
+                                .metricValues(Map.of("M_DEPOSIT_BAL", new BigDecimal("1000.00"))).build(),
+                        EmpMetricSnapshotDTO.builder().empId("E002")
+                                .metricValues(Map.of("M_DEPOSIT_BAL", new BigDecimal("2000.00"))).build()));
         MetricDefDTO def = new MetricDefDTO();
         def.setMetricCode("M_DEPOSIT_BAL");
         def.setMetricName("存款余额");
@@ -246,10 +265,13 @@ class DynamicQueryServiceTest {
         when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(u1, u2));
         lenient().when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u1, u2));
 
-        when(metricApi.getEmpMetricValues(eq("1001"), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("M1", new BigDecimal("10")));
-        when(metricApi.getEmpMetricValues(eq("1002"), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("M1", new BigDecimal("20")));
+        when(metricQueryApi.batchQueryEmpSnapshots(eq(List.of("1001", "1002")),
+                any(LocalDate.class), any(LocalDate.class), eq(List.of("M1"))))
+                .thenReturn(List.of(
+                        EmpMetricSnapshotDTO.builder().empId("1001")
+                                .metricValues(Map.of("M1", new BigDecimal("10"))).build(),
+                        EmpMetricSnapshotDTO.builder().empId("1002")
+                                .metricValues(Map.of("M1", new BigDecimal("20"))).build()));
         MetricDefDTO def = new MetricDefDTO(); def.setMetricCode("M1"); def.setMetricName("指标1");
         when(metricApi.getMetricDef("M1")).thenReturn(Optional.of(def));
         lenient().when(orgApi.getUserMainOrg(any())).thenReturn(null);
@@ -275,8 +297,9 @@ class DynamicQueryServiceTest {
         when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
         UserDTO me = new UserDTO(); me.setEmpId("U1"); me.setUsername("1001"); me.setMainOrgCode("ORG001");
         when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(me));
-        // 本人当天无数据：取值返回空
-        when(metricApi.getEmpMetricValues(eq("1001"), any(LocalDate.class), anyList())).thenReturn(Map.of());
+        // 本人当天无数据：批量取值返回空列表（EmpMetricSnapshotDTO 契约：无数据的 empId 不出现在结果中）
+        when(metricQueryApi.batchQueryEmpSnapshots(eq(List.of("1001")),
+                any(LocalDate.class), any(LocalDate.class), eq(List.of("M1")))).thenReturn(List.of());
         MetricDefDTO def = new MetricDefDTO(); def.setMetricCode("M1"); def.setMetricName("指标1");
         when(metricApi.getMetricDef("M1")).thenReturn(Optional.of(def));
         lenient().when(orgApi.getUserMainOrg(any())).thenReturn(null);
@@ -307,8 +330,14 @@ class DynamicQueryServiceTest {
         lenient().when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
         MetricDefDTO def = new MetricDefDTO(); def.setMetricCode("M1"); def.setMetricName("指标1");
         when(metricApi.getMetricDef("M1")).thenReturn(Optional.of(def));
-        lenient().when(metricApi.getEmpMetricValues(any(), any(LocalDate.class), anyList()))
-                .thenReturn(Map.of("M1", new BigDecimal("1")));
+        // 分页只取当前页对象取值：批量调用应仅针对当前页 lookupIds（E3/E4），而非全部 5 个
+        lenient().when(metricQueryApi.batchQueryEmpSnapshots(eq(List.of("E3", "E4")),
+                        any(LocalDate.class), any(LocalDate.class), eq(List.of("M1"))))
+                .thenReturn(List.of(
+                        EmpMetricSnapshotDTO.builder().empId("E3")
+                                .metricValues(Map.of("M1", new BigDecimal("1"))).build(),
+                        EmpMetricSnapshotDTO.builder().empId("E4")
+                                .metricValues(Map.of("M1", new BigDecimal("1"))).build()));
         lenient().when(orgApi.getUserMainOrg(any())).thenReturn(null);
 
         DynamicQueryRespDTO resp = service.execute(req);
@@ -352,5 +381,139 @@ class DynamicQueryServiceTest {
         assertThat(resp.getRows()).hasSize(1);
         assertThat(resp.getRows().get(0))
                 .containsEntry("subjectName", "总行");
+    }
+
+    // ------------------------------------------------------------------
+    // EMP 维度 N+1 修复专项测试（复用 performance.MetricQueryApi.batchQueryEmpSnapshots）
+    // ------------------------------------------------------------------
+
+    @Test
+    void execute_empDim_multipleEmployees_usesBatchQueryNotPerEmployeeLoop() {
+        // 3 个员工、显式选择对象：验证 EMP 维度改走一次批量调用取全部指标值，而不是逐员工循环
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        req.setSubjectIds(new ArrayList<>(List.of("E001", "E002", "E003")));
+        req.setMetricCodes(new ArrayList<>(List.of("M_DEPOSIT_BAL")));
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.ALL, "E001", "ORG001", Set.of(), BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+
+        UserDTO u1 = new UserDTO(); u1.setEmpId("E001"); u1.setUsername("1001");
+        UserDTO u2 = new UserDTO(); u2.setEmpId("E002"); u2.setUsername("1002");
+        UserDTO u3 = new UserDTO(); u3.setEmpId("E003"); u3.setUsername("1003");
+        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u1, u2, u3));
+
+        when(metricQueryApi.batchQueryEmpSnapshots(eq(List.of("1001", "1002", "1003")),
+                eq(req.getDataDate()), eq(req.getDataDate()), eq(List.of("M_DEPOSIT_BAL"))))
+                .thenReturn(List.of(
+                        EmpMetricSnapshotDTO.builder().empId("1001")
+                                .metricValues(Map.of("M_DEPOSIT_BAL", new BigDecimal("100"))).build(),
+                        EmpMetricSnapshotDTO.builder().empId("1002")
+                                .metricValues(Map.of("M_DEPOSIT_BAL", new BigDecimal("200"))).build(),
+                        EmpMetricSnapshotDTO.builder().empId("1003")
+                                .metricValues(Map.of("M_DEPOSIT_BAL", new BigDecimal("300"))).build()));
+
+        MetricDefDTO def = new MetricDefDTO();
+        def.setMetricCode("M_DEPOSIT_BAL");
+        def.setMetricName("存款余额");
+        when(metricApi.getMetricDef("M_DEPOSIT_BAL")).thenReturn(Optional.of(def));
+
+        DynamicQueryRespDTO resp = service.execute(req);
+
+        assertThat(resp.getRows()).hasSize(3);
+        assertThat(resp.getRows().get(0))
+                .containsEntry("subjectId", "1001")
+                .containsEntry("M_DEPOSIT_BAL", new BigDecimal("100"));
+        assertThat(resp.getRows().get(1))
+                .containsEntry("subjectId", "1002")
+                .containsEntry("M_DEPOSIT_BAL", new BigDecimal("200"));
+        assertThat(resp.getRows().get(2))
+                .containsEntry("subjectId", "1003")
+                .containsEntry("M_DEPOSIT_BAL", new BigDecimal("300"));
+
+        // 防回归关键断言：EMP 维度不再逐员工调用 getEmpMetricValues（N+1 已修复），批量接口恰好调用 1 次
+        verify(metricQueryApi, times(1)).batchQueryEmpSnapshots(anyList(), any(), any(), anyList());
+        verify(metricApi, never()).getEmpMetricValues(any(), any(), any());
+    }
+
+    @Test
+    void execute_empDim_metricCodesExceed50_splitsIntoMultipleBatchCalls() {
+        // metricCodes 超过批量上限 50 → 应按 50 一片分多次调用 batchQueryEmpSnapshots
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        req.setSubjectIds(new ArrayList<>(List.of("E001")));
+        List<String> metricCodes = IntStream.rangeClosed(1, 51)
+                .mapToObj(i -> "M" + i)
+                .collect(Collectors.toList());
+        req.setMetricCodes(metricCodes);
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.ALL, "E001", "ORG001", Set.of(), BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+        lenient().when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
+        lenient().when(metricApi.getMetricDef(anyString())).thenReturn(Optional.empty());
+        when(metricQueryApi.batchQueryEmpSnapshots(anyList(), any(), any(), anyList()))
+                .thenReturn(List.of());
+
+        service.execute(req);
+
+        // 51 个指标码按 50 上限分片 → 触发 2 次批量调用（1 个 subject 分片 × 2 个 metric 分片）
+        verify(metricQueryApi, times(2)).batchQueryEmpSnapshots(anyList(), any(), any(), anyList());
+    }
+
+    @Test
+    void execute_empDim_empIdsExceed500_splitsIntoMultipleBatchCalls() {
+        // lookupIds 超过批量上限 500 → 应按 500 一片分多次调用 batchQueryEmpSnapshots
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        List<String> subjectIds = IntStream.rangeClosed(1, 501)
+                .mapToObj(i -> "E" + i)
+                .collect(Collectors.toList());
+        req.setSubjectIds(new ArrayList<>(subjectIds));
+        req.setMetricCodes(new ArrayList<>(List.of("M1")));
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.ALL, "E001", "ORG001", Set.of(), BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+        lenient().when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
+        lenient().when(metricApi.getMetricDef(anyString())).thenReturn(Optional.empty());
+        when(metricQueryApi.batchQueryEmpSnapshots(anyList(), any(), any(), anyList()))
+                .thenReturn(List.of());
+
+        service.execute(req);
+
+        // 501 个员工按 500 上限分片 → 触发 2 次批量调用（2 个 subject 分片 × 1 个 metric 分片）
+        verify(metricQueryApi, times(2)).batchQueryEmpSnapshots(anyList(), any(), any(), anyList());
+    }
+
+    @Test
+    void execute_empDim_batchQueryThrows_fallsBackToPerEmployeeFetch() {
+        // 批量取值整体异常 → 应 log.warn 后回退到原逐员工 fetchValuesByDim，保证单点故障不拖垮整批
+        DynamicQueryReqDTO req = new DynamicQueryReqDTO();
+        req.setDim("EMP");
+        req.setSubjectIds(new ArrayList<>(List.of("E001")));
+        req.setMetricCodes(new ArrayList<>(List.of("M1")));
+        req.setDataDate(LocalDate.of(2026, 4, 1));
+
+        DataScopeContext scope = new DataScopeContext(
+                DataScopeType.ALL, "E001", "ORG001", Set.of(), BizType.REPORT_DYN_EMP, BizAction.LIST);
+        when(bizScopeApi.buildScopeContext(any(), any(), any())).thenReturn(scope);
+        lenient().when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of());
+        when(metricQueryApi.batchQueryEmpSnapshots(anyList(), any(), any(), anyList()))
+                .thenThrow(new RuntimeException("批量查询失败"));
+        when(metricApi.getEmpMetricValues(eq("E001"), any(LocalDate.class), anyList()))
+                .thenReturn(Map.of("M1", new BigDecimal("999")));
+        MetricDefDTO def = new MetricDefDTO(); def.setMetricCode("M1"); def.setMetricName("指标1");
+        when(metricApi.getMetricDef("M1")).thenReturn(Optional.of(def));
+
+        DynamicQueryRespDTO resp = service.execute(req);
+
+        assertThat(resp.getRows()).hasSize(1);
+        assertThat(resp.getRows().get(0)).containsEntry("M1", new BigDecimal("999"));
+        verify(metricApi, times(1)).getEmpMetricValues(eq("E001"), any(LocalDate.class), anyList());
     }
 }

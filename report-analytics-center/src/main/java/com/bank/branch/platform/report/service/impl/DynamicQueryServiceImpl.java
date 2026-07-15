@@ -15,6 +15,8 @@ import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.customer.api.CustomerQueryApi;
 import com.bank.branch.platform.customer.api.dto.CustomerDTO;
 import com.bank.branch.platform.performance.api.MetricApi;
+import com.bank.branch.platform.performance.api.MetricQueryApi;
+import com.bank.branch.platform.performance.api.dto.EmpMetricSnapshotDTO;
 import com.bank.branch.platform.performance.api.dto.MetricDefDTO;
 import com.bank.branch.platform.report.dto.req.DynamicQueryReqDTO;
 import com.bank.branch.platform.report.dto.resp.DynamicQueryRespDTO;
@@ -46,7 +48,9 @@ import java.util.Set;
  *   <li>入参校验：dim 合法性 + subjectIds/metricCodes 个数上限</li>
  *   <li>外层 DataScope：依据 {@link BizScopeApi#buildScopeContext} 返回的 scope 类型，
  *       对照请求的 subjectIds 做范围过滤；命中范围外即 RPT-40005</li>
- *   <li>内层取值：按 dim 调用 {@link MetricApi} 三个分支接口（V1.0 单条循环，batch 优化留 V1.1+）</li>
+ *   <li>内层取值：EMP 维度批量调用 {@link MetricQueryApi#batchQueryEmpSnapshots} 一次性取全页员工的
+ *       指标值（N+1 修复，本任务交付）；ORG / CUST 维度仍按 dim 调用 {@link MetricApi} 分支接口逐个
+ *       取值（batch 优化留待后续任务）</li>
  * </ol>
  *
  * <p>SubjectName 解析策略：
@@ -69,11 +73,19 @@ public class DynamicQueryServiceImpl implements DynamicQueryService {
 
     private static final String DIM_CUST = "CUST";
 
+    /** EMP 维度批量取值：{@link MetricQueryApi#batchQueryEmpSnapshots} 单次调用 subject 上限（与 MetricQueryApiImpl 上限对齐）。 */
+    private static final int EMP_BATCH_SUBJECT_LIMIT = 500;
+
+    /** EMP 维度批量取值：{@link MetricQueryApi#batchQueryEmpSnapshots} 单次调用 metricCode 上限（与 MetricQueryApiImpl 上限对齐）。 */
+    private static final int EMP_BATCH_METRIC_LIMIT = 50;
+
     private final BizScopeApi bizScopeApi;
 
     private final CurrentUserApi currentUserApi;
 
     private final MetricApi metricApi;
+
+    private final MetricQueryApi metricQueryApi;
 
     private final OrgApi orgApi;
 
@@ -140,17 +152,23 @@ public class DynamicQueryServiceImpl implements DynamicQueryService {
             pageIds = allowed;
         }
 
-        // 4) 跨模块取值（V1.0 单条循环）。empMap 已含工号/姓名/主机构
+        // 4) 跨模块取值。empMap 已含工号/姓名/主机构
+        // EMP 维度：主循环之前先按本页全部对象批量取值一次（修复原逐员工循环 N+1），
+        // 主循环内直接从批量结果 Map 取值；ORG / CUST 维度仍在循环内逐个调 fetchValuesByDim。
+        Map<String, Map<String, BigDecimal>> empValuesByLookupId = DIM_EMP.equals(req.getDim())
+                ? batchFetchEmpValues(pageIds, empMap, req.getDataDate(), req.getMetricCodes())
+                : Map.of();
+
         List<Map<String, Object>> rows = new ArrayList<>(pageIds.size());
         for (String sid : pageIds) {
             // EMP 维度：前端传入的 subjectId 是 auth 的 USER_ID，而宽表 EMP_INDEX_RESULT.emp_id
             // 存的是工号(PT_USER.username)。需经 empMap(键=USER_ID) 解析出工号后再查指标值/展示，
             // 否则真实员工(USER_ID≠工号)查不到任何指标值（仅 USER_ID 恰好等于工号的账号能命中）。
             UserDTO emp = DIM_EMP.equals(req.getDim()) ? empMap.get(sid) : null;
-            String lookupId = (emp != null && emp.getUsername() != null && !emp.getUsername().isEmpty())
-                    ? emp.getUsername() : sid;
-            Map<String, BigDecimal> values = fetchValuesByDim(req.getDim(), lookupId,
-                    req.getDataDate(), req.getMetricCodes());
+            String lookupId = lookupIdOf(sid, emp);
+            Map<String, BigDecimal> values = DIM_EMP.equals(req.getDim())
+                    ? empValuesByLookupId.getOrDefault(lookupId, Map.of())
+                    : fetchValuesByDim(req.getDim(), lookupId, req.getDataDate(), req.getMetricCodes());
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("subjectId", lookupId);
             row.put("subjectName", resolveSubjectName(req.getDim(), sid, empMap));
@@ -401,7 +419,79 @@ public class DynamicQueryServiceImpl implements DynamicQueryService {
     }
 
     /**
-     * 按 dim 选择对应的 MetricApi 分支接口取指标值（V1.0 单条循环）。
+     * EMP 维度的宽表查值键（lookupId）解析：与 {@code empMap} 键 = auth USER_ID 不同，
+     * {@code EMP_INDEX_RESULT.emp_id} 存的是工号(username)，需经 emp.getUsername() 解析；
+     * emp 为空或 username 缺失则回退 subjectId 本身。EMP 以外维度直接透传 subjectId。
+     */
+    private String lookupIdOf(String subjectId, UserDTO emp) {
+        return (emp != null && emp.getUsername() != null && !emp.getUsername().isEmpty())
+                ? emp.getUsername() : subjectId;
+    }
+
+    /**
+     * EMP 维度批量取值（修复原 V1.0 逐员工循环调用 {@code metricApi.getEmpMetricValues} 的 N+1）。
+     * <p>调用 {@link MetricQueryApi#batchQueryEmpSnapshots}，对 lookupIds 按 {@link #EMP_BATCH_SUBJECT_LIMIT}、
+     * metricCodes 按 {@link #EMP_BATCH_METRIC_LIMIT} 分片，逐片调用后按 lookupId 合并 metricValues
+     * （同一 lookupId 跨 metric 分片需 merge，不能互相覆盖）。</p>
+     * <p><b>容错</b>：整个批量取值过程用 try/catch 包住，任一环节抛异常即记 warn 后整体回退到
+     * 原「逐员工 {@link #fetchValuesByDim}」路径，保证批量接口单点故障不拖垮整批查询
+     * （代价是此时退化回 N+1，仅作异常兜底，非常态路径）。</p>
+     */
+    private Map<String, Map<String, BigDecimal>> batchFetchEmpValues(List<String> pageIds,
+                                                                      Map<String, UserDTO> empMap,
+                                                                      LocalDate dataDate,
+                                                                      List<String> metricCodes) {
+        if (pageIds.isEmpty()) {
+            return Map.of();
+        }
+        List<String> lookupIds = pageIds.stream()
+                .map(sid -> lookupIdOf(sid, empMap.get(sid)))
+                .toList();
+        try {
+            Map<String, Map<String, BigDecimal>> merged = new HashMap<>();
+            for (List<String> subjectChunk : partition(lookupIds, EMP_BATCH_SUBJECT_LIMIT)) {
+                for (List<String> metricChunk : partition(metricCodes, EMP_BATCH_METRIC_LIMIT)) {
+                    List<EmpMetricSnapshotDTO> snapshots = metricQueryApi.batchQueryEmpSnapshots(
+                            subjectChunk, dataDate, dataDate, metricChunk);
+                    if (snapshots == null) {
+                        continue;
+                    }
+                    for (EmpMetricSnapshotDTO snap : snapshots) {
+                        if (snap == null || snap.getEmpId() == null || snap.getMetricValues() == null) {
+                            continue;
+                        }
+                        merged.computeIfAbsent(snap.getEmpId(), k -> new HashMap<>())
+                                .putAll(snap.getMetricValues());
+                    }
+                }
+            }
+            return merged;
+        } catch (RuntimeException ex) {
+            log.warn("[DynamicQuery] EMP 维度批量取值失败，回退逐员工查询 lookupIds.size={} dataDate={} cause={}",
+                    lookupIds.size(), dataDate, ex.getMessage());
+            Map<String, Map<String, BigDecimal>> fallback = new HashMap<>(lookupIds.size());
+            for (String lookupId : lookupIds) {
+                fallback.put(lookupId, fetchValuesByDim(DIM_EMP, lookupId, dataDate, metricCodes));
+            }
+            return fallback;
+        }
+    }
+
+    /** 将 list 按 chunkSize 切分为若干子 List（原地视图，不拷贝数据）。chunkSize &le; 0 或 list 为空则返回空列表。 */
+    private static <T> List<List<T>> partition(List<T> list, int chunkSize) {
+        if (list == null || list.isEmpty() || chunkSize <= 0) {
+            return List.of();
+        }
+        List<List<T>> chunks = new ArrayList<>();
+        for (int from = 0; from < list.size(); from += chunkSize) {
+            chunks.add(list.subList(from, Math.min(from + chunkSize, list.size())));
+        }
+        return chunks;
+    }
+
+    /**
+     * 按 dim 选择对应的 MetricApi 分支接口取指标值（ORG / CUST 维度沿用，EMP 维度改走
+     * {@link #batchFetchEmpValues} 批量路径，本方法仅在批量取值异常兜底时对 EMP 维度调用）。
      */
     private Map<String, BigDecimal> fetchValuesByDim(String dim, String subjectId,
                                                      LocalDate dataDate, List<String> metricCodes) {
