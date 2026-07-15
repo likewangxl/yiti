@@ -300,8 +300,8 @@ public class MetricLifecycleFacade {
      * 批量执行：对给定指标逐个立即执行（非级联），best-effort 聚合结果.
      *
      * <p>单指标失败不中断整批（仿 HistoryRecalcService）；每指标各自写 PERF_RUN_TASK 行。
-     * 本方法不开 @Transactional：各 calcMetric 由 {@link #executeMetric} 独立管理 run_task。
-     * version 由 {@link #executeMetric} 内部解析当前生效版本。
+     * 本方法不开 @Transactional：各 calcMetric 由 {@link #executeMetric(String, LocalDate, Boolean, LocalDate)}
+     * 独立管理 run_task。version 由 {@link #executeMetric(String, LocalDate, Boolean, LocalDate)} 内部解析当前生效版本。
      *
      * @param metricCodes 指标编码列表
      * @param dataDate    数据日期

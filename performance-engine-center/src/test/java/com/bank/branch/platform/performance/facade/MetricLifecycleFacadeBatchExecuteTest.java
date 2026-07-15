@@ -64,19 +64,26 @@ class MetricLifecycleFacadeBatchExecuteTest extends PerformanceServiceTestBase {
 
     @Test
     void batchExecute_partialFailure_aggregates() {
+        // 失败项 M_BAD 放在列表中间（而非最后一个），用来证明"中间失败不中断循环、后续项仍被处理"
         LocalDate d = LocalDate.of(2026, 7, 1);
         doReturn(RunTaskInfoDTO.builder().taskId("T1").status("SUCCESS").build())
                 .when(facade).executeMetric(eq("M_OK"), eq(d), eq(false), any());
         doThrow(new PerfException(PerfErrorCode.VALIDATION_FAILED, "boom"))
                 .when(facade).executeMetric(eq("M_BAD"), eq(d), eq(false), any());
+        doReturn(RunTaskInfoDTO.builder().taskId("T2").status("SUCCESS").build())
+                .when(facade).executeMetric(eq("M_OK2"), eq(d), eq(false), any());
 
-        BatchExecuteRespDTO resp = facade.batchExecute(List.of("M_OK", "M_BAD"), d);
+        BatchExecuteRespDTO resp = facade.batchExecute(List.of("M_OK", "M_BAD", "M_OK2"), d);
 
-        assertThat(resp.getTotal()).isEqualTo(2);
-        assertThat(resp.getSuccess()).isEqualTo(1);
+        assertThat(resp.getTotal()).isEqualTo(3);
+        assertThat(resp.getSuccess()).isEqualTo(2);
         assertThat(resp.getFailed()).isEqualTo(1);
         assertThat(resp.getResults()).extracting(BatchExecuteRespDTO.Item::getMetricCode)
-                .containsExactly("M_OK", "M_BAD");
+                .containsExactly("M_OK", "M_BAD", "M_OK2");
+        // 中间项 M_BAD 失败
+        assertThat(resp.getResults().get(1).getStatus()).isEqualTo("FAILED");
         assertThat(resp.getResults().get(1).getErrorMsg()).contains("boom");
+        // 最后一项 M_OK2 仍被正常处理并成功，证明中间失败没有中断循环
+        assertThat(resp.getResults().get(2).getStatus()).isEqualTo("SUCCESS");
     }
 }
