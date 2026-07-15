@@ -84,7 +84,7 @@
               :label="`${m.metricCode} · ${m.metricName || ''}`" :value="m.metricCode" />
           </el-select>
         </el-form-item>
-        <el-form-item label="执行时间" required>
+        <el-form-item label="数据日期" required>
           <el-date-picker v-model="execDlg.dataDate" type="date" value-format="YYYY-MM-DD"
             placeholder="选择数据日期（不能大于今天）" :disabled-date="disabledFuture" style="width:100%" />
         </el-form-item>
@@ -124,8 +124,8 @@
     <el-drawer v-model="hist.show" :title="`执行历史 · ${hist.metricCode || ''}`" size="52%"
       :destroy-on-close="true">
       <el-table :data="hist.rows" size="default" v-loading="hist.loading" empty-text="暂无执行记录">
-        <el-table-column label="执行时间" width="170">
-          <template #default="{row}">{{ fmtTime(row.createdTime) }}</template>
+        <el-table-column label="数据日期" width="130">
+          <template #default="{row}">{{ row.dataDate || '-' }}</template>
         </el-table-column>
         <el-table-column label="开始时间" width="170">
           <template #default="{row}">{{ fmtTime(row.startTime) }}</template>
@@ -133,14 +133,11 @@
         <el-table-column label="结束时间" width="170">
           <template #default="{row}">{{ fmtTime(row.endTime) }}</template>
         </el-table-column>
-        <el-table-column label="计算结果" min-width="160">
+        <el-table-column label="计算状态" min-width="160">
           <template #default="{row}">
             <el-tag :class="statusCls(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag>
             <div v-if="row.errorMsg" class="err-inline" :title="row.errorMsg">{{ row.errorMsg }}</div>
           </template>
-        </el-table-column>
-        <el-table-column label="发起人" width="150">
-          <template #default="{row}">{{ row.startedByName || row.startedBy || '-' }}</template>
         </el-table-column>
       </el-table>
       <div class="pager">
