@@ -31,7 +31,7 @@
     </div>
 
     <div class="card-section table">
-      <el-table :data="rows" size="default" v-loading="loading" empty-text="暂无任务记录"
+      <el-table ref="tableRef" :data="rows" size="default" v-loading="loading" empty-text="暂无任务记录"
         @selection-change="onSelectionChange" row-key="metricCode">
         <el-table-column type="selection" width="46" reserve-selection />
         <el-table-column label="指标" min-width="280" show-overflow-tooltip>
@@ -182,7 +182,10 @@ function fmtTime(t) {
   if (!t) return '-';
   return String(t).replace('T', ' ').slice(0, 19);
 }
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 const disabledFuture = (d) => { const t = new Date(); t.setHours(0, 0, 0, 0); return d.getTime() > t.getTime(); };
 
 // 任务类型字典（默认兜底一项，字典拉到后覆盖）
@@ -198,6 +201,7 @@ const loading = ref(false);
 const pageNo = ref(1);
 const pageSize = ref(20);
 const selected = ref([]);
+const tableRef = ref(null);
 
 function onSelectionChange(sel) { selected.value = sel; }
 
@@ -279,6 +283,9 @@ async function confirmBatch() {
       if (bad) ElMessage.warning(`失败明细：${bad}`);
     }
     batchDlg.show = false;
+    // 成功后清空选中态：避免 reserve-selection 残留同名指标勾选，误用同一批 metricCodes 重复提交高危批量执行
+    selected.value = [];
+    tableRef.value?.clearSelection();
     reload();
   } catch { /* 拦截器已提示 */ } finally { batchDlg.submitting = false; }
 }
@@ -287,6 +294,8 @@ async function confirmBatch() {
 const hist = reactive({ show: false, metricCode: '', rows: [], total: 0, loading: false, pageNo: 1, pageSize: 20 });
 function openHistory(row) {
   hist.metricCode = row.metricCode; hist.pageNo = 1; hist.show = true;
+  // 打开抽屉先清空上一个指标的历史数据，避免慢网络下短暂残留
+  hist.rows = []; hist.total = 0;
   loadHistory();
 }
 async function loadHistory() {
