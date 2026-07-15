@@ -6,6 +6,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricSummaryDTO;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.enums.PerfErrorCode;
@@ -225,6 +226,31 @@ public class PerfRunTaskService {
         PerfRunTask task = getById(id)
                 .orElseThrow(() -> new PerfException(PerfErrorCode.RUN_TASK_NOT_FOUND, id));
         return RunTaskAssembler.toDto(task);
+    }
+
+    /**
+     * 任务监控：按指标分组分页汇总（含数据范围过滤）.
+     *
+     * <p>total=0 直接返回空分页（跳过 select）；数据范围复用 {@link #resolveScopeFilter()}.
+     *
+     * @param taskType 任务类型（如 METRIC_RUN）
+     * @param keyword  指标编码/名称关键字（nullable）
+     * @param pageNo   页码（从 1 起）
+     * @param pageSize 页大小
+     */
+    @Transactional(readOnly = true)
+    public PageResult<MetricSummaryDTO> pageMetricSummary(String taskType, String keyword,
+                                                          int pageNo, int pageSize) {
+        String dataScopeFilter = resolveScopeFilter();
+        String kw = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
+        long total = runTaskMapper.countMetricSummary(taskType, kw, dataScopeFilter);
+        if (total == 0L) {
+            return PageResult.of(pageNo, pageSize, 0L, java.util.Collections.emptyList());
+        }
+        int offset = Math.max(pageNo - 1, 0) * pageSize;
+        List<MetricSummaryDTO> records = runTaskMapper.selectMetricSummary(
+                taskType, kw, dataScopeFilter, offset, pageSize);
+        return PageResult.of(pageNo, pageSize, total, records);
     }
 
     /**
