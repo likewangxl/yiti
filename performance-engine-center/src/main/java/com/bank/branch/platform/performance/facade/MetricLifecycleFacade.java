@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.facade;
 
+import com.bank.branch.platform.performance.controller.dto.BatchExecuteRespDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricDefRespDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricTrialRespDTO;
 import com.bank.branch.platform.performance.controller.dto.RunTaskInfoDTO;
@@ -28,7 +29,9 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -291,5 +294,42 @@ public class MetricLifecycleFacade {
                 .dataDate(dataDate)
                 .version(version)
                 .build();
+    }
+
+    /**
+     * 批量执行：对给定指标逐个立即执行（非级联），best-effort 聚合结果.
+     *
+     * <p>单指标失败不中断整批（仿 HistoryRecalcService）；每指标各自写 PERF_RUN_TASK 行。
+     * 本方法不开 @Transactional：各 calcMetric 由 {@link #executeMetric} 独立管理 run_task。
+     * version 由 {@link #executeMetric} 内部解析当前生效版本。
+     *
+     * @param metricCodes 指标编码列表
+     * @param dataDate    数据日期
+     * @return 聚合结果（total/success/failed + 逐指标明细）
+     */
+    public BatchExecuteRespDTO batchExecute(List<String> metricCodes, LocalDate dataDate) {
+        List<BatchExecuteRespDTO.Item> results = new ArrayList<>(metricCodes.size());
+        int success = 0;
+        int failed = 0;
+        for (String code : metricCodes) {
+            try {
+                // cascade=false：批量场景走直算，避免大批量级联放大；version 内部解析
+                RunTaskInfoDTO r = executeMetric(code, dataDate, Boolean.FALSE, null);
+                results.add(BatchExecuteRespDTO.Item.builder()
+                        .metricCode(code).status(r.getStatus()).runTaskId(r.getTaskId()).build());
+                success++;
+            } catch (Exception ex) {
+                String msg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                if (msg.length() > 500) {
+                    msg = msg.substring(0, 500);
+                }
+                log.warn("[MetricLifecycleFacade.batchExecute] 指标 {} 执行失败: {}", code, msg);
+                results.add(BatchExecuteRespDTO.Item.builder()
+                        .metricCode(code).status("FAILED").errorMsg(msg).build());
+                failed++;
+            }
+        }
+        return BatchExecuteRespDTO.builder()
+                .total(metricCodes.size()).success(success).failed(failed).results(results).build();
     }
 }
