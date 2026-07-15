@@ -7,6 +7,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.api.dto.PerfRunTaskDTO;
+import com.bank.branch.platform.performance.controller.dto.MetricSummaryDTO;
 import com.bank.branch.platform.performance.service.PerfRunTaskService;
 import com.bank.branch.platform.performance.service.dto.RunTaskQuery;
 import io.swagger.v3.oas.annotations.Operation;
@@ -120,5 +121,27 @@ public class PerfRunTaskController {
         // 不再复用 METRIC_NOT_FOUND（语义是"指标不存在"，与 run_task 场景不符）
         // V1.3 R4.1：Service.getByIdDto 内部完成 entity 装配 + 不存在抛异常
         return ResponseWrapper.success(perfRunTaskService.getByIdDto(id));
+    }
+
+    /**
+     * 任务监控：按指标分组汇总分页（列表页数据源）.
+     *
+     * @param taskType      任务类型（默认 METRIC_RUN）
+     * @param metricKeyword 指标编码/名称关键字（nullable）
+     */
+    @GetMapping("/metric-summary")
+    @Operation(summary = "按指标分组汇总任务（任务监控列表）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.LIST)
+    public ResponseWrapper<MetricSummaryDTO> metricSummary(
+            @RequestParam(value = "taskType", defaultValue = "METRIC_RUN") String taskType,
+            @RequestParam(value = "metricKeyword", required = false) String metricKeyword,
+            @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) int pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "20") @Min(1) @Max(100) int pageSize) {
+        String empId = currentUserApi.getCurrentEmpId();
+        log.debug("[PerfRunTaskController.metricSummary] empId={}, taskType={}, keyword={}, pageNo={}, pageSize={}",
+                empId, taskType, metricKeyword, pageNo, pageSize);
+        PageResult<MetricSummaryDTO> page = perfRunTaskService.pageMetricSummary(
+                taskType, metricKeyword, pageNo, pageSize);
+        return ResponseWrapper.page(page);
     }
 }
