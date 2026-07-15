@@ -6,6 +6,8 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.performance.controller.dto.BatchExecuteReqDTO;
+import com.bank.branch.platform.performance.controller.dto.BatchExecuteRespDTO;
 import com.bank.branch.platform.performance.controller.dto.ChangeStatusReqDTO;
 import com.bank.branch.platform.performance.controller.dto.CreateMetricReqDTO;
 import com.bank.branch.platform.performance.controller.dto.MetricCategoryDTO;
@@ -335,5 +337,22 @@ public class MetricDefController {
         // allocDate 为空时传 null，后端绑定阶段兜底为 dataDate。
         return ResponseWrapper.success(metricLifecycleFacade.executeMetric(
                 metricCode, req.getDataDate(), req.getCascade(), allocDate));
+    }
+
+    /**
+     * 指标批量执行（高危）：对所选指标按同一数据日期逐个立即执行，best-effort 聚合返回.
+     *
+     * <p>整批一条审计（reason 必填）；实际逐指标写各自 PERF_RUN_TASK 行。
+     */
+    @PostMapping("/batch-execute")
+    @Operation(summary = "指标批量执行（高危，需 reason）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
+    @AuditLog(action = "METRIC_BATCH_EXECUTE", resourceType = "PERF_RUN_TASK", reasonRequired = true)
+    public ResponseWrapper<BatchExecuteRespDTO> batchExecute(@Valid @RequestBody BatchExecuteReqDTO req) {
+        String operator = currentUserApi.getCurrentEmpId();
+        log.info("[MetricDefController.batchExecute] operator={}, metricCodes={}, dataDate={}, reason={}",
+                operator, req.getMetricCodes(), req.getDataDate(), req.getReason());
+        return ResponseWrapper.success(
+                metricLifecycleFacade.batchExecute(req.getMetricCodes(), req.getDataDate()));
     }
 }
