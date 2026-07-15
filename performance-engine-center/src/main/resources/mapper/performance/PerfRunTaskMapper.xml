@@ -158,4 +158,47 @@
           AND end_time &lt; #{cutoffTime}
     </delete>
 
+    <!--
+        任务监控：按 task_key(指标) 分组汇总。
+        - LEFT JOIN PERF_METRIC_DEF 取指标名 + 支持名称/编码关键字模糊；
+        - ${dataScopeFilter} 仅 run_task 有 started_by 列，拼在 t 上无歧义；
+        - ONLY_FULL_GROUP_BY：GROUP BY 含 t.task_key + d.metric_name。
+    -->
+    <sql id="SUMMARY_WHERE">
+        t.task_type = #{taskType}
+        AND t.task_key IS NOT NULL AND t.task_key != ''
+        <if test="keyword != null and keyword != ''">
+            AND (t.task_key LIKE CONCAT('%', #{keyword}, '%')
+                 OR d.metric_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="dataScopeFilter != null and dataScopeFilter != ''">
+            ${dataScopeFilter}
+        </if>
+    </sql>
+
+    <select id="selectMetricSummary"
+            resultType="com.bank.branch.platform.performance.controller.dto.MetricSummaryDTO">
+        SELECT t.task_key            AS metricCode,
+               d.metric_name         AS metricName,
+               MIN(t.created_time)   AS firstCreatedTime,
+               COUNT(*)              AS runCount
+        FROM PERF_RUN_TASK t
+        LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = t.task_key
+        <where>
+            <include refid="SUMMARY_WHERE"/>
+        </where>
+        GROUP BY t.task_key, d.metric_name
+        ORDER BY firstCreatedTime DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countMetricSummary" resultType="long">
+        SELECT COUNT(DISTINCT t.task_key)
+        FROM PERF_RUN_TASK t
+        LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = t.task_key
+        <where>
+            <include refid="SUMMARY_WHERE"/>
+        </where>
+    </select>
+
 </mapper>

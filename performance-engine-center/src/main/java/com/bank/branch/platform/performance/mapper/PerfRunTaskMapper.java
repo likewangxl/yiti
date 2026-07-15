@@ -1,5 +1,6 @@
 package com.bank.branch.platform.performance.mapper;
 
+import com.bank.branch.platform.performance.controller.dto.MetricSummaryDTO;
 import com.bank.branch.platform.performance.entity.PerfRunTask;
 import com.bank.branch.platform.performance.service.dto.RunTaskQuery;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -80,6 +81,30 @@ public interface PerfRunTaskMapper extends BaseMapper<PerfRunTask> {
      */
     long countByTypeAndDate(@Param("taskType") String taskType,
                             @Param("dataDate") LocalDate dataDate);
+
+    /**
+     * 按 task_key(指标) 分组汇总（任务监控列表）.
+     *
+     * <p>LEFT JOIN perf_metric_def 取指标名并支持"编码或名称"关键字模糊；
+     * {@code dataScopeFilter} 为可信数据范围片段（形如 " AND started_by = 'xxx' "），
+     * 仅由 Service 层 resolveScopeFilter 生成，禁止用户输入拼入。
+     *
+     * @param taskType        任务类型（如 METRIC_RUN）
+     * @param keyword         关键字（nullable；匹配 task_key 或 metric_name）
+     * @param dataScopeFilter 数据范围 SQL 片段（nullable）
+     * @param offset          偏移
+     * @param limit           每页
+     */
+    List<MetricSummaryDTO> selectMetricSummary(@Param("taskType") String taskType,
+                                               @Param("keyword") String keyword,
+                                               @Param("dataScopeFilter") String dataScopeFilter,
+                                               @Param("offset") int offset,
+                                               @Param("limit") int limit);
+
+    /** 与 {@link #selectMetricSummary} 同过滤条件的分组计数（DISTINCT task_key 数）. */
+    long countMetricSummary(@Param("taskType") String taskType,
+                            @Param("keyword") String keyword,
+                            @Param("dataScopeFilter") String dataScopeFilter);
 
     /**
      * 更新任务状态（V1.1 Task P2.4 起由计算引擎调用）.
