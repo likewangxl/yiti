@@ -161,6 +161,10 @@
     <!--
         任务监控：按 task_key(指标) 分组汇总。
         - LEFT JOIN PERF_METRIC_DEF 取指标名 + 支持名称/编码关键字模糊；
+        - JOIN 条件带 AND d.deleted = 0（放 ON 而非 WHERE）：与模块内其它查 PERF_METRIC_DEF 的口径一致，
+          防止已软删指标的 metric_name 泄漏到汇总列表 / 被关键字命中；放 ON 是因为 LEFT JOIN 要保留
+          "指标已删但仍有历史执行行" 的分组（此时 metricName 为 null、runCount 照常计数），
+          放 WHERE 会把整组连同 t 的行一起过滤掉，令执行次数失真。
         - ${dataScopeFilter} 仅 run_task 有 started_by 列，拼在 t 上无歧义；
         - ONLY_FULL_GROUP_BY：GROUP BY 含 t.task_key + d.metric_name。
     -->
@@ -183,7 +187,7 @@
                MIN(t.created_time)   AS firstCreatedTime,
                COUNT(*)              AS runCount
         FROM PERF_RUN_TASK t
-        LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = t.task_key
+        LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = t.task_key AND d.deleted = 0
         <where>
             <include refid="SUMMARY_WHERE"/>
         </where>
@@ -195,7 +199,7 @@
     <select id="countMetricSummary" resultType="long">
         SELECT COUNT(DISTINCT t.task_key)
         FROM PERF_RUN_TASK t
-        LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = t.task_key
+        LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = t.task_key AND d.deleted = 0
         <where>
             <include refid="SUMMARY_WHERE"/>
         </where>
