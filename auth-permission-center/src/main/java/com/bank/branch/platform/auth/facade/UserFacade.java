@@ -4,6 +4,7 @@ import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.auth.entity.ExtOrgInfo;
+import com.bank.branch.platform.auth.entity.ExtUserOrg;
 import com.bank.branch.platform.auth.entity.PtRole;
 import com.bank.branch.platform.auth.entity.PtUser;
 import com.bank.branch.platform.auth.mapper.OrgMapper;
@@ -84,12 +85,82 @@ public class UserFacade implements UserApi {
         if (empIds == null || empIds.isEmpty()) {
             return new ArrayList<>();
         }
+        // 单次批量 IN 查询取用户，不逐人调用 getUserByEmpId（避免 N+1，动态指标查询「员工维度」等
+        // 大批量场景每人 3 次查询会被放大成数百上千次）
+        List<PtUser> users = userMapper.selectByUserIds(empIds);
+        if (users == null || users.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Map<String, UserDTO> dtoByUserId = new HashMap<>();
+        for (UserDTO dto : buildUserDtos(users)) {
+            dtoByUserId.put(dto.getEmpId(), dto);
+        }
+        // 按入参 empIds 顺序输出，保持与旧的逐人实现相同的返回顺序，兼容既有调用方
         List<UserDTO> results = new ArrayList<>();
         for (String empId : empIds) {
-            UserDTO dto = getUserByEmpId(empId);
+            UserDTO dto = dtoByUserId.get(empId);
             if (dto != null) {
                 results.add(dto);
             }
+        }
+        return results;
+    }
+
+    /**
+     * 按一批 {@link PtUser} 批量装配 {@link UserDTO}（含主机构编码/名称），字段映射口径
+     * 与单用户版 {@link #getUserByEmpId(String)} 逐一一致，供 {@link #getUserByEmpIds(List)}
+     * 和 {@link #getUsersByUsernames(List)} 复用，避免各自逐人回查机构造成 N+1。
+     *
+     * @param users 已批量查得的用户实体列表（非空）
+     * @return 装配好的 UserDTO 列表，顺序与入参 users 一致
+     */
+    private List<UserDTO> buildUserDtos(List<PtUser> users) {
+        List<String> userIds = new ArrayList<>();
+        for (PtUser u : users) {
+            if (u.getUserId() != null) {
+                userIds.add(u.getUserId());
+            }
+        }
+
+        // 批量查主机构关联（每人至多一条），同一 userId 只取首条命中，等价于单用户版 LIMIT 1 语义
+        Map<String, String> orgCodeByUserId = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<ExtUserOrg> userOrgs = userOrgMapper.selectByUserIds(userIds);
+            if (userOrgs != null) {
+                for (ExtUserOrg uo : userOrgs) {
+                    orgCodeByUserId.putIfAbsent(uo.getUserId(), uo.getOrgCode());
+                }
+            }
+        }
+
+        // 去重机构编码后批量查机构名称，避免同机构重复查询
+        Set<String> orgCodes = new HashSet<>(orgCodeByUserId.values());
+        Map<String, String> orgNameByOrgCode = new HashMap<>();
+        if (!orgCodes.isEmpty()) {
+            List<ExtOrgInfo> orgInfos = orgMapper.selectByOrgCodes(orgCodes);
+            if (orgInfos != null) {
+                for (ExtOrgInfo o : orgInfos) {
+                    orgNameByOrgCode.put(o.getOrgCode(), o.getOrgName());
+                }
+            }
+        }
+
+        List<UserDTO> results = new ArrayList<>();
+        for (PtUser u : users) {
+            UserDTO dto = new UserDTO();
+            dto.setEmpId(u.getUserId());
+            dto.setUsername(u.getUsername());
+            dto.setDisplayName(u.getUserchnname());
+            dto.setUserType(u.getUserType());
+            // ISENABLED 反向语义：0=启用
+            dto.setEnabled(u.getIsEnabled() != null && u.getIsEnabled() == 0);
+
+            String orgCode = orgCodeByUserId.get(u.getUserId());
+            if (orgCode != null) {
+                dto.setMainOrgCode(orgCode);
+                dto.setMainOrgName(orgNameByOrgCode.get(orgCode));
+            }
+            results.add(dto);
         }
         return results;
     }
@@ -164,17 +235,12 @@ public class UserFacade implements UserApi {
         if (usernames == null || usernames.isEmpty()) {
             return new ArrayList<>();
         }
+        // 单次批量 IN 查询取用户，不逐人调用 getUserByEmpId（避免 N+1，理由同 getUserByEmpIds）
         List<PtUser> users = userMapper.selectByUsernames(usernames);
-        if (users == null) return new ArrayList<>();
-        List<UserDTO> results = new ArrayList<>();
-        for (PtUser user : users) {
-            UserDTO dto = getUserByEmpId(user.getUserId());
-            if (dto != null) {
-                dto.setUsername(user.getUsername());
-                results.add(dto);
-            }
+        if (users == null || users.isEmpty()) {
+            return new ArrayList<>();
         }
-        return results;
+        return buildUserDtos(users);
     }
 
     /** 单次/分片 IN 查询过滤存在的用户名，不走逐人 getUserByEmpId（避免大批量 N+1）. */

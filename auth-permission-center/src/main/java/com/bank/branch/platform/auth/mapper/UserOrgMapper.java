@@ -28,6 +28,18 @@ public interface UserOrgMapper {
     ExtUserOrg selectByUserId(String userId);
 
     /**
+     * 按用户ID列表批量查询用户机构关联记录（V1 单主机构），替代逐人 {@link #selectByUserId} 的 N+1。
+     * <p>
+     * 每个用户仅一条主机构记录，调用方按 USER_ID 取首条即可（无 LIMIT，因批量场景无法逐用户限量，
+     * 调用方汇总为 Map 时同一 userId 只保留首条命中的记录，等价于单条查询的 LIMIT 1 语义）。
+     * </p>
+     *
+     * @param userIds 用户ID列表（调用方保证非空）
+     * @return 用户机构关联实体列表（无命中返回空列表）
+     */
+    List<ExtUserOrg> selectByUserIds(@Param("userIds") List<String> userIds);
+
+    /**
      * 根据用户ID查询用户所属机构的完整信息列表（JOIN EXT_ORG_INFO）。
      * 用于构建数据权限过滤条件。
      *
