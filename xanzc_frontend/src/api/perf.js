@@ -421,6 +421,17 @@ export function getComputeBatch(id) {
 export function listRunTasks(params = {}) {
   return call('get', '/perf/run-tasks', { params }, { records: [], total: 0 }).then(unwrapPage);
 }
+// 任务监控：按指标分组汇总（列表数据源）
+// params: taskType(默认 METRIC_RUN) / metricKeyword / pageNo / pageSize
+export function listMetricSummary(params = {}) {
+  return call('get', '/perf/run-tasks/metric-summary', { params }, { records: [], total: 0 }).then(unwrapPage);
+}
+
+// 任务监控：批量执行（POST /perf/metrics/batch-execute）
+// payload: { metricCodes: string[], dataDate: 'YYYY-MM-DD', reason }
+export function batchExecuteMetrics(payload) {
+  return call('post', '/perf/metrics/batch-execute', { data: payload }, { total: 0, success: 0, failed: 0, results: [] });
+}
 // 考核计算统计：最后一次 KPI 计算任务(PERF_METRIC_CALC_TASK) 成功/失败/耗时 + 本月任务数
 export function getKpiScoreStats() {
   return call('get', '/perf/kpi-score/stats', {},
