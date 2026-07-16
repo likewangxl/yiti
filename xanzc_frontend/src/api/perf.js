@@ -238,6 +238,9 @@ export async function refreshImportStatus(batchId) {
 // 下载导入源文件（OBS）→ 触发浏览器另存。
 // fileName 由列表行（fileName 字段）传入；http 响应拦截器对二进制只返回 Blob，拿不到响应头。
 export async function downloadImportSourceFile(batchId, fileName) {
+  // 先取 OBS 预签名 URL：有则直连 OBS 下载(减轻应用带宽)；空则回退字节流(本地存储的 指标/KPI/目标 3 类)
+  const r = await call('get', `/perf/import/batches/${batchId}/source-file`, { params: { asUrl: true } }, null);
+  if (r && r.url) { window.open(r.url, '_blank'); return; }
   const blob = await call('get', `/perf/import/batches/${batchId}/source-file`,
     { responseType: 'blob' }, null);
   if (!blob) return;

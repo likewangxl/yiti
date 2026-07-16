@@ -325,6 +325,25 @@ public class PerfImportServiceImpl implements PerfImportService {
         return new ImportSourceFile(fileName, content);
     }
 
+    @Override
+    public String getSourceFileDownloadUrl(String batchId) {
+        PerfImportBatch b = getBatch(batchId);
+        // 数据范围校验：非管理员只能取自己的批次（与 getSourceFile 一致）
+        String selfEmpId = resolveSelfEmpId();
+        if (selfEmpId != null && !selfEmpId.equals(b.getCreatedBy())) {
+            throw new PerfException(PerfErrorCode.IMPORT_BATCH_NO_PERMISSION, batchId);
+        }
+        String objectKey = b.getSourceObjectKey();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw new PerfException(PerfErrorCode.IMPORT_BATCH_NO_SOURCE_FILE, batchId);
+        }
+        // 本地存储类型（指标 / KPI / 目标）无 OBS 对象 → 返回 null，调用方回退字节流下载
+        if (LOCAL_STORAGE_TYPES.contains(b.getImportType())) {
+            return null;
+        }
+        return fileApi.getDownloadUrl(objectKey);
+    }
+
     private static String generateId() {
         return UUID.randomUUID().toString().replace("-", "");
     }

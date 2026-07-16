@@ -114,6 +114,15 @@ public interface PerfImportService {
     ImportSourceFile getSourceFile(String batchId);
 
     /**
+     * 取源文件的 OBS 预签名下载 URL（走 OBS 直连，减轻应用带宽）.
+     *
+     * <p>权限校验同 {@link #getSourceFile}（非管理员只能取自己批次）。
+     * <p>本地存储类型（METRIC_DEF / KPI_SCHEME / TARGET_PLAN，无 OBS 对象）返回 {@code null}，
+     * 由调用方回退字节流下载。
+     */
+    String getSourceFileDownloadUrl(String batchId);
+
+    /**
      * 源文件下载载荷（文件名 + 字节）.
      */
     record ImportSourceFile(String fileName, byte[] content) {

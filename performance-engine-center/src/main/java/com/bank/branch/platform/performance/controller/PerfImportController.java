@@ -36,6 +36,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 绩效数据导入 REST 控制器（V1.1 Task P5.5，5 个端点）.
@@ -215,5 +216,21 @@ public class PerfImportController {
         response.setContentLengthLong(data.length);
         response.getOutputStream().write(data);
         response.flushBuffer();
+    }
+
+    /**
+     * 获取导入源文件的 OBS 预签名下载 URL（走 OBS 直连）.
+     *
+     * <p>与字节流下载共用同一路径 + 同一 PT_RESOURCE（ResourceMatcher 按路径匹配、忽略 query）；
+     * 本地存储类型返回空 URL，由前端回退到字节流下载端点。
+     */
+    @GetMapping(value = "/batches/{batchId}/source-file", params = "asUrl")
+    @Operation(summary = "获取导入源文件下载 URL（OBS 预签名；本地文件返回空 URL 由前端回退字节流）")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXPORT)
+    @AuditLog(action = "PERF_IMPORT_DOWNLOAD_SOURCE", resourceType = "PERF_IMPORT_BATCH")
+    public ResponseWrapper<Map<String, String>> sourceFileUrl(@PathVariable("batchId") @NotBlank String batchId) {
+        log.info("[PerfImportController.sourceFileUrl] batchId={}", batchId);
+        String url = perfImportService.getSourceFileDownloadUrl(batchId);
+        return ResponseWrapper.success(Map.of("url", url != null ? url : ""));
     }
 }

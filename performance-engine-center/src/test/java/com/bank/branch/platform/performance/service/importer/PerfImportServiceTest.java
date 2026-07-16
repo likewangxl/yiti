@@ -416,6 +416,56 @@ class PerfImportServiceTest {
                         .isEqualTo(PerfErrorCode.IMPORT_BATCH_NO_SOURCE_FILE));
     }
 
+    // ---------- getSourceFileDownloadUrl（OBS 预签名 URL；本地类型回退 null）----------
+
+    @Test
+    @DisplayName("getSourceFileDownloadUrl：OBS 类型 → 返回 fileApi 预签名 URL")
+    void getSourceFileDownloadUrl_obsType_returnsPresignedUrl() {
+        when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "admin", "OBJ1"));
+        when(fileApi.getDownloadUrl("OBJ1")).thenReturn("https://obs.example/presigned?sig=x");
+
+        String url = service.getSourceFileDownloadUrl("B1");
+
+        assertThat(url).isEqualTo("https://obs.example/presigned?sig=x");
+    }
+
+    @Test
+    @DisplayName("getSourceFileDownloadUrl：本地类型（METRIC_DEF）→ null，不取 OBS URL")
+    void getSourceFileDownloadUrl_localType_returnsNull() {
+        PerfImportBatch b = batchWith("BL", "admin", "20260625/localkey.xlsx");
+        b.setImportType("METRIC_DEF");
+        when(batchMapper.selectByBatchId("BL")).thenReturn(b);
+
+        String url = service.getSourceFileDownloadUrl("BL");
+
+        assertThat(url).isNull();
+        verify(fileApi, never()).getDownloadUrl(anyString());
+    }
+
+    @Test
+    @DisplayName("getSourceFileDownloadUrl：普通用户取他人批次 → IMPORT_BATCH_NO_PERMISSION")
+    void getSourceFileDownloadUrl_nonAdminOthersBatch_throwsNoPermission() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("u001");
+        when(bizScopeApi.resolveScope(anyString(), any(BizType.class))).thenReturn(DataScopeType.SELF);
+        when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "someoneElse", "OBJ1"));
+
+        assertThatThrownBy(() -> service.getSourceFileDownloadUrl("B1"))
+                .isInstanceOf(PerfException.class)
+                .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
+                        .isEqualTo(PerfErrorCode.IMPORT_BATCH_NO_PERMISSION));
+    }
+
+    @Test
+    @DisplayName("getSourceFileDownloadUrl：source_object_key 为空 → IMPORT_BATCH_NO_SOURCE_FILE")
+    void getSourceFileDownloadUrl_nullObjectKey_throwsNoSourceFile() {
+        when(batchMapper.selectByBatchId("B1")).thenReturn(batchWith("B1", "admin", null));
+
+        assertThatThrownBy(() -> service.getSourceFileDownloadUrl("B1"))
+                .isInstanceOf(PerfException.class)
+                .satisfies(ex -> assertThat(((PerfException) ex).getErrorCode())
+                        .isEqualTo(PerfErrorCode.IMPORT_BATCH_NO_SOURCE_FILE));
+    }
+
     @Test
     @DisplayName("getBatchDto：含 sourceObjectKey")
     void getBatchDto_exposesSourceObjectKey() {
