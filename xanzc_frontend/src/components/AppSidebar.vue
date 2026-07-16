@@ -55,7 +55,8 @@ const openMap = reactive({});
 // 默认展开全部分组节点（按 resourceId）；tree 变化（首次加载/改名刷新）后重建展开态
 function initOpen() {
   for (const m of menus.value) {
-    if (m.children && m.children.length) openMap[m.resourceId] = true;
+    // 仅对首次见到的分组设默认展开，避免 tree 刷新时覆盖用户已手动折叠的状态
+    if (m.children && m.children.length && !(m.resourceId in openMap)) openMap[m.resourceId] = true;
   }
 }
 onMounted(() => menuStore.load());

@@ -36,8 +36,9 @@ export const useMenuStore = defineStore('menu', () => {
       buildIndex(tree.value, null, map);
       byUrl.value = map;
       loaded.value = true;
-    } catch {
-      // 保持原值；首次失败 loaded 仍 false，后续可重试
+    } catch (e) {
+      // 加载失败保持原值（loaded 仍 false，非强制调用下次可重试）；记录以便排查
+      console.warn('[menu] 加载菜单树失败', e);
     } finally {
       loading.value = false;
     }

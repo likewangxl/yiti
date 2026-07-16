@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <PageTitle />
+      <PageTitle title="流程配置" />
       <span class="sub">节点候选人 · 节点表单 · 超时规则（SLA）</span>
     </div>
 
