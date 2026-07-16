@@ -86,7 +86,7 @@
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="dtl.show" title="通知详情" width="600px">
-      <el-descriptions :column="1" border size="default" v-if="dtl.row">
+      <el-descriptions :column="1" border size="default" v-if="dtl.row" label-width="120px" class="ntf-detail-desc">
         <el-descriptions-item label="标题">{{ dtl.row.title || '—' }}</el-descriptions-item>
         <el-descriptions-item label="内容">
           <div style="white-space:pre-wrap;line-height:1.6">{{ dtl.row.content || '无' }}</div>
@@ -96,15 +96,7 @@
             {{ dtl.row.notifyTypeLabel || typeLabel(dtl.row.notifyType) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="业务类型">{{ dtl.row.bizType || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="关联业务ID">
-          <code v-if="dtl.row.bizId" class="mono">{{ dtl.row.bizId }}</code>
-          <span v-else>—</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="跳转链接">
-          <a v-if="dtl.row.linkUrl" class="link" @click="onJump(dtl.row)">{{ dtl.row.linkUrl }}</a>
-          <span v-else>—</span>
-        </el-descriptions-item>
+        <el-descriptions-item label="当前审批环节" v-if="currentNode">{{ currentNode }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag v-if="dtl.row.isRead" size="small" effect="plain" class="tag-info">已读 · {{ fmtDateTime(dtl.row.readTime) }}</el-tag>
           <el-tag v-else size="small" effect="plain" type="danger">未读</el-tag>
@@ -120,10 +112,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { fmtDateTime } from '@/utils/datetime';
+import { parseApprovalNode } from '@/utils/notify';
 import { listNotifications, markRead, markAllRead, getUnreadNotificationCount } from '@/api/workspace';
 
 const router = useRouter();
@@ -134,6 +127,8 @@ const unreadCount = ref(0);
 const filters = reactive({ isRead: null });
 const pager = reactive({ pageNo: 1, pageSize: 20, total: 0 });
 const dtl = reactive({ show: false, row: null });
+// 详情页「当前审批环节」：从通知正文解析（解析不到则该行不展示）
+const currentNode = computed(() => parseApprovalNode(dtl.row?.content));
 
 function resetFilters() {
   filters.isRead = null;
@@ -219,6 +214,9 @@ onMounted(reload);
 </script>
 
 <style lang="scss" scoped>
+/* 通知详情标签列：拉宽 + 不换行，保证「当前审批环节」等4~6字标签一行显示 */
+.ntf-detail-desc :deep(.el-descriptions__label) { width: 120px; min-width: 120px; white-space: nowrap; }
+
 .dot {
   display: inline-block; width: 6px; height: 6px; border-radius: 50%;
   background: $danger; margin-right: 8px; vertical-align: middle;
