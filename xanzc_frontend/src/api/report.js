@@ -190,7 +190,9 @@ export function updateSavedQuery(id, payload) {
   if (Array.isArray(payload.metrics)) {
     body.metricCodes = JSON.stringify(payload.metrics.map(m => (typeof m === 'string' ? m : m?.code)).filter(Boolean));
   }
-  if (payload.version != null) body.version = payload.version;
+  // 后端契约字段是 expectedVersion(乐观锁),兼容老调用方仍传 version
+  const ev = payload.expectedVersion != null ? payload.expectedVersion : payload.version;
+  if (ev != null) body.expectedVersion = ev;
   return call('put', `/reports/saved-queries/${id}`, { data: body }, () => ({ id, ...payload }));
 }
 

@@ -20,12 +20,13 @@
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="load(row)">载入</el-button>
           <el-divider direction="vertical" />
-          <el-button link size="small" @click="rename(row)">编辑</el-button>
+          <el-button link size="small" @click="openEdit(row)">编辑</el-button>
           <el-divider direction="vertical" />
           <el-button type="danger" link size="small" @click="remove(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <SchemeEditDialog v-model:visible="editVisible" :scheme="editScheme" @saved="onEdited" />
     <template #footer>
       <el-button @click="$emit('update:visible', false)">关闭</el-button>
     </template>
@@ -35,13 +36,16 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { listSavedQueries, deleteSavedQuery, updateSavedQuery } from '@/api/report';
+import { listSavedQueries, deleteSavedQuery, getSavedQuery } from '@/api/report';
+import SchemeEditDialog from './SchemeEditDialog.vue';
 
 const props = defineProps({ visible: Boolean });
 const emit = defineEmits(['update:visible', 'load']);
 
 const schemes = ref([]);
 const loading = ref(false);
+const editVisible = ref(false);
+const editScheme = ref({ id: '', name: '', dim: 'EMP', metrics: [], subjects: [], version: 0 });
 
 const DIM_LABEL = { EMP: '员工', ORG: '机构', CUST: '客户' };
 const dimLabel = (d) => DIM_LABEL[d] || d || '-';
@@ -77,25 +81,23 @@ async function remove(row) {
   } catch (e) {}
 }
 
-async function rename(row) {
-  let val;
+// 编辑：先取详情(列表 DTO 不含 metrics/subjects/version)→ 预填并打开编辑弹框
+async function openEdit(row) {
   try {
-    const r = await ElMessageBox.prompt('修改方案名称', '编辑方案', {
-      inputValue: row.name,
-      inputPattern: /\S/,
-      inputErrorMessage: '名称不能为空'
-    });
-    val = r.value.trim();
-  } catch { return; }
-  if (!val || val === row.name) return;
-  try {
-    await updateSavedQuery(row.id, { name: val });
-    row.name = val;
-    ElMessage.success('已保存');
-    // 重新拉一次以刷新 updatedTime
-    refresh();
-  } catch (e) {
-    // http.js 拦截器已 ElMessage.error
-  }
+    const d = await getSavedQuery(row.id);
+    if (!d) return;
+    editScheme.value = {
+      id: d.id, name: d.name, dim: d.dim,
+      metrics: Array.isArray(d.metrics) ? d.metrics : [],
+      subjects: Array.isArray(d.subjects) ? d.subjects : [],
+      version: d.version
+    };
+    editVisible.value = true;
+  } catch { /* http.js 拦截器已弹错 */ }
 }
+
+// 编辑保存成功 → 刷新列表(更新时间/名称)
+function onEdited() { refresh(); }
+
+defineExpose({ openEdit, editVisible, editScheme });
 </script>
