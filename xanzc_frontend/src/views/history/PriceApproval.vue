@@ -8,7 +8,7 @@
 <template>
   <div class="price-approval">
     <div class="page-h">
-      <h1>定价审批查询</h1>
+      <PageTitle />
       <span class="desc">AMAS 定价审批数据查询，按申请时间倒序</span>
     </div>
 

@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>文件管理</h1>
+      <PageTitle />
       <div class="actions"><el-button type="primary">📤 上传文件</el-button></div>
     </div>
 

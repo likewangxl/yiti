@@ -1,12 +1,12 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>目标值管理
+      <PageTitle>
         <span class="sub" v-if="currentPlan">
           方案：<em>{{ currentPlanLabel }}</em>
         </span>
         <span class="sub" v-else>单条 / 批量 / 修正 <em>(修正会触发回算)</em></span>
-      </h1>
+      </PageTitle>
       <div class="actions">
         <el-button link type="primary" @click="backToTargets">← 返回目标管理</el-button>
         <!-- 仅方案创建人可新增目标值；非创建人时按钮置灰并通过 tooltip 解释原因 -->

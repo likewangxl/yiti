@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>通知列表</h1>
+      <PageTitle />
       <div class="actions">
         <el-button type="primary" @click="doMarkAllRead">全部标记已读</el-button>
       </div>

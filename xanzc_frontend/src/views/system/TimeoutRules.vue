@@ -2,7 +2,7 @@
   <div>
     <div class="page-h">
       <div>
-        <h1>流程超时规则配置</h1>
+        <PageTitle />
         <p class="sub">管理所有业务流程节点的红绿灯超时阈值</p>
       </div>
       <div class="actions">

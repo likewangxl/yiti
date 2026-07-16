@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>任务调度</h1>
+      <PageTitle />
       <div class="actions">
         <el-input v-model="keyword" clearable placeholder="关键字搜索" style="width:220px" @keyup.enter="onSearch" />
         <el-button type="primary" @click="onSearch">查询</el-button>

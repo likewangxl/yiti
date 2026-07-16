@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>任务监控 <span class="sub">指标重算任务 · 按指标汇总 / 执行 / 历史</span></h1>
+      <PageTitle><span class="sub">指标重算任务 · 按指标汇总 / 执行 / 历史</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button type="primary" @click="openAdd">新增</el-button>

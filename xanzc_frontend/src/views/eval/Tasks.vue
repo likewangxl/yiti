@@ -2,7 +2,7 @@
   <!-- 评价任务管理页面（管理端：统一列表 = 规则任务 + 导入批次） -->
   <div class="eval-tasks-page">
     <div class="page-h">
-      <h1>评价任务</h1>
+      <PageTitle />
       <span class="desc">发起评价活动 · 管理任务生命周期</span>
       <div class="actions">
         <el-button type="primary" @click="openWizard">新增待处理任务</el-button>

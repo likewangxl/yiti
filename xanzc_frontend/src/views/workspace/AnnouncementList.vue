@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>公告列表</h1>
+      <PageTitle />
     </div>
 
     <div class="card-section">

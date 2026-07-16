@@ -1,10 +1,9 @@
 <template>
   <div class="flow-edit-page">
     <div class="page-h">
-      <h1>
-        审批流程编辑
+      <PageTitle>
         <span class="sub">流程图式可视化编辑：拖入节点、连线表达流转、网关出边配置条件分支；保存草稿后发布生成影子流程，不影响现有线上审批</span>
-      </h1>
+      </PageTitle>
       <div class="actions">
         <el-button @click="goBack">← 返回列表</el-button>
         <el-button :disabled="readonly" :loading="saving" @click="doSave">保存草稿</el-button>

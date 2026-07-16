@@ -1,7 +1,7 @@
 <template>
   <div class="pl-page">
     <div class="page-h">
-      <h1>产品资料库 <span class="sub">中后台组织维护 · 负责人来自通讯录反向关联</span></h1>
+      <PageTitle><span class="sub">中后台组织维护 · 负责人来自通讯录反向关联</span></PageTitle>
       <div class="actions"><el-button type="primary" @click="openCreate">＋ 新增产品</el-button></div>
     </div>
 

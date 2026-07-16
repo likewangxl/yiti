@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>大屏数据源</h1>
+      <PageTitle />
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button type="primary" @click="openCreate">+ 新建数据源</el-button>

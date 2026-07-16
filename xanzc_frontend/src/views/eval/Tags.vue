@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>标签管理</h1>
+      <PageTitle />
       <span class="desc">评价标签</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>

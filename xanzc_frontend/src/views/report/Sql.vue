@@ -11,7 +11,7 @@
 <template>
   <div class="rpt-sql">
     <div class="page-h">
-      <h1>SQL 探查</h1>
+      <PageTitle />
       <span class="desc">仅 SELECT · 30s 超时 · 全程审计 · 传输加密</span>
     </div>
 

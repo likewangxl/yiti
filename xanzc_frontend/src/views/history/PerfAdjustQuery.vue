@@ -7,7 +7,7 @@
 <template>
   <div class="perf-adjust">
     <div class="page-h">
-      <h1>业绩调整查询</h1>
+      <PageTitle />
       <span class="desc">AMAS 业绩调整审批数据查询，按申请时间倒序</span>
     </div>
 

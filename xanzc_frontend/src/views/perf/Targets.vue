@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>目标管理 <span class="sub">方案级管理：新增方案 / 进入子页维护目标值</span></h1>
+      <PageTitle><span class="sub">方案级管理：新增方案 / 进入子页维护目标值</span></PageTitle>
       <div class="actions">
         <el-button @click="reload" :loading="loadingPlans || todoLoading || doneLoading">刷新</el-button>
         <el-button v-if="activeTab==='plans' && canCreatePlan" @click="downloadPlanTpl">下载模板</el-button>

@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>KPI 规则</h1>
+      <PageTitle />
       <span class="desc">方案 · 权重 · 公式预览 · 计分上下限</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>

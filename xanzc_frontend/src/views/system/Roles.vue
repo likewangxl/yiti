@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>角色管理 <span class="sub">角色 CRUD · 已绑用户查看 · 资源/数据范围请去【权限配置】</span></h1>
+      <PageTitle><span class="sub">角色 CRUD · 已绑用户查看 · 资源/数据范围请去【权限配置】</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button @click="goPermission">→ 配置资源/数据范围</el-button>

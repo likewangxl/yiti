@@ -7,7 +7,7 @@
 <template>
   <div class="amas-approvals">
     <div class="page-h">
-      <h1>业绩分配查询</h1>
+      <PageTitle />
       <span class="desc">历史业绩调整（AMAS）与业绩调整（平台）两类申请查询，按申请时间倒序</span>
     </div>
 

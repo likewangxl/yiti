@@ -16,7 +16,7 @@
 <template>
   <div class="rpt-dyn">
     <div class="page-h">
-      <h1>动态指标查询</h1>
+      <PageTitle />
       <span class="desc">维度 → 指标 → 对象 → 日期 · 支持保存方案 / 部门共享</span>
       <div class="actions">
         <el-button :icon="Folder"   @click="schemeListVisible = true">我的方案</el-button>

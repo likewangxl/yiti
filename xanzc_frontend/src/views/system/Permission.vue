@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>权限配置</h1>
+      <PageTitle />
       <span class="desc">RBAC 角色 × 资源 × 数据范围 — 与 project_ana §4.6.1 对齐</span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>

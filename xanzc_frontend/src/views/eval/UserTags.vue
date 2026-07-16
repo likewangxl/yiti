@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>人员标签</h1>
+      <PageTitle />
       <span class="desc">维护人员评价角色（每人单选一个）</span>
     </div>
 

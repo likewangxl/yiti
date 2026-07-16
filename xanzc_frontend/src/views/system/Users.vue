@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>用户管理 <span class="sub">按机构筛选 · 启停/锁解/重置密码 · 分配角色</span></h1>
+      <PageTitle><span class="sub">按机构筛选 · 启停/锁解/重置密码 · 分配角色</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button @click="exportUsers">导出</el-button>

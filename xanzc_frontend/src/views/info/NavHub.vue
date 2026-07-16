@@ -2,7 +2,7 @@
   <div class="nav-page">
     <div class="page-h">
       <div>
-        <h1>网址导航 <span class="sub">科技部可新增 / 编辑 / 删除 / 排序</span></h1>
+        <PageTitle><span class="sub">科技部可新增 / 编辑 / 删除 / 排序</span></PageTitle>
       </div>
       <div class="actions">
         <el-button :type="sortMode ? 'warning' : 'default'" @click="toggleSortMode">

@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>自由报表</h1>
+      <PageTitle />
       <div class="actions">
         <el-button v-if="isOperator" @click="downloadTemplate">下载模板</el-button>
         <el-button v-if="isOperator" type="primary" @click="importDlg.show = true">导入 Excel</el-button>

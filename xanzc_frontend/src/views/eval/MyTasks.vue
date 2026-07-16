@@ -5,7 +5,7 @@
     <!-- ===== 汇总列表视图 ===== -->
     <template v-if="!processView.active && !rewardView.active">
       <div class="page-h">
-        <h1>待处理任务</h1>
+        <PageTitle />
         <span class="desc">按部门汇总 · 逐人评价打分</span>
         <div class="actions">
           <el-button :loading="loading" @click="loadGroups">刷新</el-button>

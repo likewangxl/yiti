@@ -6,7 +6,7 @@
 <template>
   <div class="rpt-dash" v-loading="loading">
     <div class="page-h">
-      <h1>分行行长仪表盘</h1>
+      <PageTitle />
       <span class="desc">{{ data.org || '全行' }} · 数据日期 {{ data.date || '—' }}</span>
       <div class="actions">
         <el-date-picker

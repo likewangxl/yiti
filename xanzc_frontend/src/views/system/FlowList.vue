@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>审批流程 <span class="sub">查看/编辑审批流程；发布生成影子流程，切换生效另行处理，不影响现有线上审批</span></h1>
+      <PageTitle><span class="sub">查看/编辑审批流程；发布生成影子流程，切换生效另行处理，不影响现有线上审批</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button :loading="importing" @click="doImportExisting">导入现有流程</el-button>

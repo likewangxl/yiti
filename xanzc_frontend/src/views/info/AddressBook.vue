@@ -1,7 +1,7 @@
 <template>
   <div class="ab-page">
     <div class="page-h">
-      <h1>分行通讯录 <span class="sub">模糊搜索 · 60 天未更新提醒 · 勾选产品反向更新产品库</span></h1>
+      <PageTitle><span class="sub">模糊搜索 · 60 天未更新提醒 · 勾选产品反向更新产品库</span></PageTitle>
       <div class="actions">
         <el-button @click="downloadTemplate">📥 下载模板</el-button>
         <el-upload ref="importUploaderRef" :auto-upload="false" :show-file-list="false" accept=".xlsx,.xls" :on-change="onImportPick" style="display:inline-block">

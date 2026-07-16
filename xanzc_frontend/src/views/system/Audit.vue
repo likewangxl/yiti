@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>审计日志</h1>
+      <PageTitle />
       <span class="desc">高危动作 · 操作流水 · 完整可追溯</span>
       <div class="actions">
         <el-button @click="onlyHighRisk">仅看高危</el-button>

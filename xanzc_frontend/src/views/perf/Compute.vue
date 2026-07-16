@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>考核计算 <span class="sub">手工触发 / 回算 / 快照</span></h1>
+      <PageTitle><span class="sub">手工触发 / 回算 / 快照</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button type="primary" @click="openTrigger">▶ 触发计算</el-button>

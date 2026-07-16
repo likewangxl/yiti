@@ -1,9 +1,9 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>KPI 计算结果详情
+      <PageTitle>
         <span class="sub">数据日期 {{ dataDate || '-' }} · 方案 {{ schemeCode || '-' }}</span>
-      </h1>
+      </PageTitle>
       <div class="actions">
         <el-button @click="goBack">← 返回</el-button>
         <el-button @click="loadData">刷新</el-button>

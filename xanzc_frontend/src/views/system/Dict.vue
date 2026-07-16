@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>字典管理</h1>
+      <PageTitle />
       <div class="actions">
         <el-button @click="loadItems(picked)">刷新</el-button>
         <el-button type="primary" @click="openCreate">+ 新增字典项</el-button>

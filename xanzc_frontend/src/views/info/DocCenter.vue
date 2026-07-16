@@ -1,7 +1,7 @@
 <template>
   <div class="doc-page">
     <div class="page-h">
-      <h1>常用文档下载 <span class="sub">科技部维护</span></h1>
+      <PageTitle><span class="sub">科技部维护</span></PageTitle>
       <div class="actions">
         <el-button type="primary" @click="openUpload">📤 上传文档</el-button>
       </div>

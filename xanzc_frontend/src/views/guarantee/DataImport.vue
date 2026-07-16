@@ -6,7 +6,7 @@
 <template>
   <div class="data-import">
     <div class="page-h">
-      <h1>数据导入查询</h1>
+      <PageTitle />
       <span class="desc">导入批次列表，点击「查看数据」展示该批次的导入数据</span>
     </div>
 

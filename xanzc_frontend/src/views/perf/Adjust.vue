@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>业绩调整 <span class="sub">比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复</span></h1>
+      <PageTitle><span class="sub">比例之和 = 100% · 单行 ≥ 1% · 同一员工不重复</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
         <el-button v-if="activeTab==='mine'" type="primary" @click="openCreate">+ 新建调整申请</el-button>

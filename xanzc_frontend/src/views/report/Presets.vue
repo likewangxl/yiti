@@ -9,7 +9,7 @@
 <template>
   <div class="rpt-presets">
     <div class="page-h">
-      <h1>预置报表</h1>
+      <PageTitle />
       <span class="desc">点击卡片打开对应汇总报表</span>
     </div>
 

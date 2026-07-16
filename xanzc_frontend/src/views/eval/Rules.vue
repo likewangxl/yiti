@@ -2,7 +2,7 @@
   <div class="rules-page">
     <!-- 页头 -->
     <div class="page-h">
-      <h1>评价规则</h1>
+      <PageTitle />
       <span class="desc">为每类评价对象配置评价人组及权重</span>
       <div class="actions">
         <el-button type="primary" @click="openCreateDialog">新建规则</el-button>

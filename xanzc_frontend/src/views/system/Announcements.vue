@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>公告管理</h1>
+      <PageTitle />
       <div class="actions">
         <el-button v-if="userStore.isSystemAdmin" type="primary" @click="openCreate">+ 新增公告</el-button>
       </div>

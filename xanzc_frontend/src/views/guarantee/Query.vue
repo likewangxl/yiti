@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>担保查询</h1>
+      <PageTitle />
       <div class="actions">
         <el-button :loading="exporting" @click="onExport">导出</el-button>
         <el-button type="primary" @click="openCreate">新增</el-button>

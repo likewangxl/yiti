@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>审批流监控 <span class="sub">秘书岗按本机构、行长按全行查看进行中/已完成的审批流实例</span></h1>
+      <PageTitle><span class="sub">秘书岗按本机构、行长按全行查看进行中/已完成的审批流实例</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
       </div>

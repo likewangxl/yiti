@@ -6,7 +6,7 @@
 <template>
   <div class="notice-query">
     <div class="page-h">
-      <h1>公告查询</h1>
+      <PageTitle />
       <span class="desc">通知公告查询，按序号倒序</span>
     </div>
 

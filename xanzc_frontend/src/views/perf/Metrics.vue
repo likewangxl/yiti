@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>指标库</h1>
+      <PageTitle />
       <span class="desc"></span>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>

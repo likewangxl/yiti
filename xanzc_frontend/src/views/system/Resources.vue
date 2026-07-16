@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>菜单管理 <span class="sub">PT_RESOURCE.IS_MENU=1 的菜单节点；接口资源在「资源管理」单独维护</span></h1>
+      <PageTitle><span class="sub">PT_RESOURCE.IS_MENU=1 的菜单节点；接口资源在「资源管理」单独维护</span></PageTitle>
       <div class="actions">
         <el-input
           v-model="keyword"

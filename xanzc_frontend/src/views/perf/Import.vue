@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-h">
-      <h1>数据导入 <span class="sub">指标结果 / KPI 结果</span></h1>
+      <PageTitle><span class="sub">指标结果 / KPI 结果</span></PageTitle>
       <div class="actions">
         <el-button @click="reload">刷新</el-button>
       </div>
