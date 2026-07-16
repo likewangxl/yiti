@@ -178,10 +178,28 @@ public class UserService {
         int offset = (pageNo - 1) * pageSize;
         java.util.List<PtUser> records = userMapper.selectByQuery(q, offset, pageSize);
         long total = userMapper.countByQuery(q);
+        // 批量补「部门」列（EXT_USER_ORG ⋈ EXT_ORG_INFO 取 ORG_NAME），一次 IN 查询避免逐行 N+1
+        java.util.Map<String, String> deptMap = loadDeptNameMap(records);
         java.util.List<com.bank.branch.platform.auth.api.dto.UserListItemRespDTO> items =
                 new java.util.ArrayList<>(records.size());
-        for (PtUser u : records) items.add(toListItemDto(u));
+        for (PtUser u : records) {
+            com.bank.branch.platform.auth.api.dto.UserListItemRespDTO dto = toListItemDto(u);
+            dto.setDeptName(deptMap.get(u.getUserId()));
+            items.add(dto);
+        }
         return com.bank.branch.platform.common.web.PageResult.of(pageNo, pageSize, total, items);
+    }
+
+    /** 批量查询用户部门名映射（userId → 聚合 ORG_NAME）；空列表不发 SQL */
+    private java.util.Map<String, String> loadDeptNameMap(java.util.List<PtUser> users) {
+        if (users == null || users.isEmpty()) return java.util.Map.of();
+        java.util.List<String> ids = new java.util.ArrayList<>(users.size());
+        for (PtUser u : users) ids.add(u.getUserId());
+        java.util.Map<String, String> m = new java.util.HashMap<>();
+        for (com.bank.branch.platform.auth.api.dto.UserDeptNameDTO r : userOrgMapper.selectDeptNamesByUserIds(ids)) {
+            if (r.getUserId() != null) m.put(r.getUserId(), r.getDeptName());
+        }
+        return m;
     }
 
     private com.bank.branch.platform.auth.api.dto.UserListItemRespDTO toListItemDto(PtUser u) {

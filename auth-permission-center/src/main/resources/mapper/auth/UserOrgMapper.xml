@@ -26,6 +26,21 @@
     </select>
 
     <!--
+        按用户ID批量查部门名：EXT_USER_ORG JOIN EXT_ORG_INFO 取 ORG_NAME，按 USER_ID 聚合
+        （用户挂多机构时 GROUP_CONCAT 以「、」连接，V1 单主机构退化为单名）。
+        不过滤 ORGAN_STATE：有用户挂靠的机构后端禁止禁用，此处宽松展示避免脏数据时列空白。
+    -->
+    <select id="selectDeptNamesByUserIds" resultType="com.bank.branch.platform.auth.api.dto.UserDeptNameDTO">
+        SELECT uo.USER_ID AS userId,
+               GROUP_CONCAT(oi.ORG_NAME ORDER BY oi.ORG_CODE SEPARATOR '、') AS deptName
+        FROM EXT_USER_ORG uo
+        JOIN EXT_ORG_INFO oi ON oi.ORG_CODE = uo.ORG_CODE
+        WHERE uo.USER_ID IN
+        <foreach collection="userIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        GROUP BY uo.USER_ID
+    </select>
+
+    <!--
         根据用户ID查询用户所属机构的完整信息，通过 JOIN EXT_ORG_INFO 获取机构详情。
         P_ID 不含下划线，使用别名 p_id 确保 underscore-to-camel 能正确映射到 pId 字段。
         只返回 ORGAN_STATE = 0（启用）的机构，避免将已注销机构加入权限计算。

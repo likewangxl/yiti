@@ -199,6 +199,35 @@ class UserServiceTest {
     }
 
     @Test
+    void pageUsers_shouldFillDeptNameFromUserOrgJoin_andLeaveNullWhenNoMapping() {
+        com.bank.branch.platform.auth.api.dto.UserQueryReqDTO q =
+                new com.bank.branch.platform.auth.api.dto.UserQueryReqDTO();
+        q.setPageNo(1);
+        q.setPageSize(20);
+
+        PtUser u1 = new PtUser();
+        u1.setUserId("E001");
+        PtUser u2 = new PtUser();
+        u2.setUserId("E002");
+        when(userMapper.selectByQuery(eq(q), eq(0), eq(20))).thenReturn(java.util.List.of(u1, u2));
+        when(userMapper.countByQuery(eq(q))).thenReturn(2L);
+
+        // EXT_USER_ORG ⋈ EXT_ORG_INFO 批量查询：仅 E001 有机构归属
+        com.bank.branch.platform.auth.api.dto.UserDeptNameDTO row =
+                new com.bank.branch.platform.auth.api.dto.UserDeptNameDTO();
+        row.setUserId("E001");
+        row.setDeptName("公司业务部(绿色金融部)");
+        when(userOrgMapper.selectDeptNamesByUserIds(java.util.List.of("E001", "E002")))
+                .thenReturn(java.util.List.of(row));
+
+        com.bank.branch.platform.common.web.PageResult<com.bank.branch.platform.auth.api.dto.UserListItemRespDTO> page =
+                userService.pageUsers(q);
+
+        assertThat(page.getRecords().get(0).getDeptName()).isEqualTo("公司业务部(绿色金融部)");
+        assertThat(page.getRecords().get(1).getDeptName()).isNull();
+    }
+
+    @Test
     void update_shouldSetUpdateFieldsAndCallMapper() {
         com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO req =
                 new com.bank.branch.platform.auth.api.dto.UserUpdateReqDTO();

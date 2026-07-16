@@ -366,6 +366,8 @@ public class OrgService {
      */
     private List<OrgUserDTO> buildOrgUserDtoList(List<PtUser> users) {
         Map<String, List<RoleSimpleDTO>> rolesMap = loadRolesMap(users);
+        // 批量补「部门」列（EXT_USER_ORG ⋈ EXT_ORG_INFO 取 ORG_NAME），一次 IN 查询避免逐行 N+1
+        Map<String, String> deptMap = loadDeptNameMap(users);
         return users.stream().map(u -> {
             OrgUserDTO dto = new OrgUserDTO();
             dto.setEmpId(u.getUserId());
@@ -373,12 +375,31 @@ public class OrgService {
             dto.setDisplayName(u.getUserchnname());
             dto.setEmail(u.getEmail());
             dto.setRemark(u.getRemark());
+            dto.setDeptName(deptMap.get(u.getUserId()));
             dto.setIsEnabled(u.getIsEnabled());
             dto.setIsLocked(u.getIsLocked());
             dto.setCreateTime(u.getCreateTime());
             dto.setRoles(rolesMap.getOrDefault(u.getUserId(), List.of()));
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * 批量查询用户部门名映射（userId → 聚合 ORG_NAME，EXT_USER_ORG JOIN EXT_ORG_INFO）；空列表不发 SQL。
+     *
+     * @param users 用户实体列表
+     * @return userId → 部门名称的映射（无机构归属的用户不含在内）
+     */
+    private Map<String, String> loadDeptNameMap(List<PtUser> users) {
+        if (users == null || users.isEmpty()) {
+            return Map.of();
+        }
+        List<String> userIds = users.stream().map(PtUser::getUserId).collect(Collectors.toList());
+        Map<String, String> m = new java.util.HashMap<>();
+        for (com.bank.branch.platform.auth.api.dto.UserDeptNameDTO r : userOrgMapper.selectDeptNamesByUserIds(userIds)) {
+            if (r.getUserId() != null) m.put(r.getUserId(), r.getDeptName());
+        }
+        return m;
     }
 
     /**

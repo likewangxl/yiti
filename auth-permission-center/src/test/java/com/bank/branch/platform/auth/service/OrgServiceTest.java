@@ -25,6 +25,8 @@ class OrgServiceTest {
 
     @Mock OrgMapper orgMapper;
     @Mock UserOrgMapper userOrgMapper;
+    @Mock com.bank.branch.platform.auth.mapper.UserMapper userMapper;
+    @Mock com.bank.branch.platform.auth.mapper.UserRoleMapper userRoleMapper;
     @InjectMocks OrgService orgService;
 
     private ExtOrgInfo branch;
@@ -53,6 +55,28 @@ class OrgServiceTest {
         sub2.setOrgLevel(3);
         sub2.setPId("ORG001");
         sub2.setOrganState(0);
+    }
+
+    @Test
+    void getOrgUsers_shouldFillDeptNameFromUserOrgJoin() {
+        com.bank.branch.platform.auth.entity.PtUser u = new com.bank.branch.platform.auth.entity.PtUser();
+        u.setUserId("E001");
+        u.setUsername("10086");
+        when(userMapper.selectOrgUsersByPage(eq("ORG001"), isNull(), isNull(), isNull(), eq(0), eq(20)))
+                .thenReturn(List.of(u));
+        when(userMapper.countOrgUsers(eq("ORG001"), isNull(), isNull(), isNull())).thenReturn(1L);
+        when(userRoleMapper.selectRolesByUserIds(any())).thenReturn(List.of());
+
+        com.bank.branch.platform.auth.api.dto.UserDeptNameDTO row =
+                new com.bank.branch.platform.auth.api.dto.UserDeptNameDTO();
+        row.setUserId("E001");
+        row.setDeptName("信用卡部");
+        when(userOrgMapper.selectDeptNamesByUserIds(List.of("E001"))).thenReturn(List.of(row));
+
+        com.bank.branch.platform.common.web.PageResult<com.bank.branch.platform.auth.api.dto.OrgUserDTO> page =
+                orgService.getOrgUsers("ORG001", null, null, null, 1, 20);
+
+        assertThat(page.getRecords().get(0).getDeptName()).isEqualTo("信用卡部");
     }
 
     @Test

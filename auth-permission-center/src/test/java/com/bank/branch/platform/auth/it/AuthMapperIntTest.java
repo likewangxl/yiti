@@ -192,6 +192,20 @@ class AuthMapperIntTest {
         assertThat(userOrg.getOrgCode()).isEqualTo("BJ_CY");
     }
 
+    @Test
+    @DisplayName("用户机构关联: 批量查部门名（EXT_USER_ORG JOIN EXT_ORG_INFO 取 ORG_NAME）")
+    void selectDeptNamesByUserIds() {
+        List<com.bank.branch.platform.auth.api.dto.UserDeptNameDTO> rows =
+                userOrgMapper.selectDeptNamesByUserIds(List.of("user001", "user002", "no_such_user"));
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(
+                        com.bank.branch.platform.auth.api.dto.UserDeptNameDTO::getUserId,
+                        com.bank.branch.platform.auth.api.dto.UserDeptNameDTO::getDeptName)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("user001", "北京分行朝阳支行"),
+                        org.assertj.core.groups.Tuple.tuple("user002", "上海分行浦东支行"));
+    }
+
     // ===== 用户通讯录三表联查（PT_USER + EXT_USER_ORG + EXT_ORG_INFO） =====
 
     @Test

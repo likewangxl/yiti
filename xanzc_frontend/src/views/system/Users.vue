@@ -113,6 +113,8 @@
           </el-table-column>
           <el-table-column prop="createTime" label="创建时间" width="160" :formatter="fmtDateTime" />
           <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
+          <!-- 部门：后端 EXT_USER_ORG ⋈ EXT_ORG_INFO 联查返回的 ORG_NAME（多机构以「、」连接） -->
+          <el-table-column prop="deptName" label="部门" width="150" show-overflow-tooltip />
           <el-table-column prop="remark" label="备注" width="160" show-overflow-tooltip />
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{row}">
@@ -453,6 +455,7 @@ async function reload() {
       isLocked: u.isLocked ?? null,
       createTime: u.createTime ?? null,
       remark: u.remark ?? '',
+      deptName: u.deptName ?? '',
     }));
     // 后端 PageResult 总数（拦截器抽走后只剩 records，需要单独 total 时改用原 wrapper）
     pager.total = r?.total ?? rows.value.length;

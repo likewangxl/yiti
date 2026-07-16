@@ -30,6 +30,9 @@ public class OrgUserDTO {
     /** 备注 */
     private String remark;
 
+    /** 部门名称（EXT_USER_ORG ⋈ EXT_ORG_INFO 的 ORG_NAME，多机构以「、」连接；无归属为 null） */
+    private String deptName;
+
     /** 启用状态：0-启用，1-停用 */
     private Integer isEnabled;
 

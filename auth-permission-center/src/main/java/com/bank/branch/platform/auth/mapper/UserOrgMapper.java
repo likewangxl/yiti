@@ -40,6 +40,19 @@ public interface UserOrgMapper {
     List<ExtUserOrg> selectByUserIds(@Param("userIds") List<String> userIds);
 
     /**
+     * 按用户ID列表批量查询用户所属部门名称（EXT_USER_ORG JOIN EXT_ORG_INFO 取 ORG_NAME）。
+     * <p>
+     * 供用户列表页一次 IN 查询填充「部门」列，避免逐行 N+1；
+     * 用户挂多机构时在 SQL 端 GROUP_CONCAT 聚合为「名称1、名称2」。
+     * </p>
+     *
+     * @param userIds 用户ID列表（调用方保证非空）
+     * @return userId → 聚合部门名称 行列表（无机构归属的用户不出现在结果中）
+     */
+    List<com.bank.branch.platform.auth.api.dto.UserDeptNameDTO> selectDeptNamesByUserIds(
+            @Param("userIds") List<String> userIds);
+
+    /**
      * 根据用户ID查询用户所属机构的完整信息列表（JOIN EXT_ORG_INFO）。
      * 用于构建数据权限过滤条件。
      *
