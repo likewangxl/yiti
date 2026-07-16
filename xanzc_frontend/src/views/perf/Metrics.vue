@@ -724,7 +724,15 @@ const dlg = reactive({
     _category: '规模类'
   }
 });
+// openEdit/openCreate 程序化填充表单期间置真：此时 metricLevel 由被编辑指标的数据决定，
+// 不是用户在表单里主动切换层级。若不区分，Object.assign 把层级从旧值改到新值会异步触发下面
+// 的 watch，把 openEdit 刚载入的 exprText 清成空串——首次编辑二级(Groovy)指标时表达式因此
+// 渲染不出来，需再点一次（此时层级未变、watch 不触发）才显示。用该标志抑制载入期间的重置。
+let loadingMetricIntoForm = false;
 watch(() => dlg.form.metricLevel, (lvl) => {
+  // 载入指标途中的层级变化不算用户切换，跳过：既不改 calcLogicType（openEdit 已按数据设好），
+  // 也不清空 exprText（否则清掉刚载入的表达式）
+  if (loadingMetricIntoForm) return;
   if (lvl === 1) dlg.form.calcLogicType = 'SQL';
   else if (lvl >= 2) dlg.form.calcLogicType = 'EXPR';
   dlg.form.exprText = '';
@@ -1003,6 +1011,7 @@ function defaultForm() {
   };
 }
 function openCreate() {
+  loadingMetricIntoForm = true;   // 程序化重置表单期间，抑制 metricLevel watch 的联动清空
   dlg.editing = null;
   Object.assign(dlg.form, defaultForm());
   dlg.slots = [
@@ -1015,9 +1024,12 @@ function openCreate() {
   dlg.show = true;
   // 指标列表若未加载成功（首屏失败/仍在途），开窗时补一次拉取，避免弹框永久禁用保存
   if (!metricsLoaded.value && !metricsLoading.value) reload();
-  nextTick(renderExprEditor);
+  // 渲染后关闭载入守卫：nextTick 回调在 metricLevel watch(pre-flush) 之后执行，
+  // 确保守卫在整个 watch 触发期间保持开启
+  nextTick(() => { renderExprEditor(); loadingMetricIntoForm = false; });
 }
 function openEdit(row) {
+  loadingMetricIntoForm = true;   // 载入被编辑指标期间，抑制 metricLevel watch 清空 exprText
   dlg.editing = row.metricCode;
   Object.assign(dlg.form, {
     metricCode: row.metricCode, metricName: row.metricName,
@@ -1036,8 +1048,8 @@ function openEdit(row) {
   dlg.show = true;
   // 指标列表若未加载成功，开窗时补一次拉取（编辑场景还需靠它把已存 exprText 还原成指标标签）
   if (!metricsLoaded.value && !metricsLoading.value) reload();
-  // 弹框渲染后，把已存的 exprText 还原成标签 + 文本
-  nextTick(renderExprEditor);
+  // 弹框渲染后，把已存的 exprText 还原成标签 + 文本；随后关闭载入守卫（见 openCreate 注释）
+  nextTick(() => { renderExprEditor(); loadingMetricIntoForm = false; });
 }
 // el-dialog 首次打开时其内容（含 contenteditable 表达式编辑器）才异步挂载完成；
 // openEdit 里的单次 nextTick 此刻 exprEditorRef 仍为 null → renderExprEditor 空跑，
