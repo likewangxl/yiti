@@ -23,7 +23,7 @@ class AllocAdjustNodeProgressTest {
     @Test
     void corp_bizDeptReview_nextIsOriginalOwner() {
         assertThat(AllocAdjustNodeProgress.nextNodeName("CORP", "biz_dept_review"))
-                .isEqualTo("原业绩所属人审批");
+                .isEqualTo("原业绩所属机构负责人审批");
     }
 
     @Test

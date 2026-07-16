@@ -70,6 +70,11 @@ public class AllocAdjustService {
     /** 【已停用·保留回退】对公静态 BPMN 流程定义 key. */
     public static final String PROCESS_KEY_CORP = "perf_alloc_adjust_corp_v1";
 
+    /** 机构负责人角色码（PT_ROLE.ROLE_CODE），原业绩所属机构负责人会签取该角色持有者 */
+    private static final String ROLE_CODE_BRANCH_HEAD = "BRANCH_HEAD";
+    /** 「所属机构」的行政级别：2 级（分行/总行部门，与公司部/零售部同级） */
+    private static final int ORG_LEADER_ORG_LEVEL = 2;
+
     /** 【已停用·保留回退】零售静态 BPMN 流程定义 key. */
     public static final String PROCESS_KEY_RETAIL = "perf_alloc_adjust_retail_v1";
 
@@ -451,6 +456,9 @@ public class AllocAdjustService {
         vars.put("originalOwnerEmpId", originalOwnerEmpId);
         // 原业绩分配会签名单（corp_v1 并行多实例 collection），前面已校验非空。
         vars.put("originalOwnerEmpIds", originalOwnerEmpIds);
+        // 原业绩所属机构负责人会签名单：original_owner_approve 节点候选已切换为该变量
+        // （每个原分配人主机构上溯至 2 级机构后取 BRANCH_HEAD 持有者并集，缺失则 fail-fast 阻断发起）
+        vars.put("originalOwnerOrgLeaderEmpIds", resolveOriginalOwnerOrgLeaderEmpIds(originalOwnerEmpIds));
         // 设计器流程网关分流：种入发起机构级别等启动变量（corpRouteTo/finRouteTo 由审批 formData 提供，不在此种）
         buildStartVariables(cmd.getOwnerOrgId(), vars);
         // 前置校验：业绩分配调整仅限 2级/3级机构员工发起。
@@ -1212,6 +1220,55 @@ public class AllocAdjustService {
     /** 仅供 buildStartVariables 单测：除 orgApi 外其余依赖置 null。 */
     static AllocAdjustService forStartVarsTest(OrgApi orgApi) {
         return new AllocAdjustService(null, null, null, null, null, null, orgApi, null, null);
+    }
+
+    /** 仅供 原业绩所属机构负责人解析/起流程变量装配 单测：其余依赖置 null。 */
+    static AllocAdjustService forOrgLeaderTest(WorkflowApi workflowApi,
+            CustAllocRelationMapper allocRelationMapper, UserApi userApi, OrgApi orgApi) {
+        return new AllocAdjustService(null, null, allocRelationMapper, workflowApi, null, userApi, orgApi, null, null);
+    }
+
+    /**
+     * 解析「原业绩所属机构负责人」会签名单（original_owner_approve 节点候选）。
+     * <p>每个原业绩分配人主机构沿 P_ID 上溯至 2 级机构（与公司部/零售部同级；主机构本身
+     * 2 级则就地），机构去重后取各机构 BRANCH_HEAD（机构负责人）角色持有者并集。
+     * 任一环节缺失即抛 {@link PerfException} fail-fast，避免流程行至该节点无人可批卡死。</p>
+     */
+    private List<String> resolveOriginalOwnerOrgLeaderEmpIds(List<String> originalOwnerEmpIds) {
+        // 1) 每个原分配人主机构上溯至 2 级机构，LinkedHashSet 去重保序（同分行多人只留一个机构）
+        java.util.LinkedHashSet<String> level2OrgCodes = new java.util.LinkedHashSet<>();
+        for (String empId : originalOwnerEmpIds) {
+            OrgDTO org = orgApi.getUserMainOrg(empId);
+            if (org == null) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "原业绩分配人[" + empId + "]无机构归属，无法确定所属机构负责人");
+            }
+            // 沿 P_ID 上溯；hops 上限防脏数据成环
+            int hops = 0;
+            while (org != null && (org.getOrgLevel() == null || org.getOrgLevel() > ORG_LEADER_ORG_LEVEL)) {
+                if (++hops > 10 || isBlank(org.getParentOrgCode())) {
+                    org = null;
+                    break;
+                }
+                org = orgApi.getOrg(org.getParentOrgCode());
+            }
+            if (org == null || org.getOrgLevel() == null || org.getOrgLevel() != ORG_LEADER_ORG_LEVEL) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "原业绩分配人[" + empId + "]无法定位到2级所属机构，无法确定机构负责人");
+            }
+            level2OrgCodes.add(org.getOrgCode());
+        }
+        // 2) 各 2 级机构 BRANCH_HEAD 持有者并集（跨分行=多机构负责人会签）
+        java.util.LinkedHashSet<String> leaderEmpIds = new java.util.LinkedHashSet<>();
+        for (String orgCode : level2OrgCodes) {
+            List<String> holders = userApi.getEmpIdsByRoleCodeAndOrg(ROLE_CODE_BRANCH_HEAD, orgCode);
+            if (holders == null || holders.isEmpty()) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                        "原业绩所属机构[" + orgCode + "]未配置机构负责人(BRANCH_HEAD)，无法发起审批");
+            }
+            leaderEmpIds.addAll(holders);
+        }
+        return new ArrayList<>(leaderEmpIds);
     }
 
     /**

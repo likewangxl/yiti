@@ -125,7 +125,13 @@ class AllocAdjustServiceTest {
         // 发起机构级别（设计器网关分流依据 + submit 前置校验「仅限 2/3 级机构发起」）：种 2 级
         OrgDTO org = new OrgDTO();
         org.setOrgLevel(2);
+        org.setOrgCode("ORG_L2");
         when(orgApi.getOrg(anyString())).thenReturn(org);
+        // 原业绩所属机构负责人解析（startApprovalWorkflow 内 fail-fast 前置校验）：
+        // 原分配人主机构=2级（就地），该机构 BRANCH_HEAD 持有者非空
+        when(orgApi.getUserMainOrg(anyString())).thenReturn(org);
+        when(userApi.getEmpIdsByRoleCodeAndOrg(anyString(), anyString()))
+                .thenReturn(java.util.List.of("ORG_LEADER_1"));
         // 审批流已改走设计器动态流程：submit 经 resolveDesignerProcDefKey(flowKey) 取已部署 procDefKey。
         // 单测把「对公/零售设计器 flowKey」解析回原静态流程 KEY，路由断言语义保持不变。
         when(workflowApi.resolveDesignerProcDefKey("alloc_corp_designer"))

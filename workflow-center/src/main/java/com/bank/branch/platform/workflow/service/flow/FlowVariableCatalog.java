@@ -58,8 +58,10 @@ public class FlowVariableCatalog {
      */
     private static final Map<String, List<FlowVariableDTO>> APPROVER_VAR_CATALOG = Map.of(
             // ALLOC_ADJUST：AllocAdjustService.submit 写入 originalOwnerEmpIds（原业绩分配名单）
+            // 与 originalOwnerOrgLeaderEmpIds（原业绩所属 2 级机构 BRANCH_HEAD 负责人名单）
             "ALLOC_ADJUST", List.of(
-                    new FlowVariableDTO("originalOwnerEmpIds", "原业绩所属人", "list"))
+                    new FlowVariableDTO("originalOwnerEmpIds", "原业绩所属人", "list"),
+                    new FlowVariableDTO("originalOwnerOrgLeaderEmpIds", "原业绩所属机构负责人", "list"))
             // TARGET_ADJUST 无 VAR 审批人变量
     );
 

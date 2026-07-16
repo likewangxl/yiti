@@ -67,6 +67,9 @@ class AllocAdjustRetailRoutingTest {
     private com.bank.branch.platform.performance.mapper.CustAllocRelationMapper allocRelationMapper;
 
     @Mock
+    private com.bank.branch.platform.auth.api.UserApi userApi;
+
+    @Mock
     private AllocAdjustPreviewService allocAdjustPreviewService;
 
     @InjectMocks
@@ -97,7 +100,13 @@ class AllocAdjustRetailRoutingTest {
         // 发起机构级别（设计器网关分流依据 + submit 前置校验「仅限 2/3 级机构发起」）：种 2 级
         OrgDTO org = new OrgDTO();
         org.setOrgLevel(2);
+        org.setOrgCode("ORG_L2");
         when(orgApi.getOrg(anyString())).thenReturn(org);
+        // 原业绩所属机构负责人解析（startApprovalWorkflow 内 fail-fast 前置校验）：
+        // 原分配人主机构=2级（就地），该机构 BRANCH_HEAD 持有者非空
+        when(orgApi.getUserMainOrg(anyString())).thenReturn(org);
+        when(userApi.getEmpIdsByRoleCodeAndOrg(anyString(), anyString()))
+                .thenReturn(java.util.List.of("ORG_LEADER_1"));
         when(workflowApi.startProcess(any(StartProcessCmd.class)))
                 .thenReturn(new WorkflowLaunchResp("PI_RET_AUTO", null, null));
         // 审批流已改走设计器动态流程：submit 经 resolveDesignerProcDefKey(flowKey) 取已部署 procDefKey。

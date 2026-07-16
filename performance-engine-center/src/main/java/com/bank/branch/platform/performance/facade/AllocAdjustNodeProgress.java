@@ -22,25 +22,25 @@ final class AllocAdjustNodeProgress {
 
     /**
      * 公司链路（custType=CORP，corpRouteTo=OWNER）：
-     * 机构负责人 → 公司部经办 → 原业绩所属人会签 → 公司部负责人 → 资财部经办 → 资财部负责人 → end。
+     * 机构负责人 → 公司部经办 → 原业绩所属机构负责人会签 → 公司部负责人 → 资财部经办 → 资财部负责人 → end。
      */
     private static final List<String[]> CORP_SEQ = List.of(
             new String[]{"branch_approve", "机构负责人审批"},
             new String[]{"biz_dept_review", "公司部经办审批"},
-            new String[]{"original_owner_approve", "原业绩所属人审批"},
+            new String[]{"original_owner_approve", "原业绩所属机构负责人审批"},
             new String[]{"biz_dept_leader_approve", "公司部负责人审批"},
             new String[]{"finance_review", "资财部经办审批"},
             new String[]{"finance_leader_approve", "资财部负责人审批"});
 
     /**
      * 零售链路（custType=RETAIL，corpRouteTo=OWNER）：
-     * 机构负责人 → 零售部经办 → 原业绩所属人会签 → 资财部经办 → 资财部负责人 → end。
+     * 机构负责人 → 零售部经办 → 原业绩所属机构负责人会签 → 资财部经办 → 资财部负责人 → end。
      * 注意：零售 OWNER 路径会签后<b>直接汇合</b>，不过「零售部负责人审批」。
      */
     private static final List<String[]> RETAIL_SEQ = List.of(
             new String[]{"branch_approve", "机构负责人审批"},
             new String[]{"biz_dept_review", "零售部经办审批"},
-            new String[]{"original_owner_approve", "原业绩所属人审批"},
+            new String[]{"original_owner_approve", "原业绩所属机构负责人审批"},
             new String[]{"finance_review", "资财部经办审批"},
             new String[]{"finance_leader_approve", "资财部负责人审批"});
 
