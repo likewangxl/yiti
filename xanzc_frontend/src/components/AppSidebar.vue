@@ -41,35 +41,27 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { reactive, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { getMyMenus } from '@/api/auth';
+import { useMenuStore } from '@/stores/menu';
 
 const route = useRoute();
-// 直接从 my-menus 渲染，不再用 router.options.routes 作为基础。
-// 这样在「菜单管理」新建一条菜单 + 给角色绑定后，刷新页面 sidebar 立即出现。
-const menus = ref([]);
-const loading = ref(false);
+const menuStore = useMenuStore();
+// 直接消费共享 store 的菜单树；与面包屑/PageTitle 同源，改名 force 刷新后一并更新
+const menus = computed(() => menuStore.tree);
+const loading = computed(() => menuStore.loading);
 const openMap = reactive({});
 
-async function load() {
-  loading.value = true;
-  try {
-    const tree = await getMyMenus();
-    menus.value = Array.isArray(tree) ? tree : [];
-    // 默认所有分组节点展开（按 resourceId）
-    for (const m of menus.value) {
-      if (m.children && m.children.length) openMap[m.resourceId] = true;
-    }
-  } catch {
-    menus.value = [];
-  } finally {
-    loading.value = false;
+// 默认展开全部分组节点（按 resourceId）；tree 变化（首次加载/改名刷新）后重建展开态
+function initOpen() {
+  for (const m of menus.value) {
+    if (m.children && m.children.length) openMap[m.resourceId] = true;
   }
 }
-function toggle(id) { openMap[id] = !openMap[id]; }
+onMounted(() => menuStore.load());
+watch(() => menuStore.tree, initOpen, { immediate: true });
 
-onMounted(load);
+function toggle(id) { openMap[id] = !openMap[id]; }
 </script>
 
 <style lang="scss" scoped>
