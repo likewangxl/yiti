@@ -29,4 +29,12 @@ describe('AppBreadcrumb.vue', () => {
     expect(text).toContain('自由报表');
     expect(text).toContain('报表分析');
   });
+
+  it('命中菜单但 group 为 null 时只显示标题、不回退 meta.group', () => {
+    resolveImpl = () => ({ title: '数据公式', group: null });
+    const w = mount(AppBreadcrumb);
+    const text = w.text();
+    expect(text).toContain('数据公式');
+    expect(text).not.toContain('报表分析');
+  });
 });
