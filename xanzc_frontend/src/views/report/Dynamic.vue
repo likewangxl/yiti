@@ -48,7 +48,7 @@
         <div class="col grow">
           <div class="lab">③ 对象 (已选 {{ subjects.length }}，不选=查全部可见对象)</div>
           <div class="tags" :class="{ click: !selfOnlyPicker }"
-               @click="!selfOnlyPicker && (subjectDlg.show = true)">
+               @click="!selfOnlyPicker && (subjectDlgVisible = true)">
             <el-tag v-for="s in subjects" :key="s.id" closable effect="plain" @close.stop="subjects = subjects.filter(x => x !== s)">
               {{ subjectLabel(s) }}
             </el-tag>
@@ -109,75 +109,8 @@
       <v-chart v-else class="chart" :option="chartOption" autoresize />
     </div>
 
-    <!-- 对象选择弹框：机构树 + 员工搜索 -->
-    <el-dialog v-model="subjectDlg.show" :title="dim === 'EMP' ? '选择员工' : dim === 'CUST' ? '选择客户' : '选择机构'" width="720px" :close-on-click-modal="false">
-      <div class="subject-picker">
-        <!-- 客户维度不用机构树，只用右侧搜索框 -->
-        <div class="picker-left" v-if="dim !== 'CUST'">
-          <div class="picker-title">机构树（勾选{{ dim === 'EMP' ? '机构可选该机构下全部员工' : '机构' }}）</div>
-          <!-- 机构/员工维度：独立勾选，可选是否把勾选机构连同其下级一起纳入 -->
-          <el-checkbox v-if="dim !== 'CUST'" v-model="subjectDlg.includeSubOrg" size="small" style="margin-bottom:8px"
-                       @change="onIncludeSubOrgChange">包含下级机构</el-checkbox>
-          <el-input v-model="subjectDlg.treeKw" placeholder="搜索机构名称" size="small" clearable style="margin-bottom:8px" />
-          <!-- 机构/员工维度均 check-strictly 父子独立：勾哪个算哪个，不级联误勾上级容器机构；
-               是否带下级由「包含下级机构」开关控制 -->
-          <el-tree
-            ref="subjectTreeRef"
-            :key="subjectDlg.openSeq"
-            :data="subjectDlg.orgTree"
-            show-checkbox
-            :check-strictly="dim !== 'CUST'"
-            node-key="code"
-            default-expand-all
-            :filter-node-method="filterOrgNode"
-            :props="{ label: 'name', children: 'children' }"
-            @check-change="onOrgCheckChange"
-            style="max-height:360px;overflow:auto"
-          />
-        </div>
-        <div class="picker-right">
-          <template v-if="dim === 'EMP'">
-            <div class="picker-title">精确搜索员工</div>
-            <el-input v-model="subjectDlg.empKw" placeholder="输入姓名或工号搜索" size="small" clearable
-                      @keyup.enter="onEmpSearch" style="margin-bottom:8px">
-              <template #append><el-button @click="onEmpSearch">搜索</el-button></template>
-            </el-input>
-            <div class="emp-results">
-              <div v-for="e in subjectDlg.empSearchResults" :key="e.id" class="emp-row" @click="addSubjectFromSearch(e)">
-                <span>{{ e.name }}</span>
-                <span class="muted">{{ e.org }}</span>
-              </div>
-            </div>
-          </template>
-          <template v-else-if="dim === 'CUST'">
-            <div class="picker-title">搜索客户</div>
-            <el-input v-model="subjectDlg.custKw" placeholder="输入客户名或客户号搜索" size="small" clearable
-                      @keyup.enter="onCustSearch" style="margin-bottom:8px">
-              <template #append><el-button @click="onCustSearch">搜索</el-button></template>
-            </el-input>
-            <div class="emp-results">
-              <div v-for="c in subjectDlg.custSearchResults" :key="c.id" class="emp-row" @click="addSubjectFromSearch(c)">
-                <span>{{ c.name }}</span>
-                <span class="muted">{{ c.org }}</span>
-              </div>
-            </div>
-          </template>
-          <div class="picker-title" style="margin-top:12px">已选 ({{ subjectDlg.selected.length }})</div>
-          <div class="selected-list">
-            <el-tag v-for="s in subjectDlg.selected" :key="s.id" closable effect="plain" size="small"
-                    @close="subjectDlg.selected = subjectDlg.selected.filter(x => x.id !== s.id)"
-                    style="margin:2px">
-              {{ s.name }}
-            </el-tag>
-            <div v-if="!subjectDlg.selected.length" class="obj-empty">暂未选择</div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="subjectDlg.show = false">取消</el-button>
-        <el-button type="primary" @click="confirmSubjects">确定</el-button>
-      </template>
-    </el-dialog>
+    <!-- 对象选择：抽取为可复用组件 SubjectPicker -->
+    <SubjectPicker v-model:visible="subjectDlgVisible" v-model="subjects" :dim="dim" />
 
     <MetricPicker
       v-model:visible="pickerVisible"
@@ -197,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Grid, Histogram, TrendCharts, PieChart, Folder, Plus, Download } from '@element-plus/icons-vue';
 import { use } from 'echarts/core';
@@ -205,10 +138,10 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart, LineChart, PieChart as EPie } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { queryDynamic, exportDynamicFile, searchReportEmployees, searchReportCustomers, getPickerScope, getQueryDimensions, getSavedQuery } from '@/api/report';
-import { getOrgTree, listOrgUsers } from '@/api/orgs';
+import { queryDynamic, exportDynamicFile, getPickerScope, getQueryDimensions, getSavedQuery } from '@/api/report';
 import { listMetrics } from '@/api/metrics';
 import MetricPicker from './components/MetricPicker.vue';
+import SubjectPicker from './components/SubjectPicker.vue';
 import SchemeSaveDialog from './components/SchemeSaveDialog.vue';
 import SchemeListDialog from './components/SchemeListDialog.vue';
 
@@ -255,230 +188,12 @@ function reset() {
   hasResult.value = false;
 }
 
-// ============ 对象选择 dialog ============
-const subjectTreeRef = ref(null);
-const orgTreeData = ref([]);
+// ============ 对象选择 dialog（弹框逻辑已抽到 components/SubjectPicker.vue）============
+const subjectDlgVisible = ref(false);
 // 对象选择数据范围（按角色）：ALL 不限 / ORG_SUBTREE 本机构子树 / SELF 仅本人
 const pickerScope = ref({ mode: 'ALL', selfEmpId: '', selfName: '', orgCodes: [] });
 // 仅本人选择器：SELF 范围默认只能看自己、不让选；客户维度不限数据范围，不受此限
 const selfOnlyPicker = computed(() => pickerScope.value.mode === 'SELF' && dim.value !== 'CUST');
-
-// 按允许的机构编码裁剪机构树：保留 code 命中或有命中后代的节点（ALL 不裁剪）
-function filterTreeByCodes(nodes, codeSet) {
-  const out = [];
-  for (const n of nodes || []) {
-    const children = filterTreeByCodes(n.children, codeSet);
-    if (codeSet.has(n.code) || children.length) {
-      out.push({ ...n, children });
-    }
-  }
-  return out;
-}
-function scopedOrgTree() {
-  const sc = pickerScope.value;
-  if (!sc || sc.mode === 'ALL') return orgTreeData.value;
-  const set = new Set(sc.orgCodes || []);
-  return filterTreeByCodes(orgTreeData.value, set);
-}
-const subjectDlg = reactive({
-  show: false,
-  orgTree: [],
-  treeKw: '',
-  empKw: '',
-  empSearchResults: [],
-  custKw: '',
-  custSearchResults: [],
-  selected: [],
-  includeSubOrg: false,   // ORG 维度：勾选机构时是否连同其全部下级机构一并纳入
-  openSeq: 0,   // 每次打开递增，给 el-tree 当 :key 强制重建，避免上次勾选残留
-});
-
-function filterOrgNode(value, data) {
-  if (!value) return true;
-  return (data.name || '').includes(value);
-}
-
-watch(() => subjectDlg.treeKw, (val) => {
-  subjectTreeRef.value?.filter(val);
-});
-
-watch(() => subjectDlg.show, (visible) => {
-  if (visible) {
-    subjectDlg.selected = [...subjects.value];
-    subjectDlg.orgTree = scopedOrgTree();
-    subjectDlg.treeKw = '';
-    subjectDlg.empKw = '';
-    subjectDlg.empSearchResults = [];
-    subjectDlg.custKw = '';
-    subjectDlg.custSearchResults = [];
-    subjectDlg.includeSubOrg = false;   // 每次打开默认「仅本级」，避免上次开关状态残留
-    subjectDlg.openSeq++;   // 强制 el-tree 重建：清掉上次的机构勾选残留，避免"勾着却没加载员工"
-  }
-});
-
-// 机构 → 员工 缓存：成功查过的机构存起来，重复勾选/取消不再重复请求（失败不缓存，下次会重试）
-const orgUsersCache = new Map();
-let orgCheckTimer = null;
-
-// 防抖：勾父机构时 el-tree 级联勾全部子节点，@check-change 会对每个节点各触发一次，
-// 若每次都跑一遍查询 → O(N²) 请求风暴、疯狂报错。
-// 这里把这一连串触发合并成"安静 150ms 后只跑一次"，既消除风暴又保留能加载数据的事件。
-function onOrgCheckChange() {
-  clearTimeout(orgCheckTimer);
-  orgCheckTimer = setTimeout(loadCheckedOrgEmployees, 150);
-}
-
-// 「包含下级机构」开关：开启时把已勾机构的全部下级也勾到树上（可见反馈）；
-// 关闭时收起到最上层（祖先已勾的子节点取消勾选）。改完再重算选中对象。
-function onIncludeSubOrgChange(val) {
-  const tree = subjectTreeRef.value;
-  if (tree) {
-    const keys = new Set(tree.getCheckedKeys());
-    if (val) {
-      // 开：已勾节点的所有后代都勾上
-      const addDesc = (n) => (n.children || []).forEach(c => { keys.add(c.code); addDesc(c); });
-      tree.getCheckedNodes().forEach(addDesc);
-    } else {
-      // 关：祖先也被勾的节点取消，只保留最上层勾选
-      const walk = (n, ancestorChecked) => {
-        const checked = keys.has(n.code);
-        if (checked && ancestorChecked) keys.delete(n.code);
-        (n.children || []).forEach(c => walk(c, ancestorChecked || checked));
-      };
-      (subjectDlg.orgTree || []).forEach(n => walk(n, false));
-    }
-    tree.setCheckedKeys([...keys]);
-  }
-  clearTimeout(orgCheckTimer);
-  orgCheckTimer = setTimeout(loadCheckedOrgEmployees, 150);
-}
-
-async function loadCheckedOrgEmployees() {
-  const checkedNodes = subjectTreeRef.value?.getCheckedNodes() || [];
-  if (dim.value === 'ORG') {
-    // 西安分行/榆林总等上层机构只是树形结构的容器节点（filterTreeByCodes 为展示层级而保留），
-    // 它们的 code 并不在数据范围 orgCodes 内。勾上也不算选中，否则会把越权机构带进查询，
-    // 导致后端整单 RPT-40005「对象不在数据范围内」失败。ALL 不裁剪。
-    const sc = pickerScope.value;
-    const allow = (sc && sc.mode !== 'ALL') ? new Set(sc.orgCodes || []) : null;
-    // 「包含下级机构」开启：把每个勾选机构展开成它+全部下级；关闭：只取勾选的本级
-    let nodes = checkedNodes;
-    if (subjectDlg.includeSubOrg) {
-      const acc = new Map();
-      const collect = (n) => {
-        if (!acc.has(n.code)) acc.set(n.code, { code: n.code, name: n.name });
-        (n.children || []).forEach(collect);
-      };
-      checkedNodes.forEach(collect);
-      nodes = [...acc.values()];
-    }
-    const picked = allow ? nodes.filter(n => allow.has(n.code)) : nodes;
-    subjectDlg.selected = picked.map(n => ({ id: n.code, name: n.name, org: '' }));
-    return;
-  }
-  // SELF（支行员工）：只能选自己——勾任意机构都只加入本人，不加载同机构同事
-  if (pickerScope.value.mode === 'SELF') {
-    const sc = pickerScope.value;
-    const base = subjectDlg.selected.filter(s => s._fromSearch);
-    if (checkedNodes.length && sc.selfEmpId && !base.some(s => s.id === sc.selfEmpId)) {
-      base.push({ id: sc.selfEmpId, name: sc.selfName || sc.selfEmpId, org: '' });
-    }
-    subjectDlg.selected = base;
-    return;
-  }
-  // EMP 模式：勾机构（含级联子机构）→ 加载其下全部员工。
-  // 全选会勾上百个机构：用「分批并发(每批 8 个)+ 逐批刷新界面」，既快又能看到员工逐步出现，
-  // 且并发有上限不会变回请求风暴。
-  // 数据范围过滤：勾子机构时 el-tree 级联会把「仅作容器展示、不在数据范围内」的上级机构（如西安分行）
-  // 也勾成全选，若直接加载其员工会把越权用户（如一级机构行长）带出 → 后端 RPT-40005 整单失败。
-  // 故与 ORG 维度一致，按数据范围 orgCodes 过滤掉越权机构再加载（ALL 不限）。
-  const empSc = pickerScope.value;
-  const empAllow = (empSc && empSc.mode !== 'ALL') ? new Set(empSc.orgCodes || []) : null;
-  // 独立勾选：默认只取勾中的机构；「包含下级机构」开启时展开为它+全部下级
-  let empNodes = checkedNodes;
-  if (subjectDlg.includeSubOrg) {
-    const acc = new Map();
-    const collect = (n) => {
-      if (!acc.has(n.code)) acc.set(n.code, { code: n.code, name: n.name, children: n.children });
-      (n.children || []).forEach(collect);
-    };
-    checkedNodes.forEach(collect);
-    empNodes = [...acc.values()];
-  }
-  const orgNodes = empAllow ? empNodes.filter(n => empAllow.has(n.code)) : empNodes;
-  const newSelected = [...subjectDlg.selected.filter(s => s._fromSearch)];
-  const seen = new Set(newSelected.map(s => s.id));
-  const BATCH = 8;
-  for (let i = 0; i < orgNodes.length; i += BATCH) {
-    const batch = orgNodes.slice(i, i + BATCH);
-    const results = await Promise.all(batch.map(async (node) => {
-      let list = orgUsersCache.get(node.code);
-      if (list === undefined) {
-        try {
-          const users = await listOrgUsers(node.code, { pageSize: 100 });
-          list = Array.isArray(users) ? users : (users?.records || []);
-          orgUsersCache.set(node.code, list);   // 仅成功才缓存；失败不缓存，下次重试
-        } catch { list = []; }
-      }
-      return { node, list };
-    }));
-    for (const { node, list } of results) {
-      for (const u of list) {
-        const id = u.empId || u.userId;
-        if (id && !seen.has(id)) {
-          seen.add(id);
-          // OrgUserDTO 的姓名在 displayName 字段（无 empName/userchnname）；缺失才退化工号 username
-          newSelected.push({ id, name: u.displayName || u.empName || u.userchnname || u.username, org: node.name });
-        }
-      }
-    }
-    subjectDlg.selected = [...newSelected];   // 逐批刷新，全选时能看到员工陆续出现
-  }
-}
-
-async function onEmpSearch() {
-  const kw = subjectDlg.empKw?.trim();
-  if (!kw) { subjectDlg.empSearchResults = []; return; }
-  try {
-    // 搜 PT_USER（报表专用接口，按工号/姓名匹配，REPORT 权限）；返回 [{id,name,org}]
-    subjectDlg.empSearchResults = await searchReportEmployees(kw, 20);
-  } catch { subjectDlg.empSearchResults = []; }
-}
-
-// 员工搜索：边输边搜（防抖 300ms），无需点按钮；清空则清结果
-let empSearchTimer = null;
-watch(() => subjectDlg.empKw, () => {
-  clearTimeout(empSearchTimer);
-  if (!subjectDlg.empKw?.trim()) { subjectDlg.empSearchResults = []; return; }
-  empSearchTimer = setTimeout(onEmpSearch, 300);
-});
-
-async function onCustSearch() {
-  const kw = subjectDlg.custKw?.trim();
-  if (!kw) { subjectDlg.custSearchResults = []; return; }
-  try {
-    // 搜客户（按客户名/客户号，不限范围）；返回 [{id,name,org}]
-    subjectDlg.custSearchResults = await searchReportCustomers(kw, 20);
-  } catch { subjectDlg.custSearchResults = []; }
-}
-
-// 客户搜索：边输边搜（防抖 300ms），无需点按钮；清空则清结果
-let custSearchTimer = null;
-watch(() => subjectDlg.custKw, () => {
-  clearTimeout(custSearchTimer);
-  if (!subjectDlg.custKw?.trim()) { subjectDlg.custSearchResults = []; return; }
-  custSearchTimer = setTimeout(onCustSearch, 300);
-});
-
-function addSubjectFromSearch(emp) {
-  if (subjectDlg.selected.some(s => s.id === emp.id)) return;
-  subjectDlg.selected.push({ ...emp, _fromSearch: true });
-}
-
-function confirmSubjects() {
-  subjects.value = subjectDlg.selected.map(s => ({ id: s.id, name: s.name, org: s.org || '' }));
-  subjectDlg.show = false;
-}
 
 function subjectLabel(s) {
   // 统一显示名称：员工=姓名（不再加"员工"前缀）、机构=机构名、客户=客户名
@@ -676,7 +391,6 @@ const chartOption = computed(() => {
 
 onMounted(async () => {
   await Promise.all([
-    getOrgTree().then(tree => { orgTreeData.value = tree; }).catch(() => {}),
     getPickerScope(dim.value).then(sc => { if (sc && sc.mode) pickerScope.value = sc; }).catch(() => {}),
     listMetrics({ status: 'ACTIVE' })
       .then(list => { if (Array.isArray(list)) metricsList.value = list; })
