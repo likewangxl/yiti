@@ -109,4 +109,7 @@ public class PerfAllocAdjustApply {
 
     /** 更新时间（DB ON UPDATE CURRENT_TIMESTAMP）. */
     private LocalDateTime updatedTime;
+
+    /** 超时提醒已发送时间（满 14 天未办结的提醒，仅提醒一次；null=未提醒）. */
+    private LocalDateTime overdueNotifiedTime;
 }
