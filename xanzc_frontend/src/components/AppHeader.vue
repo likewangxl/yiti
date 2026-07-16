@@ -131,8 +131,9 @@ async function onCommand(cmd) {
     } catch { return; }
     try { await logout(); } catch { /* yiti session 后端清不掉也无所谓，前端继续清 */ }
     store.clear();
-    ElMessage.success('已退出登录');
-    router.replace('/login');
+    // 整页跳转（对齐切换角色的 location.reload 做法）：router.replace 是 SPA 内跳转，
+    // menu store 等 Pinia 内存态会残留给下一个登录用户（旧菜单/旧索引）
+    window.location.replace('/login');
   } else if (cmd === 'changePassword') {
     pwdDlg.oldPassword = '';
     pwdDlg.newPassword = '';

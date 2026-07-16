@@ -95,6 +95,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { login, uniAuthLogin } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
+import { useMenuStore } from '@/stores/menu';
 import { USE_MOCK } from '@/api/http';
 
 const router = useRouter();
@@ -135,6 +136,9 @@ async function onSubmit() {
   try {
     const user = await login(form.username, form.password);
     store.setUser(user);
+    // 强制重拉当前用户菜单：session 过期被守卫踢回 /login 等未整页刷新的路径下，
+    // menu store 仍缓存着上一个用户的菜单（loaded=true 时 load() 默认跳过）
+    await useMenuStore().load(true);
     ElMessage.success(`欢迎，${user.displayName || user.username}`);
     const redirect = route.query.redirect && String(route.query.redirect);
     router.replace(redirect || '/workspace');
