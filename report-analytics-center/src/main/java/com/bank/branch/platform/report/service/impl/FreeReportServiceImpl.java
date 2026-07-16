@@ -264,6 +264,10 @@ public class FreeReportServiceImpl implements FreeReportService {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
              java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet("数据");
+            // 复用一个 0.00 数字格式样式（逐格建样式会超 64000 上限）
+            CellStyle numStyle = wb.createCellStyle();
+            numStyle.setDataFormat(wb.createDataFormat().getFormat("0.00"));
+            DataValidationHelper dvHelper = sheet.getDataValidationHelper();
             // 表头
             Row header = sheet.createRow(0);
             for (int c = 0; c < colDefs.size(); c++) {
@@ -277,7 +281,7 @@ public class FreeReportServiceImpl implements FreeReportService {
                     try { extra = objectMapper.readValue(r.getDataJson(), new TypeReference<>() {}); }
                     catch (Exception ignore) { /* keep empty */ }
                 }
-                Row row = sheet.createRow(rIdx++);
+                Row row = sheet.createRow(rIdx);
                 for (int c = 0; c < colDefs.size(); c++) {
                     String key = colDefs.get(c).getOrDefault("key", "col_" + (c + 1));
                     String val = switch (key) {
@@ -285,8 +289,28 @@ public class FreeReportServiceImpl implements FreeReportService {
                         case "col_2" -> r.getCol2();
                         default -> extra.get(key);
                     };
-                    row.createCell(c).setCellValue(val != null ? val : "");
+                    val = val != null ? val : "";
+                    Cell cell = row.createCell(c);
+                    // 工号/姓名两列原样文本；其余列若是小数 → 显示截断两位数值(不四舍五入) + 0.00 格式；
+                    // 若确有精度被砍(小数位>2) → 挂「数据有效性输入提示」，点击/选中该格弹出完整原值。
+                    if (!"col_1".equals(key) && !"col_2".equals(key) && isDecimal(val)) {
+                        cell.setCellValue(Double.parseDouble(truncate2(val)));
+                        cell.setCellStyle(numStyle);
+                        int fracLen = val.length() - val.indexOf('.') - 1;
+                        if (fracLen > 2) {
+                            DataValidation dv = dvHelper.createValidation(
+                                    dvHelper.createCustomConstraint("TRUE()"),
+                                    new org.apache.poi.ss.util.CellRangeAddressList(rIdx, rIdx, c, c));
+                            dv.createPromptBox("完整值", val);
+                            dv.setShowPromptBox(true);
+                            dv.setSuppressDropDownArrow(true);
+                            sheet.addValidationData(dv);
+                        }
+                    } else {
+                        cell.setCellValue(val);
+                    }
                 }
+                rIdx++;
             }
             wb.write(out);
             return out.toByteArray();
@@ -341,6 +365,24 @@ public class FreeReportServiceImpl implements FreeReportService {
         if (fileKey != null) {
             try { fileApi.deleteFile(fileKey); } catch (Exception e) { log.warn("[FreeReport.delete] 删 MinIO 文件失败 key={}", fileKey, e); }
         }
+    }
+
+    // 小数截断显示：仅处理形如 -?\d+\.\d+ 的纯小数字符串，砍尾保留两位（不四舍五入，不足补零）；
+    // 整数、文本、日期、空一律原样返回（避免把工号/编号误加小数点）。原始数据不变，仅用于下载显示。
+    private static final java.util.regex.Pattern DECIMAL = java.util.regex.Pattern.compile("^-?\\d+\\.\\d+$");
+
+    static boolean isDecimal(String s) {
+        return s != null && DECIMAL.matcher(s).matches();
+    }
+
+    static String truncate2(String s) {
+        if (!isDecimal(s)) {
+            return s;
+        }
+        int dot = s.indexOf('.');
+        String intPart = s.substring(0, dot);
+        String frac2 = (s.substring(dot + 1) + "00").substring(0, 2);
+        return intPart + "." + frac2;
     }
 
     private String getCellString(Cell cell) {
