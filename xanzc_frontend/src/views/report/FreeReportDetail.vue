@@ -34,7 +34,12 @@
         <el-table-column v-if="columns.length > 1" :prop="columns[1].key" :label="columns[1].label"
                          width="150" fixed />
         <el-table-column v-for="col in dynamicCols" :key="col.key" :prop="col.key" :label="col.label"
-                         min-width="120" show-overflow-tooltip />
+                         min-width="120">
+          <template #default="{ row }">
+            <!-- 数字列显示截断两位(不四舍五入);悬停 title 显示完整原值。原始数据不改。 -->
+            <span :title="row[col.key]">{{ truncate2(row[col.key]) }}</span>
+          </template>
+        </el-table-column>
       </el-table>
       <div class="pager">
         <el-pagination
@@ -56,6 +61,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { queryFreeReportData, getFreeReportColumns, listFreeReportBatches } from '@/api/report';
+import { truncate2 } from '@/utils/numFmt';
 
 const route = useRoute();
 const batchId = route.params.batchId;
