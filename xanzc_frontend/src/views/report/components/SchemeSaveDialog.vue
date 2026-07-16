@@ -52,7 +52,7 @@ async function save() {
   if (!form.name.trim()) { ElMessage.warning('请填写方案名称'); return; }
   const p = props.context.payload || {};
   if (!Array.isArray(p.metrics)  || !p.metrics.length)  { ElMessage.warning('请先选择至少 1 个指标'); return; }
-  if (!Array.isArray(p.subjects) || !p.subjects.length) { ElMessage.warning('请先选择至少 1 个对象'); return; }
+  // 对象允许为空：不选=保存后按数据范围「查全部」(与编辑弹框口径一致，后端 noSubjectSelected 分支支持)
   saving.value = true;
   try {
     const res = await saveQuery({
