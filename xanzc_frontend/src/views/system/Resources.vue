@@ -186,8 +186,11 @@ import {
   END_FLAG_OPTIONS
 } from '@/api/resources';
 import { listAllRoles } from '@/api/system';
+import { useMenuStore } from '@/stores/menu';
 
 const router = useRouter();
+// 资源改名/增删后强制刷新菜单树，使侧边栏/面包屑/页面标题即时同步
+const menuStore = useMenuStore();
 // 菜单 URL 强制下拉选 — 选项来自 router 已注册路由扁平化
 // 业务约束：新建菜单只能指向真存在的前端页面，避免点进去空白
 const routeOptions = computed(() => {
@@ -299,6 +302,7 @@ async function saveDlg() {
     if (dlg.editing) {
       await updateResource(dlg.editing, rest);
       ElMessage.success('已更新');
+      menuStore.load(true);
     } else {
       // ResourceCreateReqDTO 白名单不含 status（创建不支持设隐藏菜单），剥离以免后端严格反序列化报错
       // eslint-disable-next-line no-unused-vars
@@ -306,6 +310,7 @@ async function saveDlg() {
       if (dlg.parent) payload.parentResourceId = dlg.parent.resourceId;
       await createResource(payload);
       ElMessage.success('已创建');
+      menuStore.load(true);
     }
     dlg.show = false;
     await reload();
@@ -318,6 +323,7 @@ async function doDelete(row) {
   try {
     await deleteResource(row.resourceId, '前端删除');
     ElMessage.success('已删除');
+    menuStore.load(true);
     await reload();
   } catch (e) {
     ElMessage.error('删除失败：' + (e?.message || e));
