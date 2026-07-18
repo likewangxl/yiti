@@ -1,6 +1,7 @@
 package com.bank.branch.platform.report.dto.req;
 
 import lombok.Data;
+import java.util.List;
 import java.util.Map;
 
 /** 画布单个组件节点(对应 DRAFT.components[i]). */
@@ -8,8 +9,12 @@ import java.util.Map;
 public class CanvasComponentDTO {
     /** 客户端生成的稳定 id(w-xxxx) */
     private String id;
-    /** 组件类型:ChartWidget/TextLabel/ImageBox/RectShape/BorderDecor/ClockWidget */
+    /** 组件类型:ChartWidget/TextLabel/ImageBox/RectShape/BorderDecor/ClockWidget/MapCenter/Group */
     private String component;
+    /** 组件自定义名称(图层面板双击改名;可空,空时前端显示组件类型 label) */
+    private String name;
+    /** 仅 Group(多选成组容器):子组件节点,style 为相对组左上角坐标;其余组件为 null */
+    private List<CanvasComponentDTO> children;
     /** 仅 ChartWidget:METRIC_CARD/LINE_TREND/PIE_SHARE/RANK_LIST/FLOW_STATUS */
     private String innerType;
     /** 仅 ChartWidget:关联的区块 id;素材组件为 null */

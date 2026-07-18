@@ -10,13 +10,14 @@ import lombok.Getter;
  * <p>权威来源: docs/modules/report-analytics-center/02-后端架构.md §6.5「基线 25 条」+ 03 §J.4「J 章导出 5 条」+ 大屏需求 43xxx 子域
  * <p>使用: throw new RptException(RptErrorCode.SAVED_QUERY_NOT_FOUND, id);
  *
- * <p>V1 合计 45 条（业务 13 + 权限 3 + SQL 探查 9 + J 章导出 5 + 大屏子域 12 + 系统 3）：
+ * <p>V1 合计 46 条（业务 13 + 权限 3 + SQL 探查 9 + J 章导出 5 + 大屏子域 13 + 系统 3）：
  * <ul>
  *   <li>400xx 业务错误 13 条（saved-query / data-version / subject / metric / export-task / amas / alloc-adjust / notice）</li>
  *   <li>403xx 权限 3 条（DASHBOARD / SQL_PROBE / DATA_SCOPE）</li>
  *   <li>420xx SQL 探查 9 条（含 plan F1 漏项 42004 / 42006 / 42009）</li>
  *   <li>422xx J 章导出 5 条（M5.4.1 扩展，42207~42211）</li>
- *   <li>430xx 大屏子域 12 条（2026-07-12 screen-dashboard 基础 9 条 43001~43009 + 画布设计器 V2 3 条 43010~43012）</li>
+ *   <li>430xx 大屏子域 13 条（2026-07-12 screen-dashboard 基础 9 条 43001~43009 + 画布设计器 V2 3 条 43010~43012
+ *       + 2026-07-17 取数 DATA_SCOPE 行级权限 43013）</li>
  *   <li>500xx 系统 3 条（含 plan F1 漏项 50002 / 50003 EXPORT_START_FAILED）</li>
  * </ul>
  *
@@ -149,6 +150,9 @@ public enum RptErrorCode {
 
     /** 画布保存冲突：CANVAS_VERSION 乐观锁 WHERE 命中 0 行（他人/他标签页已保存），前端带最新 version 二次确认覆盖 */
     SCREEN_CANVAS_CONFLICT("RPT-43012", "画布保存冲突，请刷新后重试"),
+
+    /** 取数 DATA_SCOPE 行级权限拒绝（2026-07-17 spec §4）：主体参数越权 / GLOBAL 数据源 scope 不足 / fail-close 兜底 */
+    SCREEN_DATA_SCOPE_DENIED("RPT-43013", "数据范围不允许"),
 
     // =============================================
     // 500xx 系统错误（3 条）

@@ -78,9 +78,14 @@ class ScreenConfigServiceTest {
     }
 
     private RptScreenDatasource ds(long id, String dsType) {
+        return ds(id, dsType, "WIDE_TABLE");
+    }
+
+    private RptScreenDatasource ds(long id, String dsType, String sourceKind) {
         RptScreenDatasource d = new RptScreenDatasource();
         d.setId(id);
         d.setDsType(dsType);
+        d.setSourceKind(sourceKind);
         d.setStatus("ACTIVE");
         return d;
     }
@@ -149,6 +154,83 @@ class ScreenConfigServiceTest {
         order.verify(screenMapper).insert(any(RptScreen.class));
         order.verify(blockMapper).delete(any(Wrapper.class));
         order.verify(blockMapper, times(2)).insert(any(RptScreenBlock.class));
+    }
+
+    // ===== 组件白名单扩充 + RPT-43005 联动（spec 2026-07-17 §5.1）=====
+
+    /** 8 种新图表 component_type 进入区块保存白名单（KPI 专属 3 种绑 KPI_DETAIL 数据源）. */
+    @Test
+    void saveScreen_newComponentTypes_allAccepted() {
+        when(dsMapper.selectBatchIds(anyCollection())).thenReturn(List.of(
+                ds(1L, "SINGLE", "WIDE_TABLE"),
+                ds(2L, "TIMESERIES", "WIDE_TABLE"),
+                ds(3L, "SINGLE", "KPI_DETAIL")));
+        ScreenSaveReqDTO req = reqWith("BRANCH",
+                block("LEFT", 1, 1, 50, "BAR_COMPARE", "{\"dsId\":1}", null),
+                block("LEFT", 2, 1, 50, "AREA_STACK", "{\"dsId\":2}", null),
+                block("LEFT", 3, 1, 50, "GAUGE", "{\"dsId\":1}", null),
+                block("LEFT", 4, 1, 50, "TABLE_LIST", "{\"dsId\":1}", null),
+                block("RIGHT", 1, 1, 50, "KPI_DETAIL_TABLE", "{\"dsId\":3}", null),
+                block("RIGHT", 2, 1, 50, "KPI_RADAR", "{\"dsId\":3}", null),
+                block("RIGHT", 3, 1, 50, "LIQUID_PROGRESS", "{\"dsId\":1}", null),
+                block("RIGHT", 4, 1, 50, "PROGRESS_LIST", "{\"dsId\":3}", null));
+
+        service.saveScreen(req);
+
+        verify(blockMapper, times(8)).insert(any(RptScreenBlock.class));
+    }
+
+    /** needTimeseries 联动：AREA_STACK 绑非 TIMESERIES 数据源 → 43005（与 LINE_TREND 同规则）. */
+    @Test
+    void saveScreen_areaStackOnSingleDs_throws43005() {
+        when(dsMapper.selectBatchIds(anyCollection())).thenReturn(List.of(ds(1L, "SINGLE")));
+        ScreenSaveReqDTO req = reqWith("BRANCH",
+                block("LEFT", 1, 1, 100, "AREA_STACK", "{\"dsId\":1}", null));
+        assertThatThrownBy(() -> service.saveScreen(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43005");
+    }
+
+    /** needKinds 联动：KPI_DETAIL_TABLE 仅可绑 source_kind=KPI_DETAIL 数据源，越界 43005. */
+    @Test
+    void saveScreen_kpiDetailTableOnNonKpiDetailDs_throws43005() {
+        when(dsMapper.selectBatchIds(anyCollection())).thenReturn(List.of(ds(1L, "SINGLE", "WIDE_TABLE")));
+        ScreenSaveReqDTO req = reqWith("BRANCH",
+                block("LEFT", 1, 1, 100, "KPI_DETAIL_TABLE", "{\"dsId\":1}", null));
+        assertThatThrownBy(() -> service.saveScreen(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43005");
+    }
+
+    @Test
+    void saveScreen_kpiRadarOnNonKpiDetailDs_throws43005() {
+        when(dsMapper.selectBatchIds(anyCollection())).thenReturn(List.of(ds(1L, "TIMESERIES", "KPI_RESULT")));
+        ScreenSaveReqDTO req = reqWith("BRANCH",
+                block("LEFT", 1, 1, 100, "KPI_RADAR", "{\"dsId\":1}", null));
+        assertThatThrownBy(() -> service.saveScreen(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43005");
+    }
+
+    @Test
+    void saveScreen_progressListOnNonKpiDetailDs_throws43005() {
+        when(dsMapper.selectBatchIds(anyCollection())).thenReturn(List.of(ds(1L, "SINGLE", "CUSTOM_SQL")));
+        ScreenSaveReqDTO req = reqWith("BRANCH",
+                block("LEFT", 1, 1, 100, "PROGRESS_LIST", "{\"dsId\":1}", null));
+        assertThatThrownBy(() -> service.saveScreen(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43005");
+    }
+
+    /** 白名单外 component_type 仍拒绝（防御性回归）. */
+    @Test
+    void saveScreen_unknownComponentType_stillThrows43006() {
+        lenient().when(dsMapper.selectBatchIds(anyCollection())).thenReturn(List.of(ds(1L, "SINGLE")));
+        ScreenSaveReqDTO req = reqWith("BRANCH",
+                block("LEFT", 1, 1, 100, "PIVOT_3D", "{\"dsId\":1}", null));
+        assertThatThrownBy(() -> service.saveScreen(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
     }
 
     @Test

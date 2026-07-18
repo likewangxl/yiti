@@ -43,10 +43,17 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
 
     private static final Set<String> VIEW_LEVELS = Set.of("PROVINCE", "BRANCH", "PERSON");
     private static final Set<String> REGIONS = Set.of("LEFT", "MAIN", "RIGHT");
-    private static final Set<String> COMPONENT_TYPES =
-            Set.of("METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS");
-    /** 需要时序型数据源的组件 */
-    private static final Set<String> TIMESERIES_ONLY_COMPONENTS = Set.of("LINE_TREND");
+    /** 区块 component_type 白名单（基础 5 + spec 2026-07-17 §5.1 扩充 8；画布 innerType 白名单
+     * 见 ScreenCanvasServiceImpl 同步扩充） */
+    private static final Set<String> COMPONENT_TYPES = Set.of(
+            "METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS",
+            "BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
+            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST");
+    /** 需要时序型数据源的组件（needTimeseries 联动，违规 43005） */
+    private static final Set<String> TIMESERIES_ONLY_COMPONENTS = Set.of("LINE_TREND", "AREA_STACK");
+    /** 仅可绑 source_kind=KPI_DETAIL 数据源的 KPI 专属组件（needKinds 联动，spec §5.1，违规 43005） */
+    private static final Set<String> KPI_DETAIL_ONLY_COMPONENTS =
+            Set.of("KPI_DETAIL_TABLE", "KPI_RADAR", "PROGRESS_LIST");
 
     private final RptScreenMapper screenMapper;
     private final RptScreenBlockMapper blockMapper;
@@ -290,6 +297,11 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             }
             boolean needTs = TIMESERIES_ONLY_COMPONENTS.contains(b.getComponentType()) || drillEnabled(b.getDrillJson());
             if (needTs && !"TIMESERIES".equals(ds.getDsType())) {
+                throw new RptException(RptErrorCode.SCREEN_BLOCK_BIND_MISMATCH);
+            }
+            // KPI 专属组件仅可绑 KPI_DETAIL 数据源（needKinds 联动，spec 2026-07-17 §5.1）
+            if (KPI_DETAIL_ONLY_COMPONENTS.contains(b.getComponentType())
+                    && !"KPI_DETAIL".equals(ds.getSourceKind())) {
                 throw new RptException(RptErrorCode.SCREEN_BLOCK_BIND_MISMATCH);
             }
         }

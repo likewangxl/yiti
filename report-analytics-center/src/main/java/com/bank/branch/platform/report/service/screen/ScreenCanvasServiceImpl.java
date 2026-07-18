@@ -52,12 +52,26 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
 
     /** 组件类型白名单(用户输入必须验证红线)。MapCenter(省级屏地图,Task10 渲染层已支持
      * component==='MapCenter' 独立渲染分支)不是 ChartWidget,不占 block 行、无 innerType,
-     * 但仍需在此白名单内才能保存(Task11 三屏重配发现的缺口,补齐)。 */
+     * 但仍需在此白名单内才能保存(Task11 三屏重配发现的缺口,补齐)。
+     * Group(2026-07-17 画布多选成组容器):children 携带子组件(相对坐标),自身不占 block 行;
+     * 校验/区块 upsert/发布 blockId 收集均须递归展开 children(见 flatten/collectChartBlockIds)。 */
     private static final Set<String> COMPONENT_TYPES = Set.of(
-            "ChartWidget", "TextLabel", "ImageBox", "RectShape", "BorderDecor", "ClockWidget", "MapCenter");
-    /** ChartWidget 的 innerType 白名单(复用现有 5 图表) */
+            "ChartWidget", "TextLabel", "ImageBox", "RectShape", "BorderDecor", "ClockWidget", "MapCenter",
+            "Group",
+            // 2026-07-17 素材装饰扩充:科技感标题条/装饰线/跑马灯(前端 widgets 注册表同步新增)
+            "TitleBar", "DecorLine", "Marquee",
+            // 2026-07-17 §5.3 全屏周期过滤器(运行时联动 TIMESERIES 区块;每屏最多 1 个,见 requireAtMostOnePeriodFilter)
+            "PeriodFilter");
+
+    /** 全屏周期过滤器组件名(每屏最多 1 个的保存/发布双侧校验共用) */
+    private static final String PERIOD_FILTER = "PeriodFilter";
+    /** ChartWidget 的 innerType 白名单(基础 5 图表 + spec 2026-07-17 §5.1 扩充 8 种:
+     * 占位启用 BAR_COMPARE/AREA_STACK/GAUGE/TABLE_LIST + KPI 专属 KPI_DETAIL_TABLE/KPI_RADAR/
+     * LIQUID_PROGRESS/PROGRESS_LIST;区块保存侧 component_type 白名单见 ScreenConfigServiceImpl 同步扩充) */
     private static final Set<String> INNER_TYPES = Set.of(
-            "METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS");
+            "METRIC_CARD", "LINE_TREND", "PIE_SHARE", "RANK_LIST", "FLOW_STATUS",
+            "BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
+            "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST");
     /** 画布 JSON 上限 2MB(字符数近似) */
     private static final int MAX_JSON_LEN = 2 * 1024 * 1024;
     private static final int DESIGN_W = 1920;
@@ -113,8 +127,11 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         RptScreen s = requireScreen(req.getScreenId());
         List<CanvasComponentDTO> comps = req.getComponents() == null ? List.of() : req.getComponents();
 
-        // 1) 结构化校验:组件类型白名单 + innerType + 坐标/尺寸范围
-        for (CanvasComponentDTO c : comps) {
+        // 1) 结构化校验:组件类型白名单 + innerType + 坐标/尺寸范围。
+        //    Group 节点的 children 一并摊平校验(children 为相对组左上角坐标,恒落在
+        //    [0,组尺寸] ⊆ [0,设计基准] 内,validateStyle 范围校验语义不变)。
+        List<CanvasComponentDTO> flat = flatten(comps);
+        for (CanvasComponentDTO c : flat) {
             if (c.getComponent() == null || !COMPONENT_TYPES.contains(c.getComponent())) {
                 throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
             }
@@ -124,10 +141,15 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
             }
             validateStyle(c.getStyle());
         }
+        // 全屏周期过滤器每屏最多 1 个(spec 2026-07-17 §5.3):多个过滤器会互相覆盖 screen 级
+        // globalPeriod,联动语义不可仲裁 → 按布局非法拒绝(计数用摊平列表,防 Group 嵌套绕过)
+        requireAtMostOnePeriodFilter(flat.stream()
+                .filter(c -> PERIOD_FILTER.equals(c.getComponent())).count());
 
         // 2) blocks 增删改(upsert,保留 id,禁先删后插以免 blockId 引用失效)。
-        //    仅 ChartWidget 参与;素材组件不占 block 行。
-        List<CanvasComponentDTO> chartNodes = comps.stream()
+        //    仅 ChartWidget 参与;素材组件不占 block 行。必须含 Group children 里的图表节点,
+        //    否则组内图表的 block 行会被下方孤儿清理误删(blockId 引用失效)。
+        List<CanvasComponentDTO> chartNodes = flat.stream()
                 .filter(c -> "ChartWidget".equals(c.getComponent()))
                 .collect(Collectors.toList());
         Set<Long> keepBlockIds = new HashSet<>();
@@ -207,21 +229,12 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
         } catch (Exception e) {
             throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, e);
         }
+        // 发布侧防线:草稿多个 PeriodFilter 同样拒绝(保存已拦,但历史草稿/旁路写入不可信,双侧校验)
+        requireAtMostOnePeriodFilter(countComponentNodes(draft.path("components"), PERIOD_FILTER));
         Set<Long> draftBlockIds = new HashSet<>();
-        JsonNode comps = draft.path("components");
-        if (comps.isArray()) {
-            for (JsonNode n : comps) {
-                if ("ChartWidget".equals(n.path("component").asText())) {
-                    JsonNode bid = n.path("blockId");
-                    if (bid.isNumber()) {
-                        draftBlockIds.add(bid.asLong());
-                    } else {
-                        // ChartWidget 必须有 blockId
-                        throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
-                    }
-                }
-            }
-        }
+        // 递归收集:Group 节点的 children 里的 ChartWidget 同样引用 block 行,漏收会导致
+        // 发布渲染包 bindSnapshots 缺失(组内图表线上无数据)
+        collectChartBlockIds(draft.path("components"), draftBlockIds);
         // 2) 与本屏 block 行集合交叉一致性校验
         List<RptScreenBlock> rows = blockMapper.selectList(
                 new LambdaQueryWrapper<RptScreenBlock>().eq(RptScreenBlock::getScreenId, s.getId()));
@@ -333,6 +346,68 @@ public class ScreenCanvasServiceImpl implements ScreenCanvasService {
     }
 
     // ===== 内部 =====
+
+    /**
+     * 摊平组件树:顶层节点 + Group 的 children 全部纳入(设计器保证组不嵌套,此处仍防御性递归)。
+     * 返回的列表持有原 DTO 引用——区块 upsert 对 children 图表节点 setBlockId 回吐后,
+     * buildDraftJson 序列化顶层 comps 时嵌套 children 同步携带 resolved id。
+     */
+    private List<CanvasComponentDTO> flatten(List<CanvasComponentDTO> comps) {
+        List<CanvasComponentDTO> out = new java.util.ArrayList<>();
+        collectFlat(comps, out);
+        return out;
+    }
+
+    private void collectFlat(List<CanvasComponentDTO> comps, List<CanvasComponentDTO> out) {
+        if (comps == null) {
+            return;
+        }
+        for (CanvasComponentDTO c : comps) {
+            out.add(c);
+            collectFlat(c.getChildren(), out);
+        }
+    }
+
+    /** 每屏最多 1 个 PeriodFilter,超限按布局非法(RPT-43006)拒绝(保存/发布双侧共用) */
+    private void requireAtMostOnePeriodFilter(long count) {
+        if (count > 1) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+        }
+    }
+
+    /** 递归统计组件树里指定 component 的节点数(含 Group children,与 flatten 摊平语义一致) */
+    private long countComponentNodes(JsonNode comps, String component) {
+        if (comps == null || !comps.isArray()) {
+            return 0;
+        }
+        long count = 0;
+        for (JsonNode n : comps) {
+            if (component.equals(n.path("component").asText())) {
+                count++;
+            }
+            count += countComponentNodes(n.path("children"), component);
+        }
+        return count;
+    }
+
+    /** 递归收集 ChartWidget 的 blockId(含 Group children);ChartWidget 缺 blockId 视为非法草稿 */
+    private void collectChartBlockIds(JsonNode comps, Set<Long> out) {
+        if (comps == null || !comps.isArray()) {
+            return;
+        }
+        for (JsonNode n : comps) {
+            if ("ChartWidget".equals(n.path("component").asText())) {
+                JsonNode bid = n.path("blockId");
+                if (bid.isNumber()) {
+                    out.add(bid.asLong());
+                } else {
+                    // ChartWidget 必须有 blockId
+                    throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID);
+                }
+            }
+            collectChartBlockIds(n.path("children"), out);
+        }
+    }
 
     /** 按屏滚动保留最近 PUBLISH_LOG_KEEP 份,超出删最旧 */
     private void trimPublishLogs(Long screenId) {

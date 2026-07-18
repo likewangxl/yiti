@@ -211,6 +211,207 @@ class ScreenCanvasServiceTest {
         assertThat(resp.getCanvasDraftJson()).contains("\"blockId\":50").contains("\"blockId\":88");
     }
 
+    // ===== Group 成组容器（2026-07-17 画布多选成组，补齐 TDD 缺口）=====
+
+    /** 成组保存：Group.children 里的 ChartWidget 参与 block upsert（insert 生成 id 回吐进子节点），
+     * draftJson 序列化时嵌套 children 同步携带 resolved blockId，且组内图表 block 不被孤儿清理误删. */
+    @Test
+    void save_groupWithChartChild_upsertsChildBlockAndResolvesId() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        when(blockMapper.selectList(any())).thenReturn(List.of());
+        doAnswer(invocation -> {
+            RptScreenBlock e = invocation.getArgument(0);
+            e.setId(88L);
+            return 1;
+        }).when(blockMapper).insert(any(RptScreenBlock.class));
+
+        CanvasComponentDTO child = comp("ChartWidget", "METRIC_CARD",
+                Map.of("top", 10, "left", 10, "width", 100, "height", 40));
+        CanvasComponentDTO group = comp("Group", null,
+                Map.of("top", 100, "left", 100, "width", 400, "height", 300));
+        group.setChildren(List.of(child));
+
+        var resp = service.saveCanvas(req(7L, 0, group));
+
+        verify(blockMapper).insert(any(RptScreenBlock.class)); // 组内图表占 block 行
+        verify(blockMapper, never()).deleteById(anyLong());     // 不被孤儿清理误删
+        assertThat(child.getBlockId()).isEqualTo(88L);          // 新 id 回吐进 children 节点
+        assertThat(resp.getCanvasDraftJson())
+                .contains("\"component\":\"Group\"")
+                .contains("\"blockId\":88");
+    }
+
+    /** 成组保存：children 里的非法组件类型必须与顶层同样被白名单拦截（摊平校验语义）. */
+    @Test
+    void save_groupWithIllegalChildComponentType_throws43006() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        CanvasComponentDTO evilChild = comp("EvilWidget", null,
+                Map.of("top", 10, "left", 10, "width", 100, "height", 40));
+        CanvasComponentDTO group = comp("Group", null,
+                Map.of("top", 100, "left", 100, "width", 400, "height", 300));
+        group.setChildren(List.of(evilChild));
+
+        assertThatThrownBy(() -> service.saveCanvas(req(7L, 0, group)))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+        verify(blockMapper, never()).insert(any(RptScreenBlock.class));
+    }
+
+    /** 成组发布：blockId 递归收集覆盖 Group.children，组内图表快照进 bindSnapshots（漏收=线上无数据）. */
+    @Test
+    void publish_groupChildChartBlockId_collectedIntoBindSnapshots() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasStyleJson("{\"schemaVersion\":1}");
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"g-1\",\"component\":\"Group\","
+                + "\"style\":{\"top\":0,\"left\":0,\"width\":800,\"height\":600},\"children\":["
+                + "{\"id\":\"w-1\",\"component\":\"ChartWidget\",\"innerType\":\"METRIC_CARD\","
+                + "\"blockId\":1001,\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}}]}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        RptScreenBlock b = new RptScreenBlock();
+        b.setId(1001L);
+        b.setScreenId(7L);
+        b.setComponentType("METRIC_CARD");
+        b.setBindJson("{\"dsId\":9001,\"period\":\"LATEST\"}");
+        when(blockMapper.selectList(any())).thenReturn(List.of(b));
+        when(canvasMapper.applyPublished(anyLong(), anyString(), anyInt(), anyString())).thenReturn(1);
+        when(publishLogMapper.selectList(any())).thenReturn(List.of());
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+        service.publishCanvas(req);
+
+        ArgumentCaptor<String> pkgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(canvasMapper).applyPublished(
+                org.mockito.ArgumentMatchers.eq(7L), pkgCaptor.capture(), anyInt(), anyString());
+        assertThat(pkgCaptor.getValue())
+                .contains("\"component\":\"Group\"")
+                .contains("\"bindSnapshots\":{\"1001\":{")
+                .doesNotContain("\"1001\":{}");
+    }
+
+    /** 成组发布：children 里的 ChartWidget 缺 blockId 视为非法草稿（与顶层同语义）. */
+    @Test
+    void publish_groupChildChartMissingBlockId_throws43006() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"g-1\",\"component\":\"Group\","
+                + "\"style\":{\"top\":0,\"left\":0,\"width\":800,\"height\":600},\"children\":["
+                + "{\"id\":\"w-1\",\"component\":\"ChartWidget\",\"innerType\":\"METRIC_CARD\","
+                + "\"style\":{\"top\":0,\"left\":0,\"width\":100,\"height\":100}}]}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+        assertThatThrownBy(() -> service.publishCanvas(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+    }
+
+    // ===== 图表 innerType 白名单扩充（spec 2026-07-17 §5.1，8 种新图表）=====
+
+    /** 8 种新图表 innerType 必须全部进入画布保存白名单（占位启用 4 种 + KPI 专属 4 种）. */
+    @Test
+    void save_newChartInnerTypes_allAccepted() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        lenient().when(blockMapper.selectList(any())).thenReturn(List.of());
+        doAnswer(invocation -> {
+            RptScreenBlock e = invocation.getArgument(0);
+            e.setId(90L);
+            return 1;
+        }).when(blockMapper).insert(any(RptScreenBlock.class));
+
+        for (String innerType : List.of("BAR_COMPARE", "AREA_STACK", "GAUGE", "TABLE_LIST",
+                "KPI_DETAIL_TABLE", "KPI_RADAR", "LIQUID_PROGRESS", "PROGRESS_LIST")) {
+            CanvasComponentDTO c = comp("ChartWidget", innerType,
+                    Map.of("top", 10, "left", 10, "width", 100, "height", 40));
+            var resp = service.saveCanvas(req(7L, 0, c));
+            assertThat(resp.getCanvasDraftJson()).as("innerType %s 应可保存", innerType).contains(innerType);
+        }
+    }
+
+    /** 白名单外的 innerType 仍然拒绝（防御性回归）. */
+    @Test
+    void save_unknownInnerType_stillRejected() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        assertThatThrownBy(() -> service.saveCanvas(req(7L, 0,
+                comp("ChartWidget", "PIVOT_3D",
+                        Map.of("top", 10, "left", 10, "width", 100, "height", 40)))))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+    }
+
+    // ===== PeriodFilter 全屏周期过滤器（spec 2026-07-17 §5.3，每屏最多 1 个）=====
+
+    /** PeriodFilter 必须进入组件类型白名单（单个可正常保存，素材类组件不占 block 行）. */
+    @Test
+    void save_singlePeriodFilter_accepted() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        when(canvasMapper.bumpVersion(anyLong(), anyInt(), anyString(), anyString(), anyString())).thenReturn(1);
+        var resp = service.saveCanvas(req(7L, 0,
+                comp("PeriodFilter", null, Map.of("top", 88, "left", 1400, "width", 420, "height", 44))));
+        assertThat(resp.getCanvasVersion()).isEqualTo(1);
+        assertThat(resp.getCanvasDraftJson()).contains("PeriodFilter");
+    }
+
+    /** 每屏最多 1 个 PeriodFilter：保存时超过 1 个抛 RPT-43006（布局非法语义）. */
+    @Test
+    void save_twoPeriodFilters_throws43006() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        CanvasComponentDTO f1 = comp("PeriodFilter", null,
+                Map.of("top", 88, "left", 1400, "width", 420, "height", 44));
+        CanvasComponentDTO f2 = comp("PeriodFilter", null,
+                Map.of("top", 200, "left", 1400, "width", 420, "height", 44));
+        assertThatThrownBy(() -> service.saveCanvas(req(7L, 0, f1, f2)))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+    }
+
+    /** 计数按摊平语义：Group.children 里的 PeriodFilter 与顶层节点合并计数，规避成组绕过限制. */
+    @Test
+    void save_periodFilterInGroupPlusTopLevel_throws43006() {
+        when(screenMapper.selectById(7L)).thenReturn(screen(7L, 0));
+        CanvasComponentDTO top = comp("PeriodFilter", null,
+                Map.of("top", 88, "left", 1400, "width", 420, "height", 44));
+        CanvasComponentDTO child = comp("PeriodFilter", null,
+                Map.of("top", 10, "left", 10, "width", 300, "height", 40));
+        CanvasComponentDTO group = comp("Group", null,
+                Map.of("top", 100, "left", 100, "width", 400, "height", 300));
+        group.setChildren(List.of(child));
+        assertThatThrownBy(() -> service.saveCanvas(req(7L, 0, top, group)))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+    }
+
+    /** 发布侧防线：草稿 JSON 里出现 2 个 PeriodFilter（含 Group 嵌套）同样拒绝发布（保存/发布双侧校验）. */
+    @Test
+    void publish_twoPeriodFiltersInDraft_throws43006() {
+        RptScreen s = screen(7L, 5);
+        s.setCanvasStyleJson("{\"schemaVersion\":1}");
+        s.setCanvasDraftJson("{\"schemaVersion\":1,\"components\":["
+                + "{\"id\":\"w-1\",\"component\":\"PeriodFilter\","
+                + "\"style\":{\"top\":88,\"left\":1400,\"width\":420,\"height\":44}},"
+                + "{\"id\":\"g-1\",\"component\":\"Group\","
+                + "\"style\":{\"top\":100,\"left\":100,\"width\":400,\"height\":300},\"children\":["
+                + "{\"id\":\"w-2\",\"component\":\"PeriodFilter\","
+                + "\"style\":{\"top\":10,\"left\":10,\"width\":300,\"height\":40}}]}]}");
+        when(screenMapper.selectById(7L)).thenReturn(s);
+        // 实现应在 blockId 一致性校验前就拦下（lenient：Red 阶段与实现落点无关的桩不因未消费而报错）
+        lenient().when(blockMapper.selectList(any())).thenReturn(List.of());
+
+        var req = new com.bank.branch.platform.report.dto.req.ScreenCanvasPublishReqDTO();
+        req.setScreenId(7L);
+        req.setExpectedVersion(5);
+        assertThatThrownBy(() -> service.publishCanvas(req))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43006");
+        verify(canvasMapper, never()).applyPublished(anyLong(), anyString(), anyInt(), anyString());
+    }
+
     @org.junit.jupiter.api.Test
     void publish_blockIdSetMismatch_throws43006() {
         RptScreen s = screen(7L, 5);

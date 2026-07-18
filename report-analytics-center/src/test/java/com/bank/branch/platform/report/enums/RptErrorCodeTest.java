@@ -7,7 +7,7 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * RptErrorCode 45 条错误码守护测试（M0.3.1 基线 25 条 + 历史扩展 8 条 + 大屏子域 12 条）.
+ * RptErrorCode 46 条错误码守护测试（M0.3.1 基线 25 条 + 历史扩展 8 条 + 大屏子域 13 条）.
  *
  * <p>权威来源：02-后端架构.md §6.5 + 03 §J.4 + 大屏需求 43xxx 子域
  * <ul>
@@ -15,22 +15,31 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>403xx 权限 3 条（DASHBOARD / SQL_PROBE / DATA_SCOPE）</li>
  *   <li>420xx SQL 探查 9 条（含 plan F1 漏项 42004 / 42006 / 42009）</li>
  *   <li>422xx J 章导出 5 条（M5.4.1 扩展，42207~42211）</li>
- *   <li>430xx 大屏子域 12 条（2026-07-12 screen-dashboard 基础 9 条 43001~43009 + 画布设计器 V2 3 条 43010~43012）</li>
+ *   <li>430xx 大屏子域 13 条（2026-07-12 screen-dashboard 基础 9 条 43001~43009 + 画布设计器 V2 3 条 43010~43012
+ *       + 2026-07-17 取数 DATA_SCOPE 行级权限 43013）</li>
  *   <li>500xx 系统 3 条（含 plan F1 漏项 50002 / 50003 EXPORT_START_FAILED）</li>
  * </ul>
  *
- * <p>本测试守护 V1 合计"恰好 45 条"，新增需同步更新本测试。
+ * <p>本测试守护 V1 合计"恰好 46 条"，新增需同步更新本测试。
  */
 class RptErrorCodeTest {
 
     @Test
-    void shouldHaveExactly45ErrorCodes() {
-        // 45 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
+    void shouldHaveExactly46ErrorCodes() {
+        // 46 条：基线 25 + M5.4.1 扩展 5 + AMAS_APPROVAL_NOT_FOUND 1 + ALLOC_ADJUST_APPLY_NOT_FOUND 1
         // + NOTICE_NOT_FOUND 1（此前断言遗漏该项，实际已是 33，此次一并订正 32→33）
         // + 大屏子域 9 条（RPT-43001~43009）= 42
         // + FIX-1 错误码语义分离 2 条（RPT-43010 缺必填上下文参数 / RPT-43011 周期参数非法）= 44
         // + 画布保存冲突 RPT-43012 = 45
-        assertThat(RptErrorCode.values()).hasSize(45);
+        // + 取数 DATA_SCOPE 行级权限拒绝 RPT-43013（2026-07-17 spec §4）= 46
+        assertThat(RptErrorCode.values()).hasSize(46);
+    }
+
+    /** 2026-07-17 取数 DATA_SCOPE：越权取数统一拒绝码 RPT-43013（fail-close）. */
+    @Test
+    void screenDataScopeDenied_shouldExistWithChineseMessage() {
+        assertThat(RptErrorCode.SCREEN_DATA_SCOPE_DENIED.getCode()).isEqualTo("RPT-43013");
+        assertThat(RptErrorCode.SCREEN_DATA_SCOPE_DENIED.getMsg()).isEqualTo("数据范围不允许");
     }
 
     @Test
@@ -108,7 +117,7 @@ class RptErrorCodeTest {
             .distinct()
             .count();
         assertThat(distinct)
-            .as("RPT 45 条错误码必须唯一无重复")
-            .isEqualTo(45);
+            .as("RPT 46 条错误码必须唯一无重复")
+            .isEqualTo(46);
     }
 }

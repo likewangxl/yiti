@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.report.dto.req.ScreenDataReqDTO;
+import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -140,6 +141,136 @@ class ScreenQueryEngineTest {
                 .hasFieldOrPropertyWithValue("code", "RPT-43010");
     }
 
+    // ===== KPI_DETAIL =====
+
+    /** SNAPSHOT 基准配置（EMP 主体） */
+    private static final String KD_SNAPSHOT_EMP_CFG =
+            "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"EMP\",\"mode\":\"SNAPSHOT\"}";
+
+    /** TREND 基准配置（EMP 主体，两个细项） */
+    private static final String KD_TREND_EMP_CFG =
+            "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"EMP\",\"mode\":\"TREND\","
+                    + "\"metrics\":[{\"metricCode\":\"M_D1\",\"metricName\":\"存款细项\"},"
+                    + "{\"metricCode\":\"M_D2\",\"metricName\":\"贷款细项\"}]}";
+
+    @Test
+    void buildKpiDetail_snapshot_fixedColumnsLatestDateSubqueryAndParamOrder() {
+        var q = engine.build("KPI_DETAIL", KD_SNAPSHOT_EMP_CFG,
+                req("LATEST", Map.of("empId", "E001")), 1000, TODAY);
+        // 固定列清单：metric_code + 细项名称（LEFT JOIN 取名回落 metric_code）+ 目标/实际/权重/得分/完成率/缺口
+        assertThat(q.sql()).contains("FROM PERF_KPI_SCORE s");
+        assertThat(q.sql()).contains("LEFT JOIN PERF_METRIC_DEF d ON d.metric_code = s.metric_code");
+        assertThat(q.sql()).contains("COALESCE(d.metric_name, s.metric_code) AS `细项名称`");
+        assertThat(q.sql()).contains("s.target_value AS `目标值`");
+        assertThat(q.sql()).contains("s.actual_value AS `实际值`");
+        assertThat(q.sql()).contains("s.weight AS `权重`");
+        assertThat(q.sql()).contains("s.score AS `得分`");
+        // 完成率 target=0 → NULL；缺口允许负数
+        assertThat(q.sql()).contains("ROUND(s.actual_value / NULLIF(s.target_value, 0) * 100, 2) AS `完成率`");
+        assertThat(q.sql()).contains("s.target_value - s.actual_value AS `缺口`");
+        // 最新快照日子查询
+        assertThat(q.sql()).contains("s.data_date = (SELECT MAX(data_date) FROM PERF_KPI_SCORE"
+                + " WHERE scheme_code = ? AND subject_type = ? AND subject_id = ?)");
+        // 参数顺序：外层 3 个 + 子查询 3 个
+        assertThat(q.params()).containsExactly(
+                "KPI_2026_STD", "EMP", "E001", "KPI_2026_STD", "EMP", "E001");
+    }
+
+    @Test
+    void buildKpiDetail_snapshot_orgSubject_takesOrgCodeContext() {
+        String cfg = "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"ORG\",\"mode\":\"SNAPSHOT\"}";
+        var q = engine.build("KPI_DETAIL", cfg, req("LATEST", Map.of("orgCode", "610100")), 1000, TODAY);
+        assertThat(q.params()).containsExactly(
+                "KPI_2026_STD", "ORG", "610100", "KPI_2026_STD", "ORG", "610100");
+    }
+
+    @Test
+    void buildKpiDetail_trend_latest_pivotByMetricCodeBindings() {
+        var q = engine.build("KPI_DETAIL", KD_TREND_EMP_CFG,
+                req("LATEST", Map.of("empId", "E001")), 1000, TODAY);
+        // 透视：每个配置细项一列，metricCode 全部 ? 绑定，列名 = metricName
+        assertThat(q.sql()).contains("MAX(CASE WHEN s.metric_code = ? THEN s.score END) AS `存款细项`");
+        assertThat(q.sql()).contains("MAX(CASE WHEN s.metric_code = ? THEN s.score END) AS `贷款细项`");
+        assertThat(q.sql()).contains("GROUP BY s.data_date");
+        assertThat(q.sql()).endsWith("ORDER BY s.data_date DESC LIMIT 1");
+        // 参数顺序：SELECT 列的 metricCode 在前，WHERE 主体过滤在后
+        assertThat(q.params()).containsExactly("M_D1", "M_D2", "KPI_2026_STD", "EMP", "E001");
+    }
+
+    @Test
+    void buildKpiDetail_trend_range_appendsDateBetweenAscendingLimit() {
+        ScreenDataReqDTO r = req("RANGE", Map.of("empId", "E001"));
+        r.setDateFrom("2026-07-01");
+        r.setDateTo("2026-07-10");
+        var q = engine.build("KPI_DETAIL", KD_TREND_EMP_CFG, r, 1000, TODAY);
+        assertThat(q.sql()).contains("s.data_date BETWEEN ? AND ?");
+        assertThat(q.sql()).endsWith("ORDER BY s.data_date LIMIT 1000");
+        assertThat(q.params()).containsExactly("M_D1", "M_D2", "KPI_2026_STD", "EMP", "E001",
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 10));
+    }
+
+    @Test
+    void buildKpiDetail_trend_completeRateValueCol_switchesPivotExpr() {
+        String cfg = "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"EMP\",\"mode\":\"TREND\","
+                + "\"valueCol\":\"completeRate\","
+                + "\"metrics\":[{\"metricCode\":\"M_D1\",\"metricName\":\"存款细项\"}]}";
+        var q = engine.build("KPI_DETAIL", cfg, req("LATEST", Map.of("empId", "E001")), 1000, TODAY);
+        // valueCol=completeRate 时透视表达式换成完成率算式
+        assertThat(q.sql()).contains("MAX(CASE WHEN s.metric_code = ? THEN "
+                + "ROUND(s.actual_value / NULLIF(s.target_value, 0) * 100, 2) END) AS `存款细项`");
+        assertThat(q.params()).containsExactly("M_D1", "KPI_2026_STD", "EMP", "E001");
+    }
+
+    @Test
+    void buildKpiDetail_illegalMode_throws43009() {
+        String cfg = "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"EMP\",\"mode\":\"REALTIME\"}";
+        assertThatThrownBy(() -> engine.build("KPI_DETAIL", cfg, req("LATEST", Map.of("empId", "E001")), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildKpiDetail_illegalSubjectType_throws43009() {
+        String cfg = "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"CUST\",\"mode\":\"SNAPSHOT\"}";
+        assertThatThrownBy(() -> engine.build("KPI_DETAIL", cfg, req("LATEST", Map.of("custNo", "C001")), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildKpiDetail_blankSchemeCode_throws43009() {
+        String cfg = "{\"schemaVersion\":2,\"subjectType\":\"EMP\",\"mode\":\"SNAPSHOT\"}";
+        assertThatThrownBy(() -> engine.build("KPI_DETAIL", cfg, req("LATEST", Map.of("empId", "E001")), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildKpiDetail_trendWithoutMetrics_throws43009() {
+        String cfg = "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"EMP\",\"mode\":\"TREND\"}";
+        assertThatThrownBy(() -> engine.build("KPI_DETAIL", cfg, req("LATEST", Map.of("empId", "E001")), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildKpiDetail_illegalValueCol_throws43009() {
+        String cfg = "{\"schemaVersion\":2,\"schemeCode\":\"KPI_2026_STD\",\"subjectType\":\"EMP\",\"mode\":\"TREND\","
+                + "\"valueCol\":\"weight\","
+                + "\"metrics\":[{\"metricCode\":\"M_D1\",\"metricName\":\"存款细项\"}]}";
+        assertThatThrownBy(() -> engine.build("KPI_DETAIL", cfg, req("LATEST", Map.of("empId", "E001")), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildKpiDetail_missingContextParam_throws43010() {
+        // subjectType=EMP 需要 contextParams.empId；缺参属入参校验失败（43010），与配置非法 43009 语义分离
+        assertThatThrownBy(() -> engine.build("KPI_DETAIL", KD_SNAPSHOT_EMP_CFG, req("LATEST", Map.of()), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43010");
+    }
+
     @Test
     void build_unknownSourceKind_throws43009() {
         assertThatThrownBy(() -> engine.build("MAGIC", "{}", req("LATEST", Map.of()), 1000, TODAY))
@@ -153,5 +284,177 @@ class ScreenQueryEngineTest {
         assertThatThrownBy(() -> engine.validateCustomSql("SELECT FROM WHERE"))
                 .isInstanceOf(BizException.class)
                 .hasFieldOrPropertyWithValue("code", "RPT-43002");
+    }
+
+    // ===== WIDE_TABLE aggregation（spec 2026-07-17 §3.3）=====
+
+    /** EMP 宽表单指标（slot 3 存款余额）+ 指定 aggregation 的基准配置 */
+    private static String wideAggCfg(String aggregationJson) {
+        return "{\"table\":\"EMP_INDEX_RESULT\",\"subjectCol\":\"emp_id\",\"subjectParam\":\"empId\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"aggregation\":" + aggregationJson + "}";
+    }
+
+    @Test
+    void buildWideAgg_groupByNone_latest_aggregatesSingleRowWithoutSubjectParam() {
+        var q = engine.build("WIDE_TABLE", wideAggCfg("{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}"),
+                req("LATEST", Map.of()), 1000, TODAY);
+        assertThat(q.sql()).startsWith("SELECT SUM(val_3) AS `存款余额` FROM EMP_INDEX_RESULT");
+        // 仍按 SYS_CONTROL 最新版本过滤
+        assertThat(q.sql()).contains(
+                "version = COALESCE((SELECT current_version FROM SYS_CONTROL WHERE scope_dim = 'EMP'");
+        // LATEST = 当前版本内最新快照日单日聚合（跨主体不能再用 ORDER BY ... LIMIT 1）
+        assertThat(q.sql()).contains(
+                "data_date = (SELECT MAX(data_date) FROM EMP_INDEX_RESULT WHERE version = COALESCE(");
+        // 跨主体聚合：不再要求主体上下文参数
+        assertThat(q.sql()).doesNotContain("emp_id = ?");
+        assertThat(q.sql()).endsWith("LIMIT 1000");
+        assertThat(q.params()).isEmpty();
+    }
+
+    @Test
+    void buildWideAgg_groupByNone_range_bindsFromToInOrder() {
+        var q = engine.build("WIDE_TABLE", wideAggCfg("{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}"),
+                req("LAST_10D", Map.of()), 1000, TODAY);
+        assertThat(q.sql()).contains("data_date BETWEEN ? AND ?");
+        assertThat(q.params()).containsExactly(LocalDate.of(2026, 7, 3), TODAY);
+    }
+
+    @Test
+    void buildWideAgg_groupBySubject_groupsBySubjectColOrderedByAggDesc() {
+        var q = engine.build("WIDE_TABLE", wideAggCfg("{\"groupBy\":\"SUBJECT\",\"agg\":\"MAX\"}"),
+                req("LATEST", Map.of()), 1000, TODAY);
+        assertThat(q.sql()).startsWith("SELECT emp_id, MAX(val_3) AS `存款余额` FROM EMP_INDEX_RESULT");
+        assertThat(q.sql()).contains("GROUP BY emp_id");
+        // 排名/对比场景：按第一个聚合列倒序
+        assertThat(q.sql()).endsWith("ORDER BY `存款余额` DESC LIMIT 1000");
+        assertThat(q.params()).isEmpty();
+    }
+
+    @Test
+    void buildWideAgg_groupByDate_range_returnsSeriesWithFilterParamOrder() {
+        String cfg = "{\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"org_code\",\"subjectParam\":\"orgCode\","
+                + "\"metrics\":[{\"metricCode\":\"M_0002\",\"metricName\":\"贷款余额\",\"slot\":7}],"
+                + "\"aggregation\":{\"groupBy\":\"DATE\",\"agg\":\"AVG\","
+                + "\"filters\":[{\"col\":\"org_code\",\"op\":\"EQ\",\"value\":\"610100\"}]}}";
+        var q = engine.build("WIDE_TABLE", cfg, req("LAST_10D", Map.of()), 1000, TODAY);
+        assertThat(q.sql()).startsWith("SELECT data_date, AVG(val_7) AS `贷款余额` FROM ORG_INDEX_RESULT");
+        assertThat(q.sql()).contains("AND org_code = ?");
+        assertThat(q.sql()).contains("GROUP BY data_date");
+        assertThat(q.sql()).endsWith("ORDER BY data_date LIMIT 1000");
+        // 参数顺序：周期范围在前，filters 依次在后
+        assertThat(q.params()).containsExactly(LocalDate.of(2026, 7, 3), TODAY, "610100");
+    }
+
+    @Test
+    void buildWideAgg_filters_eachOpMapsToSqlOperator() {
+        String filters = "[{\"col\":\"emp_id\",\"op\":\"EQ\",\"value\":\"E001\"},"
+                + "{\"col\":\"data_date\",\"op\":\"NE\",\"value\":\"2026-07-01\"},"
+                + "{\"col\":\"val_3\",\"op\":\"GT\",\"value\":\"1\"},"
+                + "{\"col\":\"val_3\",\"op\":\"GE\",\"value\":\"100\"},"
+                + "{\"col\":\"val_3\",\"op\":\"LT\",\"value\":\"9\"},"
+                + "{\"col\":\"val_3\",\"op\":\"LE\",\"value\":\"8\"}]";
+        var q = engine.build("WIDE_TABLE",
+                wideAggCfg("{\"groupBy\":\"NONE\",\"agg\":\"SUM\",\"filters\":" + filters + "}"),
+                req("LATEST", Map.of()), 1000, TODAY);
+        assertThat(q.sql()).contains("AND emp_id = ?");
+        assertThat(q.sql()).contains("AND data_date <> ?");
+        assertThat(q.sql()).contains("AND val_3 > ?");
+        assertThat(q.sql()).contains("AND val_3 >= ?");
+        assertThat(q.sql()).contains("AND val_3 < ?");
+        assertThat(q.sql()).contains("AND val_3 <= ?");
+        // 值全部 ? 绑定且保持声明顺序（禁止任何字符串拼接用户值）
+        assertThat(q.params()).containsExactly("E001", "2026-07-01", "1", "100", "9", "8");
+    }
+
+    @Test
+    void buildWideAgg_filterIn_splitsCommaIntoMultipleBinds() {
+        var q = engine.build("WIDE_TABLE",
+                wideAggCfg("{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\","
+                        + "\"filters\":[{\"col\":\"emp_id\",\"op\":\"IN\",\"value\":\"E001,E002,E003\"}]}"),
+                req("LATEST", Map.of()), 1000, TODAY);
+        assertThat(q.sql()).contains("AND emp_id IN (?, ?, ?)");
+        assertThat(q.params()).containsExactly("E001", "E002", "E003");
+    }
+
+    @Test
+    void buildWideAgg_filterColNotAllowed_throws43009() {
+        // val_99 未配置为该数据源的槽位列 → 越界（仅允许主体列/data_date/已配置 val_N）
+        assertThatThrownBy(() -> engine.build("WIDE_TABLE",
+                wideAggCfg("{\"groupBy\":\"NONE\",\"agg\":\"SUM\","
+                        + "\"filters\":[{\"col\":\"val_99\",\"op\":\"EQ\",\"value\":\"1\"}]}"),
+                req("LATEST", Map.of()), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildWideAgg_filterOpNotAllowed_throws43009() {
+        assertThatThrownBy(() -> engine.build("WIDE_TABLE",
+                wideAggCfg("{\"groupBy\":\"NONE\",\"agg\":\"SUM\","
+                        + "\"filters\":[{\"col\":\"emp_id\",\"op\":\"LIKE\",\"value\":\"E%\"}]}"),
+                req("LATEST", Map.of()), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildWideAgg_illegalGroupBy_throws43009() {
+        assertThatThrownBy(() -> engine.build("WIDE_TABLE",
+                wideAggCfg("{\"groupBy\":\"CUSTOM\",\"agg\":\"SUM\"}"),
+                req("LATEST", Map.of()), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildWideAgg_illegalAggFunc_throws43009() {
+        assertThatThrownBy(() -> engine.build("WIDE_TABLE",
+                wideAggCfg("{\"groupBy\":\"NONE\",\"agg\":\"MEDIAN\"}"),
+                req("LATEST", Map.of()), 1000, TODAY))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43009");
+    }
+
+    @Test
+    void buildWide_withFieldMetaButNoAggregation_behaviorUnchanged() {
+        // 回归保障：无 aggregation → 明细行为完全不变（fieldMeta 只影响响应元数据，不影响 SQL）
+        String cfg = "{\"table\":\"EMP_INDEX_RESULT\",\"subjectCol\":\"emp_id\",\"subjectParam\":\"empId\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"role\":\"METRIC\"}]}";
+        var q = engine.build("WIDE_TABLE", cfg, req("LATEST", Map.of("empId", "E001")), 1000, TODAY);
+        assertThat(q.sql()).contains("emp_id = ?");
+        assertThat(q.sql()).endsWith("ORDER BY data_date DESC LIMIT 1");
+        assertThat(q.params()).containsExactly("E001");
+    }
+
+    // ===== fieldMeta → columnsMeta（spec 2026-07-17 §3.2）=====
+
+    @Test
+    void fillColumnsMeta_matchesByColumnName_skipsUnconfiguredColumns() {
+        String cfg = "{\"table\":\"EMP_INDEX_RESULT\","
+                + "\"fieldMeta\":[{\"col\":\"存款余额\",\"alias\":\"一般性存款\",\"role\":\"METRIC\","
+                + "\"unit\":\"万元\",\"decimals\":2},"
+                + "{\"col\":\"data_date\",\"role\":\"DIM\"}]}";
+        ScreenDataRespDTO resp = new ScreenDataRespDTO(
+                List.of("data_date", "存款余额", "贷款余额"), List.of());
+        engine.fillColumnsMeta(resp, cfg);
+        // 固化实现选择：仅出现配置过 fieldMeta 的列，顺序跟随 columns；未配置列（贷款余额）不出现
+        assertThat(resp.getColumnsMeta()).hasSize(2);
+        assertThat(resp.getColumnsMeta().get(0).getCol()).isEqualTo("data_date");
+        assertThat(resp.getColumnsMeta().get(0).getRole()).isEqualTo("DIM");
+        assertThat(resp.getColumnsMeta().get(0).getAlias()).isNull();
+        assertThat(resp.getColumnsMeta().get(1).getCol()).isEqualTo("存款余额");
+        assertThat(resp.getColumnsMeta().get(1).getAlias()).isEqualTo("一般性存款");
+        assertThat(resp.getColumnsMeta().get(1).getUnit()).isEqualTo("万元");
+        assertThat(resp.getColumnsMeta().get(1).getDecimals()).isEqualTo(2);
+    }
+
+    @Test
+    void fillColumnsMeta_withoutFieldMeta_keepsNull() {
+        // 固化实现选择：无 fieldMeta 配置 → columnsMeta 保持 null（旧调用方零影响）
+        ScreenDataRespDTO resp = new ScreenDataRespDTO(List.of("cnt"), List.of());
+        engine.fillColumnsMeta(resp, "{\"table\":\"EMP_INDEX_RESULT\"}");
+        assertThat(resp.getColumnsMeta()).isNull();
     }
 }

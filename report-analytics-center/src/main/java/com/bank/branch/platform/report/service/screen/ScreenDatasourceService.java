@@ -5,6 +5,7 @@ import com.bank.branch.platform.report.dto.req.ScreenDatasourceSaveReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenTryRunReqDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDatasourceRespDTO;
+import com.bank.branch.platform.report.dto.resp.ScreenKpiSchemeRespDTO;
 
 import java.util.List;
 
@@ -27,6 +28,9 @@ public interface ScreenDatasourceService {
 
     /** 配置态试跑（LIMIT 10，高危审计） */
     ScreenDataRespDTO tryRun(ScreenTryRunReqDTO req);
+
+    /** KPI 方案下拉（仅 ACTIVE，KPI_DETAIL 数据源配置用） */
+    List<ScreenKpiSchemeRespDTO> listKpiSchemes();
 
     /** 运行时统一取数（Controller 唯一入口，内部完成实体加载） */
     ScreenDataRespDTO queryData(ScreenDataReqDTO req);
