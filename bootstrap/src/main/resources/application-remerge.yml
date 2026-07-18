@@ -1,0 +1,5 @@
+# 红色引擎合并开发/验收专用 profile：数据源切到 yiti_test，其余全部继承默认配置。
+# 用法：cd bootstrap && mvn spring-boot:run -Dspring-boot.run.profiles=remerge
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/yiti_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
