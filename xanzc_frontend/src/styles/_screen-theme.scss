@@ -118,10 +118,15 @@
 
   .scr-block {
     position: relative;
+    // 宿主恒为定高盒子(运行时 ScreenRenderer .scr-abs 绝对定位 / 设计器 Shape → .w-chart 100%),
+    // 必须撑满否则高度随内容塌陷,echarts 图表(height:100% 链)拿到 0 高 canvas 静默空白——
+    // 契约测试 ScreenBlockHeight.spec.js 守护(2026-07-18 修复)
+    height: 100%;
     background: var(--scr-bg-card);
     border: 1px solid var(--scr-border);
     border-radius: 6px;
-    box-shadow: inset 0 0 24px rgba(0, 229, 255, 0.05);
+    // 2026-07-17 视觉打磨:内侧弥散光保持,外侧补一圈极弱青色泛光,卡片在深底上更"浮起"(幅度克制不喧宾)
+    box-shadow: inset 0 0 24px rgba(0, 229, 255, 0.05), 0 0 14px rgba(0, 229, 255, 0.07);
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -147,6 +152,9 @@
       color: var(--scr-cyan);
       letter-spacing: 2px;
       flex: none;
+      // 2026-07-17 视觉打磨:标题文字弱发光 + 标题栏底部 1px 青色 hairline(inset 阴影实现,不占布局)
+      text-shadow: 0 0 10px rgba(0, 229, 255, 0.35);
+      box-shadow: inset 0 -1px 0 rgba(0, 229, 255, 0.14);
       &::before { content: '▍'; margin-right: 4px; }
     }
     .scr-block-body { flex: 1; min-height: 0; padding: 4px 10px 10px; position: relative; }
