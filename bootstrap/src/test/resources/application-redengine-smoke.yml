@@ -1,0 +1,89 @@
+# ============================================================
+# RedEngine Smoke Profile
+# 供 RedEngineSmokeIT 使用：验证红色引擎鉴权链路真实 401/403/200。
+#
+# 为什么不复用 "test" profile：
+#   auth-permission-center 的 WebMvcAuthConfig 上标注 @Profile("!test")——
+#   这是全仓库唯一注册生产 AuthenticationFilter + AuthorizationInterceptor（真实
+#   RBAC 校验）的地方。字面量 "test" profile 下该 Configuration 整体不加载，
+#   TestSecurityConfig 的替代 Filter 只检查 session 是否存在，不做 RBAC 校验，
+#   因此"无 P_RE_* 权限角色访问返回 403"这类断言在 "test" profile 下无法真实触发。
+#   本 profile 沿用 lead-e2e/flowable-e2e 的既有做法（同样只是把 profile 名字改成
+#   非字面量 "test"，未改任何生产代码），换取真实鉴权链路，同时数据源仍指向与
+#   "test" profile 相同的本地 onepl_test_bootstrap（Task 3/4 红色引擎种子已在此库）。
+#
+# 全仓库 grep "@Profile" 只有 WebMvcAuthConfig 这一处，故切换 profile 名字
+# 不会影响任何其它生产 Bean 的装配行为。
+# ============================================================
+server:
+  port: 0
+
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: djdev
+    type: com.zaxxer.hikari.HikariDataSource
+  quartz:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.session.SessionAutoConfiguration
+      - com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceAutoConfigure
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
+      # 红色引擎不依赖工作流，沿用 application-test.yml 的做法整体排除 Flowable
+      - org.flowable.spring.boot.ProcessEngineAutoConfiguration
+      - org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineAutoConfiguration
+      - org.flowable.spring.boot.app.AppEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineAutoConfiguration
+      - org.flowable.spring.boot.dmn.DmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineAutoConfiguration
+      - org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineAutoConfiguration
+      - org.flowable.spring.boot.cmmn.CmmnEngineServicesAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryAutoConfiguration
+      - org.flowable.spring.boot.eventregistry.EventRegistryServicesAutoConfiguration
+      - org.flowable.spring.boot.RestApiAutoConfiguration
+      - org.flowable.spring.boot.FlowableJpaAutoConfiguration
+      - org.flowable.spring.boot.FlowableSecurityAutoConfiguration
+      - org.flowable.spring.boot.EndpointAutoConfiguration
+      - org.flowable.spring.boot.actuate.info.FlowableInfoAutoConfiguration
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data.sql
+      encoding: UTF-8
+      continue-on-error: true
+
+flowable:
+  enabled: false
+  async-executor-activate: false
+  job-executor-activate: false
+  app-engine:
+    enabled: false
+    async-executor-activate: false
+  dmn-engine:
+    enabled: false
+    async-executor-activate: false
+  cmmn:
+    enabled: false
+    async-executor-activate: false
+  idm:
+    enabled: false
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.bank.branch.platform: DEBUG
+    org.mybatis: INFO
+    root: INFO
