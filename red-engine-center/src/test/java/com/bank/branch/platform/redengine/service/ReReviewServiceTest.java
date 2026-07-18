@@ -22,15 +22,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.Year;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -189,6 +186,21 @@ class ReReviewServiceTest {
         verify(reScoreMapper, never()).selectList(any());
         verify(reSubmitMapper).updateById(ArgumentMatchers.<ReSubmit>argThat(u ->
                 u.getId().equals(13L) && u.getStatus().equals(2)));
+    }
+
+    @Test
+    void approve_scoreZero_skipsScoreInsertion_butStillAdvancesStatus() {
+        // 防边界盲区：score=BigDecimal.ZERO（非 null）时，score.compareTo(BigDecimal.ZERO) > 0 应为 false，
+        // 跳过评分落库分支；若该判断被误改为 >= 0，本用例会因 reScoreMapper.insert 被调用而失败
+        ReSubmit existing = existingSubmit(14L, 100L, "1.1", new BigDecimal("35"));
+        when(reSubmitMapper.selectById(14L)).thenReturn(existing);
+
+        reReviewService.approve(14L, BigDecimal.ZERO, "免于评分", "E007");
+
+        verify(reScoreMapper, never()).insert(any(ReScore.class));
+        verify(reScoreMapper, never()).selectList(any());
+        verify(reSubmitMapper).updateById(ArgumentMatchers.<ReSubmit>argThat(u ->
+                u.getId().equals(14L) && u.getStatus().equals(2)));
     }
 
     @Test

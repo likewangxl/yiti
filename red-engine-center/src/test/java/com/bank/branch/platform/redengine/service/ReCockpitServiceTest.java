@@ -259,6 +259,43 @@ class ReCockpitServiceTest {
     }
 
     @Test
+    void generateAnnualResult_sameDimensionTwoScores_sumsUp() {
+        // 防边界盲区：同一党组织(orgId=500)同一 dimension(dim1) 两条评分应求和(10+15=25)，
+        // 而非被后一条覆盖——若 orgDimensionSums.merge(...) 被误改为 put(...) 会导致本用例失败(结果=15)
+        ReSubmit submit1 = submitWithDimension(11L, "dim1");
+        ReSubmit submit2 = submitWithDimension(12L, "dim1");
+        when(reSubmitMapper.selectList(any())).thenReturn(List.of(submit1, submit2));
+
+        ReScore score1 = scoreForOrgAndSubmit(500L, 11L, new BigDecimal("10"));
+        ReScore score2 = scoreForOrgAndSubmit(500L, 12L, new BigDecimal("15"));
+        when(reScoreMapper.selectList(any())).thenReturn(List.of(score1, score2));
+        when(reAnnualResultMapper.selectOne(any())).thenReturn(null);
+
+        reCockpitService.generateAnnualResult(2026);
+
+        ArgumentCaptor<ReAnnualResult> captor = ArgumentCaptor.forClass(ReAnnualResult.class);
+        verify(reAnnualResultMapper).insert(captor.capture());
+        ReAnnualResult saved = captor.getValue();
+
+        assertThat(saved.getOrgId()).isEqualTo(500L);
+        assertThat(saved.getDim1Score()).isEqualByComparingTo("25");
+    }
+
+    @Test
+    void generateAnnualResult_emptyScores_noInsertNoUpdate() {
+        // reScoreMapper.selectList 返回空列表的显式用例：allScores 为空 → submitIds 为空
+        // → 跳过 reSubmitMapper.selectList 查询（if (!submitIds.isEmpty())）→ orgDimensionSums 为空
+        // → 循环体不执行，既不 insert 也不 updateById
+        when(reScoreMapper.selectList(any())).thenReturn(List.of());
+
+        reCockpitService.generateAnnualResult(2026);
+
+        verify(reSubmitMapper, never()).selectList(any());
+        verify(reAnnualResultMapper, never()).insert(any(ReAnnualResult.class));
+        verify(reAnnualResultMapper, never()).updateById(any(ReAnnualResult.class));
+    }
+
+    @Test
     void generateAnnualResult_existingRecordFound_updatesById_doesNotInsert() {
         ReSubmit submitDim1 = submitWithDimension(21L, "dim1");
         when(reSubmitMapper.selectList(any())).thenReturn(List.of(submitDim1));
