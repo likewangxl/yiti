@@ -29,7 +29,17 @@ const routes = [
     path: '/redengine',
     component: () => import('@/views/redengine/layout/RedEngineLayout.vue'),
     redirect: '/redengine/dashboard',
-    children: [] // Task 14 填充
+    children: [
+      { path: 'dashboard', name: 'RedEngineDashboard', component: () => import('@/views/redengine/dashboard/DashboardView.vue'), meta: { title: '工作台' } },
+      { path: 'report', name: 'RedEngineReport', component: () => import('@/views/redengine/report/JointView.vue'), meta: { title: '四大维度材料上报' } },
+      { path: 'records', name: 'RedEngineRecords', component: () => import('@/views/redengine/records/RecordsView.vue'), meta: { title: '上报记录' } },
+      { path: 'branch-review', name: 'RedEngineBranchReview', component: () => import('@/views/redengine/branch-review/BranchReviewView.vue'), meta: { title: '支部审核工作台' } },
+      { path: 'cockpit', name: 'RedEngineCockpit', component: () => import('@/views/redengine/cockpit/CockpitView.vue'), meta: { title: '全局数据驾驶舱' } },
+      { path: 'warning', name: 'RedEngineWarning', component: () => import('@/views/redengine/warning/WarningView.vue'), meta: { title: '红黄牌预警池' } },
+      { path: 'review', name: 'RedEngineReview', component: () => import('@/views/redengine/review/ReviewView.vue'), meta: { title: '沉浸式审核工作台' } },
+      { path: 'archive', name: 'RedEngineArchive', component: () => import('@/views/redengine/archive/ArchiveView.vue'), meta: { title: '年度考核归档' } },
+      { path: 'export', name: 'RedEngineExport', component: () => import('@/views/redengine/export/ExportView.vue'), meta: { title: '数据导出' } }
+    ]
   },
   {
     path: '/',

@@ -1,0 +1,50 @@
+// 红色引擎（党建）前端 API 层。
+// 全部走平台 http.js 的 call(method, url, config) —— 复用 yiti session/拦截器/ResponseWrapper 解包，
+// 不引入独立 axios 实例、不碰 JWT/localStorage（F2）。URL 与红色引擎种子 SQL
+// docs/superpowers/sql/2026-07-18-redengine-seed.sql 的 PT_RESOURCE.RESOURCE_URL 逐条核对一致。
+import { call } from '@/api/http';
+
+// ── 党组织 ──
+export const getOrgTree = () => call('get', '/re/orgs/tree');
+export const getOrg = (id) => call('get', `/re/orgs/${id}`);
+export const addOrg = (data) => call('post', '/re/orgs', { data });
+export const updateOrg = (id, data) => call('put', `/re/orgs/${id}`, { data });
+export const deleteOrg = (id) => call('delete', `/re/orgs/${id}`);
+
+// ── 用户党组织映射 ──
+export const listUserMaps = () => call('get', '/re/user-party-maps');
+export const bindUserMap = (data) => call('post', '/re/user-party-maps', { data });
+
+// ── 上报 ──
+export const createSubmit = (data) => call('post', '/re/submits', { data });
+export const getMySubmits = (pageNo = 1, pageSize = 10) =>
+  call('get', '/re/submits/my', { params: { pageNo, pageSize } });
+export const getSubmit = (id) => call('get', `/re/submits/${id}`);
+
+// ── 审核 ──
+export const getReviewQueue = (pageNo = 1, pageSize = 10) =>
+  call('get', '/re/reviews/queue', { params: { pageNo, pageSize } });
+export const getReviewPreview = (id) => call('get', `/re/reviews/${id}/preview`);
+export const approveSubmit = (id, data) => call('post', `/re/reviews/${id}/approve`, { data });
+export const rejectSubmit = (id, data) => call('post', `/re/reviews/${id}/reject`, { data });
+
+// ── 驾驶舱 ──
+export const getCockpitOverview = () => call('get', '/re/cockpit/overview');
+export const getRanking = () => call('get', '/re/cockpit/ranking');
+export const getOverdueList = () => call('get', '/re/cockpit/overdue');
+// 纠偏（后端实际签名 ReCockpitController.executeOverdue 是
+// @PostMapping("/overdue/execute") @Valid @RequestBody ReOverdueExecuteReqDTO，
+// 字段 submitId/deductionPoints/reason，reason 为 @NotBlank 必填，非简报原先的 query params）
+export const executeOverdue = (data) => call('post', '/re/cockpit/overdue/execute', { data });
+export const getRedWarning = () => call('get', '/re/cockpit/warning/red');
+export const getYellowWarning = () => call('get', '/re/cockpit/warning/yellow');
+export const archiveSettlement = (period) =>
+  call('get', '/re/cockpit/archive/settlement', { params: { period } });
+export const generateAnnual = (year) => call('post', `/re/cockpit/archive/generate/${year}`);
+
+// ── 导出（二进制直下）──
+export const exportData = (type) => call('get', `/re/export/${type}`, { responseType: 'blob' });
+
+// ── 文件上传（复用平台 governance 端点，非红色引擎自建）──
+export const uploadFile = (formData) =>
+  call('post', '/files/upload', { data: formData, headers: { 'Content-Type': 'multipart/form-data' } });
