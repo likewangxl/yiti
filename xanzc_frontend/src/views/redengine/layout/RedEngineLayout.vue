@@ -1,6 +1,6 @@
 <template>
   <el-container class="re-layout">
-    <el-aside width="210px" class="re-aside">
+    <el-aside width="275px" class="re-aside">
       <div class="re-sidebar">
         <div class="re-sidebar-logo">
           <component :is="Star" class="re-logo-icon" />
@@ -61,7 +61,7 @@
 //   扁平的 10 项（无 children），故本次移植未保留递归子菜单渲染；如 Task 14/15 需要二级菜单再补 SidebarItem 递归。
 // - 源工程 MainLayout 的侧栏折叠开关（Sidebar @toggle-collapse / TopNav @toggle-sidebar）在源码里两端均未真正
 //   emit 事件（Sidebar.vue 只是 defineExpose 了一个方法，从未被调用），是无效代码；本次移植未保留这段死代码，
-//   侧栏宽度固定为 210px。
+//   侧栏宽度固定为 275px（对齐源 MainLayout.vue 展开态默认值 sidebarWidth=ref('275px')，审查返工按建议对齐）。
 import { ref, computed, provide, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
@@ -107,10 +107,10 @@ const menuItems = [
   { path: '/redengine/dashboard', title: '工作台', icon: 'HomeFilled', res: null },
   { path: '/redengine/report', title: '四大维度材料上报', icon: 'EditPen', res: '/api/re/submits' },
   { path: '/redengine/records', title: '上报记录', icon: 'Document', res: '/api/re/submits/my' },
-  { path: '/redengine/branch-review', title: '支部审核工作台', icon: 'Stamp', res: '/api/re/reviews/queue' },
+  { path: '/redengine/branch-review', title: '支部审核工作台', icon: 'Stamp', res: '/api/re/reviews/**' },
   { path: '/redengine/cockpit', title: '全局数据驾驶舱', icon: 'DataAnalysis', res: '/api/re/cockpit/**' },
   { path: '/redengine/warning', title: '红黄牌预警池', icon: 'WarningFilled', res: '/api/re/cockpit/**' },
-  { path: '/redengine/review', title: '沉浸式审核工作台', icon: 'Checked', res: '/api/re/reviews/queue' },
+  { path: '/redengine/review', title: '沉浸式审核工作台', icon: 'Checked', res: '/api/re/reviews/**' },
   { path: '/redengine/archive', title: '年度考核归档', icon: 'Trophy', res: '/api/re/cockpit/**' },
   { path: '/redengine/export', title: '数据导出', icon: 'Download', res: '/api/re/export/*' },
   { path: '/redengine/org-manage', title: '党组织管理', icon: 'Setting', res: '/api/re/orgs' }

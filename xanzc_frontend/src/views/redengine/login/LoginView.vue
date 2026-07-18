@@ -28,7 +28,7 @@
             <el-input
               v-model="loginForm.username"
               placeholder="请输入用户名"
-              prefix-icon="User"
+              :prefix-icon="User"
               size="large"
               clearable
             />
@@ -39,7 +39,7 @@
               v-model="loginForm.password"
               type="password"
               placeholder="请输入密码"
-              prefix-icon="Lock"
+              :prefix-icon="Lock"
               size="large"
               show-password
               clearable
@@ -95,11 +95,18 @@
 // 注：下方"演示账号"区块的 admin/wang/zhangsh/xiaoli 账号密码是源红色引擎工程（red-engine-server）
 // 自带的种子数据，与平台 yiti 库账号体系无关；按"模板原样保留"要求本次未删改这些展示文案，
 // 点击仅回填输入框，不会自动提交，用户仍需填入平台真实账号密码后点击"登录"。
+//
+// 审查返工（Finding 2）：用户名/密码输入框的 prefix-icon 由裸字符串 "User"/"Lock" 改为 :prefix-icon="User"/"Lock"
+// （对象绑定）。源工程 main.js 对 @element-plus/icons-vue 做了全量 app.component 注册，裸字符串能被
+// resolveDynamicComponent 按全局注册名解析成功；平台 main.js 未做这层全量注册，裸字符串会解析失败、图标不渲染
+// （平台其它页面如 Dashboard.vue/Resources.vue/Users.vue/Metrics.vue 用到 prefix-icon 时也全部是 : 绑定写法）。
+// 这是"模板逐字节保真"要求下唯一必要的偏离：保留文字但让图标在新环境里不可见，不是真正的保真，
+// 故对这两处做最小必要改动（属性名/绑定符号不变，只把值从字符串字面量换成导入的图标组件对象）。
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { ElMessage } from 'element-plus';
-import { Star } from '@element-plus/icons-vue';
+import { Star, User, Lock } from '@element-plus/icons-vue';
 import { login } from '@/api/auth';
 
 const router = useRouter();
