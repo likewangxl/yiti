@@ -79,6 +79,27 @@ V1.0 交付内容：
 > 自动适应×1/CommonAttr 模板契约×1/DefaultLayout full-bleed 契约×3）。
 > 操作指南同步：`docs/modules/report-analytics-center/10-大屏设计器操作指南.md`。
 
+> 2026-07-17/18 screen 子域 V3：设计器扩充（借鉴 DataEase）+ KPI 明细数据源 + DATA_SCOPE——
+> spec：`docs/superpowers/specs/2026-07-17-screen-designer-expansion-design.md`。
+> **后端**：①新 source_kind=`KPI_DETAIL`（PERF_KPI_SCORE T+1 快照；SNAPSHOT 细项明细含完成率/缺口
+> 现算列、TREND 按细项 CASE WHEN 透视，valueCol=score|completeRate）；`PERF_KPI_SCORE`/`PERF_KPI_SCHEME`
+> 入白名单；新端点 `GET /api/screen/admin/kpi-schemes`（资源 `R_RPT_SCR_KPI_SCH`，Mapper 名为
+> `ScreenKpiSchemeMapper`——**勿改回 PerfKpiSchemeMapper，与 performance 模块同名 Mapper 会在 bootstrap
+> 合体时 ConflictingBeanDefinitionException**）；②config_json 增 `fieldMeta`（别名/DIM|METRIC/单位/小数位，
+> 响应新增可选 `columnsMeta`）与 WIDE_TABLE `aggregation`（groupBy NONE|SUBJECT|DATE + SUM/AVG/... +
+> filters op 白名单全 ? 绑定），`support/ScreenConfigSchema` 集中 schemaVersion 读时兼容；③取数
+> DATA_SCOPE：`ScreenDataScopeGuard`（BizType=REPORT 并集取最大，SELF/ORG/ORG_SUBTREE 校验
+> contextParams 归属，fail-close 新错误码 **RPT-43013**；config_json `scopeMode:GLOBAL` 需 ALL/省级）。
+> **前端**：图表 innerType 扩到 13 种（启用 BAR_COMPARE/AREA_STACK/GAUGE/TABLE_LIST + 新增
+> KPI_DETAIL_TABLE/KPI_RADAR/LIQUID_PROGRESS(自绘零依赖)/PROGRESS_LIST，KPI 类 needKinds 限绑
+> KPI_DETAIL）；素材新增 TitleBar/DecorLine/Marquee + BorderDecor 扩到 6 种 + 画布/组件渐变与图片背景；
+> 画布多选/框选/成组(Group 节点)/对齐分布/图层拖拽排序/组件改名；`PeriodFilter` 全屏周期过滤器
+> （每屏 ≤1 后端校验，TIMESERIES 图表联动刷新）；数据源管理页适配全部新配置。
+> **坑**：`.scr-block` 必须 height:100%（否则 echarts 组件 0 高 canvas 静默空白，
+> `ScreenBlockHeight.spec.js` 契约守护）。SQL/种子：`docs/superpowers/sql/2026-07-18-screen-expansion-*.sql`
+> （资源+BIZ_SCOPE 对齐、SCRDS_SEED08~11、三屏重配发布导出）。测试基线：模块 316 用例、
+> 9 个 pre-existing 失败（Dashboard×7 + NoEntityInController Arch×2，均与 screen 无关）；vitest 269 条。
+
 ## 红线（不被任何业务模块依赖）
 
 `report-analytics-center` 是**只读**模块，**禁止**被任何业务模块依赖：
