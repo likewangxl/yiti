@@ -29,7 +29,9 @@
       </div>
       <CanvasCore class="dsn2-center" />
       <div class="dsn2-right">
-        <component v-if="store.curComponent" :is="attrOf(store.curComponent.component)" :element="store.curComponent" />
+        <!-- 右栏三态:多选=多选工具条(对齐/分布/成组);单选=组件属性面板;未选=画布全局设置 -->
+        <MultiSelectBar v-if="store.curComponents.length > 1" />
+        <component v-else-if="store.curComponent" :is="attrOf(store.curComponent.component)" :element="store.curComponent" />
         <CanvasAttr v-else />
       </div>
     </div>
@@ -59,13 +61,14 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { listScreens, getScreenCanvas, saveScreen, saveScreenCanvas, publishScreenCanvas,
   discardScreenCanvas, rollbackScreenCanvas, listScreenPublishLogs } from '@/api/screen';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
-import { fitScale, clampRect } from '@/views/screen/designer/utils/scale';
+import { fitScale } from '@/views/screen/designer/utils/scale';
 import { cloneComponentForClipboard, pasteFromClipboard } from '@/views/screen/designer/utils/clipboard';
 import { findAttr } from '@/views/screen/designer/widgets';
 import CanvasCore from './canvas/CanvasCore.vue';
 import ComponentPanel from './panels/ComponentPanel.vue';
 import LayerPanel from './panels/LayerPanel.vue';
 import CanvasAttr from './panels/CanvasAttr.vue';
+import MultiSelectBar from './panels/MultiSelectBar.vue';
 
 const store = useScreenDesignerStore();
 const screens = ref([]);
@@ -206,17 +209,16 @@ function onKey(e) {
     const node = pasteFromClipboard(clipboard.value);
     if (node) { e.preventDefault(); store.addComponent(node); } // addComponent 内部已选中新节点
   }
-  else if (e.key === 'Delete') { store.removeCurrent(); }
-  else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && store.curComponent) {
+  else if (e.key === 'Delete') { store.removeSelected(); } // 批量口径(单选=长度 1 特例)
+  else if (e.key === 'Escape') { store.clearSelection(); }
+  else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && store.curComponents.length) {
     e.preventDefault();
     const step = e.shiftKey ? 10 : 1;
-    const s = store.curComponent.style;
-    const patch = { ArrowUp: { top: s.top - step }, ArrowDown: { top: s.top + step },
-      ArrowLeft: { left: s.left - step }, ArrowRight: { left: s.left + step } }[e.key];
-    // clampRect 兜底禁拖出画布——与拖拽/8点缩放/CommonAttr 数值输入统一口径,
-    // 否则连续按方向键可把组件顶出 1920×1080 设计基准之外(唯一遗漏的移动路径)。
-    store.setShapeStyle(clampRect({ ...s, ...patch }));
-    store.pushSnapshotDebounced();
+    const [dx, dy] = { ArrowUp: [0, -step], ArrowDown: [0, step],
+      ArrowLeft: [-step, 0], ArrowRight: [step, 0] }[e.key];
+    // nudgeSelected 内部逐个 clampRect 兜底禁移出画布(与拖拽/8点缩放/CommonAttr 统一口径),
+    // 多选时批量微移,单选行为与原先一致;连续按键走防抖快照。
+    store.nudgeSelected(dx, dy);
   }
 }
 onMounted(async () => {

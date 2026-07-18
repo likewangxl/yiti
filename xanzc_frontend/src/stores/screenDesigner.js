@@ -4,6 +4,10 @@ import {
   createSnapshotStack, record as snapRecord, undo as snapUndo,
   redo as snapRedo, canUndo as snapCanUndo, canRedo as snapCanRedo, deepClone
 } from '@/views/screen/designer/utils/snapshotStack';
+import { clampRect } from '@/views/screen/designer/utils/scale';
+import { normalizeCanvasStyle } from '@/views/screen/designer/utils/background';
+import { alignRects, distributeRects } from '@/views/screen/designer/utils/align';
+import { makeGroup, ungroup } from '@/views/screen/designer/utils/group';
 
 /**
  * 大屏设计器 store(setup-store 写法,对齐 stores/user.js)。
@@ -17,14 +21,19 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
   const viewLevel = ref('BRANCH');
   const canvasVersion = ref(0);
   const publishStatus = ref(0);
-  const canvasStyle = ref({ schemaVersion: 1, designWidth: 1920, designHeight: 1080,
-    background: '#050e2b', adaptor: 'keepProportion', themeOverride: {} });
+  // 背景增强(2026-07-17):backgroundType 纯色/渐变/图片三选一 + bgGradient/bgImage,
+  // 旧 canvas_style_json(仅 background 纯色)由 normalizeCanvasStyle 读时补默认,不写迁移
+  const canvasStyle = ref(normalizeCanvasStyle({ schemaVersion: 1, designWidth: 1920, designHeight: 1080,
+    background: '#050e2b', adaptor: 'keepProportion', themeOverride: {} }));
   // CANVAS_DRAFT_JSON 契约的顶层 schemaVersion(与 canvasStyle.schemaVersion 是两套独立版本号,
   // 分别对应 draft/style 两份 JSON 契约);loadFromEditor 装载、toSavePayload 原样带回(评审 Important-2)。
   const draftSchemaVersion = ref(1);
   const componentData = ref([]);
   const curComponent = ref(null);
   const curIndex = ref(-1);
+  // 多选选中集(组件树内同一响应式引用数组)。单选 = 长度 1 的特例:curComponent 仅在
+  // 恰好选中 1 个时有值(属性面板只在单选时显示),多选时为 null、右栏切多选工具条。
+  const curComponents = ref([]);
   const blocks = ref([]);           // 区块行(ChartWidget 按 blockId 关联)
   const scale = ref(0.5);           // 编辑器画布缩放(50%~150% + 适应窗口)
   const dirty = ref(false);
@@ -50,6 +59,7 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     canvasStyle.value = deepClone(snap.canvasStyle);
     curComponent.value = null;
     curIndex.value = -1;
+    curComponents.value = [];
   }
   /**
    * 立即记快照(3 秒防抖窗口内跳过,避免连续拖拽污染栈——对齐 snapshot.ts snapshotDisableTime)。
@@ -90,7 +100,8 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     canvasVersion.value = resp.canvasVersion ?? 0;
     publishStatus.value = resp.publishStatus ?? 0;
     blocks.value = resp.blocks || [];
-    canvasStyle.value = parse(resp.canvasStyleJson, canvasStyle.value);
+    // 读时兼容:旧 canvas_style_json 缺 backgroundType/bgGradient/bgImage 时补默认(唯一适配点)
+    canvasStyle.value = normalizeCanvasStyle(parse(resp.canvasStyleJson, canvasStyle.value));
     const draft = parse(resp.canvasDraftJson, { components: [] });
     draftSchemaVersion.value = draft.schemaVersion ?? 1;
     componentData.value = Array.isArray(draft.components) ? draft.components : [];
@@ -129,16 +140,140 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
     componentData.value.splice(curIndex.value, 1);
     curComponent.value = null;
     curIndex.value = -1;
+    curComponents.value = [];
     recordSnapshot();
   }
   function selectComponent(id) {
     const i = componentData.value.findIndex(c => c.id === id);
     curIndex.value = i;
     curComponent.value = i >= 0 ? componentData.value[i] : null;
+    // 单选是多选的长度 1 特例:保持 curComponents 与 curComponent 同步
+    curComponents.value = i >= 0 ? [componentData.value[i]] : [];
   }
   function setShapeStyle(patch) {
     if (!curComponent.value) return;
     curComponent.value.style = { ...curComponent.value.style, ...patch };
+  }
+
+  // ===== 多选(框选/Ctrl+点选;单选=长度 1 特例) =====
+  /** 统一选区归一化:恰好 1 个时退化为单选(curComponent 有值),否则 curComponent=null */
+  function syncSelection(list) {
+    curComponents.value = list;
+    if (list.length === 1) {
+      curComponent.value = list[0];
+      curIndex.value = componentData.value.indexOf(list[0]);
+    } else {
+      curComponent.value = null;
+      curIndex.value = -1;
+    }
+  }
+  /** 按 id 列表设置多选(框选命中/解组后全选子组件用);无效 id 静默跳过 */
+  function setCurComponents(ids) {
+    const list = (ids || [])
+      .map(id => componentData.value.find(c => c.id === id))
+      .filter(Boolean);
+    syncSelection(list);
+  }
+  /** Ctrl+点击:选中集中有则移出,无则加入 */
+  function toggleSelect(id) {
+    const c = componentData.value.find(x => x.id === id);
+    if (!c) return;
+    const list = curComponents.value.includes(c)
+      ? curComponents.value.filter(x => x !== c)
+      : [...curComponents.value, c];
+    syncSelection(list);
+  }
+  /** 清空选区(Esc / 画布空白点击) */
+  function clearSelection() { syncSelection([]); }
+  /** 批量删除选中组件(Del;单选场景同样走此口径) */
+  function removeSelected() {
+    if (!curComponents.value.length) return;
+    const ids = new Set(curComponents.value.map(c => c.id));
+    componentData.value = componentData.value.filter(c => !ids.has(c.id));
+    syncSelection([]);
+    recordSnapshot();
+  }
+  /** 批量微移(方向键):跳过锁定组件,逐个 clamp 画布内;连续按键走防抖快照 */
+  function nudgeSelected(dx, dy) {
+    const targets = curComponents.value.filter(c => !c.isLock);
+    if (!targets.length) return;
+    for (const c of targets) {
+      const next = clampRect({ ...c.style, top: c.style.top + dy, left: c.style.left + dx });
+      c.style = { ...c.style, top: next.top, left: next.left };
+    }
+    pushSnapshotDebounced();
+  }
+
+  // ===== 成组/解组 =====
+  /** 多选成组:成员从顶层移除,Group 插入到原最上层成员的位置(保持视觉层级),并选中组 */
+  function groupSelected() {
+    const members = curComponents.value;
+    if (members.length < 2) return;
+    const g = makeGroup(members);
+    if (!g) return;
+    const idSet = new Set(members.map(c => c.id));
+    const indices = [];
+    componentData.value.forEach((c, i) => { if (idSet.has(c.id)) indices.push(i); });
+    // 移除成员后,原最上层成员的位置 = 其原 index - 排在它前面的成员数
+    const insertAt = indices[indices.length - 1] - (indices.length - 1);
+    componentData.value = componentData.value.filter(c => !idSet.has(c.id));
+    componentData.value.splice(insertAt, 0, g);
+    selectComponent(g.id);
+    recordSnapshot();
+  }
+  /** 解组:children 回填绝对坐标插回组所在位置,并多选全部子组件 */
+  function ungroupSelected() {
+    const g = curComponents.value.length === 1 && curComponents.value[0].component === 'Group'
+      ? curComponents.value[0] : null;
+    if (!g) return;
+    const children = ungroup(g);
+    if (!children.length) return;
+    const i = componentData.value.findIndex(c => c.id === g.id);
+    componentData.value.splice(i, 1, ...children);
+    syncSelection(componentData.value.slice(i, i + children.length));
+    recordSnapshot();
+  }
+
+  // ===== 对齐/分布(多选工具条) =====
+  function applyPositionPatches(patches) {
+    for (const p of patches) {
+      const c = componentData.value.find(x => x.id === p.id);
+      if (c) c.style = { ...c.style, top: p.top, left: p.left };
+    }
+  }
+  /** 对齐:type ∈ left|right|top|bottom|hcenter|vcenter;跳过锁定组件 */
+  function alignSelected(type) {
+    const movable = curComponents.value.filter(c => !c.isLock);
+    const patches = alignRects(type, movable.map(c => ({ id: c.id, ...c.style })));
+    if (!patches.length) return;
+    applyPositionPatches(patches);
+    recordSnapshot();
+  }
+  /** 等间距分布:dir ∈ h|v,≥3 个可用;跳过锁定组件 */
+  function distributeSelected(dir) {
+    const movable = curComponents.value.filter(c => !c.isLock);
+    const patches = distributeRects(dir, movable.map(c => ({ id: c.id, ...c.style })));
+    if (!patches.length) return;
+    applyPositionPatches(patches);
+    recordSnapshot();
+  }
+
+  // ===== 图层拖拽排序 / 组件改名 =====
+  /** 图层面板拖拽排序:数组内 splice 移动(from→to 均为 componentData 下标) */
+  function moveComponentIndex(from, to) {
+    const arr = componentData.value;
+    if (from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return;
+    const [item] = arr.splice(from, 1);
+    arr.splice(to, 0, item);
+    if (curComponent.value) curIndex.value = arr.findIndex(c => c.id === curComponent.value.id);
+    recordSnapshot();
+  }
+  /** 组件改名:name 进组件树 JSON(读时兼容:无 name 时图层面板显示组件类型 label) */
+  function renameComponent(id, name) {
+    const c = componentData.value.find(x => x.id === id);
+    if (!c) return;
+    c.name = (name || '').trim();
+    recordSnapshot();
   }
 
   // ===== 图层(参照 layer.ts:数组内 swap / splice) =====
@@ -183,10 +318,13 @@ export const useScreenDesignerStore = defineStore('screenDesigner', () => {
 
   return {
     screenId, screenCode, viewLevel, canvasVersion, publishStatus,
-    canvasStyle, draftSchemaVersion, componentData, curComponent, curIndex, blocks, scale, dirty,
+    canvasStyle, draftSchemaVersion, componentData, curComponent, curIndex, curComponents, blocks, scale, dirty,
     canUndo, canRedo,
     loadFromEditor, toSavePayload, adoptSaveResult,
     addComponent, removeCurrent, selectComponent, setShapeStyle,
+    setCurComponents, toggleSelect, clearSelection, removeSelected, nudgeSelected,
+    groupSelected, ungroupSelected, alignSelected, distributeSelected,
+    moveComponentIndex, renameComponent,
     upComponent, downComponent, topComponent, bottomComponent, toggleLock, toggleShow,
     recordSnapshot, pushSnapshotDebounced, undo, redo
   };

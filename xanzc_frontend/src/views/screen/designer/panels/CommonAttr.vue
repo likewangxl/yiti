@@ -19,6 +19,33 @@
           <el-form-item label="透明度">
             <el-slider :model-value="opacity" :min="0" :max="100" @change="setOpacity" />
           </el-form-item>
+          <!-- 组件级背景:透明(现状缺省)/纯色/线性渐变;CSS 生成走 utils/background.js 纯函数,
+               设计态(Shape)与运行时(ScreenRenderer)同一实现,字段落在 style(bgType/bgColor/bgFrom/bgTo/bgAngle) -->
+          <el-form-item label="背景">
+            <el-radio-group :model-value="bgType" @change="v => setBg({ bgType: v })">
+              <el-radio-button label="none">透明</el-radio-button>
+              <el-radio-button label="solid">纯色</el-radio-button>
+              <el-radio-button label="gradient">渐变</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="bgType === 'solid'" label="颜色">
+            <el-color-picker show-alpha :model-value="element.style.bgColor"
+                             @change="v => setBg({ bgColor: v })" />
+          </el-form-item>
+          <template v-if="bgType === 'gradient'">
+            <el-form-item label="渐变色">
+              <div class="row2" style="align-items:center">
+                <el-color-picker show-alpha :model-value="element.style.bgFrom"
+                                 @change="v => setBg({ bgFrom: v })" />
+                <el-color-picker show-alpha :model-value="element.style.bgTo"
+                                 @change="v => setBg({ bgTo: v })" />
+              </div>
+            </el-form-item>
+            <el-form-item label="角度">
+              <el-input-number controls-position="right" :model-value="element.style.bgAngle ?? 135"
+                               :min="0" :max="360" :step="15" @change="v => setBg({ bgAngle: v })" />
+            </el-form-item>
+          </template>
         </el-form>
       </el-collapse-item>
       <slot />  <!-- 组件私有属性项 -->
@@ -36,6 +63,8 @@ const props = defineProps({ element: { type: Object, required: true } });
 const store = useScreenDesignerStore();
 const open = ref(['pos', 'look']);
 const opacity = computed(() => Math.round((props.element.style.opacity ?? 1) * 100));
+// 组件级背景类型:缺省 none(透明,与存量组件行为一致,存量画布 JSON 无 bgType 字段读时零迁移)
+const bgType = computed(() => props.element.style.bgType || 'none');
 function set(key, v) {
   const next = clampRect({ ...props.element.style, [key]: v });
   props.element.style = { ...props.element.style, ...next };
@@ -43,6 +72,17 @@ function set(key, v) {
 }
 function setOpacity(v) {
   props.element.style = { ...props.element.style, opacity: v / 100 };
+  store.pushSnapshotDebounced();
+}
+/** 背景字段补丁(bgType/bgColor/bgFrom/bgTo/bgAngle);切到渐变时补默认双色,避免空渐变看不出效果 */
+function setBg(patch) {
+  const merged = { ...props.element.style, ...patch };
+  if (merged.bgType === 'gradient') {
+    if (!merged.bgFrom) merged.bgFrom = 'rgba(10,32,74,.85)';
+    if (!merged.bgTo) merged.bgTo = 'rgba(5,14,43,.35)';
+    if (merged.bgAngle === undefined || merged.bgAngle === null) merged.bgAngle = 135;
+  }
+  props.element.style = merged;
   store.pushSnapshotDebounced();
 }
 </script>

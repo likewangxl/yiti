@@ -13,11 +13,16 @@ export function cloneComponentForClipboard(node) {
  * 新 id(与 registry.newComponentFromMeta / ContextMenu.vue 同一命名规则 'w-'+随机串,
  * 避免与画布现有组件 id 冲突),top/left 各加 offset(默认 20,对齐 ContextMenu.vue 现状),
  * 不做 clampRect 兜底(与 ContextMenu.vue 现状一致,越界由后续拖拽/属性面板修正)。
+ * Group 节点:children 的 id 也全部重生成(否则解组回填顶层后画布出现重复 id),
+ * children 相对坐标不加偏移(只挪组整体)。
  */
 export function pasteFromClipboard(clip, offset = 20) {
   if (!clip) return null;
   const node = JSON.parse(JSON.stringify(clip));
   node.id = 'w-' + Math.random().toString(36).slice(2, 8);
   node.style = { ...node.style, top: (node.style.top || 0) + offset, left: (node.style.left || 0) + offset };
+  if (Array.isArray(node.children)) {
+    node.children.forEach(ch => { ch.id = 'w-' + Math.random().toString(36).slice(2, 8); });
+  }
   return node;
 }

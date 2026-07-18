@@ -1,21 +1,29 @@
 <template>
   <ul v-show="visible" class="dsn-ctx" :style="{ top: top + 'px', left: left + 'px' }"
       @mouseleave="hide">
-    <li @click="act('copy')">复制</li>
-    <li @click="act('paste')">粘贴</li>
+    <!-- 多选态:只保留批量语义的条目(成组/删除);单组件条目在单选态显示 -->
+    <li v-if="multi" @click="act('group')">成组</li>
+    <li v-if="isGroup" @click="act('ungroup')">解组</li>
+    <template v-if="!multi">
+      <li @click="act('copy')">复制</li>
+      <li @click="act('paste')">粘贴</li>
+    </template>
     <li class="danger" @click="act('delete')">删除</li>
-    <li class="sep" />
-    <li @click="act('top')">置顶</li>
-    <li @click="act('bottom')">置底</li>
-    <li @click="act('up')">上移一层</li>
-    <li @click="act('down')">下移一层</li>
-    <li class="sep" />
-    <li @click="act('lock')">{{ lockedLabel }}</li>
+    <template v-if="!multi">
+      <li class="sep" />
+      <li @click="act('top')">置顶</li>
+      <li @click="act('bottom')">置底</li>
+      <li @click="act('up')">上移一层</li>
+      <li @click="act('down')">下移一层</li>
+      <li class="sep" />
+      <li @click="act('lock')">{{ lockedLabel }}</li>
+    </template>
   </ul>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
+import { pasteFromClipboard } from '@/views/screen/designer/utils/clipboard';
 import { useScreenDesignerStore } from '@/stores/screenDesigner';
 
 const store = useScreenDesignerStore();
@@ -25,6 +33,8 @@ const left = ref(0);
 let clipboard = null;
 
 const lockedLabel = computed(() => store.curComponent?.isLock ? '解锁' : '锁定');
+const multi = computed(() => store.curComponents.length > 1);
+const isGroup = computed(() => store.curComponent?.component === 'Group');
 
 function show(x, y) { visible.value = true; top.value = y; left.value = x; }
 function hide() { visible.value = false; }
@@ -33,15 +43,15 @@ function act(type) {
   const cur = store.curComponent;
   switch (type) {
     case 'copy': clipboard = cur ? JSON.parse(JSON.stringify(cur)) : null; break;
-    case 'paste':
-      if (clipboard) {
-        const node = JSON.parse(JSON.stringify(clipboard));
-        node.id = 'w-' + Math.random().toString(36).slice(2, 8);
-        node.style = { ...node.style, top: (node.style.top || 0) + 20, left: (node.style.left || 0) + 20 };
-        store.addComponent(node);
-      }
+    case 'paste': {
+      // 统一走纯函数口径(新 id + 偏移 20;Group children id 一并重生成防重复 id)
+      const node = pasteFromClipboard(clipboard);
+      if (node) store.addComponent(node);
       break;
-    case 'delete': store.removeCurrent(); break;
+    }
+    case 'delete': store.removeSelected(); break; // 批量口径(单选=长度 1 特例)
+    case 'group': store.groupSelected(); break;
+    case 'ungroup': store.ungroupSelected(); break;
     case 'top': store.topComponent(); break;
     case 'bottom': store.bottomComponent(); break;
     case 'up': store.upComponent(); break;

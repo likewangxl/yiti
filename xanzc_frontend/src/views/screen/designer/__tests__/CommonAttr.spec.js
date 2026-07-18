@@ -13,7 +13,11 @@ const stubs = {
   'el-form': { template: '<form @submit.prevent><slot /></form>' },
   'el-form-item': { template: '<div><slot /></div>' },
   'el-input-number': true,
-  'el-slider': true
+  'el-slider': true,
+  // 背景增强(2026-07-17)新增控件:仅 stub 消除解析警告,断言仍只锁位置尺寸 4 个数字输入的模板契约
+  'el-radio-group': true,
+  'el-radio-button': true,
+  'el-color-picker': true
 };
 
 describe('CommonAttr.vue 窄栏适配', () => {

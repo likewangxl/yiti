@@ -15,6 +15,21 @@ import borderDecorMeta from './border-decor/meta';
 import ClockWidget from './clock-widget/Component.vue';
 import ClockWidgetAttr from './clock-widget/Attr.vue';
 import clockWidgetMeta from './clock-widget/meta';
+// 2026-07-17 素材装饰扩充:科技感标题条/装饰线/跑马灯(全 CSS 自绘零依赖,后端 COMPONENT_TYPES 白名单同步)
+import TitleBar from './title-bar/Component.vue';
+import TitleBarAttr from './title-bar/Attr.vue';
+import titleBarMeta from './title-bar/meta';
+import DecorLine from './decor-line/Component.vue';
+import DecorLineAttr from './decor-line/Attr.vue';
+import decorLineMeta from './decor-line/meta';
+import Marquee from './marquee/Component.vue';
+import MarqueeAttr from './marquee/Attr.vue';
+import marqueeMeta from './marquee/meta';
+// 2026-07-17 §5.3 全屏周期过滤器:运行时写 screen 级 globalPeriod 联动 TIMESERIES 区块;
+// 每屏最多 1 个(后端 ScreenCanvasServiceImpl 保存/发布校验 RPT-43006,白名单同步新增)
+import PeriodFilter from './period-filter/Component.vue';
+import PeriodFilterAttr from './period-filter/Attr.vue';
+import periodFilterMeta from './period-filter/meta';
 import ChartWidget from './chart-widget/Component.vue';
 import ChartWidgetAttr from './chart-widget/Attr.vue';
 import chartWidgetMeta from './chart-widget/meta';
@@ -23,6 +38,10 @@ import chartWidgetMeta from './chart-widget/meta';
 import MapCenter from '@/views/screen/components/MapCenter.vue';
 import MapCenterAttr from './map-center/Attr.vue';
 import mapCenterMeta from './map-center/meta';
+// Group:多选成组容器,由画布多选「成组」生成而非拖拽创建——与 MapCenter 同类,
+// 只登记 componentsMap,不入 materialMetas 拖拽面板。
+import Group from './group/Component.vue';
+import GroupAttr from './group/Attr.vue';
 
 const componentsMap = {
   TextLabel, TextLabelAttr,
@@ -30,17 +49,23 @@ const componentsMap = {
   RectShape, RectShapeAttr,
   BorderDecor, BorderDecorAttr,
   ClockWidget, ClockWidgetAttr,
+  TitleBar, TitleBarAttr,
+  DecorLine, DecorLineAttr,
+  Marquee, MarqueeAttr,
+  PeriodFilter, PeriodFilterAttr,
   ChartWidget, ChartWidgetAttr,
-  MapCenter, MapCenterAttr
+  MapCenter, MapCenterAttr,
+  Group, GroupAttr
 };
 
-export const materialMetas = [textLabelMeta, imageBoxMeta, rectShapeMeta, borderDecorMeta, clockWidgetMeta];
+export const materialMetas = [textLabelMeta, imageBoxMeta, rectShapeMeta, borderDecorMeta, clockWidgetMeta,
+  titleBarMeta, decorLineMeta, marqueeMeta, periodFilterMeta];
 // mapCenterMeta 故意不并入上面的 materialMetas:它驱动 ComponentPanel 的拖拽入口，而 MapCenter
 // 一期不开放拖拽创建(运行时由 ScreenRenderer 按 component==='MapCenter' 走独立分支注入 mapPoints，
 // 不经拖拽面板/newComponentFromMeta 生成节点；地图组件由屏配置直投渲染包 components 节点)。
 export { mapCenterMeta };
 
-// 图表类型自动扫描注册(eager 同步纳入):9 个 charts/*.js
+// 图表类型自动扫描注册(eager 同步纳入):13 个 charts/*.js(9 基础 + 4 个 KPI 专属)
 const chartModules = import.meta.glob('./chart-widget/charts/*.js', { eager: true });
 export const chartMetas = Object.values(chartModules).map(m => m.default);
 

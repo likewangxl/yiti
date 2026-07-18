@@ -46,4 +46,20 @@ describe('剪贴板纯函数(Ctrl+C/V 与右键复制粘贴同一口径)', () =>
   it('pasteFromClipboard(null) 返回 null(剪贴板为空时粘贴不产生节点)', () => {
     expect(pasteFromClipboard(null)).toBeNull();
   });
+
+  it('粘贴 Group 时 children 的 id 也全部重生成(否则解组后画布出现重复 id)', () => {
+    const clip = { id: 'w-grp001', component: 'Group', style: { top: 0, left: 0, width: 300, height: 200 },
+      children: [
+        { id: 'w-chd001', component: 'TextLabel', style: { top: 0, left: 0, width: 50, height: 20 } },
+        { id: 'w-chd002', component: 'RectShape', style: { top: 30, left: 0, width: 50, height: 20 } }
+      ] };
+    const node = pasteFromClipboard(clip);
+    expect(node.children.length).toBe(2);
+    expect(node.children[0].id).toMatch(/^w-/);
+    expect(node.children[0].id).not.toBe('w-chd001');
+    expect(node.children[1].id).not.toBe('w-chd002');
+    expect(node.children[0].id).not.toBe(node.children[1].id);
+    // children 相对坐标不加偏移(仅顶层 top/left +offset)
+    expect(node.children[0].style.top).toBe(0);
+  });
 });
