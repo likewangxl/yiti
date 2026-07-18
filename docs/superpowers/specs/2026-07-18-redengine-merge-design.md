@@ -142,3 +142,44 @@ bootstrap (18081, 单 JVM)
 - 不接 Flowable / 不生成 `BIZ_PROCESS_MAP` 记录
 - 不改平台既有 9 模块的业务逻辑（仅门户加入口、权限表加数据）
 - 报表分析中心不为红色引擎新增报表
+
+## 实现勘误与决策记录（Task 18）
+
+Task 0-17（`.superpowers/sdd/task-0-brief.md` ~ `task-17d-report.md`）实施完成后，以下内容与本设计规格原文存在偏差或补充决策，以 **Java 源码 / 已落库种子为权威口径**，本节记录偏差并声明本规格对应条款视为已被下述内容更新。模块级权威详情见 `red-engine-center/CLAUDE.md`（8 表清单、17 条 `PT_RESOURCE` 契约、角色矩阵、状态机、错误码、差异清单、技术债，本节不重复列出全部细节，仅摘要勘误点与索引）。
+
+### 9.1 业务口径勘误（§5.4 弃用，以代码为准）
+
+- **红黄牌阈值**：本规格 §5.4 原文"总分 <60 红牌；60 ≤ 总分 <75 黄牌"中的 **75 已弃用**。`ReCockpitService`（移植自 `BizCockpitServiceImpl.getYellowWarning`）实际代码阈值为 `final_score<60` 红牌、`60≤final_score<80` 黄牌，按代码原样移植，未按本规格文档口径实现。
+- **逾期扣分规则**：本规格 §5.4 原文"迟 1 天 −1 分；≥3 天该项清零"的**自动累进扣分口径已弃用**。`BizCockpitServiceImpl` 实际代码是"逾期列表 = `status∈{0,1}` 且 `submitDate+7 天`早于今天的记录，由人工在预警池逐条调用 `executeOverdue` 执行扣分，默认扣 5 分"，本次移植原样保真代码行为，不实现文档描述的自动累进逻辑。
+
+### 9.2 与源系统的实现差异（§4.2/§5.1/§5.2/§6 补充）
+
+| 条款 | 规格原文 | 实际实现 |
+|---|---|---|
+| 用户主键（§4.2） | 未明确类型 | `secretary_id`/`submitter_id`/`reviewer_id`/`user_id` 一律 `VARCHAR(50)` 工号（非源系统 `BIGINT`），对齐 `PT_USER.USER_ID` |
+| 附件存储（§4.2） | "改用平台 MinIO" | 实际改走 `system-governance-center` 既有 `FileApi`（底层华为云 OBS，非 MinIO），`RE_SUBMIT_FILE` 仅存 `file_object_id` 业务关联；源 `uploadFile` 端点已裁剪，前端直传获取 `fileObjectId` 后随创建请求体提交 |
+| 草稿态（§5.1 移植范围） | 未明确处置 | 明确废弃：`createSubmit` 创建即 `status=1`（已提交），不提供两段式草稿接口（源前端本就从未真正使用草稿态，YAGNI 裁剪） |
+| `orgId`/`submitterId`（§6 认证权限） | 未提及越权风险 | 服务端从登录人 `empId` 经 `RE_USER_PARTY_MAP` 强制派生，不再由前端 DTO 传入——修复源系统"前端可伪造挂靠/冒名提交"的越权隐患（正向改进） |
+| `reviewerId` | 源系统无此字段 | 补齐，`approve`/`reject` 均回填当前审核人工号 |
+| `generateAnnualResult` 维度聚合 | 未提及源码缺陷 | 源码 `putIfAbsent` 死代码只建键从未写入维度分值；本次补全为 `RE_SCORE` 关联 `RE_SUBMIT.dimension` 内存 join 分组求和 |
+| `executeOverdue` 上报不存在 | 未提及 | 源码静默 `return false`；本次改抛 `RE-40005`（平台惯例加固） |
+| 数据导出（§5.1） | 未提及技术选型 | hutool-poi → EasyExcel；仅 `submit`/`score` 两类；`RE-40006`（type 非法）/`RE-40007`（超上限，初拟 `RE-40005` 因与 Task10 冲突纠偏） |
+| `OrgController.getChildren`/`generateReport`（§5.1） | 隐含全量移植 | 未移植（无 `PT_RESOURCE` 注册 + 任务简报未列端点，YAGNI 裁剪） |
+| `secretaryName` 回填 | 未提及 | 未移植（依赖边界只声明 `RePartyOrgMapper`，未含 `UserApi` 跨模块查询），`RePartyOrgTreeDTO` 仅带 `secretaryId` 工号 |
+
+### 9.3 权限种子实现细节（§6 补充，非规格原文层面决策）
+
+- `P_RE_REVIEW_Q` 的 `RESOURCE_URL` 由 Task 4 初版字面量 `/api/re/reviews/queue` 于 Task 9 放宽为通配符 `/api/re/reviews/**`，复用覆盖"待审队列"与"审核预览"两个 GET 端点，17 条资源总数不变。
+- `P_RE_ORG_GET`/`P_RE_SUBMIT_GET` 两条通配符资源设 `MENU_RANK_NO=10`（其余 15 条为默认 0），修复 `ResourceMatcher` 按 `MENU_RANK_NO ASC, RESOURCE_ID ASC` 排序时通配符资源字母序抢先于同 METHOD 字面量资源（`P_RE_ORG_TREE`/`P_RE_SUBMIT_MY`）被误匹配、导致 `R_RE_ORGREV` 越权访问"我的上报分页"的 Critical 缺陷（Task 4 审查发现并修复，详见 `task-4-review.md`）。
+
+### 9.4 技术债与已知限制（索引，详情见 `red-engine-center/CLAUDE.md` §技术债）
+
+1. `generateAnnualResult` 不按 `year` 过滤聚合范围（源系统同款），多年数据混算风险，待产品决策。
+2. 重复审核（通过→驳回→再通过）会产生 `RE_SCORE` 重复/滞留记录（源系统同款保真），禁止重复审核会破坏改判能力，留产品决策。
+3. 导出 10000 行同步上限偏离平台"5000 行必须异步"MUST 线（迁移期过渡决策，见 `docs/export-spec-coverage.md`）。
+4. 能力缺口：`RE_SCORE` 无按 `submitId` 明细查询端点；`ReRankingItemDTO`/`ReOverdueItemDTO` 无组织名字段；无按 `submitId` 查附件端点；`deleteOrg` 无 `reason` 入参通道。
+5. `RE-4xxxx` 为裸字符串错误码，`ReErrorCode` 枚举未建，`common-dev-guide.md` 附录 B 错误码前缀表未收录 `RE-` 前缀。
+6. 前端 `canSee` 通配符前缀匹配是近似算法（当前角色绑定巧合正确，非真 AntPath 反向匹配）。
+7. OBS 域名在开发沙箱 DNS 不可达（`GOV-50001`），附件上传联调不可用，生产内网可用。
+8. `RestEndpointInventoryIT` 只静态比对 `docs/schema/seed-v1.sql` 基线且不做 AntPath 通配符展开，本模块 17 条资源已正确注册但被误报为 23 条差值（BASE=195，当前=218），属该审计工具既有方法论盲区。
+9. `SYS_DICT_ITEM` 平台无代码读取通道，本模块字典按平台拍平惯例落 `SYS_DICT`（`RE_` 前缀，4 类 18 项），未使用 DDL 语义预留的两级设计。

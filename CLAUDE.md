@@ -51,6 +51,7 @@ pom.xml surefire/failsafe 的 argLine 已含 `-Dfile.encoding=UTF-8`，无需在
 | `portal-content-center` | com.bank.branch.platform.portal | 门户与内容中心 |
 | `performance-engine-center` | com.bank.branch.platform.performance | 绩效计算中心 (含 eval 考核评价/奖励分配) |
 | `report-analytics-center` | com.bank.branch.platform.report | 报表分析中心 (只读) |
+| `red-engine-center` | com.bank.branch.platform.redengine | 红色引擎党建管理 |
 | `bootstrap` | com.bank.branch.platform | 唯一的 Spring Boot 启动入口 |
 
 此外还有两个工程：
@@ -75,6 +76,8 @@ business-application-center (依赖 auth + governance + workflow + customer-mark
 performance-engine-center (依赖 auth + governance + workflow + customer-marketing)
 
 report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖)
+
+red-engine-center (依赖 auth + governance；不依赖 workflow——审核流不接 Flowable，自管两级审核状态机)
 
 bootstrap (依赖所有业务模块，是唯一的 Spring Boot 启动入口)
 ```
@@ -194,6 +197,7 @@ com.bank.branch.platform.<module>/
 - **门户与内容**: [portal-content-center/CLAUDE.md](portal-content-center/CLAUDE.md)
 - **绩效计算**: [performance-engine-center/CLAUDE.md](performance-engine-center/CLAUDE.md)
 - **报表分析**: [report-analytics-center/CLAUDE.md](report-analytics-center/CLAUDE.md)
+- **红色引擎（党建管理）**: [red-engine-center/CLAUDE.md](red-engine-center/CLAUDE.md) — 党组织树管理、材料上报、两级审核评分、驾驶舱/红黄牌预警、年度归档、数据导出；不接 Flowable
 - **外部渠道网关（SOAP/callpu）**: [soap-gateway-center/CLAUDE.md](soap-gateway-center/CLAUDE.md) — Netty SOAP 服务 + callpu HTTP 网关；含 SYS_415 / urlencoded 兼容过滤器
 
 ### 共享开发规范
