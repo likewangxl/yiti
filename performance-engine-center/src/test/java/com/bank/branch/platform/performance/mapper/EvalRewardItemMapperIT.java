@@ -99,20 +99,24 @@ class EvalRewardItemMapperIT extends PerformanceMapperTestBase {
     }
 
     @Test
-    @DisplayName("markAssigned：带 submitted=0 乐观条件，写入分配值并置已提交")
+    @DisplayName("markAssigned：带 submitted=0 乐观条件，写入分配值/兑现值并置已提交")
     void markAssigned_writesValueAndFlag() {
         Long batchId = newActiveBatch();
         String a = "TEST_RW_A3";
         itemMapper.batchInsert(List.of(item(batchId, a, "TEST_RW_D1", "信贷部", "100")));
         EvalRewardItem before = itemMapper.selectByAssignerBatchDept(a, batchId, "信贷部").get(0);
 
-        int updated = itemMapper.markAssigned(before.getItemId(), new BigDecimal("100"), LocalDateTime.now());
+        // 兑现值 = 原始值(76.5) + 分配值(100) = 176.5，由 Service 计算后传入
+        int updated = itemMapper.markAssigned(before.getItemId(), new BigDecimal("100"),
+                new BigDecimal("176.5"), LocalDateTime.now());
 
         assertThat(updated).isEqualTo(1);
         EvalRewardItem after = itemMapper.selectById(before.getItemId());
         assertThat(after.getSubmitted()).isEqualTo(1);
         assertThat(after.getAssignValue()).isEqualByComparingTo("100");
+        assertThat(after.getCashValue()).isEqualByComparingTo("176.5");
         // 二次执行乐观条件不再命中
-        assertThat(itemMapper.markAssigned(before.getItemId(), new BigDecimal("50"), LocalDateTime.now())).isEqualTo(0);
+        assertThat(itemMapper.markAssigned(before.getItemId(), new BigDecimal("50"),
+                new BigDecimal("126.5"), LocalDateTime.now())).isEqualTo(0);
     }
 }

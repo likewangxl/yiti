@@ -44,7 +44,7 @@
 
     <update id="markAssigned">
         UPDATE EVAL_REWARD_ITEM
-        SET assign_value = #{assignValue}, submitted = 1, submit_time = #{submitTime}
+        SET assign_value = #{assignValue}, cash_value = #{cashValue}, submitted = 1, submit_time = #{submitTime}
         WHERE item_id = #{itemId} AND submitted = 0
     </update>
 

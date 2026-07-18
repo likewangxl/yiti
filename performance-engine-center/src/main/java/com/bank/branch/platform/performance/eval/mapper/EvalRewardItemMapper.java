@@ -34,9 +34,10 @@ public interface EvalRewardItemMapper extends BaseMapper<EvalRewardItem> {
                                                    @Param("batchId") Long batchId,
                                                    @Param("dept") String dept);
 
-    /** 标记某明细已分配并写入分配值与提交时间（带 submitted=0 乐观条件）。 */
+    /** 标记某明细已分配并写入分配值/兑现值(=原始值+分配值,由 Service 计算)与提交时间（带 submitted=0 乐观条件）。 */
     int markAssigned(@Param("itemId") Long itemId,
                      @Param("assignValue") BigDecimal assignValue,
+                     @Param("cashValue") BigDecimal cashValue,
                      @Param("submitTime") LocalDateTime submitTime);
 
     /** 管理端-分页查询批次下明细。 */

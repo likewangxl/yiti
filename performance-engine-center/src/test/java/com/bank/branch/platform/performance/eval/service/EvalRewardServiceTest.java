@@ -84,30 +84,51 @@ class EvalRewardServiceTest {
     }
 
     @Test
-    @DisplayName("提交成功：每人>0 且 求和=分配合计 → 全部 markAssigned")
+    @DisplayName("提交成功：每人>=0 且 求和=分配合计 → 全部 markAssigned，兑现值=原始值+分配值")
     void submit_success() {
         when(batchMapper.selectById(5L)).thenReturn(activeBatch());
+        EvalRewardItem i11 = item(11L, "信贷部", "100");
+        i11.setOriginalValue(new BigDecimal("10.5"));
+        EvalRewardItem i12 = item(12L, "信贷部", "100"); // originalValue=null → 按 0 兜底
         when(itemMapper.selectByAssignerBatchDept("A1", 5L, "信贷部"))
-                .thenReturn(List.of(item(11L, "信贷部", "100"), item(12L, "信贷部", "100")));
-        when(itemMapper.markAssigned(any(), any(), any())).thenReturn(1);
+                .thenReturn(List.of(i11, i12));
+        when(itemMapper.markAssigned(any(), any(), any(), any())).thenReturn(1);
 
         service.submitRewardBatch("A1", 5L, "信贷部", List.of(entry(11L, "60"), entry(12L, "40")));
 
-        verify(itemMapper).markAssigned(eq(11L), eq(new BigDecimal("60")), any());
-        verify(itemMapper).markAssigned(eq(12L), eq(new BigDecimal("40")), any());
+        verify(itemMapper).markAssigned(eq(11L), eq(new BigDecimal("60")), eq(new BigDecimal("70.5")), any());
+        verify(itemMapper).markAssigned(eq(12L), eq(new BigDecimal("40")), eq(new BigDecimal("40")), any());
     }
 
     @Test
-    @DisplayName("提交失败：某人分配值<=0 → 分配值必须大于0，一条不写")
-    void submit_notPositive() {
+    @DisplayName("提交成功：分配值可以等于0 → 正常写库，兑现值=原始值+0")
+    void submit_zeroAllowed() {
+        when(batchMapper.selectById(5L)).thenReturn(activeBatch());
+        EvalRewardItem i11 = item(11L, "信贷部", "100");
+        i11.setOriginalValue(new BigDecimal("20"));
+        EvalRewardItem i12 = item(12L, "信贷部", "100");
+        i12.setOriginalValue(new BigDecimal("30"));
+        when(itemMapper.selectByAssignerBatchDept("A1", 5L, "信贷部"))
+                .thenReturn(List.of(i11, i12));
+        when(itemMapper.markAssigned(any(), any(), any(), any())).thenReturn(1);
+
+        service.submitRewardBatch("A1", 5L, "信贷部", List.of(entry(11L, "100"), entry(12L, "0")));
+
+        verify(itemMapper).markAssigned(eq(11L), eq(new BigDecimal("100")), eq(new BigDecimal("120")), any());
+        verify(itemMapper).markAssigned(eq(12L), eq(new BigDecimal("0")), eq(new BigDecimal("30")), any());
+    }
+
+    @Test
+    @DisplayName("提交失败：某人分配值<0 → 分配值不能为负数，一条不写")
+    void submit_negative() {
         when(batchMapper.selectById(5L)).thenReturn(activeBatch());
         when(itemMapper.selectByAssignerBatchDept("A1", 5L, "信贷部"))
                 .thenReturn(List.of(item(11L, "信贷部", "100"), item(12L, "信贷部", "100")));
         assertThatThrownBy(() -> service.submitRewardBatch("A1", 5L, "信贷部",
-                List.of(entry(11L, "100"), entry(12L, "0"))))
+                List.of(entry(11L, "101"), entry(12L, "-1"))))
                 .isInstanceOf(PerfException.class)
-                .hasMessageContaining("分配值必须大于0");
-        verify(itemMapper, never()).markAssigned(any(), any(), any());
+                .hasMessageContaining("分配值不能为负数");
+        verify(itemMapper, never()).markAssigned(any(), any(), any(), any());
     }
 
     @Test
@@ -120,7 +141,7 @@ class EvalRewardServiceTest {
                 List.of(entry(11L, "60"), entry(12L, "50")))) // 和=110≠100
                 .isInstanceOf(PerfException.class)
                 .hasMessageContaining("分配值之和必须等于分配合计");
-        verify(itemMapper, never()).markAssigned(any(), any(), any());
+        verify(itemMapper, never()).markAssigned(any(), any(), any(), any());
     }
 
     @Test
@@ -131,7 +152,7 @@ class EvalRewardServiceTest {
                 .thenReturn(List.of(item(11L, "信贷部", "100"), item(12L, "信贷部", "100")));
         assertThatThrownBy(() -> service.submitRewardBatch("A1", 5L, "信贷部", List.of(entry(11L, "100"))))
                 .isInstanceOf(PerfException.class);
-        verify(itemMapper, never()).markAssigned(any(), any(), any());
+        verify(itemMapper, never()).markAssigned(any(), any(), any(), any());
     }
 
     @Test

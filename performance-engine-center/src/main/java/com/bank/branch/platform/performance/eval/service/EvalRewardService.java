@@ -83,7 +83,8 @@ public class EvalRewardService {
      * 一次性提交某(分配人+批次+部门)组的分配。
      *
      * <p>校验：批次 ACTIVE 且未过期 → entries 覆盖该组全部未提交明细且归属当前人 →
-     * 每人分配值>0 → 求和严格等于该组分配合计 → 同一事务逐条写库(all-or-none)。</p>
+     * 每人分配值>=0(允许 0,禁止负数) → 求和严格等于该组分配合计 → 同一事务逐条写库(all-or-none)。
+     * 落库时同步刷新兑现值 = 原始值(空按 0) + 分配值。</p>
      *
      * @param assignUserId 当前登录人工号（分配人）
      * @param batchId      批次ID
@@ -123,8 +124,8 @@ public class EvalRewardService {
                 // 明细不属于该组未提交集合（非归属 / 已提交 / 不存在）
                 throw new PerfException(PerfErrorCode.EVAL_ASSIGN_ITEM_NOT_FOUND, e.itemId());
             }
-            if (e.assignValue() == null || e.assignValue().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new PerfException(PerfErrorCode.EVAL_REWARD_ASSIGN_NOT_POSITIVE);
+            if (e.assignValue() == null || e.assignValue().compareTo(BigDecimal.ZERO) < 0) {
+                throw new PerfException(PerfErrorCode.EVAL_REWARD_ASSIGN_NEGATIVE);
             }
             sum = sum.add(e.assignValue());
         }
@@ -134,7 +135,10 @@ public class EvalRewardService {
         }
         LocalDateTime now = LocalDateTime.now();
         for (RewardEntry e : entries) {
-            itemMapper.markAssigned(e.itemId(), e.assignValue(), now);
+            EvalRewardItem it = unsubmitted.get(e.itemId());
+            // 兑现值 = 原始值(空按 0 兜底) + 分配值，提交时一并落库
+            BigDecimal original = it.getOriginalValue() == null ? BigDecimal.ZERO : it.getOriginalValue();
+            itemMapper.markAssigned(e.itemId(), e.assignValue(), original.add(e.assignValue()), now);
         }
         log.info("[EvalRewardService.submitRewardBatch] 提交成功 assignUserId={} batchId={} dept={} count={}",
                 assignUserId, batchId, dept, entries.size());
