@@ -18,8 +18,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 直连本地 MySQL 实例，每个测试方法执行前清理 TEST_ 前缀的测试数据。
  * 重点验证系统级/自定义快捷入口的可见性隔离以及物理删除逻辑。
  * </p>
+ * <p>
+ * 测试隔离：除 BEFORE 清理外，同一注解额外追加 AFTER_TEST_METHOD 收尾清理——
+ * 本测试类与 bootstrap 模块共享同一张 onepl_test_bootstrap.PORTAL_SHORTCUT 物理表，
+ * 若不做收尾清理，最后一个测试方法写入的 TEST_% 行会永久遗留，导致其后运行的
+ * PortalWorkspaceMetricIT（bootstrap）快捷方式计数断言失败（受控实验验证：
+ * 表干净时该 IT 5/5 全绿，遗留 3 行脏数据时计数 4≠2 断言失败）。
+ * </p>
  */
-@Sql(scripts = "/sql/clean-portal-shortcut.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+@Sql(scripts = "/sql/clean-portal-shortcut.sql",
+        executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+@Sql(scripts = "/sql/clean-portal-shortcut.sql",
+        executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
 class PortalShortcutMapperIntegrationTest extends AbstractMapperIntegrationTest {
 
     @Autowired
