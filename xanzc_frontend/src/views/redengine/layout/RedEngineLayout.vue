@@ -62,6 +62,8 @@
 // - 源工程 MainLayout 的侧栏折叠开关（Sidebar @toggle-collapse / TopNav @toggle-sidebar）在源码里两端均未真正
 //   emit 事件（Sidebar.vue 只是 defineExpose 了一个方法，从未被调用），是无效代码；本次移植未保留这段死代码，
 //   侧栏宽度固定为 275px（对齐源 MainLayout.vue 展开态默认值 sidebarWidth=ref('275px')，审查返工按建议对齐）。
+// - Task 15 重构（非行为变更）：menuItems 数据源 + canSee() 判断逻辑抽到同目录 canSee.js 纯函数模块，
+//   供 Vitest 直接单测（RedEngineMenuFilter.spec.js），本文件改为 import 复用，逻辑与取值完全未变。
 import { ref, computed, provide, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
@@ -76,11 +78,13 @@ import {
   Checked,
   Trophy,
   Download,
-  Setting
+  Setting,
+  Connection
 } from '@element-plus/icons-vue';
 import http from '@/api/http';
 import { logout } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
+import { menuItems, canSee as canSeeImpl } from './canSee';
 
 const route = useRoute();
 const router = useRouter();
@@ -98,46 +102,19 @@ const iconMap = {
   Checked,
   Trophy,
   Download,
-  Setting
+  Setting,
+  Connection
 };
-
-// 菜单数据源（源 dynamicRoutes meta 翻译而来）：每项带 res 字段（资源 URL），
-// res=null 表示无需鉴权（工作台默认可见）；res 以 /** 或 /* 结尾表示一组接口共用同一菜单项，做前缀匹配
-const menuItems = [
-  { path: '/redengine/dashboard', title: '工作台', icon: 'HomeFilled', res: null },
-  { path: '/redengine/report', title: '四大维度材料上报', icon: 'EditPen', res: '/api/re/submits' },
-  { path: '/redengine/records', title: '上报记录', icon: 'Document', res: '/api/re/submits/my' },
-  { path: '/redengine/branch-review', title: '支部审核工作台', icon: 'Stamp', res: '/api/re/reviews/**' },
-  { path: '/redengine/cockpit', title: '全局数据驾驶舱', icon: 'DataAnalysis', res: '/api/re/cockpit/**' },
-  { path: '/redengine/warning', title: '红黄牌预警池', icon: 'WarningFilled', res: '/api/re/cockpit/**' },
-  { path: '/redengine/review', title: '沉浸式审核工作台', icon: 'Checked', res: '/api/re/reviews/**' },
-  { path: '/redengine/archive', title: '年度考核归档', icon: 'Trophy', res: '/api/re/cockpit/**' },
-  { path: '/redengine/export', title: '数据导出', icon: 'Download', res: '/api/re/export/*' },
-  { path: '/redengine/org-manage', title: '党组织管理', icon: 'Setting', res: '/api/re/orgs' }
-];
 
 // 当前用户可访问的资源 URL 集合；null = 尚未成功拉取（含拉取失败），此时降级为全放行，交由后端 403 兜底
 const resourceUrls = ref(null);
 
 /**
- * 判断某菜单项/子视图内某资源对当前用户是否可见。
- * - item.res 为空 → 恒可见（工作台）
- * - resourceUrls 未就绪 → 降级全显示（GET /api/auth/permissions 拉取中或失败）
- * - item.res 以 /** 或 /* 结尾 → 前缀匹配
- * - 否则精确匹配 resourceUrls 集合
+ * 判断某菜单项/子视图内某资源对当前用户是否可见（实现见 ./canSee.js，本处仅绑定当前
+ * resourceUrls.value，保持原有 canSee(item) 单参签名不变，供模板与 provide 复用）。
  */
 function canSee(item) {
-  if (!item || !item.res) return true;
-  if (!resourceUrls.value) return true;
-  const res = item.res;
-  if (res.endsWith('/**') || res.endsWith('/*')) {
-    const prefix = res.replace(/\/\*+$/, '');
-    for (const u of resourceUrls.value) {
-      if (u.startsWith(prefix)) return true;
-    }
-    return false;
-  }
-  return resourceUrls.value.has(res);
+  return canSeeImpl(item, resourceUrls.value);
 }
 
 // 供 Task 14 子视图通过 inject('canSee') 复用同一份鉴权判断

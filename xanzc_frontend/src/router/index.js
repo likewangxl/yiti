@@ -38,7 +38,10 @@ const routes = [
       { path: 'warning', name: 'RedEngineWarning', component: () => import('@/views/redengine/warning/WarningView.vue'), meta: { title: '红黄牌预警池' } },
       { path: 'review', name: 'RedEngineReview', component: () => import('@/views/redengine/review/ReviewView.vue'), meta: { title: '沉浸式审核工作台' } },
       { path: 'archive', name: 'RedEngineArchive', component: () => import('@/views/redengine/archive/ArchiveView.vue'), meta: { title: '年度考核归档' } },
-      { path: 'export', name: 'RedEngineExport', component: () => import('@/views/redengine/export/ExportView.vue'), meta: { title: '数据导出' } }
+      { path: 'export', name: 'RedEngineExport', component: () => import('@/views/redengine/export/ExportView.vue'), meta: { title: '数据导出' } },
+      // Task 15 新增：党组织管理（org-manage，Task 13 起菜单数组已声明该项但路由此前未接）+ 用户党组织映射（user-map，新建）
+      { path: 'org-manage', name: 'RedEngineOrgManage', component: () => import('@/views/redengine/system/OrgManageView.vue'), meta: { title: '党组织管理' } },
+      { path: 'user-map', name: 'RedEngineUserMap', component: () => import('@/views/redengine/system/UserMapView.vue'), meta: { title: '用户党组织映射' } }
     ]
   },
   {

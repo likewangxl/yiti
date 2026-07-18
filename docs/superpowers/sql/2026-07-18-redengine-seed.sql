@@ -255,3 +255,24 @@ WHERE NOT EXISTS (SELECT 1 FROM RE_PARTY_ORG WHERE org_code = 'ORG_009');
 INSERT INTO RE_PARTY_ORG (org_name, parent_id, org_level, org_code, org_type, principal, contact_phone, org_address)
 SELECT '长安支行党支部', (SELECT id FROM RE_PARTY_ORG WHERE org_code = 'ORG_001'), 2, 'ORG_010', '经营单位', '孙丽', '029-8888-0010', '西安市长安区韦曲路'
 WHERE NOT EXISTS (SELECT 1 FROM RE_PARTY_ORG WHERE org_code = 'ORG_010');
+
+
+-- ============================================================================
+-- 8) PORTAL_SHORTCUT：门户工作台快捷入口——追加"红色引擎"一条（Task 15 §0）
+--    前置核查（2026-07-18，两库均已核实）：
+--      DESCRIBE yiti_test.PORTAL_SHORTCUT 列：id/shortcut_name/shortcut_url/shortcut_icon/
+--      shortcut_type/target_type/emp_id/sort_order/status/created_by/created_time/updated_by/
+--      updated_time，PK=id(varchar(32))；实体 portal-content-center 模块
+--      entity/PortalShortcut.java 注释确认：shortcut_type=SYSTEM 表示全员可见（不按 emp_id
+--      过滤，见 PortalShortcutMapper.xml#listByEmpIdOrSystem），target_type=INTERNAL 表示内部跳转。
+--      yiti_test.PORTAL_SHORTCUT 当前 0 行；onepl_test_bootstrap.PORTAL_SHORTCUT 已有 3 行测试
+--      夹具（TEST_SYS_01/TEST_CUSTOM_E1/TEST_CUSTOM_E2，id 均为 32 位十六进制字符串），本段与其
+--      共存，id 用 MD5 派生避免与既有行冲突。
+--    结论：该表结构含名称/URL/排序类字段，判定为"数据驱动"快捷方式 → 走本段 SQL 追加路线
+--    （非 DefaultLayout.vue 顶栏硬编码链接路线）。
+--    幂等：id = MD5('RE_PORTAL_SHORTCUT#redengine') 固定值，INSERT IGNORE 重跑不产生重复行。
+-- ============================================================================
+INSERT IGNORE INTO PORTAL_SHORTCUT
+  (id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type, target_type, emp_id, sort_order, status, created_by)
+VALUES
+  (MD5('RE_PORTAL_SHORTCUT#redengine'), '红色引擎', '/#/redengine', '🚩', 'SYSTEM', 'INTERNAL', NULL, 0, 'ACTIVE', 'redengine-merge');
