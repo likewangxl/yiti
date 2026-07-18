@@ -55,7 +55,11 @@
         <template #default="{ row }">{{ formatNum(row.originalValue) }}</template>
       </el-table-column>
       <el-table-column label="兑现值" width="120" align="right">
-        <template #default="{ row }">{{ formatNum(row.cashValue) }}</template>
+        <!-- 已提交行显示落库值；未提交行实时预览 = 原始值 + 当前草稿分配值 -->
+        <template #default="{ row }">
+          <span v-if="row.submitted === 1">{{ formatNum(row.cashValue) }}</span>
+          <span v-else class="cash-preview">{{ formatNum(previewCash(row)) }}</span>
+        </template>
       </el-table-column>
       <el-table-column label="分配值" min-width="180">
         <template #default="{ row }">
@@ -111,12 +115,19 @@ const allocated = computed(() =>
 )
 // 距离还剩 = 分配合计 - 已分配（负数=超额）
 const remaining = computed(() => round2(assignTotal.value - allocated.value))
-// 可提交：剩余为 0（浮点容差）且全部未提交行 > 0
+// 可提交：剩余为 0（浮点容差）且全部未提交行已填且 >= 0（分配值允许为 0）
 const canSubmit = computed(() =>
   pendingCount.value > 0
   && isZero(remaining.value)
-  && items.value.filter(it => it.submitted !== 1).every(it => Number(editValues[it.itemId]) > 0)
+  && items.value.filter(it => it.submitted !== 1).every(it => {
+    const v = editValues[it.itemId]
+    return v != null && !isNaN(Number(v)) && Number(v) >= 0
+  })
 )
+// 未提交行兑现值实时预览 = 原始值 + 当前草稿分配值
+function previewCash(row) {
+  return round2(Number(row.originalValue || 0) + Number(editValues[row.itemId] || 0))
+}
 
 async function load() {
   loading.value = true
@@ -150,8 +161,9 @@ async function handleSubmit() {
     return
   }
   for (const it of pending) {
-    if (!(Number(editValues[it.itemId]) > 0)) {
-      ElMessage.warning(`「${it.beAssignedUserName || it.beAssignedUserId}」分配值必须大于 0`)
+    const v = editValues[it.itemId]
+    if (v == null || isNaN(Number(v)) || Number(v) < 0) {
+      ElMessage.warning(`「${it.beAssignedUserName || it.beAssignedUserId}」分配值不能为空且不能为负数`)
       return
     }
   }
@@ -166,6 +178,8 @@ async function handleSubmit() {
     for (const it of pending) {
       it.submitted = 1
       it.assignValue = Number(editValues[it.itemId])
+      // 与后端落库规则保持一致：兑现值 = 原始值 + 分配值
+      it.cashValue = round2(Number(it.originalValue || 0) + it.assignValue)
     }
     ElMessage.success(`已提交 ${payload.length} 人分配`)
     emit('back')
