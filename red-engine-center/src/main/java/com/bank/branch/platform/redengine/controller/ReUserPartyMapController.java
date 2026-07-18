@@ -46,6 +46,9 @@ public class ReUserPartyMapController {
     @Operation(summary = "绑定用户党组织")
     @PostMapping
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.CONFIG)
+    // 种子表 P_RE_MAP_BIND 注释标注为"高危"，但经 Task 6 评审裁决维持 reasonRequired=false（简报权威口径）：
+    // 不强制填写审计原因，@AuditLog 切面仍会记录操作人与时间戳，留痕问责不依赖 reason 字段。
+    // 若后续评审要求升级为强制填 reason，需联动改 ReUserPartyMapDTO 增加 reason 字段并另开任务。
     @AuditLog(action = "RE_MAP_BIND", resourceType = "RE_USER_PARTY_MAP", reasonRequired = false)
     public ResponseWrapper<Void> bind(@Valid @RequestBody ReUserPartyMapDTO req) {
         log.info("[ReUserPartyMapController.bind] userId={}, partyOrgId={}, partyRole={}",
