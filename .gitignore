@@ -44,7 +44,7 @@ __pycache__/
 *.Z
 tar.sh
 
-# 红色引擎迁移源工程（只读参考，不入库）
-redengine/
+# 红色引擎迁移源工程（只读参考，不入库；锚定仓库根目录，避免误伤 red-engine-center 模块下同名包路径 .../platform/redengine/）
+/redengine/
 # 数据库备份
 backup/
