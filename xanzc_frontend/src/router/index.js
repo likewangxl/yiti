@@ -18,6 +18,19 @@ const routes = [
     component: () => import('@/views/screen/ScreenView.vue'),
     meta: { title: '经营大屏' }
   },
+  // 红色引擎（党建）：独立登录页 + 独立布局路由区，风格与平台主布局隔离
+  {
+    path: '/redengine/login',
+    name: 'RedEngineLogin',
+    component: () => import('@/views/redengine/login/LoginView.vue'),
+    meta: { title: '红色引擎-登录', public: true }
+  },
+  {
+    path: '/redengine',
+    component: () => import('@/views/redengine/layout/RedEngineLayout.vue'),
+    redirect: '/redengine/dashboard',
+    children: [] // Task 14 填充
+  },
   {
     path: '/',
     component: DefaultLayout,
