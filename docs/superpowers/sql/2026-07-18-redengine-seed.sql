@@ -34,27 +34,40 @@
 
 -- ============================================================================
 -- 1) PT_RESOURCE：红色引擎 17 条 API 资源（端点↔资源对照表，见 task-4-brief.md）
+--    MENU_RANK_NO 说明（2026-07-18 修复，Task 4 审查 Finding 1）：ResourceMatcher.match()
+--    对 ResourceMapper.selectAll 按 ORDER BY MENU_RANK_NO ASC, RESOURCE_ID ASC 取到的有序列表
+--    做 AntPath 逐条匹配 findFirst，不区分"字面量精确匹配"与"通配符匹配"孰优先。若同 METHOD
+--    下字面量 URL（如 /api/re/submits/my）与通配符 URL（如 /api/re/submits/*）的 MENU_RANK_NO
+--    相同（默认 0），则按 RESOURCE_ID 字母序排列，可能让通配符资源排在字面量资源之前被误先匹配，
+--    导致只持有通配符资源的角色越权访问字面量资源对应的接口。故本段对通配符资源
+--    P_RE_ORG_GET / P_RE_SUBMIT_GET 显式设置 MENU_RANK_NO=10（其余 15 条为 0），确保 ASC 排序下
+--    字面量资源（0）恒排在通配符资源（10）之前，ResourceMatcher 优先匹配到语义正确的资源。
+--    这两条 ISMENU=0（不进菜单树），排序值仅影响 ResourceMatcher 匹配顺序，无菜单展示副作用。
 -- ============================================================================
 INSERT IGNORE INTO PT_RESOURCE
- (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, ISMENU, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_USER, REMARK)
+ (RESOURCE_ID, RESOURCE_URL, RESOURCE_METHOD, MENU_NAME, MENU_RANK_NO, ISMENU, PARENT_RESOURCE_ID, STATUS, SYS_CODE, CREATE_USER, REMARK)
 VALUES
- ('P_RE_ORG_TREE',   '/api/re/orgs/tree',                 'GET',    '红色引擎-党组织树',         0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_ORG_GET',    '/api/re/orgs/*',                    'GET',    '红色引擎-党组织详情',       0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_ORG_ADD',    '/api/re/orgs',                      'POST',   '红色引擎-新增党组织',       0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_ORG_UPD',    '/api/re/orgs/*',                    'PUT',    '红色引擎-修改党组织',       0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_ORG_DEL',    '/api/re/orgs/*',                    'DELETE', '红色引擎-删除党组织(高危)', 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_MAP_LIST',   '/api/re/user-party-maps',           'GET',    '红色引擎-用户党组织映射列表', 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_MAP_BIND',   '/api/re/user-party-maps',           'POST',   '红色引擎-绑定用户党组织(高危)', 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_SUBMIT_ADD', '/api/re/submits',                   'POST',   '红色引擎-新建上报',         0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_SUBMIT_MY',  '/api/re/submits/my',                'GET',    '红色引擎-我的上报',         0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_SUBMIT_GET', '/api/re/submits/*',                 'GET',    '红色引擎-上报详情',         0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_REVIEW_Q',   '/api/re/reviews/queue',              'GET',    '红色引擎-审核待审队列',     0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_REVIEW_APPR','/api/re/reviews/*/approve',          'POST',   '红色引擎-审核通过+评分',     0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_REVIEW_REJ', '/api/re/reviews/*/reject',           'POST',   '红色引擎-审核驳回',         0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_CKPT_VIEW',  '/api/re/cockpit/**',                 'GET',    '红色引擎-驾驶舱只读',       0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_CKPT_EXEC',  '/api/re/cockpit/overdue/execute',    'POST',   '红色引擎-执行逾期扣分(高危)', 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_CKPT_ANNUAL','/api/re/cockpit/archive/generate/*', 'POST',   '红色引擎-生成年度归档(高危)', 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_EXPORT',     '/api/re/export/*',                   'GET',    '红色引擎-数据导出',         0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6');
+ ('P_RE_ORG_TREE',   '/api/re/orgs/tree',                 'GET',    '红色引擎-党组织树',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_ORG_GET',    '/api/re/orgs/*',                    'GET',    '红色引擎-党组织详情',       10, 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_ORG_ADD',    '/api/re/orgs',                      'POST',   '红色引擎-新增党组织',       0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_ORG_UPD',    '/api/re/orgs/*',                    'PUT',    '红色引擎-修改党组织',       0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_ORG_DEL',    '/api/re/orgs/*',                    'DELETE', '红色引擎-删除党组织(高危)', 0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_MAP_LIST',   '/api/re/user-party-maps',           'GET',    '红色引擎-用户党组织映射列表', 0, 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_MAP_BIND',   '/api/re/user-party-maps',           'POST',   '红色引擎-绑定用户党组织(高危)', 0, 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_SUBMIT_ADD', '/api/re/submits',                   'POST',   '红色引擎-新建上报',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_SUBMIT_MY',  '/api/re/submits/my',                'GET',    '红色引擎-我的上报',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_SUBMIT_GET', '/api/re/submits/*',                 'GET',    '红色引擎-上报详情',         10, 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_REVIEW_Q',   '/api/re/reviews/queue',              'GET',    '红色引擎-审核待审队列',     0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_REVIEW_APPR','/api/re/reviews/*/approve',          'POST',   '红色引擎-审核通过+评分',     0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_REVIEW_REJ', '/api/re/reviews/*/reject',           'POST',   '红色引擎-审核驳回',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_CKPT_VIEW',  '/api/re/cockpit/**',                 'GET',    '红色引擎-驾驶舱只读',       0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_CKPT_EXEC',  '/api/re/cockpit/overdue/execute',    'POST',   '红色引擎-执行逾期扣分(高危)', 0, 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_CKPT_ANNUAL','/api/re/cockpit/archive/generate/*', 'POST',   '红色引擎-生成年度归档(高危)', 0, 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_EXPORT',     '/api/re/export/*',                   'GET',    '红色引擎-数据导出',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6');
+
+-- 1-0) 幂等对齐 UPDATE（2026-07-18 修复）：INSERT IGNORE 对两测试库已存在的 17 行不会更新任何列，
+--      故此处显式补 UPDATE 把 MENU_RANK_NO 对齐到目标值，确保历史已落库的行同样获得修复。
+UPDATE PT_RESOURCE SET MENU_RANK_NO = 10 WHERE RESOURCE_ID IN ('P_RE_ORG_GET', 'P_RE_SUBMIT_GET');
 
 
 -- ============================================================================
@@ -145,11 +158,14 @@ WHERE r.ROLE_CODE IN ('R_RE_ORGREV','R_RE_BRREV','R_RE_SECR','R_RE_REPORT','SYS_
 
 -- 6-0) 清理修复前误写的 4 条"类型头"行（无 RE_ 前缀的旧 dict_type）与 SYS_DICT_ITEM 18 行
 --      已核实：这 4 个 dict_type（org_type/dimension/submit_status/item_code）在
---      yiti_test/onepl_test_bootstrap 两库仅由本任务本次写入，无其它模块/既有数据共用，
---      可安全清理；SYS_DICT_ITEM 两库本为空表，仅本任务误写过 18 行。DELETE 语句天然幂等
---      （重跑时条件不再命中，不报错，不影响其它 dict_type 数据）。
-DELETE FROM SYS_DICT WHERE dict_type IN ('org_type','dimension','submit_status','item_code');
-DELETE FROM SYS_DICT_ITEM WHERE dict_type IN ('org_type','dimension','submit_status','item_code');
+--      yiti_test/onepl_test_bootstrap 两库当前仅由本任务本次写入，无其它模块/既有数据共用。
+--      但 org_type/item_code 等属通用命名，未来不排除其它模块也用同名 dict_type 写入合法数据；
+--      DELETE 语句额外补 AND created_by='redengine-merge' 精确限定为"本任务本次误写的行"，
+--      使清理动作只对本任务写入的数据生效，不依赖对当前库状态的一次性经验核查结论——即便未来
+--      某模块的种子脚本恰好复用了这 4 个 dict_type，本脚本重放时也不会误删该模块的数据。
+--      DELETE 语句天然幂等（重跑时条件不再命中，不报错）。
+DELETE FROM SYS_DICT WHERE dict_type IN ('org_type','dimension','submit_status','item_code') AND created_by = 'redengine-merge';
+DELETE FROM SYS_DICT_ITEM WHERE dict_type IN ('org_type','dimension','submit_status','item_code') AND created_by = 'redengine-merge';
 
 -- 6a) RE_ORG_TYPE（3 项）
 INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, created_by) VALUES
