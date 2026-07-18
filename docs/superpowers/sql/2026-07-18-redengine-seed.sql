@@ -57,7 +57,7 @@ VALUES
  ('P_RE_SUBMIT_ADD', '/api/re/submits',                   'POST',   '红色引擎-新建上报',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
  ('P_RE_SUBMIT_MY',  '/api/re/submits/my',                'GET',    '红色引擎-我的上报',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
  ('P_RE_SUBMIT_GET', '/api/re/submits/*',                 'GET',    '红色引擎-上报详情',         10, 0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
- ('P_RE_REVIEW_Q',   '/api/re/reviews/queue',              'GET',    '红色引擎-审核待审队列',     0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
+ ('P_RE_REVIEW_Q',   '/api/re/reviews/**',                 'GET',    '红色引擎-审核待审队列',     0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6 / Task9 复用 preview'),
  ('P_RE_REVIEW_APPR','/api/re/reviews/*/approve',          'POST',   '红色引擎-审核通过+评分',     0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
  ('P_RE_REVIEW_REJ', '/api/re/reviews/*/reject',           'POST',   '红色引擎-审核驳回',         0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
  ('P_RE_CKPT_VIEW',  '/api/re/cockpit/**',                 'GET',    '红色引擎-驾驶舱只读',       0,  0, NULL, 0, 'RE', 'redengine-merge', 'spec 2026-07-18 §6'),
@@ -68,6 +68,15 @@ VALUES
 -- 1-0) 幂等对齐 UPDATE（2026-07-18 修复）：INSERT IGNORE 对两测试库已存在的 17 行不会更新任何列，
 --      故此处显式补 UPDATE 把 MENU_RANK_NO 对齐到目标值，确保历史已落库的行同样获得修复。
 UPDATE PT_RESOURCE SET MENU_RANK_NO = 10 WHERE RESOURCE_ID IN ('P_RE_ORG_GET', 'P_RE_SUBMIT_GET');
+
+-- 1-1) 幂等对齐 UPDATE（Task 9 两级审核控制器裁决）：GET /api/re/reviews/{id}/preview（审核预览）
+--      复用 P_RE_REVIEW_Q 资源而非单独登记，故把该资源 RESOURCE_URL 从字面量 '/api/re/reviews/queue'
+--      放宽为通配符 '/api/re/reviews/**'，同时覆盖 queue 与 {id}/preview 两个 GET 端点。
+--      与 1-0 同模式：INSERT IGNORE 对已存在行不会更新 RESOURCE_URL 列，需显式 UPDATE 对齐历史落库行。
+--      无歧义风险：同 METHOD(GET) 下 /api/re/reviews/ 前缀无其它字面量资源兄弟，P_RE_REVIEW_APPR/REJ
+--      为 POST 方法，不与本资源在同一 METHOD 分组内竞争 AntPath 匹配顺序，故无需像 P_RE_ORG_GET/
+--      P_RE_SUBMIT_GET 那样调整 MENU_RANK_NO。
+UPDATE PT_RESOURCE SET RESOURCE_URL = '/api/re/reviews/**' WHERE RESOURCE_ID = 'P_RE_REVIEW_Q';
 
 
 -- ============================================================================
