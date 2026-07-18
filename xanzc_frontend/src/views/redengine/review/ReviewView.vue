@@ -240,8 +240,14 @@ async function reload() {
   }
 }
 
-watch(selectedItem, (val) => {
-  if (val) finalScore.value = 0
+// 只在"切换到不同条目"时把评分清零；同一条目的重赋值（handleApprove/handleConfirmReject
+// 成功后 `selectedItem.value = { ...item }`、selectItem() 里 getReviewPreview 异步返回后
+// `selectedItem.value = merged`，均只是同 id 对象换引用触发视图刷新）不应清空已录入的分值——
+// 否则审核通过后"最终得分"输入框会被误重置为 0，与同屏"已通过，计 X 分"结果横幅自相矛盾
+// （Playwright 联调 Task 17d 截图复现），且若用户在预览异步加载期间已手填分数，预览返回时
+// 也会静默清零用户刚输入的值。
+watch(selectedItem, (val, oldVal) => {
+  if (val && (!oldVal || val.id !== oldVal.id)) finalScore.value = 0
 })
 
 const selectItem = async (item) => {
