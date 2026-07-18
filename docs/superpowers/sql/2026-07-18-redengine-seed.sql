@@ -18,6 +18,17 @@
 --   4) onepl_test_bootstrap 已具备本脚本涉及的全部表（PT_RESOURCE/PT_ROLE/PT_ROLE_RESOURCE/
 --      PT_ROLE_BIZ_SCOPE/SYS_DICT/SYS_DICT_ITEM/RE_PARTY_ORG），结构与 yiti_test 一致，两库
 --      执行同一份脚本，无需拆分。
+--
+-- 修复记录（2026-07-18 二次修复，控制器核实后要求）：
+--   governance 模块的 DictApi/DictController/AdminDictController 与 SysDict 实体
+--   （system-governance-center/.../entity/SysDict.java，@TableName("SYS_DICT")）只读写
+--   SYS_DICT 单表，全平台代码不存在任何 SYS_DICT_ITEM 引用（grep 确认）。第 6 段原先落地的
+--   "类型头(SYS_DICT 4行)+字典项(SYS_DICT_ITEM 18行)"两级设计因此对平台完全不可见。现改为
+--   按平台既有拍平惯例（抽样 yiti_test 现存 174 行 SYS_DICT，如 NOTIFY_TYPE/BIZ_KIND/
+--   AUDIT_BIZ_TYPE 均为 dict_type=类别、dict_code=项编码、status='ACTIVE'/'DISABLED' 字符串
+--   枚举，与 SysDict.java 类注释一致）把 18 项直接落 SYS_DICT，dict_type 加 RE_ 前缀命名空间
+--   （RE_ORG_TYPE/RE_DIMENSION/RE_SUBMIT_STATUS/RE_ITEM_CODE）防止与通用字典类型撞车；
+--   第 6 段新增 DELETE 清理此前误写的 4 条类型头行 + 18 行 SYS_DICT_ITEM，不再写 SYS_DICT_ITEM。
 -- ============================================================================
 
 
@@ -124,48 +135,51 @@ WHERE r.ROLE_CODE IN ('R_RE_ORGREV','R_RE_BRREV','R_RE_SECR','R_RE_REPORT','SYS_
 
 
 -- ============================================================================
--- 6) SYS_DICT（4 类）+ SYS_DICT_ITEM（18 项）
---    内容照抄 redengine data.sql 158-193 行；SYS_DICT 存字典类型头行（dict_code 与 dict_type 同值，
---    仅为满足 uk_dict_type_code 唯一键结构，无独立编码语义），SYS_DICT_ITEM 存实际字典项。
---    id 用 MD5(...) 生成 32 位十六进制，天然贴合 varchar(32) 主键并保证幂等重跑。
+-- 6) SYS_DICT：红色引擎字典 4 类 18 项（拍平惯例，dict_type 加 RE_ 前缀命名空间）
+--    governance 模块只读写 SYS_DICT 单表，SYS_DICT_ITEM 全平台未被任何代码读取（见文件头
+--    "修复记录"）。按平台拍平惯例把 18 项直接落 SYS_DICT，每项一行，(dict_type, dict_code)
+--    唯一；dict_type 用 RE_ORG_TYPE / RE_DIMENSION / RE_SUBMIT_STATUS / RE_ITEM_CODE。
+--    内容照抄 redengine data.sql 158-193 行。id 用 MD5(...) 生成 32 位十六进制，天然贴合
+--    varchar(32) 主键并保证幂等重跑。不再写 SYS_DICT_ITEM（该表全平台未被读取，保持为空）。
 -- ============================================================================
 
--- 6a) SYS_DICT：4 个字典类型头行
+-- 6-0) 清理修复前误写的 4 条"类型头"行（无 RE_ 前缀的旧 dict_type）与 SYS_DICT_ITEM 18 行
+--      已核实：这 4 个 dict_type（org_type/dimension/submit_status/item_code）在
+--      yiti_test/onepl_test_bootstrap 两库仅由本任务本次写入，无其它模块/既有数据共用，
+--      可安全清理；SYS_DICT_ITEM 两库本为空表，仅本任务误写过 18 行。DELETE 语句天然幂等
+--      （重跑时条件不再命中，不报错，不影响其它 dict_type 数据）。
+DELETE FROM SYS_DICT WHERE dict_type IN ('org_type','dimension','submit_status','item_code');
+DELETE FROM SYS_DICT_ITEM WHERE dict_type IN ('org_type','dimension','submit_status','item_code');
+
+-- 6a) RE_ORG_TYPE（3 项）
 INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, created_by) VALUES
- (MD5('RE_DICT#org_type'),      'org_type',      'org_type',      '组织类型',       'org_type',      1, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT#dimension'),     'dimension',     'dimension',     '考核维度',       'dimension',     2, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT#submit_status'), 'submit_status', 'submit_status', '上报状态',       'submit_status', 3, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT#item_code'),     'item_code',     'item_code',     '考核项目编码',   'item_code',     4, 'ACTIVE', 'redengine-merge');
+ (MD5('RE_DICT#RE_ORG_TYPE#经营单位'),   'RE_ORG_TYPE', '经营单位',   '经营单位',   '经营单位',   1, 'ACTIVE', 'redengine-merge'),
+ (MD5('RE_DICT#RE_ORG_TYPE#营销部室'),   'RE_ORG_TYPE', '营销部室',   '营销部室',   '营销部室',   2, 'ACTIVE', 'redengine-merge'),
+ (MD5('RE_DICT#RE_ORG_TYPE#中后台部门'), 'RE_ORG_TYPE', '中后台部门', '中后台部门', '中后台部门', 3, 'ACTIVE', 'redengine-merge');
 
--- 6b) SYS_DICT_ITEM：org_type（3 项）
-INSERT IGNORE INTO SYS_DICT_ITEM (id, dict_type, item_code, item_label, item_value, sort_order, status, created_by) VALUES
- (MD5('RE_DICT_ITEM#org_type#经营单位'),   'org_type', '经营单位',   '经营单位',   '经营单位',   1, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#org_type#营销部室'),   'org_type', '营销部室',   '营销部室',   '营销部室',   2, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#org_type#中后台部门'), 'org_type', '中后台部门', '中后台部门', '中后台部门', 3, 'ACTIVE', 'redengine-merge');
+-- 6b) RE_DIMENSION（4 项）
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, created_by) VALUES
+ (MD5('RE_DICT#RE_DIMENSION#dim1'), 'RE_DIMENSION', 'dim1', '党建联建(35分)',     'dim1', 1, 'ACTIVE', 'redengine-merge'),
+ (MD5('RE_DICT#RE_DIMENSION#dim2'), 'RE_DIMENSION', 'dim2', '业务提升(50分)',     'dim2', 2, 'ACTIVE', 'redengine-merge'),
+ (MD5('RE_DICT#RE_DIMENSION#dim3'), 'RE_DIMENSION', 'dim3', '头雁与先锋(10分)',   'dim3', 3, 'ACTIVE', 'redengine-merge'),
+ (MD5('RE_DICT#RE_DIMENSION#dim4'), 'RE_DIMENSION', 'dim4', '督导与工作总结(5分)', 'dim4', 4, 'ACTIVE', 'redengine-merge');
 
--- 6c) SYS_DICT_ITEM：dimension（4 项）
-INSERT IGNORE INTO SYS_DICT_ITEM (id, dict_type, item_code, item_label, item_value, sort_order, status, created_by) VALUES
- (MD5('RE_DICT_ITEM#dimension#dim1'), 'dimension', 'dim1', '党建联建(35分)',     'dim1', 1, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#dimension#dim2'), 'dimension', 'dim2', '业务提升(50分)',     'dim2', 2, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#dimension#dim3'), 'dimension', 'dim3', '头雁与先锋(10分)',   'dim3', 3, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#dimension#dim4'), 'dimension', 'dim4', '督导与工作总结(5分)', 'dim4', 4, 'ACTIVE', 'redengine-merge');
+-- 6c) RE_SUBMIT_STATUS（3 项）
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, created_by) VALUES
+ (MD5('RE_DICT#RE_SUBMIT_STATUS#pending'),  'RE_SUBMIT_STATUS', 'pending',  '待审核', 'pending',  1, 'ACTIVE', 'redengine-merge'),
+ (MD5('RE_DICT#RE_SUBMIT_STATUS#approved'), 'RE_SUBMIT_STATUS', 'approved', '已通过', 'approved', 2, 'ACTIVE', 'redengine-merge'),
+ (MD5('RE_DICT#RE_SUBMIT_STATUS#rejected'), 'RE_SUBMIT_STATUS', 'rejected', '已驳回', 'rejected', 3, 'ACTIVE', 'redengine-merge');
 
--- 6d) SYS_DICT_ITEM：submit_status（3 项）
-INSERT IGNORE INTO SYS_DICT_ITEM (id, dict_type, item_code, item_label, item_value, sort_order, status, created_by) VALUES
- (MD5('RE_DICT_ITEM#submit_status#pending'),  'submit_status', 'pending',  '待审核', 'pending',  1, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#submit_status#approved'), 'submit_status', 'approved', '已通过', 'approved', 2, 'ACTIVE', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#submit_status#rejected'), 'submit_status', 'rejected', '已驳回', 'rejected', 3, 'ACTIVE', 'redengine-merge');
-
--- 6e) SYS_DICT_ITEM：item_code（8 项，含 remark）
-INSERT IGNORE INTO SYS_DICT_ITEM (id, dict_type, item_code, item_label, item_value, sort_order, status, remark, created_by) VALUES
- (MD5('RE_DICT_ITEM#item_code#1.1'), 'item_code', '1.1', '1.1 外联共建分数',   '1.1', 1, 'ACTIVE', '最高35分', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#item_code#1.2'), 'item_code', '1.2', '1.2 党建项目',       '1.2', 2, 'ACTIVE', '最高35分', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#item_code#1.3'), 'item_code', '1.3', '1.3 党建创新',       '1.3', 3, 'ACTIVE', '最高35分', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#item_code#2.1'), 'item_code', '2.1', '2.1 业务提升分数',   '2.1', 4, 'ACTIVE', '最高50分', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#item_code#2.2'), 'item_code', '2.2', '2.2 市场开拓',       '2.2', 5, 'ACTIVE', '最高50分', 'redengine-merge'),
- (MD5('RE_DICT_ITEM#item_code#4.1'), 'item_code', '4.1', '4.1 督导与工作总结', '4.1', 6, 'ACTIVE', '最高5分',  'redengine-merge'),
- (MD5('RE_DICT_ITEM#item_code#4.2'), 'item_code', '4.2', '4.2 年度工作总结',   '4.2', 7, 'ACTIVE', '最高5分',  'redengine-merge'),
- (MD5('RE_DICT_ITEM#item_code#sup'), 'item_code', 'sup', 'sup 补充加分',       'sup', 8, 'ACTIVE', 'N/A',      'redengine-merge');
+-- 6d) RE_ITEM_CODE（8 项，含 remark）
+INSERT IGNORE INTO SYS_DICT (id, dict_type, dict_code, dict_label, dict_value, sort_order, status, remark, created_by) VALUES
+ (MD5('RE_DICT#RE_ITEM_CODE#1.1'), 'RE_ITEM_CODE', '1.1', '1.1 外联共建分数',   '1.1', 1, 'ACTIVE', '最高35分', 'redengine-merge'),
+ (MD5('RE_DICT#RE_ITEM_CODE#1.2'), 'RE_ITEM_CODE', '1.2', '1.2 党建项目',       '1.2', 2, 'ACTIVE', '最高35分', 'redengine-merge'),
+ (MD5('RE_DICT#RE_ITEM_CODE#1.3'), 'RE_ITEM_CODE', '1.3', '1.3 党建创新',       '1.3', 3, 'ACTIVE', '最高35分', 'redengine-merge'),
+ (MD5('RE_DICT#RE_ITEM_CODE#2.1'), 'RE_ITEM_CODE', '2.1', '2.1 业务提升分数',   '2.1', 4, 'ACTIVE', '最高50分', 'redengine-merge'),
+ (MD5('RE_DICT#RE_ITEM_CODE#2.2'), 'RE_ITEM_CODE', '2.2', '2.2 市场开拓',       '2.2', 5, 'ACTIVE', '最高50分', 'redengine-merge'),
+ (MD5('RE_DICT#RE_ITEM_CODE#4.1'), 'RE_ITEM_CODE', '4.1', '4.1 督导与工作总结', '4.1', 6, 'ACTIVE', '最高5分',  'redengine-merge'),
+ (MD5('RE_DICT#RE_ITEM_CODE#4.2'), 'RE_ITEM_CODE', '4.2', '4.2 年度工作总结',   '4.2', 7, 'ACTIVE', '最高5分',  'redengine-merge'),
+ (MD5('RE_DICT#RE_ITEM_CODE#sup'), 'RE_ITEM_CODE', 'sup', 'sup 补充加分',       'sup', 8, 'ACTIVE', 'N/A',      'redengine-merge');
 
 
 -- ============================================================================
