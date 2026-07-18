@@ -1,0 +1,334 @@
+// 大屏数据源 config_json 组装/解析纯函数测试（TDD Red 先行）
+// 覆盖：KPI_DETAIL 引导式 / fieldMeta 字段元数据 / WIDE_TABLE aggregation / scopeMode / 试跑预览列头
+// 后端契约对齐 report-analytics-center ScreenDatasourceServiceImpl（spec 2026-07-17 §3）：
+//   - KPI_DETAIL：SNAPSHOT→SINGLE、TREND→TIMESERIES；TREND metrics 每项 code+name 非空；valueCol ∈ score|completeRate
+//   - fieldMeta：col 非空且不重复、role ∈ DIM|METRIC 必填
+//   - aggregation：groupBy DATE→TIMESERIES、NONE/SUBJECT→SINGLE；filters op 白名单，IN 值为逗号分隔字符串（后端拆分）
+import { describe, it, expect } from 'vitest';
+import {
+  defaultDsModel, deriveDsType, buildConfigJson, buildTimeParamJson,
+  parseConfigJson, validateDsModel, buildPreviewColumns, formatPreviewCell
+} from '../dsConfig';
+
+/** 快速构造一个在 defaultDsModel 基础上打补丁的模型 */
+function model(patch = {}) {
+  const m = defaultDsModel();
+  return { ...m, ...patch };
+}
+
+describe('deriveDsType —— ds_type 随配置联动（与后端强制规则一致）', () => {
+  it('WIDE_TABLE 未开聚合 → TIMESERIES（现状行为）', () => {
+    expect(deriveDsType(model({ sourceKind: 'WIDE_TABLE' }))).toBe('TIMESERIES');
+  });
+  it('WIDE_TABLE 聚合 groupBy=DATE → TIMESERIES', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE', aggEnabled: true });
+    m.aggregation.groupBy = 'DATE';
+    expect(deriveDsType(m)).toBe('TIMESERIES');
+  });
+  it('WIDE_TABLE 聚合 groupBy=NONE/SUBJECT → SINGLE', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE', aggEnabled: true });
+    m.aggregation.groupBy = 'NONE';
+    expect(deriveDsType(m)).toBe('SINGLE');
+    m.aggregation.groupBy = 'SUBJECT';
+    expect(deriveDsType(m)).toBe('SINGLE');
+  });
+  it('KPI_DETAIL SNAPSHOT → SINGLE；TREND → TIMESERIES', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL' });
+    m.kpiDetail.mode = 'SNAPSHOT';
+    expect(deriveDsType(m)).toBe('SINGLE');
+    m.kpiDetail.mode = 'TREND';
+    expect(deriveDsType(m)).toBe('TIMESERIES');
+  });
+  it('KPI_RESULT → TIMESERIES（后端强制）；CUSTOM_SQL → 跟随用户选择', () => {
+    expect(deriveDsType(model({ sourceKind: 'KPI_RESULT' }))).toBe('TIMESERIES');
+    expect(deriveDsType(model({ sourceKind: 'CUSTOM_SQL', dsType: 'SINGLE' }))).toBe('SINGLE');
+    expect(deriveDsType(model({ sourceKind: 'CUSTOM_SQL', dsType: 'TIMESERIES' }))).toBe('TIMESERIES');
+  });
+});
+
+describe('buildConfigJson —— 表单模型 → config_json 对象', () => {
+  it('WIDE_TABLE 基础形态：table + metrics(仅 code) + schemaVersion:2 + scopeMode，未开聚合/无 fieldMeta 时不落对应键', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE' });
+    m.wide.table = 'EMP_INDEX_RESULT';
+    m.wide.metricCodes = ['M0001', 'M0002'];
+    const cfg = buildConfigJson(m);
+    expect(cfg).toEqual({
+      schemaVersion: 2,
+      table: 'EMP_INDEX_RESULT',
+      metrics: [{ metricCode: 'M0001' }, { metricCode: 'M0002' }],
+      scopeMode: 'SUBJECT'
+    });
+    expect(cfg).not.toHaveProperty('aggregation');
+    expect(cfg).not.toHaveProperty('fieldMeta');
+  });
+
+  it('WIDE_TABLE 开启聚合：aggregation 落盘；filters 过滤整行空、IN 值保持逗号分隔字符串', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE', aggEnabled: true });
+    m.wide.table = 'ORG_INDEX_RESULT';
+    m.wide.metricCodes = ['M0003'];
+    m.aggregation = {
+      groupBy: 'SUBJECT', agg: 'SUM',
+      filters: [
+        { col: 'org_code', op: 'IN', value: 'ORG001, ORG002' },
+        { col: '', op: 'EQ', value: '' }  // 用户加了但没填的空行 → 丢弃
+      ]
+    };
+    const cfg = buildConfigJson(m);
+    expect(cfg.aggregation).toEqual({
+      groupBy: 'SUBJECT', agg: 'SUM',
+      filters: [{ col: 'org_code', op: 'IN', value: 'ORG001, ORG002' }]
+    });
+  });
+
+  it('WIDE_TABLE 聚合无有效 filters 时省略 filters 键', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE', aggEnabled: true });
+    m.wide.metricCodes = ['M0001'];
+    m.aggregation = { groupBy: 'DATE', agg: 'AVG', filters: [{ col: '', op: 'EQ', value: '' }] };
+    const cfg = buildConfigJson(m);
+    expect(cfg.aggregation).toEqual({ groupBy: 'DATE', agg: 'AVG' });
+  });
+
+  it('aggEnabled=false 时即使 aggregation 有残留值也不落盘（开关语义）', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE', aggEnabled: false });
+    m.wide.metricCodes = ['M0001'];
+    m.aggregation.groupBy = 'DATE';
+    expect(buildConfigJson(m)).not.toHaveProperty('aggregation');
+  });
+
+  it('fieldMeta（全类型通用）：过滤整行空、trim、decimals 转数字，空数组不落键', () => {
+    const m = model({ sourceKind: 'CUSTOM_SQL', dsType: 'SINGLE' });
+    m.sql = { text: 'SELECT 1', dateCol: '' };
+    m.fieldMeta = [
+      { col: ' 存款余额 ', alias: '一般性存款', role: 'METRIC', unit: '万元', decimals: '2' },
+      { col: 'data_date', alias: '', role: 'DIM', unit: '', decimals: null },
+      { col: '', alias: '', role: 'METRIC', unit: '', decimals: null }  // 空行丢弃
+    ];
+    const cfg = buildConfigJson(m);
+    expect(cfg.fieldMeta).toEqual([
+      { col: '存款余额', alias: '一般性存款', role: 'METRIC', unit: '万元', decimals: 2 },
+      { col: 'data_date', role: 'DIM' }
+    ]);
+    // fieldMeta 全空时不落键
+    m.fieldMeta = [];
+    expect(buildConfigJson(m)).not.toHaveProperty('fieldMeta');
+  });
+
+  it('KPI_DETAIL SNAPSHOT：schemaVersion:2 + 方案/主体/模式，不携带 metrics/valueCol', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL' });
+    m.kpiDetail = { ...m.kpiDetail, schemeCode: 'KPI_2026_STD', subjectType: 'EMP', mode: 'SNAPSHOT' };
+    const cfg = buildConfigJson(m);
+    expect(cfg).toEqual({
+      schemaVersion: 2, schemeCode: 'KPI_2026_STD', subjectType: 'EMP', mode: 'SNAPSHOT', scopeMode: 'SUBJECT'
+    });
+  });
+
+  it('KPI_DETAIL TREND：携带 metrics 快照（code+name）与 valueCol（默认 score）', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL', scopeMode: 'GLOBAL' });
+    m.kpiDetail = {
+      schemeCode: 'KPI_2026_STD', subjectType: 'ORG', mode: 'TREND',
+      metrics: [{ metricCode: 'M0001', metricName: '存款日均' }],
+      valueCol: 'score', timeParams: ['LAST_1M']
+    };
+    const cfg = buildConfigJson(m);
+    expect(cfg).toEqual({
+      schemaVersion: 2, schemeCode: 'KPI_2026_STD', subjectType: 'ORG', mode: 'TREND',
+      metrics: [{ metricCode: 'M0001', metricName: '存款日均' }],
+      valueCol: 'score', scopeMode: 'GLOBAL'
+    });
+  });
+
+  it('KPI_DETAIL TREND 取值列可选 completeRate', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL' });
+    m.kpiDetail = {
+      schemeCode: 'S1', subjectType: 'EMP', mode: 'TREND',
+      metrics: [{ metricCode: 'M1', metricName: 'N1' }], valueCol: 'completeRate', timeParams: []
+    };
+    expect(buildConfigJson(m).valueCol).toBe('completeRate');
+  });
+
+  it('KPI_RESULT：cycleType + scopeMode；CUSTOM_SQL：sql/dateCol(空→null)', () => {
+    const m1 = model({ sourceKind: 'KPI_RESULT' });
+    m1.kpi.cycleType = 'QUARTERLY';
+    expect(buildConfigJson(m1)).toEqual({ schemaVersion: 2, cycleType: 'QUARTERLY', scopeMode: 'SUBJECT' });
+
+    const m2 = model({ sourceKind: 'CUSTOM_SQL', dsType: 'TIMESERIES', scopeMode: 'GLOBAL' });
+    m2.sql = { text: 'SELECT stat_date, cnt FROM RPT_X', dateCol: 'stat_date' };
+    expect(buildConfigJson(m2)).toEqual({
+      schemaVersion: 2, sql: 'SELECT stat_date, cnt FROM RPT_X', dateCol: 'stat_date', scopeMode: 'GLOBAL'
+    });
+    m2.sql.dateCol = '';
+    expect(buildConfigJson(m2).dateCol).toBeNull();
+  });
+});
+
+describe('buildTimeParamJson —— 预设周期落 time_param_json', () => {
+  it('WIDE_TABLE：序列化 wide.timeParams', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE' });
+    m.wide.timeParams = ['LATEST', 'LAST_1M'];
+    expect(buildTimeParamJson(m)).toBe('["LATEST","LAST_1M"]');
+  });
+  it('KPI_DETAIL TREND：序列化 kpiDetail.timeParams；SNAPSHOT 不携带（null）', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL' });
+    m.kpiDetail.mode = 'TREND';
+    m.kpiDetail.timeParams = ['LAST_10D'];
+    expect(buildTimeParamJson(m)).toBe('["LAST_10D"]');
+    m.kpiDetail.mode = 'SNAPSHOT';
+    expect(buildTimeParamJson(m)).toBeNull();
+  });
+  it('其他类型 → null', () => {
+    expect(buildTimeParamJson(model({ sourceKind: 'KPI_RESULT' }))).toBeNull();
+    expect(buildTimeParamJson(model({ sourceKind: 'CUSTOM_SQL' }))).toBeNull();
+  });
+});
+
+describe('parseConfigJson —— config_json → 表单模型补丁（读时兼容 v1 旧数据）', () => {
+  it('WIDE_TABLE v1 旧数据：无 fieldMeta/aggregation/scopeMode → 补默认（关聚合/空元数据/SUBJECT）', () => {
+    const patch = parseConfigJson('WIDE_TABLE', {
+      table: 'EMP_INDEX_RESULT',
+      metrics: [{ metricCode: 'M0001', metricName: '存款', slot: 1 }]
+    });
+    expect(patch.wide.table).toBe('EMP_INDEX_RESULT');
+    expect(patch.wide.metricCodes).toEqual(['M0001']);
+    // 后端重写后的 config 带 slot → 供 filters col 下拉提示
+    expect(patch.wide.slotCols).toEqual(['val_1']);
+    expect(patch.aggEnabled).toBe(false);
+    expect(patch.fieldMeta).toEqual([]);
+    expect(patch.scopeMode).toBe('SUBJECT');
+  });
+
+  it('WIDE_TABLE v2：回填 aggregation（含 filters）与 fieldMeta（行字段补默认）', () => {
+    const patch = parseConfigJson('WIDE_TABLE', {
+      schemaVersion: 2,
+      table: 'ORG_INDEX_RESULT',
+      metrics: [{ metricCode: 'M0003', slot: 2 }],
+      aggregation: { groupBy: 'DATE', agg: 'SUM', filters: [{ col: 'org_code', op: 'IN', value: 'A,B' }] },
+      fieldMeta: [{ col: 'val_2', alias: '余额', role: 'METRIC' }],
+      scopeMode: 'GLOBAL'
+    });
+    expect(patch.aggEnabled).toBe(true);
+    expect(patch.aggregation).toEqual({
+      groupBy: 'DATE', agg: 'SUM', filters: [{ col: 'org_code', op: 'IN', value: 'A,B' }]
+    });
+    expect(patch.fieldMeta).toEqual([{ col: 'val_2', alias: '余额', role: 'METRIC', unit: '', decimals: null }]);
+    expect(patch.scopeMode).toBe('GLOBAL');
+  });
+
+  it('KPI_DETAIL TREND：回填方案/主体/模式/metrics 快照/valueCol', () => {
+    const patch = parseConfigJson('KPI_DETAIL', {
+      schemaVersion: 2, schemeCode: 'KPI_2026_STD', subjectType: 'ORG', mode: 'TREND',
+      metrics: [{ metricCode: 'M1', metricName: 'N1' }], valueCol: 'completeRate'
+    }, '["LAST_1M"]');
+    expect(patch.kpiDetail).toEqual({
+      schemeCode: 'KPI_2026_STD', subjectType: 'ORG', mode: 'TREND',
+      metrics: [{ metricCode: 'M1', metricName: 'N1' }], valueCol: 'completeRate', timeParams: ['LAST_1M']
+    });
+  });
+
+  it('KPI_DETAIL SNAPSHOT 缺省字段补默认（subjectType=EMP、valueCol=score、timeParams 默认集）', () => {
+    const patch = parseConfigJson('KPI_DETAIL', { schemeCode: 'S1', mode: 'SNAPSHOT' });
+    expect(patch.kpiDetail.subjectType).toBe('EMP');
+    expect(patch.kpiDetail.valueCol).toBe('score');
+    expect(Array.isArray(patch.kpiDetail.timeParams)).toBe(true);
+  });
+
+  it('CUSTOM_SQL / KPI_RESULT：回填原有字段 + 通用段', () => {
+    const p1 = parseConfigJson('CUSTOM_SQL', { sql: 'SELECT 1', dateCol: null, scopeMode: 'GLOBAL' });
+    expect(p1.sql).toEqual({ text: 'SELECT 1', dateCol: '' });
+    expect(p1.scopeMode).toBe('GLOBAL');
+    const p2 = parseConfigJson('KPI_RESULT', { cycleType: 'MONTHLY' });
+    expect(p2.kpi.cycleType).toBe('MONTHLY');
+    expect(p2.scopeMode).toBe('SUBJECT');
+  });
+});
+
+describe('validateDsModel —— 与后端 43009 校验规则对齐的前置校验', () => {
+  it('KPI_DETAIL：方案必填；TREND 必须至少选一个指标', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL' });
+    m.kpiDetail.schemeCode = '';
+    expect(validateDsModel(m).some(e => e.includes('方案'))).toBe(true);
+    m.kpiDetail.schemeCode = 'S1';
+    m.kpiDetail.mode = 'TREND';
+    m.kpiDetail.metrics = [];
+    expect(validateDsModel(m).some(e => e.includes('指标'))).toBe(true);
+    m.kpiDetail.metrics = [{ metricCode: 'M1', metricName: 'N1' }];
+    expect(validateDsModel(m)).toEqual([]);
+  });
+
+  it('KPI_DETAIL TREND：metrics 缺 metricName 快照报错（后端 code+name 均非空）', () => {
+    const m = model({ sourceKind: 'KPI_DETAIL' });
+    m.kpiDetail = {
+      ...m.kpiDetail, schemeCode: 'S1', mode: 'TREND',
+      metrics: [{ metricCode: 'M1', metricName: '' }]
+    };
+    expect(validateDsModel(m).length).toBeGreaterThan(0);
+  });
+
+  it('WIDE_TABLE：指标必选；开聚合后 filters 行 col/op/value 必须填全', () => {
+    const m = model({ sourceKind: 'WIDE_TABLE' });
+    m.wide.metricCodes = [];
+    expect(validateDsModel(m).some(e => e.includes('指标'))).toBe(true);
+    m.wide.metricCodes = ['M0001'];
+    m.aggEnabled = true;
+    m.aggregation = { groupBy: 'SUBJECT', agg: 'SUM', filters: [{ col: 'org_code', op: 'EQ', value: '' }] };
+    expect(validateDsModel(m).some(e => e.includes('过滤'))).toBe(true);
+    m.aggregation.filters[0].value = 'X';
+    expect(validateDsModel(m)).toEqual([]);
+  });
+
+  it('fieldMeta：col 重复 / role 非法 / decimals 非法均报错；整行空跳过', () => {
+    const m = model({ sourceKind: 'KPI_RESULT' });
+    m.fieldMeta = [
+      { col: 'a', alias: '', role: 'METRIC', unit: '', decimals: null },
+      { col: 'a', alias: '', role: 'DIM', unit: '', decimals: null }
+    ];
+    expect(validateDsModel(m).some(e => e.includes('重复'))).toBe(true);
+    m.fieldMeta = [{ col: 'a', alias: '', role: 'BAD', unit: '', decimals: null }];
+    expect(validateDsModel(m).length).toBeGreaterThan(0);
+    m.fieldMeta = [{ col: 'a', alias: '', role: 'METRIC', unit: '', decimals: '2.5' }];
+    expect(validateDsModel(m).some(e => e.includes('小数'))).toBe(true);
+    m.fieldMeta = [{ col: '', alias: '', role: 'METRIC', unit: '', decimals: null }];
+    expect(validateDsModel(m)).toEqual([]);
+  });
+
+  it('CUSTOM_SQL：SQL 必填；时序型必须声明日期列', () => {
+    const m = model({ sourceKind: 'CUSTOM_SQL', dsType: 'TIMESERIES' });
+    m.sql = { text: '', dateCol: '' };
+    expect(validateDsModel(m).some(e => e.includes('SQL'))).toBe(true);
+    m.sql.text = 'SELECT 1';
+    expect(validateDsModel(m).some(e => e.includes('日期列'))).toBe(true);
+    m.sql.dateCol = 'stat_date';
+    expect(validateDsModel(m)).toEqual([]);
+  });
+});
+
+describe('试跑预览增强 —— columnsMeta 列头与单元格格式化', () => {
+  it('buildPreviewColumns：按 col 匹配 columnsMeta，别名替换列头、单位附注；无 meta 时原样', () => {
+    const cols = buildPreviewColumns(
+      ['metric_code', '存款余额', '完成率'],
+      [
+        { col: '存款余额', alias: '一般性存款', role: 'METRIC', unit: '万元', decimals: 2 },
+        { col: '完成率', role: 'METRIC', unit: '%' }
+      ]
+    );
+    expect(cols).toEqual([
+      { col: 'metric_code', label: 'metric_code', meta: null },
+      { col: '存款余额', label: '一般性存款（万元）', meta: { col: '存款余额', alias: '一般性存款', role: 'METRIC', unit: '万元', decimals: 2 } },
+      { col: '完成率', label: '完成率（%）', meta: { col: '完成率', role: 'METRIC', unit: '%' } }
+    ]);
+  });
+
+  it('buildPreviewColumns：columnsMeta 缺失（旧接口）时退化为原始列名', () => {
+    expect(buildPreviewColumns(['a', 'b'], null)).toEqual([
+      { col: 'a', label: 'a', meta: null },
+      { col: 'b', label: 'b', meta: null }
+    ]);
+  });
+
+  it('formatPreviewCell：null/undefined → "—"（完成率 target=0 场景）；decimals 生效；非数值原样', () => {
+    expect(formatPreviewCell(null, { decimals: 2 })).toBe('—');
+    expect(formatPreviewCell(undefined, null)).toBe('—');
+    expect(formatPreviewCell(98.456, { decimals: 2 })).toBe('98.46');
+    expect(formatPreviewCell(98.456, null)).toBe(98.456);
+    expect(formatPreviewCell('ORG001', { decimals: 2 })).toBe('ORG001');
+  });
+});

@@ -25,6 +25,10 @@ export function deleteScreenDatasource(id) {
 export function tryRunScreenDatasource(data) {
   return call('post', '/screen/admin/datasources/try-run', { data });
 }
+// KPI 方案下拉（KPI_DETAIL 数据源配置用，仅 ACTIVE 方案）：[{schemeCode, schemeName}]
+export function listKpiSchemes() {
+  return call('get', '/screen/admin/kpi-schemes', {}, []);
+}
 
 // ===== 大屏布局管理 =====
 export function listScreens() {
