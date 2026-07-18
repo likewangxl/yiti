@@ -191,6 +191,8 @@ src/test/java/com/bank/branch/platform/redengine/
 7. **OBS 域名在开发沙箱 DNS 不可达**（`GOV-50001`）：附件上传联调在当前开发环境不可用，生产内网可用；`JointView` 未做"附件失败仍放行提交"的降级（安全默认：附件失败=提交失败），已记录不修。
 8. **`RestEndpointInventoryIT` 误报**：该审计工具只静态比对 `docs/schema/seed-v1.sql` 基线且不做 AntPath 通配符展开，本模块 17 条 `P_RE_*` 资源已正确注册但被误计入"未登记"差值（BASE=195，当前=218，差值 23 恰为 RE 端点，含 2 条通配符资源覆盖多端点），属该工具既有方法论盲区，非真实注册缺口。
 9. **`SYS_DICT_ITEM` 平台无代码读取通道**：`system-governance-center` 的 `DictApi`/`SysDict` 只读写 `SYS_DICT` 单表，本模块字典按平台拍平惯例落 `SYS_DICT`（`RE_` 前缀命名空间，4 类 18 项），未使用 DDL 语义上"预留"的两级 `SYS_DICT_ITEM` 设计。
+10. **`approve` 评分上限校验并发 TOCTOU 可绕过 `maxScore`**（终审 F-1，`.superpowers/sdd/final-review.md` §3，Minor/非阻断）：`ReReviewService.insertScoreWithLimitCheck`（约 L765-798）走"`selectList` 内存求和 → 校验 → `insert`"，`@Transactional` 不加读锁/唯一约束。两个审核员（或前端重复提交）几乎同时对同一党组织、同一 `itemCode`、同一年度的上报调用 `approve`，各自事务在 `selectList` 阶段读到相同历史累计值，各自判定 `existingSum+score ≤ maxScore` 通过，各自落一行 `RE_SCORE`，最终累计可突破 `maxScore`。终审评估为 Minor：党建业务量级为个位数支部、审核为人工离散动作，真实并发概率极低，且已有 `@AuditLog` 留痕；本质是与技术债②"重复审核"同源的并发变体（技术债②接受"保留改判能力"的产品决策）。若未来需强一致，可对 `(org_id, item_code, score_year)` 加唯一约束或改 `SELECT ... FOR UPDATE` 行锁。
+11. **驾驶舱/导出为全局口径（`DATA_SCOPE='ALL'`），支部书记可见并导出全行数据**（终审 F-3，`.superpowers/sdd/final-review.md` §3，Info/设计如此）：`ReCockpitService`（ranking/warning/overview 等）与 `ReExportService`（全量导出）均无 per-org 过滤，模块内 org 隔离仅作用于"我的上报/创建"；`R_RE_SECR`（支部书记）按角色矩阵获授"驾驶舱只读 + 数据导出"，因此可看到并导出全行各支部的评分数据，而非仅本支部。这是 `PT_ROLE_BIZ_SCOPE.BIZ_TYPE='RED_ENGINE'` 统一 `DATA_SCOPE='ALL'` + "全局数据驾驶舱"产品定位的显式决策，非缺陷；若业务上要求收敛到本支部口径，需另立任务改造 `ReCockpitService`/`ReExportService` 按登录人 `RE_USER_PARTY_MAP` 的 `partyOrgId` 过滤。
 
 ## 开发参考
 
