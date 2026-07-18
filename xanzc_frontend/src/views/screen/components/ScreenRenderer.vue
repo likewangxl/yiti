@@ -5,7 +5,8 @@
       <!-- ChartWidget:注入 bindSnapshot 后复用 BlockContainer 取数;快照缺失(如草稿预览态
            bindSnapshots 恒空,详见后端 composeDraftPreview)不裸传 null 给 BlockContainer(会
            空指针崩溃),渲染中性占位。 -->
-      <BlockContainer v-if="c.component === 'ChartWidget' && blockOf(c)" :block="blockOf(c)" :context="context" />
+      <BlockContainer v-if="c.component === 'ChartWidget' && blockOf(c)" :block="blockOf(c)" :context="context"
+                      :prop-value="c.propValue || {}" />
       <div v-else-if="c.component === 'ChartWidget'" class="scr-abs-empty">暂无预览数据</div>
       <!-- MapCenter 走独立分支:其 props 契约是 mapPoints 数组(来自 ScreenRenderRespDTO.mapPoints，
            PROVINCE 屏实时回填)，与素材类 widgets 的 element/propValue 签名不同，不经 widgetOf 通用注册。 -->
@@ -22,23 +23,50 @@ import { computed } from 'vue';
 import BlockContainer from './BlockContainer.vue';
 import MapCenter from './MapCenter.vue';
 import { findWidget } from '@/views/screen/designer/widgets';
+import { canvasBackgroundStyle, componentBackgroundStyle } from '@/views/screen/designer/utils/background';
 
 const props = defineProps({
   renderPackage: { type: Object, default: () => ({ components: [], bindSnapshots: {}, canvasStyle: {} }) },
   mapPoints: { type: Array, default: () => [] },
   context: { type: Object, default: () => ({}) }
 });
-const components = computed(() => props.renderPackage.components || []);
+/**
+ * 渲染列表:Group 成组节点(设计器多选成组产物)在运行时只是坐标容器,无自身视觉——
+ * 展开为"绝对坐标子节点"(组左上角 + 子相对坐标,透明度相乘)后走既有按 component 分派分支,
+ * 模板零改动(最小适配)。组隐藏则子组件整体不渲染;组不嵌套(设计器 makeGroup 已保证)。
+ */
+const components = computed(() => {
+  const out = [];
+  for (const c of (props.renderPackage.components || [])) {
+    if (c.component === 'Group') {
+      if (c.isShow === false) continue;
+      const gs = c.style || {};
+      for (const ch of (c.children || [])) {
+        const cs = ch.style || {};
+        out.push({ ...ch, style: { ...cs,
+          top: (gs.top ?? 0) + (cs.top ?? 0),
+          left: (gs.left ?? 0) + (cs.left ?? 0),
+          opacity: (gs.opacity ?? 1) * (cs.opacity ?? 1) } });
+      }
+    } else {
+      out.push(c);
+    }
+  }
+  return out;
+});
 const stageCss = computed(() => ({
   position: 'relative', width: '1920px', height: '1080px',
-  background: props.renderPackage.canvasStyle?.background || 'transparent'
+  // 背景三选一(纯色/渐变/图片)与设计器画布共用同一纯函数;solid 无色值兜底 transparent(既有契约)
+  ...canvasBackgroundStyle(props.renderPackage.canvasStyle || {}, 'transparent')
 }));
 function absStyle(c) {
   // c.style||{} 兜底:防脏渲染包节点缺 style 时 undefined.top 报错(rev-t10 复审 Minor)
   const s = c.style || {};
   return { position: 'absolute', top: (s.top ?? 0) + 'px', left: (s.left ?? 0) + 'px',
     width: (s.width ?? 0) + 'px', height: (s.height ?? 0) + 'px',
-    opacity: s.opacity ?? 1 };
+    opacity: s.opacity ?? 1,
+    // 组件级背景(CommonAttr 外观区:透明/纯色/渐变),缺省空对象与现状零差异
+    ...componentBackgroundStyle(s) };
 }
 function widgetOf(component) { return findWidget(component); }
 /** 从 bindSnapshots 合成 BlockContainer 需要的 block(bindJson/styleJson/drillJson 字符串);

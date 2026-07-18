@@ -1,7 +1,7 @@
 <template>
   <div class="w-chart">
     <!-- 复用运行时 BlockContainer:把 ChartWidget 的 blockId 映射到 block 行(bind/style/drill JSON) -->
-    <BlockContainer v-if="block" :block="block" :context="ctx" />
+    <BlockContainer v-if="block" :block="block" :context="ctx" :prop-value="element.propValue || {}" />
     <div v-else class="w-chart-empty">图表(未绑定数据源)</div>
   </div>
 </template>

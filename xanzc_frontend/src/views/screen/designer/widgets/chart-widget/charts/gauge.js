@@ -1,2 +1,2 @@
-// 占位：仪表盘——BlockContainer 组件映射尚未接入，enabled:false 预留扩展位（Task 8 一期不实现渲染）
-export default { innerType: 'GAUGE', label: '仪表盘', needTimeseries: false, enabled: false };
+// 仪表盘：绑定单行数据某一数值列（默认取名含"完成率"的列，属性面板可选列），0-100 刻度、超 100 封顶。
+export default { innerType: 'GAUGE', label: '仪表盘', needTimeseries: false, enabled: true };

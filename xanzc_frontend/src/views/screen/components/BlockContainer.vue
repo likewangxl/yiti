@@ -14,26 +14,38 @@
                   :item="drillItem" :periods="drill.drillPeriods || ['LAST_10D']" />
       <component v-else-if="data" :is="componentMap[block.componentType]"
                  :columns="data.columns" :rows="data.rows"
-                 :bind="bind" :style-cfg="styleCfg" @item-click="onItemClick" />
+                 :bind="bind" :style-cfg="styleCfg" v-bind="extraProps" @item-click="onItemClick" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { InfoFilled } from '@element-plus/icons-vue';
 import { queryScreenData } from '@/api/screen';
+import { GLOBAL_PERIOD_INJECT_KEY, resolveBlockPeriod, shouldApplyGlobalPeriod } from '@/utils/globalPeriod';
 import MetricCard from './MetricCard.vue';
 import LineTrend from './LineTrend.vue';
 import PieShare from './PieShare.vue';
 import RankList from './RankList.vue';
 import FlowStatus from './FlowStatus.vue';
 import DrillTrend from './DrillTrend.vue';
+import BarCompare from './BarCompare.vue';
+import AreaStack from './AreaStack.vue';
+import GaugeDial from './GaugeDial.vue';
+import TableList from './TableList.vue';
+import KpiDetailTable from './KpiDetailTable.vue';
+import KpiRadar from './KpiRadar.vue';
+import LiquidProgress from './LiquidProgress.vue';
+import ProgressList from './ProgressList.vue';
 
 const props = defineProps({
   block: { type: Object, required: true },
-  context: { type: Object, default: () => ({}) }
+  context: { type: Object, default: () => ({}) },
+  // ChartWidget 组件节点的 propValue（barMode/carousel/valueField 等图表形态配置）——
+  // 设计态由 chart-widget/Component.vue、运行态由 ScreenRenderer 透传；旧 5 类图表不消费
+  propValue: { type: Object, default: () => ({}) }
 });
 
 const router = useRouter();
@@ -42,8 +54,22 @@ const componentMap = {
   LINE_TREND: LineTrend,
   PIE_SHARE: PieShare,
   RANK_LIST: RankList,
-  FLOW_STATUS: FlowStatus
+  FLOW_STATUS: FlowStatus,
+  BAR_COMPARE: BarCompare,
+  AREA_STACK: AreaStack,
+  GAUGE: GaugeDial,
+  TABLE_LIST: TableList,
+  KPI_DETAIL_TABLE: KpiDetailTable,
+  KPI_RADAR: KpiRadar,
+  LIQUID_PROGRESS: LiquidProgress,
+  PROGRESS_LIST: ProgressList
 };
+// 新一代图表额外消费 propValue + columnsMeta（/api/screen/data 可选扩展字段，缺失容错）；
+// 旧 5 类图表不声明这两个 props，避免对象透传落成 DOM attribute，按类型白名单条件绑定
+const EXTENDED_TYPES = new Set([
+  'BAR_COMPARE', 'AREA_STACK', 'GAUGE', 'TABLE_LIST',
+  'KPI_DETAIL_TABLE', 'KPI_RADAR', 'LIQUID_PROGRESS', 'PROGRESS_LIST'
+]);
 
 function parse(json, fallback = {}) {
   try { return json ? JSON.parse(json) : fallback; } catch { return fallback; }
@@ -53,10 +79,28 @@ const styleCfg = computed(() => parse(props.block.styleJson));
 const drill = computed(() => parse(props.block.drillJson));
 
 const data = ref(null);
+// 扩展 props 仅对新一代图表下发（columnsMeta 来自 /api/screen/data 响应可选字段，后端未上线时为 null）
+const extraProps = computed(() =>
+  EXTENDED_TYPES.has(props.block.componentType)
+    ? { propValue: props.propValue || {}, columnsMeta: data.value?.columnsMeta || null }
+    : {});
 const loading = ref(false);
 const error = ref('');    // 真错误（红字）：周期非法 43011 / 执行失败 43008 / 其他
 const guide = ref('');    // 引导态（非报错）：缺必填上下文参数 43010，提示补 orgCode/empId
 const drillItem = ref(null); // { col, label } —— 非空即钻取态
+
+// 全屏周期过滤器联动(spec 2026-07-17 §5.3):ScreenView provide 的 screen 级响应式周期。
+// 设计器/独立预览未 provide → 兜底 null,取数行为与现状完全一致(零联动)。
+const globalPeriod = inject(GLOBAL_PERIOD_INJECT_KEY, null);
+/** 联动判定入参快照(是否响应/最终周期两处共用,判定逻辑全在 utils/globalPeriod 纯函数) */
+function periodCtx() {
+  return {
+    globalPeriod: globalPeriod ? globalPeriod.value : null,
+    bind: bind.value,
+    propValue: props.propValue,
+    componentType: props.block.componentType
+  };
+}
 
 async function load() {
   // FIX-4: 未选数据源（新建区块 bindJson='{}' → dsId undefined）时不发请求。
@@ -74,7 +118,8 @@ async function load() {
   try {
     data.value = await queryScreenData({
       dsId: bind.value.dsId,
-      period: bind.value.period || 'LATEST',
+      // 时序数据源且未豁免时被全局周期覆盖,否则维持自身 bind.period(缺省 LATEST,现状不变)
+      period: resolveBlockPeriod(periodCtx()),
       contextParams: { orgCode: props.context.orgCode || null, empId: props.context.empId || null }
     });
   } catch (e) {
@@ -106,6 +151,15 @@ function onItemClick({ col, label, row }) {
     else query[k] = v;
   }
   router.push({ path: `/screen/${jump.targetScreenCode}`, query });
+}
+
+// 全局周期变化 → 仅"应响应联动"的区块重新取数(SINGLE 数据源/显式豁免组件不动);
+// 未 provide(设计器态)时 globalPeriod 为 null,不注册 watch,零行为差异
+if (globalPeriod) {
+  watch(globalPeriod, val => {
+    if (!bind.value.dsId) return; // 未绑数据源的引导态区块无数可取
+    if (shouldApplyGlobalPeriod({ ...periodCtx(), globalPeriod: val })) load();
+  });
 }
 
 // 区块级轮询（refreshSec，0=不刷新；页面隐藏时跳过）

@@ -99,4 +99,29 @@ describe('ScreenRenderer.vue', () => {
     const wrapper = mount(ScreenRenderer, { props: { renderPackage: pkg([]) }, global: { stubs } });
     expect(wrapper.find('.scr-canvas-render').attributes('style')).toContain('transparent');
   });
+
+  it('Group 节点展开为绝对坐标子节点渲染(组左上角+子相对坐标,子 ChartWidget 仍走 bindSnapshots)', () => {
+    const g = { id: 'g1', component: 'Group', style: { top: 100, left: 200, width: 500, height: 300 },
+      isShow: true,
+      children: [
+        { id: 'w6', component: 'TextLabel', style: { top: 10, left: 20, width: 100, height: 40 }, propValue: { text: 'in' }, isShow: true },
+        { id: 'w7', component: 'ChartWidget', innerType: 'METRIC_CARD', blockId: 502,
+          style: { top: 60, left: 0, width: 200, height: 100 }, isShow: true }
+      ] };
+    const snap = { bind: { dsId: 1 }, componentType: 'METRIC_CARD', styleCfg: {}, drill: {} };
+    const wrapper = mount(ScreenRenderer, { props: { renderPackage: pkg([g], { 502: snap }) }, global: { stubs } });
+    const abs = wrapper.findAll('.scr-abs');
+    expect(abs.length).toBe(2); // Group 自身不渲染节点,只展开 children
+    expect(abs[0].attributes('style')).toContain('top: 110px');   // 100+10
+    expect(abs[0].attributes('style')).toContain('left: 220px');  // 200+20
+    expect(wrapper.find('.stub-block').attributes('data-type')).toBe('METRIC_CARD');
+  });
+
+  it('Group isShow:false 时整组子组件不渲染', () => {
+    const g = { id: 'g2', component: 'Group', style: { top: 0, left: 0, width: 100, height: 100 },
+      isShow: false,
+      children: [{ id: 'w8', component: 'TextLabel', style: { top: 0, left: 0, width: 10, height: 10 }, propValue: {}, isShow: true }] };
+    const wrapper = mount(ScreenRenderer, { props: { renderPackage: pkg([g]) }, global: { stubs } });
+    expect(wrapper.findAll('.scr-abs').length).toBe(0);
+  });
 });

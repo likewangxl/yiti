@@ -1,2 +1,2 @@
-// 占位：堆叠面积图——BlockContainer 组件映射尚未接入，enabled:false 预留扩展位（Task 8 一期不实现渲染）
-export default { innerType: 'AREA_STACK', label: '堆叠面积图', needTimeseries: true, enabled: false };
+// 堆叠面积图：时序数据源专用（data_date × 各数值列堆叠），渐变填充深色风格。
+export default { innerType: 'AREA_STACK', label: '堆叠面积图', needTimeseries: true, enabled: true };

@@ -23,6 +23,18 @@ export const SCR_PALETTE_WIDE = [
   '#ba68c8', '#4dd0e1', '#fff176', '#90caf9', '#a5d6a7'
 ];
 
+/**
+ * 十六进制主题色 → rgba（渐变柱/面积填充等需要同色不同透明度时用，避免各组件手写 rgba 字面量漂移）。
+ * 仅支持 #rrggbb；其他格式原样返回（调用方给的已是 rgba 时不破坏）。
+ */
+export function scrWithAlpha(hex, alpha) {
+  if (typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 export function scrTooltipStyle() {
   return {
     backgroundColor: 'rgba(5,14,43,.9)',
