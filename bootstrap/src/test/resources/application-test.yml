@@ -7,6 +7,16 @@
 server:
   port: 0
 
+# 测试环境不需要真实 SOAP 网关：SoapNettyServer 固定绑定 30523，Spring Test 上下文
+# 缓存会让多个不同 profile/@Import 组合的 @SpringBootTest 上下文同时存活，后启动者
+# 抢占同一端口报 "Address already in use"（bootstrap 全量 mvn test 既有构建坑，见
+# .superpowers/sdd/task-12-report.md「环境坑」节 / task-17a-report.md）。本 profile
+# 下的 IT 均不测试 SOAP/callpu 网关，关闭该开关跳过 soapNettyServer Bean 装配。
+platform:
+  soap:
+    netty:
+      enabled: false
+
 # 允许 Bean 定义覆盖，避免业务模块 AutoConfig 与 TestMockConfig (@Primary mock) 冲突
 spring:
   main:

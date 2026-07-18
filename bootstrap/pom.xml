@@ -132,6 +132,23 @@
 
     <build>
         <plugins>
+            <!--
+                Task 17a 修坑②：根 pom 统一管理的 maven-failsafe-plugin（build/plugins，全模块继承）
+                默认 classesDirectory 取 ${project.build.outputDirectory}，但 bootstrap 模块的
+                spring-boot-maven-plugin:repackage（见下方 execution）会在 package 阶段把
+                target/classes 打成 fat jar 并替换 target/bootstrap-*.jar 主构件；标准生命周期下
+                repackage 先于 failsafe 的 integration-test 执行，导致 failsafe 解析测试 classpath
+                时错误地取到 fat jar（BOOT-INF/classes/... 嵌套结构）而非 target/classes 目录，
+                *IT.java 报 "Unable to find a @SpringBootConfiguration"。此处在 bootstrap 显式覆盖
+                classesDirectory，强制指回 target/classes，绕开 repackage 产物。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

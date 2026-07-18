@@ -18,6 +18,13 @@
 server:
   port: 0
 
+# 测试环境不需要真实 SOAP 网关，避免与其它 @SpringBootTest 上下文抢占固定端口 30523
+# （见 Task 17a：SoapNettyServer 端口冲突构建坑）。
+platform:
+  soap:
+    netty:
+      enabled: false
+
 spring:
   main:
     allow-bean-definition-overriding: true
