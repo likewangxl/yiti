@@ -4,6 +4,15 @@
 --   （该库是 IT 集成测试库，须保持干净，三张目标表恒为 0 行）；严禁随正式上线，
 --   严禁对 yiti 生产库执行任何写操作。
 --
+-- 追加记录（2026-07-18 Task 17b 修复）：第 4 段 PORTAL_SHORTCUT 由
+--   2026-07-18-redengine-seed.sql 第 8 段整段剪切迁入。迁移原因：该段 Task 15 §0 加入
+--   时误随 redengine-seed.sql 一起重放到了 onepl_test_bootstrap（IT 库），混入
+--   PortalShortcutMapperIntegrationTest / PortalWorkspaceMetricIT 依赖的固定行数断言，
+--   已在 Task 17a 全量回归中实测复现导致 3+1 个用例失败（详见 task-17a-report.md 第二部分 /
+--   task-17b-report.md）。"红色引擎"入口本身只是 yiti_test 演示环境验收用可视化数据，
+--   与本文件其余三张业务表数据同属一类（仅 yiti_test 演示基准），故迁入本文件统一管理，
+--   不再随 redengine-seed.sql 进 onepl_test_bootstrap。
+--
 -- 数据来源：redengine/red_engine.db（SQLite，只读，本次导入未对其做任何修改）
 --   biz_submit(16 行) / biz_score(16 行) / biz_overdue_deduction(4 行)
 --   （biz_submit_file 核实为 0 行，源库本无附件数据可带）
@@ -104,4 +113,26 @@ VALUES
   (2, 3, NULL, NULL, 2.0, '2026-05-16', '源库 status=pending，executed_at=NULL，表示尚未执行（对应驾驶舱"执行逾期扣分"待执行队列语义），year=2026', 0, '2026-05-16 15:49:54', '2026-05-16 15:49:54'),
   (3, 4, NULL, NULL, 2.0, '2026-05-16', '源库 status=pending，executed_at=NULL，表示尚未执行（对应驾驶舱"执行逾期扣分"待执行队列语义），year=2026', 0, '2026-05-16 15:49:54', '2026-05-16 15:49:54'),
   (4, 5, NULL, NULL, 2.0, '2026-05-16', '源库 status=pending，executed_at=NULL，表示尚未执行（对应驾驶舱"执行逾期扣分"待执行队列语义），year=2026', 0, '2026-05-16 15:49:54', '2026-05-16 15:49:54');
+
+
+-- ============================================================================
+-- 4) PORTAL_SHORTCUT：门户工作台快捷入口——追加"红色引擎"一条
+--    （2026-07-18 Task 17b 迁入，原为 2026-07-18-redengine-seed.sql 第 8 段，
+--    Task 15 §0 首次写入；迁移原因见本文件头"追加记录"说明）
+--    前置核查（2026-07-18，两库均已核实）：
+--      DESCRIBE yiti_test.PORTAL_SHORTCUT 列：id/shortcut_name/shortcut_url/shortcut_icon/
+--      shortcut_type/target_type/emp_id/sort_order/status/created_by/created_time/updated_by/
+--      updated_time，PK=id(varchar(32))；实体 portal-content-center 模块
+--      entity/PortalShortcut.java 注释确认：shortcut_type=SYSTEM 表示全员可见（不按 emp_id
+--      过滤，见 PortalShortcutMapper.xml#listByEmpIdOrSystem），target_type=INTERNAL 表示内部跳转。
+--      yiti_test.PORTAL_SHORTCUT 当前 0 行（本段执行后应为 1 行）；本文件不进
+--      onepl_test_bootstrap（该库 3 行 TEST_* 夹具保持不变，见文件头"追加记录"）。
+--    结论：该表结构含名称/URL/排序类字段，判定为"数据驱动"快捷方式 → 走本段 SQL 追加路线
+--    （非 DefaultLayout.vue 顶栏硬编码链接路线）。
+--    幂等：id = MD5('RE_PORTAL_SHORTCUT#redengine') 固定值，INSERT IGNORE 重跑不产生重复行。
+-- ============================================================================
+INSERT IGNORE INTO PORTAL_SHORTCUT
+  (id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type, target_type, emp_id, sort_order, status, created_by)
+VALUES
+  (MD5('RE_PORTAL_SHORTCUT#redengine'), '红色引擎', '/#/redengine', '🚩', 'SYSTEM', 'INTERNAL', NULL, 0, 'ACTIVE', 'redengine-merge');
 

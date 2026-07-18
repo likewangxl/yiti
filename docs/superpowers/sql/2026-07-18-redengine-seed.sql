@@ -258,21 +258,16 @@ WHERE NOT EXISTS (SELECT 1 FROM RE_PARTY_ORG WHERE org_code = 'ORG_010');
 
 
 -- ============================================================================
--- 8) PORTAL_SHORTCUT：门户工作台快捷入口——追加"红色引擎"一条（Task 15 §0）
---    前置核查（2026-07-18，两库均已核实）：
---      DESCRIBE yiti_test.PORTAL_SHORTCUT 列：id/shortcut_name/shortcut_url/shortcut_icon/
---      shortcut_type/target_type/emp_id/sort_order/status/created_by/created_time/updated_by/
---      updated_time，PK=id(varchar(32))；实体 portal-content-center 模块
---      entity/PortalShortcut.java 注释确认：shortcut_type=SYSTEM 表示全员可见（不按 emp_id
---      过滤，见 PortalShortcutMapper.xml#listByEmpIdOrSystem），target_type=INTERNAL 表示内部跳转。
---      yiti_test.PORTAL_SHORTCUT 当前 0 行；onepl_test_bootstrap.PORTAL_SHORTCUT 已有 3 行测试
---      夹具（TEST_SYS_01/TEST_CUSTOM_E1/TEST_CUSTOM_E2，id 均为 32 位十六进制字符串），本段与其
---      共存，id 用 MD5 派生避免与既有行冲突。
---    结论：该表结构含名称/URL/排序类字段，判定为"数据驱动"快捷方式 → 走本段 SQL 追加路线
---    （非 DefaultLayout.vue 顶栏硬编码链接路线）。
---    幂等：id = MD5('RE_PORTAL_SHORTCUT#redengine') 固定值，INSERT IGNORE 重跑不产生重复行。
+-- 8) PORTAL_SHORTCUT：门户工作台快捷入口——已迁移（2026-07-18 Task 17b 修复）
+--    原第 8 段（Task 15 §0 追加"红色引擎"快捷方式 INSERT IGNORE）已整段剪切迁移至
+--    docs/superpowers/sql/2026-07-18-redengine-demo-data-yiti-test-only.sql。
+--    迁移原因（Task 17a 全量回归发现，见 task-17a-report.md 第二部分）：本文件
+--    （2026-07-18-redengine-seed.sql）按文件头注释声明会在 yiti_test **与**
+--    onepl_test_bootstrap 两个测试库都重放；但 onepl_test_bootstrap 是 portal-content-center
+--    IT 集成测试库，其 PortalShortcutMapperIntegrationTest / bootstrap 的
+--    PortalWorkspaceMetricIT 对 PORTAL_SHORTCUT 表的行数/内容做了固定断言，必须保持只有
+--    TEST_* 前缀的夹具行，混入本段 SYSTEM 级"红色引擎"数据会导致断言偏移（3 个 + 1 个用例
+--    失败，已实测复现）。而"红色引擎"入口本身只是 yiti_test 演示环境的可视化验收数据，
+--    不应影响 IT 库夹具确定性，故迁移到天生只对 yiti_test 执行的
+--    2026-07-18-redengine-demo-data-yiti-test-only.sql（该文件名 -only 后缀已明示范围）。
 -- ============================================================================
-INSERT IGNORE INTO PORTAL_SHORTCUT
-  (id, shortcut_name, shortcut_url, shortcut_icon, shortcut_type, target_type, emp_id, sort_order, status, created_by)
-VALUES
-  (MD5('RE_PORTAL_SHORTCUT#redengine'), '红色引擎', '/#/redengine', '🚩', 'SYSTEM', 'INTERNAL', NULL, 0, 'ACTIVE', 'redengine-merge');
