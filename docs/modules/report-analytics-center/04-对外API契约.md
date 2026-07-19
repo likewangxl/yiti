@@ -2,7 +2,7 @@
 
 > **模块**: report-analytics-center
 > **版本**: V1.0
-> **最后更新**: 2026-04-10
+> **最后更新**: 2026-07-19（回填 screen/自由报表/AMAS 审批查询/DataScope picker 等子域 REST 范围 + 订正跨模块 `*Api` 消费清单，详见文末《2026-07-19 回填说明》；本次回填不改变 §1"V1 不暴露 Api"的结论）
 
 ---
 
@@ -32,16 +32,22 @@
 
 ## 2. V1 对外接口范围（仅 REST API）
 
-本模块在 V1 版本**仅通过 REST 接口**对前端暴露能力：
+本模块在 V1 版本**仅通过 REST 接口**对前端暴露能力。**2026-07-19 订正**：本表原先只列了 6 类，实际现网 Controller 数为 23 个（不含 `package-info.java`），REST 端点约 73 个，按子域补全如下：
 
 | 接口类别 | 路径前缀 | 用途 |
 |---------|---------|------|
-| 动态指标查询 | `/api/reports/dynamic-query` | 自助查询 |
-| 查询方案管理 | `/api/reports/saved-queries` | 方案 CRUD |
-| 仪表盘 | `/api/reports/dashboard/**` | 固定仪表盘 |
-| 汇总报表 | `/api/reports/touch-task-summary`, `/api/reports/perf-summary`, `/api/reports/customer-pool-summary` | 预置报表 |
-| SQL 探查 | `/api/reports/sql-probe/**` | SQL 探查工具 |
-| 异步导出 | `/api/reports/export-tasks/**` | 导出任务 |
+| 动态指标查询 | `/api/reports/query-dimensions`、`/api/reports/dynamic-query*`、`/api/reports/customers/search`、`/api/reports/employees/search` | 自助查询（含选择对象搜索） |
+| 查询方案管理 | `/api/reports/saved-queries*` | 方案 CRUD（含详情端点） |
+| 仪表盘 | `/api/reports/dashboard/**` | 分行/机构/员工三级固定仪表盘 |
+| 汇总报表 | `/api/reports/touch-task-summary*`, `/api/reports/perf-summary*`, `/api/reports/customer-pool-summary*` | 预置报表（各含导出提交端点） |
+| SQL 探查 | `/api/reports/sql-probe/**` | SQL 探查工具（含异步导出 D.5~D.7） |
+| 异步导出 | `/api/reports/export-tasks/**` | 导出任务（状态/取消/下载） |
+| **AMAS 审批查询与历史数据查询**（2026-07-19 新增） | `/api/reports/amas-price-approvals*`、`/api/reports/amas-approvals*`、`/api/reports/alloc-adjust-applies*`、`/api/report/alloc-preview`（注意路径是单数）、`/api/reports/data-imports*`、`/api/reports/notices*` | 定价审批、业绩调整审批历史、分配调整申请历史（含预览）、数据导入查询、公告查询 |
+| **自由报表**（2026-07-19 新增） | `/api/reports/free/**` | Excel 导入动态列展示 + 批次管理 + 行级隔离下载 |
+| **大屏（screen）子域**（2026-07-19 新增） | `/api/screen/admin/**`、`/api/screen/data`、`/api/screen/view/*` | 经营管理大屏三级视角 + 画布设计器（草稿/发布双态）+ 统一取数 |
+| **DataScope Picker**（2026-07-19 新增） | `/api/reports/scope/picker` | 报表"选择对象"控件统一数据范围解析 |
+
+**数据湖查询**（`DatalakeQueryService`）**暂无 REST 入口**，只以只读 Service 形式存在，不计入上表；详见 [03-接口设计与报文.md §M](./03-接口设计与报文.md#m-数据湖查询暂无-rest-入口2026-07-19-新增)。
 
 **详见：[03-接口设计与报文.md](./03-接口设计与报文.md)**
 
@@ -436,21 +442,38 @@ public class SysControlUpdatedListener {
 
 ---
 
-## V1.0 交付状态备注（2026-04-25）
+## V1.0 交付状态备注（2026-04-25，2026-07-19 订正/更新见下）
 
-**V1.0 已交付**：25 PT_RESOURCE 全部落地（24 实现 + 1 占位 = R_RPT_SQL_EXP V1.1+ 启用）。
+**V1.0 已交付（历史记录，保留不删）**：25 PT_RESOURCE 全部落地（24 实现 + 1 占位 = R_RPT_SQL_EXP V1.1+ 启用）。
 
-**契约红线维持**：本文档 §1.1 "本模块不暴露任何 `*Api` 接口" 在 V1.0 交付后**继续生效**：
+**契约红线维持**：本文档 §1.1 "本模块不暴露任何 `*Api` 接口" 在 V1.0 交付后**继续生效，2026-07-19 复核仍然成立**：
 - `report-analytics-center/src/main/java/com/bank/branch/platform/report/api/` 目录下仅有 `package-info.java` 占位
 - 没有任何生产 `*Api` / `*QueryApi` 类
 - 由 `RptModuleStructureArchTest` 架构守护（任何未来提交在 `api/` 包下新增 `*Api.java` 都会编译期触发架构测试失败）
 
-**V1.0 跨模块依赖侧**：报表只读消费 4 个上游模块的 *Api（共 10 个接口）：
-- auth-permission-center: `CurrentUserApi` / `BizScopeApi` / `OrgApi`
-- system-governance-center: `DictApi` / `AuditApi` / `FileApi`
-- performance-engine-center: `MetricApi` / `KpiApi`
-- customer-marketing-center: `CustomerQueryApi` / `TouchTaskQueryApi`
-
 **Plan 来源**：`docs/superpowers/plans/2026-04-25-report-analytics-center-v1.0-plan.md`（Milestone M0-M6）
 
-**测试基线（M6 末）**：surefire 103 + failsafe 70 = 173 全绿，6 架构守护全绿（Flyway 已废弃，原 V1_0_0~V1_0_7 共 8 脚本已删除，详见根 CLAUDE.md "Flyway 禁令"红线）.
+**测试基线（M6 末，历史记录）**：surefire 103 + failsafe 70 = 173 全绿，6 架构守护全绿（Flyway 已废弃，原 V1_0_0~V1_0_7 共 8 脚本已删除，详见根 CLAUDE.md "Flyway 禁令"红线）.
+
+---
+
+## 2026-07-19 回填说明
+
+本次回填按代码全量核实（`controller/` 目录 grep + import 扫描），仅更新本文档；不涉及代码改动，不影响 §1.1"不暴露 Api"的结论。
+
+### 订正 1：PT_RESOURCE / 端点规模
+
+上方"25 PT_RESOURCE 全部落地"是 2026-04-25 交付时点的统计，**截至 2026-07-19 已严重过期**：现网 `controller/` 目录实际有 **23 个 Controller、约 73 个 REST 端点**（`@GetMapping`/`@PostMapping`/`@PutMapping`/`@DeleteMapping` 合计 73 处），对应 `docs/superpowers/sql/` 下按日期累积的一系列资源注册脚本（`2026-06-15`~`2026-07-18` 多批），详见 [03-接口设计与报文.md §H.2](./03-接口设计与报文.md#h-pt_resource-注册清单)。25→73 的增量主要来自 2026-06 起陆续上线的 AMAS 审批查询/历史数据查询/自由报表（K/L 章）与 2026-07 上线的大屏 screen 子域（N 章）。
+
+### 订正 2：跨模块依赖侧 `*Api` 消费清单不完整
+
+原"共 10 个接口"的统计**遗漏了 3 个实际被 import 并使用的 `*Api` 接口**（`grep -rhoE "import com\.bank\.branch\.platform\.[a-z]+\.api\..*;" report-analytics-center/src/main/java` 逐条核对）。**订正后：报表只读消费 4 个上游模块的 `*Api`，共 13 个接口**：
+
+| 上游模块 | 消费的 `*Api` | 使用位置举例 |
+|---|---|---|
+| auth-permission-center | `CurrentUserApi` / `BizScopeApi` / `OrgApi` / **`UserApi`（原文档遗漏）** | `UserApi` 用于 `DynamicQueryController`（员工搜索分页）、`AllocAdjustQueryServiceImpl`、`SqlProbeServiceImpl` 等 |
+| system-governance-center | `DictApi` / `AuditApi` / `FileApi` | — |
+| performance-engine-center | `MetricApi` / `KpiApi` / **`AllocApi`（原文档遗漏）** / **`MetricQueryApi`（原文档遗漏）** | `AllocApi` 用于 K 章 `AllocPreviewService`（`getLastApprovedAllocPreview`）；`MetricQueryApi` 用于 `DynamicQueryServiceImpl` |
+| customer-marketing-center | `CustomerQueryApi` / `TouchTaskQueryApi` | — |
+
+单向依赖原则（report 只调用其他模块、不被调用）与 Code Review 硬规则（§4.4）不受本次订正影响，依然成立。

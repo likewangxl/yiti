@@ -1,361 +1,76 @@
 # customer-marketing-center/ CLAUDE.md
 
-本文件为 `customer-marketing-center` 模块提供上下文说明。
-
-> ⚠️ **Flyway 已彻底废弃**（详见根 [CLAUDE.md](../CLAUDE.md) "Flyway 禁令"红线）。
-> 本文件下方 V1.x 历史变更日志中提到的 `V1_8_0__register_lead_callback_compensate_job.sql` /
-> `U1_8_0__remove_lead_callback_compensate_job.sql` / `FlywayTestBase` / `FlywayIT` 等内容仅作为
-> **历史档案**保留，对应文件已从源码中删除。新增 schema 变更请直接以 SQL 在目标库执行，**禁止**重新引入 Flyway。
+本文件为 `customer-marketing-center` 模块提供开发上下文，是本模块开发指导的唯一权威来源（同目录 `AGENTS.md` 仅作指针，不承载内容）。
 
 ## 模块概述
 
 **customer-marketing-center** 是客户营销中心，覆盖客户全生命周期管理：标签体系、线索管理（含审批流）、客户主档、客户池与认领、触达任务、触达报表。是平台核心业务模块之一。
 
-**基础包名**: `com.bank.branch.platform.customer`
-
-**Maven 坐标**: `com.bank.branch.platform:customer-marketing-center`
-
-**对外契约**: 5 个 `*Api` 接口 + 47 个 REST 端点。
+- **基础包名**: `com.bank.branch.platform.customer`
+- **Maven 坐标**: `com.bank.branch.platform:customer-marketing-center`
 
 ## 依赖关系
 
-- **依赖**: `common-web`, `common-trace`, `common-security`, `common-aop`, `common-db`, `auth-permission-center`, `workflow-center`, `system-governance-center`
-- **被依赖**: 需要客户/标签/线索/认领/触达查询能力的模块 (通过 `*Api`)
+- **依赖**（均通过 `*Api`/`*QueryApi`）：`auth-permission-center`（`CurrentUserApi`/`BizScopeApi`/`OrgApi`）、`workflow-center`（`WorkflowApi` —— 线索/客户删除审批流程启动）、`system-governance-center`（`DictApi`/`FileApi`/`NotifyApi`/`AuditApi`）；此外依赖 `common-web`/`common-trace`/`common-security`/`common-aop`/`common-db`。
+- **被依赖**：`business-application-center`、`performance-engine-center` 直接依赖本模块；`report-analytics-center` 只读依赖本模块 `*Api`/`*QueryApi`（禁止反向依赖，也禁止任何业务模块依赖 report-analytics-center）。
+- 本模块**不接入 Flowable 直连**：线索/客户删除审批统一通过 `workflow-center` 暴露的 `WorkflowApi` 发起，回调经 `ProcessCompletedEvent` 收敛回本模块处理（`workflow-center` 是唯一直接调 Flowable API 的模块，见根 CLAUDE.md）。
 
-## 包结构
+## 架构规则与红线
 
-```
-src/main/java/com/bank/branch/platform/customer/
-├── api/              # 对外 API 接口 (5 个)
-│   ├── TagApi.java
-│   ├── LeadApi.java
-│   ├── CustomerQueryApi.java
-│   ├── ClaimApi.java
-│   └── TouchTaskQueryApi.java
-├── config/           # 模块配置
-│   └── CustomerCacheConfig.java    # 缓存 Key/TTL 常量 + 防雪崩抖动（2026-05 去 Redis 后仅保留常量位，当前无缓存中间件依赖，详见「缓存配置」节）
-├── controller/       # REST 控制器 (13 个，含 1 个 admin 子包)
-│   ├── TagController.java              # 标签 CRUD (5 端点)
-│   ├── TagCustomerController.java      # 标签客户导入/查询/导出 (3 端点)
-│   ├── LeadController.java             # 线索 CRUD + 审批 + 版本链查询 (9 端点)
-│   ├── LeadImportController.java       # 线索批量导入 (4 端点)
-│   ├── CustomerController.java         # 客户主档 (4 端点)
-│   ├── CustomerPoolController.java     # 客户池 (1 端点)
-│   ├── CustomerHistoryController.java  # 跨机构全量历史查询 (1 端点，高危)
-│   ├── CustomerTagController.java      # 客户追加/取消打标 (2 端点)
-│   ├── CustomerExportController.java   # 客户列表导出 (1 端点，高危)
-│   ├── ClaimController.java            # 认领/取消/我的认领/重新触达 (4 端点)
-│   ├── TouchTaskController.java        # 触达任务 (6 端点)
-│   ├── TouchReportController.java      # 触达报表 (3 端点)
-│   └── admin/
-│       └── AdminTouchTaskController.java  # 管理后台触达任务 (4 端点)
-├── dto/
-│   ├── req/          # 请求 DTO (19 个)
-│   └── resp/         # 响应 DTO (6 个)
-├── entity/           # 数据库实体 (8 个)
-│   ├── CustTag.java
-│   ├── CustTagRel.java
-│   ├── CustLead.java
-│   ├── LeadImportBatch.java
-│   ├── CustMaster.java
-│   ├── CustClaim.java
-│   ├── TouchTask.java
-│   └── TouchLog.java
-├── enums/            # 枚举 (10 个)
-│   ├── CustomerErrorCode.java      # CUST-400xx / CUST-404xx / CUST-409xx / CUST-500xx
-│   ├── TagStatus.java              # ENABLED / DISABLED
-│   ├── LeadStatus.java             # DRAFT / SUBMITTED / IN_APPROVAL / APPROVED / REJECTED
-│   ├── LeadOp.java                 # CREATE / UPDATE / DELETE
-│   ├── BatchStatus.java            # PENDING / PROCESSING / SUCCESS / FAIL
-│   ├── ClaimStatus.java            # ACTIVE / CANCELLED
-│   ├── CustMasterStatus.java       # ACTIVE / INACTIVE
-│   ├── TouchTaskStatus.java        # PENDING / IN_PROGRESS / SUCCESS / CANCELLED
-│   ├── TouchTaskType.java          # FIRST_TOUCH / FOLLOW_UP
-│   └── SlaStatus.java              # GREEN / YELLOW / RED
-├── event/            # Spring 内部事件 (5 个；V1.11#1 起 LeadApprovedEvent / LeadDeletedEvent / ClaimCreatedEvent 已删除，见「事件驱动架构」)
-│   ├── LeadRejectedEvent.java
-│   ├── ClaimCancelledEvent.java
-│   ├── ClaimTransferredEvent.java
-│   ├── CustomerDeletedEvent.java
-│   └── TouchCompletedEvent.java
-├── facade/           # API 实现 (5 个 @Service)
-│   ├── TagApiImpl.java
-│   ├── LeadApiImpl.java
-│   ├── CustomerQueryApiImpl.java
-│   ├── ClaimApiImpl.java
-│   └── TouchTaskQueryApiImpl.java
-├── listener/         # 事件监听器 (2 个；V1.11#1 起 LeadApprovedListener / LeadDeletedListener / ClaimCreatedListener 已删除，改为同步调用)
-│   ├── WorkflowCallbackListener.java    # ProcessCompletedEvent → 委托 LeadCallbackReconcileService 处理线索审批结果
-│   └── TouchTaskCompletedListener.java  # 触达完成后处理
-├── mapper/           # MyBatis Mapper (9 个接口 + XML)
-│   ├── CustTagMapper, CustTagRelMapper
-│   ├── CustLeadMapper, LeadImportBatchMapper
-│   ├── CustMasterMapper, CustClaimMapper
-│   ├── TouchTaskMapper, TouchLogMapper
-│   └── TouchReportMapper              # 报表专用 JOIN 查询
-├── job/quartz/       # Quartz Job (2 个)
-│   ├── CustMasterSyncJob.java               # 客户信息同步 (job_key=CUST_INFO_SYNC)
-│   └── LeadCallbackCompensateQuartzJob.java # 线索回调补偿 (job_key=LEAD_CALLBACK_COMPENSATE，V1.8 新增)
-└── service/          # 业务逻辑 (16 个 Service)
-    ├── TagService.java                     # 标签 CRUD + 状态切换
-    ├── TagCustomerService.java             # 标签客户覆盖式导入
-    ├── LeadService.java                    # 线索 CRUD + 提交审批 (SELECT FOR UPDATE)
-    ├── LeadVersionService.java             # 线索编辑/删除版本创建
-    ├── LeadImportService.java              # 批量导入预览与执行
-    ├── LeadCallbackReconcileService.java   # 线索审批回调对账 (APPROVED/REJECTED 推进，供 listener 主路径 + 补偿任务共用，V1.11#1 新增)
-    ├── LeadCallbackCompensationService.java # 孤儿 lead 数据补偿 (Quartz 驱动扫描卡在 IN_APPROVAL 的线索)
-    ├── CustMasterAssemblerService.java     # 线索→客户主档 (CREATE/UPDATE/DELETE)
-    ├── CustMasterSyncService.java          # 外部客户统计表 → 客户主档同步 (Quartz 驱动)
-    ├── CustomerService.java                # 客户查询 + 转交 + 删除申请
-    ├── CustomerPoolService.java             # 客户池 (未认领客户 LEFT JOIN)
-    ├── ClaimService.java                   # 认领 (DuplicateKeyException 防并发) + 同步创建首次触达任务
-    ├── TouchTaskService.java               # 触达任务全生命周期 + SLA 刷新
-    ├── TouchTaskStateMachineService.java   # 触达任务状态转移合法性校验
-    ├── TouchLogService.java                # 触达日志 (UK 幂等)
-    └── TouchReportService.java             # 触达报表统计
-```
+- 模块间只通过 `*Api`/`*QueryApi` 交互，禁止其他模块直接依赖本模块的 `mapper`/`entity`/`serviceImpl`。
+- 所有接口必须注册到 `PT_RESOURCE` 并声明 `@BizAuth`；高危操作（跨机构历史查询、各类导出、批量分配）必须独立 URL、单独授权、单独审计。
+- **禁止在本模块内新增 Spring `@Scheduled`**：定时任务一律走 Quartz + `SYS_JOB_CONF`（`job/quartz/CustMasterSyncJob` 对应 `job_key=CUST_INFO_SYNC`，`job/quartz/LeadCallbackCompensateQuartzJob` 对应 `job_key=LEAD_CALLBACK_COMPENSATE`）。`src/test/.../arch/NoCustomerScheduledArchTest.java` 用 ArchUnit 守护此规则，回退使用 `@Scheduled` 会导致该测试失败。
+- **事件监听器禁止嵌套异步事件**：见下方"线索审批回调"踩坑，本模块内新增事件驱动逻辑前必须先读该节。
 
-## 对外 API (5 个接口)
+## 关键实现要点与踩坑
 
-| 接口 | 实现 | 主要方法 |
-|------|------|---------|
-| `TagApi` | TagApiImpl | listEnabledTags, getTagByCode, getCustomerTags, batchGetCustomerTags, getCustomerIdsByTag, isTagNameExists |
-| `LeadApi` | LeadApiImpl | getLead, getLeadByBusinessKey, getLeadsByBatch, getLeadVersionChain, isLeadCustNameAvailable |
-| `CustomerQueryApi` | CustomerQueryApiImpl | getCustomer, listCustomers, searchCustomers, isValidCustomer, isClaimedByOrg, getCustomerClaims, hasRunningProcess, listRunningProcesses, countCustomers |
-| `ClaimApi` | ClaimApiImpl | getClaim, getEmpClaims, getOrgClaims, isClaimActive, countEmpClaims, countOrgClaims |
-| `TouchTaskQueryApi` | TouchTaskQueryApiImpl | getTouchTask, getTouchTaskByBusinessKey, getEmpTouchTasks, countRunningTouchTasks, getCustomerTouchHistory, getCustomerTouchHistoryByOrg, hasCompletedFirstTouch, getOrgTouchSummary |
+### 线索审批回调：为什么不能嵌套事件监听器
+早期实现中，线索审批通过事件链驱动客户主档装配与首次触达任务创建：`WorkflowCallbackListener` 在 `@TransactionalEventListener(AFTER_COMMIT)` 内发布领域事件，再由另一层 `@TransactionalEventListener(AFTER_COMMIT)` 监听器消费。这种"事件套事件"在 AFTER_COMMIT 阶段的嵌套触发时序下曾导致一次 INSERT 未真正持久化的 bug（事务边界与监听器触发顺序不符合直觉）。
 
-## REST 端点
+修复后（当前实现）：`listener/WorkflowCallbackListener` 监听 workflow-center 发布的 `com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent`（`@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`），按 `outcome` 直接**同步方法调用**（不再发布下游事件）委托 `service/LeadCallbackReconcileService`：
+- `reconcileApproved` 内部同步调用 `CustMasterAssemblerService.assembleFromLead` 完成客户主档装配（CREATE/UPDATE/DELETE 按 `leadOp` 分支）；
+- `reconcileRejected` 仅推进状态并发布 `LeadRejectedEvent`（REJECTED 分支无下游装配，暂无消费者，保留扩展点，非嵌套风险点）。
 
-### TagController (`/api/tags`)
+`LeadCallbackReconcileService` 同时被 `LeadCallbackCompensationService`（Quartz 补偿扫描）复用，两条路径共用同一套幂等语义。**教训**：跨模块/跨子系统的异步回调，一旦需要"处理结果 A 触发处理逻辑 B"，优先选同步方法调用 + 独立事务边界（`REQUIRES_NEW`），而不是再叠一层事件监听器；事件-监听器链路每加一层，AFTER_COMMIT 时序的心智负担和出错面都会成倍增加。
 
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/tags` | 分页标签列表 |
-| GET | `/api/tags/enabled` | 启用状态标签列表 |
-| POST | `/api/tags` | 创建标签 |
-| PUT | `/api/tags/{id}` | 更新标签 |
-| PUT | `/api/tags/{id}/status` | 切换标签状态 |
+同样的教训也体现在客户认领上：`ClaimService.claim()` 认领成功后**同步**调用 `TouchTaskService.createFromClaim` 创建首次触达任务，而不是发布事件再监听。
 
-### TagCustomerController (`/api/tags`)
+### 幂等设计：认领 UK / 触达日志 UK
+- `CUST_CLAIM` 表 `UNIQUE KEY uk_cust_claim_org (cust_id, org_id)`：同一客户在同一机构只能有一条有效认领关系。`ClaimService.claim()` 直接 INSERT，捕获 `DuplicateKeyException` 转为 `CUSTOMER_ALREADY_CLAIMED`（`CUST-40904`），以此代替分布式锁防并发抢认领。
+- `TOUCH_LOG` 表 `UNIQUE KEY uk_touch_log_client (touch_task_id, client_uuid)`：客户端提交触达日志时自带 `clientUuid`，重复提交（如前端重试/弱网双发）命中该 UK 冲突，捕获 `DuplicateKeyException` 转为 `TOUCH_LOG_DUPLICATE`（`CUST-40905`），保证同一次触达记录不被重复落库。
 
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/api/tags/{tagId}/customers/import` | 覆盖式导入标签客户 |
-| GET | `/api/tags/{tagId}/customers` | 查询标签下客户列表 |
+### 触达任务状态机
+`enums/TouchTaskStatus`：`PENDING`（待处理）→ `IN_PROGRESS`（进行中）/`CANCELLED`（已取消）；`IN_PROGRESS` → `SUCCESS`（已完成）/`CANCELLED`；`SUCCESS`/`CANCELLED` 为终态。首次触达日志会自动驱动 `PENDING → IN_PROGRESS`。所有转移由 `service/TouchTaskStateMachineService.assertTransition` 校验，非法转移抛 `CUST-40010`。
 
-### LeadController (`/api/leads`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/leads` | 分页线索列表 |
-| GET | `/api/leads/{id}` | 线索详情 |
-| POST | `/api/leads` | 创建线索草稿 |
-| PUT | `/api/leads/{id}` | 更新线索草稿 |
-| DELETE | `/api/leads/{id}` | 删除线索草稿 |
-| POST | `/api/leads/{id}/submit` | 提交审批 (SELECT FOR UPDATE + WorkflowApi) |
-| POST | `/api/leads/edit-version` | 创建编辑版本 (已生效线索修改) |
-| POST | `/api/leads/delete-version` | 创建删除版本 (已生效线索删除) |
-
-### LeadImportController (`/api/leads`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/api/leads/import/preview` | 导入预览 (校验) |
-| POST | `/api/leads/import/execute` | 执行导入 |
-| GET | `/api/leads/batches` | 导入批次列表 |
-| GET | `/api/leads/import/batches/{batchId}` | 导入批次详情 (P1a 2026-04-28) |
-
-### CustomerController (`/api/customers`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/customers` | 分页客户列表 |
-| GET | `/api/customers/{id}` | 客户详情 |
-| POST | `/api/customers/{custId}/claims/{claimId}/transfer` | 转交维护人 (@AuditLog) |
-| POST | `/api/customers/{custId}/delete-apply` | 删除申请 (WorkflowApi) |
-
-### CustomerPoolController (`/api/customer-pool`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/customer-pool` | 未认领客户池 (LEFT JOIN) |
-
-### ClaimController (`/api/claims`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/api/claims` | 认领客户 (UK 防并发) |
-| POST | `/api/claims/{id}/cancel` | 取消认领 |
-| GET | `/api/claims/mine` | 我的认领列表 |
-| POST | `/api/claims/{claimId}/re-touch` | 重新发起触达 (P1a 2026-04-28，FOLLOW_UP) |
-
-### TouchTaskController (`/api/touch-tasks`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/touch-tasks` | 分页触达任务列表 |
-| GET | `/api/touch-tasks/{id}` | 任务详情 |
-| POST | `/api/touch-tasks/{id}/success` | 标记任务成功（原 /complete）|
-| POST | `/api/touch-tasks/{id}/cancel` | 取消任务 |
-| POST | `/api/touch-tasks/{id}/logs` | 添加触达日志 (UK 幂等) |
-| GET | `/api/touch-tasks/{id}/logs` | 查询触达日志 |
-
-### CustomerHistoryController (`/api/customers`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/customers/{id}/history` | 跨机构全量历史查询（高危 / 独立审计）|
-
-### CustomerTagController (`/api/customers`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/api/customers/{id}/tags` | 客户追加打标 |
-| DELETE | `/api/customers/{id}/tags/{tagId}` | 客户取消单个标签 |
-
-### CustomerExportController (`/api/customers`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/customers/export` | 客户列表导出（高危）|
-
-### LeadController 新增端点
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/leads/{id}/versions` | 查询线索版本链 |
-
-### TagCustomerController 新增端点
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/tags/{tagId}/customers/export` | 标签客户导出（高危）|
-
-### TouchReportController (`/api/touch-reports`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/touch-reports` | 分页触达报表 |
-| GET | `/api/touch-reports/statistics` | 触达统计汇总 |
-| GET | `/api/touch-reports/export` | 触达报表导出（高危，已实现 CSV）|
-
-### AdminTouchTaskController (`/api/admin/touch-tasks`)
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/api/admin/touch-tasks` | 管理后台全局触达任务列表 |
-| GET | `/api/admin/touch-tasks/summary` | 管理后台机构触达汇总 (P1a 2026-04-28) |
-| GET | `/api/admin/touch-tasks/export` | 管理后台导出（高危）|
-| POST | `/api/admin/touch-tasks/batch-assign` | 批量分配触达任务（高危）|
-
-## 数据库表 (8 张)
-
-| 表 | 实体 | 说明 |
-|----|------|------|
-| `CUST_TAG` | CustTag | 客户标签 (tagCode, tagName, tagCategory, description, status) |
-| `CUST_TAG_REL` | CustTagRel | 标签-客户关系 (tagId, custId) |
-| `CUST_LEAD` | CustLead | 客户线索 (leadNo, leadOp, leadStatus, sourceCustId, 含完整客户快照字段) |
-| `LEAD_IMPORT_BATCH` | LeadImportBatch | 线索导入批次 (sourceFileName, totalCount/successCount/failCount, businessKey) |
-| `CUST_MASTER` | CustMaster | 客户主档 (custNo, custName, idType/idNo, mobile, ownerOrgId, status) |
-| `CUST_CLAIM` | CustClaim | 客户认领 (custId + orgId UK, maintainerEmpId, claimStatus) |
-| `TOUCH_TASK` | TouchTask | 触达任务 (taskNo, custId, assigneeEmpId, taskType, taskStatus, slaStatus, slaWarning, planFinishTime 等) |
-| `TOUCH_LOG` | TouchLog | 触达日志 (touchTaskId + clientUuid UK, logContent, logTime) |
-
-> 表名已于 V1.12 全面大写化（8 个历史小写表已 DROP，详见下方 V1.12 变更日志 #6）。
-
-## 事件驱动架构
-
-模块内部通过 Spring 事件实现松耦合：
-
-| 事件 | 发布者 | 监听者 | 触发条件 |
-|------|--------|--------|---------|
-| `ProcessCompletedEvent` | workflow-center | WorkflowCallbackListener | 线索审批流程结束 |
-| `LeadRejectedEvent` | LeadCallbackReconcileService | (预留，无消费者；V1.13 候选 #6 待定调：删除/加 V2 listener/加 TODO) | 线索审批驳回 |
-| `ClaimCancelledEvent` | ClaimService | (预留) | 认领被取消 |
-| `ClaimTransferredEvent` | CustomerService | (预留) | 维护人转交 |
-| `CustomerDeletedEvent` | CustMasterAssemblerService | (预留) | 线索 DELETE 版本审批通过，客户主档失效 |
-| `TouchCompletedEvent` | TouchTaskService | TouchTaskCompletedListener | 触达任务完成 |
-
-> **V1.11#1 架构变更**：原 `LeadApprovedEvent`/`LeadDeletedEvent`（由 `WorkflowCallbackListener` 发布，`LeadApprovedListener`/`LeadDeletedListener` 消费，驱动客户主档装配）与 `ClaimCreatedEvent`（`ClaimService` 发布，`ClaimCreatedListener` 消费，驱动首次触达任务创建）已删除。三者的事件-监听器链路存在嵌套 `@TransactionalEventListener(AFTER_COMMIT)` 导致 INSERT 不持久化的 bug，改为**同步直接调用**：`WorkflowCallbackListener` 委托 `LeadCallbackReconcileService.reconcileApproved/reconcileRejected` 同步调用 `CustMasterAssemblerService.assembleFromLead`；`ClaimService.claim()` 同步创建首次触达任务。详见下方 V1.11 变更日志。
-
-所有事件监听器使用 `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`。
-
-## 关键设计决策
-
-### 线索审批流程
-线索提交审批通过 `WorkflowApi.startProcess()` 启动 Flowable 流程。`LeadService.submitForApproval()` 使用 `SELECT FOR UPDATE` 防止并发提交。审批结果通过 `ProcessCompletedEvent` 回调，由 `WorkflowCallbackListener` 委托 `LeadCallbackReconcileService` 按 outcome（APPROVED/REJECTED）同步处理（V1.11#1 起不再走嵌套事件监听器）。
-
-### 客户认领并发控制
-`CUST_CLAIM` 表有 `(cust_id, org_id)` 唯一约束。`ClaimService.claim()` 直接 INSERT，捕获 `DuplicateKeyException` 返回 CUST-40904 错误，避免分布式锁；认领成功后同步创建首次触达任务（V1.11#1 起，原 `ClaimCreatedEvent` 事件链已删除）。
-
-### 触达日志幂等
-`TOUCH_LOG` 表有 `(touch_task_id, client_uuid)` 唯一约束。客户端传入 `clientUuid`，重复提交时捕获 `DuplicateKeyException` 返回 CUST-40905。
+### 错误码演进：CUST-40006 已废弃
+`CUST-40006` 早期代表"导入行数过多"，已废弃并迁移语义到 `CUST-42205`（`IMPORT_ROWS_TOO_MANY`，`enums/CustomerErrorCode`）。**看到代码/日志/前端 i18n 里的 `CUST-40006` 时应知道它已被 `CUST-42205` 取代**，不要再新建或复用 `CUST-40006`。同批次 `CUST-40003` 也已废弃，语义升级为 `CUST-40301`（`LEAD_EDIT_FORBIDDEN`）。
 
 ### 标签客户覆盖式导入
-`TagCustomerService.importCustomers()` 先 `deleteByTagId()` 再 `insertBatch()`，保证每次导入后标签下客户列表完全等于本次导入内容。
+`service/TagCustomerService.importCustomers()` 采用**先删后插**：`deleteByTagId()` 清空该标签下全部旧关联，再 `insertBatch()` 批量写入本次导入内容。这是**覆盖式**而非增量合并语义 —— 对调用方的含义是：重复导入同一标签会让标签下客户列表完全等于最近一次导入的内容，不会与历史导入结果叠加；如需增量追加需调用方自行先查询再合并后整体导入。
 
-### 触达任务状态机 (V1.0)
-依据《功能规格》§7.3bis：
-- PENDING → IN_PROGRESS / SUCCESS / CANCELLED
-- IN_PROGRESS → SUCCESS / CANCELLED
-- SUCCESS / CANCELLED 为终态
+### 线索提交审批的并发控制
+`service/LeadService.submitForApproval()` 先 `leadMapper.selectForUpdate(id)` 加行锁（要求线索当前状态为 `DRAFT`），锁内确认状态后再组装 `StartProcessCmd` 调用 `workflowApi.startProcess(...)` 启动 Flowable 流程，避免同一线索被并发重复提交审批。完整调用链参见源码 `src/main/java/com/bank/branch/platform/customer/service/LeadService.java`（`submitForApproval` 方法），该模式在 `docs/code-examples.md` 中也有索引条目。
 
-首次触达日志自动驱动 PENDING → IN_PROGRESS（由 `TouchLogService` 触发）。
-状态转移由 `TouchTaskStateMachineService.assertTransition` 校验，非法抛 CUST-40010。
+## 已知技术债/例外
 
-## 错误码
+- 线索导入行级校验为简化实现：`LeadImportService`/`LeadImportPreviewResp` 中多处 TODO 标记，当前 `failCount` 恒为 0、错误明细恒为空列表，真实行级校验待后续补齐。
+- 跨机构客户历史查询（`CustomerHistoryController`）等高危操作的 `CROSS_ORG` 特殊审计分类，待 `@AuditLog` 支持 `specialCategory` 属性后再补齐（`CustomerService`/`CustomerCrossOrgHistoryVO` 均有对应 TODO）。
+- `TouchTaskMapper.xml` 中触达耗时统计的日期函数存在 H2（`DATEDIFF`）与 MySQL 生产（`TIMESTAMPDIFF`）方言差异，当前按 H2 兼容写法实现，TODO 标记待 DBA 确认生产环境后切换。
+- ArchUnit 守护目前仅覆盖"禁止 `@Scheduled`回退"这一条规则（`NoCustomerScheduledArchTest`），非全面架构守护。
+- 模块历史上曾直接使用原生 MyBatis Mapper + XML；按根 CLAUDE.md 红线，本模块**新增**数据库访问需改用 MyBatis-Plus（`BaseMapper`/`LambdaQueryWrapper`），既有遗留 Mapper 不强制回改。
 
-| 错误码 | 含义 |
-|--------|------|
-| `CUST-400xx` | 参数/业务规则错误 (01-02 标签校验, 03-04 线索状态, 05 文件空, 07 触达任务非待办, 08-09 转交/取消原因)；CUST-40006 已废弃 (P1B 迁至 42205) |
-| `CUST-40010` | 触达任务非法状态转移 |
-| `CUST-403xx` | 403 权限/越权 (01 无权编辑非草稿线索 P1C 升级自 40003，05 跨机构认领越权 P1a→P1C 扩展到 cancelClaim，06 转交角色不符 P1C，07 转交机构不符 P1C；02/03/04 占位待 V1.x) |
-| `CUST-404xx` | 资源不存在 (01: 标签, 02: 线索, 03: 客户, 04: 认领, 05: 任务, 06: 批次) |
-| `CUST-409xx` | 冲突 (01-02: 标签重复, 03: 线索编号重复, 04: 重复认领, 05: 日志重复, 06: 编码不可改, 08-09: re-touch 状态冲突, 12: 客户在途流程不可删) |
-| `CUST-422xx` | 422 业务校验 (01: 线索行级校验占位, 02: 标签客户ID 无效, 03: 文件格式, 04: 文件过大 10MB, 05: 行数 > 5000, 06: 日志必填, 07: 照片 > 9, 08: 照片格式 jpg/png/heic) — P1B 2026-04-29 落地 |
-| `CUST-500xx` | 内部错误 (01: 通用, 02: 工作流调用) |
+## 清单与契约指引
 
-## 跨模块依赖
+- 对外 `*Api`/`*QueryApi` 接口清单以 `src/main/java/com/bank/branch/platform/customer/api/` 目录源码为准（`TagApi`/`LeadApi`/`CustomerQueryApi`/`ClaimApi`/`TouchTaskQueryApi`）。
+- Controller/端点/DTO/枚举/事件等逐条清单一律不在本文件维护，以 `src/main/java/com/bank/branch/platform/customer/` 各子包源码为准。
+- REST 端点契约细节（请求/响应报文、字段级校验）见 `docs/modules/customer-marketing-center/03-接口设计与报文.md` 与 `04-对外API契约.md`；并发与事务策略另见 `docs/modules/customer-marketing-center/06-并发与事务策略.md`；表结构见 `05-表结构DDL.md`。
+- `PT_RESOURCE` 注册 SQL 见 `docs/superpowers/sql/2026-04-14-customer-*.sql` 及 `2026-04-21-customer-contract-alignment-pt-resource.sql`。
+- 数据库表：`CUST_TAG`/`CUST_TAG_REL`/`CUST_LEAD`/`LEAD_IMPORT_BATCH`/`CUST_MASTER`/`CUST_CLAIM`/`TOUCH_TASK`/`TOUCH_LOG`，均已大写化（历史小写表已 DROP），字段定义见 `docs/schema/ddl-customer.sql`。
 
-| 依赖 | 来源模块 | 用途 |
-|------|----------|------|
-| `CurrentUserApi` | auth-permission-center | 获取当前用户工号/机构 |
-| `BizScopeApi` | auth-permission-center | 数据范围校验 |
-| `OrgApi` | auth-permission-center | 组织架构查询 |
-| `WorkflowApi` | workflow-center | 线索/删除审批流程启动 |
-| `DictApi` | system-governance-center | 字典值查询 |
-| `FileApi` | system-governance-center | 导入文件读取 |
-| `NotifyApi` | system-governance-center | 通知发送 |
-| `AuditApi` | system-governance-center | 审计日志 |
+## 测试指引
 
-## 缓存配置
-
-> **现状（2026-05 去 Redis 后）**：`CustomerCacheConfig` 当前**仅保留** Cache-Aside 的 Key 前缀 / TTL 常量与防雪崩抖动算法定义，模块**无任何缓存中间件依赖**（Redis 已移除，未接入替代方案）。下表描述的是原设计的 Key/TTL 语义，作为常量预留位，当前未接入真实缓存读写。
-
-设计语义：Cache-Aside 模式，所有 Key 前缀 `customer:`，默认 TTL 5 分钟 + 10% 随机抖动防雪崩。
-
-| Key | 内容 | TTL |
-|-----|------|-----|
-| `customer:tag:enabled` | 启用状态标签列表 | 5 分钟 |
-| `customer:master:{custId}` | 客户主档详情 | 5 分钟 |
-
-## 测试
-
-- **单元测试**: Mockito (Service 层), 每个 Service 对应 `*Test.java`
-- **集成测试**: MockMvc + H2 (Controller 层), 基类 `AbstractControllerIntegrationTest`
-- **测试配置**: `CustomerTestConfiguration.java` + `application-test.yml` (H2 MySQL 兼容模式)
-- **Mock 用户上下文**: `@WithMockEmpContext` 注解 + `MockEmpContextExtension`
-- **当前测试数**: 53 个测试文件（含 Service/Controller/Job/ArchUnit），覆盖全部 Service/Controller；具体用例数以 CI 最新跑批为准（V1.8 交付时点为 355 个，后续 V1.9~V1.13 有增减，本文件不再刻舟求剑维护绝对值）
-
-## PT_RESOURCE 注册 SQL
-
-模块所有接口对应的 `PT_RESOURCE` 注册记录存放于：
-- `docs/superpowers/sql/2026-04-14-customer-tag-pt-resource.sql` (7 条)
-- `docs/superpowers/sql/2026-04-14-customer-lead-pt-resource.sql` (11 条)
-- `docs/superpowers/sql/2026-04-14-customer-master-pt-resource.sql` (4 条)
-- `docs/superpowers/sql/2026-04-14-customer-pool-claim-pt-resource.sql` (4 条)
-- `docs/superpowers/sql/2026-04-14-customer-touch-pt-resource.sql` (6 条)
-- `docs/superpowers/sql/2026-04-14-customer-report-pt-resource.sql` (3 条)
-- `docs/superpowers/sql/2026-04-21-customer-contract-alignment-pt-resource.sql` (10 条，契约对齐新增端点)
-
+- `*Test.java`/`*Tests.java` 走 surefire（`mvn test`），`*IT.java` 走 failsafe（`mvn verify`），命名与分工遵循根 CLAUDE.md 规范。
+- Service 层：Mockito 单元测试，每个 Service 对应一个 `*Test.java`。
+- Controller 层：MockMvc + H2 集成测试，基类 `support/AbstractControllerIntegrationTest`，测试配置 `CustomerTestConfiguration` + `application-test.yml`（H2 MySQL 兼容模式）。
+- Mock 用户上下文使用 `support/WithMockEmpContext` 注解 + `support/MockEmpContextExtension`。
+- 新增/修改定时任务相关代码后，务必确认 `arch/NoCustomerScheduledArchTest` 仍通过，避免误用 `@Scheduled` 回退。

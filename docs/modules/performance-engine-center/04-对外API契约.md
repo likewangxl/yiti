@@ -4,6 +4,15 @@
 > 关联文档: `01-功能规格.md` / `02-后端架构.md` / `03-接口设计与报文.md`
 > 契约层: 所有跨模块调用必须通过本文件定义的 `*Api` 接口, 禁止直接访问本模块的 mapper/entity/serviceImpl
 > 契约位置: `com.bank.branch.platform.performance.api.*`
+> 最后更新: **2026-07-19**（此前一次实质更新 2026-04-25）
+
+> **2026-07-19 回填说明**：`performance-engine-center` 模块实际共 11 个 `*Api`/`*QueryApi`（`api/` 目录，不含 `dto/` 子包），原文档仅收录 7 个（§1～§7），本次依据源码补齐缺失的 4 个：
+> - **§8 `CustStatQueryApi`**（客户财务统计展示表只读查询，面向 soap-gateway-center callpu `CASH_GETCUST_INFO`）
+> - **§9 `EvalQueryApi`**（eval 考核评价子域对外只读查询，供 report-analytics-center 未来引用）
+> - **§10 `PerfApprovalCmdApi`**（分配关系调整审批"写"接口，面向手机端 callpu 网关）
+> - **§11 `PerfApprovalQueryApi`**（分配关系调整审批列表"读"接口，**已确认被 `soap-gateway-center` 的 `CallPuDispatchService` 实际消费**，`PERF_LIST`/`PERF_SAVE`/`PERF_RECALL`/`PERF_APPR` 四个 callpu 操作码分别调用本接口与 `PerfApprovalCmdApi`）
+>
+> 原 §8～§12（DTO 定义 / 调用约束 / 领域事件 / 接口注册与暴露 / 不对外暴露的内部能力）依次顺延为 **§12～§16**。§12 DTO 定义新增 §10 补充 DTO（`AllocAdjustPreviewItemDTO`）。此外 §1 `MetricApi`、§3 `KpiApi`、§5 `PerfCalcApi`、§7 `AllocApi` 四个既有接口经源码核对存在方法级漏收/失真，已在对应章节原地订正（详见各章节内 "2026-07-19 代码核实" 标注）。一切以源码（`api/*.java`）为准。
 
 ---
 
@@ -146,8 +155,39 @@ public interface MetricApi {
      * @param metricCodes 指标编码列表
      */
     Map<String, BigDecimal> getCustMetricValues(String custId, LocalDate dataDate, List<String> metricCodes);
+
+    /**
+     * 取某维度 SYS_CONTROL 的最新有效数据日期（current_version 对应的 latest_data_date）.
+     * 供报表/仪表盘"读取最新版本汇总数据"使用，未配置时返回 null.
+     *
+     * @param scopeDim 维度 EMP / ORG / CUST
+     * @return 最新数据日期，无配置返回 null
+     */
+    LocalDate getLatestDataDate(String scopeDim);
+
+    /**
+     * 列出某日宽表中有数据的全部员工工号（不限 version）.
+     * 动态指标查询"不选对象=查范围内全部对象"用：对象集合取自当天宽表实际有数据的对象，
+     * 天然有界、避免返回全是空值的行。调用方需再按数据范围裁剪。
+     *
+     * @param dataDate 数据日期
+     * @return 员工工号列表（可能为空）
+     */
+    List<String> listEmpIdsWithData(LocalDate dataDate);
+
+    /**
+     * 列出某日宽表中有数据的全部机构编码（不限 version）.同 {@link #listEmpIdsWithData}。
+     */
+    List<String> listOrgCodesWithData(LocalDate dataDate);
+
+    /**
+     * 列出某日宽表中有数据的全部客户 ID（不限 version）.同 {@link #listEmpIdsWithData}。
+     */
+    List<String> listCustIdsWithData(LocalDate dataDate);
 }
 ```
+
+> **2026-07-19 代码核实**：源码 `MetricApi` 比本节原文档多 4 个方法（上方已补入代码块）：`getLatestDataDate`（报表/仪表盘取最新数据日期）、`listEmpIdsWithData`/`listOrgCodesWithData`/`listCustIdsWithData`（动态指标查询"不选对象=查全部"场景的对象集合来源，均为 `report-analytics-center` 消费）。
 
 ### MetricApi 调用约束
 
@@ -304,20 +344,26 @@ public interface KpiApi {
     Optional<KpiSchemeDTO> getKpiSchemeById(String schemeId);
 
     /**
-     * 批量获取某组员工在某 cycle 的 KPI 总分.
-     * 报表/排行榜用.
+     * V1.14：列举近期被考核过的员工工号（来自 kpi_result distinct emp_id）.
      *
-     * @param empIds    员工列表
-     * @param cycleType 周期类型
-     * @param cycleDate cycle 日期
-     * @return Map of empId → kpiTotalScore
+     * <p>用途：报表「动态指标查询」页面 → 考核员工选择器数据源。本方法是为避免
+     * report-analytics-center 跨库直连 perf 物理表而暴露的对外只读 Api，调用方必须先通过
+     * auth.OrgApi.getOrgSubtreeCodes(currentOrg) 完成数据范围裁剪后再传 orgCodes。
+     *
+     * <p>语义：sinceDate 必填，为 null 时返回空列表（fail-close）；orgCodes 为 null 表示
+     * 不限机构（管理员场景）；orgCodes 为 empty set 表示数据范围裁剪后无可见机构 → 返回空列表（fail-close）。
+     *
+     * @param sinceDate 仅返回 as_of_date >= sinceDate 的员工（建议 today.minusDays(90)）
+     * @param orgCodes  机构子树过滤；null 表示不限
+     * @return 去重后的 empId 列表（按 empId 升序），永不返回 null
      */
-    java.util.Map<String, BigDecimal> batchGetKpiTotals(
-        List<String> empIds, String cycleType, LocalDate cycleDate);
+    List<String> listEvalEmpIds(LocalDate sinceDate, java.util.Set<String> orgCodes);
 }
 ```
 
-**约束:** `batchGetKpiTotals` 单次最多 500 个 empId。
+> **2026-07-19 代码核实（破坏性差异）**：源码 `KpiApi` **不存在**本节原文档描述的 `batchGetKpiTotals(List<String> empIds, String cycleType, LocalDate cycleDate)` 方法——全仓检索该方法名零命中，属历史设计从未落地或已被移除。取而代之的是上方 `listEvalEmpIds(LocalDate sinceDate, Set<String> orgCodes)`（V1.14 新增，语义完全不同：列举近期被考核员工工号供报表选择器用，而非批量取总分）。消费方如需"批量获取某组员工 KPI 总分"，当前只能循环调用 `getCurrentKpiTotal`，本契约暂无批量方法，如有性能需求需在源码新增后回填本文档。
+
+**约束:** `listEvalEmpIds` 的 `sinceDate` 必填（fail-close 设计）；`orgCodes` 由调用方基于 `OrgApi.getOrgSubtreeCodes` 完成数据范围裁剪后传入。
 
 ---
 
@@ -423,7 +469,24 @@ public interface PerfCalcApi {
                        LocalDate cycleDate, LocalDate asOfDate, String version);
 
     /**
-     * 触发历史回算.
+     * 触发单个指标的计算（V1.1 Task P3.3 交付）.
+     *
+     * <p>内部委托 {@code MetricCalcService.calcMetric} 完成 SQL/Groovy 路由、宽表写入、run_task 状态机。
+     * 消费方：定时任务（如每日指标计算 job）、运维后台补跑、external 上报触发。
+     *
+     * @param metricCode 指标编码（必填）
+     * @param dataDate   数据日期（必填）
+     * @param version    数据版本（必填，通常取自 sys_control.current_version）
+     * @return run_task 主键 ID
+     * @throws IllegalArgumentException 任一参数为 null
+     */
+    String triggerMetricCalc(String metricCode, LocalDate dataDate, String version);
+
+    /**
+     * 触发历史回算（5 参数简化签名）.
+     *
+     * <p>等价于下方 7 参数版本传入 metricCodes=null（所有 ACTIVE 指标）且 version=null
+     * （Facade 兜底按空串透传）。保留此签名以兼容旧契约；新接入方推荐使用 7 参数版本。
      *
      * @param cycleType 周期类型
      * @param from      起始 cycleDate
@@ -435,6 +498,24 @@ public interface PerfCalcApi {
     String triggerRecalc(String cycleType, LocalDate from, LocalDate to, String reason, String operator);
 
     /**
+     * 触发历史回算（7 参数完整签名，2026-07-19 补充，原文档未收录）.
+     *
+     * <p>委托 {@code HistoryRecalcService.recalc}，按日期范围 × 指标码批量调用 MetricCalcService.calcMetric。
+     *
+     * @param cycleType   周期类型（用于审计日志；实际按日切分，不按 cycle）
+     * @param from        起始日期（含）
+     * @param to          截止日期（含）
+     * @param metricCodes 指标编码列表（null 或空 → 所有 ACTIVE 指标）
+     * @param version     数据版本（必填）
+     * @param reason      回算原因（@AuditLog reasonRequired=true）
+     * @param operator    发起人 emp_id
+     * @return 父级 run_task 主键
+     */
+    String triggerRecalc(String cycleType, LocalDate from, LocalDate to,
+                         java.util.List<String> metricCodes, String version,
+                         String reason, String operator);
+
+    /**
      * 查询运行任务状态.
      *
      * @param taskId 任务 ID
@@ -442,6 +523,8 @@ public interface PerfCalcApi {
     Optional<PerfRunTaskDTO> getRunTask(String taskId);
 }
 ```
+
+> **2026-07-19 代码核实**：源码 `PerfCalcApi` 比本节原文档多 2 处：① `triggerMetricCalc`（单指标计算触发，V1.1 P3.3 交付，上方已补入代码块）；② `triggerRecalc` 的 7 参数重载（原文档只收录 5 参数版本，两者并存，5 参数版本内部委托 7 参数版本）。另需订正：源码 Javadoc 声称"与 `KpiApi.triggerKpiCalc` 语义相同，双入口均可使用"，但**实际 `KpiApi` 接口中不存在 `triggerKpiCalc` 方法**（详见 §3 订正说明），该 Javadoc 本身是过期表述，`triggerKpiCalc` 目前只有 `PerfCalcApi` 这一个入口。
 
 ---
 
@@ -505,6 +588,7 @@ public interface DataTaskApi {
 package com.bank.branch.platform.performance.api;
 
 import com.bank.branch.platform.performance.api.dto.CustAllocRelationDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustPreviewItemDTO;
 import com.bank.branch.platform.performance.api.dto.AllocSummaryDTO;
 import com.bank.branch.platform.performance.api.dto.AllocVersionDTO;
 import java.time.LocalDate;
@@ -634,8 +718,25 @@ public interface AllocApi {
      * @return 该时点的版本号信息
      */
     AllocVersionDTO getAllocVersionAt(String bizKind, LocalDate asOfDate);
+
+    /* ==================== 原业绩分配预览（调整申请页面，2026-07-19 补充） ==================== */
+
+    /**
+     * 查询客户「原业绩分配」预览：分别取「按规则分配(RULE)」与「按账号分配(ACCOUNT)」两个维度下
+     * 审批通过(APPROVED)的最后一条分配关系调整申请，关联其调整明细返回.
+     *
+     * <p>数据源为 {@code PERF_ALLOC_ADJUST_APPLY} + {@code PERF_ALLOC_ADJUST_ITEM}（非
+     * {@code cust_alloc_relation}），供审批/新增调整申请页面的「原业绩分配」模块展示。
+     *
+     * @param custId   客户编号（匹配 apply.cust_id）
+     * @param allocDim 当前申请的分配维度（RULE / ACCOUNT / null，null 或 RULE 取 RULE+ACCOUNT 两者）
+     * @return 预览项列表，可能为空列表，不会返回 null
+     */
+    List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim);
 }
 ```
+
+> **2026-07-19 代码核实**：源码 `AllocApi` 实际比本节原文档多 1 个方法 `getLastApprovedAllocPreview`（上方已补入代码块），供审批/新增调整申请页面展示"原业绩分配"预览，与 `cust_alloc_relation`（生产分配关系）不同，反映的是"最近一次审批通过的调整申请"快照。对应 DTO `AllocAdjustPreviewItemDTO` 见 §7.4。
 
 ### 7.1 AllocApi 补充 DTO
 
@@ -729,11 +830,301 @@ public class LoanSubmitService {
 - 监听 `performance.allocation-adjustment.approved.v1` 事件 → 失效相关 `alloc:*` 缓存
 - 监听 `performance.sys-control.updated.v1` 事件 → 失效 `alloc:latestver:*` 缓存
 
+### 7.4 AllocApi 原业绩分配预览方法与 DTO（2026-07-19 补充，代码核实）
+
+**方法：** `List<AllocAdjustPreviewItemDTO> getLastApprovedAllocPreview(String custId, String allocDim)`
+
+**调用方：** `performance-engine-center` 内部（`AllocAdjustController`/`TargetAdjustController` 等新建调整申请页面），当前未见其他模块消费，暂列为模块内可复用能力
+
+**`AllocAdjustPreviewItemDTO` 字段：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `allocDim` | String | 分配维度：RULE（按规则分配）/ ACCOUNT（按账号分配） |
+| `accountNo` | String | 账号（ACCOUNT 维度取 apply.account_no；RULE 维度为空） |
+| `empId` | String | 员工工号（item.emp_id） |
+| `username` | String | 员工登录名（PT_USER.USERNAME；解析不到时回退为工号） |
+| `empChnName` | String | 员工中文姓名（PT_USER.USERCHNNAME） |
+| `orgCode` | String | 所属机构号（员工主机构 ORG_CODE） |
+| `orgName` | String | 所属机构名称（员工主机构 ORG_NAME） |
+| `ratio` | BigDecimal | 分配比例（0-100） |
+
 ---
 
-## 8. DTO 定义
+## 8. CustStatQueryApi (客户财务统计展示表只读查询，2026-07-19 新增)
 
-### 8.1 MetricDefDTO
+**接口路径:** `com.bank.branch.platform.performance.api.CustStatQueryApi`
+
+**调用方:** `soap-gateway-center`（callpu 网关 `CASH_GETCUST_INFO` 客户号查名场景）
+
+**职责:** 面向外部渠道的客户号查名入口。数据源 `XAN_M98_CUST_STAT_SHOW3`（外部数仓抽数落地表，由 `performance-engine-center` 持有），跨模块调用方仅通过本 `*Api` 访问，禁止直连其 mapper/表。
+
+```java
+package com.bank.branch.platform.performance.api;
+
+import java.util.Optional;
+
+/**
+ * 客户财务统计展示表（XAN_M98_CUST_STAT_SHOW3）对外只读查询 Api.
+ */
+public interface CustStatQueryApi {
+
+    /**
+     * 按客户号查客户名称（XAN_M98_CUST_STAT_SHOW3，取一条）.
+     *
+     * @param custId 客户号（对应 CUST_ID 列；外部渠道前端输入）
+     * @return 客户名称；custId 为空或查无匹配时返回 Optional.empty()
+     * @deprecated 客户号查名已统一改走客户主档 CUST_MASTER，请使用 {@link #getCustNameFromMaster(String)}
+     *             （与 PC 管理端 StatShowController#getCustMasterName 同一口径，见 03 §P.3）。
+     */
+    @Deprecated
+    Optional<String> getCustNameByCustId(String custId);
+
+    /**
+     * 按客户编号从客户主档 CUST_MASTER 查客户名称（cust_master.cust_no 列）.
+     *
+     * <p>替代原 {@link #getCustNameByCustId(String)} 从外部统计表取名的方式，与 PC 管理端
+     * "新建调整申请页客户名称反显"（03 §P.3）走同一客户营销中心 {@code CustomerQueryApi.getCustomerByCustNo} 口径。
+     * custNo 为空、客户主档无该编号或名称为空白均返回 Optional.empty()（永不返回空白名）。
+     *
+     * @param custNo 客户编号（cust_master.cust_no；外部渠道前端输入）
+     * @return 客户名称（去空白后非空）；客户主档无匹配时返回 Optional.empty()
+     */
+    Optional<String> getCustNameFromMaster(String custNo);
+}
+```
+
+**调用约束：** 两方法均只读同步；`getCustNameByCustId` 已废弃但未删除（兼容存量调用方），新对接一律使用 `getCustNameFromMaster`。
+
+---
+
+## 9. EvalQueryApi (eval 考核评价子域对外只读查询，2026-07-19 新增)
+
+**接口路径:** `com.bank.branch.platform.performance.api.EvalQueryApi`
+
+**调用方:** 供 `report-analytics-center` 未来引用（当前未见实际消费方，属预留对外能力）
+
+**实现类:** `com.bank.branch.platform.performance.eval.facade.EvalQueryFacade`
+
+**职责:** eval 考核评价子域（见 03 §S）唯一对外只读入口，禁止被业务模块写操作依赖。
+
+```java
+package com.bank.branch.platform.performance.api;
+
+import com.bank.branch.platform.performance.api.dto.EvalTaskSummaryDto;
+import java.util.List;
+
+/**
+ * 评价查询对外 API（供 report-analytics-center 未来引用）.
+ * 只读接口，禁止被业务模块写操作依赖。
+ */
+public interface EvalQueryApi {
+
+    /**
+     * 查询所有评价任务概要.
+     *
+     * @return 任务概要列表（含 taskId、taskName、status、endTime、targetCount）
+     */
+    List<EvalTaskSummaryDto> listTaskSummaries();
+}
+```
+
+**`EvalTaskSummaryDto` 字段：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `taskId` | Long | 任务ID |
+| `taskName` | String | 任务名称 |
+| `status` | Integer | 任务状态（0=进行中，1=已结束） |
+| `endTime` | LocalDateTime | 截止时间 |
+| `targetCount` | int | 被评价人数量 |
+
+---
+
+## 10. PerfApprovalCmdApi (分配关系调整审批「写」，2026-07-19 新增)
+
+**接口路径:** `com.bank.branch.platform.performance.api.PerfApprovalCmdApi`
+
+**调用方:** `soap-gateway-center` 的 `CallPuDispatchService`（面向手机端等外部渠道，callpu 操作码 `PERF_SAVE`=新增申请、`PERF_RECALL`=撤回申请、`PERF_APPR`=审批申请）
+
+**职责:** 面向手机端等外部渠道提交/撤回/审批「分配关系调整」申请，业务规则与 Web 管理端 `POST /api/perf/alloc-adjust/create`（03 §L.1）完全一致，实现类 `PerfApprovalCmdFacade` 委托项目内已有的 `AllocAdjustService`。与 `PerfApprovalQueryApi`（§11）一起构成对外渠道的审批读写入口，调用方禁止直接依赖 perf 的 service/mapper/entity。
+
+```java
+package com.bank.branch.platform.performance.api;
+
+import com.bank.branch.platform.performance.api.dto.AllocAdjustSubmitCmd;
+
+public interface PerfApprovalCmdApi {
+
+    /**
+     * 提交「分配关系调整」申请（启动审批流）.
+     *
+     * @param cmd 提交命令（applicant 必填；ownerOrgId 可空，空则按 applicant 反查主机构）
+     * @return 申请主键 id（手机端 perfAdjustNo）
+     */
+    String submitAllocAdjust(AllocAdjustSubmitCmd cmd);
+
+    /**
+     * 撤回「分配关系调整」申请（带越权校验，同步取消审批流）.
+     *
+     * <p>仅申请创建人本人可撤回（operator 必须等于申请创建人），委托
+     * {@code AllocAdjustService.withdrawByApplicant}。仅 IN_APPROVAL / DRAFT 状态可撤回。
+     *
+     * @param perfAdjustNo 申请主键 id（手机端 perfAdjustNo）
+     * @param operator     操作人工号（外部渠道传入，必须等于申请创建人）
+     * @param reason       撤回原因（可空，空则由实现兜底默认文案）
+     */
+    void withdrawAllocAdjust(String perfAdjustNo, String operator, String reason);
+
+    /**
+     * 审批「分配关系调整」申请（通过 / 驳回，无会话版）.
+     *
+     * <p>面向手机端等外部渠道（callpu PERF_APPR）：按 perfAdjustNo + 审批人 empId 解析当前待办任务——
+     * 候选组/角色可见性即权限校验，审批人看不到该待办（查不到 taskId）则拒绝审批。再按 apprStatus
+     * 走通过/驳回，委托 workflow 无会话审批，全程不依赖登录会话。
+     *
+     * <p>下一步路由（routeTo）：仅在「同意」且当前节点是含排他网关的经办节点时生效——
+     * {@code biz_dept_review}（公司部/零售部经办）→ 网关变量 corpRouteTo：LEADER（交部门负责人）/
+     * OWNER（交原业绩所属人会签）；{@code finance_review}（资财部经办）→ 网关变量 finRouteTo：
+     * LEADER（交资财部负责人）/ END（审批结束）。其余节点忽略 routeTo；经办节点未传 routeTo 时
+     * 按默认走最全链路（corp→OWNER、fin→LEADER），保持老渠道兼容不卡流程。
+     *
+     * @param perfAdjustNo 申请主键 id（手机端 perfAdjustNo）
+     * @param empId        审批人工号（外部渠道认证后透传）
+     * @param apprStatus   审批结论："1"=通过 / "2"=驳回
+     * @param opinion      审批意见（可空，空则由实现兜底默认文案）
+     * @param routeTo      经办节点下一步路由选择（可空；非经办节点/驳回时忽略）
+     * @throws IllegalStateException    审批人无该待办任务（无权审批/已被处理）
+     * @throws IllegalArgumentException apprStatus 非 "1"/"2"
+     */
+    void approveAllocAdjust(String perfAdjustNo, String empId, String apprStatus, String opinion, String routeTo);
+}
+```
+
+**`AllocAdjustSubmitCmd` 字段（与 `AllocAdjustCreateReqDTO` 语义一致，差异见下）：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `custType` | String | CORP / RETAIL（决定审批流路由） |
+| `custId` | String | 客户编号 |
+| `custName` | String | 客户名称（前端反显） |
+| `allocDim` | String | RULE / ACCOUNT |
+| `bizKind` | String | 业务种类（如 CORP_DEPOSIT / RETAIL_LOAN） |
+| `accountNo` | String | 账号（ACCOUNT 维度必填） |
+| `ownerOrgId` | String | 归属机构（**可空**——为空时由 Facade 按 applicant 反查主机构，这是与管理端 `AllocAdjustCreateReqDTO.ownerOrgId` 必填的关键差异） |
+| `reason` | String | 申请原因 |
+| `applicant` | String | 申请人工号（**外部渠道显式传入**，因无平台登录态，管理端由 `CurrentUserApi` 隐式获取） |
+| `items` | List\<Item\> | 调整后明细：`empId`/`ratio`/`remark` |
+| `originalAllocList` | List\<OriginalItem\> | 原业绩分配（手工录入）：`acctNo`/`empId`/`username`/`empChnName`/`orgCode`/`orgName`/`ratio`；外部渠道仅采集工号/姓名/比例，`acctNo`/`orgCode`/`orgName` 可空（Service 对缺失机构留空、按工号反查补全） |
+
+**调用约束：** `submitAllocAdjust` 委托的落库/审批流路由规则与 Web 端 `AllocAdjustController.create` 完全一致（对公走 `perf_alloc_adjust_corp_v1`，零售走 `perf_alloc_adjust_retail_v1`）；`approveAllocAdjust` 是无会话审批，业务侧需自行保证 `empId` 已经过外部渠道认证。
+
+---
+
+## 11. PerfApprovalQueryApi (分配关系调整审批列表「读」，2026-07-19 新增)
+
+**接口路径:** `com.bank.branch.platform.performance.api.PerfApprovalQueryApi`
+
+**调用方:** **`soap-gateway-center` 的 `CallPuDispatchService`**（已在源码中确认消费，callpu 操作码 `PERF_LIST` 拉取审批列表；`import` 语句见 `CallPuDispatchService.java` 第 9-10 行，字段注入见第 84 行 `private final PerfApprovalQueryApi perfApprovalQueryApi;`）
+
+**职责:** 面向手机端等外部渠道，按员工号拉取该员工的分配关系调整审批列表/我的申请列表/单据详情。实现类 `PerfApprovalQueryFacade` 委托项目内已有的 `AllocAdjustTodoService`/`AllocAdjustDoneService`，权限逻辑与 Web 端 `GET /api/perf/alloc-adjust/my-todos`/`my-done`（03 §L.11/L.12）完全一致（底层均走 workflow `TodoQueryApi` 的 Flowable 待办/已办）。与 `PerfApprovalCmdApi`（§10）一起构成对外渠道的唯一审批入口，调用方禁止直接依赖 perf 的 service/mapper/entity。
+
+```java
+package com.bank.branch.platform.performance.api;
+
+import com.bank.branch.platform.common.web.PageResult;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustApprovalItemDTO;
+import com.bank.branch.platform.performance.api.dto.AllocAdjustDetailDTO;
+
+public interface PerfApprovalQueryApi {
+
+    /**
+     * 查询某员工的「分配关系调整」审批列表（待审批 + 本人已审批，合并为一个列表）.
+     *
+     * @param empId    员工号（外部渠道传入；上游 callpu 已完成身份认证）
+     * @param pageNo   页码（从 1 开始，&lt;1 归一为 1）
+     * @param pageSize 每页大小（&lt;1 归一为默认值）
+     * @return 合并去重后按申请时间倒序的分页结果；员工无任何待办/已办时返回空页
+     */
+    PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(String empId, int pageNo, int pageSize);
+
+    /**
+     * 按状态域查询审批列表：statusFilter="PENDING" 仅待办、"DONE" 仅已办、null 合并（同 3 参版）.
+     *
+     * @param empId        员工号（外部渠道传入；上游 callpu 已完成身份认证）
+     * @param statusFilter 状态过滤："PENDING" 仅待办，"DONE" 仅已办，null 合并
+     * @param pageNo       页码（从 1 开始，&lt;1 归一为 1）
+     * @param pageSize     每页大小（&lt;1 归一为默认值）
+     * @return 按申请时间倒序的分页结果
+     */
+    PageResult<AllocAdjustApprovalItemDTO> listAllocAdjustApprovals(
+            String empId, String statusFilter, int pageNo, int pageSize);
+
+    /**
+     * 查询某员工"作为申请人"提交的「分配关系调整」申请列表（全状态，含 WITHDRAWN）.
+     *
+     * <p>区别于 {@link #listAllocAdjustApprovals}（审批人视角）：本方法按 createdBy = empId
+     * 过滤，供手机端"我的申请"模块使用。
+     *
+     * @param empId    申请人 USER_ID（网关已把报文工号转为 USER_ID）
+     * @param pageNo   页码（从 1 开始，&lt;1 归一为 1）
+     * @param pageSize 每页大小（&lt;1 归一为默认值）
+     * @return 按申请时间倒序的分页结果
+     */
+    PageResult<AllocAdjustApprovalItemDTO> listMyAllocAdjustApplications(String empId, int pageNo, int pageSize);
+
+    /**
+     * 查询「分配关系调整」单据详情（手机端详情页：含分配明细 + 审批/撤回能力标志）.
+     *
+     * @param perfAdjustNo 申请主键
+     * @param empId        当前操作员 USER_ID（用于判定 canApprove/canDelete）
+     */
+    AllocAdjustDetailDTO getAllocAdjustDetail(String perfAdjustNo, String empId);
+}
+```
+
+**`AllocAdjustApprovalItemDTO` 字段：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `perfAdjustNo` | String | 业绩调整审批编号（= 申请主键 id），手机端 perfAdjustNo |
+| `applyNo` | String | 申请编号（业务可读编号 apply_no，备用） |
+| `custId` | String | 客户ID |
+| `custName` | String | 客户名称（CustomerQueryApi 补齐，查不到为 null） |
+| `createdBy` | String | 申请人员工号（created_by） |
+| `applyFullname` | String | 申请人姓名（通讯录 AddressBookApi 补齐，查不到为 null） |
+| `applyTime` | LocalDateTime | 申请时间（created_time） |
+| `status` | String | 申请单状态：DRAFT/IN_APPROVAL/APPROVED/REJECTED |
+| `category` | String | 渠道分类：TODO=待本人审批，DONE=本人已审批/已驳回 |
+
+**`AllocAdjustDetailDTO` 字段：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `perfAdjustNo` / `applyNo` | String | 同上 |
+| `custId` / `custName` | String | 客户信息 |
+| `custType` | String | CORP / RETAIL |
+| `allocDim` | String | ACCOUNT / RULE |
+| `bizKind` / `accountNo` | String | 业务种类 / 账号 |
+| `status` | String | DRAFT/IN_APPROVAL/APPROVED/REJECTED/WITHDRAWN |
+| `reason` | String | 调整理由（apply.remark） |
+| `createdBy` / `applyFullname` / `applyTime` | — | 申请人信息 |
+| `canDelete` | boolean | 申请人本人且可撤回（status∈IN_APPROVAL/DRAFT） |
+| `canApprove` | boolean | 当前用户的待办且 IN_APPROVAL |
+| `currentNode` | String | 当前所处审批节点中文名（IN_APPROVAL 取 Flowable 活动 userTask 名；终态显示"已完成/已拒绝/已撤回/草稿"） |
+| `currentNodeKey` | String | 当前活动节点 KEY（如 `biz_dept_review`/`finance_review`），供经办审批端决定"下一步审批"表单 |
+| `nextNode` | String | 下一审批节点中文名（按 callPu 硬编码路由的确定链路静态推算；末节点显示"流程结束"，终态显示"无"） |
+| `allocaters` | List\<AllocItem\> | 分配明细：`empId`/`username`/`fullname`/`ratio`/`isOriginal`(1=原分配/2=调整后) |
+
+**调用约束：** 全部方法为只读同步调用；权限逻辑与 Web 端待办/已办完全一致（不重新实现一套权限判断）。
+
+---
+
+## 12. DTO 定义
+
+> **2026-07-19 索引补充**：本次新增的 4 个 `*Api`（§8～§11）及 §7 补充方法涉及的 DTO 已随各自章节就地给出字段表，不在此重复：`AllocAdjustPreviewItemDTO` 见 §7.4；`EvalTaskSummaryDto` 见 §9；`AllocAdjustSubmitCmd` 见 §10；`AllocAdjustApprovalItemDTO`/`AllocAdjustDetailDTO` 见 §11。
+
+### 12.1 MetricDefDTO
 
 ```java
 public class MetricDefDTO {
@@ -754,7 +1145,7 @@ public class MetricDefDTO {
 }
 ```
 
-### 8.2 MetricCardDTO
+### 12.2 MetricCardDTO
 
 ```java
 public class MetricCardDTO {
@@ -773,7 +1164,7 @@ public class MetricCardDTO {
 }
 ```
 
-### 8.3 KpiResultDTO
+### 12.3 KpiResultDTO
 
 ```java
 public class KpiResultDTO {
@@ -792,7 +1183,7 @@ public class KpiResultDTO {
 }
 ```
 
-### 8.4 KpiSchemeDTO
+### 12.4 KpiSchemeDTO
 
 ```java
 public class KpiSchemeDTO {
@@ -818,7 +1209,7 @@ public class KpiItemDTO {
 }
 ```
 
-### 8.5 TargetPlanDTO
+### 12.5 TargetPlanDTO
 
 ```java
 public class TargetPlanDTO {
@@ -834,7 +1225,7 @@ public class TargetPlanDTO {
 }
 ```
 
-### 8.6 TargetValueDTO
+### 12.6 TargetValueDTO
 
 ```java
 public class TargetValueDTO {
@@ -849,7 +1240,7 @@ public class TargetValueDTO {
 }
 ```
 
-### 8.7 CustAllocRelationDTO
+### 12.7 CustAllocRelationDTO
 
 ```java
 public class CustAllocRelationDTO {
@@ -869,7 +1260,7 @@ public class CustAllocRelationDTO {
 }
 ```
 
-### 8.8 PerfRunTaskDTO
+### 12.8 PerfRunTaskDTO
 
 ```java
 public class PerfRunTaskDTO {
@@ -888,7 +1279,7 @@ public class PerfRunTaskDTO {
 }
 ```
 
-### 8.9 EmpMetricSnapshotDTO / OrgMetricSnapshotDTO / CustMetricSnapshotDTO
+### 12.9 EmpMetricSnapshotDTO / OrgMetricSnapshotDTO / CustMetricSnapshotDTO
 
 ```java
 public class EmpMetricSnapshotDTO {
@@ -901,7 +1292,7 @@ public class EmpMetricSnapshotDTO {
 
 `OrgMetricSnapshotDTO` 把 `empId` 换成 `orgCode`, `CustMetricSnapshotDTO` 换成 `custId`, 其余结构相同。
 
-### 8.10 Cmd (命令 DTO)
+### 12.10 Cmd (命令 DTO)
 
 ```java
 public class DataTaskStatusCmd {
@@ -929,13 +1320,13 @@ public class DataTaskStatusCmd {
 
 ---
 
-## 9. 调用约束
+## 13. 调用约束
 
-### 9.1 调用方式
+### 13.1 调用方式
 
 所有接口均使用 Spring `@Autowired` 在同一进程内注入 (模块化单体, 非 RPC), 调用耗时按本地方法计。
 
-### 9.2 性能建议
+### 13.2 性能建议
 
 | 接口 | 性能特征 | 建议 |
 |---|---|---|
@@ -945,23 +1336,23 @@ public class DataTaskStatusCmd {
 | `KpiApi.batchGetKpiTotals` | 中频 | 单次 ≤500 empId |
 | `AllocApi.listCustomersByEmp` | 中频 | 按 empId+bizKind 做 Redis 缓存 15 min |
 
-### 9.3 数据一致性
+### 13.3 数据一致性
 
 - 所有查询以 `sys_control is_valid=1` 为准, 保证跨模块看到同一份数据快照
 - 历史回算期间, 短时间可能出现"部分员工已更新、部分未更新"的不一致, 消费方应有容错
 - 不同维度 (EMP/ORG/CUST) 的版本独立, 消费方不要假设维度间严格一致
 
-### 9.4 异常
+### 13.4 异常
 
 本契约定义的接口不抛检查异常, 运行时错误统一抛 `BizException(PerfErrorCode)`, 调用方用 `try/catch` 或让 `GlobalExceptionHandler` 处理。
 
-### 9.5 审计
+### 13.5 审计
 
 调用方发起的操作若需要审计, 审计职责在调用方, 本模块的 API 不会记录外部审计日志 (本模块的 controller/facade 内部仍然有审计)。
 
 ---
 
-## 10. 领域事件（V1.2 交付）
+## 14. 领域事件（V1.2 交付）
 
 本模块发布的领域事件遵循 `docs/common-dev-guide.md` 中的事件规范, 使用 Spring `ApplicationEventPublisher`, 后续可接入 RocketMQ。
 
@@ -980,7 +1371,7 @@ public abstract class PerfDomainEvent {
 }
 ```
 
-### 10.1 performance.target-adjustment.approved.v1 （V1.2 Q4 交付）
+### 14.1 performance.target-adjustment.approved.v1 （V1.2 Q4 交付）
 
 **发布类:** `TargetAdjustmentApprovedEvent`
 
@@ -1009,7 +1400,7 @@ public class TargetAdjustmentApprovedEvent extends PerfDomainEvent {
 | `report-analytics-center` | 刷新报表快照 (可选) |
 | 配置缓存 `perf:target_value:*` | 失效 |
 
-### 10.2 performance.allocation-adjustment.approved.v1 （V1.2 Q4 交付）
+### 14.2 performance.allocation-adjustment.approved.v1 （V1.2 Q4 交付）
 
 **发布类:** `AllocationAdjustmentApprovedEvent`
 
@@ -1038,7 +1429,7 @@ public class AllocationAdjustmentApprovedEvent extends PerfDomainEvent {
 | `system-governance-center` 通知子域 | 推送通知给资财部, 提醒线下 CCRM/PCRM 操作 |
 | 审计 | 留痕（`audit_log` 表） |
 
-### 10.3 performance.kpi-calc.completed.v1 （V1.2 Q4 交付）
+### 14.3 performance.kpi-calc.completed.v1 （V1.2 Q4 交付）
 
 **发布类:** `KpiCalcCompletedEvent`
 
@@ -1066,7 +1457,7 @@ public class KpiCalcCompletedEvent extends PerfDomainEvent {
 | `report-analytics-center` | 重新生成快照数据, 失效相关缓存 |
 | `portal-content-center` | 清理工作台 `perf:card:user:*` 缓存 |
 
-### 10.4 performance.sys-control.updated.v1 （V1.2 Q4 交付）
+### 14.4 performance.sys-control.updated.v1 （V1.2 Q4 交付）
 
 **发布类:** `SysControlUpdatedEvent`
 
@@ -1094,7 +1485,7 @@ public class SysControlUpdatedEvent extends PerfDomainEvent {
 | `report-analytics-center` | 失效报表汇总缓存 |
 | `portal-content-center` | 失效工作台聚合缓存 |
 
-### 10.5 事件发布可靠性
+### 14.5 事件发布可靠性
 
 - V1.2 使用 Spring `@TransactionalEventListener(phase = AFTER_COMMIT)` 保证事件在事务提交后发布。
 - 订阅者抛出异常不回滚主事务，`PerfEventPublisher` 捕获后只记录 ERROR 日志（V1.3 规划：落 `sys_event_dead_letter` 表留痕）。
@@ -1102,17 +1493,17 @@ public class SysControlUpdatedEvent extends PerfDomainEvent {
 
 ---
 
-## 11. 接口注册与暴露
+## 15. 接口注册与暴露
 
-### 11.1 Facade 实现
+### 15.1 Facade 实现
 
 每个 `*Api` 在 `com.bank.branch.platform.performance.facade` 下有对应实现类, 标注 `@Service` + 实现接口, 被其他模块 `@Autowired`。
 
-### 11.2 @BizAuth 与内部调用
+### 15.2 @BizAuth 与内部调用
 
 对外 `*Api` 方法**不**走 `@BizAuth` 鉴权, 因为这是模块间的直接调用, 鉴权已在 controller 层完成。由 `*Api` 触发的"跨模块写操作" (如 `triggerKpiCalc`) 默认以"系统"身份执行, 但必须在审计日志中记录调用方。
 
-### 11.3 版本兼容策略
+### 15.3 版本兼容策略
 
 - 本契约版本 V1, 任何字段增加为非破坏性变更
 - 删除字段或修改字段类型必须发布新接口方法, 旧方法标记 `@Deprecated` 且保留至少一个小版本
@@ -1120,7 +1511,7 @@ public class SysControlUpdatedEvent extends PerfDomainEvent {
 
 ---
 
-## 12. 不对外暴露的内部能力
+## 16. 不对外暴露的内部能力
 
 下列能力仅限本模块内部使用, **不**在 `api` 包中定义:
 

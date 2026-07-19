@@ -18,6 +18,32 @@ const routes = [
     component: () => import('@/views/screen/ScreenView.vue'),
     meta: { title: '经营大屏' }
   },
+  // 红色引擎（党建）：独立登录页 + 独立布局路由区，风格与平台主布局隔离
+  {
+    path: '/redengine/login',
+    name: 'RedEngineLogin',
+    component: () => import('@/views/redengine/login/LoginView.vue'),
+    meta: { title: '红色引擎-登录', public: true }
+  },
+  {
+    path: '/redengine',
+    component: () => import('@/views/redengine/layout/RedEngineLayout.vue'),
+    redirect: '/redengine/dashboard',
+    children: [
+      { path: 'dashboard', name: 'RedEngineDashboard', component: () => import('@/views/redengine/dashboard/DashboardView.vue'), meta: { title: '工作台' } },
+      { path: 'report', name: 'RedEngineReport', component: () => import('@/views/redengine/report/JointView.vue'), meta: { title: '四大维度材料上报' } },
+      { path: 'records', name: 'RedEngineRecords', component: () => import('@/views/redengine/records/RecordsView.vue'), meta: { title: '上报记录' } },
+      { path: 'branch-review', name: 'RedEngineBranchReview', component: () => import('@/views/redengine/branch-review/BranchReviewView.vue'), meta: { title: '支部审核工作台' } },
+      { path: 'cockpit', name: 'RedEngineCockpit', component: () => import('@/views/redengine/cockpit/CockpitView.vue'), meta: { title: '全局数据驾驶舱' } },
+      { path: 'warning', name: 'RedEngineWarning', component: () => import('@/views/redengine/warning/WarningView.vue'), meta: { title: '红黄牌预警池' } },
+      { path: 'review', name: 'RedEngineReview', component: () => import('@/views/redengine/review/ReviewView.vue'), meta: { title: '沉浸式审核工作台' } },
+      { path: 'archive', name: 'RedEngineArchive', component: () => import('@/views/redengine/archive/ArchiveView.vue'), meta: { title: '年度考核归档' } },
+      { path: 'export', name: 'RedEngineExport', component: () => import('@/views/redengine/export/ExportView.vue'), meta: { title: '数据导出' } },
+      // Task 15 新增：党组织管理（org-manage，Task 13 起菜单数组已声明该项但路由此前未接）+ 用户党组织映射（user-map，新建）
+      { path: 'org-manage', name: 'RedEngineOrgManage', component: () => import('@/views/redengine/system/OrgManageView.vue'), meta: { title: '党组织管理' } },
+      { path: 'user-map', name: 'RedEngineUserMap', component: () => import('@/views/redengine/system/UserMapView.vue'), meta: { title: '用户党组织映射' } }
+    ]
+  },
   {
     path: '/',
     component: DefaultLayout,

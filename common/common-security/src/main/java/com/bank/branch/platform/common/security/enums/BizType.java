@@ -32,7 +32,8 @@ public enum BizType {
     SYS_CONFIG("SYS_CONFIG", "系统配置"),
     ORG("ORG", "组织机构"),
     EVAL("EVAL", "内部评价"),
-    WORKFLOW_MONITOR("WORKFLOW_MONITOR", "工作流监控");
+    WORKFLOW_MONITOR("WORKFLOW_MONITOR", "工作流监控"),
+    RED_ENGINE("RED_ENGINE", "党建红色引擎");
 
     private final String code;
     private final String description;

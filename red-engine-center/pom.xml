@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.bank.branch.platform</groupId>
+        <artifactId>branch-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>red-engine-center</artifactId>
+    <name>Red Engine Center</name>
+    <description>党建红色引擎中心：四大维度材料上报、两级审核、评分与逾期扣分、驾驶舱、红黄牌预警、年度归档、数据导出（自 redengine 独立系统移植）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-trace</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-aop</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>common-db</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>auth-permission-center</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bank.branch.platform</groupId>
+            <artifactId>system-governance-center</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+        </dependency>
+        <!-- 数据导出（平台既有版本，替代 redengine 的 hutool-poi）；版本由根 pom dependencyManagement 统一管理，此处不重复声明 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>easyexcel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,5 +1,8 @@
 package com.bank.branch.platform.performance.controller;
 
+import com.bank.branch.platform.common.security.annotation.BizAuth;
+import com.bank.branch.platform.common.security.enums.BizAction;
+import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.performance.service.MetricBatchCalcService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +18,21 @@ import java.time.LocalDate;
 
 /**
  * 指标批量计算手动触发接口（测试/运维用）
+ *
+ * <p><b>2026-07-19 鉴权修复</b>：本接口此前未标注 {@code @BizAuth}，且
+ * {@code BizAuthConsistencyArchTest} 只校验"若声明则 bizType 必须单档"、不要求
+ * "必须声明"，导致这一缺口长期未被架构测试拦截（详见新增的
+ * {@code BizAuthRequiredArchTest}）。现补齐 {@code @BizAuth(bizType = PERF_CONFIG,
+ * action = EXECUTE)}，与同包 {@code MetricDefController.execute}/{@code batchExecute}
+ * 的"手动触发执行"语义保持一致。
+ *
+ * <p><b>鉴权链路已完整（2026-07-19 收口）</b>：该 URL 曾于 2026-05-27（提交 326bba98）
+ * 加入 {@code auth-permission-center} 的 {@code AuthenticationFilter.WHITELIST} 与
+ * {@code WebMvcAuthConfig.excludePathPatterns} 作为调试便捷通道，期间匿名即可触发批量计算、
+ * 本注解不生效。经全仓排查确认无裸调依赖方后两处白名单已摘除，当前走
+ * Session → {@code AuthorizationInterceptor}（{@code P_PERF_CALC_TRIG}）→ {@code @BizAuth}
+ * 全链路，由 bootstrap 的 {@code PerfTriggerAuthWhitelistRemovalIT} 固定回归
+ * （匿名 401 / 登录后可达）。运维如需手工触发，须先登录携带会话，不能再裸 curl。
  */
 @Slf4j
 @RestController
@@ -33,6 +51,7 @@ public class MetricBatchCalcController {
      */
     @PostMapping("/trigger")
     @Operation(summary = "手动触发指标批量计算")
+    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.EXECUTE)
     public ResponseWrapper<String> trigger(
             @RequestParam int level,
             @RequestParam(required = false) String dataDate) {

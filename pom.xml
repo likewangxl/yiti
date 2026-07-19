@@ -21,6 +21,7 @@
         <module>business-application-center</module>
         <module>performance-engine-center</module>
         <module>report-analytics-center</module>
+        <module>red-engine-center</module>
         <module>soap-gateway-center</module>
         <module>bootstrap</module>
     </modules>
@@ -145,6 +146,13 @@
             <dependency>
                 <groupId>com.bank.branch.platform</groupId>
                 <artifactId>report-analytics-center</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- red-engine-center -->
+            <dependency>
+                <groupId>com.bank.branch.platform</groupId>
+                <artifactId>red-engine-center</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

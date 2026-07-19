@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    # IT 走 onepl_test_bootstrap 测试库，绝不连接/写 yiti 生产库
+    # 同构复制 performance-engine-center/src/test/resources/application-test.yml 的连接串
+    url: jdbc:mysql://localhost:3306/onepl_test_bootstrap?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: djdev
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  main:
+    allow-bean-definition-overriding: true
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.bank.branch.platform.redengine: DEBUG
+    org.mybatis: INFO
+    org.springframework.jdbc: INFO
+    org.springframework.transaction: INFO

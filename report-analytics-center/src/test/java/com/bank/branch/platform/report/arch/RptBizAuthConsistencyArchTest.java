@@ -46,4 +46,20 @@ public class RptBizAuthConsistencyArchTest {
               }
           });
     // M1.1+ 起 Controller 包至少有 MetaController 一个类，allowEmptyShould 守护已转为实质检查
+
+    /**
+     * 所有 Controller 公共处理方法必须标注 {@code @BizAuth}（不允许"裸奔"端点）.
+     *
+     * <p>背景（2026-07-19）：{@code AllocPreviewController.preview} 曾完全没有标注
+     * {@code @BizAuth}——{@code PT_RESOURCE} 虽已登记（{@code RES_ALLOC_PREVIEW}），
+     * 但鉴权 AOP 依赖方法级注解触发校验，未标注则该资源登记形同虚设，
+     * 实际访问控制强度弱于本模块其余所有端点，仅剩最外层登录态过滤器。
+     * 本规则把"必须标注"从口头约定升级为架构守护，防止同类回归再次滑入生产。
+     */
+    @ArchTest
+    static final ArchRule allControllerMethods_mustHaveBizAuth =
+        methods()
+          .that().areDeclaredInClassesThat().haveSimpleNameEndingWith("Controller")
+          .and().arePublic()
+          .should().beAnnotatedWith(BizAuth.class);
 }

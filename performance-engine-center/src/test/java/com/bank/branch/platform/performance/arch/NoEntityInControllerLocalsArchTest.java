@@ -1,9 +1,13 @@
 package com.bank.branch.platform.performance.arch;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+
+import java.util.Set;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
@@ -48,6 +52,14 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  *
  * <p><b>对照</b> {@link NoEntityInControllerArchTest} 聚焦返回类型；本测试聚焦
  * Controller 类级别的 import / 依赖，两者互补。
+ *
+ * <p><b>2026-07-19 修复</b>：原规则的包名匹配 {@code ..performance.controller..} /
+ * {@code ..performance.entity..} 是按"相邻包段"做字面匹配的，无法覆盖 eval 子域
+ * {@code performance.eval.controller} / {@code performance.eval.entity}
+ * （中间多了一级 {@code eval}，不是相邻段）——已改为 {@code resideInAnyPackage}
+ * 显式枚举两套子域的包路径。拓宽后 eval 侧多个 Controller 类暴露出对 entity
+ * 的直接依赖（历史遗留，未走 DTO 装配），已通过 {@link #FROZEN_EXEMPT_CONTROLLERS}
+ * 显式冻结为存量技术债——**只允许清单内的类沿用旧写法，新增违规一律禁止**。
  */
 @AnalyzeClasses(
         packages = "com.bank.branch.platform.performance",
@@ -55,13 +67,42 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 public class NoEntityInControllerLocalsArchTest {
 
     /**
-     * Controller 层不得依赖 entity 包（V1.3 加强守护）.
+     * 存量技术债冻结清单（2026-07-19）.
+     *
+     * <p>与 {@link NoEntityInControllerArchTest#FROZEN_VIOLATIONS} 对应的类级别冻结——
+     * 本测试按"类是否依赖 entity 包"判定，粒度是整个 Controller 类而非单个方法，
+     * 故清单以全限定类名登记。后续如有余力应逐个改造为只依赖 DTO 并从本清单移除。
+     */
+    private static final Set<String> FROZEN_EXEMPT_CONTROLLERS = Set.of(
+            "com.bank.branch.platform.performance.eval.controller.EvalAssignBatchController",
+            "com.bank.branch.platform.performance.eval.controller.EvalRewardAdminController",
+            "com.bank.branch.platform.performance.eval.controller.EvalRuleController",
+            "com.bank.branch.platform.performance.eval.controller.EvalScoreController",
+            "com.bank.branch.platform.performance.eval.controller.EvalTagController",
+            "com.bank.branch.platform.performance.eval.controller.EvalTaskController",
+            "com.bank.branch.platform.performance.eval.controller.EvalUserTagController"
+    );
+
+    private static final DescribedPredicate<JavaClass> NOT_FROZEN_EXEMPT =
+            new DescribedPredicate<JavaClass>("not in 2026-07-19 frozen entity-locals exemption list") {
+                @Override
+                public boolean test(JavaClass input) {
+                    return !FROZEN_EXEMPT_CONTROLLERS.contains(input.getFullName());
+                }
+            };
+
+    /**
+     * Controller 层不得依赖 entity 包（V1.3 加强守护；2026-07-19 扩到 eval 子域）.
      */
     @ArchTest
     public static final ArchRule controllers_shouldNot_dependOn_entity_classes =
             noClasses()
-                    .that().resideInAPackage("..performance.controller..")
+                    .that().resideInAnyPackage(
+                            "..performance.controller..", "..performance.eval.controller..")
+                    .and(NOT_FROZEN_EXEMPT)
                     .should().dependOnClassesThat()
-                    .resideInAPackage("..performance.entity..")
-                    .because("Controller 层不得感知 entity（包括 import、局部变量、字段、泛型）V1.3 R4.1 加强守护");
+                    .resideInAnyPackage(
+                            "..performance.entity..", "..performance.eval.entity..")
+                    .because("Controller 层不得感知 entity（包括 import、局部变量、字段、泛型）"
+                            + "V1.3 R4.1 加强守护，2026-07-19 扩到 eval 子域并冻结存量违规");
 }

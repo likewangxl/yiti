@@ -23,7 +23,7 @@
 - `06-并发与事务策略.md`：审批回写和后置同步链路。
 - `09-依赖契约摘要.md`：上游依赖与事件消费差异。
 - `原业绩分配预览查询口径.md`：分配预览查询口径补充说明。
-- eval/REWARD 子域现状：`docs/schema/ddl-eval.sql` + `docs/superpowers/specs/2026-07-11-eval-reward-assign-design.md` + `../../../performance-engine-center/CLAUDE.md`（模块根 CLAUDE.md 有完整变更日志）。
+- eval/REWARD 子域现状：`docs/schema/ddl-eval.sql` + `docs/superpowers/specs/2026-07-11-eval-reward-assign-design.md` + `../../../performance-engine-center/CLAUDE.md`（历史演进见 git log）。
 
 ## 覆盖关系
 

@@ -1,10 +1,17 @@
 # 客户营销中心 — 对外 API 契约
 
-> 版本：v1.0
-> 最后更新：2026-04-10
+> 版本：v1.1
+> 最后更新：2026-07-19
 > 模块编码：customer-marketing-center
 > 本文约束 `customer-marketing-center` 对外暴露的所有 API 接口、DTO 结构、调用约束、领域事件
 > 所有外部模块（business-application-center / performance-engine-center / report-analytics-center / workflow-center）必须通过本文定义的接口访问本模块数据
+>
+> **2026-07-19 回填说明**：本次依据源码对 `api/` 包与 `event/` 包（注意：事件类实际包路径是
+> `com.bank.branch.platform.customer.event`，并非 `api/event`）做全量核对。`CustomerQueryApi` /
+> `LeadApi` / `TagApi` / `ClaimApi` / `TouchTaskQueryApi` 五个接口定义与源码基本一致，仅补齐
+> §1.1 遗漏的 `getCustomerByCustNo` 方法；§8 领域事件按 V1.11.1（2026-05-01，方向 C 修复）核实重写——
+> `LeadApprovedEvent`/`ClaimCreatedEvent` 已删除，事件驱动改为同步方法调用，详见 §8.2.1/§8.2.3 订正说明；
+> 现存 5 个事件类的字段列表已按真实源码逐一订正（原文档字段多为设计态超集，与实际 `@Data` POJO 不符）。
 
 ---
 
@@ -71,6 +78,17 @@ public interface CustomerQueryApi {
      * @return 客户 DTO，不存在时返回 Optional.empty()
      */
     Optional<CustomerDTO> getCustomer(String custId);
+
+    /**
+     * 按客户编号（cust_no）获取客户详情
+     *
+     * 2026-07-19 回填：源码已有此方法，此前文档遗漏未收录。
+     * 区别于 {@link #getCustomer(String)} 的内部 ID 主键查询，供上游模块按业务编号查询客户时使用。
+     *
+     * @param custNo 客户编号（cust_master.cust_no 列）
+     * @return 客户 DTO，不存在时返回 Optional.empty()
+     */
+    Optional<CustomerDTO> getCustomerByCustNo(String custNo);
 
     /**
      * 批量获取客户信息
@@ -742,172 +760,159 @@ public class TouchTaskSummaryDTO {
 
 ## 8. 领域事件
 
-### 8.1 事件规范
-所有事件基类：
+> **2026-07-19 全量订正**：本节原文档描述的是设计态事件体系（统一 `DomainEvent` 基类 + `eventId`/
+> `traceId`/`version` 元数据 + `.v1` 版本化事件名）。**实际源码不是这样实现的**：
+> `com.bank.branch.platform.customer.event` 包（不是 `api/event`）下的事件类均为独立的
+> `@Data @AllArgsConstructor @NoArgsConstructor` 普通 POJO，**不继承任何公共基类**，没有
+> `eventId`/`traceId`/`aggregateId`/`timestamp`/`source`/`version` 字段，事件类名本身就是标识
+> （不使用 `customer.xxx.v1` 这种字符串事件名，Spring `ApplicationEventPublisher` 按事件的 Java 类型分发）。
+> 以下 §8.1/§8.2 已按源码重写；§8.3/§8.4 描述的幂等/异步/版本化约束当前**均未落地**，标注为已知技术债，
+> 不代表现状。
+
+### 8.1 事件类形态（实际）
 ```java
-public abstract class DomainEvent {
-    protected String eventId;          // UUID
-    protected String eventType;        // 如 customer.lead.approved.v1
-    protected String traceId;          // 链路追踪 ID
-    protected String aggregateId;      // 聚合根 ID
-    protected Long timestamp;          // 事件时间戳
-    protected String source;           // 来源模块：customer-marketing-center
-    protected Integer version;         // 事件版本号
+package com.bank.branch.platform.customer.event;
+
+// 无公共基类，每个事件独立定义，示例（TouchCompletedEvent）：
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class TouchCompletedEvent {
+    private String taskId;
+    private String taskNo;
+    private String custId;
+    private String assigneeEmpId;
+    private String taskType;
 }
 ```
+发布方式：`ApplicationEventPublisher.publishEvent(event)`，消费方用 `@TransactionalEventListener(phase = AFTER_COMMIT)` 监听具体 Java 类型。
 
-### 8.2 事件清单
+### 8.2 事件清单（源码现状，2026-07-19 核实）
 
-#### 8.2.1 customer.lead.approved.v1 — 线索审批通过
-**发布时机**：线索审批流程结束且结果为通过
-**发布方**：`customer-marketing-center` → `workflow-center` 流程回调
-**消费方**：
-- **自身**：`LeadApprovedListener` → 创建/更新 `cust_master` → 进入待认领池
-- `report-analytics-center`：统计维度更新
+#### 8.2.1 ~~customer.lead.approved.v1~~ — 已删除（V1.11.1，2026-05-01）
+**订正**：`LeadApprovedEvent` 类及其监听器 `LeadApprovedListener` 已在 V1.11.1（方向 C 修复，见
+`customer-marketing-center/CLAUDE.md`「线索审批回调」一节）**删除**，不再以事件形式存在。
+根因：`@TransactionalEventListener(AFTER_COMMIT)` 嵌套 `@Transactional(REQUIRES_NEW)` 子链路下，
+INSERT 显示 commit 成功但实际未持久化（详见 `docs/superpowers/sessions/2026-05-01-v1.11-1-d0-isolation-diagnosis.md`）。
 
-**事件体**：
+**现状**：`WorkflowCallbackListener` 监听 workflow-center 发布的
+`com.bank.branch.platform.workflow.api.event.ProcessCompletedEvent`
+（`@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`），
+`outcome=APPROVED` 时**直接同步方法调用** `LeadCallbackReconcileService.reconcileApproved(...)`，
+其内部再同步调用 `CustMasterAssemblerService.assembleFromLead(...)` 完成 `cust_master` 装配
+（CREATE/UPDATE/DELETE 按 `leadOp` 分支），**不再发布任何下游事件**。
+`LeadCallbackCompensationService`（Quartz 补偿扫描，`job_key=LEAD_CALLBACK_COMPENSATE`）复用同一套
+`reconcileApproved` 逻辑作为兜底。
+
+#### 8.2.2 LeadRejectedEvent — 线索审批驳回
+**发布时机**：`WorkflowCallbackListener` 收到 `outcome=REJECTED` 的 `ProcessCompletedEvent`，委托
+`LeadCallbackReconcileService.reconcileRejected(...)` 仅推进线索状态（不做 `cust_master` 装配），
+随后发布本事件。
+**消费方**：**当前 V1 无任何监听器消费**（源码内 grep 确认），保留扩展点（如驳回通知、驳回审计）。
+
+**事件体（真实字段，`event/LeadRejectedEvent.java`）**：
 ```java
-public class LeadApprovedEvent extends DomainEvent {
-    private String leadId;               // 线索 ID
-    private String importBatchId;        // 批次 ID（可空，单条线索为空）
-    private String leadOp;               // CREATE/UPDATE/DELETE
-    private String custName;             // 客户名称
-    private String sourceCustId;         // 来源客户 ID（UPDATE/DELETE 时）
-    private String ownerOrgId;           // 归属机构
-    private String approverId;           // 审批人 ID
-    private LocalDateTime approvedAt;    // 审批通过时间
-    // ... 其他字段
-}
-```
-
-#### 8.2.2 customer.lead.rejected.v1 — 线索审批驳回
-**发布时机**：线索审批驳回
-**消费方**：自身（更新状态）+ 通知系统
-
-**事件体**：
-```java
-public class LeadRejectedEvent extends DomainEvent {
+public class LeadRejectedEvent {
     private String leadId;
-    private String importBatchId;
-    private String approverId;
-    private String rejectReason;
-    private LocalDateTime rejectedAt;
+    private String leadNo;
+    private String leadOp;        // CREATE/UPDATE/DELETE
+    private String sourceCustId;  // UPDATE/DELETE 时有值
+    private String ownerOrgId;
+    private String rejectReason;  // 来自 ProcessCompletedEvent.reason，可为 null
+    private String operatorEmpId;
 }
 ```
+**订正**：原文档字段 `importBatchId`/`approverId`/`rejectedAt` 均不存在；真实字段是
+`leadNo`/`leadOp`/`sourceCustId`/`ownerOrgId`/`operatorEmpId`。
 
-#### 8.2.3 customer.claim.created.v1 — 客户被认领
-**发布时机**：客户被机构成功认领
-**消费方**：
-- **自身**：`ClaimCreatedListener` → 创建 `FIRST_TOUCH` 触达任务
-- `performance-engine-center`：记录分配关系
-- `report-analytics-center`：更新统计
+#### 8.2.3 ~~customer.claim.created.v1~~ — 已删除（V1.11.1，2026-05-01）
+**订正**：`ClaimCreatedEvent` 类及其监听器 `ClaimCreatedListener` 已删除，原因与 8.2.1 相同
+（AFTER_COMMIT 嵌套事件时序坑）。
+**现状**：`ClaimService.claim()` 认领成功后**同步方法调用** `TouchTaskService.createFromClaim(...)`
+创建 `FIRST_TOUCH` 首次触达任务，不再发布事件。
 
-**事件体**：
+#### 8.2.4 ClaimCancelledEvent — 客户取消认领
+**发布时机**：`ClaimService.cancelClaim()` 取消认领成功后。
+**消费方**：模块内**当前无监听器**消费（跨模块 business-application-center/performance-engine-center/
+report-analytics-center 是否消费需以各自模块源码为准，本模块无法验证）。
+
+**事件体（真实字段，`event/ClaimCancelledEvent.java`）**：
 ```java
-public class ClaimCreatedEvent extends DomainEvent {
-    private String claimId;
-    private String custId;
-    private String custName;
-    private String orgId;
-    private String orgName;
-    private String maintainerEmpId;
-    private String maintainerEmpName;
-    private LocalDateTime claimedAt;
-}
-```
-
-#### 8.2.4 customer.claim.cancelled.v1 — 客户取消认领
-**发布时机**：客户取消认领
-**消费方**：
-- `business-application-center`：清缓存
-- `performance-engine-center`：分配关系调整
-- `report-analytics-center`：统计更新
-
-**事件体**：
-```java
-public class ClaimCancelledEvent extends DomainEvent {
+public class ClaimCancelledEvent {
     private String claimId;
     private String custId;
     private String orgId;
-    private String maintainerEmpId;
     private String cancelReason;
     private String operatorEmpId;
-    private LocalDateTime cancelledAt;
 }
 ```
+**订正**：原文档的 `maintainerEmpId`/`cancelledAt` 字段不存在。
 
-#### 8.2.5 customer.claim.transferred.v1 — 客户转交
-**发布时机**：客户转交维护负责人
-**消费方**：
-- `performance-engine-center`：绩效归属调整
-- `report-analytics-center`：统计更新
+#### 8.2.5 ClaimTransferredEvent — 客户转交
+**发布时机**：`CustomerService.transfer()` 转交维护人成功后。
+**消费方**：模块内当前无监听器消费。
 
-**事件体**：
+**事件体（真实字段，`event/ClaimTransferredEvent.java`）**：
 ```java
-public class ClaimTransferredEvent extends DomainEvent {
+public class ClaimTransferredEvent {
     private String claimId;
     private String custId;
-    private String orgId;
     private String fromEmpId;
     private String toEmpId;
-    private String reason;
     private String operatorEmpId;
-    private LocalDateTime transferredAt;
 }
 ```
+**订正**：原文档的 `orgId`/`reason`/`transferredAt` 字段不存在——注意转交原因（`reason`，高危操作必填）
+**未被携带进事件体**，仅落在 `@AuditLog` 审计记录里。
 
-#### 8.2.6 customer.touch.completed.v1 — 触达完成
-**发布时机**：触达任务成功或取消
-**消费方**：
-- `business-application-center`：可能触发中场支持的后续流程
-- `performance-engine-center`：触达数据作为绩效输入
-- `report-analytics-center`：报表更新
-- `portal-content-center`：通知
+#### 8.2.6 TouchCompletedEvent — 触达任务完成
+**发布时机**：**仅** `TouchTaskService.markSuccess()` 标记成功后发布。
+**订正（重要）**：`TouchTaskService.cancel()`（取消触达）**不发布此事件**，原文档「发布时机：触达任务
+成功或取消」不准确，取消场景没有任何事件发布。
+**消费方**：模块内 `TouchTaskCompletedListener`（`@TransactionalEventListener(AFTER_COMMIT)`），
+**当前实现仅记录日志**，未创建后续跟进任务或更新统计（源码注释明确标注为预留扩展点）。
+跨模块（business-application-center/performance-engine-center/report-analytics-center/
+portal-content-center）是否消费需以各自模块源码为准。
 
-**事件体**：
+**事件体（真实字段，`event/TouchCompletedEvent.java`）**：
 ```java
-public class TouchCompletedEvent extends DomainEvent {
-    private String touchTaskId;
+public class TouchCompletedEvent {
+    private String taskId;
+    private String taskNo;
     private String custId;
-    private String custName;
-    private String orgId;
     private String assigneeEmpId;
-    private String taskType;             // FIRST_TOUCH/FOLLOW_UP
-    private String finishResult;         // SUCCESS/CANCELLED
-    private String logContent;           // 日志摘要（前 200 字符）
-    private Integer photoCount;          // 照片数量
-    private LocalDateTime finishedAt;
+    private String taskType;      // FIRST_TOUCH/FOLLOW_UP
 }
 ```
+**订正**：原文档字段 `touchTaskId`（应为 `taskId`）/`custName`/`orgId`/`finishResult`/`logContent`/
+`photoCount`/`finishedAt` 均不存在，字段少得多。
 
-#### 8.2.7 customer.customer.deleted.v1 — 客户删除审批通过
-**发布时机**：客户删除审批流程通过
-**消费方**：
-- `performance-engine-center`：清缓存 + 归档分配关系
-- `report-analytics-center`：清缓存 + 归档
+#### 8.2.7 CustomerDeletedEvent — 客户删除
+**发布时机**：`CustMasterAssemblerService` 处理线索 `leadOp=DELETE` 审批通过、完成 `cust_master`
+逻辑删除（`status=INACTIVE`、`deleted=1`）后发布，**不是**由 workflow 直接触发。
+**消费方**：模块内当前无监听器消费。
 
-**事件体**：
+**事件体（真实字段，`event/CustomerDeletedEvent.java`）**：
 ```java
-public class CustomerDeletedEvent extends DomainEvent {
+public class CustomerDeletedEvent {
     private String custId;
-    private String custName;
-    private String leadId;               // 触发删除的线索 ID
+    private String custNo;
     private String operatorEmpId;
-    private String reason;
-    private LocalDateTime deletedAt;
 }
 ```
+**订正**：原文档字段 `custName`/`leadId`/`reason`/`deletedAt` 均不存在。
 
-### 8.3 事件消费约束
-- **幂等消费**：所有消费方必须保证幂等（使用 `eventId` 去重）
-- **异步处理**：使用 `@Async` + `@TransactionalEventListener(AFTER_COMMIT)`
-- **失败重试**：消费失败必须记录到失败表，由定时任务重试
-- **事件顺序**：不依赖事件顺序（同一聚合根事件可能乱序）
-- **版本升级**：发布方新增 `.v2` 事件时保留 `.v1` 至少 2 个版本周期
+### 8.3 事件消费约束（设计态，尚未落地——已知技术债）
+以下为原文档设定的目标规范，**当前源码均未实现**，仅保留作为后续演进方向参考：
+- **幂等消费**：无 `eventId`，当前无法做去重；如需幂等消费需消费方自行基于业务字段（如 `claimId`/`taskId`）实现。
+- **异步处理**：仅用 `@TransactionalEventListener(AFTER_COMMIT)`，**未叠加 `@Async`**（进程内同步分发监听器，只是在事务提交后触发）。
+- **失败重试**：无失败记录表、无定时任务重试机制。
+- **事件顺序**：不依赖事件顺序，此点符合实际。
+- **版本升级**：事件类名无版本号后缀，新增字段需自行评估兼容性。
 
 ### 8.4 事件总线实现
-- **开发阶段**：Spring `ApplicationEventPublisher`（进程内）
-- **生产阶段（未来）**：可升级到 MQ（Kafka/RocketMQ），事件结构保持不变
+- **当前实现**：Spring `ApplicationEventPublisher`（进程内，同步注册 + `AFTER_COMMIT` 阶段触发），与原文档描述一致。
+- **生产阶段（未来）**：可升级到 MQ（Kafka/RocketMQ），但需先补齐 §8.3 列出的幂等/重试机制。
 
 ---
 

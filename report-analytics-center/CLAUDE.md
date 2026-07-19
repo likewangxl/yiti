@@ -1,338 +1,66 @@
 # report-analytics-center/ CLAUDE.md
 
-本文件为 `report-analytics-center` 模块提供上下文说明。
-
-> ⚠️ **Flyway 已彻底废弃**（详见根 [CLAUDE.md](../CLAUDE.md) "Flyway 禁令"红线）。
-> 本文件下方提到的 `V1_0_X__rpt_*.sql` 系列迁移脚本、`ReportFlywayTestBase` 测试基类、
-> `V1_0_*FlywayIT` 等内容仅作为**历史档案**保留，对应文件已从源码中删除。
-> 新增 schema 变更请直接以 SQL 在目标库执行，**禁止**重新引入 Flyway。
+本文件为 `report-analytics-center` 模块（报表分析中心）提供开发指导，是本目录唯一权威来源。
 
 ## 模块概述
 
-**report-analytics-center** 是报表分析中心（支撑域，**只读**模块），为整个平台提供动态查询 / 仪表盘 / 汇总报表 / SQL 探查 / 异步导出能力。
+**report-analytics-center** 是报表分析中心（支撑域，**只读**模块），基础包名 `com.bank.branch.platform.report`，Maven 坐标 `com.bank.branch.platform:report-analytics-center`。
 
-**当前版本**: V1.0（2026-04-25 交付）
+模块覆盖以下子域，均为只读聚合/查询，不承载业务写事务（自身自有表除外）：
 
-V1.0 交付内容：
-- 24 REST 接口（query-dimensions / dynamic-query / saved-queries×4 / dashboard×3 / 3 类汇总×2 + 4 SQL 探查 + 3 export-tasks + 1 占位 = 25 PT_RESOURCE）
-- 4 张自有表（rpt_saved_query / rpt_snapshot_task / sql_probe_history / rpt_export_task）
-- 4 个 ExportStrategy（DYNAMIC_QUERY / TOUCH_SUMMARY / PERF_SUMMARY / CUSTPOOL_SUMMARY，走 governance.FileApi.upload 真实上传 MinIO）
-- SQL 探查（独立 readOnlyDataSource + JSqlParser AST 校验 + 双写审计）
-- 30 条 RptErrorCode（25 基线 + 5 J 章扩展）
-- DATA_SCOPE 7 类映射在仪表盘 / 汇总报表 / SQL 探查 3 处生效
+- **传统报表 + 导出**：查询维度元数据、动态查询、已保存查询 CRUD、仪表盘（分行/机构/员工三级）、触达/绩效/客户池三类汇总报表，均支持异步导出任务。
+- **screen 大屏子域**：经营管理大屏（三级视角 + 全配置化数据源）+ 画布设计器（拖拽式所见即所得，草稿/发布双态 + 乐观锁）+ 大屏运行时渲染。
+- **自由报表（FreeReport）**：Excel 导入动态列展示 + 批次管理 + 下载。
+- **数据湖查询**：只读消费 `DATALAKE_XAN_*` 系列外部表（对公/个人存贷款账户、资产负债分配关系），当前以 `DatalakeQueryService` 形式存在，尚无独立 REST Controller 暴露；批次核对场景由 `DataImportQueryController`（`amas_dt_import_*` 明细/汇总）承接。
+- **AMAS 审批查询**：定价审批、业绩调整审批历史、分配调整申请历史（含预览）、公告查询。
+- **DataScope picker**：`ReportScopeController` 提供报表数据范围（数据范围选择器）统一入口供前端复用。
 
-**基础包名**: `com.bank.branch.platform.report`
-**Maven 坐标**: `com.bank.branch.platform:report-analytics-center`
-
-**Spec / Plan**: `docs/superpowers/plans/2026-04-25-report-analytics-center-v1.0-plan.md`
-
-> 2026-07-12 screen 子域：经营管理大屏（三级视角 + 全配置化）——新增 4 张配置表
-> `RPT_SCREEN_DATASOURCE`/`RPT_SCREEN`/`RPT_SCREEN_BLOCK`/`RPT_SCREEN_MAP_POINT`（MyBatis-Plus），
-> 查询执行引擎 `ScreenQueryEngine` 走 rptReadOnlyDataSource + 表白名单直查（D1 决策，白名单见
-> `rpt.screen.whitelist-tables` 默认值），三类数据源（宽表引导/KPI引导/自定义SQL#{param}占位）。
-> 13 API 资源 + 2 菜单（R_RPT_SCR_*/M_RPT_SCR_*），错误码 RPT-43001~43009。
-> 前端 /screen/:screenCode 全屏深色三级大屏（陕西地图+钻取+跳转）+ 两个配置后台页。
-> DDL/资源/种子脚本：docs/superpowers/sql/2026-07-12-screen-dashboard-{ddl,resources,seed}.sql。
-> spec/plan：docs/superpowers/specs/2026-07-12-screen-dashboard-design.md /
-> docs/superpowers/plans/2026-07-12-screen-dashboard-impl.md。
-
-> 2026-07-12 screen 子域 V2：大屏画布设计器（拖拽式所见即所得，替代 V1 行块布局配置台）——
-> `RPT_SCREEN` 增补 7 列双态字段：`canvas_style_json`（画布全局样式，含 schemaVersion）/
-> `canvas_draft_json`（草稿态组件树，编辑器唯一读写对象）/ `canvas_published_json`（发布态渲染包，
-> 线上与预览只读）/ `canvas_version`（真乐观锁，保存时 `WHERE canvas_version=?` 冲突即 RPT-43012）/
-> `publish_status`（0未发布/1已发布/2已发布但有未发布修改）/ `published_at` / `published_by`；
-> 新表 `RPT_SCREEN_PUBLISH_LOG`（发布归档，按屏滚动保留最近 10 份，回滚用）。
-> 管理端 6 端点 `/api/screen/admin/canvas/*`（`ScreenCanvasAdminController`）：
-> `GET /{id}` 加载 / `POST /save` 保存草稿(乐观锁) / `POST /publish` 发布(高危：结构化一致性校验+
-> 合成渲染包+归档+审计) / `POST /rollback` 回滚(高危：从归档恢复) / `POST /discard` 放弃草稿(发布态
-> 覆盖草稿) / `GET /{id}/publish-logs` 发布归档列表。6 条新 PT_RESOURCE：`R_RPT_SCR_CV_GET/SAVE/
-> PUB/RB/DISC/LOG`（load/save/discard/log 复用 `R_RPT_SCR_CFG_SAVE` 角色集；publish/rollback 独立
-> 高危，复用 `R_RPT_SQL_EXEC` 角色集；`R_ADMIN` 全量兜底）。新错误码 `RPT-43012
-> SCREEN_CANVAS_CONFLICT`（画布保存冲突）+ 取数上下文 `RPT-43010/43011`。
-> 渲染改读：`ScreenViewController` 由读行块布局改为读 `canvas_published_json`
-> （`?preview=draft` 走草稿，需登录 + 管理端菜单门禁，V1.1 待补独立校验 `R_RPT_SCR_CV_GET`，
-> 现阶段 3 屏开发测试态可接受，无敏感数据）；无 fallback，旧 Designer 组件与行块渲染分支已删除。
-> 前端 `xanzc_frontend/src/views/screen/designer/`：`DesignerV2.vue` 三栏（组件面板/画布/属性面板）+
-> `canvas/`（CanvasCore 拖拽缩放/Shape 8点缩放/MarkLine 吸附/ContextMenu 右键菜单）+
-> `panels/`（ComponentPanel/LayerPanel/CommonAttr/CanvasAttr）+ `widgets/` 两层注册
-> （`componentsMap` 手写字典 5 素材：TextLabel/ImageBox/RectShape/BorderDecor/ClockWidget +
-> `import.meta.glob` 自动扫描 9 图表：area-stack/bar-compare/flow-status/gauge/line-trend/
-> metric-card/pie-share/rank-list/table-list + MapCenter 复用运行时组件，不入拖拽面板） +
-> `utils/`（scale/snap/snapshotStack(undo/redo)/clipboard 4 个纯函数模块）；
-> `src/api/screen.js` 新增 6 个画布 API 函数；vitest 新增 designer 相关用例。
-> DDL/资源/种子脚本：`docs/superpowers/sql/2026-07-12-screen-canvas-{ddl,resources}.sql` +
-> `docs/superpowers/sql/2026-07-13-screen-canvas-seed.sql`（三屏经画布管理端 API 实测重配发布后
-> 导出，非直接 UPDATE；执行前置链见该脚本头注释，严禁跳过/乱序）。
-> spec/plan：`docs/superpowers/specs/2026-07-12-screen-canvas-designer-design.md` /
-> `docs/superpowers/plans/2026-07-12-screen-canvas-designer-impl.md`。
-> 已知遗留（非一期阻塞，V1.1 待跟进）：`?preview=draft` 当前仅"登录 + 管理端菜单门禁"即可见草稿，
-> 未做独立资源校验（若草稿未来承载敏感数据需补 `R_RPT_SCR_CV_GET` 专项校验）；
-> `discardDraft` 未做前置状态校验、也绕过乐观锁（plan-mandated，未发布屏 discard 会写空草稿并误标已发布）。
-
-> 2026-07-13 设计器 V2 页面整改（纯前端，后端/SQL 零改动）：①设计器路由声明 `meta.fullBleed`，
-> `DefaultLayout` 对其去内容区 padding，`DesignerV2` 高度改 `100%`（原写死 `calc(100vh - 60px)`
-> 与壳层实际 52+40+32px 不符，超高 64px 致整页滚动条）；②`CommonAttr` 数字输入改
-> `controls-position="right"` + 宽度铺满、右栏 260→300px（修 X/Y/宽/高输入被截断）；
-> ③首屏加载完自动"适应窗口"；④工具条新增「新建大屏」弹框（复用既有
-> `POST /api/screen/admin/screens` upsert 端点与 `R_RPT_SCR_CFG_SAVE` 资源，id/screenCode
-> 留空走后端新建分支自动生成 `SCR_XXXXXXXX`）。vitest 53→60（新增 7 条：新建流程×2/
-> 自动适应×1/CommonAttr 模板契约×1/DefaultLayout full-bleed 契约×3）。
-> 操作指南同步：`docs/modules/report-analytics-center/10-大屏设计器操作指南.md`。
-
-> 2026-07-17/18 screen 子域 V3：设计器扩充（借鉴 DataEase）+ KPI 明细数据源 + DATA_SCOPE——
-> spec：`docs/superpowers/specs/2026-07-17-screen-designer-expansion-design.md`。
-> **后端**：①新 source_kind=`KPI_DETAIL`（PERF_KPI_SCORE T+1 快照；SNAPSHOT 细项明细含完成率/缺口
-> 现算列、TREND 按细项 CASE WHEN 透视，valueCol=score|completeRate）；`PERF_KPI_SCORE`/`PERF_KPI_SCHEME`
-> 入白名单；新端点 `GET /api/screen/admin/kpi-schemes`（资源 `R_RPT_SCR_KPI_SCH`，Mapper 名为
-> `ScreenKpiSchemeMapper`——**勿改回 PerfKpiSchemeMapper，与 performance 模块同名 Mapper 会在 bootstrap
-> 合体时 ConflictingBeanDefinitionException**）；②config_json 增 `fieldMeta`（别名/DIM|METRIC/单位/小数位，
-> 响应新增可选 `columnsMeta`）与 WIDE_TABLE `aggregation`（groupBy NONE|SUBJECT|DATE + SUM/AVG/... +
-> filters op 白名单全 ? 绑定），`support/ScreenConfigSchema` 集中 schemaVersion 读时兼容；③取数
-> DATA_SCOPE：`ScreenDataScopeGuard`（BizType=REPORT 并集取最大，SELF/ORG/ORG_SUBTREE 校验
-> contextParams 归属，fail-close 新错误码 **RPT-43013**；config_json `scopeMode:GLOBAL` 需 ALL/省级）。
-> **前端**：图表 innerType 扩到 13 种（启用 BAR_COMPARE/AREA_STACK/GAUGE/TABLE_LIST + 新增
-> KPI_DETAIL_TABLE/KPI_RADAR/LIQUID_PROGRESS(自绘零依赖)/PROGRESS_LIST，KPI 类 needKinds 限绑
-> KPI_DETAIL）；素材新增 TitleBar/DecorLine/Marquee + BorderDecor 扩到 6 种 + 画布/组件渐变与图片背景；
-> 画布多选/框选/成组(Group 节点)/对齐分布/图层拖拽排序/组件改名；`PeriodFilter` 全屏周期过滤器
-> （每屏 ≤1 后端校验，TIMESERIES 图表联动刷新）；数据源管理页适配全部新配置。
-> **坑**：`.scr-block` 必须 height:100%（否则 echarts 组件 0 高 canvas 静默空白，
-> `ScreenBlockHeight.spec.js` 契约守护）。SQL/种子：`docs/superpowers/sql/2026-07-18-screen-expansion-*.sql`
-> （资源+BIZ_SCOPE 对齐、SCRDS_SEED08~11、三屏重配发布导出）。测试基线：模块 316 用例、
-> 9 个 pre-existing 失败（Dashboard×7 + NoEntityInController Arch×2，均与 screen 无关）；vitest 269 条。
-
-## 红线（不被任何业务模块依赖）
+## 依赖关系
 
 `report-analytics-center` 是**只读**模块，**禁止**被任何业务模块依赖：
-- 业务模块如需查询报表数据，**直接调上游 *Api**（不经 report 中转）
-- report 没有任何 `*Api` 接口对外暴露（`api/` 目录仅占位 `package-info.java`）
-- 架构守护：`RptModuleStructureArchTest`（报表 `api/` 目录禁出现 `*Api.java` 文件）
+- 业务模块如需查询报表数据，**直接调上游 `*Api`**（不经 report 中转）
+- report 自身**不暴露**任何 `*Api`（`api/` 目录仅占位 `package-info.java`）
+- 只读消费 `auth-permission-center`（`CurrentUserApi` / `BizScopeApi` / `OrgApi`）、`system-governance-center`（`DictApi` / `AuditApi` / `FileApi`）、`performance-engine-center`（`MetricApi` / `KpiApi`）、`customer-marketing-center`（`CustomerQueryApi` / `TouchTaskQueryApi`）的 `*Api`
 
-## 跨模块依赖
+## 架构规则与红线
 
-V1.0 报表只读消费 4 个上游模块的 *Api（共 10 个接口）：
+1. 只读模块定位是根 [CLAUDE.md](../CLAUDE.md) 已声明的架构规则，本模块严格重申：不被业务模块依赖、不对外暴露 `*Api`，架构守护 `RptModuleStructureArchTest` 强制 `api/` 目录禁出现 `*Api.java`
+2. Controller 公共方法必须标注 `@BizAuth` 且 `bizType` 必须为 `BizType.REPORT`（`RptBizAuthConsistencyArchTest` 现含两条规则：单档 bizType 校验 + 2026-07-19 起新增"必须标注"强制覆盖率校验，后者由 `AllocPreviewController` 缺鉴权事件触发补上，见下节"关键实现要点与踩坑"）
+3. Controller 方法签名/局部变量禁出现 Entity（`RptNoEntityInControllerArchTest` / `RptNoEntityInControllerLocalsArchTest`）
+4. facade 测试禁用 `assertThrows(UnsupportedOperationException.class, ...)` 及 "V1.1 delivered" 占位字面量（`RptNoUoeInFacadeTestsArchTest` / `RptNoV11UOEArchTest`）
+5. 跨模块调用一律走对方 `*Api`；schema/PT_RESOURCE 变更走手工 SQL（Flyway 已彻底废弃，详见根 CLAUDE.md "Flyway 禁令"红线）
 
-| 上游模块 | *Api | 用途 |
-|---|---|---|
-| auth-permission-center | CurrentUserApi | 当前用户 empId（导出归属、审计 operatorId）|
-| auth-permission-center | BizScopeApi | DATA_SCOPE 7 类型查询 |
-| auth-permission-center | OrgApi | 机构层级（仪表盘 ORG / ORG_SUBTREE）|
-| governance | DictApi | 字典翻译（动态查询元数据 metaTree 节点）|
-| governance | AuditApi | 双写审计（SQL 探查 / 异步导出 / 仪表盘 READ）|
-| governance | FileApi | 对象存储上传（governance 已从 MinIO 迁移至华为云 OBS；4 ExportStrategy upload + getDownloadUrl 拉预签名 URL）|
-| performance | MetricApi | 指标查询（仪表盘 + 动态查询）|
-| performance | KpiApi | KPI 查询（PerfSummary）|
-| customer-marketing | CustomerQueryApi | 客户池查询（CustPoolSummary）|
-| customer-marketing | TouchTaskQueryApi | 触达任务查询（TouchSummary）|
+## 关键实现要点与踩坑
 
-## 包结构
+- **`AllocPreviewController` 鉴权缺失反例（已于 2026-07-19 修复，保留为历史教训）**：该 Controller（`GET /api/report/alloc-preview`）曾**完全没有** `@BizAuth`，也没有类级 `@RequestMapping`（路径直接写在方法注解里）——`PT_RESOURCE` 早已登记 `RES_ALLOC_PREVIEW`，但因方法未标注注解，鉴权 AOP 实际不拦截，运行期访问控制强度弱于本模块其余所有端点。TDD 修复：先在 `RptBizAuthConsistencyArchTest` 新增"Controller 公共方法必须标注 `@BizAuth`"规则并跑 Red（仅 `AllocPreviewController.preview` 命中），再补 `@BizAuth(bizType = BizType.REPORT, action = BizAction.READ)` + 类级 `@RequestMapping("/api/report")`（方法级 `@GetMapping("/alloc-preview")`，总 URL 与修复前完全一致，仍是历史遗留的单数 `/api/report/`，未改为 `/api/reports/`）转 Green。新增功能不要照抄这个历史反例，务必对齐惯例主动补 `@BizAuth`。
+- **FreeReport 故意不清理旧 OBS 文件**：`FreeReportServiceImpl.importExcel` 在 `@Transactional` 内先删同操作人的同名旧批次记录（`RPT_FREE_REPORT_BATCH`/`ROW`），但**故意不删旧对象存储文件**——MD5 去重下新旧批次可能共享同一 `FILE_OBJECT`，删旧文件会误删新批次仍在用的对象；且对已不存在记录调 `fileApi.deleteFile` 会抛异常，把事务标记为 rollback-only 致整单回滚。旧对象留存视为可接受的孤儿。
+- **外部只读表边界**：`AMAS_*`（定价/业绩调整审批、审批流程记录）、`amas_dt_import_*`（数据导入明细/汇总）、`PERF_ALLOC_ADJUST_*`（分配调整申请/明细）、`DATALAKE_XAN_*`（数据湖对公/个人存贷款账户、资产负债分配关系）、`sys_notice`（公告）均为外部系统/数据湖同步表，不是本仓库其他业务模块的私有表，因此本模块直接建 Mapper 只读消费不违反"跨模块必须走 `*Api`"红线；但这些表 schema 由外部系统掌控，改表结构前须先确认外部契约。
+- **SQL 探查仅 `R_BACK_TECH` 角色独占**：`POST /api/reports/sql-probe/execute`（资源 `R_RPT_SQL_EXEC`）在 `PT_ROLE_RESOURCE` 层面只绑定 `R_BACK_TECH`（中后台科技岗），业务角色不可访问；执行前还要求 reason 必填 + 双写审计（业务历史 `SQL_PROBE_HISTORY` + 治理 `governance.audit_log`）。这是强约束，调整前须先确认合规要求。
+- **`.scr-block` 必须 `height: 100%`，否则 echarts 静默空白**：大屏运行时/设计器的图表宿主容器若无显式 `height:100%` 会随内容塌陷为 0 高，echarts 组件拿到 0 高度 canvas 后**不报错、静默空白**（纯 DOM 类组件因靠内容撑高不受影响）。回归由前端 `xanzc_frontend/src/views/screen/__tests__/ScreenBlockHeight.spec.js` 断言 `_screen-theme.scss` 中 `.scr-block` 顶层声明段含 `height: 100%` 来守护；大屏空白先量 canvas 高度，不要先怀疑取数逻辑。
+- **`ScreenKpiSchemeMapper` 不能改回/合并为 `PerfKpiSchemeMapper`**：大屏 KPI_DETAIL 数据源用的 `ScreenKpiSchemeMapper`（`com.bank.branch.platform.report.mapper`，只读封装 `PerfKpiScheme` 实体）与 performance 模块的 `PerfKpiSchemeMapper`（`com.bank.branch.platform.performance.mapper`）包名不同，但若改成同一个简单类名，`@Mapper` 默认 Bean 名（类名首字母小写）会相同——`bootstrap` 合体启动聚合全部模块到同一 Spring 容器时会抛 `ConflictingBeanDefinitionException`。保持独立类名是有意为之，不要"顺手"合并。
+- **Caffeine CacheManager 是全平台共享 Bean**：`ReportCacheConfig#rptCacheManager()` 标注 `@Primary`，未设置 `cacheNames` 走 dynamic 模式，任意 `@Cacheable("xxx")` 用到的 cache 名都会按本模块的 Caffeine spec（TTL 5 分钟 + maxSize 500）自动创建；其他模块（如 performance-engine 的 `perf:metric_def` 等）的 `@Cacheable` 也会路由到这同一个 Bean。改动本配置（TTL/maxSize/移除 `@Primary`）会影响全平台缓存行为，不是本模块私有配置。
 
-```
-src/main/java/com/bank/branch/platform/report/
-├── api/              # 占位（V1.0 不暴露 Api，仅 package-info.java）
-├── controller/       # REST 控制器（10 个，对应 24 个端点）
-│   ├── MetaController.java                  (A.1)
-│   ├── DynamicQueryController.java          (A.2)
-│   ├── DynamicQueryExportController.java    (A.3 占位)
-│   ├── SavedQueryController.java            (B.1-B.5)
-│   ├── DashboardController.java             (C.1-C.3)
-│   ├── TouchSummaryController.java          (C.4-view + C.4-export)
-│   ├── PerfSummaryController.java           (C.5-view + C.5-export)
-│   ├── CustPoolSummaryController.java       (C.6-view + C.6-export)
-│   ├── RptSqlProbeController.java           (D.1-D.4)
-│   └── RptExportController.java             (E.1-E.3)
-├── facade/           # 跨层编排（RptExportFacade）
-├── service/          # 业务逻辑 + 4 个 ExportStrategy
-│   ├── DashboardService / *Impl
-│   ├── DynamicQueryService / *Impl
-│   ├── SavedQueryService / *Impl
-│   ├── *SummaryService / *Impl × 3（Touch / Perf / CustPool）
-│   ├── SqlProbeService / *Impl
-│   ├── ExportTaskService / *Impl
-│   └── export/
-│       ├── ExportStrategy.java（接口）
-│       ├── RptExportService / *Impl（同步执行状态机）
-│       ├── model/*Row（4 个 EasyExcel 行模型）
-│       └── impl/4 个 *ExportStrategy（DYNAMIC / TOUCH / PERF / CUSTPOOL）
-├── mapper/           # MyBatis Mapper（4 个：RptSavedQueryMapper / RptSnapshotTaskMapper / SqlProbeHistoryMapper / RptExportTaskMapper）
-├── entity/           # 贫血模型（4 个）
-├── enums/            # 错误码 + 状态枚举
-│   └── RptErrorCode.java（45 条 RPT-* 错误码，含 screen 子域 43001-43012）
-├── exception/
-│   └── RptException.java（extends BizException）
-├── config/           # Spring 配置
-│   ├── RptReadOnlyDataSourceConfig.java（独立只读数据源 rptReadOnlyDataSource）
-│   ├── DashboardPresidentMetricsConfig.java
-│   └── ...
-├── support/          # 工具类
-│   ├── SqlSafeValidator.java（JSqlParser 4.9 AST 校验，≥15 边界用例）
-│   └── ByteArrayMultipartFile.java（byte[] → MultipartFile 适配 governance.FileApi.upload）
-└── listener/         # 占位
-```
+## 已知技术债 / 例外
 
-```
-src/main/resources/
-└── mapper/                 # MyBatis XML
-```
+- 通用异步导出（`RptExportService.createTask`）仍是创建即同步执行模型（INSERT PENDING → UPDATE RUNNING → `strategy.execute` 内联生成字节流并调 `governance.FileApi.upload` → UPDATE SUCCESS），未切真异步线程池；SQL 探查导出已独立线程池异步（`sqlProbeExportExecutor`，`RptAsyncConfig`）。`task.fileKey` 持久化的是 `FileObjectDTO.id` 而非对象存储 key，下载走 `fileApi.getDownloadUrl` 拿预签名 URL。
+- `RPT_SNAPSHOT_TASK` 仅建表未启用，启用条件（DAU/仪表盘 P99）另议。
+- `DataScopeType.WORKFLOW_PARTICIPANT` 未在本模块落地（无 `business_key` 列）。
+- 数据湖查询（`DatalakeQueryService`）当前无独立 REST Controller/PT_RESOURCE 暴露，也无对应测试覆盖，属基础设施先行、对外查询接口待补。
+- 大屏画布 `?preview=draft` 当前仅"登录 + 管理端菜单门禁"即可见草稿，未做独立资源校验；`discardDraft` 未做前置状态校验也绕过乐观锁（均为已知遗留，非阻塞）。
+- 详细版本演进（screen 子域历次扩展、错误码计数订正等）一律以 `git log report-analytics-center/` 为准，本文件不维护变更叙事。
 
-> 历史 V1_0_0~V1_0_7 共 8 个 Flyway 迁移脚本已随 Flyway 框架退役一并删除，
-> 当前 schema/PT_RESOURCE 真相以生产库（`onepl`）为准。
+## 清单与契约指引
 
-## V1.0 交付的 24 REST 端点（25 PT_RESOURCE = 24 真实 + 1 占位）
+- Controller/端点/错误码/表结构的完整清单以源码目录为准，不在本文件重复列举：`src/main/java/com/bank/branch/platform/report/controller/`、`enums/RptErrorCode.java`、`entity/`、`mapper/`
+- 接口设计与报文契约：`docs/modules/report-analytics-center/03-接口设计与报文.md`
+- 对外 API 契约（V1.0 维持"不暴露 `*Api`"结论）：`docs/modules/report-analytics-center/04-对外API契约.md`
+- screen 大屏设计器操作指南（含画布双态、数据源配置、KPI 明细数据源等）：`docs/modules/report-analytics-center/10-大屏设计器操作指南.md`
+- 示例代码统一登记于 `docs/code-examples.md`（如只读模块消费上游 `*Api` 的典范：`report/service/impl/CustPoolSummaryServiceImpl.java`；异步导出任务框架：`report/export/impl/RptExportServiceImpl.java`），本文件不复制代码块
+- 共通开发规范：`docs/common-dev-guide.md`
 
-| Controller | 路径 | 鉴权 | RESOURCE_ID |
-|---|---|---|---|
-| MetaController | GET /api/reports/query-dimensions | REPORT/READ | R_RPT_META_QD |
-| DynamicQueryController | POST /api/reports/dynamic-query | REPORT/READ | R_RPT_DQ_EXEC |
-| DynamicQueryExportController | POST /api/reports/dynamic-query/export | REPORT/EXPORT | R_RPT_DQ_EXPORT |
-| SavedQueryController | GET    /api/reports/saved-queries     | REPORT/LIST   | R_RPT_SQ_LIST |
-| SavedQueryController | GET    /api/reports/saved-queries/{id}| REPORT/READ   | R_RPT_SQ_GET  |
-| SavedQueryController | POST   /api/reports/saved-queries     | REPORT/WRITE  | R_RPT_SQ_SAVE |
-| SavedQueryController | PUT    /api/reports/saved-queries/{id}| REPORT/WRITE  | R_RPT_SQ_UPD  |
-| SavedQueryController | DELETE /api/reports/saved-queries/{id}| REPORT/DELETE | R_RPT_SQ_DEL  |
-| DashboardController | GET /api/reports/dashboard/president  | REPORT/READ | R_RPT_DASH_PRES |
-| DashboardController | GET /api/reports/dashboard/org/{orgCode} | REPORT/READ | R_RPT_DASH_ORG  |
-| DashboardController | GET /api/reports/dashboard/emp/{empId} | REPORT/READ | R_RPT_DASH_EMP  |
-| TouchSummaryController | GET /api/reports/touch-task-summary | REPORT/READ | R_RPT_SUM_TOUCH_VW  |
-| TouchSummaryController | POST /api/reports/touch-task-summary/export | REPORT/EXPORT | R_RPT_SUM_TOUCH_EXP |
-| PerfSummaryController | GET /api/reports/perf-summary | REPORT/READ | R_RPT_SUM_PERF_VW |
-| PerfSummaryController | POST /api/reports/perf-summary/export | REPORT/EXPORT | R_RPT_SUM_PERF_EXP |
-| CustPoolSummaryController | GET /api/reports/customer-pool-summary | REPORT/READ | R_RPT_SUM_CUST_VW |
-| CustPoolSummaryController | POST /api/reports/customer-pool-summary/export | REPORT/EXPORT | R_RPT_SUM_CUST_EXP |
-| RptSqlProbeController | POST /api/reports/sql-probe/execute | REPORT/EXECUTE_SQL | R_RPT_SQL_EXEC |
-| RptSqlProbeController | GET  /api/reports/sql-probe/history | REPORT/LIST | R_RPT_SQL_HIST |
-| RptSqlProbeController | GET  /api/reports/sql-probe/history/{id} | REPORT/READ | R_RPT_SQL_HIST_DTL |
-| RptSqlProbeController | GET  /api/reports/sql-probe/schema-whitelist | REPORT/READ | R_RPT_SQL_WL |
-| RptExportController | GET    /api/reports/export-tasks/{taskId} | REPORT/READ | R_RPT_EXP_STATUS |
-| RptExportController | DELETE /api/reports/export-tasks/{taskId} | REPORT/WRITE | R_RPT_EXP_CANCEL |
-| RptExportController | GET    /api/reports/export-tasks/{taskId}/download | REPORT/EXPORT | R_RPT_EXP_DOWNLOAD |
-| （占位） | POST /api/reports/sql-probe/export（V1.1+） | - | R_RPT_SQL_EXP（STATUS=1 disabled） |
+## 测试指引
 
-## 45 条 RptErrorCode（非 screen 子域 33 条 + screen 子域 43001~43012 共 12 条）
-
-- 40001-40013：业务态错误 13 条（saved query ×3 / data version / dim mismatch / size limits ×2 / export task NOT_FOUND/NOT_READY / amas-approval / alloc-adjust-apply / notice）
-- 40301-40303：权限错误 3 条（无访问 / SQL 探查无权 / 数据范围不足）
-- 42001-42009：SQL 探查 9 条（语法 / 白名单 / 关键字 / 行数 / 超时 / 并发 / 仅 SELECT / 长度 / 执行）
-- 42207-42211：J 章扩展 5 条（行数 / 任务过期 / 下载越权 / DATA_SCOPE / metricCodes）
-- 43001-43009：screen 大屏基础子域 9 条（数据源不存在/SQL校验/时序缺日期列/大屏不存在/组件数据源不匹配/布局非法/数据源占用/取数失败/数据源配置非法）
-- 43010-43011：screen 取数上下文 2 条（缺必填上下文参数 / 取数周期参数非法）
-- 43012：`SCREEN_CANVAS_CONFLICT`——画布设计器 V2 保存乐观锁冲突（详见上方"V2 画布设计器"段），screen 子域合计 12 条（43001~43012）
-- 50001-50003：跨模块 / 缓存 / 异步导出启动失败 3 条（含 EXPORT_START_FAILED）
-
-守护：`RptErrorCodeTest` 6 case（45 条 + 唯一性 + 中文消息 + EXPORT_START_FAILED 必含）。
-
-> 历史记录：本节此前长期停留在"30 条（25 基线 + 5 J 章扩展）"，未计入 amas-approval/alloc-adjust-apply/notice
-> 历史扩展 3 条（非 screen 子域实为 33 条）；2026-07-12 screen 子域首次交付（43001-43009）与本次 V2 画布
-> 设计器（43010-43012）均未同步刷新此计数，本次一并订正为代码实测真值（33 + 12 = 45）。
-
-## 异步导出（V1.0 同步执行模型）
-
-`RptExportService.createTask` V1.0 同步执行（对齐 PerfExport V1.2 同款模型，BR-2 决策）：
-1. INSERT PENDING
-2. UPDATE → RUNNING
-3. `strategy.execute(task)` 内部生成 EasyExcel 字节流 → 调 `governance.FileApi.upload(MultipartFile, operatorId)` → 返回 `FileObjectDTO.id` 写入 `task.fileKey`
-4. UPDATE → SUCCESS（含 fileKey / rowCount / fileSize / expireAt = +7 days）
-
-**关键**：`task.fileKey` 持久化的是 `FileObjectDTO.id`（governance.file_object 主键），不是 MinIO object key；下载链路 `RptExportFacade.getDownloadUrl` 委托 `fileApi.getDownloadUrl(fileKey)` 拿 1 小时预签名 URL。
-
-V1.1+ 切真异步：把"落库 → 执行 → 回填"链路移到 @Async + ThreadPoolExecutor，createTask 立即返回 PENDING 不等 SUCCESS。
-
-## SQL 探查特殊性
-
-- 独立只读数据源 `rptReadOnlyDataSource`（与 Druid 主数据源隔离，强制 readOnly=true）
-- JSqlParser 4.9 AST 校验（`SqlSafeValidator` ≥15 边界用例守护）：仅 SELECT / 白名单表 / 禁用关键字 / 子查询深度 ≤3 / 长度 ≤8000 字符
-- 双写审计：业务历史 → `sql_probe_history`；治理审计 → `governance.audit_log`
-- 角色限制：`R_BACK_TECH` 独占 `R_RPT_SQL_EXEC`（plan BR-1 决策强约束，业务角色不可访问）
-
-## DATA_SCOPE 7 类映射
-
-DATA_SCOPE 类型在 3 处生效：
-- 仪表盘（DashboardServiceImpl）：`R_PRESIDENT` 映射 ALL，其他角色按 ORG_SUBTREE / SELF / SELF_ASSIGNED / ORG / SELF_CREATED
-- 汇总报表（3 个 *SummaryServiceImpl）：ORG_SUBTREE / SELF
-- SQL 探查：仅角色限制（`R_BACK_TECH` 独占），不走 DATA_SCOPE 行级过滤
-
-`WORKFLOW_PARTICIPANT` 类型 V1.0 在 report 不落地（无 business_key 列），V2 引入快照表后再考虑。
-
-## 测试数据前缀约定
-
-| 前缀 | 用途 |
-|------|------|
-| `TEST_RPT_*` | 通用测试数据（saved_query / dashboard / summary 等）|
-| `CONCUR_RPT_*` | 并发场景（V2+ 启用，V1.0 暂未引入）|
-| `TEST_RPT_EXP_M5_*` | M5 RptExportTaskMapperIT |
-| `TEST_RPT_E2E_*` | M6.0.2 StrategyEndToEndUploadIT |
-
-## 6 架构守护
-
-| 测试 | 守护内容 |
-|------|---------|
-| `RptBizAuthConsistencyArchTest` | 所有 RestController 公共方法必有 `@BizAuth(bizType = BizType.REPORT)` |
-| `RptNoEntityInControllerArchTest` | Controller 签名禁出现 Entity |
-| `RptNoEntityInControllerLocalsArchTest` | Controller 局部变量禁出现 Entity |
-| `RptModuleStructureArchTest` | `api/` 目录无 `*Api.java`（不暴露契约 + 严格只读）|
-| `RptNoUoeInFacadeTestsArchTest` | facade 测试禁 `assertThrows(UnsupportedOperationException.class, ...)` |
-| `RptNoV11UOEArchTest` | facade/*.java 不出现 "V1.1 delivered" 占位字面量 |
-
-## 环境依赖
-
-- MySQL 8.0：`onepl`（生产）/ `onepl_test_bootstrap`（测试 IT，V1.10 合一后唯一测试库；原 onepl_test_v103 废弃）
-- 缓存：`ReportCacheConfig`（Caffeine `@Primary` CacheManager，TTL 5 分钟 + maxSize 500，整个平台共享）；**2026-05-20 项目已去 Redis**，report 模块本身未使用 Redis，也未见 LockManager/限流组件调用
-- 对象存储：华为云 OBS（governance.FileApi.upload 实际依赖，已替代原 MinIO，bucket 由 governance 管理）
-- 上游模块依赖（10 个 *Api，见上文）
-
-## 开发 Checklist（新增功能时）
-
-1. ✅ 严格 TDD 红-绿-重构闭环（每步独立 commit）
-2. ✅ 所有 Controller 方法必标 `@BizAuth(bizType = BizType.REPORT, action = ...)`
-3. ✅ 写操作必标 `@AuditLog(action, resourceType)`，高危操作 `reasonRequired=true`
-4. ✅ Service 层 public 写方法 `@Transactional(rollbackFor = Exception.class)`
-5. ✅ Mapper XML 使用 `#{}` 不用 `${}`（数据范围片段除外）
-6. ✅ 跨模块调用走对方 `*Api` 接口；report 自身**不暴露** `*Api`
-7. ✅ 中文注释 + UTF-8 编码
-8. ✅ 测试数据使用约定前缀（`TEST_RPT_*` / `CONCUR_RPT_*`）
-9. ✅ 新增 PT_RESOURCE 通过手工 SQL 在目标库执行（**禁止**重新引入 Flyway，详见根 CLAUDE.md "Flyway 禁令"红线）
-10. ✅ 新增错误码 RPT-* 唯一不重复 + 中文消息 + RptErrorCodeTest 同步守护
-
-## V1.0 已知技术债（待 V1.1+ 处理）
-
-| 序号 | 标题 | 优先级 | 来源 | 状态 |
-|---|---|---|---|---|
-| 1 | MetricApi.batchGet*MetricValues 性能优化（M1.2 / M2.2 当前用单条循环，规模大时 N+1 风险）| 中 | 09 文档规划态 + M1.2 实现 | 待 V1.1 上游 batchGet 提供后切换 |
-| 2 | KpiApi.batchGetKpiTotal / getKpiRanking 同上规划态 | 中 | 09 文档规划态 + M3.2 实现 | 待 V1.1 上游 batchGet 提供后切换 |
-| 3 | 异步导出 V1.0 同步执行（PerfExport V1.2 同模型）→ V1.1 切真异步线程池 | 低 | M5 决策 BR-2 | V1.1 引入 @Async + ThreadPoolExecutor |
-| 4 | rpt_snapshot_task V1 仅建表不启用 → V2 启用条件：DAU > 200 或仪表盘 P99 > 1s | 低 | 决策 BR-3 + 05 §7 | V2 启用时间另议 |
-| 5 | 仪表盘 V1.0 数据版本依赖 performance.SysControlApi（当前不存在），临时用 MetricApi 兜底；待 V1.1 SysControlApi 暴露后切换 | 低 | 调研发现 | 待 V1.1 上游 |
-| 6 | DataScope WORKFLOW_PARTICIPANT 类型暂未在 report 落地（无 business_key 列）| 低 | 09 §X.6 | V2 引入快照表后再考虑 |
-| 7 | M3 reviewer #1：RPT-40006 语义偏差（日期超限误用 METRIC_DIM_MISMATCH） | 低 | M3 reviewer | V1.1 新增 RPT-40011 DATE_RANGE_EXCEEDED 替代 |
-| 8 | M3 reviewer #2：failedCount = cancelledCount V1.0 简化 | 低 | M3 reviewer | V1.1 拆分两字段 |
-| 9 | M3 reviewer #3：3 个 Summary Service 未应用 BizScopeApi（仅 SELF / ORG_SUBTREE 简化）| 中 | M3 reviewer | V1.1 引入 BizScopeApi 注入 |
-| 10 | M5 reviewer #2：错误码 42210/42211/42207/42208 当前 0 消费（M6.0 切真 upload 后 42210/42211 仍未消费）| 低 | M5 reviewer | V1.1 真正调用方落地后激活 |
-| 11 | M5 reviewer #3：error_msg truncate 阈值 3900 提取 common 常量 | 低 | M5 reviewer | V1.1 收敛 |
-| 12 | M5 reviewer #4：ObjectMapper 独立实例 → 共享 Spring Bean | 低 | M5 reviewer | V1.1 替换为 @Qualifier 注入 |
-| 13 | SqlProbeServiceImpl#getHistoryDetail 不存在时错误码错配（用 SAVED_QUERY_NOT_FOUND） | 中 | code 审查 I-1 | 待 V1.1 新增 SQL_PROBE_HISTORY_NOT_FOUND |
-| 14 | PerfSummaryServiceImpl#L75 subjectName = subjectId 兜底，未通过 OrgApi/CustomerQueryApi 翻译 | 低 | code 审查 M-2 | V1.1 引入 OrgApi/CustQueryApi 翻译 |
-| 15 | 仪表盘 Caffeine 单实例（V1.0 计划 V1.1 切 Redis 共享缓存） | 低 | code 审查观察 | 已解决：`ReportCacheConfig` 改为全平台共享的 `@Primary` Caffeine CacheManager（未引入 Redis，2026-05-20 项目已去 Redis） |
-
-## V1.1 规划
-
-- 性能优化：批量 Api 切换（M1.2 + M3.2）
-- 异步导出：@Async + 线程池切换（参考 PerfExport V1.3+）
-- C.x 固定报表导出端点：03 §I.5 V2 4 个 /export 端点（dashboard / touch / perf / custpool）
-- C.bis 报表订阅推送（订阅 sys_control 事件后预热缓存）
-- M3 reviewer 系列消化：DATE_RANGE_EXCEEDED 错误码拆分 / failedCount/cancelledCount 拆分 / Summary Service BizScopeApi 注入
-
-## V1.0 plan 撰写期 reviewer 误判记录（2026-04-25）
-
-| 误判项 | reviewer 误读 | 实际真相 | 根因 |
-|---|---|---|---|
-| F2 | M2/M3 调 MetricApi 仍是 UOE 占位 | V1.1 P2.6 已 Green | MetricApi.java:18 Javadoc 未与实现同步（M6.4.1 已修） |
-| F4 | M3 调 KpiApi 仍是 UOE 占位 | V1.1 P2.6 已 Green | KpiApi.java:17 Javadoc 未与实现同步（M6.4.1 已修） |
-
-启示：跨模块依赖的 *Api 接口 Javadoc 必须与 *Impl 状态同步，避免后续模块的 plan 撰写/审查被过时注释误导。
-
-## 相关文档
-
-- Plan: `docs/superpowers/plans/2026-04-25-report-analytics-center-v1.0-plan.md`
-- 权威功能规格: `docs/modules/report-analytics-center/`（9 份）
-- 对外 API 契约: `docs/modules/report-analytics-center/04-对外API契约.md`（V1.0 维持"不暴露 Api"）
-- DDL 权威源: V1_0_0__rpt_init.sql（自有 4 表）
-- 共通开发规范: `docs/common-dev-guide.md`
+- 新增功能先跑通红-绿-重构闭环（TDD 绝对红线，见根 CLAUDE.md）
+- 测试数据统一使用 `TEST_RPT_*` 前缀（导出相关另有 `TEST_RPT_EXP_*` / `TEST_RPT_E2E_*` 子前缀，并发场景预留 `CONCUR_RPT_*`）
+- 架构守护测试位于 `src/test/java/com/bank/branch/platform/report/arch/`：`RptBizAuthConsistencyArchTest` / `RptNoEntityInControllerArchTest` / `RptNoEntityInControllerLocalsArchTest` / `RptModuleStructureArchTest` / `RptNoUoeInFacadeTestsArchTest` / `RptNoV11UOEArchTest`
+- 前端 screen 子域测试见 `xanzc_frontend/src/views/screen/__tests__/`（含 `ScreenBlockHeight.spec.js` 高度契约守护）与 `designer/__tests__/`；改动大屏渲染/画布前先看既有 vitest 用例了解拖拽/保存/渲染三态一致性约定

@@ -9,12 +9,24 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
+/**
+ * SOAP Netty 服务端。
+ *
+ * <p><strong>{@code platform.soap.netty.enabled}</strong>（默认 {@code true}，生产行为不变）：
+ * 固定端口 30523 绑定与 Spring Test 上下文缓存共存时会互相抢占端口
+ * （见 {@code bootstrap} 模块 {@code mvn test} 全量跑 {@code FullAuthChainTest} 等既有 IT 的
+ * "Address already in use" 构建坑）。测试 profile（{@code test}/{@code redengine-smoke}/
+ * {@code lead-e2e}/{@code flowable-e2e}）不需要真实 SOAP 网关，显式关闭本开关跳过该 Bean 装配；
+ * 生产 {@code application.yml} 未配置该属性，{@code matchIfMissing = true} 保证生产行为完全不变。</p>
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "platform.soap.netty.enabled", havingValue = "true", matchIfMissing = true)
 public class SoapNettyServer implements SmartLifecycle {
 
     private final SoapNettyProperties props;
