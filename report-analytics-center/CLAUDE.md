@@ -25,14 +25,14 @@
 ## 架构规则与红线
 
 1. 只读模块定位是根 [CLAUDE.md](../CLAUDE.md) 已声明的架构规则，本模块严格重申：不被业务模块依赖、不对外暴露 `*Api`，架构守护 `RptModuleStructureArchTest` 强制 `api/` 目录禁出现 `*Api.java`
-2. Controller 公共方法标注 `@BizAuth` 时 `bizType` 必须为 `BizType.REPORT`（`RptBizAuthConsistencyArchTest` 守护"若标注则校验"这一单档策略，不强制每个方法都必须标注——新增 Controller 请对齐惯例主动补，不要依赖架构测试兜底）
+2. Controller 公共方法必须标注 `@BizAuth` 且 `bizType` 必须为 `BizType.REPORT`（`RptBizAuthConsistencyArchTest` 现含两条规则：单档 bizType 校验 + 2026-07-19 起新增"必须标注"强制覆盖率校验，后者由 `AllocPreviewController` 缺鉴权事件触发补上，见下节"关键实现要点与踩坑"）
 3. Controller 方法签名/局部变量禁出现 Entity（`RptNoEntityInControllerArchTest` / `RptNoEntityInControllerLocalsArchTest`）
 4. facade 测试禁用 `assertThrows(UnsupportedOperationException.class, ...)` 及 "V1.1 delivered" 占位字面量（`RptNoUoeInFacadeTestsArchTest` / `RptNoV11UOEArchTest`）
 5. 跨模块调用一律走对方 `*Api`；schema/PT_RESOURCE 变更走手工 SQL（Flyway 已彻底废弃，详见根 CLAUDE.md "Flyway 禁令"红线）
 
 ## 关键实现要点与踩坑
 
-- **`AllocPreviewController` 当前仍缺失鉴权注解**（当前问题，非历史反例）：该 Controller（`GET /api/report/alloc-preview`）目前**完全没有** `@BizAuth`，也没有类级 `@RequestMapping`（路径直接写在方法注解里，且是单数 `/api/report/` 而非其余端点的 `/api/reports/`）。新增功能**不要照抄这个反例**；如排期允许应补齐 `@BizAuth(bizType = BizType.REPORT, ...)` 与类级 `@RequestMapping`。
+- **`AllocPreviewController` 鉴权缺失反例（已于 2026-07-19 修复，保留为历史教训）**：该 Controller（`GET /api/report/alloc-preview`）曾**完全没有** `@BizAuth`，也没有类级 `@RequestMapping`（路径直接写在方法注解里）——`PT_RESOURCE` 早已登记 `RES_ALLOC_PREVIEW`，但因方法未标注注解，鉴权 AOP 实际不拦截，运行期访问控制强度弱于本模块其余所有端点。TDD 修复：先在 `RptBizAuthConsistencyArchTest` 新增"Controller 公共方法必须标注 `@BizAuth`"规则并跑 Red（仅 `AllocPreviewController.preview` 命中），再补 `@BizAuth(bizType = BizType.REPORT, action = BizAction.READ)` + 类级 `@RequestMapping("/api/report")`（方法级 `@GetMapping("/alloc-preview")`，总 URL 与修复前完全一致，仍是历史遗留的单数 `/api/report/`，未改为 `/api/reports/`）转 Green。新增功能不要照抄这个历史反例，务必对齐惯例主动补 `@BizAuth`。
 - **FreeReport 故意不清理旧 OBS 文件**：`FreeReportServiceImpl.importExcel` 在 `@Transactional` 内先删同操作人的同名旧批次记录（`RPT_FREE_REPORT_BATCH`/`ROW`），但**故意不删旧对象存储文件**——MD5 去重下新旧批次可能共享同一 `FILE_OBJECT`，删旧文件会误删新批次仍在用的对象；且对已不存在记录调 `fileApi.deleteFile` 会抛异常，把事务标记为 rollback-only 致整单回滚。旧对象留存视为可接受的孤儿。
 - **外部只读表边界**：`AMAS_*`（定价/业绩调整审批、审批流程记录）、`amas_dt_import_*`（数据导入明细/汇总）、`PERF_ALLOC_ADJUST_*`（分配调整申请/明细）、`DATALAKE_XAN_*`（数据湖对公/个人存贷款账户、资产负债分配关系）、`sys_notice`（公告）均为外部系统/数据湖同步表，不是本仓库其他业务模块的私有表，因此本模块直接建 Mapper 只读消费不违反"跨模块必须走 `*Api`"红线；但这些表 schema 由外部系统掌控，改表结构前须先确认外部契约。
 - **SQL 探查仅 `R_BACK_TECH` 角色独占**：`POST /api/reports/sql-probe/execute`（资源 `R_RPT_SQL_EXEC`）在 `PT_ROLE_RESOURCE` 层面只绑定 `R_BACK_TECH`（中后台科技岗），业务角色不可访问；执行前还要求 reason 必填 + 双写审计（业务历史 `SQL_PROBE_HISTORY` + 治理 `governance.audit_log`）。这是强约束，调整前须先确认合规要求。
