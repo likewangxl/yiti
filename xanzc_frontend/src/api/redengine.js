@@ -9,7 +9,10 @@ export const getOrgTree = () => call('get', '/re/orgs/tree');
 export const getOrg = (id) => call('get', `/re/orgs/${id}`);
 export const addOrg = (data) => call('post', '/re/orgs', { data });
 export const updateOrg = (id, data) => call('put', `/re/orgs/${id}`, { data });
-export const deleteOrg = (id) => call('delete', `/re/orgs/${id}`);
+// 纠偏（2026-07-19 修复审计缺口）：后端 ReOrgController.deleteOrg 现为
+// @Valid @RequestBody ReOrgDeleteReqDTO（reason 为 @NotBlank，配合 @AuditLog(reasonRequired=true)
+// 强制审计留痕），DELETE 请求体经 axios `data` 字段携带（call() 内部 http.request 透传）。
+export const deleteOrg = (id, reason) => call('delete', `/re/orgs/${id}`, { data: { reason } });
 
 // ── 用户党组织映射 ──
 export const listUserMaps = () => call('get', '/re/user-party-maps');
@@ -40,7 +43,9 @@ export const getRedWarning = () => call('get', '/re/cockpit/warning/red');
 export const getYellowWarning = () => call('get', '/re/cockpit/warning/yellow');
 export const archiveSettlement = (period) =>
   call('get', '/re/cockpit/archive/settlement', { params: { period } });
-export const generateAnnual = (year) => call('post', `/re/cockpit/archive/generate/${year}`);
+// 纠偏（2026-07-19 修复审计缺口）：后端 generateAnnualResult 现为
+// @Valid @RequestBody ReAnnualGenerateReqDTO（reason 为 @NotBlank，@AuditLog 补齐 reasonRequired=true）
+export const generateAnnual = (year, reason) => call('post', `/re/cockpit/archive/generate/${year}`, { data: { reason } });
 
 // ── 导出（二进制直下）──
 export const exportData = (type) => call('get', `/re/export/${type}`, { responseType: 'blob' });

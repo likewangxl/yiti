@@ -51,6 +51,27 @@
         <div class="stat-value" style="color:#2563eb;">{{ passRate }}%</div>
       </div>
     </div>
+
+    <!-- 生成年度报告弹窗：生成原因必填（高危操作审计留痕，对齐后端 ReAnnualGenerateReqDTO.reason
+         @NotBlank + @AuditLog(reasonRequired=true)）。2026-07-19 修复：原实现仅 ElMessageBox 二次
+         确认、无任何 reason 承载通道 -->
+    <el-dialog v-model="generateDialog.show" title="生成年度报告" width="480px">
+      <div class="generate-desc">确认生成 {{ currentYear }} 年度考核归档结果？生成后将作为正式考核依据，请谨慎操作。</div>
+      <el-form ref="generateFormRef" :model="generateDialog.form" :rules="generateRules" label-width="90px">
+        <el-form-item label="生成原因" prop="reason">
+          <el-input
+            v-model="generateDialog.form.reason"
+            type="textarea"
+            :rows="3"
+            placeholder="高危操作，审计强制留痕，必填"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="generateDialog.show = false">取消</el-button>
+        <el-button type="danger" :loading="generating" @click="confirmGenerate">确认生成</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -62,14 +83,15 @@
 // 操作按钮改动说明（源系统 handleAction 对三个按钮都只是同一个纯前端 ElMessage 装饰，
 // 没有任何后端调用）：
 //   - "生成年度报告" → 接后端真实高危端点 POST /re/cockpit/archive/generate/{year}
-//     （@AuditLog 未设 reasonRequired，默认 false，不需要收集原因，但仍是 EXECUTE 级操作，
-//     加二次确认弹窗）；仅当前用户持有 P_RE_CKPT_ANNUAL 资源时展示按钮（种子 SQL 里只授权
-//     给 R_RE_ORGREV + SYS_ADMIN），复用 inject('canSee')。
+//     （2026-07-19 修复：@AuditLog 已补齐 reasonRequired=true + ReAnnualGenerateReqDTO.reason
+//     @NotBlank，原纯 ElMessageBox 二次确认弹窗改为「生成原因」必填弹窗）；仅当前用户持有
+//     P_RE_CKPT_ANNUAL 资源时展示按钮（种子 SQL 里只授权给 R_RE_ORGREV + SYS_ADMIN），复用
+//     inject('canSee')。
 //   - "导出Excel" → 接 GET /re/export/score（复用 export/ExportView.vue 同款 blob 下载逻辑）。
 //   - "推送测评系统" → 后端 6 个 Controller 均无对应端点，属源系统就不存在的能力（同样是纯装饰
 //     ElMessage），本次移植按 YAGNI 直接去掉这个按钮，不新造假接口。
-import { ref, computed, inject, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, reactive, computed, inject, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getRanking, getOrgTree, generateAnnual, archiveSettlement, exportData } from '@/api/redengine'
 
 const canSee = inject('canSee', () => true)
@@ -122,20 +144,30 @@ const topBranch = computed(() => branches.value[0]?.name || '-')
 const redCount = computed(() => branches.value.filter((b) => b.score < 60).length)
 const passRate = computed(() => (branches.value.length ? ((branches.value.filter((b) => b.score >= 60).length / branches.value.length) * 100).toFixed(1) : '0.0'))
 
-async function handleGenerate() {
+// 生成年度报告弹窗状态（高危操作，生成原因必填，见上方脚本头部注释）
+const generateFormRef = ref(null)
+const generateDialog = reactive({ show: false, form: { reason: '' } })
+const generateRules = {
+  reason: [{ required: true, message: '请填写生成原因（审计留痕必填）', trigger: 'blur' }]
+}
+
+// 点击「生成年度报告」：打开「生成原因」弹窗，而非直接二次确认后即生成
+function handleGenerate() {
+  generateDialog.form = { reason: '' }
+  generateDialog.show = true
+}
+
+async function confirmGenerate() {
   try {
-    await ElMessageBox.confirm(
-      `确认生成 ${currentYear} 年度考核归档结果？生成后将作为正式考核依据，请谨慎操作。`,
-      '生成年度报告确认',
-      { type: 'warning', confirmButtonText: '确认生成', cancelButtonText: '取消' }
-    )
+    await generateFormRef.value?.validate()
   } catch {
     return
   }
   generating.value = true
   try {
-    await generateAnnual(currentYear)
+    await generateAnnual(currentYear, generateDialog.form.reason)
     ElMessage.success(`✅ ${currentYear} 年度报告已生成`)
+    generateDialog.show = false
     await reload()
   } catch (e) {
     ElMessage.error(e?.message || '生成失败')
@@ -172,6 +204,7 @@ onMounted(reload)
 .archive-container { padding: 0; }
 .page-title { font-size: 22px; font-weight: 700; color: #1e293b; margin: 0 0 4px 0; }
 .page-desc { font-size: 13px; color: #64748b; margin: 0 0 20px 0; }
+.generate-desc { margin-bottom: 12px; color: #64748b; font-size: 13px; }
 
 .action-bar {
   display: flex;

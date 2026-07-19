@@ -5,11 +5,14 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.redengine.api.dto.ReOrgDeleteReqDTO;
+import com.bank.branch.platform.redengine.api.dto.RePartyOrgReqDTO;
 import com.bank.branch.platform.redengine.api.dto.RePartyOrgTreeDTO;
 import com.bank.branch.platform.redengine.entity.RePartyOrg;
 import com.bank.branch.platform.redengine.service.RePartyOrgService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -64,7 +67,8 @@ public class ReOrgController {
     @PostMapping
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.WRITE)
     @AuditLog(action = "RE_ORG_ADD", resourceType = "RE_PARTY_ORG")
-    public ResponseWrapper<Long> addOrg(@RequestBody RePartyOrg org) {
+    public ResponseWrapper<Long> addOrg(@Valid @RequestBody RePartyOrgReqDTO req) {
+        RePartyOrg org = toEntity(req);
         Long id = rePartyOrgService.add(org);
         log.info("[ReOrgController.addOrg] id={}, orgName={}", id, org.getOrgName());
         return ResponseWrapper.success(id);
@@ -74,7 +78,8 @@ public class ReOrgController {
     @PutMapping("/{id}")
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.WRITE)
     @AuditLog(action = "RE_ORG_UPD", resourceType = "RE_PARTY_ORG")
-    public ResponseWrapper<Void> updateOrg(@PathVariable Long id, @RequestBody RePartyOrg org) {
+    public ResponseWrapper<Void> updateOrg(@PathVariable Long id, @Valid @RequestBody RePartyOrgReqDTO req) {
+        RePartyOrg org = toEntity(req);
         rePartyOrgService.update(id, org);
         log.info("[ReOrgController.updateOrg] id={}", id);
         return ResponseWrapper.success();
@@ -84,9 +89,28 @@ public class ReOrgController {
     @DeleteMapping("/{id}")
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.DELETE)
     @AuditLog(action = "RE_ORG_DEL", resourceType = "RE_PARTY_ORG", reasonRequired = true)
-    public ResponseWrapper<Void> deleteOrg(@PathVariable Long id) {
+    public ResponseWrapper<Void> deleteOrg(@PathVariable Long id, @Valid @RequestBody ReOrgDeleteReqDTO req) {
         rePartyOrgService.delete(id);
-        log.info("[ReOrgController.deleteOrg] id={}", id);
+        log.info("[ReOrgController.deleteOrg] id={}, reason={}", id, req.getReason());
         return ResponseWrapper.success();
+    }
+
+    /**
+     * 请求 DTO -> 实体转换（内部私有，不跨模块暴露实体；{@link RePartyOrgReqDTO} 无 id 字段，
+     * 新增/修改均以 Service 层自增主键回填或路径变量覆盖为准，避免请求体伪造 id 越权）。
+     */
+    private RePartyOrg toEntity(RePartyOrgReqDTO req) {
+        RePartyOrg org = new RePartyOrg();
+        org.setOrgName(req.getOrgName());
+        org.setParentId(req.getParentId());
+        org.setOrgLevel(req.getOrgLevel());
+        org.setOrgCode(req.getOrgCode());
+        org.setOrgType(req.getOrgType());
+        org.setPrincipal(req.getPrincipal());
+        org.setContactPhone(req.getContactPhone());
+        org.setOrgAddress(req.getOrgAddress());
+        org.setSecretaryId(req.getSecretaryId());
+        org.setRemark(req.getRemark());
+        return org;
     }
 }

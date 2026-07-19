@@ -172,6 +172,27 @@
         <el-button type="primary" :loading="submitting" @click="handleFormSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 删除确认弹窗：删除原因必填（高危操作审计留痕，对齐后端 ReOrgDeleteReqDTO.reason @NotBlank +
+         @AuditLog(reasonRequired=true)）。2026-07-19 修复：原实现仅 ElMessageBox 二次确认、无任何
+         reason 承载通道，见 red-engine-center/CLAUDE.md「技术债」④（已修复） -->
+    <el-dialog v-model="deleteDialog.show" title="删除党组织" width="480px">
+      <div class="delete-desc">确定删除组织"{{ deleteDialog.node?.orgName }}"吗？此操作不可恢复。</div>
+      <el-form ref="deleteFormRef" :model="deleteDialog.form" :rules="deleteRules" label-width="90px">
+        <el-form-item label="删除原因" prop="reason">
+          <el-input
+            v-model="deleteDialog.form.reason"
+            type="textarea"
+            :rows="3"
+            placeholder="高危操作，审计强制留痕，必填"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="deleteDialog.show = false">取消</el-button>
+        <el-button type="danger" :loading="deleteDialog.submitting" @click="confirmDelete">确认删除</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -186,13 +207,14 @@
 // - 新增"支部书记工号"(secretaryId) 编辑字段——后端实体有该列，源系统无对应字段。
 // - 组织类型下拉不再写死 company/department/team，改用平台字典 useDict('RE_ORG_TYPE')
 //   动态拉取（GET /api/sys/dicts/RE_ORG_TYPE/items，读取种子 SYS_DICT 三项：经营单位/营销部室/中后台部门）。
-// - 删除交互由源系统 el-popconfirm 改为 ElMessageBox.confirm 二次确认（简报要求）；后端
-//   DELETE /api/re/orgs/{id} 的 @AuditLog 标注 reasonRequired=true，但 ReOrgController.deleteOrg
-//   方法签名只有 @PathVariable id、无 reason 请求参数通道——是已记档的后端缺口（见 task-15-report.md），
-//   前端此处不额外收集 reason，仅做二次确认防误删；删除失败（如 RE-40002 存在下级党组织不可删除）的
-//   错误提示走平台 http.js 既有拦截器，本组件 catch 仅吞掉避免 unhandled rejection，不重复弹窗。
-import { ref, onMounted } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+// - 删除交互（2026-07-19 修复）：由源系统 el-popconfirm / 早期迁移阶段的 ElMessageBox.confirm 二次确认，
+//   改为「删除原因」弹窗必填——后端 DELETE /api/re/orgs/{id} 已补齐 ReOrgDeleteReqDTO.reason
+//   （@NotBlank）+ @AuditLog(reasonRequired=true) 强制审计留痕（原缺口见
+//   red-engine-center/CLAUDE.md「技术债」④，本次同步修复该文档标记）；删除失败（如 RE-40002
+//   存在下级党组织不可删除）的错误提示走平台 http.js 既有拦截器，本组件 catch 仅吞掉避免
+//   unhandled rejection，不重复弹窗。
+import { ref, reactive, onMounted } from 'vue';
+import { ElMessage } from 'element-plus';
 import { Plus, Edit, Delete } from '@element-plus/icons-vue';
 import { getOrgTree, addOrg, updateOrg, deleteOrg } from '@/api/redengine';
 import { useDict } from '@/composables/useDict';
@@ -291,25 +313,44 @@ const handleEditNode = (node) => {
   dialogVisible.value = true;
 };
 
-// 删除党组织（高危操作，二次确认）：见上方脚本头部注释说明 reason 缺口
-const handleDeleteNode = (node) => {
-  ElMessageBox.confirm(`确定删除组织"${node.orgName}"吗？`, '提示', {
-    type: 'warning',
-    confirmButtonText: '确定',
-    cancelButtonText: '取消'
-  }).then(async () => {
-    try {
-      await deleteOrg(node.id);
-      ElMessage.success('组织已删除');
-      if (selectedNode.value?.id === node.id) selectedNode.value = null;
-      await loadTree();
-    } catch (e) {
-      // http.js 响应拦截器已对业务失败（如 RE-40002 存在下级党组织不可删除）弹出错误提示，这里不重复
-    }
-  }).catch(() => {
-    // 用户取消，静默忽略
-  });
+// 删除党组织弹窗状态（高危操作，删除原因必填，见上方脚本头部注释）
+const deleteFormRef = ref(null);
+const deleteDialog = reactive({
+  show: false,
+  submitting: false,
+  node: null,
+  form: { reason: '' }
+});
+const deleteRules = {
+  reason: [{ required: true, message: '请填写删除原因（审计留痕必填）', trigger: 'blur' }]
 };
+
+// 点击删除图标：打开「删除原因」弹窗，而非直接二次确认后即删除
+const handleDeleteNode = (node) => {
+  deleteDialog.node = node;
+  deleteDialog.form = { reason: '' };
+  deleteDialog.show = true;
+};
+
+async function confirmDelete() {
+  try {
+    await deleteFormRef.value?.validate();
+  } catch {
+    return;
+  }
+  deleteDialog.submitting = true;
+  try {
+    await deleteOrg(deleteDialog.node.id, deleteDialog.form.reason);
+    ElMessage.success('组织已删除');
+    if (selectedNode.value?.id === deleteDialog.node.id) selectedNode.value = null;
+    deleteDialog.show = false;
+    await loadTree();
+  } catch (e) {
+    // http.js 响应拦截器已对业务失败（如 RE-40002 存在下级党组织不可删除）弹出错误提示，这里不重复
+  } finally {
+    deleteDialog.submitting = false;
+  }
+}
 
 const handleDialogClose = () => {
   formRef.value?.resetFields();
@@ -345,6 +386,12 @@ const handleFormSubmit = () => {
 
 <style scoped lang="scss">
 .org-container {
+  .delete-desc {
+    margin-bottom: 12px;
+    color: #64748b;
+    font-size: 13px;
+  }
+
   .page-title {
     font-size: 24px;
     margin-bottom: 20px;

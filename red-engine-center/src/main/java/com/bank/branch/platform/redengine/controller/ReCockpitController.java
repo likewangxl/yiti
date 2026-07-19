@@ -5,6 +5,7 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.redengine.api.dto.ReAnnualGenerateReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReCockpitOverviewDTO;
 import com.bank.branch.platform.redengine.api.dto.ReOverdueExecuteReqDTO;
 import com.bank.branch.platform.redengine.api.dto.ReOverdueItemDTO;
@@ -115,10 +116,11 @@ public class ReCockpitController {
     @Operation(summary = "生成年度考核归档结果(高危)")
     @PostMapping("/archive/generate/{year}")
     @BizAuth(bizType = BizType.RED_ENGINE, action = BizAction.EXECUTE)
-    @AuditLog(action = "RE_ANNUAL_GENERATE", resourceType = "RE_ANNUAL_RESULT")
-    public ResponseWrapper<Void> generateAnnualResult(@PathVariable Integer year) {
+    @AuditLog(action = "RE_ANNUAL_GENERATE", resourceType = "RE_ANNUAL_RESULT", reasonRequired = true)
+    public ResponseWrapper<Void> generateAnnualResult(@PathVariable Integer year,
+                                                       @Valid @RequestBody ReAnnualGenerateReqDTO req) {
         reCockpitService.generateAnnualResult(year);
-        log.info("[ReCockpitController.generateAnnualResult] year={}", year);
+        log.info("[ReCockpitController.generateAnnualResult] year={}, reason={}", year, req.getReason());
         return ResponseWrapper.success();
     }
 }

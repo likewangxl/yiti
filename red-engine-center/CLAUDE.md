@@ -86,7 +86,7 @@ src/test/java/com/bank/branch/platform/redengine/
 | 13 | `P_RE_REVIEW_REJ` | POST | `/api/re/reviews/*/reject` | 审核驳回 | R_RE_BRREV, R_RE_ORGREV | 无前置状态校验（源系统同款保真） |
 | 14 | `P_RE_CKPT_VIEW` | GET | `/api/re/cockpit/**` | 驾驶舱只读（overview/ranking/overdue/warning/settlement，6 端点复用） | R_RE_ORGREV, R_RE_SECR | |
 | 15 | `P_RE_CKPT_EXEC` | POST | `/api/re/cockpit/overdue/execute` | 执行逾期扣分（高危） | 仅 R_RE_ORGREV | `reasonRequired=true`；上报不存在抛 `RE-40005` |
-| 16 | `P_RE_CKPT_ANNUAL` | POST | `/api/re/cockpit/archive/generate/*` | 生成年度归档（高危） | 仅 R_RE_ORGREV | |
+| 16 | `P_RE_CKPT_ANNUAL` | POST | `/api/re/cockpit/archive/generate/*` | 生成年度归档（高危） | 仅 R_RE_ORGREV | `reasonRequired=true`（2026-07-19 修复，此前遗漏，见「技术债」④） |
 | 17 | `P_RE_EXPORT` | GET | `/api/re/export/*` | 数据导出 | R_RE_ORGREV, R_RE_SECR | 仅 submit/score 两类，超上限抛 `RE-40007` |
 
 `SYS_CODE='RE'`、`ISMENU=0`（纯 API 资源，不建独立菜单）。角色-资源绑定行数见下方「党建角色权限矩阵」。
@@ -175,6 +175,7 @@ src/test/java/com/bank/branch/platform/redengine/
 ## 测试
 
 - **单元测试**：6 个纯 Mockito `*Test.java`（`RePartyOrgServiceTest` 8 / `ReUserPartyMapServiceTest` 5 / `ReSubmitServiceTest` 5 / `ReReviewServiceTest` 8 / `ReCockpitServiceTest` 17 / `ReExportServiceTest` 7），合计 **50 case 全绿**，均不连库
+- **Controller 单元测试**（2026-07-19 新增，TDD 覆盖三处审计/校验缺口修复）：`ReOrgControllerTest`（9 case：deleteOrg 带/缺 reason、RE-40002 守卫不回归、addOrg/updateOrg 校验+树查询）/ `ReCockpitControllerTest`（3 case：generateAnnualResult 带/缺 reason）；均 `MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler())` 纯单元测试（同构 `workflow-center` `ProcessCommandControllerTest`/`auth-permission-center` `OrgControllerTest` 既有惯例），不连库、不起 Spring 容器
 - **Mapper 集成测试**：`RePartyOrgMapperIT`（failsafe，`onepl_test_bootstrap`），基座 `RedEngineTestApp` + `RedEngineMapperTestBase` 同构复制 `performance-engine-center` 的隔离测试模式（`@ActiveProfiles("test")` + `@Transactional` + `@Rollback`）
 - **bootstrap 冒烟 IT**：`RedEngineSmokeIT`（`redengine-smoke` profile，激活真实鉴权链路 `AuthenticationFilter`+`AuthorizationInterceptor`，而非 `test` profile 下被 `@Profile("!test")` 关闭的 `WebMvcAuthConfig`），3 case：无 session 401 / admin 登录 200+树 10 节点 / 无 `P_RE_*` 绑定角色 403，全部真实 RBAC 日志亲验
 - **Playwright 全链路**：登录（外观保真）→ 上报 → 审核通过 → 驾驶舱 → 预警池 → 导出 xlsx，权限矩阵三项（报送员 403 / 无映射 `RE-40001` / admin 全通）均实测通过
@@ -185,7 +186,11 @@ src/test/java/com/bank/branch/platform/redengine/
 1. **`generateAnnualResult` 不按 `year` 过滤聚合范围**（源系统同款）：`evalYear` 只定落库键，不限定 `RE_SCORE` 聚合范围，长期运行多年数据混算风险，需产品决策补 `scoreYear` 过滤。
 2. **重复审核产生 `RE_SCORE` 重复/滞留记录**（源系统同款保真）：`approve`/`reject` 无前置状态校验，对同一 `submitId` 反复"通过→驳回→再通过"会重复插入评分行；禁止重复审核会破坏改判能力，故未加校验，留产品决策。
 3. **导出 10000 行同步上限偏离平台"5000 行必须异步"MUST 线**（`docs/export-spec-coverage.md` 全局规则）：党建业务量级小 + 源系统无上限 + 迁移期过渡防呆，`ResponseEntity<byte[]>` 全量物化为全平台唯一此类导出实现，其余模块导出端点均为流式/异步。
-4. **能力缺口**（均经审查核实属实，非遗漏）：`RE_SCORE` 无按 `submitId` 的评分明细查询端点（前端得分列显示"-"）；`ReRankingItemDTO`/`ReOverdueItemDTO` 无组织名字段（前端需另拉 `orgTree` 拍平匹配）；无按 `submitId` 查附件列表端点；`ReOrgController.deleteOrg` 无 `reason` 入参通道（高危操作但 `@AuditLog` 依赖 DTO `@NotBlank reason` 字段，该端点路径变量无处挂载）。
+4. **能力缺口**（均经审查核实属实，非遗漏）：`RE_SCORE` 无按 `submitId` 的评分明细查询端点（前端得分列显示"-"）；`ReRankingItemDTO`/`ReOverdueItemDTO` 无组织名字段（前端需另拉 `orgTree` 拍平匹配）；无按 `submitId` 查附件列表端点。
+   **以下三处审计/校验缺口已于 2026-07-19 修复（TDD，含前端配套）**，不再是遗留缺口，保留记录供追溯：
+   - `ReOrgController.deleteOrg`（高危）此前无 `reason` 入参通道（`@AuditLog(reasonRequired=true)` 依赖 DTO `@NotBlank reason` 字段，该端点仅 `@PathVariable id` 无处挂载）——已新增 `ReOrgDeleteReqDTO`（`reason` `@NotBlank`）+ `@Valid @RequestBody`，前端 `OrgManageView.vue` 删除交互改为「删除原因」必填弹窗。
+   - `ReCockpitController.generateAnnualResult`（高危）此前 `@AuditLog` 未设 `reasonRequired=true`——已补齐 `reasonRequired=true` + 新增 `ReAnnualGenerateReqDTO`（`reason` `@NotBlank`），前端 `ArchiveView.vue`「生成年度报告」改为「生成原因」必填弹窗。
+   - `ReOrgController.addOrg`/`updateOrg` 此前直接接收裸实体 `RePartyOrg` 且无 `@Valid`——已改为独立 `RePartyOrgReqDTO`（`orgName` `@NotBlank`，对齐 DDL `NOT NULL`）+ `@Valid`，Controller 内部转换为实体后再调用 Service，URL/HTTP 方法/字段名均未变。
 5. **`RE-4xxxx` 为裸字符串错误码**：未建 `ReErrorCode` 枚举类，`docs/common-dev-guide.md` 附录 B 模块错误码前缀表未收录 `RE-` 前缀，后续错误码增多时应统一收敛。
 6. **前端 `canSee` 通配符前缀匹配是近似算法**：「年度考核归档」菜单项 `res` 复用较宽的 `P_RE_CKPT_VIEW`（而非更窄的 `P_RE_CKPT_ANNUAL`），当前因两资源总绑定同一批角色而"巧合正确"，非真 AntPath 反向匹配；后续角色绑定分化时需换成显式资源映射。
 7. **OBS 域名在开发沙箱 DNS 不可达**（`GOV-50001`）：附件上传联调在当前开发环境不可用，生产内网可用；`JointView` 未做"附件失败仍放行提交"的降级（安全默认：附件失败=提交失败），已记录不修。
