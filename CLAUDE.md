@@ -181,6 +181,7 @@ com.bank.branch.platform.<module>/
 7. ✅ 所有流程类业务必须维护 `business_key` 和 `biz_process_map`
 8. ✅ 所有 Service 类与 public 方法必须补齐注释
 9. ✅ 所有接口记录入参/出参、traceId 和耗时
+10. ✅ **接口契约同步**:凡改动 `controller/`、`api/` 包(含 DTO 字段、错误码、`@BizAuth`),**同一提交内**更新 `docs/modules/<模块>/03-接口设计*`、`04-对外API契约*`;提交前跑 `scripts/check-contract-docs.sh` 自检(比较契约代码与契约文档的提交时间,STALE 即欠账)
 
 ## 重要文件路径
 
@@ -211,7 +212,7 @@ com.bank.branch.platform.<module>/
 
 ### 文档维护约定（2026-07-19 起，防止再次漂移）
 - **每个目录的 CLAUDE.md 是该目录开发指导的唯一权威**；凡与 CLAUDE.md 同目录并存的 AGENTS.md 一律只写指向 CLAUDE.md 的指针，禁止承载实体内容（历史上两份并行维护已造成双向漂移）
-- **CLAUDE.md 不维护数量与清单**：Controller/端点/类/错误码的个数与逐条列表一律不写入（历史证明必然过期，最严重处漏记 56%）。清单以源码目录为准；端点契约细节见 `docs/modules/<模块名>/03-接口设计.md`、`04-对外API契约.md`，每次接口变更同步更新这两份文档而非 CLAUDE.md
+- **CLAUDE.md 不维护数量与清单**：Controller/端点/类/错误码的个数与逐条列表一律不写入（历史证明必然过期，最严重处漏记 56%）。清单以源码目录为准；端点契约细节见 `docs/modules/<模块名>/03-接口设计.md`、`04-对外API契约.md`，每次接口变更同步更新这两份文档而非 CLAUDE.md（开发 Checklist 第 10 条硬约束，`scripts/check-contract-docs.sh` 可检出欠账）
 - **版本历史/变更叙事不进 CLAUDE.md**：一律靠 `git log`；CLAUDE.md 只保留仍影响当下决策的"为什么"结论与踩坑
 - **示例代码位置统一登记在 `docs/code-examples.md`**：新增/替换某类规范实现时同步更新该索引，CLAUDE.md 只引用不复制
 
