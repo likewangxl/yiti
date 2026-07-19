@@ -9,9 +9,6 @@
       "Bash(docs/modules/business-application-center/02-后端架构.md:*)"
     ]
   },
-  "enabledPlugins": {
-    "superpowers@superpowers-marketplace": true
-  },
     "env": {
     "CLAUDE_CODE_USE_POWERSHELL_TOOL": "1"
   },  
