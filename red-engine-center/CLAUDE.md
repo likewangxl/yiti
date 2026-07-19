@@ -6,7 +6,7 @@
 
 **red-engine-center** 是红色引擎党建管理中心，为银行分行提供党组织树管理、四大维度材料上报、两级审核评分、逾期扣分、驾驶舱/红黄牌预警、年度归档、数据导出等党建业务能力。
 
-本模块由独立的 `redengine` 系统（Spring Boot 2.7 + Java 8 + Vue2，源码只读参照目录 `redengine/`，不进 git）于 **2026-07-18** 整体移植合并入平台（`.superpowers/sdd/task-0-brief.md` 起 19 个任务，`docs/superpowers/specs/2026-07-18-redengine-merge-design.md` 为权威 spec）。
+本模块由独立的 `redengine` 系统（Spring Boot 2.7 + Java 8 + Vue2，源码只读参照目录 `redengine/`，不进 git）于 **2026-07-18** 整体移植合并入平台（任务台账与权威 spec 见文末「开发参考」）。
 
 **基础包名**: `com.bank.branch.platform.redengine`
 **Maven 坐标**: `com.bank.branch.platform:red-engine-center`
@@ -31,16 +31,16 @@ src/main/java/com/bank/branch/platform/redengine/
 │   └── ReSubmitExportRow / ReScoreExportRow（EasyExcel 行模型）
 ├── config/
 │   └── RedEngineMyBatisConfig.java   # Mapper 扫描
-├── controller/        # 6 个 Controller，23 个 REST 端点
-│   ├── ReOrgController          # 党组织管理 (5 端点)
-│   ├── ReUserPartyMapController  # 用户党组织映射 (2 端点)
-│   ├── ReSubmitController       # 材料上报 (3 端点)
-│   ├── ReReviewController       # 两级审核 (4 端点)
-│   ├── ReCockpitController      # 驾驶舱/预警/归档 (8 端点)
-│   └── ReExportController       # 数据导出 (1 端点)
-├── entity/            # 8 个实体（均 @Data + @TableName + @TableId(IdType.AUTO)）
-├── mapper/            # 8 个 Mapper 接口，全部 extends BaseMapper<T>，无 XML
-└── service/           # 6 个 Service（贫血模型，无 facade 层——本模块无对外 Api）
+├── controller/        # REST 端点清单见下方「REST 端点与 PT_RESOURCE 契约」
+│   ├── ReOrgController          # 党组织管理
+│   ├── ReUserPartyMapController  # 用户党组织映射
+│   ├── ReSubmitController       # 材料上报
+│   ├── ReReviewController       # 两级审核
+│   ├── ReCockpitController      # 驾驶舱/预警/归档
+│   └── ReExportController       # 数据导出
+├── entity/            # 均 @Data + @TableName + @TableId(IdType.AUTO)
+├── mapper/            # 全部 extends BaseMapper<T>，无 XML
+└── service/           # 贫血模型，无 facade 层——本模块无对外 Api
     ├── RePartyOrgService / ReUserPartyMapService / ReSubmitService
     ├── ReReviewService / ReCockpitService / ReExportService
 
@@ -52,7 +52,7 @@ src/test/java/com/bank/branch/platform/redengine/
 
 > bootstrap 侧另有 `bootstrap/src/test/java/com/bank/branch/platform/it/RedEngineSmokeIT.java`（`redengine-smoke` profile，激活真实 RBAC 鉴权链路，见「测试」节）。
 
-## 数据库表（8 张，`RE_` 前缀，DDL：`docs/superpowers/sql/2026-07-18-redengine-tables.sql`）
+## 数据库表（`RE_` 前缀，DDL：`docs/superpowers/sql/2026-07-18-redengine-tables.sql`）
 
 | 表 | 实体 | 说明 |
 |----|------|------|
@@ -67,7 +67,7 @@ src/test/java/com/bank/branch/platform/redengine/
 
 用户主键字段（`secretary_id`/`submitter_id`/`reviewer_id`/`user_id`）全部为 `VARCHAR(50)` 工号，对齐 `PT_USER.USER_ID`——与源系统 `BIGINT` 自增主键的**有意差异**。
 
-## REST 端点与 PT_RESOURCE 契约（17 条 `P_RE_*` 资源，种子：`docs/superpowers/sql/2026-07-18-redengine-seed.sql`）
+## REST 端点与 PT_RESOURCE 契约（`P_RE_*` 资源，权威清单/种子：`docs/superpowers/sql/2026-07-18-redengine-seed.sql`）
 
 | # | RESOURCE_ID | METHOD | URL | 说明 | 授权角色（党建 4 角色 + SYS_ADMIN 恒全通） | 备注 |
 |---|---|---|---|---|---|---|
@@ -81,7 +81,7 @@ src/test/java/com/bank/branch/platform/redengine/
 | 8 | `P_RE_SUBMIT_ADD` | POST | `/api/re/submits` | 新建上报 | R_RE_REPORT, R_RE_SECR | 创建即 `status=1` |
 | 9 | `P_RE_SUBMIT_MY` | GET | `/api/re/submits/my` | 我的上报分页 | R_RE_REPORT, R_RE_SECR, R_RE_BRREV | 不含 R_RE_ORGREV |
 | 10 | `P_RE_SUBMIT_GET` | GET | `/api/re/submits/*` | 上报详情 | 全部 4 角色 | `MENU_RANK_NO=10`，同 #2 理由（与 #9 同 METHOD） |
-| 11 | `P_RE_REVIEW_Q` | GET | `/api/re/reviews/**` | 待审队列 + 审核预览 | R_RE_BRREV, R_RE_ORGREV | Task 9 由字面量 `/api/re/reviews/queue` 放宽为通配符，复用覆盖 `GET .../queue` 与 `GET .../{id}/preview` 两端点，17 条资源总数不变 |
+| 11 | `P_RE_REVIEW_Q` | GET | `/api/re/reviews/**` | 待审队列 + 审核预览 | R_RE_BRREV, R_RE_ORGREV | Task 9 由字面量 `/api/re/reviews/queue` 放宽为通配符，复用覆盖 `GET .../queue` 与 `GET .../{id}/preview` 两端点，未新增资源 |
 | 12 | `P_RE_REVIEW_APPR` | POST | `/api/re/reviews/*/approve` | 审核通过 + 评分 | R_RE_BRREV, R_RE_ORGREV | 超上限抛 `RE-40004` |
 | 13 | `P_RE_REVIEW_REJ` | POST | `/api/re/reviews/*/reject` | 审核驳回 | R_RE_BRREV, R_RE_ORGREV | 无前置状态校验（源系统同款保真） |
 | 14 | `P_RE_CKPT_VIEW` | GET | `/api/re/cockpit/**` | 驾驶舱只读（overview/ranking/overdue/warning/settlement，6 端点复用） | R_RE_ORGREV, R_RE_SECR | |
@@ -89,7 +89,7 @@ src/test/java/com/bank/branch/platform/redengine/
 | 16 | `P_RE_CKPT_ANNUAL` | POST | `/api/re/cockpit/archive/generate/*` | 生成年度归档（高危） | 仅 R_RE_ORGREV | |
 | 17 | `P_RE_EXPORT` | GET | `/api/re/export/*` | 数据导出 | R_RE_ORGREV, R_RE_SECR | 仅 submit/score 两类，超上限抛 `RE-40007` |
 
-`SYS_CODE='RE'`、`ISMENU=0`（纯 API 资源，不建独立菜单）。角色-资源绑定共 46 行（`10+7+7+5+17`，见「党建角色权限矩阵」）。
+`SYS_CODE='RE'`、`ISMENU=0`（纯 API 资源，不建独立菜单）。角色-资源绑定行数见下方「党建角色权限矩阵」。
 
 ## 4 党建角色权限矩阵
 
@@ -151,7 +151,7 @@ src/test/java/com/bank/branch/platform/redengine/
 
 ## 字典
 
-`SYS_DICT`（拍平惯例，非 `SYS_DICT_ITEM` 两级设计，见「技术债」⑨）4 类共 18 项，均 `RE_` 前缀命名空间：`RE_ORG_TYPE`(3)/`RE_DIMENSION`(4)/`RE_SUBMIT_STATUS`(3)/`RE_ITEM_CODE`(8)。前端未走 `useDict()` 的地方（如 `partyRole`）是因为该字段本身**不在**这 4 类字典内，属硬编码字面量（见上文角色矩阵节）。
+`SYS_DICT`（拍平惯例，非 `SYS_DICT_ITEM` 两级设计，见「技术债」⑨），均 `RE_` 前缀命名空间：`RE_ORG_TYPE`/`RE_DIMENSION`/`RE_SUBMIT_STATUS`/`RE_ITEM_CODE`。前端未走 `useDict()` 的地方（如 `partyRole`）是因为该字段本身**不在**上述字典内，属硬编码字面量（见上文角色矩阵节）。
 
 ## 与源系统差异清单
 
@@ -190,7 +190,7 @@ src/test/java/com/bank/branch/platform/redengine/
 6. **前端 `canSee` 通配符前缀匹配是近似算法**：「年度考核归档」菜单项 `res` 复用较宽的 `P_RE_CKPT_VIEW`（而非更窄的 `P_RE_CKPT_ANNUAL`），当前因两资源总绑定同一批角色而"巧合正确"，非真 AntPath 反向匹配；后续角色绑定分化时需换成显式资源映射。
 7. **OBS 域名在开发沙箱 DNS 不可达**（`GOV-50001`）：附件上传联调在当前开发环境不可用，生产内网可用；`JointView` 未做"附件失败仍放行提交"的降级（安全默认：附件失败=提交失败），已记录不修。
 8. **`RestEndpointInventoryIT` 误报**：该审计工具只静态比对 `docs/schema/seed-v1.sql` 基线且不做 AntPath 通配符展开，本模块 17 条 `P_RE_*` 资源已正确注册但被误计入"未登记"差值（BASE=195，当前=218，差值 23 恰为 RE 端点，含 2 条通配符资源覆盖多端点），属该工具既有方法论盲区，非真实注册缺口。
-9. **`SYS_DICT_ITEM` 平台无代码读取通道**：`system-governance-center` 的 `DictApi`/`SysDict` 只读写 `SYS_DICT` 单表，本模块字典按平台拍平惯例落 `SYS_DICT`（`RE_` 前缀命名空间，4 类 18 项），未使用 DDL 语义上"预留"的两级 `SYS_DICT_ITEM` 设计。
+9. **`SYS_DICT_ITEM` 平台无代码读取通道**：`system-governance-center` 的 `DictApi`/`SysDict` 只读写 `SYS_DICT` 单表，本模块字典按平台拍平惯例落 `SYS_DICT`（`RE_` 前缀命名空间），未使用 DDL 语义上"预留"的两级 `SYS_DICT_ITEM` 设计。
 10. **`approve` 评分上限校验并发 TOCTOU 可绕过 `maxScore`**（终审 F-1，`.superpowers/sdd/final-review.md` §3，Minor/非阻断）：`ReReviewService.insertScoreWithLimitCheck`（约 L765-798）走"`selectList` 内存求和 → 校验 → `insert`"，`@Transactional` 不加读锁/唯一约束。两个审核员（或前端重复提交）几乎同时对同一党组织、同一 `itemCode`、同一年度的上报调用 `approve`，各自事务在 `selectList` 阶段读到相同历史累计值，各自判定 `existingSum+score ≤ maxScore` 通过，各自落一行 `RE_SCORE`，最终累计可突破 `maxScore`。终审评估为 Minor：党建业务量级为个位数支部、审核为人工离散动作，真实并发概率极低，且已有 `@AuditLog` 留痕；本质是与技术债②"重复审核"同源的并发变体（技术债②接受"保留改判能力"的产品决策）。若未来需强一致，可对 `(org_id, item_code, score_year)` 加唯一约束或改 `SELECT ... FOR UPDATE` 行锁。
 11. **驾驶舱/导出为全局口径（`DATA_SCOPE='ALL'`），支部书记可见并导出全行数据**（终审 F-3，`.superpowers/sdd/final-review.md` §3，Info/设计如此）：`ReCockpitService`（ranking/warning/overview 等）与 `ReExportService`（全量导出）均无 per-org 过滤，模块内 org 隔离仅作用于"我的上报/创建"；`R_RE_SECR`（支部书记）按角色矩阵获授"驾驶舱只读 + 数据导出"，因此可看到并导出全行各支部的评分数据，而非仅本支部。这是 `PT_ROLE_BIZ_SCOPE.BIZ_TYPE='RED_ENGINE'` 统一 `DATA_SCOPE='ALL'` + "全局数据驾驶舱"产品定位的显式决策，非缺陷；若业务上要求收敛到本支部口径，需另立任务改造 `ReCockpitService`/`ReExportService` 按登录人 `RE_USER_PARTY_MAP` 的 `partyOrgId` 过滤。
 
