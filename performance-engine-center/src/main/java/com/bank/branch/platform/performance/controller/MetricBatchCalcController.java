@@ -26,14 +26,13 @@ import java.time.LocalDate;
  * action = EXECUTE)}，与同包 {@code MetricDefController.execute}/{@code batchExecute}
  * 的"手动触发执行"语义保持一致。
  *
- * <p><b>⚠️ 遗留风险（本次修复未覆盖，需另行决策）</b>：{@code /api/perf/metric-calc/trigger}
- * 目前仍同时登记在 {@code auth-permission-center} 的
- * {@code AuthenticationFilter.WHITELIST} 与 {@code WebMvcAuthConfig} 的
- * {@code excludePathPatterns} 中（见 2026-05-27 提交 326bba98，注释"调试/运维触发...
- * 跳过 Session 校验与 RBAC 注册"）——这两处白名单会让请求在到达
- * {@code AuthorizationInterceptor} 之前就被放行，本次新增的 {@code @BizAuth} 注解
- * 因此暂不产生运行时鉴权效果（一旦白名单收紧，注解会立即生效）。是否移除这两条白名单
- * 需要产品/运维侧确认该"调试/运维便捷通道"是否还有依赖方，不在本次修复范围内。
+ * <p><b>鉴权链路已完整（2026-07-19 收口）</b>：该 URL 曾于 2026-05-27（提交 326bba98）
+ * 加入 {@code auth-permission-center} 的 {@code AuthenticationFilter.WHITELIST} 与
+ * {@code WebMvcAuthConfig.excludePathPatterns} 作为调试便捷通道，期间匿名即可触发批量计算、
+ * 本注解不生效。经全仓排查确认无裸调依赖方后两处白名单已摘除，当前走
+ * Session → {@code AuthorizationInterceptor}（{@code P_PERF_CALC_TRIG}）→ {@code @BizAuth}
+ * 全链路，由 bootstrap 的 {@code PerfTriggerAuthWhitelistRemovalIT} 固定回归
+ * （匿名 401 / 登录后可达）。运维如需手工触发，须先登录携带会话，不能再裸 curl。
  */
 @Slf4j
 @RestController

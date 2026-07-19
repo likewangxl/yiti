@@ -71,8 +71,7 @@ public class WebMvcAuthConfig implements WebMvcConfigurer {
                 "/swagger-resources/**",
                 "/v3/api-docs/**",
                 "/actuator/health",
-                "/**/receiveCallPuRequest/**",
-                "/api/perf/metric-calc/trigger"
+                "/**/receiveCallPuRequest/**"
             );
     }
 }
