@@ -10,7 +10,7 @@
 
 ## 技术栈
 
-- **后端**: Spring Boot 3.2.3 + JDK 17、MyBatis 3.0.3（新增功能一律 MyBatis-Plus，见下文红线）、Flowable 7.0.1（嵌入式）、MySQL 8.0 + Druid、Spring Session JDBC（session 落 MySQL `SPRING_SESSION` 表，**2026-05 已去 Redis**）、Knife4j 4.4.0、MinIO 8.5.7
+- **后端**: Spring Boot 3.2.3 + JDK 17、MyBatis 3.0.3（新增功能一律 MyBatis-Plus，见下文红线）、Flowable 7.0.1（嵌入式）、MySQL 8.0 + Druid、Spring Session JDBC（session 落 MySQL `SPRING_SESSION` 表，**2026-05 已去 Redis**）、Knife4j 4.4.0、**华为云 OBS**（`esdk-obs-java-bundle` 3.24.3，实现类 `ObsStorageClient`；早期 MinIO 已迁移废弃，代码 Javadoc 里残留的 "MinIO" 字样勿信）
 - **前端** (`xanzc_frontend/`): Vue 3 + Vite 4 + Element Plus + Pinia
 - **构建**: Maven 多模块项目；版本控制 Git
 
@@ -36,28 +36,30 @@ bootstrap 的 `@SpringBootTest` 依赖其他模块的最新 java 类时，必须
 ### UTF-8 编码已全局配置
 pom.xml surefire/failsafe 的 argLine 已含 `-Dfile.encoding=UTF-8`，无需在 `@Sql` 注解上加 `@SqlConfig(encoding="UTF-8")`。
 
+### 测试数据库
+- 多数模块的真库测试与 bootstrap IT 连 `onepl_test_bootstrap`（**仍在用的测试基础设施，勿当历史遗留清理**）；auth/customer/business 单测用 H2 内存库；`yiti_test` 仅用于演示/验收数据
+- `yiti` 是开发主库（生产语义）：任何测试、脚本不得向其写入测试数据
+
 ## 模块结构与依赖
 
-全部 9 个业务模块 + bootstrap 均已交付，无尚未实现模块。各模块版本历史与状态细节见对应模块的 CLAUDE.md，此处不重复维护。
+全部模块均已交付，无尚未实现模块。各模块细节见对应模块的 CLAUDE.md，此处不重复维护。
 
 | 模块 | 包名 | 说明 |
 |------|------|------|
 | `common` | com.bank.branch.platform.common.* | 公共基础设施 (web/trace/security/aop/db 5 个子模块) |
 | `auth-permission-center` | com.bank.branch.platform.auth | 认证授权中心 (RBAC + 数据范围) |
-| `system-governance-center` | com.bank.branch.platform.governance | 系统治理中心 (含 sys_job_conf / Quartz 集群调度) |
+| `system-governance-center` | com.bank.branch.platform.governance | 系统治理中心 (含 sys_job_conf / Quartz 集群调度、文件存储 OBS) |
 | `workflow-center` | com.bank.branch.platform.workflow | 工作流中心 (Flowable 集成) |
 | `customer-marketing-center` | com.bank.branch.platform.customer | 客户营销中心 |
 | `business-application-center` | com.bank.branch.platform.bizapp | 业务申请中心 |
 | `portal-content-center` | com.bank.branch.platform.portal | 门户与内容中心 |
 | `performance-engine-center` | com.bank.branch.platform.performance | 绩效计算中心 (含 eval 考核评价/奖励分配) |
-| `report-analytics-center` | com.bank.branch.platform.report | 报表分析中心 (只读) |
+| `report-analytics-center` | com.bank.branch.platform.report | 报表分析中心 (只读，含 screen 大屏子域) |
 | `red-engine-center` | com.bank.branch.platform.redengine | 红色引擎党建管理 |
+| `soap-gateway-center` | com.bank.branch.platform.soap | 外部渠道 SOAP/callpu 网关：随 bootstrap 同 JVM 启动，`SoapNettyServer` 额外监听独立 Netty 端口；另提供 `POST /api/callpu` HTTP 入口 |
 | `bootstrap` | com.bank.branch.platform | 唯一的 Spring Boot 启动入口 |
 
-此外还有两个工程：
-
-- `soap-gateway-center/` — 外部渠道 SOAP/callpu 网关（包名 `...platform.soap`）：随 bootstrap 同 JVM 启动，`SoapNettyServer` 额外监听独立 Netty 端口；另提供 `POST /api/callpu` HTTP 入口。见其 CLAUDE.md / AGENTS.md
-- `xanzc_frontend/` — Vue 3 + Vite 前端（npm 工程，不在 Maven 聚合内，`npm run dev` 启动）
+以上均在 Maven 聚合内。此外 `xanzc_frontend/` 为 Vue 3 + Vite 前端（npm 工程，不在 Maven 聚合内，`npm run dev` 启动）。
 
 ### 当前模块依赖图
 
@@ -73,11 +75,12 @@ workflow-center (依赖 auth + governance)
 portal-content-center (依赖 auth + governance + workflow，通用域不持有核心域状态)
 customer-marketing-center (依赖 auth + governance + workflow)
 business-application-center (依赖 auth + governance + workflow + customer-marketing + portal)
-performance-engine-center (依赖 auth + governance + workflow + customer-marketing)
+performance-engine-center (依赖 auth + governance + workflow + customer-marketing + portal——V1.12+ 经 AddressBookApi 校验员工存在性)
 
 report-analytics-center (只读，依赖 auth/governance/performance/customer 的 *Api，不被业务模块依赖)
 
 red-engine-center (依赖 auth + governance；不依赖 workflow——审核流不接 Flowable，自管两级审核状态机)
+soap-gateway-center (依赖 performance-engine 的 PerfApprovalQueryApi，手机端审批网关)
 
 bootstrap (依赖所有业务模块，是唯一的 Spring Boot 启动入口)
 ```
@@ -116,7 +119,7 @@ com.bank.branch.platform.<module>/
 - **接口**: `*Api`, `*QueryApi`
 - **实现类**: `*Facade` (对外), `*ServiceImpl` (内部)
 - **实体**: 驼峰命名，对应表名
-- **Mapper**: `*Mapper` (接口) + `*Mapper.xml`
+- **Mapper**: `*Mapper` (接口) + `*Mapper.xml`（仅 BaseMapper 覆盖不到的自定义 SQL 才写 XML）
 - **控制器**: `*Controller`
 - **常量**: `SCREAMING_SNAKE_CASE`
 
@@ -149,7 +152,7 @@ com.bank.branch.platform.<module>/
 ### 开发环境
 
 - **数据库**: MySQL 8.0 本地实例 (`localhost:3306/yiti 用户:root, 密码 djdev`)
-- **对象存储**: MinIO 本地服务
+- **对象存储**: 华为云 OBS（配置键 `obs.endPoint` / `obs.bucketName`，见 bootstrap `application.yml`；开发沙箱可能无法解析 OBS 域名，附件失败按 fail-close 处理）
 - **日志级别**: DEBUG (com.bank.platform), INFO (root)
 
 ### 配置文件
@@ -161,9 +164,9 @@ com.bank.branch.platform.<module>/
 
 ### 端口与 API 文档
 
-- 后端 `server.port`: **18081**；SOAP 网关 Netty 端口: 30523（`platform.soap.netty.port`）
-- 前端 dev server: 8090（`/api` 代理到 `http://localhost:18081`）
-- Knife4j UI: `http://localhost:18081/doc.html` (启动后访问)
+- **仓库基线**: 后端 `server.port` **18080**、SOAP 网关 Netty **30522**（`platform.soap.netty.port`）、前端 dev **8090**（`/api` 代理到 18080）
+- **本机开发实况**: 18080/30522 被另一套遗留 java 进程占用（**勿动该进程**），本机通过 `bootstrap/src/main/resources/application.yml` 与 `xanzc_frontend/vite.config.js` 的**有意未提交改动**运行在 **18081 / 30523 / 8091**——这几处本地改动勿提交、勿回退
+- Knife4j UI: `http://localhost:18081/doc.html`（按本机实际后端端口）
 
 ## 开发 Checklist
 
@@ -185,7 +188,8 @@ com.bank.branch.platform.<module>/
 - **设计文档**: `project_ana_技术方案与架构拆分.md`
 - **功能文档**: `project_ana.md`
 - **docs 目录**: 各模块详细设计文档 + DDL + 共享开发规范 (见 `docs/CLAUDE.md`)
-- **运维 Runbook**: `docs/modules/system-governance-center/09-运维Runbook.md` — sys_job_conf / Quartz 集群调度运维权威指南（V1.9 整合）
+- **示例代码索引**: [docs/code-examples.md](docs/code-examples.md) — 各类规范实现（文件上传/OBS、MyBatis-Plus、标准 Controller、资源注册 SQL、DATA_SCOPE、Flowable、Quartz、导出、分布式锁、各类测试、前端模式）的现成范例位置，**开发新功能先查此索引照着写**
+- **运维 Runbook**: `docs/modules/system-governance-center/09-运维Runbook.md` — sys_job_conf / Quartz 集群调度运维权威指南
 
 ### 模块级 CLAUDE.md (开发时必须参考)
 - **公共基础设施**: [common/CLAUDE.md](common/CLAUDE.md)
@@ -197,11 +201,19 @@ com.bank.branch.platform.<module>/
 - **门户与内容**: [portal-content-center/CLAUDE.md](portal-content-center/CLAUDE.md)
 - **绩效计算**: [performance-engine-center/CLAUDE.md](performance-engine-center/CLAUDE.md)
 - **报表分析**: [report-analytics-center/CLAUDE.md](report-analytics-center/CLAUDE.md)
-- **红色引擎（党建管理）**: [red-engine-center/CLAUDE.md](red-engine-center/CLAUDE.md) — 党组织树管理、材料上报、两级审核评分、驾驶舱/红黄牌预警、年度归档、数据导出；不接 Flowable
-- **外部渠道网关（SOAP/callpu）**: [soap-gateway-center/CLAUDE.md](soap-gateway-center/CLAUDE.md) — Netty SOAP 服务 + callpu HTTP 网关；含 SYS_415 / urlencoded 兼容过滤器
+- **红色引擎（党建管理）**: [red-engine-center/CLAUDE.md](red-engine-center/CLAUDE.md) — 不接 Flowable，自管两级审核状态机
+- **外部渠道网关（SOAP/callpu）**: [soap-gateway-center/CLAUDE.md](soap-gateway-center/CLAUDE.md) — 含 SYS_415 / urlencoded 兼容过滤器
+- **启动入口**: [bootstrap/CLAUDE.md](bootstrap/CLAUDE.md)
+- **前端**: [xanzc_frontend/CLAUDE.md](xanzc_frontend/CLAUDE.md)
 
 ### 共享开发规范
 - **[docs/common-dev-guide.md](docs/common-dev-guide.md)** — 统一响应模型、错误码规范、分页标准、鉴权链路、数据范围 SQL 模板、审计规范、事件发布、数据传输、日志规范 (所有模块必须遵守)
+
+### 文档维护约定（2026-07-19 起，防止再次漂移）
+- **每个目录的 CLAUDE.md 是该目录开发指导的唯一权威**；凡与 CLAUDE.md 同目录并存的 AGENTS.md 一律只写指向 CLAUDE.md 的指针，禁止承载实体内容（历史上两份并行维护已造成双向漂移）
+- **CLAUDE.md 不维护数量与清单**：Controller/端点/类/错误码的个数与逐条列表一律不写入（历史证明必然过期，最严重处漏记 56%）。清单以源码目录为准；端点契约细节见 `docs/modules/<模块名>/03-接口设计.md`、`04-对外API契约.md`，每次接口变更同步更新这两份文档而非 CLAUDE.md
+- **版本历史/变更叙事不进 CLAUDE.md**：一律靠 `git log`；CLAUDE.md 只保留仍影响当下决策的"为什么"结论与踩坑
+- **示例代码位置统一登记在 `docs/code-examples.md`**：新增/替换某类规范实现时同步更新该索引，CLAUDE.md 只引用不复制
 
 ### TDD (测试驱动开发) 绝对红线
 - **红-绿-重构 (Red-Green-Refactor) 闭环**：一切特性的开发或者 Bug 修复，必须先写测试（让他失败，Red），再写最简代码让他通过（Green），最后重构优化（Refactor）。
@@ -210,7 +222,7 @@ com.bank.branch.platform.<module>/
 ### Flyway 禁令（绝对红线）
 - **本项目已彻底废弃 Flyway**：禁止引入 `flyway-core` / `flyway-mysql` 任何版本依赖；禁止在 `application*.yml` 出现 `spring.flyway.*` 配置；禁止新增 `V*__*.sql` / `U*__*.sql` 命名风格的迁移脚本；禁止编写 `*FlywayIT` / `*FlywayTestBase` 类。
 - **schema 变更走 SQL 直接执行**：所有 DDL/DML 由开发或 DBA 直接在目标库执行（手工或 CI 脚本），不再依赖任何"按版本号自动 migrate"框架。
-- **历史迁移脚本已全部删除**：`onepl` 与 `yiti` 当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
+- **历史迁移脚本已全部删除**：当前 schema 即为唯一真相，未来如需 fresh deploy 请用 `mysqldump` 从生产库导出 baseline。
 
 ### MyBatis-Plus 规范（新增功能绝对红线，2026-06-10 起）
 - **所有新增功能涉及的数据库访问统一使用 MyBatis-Plus**：Mapper 接口必须 `extends BaseMapper<T>`；单条 CRUD（`insert`/`selectById`/`updateById`/`deleteById` 等）直接用 BaseMapper 内置方法，**禁止**为这些方法重复写 XML；动态/简单条件查询优先 `LambdaQueryWrapper`/`LambdaUpdateWrapper`。
