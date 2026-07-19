@@ -41,6 +41,11 @@
    - `PRODUCT_SUPPORT_KEY` / `NAV_ACTIVE_KEY` 只是设计语义预留位，当前代码没有真正的缓存读写逻辑。
    - 后续如需恢复 Cache-Aside，需先决定接入的缓存实现。
 
+4. **`AnnouncementController` `@BizAuth` 缺失反例（已于 2026-07-19 修复，保留为历史教训）**：该 Controller 的全部 9 个端点曾**完全没有** `@BizAuth`——对应的 `RES_ANN_*` 资源早已在 `PT_RESOURCE` 完整登记，RBAC（`AuthorizationInterceptor` Step1 资源匹配 + Step2 角色-资源绑定）本身不受影响，但 Step3（`BizMetaResolver`）因缺注解直接放行并退化为最小 `DataScopeContext`，不解析 `BizType`/`BizAction`。TDD 修复：新建架构守护测试 `PortalBizAuthArchTest`（`src/test/java/.../arch/`，对照 performance 的 `BizAuthConsistencyArchTest`）跑 Red（9 个端点命中），补 `@BizAuth(bizType = BizType.SYS_CONFIG, action = ...)` 转 Green。
+   - `bizType` 选 `SYS_CONFIG` 而非新增独立 BizType：公告管理菜单挂在「系统设置」分组（`M_SYS_ANN` 挂 `M_GROUP_SYSTEM`），与 auth/governance/workflow 里同样归为系统级杂项管理的端点一致复用 `SYS_CONFIG`，不违反"扩展新 BizType 前优先复用现有枚举"的红线。
+   - `PortalBizAuthArchTest` 对 `ShortcutController`/`WorkspaceController` 做了显式豁免（登录态即可访问，源码类级 Javadoc 已声明设计意图），新增 Controller 若确需同类豁免，需照此模式在架构测试里显式登记理由，不能只是漏标。
+   - 新增功能不要照抄这个历史反例，务必对齐惯例主动补 `@BizAuth`。
+
 ## 已知技术债/例外
 
 - **边界违规（`listener/WorkflowApprovalNotificationListener.java`，git log 显示 2026-05-22 引入）**：该监听器同时触犯"跨模块只能走 `*Api`/`*QueryApi`"红线三处，均登记为待整改技术债：
@@ -63,4 +68,5 @@
 
 - 单元测试用 Mockito（Service / Adapter / Converter / Facade / Listener）；Controller 层用 MockMvc + H2，基类 `AbstractControllerIntegrationTest`；Mapper 集成测试用 Testcontainers MySQL，基类 `AbstractMapperIntegrationTest`。
 - Mock 用户上下文用 `@WithMockEmpContext` 注解 + `MockEmpContextExtension`。
+- **架构守护测试**（`src/test/java/.../arch/`）：`PortalBizAuthArchTest`（2026-07-19 新建）守护 controller 包所有 public 处理方法必须标注 `@BizAuth`，`ShortcutController`/`WorkspaceController` 因登录态即可访问被显式豁免（白名单登记在测试源码内，改动前先读测试 Javadoc）。
 - **共享物理表清理**：本模块 `PORTAL_SHORTCUT` 表与 bootstrap 模块 IT 直连的 `onepl_test_bootstrap.PORTAL_SHORTCUT` 是同一张物理表。`PortalShortcutMapperIntegrationTest` 因此用了双 `@Sql`：一个 `BEFORE_TEST_METHOD` 清理遗留脏数据保证每个用例从干净状态开始，另一个 `executionPhase = AFTER_TEST_METHOD` 在用例结束后收尾清理本次写入的数据。原因：如果只清前不清后，最后一个测试方法写入的 `TEST_%` 行会遗留在共享物理表里，污染之后运行的 bootstrap 侧 `PortalWorkspaceMetricIT`（其快捷方式计数断言会因残留脏数据而失败）。今后新增涉及与 bootstrap 共享物理表的 Mapper/Controller 集成测试，都应遵循这个「准备 + 收尾」双 `@Sql` 模式。
