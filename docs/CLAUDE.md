@@ -13,16 +13,16 @@ docs/
 ├── customer-marketing-center-文档偏离检查报告-2026-04-26.md  # customer 模块文档-代码偏离核对报告（历史存档）
 ├── 指标结果模板.xlsx / 指标表上传模板.xlsx / 目标值上传模板.xlsx  # 绩效导入 Excel 模板样例
 ├── exports/                                # 独立 PlantUML ER 图产物链（build_yiti_schema_doc.py + plantuml.jar + yiti_er_*.puml/.png/.svg）
-├── modules/                               # 各模块的详细设计文档
-│   ├── common/                            # 公共基础设施 (3 份文档)
-│   ├── auth-permission-center/            # 认证授权中心 (8 份文档)
-│   ├── system-governance-center/          # 系统治理中心 (10 份文档，含 09-运维Runbook.md)
-│   ├── workflow-center/                   # 工作流中心 (9 份文档)
-│   ├── portal-content-center/             # 门户与内容中心 (9 份文档)
-│   ├── customer-marketing-center/         # 客户营销中心 (9 份文档)
-│   ├── business-application-center/       # 业务申请中心 (9 份文档)
-│   ├── performance-engine-center/         # 绩效计算中心 (10 份文档，含 原业绩分配预览查询口径.md)
-│   └── report-analytics-center/           # 报表分析中心 (9 份文档)
+├── modules/                               # 各模块的详细设计文档（文档份数以目录实际为准，不在此维护）
+│   ├── common/                            # 公共基础设施
+│   ├── auth-permission-center/            # 认证授权中心
+│   ├── system-governance-center/          # 系统治理中心（含 09-运维Runbook.md）
+│   ├── workflow-center/                   # 工作流中心
+│   ├── portal-content-center/             # 门户与内容中心
+│   ├── customer-marketing-center/         # 客户营销中心
+│   ├── business-application-center/       # 业务申请中心
+│   ├── performance-engine-center/         # 绩效计算中心（含 原业绩分配预览查询口径.md）
+│   └── report-analytics-center/           # 报表分析中心（含 10-大屏设计器操作指南.md）
 ├── schema/                                # 数据库 DDL、种子数据、schema 可视化生成脚本
 │   └── migrations/                        # 历史增量迁移脚本归档（非 Flyway）
 ├── testing/                               # API 集成测试脚本与测试数据
@@ -70,19 +70,19 @@ docs/
 | `08-初始化数据清单.md` | 种子数据 |
 | `09-依赖契约摘要.md` | 依赖其他模块的契约 |
 
-**全部 9 个模块文档已就绪（2026-07-13 刷新，共 77 份）**：
+**全部业务模块的详细设计文档均已就绪**（各模块实际文档份数以目录为准，不在此维护数字，避免过期）：
 
-| 模块 | 文档数 | 类型 |
-|---|---|---|
-| `common` | 3 | 公共基础层 |
-| `auth-permission-center` | 8 | 支撑域 |
-| `system-governance-center` | 10（含 `09-运维Runbook.md`） | 支撑域 |
-| `workflow-center` | 9 | 支撑域 |
-| `portal-content-center` | 9 | 通用域 |
-| `customer-marketing-center` | 9 | 核心域 |
-| `business-application-center` | 9 | 核心域 |
-| `performance-engine-center` | 10（含 `原业绩分配预览查询口径.md`） | 核心域 |
-| `report-analytics-center` | 10（含 `10-大屏设计器操作指南.md`） | 支撑域（只读） |
+| 模块 | 类型 |
+|---|---|
+| `common` | 公共基础层 |
+| `auth-permission-center` | 支撑域 |
+| `system-governance-center` | 支撑域（含 `09-运维Runbook.md`） |
+| `workflow-center` | 支撑域 |
+| `portal-content-center` | 通用域 |
+| `customer-marketing-center` | 核心域 |
+| `business-application-center` | 核心域 |
+| `performance-engine-center` | 核心域（含 `原业绩分配预览查询口径.md`） |
+| `report-analytics-center` | 支撑域（只读，含 `10-大屏设计器操作指南.md`） |
 
 ## 数据脚本分层约定
 
@@ -113,26 +113,7 @@ docs/
 | `ddl-eval.sql` | performance-engine-center / eval 子域（2026-05-27 引入） | 内部相互评价 + 奖励分配（REWARD）表，`05-表结构DDL.md` 尚未同步收录 |
 | `ddl-yiti-prod-golive.sql` | 全量（生产上线基线） | 从权威源 `yiti` 库导出的全表建库建表脚本，与 `seed-yiti-prod-golive.sql` 成对 |
 
-> **历史记录，非当前最新版**：以下 2026-04-10 记录是 PT_* 对齐脚本机制刚建立时的首个样例。此后 `docs/superpowers/sql/` 下持续新增了大量按日期前缀的对齐/授权/资源注册脚本（截至 2026-07-12 已超过 150 个），**查找当前有效的权限/资源配置务必按文件名日期从新到旧检索**，不要只看本节示例就当作现状。
-
-### 2026-04-10 PT_* 对齐脚本（历史记录）
-
-| 文件 | 内容 | 说明 |
-|------|------|------|
-| `docs/superpowers/sql/backup/2026-04-10-pt-tables-backup.sql` | 对齐前 mysqldump 备份 | 覆盖 `PT_RESOURCE` / `PT_ROLE_RESOURCE` / `PT_ROLE_BIZ_SCOPE` / `PT_USER` / `PT_USER_ROLE` / `EXT_USER_ORG` / `EXT_ORG_INFO` |
-| `docs/superpowers/sql/2026-04-10-pt-align-and-test-seed.sql` | 全清全建 + 测试种子 | 84 行 `PT_RESOURCE`、458 行 `PT_ROLE_RESOURCE`、70 行 `PT_ROLE_BIZ_SCOPE`、10 个测试账户及角色/机构绑定 |
-
-**关键约束（该 2026-04-10 样例脚本的约束，机制层面长期有效）**：
-
-1. `PT_RESOURCE.RESOURCE_ID` 长度 ≤ 20，命名规范：`A_*`（auth）/ `G_*`（governance）/ `W_*`（workflow）
-2. 路径变量统一写成 AntPath `*`（如 `/api/admin/roles/*`），由 `ResourceMatcher` 匹配
-3. 角色分两档：`R_ADMIN` + `R_BACK_TECH` 拥有全部 84 条；其余 10 个业务角色只授予 29 条通用资源
-4. 10 个测试账户统一密码 `123456`，BCrypt hash 为 `$2b$10$16t1SpylVaWF2rgXoPsCVO1dmylMXQUAcVFkjSwiFwPg3xjsOmH7m`（python bcrypt 生成，已验证）
-5. 该脚本**覆盖** `docs/schema/seed-v1.sql` 里 PT_* 的旧种子；未来如要再次对齐，必须：先备份 → 再以新日期前缀新增脚本 → 不要原地修改已归档脚本
-
-完整变更背景和测试结果见：
-- `docs/superpowers/plans/2026-04-10-interface-full-test-plan.md`（100 条 curl 用例 + 实测 80% 通过率）
-- `docs/superpowers/sessions/2026-04-10-interface-test-session-record.md`（会话全记录、修复的 12 个缺陷清单）
+> **查找当前有效的 PT_* 权限/资源配置**：`docs/superpowers/sql/` 下按日期前缀持续新增对齐/授权/资源注册脚本，务必按文件名日期从新到旧检索，不要依赖任何单个历史样例脚本当作现状；资源注册与鉴权匹配机制见根 `CLAUDE.md`「开发 Checklist」与 `docs/common-dev-guide.md`「鉴权链路使用指南」。
 
 ## 使用指引
 

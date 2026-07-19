@@ -8,6 +8,7 @@
 |------|------|
 | `test-data.sql` | API 测试用种子数据（MySQL），包含 auth/governance/workflow 测试数据 |
 | `api-test.sh` | API 集成测试脚本（bash/curl） |
+| `interface-design-check.md` | 三模块（auth/governance/workflow）接口设计与实现一致性核对报告，历史核对记录，非持续维护文档 |
 
 ## 前置条件
 
