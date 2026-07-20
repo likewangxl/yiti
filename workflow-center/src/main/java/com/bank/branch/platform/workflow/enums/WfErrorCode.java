@@ -36,6 +36,11 @@ public enum WfErrorCode {
     TRANSFER_NOT_FOUND_OR_PROCESSED("WF-40914", "转交不存在或已处理"),
     TRANSFER_STATE_CHANGED("WF-40915", "转交状态已变更"),
     TRANSFER_TASK_GONE("WF-40916", "原任务已不存在，转交失效"),
+    /**
+     * @deprecated 2026-07-20 起未签收的候选组任务改为可直接指派（from_emp_id 允许为空），
+     *     不再因"未签收"拒绝转交发起。保留枚举项避免占用/复用 WF-40917 码位，勿再抛出。
+     */
+    @Deprecated
     TRANSFER_TASK_NOT_CLAIMED("WF-40917", "任务尚未签收，无法转交"),
     TRANSFER_SELF_NOT_ALLOWED("WF-40918", "不能将任务转交给本人"),
 

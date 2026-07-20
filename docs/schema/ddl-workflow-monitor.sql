@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS `WF_TASK_TRANSFER` (
   `biz_type` varchar(50) DEFAULT NULL,
   `node_key` varchar(100) DEFAULT NULL,
   `node_name` varchar(200) DEFAULT NULL,
-  `from_emp_id` varchar(32) NOT NULL,
+  `from_emp_id` varchar(32) DEFAULT NULL COMMENT '原办理人工号；NULL=发起时任务尚未签收(候选池指派)',
   `initiator_emp_id` varchar(32) NOT NULL,
   `to_emp_id` varchar(32) NOT NULL,
   `org_code` varchar(32) DEFAULT NULL,

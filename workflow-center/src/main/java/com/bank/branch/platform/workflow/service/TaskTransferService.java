@@ -91,11 +91,21 @@ public class TaskTransferService {
      * {@code fromEmpId} 取当前任务 {@code assignee}（被转出者），<b>不是</b>发起人 —— 秘书代为
      * 发起转交时，发起人（{@code initiatorEmpId}）可能不同于被转出的实际办理人。
      * </p>
+     * <p>
+     * <b>两种语义共用本方法</b>（2026-07-20 放开未签收转交）：
+     * <ul>
+     *   <li><b>转交</b>：任务已签收，{@code fromEmpId} = 原办理人，办理权从 A 转给 B；</li>
+     *   <li><b>指派</b>：候选组任务尚无人签收，{@code fromEmpId} 为 {@code null}，
+     *       由发起人从候选池直接指派给 B（秘书岗代分派场景）。</li>
+     * </ul>
+     * 两者都走两阶段（接收人 {@link #accept} 后才真正 setAssignee）与发起即锁定
+     * （待认领期间原任务对所有人只读，其他候选人不能抢先审批）。
+     * </p>
      *
      * @param taskId 任务ID
      * @param req    转交发起请求（接收人工号 + 原因）
      * @return 转交记录ID
-     * @throws BizException WF-40403 任务不存在；WF-40917 任务尚未签收；WF-40918 不能转交给本人；
+     * @throws BizException WF-40403 任务不存在；WF-40918 不能转交/指派给本人；
      *                       WF-40910 已有待认领转交；WF-40911 接收人不在本机构；
      *                       WF-40912 接收人无该节点办理资格
      */
@@ -110,16 +120,15 @@ public class TaskTransferService {
             throw new BizException(WfErrorCode.TASK_NOT_FOUND.getCode(), WfErrorCode.TASK_NOT_FOUND.getMessage());
         }
 
-        // 候选组任务未签收时 assignee 为 null，from_emp_id NOT NULL 直接插会抛 DataIntegrityViolationException，
-        // 原实现被下面的 catch 误兜成 WF-40910「已有待认领转交」假冲突。这里显式前置校验，
-        // 给出明确的「任务尚未签收，无法转交」错误（I2 整改）。
+        // fromEmpId 为 null = 任务尚在候选池无人签收 → 本次为「指派」语义（2026-07-20 放开）。
+        // 此前这里硬性要求 assignee 非空（WF-40917），导致秘书岗无法指派未签收的会签任务，
+        // 与审批链路口径不一致（PC 端 approve 前自动 claim、手机端 approveTaskByEmp 不校验 assignee）。
+        // 现 from_emp_id 已改为可空列，两种语义共用同一条两阶段链路：
+        //   非空 = 转交（从原办理人 A 手上转给 B）；空 = 指派（候选池 → B）。
         String fromEmpId = task.getAssignee();
-        if (fromEmpId == null) {
-            throw new BizException(WfErrorCode.TRANSFER_TASK_NOT_CLAIMED.getCode(),
-                    WfErrorCode.TRANSFER_TASK_NOT_CLAIMED.getMessage());
-        }
         // 自转交防御：转给被转出者本人或发起人自己均无意义（前端 TransferDialog 已过滤，服务层兜底）。
-        if (fromEmpId.equals(toEmpId) || initiator.equals(toEmpId)) {
+        // 指派场景无原办理人，只需防"指派给自己"。
+        if (Objects.equals(fromEmpId, toEmpId) || initiator.equals(toEmpId)) {
             throw new BizException(WfErrorCode.TRANSFER_SELF_NOT_ALLOWED.getCode(),
                     WfErrorCode.TRANSFER_SELF_NOT_ALLOWED.getMessage());
         }
@@ -178,7 +187,7 @@ public class TaskTransferService {
         // 上面的先查后插存在竞态窗口（并发 initiate 都读到 selectActiveByTaskId==null），
         // 竞态败者在这里插入时会命中唯一索引冲突，兜成与预检查一致的 WF-40910。
         // 只兜「唯一键冲突」这一类（DuplicateKeyException），不再宽泛捕获 DataIntegrityViolationException——
-        // 后者还包含 NOT NULL 等其他约束违约（如 from_emp_id 为空），一律当作待认领冲突会掩盖真实错误（I2 整改）。
+        // 后者还包含其他约束违约，一律当作待认领冲突会掩盖真实错误（I2 整改）。
         try {
             wfTaskTransferMapper.insert(t);
         } catch (DuplicateKeyException e) {
@@ -187,8 +196,9 @@ public class TaskTransferService {
         }
 
         taskService.addComment(taskId, task.getProcessInstanceId(), "TRANSFER_INITIATED", req.getReason());
-        log.info("转交发起: taskId={}, from={}, to={}, initiator={}, transferId={}",
-                taskId, t.getFromEmpId(), toEmpId, initiator, t.getId());
+        log.info("转交发起: taskId={}, from={}, to={}, initiator={}, transferId={}, mode={}",
+                taskId, t.getFromEmpId(), toEmpId, initiator, t.getId(),
+                fromEmpId == null ? "ASSIGN(未签收指派)" : "TRANSFER(原办理人转出)");
         return t.getId();
     }
 
@@ -446,6 +456,9 @@ public class TaskTransferService {
     /**
      * 拒绝场景下同时通知发起人与原办理人（{@code fromEmpId}）：两者都需要知悉转交未被接收人认领，
      * 任务仍停留在原办理人手中（转交锁已随状态流转解除）。
+     *
+     * <p>指派场景（发起时任务未签收，{@code fromEmpId} 为 null）无原办理人，
+     * 只通知发起人——发给 null 收件人会产生无主通知，且 NotifyApi 侧无从投递。</p>
      */
     private void notifyInitiatorAndFrom(WfTaskTransfer t, String title, String content) {
         notifyApi.sendNotification(NotificationCmd.builder()
@@ -456,6 +469,9 @@ public class TaskTransferService {
                 .bizType(t.getBizType())
                 .bizId(t.getBusinessKey())
                 .build());
+        if (t.getFromEmpId() == null || t.getFromEmpId().isBlank()) {
+            return;
+        }
         notifyApi.sendNotification(NotificationCmd.builder()
                 .targetEmpId(t.getFromEmpId())
                 .title(title)

@@ -173,23 +173,49 @@ class TaskTransferServiceTest {
     }
 
     /**
-     * I2：对未签收的候选组任务（assignee==null）发起转交 → 明确的「任务尚未签收」WF-40917，
-     * 而非被 NOT NULL 违约误兜成 WF-40910 假冲突；不写库，也不再走单活/机构等后续校验。
+     * 2026-07-20：对未签收的候选组任务（assignee==null）发起转交 = <b>指派</b>语义，应正常落库，
+     * from_emp_id 为 null（无原办理人）。此前这里抛 WF-40917 拒绝，导致秘书岗无法分派会签任务，
+     * 与审批链路（PC 端 approve 前自动 claim、手机端不校验 assignee）口径不一致。
      */
     @Test
-    void initiate_rejectsWhenTaskNotClaimed() {
+    void initiate_unclaimedTask_assignsWithNullFrom() {
         when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
         when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
-        Task task = mock(Task.class);
+        Task task = mockTask();
         when(task.getAssignee()).thenReturn(null); // 未签收候选组任务
         mockTaskQuery(task);
+        when(wfTaskTransferMapper.selectActiveByTaskId(TASK_ID)).thenReturn(null);
+        when(orgApi.getUserMainOrg(E_TO)).thenReturn(org(ORG_A));
+        mockPdKey();
+        when(candidateResolverService.resolveCandidates(PD_KEY, NODE_KEY)).thenReturn(List.of("USER:" + E_TO));
+        when(userApi.getCandidateGroupKeys(E_TO)).thenReturn(Set.of("USER:" + E_TO, "ORG:" + ORG_A));
 
-        assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_TO, "忙")))
+        String id = taskTransferService.initiate(TASK_ID, req(E_TO, "指派给行长"));
+
+        assertThat(id).isNotBlank();
+        ArgumentCaptor<WfTaskTransfer> cap = ArgumentCaptor.forClass(WfTaskTransfer.class);
+        verify(wfTaskTransferMapper).insert(cap.capture());
+        WfTaskTransfer saved = cap.getValue();
+        assertThat(saved.getFromEmpId()).isNull();          // 指派：无原办理人
+        assertThat(saved.getInitiatorEmpId()).isEqualTo(E_SEC);
+        assertThat(saved.getToEmpId()).isEqualTo(E_TO);
+        assertThat(saved.getStatus()).isEqualTo("PENDING_ACCEPT");
+    }
+
+    /** 指派场景仍禁止指派给发起人自己（无原办理人可比，只比发起人）→ WF-40918，不写库。 */
+    @Test
+    void initiate_unclaimedTask_rejectsAssignToSelf() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        Task task = mockTask();
+        when(task.getAssignee()).thenReturn(null);
+        mockTaskQuery(task);
+
+        assertThatThrownBy(() -> taskTransferService.initiate(TASK_ID, req(E_SEC, "指派给自己")))
                 .isInstanceOf(BizException.class)
                 .extracting("code")
-                .isEqualTo("WF-40917");
+                .isEqualTo("WF-40918");
 
-        verify(wfTaskTransferMapper, never()).selectActiveByTaskId(anyString());
         verify(wfTaskTransferMapper, never()).insert(any(WfTaskTransfer.class));
     }
 
