@@ -267,7 +267,8 @@ public class FreeReportServiceImpl implements FreeReportService {
             // 复用一个 0.00 数字格式样式（逐格建样式会超 64000 上限）
             CellStyle numStyle = wb.createCellStyle();
             numStyle.setDataFormat(wb.createDataFormat().getFormat("0.00"));
-            DataValidationHelper dvHelper = sheet.getDataValidationHelper();
+            // 是否写过 TRUNC 公式：写过才让 Excel/WPS 打开时重算一次，避免无公式文件被标记为已修改
+            boolean hasFormula = false;
             // 表头
             Row header = sheet.createRow(0);
             for (int c = 0; c < colDefs.size(); c++) {
@@ -291,26 +292,28 @@ public class FreeReportServiceImpl implements FreeReportService {
                     };
                     val = val != null ? val : "";
                     Cell cell = row.createCell(c);
-                    // 工号/姓名两列原样文本；其余列若是小数 → 显示截断两位数值(不四舍五入) + 0.00 格式；
-                    // 若确有精度被砍(小数位>2) → 挂「数据有效性输入提示」，点击/选中该格弹出完整原值。
+                    // 工号/姓名两列原样文本；其余列若是小数 → 0.00 格式显示两位。
+                    // 精度被砍(小数位>2)时写 TRUNC 公式而非裸数值：Excel/WPS 的数字格式只会四舍五入、
+                    // 无法截断，公式让「格内显示截断两位」与「点击后编辑栏可见完整原值」两个诉求同时成立。
                     if (!"col_1".equals(key) && !"col_2".equals(key) && isDecimal(val)) {
-                        cell.setCellValue(Double.parseDouble(truncate2(val)));
-                        cell.setCellStyle(numStyle);
                         int fracLen = val.length() - val.indexOf('.') - 1;
                         if (fracLen > 2) {
-                            DataValidation dv = dvHelper.createValidation(
-                                    dvHelper.createCustomConstraint("TRUE()"),
-                                    new org.apache.poi.ss.util.CellRangeAddressList(rIdx, rIdx, c, c));
-                            dv.createPromptBox("完整值", val);
-                            dv.setShowPromptBox(true);
-                            dv.setSuppressDropDownArrow(true);
-                            sheet.addValidationData(dv);
+                            cell.setCellFormula("TRUNC(" + val + ",2)");
+                            // 缓存计算结果：打开文件未重算时也能正确显示截断值
+                            cell.setCellValue(Double.parseDouble(truncate2(val)));
+                            hasFormula = true;
+                        } else {
+                            cell.setCellValue(Double.parseDouble(val));
                         }
+                        cell.setCellStyle(numStyle);
                     } else {
                         cell.setCellValue(val);
                     }
                 }
                 rIdx++;
+            }
+            if (hasFormula) {
+                wb.setForceFormulaRecalculation(true);
             }
             wb.write(out);
             return out.toByteArray();

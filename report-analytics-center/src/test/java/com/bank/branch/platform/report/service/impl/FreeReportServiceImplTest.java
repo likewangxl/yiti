@@ -96,9 +96,12 @@ class FreeReportServiceImplTest {
         verify(fileApi).upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT));
     }
 
-    /** 下载导出：数字格显示截断两位(不四舍五入)，完整原值放"数据有效性输入提示"(点击/选中弹出)；工号/姓名原样文本。 */
+    /**
+     * 下载导出（小数位>2）：单元格写 TRUNC 公式 —— 格内显示截断两位(不四舍五入)，
+     * 点击该格时编辑栏显示 =TRUNC(完整原值,2)，原值一目了然；不再使用数据有效性弹框。
+     */
     @Test
-    void exportFilteredExcel_truncatesDecimal_keepsFullValueInPrompt() throws Exception {
+    void exportFilteredExcel_longDecimal_writesTruncFormulaCarryingFullValue() throws Exception {
         RptFreeReportBatch batch = new RptFreeReportBatch();
         batch.setId("B1");
         batch.setColDefs("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_2\",\"label\":\"姓名\"},{\"key\":\"col_3\",\"label\":\"金额\"}]");
@@ -120,15 +123,40 @@ class FreeReportServiceImplTest {
             // 工号/姓名 原样文本
             assertThat(data.getCell(0).getStringCellValue()).isEqualTo("E1");
             assertThat(data.getCell(1).getStringCellValue()).isEqualTo("张三");
-            // 金额列 → 数值截断 3.17(不四舍五入,3.1779998→3.17) + 数字格式 0.00
             Cell amt = data.getCell(2);
-            assertThat(amt.getCellType()).isEqualTo(CellType.NUMERIC);
+            // 公式承载完整原值：点击格子 → 编辑栏 =TRUNC(3.1779998,2)
+            assertThat(amt.getCellType()).isEqualTo(CellType.FORMULA);
+            assertThat(amt.getCellFormula()).isEqualTo("TRUNC(3.1779998,2)");
+            // 缓存结果 = 截断值，未重算也能正确显示 3.17
             assertThat(amt.getNumericCellValue()).isCloseTo(3.17, within(1e-9));
             assertThat(amt.getCellStyle().getDataFormatString()).isEqualTo("0.00");
-            // 完整原值在"数据有效性输入提示"里(点击/选中弹出)
-            boolean promptHasFull = sheet.getDataValidations().stream()
-                    .anyMatch(dv -> "3.1779998".equals(dv.getPromptBoxText()));
-            assertThat(promptHasFull).isTrue();
+            // 不再挂数据有效性弹框
+            assertThat(sheet.getDataValidations()).isEmpty();
+        }
+    }
+
+    /** 小数位≤2 无精度损失，写普通数值即可，不必套公式。 */
+    @Test
+    void exportFilteredExcel_shortDecimal_writesPlainNumber() throws Exception {
+        RptFreeReportBatch batch = new RptFreeReportBatch();
+        batch.setId("B1");
+        batch.setColDefs("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_3\",\"label\":\"金额\"}]");
+        when(batchMapper.selectById("B1")).thenReturn(batch);
+
+        RptFreeReportRow row = new RptFreeReportRow();
+        row.setCol1("E1");
+        row.setDataJson("{\"col_3\":\"3.1\"}");
+        when(rowMapper.countByBatch(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        when(rowMapper.selectByBatch(any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+
+        byte[] bytes = service.exportFilteredExcel("B1", "ALL", null, null, null);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            Cell amt = wb.getSheetAt(0).getRow(1).getCell(1);
+            assertThat(amt.getCellType()).isEqualTo(CellType.NUMERIC);
+            assertThat(amt.getNumericCellValue()).isCloseTo(3.1, within(1e-9));
+            assertThat(amt.getCellStyle().getDataFormatString()).isEqualTo("0.00");
         }
     }
 
