@@ -108,14 +108,18 @@
               <el-option :value="false" label="否" />
             </el-select>
           </el-form-item>
-          <!-- 员工角色范围：状态=可用的角色（按角色名称排序）；多选，留空表示不限制 -->
-          <el-form-item label="员工角色范围" prop="empRoleScopes">
-            <el-select v-model="dlg.scheme.empRoleScopes" :disabled="dlg.readOnly"
+          <!-- 员工标签范围：人员标签（系统设置>人员标签维护）；多选取并集，留空表示不限制 -->
+          <el-form-item label="员工标签范围" prop="empTagScopes">
+            <el-select v-model="dlg.scheme.empTagScopes" :disabled="dlg.readOnly"
               multiple filterable
               placeholder="不限制（留空=全部员工）" style="width:100%">
-              <el-option v-for="r in empRoleOptions" :key="r.roleCode"
-                :value="r.roleCode" :label="r.roleChName" />
+              <el-option v-for="t in empTagOptions" :key="t.tagId"
+                :value="t.tagId" :label="t.tagName" />
             </el-select>
+            <!-- 标签被删除后方案范围会静默失效，这里显式提示用户重选 -->
+            <div v-if="invalidTagIds.length" class="tag-invalid-tip">
+              ⚠ 已选中的标签 {{ invalidTagIds.join('、') }} 已被删除，该部分范围不再生效，请重新选择后保存。
+            </div>
           </el-form-item>
         </div>
       </el-form>
@@ -250,11 +254,12 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  listKpiRules, getKpiSchemeDetail, listKpiEmpRoles,
+  listKpiRules, getKpiSchemeDetail,
   createKpiScheme, updateKpiScheme, deleteKpiScheme, publishKpiScheme,
   addKpiItem, updateKpiItem, deleteKpiItem,
   listMetrics, uploadImportFile
 } from '@/api/perf';
+import { listPersonTags } from '@/api/system';
 
 // === 字典 ===
 // 状态从 SYS_DICT.dict_type='KPI_SCHEME_STATUS' 拉，不再写死中英文映射
@@ -435,7 +440,7 @@ const dlg = reactive({
   readOnly: false,
   editingId: null,
   saving: false,
-  scheme: { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '', empRoleScopes: [] },
+  scheme: { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '', empTagScopes: [] },
   items: [],
   // 缓存原 items（用于增删 diff）
   origItemMap: new Map()
@@ -515,15 +520,25 @@ async function ensureMetrics() {
   } catch {}
 }
 
-// === 员工角色范围下拉（可用角色，后端已按名称排序）===
-const empRoleOptions = ref([]);
-async function ensureEmpRoles() {
-  if (empRoleOptions.value.length) return;
+// === 员工标签范围下拉（人员标签，系统设置>人员标签维护）===
+// 标签数量级很小，一次拉满即可，避免分页导致已选标签不在选项里被误判为"已失效"
+const TAG_OPTION_PAGE_SIZE = 500;
+const empTagOptions = ref([]);
+async function ensureEmpTags() {
+  if (empTagOptions.value.length) return;
   try {
-    const rs = await listKpiEmpRoles();
-    empRoleOptions.value = Array.isArray(rs) ? rs : (rs?.records || []);
-  } catch { empRoleOptions.value = []; }
+    const rs = await listPersonTags({ pageNo: 1, pageSize: TAG_OPTION_PAGE_SIZE });
+    empTagOptions.value = Array.isArray(rs) ? rs : (rs?.records || []);
+  } catch { empTagOptions.value = []; }
 }
+
+// 已选但在标签库中不存在的标签 ID（标签被删除 → 范围静默失效，需提示用户重选）
+const invalidTagIds = computed(() => {
+  const selected = dlg.scheme?.empTagScopes || [];
+  if (!selected.length || !empTagOptions.value.length) return [];
+  const known = new Set(empTagOptions.value.map(t => t.tagId));
+  return selected.filter(id => !known.has(id));
+});
 
 // 指标项表达式：选中类型决定提交 formula(计算表达式) 或 sqlExpr(SQL表达式)，互斥
 function exprFields(it) {
@@ -561,10 +576,10 @@ function addItemRow() {
 
 async function openCreate() {
   await ensureMetrics();
-  await ensureEmpRoles();
+  await ensureEmpTags();
   dlg.readOnly = false;
   dlg.editingId = null;
-  dlg.scheme = { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '', empRoleScopes: [] };
+  dlg.scheme = { schemeCode: '', schemeName: '', cycleType: 'YEARLY', openDetail: true, applyScope: '', empTagScopes: [] };
   dlg.items = [defaultItem()];
   dlg.origItemMap = new Map();
   dlg.show = true;
@@ -572,7 +587,7 @@ async function openCreate() {
 
 async function openEdit(row, readOnly = false) {
   await ensureMetrics();
-  await ensureEmpRoles();
+  await ensureEmpTags();
   dlg.readOnly = readOnly;
   dlg.editingId = row.id || row.schemeCode;
   dlg.scheme = {
@@ -581,7 +596,7 @@ async function openEdit(row, readOnly = false) {
     cycleType:  row.cycleType  || 'YEARLY',
     openDetail: !!row.openDetail,
     applyScope: getApplyScope(row),
-    empRoleScopes: Array.isArray(row.empRoleScopes) ? row.empRoleScopes : [],
+    empTagScopes: Array.isArray(row.empTagScopes) ? row.empTagScopes : [],
     // 当前方案状态：编辑弹框「启用/禁用」按钮据此切换
     status: row.status || ''
   };
@@ -590,9 +605,9 @@ async function openEdit(row, readOnly = false) {
   if (!detail) {
     try { detail = await getKpiSchemeDetail(row.id || row.schemeCode); } catch {}
   }
-  // 员工角色范围以详情(getByIdDto)为准回显
-  if (Array.isArray(detail?.empRoleScopes)) {
-    dlg.scheme.empRoleScopes = detail.empRoleScopes;
+  // 员工标签范围以详情(getByIdDto)为准回显
+  if (Array.isArray(detail?.empTagScopes)) {
+    dlg.scheme.empTagScopes = detail.empTagScopes;
   }
   const items = (detail?.items || row.items || []).map(it => ({
     id: it.id,
@@ -653,7 +668,7 @@ async function onSave(targetStatus) {
         schemeName: dlg.scheme.schemeName,
         cycleType:  dlg.scheme.cycleType,
         openDetail: dlg.scheme.openDetail,
-        empRoleScopes: dlg.scheme.empRoleScopes || []
+        empTagScopes: dlg.scheme.empTagScopes || []
       });
       schemeId = dlg.editingId;
       // 同步 items：新增 / 更新 / 删除（按 id 比对）
@@ -696,7 +711,7 @@ async function onSave(targetStatus) {
         schemeName: dlg.scheme.schemeName,
         cycleType:  dlg.scheme.cycleType,
         openDetail: dlg.scheme.openDetail,
-        empRoleScopes: dlg.scheme.empRoleScopes || []
+        empTagScopes: dlg.scheme.empTagScopes || []
       });
       schemeId = created?.id || dlg.scheme.schemeCode;
       // 标记为"刚创建"，下次 reload 时排在第一行
@@ -911,4 +926,6 @@ onMounted(() => { reload(); loadOrgTree(); });
 .sql-date-macros code.macro-btn:hover { background: #ffd591; color: #874d00; box-shadow: 0 0 0 1px #fa8c16; }
 .sql-date-macros code.macro-btn:active { background: #fa8c16; color: #fff; }
 .sql-date-macros .hint-foot { margin-top: 8px; color: #909399; }
+/* 员工标签范围：已选标签被删除时的失效提示 */
+.tag-invalid-tip { margin-top: 6px; font-size: 12px; line-height: 1.5; color: #e6a23c; }
 </style>

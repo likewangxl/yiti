@@ -74,10 +74,6 @@ export function listKpiRules(params = {}) {
 export function getKpiSchemeDetail(id) {
   return call('get', `/perf/kpi-schemes/${id}`, {}, { items: [] });
 }
-// KPI 方案「员工角色范围」下拉：可用角色(按名称排序)，返回 [{roleCode, roleChName}]
-export function listKpiEmpRoles() {
-  return call('get', '/perf/kpi-schemes/emp-roles', {}, []);
-}
 export function createKpiScheme(data) {
   return call('post', '/perf/kpi-schemes', { data }, { id: 'mock' });
 }
