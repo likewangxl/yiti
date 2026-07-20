@@ -97,11 +97,12 @@ class FreeReportServiceImplTest {
     }
 
     /**
-     * 下载导出（小数位>2）：单元格写 TRUNC 公式 —— 格内显示截断两位(不四舍五入)，
-     * 点击该格时编辑栏显示 =TRUNC(完整原值,2)，原值一目了然；不再使用数据有效性弹框。
+     * 下载导出：单元格存**完整原值** + 0.00 格式 —— 点击该格时编辑栏干净地显示 3.1779998。
+     * 代价是格内按 0.00 四舍五入显示（3.18），这是用户 2026-07-20 明确取舍的结果：
+     * Excel/WPS 数字格式只会四舍五入不会截断，「编辑栏干净显示完整值」与「格内截断显示」不可共存。
      */
     @Test
-    void exportFilteredExcel_longDecimal_writesTruncFormulaCarryingFullValue() throws Exception {
+    void exportFilteredExcel_longDecimal_keepsFullValueInCell() throws Exception {
         RptFreeReportBatch batch = new RptFreeReportBatch();
         batch.setId("B1");
         batch.setColDefs("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_2\",\"label\":\"姓名\"},{\"key\":\"col_3\",\"label\":\"金额\"}]");
@@ -124,18 +125,16 @@ class FreeReportServiceImplTest {
             assertThat(data.getCell(0).getStringCellValue()).isEqualTo("E1");
             assertThat(data.getCell(1).getStringCellValue()).isEqualTo("张三");
             Cell amt = data.getCell(2);
-            // 公式承载完整原值：点击格子 → 编辑栏 =TRUNC(3.1779998,2)
-            assertThat(amt.getCellType()).isEqualTo(CellType.FORMULA);
-            assertThat(amt.getCellFormula()).isEqualTo("TRUNC(3.1779998,2)");
-            // 缓存结果 = 截断值，未重算也能正确显示 3.17
-            assertThat(amt.getNumericCellValue()).isCloseTo(3.17, within(1e-9));
+            // 纯数值格、无公式壳：点击格子 → 编辑栏就是 3.1779998
+            assertThat(amt.getCellType()).isEqualTo(CellType.NUMERIC);
+            assertThat(amt.getNumericCellValue()).isCloseTo(3.1779998, within(1e-9));
             assertThat(amt.getCellStyle().getDataFormatString()).isEqualTo("0.00");
-            // 不再挂数据有效性弹框
+            // 既不挂数据有效性弹框，也不写公式
             assertThat(sheet.getDataValidations()).isEmpty();
         }
     }
 
-    /** 小数位≤2 无精度损失，写普通数值即可，不必套公式。 */
+    /** 小数位≤2：同样是纯数值格 + 0.00，显示与原值一致。 */
     @Test
     void exportFilteredExcel_shortDecimal_writesPlainNumber() throws Exception {
         RptFreeReportBatch batch = new RptFreeReportBatch();
@@ -160,12 +159,14 @@ class FreeReportServiceImplTest {
         }
     }
 
+    /** 数值格判定：只有纯小数走数值格；整数/文本走文本原样写（防工号、编号类被转成数值）。 */
     @Test
-    void truncate2_rule() {
-        assertThat(FreeReportServiceImpl.truncate2("3.1779998")).isEqualTo("3.17");
-        assertThat(FreeReportServiceImpl.truncate2("3.1")).isEqualTo("3.10");
-        assertThat(FreeReportServiceImpl.truncate2("-2.999")).isEqualTo("-2.99");
-        assertThat(FreeReportServiceImpl.truncate2("1001")).isEqualTo("1001");
-        assertThat(FreeReportServiceImpl.truncate2("张三")).isEqualTo("张三");
+    void isDecimal_rule() {
+        assertThat(FreeReportServiceImpl.isDecimal("3.1779998")).isTrue();
+        assertThat(FreeReportServiceImpl.isDecimal("-2.999")).isTrue();
+        assertThat(FreeReportServiceImpl.isDecimal("1001")).isFalse();
+        assertThat(FreeReportServiceImpl.isDecimal("张三")).isFalse();
+        assertThat(FreeReportServiceImpl.isDecimal("")).isFalse();
+        assertThat(FreeReportServiceImpl.isDecimal(null)).isFalse();
     }
 }
