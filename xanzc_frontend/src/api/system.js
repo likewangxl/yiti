@@ -198,3 +198,63 @@ export function replaceRoleMenus(roleId, menuIds, reason) {
     data: { menuIds, reason }
   }, { ok: true });
 }
+
+// === 人员标签（AdminPersonTagController: /api/admin/sys/person-tags，全平台通用） ===
+// 标签分页（含关联人数）：{ keyword?, pageNo, pageSize } → PageResult
+export function listPersonTags(params = {}) {
+  return call('get', '/admin/sys/person-tags', {
+    params: { pageNo: 1, pageSize: 20, ...params }
+  }, { records: [], total: 0 });
+}
+// data: { tagName(必填 max100 全局唯一), remark? }
+export function createPersonTag(data) {
+  return call('post', '/admin/sys/person-tags', { data }, { ok: true });
+}
+export function updatePersonTag(tagId, data) {
+  return call('put', `/admin/sys/person-tags/${tagId}`, { data }, { ok: true });
+}
+// 删除标签：后端级联删除该标签下全部人员关联
+export function deletePersonTag(tagId) {
+  return call('delete', `/admin/sys/person-tags/${tagId}`, {}, { ok: true });
+}
+// 成员分页（工号/姓名/机构实时解析）
+export function listPersonTagMembers(tagId, params = {}) {
+  return call('get', `/admin/sys/person-tags/${tagId}/members`, {
+    params: { pageNo: 1, pageSize: 20, ...params }
+  }, { records: [], total: 0 });
+}
+// 批量新增成员（已在标签下的工号后端自动跳过），data 为实际新增条数
+export function addPersonTagMembers(tagId, usernames) {
+  return call('post', `/admin/sys/person-tags/${tagId}/members`, { data: { usernames } }, 0);
+}
+// 修改成员：把关联行换成另一个工号
+export function updatePersonTagMember(tagId, id, username) {
+  return call('put', `/admin/sys/person-tags/${tagId}/members/${id}`, { data: { username } }, { ok: true });
+}
+export function removePersonTagMember(tagId, id) {
+  return call('delete', `/admin/sys/person-tags/${tagId}/members/${id}`, {}, { ok: true });
+}
+// 全局导入：列=标签名称/工号/姓名，缺标签自动新建，同步原子（任一行错误整体不入库）
+export function importPersonTags(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return call('post', '/admin/sys/person-tags/import', {
+    data: fd,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }, null);
+}
+export function downloadPersonTagTemplate() {
+  return call('get', '/admin/sys/person-tags/import-template', { responseType: 'blob' }, null);
+}
+// 成员导入（整标签全量覆盖，调用前必须先向用户确认）
+export function importPersonTagMembers(tagId, file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  return call('post', `/admin/sys/person-tags/${tagId}/import`, {
+    data: fd,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }, null);
+}
+export function downloadPersonTagMemberTemplate() {
+  return call('get', '/admin/sys/person-tags/member-import-template', { responseType: 'blob' }, null);
+}
