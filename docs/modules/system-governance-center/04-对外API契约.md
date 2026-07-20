@@ -549,9 +549,52 @@ public interface FileApi {
 
 ---
 
-## 8. DTO 定义
+## 8. PersonTagApi -- 人员标签API（2026-07-20 新增）
 
-### 8.1 DictItemDTO
+```java
+package com.bank.branch.platform.governance.api;
+
+import com.bank.branch.platform.governance.api.dto.PersonTagDTO;
+
+import java.util.List;
+
+/**
+ * 人员标签对外 API。
+ * 供其他业务模块按标签圈定员工范围，以及回显/校验标签名称。
+ */
+public interface PersonTagApi {
+
+    /** 按标签 ID 集合取其下全部员工工号（多标签取并集、去重）。 */
+    List<String> getUsernamesByTagIds(List<Long> tagIds);
+
+    /** 按标签 ID 集合查标签（用于存在性校验与名称回显；缺失的 ID 即已删除标签）。 */
+    List<PersonTagDTO> getTagsByIds(List<Long> tagIds);
+
+    /** 按标签名称集合查标签（Excel 导入按名称解析 ID 用）。 */
+    List<PersonTagDTO> getTagsByNames(List<String> tagNames);
+}
+```
+
+**实现**：`facade/PersonTagFacade`（仅做实体→DTO 转换与去重，无业务规则）。
+
+**语义与注意事项：**
+
+| 项 | 说明 |
+|---|---|
+| 工号口径 | 返回的是 `PT_USER.USERNAME`（工号），**不是** `USER_ID` 代理键；调用方无需再转换 |
+| 空入参 | `tagIds`/`tagNames` 为 null 或空 → 返回空列表，不查库 |
+| 标签不存在 | 不抛异常：`getUsernamesByTagIds` 该标签不贡献工号；`getTagsByIds` 结果中缺失该 ID，调用方据此判定"范围失效" |
+| 去重 | ID/名称入参保序去重后再查；多标签成员并集去重 |
+| 查询次数 | 均为单次 IN 查询，无 N+1 |
+
+**当前调用方**：`performance-engine-center` 的 KPI 方案「员工标签范围」
+（`KpiSchemeService` 保存校验、`KpiScoreCalcService` 计分范围解析、`KpiSchemeImportStrategy` 导入按名称解析）。
+
+---
+
+## 9. DTO 定义
+
+### 9.1 DictItemDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -584,7 +627,7 @@ public class DictItemDTO {
 }
 ```
 
-### 8.2 CalendarDayDTO
+### 9.2 CalendarDayDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -609,7 +652,7 @@ public class CalendarDayDTO {
 }
 ```
 
-### 8.3 JobConfDTO
+### 9.3 JobConfDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -651,7 +694,7 @@ public class JobConfDTO {
 }
 ```
 
-### 8.4 JobRunLogDTO
+### 9.4 JobRunLogDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -705,7 +748,7 @@ public class JobRunLogDTO {
 }
 ```
 
-### 8.5 AuditLogDTO
+### 9.5 AuditLogDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -771,7 +814,7 @@ public class AuditLogDTO {
 }
 ```
 
-### 8.6 AuditLogCmd
+### 9.6 AuditLogCmd
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -850,7 +893,7 @@ public class AuditLogCmd {
 | executionTime | Integer | 否 | 执行耗时(ms) |
 | reason | String | 条件必填 | TRANSFER/DELETE/IMPORT/RECALC/CONFIG/JOB_TRIGGER 时必填 |
 
-### 8.7 AuditLogQueryReqDTO
+### 9.7 AuditLogQueryReqDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -883,7 +926,7 @@ public class AuditLogQueryReqDTO {
 }
 ```
 
-### 8.8 NotificationDTO
+### 9.8 NotificationDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -934,7 +977,7 @@ public class NotificationDTO {
 }
 ```
 
-### 8.9 NotificationCmd
+### 9.9 NotificationCmd
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -985,7 +1028,7 @@ public class NotificationCmd {
 | bizId | String | 否 | 关联业务ID |
 | linkUrl | String | 否 | 跳转链接（前端路由路径） |
 
-### 8.10 ConfigDTO
+### 9.10 ConfigDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -1026,7 +1069,7 @@ public class ConfigDTO {
 
 订正：`ConfigDTO` 不含 `updatedBy`（最后更新人）字段，`sys_config_kv` 表本身未向该 DTO 暴露更新人信息。
 
-### 8.11 FileObjectDTO
+### 9.11 FileObjectDTO
 
 ```java
 package com.bank.branch.platform.governance.api.dto;
@@ -1065,7 +1108,7 @@ public class FileObjectDTO {
 }
 ```
 
-### 8.12 SqlProbeRespDTO
+### 9.12 SqlProbeRespDTO
 
 > 订正（2026-07-19）：真实类名为 `SqlProbeRespDTO`，本文历史版本误写为 `SqlProbeResultDTO`（字段本身一致）。
 
@@ -1100,7 +1143,7 @@ public class SqlProbeRespDTO {
 }
 ```
 
-### 8.13 RegisterJobCmd（V1.7 新增，本文历史版本未收录）
+### 9.13 RegisterJobCmd（V1.7 新增，本文历史版本未收录）
 
 `JobApi.registerJob(RegisterJobCmd cmd)` 的入参，承载 sys_job_conf upsert + Quartz JobDetail/CronTrigger 注册所需的全部参数：
 
@@ -1158,7 +1201,26 @@ public class RegisterJobCmd {
 
 ---
 
-## 9. 调用约束汇总
+### 9.14 PersonTagDTO（2026-07-20 新增）
+
+```java
+package com.bank.branch.platform.governance.api.dto;
+
+import lombok.Data;
+
+/** 人员标签对外 DTO（跨模块契约，仅暴露标识与名称）。 */
+@Data
+public class PersonTagDTO {
+    /** 标签 ID（PERSON_TAG.TAG_ID）. */
+    private Long tagId;
+    /** 标签名称（全局唯一）. */
+    private String tagName;
+}
+```
+
+---
+
+## 10. 调用约束汇总
 
 > **2026-07-19 订正**：缓存列原文标注的 "Redis TTL Xx分钟/小时" 已全部更正为本地内存缓存（`MemoryCacheService`/Caffeine，全局固定 `expireAfterWrite=1小时`，见文首回填说明第 5 条）；`JobApi` 三行 `startJobRun`/`completeJobRun`/`failJobRun` 已删除，替换为 `registerJob`/`unregisterJob`/`getJobConf`；`FileApi` 补齐历史版本未收录的方法行；`getDownloadUrl()` 预签名有效期订正为 10 分钟；`deleteFile()` "检查引用计数" 订正为当前实现不做引用计数检查。
 
@@ -1195,7 +1257,7 @@ public class RegisterJobCmd {
 
 ---
 
-## 10. 领域事件
+## 11. 领域事件
 
 governance 模块**不主动发布领域事件**。
 
