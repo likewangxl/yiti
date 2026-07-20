@@ -1,7 +1,7 @@
 package com.bank.branch.platform.performance.service.importer.impl;
 
-import com.bank.branch.platform.auth.api.RoleApi;
-import com.bank.branch.platform.auth.api.dto.RoleRespDTO;
+import com.bank.branch.platform.governance.api.PersonTagApi;
+import com.bank.branch.platform.governance.api.dto.PersonTagDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
@@ -48,7 +48,7 @@ import java.util.Set;
  *
  * <p>模板列（sheet1，第 0 行表头，从第 1 行起数据），11 列：
  * <pre>
- *   序号 | 方案编号 | 方案名称 | 员工角色范围 | 维度 | 指标名称
+ *   序号 | 方案编号 | 方案名称 | 员工标签范围 | 维度 | 指标名称
  *        | 表达式类型 | 表达式 | 权重 | 计分上线 | 计分下限
  * </pre>
  *
@@ -65,9 +65,9 @@ import java.util.Set;
  *   <li>表达式类型：「计算表达式」=FORMULA / 「SQL表达式」=SQL（兼容大小写 FORMULA/SQL）；表达式内容可空，
  *       不做语法校验。FORMULA → formula=内容、sqlExpr=null；SQL → sqlExpr=内容、formula=null；内容空 → 皆空</li>
  *   <li>权重 / 计分上线(maxScore) / 计分下限(minScore)：可解析 BigDecimal（空则 null，由 writer 兜底）</li>
- *   <li>员工角色范围（方案级，按方案分组取首次出现行的值）：非空时按英文逗号分割、trim、去空，
- *       逐个用 {@link RoleApi#listEnabledRoles()} 的 roleChName→roleCode 映射校验；任一查不到则报错；
- *       全部命中则 roleCode 用逗号连接存入 scheme.empRoleScope；空 → null</li>
+ *   <li>员工标签范围（方案级，按方案分组取首次出现行的值）：非空时按英文逗号分割、trim、去空，
+ *       逐个用 {@link PersonTagApi#getTagsByNames(List)} 的 tagName→tagId 映射校验；任一查不到则报错；
+ *       全部命中则 tagId 用逗号连接存入 scheme.empTagScope；空 → null</li>
  * </ol>
  */
 @Slf4j
@@ -88,7 +88,7 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
     private static final int COL_INDEX_NO = 0;
     private static final int COL_SCHEME_CODE = 1;
     private static final int COL_SCHEME_NAME = 2;
-    private static final int COL_EMP_ROLE_SCOPE = 3;
+    private static final int COL_EMP_TAG_SCOPE = 3;
     private static final int COL_METRIC_NAME = 4;
     private static final int COL_EXPR_TYPE = 5;
     private static final int COL_EXPR_CONTENT = 6;
@@ -98,7 +98,8 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
 
     private final PerfMetricDefMapper metricDefMapper;
     private final PerfKpiSchemeMapper schemeMapper;
-    private final RoleApi roleApi;
+    /** 「员工标签范围」按标签名称解析 ID（governance 人员标签，2026-07-20 取代原角色范围）. */
+    private final PersonTagApi personTagApi;
     private final KpiSchemeImportWriter kpiSchemeImportWriter;
 
     @Override
@@ -117,9 +118,9 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
             return new ImportResult(0, 0, 0, null);
         }
 
-        // 批量预取：指标名→def、角色中文名→编码，规避逐行 DB 往返
+        // 批量预取：指标名→def、人员标签名→标签ID，规避逐行 DB 往返
         Map<String, PerfMetricDef> defByName = loadMetricDefMap(rows);
-        Map<String, String> roleCodeByName = loadRoleCodeMap();
+        Map<String, Long> tagIdByName = loadTagIdMap(rows);
 
         // 第一遍：逐行校验 + 转换为 PerfKpiItem，收集错误（all-or-none：任一错误整批失败）
         List<String> errors = new ArrayList<>();
@@ -136,10 +137,10 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
             }
         }
 
-        // 第二遍：按方案分组解析「员工角色范围」（取每个方案首次出现行的值）
+        // 第二遍：按方案分组解析「员工标签范围」（取每个方案首次出现行的值）
         Map<String, SchemeInfo> schemeInfos = new LinkedHashMap<>();
         if (errors.isEmpty()) {
-            schemeInfos.putAll(resolveSchemeInfos(rows, roleCodeByName, errors));
+            schemeInfos.putAll(resolveSchemeInfos(rows, tagIdByName, errors));
         }
 
         if (!errors.isEmpty()) {
@@ -200,12 +201,12 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
     }
 
     /**
-     * 按方案分组解析「员工角色范围」（取每个方案首次出现行的值），校验角色名命中.
+     * 按方案分组解析「员工标签范围」（取每个方案首次出现行的值），校验标签名命中.
      *
-     * @return schemeCode → SchemeInfo（schemeName + empRoleScope，empRoleScope 空则 null）
+     * @return schemeCode → SchemeInfo（schemeName + empTagScope，empTagScope 空则 null）
      */
     private Map<String, SchemeInfo> resolveSchemeInfos(List<KpiSchemeImportRow> rows,
-                                                       Map<String, String> roleCodeByName,
+                                                       Map<String, Long> tagIdByName,
                                                        List<String> errors) {
         Map<String, SchemeInfo> result = new LinkedHashMap<>();
         for (KpiSchemeImportRow row : rows) {
@@ -214,36 +215,39 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
                 // 已取首次出现行的方案信息，后续行不再覆盖
                 continue;
             }
-            String empRoleScope;
+            String empTagScope;
             try {
-                empRoleScope = resolveEmpRoleScope(row.getEmpRoleScopeRaw(), roleCodeByName);
+                empTagScope = resolveEmpTagScope(row.getEmpTagScopeRaw(), tagIdByName);
             } catch (PerfException pex) {
                 errors.add("第" + row.getExcelRowNum() + "行: " + safeMessage(pex));
                 continue;
             }
-            result.put(code, new SchemeInfo(row.getSchemeName().trim(), empRoleScope));
+            result.put(code, new SchemeInfo(row.getSchemeName().trim(), empTagScope));
         }
         return result;
     }
 
-    /** 角色范围原文 → roleCode CSV（空 → null；任一角色名查不到 → 报错）. */
-    private String resolveEmpRoleScope(String raw, Map<String, String> roleCodeByName) {
+    /** 标签范围原文（标签名称 CSV） → 标签 ID CSV（空 → null；任一标签名查不到 → 报错）. */
+    private String resolveEmpTagScope(String raw, Map<String, Long> tagIdByName) {
         if (isBlank(raw)) {
             return null;
         }
-        List<String> codes = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
         for (String part : raw.split(",")) {
             String name = part.trim();
             if (name.isEmpty()) {
                 continue;
             }
-            String code = roleCodeByName.get(name);
-            if (code == null) {
-                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "角色不存在: " + name);
+            Long tagId = tagIdByName.get(name);
+            if (tagId == null) {
+                throw new PerfException(PerfErrorCode.VALIDATION_FAILED, "人员标签不存在: " + name);
             }
-            codes.add(code);
+            String idStr = String.valueOf(tagId);
+            if (!ids.contains(idStr)) {
+                ids.add(idStr);
+            }
         }
-        return codes.isEmpty() ? null : String.join(",", codes);
+        return ids.isEmpty() ? null : String.join(",", ids);
     }
 
     /** 表达式类型识别：计算表达式/FORMULA → FORMULA，SQL表达式/SQL → SQL，其它报错. */
@@ -293,7 +297,7 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
                 .indexNo(getString(row.getCell(COL_INDEX_NO), formatter))
                 .schemeCode(getString(row.getCell(COL_SCHEME_CODE), formatter))
                 .schemeName(getString(row.getCell(COL_SCHEME_NAME), formatter))
-                .empRoleScopeRaw(getString(row.getCell(COL_EMP_ROLE_SCOPE), formatter))
+                .empTagScopeRaw(getString(row.getCell(COL_EMP_TAG_SCOPE), formatter))
                 .metricName(getString(row.getCell(COL_METRIC_NAME), formatter))
                 .exprTypeRaw(getString(row.getCell(COL_EXPR_TYPE), formatter))
                 .exprContent(getString(row.getCell(COL_EXPR_CONTENT), formatter))
@@ -378,16 +382,32 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
         return map;
     }
 
-    /** 批量预取角色：构建 roleChName → roleCode 映射（首命中优先）. */
-    private Map<String, String> loadRoleCodeMap() {
-        List<RoleRespDTO> roles = roleApi.listEnabledRoles();
-        if (roles == null || roles.isEmpty()) {
+    /** 批量预取人员标签：构建 tagName → tagId 映射（一次 IN 查询，首命中优先）. */
+    private Map<String, Long> loadTagIdMap(List<KpiSchemeImportRow> rows) {
+        List<String> names = new ArrayList<>();
+        for (KpiSchemeImportRow row : rows) {
+            String raw = row.getEmpTagScopeRaw();
+            if (isBlank(raw)) {
+                continue;
+            }
+            for (String part : raw.split(",")) {
+                String name = part.trim();
+                if (!name.isEmpty() && !names.contains(name)) {
+                    names.add(name);
+                }
+            }
+        }
+        if (names.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<String, String> map = new HashMap<>(roles.size());
-        for (RoleRespDTO r : roles) {
-            if (r.getRoleChName() != null && r.getRoleCode() != null) {
-                map.putIfAbsent(r.getRoleChName().trim(), r.getRoleCode());
+        List<PersonTagDTO> tags = personTagApi.getTagsByNames(names);
+        if (tags == null || tags.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, Long> map = new HashMap<>(tags.size());
+        for (PersonTagDTO t : tags) {
+            if (t.getTagName() != null && t.getTagId() != null) {
+                map.putIfAbsent(t.getTagName().trim(), t.getTagId());
             }
         }
         return map;
@@ -421,8 +441,8 @@ public class KpiSchemeImportStrategy implements ImportStrategy {
      * 方案级信息（按 schemeCode 去重，仅新建方案时取用）.
      *
      * @param schemeName    方案名称
-     * @param empRoleScope  员工角色范围（roleCode CSV，空 → null）
+     * @param empTagScope  员工标签范围（人员标签 ID CSV，空 → null）
      */
-    public record SchemeInfo(String schemeName, String empRoleScope) {
+    public record SchemeInfo(String schemeName, String empTagScope) {
     }
 }

@@ -29,8 +29,8 @@ public class UpdateKpiSchemeCmd {
     /** 是否向员工开放明细 (可空). */
     private Integer openDetail;
 
-    /** 员工角色范围 (角色编码 CSV, 可空=不修改; 全量覆盖语义由 Service 处理). */
-    private String empRoleScope;
+    /** 员工标签范围 (角色编码 CSV, 可空=不修改; 全量覆盖语义由 Service 处理). */
+    private String empTagScope;
 
     /** 操作人. */
     private String operator;

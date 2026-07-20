@@ -64,7 +64,7 @@ class KpiSchemeImportWriterTest {
         PerfKpiScheme scheme = schemeCap.getValue();
         assertThat(scheme.getSchemeCode()).isEqualTo("KPI_A");
         assertThat(scheme.getSchemeName()).isEqualTo("方案A");
-        assertThat(scheme.getEmpRoleScope()).isEqualTo("R_FIN_MGR,R_TELLER");
+        assertThat(scheme.getEmpTagScope()).isEqualTo("R_FIN_MGR,R_TELLER");
         assertThat(scheme.getStatus()).isEqualTo("ACTIVE");
         assertThat(scheme.getCycleType()).isEqualTo("YEARLY");
         assertThat(scheme.getOpenDetail()).isZero();
@@ -95,7 +95,7 @@ class KpiSchemeImportWriterTest {
         exist.setId("EXIST_SCHEME_ID_00000000000000");
         exist.setSchemeCode("KPI_A");
         exist.setSchemeName("旧名称不改");
-        exist.setEmpRoleScope("R_OLD");
+        exist.setEmpTagScope("R_OLD");
         when(schemeMapper.selectBySchemeCode("KPI_A")).thenReturn(exist);
 
         List<PerfKpiItem> items = new ArrayList<>(List.of(item(new BigDecimal("10"))));

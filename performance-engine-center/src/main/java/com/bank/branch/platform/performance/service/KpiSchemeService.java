@@ -1,6 +1,8 @@
 package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.governance.api.PersonTagApi;
+import com.bank.branch.platform.governance.api.dto.PersonTagDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.performance.api.dto.KpiItemDTO;
@@ -26,10 +28,12 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -71,6 +75,8 @@ public class KpiSchemeService {
     private final CacheManager cacheManager;
     /** 解析创建人工号 → 姓名（列表"创建人"列展示用）. */
     private final UserApi userApi;
+    /** 「员工标签范围」标签存在性校验（governance 人员标签，2026-07-20 取代原角色范围）. */
+    private final PersonTagApi personTagApi;
 
     /**
      * 新建方案 + 方案项 (单事务).
@@ -95,13 +101,15 @@ public class KpiSchemeService {
             throw new PerfException(PerfErrorCode.KPI_SCHEME_CODE_EXISTS, cmd.getSchemeCode());
         }
 
+        validateTagScope(cmd.getEmpTagScope());
+
         PerfKpiScheme scheme = new PerfKpiScheme();
         scheme.setId(generateId());
         scheme.setSchemeCode(cmd.getSchemeCode());
         scheme.setSchemeName(cmd.getSchemeName());
         scheme.setCycleType(cmd.getCycleType());
         scheme.setOpenDetail(cmd.getOpenDetail() != null ? cmd.getOpenDetail() : 0);
-        scheme.setEmpRoleScope(cmd.getEmpRoleScope());
+        scheme.setEmpTagScope(cmd.getEmpTagScope());
         scheme.setStatus(STATUS_DRAFT);
         LocalDateTime now = LocalDateTime.now();
         scheme.setCreatedBy(cmd.getOperator());
@@ -147,16 +155,18 @@ public class KpiSchemeService {
         if (existing == null) {
             throw new PerfException(PerfErrorCode.KPI_SCHEME_NOT_FOUND, id);
         }
+        validateTagScope(cmd.getEmpTagScope());
+
         PerfKpiScheme patch = new PerfKpiScheme();
         patch.setId(id);
         patch.setSchemeName(cmd.getSchemeName());
         patch.setCycleType(cmd.getCycleType());
         patch.setOpenDetail(cmd.getOpenDetail());
-        patch.setEmpRoleScope(cmd.getEmpRoleScope());
+        patch.setEmpTagScope(cmd.getEmpTagScope());
         patch.setUpdatedBy(cmd.getOperator());
         schemeMapper.updateByIdSelective(patch);
-        if (cmd.getEmpRoleScope() != null) {
-            existing.setEmpRoleScope(cmd.getEmpRoleScope());
+        if (cmd.getEmpTagScope() != null) {
+            existing.setEmpTagScope(cmd.getEmpTagScope());
         }
 
         if (cmd.getSchemeName() != null) {
@@ -443,6 +453,52 @@ public class KpiSchemeService {
 
     private String generateId() {
         return UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * 校验「员工标签范围」CSV 中的标签均存在于人员标签表.
+     *
+     * <p>null/空白 → 不限定，直接放行。含非法 ID 或已删除标签 → 抛 PERF-42200，
+     * 消息附具体的无效项，避免方案保存后范围静默失效。</p>
+     *
+     * @param empTagScope 标签 ID CSV
+     * @throws PerfException PERF-42200 存在非法/不存在的标签
+     */
+    private void validateTagScope(String empTagScope) {
+        if (empTagScope == null || empTagScope.isBlank()) {
+            return;
+        }
+        List<Long> tagIds = new ArrayList<>();
+        List<String> illegal = new ArrayList<>();
+        for (String s : empTagScope.split(",")) {
+            String t = s.trim();
+            if (t.isEmpty()) {
+                continue;
+            }
+            try {
+                tagIds.add(Long.valueOf(t));
+            } catch (NumberFormatException e) {
+                illegal.add(t);
+            }
+        }
+        if (!illegal.isEmpty()) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "员工标签范围含非法标签ID: " + String.join(",", illegal));
+        }
+        if (tagIds.isEmpty()) {
+            return;
+        }
+        Set<Long> existing = personTagApi.getTagsByIds(tagIds).stream()
+                .map(PersonTagDTO::getTagId)
+                .collect(java.util.stream.Collectors.toSet());
+        List<String> missing = tagIds.stream()
+                .filter(id -> !existing.contains(id))
+                .map(String::valueOf)
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "员工标签范围含不存在的标签: " + String.join(",", missing));
+        }
     }
 
     /**

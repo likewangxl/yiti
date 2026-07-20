@@ -164,6 +164,7 @@ CREATE TABLE `PERF_KPI_SCHEME` (
   `effective_date` date NOT NULL COMMENT '生效日期',
   `expire_date` date DEFAULT NULL COMMENT '失效日期 (NULL 为长期有效)',
   `target_scope` varchar(500) DEFAULT NULL COMMENT '适用范围 JSON, 如适用岗位/机构',
+  `emp_tag_scope` varchar(500) DEFAULT NULL COMMENT '员工标签范围(PERSON_TAG.TAG_ID CSV，空=不限定全员；2026-07-20 取代原 emp_role_scope 角色编码 CSV)',
   `description` varchar(500) DEFAULT NULL COMMENT '方案说明',
   `status` tinyint(1) NOT NULL DEFAULT '1' COMMENT '状态: 0-草稿 1-启用 2-停用',
   `created_by` varchar(32) DEFAULT NULL COMMENT '创建人',

@@ -22,7 +22,7 @@ import java.util.UUID;
  * KPI 方案导入落库写入器（2026-06-17，KPI_SCHEME 策略专用）.
  *
  * <p>承载「全部行校验通过后」的 all-or-none 落库职责：单个 {@code @Transactional} 方法内
- * 先去重处理 KPI 方案（已存在则复用 id、忽略不改名不改角色范围；不存在则新建 ACTIVE 方案），
+ * 先去重处理 KPI 方案（已存在则复用 id、忽略不改名不改标签范围；不存在则新建 ACTIVE 方案），
  * 再按 5000/批 chunk 把方案项 {@code upsertBatch} 写入。任一步 DB 异常自动回滚整批。
  *
  * <p>由 {@link KpiSchemeImportStrategy} 在所有行校验通过后调用；校验逻辑不在本类内。
@@ -61,7 +61,7 @@ public class KpiSchemeImportWriter {
      *
      * <p>步骤：
      * <ol>
-     *   <li>对每个去重 schemeCode：{@code selectBySchemeCode} 命中 → 复用其 id（忽略，不改名/不改角色范围）；
+     *   <li>对每个去重 schemeCode：{@code selectBySchemeCode} 命中 → 复用其 id（忽略，不改名/不改标签范围）；
      *       未命中 → 新建 PerfKpiScheme（status=ACTIVE、cycleType=YEARLY、openDetail=0）并 insert。
      *       得到 schemeCode → schemeId 映射。</li>
      *   <li>逐项回填 id（新 UUID）、schemeId（映射）、multiplier/minScore/maxScore/weight 兜底默认、createdTime。</li>
@@ -70,7 +70,7 @@ public class KpiSchemeImportWriter {
      *
      * @param items       待落库方案项（除 id/schemeId/createdTime 及兜底默认外字段已就绪），与 schemeCodes 等长
      * @param schemeCodes 每项对应的方案编号（与 items 一一对应）
-     * @param schemeInfos 按 schemeCode 去重的方案信息（schemeName + empRoleScope，仅新建方案时取用）
+     * @param schemeInfos 按 schemeCode 去重的方案信息（schemeName + empTagScope，仅新建方案时取用）
      * @param operator    操作人（写 created_by/updated_by）
      */
     @Transactional(rollbackFor = Exception.class)
@@ -119,7 +119,7 @@ public class KpiSchemeImportWriter {
         for (String code : distinctCodes) {
             PerfKpiScheme exist = schemeMapper.selectBySchemeCode(code);
             if (exist != null) {
-                // 规则1：已存在 → 复用 id，不重建、不改名、不改角色范围
+                // 规则1：已存在 → 复用 id，不重建、不改名、不改标签范围
                 codeToSchemeId.put(code, exist.getId());
                 continue;
             }
@@ -128,7 +128,7 @@ public class KpiSchemeImportWriter {
             scheme.setId(uuid32());
             scheme.setSchemeCode(code);
             scheme.setSchemeName(info == null ? code : info.schemeName());
-            scheme.setEmpRoleScope(info == null ? null : info.empRoleScope());
+            scheme.setEmpTagScope(info == null ? null : info.empTagScope());
             scheme.setStatus(DEFAULT_SCHEME_STATUS);
             scheme.setCycleType(DEFAULT_CYCLE_TYPE);
             scheme.setOpenDetail(0);

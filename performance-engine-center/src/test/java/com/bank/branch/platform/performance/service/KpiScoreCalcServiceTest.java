@@ -79,6 +79,7 @@ class KpiScoreCalcServiceTest {
     @Mock private com.bank.branch.platform.performance.mapper.PerfKpiCalcLogMapper kpiCalcLogMapper;
     @Mock private com.bank.branch.platform.auth.api.UserApi userApi;
     @Mock private com.bank.branch.platform.auth.api.OrgApi orgApi;
+    @Mock private com.bank.branch.platform.governance.api.PersonTagApi personTagApi;
     @Mock private SqlExecutor sqlExecutor;
 
     @InjectMocks private KpiScoreCalcService service;
@@ -217,13 +218,13 @@ class KpiScoreCalcServiceTest {
     }
 
     @Test
-    @DisplayName("calculate: 方案配置员工角色范围 → 仅算所选角色员工，且目标值为空者跳过")
-    void calculate_empRoleScope_filtersAndSkipsMissingTarget() {
+    @DisplayName("calculate: 方案配置员工标签范围 → 仅算所选标签关联员工，且目标值为空者跳过")
+    void calculate_empTagScope_filtersAndSkipsMissingTarget() {
         when(taskMapper.selectCount(any())).thenReturn(1L); // 三级均已完成
 
         PerfKpiScheme scheme = new PerfKpiScheme();
         scheme.setId("S1"); scheme.setSchemeCode("KPI_A"); scheme.setStatus("ACTIVE");
-        scheme.setEmpRoleScope("R_X"); // 仅 R_X 角色员工参与计算
+        scheme.setEmpTagScope("11"); // 仅标签 11 关联员工参与计算
         when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(scheme));
 
         PerfKpiItem item = new PerfKpiItem();
@@ -238,21 +239,16 @@ class KpiScoreCalcServiceTest {
         // 基础集：目标值里出现过的员工 {E001,E002}（E003 不在目标值基础集内）
         when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_0001"), DATA_DATE))
                 .thenReturn(List.of("E001", "E002"));
-        // 角色 R_X → USER_ID {U1,U2} → 工号 {E001,E002}（与基础集取交集仍为 {E001,E002}；E003 不在角色内）
-        when(userApi.getEmpIdsByRoleCode("R_X")).thenReturn(List.of("U1", "U2"));
-        com.bank.branch.platform.auth.api.dto.UserDTO u1 = new com.bank.branch.platform.auth.api.dto.UserDTO();
-        u1.setUsername("E001");
-        com.bank.branch.platform.auth.api.dto.UserDTO u2 = new com.bank.branch.platform.auth.api.dto.UserDTO();
-        u2.setUsername("E002");
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u1, u2));
+        // 标签 11 → 工号 {E001,E002}（与基础集取交集仍为 {E001,E002}；E003 不在标签内）
+        when(personTagApi.getUsernamesByTagIds(List.of(11L))).thenReturn(List.of("E001", "E002"));
 
-        // 当日 EMP 指标值：E001/E002(在角色内) + E003(不在角色内)
+        // 当日 EMP 指标值：E001/E002(在标签内) + E003(不在标签内)
         when(empIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 5)).thenReturn(List.of(
                 new SubjectSlotValueRow("E001", new BigDecimal("80")),
                 new SubjectSlotValueRow("E002", new BigDecimal("70")),
                 new SubjectSlotValueRow("E003", new BigDecimal("60"))));
 
-        // 仅 E001 有目标值；E002 无目标值 → 跳过；E003 不在角色 → 不计算
+        // 仅 E001 有目标值；E002 无目标值 → 跳过；E003 不在标签 → 不计算
         PerfTargetValue tv = new PerfTargetValue();
         tv.setTargetValue(new BigDecimal("100")); tv.setBaseValue(new BigDecimal("0"));
         when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("EMP", "E001", "M_0001", DATA_DATE)).thenReturn(tv);
@@ -264,11 +260,11 @@ class KpiScoreCalcServiceTest {
 
         service.calculate(DATA_DATE, null, "MANUAL", "tester01");
 
-        // 仅 E001 计分（E002 目标空跳过、E003 不在角色范围）
+        // 仅 E001 计分（E002 目标空跳过、E003 不在标签范围）
         ArgumentCaptor<PerfKpiScore> cap = ArgumentCaptor.forClass(PerfKpiScore.class);
         verify(scoreMapper, times(1)).upsert(cap.capture());
         assertThat(cap.getValue().getSubjectId()).isEqualTo("E001");
-        // E003 不在角色范围 → 不应查询其目标值
+        // E003 不在标签范围 → 不应查询其目标值
         verify(targetValueMapper, never()).selectActiveCoveringByDimSubjectMetric("EMP", "E003", "M_0001", DATA_DATE);
     }
 
@@ -279,7 +275,7 @@ class KpiScoreCalcServiceTest {
 
         PerfKpiScheme scheme = new PerfKpiScheme();
         scheme.setId("S1"); scheme.setSchemeCode("KPI_A"); scheme.setStatus("ACTIVE");
-        scheme.setEmpRoleScope("R_X");
+        scheme.setEmpTagScope("11");
         when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(scheme));
 
         PerfKpiItem item = new PerfKpiItem();
@@ -287,18 +283,17 @@ class KpiScoreCalcServiceTest {
         item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
         when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
 
-        // 角色 R_X → 员工 E001（所属机构 ORG9）
-        when(userApi.getEmpIdsByRoleCode("R_X")).thenReturn(List.of("U1"));
+        // 标签 11 → 员工 E001（所属机构 ORG9）
+        when(personTagApi.getUsernamesByTagIds(List.of(11L))).thenReturn(List.of("E001"));
         com.bank.branch.platform.auth.api.dto.UserDTO u = new com.bank.branch.platform.auth.api.dto.UserDTO();
         u.setUsername("E001"); u.setMainOrgCode("ORG9");
-        when(userApi.getUserByEmpIds(anyList())).thenReturn(List.of(u));   // 角色→工号
         when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(u)); // 工号→所属机构
 
         PerfMetricDef def = new PerfMetricDef();
         def.setMetricCode("M_ORG"); def.setBaseDim("ORG"); def.setValSlot(7); def.setStatus("ACTIVE");
         when(metricDefService.getByCodeOrNull("M_ORG")).thenReturn(def);
 
-        // 基础集：目标值里出现过的员工 {E001}（与角色 R_X 的 {E001} 取交集 = {E001}）
+        // 基础集：目标值里出现过的员工 {E001}（与标签 11 的 {E001} 取交集 = {E001}）
         when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_ORG"), DATA_DATE))
                 .thenReturn(List.of("E001"));
 

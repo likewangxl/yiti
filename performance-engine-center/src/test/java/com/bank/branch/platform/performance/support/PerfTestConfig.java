@@ -5,6 +5,7 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.RoleApi;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.governance.api.PersonTagApi;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
@@ -273,5 +274,17 @@ public class PerfTestConfig {
     @SuppressWarnings("unchecked")
     public RedisTemplate<String, String> stringRedisTemplate() {
         return Mockito.mock(RedisTemplate.class);
+    }
+
+    /**
+     * 测试用 PersonTagApi（2026-07-20 KPI 方案「员工标签范围」引入）：
+     * 因 PerfTestApp 仅扫描 performance 子包，governance 的 {@code PersonTagFacade}
+     * 不会被自动装配。默认返回空（无标签成员 / 标签不存在），
+     * 单测需覆盖可 {@code @MockBean} 替换。
+     */
+    @Bean
+    @Primary
+    public PersonTagApi personTagApi() {
+        return Mockito.mock(PersonTagApi.class);
     }
 }

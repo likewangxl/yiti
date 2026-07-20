@@ -31,6 +31,7 @@ import com.bank.branch.platform.performance.controller.dto.MetricOptionDTO;
 import com.bank.branch.platform.performance.service.engine.SqlExecutor;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
+import com.bank.branch.platform.governance.api.PersonTagApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -94,6 +95,8 @@ public class KpiScoreCalcService {
     /** 解析对象名称：员工姓名（auth 用户，subject_id=工号=PT_USER.username）/ 机构名称 + 机构号（auth 机构）. */
     private final UserApi userApi;
     private final OrgApi orgApi;
+    /** 方案「员工标签范围」→ 员工工号（governance 人员标签，2026-07-20 取代原角色范围）. */
+    private final PersonTagApi personTagApi;
     private final EmpIndexResultMapper empIndexResultMapper;
     private final OrgIndexResultMapper orgIndexResultMapper;
     private final CustIndexResultMapper custIndexResultMapper;
@@ -594,31 +597,42 @@ public class KpiScoreCalcService {
     }
 
     /**
-     * 解析方案「员工角色范围」(角色编码 CSV) → 员工工号集合（仅用于 EMP 维度计算过滤）.
+     * 解析方案「员工标签范围」(人员标签 ID CSV) → 员工工号集合（仅用于 EMP 维度计算过滤）.
      *
-     * <p>每个角色经 {@link UserApi#getEmpIdsByRoleCode}(返回 USER_ID) → {@link #resolveUsernamesByUserIds} 转工号。
-     * 空/空白 → 返回 {@code null}（不限定，全员参与）；非空但解析不到成员 → 空集合（无 EMP 对象参与计算）。</p>
+     * <p>经 governance {@link PersonTagApi#getUsernamesByTagIds} 一次取回多标签成员并集，
+     * 返回值已是工号（{@code PT_USER.USERNAME}）口径，无需再做 USER_ID 转换。</p>
+     *
+     * <p>空/空白 → 返回 {@code null}（不限定，全员参与）；非空但解析不到成员（标签已删除或标签下无人）
+     * → 空集合（无 EMP 对象参与计算），与改造前角色范围的语义保持一致。</p>
      */
-    private java.util.Set<String> resolveRoleScopeUsernames(String empRoleScope) {
-        if (!StringUtils.hasText(empRoleScope)) {
+    private java.util.Set<String> resolveTagScopeUsernames(String empTagScope) {
+        if (!StringUtils.hasText(empTagScope)) {
             return null;
         }
-        java.util.LinkedHashSet<String> userIds = new java.util.LinkedHashSet<>();
-        for (String c : empRoleScope.split(",")) {
-            String code = c.trim();
-            if (code.isEmpty()) {
+        java.util.LinkedHashSet<Long> tagIds = new java.util.LinkedHashSet<>();
+        for (String s : empTagScope.split(",")) {
+            String t = s.trim();
+            if (t.isEmpty()) {
                 continue;
             }
             try {
-                List<String> ids = userApi.getEmpIdsByRoleCode(code);
-                if (ids != null) {
-                    userIds.addAll(ids);
-                }
-            } catch (Exception e) {
-                log.warn("[KPI计算] 角色 {} 解析员工失败，忽略该角色: {}", code, e.getMessage());
+                tagIds.add(Long.valueOf(t));
+            } catch (NumberFormatException e) {
+                // 历史脏值（如旧角色编码）：跳过该项，不中断整个方案计算
+                log.warn("[KPI计算] 员工标签范围含非法标签 ID，忽略该项: {}", t);
             }
         }
-        return new java.util.HashSet<>(resolveUsernamesByUserIds(userIds));
+        if (tagIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        try {
+            List<String> usernames = personTagApi.getUsernamesByTagIds(new java.util.ArrayList<>(tagIds));
+            return usernames == null ? java.util.Set.of() : new java.util.HashSet<>(usernames);
+        } catch (Exception e) {
+            // fail-close：标签解析失败按"范围为空"处理，宁可不计分也不误扩大范围
+            log.warn("[KPI计算] 员工标签范围解析失败，按空范围处理 tagIds={}: {}", tagIds, e.getMessage());
+            return java.util.Set.of();
+        }
     }
 
     /**
@@ -1042,13 +1056,13 @@ public class KpiScoreCalcService {
                 ? java.util.List.of()
                 : targetValueMapper.selectDistinctActiveEmpSubjects(metricCodes, dataDate);
         java.util.Set<String> empUniverse = new java.util.LinkedHashSet<>(baseIds == null ? java.util.List.of() : baseIds);
-        // 角色范围非空 → 在基础集中再筛出匹配所选角色的员工（交集）；为空(null) → 不过滤，基础集即全集
-        java.util.Set<String> roleEmpUsernames = resolveRoleScopeUsernames(scheme.getEmpRoleScope());
-        if (roleEmpUsernames != null) {
-            empUniverse.retainAll(roleEmpUsernames);
+        // 标签范围非空 → 在基础集中再筛出所选标签关联的员工（交集）；为空(null) → 不过滤，基础集即全集
+        java.util.Set<String> tagEmpUsernames = resolveTagScopeUsernames(scheme.getEmpTagScope());
+        if (tagEmpUsernames != null) {
+            empUniverse.retainAll(tagEmpUsernames);
         }
         if (empUniverse.isEmpty()) {
-            log.info("【KPI分值计算】方案={} 员工范围为空（目标值基础集 ∩ 角色范围 无匹配员工），不计分", scheme.getSchemeCode());
+            log.info("【KPI分值计算】方案={} 员工范围为空（目标值基础集 ∩ 标签范围 无匹配员工），不计分", scheme.getSchemeCode());
             return new SchemeStat(0, 0);
         }
         // 员工 → 所属机构(mainOrgCode) 批量解析，供机构(ORG)维度指标取机构实际值/目标值

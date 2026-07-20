@@ -69,8 +69,101 @@ class KpiSchemeServiceTest {
     @Mock
     private com.bank.branch.platform.auth.api.UserApi userApi;
 
+    @Mock
+    private com.bank.branch.platform.governance.api.PersonTagApi personTagApi;
+
     @InjectMocks
     private KpiSchemeService service;
+
+    /** 构造一个存在的人员标签 DTO. */
+    private static com.bank.branch.platform.governance.api.dto.PersonTagDTO tagDto(Long id) {
+        com.bank.branch.platform.governance.api.dto.PersonTagDTO d =
+                new com.bank.branch.platform.governance.api.dto.PersonTagDTO();
+        d.setTagId(id);
+        d.setTagName("标签" + id);
+        return d;
+    }
+
+    // --------------------------- 员工标签范围校验（2026-07-20 取代角色范围）---------------------------
+
+    @Test
+    @DisplayName("create: 员工标签范围内标签均存在 → 正常落库 CSV")
+    void create_withValidTagScope_persistsCsv() {
+        CreateKpiSchemeCmd cmd = CreateKpiSchemeCmd.builder()
+                .schemeCode("TEST_KPI_TAG_OK")
+                .schemeName("测试方案-标签范围")
+                .cycleType("MONTHLY")
+                .openDetail(0)
+                .empTagScope("11,22")
+                .operator("admin")
+                .build();
+        when(schemeMapper.selectBySchemeCode("TEST_KPI_TAG_OK")).thenReturn(null);
+        when(personTagApi.getTagsByIds(List.of(11L, 22L)))
+                .thenReturn(List.of(tagDto(11L), tagDto(22L)));
+
+        PerfKpiScheme created = service.create(cmd);
+
+        assertThat(created.getEmpTagScope()).isEqualTo("11,22");
+    }
+
+    @Test
+    @DisplayName("create: 员工标签范围含已删除标签 → 抛 VALIDATION_FAILED 且不落库")
+    void create_withMissingTag_throwsValidationFailed() {
+        CreateKpiSchemeCmd cmd = CreateKpiSchemeCmd.builder()
+                .schemeCode("TEST_KPI_TAG_MISS")
+                .schemeName("测试方案-标签失效")
+                .cycleType("MONTHLY")
+                .openDetail(0)
+                .empTagScope("11,99")
+                .operator("admin")
+                .build();
+        when(schemeMapper.selectBySchemeCode("TEST_KPI_TAG_MISS")).thenReturn(null);
+        // 标签 99 已被删除 → 不在返回中
+        when(personTagApi.getTagsByIds(List.of(11L, 99L))).thenReturn(List.of(tagDto(11L)));
+
+        assertThatThrownBy(() -> service.create(cmd))
+                .isInstanceOfSatisfying(PerfException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(PerfErrorCode.VALIDATION_FAILED))
+                .hasMessageContaining("99");
+        verify(schemeMapper, never()).insert(any(PerfKpiScheme.class));
+    }
+
+    @Test
+    @DisplayName("create: 员工标签范围含非法(非数字)标签ID → 抛 VALIDATION_FAILED，不查标签接口")
+    void create_withIllegalTagId_throwsWithoutQuery() {
+        CreateKpiSchemeCmd cmd = CreateKpiSchemeCmd.builder()
+                .schemeCode("TEST_KPI_TAG_BAD")
+                .schemeName("测试方案-标签非法")
+                .cycleType("MONTHLY")
+                .openDetail(0)
+                .empTagScope("BRANCH_EMP")
+                .operator("admin")
+                .build();
+        when(schemeMapper.selectBySchemeCode("TEST_KPI_TAG_BAD")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.create(cmd))
+                .isInstanceOf(PerfException.class)
+                .hasMessageContaining("BRANCH_EMP");
+        verify(personTagApi, never()).getTagsByIds(anyList());
+    }
+
+    @Test
+    @DisplayName("create: 员工标签范围为空 → 不限定，跳过标签校验")
+    void create_withBlankTagScope_skipsValidation() {
+        CreateKpiSchemeCmd cmd = CreateKpiSchemeCmd.builder()
+                .schemeCode("TEST_KPI_TAG_BLANK")
+                .schemeName("测试方案-不限定")
+                .cycleType("MONTHLY")
+                .openDetail(0)
+                .operator("admin")
+                .build();
+        when(schemeMapper.selectBySchemeCode("TEST_KPI_TAG_BLANK")).thenReturn(null);
+
+        PerfKpiScheme created = service.create(cmd);
+
+        assertThat(created.getEmpTagScope()).isNull();
+        verify(personTagApi, never()).getTagsByIds(anyList());
+    }
 
     // ------------------------------- publish 场景 -------------------------------
 

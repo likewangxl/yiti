@@ -43,9 +43,9 @@ public class CreateKpiSchemeReqDTO {
     @NotNull(message = "openDetail 不能为空")
     private Boolean openDetail;
 
-    /** 员工角色范围 (角色编码多选, 可空=不限定计算员工范围). */
-    @Schema(description = "员工角色范围(角色编码数组, 可空)")
-    private List<String> empRoleScopes;
+    /** 员工标签范围 (人员标签 ID 多选, 可空=不限定计算员工范围). */
+    @Schema(description = "员工标签范围(人员标签 PERSON_TAG.TAG_ID 数组, 可空)")
+    private List<Long> empTagScopes;
 
     /** 方案项列表 (可空, 允许先建空方案). */
     @Schema(description = "方案项列表 (可空)")

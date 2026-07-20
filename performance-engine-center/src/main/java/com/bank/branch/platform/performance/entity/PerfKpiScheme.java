@@ -34,8 +34,8 @@ public class PerfKpiScheme {
     /** 是否向员工开放明细（0=否, 1=是）. */
     private Integer openDetail;
 
-    /** 员工角色范围（角色编码 CSV，如 R_BACK_FINANCE,R_FIN_LEAD；空=不限定计算员工范围）. */
-    private String empRoleScope;
+    /** 员工标签范围（角色编码 CSV，如 R_BACK_FINANCE,R_FIN_LEAD；空=不限定计算员工范围）. */
+    private String empTagScope;
 
     /** 状态：ACTIVE / DISABLED. */
     private String status;

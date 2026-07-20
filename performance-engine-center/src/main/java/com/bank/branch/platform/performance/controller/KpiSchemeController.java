@@ -76,8 +76,6 @@ public class KpiSchemeController {
     private final CurrentUserApi currentUserApi;
     private final KpiSchemeService kpiSchemeService;
     private final KpiItemService kpiItemService;
-    /** 员工角色范围下拉数据源（可用角色，按名称排序）. */
-    private final com.bank.branch.platform.auth.api.RoleApi roleApi;
 
     /**
      * 分页查询 KPI 方案.
@@ -149,19 +147,6 @@ public class KpiSchemeController {
     }
 
     /**
-     * 员工角色范围下拉项：可用角色（RECORD_STATUS=0），按角色名称排序.
-     *
-     * <p>供"新增/编辑 KPI 方案"页的「员工角色范围」多选项；走 auth {@link com.bank.branch.platform.auth.api.RoleApi}。
-     * 固定字面量路径，优先于 {@code /{id}} 匹配。</p>
-     */
-    @GetMapping("/emp-roles")
-    @Operation(summary = "员工角色范围下拉(可用角色, 按名称排序)")
-    @BizAuth(bizType = BizType.PERF_CONFIG, action = BizAction.READ)
-    public ResponseWrapper<java.util.List<com.bank.branch.platform.auth.api.dto.RoleRespDTO>> empRoles() {
-        return ResponseWrapper.success(roleApi.listEnabledRoles());
-    }
-
-    /**
      * 新建方案 (父子聚合写入, 单事务).
      */
     @PostMapping
@@ -177,7 +162,7 @@ public class KpiSchemeController {
                 .schemeName(req.getSchemeName())
                 .cycleType(req.getCycleType())
                 .openDetail(Boolean.TRUE.equals(req.getOpenDetail()) ? 1 : 0)
-                .empRoleScope(joinRoleCsv(req.getEmpRoleScopes()))
+                .empTagScope(joinTagCsv(req.getEmpTagScopes()))
                 .items(toAddItemCmds(req.getItems()))
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
@@ -199,20 +184,20 @@ public class KpiSchemeController {
                 .schemeName(req.getSchemeName())
                 .cycleType(req.getCycleType())
                 .openDetail(req.getOpenDetail() == null ? null : (Boolean.TRUE.equals(req.getOpenDetail()) ? 1 : 0))
-                .empRoleScope(joinRoleCsv(req.getEmpRoleScopes()))
+                .empTagScope(joinTagCsv(req.getEmpTagScopes()))
                 .operator(currentUserApi.getCurrentEmpId())
                 .build();
         return ResponseWrapper.success(kpiSchemeService.updateByIdDto(id, cmd));
     }
 
-    /** 员工角色范围：前端多选(角色编码数组) → 去重去空后用逗号拼成 CSV 落库；空 → null(不限定). */
-    private static String joinRoleCsv(java.util.List<String> codes) {
-        if (codes == null || codes.isEmpty()) {
+    /** 员工标签范围：前端多选(人员标签 ID 数组) → 去重去空后用逗号拼成 CSV 落库；空 → null(不限定). */
+    private static String joinTagCsv(java.util.List<Long> tagIds) {
+        if (tagIds == null || tagIds.isEmpty()) {
             return null;
         }
-        String csv = codes.stream()
-                .filter(org.springframework.util.StringUtils::hasText)
-                .map(String::trim).distinct()
+        String csv = tagIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::valueOf).distinct()
                 .collect(java.util.stream.Collectors.joining(","));
         return csv.isEmpty() ? null : csv;
     }

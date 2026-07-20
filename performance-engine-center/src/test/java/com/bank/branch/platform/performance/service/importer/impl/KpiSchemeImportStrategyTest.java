@@ -1,7 +1,7 @@
 package com.bank.branch.platform.performance.service.importer.impl;
 
-import com.bank.branch.platform.auth.api.RoleApi;
-import com.bank.branch.platform.auth.api.dto.RoleRespDTO;
+import com.bank.branch.platform.governance.api.PersonTagApi;
+import com.bank.branch.platform.governance.api.dto.PersonTagDTO;
 import com.bank.branch.platform.performance.entity.PerfImportBatch;
 import com.bank.branch.platform.performance.entity.PerfKpiItem;
 import com.bank.branch.platform.performance.entity.PerfMetricDef;
@@ -60,7 +60,7 @@ class KpiSchemeImportStrategyTest {
 
     private PerfMetricDefMapper metricDefMapper;
     private PerfKpiSchemeMapper schemeMapper;
-    private RoleApi roleApi;
+    private PersonTagApi personTagApi;
     private KpiSchemeImportWriter writer;
     private KpiSchemeImportStrategy strategy;
     private PerfImportBatch batch;
@@ -69,9 +69,9 @@ class KpiSchemeImportStrategyTest {
     void setUp() {
         metricDefMapper = mock(PerfMetricDefMapper.class);
         schemeMapper = mock(PerfKpiSchemeMapper.class);
-        roleApi = mock(RoleApi.class);
+        personTagApi = mock(PersonTagApi.class);
         writer = mock(KpiSchemeImportWriter.class);
-        strategy = new KpiSchemeImportStrategy(metricDefMapper, schemeMapper, roleApi, writer);
+        strategy = new KpiSchemeImportStrategy(metricDefMapper, schemeMapper, personTagApi, writer);
 
         // 指标定义模拟：存款余额 → M_0001（EMP），中间业务收入 → M_0002（ORG）
         lenient().when(metricDefMapper.selectByMetricNames(anyList()))
@@ -88,10 +88,18 @@ class KpiSchemeImportStrategyTest {
                     return defs;
                 });
 
-        // 角色模拟：理财经理 → R_FIN_MGR，柜员 → R_TELLER
-        lenient().when(roleApi.listEnabledRoles()).thenReturn(List.of(
-                role("R_FIN_MGR", "理财经理"),
-                role("R_TELLER", "柜员")));
+        // 人员标签模拟：理财经理 → 11，柜员 → 22（只回传入名称中命中的）
+        lenient().when(personTagApi.getTagsByNames(anyList())).thenAnswer(inv -> {
+            List<String> names = inv.getArgument(0);
+            List<PersonTagDTO> hits = new java.util.ArrayList<>();
+            if (names.contains("理财经理")) {
+                hits.add(tag(11L, "理财经理"));
+            }
+            if (names.contains("柜员")) {
+                hits.add(tag(22L, "柜员"));
+            }
+            return hits;
+        });
 
         // 默认方案为新方案
         lenient().when(schemeMapper.selectBySchemeCode(anyString())).thenReturn(null);
@@ -158,7 +166,7 @@ class KpiSchemeImportStrategyTest {
 
     @Test
     @DisplayName("角色范围多个名 → roleCode CSV 正确传给 writer")
-    void execute_multiRoleScope_csvOfCodes() {
+    void execute_multiTagScope_csvOfTagIds() {
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,柜员", "存款余额",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
@@ -174,12 +182,12 @@ class KpiSchemeImportStrategyTest {
         KpiSchemeImportStrategy.SchemeInfo info = schemeCap.getValue().get("KPI_A");
         assertThat(info).isNotNull();
         assertThat(info.schemeName()).isEqualTo("方案A");
-        assertThat(info.empRoleScope()).isEqualTo("R_FIN_MGR,R_TELLER");
+        assertThat(info.empTagScope()).isEqualTo("11,22");
     }
 
     @Test
-    @DisplayName("角色范围为空 → empRoleScope=null")
-    void execute_blankRoleScope_nullScope() {
+    @DisplayName("角色范围为空 → empTagScope=null")
+    void execute_blankTagScope_nullScope() {
         List<Object[]> rows = new ArrayList<>();
         rows.add(new Object[]{1, "KPI_A", "方案A", null, "存款余额",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
@@ -192,7 +200,7 @@ class KpiSchemeImportStrategyTest {
                 ArgumentCaptor.forClass(java.util.Map.class);
         verify(writer, times(1)).write(anyList(), anyList(), schemeCap.capture(), anyString());
 
-        assertThat(schemeCap.getValue().get("KPI_A").empRoleScope()).isNull();
+        assertThat(schemeCap.getValue().get("KPI_A").empTagScope()).isNull();
     }
 
     @Test
@@ -245,15 +253,15 @@ class KpiSchemeImportStrategyTest {
 
     @Test
     @DisplayName("角色名不存在 → 抛错含'角色不存在'，never 调 Writer")
-    void execute_unknownRole_throws() {
+    void execute_unknownTag_throws() {
         List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,不存在的角色", "存款余额",
+        rows.add(new Object[]{1, "KPI_A", "方案A", "理财经理,不存在的标签", "存款余额",
                 "计算表达式", "x", new BigDecimal("10"), new BigDecimal("120"), new BigDecimal("10")});
 
         MultipartFile file = writeExcel(rows);
         assertThatThrownBy(() -> strategy.execute(batch, file, CTX))
                 .isInstanceOf(PerfException.class)
-                .hasMessageContaining("角色不存在");
+                .hasMessageContaining("人员标签不存在");
         verify(writer, never()).write(anyList(), anyList(), anyMap(), anyString());
     }
 
@@ -281,11 +289,11 @@ class KpiSchemeImportStrategyTest {
         return d;
     }
 
-    private static RoleRespDTO role(String code, String chName) {
-        RoleRespDTO r = new RoleRespDTO();
-        r.setRoleCode(code);
-        r.setRoleChName(chName);
-        return r;
+    private static PersonTagDTO tag(Long tagId, String tagName) {
+        PersonTagDTO t = new PersonTagDTO();
+        t.setTagId(tagId);
+        t.setTagName(tagName);
+        return t;
     }
 
     /** 写单 sheet 文件：表头 10 列（已取消「维度」列）+ 给定数据行. */
@@ -293,7 +301,7 @@ class KpiSchemeImportStrategyTest {
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("KPI方案");
             Row header = sheet.createRow(0);
-            String[] heads = {"序号", "方案编号", "方案名称", "员工角色范围",
+            String[] heads = {"序号", "方案编号", "方案名称", "员工标签范围",
                     "指标名称", "表达式类型", "表达式", "权重", "计分上线", "计分下限"};
             for (int i = 0; i < heads.length; i++) {
                 header.createCell(i).setCellValue(heads[i]);

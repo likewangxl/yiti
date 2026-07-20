@@ -3,7 +3,7 @@
 <mapper namespace="com.bank.branch.platform.performance.mapper.PerfKpiSchemeMapper">
 
     <sql id="BASE_COLUMNS">
-        id, scheme_code, scheme_name, cycle_type, open_detail, emp_role_scope, status,
+        id, scheme_code, scheme_name, cycle_type, open_detail, emp_tag_scope, status,
         created_by, created_time, updated_by, updated_time
     </sql>
 
@@ -16,7 +16,7 @@
             <if test="schemeName != null">scheme_name = #{schemeName},</if>
             <if test="cycleType != null">cycle_type = #{cycleType},</if>
             <if test="openDetail != null">open_detail = #{openDetail},</if>
-            <if test="empRoleScope != null">emp_role_scope = #{empRoleScope},</if>
+            <if test="empTagScope != null">emp_tag_scope = #{empTagScope},</if>
             <if test="status != null">status = #{status},</if>
             <if test="updatedBy != null">updated_by = #{updatedBy},</if>
             <!-- 创建字段 (created_by/created_time) 不可变, 刻意不提供 <if> 分支. -->

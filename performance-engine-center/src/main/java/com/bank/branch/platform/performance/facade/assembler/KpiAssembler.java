@@ -45,20 +45,39 @@ public final class KpiAssembler {
                 .schemeName(scheme.getSchemeName())
                 .cycleType(scheme.getCycleType())
                 .openDetail(scheme.getOpenDetail() != null && scheme.getOpenDetail() == 1)
-                .empRoleScopes(splitCsv(scheme.getEmpRoleScope()))
+                .empTagScopes(splitCsv(scheme.getEmpTagScope()))
                 .status(scheme.getStatus())
                 .createdBy(scheme.getCreatedBy())
                 .items(itemDtos)
                 .build();
     }
 
-    /** 角色编码 CSV → 数组（回显用）；空 → 空列表. */
-    private static List<String> splitCsv(String csv) {
+    /**
+     * 标签 ID CSV → 数组（回显用）；空 → 空列表.
+     *
+     * <p>历史脏值（非数字，如旧的角色编码）逐个跳过而非整体报错，
+     * 保证方案详情页仍可打开，失效范围由前端提示用户重选。</p>
+     */
+    private static List<Long> splitCsv(String csv) {
         if (csv == null || csv.isBlank()) {
             return Collections.emptyList();
         }
-        return java.util.Arrays.stream(csv.split(","))
-                .map(String::trim).filter(s -> !s.isEmpty()).distinct().toList();
+        List<Long> ids = new java.util.ArrayList<>();
+        for (String s : csv.split(",")) {
+            String t = s.trim();
+            if (t.isEmpty()) {
+                continue;
+            }
+            try {
+                Long id = Long.valueOf(t);
+                if (!ids.contains(id)) {
+                    ids.add(id);
+                }
+            } catch (NumberFormatException ignored) {
+                // 非数字脏值：跳过，不阻断详情回显
+            }
+        }
+        return ids;
     }
 
     /**
