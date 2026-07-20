@@ -78,8 +78,8 @@
             <el-button
               link type="primary" size="small"
               :disabled="!canTransfer(row)"
-              :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交'"
-              @click="openTransfer(row)">转交</el-button>
+              :title="canTransfer(row) ? '' : '流程已结束或暂无活跃任务，不可转交/指派'"
+              @click="openTransfer(row)">{{ transferLabel(row) }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -287,16 +287,27 @@ onMounted(async () => {
   }
 });
 
-// 转交：仅 RUNNING、有活跃任务（currentTaskId）且该任务已有办理人（currentAssignee）的行可转交。
-// 追加 currentAssignee 判定：未签收的候选组任务当前处理人为「-」，from_emp_id NOT NULL 落库必失败，
-// 后端会明确拒绝「任务尚未签收」，此处提前禁用按钮避免点开弹窗后提交必错（I2 整改）。
+// 转交/指派：仅 RUNNING 且有活跃任务（currentTaskId）的行可操作。
+// 2026-07-20 去掉了原先的 currentAssignee 判定：未签收的候选组任务（如机构负责人会签）现已支持
+// 直接「指派」（后端 from_emp_id 可空），与审批链路口径一致；再卡 assignee 会让秘书岗无法分派。
 function canTransfer(row) {
-  return row.processStatus === 'RUNNING' && !!row.currentTaskId && !!row.currentAssignee;
+  return row.processStatus === 'RUNNING' && !!row.currentTaskId;
+}
+
+// 未签收（无当前处理人）时是把任务从候选池指派给某人，用「指派」更贴合语义；已签收则是「转交」。
+function transferLabel(row) {
+  return row.currentAssignee ? '转交' : '指派';
 }
 
 const transferDlg = reactive({ show: false, task: null });
 function openTransfer(row) {
-  transferDlg.task = { taskId: row.currentTaskId, nodeName: row.title || row.businessKey, businessKey: row.businessKey };
+  transferDlg.task = {
+    taskId: row.currentTaskId,
+    nodeName: row.title || row.businessKey,
+    businessKey: row.businessKey,
+    // 传给弹窗用于区分转交/指派文案；未签收时为空
+    currentAssignee: row.currentAssignee
+  };
   transferDlg.show = true;
 }
 
