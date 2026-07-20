@@ -8,7 +8,8 @@ import { mount, flushPromises } from '@vue/test-utils';
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
-  ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') }
+  ElMessageBox: { confirm: vi.fn().mockResolvedValue('confirm') },
+  genFileId: vi.fn(() => 1)
 }));
 
 vi.mock('@/api/system', () => ({
@@ -147,7 +148,7 @@ describe('PersonTags.vue', () => {
     expect(importPersonTagMembers).not.toHaveBeenCalled();
   });
 
-  it('成员导入失败：展示行级错误明细且不关闭弹窗', async () => {
+  it('成员导入失败：展示行级错误明细、不关闭弹窗，且清空已选文件强制重选', async () => {
     importPersonTagMembers.mockResolvedValueOnce({
       success: false,
       errors: [{ row: 2, username: 'BAD', message: '工号在系统中不存在' }]
@@ -165,6 +166,45 @@ describe('PersonTags.vue', () => {
 
     expect(wrapper.vm.memberImp.errors).toHaveLength(1);
     expect(wrapper.vm.memberImp.visible).toBe(true);
+    // 失败后必须清空文件：limit=1 会挡住再次选择，且改过的旧 File 浏览器会拒发(ERR_UPLOAD_FILE_CHANGED)
+    expect(wrapper.vm.memberImp.file).toBeNull();
+  });
+
+  it('成员导入请求异常（如文件句柄失效）：清空已选文件强制重选', async () => {
+    importPersonTagMembers.mockRejectedValueOnce(new Error('ERR_UPLOAD_FILE_CHANGED'));
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
+    await flushPromises();
+    wrapper.vm.openMemberImport();
+    wrapper.vm.memberImp.file = new File([1], 'members.xlsx');
+
+    await wrapper.vm.doMemberImport();
+    await flushPromises();
+
+    expect(wrapper.vm.memberImp.file).toBeNull();
+    expect(wrapper.vm.memberImp.visible).toBe(true);
+  });
+
+  it('limit=1 已有文件时再选新文件：on-exceed 覆盖式替换而非静默丢弃', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
+    await flushPromises();
+    wrapper.vm.openMemberImport();
+    const oldFile = new File([1], 'old.xlsx');
+    wrapper.vm.memberImp.file = oldFile;
+
+    const newFile = new File([2], 'new.xlsx');
+    wrapper.vm.onMemberExceed([newFile]);
+
+    // happy-dom 下 File 会被 reactive 代理包装,引用不等,按文件名断言
+    expect(wrapper.vm.memberImp.file?.name).toBe('new.xlsx');
+    // 全局导入弹窗同样的处理器
+    wrapper.vm.onGlobalExceed([newFile]);
+    expect(wrapper.vm.globalImp.file?.name).toBe('new.xlsx');
   });
 
   it('新增员工：逗号/换行分隔的多工号被拆分提交', async () => {

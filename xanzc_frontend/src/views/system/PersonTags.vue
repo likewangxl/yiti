@@ -74,6 +74,7 @@
         <span class="muted">模板列：标签名称 / 工号 / 姓名。库中没有的标签自动新建；任一行错误则整体不导入。</span>
       </div>
       <el-upload
+        ref="globalUploaderRef"
         drag
         action="#"
         :auto-upload="false"
@@ -81,6 +82,7 @@
         :limit="1"
         :on-change="(f) => (globalImp.file = f.raw)"
         :on-remove="() => (globalImp.file = null)"
+        :on-exceed="onGlobalExceed"
         accept=".xlsx"
         style="margin-top: 12px">
         <div class="el-upload__text">点击或拖拽 <em>.xlsx</em> 到此处</div>
@@ -180,6 +182,7 @@
         <span class="muted">模板列：工号 / 姓名。任一行错误则不改动现有数据。</span>
       </div>
       <el-upload
+        ref="memberUploaderRef"
         drag
         action="#"
         :auto-upload="false"
@@ -187,6 +190,7 @@
         :limit="1"
         :on-change="(f) => (memberImp.file = f.raw)"
         :on-remove="() => (memberImp.file = null)"
+        :on-exceed="onMemberExceed"
         accept=".xlsx"
         style="margin-top: 12px">
         <div class="el-upload__text">点击或拖拽 <em>.xlsx</em> 到此处</div>
@@ -203,8 +207,8 @@
 </template>
 
 <script setup>
-import { h, onMounted, reactive, ref } from 'vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { h, nextTick, onMounted, reactive, ref } from 'vue';
+import { ElMessage, ElMessageBox, genFileId } from 'element-plus';
 import {
   listPersonTags, createPersonTag, updatePersonTag, deletePersonTag,
   listPersonTagMembers, addPersonTagMembers, updatePersonTagMember, removePersonTagMember,
@@ -319,11 +323,39 @@ async function onDeleteTag(row) {
 
 // ===== 全局导入 =====
 const globalImp = reactive({ visible: false, file: null, importing: false, errors: [] });
+const globalUploaderRef = ref(null);
+const memberUploaderRef = ref(null);
+
+/**
+ * 清空某个导入弹窗的已选文件（含 el-upload 内部列表）。
+ * 导入失败/异常后必须调用：一方面 limit=1 会挡住再次选择，另一方面浏览器对
+ * "选择后又在磁盘上被修改过"的 File 会拒发请求（ERR_UPLOAD_FILE_CHANGED），
+ * 强制重新选择可同时规避这两个问题。
+ */
+function resetUpload(uploaderRef, state) {
+  uploaderRef.value?.clearFiles?.();
+  state.file = null;
+}
+
+/** limit=1 时再选文件的覆盖式替换（不配 on-exceed 新文件会被 el-upload 静默丢弃）。 */
+function replaceOnExceed(uploaderRef, state) {
+  return (files) => {
+    const f = files && files[0];
+    if (!f) return;
+    uploaderRef.value?.clearFiles?.();
+    f.uid = genFileId();
+    uploaderRef.value?.handleStart?.(f);
+    state.file = f;
+  };
+}
+
+const onGlobalExceed = replaceOnExceed(globalUploaderRef, globalImp);
 
 function openGlobalImport() {
-  globalImp.file = null;
   globalImp.errors = [];
   globalImp.visible = true;
+  // 弹窗内容首次打开才挂载，等一拍再清残留列表
+  nextTick(() => resetUpload(globalUploaderRef, globalImp));
 }
 
 async function doGlobalImport() {
@@ -341,9 +373,14 @@ async function doGlobalImport() {
       reload();
     } else {
       globalImp.errors = (res && res.errors) || [];
-      ElMessage.error('导入未通过校验，请查看错误明细');
+      resetUpload(globalUploaderRef, globalImp);
+      ElMessage.error('导入未通过校验，请修正后重新选择文件');
     }
-  } catch { /* 已提示 */ } finally {
+  } catch {
+    // http.js 已弹错误消息；文件句柄可能已失效，清空强制重选
+    resetUpload(globalUploaderRef, globalImp);
+    ElMessage.warning('请重新选择文件后重试');
+  } finally {
     globalImp.importing = false;
   }
 }
@@ -458,11 +495,13 @@ async function onRemoveMember(row) {
 
 // ===== 成员导入（全量覆盖） =====
 const memberImp = reactive({ visible: false, file: null, importing: false, errors: [] });
+const onMemberExceed = replaceOnExceed(memberUploaderRef, memberImp);
 
 function openMemberImport() {
-  memberImp.file = null;
   memberImp.errors = [];
   memberImp.visible = true;
+  // 弹窗内容首次打开才挂载，等一拍再清残留列表
+  nextTick(() => resetUpload(memberUploaderRef, memberImp));
 }
 
 async function doMemberImport() {
@@ -485,9 +524,14 @@ async function doMemberImport() {
       refreshBoth();
     } else {
       memberImp.errors = (res && res.errors) || [];
-      ElMessage.error('导入未通过校验，现有数据未改动');
+      resetUpload(memberUploaderRef, memberImp);
+      ElMessage.error('导入未通过校验，现有数据未改动，请修正后重新选择文件');
     }
-  } catch { /* 已提示 */ } finally {
+  } catch {
+    // http.js 已弹错误消息；文件句柄可能已失效（如磁盘上原地修改过），清空强制重选
+    resetUpload(memberUploaderRef, memberImp);
+    ElMessage.warning('请重新选择文件后重试');
+  } finally {
     memberImp.importing = false;
   }
 }
