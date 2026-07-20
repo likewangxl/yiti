@@ -98,6 +98,13 @@
             <version>5.2.5</version>
         </dependency>
 
+        <!-- 人员标签 Excel 导入/模板（EasyExcel，版本与 POI 对齐由根 POM 管理） -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>easyexcel</artifactId>
+            <version>3.3.4</version>
+        </dependency>
+
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

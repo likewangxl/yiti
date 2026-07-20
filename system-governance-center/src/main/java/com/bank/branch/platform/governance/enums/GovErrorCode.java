@@ -19,6 +19,8 @@ public enum GovErrorCode {
     FILE_NOT_FOUND("GOV-40005", "文件不存在"),
     NOTICE_NOT_FOUND("GOV-40006", "通知不存在"),
     TASK_LOG_NOT_FOUND("GOV-40007", "任务执行日志不存在"),
+    PERSON_TAG_NOT_FOUND("GOV-40008", "人员标签不存在"),
+    PERSON_TAG_MEMBER_NOT_FOUND("GOV-40009", "标签成员不存在"),
 
     // 403 禁止操作
     PAST_DATE_NOT_MODIFIABLE("GOV-40301", "过去日期不可修改"),
@@ -28,6 +30,8 @@ public enum GovErrorCode {
     DICT_CODE_DUPLICATE("GOV-40901", "字典编码重复"),
     CONFIG_KEY_DUPLICATE("GOV-40902", "配置Key重复"),
     TASK_ALREADY_RUNNING("GOV-40903", "任务正在执行中"),
+    PERSON_TAG_NAME_DUPLICATE("GOV-40904", "标签名称已存在"),
+    PERSON_TAG_MEMBER_DUPLICATE("GOV-40905", "该员工已在标签下"),
 
     // 422 校验失败
     NOT_SELECT_SQL("GOV-42201", "非SELECT SQL语句"),
@@ -35,6 +39,9 @@ public enum GovErrorCode {
     FILE_FORMAT_INVALID("GOV-42203", "文件格式不合法"),
     FILE_SIZE_EXCEEDED("GOV-42204", "文件大小超限"),
     CONFIG_VALUE_TYPE_INVALID("GOV-42205", "配置值类型校验失败"),
+    PERSON_TAG_IMPORT_FILE_EMPTY("GOV-42206", "导入文件为空"),
+    PERSON_TAG_IMPORT_FILE_INVALID("GOV-42207", "导入文件解析失败"),
+    PERSON_TAG_USERNAME_NOT_EXISTS("GOV-42208", "员工工号在系统中不存在"),
 
     // 500 内部错误
     MINIO_ERROR("GOV-50001", "MinIO服务异常"),

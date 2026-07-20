@@ -19,6 +19,8 @@
 | 8 | file_object | 文件对象 | UUID(id) varchar(32) | 自有 |
 | 9 | biz_file_rel | 业务附件关联 | UUID(id) varchar(32) | 自有 |
 | 10 | audit_log | 审计日志 | UUID(id) varchar(32) | 自有 |
+| 11 | PERSON_TAG | 人员标签（全平台通用） | 自增(TAG_ID) bigint | 自有 |
+| 12 | PERSON_TAG_REL | 人员标签-人员关联 | 自增(ID) bigint | 自有 |
 
 ---
 
@@ -369,6 +371,41 @@ CREATE TABLE IF NOT EXISTS `AUDIT_LOG` (
   KEY `idx_trace_id` (`trace_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='审计日志表';
 ```
+
+### 2.11 PERSON_TAG -- 人员标签（2026-07-20 新增，全平台通用）
+
+```sql
+CREATE TABLE IF NOT EXISTS `PERSON_TAG` (
+  `TAG_ID`      bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `TAG_NAME`    varchar(100) NOT NULL COMMENT '标签名称',
+  `REMARK`      varchar(500) DEFAULT NULL COMMENT '备注',
+  `CREATE_BY`   varchar(50)  DEFAULT NULL COMMENT '创建人工号',
+  `CREATE_TIME` datetime     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `UPDATE_BY`   varchar(50)  DEFAULT NULL COMMENT '更新人工号',
+  `UPDATE_TIME` datetime     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`TAG_ID`),
+  UNIQUE KEY `UK_PERSON_TAG_NAME` (`TAG_NAME`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人员标签（全平台通用）';
+```
+
+### 2.12 PERSON_TAG_REL -- 人员标签-人员关联（2026-07-20 新增）
+
+```sql
+CREATE TABLE IF NOT EXISTS `PERSON_TAG_REL` (
+  `ID`          bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `TAG_ID`      bigint       NOT NULL COMMENT '标签ID（PERSON_TAG.TAG_ID）',
+  `USERNAME`    varchar(200) NOT NULL COMMENT '员工工号（PT_USER.USERNAME，注意不是 USER_ID 代理键）',
+  `CREATE_BY`   varchar(50)  DEFAULT NULL COMMENT '创建人工号',
+  `CREATE_TIME` datetime     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `UK_PTR_TAG_USER` (`TAG_ID`, `USERNAME`),
+  KEY `IDX_PTR_USERNAME` (`USERNAME`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人员标签-人员关联（一人可多标签）';
+```
+
+> 一人可挂多个标签（唯一键是 (TAG_ID, USERNAME) 而非 USERNAME）；成员姓名/机构不冗余存储，
+> 展示时按工号实时解析。部署脚本：`docs/superpowers/sql/2026-07-20-person-tag-tables-and-menu.sql`
+> （含 PT_RESOURCE 菜单/12 个 API 资源/角色绑定种子，幂等）。
 
 ---
 
