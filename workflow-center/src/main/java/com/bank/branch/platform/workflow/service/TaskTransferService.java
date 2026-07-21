@@ -4,9 +4,11 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
+import com.bank.branch.platform.workflow.api.dto.TransferCandidateDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
@@ -27,6 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -517,6 +522,117 @@ public class TaskTransferService {
      *       receiverKeys 交集）。</li>
      * </ol>
      */
+    /**
+     * 列出该任务当前可选的转交接收人（发起弹窗用）。
+     * <p>
+     * 与 {@link #isEligibleReceiver} <b>同源但方向相反</b>：后者对单个候选人做「能否接收」判定，
+     * 本方法直接把可办理者集合<b>反向展开</b>出来。之所以不复用前者逐人判定，是因为那样每人
+     * 要调一次 {@code getCandidateGroupKeys}，本机构上百人即上百次查询（N+1）；这里按
+     * {@code ROLE:}/{@code ORG:} 前缀走 {@code getEmpIdsByRoleCodeAndOrg}/{@code getEmpIdsByOrg}
+     * 批量反查，与人数无关。
+     * </p>
+     * <p>
+     * 展开口径必须与 {@code isEligibleReceiver} 逐条对齐，否则会出现「列表里能选、提交被
+     * WF-40912 打回」的割裂：
+     * <ol>
+     *   <li>任务有 candidate 身份链接 → <b>只</b>按链接快照展开（不查当前角色配置）。
+     *       身份链接是任务创建时的快照，流程发起后才获得角色的人本就不能办理该任务，
+     *       列表同样不该出现他。</li>
+     *   <li>任务无 candidate 身份链接（纯直接指派节点）→ 回退节点原始配置展开。</li>
+     * </ol>
+     * 最后与发起人机构取交集（对齐 WF-40911），并排除发起人自己与原办理人（对齐 WF-40918）。
+     * </p>
+     *
+     * @param taskId 任务ID
+     * @return 可选接收人列表（已按机构与自排除过滤），无可选人时返回空列表
+     * @throws BizException WF-40403 任务不存在
+     */
+    public List<TransferCandidateDTO> listCandidates(String taskId) {
+        String me = currentUserApi.getCurrentEmpId();
+        String myOrg = currentUserApi.getCurrentOrgCode();
+
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            throw new BizException(WfErrorCode.TASK_NOT_FOUND.getCode(), WfErrorCode.TASK_NOT_FOUND.getMessage());
+        }
+
+        Set<String> eligible = new LinkedHashSet<>();
+        List<IdentityLink> candidateLinks = extractCandidateLinks(taskId);
+        if (!candidateLinks.isEmpty()) {
+            for (IdentityLink link : candidateLinks) {
+                if (link.getUserId() != null) {
+                    eligible.add(link.getUserId());
+                }
+                if (link.getGroupId() != null) {
+                    eligible.addAll(expandCandidateKey(link.getGroupId(), myOrg));
+                }
+            }
+        } else {
+            String pdKey = resolvePdKey(task.getProcessDefinitionId());
+            List<String> nodeCandidates = candidateResolverService.resolveCandidates(pdKey, task.getTaskDefinitionKey());
+            if (nodeCandidates != null) {
+                for (String key : nodeCandidates) {
+                    eligible.addAll(expandCandidateKey(key, myOrg));
+                }
+            }
+        }
+
+        if (eligible.isEmpty()) {
+            return List.of();
+        }
+
+        // 同机构交集（对齐 initiate 的 WF-40911）：跨机构者即便持有该角色也不可作接收人
+        Set<String> orgMembers = new HashSet<>(nullToEmpty(userApi.getEmpIdsByOrg(myOrg)));
+        eligible.retainAll(orgMembers);
+        // 排除发起人自己与原办理人（对齐 WF-40918，转给他们无意义）
+        eligible.remove(me);
+        eligible.remove(task.getAssignee());
+
+        if (eligible.isEmpty()) {
+            return List.of();
+        }
+
+        List<UserDTO> users = userApi.getUserByEmpIds(new ArrayList<>(eligible));
+        if (users == null) {
+            return List.of();
+        }
+        return users.stream()
+                .map(u -> new TransferCandidateDTO(u.getEmpId(), u.getDisplayName(),
+                        u.getMainOrgCode(), u.getMainOrgName()))
+                .toList();
+    }
+
+    /**
+     * 把单个候选标识反向展开为 empId 集合。前缀口径对齐 {@code UserFacade#getCandidateGroupKeys}
+     * 与 {@code CandidateResolverService#resolveCandidates}：{@code USER:{empId}} /
+     * {@code ROLE:{roleCode}} / {@code ORG:{orgCode}}。
+     * <p>
+     * {@code ROLE:} 走「角色 + 机构」双条件批量反查而非全行取回后过滤——角色持有者可能跨全行，
+     * 先按机构收窄能显著减小结果集（同机构交集在调用方仍会再兜一次）。
+     * </p>
+     */
+    private List<String> expandCandidateKey(String key, String orgCode) {
+        if (key == null) {
+            return List.of();
+        }
+        if (key.startsWith("USER:")) {
+            return List.of(key.substring("USER:".length()));
+        }
+        if (key.startsWith("ROLE:")) {
+            return nullToEmpty(userApi.getEmpIdsByRoleCodeAndOrg(key.substring("ROLE:".length()), orgCode));
+        }
+        if (key.startsWith("ORG:")) {
+            return nullToEmpty(userApi.getEmpIdsByOrg(key.substring("ORG:".length())));
+        }
+        // 无前缀的裸标识不参与展开：候选配置理应带前缀，裸值来源不明，
+        // 当作用户ID展开会把任意字符串误当工号放进候选列表。
+        return List.of();
+    }
+
+    private List<String> nullToEmpty(List<String> list) {
+        return list == null ? List.of() : list;
+    }
+
     private boolean isEligibleReceiver(String taskId, List<String> nodeCandidates, String toEmpId) {
         Set<String> receiverKeys = userApi.getCandidateGroupKeys(toEmpId);
 

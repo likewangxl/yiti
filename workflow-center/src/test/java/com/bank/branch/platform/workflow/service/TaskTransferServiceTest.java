@@ -4,9 +4,11 @@ import com.bank.branch.platform.auth.api.CurrentUserApi;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
+import com.bank.branch.platform.workflow.api.dto.TransferCandidateDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
@@ -889,5 +891,131 @@ class TaskTransferServiceTest {
                 .isEqualTo("WF-40915");
 
         verifyNoInteractions(notifyApi);
+    }
+
+    // ==================== listCandidates ====================
+
+    /** 构造一条 candidate 类型身份链接（userId / groupId 二选一，另一个留 null）。 */
+    private IdentityLink candidateLink(String userId, String groupId) {
+        IdentityLink link = mock(IdentityLink.class);
+        lenient().when(link.getType()).thenReturn("candidate");
+        lenient().when(link.getUserId()).thenReturn(userId);
+        lenient().when(link.getGroupId()).thenReturn(groupId);
+        return link;
+    }
+
+    private UserDTO user(String empId, String displayName) {
+        UserDTO u = new UserDTO();
+        u.setEmpId(empId);
+        u.setDisplayName(displayName);
+        u.setMainOrgCode(ORG_A);
+        u.setMainOrgName("A 支行");
+        return u;
+    }
+
+    /**
+     * 身份链接存在时，候选人只从链接快照反向展开（USER: 直接取人，ROLE: 按机构批量反查），
+     * 且必须与 {@code initiate} 的资格校验同源——链接里没有的人不得出现在列表里。
+     * <p>
+     * 这正是 yangdb1 场景：流程发起后才被授予 BRANCH_HEAD 的人不在快照内，
+     * 弹窗就不该把他列出来让人白点一次再被 WF-40912 打回。
+     * </p>
+     */
+    @Test
+    void listCandidates_expandsFromIdentityLinkSnapshotOnly() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask());
+        // 链接 mock 必须在 when(...) 之外先建好：在 when 表达式内部创建并打桩另一个 mock
+        // 会被 Mockito 判为 UnfinishedStubbing。
+        List<IdentityLink> links = List.of(candidateLink(E_TO, null));
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(links);
+        when(userApi.getEmpIdsByOrg(ORG_A)).thenReturn(List.of(E_FROM, E_SEC, E_TO, "E_LATECOMER"));
+        when(userApi.getUserByEmpIds(List.of(E_TO))).thenReturn(List.of(user(E_TO, "张三")));
+
+        List<TransferCandidateDTO> got = taskTransferService.listCandidates(TASK_ID);
+
+        assertThat(got).extracting(TransferCandidateDTO::getEmpId).containsExactly(E_TO);
+        // 事后才拿到角色的人不在快照里 → 不出现；且不得逐人调 getCandidateGroupKeys（N+1）
+        assertThat(got).extracting(TransferCandidateDTO::getEmpId).doesNotContain("E_LATECOMER");
+        verify(userApi, never()).getCandidateGroupKeys(anyString());
+    }
+
+    /**
+     * 身份链接是组（ROLE:）时按「角色 + 本机构」批量反查成员，而不是逐个员工判定资格。
+     */
+    @Test
+    void listCandidates_expandsRoleGroupLinkViaBatchLookup() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask());
+        List<IdentityLink> links = List.of(candidateLink(null, "ROLE:BRANCH_HEAD"));
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(links);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", ORG_A)).thenReturn(List.of(E_TO, E_FROM));
+        when(userApi.getEmpIdsByOrg(ORG_A)).thenReturn(List.of(E_FROM, E_SEC, E_TO));
+        when(userApi.getUserByEmpIds(List.of(E_TO))).thenReturn(List.of(user(E_TO, "张三")));
+
+        List<TransferCandidateDTO> got = taskTransferService.listCandidates(TASK_ID);
+
+        // E_FROM 是原办理人（转给他无意义）→ 排除；E_SEC 是发起人自己 → 排除
+        assertThat(got).extracting(TransferCandidateDTO::getEmpId).containsExactly(E_TO);
+        verify(userApi).getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", ORG_A);
+        verify(userApi, never()).getCandidateGroupKeys(anyString());
+    }
+
+    /**
+     * 任务无候选身份链接（纯直接指派节点）→ 回退节点原始配置展开，
+     * 与 {@code isEligibleReceiver} 的兜底分支保持同源。
+     */
+    @Test
+    void listCandidates_fallsBackToNodeConfigWhenNoIdentityLinks() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask());
+        mockPdKey();
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(Collections.emptyList());
+        when(candidateResolverService.resolveCandidates(PD_KEY, NODE_KEY))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD", "USER:" + E_TO));
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", ORG_A)).thenReturn(List.of("E_HEAD"));
+        when(userApi.getEmpIdsByOrg(ORG_A)).thenReturn(List.of(E_FROM, E_SEC, E_TO, "E_HEAD"));
+        when(userApi.getUserByEmpIds(any()))
+                .thenReturn(List.of(user(E_TO, "张三"), user("E_HEAD", "李四")));
+
+        List<TransferCandidateDTO> got = taskTransferService.listCandidates(TASK_ID);
+
+        assertThat(got).extracting(TransferCandidateDTO::getEmpId)
+                .containsExactlyInAnyOrder(E_TO, "E_HEAD");
+    }
+
+    /**
+     * 展开结果必须与本机构取交集：跨机构的人即便持有该角色也不可作为接收人
+     * （对齐 initiate 的 WF-40911 同机构约束），否则列表会给出提交必失败的选项。
+     */
+    @Test
+    void listCandidates_intersectsWithInitiatorOrg() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(mockTask());
+        List<IdentityLink> links = List.of(candidateLink("E_OTHER_ORG", null), candidateLink(E_TO, null));
+        when(taskService.getIdentityLinksForTask(TASK_ID)).thenReturn(links);
+        when(userApi.getEmpIdsByOrg(ORG_A)).thenReturn(List.of(E_FROM, E_SEC, E_TO));
+        when(userApi.getUserByEmpIds(List.of(E_TO))).thenReturn(List.of(user(E_TO, "张三")));
+
+        List<TransferCandidateDTO> got = taskTransferService.listCandidates(TASK_ID);
+
+        assertThat(got).extracting(TransferCandidateDTO::getEmpId).containsExactly(E_TO);
+    }
+
+    /** 任务不存在 → WF-40403，与 initiate 同一错误码。 */
+    @Test
+    void listCandidates_taskNotFound_throwsWf40403() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_SEC);
+        when(currentUserApi.getCurrentOrgCode()).thenReturn(ORG_A);
+        mockTaskQuery(null);
+
+        assertThatThrownBy(() -> taskTransferService.listCandidates(TASK_ID))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40403");
     }
 }

@@ -87,6 +87,16 @@ export function transferInitiate(taskId, { toEmpId, reason }) {
   return call('post', `/workflow/monitor/tasks/${taskId}/transfer`, { data: { toEmpId, reason } }, { ok: true });
 }
 
+/**
+ * 查询该任务可选的转交接收人。
+ * 后端与 initiate 的资格校验同源：返回的人提交必定通过，不会再被 WF-40912 打回。
+ * @param {string} taskId
+ * @returns {Promise<Array<{empId:string, displayName:string, orgCode:string, orgName:string}>>}
+ */
+export function transferCandidates(taskId) {
+  return call('get', `/workflow/monitor/tasks/${taskId}/transfer-candidates`, {}, []).then(r => r || []);
+}
+
 /** 转交收件箱：当前登录用户待认领的转交任务列表 */
 export function transferInbox() {
   return call('get', '/workflow/transfers/inbox', {}, []).then(r => r || []);

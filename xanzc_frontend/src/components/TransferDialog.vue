@@ -2,10 +2,12 @@
   转交/指派弹窗：秘书岗/行长在审批流监控把某个任务交给"本机构"其他人（待接收人认领后才真正生效）。
   任务已签收 = 转交（从原办理人手上转走）；未签收的候选组任务 = 指派（从候选池直接指定办理人），
   两者走同一个 initiate 端点，仅文案区分（后端 from_emp_id 可空承载这两种语义）。
-  接收人候选：无专用端点（Task 12 未提供 /transfers/candidates），按 P4 计划走
-  「本机构人员」接口（OrgController /api/orgs/{orgCode}/users），机构取当前登录用户主机构
-  （TaskTransferService.initiate 校验接收人主机构必须等于发起人机构，本机构以外选了也会被
-  后端 WF-40911 拒绝）；节点候选资格（WF-40912）前端不做校验，交给后端 initiate 兜底。
+  接收人候选：走专用端点 GET /workflow/monitor/tasks/{taskId}/transfer-candidates
+  （2026-07-21 新增），后端 listCandidates 与 initiate 的资格校验同源——已按「节点可办理者
+  ∩ 本机构」展开并排除自己与原办理人，所以列出来的人提交必定通过。
+  此前这里列的是「本机构全部人员」（OrgController /api/orgs/{orgCode}/users），资格只由后端
+  在提交时抛 WF-40912 兜底，用户会选中注定失败的人（典型：流程发起后才被授予角色的人不在
+  任务身份链接快照内，选了必被打回）——已废弃该做法，不要改回按机构拉全量再让后端兜底。
 -->
 <template>
   <el-dialog
@@ -27,7 +29,7 @@
           placeholder="选择本机构人员"
           style="width:100%"
           :loading="candidatesLoading"
-          no-data-text="本机构暂无可选人员">
+          no-data-text="该节点在本机构暂无其他可办理人员">
           <el-option
             v-for="u in candidates"
             :key="u.empId"
@@ -35,7 +37,7 @@
             :value="u.empId"
           />
         </el-select>
-        <div class="form-hint">仅列出本机构（{{ orgLabel }}）在职人员，后端仍会校验其是否具备该节点办理资格</div>
+        <div class="form-hint">仅列出本机构（{{ orgLabel }}）中具备该节点办理资格的人员</div>
       </el-form-item>
       <el-form-item :label="isAssign ? '指派原因' : '转交原因'" prop="reason">
         <el-input
@@ -58,8 +60,7 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { transferInitiate } from '@/api/workflow';
-import { listOrgUsers } from '@/api/orgs';
+import { transferInitiate, transferCandidates } from '@/api/workflow';
 import { useUserStore } from '@/stores/user';
 
 const props = defineProps({
@@ -83,17 +84,15 @@ const rules = {
 
 const candidates = ref([]);
 const candidatesLoading = ref(false);
+// 候选人完全由后端给定：机构过滤、节点办理资格、排除自己与原办理人都在 listCandidates 内完成，
+// 前端不再做任何二次过滤——任何前端侧过滤都会与后端 initiate 的判定产生分叉。
 async function loadCandidates() {
-  if (!orgCode.value) { candidates.value = []; return; }
+  if (!taskId.value) { candidates.value = []; return; }
   candidatesLoading.value = true;
   try {
-    const r = await listOrgUsers(orgCode.value, { pageSize: 200, isEnabled: 0 });
-    const records = Array.isArray(r) ? r : (r?.records || []);
-    // 排除自己（转交给自己无意义，后端也不会作为有效候选）
-    const me = userStore.user?.empId;
-    candidates.value = records.filter(u => u.empId && u.empId !== me);
+    candidates.value = await transferCandidates(taskId.value);
   } catch {
-    ElMessage.warning('本机构人员加载失败');
+    ElMessage.warning('可选接收人加载失败');
     candidates.value = [];
   } finally {
     candidatesLoading.value = false;

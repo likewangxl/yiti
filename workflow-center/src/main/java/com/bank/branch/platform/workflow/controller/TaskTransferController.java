@@ -5,6 +5,7 @@ import com.bank.branch.platform.common.security.annotation.BizAuth;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
+import com.bank.branch.platform.workflow.api.dto.TransferCandidateDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferDecisionReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
@@ -61,6 +62,27 @@ public class TaskTransferController {
             @Valid @RequestBody TransferInitiateReqDTO req) {
         log.info("[TaskTransferController.initiate] taskId={}, toEmpId={}", taskId, req.getToEmpId());
         return ResponseWrapper.success(taskTransferService.initiate(taskId, req));
+    }
+
+    /**
+     * 列出该任务可选的转交接收人（发起弹窗用）。
+     * <p>
+     * 与 {@link #initiate} 同域、同鉴权（{@code WORKFLOW_MONITOR/TRANSFER}）——候选人名单
+     * 等于「谁能办理这个节点」，属于与发起同级的敏感信息，不能比发起动作更松。
+     * </p>
+     * <p>
+     * 返回列表与 initiate 的资格校验同源：列表里的人提交必定通过，不会再出现
+     * 「弹窗能选、提交被 WF-40912 打回」。
+     * </p>
+     *
+     * @param taskId 任务ID
+     * @return 可选接收人列表
+     */
+    @GetMapping("/monitor/tasks/{taskId}/transfer-candidates")
+    @Operation(summary = "查询可转交接收人")
+    @BizAuth(bizType = BizType.WORKFLOW_MONITOR, action = BizAction.TRANSFER)
+    public ResponseWrapper<List<TransferCandidateDTO>> transferCandidates(@PathVariable String taskId) {
+        return ResponseWrapper.success(taskTransferService.listCandidates(taskId));
     }
 
     /**
