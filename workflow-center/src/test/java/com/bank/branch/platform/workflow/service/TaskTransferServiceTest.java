@@ -581,7 +581,7 @@ class TaskTransferServiceTest {
         assertThat(mapCaptor.getValue().getCurrentAssignee()).isEqualTo(E_TO);
 
         verify(wfProcessOrgService).record(PID, E_TO, "TRANSFER");
-        verify(taskService).addComment(TASK_ID, PID, "TRANSFER_ACCEPTED", null);
+        verify(taskService).addComment(eq(TASK_ID), eq(PID), eq("TRANSFER_ACCEPTED"), anyString());
 
         ArgumentCaptor<NotificationCmd> notifyCaptor = ArgumentCaptor.forClass(NotificationCmd.class);
         verify(notifyApi).sendNotification(notifyCaptor.capture());
@@ -604,6 +604,31 @@ class TaskTransferServiceTest {
 
         verify(taskService).setAssignee(TASK_ID, E_TO);
         verify(bizProcessMapMapper, never()).updateById(any(BizProcessMap.class));
+    }
+
+    /**
+     * 回归：认领留痕评论的 message 不得为 null。
+     * <p>
+     * Flowable 7 的 {@code AddCommentCmd} 会对 message 无条件调用 {@code String.replaceAll}
+     * 做换行规整，传 null 直接 NPE，整个认领事务回滚成 500（转交永久卡 PENDING_ACCEPT）。
+     * 单测里 taskService 是 mock，null 不会触发 NPE，因此必须在此显式断言 message 非空，
+     * 否则真实引擎上的这个坑无法被测试拦住。
+     * </p>
+     */
+    @Test
+    void accept_addsNonNullCommentMessage_flowableRejectsNullMessage() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn(E_TO);
+        when(wfTaskTransferMapper.selectById(TRANSFER_ID)).thenReturn(pendingTransfer());
+        mockTaskQuery(mockTask());
+        when(wfTaskTransferMapper.updateStatusIfPending(eq(TRANSFER_ID), eq("ACCEPTED"), isNull(), any(LocalDateTime.class)))
+                .thenReturn(1);
+        when(bizProcessMapMapper.selectByProcessInstanceId(PID)).thenReturn(null);
+
+        taskTransferService.accept(TRANSFER_ID);
+
+        ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(taskService).addComment(eq(TASK_ID), eq(PID), eq("TRANSFER_ACCEPTED"), msgCaptor.capture());
+        assertThat(msgCaptor.getValue()).isNotBlank();
     }
 
     /**

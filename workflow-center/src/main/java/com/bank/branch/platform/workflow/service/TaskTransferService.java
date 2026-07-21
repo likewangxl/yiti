@@ -306,7 +306,11 @@ public class TaskTransferService {
         }
 
         wfProcessOrgService.record(t.getProcessInstanceId(), me, "TRANSFER");
-        taskService.addComment(t.getTaskId(), t.getProcessInstanceId(), "TRANSFER_ACCEPTED", null);
+        // message 不可传 null：Flowable 7 的 AddCommentCmd 会对 message 无条件调 String.replaceAll
+        // 规整换行，null 直接 NPE 并整体回滚，认领永久卡在 PENDING_ACCEPT。认领无用户输入，
+        // 故用系统生成的留痕文案（其余 addComment 调用点传的都是校验过非空的用户输入）。
+        taskService.addComment(t.getTaskId(), t.getProcessInstanceId(), "TRANSFER_ACCEPTED",
+                "已认领转交任务（认领人：" + me + "）");
 
         notifyApi.sendNotification(NotificationCmd.builder()
                 .targetEmpId(t.getInitiatorEmpId())
