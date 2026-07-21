@@ -66,6 +66,9 @@ public class FreeReportServiceImpl implements FreeReportService {
             Sheet sheet = wb.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) throw new BizException("RPT-40010", "Excel 无表头行");
+            // POI 的 DataFormatter 按单元格自身的数字格式渲染，结果与 Excel 里看到的一字不差
+            // （-5.00000000069889E-7 配格式 0.0 -> "-0.0"；0.545175438596492 配 0.0% -> "54.5%"）
+            DataFormatter formatter = new DataFormatter();
 
             // 预处理合并单元格：把合并区内每个 (row,col) 映射到主单元格的字符串值，
             // 后续读 cell == null（合并区从属位）时 fallback 拿主单元格的值，避免姓名等列断行
@@ -110,12 +113,26 @@ public class FreeReportServiceImpl implements FreeReportService {
                 boolean hasData = false;
                 for (int c = 0; c < headers.size(); c++) {
                     Cell cell = row.getCell(c);
-                    String val = cell != null ? getCellString(cell) : "";
+                    String key = "col_" + (c + 1);
+                    // 显示文本：与 Excel 里看到的完全一致（-0.0 / 54.5%），不是 String.valueOf 的科学计数法
+                    String val = cell != null ? getCellDisplay(cell, formatter) : "";
                     // 合并单元格从属位 fallback 到主单元格值
                     if (val.isEmpty()) {
                         val = mergedAnchorValue.getOrDefault(r + ":" + c, "");
                     }
-                    rowData.put("col_" + (c + 1), val);
+                    rowData.put(key, val);
+                    // 前两列是工号/姓名（纯文本），不需要原值/格式；其余数值列另存两份：
+                    //   __raw 完整原值（点击查看用）、__fmt 原数字格式（导出复刻 Excel 显示用）
+                    if (c >= 2 && cell != null) {
+                        String raw = getCellRaw(cell);
+                        if (!raw.isEmpty() && !raw.equals(val)) {
+                            rowData.put(key + "__raw", raw);
+                        }
+                        String fmt = getCellFormat(cell);
+                        if (!fmt.isEmpty()) {
+                            rowData.put(key + "__fmt", fmt);
+                        }
+                    }
                     if (!val.isEmpty()) hasData = true;
                 }
                 if (hasData) dataRows.add(rowData);
@@ -264,9 +281,15 @@ public class FreeReportServiceImpl implements FreeReportService {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
              java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet("数据");
-            // 复用一个 0.00 数字格式样式（逐格建样式会超 64000 上限）
-            CellStyle numStyle = wb.createCellStyle();
-            numStyle.setDataFormat(wb.createDataFormat().getFormat("0.00"));
+            // 按「数字格式串」缓存样式：同一格式只建一个 CellStyle。
+            // 逐格新建会撞 Excel 的 64000 样式上限，而格式种类通常只有个位数。
+            Map<String, CellStyle> styleCache = new HashMap<>();
+            java.util.function.Function<String, CellStyle> styleOf = fmt ->
+                    styleCache.computeIfAbsent(fmt, f -> {
+                        CellStyle st = wb.createCellStyle();
+                        st.setDataFormat(wb.createDataFormat().getFormat(f));
+                        return st;
+                    });
             // 表头
             Row header = sheet.createRow(0);
             for (int c = 0; c < colDefs.size(); c++) {
@@ -290,13 +313,17 @@ public class FreeReportServiceImpl implements FreeReportService {
                     };
                     val = val != null ? val : "";
                     Cell cell = row.createCell(c);
-                    // 工号/姓名两列原样文本；其余列若是小数 → 存**完整原值** + 0.00 格式显示两位。
-                    // 取舍说明（2026-07-20 用户决策）：Excel/WPS 的数字格式只会四舍五入、无法截断，
-                    // 故「点击格子编辑栏干净显示完整原值」与「格内截断显示」不可共存。这里保完整原值，
-                    // 接受格内按 0.00 四舍五入（3.1779998 显示 3.18）。查看页仍是截断显示，两者口径不同。
-                    if (!"col_1".equals(key) && !"col_2".equals(key) && isDecimal(val)) {
-                        cell.setCellValue(Double.parseDouble(val));
-                        cell.setCellStyle(numStyle);
+                    // 工号/姓名两列原样文本。其余数值列写「完整原值 + 原 Excel 数字格式」，
+                    // 完整复刻源文件行为：格内按原格式渲染（-0.0 / 54.5%），点击后编辑栏是完整值。
+                    // 这正是源 Excel 自己的做法，故不存在「显示」与「完整值」二选一的取舍。
+                    String raw = extra.get(key + "__raw");   // 导入时存的完整原值（老批次无此键）
+                    String fmt = extra.get(key + "__fmt");   // 导入时存的原数字格式（老批次无此键）
+                    boolean isDataCol = !"col_1".equals(key) && !"col_2".equals(key);
+                    String numText = (raw != null && !raw.isEmpty()) ? raw : val;
+                    if (isDataCol && isDecimal(numText)) {
+                        cell.setCellValue(Double.parseDouble(numText));
+                        // 有原格式就用原格式；老批次没有则退回 0.00（保持既有行为）
+                        cell.setCellStyle(styleOf.apply(fmt != null && !fmt.isEmpty() ? fmt : "0.00"));
                     } else {
                         cell.setCellValue(val);
                     }
@@ -364,6 +391,50 @@ public class FreeReportServiceImpl implements FreeReportService {
 
     static boolean isDecimal(String s) {
         return s != null && DECIMAL.matcher(s).matches();
+    }
+
+    /**
+     * 单元格「显示文本」：与 Excel 里肉眼所见完全一致。
+     *
+     * <p>关键在于用 {@link DataFormatter} 按单元格自身的数字格式渲染，而不是取原始 double 再
+     * {@code String.valueOf}——后者对极小值会输出科学计数法（-5.00000000069889E-7），
+     * 对百分比会丢掉 % 号（0.545175438596492）。原始值另由 {@link #getCellRaw} 保留。
+     */
+    private String getCellDisplay(Cell cell, DataFormatter formatter) {
+        if (cell == null) return "";
+        if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+            return cell.getLocalDateTimeCellValue().toString();
+        }
+        try {
+            String s = formatter.formatCellValue(cell);
+            return s != null ? s.trim() : "";
+        } catch (Exception e) {
+            // 格式串异常时退回原始取值，保证导入不中断
+            return getCellString(cell);
+        }
+    }
+
+    /** 单元格「完整原值」：数值格返回不带科学计数法的完整十进制串，供点击查看。 */
+    private String getCellRaw(Cell cell) {
+        if (cell == null) return "";
+        CellType t = cell.getCellType() == CellType.FORMULA ? cell.getCachedFormulaResultType() : cell.getCellType();
+        if (t != CellType.NUMERIC || DateUtil.isCellDateFormatted(cell)) return "";
+        try {
+            // BigDecimal.valueOf(double) 走 Double.toString 的最短表示，再 toPlainString 去掉科学计数法
+            return new java.math.BigDecimal(Double.toString(cell.getNumericCellValue())).toPlainString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /** 单元格的数字格式串（如 0.0 / 0.0% / #,##0.00）；General、文本格式返回空。 */
+    private String getCellFormat(Cell cell) {
+        if (cell == null || cell.getCellStyle() == null) return "";
+        String fmt = cell.getCellStyle().getDataFormatString();
+        if (fmt == null) return "";
+        fmt = fmt.trim();
+        // General/@ 属于「无有意义数字格式」，导出时不套用，走默认处理
+        return ("General".equalsIgnoreCase(fmt) || "@".equals(fmt)) ? "" : fmt;
     }
 
     private String getCellString(Cell cell) {
