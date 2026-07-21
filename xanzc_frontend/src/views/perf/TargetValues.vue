@@ -225,7 +225,6 @@ import {
   submitTargetAdjust, listMetrics, deleteTargetValue,
   listKpiRules, getKpiSchemeDetail
 } from '@/api/perf';
-import { listUsers } from '@/api/users';
 import { getOrgTree } from '@/api/orgs';
 import { useUserStore } from '@/stores/user';
 
@@ -264,30 +263,19 @@ async function loadKpiMap() {
 // === 员工 / 机构 / 指标 三套 id→name 映射缓存 ===
 // 后端 PERF_TARGET_VALUE 表只有 subject_id（员工号或机构编码），不返机构名/员工名/指标名
 // → 列表渲染时用这 3 个 map 把 ID 翻译成可读名称
-const empMap    = ref(new Map()); // empId → { name, orgName, orgCode }
 const orgMap    = ref(new Map()); // orgCode(内部机构编码) → orgName
 const orgDeptMap = ref(new Map()); // orgCode(内部机构编码) → deptNo(业务机构部门编号)
 const orgDeptToCode = ref(new Map()); // deptNo(EXT_ORG_INFO.DEPT_NO 业务机构部门编号) → orgCode(内部机构编码)
 const metricMap = ref(new Map()); // metricCode → metricName
 
-async function loadEmpMap() {
-  try {
-    const list = await listUsers({ pageSize: 200 });
-    // listUsers 走 unwrapPage：分页响应 { records, total }，不拍平导致 empMap 永远空，
-    // 任何 subjectId 都会被前端校验为"员工不存在"，且后端日志无任何错误记录。
-    const arr = Array.isArray(list) ? list : (list?.records || []);
-    const m = new Map();
-    for (const e of arr) {
-      // 0 = ENABLED；isEnabled 缺失（不同后端返回字段差异）时也保留，避免漏录
-      if (e.isEnabled === 0 || e.isEnabled == null) {
-        m.set(e.username, { name: e.userchnname || e.username, orgName: '', orgCode: '' });
-      }
-    }
-    empMap.value = m;
-  } catch (e) {
-    console.warn('[loadEmpMap] 用户列表加载失败，empMap 为空，前端校验将拦截所有目标值新增', e);
-  }
-}
+// 2026-07-21：原 loadEmpMap() 走管理员接口 /api/admin/users 拉全量用户建「工号→姓名」映射，
+// 已删除。该接口资源 A_USER_LIST 仅授予角色 1/3/4/131/169，资财部经办人(238)等进本页必得 403，
+// http.js 响应拦截器随即弹「没有权限」（页面内 catch 只能防崩，拦不住这个提示）。
+// 替代方案：
+//   - 列表回显员工姓名 → 后端 TargetValueService#fillEmpSubjectNames 已填 subjectName；
+//   - 新增/编辑时的输入建议 → 取方案内已有对象 subjectOptions（/target-values/subjects，本角色有权限）；
+//   - 工号存在性 → 2026-06-15 起本就由后端校验，不依赖前端缓存。
+// 不要为了补全建议把 /api/admin/users 加回来。
 async function loadOrgMap() {
   try {
     const tree = await getOrgTree();
@@ -313,7 +301,7 @@ async function loadOrgMap() {
   } catch {}
 }
 
-// el-autocomplete 数据源：根据当前对象维度从 empMap / orgMap 取候选，模糊匹配 key 或 name。
+// el-autocomplete 数据源：EMP 取方案内已有对象 subjectOptions，ORG 取 orgMap，模糊匹配 key 或 name。
 // EMP：value=username（PT_USER.username），label=中文名（PT_USER.userchnname）；
 // ORG：value=机构号（EXT_ORG_INFO.org_code），label=机构名。
 function querySubjectSuggestions(query, cb) {
@@ -321,10 +309,13 @@ function querySubjectSuggestions(query, cb) {
   const q = (query || '').toLowerCase().trim();
   const out = [];
   if (dim === 'EMP') {
-    for (const [username, info] of empMap.value) {
-      const cn = info?.name || '';
-      if (!q || username.toLowerCase().includes(q) || cn.toLowerCase().includes(q)) {
-        out.push({ value: username, label: cn });
+    // 建议来源＝本方案内已有的 EMP 对象（subjectOptions）。覆盖"给同一批人补录/改值"这一主场景；
+    // 首次为新员工录入时无建议，直接键入工号即可——存在性由后端校验，不存在会返回明确错误。
+    for (const s of subjectOptions.value) {
+      if (s.subjectType !== 'EMP' || !s.subjectId) continue;
+      const cn = s.name || '';
+      if (!q || s.subjectId.toLowerCase().includes(q) || cn.toLowerCase().includes(q)) {
+        out.push({ value: s.subjectId, label: cn });
         if (out.length >= 50) break;
       }
     }
@@ -510,8 +501,7 @@ async function loadValues() {
       let orgName     = x.orgName     || '';
       let orgCode     = x.orgCode     || '';
       if (x.subjectType === 'EMP') {
-        const e = empMap.value.get(x.subjectId);
-        if (e) { subjectName ||= e.name; orgName ||= e.orgName; orgCode ||= e.orgCode; }
+        // subjectName 由后端 fillEmpSubjectNames 按工号解析；查不到用户时后端留空，此处兜底显示工号
         if (!subjectName) subjectName = x.subjectId;
       } else if (x.subjectType === 'ORG') {
         orgCode ||= x.subjectId;
@@ -902,7 +892,7 @@ onMounted(async () => {
     f.planId = String(route.query.planId);
   }
   // 5 个基础数据并发：方案 / 指标库 / 员工映射 / 机构映射 / KPI 方案映射（用于副标题翻译）
-  await Promise.all([loadPlans(), loadMetricOptions(), loadEmpMap(), loadOrgMap(), loadKpiMap()]);
+  await Promise.all([loadPlans(), loadMetricOptions(), loadOrgMap(), loadKpiMap()]);
   loadValues();
 });
 </script>

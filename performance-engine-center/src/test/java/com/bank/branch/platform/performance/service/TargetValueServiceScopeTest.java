@@ -2,7 +2,9 @@ package com.bank.branch.platform.performance.service;
 
 import com.bank.branch.platform.auth.api.BizScopeApi;
 import com.bank.branch.platform.auth.api.CurrentUserApi;
+import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.DataScopeContext;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.security.enums.BizAction;
 import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.security.enums.DataScopeType;
@@ -67,6 +69,10 @@ class TargetValueServiceScopeTest {
     @Mock
     private CurrentUserApi currentUserApi;
 
+    /** pageWithScopeDto 批量解析 EMP 对象姓名（subjectId=工号=PT_USER.username）用. */
+    @Mock
+    private UserApi userApi;
+
     private PerfScopeHelper perfScopeHelper;
 
     private TargetValueService service;
@@ -74,8 +80,9 @@ class TargetValueServiceScopeTest {
     @BeforeEach
     void setUp() {
         this.perfScopeHelper = new PerfScopeHelper(bizScopeApi, null);
-        // 本测试只覆盖 pageWithScope 读路径，不触发主体/指标校验，userApi/orgApi/planMapper/kpiItemMapper 传 null 即可
-        this.service = new TargetValueService(targetValueMapper, currentUserApi, perfScopeHelper, null, null, null, null);
+        // 本测试覆盖 pageWithScope / pageWithScopeDto 读路径：后者要解析 EMP 姓名故需 userApi，
+        // 其余（orgApi/planMapper/kpiItemMapper）只在写路径的主体/指标校验用到，传 null 即可
+        this.service = new TargetValueService(targetValueMapper, currentUserApi, perfScopeHelper, userApi, null, null, null);
     }
 
     @Test
@@ -201,5 +208,95 @@ class TargetValueServiceScopeTest {
         verify(targetValueMapper).selectByConditionWithScope(
                 eq("PLAN_001"), any(), any(), any(), anyInt(), anyInt(), sqlCap.capture(), any());
         assertThat(sqlCap.getValue()).isEqualTo("1=0");
+    }
+
+    // ---------------- pageWithScopeDto: EMP 对象姓名解析（2026-07-21） ----------------
+
+    /** 构造一条 EMP 目标值。 */
+    private PerfTargetValue empValue(String id, String subjectId) {
+        PerfTargetValue v = new PerfTargetValue();
+        v.setId(id);
+        v.setPlanId("PLAN_001");
+        v.setSubjectType("EMP");
+        v.setSubjectId(subjectId);
+        return v;
+    }
+
+    private UserDTO user(String username, String displayName) {
+        UserDTO u = new UserDTO();
+        u.setUsername(username);
+        u.setDisplayName(displayName);
+        return u;
+    }
+
+    /** 让 scope 走 ALL 空片段，并按给定记录打桩 mapper。 */
+    private void stubAllScope(java.util.List<PerfTargetValue> records) {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("admin");
+        when(bizScopeApi.buildScopeContext(eq("admin"), eq(BizType.PERF_CONFIG), eq(BizAction.LIST)))
+                .thenReturn(new DataScopeContext(
+                        DataScopeType.ALL, "admin", "HQ", Set.of(),
+                        BizType.PERF_CONFIG, BizAction.LIST));
+        when(targetValueMapper.countByConditionWithScope(
+                anyString(), any(), any(), any(), eq(""), any()))
+                .thenReturn((long) records.size());
+        when(targetValueMapper.selectByConditionWithScope(
+                anyString(), any(), any(), any(), anyInt(), anyInt(), eq(""), any()))
+                .thenReturn(records);
+    }
+
+    /**
+     * EMP 行必须带出 subjectName（工号→姓名）。
+     * <p>
+     * 前端 TargetValues.vue 原先自行调管理员接口 /api/admin/users 拉全量用户建工号→姓名映射，
+     * 该接口资源 A_USER_LIST 仅授予少数角色，资财部经办人等进页面即 403「没有权限」。
+     * 姓名解析下沉后端后前端不再需要该调用，故本用例是那条链路的回归锚点。
+     * </p>
+     */
+    @Test
+    @DisplayName("pageWithScopeDto: EMP 行按工号批量解析 subjectName")
+    void pageWithScopeDto_resolvesEmpSubjectName() {
+        stubAllScope(java.util.List.of(empValue("V1", "finance_zhou"), empValue("V2", "rm_li")));
+        when(userApi.getUsersByUsernames(any()))
+                .thenReturn(java.util.List.of(user("finance_zhou", "周八(资财)"), user("rm_li", "李四")));
+
+        var page = service.pageWithScopeDto("PLAN_001", null, null, null, 1, 20);
+
+        assertThat(page.getRecords()).hasSize(2);
+        assertThat(page.getRecords().get(0).getSubjectName()).isEqualTo("周八(资财)");
+        assertThat(page.getRecords().get(1).getSubjectName()).isEqualTo("李四");
+        // 必须一次批量解析，不得逐行查询
+        verify(userApi, org.mockito.Mockito.times(1)).getUsersByUsernames(any());
+    }
+
+    /** ORG 行不参与工号解析：机构名由前端 orgMap 承担，避免把机构编码当工号查。 */
+    @Test
+    @DisplayName("pageWithScopeDto: 无 EMP 行时不调用户接口")
+    void pageWithScopeDto_skipsLookupWhenNoEmpRows() {
+        // 变量不能叫 org：会遮蔽 org.mockito 包名，导致下方 never() 引用编译失败
+        PerfTargetValue orgRow = new PerfTargetValue();
+        orgRow.setId("V3");
+        orgRow.setPlanId("PLAN_001");
+        orgRow.setSubjectType("ORG");
+        orgRow.setSubjectId("0101");
+        stubAllScope(java.util.List.of(orgRow));
+
+        var page = service.pageWithScopeDto("PLAN_001", null, null, null, 1, 20);
+
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).getSubjectName()).isNull();
+        verify(userApi, org.mockito.Mockito.never()).getUsersByUsernames(any());
+    }
+
+    /** 工号查不到姓名时 subjectName 留空，由前端兜底显示工号，不能塞工号冒充姓名。 */
+    @Test
+    @DisplayName("pageWithScopeDto: 工号无对应用户时 subjectName 为空")
+    void pageWithScopeDto_unresolvedEmpLeavesNameNull() {
+        stubAllScope(java.util.List.of(empValue("V4", "ghost_user")));
+        when(userApi.getUsersByUsernames(any())).thenReturn(Collections.emptyList());
+
+        var page = service.pageWithScopeDto("PLAN_001", null, null, null, 1, 20);
+
+        assertThat(page.getRecords().get(0).getSubjectId()).isEqualTo("ghost_user");
+        assertThat(page.getRecords().get(0).getSubjectName()).isNull();
     }
 }

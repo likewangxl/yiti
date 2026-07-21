@@ -374,7 +374,53 @@ public class TargetValueService {
         for (PerfTargetValue v : raw.getRecords()) {
             dtos.add(TargetAssembler.toDto(v));
         }
+        fillEmpSubjectNames(dtos);
         return PageResult.of(raw.getPageNo(), raw.getPageSize(), raw.getTotal(), dtos);
+    }
+
+    /**
+     * 批量回填 EMP 行的对象姓名（subjectId=工号=PT_USER.username → USERCHNNAME）。
+     *
+     * <p>只处理 EMP：ORG 行的 subjectId 是机构编码，拿去查用户表既查不到也是语义错误，
+     * 机构名由前端机构树映射承担。
+     *
+     * <p>用 {@code getUsersByUsernames} 一次批量解析当前页涉及的工号（去重后 ≤ pageSize，
+     * 上限 100）。该方法内部是单次 IN 查询、且 {@code buildUserDtos} 的主机构/机构名也都是
+     * 批量取，不存在 N+1；不要退化成逐行 {@code getUserByEmpId}。
+     *
+     * <p>查不到对应用户时 subjectName 留空，<b>不</b>用工号填充——前端已有「姓名为空则显示工号」
+     * 的兜底，后端塞工号会让「有名字」和「只有工号」两种情形无法区分。
+     *
+     * @param dtos 当前页 DTO 列表，原地回填
+     */
+    private void fillEmpSubjectNames(List<TargetValueDTO> dtos) {
+        if (dtos == null || dtos.isEmpty()) {
+            return;
+        }
+        java.util.Set<String> usernames = new java.util.LinkedHashSet<>();
+        for (TargetValueDTO d : dtos) {
+            if ("EMP".equals(d.getSubjectType()) && d.getSubjectId() != null && !d.getSubjectId().isBlank()) {
+                usernames.add(d.getSubjectId());
+            }
+        }
+        if (usernames.isEmpty()) {
+            return;
+        }
+        List<UserDTO> users = userApi.getUsersByUsernames(new java.util.ArrayList<>(usernames));
+        if (users == null || users.isEmpty()) {
+            return;
+        }
+        java.util.Map<String, String> nameByUsername = new java.util.HashMap<>();
+        for (UserDTO u : users) {
+            if (u.getUsername() != null) {
+                nameByUsername.put(u.getUsername(), u.getDisplayName());
+            }
+        }
+        for (TargetValueDTO d : dtos) {
+            if ("EMP".equals(d.getSubjectType())) {
+                d.setSubjectName(nameByUsername.get(d.getSubjectId()));
+            }
+        }
     }
 
     /**

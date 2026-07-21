@@ -145,7 +145,7 @@
               <template #default="{row}">{{ planOfDone(row) ? kpiLabelOf(planOfDone(row).kpiSchemeId) : '-' }}</template>
             </el-table-column>
             <el-table-column label="发起人" width="160">
-              <template #default="{row}">{{ userMap.get(row.createdBy) || row.createdByName || row.createdBy || '-' }}</template>
+              <template #default="{row}">{{ row.createdByName || row.createdBy || '-' }}</template>
             </el-table-column>
             <el-table-column label="申请时间" width="170">
               <template #default="{row}">{{ fmtDateTime(row.createdTime) }}</template>
@@ -241,7 +241,7 @@
     <el-dialog v-model="detailDlg.show" :title="detailTitle" width="580px" :close-on-click-modal="true">
       <div class="review-meta">
         <div><span class="lab">申请编号：</span><code>{{ detailDlg.row?.businessKey || detailDlg.row?.id || '-' }}</code></div>
-        <div><span class="lab">发起人：</span>{{ userMap.get(detailDlg.row?.createdBy) || detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div>
+        <div><span class="lab">发起人：</span>{{ detailDlg.row?.createdByName || detailDlg.row?.createdBy || '-' }}</div>
         <div><span class="lab">申请时间：</span>{{ fmtDateTime(detailDlg.row?.createdTime) }}</div>
         <div><span class="lab">审批结果：</span>
           <el-tag v-if="detailDlg.row?.status==='APPROVED'" class="tag-success" effect="plain">通过</el-tag>
@@ -336,7 +336,6 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { listTargets, createTargetPlan, updateTargetPlan, deleteTargetPlan, listKpiRules, getTargetAdjust, listTargetAdjusts, getTargetAdjustApprovalHistory, listTargetValues, listMetrics, calcKpiScore, uploadImportFile } from '@/api/perf';
-import { listUsers } from '@/api/users';
 import { listTodoTasks, listDoneTasks, approveTask, rejectTask, claimTask } from '@/api/workflow';
 import { getMyPermissions } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
@@ -495,32 +494,13 @@ function resetFilters() {
 const plans = ref([]);
 const loadingPlans = ref(false);
 
-// user_id → "username (中文名)" 映射，用于列表"创建人"列展示
-const userMap = ref(new Map());
-// user_id → { name:中文名, username:工号 }，用于"创建人"列两行展示（姓名 + 工号副标题）
-const userInfoMap = ref(new Map());
-async function loadUserMap() {
-  try {
-    const r = await listUsers({ pageSize: 200 });
-    const list = Array.isArray(r) ? r : (r?.records || []);
-    const m = new Map();
-    const info = new Map();
-    for (const u of list) {
-      const id = u.userId || u.empId;
-      if (!id) continue;
-      const uname = u.username || '';
-      const cn    = u.userchnname || '';
-      // 形如 "finance_zhou (周八(资财))"；若任一为空则只显示有的部分
-      const label = uname && cn ? `${uname} (${cn})` : (uname || cn || id);
-      m.set(id, label);
-      info.set(id, { name: cn, username: uname });
-    }
-    userMap.value = m;
-    userInfoMap.value = info;
-  } catch {
-    // listUsers 403 等异常时静默——列表降级显示原始 user_id 不阻塞页面
-  }
-}
+// 创建人/发起人姓名一律用后端返回的 createdByName：
+// 目标方案 TargetPlanService#425、目标调整 TargetAdjustService#289 均已解析填充。
+// 此处原有 loadUserMap() 走管理员接口 /api/admin/users 现拉全量用户建 id→姓名 映射，
+// 已于 2026-07-21 删除——它是后端补齐 createdByName 后漏清理的遗留调用，且带来真实故障：
+// 该接口资源 A_USER_LIST 仅授予角色 1/3/4/131/169，资财部经办人(238)等角色进页面必得 403，
+// http.js 响应拦截器随即弹「没有权限」（页面内 catch 只能防崩，拦不住这个提示）。
+// 不要为了显示姓名再把它加回来，也不要改用其它管理员接口。
 
 async function loadPlans() {
   loadingPlans.value = true;
@@ -944,7 +924,7 @@ async function onDeletePlan(row) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove(), loadUserMap(), loadMetricMap(), loadApplyIndex()]);
+  await Promise.all([loadPlans(), loadKpiSchemeOptions(), loadCanApprove(), loadMetricMap(), loadApplyIndex()]);
 
   // 从工作台跳转：?tab=todo&taskId=xxx → 切到待我审批 tab + 自动弹审批窗
   const queryTab = route.query.tab;
