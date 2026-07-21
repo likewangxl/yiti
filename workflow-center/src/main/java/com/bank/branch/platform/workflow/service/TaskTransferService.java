@@ -8,7 +8,9 @@ import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.bank.branch.platform.workflow.api.dto.TransferCandidateDTO;
+import com.bank.branch.platform.workflow.api.dto.TransferHistoryDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
@@ -30,9 +32,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -237,6 +241,76 @@ public class TaskTransferService {
     public List<TransferItemDTO> listOutbox() {
         String me = currentUserApi.getCurrentEmpId();
         return wfTaskTransferMapper.selectOutbox(me).stream().map(this::toItemDTO).toList();
+    }
+
+    /**
+     * 某流程实例的完整转交历史（审批流监控详情抽屉底部展示）。
+     * <p>
+     * 与收发件箱的差别有三：<b>不限当前登录用户</b>（监控视角看的是别人的流程）、
+     * <b>不限状态</b>（含 ACCEPTED/REJECTED/CANCELLED/INVALIDATED 等终态，历史就是要看全过程）、
+     * <b>额外解析三方姓名</b>（回答「谁认领了、谁拒绝了、为什么」，工号可读性太差）。
+     * </p>
+     * <p>
+     * 姓名走 {@code getUserByEmpIds} <b>一次批量</b>解析：先把所有记录涉及的工号收集去重，
+     * 再一次查回。逐条查在一个流程被反复转交时就是 N+1。无记录时直接返回，连这一次也省掉。
+     * </p>
+     *
+     * @param processInstanceId 流程实例ID
+     * @return 转交历史，按发起时间正序（先发生的在前，符合"历史"阅读习惯）；无记录返回空列表
+     */
+    public List<TransferHistoryDTO> listHistoryByProcess(String processInstanceId) {
+        List<WfTaskTransfer> rows = wfTaskTransferMapper.selectList(
+                new LambdaQueryWrapper<WfTaskTransfer>()
+                        .eq(WfTaskTransfer::getProcessInstanceId, processInstanceId)
+                        .orderByAsc(WfTaskTransfer::getInitiatedTime));
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+
+        // 三方工号去重后一次性解析姓名；fromEmpId 在「指派」语义下为 null，必须过滤掉再查
+        Set<String> empIds = new LinkedHashSet<>();
+        for (WfTaskTransfer t : rows) {
+            if (t.getFromEmpId() != null) {
+                empIds.add(t.getFromEmpId());
+            }
+            if (t.getInitiatorEmpId() != null) {
+                empIds.add(t.getInitiatorEmpId());
+            }
+            if (t.getToEmpId() != null) {
+                empIds.add(t.getToEmpId());
+            }
+        }
+        Map<String, String> nameByEmpId = new HashMap<>();
+        if (!empIds.isEmpty()) {
+            List<UserDTO> users = userApi.getUserByEmpIds(new ArrayList<>(empIds));
+            if (users != null) {
+                for (UserDTO u : users) {
+                    nameByEmpId.put(u.getEmpId(), u.getDisplayName());
+                }
+            }
+        }
+
+        return rows.stream().map(t -> toHistoryDTO(t, nameByEmpId)).toList();
+    }
+
+    /** 实体 → 历史展示 DTO；姓名查不到时留空而非塞工号，避免前端把工号误当姓名展示。 */
+    private TransferHistoryDTO toHistoryDTO(WfTaskTransfer t, Map<String, String> nameByEmpId) {
+        TransferHistoryDTO dto = new TransferHistoryDTO();
+        dto.setId(t.getId());
+        dto.setNodeKey(t.getNodeKey());
+        dto.setNodeName(t.getNodeName());
+        dto.setFromEmpId(t.getFromEmpId());
+        dto.setFromName(t.getFromEmpId() == null ? null : nameByEmpId.get(t.getFromEmpId()));
+        dto.setInitiatorEmpId(t.getInitiatorEmpId());
+        dto.setInitiatorName(nameByEmpId.get(t.getInitiatorEmpId()));
+        dto.setToEmpId(t.getToEmpId());
+        dto.setToName(nameByEmpId.get(t.getToEmpId()));
+        dto.setStatus(t.getStatus());
+        dto.setTransferReason(t.getTransferReason());
+        dto.setRejectReason(t.getRejectReason());
+        dto.setInitiatedTime(t.getInitiatedTime());
+        dto.setDecidedTime(t.getDecidedTime());
+        return dto;
     }
 
     /** 实体 → 展示 DTO，收件箱/发件箱共用同一转换，不把实体直接暴露给 Controller/前端。 */

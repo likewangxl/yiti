@@ -97,7 +97,13 @@
       </div>
     </div>
 
-    <!-- 详情抽屉：基础信息 + 流程图 + 节点 + 审批历史（复用流程查询接口） -->
+    <!--
+      详情抽屉：基础信息 + 流程节点 + 审批历史 + 转交历史。
+      「流程进度图」已于 2026-07-21 移除：后端 /processes/{id}/diagram 依赖 Flowable 部署时生成的
+      PNG 资源，而本库 573 条流程定义 HAS_GRAPHICAL_NOTATION_ 全为 0（BPMN 均无 BPMNDI 图形信息，
+      设计器生成的与静态部署的都一样），getProcessDiagram 恒返回 null → 接口恒 500，该图从未成功
+      渲染过。节点进度信息由下方「流程节点」表格承载，不再保留一个必然失败的入口。
+    -->
     <el-drawer v-model="detail.show" :title="`流程详情 · ${detail.row?.businessKey || ''}`" size="56%" :destroy-on-close="true">
       <div v-loading="detail.loading">
         <el-descriptions v-if="detail.info" :column="2" border size="default">
@@ -121,16 +127,7 @@
         </el-descriptions>
 
         <div class="d-block">
-          <div class="d-title">流程进度图</div>
-          <div class="diagram-wrap">
-            <img v-if="detail.processInstanceId && !detail.diagramFailed" :src="diagramSrc" class="diagram-img"
-              @error="detail.diagramFailed = true" alt="流程进度图" />
-            <div v-if="detail.diagramFailed" class="d-empty">流程图加载失败</div>
-          </div>
-        </div>
-
-        <div class="d-block">
-          <div class="d-title">节点状态</div>
+          <div class="d-title">流程节点</div>
           <el-table v-if="detail.nodes.length" :data="detail.nodes" size="small" border empty-text="暂无节点数据">
             <el-table-column label="节点" min-width="140">
               <template #default="{row}">{{ row.nodeName || row.nodeKey || '-' }}</template>
@@ -183,6 +180,57 @@
             </el-timeline-item>
           </el-timeline>
         </div>
+
+        <!--
+          转交历史：该流程实例被转交/指派的全过程。含未决（待认领）与全部终态，
+          回答「谁转给谁、谁认领了、谁拒绝了、为什么拒绝、什么时候」。
+          fromEmpId 为空 = 指派语义（任务尚无人签收，从候选池直接指定），非缺数据。
+        -->
+        <div class="d-block">
+          <div class="d-title">转交历史</div>
+          <el-empty v-if="!detail.transfers.length" description="暂无转交记录" :image-size="60" />
+          <el-table v-else :data="detail.transfers" size="small" border>
+            <el-table-column label="节点" min-width="130">
+              <template #default="{row}">{{ row.nodeName || row.nodeKey || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="类型" width="76">
+              <template #default="{row}">
+                <el-tag :class="row.fromEmpId ? 'tag-info' : 'tag-warning'" effect="plain" size="small">
+                  {{ row.fromEmpId ? '转交' : '指派' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="转出" width="130">
+              <template #default="{row}">
+                <span v-if="row.fromEmpId">{{ row.fromName || '-' }}<span class="sub-id-inline">（{{ row.fromEmpId }}）</span></span>
+                <span v-else class="sub-id">候选池</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="接收人" width="130">
+              <template #default="{row}">{{ row.toName || '-' }}<span class="sub-id-inline">（{{ row.toEmpId }}）</span></template>
+            </el-table-column>
+            <el-table-column label="发起人" width="130">
+              <template #default="{row}">{{ row.initiatorName || '-' }}<span class="sub-id-inline">（{{ row.initiatorEmpId }}）</span></template>
+            </el-table-column>
+            <el-table-column label="结果" width="92">
+              <template #default="{row}">
+                <el-tag :class="transferStatusCls(row.status)" effect="plain" size="small">{{ transferStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="原因" min-width="180">
+              <template #default="{row}">
+                <div class="tr-reason">转交：{{ row.transferReason || '-' }}</div>
+                <div v-if="row.rejectReason" class="tr-reason tr-reject">拒绝：{{ row.rejectReason }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="发起时间" width="160">
+              <template #default="{row}">{{ fmtDateTime(row.initiatedTime) }}</template>
+            </el-table-column>
+            <el-table-column label="处理时间" width="160">
+              <template #default="{row}">{{ row.decidedTime ? fmtDateTime(row.decidedTime) : '-' }}</template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
       <template #footer>
         <el-button @click="detail.show = false">关闭</el-button>
@@ -195,9 +243,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { monitorProcesses, getProcessInfo, getProcessHistory, getProcessNodes, processDiagramUrl } from '@/api/workflow';
+import { monitorProcesses, getProcessInfo, getProcessHistory, getProcessNodes, processTransferHistory } from '@/api/workflow';
 import { fmtDateTime } from '@/utils/datetime';
 import TransferDialog from '@/components/TransferDialog.vue';
 
@@ -229,6 +277,19 @@ const NODE_STATUS_MAP = {
 };
 const nodeStatusCls = (s) => NODE_STATUS_MAP[s]?.cls || 'tag-info';
 const nodeStatusLabel = (s) => NODE_STATUS_MAP[s]?.label || s || '-';
+
+// 转交状态字典：前 4 项与 workspace/Index.vue 的 TRANSFER_STATUS_MAP 保持一致（同一批状态码，
+// 两处措辞必须同步改）；INVALIDATED 是监控视角才会看到的终态——原任务已被删除（撤单/驳回
+// 级联）导致转交作废，收发件箱按状态过滤后不展示它，这里是全量历史故需覆盖。
+const TRANSFER_STATUS_MAP = {
+  PENDING_ACCEPT: { label: '待认领', cls: 'tag-warning' },
+  ACCEPTED: { label: '已认领', cls: 'tag-success' },
+  REJECTED: { label: '已拒绝', cls: 'tag-danger' },
+  CANCELLED: { label: '已撤回', cls: 'tag-info' },
+  INVALIDATED: { label: '已失效', cls: 'tag-info' }
+};
+const transferStatusCls = (s) => TRANSFER_STATUS_MAP[s]?.cls || 'tag-info';
+const transferStatusLabel = (s) => TRANSFER_STATUS_MAP[s]?.label || s || '-';
 
 // 审批日志动作字典（ApprovalLogDTO.action），与 perf/Adjust.vue 审批历史保持一致的视觉语言
 const ACTION_LABEL = { SUBMIT: '提交', APPROVE: '通过', REJECT: '驳回', CLAIM: '签收', TRANSFER: '转办' };
@@ -311,31 +372,32 @@ function openTransfer(row) {
   transferDlg.show = true;
 }
 
-// 详情抽屉：并行拉取实例详情 / 历史 / 节点，流程图走 <img> 直连（同源 session cookie）
+// 详情抽屉：并行拉取实例详情 / 审批历史 / 节点 / 转交历史
 const detail = reactive({
   show: false, loading: false, row: null,
-  processInstanceId: '', info: null, nodes: [], history: [], diagramFailed: false
+  processInstanceId: '', info: null, nodes: [], history: [], transfers: []
 });
-const diagramSrc = computed(() => detail.processInstanceId ? processDiagramUrl(detail.processInstanceId) : '');
 
 async function openDetail(row) {
   detail.row = row;
   detail.processInstanceId = row.processInstanceId;
-  detail.diagramFailed = false;
   detail.info = null;
   detail.nodes = [];
   detail.history = [];
+  detail.transfers = [];
   detail.show = true;
   detail.loading = true;
   try {
-    const [info, history, nodesResp] = await Promise.all([
+    const [info, history, nodesResp, transfers] = await Promise.all([
       getProcessInfo(row.processInstanceId),
       getProcessHistory(row.processInstanceId),
-      getProcessNodes(row.processInstanceId)
+      getProcessNodes(row.processInstanceId),
+      processTransferHistory(row.processInstanceId)
     ]);
     detail.info = info || null;
     detail.history = Array.isArray(history) ? history : [];
     detail.nodes = Array.isArray(nodesResp?.nodes) ? nodesResp.nodes : [];
+    detail.transfers = Array.isArray(transfers) ? transfers : [];
   } catch { /* call 内部已提示 */ } finally {
     detail.loading = false;
   }
@@ -356,8 +418,8 @@ async function openDetail(row) {
 .d-block { margin-top: 20px; }
 .d-title { font-size: 14px; font-weight: 600; color: $text-1; margin-bottom: 8px; }
 .d-empty { color: $text-3; font-size: 13px; }
-.diagram-wrap { border: 1px solid $border-1; border-radius: 4px; padding: 10px; background: $bg-soft; text-align: center; }
-.diagram-img { max-width: 100%; }
+.tr-reason { line-height: 1.5; word-break: break-all; }
+.tr-reject { color: $danger; }
 
 .approval-line { display: flex; align-items: center; gap: 8px; }
 .approval-line .node { font-size: 13px; color: $text-1; font-weight: 500; }

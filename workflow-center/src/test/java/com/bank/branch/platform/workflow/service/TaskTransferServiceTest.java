@@ -9,6 +9,7 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.NotifyApi;
 import com.bank.branch.platform.governance.api.dto.NotificationCmd;
 import com.bank.branch.platform.workflow.api.dto.TransferCandidateDTO;
+import com.bank.branch.platform.workflow.api.dto.TransferHistoryDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
 import com.bank.branch.platform.workflow.entity.BizProcessMap;
@@ -1004,6 +1005,88 @@ class TaskTransferServiceTest {
         List<TransferCandidateDTO> got = taskTransferService.listCandidates(TASK_ID);
 
         assertThat(got).extracting(TransferCandidateDTO::getEmpId).containsExactly(E_TO);
+    }
+
+    // ==================== listHistoryByProcess ====================
+
+    private WfTaskTransfer transferRow(String id, String status, String toEmpId,
+                                       String rejectReason, LocalDateTime decidedTime) {
+        WfTaskTransfer t = new WfTaskTransfer();
+        t.setId(id);
+        t.setProcessInstanceId(PID);
+        t.setTaskId(TASK_ID);
+        t.setNodeKey(NODE_KEY);
+        t.setNodeName("机构负责人审批");
+        t.setFromEmpId(E_FROM);
+        t.setInitiatorEmpId(E_SEC);
+        t.setToEmpId(toEmpId);
+        t.setStatus(status);
+        t.setTransferReason("出差");
+        t.setRejectReason(rejectReason);
+        t.setInitiatedTime(LocalDateTime.of(2026, 7, 20, 10, 0));
+        t.setDecidedTime(decidedTime);
+        return t;
+    }
+
+    /**
+     * 转交历史：返回该流程实例的全部转交记录（含已认领/已拒绝等终态），
+     * 并批量解析三方姓名——历史视图要回答「谁认领了、谁拒绝了、为什么」，只给工号可读性太差。
+     */
+    @Test
+    void listHistoryByProcess_returnsAllRecordsWithResolvedNames() {
+        List<WfTaskTransfer> rows = List.of(
+                transferRow("T1", "REJECTED", E_TO, "手头有急件", LocalDateTime.of(2026, 7, 20, 11, 0)),
+                transferRow("T2", "ACCEPTED", "E_OTHER", null, LocalDateTime.of(2026, 7, 20, 12, 0)));
+        when(wfTaskTransferMapper.selectList(any())).thenReturn(rows);
+        when(userApi.getUserByEmpIds(any())).thenReturn(List.of(
+                user(E_FROM, "原办理人"), user(E_SEC, "秘书"),
+                user(E_TO, "张三"), user("E_OTHER", "李四")));
+
+        List<TransferHistoryDTO> got = taskTransferService.listHistoryByProcess(PID);
+
+        assertThat(got).hasSize(2);
+        TransferHistoryDTO rejected = got.get(0);
+        assertThat(rejected.getStatus()).isEqualTo("REJECTED");
+        assertThat(rejected.getToName()).isEqualTo("张三");
+        assertThat(rejected.getRejectReason()).isEqualTo("手头有急件");
+        assertThat(rejected.getDecidedTime()).isEqualTo(LocalDateTime.of(2026, 7, 20, 11, 0));
+        assertThat(rejected.getFromName()).isEqualTo("原办理人");
+        assertThat(rejected.getInitiatorName()).isEqualTo("秘书");
+
+        assertThat(got.get(1).getStatus()).isEqualTo("ACCEPTED");
+        assertThat(got.get(1).getToName()).isEqualTo("李四");
+        assertThat(got.get(1).getRejectReason()).isNull();
+
+        // 姓名必须批量解析一次，不得逐条查询
+        verify(userApi, times(1)).getUserByEmpIds(any());
+    }
+
+    /** 无转交记录时返回空列表，且不去查姓名（省掉一次无谓的跨模块调用）。 */
+    @Test
+    void listHistoryByProcess_noRecords_returnsEmptyWithoutNameLookup() {
+        when(wfTaskTransferMapper.selectList(any())).thenReturn(List.of());
+
+        assertThat(taskTransferService.listHistoryByProcess(PID)).isEmpty();
+        verify(userApi, never()).getUserByEmpIds(any());
+    }
+
+    /**
+     * 指派场景 fromEmpId 为 null（任务尚无人签收，从候选池直接指定）——
+     * 姓名解析不得因 null 抛 NPE，fromName 保持为空。
+     */
+    @Test
+    void listHistoryByProcess_nullFromEmpId_doesNotBreakNameResolution() {
+        WfTaskTransfer assigned = transferRow("T3", "PENDING_ACCEPT", E_TO, null, null);
+        assigned.setFromEmpId(null);
+        when(wfTaskTransferMapper.selectList(any())).thenReturn(List.of(assigned));
+        when(userApi.getUserByEmpIds(any())).thenReturn(List.of(user(E_SEC, "秘书"), user(E_TO, "张三")));
+
+        List<TransferHistoryDTO> got = taskTransferService.listHistoryByProcess(PID);
+
+        assertThat(got).hasSize(1);
+        assertThat(got.get(0).getFromEmpId()).isNull();
+        assertThat(got.get(0).getFromName()).isNull();
+        assertThat(got.get(0).getToName()).isEqualTo("张三");
     }
 
     /** 任务不存在 → WF-40403，与 initiate 同一错误码。 */

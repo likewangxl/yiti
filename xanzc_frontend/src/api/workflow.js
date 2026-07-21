@@ -1,4 +1,4 @@
-import { call, unwrapPage, API_BASE } from './http';
+import { call, unwrapPage } from './http';
 
 // 工作流任务接口 wrapper（对接 workflow-center TaskController /api/workflow/tasks）
 
@@ -69,9 +69,12 @@ export function getProcessNodes(processInstanceId) {
 }
 
 /** 流程进度图 PNG 地址，供 <img> 直接引用（同源走 session cookie，无需单独取 blob） */
-export function processDiagramUrl(processInstanceId) {
-  return `${API_BASE}/workflow/processes/${processInstanceId}/diagram`;
-}
+// processDiagramUrl 已于 2026-07-21 移除：后端 /processes/{id}/diagram 依赖 Flowable 部署时生成的
+// PNG 资源，而本库全部流程定义 HAS_GRAPHICAL_NOTATION_ 均为 0（BPMN 无 BPMNDI 图形信息），
+// getProcessDiagram 恒返回 null → 接口恒 500，该图从未成功渲染过。唯一调用方 WorkflowMonitor.vue
+// 的「流程进度图」区块已一并移除，节点进度改由「流程节点」表格承载。
+// 若将来要恢复流程图，需先让 BPMN 带上 BPMNDI（设计器已有 x/y 坐标，可在 FlowBpmnGenerator 补 DI），
+// 否则光调这个接口仍是 500。
 
 // ===================== 任务转交待认领（TaskTransferController / TaskTransferService） =====================
 // 两阶段转交：发起（秘书/行长，挂在监控域下）→ 接收人收件箱认领/拒绝 → 发起人发件箱查看/撤回。
@@ -95,6 +98,15 @@ export function transferInitiate(taskId, { toEmpId, reason }) {
  */
 export function transferCandidates(taskId) {
   return call('get', `/workflow/monitor/tasks/${taskId}/transfer-candidates`, {}, []).then(r => r || []);
+}
+
+/**
+ * 某流程实例的转交历史（审批流监控详情抽屉）。
+ * 含待认领与全部终态（已认领/已拒绝/已撤回/已失效）及拒绝原因，按发起时间正序。
+ * @param {string} processInstanceId
+ */
+export function processTransferHistory(processInstanceId) {
+  return call('get', `/workflow/monitor/processes/${processInstanceId}/transfers`, {}, []).then(r => r || []);
 }
 
 /** 转交收件箱：当前登录用户待认领的转交任务列表 */

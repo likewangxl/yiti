@@ -7,6 +7,7 @@ import com.bank.branch.platform.common.security.enums.BizType;
 import com.bank.branch.platform.common.web.ResponseWrapper;
 import com.bank.branch.platform.workflow.api.dto.TransferCandidateDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferDecisionReqDTO;
+import com.bank.branch.platform.workflow.api.dto.TransferHistoryDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferInitiateReqDTO;
 import com.bank.branch.platform.workflow.api.dto.TransferItemDTO;
 import com.bank.branch.platform.workflow.service.TaskTransferService;
@@ -83,6 +84,23 @@ public class TaskTransferController {
     @BizAuth(bizType = BizType.WORKFLOW_MONITOR, action = BizAction.TRANSFER)
     public ResponseWrapper<List<TransferCandidateDTO>> transferCandidates(@PathVariable String taskId) {
         return ResponseWrapper.success(taskTransferService.listCandidates(taskId));
+    }
+
+    /**
+     * 某流程实例的转交历史（审批流监控详情抽屉底部）。
+     * <p>
+     * 鉴权用 {@code WORKFLOW_MONITOR/READ}——这是监控详情的一部分，能看列表的人即可看；
+     * 不用 {@code TRANSFER}，那是"能发起转交"的权限，看历史不必要求这么高。
+     * </p>
+     *
+     * @param processInstanceId 流程实例ID
+     * @return 转交历史（含认领/拒绝/撤回终态与拒绝原因），按发起时间正序
+     */
+    @GetMapping("/monitor/processes/{processInstanceId}/transfers")
+    @Operation(summary = "查询流程转交历史")
+    @BizAuth(bizType = BizType.WORKFLOW_MONITOR, action = BizAction.READ)
+    public ResponseWrapper<List<TransferHistoryDTO>> transferHistory(@PathVariable String processInstanceId) {
+        return ResponseWrapper.success(taskTransferService.listHistoryByProcess(processInstanceId));
     }
 
     /**

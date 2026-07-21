@@ -572,6 +572,7 @@ public interface TodoQueryApi {
 |---|---|---|---|---|
 | `POST` | `/api/workflow/monitor/tasks/{taskId}/transfer` | `TransferInitiateReqDTO` | `WORKFLOW_MONITOR:TRANSFER` | 发起转交（待认领），鉴权对齐审批流监控 |
 | `GET` | `/api/workflow/monitor/tasks/{taskId}/transfer-candidates` | 无 | `WORKFLOW_MONITOR:TRANSFER` | **2026-07-21 新增**：查询可转交接收人，返回 `List<TransferCandidateDTO>`，与发起端点同鉴权、与 `initiate` 资格校验同源 |
+| `GET` | `/api/workflow/monitor/processes/{processInstanceId}/transfers` | 无 | `WORKFLOW_MONITOR:READ` | **2026-07-21 新增**：流程转交历史，返回 `List<TransferHistoryDTO>`（含全部终态与拒绝原因、三方姓名），供监控详情抽屉「转交历史」区块消费 |
 | `GET` | `/api/workflow/transfers/inbox` | 无 | 无 | 转交收件箱（当前用户待认领） |
 | `POST` | `/api/workflow/transfers/{id}/accept` | 无 | 无（服务层校验接收人本人） | 认领转交 |
 | `POST` | `/api/workflow/transfers/{id}/decline` | `TransferDecisionReqDTO` | 无（服务层校验接收人本人） | 拒绝转交（理由必填） |

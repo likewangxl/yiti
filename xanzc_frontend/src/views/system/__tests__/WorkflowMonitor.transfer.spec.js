@@ -15,7 +15,7 @@ vi.mock('@/api/workflow', () => ({
   getProcessInfo: vi.fn().mockResolvedValue({}),
   getProcessHistory: vi.fn().mockResolvedValue([]),
   getProcessNodes: vi.fn().mockResolvedValue([]),
-  processDiagramUrl: vi.fn(() => '')
+  processTransferHistory: vi.fn().mockResolvedValue([])
 }));
 
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }));
