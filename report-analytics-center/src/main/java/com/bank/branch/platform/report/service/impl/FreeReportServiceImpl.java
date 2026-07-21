@@ -267,7 +267,6 @@ public class FreeReportServiceImpl implements FreeReportService {
             // 复用一个 0.00 数字格式样式（逐格建样式会超 64000 上限）
             CellStyle numStyle = wb.createCellStyle();
             numStyle.setDataFormat(wb.createDataFormat().getFormat("0.00"));
-            DataValidationHelper dvHelper = sheet.getDataValidationHelper();
             // 表头
             Row header = sheet.createRow(0);
             for (int c = 0; c < colDefs.size(); c++) {
@@ -291,21 +290,13 @@ public class FreeReportServiceImpl implements FreeReportService {
                     };
                     val = val != null ? val : "";
                     Cell cell = row.createCell(c);
-                    // 工号/姓名两列原样文本；其余列若是小数 → 显示截断两位数值(不四舍五入) + 0.00 格式；
-                    // 若确有精度被砍(小数位>2) → 挂「数据有效性输入提示」，点击/选中该格弹出完整原值。
+                    // 工号/姓名两列原样文本；其余列若是小数 → 存**完整原值** + 0.00 格式显示两位。
+                    // 取舍说明（2026-07-20 用户决策）：Excel/WPS 的数字格式只会四舍五入、无法截断，
+                    // 故「点击格子编辑栏干净显示完整原值」与「格内截断显示」不可共存。这里保完整原值，
+                    // 接受格内按 0.00 四舍五入（3.1779998 显示 3.18）。查看页仍是截断显示，两者口径不同。
                     if (!"col_1".equals(key) && !"col_2".equals(key) && isDecimal(val)) {
-                        cell.setCellValue(Double.parseDouble(truncate2(val)));
+                        cell.setCellValue(Double.parseDouble(val));
                         cell.setCellStyle(numStyle);
-                        int fracLen = val.length() - val.indexOf('.') - 1;
-                        if (fracLen > 2) {
-                            DataValidation dv = dvHelper.createValidation(
-                                    dvHelper.createCustomConstraint("TRUE()"),
-                                    new org.apache.poi.ss.util.CellRangeAddressList(rIdx, rIdx, c, c));
-                            dv.createPromptBox("完整值", val);
-                            dv.setShowPromptBox(true);
-                            dv.setSuppressDropDownArrow(true);
-                            sheet.addValidationData(dv);
-                        }
                     } else {
                         cell.setCellValue(val);
                     }
@@ -367,22 +358,12 @@ public class FreeReportServiceImpl implements FreeReportService {
         }
     }
 
-    // 小数截断显示：仅处理形如 -?\d+\.\d+ 的纯小数字符串，砍尾保留两位（不四舍五入，不足补零）；
-    // 整数、文本、日期、空一律原样返回（避免把工号/编号误加小数点）。原始数据不变，仅用于下载显示。
+    // 导出时判定「该值是否按数值格写入 Excel」：仅认形如 -?\d+\.\d+ 的纯小数字符串。
+    // 整数、文本、日期、空一律走文本原样写（避免把工号/编号类纯数字转成数值而丢前导零或变科学计数法）。
     private static final java.util.regex.Pattern DECIMAL = java.util.regex.Pattern.compile("^-?\\d+\\.\\d+$");
 
     static boolean isDecimal(String s) {
         return s != null && DECIMAL.matcher(s).matches();
-    }
-
-    static String truncate2(String s) {
-        if (!isDecimal(s)) {
-            return s;
-        }
-        int dot = s.indexOf('.');
-        String intPart = s.substring(0, dot);
-        String frac2 = (s.substring(dot + 1) + "00").substring(0, 2);
-        return intPart + "." + frac2;
     }
 
     private String getCellString(Cell cell) {

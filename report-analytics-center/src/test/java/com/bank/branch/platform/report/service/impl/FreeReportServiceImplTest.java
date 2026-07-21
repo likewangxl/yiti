@@ -96,9 +96,13 @@ class FreeReportServiceImplTest {
         verify(fileApi).upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT));
     }
 
-    /** 下载导出：数字格显示截断两位(不四舍五入)，完整原值放"数据有效性输入提示"(点击/选中弹出)；工号/姓名原样文本。 */
+    /**
+     * 下载导出：单元格存**完整原值** + 0.00 格式 —— 点击该格时编辑栏干净地显示 3.1779998。
+     * 代价是格内按 0.00 四舍五入显示（3.18），这是用户 2026-07-20 明确取舍的结果：
+     * Excel/WPS 数字格式只会四舍五入不会截断，「编辑栏干净显示完整值」与「格内截断显示」不可共存。
+     */
     @Test
-    void exportFilteredExcel_truncatesDecimal_keepsFullValueInPrompt() throws Exception {
+    void exportFilteredExcel_longDecimal_keepsFullValueInCell() throws Exception {
         RptFreeReportBatch batch = new RptFreeReportBatch();
         batch.setId("B1");
         batch.setColDefs("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_2\",\"label\":\"姓名\"},{\"key\":\"col_3\",\"label\":\"金额\"}]");
@@ -120,24 +124,49 @@ class FreeReportServiceImplTest {
             // 工号/姓名 原样文本
             assertThat(data.getCell(0).getStringCellValue()).isEqualTo("E1");
             assertThat(data.getCell(1).getStringCellValue()).isEqualTo("张三");
-            // 金额列 → 数值截断 3.17(不四舍五入,3.1779998→3.17) + 数字格式 0.00
             Cell amt = data.getCell(2);
+            // 纯数值格、无公式壳：点击格子 → 编辑栏就是 3.1779998
             assertThat(amt.getCellType()).isEqualTo(CellType.NUMERIC);
-            assertThat(amt.getNumericCellValue()).isCloseTo(3.17, within(1e-9));
+            assertThat(amt.getNumericCellValue()).isCloseTo(3.1779998, within(1e-9));
             assertThat(amt.getCellStyle().getDataFormatString()).isEqualTo("0.00");
-            // 完整原值在"数据有效性输入提示"里(点击/选中弹出)
-            boolean promptHasFull = sheet.getDataValidations().stream()
-                    .anyMatch(dv -> "3.1779998".equals(dv.getPromptBoxText()));
-            assertThat(promptHasFull).isTrue();
+            // 既不挂数据有效性弹框，也不写公式
+            assertThat(sheet.getDataValidations()).isEmpty();
         }
     }
 
+    /** 小数位≤2：同样是纯数值格 + 0.00，显示与原值一致。 */
     @Test
-    void truncate2_rule() {
-        assertThat(FreeReportServiceImpl.truncate2("3.1779998")).isEqualTo("3.17");
-        assertThat(FreeReportServiceImpl.truncate2("3.1")).isEqualTo("3.10");
-        assertThat(FreeReportServiceImpl.truncate2("-2.999")).isEqualTo("-2.99");
-        assertThat(FreeReportServiceImpl.truncate2("1001")).isEqualTo("1001");
-        assertThat(FreeReportServiceImpl.truncate2("张三")).isEqualTo("张三");
+    void exportFilteredExcel_shortDecimal_writesPlainNumber() throws Exception {
+        RptFreeReportBatch batch = new RptFreeReportBatch();
+        batch.setId("B1");
+        batch.setColDefs("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_3\",\"label\":\"金额\"}]");
+        when(batchMapper.selectById("B1")).thenReturn(batch);
+
+        RptFreeReportRow row = new RptFreeReportRow();
+        row.setCol1("E1");
+        row.setDataJson("{\"col_3\":\"3.1\"}");
+        when(rowMapper.countByBatch(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        when(rowMapper.selectByBatch(any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+
+        byte[] bytes = service.exportFilteredExcel("B1", "ALL", null, null, null);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            Cell amt = wb.getSheetAt(0).getRow(1).getCell(1);
+            assertThat(amt.getCellType()).isEqualTo(CellType.NUMERIC);
+            assertThat(amt.getNumericCellValue()).isCloseTo(3.1, within(1e-9));
+            assertThat(amt.getCellStyle().getDataFormatString()).isEqualTo("0.00");
+        }
+    }
+
+    /** 数值格判定：只有纯小数走数值格；整数/文本走文本原样写（防工号、编号类被转成数值）。 */
+    @Test
+    void isDecimal_rule() {
+        assertThat(FreeReportServiceImpl.isDecimal("3.1779998")).isTrue();
+        assertThat(FreeReportServiceImpl.isDecimal("-2.999")).isTrue();
+        assertThat(FreeReportServiceImpl.isDecimal("1001")).isFalse();
+        assertThat(FreeReportServiceImpl.isDecimal("张三")).isFalse();
+        assertThat(FreeReportServiceImpl.isDecimal("")).isFalse();
+        assertThat(FreeReportServiceImpl.isDecimal(null)).isFalse();
     }
 }
