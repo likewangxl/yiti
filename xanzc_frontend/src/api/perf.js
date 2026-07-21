@@ -147,6 +147,16 @@ export function listTargetValueSubjects(planId) {
 export function listTargetValueStageNames(planId) {
   return call('get', '/perf/target-values/stage-names', { params: { planId } }, []);
 }
+/**
+ * 绩效选人输入建议：按关键字搜员工，返回 [{ username:工号, displayName:姓名, orgName:机构名 }]。
+ *
+ * username 即目标值 subjectId 应写入的值（PT_USER.USERNAME），不是 USER_ID。
+ * 不要改用 /api/admin/users（管理员接口，业务角色 403）、/api/employees（通讯录覆盖不足）
+ * 或 /api/reports/employees/search（返回 USER_ID，与 subjectId 对不上）。
+ */
+export function searchPerfEmployees(keyword, limit = 20) {
+  return call('get', '/perf/employees/search', { params: { keyword, limit } }, []);
+}
 export function upsertTargetValue(data) {
   return call('post', '/perf/target-values', { data }, { ok: true });
 }

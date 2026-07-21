@@ -223,7 +223,7 @@ import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
 import {
   listTargets, listTargetValues, listTargetValueSubjects, listTargetValueStageNames, upsertTargetValue, batchUpsertTargetValues,
   submitTargetAdjust, listMetrics, deleteTargetValue,
-  listKpiRules, getKpiSchemeDetail
+  listKpiRules, getKpiSchemeDetail, searchPerfEmployees
 } from '@/api/perf';
 import { getOrgTree } from '@/api/orgs';
 import { useUserStore } from '@/stores/user';
@@ -301,25 +301,29 @@ async function loadOrgMap() {
   } catch {}
 }
 
-// el-autocomplete 数据源：EMP 取方案内已有对象 subjectOptions，ORG 取 orgMap，模糊匹配 key 或 name。
-// EMP：value=username（PT_USER.username），label=中文名（PT_USER.userchnname）；
+// el-autocomplete 数据源：
+//   EMP → 远程搜 /perf/employees/search（PT_USER 全表，返回工号），覆盖方案内尚未出现过的新员工；
+//   ORG → 本地 orgMap（机构树已一次性加载，无需远程）。
+// EMP：value=工号（PT_USER.username，即 subjectId 应写入的值），label=姓名；
 // ORG：value=机构号（EXT_ORG_INFO.org_code），label=机构名。
-function querySubjectSuggestions(query, cb) {
+async function querySubjectSuggestions(query, cb) {
   const dim = valDlg.form.subjectType;
   const q = (query || '').toLowerCase().trim();
   const out = [];
   if (dim === 'EMP') {
-    // 建议来源＝本方案内已有的 EMP 对象（subjectOptions）。覆盖"给同一批人补录/改值"这一主场景；
-    // 首次为新员工录入时无建议，直接键入工号即可——存在性由后端校验，不存在会返回明确错误。
-    for (const s of subjectOptions.value) {
-      if (s.subjectType !== 'EMP' || !s.subjectId) continue;
-      const cn = s.name || '';
-      if (!q || s.subjectId.toLowerCase().includes(q) || cn.toLowerCase().includes(q)) {
-        out.push({ value: s.subjectId, label: cn });
-        if (out.length >= 50) break;
+    // 远程搜索而非前端缓存全量：前者曾走管理员接口 /api/admin/users 导致业务角色 403，
+    // 后者（方案内已有对象）搜不到首次录入的新员工。两个问题一并由本端点解决。
+    try {
+      const list = await searchPerfEmployees(query || '', 50);
+      for (const e of (Array.isArray(list) ? list : [])) {
+        if (!e.username) continue;
+        out.push({ value: e.username, label: e.displayName || e.username, display: e.orgName || '' });
       }
-    }
-  } else if (dim === 'ORG') {
+    } catch { /* 搜索失败不阻塞输入：用户仍可直接键入工号，存在性由后端校验 */ }
+    cb(out);
+    return;
+  }
+  if (dim === 'ORG') {
     // 下拉内容展示「部门编号 + 机构名称」；入库 value 仍为机构编号（内部 org_code）
     for (const [code, name] of orgMap.value) {
       const nm = name || '';
