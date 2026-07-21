@@ -21,8 +21,10 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Map;
 
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -209,6 +211,66 @@ class TaskOperationServiceTest {
                         && Boolean.TRUE.equals(vars.get("approved"))
         ));
         verify(eventPublisher).publishEvent(any(TaskOperationService.TaskApprovedEvent.class));
+    }
+
+    /**
+     * 加固：审批意见为 null 时不得把 null 透传给 Flowable。
+     * <p>
+     * {@code ApproveReqDTO.opinion} 设计上可选（只有 @Size 无 @NotBlank），而 Flowable 7 的
+     * AddCommentCmd 对 message 无条件调 {@code String.replaceAll}，null 直接 NPE 并回滚成脏 500
+     * （与已修复的转交认领同一缺陷类）。前端恒初始化为空串、callpu 侧已 null-guard，故活跃链路
+     * 碰不到；但直连 API（curl / Knife4j）省略 opinion 字段即可触发，因此在服务层兜底成默认文案。
+     * </p>
+     */
+    @Test
+    void approveTask_nullOpinion_fallsBackToDefaultCommentNotNull() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        mockTaskQuery(buildMockTask("TASK_001", "PID_001", "E001"));
+
+        taskOperationService.approveTask("TASK_001", new ApproveReqDTO(null, Map.of()));
+
+        ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(taskService).addComment(eq("TASK_001"), eq("PID_001"), eq("APPROVE"), msgCaptor.capture());
+        assertThat(msgCaptor.getValue()).isNotBlank();
+    }
+
+    /**
+     * 加固：审批意见为空白串同样兜底（空白串虽不触发 NPE，但会在审批历史里留一条空意见，
+     * 与 null 归一处理更利于「已审批」列表展示）。
+     */
+    @Test
+    void approveTask_blankOpinion_fallsBackToDefaultComment() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        mockTaskQuery(buildMockTask("TASK_001", "PID_001", "E001"));
+
+        taskOperationService.approveTask("TASK_001", new ApproveReqDTO("   ", Map.of()));
+
+        ArgumentCaptor<String> msgCaptor = ArgumentCaptor.forClass(String.class);
+        verify(taskService).addComment(eq("TASK_001"), eq("PID_001"), eq("APPROVE"), msgCaptor.capture());
+        assertThat(msgCaptor.getValue()).isNotBlank();
+    }
+
+    /**
+     * 加固：驳回意见为 null 时抛 WF-40001，不得透传给 Flowable。
+     * <p>
+     * 与 approve 不同，{@code RejectReqDTO.opinion} 业务上必填（@NotBlank），null 只可能来自
+     * 绕过 Controller @Valid 的调用路径（facade rejectByEmp / 直连 API）。此时静默兜底会掩盖
+     * 「驳回未填理由」这一业务错误，故按 {@code TaskTransferService#reject} 的既有先例抛 WF-40001。
+     * 且必须抛在 addComment 与 deleteProcessInstance 之前——否则流程已被删，无法回滚。
+     * </p>
+     */
+    @Test
+    void rejectTask_nullOpinion_throwsWf40001BeforeTouchingProcess() {
+        when(currentUserApi.getCurrentEmpId()).thenReturn("E001");
+        mockTaskQuery(buildMockTask("TASK_001", "PID_001", "E001"));
+
+        assertThatThrownBy(() -> taskOperationService.rejectTask("TASK_001", new RejectReqDTO(null)))
+                .isInstanceOf(BizException.class)
+                .extracting("code")
+                .isEqualTo("WF-40001");
+
+        verify(taskService, never()).addComment(anyString(), anyString(), anyString(), anyString());
+        verify(runtimeService, never()).deleteProcessInstance(anyString(), anyString());
     }
 
     /**

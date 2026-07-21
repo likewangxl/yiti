@@ -16,6 +16,7 @@ import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -33,6 +34,9 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class TaskOperationService {
+
+    /** 审批意见缺省文案：opinion 可选，未填时的留痕兜底（不可为 null，见 doApprove 注释）。 */
+    private static final String DEFAULT_APPROVE_OPINION = "同意";
 
     private final TaskService taskService;
     private final RuntimeService runtimeService;
@@ -128,8 +132,11 @@ public class TaskOperationService {
     /** 审批通过公共实现：加审批意见 → 完成任务（approved=true）→ 发事件。empId 仅用于留痕/事件。 */
     private void doApprove(Task task, String empId, ApproveReqDTO req) {
         String taskId = task.getId();
-        // 添加审批意见
-        taskService.addComment(taskId, task.getProcessInstanceId(), "APPROVE", req.getOpinion());
+        // 添加审批意见。opinion 设计上可选（DTO 只有 @Size 无 @NotBlank），但绝不能把 null 透传给
+        // Flowable——AddCommentCmd 对 message 无条件调 String.replaceAll，null 直接 NPE 并整体回滚
+        // 成脏 500（与转交认领曾经的缺陷同源）。空白串一并归一，避免审批历史里留空意见。
+        taskService.addComment(taskId, task.getProcessInstanceId(), "APPROVE",
+                StringUtils.hasText(req.getOpinion()) ? req.getOpinion() : DEFAULT_APPROVE_OPINION);
 
         // 完成任务，推动流程流转
         Map<String, Object> vars = new HashMap<>();
@@ -190,6 +197,15 @@ public class TaskOperationService {
         String taskId = task.getId();
         String pid = task.getProcessInstanceId();
         String opinion = req.getOpinion();
+
+        // 0. 驳回理由业务上必填（DTO @NotBlank 已挡住 Controller 链路），此处是服务层防御性兜底，
+        //    防绕过 @Valid 的调用路径（facade rejectByEmp / 直连 API）把 null 透传进 Flowable 触发
+        //    AddCommentCmd 的 NPE。与 approve 不同，这里不静默补默认值——那会掩盖「驳回未填理由」
+        //    这一业务错误。必须抛在 addComment/deleteProcessInstance 之前，否则流程已删无法回滚。
+        if (!StringUtils.hasText(opinion)) {
+            throw new BizException(WfErrorCode.TRANSFER_REJECT_REASON_REQUIRED.getCode(),
+                    WfErrorCode.TRANSFER_REJECT_REASON_REQUIRED.getMessage());
+        }
 
         // 1. 写驳回意见到 ACT_HI_COMMENT（必须在 deleteProcessInstance 之前；
         //    否则 task 已被 cascade 删除时 addComment 会失败）
