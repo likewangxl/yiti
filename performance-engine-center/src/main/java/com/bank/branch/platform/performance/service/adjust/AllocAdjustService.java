@@ -1176,6 +1176,16 @@ public class AllocAdjustService {
      * {@link #resolveStaticProcessKey} 一致。原静态 BPMN 逻辑保留于该方法以便回退——
      * 回退方式：把本方法体改回 {@code return resolveStaticProcessKey(custType, bizKind);}。</p>
      *
+     * <p><b>⚠️ 回退会连带回退 original_owner_approve 节点的审批人语义（2026-07-21 补注）</b>：
+     * 静态 BPMN（{@code perf_alloc_adjust_{corp,retail}_v1.bpmn20.xml}）该节点是
+     * {@code flowable:assignee="${ownerEmpId}"}——单人指派给<b>原业绩所属人本人</b>
+     * （{@link #resolveOriginalOwnerEmpId}），节点名 "原业绩所属人审批" 与之相符；
+     * 而设计器流程自 2026-07-16 起已切换为<b>原业绩所属 2 级机构负责人（BRANCH_HEAD）会签</b>
+     * （候选变量 {@code originalOwnerOrgLeaderEmpIds}，节点名 "原业绩所属机构负责人审批"，
+     * 见 {@code docs/superpowers/sql/2026-07-16-alloc-original-owner-org-leader-switch.sql}）。
+     * 故静态 BPMN 的旧节点名<b>不是待修的漏网之鱼，而是与其自身行为相符</b>，不要"顺手改成"新名，
+     * 否则标签会与实际审批人不符。真要回退，须同时确认业务上接受审批人退回原业绩所属人本人。</p>
+     *
      * @param custType 客户类型 CORP/RETAIL（优先）
      * @param bizKind  业务种类（custType 为空时回退依据）
      * @return 已发布设计器流程的 deployedProcDefKey（如 DSN_alloc_corp_designer）
