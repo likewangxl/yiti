@@ -36,8 +36,18 @@
         <el-table-column v-for="col in dynamicCols" :key="col.key" :prop="col.key" :label="col.label"
                          min-width="120">
           <template #default="{ row }">
-            <!-- 数字列显示截断两位(不四舍五入);悬停 title 显示完整原值。原始数据不改。 -->
-            <span :title="row[col.key]">{{ truncate2(row[col.key]) }}</span>
+            <!-- 显示导入时保留的 Excel 原样文本(-0.0 / 54.5%)；
+                 悬停 title 与点击气泡均给完整原值(无科学计数法)。原始数据不改。 -->
+            <el-popover placement="top" trigger="click" :width="260"
+                        :disabled="cellFull(row, col.key) === cellDisplay(row, col.key)">
+              <template #reference>
+                <span class="cell-val" :title="cellFull(row, col.key)">{{ cellDisplay(row, col.key) }}</span>
+              </template>
+              <div class="cell-full">
+                <div class="cell-full-label">完整值</div>
+                <div class="cell-full-val">{{ cellFull(row, col.key) }}</div>
+              </div>
+            </el-popover>
           </template>
         </el-table-column>
       </el-table>
@@ -61,7 +71,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { queryFreeReportData, getFreeReportColumns, listFreeReportBatches } from '@/api/report';
-import { truncate2 } from '@/utils/numFmt';
+import { cellDisplay, cellFull } from '@/utils/cellFmt';
 
 const route = useRoute();
 const batchId = route.params.batchId;
@@ -125,6 +135,11 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
+/* 数值格：有完整值可展开时给个可点击的提示 */
+.cell-val { cursor: pointer; }
+.cell-full-label { color: #999; font-size: 12px; margin-bottom: 4px; }
+.cell-full-val { font-family: ui-monospace, monospace; word-break: break-all; }
+
 .page-h {
   display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px;
   h1 { font-size: 18px; font-weight: 600; }

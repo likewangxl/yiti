@@ -70,6 +70,71 @@ class FreeReportServiceImplTest {
         }
     }
 
+    /**
+     * 构造带「数字格式」的 xlsx，复刻用户报的两种现象：
+     *   col_3：值 -5.00000000069889E-7，格式 0.0   -> Excel 显示 -0.0
+     *   col_4：值 0.545175438596492，  格式 0.0%  -> Excel 显示 54.5%
+     */
+    private MultipartFile xlsxWithFormats() throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet s = wb.createSheet("s");
+            org.apache.poi.ss.usermodel.CellStyle st1 = wb.createCellStyle();
+            st1.setDataFormat(wb.createDataFormat().getFormat("0.0"));
+            org.apache.poi.ss.usermodel.CellStyle st2 = wb.createCellStyle();
+            st2.setDataFormat(wb.createDataFormat().getFormat("0.0%"));
+
+            Row h = s.createRow(0);
+            h.createCell(0).setCellValue("工号");
+            h.createCell(1).setCellValue("姓名");
+            h.createCell(2).setCellValue("微小值");
+            h.createCell(3).setCellValue("占比");
+
+            Row d = s.createRow(1);
+            d.createCell(0).setCellValue("E1");
+            d.createCell(1).setCellValue("张三");
+            Cell c3 = d.createCell(2);
+            c3.setCellValue(-5.00000000069889E-7);
+            c3.setCellStyle(st1);
+            Cell c4 = d.createCell(3);
+            c4.setCellValue(0.545175438596492);
+            c4.setCellStyle(st2);
+
+            wb.write(out);
+            return new MockMultipartFile("file", "fmt.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+        }
+    }
+
+    /**
+     * 导入必须保留 Excel 的「显示文本」与「数字格式」，而不是把原始值 String.valueOf 成科学计数法。
+     * 存三份：col_N=显示文本(页面用) / col_N__raw=完整原值(点击看) / col_N__fmt=数字格式(导出复刻用)。
+     */
+    @Test
+    void importExcel_keepsDisplayTextRawValueAndFormat() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        service.importExcel("rpt", xlsxWithFormats(), "E1", "张三");
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper).insertBatch(cap.capture());
+        String json = cap.getValue().get(0).getDataJson();
+
+        // 微小值：页面显示 -0.0，不是科学计数法
+        assertThat(json).contains("\"col_3\":\"-0.0\"");
+        assertThat(json).doesNotContain("E-7");          // 显示文本里不许出现科学计数法
+        assertThat(json).contains("\"col_3__raw\":");    // 完整原值另存
+        assertThat(json).contains("\"col_3__fmt\":\"0.0\"");
+
+        // 百分比：页面显示 54.5%
+        assertThat(json).contains("\"col_4\":\"54.5%\"");
+        assertThat(json).contains("\"col_4__raw\":");
+        assertThat(json).contains("\"col_4__fmt\":\"0.0%\"");
+    }
+
     @Test
     void reimportSameName_doesNotCleanupOldFile_andUsesZybbCategory() throws Exception {
         // 已有同名、同上传人的旧批次（覆盖场景）
@@ -131,6 +196,46 @@ class FreeReportServiceImplTest {
             assertThat(amt.getCellStyle().getDataFormatString()).isEqualTo("0.00");
             // 既不挂数据有效性弹框，也不写公式
             assertThat(sheet.getDataValidations()).isEmpty();
+        }
+    }
+
+    /**
+     * 下载导出：数值格写「完整原值 + 原 Excel 数字格式」，完整复刻原表行为——
+     * 格内显示 -0.0 / 54.5%，点击后编辑栏是完整值。不再出现科学计数法。
+     */
+    @Test
+    void exportFilteredExcel_usesOriginalFormatAndRawValue() throws Exception {
+        RptFreeReportBatch batch = new RptFreeReportBatch();
+        batch.setId("B1");
+        batch.setColDefs("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_3\",\"label\":\"微小值\"}"
+                + ",{\"key\":\"col_4\",\"label\":\"占比\"}]");
+        when(batchMapper.selectById("B1")).thenReturn(batch);
+
+        RptFreeReportRow row = new RptFreeReportRow();
+        row.setCol1("E1");
+        // 导入后落库的形态：显示文本 + 完整原值 + 原格式
+        row.setDataJson("{\"col_3\":\"-0.0\",\"col_3__raw\":\"-0.000000500000000069889\",\"col_3__fmt\":\"0.0\","
+                + "\"col_4\":\"54.5%\",\"col_4__raw\":\"0.545175438596492\",\"col_4__fmt\":\"0.0%\"}");
+        when(rowMapper.countByBatch(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        when(rowMapper.selectByBatch(any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+
+        byte[] bytes = service.exportFilteredExcel("B1", "ALL", null, null, null);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            Row data = wb.getSheetAt(0).getRow(1);
+
+            Cell tiny = data.getCell(1);
+            assertThat(tiny.getCellType()).isEqualTo(CellType.NUMERIC);
+            // 单元格里是完整原值（点击编辑栏可见），不是显示文本
+            assertThat(tiny.getNumericCellValue()).isCloseTo(-5.00000000069889E-7, within(1e-20));
+            // 套原格式 0.0 -> Excel 渲染成 -0.0
+            assertThat(tiny.getCellStyle().getDataFormatString()).isEqualTo("0.0");
+
+            Cell pct = data.getCell(2);
+            assertThat(pct.getCellType()).isEqualTo(CellType.NUMERIC);
+            assertThat(pct.getNumericCellValue()).isCloseTo(0.545175438596492, within(1e-15));
+            assertThat(pct.getCellStyle().getDataFormatString()).isEqualTo("0.0%");
         }
     }
 
