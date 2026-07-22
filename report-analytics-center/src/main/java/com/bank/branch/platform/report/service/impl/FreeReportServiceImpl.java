@@ -406,11 +406,66 @@ public class FreeReportServiceImpl implements FreeReportService {
             return cell.getLocalDateTimeCellValue().toString();
         }
         try {
-            String s = formatter.formatCellValue(cell);
-            return s != null ? s.trim() : "";
+            String s = renderByFormat(cell, formatter);
+            if (s == null) return "";
+            s = s.trim();
+            return fixNegativeZeroByZeroSection(cell, formatter, s);
         } catch (Exception e) {
             // 格式串异常时退回原始取值，保证导入不中断
             return getCellString(cell);
+        }
+    }
+
+    /**
+     * 按单元格自身的数字格式渲染成文本。
+     *
+     * <p>数值格**必须**走 {@code formatRawCellContents(值, formatIndex, 格式串)}，
+     * 不能用 {@code formatCellValue(cell)}：后者对**从文件读入**的自定义格式
+     * （如现场报表里 {@code numFmtId=177} 的 {@code 0.00_ ;[Red]\-0.00\ }）会退化，
+     * 把 -5e-7 渲染成科学计数法 {@code -5.00000000069889E-07}；而前者渲染为 {@code -0.00}，
+     * 与 Excel/WPS 所见一致。（代码新建的自定义格式 POI 分配 numFmtId=164 时两者表现相同，
+     * 所以只有用真实文件才能复现，见 importExcel_realFile_* 回归用例。）
+     */
+    private String renderByFormat(Cell cell, DataFormatter formatter) {
+        CellType type = cell.getCellType() == CellType.FORMULA
+                ? cell.getCachedFormulaResultType() : cell.getCellType();
+        CellStyle style = cell.getCellStyle();
+        if (type == CellType.NUMERIC && style != null) {
+            String fmt = style.getDataFormatString();
+            if (fmt != null && !fmt.isEmpty()) {
+                return formatter.formatRawCellContents(
+                        cell.getNumericCellValue(), style.getDataFormat(), fmt);
+            }
+        }
+        return formatter.formatCellValue(cell);
+    }
+
+    /**
+     * 修正 POI 与 Excel 在「分段格式 + 舍入后为零」上的渲染差异。
+     *
+     * <p>Excel 决定用格式的哪一段（正;负;零）看的是**按该格式舍入后**的值：会计格式
+     * {@code _ * #,##0_ ;_ * \-#,##0_ ;_ * "-"_ } 把 -5e-7 舍成 0，于是走第三段显示 "-"。
+     * 而 POI 的 DataFormatter 只看原始值的符号，直接走负数段渲染成 "-0"。
+     *
+     * <p>故这里检测「渲染结果的数字部分全为 0（即舍入后为零）」且「格式确有零段（≥3 段）」，
+     * 改用零值重新渲染，与 Excel 对齐。不满足条件时原样返回，不影响 -0.00 这类
+     * 只有两段（正;负）的自定义格式——它们本就该显示 -0.00。
+     */
+    private String fixNegativeZeroByZeroSection(Cell cell, DataFormatter formatter, String shown) {
+        if (shown.isEmpty() || shown.indexOf('-') < 0) return shown;
+        // 数字部分是否全为 0（去掉负号/千分位/小数点/空白后只剩 0）
+        String digits = shown.replaceAll("[-,.\\s ]", "");
+        if (digits.isEmpty() || digits.chars().anyMatch(c -> c != '0')) return shown;
+        // 格式必须确有「零段」：Excel 分段格式为 正;负;零[;文本]
+        CellStyle style = cell.getCellStyle();
+        if (style == null) return shown;
+        String fmt = style.getDataFormatString();
+        if (fmt == null || fmt.split(";", -1).length < 3) return shown;
+        try {
+            String zeroShown = formatter.formatRawCellContents(0d, style.getDataFormat(), fmt);
+            return zeroShown != null ? zeroShown.trim() : shown;
+        } catch (Exception e) {
+            return shown;
         }
     }
 
@@ -432,9 +487,16 @@ public class FreeReportServiceImpl implements FreeReportService {
         if (cell == null || cell.getCellStyle() == null) return "";
         String fmt = cell.getCellStyle().getDataFormatString();
         if (fmt == null) return "";
-        fmt = fmt.trim();
-        // General/@ 属于「无有意义数字格式」，导出时不套用，走默认处理
-        return ("General".equalsIgnoreCase(fmt) || "@".equals(fmt)) ? "" : fmt;
+        // 判空/判 General 用去空白后的副本，但**返回原串**——绝不能 trim 后返回。
+        // Excel 格式里 `_`(占位一个字符宽) 与 `\`(转义) 后面都必须再跟一个字符，
+        // 而会计格式常以 `_ @_ `、自定义格式常以 `\-0.00\ ` 结尾（末位是空格）。
+        // 一旦 trim 掉尾空格，就会留下孤立的 `_` 或 `\`，Excel/WPS 判定整串非法后
+        // 退回常规格式 —— 表现为 0 显示成 "0"、极小值显示成科学计数法，格式全失效。
+        String probe = fmt.trim();
+        if (probe.isEmpty() || "General".equalsIgnoreCase(probe) || "@".equals(probe)) {
+            return "";
+        }
+        return fmt;
     }
 
     private String getCellString(Cell cell) {

@@ -142,3 +142,46 @@ DATA_JSON = {"col_3":"-0.0","col_3__raw":"-0.000000500000000069889","col_3__fmt"
 
 ### 遗留
 存量老批次仍是「原始值 + 截断两位」展示，要拿到新效果需重新上传。
+
+## 12. 2026-07-22 修复：格式在真实报表上失效的三个根因
+
+§11 的方案在代码构造的样例上通过，但现场真实报表仍不对。拿到用户问题文件
+（含会计格式 numFmtId=41、自定义 numFmtId=177）逐格复核，查出三处：
+
+### 根因1（致命）：格式串被 trim 破坏 → Excel 判非法 → 退回常规格式
+`getCellFormat` 原有 `fmt = fmt.trim()`。Excel 格式里 `_`(占位一字符宽) 与
+`\`(转义) 后面**必须再跟一个字符**，而真实格式常以空格结尾：
+```
+会计41 : _ * #,##0_ ;_ * \-#,##0_ ;_ * "-"_ ;_ @_      trim后 -> ..._ @_    孤立下划线
+自定177: 0.00_ ;[Red]\-0.00\                          trim后 -> ...\-0.00\ 孤立反斜杠
+```
+Excel/WPS 判定整串非法后**退回常规格式** —— 表现为「下载后格子显示 0、编辑栏也是 0」，
+即用户反馈的现象。修复：判空/判 General 用 trim 后的副本，**返回原串**。
+
+### 根因2：POI 对「从文件读入的自定义格式」渲染退化成科学计数法
+`formatCellValue(cell)` 对源文件里 numFmtId=177 的 `0.00_ ;[Red]\-0.00\ `
+把 -5e-7 渲染成 `-5.00000000069889E-07`；而 `formatRawCellContents(值, formatIndex, 格式串)`
+渲染为 `-0.00`（与 WPS 一致）。**代码新建**自定义格式时 POI 分配 numFmtId=164，两者表现相同，
+所以此前用构造样例的测试复现不出。修复：数值格改走 `formatRawCellContents`（见 `renderByFormat`）。
+
+### 根因3：分段格式下「舍入后为零」的负值，POI 走错分段
+Excel 选格式的哪一段（正;负;零）看的是**按该格式舍入后**的值：`#,##0` 把 -5e-7 舍成 0，
+故走第三段显示 `-`；POI 只看原始值符号，走负数段渲染成 `-0` —— 即用户反馈的「页面展示 -0」。
+修复：`fixNegativeZeroByZeroSection` —— 当渲染结果数字部分全为 0 且格式确有零段(≥3段)时，
+改用零值重新渲染。只有两段(正;负)的格式不受影响，`-0.00` 仍正常显示。
+
+### 回归固件
+`src/test/resources/freereport/real-formats.xlsx`（取自现场问题文件）。
+构造式样例无法复现根因2，必须用真实文件守护。新增 4 个用例：
+- `importExcel_keepsFormatStringVerbatim_noTrimming` 格式串逐字保留、尾空格不丢
+- `importExcel_accountingFormat_tinyValueRoundsToZero_showsDash` 会计格式极小值显示 `-`
+- `importExcel_realFile_noScientificNotation_andAccountingDash` 全表无科学计数法 + 逐格断言
+- 前端 `cellFmt.spec.js` 补会计格式/极小值/仅 __fmt 无 __raw 三类场景
+
+### 实测（真实文件）
+```
+行3 col_9: 显示 "-"      原值 0.0
+行4 col_9: 显示 "-0.00"  原值 -0.000000500000000069889   (修复前是科学计数法)
+行5 col_9: 显示 "-"      原值 0.0
+导出格式尾字符 = ' '（空格保住，格式在 Excel 中有效）
+```
