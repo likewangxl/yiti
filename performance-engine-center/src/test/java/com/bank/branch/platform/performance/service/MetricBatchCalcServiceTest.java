@@ -142,6 +142,49 @@ class MetricBatchCalcServiceTest {
     }
 
     @Test
+    @DisplayName("execute: 机构(ORG)指标必须在员工(EMP)/客户(CUST)指标全部算完后才开始——两阶段执行")
+    void execute_orgMetricsRunAfterEmpAndCust() throws Exception {
+        // 构造混合维度指标：EMP / CUST / ORG / 维度无关(null) 各一，故意让 ORG 排在列表最前，
+        // 若只按列表顺序并发提交，ORG 会先跑；两阶段执行则应保证 ORG 一定最后。
+        PerfMetricDef org  = sqlMetric("M_ORG",  "机构指标", "ORG");
+        PerfMetricDef emp  = sqlMetric("M_EMP",  "员工指标", "EMP");
+        PerfMetricDef cust = sqlMetric("M_CUST", "客户指标", "CUST");
+        PerfMetricDef nul  = sqlMetric("M_NULL", "维度无关", null);
+        when(metricDefMapper.selectList(any()))
+                .thenReturn(java.util.List.of(org, emp, cust, nul));
+
+        // 记录每个指标「开始计算」的先后次序；ORG 的必须严格大于所有非 ORG 的
+        java.util.Map<String, Integer> startOrder = new java.util.concurrent.ConcurrentHashMap<>();
+        java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger(0);
+        // 非 ORG 指标故意 sleep 一下，放大「ORG 抢跑」的窗口；两阶段实现应无视这点仍保证顺序
+        when(metricCalcService.calcMetricWithStats(any(), any(), any(), any(), any()))
+                .thenAnswer(inv -> {
+                    String code = inv.getArgument(0);
+                    startOrder.put(code, seq.incrementAndGet());
+                    if (!"M_ORG".equals(code)) Thread.sleep(60);
+                    return new MetricCalcResult("RT", 1, 1, 0);
+                });
+
+        service.execute(1, LocalDate.of(2026, 6, 11), null, "RUNLOG1234567890ABCDEF1234567890");
+
+        // ORG 的开始次序必须晚于 EMP / CUST / 维度无关三者
+        int orgAt = startOrder.get("M_ORG");
+        assertThat(orgAt).isGreaterThan(startOrder.get("M_EMP"));
+        assertThat(orgAt).isGreaterThan(startOrder.get("M_CUST"));
+        assertThat(orgAt).isGreaterThan(startOrder.get("M_NULL"));
+    }
+
+    private static PerfMetricDef sqlMetric(String code, String name, String baseDim) {
+        PerfMetricDef d = new PerfMetricDef();
+        d.setMetricCode(code);
+        d.setMetricName(name);
+        d.setCalcLogicType("SQL");
+        d.setSqlText("SELECT 1");
+        d.setBaseDim(baseDim);
+        return d;
+    }
+
+    @Test
     @DisplayName("execute(3参兼容): allocDate 缺省以 null 透传，由计算引擎兜底 dataDate")
     void execute_threeArg_passesNullAllocDate() {
         PerfMetricDef def = new PerfMetricDef();

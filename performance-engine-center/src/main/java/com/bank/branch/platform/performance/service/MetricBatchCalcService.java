@@ -135,28 +135,31 @@ public class MetricBatchCalcService {
                 return;
             }
 
-            // 4. 并发执行，控制并发数
-            int poolSize = Math.min(MAX_CONCURRENCY, metrics.size());
-            log.info("【{}级指标批量计算】启动线程池，并发数={}", metricLevel, poolSize);
-            ExecutorService executor = Executors.newFixedThreadPool(poolSize,
-                    r -> { Thread t = new Thread(r, "metric-batch-L" + metricLevel); t.setDaemon(true); return t; });
+            // 4. 分两阶段执行：先算 员工/客户/维度无关 指标，全部完成后再算 机构 指标。
+            //    机构(ORG)维度的指标其 SQL 会汇总员工/客户的当日结果（读 EMP/CUST 宽表），
+            //    若与 EMP/CUST 并发抢跑，机构指标可能读到旧值或空值，故必须等前者跑完再启动。
+            //    阶段内部仍并发（互不依赖）；阶段之间加屏障。
+            List<PerfMetricDef> firstStage = new ArrayList<>();   // EMP / CUST / 维度无关(null)
+            List<PerfMetricDef> orgStage = new ArrayList<>();     // ORG，最后算
+            for (PerfMetricDef def : metrics) {
+                if ("ORG".equalsIgnoreCase(def.getBaseDim())) {
+                    orgStage.add(def);
+                } else {
+                    firstStage.add(def);
+                }
+            }
+            log.info("【{}级指标批量计算】分两阶段：第一阶段(员工/客户/维度无关) {} 个，第二阶段(机构) {} 个",
+                    metricLevel, firstStage.size(), orgStage.size());
 
             AtomicInteger successCount = new AtomicInteger(0);
             AtomicInteger failCount = new AtomicInteger(0);
             AtomicInteger skipCount = new AtomicInteger(0);
             List<String> failedMetrics = new CopyOnWriteArrayList<>();
 
-            List<Future<?>> futures = new ArrayList<>();
-            for (PerfMetricDef def : metrics) {
-                futures.add(executor.submit(() -> calcSingleMetric(taskId, metricLevel, def, dataDate, allocDate, successCount, failCount, skipCount, failedMetrics)));
-            }
-
-            for (Future<?> f : futures) {
-                try { f.get(300, TimeUnit.SECONDS); } catch (Exception e) {
-                    log.warn("【{}级指标批量计算】等待指标计算超时或异常: {}", metricLevel, e.getMessage());
-                }
-            }
-            executor.shutdown();
+            runStageConcurrently(firstStage, "第一阶段(员工/客户)", taskId, metricLevel, dataDate, allocDate,
+                    successCount, failCount, skipCount, failedMetrics);
+            runStageConcurrently(orgStage, "第二阶段(机构)", taskId, metricLevel, dataDate, allocDate,
+                    successCount, failCount, skipCount, failedMetrics);
 
             // 5. 更新任务完成信息
             task.setSuccessCount(successCount.get());
@@ -177,6 +180,41 @@ public class MetricBatchCalcService {
             log.error("【{}级指标批量计算】任务执行异常: {}", metricLevel, e.getMessage(), e);
             finishTask(task, "FAILED", e.getMessage());
             log.info("========== 【{}级指标批量计算】异常结束 ==========", metricLevel);
+        }
+    }
+
+    /**
+     * 并发执行一个阶段的全部指标，并阻塞等待该阶段全部完成（阶段屏障）。
+     *
+     * <p>阶段内部指标互不依赖，用固定大小线程池并发；方法返回即代表本阶段所有指标已算完，
+     * 从而保证「上一阶段全部完成后，下一阶段才开始」——机构指标依赖员工/客户结果，靠此顺序成立。
+     * 空阶段直接返回，不建线程池。
+     */
+    private void runStageConcurrently(List<PerfMetricDef> stageMetrics, String stageName,
+                                      String taskId, int metricLevel, LocalDate dataDate, LocalDate allocDate,
+                                      AtomicInteger successCount, AtomicInteger failCount,
+                                      AtomicInteger skipCount, List<String> failedMetrics) {
+        if (stageMetrics.isEmpty()) {
+            return;
+        }
+        int poolSize = Math.min(MAX_CONCURRENCY, stageMetrics.size());
+        log.info("【{}级指标批量计算】{} 启动线程池，指标数={}，并发数={}",
+                metricLevel, stageName, stageMetrics.size(), poolSize);
+        ExecutorService executor = Executors.newFixedThreadPool(poolSize,
+                r -> { Thread t = new Thread(r, "metric-batch-L" + metricLevel); t.setDaemon(true); return t; });
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (PerfMetricDef def : stageMetrics) {
+                futures.add(executor.submit(() -> calcSingleMetric(taskId, metricLevel, def, dataDate, allocDate,
+                        successCount, failCount, skipCount, failedMetrics)));
+            }
+            for (Future<?> f : futures) {
+                try { f.get(300, TimeUnit.SECONDS); } catch (Exception e) {
+                    log.warn("【{}级指标批量计算】{} 等待指标计算超时或异常: {}", metricLevel, stageName, e.getMessage());
+                }
+            }
+        } finally {
+            executor.shutdown();
         }
     }
 
