@@ -124,8 +124,11 @@ public class FreeReportServiceImpl implements FreeReportService {
                     // 前两列是工号/姓名（纯文本），不需要原值/格式；其余数值列另存两份：
                     //   __raw 完整原值（点击查看用）、__fmt 原数字格式（导出复刻 Excel 显示用）
                     if (c >= 2 && cell != null) {
+                        // 只要是数值格就存 __raw，**即便它与显示文本相同**（如 General 格式的整数 85）。
+                        // 它同时承担「这格在源里是数值」的标记作用：导出时据此按数值写回，
+                        // 否则整数会被当文本写死，Excel 里出现"数字以文本形式存储"且不能求和。
                         String raw = getCellRaw(cell);
-                        if (!raw.isEmpty() && !raw.equals(val)) {
+                        if (!raw.isEmpty()) {
                             rowData.put(key + "__raw", raw);
                         }
                         String fmt = getCellFormat(cell);
@@ -335,8 +338,13 @@ public class FreeReportServiceImpl implements FreeReportService {
                     }
                     if (num != null) {
                         cell.setCellValue(num);
-                        // 有原格式就用原格式；老批次没有则退回 0.00（保持既有行为）
-                        cell.setCellStyle(styleOf.apply(fmt != null && !fmt.isEmpty() ? fmt : "0.00"));
+                        if (fmt != null && !fmt.isEmpty()) {
+                            cell.setCellStyle(styleOf.apply(fmt));       // 复刻源格式
+                        } else if (raw == null || raw.isEmpty()) {
+                            cell.setCellStyle(styleOf.apply("0.00"));    // 老批次无格式信息，沿用既有行为
+                        }
+                        // 新批次且源本就是 General（__fmt 为空）：不套任何格式，
+                        // 保持通用格式 —— 套 0.00 会把源里显示 85 的整数变成 85.00。
                     } else {
                         cell.setCellValue(val);
                     }

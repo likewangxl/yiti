@@ -246,6 +246,97 @@ class FreeReportServiceImplTest {
         }
     }
 
+    /**
+     * 全表逐格比对：源 Excel 与「导入→导出」后的 Excel，**每一格**的
+     * 「格内显示」和「编辑栏原值」都必须相同。
+     *
+     * <p>这是本特性的总验收——不是只看有问题的那一列，而是整张表任何一格都不许走样。
+     */
+    @Test
+    void roundTrip_everyCell_displayAndRawValueMatchSource() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        byte[] src;
+        try (java.io.InputStream in = getClass().getResourceAsStream("/freereport/real-formats.xlsx")) {
+            assertThat(in).isNotNull();
+            src = in.readAllBytes();
+        }
+        service.importExcel("rpt", new MockMultipartFile("file", "real.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", src), "E1", "张三");
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper, org.mockito.Mockito.atLeastOnce()).insertBatch(cap.capture());
+        List<RptFreeReportRow> rows = cap.getAllValues().get(0);
+
+        // 用源文件的真实表头拼列定义，保证导出列序与源一致
+        StringBuilder cd = new StringBuilder("[");
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(src))) {
+            Row hr = wb.getSheetAt(0).getRow(0);
+            for (int c = 0; c < hr.getLastCellNum(); c++) {
+                if (c > 0) cd.append(",");
+                cd.append("{\"key\":\"col_").append(c + 1).append("\",\"label\":\"h").append(c).append("\"}");
+            }
+        }
+        RptFreeReportBatch batch = new RptFreeReportBatch();
+        batch.setId("B1");
+        batch.setColDefs(cd.append("]").toString());
+        when(batchMapper.selectById("B1")).thenReturn(batch);
+        when(rowMapper.countByBatch(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn((long) rows.size());
+        when(rowMapper.selectByBatch(any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(rows);
+
+        byte[] out = service.exportFilteredExcel("B1", "ALL", null, null, null);
+
+        try (XSSFWorkbook s1 = new XSSFWorkbook(new ByteArrayInputStream(src));
+             XSSFWorkbook s2 = new XSSFWorkbook(new ByteArrayInputStream(out))) {
+            Sheet a = s1.getSheetAt(0), b = s2.getSheetAt(0);
+            org.apache.poi.ss.usermodel.DataFormatter f = new org.apache.poi.ss.usermodel.DataFormatter();
+            int checked = 0;
+            for (int r = 1; r <= a.getLastRowNum(); r++) {          // 跳表头
+                Row ra = a.getRow(r), rb = b.getRow(r);
+                if (ra == null) continue;
+                assertThat(rb).as("导出缺行 %d", r + 1).isNotNull();
+                for (int c = 0; c < ra.getLastCellNum(); c++) {
+                    Cell ca = ra.getCell(c), cb = rb.getCell(c);
+                    if (ca == null || ca.getCellType() == CellType.BLANK) continue;
+                    assertThat(cb).as("导出缺格 行%d列%d", r + 1, c + 1).isNotNull();
+
+                    // 源文件里可能有公式格（本固件的 I5 就是），其"值类型"要取缓存结果类型；
+                    // 导出侧一律落成数值/文本快照，不保留公式（自由报表是数据快照）。
+                    CellType typeA = ca.getCellType() == CellType.FORMULA
+                            ? ca.getCachedFormulaResultType() : ca.getCellType();
+                    if (typeA == CellType.NUMERIC) {
+                        assertThat(cb.getCellType())
+                                .as("行%d列%d 源是数值，导出必须仍是数值格", r + 1, c + 1)
+                                .isEqualTo(CellType.NUMERIC);
+                        // 编辑栏原值
+                        assertThat(FreeReportServiceImpl.excelRawText(cb.getNumericCellValue()))
+                                .as("行%d列%d 编辑栏原值不一致", r + 1, c + 1)
+                                .isEqualTo(FreeReportServiceImpl.excelRawText(ca.getNumericCellValue()));
+                        // 格内显示（各自按自身格式渲染）
+                        String showA = f.formatRawCellContents(ca.getNumericCellValue(),
+                                ca.getCellStyle().getDataFormat(), ca.getCellStyle().getDataFormatString()).trim();
+                        String showB = f.formatRawCellContents(cb.getNumericCellValue(),
+                                cb.getCellStyle().getDataFormat(), cb.getCellStyle().getDataFormatString()).trim();
+                        assertThat(showB).as("行%d列%d 格内显示不一致", r + 1, c + 1).isEqualTo(showA);
+                    } else {
+                        // 文本列：内容原样搬运
+                        assertThat(f.formatCellValue(cb).trim())
+                                .as("行%d列%d 文本内容不一致", r + 1, c + 1)
+                                .isEqualTo(f.formatCellValue(ca).trim());
+                    }
+                    checked++;
+                }
+            }
+            assertThat(checked).as("应比对到足够多的数值格").isGreaterThanOrEqualTo(15);
+        }
+    }
+
     /** excelRawText：把 double 渲染成与 Excel 编辑栏一字不差的文本。 */
     @Test
     void excelRawText_matchesExcelFormulaBar() {
