@@ -212,8 +212,57 @@ class FreeReportServiceImplTest {
         assertThat(m.get("col_3")).isEqualTo("-");
         // 极小负值：舍入后为零，同样应显示 "-"，不能是 "-0"
         assertThat(m.get("col_4")).isEqualTo("-");
-        // 完整原值仍保留，点击可见
-        assertThat(m.get("col_4__raw")).isEqualTo("-0.000000500000000069889");
+        // 完整原值仍保留，且与 Excel 编辑栏一致（编辑栏本就是科学计数法）
+        assertThat(m.get("col_4__raw")).isEqualTo("-5.00000000069889E-07");
+    }
+
+    /**
+     * 导出时 __raw 可能是科学计数法（Excel 编辑栏对极小值的原样表示），
+     * 必须仍按**数值**写入并套原格式；若被当成文本写，格子里就成了死字符串，
+     * 既不受数字格式控制、点击也看不到原值。
+     */
+    @Test
+    void exportFilteredExcel_scientificNotationRaw_writtenAsNumberWithFormat() throws Exception {
+        RptFreeReportBatch batch = new RptFreeReportBatch();
+        batch.setId("B1");
+        batch.setColDefs("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_9\",\"label\":\"极小值\"}]");
+        when(batchMapper.selectById("B1")).thenReturn(batch);
+
+        RptFreeReportRow row = new RptFreeReportRow();
+        row.setCol1("E1");
+        row.setDataJson("{\"col_9\":\"-0.00\",\"col_9__raw\":\"-5.00000000069889E-07\","
+                + "\"col_9__fmt\":\"0.00_ ;[Red]\\\\-0.00\\\\ \"}");
+        when(rowMapper.countByBatch(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        when(rowMapper.selectByBatch(any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+
+        byte[] bytes = service.exportFilteredExcel("B1", "ALL", null, null, null);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            Cell c = wb.getSheetAt(0).getRow(1).getCell(1);
+            assertThat(c.getCellType()).as("必须是数值格而非文本").isEqualTo(CellType.NUMERIC);
+            assertThat(c.getNumericCellValue()).isCloseTo(-5.00000000069889E-07, within(1e-20));
+            assertThat(c.getCellStyle().getDataFormatString()).isEqualTo("0.00_ ;[Red]\\-0.00\\ ");
+        }
+    }
+
+    /** excelRawText：把 double 渲染成与 Excel 编辑栏一字不差的文本。 */
+    @Test
+    void excelRawText_matchesExcelFormulaBar() {
+        // 零：Excel 编辑栏是 "0"，不是 Java 的 "0.0"
+        assertThat(FreeReportServiceImpl.excelRawText(0d)).isEqualTo("0");
+        assertThat(FreeReportServiceImpl.excelRawText(-0d)).isEqualTo("0");
+        // 整数：无 ".0" 尾巴
+        assertThat(FreeReportServiceImpl.excelRawText(85d)).isEqualTo("85");
+        // 普通小数：完整精度，不被截断
+        assertThat(FreeReportServiceImpl.excelRawText(4540.69998)).isEqualTo("4540.69998");
+        assertThat(FreeReportServiceImpl.excelRawText(0.498888897666)).isEqualTo("0.498888897666");
+        // 极小值：科学计数法且指数补两位带符号（Excel 写法）
+        assertThat(FreeReportServiceImpl.excelRawText(-5.00000000069889E-07)).isEqualTo("-5.00000000069889E-07");
+        // 阈值内的小数仍平铺，不提前切科学计数法（Java 在 1e-3 就切，Excel 不会）
+        assertThat(FreeReportServiceImpl.excelRawText(0.0005)).isEqualTo("0.0005");
+        // 大数在阈值内也平铺（Java 在 1e7 就切科学计数法，Excel 编辑栏不会）
+        assertThat(FreeReportServiceImpl.excelRawText(12345678d)).isEqualTo("12345678");
     }
 
     /**
@@ -257,14 +306,22 @@ class FreeReportServiceImplTest {
             }
         }
 
-        // 第3行(会计格式 0) 显示 "-"；第4行(自定义格式 极小值) 显示 -0.00 且保留完整原值
+        // 完整原值必须与 Excel 编辑栏所见**一模一样**：
+        //   会计格式的 0   -> 编辑栏 "0"（不是 "0.0"）
+        //   极小值         -> 编辑栏 "-5.00000000069889E-07"（Excel 本就用科学计数法，指数两位）
         Map<String, String> r3 = om.readValue(rows.get(2).getDataJson(), new TypeReference<>() {});
         assertThat(r3.get("col_9")).isEqualTo("-");
-        assertThat(r3.get("col_9__raw")).isEqualTo("0.0");
+        assertThat(r3.get("col_9__raw")).isEqualTo("0");
 
         Map<String, String> r4 = om.readValue(rows.get(3).getDataJson(), new TypeReference<>() {});
         assertThat(r4.get("col_9")).isEqualTo("-0.00");
-        assertThat(r4.get("col_9__raw")).isEqualTo("-0.000000500000000069889");
+        assertThat(r4.get("col_9__raw")).isEqualTo("-5.00000000069889E-07");
+
+        // 普通数值：编辑栏是完整精度的十进制，不能被 General 渲染截断成 0.4988888977
+        Map<String, String> r1 = om.readValue(rows.get(0).getDataJson(), new TypeReference<>() {});
+        assertThat(r1.get("col_4__raw")).isEqualTo("4540.69998");
+        Map<String, String> r2 = om.readValue(rows.get(1).getDataJson(), new TypeReference<>() {});
+        assertThat(r2.get("col_8__raw")).isEqualTo("0.498888897666");
     }
 
     /**

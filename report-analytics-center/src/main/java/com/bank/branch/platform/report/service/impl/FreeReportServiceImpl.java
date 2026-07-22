@@ -319,9 +319,22 @@ public class FreeReportServiceImpl implements FreeReportService {
                     String raw = extra.get(key + "__raw");   // 导入时存的完整原值（老批次无此键）
                     String fmt = extra.get(key + "__fmt");   // 导入时存的原数字格式（老批次无此键）
                     boolean isDataCol = !"col_1".equals(key) && !"col_2".equals(key);
-                    String numText = (raw != null && !raw.isEmpty()) ? raw : val;
-                    if (isDataCol && isDecimal(numText)) {
-                        cell.setCellValue(Double.parseDouble(numText));
+                    Double num = null;
+                    if (isDataCol) {
+                        if (raw != null && !raw.isEmpty()) {
+                            // 有 __raw 说明导入时该格确为数值格，直接按数值解析——
+                            // 注意 __raw 可能是科学计数法（Excel 编辑栏对极小值的原样写法，
+                            // 如 -5.00000000069889E-07），不能再用只认纯小数的 isDecimal 判定，
+                            // 否则会被当文本写死，既不受数字格式控制、点击也看不到原值。
+                            try { num = Double.parseDouble(raw); } catch (NumberFormatException ignore) { /* 退回文本 */ }
+                        } else if (isDecimal(val)) {
+                            // 老批次无 __raw：沿用「纯小数才转数值」的保守判定，
+                            // 防止工号/卡号类纯数字被转成数值而丢前导零或变科学计数法
+                            num = Double.parseDouble(val);
+                        }
+                    }
+                    if (num != null) {
+                        cell.setCellValue(num);
                         // 有原格式就用原格式；老批次没有则退回 0.00（保持既有行为）
                         cell.setCellStyle(styleOf.apply(fmt != null && !fmt.isEmpty() ? fmt : "0.00"));
                     } else {
@@ -469,17 +482,56 @@ public class FreeReportServiceImpl implements FreeReportService {
         }
     }
 
-    /** 单元格「完整原值」：数值格返回不带科学计数法的完整十进制串，供点击查看。 */
+    /** 单元格「完整原值」：与 Excel 编辑栏所见完全一致，供点击查看。 */
     private String getCellRaw(Cell cell) {
         if (cell == null) return "";
         CellType t = cell.getCellType() == CellType.FORMULA ? cell.getCachedFormulaResultType() : cell.getCellType();
         if (t != CellType.NUMERIC || DateUtil.isCellDateFormatted(cell)) return "";
         try {
-            // BigDecimal.valueOf(double) 走 Double.toString 的最短表示，再 toPlainString 去掉科学计数法
-            return new java.math.BigDecimal(Double.toString(cell.getNumericCellValue())).toPlainString();
+            return excelRawText(cell.getNumericCellValue());
         } catch (Exception e) {
             return "";
         }
+    }
+
+    /**
+     * 把 double 渲染成「Excel 编辑栏原样」的文本。
+     *
+     * <p>要求是与源报表点开单元格时看到的一字不差，而不是"消除科学计数法"——
+     * Excel 编辑栏对极小值**本来就用科学计数法**（如 {@code -5.00000000069889E-07}）。
+     * 与 Java 默认表示的差异有两处，都在这里抹平：
+     * <ul>
+     *   <li>整数：{@code Double.toString(0.0)}="0.0"，Excel 编辑栏是 "0" —— 去掉尾部 ".0"</li>
+     *   <li>指数：{@code Double.toString(-5e-7)}="-5.00000000069889E-7"，
+     *       Excel 是 "E-07" —— 指数补足两位并显式带符号</li>
+     * </ul>
+     *
+     * <p>不走 POI 的 {@code General} 渲染：它会把 0.498888897666 截成 0.4988888977（丢精度）。
+     * 阈值上，绝对值落在 [1e-4, 1e15) 用十进制平铺（Excel 编辑栏同样如此），
+     * 超出该区间才用科学计数法——避免 Java 在 1e-3/1e7 就切科学计数法而与 Excel 不符。
+     */
+    static String excelRawText(double v) {
+        if (v == 0) return "0";                       // 含 -0.0
+        if (Double.isNaN(v) || Double.isInfinite(v)) return String.valueOf(v);
+        double abs = Math.abs(v);
+        String s = Double.toString(v);
+        if (abs >= 1e-4 && abs < 1e15) {
+            // 十进制平铺。先 stripTrailingZeros 去掉标度带来的尾零——
+            // Double.toString(0.0005)="5.0E-4"，直接 toPlainString 会得到 "0.00050"；
+            // 同时它也顺带去掉整数的 ".0"（85.0 -> 85），无需另行截尾。
+            return new java.math.BigDecimal(s).stripTrailingZeros().toPlainString();
+        }
+        // 科学计数法：尾数去掉 ".0"，指数补两位并带符号，对齐 Excel 的 E-07 / E+16 写法
+        int e = s.indexOf('E');
+        if (e < 0) return s;
+        String mant = s.substring(0, e);
+        String exp = s.substring(e + 1);
+        if (mant.endsWith(".0")) mant = mant.substring(0, mant.length() - 2);
+        char sign = '+';
+        if (exp.startsWith("-")) { sign = '-'; exp = exp.substring(1); }
+        else if (exp.startsWith("+")) { exp = exp.substring(1); }
+        if (exp.length() < 2) exp = "0" + exp;
+        return mant + "E" + sign + exp;
     }
 
     /** 单元格的数字格式串（如 0.0 / 0.0% / #,##0.00）；General、文本格式返回空。 */

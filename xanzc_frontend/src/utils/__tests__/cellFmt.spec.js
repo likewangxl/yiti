@@ -28,20 +28,22 @@ describe('cellDisplay —— 自由报表单元格显示文本', () => {
 
   it('会计格式：0 显示为 "-"，与原始 Excel 一致', () => {
     // 源 Excel 会计格式(numFmtId=41) 的 0 渲染为 "-"
-    const row = { col_9: '-', col_9__raw: '0.0', col_9__fmt: '_ * #,##0_ ;_ * \\-#,##0_ ;_ * "-"_ ;_ @_' };
+    const row = { col_9: '-', col_9__raw: '0', col_9__fmt: '_ * #,##0_ ;_ * \\-#,##0_ ;_ * "-"_ ;_ @_' };
     expect(cellDisplay(row, 'col_9')).toBe('-');
-    expect(cellFull(row, 'col_9')).toBe('0.0');
+    expect(cellFull(row, 'col_9')).toBe('0');
   });
 
   it('自定义格式：极小值显示 -0.00，点击看完整值', () => {
     const row = {
       col_9: '-0.00',
-      col_9__raw: '-0.000000500000000069889',
-      col_9__fmt: '0.00_ ;[Red]\\-0.00\\'
+      col_9__raw: '-5.00000000069889E-07',
+      col_9__fmt: '0.00_ ;[Red]\\-0.00\\ '
     };
+    // 格内显示不含科学计数法
     expect(cellDisplay(row, 'col_9')).toBe('-0.00');
     expect(cellDisplay(row, 'col_9')).not.toMatch(/[eE]-?\d/);
-    expect(cellFull(row, 'col_9')).toBe('-0.000000500000000069889');
+    // 完整值 = Excel 编辑栏原样（就是科学计数法）
+    expect(cellFull(row, 'col_9')).toBe('-5.00000000069889E-07');
   });
 
   it('文本/整数/空值原样返回', () => {
@@ -53,10 +55,11 @@ describe('cellDisplay —— 自由报表单元格显示文本', () => {
 });
 
 describe('cellFull —— 点击/悬停展示的完整值', () => {
-  it('有 __raw 时给完整原值（无科学计数法）', () => {
-    const row = { col_3: '-0.0', col_3__raw: '-0.000000500000000069889' };
-    expect(cellFull(row, 'col_3')).toBe('-0.000000500000000069889');
-    expect(cellFull(row, 'col_3')).not.toMatch(/[eE]-?\d/);
+  it('有 __raw 时给完整原值——与 Excel 编辑栏一字不差', () => {
+    // 注意：Excel 编辑栏对极小值**本来就是科学计数法**，前端原样透传即可，
+    // 不要再做「消除科学计数法」的加工（那会与源报表不一致）。
+    const row = { col_3: '-0.00', col_3__raw: '-5.00000000069889E-07' };
+    expect(cellFull(row, 'col_3')).toBe('-5.00000000069889E-07');
   });
 
   it('百分比：完整值取原始小数', () => {
