@@ -44,7 +44,12 @@ public class TaskAssignmentListener implements TaskListener {
     private final OrgApi orgApi;
     private final TaskService taskService;
     private final com.bank.branch.platform.workflow.mapper.BizProcessMapMapper bizProcessMapMapper;
-    /** 参与机构快照写入唯一入口（D5：任务创建时解析出具体受理人才记录，仅候选组不记） */
+    /**
+     * 参与机构快照写入唯一入口。两条挂点：任务已有具体受理人时按受理人记（source=ASSIGN）；
+     * 候选人模式（受理人为 NULL）下按解析出的审批机构记（source=CANDIDATE）——后者是为了让
+     * 审批流监控页在无人签收前也能按机构范围查到「正等本机构审批」的流程。
+     * 「不限机构」的候选组没有确定的审批机构，仍不记。
+     */
     private final WfProcessOrgService wfProcessOrgService;
 
     /** 「二级机构」(L2 scope) 上溯目标：机构等级 2（分行）。层级角色选「二级机构」时沿 P_ID 上溯到该级。 */
@@ -117,6 +122,9 @@ public class TaskAssignmentListener implements TaskListener {
             if ((scope != null || legacyBranchApprove) && hasStartOrg) {
                 String approveOrg = resolveApproveOrg(startOrgId, scope, legacyBranchApprove);
                 filterCandidatesByOrg(delegateTask, java.util.List.of(c), approveOrg);
+                // 候选人模式（assignee 为 NULL）也要落参与机构快照：审批机构此刻已确定，
+                // 若等到有人签收才记，该机构的秘书/行长在审批流监控页看不到"正等我们行审批"的流程。
+                wfProcessOrgService.recordOrg(delegateTask.getProcessInstanceId(), approveOrg, "CANDIDATE");
                 log.info("[TaskAssignmentListener] 任务 {} 节点 {} 候选 {} 机构归属 {} 发起机构 {} → 审批机构 {}",
                         taskId, nodeKey, c, scope != null ? scope : "AUTO", startOrgId, approveOrg);
             } else {

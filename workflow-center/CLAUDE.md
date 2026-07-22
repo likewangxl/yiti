@@ -29,7 +29,8 @@
 ### 审批流监控 + 任务转办（两阶段）
 
 - `ProcessMonitorController`（`/api/workflow/monitor/processes`）+ `ProcessMonitorService`：供秘书岗/行长按机构数据范围监控进行中与已完成的审批流实例。数据范围过滤 **Fail-Close**：系统管理员或 `DataScopeType.ALL` 不加机构过滤；`ORG`/`ORG_SUBTREE` 按机构编码集合过滤（通过 `WF_PROCESS_ORG` 参与机构快照表 EXISTS 过滤）；范围未知/为空或其余范围类型（SELF 系列/`WORKFLOW_PARTICIPANT`）一律返回空结果，不下发任何数据。
-- `WfProcessOrgService.record(processInstanceId, empId, source)` 是"参与机构快照"**唯一写入入口**，所有挂点（流程启动/Flowable 监听器/审批 REST）都调这里；方法内部整体 try-catch 兜底（机构查询与落库都可能抛未受检异常），绝不能把异常抛回调用方，否则会打断 Flowable 命令执行或让一个已提交的操作报 500。
+- `WfProcessOrgService` 是"参与机构快照"**唯一写入入口**，所有挂点（流程启动/Flowable 监听器/审批 REST）都调这里；两个方法：`record(pi, empId, source)` 从"某个人"反查主机构（START/ASSIGN/CLAIM/APPROVE/TRANSFER），`recordOrg(pi, orgCode, source)` 直接按机构编码落（CANDIDATE）。方法内部整体 try-catch 兜底（机构查询与落库都可能抛未受检异常），绝不能把异常抛回调用方，否则会打断 Flowable 命令执行或让一个已提交的操作报 500。
+- **候选人模式必须落快照（2026-07-22 修）**：层级角色审批节点的任务 `ASSIGNEE_` 为 NULL（只有候选人），早期实现只在"任务已有具体受理人"时写快照，导致「轮到某分行审批」在有人签收前从不进 `WF_PROCESS_ORG`——该分行 `DATA_SCOPE=ORG` 的秘书岗在监控页看不到正等本行审批的流程（线上现象：三级支行发起、二级分行负责人审批，分行秘书看不到）。现 `TaskAssignmentListener` 在按机构归属过滤候选人时同步 `recordOrg(pi, approveOrg, "CANDIDATE")`。**「不限机构」的候选组仍不记**——它没有确定的审批机构，硬塞会把无关机构带进监控范围。历史在途流程的回填见 `docs/superpowers/sql/2026-07-22-wf-process-org-candidate-source.sql`。
 - `TaskTransferController`/`TaskTransferService`：任务转办已从旧的**单阶段**"一步到位直接改 assignee"（`TaskController#transferTask`，已下线）升级为**两阶段**转交——发起后先落 `WF_TASK_TRANSFER` 待认领记录，须接收人主动认领/拒绝才真正转移办理权。发起端点挂在 `/monitor/tasks/{taskId}/transfer` 下（鉴权对齐审批流监控，`@BizAuth(WORKFLOW_MONITOR, TRANSFER)`）；收件箱/认领/拒绝/发件箱/撤回挂在 `/transfers/*` 下，接收人可以是任意具备任务办理角色的人，不限秘书岗/行长。
 - `ProcessMonitorService.resolveActiveTaskIds` 有**单活假设**：假定审批流均为顺序单办理人 `userTask`（无并行网关），同一流程实例任意时刻至多一个活跃任务；若未来引入并行网关产生多活跃任务，会丢失除最后一个之外的任务 ID——不阻断监控列表展示，仅影响转交入口精确性，属已知限制。
 

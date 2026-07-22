@@ -63,6 +63,35 @@ class WfProcessOrgServiceTest {
     }
 
     @Test
+    void recordOrg_insertsGivenOrgWithoutUserLookup() {
+        // 候选人模式（任务无 assignee）下没有"某个人"可查机构，只有解析出的审批机构编码，
+        // 故需要一个直接按机构编码落快照的入口；不得回查 OrgApi。
+        service.recordOrg("PID_2", "ORG_BR", "CANDIDATE");
+
+        verify(mapper).insertIgnore(ArgumentMatchers.<WfProcessOrg>argThat(r ->
+                "PID_2".equals(r.getProcessInstanceId())
+                        && "ORG_BR".equals(r.getOrgCode())
+                        && "CANDIDATE".equals(r.getSource())
+                        && r.getId() != null));
+        verifyNoInteractions(orgApi);
+    }
+
+    @Test
+    void recordOrg_skipsWhenOrgCodeBlank() {
+        service.recordOrg("PID_2", "  ", "CANDIDATE");
+        service.recordOrg("PID_2", null, "CANDIDATE");
+        service.recordOrg(null, "ORG_BR", "CANDIDATE");
+        verifyNoInteractions(mapper, orgApi);
+    }
+
+    @Test
+    void recordOrg_swallowsExceptionWhenMapperInsertThrows() {
+        when(mapper.insertIgnore(any())).thenThrow(new DataIntegrityViolationException("boom"));
+
+        assertDoesNotThrow(() -> service.recordOrg("PID_2", "ORG_BR", "CANDIDATE"));
+    }
+
+    @Test
     void record_swallowsExceptionWhenMapperInsertThrows() {
         // insertIgnore 只吞唯一键冲突，不吞死锁/锁等待超时/连接断开这类 DataAccessException；
         // record() 必须整体兜住，绝不能让 DB 异常穿透到调用方（4 个挂点均非 @Transactional，

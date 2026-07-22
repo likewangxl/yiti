@@ -446,6 +446,89 @@ class TaskAssignmentListenerTest {
     }
 
     /**
+     * 候选人模式（任务无 assignee）也要把解析出的「审批机构」记入参与机构快照。
+     * <p>背景：原先只在 {@code delegateTask.getAssignee() != null} 时写 WF_PROCESS_ORG，
+     * 而层级角色节点走的是候选人模式（ASSIGNEE_=NULL），导致"轮到某分行审批"这一事实
+     * 在有人签收前从不进快照 —— 审批流监控页按机构范围过滤时，该分行的秘书看不到这条流程。
+     */
+    @Test
+    void notify_candidateOrgScope_recordsApproveOrgSnapshot() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:71");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve_l3");
+        when(delegateTask.getId()).thenReturn("TASK_SNAP_PARENT");
+        when(delegateTask.getProcessInstanceId()).thenReturn("PROC_SNAP_1");
+        stubProcDefKey("DSN_alloc:1:71", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "PARENT"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setParentOrgCode("ORG_PARENT");
+        when(orgApi.getOrg("ORG_SUB")).thenReturn(org);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_PARENT")).thenReturn(List.of("E_P1"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // 审批机构 ORG_PARENT 必须进快照，来源标记 CANDIDATE（区别于已签收的 ASSIGN/CLAIM）
+        verify(wfProcessOrgService).recordOrg("PROC_SNAP_1", "ORG_PARENT", "CANDIDATE");
+    }
+
+    /**
+     * L2（二级机构）候选人模式：快照记的是上溯到的 2 级分行，而非发起支行。
+     * 对应线上现象——金台支行(3级)发起，宝鸡分行(2级)负责人审批，分行秘书应能在监控页看到。
+     */
+    @Test
+    void notify_candidateScopeL2_recordsSecondLevelOrgSnapshot() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:72");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve_l3");
+        when(delegateTask.getId()).thenReturn("TASK_SNAP_L2");
+        when(delegateTask.getProcessInstanceId()).thenReturn("PROC_SNAP_2");
+        stubProcDefKey("DSN_alloc:1:72", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "L2"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
+
+        com.bank.branch.platform.auth.api.dto.OrgDTO sub = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        sub.setOrgLevel(3);
+        sub.setParentOrgCode("ORG_BR");
+        com.bank.branch.platform.auth.api.dto.OrgDTO br = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        br.setOrgLevel(2);
+        when(orgApi.getOrg("ORG_SUB")).thenReturn(sub);
+        when(orgApi.getOrg("ORG_BR")).thenReturn(br);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_BR")).thenReturn(List.of("E_BR"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        verify(wfProcessOrgService).recordOrg("PROC_SNAP_2", "ORG_BR", "CANDIDATE");
+    }
+
+    /**
+     * 不限机构的候选组节点：没有确定的审批机构，不写快照（否则会把无关机构塞进监控范围）。
+     */
+    @Test
+    void notify_noOrgScope_doesNotRecordApproveOrgSnapshot() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:73");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("approval_2");
+        when(delegateTask.getId()).thenReturn("TASK_SNAP_NONE");
+        stubProcDefKey("DSN_alloc:1:73", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "approval_2"))
+                .thenReturn(List.of("ROLE:CORP_PERF_REV"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        verify(wfProcessOrgService, never()).recordOrg(anyString(), anyString(), anyString());
+    }
+
+    /**
      * 审批机构归属未配置（null）的普通节点：不做机构过滤，照常设置候选组。
      */
     @Test

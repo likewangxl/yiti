@@ -39,16 +39,43 @@ public class WfProcessOrgService {
                 log.warn("[WfProcessOrgService.record] 机构未知, empId={}, pi={}", empId, processInstanceId);
                 return;
             }
+            recordOrg(processInstanceId, org.getOrgCode(), source);
+        } catch (RuntimeException ex) {
+            log.warn("[WfProcessOrgService.record] 写入参与机构异常, empId={}, pi={}, source={}",
+                    empId, processInstanceId, source, ex);
+        }
+    }
+
+    /**
+     * 直接按机构编码记录"该机构参与了此流程实例"。幂等（uk_pi_org + INSERT IGNORE）。
+     * <p>
+     * 与 {@link #record(String, String, String)} 的区别：后者从"某个人"反查其主机构，
+     * 适用于已有具体办理人（START/ASSIGN/CLAIM/APPROVE/TRANSFER）的场景；本方法用于
+     * <b>只知道机构、没有具体办理人</b>的场景——典型是层级角色审批节点的候选人模式
+     * （任务 assignee 为 NULL，只解析出"该由哪个机构审批"），此时不写快照会导致该机构
+     * 在有人签收前对审批流监控页完全不可见。
+     * </p>
+     * <p>参数为空时静默跳过；异常整体兜住不外抛，理由同 {@link #record}。</p>
+     *
+     * @param processInstanceId 流程实例ID
+     * @param orgCode           参与机构编码
+     * @param source            来源标记（START/ASSIGN/CANDIDATE/CLAIM/APPROVE/TRANSFER/BACKFILL）
+     */
+    public void recordOrg(String processInstanceId, String orgCode, String source) {
+        if (processInstanceId == null || orgCode == null || orgCode.isBlank()) {
+            return;
+        }
+        try {
             WfProcessOrg row = new WfProcessOrg();
             row.setId(UUID.randomUUID().toString().replace("-", ""));
             row.setProcessInstanceId(processInstanceId);
-            row.setOrgCode(org.getOrgCode());
+            row.setOrgCode(orgCode);
             row.setSource(source);
             row.setFirstSeenTime(LocalDateTime.now());
             wfProcessOrgMapper.insertIgnore(row);
         } catch (RuntimeException ex) {
-            log.warn("[WfProcessOrgService.record] 写入参与机构异常, empId={}, pi={}, source={}",
-                    empId, processInstanceId, source, ex);
+            log.warn("[WfProcessOrgService.recordOrg] 写入参与机构异常, orgCode={}, pi={}, source={}",
+                    orgCode, processInstanceId, source, ex);
         }
     }
 }
