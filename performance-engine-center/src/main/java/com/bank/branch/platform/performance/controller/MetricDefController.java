@@ -330,13 +330,15 @@ public class MetricDefController {
             @Valid @RequestBody MetricExecuteReqDTO req) {
         // 业绩分配日期随请求体传入（与 dataDate 同口径），留空后端绑定阶段兜底为 dataDate
         java.time.LocalDate allocDate = req.getAllocDate();
-        log.info("[MetricDefController.execute] metricCode={}, dataDate={}, cascade={}, allocDate={}, reason={}",
-                metricCode, req.getDataDate(), req.getCascade(), allocDate, req.getReason());
+        log.info("[MetricDefController.execute] metricCode={}, dataDate={}, cascade={}, async={}, allocDate={}, reason={}",
+                metricCode, req.getDataDate(), req.getCascade(), req.getAsync(), allocDate, req.getReason());
         // V1.3 R4.1：Facade.executeMetric 内部完成 sys_control 版本解析 + cascade 路由 +
         // run_task 真实 status 读取；Controller 不再感知 entity.
         // allocDate 为空时传 null，后端绑定阶段兜底为 dataDate。
+        // async 默认 true（2026-07-22）：提交即返回 taskId，前端轮询任务历史看进度，
+        // 避免重指标/级联把 HTTP 请求阻塞到撞网关读超时（前端表现为「网络异常或后端未启动」）。
         return ResponseWrapper.success(metricLifecycleFacade.executeMetric(
-                metricCode, req.getDataDate(), req.getCascade(), allocDate));
+                metricCode, req.getDataDate(), req.getCascade(), allocDate, req.getAsync()));
     }
 
     /**
@@ -350,9 +352,9 @@ public class MetricDefController {
     @AuditLog(action = "METRIC_BATCH_EXECUTE", resourceType = "PERF_RUN_TASK", reasonRequired = true)
     public ResponseWrapper<BatchExecuteRespDTO> batchExecute(@Valid @RequestBody BatchExecuteReqDTO req) {
         String operator = currentUserApi.getCurrentEmpId();
-        log.info("[MetricDefController.batchExecute] operator={}, metricCodes={}, dataDate={}, reason={}",
-                operator, req.getMetricCodes(), req.getDataDate(), req.getReason());
+        log.info("[MetricDefController.batchExecute] operator={}, metricCodes={}, dataDate={}, async={}, reason={}",
+                operator, req.getMetricCodes(), req.getDataDate(), req.getAsync(), req.getReason());
         return ResponseWrapper.success(
-                metricLifecycleFacade.batchExecute(req.getMetricCodes(), req.getDataDate()));
+                metricLifecycleFacade.batchExecute(req.getMetricCodes(), req.getDataDate(), req.getAsync()));
     }
 }

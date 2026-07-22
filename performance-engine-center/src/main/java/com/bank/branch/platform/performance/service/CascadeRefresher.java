@@ -87,6 +87,22 @@ public class CascadeRefresher {
      * @see #refreshCascade(String, LocalDate, String)
      */
     public String refreshCascade(String rootMetricCode, LocalDate dataDate, String version, LocalDate allocDate) {
+        // 无预建根任务行（同步链路）：根指标的 run_task 由 calcMetric 自建
+        return refreshCascade(rootMetricCode, dataDate, version, allocDate, null);
+    }
+
+    /**
+     * 级联刷新，支持<b>复用外部预建的根指标 run_task 行</b>（异步提交链路）.
+     *
+     * <p>异步提交时根任务行已在请求线程建好并把 taskId 返回给了前端，这里必须复用它，
+     * 否则会为同一次执行产生两行 run_task（监控页计算次数虚高、前端轮询的 taskId 永远 PENDING）。
+     * 下游指标仍各自新建子任务行，不受影响。
+     *
+     * @param rootPresetTaskId 根指标预建的 run_task 主键；null 时按原行为自建
+     * @see #refreshCascade(String, LocalDate, String, LocalDate)
+     */
+    public String refreshCascade(String rootMetricCode, LocalDate dataDate, String version,
+                                 LocalDate allocDate, String rootPresetTaskId) {
         int maxDepth = Math.max(1, perfEngineProperties.getCascadeMaxDepth());
 
         // 1. BFS 收集下游集合（含根）+ 深度检查
@@ -142,7 +158,12 @@ public class CascadeRefresher {
                 log.info("[CascadeRefresher] 刷新指标 {} （date={}, version={}, allocDate={}）",
                         code, dataDate, version, allocDate);
                 // triggerType 沿用原 3 参 calcMetric 的默认 MANUAL；allocDate 透传到整条级联
-                String taskId = metricCalcService.calcMetric(code, dataDate, version, "MANUAL", allocDate);
+                // 根指标复用预建行（仅异步链路会传），其余一律走原 calcMetric 自建任务行
+                boolean reusePreset = rootPresetTaskId != null && rootMetricCode.equals(code);
+                String taskId = reusePreset
+                        ? metricCalcService.calcMetricWithStats(
+                                code, dataDate, version, "MANUAL", allocDate, rootPresetTaskId).runTaskId()
+                        : metricCalcService.calcMetric(code, dataDate, version, "MANUAL", allocDate);
                 if (rootMetricCode.equals(code) && rootTaskId == null) {
                     rootTaskId = taskId;
                 }

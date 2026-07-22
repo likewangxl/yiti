@@ -437,7 +437,8 @@ export function listMetricSummary(params = {}) {
 }
 
 // 任务监控：批量执行（POST /perf/metrics/batch-execute）
-// payload: { metricCodes: string[], dataDate: 'YYYY-MM-DD', reason }
+// payload: { metricCodes: string[], dataDate: 'YYYY-MM-DD', async, reason }
+// async=true(默认) 时 success/failed 是「提交」成功/失败数，各项 status=PENDING，执行结果需看任务历史
 export function batchExecuteMetrics(payload) {
   return call('post', '/perf/metrics/batch-execute', { data: payload }, { total: 0, success: 0, failed: 0, results: [] });
 }

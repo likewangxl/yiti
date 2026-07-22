@@ -56,6 +56,8 @@ class MetricLifecycleFacadeBatchExecuteTest extends PerformanceServiceTestBase {
     private MetricSlotService metricSlotService;
     @Mock
     private MetricRefService metricRefService;
+    @Mock
+    private com.bank.branch.platform.performance.service.MetricAsyncRunner metricAsyncRunner;
 
     // batchExecute 只依赖自身 executeMetric，用 spy 打桩其行为，隔离下游
     @Spy
@@ -67,11 +69,11 @@ class MetricLifecycleFacadeBatchExecuteTest extends PerformanceServiceTestBase {
         // 失败项 M_BAD 放在列表中间（而非最后一个），用来证明"中间失败不中断循环、后续项仍被处理"
         LocalDate d = LocalDate.of(2026, 7, 1);
         doReturn(RunTaskInfoDTO.builder().taskId("T1").status("SUCCESS").build())
-                .when(facade).executeMetric(eq("M_OK"), eq(d), eq(false), any());
+                .when(facade).executeMetric(eq("M_OK"), eq(d), eq(false), any(), eq(false));
         doThrow(new PerfException(PerfErrorCode.VALIDATION_FAILED, "boom"))
-                .when(facade).executeMetric(eq("M_BAD"), eq(d), eq(false), any());
+                .when(facade).executeMetric(eq("M_BAD"), eq(d), eq(false), any(), eq(false));
         doReturn(RunTaskInfoDTO.builder().taskId("T2").status("SUCCESS").build())
-                .when(facade).executeMetric(eq("M_OK2"), eq(d), eq(false), any());
+                .when(facade).executeMetric(eq("M_OK2"), eq(d), eq(false), any(), eq(false));
 
         BatchExecuteRespDTO resp = facade.batchExecute(List.of("M_OK", "M_BAD", "M_OK2"), d);
 

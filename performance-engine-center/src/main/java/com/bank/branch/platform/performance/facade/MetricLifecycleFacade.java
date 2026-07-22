@@ -12,6 +12,7 @@ import com.bank.branch.platform.performance.exception.PerfException;
 import com.bank.branch.platform.performance.facade.assembler.MetricAssembler;
 import com.bank.branch.platform.performance.mapper.PerfRunTaskMapper;
 import com.bank.branch.platform.performance.service.CascadeRefresher;
+import com.bank.branch.platform.performance.service.MetricAsyncRunner;
 import com.bank.branch.platform.performance.service.MetricCalcService;
 import com.bank.branch.platform.performance.service.MetricDefService;
 import com.bank.branch.platform.performance.service.MetricRefService;
@@ -62,6 +63,8 @@ public class MetricLifecycleFacade {
     private final MetricSlotService metricSlotService;
     /** V1.3 R4.1：refs / ref-by 查询需要. */
     private final MetricRefService metricRefService;
+    /** 2026-07-22：指标执行改「提交即返回」后的后台执行体. */
+    private final MetricAsyncRunner metricAsyncRunner;
 
     /**
      * 在基础维度级别申请锁后创建指标.
@@ -259,6 +262,28 @@ public class MetricLifecycleFacade {
      * @see #executeMetric(String, LocalDate, Boolean)
      */
     public RunTaskInfoDTO executeMetric(String metricCode, LocalDate dataDate, Boolean cascadeInput, LocalDate allocDate) {
+        // 旧签名兼容：不传 async → 同步执行（保留历史调用方"返回即终态"的语义）
+        return executeMetric(metricCode, dataDate, cascadeInput, allocDate, Boolean.FALSE);
+    }
+
+    /**
+     * 指标立即执行，支持<b>异步提交</b>（2026-07-22）.
+     *
+     * <p>{@code async=true}（页面默认）：请求线程只做「校验指标 + 解析版本 + 预建 PENDING 任务行」，
+     * 随即把 taskId 返回给前端，真正的计算交给 {@link MetricAsyncRunner} 后台跑。原全同步实现下
+     * HTTP 请求要一直阻塞到 SQL 跑完、级联下游也刷完，重指标/大批量会撞网关读超时，前端表现为
+     * 「网络异常或后端未启动」——这正是本重载要消除的问题。
+     *
+     * <p>任务行刻意在<b>请求线程</b>内预建：{@code started_by} 取自 {@code CurrentUserApi} 的
+     * ThreadLocal，异步线程里拿不到会兜底成 SYSTEM，操作人就丢了。
+     *
+     * <p>{@code async=false}：保留原同步语义，返回的 status 即真实终态。
+     *
+     * @param asyncInput 是否异步提交（null 视为 true）
+     * @return 任务信息；异步时 status=PENDING（线程池拒绝时为 FAILED）
+     */
+    public RunTaskInfoDTO executeMetric(String metricCode, LocalDate dataDate, Boolean cascadeInput,
+                                        LocalDate allocDate, Boolean asyncInput) {
         // 预校验指标存在性：不存在时抛 PERF-40001，避免产生孤立 run_task
         PerfMetricDef def = metricDefService.getByCode(metricCode);
 
@@ -275,6 +300,12 @@ public class MetricLifecycleFacade {
         }
 
         boolean cascade = cascadeInput == null ? Boolean.TRUE : cascadeInput;
+        boolean async = asyncInput == null || asyncInput;
+
+        if (async) {
+            return submitAsync(metricCode, dataDate, version, cascade, allocDate);
+        }
+
         String taskId;
         if (cascade) {
             taskId = cascadeRefresher.refreshCascade(metricCode, dataDate, version, allocDate);
@@ -297,24 +328,67 @@ public class MetricLifecycleFacade {
     }
 
     /**
-     * 批量执行：对给定指标逐个立即执行（非级联），best-effort 聚合结果.
+     * 提交异步执行：请求线程内预建 PENDING 任务行 → 交给后台线程池 → 立刻返回 taskId.
+     *
+     * <p>线程池拒绝（队列满）时把预建行就地标 FAILED 并返回 FAILED——否则任务会永远停在
+     * PENDING，监控页看着像"在跑"，实际没有任何线程会碰它。
+     */
+    private RunTaskInfoDTO submitAsync(String metricCode, LocalDate dataDate, String version,
+                                       boolean cascade, LocalDate allocDate) {
+        String taskId = metricCalcService.createPendingTask(metricCode, dataDate, version, "MANUAL");
+        String status = "PENDING";
+        try {
+            metricAsyncRunner.runAsync(metricCode, dataDate, version, cascade, allocDate, taskId);
+            log.info("[MetricLifecycleFacade.submitAsync] 已提交指标 {} 后台执行 taskId={}, cascade={}",
+                    metricCode, taskId, cascade);
+        } catch (RuntimeException ex) {
+            String msg = "提交后台执行失败（执行队列已满或线程池已关闭）: " + ex.getMessage();
+            log.warn("[MetricLifecycleFacade.submitAsync] 指标 {} {}", metricCode, msg);
+            perfRunTaskMapper.updateStatus(taskId, "FAILED", msg);
+            status = "FAILED";
+        }
+        return RunTaskInfoDTO.builder()
+                .taskId(taskId)
+                .status(status)
+                .metricCode(metricCode)
+                .dataDate(dataDate)
+                .version(version)
+                .build();
+    }
+
+    /**
+     * 批量执行：对给定指标逐个执行（非级联），best-effort 聚合结果.
      *
      * <p>单指标失败不中断整批（仿 HistoryRecalcService）；每指标各自写 PERF_RUN_TASK 行。
-     * 本方法不开 @Transactional：各 calcMetric 由 {@link #executeMetric(String, LocalDate, Boolean, LocalDate)}
-     * 独立管理 run_task。version 由 {@link #executeMetric(String, LocalDate, Boolean, LocalDate)} 内部解析当前生效版本。
+     * 本方法不开 @Transactional：各 calcMetric 由 {@link #executeMetric} 独立管理 run_task。
      *
      * @param metricCodes 指标编码列表
      * @param dataDate    数据日期
      * @return 聚合结果（total/success/failed + 逐指标明细）
      */
     public BatchExecuteRespDTO batchExecute(List<String> metricCodes, LocalDate dataDate) {
+        // 旧签名兼容：不传 async → 同步逐个执行
+        return batchExecute(metricCodes, dataDate, Boolean.FALSE);
+    }
+
+    /**
+     * 批量执行，支持<b>异步提交</b>（2026-07-22）.
+     *
+     * <p>{@code async=true}（页面默认）时 success/failed 的语义是<b>提交</b>成功/失败数，
+     * 各项 status=PENDING、带 runTaskId，真实计算结果需前端轮询任务历史；
+     * {@code async=false} 时仍是执行成功/失败数、status 为终态。
+     *
+     * @param asyncInput 是否异步提交（null 视为 true）
+     */
+    public BatchExecuteRespDTO batchExecute(List<String> metricCodes, LocalDate dataDate, Boolean asyncInput) {
+        boolean async = asyncInput == null || asyncInput;
         List<BatchExecuteRespDTO.Item> results = new ArrayList<>(metricCodes.size());
         int success = 0;
         int failed = 0;
         for (String code : metricCodes) {
             try {
                 // cascade=false：批量场景走直算，避免大批量级联放大；version 内部解析
-                RunTaskInfoDTO r = executeMetric(code, dataDate, Boolean.FALSE, null);
+                RunTaskInfoDTO r = executeMetric(code, dataDate, Boolean.FALSE, null, async);
                 results.add(BatchExecuteRespDTO.Item.builder()
                         .metricCode(code).status(r.getStatus()).runTaskId(r.getTaskId()).build());
                 success++;

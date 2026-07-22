@@ -398,6 +398,60 @@ class MetricCalcServiceTest {
 
     // ========== 测试构造器 ==========
 
+    // ── 异步提交支持：预建任务行 + 复用预建 taskId ──────────────────────────────
+
+    @Test
+    @DisplayName("createPendingTask：请求线程内先落 PENDING 行并返回 taskId（异步提交入口）")
+    void createPendingTask_insertsPendingRowAndReturnsId() {
+        String taskId = metricCalcService.createPendingTask(
+                "TEST_CALC_EMP_01", LocalDate.of(2026, 7, 22), "v1", "MANUAL");
+
+        assertThat(taskId).isNotBlank();
+        ArgumentCaptor<PerfRunTask> captor = ArgumentCaptor.forClass(PerfRunTask.class);
+        verify(perfRunTaskMapper).insert(captor.capture());
+        PerfRunTask row = captor.getValue();
+        assertThat(row.getId()).isEqualTo(taskId);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.getTaskType()).isEqualTo("METRIC_RUN");
+        assertThat(row.getTriggerType()).isEqualTo("MANUAL");
+        assertThat(row.getTaskKey()).isEqualTo("TEST_CALC_EMP_01");
+        assertThat(row.getDataVersion()).isEqualTo("v1");
+    }
+
+    @Test
+    @DisplayName("传入预建 taskId：复用该行，不再 insert 第二行 run_task")
+    void calcMetric_withPresetTaskId_reusesRowWithoutSecondInsert() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        when(metricDefService.getByCodeOrNull("TEST_CALC_EMP_01")).thenReturn(def);
+        Map<String, BigDecimal> execResult = new LinkedHashMap<>();
+        execResult.put("E001", new BigDecimal("10"));
+        when(sqlExecutor.execute(anyString(), anyMap(), any(Duration.class))).thenReturn(execResult);
+
+        var result = metricCalcService.calcMetricWithStats(
+                "TEST_CALC_EMP_01", LocalDate.of(2026, 4, 22), "20260422", "MANUAL", null, "T_PRESET");
+
+        assertThat(result.runTaskId()).isEqualTo("T_PRESET");
+        // 行已由 createPendingTask 在请求线程建好，这里不能再插
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+        verify(perfRunTaskMapper).updateStatus(eq("T_PRESET"), eq("RUNNING"), eq(null));
+        verify(perfRunTaskMapper).updateStatusWithParams(eq("T_PRESET"), eq("SUCCESS"), eq(null), anyString());
+    }
+
+    @Test
+    @DisplayName("预建 taskId + 指标已不存在：把预建行标 FAILED，不能留在 PENDING 永远悬着")
+    void calcMetric_withPresetTaskId_metricGone_marksPresetRowFailed() {
+        when(metricDefService.getByCodeOrNull("GONE")).thenReturn(null);
+
+        assertThatThrownBy(() -> metricCalcService.calcMetricWithStats(
+                "GONE", LocalDate.now(), "v1", "MANUAL", null, "T_ORPHAN"))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.METRIC_NOT_FOUND);
+
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+        verify(perfRunTaskMapper).updateStatus(eq("T_ORPHAN"), eq("FAILED"), anyString());
+    }
+
     private PerfMetricDef buildEmpSqlMetric() {
         PerfMetricDef def = new PerfMetricDef();
         def.setId("TID_EMP_01");

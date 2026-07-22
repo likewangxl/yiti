@@ -188,23 +188,42 @@ public class MetricCalcService {
      */
     public MetricCalcResult calcMetricWithStats(String metricCode, LocalDate dataDate, String version,
                                                 String triggerType, LocalDate allocDate) {
+        // 无预建任务行（同步链路 / 定时调度）：本方法内部自建
+        return calcMetricWithStats(metricCode, dataDate, version, triggerType, allocDate, null);
+    }
+
+    /**
+     * 在 {@link #calcMetricWithStats(String, LocalDate, String, String, LocalDate)} 基础上支持
+     * <b>复用外部预建的 run_task 行</b>（异步提交链路）.
+     *
+     * <p>异步执行时任务行必须在**请求线程**内先建好：一来 taskId 要立刻返回给前端轮询，
+     * 二来 {@code started_by} 取自 {@code CurrentUserApi} 的 ThreadLocal，异步线程里拿不到会
+     * 兜底成 SYSTEM，操作人就丢了。故由 {@link #createPendingTask} 先建行、本方法复用其 ID。
+     *
+     * @param presetTaskId 预建的 run_task 主键；为 null 时本方法自行创建（原行为）
+     * @return 计算结果（runTaskId 即 presetTaskId，若传入的话）
+     */
+    public MetricCalcResult calcMetricWithStats(String metricCode, LocalDate dataDate, String version,
+                                                String triggerType, LocalDate allocDate, String presetTaskId) {
         // 1. 定义加载与基本校验——指标不存在直接抛，不插 run_task（计划要求）
-        PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
-        if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
-            throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
-        }
-        // V1.9：维度无关型指标（baseDim=null）无 slot、无宽表归属，不允许进入计算路径
-        if (def.getBaseDim() == null || def.getBaseDim().isBlank()) {
-            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
-                    "维度无关型指标不支持自动/手动计算: " + metricCode + "（base_dim 为空）");
+        PerfMetricDef def;
+        try {
+            def = loadCalcableDef(metricCode);
+        } catch (RuntimeException e) {
+            // 预建行已落库（异步链路）：校验不过必须就地标 FAILED，否则永远停在 PENDING，
+            // 监控页看着像"在跑"，实际没有任何线程会再碰它。
+            if (presetTaskId != null) {
+                markFailed(presetTaskId, e);
+            }
+            throw e;
         }
 
         // 2. jobKey 推导规则：PERF_METRIC_{metricCode}（与 P1 resolveGroup 规则一致）
         String jobKey = "PERF_METRIC_" + metricCode;
 
-        // 3. 生成任务 ID 并插入 PENDING 记录（先插入再切状态，便于 FAILED 场景可见）
-        String taskId = UUID.randomUUID().toString().replace("-", "");
-        insertPendingTask(taskId, metricCode, dataDate, version, triggerType);
+        // 3. 任务 ID：复用预建行（异步链路）或就地插入 PENDING 记录（先插入再切状态，便于 FAILED 场景可见）
+        String taskId = presetTaskId != null ? presetTaskId
+                : createPendingTask(metricCode, dataDate, version, triggerType);
 
         try {
             // 4. 切换 RUNNING
@@ -580,6 +599,44 @@ public class MetricCalcService {
             throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                     "val_slot 超出 [1,400]: " + slot);
         }
+    }
+
+    /**
+     * 加载可计算的指标定义并做基本校验（不存在 / 已软删 / 维度无关型一律拒绝）.
+     *
+     * @param metricCode 指标编码
+     * @return 指标定义
+     * @throws PerfException METRIC_NOT_FOUND / METRIC_CALC_LOGIC_INVALID
+     */
+    private PerfMetricDef loadCalcableDef(String metricCode) {
+        PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
+        if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
+            throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
+        }
+        // V1.9：维度无关型指标（baseDim=null）无 slot、无宽表归属，不允许进入计算路径
+        if (def.getBaseDim() == null || def.getBaseDim().isBlank()) {
+            throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                    "维度无关型指标不支持自动/手动计算: " + metricCode + "（base_dim 为空）");
+        }
+        return def;
+    }
+
+    /**
+     * 预建 PENDING 的 run_task 行并返回其 ID，供异步提交链路在<b>请求线程</b>内调用.
+     *
+     * <p>必须在请求线程调用的两个理由：taskId 要立刻返回给前端轮询；{@code started_by} 取自
+     * {@code CurrentUserApi} 的 ThreadLocal，异步线程里拿不到会兜底成 SYSTEM，操作人就丢了。
+     *
+     * @param metricCode  指标编码
+     * @param dataDate    数据日期
+     * @param version     数据版本
+     * @param triggerType 触发类型（SCHEDULED/MANUAL/RECALC）
+     * @return 新建 run_task 主键 ID
+     */
+    public String createPendingTask(String metricCode, LocalDate dataDate, String version, String triggerType) {
+        String taskId = UUID.randomUUID().toString().replace("-", "");
+        insertPendingTask(taskId, metricCode, dataDate, version, triggerType);
+        return taskId;
     }
 
     private void insertPendingTask(String taskId, String metricCode,

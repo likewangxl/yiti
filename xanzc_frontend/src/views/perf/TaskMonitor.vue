@@ -91,7 +91,7 @@
         <el-form-item label="原因" required>
           <el-input v-model="execDlg.reason" type="textarea" :rows="3" placeholder="高危操作，必填原因" />
         </el-form-item>
-        <div class="audit-hint">⚠ 将写入 run_task 并记入审计日志</div>
+        <div class="audit-hint">⚠ 提交后由后台执行，进度见「历史」；将写入 run_task 并记入审计日志</div>
       </el-form>
       <template #footer>
         <el-button @click="execDlg.show = false">取消</el-button>
@@ -112,7 +112,7 @@
         <el-form-item label="原因" required>
           <el-input v-model="batchDlg.reason" type="textarea" :rows="3" placeholder="一条原因套用整批，高危必填" />
         </el-form-item>
-        <div class="audit-hint">⚠ 逐指标同步执行，整批记入一条审计</div>
+        <div class="audit-hint">⚠ 逐指标提交后台执行，整批记入一条审计</div>
       </el-form>
       <template #footer>
         <el-button @click="batchDlg.show = false">取消</el-button>
@@ -248,10 +248,16 @@ async function confirmExecute() {
   if (!execDlg.reason || !execDlg.reason.trim()) return ElMessage.warning('原因必填');
   execDlg.submitting = true;
   try {
-    await executeMetric(execDlg.metricCode, {
+    // async=true：后端提交即返回 taskId，不再阻塞到算完（重指标同步执行会撞网关读超时，
+    // 前端表现为「网络异常或后端未启动」）。真实进度看「历史」抽屉里的任务状态。
+    const r = await executeMetric(execDlg.metricCode, {
       dataDate: execDlg.dataDate, cascade: true, async: true, reason: execDlg.reason.trim()
     });
-    ElMessage.success('已触发执行，已记入审计');
+    if (r?.status === 'FAILED') {
+      ElMessage.error('提交失败：执行队列已满，请稍后重试');
+    } else {
+      ElMessage.success('已提交后台执行，进度请查看该指标的「历史」');
+    }
     execDlg.show = false;
     reload();
   } catch { /* executeMetric 内部已提示 */ } finally { execDlg.submitting = false; }
@@ -270,14 +276,16 @@ async function confirmBatch() {
   if (!batchDlg.reason || !batchDlg.reason.trim()) return ElMessage.warning('原因必填');
   batchDlg.submitting = true;
   try {
+    // async=true：success/failed 是「提交」成功/失败数，不是执行结果；执行进度看各指标「历史」
     const r = await batchExecuteMetrics({
-      metricCodes: batchDlg.metricCodes, dataDate: batchDlg.dataDate, reason: batchDlg.reason.trim()
+      metricCodes: batchDlg.metricCodes, dataDate: batchDlg.dataDate,
+      async: true, reason: batchDlg.reason.trim()
     });
-    ElMessage.success(`批量执行完成：成功 ${r?.success ?? 0} / 失败 ${r?.failed ?? 0}`);
+    ElMessage.success(`已提交 ${r?.success ?? 0} 个指标后台执行${r?.failed ? `，${r.failed} 个提交失败` : ''}，进度请查看各指标「历史」`);
     if (r?.failed) {
       const bad = (r.results || []).filter(x => x.status === 'FAILED')
         .map(x => `${x.metricCode}: ${x.errorMsg || ''}`).join('；');
-      if (bad) ElMessage.warning(`失败明细：${bad}`);
+      if (bad) ElMessage.warning(`提交失败明细：${bad}`);
     }
     batchDlg.show = false;
     // 成功后清空选中态：避免 reserve-selection 残留同名指标勾选，误用同一批 metricCodes 重复提交高危批量执行
