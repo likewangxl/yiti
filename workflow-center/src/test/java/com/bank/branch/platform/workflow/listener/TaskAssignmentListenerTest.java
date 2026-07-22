@@ -321,6 +321,131 @@ class TaskAssignmentListenerTest {
     }
 
     /**
+     * 审批机构归属 L2（二级机构）——四级网点发起：沿 P_ID 上溯到 2 级分行，按分行过滤候选。
+     * 「实际业务有 4 级机构」后新增的层级：发起上级机构(PARENT)只跳一级到支行(3 级)，
+     * L2 则固定上溯到发起机构所属的 2 级分行，让机构负责人审批落到分行。
+     */
+    @Test
+    void notify_approveOrgScopeL2_fromLevel4_walksUpToSecondLevelOrg() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:41");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve_l3");
+        when(delegateTask.getId()).thenReturn("TASK_L2_L4");
+        stubProcDefKey("DSN_alloc:1:41", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "L2"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_L4");
+
+        com.bank.branch.platform.auth.api.dto.OrgDTO l4 = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        l4.setOrgLevel(4);
+        l4.setParentOrgCode("ORG_L3");
+        com.bank.branch.platform.auth.api.dto.OrgDTO l3 = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        l3.setOrgLevel(3);
+        l3.setParentOrgCode("ORG_L2");
+        com.bank.branch.platform.auth.api.dto.OrgDTO l2 = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        l2.setOrgLevel(2);
+        l2.setParentOrgCode("ORG_L1");
+        when(orgApi.getOrg("ORG_L4")).thenReturn(l4);
+        when(orgApi.getOrg("ORG_L3")).thenReturn(l3);
+        when(orgApi.getOrg("ORG_L2")).thenReturn(l2);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_L2")).thenReturn(List.of("E_L2"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // 二级机构：审批机构 = 上溯到的 2 级分行 ORG_L2
+        verify(delegateTask).addCandidateUser("E_L2");
+    }
+
+    /**
+     * L2 从三级支行发起：只上溯一级即到 2 级分行——结果与旧 PARENT 一致（Part B 等价性保证）。
+     */
+    @Test
+    void notify_approveOrgScopeL2_fromLevel3_equalsParentBranch() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:31");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve_l3");
+        when(delegateTask.getId()).thenReturn("TASK_L2_L3");
+        stubProcDefKey("DSN_alloc:1:31", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "L2"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_SUB");
+
+        com.bank.branch.platform.auth.api.dto.OrgDTO sub = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        sub.setOrgLevel(3);
+        sub.setParentOrgCode("ORG_BR");
+        com.bank.branch.platform.auth.api.dto.OrgDTO br = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        br.setOrgLevel(2);
+        when(orgApi.getOrg("ORG_SUB")).thenReturn(sub);
+        when(orgApi.getOrg("ORG_BR")).thenReturn(br);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_BR")).thenReturn(List.of("E_BR"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        verify(delegateTask).addCandidateUser("E_BR");
+    }
+
+    /**
+     * L2 从二级分行自身发起：命中即 2 级，不再上溯——二级机构 = 本机构。
+     */
+    @Test
+    void notify_approveOrgScopeL2_fromLevel2_isSelf() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:21");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve_l3");
+        when(delegateTask.getId()).thenReturn("TASK_L2_L2");
+        stubProcDefKey("DSN_alloc:1:21", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "L2"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_BR");
+
+        com.bank.branch.platform.auth.api.dto.OrgDTO br = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        br.setOrgLevel(2);
+        when(orgApi.getOrg("ORG_BR")).thenReturn(br);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_BR")).thenReturn(List.of("E_SELF"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        verify(delegateTask).addCandidateUser("E_SELF");
+    }
+
+    /**
+     * L2 无 2 级上级（总行发起 / 断链）：兜底为发起人本机构，绝不放空导致无人可批。
+     */
+    @Test
+    void notify_approveOrgScopeL2_noSecondLevelAncestor_fallsBackToStartOrg() {
+        DelegateTask delegateTask = mock(DelegateTask.class);
+        when(delegateTask.getProcessDefinitionId()).thenReturn("DSN_alloc:1:11");
+        when(delegateTask.getTaskDefinitionKey()).thenReturn("branch_approve_l3");
+        when(delegateTask.getId()).thenReturn("TASK_L2_HQ");
+        stubProcDefKey("DSN_alloc:1:11", "DSN_alloc");
+
+        when(candidateResolverService.resolveCandidates("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(List.of("ROLE:BRANCH_HEAD"));
+        when(candidateResolverService.resolveCandidateScopeMap("DSN_alloc", "branch_approve_l3"))
+                .thenReturn(Map.of("ROLE:BRANCH_HEAD", "L2"));
+        when(delegateTask.getVariable("startOrgId")).thenReturn("ORG_HQ");
+
+        com.bank.branch.platform.auth.api.dto.OrgDTO hq = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        hq.setOrgLevel(1);
+        when(orgApi.getOrg("ORG_HQ")).thenReturn(hq);
+        when(userApi.getEmpIdsByRoleCodeAndOrg("BRANCH_HEAD", "ORG_HQ")).thenReturn(List.of("E_HQ"));
+
+        taskAssignmentListener.notify(delegateTask);
+
+        // 兜底本机构 ORG_HQ
+        verify(delegateTask).addCandidateUser("E_HQ");
+    }
+
+    /**
      * 审批机构归属未配置（null）的普通节点：不做机构过滤，照常设置候选组。
      */
     @Test

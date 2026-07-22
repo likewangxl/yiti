@@ -18,7 +18,7 @@ public class FlowApproverDTO {
     /** 审批人主值：层级角色=角色码 / 机构角色=机构码 / 指定人=工号 / 变量=变量名 */
     private String approverValue;
 
-    /** 层级（仅层级角色）：SELF=发起机构 / PARENT=发起上级机构 */
+    /** 层级（仅层级角色）：SELF=发起机构 / PARENT=发起上级机构 / L2=二级机构（上溯到所属分行） */
     private String orgScope;
 
     /** 可选角色码（仅机构角色，空=该机构任一角色） */

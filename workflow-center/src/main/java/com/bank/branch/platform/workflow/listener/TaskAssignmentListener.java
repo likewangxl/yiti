@@ -47,6 +47,9 @@ public class TaskAssignmentListener implements TaskListener {
     /** 参与机构快照写入唯一入口（D5：任务创建时解析出具体受理人才记录，仅候选组不记） */
     private final WfProcessOrgService wfProcessOrgService;
 
+    /** 「二级机构」(L2 scope) 上溯目标：机构等级 2（分行）。层级角色选「二级机构」时沿 P_ID 上溯到该级。 */
+    private static final int SECOND_ORG_LEVEL = 2;
+
     /**
      * 任务创建事件回调。
      * <p>
@@ -170,11 +173,13 @@ public class TaskAssignmentListener implements TaskListener {
      * <ul>
      *   <li>SELF   → 本机构：返回发起人机构编码（审批人机构号 = 发起人机构号）</li>
      *   <li>PARENT → 上级机构：返回发起人机构的 parentOrgCode（无上级则兜底本机构）</li>
+     *   <li>L2     → 二级机构：沿 P_ID 上溯到机构等级 2（分行），四级网点/三级支行发起均落到所属分行；
+     *               发起机构本身已 ≤2 级或断链则兜底本机构（见 {@link #resolveSecondLevelOrg}）</li>
      *   <li>legacyAuto（历史 branch_approve 无显式配置）→ 按机构等级自动解析（3级→上级，否则本机构）</li>
      * </ul>
      *
      * @param startOrgCode 发起人机构编码
-     * @param scope        SELF / PARENT / null
+     * @param scope        SELF / PARENT / L2 / null
      * @param legacyAuto   是否走历史 branch_approve 等级自动解析
      * @return 审批机构编码
      */
@@ -189,6 +194,9 @@ public class TaskAssignmentListener implements TaskListener {
                     return org.getParentOrgCode();
                 }
                 return startOrgCode;  // 无上级兜底本机构
+            }
+            if ("L2".equals(scope)) {
+                return resolveSecondLevelOrg(startOrgCode);
             }
             // AUTO：按发起人机构层级自动解析（3级支行→上级分行 / 2级→本机构），与历史 branch_approve 行为一致
             if ("AUTO".equals(scope) || legacyAuto) {
@@ -215,6 +223,41 @@ public class TaskAssignmentListener implements TaskListener {
                     startOrgCode, e.getMessage());
         }
         return startOrgCode;
+    }
+
+    /**
+     * 「二级机构」(L2) 解析：从发起机构沿 P_ID 上级链上溯，返回机构等级 = {@link #SECOND_ORG_LEVEL}（分行）的上级机构编码。
+     * <p>业务背景：实际机构树最深达 4 级（总行 1 / 分行 2 / 支行 3 / 网点 4）。层级角色选「发起上级机构」(PARENT)
+     * 只跳一级——四级网点发起时只能到三级支行；选「二级机构」则固定上溯到所属分行，让机构负责人审批稳定落到分行。
+     * <p>兜底：发起机构本身已是 2 级 → 即本机构；已 ≤2 级但非 2 级（如总行）或上溯断链/成环 → 返回发起人本机构，
+     * 绝不放空，避免流程行至该节点无人可批。hops 上限防脏数据成环（与 AllocAdjustService 同口径）。
+     *
+     * @param startOrgCode 发起人机构编码
+     * @return 上溯到的 2 级机构编码；无 2 级上级时兜底为发起人本机构
+     */
+    private String resolveSecondLevelOrg(String startOrgCode) {
+        try {
+            String code = startOrgCode;
+            OrgDTO org = orgApi.getOrg(code);
+            int hops = 0;
+            // 沿 P_ID 上溯，直到命中 2 级机构；等级缺失也继续上溯
+            while (org != null && (org.getOrgLevel() == null || org.getOrgLevel() > SECOND_ORG_LEVEL)) {
+                String parent = org.getParentOrgCode();
+                if (++hops > 10 || parent == null || parent.isBlank()) {
+                    return startOrgCode;  // 断链/成环兜底本机构
+                }
+                code = parent;
+                org = orgApi.getOrg(code);
+            }
+            if (org != null && org.getOrgLevel() != null && org.getOrgLevel() == SECOND_ORG_LEVEL) {
+                log.info("[TaskAssignmentListener] 二级机构解析 发起机构 {} → 所属分行 {} 审批", startOrgCode, code);
+                return code;
+            }
+        } catch (Exception e) {
+            log.warn("[TaskAssignmentListener] 解析二级机构失败 startOrg={}，兜底本机构，原因 {}",
+                    startOrgCode, e.getMessage());
+        }
+        return startOrgCode;  // 无 2 级上级（如总行发起）兜底本机构
     }
 
     /**

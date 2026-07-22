@@ -44,6 +44,7 @@
         >
           <el-option label="发起机构" value="SELF" />
           <el-option label="发起上级机构" value="PARENT" />
+          <el-option label="二级机构" value="L2" />
         </el-select>
         <el-select
           v-model="row.approverValue"
