@@ -425,13 +425,16 @@ public class FreeReportServiceImpl implements FreeReportService {
     private String getCellDisplay(Cell cell, DataFormatter formatter) {
         if (cell == null) return "";
         if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
-            return cell.getLocalDateTimeCellValue().toString();
+            // 必须按单元格自身的日期格式渲染。曾经直接返回 LocalDateTime.toString()，
+            // 于是不管源格式是 yyyy/m/d 还是 m月d日，页面一律显示 ISO 串
+            // "2026-07-24T15:30:45"——每一个日期格都和原报表对不上。
+            return formatter.formatCellValue(cell);
         }
         try {
             String s = renderByFormat(cell, formatter);
             if (s == null) return "";
             // 先剔除 ?? 占位符渲染出的幻影 0，再 trim（剔除后原地留下空格）
-            return stripQuestionMarkPhantomDigits(cell, s).trim();
+            return stripPhantomZeroDigits(cell, s).trim();
         } catch (Exception e) {
             // 格式串异常时退回原始取值，保证导入不中断
             return getCellString(cell);
@@ -447,6 +450,13 @@ public class FreeReportServiceImpl implements FreeReportService {
      * 把 -5e-7 渲染成科学计数法 {@code -5.00000000069889E-07}；而前者渲染为 {@code -0.00}，
      * 与 Excel/WPS 所见一致。（代码新建的自定义格式 POI 分配 numFmtId=164 时两者表现相同，
      * 所以只有用真实文件才能复现，见 importExcel_realFile_* 回归用例。）
+     *
+     * <p>渲染前还要把 {@code ?} 占位符换成 {@code #}：POI 压根不认识 {@code ?}，
+     * 遇到 {@code #,##0.??} 会把问号**原样吐出来**（渲染成 "1,235.??"）。二者都是
+     * 「可选数字位」，换成 {@code #} 后有数字就显示、没数字不显示，与 Excel 的差别
+     * 仅剩「Excel 用空格占位对齐」，而显示文本最终会 trim，不影响。
+     * 注意只在**渲染**时替换，{@code __fmt} 存的仍是原始格式串——导出写回 Excel 时
+     * 必须用原串，Excel 自己能正确渲染 {@code ?}。
      */
     private String renderByFormat(Cell cell, DataFormatter formatter) {
         CellType type = cell.getCellType() == CellType.FORMULA
@@ -456,26 +466,51 @@ public class FreeReportServiceImpl implements FreeReportService {
             String fmt = style.getDataFormatString();
             if (fmt != null && !fmt.isEmpty()) {
                 return formatter.formatRawCellContents(
-                        cell.getNumericCellValue(), style.getDataFormat(), fmt);
+                        cell.getNumericCellValue(), style.getDataFormat(), questionMarkToHash(fmt));
             }
         }
         return formatter.formatCellValue(cell);
     }
 
+    /** 把格式串里**生效的** {@code ?} 占位符换成 {@code #}（跳过引号/方括号/转义/占位前缀）。 */
+    private static String questionMarkToHash(String fmt) {
+        if (fmt.indexOf('?') < 0) return fmt;
+        StringBuilder b = new StringBuilder(fmt.length());
+        boolean inQuote = false;
+        for (int i = 0; i < fmt.length(); i++) {
+            char c = fmt.charAt(i);
+            if (!inQuote && (c == '\\' || c == '_' || c == '*') && i + 1 < fmt.length()) {
+                b.append(c).append(fmt.charAt(++i));
+                continue;
+            }
+            if (c == '"') { inQuote = !inQuote; b.append(c); continue; }
+            if (inQuote) { b.append(c); continue; }
+            if (c == '[') {
+                int j = fmt.indexOf(']', i);
+                if (j > 0) { b.append(fmt, i, j + 1); i = j; continue; }
+            }
+            b.append(c == '?' ? '#' : c);
+        }
+        return b.toString();
+    }
+
     /**
-     * 剔除 POI 把 Excel 的 {@code ?} 占位符当成数字位而多渲染出来的「幻影 0」。
+     * 抹掉 POI 在「只有可选数字位」的格式段上，对零值多渲染出来的幻影 "0"。
      *
-     * <p>Excel 三个数字占位符语义不同：{@code 0} 是强制位（没数字也补 0）、
-     * {@code #} 是可选位（没数字就不显示）、{@code ?} 是**对齐用的空格位**（没数字显示空格）。
-     * 会计格式的零段常写成 {@code _ * "-"??_ }，其中 {@code ??} 只为让 "-" 与上下行小数位对齐，
-     * 本身不该显示任何数字——Excel 对 0 显示的就是 "-"。但 POI 把 {@code ?} 当数字位处理，
-     * 渲染成 "- 0"，正是现场报表里页面显示 "- 0" 的来源。
+     * <p>Excel 三个数字占位符语义不同：{@code 0} 是**强制位**（没数字也补 0）、
+     * {@code #} 是**可选位**（没数字就不显示）、{@code ?} 是**对齐用的空格位**（没数字显示空格）。
+     * 只有 {@code 0} 会在零值时真的显示一个 "0"。但 POI 对可选位一律输出 "0"：
+     * <pre>
+     *   会计零段 _ * "-"??_    值 0   Excel: "-"   POI: "- 0"
+     *   纯可选位 #,###          值 0   Excel: ""    POI: "0"
+     * </pre>
      *
-     * <p>判据：取该值实际生效的那一段，若它**有 {@code ?} 占位符却没有 {@code 0} 强制位**，
-     * 说明这一段压根不打算显示数字，把渲染结果里的数字全部抹掉即可。
+     * <p>判据：取该值实际生效的那一段，若它**没有 {@code 0} 强制位**、且渲染结果里
+     * 的数字**全是 0**，说明这些 0 都是 POI 补出来的，抹掉即可。两个条件缺一不可——
+     * 只看「无 0 强制位」会把 {@code #,###} 的 1,235 也抹掉。
      * 正/负数段形如 {@code _ * #,##0.00_ } 含 {@code 0}，不受影响。
      */
-    private String stripQuestionMarkPhantomDigits(Cell cell, String shown) {
+    private String stripPhantomZeroDigits(Cell cell, String shown) {
         if (shown.isEmpty()) return shown;
         CellType type = cell.getCellType() == CellType.FORMULA
                 ? cell.getCachedFormulaResultType() : cell.getCellType();
@@ -485,7 +520,11 @@ public class FreeReportServiceImpl implements FreeReportService {
         String fmt = style.getDataFormatString();
         if (fmt == null || fmt.isEmpty()) return shown;
         String section = effectiveSection(fmt, cell.getNumericCellValue());
-        if (!hasPlaceholder(section, '?') || hasPlaceholder(section, '0')) return shown;
+        if (hasPlaceholder(section, '0')) return shown;
+        for (int i = 0; i < shown.length(); i++) {
+            char c = shown.charAt(i);
+            if (c >= '1' && c <= '9') return shown;   // 有真实数字，不能抹
+        }
         return shown.replaceAll("\\d", "");
     }
 

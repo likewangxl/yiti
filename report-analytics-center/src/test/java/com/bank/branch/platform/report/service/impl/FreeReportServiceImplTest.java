@@ -10,9 +10,12 @@ import com.bank.branch.platform.report.mapper.FreeReportRowMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -707,5 +710,290 @@ class FreeReportServiceImplTest {
         assertThat(FreeReportServiceImpl.isDecimal("张三")).isFalse();
         assertThat(FreeReportServiceImpl.isDecimal("")).isFalse();
         assertThat(FreeReportServiceImpl.isDecimal(null)).isFalse();
+    }
+
+    // ===================== 全格式口径表 =====================
+    // 用户要求「上传报表所有位置的显示都要和原报表一致，下载后也一致」，
+    // 故不再逐个补个案，改为固定一张「银行报表常见格式 × 典型值」的口径表，
+    // 期望值按 **Excel 语义**人工核定，覆盖会计/百分比/千分位/自定义各族。
+
+    /** 参与口径表的格式串（第 3 列起，每个格式占一列）。 */
+    private static final String[] SWEEP_FMTS = {
+            // 内置会计格式 43：负数用括号，零段带 ?? 对齐位
+            "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \"-\"??_);_(@_)",
+            // 中文 Excel 会计格式族（现场报表就是这一族），整数版 / 两位小数版 / 不带 ?? 版
+            "_ * #,##0_ ;_ * \\-#,##0_ ;_ * \"-\"??_ ;_ @_ ",
+            "_ * #,##0.00_ ;_ * \\-#,##0.00_ ;_ * \"-\"??_ ;_ @_ ",
+            "_ * #,##0_ ;_ * \\-#,##0_ ;_ * \"-\"_ ;_ @_ ",
+            // 百分比
+            "0.00%",
+            "0%",
+            // 普通千分位 / 自定义两段（负数标红）
+            "#,##0.00",
+            "0.00_ ;[Red]\\-0.00\\ ",
+            // 纯可选位：Excel 对 0 显示空
+            "#,###",
+    };
+
+    /** 口径表的行（每行一个典型值）。 */
+    private static final double[] SWEEP_VALS = {
+            1234.5678, -1234.5678, 0d, -5.00000000069889E-07, 1234.5
+    };
+
+    /**
+     * 期望显示，[值下标][格式下标]，按 Excel 语义人工核定。
+     *
+     * <p>要点：
+     * <ul>
+     *   <li>零段 {@code "-"??} 的 {@code ??} 是对齐空格位，0 只显示 "-"，不能冒出数字</li>
+     *   <li>极小负值走**负数段**（不是零段），故会计两位小数下是 -0.00、括号族下是 (0.00)</li>
+     *   <li>{@code #,###} 全是可选位，0 在 Excel 里显示**空**；极小负值只剩负号</li>
+     * </ul>
+     */
+    private static final String[][] SWEEP_EXPECT = {
+            // 内置43      会计整数??  会计两位??   会计无??   0.00%          0%          #,##0.00    自定义两段   #,###
+            {"1,234.57",  "1,235",   "1,234.57", "1,235",  "123456.78%",  "123457%",  "1,234.57", "1234.57",  "1,235"},
+            {"(1,234.57)", "-1,235", "-1,234.57", "-1,235", "-123456.78%", "-123457%", "-1,234.57", "-1234.57", "-1,235"},
+            {"-",         "-",       "-",        "-",      "0.00%",       "0%",       "0.00",     "0.00",     ""},
+            {"(0.00)",    "-0",      "-0.00",    "-0",     "-0.00%",      "-0%",      "-0.00",    "-0.00",    "-"},
+            {"1,234.50",  "1,235",   "1,234.50", "1,235",  "123450.00%",  "123450%",  "1,234.50", "1234.50",  "1,235"},
+    };
+
+    /** 按口径表构造 Excel：每个格式一列（col_3 起），每个值一行。 */
+    private byte[] buildSweepWorkbook() throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet s = wb.createSheet("s");
+            org.apache.poi.ss.usermodel.CellStyle[] styles =
+                    new org.apache.poi.ss.usermodel.CellStyle[SWEEP_FMTS.length];
+            for (int i = 0; i < SWEEP_FMTS.length; i++) {
+                styles[i] = wb.createCellStyle();
+                styles[i].setDataFormat(wb.createDataFormat().getFormat(SWEEP_FMTS[i]));
+            }
+            Row h = s.createRow(0);
+            h.createCell(0).setCellValue("工号");
+            h.createCell(1).setCellValue("姓名");
+            for (int i = 0; i < SWEEP_FMTS.length; i++) h.createCell(2 + i).setCellValue("F" + i);
+            for (int r = 0; r < SWEEP_VALS.length; r++) {
+                Row d = s.createRow(1 + r);
+                d.createCell(0).setCellValue("E" + r);
+                d.createCell(1).setCellValue("员工" + r);
+                for (int i = 0; i < SWEEP_FMTS.length; i++) {
+                    Cell c = d.createCell(2 + i);
+                    c.setCellValue(SWEEP_VALS[r]);
+                    c.setCellStyle(styles[i]);
+                }
+            }
+            wb.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * 页面显示必须逐格等于原报表（Excel）的显示——全格式口径表。
+     *
+     * <p>POI 的 DataFormatter 与 Excel 有两处系统性差异，都会让格子里冒出本不该有的数字：
+     * <ol>
+     *   <li>{@code ?} 占位符 POI 不认：出现在小数位（{@code #,##0.??}）时直接把问号原样吐出来，
+     *       出现在字面量后（{@code "-"??}）时当成数字位渲染出 0</li>
+     *   <li>{@code #} / {@code ?} 这类**可选位**在值为 0 时，POI 仍输出 "0"，Excel 则什么都不显示</li>
+     * </ol>
+     */
+    @Test
+    void importExcel_allCommonFormats_displayMatchesExcelSemantics() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        service.importExcel("rpt", new MockMultipartFile("file", "sweep.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                buildSweepWorkbook()), "E1", "张三");
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper).insertBatch(cap.capture());
+        List<RptFreeReportRow> rows = cap.getValue();
+        assertThat(rows).hasSize(SWEEP_VALS.length);
+
+        ObjectMapper om = new ObjectMapper();
+        for (int r = 0; r < SWEEP_VALS.length; r++) {
+            Map<String, String> m = om.readValue(rows.get(r).getDataJson(), new TypeReference<>() {});
+            for (int i = 0; i < SWEEP_FMTS.length; i++) {
+                String key = "col_" + (3 + i);
+                assertThat(m.getOrDefault(key, ""))
+                        .as("值 %s / 格式 %s", SWEEP_VALS[r], SWEEP_FMTS[i])
+                        .isEqualTo(SWEEP_EXPECT[r][i]);
+            }
+        }
+    }
+
+    /**
+     * 下载的 Excel 必须与页面显示一致——把导出结果重新读回来逐格渲染，应得到同样的文本。
+     *
+     * <p>这条守的是「页面 == 下载」这一半（另一半「页面 == 原报表」由上面的口径表守）。
+     * 导出写回的是**原始格式串**（含 {@code ?}），Excel 自己能正确渲染它；
+     * 这里用同一套导入渲染逻辑读回比对，等价于验证「值 + 格式」这对信息在往返中没丢。
+     */
+    @Test
+    void roundTrip_allCommonFormats_downloadRendersSameAsPage() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        service.importExcel("rpt", new MockMultipartFile("file", "sweep.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                buildSweepWorkbook()), "E1", "张三");
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper).insertBatch(cap.capture());
+        List<RptFreeReportRow> imported = cap.getValue();
+
+        // 用导入结果驱动导出
+        RptFreeReportBatch batch = new RptFreeReportBatch();
+        batch.setId("B1");
+        StringBuilder defs = new StringBuilder("[{\"key\":\"col_1\",\"label\":\"工号\"},{\"key\":\"col_2\",\"label\":\"姓名\"}");
+        for (int i = 0; i < SWEEP_FMTS.length; i++) {
+            defs.append(",{\"key\":\"col_").append(3 + i).append("\",\"label\":\"F").append(i).append("\"}");
+        }
+        defs.append("]");
+        batch.setColDefs(defs.toString());
+        when(batchMapper.selectById("B1")).thenReturn(batch);
+        when(rowMapper.countByBatch(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn((long) imported.size());
+        when(rowMapper.selectByBatch(any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(imported);
+
+        byte[] exported = service.exportFilteredExcel("B1", "ALL", null, null, null);
+
+        ObjectMapper om = new ObjectMapper();
+        try (Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(exported))) {
+            DataFormatter fmter = new DataFormatter();
+            Sheet sh = wb.getSheetAt(0);
+            for (int r = 0; r < SWEEP_VALS.length; r++) {
+                Map<String, String> m = om.readValue(imported.get(r).getDataJson(), new TypeReference<>() {});
+                Row row = sh.getRow(1 + r);
+                for (int i = 0; i < SWEEP_FMTS.length; i++) {
+                    String pageText = m.getOrDefault("col_" + (3 + i), "");
+                    Cell cell = row.getCell(2 + i);
+                    String downloadText = cell == null ? "" : renderForAssert(cell, fmter);
+                    assertThat(downloadText)
+                            .as("值 %s / 格式 %s：下载显示必须与页面一致", SWEEP_VALS[r], SWEEP_FMTS[i])
+                            .isEqualTo(pageText);
+                }
+            }
+        }
+    }
+
+    /** 与生产导入侧同口径地渲染一个单元格，用于「下载 == 页面」比对。 */
+    private String renderForAssert(Cell cell, DataFormatter fmter) throws Exception {
+        java.lang.reflect.Method m = FreeReportServiceImpl.class
+                .getDeclaredMethod("getCellDisplay", Cell.class, DataFormatter.class);
+        m.setAccessible(true);
+        return (String) m.invoke(service, cell, fmter);
+    }
+
+    /**
+     * 日期列必须按单元格自身的日期格式显示，与原报表一字不差。
+     *
+     * <p>曾经直接返回 {@code LocalDateTime.toString()}，于是不管源格式是
+     * {@code yyyy/m/d} 还是 {@code m月d日}，页面一律显示 ISO 串
+     * {@code 2026-07-24T15:30:45}——**每一个日期格都和原报表对不上**。
+     */
+    @Test
+    void importExcel_dateFormats_displayFollowsCellFormat() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        String[] dateFmts = {"yyyy/m/d", "yyyy-mm-dd", "m月d日", "yyyy/m/d h:mm", "h:mm:ss"};
+        String[] expect = {"2026/7/24", "2026-07-24", "7月24日", "2026/7/24 15:30", "15:30:45"};
+
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.set(2026, java.util.Calendar.JULY, 24, 15, 30, 45);
+        cal.set(java.util.Calendar.MILLISECOND, 0);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet s = wb.createSheet("s");
+            Row h = s.createRow(0);
+            h.createCell(0).setCellValue("工号");
+            h.createCell(1).setCellValue("姓名");
+            for (int i = 0; i < dateFmts.length; i++) h.createCell(2 + i).setCellValue("D" + i);
+            Row d = s.createRow(1);
+            d.createCell(0).setCellValue("E1");
+            d.createCell(1).setCellValue("张三");
+            for (int i = 0; i < dateFmts.length; i++) {
+                org.apache.poi.ss.usermodel.CellStyle st = wb.createCellStyle();
+                st.setDataFormat(wb.createDataFormat().getFormat(dateFmts[i]));
+                Cell c = d.createCell(2 + i);
+                c.setCellValue(cal.getTime());
+                c.setCellStyle(st);
+            }
+            wb.write(out);
+            service.importExcel("rpt", new MockMultipartFile("file", "date.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    out.toByteArray()), "E1", "张三");
+        }
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper).insertBatch(cap.capture());
+        Map<String, String> m = new ObjectMapper()
+                .readValue(cap.getValue().get(0).getDataJson(), new TypeReference<>() {});
+
+        for (int i = 0; i < dateFmts.length; i++) {
+            assertThat(m.get("col_" + (3 + i)))
+                    .as("日期格式 %s", dateFmts[i])
+                    .isEqualTo(expect[i]);
+        }
+    }
+
+    /**
+     * 小数位上的 {@code ?} 占位符不能被原样吐成问号。
+     *
+     * <p>POI 压根不认识 {@code ?}，对 {@code #,##0.??} 会渲染出字面的 "1,235.??"。
+     * 换成同为可选位的 {@code #} 后得到 "1,234.57"，与 Excel 一致。
+     *
+     * <p>已知残留偏差（不处理）：Excel 对 {@code #,##0.??} 的 0 显示 "0."（小数点后是两个
+     * 对齐空格），本实现显示 "0"，差一个尾部小数点。这种把 {@code ?} 放在小数位的格式在
+     * 银行报表里极罕见——会计格式里的 {@code ??} 都出现在零段的字面量之后（已由口径表覆盖）。
+     */
+    @Test
+    void importExcel_questionMarkInDecimalPlaces_notRenderedLiterally() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet s = wb.createSheet("s");
+            org.apache.poi.ss.usermodel.CellStyle st = wb.createCellStyle();
+            st.setDataFormat(wb.createDataFormat().getFormat("#,##0.??"));
+            Row h = s.createRow(0);
+            h.createCell(0).setCellValue("工号");
+            h.createCell(1).setCellValue("姓名");
+            h.createCell(2).setCellValue("问号小数位");
+            Row d = s.createRow(1);
+            d.createCell(0).setCellValue("E1");
+            d.createCell(1).setCellValue("张三");
+            Cell c = d.createCell(2); c.setCellValue(1234.5678); c.setCellStyle(st);
+            wb.write(out);
+            service.importExcel("rpt", new MockMultipartFile("file", "qm.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    out.toByteArray()), "E1", "张三");
+        }
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper).insertBatch(cap.capture());
+        Map<String, String> m = new ObjectMapper()
+                .readValue(cap.getValue().get(0).getDataJson(), new TypeReference<>() {});
+
+        assertThat(m.get("col_3")).isEqualTo("1,234.57");
+        assertThat(m.get("col_3")).doesNotContain("?");
+        // 格式串本身仍原样保留——导出写回 Excel 必须用原串，Excel 自己能正确渲染 ?
+        assertThat(m.get("col_3__fmt")).isEqualTo("#,##0.??");
     }
 }
