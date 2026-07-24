@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
-// 人员标签页核心行为回归：
-//  1) 列表加载并展示关联人数；2) 删除标签的确认文案必须提示级联删除关联人员；
-//  3) 详情抽屉按被点标签拉成员（工号/姓名/机构）；4) 成员导入（全量覆盖）提交前必须弹覆盖确认，
-//     且确认后按被点详情的标签 ID 调导入接口；5) 新增员工支持逗号/换行分隔的多工号。
+// 业务标签页核心行为回归（员工/机构两维度）：
+//  1) 列表加载并展示关联成员数；2) 删除标签的确认文案必须提示级联删除关联成员；
+//  3) 详情抽屉按被点标签+当前维度拉成员；4) 切换维度按新维度重新拉取；
+//  5) 成员导入（按维度全量覆盖）提交前必须弹覆盖确认，且确认后按被点标签 ID + 维度调导入接口；
+//  6) 新增成员支持员工工号 + 机构编号两个输入框，逗号/换行分隔多值，按 { usernames, orgDeptNos } 提交。
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 
@@ -21,7 +22,7 @@ vi.mock('@/api/system', () => ({
   updatePersonTag: vi.fn().mockResolvedValue({ ok: true }),
   deletePersonTag: vi.fn().mockResolvedValue({ ok: true }),
   listPersonTagMembers: vi.fn().mockResolvedValue({
-    records: [{ id: 11, username: '100001', displayName: '张三', orgCode: '107', orgName: '城东支行' }],
+    records: [{ id: 11, dimType: 'EMP', username: '100001' }],
     total: 1
   }),
   addPersonTagMembers: vi.fn().mockResolvedValue(2),
@@ -53,6 +54,8 @@ const stubs = {
   'el-form-item': passthrough('ElFormItem'),
   'el-input': empty('ElInput'),
   'el-alert': empty('ElAlert'),
+  'el-radio-group': passthrough('ElRadioGroup'),
+  'el-radio-button': passthrough('ElRadioButton'),
   'el-upload': passthrough('ElUpload'),
   'el-pagination': empty('ElPagination'),
   'el-table': { name: 'ElTable', props: ['data'], template: '<div class="tbl-stub"><slot /></div>' },
@@ -77,7 +80,7 @@ describe('PersonTags.vue', () => {
     expect(listPersonTags.mock.calls[0][0]).toMatchObject({ pageNo: 1, pageSize: 20 });
   });
 
-  it('删除标签：确认文案必须提示级联删除关联人员，确认后调删除并刷新', async () => {
+  it('删除标签：确认文案必须提示级联删除关联成员，确认后调删除并刷新', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
@@ -103,18 +106,38 @@ describe('PersonTags.vue', () => {
     expect(deletePersonTag).not.toHaveBeenCalled();
   });
 
-  it('点详情：按被点标签拉成员列表', async () => {
+  it('点详情：默认按被点标签 + 员工维度拉成员列表', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
     wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
     await flushPromises();
 
-    expect(listPersonTagMembers).toHaveBeenCalledWith(7, { pageNo: 1, pageSize: 20 });
-    expect(wrapper.vm.detail.rows[0]).toMatchObject({ username: '100001', displayName: '张三', orgName: '城东支行' });
+    expect(listPersonTagMembers).toHaveBeenCalledWith(7, { dim: 'EMP', pageNo: 1, pageSize: 20 });
+    expect(wrapper.vm.detail.rows[0]).toMatchObject({ username: '100001', dimType: 'EMP' });
   });
 
-  it('成员导入（全量覆盖）：提交前必须弹覆盖确认，确认后按被点标签 ID 导入并刷新', async () => {
+  it('切换到机构维度：回到第 1 页并按 ORG 维度重新拉取', async () => {
+    listPersonTagMembers.mockResolvedValueOnce({
+      records: [{ id: 11, dimType: 'EMP', username: '100001' }], total: 1
+    }).mockResolvedValueOnce({
+      records: [{ id: 21, dimType: 'ORG', orgDeptNo: '0101', orgName: '城东支行' }], total: 1
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
+    await flushPromises();
+
+    wrapper.vm.detail.dim = 'ORG';
+    wrapper.vm.onDetailDimChange();
+    await flushPromises();
+
+    expect(listPersonTagMembers).toHaveBeenLastCalledWith(7, { dim: 'ORG', pageNo: 1, pageSize: 20 });
+    expect(wrapper.vm.detail.rows[0]).toMatchObject({ orgDeptNo: '0101', orgName: '城东支行' });
+  });
+
+  it('成员导入（当前维度全量覆盖）：提交前必须弹覆盖确认，确认后按被点标签 ID + 维度导入并刷新', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
@@ -129,7 +152,23 @@ describe('PersonTags.vue', () => {
     const confirmText = ElMessageBox.confirm.mock.calls[0][0];
     expect(confirmText).toContain('全量覆盖');
     expect(confirmText).toContain('骨干');
-    expect(importPersonTagMembers).toHaveBeenCalledWith(7, wrapper.vm.memberImp.file);
+    expect(importPersonTagMembers).toHaveBeenCalledWith(7, wrapper.vm.memberImp.file, 'EMP');
+  });
+
+  it('机构维度成员导入：按 ORG 维度调导入接口', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
+    await flushPromises();
+    wrapper.vm.detail.dim = 'ORG';
+    wrapper.vm.openMemberImport();
+    wrapper.vm.memberImp.file = new File([1], 'orgs.xlsx');
+
+    await wrapper.vm.doMemberImport();
+    await flushPromises();
+
+    expect(importPersonTagMembers).toHaveBeenCalledWith(7, wrapper.vm.memberImp.file, 'ORG');
   });
 
   it('成员导入：用户取消覆盖确认则不调导入接口', async () => {
@@ -207,18 +246,38 @@ describe('PersonTags.vue', () => {
     expect(wrapper.vm.globalImp.file?.name).toBe('new.xlsx');
   });
 
-  it('新增员工：逗号/换行分隔的多工号被拆分提交', async () => {
+  it('新增成员：员工工号 + 机构编号两个输入框，逗号/换行分隔多值按 { usernames, orgDeptNos } 提交', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
     wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
     await flushPromises();
     wrapper.vm.openMemberAdd();
-    wrapper.vm.memberAdd.text = ' 100001 ，100002\n100003 ';
+    wrapper.vm.memberAdd.empText = ' 100001 ，100002\n100003 ';
+    wrapper.vm.memberAdd.orgText = '0101，0102';
 
     await wrapper.vm.saveMemberAdd();
     await flushPromises();
 
-    expect(addPersonTagMembers).toHaveBeenCalledWith(7, ['100001', '100002', '100003']);
+    expect(addPersonTagMembers).toHaveBeenCalledWith(7, {
+      usernames: ['100001', '100002', '100003'],
+      orgDeptNos: ['0101', '0102']
+    });
+  });
+
+  it('新增成员：员工与机构均为空时提示且不调接口', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
+    await flushPromises();
+    wrapper.vm.openMemberAdd();
+    wrapper.vm.memberAdd.empText = '   ';
+    wrapper.vm.memberAdd.orgText = '';
+
+    await wrapper.vm.saveMemberAdd();
+    await flushPromises();
+
+    expect(addPersonTagMembers).not.toHaveBeenCalled();
   });
 });

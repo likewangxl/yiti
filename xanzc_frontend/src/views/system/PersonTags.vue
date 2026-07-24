@@ -27,7 +27,7 @@
         <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">{{ row.remark || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="memberCount" label="关联人数" width="100" align="center" />
+        <el-table-column prop="memberCount" label="关联成员数" width="110" align="center" />
         <el-table-column prop="createTime" label="创建时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
         </el-table-column>
@@ -67,11 +67,20 @@
       </template>
     </el-dialog>
 
-    <!-- 全局导入弹窗（标签+人员关联，缺标签自动新建，追加语义） -->
-    <el-dialog v-model="globalImp.visible" title="导入人员标签" width="640px">
+    <!-- 全局导入弹窗（标签+成员关联，缺标签自动新建，追加语义；按维度导入） -->
+    <el-dialog v-model="globalImp.visible" title="导入业务标签" width="640px">
+      <div class="dim-bar">
+        <span class="dim-label">导入维度</span>
+        <el-radio-group v-model="globalImp.dim" size="small" @change="onGlobalDimChange">
+          <el-radio-button label="EMP">员工</el-radio-button>
+          <el-radio-button label="ORG">机构</el-radio-button>
+        </el-radio-group>
+      </div>
       <div class="imp-tip">
         <el-button size="small" @click="downloadGlobalTpl">📥 下载导入模板</el-button>
-        <span class="muted">模板列：标签名称 / 工号 / 姓名。库中没有的标签自动新建；任一行错误则整体不导入。</span>
+        <span class="muted">
+          模板列：{{ globalImp.dim === 'ORG' ? '标签名称 / 机构号' : '标签名称 / 工号' }}。库中没有的标签自动新建；任一行错误则整体不导入。
+        </span>
       </div>
       <el-upload
         ref="globalUploaderRef"
@@ -87,7 +96,7 @@
         style="margin-top: 12px">
         <div class="el-upload__text">点击或拖拽 <em>.xlsx</em> 到此处</div>
       </el-upload>
-      <ImportErrors :errors="globalImp.errors" />
+      <ImportErrors :errors="globalImp.errors" :dim="globalImp.dim" />
       <template #footer>
         <el-button @click="globalImp.visible = false">取消</el-button>
         <el-button type="primary" :loading="globalImp.importing" :disabled="!globalImp.file" @click="doGlobalImport">
@@ -96,26 +105,36 @@
       </template>
     </el-dialog>
 
-    <!-- 详情抽屉：成员管理 -->
+    <!-- 详情抽屉：成员管理（按维度切换） -->
     <el-drawer v-model="detail.visible" :title="`标签详情 — ${detail.tag?.tagName || ''}`" size="720px">
       <div class="toolbar">
-        <span class="muted">共 {{ detail.total }} 人</span>
+        <el-radio-group v-model="detail.dim" size="small" @change="onDetailDimChange">
+          <el-radio-button label="EMP">员工</el-radio-button>
+          <el-radio-button label="ORG">机构</el-radio-button>
+        </el-radio-group>
+        <span class="muted">共 {{ detail.total }} {{ detail.dim === 'ORG' ? '个机构' : '人' }}</span>
         <div class="toolbar-right">
-          <el-button size="small" @click="openMemberImport">导入（全量覆盖）</el-button>
-          <el-button size="small" type="primary" @click="openMemberAdd">新增员工</el-button>
+          <el-button size="small" @click="openMemberImport">导入（当前维度全量覆盖）</el-button>
+          <el-button size="small" type="primary" @click="openMemberAdd">新增成员</el-button>
         </div>
       </div>
 
-      <el-table v-loading="detail.loading" :data="detail.rows" border stripe size="small">
-        <el-table-column prop="username" label="工号" width="140" />
-        <el-table-column prop="displayName" label="姓名" width="120">
-          <template #default="{ row }">{{ row.displayName || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="orgName" label="机构" min-width="180">
+      <!-- 员工维度：仅工号 -->
+      <el-table v-if="detail.dim === 'EMP'" v-loading="detail.loading" :data="detail.rows" border stripe size="small">
+        <el-table-column prop="username" label="工号" min-width="200" />
+        <el-table-column label="操作" width="130" fixed="right">
           <template #default="{ row }">
-            <span v-if="row.orgName">{{ row.orgName }}<span class="muted"> ({{ row.orgCode }})</span></span>
-            <span v-else>—</span>
+            <el-button link type="primary" size="small" @click="openMemberEdit(row)">修改</el-button>
+            <el-button link type="danger" size="small" @click="onRemoveMember(row)">删除</el-button>
           </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 机构维度：机构号 + 机构名称 -->
+      <el-table v-else v-loading="detail.loading" :data="detail.rows" border stripe size="small">
+        <el-table-column prop="orgDeptNo" label="机构号" width="180" />
+        <el-table-column prop="orgName" label="机构名称" min-width="200">
+          <template #default="{ row }">{{ row.orgName || '—' }}</template>
         </el-table-column>
         <el-table-column label="操作" width="130" fixed="right">
           <template #default="{ row }">
@@ -134,33 +153,52 @@
         @current-change="reloadMembers" />
     </el-drawer>
 
-    <!-- 新增员工弹窗 -->
-    <el-dialog v-model="memberAdd.visible" title="新增员工" width="480px">
-      <el-form label-width="90px">
+    <!-- 新增成员弹窗（员工 + 机构两个输入框，可同时提交） -->
+    <el-dialog v-model="memberAdd.visible" title="新增成员" width="560px">
+      <el-form label-width="110px">
         <el-form-item label="员工工号">
           <el-input
-            v-model="memberAdd.text"
+            v-model="memberAdd.empText"
             type="textarea"
-            :rows="4"
-            placeholder="输入工号，多个用逗号或换行分隔" />
+            :rows="3"
+            placeholder="输入员工工号，多个用逗号或换行分隔（可留空）" />
+        </el-form-item>
+        <el-form-item label="机构编号">
+          <el-input
+            v-model="memberAdd.orgText"
+            type="textarea"
+            :rows="3"
+            placeholder="输入机构编号(dept_no)，多个用逗号或换行分隔（可留空）" />
         </el-form-item>
       </el-form>
-      <div class="muted">工号必须已存在于用户管理；已在标签下的工号自动跳过。</div>
+      <div class="muted">
+        工号须存在于用户管理、机构编号须存在于机构档案；已在标签下的同维度成员自动跳过。员工与机构至少填写一类。
+      </div>
       <template #footer>
         <el-button @click="memberAdd.visible = false">取消</el-button>
         <el-button type="primary" :loading="memberAdd.saving" @click="saveMemberAdd">保存</el-button>
       </template>
     </el-dialog>
 
-    <!-- 修改员工弹窗 -->
-    <el-dialog v-model="memberEdit.visible" title="修改员工" width="420px">
+    <!-- 修改成员弹窗（按行维度：工号 / 机构编号） -->
+    <el-dialog v-model="memberEdit.visible" :title="memberEdit.isOrg ? '修改机构' : '修改员工'" width="440px">
       <el-form label-width="90px">
-        <el-form-item label="原工号">
-          <span>{{ memberEdit.row?.username }}<template v-if="memberEdit.row?.displayName">（{{ memberEdit.row.displayName }}）</template></span>
-        </el-form-item>
-        <el-form-item label="新工号">
-          <el-input v-model="memberEdit.username" placeholder="替换为另一个工号" />
-        </el-form-item>
+        <template v-if="memberEdit.isOrg">
+          <el-form-item label="原机构号">
+            <span>{{ memberEdit.row?.orgDeptNo }}<template v-if="memberEdit.row?.orgName">（{{ memberEdit.row.orgName }}）</template></span>
+          </el-form-item>
+          <el-form-item label="新机构号">
+            <el-input v-model="memberEdit.value" placeholder="替换为另一个机构编号(dept_no)" />
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="原工号">
+            <span>{{ memberEdit.row?.username }}</span>
+          </el-form-item>
+          <el-form-item label="新工号">
+            <el-input v-model="memberEdit.value" placeholder="替换为另一个工号" />
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="memberEdit.visible = false">取消</el-button>
@@ -168,18 +206,18 @@
       </template>
     </el-dialog>
 
-    <!-- 成员导入弹窗（全量覆盖） -->
-    <el-dialog v-model="memberImp.visible" title="导入标签成员（全量覆盖）" width="640px">
+    <!-- 成员导入弹窗（当前维度全量覆盖） -->
+    <el-dialog v-model="memberImp.visible" :title="`导入标签成员（${detail.dim === 'ORG' ? '机构' : '员工'}维度全量覆盖）`" width="640px">
       <el-alert
         type="warning"
         :closable="false"
         show-icon
-        title="全量覆盖导入"
-        description="导入成功后，该标签现有全部关联人员将被清空，并以本次文件内容为准。"
+        title="按维度全量覆盖导入"
+        :description="`导入成功后，该标签「${detail.dim === 'ORG' ? '机构' : '员工'}维度」现有全部成员将被清空，并以本次文件内容为准（不影响另一维度成员）。`"
         style="margin-bottom: 12px" />
       <div class="imp-tip">
         <el-button size="small" @click="downloadMemberTpl">📥 下载导入模板</el-button>
-        <span class="muted">模板列：工号 / 姓名。任一行错误则不改动现有数据。</span>
+        <span class="muted">模板列：{{ detail.dim === 'ORG' ? '机构号' : '工号' }}。任一行错误则不改动现有数据。</span>
       </div>
       <el-upload
         ref="memberUploaderRef"
@@ -195,7 +233,7 @@
         style="margin-top: 12px">
         <div class="el-upload__text">点击或拖拽 <em>.xlsx</em> 到此处</div>
       </el-upload>
-      <ImportErrors :errors="memberImp.errors" />
+      <ImportErrors :errors="memberImp.errors" :dim="detail.dim" />
       <template #footer>
         <el-button @click="memberImp.visible = false">取消</el-button>
         <el-button type="primary" :loading="memberImp.importing" :disabled="!memberImp.file" @click="doMemberImport">
@@ -216,16 +254,20 @@ import {
   importPersonTagMembers, downloadPersonTagMemberTemplate
 } from '@/api/system';
 
-/** 导入错误明细表（行号/工号/原因），两个导入弹窗共用。 */
+/** 导入错误明细表（行号/标识/原因），两个导入弹窗共用；标识列名随维度切换（工号/机构号）。 */
 const ImportErrors = {
   name: 'ImportErrors',
-  props: { errors: { type: Array, default: () => [] } },
+  props: {
+    errors: { type: Array, default: () => [] },
+    dim: { type: String, default: 'EMP' }
+  },
   render() {
     if (!this.errors.length) return null;
+    const idLabel = this.dim === 'ORG' ? '机构号' : '工号';
     return h('div', { class: 'imp-errors' }, [
       h('div', { class: 'err-title' }, `导入未通过校验（共 ${this.errors.length} 条问题），未做任何改动：`),
       h('table', { class: 'err-table' }, [
-        h('thead', [h('tr', [h('th', '行号'), h('th', '工号'), h('th', '原因')])]),
+        h('thead', [h('tr', [h('th', '行号'), h('th', idLabel), h('th', '原因')])]),
         h('tbody', this.errors.map((e) =>
           h('tr', { key: `${e.row}-${e.username}` },
             [h('td', e.row), h('td', e.username || '—'), h('td', e.message)])))
@@ -265,6 +307,11 @@ function onSearch() {
 function formatTime(t) {
   if (!t) return '—';
   return String(t).replace('T', ' ').slice(0, 19);
+}
+
+/** 文本框批量输入 → 去空白/去重的标识数组（逗号/换行/空白分隔）。 */
+function splitIds(text) {
+  return [...new Set((text || '').split(/[,，\n\s]+/).map((s) => s.trim()).filter(Boolean))];
 }
 
 // ===== 新建/编辑标签 =====
@@ -309,7 +356,7 @@ async function saveTag() {
 async function onDeleteTag(row) {
   try {
     await ElMessageBox.confirm(
-      `删除标签「${row.tagName}」将同时删除其下 ${row.memberCount || 0} 条关联人员信息，是否继续？`,
+      `删除标签「${row.tagName}」将同时删除其下 ${row.memberCount || 0} 条关联成员信息，是否继续？`,
       '删除确认',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
     );
@@ -322,7 +369,7 @@ async function onDeleteTag(row) {
 }
 
 // ===== 全局导入 =====
-const globalImp = reactive({ visible: false, file: null, importing: false, errors: [] });
+const globalImp = reactive({ visible: false, dim: 'EMP', file: null, importing: false, errors: [] });
 const globalUploaderRef = ref(null);
 const memberUploaderRef = ref(null);
 
@@ -353,9 +400,16 @@ const onGlobalExceed = replaceOnExceed(globalUploaderRef, globalImp);
 
 function openGlobalImport() {
   globalImp.errors = [];
+  globalImp.dim = 'EMP';
   globalImp.visible = true;
   // 弹窗内容首次打开才挂载，等一拍再清残留列表
   nextTick(() => resetUpload(globalUploaderRef, globalImp));
+}
+
+/** 切换导入维度：清空已选文件与错误（不同维度模板不同）。 */
+function onGlobalDimChange() {
+  globalImp.errors = [];
+  resetUpload(globalUploaderRef, globalImp);
 }
 
 async function doGlobalImport() {
@@ -363,7 +417,7 @@ async function doGlobalImport() {
   globalImp.importing = true;
   globalImp.errors = [];
   try {
-    const res = await importPersonTags(globalImp.file);
+    const res = await importPersonTags(globalImp.file, globalImp.dim);
     if (res && res.success) {
       const parts = [`新增关联 ${res.importedCount} 条`];
       if (res.createdTagCount) parts.push(`自动新建标签 ${res.createdTagCount} 个`);
@@ -387,21 +441,28 @@ async function doGlobalImport() {
 
 async function downloadGlobalTpl() {
   try {
-    const blob = await downloadPersonTagTemplate();
-    saveBlob(blob, '人员标签导入模板.xlsx');
+    const blob = await downloadPersonTagTemplate(globalImp.dim);
+    saveBlob(blob, globalImp.dim === 'ORG' ? '业务标签机构导入模板.xlsx' : '业务标签员工导入模板.xlsx');
   } catch { /* 已提示 */ }
 }
 
-// ===== 详情（成员管理） =====
+// ===== 详情（成员管理，按维度） =====
 const detail = reactive({
-  visible: false, tag: null, loading: false,
+  visible: false, tag: null, dim: 'EMP', loading: false,
   rows: [], total: 0, page: 1, pageSize: 20
 });
 
 function openDetail(row) {
   detail.tag = row;
+  detail.dim = 'EMP';
   detail.page = 1;
   detail.visible = true;
+  reloadMembers();
+}
+
+/** 切换详情维度：回到第 1 页并重新拉取该维度成员。 */
+function onDetailDimChange() {
+  detail.page = 1;
   reloadMembers();
 }
 
@@ -410,6 +471,7 @@ async function reloadMembers() {
   detail.loading = true;
   try {
     const r = await listPersonTagMembers(detail.tag.tagId, {
+      dim: detail.dim,
       pageNo: detail.page,
       pageSize: detail.pageSize
     });
@@ -420,55 +482,60 @@ async function reloadMembers() {
   }
 }
 
-/** 成员变动后同步列表页的关联人数列。 */
+/** 成员变动后同步列表页的关联成员数列。 */
 function refreshBoth() {
   reloadMembers();
   reload();
 }
 
-// ===== 新增员工 =====
-const memberAdd = reactive({ visible: false, text: '', saving: false });
+// ===== 新增成员（员工 + 机构双输入） =====
+const memberAdd = reactive({ visible: false, empText: '', orgText: '', saving: false });
 
 function openMemberAdd() {
-  memberAdd.text = '';
+  memberAdd.empText = '';
+  memberAdd.orgText = '';
   memberAdd.visible = true;
 }
 
 async function saveMemberAdd() {
-  const usernames = memberAdd.text.split(/[,，\n\s]+/).map((s) => s.trim()).filter(Boolean);
-  if (!usernames.length) {
-    ElMessage.warning('请输入至少一个工号');
+  const usernames = splitIds(memberAdd.empText);
+  const orgDeptNos = splitIds(memberAdd.orgText);
+  if (!usernames.length && !orgDeptNos.length) {
+    ElMessage.warning('请至少输入一个员工工号或机构编号');
     return;
   }
   memberAdd.saving = true;
   try {
-    const added = await addPersonTagMembers(detail.tag.tagId, usernames);
-    ElMessage.success(`新增 ${added} 人${added < usernames.length ? `（跳过已存在 ${usernames.length - added} 人）` : ''}`);
+    const added = await addPersonTagMembers(detail.tag.tagId, { usernames, orgDeptNos });
+    const submitted = usernames.length + orgDeptNos.length;
+    ElMessage.success(`新增 ${added} 个成员${added < submitted ? `（跳过已存在 ${submitted - added} 个）` : ''}`);
     memberAdd.visible = false;
     refreshBoth();
-  } catch { /* 已提示（含无效工号清单） */ } finally {
+  } catch { /* 已提示（含无效工号/机构号清单） */ } finally {
     memberAdd.saving = false;
   }
 }
 
-// ===== 修改员工 =====
-const memberEdit = reactive({ visible: false, row: null, username: '', saving: false });
+// ===== 修改成员（按行维度） =====
+const memberEdit = reactive({ visible: false, row: null, isOrg: false, value: '', saving: false });
 
 function openMemberEdit(row) {
   memberEdit.row = row;
-  memberEdit.username = row.username;
+  memberEdit.isOrg = row.dimType === 'ORG';
+  memberEdit.value = memberEdit.isOrg ? row.orgDeptNo : row.username;
   memberEdit.visible = true;
 }
 
 async function saveMemberEdit() {
-  const username = memberEdit.username.trim();
-  if (!username) {
-    ElMessage.warning('工号不能为空');
+  const value = (memberEdit.value || '').trim();
+  if (!value) {
+    ElMessage.warning(memberEdit.isOrg ? '机构编号不能为空' : '工号不能为空');
     return;
   }
   memberEdit.saving = true;
   try {
-    await updatePersonTagMember(detail.tag.tagId, memberEdit.row.id, username);
+    const data = memberEdit.isOrg ? { orgDeptNo: value } : { username: value };
+    await updatePersonTagMember(detail.tag.tagId, memberEdit.row.id, data);
     ElMessage.success('已修改');
     memberEdit.visible = false;
     reloadMembers();
@@ -477,11 +544,12 @@ async function saveMemberEdit() {
   }
 }
 
-// ===== 删除员工 =====
+// ===== 删除成员 =====
 async function onRemoveMember(row) {
+  const label = row.dimType === 'ORG' ? (row.orgName || row.orgDeptNo) : row.username;
   try {
     await ElMessageBox.confirm(
-      `将「${row.displayName || row.username}」从标签「${detail.tag.tagName}」移除？`,
+      `将「${label}」从标签「${detail.tag.tagName}」移除？`,
       '删除确认',
       { type: 'warning' }
     );
@@ -493,7 +561,7 @@ async function onRemoveMember(row) {
   } catch { /* 已提示 */ }
 }
 
-// ===== 成员导入（全量覆盖） =====
+// ===== 成员导入（当前维度全量覆盖） =====
 const memberImp = reactive({ visible: false, file: null, importing: false, errors: [] });
 const onMemberExceed = replaceOnExceed(memberUploaderRef, memberImp);
 
@@ -506,10 +574,11 @@ function openMemberImport() {
 
 async function doMemberImport() {
   if (!memberImp.file) return;
+  const dimLabel = detail.dim === 'ORG' ? '机构' : '员工';
   // 全量覆盖前的强提示（需求硬约束）
   try {
     await ElMessageBox.confirm(
-      `本次导入将清空标签「${detail.tag.tagName}」现有全部 ${detail.total} 条关联，并以文件内容全量覆盖，是否继续？`,
+      `本次导入将清空标签「${detail.tag.tagName}」现有全部${dimLabel}维度成员，并以文件内容全量覆盖（不影响另一维度），是否继续？`,
       '全量覆盖确认',
       { type: 'warning', confirmButtonText: '覆盖导入', cancelButtonText: '取消' }
     );
@@ -517,9 +586,9 @@ async function doMemberImport() {
   memberImp.importing = true;
   memberImp.errors = [];
   try {
-    const res = await importPersonTagMembers(detail.tag.tagId, memberImp.file);
+    const res = await importPersonTagMembers(detail.tag.tagId, memberImp.file, detail.dim);
     if (res && res.success) {
-      ElMessage.success(`导入成功，当前标签共 ${res.importedCount} 人`);
+      ElMessage.success(`导入成功，当前标签${dimLabel}维度共 ${res.importedCount} 个成员`);
       memberImp.visible = false;
       refreshBoth();
     } else {
@@ -538,8 +607,8 @@ async function doMemberImport() {
 
 async function downloadMemberTpl() {
   try {
-    const blob = await downloadPersonTagMemberTemplate();
-    saveBlob(blob, '标签成员导入模板.xlsx');
+    const blob = await downloadPersonTagMemberTemplate(detail.dim);
+    saveBlob(blob, detail.dim === 'ORG' ? '标签机构成员导入模板.xlsx' : '标签员工成员导入模板.xlsx');
   } catch { /* 已提示 */ }
 }
 
@@ -577,6 +646,16 @@ onMounted(reload);
 .muted {
   color: #909399;
   font-size: 12px;
+}
+.dim-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.dim-label {
+  font-size: 13px;
+  color: #606266;
 }
 .imp-tip {
   display: flex;
