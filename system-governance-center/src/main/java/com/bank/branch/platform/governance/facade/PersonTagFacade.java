@@ -27,7 +27,7 @@ public class PersonTagFacade implements PersonTagApi {
     private final PersonTagRelMapper relMapper;
 
     /**
-     * 按标签 ID 集合取其下全部员工工号（并集去重，单次 IN 查询）。
+     * 按标签 ID 集合取其下全部员工工号（EMP 维度，并集去重，单次 IN 查询）。
      *
      * @param tagIds 标签 ID 集合
      * @return 去重工号列表
@@ -40,11 +40,38 @@ public class PersonTagFacade implements PersonTagApi {
         }
         LinkedHashSet<String> usernames = new LinkedHashSet<>();
         for (PersonTagRel rel : relMapper.selectByTagIds(ids)) {
-            if (rel != null && rel.getUsername() != null) {
+            // 仅 EMP 维度成员贡献工号；存量行 dim_type 缺省即 EMP
+            if (rel != null && rel.getUsername() != null && isEmpDim(rel)) {
                 usernames.add(rel.getUsername());
             }
         }
         return new ArrayList<>(usernames);
+    }
+
+    /**
+     * 按标签 ID 集合取其下全部机构业务编号（ORG 维度，并集去重，单次 IN 查询）。
+     *
+     * @param tagIds 标签 ID 集合
+     * @return 去重机构编号（dept_no）列表
+     */
+    @Override
+    public List<String> getDeptNosByTagIds(List<Long> tagIds) {
+        List<Long> ids = distinctNonNull(tagIds);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> deptNos = new LinkedHashSet<>();
+        for (PersonTagRel rel : relMapper.selectByTagIds(ids)) {
+            if (rel != null && PersonTagRel.DIM_ORG.equals(rel.getDimType()) && rel.getOrgDeptNo() != null) {
+                deptNos.add(rel.getOrgDeptNo());
+            }
+        }
+        return new ArrayList<>(deptNos);
+    }
+
+    /** 成员行是否为员工维度（存量行 dim_type 缺省按 EMP）。 */
+    private static boolean isEmpDim(PersonTagRel rel) {
+        return rel.getDimType() == null || PersonTagRel.DIM_EMP.equals(rel.getDimType());
     }
 
     /**

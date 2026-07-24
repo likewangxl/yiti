@@ -42,6 +42,8 @@ public enum GovErrorCode {
     PERSON_TAG_IMPORT_FILE_EMPTY("GOV-42206", "导入文件为空"),
     PERSON_TAG_IMPORT_FILE_INVALID("GOV-42207", "导入文件解析失败"),
     PERSON_TAG_USERNAME_NOT_EXISTS("GOV-42208", "员工工号在系统中不存在"),
+    PERSON_TAG_DEPTNO_NOT_EXISTS("GOV-42209", "机构编号在系统中不存在"),
+    PERSON_TAG_MEMBER_EMPTY("GOV-42210", "请至少填写一个员工工号或机构编号"),
 
     // 500 内部错误
     MINIO_ERROR("GOV-50001", "MinIO服务异常"),

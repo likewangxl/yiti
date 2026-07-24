@@ -1,7 +1,8 @@
 package com.bank.branch.platform.governance.service;
 
+import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
-import com.bank.branch.platform.auth.api.dto.UserDTO;
+import com.bank.branch.platform.auth.api.dto.OrgDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.PersonTagMemberRespDTO;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * PersonTagService 单元测试（Mock Mapper + UserApi）。
+ * PersonTagService 单元测试（Mock Mapper + UserApi + OrgApi）。
  */
 @ExtendWith(MockitoExtension.class)
 class PersonTagServiceTest {
@@ -43,12 +44,14 @@ class PersonTagServiceTest {
     private PersonTagRelMapper relMapper;
     @Mock
     private UserApi userApi;
+    @Mock
+    private OrgApi orgApi;
 
     private PersonTagService service;
 
     @BeforeEach
     void setUp() {
-        service = new PersonTagService(tagMapper, relMapper, userApi);
+        service = new PersonTagService(tagMapper, relMapper, userApi, orgApi);
     }
 
     private static PersonTag tag(Long id, String name) {
@@ -58,21 +61,29 @@ class PersonTagServiceTest {
         return t;
     }
 
-    private static PersonTagRel rel(Long id, Long tagId, String username) {
+    private static PersonTagRel empRel(Long id, Long tagId, String username) {
         PersonTagRel r = new PersonTagRel();
         r.setId(id);
         r.setTagId(tagId);
+        r.setDimType(PersonTagRel.DIM_EMP);
         r.setUsername(username);
         return r;
     }
 
-    private static UserDTO user(String username, String displayName, String orgCode, String orgName) {
-        UserDTO u = new UserDTO();
-        u.setUsername(username);
-        u.setDisplayName(displayName);
-        u.setMainOrgCode(orgCode);
-        u.setMainOrgName(orgName);
-        return u;
+    private static PersonTagRel orgRel(Long id, Long tagId, String deptNo) {
+        PersonTagRel r = new PersonTagRel();
+        r.setId(id);
+        r.setTagId(tagId);
+        r.setDimType(PersonTagRel.DIM_ORG);
+        r.setOrgDeptNo(deptNo);
+        return r;
+    }
+
+    private static OrgDTO org(String deptNo, String orgName) {
+        OrgDTO o = new OrgDTO();
+        o.setDeptNo(deptNo);
+        o.setOrgName(orgName);
+        return o;
     }
 
     // ===== 标签 CRUD =====
@@ -165,42 +176,73 @@ class PersonTagServiceTest {
         verify(relMapper, never()).deleteByTagId(any());
     }
 
-    // ===== 成员查询 =====
+    // ===== 成员查询（分维度） =====
 
     @Test
-    void pageMembers_shouldResolveNameAndOrgByUsername() {
+    void pageMembers_empDim_shouldReturnUsernameOnly_noNameResolve() {
         when(tagMapper.selectById(1L)).thenReturn(tag(1L, "骨干"));
-        when(relMapper.countByTagId(1L)).thenReturn(2L);
-        when(relMapper.selectPageByTagId(1L, 0, 20))
-                .thenReturn(List.of(rel(11L, 1L, "100001"), rel(12L, 1L, "gone")));
-        when(userApi.getUsersByUsernames(List.of("100001", "gone")))
-                .thenReturn(List.of(user("100001", "张三", "107", "城东支行")));
+        when(relMapper.countByTagId(1L, "EMP")).thenReturn(2L);
+        when(relMapper.selectPageByTagId(1L, "EMP", 0, 20))
+                .thenReturn(List.of(empRel(11L, 1L, "100001"), empRel(12L, 1L, "100002")));
 
-        PageResult<PersonTagMemberRespDTO> page = service.pageMembers(1L, 1, 20);
+        PageResult<PersonTagMemberRespDTO> page = service.pageMembers(1L, "EMP", 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(2);
-        PersonTagMemberRespDTO first = page.getRecords().get(0);
-        assertThat(first.getDisplayName()).isEqualTo("张三");
-        assertThat(first.getOrgName()).isEqualTo("城东支行");
-        // 已删除用户解析不到：保留工号，姓名/机构为空
-        PersonTagMemberRespDTO second = page.getRecords().get(1);
-        assertThat(second.getUsername()).isEqualTo("gone");
-        assertThat(second.getDisplayName()).isNull();
+        assertThat(page.getRecords().get(0).getDimType()).isEqualTo("EMP");
+        assertThat(page.getRecords().get(0).getUsername()).isEqualTo("100001");
+        // 员工维度不再解析姓名
+        verify(userApi, never()).getUsersByUsernames(anyList());
     }
 
-    // ===== 成员增删改 =====
+    @Test
+    void pageMembers_orgDim_shouldResolveOrgNameByDeptNo() {
+        when(tagMapper.selectById(1L)).thenReturn(tag(1L, "重点机构"));
+        when(relMapper.countByTagId(1L, "ORG")).thenReturn(2L);
+        when(relMapper.selectPageByTagId(1L, "ORG", 0, 20))
+                .thenReturn(List.of(orgRel(21L, 1L, "0101"), orgRel(22L, 1L, "9999")));
+        when(orgApi.getOrgsByDeptNos(List.of("0101", "9999")))
+                .thenReturn(List.of(org("0101", "城东支行")));
+
+        PageResult<PersonTagMemberRespDTO> page = service.pageMembers(1L, "ORG", 1, 20);
+
+        PersonTagMemberRespDTO first = page.getRecords().get(0);
+        assertThat(first.getDimType()).isEqualTo("ORG");
+        assertThat(first.getOrgDeptNo()).isEqualTo("0101");
+        assertThat(first.getOrgName()).isEqualTo("城东支行");
+        // 机构不存在解析不到：保留编号，名称为空
+        assertThat(page.getRecords().get(1).getOrgName()).isNull();
+    }
+
+    // ===== 成员新增（双维度） =====
 
     @Test
-    void addMembers_shouldSkipExistingAndInsertRest() {
+    void addMembers_bothDims_shouldSkipExistingAndInsertRest() {
         when(tagMapper.selectById(1L)).thenReturn(tag(1L, "骨干"));
         when(userApi.filterExistingUsernames(List.of("100001", "100002")))
                 .thenReturn(List.of("100001", "100002"));
         when(relMapper.selectUsernamesByTagId(1L)).thenReturn(List.of("100001"));
+        when(orgApi.getOrgsByDeptNos(List.of("0101", "0102")))
+                .thenReturn(List.of(org("0101", "城东"), org("0102", "城西")));
+        when(relMapper.selectDeptNosByTagId(1L)).thenReturn(List.of("0102"));
 
-        int added = service.addMembers(1L, List.of(" 100001 ", "100002", "100002"), "OP1");
+        int added = service.addMembers(1L,
+                List.of(" 100001 ", "100002", "100002"), List.of("0101", "0102"), "OP1");
+
+        // 员工新增 100002（100001 已存在跳过）+ 机构新增 0101（0102 已存在跳过）= 2
+        assertThat(added).isEqualTo(2);
+        verify(relMapper).insertBatch(argThatSize(2));
+    }
+
+    @Test
+    void addMembers_onlyOrg_shouldInsertOrgRows() {
+        when(tagMapper.selectById(1L)).thenReturn(tag(1L, "重点机构"));
+        when(orgApi.getOrgsByDeptNos(List.of("0101"))).thenReturn(List.of(org("0101", "城东")));
+        when(relMapper.selectDeptNosByTagId(1L)).thenReturn(List.of());
+
+        int added = service.addMembers(1L, null, List.of("0101"), "OP1");
 
         assertThat(added).isEqualTo(1);
-        verify(relMapper).insertBatch(argThatSize(1));
+        verify(userApi, never()).filterExistingUsernames(anyList());
     }
 
     @Test
@@ -208,46 +250,79 @@ class PersonTagServiceTest {
         when(tagMapper.selectById(1L)).thenReturn(tag(1L, "骨干"));
         when(userApi.filterExistingUsernames(anyList())).thenReturn(List.of("100001"));
 
-        assertThatThrownBy(() -> service.addMembers(1L, List.of("100001", "BAD"), "OP1"))
+        assertThatThrownBy(() -> service.addMembers(1L, List.of("100001", "BAD"), null, "OP1"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("BAD");
         verify(relMapper, never()).insertBatch(anyList());
     }
 
     @Test
-    void updateMember_shouldValidateAndUpdate() {
-        when(relMapper.selectById(11L)).thenReturn(rel(11L, 1L, "100001"));
+    void addMembers_invalidDeptNo_shouldThrow42209() {
+        when(tagMapper.selectById(1L)).thenReturn(tag(1L, "重点机构"));
+        when(orgApi.getOrgsByDeptNos(anyList())).thenReturn(List.of(org("0101", "城东")));
+
+        assertThatThrownBy(() -> service.addMembers(1L, null, List.of("0101", "BADORG"), "OP1"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("BADORG");
+        verify(relMapper, never()).insertBatch(anyList());
+    }
+
+    @Test
+    void addMembers_bothEmpty_shouldThrow42210() {
+        when(tagMapper.selectById(1L)).thenReturn(tag(1L, "骨干"));
+
+        assertThatThrownBy(() -> service.addMembers(1L, List.of(), List.of(), "OP1"))
+                .isInstanceOf(BizException.class);
+        verify(relMapper, never()).insertBatch(anyList());
+    }
+
+    // ===== 成员修改（按行维度分流） =====
+
+    @Test
+    void updateMember_empRow_shouldValidateAndUpdate() {
+        when(relMapper.selectById(11L)).thenReturn(empRel(11L, 1L, "100001"));
         when(userApi.filterExistingUsernames(List.of("100002"))).thenReturn(List.of("100002"));
         when(relMapper.selectUsernamesByTagId(1L)).thenReturn(List.of("100001"));
 
-        service.updateMember(1L, 11L, "100002", "OP1");
+        service.updateMember(1L, 11L, "100002", null, "OP1");
+
+        verify(relMapper).updateById(any(PersonTagRel.class));
+    }
+
+    @Test
+    void updateMember_orgRow_shouldValidateDeptNoAndUpdate() {
+        when(relMapper.selectById(21L)).thenReturn(orgRel(21L, 1L, "0101"));
+        when(orgApi.getOrgsByDeptNos(List.of("0102"))).thenReturn(List.of(org("0102", "城西")));
+        when(relMapper.selectDeptNosByTagId(1L)).thenReturn(List.of("0101"));
+
+        service.updateMember(1L, 21L, null, "0102", "OP1");
 
         verify(relMapper).updateById(any(PersonTagRel.class));
     }
 
     @Test
     void updateMember_duplicateInTag_shouldThrow40905() {
-        when(relMapper.selectById(11L)).thenReturn(rel(11L, 1L, "100001"));
+        when(relMapper.selectById(11L)).thenReturn(empRel(11L, 1L, "100001"));
         when(userApi.filterExistingUsernames(List.of("100002"))).thenReturn(List.of("100002"));
         when(relMapper.selectUsernamesByTagId(1L)).thenReturn(List.of("100001", "100002"));
 
-        assertThatThrownBy(() -> service.updateMember(1L, 11L, "100002", "OP1"))
+        assertThatThrownBy(() -> service.updateMember(1L, 11L, "100002", null, "OP1"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("已在标签下");
     }
 
     @Test
     void updateMember_relBelongsToOtherTag_shouldThrow40009() {
-        when(relMapper.selectById(11L)).thenReturn(rel(11L, 2L, "100001"));
+        when(relMapper.selectById(11L)).thenReturn(empRel(11L, 2L, "100001"));
 
-        assertThatThrownBy(() -> service.updateMember(1L, 11L, "100002", "OP1"))
+        assertThatThrownBy(() -> service.updateMember(1L, 11L, "100002", null, "OP1"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("成员不存在");
     }
 
     @Test
     void removeMember_shouldDeleteById() {
-        when(relMapper.selectById(11L)).thenReturn(rel(11L, 1L, "100001"));
+        when(relMapper.selectById(11L)).thenReturn(empRel(11L, 1L, "100001"));
 
         service.removeMember(1L, 11L);
 
@@ -256,7 +331,7 @@ class PersonTagServiceTest {
 
     @Test
     void removeMember_wrongTag_shouldThrow40009() {
-        when(relMapper.selectById(11L)).thenReturn(rel(11L, 2L, "100001"));
+        when(relMapper.selectById(11L)).thenReturn(empRel(11L, 2L, "100001"));
 
         assertThatThrownBy(() -> service.removeMember(1L, 11L))
                 .isInstanceOf(BizException.class);

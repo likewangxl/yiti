@@ -10,6 +10,7 @@ import com.bank.branch.platform.governance.api.dto.PersonTagMemberAddReqDTO;
 import com.bank.branch.platform.governance.api.dto.PersonTagMemberRespDTO;
 import com.bank.branch.platform.governance.api.dto.PersonTagRespDTO;
 import com.bank.branch.platform.governance.entity.PersonTag;
+import com.bank.branch.platform.governance.entity.PersonTagRel;
 import com.bank.branch.platform.governance.service.PersonTagImportService;
 import com.bank.branch.platform.governance.service.PersonTagService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,7 +30,9 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -128,7 +131,7 @@ class AdminPersonTagControllerTest {
 
     @Test
     void delete_notFound_shouldReturnBizErrorCode() throws Exception {
-        doThrow(new BizException("GOV-40008", "人员标签不存在"))
+        doThrow(new BizException("GOV-40008", "业务标签不存在"))
                 .when(personTagService).deleteTag(99L);
 
         mockMvc.perform(delete("/api/admin/sys/person-tags/99"))
@@ -137,53 +140,81 @@ class AdminPersonTagControllerTest {
     }
 
     @Test
-    void members_shouldReturnResolvedRows() throws Exception {
+    void members_empDim_default_shouldReturnUsername() throws Exception {
         PersonTagMemberRespDTO m = new PersonTagMemberRespDTO();
         m.setId(11L);
+        m.setDimType(PersonTagRel.DIM_EMP);
         m.setUsername("100001");
-        m.setDisplayName("张三");
-        m.setOrgName("城东支行");
-        when(personTagService.pageMembers(eq(1L), anyInt(), anyInt()))
+        when(personTagService.pageMembers(eq(1L), eq("EMP"), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 20, 1, List.of(m)));
 
         mockMvc.perform(get("/api/admin/sys/person-tags/1/members"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.records[0].username").value("100001"))
+                .andExpect(jsonPath("$.data.records[0].dimType").value("EMP"))
+                .andExpect(jsonPath("$.data.records[0].username").value("100001"));
+    }
+
+    @Test
+    void members_orgDim_shouldReturnDeptNoAndOrgName() throws Exception {
+        PersonTagMemberRespDTO m = new PersonTagMemberRespDTO();
+        m.setId(21L);
+        m.setDimType(PersonTagRel.DIM_ORG);
+        m.setOrgDeptNo("0101");
+        m.setOrgName("城东支行");
+        when(personTagService.pageMembers(eq(1L), eq("ORG"), anyInt(), anyInt()))
+                .thenReturn(PageResult.of(1, 20, 1, List.of(m)));
+
+        mockMvc.perform(get("/api/admin/sys/person-tags/1/members").param("dim", "ORG"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.records[0].dimType").value("ORG"))
+                .andExpect(jsonPath("$.data.records[0].orgDeptNo").value("0101"))
                 .andExpect(jsonPath("$.data.records[0].orgName").value("城东支行"));
     }
 
     @Test
-    void addMembers_shouldReturnAddedCount() throws Exception {
-        when(personTagService.addMembers(eq(1L), anyList(), eq("OP1"))).thenReturn(2);
+    void addMembers_bothDims_shouldReturnAddedCount() throws Exception {
+        when(personTagService.addMembers(eq(1L), anyList(), anyList(), eq("OP1"))).thenReturn(3);
 
         PersonTagMemberAddReqDTO req = new PersonTagMemberAddReqDTO();
         req.setUsernames(List.of("100001", "100002"));
+        req.setOrgDeptNos(List.of("0101"));
 
         mockMvc.perform(post("/api/admin/sys/person-tags/1/members")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").value(2));
+                .andExpect(jsonPath("$.data").value(3));
     }
 
     @Test
-    void updateMember_shouldDelegate() throws Exception {
+    void updateMember_empRow_shouldDelegateWithNullDeptNo() throws Exception {
         mockMvc.perform(put("/api/admin/sys/person-tags/1/members/11")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"100002\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
 
-        verify(personTagService).updateMember(1L, 11L, "100002", "OP1");
+        verify(personTagService).updateMember(1L, 11L, "100002", null, "OP1");
     }
 
     @Test
-    void importGlobal_shouldReturnResult() throws Exception {
+    void updateMember_orgRow_shouldDelegateWithDeptNo() throws Exception {
+        mockMvc.perform(put("/api/admin/sys/person-tags/1/members/21")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orgDeptNo\":\"0102\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("0"));
+
+        verify(personTagService).updateMember(eq(1L), eq(21L), isNull(), eq("0102"), eq("OP1"));
+    }
+
+    @Test
+    void importGlobal_empDim_default_shouldReturnResult() throws Exception {
         PersonTagImportResultDTO result = new PersonTagImportResultDTO();
         result.setSuccess(true);
         result.setImportedCount(3);
         result.setCreatedTagCount(1);
-        when(personTagImportService.importGlobal(any(), eq("OP1"))).thenReturn(result);
+        when(personTagImportService.importGlobal(any(), eq("EMP"), eq("OP1"))).thenReturn(result);
 
         MockMultipartFile file = new MockMultipartFile("file", "import.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", new byte[]{1});
@@ -195,31 +226,33 @@ class AdminPersonTagControllerTest {
     }
 
     @Test
-    void importMembers_shouldTargetClickedTag() throws Exception {
+    void importMembers_orgDim_shouldTargetClickedTagAndDim() throws Exception {
         PersonTagImportResultDTO result = new PersonTagImportResultDTO();
         result.setSuccess(true);
         result.setImportedCount(2);
-        when(personTagImportService.importMembers(eq(1L), any(), eq("OP1"))).thenReturn(result);
+        when(personTagImportService.importMembers(eq(1L), any(), eq("ORG"), eq("OP1"))).thenReturn(result);
 
         MockMultipartFile file = new MockMultipartFile("file", "members.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", new byte[]{1});
 
-        mockMvc.perform(multipart("/api/admin/sys/person-tags/1/import").file(file))
+        mockMvc.perform(multipart("/api/admin/sys/person-tags/1/import").file(file).param("dim", "ORG"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.importedCount").value(2));
 
-        verify(personTagImportService).importMembers(eq(1L), any(), eq("OP1"));
+        verify(personTagImportService).importMembers(eq(1L), any(), eq("ORG"), eq("OP1"));
     }
 
     @Test
-    void importTemplate_shouldStreamXlsx() throws Exception {
-        mockMvc.perform(get("/api/admin/sys/person-tags/import-template"))
+    void importTemplate_bothDims_shouldStreamXlsx() throws Exception {
+        mockMvc.perform(get("/api/admin/sys/person-tags/import-template")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/sys/person-tags/import-template").param("dim", "ORG"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void memberImportTemplate_shouldStreamXlsx() throws Exception {
-        mockMvc.perform(get("/api/admin/sys/person-tags/member-import-template"))
+    void memberImportTemplate_bothDims_shouldStreamXlsx() throws Exception {
+        mockMvc.perform(get("/api/admin/sys/person-tags/member-import-template")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/sys/person-tags/member-import-template").param("dim", "ORG"))
                 .andExpect(status().isOk());
     }
 }

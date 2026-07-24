@@ -14,6 +14,8 @@ import com.bank.branch.platform.governance.api.dto.PersonTagMemberAddReqDTO;
 import com.bank.branch.platform.governance.api.dto.PersonTagMemberImportRow;
 import com.bank.branch.platform.governance.api.dto.PersonTagMemberRespDTO;
 import com.bank.branch.platform.governance.api.dto.PersonTagMemberUpdateReqDTO;
+import com.bank.branch.platform.governance.api.dto.PersonTagOrgImportRow;
+import com.bank.branch.platform.governance.api.dto.PersonTagOrgMemberImportRow;
 import com.bank.branch.platform.governance.api.dto.PersonTagRespDTO;
 import com.bank.branch.platform.governance.api.dto.PersonTagUpdateReqDTO;
 import com.bank.branch.platform.governance.entity.PersonTag;
@@ -125,58 +127,63 @@ public class AdminPersonTagController {
     }
 
     /**
-     * 分页查询标签成员（工号/姓名/机构实时解析）。
+     * 分页查询标签某维度下的成员（EMP=工号 / ORG=机构编号+名称实时解析）。
      *
      * @param tagId    标签 ID
+     * @param dim      成员维度（EMP/ORG，默认 EMP）
      * @param pageNo   页码（从 1 起）
      * @param pageSize 页大小
      * @return 分页结果
      */
     @GetMapping("/{tagId}/members")
-    @Operation(summary = "分页查询标签成员（工号/姓名/机构）")
+    @Operation(summary = "分页查询标签成员（按维度：员工工号 / 机构编号）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.LIST)
     public ResponseWrapper<PageResult<PersonTagMemberRespDTO>> members(
             @PathVariable("tagId") Long tagId,
+            @RequestParam(value = "dim", defaultValue = "EMP") String dim,
             @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        return ResponseWrapper.success(personTagService.pageMembers(tagId, pageNo, pageSize));
+        return ResponseWrapper.success(personTagService.pageMembers(tagId, dim, pageNo, pageSize));
     }
 
     /**
-     * 新增成员（批量工号，已在标签下的跳过）。
+     * 新增成员（可同时批量提交员工工号与机构编号，已在标签下的同维度成员跳过）。
      *
      * @param tagId 标签 ID
-     * @param req   工号列表
-     * @return 实际新增条数
+     * @param req   员工工号列表 + 机构编号列表（至少一个非空）
+     * @return 实际新增条数（员工+机构合计）
      */
     @PostMapping("/{tagId}/members")
-    @Operation(summary = "新增标签成员（批量工号）")
+    @Operation(summary = "新增标签成员（批量员工工号 / 机构编号）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<Integer> addMembers(@PathVariable("tagId") Long tagId,
                                                @Valid @RequestBody PersonTagMemberAddReqDTO req) {
         String operator = DataScopeContext.current().getEmpId();
-        log.info("[AdminPersonTagController.addMembers] operator={}, tagId={}, size={}",
-                operator, tagId, req.getUsernames().size());
-        return ResponseWrapper.success(personTagService.addMembers(tagId, req.getUsernames(), operator));
+        int empSize = req.getUsernames() == null ? 0 : req.getUsernames().size();
+        int orgSize = req.getOrgDeptNos() == null ? 0 : req.getOrgDeptNos().size();
+        log.info("[AdminPersonTagController.addMembers] operator={}, tagId={}, empSize={}, orgSize={}",
+                operator, tagId, empSize, orgSize);
+        return ResponseWrapper.success(
+                personTagService.addMembers(tagId, req.getUsernames(), req.getOrgDeptNos(), operator));
     }
 
     /**
-     * 修改成员（把关联行换成另一个工号）。
+     * 修改成员（按行维度换成另一个工号 / 机构编号）。
      *
      * @param tagId 标签 ID
      * @param id    关联行 ID
-     * @param req   新工号
+     * @param req   新工号（EMP 行）或新机构编号（ORG 行）
      * @return 空响应
      */
     @PutMapping("/{tagId}/members/{id}")
-    @Operation(summary = "修改标签成员（更换工号）")
+    @Operation(summary = "修改标签成员（更换工号 / 机构编号）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.CONFIG)
     public ResponseWrapper<Void> updateMember(@PathVariable("tagId") Long tagId,
                                               @PathVariable("id") Long id,
                                               @Valid @RequestBody PersonTagMemberUpdateReqDTO req) {
         String operator = DataScopeContext.current().getEmpId();
         log.info("[AdminPersonTagController.updateMember] operator={}, tagId={}, relId={}", operator, tagId, id);
-        personTagService.updateMember(tagId, id, req.getUsername(), operator);
+        personTagService.updateMember(tagId, id, req.getUsername(), req.getOrgDeptNo(), operator);
         return ResponseWrapper.success();
     }
 
@@ -199,70 +206,94 @@ public class AdminPersonTagController {
     }
 
     /**
-     * 全局导入（标签名称/工号/姓名，缺标签自动新建，同步原子）。
+     * 全局导入（按维度：员工=标签名称/工号，机构=标签名称/机构号；缺标签自动新建，同步原子）。
      *
      * @param file .xlsx 文件
+     * @param dim  成员维度（EMP/ORG，默认 EMP）
      * @return 导入结果（成功计数或行级错误明细）
      */
     @PostMapping("/import")
-    @Operation(summary = "全局导入标签-人员关联（Excel，缺标签自动新建，同步原子）")
+    @Operation(summary = "全局导入业务标签-成员关联（Excel，按维度，缺标签自动新建，同步原子）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.IMPORT)
     public ResponseWrapper<PersonTagImportResultDTO> importGlobal(
-            @RequestPart("file") MultipartFile file) {
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "dim", defaultValue = "EMP") String dim) {
         String operator = DataScopeContext.current().getEmpId();
-        log.info("[AdminPersonTagController.importGlobal] operator={}, fileName={}",
-                operator, file != null ? file.getOriginalFilename() : null);
-        return ResponseWrapper.success(personTagImportService.importGlobal(file, operator));
+        log.info("[AdminPersonTagController.importGlobal] operator={}, dim={}, fileName={}",
+                operator, dim, file != null ? file.getOriginalFilename() : null);
+        return ResponseWrapper.success(personTagImportService.importGlobal(file, dim, operator));
     }
 
     /**
-     * 下载全局导入模板（标签名称/工号/姓名）。
+     * 下载全局导入模板（按维度：员工=标签名称/工号，机构=标签名称/机构号）。
      *
+     * @param dim      成员维度（EMP/ORG，默认 EMP）
      * @param response HTTP 响应（附件输出）
      */
     @GetMapping("/import-template")
-    @Operation(summary = "下载人员标签全局导入模板")
+    @Operation(summary = "下载业务标签全局导入模板（按维度）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.IMPORT)
-    public void importTemplate(HttpServletResponse response) throws IOException {
-        PersonTagImportRow sample = new PersonTagImportRow();
-        sample.setTagName("重点培养");
-        sample.setUsername("100001");
-        sample.setDisplayName("张三");
-        writeTemplate(response, "人员标签导入模板.xlsx", PersonTagImportRow.class, List.of(sample));
+    public void importTemplate(@RequestParam(value = "dim", defaultValue = "EMP") String dim,
+                               HttpServletResponse response) throws IOException {
+        if (isOrgDim(dim)) {
+            PersonTagOrgImportRow sample = new PersonTagOrgImportRow();
+            sample.setTagName("重点机构");
+            sample.setOrgDeptNo("0101");
+            writeTemplate(response, "业务标签机构导入模板.xlsx", PersonTagOrgImportRow.class, List.of(sample));
+        } else {
+            PersonTagImportRow sample = new PersonTagImportRow();
+            sample.setTagName("重点培养");
+            sample.setUsername("100001");
+            writeTemplate(response, "业务标签员工导入模板.xlsx", PersonTagImportRow.class, List.of(sample));
+        }
     }
 
     /**
-     * 成员导入（工号/姓名，对该标签全量覆盖，同步原子）。
+     * 成员导入（按维度对该标签全量覆盖，不影响另一维度，同步原子）。
      *
      * @param tagId 标签 ID
      * @param file  .xlsx 文件
+     * @param dim   成员维度（EMP/ORG，默认 EMP）
      * @return 导入结果（成功计数或行级错误明细）
      */
     @PostMapping("/{tagId}/import")
-    @Operation(summary = "导入标签成员（Excel，整标签全量覆盖，同步原子）")
+    @Operation(summary = "导入标签成员（Excel，按维度全量覆盖，同步原子）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.IMPORT)
     public ResponseWrapper<PersonTagImportResultDTO> importMembers(
             @PathVariable("tagId") Long tagId,
-            @RequestPart("file") MultipartFile file) {
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "dim", defaultValue = "EMP") String dim) {
         String operator = DataScopeContext.current().getEmpId();
-        log.info("[AdminPersonTagController.importMembers] operator={}, tagId={}, fileName={}",
-                operator, tagId, file != null ? file.getOriginalFilename() : null);
-        return ResponseWrapper.success(personTagImportService.importMembers(tagId, file, operator));
+        log.info("[AdminPersonTagController.importMembers] operator={}, tagId={}, dim={}, fileName={}",
+                operator, tagId, dim, file != null ? file.getOriginalFilename() : null);
+        return ResponseWrapper.success(personTagImportService.importMembers(tagId, file, dim, operator));
     }
 
     /**
-     * 下载成员导入模板（工号/姓名）。
+     * 下载成员导入模板（按维度：员工=工号，机构=机构号）。
      *
+     * @param dim      成员维度（EMP/ORG，默认 EMP）
      * @param response HTTP 响应（附件输出）
      */
     @GetMapping("/member-import-template")
-    @Operation(summary = "下载标签成员导入模板")
+    @Operation(summary = "下载标签成员导入模板（按维度）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.IMPORT)
-    public void memberImportTemplate(HttpServletResponse response) throws IOException {
-        PersonTagMemberImportRow sample = new PersonTagMemberImportRow();
-        sample.setUsername("100001");
-        sample.setDisplayName("张三");
-        writeTemplate(response, "标签成员导入模板.xlsx", PersonTagMemberImportRow.class, List.of(sample));
+    public void memberImportTemplate(@RequestParam(value = "dim", defaultValue = "EMP") String dim,
+                                     HttpServletResponse response) throws IOException {
+        if (isOrgDim(dim)) {
+            PersonTagOrgMemberImportRow sample = new PersonTagOrgMemberImportRow();
+            sample.setOrgDeptNo("0101");
+            writeTemplate(response, "标签机构成员导入模板.xlsx", PersonTagOrgMemberImportRow.class, List.of(sample));
+        } else {
+            PersonTagMemberImportRow sample = new PersonTagMemberImportRow();
+            sample.setUsername("100001");
+            writeTemplate(response, "标签员工成员导入模板.xlsx", PersonTagMemberImportRow.class, List.of(sample));
+        }
+    }
+
+    /** 维度是否为机构（ORG，忽略大小写）。 */
+    private static boolean isOrgDim(String dim) {
+        return "ORG".equalsIgnoreCase(dim);
     }
 
     /** 输出 Excel 模板附件（UTF-8 文件名）。 */

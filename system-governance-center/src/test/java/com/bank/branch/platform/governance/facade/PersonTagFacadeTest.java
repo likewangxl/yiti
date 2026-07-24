@@ -37,10 +37,19 @@ class PersonTagFacadeTest {
         facade = new PersonTagFacade(tagMapper, relMapper);
     }
 
-    private static PersonTagRel rel(Long tagId, String username) {
+    private static PersonTagRel empRel(Long tagId, String username) {
         PersonTagRel r = new PersonTagRel();
         r.setTagId(tagId);
+        r.setDimType(PersonTagRel.DIM_EMP);
         r.setUsername(username);
+        return r;
+    }
+
+    private static PersonTagRel orgRel(Long tagId, String deptNo) {
+        PersonTagRel r = new PersonTagRel();
+        r.setTagId(tagId);
+        r.setDimType(PersonTagRel.DIM_ORG);
+        r.setOrgDeptNo(deptNo);
         return r;
     }
 
@@ -52,20 +61,20 @@ class PersonTagFacadeTest {
     }
 
     @Test
-    void getUsernamesByTagIds_multiTags_shouldReturnUnionDistinct() {
+    void getUsernamesByTagIds_multiTags_shouldReturnUnionDistinct_empOnly() {
         when(relMapper.selectByTagIds(List.of(1L, 2L))).thenReturn(List.of(
-                rel(1L, "100001"), rel(1L, "100002"),
-                rel(2L, "100002"), rel(2L, "100003")));
+                empRel(1L, "100001"), empRel(1L, "100002"), orgRel(1L, "0101"),
+                empRel(2L, "100002"), empRel(2L, "100003"), orgRel(2L, "0102")));
 
         List<String> usernames = facade.getUsernamesByTagIds(List.of(1L, 2L));
 
-        // 并集去重：100002 同属两个标签只出现一次
+        // 并集去重且仅 EMP：100002 只出现一次，机构成员(0101/0102)不混入
         assertThat(usernames).containsExactly("100001", "100002", "100003");
     }
 
     @Test
     void getUsernamesByTagIds_duplicateAndNullIds_shouldNormalizeBeforeQuery() {
-        when(relMapper.selectByTagIds(List.of(1L))).thenReturn(List.of(rel(1L, "100001")));
+        when(relMapper.selectByTagIds(List.of(1L))).thenReturn(List.of(empRel(1L, "100001")));
 
         List<String> usernames = facade.getUsernamesByTagIds(java.util.Arrays.asList(1L, null, 1L));
 
@@ -77,6 +86,25 @@ class PersonTagFacadeTest {
     void getUsernamesByTagIds_emptyInput_shouldSkipQuery() {
         assertThat(facade.getUsernamesByTagIds(List.of())).isEmpty();
         assertThat(facade.getUsernamesByTagIds(null)).isEmpty();
+        verify(relMapper, never()).selectByTagIds(anyList());
+    }
+
+    @Test
+    void getDeptNosByTagIds_multiTags_shouldReturnUnionDistinct_orgOnly() {
+        when(relMapper.selectByTagIds(List.of(1L, 2L))).thenReturn(List.of(
+                empRel(1L, "100001"), orgRel(1L, "0101"), orgRel(1L, "0102"),
+                orgRel(2L, "0102"), orgRel(2L, "0103")));
+
+        List<String> deptNos = facade.getDeptNosByTagIds(List.of(1L, 2L));
+
+        // 并集去重且仅 ORG：0102 只出现一次，员工成员不混入
+        assertThat(deptNos).containsExactly("0101", "0102", "0103");
+    }
+
+    @Test
+    void getDeptNosByTagIds_emptyInput_shouldSkipQuery() {
+        assertThat(facade.getDeptNosByTagIds(List.of())).isEmpty();
+        assertThat(facade.getDeptNosByTagIds(null)).isEmpty();
         verify(relMapper, never()).selectByTagIds(anyList());
     }
 

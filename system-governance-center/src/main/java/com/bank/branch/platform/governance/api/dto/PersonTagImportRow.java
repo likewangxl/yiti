@@ -4,8 +4,8 @@ import com.alibaba.excel.annotation.ExcelProperty;
 import lombok.Data;
 
 /**
- * 人员标签全局导入 Excel 行模型（3 列）。
- * <p>姓名列仅供人工对照，入库以 PT_USER 为准，不校验一致性。</p>
+ * 业务标签「员工维度」全局导入 Excel 行模型（2 列，缺标签自动新建，追加语义）。
+ * <p>按需求员工维度只需工号，不再有姓名列。</p>
  */
 @Data
 public class PersonTagImportRow {
@@ -17,8 +17,4 @@ public class PersonTagImportRow {
     /** 员工工号. */
     @ExcelProperty("工号")
     private String username;
-
-    /** 员工姓名（仅对照，不入库）. */
-    @ExcelProperty("姓名")
-    private String displayName;
 }

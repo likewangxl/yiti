@@ -3,31 +3,38 @@
 <mapper namespace="com.bank.branch.platform.governance.mapper.PersonTagRelMapper">
 
     <sql id="BASE_COLUMNS">
-        ID, TAG_ID, USERNAME, CREATE_BY, CREATE_TIME
+        ID, TAG_ID, DIM_TYPE, USERNAME, ORG_DEPT_NO, CREATE_BY, CREATE_TIME
     </sql>
 
-    <!-- 分页查询某标签下的关联行，稳定顺序 -->
+    <!-- 分页查询某标签某维度下的成员行，稳定顺序 -->
     <select id="selectPageByTagId"
             resultType="com.bank.branch.platform.governance.entity.PersonTagRel">
         SELECT
             <include refid="BASE_COLUMNS"/>
         FROM PERSON_TAG_REL
-        WHERE TAG_ID = #{tagId}
+        WHERE TAG_ID = #{tagId} AND DIM_TYPE = #{dimType}
         ORDER BY CREATE_TIME ASC, ID ASC
         LIMIT #{offset}, #{size}
     </select>
 
-    <!-- 某标签下关联总数 -->
+    <!-- 某标签某维度下成员总数 -->
     <select id="countByTagId" resultType="long">
-        SELECT COUNT(*) FROM PERSON_TAG_REL WHERE TAG_ID = #{tagId}
+        SELECT COUNT(*) FROM PERSON_TAG_REL WHERE TAG_ID = #{tagId} AND DIM_TYPE = #{dimType}
     </select>
 
-    <!-- 某标签下已关联的工号集合 -->
+    <!-- 某标签下已关联的员工工号集合（仅 EMP 维度） -->
     <select id="selectUsernamesByTagId" resultType="string">
-        SELECT USERNAME FROM PERSON_TAG_REL WHERE TAG_ID = #{tagId}
+        SELECT USERNAME FROM PERSON_TAG_REL
+        WHERE TAG_ID = #{tagId} AND DIM_TYPE = 'EMP' AND USERNAME IS NOT NULL
     </select>
 
-    <!-- 按标签 ID 集合查全部关联 -->
+    <!-- 某标签下已关联的机构编号集合（仅 ORG 维度） -->
+    <select id="selectDeptNosByTagId" resultType="string">
+        SELECT ORG_DEPT_NO FROM PERSON_TAG_REL
+        WHERE TAG_ID = #{tagId} AND DIM_TYPE = 'ORG' AND ORG_DEPT_NO IS NOT NULL
+    </select>
+
+    <!-- 按标签 ID 集合查全部成员（含两维） -->
     <select id="selectByTagIds"
             resultType="com.bank.branch.platform.governance.entity.PersonTagRel">
         SELECT
@@ -39,17 +46,22 @@
         </foreach>
     </select>
 
-    <!-- 删除某标签下全部关联 -->
+    <!-- 删除某标签下全部成员（删除标签级联，不分维度） -->
     <delete id="deleteByTagId">
         DELETE FROM PERSON_TAG_REL WHERE TAG_ID = #{tagId}
     </delete>
 
-    <!-- 批量插入关联行 -->
+    <!-- 删除某标签某维度下全部成员（成员导入按维度全量覆盖） -->
+    <delete id="deleteByTagIdAndDim">
+        DELETE FROM PERSON_TAG_REL WHERE TAG_ID = #{tagId} AND DIM_TYPE = #{dimType}
+    </delete>
+
+    <!-- 批量插入成员行（EMP 行填 USERNAME、ORG 行填 ORG_DEPT_NO，另一维列为 NULL） -->
     <insert id="insertBatch">
-        INSERT INTO PERSON_TAG_REL (TAG_ID, USERNAME, CREATE_BY)
+        INSERT INTO PERSON_TAG_REL (TAG_ID, DIM_TYPE, USERNAME, ORG_DEPT_NO, CREATE_BY)
         VALUES
         <foreach collection="rows" item="row" separator=",">
-            (#{row.tagId}, #{row.username}, #{row.createBy})
+            (#{row.tagId}, #{row.dimType}, #{row.username}, #{row.orgDeptNo}, #{row.createBy})
         </foreach>
     </insert>
 
