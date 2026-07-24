@@ -252,3 +252,31 @@ Excel 里出现"数字以文本形式存储"绿三角且不能求和。
 ### 验收用例
 `roundTrip_everyCell_displayAndRawValueMatchSource` —— 全表逐格（数值格比显示+编辑栏原值，
 文本格比内容），断言比对格数下限防止空跑。这是本特性的总验收。
+
+## 15. 2026-07-23 修复：百分比列的「完整值」必须带 % 且已乘 100
+
+### 问题（用户实测）
+源报表某列格内显示 `-1683.2%`，点开编辑栏是 `-1683.24723247232%`；
+页面格内显示对了，但点开的完整值是 `-16.8324723247232`（底层小数），与源对不上。
+
+### 根因
+Excel 对**百分比格式**的单元格，编辑栏显示的是「底层值 ×100 加 %」，
+而 `getCellRaw` 一直直接输出底层 double。固件上同样复现：
+`0.91 + 0%` 给出 `0.91`（应为 `91%`）、`0.498888897666 + 0.00%` 给出底层小数（应为 `49.8888897666%`）。
+
+### 落地
+- 新增 `isPercentFormat(fmt)`：扫描格式串找**生效的** `%`，跳过 `\%` 转义、
+  `"…%…"` 引号字面量、`[Red]`/`[$-409]` 方括号段。
+- `getCellRaw` 命中百分比格式时用 `BigDecimal.movePointRight(2)` **精确移位**再加 `%`
+  （`×100` 的浮点乘法会引入误差，如 0.498888897666×100 = 49.88888976660001）。
+- `excelRawText` 增加 BigDecimal 重载，百分比移位后直接走它，避免二次转 double 丢精度；
+  科学计数法分支抽为 `sciText`。
+
+### 连带修复：导出解析 __raw 要能处理 % 后缀
+`__raw` 现在可能形如 `91%`，`Double.parseDouble` 会抛异常 → 该格被当**文本**写入
+（导出比对立刻报 `expected NUMERIC but was STRING`）。新增 `parseRawValue`：
+末尾带 % 时 `movePointLeft(2)` 还原为底层值（`91%` → `0.91`），解析失败才退回文本。
+
+### 测试
+`importExcel_percentFormat_rawValueCarriesPercentSign`（0% 与 0.00% 两种格式 + 非百分比列不受影响）；
+`roundTrip_everyCell_displayAndRawValueMatchSource` 覆盖导出侧的百分比回写。

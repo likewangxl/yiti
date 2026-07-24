@@ -327,9 +327,10 @@ public class FreeReportServiceImpl implements FreeReportService {
                         if (raw != null && !raw.isEmpty()) {
                             // 有 __raw 说明导入时该格确为数值格，直接按数值解析——
                             // 注意 __raw 可能是科学计数法（Excel 编辑栏对极小值的原样写法，
-                            // 如 -5.00000000069889E-07），不能再用只认纯小数的 isDecimal 判定，
-                            // 否则会被当文本写死，既不受数字格式控制、点击也看不到原值。
-                            try { num = Double.parseDouble(raw); } catch (NumberFormatException ignore) { /* 退回文本 */ }
+                            // 如 -5.00000000069889E-07），也可能是百分比形式（如 91%），
+                            // 不能再用只认纯小数的 isDecimal 判定，否则会被当文本写死，
+                            // 既不受数字格式控制、点击也看不到原值。
+                            num = parseRawValue(raw);
                         } else if (isDecimal(val)) {
                             // 老批次无 __raw：沿用「纯小数才转数值」的保守判定，
                             // 防止工号/卡号类纯数字被转成数值而丢前导零或变科学计数法
@@ -496,10 +497,42 @@ public class FreeReportServiceImpl implements FreeReportService {
         CellType t = cell.getCellType() == CellType.FORMULA ? cell.getCachedFormulaResultType() : cell.getCellType();
         if (t != CellType.NUMERIC || DateUtil.isCellDateFormatted(cell)) return "";
         try {
-            return excelRawText(cell.getNumericCellValue());
+            double v = cell.getNumericCellValue();
+            CellStyle style = cell.getCellStyle();
+            String fmt = style != null ? style.getDataFormatString() : null;
+            if (isPercentFormat(fmt)) {
+                // 百分比格式：Excel 编辑栏显示的是「底层值 ×100 加 %」，
+                // 例如底层 -16.8324723247232 + 格式 0.0% -> 编辑栏 -1683.24723247232%。
+                // 必须用 movePointRight(2) 精确移位，×100 的浮点乘法会引入误差。
+                return excelRawText(new java.math.BigDecimal(Double.toString(v)).movePointRight(2)) + "%";
+            }
+            return excelRawText(v);
         } catch (Exception e) {
             return "";
         }
+    }
+
+    /**
+     * 判断数字格式是否为百分比（存在**生效的** {@code %} 记号）。
+     *
+     * <p>需跳过三类"不算数"的 %：{@code \%} 转义、{@code "…%…"} 引号内的字面量、
+     * {@code [Red]}/{@code [$-409]} 这类方括号区段内的内容。
+     */
+    static boolean isPercentFormat(String fmt) {
+        if (fmt == null || fmt.isEmpty()) return false;
+        boolean inQuote = false;
+        for (int i = 0; i < fmt.length(); i++) {
+            char c = fmt.charAt(i);
+            if (c == '\\') { i++; continue; }              // 转义：跳过下一个字符
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (inQuote) continue;
+            if (c == '[') {                                 // 颜色/区域等方括号段整体跳过
+                int j = fmt.indexOf(']', i);
+                if (j > 0) { i = j; continue; }
+            }
+            if (c == '%') return true;
+        }
+        return false;
     }
 
     /**
@@ -521,15 +554,33 @@ public class FreeReportServiceImpl implements FreeReportService {
     static String excelRawText(double v) {
         if (v == 0) return "0";                       // 含 -0.0
         if (Double.isNaN(v) || Double.isInfinite(v)) return String.valueOf(v);
-        double abs = Math.abs(v);
-        String s = Double.toString(v);
-        if (abs >= 1e-4 && abs < 1e15) {
-            // 十进制平铺。先 stripTrailingZeros 去掉标度带来的尾零——
+        return excelRawText(new java.math.BigDecimal(Double.toString(v)));
+    }
+
+    /** 平铺区间下界：小于它 Excel 编辑栏才切科学计数法。 */
+    private static final java.math.BigDecimal PLAIN_MIN = new java.math.BigDecimal("0.0001");
+    /** 平铺区间上界（1e15）：大于等于它 Excel 编辑栏才切科学计数法。 */
+    private static final java.math.BigDecimal PLAIN_MAX = new java.math.BigDecimal("1000000000000000");
+
+    /**
+     * BigDecimal 版本（百分比 movePointRight(2) 后走这条，避免二次转 double 丢精度）。
+     */
+    static String excelRawText(java.math.BigDecimal bd) {
+        if (bd == null) return "";
+        if (bd.signum() == 0) return "0";
+        java.math.BigDecimal abs = bd.abs();
+        if (abs.compareTo(PLAIN_MIN) >= 0 && abs.compareTo(PLAIN_MAX) < 0) {
+            // 十进制平铺。stripTrailingZeros 去掉标度带来的尾零——
             // Double.toString(0.0005)="5.0E-4"，直接 toPlainString 会得到 "0.00050"；
-            // 同时它也顺带去掉整数的 ".0"（85.0 -> 85），无需另行截尾。
-            return new java.math.BigDecimal(s).stripTrailingZeros().toPlainString();
+            // 同时顺带去掉整数的 ".0"（85.0 -> 85）。
+            return bd.stripTrailingZeros().toPlainString();
         }
-        // 科学计数法：尾数去掉 ".0"，指数补两位并带符号，对齐 Excel 的 E-07 / E+16 写法
+        return sciText(bd.doubleValue());
+    }
+
+    /** 科学计数法：尾数去掉 ".0"，指数补两位并带符号，对齐 Excel 的 E-07 / E+16 写法。 */
+    private static String sciText(double v) {
+        String s = Double.toString(v);
         int e = s.indexOf('E');
         if (e < 0) return s;
         String mant = s.substring(0, e);
@@ -540,6 +591,27 @@ public class FreeReportServiceImpl implements FreeReportService {
         else if (exp.startsWith("+")) { exp = exp.substring(1); }
         if (exp.length() < 2) exp = "0" + exp;
         return mant + "E" + sign + exp;
+    }
+
+    /**
+     * 把 {@code __raw}（Excel 编辑栏原样文本）解析回 Excel 的底层数值，供导出写回单元格。
+     *
+     * <p>百分比形式（末尾带 %）要 {@code movePointLeft(2)} 还原：编辑栏 {@code 91%}
+     * 对应底层 {@code 0.91}，直接 parseDouble 会抛异常导致该格被当文本写死。
+     * 解析不了则返回 null，由调用方退回文本写入。
+     */
+    private static Double parseRawValue(String raw) {
+        if (raw == null || raw.isEmpty()) return null;
+        String s = raw.trim();
+        try {
+            if (s.endsWith("%")) {
+                return new java.math.BigDecimal(s.substring(0, s.length() - 1).trim())
+                        .movePointLeft(2).doubleValue();
+            }
+            return Double.parseDouble(s);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** 单元格的数字格式串（如 0.0 / 0.0% / #,##0.00）；General、文本格式返回空。 */

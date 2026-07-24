@@ -9,7 +9,7 @@ describe('cellDisplay —— 自由报表单元格显示文本', () => {
   });
 
   it('新批次：百分比原样显示，不丢 % 号', () => {
-    const row = { col_4: '54.5%', col_4__raw: '0.545175438596492' };
+    const row = { col_4: '54.5%', col_4__raw: '54.5175438596492%' };
     expect(cellDisplay(row, 'col_4')).toBe('54.5%');
   });
 

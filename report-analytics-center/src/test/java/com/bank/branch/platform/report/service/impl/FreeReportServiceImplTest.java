@@ -337,6 +337,47 @@ class FreeReportServiceImplTest {
         }
     }
 
+    /**
+     * 百分比格式的「完整值」必须与 Excel 编辑栏一致——带 % 且已乘 100。
+     *
+     * <p>Excel 对百分比格式的单元格，编辑栏显示的是 {@code -1683.24723247232%}，
+     * 而不是底层存储的小数 {@code -16.8324723247232}。此前直接给底层小数，
+     * 页面点开看到的数跟源报表对不上（用户实测：源 -1683.24723247232%，页面 -16.83…）。
+     */
+    @Test
+    void importExcel_percentFormat_rawValueCarriesPercentSign() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        byte[] src;
+        try (java.io.InputStream in = getClass().getResourceAsStream("/freereport/real-formats.xlsx")) {
+            src = in.readAllBytes();
+        }
+        service.importExcel("rpt", new MockMultipartFile("file", "real.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", src), "E1", "张三");
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper, org.mockito.Mockito.atLeastOnce()).insertBatch(cap.capture());
+        List<RptFreeReportRow> rows = cap.getAllValues().get(0);
+        ObjectMapper om = new ObjectMapper();
+
+        // 0% 格式，底层 0.91 -> 编辑栏 91%
+        Map<String, String> r1 = om.readValue(rows.get(0).getDataJson(), new TypeReference<>() {});
+        assertThat(r1.get("col_8")).isEqualTo("91%");
+        assertThat(r1.get("col_8__raw")).isEqualTo("91%");
+
+        // 0.00% 格式，底层 0.498888897666 -> 编辑栏 49.8888897666%（乘100后不得有浮点误差）
+        Map<String, String> r2 = om.readValue(rows.get(1).getDataJson(), new TypeReference<>() {});
+        assertThat(r2.get("col_8")).isEqualTo("49.89%");
+        assertThat(r2.get("col_8__raw")).isEqualTo("49.8888897666%");
+
+        // 非百分比列不受影响
+        assertThat(r1.get("col_4__raw")).isEqualTo("4540.69998");
+    }
+
     /** excelRawText：把 double 渲染成与 Excel 编辑栏一字不差的文本。 */
     @Test
     void excelRawText_matchesExcelFormulaBar() {
@@ -411,8 +452,9 @@ class FreeReportServiceImplTest {
         // 普通数值：编辑栏是完整精度的十进制，不能被 General 渲染截断成 0.4988888977
         Map<String, String> r1 = om.readValue(rows.get(0).getDataJson(), new TypeReference<>() {});
         assertThat(r1.get("col_4__raw")).isEqualTo("4540.69998");
+        // 百分比列：编辑栏带 % 且已乘 100（详见 importExcel_percentFormat_* 用例）
         Map<String, String> r2 = om.readValue(rows.get(1).getDataJson(), new TypeReference<>() {});
-        assertThat(r2.get("col_8__raw")).isEqualTo("0.498888897666");
+        assertThat(r2.get("col_8__raw")).isEqualTo("49.8888897666%");
     }
 
     /**
