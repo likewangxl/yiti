@@ -167,14 +167,18 @@ class FreeReportServiceImplTest {
     }
 
     /**
-     * 会计格式下，按格式舍入后为零的极小值必须走「零段」显示为 "-"，与 Excel 一致。
+     * 分段格式选段看的是**原始值的符号**，不是按格式舍入后的值。
      *
-     * <p>Excel 决定用格式的哪一段（正;负;零）是看**按该格式舍入后**的值：
-     * `#,##0` 把 -5e-7 舍成 0，故走第三段显示 "-"。但 POI 的 DataFormatter 只看原始值符号，
-     * 直接走负数段渲染成 "-0" —— 正是用户反馈的「页面展示的 -0」。
+     * <p>曾经反过来假设（以为 `#,##0` 把 -5e-7 舍成 0 就该走零段显示 "-"），并据此加了
+     * 一个「舍入为零就改用零段重渲染」的修正。**这个假设是错的**，现场报表两次证伪：
+     * 四段会计格式 `_ * #,##0.00_ ;_ * \-#,##0.00_ ;_ * "-"??_ ;_ @_ ` 下，
+     * -5.00000000069889E-07 在 Excel 里显示的是 **-0.00**（负数段），不是 "-"。
+     * 那个修正反而把对的改错，是用户所见 "-0" 的直接来源，已删除。
+     *
+     * <p>故本用例的口径：精确零走零段显示 "-"；极小负值走负数段，整数会计格式下就是 "-0"。
      */
     @Test
-    void importExcel_accountingFormat_tinyValueRoundsToZero_showsDash() throws Exception {
+    void importExcel_accountingFormat_zeroShowsDash_tinyNegativeKeepsNegativeSection() throws Exception {
         FileObjectDTO dto = new FileObjectDTO();
         dto.setId("F1");
         when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
@@ -208,12 +212,90 @@ class FreeReportServiceImplTest {
         Map<String, String> m = new ObjectMapper()
                 .readValue(cap.getValue().get(0).getDataJson(), new TypeReference<>() {});
 
-        // 精确零：本来就正确
+        // 精确零：走零段，显示 "-"
         assertThat(m.get("col_3")).isEqualTo("-");
-        // 极小负值：舍入后为零，同样应显示 "-"，不能是 "-0"
-        assertThat(m.get("col_4")).isEqualTo("-");
+        // 极小负值：值本身是负的，走**负数段** `_ * \-#,##0_ `，整数格式下就是 "-0"。
+        // 不能"顺手"改成零段的 "-"——现场报表已证实 Excel 就是这么显示的。
+        assertThat(m.get("col_4")).isEqualTo("-0");
         // 完整原值仍保留，且与 Excel 编辑栏一致（编辑栏本就是科学计数法）
         assertThat(m.get("col_4__raw")).isEqualTo("-5.00000000069889E-07");
+    }
+
+    /** 现场报表的真实会计格式——零段是 `"-"??`（带问号占位符），整数版。 */
+    private static final String ACCT_QM_INT = "_ * #,##0_ ;_ * \\-#,##0_ ;_ * \"-\"??_ ;_ @_ ";
+    /** 同上，两位小数版。 */
+    private static final String ACCT_QM_DEC = "_ * #,##0.00_ ;_ * \\-#,##0.00_ ;_ * \"-\"??_ ;_ @_ ";
+
+    /**
+     * 会计格式零段里的 `??` 是**空格占位符**，不是数字占位符——POI 会多渲染出一个 0。
+     *
+     * <p>现场报表两处错显都由它引起（用户 2026-07-24 反馈，附 DATA_JSON 实据）：
+     * <pre>
+     *   col_20  fmt=_ * #,##0_ ;_ * \-#,##0_ ;_ * "-"??_ ;_ @_    值 0      Excel 显示 "-"     页面却是 "- 0"
+     *   col_124 fmt=_ * #,##0.00_ ;...;_ * "-"??_ ;_ @_           值 -5e-7  Excel 显示 "-0.00" 页面却是 "-0"
+     * </pre>
+     *
+     * <p>Excel 语义：`0` 是强制数字位（无值也显示 0），`#` 是可选数字位（无值不显示），
+     * `?` 是**对齐用的空格位**（无值显示空格）。零段 `_ * "-"??_ ` 里根本没有 `0`，
+     * 所以值为 0 时只该显示 "-" 加两个对齐空格；POI 把 `?` 当成了数字位，渲染成 "- 0"。
+     *
+     * <p>第二处 "-0" 则是另一个 Bug：极小负值 POI 本来就正确渲染为 "-0.00"（负数段），
+     * 是曾经那个「舍入为零改走零段」的修正把它改成了零段的 "- 0"。该修正已删除。
+     */
+    @Test
+    void importExcel_accountingZeroSectionWithQuestionMark_showsBareDash() throws Exception {
+        FileObjectDTO dto = new FileObjectDTO();
+        dto.setId("F1");
+        when(fileApi.upload(any(MultipartFile.class), eq("E1"), eq(FileCategory.FREE_REPORT))).thenReturn(dto);
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet s = wb.createSheet("s");
+            org.apache.poi.ss.usermodel.CellStyle qmInt = wb.createCellStyle();
+            qmInt.setDataFormat(wb.createDataFormat().getFormat(ACCT_QM_INT));
+            org.apache.poi.ss.usermodel.CellStyle qmDec = wb.createCellStyle();
+            qmDec.setDataFormat(wb.createDataFormat().getFormat(ACCT_QM_DEC));
+
+            Row h = s.createRow(0);
+            h.createCell(0).setCellValue("工号");
+            h.createCell(1).setCellValue("姓名");
+            h.createCell(2).setCellValue("案例1-整数零");
+            h.createCell(3).setCellValue("案例2-极小负值");
+            h.createCell(4).setCellValue("对照-两位小数零");
+            h.createCell(5).setCellValue("对照-正数");
+            h.createCell(6).setCellValue("对照-负数");
+            Row d = s.createRow(1);
+            d.createCell(0).setCellValue("E1");
+            d.createCell(1).setCellValue("张三");
+            Cell c3 = d.createCell(2); c3.setCellValue(0d);          c3.setCellStyle(qmInt);
+            Cell c4 = d.createCell(3); c4.setCellValue(-5.00000000069889E-07); c4.setCellStyle(qmDec);
+            Cell c5 = d.createCell(4); c5.setCellValue(0d);          c5.setCellStyle(qmDec);
+            Cell c6 = d.createCell(5); c6.setCellValue(1234.5678);   c6.setCellStyle(qmDec);
+            Cell c7 = d.createCell(6); c7.setCellValue(-1234.5678);  c7.setCellStyle(qmDec);
+            wb.write(out);
+
+            service.importExcel("rpt", new MockMultipartFile("file", "f.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    out.toByteArray()), "E1", "张三");
+        }
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<RptFreeReportRow>> cap =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(rowMapper).insertBatch(cap.capture());
+        Map<String, String> m = new ObjectMapper()
+                .readValue(cap.getValue().get(0).getDataJson(), new TypeReference<>() {});
+
+        // 案例1：零段的 ?? 不该冒出数字 0
+        assertThat(m.get("col_3")).isEqualTo("-");
+        assertThat(m.get("col_3__raw")).isEqualTo("0");
+        // 案例2：极小负值走负数段，两位小数格式下就是 -0.00
+        assertThat(m.get("col_4")).isEqualTo("-0.00");
+        assertThat(m.get("col_4__raw")).isEqualTo("-5.00000000069889E-07");
+        // 对照：两位小数格式的精确零同样只显示 "-"
+        assertThat(m.get("col_5")).isEqualTo("-");
+        // 对照：正常正负值不受影响，千分位与两位小数都在
+        assertThat(m.get("col_6")).isEqualTo("1,234.57");
+        assertThat(m.get("col_7")).isEqualTo("-1,234.57");
     }
 
     /**

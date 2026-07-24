@@ -430,8 +430,8 @@ public class FreeReportServiceImpl implements FreeReportService {
         try {
             String s = renderByFormat(cell, formatter);
             if (s == null) return "";
-            s = s.trim();
-            return fixNegativeZeroByZeroSection(cell, formatter, s);
+            // 先剔除 ?? 占位符渲染出的幻影 0，再 trim（剔除后原地留下空格）
+            return stripQuestionMarkPhantomDigits(cell, s).trim();
         } catch (Exception e) {
             // 格式串异常时退回原始取值，保证导入不中断
             return getCellString(cell);
@@ -463,32 +463,89 @@ public class FreeReportServiceImpl implements FreeReportService {
     }
 
     /**
-     * 修正 POI 与 Excel 在「分段格式 + 舍入后为零」上的渲染差异。
+     * 剔除 POI 把 Excel 的 {@code ?} 占位符当成数字位而多渲染出来的「幻影 0」。
      *
-     * <p>Excel 决定用格式的哪一段（正;负;零）看的是**按该格式舍入后**的值：会计格式
-     * {@code _ * #,##0_ ;_ * \-#,##0_ ;_ * "-"_ } 把 -5e-7 舍成 0，于是走第三段显示 "-"。
-     * 而 POI 的 DataFormatter 只看原始值的符号，直接走负数段渲染成 "-0"。
+     * <p>Excel 三个数字占位符语义不同：{@code 0} 是强制位（没数字也补 0）、
+     * {@code #} 是可选位（没数字就不显示）、{@code ?} 是**对齐用的空格位**（没数字显示空格）。
+     * 会计格式的零段常写成 {@code _ * "-"??_ }，其中 {@code ??} 只为让 "-" 与上下行小数位对齐，
+     * 本身不该显示任何数字——Excel 对 0 显示的就是 "-"。但 POI 把 {@code ?} 当数字位处理，
+     * 渲染成 "- 0"，正是现场报表里页面显示 "- 0" 的来源。
      *
-     * <p>故这里检测「渲染结果的数字部分全为 0（即舍入后为零）」且「格式确有零段（≥3 段）」，
-     * 改用零值重新渲染，与 Excel 对齐。不满足条件时原样返回，不影响 -0.00 这类
-     * 只有两段（正;负）的自定义格式——它们本就该显示 -0.00。
+     * <p>判据：取该值实际生效的那一段，若它**有 {@code ?} 占位符却没有 {@code 0} 强制位**，
+     * 说明这一段压根不打算显示数字，把渲染结果里的数字全部抹掉即可。
+     * 正/负数段形如 {@code _ * #,##0.00_ } 含 {@code 0}，不受影响。
      */
-    private String fixNegativeZeroByZeroSection(Cell cell, DataFormatter formatter, String shown) {
-        if (shown.isEmpty() || shown.indexOf('-') < 0) return shown;
-        // 数字部分是否全为 0（去掉负号/千分位/小数点/空白后只剩 0）
-        String digits = shown.replaceAll("[-,.\\s ]", "");
-        if (digits.isEmpty() || digits.chars().anyMatch(c -> c != '0')) return shown;
-        // 格式必须确有「零段」：Excel 分段格式为 正;负;零[;文本]
+    private String stripQuestionMarkPhantomDigits(Cell cell, String shown) {
+        if (shown.isEmpty()) return shown;
+        CellType type = cell.getCellType() == CellType.FORMULA
+                ? cell.getCachedFormulaResultType() : cell.getCellType();
+        if (type != CellType.NUMERIC) return shown;
         CellStyle style = cell.getCellStyle();
         if (style == null) return shown;
         String fmt = style.getDataFormatString();
-        if (fmt == null || fmt.split(";", -1).length < 3) return shown;
-        try {
-            String zeroShown = formatter.formatRawCellContents(0d, style.getDataFormat(), fmt);
-            return zeroShown != null ? zeroShown.trim() : shown;
-        } catch (Exception e) {
-            return shown;
+        if (fmt == null || fmt.isEmpty()) return shown;
+        String section = effectiveSection(fmt, cell.getNumericCellValue());
+        if (!hasPlaceholder(section, '?') || hasPlaceholder(section, '0')) return shown;
+        return shown.replaceAll("\\d", "");
+    }
+
+    /**
+     * 取分段格式中对给定值实际生效的那一段。
+     *
+     * <p>分段规则：1 段全用；2 段是「正/零 | 负」；3 段及以上是「正 | 负 | 零」（第 4 段是文本段，数值不走）。
+     * 选段看的是**原始值的符号**，不是按格式舍入后的值——现场报表已证实：四段会计格式下
+     * -5.00000000069889E-07 在 Excel 里显示 "-0.00"（负数段），而不是零段的 "-"。
+     * 曾经反过来假设并加了「舍入为零就改走零段」的修正，反而把对的改错，已删除。
+     */
+    private static String effectiveSection(String fmt, double v) {
+        List<String> secs = splitFormatSections(fmt);
+        if (secs.size() <= 1) return fmt;
+        if (v > 0) return secs.get(0);
+        if (v < 0) return secs.get(1);
+        return secs.size() >= 3 ? secs.get(2) : secs.get(0);
+    }
+
+    /** 按分号拆分格式串，跳过引号字面量、方括号段与反斜杠转义里的分号。 */
+    private static List<String> splitFormatSections(String fmt) {
+        List<String> out = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        boolean inQuote = false;
+        for (int i = 0; i < fmt.length(); i++) {
+            char c = fmt.charAt(i);
+            if (c == '\\' && i + 1 < fmt.length()) { cur.append(c).append(fmt.charAt(++i)); continue; }
+            if (c == '"') { inQuote = !inQuote; cur.append(c); continue; }
+            if (!inQuote && c == '[') {
+                int j = fmt.indexOf(']', i);
+                if (j > 0) { cur.append(fmt, i, j + 1); i = j; continue; }
+            }
+            if (!inQuote && c == ';') { out.add(cur.toString()); cur.setLength(0); continue; }
+            cur.append(c);
         }
+        out.add(cur.toString());
+        return out;
+    }
+
+    /**
+     * 格式段里是否含**生效的**指定占位符。
+     *
+     * <p>要跳过三类「后一个字符是字面量」的前缀：反斜杠转义、{@code _x}（占位一个 x 的字符宽）、
+     * {@code *x}（用 x 填充剩余宽度）——否则 {@code _0} 里的 0 会被误判成强制数字位。
+     * 同样跳过引号字面量与 {@code [Red]} 这类方括号段。
+     */
+    private static boolean hasPlaceholder(String section, char ph) {
+        boolean inQuote = false;
+        for (int i = 0; i < section.length(); i++) {
+            char c = section.charAt(i);
+            if (!inQuote && (c == '\\' || c == '_' || c == '*') && i + 1 < section.length()) { i++; continue; }
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (inQuote) continue;
+            if (c == '[') {
+                int j = section.indexOf(']', i);
+                if (j > 0) { i = j; continue; }
+            }
+            if (c == ph) return true;
+        }
+        return false;
     }
 
     /** 单元格「完整原值」：与 Excel 编辑栏所见完全一致，供点击查看。 */
