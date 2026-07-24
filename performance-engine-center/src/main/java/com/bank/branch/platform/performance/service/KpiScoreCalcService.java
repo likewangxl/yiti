@@ -609,30 +609,76 @@ public class KpiScoreCalcService {
         if (!StringUtils.hasText(empTagScope)) {
             return null;
         }
-        java.util.LinkedHashSet<Long> tagIds = new java.util.LinkedHashSet<>();
-        for (String s : empTagScope.split(",")) {
-            String t = s.trim();
-            if (t.isEmpty()) {
-                continue;
-            }
-            try {
-                tagIds.add(Long.valueOf(t));
-            } catch (NumberFormatException e) {
-                // 历史脏值（如旧角色编码）：跳过该项，不中断整个方案计算
-                log.warn("[KPI计算] 员工标签范围含非法标签 ID，忽略该项: {}", t);
-            }
-        }
+        List<Long> tagIds = parseTagIds(empTagScope);
         if (tagIds.isEmpty()) {
             return java.util.Set.of();
         }
         try {
-            List<String> usernames = personTagApi.getUsernamesByTagIds(new java.util.ArrayList<>(tagIds));
+            List<String> usernames = personTagApi.getUsernamesByTagIds(tagIds);
             return usernames == null ? java.util.Set.of() : new java.util.HashSet<>(usernames);
         } catch (Exception e) {
             // fail-close：标签解析失败按"范围为空"处理，宁可不计分也不误扩大范围
             log.warn("[KPI计算] 员工标签范围解析失败，按空范围处理 tagIds={}: {}", tagIds, e.getMessage());
             return java.util.Set.of();
         }
+    }
+
+    /**
+     * 解析方案「标签范围」的<b>机构</b>成员 → 内部机构编码集合（仅用于 ORG 主体计分过滤）.
+     *
+     * <p>经 governance {@link PersonTagApi#getDeptNosByTagIds} 取回多标签机构成员并集（{@code EXT_ORG_INFO.DEPT_NO}
+     * 口径），再经 auth {@link OrgApi#getOrgsByDeptNos} 转成内部机构编码（与目标值/宽表/计分结果表 ORG 口径一致）。</p>
+     *
+     * <p>与员工侧不同：机构维度是<b>opt-in</b>——空/空白范围或标签下无机构成员 → 返回空集（不做机构主体计分），
+     * 从而保证既有方案（标签范围空 / 仅员工标签）行为完全不变。dept_no 解析失败按 fail-close 空集处理。</p>
+     */
+    private java.util.Set<String> resolveTagScopeOrgCodes(String empTagScope) {
+        List<Long> tagIds = parseTagIds(empTagScope);
+        if (tagIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        try {
+            List<String> deptNos = personTagApi.getDeptNosByTagIds(tagIds);
+            if (deptNos == null || deptNos.isEmpty()) {
+                return java.util.Set.of();
+            }
+            List<OrgDTO> orgs = orgApi.getOrgsByDeptNos(deptNos);
+            java.util.LinkedHashSet<String> orgCodes = new java.util.LinkedHashSet<>();
+            if (orgs != null) {
+                for (OrgDTO o : orgs) {
+                    if (o != null && StringUtils.hasText(o.getOrgCode())) {
+                        orgCodes.add(o.getOrgCode());
+                    }
+                }
+            }
+            return orgCodes;
+        } catch (Exception e) {
+            // fail-close：机构标签范围解析失败按"范围为空"处理，宁可不计分也不误扩大范围
+            log.warn("[KPI计算] 机构标签范围解析失败，按空范围处理 tagIds={}: {}", tagIds, e.getMessage());
+            return java.util.Set.of();
+        }
+    }
+
+    /**
+     * 解析「标签范围」CSV → 去重标签 ID 列表（员工/机构两侧共用）.
+     * <p>历史脏值（如旧角色编码等非数字项）跳过并告警，不中断整个方案计算。</p>
+     */
+    private static List<Long> parseTagIds(String empTagScope) {
+        java.util.LinkedHashSet<Long> tagIds = new java.util.LinkedHashSet<>();
+        if (StringUtils.hasText(empTagScope)) {
+            for (String s : empTagScope.split(",")) {
+                String t = s.trim();
+                if (t.isEmpty()) {
+                    continue;
+                }
+                try {
+                    tagIds.add(Long.valueOf(t));
+                } catch (NumberFormatException e) {
+                    log.warn("[KPI计算] 标签范围含非法标签 ID，忽略该项: {}", t);
+                }
+            }
+        }
+        return new java.util.ArrayList<>(tagIds);
     }
 
     /**
@@ -1045,8 +1091,11 @@ public class KpiScoreCalcService {
         if (items == null || items.isEmpty()) {
             return new SchemeStat(0, 0);
         }
-        // 员工范围基础集：无论角色范围是否为空，都以「目标值里出现过的员工」为基础
-        // （方案ACTIVE + 目标值起止日期涵盖数据日期 + 指标∈本方案KPI指标 的去重 EMP 工号）
+        // 计分对象两维度并存：
+        //  ① 员工维度（既有）：以「目标值里出现过的员工」为基础集，标签的员工成员再取交集（标签范围空则不过滤）；
+        //     所有指标（含机构维度指标，按员工所属机构取值）逐员工计分，得分统一按工号(EMP)落库。
+        //  ② 机构维度（新增，opt-in）：标签的机构成员(dept_no→内部机构编码)对「机构维度指标」直接按机构(ORG)计分。
+        //     仅当标签显式含机构成员时才产生 ORG 主体计分——既有方案(标签范围空/仅员工标签)行为完全不变。
         List<String> metricCodes = items.stream()
                 .map(PerfKpiItem::getMetricCode)
                 .filter(StringUtils::hasText)
@@ -1061,12 +1110,17 @@ public class KpiScoreCalcService {
         if (tagEmpUsernames != null) {
             empUniverse.retainAll(tagEmpUsernames);
         }
-        if (empUniverse.isEmpty()) {
-            log.info("【KPI分值计算】方案={} 员工范围为空（目标值基础集 ∩ 标签范围 无匹配员工），不计分", scheme.getSchemeCode());
+        // 机构范围：标签显式机构成员 → 内部机构编码集合（标签范围空/无机构成员 → 空集，不做机构主体计分）
+        java.util.Set<String> orgUniverse = resolveTagScopeOrgCodes(scheme.getEmpTagScope());
+        if (empUniverse.isEmpty() && orgUniverse.isEmpty()) {
+            log.info("【KPI分值计算】方案={} 员工与机构范围均为空（目标值基础集 ∩ 标签范围 无匹配成员），不计分",
+                    scheme.getSchemeCode());
             return new SchemeStat(0, 0);
         }
-        // 员工 → 所属机构(mainOrgCode) 批量解析，供机构(ORG)维度指标取机构实际值/目标值
-        java.util.Map<String, String> empOrgMap = resolveEmpOrgMap(empUniverse);
+        // 员工 → 所属机构(mainOrgCode) 批量解析，供员工维度下机构(ORG)指标取机构实际值/目标值
+        java.util.Map<String, String> empOrgMap = empUniverse.isEmpty()
+                ? java.util.Map.of()
+                : resolveEmpOrgMap(empUniverse);
 
         int scored = 0;
         int skipped = 0;
@@ -1114,15 +1168,14 @@ public class KpiScoreCalcService {
                 }
             }
 
-            BigDecimal weight = item.getWeight();
-            // 逐员工：按维度确定 目标值对象 与 实际值键；无目标值则跳过；得分统一按工号落库
+            // ① 员工维度计分（EMP 主体）：EMP 指标取员工本人值，ORG 指标取员工所属机构值；统一按工号落库
             for (String empUser : empUniverse) {
-                String targetSubjectType;
-                String targetSubjectId;
+                String targetType;
+                String targetId;
                 String actualKey;
                 if (empDim) {
-                    targetSubjectType = "EMP";
-                    targetSubjectId = empUser;
+                    targetType = "EMP";
+                    targetId = empUser;
                     actualKey = empUser;
                 } else {
                     String orgCode = empOrgMap.get(empUser);
@@ -1131,34 +1184,64 @@ public class KpiScoreCalcService {
                         skipped++;
                         continue;
                     }
-                    targetSubjectType = "ORG";
-                    targetSubjectId = orgCode;
+                    targetType = "ORG";
+                    targetId = orgCode;
                     actualKey = orgCode;
                 }
-                PerfTargetValue tv = targetValueMapper.selectActiveCoveringByDimSubjectMetric(
-                        targetSubjectType, targetSubjectId, metricCode, dataDate);
-                // 该 员工/机构 × 指标 在目标值中未定义 → 不计算，跳过
-                if (tv == null) {
+                if (computeAndUpsert(item, metricCode, baseDim, dataDate, scheme.getSchemeCode(),
+                        actualMap, targetType, targetId, actualKey, "EMP", empUser)) {
+                    scored++;
+                } else {
+                    // 该 员工/机构 × 指标 在目标值中未定义 → 跳过
                     skipped++;
-                    continue;
                 }
-                BigDecimal target = tv.getTargetValue() == null ? BigDecimal.ZERO : tv.getTargetValue();
-                BigDecimal base = tv.getBaseValue() == null ? BigDecimal.ZERO : tv.getBaseValue();
-                BigDecimal actual = actualMap.getOrDefault(actualKey, BigDecimal.ZERO);
-                KpiScoreRow dr = new KpiScoreRow(metricCode, dataDate, empUser, baseDim,
-                        weight, item.getMaxScore(), item.getMinScore(), actual, target, base);
-                // 计算表达式优先、否则 SQL 表达式（每指标一个表达式）
-                BigDecimal score = hasFormula
-                        ? formulaService.evalScore(item.getFormula(), actual, target, base,
-                                weight, item.getMinScore(), item.getMaxScore())
-                        : evalScoreBySql(item.getSqlExpr(), dr);
-                // 得分落库：对象类型=员工(EMP)、对象ID=工号、指标=该指标（机构维度指标亦按工号落库）
-                upsertScore(dataDate, scheme.getSchemeCode(), metricCode, "EMP", empUser,
-                        actual, weight, target, base, score);
-                scored++;
+            }
+
+            // ② 机构维度计分（ORG 主体）：仅机构维度指标，对标签所选机构直接计分，得分按机构(ORG)落库
+            if (orgDim) {
+                for (String orgCode : orgUniverse) {
+                    if (computeAndUpsert(item, metricCode, baseDim, dataDate, scheme.getSchemeCode(),
+                            actualMap, "ORG", orgCode, orgCode, "ORG", orgCode)) {
+                        scored++;
+                    } else {
+                        skipped++;
+                    }
+                }
             }
         }
         return new SchemeStat(scored, skipped);
+    }
+
+    /**
+     * 取目标值 → 代入计分表达式求分 → upsert 一条计分明细.
+     *
+     * @param targetType/targetId 目标值匹配对象（EMP=工号 / ORG=机构编码）
+     * @param actualKey           实际值宽表键（EMP=工号 / ORG=机构编码）
+     * @param scoreType/scoreId   落库对象（员工维度按工号落 EMP，机构维度按机构落 ORG）
+     * @return true=已计分并落库；false=该对象×指标无目标值，未落库（调用方计为跳过）
+     */
+    private boolean computeAndUpsert(PerfKpiItem item, String metricCode, String baseDim, LocalDate dataDate,
+                                     String schemeCode, java.util.Map<String, BigDecimal> actualMap,
+                                     String targetType, String targetId, String actualKey,
+                                     String scoreType, String scoreId) {
+        PerfTargetValue tv = targetValueMapper.selectActiveCoveringByDimSubjectMetric(
+                targetType, targetId, metricCode, dataDate);
+        if (tv == null) {
+            return false;
+        }
+        BigDecimal target = tv.getTargetValue() == null ? BigDecimal.ZERO : tv.getTargetValue();
+        BigDecimal base = tv.getBaseValue() == null ? BigDecimal.ZERO : tv.getBaseValue();
+        BigDecimal actual = actualMap.getOrDefault(actualKey, BigDecimal.ZERO);
+        BigDecimal weight = item.getWeight();
+        KpiScoreRow dr = new KpiScoreRow(metricCode, dataDate, scoreId, baseDim,
+                weight, item.getMaxScore(), item.getMinScore(), actual, target, base);
+        // 计算表达式优先、否则 SQL 表达式（每指标一个表达式）
+        BigDecimal score = StringUtils.hasText(item.getFormula())
+                ? formulaService.evalScore(item.getFormula(), actual, target, base,
+                        weight, item.getMinScore(), item.getMaxScore())
+                : evalScoreBySql(item.getSqlExpr(), dr);
+        upsertScore(dataDate, schemeCode, metricCode, scoreType, scoreId, actual, weight, target, base, score);
+        return true;
     }
 
     /**

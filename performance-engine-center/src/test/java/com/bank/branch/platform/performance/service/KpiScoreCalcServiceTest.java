@@ -324,6 +324,115 @@ class KpiScoreCalcServiceTest {
     }
 
     @Test
+    @DisplayName("calculate: 标签含机构成员 → 机构维度指标按机构(ORG)主体直接计分（dept_no→内部机构编码）")
+    void calculate_orgTagMembers_scoresOrgSubjectsDirectly() {
+        when(taskMapper.selectCount(any())).thenReturn(1L);
+
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1"); scheme.setSchemeCode("KPI_A"); scheme.setStatus("ACTIVE");
+        scheme.setEmpTagScope("11"); // 标签 11 只含机构成员，无员工成员
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(scheme));
+
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1"); item.setSchemeId("S1"); item.setMetricCode("M_ORG");
+        item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_ORG"); def.setBaseDim("ORG"); def.setValSlot(7); def.setStatus("ACTIVE");
+        when(metricDefService.getByCodeOrNull("M_ORG")).thenReturn(def);
+
+        // 员工范围空：目标值无 EMP 对象 + 标签无员工成员
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_ORG"), DATA_DATE)).thenReturn(List.of());
+        when(personTagApi.getUsernamesByTagIds(List.of(11L))).thenReturn(List.of());
+        // 标签 11 的机构成员 dept_no=D9 → 内部机构编码 ORG9
+        when(personTagApi.getDeptNosByTagIds(List.of(11L))).thenReturn(List.of("D9"));
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setDeptNo("D9"); org.setOrgCode("ORG9");
+        when(orgApi.getOrgsByDeptNos(List.of("D9"))).thenReturn(List.of(org));
+
+        // 机构维度实际值取 ORG 宽表（按机构 ORG9）
+        when(orgIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 7))
+                .thenReturn(List.of(new SubjectSlotValueRow("ORG9", new BigDecimal("90"))));
+        // 目标值按 机构(ORG, ORG9) 查
+        PerfTargetValue tv = new PerfTargetValue();
+        tv.setTargetValue(new BigDecimal("200")); tv.setBaseValue(new BigDecimal("0"));
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("ORG", "ORG9", "M_ORG", DATA_DATE)).thenReturn(tv);
+
+        when(formulaService.evalScore(eq("actual / target * weight"),
+                eq(new BigDecimal("90")), eq(new BigDecimal("200")), eq(new BigDecimal("0")),
+                eq(new BigDecimal("0.5")), any(), any())).thenReturn(new BigDecimal("0.2250"));
+
+        service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+
+        ArgumentCaptor<PerfKpiScore> cap = ArgumentCaptor.forClass(PerfKpiScore.class);
+        verify(scoreMapper, times(1)).upsert(cap.capture());
+        PerfKpiScore s = cap.getValue();
+        assertThat(s.getSubjectType()).isEqualTo("ORG");      // 得分按机构落库
+        assertThat(s.getSubjectId()).isEqualTo("ORG9");       // 对象ID=内部机构编码
+        assertThat(s.getMetricCode()).isEqualTo("M_ORG");
+        assertThat(s.getActualValue()).isEqualByComparingTo("90");
+        assertThat(s.getScore()).isEqualByComparingTo("0.225");
+        // 员工范围空 → 不解析员工所属机构
+        verify(userApi, never()).getUsersByUsernames(anyList());
+    }
+
+    @Test
+    @DisplayName("calculate: 标签同时含员工与机构 → 机构维度指标同时产出 EMP(按员工所属机构) 与 ORG(机构本身) 两类主体")
+    void calculate_mixedTag_orgDim_producesBothEmpAndOrgSubjects() {
+        when(taskMapper.selectCount(any())).thenReturn(1L);
+
+        PerfKpiScheme scheme = new PerfKpiScheme();
+        scheme.setId("S1"); scheme.setSchemeCode("KPI_A"); scheme.setStatus("ACTIVE");
+        scheme.setEmpTagScope("11");
+        when(schemeMapper.selectByCondition(null, "ACTIVE", null, null, 0, 100000)).thenReturn(List.of(scheme));
+
+        PerfKpiItem item = new PerfKpiItem();
+        item.setId("I1"); item.setSchemeId("S1"); item.setMetricCode("M_ORG");
+        item.setWeight(new BigDecimal("0.5")); item.setFormula("actual / target * weight");
+        when(itemMapper.selectBySchemeId("S1")).thenReturn(List.of(item));
+
+        PerfMetricDef def = new PerfMetricDef();
+        def.setMetricCode("M_ORG"); def.setBaseDim("ORG"); def.setValSlot(7); def.setStatus("ACTIVE");
+        when(metricDefService.getByCodeOrNull("M_ORG")).thenReturn(def);
+
+        // 员工 E001（所属机构 ORG1）+ 标签机构成员 dept_no=D9→ORG9
+        when(targetValueMapper.selectDistinctActiveEmpSubjects(List.of("M_ORG"), DATA_DATE)).thenReturn(List.of("E001"));
+        when(personTagApi.getUsernamesByTagIds(List.of(11L))).thenReturn(List.of("E001"));
+        UserDTO u = new UserDTO(); u.setUsername("E001"); u.setMainOrgCode("ORG1");
+        when(userApi.getUsersByUsernames(anyList())).thenReturn(List.of(u));
+        when(personTagApi.getDeptNosByTagIds(List.of(11L))).thenReturn(List.of("D9"));
+        com.bank.branch.platform.auth.api.dto.OrgDTO org = new com.bank.branch.platform.auth.api.dto.OrgDTO();
+        org.setDeptNo("D9"); org.setOrgCode("ORG9");
+        when(orgApi.getOrgsByDeptNos(List.of("D9"))).thenReturn(List.of(org));
+
+        when(orgIndexResultMapper.selectLatestSlotValuesByDate(DATA_DATE, 7)).thenReturn(List.of(
+                new SubjectSlotValueRow("ORG1", new BigDecimal("50")),
+                new SubjectSlotValueRow("ORG9", new BigDecimal("90"))));
+        PerfTargetValue tvOrg1 = new PerfTargetValue();
+        tvOrg1.setTargetValue(new BigDecimal("100")); tvOrg1.setBaseValue(BigDecimal.ZERO);
+        PerfTargetValue tvOrg9 = new PerfTargetValue();
+        tvOrg9.setTargetValue(new BigDecimal("200")); tvOrg9.setBaseValue(BigDecimal.ZERO);
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("ORG", "ORG1", "M_ORG", DATA_DATE)).thenReturn(tvOrg1);
+        when(targetValueMapper.selectActiveCoveringByDimSubjectMetric("ORG", "ORG9", "M_ORG", DATA_DATE)).thenReturn(tvOrg9);
+        when(formulaService.evalScore(any(), any(), any(), any(), any(), any(), any())).thenReturn(new BigDecimal("1.0"));
+
+        service.calculate(DATA_DATE, null, "MANUAL", "tester01");
+
+        ArgumentCaptor<PerfKpiScore> cap = ArgumentCaptor.forClass(PerfKpiScore.class);
+        verify(scoreMapper, times(2)).upsert(cap.capture());
+        List<PerfKpiScore> all = cap.getAllValues();
+        // 一条 EMP 主体(E001，取其机构 ORG1 的值) + 一条 ORG 主体(ORG9 本身的值)
+        assertThat(all).extracting(PerfKpiScore::getSubjectType).containsExactlyInAnyOrder("EMP", "ORG");
+        PerfKpiScore emp = all.stream().filter(x -> "EMP".equals(x.getSubjectType())).findFirst().orElseThrow();
+        assertThat(emp.getSubjectId()).isEqualTo("E001");
+        assertThat(emp.getActualValue()).isEqualByComparingTo("50");   // 员工所属机构 ORG1 的值
+        PerfKpiScore orgS = all.stream().filter(x -> "ORG".equals(x.getSubjectType())).findFirst().orElseThrow();
+        assertThat(orgS.getSubjectId()).isEqualTo("ORG9");
+        assertThat(orgS.getActualValue()).isEqualByComparingTo("90");  // 机构本身的值
+    }
+
+    @Test
     void calculate_sqlExpr_executesSqlAndUpserts() {
         when(taskMapper.selectCount(any())).thenReturn(1L); // 三级均已完成
 
