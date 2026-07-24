@@ -39,6 +39,11 @@ public class OrgFacade implements OrgApi {
         return orgService.getOrgByDeptNo(deptNo);
     }
 
+    @Override
+    public List<OrgDTO> getOrgsByDeptNos(java.util.Collection<String> deptNos) {
+        return orgService.getOrgsByDeptNos(deptNos);
+    }
+
     /**
      * 按机构编码集合批量查询机构信息（委托 OrgService，替代逐个 getOrg 的 N+1）。
      *

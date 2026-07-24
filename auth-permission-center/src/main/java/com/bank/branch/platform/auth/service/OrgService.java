@@ -227,6 +227,32 @@ public class OrgService {
     }
 
     /**
+     * 按机构编号（EXT_ORG_INFO.DEPT_NO）集合批量查询机构（替代逐个 {@link #getOrgByDeptNo} 的 N+1）.
+     *
+     * @param deptNos 机构编号集合（可空；内部去重去空白）
+     * @return 命中的机构 DTO 列表（含重号；无命中返回空列表）
+     */
+    public List<OrgDTO> getOrgsByDeptNos(java.util.Collection<String> deptNos) {
+        if (deptNos == null || deptNos.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> distinct = new LinkedHashSet<>();
+        for (String d : deptNos) {
+            if (d != null && !d.isBlank()) {
+                distinct.add(d.trim());
+            }
+        }
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        List<ExtOrgInfo> rows = orgMapper.selectByDeptNos(distinct);
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        return rows.stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    /**
      * 获取机构子树（含自身），递归遍历子机构
      *
      * @param orgCode 根机构编码

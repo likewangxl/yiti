@@ -61,6 +61,15 @@
         LIMIT 1
     </select>
 
+    <!-- 按机构编号(DEPT_NO)集合批量查询（替代逐个 selectByDeptNo 的 N+1）；含重号全部返回. -->
+    <select id="selectByDeptNos" resultType="com.bank.branch.platform.auth.entity.ExtOrgInfo">
+        SELECT
+            <include refid="BASE_COLUMNS"/>
+        FROM EXT_ORG_INFO
+        WHERE DEPT_NO IN
+        <foreach collection="deptNos" item="d" open="(" separator="," close=")">#{d}</foreach>
+    </select>
+
     <!--
         查询全量机构数据，用于系统启动时构建完整机构树缓存。
         不过滤 ORGAN_STATE，以便业务层自行决定是否展示已删除机构。

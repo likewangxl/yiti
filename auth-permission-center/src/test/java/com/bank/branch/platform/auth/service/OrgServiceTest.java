@@ -330,4 +330,29 @@ class OrgServiceTest {
         org.setPId(parentOrgCode);
         return org;
     }
+
+    // ===== getOrgsByDeptNos（业务标签机构成员批量校验/回显用） =====
+
+    @Test
+    void getOrgsByDeptNos_shouldDedupeTrimAndMapToDto() {
+        ExtOrgInfo o1 = new ExtOrgInfo();
+        o1.setOrgCode("ORG001");
+        o1.setOrgName("城东支行");
+        o1.setDeptNo("0101");
+        when(orgMapper.selectByDeptNos(Set.of("0101", "0102"))).thenReturn(List.of(o1));
+
+        List<OrgDTO> dtos = orgService.getOrgsByDeptNos(java.util.Arrays.asList(" 0101 ", "0102", "0101", null, ""));
+
+        assertThat(dtos).hasSize(1);
+        assertThat(dtos.get(0).getDeptNo()).isEqualTo("0101");
+        assertThat(dtos.get(0).getOrgName()).isEqualTo("城东支行");
+    }
+
+    @Test
+    void getOrgsByDeptNos_emptyOrBlankInput_shouldSkipQuery() {
+        assertThat(orgService.getOrgsByDeptNos(null)).isEmpty();
+        assertThat(orgService.getOrgsByDeptNos(List.of())).isEmpty();
+        assertThat(orgService.getOrgsByDeptNos(java.util.Arrays.asList("  ", null))).isEmpty();
+        verify(orgMapper, never()).selectByDeptNos(any());
+    }
 }
