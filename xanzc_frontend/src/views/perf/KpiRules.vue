@@ -108,11 +108,11 @@
               <el-option :value="false" label="否" />
             </el-select>
           </el-form-item>
-          <!-- 员工标签范围：人员标签（系统设置>人员标签维护）；多选取并集，留空表示不限制 -->
-          <el-form-item label="员工标签范围" prop="empTagScopes">
+          <!-- 业务标签范围：业务标签（系统设置>业务标签）；含员工/机构两维度成员，多选取并集，留空=不限制（仅全部员工、不计机构） -->
+          <el-form-item label="业务标签范围" prop="empTagScopes">
             <el-select v-model="dlg.scheme.empTagScopes" :disabled="dlg.readOnly"
               multiple filterable
-              placeholder="不限制（留空=全部员工）" style="width:100%">
+              placeholder="不限制（留空=全部员工；机构维度需选含机构成员的标签）" style="width:100%">
               <el-option v-for="t in empTagOptions" :key="t.tagId"
                 :value="t.tagId" :label="t.tagName" />
             </el-select>
@@ -520,7 +520,7 @@ async function ensureMetrics() {
   } catch {}
 }
 
-// === 员工标签范围下拉（人员标签，系统设置>人员标签维护）===
+// === 业务标签范围下拉（业务标签，系统设置>业务标签；含员工/机构两维度成员）===
 // 标签数量级很小，一次拉满即可，避免分页导致已选标签不在选项里被误判为"已失效"
 const TAG_OPTION_PAGE_SIZE = 500;
 const empTagOptions = ref([]);
