@@ -1,5 +1,6 @@
 package com.bank.branch.platform.governance.controller;
 
+import com.alibaba.excel.EasyExcel;
 import com.bank.branch.platform.common.security.context.DataScopeContext;
 import com.bank.branch.platform.common.web.GlobalExceptionHandler;
 import com.bank.branch.platform.common.web.PageResult;
@@ -23,10 +24,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.ByteArrayInputStream;
 import java.util.List;
+import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -245,14 +250,36 @@ class AdminPersonTagControllerTest {
     @Test
     void importTemplate_bothDims_shouldStreamXlsx() throws Exception {
         mockMvc.perform(get("/api/admin/sys/person-tags/import-template")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/admin/sys/person-tags/import-template").param("dim", "ORG"))
-                .andExpect(status().isOk());
+        MvcResult result = mockMvc.perform(
+                        get("/api/admin/sys/person-tags/import-template").param("dim", "ORG"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        List<Map<Integer, String>> rows = readXlsxRows(result);
+        assertThat(rows.get(0))
+                .containsEntry(0, "标签名称")
+                .containsEntry(1, "机构名称");
+        assertThat(rows.get(1)).containsEntry(1, "城东支行");
     }
 
     @Test
     void memberImportTemplate_bothDims_shouldStreamXlsx() throws Exception {
         mockMvc.perform(get("/api/admin/sys/person-tags/member-import-template")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/admin/sys/person-tags/member-import-template").param("dim", "ORG"))
-                .andExpect(status().isOk());
+        MvcResult result = mockMvc.perform(
+                        get("/api/admin/sys/person-tags/member-import-template").param("dim", "ORG"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        List<Map<Integer, String>> rows = readXlsxRows(result);
+        assertThat(rows.get(0)).containsEntry(0, "机构名称");
+        assertThat(rows.get(1)).containsEntry(0, "城东支行");
+    }
+
+    /** 读取模板全部行（含第 0 行表头），用于断言实际下载内容。 */
+    private static List<Map<Integer, String>> readXlsxRows(MvcResult result) {
+        return EasyExcel.read(new ByteArrayInputStream(result.getResponse().getContentAsByteArray()))
+                .headRowNumber(0)
+                .sheet()
+                .doReadSync();
     }
 }

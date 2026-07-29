@@ -225,7 +225,7 @@ public class AdminPersonTagController {
     }
 
     /**
-     * 下载全局导入模板（按维度：员工=标签名称/工号，机构=标签名称/机构号）。
+     * 下载全局导入模板（按维度：员工=标签名称/工号，机构=标签名称/机构名称）。
      *
      * @param dim      成员维度（EMP/ORG，默认 EMP）
      * @param response HTTP 响应（附件输出）
@@ -238,7 +238,7 @@ public class AdminPersonTagController {
         if (isOrgDim(dim)) {
             PersonTagOrgImportRow sample = new PersonTagOrgImportRow();
             sample.setTagName("重点机构");
-            sample.setOrgName("0101");
+            sample.setOrgName("城东支行");
             writeTemplate(response, "业务标签机构导入模板.xlsx", PersonTagOrgImportRow.class, List.of(sample));
         } else {
             PersonTagImportRow sample = new PersonTagImportRow();
@@ -270,7 +270,7 @@ public class AdminPersonTagController {
     }
 
     /**
-     * 下载成员导入模板（按维度：员工=工号，机构=机构号）。
+     * 下载成员导入模板（按维度：员工=工号，机构=机构名称）。
      *
      * @param dim      成员维度（EMP/ORG，默认 EMP）
      * @param response HTTP 响应（附件输出）
@@ -282,7 +282,7 @@ public class AdminPersonTagController {
                                      HttpServletResponse response) throws IOException {
         if (isOrgDim(dim)) {
             PersonTagOrgMemberImportRow sample = new PersonTagOrgMemberImportRow();
-            sample.setOrgName("0101");
+            sample.setOrgName("城东支行");
             writeTemplate(response, "标签机构成员导入模板.xlsx", PersonTagOrgMemberImportRow.class, List.of(sample));
         } else {
             PersonTagMemberImportRow sample = new PersonTagMemberImportRow();
