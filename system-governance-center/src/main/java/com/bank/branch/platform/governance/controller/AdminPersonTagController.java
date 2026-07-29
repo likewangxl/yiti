@@ -238,7 +238,7 @@ public class AdminPersonTagController {
         if (isOrgDim(dim)) {
             PersonTagOrgImportRow sample = new PersonTagOrgImportRow();
             sample.setTagName("重点机构");
-            sample.setOrgDeptNo("0101");
+            sample.setOrgName("0101");
             writeTemplate(response, "业务标签机构导入模板.xlsx", PersonTagOrgImportRow.class, List.of(sample));
         } else {
             PersonTagImportRow sample = new PersonTagImportRow();
@@ -282,7 +282,7 @@ public class AdminPersonTagController {
                                      HttpServletResponse response) throws IOException {
         if (isOrgDim(dim)) {
             PersonTagOrgMemberImportRow sample = new PersonTagOrgMemberImportRow();
-            sample.setOrgDeptNo("0101");
+            sample.setOrgName("0101");
             writeTemplate(response, "标签机构成员导入模板.xlsx", PersonTagOrgMemberImportRow.class, List.of(sample));
         } else {
             PersonTagMemberImportRow sample = new PersonTagMemberImportRow();

@@ -17,6 +17,7 @@ import com.bank.branch.platform.governance.mapper.PersonTagRelMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -67,7 +68,7 @@ class PersonTagImportServiceTest {
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
     }
 
-    /** 生成机构全局导入 xlsx（标签名称/机构号 两列）。 */
+    /** 生成机构全局导入 xlsx（标签名称/机构名称 两列）。 */
     private static MockMultipartFile orgGlobalXlsx(List<PersonTagOrgImportRow> rows) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         EasyExcel.write(out, PersonTagOrgImportRow.class).sheet("s").doWrite(rows);
@@ -83,7 +84,7 @@ class PersonTagImportServiceTest {
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
     }
 
-    /** 生成机构成员导入 xlsx（机构号 一列）。 */
+    /** 生成机构成员导入 xlsx（机构名称 一列）。 */
     private static MockMultipartFile orgMemberXlsx(List<PersonTagOrgMemberImportRow> rows) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         EasyExcel.write(out, PersonTagOrgMemberImportRow.class).sheet("s").doWrite(rows);
@@ -98,10 +99,10 @@ class PersonTagImportServiceTest {
         return r;
     }
 
-    private static PersonTagOrgImportRow orgRow(String tagName, String deptNo) {
+    private static PersonTagOrgImportRow orgRow(String tagName, String orgName) {
         PersonTagOrgImportRow r = new PersonTagOrgImportRow();
         r.setTagName(tagName);
-        r.setOrgDeptNo(deptNo);
+        r.setOrgName(orgName);
         return r;
     }
 
@@ -111,9 +112,9 @@ class PersonTagImportServiceTest {
         return r;
     }
 
-    private static PersonTagOrgMemberImportRow orgMemberRow(String deptNo) {
+    private static PersonTagOrgMemberImportRow orgMemberRow(String orgName) {
         PersonTagOrgMemberImportRow r = new PersonTagOrgMemberImportRow();
-        r.setOrgDeptNo(deptNo);
+        r.setOrgName(orgName);
         return r;
     }
 
@@ -124,9 +125,10 @@ class PersonTagImportServiceTest {
         return t;
     }
 
-    private static OrgDTO org(String deptNo) {
+    private static OrgDTO org(String deptNo, String orgName) {
         OrgDTO o = new OrgDTO();
         o.setDeptNo(deptNo);
+        o.setOrgName(orgName);
         return o;
     }
 
@@ -214,30 +216,56 @@ class PersonTagImportServiceTest {
     // ===== 全局导入（机构维度） =====
 
     @Test
-    void importGlobal_org_shouldValidateDeptNoAndInsertOrgRels() {
-        when(orgApi.getOrgsByDeptNos(anyList())).thenReturn(List.of(org("0101"), org("0102")));
+    void importGlobal_org_shouldResolveUniqueOrgNameAndPersistDeptNo() {
+        when(orgApi.getOrgsByNames(anyList()))
+                .thenReturn(List.of(org("0101", "城东支行"), org("0102", "城西支行")));
         when(tagMapper.selectByTagNames(anyList())).thenReturn(List.of(tag(1L, "重点机构")));
         when(relMapper.selectByTagIds(anyList())).thenReturn(List.of());
 
         PersonTagImportResultDTO result = service.importGlobal(
-                orgGlobalXlsx(List.of(orgRow("重点机构", "0101"), orgRow("重点机构", "0102"))), "ORG", "OP1");
+                orgGlobalXlsx(List.of(
+                        orgRow("重点机构", "城东支行"),
+                        orgRow("重点机构", "城西支行"))),
+                "ORG", "OP1");
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getImportedCount()).isEqualTo(2);
         verify(userApi, never()).filterExistingUsernames(anyList());
-        verify(relMapper).insertBatch(anyList());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PersonTagRel>> rows = ArgumentCaptor.forClass(List.class);
+        verify(relMapper).insertBatch(rows.capture());
+        assertThat(rows.getValue()).extracting(PersonTagRel::getOrgDeptNo)
+                .containsExactly("0101", "0102");
     }
 
     @Test
-    void importGlobal_org_invalidDeptNo_shouldFailWithRowError() {
-        when(orgApi.getOrgsByDeptNos(anyList())).thenReturn(List.of(org("0101")));
+    void importGlobal_org_missingName_shouldFailWithRowError() {
+        when(orgApi.getOrgsByNames(anyList())).thenReturn(List.of(org("0101", "城东支行")));
 
         PersonTagImportResultDTO result = service.importGlobal(
-                orgGlobalXlsx(List.of(orgRow("重点机构", "0101"), orgRow("重点机构", "BADORG"))), "ORG", "OP1");
+                orgGlobalXlsx(List.of(
+                        orgRow("重点机构", "城东支行"),
+                        orgRow("重点机构", "不存在支行"))),
+                "ORG", "OP1");
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getErrors()).hasSize(1);
         assertThat(result.getErrors().get(0).getRow()).isEqualTo(2);
+        assertThat(result.getErrors().get(0).getMessage()).contains("机构名称").contains("不存在");
+        verify(relMapper, never()).insertBatch(anyList());
+    }
+
+    @Test
+    void importGlobal_org_ambiguousName_shouldFailAtomically() {
+        when(orgApi.getOrgsByNames(anyList()))
+                .thenReturn(List.of(org("0101", "同名支行"), org("0102", "同名支行")));
+
+        PersonTagImportResultDTO result = service.importGlobal(
+                orgGlobalXlsx(List.of(orgRow("重点机构", "同名支行"))), "ORG", "OP1");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrors()).hasSize(1);
+        assertThat(result.getErrors().get(0).getMessage()).contains("不唯一");
         verify(relMapper, never()).insertBatch(anyList());
     }
 
@@ -261,16 +289,35 @@ class PersonTagImportServiceTest {
 
     @Test
     void importMembers_org_shouldOverwriteOrgDimOnly() {
-        when(orgApi.getOrgsByDeptNos(anyList())).thenReturn(List.of(org("0101"), org("0102")));
+        when(orgApi.getOrgsByNames(anyList()))
+                .thenReturn(List.of(org("0101", "城东支行"), org("0102", "城西支行")));
         when(relMapper.deleteByTagIdAndDim(1L, "ORG")).thenReturn(1);
 
         PersonTagImportResultDTO result = service.importMembers(1L,
-                orgMemberXlsx(List.of(orgMemberRow("0101"), orgMemberRow("0102"))), "ORG", "OP1");
+                orgMemberXlsx(List.of(orgMemberRow("城东支行"), orgMemberRow("城西支行"))), "ORG", "OP1");
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getImportedCount()).isEqualTo(2);
         verify(relMapper).deleteByTagIdAndDim(1L, "ORG");
-        verify(relMapper).insertBatch(anyList());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<PersonTagRel>> rows = ArgumentCaptor.forClass(List.class);
+        verify(relMapper).insertBatch(rows.capture());
+        assertThat(rows.getValue()).extracting(PersonTagRel::getOrgDeptNo)
+                .containsExactly("0101", "0102");
+    }
+
+    @Test
+    void importMembers_org_missingName_shouldKeepExistingRelations() {
+        when(orgApi.getOrgsByNames(anyList())).thenReturn(List.of());
+
+        PersonTagImportResultDTO result = service.importMembers(1L,
+                orgMemberXlsx(List.of(orgMemberRow("不存在支行"))), "ORG", "OP1");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrors()).hasSize(1);
+        assertThat(result.getErrors().get(0).getMessage()).contains("机构名称").contains("不存在");
+        verify(relMapper, never()).deleteByTagIdAndDim(anyLong(), anyString());
+        verify(relMapper, never()).insertBatch(anyList());
     }
 
     @Test

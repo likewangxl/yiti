@@ -5,12 +5,12 @@ import lombok.Data;
 
 /**
  * 业务标签「机构维度」成员导入 Excel 行模型（1 列，按维度全量覆盖）。
- * <p>机构编号为 EXT_ORG_INFO.DEPT_NO 口径。</p>
+ * <p>Excel 按 EXT_ORG_INFO.ORG_NAME 输入机构名称，导入服务唯一匹配后仍以 DEPT_NO 落库。</p>
  */
 @Data
 public class PersonTagOrgMemberImportRow {
 
-    /** 机构业务编号（EXT_ORG_INFO.DEPT_NO）. */
-    @ExcelProperty("机构号")
-    private String orgDeptNo;
+    /** 机构名称（EXT_ORG_INFO.ORG_NAME）. */
+    @ExcelProperty("机构名称")
+    private String orgName;
 }

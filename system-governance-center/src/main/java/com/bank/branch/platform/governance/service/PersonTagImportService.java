@@ -31,7 +31,8 @@ import java.util.Set;
 
 /**
  * 业务标签 Excel 导入服务（同步原子：任一行错误则整体不入库，返回行级错误明细）。
- * <p>按维度分流：EMP 维度按工号（PT_USER 校验），ORG 维度按机构编号（EXT_ORG_INFO.DEPT_NO 校验）。</p>
+ * <p>按维度分流：EMP 维度按工号（PT_USER 校验）；ORG 维度按机构名称输入，
+ * 经 EXT_ORG_INFO.ORG_NAME 唯一匹配后以 DEPT_NO 落库。</p>
  * <ul>
  *   <li>全局导入（标签名称 + 成员标识）：库中无该标签时自动新建；已存在的同维度关联跳过（追加语义）。</li>
  *   <li>成员导入（成员标识）：对指定标签<b>按维度全量覆盖</b>——先清空该标签该维度原关联，再写入本次文件内容，
@@ -53,7 +54,7 @@ public class PersonTagImportService {
     private final PersonTagRelMapper relMapper;
     private final PersonTagService personTagService;
     private final UserApi userApi;
-    /** 机构维度：dept_no 存在性批量校验（EXT_ORG_INFO 口径，经 auth OrgApi）. */
+    /** 机构维度：按 org_name 批量唯一解析为 dept_no（EXT_ORG_INFO 口径，经 auth OrgApi）. */
     private final OrgApi orgApi;
 
     /**
@@ -81,29 +82,47 @@ public class PersonTagImportService {
                 continue;
             }
             if (ident.isEmpty()) {
-                errors.add(new PersonTagImportResultDTO.RowError(rowNo, ident, org ? "机构号不能为空" : "工号不能为空"));
+                errors.add(new PersonTagImportResultDTO.RowError(rowNo, ident,
+                        org ? "机构名称不能为空" : "工号不能为空"));
                 continue;
             }
             if (!seenPairs.add(tagName + KEY_SEP + ident)) {
                 errors.add(new PersonTagImportResultDTO.RowError(rowNo, ident,
-                        org ? "标签+机构号在文件内重复" : "标签+工号在文件内重复"));
+                        org ? "标签+机构名称在文件内重复" : "标签+工号在文件内重复"));
                 continue;
             }
             valid.add(new RowRef(rowNo, tagName, ident));
         }
 
         // 2. 标识有效性：单次/分片批量校验，不逐行查库
-        Set<String> existingIdents = org
-                ? batchExistingDeptNos(valid.stream().map(RowRef::ident).toList())
-                : batchExistingUsernames(valid.stream().map(RowRef::ident).toList());
         List<RowRef> passed = new ArrayList<>();
-        for (RowRef r : valid) {
-            if (!existingIdents.contains(r.ident())) {
-                errors.add(new PersonTagImportResultDTO.RowError(r.rowNo(), r.ident(),
-                        org ? "机构号在系统中不存在" : "工号在系统中不存在"));
-                continue;
+        if (org) {
+            OrgNameResolution resolution = resolveOrgNames(valid.stream().map(RowRef::ident).toList());
+            for (RowRef r : valid) {
+                if (resolution.ambiguousNames().contains(r.ident())) {
+                    errors.add(new PersonTagImportResultDTO.RowError(
+                            r.rowNo(), r.ident(), "机构名称不唯一"));
+                    continue;
+                }
+                String deptNo = resolution.deptNoByName().get(r.ident());
+                if (deptNo == null) {
+                    errors.add(new PersonTagImportResultDTO.RowError(
+                            r.rowNo(), r.ident(), "机构名称在系统中不存在"));
+                    continue;
+                }
+                passed.add(new RowRef(r.rowNo(), r.tagName(), deptNo));
             }
-            passed.add(r);
+        } else {
+            Set<String> existingUsernames = batchExistingUsernames(
+                    valid.stream().map(RowRef::ident).toList());
+            for (RowRef r : valid) {
+                if (!existingUsernames.contains(r.ident())) {
+                    errors.add(new PersonTagImportResultDTO.RowError(
+                            r.rowNo(), r.ident(), "工号在系统中不存在"));
+                    continue;
+                }
+                passed.add(r);
+            }
         }
 
         // 3. 任一行错误 → 整体不入库
@@ -191,29 +210,47 @@ public class PersonTagImportService {
             int rowNo = i + 1;
             String ident = trim(idents.get(i));
             if (ident.isEmpty()) {
-                errors.add(new PersonTagImportResultDTO.RowError(rowNo, ident, org ? "机构号不能为空" : "工号不能为空"));
+                errors.add(new PersonTagImportResultDTO.RowError(rowNo, ident,
+                        org ? "机构名称不能为空" : "工号不能为空"));
                 continue;
             }
             if (!seen.add(ident)) {
                 errors.add(new PersonTagImportResultDTO.RowError(rowNo, ident,
-                        org ? "机构号在文件内重复" : "工号在文件内重复"));
+                        org ? "机构名称在文件内重复" : "工号在文件内重复"));
                 continue;
             }
             valid.add(new RowRef(rowNo, null, ident));
         }
 
         // 2. 标识有效性：单次/分片批量校验
-        Set<String> existing = org
-                ? batchExistingDeptNos(valid.stream().map(RowRef::ident).toList())
-                : batchExistingUsernames(valid.stream().map(RowRef::ident).toList());
         List<String> passed = new ArrayList<>();
-        for (RowRef r : valid) {
-            if (!existing.contains(r.ident())) {
-                errors.add(new PersonTagImportResultDTO.RowError(r.rowNo(), r.ident(),
-                        org ? "机构号在系统中不存在" : "工号在系统中不存在"));
-                continue;
+        if (org) {
+            OrgNameResolution resolution = resolveOrgNames(valid.stream().map(RowRef::ident).toList());
+            for (RowRef r : valid) {
+                if (resolution.ambiguousNames().contains(r.ident())) {
+                    errors.add(new PersonTagImportResultDTO.RowError(
+                            r.rowNo(), r.ident(), "机构名称不唯一"));
+                    continue;
+                }
+                String deptNo = resolution.deptNoByName().get(r.ident());
+                if (deptNo == null) {
+                    errors.add(new PersonTagImportResultDTO.RowError(
+                            r.rowNo(), r.ident(), "机构名称在系统中不存在"));
+                    continue;
+                }
+                passed.add(deptNo);
             }
-            passed.add(r.ident());
+        } else {
+            Set<String> existingUsernames = batchExistingUsernames(
+                    valid.stream().map(RowRef::ident).toList());
+            for (RowRef r : valid) {
+                if (!existingUsernames.contains(r.ident())) {
+                    errors.add(new PersonTagImportResultDTO.RowError(
+                            r.rowNo(), r.ident(), "工号在系统中不存在"));
+                    continue;
+                }
+                passed.add(r.ident());
+            }
         }
 
         // 3. 任一行错误 → 整体不动原数据
@@ -249,7 +286,7 @@ public class PersonTagImportService {
 
     private List<TagIdentRow> parseOrgGlobalRows(MultipartFile file) {
         return parse(file, PersonTagOrgImportRow.class).stream()
-                .map(r -> new TagIdentRow(r.getTagName(), r.getOrgDeptNo())).toList();
+                .map(r -> new TagIdentRow(r.getTagName(), r.getOrgName())).toList();
     }
 
     private List<String> parseEmpMemberRows(MultipartFile file) {
@@ -259,7 +296,7 @@ public class PersonTagImportService {
 
     private List<String> parseOrgMemberRows(MultipartFile file) {
         return parse(file, PersonTagOrgMemberImportRow.class).stream()
-                .map(PersonTagOrgMemberImportRow::getOrgDeptNo).toList();
+                .map(PersonTagOrgMemberImportRow::getOrgName).toList();
     }
 
     /**
@@ -297,21 +334,37 @@ public class PersonTagImportService {
         return new HashSet<>(userApi.filterExistingUsernames(usernames));
     }
 
-    /** 按 EXT_ORG_INFO.DEPT_NO 批量取存在的机构编号集合（空列表直接返回空集）。 */
-    private Set<String> batchExistingDeptNos(List<String> deptNos) {
-        if (deptNos == null || deptNos.isEmpty()) {
-            return Set.of();
+    /**
+     * 按 EXT_ORG_INFO.ORG_NAME 批量解析机构名称。
+     * <p>名称命中多条时记录为歧义；仅唯一命中且 dept_no 非空时返回名称到编号的映射。</p>
+     */
+    private OrgNameResolution resolveOrgNames(List<String> orgNames) {
+        if (orgNames == null || orgNames.isEmpty()) {
+            return new OrgNameResolution(Map.of(), Set.of());
         }
-        Set<String> existing = new HashSet<>();
-        List<OrgDTO> orgs = orgApi.getOrgsByDeptNos(deptNos);
+        List<OrgDTO> orgs = orgApi.getOrgsByNames(orgNames);
+        Map<String, List<OrgDTO>> byName = new HashMap<>();
         if (orgs != null) {
             for (OrgDTO o : orgs) {
-                if (o != null && o.getDeptNo() != null) {
-                    existing.add(o.getDeptNo());
+                if (o != null && o.getOrgName() != null) {
+                    byName.computeIfAbsent(o.getOrgName(), key -> new ArrayList<>()).add(o);
                 }
             }
         }
-        return existing;
+        Map<String, String> deptNoByName = new HashMap<>();
+        Set<String> ambiguousNames = new HashSet<>();
+        for (String orgName : new LinkedHashSet<>(orgNames)) {
+            List<OrgDTO> matches = byName.getOrDefault(orgName, List.of());
+            if (matches.size() > 1) {
+                ambiguousNames.add(orgName);
+            } else if (matches.size() == 1) {
+                String deptNo = matches.get(0).getDeptNo();
+                if (deptNo != null && !deptNo.isBlank()) {
+                    deptNoByName.put(orgName, deptNo);
+                }
+            }
+        }
+        return new OrgNameResolution(deptNoByName, ambiguousNames);
     }
 
     /** 新建成员关联行（按维度落对应标识列）。 */
@@ -352,5 +405,10 @@ public class PersonTagImportService {
 
     /** 校验通过行的引用（Excel 数据行号从 1 起）。 */
     private record RowRef(int rowNo, String tagName, String ident) {
+    }
+
+    /** 机构名称批量解析结果：唯一匹配映射 + 重名集合。 */
+    private record OrgNameResolution(Map<String, String> deptNoByName,
+                                     Set<String> ambiguousNames) {
     }
 }
