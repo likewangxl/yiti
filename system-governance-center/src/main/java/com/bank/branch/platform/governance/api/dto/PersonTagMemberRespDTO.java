@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 
 /**
  * 业务标签成员行响应。
- * <p>按维度分两类：EMP=员工（仅工号，姓名已按需求去除）、ORG=机构（机构编号 dept_no + 机构名称实时解析）。</p>
+ * <p>按维度分两类：EMP=员工（工号 + 姓名实时解析）、ORG=机构（机构编号 dept_no + 机构名称实时解析）。</p>
  */
 @Data
 public class PersonTagMemberRespDTO {
@@ -19,6 +19,9 @@ public class PersonTagMemberRespDTO {
 
     /** 员工工号（PT_USER.USERNAME）；DIM_TYPE=EMP 时有值. */
     private String username;
+
+    /** 员工姓名（PT_USER.DISPLAY_NAME）；DIM_TYPE=EMP 时按工号实时解析，用户不存在时为 null. */
+    private String displayName;
 
     /** 机构业务编号（EXT_ORG_INFO.DEPT_NO）；DIM_TYPE=ORG 时有值. */
     private String orgDeptNo;

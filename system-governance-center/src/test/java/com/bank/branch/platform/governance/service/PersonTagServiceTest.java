@@ -3,6 +3,7 @@ package com.bank.branch.platform.governance.service;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.PersonTagMemberRespDTO;
@@ -179,19 +180,25 @@ class PersonTagServiceTest {
     // ===== 成员查询（分维度） =====
 
     @Test
-    void pageMembers_empDim_shouldReturnUsernameOnly_noNameResolve() {
+    void pageMembers_empDim_shouldResolveDisplayNameInSingleBatch() {
         when(tagMapper.selectById(1L)).thenReturn(tag(1L, "骨干"));
         when(relMapper.countByTagId(1L, "EMP")).thenReturn(2L);
         when(relMapper.selectPageByTagId(1L, "EMP", 0, 20))
                 .thenReturn(List.of(empRel(11L, 1L, "100001"), empRel(12L, 1L, "100002")));
+        UserDTO user = new UserDTO();
+        user.setUsername("100001");
+        user.setDisplayName("张三");
+        when(userApi.getUsersByUsernames(List.of("100001", "100002")))
+                .thenReturn(List.of(user));
 
         PageResult<PersonTagMemberRespDTO> page = service.pageMembers(1L, "EMP", 1, 20);
 
         assertThat(page.getTotal()).isEqualTo(2);
         assertThat(page.getRecords().get(0).getDimType()).isEqualTo("EMP");
         assertThat(page.getRecords().get(0).getUsername()).isEqualTo("100001");
-        // 员工维度不再解析姓名
-        verify(userApi, never()).getUsersByUsernames(anyList());
+        assertThat(page.getRecords().get(0).getDisplayName()).isEqualTo("张三");
+        assertThat(page.getRecords().get(1).getDisplayName()).isNull();
+        verify(userApi).getUsersByUsernames(List.of("100001", "100002"));
     }
 
     @Test

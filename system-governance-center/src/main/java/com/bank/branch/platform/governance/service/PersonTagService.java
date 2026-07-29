@@ -3,6 +3,7 @@ package com.bank.branch.platform.governance.service;
 import com.bank.branch.platform.auth.api.OrgApi;
 import com.bank.branch.platform.auth.api.UserApi;
 import com.bank.branch.platform.auth.api.dto.OrgDTO;
+import com.bank.branch.platform.auth.api.dto.UserDTO;
 import com.bank.branch.platform.common.web.PageResult;
 import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.governance.api.dto.PersonTagMemberRespDTO;
@@ -29,7 +30,7 @@ import java.util.Set;
  * 业务标签服务（全平台通用，原「人员标签」）。
  * <p>标签 CRUD（删除级联删关联）+ 标签成员管理（按维度新增/修改/删除/分页查询）。</p>
  * <p>成员按维度分两类：EMP=员工（存工号 {@code PT_USER.USERNAME}）、ORG=机构（存业务编号
- * {@code EXT_ORG_INFO.DEPT_NO}）。员工维度只展示工号（不再解析姓名）；机构维度按 dept_no 实时解析机构名称。</p>
+ * {@code EXT_ORG_INFO.DEPT_NO}）。员工维度按工号实时解析姓名；机构维度按 dept_no 实时解析机构名称。</p>
  */
 @Slf4j
 @Service
@@ -125,7 +126,8 @@ public class PersonTagService {
 
     /**
      * 分页查询标签某维度下的成员。
-     * <p>EMP 维度：仅工号（不再解析姓名）；ORG 维度：机构编号 + 机构名称（按 dept_no 当页批量实时解析）。</p>
+     * <p>EMP 维度：工号 + 员工姓名（按 username 当页批量实时解析）；
+     * ORG 维度：机构编号 + 机构名称（按 dept_no 当页批量实时解析）。</p>
      *
      * @param tagId    标签 ID
      * @param dimType  成员维度（EMP/ORG，空按 EMP）
@@ -150,14 +152,29 @@ public class PersonTagService {
         return PageResult.of(safeNo, safeSize, total, records);
     }
 
-    /** EMP 成员行 → DTO（仅工号，无姓名解析）。 */
+    /** EMP 成员行 → DTO（工号 + 按 username 批量解析员工姓名）。 */
     private List<PersonTagMemberRespDTO> toEmpMemberDtos(List<PersonTagRel> rels) {
+        List<String> usernames = rels.stream()
+                .map(PersonTagRel::getUsername)
+                .filter(username -> username != null && !username.isBlank())
+                .distinct()
+                .toList();
+        Map<String, String> displayNameByUsername = new HashMap<>();
+        List<UserDTO> users = usernames.isEmpty() ? List.of() : userApi.getUsersByUsernames(usernames);
+        if (users != null) {
+            for (UserDTO user : users) {
+                if (user != null && user.getUsername() != null) {
+                    displayNameByUsername.putIfAbsent(user.getUsername(), user.getDisplayName());
+                }
+            }
+        }
         List<PersonTagMemberRespDTO> records = new ArrayList<>(rels.size());
         for (PersonTagRel rel : rels) {
             PersonTagMemberRespDTO dto = new PersonTagMemberRespDTO();
             dto.setId(rel.getId());
             dto.setDimType(PersonTagRel.DIM_EMP);
             dto.setUsername(rel.getUsername());
+            dto.setDisplayName(displayNameByUsername.get(rel.getUsername()));
             dto.setCreateTime(rel.getCreateTime());
             records.add(dto);
         }

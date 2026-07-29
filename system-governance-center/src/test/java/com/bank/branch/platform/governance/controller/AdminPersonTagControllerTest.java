@@ -150,13 +150,15 @@ class AdminPersonTagControllerTest {
         m.setId(11L);
         m.setDimType(PersonTagRel.DIM_EMP);
         m.setUsername("100001");
+        m.setDisplayName("张三");
         when(personTagService.pageMembers(eq(1L), eq("EMP"), anyInt(), anyInt()))
                 .thenReturn(PageResult.of(1, 20, 1, List.of(m)));
 
         mockMvc.perform(get("/api/admin/sys/person-tags/1/members"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.records[0].dimType").value("EMP"))
-                .andExpect(jsonPath("$.data.records[0].username").value("100001"));
+                .andExpect(jsonPath("$.data.records[0].username").value("100001"))
+                .andExpect(jsonPath("$.data.records[0].displayName").value("张三"));
     }
 
     @Test
