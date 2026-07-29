@@ -79,7 +79,7 @@
       <div class="imp-tip">
         <el-button size="small" @click="downloadGlobalTpl">📥 下载导入模板</el-button>
         <span class="muted">
-          模板列：{{ globalImp.dim === 'ORG' ? '标签名称 / 机构号' : '标签名称 / 工号' }}。库中没有的标签自动新建；任一行错误则整体不导入。
+          模板列：{{ globalImp.dim === 'ORG' ? '标签名称 / 机构名称' : '标签名称 / 工号' }}。库中没有的标签自动新建；任一行错误则整体不导入。
         </span>
       </div>
       <el-upload
@@ -119,9 +119,12 @@
         </div>
       </div>
 
-      <!-- 员工维度：仅工号 -->
+      <!-- 员工维度：工号 + 员工姓名 -->
       <el-table v-if="detail.dim === 'EMP'" v-loading="detail.loading" :data="detail.rows" border stripe size="small">
-        <el-table-column prop="username" label="工号" min-width="200" />
+        <el-table-column prop="username" label="工号" width="180" />
+        <el-table-column prop="displayName" label="员工姓名" min-width="200">
+          <template #default="{ row }">{{ row.displayName || '—' }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="130" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openMemberEdit(row)">修改</el-button>
@@ -217,7 +220,7 @@
         style="margin-bottom: 12px" />
       <div class="imp-tip">
         <el-button size="small" @click="downloadMemberTpl">📥 下载导入模板</el-button>
-        <span class="muted">模板列：{{ detail.dim === 'ORG' ? '机构号' : '工号' }}。任一行错误则不改动现有数据。</span>
+        <span class="muted">模板列：{{ detail.dim === 'ORG' ? '机构名称' : '工号' }}。任一行错误则不改动现有数据。</span>
       </div>
       <el-upload
         ref="memberUploaderRef"
@@ -254,7 +257,7 @@ import {
   importPersonTagMembers, downloadPersonTagMemberTemplate
 } from '@/api/system';
 
-/** 导入错误明细表（行号/标识/原因），两个导入弹窗共用；标识列名随维度切换（工号/机构号）。 */
+/** 导入错误明细表（行号/标识/原因），两个导入弹窗共用；标识列名随维度切换（工号/机构名称）。 */
 const ImportErrors = {
   name: 'ImportErrors',
   props: {
@@ -263,7 +266,7 @@ const ImportErrors = {
   },
   render() {
     if (!this.errors.length) return null;
-    const idLabel = this.dim === 'ORG' ? '机构号' : '工号';
+    const idLabel = this.dim === 'ORG' ? '机构名称' : '工号';
     return h('div', { class: 'imp-errors' }, [
       h('div', { class: 'err-title' }, `导入未通过校验（共 ${this.errors.length} 条问题），未做任何改动：`),
       h('table', { class: 'err-table' }, [

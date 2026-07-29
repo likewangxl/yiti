@@ -22,7 +22,7 @@ vi.mock('@/api/system', () => ({
   updatePersonTag: vi.fn().mockResolvedValue({ ok: true }),
   deletePersonTag: vi.fn().mockResolvedValue({ ok: true }),
   listPersonTagMembers: vi.fn().mockResolvedValue({
-    records: [{ id: 11, dimType: 'EMP', username: '100001' }],
+    records: [{ id: 11, dimType: 'EMP', username: '100001', displayName: '张三' }],
     total: 1
   }),
   addPersonTagMembers: vi.fn().mockResolvedValue(2),
@@ -59,7 +59,11 @@ const stubs = {
   'el-upload': passthrough('ElUpload'),
   'el-pagination': empty('ElPagination'),
   'el-table': { name: 'ElTable', props: ['data'], template: '<div class="tbl-stub"><slot /></div>' },
-  'el-table-column': empty('ElTableColumn')
+  'el-table-column': {
+    name: 'ElTableColumn',
+    props: ['prop', 'label'],
+    template: '<div />'
+  }
 };
 
 function mountPage() {
@@ -114,7 +118,15 @@ describe('PersonTags.vue', () => {
     await flushPromises();
 
     expect(listPersonTagMembers).toHaveBeenCalledWith(7, { dim: 'EMP', pageNo: 1, pageSize: 20 });
-    expect(wrapper.vm.detail.rows[0]).toMatchObject({ username: '100001', dimType: 'EMP' });
+    expect(wrapper.vm.detail.rows[0]).toMatchObject({
+      username: '100001',
+      displayName: '张三',
+      dimType: 'EMP'
+    });
+    const columns = wrapper.findAllComponents({ name: 'ElTableColumn' });
+    expect(columns.some(column =>
+      column.props('prop') === 'displayName' && column.props('label') === '员工姓名'
+    )).toBe(true);
   });
 
   it('切换到机构维度：回到第 1 页并按 ORG 维度重新拉取', async () => {
