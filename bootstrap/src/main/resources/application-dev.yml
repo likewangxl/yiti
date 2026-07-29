@@ -3,6 +3,14 @@ spring:
   # 去 Redis 后 dev profile 不再需要 redis database/session namespace 隔离
   datasource:
     druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
       stat-view-servlet:
         enabled: true
         url-pattern: /druid/*
