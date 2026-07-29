@@ -22,6 +22,7 @@ spring:
         enabled: true
       filter:
         stat:
+          enabled: true
           log-slow-sql: true
           slow-sql-millis: 5000
         # slf4j 过滤器：在连接层打印「所有」走 Druid 的 SQL（含 Flowable taskService）。

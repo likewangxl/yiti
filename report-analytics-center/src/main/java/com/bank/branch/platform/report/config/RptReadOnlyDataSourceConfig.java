@@ -2,6 +2,7 @@ package com.bank.branch.platform.report.config;
 
 import com.alibaba.druid.pool.DruidDataSource;
 import com.alibaba.druid.pool.DruidPooledConnection;
+import com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,7 +60,7 @@ public class RptReadOnlyDataSourceConfig {
     @ConfigurationProperties("spring.datasource.druid")
     public DataSource primaryDataSource(DataSourceProperties properties) {
         DataSource ds = properties.initializeDataSourceBuilder()
-                .type(DruidDataSource.class)
+                .type(DruidDataSourceWrapper.class)
                 .build();
         log.info("[RptPrimaryDataSource] initialized url={}", properties.getUrl());
         return ds;

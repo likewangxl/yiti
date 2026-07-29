@@ -1,6 +1,10 @@
 package com.bank.branch.platform.report.config;
 
+import com.alibaba.druid.filter.logging.Slf4jLogFilter;
+import com.alibaba.druid.filter.stat.StatFilter;
 import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.druid.spring.boot3.autoconfigure.DruidDataSourceWrapper;
+import com.bank.branch.platform.report.ReportTestApplication;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,8 +16,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-import com.bank.branch.platform.report.ReportTestApplication;
 
 /**
  * rptReadOnlyDataSource Bean 守护测试（Task M4.2.2，Red）.
@@ -29,13 +31,37 @@ import com.bank.branch.platform.report.ReportTestApplication;
  * （需 MySQL 实例 + sql_probe_readonly 账号；放在子类的真实库 IT 中）.
  */
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = ReportTestApplication.class)
+@SpringBootTest(
+        classes = ReportTestApplication.class,
+        properties = {
+                "spring.datasource.druid.filter.stat.enabled=true",
+                "spring.datasource.druid.filter.slf4j.enabled=true"
+        }
+)
 @ActiveProfiles("test")
 class RptReadOnlyDataSourceConfigTest {
 
     @Autowired
+    private DataSource primaryDataSource;
+
+    @Autowired
     @Qualifier("rptReadOnlyDataSource")
     private DataSource rptReadOnlyDataSource;
+
+    @Test
+    void primaryDataSourceShouldUseWrapperAndAttachMonitoringFilters() {
+        assertThat(primaryDataSource).isInstanceOf(DruidDataSourceWrapper.class);
+        DruidDataSource druid = (DruidDataSource) primaryDataSource;
+        assertThat(druid.getProxyFilters().stream().anyMatch(StatFilter.class::isInstance)).isTrue();
+        assertThat(druid.getProxyFilters().stream().anyMatch(Slf4jLogFilter.class::isInstance)).isTrue();
+    }
+
+    @Test
+    void rptReadOnlyDataSourceShouldNotAttachMonitoringFilters() {
+        DruidDataSource druid = (DruidDataSource) rptReadOnlyDataSource;
+        assertThat(druid.getProxyFilters().stream().anyMatch(StatFilter.class::isInstance)).isFalse();
+        assertThat(druid.getProxyFilters().stream().anyMatch(Slf4jLogFilter.class::isInstance)).isFalse();
+    }
 
     @Test
     void rptReadOnlyDataSourceShouldExistAndBeDruid() {
