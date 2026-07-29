@@ -29,12 +29,6 @@ spring:
     url: jdbc:mysql://localhost:3306/yiti?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true&sessionVariables=time_zone%3D%27%2B08%3A00%27
     username: root
     password: djdev
-    druid:
-      # GoldenDB(分布式库)上 SPRING_SESSION 行锁争用致登录卡死(Lock wait timeout)：
-      # 用 READ COMMITTED 消除范围扫描(每分钟过期清理 DELETE ... WHERE EXPIRY_TIME<?)的 gap/next-key 锁，
-      # 缓解与登录 session 写(UPDATE SPRING_SESSION)的争抢。GoldenDB/MySQL 通用、可回退。
-      connection-init-sqls:
-        - SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED
   session:
     # 去 Redis 后改 Spring Session JDBC：session 落 MySQL SPRING_SESSION 表
     # 多实例 docker 部署下天然共享，性能比 redis 慢 1-3ms 无感
