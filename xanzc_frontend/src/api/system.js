@@ -235,7 +235,7 @@ export function updatePersonTagMember(tagId, id, data) {
 export function removePersonTagMember(tagId, id) {
   return call('delete', `/admin/sys/person-tags/${tagId}/members/${id}`, {}, { ok: true });
 }
-// 全局导入（按维度 dim）：EMP 列=标签名称/工号，ORG 列=标签名称/机构号；缺标签自动新建，同步原子
+// 全局导入（按维度 dim）：EMP 列=标签名称/工号，ORG 列=标签名称/机构名称；缺标签自动新建，同步原子
 export function importPersonTags(file, dim = 'EMP') {
   const fd = new FormData();
   fd.append('file', file);

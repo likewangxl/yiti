@@ -127,7 +127,7 @@ public class AdminPersonTagController {
     }
 
     /**
-     * 分页查询标签某维度下的成员（EMP=工号 / ORG=机构编号+名称实时解析）。
+     * 分页查询标签某维度下的成员（EMP=工号+姓名 / ORG=机构编号+名称，均实时解析名称）。
      *
      * @param tagId    标签 ID
      * @param dim      成员维度（EMP/ORG，默认 EMP）
@@ -136,7 +136,7 @@ public class AdminPersonTagController {
      * @return 分页结果
      */
     @GetMapping("/{tagId}/members")
-    @Operation(summary = "分页查询标签成员（按维度：员工工号 / 机构编号）")
+    @Operation(summary = "分页查询标签成员（按维度：员工工号+姓名 / 机构编号+名称）")
     @BizAuth(bizType = BizType.SYS_CONFIG, action = BizAction.LIST)
     public ResponseWrapper<PageResult<PersonTagMemberRespDTO>> members(
             @PathVariable("tagId") Long tagId,
@@ -206,7 +206,7 @@ public class AdminPersonTagController {
     }
 
     /**
-     * 全局导入（按维度：员工=标签名称/工号，机构=标签名称/机构号；缺标签自动新建，同步原子）。
+     * 全局导入（按维度：员工=标签名称/工号，机构=标签名称/机构名称；缺标签自动新建，同步原子）。
      *
      * @param file .xlsx 文件
      * @param dim  成员维度（EMP/ORG，默认 EMP）

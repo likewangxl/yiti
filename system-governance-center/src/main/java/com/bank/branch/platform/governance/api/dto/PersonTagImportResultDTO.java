@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 人员标签导入结果（同步原子：任一行错误则整体不入库，返回行级错误明细）。
+ * 业务标签导入结果（同步原子：任一行错误则整体不入库，返回行级错误明细）。
  */
 @Data
 public class PersonTagImportResultDTO {
@@ -35,7 +35,7 @@ public class PersonTagImportResultDTO {
     public static class RowError {
         /** Excel 数据行号（从 1 起，不含表头）. */
         private int row;
-        /** 该行工号（可空）. */
+        /** 该行成员标识（EMP=工号，ORG=机构名称，可空）. */
         private String username;
         /** 错误原因. */
         private String message;
