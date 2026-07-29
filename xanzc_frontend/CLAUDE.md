@@ -27,11 +27,12 @@
 
 ## 功能域：`src/views/redengine/`（红色引擎党建子系统）
 
-独立的红色引擎前端子系统，对接 `red-engine-center` 模块，路由前缀 `/redengine/**`：
+红色引擎前端子系统，对接 `red-engine-center` 模块，路由前缀 `/redengine/**`。平台动态菜单通过
+`M_RE_ENGINE`（`/redengine/dashboard`）进入；登录统一使用平台 `/login` 与 Spring Session，
+不再保留 `/redengine/login` 或红色引擎独立登录组件：
 
 - `layout/RedEngineLayout.vue`：独立红色主题布局，`re-` 类名前缀隔离平台全局样式，不复用 `DefaultLayout`。
 - `layout/canSee.js`：纯函数模块，菜单项按 `res`（后端资源 URL）字段过滤可见性——精确匹配 或 `/**`/`/*` 前缀匹配；`resourceUrls` 未就绪（拉取中/失败）时降级为全部可见。**这套"前端按资源过滤菜单"的做法仅红色引擎子系统使用**；主平台 `DefaultLayout`/`AppSidebar` 不做前端菜单过滤，而是按后端下发的 `getMyMenus()` 动态树渲染，权限最终一律靠后端 403 兜底——两条子系统的菜单可见性策略不同，不要把 `canSee` 模式误移植到主平台，也不要假设主平台已有等价过滤。
-- `login/LoginView.vue`：独立登录页（与主平台 `views/login/Index.vue` 并存，两套账号体系分别对接 `PT_USER` 的党建角色与主平台角色）。
 - 各业务视图（`report`/`branch-review`/`cockpit`/`warning`/`review`/`archive`/`export`/`system/OrgManageView`/`system/UserMapView`）对应 `red-engine-center` 的材料上报/两级审核/驾驶舱/预警/归档/导出/党组织管理能力，API 封装见 `src/api/redengine.js`（`docs/code-examples.md` 收录了其中 blob 导出与 multipart 上传两种写法范例）。
 
 ## mock 机制（`src/api/http.js` 的 `call()`）

@@ -4,6 +4,14 @@
 - **分支**: `feature/redengine-merge`（本次合并全部改动所在分支，不动 master）
 - **状态**: 设计已获用户批准（含"首期不接 Flowable"决策点）
 
+> **2026-07-29 后续变更**：原设计中“保留红色引擎登录页、通过独立入口进入”的要求已被取消。
+> 当前方案以本文 §10 为准：红色引擎作为 Branch Platform 动态菜单进入，复用平台登录态，
+> 业务页面继续使用原 `RedEngineLayout` 与红色主题。
+>
+> **2026-07-29 数据库上线补记**：用户已另行明确授权将相关数据库调整同步到 `yiti`。
+> 原文“仅在 `yiti_test` 执行”的限制仍是 2026-07-18 初次合并阶段的历史约束；本次正式同步
+> 通过 `2026-07-29-redengine-sync-yiti.sql` 编排执行，明确排除 `yiti_test` 专用演示业务数据。
+
 ## 1. 背景与目标
 
 `redengine/` 是独立开发的**党建工程管理系统**（红色引擎，西安分行党建管理）：
@@ -183,3 +191,26 @@ Task 0-17（`.superpowers/sdd/task-0-brief.md` ~ `task-17d-report.md`）实施�
 7. OBS 域名在开发沙箱 DNS 不可达（`GOV-50001`），附件上传联调不可用，生产内网可用。
 8. `RestEndpointInventoryIT` 只静态比对 `docs/schema/seed-v1.sql` 基线且不做 AntPath 通配符展开，本模块 17 条资源已正确注册但被误报为 23 条差值（BASE=195，当前=218），属该审计工具既有方法论盲区。
 9. `SYS_DICT_ITEM` 平台无代码读取通道，本模块字典按平台拍平惯例落 `SYS_DICT`（`RE_` 前缀，4 类 18 项），未使用 DDL 语义预留的两级设计。
+
+## 10. 2026-07-29 平台菜单入口变更
+
+本节覆盖本文 §1 目标 1、§2“前端形态”、§3 前端架构图、§7“登录页/平台门户入口”及
+§8 Playwright 登录入口的旧设计，其他后端业务、权限、数据与页面风格要求不变。
+
+- 平台 `PT_RESOURCE` 新增顶层叶子菜单 `M_RE_ENGINE`，URL 为 `/redengine/dashboard`；
+  四个党建角色与 `SYS_ADMIN` 均绑定该菜单。
+- 17 条 `P_RE_*` API 资源的 `PARENT_RESOURCE_ID` 对齐为 `M_RE_ENGINE`，使平台权限配置分配
+  菜单时自动联动接口权限。
+- 删除 `/redengine/login` 路由及 `LoginView.vue`；未登录访问 `/redengine/**` 统一由全局
+  路由守卫跳转平台 `/login`，不再存在红色引擎独立账号入口。
+- `/redengine/**` 仍使用顶层 `RedEngineLayout`，不嵌入 `DefaultLayout`，避免平台侧栏与红色
+  引擎侧栏叠加；原红色主题、页面结构、内部菜单和业务视图样式不变。
+- 红色引擎顶栏“退出”销毁平台 Session 并整页跳转 `/login`，与平台 `AppHeader` 行为一致。
+- 数据库增量对齐脚本为
+  `docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`；历史
+  `2026-07-18-redengine-seed.sql` 保持原貌，不原地改写。
+- `yiti` 正式同步统一通过
+  `docs/superpowers/sql/2026-07-29-redengine-sync-yiti.sql` 执行，顺序为“8 张 `RE_*`
+  基础表 → 权限/字典/党组织正式种子 → 平台菜单对齐”。2026-07-29 已在完整备份后执行并
+  重复执行验证幂等：落库 17 条 API 资源、1 条菜单、4 个党建角色、5 条业务范围、18 条
+  字典、10 条党组织；`RE_SUBMIT`/`RE_SCORE`/`RE_ANNUAL_RESULT` 均为 0，未同步演示业务数据。
