@@ -11,7 +11,7 @@ import com.bank.branch.platform.auth.mapper.UserOrgMapper;
 import com.bank.branch.platform.common.web.exception.BizException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -31,7 +31,7 @@ public class UserService {
     private final UserMapper userMapper;
     private final UserOrgMapper userOrgMapper;
     private final com.bank.branch.platform.auth.mapper.UserRoleMapper userRoleMapper;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
     private final AuthUserProperties props;
 
     /**
