@@ -2,7 +2,7 @@
 
 ## 目标
 
-在 `bootstrap/src/main/resources/application-dev.yml` 中补充 Druid 连接池容量、等待时间和空闲连接检测配置，仅对 `dev` profile 生效，不改变其他环境的连接池行为。
+在 `bootstrap/src/main/resources/application-dev.yml` 中补充 Druid 连接池容量、等待时间、空闲连接检测和主动保活配置，仅对 `dev` profile 生效，不改变其他环境的连接池行为。
 
 ## 配置设计
 
@@ -18,12 +18,15 @@
 | `min-evictable-idle-time-millis` | `300000` | 连接空闲满 5 分钟后允许回收 |
 | `validation-query` | `SELECT 1` | 用轻量查询验证连接有效性 |
 | `test-while-idle` | `true` | 在空闲检测时执行连接有效性验证 |
+| `keep-alive` | `true` | 主动验证并保活达到最小空闲数的连接 |
+| `keep-alive-between-time-millis` | `120000` | 同一连接两次保活检测至少间隔 2 分钟 |
 
 ## 作用范围
 
 - 只修改 `application-dev.yml`，不把开发环境参数提升到全局 `application.yml`。
 - 不修改数据源 URL、账号、Druid 类型或现有监控和日志配置。
 - 不启用 `test-on-borrow` 或 `test-on-return`，避免每次借还连接都增加一次验证查询。
+- 主动保活仅降低空闲连接失效的概率，不能防止事务执行期间发生 GoldenDB 节点切换、网络中断或 JDBC `socketTimeout`。
 
 ## 验证
 
@@ -31,4 +34,3 @@
 2. 检查新增配置路径和取值与设计一致。
 3. 执行 `git diff --check`，确认没有空白或格式错误。
 4. 重启后端后确认应用启动成功且 `18080` 端口正常监听。
-
