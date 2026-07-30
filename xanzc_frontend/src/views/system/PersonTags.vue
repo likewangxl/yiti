@@ -156,7 +156,7 @@
         @current-change="reloadMembers" />
     </el-drawer>
 
-    <!-- 新增成员弹窗（员工 + 机构两个输入框，可同时提交） -->
+    <!-- 新增成员弹窗（员工工号 + 机构名称，可同时提交） -->
     <el-dialog v-model="memberAdd.visible" title="新增成员" width="560px">
       <el-form label-width="110px">
         <el-form-item label="员工工号">
@@ -166,16 +166,28 @@
             :rows="3"
             placeholder="输入员工工号，多个用逗号或换行分隔（可留空）" />
         </el-form-item>
-        <el-form-item label="机构编号">
-          <el-input
-            v-model="memberAdd.orgText"
-            type="textarea"
-            :rows="3"
-            placeholder="输入机构编号(dept_no)，多个用逗号或换行分隔（可留空）" />
+        <el-form-item label="机构名称">
+          <el-select
+            v-model="memberAdd.orgDeptNos"
+            multiple
+            filterable
+            clearable
+            collapse-tags
+            collapse-tags-tooltip
+            :loading="memberAdd.orgLoading"
+            :disabled="memberAdd.orgLoading"
+            placeholder="按机构名称搜索并选择（可留空）"
+            style="width: 100%">
+            <el-option
+              v-for="org in memberOrgOptions"
+              :key="org.deptNo"
+              :label="`${org.name}（${org.deptNo}）`"
+              :value="org.deptNo" />
+          </el-select>
         </el-form-item>
       </el-form>
       <div class="muted">
-        工号须存在于用户管理、机构编号须存在于机构档案；已在标签下的同维度成员自动跳过。员工与机构至少填写一类。
+        工号须存在于用户管理；机构请按名称搜索选择。已在标签下的同维度成员自动跳过，员工与机构至少填写一类。
       </div>
       <template #footer>
         <el-button @click="memberAdd.visible = false">取消</el-button>
@@ -256,6 +268,7 @@ import {
   importPersonTags, downloadPersonTagTemplate,
   importPersonTagMembers, downloadPersonTagMemberTemplate
 } from '@/api/system';
+import { getOrgTree } from '@/api/orgs';
 
 /** 导入错误明细表（行号/标识/原因），两个导入弹窗共用；标识列名随维度切换（工号/机构名称）。 */
 const ImportErrors = {
@@ -491,20 +504,64 @@ function refreshBoth() {
   reload();
 }
 
-// ===== 新增成员（员工 + 机构双输入） =====
-const memberAdd = reactive({ visible: false, empText: '', orgText: '', saving: false });
+// ===== 新增成员（员工工号 + 机构名称多选） =====
+const memberAdd = reactive({
+  visible: false,
+  empText: '',
+  orgDeptNos: [],
+  orgLoading: false,
+  saving: false
+});
+const memberOrgOptions = ref([]);
+const memberOrgLoaded = ref(false);
+
+function flattenMemberOrgOptions(nodes) {
+  const options = [];
+  const seenDeptNos = new Set();
+  const walk = (items) => {
+    for (const node of items || []) {
+      const deptNo = node?.deptNo == null ? '' : String(node.deptNo).trim();
+      if (deptNo && !seenDeptNos.has(deptNo)) {
+        seenDeptNos.add(deptNo);
+        options.push({
+          deptNo,
+          name: node.name || deptNo,
+          code: node.code || ''
+        });
+      }
+      if (node?.children?.length) walk(node.children);
+    }
+  };
+  walk(nodes);
+  return options;
+}
+
+async function ensureMemberOrgOptions() {
+  if (memberOrgLoaded.value || memberAdd.orgLoading) return;
+  memberAdd.orgLoading = true;
+  try {
+    memberOrgOptions.value = flattenMemberOrgOptions(await getOrgTree());
+    memberOrgLoaded.value = true;
+  } catch {
+    memberOrgOptions.value = [];
+    ElMessage.warning('机构列表加载失败，请重试');
+  } finally {
+    memberAdd.orgLoading = false;
+  }
+}
 
 function openMemberAdd() {
   memberAdd.empText = '';
-  memberAdd.orgText = '';
+  memberAdd.orgDeptNos = [];
   memberAdd.visible = true;
+  ensureMemberOrgOptions();
 }
 
 async function saveMemberAdd() {
   const usernames = splitIds(memberAdd.empText);
-  const orgDeptNos = splitIds(memberAdd.orgText);
+  const orgDeptNos = [...memberAdd.orgDeptNos];
   if (!usernames.length && !orgDeptNos.length) {
-    ElMessage.warning('请至少输入一个员工工号或机构编号');
+    ElMessage.warning('请至少输入一个员工工号或选择一个机构');
     return;
   }
   memberAdd.saving = true;

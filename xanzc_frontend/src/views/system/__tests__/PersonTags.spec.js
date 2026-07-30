@@ -3,7 +3,7 @@
 //  1) 列表加载并展示关联成员数；2) 删除标签的确认文案必须提示级联删除关联成员；
 //  3) 详情抽屉按被点标签+当前维度拉成员；4) 切换维度按新维度重新拉取；
 //  5) 成员导入（按维度全量覆盖）提交前必须弹覆盖确认，且确认后按被点标签 ID + 维度调导入接口；
-//  6) 新增成员支持员工工号 + 机构编号两个输入框，逗号/换行分隔多值，按 { usernames, orgDeptNos } 提交。
+//  6) 新增成员支持员工工号 + 机构名称多选，按 { usernames, orgDeptNos } 提交。
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 
@@ -34,11 +34,27 @@ vi.mock('@/api/system', () => ({
   downloadPersonTagMemberTemplate: vi.fn().mockResolvedValue(new Blob())
 }));
 
-import { ElMessageBox } from 'element-plus';
+vi.mock('@/api/orgs', () => ({
+  getOrgTree: vi.fn().mockResolvedValue([
+    {
+      code: 'ROOT',
+      name: '总行',
+      children: [
+        { code: 'ORG_A', name: '城东支行', deptNo: '0101' },
+        { code: 'ORG_A_DUP', name: '城东支行重复记录', deptNo: '0101' },
+        { code: 'ORG_B', name: '城西支行', deptNo: '0102' },
+        { code: 'ORG_EMPTY', name: '未配置机构号' }
+      ]
+    }
+  ])
+}));
+
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   listPersonTags, deletePersonTag, listPersonTagMembers,
   addPersonTagMembers, importPersonTagMembers
 } from '@/api/system';
+import { getOrgTree } from '@/api/orgs';
 import PersonTags from '../PersonTags.vue';
 
 const passthrough = (name) => ({ name, template: '<div><slot /><slot name="header" /><slot name="footer" /></div>' });
@@ -53,6 +69,22 @@ const stubs = {
   'el-form': passthrough('ElForm'),
   'el-form-item': passthrough('ElFormItem'),
   'el-input': empty('ElInput'),
+  'el-select': {
+    name: 'ElSelect',
+    props: {
+      modelValue: Array,
+      multiple: Boolean,
+      filterable: Boolean,
+      loading: Boolean,
+      placeholder: String
+    },
+    template: '<div class="select-stub"><slot /></div>'
+  },
+  'el-option': {
+    name: 'ElOption',
+    props: ['label', 'value'],
+    template: '<div />'
+  },
   'el-alert': empty('ElAlert'),
   'el-radio-group': passthrough('ElRadioGroup'),
   'el-radio-button': passthrough('ElRadioButton'),
@@ -258,15 +290,50 @@ describe('PersonTags.vue', () => {
     expect(wrapper.vm.globalImp.file?.name).toBe('new.xlsx');
   });
 
-  it('新增成员：员工工号 + 机构编号两个输入框，逗号/换行分隔多值按 { usernames, orgDeptNos } 提交', async () => {
+  it('新增成员：首次打开时按需加载机构名称选项，过滤空 deptNo、按 deptNo 去重并缓存成功结果', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
     wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
     await flushPromises();
     wrapper.vm.openMemberAdd();
+    await flushPromises();
+
+    expect(getOrgTree).toHaveBeenCalledTimes(1);
+    expect(wrapper.vm.memberOrgOptions).toEqual([
+      { deptNo: '0101', name: '城东支行', code: 'ORG_A' },
+      { deptNo: '0102', name: '城西支行', code: 'ORG_B' }
+    ]);
+    const select = wrapper.findComponent({ name: 'ElSelect' });
+    expect(select.props()).toMatchObject({
+      multiple: true,
+      filterable: true,
+      placeholder: '按机构名称搜索并选择（可留空）'
+    });
+    expect(wrapper.findAllComponents({ name: 'ElOption' }).map(option => ({
+      label: option.props('label'),
+      value: option.props('value')
+    }))).toEqual([
+      { label: '城东支行（0101）', value: '0101' },
+      { label: '城西支行（0102）', value: '0102' }
+    ]);
+
+    wrapper.vm.memberAdd.visible = false;
+    wrapper.vm.openMemberAdd();
+    await flushPromises();
+    expect(getOrgTree).toHaveBeenCalledTimes(1);
+  });
+
+  it('新增成员：员工工号与机构名称多选按 { usernames, orgDeptNos } 提交', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
+    await flushPromises();
+    wrapper.vm.openMemberAdd();
+    await flushPromises();
     wrapper.vm.memberAdd.empText = ' 100001 ，100002\n100003 ';
-    wrapper.vm.memberAdd.orgText = '0101，0102';
+    wrapper.vm.memberAdd.orgDeptNos = ['0101', '0102'];
 
     await wrapper.vm.saveMemberAdd();
     await flushPromises();
@@ -285,11 +352,42 @@ describe('PersonTags.vue', () => {
     await flushPromises();
     wrapper.vm.openMemberAdd();
     wrapper.vm.memberAdd.empText = '   ';
-    wrapper.vm.memberAdd.orgText = '';
+    wrapper.vm.memberAdd.orgDeptNos = [];
 
     await wrapper.vm.saveMemberAdd();
     await flushPromises();
 
     expect(addPersonTagMembers).not.toHaveBeenCalled();
+  });
+
+  it('新增成员：机构列表加载失败可重试，且仍可只提交员工', async () => {
+    getOrgTree
+      .mockRejectedValueOnce(new Error('load failed'))
+      .mockResolvedValueOnce([
+        { code: 'ORG_A', name: '城东支行', deptNo: '0101' }
+      ]);
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openDetail({ tagId: 7, tagName: '骨干', memberCount: 1 });
+    await flushPromises();
+    wrapper.vm.openMemberAdd();
+    await flushPromises();
+
+    expect(ElMessage.warning).toHaveBeenCalledWith('机构列表加载失败，请重试');
+    wrapper.vm.memberAdd.empText = '100001';
+    await wrapper.vm.saveMemberAdd();
+    expect(addPersonTagMembers).toHaveBeenCalledWith(7, {
+      usernames: ['100001'],
+      orgDeptNos: []
+    });
+
+    wrapper.vm.memberAdd.visible = false;
+    wrapper.vm.openMemberAdd();
+    await flushPromises();
+    expect(getOrgTree).toHaveBeenCalledTimes(2);
+    expect(wrapper.vm.memberOrgOptions).toEqual([
+      { deptNo: '0101', name: '城东支行', code: 'ORG_A' }
+    ]);
   });
 });
