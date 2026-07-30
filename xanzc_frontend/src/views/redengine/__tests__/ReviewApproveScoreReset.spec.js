@@ -26,7 +26,7 @@ vi.mock('@/api/redengine', () => ({
 import { getReviewQueue, getReviewPreview, approveSubmit } from '@/api/redengine';
 import ReviewView from '../review/ReviewView.vue';
 
-// 桩写法沿用 RedEngineLogin.spec.js 既有惯例：手写可交互的 el-input-number/el-input 桩
+// 桩使用手写可交互的 el-input-number/el-input，避免依赖 Element Plus 全量挂载
 // （支持 v-model），避免测试环境需要真实安装 ElementPlus 插件。
 const stubs = {
   'el-input-number': {

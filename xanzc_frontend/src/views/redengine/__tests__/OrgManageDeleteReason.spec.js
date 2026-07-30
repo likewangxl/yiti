@@ -27,7 +27,7 @@ import { getOrgTree, deleteOrg } from '@/api/redengine';
 import { ElMessage } from 'element-plus';
 import OrgManageView from '../system/OrgManageView.vue';
 
-// 手写可交互桩：沿用 ReviewApproveScoreReset.spec.js / RedEngineLogin.spec.js 既有惯例。
+// 手写可交互桩：沿用 ReviewApproveScoreReset.spec.js 既有惯例。
 // el-dialog 桩把 title 透出到 data-dialog-title，用于在"新增/编辑"与"删除原因"两个弹窗并存时
 // 精确定位目标弹窗内的按钮/输入框，避免元素选择器歧义。
 const stubs = {

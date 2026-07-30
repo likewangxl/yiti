@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// 红色引擎已并入平台统一入口，退出时必须回平台登录页并整页导航，
-// 避免独立登录页复活，也避免 Pinia 菜单/用户状态残留给下一次登录。
+// 红色引擎退出时必须回到独立的红色登录页，并使用整页导航清空前端内存态。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -65,8 +64,8 @@ async function settle() {
   await flushPromises();
 }
 
-describe('红色引擎统一退出入口', () => {
-  it('退出后清理用户态并整页跳转平台 /login', async () => {
+describe('红色引擎退出入口', () => {
+  it('退出后清理用户态并整页跳转红色引擎登录页', async () => {
     const userStore = useUserStore();
     userStore.setUser({ empId: 'E001', displayName: '党建用户', roles: [] });
     wrapper = mount(RedEngineLayout, { global: { plugins: [pinia], stubs } });
@@ -76,7 +75,8 @@ describe('红色引擎统一退出入口', () => {
 
     expect(logout).toHaveBeenCalled();
     expect(userStore.user).toBeNull();
-    expect(locationReplace).toHaveBeenCalledWith('/login');
-    expect(routerPush).not.toHaveBeenCalledWith('/redengine/login');
+    expect(locationReplace).toHaveBeenCalledWith('/#/redengine/login');
+    expect(locationReplace).not.toHaveBeenCalledWith('/login');
+    expect(routerPush).not.toHaveBeenCalled();
   });
 });
