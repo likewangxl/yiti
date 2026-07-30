@@ -71,11 +71,16 @@ const stubs = {
   'el-input': empty('ElInput'),
   'el-select': {
     name: 'ElSelect',
+    emits: ['update:modelValue'],
     props: {
       modelValue: Array,
       multiple: Boolean,
       filterable: Boolean,
+      clearable: Boolean,
+      collapseTags: Boolean,
+      collapseTagsTooltip: Boolean,
       loading: Boolean,
+      disabled: Boolean,
       placeholder: String
     },
     template: '<div class="select-stub"><slot /></div>'
@@ -300,6 +305,7 @@ describe('PersonTags.vue', () => {
     await flushPromises();
 
     expect(getOrgTree).toHaveBeenCalledTimes(1);
+    expect(getOrgTree).toHaveBeenCalledWith({ strict: true });
     expect(wrapper.vm.memberOrgOptions).toEqual([
       { deptNo: '0101', name: '城东支行', code: 'ORG_A' },
       { deptNo: '0102', name: '城西支行', code: 'ORG_B' }
@@ -308,6 +314,11 @@ describe('PersonTags.vue', () => {
     expect(select.props()).toMatchObject({
       multiple: true,
       filterable: true,
+      clearable: true,
+      collapseTags: true,
+      collapseTagsTooltip: true,
+      loading: false,
+      disabled: false,
       placeholder: '按机构名称搜索并选择（可留空）'
     });
     expect(wrapper.findAllComponents({ name: 'ElOption' }).map(option => ({
@@ -333,7 +344,11 @@ describe('PersonTags.vue', () => {
     wrapper.vm.openMemberAdd();
     await flushPromises();
     wrapper.vm.memberAdd.empText = ' 100001 ，100002\n100003 ';
-    wrapper.vm.memberAdd.orgDeptNos = ['0101', '0102'];
+    const select = wrapper.findComponent({ name: 'ElSelect' });
+    select.vm.$emit('update:modelValue', ['0101', '0102']);
+    await flushPromises();
+
+    expect(wrapper.vm.memberAdd.orgDeptNos).toEqual(['0101', '0102']);
 
     await wrapper.vm.saveMemberAdd();
     await flushPromises();
@@ -342,6 +357,29 @@ describe('PersonTags.vue', () => {
       usernames: ['100001', '100002', '100003'],
       orgDeptNos: ['0101', '0102']
     });
+  });
+
+  it('新增成员：机构树加载中禁用可清空的折叠多选', async () => {
+    let resolveOrgTree;
+    getOrgTree.mockImplementationOnce(() => new Promise(resolve => { resolveOrgTree = resolve; }));
+    const wrapper = mountPage();
+    await flushPromises();
+
+    wrapper.vm.openMemberAdd();
+    await flushPromises();
+
+    const select = wrapper.findComponent({ name: 'ElSelect' });
+    expect(select.props()).toMatchObject({
+      clearable: true,
+      collapseTags: true,
+      collapseTagsTooltip: true,
+      loading: true,
+      disabled: true
+    });
+
+    resolveOrgTree([]);
+    await flushPromises();
+    expect(select.props()).toMatchObject({ loading: false, disabled: false });
   });
 
   it('新增成员：员工与机构均为空时提示且不调接口', async () => {
@@ -374,6 +412,7 @@ describe('PersonTags.vue', () => {
     wrapper.vm.openMemberAdd();
     await flushPromises();
 
+    expect(ElMessage.warning).toHaveBeenCalledTimes(1);
     expect(ElMessage.warning).toHaveBeenCalledWith('机构列表加载失败，请重试');
     wrapper.vm.memberAdd.empText = '100001';
     await wrapper.vm.saveMemberAdd();

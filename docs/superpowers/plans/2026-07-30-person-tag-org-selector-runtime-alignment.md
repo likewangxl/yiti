@@ -380,7 +380,7 @@ mvn -pl system-governance-center -am test \
   -Dtest=AdminPersonTagControllerTest,PersonTagImportServiceTest,PersonTagServiceTest,UserFacadeBatchQueryNPlusOneTest
 ```
 
-Expected: 48 tests PASS，覆盖机构名称模板、按名称唯一解析、员工姓名批量补全和 JSON 字段。
+Expected: 聚合 53 项 PASS，其中 governance 48 项、auth 5 项；覆盖机构名称模板、按名称唯一解析、员工姓名批量补全和 JSON 字段。
 
 - [ ] **Step 2: 全量安装最新模块到本地 Maven 仓库**
 

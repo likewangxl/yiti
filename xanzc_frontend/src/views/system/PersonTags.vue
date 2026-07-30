@@ -540,7 +540,7 @@ async function ensureMemberOrgOptions() {
   if (memberOrgLoaded.value || memberAdd.orgLoading) return;
   memberAdd.orgLoading = true;
   try {
-    memberOrgOptions.value = flattenMemberOrgOptions(await getOrgTree());
+    memberOrgOptions.value = flattenMemberOrgOptions(await getOrgTree({ strict: true }));
     memberOrgLoaded.value = true;
   } catch {
     memberOrgOptions.value = [];

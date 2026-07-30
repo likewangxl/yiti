@@ -28,8 +28,12 @@ function toFront(node) {
   return out;
 }
 
-export async function getOrgTree() {
-  const r = await call('get', '/orgs/tree', {}, orgsTree);
+/**
+ * strict 用于必须感知加载失败的交互；保持默认 fallback 以兼容既有只读页面。
+ * strict 请求静默处理全局 HTTP toast，由调用组件给出一次上下文提示。
+ */
+export async function getOrgTree({ strict = false } = {}) {
+  const r = await call('get', '/orgs/tree', strict ? { silent: true } : {}, strict ? null : orgsTree);
   return Array.isArray(r) ? r.map(toFront) : [];
 }
 
