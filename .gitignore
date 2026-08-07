@@ -22,6 +22,7 @@ logs/
 .omx/
 .omc/
 .claude/
+.worktrees/
 
 # Node / 前端构建产物
 node_modules/

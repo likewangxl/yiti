@@ -2,6 +2,8 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useUserStore } from '@/stores/user';
 import http from '@/api/http';
+import { ElMessage } from 'element-plus';
+import { createRouteProgress } from './routeProgress';
 
 const routes = [
   // 登录页：顶层路由，不进 DefaultLayout（无 sidebar / header）
@@ -18,7 +20,7 @@ const routes = [
     component: () => import('@/views/screen/ScreenView.vue'),
     meta: { title: '经营大屏' }
   },
-  // 红色引擎（党建）：独立登录页 + 独立布局路由区，风格与平台主布局隔离
+  // 红色引擎（党建）：独立登录页复用平台 Session，业务页面保持独立红色布局
   {
     path: '/redengine/login',
     name: 'RedEngineLogin',
@@ -126,28 +128,18 @@ const routes = [
 
 const router = createRouter({ history: createWebHashHistory(), routes });
 
-// ── 顶部进度条（纯 DOM，不装 nprogress） ──
-const bar = (() => {
-  const el = document.createElement('div');
-  el.id = 'route-progress';
-  Object.assign(el.style, {
-    position: 'fixed', top: '0', left: '0', height: '2px', zIndex: '99999',
-    background: 'linear-gradient(90deg, #409eff 0%, #1e5bba 100%)',
-    transition: 'width .3s ease, opacity .2s', width: '0', opacity: '0'
-  });
-  document.body.appendChild(el);
-  return {
-    start() { el.style.opacity = '1'; el.style.width = '70%'; },
-    done()  { el.style.width = '100%'; setTimeout(() => { el.style.opacity = '0'; el.style.width = '0'; }, 300); }
-  };
-})();
+const progress = createRouteProgress({
+  onTimeout() {
+    ElMessage.error('页面加载超时，请刷新后重试');
+  }
+});
 
 // 全局守卫：未登录访问业务路由 → 跳 /login？redirect=...
 // store 没 user 时先试一次 /api/auth/current-user：
 //   - 200 → 后端 session 还在（UIAS 回调 / F5 刷新 sessionStorage 清空场景）→ setUser 后放行
 //   - 401 → 真未登录 → 跳 login
 router.beforeEach(async (to) => {
-  bar.start();
+  progress.start();
   const store = useUserStore();
   if (to.meta?.public) return true;
   if (store.isLoggedIn) return true;
@@ -164,6 +156,16 @@ router.beforeEach(async (to) => {
   return { path: '/login', query: { redirect: to.fullPath } };
 });
 
-router.afterEach(() => { bar.done(); });
+router.afterEach(() => {
+  progress.done();
+});
+
+router.onError((error) => {
+  const wasActive = progress.fail();
+  console.error('[Router] 路由加载失败', error);
+  if (wasActive) {
+    ElMessage.error('页面加载失败，请刷新后重试');
+  }
+});
 
 export default router;

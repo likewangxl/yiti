@@ -8,13 +8,13 @@
 ## 目录职责
 
 - 本目录记录红色引擎的接口设计与对外契约，当前 2 份文档（`03-接口设计与报文.md`/`04-对外API契约.md`），编号沿用平台惯例但未补齐 01/02/05~09（该模块由独立 `redengine` 系统整体移植合并，文档以「接口/契约」为优先交付项，其余编号文档暂缺，非遗漏计划外补齐）。
-- 该模块已于 **2026-07-18** 整体落地交付（6 Controller / 23 REST 端点 / 17 条 `PT_RESOURCE`，50 单元测试用例全绿），文档需以当前实现态为准。
+- 该模块已于 **2026-07-18** 整体落地交付（6 Controller / 23 REST 端点 / 17 条 API `PT_RESOURCE`，50 单元测试用例全绿）；2026-07-29 新增 1 条平台菜单资源 `M_RE_ENGINE`，文档需以当前实现态为准。
 
 ## 维护要求
 
 - 本模块**当前无对外 `*Api`/`*QueryApi`**（`api/` 包下只有 `dto/`），`04-对外API契约.md` 的核心结论是"无对外契约 + 消费上游 `CurrentUserApi`/`FileApi`"——若后续新增跨模块查询能力，必须同步更新该文档，不要留空。
 - 本模块**不接 Flowable**，审核流是自管两级状态机（`RE_SUBMIT.status` 字段流转），涉及审核/流程的表述禁止套用 `workflow-center` 的 `businessKey`/`BIZ_PROCESS_MAP`/流程实例等术语。
-- PT_RESOURCE 与角色权限矩阵的权威来源是 `docs/superpowers/sql/2026-07-18-redengine-seed.sql`，`03-接口设计与报文.md` 的端点↔资源对照表变更时必须与该脚本保持一致，不要凭记忆改动资源 ID/URL。
+- 17 条 API PT_RESOURCE 与角色权限矩阵的基础来源是 `docs/superpowers/sql/2026-07-18-redengine-seed.sql`；平台菜单入口及 API 父子关系的最新对齐来源是 `docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`；正式同步到 `yiti` 必须使用 `docs/superpowers/sql/2026-07-29-redengine-sync-yiti.sql` 编排并先备份，禁止混入 `yiti_test` 专用演示数据。`03-接口设计与报文.md` 变更时必须与这些脚本的分层职责保持一致，不要凭记忆改动资源 ID/URL。
 - 字段级 DTO 校验注解、错误码语义变更时，优先核实 `red-engine-center/src/main/java/.../api/dto/` 与 `service/` 源码，不要照抄旧简报口径（模块 CLAUDE.md 已记录多处"简报口径 vs 代码实际"的纠偏案例，如红黄牌阈值、逾期规则）。
 
 ## 推荐阅读

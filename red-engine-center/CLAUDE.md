@@ -89,16 +89,19 @@ src/test/java/com/bank/branch/platform/redengine/
 | 16 | `P_RE_CKPT_ANNUAL` | POST | `/api/re/cockpit/archive/generate/*` | 生成年度归档（高危） | 仅 R_RE_ORGREV | `reasonRequired=true`（2026-07-19 修复，此前遗漏，见「技术债」④） |
 | 17 | `P_RE_EXPORT` | GET | `/api/re/export/*` | 数据导出 | R_RE_ORGREV, R_RE_SECR | 仅 submit/score 两类，超上限抛 `RE-40007` |
 
-`SYS_CODE='RE'`、`ISMENU=0`（纯 API 资源，不建独立菜单）。角色-资源绑定行数见下方「党建角色权限矩阵」。
+上述 17 条均为 `SYS_CODE='RE'`、`ISMENU=0` 的 API 资源。2026-07-29 新增平台菜单资源
+`M_RE_ENGINE`（`/redengine/dashboard`、`ISMENU=1`、顶层叶子），并把 17 条 `P_RE_*`
+的 `PARENT_RESOURCE_ID` 对齐为该菜单；入口变更脚本为
+`docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`。角色-资源绑定行数见下方「党建角色权限矩阵」。
 
 ## 4 党建角色权限矩阵
 
 | ROLE_ID | ROLE_CODE | 中文名 | 资源数 |
 |---|---|---|---|
-| `RE_ROLE_1` | `R_RE_ORGREV` | 党建组织审核员 | 10 |
-| `RE_ROLE_2` | `R_RE_BRREV` | 党建支部审核员 | 7 |
-| `RE_ROLE_3` | `R_RE_SECR` | 党建支部书记 | 7 |
-| `RE_ROLE_4` | `R_RE_REPORT` | 党建报送员 | 5 |
+| `RE_ROLE_1` | `R_RE_ORGREV` | 党建组织审核员 | 11（10 API + 1 菜单） |
+| `RE_ROLE_2` | `R_RE_BRREV` | 党建支部审核员 | 8（7 API + 1 菜单） |
+| `RE_ROLE_3` | `R_RE_SECR` | 党建支部书记 | 8（7 API + 1 菜单） |
+| `RE_ROLE_4` | `R_RE_REPORT` | 党建报送员 | 6（5 API + 1 菜单） |
 
 | 能力 | R_RE_REPORT 报送员 | R_RE_SECR 支部书记 | R_RE_BRREV 支部审核员 | R_RE_ORGREV 组织审核员 | SYS_ADMIN |
 |---|---|---|---|---|---|
@@ -170,7 +173,7 @@ src/test/java/com/bank/branch/platform/redengine/
 | `OrgController.getChildren`/`generateReport` | 存在 | 未移植（无 `PT_RESOURCE` 注册 + 简报未列端点，YAGNI） |
 | `secretaryName` 回填 | `PartyOrgServiceImpl` 反查 `SysUserMapper` | 未移植（简报依赖边界只声明 `RePartyOrgMapper`），`RePartyOrgTreeDTO` 仅带 `secretaryId` 工号 |
 | 审核流程 | 无独立工作流引擎，Controller 内状态字段流转 | 保持自管两级审核状态机，**不接 Flowable**，不写 `BIZ_PROCESS_MAP` |
-| 认证/权限体系 | 独立 `sys_user`/`sys_role`/JWT | 完全由平台 `PT_USER` + Session + RBAC 取代，红色引擎演示账号不迁移 |
+| 认证/权限体系 | 独立 `sys_user`/`sys_role`/JWT | 完全由平台 `PT_USER` + Session + RBAC 取代；红色引擎演示账号和独立登录页均不保留 |
 
 ## 测试
 
@@ -178,7 +181,7 @@ src/test/java/com/bank/branch/platform/redengine/
 - **Controller 单元测试**（2026-07-19 新增，TDD 覆盖三处审计/校验缺口修复）：`ReOrgControllerTest`（9 case：deleteOrg 带/缺 reason、RE-40002 守卫不回归、addOrg/updateOrg 校验+树查询）/ `ReCockpitControllerTest`（3 case：generateAnnualResult 带/缺 reason）；均 `MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler())` 纯单元测试（同构 `workflow-center` `ProcessCommandControllerTest`/`auth-permission-center` `OrgControllerTest` 既有惯例），不连库、不起 Spring 容器
 - **Mapper 集成测试**：`RePartyOrgMapperIT`（failsafe，`onepl_test_bootstrap`），基座 `RedEngineTestApp` + `RedEngineMapperTestBase` 同构复制 `performance-engine-center` 的隔离测试模式（`@ActiveProfiles("test")` + `@Transactional` + `@Rollback`）
 - **bootstrap 冒烟 IT**：`RedEngineSmokeIT`（`redengine-smoke` profile，激活真实鉴权链路 `AuthenticationFilter`+`AuthorizationInterceptor`，而非 `test` profile 下被 `@Profile("!test")` 关闭的 `WebMvcAuthConfig`），3 case：无 session 401 / admin 登录 200+树 10 节点 / 无 `P_RE_*` 绑定角色 403，全部真实 RBAC 日志亲验
-- **Playwright 全链路**：登录（外观保真）→ 上报 → 审核通过 → 驾驶舱 → 预警池 → 导出 xlsx，权限矩阵三项（报送员 403 / 无映射 `RE-40001` / admin 全通）均实测通过
+- **Playwright 全链路（2026-07-18 历史验收）**：原独立登录页 → 上报 → 审核通过 → 驾驶舱 → 预警池 → 导出 xlsx，权限矩阵三项（报送员 403 / 无映射 `RE-40001` / admin 全通）均实测通过。2026-07-29 起入口改为平台 `/login` → 动态菜单“红色引擎”，独立登录页已删除。
 - **演示数据**（仅 `yiti_test`，`docs/superpowers/sql/` 2026-07-18 demo 脚本，显式主键 + `INSERT IGNORE` 幂等）：16 条上报 + 16 条评分 + 4 条逾期扣分，4 支部（org 2-5）各 4 项 × 15 分 = 60 分，`dim_clean`/`CLEAN_PROJECT` 源编码不翻译到平台 `dim1~4`/`RE_ITEM_CODE`（仅用于验证列表/统计出数，年度归档聚合会丢弃这批数据，属预期）
 
 ## 技术债与已知限制
@@ -205,5 +208,8 @@ src/test/java/com/bank/branch/platform/redengine/
 - 实施任务台账：`.superpowers/sdd/task-0-brief.md` ~ `task-18-brief.md`（含各任务 report/review）
 - DDL：`docs/superpowers/sql/2026-07-18-redengine-tables.sql`
 - 权限/字典/党组织种子：`docs/superpowers/sql/2026-07-18-redengine-seed.sql`
+- 平台菜单入口对齐：`docs/superpowers/sql/2026-07-29-redengine-platform-menu-align.sql`
+- `yiti` 正式同步编排：`docs/superpowers/sql/2026-07-29-redengine-sync-yiti.sql`（先备份；
+  不包含 `yiti_test` 专用演示业务数据）
 - 共享开发规范：`docs/common-dev-guide.md`
-- 前端：`xanzc_frontend/src/views/redengine/**`（路由 `/redengine/**`，独立 `RedEngineLayout` 红色主题布局，`re-` 类名前缀隔离平台全局样式）
+- 前端：`xanzc_frontend/src/views/redengine/**`（平台菜单进入 `/redengine/dashboard`，复用平台登录态；独立 `RedEngineLayout` 红色主题布局，`re-` 类名前缀隔离平台全局样式）

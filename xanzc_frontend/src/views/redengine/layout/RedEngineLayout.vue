@@ -55,7 +55,7 @@
 // 变换要点（见 Task 13 简报 F1-F6）：
 // - F1: 平台侧 API 调用一律走 @/api/http（本文件仅直接用 http.get 拉权限集合，业务 API 见 Task 14 的 @/api/redengine.js）
 // - F2: 源工程的 JWT/localStorage token 逻辑全部不移植，登录态完全靠 yiti session cookie（http.js withCredentials:true）
-// - F3: 路由路径统一加 /redengine 前缀，登出后跳 /redengine/login
+// - F3: 路由路径统一加 /redengine 前缀，登出后整页跳转 /#/redengine/login
 // - F5: 源工程的 v-permission 指令替换为本组件维护的 canSee()，经 provide/inject 供 Task 14 子视图使用
 // - 源工程 Sidebar/SidebarItem 支持多级子菜单（el-sub-menu 递归），但 Task 13 简报给定的菜单数据源是
 //   扁平的 10 项（无 children），故本次移植未保留递归子菜单渲染；如 Task 14/15 需要二级菜单再补 SidebarItem 递归。
@@ -65,8 +65,7 @@
 // - Task 15 重构（非行为变更）：menuItems 数据源 + canSee() 判断逻辑抽到同目录 canSee.js 纯函数模块，
 //   供 Vitest 直接单测（RedEngineMenuFilter.spec.js），本文件改为 import 复用，逻辑与取值完全未变。
 import { ref, computed, provide, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { useRoute } from 'vue-router';
 import {
   Star,
   HomeFilled,
@@ -87,7 +86,6 @@ import { useUserStore } from '@/stores/user';
 import { menuItems, canSee as canSeeImpl } from './canSee';
 
 const route = useRoute();
-const router = useRouter();
 const userStore = useUserStore();
 
 // 平台未做图标全局注册（main.js 只 app.use(ElementPlus)，未 app.component 逐个注册图标），
@@ -135,7 +133,8 @@ onMounted(async () => {
   }
 });
 
-// 登出：清 yiti session（后端） + 本地 user store，跳回红色引擎登录页
+// 登出：清 yiti session（后端）+ 本地用户态，整页回到红色引擎登录页。
+// 使用整页导航确保菜单等 Pinia 内存状态不会残留给下一位用户。
 async function handleLogout() {
   try {
     await logout();
@@ -143,8 +142,7 @@ async function handleLogout() {
     // 登出接口异常也继续清本地态、跳登录页，避免用户卡在原页面
   }
   userStore.clear();
-  router.push('/redengine/login');
-  ElMessage.success('退出登录成功');
+  window.location.replace('/#/redengine/login');
 }
 </script>
 
